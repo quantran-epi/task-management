@@ -11,8 +11,8 @@ import CloudServerOutlined from '@ant-design/icons/CloudServerOutlined';
 import FolderViewOutlined from '@ant-design/icons/FolderViewOutlined';
 import { RemoteDirectoryBrowserModal } from '../../components/common/RemoteDirectoryBrowserModal';
 import { getSshConfigs, getSshSecret } from '../../services/sshService';
-import { getRemoteBranches } from '../../services/gitRemoteService';
-import { getRemoteTree } from '../../services/gitRemoteTreeService';
+import { getRemoteBranches, checkDirtyStatus } from '../../services/gitRemoteService';
+import { getRemoteTree, mergeUncommittedFilesIntoTree } from '../../services/gitRemoteTreeService';
 import type { SshConfig } from '../../types/ssh';
 import type { RemoteGitBranch, RemoteGitTreeNode } from '../../types/gitRemote';
 import { useLayoutStore } from '../store/layoutStore';
@@ -26,7 +26,87 @@ interface CustomTreeNodeData extends DataNode {
   isLeaf?: boolean;
   size?: number;
   sha?: string;
+  gitStatus?: string;
   rawNode?: RemoteGitTreeNode;
+}
+
+function renderGitStatusBadge(status?: string) {
+  if (!status) return null;
+  const s = status.trim();
+  if (s === '?') {
+    return (
+      <Tag
+        bordered={false}
+        data-testid="status-badge-untracked"
+        style={{
+          fontSize: 10,
+          fontWeight: 600,
+          lineHeight: '14px',
+          padding: '0 4px',
+          margin: 0,
+          color: '#16a34a',
+          background: 'rgba(22, 163, 74, 0.1)',
+        }}
+      >
+        ?
+      </Tag>
+    );
+  }
+  if (s === 'A' || s === 'AM') {
+    return (
+      <Tag
+        bordered={false}
+        data-testid="status-badge-added"
+        style={{
+          fontSize: 10,
+          fontWeight: 600,
+          lineHeight: '14px',
+          padding: '0 4px',
+          margin: 0,
+          color: '#0891b2',
+          background: 'rgba(8, 145, 178, 0.1)',
+        }}
+      >
+        {s}
+      </Tag>
+    );
+  }
+  if (s === 'D') {
+    return (
+      <Tag
+        bordered={false}
+        data-testid="status-badge-deleted"
+        style={{
+          fontSize: 10,
+          fontWeight: 600,
+          lineHeight: '14px',
+          padding: '0 4px',
+          margin: 0,
+          color: '#dc2626',
+          background: 'rgba(220, 38, 38, 0.1)',
+        }}
+      >
+        D
+      </Tag>
+    );
+  }
+  return (
+    <Tag
+      bordered={false}
+      data-testid="status-badge-modified"
+      style={{
+        fontSize: 10,
+        fontWeight: 600,
+        lineHeight: '14px',
+        padding: '0 4px',
+        margin: 0,
+        color: '#2563eb',
+        background: 'rgba(37, 99, 235, 0.1)',
+      }}
+    >
+      {s || 'M'}
+    </Tag>
+  );
 }
 
 function formatBytes(bytes?: number): string {
@@ -86,6 +166,59 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
 
   const selectedConfig = sshConfigs.find((c) => c.id === selectedConfigId);
 
+  const [uncommittedFiles, setUncommittedFiles] = useState<
+    Array<{ path: string; indexStatus: string; workingTreeStatus: string }>
+  >([]);
+
+  const mapTreeNodeToDataNode = useCallback((node: RemoteGitTreeNode): CustomTreeNodeData => {
+    const isCode = /\.(ts|tsx|js|jsx|json|rs|go|py|css|html|md)$/i.test(node.title);
+    return {
+      key: node.key,
+      title: (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            fontSize: 12.5,
+            userSelect: 'none',
+          }}
+        >
+          {node.isLeaf ? (
+            isCode ? (
+              <CodeOutlined style={{ color: 'var(--accent, #3871e1)' }} />
+            ) : (
+              <FileOutlined style={{ color: 'var(--fg-muted, #6c707e)' }} />
+            )
+          ) : (
+            <FolderOutlined style={{ color: '#eab308' }} />
+          )}
+          <span>{node.title}</span>
+          {renderGitStatusBadge(node.gitStatus)}
+          {node.isLeaf && node.size !== undefined && (
+            <Tag
+              bordered={false}
+              style={{
+                fontSize: 10,
+                lineHeight: '14px',
+                padding: '0 4px',
+                color: 'var(--fg-muted, #6c707e)',
+                background: 'rgba(0,0,0,0.04)',
+              }}
+            >
+              {formatBytes(node.size)}
+            </Tag>
+          )}
+        </span>
+      ),
+      isLeaf: node.isLeaf,
+      ...(node.size !== undefined ? { size: node.size } : {}),
+      sha: node.sha,
+      ...(node.gitStatus !== undefined ? { gitStatus: node.gitStatus } : {}),
+      rawNode: node,
+    };
+  }, []);
+
   // Load root tree
   const loadRootTree = useCallback(
     async (branchOverride?: string, pathOverride?: string) => {
@@ -96,6 +229,15 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
       setError(null);
       try {
         const secret = await getSshSecret(selectedConfig.id);
+        let dirtyFiles: Array<{ path: string; indexStatus: string; workingTreeStatus: string }> = [];
+        try {
+          const dirtyStatus = await checkDirtyStatus(selectedConfig, targetPath, secret ?? undefined);
+          dirtyFiles = dirtyStatus?.uncommittedFiles || [];
+          setUncommittedFiles(dirtyFiles);
+        } catch {
+          // Gracefully continue if not git repo or command error
+        }
+
         const rawNodes = await getRemoteTree(
           selectedConfig,
           targetPath,
@@ -104,52 +246,8 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
           secret ?? undefined
         );
 
-        const mapped: CustomTreeNodeData[] = rawNodes.map((node) => {
-          const isCode = /\.(ts|tsx|js|jsx|json|rs|go|py|css|html|md)$/i.test(node.title);
-          return {
-            key: node.key,
-            title: (
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  fontSize: 12.5,
-                  userSelect: 'none',
-                }}
-              >
-                {node.isLeaf ? (
-                  isCode ? (
-                    <CodeOutlined style={{ color: 'var(--accent, #3871e1)' }} />
-                  ) : (
-                    <FileOutlined style={{ color: 'var(--fg-muted, #6c707e)' }} />
-                  )
-                ) : (
-                  <FolderOutlined style={{ color: '#eab308' }} />
-                )}
-                <span>{node.title}</span>
-                {node.isLeaf && node.size !== undefined && (
-                  <Tag
-                    bordered={false}
-                    style={{
-                      fontSize: 10,
-                      lineHeight: '14px',
-                      padding: '0 4px',
-                      color: 'var(--fg-muted, #6c707e)',
-                      background: 'rgba(0,0,0,0.04)',
-                    }}
-                  >
-                    {formatBytes(node.size)}
-                  </Tag>
-                )}
-              </span>
-            ),
-            isLeaf: node.isLeaf,
-            ...(node.size !== undefined ? { size: node.size } : {}),
-            sha: node.sha,
-            rawNode: node,
-          };
-        });
+        const mergedNodes = mergeUncommittedFilesIntoTree(rawNodes, dirtyFiles);
+        const mapped: CustomTreeNodeData[] = mergedNodes.map(mapTreeNodeToDataNode);
         setTreeData(mapped);
       } catch (err: any) {
         setError(err?.message || 'Failed to load repository tree');
@@ -158,7 +256,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         setLoadingTree(false);
       }
     },
-    [selectedConfig, repoPath, selectedBranch]
+    [selectedConfig, repoPath, selectedBranch, mapTreeNodeToDataNode]
   );
 
   // Load branches whenever config or repoPath changes
@@ -246,53 +344,12 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         secret ?? undefined
       );
 
-      const childrenNodes: CustomTreeNodeData[] = rawChildren.map((c) => {
-        const isCode = /\.(ts|tsx|js|jsx|json|rs|go|py|css|html|md)$/i.test(c.title);
-        return {
-          key: c.key,
-          title: (
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                fontSize: 12.5,
-                userSelect: 'none',
-              }}
-            >
-              {c.isLeaf ? (
-                isCode ? (
-                  <CodeOutlined style={{ color: 'var(--accent, #3871e1)' }} />
-                ) : (
-                  <FileOutlined style={{ color: 'var(--fg-muted, #6c707e)' }} />
-                )
-              ) : (
-                <FolderOutlined style={{ color: '#eab308' }} />
-              )}
-              <span>{c.title}</span>
-              {c.isLeaf && c.size !== undefined && (
-                <Tag
-                  bordered={false}
-                  style={{
-                    fontSize: 10,
-                    lineHeight: '14px',
-                    padding: '0 4px',
-                    color: 'var(--fg-muted, #6c707e)',
-                    background: 'rgba(0,0,0,0.04)',
-                  }}
-                >
-                  {formatBytes(c.size)}
-                </Tag>
-              )}
-            </span>
-          ),
-          isLeaf: c.isLeaf,
-          ...(c.size !== undefined ? { size: c.size } : {}),
-          sha: c.sha,
-          rawNode: c,
-        };
-      });
-
+      const mergedChildren = mergeUncommittedFilesIntoTree(
+        rawChildren,
+        uncommittedFiles,
+        node.key as string
+      );
+      const childrenNodes: CustomTreeNodeData[] = mergedChildren.map(mapTreeNodeToDataNode);
       const updateTreeNodes = (list: CustomTreeNodeData[]): CustomTreeNodeData[] => {
         return list.map((item) => {
           if (item.key === node.key) {
@@ -333,6 +390,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         branch: selectedBranch,
         filePath: node.key as string,
         size: node.size,
+        gitStatus: node.gitStatus,
       },
     });
   };

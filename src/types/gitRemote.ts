@@ -71,6 +71,7 @@ export interface RemoteGitTreeNode {
   size?: number;
   sha: string;
   children?: RemoteGitTreeNode[];
+  gitStatus?: string;
 }
 
 

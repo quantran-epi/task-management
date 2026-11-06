@@ -37,6 +37,11 @@ describe('RemoteGitExplorer Component (SDLC-REPO-EXP-02)', () => {
       { name: 'feat/test', isRemote: false, isHead: false },
     ]);
 
+    vi.spyOn(gitRemoteService, 'checkDirtyStatus').mockResolvedValue({
+      isClean: true,
+      uncommittedFiles: [],
+    });
+
     vi.spyOn(gitRemoteTreeService, 'getRemoteTree').mockImplementation(async (_cfg, _repo, _ref, dirPath) => {
       if (!dirPath) {
         return [
@@ -187,5 +192,43 @@ describe('RemoteGitExplorer Component (SDLC-REPO-EXP-02)', () => {
     // Branch select should not be disabled
     const branchSelect = screen.getByTestId('branch-select');
     expect(branchSelect.className).not.toContain('ant-select-disabled');
+  });
+
+  it('displays uncommitted files with status badges and passes gitStatus to opened tab', async () => {
+    vi.spyOn(gitRemoteService, 'checkDirtyStatus').mockResolvedValue({
+      isClean: false,
+      uncommittedFiles: [
+        { path: 'package.json', indexStatus: ' ', workingTreeStatus: 'M' },
+        { path: 'untracked-script.sh', indexStatus: '?', workingTreeStatus: '?' },
+      ],
+    });
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteGitExplorer />
+      </AntdThemeAdapter>
+    );
+
+    const repoInput = screen.getByTestId('repo-path-input');
+    fireEvent.change(repoInput, { target: { value: '/home/dev/my-repo' } });
+    fireEvent.blur(repoInput);
+
+    await waitFor(() => {
+      expect(screen.getByText('package.json')).toBeDefined();
+      expect(screen.getByText('untracked-script.sh')).toBeDefined();
+    });
+
+    // Check status tags/badges
+    expect(screen.getByTestId('status-badge-modified')).toBeDefined();
+    expect(screen.getByTestId('status-badge-untracked')).toBeDefined();
+
+    // Click untracked file to open
+    const untrackedNode = screen.getByText('untracked-script.sh');
+    fireEvent.click(untrackedNode);
+
+    const tabs = useLayoutStore.getState().openTabs;
+    const untrackedTab = tabs.find((t) => t.id === 'remote:untracked-script.sh');
+    expect(untrackedTab).toBeDefined();
+    expect(untrackedTab?.params?.gitStatus).toBe('?');
   });
 });
