@@ -74,6 +74,14 @@
 - [ ] **EXPUI-04**: User can navigate and manage tabbed views in the center Editor Area (Tasks, Docs, Planner) and access docked tool windows (Project Tree, AI Chat).
 - [x] **EXPUI-05**: User can invoke Search Everywhere modal via `Double Shift` or `Ctrl+K` to search entities and dispatch actions at 60fps virtualized performance.
 
+### Remote SSH Git Explorer & Headless Claude Code Trace Flow (Phase 29.1 INSERTED)
+
+- [ ] **SDLC-REPO-EXP-01**: Left Stripe provides `remote_explorer` tool window icon positioned below Diagram Explorer with persistent toggle and docking support.
+- [ ] **SDLC-REPO-EXP-02**: User can select saved SSH Host config, specify remote repository path, select git branches, and view repository tree read-only (`git ls-tree`) without dirtying remote working copy.
+- [ ] **SDLC-REPO-EXP-03**: User can open remote files in read-only editor tabs (`git show <ref>:<file_path>`) with code viewer and syntax highlighting.
+- [ ] **SDLC-REPO-EXP-04**: User can select remote directory or file to launch Claude Code headless session via SSH CLI with target path context, custom user prompt, and model selection (`claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-opus-5-5`).
+- [ ] **SDLC-REPO-EXP-05**: TaskMate extracts ```mermaid diagram blocks from Claude Code trace output, renders visual preview, and enables saving directly into Dexie diagrams (`type: 'diagram'`).
+
 ## Future Requirements (Deferred)
 
 - **FUTR-SDLC-01**: Multi-agent coding runs (several worktrees in parallel) — needs reliability evidence from single-run first.
@@ -138,12 +146,17 @@
 | EXPUI-02 | Phase 25.4 | Pending |
 | EXPUI-03 | Phase 25.4 | Pending |
 | EXPUI-04 | Phase 25.4 | Pending |
-| EXPUI-05 | Phase 25.4 | Pending |
+| EXPUI-05 | Phase 25.4 | Complete |
+| SDLC-REPO-EXP-01 | Phase 29.1 | Pending |
+| SDLC-REPO-EXP-02 | Phase 29.1 | Pending |
+| SDLC-REPO-EXP-03 | Phase 29.1 | Pending |
+| SDLC-REPO-EXP-04 | Phase 29.1 | Pending |
+| SDLC-REPO-EXP-05 | Phase 29.1 | Pending |
 
 **Coverage:**
 
-- v1 requirements: 38 total
-- Mapped to phases: 38
+- v1 requirements: 43 total
+- Mapped to phases: 43
 - Unmapped: 0 ✓
 
 **Phase totals:**
@@ -152,6 +165,7 @@
 - Phase 27 (Studio Artifact Tools & Diff Approval): 6 requirements, 5 plans
 - Phase 28 (Query-Only Knowledge Retrieval): 5 requirements, 4 plans
 - Phase 29 (fs-gw Client & Headless Repository Runs): 4 requirements, 4 plans
+- Phase 29.1 (Remote SSH Git Explorer & Headless Claude Code Trace Flow): 5 requirements, 3 plans
 - Phase 30 (Automatic Change Packs, Fallback & Run Reliability): 3 requirements, 4 plans
 - Phase 31 (Org Conventions in the Solution Pipeline): 6 requirements, ~4 plans
 - Phase 32 (External Research via Claude Code): 6 requirements, ~4 plans
