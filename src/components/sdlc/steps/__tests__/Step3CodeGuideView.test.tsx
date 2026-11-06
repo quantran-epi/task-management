@@ -461,4 +461,111 @@ describe('Task 1: SdlcWorkflowState schema and coordinator BranchSnapshot persis
   });
 });
 
+describe('Task 2: approval snapshot and drift handling', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders drift alert banner and allows re-inspect when remote HEAD changed', async () => {
+    vi.spyOn(sshService, 'getSshConfigs').mockResolvedValue([
+      {
+        id: 'ssh-1',
+        name: 'Dev WSL',
+        host: '127.0.0.1',
+        port: 2222,
+        username: 'dev',
+        authType: 'password',
+        createdAt: '2026-11-06T00:00:00Z',
+        updatedAt: '2026-11-06T00:00:00Z',
+      },
+    ]);
+    vi.spyOn(sshService, 'getSshSecret').mockResolvedValue('test-pass');
+
+    vi.spyOn(gitRemoteService, 'getProjectRepoSshBinding').mockResolvedValue({
+      sshConfigId: 'ssh-1',
+      remoteRepoPath: '/home/dev/repo',
+      defaultBaseBranch: 'origin/main',
+      updatedAt: '2026-11-06T00:00:00Z',
+    });
+
+    vi.spyOn(gitRemoteService, 'getRemoteBranches').mockResolvedValue([
+      { name: 'origin/main', isRemote: true, isHead: false },
+      { name: 'feature/CR-101', isRemote: true, isHead: false },
+    ]);
+
+    vi.spyOn(gitRemoteService, 'checkDirtyStatus').mockResolvedValue({
+      isClean: true,
+      uncommittedFiles: [],
+    });
+
+    vi.spyOn(gitRemoteService, 'getDiffSummary').mockResolvedValue({
+      baseBranch: 'origin/main',
+      targetBranch: 'feature/CR-101',
+      headSha: '1111111111111111111111111111111111111111',
+      commits: [
+        {
+          sha: '1111111111111111111111111111111111111111',
+          shortSha: '1111111',
+          author: 'Dev',
+          date: '2026-11-06',
+          message: 'feat: drift commit',
+        },
+      ],
+      files: [],
+      totalAdditions: 0,
+      totalDeletions: 0,
+    });
+
+    vi.spyOn(gitRemoteService, 'checkHeadDrift').mockResolvedValue({
+      drifted: true,
+      currentHeadSha: '2222222222222222222222222222222222222222',
+    });
+
+    const savedSnapshot = {
+      baseBranch: 'origin/main',
+      targetBranch: 'feature/CR-101',
+      headSha: '0000000000000000000000000000000000000000',
+      commitShas: ['0000000000000000000000000000000000000000'],
+      fileStats: [],
+      totalAdditions: 0,
+      totalDeletions: 0,
+      approvedAt: '2026-11-06T10:00:00.000Z',
+    };
+
+    const handleProceed = vi.fn();
+
+    render(
+      <Step3CodeGuideView
+        projectId="proj-1"
+        crCode="CR-101"
+        approvedSolutionMarkdown="# Approved Solution"
+        savedSnapshot={savedSnapshot}
+        onProceedToStep4={handleProceed}
+      />
+    );
+
+    // Verify drift alert renders
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Remote HEAD đã thay đổi so với snapshot đã duyệt/i)
+      ).toBeInTheDocument();
+    });
+
+    const reInspectBtn = screen.getByRole('button', {
+      name: /Kiểm tra lại & Cập nhật snapshot/i,
+    });
+    expect(reInspectBtn).toBeInTheDocument();
+    fireEvent.click(reInspectBtn);
+
+    // Forward button is unlocked since snapshot exists
+    const forwardBtn = screen.getByRole('button', {
+      name: /Chuyển sang Bước 4: Change Pack/i,
+    });
+    expect(forwardBtn).toBeEnabled();
+    fireEvent.click(forwardBtn);
+    expect(handleProceed).toHaveBeenCalledTimes(1);
+  });
+});
+
+
 

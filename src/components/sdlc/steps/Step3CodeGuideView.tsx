@@ -93,6 +93,12 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
   const [currentSnapshot, setCurrentSnapshot] = useState<BranchSnapshot | undefined>(
     initialSavedSnapshot
   );
+
+  useEffect(() => {
+    if (initialSavedSnapshot) {
+      setCurrentSnapshot(initialSavedSnapshot);
+    }
+  }, [initialSavedSnapshot]);
   const [driftInfo, setDriftInfo] = useState<{ drifted: boolean; currentHeadSha: string } | null>(
     null
   );
@@ -295,11 +301,19 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
     if (!diffSummary) return;
 
     const snapshot: BranchSnapshot = {
+      sshConfigId: selectedSshConfigId,
+      remoteRepoPath,
       baseBranch,
       targetBranch,
+      branch: targetBranch,
+      baseCommit: baseBranch,
       headSha: diffSummary.headSha,
+      headCommit: diffSummary.headSha,
+      commitCount: diffSummary.commits.length,
       commitShas: diffSummary.commits.map((c) => c.sha),
+      filesChangedCount: diffSummary.files.length,
       fileStats: diffSummary.files,
+      filesSummary: diffSummary.files,
       totalAdditions: diffSummary.totalAdditions,
       totalDeletions: diffSummary.totalDeletions,
       approvedAt: new Date().toISOString(),
