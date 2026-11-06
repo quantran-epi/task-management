@@ -30,6 +30,7 @@ import { LocalSqlitePersistenceCard } from '../components/settings/LocalSqlitePe
 import { NotificationSettingsCard } from '../components/settings/NotificationSettingsCard';
 import { SshConfigCard } from '../components/settings/SshConfigCard';
 import { OracleAiToolConfigCard } from '../components/settings/OracleAiToolConfigCard';
+import { SshFsAiToolConfigCard } from '../components/settings/SshFsAiToolConfigCard';
 import { PostRestoreBanner } from '../components/settings/PostRestoreBanner';
 import { ResetDbModal } from '../components/common/ResetDbModal';
 import { PageHeader } from '../components/common/PageHeader';
@@ -230,6 +231,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
           <McpConfigCard db={db} />
           <OracleAiToolConfigCard db={db} />
+          <SshFsAiToolConfigCard db={db} />
           <GhostDevConfigCard />
           <NineRouterConfigCard db={db} />
           <KnowledgeServerConfigCard />

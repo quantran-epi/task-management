@@ -57,6 +57,8 @@ import { AITaskPlannerInstructionsModal } from './AITaskPlannerInstructionsModal
 import { McpSettingsModal } from './McpSettingsModal';
 import { OracleSqlclSettingsModal } from './OracleSqlclSettingsModal';
 import { getOracleToolConfig } from '../../services/ai/oracleSqlclService';
+import { SshFsSettingsModal } from './SshFsSettingsModal';
+import { getSshFsToolConfig } from '../../services/ai/sshFsToolService';
 import { logAiChatError } from './aiChatDiagnostics';
 import { RestoredSourceNotice } from './RestoredSourceNotice';
 import { deriveMissingSources } from './wizard/restoreRecovery';
@@ -311,6 +313,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [isMcpModalOpen, setIsMcpModalOpen] = useState(false);
   const [isOracleModalOpen, setIsOracleModalOpen] = useState(false);
   const [oracleToolEnabled, setOracleToolEnabled] = useState(false);
+  const [isSshFsModalOpen, setIsSshFsModalOpen] = useState(false);
+  const [sshFsToolEnabled, setSshFsToolEnabled] = useState(false);
   const [mcpServers, setMcpServers] = useState<McpServerConfig[]>([]);
   const knowledgeConfig = useOptionalKnowledgeConfig();
 
@@ -367,11 +371,21 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     }
   }, [db]);
 
+  const reloadSshFsConfig = useCallback(async () => {
+    try {
+      const cfg = await getSshFsToolConfig(db);
+      setSshFsToolEnabled(cfg?.enabled ?? false);
+    } catch (err) {
+      logAiChatError('Failed to load SSH File System tool config', err);
+    }
+  }, [db]);
+
   useEffect(() => {
     if (open) {
       void reloadOracleConfig();
+      void reloadSshFsConfig();
     }
-  }, [open, reloadOracleConfig]);
+  }, [open, reloadOracleConfig, reloadSshFsConfig]);
 
   const handleToggleMcpServer = async (id: string, enabled: boolean) => {
     try {
@@ -2352,6 +2366,13 @@ Rules:
         onConfigChange={reloadOracleConfig}
       />
 
+      <SshFsSettingsModal
+        open={isSshFsModalOpen}
+        onClose={() => setIsSshFsModalOpen(false)}
+        db={db}
+        onConfigChange={reloadSshFsConfig}
+      />
+
       <RestoredSourceNotice missingSources={restoredMissingSources} />
 
       {activeRoutedScope && hasMeaningfulRoutedScope(activeRoutedScope.routedScope) && (
@@ -2414,6 +2435,8 @@ Rules:
             onOpenMcpSettings: () => setIsMcpModalOpen(true),
             onOpenOracleSettings: () => setIsOracleModalOpen(true),
             oracleToolEnabled,
+            onOpenSshFsSettings: () => setIsSshFsModalOpen(true),
+            sshFsToolEnabled,
           }}
           quickPrompts={DRAWER_QUICK_PROMPTS}
           onClearThread={handleDeleteCurrentThread}

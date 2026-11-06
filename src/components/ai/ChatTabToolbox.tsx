@@ -10,6 +10,7 @@ import {
   ClearOutlined,
   ApiOutlined,
   DatabaseOutlined,
+  FolderOpenOutlined,
   SettingOutlined,
   MoreOutlined,
 } from '@ant-design/icons';
@@ -48,6 +49,10 @@ export interface ChatTabToolboxProps {
   onOpenOracleSettings?: () => void;
   oracleToolEnabled?: boolean;
 
+  // SSH File System (remote connection for AI tool loop)
+  onOpenSshFsSettings?: () => void;
+  sshFsToolEnabled?: boolean;
+
   // Clear context
   onClearContext: () => void;
 }
@@ -71,6 +76,8 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
   onOpenMcpSettings,
   onOpenOracleSettings,
   oracleToolEnabled = false,
+  onOpenSshFsSettings,
+  sshFsToolEnabled = false,
   onClearContext,
 }) => {
   const { token } = theme.useToken();
@@ -250,6 +257,20 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
               />
             ),
             onClick: onOpenOracleSettings,
+          },
+        ]
+      : []),
+    ...(onOpenSshFsSettings
+      ? [
+          {
+            key: 'ssh-fs',
+            label: 'Cấu hình SSH File System',
+            icon: (
+              <FolderOpenOutlined
+                style={{ color: sshFsToolEnabled ? token.colorPrimary : undefined }}
+              />
+            ),
+            onClick: onOpenSshFsSettings,
           },
         ]
       : []),
@@ -482,6 +503,36 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
                   }}
                 >
                   Oracle
+                </Button>
+              </Tooltip>
+            )}
+
+            {/* SSH File System Remote Tool Config Button */}
+            {onOpenSshFsSettings && (
+              <Tooltip
+                title={
+                  sshFsToolEnabled
+                    ? 'SSH File System: ĐANG BẬT (Bấm để xem/đổi máy chủ remote)'
+                    : 'SSH File System: Bấm để chọn SSH duyệt file/log cho AI'
+                }
+              >
+                <Button
+                  size="small"
+                  type={sshFsToolEnabled ? 'primary' : 'default'}
+                  icon={<FolderOpenOutlined />}
+                  onClick={onOpenSshFsSettings}
+                  aria-label="Cấu hình SSH File System"
+                  data-testid="tab-ssh-fs-btn"
+                  style={{
+                    fontSize: 11,
+                    padding: '0 6px',
+                    height: 22,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  SSH Files
                 </Button>
               </Tooltip>
             )}

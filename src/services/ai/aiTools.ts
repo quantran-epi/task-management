@@ -76,6 +76,11 @@ import { executeKnowledgeRetrievalTool } from './knowledgeRetrievalTool';
 import { getImageConfig, getImageApiKey } from './nineRouterTokenService';
 import { redactApiKey } from './nineRouterClient';
 import { executeOracleQuery, executeOracleDescribe } from './oracleSqlclService';
+import {
+  executeSshListDir,
+  executeSshReadFile,
+  executeSshGrepFiles,
+} from './sshFsToolService';
 import dayjs from 'dayjs';
 
 export interface AiToolDefinition {
@@ -2114,6 +2119,92 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'ssh_list_dir',
+      description:
+        'List files and directories on the remote host via configured SSH connection. Returns name, type (file/directory/symlink), size in bytes, and last modified timestamp. Directories sorted first.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: 'Remote directory path to list (e.g. "/var/log", "/etc/nginx", or ".").',
+          },
+          showHidden: {
+            type: 'boolean',
+            description: 'Optional. If true, includes hidden files starting with dot "." (default false).',
+          },
+          limit: {
+            type: 'number',
+            description: 'Optional max entries to return (default 100, max 200).',
+          },
+        },
+        required: ['path'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'ssh_read_file',
+      description:
+        'Read a slice of lines from a remote text/code/log file over SSH. Refuses binary files. Returns numbered lines, total lines count, and pagination indicator to preserve AI context window.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: 'Remote absolute path of the file to read.',
+          },
+          offset: {
+            type: 'number',
+            description: 'Optional 1-based line offset to start reading (default 1).',
+          },
+          limit: {
+            type: 'number',
+            description: 'Optional number of lines to read (default 100, max 500).',
+          },
+        },
+        required: ['path'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'ssh_grep_files',
+      description:
+        'Search for a string or regex pattern in remote files or directories using read-only grep over SSH. Ignores binary files. Returns matching file paths, line numbers, and contents.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: 'Remote file or directory path to search.',
+          },
+          pattern: {
+            type: 'string',
+            description: 'Search string or regular expression.',
+          },
+          recursive: {
+            type: 'boolean',
+            description: 'Optional. If true, searches recursively in subdirectories (default false).',
+          },
+          caseSensitive: {
+            type: 'boolean',
+            description: 'Optional. True for case-sensitive search, false for case-insensitive (default true).',
+          },
+          limit: {
+            type: 'number',
+            description: 'Optional max matching lines to return (default 50, max 100).',
+          },
+        },
+        required: ['path', 'pattern'],
+      },
+    },
+  },
 ];
 
 export interface ExecuteAiToolOptions {
@@ -2131,6 +2222,18 @@ export async function executeAiTool(
   const normalized = normalizeToolName(toolName);
   try {
     switch (normalized) {
+      case 'ssh_list_dir': {
+        return await executeSshListDir(args as any, db);
+      }
+
+      case 'ssh_read_file': {
+        return await executeSshReadFile(args as any, db);
+      }
+
+      case 'ssh_grep_files': {
+        return await executeSshGrepFiles(args as any, db);
+      }
+
       case 'oracle_query': {
         return await executeOracleQuery(args as any, db);
       }

@@ -55,6 +55,8 @@ export interface AiChatToolboxProps {
   onOpenMcpSettings?: (() => void) | undefined;
   onOpenOracleSettings?: (() => void) | undefined;
   oracleToolEnabled?: boolean | undefined;
+  onOpenSshFsSettings?: (() => void) | undefined;
+  sshFsToolEnabled?: boolean | undefined;
 }
 
 export interface AiChatTurnSnapshot {
@@ -379,6 +381,8 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
         {...(toolbox.onOpenMcpSettings ? { onOpenMcpSettings: toolbox.onOpenMcpSettings } : {})}
         {...(toolbox.onOpenOracleSettings ? { onOpenOracleSettings: toolbox.onOpenOracleSettings } : {})}
         {...(toolbox.oracleToolEnabled !== undefined ? { oracleToolEnabled: toolbox.oracleToolEnabled } : {})}
+        {...(toolbox.onOpenSshFsSettings ? { onOpenSshFsSettings: toolbox.onOpenSshFsSettings } : {})}
+        {...(toolbox.sshFsToolEnabled !== undefined ? { sshFsToolEnabled: toolbox.sshFsToolEnabled } : {})}
         onClearContext={onClearThread}
       />
 
