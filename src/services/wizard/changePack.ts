@@ -151,7 +151,8 @@ export async function validateChangePack(
 
   let zip: JSZip;
   try {
-    zip = await JSZip.loadAsync(packedBytes, { checkCRC32: true, createFolders: false });
+    // Lazy load: checkCRC32 would decompress every entry here, before any size guard runs.
+    zip = await JSZip.loadAsync(packedBytes, { createFolders: false });
   } catch {
     reject('PACK_CORRUPT');
   }
@@ -173,6 +174,16 @@ export async function validateChangePack(
   let expandedBytes = 0;
   const entries: ChangePackEntry[] = [];
   for (const candidate of normalized) {
+    // Trust the central-directory size for the cheap guards: awaiting the entry first
+    // decompresses it, which lets one oversized entry exhaust memory before it is rejected.
+    // ponytail: JSZip exposes no public uncompressedSize, so this reads its private _data.
+    // Upgrade to an unzip stream/worker if JSZip changes that shape.
+    const declared = (candidate.entry as unknown as { _data?: { uncompressedSize?: number } })._data
+      ?.uncompressedSize;
+    if (typeof declared === 'number') {
+      if (declared > limits.maxEntryBytes) reject('PACK_ENTRY_TOO_LARGE');
+      if (expandedBytes + declared > limits.maxExpandedBytes) reject('PACK_EXPANDED_TOO_LARGE');
+    }
     let bytes: Uint8Array;
     try {
       bytes = await candidate.entry.async('uint8array');
