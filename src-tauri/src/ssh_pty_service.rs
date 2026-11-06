@@ -55,7 +55,7 @@ pub fn ssh_pty_start(
         .map_err(|e| format!("Lỗi request_pty: {}", e))?;
 
     // Merge stdout and stderr so interactive ANSI prompts and error messages appear in terminal stream
-    channel.handle_extended_data(ssh2::ExtendedDataMode::Merge);
+    let _ = channel.handle_extended_data(ssh2::ExtendedData::Merge);
 
     // Start remote interactive shell
     channel

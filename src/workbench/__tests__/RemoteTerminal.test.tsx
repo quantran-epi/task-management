@@ -1,4 +1,3 @@
-import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import 'fake-indexeddb/auto';
@@ -58,7 +57,9 @@ const mockConfig: SshConfig = {
   host: '10.0.0.1',
   port: 22,
   username: 'ubuntu',
-  authType: 'key',
+  authType: 'key_file',
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
 };
 
 describe('RemoteTerminalPanel Component (SDLC-REPO-EXP-04 & SDLC-REPO-EXP-05)', () => {
@@ -141,7 +142,7 @@ describe('RemoteTerminalPanel Component (SDLC-REPO-EXP-04 & SDLC-REPO-EXP-05)', 
     let ptyDataCb: ((data: string) => void) | null = null;
     vi.spyOn(sshPtyService, 'subscribePtyData').mockImplementation(async (_, cb) => {
       ptyDataCb = cb;
-      return vi.fn();
+      return () => {};
     });
 
     const saveSpy = vi.spyOn(diagramSaveBridge, 'saveDiagramToStudio').mockResolvedValue({
@@ -178,9 +179,10 @@ describe('RemoteTerminalPanel Component (SDLC-REPO-EXP-04 & SDLC-REPO-EXP-05)', 
       expect(saveSpy).toHaveBeenCalled();
     });
     const callArgs = saveSpy.mock.calls[0];
-    expect(callArgs[0]).toContain('Terminal Diagram 1');
-    expect(callArgs[1]).toBe('graph TD\n  A[Start] --> B[Finish]');
-    expect(callArgs[2]).toEqual(['terminal', 'claude-code']);
+    expect(callArgs).toBeDefined();
+    expect(callArgs?.[0]).toContain('Terminal Diagram 1');
+    expect(callArgs?.[1]).toBe('graph TD\n  A[Start] --> B[Finish]');
+    expect(callArgs?.[2]).toEqual(['terminal', 'claude-code']);
     expect(openSpy).toHaveBeenCalledWith('note-mermaid-1');
   });
 });

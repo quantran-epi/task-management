@@ -652,7 +652,7 @@ pub async fn start_ghost_dev_session(
     let app_clone = app.clone();
     let worktree_path_str = worktree_path.to_string_lossy().to_string();
     let worktree_dir = worktree_path.clone();
-    let repo_path_str = payload.repo_path.clone();
+    let _repo_path_str = payload.repo_path.clone();
     let worker_model_default = payload.worker_model.clone();
     let claude_binary_clone = claude_binary.clone();
     let max_processes_cap = max_processes;

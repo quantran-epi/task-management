@@ -16,6 +16,8 @@ describe('gitRemoteTreeService', () => {
     port: 22,
     username: 'developer',
     authType: 'password',
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
   };
 
   beforeEach(() => {

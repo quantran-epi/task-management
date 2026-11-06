@@ -1,4 +1,3 @@
-import React from 'react';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { RemoteGitExplorer } from '../toolwindows/RemoteGitExplorer';
@@ -16,7 +15,9 @@ const mockSshConfigs: SshConfig[] = [
     host: '192.168.1.100',
     port: 22,
     username: 'dev',
-    authType: 'key',
+    authType: 'key_file',
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
   },
 ];
 

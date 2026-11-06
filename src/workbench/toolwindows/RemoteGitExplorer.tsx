@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Select, Input, Tree, Button, Tooltip, Tag, Spin, Alert, Empty } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import FolderOutlined from '@ant-design/icons/FolderOutlined';
@@ -57,8 +57,9 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
       .then((configs) => {
         if (!mounted) return;
         setSshConfigs(configs);
-        if (configs.length > 0 && !selectedConfigId) {
-          setSelectedConfigId(configs[0].id);
+        const first = configs[0];
+        if (first && !selectedConfigId) {
+          setSelectedConfigId(first.id);
         }
       })
       .catch((err) => {
@@ -84,7 +85,8 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
       if (remoteBranches.length > 0) {
         const hasMain = remoteBranches.some((b) => b.name === 'main');
         const hasMaster = remoteBranches.some((b) => b.name === 'master');
-        const defaultBranch = hasMain ? 'main' : hasMaster ? 'master' : remoteBranches[0].name;
+        const firstBranch = remoteBranches[0];
+        const defaultBranch = hasMain ? 'main' : hasMaster ? 'master' : firstBranch ? firstBranch.name : 'main';
         setSelectedBranch(defaultBranch);
       }
     } catch (err: any) {
@@ -151,7 +153,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
             </span>
           ),
           isLeaf: node.isLeaf,
-          size: node.size,
+          ...(node.size !== undefined ? { size: node.size } : {}),
           sha: node.sha,
           rawNode: node,
         };
@@ -231,7 +233,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
             </span>
           ),
           isLeaf: c.isLeaf,
-          size: c.size,
+          ...(c.size !== undefined ? { size: c.size } : {}),
           sha: c.sha,
           rawNode: c,
         };
@@ -344,7 +346,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
             style={{ flex: 1 }}
             placeholder="Branch"
             value={selectedBranch || undefined}
-            onChange={(val) => setSelectedBranch(val)}
+            onChange={(val) => setSelectedBranch(val ?? '')}
             loading={loadingBranches}
             disabled={branches.length === 0}
             options={branches.map((b) => ({
@@ -397,7 +399,6 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
             onSelect={handleSelectNode}
             showIcon={false}
             blockNode
-            titleRender={undefined}
             style={{
               background: 'transparent',
               fontSize: 12.5,

@@ -175,6 +175,7 @@ export const useLayoutStore = create<LayoutState>()(
           if (tabIndex === -1) return state;
 
           const currentTab = state.openTabs[tabIndex];
+          if (!currentTab) return state;
           const nextPinned = !currentTab.pinned;
 
           // Clone tabs array and update pinned status

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { Button, Tooltip, message, Tag } from 'antd';
@@ -120,7 +120,7 @@ export function RemoteTerminalPanel({
         await startPtySession({
           sessionId,
           config,
-          workingDir: repoPath || undefined,
+          ...(repoPath ? { workingDir: repoPath } : {}),
           cols: term.cols || 80,
           rows: term.rows || 24,
         });
@@ -237,8 +237,10 @@ export function RemoteTerminalPanel({
 
       let lastNoteId = '';
       for (let i = 0; i < blocks.length; i++) {
+        const block = blocks[i];
+        if (!block) continue;
         const title = `Terminal Diagram ${i + 1} (${new Date().toLocaleTimeString()})`;
-        const note = await saveDiagramToStudio(title, blocks[i], ['terminal', 'claude-code'], db);
+        const note = await saveDiagramToStudio(title, block, ['terminal', 'claude-code'], db);
         lastNoteId = note.id;
       }
 

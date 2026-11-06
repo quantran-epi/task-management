@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Tag, Button, Alert, Spin, Tooltip, message } from 'antd';
 import {
   FileTextOutlined,
@@ -115,8 +115,10 @@ export function RemoteFileViewer({
       const fileName = filePath ? filePath.split('/').pop() || 'Remote' : 'Remote';
       let lastNoteId = '';
       for (let i = 0; i < mermaidBlocks.length; i++) {
+        const block = mermaidBlocks[i];
+        if (!block) continue;
         const title = `${fileName} Diagram ${i + 1}`;
-        const note = await saveDiagramToStudio(title, mermaidBlocks[i], ['remote-file', fileName], db);
+        const note = await saveDiagramToStudio(title, block, ['remote-file', fileName], db);
         lastNoteId = note.id;
       }
       message.success(`Saved ${mermaidBlocks.length} diagram(s) to Diagram Studio.`);

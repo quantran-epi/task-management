@@ -33,7 +33,6 @@ export function BottomToolWindow({
 }: BottomToolWindowProps) {
   const [activeTab, setActiveTab] = useState<'terminal' | 'output'>('terminal');
   const [isMaximized, setIsMaximized] = useState(false);
-  const bottomPanelSize = useLayoutStore((s) => s.bottomPanelSize);
   const setPanelSize = useLayoutStore((s) => s.setPanelSize);
   const toggleToolWindow = useLayoutStore((s) => s.toggleToolWindow);
 

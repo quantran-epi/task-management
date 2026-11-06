@@ -32,7 +32,7 @@ export function parseLsTreeLine(line: string, baseDir?: string): RemoteGitTreeNo
     key,
     title: fileName,
     isLeaf,
-    size,
+    ...(size !== undefined ? { size } : {}),
     sha,
   };
 }
