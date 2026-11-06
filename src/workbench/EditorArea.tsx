@@ -29,6 +29,7 @@ import { TelegramMonitorView } from '../views/TelegramMonitorView';
 import { ItemInsightView } from '../views/ItemInsightView';
 import { ProjectSdlcView } from '../views/ProjectSdlcView';
 import { MermaidAssistantView } from '../views/MermaidAssistantView';
+import { RemoteFileViewer } from './editor/RemoteFileViewer';
 import type { TaskPlannerDatabase } from '../db';
 
 export interface EditorAreaProps {
@@ -434,6 +435,8 @@ export function EditorArea({ db }: EditorAreaProps) {
         return <TelegramMonitorView />;
       case 'mermaid':
         return <MermaidAssistantView initialCode={tab.params?.code} noteId={tab.params?.noteId} db={db} />;
+      case 'remote_file':
+        return <RemoteFileViewer {...tab.params} />;
       case 'sdlc':
         return (
           <ProjectSdlcView
