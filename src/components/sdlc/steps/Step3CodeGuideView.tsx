@@ -10,7 +10,6 @@ import {
   Tag,
   Spin,
   Empty,
-  Tooltip,
   theme,
   message,
 } from 'antd';
@@ -76,6 +75,7 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
   const [sshConfigs, setSshConfigs] = useState<SshConfig[]>([]);
   const [selectedSshConfigId, setSelectedSshConfigId] = useState<string>('');
   const [remoteRepoPath, setRemoteRepoPath] = useState<string>('');
+  const [loadedRepoPath, setLoadedRepoPath] = useState<string>('');
   const [baseBranch, setBaseBranch] = useState<string>('origin/main');
   const [targetBranch, setTargetBranch] = useState<string>('');
 
@@ -130,6 +130,7 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
           if (binding) {
             setSelectedSshConfigId(binding.sshConfigId);
             setRemoteRepoPath(binding.remoteRepoPath);
+            setLoadedRepoPath(binding.remoteRepoPath);
             if (binding.defaultBaseBranch) {
               setBaseBranch(binding.defaultBaseBranch);
             }
@@ -137,10 +138,15 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
             setSelectedSshConfigId(configs[0].id);
             if (configs[0].defaultRemotePath) {
               setRemoteRepoPath(configs[0].defaultRemotePath);
+              setLoadedRepoPath(configs[0].defaultRemotePath);
             }
           }
         } else if (configs.length > 0 && configs[0]) {
           setSelectedSshConfigId(configs[0].id);
+          if (configs[0].defaultRemotePath) {
+            setRemoteRepoPath(configs[0].defaultRemotePath);
+            setLoadedRepoPath(configs[0].defaultRemotePath);
+          }
         }
       } catch (err: unknown) {
         if (!cancelled) {
@@ -178,83 +184,95 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
   );
 
   // Fetch branches, check dirty status, and load diff summary
-  const fetchRemoteData = useCallback(async () => {
-    if (!activeSshConfig || !remoteRepoPath.trim()) {
-      return;
-    }
-    setLoading(true);
-    setErrorMessage(null);
-
-    try {
-      const secret = (await getSshSecret(activeSshConfig.id)) ?? undefined;
-
-      // 1. Fetch remote branches
-      const branchList = await getRemoteBranches(activeSshConfig, remoteRepoPath, secret);
-      setBranches(branchList);
-
-      // Select default target branch: prefer feature/{crCode} or branch containing crCode
-      let resolvedTarget = targetBranch;
-      if (!resolvedTarget) {
-        const matchingBranch = branchList.find(
-          (b) =>
-            b.name === `feature/${crCode}` ||
-            b.name === `origin/feature/${crCode}` ||
-            b.name.includes(crCode)
-        );
-        if (matchingBranch) {
-          resolvedTarget = matchingBranch.name;
-        } else if (branchList.length > 0 && branchList[0]) {
-          resolvedTarget = branchList[0].name;
-        }
-        setTargetBranch(resolvedTarget);
+  const fetchRemoteData = useCallback(
+    async (pathOverride?: string) => {
+      const pathToUse = (pathOverride ?? loadedRepoPath).trim();
+      if (!activeSshConfig || !pathToUse) {
+        return;
       }
+      setLoading(true);
+      setErrorMessage(null);
 
-      // 2. Check working tree dirty status
-      const statusResult = await checkDirtyStatus(activeSshConfig, remoteRepoPath, secret);
-      setDirtyStatus(statusResult);
+      try {
+        const secret = (await getSshSecret(activeSshConfig.id)) ?? undefined;
 
-      // 3. If target branch resolved, fetch diff summary and commits
-      if (resolvedTarget && baseBranch) {
-        const summary = await getDiffSummary(
-          activeSshConfig,
-          remoteRepoPath,
-          baseBranch,
-          resolvedTarget,
-          secret
-        );
-        setDiffSummary(summary);
+        // 1. Fetch remote branches
+        const branchList = await getRemoteBranches(activeSshConfig, pathToUse, secret);
+        setBranches(branchList);
 
-        // Check drift if we have an approved snapshot
-        if (currentSnapshot && currentSnapshot.headSha) {
-          const drift = await checkHeadDrift(
+        // Select default target branch: prefer feature/{crCode} or branch containing crCode
+        let resolvedTarget = targetBranch;
+        if (!resolvedTarget) {
+          const matchingBranch = branchList.find(
+            (b) =>
+              b.name === `feature/${crCode}` ||
+              b.name === `origin/feature/${crCode}` ||
+              b.name.includes(crCode)
+          );
+          if (matchingBranch) {
+            resolvedTarget = matchingBranch.name;
+          } else if (branchList.length > 0 && branchList[0]) {
+            resolvedTarget = branchList[0].name;
+          }
+          setTargetBranch(resolvedTarget);
+        }
+
+        // 2. Check working tree dirty status
+        const statusResult = await checkDirtyStatus(activeSshConfig, pathToUse, secret);
+        setDirtyStatus(statusResult);
+
+        // 3. If target branch resolved, fetch diff summary and commits
+        if (resolvedTarget && baseBranch) {
+          const summary = await getDiffSummary(
             activeSshConfig,
-            remoteRepoPath,
+            pathToUse,
+            baseBranch,
             resolvedTarget,
-            currentSnapshot.headSha,
             secret
           );
-          setDriftInfo(drift);
-        }
+          setDiffSummary(summary);
 
-        // Auto-select first changed file if none selected
-        if (summary.files.length > 0 && summary.files[0]) {
-          setSelectedFilePath(summary.files[0].path);
+          // Check drift if we have an approved snapshot
+          if (currentSnapshot && currentSnapshot.headSha) {
+            const drift = await checkHeadDrift(
+              activeSshConfig,
+              pathToUse,
+              resolvedTarget,
+              currentSnapshot.headSha,
+              secret
+            );
+            setDriftInfo(drift);
+          }
+
+          // Auto-select first changed file if none selected
+          if (summary.files.length > 0 && summary.files[0]) {
+            setSelectedFilePath(summary.files[0].path);
+          }
         }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setErrorMessage(`Lỗi Git/SSH: ${msg}`);
+      } finally {
+        setLoading(false);
       }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setErrorMessage(`Lỗi Git/SSH: ${msg}`);
-    } finally {
-      setLoading(false);
-    }
-  }, [activeSshConfig, remoteRepoPath, targetBranch, baseBranch, crCode, currentSnapshot]);
+    },
+    [activeSshConfig, loadedRepoPath, targetBranch, baseBranch, crCode, currentSnapshot]
+  );
 
-  // Trigger query when configuration changes
+  // Trigger query when loaded repository path, branches, or config changes
   useEffect(() => {
-    if (activeSshConfig && remoteRepoPath.trim()) {
+    if (activeSshConfig && loadedRepoPath.trim()) {
       void fetchRemoteData();
     }
-  }, [activeSshConfig, remoteRepoPath, baseBranch, targetBranch]);
+  }, [activeSshConfig, loadedRepoPath, baseBranch, targetBranch]);
+
+  const handleLoad = useCallback(() => {
+    setLoadedRepoPath(remoteRepoPath);
+    void handleSaveBinding(selectedSshConfigId, remoteRepoPath, baseBranch);
+    if (loadedRepoPath === remoteRepoPath) {
+      void fetchRemoteData(remoteRepoPath);
+    }
+  }, [remoteRepoPath, loadedRepoPath, selectedSshConfigId, baseBranch, handleSaveBinding, fetchRemoteData]);
 
   // Load single file diff when selectedFilePath changes
   useEffect(() => {
@@ -442,6 +460,7 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
               placeholder="/home/user/workspace/repo"
               value={remoteRepoPath}
               onChange={(e) => setRemoteRepoPath(e.target.value)}
+              onPressEnter={handleLoad}
               onBlur={() => handleSaveBinding(selectedSshConfigId, remoteRepoPath, baseBranch)}
               style={{ fontFamily: 'monospace', fontSize: 12 }}
             />
@@ -457,6 +476,7 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
               style={{ width: 140, fontFamily: 'monospace', fontSize: 12 }}
               value={baseBranch}
               onChange={(e) => setBaseBranch(e.target.value)}
+              onPressEnter={handleLoad}
               onBlur={() => handleSaveBinding(selectedSshConfigId, remoteRepoPath, baseBranch)}
             />
           </div>
@@ -483,15 +503,17 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
             />
           </div>
 
-          {/* Refresh Button */}
-          <Tooltip title="Làm mới danh sách nhánh">
-            <Button
-              size="small"
-              icon={<ReloadOutlined spin={loading} />}
-              onClick={fetchRemoteData}
-              disabled={loading || !activeSshConfig || !remoteRepoPath}
-            />
-          </Tooltip>
+          {/* Load / Refresh Button */}
+          <Button
+            size="small"
+            type="primary"
+            icon={<ReloadOutlined spin={loading} />}
+            onClick={handleLoad}
+            loading={loading}
+            disabled={!activeSshConfig || !remoteRepoPath.trim()}
+          >
+            Tải dữ liệu
+          </Button>
         </div>
       </Card>
 

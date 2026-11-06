@@ -36,7 +36,7 @@ export async function getRemoteBranches(
   const output = await runGitCommand(
     config,
     repoPath,
-    ['for-each-ref', '--format=%(refname:short)%00%(refname)', 'refs/heads/', 'refs/remotes/origin/'],
+    ['for-each-ref', escapeShellArg('--format=%(refname:short)%00%(refname)'), 'refs/heads/', 'refs/remotes/origin/'],
     secret
   );
 
