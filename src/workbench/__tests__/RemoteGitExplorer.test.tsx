@@ -119,4 +119,30 @@ describe('RemoteGitExplorer Component (SDLC-REPO-EXP-02)', () => {
     expect(remoteTab?.params?.branch).toBe('main');
     expect(remoteTab?.params?.size).toBe(1024);
   });
+
+  it('renders remote folder browse button and opens modal when clicked', async () => {
+    vi.spyOn(sshService, 'listRemoteDir').mockResolvedValue([
+      { name: 'repo-one', path: '/home/dev/repo-one', isDir: true, isSymlink: false, size: 4096, modified: 1000 },
+    ]);
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteGitExplorer />
+      </AntdThemeAdapter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('ssh-config-select')).toBeDefined();
+    });
+
+    const browseBtn = screen.getByTestId('browse-remote-repo-btn');
+    expect(browseBtn).toBeDefined();
+    expect(browseBtn.hasAttribute('disabled')).toBe(false);
+
+    fireEvent.click(browseBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Chọn thư mục Git Repository từ xa/i)).toBeDefined();
+    });
+  });
 });

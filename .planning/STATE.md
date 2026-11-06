@@ -84,3 +84,10 @@ Progress: [████░░░░░░] 45%
 - Phase 27 artifact diff cards + scoped approval verified.
 - Phase 25.4/25.5 IntelliJ workbench + SSH & SFTP backend verified.
 - Phase 29.1 Remote SSH Git Explorer + headful interactive terminal in bottom panel verified.
+
+## Quick Tasks Completed
+
+| Task | Date | Scope | Outcome |
+|------|------|-------|---------|
+| `261106-rfe-remote-explorer-picker-and-step2-header-fix` | 2026-11-06 | RemoteGitExplorer & Step2SolutionView | Added remote folder picker modal via SFTP; fixed Step 2 header title nowrap & flex wrap |
+

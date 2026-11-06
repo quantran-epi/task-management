@@ -165,9 +165,9 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 14 }}>
       {/* Header Toolbar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Space size={12}>
-          <Typography.Title level={4} style={{ margin: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+        <Space size={12} wrap style={{ alignItems: 'center' }}>
+          <Typography.Title level={4} style={{ margin: 0, whiteSpace: 'nowrap' }}>
             Bước 2: Thiết kế giải pháp kiến trúc (SOLUTION.md)
           </Typography.Title>
           {solutionArtifact?.version && (
@@ -181,7 +181,7 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
           )}
         </Space>
 
-        <Space size={10}>
+        <Space size={10} wrap>
           <Button
             icon={<RobotOutlined />}
             onClick={handleRunAnalysis}

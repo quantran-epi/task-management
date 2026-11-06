@@ -2,12 +2,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { Select, Input, Tree, Button, Tooltip, Tag, Spin, Alert, Empty } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import FolderOutlined from '@ant-design/icons/FolderOutlined';
+import FolderOpenOutlined from '@ant-design/icons/FolderOpenOutlined';
 import FileOutlined from '@ant-design/icons/FileOutlined';
 import CodeOutlined from '@ant-design/icons/CodeOutlined';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import BranchesOutlined from '@ant-design/icons/BranchesOutlined';
 import CloudServerOutlined from '@ant-design/icons/CloudServerOutlined';
 import FolderViewOutlined from '@ant-design/icons/FolderViewOutlined';
+import { RemoteDirectoryBrowserModal } from '../../components/common/RemoteDirectoryBrowserModal';
 import { getSshConfigs, getSshSecret } from '../../services/sshService';
 import { getRemoteBranches } from '../../services/gitRemoteService';
 import { getRemoteTree } from '../../services/gitRemoteTreeService';
@@ -41,6 +43,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
   const [sshConfigs, setSshConfigs] = useState<SshConfig[]>([]);
   const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
   const [repoPath, setRepoPath] = useState<string>('');
+  const [browserModalOpen, setBrowserModalOpen] = useState<boolean>(false);
   const [branches, setBranches] = useState<RemoteGitBranch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState<string>('main');
   const [loadingBranches, setLoadingBranches] = useState<boolean>(false);
@@ -73,13 +76,14 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
   const selectedConfig = sshConfigs.find((c) => c.id === selectedConfigId);
 
   // Load branches whenever config or repoPath changes
-  const loadBranches = useCallback(async () => {
-    if (!selectedConfig || !repoPath.trim()) return;
+  const loadBranches = useCallback(async (pathOverride?: string) => {
+    const targetPath = (pathOverride ?? repoPath).trim();
+    if (!selectedConfig || !targetPath) return;
     setLoadingBranches(true);
     setError(null);
     try {
       const secret = await getSshSecret(selectedConfig.id);
-      const remoteBranches = await getRemoteBranches(selectedConfig, repoPath.trim(), secret ?? undefined);
+      const remoteBranches = await getRemoteBranches(selectedConfig, targetPath, secret ?? undefined);
       setBranches(remoteBranches);
 
       if (remoteBranches.length > 0) {
@@ -336,6 +340,15 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
             onBlur={handleRepoPathSubmit}
             data-testid="repo-path-input"
           />
+          <Tooltip title="Browse remote folder">
+            <Button
+              size="small"
+              icon={<FolderOpenOutlined />}
+              onClick={() => setBrowserModalOpen(true)}
+              disabled={!selectedConfig}
+              data-testid="browse-remote-repo-btn"
+            />
+          </Tooltip>
         </div>
 
         {/* Branch Selector & Refresh */}
@@ -420,6 +433,19 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
           </div>
         )}
       </div>
+
+      {/* Remote Directory Browser Modal */}
+      <RemoteDirectoryBrowserModal
+        open={browserModalOpen}
+        sshConfig={selectedConfig}
+        initialPath={repoPath}
+        onSelect={(selectedPath) => {
+          setRepoPath(selectedPath);
+          setBrowserModalOpen(false);
+          void loadBranches(selectedPath);
+        }}
+        onCancel={() => setBrowserModalOpen(false)}
+      />
     </div>
   );
 }
