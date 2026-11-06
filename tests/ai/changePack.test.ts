@@ -117,12 +117,12 @@ describe('canonicalizePackPath', () => {
 });
 
 describe('validateChangePack', () => {
-  it('exports the exact profile-B ceilings', () => {
+  it('exports the exact desktop ceilings', () => {
     expect(ChangePackLimits).toEqual({
-      maxCompressedBytes: 5_242_880,
-      maxExpandedBytes: 26_214_400,
-      maxEntryBytes: 2_097_152,
-      maxEntries: 256,
+      maxCompressedBytes: 25 * 1024 * 1024,
+      maxExpandedBytes: 100 * 1024 * 1024,
+      maxEntryBytes: 10 * 1024 * 1024,
+      maxEntries: 1000,
     });
   });
 
