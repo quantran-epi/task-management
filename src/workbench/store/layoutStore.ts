@@ -38,6 +38,7 @@ export interface LayoutStateValues {
   activeTabId: string | null;
   activeRemoteConfigId: string | null;
   activeRemoteRepoPath: string;
+  activeRemoteBranch: string;
   isBottomMaximized: boolean;
 }
 
@@ -52,7 +53,8 @@ export interface LayoutActions {
   togglePinTab: (tabId: string) => void;
   reorderTabs: (fromIndex: number, toIndex: number) => void;
   setActiveTabId: (tabId: string) => void;
-  setActiveRemoteTarget: (configId: string | null, repoPath: string) => void;
+  setActiveRemoteTarget: (configId: string | null, repoPath: string, branch?: string) => void;
+  setActiveRemoteBranch: (branch: string) => void;
   resetLayout: () => void;
 }
 
@@ -75,6 +77,7 @@ export const DEFAULT_LAYOUT_STATE: LayoutStateValues = {
   activeTabId: 'tasks',
   activeRemoteConfigId: null,
   activeRemoteRepoPath: '',
+  activeRemoteBranch: '',
   isBottomMaximized: false,
 };
 
@@ -233,11 +236,16 @@ export const useLayoutStore = create<LayoutState>()(
         set(() => ({ activeTabId: tabId }));
       },
 
-      setActiveRemoteTarget: (configId: string | null, repoPath: string) => {
+      setActiveRemoteTarget: (configId: string | null, repoPath: string, branch?: string) => {
         set(() => ({
           activeRemoteConfigId: configId,
           activeRemoteRepoPath: repoPath,
+          ...(branch !== undefined ? { activeRemoteBranch: branch } : {}),
         }));
+      },
+
+      setActiveRemoteBranch: (branch: string) => {
+        set(() => ({ activeRemoteBranch: branch }));
       },
 
       resetLayout: () => {
@@ -267,6 +275,7 @@ export const useLayoutStore = create<LayoutState>()(
         activeTabId: typeof state.activeTabId === 'string' ? state.activeTabId : DEFAULT_LAYOUT_STATE.activeTabId,
         activeRemoteConfigId: typeof state.activeRemoteConfigId === 'string' ? state.activeRemoteConfigId : null,
         activeRemoteRepoPath: typeof state.activeRemoteRepoPath === 'string' ? state.activeRemoteRepoPath : '',
+        activeRemoteBranch: typeof state.activeRemoteBranch === 'string' ? state.activeRemoteBranch : '',
       }),
     }
   )

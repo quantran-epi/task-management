@@ -145,4 +145,47 @@ describe('RemoteGitExplorer Component (SDLC-REPO-EXP-02)', () => {
       expect(screen.getByText(/Chọn thư mục Git Repository từ xa/i)).toBeDefined();
     });
   });
+
+  it('automatically recovers branches and tree on remount without re-entering path', async () => {
+    // Preset target and branch as if previously chosen before toolwindow collapsed
+    act(() => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'feat/test');
+    });
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteGitExplorer />
+      </AntdThemeAdapter>
+    );
+
+    // Verify branches are loaded automatically once ssh configs resolve
+    await waitFor(() => {
+      expect(gitRemoteService.getRemoteBranches).toHaveBeenCalledWith(
+        mockSshConfigs[0],
+        '/home/dev/my-repo',
+        'secret-123'
+      );
+    });
+
+    // Verify tree is loaded automatically for the preserved active branch 'feat/test'
+    await waitFor(() => {
+      expect(gitRemoteTreeService.getRemoteTree).toHaveBeenCalledWith(
+        mockSshConfigs[0],
+        '/home/dev/my-repo',
+        'feat/test',
+        '',
+        'secret-123'
+      );
+    });
+
+    // Tree nodes should be visible immediately without typing in path input
+    await waitFor(() => {
+      expect(screen.getByText('src')).toBeDefined();
+      expect(screen.getByText('package.json')).toBeDefined();
+    });
+
+    // Branch select should not be disabled
+    const branchSelect = screen.getByTestId('branch-select');
+    expect(branchSelect.className).not.toContain('ant-select-disabled');
+  });
 });

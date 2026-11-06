@@ -90,4 +90,5 @@ Progress: [████░░░░░░] 45%
 | Task | Date | Scope | Outcome |
 |------|------|-------|---------|
 | `261106-rfe-remote-explorer-picker-and-step2-header-fix` | 2026-11-06 | RemoteGitExplorer & Step2SolutionView | Added remote folder picker modal via SFTP; fixed Step 2 header title nowrap & flex wrap |
+| `261107-0cw-fix-remote-file-explorer-state-loss-when` | 2026-11-06 | RemoteGitExplorer & layoutStore | Auto-reload branches and tree on remount; retain selected branch across toolwindow toggles |
 

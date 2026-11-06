@@ -83,4 +83,16 @@ describe('useLayoutStore', () => {
     expect(tabs[0]?.id).toBe('notes'); // only notes remains pinned on left
     expect(tabs.find((t) => t.id === 'planner')?.pinned).toBe(false);
   });
+
+  it('sets active remote target and branch correctly', () => {
+    useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/var/www/repo', 'feature/login');
+    let state = useLayoutStore.getState();
+    expect(state.activeRemoteConfigId).toBe('ssh-1');
+    expect(state.activeRemoteRepoPath).toBe('/var/www/repo');
+    expect(state.activeRemoteBranch).toBe('feature/login');
+
+    useLayoutStore.getState().setActiveRemoteBranch('main');
+    state = useLayoutStore.getState();
+    expect(state.activeRemoteBranch).toBe('main');
+  });
 });

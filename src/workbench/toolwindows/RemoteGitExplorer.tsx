@@ -43,14 +43,16 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
   const openTab = useLayoutStore((s) => s.openTab);
   const activeRemoteConfigId = useLayoutStore((s) => s.activeRemoteConfigId);
   const activeRemoteRepoPath = useLayoutStore((s) => s.activeRemoteRepoPath);
+  const activeRemoteBranch = useLayoutStore((s) => s.activeRemoteBranch);
   const setActiveRemoteTarget = useLayoutStore((s) => s.setActiveRemoteTarget);
+  const setActiveRemoteBranch = useLayoutStore((s) => s.setActiveRemoteBranch);
 
   const [sshConfigs, setSshConfigs] = useState<SshConfig[]>([]);
   const [selectedConfigId, setSelectedConfigId] = useState<string | null>(activeRemoteConfigId);
   const [repoPath, setRepoPath] = useState<string>(activeRemoteRepoPath || '');
   const [browserModalOpen, setBrowserModalOpen] = useState<boolean>(false);
   const [branches, setBranches] = useState<RemoteGitBranch[]>([]);
-  const [selectedBranch, setSelectedBranch] = useState<string>('');
+  const [selectedBranch, setSelectedBranch] = useState<string>(activeRemoteBranch || '');
   const [loadingBranches, setLoadingBranches] = useState<boolean>(false);
   const [treeData, setTreeData] = useState<CustomTreeNodeData[]>([]);
   const [loadingTree, setLoadingTree] = useState<boolean>(false);
@@ -180,9 +182,11 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
           const defaultBranch = targetMain ?? targetMaster ?? firstBranch ?? '';
 
           setSelectedBranch((current) => {
-            const stillValid = current && remoteBranches.some((b) => b.name === current);
-            const nextBranch = stillValid ? current : defaultBranch;
+            const preferred = current || activeRemoteBranch;
+            const stillValid = preferred && remoteBranches.some((b) => b.name === preferred);
+            const nextBranch = stillValid ? preferred : defaultBranch;
             if (nextBranch) {
+              setActiveRemoteBranch(nextBranch);
               void loadRootTree(nextBranch, targetPath);
             }
             return nextBranch;
@@ -199,7 +203,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         setLoadingBranches(false);
       }
     },
-    [selectedConfig, repoPath, loadRootTree]
+    [selectedConfig, repoPath, loadRootTree, activeRemoteBranch, setActiveRemoteBranch]
   );
 
   // Trigger branch load when repoPath input changes / blurred
@@ -216,6 +220,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
   const handleBranchChange = (newBranch: string) => {
     if (!newBranch || newBranch === selectedBranch) return;
     setSelectedBranch(newBranch);
+    setActiveRemoteBranch(newBranch);
     setLoadingTree(true);
     void loadRootTree(newBranch);
   };
@@ -226,7 +231,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
       void loadBranches(repoPath.trim());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedConfigId, repoPath]);
+  }, [selectedConfig, repoPath]);
 
   // Lazy child loader for directory nodes
   const onLoadData = async (node: any) => {
