@@ -298,7 +298,7 @@ describe('aiTools', () => {
   };
 
   it('declares comprehensive query and mutation AI_DATABASE_TOOLS', () => {
-    expect(AI_DATABASE_TOOLS.length).toBe(69);
+    expect(AI_DATABASE_TOOLS.length).toBe(71);
     const names = AI_DATABASE_TOOLS.map((t) => t.function.name);
     // Includes standard read tools
     expect(names).toContain('read_file');
@@ -330,6 +330,8 @@ describe('aiTools', () => {
     expect(names).toContain('query_recurring_tasks');
     expect(names).toContain('get_system_status');
     expect(names).toContain('query_notifications');
+    expect(names).toContain('get_artifact');
+    expect(names).toContain('patch_artifact_section');
 
     // Includes full mutation action tools
     expect(names).toContain('create_task');

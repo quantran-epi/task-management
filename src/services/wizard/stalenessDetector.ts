@@ -106,3 +106,34 @@ export function detectWorkflowStaleness(state: SdlcWorkflowState): WorkflowStale
 
   return { staleSteps, reasons };
 }
+
+/**
+ * D-03/A-ART04: a draft that diverges from its committed version marks only the owning step.
+ * Read-only by construction — it never emits, saves, or synthesizes a committed hash change.
+ */
+export function detectDraftHashDivergence(
+  state: SdlcWorkflowState,
+  draftHashes: Partial<Record<'SOLUTION' | 'PL03B' | 'PL07' | 'CAB', string>> = {}
+): WorkflowStalenessReport {
+  const staleSteps: SdlcStepId[] = [];
+  const reasons: Partial<Record<SdlcStepId, string>> = {};
+  const owningStep: Record<'SOLUTION' | 'PL03B' | 'PL07' | 'CAB', SdlcStepId> = {
+    SOLUTION: 'SOLUTION', PL03B: 'TECH_DOCS', PL07: 'TECH_DOCS', CAB: 'CAB',
+  };
+  const committed: Record<'SOLUTION' | 'PL03B' | 'PL07' | 'CAB', string | undefined> = {
+    SOLUTION: state.artifacts.solution?.hash,
+    PL03B: state.artifacts.pl03b?.hash,
+    PL07: state.artifacts.pl07?.hash,
+    CAB: state.artifacts.cab?.hash,
+  };
+  for (const kind of ['SOLUTION', 'PL03B', 'PL07', 'CAB'] as const) {
+    const hash = draftHashes[kind];
+    // An absent draft is absent; a missing baseline has nothing to diverge from.
+    if (hash === undefined || committed[kind] === undefined) continue;
+    if (hash === committed[kind]) continue;
+    const step = owningStep[kind];
+    if (!staleSteps.includes(step)) staleSteps.push(step);
+    reasons[step] = `Bản nháp ${kind} khác với phiên bản đã lưu. Hãy review và dùng thao tác lưu/phê duyệt hiện có nếu muốn cập nhật phiên bản.`;
+  }
+  return { staleSteps, reasons };
+}

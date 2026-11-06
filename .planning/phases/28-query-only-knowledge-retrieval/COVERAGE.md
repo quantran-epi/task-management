@@ -1,0 +1,1 @@
+No external API integration: Phase 28 extends the project's own Fastify `/api/v1/retrieve` route and its client with a query-only request shape; it adds no third-party API, SDK, webhook, or OAuth surface.

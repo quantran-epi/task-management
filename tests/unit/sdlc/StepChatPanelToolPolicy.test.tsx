@@ -77,7 +77,8 @@ describe('StepChatPanel tool-policy/payload parity', () => {
     expect(system).not.toContain('write_record');
     const policyNames = system.split('\n')
       .filter((line) => /^(Công cụ đọc cục bộ|MCP đọc-only động):/.test(line))
-      .flatMap((line) => line.slice(line.indexOf(': ') + 2).split(', '));
+      .flatMap((line) => line.slice(line.indexOf(': ') + 2).split(', '))
+      .filter((name) => name && name !== 'không có trong payload của turn này');
     expect(new Set(policyNames)).toEqual(new Set(tools.map((tool) => normalizeToolName(tool.function.name))));
     expect(mocks.discover).toHaveBeenCalledOnce();
     expect(request.analysisMode).toBe(true);
@@ -95,7 +96,9 @@ describe('StepChatPanel tool-policy/payload parity', () => {
     mocks.discover.mockRejectedValue(new Error('offline'));
     const request = await send();
     expect(request.systemMessages[0]!.content).toContain('MCP đọc-only động: không có trong payload của turn này');
-    expect((request.tools as AiToolDefinition[]).map((tool) => tool.function.name)).toEqual(SDLC_STEP_ALLOWED_TOOLS.SOLUTION);
+    // The host gate removes studio tools without a trusted scope, leaving the Phase 26 reads.
+    expect((request.tools as AiToolDefinition[]).map((tool) => tool.function.name))
+      .toEqual(['query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details']);
   });
 
   it('filters instruction-shaped capability names from both policy and payload', async () => {

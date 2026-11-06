@@ -8,8 +8,8 @@
 - Phase 25.3: SDLC Workflow Engine Hardening, Unified AI Chat Widget & Prompt Architecture (COMPLETE)
 - Phase 25.4: IntelliJ ExpUI (Light Theme) Workbench Migration (COMPLETE)
 - Phase 25.5: TaskMate Workbench UI/UX Comprehensive Restructure & Precision Layout (COMPLETE — verified 2026-11-04)
-- Phase 26: SDLC Prompt Grounding & Tool-Use Policy (NOT STARTED — v1.3)
-- Phase 27: Studio Artifact Tools & Diff Approval (v1.3)
+- Phase 26: SDLC Prompt Grounding & Tool-Use Policy (COMPLETE — verified 2026-11-05)
+- Phase 27: Studio Artifact Tools & Diff Approval (COMPLETE — verified 2026-11-05)
 - Phase 28: Query-Only Knowledge Retrieval (v1.3, parallel-capable)
 - Phase 29: fs-gw Client & Headless Repository Runs (v1.3)
 - Phase 30: Automatic Change Packs, Fallback & Run Reliability (v1.3)
@@ -466,7 +466,6 @@ Plans:
 
 - [x] 25.3-18-PLAN.md — SOLUTION extraction and truncation safety: fence-aware parser, transcript summary removal, four-backtick output contract, context-window forwarding and rejection of length-truncated artifacts (no host completion cap)
 
-
 ### Phase 25.4: IntelliJ ExpUI (Light Theme) Workbench Migration (INSERTED)
 
 **Goal:** Chuyển đổi giao diện TaskMate sang phong cách IntelliJ IDEA (ExpUI Islands Light) tương tự OpenIDEA theo mô hình Isolated Shell trên branch riêng `feature/intellij-workbench`. Đạt 60fps, low latency, fast docking/switching; giữ nguyên 100% logic nghiệp vụ, Dexie DB, các services và views hiện có.
@@ -488,8 +487,6 @@ Plans:
 7. Danh sách dài được ảo hóa bằng `@tanstack/react-virtual`, đạt render 60fps.
 
 **Plans:** 4 plans in 4 waves
-
-Plans:
 
 **Wave 1**
 - [x] 25.4-01-PLAN.md — Khung Workbench & Light Theme (`tokens.css`, `TitleBar`, `Stripe`, `StatusBar`, `layoutStore.ts` Zustand)
@@ -529,8 +526,6 @@ Plans:
 7. Toàn bộ các view hiện hữu của TaskMate (Tasks, Notes, Planner, Dashboard, Projects, Analytics, Settings, SDLC) mở và điều hướng trơn tru qua Center Tabs.
 
 **Plans:** 4/4 plans complete
-
-Plans:
 
 **Wave 1**
 - [x] 25.5-01-PLAN.md — Resizable Panels Fix & Theme/Typography Scale Overhaul (`workbench-tokens.css`, `WorkbenchLayout.tsx`, `layoutStore.ts`)
@@ -602,23 +597,23 @@ Plans:
 
 **Wave 1** *(depends on Phase 26; edits tool registry and artifact repository reads)*
 
-- [ ] 27-01-PLAN.md — `get_artifact` read tool with section index and `patch_artifact_section` diff tool (no editor write)
+- [x] 27-01-PLAN.md — `get_artifact` read tool with section index and `patch_artifact_section` diff tool (no editor write)
 
 **Wave 2** *(depends on 27-01; edits `AiChatWidget` and `StepChatPanel`)*
 
-- [ ] 27-02-PLAN.md — Artifact-diff approval card: added/removed rendering, approve/reject, transcript decision record
+- [x] 27-02-PLAN.md — Artifact-diff approval card: added/removed rendering, approve/reject, transcript decision record
 
 **Wave 3** *(depends on 27-02; edits SDLC host handlers)*
 
-- [ ] 27-03-PLAN.md — Approve writes editor draft, marks step stale via existing revision rules, and never commits a version
+- [x] 27-03-PLAN.md — Approve writes editor draft, marks step stale via existing revision rules, and never commits a version
 
 **Wave 4** *(depends on 27-03)*
 
-- [ ] 27-04-PLAN.md — Intent routing regression: small "add this content" request produces get + patch and a bounded diff
+- [x] 27-04-PLAN.md — Intent routing regression: small "add this content" request produces get + patch and a bounded diff
 
 **Wave 5** *(depends on 27-01)*
 
-- [ ] 27-05-PLAN.md — Read-only and prerequisite guards: refused in preview/historical, allowed in active CR, blocked without prerequisite artifact
+- [x] 27-05-PLAN.md — Read-only and prerequisite guards: refused in preview/historical, allowed in active CR, blocked without prerequisite artifact
 
 ### Phase 28: Query-Only Knowledge Retrieval
 

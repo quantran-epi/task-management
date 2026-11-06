@@ -8,6 +8,19 @@ import { SdlcSidebar } from '../../../src/components/sdlc/SdlcSidebar';
 import { StepChatPanel } from '../../../src/components/sdlc/chat/StepChatPanel';
 import { createNewCr } from '../../../src/services/wizard/sdlcCrManager';
 import type { SdlcWorkflowMetadata } from '../../../src/services/wizard/workflowSchemas';
+import { act, cleanup } from '@testing-library/react';
+import { createSdlcWorkflowCoordinator, workflowStorageKey } from '../../../src/services/wizard/workflowCoordinator';
+import { prepareArtifactPatch, readArtifactSnapshot, type ArtifactPatchProposal, type ArtifactToolKind } from '../../../src/services/ai/sdlcArtifactTools';
+import type { SdlcWorkspaceProps } from '../../../src/components/sdlc/SdlcWorkspace';
+
+const patchHost = vi.hoisted(() => ({ workspace: undefined as SdlcWorkspaceProps | undefined }));
+vi.mock('../../../src/components/sdlc/SdlcWorkspace', async (original) => {
+  const module = await original<typeof import('../../../src/components/sdlc/SdlcWorkspace')>();
+  return { ...module, SdlcWorkspace: (props: SdlcWorkspaceProps) => {
+    patchHost.workspace = props;
+    return <module.SdlcWorkspace {...props} />;
+  } };
+});
 
 describe('ProjectSdlcView and IDE Layout', () => {
   let db: TaskPlannerDatabase;
@@ -533,6 +546,127 @@ describe('ProjectSdlcView and IDE Layout', () => {
     });
     expect(screen.getByText(/Chi tiết phân tích kỹ thuật của AI/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Xem thêm/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('production artifact patch adapter (27-03)', () => {
+  let db: TaskPlannerDatabase;
+  let projectId: string;
+  let crId: string;
+
+  beforeEach(async () => {
+    patchHost.workspace = undefined;
+    db = new TaskPlannerDatabase(`production-patch-${crypto.randomUUID()}`);
+    projectId = crypto.randomUUID();
+    const metadata = { cr: 'CR-PATCH', featureName: 'Patch', author: 'T', requestingUnit: 'IT', date: '2026-11-05' };
+    const at = new Date().toISOString();
+    await db.projects.add({ id: projectId, name: 'Patch host', status: 'In Progress', createdAt: at, updatedAt: at });
+    crId = (await createNewCr(projectId, metadata, false, db)).id;
+    const coordinator = createSdlcWorkflowCoordinator({ projectId, threadId: crypto.randomUUID() });
+    await coordinator.startOrUpdateIntake(metadata, 'PL01', 'PL02');
+    await coordinator.commitSolution('# SOLUTION\n## Mục tiêu\nNội dung gốc.');
+    const state = coordinator.getState()!;
+    for (const kind of ['PL03B', 'PL07', 'CAB'] as const) {
+      const key = kind === 'PL03B' ? 'pl03b' : kind === 'PL07' ? 'pl07' : 'cab';
+      const content = `# ${kind}\n## Mục tiêu\nNội dung ${kind}.`;
+      const { defaultSha256 } = await import('../../../src/services/wizard/workflowCoordinator');
+      state.artifacts[key] = { kind, version: 2, hash: await defaultSha256(content.trim()), title: kind, content,
+        sourceHashes: [state.artifacts.solution!.hash], updatedAt: at, approvedAt: at };
+    }
+    state.artifacts.changePack = { kind: 'CHANGE_PACK', version: 1, hash: 'c'.repeat(64), title: 'PACK',
+      sourceHashes: [state.artifacts.solution!.hash], updatedAt: at };
+    await db.settings.put({ key: workflowStorageKey(projectId, crId), value: JSON.stringify(state) });
+  });
+
+  afterEach(async () => { cleanup(); vi.restoreAllMocks(); await db.delete(); });
+
+  async function openStep(step: 'SOLUTION' | 'TECH_DOCS' | 'CAB' = 'SOLUTION') {
+    const view = render(<ProjectSdlcView projectId={projectId} onBack={vi.fn()} db={db} />);
+    await screen.findByText('Bước 2: Thiết kế giải pháp');
+    await waitFor(() => expect(screen.getByTestId('sidebar-cr-select')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId(`sidebar-step-${step}`));
+    await waitFor(() => expect(patchHost.workspace?.selectedStep).toBe(step));
+    await waitFor(() => expect(patchHost.workspace?.workflowState?.artifacts.solution).toBeDefined());
+    return view;
+  }
+
+  async function proposalFor(kind: ArtifactToolKind = 'SOLUTION') {
+    const context = patchHost.workspace?.artifactToolContext;
+    expect(context, 'production workspace must forward trusted live artifact context').toBeDefined();
+    const snapshot = await readArtifactSnapshot(db, context!, kind);
+    expect('markdown' in snapshot).toBe(true);
+    const result = await prepareArtifactPatch(db, context!, { kind, sectionId: '1.1', expectedHeading: 'Mục tiêu',
+      baseHash: 'baseHash' in snapshot ? snapshot.baseHash : '', operation: 'append', newContent: `Dòng thêm ${kind}.` });
+    expect('proposalId' in result).toBe(true);
+    return result as ArtifactPatchProposal;
+  }
+
+  function decisionFor(proposal: ArtifactPatchProposal) {
+    return { id: crypto.randomUUID(), threadId: patchHost.workspace!.artifactToolContext!.getWorkflowState!()!.threadId,
+      role: 'system' as const, createdAt: new Date().toISOString(),
+      content: `ARTIFACT_PATCH_DECISION ${JSON.stringify({ proposalId: proposal.proposalId, kind: proposal.kind, sectionId: proposal.sectionId, decision: 'approved' })}\nĐã chấp thuận — bản nháp bước này đã được cập nhật.` };
+  }
+
+  it('applies a real prepared SOLUTION only through approval, atomically with decision and without workflow mutation', async () => {
+    await openStep();
+    const proposal = await proposalFor();
+    const before = await db.settings.get(workflowStorageKey(projectId, crId));
+    const decision = decisionFor(proposal);
+    expect(await db.settings.get(`sdlc_draft_solution:${projectId}:${crId}`)).toBeUndefined();
+    await act(async () => { await patchHost.workspace!.onApplyArtifactPatch!(proposal, decision); });
+    expect((await db.settings.get(`sdlc_draft_solution:${projectId}:${crId}`))?.value).toBe(proposal.patchedMarkdown);
+    expect(await db.chatMessages.get(decision.id)).toEqual(decision);
+    await waitFor(() => expect(screen.getByPlaceholderText(/Nội dung kiến trúc giải pháp SOLUTION.md/i)).toHaveValue(proposal.patchedMarkdown));
+    expect(await db.settings.get(workflowStorageKey(projectId, crId))).toEqual(before);
+    expect((await db.chatMessages.toArray()).filter((row) => row.artifactEvent)).toEqual([]);
+  });
+
+  it('rolls back SOLUTION draft and approved decision when the second transaction write fails', async () => {
+    await openStep();
+    const proposal = await proposalFor();
+    const before = await db.settings.get(workflowStorageKey(projectId, crId));
+    const decision = decisionFor(proposal);
+    const spy = vi.spyOn(db.chatMessages, 'put').mockRejectedValueOnce(new Error('disk failure'));
+    await expect(patchHost.workspace!.onApplyArtifactPatch!(proposal, decision)).rejects.toThrow();
+    spy.mockRestore();
+    expect(await db.settings.get(`sdlc_draft_solution:${projectId}:${crId}`)).toBeUndefined();
+    expect(await db.chatMessages.get(decision.id)).toBeUndefined();
+    expect(await db.settings.get(workflowStorageKey(projectId, crId))).toEqual(before);
+    expect(screen.getByPlaceholderText(/Nội dung kiến trúc giải pháp SOLUTION.md/i)).toHaveValue(proposal.baseMarkdown);
+  });
+
+  it('rejects a whitespace-only manual edit before approval instead of overwriting it', async () => {
+    await openStep();
+    const proposal = await proposalFor();
+    fireEvent.change(screen.getByPlaceholderText(/Nội dung kiến trúc giải pháp SOLUTION.md/i), {
+      target: { value: proposal.baseMarkdown + '\n' },
+    });
+    await expect(patchHost.workspace!.onApplyArtifactPatch!(proposal, decisionFor(proposal))).rejects.toThrow();
+    await waitFor(async () => expect((await db.settings.get(`sdlc_draft_solution:${projectId}:${crId}`))?.value)
+      .toBe(proposal.baseMarkdown + '\n'));
+    expect((await db.chatMessages.toArray()).filter((row) => row.content.startsWith('ARTIFACT_PATCH_DECISION '))).toEqual([]);
+  });
+
+  it.each(['PL03B', 'PL07', 'CAB'] as const)('updates only the live %s draft and keeps committed metadata unchanged', async (kind) => {
+    await openStep(kind === 'CAB' ? 'CAB' : 'TECH_DOCS');
+    const proposal = await proposalFor(kind);
+    const before = await db.settings.get(workflowStorageKey(projectId, crId));
+    const sibling = kind === 'PL03B' ? 'PL07' : 'PL03B';
+    const siblingBefore = patchHost.workspace!.artifactToolContext!.getDraft(sibling);
+    await act(async () => { await patchHost.workspace!.onApplyArtifactPatch!(proposal, decisionFor(proposal)); });
+    expect(patchHost.workspace!.artifactToolContext!.getDraft(kind)).toBe(proposal.patchedMarkdown);
+    expect(patchHost.workspace!.artifactToolContext!.getDraft(sibling)).toBe(siblingBefore);
+    expect(await db.settings.get(workflowStorageKey(projectId, crId))).toEqual(before);
+    expect(await db.settings.get(`sdlc_draft_solution:${projectId}:${crId}`)).toBeUndefined();
+  });
+
+  it('refuses a captured approval adapter after leaving its step', async () => {
+    await openStep();
+    const proposal = await proposalFor();
+    const apply = patchHost.workspace!.onApplyArtifactPatch!;
+    fireEvent.click(screen.getByTestId('sidebar-step-INTAKE'));
+    await expect(apply(proposal, decisionFor(proposal))).rejects.toThrow();
+    expect(await db.settings.get(`sdlc_draft_solution:${projectId}:${crId}`)).toBeUndefined();
   });
 });
 

@@ -249,3 +249,18 @@ export async function deleteChatTab(tabId: string, db: TaskPlannerDatabase = def
     }
   });
 }
+
+export async function reorderChatTabs(
+  _scopeKey: string,
+  orderedTabIds: string[],
+  db: TaskPlannerDatabase = defaultDb
+): Promise<void> {
+  const now = new Date().toISOString();
+  await db.transaction('rw', [db.chatTabs], async () => {
+    for (let index = 0; index < orderedTabIds.length; index++) {
+      const tabId = orderedTabIds[index];
+      if (!tabId) continue;
+      await db.chatTabs.update(tabId, { order: index, updatedAt: now });
+    }
+  });
+}

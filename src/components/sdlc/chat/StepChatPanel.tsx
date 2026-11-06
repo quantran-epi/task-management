@@ -19,6 +19,31 @@ import { formatGuardMessage, WORKFLOW_GUARD_MESSAGES, WORKFLOW_GUARD_STEP_NUMBER
 import { extractChatSummary, extractSolutionMarkdown } from '../../../utils/sdlcSolutionParser';
 import type { SdlcStepId } from '../../../services/wizard/workflowSchemas';
 import { useStepChatToolbox } from './useStepChatToolbox';
+import type { ChatMessage } from '../../../types/models';
+import { normalizeToolName } from '../../../services/ai/aiTools';
+import { readArtifactSnapshot, type ArtifactPatchProposal, type ArtifactToolContext } from '../../../services/ai/sdlcArtifactTools';
+
+export const ARTIFACT_PATCH_DECISION_PREFIX = 'ARTIFACT_PATCH_DECISION ';
+const DECISION_COPY = {
+  approved: 'Đã chấp thuận — bản nháp bước này đã được cập nhật.',
+  rejected: 'Đã từ chối đề xuất — tài liệu không thay đổi.',
+};
+
+type PatchRecord = { patch: ArtifactPatchProposal; scopeKey: string; callId?: string;
+  decisionRow: ChatMessage; decision?: 'approved' | 'rejected' };
+type RefusalRecord = { callId: string; scopeKey: string; message: string; step?: SdlcStepId };
+
+function parseDecision(row: ChatMessage): { proposalId: string; decision: 'approved' | 'rejected' } | undefined {
+  if (row.role !== 'system' || !row.content.startsWith(ARTIFACT_PATCH_DECISION_PREFIX)) return undefined;
+  try {
+    const metadata: unknown = JSON.parse(row.content.slice(ARTIFACT_PATCH_DECISION_PREFIX.length).split('\n')[0]!);
+    if (metadata && typeof metadata === 'object' && 'proposalId' in metadata && typeof metadata.proposalId === 'string' &&
+      'decision' in metadata && (metadata.decision === 'approved' || metadata.decision === 'rejected')) {
+      return { proposalId: metadata.proposalId, decision: metadata.decision };
+    }
+  } catch { /* A malformed internal marker never becomes assistant content or model instructions. */ }
+  return undefined;
+}
 
 export type SdlcGroundingSource = SdlcGroundingResult;
 
@@ -43,6 +68,8 @@ export interface StepChatPanelProps {
   artifactEvents?: AiChatArtifactEvent[] | undefined;
   onArtifactOpen?: ((eventId: string, readOnly: boolean) => void) | undefined;
   onArtifactCta?: ((eventId: string) => void) | undefined;
+  artifactToolContext?: ArtifactToolContext | undefined;
+  onApplyArtifactPatch?: ((proposal: ArtifactPatchProposal, decision: ChatMessage) => Promise<void>) | undefined;
 }
 
 export interface StepChatPanelHandle {
@@ -83,10 +110,32 @@ const ARTIFACT_PREREQUISITES: Partial<Record<SdlcStepId, readonly [SdlcGrounding
 const normalizeArtifactText = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('vi-VN');
 const artifactTerm = (term: string) => new RegExp(`(?:^|[^\\p{L}\\p{N}])(?:${term})(?=$|[^\\p{L}\\p{N}])`, 'u');
 
+/** Explicit full-document generation verbs; these keep the complete-artifact output contract. */
+const GENERATION_VERB = artifactTerm('tao|soan|sinh|viet');
+/** Bounded section-edit verbs; these route to get_artifact + patch_artifact_section. */
+const PATCH_VERB = artifactTerm('them|bo\\s+sung|chen|sua|cap\\s+nhat|add|append|insert|edit|replace|update');
+const ARTIFACT_TERM = artifactTerm('tai\\s+lieu|solution|pl03b|pl07|cab');
+
 export function looksLikeArtifactRequest(text: string): boolean {
   const normalized = normalizeArtifactText(text);
-  return artifactTerm('tao|soan|sinh|viet|cap\\s+nhat|sua').test(normalized)
-    && artifactTerm('tai\\s+lieu|solution|pl03b|pl07|cab').test(normalized);
+  return (GENERATION_VERB.test(normalized) || PATCH_VERB.test(normalized)) && ARTIFACT_TERM.test(normalized);
+}
+
+/**
+ * A concrete add/edit request with an explicit artifact. Full-generation verbs win so an
+ * explicit "soạn SOLUTION đầy đủ" turn is never downgraded to a section patch (D-05/D-09).
+ */
+export function looksLikeArtifactPatchRequest(text: string): boolean {
+  const normalized = normalizeArtifactText(text);
+  if (GENERATION_VERB.test(normalized)) return false;
+  return PATCH_VERB.test(normalized) && ARTIFACT_TERM.test(normalized);
+}
+
+/** Only the exact artifact the user named; never a silent step default. */
+export function explicitPatchKind(text: string, allowed: readonly SdlcArtifactKindForTurn[]): SdlcArtifactKindForTurn | undefined {
+  const normalized = normalizeArtifactText(text);
+  const named = allowed.filter((kind) => artifactTerm(kind.toLowerCase()).test(normalized));
+  return named.length === 1 ? named[0] : undefined;
 }
 
 type ArtifactNotice =
@@ -110,6 +159,8 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   artifactEvents,
   onArtifactOpen,
   onArtifactCta,
+  artifactToolContext,
+  onApplyArtifactPatch,
   db = defaultDb,
 }, ref) => {
   const { token } = theme.useToken();
@@ -123,9 +174,11 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
   const [toolEvents, setToolEvents] = useState<ChatTurnToolEvent[]>([]);
   const [artifactNotice, setArtifactNotice] = useState<ArtifactNotice | null>(null);
+  // Original bounded-edit text is retained until the user names the document (D-03/D-08).
+  const [patchClarification, setPatchClarification] = useState<{ text: string; targets: readonly SdlcArtifactKindForTurn[] } | null>(null);
   const artifactActions = STEP_ARTIFACT_ACTIONS[stepId] ?? [];
 
-  useEffect(() => { setArtifactNotice(null); }, [scopeKey, threadId, readOnly]);
+  useEffect(() => { setArtifactNotice(null); setPatchClarification(null); }, [scopeKey, threadId, readOnly]);
 
   // Isolated thread for this step: sdlc:{projectId}:{crId}:{stepId}
   useEffect(() => {
@@ -167,14 +220,79 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
     };
   }, [scopeKey]);
 
+  const [patchRecords, setPatchRecords] = useState<Record<string, PatchRecord>>({});
+  const [refusalRecords, setRefusalRecords] = useState<RefusalRecord[]>([]);
+  const [approvalState, setApprovalState] = useState<{ stale?: boolean; applying?: boolean; error?: string }>({});
+  const staleRef = useRef(false);
+  staleRef.current = approvalState.stale === true;
+  const [activeProposalId, setActiveProposalId] = useState<string | null>(null);
+  const pendingProposalRef = useRef<ArtifactPatchProposal | null>(null);
+  const appliedProposalIdsRef = useRef(new Set<string>());
+  const freshnessGenerationRef = useRef(0);
+  const liveContextRef = useRef(artifactToolContext);
+  liveContextRef.current = artifactToolContext;
+
+  useEffect(() => {
+    setPatchRecords({}); setRefusalRecords([]); setApprovalState({}); setActiveProposalId(null);
+    pendingProposalRef.current = null; appliedProposalIdsRef.current.clear();
+    freshnessGenerationRef.current += 1;
+  }, [scopeKey, threadId]);
+
   const turn = useChatTurn({
     scopeKey,
     deps: {
       ...createDefaultChatTurnDeps(db),
-      onToolEvent: (event) => setToolEvents((prev) => [...prev, event]),
+      onToolEvent: (event) => {
+        setToolEvents((prev) => [...prev, event]);
+        const toolName = normalizeToolName(event.name);
+        if (event.phase !== 'result' || (toolName !== 'patch_artifact_section' && toolName !== 'get_artifact')) return;
+        let parsed: { refused?: boolean; code?: string; message?: string; supplyingStep?: SdlcStepId;
+          stepNumber?: number; missingArtifact?: string } | undefined;
+        try { parsed = JSON.parse(event.result ?? '{}'); } catch { parsed = undefined; }
+        if (parsed?.refused !== true) return;
+        // WR-06: the service already reports the supplying step; surface its navigation CTA.
+        const step = parsed.supplyingStep ?? (
+          parsed.code === 'ARTIFACT_NOT_FOUND' || parsed.code === 'WORKFLOW_UNAVAILABLE' ? stepId : undefined);
+        setRefusalRecords((prev) => [...prev, { callId: event.id, scopeKey, message: parsed!.message ?? '',
+          ...(step ? { step } : {}) }]);
+      },
+      onAwaitingApproval: (info) => {
+        if (!info.patch) return;
+        const patch = info.patch;
+        pendingProposalRef.current = patch;
+        setActiveProposalId(patch.proposalId);
+        setApprovalState({ stale: false });
+        setPatchRecords((prev) => prev[patch.proposalId] ? prev : { ...prev, [patch.proposalId]: {
+          patch, scopeKey, decisionRow: { id: crypto.randomUUID(), threadId: threadId ?? '', role: 'system', content: '',
+            createdAt: new Date().toISOString() } } });
+      },
       onError: (info) => setError(info),
     },
   });
+
+  // Live draft text for the pending proposal; part of the freshness effect's dependency set so a
+  // host-rendered edit re-checks even when it hands down the same context object.
+  const liveDraft = artifactToolContext && pendingProposalRef.current
+    ? artifactToolContext.getDraft(pendingProposalRef.current.kind) : undefined;
+  // Freshness is checked against the live trusted context, never against a rejection.
+  // The draft text is part of the dependency set so a host-rendered edit re-checks even when
+  // it hands down the same context object.
+  useEffect(() => {
+    if (!activeProposalId || !artifactToolContext) return;
+    // The generation token stops an older hash promise from re-enabling Approve after a scope switch.
+    const generation = (freshnessGenerationRef.current += 1);
+    void (async () => {
+      const snapshot = await readArtifactSnapshot(db, artifactToolContext, pendingProposalRef.current?.kind ?? 'SOLUTION');
+      if (generation !== freshnessGenerationRef.current) return;
+      // Normalized hash governs staleness semantics; an exact-base change (including
+      // whitespace-only) also requires a fresh proposal before replacing text (T-27-02).
+      const captured = pendingProposalRef.current;
+      const currentMarkdown = 'markdown' in snapshot ? snapshot.markdown : undefined;
+      const stale = !('baseHash' in snapshot) || !captured || currentMarkdown === undefined ||
+        snapshot.baseHash !== captured.baseHash || currentMarkdown !== captured.baseMarkdown;
+      setApprovalState((prev) => prev.stale === stale ? prev : { ...prev, stale });
+    })();
+  }, [artifactToolContext, activeProposalId, db, liveDraft]);
 
   /**
    * D-07/D-16: a chat-produced artifact is a draft for the editor, never a committed version.
@@ -206,7 +324,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   );
 
   const submit = useCallback(
-    async (rawText: string, artifact?: SdlcArtifactKindForTurn) => {
+    async (rawText: string, artifact?: SdlcArtifactKindForTurn, patchIntent = false) => {
       const text = rawText.trim();
       if (!text || !threadId) return;
       // A prelude in flight owns the step: a second send would supersede a prompt already
@@ -216,6 +334,8 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
       setDraft('');
       setError(null);
       setToolEvents([]);
+      setRefusalRecords([]);
+      appliedProposalIdsRef.current.clear();
       // D-19/SC5: paint the loading state before any await. Config, key and MCP discovery
       // can take a visible moment; the composer must never look dead in that window.
       const preludeToken = (preludeSeqRef.current += 1);
@@ -230,18 +350,36 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
             role: row.role === 'user' ? ('user' as const) : ('assistant' as const),
             content: row.content,
           }));
-        const [config, apiKey, { tools, dynamicReadOnlyToolNames }] = await Promise.all([
+        // Trusted host gate before composition: an artifact tool is only advertised when a real
+        // scoped context, a live target artifact and every prerequisite are present (T-27-13).
+        const artifactScopeReady = Boolean(artifactToolContext) && artifactToolContext!.getAccess().scopeValid &&
+          !artifactToolContext!.getAccess().readOnly && artifactToolContext!.getAccess().crActive;
+        const prerequisitesMet = (ARTIFACT_PREREQUISITES[stepId] ?? [])
+          .every(([marker]) => hasGroundingSource(stepGroundingContext, marker));
+        const contextKinds = (['SOLUTION', 'PL03B', 'PL07', 'CAB'] as const)
+          .filter((kind) => artifactToolContext?.getDraft(kind) !== undefined);
+        const artifactsAllowed = artifactScopeReady && prerequisitesMet;
+        const [config, apiKey, discovery] = await Promise.all([
           getNineRouterConfig(db),
           getNineRouterApiKey(db),
           toolbox.toolsForTurn(),
         ]);
+        const { dynamicReadOnlyToolNames } = discovery;
+        // Only the artifact pair is host-gated here; the discovered MCP suffix flows through.
+        const tools = discovery.tools.filter((tool) => {
+          const name = normalizeToolName(tool.function.name);
+          if (name === 'get_artifact') return artifactsAllowed;
+          if (name === 'patch_artifact_section') return artifactsAllowed && contextKinds.length > 0;
+          return true;
+        });
 
         const composed = composeSdlcTurn({
           step: stepId,
-          intent: artifact ? 'artifact' : 'qa',
+          intent: patchIntent ? 'patch' : artifact ? 'artifact' : 'qa',
           ...(artifact ? { artifact } : {}),
           grounding: groundingText,
           dynamicReadOnlyToolNames,
+          availableToolNames: tools.map((tool) => normalizeToolName(tool.function.name)),
           metadata: { cr: crId },
           history,
           userTurn: text,
@@ -273,14 +411,17 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
           systemMessages,
           history: composedHistory,
           tools,
+          ...(artifactToolContext ? { artifactContext: artifactToolContext } : {}),
         });
 
         if (outcome.phase === 'error') {
           if (outcome.error) setError(outcome.error);
           return;
         }
-        if (outcome.phase === 'complete' && outcome.content) {
-          await extractArtifactDraft(outcome.content, artifact ?? 'SOLUTION');
+        // T-27-12: only an explicit full-generation turn may hand final text to the editor.
+        // Patch and ordinary Q&A answers can never bypass the diff card.
+        if (outcome.phase === 'complete' && outcome.content && artifact && !patchIntent) {
+          await extractArtifactDraft(outcome.content, artifact);
         }
       } catch {
         setDraft((current) => current || rawText);
@@ -293,8 +434,58 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
         }
       }
     },
-    [threadId, messages, db, stepId, crId, groundingText, turn, scopeKey, toolbox, extractArtifactDraft]
+    [threadId, messages, db, stepId, crId, groundingText, turn, scopeKey, toolbox, extractArtifactDraft, artifactToolContext]
   );
+
+  const handleResolveArtifactApproval = useCallback(async (approved: boolean) => {
+    const patch = pendingProposalRef.current;
+    if (!patch) return;
+    if (approved) {
+      if (liveContextRef.current?.scopeKey !== patch.scopeKey) {
+        setApprovalState({ stale: true });
+        return;
+      }
+      if (approvalState.stale) return;
+      if (!onApplyArtifactPatch) {
+        setApprovalState({ error: 'Chưa có kết nối cập nhật bản nháp trong màn hình này. Bản nháp hiện tại vẫn nguyên vẹn — hãy mở lại bước và thử chấp thuận lại.' });
+        return;
+      }
+      if (appliedProposalIdsRef.current.has(patch.proposalId)) return;
+      appliedProposalIdsRef.current.add(patch.proposalId);
+      setApprovalState({ applying: true });
+      const decisionRow: ChatMessage = {
+        ...patchRecords[patch.proposalId]!.decisionRow,
+        content: `${ARTIFACT_PATCH_DECISION_PREFIX}${JSON.stringify({ proposalId: patch.proposalId, kind: patch.kind, sectionId: patch.sectionId, decision: 'approved' })}\n${DECISION_COPY.approved}`,
+      };
+      try {
+        await onApplyArtifactPatch(patch, decisionRow);
+        setPatchRecords((prev) => ({ ...prev, [patch.proposalId]: { ...prev[patch.proposalId]!, decision: 'approved' } }));
+        setApprovalState({});
+        turn.resolveApproval(true);
+      } catch (cause) {
+        appliedProposalIdsRef.current.delete(patch.proposalId);
+        const detail = cause instanceof Error ? cause.message : String(cause);
+        setApprovalState({ error: `Không thể cập nhật bản nháp: ${detail}. Bản nháp hiện tại vẫn nguyên vẹn — thử chấp thuận lại hoặc gửi yêu cầu mới trong khung chat.` });
+      }
+      return;
+    }
+    const record = patchRecords[patch.proposalId];
+    setApprovalState({ applying: true });
+    try {
+      // Stable runtime UUID: retries rewrite the same row, never append a duplicate.
+      const row: ChatMessage = { ...record!.decisionRow, threadId: threadId ?? record!.decisionRow.threadId,
+        content: `${ARTIFACT_PATCH_DECISION_PREFIX}${JSON.stringify({ proposalId: patch.proposalId, kind: patch.kind, sectionId: patch.sectionId, decision: 'rejected' })}\n${DECISION_COPY.rejected}` };
+      await db.transaction('rw', [db.chatMessages, db.chatThreads], async () => {
+        await db.chatMessages.put(row);
+        await db.chatThreads.update(row.threadId, { updatedAt: row.createdAt });
+      });
+      setPatchRecords((prev) => ({ ...prev, [patch.proposalId]: { ...prev[patch.proposalId]!, decision: 'rejected' } }));
+      setApprovalState({});
+      turn.resolveApproval(false);
+    } catch {
+      setApprovalState({ error: 'Không thể ghi nhận quyết định từ chối. Đề xuất vẫn đang chờ — hãy thử lại.' });
+    }
+  }, [approvalState.stale, onApplyArtifactPatch, patchRecords, threadId, db, turn]);
 
   const launchArtifact = (kind: SdlcArtifactKindForTurn) => {
     if (readOnly || preludeTokenRef.current !== 0 || turn.runtime?.isRunning() || turn.status === 'awaiting-approval') return;
@@ -336,6 +527,38 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   }, [threadId, scopeKey]);
 
   const sendMessage = async (text: string) => {
+    // T-27-13: a bounded edit naming a document this step does not own is refused, never
+    // silently downgraded to Q&A or retargeted at another step's artifact.
+    if (!readOnly && artifactActions.length > 0 && looksLikeArtifactPatchRequest(text) &&
+      !explicitPatchKind(text, artifactActions)) {
+      const foreign = (['SOLUTION', 'PL03B', 'PL07', 'CAB'] as const).find((kind) =>
+        !artifactActions.includes(kind) && artifactTerm(kind.toLowerCase()).test(normalizeArtifactText(text)));
+      if (foreign) {
+        const step = (Object.keys(STEP_ARTIFACT_ACTIONS) as SdlcStepId[])
+          .find((candidate) => STEP_ARTIFACT_ACTIONS[candidate]?.includes(foreign));
+        setArtifactNotice({ type: 'warning',
+          message: `Tài liệu ${foreign} không thuộc bước này. Hãy chuyển sang bước sở hữu tài liệu đó để đề xuất chỉnh sửa.`,
+          ...(step ? { step } : {}) });
+        return;
+      }
+    }
+    // D-05/D-09: a concrete add/edit request with an explicit target becomes a bounded patch turn.
+    if (!readOnly && artifactToolContext && artifactActions.length > 0 && looksLikeArtifactPatchRequest(text)) {
+      const kind = explicitPatchKind(text, artifactActions);
+      if (kind) {
+        const missing = ARTIFACT_PREREQUISITES[stepId]?.find(([marker]) => !hasGroundingSource(stepGroundingContext, marker));
+        if (missing) {
+          setArtifactNotice({ type: 'warning', message: formatGuardMessage(missing[1]),
+            step: WORKFLOW_GUARD_MESSAGES[missing[1]].supplyingStep });
+          return;
+        }
+        await submit(text, kind, true);
+        return;
+      }
+      // TECH_DOCS owns two documents: ask which one instead of silently defaulting (T-27-13).
+      setPatchClarification({ text, targets: artifactActions });
+      return;
+    }
     // A clarify prompt needs somewhere to go: without targets (no artifact action at this
     // step) or in read-only history view it would dead-end, so the turn stays ordinary Q&A.
     if (!readOnly && artifactActions.length > 0 && looksLikeArtifactRequest(text)) {
@@ -362,6 +585,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
         pendingArtifactScopeRef.current = null;
         setPreludePending(false);
         setArtifactNotice(null);
+        setPatchClarification(null);
         turn.abort();
         try {
           await turn.runtime?.drainPersistence();
@@ -379,6 +603,27 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
     requestArtifactAnalysis: () => launchArtifact('SOLUTION'),
     requestArtifact: launchArtifact,
   }));
+
+  // Decisions are durable transcript data; pending bodies never enter `messages`.
+  // The card already renders its resolved line while still mounted; the persisted row is
+  // shown once the card is gone (after resolve) or after remount. Dedupe only that overlap.
+  const decisionRows = (messages ?? [])
+    .map(parseDecision)
+    .filter((d): d is NonNullable<typeof d> => Boolean(d))
+    .filter((d) => !(turn.pendingApproval?.patch?.proposalId === d.proposalId && patchRecords[d.proposalId]?.decision));
+  const activeRecord = activeProposalId ? patchRecords[activeProposalId] : undefined;
+  const toolEventExtensions = useMemo(
+    () => Object.fromEntries(refusalRecords.map((record) => [record.callId, (
+      <Alert key={record.callId} type="warning" showIcon style={{ fontSize: 12, marginTop: 4 }}
+        title={record.message}
+        action={record.step && onNavigateToStep ? (
+          <Button size="small" style={{ minHeight: 32, fontSize: 12 }} onClick={() => onNavigateToStep(record.step!)}>
+            Chuyển đến Bước {WORKFLOW_GUARD_STEP_NUMBER[record.step]}: {STEP_LABELS[record.step].replace(/^\d+\.\s*/, '')}
+          </Button>
+        ) : null} />
+    )])),
+    [refusalRecords, onNavigateToStep]
+  );
 
   const quickPrompts = useMemo<AiChatQuickPrompt[]>(
     () =>
@@ -407,12 +652,14 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
           scopeKey,
           label: `SDLC — ${STEP_LABELS[stepId]}`,
         }}
-        messages={messages ?? []}
+        messages={(messages ?? []).filter((row) => !row.content.startsWith(ARTIFACT_PATCH_DECISION_PREFIX))}
         turn={{
           status: preludePending && turn.status === 'idle' ? 'preparing' : turn.status,
           streamingText: turn.streamingText,
           streamingStatusLabel: turn.streamingStatusLabel,
-          pendingApproval: turn.pendingApproval,
+          pendingApproval: turn.pendingApproval && activeRecord?.decision
+            ? { ...turn.pendingApproval, patch: activeRecord.patch }
+            : turn.pendingApproval,
           toolLimitRounds: turn.runtime?.getToolLimitRounds?.() ?? null,
         }}
         onSubmit={(text) => {
@@ -427,12 +674,44 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
           }
           turn.abort();
         }}
-        onResolveApproval={turn.resolveApproval}
+        onResolveApproval={(approved) => {
+          // WR-02: only a live artifact proposal owns the artifact path; ordinary mutation
+          // approvals resolve directly so the turn never hangs with a disabled composer.
+          const proposal = pendingProposalRef.current;
+          if (proposal && patchRecords[proposal.proposalId] && !patchRecords[proposal.proposalId]?.decision) {
+            void handleResolveArtifactApproval(approved);
+            return;
+          }
+          turn.resolveApproval(approved);
+        }}
         onRetry={() => {
           void turn.retry();
         }}
-        statusExtensions={!readOnly && (artifactNotice || artifactActions.length > 0) ? (
+        statusExtensions={!readOnly && (artifactNotice || patchClarification || artifactActions.length > 0) ? (
           <div style={{ padding: '8px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {patchClarification && (
+              <Alert
+                type="warning"
+                showIcon
+                closable={{ onClose: () => setPatchClarification(null) }}
+                title={`Yêu cầu chỉnh sửa này áp dụng cho tài liệu nào của bước ${stepId}? Chọn một tài liệu để đề xuất chỉnh sửa: ${patchClarification.targets.join(' / ')}.`}
+                action={
+                  <Space size={8} wrap>
+                    {patchClarification.targets.map((kind) => (
+                      <Button key={kind} size="small" style={{ minHeight: 32, fontSize: 12 }}
+                        disabled={preludePending || turn.runtime?.isRunning() || turn.status === 'awaiting-approval'}
+                        onClick={() => {
+                          const original = patchClarification.text;
+                          setPatchClarification(null);
+                          void submit(original, kind, true);
+                        }}>
+                        Chỉnh sửa {kind}
+                      </Button>
+                    ))}
+                  </Space>
+                }
+              />
+            )}
             {artifactNotice && (
               <Alert
                 type={artifactNotice.type}
@@ -478,6 +757,18 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
           body: 'Chọn gợi ý bên dưới hoặc đặt câu hỏi để hoàn thiện hồ sơ cho bước này.',
         }}
         toolEvents={toolEvents}
+        artifactApprovalState={approvalState}
+        {...(activeRecord?.decision ? { artifactDecision: activeRecord.decision } : {})}
+        {...(Object.keys(toolEventExtensions).length > 0 ? { toolEventExtensions } : {})}
+        transcriptExtensions={decisionRows.length > 0 ? (
+          <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 4 }} aria-label="Quyết định đề xuất chỉnh sửa">
+            {decisionRows.map((row) => (
+              <div key={row.proposalId} role="status" style={{ fontSize: 12, color: token.colorTextSecondary }}>
+                {row.decision === 'approved' ? 'Đã chấp thuận — bản nháp bước này đã được cập nhật.' : 'Đã từ chối đề xuất — tài liệu không thay đổi.'}
+              </div>
+            ))}
+          </div>
+        ) : undefined}
         // D-03: the SDLC panel is a fixed 380px lane, so name it explicitly. Hosts with a
         // variable width (the drawer) omit this and let the widget measure its host.
         compact

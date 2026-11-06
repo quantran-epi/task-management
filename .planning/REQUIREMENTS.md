@@ -18,12 +18,12 @@
 
 ### Studio Artifact Tools (SDLC-ART)
 
-- [ ] **SDLC-ART-01**: A read tool (`get_artifact`) returns the current artifact for a step — kind, version, approval state, full Markdown, and a stable section index — so the model can inspect what exists before proposing edits.
-- [ ] **SDLC-ART-02**: A patch tool (`patch_artifact_section`) takes a target section and replacement/addition text and returns a unified diff plus the resulting Markdown, without writing to the editor.
-- [ ] **SDLC-ART-03**: The studio chat renders an artifact-diff approval card for every patch tool result: the user sees added/removed lines, can approve (writes the editor draft) or reject (leaves the editor untouched), and the decision is recorded in the transcript.
-- [ ] **SDLC-ART-04**: Approving a patch updates the step editor draft and marks the step stale, following the existing revision/staleness rules; it never commits a version, claims approval, or claims the document was saved.
-- [ ] **SDLC-ART-05**: "Add this content to the solution" style requests resolve to `get_artifact` + `patch_artifact_section` rather than regenerating the whole document, and a regression test proves a small addition produces a bounded diff.
-- [ ] **SDLC-ART-06**: Artifact tools respect read-only rules — refused in preview/historical versions, available in the active CR, and blocked when the prerequisite artifact for that step does not exist.
+- [x] **SDLC-ART-01**: A read tool (`get_artifact`) returns the current artifact for a step — kind, version, approval state, full Markdown, and a stable section index — so the model can inspect what exists before proposing edits.
+- [x] **SDLC-ART-02**: A patch tool (`patch_artifact_section`) takes a target section and replacement/addition text and returns a unified diff plus the resulting Markdown, without writing to the editor.
+- [x] **SDLC-ART-03**: The studio chat renders an artifact-diff approval card for every patch tool result: the user sees added/removed lines, can approve (writes the editor draft) or reject (leaves the editor untouched), and the decision is recorded in the transcript.
+- [x] **SDLC-ART-04**: Approving a patch updates the step editor draft and marks the step stale, following the existing revision/staleness rules; it never commits a version, claims approval, or claims the document was saved.
+- [x] **SDLC-ART-05**: "Add this content to the solution" style requests resolve to `get_artifact` + `patch_artifact_section` rather than regenerating the whole document, and a regression test proves a small addition produces a bounded diff.
+- [x] **SDLC-ART-06**: Artifact tools respect read-only rules — refused in preview/historical versions, available in the active CR, and blocked when the prerequisite artifact for that step does not exist.
 
 ### Knowledge Retrieval (SDLC-RET)
 
@@ -101,12 +101,12 @@
 | SDLC-PR-04 | Phase 26 | Complete |
 | SDLC-PR-05 | Phase 26 | Complete |
 | SDLC-PR-06 | Phase 26 | Pending |
-| SDLC-ART-01 | Phase 27 | Pending |
-| SDLC-ART-02 | Phase 27 | Pending |
-| SDLC-ART-03 | Phase 27 | Pending |
-| SDLC-ART-04 | Phase 27 | Pending |
-| SDLC-ART-05 | Phase 27 | Pending |
-| SDLC-ART-06 | Phase 27 | Pending |
+| SDLC-ART-01 | Phase 27 | Complete |
+| SDLC-ART-02 | Phase 27 | Complete |
+| SDLC-ART-03 | Phase 27 | Complete |
+| SDLC-ART-04 | Phase 27 | Complete |
+| SDLC-ART-05 | Phase 27 | Complete |
+| SDLC-ART-06 | Phase 27 | Complete |
 | SDLC-RET-01 | Phase 28 | Pending |
 | SDLC-RET-02 | Phase 28 | Pending |
 | SDLC-RET-03 | Phase 28 | Pending |

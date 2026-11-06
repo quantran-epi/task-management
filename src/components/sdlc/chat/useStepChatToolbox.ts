@@ -21,7 +21,8 @@ import { normalizeDynamicToolNames, SDLC_STEP_ALLOWED_TOOLS } from '../../../ser
 
 export interface StepChatToolbox extends AiChatToolboxProps {
   /** One immutable discovery snapshot supplies both policy names and tool payload. */
-  toolsForTurn: () => Promise<{
+  /** One discovery snapshot; the optional host filter can only narrow the payload. */
+  toolsForTurn: (availableToolNames?: readonly string[]) => Promise<{
     tools: AiToolDefinition[];
     dynamicReadOnlyToolNames: string[];
   }>;
@@ -84,7 +85,7 @@ export function useStepChatToolbox(db: TaskPlannerDatabase, stepId?: SdlcStepId)
 
   return {
     selectedModel,
-    toolsForTurn: async () => {
+    toolsForTurn: async (availableToolNames) => {
       const dynamicMcpTools = mcpEnabled ? await discoverAllMcpTools(db).catch(() => []) : [];
       const dynamicReadOnlyToolNames = normalizeDynamicToolNames(dynamicMcpTools
         .filter((tool) => isReadOnlyMcpTool(normalizeToolName(tool.function.name)))
@@ -93,7 +94,10 @@ export function useStepChatToolbox(db: TaskPlannerDatabase, stepId?: SdlcStepId)
       const allowedToolNames = stepId
         ? [...SDLC_STEP_ALLOWED_TOOLS[stepId], ...dynamicReadOnlyToolNames]
         : undefined;
-      const tools = getToolsForTurn(analysisMode, dynamicMcpTools, allowedToolNames);
+      const payload = getToolsForTurn(analysisMode, dynamicMcpTools, allowedToolNames);
+      const tools = availableToolNames === undefined
+        ? payload
+        : payload.filter((tool) => availableToolNames.includes(normalizeToolName(tool.function.name)));
       return { tools, dynamicReadOnlyToolNames };
     },
     availableModels,

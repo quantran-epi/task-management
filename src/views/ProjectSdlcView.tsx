@@ -36,6 +36,8 @@ import type {
 import type { AiChatArtifactEvent } from '../components/ai/AiChatWidget';
 import type { StepChatPanelHandle } from '../components/sdlc/chat/StepChatPanel';
 import { generateId } from '../utils/uuid';
+import type { ChatMessage } from '../types/models';
+import { readArtifactSnapshot, type ArtifactPatchProposal, type ArtifactToolContext, type ArtifactToolKind } from '../services/ai/sdlcArtifactTools';
 
 export interface ProjectSdlcViewProps {
   projectId: string;
@@ -61,6 +63,10 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   const [selectedStep, setSelectedStep] = useState<SdlcStepId>('INTAKE');
   const selectedStepRef = useRef<SdlcStepId>('INTAKE');
   const setSelectedStepTracked = useCallback((step: SdlcStepId) => {
+    if (selectedStepRef.current !== step) {
+      scopeEpochRef.current += 1;
+      patchTransactionRef.current?.abort();
+    }
     selectedStepRef.current = step;
     setSelectedStep(step);
   }, []);
@@ -69,12 +75,27 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   const threadId = stepThread.id;
   const threadReady = stepThread.scopeKey === `sdlc:${projectId}:${activeCrId}:${selectedStep}`;
   const [workflowState, setWorkflowState] = useState<SdlcWorkflowState | undefined>(undefined);
+  // The step editors gate approval on a proven intake baseline, so they must not mount before
+  // this CR's workflow restore settles: a transiently empty state renders a wrongly blocked
+  // editor and drops an early click (T-25.3-34).
+  const [workflowRestored, setWorkflowRestored] = useState(false);
   const [stepEvidence, setStepEvidence] = useState<WizardEvidence | undefined>(undefined);
   const [incomingSolutionDraft, setIncomingSolutionDraft] = useState<string | undefined>(undefined);
   const [draftPl03b, setDraftPl03b] = useState<string | undefined>(undefined);
   const [draftPl07, setDraftPl07] = useState<string | undefined>(undefined);
   const [draftCab, setDraftCab] = useState<string | undefined>(undefined);
   const [wizardRuntime, setWizardRuntime] = useState<SdlcWizardRuntime | undefined>(undefined);
+  const draftRef = useRef<Partial<Record<ArtifactToolKind, string>>>({});
+  const editEpochRef = useRef(0);
+  const scopeEpochRef = useRef(0);
+  const mountedRef = useRef(true);
+  const solutionWritesRef = useRef(new Map<string, Promise<void>>());
+  const patchTransactionRef = useRef<{ abort: () => void } | null>(null);
+  const [draftHashes, setDraftHashes] = useState<Partial<Record<ArtifactToolKind, string>>>({});
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; scopeEpochRef.current += 1; patchTransactionRef.current?.abort(); };
+  }, []);
   const chatPanelRef = useRef<StepChatPanelHandle>(null);
   const analysisTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearAnalysisTimer = useCallback(() => {
@@ -200,6 +221,11 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
 
   const selectCr = useCallback((crId: string) => {
     if (activeCrRef.current !== crId) {
+      scopeEpochRef.current += 1;
+      editEpochRef.current += 1;
+      patchTransactionRef.current?.abort();
+      draftRef.current = {};
+      setDraftHashes({});
       clearAnalysisTimer();
       setWorkflowState(undefined);
       setViewedVersion(undefined);
@@ -252,15 +278,19 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   // Editor draft persistence (D-08). This is editor state, not workflow state.
   useEffect(() => {
     let cancelled = false;
+    const editEpoch = editEpochRef.current;
     async function loadDraft() {
       const crKey = activeCrId || 'default-cr';
       try {
         const draftRow = await db.settings.get(draftSettingKey(projectId, crKey));
-        if (!cancelled) {
-          setIncomingSolutionDraft(draftRow?.value ? String(draftRow.value) : undefined);
+        if (!cancelled && editEpochRef.current === editEpoch) {
+          const text = typeof draftRow?.value === 'string' ? draftRow.value : undefined;
+          if (text === undefined) delete draftRef.current.SOLUTION;
+          else draftRef.current.SOLUTION = text;
+          setIncomingSolutionDraft(text);
         }
       } catch {
-        if (!cancelled) setIncomingSolutionDraft(undefined);
+        if (!cancelled && editEpochRef.current === editEpoch) setIncomingSolutionDraft(undefined);
       }
     }
     void loadDraft();
@@ -317,8 +347,10 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
     let cancelled = false;
     if (!activeCrId) {
       setWorkflowState(undefined);
+      setWorkflowRestored(true);
       return undefined;
     }
+    setWorkflowRestored(false);
     void (async () => {
       try {
         const restored = await coordinator.restore();
@@ -326,6 +358,8 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
       } catch {
         // A failed restore leaves prerequisites unproven, so step views render their guards.
         if (!cancelled) setWorkflowState(undefined);
+      } finally {
+        if (!cancelled) setWorkflowRestored(true);
       }
     })();
     return () => {
@@ -436,14 +470,129 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
     scheduleSolutionAnalysis();
   }, [scheduleSolutionAnalysis]);
 
+  const enqueueSolutionWrite = useCallback((crKey: string, write: () => Promise<void>) => {
+    const key = `${projectId}:${crKey}`;
+    const previous = solutionWritesRef.current.get(key) ?? Promise.resolve();
+    const pending = previous.catch(() => undefined).then(write);
+    solutionWritesRef.current.set(key, pending);
+    void pending.finally(() => {
+      if (solutionWritesRef.current.get(key) === pending) solutionWritesRef.current.delete(key);
+    }).catch(() => undefined);
+    return pending;
+  }, [projectId]);
+
+  const setRuntimeDraft = useCallback((kind: ArtifactToolKind, markdown: string) => {
+    if (draftRef.current[kind] === markdown) return;
+    editEpochRef.current += 1;
+    patchTransactionRef.current?.abort();
+    draftRef.current[kind] = markdown;
+    if (kind === 'SOLUTION') setIncomingSolutionDraft(markdown);
+    else if (kind === 'PL03B') setDraftPl03b(markdown);
+    else if (kind === 'PL07') setDraftPl07(markdown);
+    else setDraftCab(markdown);
+  }, []);
+
   const saveDraft = useCallback(
-    async (markdown: string) => {
+    (markdown: string) => {
       const crKey = activeCrId || 'default-cr';
-      if (activeCrRef.current === activeCrId) setIncomingSolutionDraft(markdown);
-      await db.settings.put({ key: draftSettingKey(projectId, crKey), value: markdown });
+      setRuntimeDraft('SOLUTION', markdown);
+      return enqueueSolutionWrite(crKey, async () => {
+        await db.settings.put({ key: draftSettingKey(projectId, crKey), value: markdown });
+      });
     },
-    [projectId, db, activeCrId]
+    [projectId, db, activeCrId, enqueueSolutionWrite, setRuntimeDraft]
   );
+
+  // All getters read live refs, including access after an async hash/transaction boundary.
+  const liveArtifactStateRef = useRef({ projectId, activeCrId, selectedStep, crStatus, viewedVersion,
+    readOnlySolution, workflowState });
+  liveArtifactStateRef.current = { projectId, activeCrId, selectedStep, crStatus, viewedVersion,
+    readOnlySolution, workflowState };
+  const artifactToolContext = useMemo<ArtifactToolContext>(() => {
+    const scopeKey = `sdlc:${projectId}:${activeCrId}:${selectedStep}`;
+    const scopeEpoch = scopeEpochRef.current;
+    return {
+      scopeKey, projectId, crId: activeCrId, stepId: selectedStep,
+      getDraft: (kind) => draftRef.current[kind],
+      getWorkflowState: () => liveArtifactStateRef.current.workflowState,
+      getAccess: () => {
+        const live = liveArtifactStateRef.current;
+        return {
+          scopeValid: mountedRef.current && scopeEpochRef.current === scopeEpoch && live.projectId === projectId &&
+            activeCrRef.current === activeCrId && selectedStepRef.current === selectedStep && Boolean(live.workflowState),
+          crActive: live.crStatus === 'active',
+          readOnly: Boolean(live.viewedVersion) || live.readOnlySolution,
+        };
+      },
+    };
+  }, [projectId, activeCrId, selectedStep]);
+
+  const handleApplyArtifactPatch = useCallback(async (proposal: ArtifactPatchProposal, decision: ChatMessage) => {
+    const context = artifactToolContext;
+    const epoch = editEpochRef.current;
+    const scopeEpoch = scopeEpochRef.current;
+    const assertCurrent = () => {
+      const access = context.getAccess();
+      if (!access.scopeValid || access.readOnly || !access.crActive || epoch !== editEpochRef.current ||
+        scopeEpoch !== scopeEpochRef.current || proposal.scopeKey !== context.scopeKey ||
+        proposal.projectId !== projectId || proposal.crId !== activeCrId || decision.role !== 'system' ||
+        !decision.content.startsWith('ARTIFACT_PATCH_DECISION ')) throw new Error('Đề xuất không còn thuộc bản nháp hiện tại. Hãy yêu cầu đề xuất mới.');
+    };
+    assertCurrent();
+    const snapshot = await readArtifactSnapshot(db, context, proposal.kind);
+    assertCurrent();
+    if (!('markdown' in snapshot) || snapshot.baseHash !== proposal.baseHash ||
+      snapshot.markdown !== proposal.baseMarkdown || snapshot.version !== proposal.version) {
+      throw new Error('Tài liệu đã thay đổi. Hãy yêu cầu AI đề xuất lại.');
+    }
+    const commit = async () => {
+      assertCurrent();
+      await db.transaction('rw', [db.settings, db.chatMessages], async (transaction) => {
+        patchTransactionRef.current = transaction;
+        try {
+          assertCurrent();
+          const prior = await db.chatMessages.get(decision.id);
+          if (prior) {
+            if (prior.content !== decision.content || prior.threadId !== decision.threadId) throw new Error('Quyết định không khớp.');
+            return;
+          }
+          if (proposal.kind === 'SOLUTION') {
+            await db.settings.put({ key: draftSettingKey(projectId, activeCrId), value: proposal.patchedMarkdown });
+          }
+          assertCurrent();
+          await db.chatMessages.put(decision);
+          assertCurrent();
+        } finally { patchTransactionRef.current = null; }
+      });
+      assertCurrent();
+      // No fallible write remains: publish only the selected draft after durable success.
+      draftRef.current[proposal.kind] = proposal.patchedMarkdown;
+      editEpochRef.current += 1;
+      if (proposal.kind === 'SOLUTION') setIncomingSolutionDraft(proposal.patchedMarkdown);
+      else if (proposal.kind === 'PL03B') setDraftPl03b(proposal.patchedMarkdown);
+      else if (proposal.kind === 'PL07') setDraftPl07(proposal.patchedMarkdown);
+      else setDraftCab(proposal.patchedMarkdown);
+    };
+    if (proposal.kind === 'SOLUTION') await enqueueSolutionWrite(activeCrId, commit);
+    else await commit();
+  }, [artifactToolContext, db, projectId, activeCrId, enqueueSolutionWrite]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const scopeEpoch = scopeEpochRef.current;
+    const draftEpoch = editEpochRef.current;
+    void (async () => {
+      const hashes: Partial<Record<ArtifactToolKind, string>> = {};
+      for (const kind of ['SOLUTION', 'PL03B', 'PL07', 'CAB'] as const) {
+        const text = draftRef.current[kind];
+        if (text !== undefined) hashes[kind] = await defaultSha256(text.trim());
+      }
+      if (!cancelled && mountedRef.current && scopeEpoch === scopeEpochRef.current && draftEpoch === editEpochRef.current) {
+        setDraftHashes(hashes);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [projectId, activeCrId, incomingSolutionDraft, draftPl03b, draftPl07, draftCab]);
 
   // D-16: a chat-produced SOLUTION only updates the editor draft.
   const handleSolutionExtracted = useCallback(
@@ -470,12 +619,10 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
    */
   const handleChatArtifactDraft = useCallback(
     (kind: SdlcArtifactKindForTurn, markdown: string) => {
-      if (kind === 'PL03B') setDraftPl03b(markdown);
-      else if (kind === 'PL07') setDraftPl07(markdown);
-      else if (kind === 'CAB') setDraftCab(markdown);
+      setRuntimeDraft(kind, markdown);
       message.success(`Đã chuyển bản nháp ${kind} vào trình soạn thảo`);
     },
-    []
+    [setRuntimeDraft]
   );
 
   const handleStartIntake = async (
@@ -579,7 +726,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
             onNavigateToStep={handleNavigateToStep}
             onCommitSolution={handleCommitSolution}
             onDraftChange={(markdown) => {
-              void saveDraft(markdown);
+              void saveDraft(markdown).catch(() => message.error('Không thể lưu bản nháp SOLUTION. Nội dung trong trình soạn thảo vẫn được giữ nguyên.'));
             }}
             onRequestAiAnalysis={handleTriggerSolutionAnalysis}
             onProceedToStep3={() => handleNavigateToStep('CODE_GUIDE')}
@@ -627,10 +774,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
             workflowState={workflowState}
             draftPl03b={draftPl03b}
             draftPl07={draftPl07}
-            onDraftChange={(kind, markdown) => {
-              if (kind === 'PL03B') setDraftPl03b(markdown);
-              else setDraftPl07(markdown);
-            }}
+            onDraftChange={setRuntimeDraft}
             onCommitTechDoc={async (kind, markdown, noteId) => {
               try {
                 const nextState = await coordinator.commitTechDoc(kind, markdown, noteId);
@@ -663,7 +807,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
             crId={activeCrId}
             workflowState={workflowState}
             incomingDraft={draftCab}
-            onDraftChange={(markdown) => setDraftCab(markdown)}
+            onDraftChange={(markdown) => setRuntimeDraft('CAB', markdown)}
             onCommitCab={async (markdown, noteId) => {
               try {
                 const nextState = await coordinator.commitCab(markdown, noteId);
@@ -760,10 +904,17 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
           stepGroundingContext={stepGroundingContext}
           readOnly={Boolean(viewedVersion)}
           workflowState={workflowState}
-          stepViewNode={renderStepNode()}
+          stepViewNode={activeCrId && !workflowRestored ? (
+            <div data-testid="sdlc-step-loading" style={{ color: token.colorTextSecondary, padding: 32, textAlign: 'center' }}>
+              Đang khôi phục hồ sơ quy trình của CR này…
+            </div>
+          ) : renderStepNode()}
           onNavigateToStep={handleNavigateToStep}
           onSolutionExtracted={handleSolutionExtracted}
           onArtifactDraft={handleChatArtifactDraft}
+          artifactToolContext={artifactToolContext}
+          onApplyArtifactPatch={handleApplyArtifactPatch}
+          draftHashes={draftHashes}
           artifactEvents={artifactEvents}
           onArtifactOpen={handleArtifactOpen}
           onArtifactCta={(eventId) => {

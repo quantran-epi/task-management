@@ -11,8 +11,12 @@ import {
   normalizeToolName,
 } from './aiTools';
 import { executeDynamicMcpTool, type ExecuteMcpToolOptions } from './mcpClient';
+import type { ArtifactToolContext } from './sdlcArtifactTools';
 
-export interface DispatchAiToolCallOptions extends ExecuteMcpToolOptions {}
+export interface DispatchAiToolCallOptions extends ExecuteMcpToolOptions {
+  /** Trusted, request-bound SDLC artifact scope for the artifact tools. */
+  artifactContext?: ArtifactToolContext;
+}
 
 /** Default tool dispatch: local DB tools first, dynamic MCP tools otherwise. */
 export async function dispatchAiToolCall(
@@ -26,8 +30,15 @@ export async function dispatchAiToolCall(
   const isLocalDbTool = AI_DATABASE_TOOLS.some(
     (t) => normalizeToolName(t.function.name) === normalized
   );
+  const artifactContext = options?.artifactContext;
   return isLocalDbTool
-    ? executeAiTool(name, args, db, signal)
+    ? executeAiTool(
+        name,
+        args,
+        db,
+        signal,
+        artifactContext ? { artifactContext } : undefined
+      )
     : executeDynamicMcpTool(normalized, args, db, options);
 }
 
@@ -67,6 +78,8 @@ export interface AiOrchestratorLoopOptions {
     signal?: AbortSignal,
     options?: DispatchAiToolCallOptions
   ) => Promise<string>;
+  /** Trusted scope forwarded to every tool dispatch in this turn (artifact tools). */
+  artifactContext?: ArtifactToolContext;
   /** Recent tool outputs kept intact when pruning; older ones truncate. */
   keepRecentToolOutputs?: number;
   /** Character cap applied to older tool outputs. */
@@ -154,6 +167,7 @@ export async function runAiOrchestratorLoop(
     onMutationCheck,
     onFileGenerated,
     executeToolFn,
+    artifactContext,
     keepRecentToolOutputs = 2,
     maxOldToolChars = 500,
     contextWindowTokens,
@@ -379,9 +393,14 @@ export async function runAiOrchestratorLoop(
       const toolStartTime = Date.now();
       let toolResult: string;
       try {
+        const dispatchOptions = artifactContext ? { artifactContext } : undefined;
         toolResult = executeToolFn
-          ? await executeToolFn(tc.function.name, args, db, signal)
-          : await dispatchAiToolCall(tc.function.name, args, db, signal);
+          ? await (dispatchOptions
+              ? executeToolFn(tc.function.name, args, db, signal, dispatchOptions)
+              : executeToolFn(tc.function.name, args, db, signal))
+          : await (dispatchOptions
+              ? dispatchAiToolCall(tc.function.name, args, db, signal, dispatchOptions)
+              : dispatchAiToolCall(tc.function.name, args, db, signal));
       } catch (toolErr: any) {
         if (toolErr?.name === 'AbortError' || signal?.aborted) throw toolErr;
         toolResult = JSON.stringify({

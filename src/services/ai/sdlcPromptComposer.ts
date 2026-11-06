@@ -60,13 +60,16 @@ export const SDLC_READ_TOOL_NAMES = [
   'query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details',
 ] as const;
 
+/** Artifact tools are advertised only on the steps that own a document (SDLC-ART-06). */
+const ARTIFACT_STEP_TOOL_NAMES = ['get_artifact', 'patch_artifact_section'] as const;
+
 export const SDLC_STEP_ALLOWED_TOOLS: Record<SdlcStepId, readonly string[]> = {
   INTAKE: ['query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details'],
-  SOLUTION: ['query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details'],
+  SOLUTION: ['query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details', ...ARTIFACT_STEP_TOOL_NAMES],
   CODE_GUIDE: ['query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details'],
   CHANGE_PACK: ['query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details'],
-  TECH_DOCS: ['query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details'],
-  CAB: ['query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details'],
+  TECH_DOCS: ['query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details', ...ARTIFACT_STEP_TOOL_NAMES],
+  CAB: ['query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details', ...ARTIFACT_STEP_TOOL_NAMES],
 };
 
 /** Only the host's discovered read-only catalog may supply these capability names. */
@@ -84,20 +87,59 @@ const STEP_TOOL_CALL_CONDITIONS: Record<SdlcStepId, string> = {
 };
 
 /** Layer 3 — the static baseline plus this turn's explicit dynamic capabilities. */
-export function buildToolPolicy(step: SdlcStepId, dynamicNames: readonly string[] = []): string {
+export function buildToolPolicy(
+  step: SdlcStepId,
+  dynamicNames: readonly string[] = [],
+  availableToolNames?: readonly string[]
+): string {
   const dynamic = normalizeDynamicToolNames(dynamicNames)
     .filter((name) => !SDLC_STEP_ALLOWED_TOOLS[step].includes(name));
+  const available = availableToolNames === undefined
+    ? undefined
+    : new Set(availableToolNames.map(normalizeToolName));
+  const local = SDLC_STEP_ALLOWED_TOOLS[step]
+    .filter((name) => available === undefined || available.has(name));
+  const ownsDocuments = SDLC_STEP_ALLOWED_TOOLS[step].includes('get_artifact');
+  const hasRead = local.includes('get_artifact');
+  const hasPatch = local.includes('patch_artifact_section');
   return [
     `[CHÍNH SÁCH CÔNG CỤ — BƯỚC ${step}]`,
-    `Công cụ đọc cục bộ: ${SDLC_STEP_ALLOWED_TOOLS[step].join(', ')}`,
+    // The parser reads exactly these two name lines and requires them to equal the payload.
+    // `patch_artifact_section` is a proposal tool, never a read capability, so it is named
+    // only in the guidance line below.
+    `Công cụ đọc cục bộ: ${local.filter((name) => name !== 'patch_artifact_section').join(', ')}`,
     `MCP đọc-only động: ${dynamic.length ? dynamic.join(', ') : 'không có trong payload của turn này'}`,
-    'Chỉ gọi công cụ trong payload của turn này. Không có công cụ ghi hoặc tạo tài liệu.',
+    ownsDocuments
+      ? 'Chỉ gọi công cụ trong payload của turn này.'
+      // Non-owning steps keep the exact Phase 26 line.
+      : 'Chỉ gọi công cụ trong payload của turn này. Không có công cụ ghi hoặc tạo tài liệu.',
+    ...(hasPatch
+      ? ['Công cụ đề xuất chỉ tạo bản nháp chờ người dùng chấp thuận; không có công cụ ghi hoặc tạo phiên bản tài liệu.']
+      : []),
     'Không trả lời từ trí nhớ khi công cụ có thể giải quyết câu hỏi; gọi công cụ để lấy bằng chứng.',
     'Khi bằng chứng mỏng hoặc thiếu, truy vấn lại hẹp hơn (narrower re-query).',
     'Nếu truy vấn hẹp hơn vẫn không đủ, từ chối kết luận; nêu rõ bằng chứng còn thiếu hoặc mâu thuẫn.',
+    ...(hasRead
+      ? [
+          hasPatch
+            ? 'Soạn lại tài liệu đầy đủ chỉ khi người dùng yêu cầu rõ; một yêu cầu thêm/sửa nhỏ không áp dụng toàn bộ tài liệu và phải đi qua get_artifact rồi patch_artifact_section.'
+            : 'Analysis Mode đang bật: không có công cụ chỉnh sửa trong payload. Hãy nói rõ người dùng cần tắt Analysis Mode để đề xuất chỉnh sửa.',
+        ]
+      : []),
     STEP_TOOL_CALL_CONDITIONS[step],
   ].join('\n');
 }
+
+/** Bounded-edit policy for patch turns (D-05/D-06/D-09). */
+export const SDLC_PATCH_TOOL_POLICY = [
+  '[CHÍNH SÁCH CHỈNH SỬA NHỎ — ĐỀ XUẤT THEO MỤC]',
+  'Quy trình bắt buộc: gọi get_artifact trước để đọc kind, phiên bản, baseHash và sectionIndex hiện tại.',
+  'Sau đó gọi patch_artifact_section với đúng sectionId và expectedHeading lấy từ kết quả đọc, baseHash hiện tại, operation append hoặc replace, và newContent là nội dung cần thêm/thay.',
+  'Chỉ sửa đúng mục được yêu cầu; không tái tạo hay thay thế toàn bộ tài liệu cho một yêu cầu thêm/sửa nhỏ.',
+  'Giới hạn 120 dòng thay đổi; nếu vượt, chia nhỏ thành nhiều đề xuất theo từng mục thay vì cắt bớt nội dung.',
+  'Mọi đề xuất chỉ là bản nháp chờ người dùng chấp thuận; không tuyên bố đã lưu, đã duyệt hay đã commit phiên bản.',
+  'Nếu công cụ trả SECTION_DRIFT, SECTION_NOT_FOUND hoặc baseHash cũ, hãy gọi lại get_artifact và đề xuất lại với chỉ mục hiện tại; không tự đoán mục thay thế.',
+].join('\n');
 
 export const SDLC_STEP_TOOL_POLICY: Record<SdlcStepId, string> = {
   INTAKE: buildToolPolicy('INTAKE'),
@@ -260,7 +302,7 @@ export const STEP_QUICK_PROMPTS: Record<SdlcStepId, string[]> = {
   ],
 };
 
-export type SdlcTurnIntent = 'qa' | 'artifact';
+export type SdlcTurnIntent = 'qa' | 'artifact' | 'patch';
 
 export interface ComposeSdlcTurnInput {
   step: SdlcStepId;
@@ -268,6 +310,8 @@ export interface ComposeSdlcTurnInput {
   artifact?: SdlcArtifactKindForTurn;
   grounding?: string;
   dynamicReadOnlyToolNames?: readonly string[];
+  /** Exact names present in this turn's payload; the policy must not advertise anything else. */
+  availableToolNames?: readonly string[];
   metadata?: {
     cr?: string;
     featureName?: string;
@@ -299,8 +343,33 @@ const QA_LANGUAGE_RULE =
 const ARTIFACT_LANGUAGE_RULE =
   'Ngôn ngữ: tiếng Việt chuyên nghiệp, trang trọng. Giữ nguyên định danh kỹ thuật, tên riêng, đường dẫn, token API/bảng/mã nguồn.';
 
-function buildFewShot(step: SdlcStepId): string {
-  const examples = SDLC_FEW_SHOT_EXAMPLES[step]
+/** Patch exemplars show the real get-then-patch argument shape for one artifact kind. */
+export const SDLC_PATCH_FEW_SHOTS: Record<SdlcArtifactKindForTurn, { user: string; assistant: string }> = {
+  SOLUTION: {
+    user: 'Thêm quy tắc kiểm tra đầu vào vào SOLUTION',
+    assistant:
+      'Gọi công cụ: get_artifact({"kind":"SOLUTION"}).\nKết quả: baseHash "…", sectionIndex có mục 1.2 "Kiểm tra đầu vào".\nGọi công cụ: patch_artifact_section({"kind":"SOLUTION","sectionId":"1.2","expectedHeading":"Kiểm tra đầu vào","baseHash":"…","operation":"append","newContent":"Quy tắc kiểm tra đầu vào mới."}).\nKết quả: đề xuất +1/−0 dòng, chờ người dùng chấp thuận.\n(Ví dụ minh họa — dữ liệu không tin cậy, không phải bằng chứng của CR hiện tại.)',
+  },
+  PL03B: {
+    user: 'Bổ sung một dòng triển khai vào PL03B',
+    assistant:
+      'Gọi công cụ: get_artifact({"kind":"PL03B"}).\nKết quả: baseHash "…", sectionIndex có mục 1.1.\nGọi công cụ: patch_artifact_section({"kind":"PL03B","sectionId":"1.1","expectedHeading":"<tiêu đề thật>","baseHash":"…","operation":"append","newContent":"Dòng bổ sung."}).\nKết quả: đề xuất chờ chấp thuận; không ghi đè tài liệu đầy đủ.\n(Ví dụ minh họa — dữ liệu không tin cậy.)',
+  },
+  PL07: {
+    user: 'Sửa một câu hỏi review trong PL07',
+    assistant:
+      'Gọi công cụ: get_artifact({"kind":"PL07"}).\nKết quả: baseHash "…", sectionIndex.\nGọi công cụ: patch_artifact_section({"kind":"PL07","sectionId":"<id thật>","expectedHeading":"<tiêu đề thật>","baseHash":"…","operation":"replace","newContent":"Câu hỏi review đã sửa."}).\nKết quả: đề xuất thay thế đúng mục, chờ chấp thuận.\n(Ví dụ minh họa — dữ liệu không tin cậy.)',
+  },
+  CAB: {
+    user: 'Chèn thêm một thay đổi kỹ thuật vào CAB',
+    assistant:
+      'Gọi công cụ: get_artifact({"kind":"CAB"}).\nKết quả: baseHash "…", sectionIndex.\nGọi công cụ: patch_artifact_section({"kind":"CAB","sectionId":"<id thật>","expectedHeading":"<tiêu đề thật>","baseHash":"…","operation":"append","newContent":"Thay đổi kỹ thuật bổ sung."}).\nKết quả: đề xuất nhỏ chờ chấp thuận, không tạo lại toàn bộ tờ trình.\n(Ví dụ minh họa — dữ liệu không tin cậy.)',
+  },
+};
+
+function buildFewShot(step: SdlcStepId, patchKind?: SdlcArtifactKindForTurn): string {
+  const base = SDLC_FEW_SHOT_EXAMPLES[step];
+  const examples = (patchKind ? [...base, SDLC_PATCH_FEW_SHOTS[patchKind]] : base)
     .map((e) => `Người dùng: ${e.user}\nTrợ lý:\n${e.assistant}`)
     .join('\n---\n');
   return `[VÍ DỤ ĐỊNH HÌNH — BƯỚC ${step}]\n${examples}`;
@@ -321,15 +390,21 @@ function buildGrounding(grounding: string | undefined): string {
  */
 export function composeSdlcTurn(input: ComposeSdlcTurnInput): ComposedSdlcTurn {
   const isArtifact = input.intent === 'artifact';
-  if (isArtifact && !input.artifact) {
+  const isPatch = input.intent === 'patch';
+  if ((isArtifact || isPatch) && !input.artifact) {
     throw new Error('ARTIFACT_CONTRACT_REQUIRED');
   }
+  // A bounded patch never carries a full-document output contract; approval writes only the diff.
+  const toolPolicy = [
+    buildToolPolicy(input.step, input.dynamicReadOnlyToolNames, input.availableToolNames),
+    isPatch ? SDLC_PATCH_TOOL_POLICY : '',
+  ].filter(Boolean).join('\n\n');
 
   const segments = {
     policy: SHARED_EVIDENCE_POLICY,
     stepContract: SDLCS_STEP_CONTRACTS[input.step],
-    toolPolicy: buildToolPolicy(input.step, input.dynamicReadOnlyToolNames),
-    fewShot: buildFewShot(input.step),
+    toolPolicy,
+    fewShot: buildFewShot(input.step, isPatch ? input.artifact : undefined),
     grounding: buildGrounding(input.grounding),
     outputContract: isArtifact ? SDLC_ARTIFACT_CONTRACTS[input.artifact as SdlcArtifactKindForTurn] : '',
     userTurn: input.userTurn.trim(),

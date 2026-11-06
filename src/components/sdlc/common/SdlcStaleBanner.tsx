@@ -2,13 +2,15 @@ import React from 'react';
 import { Alert, Button, Typography } from 'antd';
 import { WarningOutlined, ArrowRightOutlined } from '@ant-design/icons';
 import type { SdlcStepId } from '../../../services/wizard/workflowSchemas';
-import { detectWorkflowStaleness } from '../../../services/wizard/stalenessDetector';
+import { detectWorkflowStaleness, type WorkflowStalenessReport } from '../../../services/wizard/stalenessDetector';
 import type { SdlcWorkflowState } from '../../../services/wizard/workflowSchemas';
 
 export interface SdlcStaleBannerProps {
   currentStep: SdlcStepId;
   workflowState?: SdlcWorkflowState | undefined;
   onNavigateToStep: (step: SdlcStepId) => void;
+  /** Read-only draft-divergence report merged at render; never mutates workflow state. */
+  draftStaleness?: WorkflowStalenessReport | undefined;
 }
 
 const STEP_LABELS: Record<SdlcStepId, string> = {
@@ -24,10 +26,19 @@ export const SdlcStaleBanner: React.FC<SdlcStaleBannerProps> = ({
   currentStep,
   workflowState,
   onNavigateToStep,
+  draftStaleness,
 }) => {
   if (!workflowState) return null;
 
-  const staleness = detectWorkflowStaleness(workflowState);
+  const committedReport = detectWorkflowStaleness(workflowState);
+  // Union in committed order, then append draft-only steps. Committed reasons always win.
+  const staleness: WorkflowStalenessReport = {
+    staleSteps: [
+      ...committedReport.staleSteps,
+      ...(draftStaleness?.staleSteps ?? []).filter((step) => !committedReport.staleSteps.includes(step)),
+    ],
+    reasons: { ...(draftStaleness?.reasons ?? {}), ...committedReport.reasons },
+  };
   const isCurrentStale = staleness.staleSteps.includes(currentStep);
   const hasStaleSteps = staleness.staleSteps.length > 0;
 
