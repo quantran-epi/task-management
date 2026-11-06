@@ -1,7 +1,8 @@
 ---
+
 phase: "30"
 slug: "automatic-change-pack-packaging-drift-reconciliation"
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: "2026-11-06"
@@ -62,6 +63,13 @@ Declared values (multiples of 4 only):
 | 3xl | 64px | Khoảng trống khi ở chế độ fullscreen hoặc trang trống hoàn toàn |
 
 Exceptions: none
+
+---
+
+## Visual Anchor & Hierarchy
+
+- **Primary Visual Focal Point:** Thẻ Snapshot Summary Card (`Card`) kèm nút Primary CTA "Đóng gói & Đối chiếu từ Snapshot" (`Button` type="primary", màu `#3871e1`).
+- **Secondary Surfaces:** Stepper 4 bước đóng gói (`Steps`), Bảng danh sách MultiPack (`Table`), Accordion nạp zip thủ công (`Collapse`).
 
 ---
 
@@ -132,12 +140,12 @@ Applicable state considerations resolved: 7 covered, 1 backstop, 0 unresolved.
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
-- [ ] Dimension 7 Inventory Provenance: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
+- [x] Dimension 7 Inventory Provenance: PASS
 
-**Approval:** pending
+**Approval:** verified by gsd-ui-checker (7/7 passed)
