@@ -250,3 +250,50 @@ export async function getFileDiff(
     secret
   );
 }
+
+const PROJECT_SSH_REPO_SETTING_PREFIX = 'project_ssh_repo:';
+
+export function getProjectSshRepoKey(projectId: string): string {
+  return `${PROJECT_SSH_REPO_SETTING_PREFIX}${projectId}`;
+}
+
+export async function getProjectRepoSshBinding(
+  projectId: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<ProjectRepoSshBinding | null> {
+  const row = await db.settings.get(getProjectSshRepoKey(projectId));
+  if (!row || !row.value) return null;
+  return row.value as ProjectRepoSshBinding;
+}
+
+export async function saveProjectRepoSshBinding(
+  projectId: string,
+  binding: ProjectRepoSshBinding,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<void> {
+  await db.settings.put({
+    key: getProjectSshRepoKey(projectId),
+    value: binding,
+  });
+}
+
+export async function checkHeadDrift(
+  config: SshConfig,
+  repoPath: string,
+  targetBranch: string,
+  expectedHeadSha: string,
+  secret?: string
+): Promise<{ drifted: boolean; currentHeadSha: string }> {
+  const stdout = await runGitCommand(
+    config,
+    repoPath,
+    ['rev-parse', escapeShellArg(targetBranch)],
+    secret
+  );
+  const currentHeadSha = stdout.trim();
+  return {
+    drifted: currentHeadSha !== expectedHeadSha,
+    currentHeadSha,
+  };
+}
+
