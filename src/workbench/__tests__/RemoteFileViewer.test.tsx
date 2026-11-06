@@ -70,7 +70,9 @@ describe('RemoteFileViewer Component (SDLC-REPO-EXP-03)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('code-container')).toBeDefined();
       expect(screen.getByTestId('line-numbers-gutter')).toBeDefined();
-      expect(screen.getByText('export function add(a: number, b: number): number {')).toBeDefined();
+      expect(screen.getByTestId('code-container').textContent).toContain(
+        'export function add(a: number, b: number): number {'
+      );
     });
   });
 

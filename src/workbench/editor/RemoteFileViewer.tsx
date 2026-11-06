@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Tag, Button, Alert, Spin, Tooltip, message } from 'antd';
+import { Tag, Button, Alert, Spin, Tooltip, message, theme } from 'antd';
 import {
   FileTextOutlined,
   BranchesOutlined,
@@ -14,6 +14,7 @@ import type { SshConfig } from '../../types/ssh';
 import { getRemoteFileContent } from '../../services/gitRemoteTreeService';
 import { getSshSecret } from '../../services/sshService';
 import { extractMermaidBlocks, saveDiagramToStudio, openDiagramInStudio } from '../../services/diagramSaveBridge';
+import { DiffLineCodeRenderer } from '../../components/sdlc/diff/DiffSyntaxHighlighter';
 
 export interface RemoteFileViewerProps {
   config?: SshConfig;
@@ -44,6 +45,9 @@ export function RemoteFileViewer({
   size,
   db,
 }: RemoteFileViewerProps) {
+  const { token } = theme.useToken();
+  const isDark = token.colorBgBase === '#141414' || token.colorTextBase?.includes('255');
+
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -371,7 +375,7 @@ export function RemoteFileViewer({
             >
               {lines.map((line, idx) => (
                 <div key={idx} style={{ height: 20 }}>
-                  {line || ' '}
+                  <DiffLineCodeRenderer content={line} isDark={isDark} />
                 </div>
               ))}
             </div>

@@ -179,10 +179,14 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
           const firstBranch = remoteBranches[0]?.name;
           const defaultBranch = targetMain ?? targetMaster ?? firstBranch ?? '';
 
-          setSelectedBranch(defaultBranch);
-          if (defaultBranch) {
-            void loadRootTree(defaultBranch, targetPath);
-          }
+          setSelectedBranch((current) => {
+            const stillValid = current && remoteBranches.some((b) => b.name === current);
+            const nextBranch = stillValid ? current : defaultBranch;
+            if (nextBranch) {
+              void loadRootTree(nextBranch, targetPath);
+            }
+            return nextBranch;
+          });
         } else {
           setSelectedBranch('');
           setTreeData([]);
@@ -210,10 +214,10 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
   };
 
   const handleBranchChange = (newBranch: string) => {
+    if (!newBranch || newBranch === selectedBranch) return;
     setSelectedBranch(newBranch);
-    if (newBranch) {
-      void loadRootTree(newBranch);
-    }
+    setLoadingTree(true);
+    void loadRootTree(newBranch);
   };
 
   // Re-load branches and tree whenever selectedConfig or repoPath changes
@@ -221,7 +225,8 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
     if (selectedConfig && repoPath.trim()) {
       void loadBranches(repoPath.trim());
     }
-  }, [selectedConfig, repoPath, loadBranches]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedConfigId, repoPath]);
 
   // Lazy child loader for directory nodes
   const onLoadData = async (node: any) => {
@@ -400,7 +405,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
             placeholder="Branch"
             value={selectedBranch || undefined}
             onChange={(val) => handleBranchChange(val ?? '')}
-            loading={loadingBranches}
+            loading={loadingBranches || loadingTree}
             disabled={branches.length === 0}
             options={branches.map((b) => ({
               label: b.name,
@@ -439,39 +444,38 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
           minHeight: 0,
           overflow: 'auto',
           padding: '6px 4px',
+          position: 'relative',
         }}
       >
-        {loadingTree && treeData.length === 0 ? (
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', padding: 24 }}>
-            <Spin description="Loading tree..." />
-          </div>
-        ) : treeData.length > 0 ? (
-          <Tree
-            loadData={onLoadData}
-            treeData={treeData}
-            onSelect={handleSelectNode}
-            showIcon={false}
-            blockNode
-            style={{
-              background: 'transparent',
-              fontSize: 12.5,
-              padding: '4px 6px',
-            }}
-          />
-        ) : (
-          <div style={{ padding: 20 }}>
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={
-                !selectedConfig
-                  ? 'No SSH host selected'
-                  : !repoPath.trim()
-                  ? 'Enter remote repository path above'
-                  : 'No files or branches found'
-              }
+        <Spin spinning={loadingTree}>
+          {treeData.length > 0 ? (
+            <Tree
+              loadData={onLoadData}
+              treeData={treeData}
+              onSelect={handleSelectNode}
+              showIcon={false}
+              blockNode
+              style={{
+                background: 'transparent',
+                fontSize: 12.5,
+                padding: '4px 6px',
+              }}
             />
-          </div>
-        )}
+          ) : !loadingTree ? (
+            <div style={{ padding: 20 }}>
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={
+                  !selectedConfig
+                    ? 'No SSH host selected'
+                    : !repoPath.trim()
+                    ? 'Enter remote repository path above'
+                    : 'No files or branches found'
+                }
+              />
+            </div>
+          ) : null}
+        </Spin>
       </div>
 
       {/* Remote Directory Browser Modal */}
