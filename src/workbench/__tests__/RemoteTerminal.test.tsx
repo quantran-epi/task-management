@@ -89,7 +89,6 @@ describe('RemoteTerminalPanel Component (SDLC-REPO-EXP-04 & SDLC-REPO-EXP-05)', 
       expect(sshPtyService.startPtySession).toHaveBeenCalledWith(
         expect.objectContaining({
           config: mockConfig,
-          workingDir: '/var/www/my-project',
           cols: 80,
           rows: 24,
         })
@@ -184,5 +183,22 @@ describe('RemoteTerminalPanel Component (SDLC-REPO-EXP-04 & SDLC-REPO-EXP-05)', 
     expect(callArgs?.[1]).toBe('graph TD\n  A[Start] --> B[Finish]');
     expect(callArgs?.[2]).toEqual(['terminal', 'claude-code']);
     expect(openSpy).toHaveBeenCalledWith('note-mermaid-1');
+  });
+
+  it('aborts orphaned pty session on unmount or re-render', async () => {
+    const { unmount } = render(
+      <RemoteTerminalPanel
+        config={mockConfig}
+        repoPath="/var/www/my-project"
+      />
+    );
+
+    await waitFor(() => {
+      expect(sshPtyService.startPtySession).toHaveBeenCalled();
+    });
+
+    unmount();
+
+    expect(sshPtyService.closePtySession).toHaveBeenCalled();
   });
 });

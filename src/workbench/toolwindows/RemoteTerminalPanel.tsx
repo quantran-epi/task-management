@@ -22,16 +22,20 @@ import { extractMermaidBlocks, saveDiagramToStudio, openDiagramInStudio } from '
 import type { TaskPlannerDatabase } from '../../db';
 
 export interface RemoteTerminalPanelProps {
+  sessionId?: string | undefined;
   config?: SshConfig | undefined;
   repoPath?: string | undefined;
   db?: TaskPlannerDatabase | undefined;
+  isActive?: boolean | undefined;
   onSessionReady?: ((sessionId: string) => void) | undefined;
 }
 
 export function RemoteTerminalPanel({
+  sessionId: propSessionId,
   config,
   repoPath,
   db,
+  isActive = true,
   onSessionReady,
 }: RemoteTerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -39,6 +43,12 @@ export function RemoteTerminalPanel({
   const fitAddonRef = useRef<FitAddon | null>(null);
   const sessionIdRef = useRef<string>('');
   const bufferLogRef = useRef<string>('');
+  const lastColsRef = useRef<number>(0);
+  const lastRowsRef = useRef<number>(0);
+
+  const configId = config?.id;
+  const configRef = useRef(config);
+  configRef.current = config;
 
   const [connected, setConnected] = useState<boolean>(false);
   const [connecting, setConnecting] = useState<boolean>(false);
@@ -61,16 +71,20 @@ export function RemoteTerminalPanel({
       termRef.current = null;
     }
 
-    const sessionId = `term-${Date.now()}`;
+    const sessionId = propSessionId || `term-${Date.now()}`;
     sessionIdRef.current = sessionId;
     bufferLogRef.current = '';
 
-    // JetBrains ExpUI dark theme
+    // JetBrains ExpUI dark theme & pixel-perfect native terminal metrics
     const term = new Terminal({
       cursorBlink: true,
-      fontFamily: "'JetBrains Mono', 'Menlo', 'Monaco', monospace",
+      cursorStyle: 'block',
+      fontFamily: "'JetBrains Mono', Menlo, Monaco, 'Courier New', monospace",
       fontSize: 13,
-      lineHeight: 1.25,
+      lineHeight: 1.0,
+      letterSpacing: 0,
+      macOptionIsMeta: true,
+      scrollback: 10000,
       theme: {
         background: '#1e1f22',
         foreground: '#bcbec4',
@@ -96,6 +110,28 @@ export function RemoteTerminalPanel({
       convertEol: true,
     });
 
+    // Native OS keybindings (Cmd/Ctrl+C copy, Cmd/Ctrl+V paste, Cmd/Ctrl+K clear)
+    term.attachCustomKeyEventHandler?.((event) => {
+      if (event.type === 'keydown') {
+        const isCmdOrCtrl = event.metaKey || event.ctrlKey;
+        if (isCmdOrCtrl && event.key.toLowerCase() === 'c' && term.hasSelection()) {
+          navigator.clipboard.writeText(term.getSelection());
+          return false;
+        }
+        if (isCmdOrCtrl && event.key.toLowerCase() === 'v') {
+          navigator.clipboard.readText().then((text) => {
+            if (text) writePtyInput(sessionId, text);
+          });
+          return false;
+        }
+        if (isCmdOrCtrl && event.key.toLowerCase() === 'k') {
+          term.clear();
+          return false;
+        }
+      }
+      return true;
+    });
+
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
     term.open(containerRef.current);
@@ -111,19 +147,22 @@ export function RemoteTerminalPanel({
     setConnecting(true);
 
     try {
-      if (config) {
-        term.write(`\r\n\x1B[34m[SSH PTY]\x1B[0m Connecting to ${config.username}@${config.host}...`);
-        if (repoPath) {
-          term.write(`\r\n\x1B[34m[SSH PTY]\x1B[0m Working directory: ${repoPath}\r\n`);
-        }
+      const activeConf = configRef.current;
+      if (activeConf) {
+        term.write(`\r\n\x1B[34m[SSH PTY]\x1B[0m Connecting to ${activeConf.username}@${activeConf.host}...`);
 
         await startPtySession({
           sessionId,
-          config,
-          ...(repoPath ? { workingDir: repoPath } : {}),
+          config: activeConf,
           cols: term.cols || 80,
           rows: term.rows || 24,
         });
+
+        // Check if session ID was superseded while connecting
+        if (sessionIdRef.current !== sessionId) {
+          closePtySession(sessionId).catch(() => {});
+          return;
+        }
 
         term.write(`\r\n\x1B[32m[SSH PTY]\x1B[0m Connected.\r\n\r\n`);
         setConnected(true);
@@ -136,10 +175,14 @@ export function RemoteTerminalPanel({
         setConnected(false);
       }
     } catch (err: any) {
-      term.write(`\r\n\x1B[31m[SSH PTY ERROR]\x1B[0m ${err?.message || 'Connection failed'}\r\n`);
-      setConnected(false);
+      if (sessionIdRef.current === sessionId) {
+        term.write(`\r\n\x1B[31m[SSH PTY ERROR]\x1B[0m ${err?.message || 'Connection failed'}\r\n`);
+        setConnected(false);
+      }
     } finally {
-      setConnecting(false);
+      if (sessionIdRef.current === sessionId) {
+        setConnecting(false);
+      }
     }
 
     // Pipe user input to backend PTY stdin
@@ -165,38 +208,60 @@ export function RemoteTerminalPanel({
       unlistenExit = unsub;
     });
 
-    // Resize observer
+    // Resize observer with dimension checking
+    let resizeTimer: any = null;
     const ro = new ResizeObserver(() => {
       if (!termRef.current || !fitAddonRef.current || !containerRef.current) return;
-      try {
-        fitAddonRef.current.fit();
-        if (termRef.current.cols && termRef.current.rows) {
-          resizePty(sessionId, termRef.current.cols, termRef.current.rows);
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        try {
+          fitAddonRef.current?.fit();
+          const currentCols = termRef.current?.cols;
+          const currentRows = termRef.current?.rows;
+          if (
+            currentCols &&
+            currentRows &&
+            (currentCols !== lastColsRef.current || currentRows !== lastRowsRef.current)
+          ) {
+            lastColsRef.current = currentCols;
+            lastRowsRef.current = currentRows;
+            resizePty(sessionId, currentCols, currentRows);
+          }
+        } catch {
+          // Safe resize fallback
         }
-      } catch {
-        // Safe resize fallback
-      }
+      }, 50);
     });
     ro.observe(containerRef.current);
 
     return () => {
+      if (resizeTimer) clearTimeout(resizeTimer);
       ro.disconnect();
       onDataSub.dispose();
       unlistenData?.();
       unlistenExit?.();
       closePtySession(sessionId).catch(() => {});
     };
-  }, [config, repoPath, onSessionReady]);
+  }, [configId, propSessionId, onSessionReady]);
 
   useEffect(() => {
     let cleanup: (() => void) | undefined;
+    let cancelled = false;
+
     initTerminal().then((unsub) => {
+      if (cancelled) {
+        if (typeof unsub === 'function') {
+          unsub();
+        }
+        return;
+      }
       if (typeof unsub === 'function') {
         cleanup = unsub;
       }
     });
 
     return () => {
+      cancelled = true;
       cleanup?.();
       if (termRef.current) {
         termRef.current.dispose();
@@ -204,6 +269,20 @@ export function RemoteTerminalPanel({
       }
     };
   }, [initTerminal]);
+
+  useEffect(() => {
+    if (isActive && termRef.current && fitAddonRef.current) {
+      const timer = setTimeout(() => {
+        try {
+          fitAddonRef.current?.fit();
+          termRef.current?.focus();
+        } catch {
+          // ignore fit error
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [isActive]);
 
   const handleClear = () => {
     if (termRef.current) {
@@ -284,7 +363,7 @@ export function RemoteTerminalPanel({
           <Tag color={connected ? 'green' : connecting ? 'orange' : 'default'} style={{ margin: 0, fontSize: 11 }}>
             {connected ? 'SSH Connected' : connecting ? 'Connecting...' : 'Disconnected'}
           </Tag>
-          {repoPath && (
+          {config && (
             <span
               style={{
                 fontSize: 11.5,
@@ -296,7 +375,7 @@ export function RemoteTerminalPanel({
                 whiteSpace: 'nowrap',
               }}
             >
-              {repoPath}
+              {config.username}@{config.host}
             </span>
           )}
         </div>
@@ -350,6 +429,7 @@ export function RemoteTerminalPanel({
       <div
         ref={containerRef}
         data-testid="xterm-container"
+        onClick={() => termRef.current?.focus()}
         style={{
           flex: 1,
           width: '100%',
@@ -359,6 +439,7 @@ export function RemoteTerminalPanel({
           padding: '4px 6px',
           boxSizing: 'border-box',
           overflow: 'hidden',
+          cursor: 'text',
         }}
       />
     </div>

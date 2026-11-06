@@ -1,17 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { Tooltip, Button } from 'antd';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Tooltip, Button, Popconfirm, Select } from 'antd';
 import {
   CodeOutlined,
-  FileTextOutlined,
   CloseOutlined,
   ClearOutlined,
   ReloadOutlined,
   FullscreenOutlined,
   FullscreenExitOutlined,
+  PlusOutlined,
+  CloudServerOutlined,
 } from '@ant-design/icons';
 import { useLayoutStore } from '../store/layoutStore';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { getSshConfigs } from '../../services/sshService';
+import { closePtySession } from '../../services/sshPtyService';
 import { RemoteTerminalPanel } from './RemoteTerminalPanel';
 import type { SshConfig } from '../../types/ssh';
 
@@ -19,67 +21,104 @@ export interface BottomToolWindowProps {
   db?: TaskPlannerDatabase | undefined;
   children?: React.ReactNode;
   config?: SshConfig | undefined;
-  repoPath?: string | undefined;
   onClear?: (() => void) | undefined;
   onReconnect?: (() => void) | undefined;
+}
+
+export interface TerminalTabItem {
+  id: string;
+  title: string;
 }
 
 export function BottomToolWindow({
   children,
   config,
-  repoPath,
   db = defaultDb,
   onClear,
   onReconnect,
 }: BottomToolWindowProps) {
-  const [activeTab, setActiveTab] = useState<'terminal' | 'output'>('terminal');
-  const [isMaximized, setIsMaximized] = useState(false);
-  const [resolvedConfig, setResolvedConfig] = useState<SshConfig | undefined>(config);
+  const [terminalTabs, setTerminalTabs] = useState<TerminalTabItem[]>([
+    { id: 'term-1', title: 'Terminal 1' },
+  ]);
+  const [activeTerminalId, setActiveTerminalId] = useState<string>('term-1');
+  const [configs, setConfigs] = useState<SshConfig[]>([]);
+  const [selectedConfigId, setSelectedConfigId] = useState<string>(config?.id || '');
 
-  const activeRemoteConfigId = useLayoutStore((s) => s.activeRemoteConfigId);
-  const activeRemoteRepoPath = useLayoutStore((s) => s.activeRemoteRepoPath);
-  const setPanelSize = useLayoutStore((s) => s.setPanelSize);
+  const bottomActiveId = useLayoutStore((s) => s.bottomActiveId);
+  const isBottomMaximized = useLayoutStore((s) => s.isBottomMaximized);
+  const toggleBottomMaximize = useLayoutStore((s) => s.toggleBottomMaximize);
   const toggleToolWindow = useLayoutStore((s) => s.toggleToolWindow);
 
+  // When bottom panel is reopened and has no tabs, automatically add 1 fresh terminal tab
   useEffect(() => {
-    if (config) {
-      setResolvedConfig(config);
-      return;
+    if (bottomActiveId === 'terminal' && terminalTabs.length === 0) {
+      const newId = `term-${Date.now()}`;
+      setTerminalTabs([{ id: newId, title: 'Terminal 1' }]);
+      setActiveTerminalId(newId);
     }
+  }, [bottomActiveId, terminalTabs.length]);
+
+  useEffect(() => {
     let mounted = true;
     getSshConfigs(db)
-      .then((configs) => {
+      .then((saved) => {
         if (!mounted) return;
-        if (activeRemoteConfigId) {
-          const match = configs.find((c) => c.id === activeRemoteConfigId);
-          if (match) {
-            setResolvedConfig(match);
-            return;
-          }
-        }
-        if (configs.length > 0 && configs[0]) {
-          setResolvedConfig(configs[0]);
+        setConfigs(saved);
+        if (!selectedConfigId && saved.length > 0 && saved[0]) {
+          setSelectedConfigId(saved[0].id);
         }
       })
       .catch(() => {});
     return () => {
       mounted = false;
     };
-  }, [config, db, activeRemoteConfigId]);
+  }, [db, selectedConfigId]);
 
-  const effectiveRepoPath = repoPath ?? (activeRemoteRepoPath || resolvedConfig?.defaultRemotePath || '');
+  const activeConfig = useMemo(() => {
+    if (config) return config;
+    return configs.find((c) => c.id === selectedConfigId) || configs[0];
+  }, [config, configs, selectedConfigId]);
 
-  const handleToggleMaximize = () => {
-    if (isMaximized) {
-      setPanelSize('bottom', 30);
-      setIsMaximized(false);
-    } else {
-      setPanelSize('bottom', 60);
-      setIsMaximized(true);
-    }
+  const handleNewTab = () => {
+    const nextIndex = terminalTabs.length + 1;
+    const newId = `term-${Date.now()}`;
+    const newTab: TerminalTabItem = {
+      id: newId,
+      title: `Terminal ${nextIndex}`,
+    };
+    setTerminalTabs((prev) => [...prev, newTab]);
+    setActiveTerminalId(newId);
   };
 
-  const handleClose = () => {
+  const handleCloseTab = (tabId: string) => {
+    // Explicitly kill the remote SSH PTY session to prevent zombie processes
+    closePtySession(tabId).catch(() => {});
+
+    setTerminalTabs((prev) => {
+      const remaining = prev.filter((t) => t.id !== tabId);
+      if (remaining.length === 0) {
+        // When closing the last terminal, close the bottom panel and clear all tabs
+        toggleToolWindow('bottom', 'terminal');
+        setActiveTerminalId('');
+        return [];
+      }
+      if (activeTerminalId === tabId) {
+        const closedIdx = prev.findIndex((t) => t.id === tabId);
+        const nextActive = remaining[Math.min(closedIdx, remaining.length - 1)];
+        if (nextActive) {
+          setActiveTerminalId(nextActive.id);
+        }
+      }
+      return remaining;
+    });
+  };
+
+  const handleToggleMaximize = () => {
+    toggleBottomMaximize();
+  };
+
+  const handleMinimize = () => {
+    // Minimize panel: does NOT kill sessions, keeps background processes alive
     toggleToolWindow('bottom', 'terminal');
   };
 
@@ -110,75 +149,122 @@ export function BottomToolWindow({
           userSelect: 'none',
         }}
       >
-        {/* Left: Tab selectors */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <button
-            type="button"
-            data-testid="bottom-tab-terminal"
-            onClick={() => setActiveTab('terminal')}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '3px 10px',
-              fontSize: 'var(--font-size-small, 12px)',
-              fontWeight: activeTab === 'terminal' ? 600 : 400,
-              color:
-                activeTab === 'terminal'
-                  ? 'var(--accent, #3871e1)'
-                  : 'var(--fg-secondary, #5f6269)',
-              background:
-                activeTab === 'terminal'
-                  ? 'var(--bg-island, #ffffff)'
-                  : 'transparent',
-              border: 'none',
-              borderBottom:
-                activeTab === 'terminal'
-                  ? '2px solid var(--accent, #3871e1)'
-                  : '2px solid transparent',
-              cursor: 'pointer',
-              borderRadius: '3px 3px 0 0',
-            }}
-          >
-            <CodeOutlined style={{ fontSize: 12 }} />
-            <span>Terminal</span>
-          </button>
+        {/* Left: Dynamic Terminal Tabs list */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto' }}>
+          {terminalTabs.map((tab) => {
+            const isActive = activeTerminalId === tab.id;
+            return (
+              <div
+                key={tab.id}
+                data-testid={`terminal-tab-${tab.id}`}
+                onClick={() => setActiveTerminalId(tab.id)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '3px 8px',
+                  fontSize: 'var(--font-size-small, 12px)',
+                  fontWeight: isActive ? 600 : 400,
+                  color: isActive
+                    ? 'var(--accent, #3871e1)'
+                    : 'var(--fg-secondary, #5f6269)',
+                  background: isActive
+                    ? 'var(--bg-island, #ffffff)'
+                    : 'transparent',
+                  border: 'none',
+                  borderBottom: isActive
+                    ? '2px solid var(--accent, #3871e1)'
+                    : '2px solid transparent',
+                  cursor: 'pointer',
+                  borderRadius: '3px 3px 0 0',
+                }}
+              >
+                <CodeOutlined style={{ fontSize: 12 }} />
+                <span>{tab.title}</span>
 
-          <button
-            type="button"
-            data-testid="bottom-tab-output"
-            onClick={() => setActiveTab('output')}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '3px 10px',
-              fontSize: 'var(--font-size-small, 12px)',
-              fontWeight: activeTab === 'output' ? 600 : 400,
-              color:
-                activeTab === 'output'
-                  ? 'var(--accent, #3871e1)'
-                  : 'var(--fg-secondary, #5f6269)',
-              background:
-                activeTab === 'output'
-                  ? 'var(--bg-island, #ffffff)'
-                  : 'transparent',
-              border: 'none',
-              borderBottom:
-                activeTab === 'output'
-                  ? '2px solid var(--accent, #3871e1)'
-                  : '2px solid transparent',
-              cursor: 'pointer',
-              borderRadius: '3px 3px 0 0',
-            }}
-          >
-            <FileTextOutlined style={{ fontSize: 12 }} />
-            <span>Output</span>
-          </button>
+                {/* Tab close button with confirmation prompt */}
+                <Popconfirm
+                  title="Đóng terminal này?"
+                  description="Tiến trình đang chạy trên remote sẽ bị dừng hoàn toàn."
+                  okText="Đóng"
+                  cancelText="Hủy"
+                  okButtonProps={{ danger: true, size: 'small' }}
+                  cancelButtonProps={{ size: 'small' }}
+                  onConfirm={(e) => {
+                    e?.stopPropagation();
+                    handleCloseTab(tab.id);
+                  }}
+                  onCancel={(e) => e?.stopPropagation()}
+                >
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    data-testid={`close-tab-${tab.id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: 16,
+                      height: 16,
+                      marginLeft: 2,
+                      borderRadius: 2,
+                      color: 'var(--fg-muted, #8c8f9c)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <CloseOutlined style={{ fontSize: 10 }} />
+                  </span>
+                </Popconfirm>
+              </div>
+            );
+          })}
+
+          {/* New Tab button (+) */}
+          <Tooltip title="Mở thêm Terminal mới (mở tại root)">
+            <Button
+              type="text"
+              size="small"
+              data-testid="new-terminal-tab-btn"
+              icon={<PlusOutlined style={{ fontSize: 11 }} />}
+              onClick={handleNewTab}
+              style={{ width: 22, height: 22, padding: 0, marginLeft: 2 }}
+            />
+          </Tooltip>
+
+          {/* SSH Target Host Selector (independent from File Explorer) */}
+          {configs.length > 1 && (
+            <Select
+              size="small"
+              value={activeConfig?.id}
+              onChange={(newId) => setSelectedConfigId(newId)}
+              style={{ width: 140, marginLeft: 8, fontSize: 11 }}
+              options={configs.map((c) => ({
+                label: c.name || `${c.username}@${c.host}`,
+                value: c.id,
+              }))}
+            />
+          )}
         </div>
 
         {/* Right: Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {activeConfig && (
+            <span
+              style={{
+                fontSize: 11,
+                color: 'var(--fg-muted, #8c8f9c)',
+                marginRight: 6,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              <CloudServerOutlined style={{ fontSize: 12, color: '#f59e0b' }} />
+              {activeConfig.username}@{activeConfig.host}
+            </span>
+          )}
+
           {onClear && (
             <Tooltip title="Clear Terminal">
               <Button
@@ -203,12 +289,12 @@ export function BottomToolWindow({
             </Tooltip>
           )}
 
-          <Tooltip title={isMaximized ? 'Restore Panel Size' : 'Maximize Panel'}>
+          <Tooltip title={isBottomMaximized ? 'Restore Panel Size' : 'Maximize Panel'}>
             <Button
               type="text"
               size="small"
               icon={
-                isMaximized ? (
+                isBottomMaximized ? (
                   <FullscreenExitOutlined style={{ fontSize: 12 }} />
                 ) : (
                   <FullscreenOutlined style={{ fontSize: 12 }} />
@@ -219,12 +305,12 @@ export function BottomToolWindow({
             />
           </Tooltip>
 
-          <Tooltip title="Close Bottom Panel">
+          <Tooltip title="Thu nhỏ Bottom Panel (Tiến trình vẫn tiếp tục chạy)">
             <Button
               type="text"
               size="small"
               icon={<CloseOutlined style={{ fontSize: 12 }} />}
-              onClick={handleClose}
+              onClick={handleMinimize}
               data-testid="bottom-panel-close-btn"
               style={{ width: 22, height: 22, padding: 0 }}
             />
@@ -232,32 +318,30 @@ export function BottomToolWindow({
         </div>
       </div>
 
-      {/* Body */}
+      {/* Body: Keep all active tabs mounted at root so background tasks never pause */}
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
-        {activeTab === 'terminal' ? (
-          children || (
-            <RemoteTerminalPanel
-              config={resolvedConfig}
-              repoPath={effectiveRepoPath}
-              db={db}
-            />
-          )
-        ) : (
-          <div
-            style={{
-              padding: 12,
-              fontFamily: 'monospace',
-              fontSize: 12,
-              color: 'var(--fg-secondary, #5f6269)',
-              height: '100%',
-              overflow: 'auto',
-            }}
-          >
-            Output logs are idle.
-          </div>
-        )}
+        {children ||
+          terminalTabs.map((tab) => (
+            <div
+              key={tab.id}
+              style={{
+                display: activeTerminalId === tab.id ? 'flex' : 'none',
+                flexDirection: 'column',
+                width: '100%',
+                height: '100%',
+              }}
+            >
+              <RemoteTerminalPanel
+                sessionId={tab.id}
+                config={activeConfig}
+                db={db}
+                isActive={activeTerminalId === tab.id}
+              />
+            </div>
+          ))}
       </div>
     </div>
   );
 }
 export default BottomToolWindow;
+

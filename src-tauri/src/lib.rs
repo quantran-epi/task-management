@@ -8,6 +8,7 @@ mod sqlite_persistence;
 mod ssh_pty_service;
 mod ssh_service;
 mod telegram_gateway;
+use tauri::Manager;
 
 #[tauri::command]
 fn open_devtools(window: tauri::WebviewWindow) {
@@ -80,10 +81,13 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|_app_handle, event| {
+        .run(|app_handle, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event {
                 // D-18: Kill active process groups immediately, preserve .plannermate/worktrees on disk
                 agent_manager::cleanup_on_exit();
+                if let Some(pty_registry) = app_handle.try_state::<ssh_pty_service::SshPtyRegistry>() {
+                    ssh_pty_service::cleanup_on_exit(&pty_registry);
+                }
             }
         });
 }

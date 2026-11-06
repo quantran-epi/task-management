@@ -9,6 +9,7 @@ use tauri::{AppHandle, Emitter, State};
 use tokio::sync::mpsc;
 
 pub struct SshPtySession {
+    #[allow(dead_code)]
     pub session_id: String,
     pub stdin_tx: mpsc::Sender<Vec<u8>>,
     pub is_closed: Arc<AtomicBool>,
@@ -27,15 +28,18 @@ pub fn ssh_pty_start(
     config: SshConfig,
     secret: Option<String>,
     session_id: String,
-    working_dir: Option<String>,
+    _working_dir: Option<String>,
     cols: u32,
     rows: u32,
 ) -> Result<String, String> {
-    // Check if session ID already exists
+    // If a session with this session_id already exists, cleanly close it before replacing
     {
-        let sessions = registry.sessions.lock().map_err(|e| e.to_string())?;
-        if sessions.contains_key(&session_id) {
-            return Err(format!("Session PTY '{}' đã tồn tại", session_id));
+        let mut sessions = registry.sessions.lock().map_err(|e| e.to_string())?;
+        if let Some(old_sess) = sessions.remove(&session_id) {
+            old_sess.is_closed.store(true, Ordering::Relaxed);
+            if let Ok(mut ch) = old_sess.channel.lock() {
+                let _ = ch.close();
+            }
         }
     }
 
@@ -62,21 +66,14 @@ pub fn ssh_pty_start(
         .shell()
         .map_err(|e| format!("Lỗi khởi động remote shell: {}", e))?;
 
-    // If working_dir is specified, navigate to it immediately
-    if let Some(ref dir) = working_dir {
-        let clean_dir = dir.trim();
-        if !clean_dir.is_empty() {
-            let cd_cmd = format!("cd {}\n", clean_dir);
-            let _ = channel.write_all(cd_cmd.as_bytes());
-            let _ = channel.flush();
-        }
-    }
+    // Set a responsive blocking timeout (20ms) so channel.read() releases Mutex to writer thread with sub-frame latency
+    session.set_timeout(20);
 
     let channel_arc = Arc::new(Mutex::new(channel));
     let is_closed = Arc::new(AtomicBool::new(false));
 
     // Stdin channel: frontend writes bytes to mpsc::Sender, dedicated background OS thread writes to channel
-    let (stdin_tx, mut stdin_rx) = mpsc::channel::<Vec<u8>>(128);
+    let (stdin_tx, mut stdin_rx) = mpsc::channel::<Vec<u8>>(256);
 
     // Dedicated OS thread for writing stdin
     {
@@ -90,9 +87,7 @@ pub fn ssh_pty_start(
                         break;
                     }
                     if let Ok(mut ch) = channel_clone.lock() {
-                        if ch.write_all(&bytes).is_err() || ch.flush().is_err() {
-                            break;
-                        }
+                        let _ = ch.write_all(&bytes);
                     } else {
                         break;
                     }
@@ -113,38 +108,43 @@ pub fn ssh_pty_start(
             .spawn(move || {
                 let data_event_name = format!("ssh-pty:data:{}", sid);
                 let exit_event_name = format!("ssh-pty:exit:{}", sid);
-                let mut buf = [0u8; 4096];
+                let mut buf = [0u8; 8192];
 
                 loop {
                     if is_closed_clone.load(Ordering::Relaxed) {
                         break;
                     }
 
-                    let read_result = {
+                    let (accumulated, is_eof) = {
                         if let Ok(mut ch) = channel_clone.lock() {
-                            ch.read(&mut buf)
+                            let mut data = Vec::new();
+                            let mut eof = ch.eof();
+                            // Read available bytes; loop to drain burst data (e.g. command output / directory listing)
+                            while let Ok(n) = ch.read(&mut buf) {
+                                if n == 0 {
+                                    eof = ch.eof();
+                                    break;
+                                }
+                                data.extend_from_slice(&buf[..n]);
+                                if data.len() >= 32768 {
+                                    break;
+                                }
+                            }
+                            (data, eof)
                         } else {
                             break;
                         }
                     };
 
-                    match read_result {
-                        Ok(0) => {
-                            // EOF received from remote shell
-                            break;
-                        }
-                        Ok(n) => {
-                            let text = String::from_utf8_lossy(&buf[..n]).to_string();
-                            let _ = app_handle.emit(&data_event_name, text);
-                        }
-                        Err(e) => {
-                            // If channel timed out or non-blocking would block, sleep briefly; otherwise break
-                            if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut {
-                                thread::sleep(Duration::from_millis(15));
-                                continue;
-                            }
-                            break;
-                        }
+                    if !accumulated.is_empty() {
+                        let text = String::from_utf8_lossy(&accumulated).to_string();
+                        let _ = app_handle.emit(&data_event_name, text);
+                    } else if is_eof {
+                        // Remote shell has genuinely exited
+                        break;
+                    } else {
+                        // Idle or socket timeout: sleep briefly and poll again
+                        thread::sleep(Duration::from_millis(10));
                     }
                 }
 
@@ -175,17 +175,19 @@ pub fn ssh_pty_write(
     session_id: String,
     data: String,
 ) -> Result<(), String> {
-    let sessions = registry.sessions.lock().map_err(|e| e.to_string())?;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| format!("Session PTY '{}' không tồn tại", session_id))?;
+    let (stdin_tx, is_closed) = {
+        let sessions = registry.sessions.lock().map_err(|e| e.to_string())?;
+        let session = sessions
+            .get(&session_id)
+            .ok_or_else(|| format!("Session PTY '{}' không tồn tại", session_id))?;
+        (session.stdin_tx.clone(), Arc::clone(&session.is_closed))
+    };
 
-    if session.is_closed.load(Ordering::Relaxed) {
+    if is_closed.load(Ordering::Relaxed) {
         return Err(format!("Session PTY '{}' đã kết thúc", session_id));
     }
 
-    session
-        .stdin_tx
+    stdin_tx
         .blocking_send(data.into_bytes())
         .map_err(|e| format!("Không thể gửi input tới session: {}", e))?;
 
@@ -199,18 +201,21 @@ pub fn ssh_pty_resize(
     cols: u32,
     rows: u32,
 ) -> Result<(), String> {
-    let sessions = registry.sessions.lock().map_err(|e| e.to_string())?;
-    let session = sessions
-        .get(&session_id)
-        .ok_or_else(|| format!("Session PTY '{}' không tồn tại", session_id))?;
+    let (channel, is_closed) = {
+        let sessions = registry.sessions.lock().map_err(|e| e.to_string())?;
+        let session = sessions
+            .get(&session_id)
+            .ok_or_else(|| format!("Session PTY '{}' không tồn tại", session_id))?;
+        (Arc::clone(&session.channel), Arc::clone(&session.is_closed))
+    };
 
-    if session.is_closed.load(Ordering::Relaxed) {
+    if is_closed.load(Ordering::Relaxed) {
         return Ok(());
     }
 
-    let mut ch = session.channel.lock().map_err(|e| e.to_string())?;
-    ch.request_pty_size(cols, rows, None, None)
-        .map_err(|e| format!("Lỗi resize PTY: {}", e))?;
+    if let Ok(mut ch) = channel.lock() {
+        let _ = ch.request_pty_size(cols, rows, None, None);
+    }
 
     Ok(())
 }
@@ -220,8 +225,12 @@ pub fn ssh_pty_close(
     registry: State<'_, SshPtyRegistry>,
     session_id: String,
 ) -> Result<(), String> {
-    let mut sessions = registry.sessions.lock().map_err(|e| e.to_string())?;
-    if let Some(session) = sessions.remove(&session_id) {
+    let session_opt = {
+        let mut sessions = registry.sessions.lock().map_err(|e| e.to_string())?;
+        sessions.remove(&session_id)
+    };
+
+    if let Some(session) = session_opt {
         session.is_closed.store(true, Ordering::Relaxed);
         if let Ok(mut ch) = session.channel.lock() {
             let _ = ch.close();
@@ -229,4 +238,15 @@ pub fn ssh_pty_close(
         }
     }
     Ok(())
+}
+
+pub fn cleanup_on_exit(registry: &SshPtyRegistry) {
+    if let Ok(mut sessions) = registry.sessions.lock() {
+        for (_, session) in sessions.drain() {
+            session.is_closed.store(true, Ordering::Relaxed);
+            if let Ok(mut ch) = session.channel.lock() {
+                let _ = ch.close();
+            }
+        }
+    }
 }

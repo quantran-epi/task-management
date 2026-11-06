@@ -38,12 +38,15 @@ export interface LayoutStateValues {
   activeTabId: string | null;
   activeRemoteConfigId: string | null;
   activeRemoteRepoPath: string;
+  isBottomMaximized: boolean;
 }
 
 export interface LayoutActions {
   toggleToolWindow: (slot: ToolWindowSlot, id: string) => void;
   setToolWindowActive: (slot: ToolWindowSlot, id: string | null) => void;
   setPanelSize: (slot: ToolWindowSlot, size: number) => void;
+  toggleBottomMaximize: () => void;
+  setBottomMaximized: (maximized: boolean) => void;
   openTab: (tab: EditorTab) => void;
   closeTab: (tabId: string) => void;
   togglePinTab: (tabId: string) => void;
@@ -72,6 +75,7 @@ export const DEFAULT_LAYOUT_STATE: LayoutStateValues = {
   activeTabId: 'tasks',
   activeRemoteConfigId: null,
   activeRemoteRepoPath: '',
+  isBottomMaximized: false,
 };
 
 export const LAYOUT_STORAGE_KEY = 'taskmate_workbench_layout_v1';
@@ -113,6 +117,14 @@ export const useLayoutStore = create<LayoutState>()(
           if (slot === 'bottom') return { bottomPanelSize: size };
           return state;
         });
+      },
+
+      toggleBottomMaximize: () => {
+        set((state) => ({ isBottomMaximized: !state.isBottomMaximized }));
+      },
+
+      setBottomMaximized: (maximized: boolean) => {
+        set(() => ({ isBottomMaximized: maximized }));
       },
 
       openTab: (tab: EditorTab) => {

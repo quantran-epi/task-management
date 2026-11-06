@@ -44,14 +44,15 @@ describe('WorkbenchBottomPanel Integration', () => {
     });
   });
 
-  it('does not render bottom tool window when bottomActiveId is null', () => {
+  it('hides (minimizes) bottom panel when bottomActiveId is null to keep background tasks alive', () => {
     act(() => {
       useLayoutStore.getState().setToolWindowActive('bottom', null);
     });
 
     render(<WorkbenchLayout />);
 
-    expect(screen.queryByTestId('bottom-tool-window')).not.toBeInTheDocument();
+    const bottomWindow = screen.getByTestId('bottom-tool-window');
+    expect(bottomWindow.parentElement?.parentElement).toHaveStyle({ display: 'none' });
     expect(screen.getByTestId('editor-area-mock')).toBeInTheDocument();
   });
 
@@ -63,15 +64,15 @@ describe('WorkbenchBottomPanel Integration', () => {
     render(<WorkbenchLayout />);
 
     expect(screen.getByTestId('bottom-tool-window')).toBeInTheDocument();
-    expect(screen.getByTestId('bottom-tab-terminal')).toBeInTheDocument();
-    expect(screen.getByTestId('bottom-tab-output')).toBeInTheDocument();
+    expect(screen.getByText('Terminal 1')).toBeInTheDocument();
   });
 
   it('toggles bottom panel when StatusBar Terminal button is clicked', () => {
     render(<WorkbenchLayout />);
 
     const terminalBtn = screen.getByTestId('statusbar-terminal-btn');
-    expect(screen.queryByTestId('bottom-tool-window')).not.toBeInTheDocument();
+    const bottomWindow = screen.getByTestId('bottom-tool-window');
+    expect(bottomWindow.parentElement?.parentElement).toHaveStyle({ display: 'none' });
 
     // Click to open
     act(() => {
@@ -79,15 +80,15 @@ describe('WorkbenchBottomPanel Integration', () => {
     });
 
     expect(useLayoutStore.getState().bottomActiveId).toBe('terminal');
-    expect(screen.getByTestId('bottom-tool-window')).toBeInTheDocument();
+    expect(bottomWindow.parentElement?.parentElement).toHaveStyle({ display: 'flex' });
 
-    // Click to close
+    // Click to close (minimize)
     act(() => {
       fireEvent.click(terminalBtn);
     });
 
     expect(useLayoutStore.getState().bottomActiveId).toBeNull();
-    expect(screen.queryByTestId('bottom-tool-window')).not.toBeInTheDocument();
+    expect(bottomWindow.parentElement?.parentElement).toHaveStyle({ display: 'none' });
   });
 
   it('closes bottom panel when close button on panel header is clicked', () => {
@@ -97,7 +98,8 @@ describe('WorkbenchBottomPanel Integration', () => {
 
     render(<WorkbenchLayout />);
 
-    expect(screen.getByTestId('bottom-tool-window')).toBeInTheDocument();
+    const bottomWindow = screen.getByTestId('bottom-tool-window');
+    expect(bottomWindow.parentElement?.parentElement).toHaveStyle({ display: 'flex' });
 
     const closeBtn = screen.getByTestId('bottom-panel-close-btn');
     act(() => {
@@ -105,7 +107,7 @@ describe('WorkbenchBottomPanel Integration', () => {
     });
 
     expect(useLayoutStore.getState().bottomActiveId).toBeNull();
-    expect(screen.queryByTestId('bottom-tool-window')).not.toBeInTheDocument();
+    expect(bottomWindow.parentElement?.parentElement).toHaveStyle({ display: 'none' });
   });
 
   it('updates panel size in store when setPanelSize is invoked', () => {
