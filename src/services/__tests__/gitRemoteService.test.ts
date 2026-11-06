@@ -237,7 +237,7 @@ describe('gitRemoteService - Task 1 Tracer Slice', () => {
       const diff = await getFileDiff(dummyConfig, '/var/repo', 'main', 'feature/pay', 'src/a.ts');
       expect(sshService.execRemoteCommand).toHaveBeenCalledWith(
         dummyConfig,
-        "git -C '/var/repo' --no-pager diff \"'main'..'feature/pay'\" -- 'src/a.ts'",
+        "git -C '/var/repo' --no-pager diff 'main..feature/pay' -- 'src/a.ts'",
         undefined
       );
       expect(diff).toBe(mockDiff);

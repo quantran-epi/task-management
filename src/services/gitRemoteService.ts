@@ -36,7 +36,7 @@ export async function getRemoteBranches(
   const output = await runGitCommand(
     config,
     repoPath,
-    ['for-each-ref', '--format="%(refname:short)%x00%(refname)"', 'refs/heads/', 'refs/remotes/origin/'],
+    ['for-each-ref', '--format=%(refname:short)%00%(refname)', 'refs/heads/', 'refs/remotes/origin/'],
     secret
   );
 
@@ -101,7 +101,7 @@ export async function getCommitLog(
   target: string,
   secret?: string
 ): Promise<RemoteGitCommit[]> {
-  const rangeArg = `"${escapeShellArg(base)}..${escapeShellArg(target)}"`;
+  const rangeArg = escapeShellArg(`${base}..${target}`);
   const output = await runGitCommand(
     config,
     repoPath,
@@ -146,7 +146,7 @@ export async function getDiffSummary(
   target: string,
   secret?: string
 ): Promise<RemoteDiffSummary> {
-  const rangeArg = `"${escapeShellArg(base)}..${escapeShellArg(target)}"`;
+  const rangeArg = escapeShellArg(`${base}..${target}`);
 
   // Get target branch HEAD sha
   const headShaOut = await runGitCommand(
@@ -242,7 +242,7 @@ export async function getFileDiff(
   filePath: string,
   secret?: string
 ): Promise<string> {
-  const rangeArg = `"${escapeShellArg(base)}..${escapeShellArg(target)}"`;
+  const rangeArg = escapeShellArg(`${base}..${target}`);
   return runGitCommand(
     config,
     repoPath,
