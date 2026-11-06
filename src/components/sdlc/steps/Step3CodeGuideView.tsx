@@ -44,6 +44,7 @@ import type {
 import type { DiffViewMode } from '../../../types/agent';
 import { ResizeSplitter } from '../../common/ResizeSplitter';
 import { RemoteDiffViewer } from '../diff/RemoteDiffViewer';
+import { RemoteDirectoryBrowserModal } from '../../common/RemoteDirectoryBrowserModal';
 import type { SdlcStepId } from '../../../services/wizard/workflowSchemas';
 import { formatGuardMessage } from '../../../services/wizard/workflowGuards';
 
@@ -81,6 +82,8 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
 
   // Remote data state
   const [branches, setBranches] = useState<RemoteGitBranch[]>([]);
+  const [loadingBranches, setLoadingBranches] = useState<boolean>(false);
+  const [browserModalOpen, setBrowserModalOpen] = useState<boolean>(false);
   const [dirtyStatus, setDirtyStatus] = useState<RemoteGitStatus | null>(null);
   const [diffSummary, setDiffSummary] = useState<RemoteDiffSummary | null>(null);
   const [selectedFilePath, setSelectedFilePath] = useState<string>('');
@@ -182,6 +185,26 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
     },
     [projectId, db]
   );
+
+  // Fetch only branches on-demand
+  const fetchBranchesOnly = useCallback(async () => {
+    if (!activeSshConfig || !remoteRepoPath.trim()) {
+      message.warning('Vui lòng chọn cấu hình SSH và nhập đường dẫn repo trước.');
+      return;
+    }
+    setLoadingBranches(true);
+    try {
+      const secret = (await getSshSecret(activeSshConfig.id)) ?? undefined;
+      const branchList = await getRemoteBranches(activeSshConfig, remoteRepoPath.trim(), secret);
+      setBranches(branchList);
+      message.success(`Đã tải ${branchList.length} nhánh.`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      message.error(`Không thể tải nhánh: ${msg}`);
+    } finally {
+      setLoadingBranches(false);
+    }
+  }, [activeSshConfig, remoteRepoPath]);
 
   // Fetch branches, check dirty status, and load diff summary
   const fetchRemoteData = useCallback(
@@ -450,9 +473,9 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
           </div>
 
           {/* Remote Repo Path */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 220 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 260 }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
-              Đường dẫn repo remote:
+              Repo remote:
             </span>
             <Input
               size="small"
@@ -464,33 +487,60 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
               onBlur={() => handleSaveBinding(selectedSshConfigId, remoteRepoPath, baseBranch)}
               style={{ fontFamily: 'monospace', fontSize: 12 }}
             />
+            <Button
+              size="small"
+              icon={<FolderOpenOutlined />}
+              onClick={() => setBrowserModalOpen(true)}
+              disabled={!activeSshConfig}
+            >
+              Duyệt...
+            </Button>
           </div>
 
           {/* Base Branch */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
-              Nhánh gốc (Base):
+              Base:
             </span>
-            <Input
+            <Select
               size="small"
-              style={{ width: 140, fontFamily: 'monospace', fontSize: 12 }}
+              showSearch
+              style={{ width: 150, fontFamily: 'monospace', fontSize: 12 }}
               value={baseBranch}
-              onChange={(e) => setBaseBranch(e.target.value)}
-              onPressEnter={handleLoad}
-              onBlur={() => handleSaveBinding(selectedSshConfigId, remoteRepoPath, baseBranch)}
+              onChange={(val) => {
+                setBaseBranch(val);
+                void handleSaveBinding(selectedSshConfigId, remoteRepoPath, val);
+              }}
+              options={
+                branches.length > 0
+                  ? branches.map((b) => ({ label: b.name, value: b.name }))
+                  : [
+                      { label: 'origin/main', value: 'origin/main' },
+                      { label: 'origin/master', value: 'origin/master' },
+                      { label: 'staging', value: 'staging' },
+                      { label: 'master', value: 'master' },
+                      { label: 'main', value: 'main' },
+                    ]
+              }
+            />
+            <Button
+              size="small"
+              icon={<ReloadOutlined spin={loadingBranches} />}
+              onClick={fetchBranchesOnly}
+              title="Tải lại danh sách nhánh"
             />
           </div>
 
           {/* Target Branch */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
-              Nhánh cần review:
+              Compare:
             </span>
             <Select
               size="small"
               showSearch
-              style={{ width: 200, fontFamily: 'monospace', fontSize: 12 }}
-              placeholder="Chọn nhánh cần review"
+              style={{ width: 180, fontFamily: 'monospace', fontSize: 12 }}
+              placeholder="Chọn nhánh review"
               value={targetBranch || undefined}
               onChange={(val) => setTargetBranch(val ?? '')}
               options={branches.map((b) => ({
@@ -503,16 +553,16 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
             />
           </div>
 
-          {/* Load / Refresh Button */}
+          {/* Load Changes Button */}
           <Button
             size="small"
             type="primary"
-            icon={<ReloadOutlined spin={loading} />}
+            icon={<SearchOutlined />}
             onClick={handleLoad}
             loading={loading}
             disabled={!activeSshConfig || !remoteRepoPath.trim()}
           >
-            Tải dữ liệu
+            So sánh thay đổi
           </Button>
         </div>
       </Card>
@@ -893,6 +943,19 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
           </Button>
         </Space>
       </div>
+
+      {/* Remote Directory Browser Modal */}
+      <RemoteDirectoryBrowserModal
+        open={browserModalOpen}
+        sshConfig={activeSshConfig}
+        initialPath={remoteRepoPath}
+        onSelect={(selectedPath) => {
+          setRemoteRepoPath(selectedPath);
+          setBrowserModalOpen(false);
+          void handleSaveBinding(selectedSshConfigId, selectedPath, baseBranch);
+        }}
+        onCancel={() => setBrowserModalOpen(false)}
+      />
     </div>
   );
 };
