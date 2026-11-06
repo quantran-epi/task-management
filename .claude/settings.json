@@ -1,9 +1,17 @@
 {
+  "worktree": {
+    "baseRef": "head"
+  },
   "hooks": {
-    "PreToolCall": [
+    "PreToolUse": [
       {
         "matcher": "Read",
-        "command": "node scripts/anti-read-loop.mjs"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/anti-read-loop.mjs\""
+          }
+        ]
       }
     ]
   }

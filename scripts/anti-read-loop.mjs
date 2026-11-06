@@ -3,7 +3,7 @@ import fs from 'node:fs';
 const STATE_FILE = '/tmp/claude_read_history.json';
 const MIN_CHUNK_LINES = 150;
 
-function readStdin(): Promise<string> {
+function readStdin() {
   return new Promise((resolve) => {
     let data = '';
     process.stdin.setEncoding('utf-8');
@@ -22,7 +22,7 @@ async function main() {
     process.exit(0);
   }
 
-  let hookData: any = null;
+  let hookData = null;
   try {
     hookData = JSON.parse(rawInput);
   } catch {
@@ -48,11 +48,11 @@ async function main() {
     process.stderr.write(
       `[ANTI-READ-LOOP HOOK] BỊ CHẶN: Bạn đang cố gọi Read với limit=${limit} (< ${MIN_CHUNK_LINES} dòng). Quy tắc bắt buộc: Phải đọc rộng (>= 150 dòng hoặc allow_large: true). Không đọc vụn vặt!\n`
     );
-    process.exit(1);
+    process.exit(2);
   }
 
   // 2. Chặn đọc lặp lại file vừa đọc gần đây trong vòng vài turn
-  let history: { filePath: string; timestamp: number }[] = [];
+  let history = [];
   try {
     if (fs.existsSync(STATE_FILE)) {
       history = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
@@ -74,7 +74,7 @@ async function main() {
     process.stderr.write(
       `[ANTI-READ-LOOP HOOK] BỊ CHẶN: File "${filePath}" đã được đọc ${recentReads.length} lần trong 2 phút qua. Nội dung đã nằm trong hội thoại. Dùng context đã có để gọi Edit hoặc dừng ngay, CẤM RE-READ LẶP LẠI!\n`
     );
-    process.exit(1);
+    process.exit(2);
   }
 
   // Ghi nhận lần đọc thành công
