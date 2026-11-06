@@ -696,15 +696,15 @@ Plans:
 
 **Wave 1** *(depends on Phase 29; in-memory zip packager)*
 
-- [ ] 30-01-PLAN.md — SSH file collector and in-memory JSZip change-pack builder conforming to ChangePackManifestSchema
+- [ ] 30-01-PLAN.md — SSH file collector and in-memory JSZip change-pack builder conforming to ChangePackManifestSchema & desktop limits
 
 **Wave 2** *(depends on 30-01; Step 4 auto-packaging integration)*
 
-- [ ] 30-02-PLAN.md — Step 4 auto-packaging trigger, reconciliation execution, and explicit manual-dropzone fallback toggle
+- [ ] 30-02-PLAN.md — Step 4 auto-packaging trigger, progress stepper, drift reconciliation, and manual dropzone accordion fallback
 
 **Wave 3** *(depends on 30-02; error hardening & end-to-end walkthrough)*
 
-- [ ] 30-03-PLAN.md — Reliability hardening (SSH timeouts, size guard, CR validation failures) and end-to-end SDLC walk-through test
+- [ ] 30-03-PLAN.md — Reliability hardening (missing snapshot CTA, remote drift handling, dirty tree info, SSH failure auto-expansion)
 
 ### Phase 31: Organization Conventions in the Solution Pipeline
 
