@@ -83,7 +83,7 @@ export function RemoteTerminalPanel({
       fontSize: 13,
       lineHeight: 1.0,
       letterSpacing: 0,
-      macOptionIsMeta: true,
+      macOptionIsMeta: false,
       scrollback: 10000,
       theme: {
         background: '#1e1f22',
@@ -112,6 +112,11 @@ export function RemoteTerminalPanel({
 
     // Native OS keybindings (Cmd/Ctrl+C copy, Cmd/Ctrl+V paste, Cmd/Ctrl+K clear)
     term.attachCustomKeyEventHandler?.((event) => {
+      // Allow IME composition (Vietnamese Telex/VNI, CJK) to pass through without interception
+      if (event.isComposing || event.keyCode === 229) {
+        return true;
+      }
+
       if (event.type === 'keydown') {
         const isCmdOrCtrl = event.metaKey || event.ctrlKey;
         if (isCmdOrCtrl && event.key.toLowerCase() === 'c' && term.hasSelection()) {
