@@ -5,6 +5,7 @@ mod ai_proxy;
 mod jira_proxy;
 mod keyring_store;
 mod sqlite_persistence;
+mod ssh_pty_service;
 mod ssh_service;
 mod telegram_gateway;
 
@@ -18,6 +19,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .manage(telegram_gateway::TelegramGatewayState::new())
+        .manage(ssh_pty_service::SshPtyRegistry::default())
         .invoke_handler(tauri::generate_handler![
             open_devtools,
             sqlite_persistence::select_sqlite_path,
@@ -71,6 +73,10 @@ pub fn run() {
             ssh_service::ssh_delete_entry,
             ssh_service::ssh_rename,
             ssh_service::ssh_exec_command,
+            ssh_pty_service::ssh_pty_start,
+            ssh_pty_service::ssh_pty_write,
+            ssh_pty_service::ssh_pty_resize,
+            ssh_pty_service::ssh_pty_close,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
