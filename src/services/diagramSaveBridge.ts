@@ -24,16 +24,16 @@ export function extractMermaidBlocks(text: string): string[] {
 
   while ((match = regex.exec(clean)) !== null) {
     if (match[1]) {
-      const trimmed = match[1].trim();
-      if (trimmed.length > 0) {
-        blocks.push(trimmed);
+      const normalized = match[1].replace(/\r\n/g, '\n').trim();
+      if (normalized.length > 0) {
+        blocks.push(normalized);
       }
     }
   }
 
   // Fallback: check if text itself is bare mermaid definition without fences
   if (blocks.length === 0) {
-    const trimmed = clean.trim();
+    const trimmed = clean.replace(/\r\n/g, '\n').trim();
     if (
       /^(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|gitGraph|mindmap|timeline)\b/i.test(
         trimmed

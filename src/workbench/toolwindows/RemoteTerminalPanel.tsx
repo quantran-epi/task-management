@@ -1,0 +1,365 @@
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { Terminal } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
+import { Button, Tooltip, message, Tag } from 'antd';
+import {
+  ApartmentOutlined,
+  ReloadOutlined,
+  ClearOutlined,
+  CopyOutlined,
+} from '@ant-design/icons';
+import '@xterm/xterm/css/xterm.css';
+import type { SshConfig } from '../../types/ssh';
+import {
+  startPtySession,
+  writePtyInput,
+  resizePty,
+  closePtySession,
+  subscribePtyData,
+  subscribePtyExit,
+} from '../../services/sshPtyService';
+import { extractMermaidBlocks, saveDiagramToStudio, openDiagramInStudio } from '../../services/diagramSaveBridge';
+import type { TaskPlannerDatabase } from '../../db';
+
+export interface RemoteTerminalPanelProps {
+  config?: SshConfig | undefined;
+  repoPath?: string | undefined;
+  db?: TaskPlannerDatabase | undefined;
+  onSessionReady?: ((sessionId: string) => void) | undefined;
+}
+
+export function RemoteTerminalPanel({
+  config,
+  repoPath,
+  db,
+  onSessionReady,
+}: RemoteTerminalPanelProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const termRef = useRef<Terminal | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
+  const sessionIdRef = useRef<string>('');
+  const bufferLogRef = useRef<string>('');
+
+  const [connected, setConnected] = useState<boolean>(false);
+  const [connecting, setConnecting] = useState<boolean>(false);
+  const [extracting, setExtracting] = useState<boolean>(false);
+
+  // Initialize and bind terminal session
+  const initTerminal = useCallback(async () => {
+    if (!containerRef.current) return;
+
+    // Clean previous session if exists
+    if (sessionIdRef.current) {
+      try {
+        await closePtySession(sessionIdRef.current);
+      } catch {
+        // ignore error on cleanup
+      }
+    }
+    if (termRef.current) {
+      termRef.current.dispose();
+      termRef.current = null;
+    }
+
+    const sessionId = `term-${Date.now()}`;
+    sessionIdRef.current = sessionId;
+    bufferLogRef.current = '';
+
+    // JetBrains ExpUI dark theme
+    const term = new Terminal({
+      cursorBlink: true,
+      fontFamily: "'JetBrains Mono', 'Menlo', 'Monaco', monospace",
+      fontSize: 13,
+      lineHeight: 1.25,
+      theme: {
+        background: '#1e1f22',
+        foreground: '#bcbec4',
+        cursor: '#3871e1',
+        selectionBackground: 'rgba(56, 113, 225, 0.4)',
+        black: '#1e1f22',
+        red: '#fa6675',
+        green: '#57c85f',
+        yellow: '#f5c842',
+        blue: '#54a0ff',
+        magenta: '#d480aa',
+        cyan: '#47c2c9',
+        white: '#bcbec4',
+        brightBlack: '#5f6269',
+        brightRed: '#fa6675',
+        brightGreen: '#57c85f',
+        brightYellow: '#f5c842',
+        brightBlue: '#54a0ff',
+        brightMagenta: '#d480aa',
+        brightCyan: '#47c2c9',
+        brightWhite: '#ffffff',
+      },
+      convertEol: true,
+    });
+
+    const fitAddon = new FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(containerRef.current);
+    try {
+      fitAddon.fit();
+    } catch {
+      // Container may have 0 dimensions initially
+    }
+
+    termRef.current = term;
+    fitAddonRef.current = fitAddon;
+
+    setConnecting(true);
+
+    try {
+      if (config) {
+        term.write(`\r\n\x1B[34m[SSH PTY]\x1B[0m Connecting to ${config.username}@${config.host}...`);
+        if (repoPath) {
+          term.write(`\r\n\x1B[34m[SSH PTY]\x1B[0m Working directory: ${repoPath}\r\n`);
+        }
+
+        await startPtySession({
+          sessionId,
+          config,
+          workingDir: repoPath || undefined,
+          cols: term.cols || 80,
+          rows: term.rows || 24,
+        });
+
+        term.write(`\r\n\x1B[32m[SSH PTY]\x1B[0m Connected.\r\n\r\n`);
+        setConnected(true);
+        onSessionReady?.(sessionId);
+      } else {
+        term.write(
+          `\r\n\x1B[33m[TaskMate Terminal]\x1B[0m No remote SSH host selected.\r\n` +
+          `Select an SSH host and remote repository in the Remote Git Explorer to start headful Claude Code.\r\n\r\n`
+        );
+        setConnected(false);
+      }
+    } catch (err: any) {
+      term.write(`\r\n\x1B[31m[SSH PTY ERROR]\x1B[0m ${err?.message || 'Connection failed'}\r\n`);
+      setConnected(false);
+    } finally {
+      setConnecting(false);
+    }
+
+    // Pipe user input to backend PTY stdin
+    const onDataSub = term.onData((data) => {
+      writePtyInput(sessionId, data);
+    });
+
+    // Subscribe to stdout/stderr stream from backend
+    let unlistenData: (() => void) | undefined;
+    subscribePtyData(sessionId, (data) => {
+      term.write(data);
+      bufferLogRef.current = (bufferLogRef.current + data).slice(-50000); // retain last 50KB for diagram extraction
+    }).then((unsub) => {
+      unlistenData = unsub;
+    });
+
+    // Subscribe to exit event
+    let unlistenExit: (() => void) | undefined;
+    subscribePtyExit(sessionId, () => {
+      term.write('\r\n\x1B[33m[SSH PTY]\x1B[0m Connection closed by remote host.\r\n');
+      setConnected(false);
+    }).then((unsub) => {
+      unlistenExit = unsub;
+    });
+
+    // Resize observer
+    const ro = new ResizeObserver(() => {
+      if (!termRef.current || !fitAddonRef.current || !containerRef.current) return;
+      try {
+        fitAddonRef.current.fit();
+        if (termRef.current.cols && termRef.current.rows) {
+          resizePty(sessionId, termRef.current.cols, termRef.current.rows);
+        }
+      } catch {
+        // Safe resize fallback
+      }
+    });
+    ro.observe(containerRef.current);
+
+    return () => {
+      ro.disconnect();
+      onDataSub.dispose();
+      unlistenData?.();
+      unlistenExit?.();
+      closePtySession(sessionId).catch(() => {});
+    };
+  }, [config, repoPath, onSessionReady]);
+
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    initTerminal().then((unsub) => {
+      if (typeof unsub === 'function') {
+        cleanup = unsub;
+      }
+    });
+
+    return () => {
+      cleanup?.();
+      if (termRef.current) {
+        termRef.current.dispose();
+        termRef.current = null;
+      }
+    };
+  }, [initTerminal]);
+
+  const handleClear = () => {
+    if (termRef.current) {
+      termRef.current.clear();
+      bufferLogRef.current = '';
+    }
+  };
+
+  const handleCopyLogs = async () => {
+    if (!bufferLogRef.current) {
+      message.info('No terminal logs to copy');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(bufferLogRef.current);
+      message.success('Terminal buffer copied');
+    } catch {
+      message.error('Failed to copy buffer');
+    }
+  };
+
+  // SDLC-REPO-EXP-05: Extract diagrams from terminal buffer logs
+  const handleExtractDiagrams = async () => {
+    setExtracting(true);
+    try {
+      const blocks = extractMermaidBlocks(bufferLogRef.current);
+      if (blocks.length === 0) {
+        message.info('No Mermaid diagram blocks detected in current terminal session.');
+        return;
+      }
+
+      let lastNoteId = '';
+      for (let i = 0; i < blocks.length; i++) {
+        const title = `Terminal Diagram ${i + 1} (${new Date().toLocaleTimeString()})`;
+        const note = await saveDiagramToStudio(title, blocks[i], ['terminal', 'claude-code'], db);
+        lastNoteId = note.id;
+      }
+
+      message.success(`Saved ${blocks.length} diagram(s) to Diagram Studio.`);
+      if (lastNoteId) {
+        openDiagramInStudio(lastNoteId);
+      }
+    } catch (err: any) {
+      message.error(`Diagram extraction failed: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  return (
+    <div
+      data-testid="remote-terminal-panel"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        width: '100%',
+        height: '100%',
+        background: '#1e1f22',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Terminal Toolbar */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '4px 8px',
+          background: '#2b2d30',
+          borderBottom: '1px solid #1e1f22',
+          fontSize: 12,
+          color: '#bcbec4',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Tag color={connected ? 'green' : connecting ? 'orange' : 'default'} style={{ margin: 0, fontSize: 11 }}>
+            {connected ? 'SSH Connected' : connecting ? 'Connecting...' : 'Disconnected'}
+          </Tag>
+          {repoPath && (
+            <span
+              style={{
+                fontSize: 11.5,
+                color: '#8c8f9c',
+                fontFamily: 'monospace',
+                maxWidth: 320,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {repoPath}
+            </span>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Tooltip title="Extract Mermaid diagrams from terminal output into Diagram Studio">
+            <Button
+              size="small"
+              type="primary"
+              icon={<ApartmentOutlined />}
+              onClick={handleExtractDiagrams}
+              loading={extracting}
+              data-testid="extract-diagrams-btn"
+              style={{ fontSize: 11.5, background: '#3871e1' }}
+            >
+              Extract Diagrams
+            </Button>
+          </Tooltip>
+
+          <Tooltip title="Copy Terminal Buffer">
+            <Button
+              size="small"
+              icon={<CopyOutlined style={{ fontSize: 11 }} />}
+              onClick={handleCopyLogs}
+              style={{ background: 'transparent', color: '#bcbec4', borderColor: '#43454a' }}
+            />
+          </Tooltip>
+
+          <Tooltip title="Clear Terminal">
+            <Button
+              size="small"
+              icon={<ClearOutlined style={{ fontSize: 11 }} />}
+              onClick={handleClear}
+              style={{ background: 'transparent', color: '#bcbec4', borderColor: '#43454a' }}
+            />
+          </Tooltip>
+
+          <Tooltip title="Reconnect Terminal Session">
+            <Button
+              size="small"
+              icon={<ReloadOutlined style={{ fontSize: 11 }} />}
+              onClick={initTerminal}
+              loading={connecting}
+              style={{ background: 'transparent', color: '#bcbec4', borderColor: '#43454a' }}
+            />
+          </Tooltip>
+        </div>
+      </div>
+
+      {/* Terminal DOM mounting node */}
+      <div
+        ref={containerRef}
+        data-testid="xterm-container"
+        style={{
+          flex: 1,
+          width: '100%',
+          height: '100%',
+          minHeight: 0,
+          background: '#1e1f22',
+          padding: '4px 6px',
+          boxSizing: 'border-box',
+          overflow: 'hidden',
+        }}
+      />
+    </div>
+  );
+}
+export default RemoteTerminalPanel;

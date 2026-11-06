@@ -11,16 +11,23 @@ import {
 } from '@ant-design/icons';
 import { useLayoutStore } from '../store/layoutStore';
 import type { TaskPlannerDatabase } from '../../db';
+import { RemoteTerminalPanel } from './RemoteTerminalPanel';
+import type { SshConfig } from '../../types/ssh';
 
 export interface BottomToolWindowProps {
   db?: TaskPlannerDatabase | undefined;
   children?: React.ReactNode;
+  config?: SshConfig | undefined;
+  repoPath?: string | undefined;
   onClear?: (() => void) | undefined;
   onReconnect?: (() => void) | undefined;
 }
 
 export function BottomToolWindow({
   children,
+  config,
+  repoPath,
+  db,
   onClear,
   onReconnect,
 }: BottomToolWindowProps) {
@@ -197,19 +204,11 @@ export function BottomToolWindow({
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
         {activeTab === 'terminal' ? (
           children || (
-            <div
-              style={{
-                width: '100%',
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--fg-muted, #6c707e)',
-                fontSize: 12,
-              }}
-            >
-              No active terminal session
-            </div>
+            <RemoteTerminalPanel
+              config={config}
+              repoPath={repoPath}
+              db={db}
+            />
           )
         ) : (
           <div

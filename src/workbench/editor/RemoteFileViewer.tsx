@@ -8,10 +8,12 @@ import {
   WarningOutlined,
   ReloadOutlined,
   LockOutlined,
+  ApartmentOutlined,
 } from '@ant-design/icons';
 import type { SshConfig } from '../../types/ssh';
 import { getRemoteFileContent } from '../../services/gitRemoteTreeService';
 import { getSshSecret } from '../../services/sshService';
+import { extractMermaidBlocks, saveDiagramToStudio, openDiagramInStudio } from '../../services/diagramSaveBridge';
 
 export interface RemoteFileViewerProps {
   config?: SshConfig;
@@ -19,6 +21,7 @@ export interface RemoteFileViewerProps {
   branch?: string;
   filePath?: string;
   size?: number;
+  db?: any;
 }
 
 const TWO_MB = 2 * 1024 * 1024;
@@ -39,14 +42,18 @@ export function RemoteFileViewer({
   branch = 'main',
   filePath = '',
   size,
+  db,
 }: RemoteFileViewerProps) {
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [overrideLargeFile, setOverrideLargeFile] = useState<boolean>(false);
+  const [savingDiagram, setSavingDiagram] = useState<boolean>(false);
 
   const isTooLarge = size !== undefined && size > TWO_MB && !overrideLargeFile;
+  const mermaidBlocks = content ? extractMermaidBlocks(content) : [];
+  const hasMermaid = mermaidBlocks.length > 0;
 
   const loadContent = async () => {
     if (!config || !repoPath.trim() || !filePath.trim()) return;
@@ -97,6 +104,29 @@ export function RemoteFileViewer({
       message.success('File path copied');
     } catch {
       message.error('Failed to copy path');
+    }
+  };
+
+  // SDLC-REPO-EXP-05: Save extracted Mermaid diagram to Diagram Studio
+  const handleSaveDiagram = async () => {
+    if (mermaidBlocks.length === 0) return;
+    setSavingDiagram(true);
+    try {
+      const fileName = filePath ? filePath.split('/').pop() || 'Remote' : 'Remote';
+      let lastNoteId = '';
+      for (let i = 0; i < mermaidBlocks.length; i++) {
+        const title = `${fileName} Diagram ${i + 1}`;
+        const note = await saveDiagramToStudio(title, mermaidBlocks[i], ['remote-file', fileName], db);
+        lastNoteId = note.id;
+      }
+      message.success(`Saved ${mermaidBlocks.length} diagram(s) to Diagram Studio.`);
+      if (lastNoteId) {
+        openDiagramInStudio(lastNoteId);
+      }
+    } catch (err: any) {
+      message.error(`Failed to save diagram: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setSavingDiagram(false);
     }
   };
 
@@ -190,6 +220,22 @@ export function RemoteFileViewer({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          {hasMermaid && (
+            <Tooltip title="Save detected Mermaid diagram to Diagram Studio">
+              <Button
+                size="small"
+                type="primary"
+                icon={<ApartmentOutlined />}
+                onClick={handleSaveDiagram}
+                loading={savingDiagram}
+                data-testid="save-diagram-studio-btn"
+                style={{ fontSize: 11.5, background: '#10b981' }}
+              >
+                Save Diagram to Studio
+              </Button>
+            </Tooltip>
+          )}
+
           <Tooltip title="Copy file path">
             <Button size="small" icon={<CopyOutlined />} onClick={handleCopyPath}>
               Copy Path

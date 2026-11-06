@@ -5,6 +5,7 @@ import { RemoteFileViewer } from '../editor/RemoteFileViewer';
 import { AntdThemeAdapter } from '../AntdThemeAdapter';
 import * as gitRemoteTreeService from '../../services/gitRemoteTreeService';
 import * as sshService from '../../services/sshService';
+import * as diagramSaveBridge from '../../services/diagramSaveBridge';
 import type { SshConfig } from '../../types/ssh';
 
 const mockConfig: SshConfig = {
@@ -20,6 +21,13 @@ const sampleCode = `// Sample TypeScript File
 export function add(a: number, b: number): number {
   return a + b;
 }
+`;
+
+const sampleMermaidFile = `# System Architecture
+\`\`\`mermaid
+flowchart TD
+  Client --> API
+\`\`\`
 `;
 
 describe('RemoteFileViewer Component (SDLC-REPO-EXP-03)', () => {
@@ -99,6 +107,50 @@ describe('RemoteFileViewer Component (SDLC-REPO-EXP-03)', () => {
         'secret-123'
       );
       expect(screen.getByTestId('code-container')).toBeDefined();
+    });
+  });
+
+  it('detects Mermaid diagram in file and saves to Diagram Studio', async () => {
+    vi.spyOn(gitRemoteTreeService, 'getRemoteFileContent').mockResolvedValue(sampleMermaidFile);
+    const saveSpy = vi.spyOn(diagramSaveBridge, 'saveDiagramToStudio').mockResolvedValue({
+      id: 'note-doc-1',
+      type: 'diagram',
+      title: 'architecture.md Diagram 1',
+      body: 'flowchart TD\n  Client --> API',
+      tags: ['diagram'],
+      isPinned: false,
+      createdAt: '',
+      updatedAt: '',
+    });
+    const openSpy = vi.spyOn(diagramSaveBridge, 'openDiagramInStudio').mockImplementation(() => {});
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteFileViewer
+          config={mockConfig}
+          repoPath="/home/dev/my-repo"
+          branch="main"
+          filePath="docs/architecture.md"
+          size={500}
+        />
+      </AntdThemeAdapter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('save-diagram-studio-btn')).toBeInTheDocument();
+    });
+
+    const saveBtn = screen.getByTestId('save-diagram-studio-btn');
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(saveSpy).toHaveBeenCalledWith(
+        'architecture.md Diagram 1',
+        'flowchart TD\n  Client --> API',
+        ['remote-file', 'architecture.md'],
+        undefined
+      );
+      expect(openSpy).toHaveBeenCalledWith('note-doc-1');
     });
   });
 });
