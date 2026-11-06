@@ -1,132 +1,367 @@
-import React, { useState } from 'react';
-import { Typography, Button, Space, Card, Alert, theme, message } from 'antd';
-import { CopyOutlined, CheckOutlined, ArrowRightOutlined, CodeOutlined } from '@ant-design/icons';
-import { formatGuardMessage } from '../../../services/wizard/workflowGuards';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  Typography,
+  Button,
+  Space,
+  Card,
+  Alert,
+  Select,
+  Input,
+  Tag,
+  Spin,
+  Empty,
+  Tooltip,
+  theme,
+  message,
+} from 'antd';
+import {
+  ReloadOutlined,
+  CheckCircleOutlined,
+  ArrowRightOutlined,
+  BranchesOutlined,
+  FolderOpenOutlined,
+  WarningOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
+import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
+import { getSshConfigs, getSshSecret } from '../../../services/sshService';
+import {
+  getRemoteBranches,
+  checkDirtyStatus,
+  getCommitLog,
+  getDiffSummary,
+  getFileDiff,
+  getProjectRepoSshBinding,
+  saveProjectRepoSshBinding,
+  checkHeadDrift,
+} from '../../../services/gitRemoteService';
+import type { SshConfig } from '../../../types/ssh';
+import type {
+  RemoteGitBranch,
+  RemoteGitCommit,
+  RemoteDiffSummary,
+  RemoteFileStat,
+  RemoteGitStatus,
+  BranchSnapshot,
+} from '../../../types/gitRemote';
+import type { DiffViewMode } from '../../../types/agent';
+import { ResizeSplitter } from '../../common/ResizeSplitter';
+import { RemoteDiffViewer } from '../diff/RemoteDiffViewer';
 import type { SdlcStepId } from '../../../services/wizard/workflowSchemas';
+import { formatGuardMessage } from '../../../services/wizard/workflowGuards';
 
 export interface Step3CodeGuideViewProps {
+  projectId?: string;
   crCode?: string;
-  /** Approved SOLUTION.md body — supplies the scope/acceptance part of the handoff contract. */
   approvedSolutionMarkdown?: string | undefined;
+  savedSnapshot?: BranchSnapshot | undefined;
+  onCommitBranchSnapshot?: (snapshot: BranchSnapshot) => Promise<void>;
   onProceedToStep4: () => void;
-  /** D-20: a navigation CTA back to the step that supplies the missing artifact. */
   onNavigateToStep?: ((step: SdlcStepId) => void) | undefined;
+  db?: TaskPlannerDatabase;
 }
 
-const HANDOFF_ITEMS = [
-  { key: 'scope', label: 'Phạm vi & tiêu chí nghiệm thu' },
-  { key: 'tests', label: 'Kiểm thử bắt buộc' },
-  { key: 'migration', label: 'Migration & rollback' },
-  { key: 'pack', label: 'Yêu cầu đối với Change Pack' },
-] as const;
-
 export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
+  projectId = '',
   crCode = 'CR-UNKNOWN',
   approvedSolutionMarkdown,
+  savedSnapshot: initialSavedSnapshot,
+  onCommitBranchSnapshot,
   onProceedToStep4,
   onNavigateToStep,
+  db = defaultDb,
 }) => {
-  // D-20: the handoff is only meaningful against an approved SOLUTION.
-  const hasApprovedSolution = Boolean(approvedSolutionMarkdown?.trim());
   const { token } = theme.useToken();
-  const [copied, setCopied] = useState(false);
+  const hasApprovedSolution = Boolean(approvedSolutionMarkdown?.trim());
 
-  const cliCommand = `node scripts/change-pack.mjs --cr ${crCode}`;
+  // Configuration state
+  const [sshConfigs, setSshConfigs] = useState<SshConfig[]>([]);
+  const [selectedSshConfigId, setSelectedSshConfigId] = useState<string>('');
+  const [remoteRepoPath, setRemoteRepoPath] = useState<string>('');
+  const [baseBranch, setBaseBranch] = useState<string>('origin/main');
+  const [targetBranch, setTargetBranch] = useState<string>('');
 
-  const handleCopy = async () => {
+  // Remote data state
+  const [branches, setBranches] = useState<RemoteGitBranch[]>([]);
+  const [dirtyStatus, setDirtyStatus] = useState<RemoteGitStatus | null>(null);
+  const [diffSummary, setDiffSummary] = useState<RemoteDiffSummary | null>(null);
+  const [selectedFilePath, setSelectedFilePath] = useState<string>('');
+  const [currentFileDiff, setCurrentFileDiff] = useState<string>('');
+  const [fileSearchQuery, setFileSearchQuery] = useState<string>('');
+
+  // Review & snapshot state
+  const [currentSnapshot, setCurrentSnapshot] = useState<BranchSnapshot | undefined>(
+    initialSavedSnapshot
+  );
+  const [driftInfo, setDriftInfo] = useState<{ drifted: boolean; currentHeadSha: string } | null>(
+    null
+  );
+
+  // UI state
+  const [leftWidth, setLeftWidth] = useState<number>(320);
+  const [diffViewMode, setDiffViewMode] = useState<DiffViewMode>('unified');
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [loadingDiff, setLoadingDiff] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Active SSH configuration
+  const activeSshConfig = useMemo(
+    () => sshConfigs.find((c) => c.id === selectedSshConfigId),
+    [sshConfigs, selectedSshConfigId]
+  );
+
+  // Load available SSH profiles and project repo binding on mount
+  useEffect(() => {
+    let cancelled = false;
+    async function loadInitial() {
+      try {
+        const configs = await getSshConfigs(db);
+        if (cancelled) return;
+        setSshConfigs(configs);
+
+        if (projectId) {
+          const binding = await getProjectRepoSshBinding(projectId, db);
+          if (cancelled) return;
+          if (binding) {
+            setSelectedSshConfigId(binding.sshConfigId);
+            setRemoteRepoPath(binding.remoteRepoPath);
+            if (binding.defaultBaseBranch) {
+              setBaseBranch(binding.defaultBaseBranch);
+            }
+          } else if (configs.length > 0 && configs[0]) {
+            setSelectedSshConfigId(configs[0].id);
+            if (configs[0].defaultRemotePath) {
+              setRemoteRepoPath(configs[0].defaultRemotePath);
+            }
+          }
+        } else if (configs.length > 0 && configs[0]) {
+          setSelectedSshConfigId(configs[0].id);
+        }
+      } catch (err: unknown) {
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : String(err);
+          setErrorMessage(`Không thể tải cấu hình SSH: ${msg}`);
+        }
+      }
+    }
+    void loadInitial();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, db]);
+
+  // Persist project binding when SSH config or repo path changes
+  const handleSaveBinding = useCallback(
+    async (sshId: string, path: string, base: string) => {
+      if (!projectId || !sshId || !path) return;
+      try {
+        await saveProjectRepoSshBinding(
+          projectId,
+          {
+            sshConfigId: sshId,
+            remoteRepoPath: path,
+            defaultBaseBranch: base,
+            updatedAt: new Date().toISOString(),
+          },
+          db
+        );
+      } catch {
+        // Non-blocking error
+      }
+    },
+    [projectId, db]
+  );
+
+  // Fetch branches, check dirty status, and load diff summary
+  const fetchRemoteData = useCallback(async () => {
+    if (!activeSshConfig || !remoteRepoPath.trim()) {
+      return;
+    }
+    setLoading(true);
+    setErrorMessage(null);
+
     try {
-      await navigator.clipboard.writeText(cliCommand);
-      setCopied(true);
-      message.success('Đã sao chép lệnh đóng gói!');
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      message.error('Không thể sao chép lệnh');
+      const secret = await getSshSecret(activeSshConfig.id);
+
+      // 1. Fetch remote branches
+      const branchList = await getRemoteBranches(activeSshConfig, remoteRepoPath, secret);
+      setBranches(branchList);
+
+      // Select default target branch: prefer feature/{crCode} or branch containing crCode
+      let resolvedTarget = targetBranch;
+      if (!resolvedTarget) {
+        const matchingBranch = branchList.find(
+          (b) =>
+            b.name === `feature/${crCode}` ||
+            b.name === `origin/feature/${crCode}` ||
+            b.name.includes(crCode)
+        );
+        if (matchingBranch) {
+          resolvedTarget = matchingBranch.name;
+        } else if (branchList.length > 0 && branchList[0]) {
+          resolvedTarget = branchList[0].name;
+        }
+        setTargetBranch(resolvedTarget);
+      }
+
+      // 2. Check working tree dirty status
+      const statusResult = await checkDirtyStatus(activeSshConfig, remoteRepoPath, secret);
+      setDirtyStatus(statusResult);
+
+      // 3. If target branch resolved, fetch diff summary and commits
+      if (resolvedTarget && baseBranch) {
+        const summary = await getDiffSummary(
+          activeSshConfig,
+          remoteRepoPath,
+          baseBranch,
+          resolvedTarget,
+          secret
+        );
+        setDiffSummary(summary);
+
+        // Check drift if we have an approved snapshot
+        if (currentSnapshot) {
+          const drift = await checkHeadDrift(
+            activeSshConfig,
+            remoteRepoPath,
+            resolvedTarget,
+            currentSnapshot.headSha,
+            secret
+          );
+          setDriftInfo(drift);
+        }
+
+        // Auto-select first changed file if none selected
+        if (summary.files.length > 0 && summary.files[0]) {
+          setSelectedFilePath(summary.files[0].path);
+        }
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMessage(`Lỗi Git/SSH: ${msg}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeSshConfig, remoteRepoPath, targetBranch, baseBranch, crCode, currentSnapshot]);
+
+  // Trigger query when configuration changes
+  useEffect(() => {
+    if (activeSshConfig && remoteRepoPath.trim()) {
+      void fetchRemoteData();
+    }
+  }, [activeSshConfig, remoteRepoPath, baseBranch, targetBranch]);
+
+  // Load single file diff when selectedFilePath changes
+  useEffect(() => {
+    let cancelled = false;
+    async function loadDiff() {
+      if (!activeSshConfig || !remoteRepoPath.trim() || !baseBranch || !targetBranch || !selectedFilePath) {
+        setCurrentFileDiff('');
+        return;
+      }
+      setLoadingDiff(true);
+      try {
+        const secret = await getSshSecret(activeSshConfig.id);
+        const diffText = await getFileDiff(
+          activeSshConfig,
+          remoteRepoPath,
+          baseBranch,
+          targetBranch,
+          selectedFilePath,
+          secret
+        );
+        if (!cancelled) {
+          setCurrentFileDiff(diffText);
+        }
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setCurrentFileDiff('');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingDiff(false);
+        }
+      }
+    }
+    void loadDiff();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSshConfig, remoteRepoPath, baseBranch, targetBranch, selectedFilePath]);
+
+  // Approve review handler
+  const handleApproveReview = async () => {
+    if (!diffSummary) return;
+
+    const snapshot: BranchSnapshot = {
+      baseBranch,
+      targetBranch,
+      headSha: diffSummary.headSha,
+      commitShas: diffSummary.commits.map((c) => c.sha),
+      fileStats: diffSummary.files,
+      totalAdditions: diffSummary.totalAdditions,
+      totalDeletions: diffSummary.totalDeletions,
+      approvedAt: new Date().toISOString(),
+    };
+
+    setCurrentSnapshot(snapshot);
+    setDriftInfo(null);
+
+    if (onCommitBranchSnapshot) {
+      try {
+        await onCommitBranchSnapshot(snapshot);
+        message.success('Đã lưu snapshot nhánh thành công!');
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        message.error(`Không thể lưu snapshot: ${msg}`);
+      }
+    } else {
+      message.success('Đã lưu snapshot nhánh thành công!');
     }
   };
 
-  const contractBody: Record<(typeof HANDOFF_ITEMS)[number]['key'], string> = {
-    scope: approvedSolutionMarkdown?.trim() || '(chưa cung cấp)',
-    tests:
-      'Chạy unit test và kiểm thử hồi quy cho mọi hành vi trong phạm vi đã duyệt; ghi lại kết quả vào Change Pack.',
-    migration:
-      'Nếu thay đổi schema/DB, kèm script migration và kịch bản rollback tương ứng. Không có thay đổi DB thì ghi rõ "không áp dụng".',
-    pack: `Gói .zip phải chứa diff.patch và meta.json; trường cr trong meta.json phải trùng ${crCode}.`,
+  // Re-inspect drift handler
+  const handleReInspectDrift = async () => {
+    await fetchRemoteData();
+    message.info('Đã kiểm tra lại trạng thái remote repository.');
+  };
+
+  // Filter changed files
+  const filteredFiles = useMemo(() => {
+    if (!diffSummary) return [];
+    if (!fileSearchQuery.trim()) return diffSummary.files;
+    const q = fileSearchQuery.toLowerCase();
+    return diffSummary.files.filter((f) => f.path.toLowerCase().includes(q));
+  }, [diffSummary, fileSearchQuery]);
+
+  const getStatusTag = (status: RemoteFileStat['status']) => {
+    switch (status) {
+      case 'added':
+        return <Tag color="success" style={{ margin: 0, fontSize: 12, fontWeight: 600 }}>[A]</Tag>;
+      case 'deleted':
+        return <Tag color="error" style={{ margin: 0, fontSize: 12, fontWeight: 600 }}>[D]</Tag>;
+      case 'renamed':
+        return <Tag color="processing" style={{ margin: 0, fontSize: 12, fontWeight: 600 }}>[R]</Tag>;
+      case 'modified':
+      default:
+        return <Tag color="warning" style={{ margin: 0, fontSize: 12, fontWeight: 600 }}>[M]</Tag>;
+    }
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 900 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, width: '100%' }}>
+      {/* Step Header */}
       <div>
         <Typography.Title level={4} style={{ margin: 0 }}>
-          Bước 3: Hướng dẫn Coding ngoài & Đóng gói Change Pack
+          Bước 3: Review Nhánh & Diff Repository Remote qua SSH
         </Typography.Title>
-        <Typography.Paragraph type="secondary" style={{ marginTop: 4 }}>
-          Thực hiện code trên IDE ngoài (VS Code, Cursor, Claude Code CLI...). Sau khi hoàn tất, chạy lệnh script bên dưới để đóng gói thay đổi vào file `.zip`.
+        <Typography.Paragraph type="secondary" style={{ marginTop: 4, marginBottom: 0 }}>
+          Kết nối SSH đến máy chủ/WSL, kiểm tra lịch sử commit và xem trước diff thay đổi trước khi đóng gói Change Pack.
         </Typography.Paragraph>
       </div>
 
-      <Card
-        title={
-          <Space>
-            <CodeOutlined style={{ color: token.colorPrimary }} />
-            <span>Lệnh đóng gói Change Pack</span>
-          </Space>
-        }
-        size="small"
-        style={{ border: `1px solid ${token.colorBorderSecondary}` }}
-      >
-        <Typography.Paragraph style={{ fontSize: 13, color: token.colorTextSecondary }}>
-          Mở terminal tại thư mục gốc dự án của bạn và chạy lệnh sau:
-        </Typography.Paragraph>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            background: token.colorFillTertiary,
-            padding: '10px 16px',
-            borderRadius: token.borderRadiusSM,
-            fontFamily: 'monospace',
-            fontSize: 14,
-            fontWeight: 600,
-            border: `1px solid ${token.colorBorderSecondary}`,
-          }}
-        >
-          <span data-testid="cli-command">{cliCommand}</span>
-          <Button
-            size="small"
-            icon={copied ? <CheckOutlined /> : <CopyOutlined />}
-            onClick={handleCopy}
-          >
-            {copied ? 'Đã chép' : 'Sao chép'}
-          </Button>
-        </div>
-        <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
-          * Script sẽ tự động scan git diff, tạo file meta.json và nén thành file zip tương ứng với mã CR <code>{crCode}</code>.
-        </Typography.Text>
-        <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
-          Lệnh này do lập trình viên chạy trong repository nguồn đích. TaskMate không thực thi lệnh và không truy cập mã nguồn; TaskMate chỉ đọc tệp .zip sau khi bạn nạp lên.
-        </Typography.Text>
-      </Card>
-
-      <Card
-        title="Hợp đồng bàn giao Coding & Change Pack"
-        size="small"
-        style={{ border: `1px solid ${token.colorBorderSecondary}` }}
-      >
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
-          {HANDOFF_ITEMS.map((item) => (
-            <div key={item.key}>
-              <Typography.Text strong style={{ display: 'block', fontSize: 13 }}>
-                {item.label}
-              </Typography.Text>
-              <Typography.Paragraph style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: 13 }}>
-                {contractBody[item.key]}
-              </Typography.Paragraph>
-            </div>
-          ))}
-        </Space>
-      </Card>
-
+      {/* Prerequisite Guard Alert if SOLUTION is not approved */}
       {!hasApprovedSolution && (
         <Alert
           type="error"
@@ -146,16 +381,482 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
         />
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
-        <Button
-          type="primary"
-          size="large"
-          icon={<ArrowRightOutlined />}
-          disabled={!hasApprovedSolution}
-          onClick={onProceedToStep4}
+      {/* Top Configuration Bar */}
+      <Card
+        size="small"
+        style={{
+          border: `1px solid ${token.colorBorderSecondary}`,
+          backgroundColor: token.colorFillAlter,
+        }}
+        styles={{ body: { padding: '12px 16px' } }}
+      >
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+          {/* SSH Profile */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+              Cấu hình SSH:
+            </span>
+            <Select
+              size="small"
+              style={{ width: 180 }}
+              placeholder="Chọn cấu hình SSH"
+              value={selectedSshConfigId || undefined}
+              onChange={(val) => {
+                setSelectedSshConfigId(val);
+                const cfg = sshConfigs.find((c) => c.id === val);
+                if (cfg?.defaultRemotePath && !remoteRepoPath) {
+                  setRemoteRepoPath(cfg.defaultRemotePath);
+                  void handleSaveBinding(val, cfg.defaultRemotePath, baseBranch);
+                } else {
+                  void handleSaveBinding(val, remoteRepoPath, baseBranch);
+                }
+              }}
+              options={sshConfigs.map((c) => ({
+                label: `${c.name} (${c.username}@${c.host})`,
+                value: c.id,
+              }))}
+            />
+          </div>
+
+          {/* Remote Repo Path */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 220 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+              Đường dẫn repo remote:
+            </span>
+            <Input
+              size="small"
+              prefix={<FolderOpenOutlined style={{ color: token.colorTextTertiary }} />}
+              placeholder="/home/user/workspace/repo"
+              value={remoteRepoPath}
+              onChange={(e) => setRemoteRepoPath(e.target.value)}
+              onBlur={() => handleSaveBinding(selectedSshConfigId, remoteRepoPath, baseBranch)}
+              style={{ fontFamily: 'monospace', fontSize: 12 }}
+            />
+          </div>
+
+          {/* Base Branch */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+              Nhánh gốc (Base):
+            </span>
+            <Input
+              size="small"
+              style={{ width: 140, fontFamily: 'monospace', fontSize: 12 }}
+              value={baseBranch}
+              onChange={(e) => setBaseBranch(e.target.value)}
+              onBlur={() => handleSaveBinding(selectedSshConfigId, remoteRepoPath, baseBranch)}
+            />
+          </div>
+
+          {/* Target Branch */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+              Nhánh cần review:
+            </span>
+            <Select
+              size="small"
+              showSearch
+              style={{ width: 200, fontFamily: 'monospace', fontSize: 12 }}
+              placeholder="Chọn nhánh cần review"
+              value={targetBranch || undefined}
+              onChange={(val) => setTargetBranch(val)}
+              options={branches.map((b) => ({
+                label: b.name,
+                value: b.name,
+              }))}
+              filterOption={(input, option) =>
+                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+              }
+            />
+          </div>
+
+          {/* Refresh Button */}
+          <Tooltip title="Làm mới danh sách nhánh">
+            <Button
+              size="small"
+              icon={<ReloadOutlined spin={loading} />}
+              onClick={fetchRemoteData}
+              disabled={loading || !activeSshConfig || !remoteRepoPath}
+            />
+          </Tooltip>
+        </div>
+      </Card>
+
+      {/* Error Alert */}
+      {errorMessage && (
+        <Alert
+          type="error"
+          showIcon
+          closable
+          onClose={() => setErrorMessage(null)}
+          message="Lỗi kết nối SSH hoặc lệnh Git"
+          description={errorMessage}
+        />
+      )}
+
+      {/* Dirty Working Tree Alert Banner */}
+      {dirtyStatus && !dirtyStatus.isClean && (
+        <Alert
+          type="warning"
+          showIcon
+          icon={<WarningOutlined />}
+          message={`Thư mục làm việc remote có ${dirtyStatus.uncommittedFiles.length} tệp chưa commit. Kết quả review bên dưới chỉ hiển thị các commit đã tạo giữa ${baseBranch} và ${targetBranch}.`}
+          description={
+            <div style={{ marginTop: 4, maxHeight: 80, overflowY: 'auto' }}>
+              {dirtyStatus.uncommittedFiles.slice(0, 5).map((f, i) => (
+                <div key={i} style={{ fontFamily: 'monospace', fontSize: 12 }}>
+                  <Tag color="default" style={{ fontSize: 11, padding: '0 4px', marginRight: 6 }}>
+                    {f.indexStatus || ' '}{f.workingTreeStatus || ' '}
+                  </Tag>
+                  {f.path}
+                </div>
+              ))}
+              {dirtyStatus.uncommittedFiles.length > 5 && (
+                <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 2 }}>
+                  ... và {dirtyStatus.uncommittedFiles.length - 5} tệp khác
+                </div>
+              )}
+            </div>
+          }
+        />
+      )}
+
+      {/* Remote HEAD Drift Alert Banner */}
+      {driftInfo && driftInfo.drifted && currentSnapshot && (
+        <Alert
+          type="warning"
+          showIcon
+          message={`Remote HEAD đã thay đổi so với snapshot đã duyệt (${currentSnapshot.headSha.slice(0, 8)} → ${driftInfo.currentHeadSha.slice(0, 8)}). Nhấn "Kiểm tra lại" để cập nhật.`}
+          action={
+            <Button size="small" type="primary" onClick={handleReInspectDrift}>
+              Kiểm tra lại & Cập nhật snapshot
+            </Button>
+          }
+        />
+      )}
+
+      {/* Approved Snapshot Banner */}
+      {currentSnapshot && (!driftInfo || !driftInfo.drifted) && (
+        <Alert
+          type="success"
+          showIcon
+          message={`Đã lưu snapshot nhánh thành công vào lúc ${new Date(currentSnapshot.approvedAt).toLocaleTimeString()}. Có thể tiếp tục sang Bước 4.`}
+        />
+      )}
+
+      {/* 2-Column Review Pane */}
+      {!activeSshConfig || !remoteRepoPath ? (
+        <Card style={{ border: `1px solid ${token.colorBorderSecondary}`, textAlign: 'center', padding: 40 }}>
+          <Empty
+            description={
+              <div>
+                <Typography.Text strong style={{ fontSize: 16 }}>
+                  Chưa kết nối SSH hoặc chưa chọn repository
+                </Typography.Text>
+                <Typography.Paragraph type="secondary" style={{ marginTop: 8, fontSize: 13 }}>
+                  Chọn cấu hình SSH và đường dẫn repository remote ở thanh bên trên để bắt đầu kiểm tra.
+                </Typography.Paragraph>
+              </div>
+            }
+          />
+        </Card>
+      ) : loading && !diffSummary ? (
+        <div style={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
+          <Spin size="large" />
+          <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+            Đang truy vấn repository remote qua SSH...
+          </Typography.Text>
+        </div>
+      ) : diffSummary && diffSummary.commits.length === 0 && diffSummary.files.length === 0 ? (
+        <Card style={{ border: `1px solid ${token.colorBorderSecondary}`, textAlign: 'center', padding: 40 }}>
+          <Empty
+            description={
+              <div>
+                <Typography.Text strong style={{ fontSize: 16 }}>
+                  Không có thay đổi Git nào
+                </Typography.Text>
+                <Typography.Paragraph type="secondary" style={{ marginTop: 8, fontSize: 13 }}>
+                  Nhánh {targetBranch} đồng nhất với nhánh gốc {baseBranch}. Không tìm thấy commit hoặc diff nào cần review.
+                </Typography.Paragraph>
+              </div>
+            }
+          />
+        </Card>
+      ) : (
+        <div
+          data-testid="two-column-review-pane"
+          style={{
+            display: 'flex',
+            height: 600,
+            border: `1px solid ${token.colorBorderSecondary}`,
+            borderRadius: 8,
+            overflow: 'hidden',
+          }}
         >
-          Đã code xong — Chuyển sang Nạp Change Pack
-        </Button>
+          {/* Left Panel: Commits & Changed Files */}
+          <div
+            style={{
+              width: leftWidth,
+              minWidth: 260,
+              maxWidth: 480,
+              display: 'flex',
+              flexDirection: 'column',
+              backgroundColor: token.colorFillAlter,
+              borderRight: `1px solid ${token.colorBorderSecondary}`,
+              overflow: 'hidden',
+            }}
+          >
+            {/* Sub-section 1: Commit Timeline */}
+            <div
+              style={{
+                height: 220,
+                borderBottom: `1px solid ${token.colorBorderSecondary}`,
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              <div
+                style={{
+                  padding: '8px 12px',
+                  fontWeight: 600,
+                  fontSize: 12,
+                  color: token.colorTextSecondary,
+                  borderBottom: `1px solid ${token.colorBorderSecondary}`,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <span>Lịch sử Commit ({diffSummary?.commits.length ?? 0})</span>
+                <BranchesOutlined />
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
+                {diffSummary?.commits.map((c) => (
+                  <div
+                    key={c.sha}
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: 12,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 2,
+                      borderBottom: `1px solid ${token.colorBorderSecondary}`,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Tag
+                        color="blue"
+                        style={{
+                          margin: 0,
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                          fontWeight: 600,
+                          padding: '0 4px',
+                        }}
+                      >
+                        {c.shortSha}
+                      </Tag>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          color: token.colorTextSecondary,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          flex: 1,
+                        }}
+                      >
+                        {c.author} · {c.date.split('T')[0] || c.date}
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        color: token.colorText,
+                      }}
+                      title={c.message}
+                    >
+                      {c.message}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Sub-section 2: Changed Files Tree */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div
+                style={{
+                  padding: '8px 12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  borderBottom: `1px solid ${token.colorBorderSecondary}`,
+                }}
+              >
+                <span style={{ fontWeight: 600, fontSize: 12, color: token.colorTextSecondary }}>
+                  Tệp thay đổi ({diffSummary?.files.length ?? 0})
+                </span>
+                {diffSummary && (
+                  <span style={{ fontSize: 11, color: token.colorTextSecondary }}>
+                    <span style={{ color: '#52c41a', fontWeight: 600 }}>+{diffSummary.totalAdditions}</span>
+                    {' · '}
+                    <span style={{ color: '#ff4d4f', fontWeight: 600 }}>−{diffSummary.totalDeletions}</span>
+                  </span>
+                )}
+              </div>
+
+              {/* Quick Search */}
+              <div style={{ padding: '6px 10px', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
+                <Input
+                  size="small"
+                  prefix={<SearchOutlined style={{ color: token.colorTextTertiary }} />}
+                  placeholder="Lọc tệp..."
+                  value={fileSearchQuery}
+                  onChange={(e) => setFileSearchQuery(e.target.value)}
+                  allowClear
+                />
+              </div>
+
+              {/* File list */}
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                {filteredFiles.map((f) => {
+                  const isSelected = f.path === selectedFilePath;
+                  return (
+                    <div
+                      key={f.path}
+                      onClick={() => setSelectedFilePath(f.path)}
+                      style={{
+                        padding: '6px 12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        backgroundColor: isSelected ? token.colorPrimaryBg : 'transparent',
+                        borderLeft: isSelected ? `3px solid ${token.colorPrimary}` : '3px solid transparent',
+                        transition: 'background-color 0.1s ease',
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          overflow: 'hidden',
+                          flex: 1,
+                        }}
+                      >
+                        {getStatusTag(f.status)}
+                        <span
+                          style={{
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            color: isSelected ? token.colorPrimary : token.colorText,
+                            fontWeight: isSelected ? 600 : 400,
+                          }}
+                          title={f.path}
+                        >
+                          {f.path}
+                        </span>
+                      </div>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          flexShrink: 0,
+                          marginLeft: 6,
+                          color: token.colorTextSecondary,
+                        }}
+                      >
+                        {f.additions > 0 && <span style={{ color: '#52c41a' }}>+{f.additions}</span>}
+                        {f.additions > 0 && f.deletions > 0 && ' '}
+                        {f.deletions > 0 && <span style={{ color: '#ff4d4f' }}>−{f.deletions}</span>}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Splitter */}
+          <ResizeSplitter
+            side="left"
+            currentWidth={leftWidth}
+            minWidth={260}
+            maxWidth={480}
+            onResize={setLeftWidth}
+          />
+
+          {/* Right Panel: Diff Viewer */}
+          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            {loadingDiff ? (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Spin tip="Đang tải diff tệp..." />
+              </div>
+            ) : (
+              <RemoteDiffViewer
+                rawDiff={currentFileDiff}
+                filePath={selectedFilePath}
+                viewMode={diffViewMode}
+                onViewModeChange={setDiffViewMode}
+                isFullscreen={isFullscreen}
+                onToggleFullscreen={() => setIsFullscreen(!isFullscreen)}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Action & Approval Footer */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '12px 0',
+          borderTop: `1px solid ${token.colorBorderSecondary}`,
+        }}
+      >
+        <div>
+          {currentSnapshot ? (
+            <Space>
+              <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 16 }} />
+              <Typography.Text strong style={{ fontSize: 13 }}>
+                Đã duyệt snapshot: {new Date(currentSnapshot.approvedAt).toLocaleDateString()} (HEAD: {currentSnapshot.headSha.slice(0, 8)})
+              </Typography.Text>
+            </Space>
+          ) : (
+            <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+              Trạng thái: Chưa duyệt snapshot nhánh
+            </Typography.Text>
+          )}
+        </div>
+
+        <Space orientation="horizontal" size={12}>
+          <Button
+            type="primary"
+            size="large"
+            icon={<CheckCircleOutlined />}
+            onClick={handleApproveReview}
+            disabled={!hasApprovedSolution || !diffSummary}
+          >
+            Chấp thuận kết quả review
+          </Button>
+
+          <Button
+            size="large"
+            icon={<ArrowRightOutlined />}
+            disabled={!hasApprovedSolution || !currentSnapshot}
+            onClick={onProceedToStep4}
+          >
+            Chuyển sang Bước 4: Change Pack
+          </Button>
+        </Space>
       </div>
     </div>
   );

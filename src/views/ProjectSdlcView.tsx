@@ -736,10 +736,12 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
       case 'CODE_GUIDE':
         return (
           <Step3CodeGuideView
+            projectId={projectId}
             crCode={workflowState?.metadata.cr ?? ''}
             approvedSolutionMarkdown={workflowState?.artifacts.solution?.content}
             onProceedToStep4={() => handleNavigateToStep('CHANGE_PACK')}
             onNavigateToStep={handleNavigateToStep}
+            db={db}
           />
         );
       case 'CHANGE_PACK':
