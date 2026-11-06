@@ -8,8 +8,8 @@ export interface GhostDevConfig {
 export const GHOST_DEV_CONFIG_KEY = 'planner:ghost_dev_config';
 
 export const DEFAULT_GHOST_DEV_CONFIG: GhostDevConfig = {
-  masterModel: 'claude-3-5-sonnet-20241022',
-  workerModel: 'claude-3-5-haiku-20241022',
+  masterModel: 'sonnet',
+  workerModel: 'haiku',
   concurrencyCap: 6,
   claudePath: '',
 };

@@ -188,7 +188,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
             workerModel,
             initialPrompt,
             concurrencyCap: config.concurrencyCap,
-            claudePath: config.claudePath?.trim() || undefined,
+            claudePath: execTarget === 'local' ? (config.claudePath?.trim() || undefined) : undefined,
             sshConfig: sshConfigToUse,
             sshSecret: sshSecretToUse,
           },
@@ -406,7 +406,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
               },
             ]}
           >
-            <Input placeholder="claude-3-5-sonnet-20241022" />
+            <Input placeholder="sonnet" />
           </Form.Item>
 
           <Form.Item
@@ -420,7 +420,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
               },
             ]}
           >
-            <Input placeholder="claude-3-5-haiku-20241022" />
+            <Input placeholder="haiku" />
           </Form.Item>
         </div>
 

@@ -385,11 +385,11 @@ pub async fn start_ssh_ghost_dev_session(
         .claude_path
         .as_deref()
         .map(str::trim)
-        .filter(|s| !s.is_empty())
+        .filter(|s| !s.is_empty() && !s.contains('\\') && !s.contains(':'))
         .unwrap_or("claude");
 
     let master_cmd = format!(
-        "cd \"{}\" && {} -p --verbose --output-format stream-json --input-format stream-json --permission-mode bypassPermissions --dangerously-skip-permissions --model \"{}\"",
+        "cd \"{}\" && {} -p --verbose --output-format stream-json --input-format stream-json --permission-mode bypassPermissions --dangerously-skip-permissions --model \"{}\" 2>&1",
         remote_dir, claude_binary, payload.master_model
     );
 

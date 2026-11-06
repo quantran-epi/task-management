@@ -56,6 +56,15 @@ interface SshFormValues {
   defaultRemotePath?: string | undefined;
 }
 
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (typeof err === 'string' && err.trim().length > 0) return err;
+  if (err instanceof Error && err.message) return err.message;
+  if (typeof err === 'object' && err !== null && 'message' in err && typeof (err as any).message === 'string') {
+    return (err as any).message;
+  }
+  return fallback;
+}
+
 export const SshConfigCard: React.FC<SshConfigCardProps> = ({ db = defaultDb }) => {
   const [configs, setConfigs] = useState<SshConfig[]>([]);
   const [loading, setLoading] = useState(false);
@@ -75,7 +84,7 @@ export const SshConfigCard: React.FC<SshConfigCardProps> = ({ db = defaultDb }) 
     } catch (err: any) {
       notification.error({
         message: 'Lỗi tải cấu hình SSH',
-        description: err?.message || 'Không thể đọc cấu hình SSH từ bộ nhớ.',
+        description: getErrorMessage(err, 'Không thể đọc cấu hình SSH từ bộ nhớ.'),
       });
     } finally {
       setLoading(false);
@@ -136,7 +145,7 @@ export const SshConfigCard: React.FC<SshConfigCardProps> = ({ db = defaultDb }) 
     } catch (err: any) {
       notification.error({
         message: 'Lỗi chọn tệp',
-        description: err?.message || 'Không thể mở cửa sổ chọn tệp.',
+        description: getErrorMessage(err, 'Không thể mở cửa sổ chọn tệp.'),
       });
     }
   };
@@ -166,7 +175,7 @@ export const SshConfigCard: React.FC<SshConfigCardProps> = ({ db = defaultDb }) 
     } catch (err: any) {
       notification.error({
         message: 'Kiểm tra kết nối thất bại',
-        description: err?.message || 'Không thể kết nối tới SSH server.',
+        description: getErrorMessage(err, 'Không thể kết nối tới SSH server.'),
       });
     } finally {
       setModalTesting(false);
@@ -202,7 +211,7 @@ export const SshConfigCard: React.FC<SshConfigCardProps> = ({ db = defaultDb }) 
     } catch (err: any) {
       notification.error({
         message: 'Lỗi lưu cấu hình',
-        description: err?.message || 'Vui lòng kiểm tra lại thông tin biểu mẫu.',
+        description: getErrorMessage(err, 'Vui lòng kiểm tra lại thông tin biểu mẫu.'),
       });
     }
   };
@@ -218,7 +227,7 @@ export const SshConfigCard: React.FC<SshConfigCardProps> = ({ db = defaultDb }) 
     } catch (err: any) {
       notification.error({
         message: 'Lỗi xóa cấu hình',
-        description: err?.message || 'Không thể xóa cấu hình SSH.',
+        description: getErrorMessage(err, 'Không thể xóa cấu hình SSH.'),
       });
     }
   };
@@ -234,7 +243,7 @@ export const SshConfigCard: React.FC<SshConfigCardProps> = ({ db = defaultDb }) 
     } catch (err: any) {
       notification.error({
         message: `Kết nối "${config.name}" thất bại`,
-        description: err?.message || 'Không thể kết nối đến SSH server.',
+        description: getErrorMessage(err, 'Không thể kết nối đến SSH server.'),
       });
     } finally {
       setTestingId(null);
