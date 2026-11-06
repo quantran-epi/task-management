@@ -672,9 +672,24 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
           data-testid="two-column-review-pane"
           style={{
             display: 'flex',
-            height: 600,
-            border: `1px solid ${token.colorBorderSecondary}`,
-            borderRadius: 8,
+            ...(isFullscreen
+              ? {
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  zIndex: 1050,
+                  height: '100vh',
+                  width: '100vw',
+                  backgroundColor: token.colorBgContainer,
+                  borderRadius: 0,
+                }
+              : {
+                  height: 600,
+                  border: `1px solid ${token.colorBorderSecondary}`,
+                  borderRadius: 8,
+                }),
             overflow: 'hidden',
           }}
         >

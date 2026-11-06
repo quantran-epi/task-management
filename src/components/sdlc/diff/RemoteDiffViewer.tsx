@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { theme, Segmented, Button, Alert, Modal } from 'antd';
+import { theme, Segmented, Button, Alert } from 'antd';
 import { FullscreenOutlined, FullscreenExitOutlined } from '@ant-design/icons';
 import { parseGitDiff } from '../../../utils/gitDiffParser';
 import type { DiffViewMode, DiffHunk, DiffLine } from '../../../types/agent';
+import { DiffLineCodeRenderer } from './DiffSyntaxHighlighter';
 
 export interface RemoteDiffViewerProps {
   rawDiff: string;
@@ -135,11 +136,10 @@ export const RemoteDiffViewer: React.FC<RemoteDiffViewerProps> = ({
                 whiteSpace: 'pre',
                 overflowX: 'auto',
                 paddingRight: 8,
-                color: token.colorText,
                 fontSize: 12,
               }}
             >
-              {line.content || ' '}
+              <DiffLineCodeRenderer content={line.content} isDark={isDark} />
             </div>
           </div>
         );
@@ -241,11 +241,10 @@ export const RemoteDiffViewer: React.FC<RemoteDiffViewerProps> = ({
                   overflowX: 'auto',
                   paddingLeft: 6,
                   paddingRight: 6,
-                  color: token.colorText,
                   fontSize: 12,
                 }}
               >
-                {row.left?.content ?? ''}
+                <DiffLineCodeRenderer content={row.left?.content ?? ''} isDark={isDark} />
               </div>
             </div>
 
@@ -280,11 +279,10 @@ export const RemoteDiffViewer: React.FC<RemoteDiffViewerProps> = ({
                   overflowX: 'auto',
                   paddingLeft: 6,
                   paddingRight: 6,
-                  color: token.colorText,
                   fontSize: 12,
                 }}
               >
-                {row.right?.content ?? ''}
+                <DiffLineCodeRenderer content={row.right?.content ?? ''} isDark={isDark} />
               </div>
             </div>
           </div>
@@ -410,25 +408,5 @@ export const RemoteDiffViewer: React.FC<RemoteDiffViewerProps> = ({
     </div>
   );
 
-  return (
-    <>
-      {renderContent(false)}
-
-      {isFullscreen && (
-        <Modal
-          open={isFullscreen}
-          {...(onToggleFullscreen ? { onCancel: onToggleFullscreen } : {})}
-          footer={null}
-          width="95vw"
-          centered
-          styles={{
-            body: { height: '85vh', padding: 0, overflow: 'hidden' },
-          }}
-          destroyOnClose
-        >
-          {renderContent(true)}
-        </Modal>
-      )}
-    </>
-  );
+  return renderContent(isFullscreen);
 };
