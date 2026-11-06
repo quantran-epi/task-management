@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-11-03)
 Phase: 29.1 (Remote SSH Git Explorer & Headful Claude Code Terminal Flow (INSERTED)) — COMPLETE
 Plan: 3 of 3 complete
 Status: Verified and complete
-Last activity: 2026-11-06 — Phase 29.1 complete and verified
+Last activity: 2026-11-06 — Completed quick task 261107-0jk: Support uncommitted files in RemoteGitExplorer and add rename tab feature to xterm tabs
 
 Phase sequence: 26 → 27 → 28 → 29 → 29.1 → 30 → 31
 (28 is independent of 26/27; 31 depends on 26 and 27.)
@@ -91,4 +91,5 @@ Progress: [████░░░░░░] 45%
 |------|------|-------|---------|
 | `261106-rfe-remote-explorer-picker-and-step2-header-fix` | 2026-11-06 | RemoteGitExplorer & Step2SolutionView | Added remote folder picker modal via SFTP; fixed Step 2 header title nowrap & flex wrap |
 | `261107-0cw-fix-remote-file-explorer-state-loss-when` | 2026-11-06 | RemoteGitExplorer & layoutStore | Auto-reload branches and tree on remount; retain selected branch across toolwindow toggles |
+| `261107-0jk-support-uncommitted-files-in-remotegitex` | 2026-11-06 | RemoteGitExplorer & BottomToolWindow | Show uncommitted files with status tags; fallback reader for untracked; inline rename for xterm tabs |
 
