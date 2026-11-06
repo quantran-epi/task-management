@@ -44,3 +44,15 @@ export interface ProjectRepoSshBinding {
   defaultBaseBranch?: string;
   updatedAt: string;
 }
+
+export interface BranchSnapshot {
+  baseBranch: string;
+  targetBranch: string;
+  headSha: string;
+  commitShas: string[];
+  fileStats: RemoteFileStat[];
+  totalAdditions: number;
+  totalDeletions: number;
+  approvedAt: string;
+}
+
