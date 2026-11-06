@@ -739,6 +739,15 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
             projectId={projectId}
             crCode={workflowState?.metadata.cr ?? ''}
             approvedSolutionMarkdown={workflowState?.artifacts.solution?.content}
+            savedSnapshot={workflowState?.artifacts.branchSnapshot}
+            onCommitBranchSnapshot={async (snapshot) => {
+              try {
+                await coordinator.commitBranchSnapshot(snapshot);
+                message.success('Đã phê duyệt branch snapshot thành công!');
+              } catch (err) {
+                reportGuardError(err);
+              }
+            }}
             onProceedToStep4={() => handleNavigateToStep('CHANGE_PACK')}
             onNavigateToStep={handleNavigateToStep}
             db={db}
