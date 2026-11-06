@@ -177,6 +177,20 @@ html, body, #root {
   flex-direction: column;
 }
 
+/* Center Editor Area Island - elevated focus contrast */
+.workbench-island-card-center {
+  background: var(--bg-island);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(56, 113, 225, 0.08);
+}
+
+/* Side Tool Windows - subdued background and softer borders to draw eye to center */
+.workbench-island-card-toolwindow {
+  background: #fafbfc;
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+
 /* Ant Design Tree Explorer Fixes - Single row alignment without break lines */
 .workbench-toolwindow-left .ant-tree .ant-tree-treenode {
   width: 100% !important;

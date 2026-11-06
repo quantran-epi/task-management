@@ -22,6 +22,7 @@ export interface EditorTab {
   title: string;
   viewType: EditorViewType;
   closable?: boolean;
+  pinned?: boolean;
   params?: Record<string, any>;
 }
 
@@ -42,6 +43,7 @@ export interface LayoutActions {
   setPanelSize: (slot: ToolWindowSlot, size: number) => void;
   openTab: (tab: EditorTab) => void;
   closeTab: (tabId: string) => void;
+  togglePinTab: (tabId: string) => void;
   reorderTabs: (fromIndex: number, toIndex: number) => void;
   setActiveTabId: (tabId: string) => void;
   resetLayout: () => void;
@@ -166,6 +168,29 @@ export const useLayoutStore = create<LayoutState>()(
         });
       },
 
+      togglePinTab: (tabId: string) => {
+        set((state) => {
+          const tabIndex = state.openTabs.findIndex((t) => t.id === tabId);
+          if (tabIndex === -1) return state;
+
+          const currentTab = state.openTabs[tabIndex];
+          const nextPinned = !currentTab.pinned;
+
+          // Clone tabs array and update pinned status
+          const updated = state.openTabs.map((t) =>
+            t.id === tabId ? { ...t, pinned: nextPinned } : t
+          );
+
+          // Stable partition: pinned tabs first, followed by unpinned tabs
+          const pinnedTabs = updated.filter((t) => t.pinned);
+          const unpinnedTabs = updated.filter((t) => !t.pinned);
+
+          return {
+            openTabs: [...pinnedTabs, ...unpinnedTabs],
+          };
+        });
+      },
+
       reorderTabs: (fromIndex: number, toIndex: number) => {
         set((state) => {
           if (
@@ -207,7 +232,11 @@ export const useLayoutStore = create<LayoutState>()(
         rightPanelSize: typeof state.rightPanelSize === 'number' && state.rightPanelSize > 0 ? state.rightPanelSize : DEFAULT_LAYOUT_STATE.rightPanelSize,
         bottomPanelSize: typeof state.bottomPanelSize === 'number' && state.bottomPanelSize > 0 ? state.bottomPanelSize : DEFAULT_LAYOUT_STATE.bottomPanelSize,
         openTabs: Array.isArray(state.openTabs) && state.openTabs.length > 0
-          ? state.openTabs.slice(0, MAX_OPEN_TABS).map((tab) => ({ ...tab, closable: true }))
+          ? state.openTabs.slice(0, MAX_OPEN_TABS).map((tab) => ({
+              ...tab,
+              closable: true,
+              pinned: Boolean(tab.pinned),
+            }))
           : DEFAULT_LAYOUT_STATE.openTabs,
         activeTabId: typeof state.activeTabId === 'string' ? state.activeTabId : DEFAULT_LAYOUT_STATE.activeTabId,
       }),

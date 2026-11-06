@@ -212,7 +212,7 @@ export function WorkbenchLayout({
                       flexDirection: 'column',
                     }}
                   >
-                    <div className="workbench-island-card" style={{ height: '100%', width: '100%' }}>
+                    <div className="workbench-island-card workbench-island-card-toolwindow" style={{ height: '100%', width: '100%' }}>
                       {leftPanelContent || (
                         <LeftToolWindow
                           {...(db ? { db } : {})}
@@ -227,7 +227,7 @@ export function WorkbenchLayout({
 
               {/* Center Column: 100% Height Editor Area */}
               <Panel id="center-column" order={2} minSize={30}>
-                <div className="workbench-island-card" style={{ height: '100%', width: '100%' }}>
+                <div className="workbench-island-card workbench-island-card-center" style={{ height: '100%', width: '100%' }}>
                   {children || <EditorArea {...(db ? { db } : {})} />}
                 </div>
               </Panel>
@@ -249,7 +249,7 @@ export function WorkbenchLayout({
                       flexDirection: 'column',
                     }}
                   >
-                    <div className="workbench-island-card" style={{ height: '100%', width: '100%' }}>
+                    <div className="workbench-island-card workbench-island-card-toolwindow" style={{ height: '100%', width: '100%' }}>
                       {rightPanelContent || (
                         <RightToolWindow
                           {...(db ? { db } : {})}

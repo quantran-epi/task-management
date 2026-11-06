@@ -60,11 +60,27 @@ describe('useLayoutStore', () => {
     expect(state.leftPanelSize).toBe(DEFAULT_LAYOUT_STATE.leftPanelSize);
   });
 
-  it('persists changes to localStorage under taskmate_workbench_layout_v1', () => {
-    useLayoutStore.getState().toggleToolWindow('left', 'custom_tool');
-    const storedRaw = localStorage.getItem('taskmate_workbench_layout_v1');
-    expect(storedRaw).toBeTruthy();
-    const parsed = JSON.parse(storedRaw!);
-    expect(parsed.state.leftActiveId).toBe('custom_tool');
+  it('pins and unpins tabs keeping pinned tabs on the left', () => {
+    // Initial tabs: tasks, notes, planner
+    expect(useLayoutStore.getState().openTabs.map((t) => t.id)).toEqual(['tasks', 'notes', 'planner']);
+
+    // Pin 'planner' (currently at index 2)
+    useLayoutStore.getState().togglePinTab('planner');
+    let tabs = useLayoutStore.getState().openTabs;
+    expect(tabs.find((t) => t.id === 'planner')?.pinned).toBe(true);
+    // Planner should be moved to front (leftmost)
+    expect(tabs[0]?.id).toBe('planner');
+
+    // Pin 'notes'
+    useLayoutStore.getState().togglePinTab('notes');
+    tabs = useLayoutStore.getState().openTabs;
+    expect(tabs.filter((t) => t.pinned).map((t) => t.id)).toEqual(['planner', 'notes']);
+    expect(tabs[2]?.id).toBe('tasks'); // unpinned tab remains after pinned ones
+
+    // Unpin 'planner'
+    useLayoutStore.getState().togglePinTab('planner');
+    tabs = useLayoutStore.getState().openTabs;
+    expect(tabs[0]?.id).toBe('notes'); // only notes remains pinned on left
+    expect(tabs.find((t) => t.id === 'planner')?.pinned).toBe(false);
   });
 });

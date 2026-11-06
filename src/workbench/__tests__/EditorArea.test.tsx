@@ -104,4 +104,26 @@ describe('EditorArea', () => {
     const openTabs = useLayoutStore.getState().openTabs;
     expect(openTabs.length).toBeLessThanOrEqual(20);
   });
+
+  it('renders open tabs dropdown trigger button', () => {
+    render(<EditorArea />);
+    const dropdownBtn = screen.getByRole('button', { name: 'Show open tabs list' });
+    expect(dropdownBtn).toBeDefined();
+  });
+
+  it('pins and unpins tab via pin icon button', () => {
+    render(<EditorArea />);
+
+    const pinTasksBtn = screen.getByRole('button', { name: 'Pin Tasks' });
+    expect(pinTasksBtn).toBeDefined();
+
+    fireEvent.click(pinTasksBtn);
+    expect(useLayoutStore.getState().openTabs.find((t) => t.id === 'tasks')?.pinned).toBe(true);
+
+    const unpinTasksBtn = screen.getByRole('button', { name: 'Unpin Tasks' });
+    expect(unpinTasksBtn).toBeDefined();
+
+    fireEvent.click(unpinTasksBtn);
+    expect(useLayoutStore.getState().openTabs.find((t) => t.id === 'tasks')?.pinned).toBe(false);
+  });
 });
