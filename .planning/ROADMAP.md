@@ -678,35 +678,35 @@ Plans:
 
 - [ ] 29-03-PLAN.md — Branch snapshot approval and state handoff to Step 4 with regression tests
 
-### Phase 29.1: Remote SSH Git Explorer & Headless Claude Code Trace Flow (INSERTED)
+### Phase 29.1: Remote SSH Git Explorer & Headful Claude Code Terminal Flow (INSERTED)
 
-**Goal:** Provide an IDE-grade Remote File Explorer on Workbench Left Stripe (below Diagram Explorer) that connects over SSH, lazy-loads git directory trees and views file contents strictly read-only by branch without altering the remote working tree, triggers Claude Code headless tracing over targeted folders/files, renders Mermaid sequence/flow diagrams, and saves them directly into TaskMate's Diagram Studio.
+**Goal:** Provide an IDE-grade Remote File Explorer on Workbench Left Stripe (below Diagram Explorer) that connects over SSH, lazy-loads git directory trees and views file contents strictly read-only by branch without altering the remote working tree, embeds an interactive xterm.js remote terminal in Workbench bottom panel connected via Tauri SSH PTY streaming session, allowing the user to run headful `claude` CLI or any shell commands in the repository working directory, inspect generated files/diagrams in Explorer or terminal, and bridge Mermaid diagrams to Diagram Studio.
 **Requirements**: SDLC-REPO-EXP-01, SDLC-REPO-EXP-02, SDLC-REPO-EXP-03, SDLC-REPO-EXP-04, SDLC-REPO-EXP-05
 **Depends on:** Phase 29
 **Success Criteria** (what must be TRUE):
 
 1. Left Stripe displays a dedicated File Explorer icon below Diagram Explorer, opening a docked `RemoteFileExplorer` tool window.
-2. User can select saved SSH configurations, choose/input remote repository paths, pick git branches, and browse directory hierarchy via read-only git tree operations (`git ls-tree <ref>:<path>`) without dirtying remote working copy.
-3. Clicking any file opens a read-only editor tab displaying file contents retrieved via `git show <ref>:<file_path>`.
-4. Right-click or action trigger on any directory or file launches a Trace Flow modal allowing model selection (`claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-opus-5-5`), custom prompt specification, and execution of Claude Code headless via SSH CLI.
-5. Claude Code execution stream parses ````mermaid code blocks, displays live rendering preview, and provides a "Save Diagram" action committing to Dexie `notes` (type `diagram`) and opening in Diagram Studio.
+2. User can select saved SSH configurations, choose/input remote repository paths, pick git branches, and browse directory hierarchy via read-only git tree operations (`git ls-tree -l <ref>[:<path>]`) without dirtying remote working copy.
+3. Clicking any file opens a read-only editor tab displaying file contents retrieved via `git show <ref>:<file_path>` with syntax formatting and 2MB preview guard.
+4. Workbench Bottom Panel hosts an interactive remote terminal powered by `@xterm/xterm` and Tauri SSH PTY streaming, automatically anchored to repository working directory for headful `claude` CLI or arbitrary shell execution.
+5. User can extract Mermaid diagrams from remote files or terminal logs with 1-click bridge saving to Diagram Studio (`type: 'diagram'`).
 
 **Plans:** 3 plans in 3 waves
 **UI hint**: yes
 
 Plans:
 
-**Wave 1** *(no dependencies; remote git tree & read service)*
+**Wave 1** *(no dependencies; remote git tree & PTY streaming backend)*
 
-- [ ] 29.1-01-PLAN.md — Remote git read-only tree service (`ls-tree`, `show`), branch switcher, and Claude Code headless SSH execution runner
+- [ ] 29.1-01-PLAN.md — Remote git read-only tree service (`ls-tree`, `show`), branch switcher, and Tauri SSH PTY streaming backend + `sshPtyService.ts`
 
 **Wave 2** *(depends on 29.1-01; Workbench UI & Left Explorer)*
 
-- [ ] 29.1-02-PLAN.md — `RemoteFileExplorer` Left Tool Window, Stripe integration, branch selector, and read-only Center Editor Tab
+- [ ] 29.1-02-PLAN.md — `RemoteGitExplorer` Left Tool Window, Stripe integration, branch selector, and read-only Center Editor Tab
 
-**Wave 3** *(depends on 29.1-02; Trace Flow dialog & Mermaid save bridge)*
+**Wave 3** *(depends on 29.1-01, 29.1-02; Bottom Terminal & Diagram Bridge)*
 
-- [ ] 29.1-03-PLAN.md — Trace Flow modal, Claude model selection, Mermaid block extractor, live diagram preview, and Diagram Studio save bridge
+- [ ] 29.1-03-PLAN.md — Workbench Bottom Terminal Tool Window (`RemoteTerminalPanel.tsx`), xterm.js integration, Claude Code headful session flow, and Diagram Studio bridge
 
 ### Phase 30: Automatic Change Pack Packaging & Drift Reconciliation
 

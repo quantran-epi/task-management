@@ -1,20 +1,20 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.3
-current_phase: 30
-current_phase_name: Automatic Change Pack Packaging & Drift Reconciliation
-status: verifying
+current_phase: "29.1"
+current_phase_name: Remote SSH Git Explorer & Headful Claude Code Terminal Flow (INSERTED)
+status: executing
 stopped_at: context exhaustion at 88% (2026-11-06)
-last_updated: "2026-11-06T09:44:50.955Z"
+last_updated: "2026-11-06T10:21:49.661Z"
 last_activity: 2026-11-06
 last_activity_desc: Phase 30 execution resumed (wave continue)
-state_head: 19b442ff892118b34208b13c5d1eaf9e3687f708
+state_head: 8713335bf38392d2c6ede220c070a091f177a497
 progress:
-  total_phases: 8
+  total_phases: 9
   completed_phases: 3
-  total_plans: 19
+  total_plans: 22
   completed_plans: 15
-  percent: 38
+  percent: 33
 milestone_name: SDLC Closed-Loop Engine & Repository Autonomy
 ---
 
@@ -27,9 +27,9 @@ See: .planning/PROJECT.md (updated 2026-11-03)
 
 ## Current Position
 
-Phase: 30 (Automatic Change Pack Packaging & Drift Reconciliation) — EXECUTING
+Phase: 29.1 (Remote SSH Git Explorer & Headful Claude Code Terminal Flow (INSERTED)) — READY TO EXECUTE
 Plan: 3 of 3
-Status: Phase complete — ready for verification
+Status: Ready to execute
 Last activity: 2026-11-06 — Phase 30 execution resumed (wave continue)
 
 Phase sequence: 26 → 27 → 28 → 29 → 30 → 31
@@ -41,7 +41,7 @@ Last session: 2026-11-06T09:44:50.464Z
 Stopped at: context exhaustion at 88% (2026-11-06)
 Resume file: None
 
-Progress: [████░░░░░░] 38%
+Progress: [███░░░░░░░] 33%
 
 ## Milestone v1.3 Map
 
