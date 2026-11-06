@@ -237,7 +237,7 @@ export function BottomToolWindow({
             <Select
               size="small"
               value={activeConfig?.id}
-              onChange={(newId) => setSelectedConfigId(newId)}
+              onChange={(newId) => setSelectedConfigId(newId || '')}
               style={{ width: 140, marginLeft: 8, fontSize: 11 }}
               options={configs.map((c) => ({
                 label: c.name || `${c.username}@${c.host}`,

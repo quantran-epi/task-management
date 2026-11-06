@@ -239,37 +239,56 @@ export function WorkbenchLayout({
               )}
 
               {/* Center Column: Editor Area and Bottom Tool Window */}
-              <Panel id="center-column" order={2} minSize={30}>
+              <Panel id="center-column" order={2} minSize={30} style={{ position: 'relative' }}>
                 <PanelGroup direction="vertical" style={{ width: '100%', height: '100%' }}>
-                  {!isBottomMaximized && (
-                    <Panel
-                      id="center-editor-panel"
-                      order={1}
-                      defaultSize={bottomActiveId ? 100 - bottomPanelSize : 100}
-                      minSize={bottomActiveId ? 30 : 100}
-                    >
-                      <div className="workbench-island-card workbench-island-card-center" style={{ height: '100%', width: '100%' }}>
-                        {children || <EditorArea {...(db ? { db } : {})} />}
-                      </div>
-                    </Panel>
-                  )}
+                  <Panel
+                    id="center-editor-panel"
+                    order={1}
+                    defaultSize={bottomActiveId ? 100 - bottomPanelSize : 100}
+                    minSize={bottomActiveId ? 30 : 100}
+                    style={{
+                      overflow: 'hidden',
+                      display: isBottomMaximized ? 'none' : 'flex',
+                      flexDirection: 'column',
+                    }}
+                  >
+                    <div className="workbench-island-card workbench-island-card-center" style={{ height: '100%', width: '100%' }}>
+                      {children || <EditorArea {...(db ? { db } : {})} />}
+                    </div>
+                  </Panel>
                   {bottomActiveId && !isBottomMaximized && (
                     <WorkbenchResizeHandle direction="vertical" id="bottom-resizer" />
                   )}
                   <Panel
                     id="bottom-panel"
                     order={2}
-                    defaultSize={isBottomMaximized ? 100 : (bottomActiveId ? bottomPanelSize : 0)}
+                    defaultSize={bottomActiveId ? bottomPanelSize : 0}
                     minSize={bottomActiveId ? 15 : 0}
                     maxSize={100}
                     onResize={(size) => {
                       if (!isBottomMaximized && bottomActiveId) setPanelSize('bottom', size);
                     }}
-                    style={{
-                      overflow: 'hidden',
-                      display: bottomActiveId ? 'flex' : 'none',
-                      flexDirection: 'column',
-                    }}
+                    style={
+                      isBottomMaximized
+                        ? {
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            zIndex: 10,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            width: '100%',
+                            height: '100%',
+                            background: 'var(--bg-island, #ffffff)',
+                          }
+                        : {
+                            overflow: 'hidden',
+                            display: bottomActiveId ? 'flex' : 'none',
+                            flexDirection: 'column',
+                          }
+                    }
                   >
                     <div className="workbench-island-card workbench-island-card-toolwindow" style={{ height: '100%', width: '100%' }}>
                       {bottomPanelContent || <BottomToolWindow db={db} />}

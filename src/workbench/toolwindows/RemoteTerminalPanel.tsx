@@ -33,7 +33,7 @@ export interface RemoteTerminalPanelProps {
 export function RemoteTerminalPanel({
   sessionId: propSessionId,
   config,
-  repoPath,
+  repoPath: _repoPath,
   db,
   isActive = true,
   onSessionReady,
