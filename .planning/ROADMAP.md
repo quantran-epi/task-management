@@ -698,15 +698,9 @@ Plans:
 
 **Wave 1** *(no dependencies; remote git tree & PTY streaming backend)*
 
-- [ ] 29.1-01-PLAN.md — Remote git read-only tree service (`ls-tree`, `show`), branch switcher, and Tauri SSH PTY streaming backend + `sshPtyService.ts`
-
-**Wave 2** *(depends on 29.1-01; Workbench UI & Left Explorer)*
-
-- [ ] 29.1-02-PLAN.md — `RemoteGitExplorer` Left Tool Window, Stripe integration, branch selector, and read-only Center Editor Tab
-
-**Wave 3** *(depends on 29.1-01, 29.1-02; Bottom Terminal & Diagram Bridge)*
-
-- [ ] 29.1-03-PLAN.md — Workbench Bottom Terminal Tool Window (`RemoteTerminalPanel.tsx`), xterm.js integration, Claude Code headful session flow, and Diagram Studio bridge
+- [x] 29.1-01-PLAN.md — Remote git read-only tree service (`ls-tree`, `show`), branch switcher, and Tauri SSH PTY streaming backend + `sshPtyService.ts`
+- [x] 29.1-02-PLAN.md — `RemoteGitExplorer` Left Tool Window, Stripe integration, branch selector, and read-only Center Editor Tab
+- [x] 29.1-03-PLAN.md — Workbench Bottom Terminal Tool Window (`RemoteTerminalPanel.tsx`), xterm.js integration, Claude Code headful session flow, and Diagram Studio bridge
 
 ### Phase 30: Automatic Change Pack Packaging & Drift Reconciliation
 
