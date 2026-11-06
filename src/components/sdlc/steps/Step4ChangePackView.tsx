@@ -36,7 +36,7 @@ import {
 } from '../../../services/wizard/sdlcCrManager';
 import type { SdlcArtifactRef, SdlcStepId } from '../../../services/wizard/workflowSchemas';
 import type { BranchSnapshot } from '../../../types/gitRemote';
-import { getProjectRepoSshBinding } from '../../../services/gitRemoteService';
+import { checkHeadDrift, getProjectRepoSshBinding } from '../../../services/gitRemoteService';
 import { getSshConfigs } from '../../../services/sshService';
 import {
   createChangePackFromSnapshot,
@@ -93,6 +93,9 @@ const PACKAGING_STAGES = [
 const SSH_PACKAGING_ERROR =
   'Không thể kết nối SSH hoặc đóng gói thất bại. Vui lòng kiểm tra cấu hình kết nối hoặc nạp tệp zip thủ công.';
 
+/** The packager emits its dirty-tree notice as a warning; D-09 wants it as an info banner. */
+const DIRTY_WARNING_PATTERN = /tệp chưa commit/i;
+
 export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
   projectId,
   crId,
@@ -117,6 +120,13 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
   const [packagingStep, setPackagingStep] = useState(0);
   const [packagingStepStatus, setPackagingStepStatus] = useState<'process' | 'finish' | 'error' | 'wait'>('wait');
   const [packagingWarnings, setPackagingWarnings] = useState<string[]>([]);
+  // D-08: drift is surfaced once and re-checked on retry until the user confirms.
+  const [driftPrompt, setDriftPrompt] = useState<{ currentHeadSha: string } | null>(null);
+  const [driftConfirmed, setDriftConfirmed] = useState(false);
+  // D-09: separate info banner for the dirty working tree.
+  const [dirtyNotice, setDirtyNotice] = useState(false);
+  // D-11: only snapshot packaging failures offer a reconnect retry.
+  const [showRetryConnection, setShowRetryConnection] = useState(false);
   // D-03: without an approved snapshot the manual fallback opens straight away.
   const [manualAccordionOpen, setManualAccordionOpen] = useState(!branchSnapshot);
 
@@ -200,6 +210,7 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
       setLoading(true);
       setErrorMsg(null);
       setNeedsReupload(false);
+      setShowRetryConnection(false);
 
       // 1. Validate change-pack identity & size against expected CR
       const manifest = await validateHubChangePack(file, crCode);
@@ -219,7 +230,7 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
   };
 
   /** D-01/D-02: active trigger builds the pack over SSH and reconciles it immediately. */
-  const handlePackageFromSnapshot = async () => {
+  const handlePackageFromSnapshot = async (options?: { driftConfirmed?: boolean }) => {
     if (!branchSnapshot || packagingLoading) return;
     if (!solutionArtifact?.noteId) {
       setErrorMsg(formatGuardMessage('SOLUTION_REQUIRED_FOR_CHANGE_PACK'));
@@ -229,6 +240,8 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
 
     setPackagingLoading(true);
     setPackagingWarnings([]);
+    setDirtyNotice(false);
+    setShowRetryConnection(false);
     setPackagingStep(0);
     setPackagingStepStatus('process');
     setErrorMsg(null);
@@ -244,15 +257,33 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
         // D-11: surface the failure and open the manual fallback immediately.
         setPackagingStepStatus('error');
         setErrorMsg(SSH_PACKAGING_ERROR);
+        setShowRetryConnection(true);
         setManualAccordionOpen(true);
         return;
       }
 
+      // D-08: the approved SHA stays authoritative, but the user must confirm the drift first.
+      const approvedHead = branchSnapshot.headSha ?? branchSnapshot.headCommit;
+      const targetBranch = branchSnapshot.targetBranch ?? branchSnapshot.branch;
+      const confirmed = options?.driftConfirmed ?? driftConfirmed;
+      if (targetBranch && approvedHead && !confirmed) {
+        const drift = await checkHeadDrift(config, repoPath, targetBranch, approvedHead);
+        if (drift.drifted) {
+          setDriftPrompt({ currentHeadSha: drift.currentHeadSha });
+          setPackagingStepStatus('wait');
+          return;
+        }
+      }
+
+      setDriftPrompt(null);
       const packaged = await createChangePackFromSnapshot(config, repoPath, branchSnapshot, crCode, (step) => {
         setPackagingStep(PACKAGE_STEP_INDEX[step]);
         setPackagingStepStatus('process');
       });
-      setPackagingWarnings(packaged.warnings);
+      // D-09: the dirty notice gets its own info banner; keep the remaining warnings.
+      const dirtyWarnings = packaged.warnings.filter((warning) => DIRTY_WARNING_PATTERN.test(warning));
+      setDirtyNotice(dirtyWarnings.length > 0);
+      setPackagingWarnings(packaged.warnings.filter((warning) => !DIRTY_WARNING_PATTERN.test(warning)));
 
       setPackagingStep(3);
       setPackagingStepStatus('process');
@@ -267,11 +298,27 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setPackagingStepStatus('error');
-      setErrorMsg(`Lỗi đóng gói change pack: ${msg}`);
+      setErrorMsg(`Lỗi kết nối SSH hoặc đóng gói: ${msg}`);
+      setShowRetryConnection(true);
       setManualAccordionOpen(true);
     } finally {
       setPackagingLoading(false);
     }
+  };
+
+  const handleRetryConnection = () => {
+    void handlePackageFromSnapshot({ driftConfirmed });
+  };
+
+  const handleConfirmDrift = () => {
+    setDriftConfirmed(true);
+    void handlePackageFromSnapshot({ driftConfirmed: true });
+  };
+
+  const handleReturnToStep3 = () => {
+    setDriftPrompt(null);
+    setDriftConfirmed(false);
+    onNavigateToStep?.('CODE_GUIDE');
   };
 
   const handleSelectActive = async (packHash: string) => {
@@ -297,6 +344,7 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
       setLoading(true);
       setErrorMsg(null);
       setNeedsReupload(false);
+      setShowRetryConnection(false);
       const reconciliation = await reconcile(pack.manifest);
       setDriftResult(reconciliation);
       await onCommitChangePackAndDrift(packHash, pack.filename, reconciliation);
@@ -398,7 +446,7 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
               icon={<CloudUploadOutlined />}
               loading={packagingLoading}
               disabled={packagingLoading || !solutionArtifact}
-              onClick={handlePackageFromSnapshot}
+              onClick={() => void handlePackageFromSnapshot()}
               data-testid="btn-package-from-snapshot"
             >
               Đóng gói & Đối chiếu từ Snapshot
@@ -440,6 +488,36 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
         </div>
       )}
 
+      {driftPrompt && (
+        <Alert
+          data-testid="drift-warning"
+          type="warning"
+          showIcon
+          message="Cảnh báo: Remote HEAD đã thay đổi"
+          description={`Remote HEAD hiện tại (${shortSha(driftPrompt.currentHeadSha)}) khác với commit đã duyệt trong Snapshot (${shortSha(
+            branchSnapshot?.headSha ?? branchSnapshot?.headCommit
+          )}). Bạn muốn làm gì?`}
+          action={
+            <Space orientation="vertical" size={8}>
+              <Button type="primary" onClick={handleConfirmDrift}>
+                Tiếp tục với commit đã duyệt
+              </Button>
+              <Button onClick={handleReturnToStep3}>Quay lại Bước 3 duyệt lại</Button>
+            </Space>
+          }
+        />
+      )}
+
+      {dirtyNotice && (
+        <Alert
+          data-testid="dirty-warning"
+          type="info"
+          showIcon
+          message="Repository remote đang có tệp chưa commit"
+          description="Change Pack được tạo dựa trên lịch sử commit đã duyệt giữa Base và Head nên không bị ảnh hưởng bởi working tree."
+        />
+      )}
+
       {packagingWarnings.length > 0 && (
         <Alert
           type="warning"
@@ -462,6 +540,11 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
           closable
           onClose={() => setErrorMsg(null)}
           message={errorMsg}
+          action={
+            showRetryConnection ? (
+              <Button onClick={handleRetryConnection}>Thử lại kết nối</Button>
+            ) : undefined
+          }
         />
       )}
 
