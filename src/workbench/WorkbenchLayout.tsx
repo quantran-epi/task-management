@@ -7,6 +7,7 @@ import { StatusBar } from './StatusBar';
 import { EditorArea } from './EditorArea';
 import { LeftToolWindow } from './toolwindows/LeftToolWindow';
 import { RightToolWindow } from './toolwindows/RightToolWindow';
+import { BottomToolWindow } from './toolwindows/BottomToolWindow';
 import { WorkbenchResizeHandle } from './WorkbenchResizeHandle';
 import { useLayoutStore } from './store/layoutStore';
 import { useGlobalKeymap } from './hooks/useGlobalKeymap';
@@ -27,10 +28,11 @@ import {
 import { CloudServerOutlined } from '@ant-design/icons';
 import '../styles/workbench-tokens.css';
 
-export interface WorkbenchLayoutProps {
+  export interface WorkbenchLayoutProps {
   children?: React.ReactNode;
   leftPanelContent?: React.ReactNode;
   rightPanelContent?: React.ReactNode;
+  bottomPanelContent?: React.ReactNode;
   selectedProjectId?: string | null | undefined;
   onSelectProject?: ((projectId: string | null) => void) | undefined;
   onOpenSearch?: (() => void) | undefined;
@@ -54,6 +56,7 @@ export function WorkbenchLayout({
   children,
   leftPanelContent,
   rightPanelContent,
+  bottomPanelContent,
   onSelectProject,
   onOpenSearch,
   onOpenSettings,
@@ -100,6 +103,7 @@ export function WorkbenchLayout({
 
   const leftActiveId = useLayoutStore((s) => s.leftActiveId);
   const rightActiveId = useLayoutStore((s) => s.rightActiveId);
+  const bottomActiveId = useLayoutStore((s) => s.bottomActiveId);
   const setToolWindowActive = useLayoutStore((s) => s.setToolWindowActive);
   const openTab = useLayoutStore((s) => s.openTab);
   const activeTabId = useLayoutStore((s) => s.activeTabId);
@@ -135,6 +139,7 @@ export function WorkbenchLayout({
 
   const leftPanelSize = useLayoutStore((s) => s.leftPanelSize);
   const rightPanelSize = useLayoutStore((s) => s.rightPanelSize);
+  const bottomPanelSize = useLayoutStore((s) => s.bottomPanelSize);
   const setPanelSize = useLayoutStore((s) => s.setPanelSize);
 
   const handleOpenSettingsTab = useCallback(() => {
@@ -232,11 +237,44 @@ export function WorkbenchLayout({
                 </>
               )}
 
-              {/* Center Column: 100% Height Editor Area */}
+              {/* Center Column: Editor Area and optional Bottom Tool Window */}
               <Panel id="center-column" order={2} minSize={30}>
-                <div className="workbench-island-card workbench-island-card-center" style={{ height: '100%', width: '100%' }}>
-                  {children || <EditorArea {...(db ? { db } : {})} />}
-                </div>
+                {bottomActiveId ? (
+                  <PanelGroup direction="vertical" style={{ width: '100%', height: '100%' }}>
+                    <Panel
+                      id="center-editor-panel"
+                      order={1}
+                      defaultSize={100 - bottomPanelSize}
+                      minSize={30}
+                    >
+                      <div className="workbench-island-card workbench-island-card-center" style={{ height: '100%', width: '100%' }}>
+                        {children || <EditorArea {...(db ? { db } : {})} />}
+                      </div>
+                    </Panel>
+                    <WorkbenchResizeHandle direction="vertical" id="bottom-resizer" />
+                    <Panel
+                      id="bottom-panel"
+                      order={2}
+                      defaultSize={bottomPanelSize}
+                      minSize={15}
+                      maxSize={60}
+                      onResize={(size) => setPanelSize('bottom', size)}
+                      style={{
+                        overflow: 'hidden',
+                        display: 'flex',
+                        flexDirection: 'column',
+                      }}
+                    >
+                      <div className="workbench-island-card workbench-island-card-toolwindow" style={{ height: '100%', width: '100%' }}>
+                        {bottomPanelContent || <BottomToolWindow db={db} />}
+                      </div>
+                    </Panel>
+                  </PanelGroup>
+                ) : (
+                  <div className="workbench-island-card workbench-island-card-center" style={{ height: '100%', width: '100%' }}>
+                    {children || <EditorArea {...(db ? { db } : {})} />}
+                  </div>
+                )}
               </Panel>
 
               {/* Right Docked Tool Window (AI Assistant, Ghost Dev & Telegram) */}

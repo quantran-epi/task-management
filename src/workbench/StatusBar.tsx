@@ -4,6 +4,7 @@ import {
   CloudSyncOutlined,
   ApiOutlined,
   CheckCircleFilled,
+  CodeOutlined,
 } from '@ant-design/icons';
 import { useTimer } from '../hooks/useTimer';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -22,6 +23,8 @@ export function StatusBar({
 }: StatusBarProps) {
   const activeTabId = useLayoutStore((s) => s.activeTabId);
   const openTabs = useLayoutStore((s) => s.openTabs);
+  const bottomActiveId = useLayoutStore((s) => s.bottomActiveId);
+  const toggleToolWindow = useLayoutStore((s) => s.toggleToolWindow);
   const activeTab = openTabs.find((t) => t.id === activeTabId);
 
   const { activeTimers } = useTimer();
@@ -60,6 +63,31 @@ export function StatusBar({
     >
       {/* Left: Active Center Item Focus & Storage Indicators */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        {/* Terminal Toggle Button */}
+        <Tooltip title={bottomActiveId === 'terminal' ? 'Hide Terminal (Alt+F12)' : 'Show Terminal (Alt+F12)'}>
+          <button
+            type="button"
+            data-testid="statusbar-terminal-btn"
+            onClick={() => toggleToolWindow('bottom', 'terminal')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              background: bottomActiveId === 'terminal' ? 'var(--accent-subtle, rgba(56, 113, 225, 0.12))' : 'transparent',
+              color: bottomActiveId === 'terminal' ? 'var(--accent, #3871e1)' : 'var(--fg-secondary, #5f6269)',
+              border: bottomActiveId === 'terminal' ? '1px solid var(--accent, #3871e1)' : '1px solid transparent',
+              borderRadius: 3,
+              padding: '1px 6px',
+              fontSize: 'var(--font-size-xs, 11px)',
+              fontWeight: bottomActiveId === 'terminal' ? 600 : 400,
+              cursor: 'pointer',
+            }}
+          >
+            <CodeOutlined style={{ fontSize: 11 }} />
+            <span>Terminal</span>
+          </button>
+        </Tooltip>
+
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <CheckCircleFilled style={{ color: 'var(--success, #338555)', fontSize: 11 }} />
           <Tooltip title={activeTab?.title ? `Active Item: ${activeTab.title}` : (activeRunningTask ? `Task: ${activeRunningTask}` : 'Ready')}>
