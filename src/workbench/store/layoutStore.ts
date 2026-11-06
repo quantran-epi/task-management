@@ -36,6 +36,8 @@ export interface LayoutStateValues {
   bottomPanelSize: number;
   openTabs: EditorTab[];
   activeTabId: string | null;
+  activeRemoteConfigId: string | null;
+  activeRemoteRepoPath: string;
 }
 
 export interface LayoutActions {
@@ -47,6 +49,7 @@ export interface LayoutActions {
   togglePinTab: (tabId: string) => void;
   reorderTabs: (fromIndex: number, toIndex: number) => void;
   setActiveTabId: (tabId: string) => void;
+  setActiveRemoteTarget: (configId: string | null, repoPath: string) => void;
   resetLayout: () => void;
 }
 
@@ -67,6 +70,8 @@ export const DEFAULT_LAYOUT_STATE: LayoutStateValues = {
   bottomPanelSize: 30,
   openTabs: DEFAULT_TABS,
   activeTabId: 'tasks',
+  activeRemoteConfigId: null,
+  activeRemoteRepoPath: '',
 };
 
 export const LAYOUT_STORAGE_KEY = 'taskmate_workbench_layout_v1';
@@ -216,6 +221,13 @@ export const useLayoutStore = create<LayoutState>()(
         set(() => ({ activeTabId: tabId }));
       },
 
+      setActiveRemoteTarget: (configId: string | null, repoPath: string) => {
+        set(() => ({
+          activeRemoteConfigId: configId,
+          activeRemoteRepoPath: repoPath,
+        }));
+      },
+
       resetLayout: () => {
         set(() => ({
           ...DEFAULT_LAYOUT_STATE,
@@ -241,6 +253,8 @@ export const useLayoutStore = create<LayoutState>()(
             }))
           : DEFAULT_LAYOUT_STATE.openTabs,
         activeTabId: typeof state.activeTabId === 'string' ? state.activeTabId : DEFAULT_LAYOUT_STATE.activeTabId,
+        activeRemoteConfigId: typeof state.activeRemoteConfigId === 'string' ? state.activeRemoteConfigId : null,
+        activeRemoteRepoPath: typeof state.activeRemoteRepoPath === 'string' ? state.activeRemoteRepoPath : '',
       }),
     }
   )

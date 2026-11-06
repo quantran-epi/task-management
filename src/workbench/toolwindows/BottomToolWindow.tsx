@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Tooltip, Button } from 'antd';
 import {
   CodeOutlined,
@@ -10,7 +10,8 @@ import {
   FullscreenExitOutlined,
 } from '@ant-design/icons';
 import { useLayoutStore } from '../store/layoutStore';
-import type { TaskPlannerDatabase } from '../../db';
+import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
+import { getSshConfigs } from '../../services/sshService';
 import { RemoteTerminalPanel } from './RemoteTerminalPanel';
 import type { SshConfig } from '../../types/ssh';
 
@@ -27,14 +28,46 @@ export function BottomToolWindow({
   children,
   config,
   repoPath,
-  db,
+  db = defaultDb,
   onClear,
   onReconnect,
 }: BottomToolWindowProps) {
   const [activeTab, setActiveTab] = useState<'terminal' | 'output'>('terminal');
   const [isMaximized, setIsMaximized] = useState(false);
+  const [resolvedConfig, setResolvedConfig] = useState<SshConfig | undefined>(config);
+
+  const activeRemoteConfigId = useLayoutStore((s) => s.activeRemoteConfigId);
+  const activeRemoteRepoPath = useLayoutStore((s) => s.activeRemoteRepoPath);
   const setPanelSize = useLayoutStore((s) => s.setPanelSize);
   const toggleToolWindow = useLayoutStore((s) => s.toggleToolWindow);
+
+  useEffect(() => {
+    if (config) {
+      setResolvedConfig(config);
+      return;
+    }
+    let mounted = true;
+    getSshConfigs(db)
+      .then((configs) => {
+        if (!mounted) return;
+        if (activeRemoteConfigId) {
+          const match = configs.find((c) => c.id === activeRemoteConfigId);
+          if (match) {
+            setResolvedConfig(match);
+            return;
+          }
+        }
+        if (configs.length > 0 && configs[0]) {
+          setResolvedConfig(configs[0]);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, [config, db, activeRemoteConfigId]);
+
+  const effectiveRepoPath = repoPath ?? (activeRemoteRepoPath || resolvedConfig?.defaultRemotePath || '');
 
   const handleToggleMaximize = () => {
     if (isMaximized) {
@@ -204,8 +237,8 @@ export function BottomToolWindow({
         {activeTab === 'terminal' ? (
           children || (
             <RemoteTerminalPanel
-              config={config}
-              repoPath={repoPath}
+              config={resolvedConfig}
+              repoPath={effectiveRepoPath}
               db={db}
             />
           )

@@ -40,18 +40,21 @@ function formatBytes(bytes?: number): string {
 }
 
 export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
+  const openTab = useLayoutStore((s) => s.openTab);
+  const activeRemoteConfigId = useLayoutStore((s) => s.activeRemoteConfigId);
+  const activeRemoteRepoPath = useLayoutStore((s) => s.activeRemoteRepoPath);
+  const setActiveRemoteTarget = useLayoutStore((s) => s.setActiveRemoteTarget);
+
   const [sshConfigs, setSshConfigs] = useState<SshConfig[]>([]);
-  const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
-  const [repoPath, setRepoPath] = useState<string>('');
+  const [selectedConfigId, setSelectedConfigId] = useState<string | null>(activeRemoteConfigId);
+  const [repoPath, setRepoPath] = useState<string>(activeRemoteRepoPath || '');
   const [browserModalOpen, setBrowserModalOpen] = useState<boolean>(false);
   const [branches, setBranches] = useState<RemoteGitBranch[]>([]);
-  const [selectedBranch, setSelectedBranch] = useState<string>('main');
+  const [selectedBranch, setSelectedBranch] = useState<string>('');
   const [loadingBranches, setLoadingBranches] = useState<boolean>(false);
   const [treeData, setTreeData] = useState<CustomTreeNodeData[]>([]);
   const [loadingTree, setLoadingTree] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-
-  const openTab = useLayoutStore((s) => s.openTab);
 
   // Load SSH configs on mount
   useEffect(() => {
@@ -60,9 +63,15 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
       .then((configs) => {
         if (!mounted) return;
         setSshConfigs(configs);
-        const first = configs[0];
-        if (first && !selectedConfigId) {
-          setSelectedConfigId(first.id);
+        const match = activeRemoteConfigId ? configs.find((c) => c.id === activeRemoteConfigId) : null;
+        const initialConfig = match || configs[0];
+        if (initialConfig && !selectedConfigId) {
+          setSelectedConfigId(initialConfig.id);
+          const initialPath = activeRemoteRepoPath || initialConfig.defaultRemotePath || '';
+          if (initialPath && !repoPath) {
+            setRepoPath(initialPath);
+          }
+          setActiveRemoteTarget(initialConfig.id, repoPath || initialPath);
         }
       })
       .catch((err) => {
@@ -71,117 +80,148 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
     return () => {
       mounted = false;
     };
-  }, [db, selectedConfigId]);
+  }, [db, selectedConfigId, activeRemoteConfigId, activeRemoteRepoPath, repoPath, setActiveRemoteTarget]);
 
   const selectedConfig = sshConfigs.find((c) => c.id === selectedConfigId);
 
-  // Load branches whenever config or repoPath changes
-  const loadBranches = useCallback(async (pathOverride?: string) => {
-    const targetPath = (pathOverride ?? repoPath).trim();
-    if (!selectedConfig || !targetPath) return;
-    setLoadingBranches(true);
-    setError(null);
-    try {
-      const secret = await getSshSecret(selectedConfig.id);
-      const remoteBranches = await getRemoteBranches(selectedConfig, targetPath, secret ?? undefined);
-      setBranches(remoteBranches);
-
-      if (remoteBranches.length > 0) {
-        const hasMain = remoteBranches.some((b) => b.name === 'main');
-        const hasMaster = remoteBranches.some((b) => b.name === 'master');
-        const firstBranch = remoteBranches[0];
-        const defaultBranch = hasMain ? 'main' : hasMaster ? 'master' : firstBranch ? firstBranch.name : 'main';
-        setSelectedBranch(defaultBranch);
-      }
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load remote branches');
-      setBranches([]);
-    } finally {
-      setLoadingBranches(false);
-    }
-  }, [selectedConfig, repoPath]);
-
   // Load root tree
-  const loadRootTree = useCallback(async () => {
-    if (!selectedConfig || !repoPath.trim() || !selectedBranch) return;
-    setLoadingTree(true);
-    setError(null);
-    try {
-      const secret = await getSshSecret(selectedConfig.id);
-      const rawNodes = await getRemoteTree(
-        selectedConfig,
-        repoPath.trim(),
-        selectedBranch,
-        '',
-        secret ?? undefined
-      );
+  const loadRootTree = useCallback(
+    async (branchOverride?: string, pathOverride?: string) => {
+      const activeBranch = branchOverride ?? selectedBranch;
+      const targetPath = (pathOverride ?? repoPath).trim();
+      if (!selectedConfig || !targetPath || !activeBranch) return;
+      setLoadingTree(true);
+      setError(null);
+      try {
+        const secret = await getSshSecret(selectedConfig.id);
+        const rawNodes = await getRemoteTree(
+          selectedConfig,
+          targetPath,
+          activeBranch,
+          '',
+          secret ?? undefined
+        );
 
-      const mapped: CustomTreeNodeData[] = rawNodes.map((node) => {
-        const isCode = /\.(ts|tsx|js|jsx|json|rs|go|py|css|html|md)$/i.test(node.title);
-        return {
-          key: node.key,
-          title: (
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                fontSize: 12.5,
-                userSelect: 'none',
-              }}
-            >
-              {node.isLeaf ? (
-                isCode ? (
-                  <CodeOutlined style={{ color: 'var(--accent, #3871e1)' }} />
+        const mapped: CustomTreeNodeData[] = rawNodes.map((node) => {
+          const isCode = /\.(ts|tsx|js|jsx|json|rs|go|py|css|html|md)$/i.test(node.title);
+          return {
+            key: node.key,
+            title: (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontSize: 12.5,
+                  userSelect: 'none',
+                }}
+              >
+                {node.isLeaf ? (
+                  isCode ? (
+                    <CodeOutlined style={{ color: 'var(--accent, #3871e1)' }} />
+                  ) : (
+                    <FileOutlined style={{ color: 'var(--fg-muted, #6c707e)' }} />
+                  )
                 ) : (
-                  <FileOutlined style={{ color: 'var(--fg-muted, #6c707e)' }} />
-                )
-              ) : (
-                <FolderOutlined style={{ color: '#eab308' }} />
-              )}
-              <span>{node.title}</span>
-              {node.isLeaf && node.size !== undefined && (
-                <Tag
-                  bordered={false}
-                  style={{
-                    fontSize: 10,
-                    lineHeight: '14px',
-                    padding: '0 4px',
-                    color: 'var(--fg-muted, #6c707e)',
-                    background: 'rgba(0,0,0,0.04)',
-                  }}
-                >
-                  {formatBytes(node.size)}
-                </Tag>
-              )}
-            </span>
-          ),
-          isLeaf: node.isLeaf,
-          ...(node.size !== undefined ? { size: node.size } : {}),
-          sha: node.sha,
-          rawNode: node,
-        };
-      });
-      setTreeData(mapped);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load repository tree');
-      setTreeData([]);
-    } finally {
-      setLoadingTree(false);
-    }
-  }, [selectedConfig, repoPath, selectedBranch]);
+                  <FolderOutlined style={{ color: '#eab308' }} />
+                )}
+                <span>{node.title}</span>
+                {node.isLeaf && node.size !== undefined && (
+                  <Tag
+                    bordered={false}
+                    style={{
+                      fontSize: 10,
+                      lineHeight: '14px',
+                      padding: '0 4px',
+                      color: 'var(--fg-muted, #6c707e)',
+                      background: 'rgba(0,0,0,0.04)',
+                    }}
+                  >
+                    {formatBytes(node.size)}
+                  </Tag>
+                )}
+              </span>
+            ),
+            isLeaf: node.isLeaf,
+            ...(node.size !== undefined ? { size: node.size } : {}),
+            sha: node.sha,
+            rawNode: node,
+          };
+        });
+        setTreeData(mapped);
+      } catch (err: any) {
+        setError(err?.message || 'Failed to load repository tree');
+        setTreeData([]);
+      } finally {
+        setLoadingTree(false);
+      }
+    },
+    [selectedConfig, repoPath, selectedBranch]
+  );
 
-  // Automatically trigger branch load when repoPath input changes / blurred
+  // Load branches whenever config or repoPath changes
+  const loadBranches = useCallback(
+    async (pathOverride?: string) => {
+      const targetPath = (pathOverride ?? repoPath).trim();
+      if (!selectedConfig || !targetPath) return;
+      setLoadingBranches(true);
+      setError(null);
+      try {
+        const secret = await getSshSecret(selectedConfig.id);
+        const remoteBranches = await getRemoteBranches(selectedConfig, targetPath, secret ?? undefined);
+        setBranches(remoteBranches);
+
+        if (remoteBranches.length > 0) {
+          const targetMain = remoteBranches.find((b) => b.name === 'main')?.name
+            ?? remoteBranches.find((b) => b.name === 'origin/main')?.name;
+          const targetMaster = remoteBranches.find((b) => b.name === 'master')?.name
+            ?? remoteBranches.find((b) => b.name === 'origin/master')?.name;
+          const firstBranch = remoteBranches[0]?.name;
+          const defaultBranch = targetMain ?? targetMaster ?? firstBranch ?? '';
+
+          setSelectedBranch(defaultBranch);
+          if (defaultBranch) {
+            void loadRootTree(defaultBranch, targetPath);
+          }
+        } else {
+          setSelectedBranch('');
+          setTreeData([]);
+        }
+      } catch (err: any) {
+        setError(err?.message || 'Failed to load remote branches');
+        setBranches([]);
+        setTreeData([]);
+      } finally {
+        setLoadingBranches(false);
+      }
+    },
+    [selectedConfig, repoPath, loadRootTree]
+  );
+
+  // Trigger branch load when repoPath input changes / blurred
   const handleRepoPathSubmit = () => {
-    loadBranches();
+    setActiveRemoteTarget(selectedConfigId, repoPath);
+    void loadBranches();
   };
 
-  // Re-fetch tree when selected branch changes
-  useEffect(() => {
-    if (selectedConfig && repoPath.trim() && selectedBranch) {
-      loadRootTree();
+  const handleConfigChange = (newConfigId: string) => {
+    setSelectedConfigId(newConfigId);
+    setActiveRemoteTarget(newConfigId, repoPath);
+  };
+
+  const handleBranchChange = (newBranch: string) => {
+    setSelectedBranch(newBranch);
+    if (newBranch) {
+      void loadRootTree(newBranch);
     }
-  }, [selectedBranch, loadRootTree]);
+  };
+
+  // Re-load branches and tree whenever selectedConfig or repoPath changes
+  useEffect(() => {
+    if (selectedConfig && repoPath.trim()) {
+      void loadBranches(repoPath.trim());
+    }
+  }, [selectedConfig, repoPath, loadBranches]);
 
   // Lazy child loader for directory nodes
   const onLoadData = async (node: any) => {
@@ -318,7 +358,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
             style={{ flex: 1 }}
             placeholder="Select SSH Host"
             value={selectedConfigId}
-            onChange={(val) => setSelectedConfigId(val)}
+            onChange={(val) => handleConfigChange(val)}
             options={sshConfigs.map((c) => ({
               label: `${c.name} (${c.host})`,
               value: c.id,
@@ -359,7 +399,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
             style={{ flex: 1 }}
             placeholder="Branch"
             value={selectedBranch || undefined}
-            onChange={(val) => setSelectedBranch(val ?? '')}
+            onChange={(val) => handleBranchChange(val ?? '')}
             loading={loadingBranches}
             disabled={branches.length === 0}
             options={branches.map((b) => ({
@@ -372,7 +412,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
             <Button
               size="small"
               icon={<ReloadOutlined spin={loadingTree} />}
-              onClick={loadRootTree}
+              onClick={() => loadRootTree()}
               disabled={!selectedConfig || !repoPath.trim()}
               data-testid="refresh-tree-btn"
             />
@@ -441,6 +481,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         initialPath={repoPath}
         onSelect={(selectedPath) => {
           setRepoPath(selectedPath);
+          setActiveRemoteTarget(selectedConfigId, selectedPath);
           setBrowserModalOpen(false);
           void loadBranches(selectedPath);
         }}

@@ -115,4 +115,13 @@ describe('WorkbenchBottomPanel Integration', () => {
 
     expect(useLayoutStore.getState().bottomPanelSize).toBe(42);
   });
+
+  it('stores and restores activeRemoteConfigId and activeRemoteRepoPath in layoutStore', () => {
+    act(() => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-test-id', '/var/www/my-repo');
+    });
+
+    expect(useLayoutStore.getState().activeRemoteConfigId).toBe('ssh-test-id');
+    expect(useLayoutStore.getState().activeRemoteRepoPath).toBe('/var/www/my-repo');
+  });
 });
