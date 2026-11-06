@@ -64,3 +64,13 @@ export interface BranchSnapshot {
   approvedAt: string;
 }
 
+export interface RemoteGitTreeNode {
+  key: string;
+  title: string;
+  isLeaf: boolean;
+  size?: number;
+  sha: string;
+  children?: RemoteGitTreeNode[];
+}
+
+
