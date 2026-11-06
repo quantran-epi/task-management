@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Tooltip, Button, Popconfirm, Select } from 'antd';
+import { Tooltip, Button, Popconfirm, Select, Input } from 'antd';
 import {
   CodeOutlined,
   CloseOutlined,
@@ -41,6 +41,8 @@ export function BottomToolWindow({
     { id: 'term-1', title: 'Terminal 1' },
   ]);
   const [activeTerminalId, setActiveTerminalId] = useState<string>('term-1');
+  const [editingTabId, setEditingTabId] = useState<string | null>(null);
+  const [editingTabTitle, setEditingTabTitle] = useState<string>('');
   const [configs, setConfigs] = useState<SshConfig[]>([]);
   const [selectedConfigId, setSelectedConfigId] = useState<string>(config?.id || '');
   const [configsLoaded, setConfigsLoaded] = useState<boolean>(Boolean(config));
@@ -92,6 +94,28 @@ export function BottomToolWindow({
     };
     setTerminalTabs((prev) => [...prev, newTab]);
     setActiveTerminalId(newId);
+  };
+
+  const handleStartRename = (tab: TerminalTabItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingTabId(tab.id);
+    setEditingTabTitle(tab.title);
+  };
+
+  const handleRenameSubmit = (tabId: string) => {
+    const trimmed = editingTabTitle.trim();
+    if (trimmed) {
+      setTerminalTabs((prev) =>
+        prev.map((t) => (t.id === tabId ? { ...t, title: trimmed } : t))
+      );
+    }
+    setEditingTabId(null);
+    setEditingTabTitle('');
+  };
+
+  const handleRenameCancel = () => {
+    setEditingTabId(null);
+    setEditingTabTitle('');
   };
 
   const handleCloseTab = (tabId: string) => {
@@ -161,7 +185,12 @@ export function BottomToolWindow({
               <div
                 key={tab.id}
                 data-testid={`terminal-tab-${tab.id}`}
-                onClick={() => setActiveTerminalId(tab.id)}
+                onClick={() => {
+                  if (editingTabId !== tab.id) {
+                    setActiveTerminalId(tab.id);
+                  }
+                }}
+                onDoubleClick={(e) => handleStartRename(tab, e)}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -184,7 +213,39 @@ export function BottomToolWindow({
                 }}
               >
                 <CodeOutlined style={{ fontSize: 12 }} />
-                <span>{tab.title}</span>
+                {editingTabId === tab.id ? (
+                  <Input
+                    size="small"
+                    autoFocus
+                    value={editingTabTitle}
+                    data-testid={`rename-input-${tab.id}`}
+                    onChange={(e) => setEditingTabTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === 'Enter') {
+                        handleRenameSubmit(tab.id);
+                      } else if (e.key === 'Escape') {
+                        handleRenameCancel();
+                      }
+                    }}
+                    onBlur={() => handleRenameSubmit(tab.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      height: 20,
+                      width: 100,
+                      fontSize: 11,
+                      padding: '0 4px',
+                      borderRadius: 2,
+                    }}
+                  />
+                ) : (
+                  <span
+                    onDoubleClick={(e) => handleStartRename(tab, e)}
+                    data-testid={`terminal-tab-title-${tab.id}`}
+                  >
+                    {tab.title}
+                  </span>
+                )}
 
                 {/* Tab close button with confirmation prompt */}
                 <Popconfirm

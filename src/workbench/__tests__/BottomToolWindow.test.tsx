@@ -123,4 +123,47 @@ describe('BottomToolWindow multi-terminal management', () => {
 
     expect(screen.getByText('Terminal 1')).toBeInTheDocument();
   });
+
+  it('allows inline renaming tab on double-click and committing with Enter or blur', async () => {
+    render(<BottomToolWindow />);
+
+    const tabTitle = screen.getByTestId('terminal-tab-title-term-1');
+    expect(tabTitle).toHaveTextContent('Terminal 1');
+
+    // Double-click tab title to trigger rename
+    act(() => {
+      fireEvent.doubleClick(tabTitle);
+    });
+
+    const input = screen.getByTestId('rename-input-term-1');
+    expect(input).toBeInTheDocument();
+    expect((input as HTMLInputElement).value).toBe('Terminal 1');
+
+    // Type new title and press Enter
+    act(() => {
+      fireEvent.change(input, { target: { value: 'Build Server' } });
+      fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+    });
+
+    expect(screen.queryByTestId('rename-input-term-1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('terminal-tab-title-term-1')).toHaveTextContent('Build Server');
+  });
+
+  it('cancels inline tab renaming when Escape key is pressed', async () => {
+    render(<BottomToolWindow />);
+
+    const tabTitle = screen.getByTestId('terminal-tab-title-term-1');
+    act(() => {
+      fireEvent.doubleClick(tabTitle);
+    });
+
+    const input = screen.getByTestId('rename-input-term-1');
+    act(() => {
+      fireEvent.change(input, { target: { value: 'Should Cancel' } });
+      fireEvent.keyDown(input, { key: 'Escape', code: 'Escape' });
+    });
+
+    expect(screen.queryByTestId('rename-input-term-1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('terminal-tab-title-term-1')).toHaveTextContent('Terminal 1');
+  });
 });
