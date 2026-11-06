@@ -704,7 +704,7 @@ Plans:
 
 **Wave 3** *(depends on 30-02; error hardening & end-to-end walkthrough)*
 
-- [ ] 30-03-PLAN.md — Reliability hardening (missing snapshot CTA, remote drift handling, dirty tree info, SSH failure auto-expansion)
+- [x] 30-03-PLAN.md — Reliability hardening (missing snapshot CTA, remote drift handling, dirty tree info, SSH failure auto-expansion)
 
 ### Phase 31: Organization Conventions in the Solution Pipeline
 

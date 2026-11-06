@@ -38,10 +38,10 @@
 - [ ] **SDLC-REPO-01**: SDLC Step 3 leverages existing Tauri native SSH service to connect to the remote host/WSL repo, supporting configured SSH profile selection and connection status verification.
 - [ ] **SDLC-REPO-02**: Step 3 inspects remote git branch for the active CR (default `feature/{crCode}`), fetching commit log (`git log $BASE..HEAD`) and changed files diff summary (`git diff --stat`) for review.
 - [ ] **SDLC-REPO-03**: Step 3 provides a visual diff & commit review UI (commits timeline, files changed with status +/~/-, inline diff) allowing user approval before proceeding to Step 4.
-- [ ] **SDLC-REPO-04**: Step 4 automatically collects git diff and required file contents (sql/*, new-files/*) over SSH, packaging an in-memory change pack zip via JSZip conforming to ChangePackManifestSchema.
+- [x] **SDLC-REPO-04**: Step 4 automatically collects git diff and required file contents (sql/*, new-files/*) over SSH, packaging an in-memory change pack zip via JSZip conforming to ChangePackManifestSchema.
 - [x] **SDLC-REPO-05**: Step 4 immediately runs `validateHubChangePack` and triggers drift reconciliation against the approved SOLUTION, while keeping manual zip dropzone as an explicit fallback.
 - [ ] **SDLC-REPO-06**: Repository SSH configurations respect native keyring credentials, opt-in per project, and never perform destructive write operations without explicit confirmation.
-- [ ] **SDLC-REPO-07**: Edge-case handling covers uncommitted changes warning, SSH timeout/disconnect, large diff size limits (< 5MB limit), and invalid CR metadata mismatch.
+- [x] **SDLC-REPO-07**: Edge-case handling covers uncommitted changes warning, SSH timeout/disconnect, large diff size limits (< 5MB limit), and invalid CR metadata mismatch.
 
 ### Organization Conventions (SDLC-CONV)
 
@@ -115,10 +115,10 @@
 | SDLC-REPO-01 | Phase 29 | Complete |
 | SDLC-REPO-02 | Phase 29 | Complete |
 | SDLC-REPO-03 | Phase 29 | Complete |
-| SDLC-REPO-04 | Phase 30 | Pending |
+| SDLC-REPO-04 | Phase 30 | Complete |
 | SDLC-REPO-05 | Phase 30 | Complete |
 | SDLC-REPO-06 | Phase 29 | Complete |
-| SDLC-REPO-07 | Phase 30 | Pending |
+| SDLC-REPO-07 | Phase 30 | Complete |
 | SDLC-CONV-01 | Phase 31 | Pending |
 | SDLC-CONV-02 | Phase 31 | Pending |
 | SDLC-CONV-03 | Phase 31 | Pending |
