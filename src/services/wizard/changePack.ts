@@ -8,12 +8,22 @@ export interface ChangePackLimits {
   maxEntries: number;
 }
 
-export const ChangePackLimits: Readonly<ChangePackLimits> = Object.freeze({
-  maxCompressedBytes: 5_242_880,
-  maxExpandedBytes: 26_214_400,
-  maxEntryBytes: 2_097_152,
-  maxEntries: 256,
+export const DesktopChangePackLimits: Readonly<ChangePackLimits> = Object.freeze({
+  maxCompressedBytes: 26_214_400,
+  maxExpandedBytes: 104_857_600,
+  maxEntryBytes: 10_485_760,
+  maxEntries: 1000,
 });
+
+export const ChangePackLimits: Readonly<ChangePackLimits> = DesktopChangePackLimits;
+
+export function getEffectiveChangePackLimits(customLimits?: Partial<ChangePackLimits>): ChangePackLimits {
+  const limits = { ...DesktopChangePackLimits, ...customLimits };
+  if (Object.values(limits).some((value) => !Number.isSafeInteger(value) || value <= 0)) {
+    throw new Error('Change Pack limits must be positive safe integers');
+  }
+  return limits;
+}
 
 const boundedText = z.string().trim().min(1).max(500);
 const hexSha = z.string().trim().min(1).max(128);
@@ -24,8 +34,8 @@ export const ChangePackMetaSchema = z.strictObject({
   branch: boundedText,
   author: boundedText,
   generatedAt: z.string().datetime(),
-  commits: z.array(z.strictObject({ sha: hexSha, subject: boundedText })).max(256),
-  files: z.array(z.strictObject({ path: boundedText, status: z.string().trim().min(1).max(100) })).max(256),
+  commits: z.array(z.strictObject({ sha: hexSha, subject: boundedText })).max(10_000),
+  files: z.array(z.strictObject({ path: boundedText, status: z.string().trim().min(1).max(100) })).max(10_000),
 });
 export type ChangePackMeta = z.infer<typeof ChangePackMetaSchema>;
 
@@ -52,7 +62,7 @@ export const ChangePackManifestSchema = z.strictObject({
   packHash: z.string().regex(/^[a-f0-9]{64}$/),
   identity: ChangePackIdentitySchema,
   meta: ChangePackMetaSchema,
-  entries: z.array(ChangePackEntrySchema).max(ChangePackLimits.maxEntries),
+  entries: z.array(ChangePackEntrySchema).max(10_000),
   compressedBytes: z.number().int().nonnegative(),
   expandedBytes: z.number().int().nonnegative(),
   commitCount: z.number().int().nonnegative(),
