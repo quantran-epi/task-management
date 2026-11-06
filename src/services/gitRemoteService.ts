@@ -1,4 +1,4 @@
-import { execRemoteCommand, getSshSecret } from './sshService';
+import { execRemoteCommand } from './sshService';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import type { SshConfig } from '../types/ssh';
 import type {

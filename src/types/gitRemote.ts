@@ -46,21 +46,21 @@ export interface ProjectRepoSshBinding {
 }
 
 export interface BranchSnapshot {
-  sshConfigId?: string;
-  remoteRepoPath?: string;
-  baseBranch?: string;
-  targetBranch?: string;
-  branch?: string;
-  baseCommit?: string;
-  headSha?: string;
-  headCommit?: string;
-  commitCount?: number;
-  commitShas?: string[];
-  filesChangedCount?: number;
-  fileStats?: RemoteFileStat[];
-  filesSummary?: RemoteFileStat[] | unknown;
-  totalAdditions?: number;
-  totalDeletions?: number;
+  sshConfigId?: string | undefined;
+  remoteRepoPath?: string | undefined;
+  baseBranch?: string | undefined;
+  targetBranch?: string | undefined;
+  branch?: string | undefined;
+  baseCommit?: string | undefined;
+  headSha?: string | undefined;
+  headCommit?: string | undefined;
+  commitCount?: number | undefined;
+  commitShas?: string[] | undefined;
+  filesChangedCount?: number | undefined;
+  fileStats?: RemoteFileStat[] | undefined;
+  filesSummary?: RemoteFileStat[] | Record<string, unknown> | string | undefined;
+  totalAdditions?: number | undefined;
+  totalDeletions?: number | undefined;
   approvedAt: string;
 }
 

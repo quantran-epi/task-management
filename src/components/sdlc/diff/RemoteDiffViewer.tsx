@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { theme, Segmented, Button, Alert, Modal, Tag } from 'antd';
+import { theme, Segmented, Button, Alert, Modal } from 'antd';
 import { FullscreenOutlined, FullscreenExitOutlined } from '@ant-design/icons';
 import { parseGitDiff } from '../../../utils/gitDiffParser';
 import type { DiffViewMode, DiffHunk, DiffLine } from '../../../types/agent';
@@ -148,7 +148,7 @@ export const RemoteDiffViewer: React.FC<RemoteDiffViewerProps> = ({
   );
 
   const renderSplitHunk = (hunk: DiffHunk, hunkIdx: number) => {
-    const rows: Array<{ left?: DiffLine; right?: DiffLine }> = [];
+    const rows: Array<{ left?: DiffLine | undefined; right?: DiffLine | undefined }> = [];
     const lines = hunk.lines;
     let i = 0;
 
@@ -417,7 +417,7 @@ export const RemoteDiffViewer: React.FC<RemoteDiffViewerProps> = ({
       {isFullscreen && (
         <Modal
           open={isFullscreen}
-          onCancel={onToggleFullscreen}
+          {...(onToggleFullscreen ? { onCancel: onToggleFullscreen } : {})}
           footer={null}
           width="95vw"
           centered

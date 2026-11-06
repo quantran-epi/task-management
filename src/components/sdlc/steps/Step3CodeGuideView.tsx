@@ -28,7 +28,6 @@ import { getSshConfigs, getSshSecret } from '../../../services/sshService';
 import {
   getRemoteBranches,
   checkDirtyStatus,
-  getCommitLog,
   getDiffSummary,
   getFileDiff,
   getProjectRepoSshBinding,
@@ -38,7 +37,6 @@ import {
 import type { SshConfig } from '../../../types/ssh';
 import type {
   RemoteGitBranch,
-  RemoteGitCommit,
   RemoteDiffSummary,
   RemoteFileStat,
   RemoteGitStatus,
@@ -188,7 +186,7 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
     setErrorMessage(null);
 
     try {
-      const secret = await getSshSecret(activeSshConfig.id);
+      const secret = (await getSshSecret(activeSshConfig.id)) ?? undefined;
 
       // 1. Fetch remote branches
       const branchList = await getRemoteBranches(activeSshConfig, remoteRepoPath, secret);
@@ -227,7 +225,7 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
         setDiffSummary(summary);
 
         // Check drift if we have an approved snapshot
-        if (currentSnapshot) {
+        if (currentSnapshot && currentSnapshot.headSha) {
           const drift = await checkHeadDrift(
             activeSshConfig,
             remoteRepoPath,
@@ -268,7 +266,7 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
       }
       setLoadingDiff(true);
       try {
-        const secret = await getSshSecret(activeSshConfig.id);
+        const secret = (await getSshSecret(activeSshConfig.id)) ?? undefined;
         const diffText = await getFileDiff(
           activeSshConfig,
           remoteRepoPath,
@@ -416,13 +414,14 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
               placeholder="Chọn cấu hình SSH"
               value={selectedSshConfigId || undefined}
               onChange={(val) => {
-                setSelectedSshConfigId(val);
-                const cfg = sshConfigs.find((c) => c.id === val);
+                const chosenId = val ?? '';
+                setSelectedSshConfigId(chosenId);
+                const cfg = sshConfigs.find((c) => c.id === chosenId);
                 if (cfg?.defaultRemotePath && !remoteRepoPath) {
                   setRemoteRepoPath(cfg.defaultRemotePath);
-                  void handleSaveBinding(val, cfg.defaultRemotePath, baseBranch);
+                  void handleSaveBinding(chosenId, cfg.defaultRemotePath, baseBranch);
                 } else {
-                  void handleSaveBinding(val, remoteRepoPath, baseBranch);
+                  void handleSaveBinding(chosenId, remoteRepoPath, baseBranch);
                 }
               }}
               options={sshConfigs.map((c) => ({
@@ -473,7 +472,7 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
               style={{ width: 200, fontFamily: 'monospace', fontSize: 12 }}
               placeholder="Chọn nhánh cần review"
               value={targetBranch || undefined}
-              onChange={(val) => setTargetBranch(val)}
+              onChange={(val) => setTargetBranch(val ?? '')}
               options={branches.map((b) => ({
                 label: b.name,
                 value: b.name,
@@ -540,7 +539,7 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
         <Alert
           type="warning"
           showIcon
-          message={`Remote HEAD đã thay đổi so với snapshot đã duyệt (${currentSnapshot.headSha.slice(0, 8)} → ${driftInfo.currentHeadSha.slice(0, 8)}). Nhấn "Kiểm tra lại" để cập nhật.`}
+          message={`Remote HEAD đã thay đổi so với snapshot đã duyệt (${(currentSnapshot.headSha ?? '').slice(0, 8)} → ${driftInfo.currentHeadSha.slice(0, 8)}). Nhấn "Kiểm tra lại" để cập nhật.`}
           action={
             <Button size="small" type="primary" onClick={handleReInspectDrift}>
               Kiểm tra lại & Cập nhật snapshot
@@ -841,7 +840,7 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
             <Space>
               <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 16 }} />
               <Typography.Text strong style={{ fontSize: 13 }}>
-                Đã duyệt snapshot: {new Date(currentSnapshot.approvedAt).toLocaleDateString()} (HEAD: {currentSnapshot.headSha.slice(0, 8)})
+                Đã duyệt snapshot: {new Date(currentSnapshot.approvedAt).toLocaleDateString()} (HEAD: {(currentSnapshot.headSha ?? '').slice(0, 8)})
               </Typography.Text>
             </Space>
           ) : (
