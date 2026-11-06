@@ -1,25 +1,424 @@
-import React from 'react';
-import { Empty } from 'antd';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Select, Input, Tree, Button, Tooltip, Tag, Spin, Alert, Empty } from 'antd';
+import type { DataNode } from 'antd/es/tree';
+import FolderOutlined from '@ant-design/icons/FolderOutlined';
+import FileOutlined from '@ant-design/icons/FileOutlined';
+import CodeOutlined from '@ant-design/icons/CodeOutlined';
+import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
+import BranchesOutlined from '@ant-design/icons/BranchesOutlined';
+import CloudServerOutlined from '@ant-design/icons/CloudServerOutlined';
+import FolderViewOutlined from '@ant-design/icons/FolderViewOutlined';
+import { getSshConfigs, getSshSecret } from '../../services/sshService';
+import { getRemoteBranches } from '../../services/gitRemoteService';
+import { getRemoteTree } from '../../services/gitRemoteTreeService';
+import type { SshConfig } from '../../types/ssh';
+import type { RemoteGitBranch, RemoteGitTreeNode } from '../../types/gitRemote';
+import { useLayoutStore } from '../store/layoutStore';
+import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 
 export interface RemoteGitExplorerProps {
-  db?: any;
+  db?: TaskPlannerDatabase;
 }
 
-export function RemoteGitExplorer(_props: RemoteGitExplorerProps) {
+interface CustomTreeNodeData extends DataNode {
+  isLeaf?: boolean;
+  size?: number;
+  sha?: string;
+  rawNode?: RemoteGitTreeNode;
+}
+
+function formatBytes(bytes?: number): string {
+  if (bytes === undefined || bytes === null || Number.isNaN(bytes)) return '';
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const formatted = parseFloat((bytes / Math.pow(k, i)).toFixed(1));
+  return `${formatted} ${sizes[i]}`;
+}
+
+export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
+  const [sshConfigs, setSshConfigs] = useState<SshConfig[]>([]);
+  const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
+  const [repoPath, setRepoPath] = useState<string>('');
+  const [branches, setBranches] = useState<RemoteGitBranch[]>([]);
+  const [selectedBranch, setSelectedBranch] = useState<string>('main');
+  const [loadingBranches, setLoadingBranches] = useState<boolean>(false);
+  const [treeData, setTreeData] = useState<CustomTreeNodeData[]>([]);
+  const [loadingTree, setLoadingTree] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const openTab = useLayoutStore((s) => s.openTab);
+
+  // Load SSH configs on mount
+  useEffect(() => {
+    let mounted = true;
+    getSshConfigs(db)
+      .then((configs) => {
+        if (!mounted) return;
+        setSshConfigs(configs);
+        if (configs.length > 0 && !selectedConfigId) {
+          setSelectedConfigId(configs[0].id);
+        }
+      })
+      .catch((err) => {
+        if (mounted) setError(err.message || 'Failed to load SSH configs');
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [db, selectedConfigId]);
+
+  const selectedConfig = sshConfigs.find((c) => c.id === selectedConfigId);
+
+  // Load branches whenever config or repoPath changes
+  const loadBranches = useCallback(async () => {
+    if (!selectedConfig || !repoPath.trim()) return;
+    setLoadingBranches(true);
+    setError(null);
+    try {
+      const secret = await getSshSecret(selectedConfig.id);
+      const remoteBranches = await getRemoteBranches(selectedConfig, repoPath.trim(), secret ?? undefined);
+      setBranches(remoteBranches);
+
+      if (remoteBranches.length > 0) {
+        const hasMain = remoteBranches.some((b) => b.name === 'main');
+        const hasMaster = remoteBranches.some((b) => b.name === 'master');
+        const defaultBranch = hasMain ? 'main' : hasMaster ? 'master' : remoteBranches[0].name;
+        setSelectedBranch(defaultBranch);
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load remote branches');
+      setBranches([]);
+    } finally {
+      setLoadingBranches(false);
+    }
+  }, [selectedConfig, repoPath]);
+
+  // Load root tree
+  const loadRootTree = useCallback(async () => {
+    if (!selectedConfig || !repoPath.trim() || !selectedBranch) return;
+    setLoadingTree(true);
+    setError(null);
+    try {
+      const secret = await getSshSecret(selectedConfig.id);
+      const rawNodes = await getRemoteTree(
+        selectedConfig,
+        repoPath.trim(),
+        selectedBranch,
+        '',
+        secret ?? undefined
+      );
+
+      const mapped: CustomTreeNodeData[] = rawNodes.map((node) => {
+        const isCode = /\.(ts|tsx|js|jsx|json|rs|go|py|css|html|md)$/i.test(node.title);
+        return {
+          key: node.key,
+          title: (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 12.5,
+                userSelect: 'none',
+              }}
+            >
+              {node.isLeaf ? (
+                isCode ? (
+                  <CodeOutlined style={{ color: 'var(--accent, #3871e1)' }} />
+                ) : (
+                  <FileOutlined style={{ color: 'var(--fg-muted, #6c707e)' }} />
+                )
+              ) : (
+                <FolderOutlined style={{ color: '#eab308' }} />
+              )}
+              <span>{node.title}</span>
+              {node.isLeaf && node.size !== undefined && (
+                <Tag
+                  bordered={false}
+                  style={{
+                    fontSize: 10,
+                    lineHeight: '14px',
+                    padding: '0 4px',
+                    color: 'var(--fg-muted, #6c707e)',
+                    background: 'rgba(0,0,0,0.04)',
+                  }}
+                >
+                  {formatBytes(node.size)}
+                </Tag>
+              )}
+            </span>
+          ),
+          isLeaf: node.isLeaf,
+          size: node.size,
+          sha: node.sha,
+          rawNode: node,
+        };
+      });
+      setTreeData(mapped);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load repository tree');
+      setTreeData([]);
+    } finally {
+      setLoadingTree(false);
+    }
+  }, [selectedConfig, repoPath, selectedBranch]);
+
+  // Automatically trigger branch load when repoPath input changes / blurred
+  const handleRepoPathSubmit = () => {
+    loadBranches();
+  };
+
+  // Re-fetch tree when selected branch changes
+  useEffect(() => {
+    if (selectedConfig && repoPath.trim() && selectedBranch) {
+      loadRootTree();
+    }
+  }, [selectedBranch, loadRootTree]);
+
+  // Lazy child loader for directory nodes
+  const onLoadData = async (node: any) => {
+    if (!selectedConfig || !repoPath.trim() || !selectedBranch) return;
+    try {
+      const secret = await getSshSecret(selectedConfig.id);
+      const rawChildren = await getRemoteTree(
+        selectedConfig,
+        repoPath.trim(),
+        selectedBranch,
+        node.key as string,
+        secret ?? undefined
+      );
+
+      const childrenNodes: CustomTreeNodeData[] = rawChildren.map((c) => {
+        const isCode = /\.(ts|tsx|js|jsx|json|rs|go|py|css|html|md)$/i.test(c.title);
+        return {
+          key: c.key,
+          title: (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 12.5,
+                userSelect: 'none',
+              }}
+            >
+              {c.isLeaf ? (
+                isCode ? (
+                  <CodeOutlined style={{ color: 'var(--accent, #3871e1)' }} />
+                ) : (
+                  <FileOutlined style={{ color: 'var(--fg-muted, #6c707e)' }} />
+                )
+              ) : (
+                <FolderOutlined style={{ color: '#eab308' }} />
+              )}
+              <span>{c.title}</span>
+              {c.isLeaf && c.size !== undefined && (
+                <Tag
+                  bordered={false}
+                  style={{
+                    fontSize: 10,
+                    lineHeight: '14px',
+                    padding: '0 4px',
+                    color: 'var(--fg-muted, #6c707e)',
+                    background: 'rgba(0,0,0,0.04)',
+                  }}
+                >
+                  {formatBytes(c.size)}
+                </Tag>
+              )}
+            </span>
+          ),
+          isLeaf: c.isLeaf,
+          size: c.size,
+          sha: c.sha,
+          rawNode: c,
+        };
+      });
+
+      const updateTreeNodes = (list: CustomTreeNodeData[]): CustomTreeNodeData[] => {
+        return list.map((item) => {
+          if (item.key === node.key) {
+            return {
+              ...item,
+              children: childrenNodes,
+            };
+          }
+          if (item.children) {
+            return {
+              ...item,
+              children: updateTreeNodes(item.children as CustomTreeNodeData[]),
+            };
+          }
+          return item;
+        });
+      };
+
+      setTreeData((prev) => updateTreeNodes(prev));
+    } catch (err: any) {
+      setError(err?.message || `Failed to expand folder ${node.key}`);
+    }
+  };
+
+  const handleSelectNode = (_selectedKeys: any, info: any) => {
+    const node = info.node as CustomTreeNodeData;
+    if (!node.isLeaf || !selectedConfig) return;
+
+    const rawTitle = node.rawNode?.title || (node.title as string) || node.key.toString();
+    openTab({
+      id: `remote:${node.key}`,
+      title: rawTitle,
+      viewType: 'remote_file',
+      closable: true,
+      params: {
+        config: selectedConfig,
+        repoPath: repoPath.trim(),
+        branch: selectedBranch,
+        filePath: node.key as string,
+        size: node.size,
+      },
+    });
+  };
+
   return (
     <div
       data-testid="remote-git-explorer"
       style={{
-        padding: 12,
-        height: '100%',
         display: 'flex',
         flexDirection: 'column',
+        height: '100%',
+        width: '100%',
+        overflow: 'hidden',
+        background: 'var(--bg-island, #ffffff)',
       }}
     >
-      <Empty
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description="Select an SSH host and repository to browse"
-      />
+      {/* Controls Container */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+          padding: '8px 10px',
+          borderBottom: '1px solid var(--border, #e9eaee)',
+          background: 'var(--bg-elev, #f7f8fa)',
+        }}
+      >
+        {/* SSH Host Selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <CloudServerOutlined style={{ color: '#f59e0b', fontSize: 13 }} />
+          <Select
+            size="small"
+            style={{ flex: 1 }}
+            placeholder="Select SSH Host"
+            value={selectedConfigId}
+            onChange={(val) => setSelectedConfigId(val)}
+            options={sshConfigs.map((c) => ({
+              label: `${c.name} (${c.host})`,
+              value: c.id,
+            }))}
+            data-testid="ssh-config-select"
+          />
+        </div>
+
+        {/* Remote Repository Path */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <FolderViewOutlined style={{ color: 'var(--fg-muted, #6c707e)', fontSize: 13 }} />
+          <Input
+            size="small"
+            style={{ flex: 1, fontSize: 12 }}
+            placeholder="/path/to/remote/repo"
+            value={repoPath}
+            onChange={(e) => setRepoPath(e.target.value)}
+            onPressEnter={handleRepoPathSubmit}
+            onBlur={handleRepoPathSubmit}
+            data-testid="repo-path-input"
+          />
+        </div>
+
+        {/* Branch Selector & Refresh */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <BranchesOutlined style={{ color: 'var(--accent, #3871e1)', fontSize: 13 }} />
+          <Select
+            size="small"
+            style={{ flex: 1 }}
+            placeholder="Branch"
+            value={selectedBranch || undefined}
+            onChange={(val) => setSelectedBranch(val)}
+            loading={loadingBranches}
+            disabled={branches.length === 0}
+            options={branches.map((b) => ({
+              label: b.name,
+              value: b.name,
+            }))}
+            data-testid="branch-select"
+          />
+          <Tooltip title="Refresh directory tree">
+            <Button
+              size="small"
+              icon={<ReloadOutlined spin={loadingTree} />}
+              onClick={loadRootTree}
+              disabled={!selectedConfig || !repoPath.trim()}
+              data-testid="refresh-tree-btn"
+            />
+          </Tooltip>
+        </div>
+      </div>
+
+      {/* Error alert if any */}
+      {error && (
+        <Alert
+          type="error"
+          message={error}
+          showIcon
+          closable
+          onClose={() => setError(null)}
+          style={{ margin: 8, fontSize: 12 }}
+        />
+      )}
+
+      {/* Tree Content Area */}
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflow: 'auto',
+          padding: '6px 4px',
+        }}
+      >
+        {loadingTree && treeData.length === 0 ? (
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', padding: 24 }}>
+            <Spin description="Loading tree..." />
+          </div>
+        ) : treeData.length > 0 ? (
+          <Tree
+            loadData={onLoadData}
+            treeData={treeData}
+            onSelect={handleSelectNode}
+            showIcon={false}
+            blockNode
+            titleRender={undefined}
+            style={{
+              background: 'transparent',
+              fontSize: 12.5,
+              padding: '4px 6px',
+            }}
+          />
+        ) : (
+          <div style={{ padding: 20 }}>
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                !selectedConfig
+                  ? 'No SSH host selected'
+                  : !repoPath.trim()
+                  ? 'Enter remote repository path above'
+                  : 'No files or branches found'
+              }
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
