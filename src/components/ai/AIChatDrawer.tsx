@@ -55,6 +55,8 @@ import { QuickPreviewDrawer } from '../notes/QuickPreviewDrawer';
 import { AIDebugModal } from './AIDebugModal';
 import { AITaskPlannerInstructionsModal } from './AITaskPlannerInstructionsModal';
 import { McpSettingsModal } from './McpSettingsModal';
+import { OracleSqlclSettingsModal } from './OracleSqlclSettingsModal';
+import { getOracleToolConfig } from '../../services/ai/oracleSqlclService';
 import { logAiChatError } from './aiChatDiagnostics';
 import { RestoredSourceNotice } from './RestoredSourceNotice';
 import { deriveMissingSources } from './wizard/restoreRecovery';
@@ -307,6 +309,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [isDebugModalOpen, setIsDebugModalOpen] = useState(false);
   const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
   const [isMcpModalOpen, setIsMcpModalOpen] = useState(false);
+  const [isOracleModalOpen, setIsOracleModalOpen] = useState(false);
+  const [oracleToolEnabled, setOracleToolEnabled] = useState(false);
   const [mcpServers, setMcpServers] = useState<McpServerConfig[]>([]);
   const knowledgeConfig = useOptionalKnowledgeConfig();
 
@@ -353,6 +357,21 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       void reloadMcpServers();
     }
   }, [open, reloadMcpServers]);
+
+  const reloadOracleConfig = useCallback(async () => {
+    try {
+      const cfg = await getOracleToolConfig(db);
+      setOracleToolEnabled(cfg.enabled);
+    } catch (err) {
+      logAiChatError('Failed to load Oracle tool config', err);
+    }
+  }, [db]);
+
+  useEffect(() => {
+    if (open) {
+      void reloadOracleConfig();
+    }
+  }, [open, reloadOracleConfig]);
 
   const handleToggleMcpServer = async (id: string, enabled: boolean) => {
     try {
@@ -2326,6 +2345,13 @@ Rules:
         onOpenSettings={onOpenSettings}
       />
 
+      <OracleSqlclSettingsModal
+        open={isOracleModalOpen}
+        onClose={() => setIsOracleModalOpen(false)}
+        db={db}
+        onConfigChange={reloadOracleConfig}
+      />
+
       <RestoredSourceNotice missingSources={restoredMissingSources} />
 
       {activeRoutedScope && hasMeaningfulRoutedScope(activeRoutedScope.routedScope) && (
@@ -2386,6 +2412,8 @@ Rules:
               void handleToggleMcpServer(id, enabled);
             },
             onOpenMcpSettings: () => setIsMcpModalOpen(true),
+            onOpenOracleSettings: () => setIsOracleModalOpen(true),
+            oracleToolEnabled,
           }}
           quickPrompts={DRAWER_QUICK_PROMPTS}
           onClearThread={handleDeleteCurrentThread}

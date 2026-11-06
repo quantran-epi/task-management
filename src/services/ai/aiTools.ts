@@ -75,6 +75,7 @@ import { executeSdlcArtifactTool, type ArtifactToolContext } from './sdlcArtifac
 import { executeKnowledgeRetrievalTool } from './knowledgeRetrievalTool';
 import { getImageConfig, getImageApiKey } from './nineRouterTokenService';
 import { redactApiKey } from './nineRouterClient';
+import { executeOracleQuery, executeOracleDescribe } from './oracleSqlclService';
 import dayjs from 'dayjs';
 
 export interface AiToolDefinition {
@@ -2056,6 +2057,63 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'oracle_query',
+      description:
+        'Execute a read-only SQL query on the configured remote Oracle database via SQLcl over SSH. Strict read-only enforcement (SET TRANSACTION READ ONLY). Results formatted in JSON.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'The SELECT or WITH SQL query to execute on Oracle DB.',
+          },
+          explain: {
+            type: 'boolean',
+            description: 'Optional. If true, generates and returns the EXPLAIN PLAN rather than executing the query.',
+          },
+          limit: {
+            type: 'number',
+            description: 'Optional max rows to return (default 100, max 1000).',
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'oracle_describe',
+      description:
+        'Inspect Oracle database metadata: list tables/views, inspect columns, types, nullability, constraints, comments, or retrieve full table DDL.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['list_tables', 'describe_table', 'get_ddl'],
+            description: 'Action: list_tables (summary of tables), describe_table (columns, types, constraints), get_ddl (full DDL).',
+          },
+          tableOrView: {
+            type: 'string',
+            description: 'Table or view name (required for describe_table and get_ddl).',
+          },
+          schema: {
+            type: 'string',
+            description: 'Optional schema or owner name.',
+          },
+          search: {
+            type: 'string',
+            description: 'Optional search keyword to filter table names for list_tables.',
+          },
+        },
+        required: ['action'],
+      },
+    },
+  },
 ];
 
 export interface ExecuteAiToolOptions {
@@ -2073,6 +2131,14 @@ export async function executeAiTool(
   const normalized = normalizeToolName(toolName);
   try {
     switch (normalized) {
+      case 'oracle_query': {
+        return await executeOracleQuery(args as any, db);
+      }
+
+      case 'oracle_describe': {
+        return await executeOracleDescribe(args as any, db);
+      }
+
       case 'get_artifact':
       case 'patch_artifact_section': {
         const result = await executeSdlcArtifactTool(normalized, args, db, options?.artifactContext);

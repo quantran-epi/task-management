@@ -9,6 +9,7 @@ import {
   ThunderboltOutlined,
   ClearOutlined,
   ApiOutlined,
+  DatabaseOutlined,
   SettingOutlined,
   MoreOutlined,
 } from '@ant-design/icons';
@@ -43,6 +44,10 @@ export interface ChatTabToolboxProps {
   onToggleMcpServer?: (id: string, enabled: boolean) => void;
   onOpenMcpSettings?: () => void;
 
+  // Oracle SQLcl (remote connection for AI tool loop)
+  onOpenOracleSettings?: () => void;
+  oracleToolEnabled?: boolean;
+
   // Clear context
   onClearContext: () => void;
 }
@@ -64,6 +69,8 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
   mcpServers = [],
   onToggleMcpServer,
   onOpenMcpSettings,
+  onOpenOracleSettings,
+  oracleToolEnabled = false,
   onClearContext,
 }) => {
   const { token } = theme.useToken();
@@ -229,6 +236,20 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
               </div>
             ),
             icon: autoApproveMutations ? <ThunderboltFilled style={{ color: token.colorError }} /> : <ThunderboltOutlined />,
+          },
+        ]
+      : []),
+    ...(onOpenOracleSettings
+      ? [
+          {
+            key: 'oracle-sqlcl',
+            label: 'Cấu hình Oracle SQLcl',
+            icon: (
+              <DatabaseOutlined
+                style={{ color: oracleToolEnabled ? token.colorPrimary : undefined }}
+              />
+            ),
+            onClick: onOpenOracleSettings,
           },
         ]
       : []),
@@ -431,6 +452,36 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
                   }}
                 >
                   Tự duyệt
+                </Button>
+              </Tooltip>
+            )}
+
+            {/* Oracle SQLcl Remote Tool Config Button */}
+            {onOpenOracleSettings && (
+              <Tooltip
+                title={
+                  oracleToolEnabled
+                    ? 'Oracle SQLcl: ĐANG BẬT (Bấm để xem/đổi kết nối remote)'
+                    : 'Oracle SQLcl: Bấm để chọn SSH & kết nối DB cho AI'
+                }
+              >
+                <Button
+                  size="small"
+                  type={oracleToolEnabled ? 'primary' : 'default'}
+                  icon={<DatabaseOutlined />}
+                  onClick={onOpenOracleSettings}
+                  aria-label="Cấu hình Oracle SQLcl"
+                  data-testid="tab-oracle-btn"
+                  style={{
+                    fontSize: 11,
+                    padding: '0 6px',
+                    height: 22,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  Oracle
                 </Button>
               </Tooltip>
             )}
