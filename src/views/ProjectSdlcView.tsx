@@ -760,6 +760,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
             crId={activeCrId}
             crCode={workflowState?.metadata.cr ?? ''}
             solutionArtifact={workflowState?.artifacts.solution}
+            branchSnapshot={workflowState?.artifacts.branchSnapshot}
             initialDriftResult={workflowState?.artifacts.driftResult}
             onCommitChangePackAndDrift={async (packHash, packTitle, driftResult) => {
               try {
