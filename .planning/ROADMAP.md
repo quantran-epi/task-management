@@ -700,7 +700,7 @@ Plans:
 
 **Wave 2** *(depends on 30-01; Step 4 auto-packaging integration)*
 
-- [ ] 30-02-PLAN.md — Step 4 auto-packaging trigger, progress stepper, drift reconciliation, and manual dropzone accordion fallback
+- [x] 30-02-PLAN.md — Step 4 auto-packaging trigger, progress stepper, drift reconciliation, and manual dropzone accordion fallback
 
 **Wave 3** *(depends on 30-02; error hardening & end-to-end walkthrough)*
 
