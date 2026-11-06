@@ -13,6 +13,7 @@ import {
   message,
   Divider,
   Tag,
+  Modal,
 } from 'antd';
 import {
   RobotOutlined,
@@ -30,6 +31,7 @@ import {
   CheckOutlined,
   SaveOutlined,
   CloudSyncOutlined,
+  FullscreenOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -216,6 +218,8 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [fixing, setFixing] = useState<boolean>(false);
   const [aiCustomPrompt, setAiCustomPrompt] = useState<string>('');
+  const [isAiModalOpen, setIsAiModalOpen] = useState<boolean>(false);
+  const [modalPromptDraft, setModalPromptDraft] = useState<string>('');
   const [copied, setCopied] = useState<boolean>(false);
 
   // Sync prop noteId change
@@ -474,17 +478,20 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
     downloadMermaidPng(svgEl, { isDark, filename: 'diagram' });
   };
 
-  const handleAiFix = async () => {
+  const handleAiFix = async (overridePrompt?: string) => {
+    const promptToSend = typeof overridePrompt === 'string' ? overridePrompt : aiCustomPrompt;
     setFixing(true);
     const hideLoading = message.loading('AI đang phân tích và sửa cú pháp Mermaid...', 0);
     try {
       const res = await fixMermaidWithAi({
         code,
         errorMessage: error || undefined,
-        prompt: aiCustomPrompt.trim() || undefined,
+        prompt: promptToSend.trim() || undefined,
       });
       setCode(res.fixedCode);
       setAiCustomPrompt('');
+      setModalPromptDraft('');
+      setIsAiModalOpen(false);
       message.success('AI đã sửa cú pháp thành công!');
     } catch (err: any) {
       message.error(err?.message || 'Không thể sửa cú pháp bằng AI');
@@ -492,6 +499,16 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
       hideLoading();
       setFixing(false);
     }
+  };
+
+  const handleOpenAiModal = () => {
+    setModalPromptDraft(aiCustomPrompt);
+    setIsAiModalOpen(true);
+  };
+
+  const handleApplyModalDraft = () => {
+    setAiCustomPrompt(modalPromptDraft);
+    setIsAiModalOpen(false);
   };
 
   return (
@@ -706,20 +723,31 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
                 size="small"
                 icon={<RobotOutlined />}
                 loading={fixing}
-                onClick={handleAiFix}
+                onClick={() => handleAiFix()}
                 disabled={!code.trim()}
               >
                 Sửa / Nâng cấp bằng AI
               </Button>
             </div>
 
-            <Input
-              size="small"
-              value={aiCustomPrompt}
-              onChange={(e) => setAiCustomPrompt(e.target.value)}
-              placeholder="Yêu cầu thêm (tùy chọn: ví dụ 'thêm node DB', 'đổi sang sơ đồ ngang')..."
-              onPressEnter={handleAiFix}
-            />
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <Input
+                size="small"
+                value={aiCustomPrompt}
+                onChange={(e) => setAiCustomPrompt(e.target.value)}
+                placeholder="Yêu cầu thêm (tùy chọn: ví dụ 'thêm node DB', 'đổi sang sơ đồ ngang')..."
+                onPressEnter={() => handleAiFix()}
+                style={{ flex: 1 }}
+              />
+              <Tooltip title="Mở rộng soạn thảo yêu cầu AI">
+                <Button
+                  size="small"
+                  icon={<FullscreenOutlined />}
+                  onClick={handleOpenAiModal}
+                  aria-label="Mở rộng soạn thảo AI prompt"
+                />
+              </Tooltip>
+            </div>
           </div>
         </Card>
 
@@ -785,7 +813,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
                         size="small"
                         icon={<RobotOutlined />}
                         loading={fixing}
-                        onClick={handleAiFix}
+                        onClick={() => handleAiFix()}
                       >
                         Bấm để AI tự động sửa lỗi ngay
                       </Button>
@@ -836,6 +864,67 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
           </div>
         </Card>
       </div>
+
+      {/* Expanded AI Prompt Modal */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <RobotOutlined style={{ color: token.colorPrimary }} />
+            <span>Soạn thảo yêu cầu AI Diagram Fixer & Enhancer</span>
+          </div>
+        }
+        open={isAiModalOpen}
+        onCancel={() => setIsAiModalOpen(false)}
+        width="70vw"
+        style={{ top: 40, maxWidth: 900 }}
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 12, color: token.colorTextSecondary }}>
+              Mẹo: Nhấn <b>Cmd + Enter</b> (hoặc <b>Ctrl + Enter</b>) để gửi AI ngay.
+            </span>
+            <Space>
+              <Button onClick={() => setIsAiModalOpen(false)}>Hủy</Button>
+              <Button onClick={handleApplyModalDraft}>Xong (Lưu vào ô nhập)</Button>
+              <Button
+                type="primary"
+                icon={<RobotOutlined />}
+                loading={fixing}
+                disabled={!code.trim()}
+                onClick={() => handleAiFix(modalPromptDraft)}
+              >
+                Gửi AI ngay
+              </Button>
+            </Space>
+          </div>
+        }
+        destroyOnClose={false}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '12px 0 4px 0' }}>
+          <Text type="secondary" style={{ fontSize: 13 }}>
+            Nhập prompt chi tiết cho AI (thêm nhánh, đổi layout, sửa lỗi cú pháp, bổ sung node, chuyển đổi loại biểu đồ...):
+          </Text>
+          <TextArea
+            autoFocus
+            rows={12}
+            value={modalPromptDraft}
+            onChange={(e) => setModalPromptDraft(e.target.value)}
+            placeholder="Ví dụ:&#10;- Bổ sung thêm luồng xử lý lỗi khi DB connection timeout&#10;- Đổi các node hệ thống sang hình trụ [Database]&#10;- Định dạng sơ đồ dạng ngang LR thay vì dọc TD..."
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                e.preventDefault();
+                handleAiFix(modalPromptDraft);
+              }
+            }}
+            style={{
+              fontSize: 14,
+              lineHeight: 1.6,
+              resize: 'vertical',
+              borderRadius: 8,
+              fontFamily: 'inherit',
+            }}
+          />
+        </div>
+      </Modal>
     </div>
   );
 };
