@@ -112,12 +112,12 @@
 | SDLC-RET-03 | Phase 28 | Pending |
 | SDLC-RET-04 | Phase 28 | Pending |
 | SDLC-RET-05 | Phase 28 | Pending |
-| SDLC-REPO-01 | Phase 29 | Pending |
-| SDLC-REPO-02 | Phase 29 | Pending |
-| SDLC-REPO-03 | Phase 29 | Pending |
+| SDLC-REPO-01 | Phase 29 | Complete |
+| SDLC-REPO-02 | Phase 29 | Complete |
+| SDLC-REPO-03 | Phase 29 | Complete |
 | SDLC-REPO-04 | Phase 30 | Pending |
 | SDLC-REPO-05 | Phase 30 | Pending |
-| SDLC-REPO-06 | Phase 29 | Pending |
+| SDLC-REPO-06 | Phase 29 | Complete |
 | SDLC-REPO-07 | Phase 30 | Pending |
 | SDLC-CONV-01 | Phase 31 | Pending |
 | SDLC-CONV-02 | Phase 31 | Pending |

@@ -667,11 +667,11 @@ Plans:
 
 **Wave 1** *(no dependencies; SSH git query service)*
 
-- [ ] 29-01-PLAN.md — SSH git execution service: branch detection, `git log`, `git diff --name-status`, uncommitted changes check, and typed branch snapshot models
+- [x] 29-01-PLAN.md — SSH git execution service: branch detection, `git log`, `git diff --name-status`, uncommitted changes check, and typed branch snapshot models
 
 **Wave 2** *(depends on 29-01; Step 3 UI overhaul)*
 
-- [ ] 29-02-PLAN.md — SDLC Step 3 interactive remote branch review UI: SSH profile picker, commit timeline, changed files tree, and diff preview
+- [x] 29-02-PLAN.md — SDLC Step 3 interactive remote branch review UI: SSH profile picker, commit timeline, changed files tree, and diff preview
 
 **Wave 3** *(depends on 29-02; approval & transition bridge)*
 
