@@ -71,7 +71,7 @@ export function RemoteTerminalPanel({
       termRef.current = null;
     }
 
-    const sessionId = propSessionId || `term-${Date.now()}`;
+    const sessionId = `${propSessionId || 'term'}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     sessionIdRef.current = sessionId;
     bufferLogRef.current = '';
 
@@ -202,8 +202,10 @@ export function RemoteTerminalPanel({
     // Subscribe to exit event
     let unlistenExit: (() => void) | undefined;
     subscribePtyExit(sessionId, () => {
-      term.write('\r\n\x1B[33m[SSH PTY]\x1B[0m Connection closed by remote host.\r\n');
-      setConnected(false);
+      if (sessionIdRef.current === sessionId) {
+        term.write('\r\n\x1B[33m[SSH PTY]\x1B[0m Connection closed by remote host.\r\n');
+        setConnected(false);
+      }
     }).then((unsub) => {
       unlistenExit = unsub;
     });

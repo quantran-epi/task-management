@@ -66,8 +66,8 @@ pub fn ssh_pty_start(
         .shell()
         .map_err(|e| format!("Lỗi khởi động remote shell: {}", e))?;
 
-    // Set a responsive blocking timeout (20ms) so channel.read() releases Mutex to writer thread with sub-frame latency
-    session.set_timeout(20);
+    // Set session to non-blocking mode after shell is established for zero-latency interactive I/O
+    session.set_blocking(false);
 
     let channel_arc = Arc::new(Mutex::new(channel));
     let is_closed = Arc::new(AtomicBool::new(false));
@@ -87,7 +87,20 @@ pub fn ssh_pty_start(
                         break;
                     }
                     if let Ok(mut ch) = channel_clone.lock() {
-                        let _ = ch.write_all(&bytes);
+                        let mut offset = 0;
+                        while offset < bytes.len() {
+                            if is_closed_clone.load(Ordering::Relaxed) {
+                                break;
+                            }
+                            match ch.write(&bytes[offset..]) {
+                                Ok(0) => break,
+                                Ok(n) => offset += n,
+                                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                                    thread::sleep(Duration::from_millis(2));
+                                }
+                                Err(_) => break,
+                            }
+                        }
                     } else {
                         break;
                     }
@@ -118,11 +131,14 @@ pub fn ssh_pty_start(
                     let (accumulated, is_eof) = {
                         if let Ok(mut ch) = channel_clone.lock() {
                             let mut data = Vec::new();
-                            let mut eof = ch.eof();
-                            // Read available bytes; loop to drain burst data (e.g. command output / directory listing)
+                            let mut eof = false;
+
+                            // Read available bytes; non-blocking loop drains burst data instantly
                             while let Ok(n) = ch.read(&mut buf) {
                                 if n == 0 {
-                                    eof = ch.eof();
+                                    if ch.eof() {
+                                        eof = true;
+                                    }
                                     break;
                                 }
                                 data.extend_from_slice(&buf[..n]);
@@ -140,11 +156,11 @@ pub fn ssh_pty_start(
                         let text = String::from_utf8_lossy(&accumulated).to_string();
                         let _ = app_handle.emit(&data_event_name, text);
                     } else if is_eof {
-                        // Remote shell has genuinely exited
+                        // Remote shell has genuinely closed
                         break;
                     } else {
-                        // Idle or socket timeout: sleep briefly and poll again
-                        thread::sleep(Duration::from_millis(10));
+                        // Channel idle / WouldBlock: yield CPU and release lock for writer thread
+                        thread::sleep(Duration::from_millis(15));
                     }
                 }
 

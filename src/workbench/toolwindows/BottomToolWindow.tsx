@@ -43,6 +43,7 @@ export function BottomToolWindow({
   const [activeTerminalId, setActiveTerminalId] = useState<string>('term-1');
   const [configs, setConfigs] = useState<SshConfig[]>([]);
   const [selectedConfigId, setSelectedConfigId] = useState<string>(config?.id || '');
+  const [configsLoaded, setConfigsLoaded] = useState<boolean>(Boolean(config));
 
   const bottomActiveId = useLayoutStore((s) => s.bottomActiveId);
   const isBottomMaximized = useLayoutStore((s) => s.isBottomMaximized);
@@ -67,8 +68,11 @@ export function BottomToolWindow({
         if (!selectedConfigId && saved.length > 0 && saved[0]) {
           setSelectedConfigId(saved[0].id);
         }
+        setConfigsLoaded(true);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (mounted) setConfigsLoaded(true);
+      });
     return () => {
       mounted = false;
     };
@@ -321,23 +325,39 @@ export function BottomToolWindow({
       {/* Body: Keep all active tabs mounted at root so background tasks never pause */}
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
         {children ||
-          terminalTabs.map((tab) => (
+          (!configsLoaded && !config ? (
             <div
-              key={tab.id}
               style={{
-                display: activeTerminalId === tab.id ? 'flex' : 'none',
-                flexDirection: 'column',
-                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 height: '100%',
+                background: '#1e1f22',
+                color: '#8c8f9c',
+                fontSize: 12,
               }}
             >
-              <RemoteTerminalPanel
-                sessionId={tab.id}
-                config={activeConfig}
-                db={db}
-                isActive={activeTerminalId === tab.id}
-              />
+              Loading terminal environment...
             </div>
+          ) : (
+            terminalTabs.map((tab) => (
+              <div
+                key={tab.id}
+                style={{
+                  display: activeTerminalId === tab.id ? 'flex' : 'none',
+                  flexDirection: 'column',
+                  width: '100%',
+                  height: '100%',
+                }}
+              >
+                <RemoteTerminalPanel
+                  sessionId={tab.id}
+                  config={activeConfig}
+                  db={db}
+                  isActive={activeTerminalId === tab.id}
+                />
+              </div>
+            ))
           ))}
       </div>
     </div>
