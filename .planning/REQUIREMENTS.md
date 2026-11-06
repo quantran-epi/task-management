@@ -33,15 +33,15 @@
 - [ ] **SDLC-RET-04**: When no published set exists the response is a clear, actionable message (not a generic exception), and the client surfaces it in AI Chat, SDLC step chat, and Telegram identically.
 - [ ] **SDLC-RET-05**: An explicit set restriction remains available for callers that already know their sets (for example project-scoped SDLC evidence), but it is optional and never the default.
 
-### Repository Autonomy via fs-gw (SDLC-REPO)
+### Repository Autonomy via Native SSH (SDLC-REPO)
 
-- [ ] **SDLC-REPO-01**: A TaskMate fs-gw client in `src/services/fsGateway/` provides health check, `exec/run`, and `exec/stream` (SSE) with typed request/response models, timeouts, and cancellation; an unreachable gateway is reported unavailable, never thrown as an unhandled error.
-- [ ] **SDLC-REPO-02**: SDLC coding runs Claude Code headless inside a real repository worktree through fs-gw — TaskMate builds the prompt from the approved SOLUTION and step context, streams stdout/stderr/exit into the UI, and can stop the process tree.
-- [ ] **SDLC-REPO-03**: Before a coding run, TaskMate creates or reuses a dedicated git worktree through fs-gw and reports the worktree path, branch, and base commit; after the run it exposes `git status` and `git diff` output for review.
-- [ ] **SDLC-REPO-04**: A change pack is generated automatically from the real repository diff (modified, added, deleted paths, git hunks, SQL artifacts) and written in the existing change-pack format, so downstream validation and drift reconciliation consume it unchanged.
-- [ ] **SDLC-REPO-05**: The manual `generate-change-pack.mjs` script remains an explicit, labelled fallback used only when fs-gw is unavailable or a run produced no repository diff.
-- [ ] **SDLC-REPO-06**: Repository operations are opt-in per project with a configured repository path; TaskMate performs no repository write before the user starts a coding run, and every run's prompts, streams, and artifacts stay local.
-- [ ] **SDLC-REPO-07**: Reliability checks cover stream disconnect, gateway crash mid-run, process kill, worktree cleanup on failure, and re-running a step after a stale check, without leaving orphaned processes or half-written artifacts.
+- [ ] **SDLC-REPO-01**: SDLC Step 3 leverages existing Tauri native SSH service to connect to the remote host/WSL repo, supporting configured SSH profile selection and connection status verification.
+- [ ] **SDLC-REPO-02**: Step 3 inspects remote git branch for the active CR (default `feature/{crCode}`), fetching commit log (`git log $BASE..HEAD`) and changed files diff summary (`git diff --stat`) for review.
+- [ ] **SDLC-REPO-03**: Step 3 provides a visual diff & commit review UI (commits timeline, files changed with status +/~/-, inline diff) allowing user approval before proceeding to Step 4.
+- [ ] **SDLC-REPO-04**: Step 4 automatically collects git diff and required file contents (sql/*, new-files/*) over SSH, packaging an in-memory change pack zip via JSZip conforming to ChangePackManifestSchema.
+- [ ] **SDLC-REPO-05**: Step 4 immediately runs `validateHubChangePack` and triggers drift reconciliation against the approved SOLUTION, while keeping manual zip dropzone as an explicit fallback.
+- [ ] **SDLC-REPO-06**: Repository SSH configurations respect native keyring credentials, opt-in per project, and never perform destructive write operations without explicit confirmation.
+- [ ] **SDLC-REPO-07**: Edge-case handling covers uncommitted changes warning, SSH timeout/disconnect, large diff size limits (< 5MB limit), and invalid CR metadata mismatch.
 
 ### Organization Conventions (SDLC-CONV)
 

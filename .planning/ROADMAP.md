@@ -11,8 +11,8 @@
 - Phase 26: SDLC Prompt Grounding & Tool-Use Policy (COMPLETE — verified 2026-11-05)
 - Phase 27: Studio Artifact Tools & Diff Approval (COMPLETE — verified 2026-11-05)
 - Phase 28: Query-Only Knowledge Retrieval (v1.3, parallel-capable)
-- Phase 29: fs-gw Client & Headless Repository Runs (v1.3)
-- Phase 30: Automatic Change Packs, Fallback & Run Reliability (v1.3)
+- Phase 29: SSH Remote Repository Branch & Diff Review (v1.3)
+- Phase 30: Automatic Change Pack Packaging & Drift Reconciliation (v1.3)
 - Phase 31: Organization Conventions in the Solution Pipeline (v1.3)
 - Phase 32: External Research via Claude Code Headless (v1.3)
 - Phase 33: Prompt Transparency & Contract Documentation (v1.3)
@@ -648,71 +648,63 @@ Plans:
 
 - [ ] 28-04-PLAN.md — Empty-set actionable outcome normalized across AI Chat, SDLC chat, and Telegram
 
-### Phase 29: fs-gw Client & Headless Repository Runs
+### Phase 29: SSH Remote Repository Branch & Diff Review
 
-**Goal:** TaskMate can drive a real repository through fs-gw — health, process execution and streaming, opt-in per project, and a dedicated git worktree — without ever spawning repo processes itself.
+**Goal:** In SDLC Step 3, TaskMate leverages native Tauri SSH & SFTP backend to connect to the remote host/WSL repository, inspect the active CR git branch, fetch commit history and changed files, and present an interactive diff & commit review UI before proceeding to change pack generation.
 **Requirements**: SDLC-REPO-01, SDLC-REPO-02, SDLC-REPO-03, SDLC-REPO-06
 **Depends on:** Phase 26
 **Success Criteria** (what must be TRUE):
 
-1. A gateway that is down reports "unavailable" and never throws an unhandled error; health, `exec/run`, and `exec/stream` are typed and support timeouts and cancellation.
-2. Repository operations are opt-in per project with a configured path; TaskMate performs no repository write before the user starts a coding run.
-3. A coding run builds its prompt from the approved SOLUTION and step context, streams stdout/stderr/exit into the UI, and can stop the process tree.
-4. Before a run, a dedicated worktree is created or reused and its path, branch, and base commit are reported; after the run, `git status` and `git diff` are visible for review.
+1. Step 3 can select an SSH profile from Settings with native OS keyring authentication and verify connection status to the target repository path.
+2. Step 3 automatically targets the CR branch (`feature/{crCode}` with fallback to current HEAD or custom branch input), fetching commit log (`git log $BASE..HEAD`) and changed files status (`git diff --name-status $BASE..HEAD`).
+3. UI presents a clean review interface: commit timeline, changed file list with diff stats (+/-), and diff preview.
+4. User can approve the review, transitioning smoothly to Step 4 with verified branch snapshot context ({ base, head, branch, commits, files, diff }).
 **UI hint**: yes
 
-**Plans:** 4 plans in 4 waves
+**Plans:** 3 plans in 3 waves
 
 Plans:
 
-**Wave 1** *(no dependencies; new `src/services/fsGateway/`)*
+**Wave 1** *(no dependencies; SSH git query service)*
 
-- [ ] 29-01-PLAN.md — Typed fs-gw client: health, `exec/run`, `exec/stream` SSE, timeout, cancellation, unavailable status
+- [ ] 29-01-PLAN.md — SSH git execution service: branch detection, `git log`, `git diff --name-status`, uncommitted changes check, and typed branch snapshot models
 
-**Wave 2** *(depends on 29-01; edits project settings and SDLC step 3 host)*
+**Wave 2** *(depends on 29-01; Step 3 UI overhaul)*
 
-- [ ] 29-02-PLAN.md — Per-project opt-in repository path and write boundary; no write before run start
+- [ ] 29-02-PLAN.md — SDLC Step 3 interactive remote branch review UI: SSH profile picker, commit timeline, changed files tree, and diff preview
 
-**Wave 3** *(depends on 29-02)*
+**Wave 3** *(depends on 29-02; approval & transition bridge)*
 
-- [ ] 29-03-PLAN.md — Worktree create/reuse through fs-gw, reported path/branch/base commit, post-run status and diff
+- [ ] 29-03-PLAN.md — Branch snapshot approval and state handoff to Step 4 with regression tests
 
-**Wave 4** *(depends on 29-03)*
+### Phase 30: Automatic Change Pack Packaging & Drift Reconciliation
 
-- [ ] 29-04-PLAN.md — Claude Code headless run from approved SOLUTION, streamed output, process-tree stop
-
-### Phase 30: Automatic Change Packs, Fallback & Run Reliability
-
-**Goal:** A completed coding run produces a change pack from the real repository diff in the existing format, the manual script remains an explicit fallback, and failure paths leave no orphans or half-written artifacts.
+**Goal:** In SDLC Step 4, TaskMate automatically collects git diff and required artifacts (new-files, sql/*) over SSH, generates an in-memory change pack zip conforming to `ChangePackManifestSchema`, runs `validateHubChangePack`, and triggers drift reconciliation against the approved SOLUTION with no manual zip handling.
 **Requirements**: SDLC-REPO-04, SDLC-REPO-05, SDLC-REPO-07
 **Depends on:** Phase 29
 **Success Criteria** (what must be TRUE):
 
-1. After a run, a change pack is generated from the real diff (modified/added/deleted paths, git hunks, SQL artifacts) in the existing format, and step 4 validation/drift consumes it unchanged.
-2. The manual `generate-change-pack.mjs` script is presented as a labelled fallback used only when fs-gw is unavailable or the run produced no diff — never as a silent default.
-3. Stream disconnect, gateway crash mid-run, process kill, worktree cleanup failure, and a stale re-run all end without orphaned processes or half-written artifacts, and the failure state is visible.
-4. An end-to-end walkthrough goes approved SOLUTION → coding run → automatic pack → step 4 drift without a manually built zip.
+1. Step 4 automatically receives the approved branch snapshot from Step 3, collects required new files and SQL scripts via SSH tarball over stdout, and constructs an in-memory zip adhering strictly to `entryPolicy` and size limits (< 5MB compressed, < 2MB per entry).
+2. The generated zip passes `validateHubChangePack` with matching CR identity, and immediately executes `buildHubReconciliation` against the approved SOLUTION.
+3. The manual dropzone in Step 4 remains an explicit, labelled fallback for offline, disconnected, or manually built change packs.
+4. Edge cases (uncommitted changes, connection failure, non-zero git exit, oversized diff) display informative error banners without leaving orphan artifacts or blocking workflow navigation.
 **UI hint**: yes
 
-**Plans:** 4 plans in 4 waves
+**Plans:** 3 plans in 3 waves
 
 Plans:
 
-**Wave 1** *(depends on Phase 29; edits change-pack services)*
+**Wave 1** *(depends on Phase 29; in-memory zip packager)*
 
-- [ ] 30-01-PLAN.md — Change-pack generator from real diff, preserving the existing manifest/entry format
+- [ ] 30-01-PLAN.md — SSH file collector and in-memory JSZip change-pack builder conforming to ChangePackManifestSchema
 
-**Wave 2** *(depends on 30-01; edits SDLC step 3/4 host)*
+**Wave 2** *(depends on 30-01; Step 4 auto-packaging integration)*
 
-- [ ] 30-02-PLAN.md — Explicitly labelled manual-script fallback and its trigger conditions
+- [ ] 30-02-PLAN.md — Step 4 auto-packaging trigger, reconciliation execution, and explicit manual-dropzone fallback toggle
 
-**Wave 3** *(depends on 30-01)*
+**Wave 3** *(depends on 30-02; error hardening & end-to-end walkthrough)*
 
-- [ ] 30-03-PLAN.md — Failure/recovery hardening: disconnect, crash, kill, cleanup, stale re-run without orphans
-
-**Wave 4** *(depends on 30-02 and 30-03)*
-
-- [ ] 30-04-PLAN.md — End-to-end acceptance: SOLUTION → run → auto pack → step 4 drift with no manual zip
+- [ ] 30-03-PLAN.md — Reliability hardening (SSH timeouts, size guard, CR validation failures) and end-to-end SDLC walk-through test
 
 ### Phase 31: Organization Conventions in the Solution Pipeline
 
