@@ -696,7 +696,7 @@ Plans:
 
 **Wave 1** *(depends on Phase 29; in-memory zip packager)*
 
-- [ ] 30-01-PLAN.md — SSH file collector and in-memory JSZip change-pack builder conforming to ChangePackManifestSchema & desktop limits
+- [x] 30-01-PLAN.md — SSH file collector and in-memory JSZip change-pack builder conforming to ChangePackManifestSchema & desktop limits
 
 **Wave 2** *(depends on 30-01; Step 4 auto-packaging integration)*
 
