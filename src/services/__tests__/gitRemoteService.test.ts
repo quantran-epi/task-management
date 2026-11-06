@@ -5,6 +5,9 @@ import {
   runGitCommand,
   getRemoteBranches,
   checkDirtyStatus,
+  getCommitLog,
+  getDiffSummary,
+  getFileDiff,
 } from '../gitRemoteService';
 import * as sshService from '../sshService';
 
@@ -133,6 +136,108 @@ describe('gitRemoteService - Task 1 Tracer Slice', () => {
         { path: 'package.json', indexStatus: 'M', workingTreeStatus: ' ' },
         { path: 'new-file.txt', indexStatus: '?', workingTreeStatus: '?' },
       ]);
+    });
+  });
+
+  describe('getCommitLog', () => {
+    it('parses null-delimited log output into RemoteGitCommit array', async () => {
+      const mockLogOutput = [
+        '\x1ea1b2c3d4e5f60000000000000000000000000000\x00a1b2c3d\x00Alice\x002026-11-06 10:00:00 +0700\x00feat: add payment gateway',
+        '\x1ef9e8d7c6b5a40000000000000000000000000000\x00f9e8d7c\x00Bob\x002026-11-06 11:30:00 +0700\x00fix: handle empty transaction\nwith multiple lines',
+      ].join('\n');
+
+      vi.mocked(sshService.execRemoteCommand).mockResolvedValueOnce({
+        stdout: mockLogOutput,
+        stderr: '',
+        exitStatus: 0,
+      });
+
+      const commits = await getCommitLog(dummyConfig, '/var/repo', 'main', 'feature/pay');
+      expect(commits).toHaveLength(2);
+      expect(commits[0]).toEqual({
+        sha: 'a1b2c3d4e5f60000000000000000000000000000',
+        shortSha: 'a1b2c3d',
+        author: 'Alice',
+        date: '2026-11-06 10:00:00 +0700',
+        message: 'feat: add payment gateway',
+      });
+      expect(commits[1]?.message).toBe('fix: handle empty transaction\nwith multiple lines');
+    });
+  });
+
+  describe('getDiffSummary', () => {
+    it('aggregates file stats and totals from diff numstat and name-status', async () => {
+      // 1. rev-parse target
+      vi.mocked(sshService.execRemoteCommand).mockResolvedValueOnce({
+        stdout: 'a1b2c3d4e5f60000000000000000000000000000\n',
+        stderr: '',
+        exitStatus: 0,
+      });
+
+      // 2. getCommitLog
+      vi.mocked(sshService.execRemoteCommand).mockResolvedValueOnce({
+        stdout: 'a1b2c3d4e5f60000000000000000000000000000\x00a1b2c3d\x00Alice\x002026-11-06 10:00:00 +0700\x00feat: initial',
+        stderr: '',
+        exitStatus: 0,
+      });
+
+      // 3. diff --numstat
+      const mockNumstat = [
+        '10\t2\tsrc/payment.ts',
+        '25\t0\tsrc/config.ts',
+        '-\t-\tassets/logo.png',
+      ].join('\n');
+      vi.mocked(sshService.execRemoteCommand).mockResolvedValueOnce({
+        stdout: mockNumstat,
+        stderr: '',
+        exitStatus: 0,
+      });
+
+      // 4. diff --name-status
+      const mockNameStatus = [
+        'M\tsrc/payment.ts',
+        'A\tsrc/config.ts',
+        'A\tassets/logo.png',
+      ].join('\n');
+      vi.mocked(sshService.execRemoteCommand).mockResolvedValueOnce({
+        stdout: mockNameStatus,
+        stderr: '',
+        exitStatus: 0,
+      });
+
+      const summary = await getDiffSummary(dummyConfig, '/var/repo', 'main', 'feature/pay');
+      expect(summary.baseBranch).toBe('main');
+      expect(summary.targetBranch).toBe('feature/pay');
+      expect(summary.headSha).toBe('a1b2c3d4e5f60000000000000000000000000000');
+      expect(summary.commits).toHaveLength(1);
+      expect(summary.files).toHaveLength(3);
+      expect(summary.totalAdditions).toBe(35);
+      expect(summary.totalDeletions).toBe(2);
+
+      expect(summary.files).toEqual([
+        { path: 'src/payment.ts', status: 'modified', additions: 10, deletions: 2 },
+        { path: 'src/config.ts', status: 'added', additions: 25, deletions: 0 },
+        { path: 'assets/logo.png', status: 'added', additions: 0, deletions: 0 },
+      ]);
+    });
+  });
+
+  describe('getFileDiff', () => {
+    it('executes git diff for a single file', async () => {
+      const mockDiff = 'diff --git a/src/a.ts b/src/a.ts\n+const a = 1;\n';
+      vi.mocked(sshService.execRemoteCommand).mockResolvedValueOnce({
+        stdout: mockDiff,
+        stderr: '',
+        exitStatus: 0,
+      });
+
+      const diff = await getFileDiff(dummyConfig, '/var/repo', 'main', 'feature/pay', 'src/a.ts');
+      expect(sshService.execRemoteCommand).toHaveBeenCalledWith(
+        dummyConfig,
+        "git -C '/var/repo' --no-pager diff \"'main'..'feature/pay'\" -- 'src/a.ts'",
+        undefined
+      );
+      expect(diff).toBe(mockDiff);
     });
   });
 });
