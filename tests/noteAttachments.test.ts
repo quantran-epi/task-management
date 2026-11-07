@@ -16,8 +16,8 @@ describe('Note Attachments & Backup Serialization', () => {
     await db.notes.clear();
     await db.noteAttachments.clear();
     await db.tasks.clear();
-    await db.milestones.clear();
-    await db.projects.clear();
+    await db.changeRequests.clear();
+    await db.systems.clear();
     await db.capacityRules.clear();
     await db.capacityOverrides.clear();
     await db.plannedAllocations.clear();
@@ -111,7 +111,7 @@ describe('Note Attachments & Backup Serialization', () => {
   });
 
   describe('Backup export and restore round-trip (D-19)', () => {
-    it('exports attachments without binary data in backup payload version 4 and restores metadata faithfully', async () => {
+    it('exports attachments without binary data in the v11 backup payload and restores metadata faithfully', async () => {
       const note = await createNote({
         title: 'Note for backup',
         body: 'Markdown content',
@@ -132,7 +132,7 @@ describe('Note Attachments & Backup Serialization', () => {
 
       // Export
       const backup = await exportBackupPayload();
-      expect(backup.schemaVersion).toBe(10);
+      expect(backup.schemaVersion).toBe(11);
       expect(backup.tables.notes).toHaveLength(1);
       expect((backup.tables as any).noteAttachments).toHaveLength(1);
 
@@ -211,7 +211,7 @@ describe('Note Attachments & Backup Serialization', () => {
       const note = await createNote({
         title: 'Note with local path',
         body: 'Testing path backup',
-        entityType: 'project',
+        entityType: 'cr',
       });
 
       await addNoteAttachment({

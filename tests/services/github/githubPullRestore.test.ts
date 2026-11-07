@@ -30,29 +30,33 @@ describe('githubPullRestore service', () => {
   const token = 'ghp_valid_mock_token';
   const passphrase = 'correct-backup-passphrase-456';
 
+  // D-49: only a v11 CR-centric envelope is accepted; a projects table is a legacy backup.
   const validPayload: BackupEnvelope = {
     app: 'personal-task-planner',
-    schemaVersion: 1,
+    schemaVersion: 11,
     exportedAt: '2026-09-27T10:00:00.000Z',
     tables: {
-      projects: [
+      changeRequests: [
         {
           id: '11111111-1111-4111-8111-111111111111',
-          name: 'Project One',
+          code: 'CR-PULL-01',
+          name: 'Change Request One',
           status: 'Open',
+          type: 'ENHANCEMENT',
+          targets: [],
           createdAt: '2026-09-27T10:00:00.000Z',
           updatedAt: '2026-09-27T10:00:00.000Z',
         },
       ],
-      milestones: [],
+      systems: [],
       tasks: [],
       capacityRules: [],
       capacityOverrides: [],
       plannedAllocations: [],
     },
     counts: {
-      projects: 1,
-      milestones: 0,
+      changeRequests: 1,
+      systems: 0,
       tasks: 0,
       capacityRules: 0,
       capacityOverrides: 0,
@@ -166,12 +170,12 @@ describe('githubPullRestore service', () => {
     expect(result.remoteSha).toBe('blob_sha_success');
     expect(result.rawEncryptedJson).toBe(rawJson);
     expect(result.payload.app).toBe('personal-task-planner');
-    expect(result.payload.tables.projects.length).toBe(1);
-    expect(result.payload.tables.projects[0]!.name).toBe('Project One');
+    expect(result.payload.tables.changeRequests!.length).toBe(1);
+    expect(result.payload.tables.changeRequests![0]!.name).toBe('Change Request One');
 
     // Invariant: zero local database tables modified during pull/decrypt/validation
-    const localProjects = await testDb.projects.toArray();
-    expect(localProjects.length).toBe(0);
+    const localCrs = await testDb.changeRequests.toArray();
+    expect(localCrs.length).toBe(0);
   });
 
   it('Test 5: throws VALIDATION_FAILED when decrypted payload has referential integrity errors per D-16', async () => {
@@ -179,14 +183,14 @@ describe('githubPullRestore service', () => {
       ...validPayload,
       tables: {
         ...validPayload.tables,
-        milestones: [
+        // A planned allocation whose task is absent from the payload is a
+        // referential-integrity failure.
+        plannedAllocations: [
           {
             id: '22222222-2222-4222-8222-222222222222',
-            projectId: '33333333-3333-4333-8333-333333333333',
-            name: 'Orphan milestone',
-            status: 'Open',
-            createdAt: '2026-09-27T10:00:00.000Z',
-            updatedAt: '2026-09-27T10:00:00.000Z',
+            taskId: '33333333-3333-4333-8333-333333333333',
+            date: '2026-09-27',
+            allocatedMinutes: 60,
           },
         ],
       },

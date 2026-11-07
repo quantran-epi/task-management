@@ -1595,17 +1595,20 @@ describe('Telegram Headless Worker', () => {
   });
 
   describe('Telegram Read Tool Execution Loop & Synthesis', () => {
-    it('executes read tool query_tasks and synthesizes complete answer for project detail query', async () => {
+    it('executes read tool query_tasks and synthesizes complete answer for CR detail query', async () => {
       await setNineRouterApiKey('test-key', testDb);
       mockStreamChatEvents.mockClear();
 
-      // Seed project and tasks
-      const projectId = 'proj-core-banking-1';
-      await testDb.projects.add({
-        id: projectId,
+      // Seed a CR and its tasks (the only hierarchy above a task after 31.2).
+      const crId = '11111111-1111-4111-8111-111111111111';
+      await testDb.changeRequests.add({
+        id: crId,
+        code: 'CR-CORE-01',
         name: 'Core Banking Modernization',
         description: 'Upgrade core banking microservices',
         status: 'In Progress',
+        type: 'ENHANCEMENT',
+        targets: [],
         createdAt: '2026-10-01T00:00:00.000Z',
         updatedAt: '2026-10-15T00:00:00.000Z',
       });
@@ -1616,7 +1619,7 @@ describe('Telegram Headless Worker', () => {
         priority: 'High',
         progress: 60,
         estimateMinutes: 180,
-        projectId,
+        crId,
         createdAt: '2026-10-02T00:00:00.000Z',
         updatedAt: '2026-10-18T00:00:00.000Z',
       });
@@ -1627,7 +1630,7 @@ describe('Telegram Headless Worker', () => {
         priority: 'Urgent',
         progress: 10,
         estimateMinutes: 240,
-        projectId,
+        crId,
         createdAt: '2026-10-03T00:00:00.000Z',
         updatedAt: '2026-10-19T00:00:00.000Z',
       });
@@ -1708,7 +1711,7 @@ describe('Telegram Headless Worker', () => {
       expect(firstCallArgs.payload.tools.some((t: any) => t.function.name === 'get_item_details')).toBe(true);
       // Verify mutation tools were excluded
       expect(firstCallArgs.payload.tools.some((t: any) => t.function.name === 'create_task')).toBe(false);
-      expect(firstCallArgs.payload.tools.some((t: any) => t.function.name === 'delete_project')).toBe(false);
+      expect(firstCallArgs.payload.tools.some((t: any) => t.function.name === 'delete_change_request')).toBe(false);
 
       // Verify second call (synthesis) was triggered with tool output in messages
       const secondCallArgs = (mockStreamChatEvents.mock.calls as any)[1]?.[0];
