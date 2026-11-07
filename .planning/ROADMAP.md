@@ -838,7 +838,7 @@ Plans:
 5. SDLC Studio không còn cấu hình Repo & SSH; có view read-only "Subsystems & Repos"; Subsystem Context Bar dùng chung cho Step 3/4; Step 2 sinh solution phân mục theo từng Subsystem; Step 4 pack riêng từng Subsystem và Pack All có báo cáo lỗi từng phần.
 6. Khi CR chưa gán hoặc thiếu subsystem, AI đề xuất subsystem ảnh hưởng kèm lý do và độ tin cậy; chỉ ghi vào CR sau khi user xác nhận.
 
-**Plans:** 22/24 plans executed
+**Plans:** 23/24 plans executed
 **UI hint**: yes
 
 Plans:
@@ -884,7 +884,7 @@ Plans:
 
 **Wave 8** *(depends on Wave 7 — test sweep)*
 
-- [ ] 31.2-19-PLAN.md — Wave 0 suites, legacy test deletion, survivor rewrites, repo-wide `tsc --noEmit` gate
+- [x] 31.2-19-PLAN.md — Wave 0 suites, legacy test deletion, survivor rewrites, repo-wide `tsc --noEmit` gate
 
 ### Phase 32: External Research via Claude Code Headless
 
