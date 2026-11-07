@@ -14,7 +14,7 @@ const { Text } = Typography;
 
 export interface StepInputDocsModalProps {
   open: boolean;
-  project: { id: string; name: string; code?: string | undefined };
+  changeRequest: { id: string; name: string; code?: string | undefined };
   currentUser?: string | undefined;
   today?: string | undefined;
   initialValues?: {
@@ -42,7 +42,7 @@ interface FormValues extends Omit<SdlcWorkflowMetadata, 'date'> {
 
 export const StepInputDocsModal: React.FC<StepInputDocsModalProps> = ({
   open,
-  project,
+  changeRequest,
   currentUser = 'Developer',
   today,
   initialValues,
@@ -67,15 +67,15 @@ export const StepInputDocsModal: React.FC<StepInputDocsModalProps> = ({
     setPl02Sources(initialValues?.pl02Sources ?? []);
 
     form.setFieldsValue({
-      cr: initialValues?.metadata?.cr ?? project.code ?? project.name,
-      featureName: initialValues?.metadata?.featureName ?? project.name,
+      cr: initialValues?.metadata?.cr ?? changeRequest.code ?? changeRequest.name,
+      featureName: initialValues?.metadata?.featureName ?? changeRequest.name,
       requestingUnit: initialValues?.metadata?.requestingUnit ?? 'Trung tâm Phát triển Phần mềm',
       author: initialValues?.metadata?.author ?? currentUser,
       date: dayjs(initialValues?.metadata?.date ?? today ?? undefined),
       pl01Content: initialValues?.pl01 ?? '',
       pl02Content: initialValues?.pl02 ?? '',
     });
-  }, [currentUser, form, initialValues, open, project.code, project.id, project.name, today]);
+  }, [currentUser, form, initialValues, open, changeRequest.code, changeRequest.id, changeRequest.name, today]);
 
   const handleSubmit = async () => {
     try {
@@ -272,8 +272,8 @@ export const StepInputDocsModal: React.FC<StepInputDocsModalProps> = ({
         <NoteSourcePickerModal
           open={Boolean(activePickerKind)}
           kind={activePickerKind}
-          projectId={project.id}
-          projectName={project.name}
+          crId={changeRequest.id}
+          crName={changeRequest.name}
           initialSelectedIds={
             activePickerKind === 'PL01'
               ? pl01Sources.map((s) => s.id)

@@ -5,7 +5,8 @@ import {
   CopyOutlined,
   CheckOutlined,
   CheckSquareOutlined,
-  ProjectOutlined,
+  BranchesOutlined,
+  ApartmentOutlined,
   FileTextOutlined,
   FileAddOutlined,
   CodeOutlined,
@@ -115,11 +116,11 @@ export function parseChecklistFromText(text: string): string[] {
 }
 
 /**
- * Parses markdown mentions (@[Task](task:id) and #[Project](project:id))
+ * Parses markdown mentions (@[Task](task:id), #[CR](cr:id) and #[System](system:id))
  * and renders them as sleek visual pill tags inside user messages.
  */
 export function renderUserMessageWithMentions(content: string): React.ReactNode {
-  const mentionRegex = /(@\[([^\]]+)\]\(task:([a-zA-Z0-9_-]+)\))|(#\[([^\]]+)\]\(project:([a-zA-Z0-9_-]+)\))|(@\[([^\]]+)\]\(doc:([a-zA-Z0-9_-]+)\))/g;
+  const mentionRegex = /(@\[([^\]]+)\]\(task:([a-zA-Z0-9_-]+)\))|(#\[([^\]]+)\]\((?:cr|system):([a-zA-Z0-9_-]+)\))|(@\[([^\]]+)\]\(doc:([a-zA-Z0-9_-]+)\))/g;
   if (!mentionRegex.test(content)) {
     return content;
   }
@@ -157,13 +158,20 @@ export function renderUserMessageWithMentions(content: string): React.ReactNode 
         </Tag>
       );
     } else if (match[4]) {
-      // Project mention
-      const projName = match[5];
-      const projId = match[6];
+      // CR / System mention
+      const crName = match[5];
+      const crId = match[6];
+      const isSystem = content.slice(match.index, match.index + match[0].length).includes('(system:');
       parts.push(
         <Tag
-          key={`proj-pill-${projId}-${match.index}`}
-          icon={<ProjectOutlined style={{ color: '#ffffff', marginRight: 4 }} />}
+          key={`${isSystem ? 'system' : 'cr'}-pill-${crId}-${match.index}`}
+          icon={
+            isSystem ? (
+              <ApartmentOutlined style={{ color: '#ffffff', marginRight: 4 }} />
+            ) : (
+              <BranchesOutlined style={{ color: '#ffffff', marginRight: 4 }} />
+            )
+          }
           style={{
             margin: '0 3px',
             verticalAlign: 'middle',
@@ -176,7 +184,7 @@ export function renderUserMessageWithMentions(content: string): React.ReactNode 
             padding: '1px 6px',
           }}
         >
-          #{projName}
+          #{crName}
         </Tag>
       );
     } else if (match[7]) {

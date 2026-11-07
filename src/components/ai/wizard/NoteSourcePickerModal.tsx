@@ -20,8 +20,8 @@ export interface NoteSourcePickerModalProps {
   open: boolean;
   title?: string | undefined;
   kind?: 'PL01' | 'PL02' | undefined;
-  projectId: string;
-  projectName?: string | undefined;
+  crId: string;
+  crName?: string | undefined;
   initialSelectedIds?: string[] | undefined;
   onApply: (sources: SdlcSourceRef[]) => void | Promise<void>;
   onClose: () => void;
@@ -37,14 +37,14 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
   open,
   title,
   kind = 'PL01',
-  projectId,
-  projectName = 'Dự án',
+  crId,
+  crName = 'CR',
   initialSelectedIds = [],
   onApply,
   onClose,
 }) => {
   const { token } = theme.useToken();
-  const [scope, setScope] = useState<'project' | 'all'>('project');
+  const [scope, setScope] = useState<'cr' | 'all'>('cr');
   const [searchQuery, setSearchQuery] = useState('');
   const [allNotes, setAllNotes] = useState<Note[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(initialSelectedIds));
@@ -68,7 +68,7 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
     wasOpen.current = true;
     setSelectedIds(new Set(initialSelectedIds));
     setSearchQuery('');
-    setScope('project');
+    setScope('cr');
     setShowFullPreview(false);
 
     void db.notes.toArray().then((notes: Note[]) => {
@@ -80,7 +80,7 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
     });
     // initialSelectedIds is intentionally read only on open; its identity changes every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, projectId]);
+  }, [open, crId]);
 
   const modalTitle =
     title ?? (kind === 'PL01' ? 'Chọn nguồn yêu cầu nghiệp vụ (PL01)' : 'Chọn nguồn đặc tả chức năng (PL02)');
@@ -88,7 +88,7 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
   // Filter notes by scope and search query
   const filteredNotes = useMemo(() => {
     return allNotes.filter((note) => {
-      if (scope === 'project' && note.entityId !== projectId) {
+      if (scope === 'cr' && note.entityId !== crId) {
         return false;
       }
       if (searchQuery.trim()) {
@@ -100,7 +100,7 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
       }
       return true;
     });
-  }, [allNotes, projectId, scope, searchQuery]);
+  }, [allNotes, crId, scope, searchQuery]);
 
   const activePreviewNote = useMemo(() => {
     return allNotes.find((n) => n.id === previewNoteId) ?? null;
@@ -232,9 +232,9 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: 'space-between' }}>
           <Segmented
             value={scope}
-            onChange={(val) => setScope(val as 'project' | 'all')}
+            onChange={(val) => setScope(val as 'cr' | 'all')}
             options={[
-              { label: 'Chỉ dự án hiện tại', value: 'project' },
+              { label: 'Chỉ CR hiện tại', value: 'cr' },
               { label: 'Toàn hệ thống', value: 'all' },
             ]}
           />
@@ -298,7 +298,7 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
                 const isChecked = selectedIds.has(note.id);
                 const isPreview = activePreviewNote?.id === note.id;
                 const formattedDate = dayjs(note.updatedAt).format('DD/MM/YYYY');
-                const noteProject = note.entityId === projectId ? projectName : 'Dự án khác';
+                const noteCr = note.entityId === crId ? crName : 'CR khác';
 
                 return (
                   <div
@@ -349,7 +349,7 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
                         {note.title || 'Untitled Note'}
                       </div>
                       <div style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary, marginTop: 2 }}>
-                        {noteProject} · Cập nhật {formattedDate}
+                        {noteCr} · Cập nhật {formattedDate}
                       </div>
                     </div>
                   </div>

@@ -5,7 +5,8 @@ import {
   SendOutlined,
   StopOutlined,
   CheckSquareOutlined,
-  ProjectOutlined,
+  BranchesOutlined,
+  ApartmentOutlined,
   ClearOutlined,
   CalendarOutlined,
   DashboardOutlined,
@@ -17,7 +18,7 @@ import {
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import type { Task, Project, Note } from '../../types/models';
+import type { Task, ChangeRequest, System, Note } from '../../types/models';
 import { isTauriApp } from '../../utils/timerPopout';
 
 export interface ChatInputBarProps {
@@ -156,7 +157,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   });
 
   const taskMentionSearchActive = searchInfo.prefix === '@' && !searchInfo.text.toLowerCase().startsWith('doc');
-  const projectMentionSearchActive = searchInfo.prefix === '#';
+  const crMentionSearchActive = searchInfo.prefix === '#';
   const documentMentionSearchActive = searchInfo.prefix === '@' && searchInfo.text.toLowerCase().startsWith('doc');
 
   const mentionsRef = useRef<MentionsRef>(null);
@@ -164,7 +165,8 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   const submitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const tasks = useLiveQuery<Task[]>(() => taskMentionSearchActive ? (db.tasks?.toArray() ?? []) : [], [db, taskMentionSearchActive]) ?? [];
-  const projects = useLiveQuery<Project[]>(() => projectMentionSearchActive ? (db.projects?.toArray() ?? []) : [], [db, projectMentionSearchActive]) ?? [];
+  const changeRequests = useLiveQuery<ChangeRequest[]>(() => crMentionSearchActive ? (db.changeRequests?.toArray() ?? []) : [], [db, crMentionSearchActive]) ?? [];
+  const systems = useLiveQuery<System[]>(() => crMentionSearchActive ? (db.systems?.toArray() ?? []) : [], [db, crMentionSearchActive]) ?? [];
   const documents = useLiveQuery<Note[]>(
     async () => {
       if (!documentMentionSearchActive || !db.notes) return [];
@@ -559,13 +561,13 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
     }
 
     if (prefix === '#') {
-      return projects
-        .filter((p) => {
-          if (p.status === 'Cancelled') return false;
+      const crOptions = changeRequests
+        .filter((c) => {
+          if (c.status === 'Cancelled') return false;
           if (!q) return true;
           return (
-            p.name.toLowerCase().includes(q) ||
-            (p.jiraEpicKey && p.jiraEpicKey.toLowerCase().includes(q))
+            c.code.toLowerCase().includes(q) ||
+            c.name.toLowerCase().includes(q)
           );
         })
         .sort((a, b) => {
@@ -575,9 +577,9 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           return (b.updatedAt || '').localeCompare(a.updatedAt || '');
         })
         .slice(0, 10)
-        .map((p) => ({
-          key: `project-${p.id}`,
-          value: `[${p.name}](project:${p.id})`,
+        .map((c) => ({
+          key: `cr-${c.id}`,
+          value: `[${c.code}](cr:${c.id})`,
           label: (
             <div
               style={{
@@ -589,7 +591,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                <ProjectOutlined style={{ color: '#722ed1', flexShrink: 0 }} />
+                <BranchesOutlined style={{ color: '#722ed1', flexShrink: 0 }} />
                 <span
                   style={{
                     fontWeight: 500,
@@ -598,21 +600,8 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {p.name}
+                  {c.code} · {c.name}
                 </span>
-                {p.jiraEpicKey && (
-                  <Tag
-                    color="purple"
-                    style={{
-                      margin: 0,
-                      fontSize: 10,
-                      lineHeight: '16px',
-                      padding: '0 4px',
-                    }}
-                  >
-                    {p.jiraEpicKey}
-                  </Tag>
-                )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                 <Tag
@@ -623,12 +612,64 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
                     padding: '0 4px',
                   }}
                 >
-                  {p.status}
+                  {c.status}
                 </Tag>
               </div>
             </div>
           ),
         }));
+
+      const systemOptions = systems
+        .filter((sys) => {
+          if (!q) return true;
+          return (
+            sys.code.toLowerCase().includes(q) ||
+            sys.name.toLowerCase().includes(q)
+          );
+        })
+        .sort((a, b) => a.code.localeCompare(b.code))
+        .slice(0, 10)
+        .map((sys) => ({
+          key: `system-${sys.id}`,
+          value: `[${sys.code}](system:${sys.id})`,
+          label: (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 8,
+                padding: '2px 0',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                <ApartmentOutlined style={{ color: '#13c2c2', flexShrink: 0 }} />
+                <span
+                  style={{
+                    fontWeight: 500,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {sys.code} · {sys.name}
+                </span>
+              </div>
+              <Tag
+                style={{
+                  margin: 0,
+                  fontSize: 10,
+                  lineHeight: '16px',
+                  padding: '0 4px',
+                }}
+              >
+                {sys.type}
+              </Tag>
+            </div>
+          ),
+        }));
+
+      return [...crOptions, ...systemOptions];
     }
 
     if (prefix === '/') {
@@ -659,7 +700,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
     }
 
     return [];
-  }, [searchInfo, tasks, projects]);
+  }, [searchInfo, tasks, changeRequests, systems]);
 
   return (
     <div

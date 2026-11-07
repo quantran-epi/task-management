@@ -45,9 +45,9 @@ import {
 import { launchClaudeTerminal } from '../../services/ai/claudeCliService';
 import { updateTask, getTask } from '../../db/repositories/taskRepo';
 import { createNote } from '../../db/repositories/noteRepo';
-import { getProject } from '../../db/repositories/projectRepo';
-import { getMilestone } from '../../db/repositories/milestoneRepo';
-import { getGlobalConventions, loadRepoConventions, loadMultiRepoConventions } from '../../services/conventionService';
+import { getChangeRequest } from '../../db/repositories/changeRequestRepo';
+import { getSystem } from '../../db/repositories/systemRepo';
+import { getGlobalConventions, loadMultiRepoConventions } from '../../services/conventionService';
 import { buildConventionsSegment } from '../../services/ai/sdlcPromptComposer';
 import { getTodayDateString } from '../../utils/date';
 import dayjs from 'dayjs';
@@ -445,7 +445,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
   const scopeKey = buildScopeKey(currentScope.type, currentScope.id);
 
-  const isProjectScope = currentScope.type === 'project' && Boolean(currentScope.id);
+  const isCrScope = currentScope.type === 'cr' && Boolean(currentScope.id);
 
   // Per-tab runtime/request ownership. Runtime state stays ephemeral; durable history stays in Dexie.
   const tabRuntimes = useTabRuntimes();
@@ -730,7 +730,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   );
 
   useEffect(() => {
-    // Non-project and project scopes adopt their legacy thread through getOrCreateActiveChatTab,
+    // Non-CR and CR scopes adopt their legacy thread through getOrCreateActiveChatTab,
     // which is transactional and therefore safe against a concurrent send creating the same first tab.
     if (durableTabs.length > 0) return;
     void ensureTurnTabRef.current().catch((err) =>
@@ -750,7 +750,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         const existing = await listTabsByScope(scopeKey, db);
         if (cancelled) return;
 
-        if (isProjectScope && currentScope.id) {
+        if (isCrScope && currentScope.id) {
           // One-shot migration: a legacy global analysis-mode flag seeds durable per-tab config,
           // then the key is removed so it can never override per-tab state again (D-07).
           let legacyAnalysisMode = false;
@@ -790,7 +790,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [currentScope.id, currentScope.type, db, isProjectScope, open, scopeKey]);
+  }, [currentScope.id, currentScope.type, db, isCrScope, open, scopeKey]);
 
   const handleSelectTab = useCallback(
     async (tabId: string) => {
@@ -908,7 +908,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   // D-30: a restored workflow whose source Notes vanished blocks the next AI step.
   const restoredMissingSourcesRef = useRef<Array<{ id: string; title: string }>>([]);
   const restoredMissingSources = useLiveQuery(async () => {
-    // The workflow row is keyed by the SDLC tab's durable thread, not by the project alone.
+    // The workflow row is keyed by the SDLC tab's durable thread, not by the CR alone.
     const sdlcTabs = durableTabs.filter((tab) => tab.type === 'sdlc' && tab.threadId);
     if (sdlcTabs.length === 0) return [];
     const notes = await db.notes.toArray();
@@ -1717,13 +1717,15 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
       // Scoped / global grounding context.
       let systemInstruction = '';
-      let activeProjectId: string | undefined;
+      // Target subsystem ids of the CR in scope, used to load repository conventions.
+      let activeTargetSystemIds: string[] = [];
       if (effectiveScope.type !== 'global' && effectiveScope.id) {
         try {
           if (effectiveScope.type === 'task') {
             const task = await getTask(effectiveScope.id, db);
             if (task) {
-              if (task.projectId) activeProjectId = task.projectId;
+              const taskCr = task.crId ? await getChangeRequest(task.crId, db) : undefined;
+              if (taskCr) activeTargetSystemIds = taskCr.targets.map((t) => t.systemId);
               systemInstruction = await buildItemContextPrompt({
                 entityType: 'task',
                 item: task,
@@ -1731,24 +1733,23 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
                 charLimit: config.charLimit,
               });
             }
-          } else if (effectiveScope.type === 'project') {
-            activeProjectId = effectiveScope.id;
-            const project = await getProject(effectiveScope.id, db);
-            if (project) {
+          } else if (effectiveScope.type === 'cr') {
+            const cr = await getChangeRequest(effectiveScope.id, db);
+            if (cr) {
+              activeTargetSystemIds = cr.targets.map((t) => t.systemId);
               systemInstruction = await buildItemContextPrompt({
-                entityType: 'project',
-                item: project,
+                entityType: 'cr',
+                item: cr,
                 db,
                 charLimit: config.charLimit,
               });
             }
-          } else if (effectiveScope.type === 'milestone') {
-            const milestone = await getMilestone(effectiveScope.id, db);
-            if (milestone) {
-              if (milestone.projectId) activeProjectId = milestone.projectId;
+          } else if (effectiveScope.type === 'system') {
+            const system = await getSystem(effectiveScope.id, db);
+            if (system) {
               systemInstruction = await buildItemContextPrompt({
-                entityType: 'milestone',
-                item: milestone,
+                entityType: 'system',
+                item: system,
                 db,
                 charLimit: config.charLimit,
               });
@@ -1768,10 +1769,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         }
       }
 
-      const { taskIds, projectIds, filePaths } = extractMentionedEntityIds(trimmed);
-      if (!activeProjectId && projectIds.length > 0) {
-        activeProjectId = projectIds[0];
-      }
+      const { taskIds, crIds, systemIds, filePaths } = extractMentionedEntityIds(trimmed);
       const mentionedContexts: string[] = [];
       const turnReferences = tabRuntimes.get(turnTabId)?.references ?? [];
       const allFiles = Array.from(new Set([...turnReferences, ...(filePaths || [])]));
@@ -1791,22 +1789,40 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           logAiChatError(`Grounding error for task ${taskId}`, err);
         }
       }
-      for (const projectId of projectIds) {
-        if (effectiveScope.type === 'project' && effectiveScope.id === projectId) continue;
+      for (const crId of crIds) {
+        if (effectiveScope.type === 'cr' && effectiveScope.id === crId) continue;
         try {
-          const project = await getProject(projectId, db);
-          if (project) {
+          const cr = await getChangeRequest(crId, db);
+          if (cr) {
             mentionedContexts.push(
               await buildItemContextPrompt({
-                entityType: 'project',
-                item: project,
+                entityType: 'cr',
+                item: cr,
                 db,
                 charLimit: config.charLimit,
               })
             );
           }
         } catch (err) {
-          logAiChatError(`Grounding error for project ${projectId}`, err);
+          logAiChatError(`Grounding error for CR ${crId}`, err);
+        }
+      }
+      for (const systemId of systemIds) {
+        if (effectiveScope.type === 'system' && effectiveScope.id === systemId) continue;
+        try {
+          const system = await getSystem(systemId, db);
+          if (system) {
+            mentionedContexts.push(
+              await buildItemContextPrompt({
+                entityType: 'system',
+                item: system,
+                db,
+                charLimit: config.charLimit,
+              })
+            );
+          }
+        } catch (err) {
+          logAiChatError(`Grounding error for system ${systemId}`, err);
         }
       }
       if (mentionedContexts.length > 0) {
@@ -1837,14 +1853,20 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
       let conventionsSegment = '';
       try {
-        const [globalConv, repoConv] = await Promise.all([
+        const [globalConv, repoConvs] = await Promise.all([
           getGlobalConventions(db),
-          activeProjectId ? loadRepoConventions(activeProjectId, db) : Promise.resolve(null),
+          activeTargetSystemIds.length > 0
+            ? loadMultiRepoConventions(activeTargetSystemIds, db)
+            : Promise.resolve([]),
         ]);
         conventionsSegment = buildConventionsSegment({
           global: globalConv,
-          repo: repoConv?.content,
-          repoPath: repoConv?.foundPath,
+          repos: repoConvs.map((r) => ({
+            systemCode: r.systemCode,
+            systemName: r.systemName,
+            ...(r.repoPath ? { repoPath: r.repoPath } : {}),
+            content: r.content,
+          })),
         });
       } catch (err) {
         logAiChatError('Conventions resolution error', err);
@@ -1857,12 +1879,12 @@ Current Date: ${todayStr} (${now.format('dddd')}). Time: ${now.format('HH:mm')}.
 
 CRITICAL ANTI-HALLUCINATION RULES:
 1. NEVER GUESS, ASSUME, OR INVENT DATA.
-2. Every statement regarding tasks, projects, milestones, statuses, deadlines, logged work sessions, actual hours, planned allocations, capacity limits, notes, reminders, recurring schedules, or system sync state MUST be strictly grounded in concrete evidence returned by your tools or provided in context.
+2. Every statement regarding tasks, change requests, subsystems, statuses, deadlines, logged work sessions, actual hours, planned allocations, capacity limits, notes, reminders, recurring schedules, or system sync state MUST be strictly grounded in concrete evidence returned by your tools or provided in context.
 3. If the user asks about anything not present in the initial context (such as time spent, worklog history, daily schedule, running timer, notes, capacity, overdue items), YOU MUST CALL THE RELEVANT DATABASE TOOLS before answering.
 4. If a requested item or detail is missing, null, empty, or not recorded in the database, EXPLICITLY STATE THAT IT IS NOT RECORDED. Never extrapolate, approximate, or pretend data exists.
 5. When breaking down goals or proposing steps, output clear actionable bullet points that can be converted into checklist items.
 6. DIAGRAMS & FLOWCHARTS: When the user asks for a flowchart, workflow diagram, sequence diagram, architecture chart, or visual representation, or when visualizing processes/hierarchies, you CAN and SHOULD generate Mermaid.js code blocks using \`\`\`mermaid syntax (e.g. flowchart TD, sequenceDiagram, classDiagram, graph LR, etc.). TaskMate will automatically render interactive diagrams from these blocks.
-7. YOU HAVE FULL DATABASE MUTATION CAPABILITIES: You can create, update, reparent, or delete tasks, projects, milestones, planned allocations, work sessions, active timers, capacity rules/overrides, and notes using mutation tools. When the user asks you to perform an action or change anything in the app, call the appropriate action tool.${
+7. YOU HAVE FULL DATABASE MUTATION CAPABILITIES: You can create, update, reparent, or delete tasks, change requests, planned allocations, work sessions, active timers, capacity rules/overrides, and notes using mutation tools. When the user asks you to perform an action or change anything in the app, call the appropriate action tool.${
         turnAutoApprove
           ? `\n\n[AUTO-EXECUTION & REPORTING MODE ACTIVE]:
 The user has EXPLICITLY authorized automatic execution of mutations without confirmation prompts.
@@ -1880,7 +1902,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
 READ ONLY:
 This turn is read-only. You may retrieve knowledge, read local files, reason, compare, propose, and generate artifacts with \`generate_file\`, \`generate_pptx\`, or \`generate_image\`.
 Rules:
-1. NEVER mutate tasks, projects, milestones, timers, notes, capacity, document links, or any MCP-backed data. For change requests, propose a plan instead of executing it.
+1. NEVER mutate tasks, change requests, timers, notes, capacity, document links, or any MCP-backed data. For change requests, propose a plan instead of executing it.
 2. Use the \`retrieve_knowledge\` tool repeatedly to gather evidence. Keep each query short and focused (<= 200 characters): an entity name, an identifier, or a narrow topic phrase. Split broad questions into multiple focused queries instead of one long query.
 3. If a retrieval returns only entity names with no excerpts, retry using the entity name itself as the query.
 4. Read attached local files with \`read_file\` FIRST (offset/limit pagination) before answering about them.
@@ -2236,7 +2258,7 @@ Rules:
   const handleSaveStickyNote = async (content: string) => {
     try {
       const scopeType = currentScope.type;
-      const entityType = (scopeType === 'task' || scopeType === 'project' || scopeType === 'milestone') ? scopeType : undefined;
+      const entityType = (scopeType === 'task' || scopeType === 'cr' || scopeType === 'system') ? scopeType : undefined;
       await createNote(
         {
           entityType,

@@ -1,5 +1,5 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import type { Task, Project, Milestone, Note, NoteAttachment } from '../../types/models';
+import type { Task, ChangeRequest, System, Note, NoteAttachment } from '../../types/models';
 import { isLocalPath, normalizeLocalPath } from '../../utils/documentLinks';
 import { isTauriApp } from '../../utils/timerPopout';
 import { readNoteMarkdown } from '../../utils/noteBody';
@@ -96,59 +96,49 @@ export function serializeTaskContext(task: Task): string {
 }
 
 /**
- * Serializes a Project model into XML with structured markdown
+ * Serializes a ChangeRequest model into XML with structured markdown
  */
-export function serializeProjectContext(project: Project): string {
+export function serializeChangeRequestContext(cr: ChangeRequest): string {
   const lines: string[] = [];
-  lines.push(`<item_context type="project" id="${project.id}">`);
-  lines.push(`## Project: ${project.name}`);
-  if (project.description?.trim()) {
-    lines.push(`**Description:** ${project.description.trim()}`);
+  lines.push(`<item_context type="cr" id="${cr.id}">`);
+  lines.push(`## CR: ${cr.code} — ${cr.name}`);
+  if (cr.description?.trim()) {
+    lines.push(`**Description:** ${cr.description.trim()}`);
   }
-  lines.push(`- **Status:** ${project.status}`);
-  if (project.jiraEpicKey) {
-    lines.push(`- **Jira Epic:** ${project.jiraEpicKey}`);
+  lines.push(`- **Type:** ${cr.type}`);
+  lines.push(`- **Status:** ${cr.status}`);
+  if (cr.jiraEpicKey) {
+    lines.push(`- **Jira Epic:** ${cr.jiraEpicKey}`);
   }
-  if (project.opsOwners && project.opsOwners.length > 0) {
-    lines.push(`- **Ops Owners:** ${project.opsOwners.join(', ')}`);
+  if (cr.opsOwners && cr.opsOwners.length > 0) {
+    lines.push(`- **Ops Owners:** ${cr.opsOwners.join(', ')}`);
   }
-  if (project.businessAnalysts && project.businessAnalysts.length > 0) {
-    lines.push(`- **Business Analysts:** ${project.businessAnalysts.join(', ')}`);
+  if (cr.businessAnalysts && cr.businessAnalysts.length > 0) {
+    lines.push(`- **Business Analysts:** ${cr.businessAnalysts.join(', ')}`);
   }
-  if (project.deadline) {
-    lines.push(`- **Deadline:** ${project.deadline}`);
-  }
-  if (project.notes?.trim()) {
-    lines.push('\n### Project Notes');
-    lines.push(project.notes.trim());
+  if (cr.deadline) {
+    lines.push(`- **Deadline:** ${cr.deadline}`);
   }
   lines.push('</item_context>');
   return lines.join('\n');
 }
 
 /**
- * Serializes a Milestone model into XML with structured markdown
+ * Serializes a System (subsystem) model into XML with structured markdown
  */
-export function serializeMilestoneContext(milestone: Milestone): string {
+export function serializeSystemContext(system: System): string {
   const lines: string[] = [];
-  lines.push(`<item_context type="milestone" id="${milestone.id}">`);
-  lines.push(`## Milestone: ${milestone.name}`);
-  if (milestone.description?.trim()) {
-    lines.push(`**Description:** ${milestone.description.trim()}`);
+  lines.push(`<item_context type="system" id="${system.id}">`);
+  lines.push(`## System: ${system.code} — ${system.name}`);
+  if (system.description?.trim()) {
+    lines.push(`**Description:** ${system.description.trim()}`);
   }
-  lines.push(`- **Status:** ${milestone.status}`);
-  if (milestone.opsOwners && milestone.opsOwners.length > 0) {
-    lines.push(`- **Ops Owners:** ${milestone.opsOwners.join(', ')}`);
+  lines.push(`- **Type:** ${system.type}`);
+  if (system.parentId) {
+    lines.push(`- **Parent System ID:** ${system.parentId}`);
   }
-  if (milestone.businessAnalysts && milestone.businessAnalysts.length > 0) {
-    lines.push(`- **Business Analysts:** ${milestone.businessAnalysts.join(', ')}`);
-  }
-  if (milestone.deadline) {
-    lines.push(`- **Deadline:** ${milestone.deadline}`);
-  }
-  if (milestone.notes?.trim()) {
-    lines.push('\n### Milestone Notes');
-    lines.push(milestone.notes.trim());
+  if (system.remoteRepoPath) {
+    lines.push(`- **Remote Repo Path:** ${system.remoteRepoPath}`);
   }
   lines.push('</item_context>');
   return lines.join('\n');
@@ -182,8 +172,8 @@ export function serializeDocumentContext(doc: Note, snippet?: string): string {
 }
 
 export interface BuildItemContextPromptOptions {
-  entityType: 'task' | 'project' | 'milestone';
-  item: Task | Project | Milestone;
+  entityType: 'task' | 'cr' | 'system';
+  item: Task | ChangeRequest | System;
   db?: TaskPlannerDatabase | undefined;
   fileReader?: ((filePath: string, maxLines?: number) => Promise<string | null>) | undefined;
   charLimit?: number | undefined;
@@ -205,10 +195,10 @@ export async function buildItemContextPrompt(options: BuildItemContextPromptOpti
   let baseXml = '';
   if (entityType === 'task') {
     baseXml = serializeTaskContext(item as Task);
-  } else if (entityType === 'project') {
-    baseXml = serializeProjectContext(item as Project);
+  } else if (entityType === 'cr') {
+    baseXml = serializeChangeRequestContext(item as ChangeRequest);
   } else {
-    baseXml = serializeMilestoneContext(item as Milestone);
+    baseXml = serializeSystemContext(item as System);
   }
 
   // Strip closing tag to append additional sections before budget clamping
@@ -218,42 +208,45 @@ export async function buildItemContextPrompt(options: BuildItemContextPromptOpti
 
   const sections: string[] = [innerContent];
 
-  // Hierarchy relationships (child milestones & tasks for projects, parent for tasks/milestones)
+  // Hierarchy relationships (targets & tasks for a CR, parent CR/subsystem for a task)
   try {
-    if (entityType === 'project' && db.milestones && db.tasks) {
-      const milestones = await db.milestones.where('projectId').equals(item.id).toArray();
-      if (milestones.length > 0) {
-        sections.push(`### Milestones (${milestones.length})`);
-        for (const ms of milestones) {
-          sections.push(`- [${ms.status}] **${ms.name}**${ms.deadline ? ` (Deadline: ${ms.deadline})` : ''}`);
+    if (entityType === 'cr' && db.tasks) {
+      const cr = item as ChangeRequest;
+      const targetSystems = db.systems
+        ? (await db.systems.toArray()).filter((sys) => cr.targets.some((t) => t.systemId === sys.id))
+        : [];
+      if (targetSystems.length > 0) {
+        sections.push(`### Target Subsystems (${targetSystems.length})`);
+        for (const sys of targetSystems) {
+          sections.push(`- [${sys.type}] **${sys.code}** ${sys.name}`);
         }
       } else {
-        sections.push('### Milestones: 0');
+        sections.push('### Target Subsystems: 0');
       }
 
-      const tasks = await db.tasks.where('projectId').equals(item.id).toArray();
+      const tasks = await db.tasks.where('crId').equals(cr.id).toArray();
       const openTasks = tasks.filter((t) => t.status !== 'Done' && t.status !== 'Cancelled');
       sections.push(`### Tasks (${tasks.length} total, ${openTasks.length} open)`);
       for (const t of tasks) {
-        const msName = milestones.find((m) => m.id === t.milestoneId)?.name;
+        const sysName = targetSystems.find((sys) => sys.id === t.systemId)?.name;
         sections.push(
           `- [${t.status}] [${t.priority}] **${t.name}** (${t.progress}%)${
-            msName ? ` [Milestone: ${msName}]` : ''
+            sysName ? ` [Subsystem: ${sysName}]` : ''
           }${t.deadline ? ` (Deadline: ${t.deadline})` : ''}${t.jiraKey ? ` [Jira: ${t.jiraKey}]` : ''}`
         );
       }
-    } else if (entityType === 'milestone') {
-      const milestone = item as Milestone;
-      if (milestone.projectId && db.projects) {
-        const proj = await db.projects.get(milestone.projectId);
-        if (proj) {
-          sections.push(`- **Parent Project:** ${proj.name} (Status: ${proj.status})`);
+    } else if (entityType === 'system') {
+      const system = item as System;
+      if (system.parentId && db.systems) {
+        const parent = await db.systems.get(system.parentId);
+        if (parent) {
+          sections.push(`- **Parent System:** ${parent.code} ${parent.name} (Type: ${parent.type})`);
         }
       }
       if (db.tasks) {
-        const tasks = await db.tasks.where('milestoneId').equals(milestone.id).toArray();
+        const tasks = await db.tasks.where('systemId').equals(system.id).toArray();
         const openTasks = tasks.filter((t) => t.status !== 'Done' && t.status !== 'Cancelled');
-        sections.push(`### Tasks in this Milestone (${tasks.length} total, ${openTasks.length} open)`);
+        sections.push(`### Tasks in this Subsystem (${tasks.length} total, ${openTasks.length} open)`);
         for (const t of tasks) {
           sections.push(
             `- [${t.status}] [${t.priority}] **${t.name}** (${t.progress}%)${
@@ -264,16 +257,19 @@ export async function buildItemContextPrompt(options: BuildItemContextPromptOpti
       }
     } else if (entityType === 'task') {
       const task = item as Task;
-      if (task.projectId && db.projects) {
-        const proj = await db.projects.get(task.projectId);
-        if (proj) {
-          sections.push(`- **Project:** ${proj.name}`);
+      if (task.crId && db.changeRequests) {
+        const cr = await db.changeRequests.get(task.crId);
+        if (cr) {
+          sections.push(`- **CR:** ${cr.code} ${cr.name} (Type: ${cr.type}, Status: ${cr.status})`);
         }
       }
-      if (task.milestoneId && db.milestones) {
-        const ms = await db.milestones.get(task.milestoneId);
-        if (ms) {
-          sections.push(`- **Milestone:** ${ms.name}`);
+      if (task.systemId && db.systems) {
+        const sys = await db.systems.get(task.systemId);
+        if (sys) {
+          sections.push(`- **Subsystem:** ${sys.code} ${sys.name} (Type: ${sys.type})`);
+          if (sys.remoteRepoPath) {
+            sections.push(`- **Remote Repo Path:** ${sys.remoteRepoPath}`);
+          }
         }
       }
     }
@@ -384,21 +380,21 @@ export async function buildGlobalContextPrompt(db: TaskPlannerDatabase = default
   ];
 
   try {
-    const projects = db.projects ? await db.projects.toArray() : [];
-    const openProjects = projects.filter((p) => p.status !== 'Done' && p.status !== 'Cancelled');
+    const changeRequests = db.changeRequests ? await db.changeRequests.toArray() : [];
+    const openCrs = changeRequests.filter((c) => c.status !== 'Done' && c.status !== 'Cancelled');
     const tasks = db.tasks ? await db.tasks.toArray() : [];
     const openTasks = tasks.filter((t) => t.status !== 'Done' && t.status !== 'Cancelled');
 
-    sections.push(`- **Projects:** ${projects.length} total (${openProjects.length} active)`);
+    sections.push(`- **Change Requests:** ${changeRequests.length} total (${openCrs.length} active)`);
     sections.push(`- **Tasks:** ${tasks.length} total (${openTasks.length} open)`);
 
-    if (projects.length > 0) {
-      sections.push('\n### Active Projects');
-      for (const p of openProjects.slice(0, 10)) {
-        const pTasks = tasks.filter((t) => t.projectId === p.id);
+    if (changeRequests.length > 0) {
+      sections.push('\n### Active Change Requests');
+      for (const c of openCrs.slice(0, 10)) {
+        const crTasks = tasks.filter((t) => t.crId === c.id);
         sections.push(
-          `- **${p.name}** [${p.status}] (${pTasks.length} tasks)${
-            p.deadline ? ` - Deadline: ${p.deadline}` : ''
+          `- **${c.code} ${c.name}** [${c.status}] (${crTasks.length} tasks)${
+            c.deadline ? ` - Deadline: ${c.deadline}` : ''
           }`
         );
       }
@@ -413,20 +409,22 @@ export async function buildGlobalContextPrompt(db: TaskPlannerDatabase = default
 
 export interface ExtractedMentions {
   taskIds: string[];
-  projectIds: string[];
+  crIds: string[];
+  systemIds: string[];
   filePaths: string[];
   docIds: string[];
 }
 
 /**
- * Extracts task, project, file, and document entity references from text containing mentions.
- * Supports @[Task Name](task:<id>), #[Project Name](project:<id>),
- * [file.txt](file:<path>), @file:<path>, @task:<id>, #project:<id>,
+ * Extracts task, CR, system, file, and document entity references from text containing mentions.
+ * Supports @[Task Name](task:<id>), #[CR Code](cr:<id>), #[System Code](system:<id>),
+ * [file.txt](file:<path>), @file:<path>, @task:<id>, #cr:<id>, #system:<id>,
  * @doc:<id>, and @[Doc Title](doc:<id>).
  */
 export function extractMentionedEntityIds(text: string): ExtractedMentions {
   const taskIds = new Set<string>();
-  const projectIds = new Set<string>();
+  const crIds = new Set<string>();
+  const systemIds = new Set<string>();
   const filePaths = new Set<string>();
   const docIds = new Set<string>();
 
@@ -437,10 +435,16 @@ export function extractMentionedEntityIds(text: string): ExtractedMentions {
     if (id) taskIds.add(id);
   }
 
-  const projRegex = /#?\[(?:[^\]]*)\]\(project:([a-zA-Z0-9_-]+)\)|#project:([a-zA-Z0-9_-]+)/g;
-  while ((match = projRegex.exec(text)) !== null) {
+  const crRegex = /#?\[(?:[^\]]*)\]\(cr:([a-zA-Z0-9_-]+)\)|#cr:([a-zA-Z0-9_-]+)/g;
+  while ((match = crRegex.exec(text)) !== null) {
     const id = match[1] || match[2];
-    if (id) projectIds.add(id);
+    if (id) crIds.add(id);
+  }
+
+  const systemRegex = /#?\[(?:[^\]]*)\]\(system:([a-zA-Z0-9_-]+)\)|#system:([a-zA-Z0-9_-]+)/g;
+  while ((match = systemRegex.exec(text)) !== null) {
+    const id = match[1] || match[2];
+    if (id) systemIds.add(id);
   }
 
   const fileRegex = /(?:@?\[(?:[^\]]*)\]\(file:([^)]+)\)|@file:([^\s]+))/g;
@@ -457,7 +461,8 @@ export function extractMentionedEntityIds(text: string): ExtractedMentions {
 
   return {
     taskIds: Array.from(taskIds),
-    projectIds: Array.from(projectIds),
+    crIds: Array.from(crIds),
+    systemIds: Array.from(systemIds),
     filePaths: Array.from(filePaths),
     docIds: Array.from(docIds),
   };
