@@ -9,8 +9,8 @@ import {
   type SdlcSourceRef,
 } from '../../../../services/wizard/sourceMerge';
 
-const projectId = '22222222-2222-4222-8222-222222222222';
-const otherProjectId = '99999999-9999-4999-8999-999999999999';
+const crId = '22222222-2222-4222-8222-222222222222';
+const otherCrId = '99999999-9999-4999-8999-999999999999';
 
 describe('StepInputDocsModal and NoteSourcePickerModal', () => {
   beforeEach(async () => {
@@ -22,12 +22,12 @@ describe('StepInputDocsModal and NoteSourcePickerModal', () => {
         id: '11111111-1111-4111-8111-000000000001',
         title: 'PL01 Yêu cầu Core Banking',
         body: '# Yêu cầu\n\nKhách hàng VIP được giảm 50% phí chuyển khoản.',
-        entityType: 'project',
-        entityId: projectId,
+        entityType: 'cr',
+        entityId: crId,
         isPinned: false,
         sdlcArtifact: {
           kind: 'PL02',
-          projectId,
+          changeRequestId: crId,
           threadId: '33333333-3333-4333-8333-333333333333',
           sessionId: '44444444-4444-4444-8444-444444444444',
           version: 2,
@@ -44,12 +44,12 @@ describe('StepInputDocsModal and NoteSourcePickerModal', () => {
         id: '11111111-1111-4111-8111-000000000002',
         title: 'PL02 Đặc tả API Chuyển tiền',
         body: '# API Spec\n\nEndpoint POST /api/transfer. Hạn mức tối đa 500 triệu.',
-        entityType: 'project',
-        entityId: projectId,
+        entityType: 'cr',
+        entityId: crId,
         isPinned: false,
         sdlcArtifact: {
           kind: 'PL02',
-          projectId,
+          changeRequestId: crId,
           threadId: '33333333-3333-4333-8333-333333333333',
           sessionId: '44444444-4444-4444-8444-444444444444',
           version: 1,
@@ -66,8 +66,8 @@ describe('StepInputDocsModal and NoteSourcePickerModal', () => {
         id: '11111111-1111-4111-8111-000000000003',
         title: 'Quy định bảo mật chung hệ thống',
         body: '# Security Guideline\n\nMọi request phải có JWT token và timestamp.',
-        entityType: 'project',
-        entityId: otherProjectId,
+        entityType: 'cr',
+        entityId: otherCrId,
         isPinned: false,
         createdAt: '2026-10-30T00:00:00.000Z',
         updatedAt: '2026-10-30T03:00:00.000Z',
@@ -82,7 +82,7 @@ describe('StepInputDocsModal and NoteSourcePickerModal', () => {
         <NoteSourcePickerModal
           open={true}
           title="Chọn nguồn yêu cầu nghiệp vụ (PL01)"
-          projectId={projectId}
+          crId={crId}
           initialSelectedIds={[]}
           onApply={onApply}
           onClose={vi.fn()}
@@ -111,7 +111,7 @@ describe('StepInputDocsModal and NoteSourcePickerModal', () => {
         <NoteSourcePickerModal
           open={true}
           title="Chọn nguồn yêu cầu nghiệp vụ (PL01)"
-          projectId={projectId}
+          crId={crId}
           initialSelectedIds={[]}
           onApply={vi.fn()}
           onClose={vi.fn()}
@@ -137,7 +137,7 @@ describe('StepInputDocsModal and NoteSourcePickerModal', () => {
         <NoteSourcePickerModal
           open={true}
           title="Chọn nguồn yêu cầu nghiệp vụ (PL01)"
-          projectId={projectId}
+          crId={crId}
           initialSelectedIds={[]}
           onApply={handleApply}
           onClose={vi.fn()}
@@ -187,7 +187,7 @@ describe('StepInputDocsModal and NoteSourcePickerModal', () => {
         <NoteSourcePickerModal
           open={true}
           title="Chọn nguồn yêu cầu nghiệp vụ (PL01)"
-          projectId={projectId}
+          crId={crId}
           initialSelectedIds={[]}
           onApply={vi.fn()}
           onClose={vi.fn()}
@@ -222,7 +222,7 @@ describe('StepInputDocsModal and NoteSourcePickerModal', () => {
       render(
         <StepInputDocsModal
           open={true}
-          project={{ id: projectId, name: 'TaskMate Core' }}
+          changeRequest={{ id: crId, name: 'TaskMate Core', code: 'CR-CORE-01' }}
           currentUser="Developer"
           today="2026-10-30"
           onSubmit={handleSubmit}

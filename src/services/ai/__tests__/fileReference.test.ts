@@ -14,7 +14,7 @@ describe('AI File Reference & Grounding', () => {
 
       expect(result.filePaths).toEqual(['/Users/test/docs/spec.md']);
       expect(result.taskIds).toEqual([]);
-      expect(result.projectIds).toEqual([]);
+      expect(result.crIds).toEqual([]);
     });
 
     it('extracts local file references with @file: syntax', () => {
@@ -25,12 +25,12 @@ describe('AI File Reference & Grounding', () => {
       expect(result.filePaths).toContain('/etc/hosts');
     });
 
-    it('extracts mixed task, project, and file mentions simultaneously', () => {
-      const text = 'Nối [Task 1](task:t-123) với [Project A](project:p-456) và tham khảo [design.pdf](file:/docs/design.pdf)';
+    it('extracts mixed task, CR, and file mentions simultaneously', () => {
+      const text = 'Nối [Task 1](task:t-123) với [CR A](cr:p-456) và tham khảo [design.pdf](file:/docs/design.pdf)';
       const result = extractMentionedEntityIds(text);
 
       expect(result.taskIds).toEqual(['t-123']);
-      expect(result.projectIds).toEqual(['p-456']);
+      expect(result.crIds).toEqual(['p-456']);
       expect(result.filePaths).toEqual(['/docs/design.pdf']);
     });
     it('deduplicates multiple mentions of the same file path', () => {
