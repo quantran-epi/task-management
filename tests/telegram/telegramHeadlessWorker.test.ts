@@ -2379,4 +2379,158 @@ describe('Telegram Headless Worker', () => {
       }
     });
   });
+
+  describe('Admin Notification on Inbound User Chat', () => {
+    it('notifies all active admins when a non-admin active user sends a message', async () => {
+      await upsertWhitelistUser(
+        { chatId: 'admin_1', name: 'Admin One', status: 'active', dataScope: 'full', isAdmin: true },
+        testDb
+      );
+      await upsertWhitelistUser(
+        { chatId: 'admin_2', name: 'Admin Two', status: 'active', dataScope: 'full', isAdmin: true },
+        testDb
+      );
+      await upsertWhitelistUser(
+        { chatId: 'user_active', name: 'Nguyen Van A', status: 'active', dataScope: 'full' },
+        testDb
+      );
+
+      const adminNotifications: Array<{ chatId: string; text: string }> = [];
+      const mockSendDirect = vi.fn(async (_tok: string, chatId: string, text: string) => {
+        adminNotifications.push({ chatId, text });
+      });
+
+      await processTelegramInboundMessage(
+        {
+          update_id: 601,
+          message_id: 2001,
+          chat_id: 'user_active',
+          from_name: 'Nguyen Van A',
+          text: '/help',
+          date: 1730000000,
+        },
+        'bot_token_xyz',
+        testDb,
+        vi.fn(async () => {}),
+        vi.fn(async () => {}),
+        mockSendDirect
+      );
+
+      // Both active admins should receive the notification
+      expect(mockSendDirect).toHaveBeenCalledTimes(2);
+      expect(adminNotifications.map((n) => n.chatId)).toEqual(['admin_1', 'admin_2']);
+
+      const alert = adminNotifications[0]!.text;
+      expect(alert).toContain('Tin nhắn mới từ người dùng');
+      expect(alert).toContain('Nguyen Van A');
+      expect(alert).toContain('user_active');
+      expect(alert).toContain('Đang hoạt động (Active)');
+      expect(alert).toContain('/help');
+      expect(alert).toContain('2024-10-27');
+    });
+
+    it('notifies admin with first-time badge when a non-whitelisted user chats for the first time', async () => {
+      await upsertWhitelistUser(
+        { chatId: 'admin_main', name: 'Main Admin', status: 'active', dataScope: 'full', isAdmin: true },
+        testDb
+      );
+
+      const adminNotifications: Array<{ chatId: string; text: string }> = [];
+      const mockSendDirect = vi.fn(async (_tok: string, chatId: string, text: string) => {
+        adminNotifications.push({ chatId, text });
+      });
+
+      await processTelegramInboundMessage(
+        {
+          update_id: 602,
+          message_id: 2002,
+          chat_id: 'new_guest_1',
+          from_name: 'Guest User',
+          text: 'Xin chào, mở quyền cho tôi với',
+          date: 1730000500,
+        },
+        'bot_token_xyz',
+        testDb,
+        vi.fn(async () => {}),
+        vi.fn(async () => {}),
+        mockSendDirect
+      );
+
+      expect(mockSendDirect).toHaveBeenCalledTimes(1);
+      expect(adminNotifications[0]?.chatId).toBe('admin_main');
+
+      const alert = adminNotifications[0]!.text;
+      expect(alert).toContain('Người dùng mới gửi tin nhắn lần đầu');
+      expect(alert).toContain('Guest User');
+      expect(alert).toContain('new_guest_1');
+      expect(alert).toContain('Người dùng mới - Chờ duyệt (Pending)');
+      expect(alert).toContain('Xin chào, mở quyền cho tôi với');
+    });
+
+    it('does NOT notify admin when the message sender is an admin themselves', async () => {
+      await upsertWhitelistUser(
+        { chatId: 'admin_self', name: 'Self Admin', status: 'active', dataScope: 'full', isAdmin: true },
+        testDb
+      );
+
+      const mockSendDirect = vi.fn(async () => {});
+
+      await processTelegramInboundMessage(
+        {
+          update_id: 603,
+          message_id: 2003,
+          chat_id: 'admin_self',
+          from_name: 'Self Admin',
+          text: '/help',
+          date: 1730001000,
+        },
+        'bot_token_xyz',
+        testDb,
+        vi.fn(async () => {}),
+        vi.fn(async () => {}),
+        mockSendDirect
+      );
+
+      expect(mockSendDirect).not.toHaveBeenCalled();
+    });
+
+    it('isolates notification failure so user message handling still succeeds', async () => {
+      await upsertWhitelistUser(
+        { chatId: 'admin_err', name: 'Admin Err', status: 'active', dataScope: 'full', isAdmin: true },
+        testDb
+      );
+      await upsertWhitelistUser(
+        { chatId: 'user_regular', name: 'User Regular', status: 'active', dataScope: 'full' },
+        testDb
+      );
+
+      const mockSendDirect = vi.fn(async () => {
+        throw new Error('Telegram network outage');
+      });
+      const userReplies: string[] = [];
+      const mockSendReply = vi.fn(async (_tok: string, _cid: string, text: string) => {
+        userReplies.push(text);
+      });
+
+      await processTelegramInboundMessage(
+        {
+          update_id: 604,
+          message_id: 2004,
+          chat_id: 'user_regular',
+          from_name: 'User Regular',
+          text: '/reset',
+          date: 1730002000,
+        },
+        'bot_token_xyz',
+        testDb,
+        mockSendReply,
+        vi.fn(async () => {}),
+        mockSendDirect
+      );
+
+      // User still received the reply despite admin notification throwing
+      expect(userReplies.length).toBe(1);
+      expect(userReplies[0]).toContain('Đã đặt lại phiên trò chuyện');
+    });
+  });
 });

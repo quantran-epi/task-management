@@ -3,6 +3,7 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import {
   getTelegramSettings,
   saveTelegramSettings,
+  getWhitelist,
   checkAndConsumeQuota,
   checkAndConsumeCommandQuota,
   logTelegramSession,
@@ -588,12 +589,87 @@ export function clearTelegramProcessedUpdateIdsForTesting(): void {
   processedUpdateIds.clear();
 }
 
+export async function notifyAdminsOnInboundMessage(
+  event: TelegramInboundEvent,
+  botToken: string,
+  db: TaskPlannerDatabase,
+  sendDirectFn: (token: string, chatId: string, text: string) => Promise<void>
+): Promise<void> {
+  if (!botToken || !botToken.trim()) return;
+
+  try {
+    const whitelist = await getWhitelist(db);
+    const caller = whitelist.find((u) => u.chatId === event.chat_id);
+
+    // If caller is an active admin, don't send self-notification
+    if (caller?.isAdmin && caller.status === 'active') {
+      return;
+    }
+
+    const activeAdmins = whitelist.filter(
+      (u) => u.isAdmin && u.status === 'active' && u.chatId !== event.chat_id
+    );
+
+    if (activeAdmins.length === 0) {
+      return;
+    }
+
+    const isFirstTime = !caller;
+    let statusBadge = '🆕 Người dùng mới - Chờ duyệt (Pending)';
+    if (caller) {
+      if (caller.status === 'active') {
+        statusBadge = '✅ Đang hoạt động (Active)';
+      } else if (caller.status === 'blocked') {
+        statusBadge = '⛔ Đã bị khóa (Blocked)';
+      } else {
+        statusBadge = '⏳ Đang chờ duyệt (Pending)';
+      }
+    }
+
+    const timeStr = event.date
+      ? dayjs(event.date * 1000).format('YYYY-MM-DD HH:mm:ss')
+      : dayjs().format('YYYY-MM-DD HH:mm:ss');
+
+    const header = isFirstTime
+      ? '🆕 **[TaskMate Bot] Người dùng mới gửi tin nhắn lần đầu**'
+      : '🔔 **[TaskMate Bot] Tin nhắn mới từ người dùng**';
+
+    const textContent =
+      event.text && event.text.trim() ? event.text.trim() : '*(Tin nhắn không có văn bản)*';
+
+    const lines = [
+      header,
+      '',
+      `👤 **Người gửi:** ${event.from_name || 'Không rõ'}`,
+      `🆔 **Chat ID:** \`${event.chat_id}\``,
+      `⏰ **Thời điểm:** ${timeStr}`,
+      `📊 **Trạng thái:** ${statusBadge}`,
+      '',
+      `💬 **Nội dung:**`,
+      `> ${textContent}`,
+    ];
+
+    const notificationText = lines.join('\n');
+
+    for (const admin of activeAdmins) {
+      try {
+        await sendDirectFn(botToken, admin.chatId, notificationText);
+      } catch (err) {
+        console.warn(`[telegramWorker] Failed to notify admin ${admin.chatId}:`, err);
+      }
+    }
+  } catch (err) {
+    console.warn('[telegramWorker] Error notifying admins on inbound message:', err);
+  }
+}
+
 export async function processTelegramInboundMessage(
   event: TelegramInboundEvent,
   botToken: string,
   db: TaskPlannerDatabase = defaultDb,
   sendReplyFn?: (token: string, chatId: string, text: string, replyTo?: number) => Promise<void>,
-  sendActionFn?: (token: string, chatId: string, action: string) => Promise<void>
+  sendActionFn?: (token: string, chatId: string, action: string) => Promise<void>,
+  sendDirectFn?: (token: string, chatId: string, text: string) => Promise<void>
 ): Promise<void> {
   const { update_id, chat_id, from_name, text, message_id } = event;
 
@@ -637,6 +713,10 @@ export async function processTelegramInboundMessage(
 
   const sendReply = sendReplyFn || defaultSendReply;
   const sendAction = sendActionFn || defaultSendAction;
+  const sendDirect = sendDirectFn || sendTelegramDirectMessage;
+
+  // Notify all active admins about incoming message from non-admin users
+  await notifyAdminsOnInboundMessage(event, botToken, db, sendDirect);
 
   const trimmedText = (text || '').trim();
   const lowerText = trimmedText.toLowerCase();

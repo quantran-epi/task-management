@@ -38,6 +38,8 @@ import type { StepChatPanelHandle } from '../components/sdlc/chat/StepChatPanel'
 import { generateId } from '../utils/uuid';
 import type { ChatMessage } from '../types/models';
 import { readArtifactSnapshot, type ArtifactPatchProposal, type ArtifactToolContext, type ArtifactToolKind } from '../services/ai/sdlcArtifactTools';
+import { getGlobalConventions, loadRepoConventions, type RepoConventionResult } from '../services/conventionService';
+import type { ConventionsSummaryProps } from '../components/sdlc/common/ConventionsSummaryCard';
 
 export interface ProjectSdlcViewProps {
   projectId: string;
@@ -110,6 +112,58 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   const project = useLiveQuery(() => db.projects.get(projectId), [projectId, db]);
   const crList = useLiveQuery(() => listCrs(projectId, db), [projectId, db]) ?? [];
   const [readOnlySolution, setReadOnlySolution] = useState(false);
+
+  // Conventions state (D-07, D-08, D-13)
+  const [globalConventions, setGlobalConventions] = useState<string>('');
+  const [repoConventions, setRepoConventions] = useState<RepoConventionResult | null>(null);
+  const [conventionsLoading, setConventionsLoading] = useState<boolean>(false);
+  const [sshStatus, setSshStatus] = useState<'connected' | 'not_linked' | 'error' | 'file_not_found'>('not_linked');
+
+  const fetchAllConventions = useCallback(async () => {
+    setConventionsLoading(true);
+    try {
+      const globalText = await getGlobalConventions(db);
+      setGlobalConventions(globalText);
+
+      try {
+        const repoRes = await loadRepoConventions(projectId, db);
+        if (repoRes) {
+          setRepoConventions(repoRes);
+          setSshStatus('connected');
+        } else {
+          setRepoConventions(null);
+          // Distinguish not linked vs file not found
+          const bindingRow = await db.settings.get(`project_repo_ssh_binding:${projectId}`);
+          if (bindingRow?.value) {
+            setSshStatus('file_not_found');
+          } else {
+            setSshStatus('not_linked');
+          }
+        }
+      } catch {
+        setRepoConventions(null);
+        setSshStatus('error');
+      }
+    } catch {
+      setGlobalConventions('');
+    } finally {
+      setConventionsLoading(false);
+    }
+  }, [projectId, db]);
+
+  useEffect(() => {
+    void fetchAllConventions();
+  }, [fetchAllConventions]);
+
+  const conventionsSummary = useMemo<ConventionsSummaryProps>(() => ({
+    globalText: globalConventions,
+    repoText: repoConventions?.content,
+    repoPath: repoConventions?.foundPath,
+    loadedAt: repoConventions?.loadedAt,
+    sshStatus,
+    loading: conventionsLoading,
+    onRefresh: fetchAllConventions,
+  }), [globalConventions, repoConventions, sshStatus, conventionsLoading, fetchAllConventions]);
   // D-06: a historical card pins the owning step view to that exact approved version.
   const [viewedVersion, setViewedVersion] = useState<
     { kind: SdlcArtifactKind; version: number; content: string; title: string } | undefined
@@ -698,6 +752,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
             initialMetadata={workflowState?.metadata}
             initialPl01={workflowState?.artifacts.pl01?.content}
             initialPl02={workflowState?.artifacts.pl02?.content}
+            conventionsSummary={conventionsSummary}
             onStartIntake={handleStartIntake}
             db={db}
           />
@@ -714,6 +769,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
             pl01Content={workflowState?.artifacts.pl01?.content}
             pl02Content={workflowState?.artifacts.pl02?.content}
             metadata={workflowState?.metadata}
+            conventionsSummary={conventionsSummary}
             hasIntakeBaseline={Boolean(
               workflowState?.artifacts.pl01 && workflowState?.artifacts.pl02
             )}
@@ -932,6 +988,11 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
           onArtifactCta={(eventId) => {
             const event = artifactEvents.find((event) => event.id === eventId);
             if (event) handleArtifactOpen(eventId, event.readOnly === true);
+          }}
+          conventions={{
+            global: globalConventions,
+            repo: repoConventions?.content,
+            repoPath: repoConventions?.foundPath,
           }}
           db={db}
         />

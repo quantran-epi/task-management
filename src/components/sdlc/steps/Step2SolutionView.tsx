@@ -23,6 +23,7 @@ import { saveHubSolution } from '../../../services/wizard/hubSolution';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
 import type { SdlcArtifactRef, SdlcStepId, SdlcWorkflowMetadata } from '../../../services/wizard/workflowSchemas';
 import { formatGuardMessage } from '../../../services/wizard/workflowGuards';
+import { ConventionsSummaryCard, type ConventionsSummaryProps } from '../common/ConventionsSummaryCard';
 
 export interface Step2SolutionViewProps {
   projectId: string;
@@ -33,6 +34,7 @@ export interface Step2SolutionViewProps {
   pl01Content?: string | undefined;
   pl02Content?: string | undefined;
   metadata?: SdlcWorkflowMetadata | undefined;
+  conventionsSummary?: ConventionsSummaryProps | undefined;
   /** Authoritative workflow-state answer; falls back to PL01/PL02 text when absent. */
   hasIntakeBaseline?: boolean | undefined;
   /** Navigates to the step that supplies the missing prerequisite (D-20). */
@@ -57,6 +59,7 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
   pl01Content = '',
   pl02Content = '',
   metadata,
+  conventionsSummary,
   hasIntakeBaseline,
   onNavigateToStep,
   readOnly = false,
@@ -164,6 +167,10 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 14 }}>
+      {conventionsSummary && (
+        <ConventionsSummaryCard {...conventionsSummary} />
+      )}
+
       {/* Header Toolbar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <Space size={12} wrap style={{ alignItems: 'center' }}>

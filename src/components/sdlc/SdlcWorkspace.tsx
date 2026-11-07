@@ -43,6 +43,11 @@ export interface SdlcWorkspaceProps {
   artifactToolContext?: ArtifactToolContext | undefined;
   onApplyArtifactPatch?: ((proposal: ArtifactPatchProposal, decision: ChatMessage) => Promise<void>) | undefined;
   draftHashes?: Partial<Record<ArtifactToolKind, string>> | undefined;
+  conventions?: {
+    global?: string | undefined;
+    repo?: string | undefined;
+    repoPath?: string | undefined;
+  } | undefined;
 }
 
 export const SdlcWorkspace: React.FC<SdlcWorkspaceProps> = ({
@@ -64,6 +69,7 @@ export const SdlcWorkspace: React.FC<SdlcWorkspaceProps> = ({
   artifactToolContext,
   onApplyArtifactPatch,
   draftHashes,
+  conventions,
 }) => {
   const { token } = theme.useToken();
   const chatPaneId = React.useId();
@@ -164,6 +170,7 @@ export const SdlcWorkspace: React.FC<SdlcWorkspaceProps> = ({
           {...(onArtifactCta ? { onArtifactCta } : {})}
           {...(artifactToolContext ? { artifactToolContext } : {})}
           {...(onApplyArtifactPatch ? { onApplyArtifactPatch } : {})}
+          {...(conventions ? { conventions } : {})}
           db={db}
         />
       </div>

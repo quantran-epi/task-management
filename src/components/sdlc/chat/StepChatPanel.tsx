@@ -70,6 +70,11 @@ export interface StepChatPanelProps {
   onArtifactCta?: ((eventId: string) => void) | undefined;
   artifactToolContext?: ArtifactToolContext | undefined;
   onApplyArtifactPatch?: ((proposal: ArtifactPatchProposal, decision: ChatMessage) => Promise<void>) | undefined;
+  conventions?: {
+    global?: string | undefined;
+    repo?: string | undefined;
+    repoPath?: string | undefined;
+  } | undefined;
 }
 
 export interface StepChatPanelHandle {
@@ -161,6 +166,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   onArtifactCta,
   artifactToolContext,
   onApplyArtifactPatch,
+  conventions,
   db = defaultDb,
 }, ref) => {
   const { token } = theme.useToken();
@@ -378,6 +384,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
           intent: patchIntent ? 'patch' : artifact ? 'artifact' : 'qa',
           ...(artifact ? { artifact } : {}),
           grounding: groundingText,
+          ...(conventions ? { conventions } : {}),
           dynamicReadOnlyToolNames,
           availableToolNames: tools.map((tool) => normalizeToolName(tool.function.name)),
           metadata: { cr: crId },

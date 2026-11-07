@@ -26,12 +26,14 @@ import type { SdlcWorkflowMetadata } from '../../../services/wizard/workflowSche
 import type { Note } from '../../../types/models';
 import { VirtualizedList } from '../../../workbench/virtual/VirtualizedList';
 import dayjs from 'dayjs';
+import { ConventionsSummaryCard, type ConventionsSummaryProps } from '../common/ConventionsSummaryCard';
 
 export interface Step1IntakeViewProps {
   projectId: string;
   initialMetadata?: Partial<SdlcWorkflowMetadata> | undefined;
   initialPl01?: string | undefined;
   initialPl02?: string | undefined;
+  conventionsSummary?: ConventionsSummaryProps | undefined;
   onStartIntake: (
     metadata: SdlcWorkflowMetadata,
     pl01Content: string,
@@ -45,6 +47,7 @@ export const Step1IntakeView: React.FC<Step1IntakeViewProps> = ({
   initialMetadata,
   initialPl01 = '',
   initialPl02 = '',
+  conventionsSummary,
   onStartIntake,
   db = defaultDb,
 }) => {
@@ -129,6 +132,10 @@ export const Step1IntakeView: React.FC<Step1IntakeViewProps> = ({
 
   return (
     <div style={{ maxWidth: 880, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {conventionsSummary && (
+        <ConventionsSummaryCard {...conventionsSummary} />
+      )}
+
       <div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Typography.Title level={4} style={{ margin: 0 }}>
