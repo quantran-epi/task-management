@@ -25,19 +25,19 @@ See: .planning/PROJECT.md (updated 2026-11-03)
 ## Current Position
 
 Phase: 31 (organization-conventions-in-the-solution-pipeline) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
-Last activity: 2026-11-07 -- Phase 31 execution started
+Last activity: 2026-11-07 -- Plan 31-03 completed
 
 Phase sequence: 26 → 27 → 28 → 29 → 29.1 → 30 → 31
 (28 is independent of 26/27; 31 depends on 26 and 27.)
 
 ## Session Continuity
 
-Last session: 2026-11-07T02:28:03.302Z
-Resume file: .planning/phases/31-organization-conventions-in-the-solution-pipeline/31-CONTEXT.md
+Last session: 2026-11-07T09:35:00.000Z
+Resume file: .planning/phases/31-organization-conventions-in-the-solution-pipeline/31-04-PLAN.md
 
-Progress: [████░░░░░░] 45%
+Progress: [█████░░░░░] 50%
 
 ## Milestone v1.3 Map
 
@@ -77,6 +77,8 @@ Progress: [████░░░░░░] 45%
 |------|----------|-------|-------|
 | Phase 30 P03 | 9min | 2 tasks | 2 files |
 | Phase 31 P01 | 10m | 2 tasks | 4 files |
+| Phase 31 P02 | 12m | 2 tasks | 3 files |
+| Phase 31 P03 | 10m | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -99,3 +101,8 @@ Progress: [████░░░░░░] 45%
 - [Phase ?]: D-02: GlobalConventionsCard embedded inside SDLC / AI tab of SettingsView
 - [Phase ?]: D-03: Setting key complies with isSafeBackupSetting whitelist, included in encrypted backups
 - [Phase ?]: D-04: Empty state returns empty string without generating default/fabricated text
+- [Phase 31]: D-09: Conventions segment placed between toolPolicy and fewShot layers inside untrusted delimiters
+- [Phase 31]: D-10: Global conventions precede repository conventions in prompt segment
+- [Phase 31]: D-11: Mandatory CONVENTIONS_CONFLICT_POLICY requires AI to cite both sources and stop for user resolution
+- [Phase 31]: D-12: Entire convention document retained without character caps or truncation
+- [Phase 31]: D-13: ConventionsSummaryCard renders on Step 1 and Step 2 with manual refresh and detail modal

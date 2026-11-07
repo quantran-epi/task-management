@@ -760,7 +760,7 @@ Plans:
 5. The intake step shows which conventions are in effect (global present/absent, repository present/absent, last-read time) before the solution is generated.
 6. A generated SOLUTION observably follows an in-effect convention the user never restated — proven by an exemplar test that asserts the mandated rule appears in the output.
 
-**Plans:** 2/4 plans executed
+**Plans:** 3/4 plans executed
 **UI hint**: yes
 
 Plans:
@@ -775,7 +775,7 @@ Plans:
 
 **Wave 3** *(depends on 31-02 and Phase 26 composer; edits `sdlcPromptComposer.ts` and `ProjectSdlcView.tsx`)*
 
-- [ ] 31-03-PLAN.md — Convention prompt segment (global → repo → conflict rule), intake visibility of in-effect sources
+- [x] 31-03-PLAN.md — Convention prompt segment (global → repo → conflict rule), intake visibility of in-effect sources
 
 **Wave 4** *(depends on 31-03)*
 
