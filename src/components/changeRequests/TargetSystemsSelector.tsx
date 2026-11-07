@@ -4,6 +4,7 @@ import { FolderOutlined, BranchesOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { System, SystemType } from '../../types/models';
+import { isLogicalParent, isSubsystem } from '../../db/repositories/systemRepo';
 
 export interface TargetSystemsSelectorProps {
   value?: string[];
@@ -12,6 +13,8 @@ export interface TargetSystemsSelectorProps {
   style?: React.CSSProperties;
   db?: TaskPlannerDatabase;
   disabled?: boolean;
+  /** Subsystem ids pre-selected by the caller (D-34 soft lock) — marked, still removable. */
+  preselectedIds?: string[];
 }
 
 interface TreeNode {
@@ -46,21 +49,48 @@ export const TargetSystemsSelector: React.FC<TargetSystemsSelectorProps> = ({
   style,
   db = defaultDb,
   disabled = false,
+  preselectedIds = [],
 }) => {
   const allSystems = useLiveQuery(() => db.systems.toArray(), [db]) ?? [];
 
   const treeData = useMemo(() => {
     if (!allSystems || allSystems.length === 0) return [];
 
-    const parentNodes: System[] = allSystems.filter(
-      (s) => s.parentId === null || s.type === 'LOGICAL_GROUP'
-    );
-    const childNodes: System[] = allSystems.filter(
-      (s) => s.parentId !== null && s.type !== 'LOGICAL_GROUP'
-    );
+    // D-24: classification keys on `type` alone. A parent is a LOGICAL_GROUP, never
+    // "anything without a parentId" — an unparented SERVICE is still a subsystem.
+    const parentNodes: System[] = allSystems.filter(isLogicalParent);
+    const subsystemNodes: System[] = allSystems.filter(isSubsystem);
+
+    const preselected = new Set(preselectedIds);
+
+    const renderSubsystem = (child: System, iconColor: string): TreeNode => ({
+      key: child.id,
+      value: child.id,
+      selectable: true,
+      title: (
+        <span>
+          <BranchesOutlined style={{ marginRight: 6, color: iconColor }} />
+          <span>{child.name}</span>
+          <span style={{ fontFamily: 'monospace', color: '#595959', marginLeft: 6, fontSize: 11 }}>
+            ({child.code})
+          </span>
+          <Tag
+            color={TYPE_TAG_COLORS[child.type]}
+            style={{ marginLeft: 6, fontSize: 10, padding: '0 4px', lineHeight: '16px' }}
+          >
+            {TYPE_LABELS[child.type]}
+          </Tag>
+          {preselected.has(child.id) && (
+            <Tag color="blue" style={{ marginLeft: 6, fontSize: 10, padding: '0 4px', lineHeight: '16px' }}>
+              Đã chọn sẵn
+            </Tag>
+          )}
+        </span>
+      ),
+    });
 
     const result: TreeNode[] = parentNodes.map((parent) => {
-      const children = childNodes.filter((c) => c.parentId === parent.id);
+      const children = subsystemNodes.filter((c) => c.parentId === parent.id);
       return {
         key: parent.id,
         value: parent.id,
@@ -73,57 +103,26 @@ export const TargetSystemsSelector: React.FC<TargetSystemsSelectorProps> = ({
             <span style={{ color: '#8c8c8c', marginLeft: 6, fontSize: 11 }}>[{parent.code}]</span>
           </span>
         ),
-        children: children.map((child) => ({
-          key: child.id,
-          value: child.id,
-          selectable: true,
-          title: (
-            <span>
-              <BranchesOutlined style={{ marginRight: 6, color: '#13c2c2' }} />
-              <span>{child.name}</span>
-              <span style={{ fontFamily: 'monospace', color: '#595959', marginLeft: 6, fontSize: 11 }}>
-                ({child.code})
-              </span>
-              <Tag
-                color={TYPE_TAG_COLORS[child.type]}
-                style={{ marginLeft: 6, fontSize: 10, padding: '0 4px', lineHeight: '16px' }}
-              >
-                {TYPE_LABELS[child.type]}
-              </Tag>
-            </span>
-          ),
-        })),
+        children: children.map((child) => renderSubsystem(child, '#13c2c2')),
       };
     });
 
-    // Check for orphaned subsystems (child with missing parent)
-    const matchedChildIds = new Set(
-      result.flatMap((p) => (p.children ?? []).map((c) => c.value))
-    );
-    const orphaned = childNodes.filter((c) => !matchedChildIds.has(c.id));
+    // Subsystems with no parent, or whose parent row is missing, land under a synthetic
+    // selectable group rather than becoming group headers themselves.
+    const parentIds = new Set(parentNodes.map((p) => p.id));
+    const orphaned = subsystemNodes.filter((c) => !c.parentId || !parentIds.has(c.parentId));
     if (orphaned.length > 0) {
       result.push({
         key: '__orphaned__',
         value: '__orphaned__',
         selectable: false,
         title: <span style={{ color: '#faad14' }}>Chưa phân nhóm hệ thống</span>,
-        children: orphaned.map((child) => ({
-          key: child.id,
-          value: child.id,
-          selectable: true,
-          title: (
-            <span>
-              <BranchesOutlined style={{ marginRight: 6, color: '#faad14' }} />
-              <span>{child.name}</span>
-              <span style={{ fontFamily: 'monospace', marginLeft: 6 }}>({child.code})</span>
-            </span>
-          ),
-        })),
+        children: orphaned.map((child) => renderSubsystem(child, '#faad14')),
       });
     }
 
     return result;
-  }, [allSystems]);
+  }, [allSystems, preselectedIds]);
 
   return (
     <div data-testid="target-systems-selector">

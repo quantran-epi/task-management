@@ -16,6 +16,7 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import type { System, SystemType } from '../../types/models';
 import type { SshConfig } from '../../types/ssh';
+import { isLogicalParent } from '../../db/repositories/systemRepo';
 
 const { Text } = Typography;
 
@@ -82,7 +83,7 @@ export const SystemTable: React.FC<SystemTableProps> = ({
 
   // Build tree data: Parent Systems -> Subsystems
   const treeData = useMemo<SystemTableRow[]>(() => {
-    const parents = systems.filter((s) => s.parentId === null || s.type === 'LOGICAL_GROUP');
+    const parents = systems.filter(isLogicalParent);
 
     return parents.map((parent) => {
       const children = systems.filter((s) => s.parentId === parent.id);
@@ -116,7 +117,7 @@ export const SystemTable: React.FC<SystemTableProps> = ({
       dataIndex: 'name',
       key: 'name',
       render: (name: string, record: SystemTableRow) => {
-        const isParent = record.parentId === null || record.type === 'LOGICAL_GROUP';
+        const isParent = isLogicalParent(record);
         return (
           <Space direction="vertical" size={2}>
             <Space>
@@ -276,7 +277,7 @@ export const SystemTable: React.FC<SystemTableProps> = ({
       key: 'actions',
       width: 180,
       render: (_: any, record: SystemTableRow) => {
-        const isParent = record.parentId === null || record.type === 'LOGICAL_GROUP';
+        const isParent = isLogicalParent(record);
         return (
           <Space size="small">
             {isParent && (
