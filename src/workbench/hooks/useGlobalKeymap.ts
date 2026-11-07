@@ -53,6 +53,11 @@ export function useGlobalKeymap(): void {
           executeAction('view.toggle-notifications');
           return;
         }
+        if (e.key === '6') {
+          e.preventDefault();
+          executeAction('view.toggle-systems');
+          return;
+        }
         if (e.key === 't' || e.key === 'T') {
           e.preventDefault();
           executeAction('timer.toggle');

@@ -110,6 +110,15 @@ export function initStandardActions(): void {
       },
     },
     {
+      id: 'view.toggle-systems',
+      title: 'Tool Windows: Toggle Systems Explorer',
+      category: 'View',
+      shortcut: 'Alt+6',
+      perform: () => {
+        useLayoutStore.getState().toggleToolWindow('left', 'systems');
+      },
+    },
+    {
       id: 'search.everywhere',
       title: 'Search Everywhere',
       category: 'Navigate',

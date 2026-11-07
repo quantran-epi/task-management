@@ -12,6 +12,7 @@ import { ProjectExplorer } from './ProjectExplorer';
 import { DocsExplorer } from './DocsExplorer';
 import { DiagramExplorer } from './DiagramExplorer';
 import { RemoteGitExplorer } from './RemoteGitExplorer';
+import { SystemsExplorer } from './SystemsExplorer';
 
 export interface LeftToolWindowProps {
   db?: TaskPlannerDatabase | undefined;
@@ -25,17 +26,22 @@ export function LeftToolWindow({
   const leftActiveId = useLayoutStore((s) => s.leftActiveId);
   const toggleToolWindow = useLayoutStore((s) => s.toggleToolWindow);
 
+  const isSystems = leftActiveId === 'systems';
   const isDocs = leftActiveId === 'docs';
   const isDiagrams = leftActiveId === 'diagrams';
   const isRemoteExplorer = leftActiveId === 'remote_explorer';
-  const title = isRemoteExplorer
+  const title = isSystems
+    ? 'Systems Explorer'
+    : isRemoteExplorer
     ? 'Remote Git Explorer'
     : isDiagrams
     ? 'Diagram Explorer'
     : isDocs
     ? 'Docs Explorer'
     : 'Project Explorer';
-  const icon = isRemoteExplorer ? (
+  const icon = isSystems ? (
+    <ApartmentOutlined style={{ fontSize: 13, color: '#722ed1' }} />
+  ) : isRemoteExplorer ? (
     <CloudServerOutlined style={{ fontSize: 13, color: '#f59e0b' }} />
   ) : isDiagrams ? (
     <ApartmentOutlined style={{ fontSize: 13, color: '#10b981' }} />
@@ -107,7 +113,9 @@ export function LeftToolWindow({
 
       {/* Explorer Content Body */}
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-        {isRemoteExplorer ? (
+        {isSystems ? (
+          <SystemsExplorer db={db} />
+        ) : isRemoteExplorer ? (
           <RemoteGitExplorer db={db} />
         ) : isDiagrams ? (
           <DiagramExplorer db={db} />

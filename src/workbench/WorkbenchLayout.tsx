@@ -25,7 +25,7 @@ import {
   JetBrainsAIIcon,
   JetBrainsNotificationIcon,
 } from '../components/icons/JetBrainsIcons';
-import { CloudServerOutlined } from '@ant-design/icons';
+import { CloudServerOutlined, ApartmentOutlined } from '@ant-design/icons';
 import '../styles/workbench-tokens.css';
 
   export interface WorkbenchLayoutProps {
@@ -44,6 +44,12 @@ const DEFAULT_LEFT_ITEMS: ToolWindowItem[] = [
   { id: 'projects', name: 'Project Explorer', icon: <JetBrainsProjectIcon size={16} />, shortcut: 'Alt+1' },
   { id: 'docs', name: 'Docs Explorer', icon: <JetBrainsDocsIcon size={16} />, shortcut: 'Alt+2' },
   { id: 'diagrams', name: 'Diagram Explorer', icon: <JetBrainsDiagramIcon size={16} />, shortcut: 'Alt+5' },
+  {
+    id: 'systems',
+    name: 'Systems Explorer',
+    icon: <ApartmentOutlined style={{ fontSize: 13, color: '#722ed1' }} />,
+    shortcut: 'Alt+6',
+  },
   {
     id: 'remote_explorer',
     name: 'Remote Git Explorer',
@@ -166,6 +172,7 @@ export function WorkbenchLayout({
         telegram: 'Telegram Bot',
         mermaid: 'Diagram Studio',
         sdlc: 'SDLC Studio',
+        systems: 'System Catalog',
       };
       openTab({
         id: viewKey,

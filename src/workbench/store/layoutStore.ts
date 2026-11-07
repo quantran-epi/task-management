@@ -16,6 +16,7 @@ export type EditorViewType =
   | 'insight'
   | 'sdlc'
   | 'mermaid'
+  | 'systems'
   | 'remote_file';
 
 export interface EditorTab {

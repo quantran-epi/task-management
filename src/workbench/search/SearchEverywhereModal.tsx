@@ -9,13 +9,14 @@ import {
   JetBrainsProjectIcon,
   JetBrainsDocsIcon,
 } from '../../components/icons/JetBrainsIcons';
+import { ApartmentOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { getAllActions, executeAction } from '../actions/actionRegistry';
 import { useLayoutStore } from '../store/layoutStore';
 import { VirtualizedList } from '../virtual/VirtualizedList';
 
-export type SearchTabType = 'all' | 'tasks' | 'projects' | 'docs' | 'actions';
+export type SearchTabType = 'all' | 'tasks' | 'projects' | 'docs' | 'systems' | 'actions';
 
 export interface SearchEverywhereModalProps {
   open: boolean;
@@ -25,7 +26,7 @@ export interface SearchEverywhereModalProps {
 
 interface SearchResultItem {
   id: string;
-  category: 'task' | 'project' | 'doc' | 'action';
+  category: 'task' | 'project' | 'doc' | 'system' | 'action';
   title: string;
   subtitle?: string | undefined;
   shortcut?: string | undefined;
@@ -68,6 +69,15 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
       if (!open) return [];
       const list = await activeDb.notes.toArray();
       return list.filter((n) => !(n as any).deletedAt);
+    },
+    [open],
+    []
+  );
+
+  const systems = useLiveQuery(
+    async () => {
+      if (!open) return [];
+      return await activeDb.systems.toArray();
     },
     [open],
     []
@@ -180,8 +190,31 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
       }
     }
 
+    // 5. Systems
+    if (activeTab === 'all' || activeTab === 'systems') {
+      for (const sys of systems) {
+        if (!searchKeyword || sys.name.toLowerCase().includes(searchKeyword) || sys.code.toLowerCase().includes(searchKeyword)) {
+          items.push({
+            id: `system:${sys.id}`,
+            category: 'system',
+            title: sys.name,
+            subtitle: `System [${sys.code}] · ${sys.type}`,
+            onSelect: () => {
+              openTab({
+                id: 'systems',
+                title: 'Danh mục hệ thống',
+                viewType: 'systems',
+                closable: true,
+              });
+              onClose();
+            },
+          });
+        }
+      }
+    }
+
     return items;
-  }, [query, activeTab, tasks, projects, notes, openTab, onClose]);
+  }, [query, activeTab, tasks, projects, notes, systems, openTab, onClose]);
 
   // Reset selection index when query or tab changes
   useEffect(() => {
@@ -210,7 +243,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
 
     if (e.key === 'Tab') {
       e.preventDefault();
-      const tabs: SearchTabType[] = ['all', 'tasks', 'projects', 'docs', 'actions'];
+      const tabs: SearchTabType[] = ['all', 'tasks', 'projects', 'docs', 'systems', 'actions'];
       const currentIndex = tabs.indexOf(activeTab);
       const nextIndex = e.shiftKey
         ? (currentIndex - 1 + tabs.length) % tabs.length
@@ -252,6 +285,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
     { key: 'tasks', label: 'Tasks' },
     { key: 'projects', label: 'Projects' },
     { key: 'docs', label: 'Docs' },
+    { key: 'systems', label: 'Systems' },
     { key: 'actions', label: 'Actions' },
   ];
 
@@ -265,6 +299,8 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
         return <JetBrainsProjectIcon size={14} />;
       case 'doc':
         return <JetBrainsDocsIcon size={14} />;
+      case 'system':
+        return <ApartmentOutlined style={{ color: '#722ed1', fontSize: 14 }} />;
     }
   };
 

@@ -1,0 +1,261 @@
+import React, { useEffect } from 'react';
+import { Modal, Form, Input, Select, message } from 'antd';
+import { ApartmentOutlined, CloudServerOutlined } from '@ant-design/icons';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
+import { getParentSystems } from '../../db/repositories/systemRepo';
+import { getSshConfigs } from '../../services/sshService';
+import type { System, SystemType } from '../../types/models';
+
+export interface SystemModalProps {
+  open: boolean;
+  system?: System | null | undefined;
+  defaultParentId?: string | null | undefined;
+  onClose: () => void;
+  onSave: (values: any) => Promise<void>;
+  db?: TaskPlannerDatabase | undefined;
+}
+
+const SYSTEM_TYPE_OPTIONS = [
+  { value: 'LOGICAL_GROUP', label: 'Parent System (Logical Group / Nhóm hệ thống logic)' },
+  { value: 'SERVICE', label: 'Service / Microservice (Dịch vụ backend)' },
+  { value: 'SCHEMA', label: 'Database Schema (Lược đồ CSDL)' },
+  { value: 'UI', label: 'Frontend UI / Web Application (Giao diện)' },
+  { value: 'WORKER', label: 'Background Worker / Batch Job (Tiến trình nền)' },
+];
+
+export const SystemModal: React.FC<SystemModalProps> = ({
+  open,
+  system,
+  defaultParentId,
+  onClose,
+  onSave,
+  db = defaultDb,
+}) => {
+  const [form] = Form.useForm();
+  const selectedType = Form.useWatch('type', form);
+
+  // Queries for parent systems & ssh configs
+  const parentSystems = useLiveQuery(() => getParentSystems(db), [db]) ?? [];
+  const sshConfigs = useLiveQuery(() => getSshConfigs(db), [db]) ?? [];
+
+  const isLogicalGroup = selectedType === 'LOGICAL_GROUP';
+
+  useEffect(() => {
+    if (open) {
+      if (system) {
+        form.setFieldsValue({
+          name: system.name,
+          code: system.code,
+          type: system.type,
+          parentId: system.parentId || undefined,
+          description: system.description || undefined,
+          sshConfigId: system.sshConfigId || undefined,
+          remoteRepoPath: system.remoteRepoPath || undefined,
+          defaultBaseBranch: system.defaultBaseBranch || 'origin/main',
+        });
+      } else {
+        form.resetFields();
+        form.setFieldsValue({
+          type: defaultParentId ? 'SERVICE' : 'LOGICAL_GROUP',
+          parentId: defaultParentId || undefined,
+          defaultBaseBranch: 'origin/main',
+        });
+      }
+    }
+  }, [open, system, defaultParentId, form]);
+
+  const handleSubmit = async () => {
+    try {
+      const values = await form.validateFields();
+      // Sanitize inputs
+      const payload: any = {
+        name: values.name.trim(),
+        code: values.code.trim().toUpperCase(),
+        type: values.type as SystemType,
+        description: values.description?.trim() || undefined,
+      };
+
+      if (values.type !== 'LOGICAL_GROUP') {
+        payload.parentId = values.parentId || null;
+        payload.sshConfigId = values.sshConfigId || undefined;
+        payload.remoteRepoPath = values.remoteRepoPath?.trim() || undefined;
+        payload.defaultBaseBranch = values.defaultBaseBranch?.trim() || 'origin/main';
+      } else {
+        payload.parentId = null;
+      }
+
+      await onSave(payload);
+    } catch (err: any) {
+      if (err?.errorFields) {
+        // Form validation error
+        return;
+      }
+      message.error(err?.message || 'Lỗi khi lưu thông tin hệ thống');
+    }
+  };
+
+  return (
+    <Modal
+      title={
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <ApartmentOutlined style={{ color: 'var(--accent, #3871e1)' }} />
+          <span>{system ? `Chỉnh sửa hệ thống: ${system.name}` : 'Tạo hệ thống mới'}</span>
+        </div>
+      }
+      open={open}
+      onCancel={onClose}
+      onOk={handleSubmit}
+      okText={system ? 'Lưu thay đổi' : 'Tạo hệ thống'}
+      cancelText="Hủy"
+      width={560}
+      destroyOnClose
+    >
+      <Form form={form} layout="vertical" style={{ marginTop: 14 }}>
+        <Form.Item
+          name="type"
+          label="Loại hệ thống"
+          rules={[{ required: true, message: 'Vui lòng chọn loại hệ thống' }]}
+        >
+          <Select
+            options={SYSTEM_TYPE_OPTIONS}
+            placeholder="Chọn loại hệ thống"
+            onChange={(val) => {
+              if (val === 'LOGICAL_GROUP') {
+                form.setFieldValue('parentId', undefined);
+              }
+            }}
+          />
+        </Form.Item>
+
+        <div style={{ display: 'flex', gap: 12 }}>
+          <Form.Item
+            name="name"
+            label="Tên hệ thống"
+            rules={[{ required: true, message: 'Vui lòng nhập tên hệ thống' }]}
+            style={{ flex: 2 }}
+          >
+            <Input placeholder="VD: SmartCard Core API" />
+          </Form.Item>
+
+          <Form.Item
+            name="code"
+            label="Mã hệ thống (Code)"
+            rules={[
+              { required: true, message: 'Vui lòng nhập mã code' },
+              {
+                pattern: /^[A-Z0-9_\-]+$/,
+                message: 'Chỉ chấp nhận chữ in hoa, số, dấu gạch nối (- hoặc _)',
+              },
+            ]}
+            style={{ flex: 1 }}
+          >
+            <Input
+              placeholder="VD: SC-API"
+              onChange={(e) => {
+                form.setFieldValue('code', e.target.value.toUpperCase());
+              }}
+            />
+          </Form.Item>
+        </div>
+
+        {!isLogicalGroup && (
+          <Form.Item
+            name="parentId"
+            label="Hệ thống cha (Parent Logical Group)"
+            rules={[{ required: false }]}
+          >
+            <Select
+              allowClear
+              placeholder="Chọn hệ thống cha (nếu có)"
+              options={parentSystems
+                .filter((p) => !system || p.id !== system.id)
+                .map((p) => ({
+                  value: p.id,
+                  label: `${p.name} (${p.code})`,
+                }))}
+            />
+          </Form.Item>
+        )}
+
+        <Form.Item name="description" label="Mô tả chức năng">
+          <Input.TextArea rows={2} placeholder="Mô tả chức năng chính của hệ thống hoặc dịch vụ..." />
+        </Form.Item>
+
+        {!isLogicalGroup && (
+          <div
+            style={{
+              padding: 12,
+              borderRadius: 6,
+              background: 'var(--bg-elev, #f7f8fa)',
+              border: '1px solid var(--border, #e9eaee)',
+              marginTop: 6,
+              marginBottom: 12,
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                marginBottom: 10,
+                fontSize: 12,
+                fontWeight: 600,
+                color: 'var(--fg-strong, #000000)',
+              }}
+            >
+              <CloudServerOutlined style={{ color: '#f59e0b' }} />
+              <span>Cấu hình SSH & Repository từ xa</span>
+            </div>
+
+            <Form.Item
+              name="sshConfigId"
+              label="Kết nối SSH máy chủ"
+              rules={[{ required: false }]}
+              style={{ marginBottom: 10 }}
+            >
+              <Select
+                allowClear
+                placeholder="Chọn cấu hình SSH đã lưu"
+                options={sshConfigs.map((cfg) => ({
+                  value: cfg.id,
+                  label: `${cfg.name} (${cfg.username}@${cfg.host}:${cfg.port})`,
+                }))}
+              />
+            </Form.Item>
+
+            <Form.Item
+              name="remoteRepoPath"
+              label="Đường dẫn Repository trên máy chủ (Absolute path)"
+              rules={[
+                {
+                  validator: async (_, value) => {
+                    if (!value) return Promise.resolve();
+                    if (!value.startsWith('/')) {
+                      return Promise.reject(new Error('Đường dẫn repository phải là đường dẫn tuyệt đối (bắt đầu bằng /)'));
+                    }
+                    return Promise.resolve();
+                  },
+                },
+              ]}
+              style={{ marginBottom: 10 }}
+            >
+              <Input placeholder="VD: /data/services/smartcard-api" />
+            </Form.Item>
+
+            <Form.Item
+              name="defaultBaseBranch"
+              label="Nhánh base mặc định"
+              rules={[{ required: false }]}
+              style={{ marginBottom: 0 }}
+            >
+              <Input placeholder="VD: origin/main hoặc origin/master" />
+            </Form.Item>
+          </div>
+        )}
+      </Form>
+    </Modal>
+  );
+};
+
+export default SystemModal;

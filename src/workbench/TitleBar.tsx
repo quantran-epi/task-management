@@ -6,6 +6,7 @@ import {
   DesktopOutlined,
   CodeOutlined,
   SwapOutlined,
+  ApartmentOutlined,
 } from '@ant-design/icons';
 import { TaskMateLogo } from '../components/TaskMateLogo';
 import {
@@ -275,6 +276,28 @@ export function TitleBar({
                 }}
               >
                 SDLC Studio
+              </Button>
+            </Tooltip>
+
+            <Tooltip title="Enterprise Systems Catalog (Danh mục hệ thống & Subsystem)">
+              <Button
+                type="text"
+                size="small"
+                icon={<ApartmentOutlined style={{ fontSize: 13, color: '#722ed1' }} />}
+                onClick={() => onOpenView?.('systems')}
+                aria-label="Open Systems Catalog"
+                data-testid="titlebar-btn-systems"
+                style={{
+                  height: 24,
+                  padding: '0 7px',
+                  fontSize: 12,
+                  borderRadius: 3,
+                  color: activeView === 'systems' ? 'var(--accent, #3871e1)' : 'var(--fg-secondary, #5f6269)',
+                  background: activeView === 'systems' ? 'var(--bg-selected, #d0dffe)' : 'transparent',
+                  fontWeight: activeView === 'systems' ? 600 : 400,
+                }}
+              >
+                Systems
               </Button>
             </Tooltip>
 
