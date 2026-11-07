@@ -5,6 +5,8 @@ import { Step6CabView } from '../../../src/components/sdlc/steps/Step6CabView';
 import { SdlcWorkflowStateSchema, type SdlcWorkflowState } from '../../../src/services/wizard/workflowSchemas';
 import type { ReconciliationResult } from '../../../src/services/wizard/reconciliation';
 import type { SdlcWizardRuntime } from '../../../src/services/wizard/sdlcWizardRuntime';
+import { TaskPlannerDatabase } from '../../../src/db';
+import { createChangeRequest } from '../../../src/db/repositories/changeRequestRepo';
 
 const PROJECT_ID = 'b45c2f09-1a89-4c07-b24e-4f056d68b981';
 const THREAD_ID = '22222222-2222-4222-8222-222222222222';
@@ -76,7 +78,7 @@ describe('Step6CabView', () => {
 
     render(
       <Step6CabView
-        projectId={PROJECT_ID}
+        changeRequestId={PROJECT_ID}
         crId="cr-001"
         workflowState={workflowState()}
         onCommitCab={handleCommitCab}
@@ -98,7 +100,7 @@ describe('Step6CabView', () => {
 
     render(
       <Step6CabView
-        projectId={PROJECT_ID}
+        changeRequestId={PROJECT_ID}
         crId="cr-001"
         workflowState={workflowState()}
         onCommitCab={vi.fn().mockResolvedValue(undefined)}
@@ -119,7 +121,7 @@ describe('Step6CabView', () => {
 
     render(
       <Step6CabView
-        projectId={PROJECT_ID}
+        changeRequestId={PROJECT_ID}
         crId="cr-001"
         workflowState={workflowState({ pl02: false, pl07: false })}
         onCommitCab={vi.fn().mockResolvedValue(undefined)}
@@ -141,7 +143,7 @@ describe('Step6CabView', () => {
 
     render(
       <Step6CabView
-        projectId={PROJECT_ID}
+        changeRequestId={PROJECT_ID}
         crId="cr-001"
         workflowState={workflowState()}
         onCommitCab={handleCommitCab}
@@ -161,7 +163,7 @@ describe('Step6CabView', () => {
   it('disables generation and shows the configuration alert when no model is wired (T-25.3-51)', () => {
     render(
       <Step6CabView
-        projectId={PROJECT_ID}
+        changeRequestId={PROJECT_ID}
         crId="cr-001"
         workflowState={workflowState()}
         onCommitCab={vi.fn().mockResolvedValue(undefined)}
@@ -175,7 +177,7 @@ describe('Step6CabView', () => {
   it('renders the internal CR summary separately and flags an unverified rollback (T-25.3-19)', () => {
     render(
       <Step6CabView
-        projectId={PROJECT_ID}
+        changeRequestId={PROJECT_ID}
         crId="cr-001"
         workflowState={workflowState()}
         onCommitCab={vi.fn().mockResolvedValue(undefined)}
@@ -192,7 +194,7 @@ describe('Step6CabView', () => {
   it('keeps approval out of reach until a draft exists', () => {
     render(
       <Step6CabView
-        projectId={PROJECT_ID}
+        changeRequestId={PROJECT_ID}
         crId="cr-001"
         workflowState={workflowState()}
         onCommitCab={vi.fn().mockResolvedValue(undefined)}
@@ -201,5 +203,42 @@ describe('Step6CabView', () => {
     );
 
     expect(screen.getByRole('button', { name: /Lưu & Phê duyệt/i })).toBeDisabled();
+  });
+
+  it('completes the CR through updateChangeRequest, never the legacy completeCr', async () => {
+    const db = new TaskPlannerDatabase(`test-step6-${Math.random()}`);
+    await db.open();
+    const cr = await createChangeRequest(
+      { code: 'CR-2026-999', name: 'Chuyển tiền nhanh', status: 'Open', type: 'NEW_FEATURE', targets: [] },
+      db
+    );
+
+    const state = workflowState({ cab: true });
+    const withContent: SdlcWorkflowState = {
+      ...state,
+      artifacts: {
+        ...state.artifacts,
+        cab: { ...state.artifacts.cab!, content: '# Tờ trình CAB\nĐã duyệt.' },
+      },
+    };
+
+    render(
+      <Step6CabView
+        changeRequestId={cr.id}
+        crId={cr.id}
+        workflowState={withContent}
+        onCommitCab={vi.fn().mockResolvedValue(undefined)}
+        wizardRuntime={runtime}
+        db={db}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Hoàn tất & Đóng CR/i }));
+
+    await waitFor(async () => {
+      const updated = await db.changeRequests.get(cr.id);
+      expect(updated?.status).toBe('Done');
+    }, { timeout: 10000 });
+    expect(await screen.findByRole('button', { name: /Đã đóng CR/i })).toBeDisabled();
   });
 });

@@ -385,7 +385,7 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
 
       render(
         <Step6CabView
-          projectId={projectId}
+          changeRequestId={projectId}
           crId="cr-001"
           onCommitCab={handleCommitCab}
           db={db}

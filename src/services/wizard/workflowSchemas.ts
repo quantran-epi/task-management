@@ -142,6 +142,12 @@ export const SdlcWorkflowStateSchema = z.strictObject({
     pl02: SdlcArtifactRefSchema.optional(),
     solution: SdlcArtifactRefSchema.optional(),
     codeGuide: SdlcArtifactRefSchema.optional(),
+    /**
+     * D-40: one approved snapshot per target subsystem, keyed by `System.id`. The single
+     * `branchSnapshot` below stays readable so an in-flight workflow is not orphaned.
+     */
+    branchSnapshots: z.record(z.string(), BranchSnapshotSchema).default({}),
+    /** @deprecated legacy single-subsystem slot; read it as a fallback only. */
     branchSnapshot: BranchSnapshotSchema.optional(),
     changePack: SdlcArtifactRefSchema.optional(),
     driftResult: ReconciliationResultSchema.optional(),

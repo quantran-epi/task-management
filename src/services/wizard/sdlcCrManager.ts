@@ -1,8 +1,14 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { ChatThread } from '../../types/models';
 import { generateId } from '../../utils/uuid';
-import type { SdlcStepId, SdlcWorkflowMetadata } from './workflowSchemas';
+import type { SdlcStepId } from './workflowSchemas';
 import type { ChangePackManifest } from './changePack';
+
+/**
+ * Marker for pack rows written before the subsystem dimension existed (and for a CR that
+ * carries no targets). Never a real `System.id`; the UI renders it as an unnamed pack.
+ */
+export const LEGACY_SYSTEM_ID = '__legacy__';
 
 export interface SdlcCrRecord {
   id: string;
@@ -22,6 +28,8 @@ export interface ChangePackHistoryItem {
   filename: string;
   uploadedAt: string;
   fileSize: number;
+  /** D-40: the subsystem this pack was built from. */
+  systemId: string;
   /**
    * Validated manifest persisted at upload (entry bytes stripped) so activation can
    * reconcile without the original zip. Rows written before this field existed have none;
@@ -40,103 +48,21 @@ export interface MultiPackState {
   packs: ChangePackHistoryItem[];
 }
 
-const CR_SETTING_PREFIX = 'sdlc_crs:';
 const PACK_SETTING_PREFIX = 'sdlc_packs:';
-
-function getCrSettingKey(projectId: string): string {
-  return `${CR_SETTING_PREFIX}${projectId}`;
-}
 
 function getPackSettingKey(projectId: string, crId: string): string {
   return `${PACK_SETTING_PREFIX}${projectId}:${crId}`;
 }
 
-export async function listCrs(
-  projectId: string,
-  db: TaskPlannerDatabase = defaultDb
-): Promise<SdlcCrRecord[]> {
-  const row = await db.settings.get(getCrSettingKey(projectId));
-  if (!row || !row.value) {
-    return [];
+/** D-40: pack history grouped per subsystem for the per-card result and Pack All summary. */
+export function groupPacksBySystem(
+  state: MultiPackState
+): Record<string, ChangePackHistoryItem[]> {
+  const grouped: Record<string, ChangePackHistoryItem[]> = {};
+  for (const pack of state.packs) {
+    (grouped[pack.systemId] ??= []).push(pack);
   }
-  try {
-    const list = JSON.parse(String(row.value));
-    return Array.isArray(list) ? (list as SdlcCrRecord[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-export async function getActiveCr(
-  projectId: string,
-  db: TaskPlannerDatabase = defaultDb
-): Promise<SdlcCrRecord | null> {
-  const crs = await listCrs(projectId, db);
-  return crs.find((cr) => cr.status === 'active') ?? null;
-}
-
-export async function createNewCr(
-  projectId: string,
-  metadata: SdlcWorkflowMetadata,
-  inheritContext = false,
-  db: TaskPlannerDatabase = defaultDb
-): Promise<SdlcCrRecord> {
-  const crs = await listCrs(projectId, db);
-  const now = new Date().toISOString();
-
-  // Mark all prior active CRs as archived (T-25.1.2-02)
-  const updatedCrs = crs.map((cr) => {
-    if (cr.status === 'active') {
-      return { ...cr, status: 'archived' as const };
-    }
-    return cr;
-  });
-
-  const newCr: SdlcCrRecord = {
-    id: generateId(),
-    crCode: metadata.cr,
-    featureName: metadata.featureName,
-    author: metadata.author,
-    requestingUnit: metadata.requestingUnit,
-    date: metadata.date,
-    status: 'active',
-    createdAt: now,
-    inheritedContext: inheritContext || undefined,
-  };
-
-  updatedCrs.push(newCr);
-
-  await db.settings.put({
-    key: getCrSettingKey(projectId),
-    value: JSON.stringify(updatedCrs),
-  });
-
-  return newCr;
-}
-
-export async function completeCr(
-  projectId: string,
-  crId: string,
-  db: TaskPlannerDatabase = defaultDb
-): Promise<void> {
-  const crs = await listCrs(projectId, db);
-  const now = new Date().toISOString();
-
-  const updatedCrs = crs.map((cr) => {
-    if (cr.id === crId) {
-      return {
-        ...cr,
-        status: 'completed' as const,
-        completedAt: now,
-      };
-    }
-    return cr;
-  });
-
-  await db.settings.put({
-    key: getCrSettingKey(projectId),
-    value: JSON.stringify(updatedCrs),
-  });
+  return grouped;
 }
 
 /**
@@ -189,10 +115,15 @@ export async function getMultiPackState(
   }
   try {
     const parsed = JSON.parse(String(row.value));
-    return {
-      activePackHash: parsed.activePackHash,
-      packs: Array.isArray(parsed.packs) ? parsed.packs : [],
-    };
+    const packs: ChangePackHistoryItem[] = Array.isArray(parsed.packs)
+      ? parsed.packs.map((pack: ChangePackHistoryItem) => ({
+          ...pack,
+          // Rows persisted before D-40 carry no subsystem; keep them visible rather than
+          // dropping history, and never fabricate an id that could collide with a real system.
+          systemId: typeof pack.systemId === 'string' && pack.systemId ? pack.systemId : LEGACY_SYSTEM_ID,
+        }))
+      : [];
+    return { activePackHash: parsed.activePackHash, packs };
   } catch {
     return { packs: [] };
   }

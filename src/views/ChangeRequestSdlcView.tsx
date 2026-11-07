@@ -12,7 +12,8 @@ import { Step3CodeGuideView } from '../components/sdlc/steps/Step3CodeGuideView'
 import { Step4ChangePackView } from '../components/sdlc/steps/Step4ChangePackView';
 import { Step5TechDocsView } from '../components/sdlc/steps/Step5TechDocsView';
 import { Step6CabView } from '../components/sdlc/steps/Step6CabView';
-import { listCrs, getActiveCr, createNewCr, getStepThread } from '../services/wizard/sdlcCrManager';
+import { getStepThread } from '../services/wizard/sdlcCrManager';
+import { createChangeRequest } from '../db/repositories/changeRequestRepo';
 import {
   createSdlcWorkflowCoordinator,
   defaultSha256,
@@ -137,7 +138,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
     () => (projectId ? db.changeRequests.get(projectId) : undefined),
     [projectId, db]
   );
-  const crList = useLiveQuery(() => listCrs(projectId, db), [projectId, db]) ?? [];
+  const crList = allChangeRequests;
   const [readOnlySolution, setReadOnlySolution] = useState(false);
 
   // Active ChangeRequest and target subsystems resolution
@@ -219,7 +220,12 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
       [threadId, projectId, activeCrId, selectedStep, db]
     ) ?? [];
   const currentCr = crList.find((cr) => cr.id === activeCrId);
-  const crStatus = currentCr?.status ?? 'active';
+  const crStatus: 'active' | 'completed' | 'archived' =
+    currentCr?.status === 'Done'
+      ? 'completed'
+      : currentCr?.status === 'Cancelled'
+        ? 'archived'
+        : 'active';
   const activeVersions = workflowState?.activeVersions ?? {};
   const artifactEvents: AiChatArtifactEvent[] = useMemo(
     () =>
@@ -336,24 +342,11 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
 
   // Initialize active CR
   useEffect(() => {
-    let cancelled = false;
-    async function loadActiveCr() {
-      const active = await getActiveCr(projectId, db);
-      if (!cancelled) {
-        if (active) {
-          selectCr(active.id);
-        } else if (crList.length > 0 && crList[0]) {
-          selectCr(crList[0].id);
-        } else if (projectId) {
-          selectCr(projectId);
-        }
-      }
-    }
-    void loadActiveCr();
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, crList.length, db, selectCr]);
+    if (activeCrId) return;
+    const preferred = crList.find((cr) => cr.id === projectId) ?? crList[0];
+    if (preferred) selectCr(preferred.id);
+    else if (projectId) selectCr(projectId);
+  }, [activeCrId, crList, projectId, selectCr]);
 
   // Sync isolated thread for current CR and step
   useEffect(() => {
@@ -533,7 +526,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
       step: selectedStep,
       metadata: workflowState?.metadata,
       crStatus,
-      artifacts: workflowState?.artifacts ?? {},
+      artifacts: workflowState?.artifacts ?? { branchSnapshots: {} },
       activeVersions: workflowState?.activeVersions,
       versions: workflowState?.versions,
       evidence: stepEvidence,
@@ -731,7 +724,17 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
       let crId = activeCrId;
       let intakeCoordinator = coordinator;
       if (!crId) {
-        const created = await createNewCr(projectId, metadata, false, db);
+        // The CR list is `db.changeRequests` now; the legacy settings store is gone.
+        const created = await createChangeRequest(
+          {
+            code: metadata.cr,
+            name: metadata.featureName,
+            status: 'Open',
+            type: 'NEW_FEATURE',
+            targets: [],
+          },
+          db
+        );
         crId = created.id;
         selectCr(crId);
         intakeCoordinator = createCoordinator(crId);
@@ -871,6 +874,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
             crId={activeCrId}
             crCode={workflowState?.metadata.cr ?? ''}
             solutionArtifact={workflowState?.artifacts.solution}
+            branchSnapshots={workflowState?.artifacts.branchSnapshots}
             branchSnapshot={workflowState?.artifacts.branchSnapshot}
             targetSystems={crTargetSystems}
             initialDriftResult={workflowState?.artifacts.driftResult}
@@ -929,7 +933,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
       case 'CAB':
         return (
           <Step6CabView
-            projectId={projectId}
+            changeRequestId={projectId}
             crId={activeCrId}
             workflowState={workflowState}
             incomingDraft={draftCab}
@@ -990,7 +994,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
           title={`SDLC Studio — ${project?.name ?? 'Chọn Change Request'}`}
           subtitle={
             currentCr
-              ? `Change Request: ${currentCr.crCode} — ${currentCr.featureName}`
+              ? `Change Request: ${currentCr.code} — ${currentCr.name}`
               : 'Môi trường phát triển & kiểm soát chất lượng bàn giao 6 bước'
           }
           style={{ marginBottom: 0 }}
