@@ -376,6 +376,9 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
           const name = normalizeToolName(tool.function.name);
           if (name === 'get_artifact') return artifactsAllowed;
           if (name === 'patch_artifact_section') return artifactsAllowed && contextKinds.length > 0;
+          // D-41: a proposal is only meaningful inside a live CR scope; without one the tool
+          // would refuse anyway, so it must not be advertised.
+          if (name === 'propose_subsystems') return artifactsAllowed;
           return true;
         });
 

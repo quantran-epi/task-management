@@ -63,9 +63,12 @@ export const SDLC_READ_TOOL_NAMES = [
 /** Artifact tools are advertised only on the steps that own a document (SDLC-ART-06). */
 const ARTIFACT_STEP_TOOL_NAMES = ['get_artifact', 'patch_artifact_section'] as const;
 
+/** D-41: the proposal tool is offered where a CR's subsystem scope is being decided. */
+const PROPOSAL_TOOL_NAME = 'propose_subsystems';
+
 export const SDLC_STEP_ALLOWED_TOOLS: Record<SdlcStepId, readonly string[]> = {
-  INTAKE: ['query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details'],
-  SOLUTION: ['query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details', ...ARTIFACT_STEP_TOOL_NAMES],
+  INTAKE: ['query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details', PROPOSAL_TOOL_NAME],
+  SOLUTION: ['query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details', ...ARTIFACT_STEP_TOOL_NAMES, PROPOSAL_TOOL_NAME],
   CODE_GUIDE: ['query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details'],
   CHANGE_PACK: ['query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details'],
   TECH_DOCS: ['query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details', ...ARTIFACT_STEP_TOOL_NAMES],
@@ -102,6 +105,7 @@ export function buildToolPolicy(
   const ownsDocuments = SDLC_STEP_ALLOWED_TOOLS[step].includes('get_artifact');
   const hasRead = local.includes('get_artifact');
   const hasPatch = local.includes('patch_artifact_section');
+  const hasProposal = local.includes(PROPOSAL_TOOL_NAME);
   return [
     `[CHÍNH SÁCH CÔNG CỤ — BƯỚC ${step}]`,
     // The parser reads exactly these two name lines and requires them to equal the payload.
@@ -115,6 +119,11 @@ export function buildToolPolicy(
       : 'Chỉ gọi công cụ trong payload của turn này. Không có công cụ ghi hoặc tạo tài liệu.',
     ...(hasPatch
       ? ['Công cụ đề xuất chỉ tạo bản nháp chờ người dùng chấp thuận; không có công cụ ghi hoặc tạo phiên bản tài liệu.']
+      : []),
+    // D-41/D-42: the proposal tool is read-only, but its output never becomes a CR target
+    // on its own — only the user's confirmation in the approval card writes `cr.targets`.
+    ...(hasProposal
+      ? ['propose_subsystems chỉ trả về danh sách subsystem ứng viên kèm lý do và độ tin cậy; không tự gắn subsystem vào CR — người dùng phải xác nhận trong thẻ đề xuất.']
       : []),
     'Không trả lời từ trí nhớ khi công cụ có thể giải quyết câu hỏi; gọi công cụ để lấy bằng chứng.',
     'Khi bằng chứng mỏng hoặc thiếu, truy vấn lại hẹp hơn (narrower re-query).',

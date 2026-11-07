@@ -1923,6 +1923,37 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
   {
     type: 'function',
     function: {
+      name: 'propose_subsystems',
+      description:
+        'Propose candidate subsystems of the open Change Request with a reason and a confidence for each. Returns data only — it never writes the CR; the user must confirm in the approval card. Use systemId values from the System Catalog, never invented codes.',
+      parameters: {
+        type: 'object',
+        properties: {
+          items: {
+            type: 'array',
+            description: 'Candidate subsystems, each with systemId, confidence and reason.',
+            items: {
+              type: 'object',
+              properties: {
+                systemId: { type: 'string', description: 'System Catalog id of a subsystem (never a logical parent).' },
+                confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+                reason: { type: 'string', description: 'Evidence-based reason this CR affects the subsystem.' },
+              },
+              required: ['systemId', 'reason'],
+            },
+          },
+          evidence: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Short evidence references supporting the proposal.',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'oracle_query',
       description:
         'Execute a read-only SQL query on the configured remote Oracle database via SQLcl over SSH. Strict read-only enforcement (SET TRANSACTION READ ONLY). Results formatted in JSON.',
@@ -2101,7 +2132,8 @@ export async function executeAiTool(
       }
 
       case 'get_artifact':
-      case 'patch_artifact_section': {
+      case 'patch_artifact_section':
+      case 'propose_subsystems': {
         const result = await executeSdlcArtifactTool(normalized, args, db, options?.artifactContext);
         return JSON.stringify(result);
       }

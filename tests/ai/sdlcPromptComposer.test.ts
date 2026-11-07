@@ -92,9 +92,13 @@ describe('SDLC per-step tool policy', () => {
       const policy = SDLC_STEP_TOOL_POLICY[step];
       // Only the artifact-owning steps add the Phase 27 studio tools.
       const ownsDocuments = ['SOLUTION', 'TECH_DOCS', 'CAB'].includes(step);
-      expect(SDLC_STEP_ALLOWED_TOOLS[step]).toEqual(ownsDocuments
-        ? [...SDLC_READ_TOOL_NAMES, 'get_artifact', 'patch_artifact_section']
-        : [...SDLC_READ_TOOL_NAMES]);
+      // D-41: the proposal tool is offered where the CR's subsystem scope is decided.
+      const offersProposal = ['INTAKE', 'SOLUTION'].includes(step);
+      expect(SDLC_STEP_ALLOWED_TOOLS[step]).toEqual([
+        ...SDLC_READ_TOOL_NAMES,
+        ...(ownsDocuments ? ['get_artifact', 'patch_artifact_section'] : []),
+        ...(offersProposal ? ['propose_subsystems'] : []),
+      ]);
       expect(composeSdlcTurn({ step, intent: 'qa', userTurn: 'hỏi' }).segments.toolPolicy).toBe(policy);
       for (const name of SDLC_READ_TOOL_NAMES) expect(policy).toContain(name);
       expect(policy).toContain('MCP đọc-only động: không có trong payload của turn này');

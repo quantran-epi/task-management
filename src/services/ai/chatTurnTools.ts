@@ -23,7 +23,7 @@ export function getToolsForTurn(
   return [
     ...AI_DATABASE_TOOLS.filter((tool) =>
       (!allowed || allowed.has(normalizeToolName(tool.function.name))) &&
-      (allowed !== undefined || !['get_artifact', 'patch_artifact_section'].includes(normalizeToolName(tool.function.name))) &&
+      (allowed !== undefined || !['get_artifact', 'patch_artifact_section', 'propose_subsystems'].includes(normalizeToolName(tool.function.name))) &&
       (!effectiveAnalysisMode || !isMutationTool(normalizeToolName(tool.function.name)))),
     ...dynamicMcpTools.filter((tool) =>
       (!allowed || allowed.has(normalizeToolName(tool.function.name))) &&
