@@ -99,6 +99,13 @@ export const SCHEMA_V14 = {
   chatTabs: 'id, &threadId, scopeKey, [scopeKey+active], createdAt',
 } as const;
 
+export const SCHEMA_V15 = {
+  ...SCHEMA_V14,
+  systems: 'id, &code, parentId, type, sshConfigId, createdAt',
+  changeRequests: 'id, &code, status, type, createdAt, updatedAt',
+} as const;
+
+
 
 
 

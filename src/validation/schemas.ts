@@ -6,6 +6,9 @@ import type {
   MilestoneStatus,
   TaskStatus,
   TaskPriority,
+  SystemType,
+  CrType,
+  CrStatus,
 } from '../types/models';
 import { SdlcArtifactMetadataSchema } from '../services/ai/wizardSchemas';
 
@@ -141,6 +144,96 @@ const linkSchema = z
       /^\\\\/.test(val), // UNC path: \\server\share
     { message: 'Liên kết phải là URL (http/https), đường dẫn thư mục, file URI, hoặc ID tài liệu hợp lệ.' }
   );
+
+// Phase 31.1: System & ChangeRequest Schemas (ENT-SYS-01, ENT-CR-01)
+export const SYSTEM_TYPES: [SystemType, ...SystemType[]] = [
+  'LOGICAL_GROUP',
+  'SERVICE',
+  'SCHEMA',
+  'UI',
+  'WORKER',
+];
+
+export const SystemTypeSchema = z.enum(SYSTEM_TYPES);
+
+export const CR_TYPES: [CrType, ...CrType[]] = [
+  'NEW_FEATURE',
+  'ENHANCEMENT',
+  'BUGFIX',
+];
+
+export const CrTypeSchema = z.enum(CR_TYPES);
+
+export const CR_STATUSES: [CrStatus, ...CrStatus[]] = [
+  'Open',
+  'Pending',
+  'In Progress',
+  'Done',
+  'Cancelled',
+];
+
+export const CrStatusSchema = z.enum(CR_STATUSES);
+
+export const SystemInputSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
+  code: z.string().trim().min(1, 'Code is required').max(64, 'Code must be 64 characters or less'),
+  parentId: z.string().nullable().default(null),
+  type: SystemTypeSchema.default('SERVICE'),
+  description: z.string().optional(),
+  sshConfigId: uuidSchema.optional(),
+  remoteRepoPath: z.string().optional(),
+  defaultBaseBranch: z.string().optional(),
+});
+
+export const SystemUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  code: z.string().trim().min(1).max(64).optional(),
+  parentId: z.string().nullable().optional(),
+  type: SystemTypeSchema.optional(),
+  description: z.string().optional(),
+  sshConfigId: uuidSchema.optional().nullable(),
+  remoteRepoPath: z.string().optional().nullable(),
+  defaultBaseBranch: z.string().optional().nullable(),
+});
+
+export const ChangeRequestInputSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
+  code: z.string().trim().max(64).optional(),
+  description: z.string().optional(),
+  deadline: calendarDateSchema.optional(),
+  status: CrStatusSchema.default('Open'),
+  type: CrTypeSchema.default('ENHANCEMENT'),
+  targetSystemIds: z.array(z.string()).default([]),
+  jiraEpicKey: jiraKeySchema.optional(),
+  opsOwners: tagListSchema.optional(),
+  businessAnalysts: tagListSchema.optional(),
+  documentLinks: z.array(linkSchema).optional(),
+  reminderDate: reminderDateSchema.optional(),
+  reminderNote: reminderNoteSchema,
+  reminders: remindersArraySchema,
+});
+
+export const ChangeRequestUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  code: z.string().trim().max(64).optional(),
+  description: z.string().optional(),
+  deadline: calendarDateSchema.optional(),
+  status: CrStatusSchema.optional(),
+  type: CrTypeSchema.optional(),
+  targetSystemIds: z.array(z.string()).optional(),
+  jiraEpicKey: jiraKeySchema.optional(),
+  opsOwners: tagListSchema.optional(),
+  businessAnalysts: tagListSchema.optional(),
+  documentLinks: z.array(linkSchema).optional(),
+  reminderDate: reminderDateSchema.optional(),
+  reminderNote: reminderNoteSchema,
+  reminders: remindersArraySchema,
+});
+
+export type SystemInput = z.infer<typeof SystemInputSchema>;
+export type SystemUpdate = z.infer<typeof SystemUpdateSchema>;
+export type ChangeRequestInput = z.infer<typeof ChangeRequestInputSchema>;
+export type ChangeRequestUpdate = z.infer<typeof ChangeRequestUpdateSchema>;
 
 export const ProjectInputSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),

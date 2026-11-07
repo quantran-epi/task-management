@@ -14,6 +14,7 @@ import {
   SCHEMA_V12,
   SCHEMA_V13,
   SCHEMA_V14,
+  SCHEMA_V15,
 } from './schema';
 import type {
   Project,
@@ -39,6 +40,8 @@ import type {
   TelegramSettingsRecord,
   TelegramWhitelistUser,
   TelegramSessionLog,
+  System,
+  ChangeRequest,
 } from '../types/models';
 
 export class TaskPlannerDatabase extends Dexie {
@@ -65,6 +68,8 @@ export class TaskPlannerDatabase extends Dexie {
   telegramSettings!: Table<TelegramSettingsRecord, string>;
   telegramWhitelist!: Table<TelegramWhitelistUser, string>;
   telegramSessionLogs!: Table<TelegramSessionLog, string>;
+  systems!: Table<System, string>;
+  changeRequests!: Table<ChangeRequest, string>;
 
 
   constructor(databaseName = 'PersonalTaskPlannerDB') {
@@ -261,6 +266,40 @@ export class TaskPlannerDatabase extends Dexie {
           for (const tab of scopeTabs) {
             if (tab.id !== active?.id && tab.active) await tabs.update(tab.id, { active: false });
           }
+        }
+      });
+
+    this.version(15)
+      .stores(SCHEMA_V15)
+      .upgrade(async (tx) => {
+        // Phase 31.1: Copy existing projects into changeRequests table (ENT-SYS-01, ENT-CR-01)
+        const projects = await tx.table('projects').toCollection().toArray();
+        const changeRequests = tx.table('changeRequests');
+
+        for (const proj of projects as Array<Record<string, unknown>>) {
+          const id = typeof proj.id === 'string' ? proj.id : '';
+          if (!id) continue;
+          const existing = await changeRequests.get(id);
+          if (existing) continue;
+
+          await changeRequests.add({
+            id,
+            name: typeof proj.name === 'string' ? proj.name : 'Untitled CR',
+            description: typeof proj.description === 'string' ? proj.description : undefined,
+            deadline: typeof proj.deadline === 'string' ? proj.deadline : undefined,
+            status: typeof proj.status === 'string' ? proj.status : 'Open',
+            type: 'ENHANCEMENT',
+            targetSystemIds: [],
+            jiraEpicKey: typeof proj.jiraEpicKey === 'string' ? proj.jiraEpicKey : undefined,
+            opsOwners: Array.isArray(proj.opsOwners) ? proj.opsOwners : undefined,
+            businessAnalysts: Array.isArray(proj.businessAnalysts) ? proj.businessAnalysts : undefined,
+            documentLinks: Array.isArray(proj.documentLinks) ? proj.documentLinks : undefined,
+            reminderDate: typeof proj.reminderDate === 'string' ? proj.reminderDate : undefined,
+            reminderNote: typeof proj.reminderNote === 'string' ? proj.reminderNote : undefined,
+            reminders: Array.isArray(proj.reminders) ? proj.reminders : undefined,
+            createdAt: typeof proj.createdAt === 'string' ? proj.createdAt : new Date().toISOString(),
+            updatedAt: typeof proj.updatedAt === 'string' ? proj.updatedAt : new Date().toISOString(),
+          });
         }
       });
 

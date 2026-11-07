@@ -57,6 +57,46 @@ export interface Project {
   updatedAt: string; // ISO string metadata
 }
 
+// Phase 31.1: Enterprise Systems Catalog & Change Request Models (ENT-SYS-01, ENT-CR-01)
+export type SystemType = 'LOGICAL_GROUP' | 'SERVICE' | 'SCHEMA' | 'UI' | 'WORKER';
+
+export interface System {
+  id: string; // RFC 4122 v4 UUID
+  name: string;
+  code: string; // Unique system identifier code (e.g. CORE_BANKING, CREDIT_SVC)
+  parentId: string | null; // null for top-level root systems / LOGICAL_GROUP
+  type: SystemType;
+  description?: string;
+  sshConfigId?: string; // Foreign key referencing SshConfigRecord
+  remoteRepoPath?: string; // Remote filesystem git repository path
+  defaultBaseBranch?: string; // Default target branch (e.g. main, develop)
+  createdAt: string; // ISO string
+  updatedAt: string; // ISO string
+}
+
+export type CrType = 'NEW_FEATURE' | 'ENHANCEMENT' | 'BUGFIX';
+export type CrStatus = 'Open' | 'Pending' | 'In Progress' | 'Done' | 'Cancelled';
+
+export interface ChangeRequest {
+  id: string; // RFC 4122 v4 UUID (matches previous Project.id for migrated records)
+  name: string;
+  code?: string; // Optional human code (e.g. CR-2026-001)
+  description?: string;
+  deadline?: string; // YYYY-MM-DD
+  status: CrStatus;
+  type: CrType;
+  targetSystemIds: string[]; // Multi-system targeting
+  jiraEpicKey?: string;
+  opsOwners?: string[];
+  businessAnalysts?: string[];
+  documentLinks?: string[];
+  reminderDate?: string;
+  reminderNote?: string;
+  reminders?: ReminderItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Milestone {
   id: string; // RFC 4122 v4 UUID
   projectId: string; // Reference to Project.id
