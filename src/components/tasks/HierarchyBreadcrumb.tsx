@@ -2,19 +2,27 @@ import React from 'react';
 import { Tag } from 'antd';
 
 export interface HierarchyBreadcrumbProps {
-  projectId?: string | undefined;
-  projectName?: string | undefined;
-  milestoneName?: string | undefined;
-  onSelectProject?: ((projectId: string) => void) | undefined;
+  crCode?: string | undefined;
+  crName?: string | undefined;
+  systemCode?: string | undefined;
+  systemName?: string | undefined;
+  onSelectCr?: ((crId: string) => void) | undefined;
+  crId?: string | undefined;
 }
 
+/**
+ * D-46/D-47: the only hierarchy above a task is `CR > Subsystem`.
+ * No project or milestone tier exists any more.
+ */
 export const HierarchyBreadcrumb: React.FC<HierarchyBreadcrumbProps> = ({
-  projectId,
-  projectName,
-  milestoneName,
-  onSelectProject,
+  crCode,
+  crName,
+  systemCode,
+  systemName,
+  onSelectCr,
+  crId,
 }) => {
-  if (!projectId) {
+  if (!crCode && !crName) {
     return (
       <Tag
         bordered={false}
@@ -25,20 +33,19 @@ export const HierarchyBreadcrumb: React.FC<HierarchyBreadcrumbProps> = ({
           background: 'rgba(0, 0, 0, 0.04)',
         }}
       >
-        Độc lập
+        Chưa gắn CR
       </Tag>
     );
   }
 
-  const isClickable = Boolean(onSelectProject);
-  const label = milestoneName
-    ? `${projectName || 'Project'} > ${milestoneName}`
-    : projectName || 'Project';
+  const crLabel = crCode || crName || 'CR';
+  const isClickable = Boolean(onSelectCr && crId);
+  const label = systemCode ? `${crLabel} > ${systemCode}` : crLabel;
 
   const handleClick = (e: React.MouseEvent) => {
-    if (isClickable) {
+    if (isClickable && crId) {
       e.stopPropagation();
-      onSelectProject?.(projectId);
+      onSelectCr?.(crId);
     }
   };
 
@@ -56,7 +63,7 @@ export const HierarchyBreadcrumb: React.FC<HierarchyBreadcrumbProps> = ({
         whiteSpace: 'nowrap',
         verticalAlign: 'middle',
       }}
-      title={label}
+      title={systemName ? `${crName ?? crLabel} > ${systemName}` : crName ?? crLabel}
     >
       {label}
     </Tag>

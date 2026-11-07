@@ -115,7 +115,7 @@ describe('ItemInsightView', () => {
       <ItemInsightView itemType="cr" itemId={cr.id} onNavigate={mockNavigate} db={testDb} />
     );
 
-    expect((await screen.findAllByText('Thanh toán QR')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/Thanh toán QR/)).length).toBeGreaterThan(0);
     expect(await screen.findByText('Setup repository')).toBeInTheDocument();
     expect(screen.getByText(/Danh sách tác vụ liên quan \(1\)/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /mở CR detail/i })).toBeInTheDocument();
