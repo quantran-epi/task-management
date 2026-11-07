@@ -17,7 +17,7 @@ import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import type { Task, Project, Milestone } from '../../types/models';
+import type { Task, ChangeRequest, System } from '../../types/models';
 import {
   aggregateTaskActualMinutesByDate,
   computeVariance,
@@ -37,8 +37,8 @@ export interface ActualWorklogPlannerProps {
 interface TableRowData {
   taskId: string;
   task: Task;
-  project?: Project | undefined;
-  milestone?: Milestone | undefined;
+  changeRequest?: ChangeRequest | undefined;
+  system?: System | undefined;
 }
 
 export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
@@ -66,7 +66,7 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
     date: '',
   });
 
-  // Query planned allocations, work sessions, tasks, projects, milestones for the week
+  // Query planned allocations, work sessions, tasks, CRs, subsystems for the week
   const startDateStr = weekDates[0] ?? weekStart.format('YYYY-MM-DD');
   const endDateStr = weekDates[6] ?? weekStart.add(6, 'day').format('YYYY-MM-DD');
 
@@ -101,17 +101,17 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
     []
   );
 
-  const allProjects = useLiveQuery(
+  const allChangeRequests = useLiveQuery(
     async () => {
-      return await db.projects.toArray();
+      return await db.changeRequests.toArray();
     },
     [db],
     []
   );
 
-  const allMilestones = useLiveQuery(
+  const allSystems = useLiveQuery(
     async () => {
-      return await db.milestones.toArray();
+      return await db.systems.toArray();
     },
     [db],
     []
@@ -121,13 +121,13 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
     return new Map<string, Task>((allTasks ?? []).map((t) => [t.id, t]));
   }, [allTasks]);
 
-  const projectMap = useMemo(() => {
-    return new Map<string, Project>((allProjects ?? []).map((p) => [p.id, p]));
-  }, [allProjects]);
+  const crMap = useMemo(() => {
+    return new Map<string, ChangeRequest>((allChangeRequests ?? []).map((cr) => [cr.id, cr]));
+  }, [allChangeRequests]);
 
-  const milestoneMap = useMemo(() => {
-    return new Map<string, Milestone>((allMilestones ?? []).map((m) => [m.id, m]));
-  }, [allMilestones]);
+  const systemMap = useMemo(() => {
+    return new Map<string, System>((allSystems ?? []).map((s) => [s.id, s]));
+  }, [allSystems]);
 
   // Aggregate actual minutes by taskId and date (D-28, D-30)
   const actualMinutesByTaskDate = useMemo(() => {
@@ -168,17 +168,17 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
     for (const taskId of distinctTaskIds) {
       const task = taskMap.get(taskId);
       if (!task) continue;
-      const project = task.projectId ? projectMap.get(task.projectId) : undefined;
-      const milestone = task.milestoneId ? milestoneMap.get(task.milestoneId) : undefined;
+      const changeRequest = task.crId ? crMap.get(task.crId) : undefined;
+      const system = task.systemId ? systemMap.get(task.systemId) : undefined;
       rows.push({
         taskId,
         task,
-        project,
-        milestone,
+        changeRequest,
+        system,
       });
     }
     return rows.sort((a, b) => a.task.name.localeCompare(b.task.name));
-  }, [distinctTaskIds, taskMap, projectMap, milestoneMap]);
+  }, [distinctTaskIds, taskMap, crMap, systemMap]);
 
   // Candidates for "Thêm công việc" dropdown: active tasks not already in distinctTaskIds
   const candidateTasksToAdd = useMemo(() => {
@@ -265,8 +265,8 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
       width: 240,
       render: (_: unknown, record: TableRowData) => {
         const subtitleParts: string[] = [];
-        if (record.project?.name) subtitleParts.push(record.project.name);
-        if (record.milestone?.name) subtitleParts.push(record.milestone.name);
+        if (record.changeRequest) subtitleParts.push(record.changeRequest.code || record.changeRequest.name);
+        if (record.system?.name) subtitleParts.push(record.system.name);
         const subtitle = subtitleParts.join(' › ');
 
         return (

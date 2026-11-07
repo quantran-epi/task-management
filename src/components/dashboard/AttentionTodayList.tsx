@@ -13,7 +13,7 @@ export interface AttentionTodayListProps {
   onTaskClick: (taskId: string) => void;
   onViewAllTasks: () => void;
   db?: TaskPlannerDatabase;
-  projectMap?: Map<string, string>;
+  crMap?: Map<string, string>;
 }
 
 const PRIORITY_COLORS: Record<TaskPriority, string> = {
@@ -35,21 +35,21 @@ export const AttentionTodayList: React.FC<AttentionTodayListProps> = ({
   onTaskClick,
   onViewAllTasks,
   db,
-  projectMap,
+  crMap,
 }) => {
-  const projects = useLiveQuery(
+  const changeRequests = useLiveQuery(
     async () => {
       if (!db) return [];
-      return db.projects.toArray();
+      return db.changeRequests.toArray();
     },
     [db],
     []
   );
 
-  const internalProjectMap = useMemo(() => {
-    if (projectMap) return projectMap;
-    return new Map<string, string>((projects ?? []).map((p) => [p.id, p.name]));
-  }, [projects, projectMap]);
+  const internalCrMap = useMemo(() => {
+    if (crMap) return crMap;
+    return new Map<string, string>((changeRequests ?? []).map((cr) => [cr.id, cr.code || cr.name]));
+  }, [changeRequests, crMap]);
 
   const handleToggleDone = async (task: Task) => {
     const nextStatus: TaskStatus = task.status === 'Done' ? 'Open' : 'Done';
@@ -133,13 +133,13 @@ export const AttentionTodayList: React.FC<AttentionTodayListProps> = ({
                     >
                       {item.task.name}
                     </Typography.Text>
-                    {item.task.projectId && internalProjectMap.get(item.task.projectId) && (
+                    {item.task.crId && internalCrMap.get(item.task.crId) && (
                       <Typography.Text
                         type="secondary"
-                        ellipsis={{ tooltip: internalProjectMap.get(item.task.projectId) }}
+                        ellipsis={{ tooltip: internalCrMap.get(item.task.crId) }}
                         style={{ fontSize: 11, lineHeight: 1.2 }}
                       >
-                        {internalProjectMap.get(item.task.projectId)}
+                        {internalCrMap.get(item.task.crId)}
                       </Typography.Text>
                     )}
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', marginTop: 2 }}>
