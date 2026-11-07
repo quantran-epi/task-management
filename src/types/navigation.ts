@@ -1,7 +1,6 @@
 export type AppRoute =
   | 'dashboard'
   | 'tasks'
-  | 'projects'
   | 'planner'
   | 'analytics'
   | 'notes'

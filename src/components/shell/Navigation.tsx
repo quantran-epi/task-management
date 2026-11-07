@@ -3,7 +3,6 @@ import { Menu, Badge, type MenuProps } from 'antd';
 import {
   DashboardOutlined,
   CheckSquareOutlined,
-  ProjectOutlined,
   CalendarOutlined,
   BarChartOutlined,
   FileTextOutlined,
@@ -44,11 +43,6 @@ export const Navigation: React.FC<NavigationProps> = ({ currentRoute, onNavigate
       key: 'tasks',
       icon: <CheckSquareOutlined style={{ fontSize: 16 }} />,
       label: 'Tác vụ',
-    },
-    {
-      key: 'projects',
-      icon: <ProjectOutlined style={{ fontSize: 16 }} />,
-      label: 'Dự án',
     },
     {
       key: 'planner',
