@@ -15,10 +15,9 @@ import {
   SCHEMA_V13,
   SCHEMA_V14,
   SCHEMA_V15,
+  SCHEMA_V16,
 } from './schema';
 import type {
-  Project,
-  Milestone,
   Task,
   CapacityRule,
   CapacityOverride,
@@ -45,8 +44,6 @@ import type {
 } from '../types/models';
 
 export class TaskPlannerDatabase extends Dexie {
-  projects!: Table<Project, string>;
-  milestones!: Table<Milestone, string>;
   tasks!: Table<Task, string>;
   capacityRules!: Table<CapacityRule, string>;
   capacityOverrides!: Table<CapacityOverride, string>;
@@ -300,6 +297,107 @@ export class TaskPlannerDatabase extends Dexie {
             createdAt: typeof proj.createdAt === 'string' ? proj.createdAt : new Date().toISOString(),
             updatedAt: typeof proj.updatedAt === 'string' ? proj.updatedAt : new Date().toISOString(),
           });
+        }
+      });
+
+    // Phase 31.2 (D-27, D-48, D-49): drop `projects`/`milestones`, re-axis tasks onto
+    // crId/systemId, convert CR targets, and purge legacy chat scopes + SSH/repo settings.
+    //
+    // The V2/V6/V15 hooks above intentionally reference the pre-V16 `projects` and
+    // `milestones` stores by name. A hook only runs when a user upgrades *from* that
+    // version, and Dexie materialises the store for the duration of the hook, so those
+    // calls resolve against the pre-V16 schema of that step — not against SCHEMA_V16.
+    this.version(16)
+      .stores(SCHEMA_V16)
+      .upgrade(async (tx) => {
+        const changeRequestsTable = tx.table('changeRequests');
+        const tasksTable = tx.table('tasks');
+
+        // 1. Collect the surviving CR ids so tasks can be resolved against them.
+        const crRows = (await changeRequestsTable.toCollection().toArray()) as Array<
+          Record<string, unknown>
+        >;
+        const crIds = new Set<string>();
+        for (const cr of crRows) {
+          if (typeof cr.id === 'string') crIds.add(cr.id);
+        }
+
+        // 2. Re-axis tasks: projectId -> crId; tasks with no resolvable CR are deleted
+        //    so no row can violate the required-crId invariant (T-31.2-06).
+        const taskRows = (await tasksTable.toCollection().toArray()) as Array<
+          Record<string, unknown>
+        >;
+        let deletedOrphans = 0;
+        for (const task of taskRows) {
+          const id = typeof task.id === 'string' ? task.id : '';
+          const projectId = typeof task.projectId === 'string' ? task.projectId : undefined;
+          if (projectId !== undefined && crIds.has(projectId)) {
+            task.crId = projectId;
+            delete task.projectId;
+            delete task.milestoneId;
+            if (id) await tasksTable.put(task);
+          } else {
+            if (id) await tasksTable.delete(id);
+            deletedOrphans += 1;
+          }
+        }
+        if (deletedOrphans > 0) {
+          console.warn(`[db v16] deleted ${deletedOrphans} orphan tasks`);
+        }
+
+        // 3. Convert targetSystemIds -> targets and backfill a deterministic legacy code
+        //    (T-31.2-04: the legacy array never survives the upgrade).
+        for (const cr of crRows) {
+          if (cr.targets === undefined) {
+            cr.targets = Array.isArray(cr.targetSystemIds)
+              ? (cr.targetSystemIds as unknown[]).map((systemId) => ({ systemId }))
+              : [];
+          }
+          delete cr.targetSystemIds;
+        }
+        const crsByCodeOrder = [...crRows].sort((a, b) =>
+          String(a.id ?? '').localeCompare(String(b.id ?? ''))
+        );
+        let legacyCodeCounter = 0;
+        for (const cr of crsByCodeOrder) {
+          if (typeof cr.code !== 'string' || cr.code.trim() === '') {
+            legacyCodeCounter += 1;
+            cr.code = `CR-LEGACY-${legacyCodeCounter}`;
+          }
+        }
+        for (const cr of crRows) {
+          if (typeof cr.id === 'string') await changeRequestsTable.put(cr);
+        }
+
+        // 4. Purge legacy project:/milestone: chat threads, their tabs and messages.
+        const threadRows = (await tx.table('chatThreads').toCollection().toArray()) as Array<
+          Record<string, unknown>
+        >;
+        const legacyThreadIds = threadRows
+          .filter(
+            (thread) =>
+              typeof thread.scopeKey === 'string' &&
+              (thread.scopeKey.startsWith('project:') ||
+                thread.scopeKey.startsWith('milestone:'))
+          )
+          .map((thread) => (typeof thread.id === 'string' ? thread.id : ''))
+          .filter((threadId) => threadId !== '');
+        for (const threadId of legacyThreadIds) {
+          await tx.table('chatMessages').where('threadId').equals(threadId).delete();
+          await tx.table('chatTabs').where('threadId').equals(threadId).delete();
+          await tx.table('chatThreads').delete(threadId);
+        }
+
+        // 5. Purge legacy project SSH/repo bindings so the removed config surface cannot
+        //    be re-read after the upgrade (T-31.2-05).
+        const settingRows = (await tx.table('settings').toCollection().toArray()) as Array<
+          Record<string, unknown>
+        >;
+        for (const setting of settingRows) {
+          const key = typeof setting.key === 'string' ? setting.key : '';
+          if (key.startsWith('project_ssh_repo:') || key.startsWith('project_repo_ssh_binding:')) {
+            await tx.table('settings').delete(key);
+          }
         }
       });
 
