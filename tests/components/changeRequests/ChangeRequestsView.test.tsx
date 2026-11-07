@@ -4,7 +4,13 @@ import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../../src/db';
 import { TargetSystemsSelector } from '../../../src/components/changeRequests/TargetSystemsSelector';
 import { ChangeRequestModal } from '../../../src/components/changeRequests/ChangeRequestModal';
+import { ChangeRequestsView } from '../../../src/views/ChangeRequestsView';
+import { ChangeRequestTable } from '../../../src/components/changeRequests/ChangeRequestTable';
+import { ProjectExplorer } from '../../../src/workbench/toolwindows/ProjectExplorer';
 import { createSystem } from '../../../src/db/repositories/systemRepo';
+import { createChangeRequest } from '../../../src/db/repositories/changeRequestRepo';
+import { createMilestone } from '../../../src/db/repositories/milestoneRepo';
+import { createTask } from '../../../src/db/repositories/taskRepo';
 
 describe('TargetSystemsSelector & ChangeRequestModal (Task 1)', () => {
   let db: TaskPlannerDatabase;
@@ -74,11 +80,29 @@ describe('TargetSystemsSelector & ChangeRequestModal (Task 1)', () => {
     });
     expect(onSave).not.toHaveBeenCalled();
   });
+});
 
-  it('submitting modal calls onSave with targetSystemIds and selected type', async () => {
-    const onSave = vi.fn().mockResolvedValue(undefined);
-    const onClose = vi.fn();
+describe('ChangeRequestsView, ChangeRequestTable, and ProjectExplorer (Task 2)', () => {
+  let db: TaskPlannerDatabase;
 
+  beforeEach(async () => {
+    db = new TaskPlannerDatabase('test-cr-view-' + Math.random().toString(36).slice(2));
+    await db.open();
+  });
+
+  afterEach(async () => {
+    await db.delete();
+  });
+
+  it('ChangeRequestsView renders empty state when no CR exists', async () => {
+    render(<ChangeRequestsView db={db} />);
+
+    expect(await screen.findByText('Chưa có Change Request (CR) nào')).toBeInTheDocument();
+    expect(screen.getByText('Quản lý Change Requests (CR)')).toBeInTheDocument();
+    expect(screen.getByTestId('btn-create-cr')).toBeInTheDocument();
+  });
+
+  it('ChangeRequestTable displays CR with type badge, code, target subsystem tags, and task progress', async () => {
     const parent = await createSystem(
       {
         name: 'SmartCard Core',
@@ -98,27 +122,107 @@ describe('TargetSystemsSelector & ChangeRequestModal (Task 1)', () => {
       db
     );
 
+    const sampleCR = await createChangeRequest(
+      {
+        name: 'SmartCard Instant Payment',
+        code: 'CR-2026-001',
+        type: 'NEW_FEATURE',
+        status: 'In Progress',
+        targetSystemIds: [subsystem.id],
+      },
+      db
+    );
+
+    const task1 = await createTask(
+      {
+        name: 'Build API spec',
+        status: 'Done',
+        priority: 'High',
+        estimateMinutes: 60,
+        projectId: sampleCR.id,
+      },
+      db
+    );
+
     render(
-      <ChangeRequestModal
-        open={true}
-        onClose={onClose}
-        onSave={onSave}
+      <ChangeRequestTable
+        changeRequests={[sampleCR]}
+        tasks={[task1]}
+        systems={[parent, subsystem]}
+        onEditChangeRequest={vi.fn()}
+        onDeleteChangeRequest={vi.fn()}
         db={db}
       />
     );
 
-    fireEvent.change(screen.getByPlaceholderText('vd: Tích hợp xác thực SmartCard và hoàn tiền tự động'), {
-      target: { value: 'Feature CR 01' },
-    });
+    // CR Name & Code
+    expect(screen.getByText('SmartCard Instant Payment')).toBeInTheDocument();
+    expect(screen.getByText('CR-2026-001')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText('vd: CR-2026-001'), {
-      target: { value: 'CR-001' },
-    });
+    // Type Badge & Subsystem tag
+    expect(screen.getByText('New Feature')).toBeInTheDocument();
+    expect(screen.getByText('SC-AUTH-API')).toBeInTheDocument();
 
-    // Select Bugfix type
-    fireEvent.click(screen.getByText('Sửa lỗi'));
+    // Task progress
+    expect(screen.getByText('1/1 Done')).toBeInTheDocument();
+    expect(screen.getByText('100%')).toBeInTheDocument();
+  });
 
-    // Select target subsystem using the ChangeRequestModal instance
-    // Simulate setting targetSystemIds or testing component with predefined initial values
+  it('ProjectExplorer renders CR items with target system pills', async () => {
+    const parent = await createSystem(
+      {
+        name: 'SmartCard Core',
+        code: 'SC-CORE',
+        type: 'LOGICAL_GROUP',
+      },
+      db
+    );
+
+    const subsystem = await createSystem(
+      {
+        name: 'Card Auth API',
+        code: 'SC-AUTH-API',
+        parentId: parent.id,
+        type: 'SERVICE',
+      },
+      db
+    );
+
+    const cr = await createChangeRequest(
+      {
+        name: 'Revamp Auth Flow',
+        code: 'CR-AUTH-01',
+        type: 'ENHANCEMENT',
+        targetSystemIds: [subsystem.id],
+      },
+      db
+    );
+
+    const ms = await createMilestone(
+      {
+        name: 'Sprint 1 Delivery',
+        projectId: cr.id,
+      },
+      db
+    );
+
+    await createTask(
+      {
+        name: 'Implement OAuth Token Guard',
+        projectId: cr.id,
+        milestoneId: ms.id,
+        status: 'Open',
+        priority: 'Urgent',
+        estimateMinutes: 120,
+      },
+      db
+    );
+
+    render(<ProjectExplorer db={db} />);
+
+    // Explorer tree elements
+    expect(await screen.findByText('Revamp Auth Flow')).toBeInTheDocument();
+    expect(screen.getByText('CR-AUTH-01')).toBeInTheDocument();
+    expect(screen.getByText('SC-AUTH-API')).toBeInTheDocument();
   });
 });

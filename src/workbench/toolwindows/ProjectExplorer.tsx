@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
-import { Tree, Input, Empty, Tag, Typography, Dropdown, Modal, message, type MenuProps } from 'antd';
+import { Tree, Input, Empty, Tag, Typography, Dropdown, Modal, Tooltip, message, type MenuProps } from 'antd';
 import {
-  FolderOutlined,
   FlagOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
@@ -16,27 +15,47 @@ import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
+  ThunderboltOutlined,
+  ToolOutlined,
+  BugOutlined,
+  BranchesOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import { getAllProjects, updateProject, createProject } from '../../db/repositories/projectRepo';
+import {
+  getAllChangeRequests,
+  updateChangeRequest,
+  createChangeRequest,
+  deleteChangeRequest,
+} from '../../db/repositories/changeRequestRepo';
 import { getAllMilestones, updateMilestone, createMilestone } from '../../db/repositories/milestoneRepo';
 import { updateTask, createTask } from '../../db/repositories/taskRepo';
-import { deleteProjectWithCascade, deleteMilestoneWithCascade, deleteTaskWithAllocations } from '../../db/repositories/cascadeRepo';
+import { deleteMilestoneWithCascade, deleteTaskWithAllocations } from '../../db/repositories/cascadeRepo';
 import { useLayoutStore } from '../store/layoutStore';
 import { useTimer } from '../../hooks/useTimer';
 import { useAIChat } from '../../context/AIChatContext';
-import { ProjectModal } from '../../components/projects/ProjectModal';
+import { ChangeRequestModal } from '../../components/changeRequests/ChangeRequestModal';
 import { MilestoneModal } from '../../components/projects/MilestoneModal';
-import { CascadeDeleteModal } from '../../components/projects/CascadeDeleteModal';
 import { TaskDrawer } from '../../components/tasks/TaskDrawer';
 import type { DataNode } from 'antd/es/tree';
-import type { Project, Milestone, Task } from '../../types/models';
+import type { ChangeRequest, Milestone, Task, System, CrType } from '../../types/models';
 
 export interface ProjectExplorerProps {
   db?: TaskPlannerDatabase | undefined;
   onSelectProject?: ((projectId: string | null) => void) | undefined;
 }
+
+const CR_TYPE_ICON: Record<CrType, React.ReactNode> = {
+  NEW_FEATURE: <ThunderboltOutlined style={{ color: '#1677ff' }} />,
+  ENHANCEMENT: <ToolOutlined style={{ color: '#52c41a' }} />,
+  BUGFIX: <BugOutlined style={{ color: '#faad14' }} />,
+};
+
+const CR_TYPE_COLOR: Record<CrType, string> = {
+  NEW_FEATURE: '#1677ff',
+  ENHANCEMENT: '#52c41a',
+  BUGFIX: '#faad14',
+};
 
 export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExplorerProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -82,21 +101,12 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
   }, []);
 
   // Modals state
-  const [projectModalOpen, setProjectModalOpen] = useState(false);
-  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [crModalOpen, setCrModalOpen] = useState(false);
+  const [editingCR, setEditingCR] = useState<ChangeRequest | null>(null);
 
   const [milestoneModalOpen, setMilestoneModalOpen] = useState(false);
   const [activeProjectIdForMilestone, setActiveProjectIdForMilestone] = useState<string>('');
   const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
-
-  const [cascadeModalOpen, setCascadeModalOpen] = useState(false);
-  const [cascadeTarget, setCascadeTarget] = useState<{
-    type: 'project' | 'milestone';
-    id: string;
-    name: string;
-    childMilestoneCount: number;
-    childTaskCount: number;
-  } | null>(null);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
@@ -105,15 +115,18 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
   const { activeTimers, startTimer, pauseTimer } = useTimer();
   const { openChat } = useAIChat();
 
-  const projects = useLiveQuery(() => getAllProjects(db), [db]) ?? [];
+  const changeRequests = useLiveQuery(() => getAllChangeRequests(db), [db]) ?? [];
   const milestones = useLiveQuery(() => getAllMilestones(db), [db]) ?? [];
-  const tasks = useLiveQuery(
-    async () => {
-      return await db.tasks.toArray();
-    },
-    [db],
-    []
-  );
+  const tasks = useLiveQuery(() => db.tasks.toArray(), [db]) ?? [];
+  const systems = useLiveQuery(() => db.systems.toArray(), [db]) ?? [];
+
+  const systemMap = useMemo(() => {
+    const map = new Map<string, System>();
+    for (const sys of systems) {
+      map.set(sys.id, sys);
+    }
+    return map;
+  }, [systems]);
 
   const isTimerRunning = useCallback(
     (taskId: string) => {
@@ -311,14 +324,21 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
           label: 'Xóa cột mốc',
           onClick: () => {
             setContextMenu(null);
-            setCascadeTarget({
-              type: 'milestone',
-              id: milestone.id,
-              name: milestone.name,
-              childMilestoneCount: 0,
-              childTaskCount: pTasks.length,
+            Modal.confirm({
+              title: `Xóa cột mốc '${milestone.name}'?`,
+              content: `Toàn bộ ${pTasks.length} tác vụ con sẽ bị xóa theo.`,
+              okText: 'Xóa',
+              okType: 'danger',
+              cancelText: 'Hủy',
+              onOk: async () => {
+                try {
+                  await deleteMilestoneWithCascade(milestone.id, 'cascade', db);
+                  message.success('Đã xóa cột mốc');
+                } catch {
+                  message.error('Không thể xóa cột mốc');
+                }
+              },
             });
-            setCascadeModalOpen(true);
           },
         },
       ];
@@ -326,10 +346,9 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
     [db, onSelectProject, openChat, openTab, tasks]
   );
 
-  const getProjectContextMenu = useCallback(
-    (project: Project): Required<MenuProps>['items'] => {
-      const projMilestones = milestones.filter((m) => m.projectId === project.id);
-      const projTasks = tasks.filter((t) => t.projectId === project.id);
+  const getCRContextMenu = useCallback(
+    (cr: ChangeRequest): Required<MenuProps>['items'] => {
+      const crTasks = tasks.filter((t) => t.projectId === cr.id);
 
       return [
         {
@@ -338,7 +357,7 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
           label: 'Hỏi Trợ lý AI',
           onClick: () => {
             setContextMenu(null);
-            openChat({ type: 'project', id: project.id, title: project.name });
+            openChat({ type: 'project', id: cr.id, title: cr.name });
           },
         },
         {
@@ -347,29 +366,29 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
           label: <span style={{ fontWeight: 600, color: '#3871e1' }}>Mở SDLC Studio</span>,
           onClick: () => {
             setContextMenu(null);
-            onSelectProject?.(project.id);
+            onSelectProject?.(cr.id);
             openTab({
-              id: `sdlc-${project.id}`,
-              title: `SDLC: ${project.name}`,
+              id: `sdlc-${cr.id}`,
+              title: `SDLC: ${cr.name}`,
               viewType: 'sdlc',
               closable: true,
-              params: { projectId: project.id },
+              params: { projectId: cr.id },
             });
           },
         },
         {
           key: 'insight',
           icon: <EyeOutlined />,
-          label: 'Chi tiết Dự án (Insight)',
+          label: 'Chi tiết CR (Insight)',
           onClick: () => {
             setContextMenu(null);
-            onSelectProject?.(project.id);
+            onSelectProject?.(cr.id);
             openTab({
-              id: `project-${project.id}`,
-              title: project.name,
+              id: `project-${cr.id}`,
+              title: cr.name,
               viewType: 'insight',
               closable: true,
-              params: { itemType: 'project', itemId: project.id },
+              params: { itemType: 'project', itemId: cr.id },
             });
           },
         },
@@ -386,7 +405,7 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
               const t = await createTask(
                 {
                   name: 'Tác vụ mới',
-                  projectId: project.id,
+                  projectId: cr.id,
                   status: 'Open',
                   priority: 'Medium',
                   estimateMinutes: 0,
@@ -406,7 +425,7 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
           label: 'Thêm cột mốc',
           onClick: () => {
             setContextMenu(null);
-            setActiveProjectIdForMilestone(project.id);
+            setActiveProjectIdForMilestone(cr.id);
             setEditingMilestone(null);
             setMilestoneModalOpen(true);
           },
@@ -414,11 +433,11 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
         {
           key: 'edit',
           icon: <EditOutlined />,
-          label: 'Sửa dự án',
+          label: 'Sửa Change Request',
           onClick: () => {
             setContextMenu(null);
-            setEditingProject(project);
-            setProjectModalOpen(true);
+            setEditingCR(cr);
+            setCrModalOpen(true);
           },
         },
         {
@@ -427,12 +446,12 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
           label: 'Xem trên bảng Tác vụ',
           onClick: () => {
             setContextMenu(null);
-            onSelectProject?.(project.id);
+            onSelectProject?.(cr.id);
             openTab({
               id: 'tasks',
-              title: `Tasks: ${project.name}`,
+              title: `Tasks: ${cr.name}`,
               viewType: 'tasks',
-              params: { projectId: project.id },
+              params: { projectId: cr.id },
             });
           },
         },
@@ -443,32 +462,39 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
           key: 'delete',
           icon: <DeleteOutlined style={{ color: 'var(--danger, #c54e58)' }} />,
           danger: true,
-          label: 'Xóa dự án',
+          label: 'Xóa Change Request',
           onClick: () => {
             setContextMenu(null);
-            setCascadeTarget({
-              type: 'project',
-              id: project.id,
-              name: project.name,
-              childMilestoneCount: projMilestones.length,
-              childTaskCount: projTasks.length,
+            Modal.confirm({
+              title: `Xóa Change Request: Xóa CR '${cr.name}'?`,
+              content: `Toàn bộ ${crTasks.length} tác vụ con và tài liệu SDLC liên quan sẽ bị xóa vĩnh viễn.`,
+              okText: 'Xóa vĩnh viễn',
+              okType: 'danger',
+              cancelText: 'Hủy',
+              onOk: async () => {
+                try {
+                  await deleteChangeRequest(cr.id, db);
+                  message.success('Đã xóa Change Request');
+                } catch {
+                  message.error('Không thể xóa Change Request');
+                }
+              },
             });
-            setCascadeModalOpen(true);
           },
         },
       ];
     },
-    [db, milestones, onSelectProject, openChat, openTab, tasks]
+    [db, onSelectProject, openChat, openTab, tasks]
   );
 
   const contextMenuItems = useMemo<Required<MenuProps>['items']>(() => {
     if (!contextMenu) return [];
     const key = contextMenu.key;
 
-    if (key.startsWith('project:')) {
-      const pId = key.replace('project:', '');
-      const project = projects.find((p) => p.id === pId);
-      return project ? getProjectContextMenu(project) : [];
+    if (key.startsWith('cr:')) {
+      const crId = key.replace('cr:', '');
+      const cr = changeRequests.find((c) => c.id === crId);
+      return cr ? getCRContextMenu(cr) : [];
     }
 
     if (key.startsWith('milestone:')) {
@@ -484,15 +510,15 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
     }
 
     return [];
-  }, [contextMenu, projects, milestones, tasks, getProjectContextMenu, getMilestoneContextMenu, getTaskContextMenu]);
+  }, [contextMenu, changeRequests, milestones, tasks, getCRContextMenu, getMilestoneContextMenu, getTaskContextMenu]);
 
   const treeData = useMemo<DataNode[]>(() => {
     const q = searchQuery.trim().toLowerCase();
 
-    return projects
-      .map((p) => {
-        const pMilestones = milestones.filter((m) => m.projectId === p.id);
-        const pTasks = tasks.filter((t) => t.projectId === p.id);
+    return changeRequests
+      .map((cr) => {
+        const pMilestones = milestones.filter((m) => m.projectId === cr.id);
+        const pTasks = tasks.filter((t) => t.projectId === cr.id);
 
         const milestoneNodes: DataNode[] = pMilestones
           .map((m) => {
@@ -564,42 +590,99 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
         }));
 
         const allChildren = [...milestoneNodes, ...orphanTaskNodes];
-        const matchProject = !q || p.name.toLowerCase().includes(q) || allChildren.length > 0;
-        if (!matchProject) return null;
+        const matchCR =
+          !q ||
+          cr.name.toLowerCase().includes(q) ||
+          (cr.code && cr.code.toLowerCase().includes(q)) ||
+          allChildren.length > 0;
+        if (!matchCR) return null;
+
+        const typeColor = CR_TYPE_COLOR[cr.type] || '#52c41a';
+        const typeIcon = CR_TYPE_ICON[cr.type] || <ToolOutlined style={{ color: typeColor }} />;
+
+        // Subsystems chips
+        const targetChips = (cr.targetSystemIds ?? []).map((id) => {
+          const sys = systemMap.get(id);
+          return sys ? sys.code : id.slice(0, 6);
+        });
 
         return {
-          key: `project:${p.id}`,
+          key: `cr:${cr.id}`,
           title: (
-            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', minWidth: 0, gap: 6, overflow: 'hidden' }}>
-              <Typography.Text ellipsis strong style={{ flex: 1, minWidth: 0, fontSize: 13.5, lineHeight: '20px' }}>
-                {p.name}
-              </Typography.Text>
-              <span style={{ fontSize: 11, color: 'var(--fg-muted, #6c707e)', flexShrink: 0 }}>
-                {pTasks.length}
-              </span>
-            </span>
+            <div style={{ display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0, overflow: 'hidden', padding: '2px 0' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', minWidth: 0, gap: 6 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+                  {cr.code && (
+                    <Tag
+                      color="blue"
+                      style={{
+                        margin: 0,
+                        padding: '0 4px',
+                        fontSize: 10,
+                        lineHeight: '14px',
+                        fontFamily: 'monospace',
+                        fontWeight: 600,
+                      }}
+                    >
+                      {cr.code}
+                    </Tag>
+                  )}
+                  <Typography.Text ellipsis strong style={{ fontSize: 13, lineHeight: '18px' }}>
+                    {cr.name}
+                  </Typography.Text>
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--fg-muted, #6c707e)', flexShrink: 0 }}>
+                  {pTasks.length}
+                </span>
+              </div>
+
+              {targetChips.length > 0 && (
+                <div style={{ display: 'flex', gap: 3, flexWrap: 'nowrap', overflow: 'hidden', marginTop: 2 }}>
+                  {targetChips.slice(0, 2).map((chip, idx) => (
+                    <Tag
+                      key={idx}
+                      color="cyan"
+                      icon={<BranchesOutlined style={{ fontSize: 9 }} />}
+                      style={{
+                        fontSize: 9.5,
+                        margin: 0,
+                        padding: '0 4px',
+                        lineHeight: '14px',
+                        height: 14,
+                        fontFamily: 'monospace',
+                      }}
+                    >
+                      {chip}
+                    </Tag>
+                  ))}
+                  {targetChips.length > 2 && (
+                    <span style={{ fontSize: 9.5, color: '#8c8c8c' }}>+{targetChips.length - 2}</span>
+                  )}
+                </div>
+              )}
+            </div>
           ),
-          icon: <FolderOutlined style={{ color: (p as any).color || 'var(--accent, #3871e1)' }} />,
+          icon: typeIcon,
           children: allChildren,
         };
       })
       .filter(Boolean) as DataNode[];
-  }, [projects, milestones, tasks, searchQuery]);
+  }, [changeRequests, milestones, tasks, searchQuery, systemMap]);
 
   const handleSelect = (selectedKeys: React.Key[]) => {
     const key = selectedKeys[0]?.toString();
     if (!key) return;
 
-    if (key.startsWith('project:')) {
-      const projectId = key.replace('project:', '');
-      onSelectProject?.(projectId);
-      const project = projects.find((p) => p.id === projectId);
+    if (key.startsWith('cr:')) {
+      const crId = key.replace('cr:', '');
+      onSelectProject?.(crId);
+      const cr = changeRequests.find((c) => c.id === crId);
       openTab({
-        id: `project-${projectId}`,
-        title: project?.name || 'Project',
+        id: `project-${crId}`,
+        title: cr?.name || 'Change Request',
         viewType: 'insight',
         closable: true,
-        params: { itemType: 'project', itemId: projectId },
+        params: { itemType: 'project', itemId: crId },
       });
     } else if (key.startsWith('milestone:')) {
       const milestoneId = key.replace('milestone:', '');
@@ -651,7 +734,7 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
       <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border, #e9eaee)' }}>
         <Input
           prefix={<SearchOutlined style={{ color: 'var(--fg-muted, #6c707e)', fontSize: 12 }} />}
-          placeholder="Filter projects, tasks..."
+          placeholder="Lọc Change Requests, tác vụ..."
           allowClear
           size="small"
           value={searchQuery}
@@ -675,7 +758,7 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
               height={treeHeight}
               showIcon
               blockNode
-              defaultExpandAll={projects.length <= 4}
+              defaultExpandAll={changeRequests.length <= 4}
               treeData={treeData}
               onSelect={handleSelect}
               onRightClick={handleRightClick}
@@ -712,29 +795,29 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
         ) : (
           <Empty
             image={<InboxOutlined style={{ fontSize: 28, color: 'var(--fg-muted, #6c707e)' }} />}
-            description="No items found"
+            description="Chưa có Change Request nào"
             style={{ marginTop: 24 }}
           />
         )}
       </div>
 
       {/* CRUD Modals and Drawers */}
-      <ProjectModal
-        open={projectModalOpen}
-        project={editingProject}
-        onClose={() => setProjectModalOpen(false)}
+      <ChangeRequestModal
+        open={crModalOpen}
+        changeRequest={editingCR}
+        onClose={() => setCrModalOpen(false)}
         onSave={async (values) => {
           try {
-            if (editingProject) {
-              await updateProject(editingProject.id, values, db);
-              message.success('Đã cập nhật dự án');
+            if (editingCR) {
+              await updateChangeRequest(editingCR.id, values as any, db);
+              message.success('Đã cập nhật Change Request');
             } else {
-              await createProject(values, db);
-              message.success('Đã tạo dự án mới');
+              await createChangeRequest(values as any, db);
+              message.success('Đã tạo Change Request mới');
             }
-            setProjectModalOpen(false);
+            setCrModalOpen(false);
           } catch {
-            message.error('Không thể lưu dự án');
+            message.error('Không thể lưu Change Request');
           }
         }}
         db={db}
@@ -757,30 +840,6 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
             setMilestoneModalOpen(false);
           } catch {
             message.error('Không thể lưu cột mốc');
-          }
-        }}
-      />
-
-      <CascadeDeleteModal
-        open={cascadeModalOpen}
-        targetType={cascadeTarget?.type ?? 'project'}
-        targetName={cascadeTarget?.name ?? ''}
-        childMilestoneCount={cascadeTarget?.childMilestoneCount ?? 0}
-        childTaskCount={cascadeTarget?.childTaskCount ?? 0}
-        onClose={() => setCascadeModalOpen(false)}
-        onConfirm={async (mode) => {
-          if (!cascadeTarget) return;
-          try {
-            if (cascadeTarget.type === 'project') {
-              await deleteProjectWithCascade(cascadeTarget.id, mode, db);
-              message.success('Đã xóa dự án');
-            } else {
-              await deleteMilestoneWithCascade(cascadeTarget.id, mode, db);
-              message.success('Đã xóa cột mốc');
-            }
-            setCascadeModalOpen(false);
-          } catch {
-            message.error('Không thể xóa');
           }
         }}
       />
