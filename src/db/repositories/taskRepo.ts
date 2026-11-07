@@ -9,6 +9,23 @@ import {
 } from '../../validation/schemas';
 import { spawnNextRecurringTask } from '../../utils/recurrence';
 
+/**
+ * D-26: a task's `systemId`, when set, must be one of its CR's targets.
+ * Runs at the repo layer so a stale subsystem id cannot be attached by a direct call.
+ */
+async function assertSystemInCrTargets(
+  crId: string,
+  systemId: string | undefined,
+  db: TaskPlannerDatabase
+): Promise<void> {
+  if (systemId === undefined) return;
+  const cr = await db.changeRequests.get(crId);
+  if (!cr) throw new Error('Change Request không tồn tại.');
+  if (!cr.targets.some((t) => t.systemId === systemId)) {
+    throw new Error('Subsystem của tác vụ phải thuộc CR đã chọn.');
+  }
+}
+
 export async function createTask(
   input: TaskInput,
   db: TaskPlannerDatabase = defaultDb
@@ -16,8 +33,11 @@ export async function createTask(
   const validated = TaskInputSchema.parse(input);
   const now = new Date().toISOString();
 
+  await assertSystemInCrTargets(validated.crId, validated.systemId, db);
+
   const task: Task = {
     id: generateId(),
+    crId: validated.crId,
     name: validated.name,
     status: validated.status,
     progress: validated.progress,
@@ -28,8 +48,7 @@ export async function createTask(
     updatedAt: now,
   };
 
-  if (validated.projectId !== undefined) task.projectId = validated.projectId;
-  if (validated.milestoneId !== undefined) task.milestoneId = validated.milestoneId;
+  if (validated.systemId !== undefined) task.systemId = validated.systemId;
   if (validated.description !== undefined) task.description = validated.description;
   if (validated.deadline !== undefined) task.deadline = validated.deadline;
   if (validated.notes !== undefined) task.notes = validated.notes;
@@ -77,8 +96,13 @@ export async function updateTask(
   if (validated.priority !== undefined) updated.priority = validated.priority;
   if (validated.estimateMinutes !== undefined) updated.estimateMinutes = validated.estimateMinutes;
   if (validated.workType !== undefined) updated.workType = validated.workType;
-  if (validated.projectId !== undefined) updated.projectId = validated.projectId;
-  if (validated.milestoneId !== undefined) updated.milestoneId = validated.milestoneId;
+  if ('crId' in patch && validated.crId !== undefined) updated.crId = validated.crId;
+  if ('systemId' in patch) {
+    if (validated.systemId !== undefined) updated.systemId = validated.systemId;
+    else delete updated.systemId;
+  }
+
+  await assertSystemInCrTargets(updated.crId, updated.systemId, db);
 
   const assignOptional = (key: keyof Pick<
     Task,
@@ -213,18 +237,18 @@ export async function getAllTasks(
   return db.tasks.toArray();
 }
 
-export async function getTasksByProject(
-  projectId: string,
+export async function getTasksByCr(
+  crId: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<Task[]> {
-  return db.tasks.where('projectId').equals(projectId).toArray();
+  return db.tasks.where('crId').equals(crId).toArray();
 }
 
-export async function getTasksByMilestone(
-  milestoneId: string,
+export async function getTasksBySystem(
+  systemId: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<Task[]> {
-  return db.tasks.where('milestoneId').equals(milestoneId).toArray();
+  return db.tasks.where('systemId').equals(systemId).toArray();
 }
 
 export async function updateTaskStatus(
@@ -248,8 +272,8 @@ export async function updateTaskProgress(
 
 export async function reparentTask(
   taskId: string,
-  targetProjectId?: string,
-  targetMilestoneId?: string,
+  targetCrId: string,
+  targetSystemId?: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<Task> {
   const existing = await db.tasks.get(taskId);
@@ -257,27 +281,20 @@ export async function reparentTask(
     throw new Error(`Task not found: ${taskId}`);
   }
 
-  const now = new Date().toISOString();
+  // Stable UUID assertion (WORK-04, D-09)
   const updated: Task = {
     ...existing,
-    updatedAt: now,
+    crId: targetCrId,
+    updatedAt: new Date().toISOString(),
   };
 
-  // Stable UUID assertion (WORK-04, D-09)
-  updated.id = existing.id;
-
-  if (targetProjectId !== undefined) {
-    updated.projectId = targetProjectId;
+  if (targetSystemId !== undefined) {
+    updated.systemId = targetSystemId;
   } else {
-    delete updated.projectId;
+    delete updated.systemId;
   }
 
-  // If project changed and no target milestone provided, or if moved to standalone, reset milestone (D-10)
-  if (targetProjectId !== undefined && targetMilestoneId !== undefined) {
-    updated.milestoneId = targetMilestoneId;
-  } else {
-    delete updated.milestoneId;
-  }
+  await assertSystemInCrTargets(updated.crId, updated.systemId, db);
 
   await db.tasks.put(updated);
   return updated;

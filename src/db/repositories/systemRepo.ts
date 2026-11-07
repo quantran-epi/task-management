@@ -1,5 +1,5 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../index';
-import type { System } from '../../types/models';
+import type { System, Task } from '../../types/models';
 import { generateId } from '../../utils/uuid';
 import {
   SystemInputSchema,
@@ -8,12 +8,66 @@ import {
   type SystemUpdate,
 } from '../../validation/schemas';
 
+/** D-24: a parent is a LOGICAL_GROUP, never "anything with no parentId". */
+export function isLogicalParent(system: Pick<System, 'type'>): boolean {
+  return system.type === 'LOGICAL_GROUP';
+}
+
+export function isSubsystem(system: Pick<System, 'type'>): boolean {
+  return system.type !== 'LOGICAL_GROUP';
+}
+
+type SystemShape = Pick<System, 'type'> & {
+  parentId?: string | null | undefined;
+  sshConfigId?: string | null | undefined;
+  remoteRepoPath?: string | null | undefined;
+  defaultBaseBranch?: string | null | undefined;
+};
+
+async function assertParentIsLogicalGroup(
+  parentId: string | null,
+  db: TaskPlannerDatabase
+): Promise<void> {
+  if (parentId === null) return;
+  const parent = await db.systems.get(parentId);
+  if (!parent) throw new Error('Hệ thống cha không tồn tại.');
+  if (!isLogicalParent(parent)) throw new Error('Subsystem phải trỏ tới một Logical Parent');
+}
+
+async function assertNoCycle(
+  id: string | null,
+  parentId: string | null,
+  db: TaskPlannerDatabase
+): Promise<void> {
+  const seen = new Set<string>();
+  let cursor = parentId;
+  while (cursor) {
+    if (cursor === id || seen.has(cursor)) throw new Error('Không thể tạo vòng lặp phân cấp');
+    seen.add(cursor);
+    cursor = (await db.systems.get(cursor))?.parentId ?? null;
+  }
+}
+
+function assertParentHasNoRepoFields(system: SystemShape): void {
+  if (!isLogicalParent(system)) return;
+  if (
+    system.sshConfigId != null ||
+    system.remoteRepoPath != null ||
+    system.defaultBaseBranch != null
+  ) {
+    throw new Error('Hệ thống cha không được có SSH/Repo');
+  }
+}
+
 export async function createSystem(
   input: SystemInput,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<System> {
   const validated = SystemInputSchema.parse(input);
   const now = new Date().toISOString();
+
+  assertParentHasNoRepoFields(validated);
+  await assertParentIsLogicalGroup(validated.parentId ?? null, db);
 
   const system: System = {
     id: generateId(),
@@ -72,6 +126,21 @@ export async function updateSystem(
     else delete updated.defaultBaseBranch;
   }
 
+  if ('parentId' in patch) {
+    await assertNoCycle(id, updated.parentId, db);
+    await assertParentIsLogicalGroup(updated.parentId, db);
+  }
+
+  // Promoting a subsystem to a parent drops its hierarchy and repo binding (D-24).
+  if (existing.type !== 'LOGICAL_GROUP' && updated.type === 'LOGICAL_GROUP') {
+    updated.parentId = null;
+    delete updated.sshConfigId;
+    delete updated.remoteRepoPath;
+    delete updated.defaultBaseBranch;
+  }
+
+  assertParentHasNoRepoFields(updated);
+
   await db.systems.put(updated);
   return updated;
 }
@@ -93,7 +162,7 @@ export async function getParentSystems(
   db: TaskPlannerDatabase = defaultDb
 ): Promise<System[]> {
   const all = await db.systems.toArray();
-  return all.filter((s) => s.parentId === null || s.type === 'LOGICAL_GROUP');
+  return all.filter(isLogicalParent);
 }
 
 export async function getSubsystems(
@@ -107,9 +176,29 @@ export async function deleteSystem(
   id: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<void> {
-  const children = await db.systems.where('parentId').equals(id).count();
-  if (children > 0) {
-    throw new Error(`Cannot delete system ${id}: child subsystems exist. Reparent or delete them first.`);
-  }
-  await db.systems.delete(id);
+  await db.transaction('rw', [db.systems, db.changeRequests, db.tasks], async () => {
+    const children = await db.systems.where('parentId').equals(id).count();
+    if (children > 0) {
+      throw new Error(`Hệ thống còn ${children} subsystem con. Hãy xóa hoặc chuyển chúng trước.`);
+    }
+
+    const affectedCrs = await db.changeRequests.toArray();
+    for (const cr of affectedCrs) {
+      if (!cr.targets.some((t) => t.systemId === id)) continue;
+      await db.changeRequests.put({
+        ...cr,
+        targets: cr.targets.filter((t) => t.systemId !== id),
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    await db.tasks
+      .where('systemId')
+      .equals(id)
+      .modify((task: Task) => {
+        delete task.systemId;
+      });
+
+    await db.systems.delete(id);
+  });
 }
