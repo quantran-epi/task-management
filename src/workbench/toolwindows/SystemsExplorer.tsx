@@ -10,12 +10,25 @@ import {
   EditOutlined,
   DeleteOutlined,
   ExportOutlined,
+  RocketOutlined,
+  CloudServerOutlined,
+  CodeOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import { getAllSystems, deleteSystem, createSystem, updateSystem } from '../../db/repositories/systemRepo';
+import {
+  getAllSystems,
+  deleteSystem,
+  createSystem,
+  updateSystem,
+  isLogicalParent,
+  isSubsystem,
+} from '../../db/repositories/systemRepo';
+import { createChangeRequest } from '../../db/repositories/changeRequestRepo';
 import { useLayoutStore } from '../store/layoutStore';
+import { useSystemActions, SYSTEM_ACTIONS_DISABLED_REASON } from '../hooks/useSystemActions';
 import { SystemModal } from '../../components/systems/SystemModal';
+import { ChangeRequestModal } from '../../components/changeRequests/ChangeRequestModal';
 import type { DataNode } from 'antd/es/tree';
 import type { System } from '../../types/models';
 
@@ -28,8 +41,10 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSystem, setEditingSystem] = useState<System | null>(null);
   const [defaultParentId, setDefaultParentId] = useState<string | null>(null);
+  const [crModalTarget, setCrModalTarget] = useState<System | null>(null);
 
   const openTab = useLayoutStore((s) => s.openTab);
+  const { openGit, openTerminal, disabledReason } = useSystemActions();
 
   const systems = useLiveQuery(() => getAllSystems(db), [db]) ?? [];
 
@@ -82,95 +97,134 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
     });
   };
 
+  const handleCreateCr = (system: System) => {
+    setCrModalTarget(system);
+  };
+
+  // D-30 / T-31.2-32: parent and subsystem action sets diverge. A parent never gets `Tạo CR`.
+  // Disabled Git/Terminal items carry the tooltip copy `Chưa cấu hình SSH/Repo — mở System Catalog`
+  // from `useSystemActions().disabledReason`.
   const getNodeMenu = (system: System): MenuProps['items'] => {
-    const isParent = system.parentId === null || system.type === 'LOGICAL_GROUP';
+    const isParent = isLogicalParent(system);
+    const reason = isParent ? undefined : disabledReason(system);
+
+    const openDetailItem = {
+      key: 'open-detail',
+      icon: <ExportOutlined style={{ color: 'var(--accent, #3871e1)' }} />,
+      label: 'Xem chi tiết',
+      onClick: () => handleOpenDetail(system),
+    };
+
+    const editItem = {
+      key: 'edit',
+      icon: <EditOutlined />,
+      label: 'Sửa',
+      onClick: () => handleEdit(system),
+    };
+
+    const deleteItem = {
+      key: 'delete',
+      icon: <DeleteOutlined style={{ color: 'var(--danger, #c54e58)' }} />,
+      danger: true,
+      label: 'Xóa',
+      onClick: () => handleDelete(system),
+    };
+
+    if (isParent) {
+      return [
+        openDetailItem,
+        {
+          key: 'add-subsystem',
+          icon: <PlusOutlined style={{ color: '#13c2c2' }} />,
+          label: 'Thêm subsystem',
+          onClick: () => handleCreateSubsystem(system.id),
+        },
+        editItem,
+        { type: 'divider' },
+        deleteItem,
+      ];
+    }
+
     return [
+      openDetailItem,
       {
-        key: 'open-detail',
-        icon: <ExportOutlined style={{ color: 'var(--accent, #3871e1)' }} />,
-        label: 'Xem chi tiết',
-        onClick: () => handleOpenDetail(system),
-      },
-      ...(isParent
-        ? [
-            {
-              key: 'add-subsystem',
-              icon: <PlusOutlined style={{ color: '#13c2c2' }} />,
-              label: 'Thêm subsystem',
-              onClick: () => handleCreateSubsystem(system.id),
-            },
-          ]
-        : []),
-      {
-        key: 'edit',
-        icon: <EditOutlined />,
-        label: 'Sửa',
-        onClick: () => handleEdit(system),
+        key: 'create-cr',
+        icon: <RocketOutlined style={{ color: 'var(--accent, #3871e1)' }} />,
+        label: 'Tạo CR',
+        onClick: () => handleCreateCr(system),
       },
       {
-        type: 'divider',
+        key: 'open-git',
+        icon: <CloudServerOutlined />,
+        label: 'Mở Git',
+        disabled: !!reason,
+        title: reason,
+        onClick: () => openGit(system),
       },
       {
-        key: 'delete',
-        icon: <DeleteOutlined style={{ color: 'var(--danger, #c54e58)' }} />,
-        danger: true,
-        label: 'Xóa',
-        onClick: () => handleDelete(system),
+        key: 'open-terminal',
+        icon: <CodeOutlined />,
+        label: 'Mở Terminal',
+        disabled: !!reason,
+        title: reason,
+        onClick: () => openTerminal(system),
       },
+      editItem,
+      { type: 'divider' },
+      deleteItem,
     ];
   };
+
+  const renderSubsystemNode = (c: System): DataNode => ({
+    key: `sys:${c.id}`,
+    title: (
+      <Dropdown menu={{ items: getNodeMenu(c) }} trigger={['contextMenu']}>
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            width: '100%',
+            justifyContent: 'space-between',
+            gap: 6,
+          }}
+        >
+          <Typography.Text ellipsis style={{ flex: 1, fontSize: 13, lineHeight: '20px' }}>
+            {c.name}
+          </Typography.Text>
+          <span
+            style={{
+              fontSize: 10,
+              padding: '0 4px',
+              borderRadius: 3,
+              background: '#e6fffb',
+              color: '#08979c',
+              border: '1px solid #87e8de',
+              flexShrink: 0,
+            }}
+          >
+            {c.code}
+          </span>
+        </span>
+      </Dropdown>
+    ),
+    icon: <BranchesOutlined style={{ color: '#13c2c2' }} />,
+    isLeaf: true,
+  });
 
   const treeData = useMemo<DataNode[]>(() => {
     const q = searchQuery.trim().toLowerCase();
 
-    // Group parents (parentId === null or type === LOGICAL_GROUP)
-    const parents = systems.filter((s) => s.parentId === null || s.type === 'LOGICAL_GROUP');
+    // D-24: parents are identified by their type alone, never by a missing parent link.
+    const parents = systems.filter(isLogicalParent);
+    const subsystems = systems.filter(isSubsystem);
 
-    return parents
+    const matches = (s: System) =>
+      !q || s.name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q);
+
+    const parentNodes = parents
       .map((p) => {
-        const children = systems.filter((s) => s.parentId === p.id);
-        const filteredChildren = q
-          ? children.filter((c) => c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q))
-          : children;
-
-        const childNodes: DataNode[] = filteredChildren.map((c) => ({
-          key: `sys:${c.id}`,
-          title: (
-            <Dropdown menu={{ items: getNodeMenu(c) }} trigger={['contextMenu']}>
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  width: '100%',
-                  justifyContent: 'space-between',
-                  gap: 6,
-                }}
-              >
-                <Typography.Text ellipsis style={{ flex: 1, fontSize: 13, lineHeight: '20px' }}>
-                  {c.name}
-                </Typography.Text>
-                <span
-                  style={{
-                    fontSize: 10,
-                    padding: '0 4px',
-                    borderRadius: 3,
-                    background: '#e6fffb',
-                    color: '#08979c',
-                    border: '1px solid #87e8de',
-                    flexShrink: 0,
-                  }}
-                >
-                  {c.code}
-                </span>
-              </span>
-            </Dropdown>
-          ),
-          icon: <BranchesOutlined style={{ color: '#13c2c2' }} />,
-          isLeaf: true,
-        }));
-
-        const matchParent = !q || p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q) || childNodes.length > 0;
-        if (!matchParent) return null;
+        const childNodes = subsystems.filter((c) => c.parentId === p.id).map(renderSubsystemNode);
+        if (!matches(p) && childNodes.length === 0) return null;
 
         return {
           key: `sys:${p.id}`,
@@ -209,6 +263,15 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
         };
       })
       .filter(Boolean) as DataNode[];
+
+    // Unparented subsystems are still subsystems: render them at root with the subsystem
+    // action set so `Tạo CR` / `Mở Git` / `Mở Terminal` stay reachable.
+    const parentIds = new Set(parents.map((p) => p.id));
+    const unparented = subsystems.filter(
+      (c) => (!c.parentId || !parentIds.has(c.parentId)) && matches(c)
+    );
+
+    return [...parentNodes, ...unparented.map(renderSubsystemNode)];
   }, [systems, searchQuery]);
 
   return (
@@ -306,18 +369,29 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
           setDefaultParentId(null);
         }}
         onSave={async (values) => {
-          try {
-            if (editingSystem) {
-              await updateSystem(editingSystem.id, values, db);
-              message.success('Đã cập nhật hệ thống');
-            } else {
-              await createSystem(values, db);
-              message.success('Đã tạo hệ thống mới');
-            }
-            setModalOpen(false);
-          } catch (err: any) {
-            message.error(err?.message || 'Không thể lưu hệ thống');
+          // Let invariant errors propagate — SystemModal renders them inline (T-31.2-31).
+          if (editingSystem) {
+            await updateSystem(editingSystem.id, values, db);
+            message.success('Đã cập nhật hệ thống');
+          } else {
+            await createSystem(values, db);
+            message.success('Đã tạo hệ thống mới');
           }
+          setModalOpen(false);
+        }}
+        db={db}
+      />
+
+      {/* D-34: `Tạo CR` from a subsystem pre-fills and soft-locks that subsystem. */}
+      <ChangeRequestModal
+        open={!!crModalTarget}
+        initialTargets={crModalTarget ? [{ systemId: crModalTarget.id }] : []}
+        systems={systems}
+        onClose={() => setCrModalTarget(null)}
+        onSave={async (values) => {
+          await createChangeRequest(values as any, db);
+          message.success('Đã tạo Change Request mới');
+          setCrModalTarget(null);
         }}
         db={db}
       />

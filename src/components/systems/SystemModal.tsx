@@ -25,6 +25,20 @@ const SYSTEM_TYPE_OPTIONS = [
   { value: 'WORKER', label: 'Background Worker / Batch Job (Tiến trình nền)' },
 ];
 
+/**
+ * Anchor an invariant error on the field the user can act on. `parentId` / `sshConfigId` are
+ * only rendered for subsystems, so a parent-side violation falls back to `type` — the field
+ * that caused it and the one always on screen.
+ */
+function invariantFieldFor(msg: string, values: { type?: SystemType }): string {
+  const isParent = values.type === 'LOGICAL_GROUP';
+  if (msg.includes('SSH/Repo')) return isParent ? 'type' : 'sshConfigId';
+  if (msg.includes('Logical Parent') || msg.includes('vòng lặp')) {
+    return isParent ? 'type' : 'parentId';
+  }
+  return 'type';
+}
+
 export const SystemModal: React.FC<SystemModalProps> = ({
   open,
   system,
@@ -94,7 +108,12 @@ export const SystemModal: React.FC<SystemModalProps> = ({
         // Form validation error
         return;
       }
-      message.error(err?.message || 'Lỗi khi lưu thông tin hệ thống');
+      // T-31.2-31: a repo invariant violation surfaces inline on the responsible field and
+      // the modal stays open — no transient toast that could read as a successful save.
+      const msg: string = err?.message || 'Lỗi khi lưu thông tin hệ thống';
+      form.setFields([
+        { name: invariantFieldFor(msg, form.getFieldsValue()), errors: [msg] },
+      ]);
     }
   };
 
