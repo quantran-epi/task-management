@@ -10,6 +10,7 @@ describe('MultiPackTable', () => {
       filename: 'change-pack-v1.zip',
       uploadedAt: '2026-11-01T10:00:00.000Z',
       fileSize: 1024 * 50,
+      systemId: 'system-a',
       driftSummary: {
         outsideSolution: 1,
         missingImplementation: 0,
@@ -21,6 +22,7 @@ describe('MultiPackTable', () => {
       filename: 'change-pack-v2.zip',
       uploadedAt: '2026-11-01T11:00:00.000Z',
       fileSize: 1024 * 65,
+      systemId: 'system-b',
       driftSummary: {
         outsideSolution: 0,
         missingImplementation: 0,
@@ -44,6 +46,31 @@ describe('MultiPackTable', () => {
 
     // Active tag should be present on pack 2
     expect(screen.getByText('Đang kích hoạt')).toBeInTheDocument();
+  });
+
+  it('renders a Subsystem column resolving each pack systemId to its code', () => {
+    render(
+      <MultiPackTable
+        packs={packs}
+        activePackHash="hash-pack-2"
+        systems={[
+          {
+            id: 'system-a', name: 'SmartCard API', code: 'SMARTCARD_API', parentId: null,
+            type: 'SERVICE', createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-01T00:00:00.000Z',
+          },
+          {
+            id: 'system-b', name: 'Card Gateway', code: 'CARD_GW', parentId: null,
+            type: 'SERVICE', createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-01T00:00:00.000Z',
+          },
+        ]}
+        onSelectActive={vi.fn()}
+        onDeletePack={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Subsystem')).toBeInTheDocument();
+    expect(screen.getByText('SMARTCARD_API')).toBeInTheDocument();
+    expect(screen.getByText('CARD_GW')).toBeInTheDocument();
   });
 
   it('triggers onSelectActive when clicking set active button on inactive pack', () => {

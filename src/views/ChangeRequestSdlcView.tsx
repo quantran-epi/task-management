@@ -526,7 +526,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
       step: selectedStep,
       metadata: workflowState?.metadata,
       crStatus,
-      artifacts: workflowState?.artifacts ?? {},
+      artifacts: workflowState?.artifacts ?? { branchSnapshots: {} },
       activeVersions: workflowState?.activeVersions,
       versions: workflowState?.versions,
       evidence: stepEvidence,
@@ -874,6 +874,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
             crId={activeCrId}
             crCode={workflowState?.metadata.cr ?? ''}
             solutionArtifact={workflowState?.artifacts.solution}
+            branchSnapshots={workflowState?.artifacts.branchSnapshots}
             branchSnapshot={workflowState?.artifacts.branchSnapshot}
             targetSystems={crTargetSystems}
             initialDriftResult={workflowState?.artifacts.driftResult}

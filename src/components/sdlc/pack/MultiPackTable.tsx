@@ -1,12 +1,15 @@
 import React from 'react';
 import { Table, Tag, Button, Space, Typography, Popconfirm, theme } from 'antd';
 import { CheckCircleOutlined, DeleteOutlined, StarOutlined } from '@ant-design/icons';
-import type { ChangePackHistoryItem } from '../../../services/wizard/sdlcCrManager';
+import { LEGACY_SYSTEM_ID, type ChangePackHistoryItem } from '../../../services/wizard/sdlcCrManager';
+import type { System } from '../../../types/models';
 import dayjs from 'dayjs';
 
 export interface MultiPackTableProps {
   packs: ChangePackHistoryItem[];
   activePackHash?: string | undefined;
+  /** D-40: resolves each pack's `systemId` to its subsystem code for the Subsystem column. */
+  systems?: System[] | undefined;
   onSelectActive: (packHash: string) => void;
   onDeletePack?: ((packHash: string) => void) | undefined;
 }
@@ -14,12 +17,29 @@ export interface MultiPackTableProps {
 export const MultiPackTable: React.FC<MultiPackTableProps> = ({
   packs,
   activePackHash,
+  systems,
   onSelectActive,
   onDeletePack,
 }) => {
   const { token } = theme.useToken();
 
   const columns = [
+    {
+      title: 'Subsystem',
+      key: 'subsystem',
+      width: 140,
+      render: (_: unknown, record: ChangePackHistoryItem) => {
+        const system = systems?.find((s) => s.id === record.systemId);
+        if (!system) {
+          return <Typography.Text type="secondary">{record.systemId === LEGACY_SYSTEM_ID ? 'Chung' : '—'}</Typography.Text>;
+        }
+        return (
+          <Tag color="cyan" style={{ fontFamily: 'monospace', margin: 0 }}>
+            {system.code}
+          </Tag>
+        );
+      },
+    },
     {
       title: 'Tên file pack',
       dataIndex: 'filename',

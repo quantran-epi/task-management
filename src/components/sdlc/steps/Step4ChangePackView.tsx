@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Typography,
   Alert,
@@ -10,15 +10,15 @@ import {
   Space,
   Tag,
   Collapse,
-  Steps,
+  Progress,
 } from 'antd';
 import {
   ArrowRightOutlined,
   UploadOutlined,
   SyncOutlined,
   BranchesOutlined,
-  CheckCircleOutlined,
   CloudUploadOutlined,
+  StopOutlined,
 } from '@ant-design/icons';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
 import { ChangePackDropzone } from '../../ai/wizard/ChangePackDropzone';
@@ -30,6 +30,7 @@ import type { ReconciliationResult } from '../../../services/wizard/reconciliati
 import type { ChangePackManifest } from '../../../services/wizard/changePack';
 import { formatGuardMessage } from '../../../services/wizard/workflowGuards';
 import {
+  LEGACY_SYSTEM_ID,
   getMultiPackState,
   saveMultiPackState,
   type ChangePackHistoryItem,
@@ -42,7 +43,6 @@ import { checkHeadDrift } from '../../../services/gitRemoteService';
 import { getSshConfigs } from '../../../services/sshService';
 import {
   createChangePackFromSnapshot,
-  type PackageProgressStep,
 } from '../../../services/changePackPackager';
 
 export interface Step4ChangePackViewProps {
@@ -50,6 +50,9 @@ export interface Step4ChangePackViewProps {
   crId: string;
   crCode: string;
   solutionArtifact?: SdlcArtifactRef | undefined;
+  /** D-40: one approved snapshot per target subsystem, keyed by `System.id`. */
+  branchSnapshots?: Record<string, BranchSnapshot> | undefined;
+  /** @deprecated legacy single-subsystem slot, read as a fallback only. */
   branchSnapshot?: BranchSnapshot | undefined;
   /** D-36: SSH/repo come from the CR's target subsystems, not a settings binding. */
   targetSystems?: System[] | undefined;
@@ -66,6 +69,22 @@ export interface Step4ChangePackViewProps {
   db?: TaskPlannerDatabase | undefined;
 }
 
+type PackStatus = 'idle' | 'packing' | 'success' | 'error' | 'skipped';
+
+interface PackCardState {
+  status: PackStatus;
+  error?: string;
+  packHash?: string;
+  filename?: string;
+  fileSize?: number;
+  driftCount?: number;
+}
+
+interface PackCard {
+  systemId: string;
+  system?: System | undefined;
+}
+
 /** The SOLUTION Note pins against the SOLUTION thread, not the CHANGE_PACK thread. */
 function solutionThreadId(projectId: string, crId: string): string {
   return `sdlc:${projectId}:${crId}:SOLUTION`;
@@ -79,33 +98,26 @@ function persistableManifest(manifest: Readonly<ChangePackManifest>): ChangePack
   };
 }
 
-/** Service progress phases collapse into the four user-visible packaging stages (D-04). */
-const PACKAGE_STEP_INDEX: Record<PackageProgressStep, number> = {
-  checking: 0,
-  diff: 0,
-  files: 1,
-  compressing: 2,
-  validating: 2,
-};
-
-const PACKAGING_STAGES = [
-  { title: 'Kiểm tra remote & tạo diff.patch' },
-  { title: 'Thu thập tệp mới & SQL' },
-  { title: 'Nén JSZip in-memory' },
-  { title: 'Đối soát Drift Matrix' },
-];
-
 const SSH_PACKAGING_ERROR =
   'Không thể kết nối SSH hoặc đóng gói thất bại. Vui lòng kiểm tra cấu hình kết nối hoặc nạp tệp zip thủ công.';
 
 /** The packager emits its dirty-tree notice as a warning; D-09 wants it as an info banner. */
 const DIRTY_WARNING_PATTERN = /tệp chưa commit/i;
 
+const STATUS_TAG: Record<PackStatus, { color: string; label: string }> = {
+  idle: { color: 'default', label: 'Chưa đóng gói' },
+  packing: { color: 'processing', label: 'Đang đóng gói' },
+  success: { color: 'success', label: 'Thành công' },
+  error: { color: 'error', label: 'Thất bại' },
+  skipped: { color: 'default', label: 'Bỏ qua' },
+};
+
 export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
   projectId,
   crId,
   crCode,
   solutionArtifact,
+  branchSnapshots,
   branchSnapshot,
   targetSystems = [],
   initialDriftResult,
@@ -117,29 +129,45 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
 }) => {
   const { token } = theme.useToken();
   const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  /** Manual-upload failures only; pack failures live on their own card (D-40). */
+  const [manualError, setManualError] = useState<string | null>(null);
   const [needsReupload, setNeedsReupload] = useState(false);
   const [multiPackState, setMultiPackState] = useState<MultiPackState>({ packs: [] });
   const [driftResult, setDriftResult] = useState<ReconciliationResult | undefined>(initialDriftResult);
 
-  // Auto-packaging state (D-01, D-04)
-  const [packagingLoading, setPackagingLoading] = useState(false);
-  const [packagingStep, setPackagingStep] = useState(0);
-  const [packagingStepStatus, setPackagingStepStatus] = useState<'process' | 'finish' | 'error' | 'wait'>('wait');
+  // D-40: one status slot per subsystem. No global error state can blank the step.
+  const [packState, setPackState] = useState<Record<string, PackCardState>>({});
+  const [running, setRunning] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const [settled, setSettled] = useState(0);
+  const [summary, setSummary] = useState<
+    { type: 'success' | 'warning' | 'info'; text: string; detail?: string } | undefined
+  >(undefined);
+  const stopRequestedRef = useRef(false);
+
   const [packagingWarnings, setPackagingWarnings] = useState<string[]>([]);
-  // D-08: drift is surfaced once and re-checked on retry until the user confirms.
-  const [driftPrompt, setDriftPrompt] = useState<{ currentHeadSha: string } | null>(null);
-  const [driftConfirmed, setDriftConfirmed] = useState(false);
+  // D-08: drift is surfaced once per subsystem and re-checked on retry until confirmed.
+  const [driftPrompt, setDriftPrompt] = useState<{ systemId: string; currentHeadSha: string } | null>(null);
+  const [driftConfirmed, setDriftConfirmed] = useState<Record<string, boolean>>({});
   // D-09: separate info banner for the dirty working tree.
   const [dirtyNotice, setDirtyNotice] = useState(false);
-  // D-11: only snapshot packaging failures offer a reconnect retry.
-  const [showRetryConnection, setShowRetryConnection] = useState(false);
   // D-03: without an approved snapshot the manual fallback opens straight away.
-  const [manualAccordionOpen, setManualAccordionOpen] = useState(!branchSnapshot);
+  const hasAnySnapshot = Boolean(branchSnapshot) || Object.keys(branchSnapshots ?? {}).length > 0;
+  const [manualAccordionOpen, setManualAccordionOpen] = useState(!hasAnySnapshot);
+
+  const cards = useMemo<PackCard[]>(() => {
+    if (targetSystems.length > 0) {
+      return targetSystems.map((system) => ({ systemId: system.id, system }));
+    }
+    // Legacy in-flight workflow: one approved snapshot and no target list yet.
+    return branchSnapshot ? [{ systemId: LEGACY_SYSTEM_ID, system: undefined }] : [];
+  }, [targetSystems, branchSnapshot]);
+
+  const total = cards.length;
 
   useEffect(() => {
-    if (!branchSnapshot) setManualAccordionOpen(true);
-  }, [branchSnapshot]);
+    if (!hasAnySnapshot) setManualAccordionOpen(true);
+  }, [hasAnySnapshot]);
 
   // Load multipack state from DB
   useEffect(() => {
@@ -155,6 +183,18 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
       cancelled = true;
     };
   }, [projectId, crId, db]);
+
+  /** Per-subsystem snapshot, with the legacy single slot used only when it is unambiguous. */
+  const snapshotFor = (systemId: string): BranchSnapshot | undefined => {
+    const direct = branchSnapshots?.[systemId];
+    if (direct) return direct;
+    if (!branchSnapshot) return undefined;
+    if (cards.length === 1) return branchSnapshot;
+    const system = targetSystems.find((s) => s.id === systemId);
+    return system?.sshConfigId && system.sshConfigId === branchSnapshot.sshConfigId
+      ? branchSnapshot
+      : undefined;
+  };
 
   const reconcile = (manifest: ChangePackManifest): Promise<ReconciliationResult> => {
     if (!solutionArtifact?.noteId) {
@@ -173,6 +213,7 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
 
   /** Persists a freshly produced manifest as the active pack and pushes drift to the coordinator. */
   const commitPack = async (
+    systemId: string,
     manifest: ChangePackManifest,
     filename: string,
     fileSize: number,
@@ -187,6 +228,7 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
       filename,
       uploadedAt: new Date().toISOString(),
       fileSize,
+      systemId,
       manifest: persistableManifest(manifest),
       driftSummary: {
         outsideSolution,
@@ -204,20 +246,29 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
     await saveMultiPackState(projectId, crId, nextState, db);
     setMultiPackState(nextState);
     setDriftResult(reconciliation);
+    setPackState((current) => ({
+      ...current,
+      [systemId]: {
+        status: 'success',
+        packHash: manifest.packHash,
+        filename,
+        fileSize,
+        driftCount: reconciliation.drift.length,
+      },
+    }));
     await onCommitChangePackAndDrift(manifest.packHash, filename, reconciliation);
   };
 
   const handleSelectFile = async (file: File) => {
     if (!solutionArtifact) {
-      setErrorMsg(formatGuardMessage('SOLUTION_REQUIRED_FOR_CHANGE_PACK'));
+      setManualError(formatGuardMessage('SOLUTION_REQUIRED_FOR_CHANGE_PACK'));
       return;
     }
 
     try {
       setLoading(true);
-      setErrorMsg(null);
+      setManualError(null);
       setNeedsReupload(false);
-      setShowRetryConnection(false);
 
       // 1. Validate change-pack identity & size against expected CR
       const manifest = await validateHubChangePack(file, crCode);
@@ -226,107 +277,163 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
       const reconciliation = await reconcile(persistableManifest(manifest));
 
       // 3. Mark as active pack & commit to workflow coordinator
-      await commitPack(manifest, file.name, file.size, reconciliation);
+      await commitPack(LEGACY_SYSTEM_ID, manifest, file.name, file.size, reconciliation);
       message.success(`Đã nạp và đối chiếu thành công pack: ${file.name}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Nạp file thất bại';
-      setErrorMsg(`Lỗi xác thực change pack: ${msg}`);
+      setManualError(`Lỗi xác thực change pack: ${msg}`);
     } finally {
       setLoading(false);
     }
   };
 
-  /** D-01/D-02: active trigger builds the pack over SSH and reconciles it immediately. */
-  const handlePackageFromSnapshot = async (options?: { driftConfirmed?: boolean }) => {
-    if (!branchSnapshot || packagingLoading) return;
+  type PackOutcome = 'success' | 'error' | 'drift';
+
+  /**
+   * D-01/D-02 + D-40: builds one pack over SSH for one subsystem and reconciles it immediately.
+   * Every failure is recorded on that subsystem's own slot, never on the step.
+   */
+  const packOne = async (
+    card: PackCard,
+    options?: { skipDriftCheck?: boolean }
+  ): Promise<PackOutcome> => {
+    const { systemId, system } = card;
+    const snapshot = snapshotFor(systemId);
+    const fail = (error: string): PackOutcome => {
+      setPackState((current) => ({ ...current, [systemId]: { status: 'error', error } }));
+      return 'error';
+    };
+
+    if (!snapshot) return fail('Chưa có Branch Snapshot được duyệt cho subsystem này.');
     if (!solutionArtifact?.noteId) {
-      setErrorMsg(formatGuardMessage('SOLUTION_REQUIRED_FOR_CHANGE_PACK'));
-      setManualAccordionOpen(true);
-      return;
+      return fail(formatGuardMessage('SOLUTION_REQUIRED_FOR_CHANGE_PACK'));
     }
 
-    setPackagingLoading(true);
-    setPackagingWarnings([]);
-    setDirtyNotice(false);
-    setShowRetryConnection(false);
-    setPackagingStep(0);
-    setPackagingStepStatus('process');
-    setErrorMsg(null);
-    setNeedsReupload(false);
+    setPackState((current) => ({ ...current, [systemId]: { status: 'packing' } }));
 
     try {
-      const sys =
-        targetSystems.find((s) => s.sshConfigId && s.sshConfigId === branchSnapshot.sshConfigId) ??
-        targetSystems.find((s) => s.remoteRepoPath);
-      const sshConfigId = sys?.sshConfigId ?? branchSnapshot.sshConfigId;
-      const repoPath = sys?.remoteRepoPath ?? branchSnapshot.remoteRepoPath;
+      const sshConfigId = system?.sshConfigId ?? snapshot.sshConfigId;
+      const repoPath = system?.remoteRepoPath ?? snapshot.remoteRepoPath;
       const configs = await getSshConfigs(db);
       const config = sshConfigId ? configs.find((c) => c.id === sshConfigId) : undefined;
-      if (!config || !repoPath) {
-        // D-11: surface the failure and open the manual fallback immediately.
-        setPackagingStepStatus('error');
-        setErrorMsg(SSH_PACKAGING_ERROR);
-        setShowRetryConnection(true);
-        setManualAccordionOpen(true);
-        return;
-      }
+      if (!config || !repoPath) return fail(SSH_PACKAGING_ERROR);
 
       // D-08: the approved SHA stays authoritative, but the user must confirm the drift first.
-      const approvedHead = branchSnapshot.headSha ?? branchSnapshot.headCommit;
-      const targetBranch = branchSnapshot.targetBranch ?? branchSnapshot.branch;
-      const confirmed = options?.driftConfirmed ?? driftConfirmed;
-      if (targetBranch && approvedHead && !confirmed) {
+      const approvedHead = snapshot.headSha ?? snapshot.headCommit;
+      const targetBranch = snapshot.targetBranch ?? snapshot.branch;
+      if (!options?.skipDriftCheck && targetBranch && approvedHead && !driftConfirmed[systemId]) {
         const drift = await checkHeadDrift(config, repoPath, targetBranch, approvedHead);
         if (drift.drifted) {
-          setDriftPrompt({ currentHeadSha: drift.currentHeadSha });
-          setPackagingStepStatus('wait');
-          return;
+          setPackState((current) => ({ ...current, [systemId]: { status: 'idle' } }));
+          setDriftPrompt({ systemId, currentHeadSha: drift.currentHeadSha });
+          return 'drift';
         }
       }
 
-      setDriftPrompt(null);
-      const packaged = await createChangePackFromSnapshot(config, repoPath, branchSnapshot, crCode, (step) => {
-        setPackagingStep(PACKAGE_STEP_INDEX[step]);
-        setPackagingStepStatus('process');
-      });
+      const packaged = await createChangePackFromSnapshot(config, repoPath, snapshot, crCode);
       // D-09: the dirty notice gets its own info banner; keep the remaining warnings.
       const dirtyWarnings = packaged.warnings.filter((warning) => DIRTY_WARNING_PATTERN.test(warning));
-      setDirtyNotice(dirtyWarnings.length > 0);
-      setPackagingWarnings(packaged.warnings.filter((warning) => !DIRTY_WARNING_PATTERN.test(warning)));
+      if (dirtyWarnings.length > 0) setDirtyNotice(true);
+      const otherWarnings = packaged.warnings.filter((warning) => !DIRTY_WARNING_PATTERN.test(warning));
+      if (otherWarnings.length > 0) {
+        setPackagingWarnings((current) => Array.from(new Set([...current, ...otherWarnings])));
+      }
 
-      setPackagingStep(3);
-      setPackagingStepStatus('process');
       const manifest = await validateHubChangePack(packaged.blob, crCode);
       const reconciliation = await reconcile(persistableManifest(manifest));
 
       const filename = `${crCode}-${manifest.identity.head.slice(0, 8)}.zip`;
-      await commitPack(manifest, filename, packaged.blob.size, reconciliation);
-
-      setPackagingStepStatus('finish');
-      message.success(`Đã đóng gói và đối chiếu thành công từ Snapshot: ${filename}`);
+      await commitPack(systemId, manifest, filename, packaged.blob.size, reconciliation);
+      return 'success';
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      setPackagingStepStatus('error');
-      setErrorMsg(`Lỗi kết nối SSH hoặc đóng gói: ${msg}`);
-      setShowRetryConnection(true);
-      setManualAccordionOpen(true);
-    } finally {
-      setPackagingLoading(false);
+      return fail(`Lỗi kết nối SSH hoặc đóng gói: ${msg}`);
     }
   };
 
-  const handleRetryConnection = () => {
-    void handlePackageFromSnapshot({ driftConfirmed });
+  const handlePackOne = async (systemId: string) => {
+    if (running) return;
+    setSummary(undefined);
+    setPackagingWarnings([]);
+    setDirtyNotice(false);
+    const card = cards.find((c) => c.systemId === systemId);
+    if (!card) return;
+    const outcome = await packOne(card, driftConfirmed[systemId] ? { skipDriftCheck: true } : undefined);
+    if (outcome === 'success') {
+      message.success('Đã đóng gói và đối chiếu thành công từ Snapshot.');
+    }
+  };
+
+  const handlePackAll = async () => {
+    if (running || total === 0) return;
+    setRunning(true);
+    setStopping(false);
+    stopRequestedRef.current = false;
+    setSummary(undefined);
+    setPackagingWarnings([]);
+    setDirtyNotice(false);
+    setSettled(0);
+    setPackState({});
+
+    const failed: string[] = [];
+    let done = 0;
+    let stopped = false;
+
+    for (const card of cards) {
+      if (stopRequestedRef.current) {
+        stopped = true;
+        break;
+      }
+      // Bulk packs the approved commit for every subsystem; the packager itself warns on drift.
+      const outcome = await packOne(card, { skipDriftCheck: true });
+      if (outcome !== 'success') failed.push(card.system?.code ?? card.systemId);
+      done += 1;
+      setSettled(done);
+    }
+
+    if (stopRequestedRef.current) stopped = true;
+
+    if (stopped) {
+      setPackState((current) => {
+        const next = { ...current };
+        for (const card of cards) {
+          if (!next[card.systemId]) next[card.systemId] = { status: 'skipped' };
+        }
+        return next;
+      });
+      setSummary({
+        type: 'info',
+        text: `Đã dừng đóng gói: ${done - failed.length}/${total} subsystem thành công.`,
+      });
+    } else if (failed.length > 0) {
+      setSummary({
+        type: 'warning',
+        text: `Đóng gói hoàn tất một phần: ${total - failed.length}/${total} subsystem thành công. Lỗi: ${failed.join(', ')}.`,
+      });
+    } else {
+      setSummary({ type: 'success', text: `Đóng gói hoàn tất: ${total}/${total} subsystem thành công.` });
+    }
+
+    setRunning(false);
+    setStopping(false);
+  };
+
+  const handleStop = () => {
+    stopRequestedRef.current = true;
+    setStopping(true);
   };
 
   const handleConfirmDrift = () => {
-    setDriftConfirmed(true);
-    void handlePackageFromSnapshot({ driftConfirmed: true });
+    if (!driftPrompt) return;
+    const { systemId } = driftPrompt;
+    setDriftConfirmed((current) => ({ ...current, [systemId]: true }));
+    setDriftPrompt(null);
+    const card = cards.find((c) => c.systemId === systemId);
+    if (card) void packOne(card, { skipDriftCheck: true });
   };
 
   const handleReturnToStep3 = () => {
     setDriftPrompt(null);
-    setDriftConfirmed(false);
     onNavigateToStep?.('CODE_GUIDE');
   };
 
@@ -351,16 +458,15 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
 
     try {
       setLoading(true);
-      setErrorMsg(null);
+      setManualError(null);
       setNeedsReupload(false);
-      setShowRetryConnection(false);
       const reconciliation = await reconcile(pack.manifest);
       setDriftResult(reconciliation);
       await onCommitChangePackAndDrift(packHash, pack.filename, reconciliation);
       message.info(`Đã chuyển active pack sang: ${pack.filename}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Đối soát thất bại';
-      setErrorMsg(`Lỗi xác thực change pack: ${msg}`);
+      setManualError(`Lỗi xác thực change pack: ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -378,10 +484,7 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
   };
 
   const shortSha = (sha: string | undefined): string => (sha ? sha.slice(0, 8) : '—');
-  const snapshotFileCount = branchSnapshot?.filesChangedCount ?? branchSnapshot?.fileStats?.length ?? 0;
-  const showStepper = packagingLoading || packagingStep > 0;
-  const stepStatus = (index: number): 'wait' | 'process' | 'finish' | 'error' =>
-    index < packagingStep ? 'finish' : index === packagingStep ? packagingStepStatus : 'wait';
+  const driftPromptCard = driftPrompt ? cards.find((c) => c.systemId === driftPrompt.systemId) : undefined;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1000 }}>
@@ -393,7 +496,7 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
           Bước 4: Nạp Change Pack & Đối chiếu Drift (Multi-Pack)
         </Typography.Title>
         <Typography.Paragraph type="secondary" style={{ marginTop: 4 }}>
-          Đóng gói tự động từ Branch Snapshot đã duyệt qua SSH, hoặc nạp bản đóng gói zip thủ công ở khu vực dự phòng. Mỗi lần đóng gói tạo một pack mới trong lịch sử và tự động đặt làm ACTIVE để đối chiếu drift so với SOLUTION.md.
+          Mỗi subsystem trong CR có một thẻ đóng gói riêng từ Branch Snapshot đã duyệt. Đóng gói tất cả chạy tuần tự và dừng được; một subsystem lỗi không chặn các subsystem còn lại. Bản đóng gói zip thủ công vẫn nằm ở khu vực dự phòng bên dưới.
         </Typography.Paragraph>
       </div>
 
@@ -415,57 +518,7 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
         />
       )}
 
-      {/* D-01: Snapshot summary card is the primary focal point; D-03: warn when absent. */}
-      {branchSnapshot ? (
-        <Card
-          size="small"
-          title={
-            <Space size={8}>
-              <BranchesOutlined />
-              <span>Branch Snapshot đã duyệt (Bước 3)</span>
-            </Space>
-          }
-          extra={
-            <Tag color="success" icon={<CheckCircleOutlined />}>
-              Đã phê duyệt
-            </Tag>
-          }
-          style={{ background: token.colorBgContainer, borderColor: token.colorPrimaryBorder }}
-        >
-          <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-            <Space size={16} wrap>
-              <span>
-                <Typography.Text type="secondary">Nhánh: </Typography.Text>
-                <Tag color="blue">{branchSnapshot.targetBranch ?? branchSnapshot.branch ?? '—'}</Tag>
-              </span>
-              <span>
-                <Typography.Text type="secondary">Base: </Typography.Text>
-                <Typography.Text code>{shortSha(branchSnapshot.baseCommit ?? branchSnapshot.baseBranch)}</Typography.Text>
-              </span>
-              <span>
-                <Typography.Text type="secondary">Head: </Typography.Text>
-                <Typography.Text code>
-                  {shortSha(branchSnapshot.headSha ?? branchSnapshot.headCommit)}
-                </Typography.Text>
-              </span>
-              <span>
-                <Typography.Text type="secondary">Tệp thay đổi: </Typography.Text>
-                <Typography.Text strong>{snapshotFileCount}</Typography.Text>
-              </span>
-            </Space>
-            <Button
-              type="primary"
-              icon={<CloudUploadOutlined />}
-              loading={packagingLoading}
-              disabled={packagingLoading || !solutionArtifact}
-              onClick={() => void handlePackageFromSnapshot()}
-              data-testid="btn-package-from-snapshot"
-            >
-              Đóng gói & Đối chiếu từ Snapshot
-            </Button>
-          </Space>
-        </Card>
-      ) : (
+      {total === 0 && (
         <Alert
           type="warning"
           showIcon
@@ -479,24 +532,135 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
         />
       )}
 
-      {/* D-04: four-stage packaging progress. */}
-      {showStepper && (
-        <div
-          data-testid="packaging-stepper"
-          style={{
-            background: token.colorBgContainer,
-            border: `1px solid ${token.colorBorderSecondary}`,
-            borderRadius: token.borderRadiusSM,
-            padding: 20,
-          }}
-        >
-          <Steps
-            size="small"
-            items={PACKAGING_STAGES.map((stage, index) => ({
-              title: stage.title,
-              status: stepStatus(index),
-            }))}
-          />
+      {total > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Space size={12} wrap>
+            {running ? (
+              <Button danger icon={<StopOutlined />} loading={stopping} onClick={handleStop}>
+                {stopping ? 'Đang dừng...' : 'Dừng đóng gói'}
+              </Button>
+            ) : (
+              <Button
+                type="primary"
+                icon={<CloudUploadOutlined />}
+                disabled={!solutionArtifact}
+                onClick={() => void handlePackAll()}
+              >
+                Đóng gói tất cả ({total})
+              </Button>
+            )}
+            {running && (
+              <div style={{ flex: 1, minWidth: 200 }} data-testid="pack-all-progress">
+                <Progress
+                  percent={total === 0 ? 0 : Math.round((settled / total) * 100)}
+                  format={() => `${settled}/${total}`}
+                  size="small"
+                />
+              </div>
+            )}
+          </Space>
+
+          {summary && (
+            <Alert
+              data-testid="pack-all-summary"
+              type={summary.type}
+              showIcon
+              message={summary.text}
+            />
+          )}
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
+              gap: 12,
+            }}
+          >
+            {cards.map((card) => {
+              const snapshot = snapshotFor(card.systemId);
+              const state = packState[card.systemId] ?? { status: 'idle' as PackStatus };
+              const tag = STATUS_TAG[state.status];
+              const fileCount = snapshot?.filesChangedCount ?? snapshot?.fileStats?.length ?? 0;
+              return (
+                <Card
+                  key={card.systemId}
+                  size="small"
+                  data-testid={`pack-card-${card.systemId}`}
+                  title={
+                    <Space size={8} wrap>
+                      {card.system && (
+                        <Tag color="cyan" style={{ fontFamily: 'monospace', margin: 0 }}>
+                          {card.system.code}
+                        </Tag>
+                      )}
+                      <span style={{ fontSize: 16, fontWeight: 600 }}>
+                        {card.system?.name ?? 'Snapshot đã duyệt'}
+                      </span>
+                      <Tag
+                        color={tag.color}
+                        icon={state.status === 'packing' ? <SyncOutlined spin /> : undefined}
+                      >
+                        {tag.label}
+                      </Tag>
+                    </Space>
+                  }
+                  style={{ borderColor: token.colorBorderSecondary }}
+                >
+                  <Space orientation="vertical" size={10} style={{ width: '100%' }}>
+                    {snapshot ? (
+                      <Space size={12} wrap>
+                        <span>
+                          <Typography.Text type="secondary">Nhánh: </Typography.Text>
+                          <Tag color="blue">{snapshot.targetBranch ?? snapshot.branch ?? '—'}</Tag>
+                        </span>
+                        <span>
+                          <Typography.Text type="secondary">Base: </Typography.Text>
+                          <Typography.Text code>
+                            {shortSha(snapshot.baseCommit ?? snapshot.baseBranch)}
+                          </Typography.Text>
+                        </span>
+                        <span>
+                          <Typography.Text type="secondary">Head: </Typography.Text>
+                          <Typography.Text code>{shortSha(snapshot.headSha ?? snapshot.headCommit)}</Typography.Text>
+                        </span>
+                        <span>
+                          <Typography.Text type="secondary">Tệp thay đổi: </Typography.Text>
+                          <Typography.Text strong>{fileCount}</Typography.Text>
+                        </span>
+                      </Space>
+                    ) : (
+                      <Typography.Text type="secondary">
+                        Chưa có Branch Snapshot được duyệt cho subsystem này.
+                      </Typography.Text>
+                    )}
+
+                    <Button
+                      type="primary"
+                      icon={<BranchesOutlined />}
+                      loading={state.status === 'packing'}
+                      disabled={running || !solutionArtifact || !snapshot}
+                      onClick={() => void handlePackOne(card.systemId)}
+                      data-testid={`btn-pack-${card.systemId}`}
+                    >
+                      Đóng gói
+                    </Button>
+
+                    {state.status === 'success' && (
+                      <Alert
+                        type="success"
+                        showIcon
+                        message={state.filename ?? 'Đã đóng gói'}
+                        description={`${((state.fileSize ?? 0) / 1024).toFixed(1)} KB · ${state.driftCount ?? 0} mục drift`}
+                      />
+                    )}
+                    {state.status === 'error' && (
+                      <Alert type="error" showIcon message={state.error ?? 'Đóng gói thất bại'} />
+                    )}
+                  </Space>
+                </Card>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -506,9 +670,9 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
           type="warning"
           showIcon
           message="Cảnh báo: Remote HEAD đã thay đổi"
-          description={`Remote HEAD hiện tại (${shortSha(driftPrompt.currentHeadSha)}) khác với commit đã duyệt trong Snapshot (${shortSha(
-            branchSnapshot?.headSha ?? branchSnapshot?.headCommit
-          )}). Bạn muốn làm gì?`}
+          description={`Remote HEAD hiện tại (${shortSha(driftPrompt.currentHeadSha)}) khác với commit đã duyệt trong Snapshot của ${
+            driftPromptCard?.system?.code ?? 'subsystem này'
+          } (${shortSha(snapshotFor(driftPrompt.systemId)?.headSha ?? snapshotFor(driftPrompt.systemId)?.headCommit)}). Bạn muốn làm gì?`}
           action={
             <Space orientation="vertical" size={8}>
               <Button type="primary" onClick={handleConfirmDrift}>
@@ -545,18 +709,13 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
         />
       )}
 
-      {errorMsg && (
+      {manualError && (
         <Alert
           type="error"
           showIcon
           closable
-          onClose={() => setErrorMsg(null)}
-          message={errorMsg}
-          action={
-            showRetryConnection ? (
-              <Button onClick={handleRetryConnection}>Thử lại kết nối</Button>
-            ) : undefined
-          }
+          onClose={() => setManualError(null)}
+          message={manualError}
         />
       )}
 
@@ -584,13 +743,14 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
           <MultiPackTable
             packs={multiPackState.packs}
             activePackHash={multiPackState.activePackHash}
+            systems={targetSystems}
             onSelectActive={handleSelectActive}
             onDeletePack={handleDeletePack}
           />
         </div>
       )}
 
-      {/* Drift Matrix Breakdown */}
+      {/* Drift Matrix Breakdown — one shared table for every subsystem (D-40). */}
       {driftResult && (
         <div
           style={{
