@@ -16,6 +16,7 @@
 - Phase 30: Automatic Change Pack Packaging & Drift Reconciliation (v1.3)
 - Phase 31: Organization Conventions in the Solution Pipeline (COMPLETE — verified 2026-11-07)
 - Phase 31.1: Enterprise Systems Catalog & CR Transformation (v1.3, INSERTED)
+- Phase 31.2: Enterprise Systems Catalog and CR Normalization (v1.3, INSERTED)
 - Phase 32: External Research via Claude Code Headless (v1.3)
 - Phase 33: Prompt Transparency & Contract Documentation (v1.3)
 
@@ -822,6 +823,68 @@ Plans:
 **Wave 4** *(depends on 31.1-03)*
 
 - [x] 31.1-04-PLAN.md — SDLC Studio & AI Chat multi-system wiring: auto-load SSH and conventions from CR target systems, E2E verification
+
+### Phase 31.2: Enterprise Systems Catalog and CR Normalization (INSERTED)
+
+**Goal:** Chuẩn hoá toàn diện mô hình "TaskMate xoay quanh CR": khai tử `Project`/`Milestone` (Task trỏ trực tiếp `crId` + `systemId?`); System Catalog phân định Logical Parent (không repo/SSH/CR) vs Subsystem (đúng 1 repo remote SSH); SystemDetailView dạng tab + 1-click Git/Terminal; CR Detail View mới; SDLC Studio bỏ hẳn màn cấu hình Repo & SSH, thay bằng view quan sát read-only "Subsystems & Repos", Subsystem Context Bar dùng chung, Step 2 phân tách giải pháp theo Subsystem, Step 4 pack từng Subsystem + Pack All; AI đề xuất subsystem ảnh hưởng có xác nhận của user.
+**Requirements**: ENT-NORM-01, ENT-NORM-02, ENT-NORM-03, ENT-NORM-04, ENT-NORM-05, ENT-NORM-06
+**Depends on:** Phase 31.1
+**Success Criteria** (what must be TRUE):
+
+1. Không còn `projects`/`milestones` trong schema, types, code hay test; `Task.crId` bắt buộc và `Task.systemId` (nếu có) luôn thuộc `cr.targets`; `cr.targets` chỉ chứa subsystem, không chứa Logical Parent. Mọi surface daily (Tasks view, TaskDrawer, filter, chat scope, backup, notifications, standup, planner, palette, export) đã chuyển sang CR/Subsystem; backup định dạng cũ bị từ chối rõ ràng.
+2. System Catalog enforce bất biến: Logical Parent không có SSH/repo và không có nút tạo CR; Subsystem có đúng 1 repo remote SSH; tạo CR từ Subsystem tự điền sẵn subsystem đó.
+3. SystemDetailView có 4 tab (Overview / Subsystems / Impacted CRs / Git & Branches) và mỗi Subsystem có 1-click mở Remote Git Explorer và SSH Terminal đúng repo.
+4. CR Explorer là tool window mặc định (Alt+1) hiển thị CR → Subsystem → Task, không còn tầng Milestone; click CR mở tab CR Detail với bảng Task có cột Subsystem và nút mở SDLC Studio.
+5. SDLC Studio không còn cấu hình Repo & SSH; có view read-only "Subsystems & Repos"; Subsystem Context Bar dùng chung cho Step 3/4; Step 2 sinh solution phân mục theo từng Subsystem; Step 4 pack riêng từng Subsystem và Pack All có báo cáo lỗi từng phần.
+6. Khi CR chưa gán hoặc thiếu subsystem, AI đề xuất subsystem ảnh hưởng kèm lý do và độ tin cậy; chỉ ghi vào CR sau khi user xác nhận.
+
+**Plans:** 19 plans in 8 waves
+**UI hint**: yes
+
+Plans:
+
+**Wave 1** *(no dependencies — data contract)*
+
+- [ ] 31.2-01-PLAN.md — Domain types + Zod: `CrTarget`, required `code`, `Task.crId`/`systemId`, System shape invariants
+- [ ] 31.2-02-PLAN.md — Dexie V16: drop `projects`/`milestones`, re-axis tasks, migrate CR targets, purge legacy chat scopes + SSH bindings
+
+**Wave 2** *(depends on Wave 1 — repo invariants)*
+
+- [ ] 31.2-03-PLAN.md — `isLogicalParent`/`isSubsystem` predicates, System/CR/Task invariant enforcement, CR cascade replacement
+- [ ] 31.2-04-PLAN.md — Re-axis tag, document-link, document-set, chat-scope, notification and work-session repos
+
+**Wave 3** *(depends on Wave 2 — legacy deletion + utilities)*
+
+- [ ] 31.2-05-PLAN.md — Delete Project/Milestone files + `RepoConfigView`, rename SDLC view, remove the legacy SSH/repo binding
+- [ ] 31.2-06-PLAN.md — Real CR Explorer, shared 1-click Git/Terminal hook, layout store re-axis
+- [ ] 31.2-07-PLAN.md — Utility/label surfaces: filter, selection context, recurrence, notifications, standup, day insight, planner hooks
+
+**Wave 4** *(depends on Wave 3 — daily surfaces)*
+
+- [ ] 31.2-08-PLAN.md — Tasks view/table/drawer/filter/quick-add/breadcrumb + ItemInsightView on CR/Subsystem
+- [ ] 31.2-09-PLAN.md — Backup version 11, legacy payload rejection before any write
+- [ ] 31.2-10-PLAN.md — AI tools, grounding and chat scope on CR/System
+- [ ] 31.2-11-PLAN.md — Dashboard, timer, planner, palette, notes, search, docx exports
+- [ ] 31.2-12-PLAN.md — Fix the parent predicate at all 7 sites, divergent Catalog action sets, pre-filled CR creation
+
+**Wave 5** *(depends on Wave 4 — new views)*
+
+- [ ] 31.2-13-PLAN.md — `ChangeRequestDetailView` + `cr_detail` tab renderer
+- [ ] 31.2-14-PLAN.md — `SystemDetailView` 4 tabs with 1-click Git/Terminal
+- [ ] 31.2-15-PLAN.md — `SubsystemsReposPanel` (read-only) + `SubsystemContextBar` shared by Step 3/4
+
+**Wave 6** *(depends on Wave 5 — SDLC content)*
+
+- [ ] 31.2-16-PLAN.md — Step 2 per-subsystem solution contract + Step 3 branch from `cr.targets`
+- [ ] 31.2-17-PLAN.md — Step 4 per-subsystem pack cards + Pack All with partial-failure reporting
+
+**Wave 7** *(depends on Wave 6 — AI proposal)*
+
+- [ ] 31.2-18-PLAN.md — `propose_subsystems` tool (6 registration points) + `SubsystemProposalCard` confirm-only write
+
+**Wave 8** *(depends on Wave 7 — test sweep)*
+
+- [ ] 31.2-19-PLAN.md — Wave 0 suites, legacy test deletion, survivor rewrites, repo-wide `tsc --noEmit` gate
 
 ### Phase 32: External Research via Claude Code Headless
 
