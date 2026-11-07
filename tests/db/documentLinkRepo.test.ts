@@ -12,7 +12,7 @@ import { createChangeRequest } from '../../src/db/repositories/changeRequestRepo
  *
  * The `projects` store does not exist after V16, so every transaction in
  * `documentLinkRepo` must name `db.changeRequests` instead. Running these against a
- * current-version database is the functional proof: a lingering `db.projects` in a
+ * current-version database is the functional proof: naming a dropped store in a
  * transaction list throws at runtime.
  *
  * RED until plan 31.2-04 re-axes `documentLinkRepo`.

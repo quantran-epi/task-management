@@ -396,11 +396,11 @@ export function EditorArea({ db }: EditorAreaProps) {
           if (itemType === 'task') {
             const item = await db.tasks.get(itemId);
             realName = item?.name;
-          } else if (itemType === 'project') {
-            const item = await db.projects.get(itemId);
+          } else if (itemType === 'cr') {
+            const item = await db.changeRequests.get(itemId);
             realName = item?.name;
-          } else if (itemType === 'milestone') {
-            const item = await db.milestones.get(itemId);
+          } else if (itemType === 'system') {
+            const item = await db.systems.get(itemId);
             realName = item?.name;
           }
           if (realName) {
@@ -418,7 +418,7 @@ export function EditorArea({ db }: EditorAreaProps) {
   const renderViewContent = (tab: EditorTab) => {
     switch (tab.viewType) {
       case 'tasks':
-        return <TasksView {...dbProp} initialProjectId={tab.params?.projectId} />;
+        return <TasksView {...dbProp} initialCrId={tab.params?.changeRequestId} />;
       case 'notes':
         return <NotesView {...dbProp} initialDocId={tab.params?.doc} hideFolderTree={true} />;
       case 'planner':
@@ -451,7 +451,7 @@ export function EditorArea({ db }: EditorAreaProps) {
       case 'sdlc':
         return (
           <ChangeRequestSdlcView
-            changeRequestId={String(tab.params?.changeRequestId ?? tab.params?.projectId ?? '')}
+            changeRequestId={String(tab.params?.changeRequestId ?? '')}
             onBack={() => closeTab(tab.id)}
             {...dbProp}
           />

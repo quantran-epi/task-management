@@ -12,8 +12,7 @@ import type { Task } from '../../src/types/models';
  *
  * `CRExplorer` becomes a real CR → Subsystem pill → Task tree: no Milestone tier, a
  * `cr_detail` tab on CR click, an `sdlc` tab on pill click, both context menus, three empty
- * states, and a search filter. Today the module is a 3-line re-export of `ProjectExplorer`,
- * so these assertions are RED — that is the intended state, not a collection error.
+ * states, and a search filter.
  */
 const NOW = '2026-01-01T00:00:00.000Z';
 
