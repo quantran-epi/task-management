@@ -23,7 +23,7 @@ import {
 import { formatMinutes } from '../../utils/time';
 import { createFocusRestorer } from '../../utils/focus';
 import { useRegisterActiveForm } from '../../context/FormGuardContext';
-import type { Task, TaskPriority, Project } from '../../types/models';
+import type { Task, TaskPriority, ChangeRequest } from '../../types/models';
 
 const { Text } = Typography;
 
@@ -57,7 +57,7 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [existingTotalMinutes, setExistingTotalMinutes] = useState(0);
   const [existingDateMinutes, setExistingDateMinutes] = useState(0);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(undefined);
+  const [selectedCrId, setSelectedCrId] = useState<string | undefined>(undefined);
   const restorerRef = useRef<(() => void) | null>(null);
 
   // Watch form fields for live estimate comparison
@@ -78,24 +78,24 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
     []
   );
 
-  // Query projects for combobox filter & project context
-  const projects = useLiveQuery(
+  // Query CRs for combobox filter & CR context
+  const changeRequests = useLiveQuery(
     async () => {
-      const all = await db.projects.toArray();
-      return all.sort((a, b) => a.name.localeCompare(b.name));
+      const all = await db.changeRequests.toArray();
+      return all.sort((a, b) => (a.code || a.name).localeCompare(b.code || b.name));
     },
     [db],
     []
   );
 
-  const projectMap = useMemo(() => {
-    return new Map<string, Project>((projects ?? []).map((p) => [p.id, p]));
-  }, [projects]);
+  const crMap = useMemo(() => {
+    return new Map<string, ChangeRequest>((changeRequests ?? []).map((cr) => [cr.id, cr]));
+  }, [changeRequests]);
 
   const filteredActiveTasks = useMemo(() => {
-    if (!selectedProjectId) return activeTasks;
-    return activeTasks.filter((t) => t.projectId === selectedProjectId);
-  }, [activeTasks, selectedProjectId]);
+    if (!selectedCrId) return activeTasks;
+    return activeTasks.filter((t) => t.crId === selectedCrId);
+  }, [activeTasks, selectedCrId]);
 
   const selectedTask = activeTasks.find((t) => t.id === selectedTaskId);
 
@@ -110,7 +110,7 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
         hours: 1,
         minutes: 0,
       });
-      setSelectedProjectId(undefined);
+      setSelectedCrId(undefined);
     }
   }, [open, initialDate, initialTaskId, form]);
 
@@ -230,23 +230,23 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
         }}
         style={{ marginTop: 16 }}
       >
-        {/* Project Filter */}
+        {/* CR Filter */}
         <div style={{ marginBottom: 12 }}>
           <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-            Lọc theo dự án:
+            Lọc theo CR:
           </Text>
           <Select
             allowClear
             showSearch
-            placeholder="Tất cả dự án"
+            placeholder="Tất cả CR"
             style={{ width: '100%' }}
-            value={selectedProjectId}
+            value={selectedCrId}
             onChange={(val) => {
-              setSelectedProjectId(val);
+              setSelectedCrId(val);
               if (val) {
                 const curTaskId = form.getFieldValue('taskId');
                 const curTask = activeTasks.find((t) => t.id === curTaskId);
-                if (curTask && curTask.projectId !== val) {
+                if (curTask && curTask.crId !== val) {
                   form.setFieldValue('taskId', undefined);
                 }
               }
@@ -254,8 +254,8 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
             filterOption={(input, option) =>
               ((option?.label as string) ?? '').toLowerCase().includes(input.toLowerCase())
             }
-            options={(projects ?? []).map((p) => ({ value: p.id, label: p.name }))}
-            aria-label="Lọc theo dự án"
+            options={(changeRequests ?? []).map((cr) => ({ value: cr.id, label: cr.code || cr.name }))}
+            aria-label="Lọc theo CR"
           />
         </div>
 
@@ -275,21 +275,22 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
               const task = (filteredActiveTasks ?? []).find((t) => t.id === option?.value);
               if (!task) return false;
               const taskMatch = task.name.toLowerCase().includes(search);
-              const proj = task.projectId ? projectMap.get(task.projectId) : undefined;
-              const projMatch = proj ? proj.name.toLowerCase().includes(search) : false;
-              return taskMatch || projMatch;
+              const cr = task.crId ? crMap.get(task.crId) : undefined;
+              const crMatch = cr ? (cr.code || cr.name).toLowerCase().includes(search) : false;
+              return taskMatch || crMatch;
             }}
             options={filteredActiveTasks.map((t) => {
-              const proj = t.projectId ? projectMap.get(t.projectId) : undefined;
+              const cr = t.crId ? crMap.get(t.crId) : undefined;
+              const crLabel = cr ? cr.code || cr.name : undefined;
               return {
                 value: t.id,
-                label: `${t.name} (${t.priority}, ước tính: ${formatMinutes(t.estimateMinutes)})${proj ? ` - [${proj.name}]` : ''}`,
+                label: `${t.name} (${t.priority}, ước tính: ${formatMinutes(t.estimateMinutes)})${crLabel ? ` - [${crLabel}]` : ''}`,
                 task: t,
-                projectName: proj?.name,
+                crName: crLabel,
               };
             })}
             optionRender={(option) => {
-              const item = option.data as { task: Task; projectName?: string };
+              const item = option.data as { task: Task; crName?: string };
               const t = item.task;
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '2px 0' }}>
@@ -302,9 +303,9 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
                       <Tag>{formatMinutes(t.estimateMinutes)}</Tag>
                     </Space>
                   </div>
-                  {item.projectName && (
+                  {item.crName && (
                     <Text type="secondary" style={{ fontSize: 11, lineHeight: 1.2 }}>
-                      {item.projectName}
+                      {item.crName}
                     </Text>
                   )}
                 </div>

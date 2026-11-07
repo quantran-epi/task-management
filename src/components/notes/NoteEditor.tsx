@@ -43,17 +43,17 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [markdownBody, setMarkdownBody] = useState<string>('');
 
   // Pre-load entities for selector if needed
-  const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([]);
+  const [changeRequests, setChangeRequests] = useState<Array<{ id: string; name: string }>>([]);
   const [tasks, setTasks] = useState<Array<{ id: string; name: string }>>([]);
-  const [milestones, setMilestones] = useState<Array<{ id: string; name: string }>>([]);
+  const [systems, setSystems] = useState<Array<{ id: string; name: string }>>([]);
 
   useEffect(() => {
     if (!open) return;
 
     // Load available entities
-    db.projects.toArray().then((list) => setProjects(list.map((p) => ({ id: p.id, name: p.name }))));
+    db.changeRequests.toArray().then((list) => setChangeRequests(list.map((cr) => ({ id: cr.id, name: cr.code || cr.name }))));
     db.tasks.toArray().then((list) => setTasks(list.map((t) => ({ id: t.id, name: t.name }))));
-    db.milestones.toArray().then((list) => setMilestones(list.map((m) => ({ id: m.id, name: m.name }))));
+    db.systems.toArray().then((list) => setSystems(list.map((s) => ({ id: s.id, name: s.name }))));
 
     if (note) {
       form.setFieldsValue({
@@ -90,10 +90,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     switch (currentEntityType) {
       case 'task':
         return tasks.map((t) => ({ label: t.name, value: t.id }));
-      case 'project':
-        return projects.map((p) => ({ label: p.name, value: p.id }));
-      case 'milestone':
-        return milestones.map((m) => ({ label: m.name, value: m.id }));
+      case 'cr':
+        return changeRequests.map((cr) => ({ label: cr.name, value: cr.id }));
+      case 'system':
+        return systems.map((s) => ({ label: s.name, value: s.id }));
       default:
         return [];
     }
@@ -210,8 +210,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               placeholder="Độc lập (Không liên kết)"
               options={[
                 { label: 'Tác vụ (Task)', value: 'task' },
-                { label: 'Dự án (Project)', value: 'project' },
-                { label: 'Cột mốc (Milestone)', value: 'milestone' },
+                { label: 'Change Request (CR)', value: 'cr' },
+                { label: 'Hệ thống (System)', value: 'system' },
               ]}
               onChange={() => form.setFieldValue('entityId', undefined)}
             />

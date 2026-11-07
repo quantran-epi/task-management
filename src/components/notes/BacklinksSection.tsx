@@ -1,28 +1,28 @@
 import React from 'react';
 import { Typography, Tag } from 'antd';
-import { LinkOutlined, CheckSquareOutlined, FolderOutlined, FileTextOutlined } from '@ant-design/icons';
-import type { Task, Project, Note } from '../../types/models';
+import { LinkOutlined, CheckSquareOutlined, ProjectOutlined, FileTextOutlined } from '@ant-design/icons';
+import type { Task, ChangeRequest, Note } from '../../types/models';
 
 const { Text } = Typography;
 
 export interface BacklinksSectionProps {
   tasks: Task[];
-  projects: Project[];
+  changeRequests: ChangeRequest[];
   referencingNotes?: Note[] | undefined;
   onOpenTask?: ((taskId: string) => void) | undefined;
-  onOpenProject?: ((projectId: string) => void) | undefined;
+  onOpenCr?: ((crId: string) => void) | undefined;
   onOpenNote?: ((noteId: string) => void) | undefined;
 }
 
 export const BacklinksSection: React.FC<BacklinksSectionProps> = ({
   tasks,
-  projects,
+  changeRequests,
   referencingNotes = [],
   onOpenTask,
-  onOpenProject,
+  onOpenCr,
   onOpenNote,
 }) => {
-  const totalCount = tasks.length + projects.length + referencingNotes.length;
+  const totalCount = tasks.length + changeRequests.length + referencingNotes.length;
 
   if (totalCount === 0) {
     return null;
@@ -63,20 +63,20 @@ export const BacklinksSection: React.FC<BacklinksSectionProps> = ({
           </div>
         )}
 
-        {projects.length > 0 && (
+        {changeRequests.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
             <Text type="secondary" style={{ fontSize: 12, marginRight: 4 }}>
-              Dự án:
+              Change Request:
             </Text>
-            {projects.map((project) => (
+            {changeRequests.map((cr) => (
               <Tag
-                key={project.id}
+                key={cr.id}
                 color="purple"
-                icon={<FolderOutlined />}
-                style={{ cursor: onOpenProject ? 'pointer' : 'default' }}
-                onClick={() => onOpenProject?.(project.id)}
+                icon={<ProjectOutlined />}
+                style={{ cursor: onOpenCr ? 'pointer' : 'default' }}
+                onClick={() => onOpenCr?.(cr.id)}
               >
-                {project.name}
+                {cr.code || cr.name}
               </Tag>
             ))}
           </div>

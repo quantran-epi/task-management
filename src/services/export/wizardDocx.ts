@@ -187,14 +187,14 @@ const cabSourceSchema = z.strictObject({
   artifactId: z.string().uuid(),
   version: z.number().int().positive(),
   hash: z.string().regex(/^[a-f0-9]{64}$/),
-  projectId: z.string().uuid(),
+  changeRequestId: z.string().uuid(),
   threadId: z.string().uuid(),
   approved: z.boolean(),
 });
 const cabPayloadSchema = z.strictObject({
   ...approvedEnvelopeSchema,
   kind: z.literal('CAB'),
-  projectId: z.string().uuid(),
+  changeRequestId: z.string().uuid(),
   threadId: z.string().uuid(),
   sourceArtifactIds: z.object({ PL02: z.string().uuid(), PL03B: z.string().uuid(), PL07: z.string().uuid() }),
   sources: z.array(cabSourceSchema).length(3),
@@ -216,7 +216,7 @@ function validateCabSources(payload: z.infer<typeof cabPayloadSchema>): void {
   const kinds = new Set(['PL02', 'PL03B', 'PL07']);
   if (payload.sources.some((source) => {
     if (!kinds.delete(source.kind)) return true;
-    return source.projectId !== payload.projectId
+    return source.changeRequestId !== payload.changeRequestId
       || source.threadId !== payload.threadId
       || !source.approved
       || source.artifactId !== payload.sourceArtifactIds[source.kind]

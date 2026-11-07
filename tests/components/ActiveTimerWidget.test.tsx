@@ -220,28 +220,32 @@ describe('ActiveTimerWidget', () => {
     expect(screen.queryByText('Tên trong CSDL')).not.toBeInTheDocument();
   });
 
-  it('renders Project › Milestone hierarchy subtitle under task name (D-04)', async () => {
-    await testDb.projects.add({
-      id: 'proj-1',
+  it('renders CR › Subsystem hierarchy subtitle under task name (D-04, D-50)', async () => {
+    await testDb.changeRequests.add({
+      id: 'cr-1',
       name: 'Dự án Alpha',
+      code: 'CR-2026-001',
       status: 'In Progress',
+      type: 'ENHANCEMENT',
+      targets: [{ systemId: 'sys-1' }],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
 
-    await testDb.milestones.add({
-      id: 'ms-1',
-      projectId: 'proj-1',
+    await testDb.systems.add({
+      id: 'sys-1',
       name: 'Giai đoạn 1',
-      status: 'In Progress',
+      code: 'CORE_SVC',
+      parentId: null,
+      type: 'SERVICE',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
 
     await testDb.tasks.add({
       id: 'task-sub',
-      projectId: 'proj-1',
-      milestoneId: 'ms-1',
+      crId: 'cr-1',
+      systemId: 'sys-1',
       name: 'Xây dựng API',
       status: 'In Progress',
       progress: 0,
@@ -267,7 +271,7 @@ describe('ActiveTimerWidget', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Xây dựng API')).toBeInTheDocument();
-      expect(screen.getByTestId('capsule-hierarchy-subtitle')).toHaveTextContent('Dự án Alpha › Giai đoạn 1');
+      expect(screen.getByTestId('capsule-hierarchy-subtitle')).toHaveTextContent('CR-2026-001 › Giai đoạn 1');
     });
   });
 });

@@ -3,17 +3,24 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import dayjs from 'dayjs';
 import { TaskPlannerDatabase } from '../../src/db/index';
 import { createTask } from '../../src/db/repositories/taskRepo';
-import { createProject } from '../../src/db/repositories/projectRepo';
+import { createChangeRequest } from '../../src/db/repositories/changeRequestRepo';
 import { upsertAllocation } from '../../src/db/repositories/allocationRepo';
 import { updateCapacityRule } from '../../src/db/repositories/capacityRepo';
 import { FeasibilityModal } from '../../src/components/planner/FeasibilityModal';
 
 describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, D-10, D-12, D-14, D-15, D-16, T-04-03)', () => {
   let testDb: TaskPlannerDatabase;
+  let crId: string;
 
   beforeEach(async () => {
     testDb = new TaskPlannerDatabase('TestFeasibilityModal_' + Math.random().toString(36).slice(2));
     await testDb.open();
+
+    const cr = await createChangeRequest(
+      { name: 'Alpha Core', code: 'CR-2026-001', type: 'ENHANCEMENT' },
+      testDb
+    );
+    crId = cr.id;
 
     // Default working week Mon-Fri 8h (480m)
     for (let day = 1; day <= 5; day++) {
@@ -30,7 +37,7 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
   it('renders modal when open with parameters, result alert, and candidate table', async () => {
     const deadline = dayjs().add(3, 'day').format('YYYY-MM-DD');
     const task = await createTask(
-      { name: 'Analyze Architecture', estimateMinutes: 240, status: 'In Progress', deadline },
+      { name: 'Analyze Architecture', estimateMinutes: 240, status: 'In Progress', deadline, crId },
       testDb
     );
 
@@ -53,7 +60,7 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
   it('CALC-03: renders green Alert when task fits within range with surplus capacity', async () => {
     const deadline = dayjs().add(5, 'day').format('YYYY-MM-DD');
     const task = await createTask(
-      { name: 'Feasible Task', estimateMinutes: 120, status: 'Open', deadline },
+      { name: 'Feasible Task', estimateMinutes: 120, status: 'Open', deadline, crId },
       testDb
     );
 
@@ -78,7 +85,7 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
     // 1-day range with 480m capacity, but task estimate is 1200m -> infeasible deficit
     const deadline = dayjs().format('YYYY-MM-DD');
     const task = await createTask(
-      { name: 'Overloaded Task', estimateMinutes: 1200, status: 'Open', deadline },
+      { name: 'Overloaded Task', estimateMinutes: 1200, status: 'Open', deadline, crId },
       testDb
     );
 
@@ -114,7 +121,7 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
   it('CALC-06 / T-04-03: candidate minutes edits and toggling checkboxes do NOT mutate IndexedDB until Apply is clicked', async () => {
     const deadline = dayjs().add(3, 'day').format('YYYY-MM-DD');
     const task = await createTask(
-      { name: 'Draft Proposal', estimateMinutes: 180, status: 'Open', deadline },
+      { name: 'Draft Proposal', estimateMinutes: 180, status: 'Open', deadline, crId },
       testDb
     );
 
@@ -159,7 +166,7 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
     const today = dayjs().format('YYYY-MM-DD');
     const deadline = dayjs().add(2, 'day').format('YYYY-MM-DD');
     const task = await createTask(
-      { name: 'Deploy Pipeline', estimateMinutes: 120, status: 'In Progress', deadline },
+      { name: 'Deploy Pipeline', estimateMinutes: 120, status: 'In Progress', deadline, crId },
       testDb
     );
 
@@ -197,7 +204,7 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
   it('automatically updates task deadline to new extended date when saving allocations', async () => {
     const today = dayjs().format('YYYY-MM-DD');
     const task = await createTask(
-      { name: 'Big Task', estimateMinutes: 1200, status: 'Open', deadline: today },
+      { name: 'Big Task', estimateMinutes: 1200, status: 'Open', deadline: today, crId },
       testDb
     );
 
@@ -230,10 +237,9 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
     });
   });
 
-  it('renders task name and project badge in task context header', async () => {
-    const proj = await createProject({ name: 'Alpha Core', status: 'Open' }, testDb);
+  it('renders task name and CR badge in task context header', async () => {
     const task = await createTask(
-      { name: 'Core Engine Task', estimateMinutes: 120, status: 'Open', projectId: proj.id },
+      { name: 'Core Engine Task', estimateMinutes: 120, status: 'Open', crId },
       testDb
     );
 
@@ -249,13 +255,13 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
     const contextHeader = await screen.findByTestId('feasibility-task-context');
     expect(contextHeader).toBeInTheDocument();
     expect(contextHeader).toHaveTextContent('Core Engine Task');
-    expect(await screen.findByText('Alpha Core')).toBeInTheDocument();
+    expect(await screen.findByText('CR-2026-001')).toBeInTheDocument();
   });
 
   it('handles task with past deadline gracefully by defaulting to custom range from today', async () => {
     const pastDeadline = dayjs().subtract(2, 'day').format('YYYY-MM-DD');
     const task = await createTask(
-      { name: 'Overdue Task', estimateMinutes: 120, status: 'Open', deadline: pastDeadline },
+      { name: 'Overdue Task', estimateMinutes: 120, status: 'Open', deadline: pastDeadline, crId },
       testDb
     );
 

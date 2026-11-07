@@ -12,9 +12,14 @@ describe('SearchEverywhereModal', () => {
         { id: 't2', name: 'Write Unit Tests', title: 'Write Unit Tests', status: 'todo' },
       ]),
     },
-    projects: {
+    changeRequests: {
       toArray: vi.fn().mockResolvedValue([
-        { id: 'p1', name: 'Mobile App', status: 'active' },
+        { id: 'c1', name: 'Mobile App', code: 'CR-2026-001', status: 'In Progress' },
+      ]),
+    },
+    systems: {
+      toArray: vi.fn().mockResolvedValue([
+        { id: 's1', name: 'Core Service', code: 'CORE_SVC', type: 'SERVICE' },
       ]),
     },
     notes: {
@@ -41,8 +46,9 @@ describe('SearchEverywhereModal', () => {
     expect(screen.getByPlaceholderText("Search everywhere, or type '>' for actions...")).toBeDefined();
     expect(screen.getByRole('tab', { name: 'All' })).toBeDefined();
     expect(screen.getByRole('tab', { name: 'Tasks' })).toBeDefined();
-    expect(screen.getByRole('tab', { name: 'Projects' })).toBeDefined();
+    expect(screen.getByRole('tab', { name: 'CR' })).toBeDefined();
     expect(screen.getByRole('tab', { name: 'Docs' })).toBeDefined();
+    expect(screen.getByRole('tab', { name: 'Systems' })).toBeDefined();
     expect(screen.getByRole('tab', { name: 'Actions' })).toBeDefined();
   });
 
@@ -56,7 +62,7 @@ describe('SearchEverywhereModal', () => {
     expect(screen.getByRole('tab', { name: 'Tasks' }).getAttribute('aria-selected')).toBe('true');
 
     fireEvent.keyDown(input, { key: 'Tab' });
-    expect(screen.getByRole('tab', { name: 'Projects' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: 'CR' }).getAttribute('aria-selected')).toBe('true');
   });
 
   it('calls onClose on Escape key press', () => {

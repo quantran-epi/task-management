@@ -12,6 +12,7 @@ vi.mock('../../src/db/repositories/taskRepo', () => ({
 function createMockTask(overrides?: Partial<Task>): Task {
   return {
     id: 'task-1',
+    crId: 'cr-1',
     name: 'Sample Task',
     status: 'Open',
     progress: 0,
@@ -205,27 +206,27 @@ describe('AttentionTodayList (DASH-01, DASH-06, D-09, D-10, D-11, D-12, D-14)', 
     expect(onViewAllTasks).toHaveBeenCalledTimes(1);
   });
 
-  it('renders project name subtitle when task belongs to a project', () => {
+  it('renders CR code subtitle when task belongs to a change request', () => {
     const items: AttentionTaskItem[] = [
       {
-        task: createMockTask({ id: 'task-proj', name: 'Project Alpha Task', projectId: 'p1' }),
+        task: createMockTask({ id: 'task-cr', name: 'CR Alpha Task', crId: 'cr-1' }),
         category: 'due-today',
         scheduledMinutes: 0,
       },
     ];
 
-    const projectMap = new Map<string, string>([['p1', 'Alpha Project']]);
+    const crMap = new Map<string, string>([['cr-1', 'CR-2026-001']]);
 
     render(
       <AttentionTodayList
         items={items}
         onTaskClick={vi.fn()}
         onViewAllTasks={vi.fn()}
-        projectMap={projectMap}
+        crMap={crMap}
       />
     );
 
-    expect(screen.getByText('Project Alpha Task')).toBeInTheDocument();
-    expect(screen.getByText('Alpha Project')).toBeInTheDocument();
+    expect(screen.getByText('CR Alpha Task')).toBeInTheDocument();
+    expect(screen.getByText('CR-2026-001')).toBeInTheDocument();
   });
 });
