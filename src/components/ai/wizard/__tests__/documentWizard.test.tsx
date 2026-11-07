@@ -14,7 +14,7 @@ const HISTORICAL_LINE = 'Tài liệu lịch sử — xuất .docx từ bước t
 const wizardSnapshot: WizardSnapshot = {
   schemaVersion: 1,
   sessionId: '10000000-0000-4000-8000-000000000001',
-  projectId: '10000000-0000-4000-8000-000000000002',
+  changeRequestId: '10000000-0000-4000-8000-000000000002',
   threadId: '10000000-0000-4000-8000-000000000003',
   skill: 'PL03',
   status: 'review',

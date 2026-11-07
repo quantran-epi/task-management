@@ -233,7 +233,7 @@ describe('persistConfirmedPack', () => {
       wizard: {
         schemaVersion: 1,
         sessionId,
-        projectId,
+        changeRequestId: projectId,
         threadId,
         skill: 'SOLUTION',
         status: 'approved',
@@ -271,7 +271,7 @@ describe('persistConfirmedPack', () => {
       wizard: {
         schemaVersion: 1,
         sessionId,
-        projectId,
+        changeRequestId: projectId,
         threadId,
         skill: 'PL03',
         status: 'approved',
