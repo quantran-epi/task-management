@@ -1,53 +1,67 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { SdlcSidebar } from '../SdlcSidebar';
-import * as sdlcCrManager from '../../../services/wizard/sdlcCrManager';
-import * as gitRemoteService from '../../../services/gitRemoteService';
+import { TaskPlannerDatabase } from '../../../db';
+import { createSystem } from '../../../db/repositories/systemRepo';
+import { createChangeRequest } from '../../../db/repositories/changeRequestRepo';
 
 describe('SdlcSidebar Component (Unified CR Hierarchy)', () => {
-  beforeEach(() => {
+  let db: TaskPlannerDatabase;
+  let systemId: string;
+  let crId: string;
+
+  beforeEach(async () => {
+    db = new TaskPlannerDatabase(`test-sidebar-${Math.random()}`);
+    await db.open();
+    const parent = await createSystem(
+      { name: 'Core', code: 'CORE', parentId: null, type: 'LOGICAL_GROUP' },
+      db
+    );
+    const subsystem = await createSystem(
+      {
+        name: 'Payment Service',
+        code: 'PAY-SVC',
+        parentId: parent.id,
+        type: 'SERVICE',
+        sshConfigId: '00000000-0000-4000-8000-000000000001',
+        remoteRepoPath: '/var/repos/payment-service',
+        defaultBaseBranch: 'origin/main',
+      },
+      db
+    );
+    systemId = subsystem.id;
+    const cr = await createChangeRequest(
+      {
+        name: 'Instant settlement',
+        code: 'CR-2026-01',
+        type: 'NEW_FEATURE',
+        status: 'Open',
+        targets: [{ systemId }],
+      },
+      db
+    );
+    crId = cr.id;
     vi.clearAllMocks();
   });
 
-  it('renders unified Change Request (CR), repo binding, and Steps', async () => {
-    vi.spyOn(gitRemoteService, 'getProjectRepoSshBinding').mockResolvedValue({
-      sshConfigId: 'ssh-1',
-      remoteRepoPath: '/home/user/my-repo',
-      defaultBaseBranch: 'origin/main',
-      updatedAt: '2026-11-07T00:00:00Z',
-    });
+  afterEach(async () => {
+    await db.delete();
+  });
 
-    vi.spyOn(sdlcCrManager, 'listCrs').mockResolvedValue([
-      {
-        id: 'cr-1',
-        projectId: 'proj-1',
-        crCode: 'CR-2026-01',
-        featureName: 'Test Feature',
-        author: 'Tester',
-        requestingUnit: 'QA',
-        date: '2026-11-07',
-        status: 'active',
-        createdAt: '2026-11-07T00:00:00Z',
-        updatedAt: '2026-11-07T00:00:00Z',
-      },
-    ]);
-
+  it('renders the CR picker, the 6-step list and the read-only Subsystems & Repos panel', async () => {
     const handleSelectStep = vi.fn();
-    const handleSelectConfig = vi.fn();
 
     render(
       <SdlcSidebar
-        projectId="proj-1"
+        projectId={crId}
         selectedStep="INTAKE"
         onSelectStep={handleSelectStep}
-        activeCrId="cr-1"
-        onSelectConfig={handleSelectConfig}
+        activeCrId={crId}
+        db={db}
       />
     );
 
-    // Unified Change Request & Repo Binding
     expect(screen.getAllByText(/Change Request \(CR\)/i).length).toBeGreaterThanOrEqual(1);
-    expect(await screen.findByText('/home/user/my-repo')).toBeInTheDocument();
     expect(await screen.findByText('CR-2026-01')).toBeInTheDocument();
 
     // Steps
@@ -58,14 +72,20 @@ describe('SdlcSidebar Component (Unified CR Hierarchy)', () => {
     expect(screen.getByText(/Bước 5: Tài liệu kỹ thuật/i)).toBeInTheDocument();
     expect(screen.getByText(/Bước 6: Tờ trình CAB/i)).toBeInTheDocument();
 
-    // Click step
-    const step2 = screen.getByTestId('sidebar-step-SOLUTION');
-    fireEvent.click(step2);
-    expect(handleSelectStep).toHaveBeenCalledWith('SOLUTION');
+    // Read-only panel replaces the deleted repo-config chip (D-37)
+    expect(await screen.findByText('Subsystems & Repos')).toBeInTheDocument();
+    expect(await screen.findByText('/var/repos/payment-service')).toBeInTheDocument();
+    expect(screen.queryByTestId('sidebar-btn-repo-config')).not.toBeInTheDocument();
 
-    // Click config
-    const configBtn = screen.getByTestId('sidebar-btn-repo-config');
-    fireEvent.click(configBtn);
-    expect(handleSelectConfig).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByTestId('sidebar-step-SOLUTION'));
+    expect(handleSelectStep).toHaveBeenCalledWith('SOLUTION');
+  });
+
+  it('has no repo-config chip even before the CR resolves', async () => {
+    render(
+      <SdlcSidebar projectId={crId} selectedStep="INTAKE" onSelectStep={vi.fn()} db={db} />
+    );
+    await waitFor(() => expect(screen.getByTestId('sdlc-sidebar')).toBeInTheDocument());
+    expect(screen.queryByTestId('sidebar-btn-repo-config')).not.toBeInTheDocument();
   });
 });
