@@ -4348,6 +4348,9 @@ export async function executeAiTool(
 
       case 'query_notifications': {
         const tasks = db.tasks ? await db.tasks.toArray() : [];
+        // `evaluateNotifications` reads `changeRequests` unconditionally to label each alert
+        // with its CR code; omitting it throws on the `crMap` build.
+        const changeRequests = db.changeRequests ? await db.changeRequests.toArray() : [];
         const rules = db.capacityRules ? await db.capacityRules.toArray() : [];
         const overrides = db.capacityOverrides ? await db.capacityOverrides.toArray() : [];
         const allocations = db.plannedAllocations ? await db.plannedAllocations.toArray() : [];
@@ -4358,6 +4361,7 @@ export async function executeAiTool(
 
         const alerts = evaluateNotifications({
           tasks,
+          changeRequests,
           rules,
           overrides,
           allocations,
