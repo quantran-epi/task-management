@@ -12,8 +12,8 @@ import {
 import { ChangeRequestTable } from '../components/changeRequests/ChangeRequestTable';
 import { ChangeRequestModal } from '../components/changeRequests/ChangeRequestModal';
 import { PageHeader } from '../components/common/PageHeader';
-import { ProjectSdlcView } from './ProjectSdlcView';
-import type { ChangeRequest, CrType, CrStatus } from '../types/models';
+import { isSubsystem } from '../db/repositories/systemRepo';
+import type { ChangeRequest, CrType } from '../types/models';
 import type { ChangeRequestInput, ChangeRequestUpdate } from '../validation/schemas';
 import { useLayoutStore } from '../workbench/store/layoutStore';
 
@@ -24,7 +24,6 @@ export interface ChangeRequestsViewProps {
 export const ChangeRequestsView: React.FC<ChangeRequestsViewProps> = ({ db = defaultDb }) => {
   const [crModalOpen, setCrModalOpen] = useState(false);
   const [editingCR, setEditingCR] = useState<ChangeRequest | null>(null);
-  const [activeSdlcCrId, setActiveSdlcCrId] = useState<string | null>(null);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -43,7 +42,7 @@ export const ChangeRequestsView: React.FC<ChangeRequestsViewProps> = ({ db = def
         return false;
       }
       if (filterSystemId !== 'ALL') {
-        if (!cr.targetSystemIds || !cr.targetSystemIds.includes(filterSystemId)) {
+        if (!cr.targets?.some((t) => t.systemId === filterSystemId)) {
           return false;
         }
       }
@@ -86,7 +85,7 @@ export const ChangeRequestsView: React.FC<ChangeRequestsViewProps> = ({ db = def
   };
 
   const handleDeleteCRPrompt = (cr: ChangeRequest) => {
-    const childTasks = tasks.filter((t) => t.projectId === cr.id);
+    const childTasks = tasks.filter((t) => t.crId === cr.id);
     Modal.confirm({
       title: `Xóa Change Request: Xóa CR '${cr.name}'?`,
       content: (
@@ -110,18 +109,8 @@ export const ChangeRequestsView: React.FC<ChangeRequestsViewProps> = ({ db = def
     });
   };
 
-  if (activeSdlcCrId) {
-    return (
-      <ProjectSdlcView
-        projectId={activeSdlcCrId}
-        onBack={() => setActiveSdlcCrId(null)}
-        db={db}
-      />
-    );
-  }
-
   const subsystemOptions = systems
-    .filter((s) => s.parentId !== null && s.type !== 'LOGICAL_GROUP')
+    .filter(isSubsystem)
     .map((s) => ({ label: `${s.name} (${s.code})`, value: s.id }));
 
   return (
@@ -203,13 +192,21 @@ export const ChangeRequestsView: React.FC<ChangeRequestsViewProps> = ({ db = def
         systems={systems}
         onEditChangeRequest={handleOpenEditCR}
         onDeleteChangeRequest={handleDeleteCRPrompt}
-        onOpenSdlcStudio={(crId) => setActiveSdlcCrId(crId)}
+        onOpenSdlcStudio={(crId) => {
+          openTab({
+            id: `sdlc-${crId}`,
+            title: 'SDLC Studio',
+            viewType: 'sdlc',
+            closable: true,
+            params: { changeRequestId: crId },
+          });
+        }}
         onViewTasks={(crId) => {
           openTab({
             id: 'tasks',
             title: 'Tasks',
             viewType: 'tasks',
-            params: { projectId: crId },
+            params: { crId },
           });
         }}
         db={db}

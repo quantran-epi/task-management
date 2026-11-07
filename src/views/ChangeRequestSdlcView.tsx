@@ -19,6 +19,7 @@ import {
   workflowStorageKey,
 } from '../services/wizard/workflowCoordinator';
 import { saveMessage } from '../db/repositories/chatRepo';
+import { updateChangeRequest } from '../db/repositories/changeRequestRepo';
 import { formatGuardMessage, WORKFLOW_GUARD_MESSAGES } from '../services/wizard/workflowGuards';
 import {
   createSdlcWizardRuntime,
@@ -38,54 +39,52 @@ import type { StepChatPanelHandle } from '../components/sdlc/chat/StepChatPanel'
 import { generateId } from '../utils/uuid';
 import type { ChatMessage } from '../types/models';
 import { readArtifactSnapshot, type ArtifactPatchProposal, type ArtifactToolContext, type ArtifactToolKind } from '../services/ai/sdlcArtifactTools';
-import { getGlobalConventions, loadRepoConventions, type RepoConventionResult } from '../services/conventionService';
+import {
+  getGlobalConventions,
+  loadMultiRepoConventions,
+  type MultiRepoConventionResult,
+} from '../services/conventionService';
 import type { ConventionsSummaryProps } from '../components/sdlc/common/ConventionsSummaryCard';
-import { RepoConfigView } from '../components/sdlc/config/RepoConfigView';
 
-export interface ProjectSdlcViewProps {
-  projectId?: string;
+export interface ChangeRequestSdlcViewProps {
+  changeRequestId?: string;
   onBack: () => void;
   db?: TaskPlannerDatabase;
 }
 
-function draftSettingKey(projectId: string, crId: string): string {
-  return `sdlc_draft_solution:${projectId}:${crId}`;
+function draftSettingKey(changeRequestId: string, crId: string): string {
+  return `sdlc_draft_solution:${changeRequestId}:${crId}`;
 }
 
 function isGuardCode(code: unknown): code is keyof typeof WORKFLOW_GUARD_MESSAGES {
   return typeof code === 'string' && code in WORKFLOW_GUARD_MESSAGES;
 }
 
-export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
-  projectId: propProjectId = '',
+export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
+  changeRequestId: propChangeRequestId = '',
   onBack,
   db = defaultDb,
 }) => {
   const { token } = theme.useToken();
-  const [selectedProjectId, setSelectedProjectId] = useState<string>(propProjectId);
-  const allProjects = useLiveQuery(() => db.projects.toArray(), [db]) ?? [];
+  const [selectedChangeRequestId, setSelectedChangeRequestId] = useState<string>(propChangeRequestId);
   const allChangeRequests = useLiveQuery(() => db.changeRequests.toArray(), [db]) ?? [];
 
   useEffect(() => {
-    if (propProjectId) {
-      setSelectedProjectId(propProjectId);
-      setActiveCrId(propProjectId);
+    if (propChangeRequestId) {
+      setSelectedChangeRequestId(propChangeRequestId);
+      setActiveCrId(propChangeRequestId);
     }
-  }, [propProjectId]);
+  }, [propChangeRequestId]);
 
   useEffect(() => {
-    if (!selectedProjectId && allChangeRequests.length > 0 && allChangeRequests[0]) {
+    if (!selectedChangeRequestId && allChangeRequests.length > 0 && allChangeRequests[0]) {
       const firstId = allChangeRequests[0].id;
-      setSelectedProjectId(firstId);
-      setActiveCrId(firstId);
-    } else if (!selectedProjectId && allProjects.length > 0 && allProjects[0]) {
-      const firstId = allProjects[0].id;
-      setSelectedProjectId(firstId);
+      setSelectedChangeRequestId(firstId);
       setActiveCrId(firstId);
     }
-  }, [selectedProjectId, allChangeRequests, allProjects]);
+  }, [selectedChangeRequestId, allChangeRequests]);
 
-  const projectId = selectedProjectId;
+  const projectId = selectedChangeRequestId;
   const knowledgeConfig = useOptionalKnowledgeConfig();
   const [selectedStep, setSelectedStep] = useState<SdlcStepId>('INTAKE');
   const selectedStepRef = useRef<SdlcStepId>('INTAKE');
@@ -134,7 +133,10 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   // Guards late callbacks from a coordinator belonging to a previously selected CR.
   const activeCrRef = useRef<string>('');
 
-  const project = useLiveQuery(() => db.projects.get(projectId), [projectId, db]);
+  const project = useLiveQuery(
+    () => (projectId ? db.changeRequests.get(projectId) : undefined),
+    [projectId, db]
+  );
   const crList = useLiveQuery(() => listCrs(projectId, db), [projectId, db]) ?? [];
   const [readOnlySolution, setReadOnlySolution] = useState(false);
 
@@ -144,16 +146,16 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
     [activeCrId, db]
   );
   const crTargetSystems = useLiveQuery(async () => {
-    if (!activeCrRecord?.targetSystemIds || activeCrRecord.targetSystemIds.length === 0) return [];
-    return db.systems.where('id').anyOf(activeCrRecord.targetSystemIds).toArray();
-  }, [activeCrRecord?.targetSystemIds, db]) ?? [];
+    const ids = activeCrRecord?.targets?.map((t) => t.systemId) ?? [];
+    if (ids.length === 0) return [];
+    return db.systems.where('id').anyOf(ids).toArray();
+  }, [activeCrRecord?.targets, db]) ?? [];
 
   // Conventions state (D-07, D-08, D-13)
   const [globalConventions, setGlobalConventions] = useState<string>('');
-  const [repoConventions, setRepoConventions] = useState<RepoConventionResult | null>(null);
+  const [repoConventions, setRepoConventions] = useState<MultiRepoConventionResult[]>([]);
   const [conventionsLoading, setConventionsLoading] = useState<boolean>(false);
   const [sshStatus, setSshStatus] = useState<'connected' | 'not_linked' | 'error' | 'file_not_found'>('not_linked');
-  const [isConfigActive, setIsConfigActive] = useState<boolean>(false);
 
   const fetchAllConventions = useCallback(async () => {
     setConventionsLoading(true);
@@ -162,22 +164,12 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
       setGlobalConventions(globalText);
 
       try {
-        const repoRes = await loadRepoConventions(projectId, db);
-        if (repoRes) {
-          setRepoConventions(repoRes);
-          setSshStatus('connected');
-        } else {
-          setRepoConventions(null);
-          // Distinguish not linked vs file not found
-          const bindingRow = await db.settings.get(`project_repo_ssh_binding:${projectId}`);
-          if (bindingRow?.value) {
-            setSshStatus('file_not_found');
-          } else {
-            setSshStatus('not_linked');
-          }
-        }
+        const systemIds = activeCrRecord?.targets?.map((t) => t.systemId) ?? [];
+        const repoRes = await loadMultiRepoConventions(systemIds, db);
+        setRepoConventions(repoRes);
+        setSshStatus(repoRes.length > 0 ? 'connected' : 'not_linked');
       } catch {
-        setRepoConventions(null);
+        setRepoConventions([]);
         setSshStatus('error');
       }
     } catch {
@@ -185,7 +177,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
     } finally {
       setConventionsLoading(false);
     }
-  }, [projectId, db]);
+  }, [activeCrRecord?.targets, db]);
 
   useEffect(() => {
     void fetchAllConventions();
@@ -193,9 +185,9 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
 
   const conventionsSummary = useMemo<ConventionsSummaryProps>(() => ({
     globalText: globalConventions,
-    repoText: repoConventions?.content,
-    repoPath: repoConventions?.foundPath,
-    loadedAt: repoConventions?.loadedAt,
+    repoText: repoConventions[0]?.content,
+    repoPath: repoConventions[0]?.foundPath,
+    loadedAt: repoConventions[0]?.loadedAt,
     sshStatus,
     loading: conventionsLoading,
     onRefresh: fetchAllConventions,
@@ -328,7 +320,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
     }
     activeCrRef.current = crId;
     setActiveCrId(crId);
-    setSelectedProjectId(crId);
+    setSelectedChangeRequestId(crId);
   }, [clearAnalysisTimer]);
 
   // Initialize active CR
@@ -773,7 +765,6 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
 
   const handleNavigateToStep = useCallback(
     (step: SdlcStepId) => {
-      setIsConfigActive(false);
       clearAnalysisTimer();
       setSelectedStepTracked(step);
       void coordinator.navigateToStep(step).catch(reportGuardError);
@@ -785,16 +776,6 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   );
 
   const renderStepNode = () => {
-    if (isConfigActive) {
-      return (
-        <RepoConfigView
-          projectId={projectId}
-          onBindingSaved={fetchAllConventions}
-          onNavigateToStep={handleNavigateToStep}
-          db={db}
-        />
-      );
-    }
     switch (selectedStep) {
       case 'INTAKE':
         return (
@@ -846,9 +827,19 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
             projectId={projectId}
             crCode={workflowState?.metadata.cr ?? ''}
             targetSystems={crTargetSystems}
+            crTargets={activeCrRecord?.targets ?? []}
             approvedSolutionMarkdown={workflowState?.artifacts.solution?.content}
             savedSnapshot={workflowState?.artifacts.branchSnapshot}
             conventionsSummary={conventionsSummary}
+            onFeatureBranchChange={(systemId, branch) => {
+              if (!activeCrRecord) return;
+              const targets = activeCrRecord.targets.map((t) =>
+                t.systemId === systemId ? { ...t, featureBranch: branch } : t
+              );
+              void updateChangeRequest(activeCrRecord.id, { targets }, db).catch(() => {
+                message.error('Không thể lưu nhánh feature vào CR target.');
+              });
+            }}
             onCommitBranchSnapshot={async (snapshot) => {
               try {
                 await coordinator.commitBranchSnapshot(snapshot);
@@ -870,6 +861,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
             crCode={workflowState?.metadata.cr ?? ''}
             solutionArtifact={workflowState?.artifacts.solution}
             branchSnapshot={workflowState?.artifacts.branchSnapshot}
+            targetSystems={crTargetSystems}
             initialDriftResult={workflowState?.artifacts.driftResult}
             conventionsSummary={conventionsSummary}
             onCommitChangePackAndDrift={async (packHash, packTitle, driftResult) => {
@@ -984,7 +976,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
         }}
       >
         <PageHeader
-          title={`SDLC Studio — ${project?.name ?? 'Chọn dự án'}`}
+          title={`SDLC Studio — ${project?.name ?? 'Chọn Change Request'}`}
           subtitle={
             currentCr
               ? `Change Request: ${currentCr.crCode} — ${currentCr.featureName}`
@@ -1006,7 +998,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
                 </Popconfirm>
               )}
               <Button icon={<ArrowLeftOutlined />} onClick={onBack}>
-                Quay lại Dự án
+                Quay lại Change Requests
               </Button>
             </Space>
           }
@@ -1016,8 +1008,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
         <SdlcSidebar
           projectId={projectId}
           onSelectProject={(newId) => {
-            setSelectedProjectId(newId);
-            setIsConfigActive(false);
+            setSelectedChangeRequestId(newId);
           }}
           selectedStep={selectedStep}
           // Sidebar navigation goes through the same path as every other step change, so a
@@ -1026,8 +1017,6 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
           activeCrId={activeCrId}
           onSelectCr={selectCr}
           workflowState={workflowState}
-          isConfigActive={isConfigActive}
-          onSelectConfig={() => setIsConfigActive(true)}
           db={db}
         />
         <SdlcWorkspace
@@ -1070,8 +1059,8 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
           }}
           conventions={{
             global: globalConventions,
-            repo: repoConventions?.content,
-            repoPath: repoConventions?.foundPath,
+            repo: repoConventions[0]?.content,
+            repoPath: repoConventions[0]?.foundPath,
           }}
           db={db}
         />

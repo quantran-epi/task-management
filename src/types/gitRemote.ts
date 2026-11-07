@@ -38,13 +38,6 @@ export interface RemoteDiffSummary {
   totalDeletions: number;
 }
 
-export interface ProjectRepoSshBinding {
-  sshConfigId: string;
-  remoteRepoPath: string;
-  defaultBaseBranch?: string;
-  updatedAt: string;
-}
-
 export interface BranchSnapshot {
   sshConfigId?: string | undefined;
   remoteRepoPath?: string | undefined;

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button, Select, Typography, Progress, Tag, Space, Divider, message, theme } from 'antd';
+import { Button, Select, Typography, Progress, Tag, message, theme } from 'antd';
 import {
   PlusOutlined,
   FileTextOutlined,
@@ -9,18 +9,12 @@ import {
   AuditOutlined,
   CheckCircleFilled,
   BranchesOutlined,
-  FolderOutlined,
-  SettingOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import { listCrs, type SdlcCrRecord } from '../../services/wizard/sdlcCrManager';
-import { getProjectRepoSshBinding } from '../../services/gitRemoteService';
 import { createChangeRequest } from '../../db/repositories/changeRequestRepo';
 import { ChangeRequestModal } from '../changeRequests/ChangeRequestModal';
-import type { System, ChangeRequest } from '../../types/models';
 import type { SdlcStepId, SdlcWorkflowState } from '../../services/wizard/workflowSchemas';
-import { CrCreateModal } from './common/CrCreateModal';
 
 export interface SdlcSidebarProps {
   projectId: string;
@@ -30,8 +24,6 @@ export interface SdlcSidebarProps {
   activeCrId?: string | undefined;
   onSelectCr?: ((crId: string) => void) | undefined;
   workflowState?: SdlcWorkflowState | undefined;
-  isConfigActive?: boolean | undefined;
-  onSelectConfig?: (() => void) | undefined;
   db?: TaskPlannerDatabase | undefined;
 }
 
@@ -57,24 +49,13 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
   activeCrId,
   onSelectCr,
   workflowState,
-  isConfigActive = false,
-  onSelectConfig,
   db = defaultDb,
 }) => {
   const { token } = theme.useToken();
   const [createModalOpen, setCreateModalOpen] = useState(false);
 
-  // 1. All Change Requests from primary db.changeRequests
-  const allChangeRequests = useLiveQuery(() => db.changeRequests.toArray(), [db]) ?? [];
-
-  // Fallback to legacy CRs from sdlcCrManager if any
-  const legacyCrs = useLiveQuery(
-    () => (projectId ? listCrs(projectId, db) : []),
-    [projectId, db]
-  ) ?? [];
-
-  // Unified CR list
-  const crs = allChangeRequests.length > 0 ? allChangeRequests : legacyCrs;
+  // Single CR source: db.changeRequests (D-36). No legacy sdlcCrManager fallback.
+  const crs = useLiveQuery(() => db.changeRequests.toArray(), [db]) ?? [];
   const currentCr = crs.find((c) => (activeCrId ? c.id === activeCrId : c.id === projectId)) ?? crs[0];
 
   // Resolve ChangeRequest and its target subsystems from DB
@@ -84,17 +65,10 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
     [resolvedCrId, db]
   );
   const targetSystems = useLiveQuery(async () => {
-    if (!crRecord?.targetSystemIds || crRecord.targetSystemIds.length === 0) return [];
-    return db.systems.where('id').anyOf(crRecord.targetSystemIds).toArray();
-  }, [crRecord?.targetSystemIds, db]) ?? [];
-
-  // Remote SSH binding: check active target subsystem first, then legacy binding
-  const primarySubsystem = targetSystems.find((s) => s.remoteRepoPath) || targetSystems[0];
-  const legacyBinding = useLiveQuery(
-    () => (resolvedCrId ? getProjectRepoSshBinding(resolvedCrId, db) : null),
-    [resolvedCrId, db]
-  );
-  const bindingDisplay = primarySubsystem?.remoteRepoPath || legacyBinding?.remoteRepoPath || null;
+    const ids = crRecord?.targets?.map((t) => t.systemId) ?? [];
+    if (ids.length === 0) return [];
+    return db.systems.where('id').anyOf(ids).toArray();
+  }, [crRecord?.targets, db]) ?? [];
 
   const isStepCompleted = (stepId: SdlcStepId): boolean => {
     if (!workflowState) return false;
@@ -121,10 +95,6 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
   const progressPercent = Math.round(
     Math.max((completedCount / SDLC_STEPS_CONFIG.length) * 100, ((currentStepIndex + 1) / SDLC_STEPS_CONFIG.length) * 100)
   );
-
-  const handleCrCreated = (newCr: SdlcCrRecord) => {
-    onSelectCr?.(newCr.id);
-  };
 
   return (
     <div
@@ -187,9 +157,9 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
               (option?.searchStr ?? '').toLowerCase().includes(input.toLowerCase())
             }
             options={crs.map((c) => {
-              const code = (c as any).code || (c as any).crCode || 'CR';
-              const name = c.name || (c as any).featureName || '';
-              const type = (c as any).type;
+              const code = c.code || 'CR';
+              const name = c.name || '';
+              const type = c.type;
               return {
                 value: c.id,
                 searchStr: `${code} ${name}`,
@@ -225,53 +195,6 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
             Khởi tạo CR đầu tiên
           </Button>
         )}
-
-        {/* Quick Repo SSH Binding Status */}
-        <div
-          onClick={onSelectConfig}
-          data-testid="sidebar-btn-repo-config"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '5px 8px',
-            borderRadius: token.borderRadiusSM,
-            cursor: 'pointer',
-            background: isConfigActive ? token.colorPrimaryBg : token.colorFillAlter,
-            border: `1px solid ${isConfigActive ? token.colorPrimaryBorder : token.colorBorderSecondary}`,
-            transition: 'all 0.15s ease',
-            marginTop: 2,
-          }}
-          title="Nhấn để mở Cấu hình Repo & Quy ước của CR"
-        >
-          <Space size={6} style={{ overflow: 'hidden', minWidth: 0, flex: 1 }}>
-            <BranchesOutlined
-              style={{
-                fontSize: 12,
-                color: isConfigActive ? token.colorPrimary : bindingDisplay ? token.colorSuccess : token.colorTextTertiary,
-              }}
-            />
-            <span
-              style={{
-                fontSize: 11,
-                fontFamily: bindingDisplay ? 'monospace' : 'inherit',
-                color: isConfigActive ? token.colorPrimaryText : token.colorTextSecondary,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {bindingDisplay || 'Chưa liên kết SSH'}
-            </span>
-          </Space>
-          <Tag
-            color={isConfigActive ? 'processing' : bindingDisplay ? 'success' : 'default'}
-            icon={<SettingOutlined style={{ fontSize: 10 }} />}
-            style={{ margin: 0, fontSize: 10, padding: '0 5px', lineHeight: '18px', cursor: 'pointer' }}
-          >
-            {isConfigActive ? 'Đang mở' : 'Cấu hình'}
-          </Tag>
-        </div>
 
         {/* Target Subsystems pills for active CR (ENT-SYS-03, ENT-CR-02) */}
         {crRecord && (
@@ -335,7 +258,7 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
           <div style={{ background: token.colorFillAlter, padding: '8px 10px', borderRadius: token.borderRadiusSM }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
               <Typography.Text style={{ fontSize: 11, color: token.colorTextSecondary }}>
-                Tiến độ ({currentCr.crCode})
+                Tiến độ ({currentCr.code})
               </Typography.Text>
               <Typography.Text strong style={{ fontSize: 11 }}>
                 Bước {currentStepIndex + 1}/6 ({progressPercent}%)
@@ -347,7 +270,7 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
           {/* Stepper Vertical List */}
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
             {SDLC_STEPS_CONFIG.map((step) => {
-              const isSelected = !isConfigActive && step.id === selectedStep;
+              const isSelected = step.id === selectedStep;
               return (
                 <div
                   key={step.id}

@@ -1,5 +1,4 @@
 import { execRemoteCommand } from './sshService';
-import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import type { SshConfig } from '../types/ssh';
 import type {
   RemoteGitBranch,
@@ -7,7 +6,6 @@ import type {
   RemoteFileStat,
   RemoteGitStatus,
   RemoteDiffSummary,
-  ProjectRepoSshBinding,
 } from '../types/gitRemote';
 
 export function escapeShellArg(arg: string): string {
@@ -249,32 +247,6 @@ export async function getFileDiff(
     ['diff', rangeArg, '--', escapeShellArg(filePath)],
     secret
   );
-}
-
-const PROJECT_SSH_REPO_SETTING_PREFIX = 'project_ssh_repo:';
-
-export function getProjectSshRepoKey(projectId: string): string {
-  return `${PROJECT_SSH_REPO_SETTING_PREFIX}${projectId}`;
-}
-
-export async function getProjectRepoSshBinding(
-  projectId: string,
-  db: TaskPlannerDatabase = defaultDb
-): Promise<ProjectRepoSshBinding | null> {
-  const row = await db.settings.get(getProjectSshRepoKey(projectId));
-  if (!row || !row.value) return null;
-  return row.value as ProjectRepoSshBinding;
-}
-
-export async function saveProjectRepoSshBinding(
-  projectId: string,
-  binding: ProjectRepoSshBinding,
-  db: TaskPlannerDatabase = defaultDb
-): Promise<void> {
-  await db.settings.put({
-    key: getProjectSshRepoKey(projectId),
-    value: binding,
-  });
 }
 
 export async function checkHeadDrift(
