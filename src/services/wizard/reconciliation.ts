@@ -59,7 +59,7 @@ export type RegressionMatrixRow = z.infer<typeof RegressionMatrixRowSchema>;
 export const ReconciliationResultSchema = z.strictObject({
   schemaVersion: z.literal(1),
   identity: z.strictObject({
-    projectId: nonEmpty,
+    changeRequestId: nonEmpty,
     threadId: nonEmpty,
     solutionNoteId: nonEmpty,
     solutionVersion: z.number().int().positive(),
@@ -94,7 +94,7 @@ const HunkSchema = z.strictObject({
   text: z.string().max(100_000),
 });
 const ReconciliationInputSchema = z.strictObject({
-  projectId: nonEmpty,
+  changeRequestId: nonEmpty,
   threadId: nonEmpty,
   solutionNoteId: nonEmpty,
   solutionVersion: z.number().int().positive(),
@@ -104,7 +104,7 @@ const ReconciliationInputSchema = z.strictObject({
   base: nonEmpty,
   head: nonEmpty,
   solution: z.strictObject({
-    projectId: nonEmpty,
+    changeRequestId: nonEmpty,
     threadId: nonEmpty,
     noteId: nonEmpty,
     version: z.number().int().positive(),
@@ -138,7 +138,7 @@ const ReconciliationInputSchema = z.strictObject({
 export type ReconciliationInput = z.infer<typeof ReconciliationInputSchema>;
 
 function assertPinnedIdentities(input: ReconciliationInput): void {
-  if (input.solution.projectId !== input.projectId || input.solution.threadId !== input.threadId || input.solution.noteId !== input.solutionNoteId) throw new Error('WRONG_PROJECT');
+  if (input.solution.changeRequestId !== input.changeRequestId || input.solution.threadId !== input.threadId || input.solution.noteId !== input.solutionNoteId) throw new Error('WRONG_CHANGE_REQUEST');
   if (input.solution.version !== input.solutionVersion) throw new Error('STALE_SOLUTION');
   if (input.solution.hash !== input.solutionHash) throw new Error('STALE_SOLUTION');
   if (input.pack.packHash !== input.packHash) throw new Error('PACK_HASH_MISMATCH');
@@ -190,7 +190,7 @@ export function reconcileSolutionWithPack(raw: unknown): ReconciliationResult {
   const candidate = {
     schemaVersion: 1 as const,
     identity: {
-      projectId: input.projectId,
+      changeRequestId: input.changeRequestId,
       threadId: input.threadId,
       solutionNoteId: input.solutionNoteId,
       solutionVersion: input.solutionVersion,

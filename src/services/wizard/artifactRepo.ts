@@ -25,7 +25,7 @@ interface SourceArtifactIdentity {
 }
 
 interface ArtifactCommitInput {
-  projectId: string;
+  changeRequestId: string;
   threadId: string;
   sessionId: string;
   inputRevision: number;
@@ -44,7 +44,7 @@ export interface SaveApprovedArtifactInput extends ArtifactCommitInput {
 }
 
 export interface PersistConfirmedPackInput {
-  projectId: string;
+  changeRequestId: string;
   threadId: string;
   sessionId: string;
   inputRevision: number;
@@ -92,13 +92,13 @@ function artifactTitle(kind: SdlcArtifactMetadata['kind'], version: number): str
  * snapshot gate: the thread itself is the identity anchor for a Note.
  */
 async function assertProjectThread(
-  projectId: string,
+  changeRequestId: string,
   threadId: string,
   db: TaskPlannerDatabase,
 ): Promise<void> {
   const thread = await db.chatThreads.get(threadId);
-  if (!thread || thread.scopeType !== 'project') fail('WIZARD_THREAD_MISMATCH');
-  if (thread.entityId !== projectId) fail('WIZARD_PROJECT_MISMATCH');
+  if (!thread || thread.scopeType !== 'cr') fail('WIZARD_THREAD_MISMATCH');
+  if (thread.entityId !== changeRequestId) fail('WIZARD_PROJECT_MISMATCH');
 }
 
 function assertCommitIdentity(input: {
@@ -124,8 +124,8 @@ async function validatedSources(
   for (const source of input.sourceArtifacts ?? []) {
     const note = await db.notes.get(source.id);
     const artifact = note?.sdlcArtifact;
-    if (!artifact || note.entityType !== 'project' || note.entityId !== input.projectId) fail('ARTIFACT_SOURCE_MISMATCH');
-    if (artifact.projectId !== input.projectId || artifact.threadId !== input.threadId || artifact.inputHash !== source.hash) {
+    if (!artifact || note.entityType !== 'cr' || note.entityId !== input.changeRequestId) fail('ARTIFACT_SOURCE_MISMATCH');
+    if (artifact.changeRequestId !== input.changeRequestId || artifact.threadId !== input.threadId || artifact.inputHash !== source.hash) {
       fail('ARTIFACT_SOURCE_MISMATCH');
     }
     ids.push(source.id);
@@ -148,12 +148,12 @@ async function commitArtifact(
   });
 
   return db.transaction('rw', [db.notes, db.documentSets, db.chatMessages, db.chatThreads], async () => {
-    await assertProjectThread(input.projectId, input.threadId, db);
+    await assertProjectThread(input.changeRequestId, input.threadId, db);
     assertCommitIdentity(input);
     const projectArtifacts = await db.notes
       .where('entityId')
-      .equals(input.projectId)
-      .filter((note) => note.entityType === 'project' && note.sdlcArtifact?.projectId === input.projectId)
+      .equals(input.changeRequestId)
+      .filter((note) => note.entityType === 'cr' && note.sdlcArtifact?.changeRequestId === input.changeRequestId)
       .toArray();
     const existing = projectArtifacts.find((note) => note.sdlcArtifact?.idempotencyKey === idempotencyKey);
     if (existing) {
@@ -172,7 +172,7 @@ async function commitArtifact(
       .reduce((max, note) => Math.max(max, note.sdlcArtifact?.version ?? 0), 0) + 1;
     const metadata = SdlcArtifactMetadataSchema.parse({
       kind,
-      projectId: input.projectId,
+      changeRequestId: input.changeRequestId,
       threadId: input.threadId,
       sessionId: input.sessionId,
       version,
@@ -187,8 +187,8 @@ async function commitArtifact(
       id: generateId(),
       type: 'document',
       tags: ['sdlc', kind.toLowerCase()],
-      entityType: 'project',
-      entityId: input.projectId,
+      entityType: 'cr',
+      entityId: input.changeRequestId,
       title: artifactTitle(kind, version),
       body,
       isPinned: false,
@@ -196,7 +196,7 @@ async function commitArtifact(
       createdAt: now,
       updatedAt: now,
     };
-    const set = await getOrCreateCrSdlcSetInTransaction(input.projectId, now, db);
+    const set = await getOrCreateCrSdlcSetInTransaction(input.changeRequestId, now, db);
     await db.notes.add(note);
     await db.documentSets.update(set.id, {
       documentIds: set.documentIds.includes(note.id) ? set.documentIds : [...set.documentIds, note.id],
@@ -254,7 +254,7 @@ export async function persistConfirmedPack(
   if (!input.idempotencyKey.trim()) fail('PACK_IDEMPOTENCY_KEY_REQUIRED');
 
   return db.transaction('rw', [db.notes, db.documentSets, db.chatMessages, db.chatThreads], async () => {
-    await assertProjectThread(input.projectId, input.threadId, db);
+    await assertProjectThread(input.changeRequestId, input.threadId, db);
     assertCommitIdentity({
       sessionId: input.sessionId,
       inputRevision: input.inputRevision,
@@ -265,10 +265,10 @@ export async function persistConfirmedPack(
 
     const solution = await db.notes.get(input.solution.noteId);
     if (
-      solution?.entityType !== 'project' ||
-      solution.entityId !== input.projectId ||
+      solution?.entityType !== 'cr' ||
+      solution.entityId !== input.changeRequestId ||
       solution.sdlcArtifact?.kind !== 'SOLUTION' ||
-      solution.sdlcArtifact.projectId !== input.projectId ||
+      solution.sdlcArtifact.changeRequestId !== input.changeRequestId ||
       solution.sdlcArtifact.threadId !== input.threadId ||
       solution.sdlcArtifact.version !== input.solution.version ||
       solution.sdlcArtifact.inputHash !== input.solution.hash
@@ -276,8 +276,8 @@ export async function persistConfirmedPack(
 
     const projectNotes = await db.notes
       .where('entityId')
-      .equals(input.projectId)
-      .filter((note) => note.entityType === 'project')
+      .equals(input.changeRequestId)
+      .filter((note) => note.entityType === 'cr')
       .toArray();
     const existing = projectNotes.filter((note): note is Note & {
       sdlcArtifact: Extract<SdlcArtifactMetadata, { kind: 'CHANGE_PACK_ENTRY' }>;
@@ -292,7 +292,7 @@ export async function persistConfirmedPack(
     }
 
     const now = new Date().toISOString();
-    const set = await getOrCreateCrSdlcSetInTransaction(input.projectId, now, db);
+    const set = await getOrCreateCrSdlcSetInTransaction(input.changeRequestId, now, db);
     let writes = 0;
     const injectFailure = () => {
       writes += 1;
@@ -304,14 +304,14 @@ export async function persistConfirmedPack(
       id: generateId(),
       type: 'document',
       tags: ['sdlc', 'change-pack'],
-      entityType: 'project',
-      entityId: input.projectId,
+      entityType: 'cr',
+      entityId: input.changeRequestId,
       title: `Change pack: ${entry.path}`,
       body: packEntryBody(entry),
       isPinned: false,
       sdlcArtifact: SdlcArtifactMetadataSchema.parse({
         kind: 'CHANGE_PACK_ENTRY',
-        projectId: input.projectId,
+        changeRequestId: input.changeRequestId,
         threadId: input.threadId,
         sessionId: input.sessionId,
         version: index + 1,
@@ -350,39 +350,39 @@ export async function persistConfirmedPack(
 }
 
 export async function listArtifactVersions(
-  projectId: string,
+  changeRequestId: string,
   threadId: string,
   kind: SdlcArtifactMetadata['kind'],
   db: TaskPlannerDatabase = defaultDb,
 ): Promise<Note[]> {
-  const notes = await loadCanonicalArtifactChain(projectId, threadId, db);
+  const notes = await loadCanonicalArtifactChain(changeRequestId, threadId, db);
   return notes.filter((note) => note.sdlcArtifact?.kind === kind);
 }
 
 export async function getActiveArtifact(
-  projectId: string,
+  changeRequestId: string,
   threadId: string,
   kind: SdlcArtifactMetadata['kind'],
   activeVersion: number,
   db: TaskPlannerDatabase = defaultDb,
 ): Promise<Note | undefined> {
-  const versions = await listArtifactVersions(projectId, threadId, kind, db);
+  const versions = await listArtifactVersions(changeRequestId, threadId, kind, db);
   return versions.find((note) => note.sdlcArtifact?.version === activeVersion);
 }
 
 export async function loadCanonicalArtifactChain(
-  projectId: string,
+  changeRequestId: string,
   threadId: string,
   db: TaskPlannerDatabase = defaultDb,
 ): Promise<Note[]> {
   const thread = await db.chatThreads.get(threadId);
-  if (!thread || thread.scopeType !== 'project' || thread.entityId !== projectId) fail('WIZARD_PROJECT_MISMATCH');
+  if (!thread || thread.scopeType !== 'cr' || thread.entityId !== changeRequestId) fail('WIZARD_PROJECT_MISMATCH');
   const notes = await db.notes
     .where('entityId')
-    .equals(projectId)
+    .equals(changeRequestId)
     .filter((note) =>
-      note.entityType === 'project' &&
-      note.sdlcArtifact?.projectId === projectId &&
+      note.entityType === 'cr' &&
+      note.sdlcArtifact?.changeRequestId === changeRequestId &&
       note.sdlcArtifact.threadId === threadId
     )
     .toArray();

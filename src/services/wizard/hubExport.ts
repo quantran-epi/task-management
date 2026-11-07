@@ -27,7 +27,7 @@ export interface HubExportResult {
 export interface HubExportInput {
   db: TaskPlannerDatabase;
   kind: HubExportKind;
-  projectId: string;
+  changeRequestId: string;
   threadId: string;
   sessionId: string;
   metadata: SdlcWorkflowMetadata;
@@ -39,7 +39,7 @@ export interface HubExportInput {
 
 export interface EnsurePl02ArtifactNoteInput {
   db: TaskPlannerDatabase;
-  projectId: string;
+  changeRequestId: string;
   threadId: string;
   sessionId: string;
   markdown: string;
@@ -118,8 +118,8 @@ export async function ensurePl02ArtifactNote(
   if (pinnedId) {
     const pinned = await input.db.notes.get(pinnedId);
     if (
-      pinned?.entityType === 'project' &&
-      pinned.entityId === input.projectId &&
+      pinned?.entityType === 'cr' &&
+      pinned.entityId === input.changeRequestId &&
       pinned.sdlcArtifact?.kind === 'PL02' &&
       pinned.sdlcArtifact.inputHash === hash
     ) {
@@ -129,7 +129,7 @@ export async function ensurePl02ArtifactNote(
 
   const saved = await (input.saveNote ?? saveApprovedArtifact)({
     kind: 'PL02',
-    projectId: input.projectId,
+    changeRequestId: input.changeRequestId,
     threadId: input.threadId,
     sessionId: input.sessionId,
     inputRevision,
@@ -181,7 +181,7 @@ export async function exportHubArtifact(input: HubExportInput): Promise<HubExpor
     version = inputRevision;
     resolveNote = () => ensurePl02ArtifactNote({
       db: input.db,
-      projectId: input.projectId,
+      changeRequestId: input.changeRequestId,
       threadId: input.threadId,
       sessionId: input.sessionId,
       markdown: text,

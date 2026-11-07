@@ -18,7 +18,7 @@ import type { SdlcSourceRef } from './sourceMerge';
 import { guardError } from './workflowGuards';
 
 export interface WorkflowCoordinatorDeps {
-  projectId: string;
+  changeRequestId: string;
   threadId: string;
   now?: () => string;
   createSessionId?: () => string;
@@ -33,8 +33,8 @@ export interface WorkflowCoordinatorDeps {
  * The coordinator module owns the persistence key format. Views must never re-type the
  * `sdlc_workflow:` literal (D-23).
  */
-export function workflowStorageKey(projectId: string, crId: string): string {
-  return `sdlc_workflow:${projectId}:${crId}`;
+export function workflowStorageKey(changeRequestId: string, crId: string): string {
+  return `sdlc_workflow:${changeRequestId}:${crId}`;
 }
 
 
@@ -227,7 +227,9 @@ export function createSdlcWorkflowCoordinator(deps: WorkflowCoordinatorDeps) {
     const nextState: SdlcWorkflowState = {
       schemaVersion: 1,
       sessionId,
-      projectId: deps.projectId,
+      // Persisted workflow-state JSON field name is owned by `SdlcWorkflowStateSchema`
+      // (plan 31.2-17); renaming it here alone would make every save fail its strict parse.
+      projectId: deps.changeRequestId,
       threadId: deps.threadId,
       currentStep: 'SOLUTION', // Sau khi nạp xong INTAKE -> sang bước SOLUTION
       metadata,
