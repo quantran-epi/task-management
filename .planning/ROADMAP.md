@@ -760,7 +760,7 @@ Plans:
 5. The intake step shows which conventions are in effect (global present/absent, repository present/absent, last-read time) before the solution is generated.
 6. A generated SOLUTION observably follows an in-effect convention the user never restated — proven by an exemplar test that asserts the mandated rule appears in the output.
 
-**Plans:** 1/4 plans executed
+**Plans:** 2/4 plans executed
 **UI hint**: yes
 
 Plans:
@@ -771,7 +771,7 @@ Plans:
 
 **Wave 2** *(depends on 31-01; depends on Phase 29 fs-gw client)*
 
-- [ ] 31-02-PLAN.md — Repository `CONVENTIONS.md` read through fs-gw, per-project binding, absence-tolerant loading
+- [x] 31-02-PLAN.md — Repository `CONVENTIONS.md` read through fs-gw, per-project binding, absence-tolerant loading
 
 **Wave 3** *(depends on 31-02 and Phase 26 composer; edits `sdlcPromptComposer.ts` and `ProjectSdlcView.tsx`)*
 
