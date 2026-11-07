@@ -80,7 +80,9 @@ describe('conventionService', () => {
       host: '192.168.1.10',
       port: 22,
       username: 'developer',
-      authMethod: 'password',
+      authType: 'password',
+      createdAt: '2026-11-07T00:00:00.000Z',
+      updatedAt: '2026-11-07T00:00:00.000Z',
     };
 
     const sampleBinding: ProjectRepoSshBinding = {
