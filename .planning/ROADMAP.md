@@ -321,6 +321,12 @@ Plans: 11 plans in 11 sequential waves (every plan edits `AIChatDrawer.tsx` or i
 
 - [x] 25.1.1-11-PLAN.md — Regressions sweep: safety-gate list repaired, every Phase 25.1 guarantee re-run scoped, real-function proofs recorded, evidence written up
 
+**Phase 31 Progress:**
+- [x] 31-01-PLAN.md — Global conventions storage, settings UI, and backup inclusion
+- [x] 31-02-PLAN.md — Repository CONVENTIONS.md discovery and SSH loading
+- [x] 31-03-PLAN.md — Conventions prompt segment, conflict policy, and Step 1/2 visibility
+- [x] 31-04-PLAN.md — Exemplar and witness tests for convention compliance and conflict handling
+
 ### Phase 25.1.2: Fix the SDLC hub user flow end to end (INSERTED)
 
 **Goal:** Everyone who touches the hub — the user, the AI turn, and the coordinator — acts on one agreed flow. After a deep discussion locks the canonical end-user journey from CR intake to CAB, every step must be reachable, actionable, and reversible: no dead ends, no step whose only exit is a hidden path, no button whose first press does nothing, and no action that silently resets work the user believes is kept.

@@ -50,7 +50,7 @@
 - [x] **SDLC-CONV-03**: Every SDLC solution/artifact turn carries both convention sources in the composed prompt — global first, repository last — in a clearly delimited, untrusted-data-framed segment that cannot be mistaken for instructions overriding the safety policy.
 - [x] **SDLC-CONV-04**: When a global rule and a repository rule conflict, the AI names the conflict with both sources and does not silently pick one; the composed prompt states this rule explicitly.
 - [x] **SDLC-CONV-05**: The intake step shows which conventions are in effect (global file present/absent, repository file present/absent, last-read time), so the user knows the basis before the solution is generated.
-- [ ] **SDLC-CONV-06**: Generated solutions follow the in-effect conventions observably — an exemplar test proves a convention (for example a mandated layering or logging rule) appears in a generated SOLUTION without the user restating it.
+- [x] **SDLC-CONV-06**: Generated solutions follow the in-effect conventions observably — an exemplar test proves a convention (for example a mandated layering or logging rule) appears in a generated SOLUTION without the user restating it.
 
 ### External Research (SDLC-RES)
 
@@ -132,7 +132,7 @@
 | SDLC-CONV-03 | Phase 31 | Complete |
 | SDLC-CONV-04 | Phase 31 | Complete |
 | SDLC-CONV-05 | Phase 31 | Complete |
-| SDLC-CONV-06 | Phase 31 | Pending |
+| SDLC-CONV-06 | Phase 31 | Complete |
 | SDLC-RES-01 | Phase 32 | Pending |
 | SDLC-RES-02 | Phase 32 | Pending |
 | SDLC-RES-03 | Phase 32 | Pending |

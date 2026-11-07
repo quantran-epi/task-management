@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: SDLC Closed-Loop Engine & Repository Autonomy
-status: executing
-last_updated: "2026-11-07T02:28:03.307Z"
-last_activity: 2026-11-07 -- Phase 31 execution started
+status: complete
+last_updated: "2026-11-07T09:38:00.000Z"
+last_activity: 2026-11-07 -- Phase 31 execution completed
 progress:
   total_phases: 9
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 26
-  completed_plans: 20
-  percent: 56
+  completed_plans: 21
+  percent: 60
 current_phase: 31
 current_phase_name: organization-conventions-in-the-solution-pipeline
 ---
@@ -24,20 +24,20 @@ See: .planning/PROJECT.md (updated 2026-11-03)
 
 ## Current Position
 
-Phase: 31 (organization-conventions-in-the-solution-pipeline) — EXECUTING
+Phase: 31 (organization-conventions-in-the-solution-pipeline) — COMPLETE
 Plan: 4 of 4
-Status: Ready to execute
-Last activity: 2026-11-07 -- Plan 31-03 completed
+Status: Phase complete
+Last activity: 2026-11-07 -- Plan 31-04 completed (SDLC-CONV-06 exemplar and conflict witness tests)
 
 Phase sequence: 26 → 27 → 28 → 29 → 29.1 → 30 → 31
 (28 is independent of 26/27; 31 depends on 26 and 27.)
 
 ## Session Continuity
 
-Last session: 2026-11-07T09:35:00.000Z
-Resume file: .planning/phases/31-organization-conventions-in-the-solution-pipeline/31-04-PLAN.md
+Last session: 2026-11-07T09:38:00.000Z
+Resume file: None
 
-Progress: [█████░░░░░] 50%
+Progress: [██████░░░░] 60%
 
 ## Milestone v1.3 Map
 
@@ -49,7 +49,8 @@ Progress: [█████░░░░░] 50%
 - [x] Phase 29: Safe Local Agent Automation
 - [x] Phase 29.1: Remote SSH Git Explorer & Headful Claude Code Terminal Flow
 - [ ] Phase 30: Automatic Change Packs, Fallback & Run Reliability
-- [ ] Phase 31: End-to-End SDLC Verification & Documentation Hardening
+- [x] Phase 31: Organization Conventions in the Solution Pipeline
+- [ ] Phase 32: External Research via Claude Code
 
 ## Performance Metrics
 
@@ -79,6 +80,7 @@ Progress: [█████░░░░░] 50%
 | Phase 31 P01 | 10m | 2 tasks | 4 files |
 | Phase 31 P02 | 12m | 2 tasks | 3 files |
 | Phase 31 P03 | 10m | 3 tasks | 8 files |
+| Phase 31 P04 | 5m | 2 tasks | 1 file |
 
 ## Accumulated Context
 
@@ -106,3 +108,5 @@ Progress: [█████░░░░░] 50%
 - [Phase 31]: D-11: Mandatory CONVENTIONS_CONFLICT_POLICY requires AI to cite both sources and stop for user resolution
 - [Phase 31]: D-12: Entire convention document retained without character caps or truncation
 - [Phase 31]: D-13: ConventionsSummaryCard renders on Step 1 and Step 2 with manual refresh and detail modal
+- [Phase 31]: D-14: ResponseEnvelope<T> and correlationId mandate verified in SOLUTION prompt without user prompt mention
+- [Phase 31]: D-15: Conflict witness test confirms both sources and CONVENTIONS_CONFLICT_POLICY are surfaced cleanly
