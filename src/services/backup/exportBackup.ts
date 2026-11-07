@@ -4,7 +4,7 @@ import type { ChatTab } from '../../types/models';
 import { generateId } from '../../utils/uuid';
 
 export const APP_MARKER = 'personal-task-planner' as const;
-export const CURRENT_SCHEMA_VERSION = 10 as const;
+export const CURRENT_SCHEMA_VERSION = 11 as const;
 
 export const UNSAFE_OR_EPHEMERAL_SETTING_KEYS = new Set<string>([
   'jira_api_token',
@@ -164,8 +164,6 @@ export async function exportBackupPayload(
   _options?: ExportBackupOptions
 ): Promise<BackupEnvelope> {
   const [
-    projects,
-    milestones,
     tasks,
     capacityRules,
     capacityOverrides,
@@ -188,8 +186,6 @@ export async function exportBackupPayload(
     systems,
     changeRequests,
   ] = await Promise.all([
-    targetDb.projects.toArray(),
-    targetDb.milestones.toArray(),
     targetDb.tasks.toArray(),
     targetDb.capacityRules.toArray(),
     targetDb.capacityOverrides.toArray(),
@@ -237,8 +233,6 @@ export async function exportBackupPayload(
   const exportedAt = new Date().toISOString();
 
   const tables = {
-    projects,
-    milestones,
     tasks,
     capacityRules,
     capacityOverrides,
@@ -263,8 +257,6 @@ export async function exportBackupPayload(
   };
 
   const counts = {
-    projects: projects.length,
-    milestones: milestones.length,
     tasks: tasks.length,
     capacityRules: capacityRules.length,
     capacityOverrides: capacityOverrides.length,

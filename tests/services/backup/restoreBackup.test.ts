@@ -7,6 +7,22 @@ import * as exportBackupModule from '../../../src/services/backup/exportBackup';
 import { APP_MARKER, CURRENT_SCHEMA_VERSION } from '../../../src/services/backup/exportBackup';
 import { validateBackupPayload } from '../../../src/services/backup/validateBackup';
 
+const CR_ID = '11111111-1111-4111-8111-111111111111';
+const LOCAL_CR_ID = '00000000-0000-4000-8000-000000000000';
+
+function crRecord(id: string, name: string): BackupEnvelope['tables']['changeRequests'] extends (infer T)[] | undefined ? T : never {
+  return {
+    id,
+    name,
+    code: 'CR-1',
+    status: 'In Progress',
+    type: 'NEW_FEATURE',
+    targets: [],
+    createdAt: '2026-09-27T12:00:00.000Z',
+    updatedAt: '2026-09-27T12:00:00.000Z',
+  } as never;
+}
+
 describe('restoreBackupPayload & rollbackToSnapshot', () => {
   let testDb: TaskPlannerDatabase;
 
@@ -24,16 +40,7 @@ describe('restoreBackupPayload & rollbackToSnapshot', () => {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     exportedAt: '2026-09-27T12:00:00.000Z',
     tables: {
-      projects: [
-        {
-          id: '11111111-1111-4111-8111-111111111111',
-          name: 'Restored Project',
-          status: 'In Progress',
-          createdAt: '2026-09-27T12:00:00.000Z',
-          updatedAt: '2026-09-27T12:00:00.000Z',
-        },
-      ],
-      milestones: [],
+      changeRequests: [crRecord(CR_ID, 'Restored CR')],
       tasks: [],
       capacityRules: [
         {
@@ -46,8 +53,7 @@ describe('restoreBackupPayload & rollbackToSnapshot', () => {
       plannedAllocations: [],
     },
     counts: {
-      projects: 1,
-      milestones: 0,
+      changeRequests: 1,
       tasks: 0,
       capacityRules: 1,
       capacityOverrides: 0,
@@ -57,28 +63,22 @@ describe('restoreBackupPayload & rollbackToSnapshot', () => {
 
   it('restores all tables, saves snapshot in settings, and logs to backupMetadata', async () => {
     // Populate some initial data
-    await testDb.projects.add({
-      id: '00000000-0000-4000-8000-000000000000',
-      name: 'Initial Project',
-      status: 'Open',
-      createdAt: '2026-09-26T10:00:00.000Z',
-      updatedAt: '2026-09-26T10:00:00.000Z',
-    });
+    await testDb.changeRequests.add(crRecord(LOCAL_CR_ID, 'Initial CR'));
 
     const result = await restoreBackupPayload(sampleBackup, testDb);
     expect(result.totalRestored).toBe(2);
 
     // Verify existing tables replaced
-    const projects = await testDb.projects.toArray();
-    expect(projects).toHaveLength(1);
-    expect(projects[0]?.name).toBe('Restored Project');
+    const crs = await testDb.changeRequests.toArray();
+    expect(crs).toHaveLength(1);
+    expect(crs[0]?.name).toBe('Restored CR');
 
     // Verify snapshot saved in settings
     const snapshotSetting = await testDb.settings.get('last_pre_import_snapshot');
     expect(snapshotSetting).toBeDefined();
-    const snapshot = snapshotSetting?.value as any;
-    expect(snapshot.tables.projects).toHaveLength(1);
-    expect(snapshot.tables.projects[0].name).toBe('Initial Project');
+    const snapshot = snapshotSetting?.value as SnapshotData;
+    expect(snapshot.tables.changeRequests).toHaveLength(1);
+    expect(snapshot.tables.changeRequests?.[0]?.name).toBe('Initial CR');
 
     // Verify backupMetadata logged
     const logs = await testDb.backupMetadata.toArray();
@@ -88,33 +88,26 @@ describe('restoreBackupPayload & rollbackToSnapshot', () => {
 
   it('rolls back to snapshot restoring previous state', async () => {
     // Initial data
-    await testDb.projects.add({
-      id: '00000000-0000-4000-8000-000000000000',
-      name: 'Pre-Restore Project',
-      status: 'Open',
-      createdAt: '2026-09-26T10:00:00.000Z',
-      updatedAt: '2026-09-26T10:00:00.000Z',
-    });
+    await testDb.changeRequests.add(crRecord(LOCAL_CR_ID, 'Pre-Restore CR'));
 
     // Run restore
     await restoreBackupPayload(sampleBackup, testDb);
-    expect((await testDb.projects.toArray())[0]?.name).toBe('Restored Project');
+    expect((await testDb.changeRequests.toArray())[0]?.name).toBe('Restored CR');
 
     // Run rollback
     const rollbackResult = await rollbackToSnapshot(testDb);
     expect(rollbackResult.success).toBe(true);
 
-    // Check project is back to Pre-Restore Project
-    const projects = await testDb.projects.toArray();
-    expect(projects).toHaveLength(1);
-    expect(projects[0]?.name).toBe('Pre-Restore Project');
+    // Check CR is back to Pre-Restore CR
+    const crs = await testDb.changeRequests.toArray();
+    expect(crs).toHaveLength(1);
+    expect(crs[0]?.name).toBe('Pre-Restore CR');
   });
 
   it('rolls back the running timer through the pre-import snapshot', async () => {
     await testDb.tasks.add({
       id: '22222222-2222-4222-8222-222222222222',
-      projectId: '00000000-0000-4000-8000-000000000000',
-      milestoneId: null,
+      crId: CR_ID,
       name: 'Timed task',
       status: 'Open',
       priority: 'Medium',
@@ -174,20 +167,20 @@ describe('restoreBackupPayload & rollbackToSnapshot', () => {
     expect(snapshot.tables.noteAttachments?.[0]?.data).toContain('data:image/png;base64,');
 
     // Verify tables restored
-    const projects = await testDb.projects.toArray();
-    expect(projects).toHaveLength(1);
-    expect(projects[0]?.name).toBe('Restored Project');
+    const crs = await testDb.changeRequests.toArray();
+    expect(crs).toHaveLength(1);
+    expect(crs[0]?.name).toBe('Restored CR');
   });
 
   it('mirrors a restored SDLC tab workflow state into the settings key the drawer reads', async () => {
-    const projectId = '11111111-1111-4111-8111-111111111111';
+    const crId = CR_ID;
     const threadId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
     const tabId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
     const missingNoteId = '99999999-9999-4999-8999-999999999999';
     const workflowState = {
       schemaVersion: 1 as const,
       sessionId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
-      projectId,
+      projectId: crId,
       threadId,
       currentStep: 'SOLUTION' as const,
       metadata: { cr: 'CR-1', featureName: 'F', author: 'A', requestingUnit: 'U', date: '2026-10-30' },
@@ -210,12 +203,12 @@ describe('restoreBackupPayload & rollbackToSnapshot', () => {
       ...sampleBackup,
       tables: {
         ...sampleBackup.tables,
-        projects: [{ ...sampleBackup.tables.projects[0]!, id: projectId }],
+        changeRequests: [crRecord(crId, 'Restored CR')],
         chatThreads: [{
           id: threadId,
-          scopeKey: `project:${projectId}:sdlc`,
-          scopeType: 'project',
-          entityId: projectId,
+          scopeKey: `cr:${crId}:sdlc`,
+          scopeType: 'cr',
+          entityId: crId,
           title: 'SDLC',
           createdAt: '2026-09-27T12:00:00.000Z',
           updatedAt: '2026-09-27T12:00:00.000Z',
@@ -223,7 +216,7 @@ describe('restoreBackupPayload & rollbackToSnapshot', () => {
         chatTabs: [{
           id: tabId,
           threadId,
-          scopeKey: `project:${projectId}`,
+          scopeKey: `cr:${crId}`,
           type: 'sdlc',
           title: 'SDLC',
           order: 0,
@@ -239,7 +232,7 @@ describe('restoreBackupPayload & rollbackToSnapshot', () => {
     await restoreBackupPayload(payload, testDb);
 
     // The tab row alone is inert; the drawer reads this settings key.
-    const stored = (await testDb.settings.get(`sdlc_workflow:${projectId}:${threadId}`))?.value as
+    const stored = (await testDb.settings.get(`sdlc_workflow:${crId}:${threadId}`))?.value as
       | { checkpoint?: { status?: string } }
       | undefined;
     expect(stored).toBeDefined();
@@ -360,15 +353,33 @@ describe('restoreBackupPayload & rollbackToSnapshot', () => {
       ...sampleBackup,
       tables: {
         ...sampleBackup.tables,
-        projects: [sampleBackup.tables.projects[0]!, { ...sampleBackup.tables.projects[0]!, id: duplicateId }],
+        changeRequests: [crRecord(CR_ID, 'Restored CR'), crRecord(duplicateId, 'Duplicate CR')],
       },
-      counts: { ...sampleBackup.counts, projects: 2 },
+      counts: { ...sampleBackup.counts, changeRequests: 2 },
     };
 
     await expect(restoreBackupPayload(failingBackup, testDb)).rejects.toThrow();
     expect(await testDb.chatThreads.toArray()).toEqual([localThread]);
     expect(await testDb.chatTabs.toArray()).toEqual([localTab]);
     expect((await testDb.settings.get('last_pre_import_snapshot'))?.value).toEqual(previousSnapshot);
+  });
+
+  it('performs zero writes when a legacy payload is rejected', async () => {
+    await testDb.changeRequests.add(crRecord(LOCAL_CR_ID, 'Survivor CR'));
+    const legacyPayload = {
+      ...sampleBackup,
+      tables: { ...sampleBackup.tables, projects: [] },
+    } as unknown as BackupEnvelope;
+
+    await expect(restoreBackupPayload(legacyPayload, testDb)).rejects.toThrow(
+      'Backup phiên bản cũ không còn được hỗ trợ'
+    );
+
+    const crs = await testDb.changeRequests.toArray();
+    expect(crs).toHaveLength(1);
+    expect(crs[0]?.name).toBe('Survivor CR');
+    expect(await testDb.settings.get('last_pre_import_snapshot')).toBeUndefined();
+    expect(await testDb.backupMetadata.count()).toBe(0);
   });
 
   it('restores telegramSettings and telegramWhitelist, preserving local logs', async () => {
@@ -387,8 +398,6 @@ describe('restoreBackupPayload & rollbackToSnapshot', () => {
       schemaVersion: CURRENT_SCHEMA_VERSION,
       exportedAt: '2026-10-20T12:00:00.000Z',
       tables: {
-        projects: [],
-        milestones: [],
         tasks: [],
         capacityRules: [],
         capacityOverrides: [],
@@ -418,8 +427,6 @@ describe('restoreBackupPayload & rollbackToSnapshot', () => {
         ],
       },
       counts: {
-        projects: 0,
-        milestones: 0,
         tasks: 0,
         capacityRules: 0,
         capacityOverrides: 0,
@@ -454,22 +461,14 @@ describe('downloadSnapshotFile', () => {
     const mockSnapshot: SnapshotData = {
       timestamp: '2026-09-27T14:30:00.000Z',
       tables: {
-        projects: [
+        changeRequests: [
           {
             id: '22222222-2222-4222-8222-222222222222',
-            name: 'Snapshot Project',
+            name: 'Snapshot CR',
+            code: 'CR-SNAP',
             status: 'Open',
-            createdAt: '2026-09-27T10:00:00.000Z',
-            updatedAt: '2026-09-27T10:00:00.000Z',
-          },
-        ],
-        milestones: [
-          {
-            id: '33333333-3333-4333-8333-333333333333',
-            projectId: '22222222-2222-4222-8222-222222222222',
-            name: 'Snapshot Milestone',
-            status: 'Open',
-            deadline: '2026-10-01',
+            type: 'ENHANCEMENT',
+            targets: [],
             createdAt: '2026-09-27T10:00:00.000Z',
             updatedAt: '2026-09-27T10:00:00.000Z',
           },
@@ -477,8 +476,7 @@ describe('downloadSnapshotFile', () => {
         tasks: [
           {
             id: '44444444-4444-4444-8444-444444444444',
-            projectId: '22222222-2222-4222-8222-222222222222',
-            milestoneId: '33333333-3333-4333-8333-333333333333',
+            crId: '22222222-2222-4222-8222-222222222222',
             name: 'Snapshot Task',
             status: 'Open',
             priority: 'Medium',
@@ -499,8 +497,7 @@ describe('downloadSnapshotFile', () => {
         plannedAllocations: [],
       },
       counts: {
-        projects: 1,
-        milestones: 1,
+        changeRequests: 1,
         tasks: 1,
         capacityRules: 1,
         capacityOverrides: 0,

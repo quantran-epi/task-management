@@ -34,29 +34,33 @@ describe('exportBackup service', () => {
   });
 
   describe('exportBackupPayload', () => {
-    it('exports all 6 domain tables with envelope metadata and logs to backupMetadata', async () => {
+    it('exports all domain tables with envelope metadata and logs to backupMetadata', async () => {
       // Seed test data across tables
       const now = new Date().toISOString();
-      await testDb.projects.add({
+      await testDb.systems.add({
         id: '11111111-1111-4111-8111-111111111111',
-        name: 'Project 1',
-        status: 'In Progress',
+        name: 'Core System',
+        code: 'CORE_SYS',
+        parentId: null,
+        type: 'SERVICE',
         createdAt: now,
         updatedAt: now,
       });
 
-      await testDb.milestones.add({
+      await testDb.changeRequests.add({
         id: '22222222-2222-4222-8222-222222222222',
-        projectId: '11111111-1111-4111-8111-111111111111',
-        name: 'Milestone 1',
-        status: 'Open',
+        name: 'CR 1',
+        code: 'CR-1',
+        status: 'In Progress',
+        type: 'NEW_FEATURE',
+        targets: [],
         createdAt: now,
         updatedAt: now,
       });
 
       await testDb.tasks.add({
         id: '33333333-3333-4333-8333-333333333333',
-        projectId: '11111111-1111-4111-8111-111111111111',
+        crId: '22222222-2222-4222-8222-222222222222',
         name: 'Task 1',
         status: 'Open',
         priority: 'High',
@@ -111,13 +115,15 @@ describe('exportBackup service', () => {
       expect(envelope.exportedAt).toBeDefined();
       expect(new Date(envelope.exportedAt).toString()).not.toBe('Invalid Date');
 
-      // 6 domain tables
-      expect(envelope.tables.projects).toHaveLength(1);
-      expect(envelope.tables.milestones).toHaveLength(1);
+      // Domain tables
+      expect(envelope.tables.systems).toHaveLength(1);
+      expect(envelope.tables.changeRequests).toHaveLength(1);
       expect(envelope.tables.tasks).toHaveLength(1);
       expect(envelope.tables.capacityRules).toHaveLength(1);
       expect(envelope.tables.capacityOverrides).toHaveLength(1);
       expect(envelope.tables.plannedAllocations).toHaveLength(1);
+      expect((envelope.tables as unknown as Record<string, unknown>).projects).toBeUndefined();
+      expect((envelope.tables as unknown as Record<string, unknown>).milestones).toBeUndefined();
 
       // Safe settings exported, secrets stripped, metadata excluded
       expect(envelope.tables.settings).toEqual([{ key: 'themeMode', value: 'dark' }]);
@@ -125,8 +131,6 @@ describe('exportBackup service', () => {
 
       // Counts object
       expect(envelope.counts).toEqual({
-        projects: 1,
-        milestones: 1,
         tasks: 1,
         capacityRules: 1,
         capacityOverrides: 1,
@@ -146,6 +150,8 @@ describe('exportBackup service', () => {
         dlpAudits: 0,
         telegramSettings: 0,
         telegramWhitelist: 0,
+        systems: 1,
+        changeRequests: 1,
       });
 
       // Export history logged in backupMetadata
@@ -165,8 +171,6 @@ describe('exportBackup service', () => {
       const envelope = await exportBackupPayload(testDb);
 
       expect(envelope.counts).toEqual({
-        projects: 0,
-        milestones: 0,
         tasks: 0,
         capacityRules: 0,
         capacityOverrides: 0,
@@ -186,6 +190,8 @@ describe('exportBackup service', () => {
         dlpAudits: 0,
         telegramSettings: 0,
         telegramWhitelist: 0,
+        systems: 0,
+        changeRequests: 0,
       });
 
       const metadataEntries = await testDb.backupMetadata.toArray();

@@ -1,6 +1,4 @@
 import type {
-  Project,
-  Milestone,
   Task,
   CapacityRule,
   CapacityOverride,
@@ -55,8 +53,6 @@ export interface BackupAttachmentRecord {
 }
 
 export interface BackupTableData {
-  projects: Project[];
-  milestones: Milestone[];
   tasks: Task[];
   capacityRules: CapacityRule[];
   capacityOverrides: CapacityOverride[];
@@ -81,8 +77,6 @@ export interface BackupTableData {
 }
 
 export interface BackupTableCounts {
-  projects: number;
-  milestones: number;
   tasks: number;
   capacityRules: number;
   capacityOverrides: number;
