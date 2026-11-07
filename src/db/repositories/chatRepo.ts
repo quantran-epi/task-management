@@ -142,8 +142,8 @@ export async function saveMessage(
       (error as Error & { code: string }).code = 'WIZARD_THREAD_MISMATCH';
       throw error;
     }
-    if (thread.scopeType !== 'project' || thread.entityId !== wizard.projectId) {
-      const error = new Error('Wizard project does not match persisted chat thread');
+    if (thread.scopeType !== 'cr' || thread.entityId !== wizard.projectId) {
+      const error = new Error('Wizard change request does not match persisted chat thread');
       (error as Error & { code: string }).code = 'WIZARD_PROJECT_MISMATCH';
       throw error;
     }
@@ -247,27 +247,26 @@ export async function clearAllChatHistory(
 }
 
 /**
- * Lấy hoặc tạo Thread duy nhất cho SDLC Workflow trong phạm vi Project.
- * Đảm bảo mỗi Project chỉ có duy nhất 1 thread cho SDLC.
+ * Lấy hoặc tạo Thread duy nhất cho SDLC Workflow trong phạm vi Change Request.
+ * Đảm bảo mỗi CR chỉ có duy nhất 1 thread cho SDLC.
  */
 export async function getOrCreateSdlcThread(
-  projectId: string,
+  crId: string,
   title?: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<ChatThread> {
-  const sdlcScopeKey = `project:${projectId}:sdlc`;
+  const sdlcScopeKey = `cr:${crId}:sdlc`;
   const existingSdlc = await db.chatThreads.where('scopeKey').equals(sdlcScopeKey).first();
   if (existingSdlc) {
     return existingSdlc;
   }
 
-  // Fallback kiểm tra thread project mặc định nếu đã có từ trước
   const now = new Date().toISOString();
   const thread: ChatThread = {
     id: generateId(),
     scopeKey: sdlcScopeKey,
-    scopeType: 'project',
-    entityId: projectId,
+    scopeType: 'cr',
+    entityId: crId,
     title: title?.trim() || '⚙️ SDLC Workflow',
     createdAt: now,
     updatedAt: now,
@@ -278,22 +277,22 @@ export async function getOrCreateSdlcThread(
 }
 
 /**
- * Tạo thêm một Tab Chat thường trong Project (cho phép nhiều tab song song).
+ * Tạo thêm một Tab Chat thường trong Change Request (cho phép nhiều tab song song).
  */
 export async function createChatTabThread(
-  projectId: string,
+  crId: string,
   title?: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<ChatThread> {
   const id = generateId();
-  const scopeKey = `project:${projectId}:chat:${id}`;
+  const scopeKey = `cr:${crId}:chat:${id}`;
   const now = new Date().toISOString();
 
   const thread: ChatThread = {
     id,
     scopeKey,
-    scopeType: 'project',
-    entityId: projectId,
+    scopeType: 'cr',
+    entityId: crId,
     title: title?.trim() || '💬 Cuộc trò chuyện mới',
     createdAt: now,
     updatedAt: now,
@@ -304,13 +303,13 @@ export async function createChatTabThread(
 }
 
 /**
- * Lấy tất cả các thread thuộc về 1 project (cả SDLC lẫn chat thường).
+ * Lấy tất cả các thread thuộc về 1 Change Request (cả SDLC lẫn chat thường).
  */
-export async function getProjectThreads(
-  projectId: string,
+export async function getCrThreads(
+  crId: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<ChatThread[]> {
-  return db.chatThreads.where('entityId').equals(projectId).toArray();
+  return db.chatThreads.where('entityId').equals(crId).toArray();
 }
 
 /**
