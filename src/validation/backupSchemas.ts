@@ -55,41 +55,6 @@ const linkSchema = z
     { message: 'Link must be a URL, folder path, or file URI.' }
   );
 
-export const BackupProjectRecordSchema = z.object({
-  id: uuidSchema,
-  name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
-  description: z.string().optional(),
-  deadline: calendarDateSchema.optional(),
-  notes: z.string().optional(),
-  status: z.enum(['Open', 'Pending', 'In Progress', 'Done', 'Cancelled']),
-  jiraEpicKey: jiraKeySchema.optional(),
-  opsOwners: tagListSchema.optional(),
-  businessAnalysts: tagListSchema.optional(),
-  documentLinks: z.array(linkSchema).optional(),
-  reminderDate: reminderDateSchema.optional(),
-  reminderNote: reminderNoteSchema,
-  reminders: remindersArraySchema,
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
-
-export const BackupMilestoneRecordSchema = z.object({
-  id: uuidSchema,
-  projectId: uuidSchema,
-  name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
-  description: z.string().optional(),
-  deadline: calendarDateSchema.optional(),
-  notes: z.string().optional(),
-  status: z.enum(['Open', 'Pending', 'In Progress', 'Done', 'Cancelled']),
-  opsOwners: tagListSchema.optional(),
-  businessAnalysts: tagListSchema.optional(),
-  reminderDate: reminderDateSchema.optional(),
-  reminderNote: reminderNoteSchema,
-  reminders: remindersArraySchema,
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
-
 export const BackupTaskChecklistItemSchema = z.object({
   id: z.string(),
   text: z.string(),
@@ -98,8 +63,8 @@ export const BackupTaskChecklistItemSchema = z.object({
 
 export const BackupTaskRecordSchema = z.object({
   id: uuidSchema,
-  projectId: uuidSchema.optional(),
-  milestoneId: uuidSchema.optional(),
+  crId: uuidSchema,
+  systemId: uuidSchema.optional(),
   name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
   description: z.string().optional(),
   deadline: calendarDateSchema.optional(),
@@ -181,7 +146,7 @@ export const BackupNoteRecordSchema = z.object({
   parentId: z.string().optional(),
   tags: z.array(z.string()).optional(),
   slug: z.string().optional(),
-  entityType: z.enum(['task', 'project', 'milestone']).optional(),
+  entityType: z.enum(['task', 'cr', 'system']).optional(),
   entityId: uuidSchema.optional(),
   title: z.string().trim().max(120, 'Title must be 120 characters or less').optional(),
   body: z.string().max(50000, 'Body must be 50000 characters or less'),
@@ -213,7 +178,7 @@ export const BackupChatThreadRecordSchema = z
   .object({
     id: uuidSchema,
     scopeKey: z.string().min(1),
-    scopeType: z.enum(['global', 'task', 'project', 'milestone', 'document']),
+    scopeType: z.enum(['global', 'task', 'cr', 'system', 'document']),
     entityId: uuidSchema.optional(),
     title: z.string().optional(),
     createdAt: z.string(),
@@ -553,7 +518,7 @@ export const BackupKnowledgeLinkRecordSchema = z
   .object({
     id: uuidSchema,
     linkKey: z.string().min(1),
-    taskMateEntityType: z.enum(['task', 'project', 'milestone']),
+    taskMateEntityType: z.enum(['task', 'cr', 'system']),
     taskMateEntityId: uuidSchema,
     setId: uuidSchema,
     urn: z.string().min(1).optional(),
@@ -612,12 +577,17 @@ export const BackupSystemRecordSchema = z.object({
 export const BackupChangeRequestRecordSchema = z.object({
   id: uuidSchema,
   name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
-  code: z.string().trim().max(64).optional(),
+  code: z.string().trim().min(1, 'Code is required').max(64, 'Code must be 64 characters or less'),
   description: z.string().optional(),
   deadline: calendarDateSchema.optional(),
   status: z.enum(CR_STATUSES),
   type: z.enum(CR_TYPES),
-  targetSystemIds: z.array(z.string()),
+  targets: z.array(
+    z.object({
+      systemId: uuidSchema,
+      featureBranch: z.string().optional(),
+    })
+  ),
   jiraEpicKey: jiraKeySchema.optional(),
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
@@ -628,6 +598,35 @@ export const BackupChangeRequestRecordSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
 });
+
+/** D-49: the current backup envelope contract. Version 11 is CR-centric; older versions are rejected. */
+export const BACKUP_SCHEMA_VERSION = 11 as const;
+
+export const BackupEnvelopeSchema = z.object({
+  app: z.literal('personal-task-planner'),
+  schemaVersion: z.literal(BACKUP_SCHEMA_VERSION),
+  exportedAt: z.string(),
+  tables: z.record(z.string(), z.array(z.unknown())),
+  counts: z.record(z.string(), z.number()),
+});
+
+export const LEGACY_BACKUP_MESSAGE =
+  'Backup phiên bản cũ không còn được hỗ trợ (chứa projects/milestones). Dữ liệu local không bị thay đổi.';
+
+/**
+ * D-49 envelope-stage gate: a payload carrying a `projects` or `milestones` table is a
+ * pre-31.2 backup. Reject it before any per-table validation so no row can be mapped
+ * into the new model and no local write can happen.
+ */
+export function assertNoLegacyTables(raw: unknown): void {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return;
+  const tables = (raw as Record<string, unknown>).tables;
+  if (!tables || typeof tables !== 'object' || Array.isArray(tables)) return;
+  const candidate = tables as Record<string, unknown>;
+  if ('projects' in candidate || 'milestones' in candidate) {
+    throw new Error(LEGACY_BACKUP_MESSAGE);
+  }
+}
 
 
 
