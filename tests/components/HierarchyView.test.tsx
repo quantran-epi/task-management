@@ -2,41 +2,57 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../src/db';
-import { ProjectTable } from '../../src/components/projects/ProjectTable';
-import { ProjectModal } from '../../src/components/projects/ProjectModal';
-import { MilestoneModal } from '../../src/components/projects/MilestoneModal';
-import { CascadeDeleteModal } from '../../src/components/projects/CascadeDeleteModal';
-import type { Project, Milestone, Task } from '../../src/types/models';
+import { ChangeRequestTable } from '../../src/components/changeRequests/ChangeRequestTable';
+import { ChangeRequestModal } from '../../src/components/changeRequests/ChangeRequestModal';
+import { SystemTable } from '../../src/components/systems/SystemTable';
+import { HierarchyBreadcrumb } from '../../src/components/tasks/HierarchyBreadcrumb';
+import type { ChangeRequest, System, Task } from '../../src/types/models';
 
-describe('ProjectsView & Hierarchy Components', () => {
+/**
+ * D-46/D-47: the only hierarchy above a task is `CR > Subsystem`. The project/milestone tier
+ * and its modals were deleted in the 31.2 normalization, so this suite covers the surviving
+ * breadcrumb plus the CR and System tables that replaced the old project table.
+ */
+describe('CR → Subsystem hierarchy components', () => {
   let db: TaskPlannerDatabase;
 
-  const sampleProject: Project = {
-    id: 'proj-1',
+  const sampleCr: ChangeRequest = {
+    id: 'cr-1',
+    code: 'CR-2026-001',
     name: 'Website Redesign',
     description: 'Revamp public marketing site',
     status: 'In Progress',
-    deadline: '2026-12-31',
-    notes: 'Primary quarterly goal',
+    type: 'ENHANCEMENT',
+    targets: [{ systemId: 'sys-1' }],
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   };
 
-  const sampleMilestone: Milestone = {
-    id: 'ms-1',
-    projectId: 'proj-1',
-    name: 'Phase 1 MVP',
-    description: 'Initial public launch',
-    status: 'Open',
-    deadline: '2026-06-30',
+  // `SystemTable` renders parents and their children only, so the fixture is a real pair.
+  const sampleGroup: System = {
+    id: 'grp-1',
+    name: 'Payments Domain',
+    code: 'PAY-GRP',
+    parentId: null,
+    type: 'LOGICAL_GROUP',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  const sampleSystem: System = {
+    id: 'sys-1',
+    name: 'Payments API',
+    code: 'PAY-API',
+    parentId: 'grp-1',
+    type: 'SERVICE',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   };
 
   const sampleTask: Task = {
     id: 'task-1',
-    projectId: 'proj-1',
-    milestoneId: 'ms-1',
+    crId: 'cr-1',
+    systemId: 'sys-1',
     name: 'Design mockups',
     status: 'Open',
     priority: 'High',
@@ -49,8 +65,9 @@ describe('ProjectsView & Hierarchy Components', () => {
   beforeEach(async () => {
     db = new TaskPlannerDatabase('test-hierarchy-' + Math.random().toString(36).slice(2));
     await db.open();
-    await db.projects.add(sampleProject);
-    await db.milestones.add(sampleMilestone);
+    await db.changeRequests.add(sampleCr);
+    await db.systems.add(sampleGroup);
+    await db.systems.add(sampleSystem);
     await db.tasks.add(sampleTask);
   });
 
@@ -58,123 +75,91 @@ describe('ProjectsView & Hierarchy Components', () => {
     await db.delete();
   });
 
-  it('ProjectTable renders projects and contextual Add Task button', () => {
-    const onAddTask = vi.fn();
+  it('HierarchyBreadcrumb renders CR > Subsystem and calls onSelectCr', () => {
+    const onSelectCr = vi.fn();
     render(
-      <ProjectTable
-        projects={[sampleProject]}
-        milestones={[sampleMilestone]}
+      <HierarchyBreadcrumb
+        crId="cr-1"
+        crCode="CR-2026-001"
+        crName="Website Redesign"
+        systemCode="PAY-API"
+        systemName="Payments API"
+        onSelectCr={onSelectCr}
+      />
+    );
+
+    const badge = screen.getByText('CR-2026-001 > PAY-API');
+    expect(badge).toBeInTheDocument();
+    fireEvent.click(badge);
+    expect(onSelectCr).toHaveBeenCalledWith('cr-1');
+  });
+
+  it('HierarchyBreadcrumb renders the standalone marker when no CR is attached', () => {
+    render(<HierarchyBreadcrumb />);
+    expect(screen.getByText('Chưa gắn CR')).toBeInTheDocument();
+  });
+
+  it('ChangeRequestTable renders CRs with their subsystem targets and task counts', async () => {
+    const onViewTasks = vi.fn();
+    const onOpenSdlcStudio = vi.fn();
+    render(
+      <ChangeRequestTable
+        changeRequests={[sampleCr]}
         tasks={[sampleTask]}
-        onAddTask={onAddTask}
-        onEditProject={vi.fn()}
-        onDeleteProject={vi.fn()}
-        onAddMilestone={vi.fn()}
-        onEditMilestone={vi.fn()}
-        onDeleteMilestone={vi.fn()}
-        onEditTask={vi.fn()}
+        systems={[sampleSystem]}
+        onEditChangeRequest={vi.fn()}
+        onDeleteChangeRequest={vi.fn()}
+        onViewTasks={onViewTasks}
+        onOpenSdlcStudio={onOpenSdlcStudio}
+        db={db}
       />
     );
 
-    expect(screen.getByText('Website Redesign')).toBeInTheDocument();
+    expect(await screen.findByText('Website Redesign')).toBeInTheDocument();
+    expect(screen.getByText('CR-2026-001')).toBeInTheDocument();
     expect(screen.getByText('Đang làm')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Tác vụ/i })).toBeInTheDocument();
+    expect(screen.getByText('PAY-API')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Tác vụ/i }));
-    expect(onAddTask).toHaveBeenCalledWith('proj-1', undefined);
+    fireEvent.click(screen.getByText('Website Redesign'));
+    expect(onViewTasks).toHaveBeenCalledWith('cr-1');
+
+    fireEvent.click(screen.getByRole('button', { name: /SDLC/ }));
+    expect(onOpenSdlcStudio).toHaveBeenCalledWith('cr-1');
   });
 
-  it('ProjectModal creates project on submission', async () => {
+  it('ChangeRequestModal refuses to save a CR with no target subsystem', async () => {
     const onSave = vi.fn();
-    render(
-      <ProjectModal
-        open={true}
-        onClose={vi.fn()}
-        onSave={onSave}
-      />
-    );
+    render(<ChangeRequestModal open={true} onClose={vi.fn()} onSave={onSave} db={db} />);
 
-    expect(screen.getByText('Dự án mới')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText(/Tên dự án/i), { target: { value: 'Brand New System' } });
-    fireEvent.click(screen.getByRole('button', { name: /Tạo dự án/i }));
-
-    await waitFor(() => {
-      expect(onSave).toHaveBeenCalledWith(
-        expect.objectContaining({
-          name: 'Brand New System',
-          status: 'Open',
-        })
-      );
+    expect(screen.getByText('Change Request mới')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Tên Change Request/i), {
+      target: { value: 'Brand New System' },
     });
+    fireEvent.change(screen.getByLabelText(/Mã CR/i), { target: { value: 'CR-2026-777' } });
+    fireEvent.click(screen.getByRole('button', { name: /Tạo Change Request/i }));
+
+    // `targets` is required (min 1): the form blocks the save and shows the field error.
+    expect(
+      await screen.findByText(/Vui lòng chọn ít nhất 1 subsystem chịu ảnh hưởng/i)
+    ).toBeInTheDocument();
+    expect(onSave).not.toHaveBeenCalled();
   });
 
-  it('MilestoneModal creates milestone for parent project', async () => {
-    const onSave = vi.fn();
+  it('SystemTable renders subsystems and offers the add-subsystem action', () => {
+    const onAddSubsystem = vi.fn();
     render(
-      <MilestoneModal
-        open={true}
-        projectId="proj-1"
-        onClose={vi.fn()}
-        onSave={onSave}
+      <SystemTable
+        systems={[sampleGroup, sampleSystem]}
+        onAddSubsystem={onAddSubsystem}
+        onEditSystem={vi.fn()}
+        onDeleteSystem={vi.fn()}
       />
     );
 
-    expect(screen.getByText('Cột mốc mới')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText(/Tên cột mốc/i), { target: { value: 'Sprint Alpha' } });
-    fireEvent.click(screen.getByRole('button', { name: /Tạo cột mốc/i }));
+    expect(screen.getByText('Payments API')).toBeInTheDocument();
+    expect(screen.getByText('PAY-API')).toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(onSave).toHaveBeenCalledWith(
-        expect.objectContaining({
-          name: 'Sprint Alpha',
-          projectId: 'proj-1',
-          status: 'Open',
-        })
-      );
-    });
-  });
-
-  it('CascadeDeleteModal presents choice between Delete All and Keep Tasks for Project', () => {
-    const onConfirm = vi.fn();
-    render(
-      <CascadeDeleteModal
-        open={true}
-        targetType="project"
-        targetName="Website Redesign"
-        childMilestoneCount={1}
-        childTaskCount={2}
-        onClose={vi.fn()}
-        onConfirm={onConfirm}
-      />
-    );
-
-    expect(screen.getByText(/Xóa dự án 'Website Redesign'/i)).toBeInTheDocument();
-    expect(screen.getByText(/chứa 1 cột mốc và 2 tác vụ/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Xóa tất cả/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Giữ lại tác vụ \(Chuyển thành Độc lập\)/i })).toBeInTheDocument();
-
-    // Default button preserves tasks
-    fireEvent.click(screen.getByRole('button', { name: /Giữ lại tác vụ \(Chuyển thành Độc lập\)/i }));
-    expect(onConfirm).toHaveBeenCalledWith('orphan');
-  });
-
-  it('CascadeDeleteModal presents choice for Milestone deletion', () => {
-    const onConfirm = vi.fn();
-    render(
-      <CascadeDeleteModal
-        open={true}
-        targetType="milestone"
-        targetName="Phase 1 MVP"
-        childTaskCount={3}
-        onClose={vi.fn()}
-        onConfirm={onConfirm}
-      />
-    );
-
-    expect(screen.getByText(/Xóa cột mốc 'Phase 1 MVP'/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Xóa tất cả tác vụ con/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Giữ lại tác vụ \(Chuyển lên Cấp dự án\)/i })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /Xóa tất cả tác vụ con/i }));
-    expect(onConfirm).toHaveBeenCalledWith('cascade');
+    fireEvent.click(screen.getByRole('button', { name: /Thêm subsystem/i }));
+    expect(onAddSubsystem).toHaveBeenCalledWith('grp-1');
   });
 });

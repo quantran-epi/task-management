@@ -2,7 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TaskTable } from '../../src/components/tasks/TaskTable';
 import { TimerContext, type TimerContextValue } from '../../src/context/TimerContext';
-import type { Task, Project, Milestone, ActiveTimer } from '../../src/types/models';
+import type { Task, ChangeRequest, System, ActiveTimer } from '../../src/types/models';
 
 describe('TaskTableTimer', () => {
   const mockStart = vi.fn();
@@ -14,6 +14,7 @@ describe('TaskTableTimer', () => {
   const mockTasks: Task[] = [
     {
       id: 'task-1',
+      crId: 'cr-1',
       name: 'Nhiệm vụ kiểm thử 1',
       status: 'In Progress',
       progress: 50,
@@ -24,6 +25,7 @@ describe('TaskTableTimer', () => {
     },
     {
       id: 'task-2',
+      crId: 'cr-1',
       name: 'Nhiệm vụ kiểm thử 2',
       status: 'Open',
       progress: 0,
@@ -34,8 +36,8 @@ describe('TaskTableTimer', () => {
     },
   ];
 
-  const mockProjects: Project[] = [];
-  const mockMilestones: Milestone[] = [];
+  const mockChangeRequests: ChangeRequest[] = [];
+  const mockSystems: System[] = [];
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -60,8 +62,8 @@ describe('TaskTableTimer', () => {
       <TimerContext.Provider value={defaultValue}>
         <TaskTable
           tasks={tasks}
-          projects={mockProjects}
-          milestones={mockMilestones}
+          changeRequests={mockChangeRequests}
+          systems={mockSystems}
           selectedRowKeys={[]}
           onSelectRows={mockSelectRows}
           onOpenDrawer={mockOpenDrawer}
@@ -142,10 +144,13 @@ describe('TaskTableTimer', () => {
     expect(screen.getByText('/ 2h')).toBeInTheDocument();
   });
 
-  it('displays column header as "Đã dùng / Ước tính" matching cell display order', () => {
+  it('labels the timer column "Đồng hồ" and keeps elapsed time ahead of the estimate', () => {
     renderWithTimerContext();
 
-    expect(screen.getByText('Đã dùng / Ước tính')).toBeInTheDocument();
-    expect(screen.queryByText('Ước tính / Đã dùng')).not.toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Đồng hồ' })).toBeInTheDocument();
+    // Elapsed ticker renders before the estimate in the same row.
+    const row = screen.getByText('Nhiệm vụ kiểm thử 1').closest('tr');
+    expect(row).not.toBeNull();
+    expect(row).toHaveTextContent('/ 1h');
   });
 });
