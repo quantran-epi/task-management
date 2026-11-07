@@ -23,7 +23,7 @@ import {
   BugOutlined,
 } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
-import type { ChangeRequest, CrType, CrStatus, ReminderItem } from '../../types/models';
+import type { ChangeRequest, CrTarget, CrType, CrStatus, ReminderItem } from '../../types/models';
 import { openDocumentLink, browseLocalFolder } from '../../utils/documentLinks';
 import { createFocusRestorer } from '../../utils/focus';
 import { useRegisterActiveForm } from '../../context/FormGuardContext';
@@ -44,13 +44,17 @@ export interface ChangeRequestModalProps {
   onSave: (values: ChangeRequestInput | ChangeRequestUpdate) => Promise<void> | void;
   loading?: boolean;
   db?: TaskPlannerDatabase;
+  /** D-34: subsystems pre-filled by the caller (e.g. "Tạo CR" from a subsystem). Soft lock. */
+  initialTargets?: CrTarget[];
+  /** Pre-loaded system list so preselected codes render on first paint, not as raw ids. */
+  systems?: import('../../types/models').System[] | undefined;
 }
 
 interface ChangeRequestFormValues {
   name: string;
   code?: string;
   type: CrType;
-  targetSystemIds: string[];
+  targets: string[];
   status: CrStatus;
   description?: string;
   deadline?: Dayjs | null;
@@ -78,12 +82,18 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
   onSave,
   loading = false,
   db = defaultDb,
+  initialTargets,
+  systems,
 }) => {
   useRegisterActiveForm('change-request-modal', open);
 
   const [form] = Form.useForm<ChangeRequestFormValues>();
   const restorerRef = useRef<(() => void) | null>(null);
   const [creatingEpic, setCreatingEpic] = useState(false);
+
+  // Stable key so an inline `initialTargets={[...]}` literal does not re-seed every render.
+  const initialTargetIds = (initialTargets ?? []).map((t) => t.systemId);
+  const initialTargetsKey = initialTargetIds.join(',');
 
   useEffect(() => {
     if (open) {
@@ -93,7 +103,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
           name: changeRequest.name,
           code: changeRequest.code || '',
           type: changeRequest.type || 'ENHANCEMENT',
-          targetSystemIds: changeRequest.targetSystemIds ?? [],
+          targets: (changeRequest.targets ?? []).map((t) => t.systemId),
           status: changeRequest.status,
           description: changeRequest.description || '',
           deadline: changeRequest.deadline ? dayjs(changeRequest.deadline, 'YYYY-MM-DD') : null,
@@ -109,7 +119,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
           name: '',
           code: '',
           type: 'ENHANCEMENT',
-          targetSystemIds: [],
+          targets: initialTargetsKey ? initialTargetsKey.split(',') : [],
           status: 'Open',
           description: '',
           jiraEpicKey: '',
@@ -120,7 +130,8 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
         });
       }
     }
-  }, [open, changeRequest, form]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, changeRequest, form, initialTargetsKey]);
 
   const handleClose = () => {
     onClose();
@@ -198,7 +209,8 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
         name: values.name.trim(),
         code: values.code?.trim().toUpperCase() || undefined,
         type: values.type,
-        targetSystemIds: values.targetSystemIds ?? [],
+        // D-25: `featureBranch` default is applied by the CR repo, never here.
+        targets: (values.targets ?? []).map((systemId) => ({ systemId })),
         status: values.status,
         description: values.description?.trim() || undefined,
         deadline: values.deadline ? values.deadline.format('YYYY-MM-DD') : undefined,
@@ -299,7 +311,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
 
         {/* Multi-System Target Selector */}
         <Form.Item
-          name="targetSystemIds"
+          name="targets"
           label="Các subsystem chịu ảnh hưởng (Target Subsystems)"
           rules={[
             {
@@ -311,7 +323,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
           ]}
           extra="Chọn các dịch vụ, database schema hoặc worker job trong Enterprise Catalog sẽ thay đổi mã nguồn trong đợt CR này."
         >
-          <TargetSystemsSelector db={db} />
+          <TargetSystemsSelector db={db} preselectedIds={initialTargetIds} systems={systems} />
         </Form.Item>
 
         <Form.Item name="description" label="Mô tả phạm vi thay đổi">

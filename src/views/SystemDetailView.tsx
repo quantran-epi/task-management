@@ -11,7 +11,7 @@ import {
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
-import { getSystem, getAllSystems, updateSystem, createSystem } from '../db/repositories/systemRepo';
+import { getSystem, getAllSystems, updateSystem, createSystem, isLogicalParent } from '../db/repositories/systemRepo';
 import { getAllChangeRequests, createChangeRequest } from '../db/repositories/changeRequestRepo';
 import { getSshConfigs } from '../services/sshService';
 import { useLayoutStore } from '../workbench/store/layoutStore';
@@ -56,13 +56,13 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
     );
   }
 
-  const isParent = system.type === 'LOGICAL_GROUP' || system.parentId === null;
+  const isParent = isLogicalParent(system);
   const parentSystem = system.parentId ? allSystems.find((s) => s.id === system.parentId) : null;
   const childSubsystems = allSystems.filter((s) => s.parentId === system.id);
   const sshConfig = system.sshConfigId ? sshConfigs.find((c) => c.id === system.sshConfigId) : null;
 
   // Change requests impacting this system
-  const relatedCrs = allCrs.filter((cr) => cr.targetSystemIds?.includes(system.id));
+  const relatedCrs = allCrs.filter((cr) => cr.targets?.some((t) => t.systemId === system.id));
 
   const handleOpenSystem = (targetSys: System) => {
     openTab({
@@ -416,15 +416,10 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
       {/* Create CR targeting this system Modal */}
       <ChangeRequestModal
         open={createCrModalOpen}
+        initialTargets={[{ systemId: system.id }]}
         onClose={() => setCreateCrModalOpen(false)}
         onSave={async (values) => {
-          await createChangeRequest(
-            {
-              ...values,
-              targetSystemIds: Array.from(new Set([...(values.targetSystemIds || []), system.id])),
-            } as any,
-            db
-          );
+          await createChangeRequest(values as any, db);
           message.success('Đã tạo Change Request mới cho hệ thống này');
           setCreateCrModalOpen(false);
         }}
