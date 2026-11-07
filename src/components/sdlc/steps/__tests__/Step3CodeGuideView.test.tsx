@@ -4,6 +4,29 @@ import { RemoteDiffViewer } from '../../diff/RemoteDiffViewer';
 import { Step3CodeGuideView } from '../Step3CodeGuideView';
 import * as sshService from '../../../../services/sshService';
 import * as gitRemoteService from '../../../../services/gitRemoteService';
+import type { CrTarget, System } from '../../../../types/models';
+
+/**
+ * D-38b: Step 3 gets SSH/repo/base and the feature branch from the CR target's subsystem —
+ * there is no settings-backed project binding any more.
+ */
+const TARGET_SYSTEM: System = {
+  id: 'sys-1',
+  name: 'Card Authorization API',
+  code: 'SC-AUTH-API',
+  parentId: null,
+  type: 'SERVICE',
+  sshConfigId: 'ssh-1',
+  remoteRepoPath: '/home/dev/repo',
+  defaultBaseBranch: 'origin/main',
+  createdAt: '2026-11-06T00:00:00Z',
+  updatedAt: '2026-11-06T00:00:00Z',
+};
+const TARGET_PROPS = {
+  targetSystems: [TARGET_SYSTEM],
+  crTargets: [{ systemId: 'sys-1', featureBranch: 'feature/CR-101' }] as CrTarget[],
+  selectedSystemId: 'sys-1',
+};
 
 const SAMPLE_RAW_DIFF = `diff --git a/src/index.ts b/src/index.ts
 index e69de29..49b78bb 100644
@@ -17,8 +40,7 @@ index e69de29..49b78bb 100644
  export default {};
 `;
 
-describe('RemoteDiffViewer Component', () => {
-  it('renders diff with file path and additions/deletions stats', () => {
+describe('RemoteDiffViewer Component', () => {  it('renders diff with file path and additions/deletions stats', () => {
     render(
       <RemoteDiffViewer
         rawDiff={SAMPLE_RAW_DIFF}
@@ -107,13 +129,6 @@ describe('Step3CodeGuideView: configuration and dirty banner', () => {
     ]);
     vi.spyOn(sshService, 'getSshSecret').mockResolvedValue('test-pass');
 
-    vi.spyOn(gitRemoteService, 'getProjectRepoSshBinding').mockResolvedValue({
-      sshConfigId: 'ssh-1',
-      remoteRepoPath: '/home/dev/repo',
-      defaultBaseBranch: 'origin/main',
-      updatedAt: '2026-11-06T00:00:00Z',
-    });
-
     vi.spyOn(gitRemoteService, 'getRemoteBranches').mockResolvedValue([
       { name: 'origin/main', isRemote: true, isHead: false },
       { name: 'feature/CR-101', isRemote: true, isHead: false },
@@ -158,6 +173,7 @@ describe('Step3CodeGuideView: configuration and dirty banner', () => {
       <Step3CodeGuideView
         projectId="proj-1"
         crCode="CR-101"
+        {...TARGET_PROPS}
         approvedSolutionMarkdown="# Approved Solution"
         onProceedToStep4={vi.fn()}
       />
@@ -197,13 +213,6 @@ describe('Step3CodeGuideView: 2-column review pane and interactions', () => {
       },
     ]);
     vi.spyOn(sshService, 'getSshSecret').mockResolvedValue('test-pass');
-
-    vi.spyOn(gitRemoteService, 'getProjectRepoSshBinding').mockResolvedValue({
-      sshConfigId: 'ssh-1',
-      remoteRepoPath: '/home/dev/repo',
-      defaultBaseBranch: 'origin/main',
-      updatedAt: '2026-11-06T00:00:00Z',
-    });
 
     vi.spyOn(gitRemoteService, 'getRemoteBranches').mockResolvedValue([
       { name: 'origin/main', isRemote: true, isHead: false },
@@ -256,6 +265,7 @@ describe('Step3CodeGuideView: 2-column review pane and interactions', () => {
       <Step3CodeGuideView
         projectId="proj-1"
         crCode="CR-101"
+        {...TARGET_PROPS}
         approvedSolutionMarkdown="# Approved Solution"
         onCommitBranchSnapshot={handleCommitSnapshot}
         onProceedToStep4={vi.fn()}
@@ -476,13 +486,6 @@ describe('Task 2: approval snapshot and drift handling', () => {
     ]);
     vi.spyOn(sshService, 'getSshSecret').mockResolvedValue('test-pass');
 
-    vi.spyOn(gitRemoteService, 'getProjectRepoSshBinding').mockResolvedValue({
-      sshConfigId: 'ssh-1',
-      remoteRepoPath: '/home/dev/repo',
-      defaultBaseBranch: 'origin/main',
-      updatedAt: '2026-11-06T00:00:00Z',
-    });
-
     vi.spyOn(gitRemoteService, 'getRemoteBranches').mockResolvedValue([
       { name: 'origin/main', isRemote: true, isHead: false },
       { name: 'feature/CR-101', isRemote: true, isHead: false },
@@ -533,6 +536,7 @@ describe('Task 2: approval snapshot and drift handling', () => {
       <Step3CodeGuideView
         projectId="proj-1"
         crCode="CR-101"
+        {...TARGET_PROPS}
         approvedSolutionMarkdown="# Approved Solution"
         savedSnapshot={savedSnapshot}
         onProceedToStep4={handleProceed}
@@ -561,7 +565,7 @@ describe('Task 2: approval snapshot and drift handling', () => {
     expect(handleProceed).toHaveBeenCalledTimes(1);
   });
 
-  it('renders ConventionsSummaryCard and handles Save binding button', async () => {
+  it('renders ConventionsSummaryCard above the step body', async () => {
     vi.spyOn(sshService, 'getSshConfigs').mockResolvedValue([
       {
         id: 'ssh-1',
@@ -575,12 +579,11 @@ describe('Task 2: approval snapshot and drift handling', () => {
       },
     ]);
 
-    const saveSpy = vi.spyOn(gitRemoteService, 'saveProjectRepoSshBinding').mockResolvedValue();
-
     render(
       <Step3CodeGuideView
         projectId="proj-1"
         crCode="CR-101"
+        {...TARGET_PROPS}
         approvedSolutionMarkdown="# Approved Solution"
         conventionsSummary={{
           globalText: 'Global rule',
@@ -591,24 +594,10 @@ describe('Task 2: approval snapshot and drift handling', () => {
       />
     );
 
-    // Verify convention summary renders
     expect(await screen.findByText(/Global:/i)).toBeInTheDocument();
     expect(screen.getByText(/Repository:/i)).toBeInTheDocument();
-
-    // Verify Save binding button
-    const saveBtn = await screen.findByTestId('step3-btn-save-binding');
-    expect(saveBtn).toBeInTheDocument();
-    fireEvent.click(saveBtn);
-
-    await waitFor(() => {
-      expect(saveSpy).toHaveBeenCalledWith(
-        'proj-1',
-        expect.objectContaining({
-          sshConfigId: 'ssh-1',
-        }),
-        expect.anything()
-      );
-    });
+    // The settings-backed binding is gone (D-36/D-38b): no save-binding control.
+    expect(screen.queryByTestId('step3-btn-save-binding')).toBeNull();
   });
 });
 
