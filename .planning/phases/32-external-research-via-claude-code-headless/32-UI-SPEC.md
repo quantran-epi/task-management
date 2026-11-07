@@ -1,7 +1,7 @@
 ---
 phase: 32
 slug: external-research-via-claude-code-headless
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-11-07
