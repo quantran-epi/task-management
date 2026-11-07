@@ -813,7 +813,7 @@ Plans:
 - [x] 31.1-02-PLAN.md — System Catalog management UI: hierarchical tree view, CRUD modal, SSH/repo binding configuration
 
 **Wave 3** *(depends on 31.1-02)*
-- [ ] 31.1-03-PLAN.md — CR management UI overhaul: Project -> CR terminology, 3 CR types, multi-system selector, and task linkage
+- [x] 31.1-03-PLAN.md — CR management UI overhaul: Project -> CR terminology, 3 CR types, multi-system selector, and task linkage
 
 **Wave 4** *(depends on 31.1-03)*
 - [ ] 31.1-04-PLAN.md — SDLC Studio & AI Chat multi-system wiring: auto-load SSH and conventions from CR target systems, E2E verification
