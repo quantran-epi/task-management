@@ -380,7 +380,7 @@ const systemContent = [
 | A1 | Lưu `global_conventions` vào `db.settings` không bị xóa khi backup mã hóa | Standard Stack | Thấp - đã xác minh trực tiếp mã nguồn `exportBackup.ts`, `isSafeBackupSetting` cho phép các key không chứa `_key`, `_token`, v.v. |
 | A2 | Candidate paths `CONVENTIONS.md`, `.github/CONVENTIONS.md`, `docs/CONVENTIONS.md` đủ bao quát các repo chuẩn | Architecture Patterns | Thấp - đây là chuẩn cấu trúc phổ biến nhất trong git repositories. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 Không có câu hỏi mở kỹ thuật nào cản trở quá trình lập kế hoạch (All technical constraints verified).
 
