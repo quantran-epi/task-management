@@ -15,6 +15,7 @@
 - Phase 29.1: Remote SSH Git Explorer & Headless Claude Code Trace Flow (v1.3)
 - Phase 30: Automatic Change Pack Packaging & Drift Reconciliation (v1.3)
 - Phase 31: Organization Conventions in the Solution Pipeline (COMPLETE — verified 2026-11-07)
+- Phase 31.1: Enterprise Systems Catalog & CR Transformation (v1.3, INSERTED)
 - Phase 32: External Research via Claude Code Headless (v1.3)
 - Phase 33: Prompt Transparency & Contract Documentation (v1.3)
 
@@ -786,6 +787,36 @@ Plans:
 **Wave 4** *(depends on 31-03)*
 
 - [x] 31-04-PLAN.md — Conflict-surfacing + convention-following exemplar tests and an intake-status regression
+
+### Phase 31.1: Enterprise Systems Catalog & CR Transformation (INSERTED)
+
+**Goal:** Establish an Enterprise System Catalog with hierarchical parent-child systems (e.g. SmartCard -> accounting-service, credit-service, cardappdb) where physical systems own SSH and repository configurations, and transform the "Project" domain entity into "Change Request (CR)" with 3 types (New Feature, Enhancement, Bugfix) impacting 1..N systems.
+**Requirements**: ENT-SYS-01, ENT-SYS-02, ENT-SYS-03, ENT-SYS-04, ENT-CR-01, ENT-CR-02
+**Depends on:** Phase 31
+**Success Criteria** (what must be TRUE):
+
+1. IndexedDB schema version upgrade adds `systems` table (supporting hierarchical parent/child links, SSH host, and repo path) and migrates existing `projects` records safely into `changeRequests` with `targetSystemIds: string[]`.
+2. Dedicated System Catalog UI supports full CRUD for logical parent systems and deployable child subsystems (services, schemas, UIs), allowing editing, reparenting, and SSH/repo binding at any time.
+3. Project management UI is rebranded and restructured as CR (Change Request) management with 3 explicit types: New Feature, Enhancement, Bugfix, and allows selecting 1 or more target subsystems.
+4. Tasks and checklists remain intact, explicitly linked to the parent CR.
+5. SDLC Studio and AI Chat Drawer automatically resolve SSH connections, repo paths, and conventions from the selected CR's target systems without redundant global configuration.
+
+**Plans:** 4 plans in 4 waves
+**UI hint**: yes
+
+Plans:
+
+**Wave 1**
+- [ ] 31.1-01-PLAN.md — Schema migration: `systems` table, `changeRequests` entity model, and safe data migration from `projects`
+
+**Wave 2** *(depends on 31.1-01)*
+- [ ] 31.1-02-PLAN.md — System Catalog management UI: hierarchical tree view, CRUD modal, SSH/repo binding configuration
+
+**Wave 3** *(depends on 31.1-02)*
+- [ ] 31.1-03-PLAN.md — CR management UI overhaul: Project -> CR terminology, 3 CR types, multi-system selector, and task linkage
+
+**Wave 4** *(depends on 31.1-03)*
+- [ ] 31.1-04-PLAN.md — SDLC Studio & AI Chat multi-system wiring: auto-load SSH and conventions from CR target systems, E2E verification
 
 ### Phase 32: External Research via Claude Code Headless
 
