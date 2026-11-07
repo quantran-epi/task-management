@@ -23,6 +23,7 @@ import { JiraConfigCard } from '../components/settings/JiraConfigCard';
 import { NineRouterConfigCard } from '../components/settings/NineRouterConfigCard';
 import { KnowledgeServerConfigCard } from '../components/settings/KnowledgeServerConfigCard';
 import { GhostDevConfigCard } from '../components/settings/GhostDevConfigCard';
+import { GlobalConventionsCard } from '../components/settings/GlobalConventionsCard';
 import { McpConfigCard } from '../components/settings/McpConfigCard';
 import { PwaStatusCard } from '../components/settings/PwaStatusCard';
 import { StoragePersistenceCard } from '../components/settings/StoragePersistenceCard';
@@ -229,6 +230,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       ),
       children: (
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <GlobalConventionsCard db={db} />
           <McpConfigCard db={db} />
           <OracleAiToolConfigCard db={db} />
           <SshFsAiToolConfigCard db={db} />
