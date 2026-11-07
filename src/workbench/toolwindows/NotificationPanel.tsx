@@ -7,7 +7,7 @@ import { useNotifications } from '../../hooks/useNotifications';
 import { dismissAlertToday } from '../../db/repositories/notificationRepo';
 import { getTodayDateString } from '../../utils/date';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import { useLayoutStore } from '../store/layoutStore';
+import { useLayoutStore, type LayoutActions } from '../store/layoutStore';
 
 export interface NotificationPanelProps {
   db?: TaskPlannerDatabase | undefined;
@@ -16,7 +16,7 @@ export interface NotificationPanelProps {
 export const NotificationPanel: React.FC<NotificationPanelProps> = ({ db = defaultDb }) => {
   const notifications = useNotifications(db);
   const [activeTab, setActiveTab] = useState<NotificationTabKey>('all');
-  const openTab = useLayoutStore((s) => s.openTab);
+  const openTab = useLayoutStore((s: LayoutActions) => s.openTab);
 
   const items = notifications.items;
 
@@ -71,7 +71,20 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({ db = defau
 
   const handleItemClick = (item: AlertNotificationItem) => {
     if (item.entityId) {
-      const type = item.entityType === 'project' ? 'project' : item.entityType === 'milestone' ? 'milestone' : 'task';
+      let type: 'task' | 'cr' | 'system';
+      switch (item.entityType) {
+        case 'cr':
+          type = 'cr';
+          break;
+        case 'system':
+          type = 'system';
+          break;
+        case 'task':
+        case 'capacity':
+        default:
+          type = 'task';
+          break;
+      }
       openTab({
         id: `${type}-${item.entityId}`,
         title: `${type.toUpperCase()}: ${item.title}`,

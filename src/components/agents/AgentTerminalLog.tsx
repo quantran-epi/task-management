@@ -2128,20 +2128,20 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                           padding: '0 4px',
                           margin: 0,
                           backgroundColor:
-                            skill.source === 'project'
+                            skill.source === 'workspace'
                               ? '#3b0764'
                               : skill.source === 'user'
                               ? '#083344'
                               : '#27272a',
                           color:
-                            skill.source === 'project'
+                            skill.source === 'workspace'
                               ? '#d8b4fe'
                               : skill.source === 'user'
                               ? '#67e8f9'
                               : '#a1a1aa',
                         }}
                       >
-                        {skill.source}
+                        {skill.source === 'workspace' ? 'Workspace' : skill.source}
                       </Tag>
                       {skill.argumentHint && (
                         <span style={{ fontSize: 10, color: '#71717a', fontFamily: 'monospace' }}>

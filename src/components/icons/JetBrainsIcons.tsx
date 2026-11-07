@@ -11,7 +11,7 @@ export interface JetBrainsIconProps {
  * high visual hierarchy, clean geometry, and prominent colors.
  */
 
-// 1. Project Explorer (Warm Amber + Coral + Code bracket)
+// 1. CR Explorer (Warm Amber + Coral + Code bracket)
 export const JetBrainsProjectIcon: React.FC<JetBrainsIconProps> = ({ size = 16, style, className }) => (
   <svg
     viewBox="0 0 24 24"
