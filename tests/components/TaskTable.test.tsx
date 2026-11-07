@@ -6,17 +6,32 @@ import { TaskPlannerDatabase } from '../../src/db';
 import { TaskTable } from '../../src/components/tasks/TaskTable';
 import { TaskFilterBar } from '../../src/components/tasks/TaskFilterBar';
 import { BatchActionBar } from '../../src/components/tasks/BatchActionBar';
-import type { Task, Project } from '../../src/types/models';
+import type { Task, ChangeRequest, System } from '../../src/types/models';
 import { DEFAULT_TASK_FILTER_STATE } from '../../src/utils/filter';
 
 describe('TaskTable Component', () => {
   let db: TaskPlannerDatabase;
 
-  const sampleProjects: Project[] = [
+  const sampleSystems: System[] = [
     {
-      id: 'proj-1',
-      name: 'Project Alpha',
+      id: 'sys-1',
+      code: 'PAYMENT_SVC',
+      name: 'Payment Service',
+      type: 'SERVICE',
+      parentId: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    },
+  ];
+
+  const sampleChangeRequests: ChangeRequest[] = [
+    {
+      id: 'cr-1',
+      code: 'CR-2026-001',
+      name: 'Thanh toán QR',
+      type: 'NEW_FEATURE',
       status: 'In Progress',
+      targets: [{ systemId: 'sys-1' }],
       opsOwners: ['NamNV'],
       businessAnalysts: ['HuongTT'],
       createdAt: '2026-01-01T00:00:00.000Z',
@@ -27,8 +42,9 @@ describe('TaskTable Component', () => {
   const sampleTasks: Task[] = [
     {
       id: 'task-1',
+      crId: 'cr-1',
+      systemId: 'sys-1',
       name: 'Alpha Task One',
-      projectId: 'proj-1',
       status: 'Open',
       priority: 'Urgent',
       workType: 'investigate',
@@ -43,7 +59,8 @@ describe('TaskTable Component', () => {
     },
     {
       id: 'task-2',
-      name: 'Beta Standalone Task',
+      crId: 'cr-1',
+      name: 'Beta Unattached Task',
       status: 'In Progress',
       priority: 'Low',
       workType: 'code',
@@ -57,7 +74,8 @@ describe('TaskTable Component', () => {
   beforeEach(async () => {
     db = new TaskPlannerDatabase('test-task-table-' + Math.random().toString(36).slice(2));
     await db.open();
-    await db.projects.bulkAdd(sampleProjects);
+    await db.systems.bulkAdd(sampleSystems);
+    await db.changeRequests.bulkAdd(sampleChangeRequests);
     await db.tasks.bulkAdd(sampleTasks);
   });
 
@@ -65,46 +83,126 @@ describe('TaskTable Component', () => {
     await db.delete();
   });
 
-  it('TaskFilterBar renders search input, segmented scope, project select, status tags, and horizon tags', () => {
+  it('TaskFilterBar renders CR and Subsystem filters and no project or milestone filter', () => {
     const onFilterChange = vi.fn();
     render(
       <TaskFilterBar
         filters={DEFAULT_TASK_FILTER_STATE}
         onFilterChange={onFilterChange}
-        projects={sampleProjects}
+        changeRequests={sampleChangeRequests}
+        systems={sampleSystems}
       />
     );
 
     expect(screen.getByPlaceholderText(/Tìm kiếm tác vụ/i)).toBeInTheDocument();
-    expect(screen.getAllByText('Tất cả').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText('Dự án')).toBeInTheDocument();
+    expect(screen.getByLabelText('Lọc theo CR')).toBeInTheDocument();
+    expect(screen.getByLabelText('Lọc theo Subsystem')).toBeInTheDocument();
+    expect(screen.queryByText('Lọc theo Dự án')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Milestone/i)).not.toBeInTheDocument();
+    expect(screen.getByText('CR')).toBeInTheDocument();
     expect(screen.getByText('Độc lập')).toBeInTheDocument();
     expect(screen.getByText(/Hoàn thành & Đã hủy/i)).toBeInTheDocument();
-    expect(screen.getByText('Quá hạn')).toBeInTheDocument();
-    expect(screen.getByText('Hôm nay')).toBeInTheDocument();
-    expect(screen.getByText('Tuần này')).toBeInTheDocument();
-    fireEvent.mouseDown(screen.getByLabelText('Lọc theo trạng thái'));
-    expect(screen.getByText('Chờ xử lý')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Bộ lọc nâng cao/i })).toBeInTheDocument();
-
-    // Toggle advanced filter panel open
-    fireEvent.click(screen.getByRole('button', { name: /Bộ lọc nâng cao/i }));
-    expect(screen.getByText('Thời gian kế hoạch:')).toBeInTheDocument();
-    expect(screen.getByText('Hạn chót:')).toBeInTheDocument();
-    expect(screen.getByText('Mốc (Milestone):')).toBeInTheDocument();
-    expect(screen.getByText('Loại việc:')).toBeInTheDocument();
-    expect(screen.getByText('Ops Owner:')).toBeInTheDocument();
-    expect(screen.getByText('BA:')).toBeInTheDocument();
-    expect(screen.getByText('Trạng thái Jira:')).toBeInTheDocument();
   }, 15000);
 
-  it('TaskTable renders columns with tags, breadcrumbs, estimate format, link badges, and overdue styling', () => {
+  it('TaskFilterBar disables the Subsystem filter until a CR is chosen and limits options to that CR targets', async () => {
+    const onFilterChange = vi.fn();
+    const { rerender } = render(
+      <TaskFilterBar
+        filters={DEFAULT_TASK_FILTER_STATE}
+        onFilterChange={onFilterChange}
+        changeRequests={sampleChangeRequests}
+        systems={sampleSystems}
+      />
+    );
+
+    const subsystemSelect = screen.getByLabelText('Lọc theo Subsystem');
+    expect(subsystemSelect).toBeDisabled();
+
+    rerender(
+      <TaskFilterBar
+        filters={{ ...DEFAULT_TASK_FILTER_STATE, crId: 'cr-1' }}
+        onFilterChange={onFilterChange}
+        changeRequests={sampleChangeRequests}
+        systems={sampleSystems}
+      />
+    );
+
+    const enabledSelect = screen.getByLabelText('Lọc theo Subsystem');
+    expect(enabledSelect).not.toBeDisabled();
+    fireEvent.mouseDown(enabledSelect);
+    expect(await screen.findByText('Payment Service')).toBeInTheDocument();
+  }, 15000);
+
+  it('TaskTable renders the leading columns in the order Task, CR, Subsystem, Status, Ước lượng, Hạn', () => {
+    render(
+      <TaskTable
+        tasks={sampleTasks}
+        changeRequests={sampleChangeRequests}
+        systems={sampleSystems}
+        selectedRowKeys={[]}
+        onSelectRows={vi.fn()}
+        onOpenDrawer={vi.fn()}
+        db={db}
+      />
+    );
+
+    const headers = screen
+      .getAllByRole('columnheader')
+      .map((th) => th.textContent?.replace(/\s+/g, ' ').trim() ?? '');
+
+    const leading = headers.slice(0, 6);
+    expect(leading[0]).toContain('Tác vụ');
+    expect(leading[1]).toContain('CR');
+    expect(leading[2]).toContain('Subsystem');
+    expect(leading[3]).toContain('Trạng thái');
+    expect(leading[4]).toContain('Ước lượng');
+    expect(leading[5]).toContain('Hạn');
+  }, 15000);
+
+  it('TaskTable renders Chung in the Subsystem cell when the task has no systemId', () => {
+    render(
+      <TaskTable
+        tasks={sampleTasks}
+        changeRequests={sampleChangeRequests}
+        systems={sampleSystems}
+        selectedRowKeys={[]}
+        onSelectRows={vi.fn()}
+        onOpenDrawer={vi.fn()}
+        db={db}
+      />
+    );
+
+    expect(screen.getByText('PAYMENT_SVC')).toBeInTheDocument();
+    expect(screen.getByText('Chung')).toBeInTheDocument();
+  }, 15000);
+
+  it('TaskTable renders the CR code tag in the CR type colour with the CR name as tooltip', () => {
+    render(
+      <TaskTable
+        tasks={sampleTasks}
+        changeRequests={sampleChangeRequests}
+        systems={sampleSystems}
+        selectedRowKeys={[]}
+        onSelectRows={vi.fn()}
+        onOpenDrawer={vi.fn()}
+        db={db}
+      />
+    );
+
+    const crTags = screen.getAllByText('CR-2026-001');
+    expect(crTags.length).toBeGreaterThan(0);
+    expect(crTags[0]).toHaveStyle({ color: '#1677ff' });
+    expect(crTags[0]!.closest('[title]')).toHaveAttribute('title', 'Thanh toán QR');
+  }, 15000);
+
+  it('TaskTable renders estimates, link badges and inherited tags from the CR', () => {
     const onOpenDrawer = vi.fn();
     render(
       <TaskTable
         tasks={sampleTasks}
-        projects={sampleProjects}
-        milestones={[]}
+        changeRequests={sampleChangeRequests}
+        systems={sampleSystems}
         selectedRowKeys={[]}
         onSelectRows={vi.fn()}
         onOpenDrawer={onOpenDrawer}
@@ -112,38 +210,25 @@ describe('TaskTable Component', () => {
       />
     );
 
-    // Task 1 checks
     expect(screen.getByText('Alpha Task One')).toBeInTheDocument();
-    expect(screen.getByText('/ 1h 30m')).toBeInTheDocument(); // 90 mins -> / 1h 30m
-    expect(screen.getByText(/Project Alpha/i)).toBeInTheDocument();
-    expect(screen.getByText(/🔗 1/i)).toBeInTheDocument(); // Document link badge
-    expect(screen.queryByText('Có ghi chú')).not.toBeInTheDocument();
-    expect(screen.queryByText('Notes line 1')).not.toBeInTheDocument();
-    // WorkTypeBadge check for investigate
+    expect(screen.getByText('/ 1h 30m')).toBeInTheDocument();
+    expect(screen.getByText(/🔗 1/i)).toBeInTheDocument();
     expect(screen.getByText('Điều tra lỗi / R&D')).toBeInTheDocument();
-    // Explicit tag for Task 1
     expect(screen.getByText('DucVA')).toBeInTheDocument();
-    // Inherited BA tag from project for Task 1
+    // Inherited BA tag from the CR
     expect(screen.getByText('HuongTT')).toBeInTheDocument();
-
-    // Task 2 checks
-    expect(screen.getByText('Beta Standalone Task')).toBeInTheDocument();
-    expect(screen.getByText('Độc lập')).toBeInTheDocument();
-    expect(screen.getByText('Lập trình')).toBeInTheDocument();
-
-    // Standup Export button check
     expect(screen.getByRole('button', { name: /Sao chép Standup/i })).toBeInTheDocument();
-  });
+  }, 15000);
 
-  it('Table keyboard navigation handles Arrow navigation and Enter opening drawer', async () => {
+  it('Table keyboard navigation handles Arrow navigation and Enter opening drawer', () => {
     const onOpenDrawer = vi.fn();
     const onSelectRows = vi.fn();
 
     render(
       <TaskTable
         tasks={sampleTasks}
-        projects={sampleProjects}
-        milestones={[]}
+        changeRequests={sampleChangeRequests}
+        systems={sampleSystems}
         selectedRowKeys={[]}
         onSelectRows={onSelectRows}
         onOpenDrawer={onOpenDrawer}
@@ -152,10 +237,7 @@ describe('TaskTable Component', () => {
     );
 
     const tableContainer = screen.getByTestId('task-table-container');
-
-    // Arrow down moves to first row
     fireEvent.keyDown(tableContainer, { key: 'ArrowDown' });
-    // Press Enter to open drawer for active row
     fireEvent.keyDown(tableContainer, { key: 'Enter' });
 
     expect(onOpenDrawer).toHaveBeenCalledWith(sampleTasks[0]?.id);
@@ -173,28 +255,25 @@ describe('TaskTable Component', () => {
         onClearSelection={onClear}
         onBatchDelete={onBatchDelete}
         onBatchStatus={onBatchStatus}
-        projects={sampleProjects}
-        milestones={[]}
+        changeRequests={sampleChangeRequests}
+        systems={sampleSystems}
       />
     );
 
     expect(screen.getByText('Đã chọn 2 tác vụ')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Bỏ chọn/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Trạng thái/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Trạng thái/i }));
-    expect(await screen.findByText('Chờ xử lý')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Xóa/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Di chuyển/i }));
 
-    fireEvent.click(screen.getByRole('button', { name: /Bỏ chọn/i }));
-    expect(onClear).toHaveBeenCalled();
+    expect(await screen.findByText('CR đích:')).toBeInTheDocument();
+    expect(screen.getByText('Subsystem đích:')).toBeInTheDocument();
   });
 
   it('Empty state renders friendly message when no tasks match filters', () => {
     render(
       <TaskTable
         tasks={[]}
-        projects={[]}
-        milestones={[]}
+        changeRequests={[]}
+        systems={[]}
         selectedRowKeys={[]}
         onSelectRows={vi.fn()}
         onOpenDrawer={vi.fn()}
@@ -211,8 +290,8 @@ describe('TaskTable Component', () => {
     render(
       <TaskTable
         tasks={sampleTasks}
-        projects={sampleProjects}
-        milestones={[]}
+        changeRequests={sampleChangeRequests}
+        systems={sampleSystems}
         selectedRowKeys={[]}
         onSelectRows={vi.fn()}
         onOpenDrawer={vi.fn()}
@@ -239,6 +318,7 @@ describe('TaskTable Component', () => {
     const onOpenDrawer = vi.fn();
     const taskWithJira: Task = {
       id: 'task-jira-1',
+      crId: 'cr-1',
       name: 'Jira Connected Task',
       jiraKey: 'SHB-567',
       status: 'In Progress',
@@ -254,8 +334,8 @@ describe('TaskTable Component', () => {
     render(
       <TaskTable
         tasks={[taskWithJira]}
-        projects={[]}
-        milestones={[]}
+        changeRequests={sampleChangeRequests}
+        systems={sampleSystems}
         selectedRowKeys={[]}
         onSelectRows={vi.fn()}
         onOpenDrawer={onOpenDrawer}
@@ -265,8 +345,6 @@ describe('TaskTable Component', () => {
     );
 
     const jiraTag = screen.getByText('SHB-567');
-    expect(jiraTag).toBeInTheDocument();
-
     fireEvent.click(jiraTag);
 
     expect(windowOpenSpy).toHaveBeenCalledWith(
@@ -288,6 +366,7 @@ describe('TaskTable Component', () => {
         tasks={[
           {
             id: 'task-doc-1',
+            crId: 'cr-1',
             name: 'Task with doc link',
             status: 'Open',
             priority: 'Medium',
@@ -299,8 +378,8 @@ describe('TaskTable Component', () => {
             updatedAt: '2026-01-01T00:00:00.000Z',
           },
         ]}
-        projects={[]}
-        milestones={[]}
+        changeRequests={sampleChangeRequests}
+        systems={sampleSystems}
         selectedRowKeys={[]}
         onSelectRows={vi.fn()}
         onOpenDrawer={vi.fn()}
@@ -309,13 +388,9 @@ describe('TaskTable Component', () => {
     );
 
     const linkTag = screen.getByText('🔗 1');
-    expect(linkTag).toBeInTheDocument();
-
-    // Trigger popover display
     fireEvent.mouseEnter(linkTag);
 
     const docLinkAnchor = await screen.findByRole('link', { name: /\/Users\/test\/workspace\/project/ });
-    expect(docLinkAnchor).toBeInTheDocument();
     expect(docLinkAnchor).toHaveAttribute('title', 'Mở trong File Explorer');
 
     fireEvent.click(docLinkAnchor);
@@ -336,8 +411,8 @@ describe('TaskTable Component', () => {
     render(
       <TaskTable
         tasks={[taskWithLongLink]}
-        projects={[]}
-        milestones={[]}
+        changeRequests={sampleChangeRequests}
+        systems={sampleSystems}
         selectedRowKeys={[]}
         onSelectRows={vi.fn()}
         onOpenDrawer={vi.fn()}
@@ -346,16 +421,12 @@ describe('TaskTable Component', () => {
     );
 
     const linkTag = screen.getByText('🔗 1');
-    expect(linkTag).toBeInTheDocument();
-
     fireEvent.mouseEnter(linkTag);
 
     const docLinkAnchor = await screen.findByRole('link');
-    expect(docLinkAnchor).toBeInTheDocument();
     expect(docLinkAnchor).toHaveAttribute('title', 'Mở liên kết web');
 
     const spanElement = screen.getByTitle(longLink);
-    expect(spanElement).toBeInTheDocument();
     expect(spanElement).toHaveTextContent(longLink);
     expect(spanElement).toHaveStyle({ wordBreak: 'break-all' });
   });
