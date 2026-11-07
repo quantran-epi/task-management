@@ -47,6 +47,8 @@ import { updateTask, getTask } from '../../db/repositories/taskRepo';
 import { createNote } from '../../db/repositories/noteRepo';
 import { getProject } from '../../db/repositories/projectRepo';
 import { getMilestone } from '../../db/repositories/milestoneRepo';
+import { getGlobalConventions, loadRepoConventions } from '../../services/conventionService';
+import { buildConventionsSegment } from '../../services/ai/sdlcPromptComposer';
 import { getTodayDateString } from '../../utils/date';
 import dayjs from 'dayjs';
 import { ChatHeader } from './ChatHeader';
@@ -1715,11 +1717,13 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
       // Scoped / global grounding context.
       let systemInstruction = '';
+      let activeProjectId: string | undefined;
       if (effectiveScope.type !== 'global' && effectiveScope.id) {
         try {
           if (effectiveScope.type === 'task') {
             const task = await getTask(effectiveScope.id, db);
             if (task) {
+              if (task.projectId) activeProjectId = task.projectId;
               systemInstruction = await buildItemContextPrompt({
                 entityType: 'task',
                 item: task,
@@ -1728,6 +1732,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
               });
             }
           } else if (effectiveScope.type === 'project') {
+            activeProjectId = effectiveScope.id;
             const project = await getProject(effectiveScope.id, db);
             if (project) {
               systemInstruction = await buildItemContextPrompt({
@@ -1740,6 +1745,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           } else if (effectiveScope.type === 'milestone') {
             const milestone = await getMilestone(effectiveScope.id, db);
             if (milestone) {
+              if (milestone.projectId) activeProjectId = milestone.projectId;
               systemInstruction = await buildItemContextPrompt({
                 entityType: 'milestone',
                 item: milestone,
@@ -1763,6 +1769,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       }
 
       const { taskIds, projectIds, filePaths } = extractMentionedEntityIds(trimmed);
+      if (!activeProjectId && projectIds.length > 0) {
+        activeProjectId = projectIds[0];
+      }
       const mentionedContexts: string[] = [];
       const turnReferences = tabRuntimes.get(turnTabId)?.references ?? [];
       const allFiles = Array.from(new Set([...turnReferences, ...(filePaths || [])]));
@@ -1826,6 +1835,21 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       }
       const toolsForTurn = getToolsForTurn(turnAnalysisMode, dynamicMcpTools);
 
+      let conventionsSegment = '';
+      try {
+        const [globalConv, repoConv] = await Promise.all([
+          getGlobalConventions(db),
+          activeProjectId ? loadRepoConventions(activeProjectId, db) : Promise.resolve(null),
+        ]);
+        conventionsSegment = buildConventionsSegment({
+          global: globalConv,
+          repo: repoConv?.content,
+          repoPath: repoConv?.foundPath,
+        });
+      } catch (err) {
+        logAiChatError('Conventions resolution error', err);
+      }
+
       const todayStr = getTodayDateString();
       const now = dayjs();
       const systemPromptContent = `You are an expert AI assistant embedded inside ${APP_NAME}.
@@ -1863,7 +1887,7 @@ Rules:
 5. Ground every factual claim in retrieved excerpts or file content. Clearly mark your own reasoning, assumptions, and proposals as such.
 6. End the answer with a short "Nguồn" (Sources) list naming the documents/files you used.`
           : ''
-      }`;
+      }${conventionsSegment ? `\n\n${conventionsSegment}` : ''}`;
 
       // Cancelled (Stop) or superseded (a newer send) while staging: nothing may be committed,
       // and nothing may be patched either. Stop already released the staged UI; a newer send

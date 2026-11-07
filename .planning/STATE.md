@@ -96,6 +96,8 @@ Progress: [██████░░░░] 60%
 | `261106-rfe-remote-explorer-picker-and-step2-header-fix` | 2026-11-06 | RemoteGitExplorer & Step2SolutionView | Added remote folder picker modal via SFTP; fixed Step 2 header title nowrap & flex wrap |
 | `261107-0cw-fix-remote-file-explorer-state-loss-when` | 2026-11-06 | RemoteGitExplorer & layoutStore | Auto-reload branches and tree on remount; retain selected branch across toolwindow toggles |
 | `261107-0jk-support-uncommitted-files-in-remotegitex` | 2026-11-06 | RemoteGitExplorer & BottomToolWindow | Show uncommitted files with status tags; fallback reader for untracked; inline rename for xterm tabs |
+| `20261107-sdlc-repo-config-tab` | 2026-11-07 | SDLC Sidebar & RepoConfigView & Step3 | Added dedicated "Cấu hình Repo & SSH" tab to SDLC sidebar; explicit save button and conventions card to Step 3 |
+| `20261107-ai-chat-conventions` | 2026-11-07 | AIChatDrawer & conventionService | Wires Global and Repo conventions into General AI Chat systemPromptContent with fail-safe resolution |
 
 ## Decisions
 
