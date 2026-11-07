@@ -3,8 +3,8 @@ import { Button, Modal, Select, Typography, message, type InputRef } from 'antd'
 import { ThunderboltOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb } from '../db';
-import { getAllProjects } from '../db/repositories/projectRepo';
-import { getAllMilestones } from '../db/repositories/milestoneRepo';
+import { getAllChangeRequests } from '../db/repositories/changeRequestRepo';
+import { getAllSystems } from '../db/repositories/systemRepo';
 import { updateTaskStatus } from '../db/repositories/taskRepo';
 import { deleteTaskWithAllocations } from '../db/repositories/cascadeRepo';
 import { useTimer } from '../hooks/useTimer';
@@ -19,7 +19,7 @@ import { useTaskFilters } from '../hooks/useTaskFilters';
 import { DEFAULT_TASK_FILTER_STATE } from '../utils/filter';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import type { TaskPlannerDatabase } from '../db';
-import type { Task, Project } from '../types/models';
+import type { Task, ChangeRequest, System } from '../types/models';
 import type { AppRoute } from '../types/navigation';
 
 const { Text } = Typography;
@@ -27,10 +27,10 @@ const { Text } = Typography;
 export interface TasksViewProps {
   db?: TaskPlannerDatabase;
   onNavigate?: (route: AppRoute) => void;
-  initialProjectId?: string | null | undefined;
+  initialCrId?: string | null | undefined;
 }
 
-export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, onNavigate, initialProjectId }) => {
+export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, onNavigate, initialCrId }) => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -38,18 +38,22 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, onNavigate
   const [feasibilityOpen, setFeasibilityOpen] = useState(false);
   const [taskSelectModalOpen, setTaskSelectModalOpen] = useState(false);
   const [selectedTaskIdForFeasibility, setSelectedTaskIdForFeasibility] = useState<string | undefined>(undefined);
-  const [selectedProjectIdForFeasibility, setSelectedProjectIdForFeasibility] = useState<string | undefined>(undefined);
+  const [selectedCrIdForFeasibility, setSelectedCrIdForFeasibility] = useState<string | undefined>(undefined);
   const searchInputRef = useRef<InputRef>(null);
   const quickAddInputRef = useRef<InputRef>(null);
 
   // Live queries from IndexedDB
   const tasks = useLiveQuery(() => db.tasks.toArray(), [db]) ?? [];
-  const projects = useLiveQuery(() => getAllProjects(db), [db]) ?? [];
-  const milestones = useLiveQuery(() => getAllMilestones(db), [db]) ?? [];
+  const changeRequests = useLiveQuery(() => getAllChangeRequests(db), [db]) ?? [];
+  const systems = useLiveQuery(() => getAllSystems(db), [db]) ?? [];
 
-  const projectMap = useMemo(() => {
-    return new Map<string, Project>(projects.map((p) => [p.id, p]));
-  }, [projects]);
+  const crMap = useMemo(() => {
+    return new Map<string, ChangeRequest>(changeRequests.map((cr) => [cr.id, cr]));
+  }, [changeRequests]);
+
+  const systemMap = useMemo(() => {
+    return new Map<string, System>(systems.map((s) => [s.id, s]));
+  }, [systems]);
 
   const activeTasksForFeasibility = useMemo(() => {
     return tasks
@@ -58,29 +62,27 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, onNavigate
   }, [tasks]);
 
   const filteredTasksForFeasibility = useMemo(() => {
-    if (!selectedProjectIdForFeasibility) return activeTasksForFeasibility;
-    return activeTasksForFeasibility.filter((t) => t.projectId === selectedProjectIdForFeasibility);
-  }, [activeTasksForFeasibility, selectedProjectIdForFeasibility]);
+    if (!selectedCrIdForFeasibility) return activeTasksForFeasibility;
+    return activeTasksForFeasibility.filter((t) => t.crId === selectedCrIdForFeasibility);
+  }, [activeTasksForFeasibility, selectedCrIdForFeasibility]);
 
-  // Extract distinct Ops Owners and BAs across projects, milestones, tasks for autocomplete
+  // Extract distinct Ops Owners and BAs across CRs and tasks for autocomplete
   const availableOpsOwners = useMemo(() => {
     const set = new Set<string>();
-    for (const p of projects) p.opsOwners?.forEach((o) => set.add(o));
-    for (const m of milestones) m.opsOwners?.forEach((o) => set.add(o));
+    for (const cr of changeRequests) cr.opsOwners?.forEach((o) => set.add(o));
     for (const t of tasks) t.opsOwners?.forEach((o) => set.add(o));
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [projects, milestones, tasks]);
+  }, [changeRequests, tasks]);
 
   const availableBAs = useMemo(() => {
     const set = new Set<string>();
-    for (const p of projects) p.businessAnalysts?.forEach((b) => set.add(b));
-    for (const m of milestones) m.businessAnalysts?.forEach((b) => set.add(b));
+    for (const cr of changeRequests) cr.businessAnalysts?.forEach((b) => set.add(b));
     for (const t of tasks) t.businessAnalysts?.forEach((b) => set.add(b));
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [projects, milestones, tasks]);
+  }, [changeRequests, tasks]);
 
   const handleOpenFeasibility = async (task?: Task) => {
-    setSelectedProjectIdForFeasibility(undefined);
+    setSelectedCrIdForFeasibility(undefined);
     if (task) {
       setFeasibilityTask(task);
       setFeasibilityOpen(true);
@@ -122,14 +124,14 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, onNavigate
     activeFilterCount,
     globalSort,
     setGlobalSort,
-  } = useTaskFilters({ tasks, projects, milestones, db });
+  } = useTaskFilters({ tasks, changeRequests, systems, db });
 
-  // Sync initialProjectId prop from editor tab or caller
+  // Sync initialCrId prop from editor tab or caller
   React.useEffect(() => {
-    if (initialProjectId !== undefined) {
-      setFilter('projectId', initialProjectId);
+    if (initialCrId !== undefined) {
+      setFilter('crId', initialCrId);
     }
-  }, [initialProjectId]);
+  }, [initialCrId]);
 
   const { getTimerForTask, startTimer, pauseTimer } = useTimer();
 
@@ -245,15 +247,15 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, onNavigate
     setDrawerTaskId(null);
   };
 
-  const handleSelectProject = (projectId: string) => {
-    setFilter('projectId', projectId);
-    setFilter('hierarchyScope', 'projects');
+  const handleSelectCr = (crId: string) => {
+    setFilter('crId', crId);
+    setFilter('hierarchyScope', 'cr');
   };
 
   const isFiltered =
     Boolean(debouncedSearch) ||
     filters.hierarchyScope !== 'all' ||
-    Boolean(filters.projectId) ||
+    Boolean(filters.crId) ||
     filters.horizon !== 'all' ||
     filters.statuses.length !== DEFAULT_TASK_FILTER_STATE.statuses.length ||
     filters.priorities.length > 0 ||
@@ -279,7 +281,9 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, onNavigate
 
       {/* 2. Fast Task Creation Bar */}
       <QuickAddBar
-        projects={projects}
+        changeRequests={changeRequests}
+        systems={systems}
+        activeCrId={filters.crId}
         db={db}
         inputRef={quickAddInputRef}
       />
@@ -289,8 +293,8 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, onNavigate
         filters={filters}
         onFilterChange={setFilters}
         onResetFilters={resetFilters}
-        projects={projects}
-        milestones={milestones}
+        changeRequests={changeRequests}
+        systems={systems}
         availableOpsOwners={availableOpsOwners}
         availableBAs={availableBAs}
         searchInputRef={searchInputRef}
@@ -299,12 +303,12 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, onNavigate
       {/* 3. Main Tasks Table */}
       <TaskTable
         tasks={filteredTasks}
-        projects={projects}
-        milestones={milestones}
+        changeRequests={changeRequests}
+        systems={systems}
         selectedRowKeys={selectedRowKeys}
         onSelectRows={setSelectedRowKeys}
         onOpenDrawer={handleOpenDrawer}
-        onSelectProject={handleSelectProject}
+        onSelectCr={handleSelectCr}
         isFiltered={isFiltered}
         db={db}
         onNavigate={onNavigate}
@@ -317,8 +321,8 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, onNavigate
         selectedCount={selectedRowKeys.length}
         selectedRowKeys={selectedRowKeys}
         onClearSelection={() => setSelectedRowKeys([])}
-        projects={projects}
-        milestones={milestones}
+        changeRequests={changeRequests}
+        systems={systems}
         db={db}
       />
 
@@ -353,33 +357,32 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, onNavigate
             Chọn tác vụ để đánh giá công suất và xem trước phân bổ khối lượng công việc:
           </Text>
 
-          {/* Project combobox filter */}
+          {/* CR combobox filter */}
           <div>
             <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-              Dự án:
+              CR:
             </Text>
             <Select
               allowClear
               showSearch
-              placeholder="Lọc theo dự án (Tất cả)"
+              optionFilterProp="label"
+              placeholder="Lọc theo CR (Tất cả)"
               style={{ width: '100%' }}
-              value={selectedProjectIdForFeasibility}
-              onChange={(newProjId) => {
-                setSelectedProjectIdForFeasibility(newProjId);
-                const matchingTasks = !newProjId
+              value={selectedCrIdForFeasibility}
+              onChange={(newCrId) => {
+                setSelectedCrIdForFeasibility(newCrId);
+                const matchingTasks = !newCrId
                   ? activeTasksForFeasibility
-                  : activeTasksForFeasibility.filter((t) => t.projectId === newProjId);
+                  : activeTasksForFeasibility.filter((t) => t.crId === newCrId);
                 if (!matchingTasks.some((t) => t.id === selectedTaskIdForFeasibility)) {
                   setSelectedTaskIdForFeasibility(matchingTasks[0]?.id);
                 }
               }}
-              filterOption={(input, option) =>
-                ((option?.label as string) ?? '').toLowerCase().includes(input.toLowerCase())
-              }
-              options={projects.map((p) => ({
-                value: p.id,
-                label: p.name,
+              options={changeRequests.map((cr) => ({
+                value: cr.id,
+                label: `${cr.code} · ${cr.name}`,
               }))}
+              aria-label="Lọc theo CR"
             />
           </div>
 
@@ -399,26 +402,27 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, onNavigate
                 const task = tasks.find((t) => t.id === option?.value);
                 if (!task) return false;
                 const taskMatch = task.name.toLowerCase().includes(search);
-                const proj = task.projectId ? projectMap.get(task.projectId) : undefined;
-                const projMatch = proj ? proj.name.toLowerCase().includes(search) : false;
-                return taskMatch || projMatch;
+                const cr = task.crId ? crMap.get(task.crId) : undefined;
+                const crMatch = cr ? cr.name.toLowerCase().includes(search) : false;
+                return taskMatch || crMatch;
               }}
               options={filteredTasksForFeasibility.map((t) => {
-                const proj = t.projectId ? projectMap.get(t.projectId) : undefined;
+                const cr = t.crId ? crMap.get(t.crId) : undefined;
+                const system = t.systemId ? systemMap.get(t.systemId) : undefined;
                 return {
                   value: t.id,
                   label: `${t.name} (${t.estimateMinutes > 0 ? `${t.estimateMinutes}m` : 'chưa ước tính'})`,
-                  projectName: proj?.name,
+                  crName: cr ? `${cr.code}${system ? ` · ${system.code}` : ''}` : undefined,
                 };
               })}
               optionRender={(option) => {
-                const projName = (option.data as { projectName?: string } | undefined)?.projectName;
+                const crName = (option.data as { crName?: string } | undefined)?.crName;
                 return (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '2px 0' }}>
                     <Text style={{ lineHeight: 1.3 }}>{option.label}</Text>
-                    {projName && (
+                    {crName && (
                       <Text type="secondary" style={{ fontSize: 11, lineHeight: 1.2 }}>
-                        {projName}
+                        {crName}
                       </Text>
                     )}
                   </div>

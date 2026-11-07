@@ -14,6 +14,7 @@ import {
   Typography,
   Badge,
   Switch,
+  Tooltip,
 } from 'antd';
 import { PlusOutlined, DeleteOutlined, LinkOutlined, SyncOutlined, FolderOpenOutlined, ExportOutlined, RobotOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
@@ -21,8 +22,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { openDocumentLink, browseLocalFolder } from '../../utils/documentLinks';
 import type {
   Task,
-  Project,
-  Milestone,
+  ChangeRequest,
+  System,
   TaskStatus,
   TaskPriority,
   WorkType,
@@ -31,8 +32,8 @@ import type {
 } from '../../types/models';
 import { WORK_TYPES } from '../../types/models';
 import { getTask, updateTask, reparentTask } from '../../db/repositories/taskRepo';
-import { getAllProjects } from '../../db/repositories/projectRepo';
-import { getAllMilestones } from '../../db/repositories/milestoneRepo';
+import { getAllChangeRequests } from '../../db/repositories/changeRequestRepo';
+import { getAllSystems } from '../../db/repositories/systemRepo';
 import { createFocusRestorer } from '../../utils/focus';
 import { useRegisterActiveForm } from '../../context/FormGuardContext';
 import { useAIChat } from '../../context/AIChatContext';
@@ -64,8 +65,8 @@ export interface TaskDrawerProps {
 
 interface TaskDrawerFormValues {
   name: string;
-  projectId?: string;
-  milestoneId?: string;
+  crId?: string;
+  systemId?: string;
   status: TaskStatus;
   priority: TaskPriority;
   workType?: WorkType;
@@ -133,14 +134,14 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
   useRegisterActiveForm('task-drawer', open);
 
   const [form] = Form.useForm<TaskDrawerFormValues>();
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
+  const [systems, setSystems] = useState<System[]>([]);
   const [currentTask, setCurrentTask] = useState<Task | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
   const [ghostDevModalOpen, setGhostDevModalOpen] = useState(false);
-  const selectedProjectId = Form.useWatch('projectId', form);
+  const selectedCrId = Form.useWatch('crId', form);
   const watchHours = Form.useWatch('hours', form);
   const watchMinutes = Form.useWatch('minutes', form);
   const liveEstimateMinutes =
@@ -205,22 +206,22 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
 
     async function loadData() {
       try {
-        const [projList, msList, taskData] = await Promise.all([
-          getAllProjects(db),
-          getAllMilestones(db),
+        const [crList, sysList, taskData] = await Promise.all([
+          getAllChangeRequests(db),
+          getAllSystems(db),
           taskId ? getTask(taskId, db) : Promise.resolve(undefined),
         ]);
 
         if (!mounted) return;
-        setProjects(projList);
-        setMilestones(msList);
+        setChangeRequests(crList);
+        setSystems(sysList);
         setCurrentTask(taskData ?? null);
 
         if (taskData) {
           form.setFieldsValue({
             name: taskData.name,
-            projectId: taskData.projectId || '',
-            milestoneId: taskData.milestoneId || '',
+            crId: taskData.crId || '',
+            systemId: taskData.systemId || '',
             status: taskData.status,
             priority: taskData.priority,
             workType: taskData.workType || 'code',
@@ -297,14 +298,15 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
     }
   };
 
-  const handleProjectChange = (nextProjectId: string) => {
-    form.setFieldValue('projectId', nextProjectId);
-    // Clear milestone if moving to Standalone or if milestone does not belong to new project (D-10)
-    const currentMilestoneId = form.getFieldValue('milestoneId');
-    if (!nextProjectId || currentMilestoneId) {
-      const ms = milestones.find((m) => m.id === currentMilestoneId);
-      if (!ms || ms.projectId !== nextProjectId) {
-        form.setFieldValue('milestoneId', '');
+  const handleCrChange = (nextCrId: string) => {
+    form.setFieldValue('crId', nextCrId);
+    // Clear the subsystem when it is not a target of the new CR (D-46)
+    const currentSystemId = form.getFieldValue('systemId');
+    if (currentSystemId) {
+      const nextCr = changeRequests.find((cr) => cr.id === nextCrId);
+      const stillValid = nextCr?.targets.some((t) => t.systemId === currentSystemId);
+      if (!stillValid) {
+        form.setFieldValue('systemId', '');
       }
     }
   };
@@ -334,17 +336,17 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
 
       setSaving(true);
 
-      const targetProjectId = values.projectId ? values.projectId : undefined;
-      const targetMilestoneId = values.milestoneId ? values.milestoneId : undefined;
+      const targetCrId = values.crId ? values.crId : undefined;
+      const targetSystemId = values.systemId ? values.systemId : undefined;
+      if (!targetCrId) return;
 
-      // Handle reparenting if parent changed
+      // Handle reparenting if the CR or subsystem changed
       const originalTask = await getTask(taskId, db);
       if (
         originalTask &&
-        (originalTask.projectId !== targetProjectId ||
-          originalTask.milestoneId !== targetMilestoneId)
+        (originalTask.crId !== targetCrId || originalTask.systemId !== targetSystemId)
       ) {
-        await reparentTask(taskId, targetProjectId, targetMilestoneId, db);
+        await reparentTask(taskId, targetCrId, targetSystemId, db);
       }
 
       // Compute total minutes (clamped to 6000)
@@ -384,8 +386,8 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
           reminderNote: savedReminders?.[0]?.note,
           checklist: values.checklist ?? [],
           notes: values.notes?.trim() ? values.notes : undefined,
-          projectId: targetProjectId,
-          milestoneId: targetMilestoneId,
+          crId: targetCrId,
+          systemId: targetSystemId,
           isRecurring: values.isRecurring ?? false,
           recurrenceFrequency: values.isRecurring ? values.recurrenceFrequency || 'daily' : undefined,
           recurrenceInterval: values.isRecurring ? values.recurrenceInterval || 1 : undefined,
@@ -419,32 +421,30 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
     onSave?.(updated);
   };
 
-  const filteredMilestones = milestones.filter(
-    (m) => Boolean(selectedProjectId) && m.projectId === selectedProjectId
-  );
+  const filteredSystems = systems.filter((s) => {
+    if (!selectedCrId) return false;
+    const cr = changeRequests.find((c) => c.id === selectedCrId);
+    return Boolean(cr?.targets.some((t) => t.systemId === s.id));
+  });
 
-  const selectedMilestoneId = Form.useWatch('milestoneId', form);
-  const selectedProj = projects.find((p) => p.id === selectedProjectId);
-  const selectedMs = milestones.find((m) => m.id === selectedMilestoneId);
+  const selectedCr = changeRequests.find((cr) => cr.id === selectedCrId);
 
   const inheritedOps = resolveInheritedTags('opsOwners', {}, {
-    project: selectedProj ? { name: selectedProj.name, opsOwners: selectedProj.opsOwners } : undefined,
-    milestone: selectedMs ? { name: selectedMs.name, opsOwners: selectedMs.opsOwners } : undefined,
+    cr: selectedCr ? { name: selectedCr.name, opsOwners: selectedCr.opsOwners } : undefined,
   });
 
   const inheritedBA = resolveInheritedTags('businessAnalysts', {}, {
-    project: selectedProj ? { name: selectedProj.name, businessAnalysts: selectedProj.businessAnalysts } : undefined,
-    milestone: selectedMs ? { name: selectedMs.name, businessAnalysts: selectedMs.businessAnalysts } : undefined,
+    cr: selectedCr ? { name: selectedCr.name, businessAnalysts: selectedCr.businessAnalysts } : undefined,
   });
 
   const opsInheritedText =
     inheritedOps.source !== 'none' && inheritedOps.tags.length > 0
-      ? `Kế thừa: [${inheritedOps.tags.join(', ')}] (từ ${inheritedOps.source === 'milestone' ? 'Milestone' : 'Dự án'})`
+      ? `Kế thừa: [${inheritedOps.tags.join(', ')}] (từ CR)`
       : undefined;
 
   const baInheritedText =
     inheritedBA.source !== 'none' && inheritedBA.tags.length > 0
-      ? `Kế thừa: [${inheritedBA.tags.join(', ')}] (từ ${inheritedBA.source === 'milestone' ? 'Milestone' : 'Dự án'})`
+      ? `Kế thừa: [${inheritedBA.tags.join(', ')}] (từ CR)`
       : undefined;
 
   const workTypeOptions = WORK_TYPES.map((wt) => {
@@ -486,27 +486,39 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
           </Form.Item>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Form.Item name="projectId" label="Dự án">
+            <Form.Item
+              name="crId"
+              label="Change Request (CR)"
+              rules={[{ required: true, message: 'Vui lòng chọn Change Request.' }]}
+            >
               <Select
-                aria-label="Dự án"
-                onChange={handleProjectChange}
-                options={[
-                  { value: '', label: 'Không / Độc lập' },
-                  ...projects.map((p) => ({ value: p.id, label: p.name })),
-                ]}
+                showSearch
+                optionFilterProp="label"
+                aria-label="Change Request (CR)"
+                onChange={handleCrChange}
+                placeholder="Chọn CR"
+                options={changeRequests.map((cr) => ({
+                  value: cr.id,
+                  label: `${cr.code} · ${cr.name}`,
+                }))}
               />
             </Form.Item>
 
-            <Form.Item name="milestoneId" label="Cột mốc">
-              <Select
-                aria-label="Cột mốc"
-                disabled={!selectedProjectId}
-                options={[
-                  { value: '', label: 'Không' },
-                  ...filteredMilestones.map((m) => ({ value: m.id, label: m.name })),
-                ]}
-              />
-            </Form.Item>
+            <Tooltip title={selectedCrId ? '' : 'Chọn CR trước'} placement="top">
+              <span style={{ display: 'block' }}>
+                <Form.Item name="systemId" label="Subsystem">
+                  <Select
+                    aria-label="Subsystem"
+                    disabled={!selectedCrId}
+                    placeholder="Chung (không gắn)"
+                    options={[
+                      { value: '', label: 'Chung (không gắn)' },
+                      ...filteredSystems.map((s) => ({ value: s.id, label: s.name })),
+                    ]}
+                  />
+                </Form.Item>
+              </span>
+            </Tooltip>
           </div>
         </>
       )}

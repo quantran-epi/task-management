@@ -29,9 +29,7 @@ import {
   LinkOutlined,
   FolderOpenOutlined,
   ProjectOutlined,
-  FlagOutlined,
   PlusOutlined,
-  LineChartOutlined,
   FileTextOutlined,
   RobotOutlined,
   ApartmentOutlined,
@@ -39,32 +37,27 @@ import {
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import type { Note } from '../types/models';
-import type { NavigateFunction } from '../types/navigation';
+import type { AppRoute, NavigateFunction } from '../types/navigation';
 import { EntityDiagramsSection } from '../components/diagrams/EntityDiagramsSection';
-import {
-  analyzeTaskInsight,
-  analyzeProjectInsight,
-  analyzeMilestoneInsight,
-  type InsightRecommendation,
-} from '../utils/itemInsight';
+import { analyzeTaskInsight, type InsightRecommendation } from '../utils/itemInsight';
 import { formatMinutes } from '../utils/time';
 import { openDocumentLink, isLocalPath } from '../utils/documentLinks';
 import { getJiraBrowseUrl, openJiraExternalUrl } from '../services/jira/jiraApi';
 import { useTimer } from '../hooks/useTimer';
 import { useAIChat } from '../context/AIChatContext';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
-import { ProjectModal } from '../components/projects/ProjectModal';
-import { MilestoneModal } from '../components/projects/MilestoneModal';
 import { NoteDetailModal } from '../components/notes/NoteDetailModal';
 import { NoteEditor } from '../components/notes/NoteEditor';
 import { updateTask, createTask } from '../db/repositories/taskRepo';
-import { updateProject } from '../db/repositories/projectRepo';
-import { updateMilestone, createMilestone } from '../db/repositories/milestoneRepo';
+import { getAllChangeRequests } from '../db/repositories/changeRequestRepo';
+import { getAllSystems } from '../db/repositories/systemRepo';
 
 const { Title, Text, Paragraph } = Typography;
 
+export type ItemInsightType = 'task' | 'cr' | 'system';
+
 export interface ItemInsightViewProps {
-  itemType: 'task' | 'project' | 'milestone';
+  itemType: ItemInsightType;
   itemId: string;
   onNavigate: NavigateFunction;
   db?: TaskPlannerDatabase;
@@ -97,6 +90,12 @@ const PRIORITY_TAG_COLORS: Record<string, string> = {
   Urgent: 'red',
 };
 
+const CR_TYPE_COLORS: Record<string, string> = {
+  NEW_FEATURE: '#1677ff',
+  ENHANCEMENT: '#52c41a',
+  BUGFIX: '#faad14',
+};
+
 export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
   itemType,
   itemId,
@@ -105,87 +104,78 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
 }) => {
   const { activeTimers, startTimer, pauseTimer } = useTimer();
 
-  // Dialog states for editing items
   const [taskDrawerOpen, setTaskDrawerOpen] = useState(false);
-  const [projectModalOpen, setProjectModalOpen] = useState(false);
-  const [milestoneModalOpen, setMilestoneModalOpen] = useState(false);
   const [inspectingNote, setInspectingNote] = useState<Note | null>(null);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
 
   // Live queries
   const allTasks = useLiveQuery(() => db.tasks.toArray(), [db]) ?? [];
-  const allProjects = useLiveQuery(() => db.projects.toArray(), [db]) ?? [];
-  const allMilestones = useLiveQuery(() => db.milestones.toArray(), [db]) ?? [];
+  const allChangeRequests = useLiveQuery(() => getAllChangeRequests(db), [db]) ?? [];
+  const allSystems = useLiveQuery(() => getAllSystems(db), [db]) ?? [];
   const allWorkSessions = useLiveQuery(() => db.workSessions.toArray(), [db]) ?? [];
   const allAllocations = useLiveQuery(() => db.plannedAllocations.toArray(), [db]) ?? [];
   const allNotes = useLiveQuery(() => db.notes.toArray(), [db]) ?? [];
-  const capacityRules = useLiveQuery(() => db.capacityRules.toArray(), [db]) ?? [];
   const jiraDomainSetting = useLiveQuery(() => db.settings.get('jira_domain'), [db]);
 
   const jiraDomain = typeof jiraDomainSetting?.value === 'string' ? jiraDomainSetting.value : undefined;
+
+  const crMap = useMemo(
+    () => new Map(allChangeRequests.map((cr) => [cr.id, cr])),
+    [allChangeRequests]
+  );
+  const systemMap = useMemo(() => new Map(allSystems.map((s) => [s.id, s])), [allSystems]);
 
   // Selected item
   const currentTask = useMemo(
     () => (itemType === 'task' ? allTasks.find((t) => t.id === itemId) : undefined),
     [itemType, allTasks, itemId]
   );
-  const currentProject = useMemo(
-    () => (itemType === 'project' ? allProjects.find((p) => p.id === itemId) : undefined),
-    [itemType, allProjects, itemId]
+  const currentCr = useMemo(
+    () => (itemType === 'cr' ? allChangeRequests.find((cr) => cr.id === itemId) : undefined),
+    [itemType, allChangeRequests, itemId]
   );
-  const currentMilestone = useMemo(
-    () => (itemType === 'milestone' ? allMilestones.find((m) => m.id === itemId) : undefined),
-    [itemType, allMilestones, itemId]
+  const currentSystem = useMemo(
+    () => (itemType === 'system' ? allSystems.find((s) => s.id === itemId) : undefined),
+    [itemType, allSystems, itemId]
   );
 
   const currentItemTitle =
-    (itemType === 'task' ? currentTask?.name : itemType === 'project' ? currentProject?.name : currentMilestone?.name) || itemId;
+    (itemType === 'task'
+      ? currentTask?.name
+      : itemType === 'cr'
+        ? currentCr?.name
+        : currentSystem?.name) || itemId;
 
   const { registerActiveItem, openChat } = useAIChat();
 
-  // Register active item with AIChatContext
   React.useEffect(() => {
     if (itemId) {
-      return registerActiveItem({
-        type: itemType,
-        id: itemId,
-        title: currentItemTitle,
-      });
+      return registerActiveItem({ type: itemType, id: itemId, title: currentItemTitle });
     }
     return undefined;
   }, [itemType, itemId, currentItemTitle, registerActiveItem]);
 
   const handleAskAI = () => {
-    openChat({
-      type: itemType,
-      id: itemId,
-      title: currentItemTitle,
-    });
+    openChat({ type: itemType, id: itemId, title: currentItemTitle });
   };
 
-  // Parent relationships
-  const parentProject = useMemo(() => {
-    if (currentTask?.projectId) return allProjects.find((p) => p.id === currentTask.projectId);
-    if (currentMilestone?.projectId) return allProjects.find((p) => p.id === currentMilestone.projectId);
+  // Parent relationships — a task has a CR and an optional subsystem (D-46/D-47)
+  const parentCr = useMemo(() => {
+    if (currentTask?.crId) return crMap.get(currentTask.crId);
     return undefined;
-  }, [currentTask, currentMilestone, allProjects]);
+  }, [currentTask, crMap]);
 
-  const parentMilestone = useMemo(() => {
-    if (currentTask?.milestoneId) return allMilestones.find((m) => m.id === currentTask.milestoneId);
+  const parentSystem = useMemo(() => {
+    if (currentTask?.systemId) return systemMap.get(currentTask.systemId);
     return undefined;
-  }, [currentTask, allMilestones]);
+  }, [currentTask, systemMap]);
 
   // Child collections
   const relatedTasks = useMemo(() => {
-    if (itemType === 'project') return allTasks.filter((t) => t.projectId === itemId);
-    if (itemType === 'milestone') return allTasks.filter((t) => t.milestoneId === itemId);
+    if (itemType === 'cr') return allTasks.filter((t) => t.crId === itemId);
+    if (itemType === 'system') return allTasks.filter((t) => t.systemId === itemId);
     return [];
   }, [itemType, allTasks, itemId]);
-
-  const relatedMilestones = useMemo(() => {
-    if (itemType === 'project') return allMilestones.filter((m) => m.projectId === itemId);
-    return [];
-  }, [itemType, allMilestones, itemId]);
 
   const relatedNotes = useMemo(() => {
     return allNotes.filter(
@@ -205,7 +195,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
     );
   }, [allNotes, itemType, itemId]);
 
-  // Insight analysis
+  // Insight analysis (task only — CR/system use the aggregate metrics below)
   const taskAnalysis = useMemo(() => {
     if (!currentTask) return null;
     const taskSessions = allWorkSessions.filter((s) => s.taskId === currentTask.id);
@@ -213,21 +203,25 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
     return analyzeTaskInsight(currentTask, taskSessions, taskAllocations, allTasks, allNotes);
   }, [currentTask, allWorkSessions, allAllocations, allTasks, allNotes]);
 
-  const projectAnalysis = useMemo(() => {
-    if (!currentProject) return null;
-    return analyzeProjectInsight(
-      currentProject,
-      relatedTasks,
-      relatedMilestones,
-      allWorkSessions,
-      allAllocations
-    );
-  }, [currentProject, relatedTasks, relatedMilestones, allWorkSessions, allAllocations]);
-
-  const milestoneAnalysis = useMemo(() => {
-    if (!currentMilestone) return null;
-    return analyzeMilestoneInsight(currentMilestone, relatedTasks, capacityRules);
-  }, [currentMilestone, relatedTasks, capacityRules]);
+  const aggregateMetrics = useMemo(() => {
+    const taskIds = new Set(relatedTasks.map((t) => t.id));
+    const doneTasks = relatedTasks.filter((t) => t.status === 'Done').length;
+    const totalEstimatedMinutes = relatedTasks.reduce((acc, t) => acc + (t.estimateMinutes || 0), 0);
+    const actualSpentMinutes = allWorkSessions
+      .filter((s) => taskIds.has(s.taskId))
+      .reduce((acc, s) => acc + (s.durationMinutes || 0), 0);
+    const plannedMinutes = allAllocations
+      .filter((a) => taskIds.has(a.taskId))
+      .reduce((acc, a) => acc + (a.allocatedMinutes || 0), 0);
+    return {
+      totalTasks: relatedTasks.length,
+      doneTasks,
+      completionRate: relatedTasks.length > 0 ? Math.round((doneTasks / relatedTasks.length) * 100) : 0,
+      totalEstimatedMinutes,
+      actualSpentMinutes,
+      plannedMinutes,
+    };
+  }, [relatedTasks, allWorkSessions, allAllocations]);
 
   // Timer helpers for current task
   const isCurrentTaskTiming = useMemo(() => {
@@ -286,43 +280,43 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
       case 'go-planner':
         onNavigate('planner');
         break;
-      case 'create-task':
-        if (itemType === 'project') {
-          void createTask({ name: 'Tác vụ mới', projectId: itemId, status: 'Open', priority: 'Medium', estimateMinutes: 0 }, db)
-            .then((t) => onNavigate('insight', { type: 'task', id: t.id }));
-        } else if (itemType === 'milestone') {
-          void createTask({
-            name: 'Tác vụ mới',
-            projectId: currentMilestone?.projectId,
-            milestoneId: itemId,
-            status: 'Open',
-            priority: 'Medium',
-            estimateMinutes: 0,
-          }, db).then((t) => onNavigate('insight', { type: 'task', id: t.id }));
-        }
-        break;
       case 'view-tasks':
         onNavigate('tasks');
-        break;
-      case 'create-milestone':
-        setMilestoneModalOpen(true);
-        break;
-      case 'edit-milestone':
-        setMilestoneModalOpen(true);
-        break;
-      case 'view-burndown':
-        onNavigate('analytics', currentMilestone ? { milestoneId: currentMilestone.id } : undefined);
         break;
       default:
         break;
     }
   };
 
+  const handleCreateTaskInCr = async () => {
+    if (!currentCr) return;
+    try {
+      const created = await createTask(
+        {
+          crId: currentCr.id,
+          name: 'Tác vụ mới',
+          status: 'Open',
+          priority: 'Medium',
+          estimateMinutes: 0,
+        },
+        db
+      );
+      onNavigate('insight', { type: 'task', id: created.id, name: created.name });
+    } catch {
+      message.error('Không thể tạo tác vụ');
+    }
+  };
+
+  const openCrDetail = (crId: string) => {
+    // `cr_detail` is rendered by EditorArea (plan 31.2-13); AppRoute has no member yet.
+    onNavigate('cr_detail' as AppRoute, { changeRequestId: crId });
+  };
+
   // If item not found
   const hasItem =
     (itemType === 'task' && currentTask) ||
-    (itemType === 'project' && currentProject) ||
-    (itemType === 'milestone' && currentMilestone);
+    (itemType === 'cr' && currentCr) ||
+    (itemType === 'system' && currentSystem);
 
   if (!hasItem) {
     return (
@@ -376,8 +370,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
             icon={<ArrowLeftOutlined />}
             onClick={() => {
               if (itemType === 'task') onNavigate('tasks');
-              else if (itemType === 'project') onNavigate('projects');
-              else if (itemType === 'milestone') onNavigate('projects');
+              else if (itemType === 'cr' && currentCr) openCrDetail(currentCr.id);
               else onNavigate('dashboard');
             }}
           >
@@ -386,23 +379,35 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
           <Breadcrumb
             items={[
               { title: <a onClick={() => onNavigate('dashboard')}>Tổng quan</a> },
-              ...(parentProject
+              ...(parentCr
                 ? [
                     {
                       title: (
-                        <a onClick={() => onNavigate('insight', { type: 'project', id: parentProject.id, name: parentProject.name })}>
-                          {parentProject.name}
+                        <a
+                          onClick={() =>
+                            onNavigate('insight', { type: 'cr', id: parentCr.id, name: parentCr.name })
+                          }
+                        >
+                          {parentCr.code}
                         </a>
                       ),
                     },
                   ]
                 : []),
-              ...(parentMilestone
+              ...(parentSystem
                 ? [
                     {
                       title: (
-                        <a onClick={() => onNavigate('insight', { type: 'milestone', id: parentMilestone.id, name: parentMilestone.name })}>
-                          {parentMilestone.name}
+                        <a
+                          onClick={() =>
+                            onNavigate('insight', {
+                              type: 'system',
+                              id: parentSystem.id,
+                              name: parentSystem.name,
+                            })
+                          }
+                        >
+                          {parentSystem.code}
                         </a>
                       ),
                     },
@@ -412,9 +417,9 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                 title:
                   itemType === 'task'
                     ? currentTask?.name
-                    : itemType === 'project'
-                    ? currentProject?.name
-                    : currentMilestone?.name,
+                    : itemType === 'cr'
+                      ? currentCr?.code
+                      : currentSystem?.name,
               },
             ]}
           />
@@ -427,20 +432,38 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
           <div>
             <Space align="center" size="small" style={{ marginBottom: 8 }} wrap>
               {itemType === 'task' && <Tag color="blue">Tác vụ</Tag>}
-              {itemType === 'project' && <Tag color="purple">Dự án</Tag>}
-              {itemType === 'milestone' && <Tag color="geekblue">Cột mốc</Tag>}
+              {itemType === 'cr' && <Tag color="purple">Change Request</Tag>}
+              {itemType === 'system' && <Tag color="cyan">Subsystem</Tag>}
 
-              <Tag
-                color={
-                  STATUS_TAG_COLORS[
-                    currentTask?.status || currentProject?.status || currentMilestone?.status || 'Open'
-                  ] ?? 'default'
-                }
-              >
-                {STATUS_LABELS[
-                  currentTask?.status || currentProject?.status || currentMilestone?.status || 'Open'
-                ] ?? 'Mở'}
-              </Tag>
+              {itemType === 'cr' && currentCr && (
+                <Tag color={CR_TYPE_COLORS[currentCr.type] ?? 'default'}>
+                  {currentCr.type === 'NEW_FEATURE'
+                    ? 'Tạo mới'
+                    : currentCr.type === 'ENHANCEMENT'
+                      ? 'Nâng cấp'
+                      : 'Sửa lỗi'}
+                </Tag>
+              )}
+
+              {itemType !== 'cr' && (
+                <Tag
+                  color={
+                    STATUS_TAG_COLORS[
+                      currentTask?.status || currentSystem?.type || 'Open'
+                    ] ?? 'default'
+                  }
+                >
+                  {STATUS_LABELS[
+                    currentTask?.status || currentSystem?.type || 'Open'
+                  ] ?? currentTask?.status ?? currentSystem?.type ?? 'Mở'}
+                </Tag>
+              )}
+
+              {itemType === 'cr' && currentCr && (
+                <Tag color={currentCr.status === 'Done' ? 'success' : 'processing'}>
+                  {currentCr.status}
+                </Tag>
+              )}
 
               {currentTask && (
                 <Tag color={PRIORITY_TAG_COLORS[currentTask.priority] ?? 'default'}>
@@ -463,43 +486,62 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                 </Tooltip>
               )}
 
-              {currentProject?.jiraEpicKey && (
+              {currentCr?.jiraEpicKey && (
                 <Tooltip title="Mở Jira Epic">
                   <Tag
                     color="cyan"
                     icon={<LinkOutlined />}
                     style={{ cursor: 'pointer' }}
                     onClick={() =>
-                      void openJiraExternalUrl(getJiraBrowseUrl(currentProject.jiraEpicKey!, jiraDomain))
+                      void openJiraExternalUrl(getJiraBrowseUrl(currentCr.jiraEpicKey!, jiraDomain))
                     }
                   >
-                    {currentProject.jiraEpicKey}
+                    {currentCr.jiraEpicKey}
                   </Tag>
                 </Tooltip>
               )}
             </Space>
 
             <Title level={3} style={{ margin: 0 }}>
-              {currentTask?.name || currentProject?.name || currentMilestone?.name}
+              {itemType === 'cr' && currentCr ? `${currentCr.code} · ${currentCr.name}` : currentTask?.name || currentSystem?.name}
             </Title>
 
-            {(currentTask?.description || currentProject?.description || currentMilestone?.description) && (
+            {(currentTask?.description || currentCr?.description || currentSystem?.description) && (
               <Paragraph
                 type="secondary"
                 style={{ marginTop: 8, marginBottom: 0, maxWidth: 800, whiteSpace: 'pre-wrap' }}
               >
-                {currentTask?.description || currentProject?.description || currentMilestone?.description}
+                {currentTask?.description || currentCr?.description || currentSystem?.description}
               </Paragraph>
             )}
 
-            {(currentTask?.notes || currentMilestone?.notes) && (
+            {currentTask?.notes && (
               <Paragraph
                 type="secondary"
                 style={{ marginTop: 4, marginBottom: 0, maxWidth: 800, whiteSpace: 'pre-wrap', fontStyle: 'italic' }}
               >
                 <Text strong>Ghi chú: </Text>
-                {currentTask?.notes || currentMilestone?.notes}
+                {currentTask.notes}
               </Paragraph>
+            )}
+
+            {itemType === 'cr' && currentCr && currentCr.targets.length > 0 && (
+              <Space size={4} wrap style={{ marginTop: 8 }}>
+                <Text type="secondary">Subsystem: </Text>
+                {currentCr.targets.map((target) => {
+                  const system = systemMap.get(target.systemId);
+                  return (
+                    <Tag
+                      key={target.systemId}
+                      bordered={false}
+                      style={{ margin: 0, fontFamily: 'monospace', color: '#13c2c2' }}
+                      title={system?.name}
+                    >
+                      {system?.code ?? target.systemId.slice(0, 8)}
+                    </Tag>
+                  );
+                })}
+              </Space>
             )}
           </div>
 
@@ -514,97 +556,28 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                 >
                   {isCurrentTaskTiming ? 'Tạm dừng' : 'Bắt đầu làm'}
                 </Button>
-                <Button
-                  icon={<CheckCircleOutlined />}
-                  onClick={handleToggleTaskStatus}
-                >
+                <Button icon={<CheckCircleOutlined />} onClick={handleToggleTaskStatus}>
                   {currentTask.status === 'Done' ? 'Mở lại' : 'Hoàn thành'}
                 </Button>
-                <Button
-                  icon={<CalendarOutlined />}
-                  onClick={() => onNavigate('planner')}
-                >
+                <Button icon={<CalendarOutlined />} onClick={() => onNavigate('planner')}>
                   Phân bổ lịch
                 </Button>
-                <Button
-                  icon={<EditOutlined />}
-                  onClick={() => setTaskDrawerOpen(true)}
-                >
+                <Button icon={<EditOutlined />} onClick={() => setTaskDrawerOpen(true)}>
                   Chỉnh sửa
                 </Button>
               </>
             )}
 
-            {itemType === 'project' && currentProject && (
+            {itemType === 'cr' && currentCr && (
               <>
                 <Button
                   type="primary"
-                  icon={<EditOutlined />}
-                  onClick={() => setProjectModalOpen(true)}
+                  icon={<ProjectOutlined />}
+                  onClick={() => openCrDetail(currentCr.id)}
                 >
-                  Chỉnh sửa dự án
+                  Mở CR detail
                 </Button>
-                <Button
-                  icon={<PlusOutlined />}
-                  onClick={async () => {
-                    try {
-                      const t = await createTask(
-                        { name: 'Tác vụ mới', projectId: currentProject.id, status: 'Open', priority: 'Medium', estimateMinutes: 0 },
-                        db
-                      );
-                      onNavigate('insight', { type: 'task', id: t.id, name: t.name });
-                    } catch {
-                      message.error('Không thể tạo tác vụ');
-                    }
-                  }}
-                >
-                  Thêm tác vụ
-                </Button>
-                <Button
-                  icon={<FlagOutlined />}
-                  onClick={() => setMilestoneModalOpen(true)}
-                >
-                  Thêm cột mốc
-                </Button>
-              </>
-            )}
-
-            {itemType === 'milestone' && currentMilestone && (
-              <>
-                <Button
-                  type="primary"
-                  icon={<EditOutlined />}
-                  onClick={() => setMilestoneModalOpen(true)}
-                >
-                  Chỉnh sửa mốc
-                </Button>
-                <Button
-                  icon={<LineChartOutlined />}
-                  onClick={() => onNavigate('analytics', { milestoneId: currentMilestone.id })}
-                >
-                  Xem Burndown
-                </Button>
-                <Button
-                  icon={<PlusOutlined />}
-                  onClick={async () => {
-                    try {
-                      const t = await createTask(
-                        {
-                          name: 'Tác vụ mới',
-                          projectId: currentMilestone.projectId,
-                          milestoneId: currentMilestone.id,
-                          status: 'Open',
-                          priority: 'Medium',
-                          estimateMinutes: 0,
-                        },
-                        db
-                      );
-                      onNavigate('insight', { type: 'task', id: t.id, name: t.name });
-                    } catch {
-                      message.error('Không thể tạo tác vụ');
-                    }
-                  }}
-                >
+                <Button icon={<PlusOutlined />} onClick={() => void handleCreateTaskInCr()}>
                   Thêm tác vụ
                 </Button>
               </>
@@ -627,24 +600,24 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
           <Col xs={24} sm={12} md={8}>
             <Text type="secondary">Hạn chót: </Text>
             <Text strong>
-              {currentTask?.deadline || currentProject?.deadline || currentMilestone?.deadline || 'Không có'}
+              {currentTask?.deadline || currentCr?.deadline || 'Không có'}
             </Text>
           </Col>
-          {(currentTask?.opsOwners || currentProject?.opsOwners || currentMilestone?.opsOwners)?.length ? (
+          {(currentTask?.opsOwners || currentCr?.opsOwners)?.length ? (
             <Col xs={24} sm={12} md={8}>
               <Text type="secondary">Ops Owners: </Text>
               <Space size={4} wrap>
-                {(currentTask?.opsOwners || currentProject?.opsOwners || currentMilestone?.opsOwners)!.map((o) => (
+                {(currentTask?.opsOwners || currentCr?.opsOwners)!.map((o) => (
                   <Tag key={o} color="blue">{o}</Tag>
                 ))}
               </Space>
             </Col>
           ) : null}
-          {(currentTask?.businessAnalysts || currentProject?.businessAnalysts || currentMilestone?.businessAnalysts)?.length ? (
+          {(currentTask?.businessAnalysts || currentCr?.businessAnalysts)?.length ? (
             <Col xs={24} sm={12} md={8}>
               <Text type="secondary">BA: </Text>
               <Space size={4} wrap>
-                {(currentTask?.businessAnalysts || currentProject?.businessAnalysts || currentMilestone?.businessAnalysts)!.map((b) => (
+                {(currentTask?.businessAnalysts || currentCr?.businessAnalysts)!.map((b) => (
                   <Tag key={b} color="geekblue">{b}</Tag>
                 ))}
               </Space>
@@ -653,11 +626,11 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
         </Row>
 
         {/* Document Links */}
-        {((currentTask?.documentLinks || currentProject?.documentLinks)?.length ?? 0) > 0 && (
+        {((currentTask?.documentLinks || currentCr?.documentLinks)?.length ?? 0) > 0 && (
           <div style={{ marginTop: 12 }}>
             <Text type="secondary">Tài liệu liên kết: </Text>
             <Space size={8} wrap style={{ marginTop: 4, maxWidth: '100%' }}>
-              {(currentTask?.documentLinks || currentProject?.documentLinks)!.map((link, idx) => (
+              {(currentTask?.documentLinks || currentCr?.documentLinks)!.map((link, idx) => (
                 <Button
                   key={idx}
                   size="small"
@@ -733,13 +706,13 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
         </Row>
       )}
 
-      {itemType === 'project' && projectAnalysis && (
+      {itemType !== 'task' && (
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
           <Col xs={12} sm={6}>
             <Card>
               <Statistic
                 title="Tổng tác vụ"
-                value={projectAnalysis.metrics.totalTasks}
+                value={aggregateMetrics.totalTasks}
                 prefix={<ProjectOutlined />}
               />
             </Card>
@@ -748,7 +721,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
             <Card>
               <Statistic
                 title="Tỉ lệ hoàn thành"
-                value={projectAnalysis.metrics.completionRate}
+                value={aggregateMetrics.completionRate}
                 suffix="%"
                 prefix={<CheckCircleOutlined />}
               />
@@ -758,7 +731,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
             <Card>
               <Statistic
                 title="Tổng ước tính"
-                value={formatMinutes(projectAnalysis.metrics.totalEstimatedMinutes)}
+                value={formatMinutes(aggregateMetrics.totalEstimatedMinutes)}
                 prefix={<ClockCircleOutlined />}
               />
             </Card>
@@ -767,7 +740,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
             <Card>
               <Statistic
                 title="Thời gian đã làm"
-                value={formatMinutes(projectAnalysis.metrics.actualSpentMinutes)}
+                value={formatMinutes(aggregateMetrics.actualSpentMinutes)}
                 prefix={<PlayCircleOutlined />}
               />
             </Card>
@@ -775,62 +748,20 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
         </Row>
       )}
 
-      {itemType === 'milestone' && milestoneAnalysis && (
-        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-          <Col xs={12} sm={6}>
-            <Card>
-              <Statistic
-                title="Tổng tác vụ"
-                value={milestoneAnalysis.metrics.totalTasks}
-                prefix={<FlagOutlined />}
-              />
-            </Card>
-          </Col>
-          <Col xs={12} sm={6}>
-            <Card>
-              <Statistic
-                title="Tỉ lệ hoàn tất"
-                value={milestoneAnalysis.metrics.completionRate}
-                suffix="%"
-                prefix={<CheckCircleOutlined />}
-              />
-            </Card>
-          </Col>
-          <Col xs={12} sm={6}>
-            <Card>
-              <Statistic
-                title="Ước tính còn lại"
-                value={formatMinutes(milestoneAnalysis.metrics.remainingEstimateMinutes)}
-                prefix={<ClockCircleOutlined />}
-              />
-            </Card>
-          </Col>
-          <Col xs={12} sm={6}>
-            <Card>
-              <Statistic
-                title="Ngày còn lại"
-                value={milestoneAnalysis.metrics.daysRemaining ?? 'N/A'}
-                prefix={<CalendarOutlined />}
-              />
-            </Card>
-          </Col>
-        </Row>
+      {/* Pre-implementation Analysis & Recommendations Panel (task only) */}
+      {itemType === 'task' && taskAnalysis && (
+        <Card
+          title={
+            <Space>
+              <ExclamationCircleOutlined style={{ color: '#1677ff' }} />
+              <span>Gợi ý & Phân tích trước khi thực hiện</span>
+            </Space>
+          }
+          style={{ marginBottom: 16 }}
+        >
+          {taskAnalysis.recommendations.map(renderRecommendationAlert)}
+        </Card>
       )}
-
-      {/* Pre-implementation Analysis & Recommendations Panel */}
-      <Card
-        title={
-          <Space>
-            <ExclamationCircleOutlined style={{ color: '#1677ff' }} />
-            <span>Gợi ý & Phân tích trước khi thực hiện</span>
-          </Space>
-        }
-        style={{ marginBottom: 16 }}
-      >
-        {itemType === 'task' && taskAnalysis?.recommendations.map(renderRecommendationAlert)}
-        {itemType === 'project' && projectAnalysis?.recommendations.map(renderRecommendationAlert)}
-        {itemType === 'milestone' && milestoneAnalysis?.recommendations.map(renderRecommendationAlert)}
-      </Card>
 
       {/* Subtasks / Checklist (Task view only) */}
       {itemType === 'task' && currentTask?.checklist && currentTask.checklist.length > 0 && (
@@ -853,8 +784,8 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
         </Card>
       )}
 
-      {/* Child Tasks & Milestones (Project & Milestone views) */}
-      {(itemType === 'project' || itemType === 'milestone') && (
+      {/* Child Tasks (CR & System views) */}
+      {itemType !== 'task' && (
         <Card
           title={`Danh sách tác vụ liên quan (${relatedTasks.length})`}
           style={{ marginBottom: 16 }}
@@ -864,37 +795,47 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
           ) : (
             <List
               dataSource={relatedTasks}
-              renderItem={(t) => (
-                <List.Item
-                  key={t.id}
-                  actions={[
-                    <Button
-                      key="insight"
-                      type="link"
-                      onClick={() => onNavigate('insight', { type: 'task', id: t.id, name: t.name })}
-                    >
-                      Xem chi tiết
-                    </Button>,
-                  ]}
-                >
-                  <List.Item.Meta
-                    title={
-                      <Space>
-                        <Tag color={STATUS_TAG_COLORS[t.status] ?? 'default'}>
-                          {STATUS_LABELS[t.status] ?? 'Mở'}
-                        </Tag>
-                        <Tag color={PRIORITY_TAG_COLORS[t.priority] ?? 'default'}>
-                          {t.priority}
-                        </Tag>
-                        <a onClick={() => onNavigate('insight', { type: 'task', id: t.id, name: t.name })}>
-                          {t.name}
-                        </a>
-                      </Space>
-                    }
-                    description={`Ước tính: ${formatMinutes(t.estimateMinutes)} | Hạn chót: ${t.deadline || 'Không'}`}
-                  />
-                </List.Item>
-              )}
+              renderItem={(t) => {
+                const cr = crMap.get(t.crId);
+                const system = t.systemId ? systemMap.get(t.systemId) : undefined;
+                return (
+                  <List.Item
+                    key={t.id}
+                    actions={[
+                      <Button
+                        key="insight"
+                        type="link"
+                        onClick={() => onNavigate('insight', { type: 'task', id: t.id, name: t.name })}
+                      >
+                        Xem chi tiết
+                      </Button>,
+                    ]}
+                  >
+                    <List.Item.Meta
+                      title={
+                        <Space>
+                          <Tag color={STATUS_TAG_COLORS[t.status] ?? 'default'}>
+                            {STATUS_LABELS[t.status] ?? 'Mở'}
+                          </Tag>
+                          <Tag color={PRIORITY_TAG_COLORS[t.priority] ?? 'default'}>
+                            {t.priority}
+                          </Tag>
+                          {itemType === 'system' && cr && <Tag color="purple">{cr.code}</Tag>}
+                          {itemType === 'cr' && system && (
+                            <Tag bordered={false} style={{ fontFamily: 'monospace', color: '#13c2c2' }}>
+                              {system.code}
+                            </Tag>
+                          )}
+                          <a onClick={() => onNavigate('insight', { type: 'task', id: t.id, name: t.name })}>
+                            {t.name}
+                          </a>
+                        </Space>
+                      }
+                      description={`Ước tính: ${formatMinutes(t.estimateMinutes)} | Hạn chót: ${t.deadline || 'Không'}`}
+                    />
+                  </List.Item>
+                );
+              }}
             />
           )}
         </Card>
@@ -977,39 +918,6 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
           open={taskDrawerOpen}
           onClose={() => setTaskDrawerOpen(false)}
           db={db}
-        />
-      )}
-
-      {currentProject && (
-        <ProjectModal
-          open={projectModalOpen}
-          project={currentProject}
-          onClose={() => setProjectModalOpen(false)}
-          onSave={async (values) => {
-            await updateProject(currentProject.id, values, db);
-            setProjectModalOpen(false);
-            message.success('Đã cập nhật dự án');
-          }}
-          db={db}
-        />
-      )}
-
-      {(currentMilestone || currentProject) && (
-        <MilestoneModal
-          open={milestoneModalOpen}
-          projectId={currentMilestone ? currentMilestone.projectId : currentProject!.id}
-          milestone={currentMilestone || null}
-          onClose={() => setMilestoneModalOpen(false)}
-          onSave={async (values) => {
-            if (currentMilestone) {
-              await updateMilestone(currentMilestone.id, values, db);
-              message.success('Đã cập nhật mốc');
-            } else if (currentProject) {
-              await createMilestone({ ...values, projectId: currentProject.id }, db);
-              message.success('Đã thêm cột mốc mới');
-            }
-            setMilestoneModalOpen(false);
-          }}
         />
       )}
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Button,
   Dropdown,
@@ -16,7 +16,7 @@ import {
   FolderOutlined,
   CloseOutlined,
 } from '@ant-design/icons';
-import type { TaskStatus, Project, Milestone } from '../../types/models';
+import type { TaskStatus, ChangeRequest, System } from '../../types/models';
 import type { TaskPlannerDatabase } from '../../db';
 import { updateTaskStatus, reparentTask } from '../../db/repositories/taskRepo';
 import { deleteTaskWithAllocations } from '../../db/repositories/cascadeRepo';
@@ -27,9 +27,9 @@ export interface BatchActionBarProps {
   onClearSelection: () => void;
   onBatchStatus?: (status: TaskStatus) => Promise<void> | void;
   onBatchDelete?: () => Promise<void> | void;
-  onBatchReparent?: (projectId?: string, milestoneId?: string) => Promise<void> | void;
-  projects?: Project[];
-  milestones?: Milestone[];
+  onBatchReparent?: (crId: string, systemId?: string) => Promise<void> | void;
+  changeRequests?: ChangeRequest[];
+  systems?: System[];
   db?: TaskPlannerDatabase;
 }
 
@@ -60,15 +60,23 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
   onBatchStatus,
   onBatchDelete,
   onBatchReparent,
-  projects = [],
-  milestones = [],
+  changeRequests = [],
+  systems = [],
   db,
 }) => {
   const { token } = theme.useToken();
   const [moveModalOpen, setMoveModalOpen] = useState(false);
-  const [targetProjectId, setTargetProjectId] = useState<string | undefined>(undefined);
-  const [targetMilestoneId, setTargetMilestoneId] = useState<string | undefined>(undefined);
+  const [targetCrId, setTargetCrId] = useState<string | undefined>(undefined);
+  const [targetSystemId, setTargetSystemId] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
+
+  const availableSystems = useMemo(() => {
+    const cr = changeRequests.find((c) => c.id === targetCrId);
+    if (!cr) return [];
+    return cr.targets
+      .map((target) => systems.find((s) => s.id === target.systemId))
+      .filter((s): s is System => Boolean(s));
+  }, [changeRequests, systems, targetCrId]);
 
   if (selectedCount === 0) return null;
 
@@ -120,14 +128,15 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
   };
 
   const handleReparentSubmit = async () => {
+    if (!targetCrId) return;
     try {
       setLoading(true);
       if (onBatchReparent) {
-        await onBatchReparent(targetProjectId, targetMilestoneId);
+        await onBatchReparent(targetCrId, targetSystemId);
       } else if (db) {
         await db.transaction('rw', db.tasks, async () => {
           for (const id of selectedRowKeys) {
-            await reparentTask(id, targetProjectId, targetMilestoneId, db);
+            await reparentTask(id, targetCrId, targetSystemId, db);
           }
         });
       }
@@ -140,10 +149,6 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
       setLoading(false);
     }
   };
-
-  const availableMilestones = milestones.filter(
-    (m) => targetProjectId && m.projectId === targetProjectId
-  );
 
   return (
     <>
@@ -219,40 +224,38 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
         confirmLoading={loading}
         okText="Áp dụng"
         cancelText="Hủy"
+        okButtonProps={{ disabled: !targetCrId }}
         destroyOnClose
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 16 }}>
           <div>
-            <div style={{ marginBottom: 4, fontWeight: 600, fontSize: 12 }}>Dự án đích:</div>
+            <div style={{ marginBottom: 4, fontWeight: 600, fontSize: 12 }}>CR đích:</div>
             <Select
-              allowClear
+              showSearch
+              optionFilterProp="label"
               style={{ width: '100%' }}
-              placeholder="Độc lập (Không thuộc dự án)"
-              value={targetProjectId}
+              placeholder="Chọn CR đích"
+              value={targetCrId}
               onChange={(val) => {
-                setTargetProjectId(val || undefined);
-                setTargetMilestoneId(undefined);
+                setTargetCrId(val || undefined);
+                setTargetSystemId(undefined);
               }}
-              options={[
-                { label: 'Độc lập (Không thuộc dự án)', value: '' },
-                ...projects.map((p) => ({ label: p.name, value: p.id })),
-              ]}
+              options={changeRequests.map((cr) => ({ label: `${cr.code} · ${cr.name}`, value: cr.id }))}
+              aria-label="CR đích"
             />
           </div>
 
           <div>
-            <div style={{ marginBottom: 4, fontWeight: 600, fontSize: 12 }}>Cột mốc đích:</div>
+            <div style={{ marginBottom: 4, fontWeight: 600, fontSize: 12 }}>Subsystem đích:</div>
             <Select
               allowClear
               style={{ width: '100%' }}
-              placeholder="Gốc dự án (Không thuộc cột mốc)"
-              value={targetMilestoneId}
-              onChange={(val) => setTargetMilestoneId(val || undefined)}
-              disabled={!targetProjectId || availableMilestones.length === 0}
-              options={[
-                { label: 'Gốc dự án (Không thuộc cột mốc)', value: '' },
-                ...availableMilestones.map((m) => ({ label: m.name, value: m.id })),
-              ]}
+              placeholder="Chung (không gắn)"
+              value={targetSystemId}
+              onChange={(val) => setTargetSystemId(val || undefined)}
+              disabled={!targetCrId || availableSystems.length === 0}
+              options={availableSystems.map((s) => ({ label: s.name, value: s.id }))}
+              aria-label="Subsystem đích"
             />
           </div>
         </div>
