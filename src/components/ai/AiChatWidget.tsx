@@ -542,7 +542,10 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
         isStreaming={isTurnActive}
         {...(placeholder !== undefined ? { placeholder } : {})}
         {...(autoFocus !== undefined ? { autoFocus } : {})}
-        disabled={disabled || awaitingApproval}
+        // Approval is answerable two ways: the card buttons, or typing yes/no (the placeholder
+        // says so and `handleSendTurn` intercepts it). Disabling the composer here made the
+        // typed path unreachable.
+        disabled={disabled}
         {...(attachedFiles ? { attachedFiles } : {})}
         {...(onAttachFile ? { onAttachFile } : {})}
         {...(onRemoveFile ? { onRemoveFile } : {})}

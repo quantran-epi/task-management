@@ -18,19 +18,25 @@ describe('ChatInputBar - Mentions & Command Palette', () => {
     vi.clearAllMocks();
     db = new TaskPlannerDatabase(`test-chat-input-${Date.now()}-${Math.random()}`);
 
-    await db.projects.bulkAdd([
+    await db.changeRequests.bulkAdd([
       {
         id: 'proj-1',
+        code: 'CR-101',
         name: 'Task Management App',
         status: 'In Progress',
+        type: 'ENHANCEMENT',
+        targets: [],
         jiraEpicKey: 'PROJ-101',
         createdAt: '2026-10-01',
         updatedAt: '2026-10-01',
       },
       {
         id: 'proj-2',
+        code: 'CR-102',
         name: 'Infrastructure & DevOps',
         status: 'Pending',
+        type: 'ENHANCEMENT',
+        targets: [],
         createdAt: '2026-10-01',
         updatedAt: '2026-10-01',
       },
@@ -43,7 +49,7 @@ describe('ChatInputBar - Mentions & Command Palette', () => {
         status: 'Open',
         priority: 'High',
         jiraKey: 'AUTH-12',
-        projectId: 'proj-1',
+        crId: 'proj-1',
         progress: 0,
         estimateMinutes: 60,
         createdAt: '2026-10-01',
@@ -54,7 +60,7 @@ describe('ChatInputBar - Mentions & Command Palette', () => {
         name: 'Design command palette UI',
         status: 'In Progress',
         priority: 'Medium',
-        projectId: 'proj-1',
+        crId: 'proj-1',
         progress: 25,
         estimateMinutes: 90,
         createdAt: '2026-10-01',
@@ -63,16 +69,16 @@ describe('ChatInputBar - Mentions & Command Palette', () => {
     ]);
   });
 
-  it('does not scan task, project, or document corpora before mention search starts', async () => {
+  it('does not scan task, CR, or document corpora before mention search starts', async () => {
     const taskRead = vi.spyOn(db.tasks, 'toArray');
-    const projectRead = vi.spyOn(db.projects, 'toArray');
+    const crRead = vi.spyOn(db.changeRequests, 'toArray');
     const noteRead = vi.spyOn(db.notes, 'toArray');
 
     render(<ChatInputBar onSubmit={vi.fn()} db={db} />);
     await new Promise((resolve) => setTimeout(resolve, 30));
 
     expect(taskRead).not.toHaveBeenCalled();
-    expect(projectRead).not.toHaveBeenCalled();
+    expect(crRead).not.toHaveBeenCalled();
     expect(noteRead).not.toHaveBeenCalled();
   });
 
@@ -238,12 +244,12 @@ describe('ChatInputBar - Mentions & Command Palette', () => {
 });
 
 describe('extractMentionedEntityIds', () => {
-  it('extracts task and project IDs from markdown links and shorthand', () => {
-    const text = 'Kiểm tra @[Fix auth](task:task-123) và #[DevOps Infra](project:proj-999) cùng @task:task-456';
+  it('extracts task and CR IDs from markdown links and shorthand', () => {
+    const text = 'Kiểm tra @[Fix auth](task:task-123) và #[DevOps Infra](cr:proj-999) cùng @task:task-456';
     const result = extractMentionedEntityIds(text);
 
     expect(result.taskIds).toEqual(['task-123', 'task-456']);
-    expect(result.projectIds).toEqual(['proj-999']);
+    expect(result.crIds).toEqual(['proj-999']);
   });
 
   it('extracts document IDs from @doc:uuid (Title) and @[Title](doc:uuid)', () => {
@@ -258,7 +264,7 @@ describe('extractMentionedEntityIds', () => {
     const result = extractMentionedEntityIds(text);
 
     expect(result.taskIds).toEqual([]);
-    expect(result.projectIds).toEqual([]);
+    expect(result.crIds).toEqual([]);
   });
 
   it('deduplicates duplicate IDs', () => {
@@ -275,9 +281,9 @@ describe('renderUserMessageWithMentions', () => {
     expect(rendered).toBe('Xin chào');
   });
 
-  it('renders pills for task, project, and document mentions', () => {
+  it('renders pills for task, CR, and document mentions', () => {
     const { container } = render(
-      <div>{renderUserMessageWithMentions('Xem @[Fix auth](task:t-1), #[Dự án](project:p-1) và @[Sổ tay kiến trúc](doc:d-1)')}</div>
+      <div>{renderUserMessageWithMentions('Xem @[Fix auth](task:t-1), #[Dự án](cr:p-1) và @[Sổ tay kiến trúc](doc:d-1)')}</div>
     );
 
     expect(container.textContent).toContain('Fix auth');

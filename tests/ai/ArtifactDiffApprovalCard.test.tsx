@@ -35,7 +35,7 @@ describe('ArtifactDiffApprovalCard through shared widget', () => {
     const db = new TaskPlannerDatabase(`patch-card-${crypto.randomUUID()}`);
     try {
       const coordinator = createSdlcWorkflowCoordinator({
-        projectId: crypto.randomUUID(), threadId: crypto.randomUUID(),
+        changeRequestId: crypto.randomUUID(), threadId: crypto.randomUUID(),
       });
       await coordinator.startOrUpdateIntake({ cr: 'CR', featureName: 'Test', author: 'Tester',
         requestingUnit: 'IT', date: '2026-11-05' }, 'PL01', 'PL02');
@@ -59,7 +59,8 @@ describe('ArtifactDiffApprovalCard through shared widget', () => {
       expect(screen.getByText('SOLUTION · phiên bản 1 · mục 1.1')).toBeInTheDocument();
       expect(screen.getByText('+1 dòng thêm')).toBeInTheDocument();
       expect(screen.getByText('−0 dòng xóa')).toBeInTheDocument();
-      expect(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI')).toBeDisabled();
+      // The composer stays enabled while parked so a typed yes/no can resolve the approval.
+      expect(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI')).not.toBeDisabled();
       expect(screen.queryByTestId('ai-staged-loading')).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Chấp thuận' }));
       expect(props.onResolveApproval).toHaveBeenCalledExactlyOnceWith(true);

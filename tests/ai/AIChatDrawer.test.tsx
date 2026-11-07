@@ -88,10 +88,12 @@ describe('ChatHeader', () => {
   });
 });
 
+const CR_ID = '44444444-4444-4444-8444-444444444444';
+
 describe('AIChatDrawer', () => {
   let db: TaskPlannerDatabase;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     localStorage.clear();
     clearGroundedTurnTestHooks();
@@ -104,6 +106,17 @@ describe('AIChatDrawer', () => {
     vi.spyOn(graphitiMcpClient, 'getGraphitiMcpToolDefinitions').mockResolvedValue([]);
     vi.spyOn(mcpClient, 'discoverAllMcpTools').mockResolvedValue([]);
     db = new TaskPlannerDatabase(`test-aichat-drawer-${Date.now()}-${Math.random()}`);
+    // `create_task` requires a CR (plan 01); every mutation test targets this one.
+    await db.changeRequests.add({
+      id: CR_ID,
+      code: 'CR-AIDRAWER-01',
+      name: 'AI Drawer CR',
+      status: 'Open',
+      type: 'ENHANCEMENT',
+      targets: [],
+      createdAt: '2026-10-01T00:00:00.000Z',
+      updatedAt: '2026-10-01T00:00:00.000Z',
+    });
   });
 
   afterEach(() => {
@@ -294,7 +307,7 @@ describe('AIChatDrawer', () => {
 
   it('allows in-drawer item picker to switch scope between global, task, project, and milestone', async () => {
     // Populate dummy task, project, and milestone
-    await db.projects.add({
+    await db.changeRequests.add({
       id: 'p-1',
       name: 'Dự án Alpha',
       status: 'In Progress',
@@ -604,6 +617,7 @@ describe('AIChatDrawer', () => {
               function: {
                 name: 'create_task',
                 arguments: JSON.stringify({
+                  crId: CR_ID,
                   name: 'Tác vụ được tạo bởi AI',
                   priority: 'High',
                   estimateMinutes: 90,
@@ -744,6 +758,7 @@ describe('AIChatDrawer', () => {
               function: {
                 name: 'create_task',
                 arguments: JSON.stringify({
+                  crId: CR_ID,
                   name: 'Tác vụ xác nhận bằng chữ',
                 }),
               },
@@ -810,6 +825,7 @@ describe('AIChatDrawer', () => {
               function: {
                 name: 'create_task_ide', // Cloaked name from 9router Antigravity
                 arguments: JSON.stringify({
+                  crId: CR_ID,
                   name: 'Tác vụ cloaked _ide',
                 }),
               },
@@ -911,6 +927,7 @@ describe('AIChatDrawer', () => {
               function: {
                 name: 'create_task',
                 arguments: JSON.stringify({
+                  crId: CR_ID,
                   name: 'Tác vụ tự động duyệt',
                   priority: 'High',
                 }),
@@ -1497,7 +1514,7 @@ describe('AIChatDrawer', () => {
                 type: 'function',
                 function: {
                   name: 'create_task',
-                  arguments: JSON.stringify({ name: 'Task khong duoc tao trong analysis mode' }),
+                  arguments: JSON.stringify({ crId: CR_ID, name: 'Task khong duoc tao trong analysis mode' }),
                 },
               },
             ],

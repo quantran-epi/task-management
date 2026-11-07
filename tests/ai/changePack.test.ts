@@ -215,11 +215,11 @@ describe('persistConfirmedPack', () => {
     db = new TaskPlannerDatabase(`confirmed-pack-${Date.now()}-${Math.random()}`);
     await db.open();
     const project: Project = { id: projectId, name: 'Pack project', status: 'Open', createdAt: now, updatedAt: now };
-    await db.projects.add(project);
+    await db.changeRequests.add(project);
     await db.chatThreads.add({
       id: threadId,
-      scopeKey: `project:${projectId}`,
-      scopeType: 'project',
+      scopeKey: `cr:${projectId}`,
+      scopeType: 'cr',
       entityId: projectId,
       createdAt: now,
       updatedAt: now,
@@ -251,7 +251,7 @@ describe('persistConfirmedPack', () => {
 
   async function preparePack() {
     const solution = await saveSolutionVersion({
-      projectId,
+      changeRequestId: projectId,
       threadId,
       sessionId,
       inputRevision: 1,
@@ -291,7 +291,7 @@ describe('persistConfirmedPack', () => {
   it('persists every validated entry, ordered membership, and one pinned event', async () => {
     const { solution, manifest } = await preparePack();
     const result = await persistConfirmedPack({
-      projectId,
+      changeRequestId: projectId,
       threadId,
       sessionId,
       inputRevision: 2,
@@ -306,7 +306,7 @@ describe('persistConfirmedPack', () => {
     expect(result.created).toBe(true);
     expect(result.notes).toHaveLength(manifest.entries.length);
     expect(result.notes.map((note) => note.sdlcArtifact?.kind === 'CHANGE_PACK_ENTRY' ? note.sdlcArtifact.path : undefined)).toEqual(manifest.entries.map((entry) => entry.path));
-    const set = await db.documentSets.filter((candidate) => candidate.sdlc?.projectId === projectId).first();
+    const set = await db.documentSets.filter((candidate) => candidate.sdlc?.changeRequestId === projectId).first();
     expect(set?.documentIds.slice(-manifest.entries.length)).toEqual(result.notes.map((note) => note.id));
     expect((await db.chatMessages.where('threadId').equals(threadId).toArray()).filter((message) => message.content.includes(manifest.packHash))).toHaveLength(1);
   });
@@ -314,7 +314,7 @@ describe('persistConfirmedPack', () => {
   it('deduplicates replay and rolls injected mid-transaction failure back fully', async () => {
     const { solution, manifest } = await preparePack();
     const input = {
-      projectId,
+      changeRequestId: projectId,
       threadId,
       sessionId,
       inputRevision: 2,
@@ -349,7 +349,7 @@ describe('persistConfirmedPack', () => {
     const { solution, manifest } = await preparePack();
     const before = { notes: await db.notes.count(), sets: await db.documentSets.count(), messages: await db.chatMessages.count() };
     const base = {
-      projectId,
+      changeRequestId: projectId,
       threadId,
       sessionId,
       inputRevision: 2,

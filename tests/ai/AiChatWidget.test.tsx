@@ -281,11 +281,11 @@ describe('AiChatWidget lifecycle and host extension points (D-01..D-06, D-19, D-
       />
     );
 
+    // The composer stays enabled while parked: the placeholder documents a typed yes/no answer
+    // and the host intercepts it, so disabling the input made that path unreachable.
     const input = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
-    expect(input).toBeDisabled();
-    fireEvent.keyDown(input, { key: 'Enter', ctrlKey: true });
-    expect(input).toHaveValue('Giữ bản nháp');
-    expect(screen.getByRole('button', { name: 'Gửi tin nhắn' })).toBeDisabled();
+    expect(input).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Gửi tin nhắn' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'Gửi tiếp' })).not.toBeInTheDocument();
     expect(screen.queryByTestId('ai-staged-loading')).not.toBeInTheDocument();
     expect(screen.getByText('Yêu cầu xác nhận thay đổi dữ liệu')).toBeInTheDocument();
@@ -488,7 +488,7 @@ describe('chatRepo artifactEvent persistence (D-22, T-25.3-43)', () => {
 
   beforeEach(async () => {
     db = new TaskPlannerDatabase(`test-artifact-event-${Date.now()}-${Math.random()}`);
-    const thread = await createOrGetThread({ scopeType: 'project', entityId: 'p-1' }, db);
+    const thread = await createOrGetThread({ scopeType: 'cr', entityId: 'p-1' }, db);
     threadId = thread.id;
   });
 

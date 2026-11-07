@@ -88,7 +88,7 @@ describe('Phase 25 wizard reference contract', () => {
 
 describe('wizard service behavior producer contracts', () => {
   const identity = {
-    projectId: '25000000-0000-4000-8000-000000000001',
+    changeRequestId: '25000000-0000-4000-8000-000000000001',
     threadId: '25000000-0000-4000-8000-000000000101',
     sessionId: '25000000-0000-4000-8000-000000000201',
     inputRevision: 1,
@@ -336,7 +336,7 @@ describe('F01-F16 deterministic acceptance matrix', () => {
 
 describe('wizard proposal stage contracts', () => {
   const identity = {
-    projectId: '25000000-0000-4000-8000-000000000001',
+    changeRequestId: '25000000-0000-4000-8000-000000000001',
     threadId: '25000000-0000-4000-8000-000000000101',
     sessionId: '25000000-0000-4000-8000-000000000201',
     inputRevision: 2,
@@ -402,7 +402,7 @@ describe('wizard proposal stage contracts', () => {
       ...identity, kind: 'PL03', model: complete, isCurrent: () => true,
       payload: {
         evidence, featureMode: 'existing',
-        pinnedSolution: { artifactId: '25000000-0000-4000-8000-000000000301', version: 2, hash, projectId: identity.projectId, threadId: identity.threadId },
+        pinnedSolution: { artifactId: '25000000-0000-4000-8000-000000000301', version: 2, hash, changeRequestId: identity.changeRequestId, threadId: identity.threadId },
         reconciliation: { coverage: 'PARTIAL', included: ['src/a.ts'], deferred: ['src/b.ts'] },
       },
     });
@@ -427,9 +427,9 @@ describe('wizard proposal stage contracts', () => {
       payload: {
         evidence,
         sources: [
-          { kind: 'PL02', artifactId: '25000000-0000-4000-8000-000000000302', version: 2, hash, projectId: identity.projectId, threadId: identity.threadId, approved: true },
-          { kind: 'PL03B', artifactId: '25000000-0000-4000-8000-000000000303', version: 1, hash, projectId: identity.projectId, threadId: identity.threadId, approved: true },
-          { kind: 'PL07', artifactId: '25000000-0000-4000-8000-000000000304', version: 1, hash, projectId: identity.projectId, threadId: identity.threadId, approved: true },
+          { kind: 'PL02', artifactId: '25000000-0000-4000-8000-000000000302', version: 2, hash, changeRequestId: identity.changeRequestId, threadId: identity.threadId, approved: true },
+          { kind: 'PL03B', artifactId: '25000000-0000-4000-8000-000000000303', version: 1, hash, changeRequestId: identity.changeRequestId, threadId: identity.threadId, approved: true },
+          { kind: 'PL07', artifactId: '25000000-0000-4000-8000-000000000304', version: 1, hash, changeRequestId: identity.changeRequestId, threadId: identity.threadId, approved: true },
         ],
         expectedVersions: { PL02: 1, PL03B: 1, PL07: 1 },
       },

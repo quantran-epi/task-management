@@ -15,7 +15,7 @@ import {
 vi.mock('../../src/utils/pptxExport', () => ({ exportPresentationAsFile: vi.fn() }));
 
 const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
-const SCOPE = { type: 'project' as const, id: PROJECT_ID, title: 'Restore Project' };
+const SCOPE = { type: 'cr' as const, id: PROJECT_ID, title: 'Restore Project' };
 const TS = '2026-10-30T00:00:00.000Z';
 const SESSION_ID = '22222222-2222-4222-8222-222222222222';
 const MISSING_NOTE = 'aaaaaaaa-aaaa-4aaa-8aaa-000000000001';
@@ -104,10 +104,13 @@ describe('AIChatDrawer restored-source recovery (D-30)', () => {
     });
     db = new TaskPlannerDatabase(`restore-${Date.now()}-${Math.random()}`);
     await db.open();
-    await db.projects.add({
+    await db.changeRequests.add({
       id: PROJECT_ID,
+        code: 'CR-AI-01',
       name: 'Restore Project',
       status: 'Open',
+        type: 'ENHANCEMENT',
+        targets: [],
       createdAt: TS,
       updatedAt: TS,
     });

@@ -69,11 +69,11 @@ let db: TaskPlannerDatabase;
 beforeEach(async () => {
   db = new TaskPlannerDatabase(`hub-export-${Date.now()}-${Math.random()}`);
   await db.open();
-  await db.projects.add(project);
+  await db.changeRequests.add(project);
   await db.chatThreads.add({
     id: THREAD_ID,
-    scopeKey: `project:${PROJECT_ID}`,
-    scopeType: 'project',
+    scopeKey: `cr:${PROJECT_ID}`,
+    scopeType: 'cr',
     entityId: PROJECT_ID,
     createdAt: NOW,
     updatedAt: NOW,
@@ -114,7 +114,7 @@ async function seedPl03bNote(exportPayload: unknown = pl03bPayload): Promise<voi
     id: PL03B_NOTE_ID,
     type: 'document',
     tags: ['sdlc', 'pl03b'],
-    entityType: 'project',
+    entityType: 'cr',
     entityId: PROJECT_ID,
     title: 'PL03B v1',
     body: JSON.stringify({ markdown: '# PL03B v1', exportPayload }),
@@ -182,8 +182,8 @@ describe('toPl02DocxPayload', () => {
 describe('ensurePl02ArtifactNote', () => {
   it('writes one Note and returns the same id for the same content hash', async () => {
     const state = await seedPl02(await defaultSha256(PL02_MARKDOWN));
-    const first = await ensurePl02ArtifactNote({ db, projectId: PROJECT_ID, threadId: THREAD_ID, sessionId: SESSION_ID, markdown: PL02_MARKDOWN, metadata, state });
-    const second = await ensurePl02ArtifactNote({ db, projectId: PROJECT_ID, threadId: THREAD_ID, sessionId: SESSION_ID, markdown: PL02_MARKDOWN, metadata, state });
+    const first = await ensurePl02ArtifactNote({ db, changeRequestId: PROJECT_ID, threadId: THREAD_ID, sessionId: SESSION_ID, markdown: PL02_MARKDOWN, metadata, state });
+    const second = await ensurePl02ArtifactNote({ db, changeRequestId: PROJECT_ID, threadId: THREAD_ID, sessionId: SESSION_ID, markdown: PL02_MARKDOWN, metadata, state });
 
     expect(second.noteId).toBe(first.noteId);
     expect(await db.notes.count()).toBe(1);
@@ -191,9 +191,9 @@ describe('ensurePl02ArtifactNote', () => {
 
   it('returns a new Note at version 2 when the PL02 markdown changed', async () => {
     const state = await seedPl02(await defaultSha256(PL02_MARKDOWN), 1);
-    const first = await ensurePl02ArtifactNote({ db, projectId: PROJECT_ID, threadId: THREAD_ID, sessionId: SESSION_ID, markdown: PL02_MARKDOWN, metadata, state });
+    const first = await ensurePl02ArtifactNote({ db, changeRequestId: PROJECT_ID, threadId: THREAD_ID, sessionId: SESSION_ID, markdown: PL02_MARKDOWN, metadata, state });
     const second = await ensurePl02ArtifactNote({
-      db, projectId: PROJECT_ID, threadId: THREAD_ID, sessionId: SESSION_ID,
+      db, changeRequestId: PROJECT_ID, threadId: THREAD_ID, sessionId: SESSION_ID,
       markdown: '# PL02\nBản cập nhật.', metadata, state,
     });
 
@@ -207,7 +207,7 @@ describe('ensurePl02ArtifactNote', () => {
     const state = await seedPl02(hash);
     expect(state.artifacts.pl02?.noteId).toBeUndefined();
 
-    const pin = await ensurePl02ArtifactNote({ db, projectId: PROJECT_ID, threadId: THREAD_ID, sessionId: SESSION_ID, markdown: PL02_MARKDOWN, metadata, state });
+    const pin = await ensurePl02ArtifactNote({ db, changeRequestId: PROJECT_ID, threadId: THREAD_ID, sessionId: SESSION_ID, markdown: PL02_MARKDOWN, metadata, state });
 
     const note = await db.notes.get(pin.noteId);
     expect(note?.sdlcArtifact?.inputHash).toBe(hash);
@@ -219,7 +219,7 @@ describe('exportHubArtifact', () => {
   it('exports PL02 as a saved Note whose body carries markdown and the export payload', async () => {
     const state = await seedPl02(await defaultSha256(PL02_MARKDOWN));
     const result = await exportHubArtifact({
-      db, kind: 'PL02', projectId: PROJECT_ID, threadId: THREAD_ID, sessionId: SESSION_ID,
+      db, kind: 'PL02', changeRequestId: PROJECT_ID, threadId: THREAD_ID, sessionId: SESSION_ID,
       metadata, state, downloadFile: downloader({ kind: 'download_initiated', filename: 'x.docx' }),
     });
 
@@ -238,7 +238,7 @@ describe('exportHubArtifact', () => {
   it('reads a stored PL03B payload instead of rebuilding it', async () => {
     await seedPl03bNote();
     const result = await exportHubArtifact({
-      db, kind: 'PL03B', projectId: PROJECT_ID, threadId: THREAD_ID, sessionId: SESSION_ID,
+      db, kind: 'PL03B', changeRequestId: PROJECT_ID, threadId: THREAD_ID, sessionId: SESSION_ID,
       metadata, state: stateWithPl03b(await defaultSha256(PL02_MARKDOWN)),
       downloadFile: downloader({ kind: 'save_picker_saved', filename: 'x.docx' }),
     });
@@ -251,7 +251,7 @@ describe('exportHubArtifact', () => {
     await seedPl03bNote({ kind: 'PL03B', garbage: true });
     const before = await db.notes.count();
     const result = await exportHubArtifact({
-      db, kind: 'PL03B', projectId: PROJECT_ID, threadId: THREAD_ID, sessionId: SESSION_ID,
+      db, kind: 'PL03B', changeRequestId: PROJECT_ID, threadId: THREAD_ID, sessionId: SESSION_ID,
       metadata, state: stateWithPl03b(await defaultSha256(PL02_MARKDOWN)),
       downloadFile: downloader({ kind: 'download_initiated', filename: 'x.docx' }),
     });
@@ -263,7 +263,7 @@ describe('exportHubArtifact', () => {
   it('reports a cancelled download as saved_download_failed and a retry never duplicates', async () => {
     const state = await seedPl02(await defaultSha256(PL02_MARKDOWN));
     const cancelled = await exportHubArtifact({
-      db, kind: 'PL02', projectId: PROJECT_ID, threadId: THREAD_ID, sessionId: SESSION_ID,
+      db, kind: 'PL02', changeRequestId: PROJECT_ID, threadId: THREAD_ID, sessionId: SESSION_ID,
       metadata, state, downloadFile: downloader({ kind: 'cancelled', filename: 'x.docx' }),
     });
 
@@ -271,7 +271,7 @@ describe('exportHubArtifact', () => {
     expect(cancelled.noteId).toBeTruthy();
 
     const retried = await exportHubArtifact({
-      db, kind: 'PL02', projectId: PROJECT_ID, threadId: THREAD_ID, sessionId: SESSION_ID,
+      db, kind: 'PL02', changeRequestId: PROJECT_ID, threadId: THREAD_ID, sessionId: SESSION_ID,
       metadata, state, downloadFile: downloader({ kind: 'download_initiated', filename: 'x.docx' }),
     });
 

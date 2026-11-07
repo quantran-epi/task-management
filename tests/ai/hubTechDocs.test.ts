@@ -34,7 +34,7 @@ const metadata: SdlcWorkflowMetadata = {
 const reconciliation: ReconciliationResult = {
   schemaVersion: 1,
   identity: {
-    projectId: PROJECT_ID,
+    changeRequestId: PROJECT_ID,
     threadId: THREAD_ID,
     solutionNoteId: '55555555-5555-4555-8555-555555555555',
     solutionVersion: 1,
@@ -112,11 +112,11 @@ let db: TaskPlannerDatabase;
 beforeEach(async () => {
   db = new TaskPlannerDatabase(`hub-tech-docs-${Date.now()}-${Math.random()}`);
   await db.open();
-  await db.projects.add(project);
+  await db.changeRequests.add(project);
   await db.chatThreads.add({
     id: THREAD_ID,
-    scopeKey: `project:${PROJECT_ID}`,
-    scopeType: 'project',
+    scopeKey: `cr:${PROJECT_ID}`,
+    scopeType: 'cr',
     entityId: PROJECT_ID,
     createdAt: NOW,
     updatedAt: NOW,
@@ -128,13 +128,13 @@ afterEach(async () => {
 });
 
 async function seedSolution(markdown = '# SOLUTION\nHệ thống hiện tại.') {
-  return saveHubSolution({ db, projectId: PROJECT_ID, threadId: THREAD_ID, sessionId: SESSION_ID, markdown, draftRevision: 1 });
+  return saveHubSolution({ db, changeRequestId: PROJECT_ID, threadId: THREAD_ID, sessionId: SESSION_ID, markdown, draftRevision: 1 });
 }
 
 function baseInput(solution: Awaited<ReturnType<typeof seedSolution>>, overrides: Record<string, unknown> = {}) {
   return {
     db,
-    projectId: PROJECT_ID,
+    changeRequestId: PROJECT_ID,
     threadId: THREAD_ID,
     sessionId: SESSION_ID,
     inputRevision: 1,
@@ -370,7 +370,7 @@ describe('generateHubTechDocs', () => {
     // Negative half: the pre-plan pin shape `{ noteId, version, hash }` carries no identity.
     await expect(runWizardStage({
       kind: 'PL03',
-      projectId: PROJECT_ID,
+      changeRequestId: PROJECT_ID,
       threadId: THREAD_ID,
       sessionId: SESSION_ID,
       inputRevision: 1,

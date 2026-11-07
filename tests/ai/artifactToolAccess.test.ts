@@ -71,7 +71,7 @@ describe('artifact tool advertisement and runtime boundaries', () => {
   it('active Analysis OFF control prepares a real proposal and waits despite Auto-approve', async () => {
     db = new TaskPlannerDatabase(`artifact-runtime-positive-${crypto.randomUUID()}`);
     const thread = await createOrGetThread({ scopeType: 'global' }, db);
-    const coordinator = createSdlcWorkflowCoordinator({ projectId: crypto.randomUUID(), threadId: thread.id });
+    const coordinator = createSdlcWorkflowCoordinator({ changeRequestId: crypto.randomUUID(), threadId: thread.id });
     await coordinator.startOrUpdateIntake({ cr: 'CR', featureName: 'Test', author: 'T', requestingUnit: 'IT', date: '2026-11-05' }, 'PL01', 'PL02');
     const markdown = '# SOLUTION\n## Mục tiêu\nNội dung gốc.';
     const state = await coordinator.commitSolution(markdown);

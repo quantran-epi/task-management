@@ -18,7 +18,7 @@ const project: Project = { id: PROJECT_ID, name: 'Hub solution project', status:
 function input(overrides: Record<string, unknown> = {}) {
   return {
     db,
-    projectId: PROJECT_ID,
+    changeRequestId: PROJECT_ID,
     threadId: THREAD_ID,
     sessionId: SESSION_ID,
     markdown: '# SOLUTION v1',
@@ -33,20 +33,20 @@ let db: TaskPlannerDatabase;
 beforeEach(async () => {
   db = new TaskPlannerDatabase(`hub-solution-${Date.now()}-${Math.random()}`);
   await db.open();
-  await db.projects.add(project);
-  await db.projects.add({ ...project, id: OTHER_PROJECT_ID, name: 'Other project' });
+  await db.changeRequests.add(project);
+  await db.changeRequests.add({ ...project, id: OTHER_PROJECT_ID, name: 'Other project' });
   await db.chatThreads.add({
     id: THREAD_ID,
-    scopeKey: `project:${PROJECT_ID}`,
-    scopeType: 'project',
+    scopeKey: `cr:${PROJECT_ID}`,
+    scopeType: 'cr',
     entityId: PROJECT_ID,
     createdAt: NOW,
     updatedAt: NOW,
   });
   await db.chatThreads.add({
     id: OTHER_THREAD_ID,
-    scopeKey: `project:${OTHER_PROJECT_ID}`,
-    scopeType: 'project',
+    scopeKey: `cr:${OTHER_PROJECT_ID}`,
+    scopeType: 'cr',
     entityId: OTHER_PROJECT_ID,
     createdAt: NOW,
     updatedAt: NOW,
@@ -76,11 +76,11 @@ describe('saveHubSolution', () => {
 
     expect(note?.sdlcArtifact).toMatchObject({
       kind: 'SOLUTION',
-      projectId: PROJECT_ID,
+      changeRequestId: PROJECT_ID,
       threadId: THREAD_ID,
       version: 1,
     });
-    expect(note?.entityType).toBe('project');
+    expect(note?.entityType).toBe('cr');
     expect(note?.entityId).toBe(PROJECT_ID);
     expect(await db.chatMessages.count()).toBe(1);
   });
@@ -152,7 +152,7 @@ describe('saveHubSolution', () => {
     };
 
     const packed = await persistConfirmedPack({
-      projectId: PROJECT_ID,
+      changeRequestId: PROJECT_ID,
       threadId: THREAD_ID,
       sessionId: SESSION_ID,
       inputRevision: 1,

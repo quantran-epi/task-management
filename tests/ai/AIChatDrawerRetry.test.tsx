@@ -13,8 +13,8 @@ import * as nineRouterClient from '../../src/services/ai/nineRouterClient';
 vi.mock('../../src/utils/pptxExport', () => ({ exportPresentationAsFile: vi.fn() }));
 
 const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
-const SCOPE = { type: 'project' as const, id: PROJECT_ID, title: 'Retry Project' };
-const SCOPE_KEY = `project:${PROJECT_ID}`;
+const SCOPE = { type: 'cr' as const, id: PROJECT_ID, title: 'Retry Project' };
+const SCOPE_KEY = `cr:${PROJECT_ID}`;
 const TS = '2026-10-30T00:00:00.000Z';
 const CHAT_ONE = 'Tab A';
 const CHAT_TWO = 'Tab B';
@@ -52,12 +52,18 @@ describe('AI retry message identity', () => {
 describe('AIChatDrawer retry reuses the original user row (D-14)', () => {
   let db: TaskPlannerDatabase;
   let dispatches: any[];
-  let failNext: boolean;
+  // The orchestrator retries once without tools on a stream error, so a failing turn needs
+  // two consecutive failures before the drawer surfaces the error card.
+  let failNext: number;
 
   const userRows = async (threadId: string) =>
     (await db.chatMessages.where('threadId').equals(threadId).toArray()).filter((m) => m.role === 'user');
   const assistantRows = async (threadId: string) =>
     (await db.chatMessages.where('threadId').equals(threadId).toArray()).filter((m) => m.role === 'assistant');
+
+  // A failing turn dispatches twice (tools, then the orchestrator's no-tools fallback), so a
+  // turn start is a dispatch that still carries a tools payload.
+  const turnStarts = () => dispatches.filter((d) => Array.isArray(d.tools) && d.tools.length > 0);
 
   const submit = (text: string) => {
     fireEvent.change(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI'), {
@@ -75,7 +81,7 @@ describe('AIChatDrawer retry reuses the original user row (D-14)', () => {
   const seedTabs = async () => {
     const first = await createChatTab(
       {
-        scopeType: 'project',
+        scopeType: 'cr',
         scopeKey: SCOPE_KEY,
         entityId: PROJECT_ID,
         title: CHAT_ONE,
@@ -85,7 +91,7 @@ describe('AIChatDrawer retry reuses the original user row (D-14)', () => {
     );
     const second = await createChatTab(
       {
-        scopeType: 'project',
+        scopeType: 'cr',
         scopeKey: SCOPE_KEY,
         entityId: PROJECT_ID,
         title: CHAT_TWO,
@@ -109,13 +115,16 @@ describe('AIChatDrawer retry reuses the original user row (D-14)', () => {
 
   beforeEach(async () => {
     dispatches = [];
-    failNext = true;
+    failNext = 2;
     db = new TaskPlannerDatabase(`retry-${Date.now()}-${Math.random()}`);
     await db.open();
-    await db.projects.add({
+    await db.changeRequests.add({
       id: PROJECT_ID,
+        code: 'CR-AI-01',
       name: 'Retry Project',
       status: 'Open',
+        type: 'ENHANCEMENT',
+        targets: [],
       createdAt: TS,
       updatedAt: TS,
     });
@@ -128,8 +137,8 @@ describe('AIChatDrawer retry reuses the original user row (D-14)', () => {
     vi.spyOn(nineRouterTokenService, 'fetchAvailableModels').mockResolvedValue(['model-alpha']);
     vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation(((options: any) => {
       dispatches.push(options.payload);
-      const shouldFail = failNext;
-      failNext = false;
+      const shouldFail = failNext > 0;
+      if (shouldFail) failNext -= 1;
       return (async function* () {
         if (shouldFail) throw new Error('boom');
         yield { type: 'text' as const, delta: 'Phản hồi sau khi thử lại' };
@@ -154,7 +163,7 @@ describe('AIChatDrawer retry reuses the original user row (D-14)', () => {
     await openTab(CHAT_ONE);
 
     submit('Phân tích lại yêu cầu');
-    await waitFor(() => expect(dispatches).toHaveLength(1));
+    await waitFor(() => expect(turnStarts()).toHaveLength(1));
     await waitFor(() => expect(screen.getByTestId('inline-api-error-card')).toBeInTheDocument());
 
     // Failed turn persisted the user row but never the failed output.
@@ -163,14 +172,14 @@ describe('AIChatDrawer retry reuses the original user row (D-14)', () => {
 
     fireEvent.click(screen.getByLabelText('Thử lại'));
 
-    await waitFor(() => expect(dispatches).toHaveLength(2));
+    await waitFor(() => expect(turnStarts()).toHaveLength(2));
     await waitFor(() => expect(screen.getByText(/Phản hồi sau khi thử lại/)).toBeInTheDocument());
 
     expect(await userRows(first.threadId)).toHaveLength(1);
     expect(await assistantRows(first.threadId)).toHaveLength(1);
 
     // The retried history carries the prompt once, never twice.
-    const retriedUsers = (dispatches[1].messages as Array<{ role: string; content: string }>).filter(
+    const retriedUsers = (turnStarts()[1].messages as Array<{ role: string; content: string }>).filter(
       (message) => message.role === 'user' && message.content.includes('Phân tích lại yêu cầu')
     );
     expect(retriedUsers).toHaveLength(1);
@@ -193,23 +202,23 @@ describe('AIChatDrawer retry reuses the original user row (D-14)', () => {
     await openTab(CHAT_ONE);
 
     submit('Câu hỏi của tab A');
-    await waitFor(() => expect(dispatches).toHaveLength(1));
+    await waitFor(() => expect(turnStarts()).toHaveLength(1));
     await waitFor(() => expect(screen.getByTestId('inline-api-error-card')).toBeInTheDocument());
 
     await openTab(CHAT_TWO);
-    failNext = true;
+    failNext = 2;
     submit('Câu hỏi của tab B');
-    await waitFor(() => expect(dispatches).toHaveLength(2));
+    await waitFor(() => expect(turnStarts()).toHaveLength(2));
     await waitFor(() => expect(screen.getByTestId('inline-api-error-card')).toBeInTheDocument());
 
     // Back to A: its retry must reuse A's own user row and leave B untouched.
     await openTab(CHAT_ONE);
     fireEvent.click(screen.getByLabelText('Thử lại'));
-    await waitFor(() => expect(dispatches).toHaveLength(3));
+    await waitFor(() => expect(turnStarts()).toHaveLength(3));
 
     expect(await userRows(first.threadId)).toHaveLength(1);
     expect(await userRows(second.threadId)).toHaveLength(1);
-    const retried = dispatches[2].messages as Array<{ role: string; content: string }>;
+    const retried = turnStarts()[2].messages as Array<{ role: string; content: string }>;
     expect(retried.some((m) => m.role === 'user' && m.content.includes('Câu hỏi của tab A'))).toBe(true);
     expect(retried.some((m) => m.content.includes('Câu hỏi của tab B'))).toBe(false);
   });
