@@ -23,7 +23,7 @@ function result(overrides: {
   return ReconciliationResultSchema.parse({
     schemaVersion: 1,
     identity: {
-      projectId: 'project',
+      changeRequestId: '11111111-1111-4111-8111-111111111111',
       threadId: 'thread',
       solutionNoteId: 'solution',
       solutionVersion: 1,

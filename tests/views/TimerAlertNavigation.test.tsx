@@ -13,8 +13,7 @@ describe('Timer alert across navigation', () => {
     await db.open();
     await Promise.all([
       db.tasks.clear(),
-      db.projects.clear(),
-      db.milestones.clear(),
+      db.changeRequests.clear(),
       db.activeTimers.clear(),
       db.plannedAllocations.clear(),
       db.workSessions.clear(),
@@ -34,8 +33,7 @@ describe('Timer alert across navigation', () => {
   afterEach(async () => {
     await Promise.all([
       db.tasks.clear(),
-      db.projects.clear(),
-      db.milestones.clear(),
+      db.changeRequests.clear(),
       db.activeTimers.clear(),
       db.plannedAllocations.clear(),
       db.workSessions.clear(),
@@ -103,15 +101,14 @@ describe('Timer alert across navigation', () => {
 
     // Wait for Tasks view
     await waitFor(() => {
-      expect(screen.getByPlaceholderText(/Thêm tác vụ nhanh/i)).toBeInTheDocument();
+      expect(screen.getByLabelText('Thêm nhanh tên tác vụ và ước tính')).toBeInTheDocument();
     });
 
-    // Navigate to projects
-    const projectsMenu = screen.getByRole('menuitem', { name: /Dự án/i });
-    fireEvent.click(projectsMenu);
+    // Navigate away from the tasks route (the projects route no longer exists).
+    fireEvent.click(screen.getByRole('menuitem', { name: /Lập kế hoạch/i }));
 
     await waitFor(() => {
-      expect(screen.queryByPlaceholderText(/Thêm tác vụ nhanh/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Thêm nhanh tên tác vụ và ước tính')).not.toBeInTheDocument();
     });
 
     await waitFor(
@@ -176,7 +173,7 @@ describe('Timer alert across navigation', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText(/Thêm tác vụ nhanh/i)).toBeInTheDocument();
+      expect(screen.getByLabelText('Thêm nhanh tên tác vụ và ước tính')).toBeInTheDocument();
     });
 
     await waitFor(() => expect(warningSpy).toHaveBeenCalledTimes(1), { timeout: 10000 });
@@ -226,7 +223,7 @@ describe('Timer alert across navigation', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText(/Thêm tác vụ nhanh/i)).toBeInTheDocument();
+      expect(screen.getByLabelText('Thêm nhanh tên tác vụ và ước tính')).toBeInTheDocument();
       expect(screen.getByText('Task Start UI 5m')).toBeInTheDocument();
     });
 
@@ -246,12 +243,11 @@ describe('Timer alert across navigation', () => {
       startedAt: now - 298000,
     });
 
-    // Navigate to Projects view
-    const projectsMenu = screen.getByRole('menuitem', { name: /Dự án/i });
-    fireEvent.click(projectsMenu);
+    // Navigate away from the tasks route (the projects route no longer exists).
+    fireEvent.click(screen.getByRole('menuitem', { name: /Lập kế hoạch/i }));
 
     await waitFor(() => {
-      expect(screen.queryByPlaceholderText(/Thêm tác vụ nhanh/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Thêm nhanh tên tác vụ và ước tính')).not.toBeInTheDocument();
     });
 
     await waitFor(

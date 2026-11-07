@@ -49,7 +49,6 @@ import { formatGuardMessage } from '../../../services/wizard/workflowGuards';
 import type { System, CrTarget } from '../../../types/models';
 
 export interface Step3CodeGuideViewProps {
-  projectId?: string;
   crCode?: string;
   targetSystems?: System[] | undefined;
   crTargets?: CrTarget[] | undefined;

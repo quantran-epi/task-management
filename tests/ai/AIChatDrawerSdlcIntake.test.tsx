@@ -31,12 +31,12 @@ function note(id: string, entityId: string, title: string, body: string, version
     id,
     title,
     body,
-    entityType: 'project' as const,
+    entityType: 'cr' as const,
     entityId,
     isPinned: false,
     sdlcArtifact: {
       kind: 'PL02' as const,
-      projectId: entityId,
+      changeRequestId: entityId,
       threadId: '33333333-3333-4333-8333-333333333333',
       sessionId: '44444444-4444-4444-8444-444444444444',
       version,
@@ -72,9 +72,9 @@ describe('SDLC intake through buildMergedSdlcInput (D-18/D-19/SC-5) — re-point
   });
 
   const seed = async (pl01Body: string, pl02Body: string) => {
-    await db.projects.bulkAdd([
-      { id: PROJECT_A, name: 'Project A', status: 'Open', createdAt: TS, updatedAt: TS },
-      { id: PROJECT_B, name: 'Project B', status: 'Open', createdAt: TS, updatedAt: TS },
+    await db.changeRequests.bulkAdd([
+      { id: PROJECT_A, name: 'CR A', code: 'CR-A', status: 'Open', type: 'ENHANCEMENT', targets: [], createdAt: TS, updatedAt: TS },
+      { id: PROJECT_B, name: 'CR B', code: 'CR-B', status: 'Open', type: 'ENHANCEMENT', targets: [], createdAt: TS, updatedAt: TS },
     ]);
     await db.notes.bulkAdd([
       note(NOTE_A1, PROJECT_A, 'Nguồn PL01 Alpha', pl01Body, 2),
@@ -96,7 +96,7 @@ describe('SDLC intake through buildMergedSdlcInput (D-18/D-19/SC-5) — re-point
   beforeEach(async () => {
     db_ = db;
     await db.notes.clear();
-    await db.projects.clear();
+    await db.changeRequests.clear();
     await db.settings.clear();
     vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
     vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({

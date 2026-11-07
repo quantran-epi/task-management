@@ -838,7 +838,6 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
       case 'CODE_GUIDE':
         return (
           <Step3CodeGuideView
-            projectId={projectId}
             crCode={workflowState?.metadata.cr ?? ''}
             targetSystems={crTargetSystems}
             crTargets={activeCrRecord?.targets ?? []}
@@ -870,7 +869,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
       case 'CHANGE_PACK':
         return (
           <Step4ChangePackView
-            projectId={projectId}
+            changeRequestId={projectId}
             crId={activeCrId}
             crCode={workflowState?.metadata.cr ?? ''}
             solutionArtifact={workflowState?.artifacts.solution}
@@ -1021,7 +1020,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
       </div>
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <SdlcSidebar
-          projectId={projectId}
+          changeRequestId={projectId}
           onSelectProject={(newId) => {
             setSelectedChangeRequestId(newId);
           }}

@@ -3,8 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../../src/db';
-import { ProjectSdlcView } from '../../../src/views/ProjectSdlcView';
-import { createNewCr } from '../../../src/services/wizard/sdlcCrManager';
+import { ChangeRequestSdlcView } from '../../../src/views/ChangeRequestSdlcView';
 import { createSdlcWorkflowCoordinator, workflowStorageKey } from '../../../src/services/wizard/workflowCoordinator';
 import type { StepChatPanelHandle, StepChatPanelProps } from '../../../src/components/sdlc/chat/StepChatPanel';
 
@@ -17,7 +16,7 @@ vi.mock('../../../src/components/sdlc/chat/StepChatPanel', () => ({
   }),
 }));
 
-describe('ProjectSdlcView solution-analysis timer lifecycle', () => {
+describe('ChangeRequestSdlcView solution-analysis timer lifecycle', () => {
   let db: TaskPlannerDatabase;
   let projectId: string;
 
@@ -26,12 +25,20 @@ describe('ProjectSdlcView solution-analysis timer lifecycle', () => {
     projectId = crypto.randomUUID();
     db = new TaskPlannerDatabase(`test-analysis-lifecycle-${crypto.randomUUID()}`);
     const timestamp = new Date().toISOString();
-    await db.projects.add({ id: projectId, name: 'Analysis lifecycle', status: 'In Progress', createdAt: timestamp, updatedAt: timestamp });
+    await db.changeRequests.add({
+      id: projectId,
+      name: 'Analysis lifecycle',
+      code: 'CR-TIMER',
+      status: 'In Progress',
+      type: 'ENHANCEMENT',
+      targets: [],
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
     const metadata = { cr: 'CR-TIMER', featureName: 'Timer lifecycle', author: 'Tester', requestingUnit: 'CNTT', date: '2026-11-02' };
-    const cr = await createNewCr(projectId, metadata, true, db);
-    const coordinator = createSdlcWorkflowCoordinator({ projectId, threadId: crypto.randomUUID() });
+    const coordinator = createSdlcWorkflowCoordinator({ changeRequestId: projectId, threadId: crypto.randomUUID() });
     const state = await coordinator.startOrUpdateIntake(metadata, 'PL01 baseline', 'PL02 baseline');
-    await db.settings.put({ key: workflowStorageKey(projectId, cr.id), value: JSON.stringify(state) });
+    await db.settings.put({ key: workflowStorageKey(projectId, projectId), value: JSON.stringify(state) });
   });
 
   afterEach(async () => {
@@ -41,7 +48,7 @@ describe('ProjectSdlcView solution-analysis timer lifecycle', () => {
   });
 
   async function openSolution() {
-    const view = render(<ProjectSdlcView projectId={projectId} onBack={vi.fn()} db={db} />);
+    const view = render(<ChangeRequestSdlcView changeRequestId={projectId} onBack={vi.fn()} db={db} />);
     await screen.findByRole('button', { name: /Đặt lại quy trình/i }, { timeout: 5000 });
     fireEvent.click(screen.getByText(/Bước 2: Thiết kế giải pháp/i));
     const trigger = await screen.findByRole('button', { name: /Phân tích lại bằng AI/i });

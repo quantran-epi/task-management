@@ -8,8 +8,8 @@ vi.mock('../../views/TasksView', () => ({
   TasksView: () => <div data-testid="mock-tasks-view">Mock Tasks View</div>,
 }));
 
-vi.mock('../toolwindows/ProjectExplorer', () => ({
-  ProjectExplorer: () => <div data-testid="mock-project-explorer">Project Explorer Body</div>,
+vi.mock('../toolwindows/CRExplorer', () => ({
+  CRExplorer: () => <div data-testid="mock-cr-explorer">CR Explorer Body</div>,
 }));
 
 vi.mock('../toolwindows/DocsExplorer', () => ({
@@ -20,9 +20,10 @@ vi.mock('../toolwindows/DiagramExplorer', () => ({
   DiagramExplorer: () => <div data-testid="mock-diagram-explorer">Diagram Explorer Body</div>,
 }));
 
-vi.mock('dexie-react-hooks', () => ({
-  useLiveQuery: (_fn: any, _deps: any, defaultVal: any) => defaultVal ?? [],
-}));
+vi.mock('dexie-react-hooks', () => {
+  const EMPTY: never[] = [];
+  return { useLiveQuery: () => EMPTY };
+});
 
 describe('Stripe Remote Git Explorer Integration (SDLC-REPO-EXP-01)', () => {
   beforeEach(() => {
@@ -39,7 +40,7 @@ describe('Stripe Remote Git Explorer Integration (SDLC-REPO-EXP-01)', () => {
     const remoteExplorerBtn = screen.getByRole('button', { name: /Remote Git Explorer/i });
     expect(remoteExplorerBtn).toBeDefined();
 
-    // Verify ordering: Project Explorer -> Docs Explorer -> Diagram Explorer -> Remote Git Explorer
+    // Verify ordering: CR Explorer -> Docs Explorer -> Diagram Explorer -> Remote Git Explorer
     const buttonLabels = buttons.map((b) => b.getAttribute('aria-label') || '');
     const diagramIndex = buttonLabels.findIndex((label) => label.includes('Diagram Explorer'));
     const remoteIndex = buttonLabels.findIndex((label) => label.includes('Remote Git Explorer'));

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { message } from 'antd';
 import { TaskPlannerDatabase } from '../../../src/db';
-import { ProjectSdlcView } from '../../../src/views/ProjectSdlcView';
+import { ChangeRequestSdlcView } from '../../../src/views/ChangeRequestSdlcView';
 import { createSdlcWorkflowCoordinator, workflowStorageKey } from '../../../src/services/wizard/workflowCoordinator';
 import type { SdlcWorkflowState } from '../../../src/services/wizard/workflowSchemas';
 
@@ -23,7 +23,7 @@ vi.mock('../../../src/components/sdlc/SdlcSidebar', () => ({
   }) => <div>
     <span data-testid="cr">{activeCrId}</span>
     <span data-testid="version">{workflowState?.activeVersions?.SOLUTION}</span>
-    <button onClick={() => onSelectCr('B')}>CR-B</button>
+    <button onClick={() => onSelectCr('22222222-2222-4222-8222-222222222222')}>CR-B</button>
     <button onClick={() => onSelectStep('SOLUTION')}>SOLUTION</button>
   </div>,
 }));
@@ -43,8 +43,9 @@ function deferred() {
   return { promise, release };
 }
 
-const pid = crypto.randomUUID();
-const draftKey = (cr: string) => `sdlc_draft_solution:${pid}:${cr}`;
+const CR_A = '11111111-1111-4111-8111-111111111111';
+const CR_B = '22222222-2222-4222-8222-222222222222';
+const draftKey = (cr: string) => `sdlc_draft_solution:${cr}:${cr}`;
 let db: TaskPlannerDatabase;
 afterEach(async () => {
   cleanup();
@@ -57,41 +58,43 @@ async function mount() {
   vi.spyOn(message, 'success').mockImplementation(() => undefined as never);
   db = new TaskPlannerDatabase(`async-cr-${crypto.randomUUID()}`);
   const metadata = { cr: 'CR-A', featureName: 'A', author: 'Tester', requestingUnit: 'CNTT', date: '2026-11-02' };
-  await db.settings.put({ key: `sdlc_crs:${pid}`, value: JSON.stringify([
-    { id: 'A', status: 'active', ...metadata }, { id: 'B', status: 'archived', ...metadata, cr: 'CR-B' },
-  ]) });
-  for (const [cr, versions] of [['A', 2], ['B', 7]] as const) {
+  const now = new Date().toISOString();
+  await db.changeRequests.bulkAdd([
+    { id: CR_A, name: 'CR A', code: 'CR-A', status: 'Open', type: 'ENHANCEMENT', targets: [], createdAt: now, updatedAt: now },
+    { id: CR_B, name: 'CR B', code: 'CR-B', status: 'Cancelled', type: 'ENHANCEMENT', targets: [], createdAt: now, updatedAt: now },
+  ]);
+  for (const [cr, versions] of [[CR_A, 2], [CR_B, 7]] as const) {
     const coordinator = createSdlcWorkflowCoordinator({
-      projectId: pid, threadId: crypto.randomUUID(),
-      saveState: async (state) => { await db.settings.put({ key: workflowStorageKey(pid, cr), value: JSON.stringify(state) }); },
+      changeRequestId: cr, threadId: crypto.randomUUID(),
+      saveState: async (state) => { await db.settings.put({ key: workflowStorageKey(cr, cr), value: JSON.stringify(state) }); },
     });
-    await coordinator.startOrUpdateIntake({ ...metadata, cr: `CR-${cr}` }, 'PL01', 'PL02');
-    for (let version = 1; version <= versions; version += 1) await coordinator.commitSolution(`# SOLUTION ${cr} v${version}`);
-    await db.settings.put({ key: draftKey(cr), value: `Draft ${cr}` });
+    await coordinator.startOrUpdateIntake({ ...metadata, cr: cr === CR_A ? 'CR-A' : 'CR-B' }, 'PL01', 'PL02');
+    for (let version = 1; version <= versions; version += 1) await coordinator.commitSolution(`# SOLUTION ${cr === CR_A ? 'A' : 'B'} v${version}`);
+    await db.settings.put({ key: draftKey(cr), value: cr === CR_A ? 'Draft A' : 'Draft B' });
   }
-  render(<ProjectSdlcView projectId={pid} db={db} onBack={() => {}} />);
+  render(<ChangeRequestSdlcView db={db} onBack={() => {}} />);
   await waitFor(() => expect(screen.getByTestId('version')).toHaveTextContent('2'));
-  return (await db.settings.get(workflowStorageKey(pid, 'B')))!.value;
+  return (await db.settings.get(workflowStorageKey(CR_B, CR_B)))!.value;
 }
 
 async function switchCr() {
   fireEvent.click(screen.getByRole('button', { name: 'CR-B' }));
-  await waitFor(() => expect(screen.getByTestId('cr')).toHaveTextContent('B'));
+  await waitFor(() => expect(screen.getByTestId('cr')).toHaveTextContent(CR_B));
   await waitFor(() => expect(screen.getByTestId('version')).toHaveTextContent('7'));
 }
 
 async function expectBUnchanged(snapshot: unknown) {
-  const { updatedAt: restoredAt, ...actual } = JSON.parse(String((await db.settings.get(workflowStorageKey(pid, 'B')))!.value));
+  const { updatedAt: restoredAt, ...actual } = JSON.parse(String((await db.settings.get(workflowStorageKey(CR_B, CR_B)))!.value));
   const { updatedAt: savedAt, ...expected } = JSON.parse(String(snapshot));
   expect(restoredAt).toBeTruthy();
   expect(savedAt).toBeTruthy();
   expect(actual).toEqual(expected);
-  expect((await db.settings.get(draftKey('B')))!.value).toBe('Draft B');
-  const threadsB = (await db.chatThreads.toArray()).filter((thread) => thread.scopeKey.startsWith(`sdlc:${pid}:B:`));
+  expect((await db.settings.get(draftKey(CR_B)))!.value).toBe('Draft B');
+  const threadsB = (await db.chatThreads.toArray()).filter((thread) => thread.scopeKey.startsWith(`sdlc:${CR_B}:${CR_B}:`));
   const cards = (await db.chatMessages.toArray()).filter((row) => row.artifactEvent);
   expect(cards).toHaveLength(1);
   expect(threadsB.map((thread) => thread.id)).not.toContain(cards[0]!.threadId);
-  expect((await db.chatThreads.get(cards[0]!.threadId))!.scopeKey).toBe(`sdlc:${pid}:A:SOLUTION`);
+  expect((await db.chatThreads.get(cards[0]!.threadId))!.scopeKey).toBe(`sdlc:${CR_A}:${CR_A}:SOLUTION`);
   expect(cards[0]!.artifactEvent!.version).toBe(3);
   expect(screen.getByTestId('version')).toHaveTextContent('7');
 }
@@ -105,7 +108,7 @@ describe('WR-05: controller giữ CR qua async boundary', () => {
     else {
       const put = db.settings.put.bind(db.settings);
       vi.spyOn(db.settings, 'put').mockImplementation((row, ...args) => {
-        if (row.key === draftKey('A')) {
+        if (row.key === draftKey(CR_A)) {
           blocked = true;
           return Dexie.Promise.resolve(gate.promise).then(() => put(row, ...args));
         }
@@ -115,12 +118,12 @@ describe('WR-05: controller giữ CR qua async boundary', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Trích xuất' }));
     await waitFor(async () => {
       if (boundary === 'write') expect(blocked).toBe(true);
-      else expect((await db.settings.get(draftKey('A')))!.value).toBe('# SOLUTION draft A');
+      else expect((await db.settings.get(draftKey(CR_A)))!.value).toBe('# SOLUTION draft A');
     });
     await switchCr();
     await act(async () => { gate.release(); });
     await waitFor(async () => expect(await db.chatMessages.count()).toBe(1));
-    expect((await db.settings.get(draftKey('A')))!.value).toBe('# SOLUTION draft A');
+    expect((await db.settings.get(draftKey(CR_A)))!.value).toBe('# SOLUTION draft A');
     await expectBUnchanged(snapshot);
   });
 
@@ -132,7 +135,7 @@ describe('WR-05: controller giữ CR qua async boundary', () => {
     let blocked = false;
     const put = db.settings.put.bind(db.settings);
     vi.spyOn(db.settings, 'put').mockImplementation((row, ...args) => {
-      if (row.key === workflowStorageKey(pid, 'A') && JSON.parse(String(row.value)).activeVersions.SOLUTION === 3) {
+      if (row.key === workflowStorageKey(CR_A, CR_A) && JSON.parse(String(row.value)).activeVersions.SOLUTION === 3) {
         blocked = true;
         return Dexie.Promise.resolve(gate.promise).then(() => put(row, ...args));
       }
@@ -143,8 +146,8 @@ describe('WR-05: controller giữ CR qua async boundary', () => {
     await switchCr();
     await act(async () => { gate.release(); });
     await waitFor(async () => expect(await db.chatMessages.count()).toBe(1));
-    expect(await db.settings.get(draftKey('A'))).toBeUndefined();
-    const stateA = JSON.parse(String((await db.settings.get(workflowStorageKey(pid, 'A')))!.value));
+    expect(await db.settings.get(draftKey(CR_A))).toBeUndefined();
+    const stateA = JSON.parse(String((await db.settings.get(workflowStorageKey(CR_A, CR_A)))!.value));
     expect(stateA.versions.SOLUTION.map((ref: { version: number }) => ref.version)).toEqual([1, 2, 3]);
     expect(stateA.artifacts.solution.content).toBe('# SOLUTION approved A');
     await expectBUnchanged(snapshot);

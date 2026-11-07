@@ -2,18 +2,14 @@ import { describe, it, expect } from 'vitest';
 import {
   reminderDateSchema,
   reminderNoteSchema,
-  ProjectInputSchema,
-  ProjectUpdateSchema,
-  MilestoneInputSchema,
-  MilestoneUpdateSchema,
+  ChangeRequestInputSchema,
+  ChangeRequestUpdateSchema,
   TaskInputSchema,
   TaskUpdateSchema,
 } from '../../src/validation/schemas';
-import {
-  BackupProjectRecordSchema,
-  BackupMilestoneRecordSchema,
-  BackupTaskRecordSchema,
-} from '../../src/validation/backupSchemas';
+import { BackupChangeRequestRecordSchema, BackupTaskRecordSchema } from '../../src/validation/backupSchemas';
+
+const CR_ID = '11111111-1111-4111-8111-111111111111';
 
 describe('Notification and Reminder Schemas (D-06, D-07, NOTIF-01)', () => {
   describe('reminderDateSchema & reminderNoteSchema', () => {
@@ -32,21 +28,12 @@ describe('Notification and Reminder Schemas (D-06, D-07, NOTIF-01)', () => {
   });
 
   describe('Domain Input and Update Schemas', () => {
-    it('accepts reminderDate and reminderNote in ProjectInputSchema', () => {
-      const valid = ProjectInputSchema.safeParse({
-        name: 'Project with reminder',
+    it('accepts reminderDate and reminderNote in ChangeRequestInputSchema', () => {
+      const valid = ChangeRequestInputSchema.safeParse({
+        name: 'CR with reminder',
+        code: 'CR-REM',
         reminderDate: '2026-10-01',
         reminderNote: 'Review budget',
-      });
-      expect(valid.success).toBe(true);
-    });
-
-    it('accepts reminderDate and reminderNote in MilestoneInputSchema', () => {
-      const valid = MilestoneInputSchema.safeParse({
-        projectId: '11111111-1111-4111-8111-111111111111',
-        name: 'Sprint 1 Review',
-        reminderDate: '2026-10-05',
-        reminderNote: 'Check deliverable list',
       });
       expect(valid.success).toBe(true);
     });
@@ -54,6 +41,7 @@ describe('Notification and Reminder Schemas (D-06, D-07, NOTIF-01)', () => {
     it('accepts reminderDate and reminderNote in TaskInputSchema', () => {
       const valid = TaskInputSchema.safeParse({
         name: 'Review PR',
+        crId: CR_ID,
         reminderDate: '2026-10-02',
         reminderNote: 'Contact requester if blocked',
       });
@@ -61,35 +49,31 @@ describe('Notification and Reminder Schemas (D-06, D-07, NOTIF-01)', () => {
     });
 
     it('accepts reminder updates in partial update schemas', () => {
-      expect(ProjectUpdateSchema.safeParse({ reminderDate: '2026-10-01' }).success).toBe(true);
-      expect(MilestoneUpdateSchema.safeParse({ reminderNote: 'Updated note' }).success).toBe(true);
-      expect(TaskUpdateSchema.safeParse({ reminderDate: '2026-10-03', reminderNote: 'Call client' }).success).toBe(true);
+      expect(ChangeRequestUpdateSchema.safeParse({ reminderDate: '2026-10-01' }).success).toBe(true);
+      expect(
+        TaskUpdateSchema.safeParse({ reminderDate: '2026-10-03', reminderNote: 'Call client' })
+          .success
+      ).toBe(true);
     });
   });
 
   describe('Backup Schemas Compatibility', () => {
-    it('permits records without reminder fields (backward compatibility)', () => {
-      const legacyProject = {
-        id: '11111111-1111-4111-8111-111111111111',
-        name: 'Legacy Project',
+    it('permits CR and task records without reminder fields', () => {
+      const cr = {
+        id: CR_ID,
+        name: 'Legacy CR',
+        code: 'CR-LEGACY',
         status: 'Open',
+        type: 'ENHANCEMENT',
+        targets: [],
         createdAt: '2026-09-01T00:00:00.000Z',
         updatedAt: '2026-09-01T00:00:00.000Z',
       };
-      expect(BackupProjectRecordSchema.safeParse(legacyProject).success).toBe(true);
+      expect(BackupChangeRequestRecordSchema.safeParse(cr).success).toBe(true);
 
-      const legacyMilestone = {
-        id: '22222222-2222-4222-8222-222222222222',
-        projectId: '11111111-1111-4111-8111-111111111111',
-        name: 'Legacy Milestone',
-        status: 'Open',
-        createdAt: '2026-09-01T00:00:00.000Z',
-        updatedAt: '2026-09-01T00:00:00.000Z',
-      };
-      expect(BackupMilestoneRecordSchema.safeParse(legacyMilestone).success).toBe(true);
-
-      const legacyTask = {
+      const task = {
         id: '33333333-3333-4333-8333-333333333333',
+        crId: CR_ID,
         name: 'Legacy Task',
         status: 'Open',
         progress: 0,
@@ -98,12 +82,13 @@ describe('Notification and Reminder Schemas (D-06, D-07, NOTIF-01)', () => {
         createdAt: '2026-09-01T00:00:00.000Z',
         updatedAt: '2026-09-01T00:00:00.000Z',
       };
-      expect(BackupTaskRecordSchema.safeParse(legacyTask).success).toBe(true);
+      expect(BackupTaskRecordSchema.safeParse(task).success).toBe(true);
     });
 
     it('accepts records with valid reminderDate and reminderNote', () => {
       const taskWithReminder = {
         id: '33333333-3333-4333-8333-333333333333',
+        crId: CR_ID,
         name: 'Task with reminder',
         status: 'Open',
         progress: 0,

@@ -15,7 +15,7 @@ describe('SDLC rapid versus settled evidence navigation', () => {
     const firstReads = controllers.map((_, index) => new Promise<void>((resolve) => { started[index] = resolve; }));
     const note = { title: 'Architecture', body: '# Architecture\nNavigation evidence from approved design.' };
     const members = Array.from({ length: 4 }, (_, index) => ({ setId: 'set', setName: 'SDLC', documentId: `doc-${index}` }));
-    const request = { projectId: 'project', threadId: 'thread', sessionId: 'session', inputRevision: 1, query: 'architecture navigation', resolvedSetIds: ['set'] };
+    const request = { changeRequestId: 'project', threadId: 'thread', sessionId: 'session', inputRevision: 1, query: 'architecture navigation', resolvedSetIds: ['set'] };
     try {
       const pending = [];
       for (let step = 0; step < 3; step += 1) {

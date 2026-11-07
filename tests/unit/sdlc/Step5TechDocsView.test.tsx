@@ -14,7 +14,7 @@ const HASH = 'ab'.repeat(32);
 const driftResult: ReconciliationResult = {
   schemaVersion: 1,
   identity: {
-    projectId: PROJECT_ID, threadId: THREAD_ID, solutionNoteId: '55555555-5555-4555-8555-555555555555',
+    changeRequestId: PROJECT_ID, threadId: THREAD_ID, solutionNoteId: '55555555-5555-4555-8555-555555555555',
     solutionVersion: 1, solutionHash: HASH, packHash: HASH, cr: 'CR-2026-999', base: 'base-1', head: 'head-2',
   },
   status: 'PARTIAL_COVERAGE',
@@ -62,7 +62,7 @@ describe('Step5TechDocsView', () => {
   it('renders both review tabs with the draft CTA labels', () => {
     render(
       <Step5TechDocsView
-        projectId={PROJECT_ID}
+        changeRequestId={PROJECT_ID}
         crId="cr-001"
         workflowState={workflowState()}
         onCommitTechDoc={vi.fn().mockResolvedValue(undefined)}
@@ -82,7 +82,7 @@ describe('Step5TechDocsView', () => {
 
     render(
       <Step5TechDocsView
-        projectId={PROJECT_ID}
+        changeRequestId={PROJECT_ID}
         crId="cr-001"
         workflowState={workflowState()}
         onCommitTechDoc={handleCommit}
@@ -101,7 +101,7 @@ describe('Step5TechDocsView', () => {
 
     render(
       <Step5TechDocsView
-        projectId={PROJECT_ID}
+        changeRequestId={PROJECT_ID}
         crId="cr-001"
         workflowState={workflowState()}
         onCommitTechDoc={vi.fn().mockResolvedValue(undefined)}
@@ -123,7 +123,7 @@ describe('Step5TechDocsView', () => {
 
     render(
       <Step5TechDocsView
-        projectId={PROJECT_ID}
+        changeRequestId={PROJECT_ID}
         crId="cr-001"
         workflowState={workflowState()}
         onCommitTechDoc={handleCommit}
@@ -145,7 +145,7 @@ describe('Step5TechDocsView', () => {
 
     render(
       <Step5TechDocsView
-        projectId={PROJECT_ID}
+        changeRequestId={PROJECT_ID}
         crId="cr-001"
         workflowState={workflowState({ solution: false, changePack: false })}
         onCommitTechDoc={vi.fn().mockResolvedValue(undefined)}
@@ -164,7 +164,7 @@ describe('Step5TechDocsView', () => {
   it('disables generation and shows the configuration alert when no model is wired', () => {
     render(
       <Step5TechDocsView
-        projectId={PROJECT_ID}
+        changeRequestId={PROJECT_ID}
         crId="cr-001"
         workflowState={workflowState()}
         onCommitTechDoc={vi.fn().mockResolvedValue(undefined)}
@@ -178,7 +178,7 @@ describe('Step5TechDocsView', () => {
   it('never pre-marks the approval tag while a document is only a draft', () => {
     render(
       <Step5TechDocsView
-        projectId={PROJECT_ID}
+        changeRequestId={PROJECT_ID}
         crId="cr-001"
         workflowState={workflowState()}
         onCommitTechDoc={vi.fn().mockResolvedValue(undefined)}

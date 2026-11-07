@@ -76,11 +76,11 @@ let db: TaskPlannerDatabase;
 beforeEach(async () => {
   db = new TaskPlannerDatabase(`hub-cab-${Date.now()}-${Math.random()}`);
   await db.open();
-  await db.projects.add(project);
+  await db.changeRequests.add(project);
   await db.chatThreads.add({
     id: THREAD_ID,
-    scopeKey: `project:${PROJECT_ID}`,
-    scopeType: 'project',
+    scopeKey: `cr:${PROJECT_ID}`,
+    scopeType: 'cr',
     entityId: PROJECT_ID,
     createdAt: NOW,
     updatedAt: NOW,
@@ -102,14 +102,14 @@ async function seedArtifactNote(input: {
     id: input.id,
     type: 'document',
     tags: ['sdlc', input.kind.toLowerCase()],
-    entityType: 'project',
+    entityType: 'cr',
     entityId: PROJECT_ID,
     title: `${input.kind} v${input.version}`,
     body: JSON.stringify({ markdown: `# ${input.kind} v${input.version}`, exportPayload: {} }),
     isPinned: false,
     sdlcArtifact: {
       kind: input.kind,
-      projectId: PROJECT_ID,
+      changeRequestId: PROJECT_ID,
       threadId: THREAD_ID,
       sessionId: SESSION_ID,
       version: input.version,
@@ -196,7 +196,7 @@ async function seedDraftChain(): Promise<SdlcWorkflowState> {
 function baseInput(state: SdlcWorkflowState, overrides: Record<string, unknown> = {}) {
   return {
     db,
-    projectId: PROJECT_ID,
+    changeRequestId: PROJECT_ID,
     threadId: THREAD_ID,
     sessionId: SESSION_ID,
     draftRevision: 1,
@@ -211,14 +211,14 @@ function baseInput(state: SdlcWorkflowState, overrides: Record<string, unknown> 
 }
 
 const pinsForContext: CabSourcePin[] = [
-  { artifactId: '99999999-9999-4999-8999-999999999991', kind: 'PL02', projectId: PROJECT_ID, threadId: THREAD_ID, version: 1, hash: '02'.repeat(32), approved: true },
-  { artifactId: '99999999-9999-4999-8999-999999999992', kind: 'PL03B', projectId: PROJECT_ID, threadId: THREAD_ID, version: 1, hash: PL03B_HASH, approved: true },
-  { artifactId: '99999999-9999-4999-8999-999999999993', kind: 'PL07', projectId: PROJECT_ID, threadId: THREAD_ID, version: 1, hash: PL07_HASH, approved: true },
+  { artifactId: '99999999-9999-4999-8999-999999999991', kind: 'PL02', changeRequestId: PROJECT_ID, threadId: THREAD_ID, version: 1, hash: '02'.repeat(32), approved: true },
+  { artifactId: '99999999-9999-4999-8999-999999999992', kind: 'PL03B', changeRequestId: PROJECT_ID, threadId: THREAD_ID, version: 1, hash: PL03B_HASH, approved: true },
+  { artifactId: '99999999-9999-4999-8999-999999999993', kind: 'PL07', changeRequestId: PROJECT_ID, threadId: THREAD_ID, version: 1, hash: PL07_HASH, approved: true },
 ];
 
 const payloadContext: CabPayloadContext = {
   metadata,
-  projectId: PROJECT_ID,
+  changeRequestId: PROJECT_ID,
   threadId: THREAD_ID,
   inputRevision: 1,
   draftRevision: 1,
@@ -325,10 +325,10 @@ describe('generateHubCab', () => {
     await expect(buildWizardDocx('CAB', result.payload)).resolves.toBeInstanceOf(Blob);
 
     // Negative half: a pin stripped of projectId/threadId is rejected by the real stage contract.
-    const { projectId: _projectId, threadId: _threadId, ...identitylessPin } = pinsForContext[0]!;
+    const { changeRequestId: _projectId, threadId: _threadId, ...identitylessPin } = pinsForContext[0]!;
     await expect(runWizardStage({
       kind: 'CAB',
-      projectId: PROJECT_ID,
+      changeRequestId: PROJECT_ID,
       threadId: THREAD_ID,
       sessionId: SESSION_ID,
       inputRevision: 1,

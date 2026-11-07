@@ -86,8 +86,11 @@ export async function getStepThread(
     const thread: ChatThread = {
       id: generateId(),
       scopeKey,
-      scopeType: 'project',
-      entityId: projectId,
+      // D-07: SDLC step threads are CR-scoped. `assertProjectThread` in artifactRepo
+      // rejects any other scopeType/entityId pair, so a 'project' thread here would make
+      // every SOLUTION approval fail with WIZARD_THREAD_MISMATCH.
+      scopeType: 'cr',
+      entityId: crId || projectId,
       title: `[SDLC] ${stepId}`,
       createdAt: now,
       updatedAt: now,

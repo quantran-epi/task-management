@@ -27,7 +27,7 @@ describe('WorkbenchLayout Integration', () => {
   it('mounts default LeftToolWindow and EditorArea', () => {
     render(<WorkbenchLayout />);
 
-    // Left is active by default ('projects')
+    // Left is active by default ('cr_explorer')
     expect(screen.getByTestId('mock-left-toolwindow')).toBeDefined();
     // Center Editor Area with Tasks view
     expect(screen.getByTestId('mock-tasks-view')).toBeDefined();

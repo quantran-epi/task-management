@@ -7,10 +7,10 @@ import {
   saveSolutionVersion,
 } from '../../src/services/wizard/artifactRepo';
 import type { ChangePackManifest } from '../../src/services/wizard/changePack';
-import type { Project } from '../../src/types/models';
+import type { ChangeRequest } from '../../src/types/models';
 
-const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
-const OTHER_PROJECT_ID = '99999999-9999-4999-8999-999999999999';
+const CR_ID = '11111111-1111-4111-8111-111111111111';
+const OTHER_CR_ID = '99999999-9999-4999-8999-999999999999';
 const THREAD_ID = '22222222-2222-4222-8222-222222222222';
 const SESSION_ID = '33333333-3333-4333-8333-333333333333';
 const NOW = '2026-10-28T12:00:00.000Z';
@@ -18,17 +18,20 @@ const HASH_A = 'a'.repeat(64);
 const HASH_B = 'b'.repeat(64);
 const PACK_HASH = 'c'.repeat(64);
 
-const project: Project = {
-  id: PROJECT_ID,
-  name: 'Artifact project',
+const changeRequest: ChangeRequest = {
+  id: CR_ID,
+  code: 'CR-ARTIFACT-01',
+  name: 'Artifact CR',
   status: 'Open',
+  type: 'ENHANCEMENT',
+  targets: [],
   createdAt: NOW,
   updatedAt: NOW,
 };
 
 function solutionInput(overrides: Record<string, unknown> = {}) {
   return {
-    projectId: PROJECT_ID,
+    changeRequestId: CR_ID,
     threadId: THREAD_ID,
     sessionId: SESSION_ID,
     inputRevision: 1,
@@ -77,21 +80,21 @@ describe('wizard-free artifact persistence', () => {
   beforeEach(async () => {
     db = new TaskPlannerDatabase(`wizard-free-artifacts-${Date.now()}-${Math.random()}`);
     await db.open();
-    await db.projects.add(project);
-    await db.projects.add({ ...project, id: OTHER_PROJECT_ID, name: 'Other project' });
+    await db.changeRequests.add(changeRequest);
+    await db.changeRequests.add({ ...changeRequest, id: OTHER_CR_ID, code: 'CR-ARTIFACT-02' });
     await db.chatThreads.add({
       id: THREAD_ID,
-      scopeKey: `project:${PROJECT_ID}`,
-      scopeType: 'project',
-      entityId: PROJECT_ID,
+      scopeKey: `cr:${CR_ID}`,
+      scopeType: 'cr',
+      entityId: CR_ID,
       createdAt: NOW,
       updatedAt: NOW,
     });
     await db.chatThreads.add({
       id: '88888888-8888-4888-8888-888888888888',
-      scopeKey: `project:${OTHER_PROJECT_ID}`,
-      scopeType: 'project',
-      entityId: OTHER_PROJECT_ID,
+      scopeKey: `cr:${OTHER_CR_ID}`,
+      scopeType: 'cr',
+      entityId: OTHER_CR_ID,
       createdAt: NOW,
       updatedAt: NOW,
     });
@@ -161,7 +164,7 @@ describe('wizard-free artifact persistence', () => {
     expect(regenerated.note.id).not.toBe(first.note.id);
     expect(regenerated.note.sdlcArtifact).toMatchObject({ kind: 'SOLUTION', version: 2 });
 
-    const chain = await loadCanonicalArtifactChain(PROJECT_ID, THREAD_ID, db);
+    const chain = await loadCanonicalArtifactChain(CR_ID, THREAD_ID, db);
     expect(chain.map((note) => [note.sdlcArtifact?.kind, note.sdlcArtifact?.version])).toEqual([
       ['SOLUTION', 1],
       ['SOLUTION', 2],
@@ -172,7 +175,7 @@ describe('wizard-free artifact persistence', () => {
     const solution = await saveSolutionVersion(solutionInput(), db);
     const pack = manifest(3);
     const input = {
-      projectId: PROJECT_ID,
+      changeRequestId: CR_ID,
       threadId: THREAD_ID,
       sessionId: SESSION_ID,
       inputRevision: 2,

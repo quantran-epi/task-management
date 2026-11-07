@@ -32,12 +32,12 @@ let db: TaskPlannerDatabase;
 beforeEach(async () => {
   db = new TaskPlannerDatabase(`hub-change-pack-${Date.now()}-${Math.random()}`);
   await db.open();
-  await db.projects.add(project);
+  await db.changeRequests.add(project);
   // Plan 01 removed the wizard-session requirement: a project-scoped thread is the anchor.
   await db.chatThreads.add({
     id: THREAD_ID,
-    scopeKey: `project:${PROJECT_ID}`,
-    scopeType: 'project',
+    scopeKey: `cr:${PROJECT_ID}`,
+    scopeType: 'cr',
     entityId: PROJECT_ID,
     createdAt: NOW,
     updatedAt: NOW,
@@ -50,13 +50,13 @@ afterEach(async () => {
 
 /** Writes a SOLUTION Note exactly the way the hub does: `{ markdown, exportPayload: {} }`. */
 async function seedHubSolution(markdown = '# SOLUTION\nHệ thống hiện tại.') {
-  return saveHubSolution({ db, projectId: PROJECT_ID, threadId: THREAD_ID, sessionId: SESSION_ID, markdown, draftRevision: 1 });
+  return saveHubSolution({ db, changeRequestId: PROJECT_ID, threadId: THREAD_ID, sessionId: SESSION_ID, markdown, draftRevision: 1 });
 }
 
 async function confirm(manifest: Readonly<ChangePackManifest>, solution: Awaited<ReturnType<typeof seedHubSolution>>) {
   return confirmHubChangePack({
     db,
-    projectId: PROJECT_ID,
+    changeRequestId: PROJECT_ID,
     threadId: THREAD_ID,
     sessionId: SESSION_ID,
     inputRevision: 1,
@@ -158,7 +158,7 @@ describe('buildHubReconciliation', () => {
 
     const result = await buildHubReconciliation({
       db,
-      projectId: PROJECT_ID,
+      changeRequestId: PROJECT_ID,
       threadId: THREAD_ID,
       manifest,
       solutionNoteId: solution.noteId,
@@ -177,7 +177,7 @@ describe('buildHubReconciliation', () => {
       id: solutionNoteId,
       type: 'document',
       tags: ['sdlc'],
-      entityType: 'project',
+      entityType: 'cr',
       entityId: PROJECT_ID,
       title: 'SOLUTION v1',
       body: JSON.stringify({
@@ -196,7 +196,7 @@ describe('buildHubReconciliation', () => {
       isPinned: false,
       sdlcArtifact: {
         kind: 'SOLUTION',
-        projectId: PROJECT_ID,
+        changeRequestId: PROJECT_ID,
         threadId: THREAD_ID,
         sessionId: SESSION_ID,
         version: 1,
@@ -213,7 +213,7 @@ describe('buildHubReconciliation', () => {
     const manifest = await validateHubChangePack(await readFixture('valid.zip'), CR);
     const result = await buildHubReconciliation({
       db,
-      projectId: PROJECT_ID,
+      changeRequestId: PROJECT_ID,
       threadId: THREAD_ID,
       manifest,
       solutionNoteId,
@@ -233,7 +233,7 @@ describe('buildHubReconciliation', () => {
     await expect(
       buildHubReconciliation({
         db,
-        projectId: PROJECT_ID,
+        changeRequestId: PROJECT_ID,
         threadId: THREAD_ID,
         manifest,
         solutionNoteId: solution.noteId,

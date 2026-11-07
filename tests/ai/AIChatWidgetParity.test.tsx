@@ -19,6 +19,8 @@ let loopScript: (options: any) => Promise<any>;
 const loopCalls: any[] = [];
 
 vi.mock('../../src/services/ai/aiOrchestratorLoop', () => ({
+  // The turn runtime reads this constant at send time; a mock without it throws.
+  DEFAULT_MAX_TOOL_ROUNDS: 50,
   runAiOrchestratorLoop: (options: any) => {
     loopCalls.push(options);
     return loopScript(options);
@@ -35,8 +37,8 @@ const CR_ID = '22222222-2222-4222-8222-222222222222';
 const STEP_ID = 'INTAKE' as const;
 const API_KEY = 'sk-super-secret-parity-key';
 
-const DRAWER_SCOPE = { type: 'project' as const, id: PROJECT_ID, title: 'Dự án Parity' };
-const DRAWER_SCOPE_KEY = `project:${PROJECT_ID}`;
+const DRAWER_SCOPE = { type: 'cr' as const, id: PROJECT_ID, title: 'Dự án Parity' };
+const DRAWER_SCOPE_KEY = `cr:${PROJECT_ID}`;
 const SDLC_SCOPE_KEY = `sdlc:${PROJECT_ID}:${CR_ID}:${STEP_ID}`;
 
 type PendingLoop = {
@@ -70,16 +72,19 @@ const hosts: HostHarness[] = [
   {
     name: 'AIChatDrawer',
     scopeKey: DRAWER_SCOPE_KEY,
-    scopeLabel: 'project · Dự án Parity',
+    scopeLabel: 'cr · Dự án Parity',
     mount: async (db) => {
       render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={DRAWER_SCOPE} />);
       await waitFor(() => expect(screen.getByTestId('chat-tab-toolbox')).toBeInTheDocument());
     },
     prepare: async (db) => {
-      await db.projects.add({
+      await db.changeRequests.add({
         id: PROJECT_ID,
+        code: 'CR-AI-01',
         name: 'Dự án Parity',
         status: 'Open',
+        type: 'ENHANCEMENT',
+        targets: [],
         createdAt: '2026-10-01T00:00:00.000Z',
         updatedAt: '2026-10-01T00:00:00.000Z',
       });
@@ -334,11 +339,11 @@ describe.each(hosts)('$name lifecycle parity through the shared widget', (host) 
     let siblingThreadId: string;
     if (host.name === 'AIChatDrawer') {
       const active = await createChatTab(
-        { scopeType: 'project', scopeKey: DRAWER_SCOPE_KEY, entityId: PROJECT_ID, title: 'Tab chính' },
+        { scopeType: 'cr', scopeKey: DRAWER_SCOPE_KEY, entityId: PROJECT_ID, title: 'Tab chính' },
         db
       );
       const sibling = await createChatTab(
-        { scopeType: 'project', scopeKey: DRAWER_SCOPE_KEY, entityId: PROJECT_ID, title: 'Tab khác' },
+        { scopeType: 'cr', scopeKey: DRAWER_SCOPE_KEY, entityId: PROJECT_ID, title: 'Tab khác' },
         db
       );
       await setActiveTab(DRAWER_SCOPE_KEY, active.id, db);

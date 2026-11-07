@@ -104,7 +104,7 @@ describe('real scripted get → patch → approve path', () => {
     markdown = BASE;
     patchContent = 'Dòng kiểm tra đầu vào mới.';
     finalText = 'Đã đề xuất một chỉnh sửa nhỏ vào mục kiểm tra đầu vào.';
-    const coordinator = createSdlcWorkflowCoordinator({ projectId, threadId: crypto.randomUUID() });
+    const coordinator = createSdlcWorkflowCoordinator({ changeRequestId: projectId, threadId: crypto.randomUUID() });
     await coordinator.startOrUpdateIntake({ cr: 'CR', featureName: 'Test', author: 'T', requestingUnit: 'IT', date: '2026-11-05' }, 'PL01', 'PL02');
     const state = await coordinator.commitSolution(BASE);
     context = { projectId: state.projectId, crId: 'cr', stepId: 'SOLUTION',

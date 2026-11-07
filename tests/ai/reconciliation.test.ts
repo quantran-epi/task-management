@@ -20,7 +20,7 @@ const cases = (JSON.parse(
 }).cases;
 
 const ids = {
-  projectId: '25000000-0000-4000-8000-000000000006',
+  changeRequestId: '25000000-0000-4000-8000-000000000006',
   threadId: '25000000-0000-4000-8000-000000000106',
   solutionNoteId: '25000000-0000-4000-8000-000000002006',
   solutionVersion: 4,
@@ -34,7 +34,7 @@ const ids = {
 const baseInput = {
   ...ids,
   solution: {
-    projectId: ids.projectId,
+    changeRequestId: ids.changeRequestId,
     threadId: ids.threadId,
     noteId: ids.solutionNoteId,
     version: ids.solutionVersion,
@@ -161,7 +161,7 @@ describe('reconcileSolutionWithPack', () => {
   });
 
   it.each([
-    ['projectId', 'WRONG_PROJECT'],
+    ['changeRequestId', 'WRONG_CHANGE_REQUEST'],
     ['solutionVersion', 'STALE_SOLUTION'],
     ['packHash', 'PACK_HASH_MISMATCH'],
     ['cr', 'CR_MISMATCH'],
@@ -170,7 +170,7 @@ describe('reconcileSolutionWithPack', () => {
   ])('rejects %s mismatch before producing result', (field, code) => {
     const input = JSON.parse(JSON.stringify(baseInput)) as typeof baseInput;
     if (field === 'solutionVersion') input.solution.version = 99;
-    else if (field === 'projectId') input.projectId = '25000000-0000-4000-8000-000000000099';
+    else if (field === 'changeRequestId') input.changeRequestId = '25000000-0000-4000-8000-000000000099';
     else if (field === 'packHash') input.pack.packHash = '9999999999999999999999999999999999999999999999999999999999999999';
     else input.pack.identity[field as 'cr' | 'base' | 'head'] = 'wrong';
     expect(() => reconcileSolutionWithPack(input)).toThrow(code);
@@ -206,7 +206,7 @@ describe('reconciliation behavior acceptance', () => {
 
   it('rejects wrong project, stale solution, wrong CR, and mixed artifact revisions', () => {
     for (const [field, code] of [
-      ['projectId', 'WRONG_PROJECT'],
+      ['changeRequestId', 'WRONG_CHANGE_REQUEST'],
       ['solutionVersion', 'STALE_SOLUTION'],
       ['packHash', 'PACK_HASH_MISMATCH'],
       ['cr', 'CR_MISMATCH'],
@@ -215,7 +215,7 @@ describe('reconciliation behavior acceptance', () => {
     ] as const) {
       const input = JSON.parse(JSON.stringify(baseInput)) as typeof baseInput;
       if (field === 'solutionVersion') input.solution.version = 99;
-      else if (field === 'projectId') input.projectId = '25000000-0000-4000-8000-000000000099';
+      else if (field === 'changeRequestId') input.changeRequestId = '25000000-0000-4000-8000-000000000099';
       else if (field === 'packHash') input.pack.packHash = '9'.repeat(64);
       else input.pack.identity[field] = 'wrong';
       expect(() => reconcileSolutionWithPack(input)).toThrow(code);

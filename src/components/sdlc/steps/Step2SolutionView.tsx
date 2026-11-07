@@ -21,6 +21,7 @@ import {
 import { SafeMarkdown } from '../common/SafeMarkdown';import { saveHubSolution } from '../../../services/wizard/hubSolution';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
 import type { SdlcArtifactRef, SdlcStepId, SdlcWorkflowMetadata } from '../../../services/wizard/workflowSchemas';
+import type { ChatThread } from '../../../types/models';
 import { formatGuardMessage } from '../../../services/wizard/workflowGuards';
 import { ConventionsSummaryCard, type ConventionsSummaryProps } from '../common/ConventionsSummaryCard';
 
@@ -208,16 +209,19 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
     }
     setSaving(true);
     try {
-      // Ensure project-scoped thread exists for artifact commitment
+      // The CR-scoped SOLUTION thread is the artifact commit target (D-02, D-07).
       const scopeKey = crId ? `sdlc:${projectId}:${crId}:SOLUTION` : `sdlc:${projectId}:SOLUTION`;
-      let thread = await db.chatThreads.where('scopeKey').equals(scopeKey).first();
+      let thread: ChatThread | undefined = await db.chatThreads
+        .where('scopeKey')
+        .equals(scopeKey)
+        .first();
       if (!thread) {
         const now = new Date().toISOString();
         thread = {
           id: crypto.randomUUID(),
           scopeKey,
-          scopeType: 'project',
-          entityId: projectId,
+          scopeType: 'cr',
+          entityId: crId ?? projectId,
           title: `[SDLC] SOLUTION`,
           createdAt: now,
           updatedAt: now,
@@ -227,7 +231,7 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
 
       const result = await saveHubSolution({
         db,
-        projectId,
+        changeRequestId: crId ?? projectId,
         threadId: thread.id,
         sessionId: crypto.randomUUID(),
         markdown: trimmed,

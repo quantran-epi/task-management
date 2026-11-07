@@ -280,15 +280,11 @@ export const useLayoutStore = create<LayoutState>()(
       name: LAYOUT_STORAGE_KEY,
       storage: createJSONStorage(() => localStorage),
       // T-25.4-01: Validate stored state against schema/shape with fallback to defaults on corrupt data
-      // T-31.2-16: the persist key moved to `_v2`; a hand-edited v1 blob still cannot resolve
-      // to the deleted `projects` tool window or a dead `projects` editor tab.
+      // T-31.2-16: the persist key moved to `_v2`, so a pre-normalization blob is never read and
+      // no retired tool-window or editor-tab id can resolve.
       partialize: (state) => ({
         leftActiveId:
-          state.leftActiveId === 'projects'
-            ? 'cr_explorer'
-            : typeof state.leftActiveId === 'string'
-            ? state.leftActiveId
-            : null,
+          typeof state.leftActiveId === 'string' ? state.leftActiveId : null,
         rightActiveId: typeof state.rightActiveId === 'string' ? state.rightActiveId : null,
         bottomActiveId: typeof state.bottomActiveId === 'string' ? state.bottomActiveId : null,
         leftPanelSize: typeof state.leftPanelSize === 'number' && state.leftPanelSize > 0 ? state.leftPanelSize : DEFAULT_LAYOUT_STATE.leftPanelSize,
@@ -296,7 +292,6 @@ export const useLayoutStore = create<LayoutState>()(
         bottomPanelSize: typeof state.bottomPanelSize === 'number' && state.bottomPanelSize > 0 ? state.bottomPanelSize : DEFAULT_LAYOUT_STATE.bottomPanelSize,
         openTabs: Array.isArray(state.openTabs) && state.openTabs.length > 0
           ? state.openTabs
-              .filter((tab) => (tab.viewType as string) !== 'projects')
               .slice(0, MAX_OPEN_TABS)
               .map((tab) => ({
                 ...tab,

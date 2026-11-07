@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QuickReminderModal } from '../../../src/components/common/QuickReminderModal';
 import { TaskPlannerDatabase } from '../../../src/db/index';
-import type { Task, Project } from '../../../src/types/models';
+import type { Task, ChangeRequest } from '../../../src/types/models';
 
 describe('QuickReminderModal', () => {
   let testDb: TaskPlannerDatabase;
@@ -19,6 +19,7 @@ describe('QuickReminderModal', () => {
   it('renders modal and submits new reminder for task', async () => {
     const mockTask: Task = {
       id: 'task-test-rem',
+      crId: 'cr-test-rem',
       name: 'Task cần thêm nhắc nhở',
       status: 'Open',
       priority: 'Medium',
@@ -55,16 +56,19 @@ describe('QuickReminderModal', () => {
     expect(handleClose).toHaveBeenCalled();
   });
 
-  it('submits new reminder for project', async () => {
-    const mockProj: Project = {
-      id: 'proj-test-rem',
-      name: 'Project cần nhắc nhở',
+  it('submits new reminder for a Change Request', async () => {
+    const mockCr: ChangeRequest = {
+      id: 'cr-test-rem',
+      code: 'CR-REM-01',
+      name: 'CR cần nhắc nhở',
       status: 'Open',
+      type: 'ENHANCEMENT',
+      targets: [],
       reminders: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    await testDb.projects.add(mockProj);
+    await testDb.changeRequests.add(mockCr);
 
     const handleClose = vi.fn();
 
@@ -72,7 +76,7 @@ describe('QuickReminderModal', () => {
       <QuickReminderModal
         open={true}
         onClose={handleClose}
-        target={{ type: 'project', entity: mockProj }}
+        target={{ type: 'cr', entity: mockCr }}
         db={testDb}
       />
     );
@@ -81,7 +85,7 @@ describe('QuickReminderModal', () => {
     fireEvent.click(saveButton);
 
     await waitFor(async () => {
-      const updated = await testDb.projects.get('proj-test-rem');
+      const updated = await testDb.changeRequests.get('cr-test-rem');
       expect(updated?.reminders?.length).toBe(1);
     });
 

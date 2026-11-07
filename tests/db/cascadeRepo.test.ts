@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TaskPlannerDatabase } from '../../src/db/index';
 import { createTask, getTask } from '../../src/db/repositories/taskRepo';
 import { createChangeRequest } from '../../src/db/repositories/changeRequestRepo';
-import { deleteTaskWithAllocations } from '../../src/db/repositories/cascadeRepo';
+import { deleteTaskWithAllocations, deleteChangeRequestWithCascade } from '../../src/db/repositories/cascadeRepo';
 import { generateId } from '../../src/utils/uuid';
 
 describe('Atomic Cascade Deletion Transactions (D-13, D-14, D-16, WORK-05, T-02-03)', () => {
@@ -35,6 +35,33 @@ describe('Atomic Cascade Deletion Transactions (D-13, D-14, D-16, WORK-05, T-02-
       expect(await getTask(task.id, testDb)).toBeUndefined();
       const allocs = await testDb.plannedAllocations.where('taskId').equals(task.id).toArray();
       expect(allocs).toHaveLength(0);
+    });
+  });
+
+  describe('deleteChangeRequestWithCascade', () => {
+    it('removes the CR, its child tasks and their allocations atomically', async () => {
+      const cr = await seedCr();
+      const survivorCr = await createChangeRequest(
+        { name: 'Survivor', code: 'CR-KEEP', type: 'BUGFIX' },
+        testDb
+      );
+      const doomed = await createTask({ name: 'Doomed', crId: cr.id }, testDb);
+      const survivor = await createTask({ name: 'Survivor task', crId: survivorCr.id }, testDb);
+
+      await testDb.plannedAllocations.bulkAdd([
+        { id: generateId(), taskId: doomed.id, date: '2026-10-01', allocatedMinutes: 60 },
+        { id: generateId(), taskId: survivor.id, date: '2026-10-01', allocatedMinutes: 30 },
+      ]);
+
+      await deleteChangeRequestWithCascade(cr.id, testDb);
+
+      expect(await testDb.changeRequests.get(cr.id)).toBeUndefined();
+      expect(await getTask(doomed.id, testDb)).toBeUndefined();
+      expect(await testDb.plannedAllocations.where('taskId').equals(doomed.id).count()).toBe(0);
+
+      expect(await testDb.changeRequests.get(survivorCr.id)).toBeDefined();
+      expect(await getTask(survivor.id, testDb)).toBeDefined();
+      expect(await testDb.plannedAllocations.where('taskId').equals(survivor.id).count()).toBe(1);
     });
   });
 

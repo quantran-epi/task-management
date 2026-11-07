@@ -25,7 +25,7 @@ function reconciliation(status: ReconciliationResult['status']): ReconciliationR
   return {
     schemaVersion: 1,
     identity: {
-      projectId: 'project', threadId: 'thread', solutionNoteId: 'solution', solutionVersion: 1,
+      changeRequestId: 'project', threadId: 'thread', solutionNoteId: 'solution', solutionVersion: 1,
       solutionHash: 'a'.repeat(64), packHash: 'b'.repeat(64), cr: 'CR-2501', base: 'base', head: 'head',
     },
     status,

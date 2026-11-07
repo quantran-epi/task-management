@@ -126,15 +126,18 @@ export async function setupMockTransport(
   return { captured, release, releaseAll };
 }
 
+/**
+ * Boots the IntelliJ workbench — the only shell that carries the CR surface (CR Explorer,
+ * `cr_detail` / `sdlc` tabs). The default shell has no CR route at all after the 31.2
+ * normalization, so every SDLC spec starts here.
+ */
+export async function gotoWorkbench(page: Page): Promise<void> {
+  await page.goto('./?ui=intellij', { waitUntil: 'commit' });
+  await expect(page.getByTestId('cr-explorer-btn-new-cr')).toBeVisible({ timeout: 30_000 });
+}
+
 export async function configureAiKey(page: Page): Promise<void> {
-  const settingsMenuItem = page.getByRole('menuitem', { name: 'Cài đặt' });
-  if (!(await settingsMenuItem.isVisible())) {
-    const openMenuBtn = page.getByRole('button', { name: 'Mở menu' });
-    if (await openMenuBtn.isVisible()) {
-      await openMenuBtn.click();
-    }
-  }
-  await page.getByRole('menuitem', { name: 'Cài đặt' }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('tab', { name: /Trợ lý AI & Ghost Dev/ }).click();
 
   const keyInput = page.getByPlaceholder('Nhập 9router API Key (sk-...)');
@@ -145,31 +148,115 @@ export async function configureAiKey(page: Page): Promise<void> {
   }
 }
 
-export async function createProject(page: Page, name: string): Promise<void> {
-  const projectMenuItem = page.getByRole('menuitem', { name: 'Dự án' });
-  if (!(await projectMenuItem.isVisible())) {
-    const openMenuBtn = page.getByRole('button', { name: 'Mở menu' });
-    if (await openMenuBtn.isVisible()) {
-      await openMenuBtn.click();
-    }
-  }
-  await page.getByRole('menuitem', { name: 'Dự án' }).click();
-  await page.getByRole('button', { name: 'Dự án mới' }).click();
-  await page.getByLabel('Tên dự án').fill(name);
-  await page.getByRole('button', { name: 'Tạo dự án' }).click();
-  await expect(page.getByText(name, { exact: true })).toBeVisible();
+/**
+ * Creates a subsystem under a fresh logical parent. A CR target must be a subsystem
+ * (`assertTargetsAreSubsystems`), so a bare `LOGICAL_GROUP` cannot be used as a target.
+ */
+export async function createSubsystem(
+  page: Page,
+  options: { groupName: string; groupCode: string; name: string; code: string }
+): Promise<void> {
+  await page.getByRole('button', { name: /Alt\+6: Systems Explorer/ }).click();
+
+  await page.getByRole('button', { name: 'Tạo hệ thống' }).first().click();
+  const groupDialog = page.getByRole('dialog');
+  await expect(groupDialog).toBeVisible();
+  await groupDialog.getByLabel('Tên hệ thống').fill(options.groupName);
+  await groupDialog.getByLabel('Mã hệ thống (Code)').fill(options.groupCode);
+  await groupDialog.getByRole('button', { name: 'Tạo hệ thống' }).click();
+  await expect(page.getByText(options.groupCode, { exact: true })).toBeVisible();
+
+  await page.getByTitle('Tạo hệ thống mới').click();
+  const subsystemDialog = page.getByRole('dialog');
+  await expect(subsystemDialog).toBeVisible();
+  await subsystemDialog.locator('#type').click();
+  await page
+    .locator('.ant-select-dropdown')
+    .last()
+    .getByText('Service / Microservice')
+    .first()
+    .click();
+  await subsystemDialog.getByLabel('Tên hệ thống').fill(options.name);
+  await subsystemDialog.getByLabel('Mã hệ thống (Code)').fill(options.code);
+  await subsystemDialog.getByRole('button', { name: 'Tạo hệ thống' }).click();
+  await expect(page.getByText(options.code, { exact: true })).toBeVisible();
 }
 
-export async function openAiDrawerWithProjectScope(page: Page, projectName: string): Promise<void> {
-  const aiButton = page.getByRole('button', { name: 'Trợ lý AI (Cmd+J / Ctrl+J)' });
-  await expect(aiButton).toBeVisible();
-  await aiButton.click();
-  await expect(page.getByText('Trợ lý AI', { exact: true }).first()).toBeVisible();
+/**
+ * Activates a left tool window. The stripe button is a toggle, so pressing it while the
+ * window is already open closes it — check the explorer's own testid first.
+ */
+async function ensureCrExplorer(page: Page): Promise<void> {
+  // After a reload the splash screen covers the workbench for ~2s, so the stripe button does
+  // not exist yet; wait for it before deciding whether the explorer is already open.
+  const stripeButton = page.getByRole('button', { name: /Alt\+1: CR Explorer/ });
+  await expect(stripeButton).toBeVisible({ timeout: 30_000 });
+  const explorer = page.locator('.workbench-toolwindow-left');
+  if (!(await explorer.getByTestId('cr-explorer-btn-new-cr').isVisible())) {
+    await stripeButton.click();
+  }
+  await expect(explorer.getByTestId('cr-explorer-btn-new-cr')).toBeVisible();
+}
+
+/** Creates a CR from the CR Explorer and targets `targetCode` (a subsystem code). */
+export async function createChangeRequest(
+  page: Page,
+  options: { name: string; code: string; targetCode: string }
+): Promise<void> {
+  await ensureCrExplorer(page);
+  await page.getByTestId('cr-explorer-btn-new-cr').click();
+
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel('Tên Change Request').fill(options.name);
+  await dialog.getByLabel('Mã CR').fill(options.code);
+  await dialog.locator('[data-testid="target-systems-selector"] .ant-select-input').click();
+  await page
+    .locator('.ant-select-dropdown')
+    .last()
+    .getByText(options.targetCode)
+    .first()
+    .click();
+  await dialog.getByRole('button', { name: 'Tạo Change Request' }).click();
+
+  await expect(page.getByText(options.code, { exact: true })).toBeVisible();
+}
+
+/** Opens the CR's SDLC Studio by selecting the CR's subsystem node in the CR Explorer. */
+export async function openSdlcStudio(page: Page, subsystemCode: string): Promise<void> {
+  await ensureCrExplorer(page);
+  await page.locator('.workbench-toolwindow-left').getByText(subsystemCode).first().click();
+  await expect(page.getByText(/^SDLC Studio — /)).toBeVisible();
+}
+
+export async function openAiDrawerWithCrScope(page: Page, crName: string): Promise<void> {
+  // The stripe button toggles the right tool window, so read the durable open flag instead of
+  // guessing — pressing it while the drawer is open closes it. The flag only exists once the
+  // workbench has booted past the splash screen.
+  const stripeButton = page.getByRole('button', { name: /Alt\+3: AI Assistant/ });
+  await expect(stripeButton).toBeVisible({ timeout: 30_000 });
+  const drawerOpen = await page.evaluate(
+    () => localStorage.getItem('planner:ai_chat_open') === 'true'
+  );
+  if (!drawerOpen) {
+    await stripeButton.click();
+  }
+  const header = page.getByText('Trợ lý AI', { exact: true }).first();
+  // The durable flag can outlive the mounted drawer (a restore rewrites settings under it), so
+  // fall back to the stripe button when the header did not appear.
+  try {
+    await expect(header).toBeVisible({ timeout: 5_000 });
+  } catch {
+    await stripeButton.click();
+    await expect(header).toBeVisible();
+  }
 
   await page.getByRole('button', { name: 'Đổi phạm vi ngữ cảnh' }).click();
-  const scopeDialog = page.getByRole('dialog');
-  await scopeDialog.getByText(projectName, { exact: true }).click();
-  await expect(page.getByText(`Đang gắn ngữ cảnh: ${projectName}`, { exact: true })).toBeVisible();
+  const scopeDialog = page.getByRole('dialog').last();
+  await scopeDialog.getByText(crName, { exact: true }).click();
+  await expect(
+    page.locator('.workbench-toolwindow-right').getByText(crName, { exact: true }).first()
+  ).toBeVisible();
 }
 
 type DexieRow = Record<string, unknown>;
@@ -275,4 +362,54 @@ export async function writeDexieRow(
     },
     { name: storeName, record: row }
   );
+}
+
+// ---- Backup export/import -------------------------------------------------
+
+async function openBackupSettings(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('tab', { name: /Sao lưu & Dữ liệu/ }).click();
+}
+
+export async function exportBackupFile(page: Page): Promise<string> {
+  await openBackupSettings(page);
+
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: 'Xuất bản sao lưu (JSON)' }).click(),
+  ]);
+
+  const target = path.join(
+    os.tmpdir(),
+    `taskmate-backup-${Date.now()}-${Math.random().toString(16).slice(2)}.json`
+  );
+  await download.saveAs(target);
+  return target;
+}
+
+export async function downloadBackupJson(page: Page): Promise<Record<string, any>> {
+  const filePath = await exportBackupFile(page);
+  return JSON.parse(fs.readFileSync(filePath, 'utf8')) as Record<string, any>;
+}
+
+export async function importBackupFile(page: Page, filePath: string): Promise<void> {
+  await openBackupSettings(page);
+
+  const fileInput = page.locator('input[type="file"][accept*=".json"]').first();
+  await expect(fileInput).toBeAttached();
+  await fileInput.setInputFiles(filePath);
+
+  const previewModal = page
+    .getByRole('dialog')
+    .filter({ hasText: 'Xem trước & Xác nhận Khôi phục' });
+  await expect(previewModal).toBeVisible();
+
+  await previewModal.getByPlaceholder('RESTORE').fill('RESTORE');
+  const confirmRestoreBtn = previewModal.getByRole('button', { name: 'Xác nhận khôi phục' });
+  await expect(confirmRestoreBtn).toBeEnabled();
+  await confirmRestoreBtn.click();
+
+  await expect(previewModal).not.toBeVisible();
+  // Both the inline success alert and the toast announce it.
+  await expect(page.getByText('Khôi phục dữ liệu thành công').first()).toBeVisible();
 }

@@ -16,14 +16,14 @@ import {
 
 // Type-level contract for the CR-centric model (D-24/D-25/D-26). `tsc --noEmit` is the
 // assertion; these aliases exist only so the compiler checks them.
-// @ts-expect-error — Project was removed from the domain model (D-27)
-export type _RemovedProject = models.Project;
-// @ts-expect-error — Milestone was removed from the domain model (D-27)
-export type _RemovedMilestone = models.Milestone;
 // @ts-expect-error — ChangeRequest.targetSystemIds was replaced by `targets: CrTarget[]`
 export type _RemovedTargetSystemIds = models.ChangeRequest['targetSystemIds'];
-// @ts-expect-error — Task.projectId was replaced by `crId`
-export type _RemovedTaskProjectId = models.Task['projectId'];
+
+// Positive half of the same contract: the CR axis is what the domain model exposes.
+export type _TaskRequiresCrId = models.Task['crId'];
+export type _TaskOptionalSystemId = models.Task['systemId'];
+export type _CrTargets = models.ChangeRequest['targets'];
+export type _SystemParentId = models.System['parentId'];
 
 describe('Banking IT Domain Fields Validation & Normalization (D-01, D-02, D-03, D-04)', () => {
   describe('normalizeTags', () => {

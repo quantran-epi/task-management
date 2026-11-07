@@ -19,8 +19,8 @@ vi.mock('../../src/utils/pptxExport', () => ({
 }));
 
 const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
-const SCOPE = { type: 'project' as const, id: PROJECT_ID, title: 'Isolation Project' };
-const SCOPE_KEY = `project:${PROJECT_ID}`;
+const SCOPE = { type: 'cr' as const, id: PROJECT_ID, title: 'Isolation Project' };
+const SCOPE_KEY = `cr:${PROJECT_ID}`;
 const CHAT_ONE = '💬 Cuộc trò chuyện #1';
 const CHAT_TWO = '💬 Cuộc trò chuyện #2';
 
@@ -34,7 +34,7 @@ describe('AIChatDrawer multi-tab isolation', () => {
   const seedTabs = async (config?: Record<string, unknown>) => {
     const first = await createChatTab(
       {
-        scopeType: 'project',
+        scopeType: 'cr',
         scopeKey: SCOPE_KEY,
         entityId: PROJECT_ID,
         title: CHAT_ONE,
@@ -44,7 +44,7 @@ describe('AIChatDrawer multi-tab isolation', () => {
     );
     const second = await createChatTab(
       {
-        scopeType: 'project',
+        scopeType: 'cr',
         scopeKey: SCOPE_KEY,
         entityId: PROJECT_ID,
         title: CHAT_TWO,
@@ -87,10 +87,13 @@ describe('AIChatDrawer multi-tab isolation', () => {
     });
     db = new TaskPlannerDatabase(`isolation-${Date.now()}-${Math.random()}`);
     await db.open();
-    await db.projects.add({
+    await db.changeRequests.add({
       id: PROJECT_ID,
+        code: 'CR-AI-01',
       name: 'Isolation Project',
       status: 'Open',
+        type: 'ENHANCEMENT',
+        targets: [],
       createdAt: '2026-10-30T00:00:00.000Z',
       updatedAt: '2026-10-30T00:00:00.000Z',
     });

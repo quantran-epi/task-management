@@ -22,8 +22,8 @@ const mockDb = {
     update: vi.fn().mockResolvedValue(1),
   },
   tasks: { toArray: vi.fn().mockResolvedValue([]) },
-  projects: { toArray: vi.fn().mockResolvedValue([]) },
-  milestones: { toArray: vi.fn().mockResolvedValue([]) },
+  changeRequests: { toArray: vi.fn().mockResolvedValue([]) },
+  systems: { toArray: vi.fn().mockResolvedValue([]) },
 } as any;
 
 describe('MermaidAssistantView AI Prompt Modal', () => {

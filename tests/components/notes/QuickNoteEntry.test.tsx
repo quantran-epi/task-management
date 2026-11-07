@@ -49,7 +49,7 @@ describe('QuickNoteEntry', () => {
     render(
       <QuickNoteEntry
         db={db}
-        defaultEntityType="project"
+        defaultEntityType="cr"
         defaultEntityId="22222222-2222-4222-8222-222222222222"
         onCreated={onCreated}
       />
@@ -61,7 +61,7 @@ describe('QuickNoteEntry', () => {
     await waitFor(() => expect(onCreated).toHaveBeenCalledOnce());
     const notes = await db.notes.toArray();
     expect(notes.length).toBe(1);
-    expect(notes[0]?.entityType).toBe('project');
+    expect(notes[0]?.entityType).toBe('cr');
     expect(notes[0]?.entityId).toBe('22222222-2222-4222-8222-222222222222');
 
     const attachments = await db.noteAttachments.where('noteId').equals(notes[0]!.id).toArray();

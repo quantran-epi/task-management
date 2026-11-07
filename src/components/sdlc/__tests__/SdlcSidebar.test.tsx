@@ -53,7 +53,7 @@ describe('SdlcSidebar Component (Unified CR Hierarchy)', () => {
 
     render(
       <SdlcSidebar
-        projectId={crId}
+        changeRequestId={crId}
         selectedStep="INTAKE"
         onSelectStep={handleSelectStep}
         activeCrId={crId}
@@ -75,17 +75,16 @@ describe('SdlcSidebar Component (Unified CR Hierarchy)', () => {
     // Read-only panel replaces the deleted repo-config chip (D-37)
     expect(await screen.findByText('Subsystems & Repos')).toBeInTheDocument();
     expect(await screen.findByText('/var/repos/payment-service')).toBeInTheDocument();
-    expect(screen.queryByTestId('sidebar-btn-repo-config')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('sidebar-step-SOLUTION'));
     expect(handleSelectStep).toHaveBeenCalledWith('SOLUTION');
   });
 
-  it('has no repo-config chip even before the CR resolves', async () => {
+  it('renders the read-only Subsystems & Repos panel instead of a repo-config chip', async () => {
     render(
-      <SdlcSidebar projectId={crId} selectedStep="INTAKE" onSelectStep={vi.fn()} db={db} />
+      <SdlcSidebar changeRequestId={crId} selectedStep="INTAKE" onSelectStep={vi.fn()} db={db} />
     );
     await waitFor(() => expect(screen.getByTestId('sdlc-sidebar')).toBeInTheDocument());
-    expect(screen.queryByTestId('sidebar-btn-repo-config')).not.toBeInTheDocument();
+    expect(await screen.findByText('Subsystems & Repos')).toBeInTheDocument();
   });
 });

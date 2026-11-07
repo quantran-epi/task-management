@@ -32,7 +32,7 @@ function snapshot(
   return {
     schemaVersion: 1,
     sessionId: SESSION_ID,
-    projectId: PROJECT_ID,
+    changeRequestId: PROJECT_ID,
     threadId: THREAD_ID,
     skill: 'SOLUTION',
     status,
@@ -68,7 +68,7 @@ describe('artifact persistence', () => {
   beforeEach(async () => {
     db = new TaskPlannerDatabase(`wizard-artifact-${Date.now()}-${Math.random()}`);
     await db.open();
-    await db.projects.add({
+    await db.changeRequests.add({
       id: PROJECT_ID,
       name: 'Wizard project',
       status: 'Open',
@@ -77,8 +77,8 @@ describe('artifact persistence', () => {
     });
     await db.chatThreads.add({
       id: THREAD_ID,
-      scopeKey: `project:${PROJECT_ID}`,
-      scopeType: 'project',
+      scopeKey: `cr:${PROJECT_ID}`,
+      scopeType: 'cr',
       entityId: PROJECT_ID,
       createdAt: NOW,
       updatedAt: NOW,
@@ -99,7 +99,7 @@ describe('artifact persistence', () => {
 
   it('deduplicates concurrent SOLUTION saves and allocates changed drafts from metadata', async () => {
     const input = {
-      projectId: PROJECT_ID,
+      changeRequestId: PROJECT_ID,
       threadId: THREAD_ID,
       sessionId: SESSION_ID,
       inputRevision: 1,
@@ -151,7 +151,7 @@ describe('artifact persistence', () => {
 
   it('saves approved artifact, set membership, and event atomically without Blob data', async () => {
     const source = await saveSolutionVersion({
-      projectId: PROJECT_ID,
+      changeRequestId: PROJECT_ID,
       threadId: THREAD_ID,
       sessionId: SESSION_ID,
       inputRevision: 1,
@@ -181,7 +181,7 @@ describe('artifact persistence', () => {
 
     const result = await saveApprovedArtifact({
       kind: 'PL02',
-      projectId: PROJECT_ID,
+      changeRequestId: PROJECT_ID,
       threadId: THREAD_ID,
       sessionId: SESSION_ID,
       inputRevision: 1,
@@ -193,9 +193,9 @@ describe('artifact persistence', () => {
       approvedAt: '2026-10-28T12:02:00.000Z',
     }, db);
 
-    const set = await db.documentSets.filter((candidate) => candidate.sdlc?.projectId === PROJECT_ID).first();
+    const set = await db.documentSets.filter((candidate) => candidate.sdlc?.changeRequestId === PROJECT_ID).first();
     expect(set?.documentIds).toEqual([source.note.id, result.note.id]);
-    expect(result.note.entityType).toBe('project');
+    expect(result.note.entityType).toBe('cr');
     expect(JSON.stringify(result.note)).not.toContain('Blob');
     expect(result.note.sdlcArtifact).toMatchObject({
       kind: 'PL02',
@@ -217,7 +217,7 @@ describe('artifact persistence', () => {
     });
     const before = await counts();
     const base = {
-      projectId: PROJECT_ID,
+      changeRequestId: PROJECT_ID,
       threadId: THREAD_ID,
       sessionId: SESSION_ID,
       inputRevision: 1,
@@ -228,13 +228,13 @@ describe('artifact persistence', () => {
       approvedAt: NOW,
     };
     await expect(saveSolutionVersion({ ...base, inputHash: 'd' }, db)).rejects.toMatchObject({ code: 'ARTIFACT_HASH_INVALID' });
-    await expect(saveSolutionVersion({ ...base, projectId: NOTE_ID }, db)).rejects.toMatchObject({ code: 'WIZARD_PROJECT_MISMATCH' });
+    await expect(saveSolutionVersion({ ...base, changeRequestId: NOTE_ID }, db)).rejects.toMatchObject({ code: 'WIZARD_PROJECT_MISMATCH' });
     expect(await counts()).toEqual(before);
   });
 
   it('treats a changed content hash as a new version and replays under a bumped revision', async () => {
     const base = {
-      projectId: PROJECT_ID,
+      changeRequestId: PROJECT_ID,
       threadId: THREAD_ID,
       sessionId: SESSION_ID,
       inputRevision: 1,
@@ -281,7 +281,7 @@ describe('wizard lifecycle contracts', () => {
 
   it('rejects unknown keys, identity changes, stale revisions, and completion without approval', () => {
     expect(WizardSnapshotSchema.safeParse({ ...snapshot('review'), apiKey: 'secret' }).success).toBe(false);
-    expectTransitionCode(snapshot('review'), snapshot('approved', { projectId: NOTE_ID }), 'WIZARD_PROJECT_MISMATCH');
+    expectTransitionCode(snapshot('review'), snapshot('approved', { changeRequestId: NOTE_ID }), 'WIZARD_PROJECT_MISMATCH');
     expectTransitionCode(snapshot('review'), snapshot('approved', { threadId: NOTE_ID }), 'WIZARD_THREAD_MISMATCH');
     expectTransitionCode(snapshot('review'), snapshot('gap_fill'), 'WIZARD_INPUT_REVISION_STALE');
     expectTransitionCode(snapshot('review'), snapshot('completed'), 'WIZARD_ILLEGAL_TRANSITION');
@@ -317,7 +317,7 @@ describe('wizard lifecycle contracts', () => {
   it('validates artifact chains and stable idempotency keys', () => {
     const solution = SdlcArtifactMetadataSchema.parse({
       kind: 'SOLUTION',
-      projectId: PROJECT_ID,
+      changeRequestId: PROJECT_ID,
       threadId: THREAD_ID,
       sessionId: SESSION_ID,
       version: 1,
@@ -369,8 +369,8 @@ describe('wizard lifecycle contracts', () => {
       updatedAt: NOW,
     }).success).toBe(true);
 
-    expect(SdlcDocumentSetMetadataSchema.parse({ projectId: PROJECT_ID, purpose: 'sdlc' })).toEqual({
-      projectId: PROJECT_ID,
+    expect(SdlcDocumentSetMetadataSchema.parse({ changeRequestId: PROJECT_ID, purpose: 'sdlc' })).toEqual({
+      changeRequestId: PROJECT_ID,
       purpose: 'sdlc',
     });
   });

@@ -6,10 +6,10 @@ import { TargetSystemsSelector } from '../../../src/components/changeRequests/Ta
 import { ChangeRequestModal } from '../../../src/components/changeRequests/ChangeRequestModal';
 import { ChangeRequestsView } from '../../../src/views/ChangeRequestsView';
 import { ChangeRequestTable } from '../../../src/components/changeRequests/ChangeRequestTable';
-import { ProjectExplorer } from '../../../src/workbench/toolwindows/ProjectExplorer';
+import { CRExplorer } from '../../../src/workbench/toolwindows/CRExplorer';
+import { useLayoutStore } from '../../../src/workbench/store/layoutStore';
 import { createSystem } from '../../../src/db/repositories/systemRepo';
 import { createChangeRequest } from '../../../src/db/repositories/changeRequestRepo';
-import { createMilestone } from '../../../src/db/repositories/milestoneRepo';
 import { createTask } from '../../../src/db/repositories/taskRepo';
 
 describe('TargetSystemsSelector & ChangeRequestModal (Task 1)', () => {
@@ -82,7 +82,7 @@ describe('TargetSystemsSelector & ChangeRequestModal (Task 1)', () => {
   });
 });
 
-describe('ChangeRequestsView, ChangeRequestTable, and ProjectExplorer (Task 2)', () => {
+describe('ChangeRequestsView, ChangeRequestTable, and CRExplorer (Task 2)', () => {
   let db: TaskPlannerDatabase;
 
   beforeEach(async () => {
@@ -128,7 +128,7 @@ describe('ChangeRequestsView, ChangeRequestTable, and ProjectExplorer (Task 2)',
         code: 'CR-2026-001',
         type: 'NEW_FEATURE',
         status: 'In Progress',
-        targetSystemIds: [subsystem.id],
+        targets: [{ systemId: subsystem.id }],
       },
       db
     );
@@ -139,7 +139,8 @@ describe('ChangeRequestsView, ChangeRequestTable, and ProjectExplorer (Task 2)',
         status: 'Done',
         priority: 'High',
         estimateMinutes: 60,
-        projectId: sampleCR.id,
+        crId: sampleCR.id,
+        systemId: subsystem.id,
       },
       db
     );
@@ -168,7 +169,33 @@ describe('ChangeRequestsView, ChangeRequestTable, and ProjectExplorer (Task 2)',
     expect(screen.getByText('100%')).toBeInTheDocument();
   });
 
-  it('ProjectExplorer renders CR items with target system pills', async () => {
+  it('CRExplorer opens a cr_detail tab instead of swapping the view inline', async () => {
+    const subsystem = await createSystem(
+      { name: 'Card Auth API', code: 'SC-AUTH-API', type: 'SERVICE' },
+      db
+    );
+    const cr = await createChangeRequest(
+      {
+        name: 'Revamp Auth Flow',
+        code: 'CR-AUTH-01',
+        type: 'ENHANCEMENT',
+        targets: [{ systemId: subsystem.id }],
+      },
+      db
+    );
+
+    render(<CRExplorer db={db} />);
+
+    fireEvent.click(await screen.findByText('Revamp Auth Flow'));
+
+    await waitFor(() => {
+      const tab = useLayoutStore.getState().openTabs.find((t) => t.viewType === 'cr_detail');
+      expect(tab).toBeDefined();
+      expect(tab?.params?.changeRequestId).toBe(cr.id);
+    });
+  });
+
+  it('CRExplorer renders CR items with target subsystem pills', async () => {
     const parent = await createSystem(
       {
         name: 'SmartCard Core',
@@ -193,15 +220,7 @@ describe('ChangeRequestsView, ChangeRequestTable, and ProjectExplorer (Task 2)',
         name: 'Revamp Auth Flow',
         code: 'CR-AUTH-01',
         type: 'ENHANCEMENT',
-        targetSystemIds: [subsystem.id],
-      },
-      db
-    );
-
-    const ms = await createMilestone(
-      {
-        name: 'Sprint 1 Delivery',
-        projectId: cr.id,
+        targets: [{ systemId: subsystem.id }],
       },
       db
     );
@@ -209,8 +228,8 @@ describe('ChangeRequestsView, ChangeRequestTable, and ProjectExplorer (Task 2)',
     await createTask(
       {
         name: 'Implement OAuth Token Guard',
-        projectId: cr.id,
-        milestoneId: ms.id,
+        crId: cr.id,
+        systemId: subsystem.id,
         status: 'Open',
         priority: 'Urgent',
         estimateMinutes: 120,
@@ -218,7 +237,7 @@ describe('ChangeRequestsView, ChangeRequestTable, and ProjectExplorer (Task 2)',
       db
     );
 
-    render(<ProjectExplorer db={db} />);
+    render(<CRExplorer db={db} />);
 
     // Explorer tree elements
     expect(await screen.findByText('Revamp Auth Flow')).toBeInTheDocument();

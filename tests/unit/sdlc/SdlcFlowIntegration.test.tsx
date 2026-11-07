@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../../src/db';
-import { ProjectSdlcView } from '../../../src/views/ProjectSdlcView';
+import { ChangeRequestSdlcView } from '../../../src/views/ChangeRequestSdlcView';
 import { SdlcStaleBanner } from '../../../src/components/sdlc/common/SdlcStaleBanner';
 import { CrCreateModal } from '../../../src/components/sdlc/common/CrCreateModal';
 import { createSdlcWorkflowCoordinator } from '../../../src/services/wizard/workflowCoordinator';
@@ -16,10 +16,13 @@ describe('SDLC Flow Integration & Components', () => {
 
   beforeEach(async () => {
     db = new TaskPlannerDatabase(`test-sdlc-integration-${Math.random()}`);
-    await db.projects.add({
+    await db.changeRequests.add({
       id: projectId,
       name: 'Ngân hàng số - QR Pay',
+      code: 'CR-QRPAY',
       status: 'In Progress',
+      type: 'ENHANCEMENT',
+      targets: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
@@ -103,7 +106,6 @@ describe('SDLC Flow Integration & Components', () => {
 
       render(
         <CrCreateModal
-          projectId={projectId}
           open={true}
           onClose={handleClose}
           onCrCreated={handleCreated}
@@ -130,21 +132,22 @@ describe('SDLC Flow Integration & Components', () => {
       await waitFor(() => {
         expect(handleCreated).toHaveBeenCalledWith(
           expect.objectContaining({
-            crCode: 'CR-2026-999',
-            featureName: 'Thanh toán quốc tế',
-            author: 'Tran Van B',
-            requestingUnit: 'Khối Nguồn vốn',
-            status: 'active',
-            inheritedContext: true,
+            code: 'CR-2026-999',
+            name: 'Thanh toán quốc tế',
+            type: 'ENHANCEMENT',
+            status: 'Open',
           })
         );
       });
+      const created = handleCreated.mock.calls[0]![0] as { description?: string };
+      expect(created.description).toContain('Người lập: Tran Van B');
+      expect(created.description).toContain('Đơn vị yêu cầu: Khối Nguồn vốn');
 
       expect(handleClose).toHaveBeenCalled();
     });
   });
 
-  describe('ProjectSdlcView Workflow Reset and Notes Retention', () => {
+  describe('ChangeRequestSdlcView Workflow Reset and Notes Retention', () => {
     it('resets workflow state when confirmed while preserving project notes intact', async () => {
       // Add existing user note
       const noteId = 'user-note-preserved';
@@ -152,7 +155,7 @@ describe('SDLC Flow Integration & Components', () => {
         id: noteId,
         title: 'Ghi chú kiến trúc quan trọng',
         body: 'Nội dung phân tích nghiệp vụ',
-        entityType: 'project',
+        entityType: 'cr',
         entityId: projectId,
         isPinned: false,
         createdAt: new Date().toISOString(),
@@ -160,8 +163,8 @@ describe('SDLC Flow Integration & Components', () => {
       });
 
       render(
-        <ProjectSdlcView
-          projectId={projectId}
+        <ChangeRequestSdlcView
+          changeRequestId={projectId}
           onBack={vi.fn()}
           db={db}
         />
@@ -183,7 +186,7 @@ describe('SDLC Flow Integration & Components', () => {
     it('executes full journey from Intake -> Solution -> Code Guide -> Change Pack -> Tech Docs -> CAB -> Staleness detection in one lifecycle', async () => {
       let state: SdlcWorkflowState | undefined;
       const coordinator = createSdlcWorkflowCoordinator({
-        projectId,
+        changeRequestId: projectId,
         threadId,
         onStateChange: (newState) => {
           state = newState;
@@ -225,7 +228,7 @@ describe('SDLC Flow Integration & Components', () => {
       const mockDriftResult = {
         schemaVersion: 1 as const,
         identity: {
-          projectId,
+          changeRequestId: projectId,
           threadId,
           solutionNoteId: '25000000-0000-4000-8000-000000000030',
           solutionVersion: 1,

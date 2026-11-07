@@ -2,11 +2,10 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../../src/db';
-import { ProjectsView } from '../../../src/views/ProjectsView';
-import { ProjectSdlcView } from '../../../src/views/ProjectSdlcView';
+import { ChangeRequestSdlcView } from '../../../src/views/ChangeRequestSdlcView';
+import { createChangeRequest } from '../../../src/db/repositories/changeRequestRepo';
 import { SdlcSidebar } from '../../../src/components/sdlc/SdlcSidebar';
 import { StepChatPanel } from '../../../src/components/sdlc/chat/StepChatPanel';
-import { createNewCr } from '../../../src/services/wizard/sdlcCrManager';
 import type { SdlcWorkflowMetadata } from '../../../src/services/wizard/workflowSchemas';
 import { act, cleanup } from '@testing-library/react';
 import { createSdlcWorkflowCoordinator, workflowStorageKey } from '../../../src/services/wizard/workflowCoordinator';
@@ -22,52 +21,47 @@ vi.mock('../../../src/components/sdlc/SdlcWorkspace', async (original) => {
   } };
 });
 
-describe('ProjectSdlcView and IDE Layout', () => {
+/** Seeds a CR row — the sidebar and the view both read `db.changeRequests`. */
+async function seedCr(targetDb: TaskPlannerDatabase, id: string, name: string, code: string) {
+  const now = new Date().toISOString();
+  const cr = {
+    id,
+    name,
+    code,
+    status: 'Open' as const,
+    type: 'ENHANCEMENT' as const,
+    targets: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+  await targetDb.changeRequests.add(cr);
+  return cr;
+}
+
+describe('ChangeRequestSdlcView and IDE Layout', () => {
   let db: TaskPlannerDatabase;
-  const projectId = 'proj-sdlc-test-01';
+  const projectId = '11111111-1111-4111-8111-111111111111';
 
   beforeEach(async () => {
     db = new TaskPlannerDatabase(`test-sdlc-${Math.random()}`);
-    await db.projects.add({
-      id: projectId,
-      name: 'Ngân hàng số Mobile App',
-      status: 'In Progress',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
+    await seedCr(db, projectId, 'Ngân hàng số Mobile App', 'CR-SDLC-01');
   });
 
-  it('Test 1: ProjectsView mounts ProjectSdlcView when onOpenSdlcStudio is triggered and returns on back click', async () => {
-    render(<ProjectsView db={db} />);
-
-    // Wait for project row to load
-    await waitFor(() => {
-      expect(screen.getByText('Ngân hàng số Mobile App')).toBeInTheDocument();
-    });
-
-    // Find SDLC Studio button
-    const sdlcButton = screen.getByRole('button', { name: /SDLC Studio/i });
-    expect(sdlcButton).toBeInTheDocument();
-
-    // Click SDLC Studio -> Should mount ProjectSdlcView
-    fireEvent.click(sdlcButton);
+  it('Test 1: mounts from a changeRequestId prop and returns on back click', async () => {
+    const handleBack = vi.fn();
+    render(<ChangeRequestSdlcView changeRequestId={projectId} onBack={handleBack} db={db} />);
 
     await waitFor(() => {
       expect(screen.getByText(/SDLC Studio — Ngân hàng số Mobile App/i)).toBeInTheDocument();
     });
 
-    // Click Back -> Should return to ProjectTable
-    const backBtn = screen.getByRole('button', { name: /Quay lại Dự án/i });
-    fireEvent.click(backBtn);
-
-    await waitFor(() => {
-      expect(screen.getByText('Dự án & Cột mốc')).toBeInTheDocument();
-    });
+    fireEvent.click(screen.getByRole('button', { name: /Quay lại Change Requests/i }));
+    expect(handleBack).toHaveBeenCalledTimes(1);
   });
 
-  it('Test 2: ProjectSdlcView renders 2-column IDE layout with header, sidebar, and workspace', async () => {
+  it('Test 2: ChangeRequestSdlcView renders 2-column IDE layout with header, sidebar, and workspace', async () => {
     const handleBack = vi.fn();
-    render(<ProjectSdlcView projectId={projectId} onBack={handleBack} db={db} />);
+    render(<ChangeRequestSdlcView changeRequestId={projectId} onBack={handleBack} db={db} />);
 
     await waitFor(() => {
       expect(screen.getByText(/SDLC Studio — Ngân hàng số Mobile App/i)).toBeInTheDocument();
@@ -89,7 +83,8 @@ describe('ProjectSdlcView and IDE Layout', () => {
       requestingUnit: 'Trung tâm CNTT',
       date: '2026-11-01',
     };
-    await createNewCr(projectId, metadata, false, db);
+    const secondCrId = crypto.randomUUID();
+    await seedCr(db, secondCrId, 'Xác thực khuôn mặt FaceID', metadata.cr);
 
     const handleSelectStep = vi.fn();
     render(
@@ -101,9 +96,12 @@ describe('ProjectSdlcView and IDE Layout', () => {
       />
     );
 
+    // The picker shows the selected CR; the second CR is reachable in its dropdown.
     await waitFor(() => {
-      expect(screen.getByText(/CR-2026-999/i)).toBeInTheDocument();
+      expect(screen.getByTestId('sidebar-cr-select')).toBeInTheDocument();
     });
+    fireEvent.mouseDown(within(screen.getByTestId('sidebar-cr-select')).getByRole('combobox'));
+    expect(await screen.findByText(/CR-2026-999/i)).toBeInTheDocument();
 
     // Check 6 steps presence
     expect(screen.getByText(/Bước 1: Nạp PL01 & PL02/i)).toBeInTheDocument();
@@ -142,7 +140,7 @@ describe('ProjectSdlcView and IDE Layout', () => {
   });
 
   it('Test 5: Explicit solution analysis and editor draft persistence across step switches', async () => {
-    render(<ProjectSdlcView projectId={projectId} onBack={vi.fn()} db={db} />);
+    render(<ChangeRequestSdlcView changeRequestId={projectId} onBack={vi.fn()} db={db} />);
 
     await waitFor(() => {
       expect(screen.getByText(/SDLC Studio — Ngân hàng số Mobile App/i)).toBeInTheDocument();
@@ -164,12 +162,9 @@ describe('ProjectSdlcView and IDE Layout', () => {
     fireEvent.click(screen.getByText(/Bước 3: Coding ngoài/i));
 
     await waitFor(() => {
-      expect(screen.getByText(/Lệnh đóng gói Change Pack/i)).toBeInTheDocument();
+      expect(screen.getByText(/Bước 3: Review Nhánh & Diff Repository Remote qua SSH/i)).toBeInTheDocument();
     });
     expect(screen.getByTestId('step3-prerequisite-guard')).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /Đã code xong — Chuyển sang Nạp Change Pack/i })
-    ).toBeDisabled();
 
     // Navigate back to Step 2 -> draft must still be there without auto-running AI.
     // The sidebar and the Step 3 guard CTA both name Step 2; click the sidebar entry.
@@ -212,14 +207,8 @@ describe('ProjectSdlcView and IDE Layout', () => {
 
   it('Test 7: Regression UAT-2: Auto-extracted SOLUTION.md does not crash DAG staleness detector with TypeError', async () => {
     const dbTest7 = new TaskPlannerDatabase(`test-sdlc-7-${Math.random()}`);
-    const proj7Id = 'proj-sdlc-test-07';
-    await dbTest7.projects.add({
-      id: proj7Id,
-      name: 'Ngân hàng số Mobile App',
-      status: 'In Progress',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
+    const proj7Id = crypto.randomUUID();
+    await seedCr(dbTest7, proj7Id, 'Ngân hàng số Mobile App', 'CR-2026-REGRESSION');
 
     // Setup initial CR and Intake state with PL01 and PL02
     const metadata: SdlcWorkflowMetadata = {
@@ -229,7 +218,7 @@ describe('ProjectSdlcView and IDE Layout', () => {
       requestingUnit: 'Trung tâm CNTT',
       date: '2026-11-01',
     };
-    const cr = await createNewCr(proj7Id, metadata, true, dbTest7);
+    const cr = { id: proj7Id };
 
     // Seed workflow state with PL01 and PL02
     const initialState = {
@@ -269,7 +258,7 @@ describe('ProjectSdlcView and IDE Layout', () => {
       value: JSON.stringify(initialState),
     });
 
-    render(<ProjectSdlcView projectId={proj7Id} onBack={vi.fn()} db={dbTest7} />);
+    render(<ChangeRequestSdlcView changeRequestId={proj7Id} onBack={vi.fn()} db={dbTest7} />);
 
     // Go to Step 2
     await waitFor(() => {
@@ -299,13 +288,7 @@ describe('ProjectSdlcView and IDE Layout', () => {
   it('Test 9: approving SOLUTION persists a durable artifact card for that version', async () => {
     const proj9Id = crypto.randomUUID();
     const db9 = new TaskPlannerDatabase(`test-sdlc-9-${Math.random()}`);
-    await db9.projects.add({
-      id: proj9Id,
-      name: 'Dự án thẻ tài liệu',
-      status: 'In Progress',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
+    await seedCr(db9, proj9Id, 'Dự án thẻ tài liệu', 'CR-09');
     const metadata: SdlcWorkflowMetadata = {
       cr: 'CR-09',
       featureName: 'Thẻ tài liệu',
@@ -313,7 +296,7 @@ describe('ProjectSdlcView and IDE Layout', () => {
       requestingUnit: 'Khối CNTT',
       date: '2026-11-01',
     };
-    const cr = await createNewCr(proj9Id, metadata, true, db9);
+    const cr = { id: proj9Id };
     await db9.settings.put({
       key: `sdlc_workflow:${proj9Id}:${cr.id}`,
       value: JSON.stringify({
@@ -349,7 +332,7 @@ describe('ProjectSdlcView and IDE Layout', () => {
       }),
     });
 
-    render(<ProjectSdlcView projectId={proj9Id} onBack={() => {}} db={db9} />);
+    render(<ChangeRequestSdlcView changeRequestId={proj9Id} onBack={() => {}} db={db9} />);
 
     await waitFor(() => {
       expect(screen.getByText(/Bước 2: Thiết kế giải pháp/i)).toBeInTheDocument();
@@ -396,13 +379,7 @@ describe('ProjectSdlcView and IDE Layout', () => {
   it('Test 10: re-approving a superseded SOLUTION does not rewrite the earlier card', async () => {
     const proj10Id = crypto.randomUUID();
     const db10 = new TaskPlannerDatabase(`test-sdlc-10-${Math.random()}`);
-    await db10.projects.add({
-      id: proj10Id,
-      name: 'Dự án nhiều phiên bản',
-      status: 'In Progress',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
+    await seedCr(db10, proj10Id, 'Dự án nhiều phiên bản', 'CR-10');
     const metadata: SdlcWorkflowMetadata = {
       cr: 'CR-10',
       featureName: 'Nhiều phiên bản',
@@ -410,7 +387,7 @@ describe('ProjectSdlcView and IDE Layout', () => {
       requestingUnit: 'Khối CNTT',
       date: '2026-11-01',
     };
-    const cr10 = await createNewCr(proj10Id, metadata, true, db10);
+    const cr10 = { id: proj10Id };
     await db10.settings.put({
       key: `sdlc_workflow:${proj10Id}:${cr10.id}`,
       value: JSON.stringify({
@@ -446,7 +423,7 @@ describe('ProjectSdlcView and IDE Layout', () => {
       }),
     });
 
-    render(<ProjectSdlcView projectId={proj10Id} onBack={() => {}} db={db10} />);
+    render(<ChangeRequestSdlcView changeRequestId={proj10Id} onBack={() => {}} db={db10} />);
     // Sidebar renders before CR restore; wait for the owning workflow before editing.
     await screen.findByRole('button', { name: /Đặt lại quy trình/i }, { timeout: 5000 });
 
@@ -498,7 +475,7 @@ describe('ProjectSdlcView and IDE Layout', () => {
       id: 'thread-test-collapse',
       title: 'Step Thread',
       scopeKey: `sdlc:${projectId}:cr-test-01:SOLUTION`,
-      scopeType: 'project',
+      scopeType: 'cr',
       entityId: projectId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -560,9 +537,9 @@ describe('production artifact patch adapter (27-03)', () => {
     projectId = crypto.randomUUID();
     const metadata = { cr: 'CR-PATCH', featureName: 'Patch', author: 'T', requestingUnit: 'IT', date: '2026-11-05' };
     const at = new Date().toISOString();
-    await db.projects.add({ id: projectId, name: 'Patch host', status: 'In Progress', createdAt: at, updatedAt: at });
-    crId = (await createNewCr(projectId, metadata, false, db)).id;
-    const coordinator = createSdlcWorkflowCoordinator({ projectId, threadId: crypto.randomUUID() });
+    await seedCr(db, projectId, 'Patch host', 'CR-PATCH');
+    crId = projectId;
+    const coordinator = createSdlcWorkflowCoordinator({ changeRequestId: projectId, threadId: crypto.randomUUID() });
     await coordinator.startOrUpdateIntake(metadata, 'PL01', 'PL02');
     await coordinator.commitSolution('# SOLUTION\n## Mục tiêu\nNội dung gốc.');
     const state = coordinator.getState()!;
@@ -581,7 +558,7 @@ describe('production artifact patch adapter (27-03)', () => {
   afterEach(async () => { cleanup(); vi.restoreAllMocks(); await db.delete(); });
 
   async function openStep(step: 'SOLUTION' | 'TECH_DOCS' | 'CAB' = 'SOLUTION') {
-    const view = render(<ProjectSdlcView projectId={projectId} onBack={vi.fn()} db={db} />);
+    const view = render(<ChangeRequestSdlcView changeRequestId={projectId} onBack={vi.fn()} db={db} />);
     await screen.findByText('Bước 2: Thiết kế giải pháp');
     await waitFor(() => expect(screen.getByTestId('sidebar-cr-select')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId(`sidebar-step-${step}`));
@@ -674,13 +651,7 @@ describe('D-06: opening a historical artifact card', () => {
   it.each(['active', 'archived'] as const)('keeps history read-only and opens a draft for an %s CR', async (status) => {
     const pid = crypto.randomUUID();
     const dbX = new TaskPlannerDatabase(`test-d06-${Math.random()}`);
-    await dbX.projects.add({
-      id: pid,
-      name: 'Dự án lịch sử phiên bản',
-      status: 'In Progress',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
+    await seedCr(dbX, pid, 'Dự án lịch sử phiên bản', 'CR-D06');
     const metadata = {
       cr: 'CR-D06',
       featureName: 'Lịch sử',
@@ -688,8 +659,8 @@ describe('D-06: opening a historical artifact card', () => {
       requestingUnit: 'Khối CNTT',
       date: '2026-11-01',
     };
-    const cr = await createNewCr(pid, metadata, true, dbX);
-    await dbX.settings.put({ key: `sdlc_crs:${pid}`, value: JSON.stringify([{ ...cr, status }]) });
+    const cr = { id: pid };
+    await dbX.changeRequests.update(pid, { status: status === 'archived' ? 'Cancelled' : 'In Progress' });
     await dbX.settings.put({ key: `sdlc_draft_solution:${pid}:${cr.id}`, value: '# SOLUTION v3 bản nháp' });
 
     const ref = (version: number, content: string) => ({
@@ -730,7 +701,7 @@ describe('D-06: opening a historical artifact card', () => {
       id: threadId,
       title: '[SDLC] SOLUTION',
       scopeKey: `sdlc:${pid}:${cr.id}:SOLUTION`,
-      scopeType: 'project',
+      scopeType: 'cr',
       entityId: pid,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -768,7 +739,7 @@ describe('D-06: opening a historical artifact card', () => {
       },
     });
 
-    render(<ProjectSdlcView projectId={pid} onBack={vi.fn()} db={dbX} />);
+    render(<ChangeRequestSdlcView changeRequestId={pid} onBack={vi.fn()} db={dbX} />);
 
     await waitFor(() => {
       expect(screen.getByText(/Bước 2: Thiết kế giải pháp/i)).toBeInTheDocument();

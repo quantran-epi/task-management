@@ -31,11 +31,13 @@ describe('selectionContext utility', () => {
     expect(context.entityId).toBeUndefined();
   });
 
-  it('resolves hierarchy and eager full context text for task and project correctly', async () => {
+  it('resolves hierarchy and eager full context text for task and CR correctly', async () => {
     const fakeDb = {
       tasks: {
         get: vi.fn().mockResolvedValue({
           id: 'task-1',
+          crId: 'cr-1',
+          systemId: 'sys-1',
           name: 'Implement OAuth',
           description: 'OAuth2 with PKCE flow',
           status: 'In Progress',
@@ -43,15 +45,26 @@ describe('selectionContext utility', () => {
           progress: 50,
           estimateMinutes: 120,
           checklist: [{ id: 'c1', text: 'Define routes', done: true }],
-          projectId: 'proj-1',
         }),
       },
-      projects: {
+      changeRequests: {
         get: vi.fn().mockResolvedValue({
-          id: 'proj-1',
+          id: 'cr-1',
+          code: 'CR-AUTH-01',
           name: 'Identity Service',
           description: 'Single Sign-On platform',
           status: 'In Progress',
+          type: 'NEW_FEATURE',
+          targets: [{ systemId: 'sys-1' }],
+        }),
+      },
+      systems: {
+        get: vi.fn().mockResolvedValue({
+          id: 'sys-1',
+          code: 'AUTH-SVC',
+          name: 'Auth Service',
+          parentId: null,
+          type: 'SERVICE',
         }),
       },
     } as any;
@@ -59,8 +72,8 @@ describe('selectionContext utility', () => {
     const hierarchy = await resolveEntityHierarchy('task', 'task-1', fakeDb);
     expect(hierarchy.targetType).toBe('task');
     expect(hierarchy.targetTitle).toBe('Implement OAuth');
-    expect(hierarchy.parentProject?.name).toBe('Identity Service');
-    expect(hierarchy.hierarchyPath).toContain('Dự án "Identity Service" > Tác vụ "Implement OAuth"');
+    expect(hierarchy.parentCr?.name).toBe('Identity Service');
+    expect(hierarchy.hierarchyPath).toContain('CR "CR-AUTH-01" > Subsystem "AUTH-SVC" > Tác vụ "Implement OAuth"');
 
     // Verify full eager context serialization
     expect(hierarchy.fullContextText).toBeDefined();

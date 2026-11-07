@@ -23,14 +23,15 @@ describe('sdlcCrManager', () => {
   });
 
   it('getStepThread resolves an isolated ChatThread with scopeKey sdlc:${projectId}:${crId}:${stepId} for each step', async () => {
-    const crId = 'cr-1';
+    const crId = '11111111-1111-4111-8111-111111111111';
     const steps = ['INTAKE', 'SOLUTION', 'CODE_GUIDE', 'CHANGE_PACK', 'TECH_DOCS', 'CAB'] as const;
 
     for (const step of steps) {
       const thread = await getStepThread(projectId, crId, step, db);
       expect(thread).toBeDefined();
       expect(thread.scopeKey).toBe(`sdlc:${projectId}:${crId}:${step}`);
-      expect(thread.entityId).toBe(projectId);
+      expect(thread.entityId).toBe(crId);
+      expect(thread.scopeType).toBe('cr');
 
       // Verify idempotency
       const threadAgain = await getStepThread(projectId, crId, step, db);

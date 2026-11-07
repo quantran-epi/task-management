@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../src/db';
 import { createTask } from '../../src/db/repositories/taskRepo';
+import { createChangeRequest } from '../../src/db/repositories/changeRequestRepo';
 import { InlineStatusTag } from '../../src/components/tasks/InlineStatusTag';
 import { InlineProgress } from '../../src/components/tasks/InlineProgress';
 import { HierarchyBreadcrumb } from '../../src/components/tasks/HierarchyBreadcrumb';
@@ -22,16 +23,23 @@ vi.mock('antd', async (importOriginal) => {
 
 describe('InlineControls', () => {
   let testDb: TaskPlannerDatabase;
+  let crId: string;
 
   beforeEach(async () => {
     testDb = new TaskPlannerDatabase(`test-inline-${Math.random()}`);
     await testDb.open();
+    // `Task.crId` is required (D-27), so every fixture hangs off a real CR.
+    const cr = await createChangeRequest(
+      { code: 'CR-INLINE', name: 'Inline CR', status: 'Open', type: 'ENHANCEMENT', targets: [] },
+      testDb
+    );
+    crId = cr.id;
     vi.clearAllMocks();
   });
 
   describe('InlineStatusTag', () => {
     it('renders current status and updates status on dropdown selection per D-06, D-32, TASK-03', async () => {
-      const task = await createTask({ name: 'Test task', status: 'Open' }, testDb);
+      const task = await createTask({ name: 'Test task', status: 'Open', crId }, testDb);
 
       const onStatusChange = vi.fn();
       render(
@@ -66,7 +74,7 @@ describe('InlineControls', () => {
 
     it('displays reminder if switched to In Progress with 0 estimate per D-24', async () => {
       const task = await createTask(
-        { name: 'Zero estimate task', status: 'Open', estimateMinutes: 0 },
+        { name: 'Zero estimate task', status: 'Open', estimateMinutes: 0, crId },
         testDb
       );
 
@@ -107,7 +115,7 @@ describe('InlineControls', () => {
   describe('InlineProgress', () => {
     it('renders progress and updates on slider / input change per D-07, TASK-06', async () => {
       const task = await createTask(
-        { name: 'Progress task', status: 'In Progress', progress: 20 },
+        { name: 'Progress task', status: 'In Progress', progress: 20, crId },
         testDb
       );
 
@@ -148,45 +156,44 @@ describe('InlineControls', () => {
     });
   });
 
+  // D-46/D-47: the only hierarchy above a task is `CR > Subsystem`.
   describe('HierarchyBreadcrumb', () => {
-    it('renders Standalone when no projectId is provided per D-02', () => {
+    it('renders the unattached marker when no CR is provided per D-02', () => {
       render(<HierarchyBreadcrumb />);
-      expect(screen.getByText('Độc lập')).toBeInTheDocument();
+      expect(screen.getByText('Chưa gắn CR')).toBeInTheDocument();
     });
 
-    it('renders ProjectName when only project is given', () => {
+    it('renders the CR code when only a CR is given', () => {
       const onSelect = vi.fn();
       render(
-        <HierarchyBreadcrumb
-          projectId="p1"
-          projectName="Project Aurora"
-          onSelectProject={onSelect}
-        />
+        <HierarchyBreadcrumb crId="cr-1" crCode="CR-2026-001" crName="CR Aurora" onSelectCr={onSelect} />
       );
 
-      const chip = screen.getByText('Project Aurora');
+      const chip = screen.getByText('CR-2026-001');
       expect(chip).toBeInTheDocument();
 
       fireEvent.click(chip);
-      expect(onSelect).toHaveBeenCalledWith('p1');
+      expect(onSelect).toHaveBeenCalledWith('cr-1');
     });
 
-    it('renders ProjectName > MilestoneName when milestone is given', () => {
+    it('renders CR > Subsystem when a subsystem is given', () => {
       const onSelect = vi.fn();
       render(
         <HierarchyBreadcrumb
-          projectId="p1"
-          projectName="Project Aurora"
-          milestoneName="Sprint 1"
-          onSelectProject={onSelect}
+          crId="cr-1"
+          crCode="CR-2026-001"
+          crName="CR Aurora"
+          systemCode="PAY-API"
+          systemName="Payments API"
+          onSelectCr={onSelect}
         />
       );
 
-      const chip = screen.getByText('Project Aurora > Sprint 1');
+      const chip = screen.getByText('CR-2026-001 > PAY-API');
       expect(chip).toBeInTheDocument();
 
       fireEvent.click(chip);
-      expect(onSelect).toHaveBeenCalledWith('p1');
+      expect(onSelect).toHaveBeenCalledWith('cr-1');
     });
   });
 });

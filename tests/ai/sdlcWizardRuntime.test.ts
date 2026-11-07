@@ -17,7 +17,7 @@ const NOTE_ID = '66666666-6666-4666-8666-666666666666';
 const NOW = '2026-11-01T12:00:00.000Z';
 
 const evidenceInput = (setIds: readonly string[]) => ({
-  projectId: PROJECT_ID,
+  changeRequestId: PROJECT_ID,
   threadId: '77777777-7777-4777-8777-777777777777',
   sessionId: '88888888-8888-4888-8888-888888888888',
   inputRevision: 1,
@@ -28,7 +28,7 @@ const evidenceInput = (setIds: readonly string[]) => ({
 const note: Note = {
   id: NOTE_ID,
   type: 'document',
-  entityType: 'project',
+  entityType: 'cr',
   entityId: PROJECT_ID,
   title: 'SOLUTION v1',
   body: '# SOLUTION\n\nChuyển tiền nhanh qua Napas 247.',
@@ -80,7 +80,7 @@ describe('createSdlcWizardRuntime (D-14, D-15)', () => {
       documentIds: [],
       createdAt: NOW,
       updatedAt: NOW,
-      sdlc: { projectId: PROJECT_ID, purpose: 'sdlc' },
+      sdlc: { changeRequestId: PROJECT_ID, purpose: 'sdlc' },
     });
     await db.documentSets.add({
       id: BASE_SET_ID,
@@ -96,7 +96,7 @@ describe('createSdlcWizardRuntime (D-14, D-15)', () => {
       documentIds: [],
       createdAt: NOW,
       updatedAt: NOW,
-      sdlc: { projectId: OTHER_PROJECT_ID, purpose: 'sdlc' },
+      sdlc: { changeRequestId: OTHER_PROJECT_ID, purpose: 'sdlc' },
     });
 
     const runtime = await createSdlcWizardRuntime({ db });
@@ -120,7 +120,7 @@ describe('createSdlcWizardRuntime (D-14, D-15)', () => {
       documentIds: [NOTE_ID],
       createdAt: NOW,
       updatedAt: NOW,
-      sdlc: { projectId: PROJECT_ID, purpose: 'sdlc' },
+      sdlc: { changeRequestId: PROJECT_ID, purpose: 'sdlc' },
     });
 
     const setIds = await runtime.resolveSetIds(PROJECT_ID);
@@ -145,7 +145,7 @@ describe('createSdlcWizardRuntime (D-14, D-15)', () => {
       documentIds: [NOTE_ID],
       createdAt: NOW,
       updatedAt: NOW,
-      sdlc: { projectId: PROJECT_ID, purpose: 'sdlc' },
+      sdlc: { changeRequestId: PROJECT_ID, purpose: 'sdlc' },
     });
 
     const runtime = await createSdlcWizardRuntime({ db });

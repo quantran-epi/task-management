@@ -769,8 +769,10 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
     });
 
     await waitFor(() => {
+      // The persistence-failure branch now shares the generic retrieval error copy
+      // (commit 02b01712 replaced the grounding-specific message).
       expect(
-        screen.getByText(/Không thể lưu câu trả lời hoặc dữ liệu tri thức không hợp lệ/)
+        screen.getByText(/Đã xảy ra lỗi khi truy xuất hoặc kết nối 9router/)
       ).toBeInTheDocument();
     });
 

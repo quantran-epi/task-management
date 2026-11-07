@@ -1,16 +1,17 @@
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ProjectExplorer } from '../toolwindows/ProjectExplorer';
+import 'fake-indexeddb/auto';
+import { CRExplorer } from '../toolwindows/CRExplorer';
 import { DocsExplorer } from '../toolwindows/DocsExplorer';
 import { useLayoutStore } from '../store/layoutStore';
 
-// Mock dexie-react-hooks
-vi.mock('dexie-react-hooks', () => ({
-  useLiveQuery: (_fn: any, _deps: any, defaultVal: any) => {
-    // Return sample data
-    return defaultVal ?? [];
-  },
-}));
+// Mock dexie-react-hooks. The value must be referentially stable: DocsExplorer's
+// publish-status effect depends on `allNotes`, and its `useLiveQuery` default is an inline
+// `[]` literal — returning that would hand back a fresh array every render and loop forever.
+vi.mock('dexie-react-hooks', () => {
+  const EMPTY: never[] = [];
+  return { useLiveQuery: () => EMPTY };
+});
 
 describe('Explorers Component Suite', () => {
   beforeEach(() => {
@@ -19,27 +20,30 @@ describe('Explorers Component Suite', () => {
     });
   });
 
-  it('renders ProjectExplorer search input and empty state when no projects', () => {
-    render(<ProjectExplorer />);
+  it('renders CRExplorer search input and new-CR action', () => {
+    render(<CRExplorer />);
 
-    const searchInput = screen.getByPlaceholderText(/Filter projects, tasks.../i);
+    const searchInput = screen.getByPlaceholderText(/Lọc CR, subsystem, tác vụ.../i);
     expect(searchInput).toBeDefined();
 
     fireEvent.change(searchInput, { target: { value: 'Test' } });
     expect((searchInput as HTMLInputElement).value).toBe('Test');
+
+    expect(screen.getByTestId('cr-explorer-btn-new-cr')).toBeDefined();
   });
 
-  it('renders DocsExplorer with search and new doc action', () => {
+  it('renders DocsExplorer with search and new doc action', async () => {
     render(<DocsExplorer />);
 
-    const searchInput = screen.getByPlaceholderText(/Filter documents.../i);
-    expect(searchInput).toBeDefined();
+    expect(screen.getByPlaceholderText(/Tìm kiếm tài liệu/i)).toBeDefined();
 
-    const newDocBtn = screen.getByRole('button', { name: /New Document/i });
+    const newDocBtn = screen.getByRole('button', { name: /Tạo tài liệu/i });
     expect(newDocBtn).toBeDefined();
 
     fireEvent.click(newDocBtn);
-    const tabs = useLayoutStore.getState().openTabs;
-    expect(tabs.some((t) => t.id === 'notes-new')).toBe(true);
+    await waitFor(() => {
+      const tabs = useLayoutStore.getState().openTabs;
+      expect(tabs.some((t) => t.viewType === 'notes')).toBe(true);
+    });
   });
 });

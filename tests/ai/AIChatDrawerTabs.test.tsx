@@ -75,7 +75,7 @@ describe('AI tab runtime ownership gates', () => {
   it('persists active tab pointer and ordinary titles in durable repository without canonical localStorage writes', async () => {
     const db = new TaskPlannerDatabase(`TestTabsDb_${Date.now()}`);
     const projectId = 'p-100';
-    const scopeKey = `project:${projectId}`;
+    const scopeKey = `cr:${projectId}`;
 
     // 1. Ensure SDLC tab is singleton
     const sdlcTab = await getOrCreateSdlcTab(projectId, db);
@@ -84,7 +84,7 @@ describe('AI tab runtime ownership gates', () => {
 
     // 2. Create ordinary tab
     const chatTab1 = await createChatTab({
-      scopeType: 'project',
+      scopeType: 'cr',
       scopeKey,
       entityId: projectId,
       title: '💬 Tra cứu 1',
@@ -112,14 +112,14 @@ describe('AI tab runtime ownership gates', () => {
 
 describe('per-tab analysis mode is durable only (D-07)', () => {
   const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
-  const SCOPE = { type: 'project' as const, id: PROJECT_ID, title: 'Analysis Project' };
-  const SCOPE_KEY = `project:${PROJECT_ID}`;
+  const SCOPE = { type: 'cr' as const, id: PROJECT_ID, title: 'Analysis Project' };
+  const SCOPE_KEY = `cr:${PROJECT_ID}`;
   const TS = '2026-10-30T00:00:00.000Z';
 
   const mount = async (db: TaskPlannerDatabase, analysisMode: boolean) => {
-    await db.projects.add({ id: PROJECT_ID, name: 'Analysis Project', status: 'Open', createdAt: TS, updatedAt: TS });
+    await db.changeRequests.add({ id: PROJECT_ID, name: 'Analysis Project', status: 'Open', createdAt: TS, updatedAt: TS });
     const tab = await createChatTab(
-      { scopeType: 'project', scopeKey: SCOPE_KEY, entityId: PROJECT_ID, title: 'Chat', config: { analysisMode } },
+      { scopeType: 'cr', scopeKey: SCOPE_KEY, entityId: PROJECT_ID, title: 'Chat', config: { analysisMode } },
       db
     );
     await setActiveTab(SCOPE_KEY, tab.id, db);
