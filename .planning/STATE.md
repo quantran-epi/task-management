@@ -25,19 +25,19 @@ See: .planning/PROJECT.md (updated 2026-11-03)
 ## Current Position
 
 Phase: 31.1 (enterprise-systems-catalog-cr-transformation-inserted) — EXECUTING
-Plan: 2 of 4
-Status: Plan 01 completed. Ready for Plan 02.
-Last activity: 2026-11-07 -- Phase 31.1 Plan 01 executed successfully
+Plan: 2 of 4 completed
+Status: Plan 02 completed. Ready for Plan 03.
+Last activity: 2026-11-07 -- Phase 31.1 Plan 02 executed successfully
 
 Phase sequence: 26 → 27 → 28 → 29 → 29.1 → 30 → 31 → 31.1
 (28 is independent of 26/27; 31 depends on 26 and 27; 31.1 depends on 31.)
 
 ## Session Continuity
 
-Last session: 2026-11-07T14:45:00.000Z
+Last session: 2026-11-07T15:22:00.000Z
 Resume file: None
 
-Progress: [██████░░░░] 61%
+Progress: [██████░░░░] 63%
 
 ## Milestone v1.3 Map
 
@@ -77,6 +77,7 @@ Progress: [██████░░░░] 61%
 
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
+| Phase 31.1 P02 | 12m | 2 tasks | 10 files |
 | Phase 31.1 P01 | 15m | 2 tasks | 11 files |
 | Phase 30 P03 | 9min | 2 tasks | 2 files |
 | Phase 31 P01 | 10m | 2 tasks | 4 files |
@@ -117,3 +118,4 @@ Progress: [██████░░░░] 61%
 - [Phase 31.1]: D-16: systems table added in Dexie SCHEMA_V15; projects table migrated to changeRequests with backward-compatibility for tasks
 - [Phase 31.1]: D-17: 3 explicit CR types with designated colors: New Feature (#1677ff), Enhancement (#52c41a), Bugfix (#faad14)
 - [Phase 31.1]: D-18: Subsystems own SSH profiles and repository paths; CRs multi-target subsystems
+- [Phase 31.1]: D-19: Systems Explorer accessed via Left Stripe (Alt+6) and Search Everywhere; TitleBar kept uncluttered

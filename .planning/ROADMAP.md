@@ -807,10 +807,10 @@ Plans:
 Plans:
 
 **Wave 1**
-- [ ] 31.1-01-PLAN.md — Schema migration: `systems` table, `changeRequests` entity model, and safe data migration from `projects`
+- [x] 31.1-01-PLAN.md — Schema migration: `systems` table, `changeRequests` entity model, and safe data migration from `projects`
 
 **Wave 2** *(depends on 31.1-01)*
-- [ ] 31.1-02-PLAN.md — System Catalog management UI: hierarchical tree view, CRUD modal, SSH/repo binding configuration
+- [x] 31.1-02-PLAN.md — System Catalog management UI: hierarchical tree view, CRUD modal, SSH/repo binding configuration
 
 **Wave 3** *(depends on 31.1-02)*
 - [ ] 31.1-03-PLAN.md — CR management UI overhaul: Project -> CR terminology, 3 CR types, multi-system selector, and task linkage
