@@ -13,6 +13,7 @@ import {
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { validateBackupPayload } from '../../services/backup/validateBackup';
+import { LEGACY_BACKUP_MESSAGE } from '../../validation/backupSchemas';
 import { restoreBackupPayload } from '../../services/backup/restoreBackup';
 import { announceToScreenReader } from '../common/AriaLiveRegion';
 
@@ -36,8 +37,8 @@ interface TableComparisonRow {
 }
 
 const TABLE_NAMES: Record<string, string> = {
-  projects: 'Dự án (Projects)',
-  milestones: 'Cột mốc (Milestones)',
+  changeRequests: 'Yêu cầu thay đổi (Change Requests)',
+  systems: 'Hệ thống (Systems)',
   tasks: 'Tác vụ (Tasks)',
   capacityRules: 'Quy tắc công suất (Capacity Rules)',
   capacityOverrides: 'Ngoại lệ công suất (Capacity Overrides)',
@@ -68,9 +69,9 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
   // Query current counts from local database
   const currentCounts = useLiveQuery(
     async () => {
-      const [p, m, t, cr, co, pa, ts, tw] = await Promise.all([
-        db.projects.count(),
-        db.milestones.count(),
+      const [crs, sys, t, cr, co, pa, ts, tw] = await Promise.all([
+        db.changeRequests.count(),
+        db.systems.count(),
         db.tasks.count(),
         db.capacityRules.count(),
         db.capacityOverrides.count(),
@@ -79,8 +80,8 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
         db.telegramWhitelist.count(),
       ]);
       return {
-        projects: p,
-        milestones: m,
+        changeRequests: crs,
+        systems: sys,
         tasks: t,
         capacityRules: cr,
         capacityOverrides: co,
@@ -91,8 +92,8 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
     },
     [db],
     {
-      projects: 0,
-      milestones: 0,
+      changeRequests: 0,
+      systems: 0,
       tasks: 0,
       capacityRules: 0,
       capacityOverrides: 0,
@@ -109,8 +110,8 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
 
     const incoming = validationResult.envelope.counts;
     const current = currentCounts ?? {
-      projects: 0,
-      milestones: 0,
+      changeRequests: 0,
+      systems: 0,
       tasks: 0,
       capacityRules: 0,
       capacityOverrides: 0,
@@ -278,7 +279,11 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
               type="error"
               showIcon
               message="Tệp sao lưu không hợp lệ"
-              description="Tệp sao lưu có cấu trúc không đúng định dạng hoặc vi phạm tính toàn vẹn quan hệ. Dữ liệu hiện tại trong máy hoàn toàn an toàn và không bị thay đổi."
+              description={
+                validationResult.errors.some((err) => err.message.includes('Backup phiên bản cũ'))
+                  ? LEGACY_BACKUP_MESSAGE
+                  : 'Tệp sao lưu có cấu trúc không đúng định dạng hoặc vi phạm tính toàn vẹn quan hệ. Dữ liệu hiện tại trong máy hoàn toàn an toàn và không bị thay đổi.'
+              }
               style={{ marginBottom: 12 }}
             />
             <Table

@@ -6,8 +6,6 @@ import type {
 } from '../../types/backup';
 import { APP_MARKER, CURRENT_SCHEMA_VERSION } from './exportBackup';
 import {
-  BackupProjectRecordSchema,
-  BackupMilestoneRecordSchema,
   BackupTaskRecordSchema,
   BackupCapacityRuleRecordSchema,
   BackupCapacityOverrideRecordSchema,
@@ -29,17 +27,36 @@ import {
   BackupTelegramWhitelistUserSchema,
   BackupSystemRecordSchema,
   BackupChangeRequestRecordSchema,
+  assertNoLegacyTables,
+  LEGACY_BACKUP_MESSAGE,
 } from '../../validation/backupSchemas';
 
 
 /**
  * Two-stage validation engine for backup payloads:
  * Stage 1: Envelope validation (app marker, schemaVersion, structure)
- * Stage 2: Schema validation of records across domain tables (projects, milestones, tasks, capacityRules, capacityOverrides, plannedAllocations, and optionally workSessions)
- * Stage 3: Referential integrity checks (foreign keys: project, milestone, task)
+ * Stage 2: Schema validation of records across domain tables (tasks, capacityRules, capacityOverrides, plannedAllocations, and optionally workSessions)
+ * Stage 3: Referential integrity checks (foreign keys: task, note, document set)
  */
 
 export function validateBackupPayload(raw: unknown): BackupValidationResult {
+  // D-49: reject a pre-31.2 payload at the envelope stage, before any table validation
+  // and therefore before any write. Local data is untouched.
+  try {
+    assertNoLegacyTables(raw);
+  } catch (err) {
+    return {
+      valid: false,
+      errors: [
+        {
+          table: 'envelope',
+          field: 'tables',
+          message: err instanceof Error ? err.message : LEGACY_BACKUP_MESSAGE,
+        },
+      ],
+    };
+  }
+
   const errors: ValidationErrorDetail[] = [];
 
   // Stage 1: Basic object and envelope check
@@ -66,15 +83,18 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     });
   }
 
-  if (
-    typeof candidate.schemaVersion !== 'number' ||
-    candidate.schemaVersion > CURRENT_SCHEMA_VERSION ||
-    candidate.schemaVersion < 1
-  ) {
+  if (typeof candidate.schemaVersion !== 'number' || candidate.schemaVersion > CURRENT_SCHEMA_VERSION) {
     errors.push({
       table: 'envelope',
       field: 'schemaVersion',
-      message: `Phiên bản sơ đồ (${String(candidate.schemaVersion)}) không tương thích (chỉ hỗ trợ phiên bản 1 đến ${CURRENT_SCHEMA_VERSION})`,
+      message: `Phiên bản sơ đồ (${String(candidate.schemaVersion)}) không tương thích (chỉ hỗ trợ phiên bản ${CURRENT_SCHEMA_VERSION})`,
+    });
+  } else if (candidate.schemaVersion < CURRENT_SCHEMA_VERSION) {
+    // D-49: older envelopes are not normalized — they are rejected outright.
+    errors.push({
+      table: 'envelope',
+      field: 'schemaVersion',
+      message: LEGACY_BACKUP_MESSAGE,
     });
   }
 
@@ -138,8 +158,6 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     return validRecords;
   }
 
-  const projects = validateTable('projects', BackupProjectRecordSchema, rawTables.projects ?? []);
-  const milestones = validateTable('milestones', BackupMilestoneRecordSchema, rawTables.milestones ?? []);
   const tasks = validateTable('tasks', BackupTaskRecordSchema, rawTables.tasks ?? []);
   const capacityRules = validateTable('capacityRules', BackupCapacityRuleRecordSchema, rawTables.capacityRules ?? []);
   const capacityOverrides = validateTable('capacityOverrides', BackupCapacityOverrideRecordSchema, rawTables.capacityOverrides ?? []);
@@ -202,44 +220,10 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
   }
 
   // Stage 3: Referential integrity checks
-  const projectIds = new Set(projects.map((p) => p.id));
-  const milestoneIds = new Set(milestones.map((m) => m.id));
   const taskIds = new Set(tasks.map((t) => t.id));
   const threadIds = new Set((chatThreads || []).map((thread) => thread.id));
   const threadById = new Map((chatThreads || []).map((thread) => [thread.id, thread]));
   const recovery = { missingSources: [] as Array<{ id: string; title: string; version?: number; hash?: string }>, blockedTabs: [] as Array<{ tabId: string; threadId: string; step: string; missingSourceIds: string[] }> };
-
-  // Check milestones refer to existing project
-  milestones.forEach((m) => {
-    if (!projectIds.has(m.projectId)) {
-      errors.push({
-        table: 'milestones',
-        recordId: m.id,
-        field: 'projectId',
-        message: `Milestone references projectId "${m.projectId}" not found in projects`,
-      });
-    }
-  });
-
-  // Check tasks refer to existing project or milestone (if provided)
-  tasks.forEach((t) => {
-    if (t.projectId && !projectIds.has(t.projectId)) {
-      errors.push({
-        table: 'tasks',
-        recordId: t.id,
-        field: 'projectId',
-        message: `Task references projectId "${t.projectId}" not found in projects`,
-      });
-    }
-    if (t.milestoneId && !milestoneIds.has(t.milestoneId)) {
-      errors.push({
-        table: 'tasks',
-        recordId: t.id,
-        field: 'milestoneId',
-        message: `Task references milestoneId "${t.milestoneId}" not found in milestones`,
-      });
-    }
-  });
 
   // Check plannedAllocations refer to existing task
   plannedAllocations.forEach((pa) => {
@@ -269,6 +253,8 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
 
   // Check notes refer to existing entity if specified
   const noteIds = new Set((notes || []).map((n) => n.id));
+  const crIds = changeRequests ? new Set(changeRequests.map((cr) => cr.id)) : undefined;
+  const systemIds = systems ? new Set(systems.map((s) => s.id)) : undefined;
   if (notes) {
     notes.forEach((n) => {
       if (n.entityType && n.entityId) {
@@ -279,19 +265,19 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
             field: 'entityId',
             message: `Note references taskId "${n.entityId}" not found in tasks`,
           });
-        } else if (n.entityType === 'milestone' && !milestoneIds.has(n.entityId)) {
+        } else if (n.entityType === 'cr' && crIds && !crIds.has(n.entityId)) {
           errors.push({
             table: 'notes',
             recordId: n.id,
             field: 'entityId',
-            message: `Note references milestoneId "${n.entityId}" not found in milestones`,
+            message: `Note references crId "${n.entityId}" not found in changeRequests`,
           });
-        } else if (n.entityType === 'project' && !projectIds.has(n.entityId)) {
+        } else if (n.entityType === 'system' && systemIds && !systemIds.has(n.entityId)) {
           errors.push({
             table: 'notes',
             recordId: n.id,
             field: 'entityId',
-            message: `Note references projectId "${n.entityId}" not found in projects`,
+            message: `Note references systemId "${n.entityId}" not found in systems`,
           });
         }
       }
@@ -390,7 +376,7 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       if (!thread) {
         errors.push({ table: 'chatTabs', recordId: tab.id, field: 'threadId', message: `ChatTab references threadId "${tab.threadId}" not found in chatThreads` });
       } else {
-        const expectedScope = thread.scopeType === 'project' && thread.scopeKey.endsWith(':sdlc')
+        const expectedScope = thread.scopeType === 'cr' && thread.scopeKey.endsWith(':sdlc')
           ? thread.scopeKey.slice(0, -5)
           : thread.scopeKey.includes(':chat:')
             ? thread.scopeKey.slice(0, thread.scopeKey.indexOf(':chat:'))
@@ -398,8 +384,8 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
         if (tab.scopeKey !== expectedScope && tab.scopeKey !== thread.scopeKey) {
           errors.push({ table: 'chatTabs', recordId: tab.id, field: 'scopeKey', message: 'ChatTab scope does not match chat thread' });
         }
-        if (thread.scopeType === 'project' && thread.entityId && tab.scopeKey === `project:${thread.entityId}` && tab.type === 'sdlc') {
-          if (sdlcByScope.has(tab.scopeKey)) errors.push({ table: 'chatTabs', recordId: tab.id, field: 'type', message: 'Duplicate SDLC tab for project scope' });
+        if (thread.scopeType === 'cr' && thread.entityId && tab.scopeKey === `cr:${thread.entityId}` && tab.type === 'sdlc') {
+          if (sdlcByScope.has(tab.scopeKey)) errors.push({ table: 'chatTabs', recordId: tab.id, field: 'type', message: 'Duplicate SDLC tab for CR scope' });
           sdlcByScope.add(tab.scopeKey);
         }
       }
@@ -458,20 +444,22 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       }
       if (cm.wizard) {
         const thread = threadById.get(cm.threadId);
-        if (!thread || thread.scopeType !== 'project' || thread.entityId !== cm.wizard.projectId || thread.id !== cm.wizard.threadId) {
+        // The wizard snapshot still names its field `projectId` (renamed in a later wave);
+        // its value is a ChangeRequest id, so the thread must be CR-scoped.
+        if (!thread || thread.scopeType !== 'cr' || thread.entityId !== cm.wizard.projectId || thread.id !== cm.wizard.threadId) {
           errors.push({
             table: 'chatMessages',
             recordId: cm.id,
             field: 'wizard',
-            message: 'Wizard snapshot project/thread identity does not match chat thread',
+            message: 'Wizard snapshot CR/thread identity does not match chat thread',
           });
         }
-        if (!projectIds.has(cm.wizard.projectId)) {
+        if (crIds && !crIds.has(cm.wizard.projectId)) {
           errors.push({
             table: 'chatMessages',
             recordId: cm.id,
             field: 'wizard.projectId',
-            message: `Wizard references projectId "${cm.wizard.projectId}" not found in projects`,
+            message: `Wizard references crId "${cm.wizard.projectId}" not found in changeRequests`,
           });
         }
         if (cm.wizard.artifactId && !noteIds.has(cm.wizard.artifactId)) {
@@ -488,12 +476,13 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
 
   if (notes) {
     notes.forEach((note) => {
-      if (note.sdlcArtifact && !projectIds.has(note.sdlcArtifact.projectId)) {
+      // `sdlcArtifact.projectId` still carries the CR id until the wizard schema rename lands.
+      if (note.sdlcArtifact && crIds && !crIds.has(note.sdlcArtifact.projectId)) {
         errors.push({
           table: 'notes',
           recordId: note.id,
           field: 'sdlcArtifact.projectId',
-          message: `Artifact references projectId "${note.sdlcArtifact.projectId}" not found in projects`,
+          message: `Artifact references crId "${note.sdlcArtifact.projectId}" not found in changeRequests`,
         });
       }
       if (note.sdlcArtifact && !threadIds.has(note.sdlcArtifact.threadId)) {
@@ -520,26 +509,26 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
   }
 
   if (documentSets) {
-    const sdlcProjects = new Set<string>();
+    const sdlcCrIds = new Set<string>();
     documentSets.forEach((set) => {
       if (!set.sdlc) return;
-      if (!projectIds.has(set.sdlc.projectId)) {
+      if (crIds && !crIds.has(set.sdlc.changeRequestId)) {
         errors.push({
           table: 'documentSets',
           recordId: set.id,
-          field: 'sdlc.projectId',
-          message: `SDLC set references projectId "${set.sdlc.projectId}" not found in projects`,
+          field: 'sdlc.changeRequestId',
+          message: `SDLC set references crId "${set.sdlc.changeRequestId}" not found in changeRequests`,
         });
       }
-      if (sdlcProjects.has(set.sdlc.projectId)) {
+      if (sdlcCrIds.has(set.sdlc.changeRequestId)) {
         errors.push({
           table: 'documentSets',
           recordId: set.id,
           field: 'sdlc',
-          message: `Duplicate SDLC mapping for projectId "${set.sdlc.projectId}"`,
+          message: `Duplicate SDLC mapping for crId "${set.sdlc.changeRequestId}"`,
         });
       }
-      sdlcProjects.add(set.sdlc.projectId);
+      sdlcCrIds.add(set.sdlc.changeRequestId);
     });
   }
 
@@ -563,14 +552,6 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
 
   // Normalization for schemaVersion 1 (backfill Banking IT domain fields per D-16)
   if (candidate.schemaVersion === 1) {
-    projects.forEach((p) => {
-      if (!p.opsOwners) p.opsOwners = [];
-      if (!p.businessAnalysts) p.businessAnalysts = [];
-    });
-    milestones.forEach((m) => {
-      if (!m.opsOwners) m.opsOwners = [];
-      if (!m.businessAnalysts) m.businessAnalysts = [];
-    });
     tasks.forEach((t) => {
       if (!t.opsOwners) t.opsOwners = [];
       if (!t.businessAnalysts) t.businessAnalysts = [];
@@ -583,8 +564,6 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     schemaVersion: candidate.schemaVersion as number,
     exportedAt: candidate.exportedAt as string,
     tables: {
-      projects: projects as BackupEnvelope['tables']['projects'],
-      milestones: milestones as BackupEnvelope['tables']['milestones'],
       tasks: tasks as BackupEnvelope['tables']['tasks'],
       capacityRules: capacityRules as BackupEnvelope['tables']['capacityRules'],
       capacityOverrides: capacityOverrides as BackupEnvelope['tables']['capacityOverrides'],
@@ -608,8 +587,6 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       ...(changeRequests !== undefined ? { changeRequests } : {}),
     },
     counts: {
-      projects: projects.length,
-      milestones: milestones.length,
       tasks: tasks.length,
       capacityRules: capacityRules.length,
       capacityOverrides: capacityOverrides.length,

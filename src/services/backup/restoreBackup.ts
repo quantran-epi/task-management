@@ -24,8 +24,6 @@ function base64ToBlob(base64Data: string, mimeType: string): Blob {
 }
 
 const RESTORE_TABLES = (db: TaskPlannerDatabase) => [
-  db.projects,
-  db.milestones,
   db.tasks,
   db.capacityRules,
   db.capacityOverrides,
@@ -54,14 +52,13 @@ const SDLC_TITLE = '⚙️ SDLC Workflow';
 const DEFAULT_CHAT_TITLE = '💬 Cuộc trò chuyện';
 
 function scopeFromThread(thread: ChatThread): string {
-  return thread.scopeType === 'project' && thread.scopeKey.endsWith(':sdlc')
+  return thread.scopeType === 'cr' && thread.scopeKey.endsWith(':sdlc')
     ? thread.scopeKey.slice(0, -':sdlc'.length)
     : thread.scopeKey;
 }
 
 function legacyTabRows(
   threads: ChatThread[],
-  projectIds: Set<string>,
   now: string,
 ): { threads: ChatThread[]; tabs: ChatTab[] } {
   const importedThreads = [...threads];
@@ -76,10 +73,10 @@ function legacyTabRows(
     scoped.push(thread);
     threadByScope.set(scopeKey, scoped);
     tabs.push({
-      id: thread.scopeKey === `${scopeKey}:sdlc` && thread.scopeType === 'project' ? generateId() : thread.id,
+      id: thread.scopeKey === `${scopeKey}:sdlc` && thread.scopeType === 'cr' ? generateId() : thread.id,
       threadId: thread.id,
       scopeKey,
-      type: thread.scopeKey === `${scopeKey}:sdlc` && thread.scopeType === 'project' ? 'sdlc' : 'chat',
+      type: thread.scopeKey === `${scopeKey}:sdlc` && thread.scopeType === 'cr' ? 'sdlc' : 'chat',
       title: thread.title?.trim() || DEFAULT_CHAT_TITLE,
       order: 0,
       active: false,
@@ -88,19 +85,18 @@ function legacyTabRows(
     });
   }
 
-  for (const projectId of projectIds) scopes.add(`project:${projectId}`);
   const orderedScopes = [...scopes].sort();
   for (const scopeKey of orderedScopes) {
     const scopedThreads = threadByScope.get(scopeKey) ?? [];
-    const hasSdlc = scopedThreads.some((thread) => thread.scopeKey === `${scopeKey}:sdlc` && thread.scopeType === 'project');
-    const projectId = scopeKey.startsWith('project:') ? scopeKey.slice('project:'.length) : undefined;
-    if (projectId && !hasSdlc) {
+    const hasSdlc = scopedThreads.some((thread) => thread.scopeKey === `${scopeKey}:sdlc` && thread.scopeType === 'cr');
+    const crId = scopeKey.startsWith('cr:') ? scopeKey.slice('cr:'.length) : undefined;
+    if (crId && !hasSdlc) {
       const threadId = generateId();
       const sdlcThread: ChatThread = {
         id: threadId,
         scopeKey: `${scopeKey}:sdlc`,
-        scopeType: 'project',
-        entityId: projectId,
+        scopeType: 'cr',
+        entityId: crId,
         title: SDLC_TITLE,
         createdAt: now,
         updatedAt: now,
@@ -120,7 +116,7 @@ function legacyTabRows(
         updatedAt: now,
       });
     }
-    if (!scopedThreads.some((thread) => thread.scopeKey !== `${scopeKey}:sdlc` || thread.scopeType !== 'project')) {
+    if (!scopedThreads.some((thread) => thread.scopeKey !== `${scopeKey}:sdlc` || thread.scopeType !== 'cr')) {
       const threadId = generateId();
       const thread: ChatThread = {
         id: threadId,
@@ -162,7 +158,7 @@ function restoreRows(
 ): { tables: BackupTableData; tabs: ChatTab[] } {
   const tables = backup.tables;
   if (tables.chatTabs !== undefined) return { tables, tabs: tables.chatTabs };
-  const backfilled = legacyTabRows(tables.chatThreads ?? [], new Set(tables.projects.map((project) => project.id)), now);
+  const backfilled = legacyTabRows(tables.chatThreads ?? [], now);
   return {
     tables: { ...tables, chatThreads: backfilled.threads, chatTabs: backfilled.tabs },
     tabs: backfilled.tabs,
@@ -176,8 +172,8 @@ function countsFor(tables: BackupTableData): BackupTableCounts {
 async function captureSnapshot(targetDb: TaskPlannerDatabase, timestamp: string): Promise<SnapshotData> {
   // activeTimers is part of the snapshot: replaceTables clears the table for both import and
   // rollback, so omitting it here would destroy the in-progress timer with no way back.
-  const [projects, milestones, tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, activeTimers, notes, rawAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettingsRaw, telegramWhitelist, systems, changeRequests, settings] = await Promise.all([
-    targetDb.projects.toArray(), targetDb.milestones.toArray(), targetDb.tasks.toArray(), targetDb.capacityRules.toArray(), targetDb.capacityOverrides.toArray(), targetDb.plannedAllocations.toArray(), targetDb.workSessions.toArray(), targetDb.activeTimers.toArray(), targetDb.notes.toArray(), targetDb.noteAttachments.toArray(), targetDb.chatThreads.toArray(), targetDb.chatMessages.toArray(), targetDb.chatTabs.toArray(), targetDb.documentSets.toArray(), targetDb.publishedDocuments.toArray(), targetDb.publishAttempts.toArray(), targetDb.dlpAudits.toArray(), targetDb.knowledgeLinks.toArray(), targetDb.telegramSettings.toArray(), targetDb.telegramWhitelist.toArray(), targetDb.systems.toArray(), targetDb.changeRequests.toArray(), targetDb.settings.toArray()
+  const [tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, activeTimers, notes, rawAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettingsRaw, telegramWhitelist, systems, changeRequests, settings] = await Promise.all([
+    targetDb.tasks.toArray(), targetDb.capacityRules.toArray(), targetDb.capacityOverrides.toArray(), targetDb.plannedAllocations.toArray(), targetDb.workSessions.toArray(), targetDb.activeTimers.toArray(), targetDb.notes.toArray(), targetDb.noteAttachments.toArray(), targetDb.chatThreads.toArray(), targetDb.chatMessages.toArray(), targetDb.chatTabs.toArray(), targetDb.documentSets.toArray(), targetDb.publishedDocuments.toArray(), targetDb.publishAttempts.toArray(), targetDb.dlpAudits.toArray(), targetDb.knowledgeLinks.toArray(), targetDb.telegramSettings.toArray(), targetDb.telegramWhitelist.toArray(), targetDb.systems.toArray(), targetDb.changeRequests.toArray(), targetDb.settings.toArray()
   ]);
   const telegramSettings = telegramSettingsRaw.map((setting) => ({ ...setting, botToken: '' }));
   const noteAttachments = await Promise.all(rawAttachments.map(async (attachment) => ({
@@ -190,7 +186,7 @@ async function captureSnapshot(targetDb: TaskPlannerDatabase, timestamp: string)
     ...(attachment.caption ? { caption: attachment.caption } : {}),
     createdAt: attachment.createdAt,
   })));
-  const tables: BackupTableData = { projects, milestones, tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, activeTimers, notes, noteAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettings, telegramWhitelist, systems, changeRequests, settings };
+  const tables: BackupTableData = { tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, activeTimers, notes, noteAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettings, telegramWhitelist, systems, changeRequests, settings };
   return { timestamp, tables, counts: countsFor(tables) };
 }
 
@@ -224,14 +220,12 @@ async function replaceTables(
         ]
       : [];
     await Promise.all([
-      targetDb.projects.clear(), targetDb.milestones.clear(), targetDb.tasks.clear(), targetDb.capacityRules.clear(), targetDb.capacityOverrides.clear(), targetDb.plannedAllocations.clear(), targetDb.workSessions.clear(), targetDb.activeTimers.clear(), targetDb.notes.clear(), targetDb.noteAttachments.clear(), targetDb.chatThreads.clear(), targetDb.chatMessages.clear(), targetDb.chatTabs.clear(), targetDb.telegramSettings.clear(), targetDb.telegramWhitelist.clear(), targetDb.systems.clear(), targetDb.changeRequests.clear(), ...clearKnowledge, targetDb.settings.clear(), targetDb.backupMetadata.clear(),
+      targetDb.tasks.clear(), targetDb.capacityRules.clear(), targetDb.capacityOverrides.clear(), targetDb.plannedAllocations.clear(), targetDb.workSessions.clear(), targetDb.activeTimers.clear(), targetDb.notes.clear(), targetDb.noteAttachments.clear(), targetDb.chatThreads.clear(), targetDb.chatMessages.clear(), targetDb.chatTabs.clear(), targetDb.telegramSettings.clear(), targetDb.telegramWhitelist.clear(), targetDb.systems.clear(), targetDb.changeRequests.clear(), ...clearKnowledge, targetDb.settings.clear(), targetDb.backupMetadata.clear(),
     ]);
 
     const add = async <T>(table: { bulkAdd: (rows: T[]) => Promise<unknown> }, rows: T[] | undefined) => {
       if (rows?.length) await table.bulkAdd(rows);
     };
-    await add(targetDb.projects, tables.projects);
-    await add(targetDb.milestones, tables.milestones);
     await add(targetDb.tasks, tables.tasks);
     await add(targetDb.capacityRules, tables.capacityRules);
     await add(targetDb.capacityOverrides, tables.capacityOverrides);
@@ -257,8 +251,8 @@ async function replaceTables(
     // exported workflowState into that key (and let the validator's `interrupted` checkpoint win),
     // so the two stores cannot disagree about a restored, blocked workflow.
     for (const tab of tables.chatTabs ?? []) {
-      if (!tab.workflowState || !tab.scopeKey.startsWith('project:')) continue;
-      const key = `sdlc_workflow:${tab.scopeKey.slice('project:'.length)}:${tab.threadId}`;
+      if (!tab.workflowState || !tab.scopeKey.startsWith('cr:')) continue;
+      const key = `sdlc_workflow:${tab.scopeKey.slice('cr:'.length)}:${tab.threadId}`;
       const existing = await targetDb.settings.get(key);
       const base = (existing?.value ?? tab.workflowState) as Record<string, unknown>;
       const checkpoint = tab.workflowState.checkpoint ?? base.checkpoint;
@@ -271,7 +265,11 @@ async function replaceTables(
 
 export async function restoreBackupPayload(backup: BackupEnvelope, targetDb: TaskPlannerDatabase = defaultDb): Promise<{ totalRestored: number; snapshotTime: string }> {
   const validation = validateBackupPayload(backup);
-  if (!validation.valid || !validation.envelope) throw new Error('Backup payload must pass validation before restore');
+  if (!validation.valid || !validation.envelope) {
+    // Surface the validator's own message (notably the D-49 legacy-backup copy) instead of a generic one.
+    const first = validation.errors[0]?.message;
+    throw new Error(first ? `Backup payload must pass validation before restore: ${first}` : 'Backup payload must pass validation before restore');
+  }
   const validatedBackup = validation.envelope;
   const snapshotTime = new Date().toISOString();
   const normalized = restoreRows(validatedBackup, snapshotTime);

@@ -115,8 +115,8 @@ export const SnapshotRollbackCard: React.FC<SnapshotRollbackCardProps> = ({
 
           <div>
             <Space wrap>
-              <Tag color="blue">Dự án: {snapshotRecord.counts.projects}</Tag>
-              <Tag color="cyan">Cột mốc: {snapshotRecord.counts.milestones}</Tag>
+              <Tag color="blue">CR: {snapshotRecord.counts.changeRequests ?? 0}</Tag>
+              <Tag color="cyan">Hệ thống: {snapshotRecord.counts.systems ?? 0}</Tag>
               <Tag color="green">Tác vụ: {snapshotRecord.counts.tasks}</Tag>
               <Tag color="orange">Quy tắc: {snapshotRecord.counts.capacityRules}</Tag>
               <Tag color="purple">Ngoại lệ: {snapshotRecord.counts.capacityOverrides}</Tag>
