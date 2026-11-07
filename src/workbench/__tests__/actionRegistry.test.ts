@@ -46,7 +46,7 @@ describe('actionRegistry', () => {
     const all = getAllActions();
     const ids = all.map((a) => a.id);
 
-    expect(ids).toContain('view.toggle-projects');
+    expect(ids).toContain('view.toggle-cr-explorer');
     expect(ids).toContain('view.toggle-docs');
     expect(ids).toContain('view.toggle-ai-chat');
     expect(ids).toContain('view.toggle-notifications');
@@ -56,14 +56,14 @@ describe('actionRegistry', () => {
   });
 
   it('toggles tool windows via standard actions', () => {
-    // Initial leftActiveId is 'projects'
-    expect(useLayoutStore.getState().leftActiveId).toBe('projects');
+    // Initial leftActiveId is 'cr_explorer'
+    expect(useLayoutStore.getState().leftActiveId).toBe('cr_explorer');
 
-    executeAction('view.toggle-projects'); // toggles off
+    executeAction('view.toggle-cr-explorer'); // toggles off
     expect(useLayoutStore.getState().leftActiveId).toBeNull();
 
-    executeAction('view.toggle-projects'); // toggles back on
-    expect(useLayoutStore.getState().leftActiveId).toBe('projects');
+    executeAction('view.toggle-cr-explorer'); // toggles back on
+    expect(useLayoutStore.getState().leftActiveId).toBe('cr_explorer');
 
     executeAction('view.toggle-docs'); // toggles left to docs
     expect(useLayoutStore.getState().leftActiveId).toBe('docs');

@@ -74,12 +74,12 @@ export function useActionRegistry(): ActionDefinition[] {
 export function initStandardActions(): void {
   const standardActions: ActionDefinition[] = [
     {
-      id: 'view.toggle-projects',
+      id: 'view.toggle-cr-explorer',
       title: 'Tool Windows: Toggle CR Explorer',
       category: 'View',
       shortcut: 'Alt+1',
       perform: () => {
-        useLayoutStore.getState().toggleToolWindow('left', 'projects');
+        useLayoutStore.getState().toggleToolWindow('left', 'cr_explorer');
       },
     },
     {
