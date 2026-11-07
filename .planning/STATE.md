@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: SDLC Closed-Loop Engine & Repository Autonomy
-status: completed
-last_updated: "2026-11-07T09:36:27.117Z"
+status: Ready to discuss and plan Phase 31.2
+last_updated: "2026-11-07T11:21:41.577Z"
 last_activity: 2026-11-07
 progress:
-  total_phases: 10
+  total_phases: 11
   completed_phases: 7
-  total_plans: 30
+  total_plans: 34
   completed_plans: 26
-  percent: 70
-current_phase: 31.1
-current_phase_name: enterprise-systems-catalog-and-cr-transformation
+  percent: 64
+current_phase: 31.2
+current_phase_name: enterprise-systems-catalog-and-cr-normalization
 ---
 
 # Project State: TaskMate — Milestone v1.3
@@ -20,13 +20,13 @@ current_phase_name: enterprise-systems-catalog-and-cr-transformation
 See: .planning/PROJECT.md (updated 2026-11-03)
 
 **Core value:** Make planned work realistically fit available time while giving the personal user evidence-grounded access to their local banking IT knowledge.
-**Current focus:** Phase 31.1 — enterprise-systems-catalog-cr-transformation-inserted
+**Current focus:** Phase 31.2 — enterprise-systems-catalog-and-cr-normalization
 
 ## Current Position
 
-Phase: 32
+Phase: 31.2
 Plan: Not started
-Status: Phase 31.1 complete. Ready for next phase.
+Status: Ready to discuss and plan Phase 31.2
 Last activity: 2026-11-07
 
 Phase sequence: 26 → 27 → 28 → 29 → 29.1 → 30 → 31 → 31.1
@@ -34,8 +34,8 @@ Phase sequence: 26 → 27 → 28 → 29 → 29.1 → 30 → 31 → 31.1
 
 ## Session Continuity
 
-Last session: 2026-11-07T09:36:27.107Z
-Resume file: .planning/phases/32-external-research-via-claude-code-headless/32-UI-SPEC.md
+Last session: 2026-11-07T11:21:41.570Z
+Resume file: .planning/phases/31.2-enterprise-systems-catalog-and-cr-normalization/31.2-UI-SPEC.md
 
 Progress: [███████░░░] 70%
 
@@ -127,3 +127,32 @@ Progress: [███████░░░] 70%
 - [Phase 31.1]: D-21: ProjectExplorer displays CR nodes with type icons and target system pills, preserving task/milestone tree
 - [Phase 31.1]: D-22: loadMultiRepoConventions aggregates CONVENTIONS.md across all target subsystems of CR, layered with system code headers
 - [Phase 31.1]: D-23: SDLC Studio Step 3 dynamically provides Subsystem Switcher to inspect diffs and branches across multi-system CRs
+- [Phase 31.2]: D-24: systems table holds both LOGICAL_GROUP and deployable types; parent has no ssh/repo/branch, subsystem binds exactly one remote repo
+- [Phase 31.2]: D-25: changeRequests stores targets: CrTarget[] ({ systemId, featureBranch? }) instead of targetSystemIds; only deployable subsystems allowed; featureBranch defaults to feature/{cr.code} and is stored explicitly, baseBranch stays on the subsystem
+- [Phase 31.2]: D-26: Task.crId required, Task.systemId optional and must belong to cr.targets
+- [Phase 31.2]: D-27: projects and milestones tables removed from Dexie; test data reset allowed, no shadow aliases
+- [Phase 31.2]: D-28: SDLC workflow state keyed by crId; per-subsystem content lives inside steps, not as separate workflows
+- [Phase 31.2]: D-29: CR Explorer is default left tool window (Alt+1), tree CR -> Subsystem -> Task, no Milestone tier
+- [Phase 31.2]: D-30: Systems Explorer parent nodes have no create-CR action; subsystem nodes do, pre-selecting themselves
+- [Phase 31.2]: D-31: Clicking a CR opens a ChangeRequestDetailView tab, never a popup or inline swap
+- [Phase 31.2]: D-32: CR Detail is a single screen: header, 6-step progress strip, flat task table with Subsystem column, collapsed Jira/docs block
+- [Phase 31.2]: D-33: SystemDetailView has 4 tabs; Git & Branches tab exists only for subsystems
+- [Phase 31.2]: D-35: 1-click Git sets activeRemoteTarget and opens the LEFT `remote_explorer` tool window (amended — no bottom Remote Git panel exists); 1-click Terminal opens the bottom Terminal; both disabled with Catalog link when unconfigured
+- [Phase 31.2]: D-36: SDLC Studio is 3 zones (sidebar with CR picker + steps + Subsystems & Repos, workspace with context bar, step chat)
+- [Phase 31.2]: D-37: Subsystems & Repos is read-only observation; editing stays in System Catalog
+- [Phase 31.2]: D-38: selectedSystemId lives at SDLC view level and drives both Step 3 and Step 4; bar hidden for single-subsystem CRs
+- [Phase 31.2]: D-39: Step 2 solution is split into one section per subsystem with repo-scoped conventions
+- [Phase 31.2]: D-40: Step 4 packs per subsystem card plus Pack All with per-subsystem failure reporting; drift matrix is one table with a Subsystem column
+- [Phase 31.2]: D-41: AI subsystem proposals are structured artifacts constrained to existing Catalog ids
+- [Phase 31.2]: D-42: Proposals never auto-attach; user ticks and confirms before cr.targets changes
+- [Phase 31.2]: D-43: Proposals can supplement an already-populated CR, listing only the missing subsystems
+- [Phase 31.2]: D-44: Delete components/projects, ProjectsView, ProjectExplorer, RepoConfigView; rename ProjectSdlcView; rewrite CRExplorer; add CR Detail, SubsystemsReposPanel, SubsystemContextBar, SubsystemProposalCard
+- [Phase 31.2]: D-45: All project/milestone tests removed or rewritten; new invariant and proposal-gate tests added
+- [Phase 31.2]: D-46: Global Tasks tab stays; axes become CR + Subsystem (filter, table columns, TaskDrawer form, QuickAddBar)
+- [Phase 31.2]: D-47: ItemInsightView itemType drops project/milestone, adds cr/system
+- [Phase 31.2]: D-48: ChatScopeType drops project/milestone, adds cr/system; old project/milestone threads deleted on upgrade (test data, acceptable loss)
+- [Phase 31.2]: D-49: Backup schema version bumped; legacy backups containing projects/milestones rejected with explicit message, never auto-mapped
+- [Phase 31.2]: D-50: Every label surface (notifications, standup, dayInsight, weekly planner, dashboard, timer, feasibility, palette, selectionContext, filter, recurrence, docx export) resolves names from CR/Subsystem instead of Project
+- [Phase 31.2]: D-51: Left stripe id renamed projects -> cr_explorer with layout persist key bump
+- [Phase 31.2]: D-52: Mandatory execution order — schema/types/Zod/repo first, then legacy deletion, then daily surfaces, then CR/System views, then SDLC, then AI proposal, then tests
+- [Phase 31.2]: D-53: Step 3 reads featureBranch from cr.targets and baseBranch from system; no branch-name guessing from crCode
