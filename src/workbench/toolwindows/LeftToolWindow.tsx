@@ -8,7 +8,7 @@ import {
 } from '@ant-design/icons';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { useLayoutStore } from '../store/layoutStore';
-import { ProjectExplorer } from './ProjectExplorer';
+import { CRExplorer } from './CRExplorer';
 import { DocsExplorer } from './DocsExplorer';
 import { DiagramExplorer } from './DiagramExplorer';
 import { RemoteGitExplorer } from './RemoteGitExplorer';
@@ -94,7 +94,7 @@ export function LeftToolWindow({
           <Tooltip title={`Collapse ${title}`}>
             <button
               type="button"
-              onClick={() => toggleToolWindow('left', leftActiveId || 'projects')}
+              onClick={() => toggleToolWindow('left', leftActiveId || 'cr_explorer')}
               aria-label="Collapse tool window"
               style={{
                 background: 'transparent',
@@ -122,7 +122,7 @@ export function LeftToolWindow({
         ) : isDocs ? (
           <DocsExplorer db={db} />
         ) : (
-          <ProjectExplorer db={db} onSelectProject={onSelectProject} />
+          <CRExplorer db={db} onSelectProject={onSelectProject} />
         )}
       </div>
     </div>

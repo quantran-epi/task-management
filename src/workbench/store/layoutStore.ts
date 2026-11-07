@@ -9,7 +9,7 @@ export type EditorViewType =
   | 'planner'
   | 'analytics'
   | 'settings'
-  | 'projects'
+  | 'cr_detail'
   | 'dashboard'
   | 'agents'
   | 'telegram'
@@ -29,6 +29,11 @@ export interface EditorTab {
   params?: Record<string, any>;
 }
 
+export interface PendingTerminalTarget {
+  sshConfigId: string | null;
+  repoPath: string;
+}
+
 export interface LayoutStateValues {
   leftActiveId: string | null;
   rightActiveId: string | null;
@@ -42,6 +47,8 @@ export interface LayoutStateValues {
   activeRemoteRepoPath: string;
   activeRemoteBranch: string;
   isBottomMaximized: boolean;
+  /** Transient 1-click Terminal request. Deliberately not persisted (T-31.2-19). */
+  pendingTerminalTarget: PendingTerminalTarget | null;
 }
 
 export interface LayoutActions {
@@ -57,6 +64,8 @@ export interface LayoutActions {
   setActiveTabId: (tabId: string) => void;
   setActiveRemoteTarget: (configId: string | null, repoPath: string, branch?: string) => void;
   setActiveRemoteBranch: (branch: string) => void;
+  setPendingTerminalTarget: (target: PendingTerminalTarget | null) => void;
+  consumePendingTerminalTarget: () => PendingTerminalTarget | null;
   resetLayout: () => void;
 }
 
@@ -69,7 +78,7 @@ export const DEFAULT_TABS: EditorTab[] = [
 ];
 
 export const DEFAULT_LAYOUT_STATE: LayoutStateValues = {
-  leftActiveId: 'projects',
+  leftActiveId: 'cr_explorer',
   rightActiveId: null,
   bottomActiveId: null,
   leftPanelSize: 20,
@@ -81,9 +90,10 @@ export const DEFAULT_LAYOUT_STATE: LayoutStateValues = {
   activeRemoteRepoPath: '',
   activeRemoteBranch: '',
   isBottomMaximized: false,
+  pendingTerminalTarget: null,
 };
 
-export const LAYOUT_STORAGE_KEY = 'taskmate_workbench_layout_v1';
+export const LAYOUT_STORAGE_KEY = 'taskmate_workbench_layout_v2';
 export const MAX_OPEN_TABS = 20;
 
 export const useLayoutStore = create<LayoutState>()(
@@ -250,6 +260,16 @@ export const useLayoutStore = create<LayoutState>()(
         set(() => ({ activeRemoteBranch: branch }));
       },
 
+      setPendingTerminalTarget: (target: PendingTerminalTarget | null) => {
+        set(() => ({ pendingTerminalTarget: target }));
+      },
+
+      consumePendingTerminalTarget: () => {
+        const target = useLayoutStore.getState().pendingTerminalTarget;
+        if (target) set(() => ({ pendingTerminalTarget: null }));
+        return target;
+      },
+
       resetLayout: () => {
         set(() => ({
           ...DEFAULT_LAYOUT_STATE,
@@ -260,19 +280,29 @@ export const useLayoutStore = create<LayoutState>()(
       name: LAYOUT_STORAGE_KEY,
       storage: createJSONStorage(() => localStorage),
       // T-25.4-01: Validate stored state against schema/shape with fallback to defaults on corrupt data
+      // T-31.2-16: the persist key moved to `_v2`; a hand-edited v1 blob still cannot resolve
+      // to the deleted `projects` tool window or a dead `projects` editor tab.
       partialize: (state) => ({
-        leftActiveId: typeof state.leftActiveId === 'string' ? state.leftActiveId : null,
+        leftActiveId:
+          state.leftActiveId === 'projects'
+            ? 'cr_explorer'
+            : typeof state.leftActiveId === 'string'
+            ? state.leftActiveId
+            : null,
         rightActiveId: typeof state.rightActiveId === 'string' ? state.rightActiveId : null,
         bottomActiveId: typeof state.bottomActiveId === 'string' ? state.bottomActiveId : null,
         leftPanelSize: typeof state.leftPanelSize === 'number' && state.leftPanelSize > 0 ? state.leftPanelSize : DEFAULT_LAYOUT_STATE.leftPanelSize,
         rightPanelSize: typeof state.rightPanelSize === 'number' && state.rightPanelSize > 0 ? state.rightPanelSize : DEFAULT_LAYOUT_STATE.rightPanelSize,
         bottomPanelSize: typeof state.bottomPanelSize === 'number' && state.bottomPanelSize > 0 ? state.bottomPanelSize : DEFAULT_LAYOUT_STATE.bottomPanelSize,
         openTabs: Array.isArray(state.openTabs) && state.openTabs.length > 0
-          ? state.openTabs.slice(0, MAX_OPEN_TABS).map((tab) => ({
-              ...tab,
-              closable: true,
-              pinned: Boolean(tab.pinned),
-            }))
+          ? state.openTabs
+              .filter((tab) => (tab.viewType as string) !== 'projects')
+              .slice(0, MAX_OPEN_TABS)
+              .map((tab) => ({
+                ...tab,
+                closable: true,
+                pinned: Boolean(tab.pinned),
+              }))
           : DEFAULT_LAYOUT_STATE.openTabs,
         activeTabId: typeof state.activeTabId === 'string' ? state.activeTabId : DEFAULT_LAYOUT_STATE.activeTabId,
         activeRemoteConfigId: typeof state.activeRemoteConfigId === 'string' ? state.activeRemoteConfigId : null,

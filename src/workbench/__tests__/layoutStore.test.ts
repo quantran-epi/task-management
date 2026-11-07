@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useLayoutStore, DEFAULT_LAYOUT_STATE } from '../store/layoutStore';
+import { useLayoutStore, DEFAULT_LAYOUT_STATE, LAYOUT_STORAGE_KEY } from '../store/layoutStore';
 
 describe('useLayoutStore', () => {
   beforeEach(() => {
@@ -9,7 +9,7 @@ describe('useLayoutStore', () => {
 
   it('initializes with default state', () => {
     const state = useLayoutStore.getState();
-    expect(state.leftActiveId).toBe('projects');
+    expect(state.leftActiveId).toBe('cr_explorer');
     expect(state.rightActiveId).toBeNull();
     expect(state.bottomActiveId).toBeNull();
     expect(state.leftPanelSize).toBe(20);
@@ -17,14 +17,18 @@ describe('useLayoutStore', () => {
     expect(state.bottomPanelSize).toBe(30);
   });
 
+  it('uses the v2 persist key so a stale v1 layout cannot resolve', () => {
+    expect(LAYOUT_STORAGE_KEY).toBe('taskmate_workbench_layout_v2');
+  });
+
   it('toggles tool windows correctly', () => {
-    // Toggling already active left 'projects' -> turns null
-    useLayoutStore.getState().toggleToolWindow('left', 'projects');
+    // Toggling already active left 'cr_explorer' -> turns null
+    useLayoutStore.getState().toggleToolWindow('left', 'cr_explorer');
     expect(useLayoutStore.getState().leftActiveId).toBeNull();
 
-    // Toggling again -> turns 'projects'
-    useLayoutStore.getState().toggleToolWindow('left', 'projects');
-    expect(useLayoutStore.getState().leftActiveId).toBe('projects');
+    // Toggling again -> turns 'cr_explorer'
+    useLayoutStore.getState().toggleToolWindow('left', 'cr_explorer');
+    expect(useLayoutStore.getState().leftActiveId).toBe('cr_explorer');
 
     // Switching left to another id
     useLayoutStore.getState().toggleToolWindow('left', 'outline');

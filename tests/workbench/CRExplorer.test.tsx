@@ -84,10 +84,10 @@ describe('CRExplorer — CR → Subsystem → Task tree (ENT-NORM-04)', () => {
     render(<CRExplorer db={db} />);
 
     expect(await screen.findByText('Instant Payment')).toBeInTheDocument();
-    expect(screen.getByText('SC-AUTH-API')).toBeInTheDocument();
-    expect(screen.getByText('Attached task')).toBeInTheDocument();
-    expect(screen.getByText('Chung (không gắn)')).toBeInTheDocument();
-    expect(screen.getByText('Unattached task')).toBeInTheDocument();
+    expect(await screen.findByText('SC-AUTH-API')).toBeInTheDocument();
+    expect(await screen.findByText('Attached task')).toBeInTheDocument();
+    expect(await screen.findByText('Chung (không gắn)')).toBeInTheDocument();
+    expect(await screen.findByText('Unattached task')).toBeInTheDocument();
   });
 
   it('renders no Milestone tier', async () => {

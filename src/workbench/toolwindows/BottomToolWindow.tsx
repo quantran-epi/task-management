@@ -28,6 +28,8 @@ export interface BottomToolWindowProps {
 export interface TerminalTabItem {
   id: string;
   title: string;
+  /** 1-click Terminal target: the panel issues `cd <repoPath>` once the PTY connects. */
+  repoPath?: string;
 }
 
 export function BottomToolWindow({
@@ -51,6 +53,21 @@ export function BottomToolWindow({
   const isBottomMaximized = useLayoutStore((s) => s.isBottomMaximized);
   const toggleBottomMaximize = useLayoutStore((s) => s.toggleBottomMaximize);
   const toggleToolWindow = useLayoutStore((s) => s.toggleToolWindow);
+  const pendingTerminalTarget = useLayoutStore((s) => s.pendingTerminalTarget);
+  const consumePendingTerminalTarget = useLayoutStore((s) => s.consumePendingTerminalTarget);
+
+  // 1-click Terminal (D-35): open a tab already pointed at the subsystem's repo path.
+  useEffect(() => {
+    if (!pendingTerminalTarget) return;
+    const target = consumePendingTerminalTarget();
+    if (!target) return;
+
+    const newId = `term-${Date.now()}`;
+    const repoName = target.repoPath.replace(/\/+$/, '').split('/').pop() || 'repo';
+    setTerminalTabs((prev) => [...prev, { id: newId, title: repoName, repoPath: target.repoPath }]);
+    setActiveTerminalId(newId);
+    if (target.sshConfigId) setSelectedConfigId(target.sshConfigId);
+  }, [pendingTerminalTarget, consumePendingTerminalTarget]);
 
   // When bottom panel is reopened and has no tabs, automatically add 1 fresh terminal tab
   useEffect(() => {
@@ -416,6 +433,7 @@ export function BottomToolWindow({
                   config={activeConfig}
                   db={db}
                   isActive={activeTerminalId === tab.id}
+                  {...(tab.repoPath ? { repoPath: tab.repoPath } : {})}
                 />
               </div>
             ))

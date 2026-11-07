@@ -35,7 +35,7 @@ export function useGlobalKeymap(): void {
       if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
         if (e.key === '1') {
           e.preventDefault();
-          executeAction('view.toggle-projects');
+          executeAction('view.toggle-cr-explorer');
           return;
         }
         if (e.key === '2') {

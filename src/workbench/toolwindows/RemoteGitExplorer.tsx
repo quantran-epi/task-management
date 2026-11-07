@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Select, Input, Tree, Button, Tooltip, Tag, Spin, Alert, Empty } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import FolderOutlined from '@ant-design/icons/FolderOutlined';
@@ -145,15 +145,14 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
       .then((configs) => {
         if (!mounted) return;
         setSshConfigs(configs);
-        const match = activeRemoteConfigId ? configs.find((c) => c.id === activeRemoteConfigId) : null;
-        const initialConfig = match || configs[0];
-        if (initialConfig && !selectedConfigId) {
+        // A target already in the store wins (restored layout or a 1-click Git action).
+        if (activeRemoteConfigId || activeRemoteRepoPath) return;
+        const initialConfig = configs[0];
+        if (initialConfig) {
+          const initialPath = initialConfig.defaultRemotePath || '';
           setSelectedConfigId(initialConfig.id);
-          const initialPath = activeRemoteRepoPath || initialConfig.defaultRemotePath || '';
-          if (initialPath && !repoPath) {
-            setRepoPath(initialPath);
-          }
-          setActiveRemoteTarget(initialConfig.id, repoPath || initialPath);
+          if (initialPath) setRepoPath(initialPath);
+          setActiveRemoteTarget(initialConfig.id, initialPath);
         }
       })
       .catch((err) => {
@@ -162,7 +161,19 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
     return () => {
       mounted = false;
     };
-  }, [db, selectedConfigId, activeRemoteConfigId, activeRemoteRepoPath, repoPath, setActiveRemoteTarget]);
+  }, [db]);
+
+  // Store → local sync (RESEARCH H5): unconditional, so a second 1-click on a different
+  // subsystem actually switches the explorer instead of being swallowed. Keyed on the last
+  // applied store value so local typing is never clobbered mid-edit.
+  const lastAppliedTargetRef = useRef<string>('');
+  useEffect(() => {
+    const key = `${activeRemoteConfigId ?? ''}|${activeRemoteRepoPath}`;
+    if (lastAppliedTargetRef.current === key) return;
+    lastAppliedTargetRef.current = key;
+    if (activeRemoteConfigId) setSelectedConfigId(activeRemoteConfigId);
+    if (activeRemoteRepoPath) setRepoPath(activeRemoteRepoPath);
+  }, [activeRemoteConfigId, activeRemoteRepoPath]);
 
   const selectedConfig = sshConfigs.find((c) => c.id === selectedConfigId);
 
