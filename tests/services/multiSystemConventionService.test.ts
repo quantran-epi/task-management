@@ -3,15 +3,12 @@ import { TaskPlannerDatabase } from '../../src/db/index';
 import {
   loadRepoConventionsForSystem,
   loadMultiRepoConventions,
-  loadRepoConventions,
-  type RepoConventionResult,
 } from '../../src/services/conventionService';
 import {
   buildConventionsSegment,
   CONVENTIONS_CONFLICT_POLICY,
 } from '../../src/services/ai/sdlcPromptComposer';
 import * as sshService from '../../src/services/sshService';
-import * as gitRemoteService from '../../src/services/gitRemoteService';
 import * as timerPopout from '../../src/utils/timerPopout';
 import type { SshConfig } from '../../src/types/ssh';
 import type { System } from '../../src/types/models';
@@ -45,7 +42,7 @@ describe('multiSystemConventionService and prompt composer', () => {
     id: 'sys-1',
     name: 'Payment Gateway',
     code: 'PAY-GW',
-    type: 'SUBSYSTEM',
+    type: 'SERVICE',
     parentId: 'sys-parent',
     sshConfigId: 'ssh-cfg-1',
     remoteRepoPath: '/var/repos/payment-gateway',
@@ -57,7 +54,7 @@ describe('multiSystemConventionService and prompt composer', () => {
     id: 'sys-2',
     name: 'Order Service',
     code: 'ORDER-SVC',
-    type: 'SUBSYSTEM',
+    type: 'SERVICE',
     parentId: 'sys-parent',
     sshConfigId: 'ssh-cfg-2',
     remoteRepoPath: '/var/repos/order-service',
@@ -88,7 +85,10 @@ describe('multiSystemConventionService and prompt composer', () => {
 
     it('returns null if system has no sshConfigId or remoteRepoPath', async () => {
       vi.spyOn(timerPopout, 'isTauriApp').mockReturnValue(true);
-      await testDb.systems.update(system1.id, { sshConfigId: undefined, remoteRepoPath: undefined });
+      await testDb.systems.where('id').equals(system1.id).modify((s) => {
+        delete s.sshConfigId;
+        delete s.remoteRepoPath;
+      });
       const res = await loadRepoConventionsForSystem(system1.id, testDb);
       expect(res).toBeNull();
     });
@@ -171,8 +171,8 @@ describe('multiSystemConventionService and prompt composer', () => {
     });
   });
 
-  describe('loadRepoConventions delegation for CR', () => {
-    it('delegates to loadMultiRepoConventions when given a CR ID with targetSystemIds', async () => {
+  describe('CR target aggregation', () => {
+    it('loads conventions for the systems targeted by a CR', async () => {
       vi.spyOn(timerPopout, 'isTauriApp').mockReturnValue(true);
       vi.spyOn(sshService, 'getSshSecret').mockResolvedValue('secret');
       vi.spyOn(sshService, 'execRemoteCommand').mockResolvedValue({
@@ -182,20 +182,26 @@ describe('multiSystemConventionService and prompt composer', () => {
       });
       vi.spyOn(sshService, 'readRemoteFile').mockResolvedValue('# CR conventions from system 1');
 
-      await testDb.changeRequests.add({
+      const cr = {
         id: 'cr-100',
         name: 'Multi System CR',
-        status: 'Open',
-        type: 'MULTI_SYSTEM',
-        targetSystemIds: [system1.id],
+        code: 'CR-100',
+        status: 'Open' as const,
+        type: 'NEW_FEATURE' as const,
+        targets: [{ systemId: system1.id }],
         createdAt: '2026-11-07T00:00:00.000Z',
         updatedAt: '2026-11-07T00:00:00.000Z',
-      });
+      };
+      await testDb.changeRequests.add(cr);
 
-      const res = await loadRepoConventions('cr-100', testDb);
-      expect(res).toBeDefined();
-      expect(res?.content).toBe('# CR conventions from system 1');
-      expect(res?.foundPath).toBe('CONVENTIONS.md');
+      const stored = await testDb.changeRequests.get(cr.id);
+      const res = await loadMultiRepoConventions(
+        (stored?.targets ?? []).map((t) => t.systemId),
+        testDb
+      );
+      expect(res).toHaveLength(1);
+      expect(res[0]?.content).toBe('# CR conventions from system 1');
+      expect(res[0]?.foundPath).toBe('CONVENTIONS.md');
     });
   });
 

@@ -6,7 +6,6 @@ import { useLayoutStore, type EditorTab } from '../../../src/workbench/store/lay
 import { getAllActions, executeAction } from '../../../src/workbench/actions/actionRegistry';
 import { SystemCatalogView } from '../../../src/views/SystemCatalogView';
 import { SystemDetailView } from '../../../src/views/SystemDetailView';
-import { SystemsExplorer } from '../../../src/workbench/toolwindows/SystemsExplorer';
 import { SystemTable } from '../../../src/components/systems/SystemTable';
 import { SystemModal } from '../../../src/components/systems/SystemModal';
 import { createSystem } from '../../../src/db/repositories/systemRepo';
@@ -126,6 +125,7 @@ describe('SystemCatalogView, SystemTable, and SystemModal (Task 2)', () => {
       {
         name: 'Enterprise Core Group',
         code: 'ENT-CORE',
+        parentId: null,
         type: 'LOGICAL_GROUP',
       },
       db
@@ -141,7 +141,7 @@ describe('SystemCatalogView, SystemTable, and SystemModal (Task 2)', () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     const onClose = vi.fn();
 
-    const { rerender } = render(
+    render(
       <SystemModal
         open={true}
         onClose={onClose}
