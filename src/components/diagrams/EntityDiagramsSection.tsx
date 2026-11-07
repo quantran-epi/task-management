@@ -83,9 +83,9 @@ export const EntityDiagramsSection: React.FC<EntityDiagramsSectionProps> = ({
       const typeLabel =
         entityType === 'task'
           ? 'Tác vụ'
-          : entityType === 'project'
-          ? 'Dự án'
-          : 'Milestone';
+          : entityType === 'cr'
+          ? 'CR'
+          : 'Hệ thống';
 
       const newDiag = await createNote(
         {

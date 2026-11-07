@@ -56,6 +56,7 @@ import { DocEditorPane } from '../components/notes/DocEditorPane';
 import { ZipImportPreviewModal } from '../components/notes/ZipImportPreviewModal';
 import { exportFolderAsZip } from '../utils/exportFolderZip';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
+import { useLayoutStore } from '../workbench/store/layoutStore';
 import { ResizeSplitter } from '../components/common/ResizeSplitter';
 
 const { Text } = Typography;
@@ -267,6 +268,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(initialDocId ?? null);
   const [activeDrawerTaskId, setActiveDrawerTaskId] = useState<string | null>(null);
+  const openTab = useLayoutStore((s) => s.openTab);
 
   const [aiPromptModalOpen, setAiPromptModalOpen] = useState<boolean>(false);
   const [documentSetDrawerOpen, setDocumentSetDrawerOpen] = useState(false);
@@ -944,12 +946,12 @@ export const NotesView: React.FC<NotesViewProps> = ({
     if (note.deletedAt) {
       try {
         const backlinks = await getBacklinksForDoc(note.id, db);
-        const backlinkCount = backlinks.tasks.length + backlinks.projects.length + backlinks.referencingNotes.length;
+        const backlinkCount = backlinks.tasks.length + backlinks.changeRequests.length + backlinks.referencingNotes.length;
 
         if (backlinkCount > 0) {
           Modal.confirm({
             title: 'Cảnh báo xóa vĩnh viễn',
-            content: `Tài liệu "${note.title || 'Không tiêu đề'}" đang được ${backlinkCount} mục liên kết (Tasks/Projects). Vẫn tiếp tục xóa vĩnh viễn?`,
+            content: `Tài liệu "${note.title || 'Không tiêu đề'}" đang được ${backlinkCount} mục liên kết (Tasks/CRs). Vẫn tiếp tục xóa vĩnh viễn?`,
             okText: 'Xóa vĩnh viễn',
             okType: 'danger',
             cancelText: 'Hủy',
@@ -1125,8 +1127,14 @@ export const NotesView: React.FC<NotesViewProps> = ({
               onRestoreDoc={handleRestoreDocument}
               onSelectDoc={(id) => setSelectedDocId(id)}
               onOpenTask={(taskId) => setActiveDrawerTaskId(taskId)}
-              onOpenProject={(projectId) => {
-                window.location.hash = `#/projects?project=${encodeURIComponent(projectId)}`;
+              onOpenCr={(crId) => {
+                openTab({
+                  id: `cr-${crId}`,
+                  title: 'Change Request',
+                  viewType: 'cr_detail',
+                  closable: true,
+                  params: { changeRequestId: crId },
+                });
               }}
               db={db}
               publishStatus={publishStatuses?.[activeDocument.id]}

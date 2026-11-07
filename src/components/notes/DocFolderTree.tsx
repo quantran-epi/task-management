@@ -21,7 +21,8 @@ import {
   SearchOutlined,
   UndoOutlined,
   CheckSquareOutlined,
-  ProjectOutlined,
+  ThunderboltOutlined,
+  BranchesOutlined,
   DownloadOutlined,
 } from '@ant-design/icons';
 import type { Note } from '../../types/models';
@@ -487,9 +488,14 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
                 <CheckSquareOutlined style={{ fontSize: 11, color: '#1677ff', flexShrink: 0 }} />
               </Tooltip>
             )}
-            {doc.entityType === 'project' && (
-              <Tooltip title="Thuộc về một dự án">
-                <ProjectOutlined style={{ fontSize: 11, color: '#722ed1', flexShrink: 0 }} />
+            {doc.entityType === 'cr' && (
+              <Tooltip title="Thuộc về một Change Request">
+                <ThunderboltOutlined style={{ fontSize: 11, color: '#722ed1', flexShrink: 0 }} />
+              </Tooltip>
+            )}
+            {doc.entityType === 'system' && (
+              <Tooltip title="Thuộc về một hệ thống">
+                <BranchesOutlined style={{ fontSize: 11, color: '#13c2c2', flexShrink: 0 }} />
               </Tooltip>
             )}
           </div>

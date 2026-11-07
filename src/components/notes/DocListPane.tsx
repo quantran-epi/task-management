@@ -60,7 +60,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<DocSortOption>('updatedAt');
-  const [entityFilter, setEntityFilter] = useState<'all' | 'standalone' | 'task' | 'project' | 'milestone'>('all');
+  const [entityFilter, setEntityFilter] = useState<'all' | 'standalone' | 'task' | 'cr' | 'system'>('all');
 
   const { matchIds } = useDocWorkerSearch(notes, searchTerm);
 
@@ -304,8 +304,8 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
               { value: 'all', label: 'Tất cả liên kết' },
               { value: 'standalone', label: 'Độc lập' },
               { value: 'task', label: 'Tác vụ (Task)' },
-              { value: 'project', label: 'Dự án (Project)' },
-              { value: 'milestone', label: 'Cột mốc (Milestone)' },
+              { value: 'cr', label: 'CR' },
+              { value: 'system', label: 'Hệ thống' },
             ]}
           />
         )}

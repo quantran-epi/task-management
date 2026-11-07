@@ -37,8 +37,8 @@ export const SmartIngestionBanner: React.FC<SmartIngestionBannerProps> = ({
 
   const renderIcon = (type: string) => {
     if (type === 'task') return '✅';
-    if (type === 'project') return '📁';
-    if (type === 'milestone') return '🚩';
+    if (type === 'cr') return '📋';
+    if (type === 'system') return '🖥️';
     return '📄';
   };
 
@@ -52,7 +52,7 @@ export const SmartIngestionBanner: React.FC<SmartIngestionBannerProps> = ({
       description={
         <div style={{ marginTop: 8 }}>
           <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
-            Phát hiện các tác vụ và dự án liên quan từ nội dung văn bản. Chọn mục cần liên kết hai chiều:
+            Phát hiện các tác vụ, CR và hệ thống liên quan từ nội dung văn bản. Chọn mục cần liên kết hai chiều:
           </Text>
           <Space orientation="vertical" size={6} style={{ width: '100%', marginBottom: 12 }}>
             {detectedEntities.map((entity) => {
