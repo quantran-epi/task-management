@@ -20,8 +20,8 @@ describe('aiTools', () => {
       priority: 'High',
       progress: 50,
       estimateMinutes: 60,
-      projectId: 'proj-1',
-      milestoneId: 'ms-1',
+      crId: 'cr-1',
+      systemId: 'sys-1',
       workType: 'code',
       deadline: '2026-10-01', // overdue relative to 2026-10-03
       checklist: [{ id: 'c1', text: 'Step 1', done: true }],
@@ -40,8 +40,8 @@ describe('aiTools', () => {
       priority: 'Urgent',
       progress: 0,
       estimateMinutes: 120,
-      projectId: 'proj-1',
-      milestoneId: 'ms-2',
+      crId: 'cr-1',
+      systemId: 'sys-2',
       workType: 'configuration',
       deadline: '2026-10-05',
       notes: 'Deployment checklist',
@@ -55,52 +55,58 @@ describe('aiTools', () => {
       priority: 'Low',
       progress: 100,
       estimateMinutes: 30,
-      projectId: 'proj-2',
+      crId: 'cr-2',
       workType: 'document',
       createdAt: '2026-09-25T10:00:00.000Z',
       updatedAt: '2026-09-26T10:00:00.000Z',
     },
   ];
 
-  const mockProjects = [
+  const mockChangeRequests = [
     {
-      id: 'proj-1',
+      id: 'cr-1',
+      code: 'CR-2026-001',
       name: 'Banking Platform',
+      type: 'NEW_FEATURE',
       status: 'In Progress',
       deadline: '2026-12-31',
       description: 'Main banking core',
-      notes: 'Banking notes',
-      jiraEpicKey: 'BANK-EPIC-1',
-      opsOwners: ['OpsTeam'],
-      businessAnalysts: ['BA1'],
+      targets: [
+        { systemId: 'sys-1', featureBranch: 'feature/CR-2026-001' },
+        { systemId: 'sys-2', featureBranch: 'feature/CR-2026-001' },
+      ],
       createdAt: '2026-09-01T00:00:00.000Z',
       updatedAt: '2026-09-02T00:00:00.000Z',
     },
     {
-      id: 'proj-2',
+      id: 'cr-2',
+      code: 'CR-2026-002',
       name: 'Mobile App',
+      type: 'ENHANCEMENT',
       status: 'Open',
       description: 'iOS and Android client',
+      targets: [],
       createdAt: '2026-09-10T00:00:00.000Z',
       updatedAt: '2026-09-10T00:00:00.000Z',
     },
   ];
 
-  const mockMilestones = [
+  const mockSystems = [
     {
-      id: 'ms-1',
-      projectId: 'proj-1',
+      id: 'sys-1',
+      code: 'BACKEND_API',
       name: 'Backend API',
-      status: 'In Progress',
-      deadline: '2026-10-10',
+      type: 'SERVICE',
+      parentId: null,
       createdAt: '2026-09-05T00:00:00.000Z',
       updatedAt: '2026-09-05T00:00:00.000Z',
     },
     {
-      id: 'ms-2',
-      projectId: 'proj-1',
+      id: 'sys-2',
+      code: 'CLOUD_DEPLOY',
       name: 'Cloud Deploy',
-      status: 'Open',
+      type: 'WORKER',
+      parentId: null,
       createdAt: '2026-09-15T00:00:00.000Z',
       updatedAt: '2026-09-15T00:00:00.000Z',
     },
@@ -223,13 +229,13 @@ describe('aiTools', () => {
       toArray: async () => mockTasks,
       get: async (id: string) => mockTasks.find((t) => t.id === id),
     },
-    projects: {
-      toArray: async () => mockProjects,
-      get: async (id: string) => mockProjects.find((p) => p.id === id),
+    changeRequests: {
+      toArray: async () => mockChangeRequests,
+      get: async (id: string) => mockChangeRequests.find((c) => c.id === id),
     },
-    milestones: {
-      toArray: async () => mockMilestones,
-      get: async (id: string) => mockMilestones.find((m) => m.id === id),
+    systems: {
+      toArray: async () => mockSystems,
+      get: async (id: string) => mockSystems.find((s) => s.id === id),
     },
     workSessions: {
       toArray: async () => mockWorkSessions,
@@ -298,7 +304,7 @@ describe('aiTools', () => {
   };
 
   it('declares comprehensive query and mutation AI_DATABASE_TOOLS', () => {
-    expect(AI_DATABASE_TOOLS.length).toBe(71);
+    expect(AI_DATABASE_TOOLS.length).toBe(73);
     const names = AI_DATABASE_TOOLS.map((t) => t.function.name);
     // Includes standard read tools
     expect(names).toContain('read_file');
@@ -311,8 +317,8 @@ describe('aiTools', () => {
     expect(names).toContain('link_document');
     expect(names).toContain('unlink_document');
     expect(names).toContain('query_tasks');
-    expect(names).toContain('query_projects');
-    expect(names).toContain('query_milestones');
+    expect(names).toContain('query_change_requests');
+    expect(names).toContain('query_systems');
     expect(names).toContain('get_item_details');
     expect(names).toContain('query_worklogs');
     expect(names).toContain('get_active_timer');
@@ -342,12 +348,9 @@ describe('aiTools', () => {
     expect(names).toContain('batch_create_tasks');
     expect(names).toContain('batch_update_tasks');
     expect(names).toContain('spawn_recurring_task_instance');
-    expect(names).toContain('create_project');
-    expect(names).toContain('update_project');
-    expect(names).toContain('delete_project');
-    expect(names).toContain('create_milestone');
-    expect(names).toContain('update_milestone');
-    expect(names).toContain('delete_milestone');
+    expect(names).toContain('create_change_request');
+    expect(names).toContain('update_change_request');
+    expect(names).toContain('delete_change_request');
     expect(names).toContain('plan_allocation');
     expect(names).toContain('batch_plan_allocations');
     expect(names).toContain('clear_allocations');
@@ -380,14 +383,14 @@ describe('aiTools', () => {
     it('normalizes tool names with proxy / cloaking suffixes and prefixes', () => {
       expect(normalizeToolName('create_task_ide')).toBe('create_task');
       expect(normalizeToolName('query_tasks_ide')).toBe('query_tasks');
-      expect(normalizeToolName('proxy_delete_project')).toBe('delete_project');
+      expect(normalizeToolName('proxy_delete_change_request')).toBe('delete_change_request');
       expect(normalizeToolName('create_task_cc')).toBe('create_task');
     });
 
     it('correctly identifies mutation tools versus read-only query tools even when cloaked', () => {
       expect(isMutationTool('create_task')).toBe(true);
       expect(isMutationTool('create_task_ide')).toBe(true);
-      expect(isMutationTool('delete_project_ide')).toBe(true);
+      expect(isMutationTool('delete_change_request_ide')).toBe(true);
       expect(isMutationTool('start_timer_ide')).toBe(true);
       expect(isMutationTool('plan_allocation')).toBe(true);
       expect(isMutationTool('manage_reminders')).toBe(true);
@@ -443,12 +446,12 @@ describe('aiTools', () => {
 
   describe('query_tasks (enriched)', () => {
     it('returns enriched tasks with resolved names, logged minutes, and recurring status', async () => {
-      const resJson = await executeAiTool('query_tasks', { projectId: 'proj-1' }, mockDb);
+      const resJson = await executeAiTool('query_tasks', { crId: 'cr-1' }, mockDb);
       const res = JSON.parse(resJson);
       expect(res.totalCount).toBe(2);
       const t1 = res.tasks.find((t: any) => t.id === 'task-1');
-      expect(t1.projectName).toBe('Banking Platform');
-      expect(t1.milestoneName).toBe('Backend API');
+      expect(t1.crName).toBe('Banking Platform');
+      expect(t1.systemName).toBe('Backend API');
       expect(t1.totalLoggedMinutes).toBe(135); // 90 + 45
       expect(t1.isRecurring).toBe(true);
       expect(t1.recurrenceFrequency).toBe('weekly');
@@ -456,24 +459,24 @@ describe('aiTools', () => {
     });
   });
 
-  describe('query_projects (enriched)', () => {
-    it('returns project with aggregated task counts, estimate minutes, and logged minutes', async () => {
-      const resJson = await executeAiTool('query_projects', {}, mockDb);
+  describe('query_change_requests (enriched)', () => {
+    it('returns CR with aggregated task counts, estimate minutes, and logged minutes', async () => {
+      const resJson = await executeAiTool('query_change_requests', {}, mockDb);
       const res = JSON.parse(resJson);
-      const p1 = res.projects.find((p: any) => p.id === 'proj-1');
-      expect(p1.taskCount).toBe(2);
-      expect(p1.totalEstimateMinutes).toBe(180); // 60 + 120
-      expect(p1.totalLoggedMinutes).toBe(135); // 135 on task-1
+      const c1 = res.changeRequests.find((c: any) => c.id === 'cr-1');
+      expect(c1.taskCount).toBe(2);
+      expect(c1.totalEstimateMinutes).toBe(180); // 60 + 120
+      expect(c1.totalLoggedMinutes).toBe(135); // 135 on task-1
     });
   });
 
-  describe('query_milestones (enriched)', () => {
-    it('returns milestone with resolved project name and logged minutes', async () => {
-      const resJson = await executeAiTool('query_milestones', { projectId: 'proj-1' }, mockDb);
+  describe('query_systems (enriched)', () => {
+    it('returns subsystem with code, type, and parentId', async () => {
+      const resJson = await executeAiTool('query_systems', { type: 'SERVICE' }, mockDb);
       const res = JSON.parse(resJson);
-      const m1 = res.milestones.find((m: any) => m.id === 'ms-1');
-      expect(m1.projectName).toBe('Banking Platform');
-      expect(m1.totalLoggedMinutes).toBe(135);
+      const s1 = res.systems.find((s: any) => s.id === 'sys-1');
+      expect(s1.code).toBe('BACKEND_API');
+      expect(s1.parentId).toBeNull();
     });
   });
 
@@ -481,8 +484,8 @@ describe('aiTools', () => {
     it('returns task with workSessionsSummary and plannedAllocations', async () => {
       const resJson = await executeAiTool('get_item_details', { type: 'task', id: 'task-1' }, mockDb);
       const res = JSON.parse(resJson);
-      expect(res.projectName).toBe('Banking Platform');
-      expect(res.milestoneName).toBe('Backend API');
+      expect(res.crName).toBe('Banking Platform');
+      expect(res.systemName).toBe('Backend API');
       expect(res.workSessionsSummary.totalLoggedMinutes).toBe(135);
       expect(res.workSessionsSummary.sessionCount).toBe(2);
       expect(res.plannedAllocations.length).toBe(1);
@@ -762,34 +765,33 @@ describe('aiTools', () => {
       expect(prioRes.tasks[2].id).toBe('task-3');
     });
 
-    it('supports query_projects filtering and returning all metadata fields', async () => {
+    it('supports query_change_requests filtering and returning all metadata fields', async () => {
       const res = JSON.parse(
-        await executeAiTool('query_projects', { createdAfter: '2026-09-05' }, mockDb)
+        await executeAiTool('query_change_requests', { type: 'ENHANCEMENT' }, mockDb)
       );
       expect(res.totalCount).toBe(1);
-      expect(res.projects[0].id).toBe('proj-2');
+      expect(res.changeRequests[0].id).toBe('cr-2');
 
       const allRes = JSON.parse(
-        await executeAiTool('query_projects', { jiraEpicKey: 'BANK' }, mockDb)
+        await executeAiTool('query_change_requests', { systemId: 'sys-1' }, mockDb)
       );
       expect(allRes.totalCount).toBe(1);
-      const p1 = allRes.projects[0];
-      expect(p1.id).toBe('proj-1');
-      expect(p1.createdAt).toBe('2026-09-01T00:00:00.000Z');
-      expect(p1.updatedAt).toBe('2026-09-02T00:00:00.000Z');
-      expect(p1.notes).toBe('Banking notes');
-      expect(p1.opsOwners).toContain('OpsTeam');
-      expect(p1.businessAnalysts).toContain('BA1');
+      const c1 = allRes.changeRequests[0];
+      expect(c1.id).toBe('cr-1');
+      expect(c1.code).toBe('CR-2026-001');
+      expect(c1.createdAt).toBe('2026-09-01T00:00:00.000Z');
+      expect(c1.updatedAt).toBe('2026-09-02T00:00:00.000Z');
+      expect(c1.targets[0].systemId).toBe('sys-1');
     });
 
-    it('supports query_milestones filtering by deadline and returning dates & notes', async () => {
+    it('supports query_systems filtering by type and returning code/parentId', async () => {
       const res = JSON.parse(
-        await executeAiTool('query_milestones', { deadlineBefore: '2026-10-12' }, mockDb)
+        await executeAiTool('query_systems', { type: 'WORKER' }, mockDb)
       );
       expect(res.totalCount).toBe(1);
-      const m1 = res.milestones[0];
-      expect(m1.id).toBe('ms-1');
-      expect(m1.createdAt).toBe('2026-09-05T00:00:00.000Z');
+      const s1 = res.systems[0];
+      expect(s1.id).toBe('sys-2');
+      expect(s1.code).toBe('CLOUD_DEPLOY');
     });
 
     it('supports query_worklogs search and minDuration with createdAt in output', async () => {
@@ -848,6 +850,7 @@ describe('aiTools', () => {
           'create_task',
           {
             name: 'New Feature',
+            crId: '00000000-0000-4000-8000-000000000010',
             notes: 'Implementation notes',
             actualStartDate: '2026-10-04',
             actualEndDate: '2026-10-05',
@@ -957,7 +960,10 @@ describe('aiTools', () => {
           get: vi.fn().mockResolvedValue(mockTask),
           update: vi.fn().mockResolvedValue(1),
         },
-        projects: {
+        changeRequests: {
+          get: vi.fn().mockResolvedValue(null),
+        },
+        systems: {
           get: vi.fn().mockResolvedValue(null),
         },
         transaction: vi.fn().mockImplementation(async (_mode, _tables, callback) => {
@@ -992,8 +998,8 @@ describe('aiTools', () => {
     it('queries active notifications and dismisses an alert', async () => {
       const notifDb: any = {
         tasks: { toArray: async () => mockTasks },
-        projects: { toArray: async () => mockProjects },
-        milestones: { toArray: async () => mockMilestones },
+        changeRequests: { toArray: async () => mockChangeRequests },
+        systems: { toArray: async () => mockSystems },
         capacityRules: { toArray: async () => mockCapacityRules },
         capacityOverrides: { toArray: async () => mockCapacityOverrides },
         plannedAllocations: { toArray: async () => mockPlannedAllocations },
@@ -1211,29 +1217,29 @@ describe('aiTools', () => {
 
       const reparentDesc = await describeToolMutationWithContext(
         'reparent_task',
-        { taskId: 'task-1', projectId: 'proj-1', milestoneId: 'ms-1' },
+        { taskId: 'task-1', crId: 'cr-1', systemId: 'sys-1' },
         mockDb as any
       );
       expect(reparentDesc).toContain('"Write unit tests"');
-      expect(reparentDesc).toContain('Banking Platform');
+      expect(reparentDesc).toContain('CR-2026-001');
       expect(reparentDesc).toContain('Backend API');
     });
 
-    it('resolves project and milestone names', async () => {
-      const projDesc = await describeToolMutationWithContext(
-        'update_project',
-        { id: 'proj-1', status: 'Done' },
+    it('resolves CR and system names', async () => {
+      const crDesc = await describeToolMutationWithContext(
+        'update_change_request',
+        { id: 'cr-1', status: 'Done' },
         mockDb as any
       );
-      expect(projDesc).toContain('"Banking Platform"');
-      expect(projDesc).toContain('Trạng thái: "Done"');
+      expect(crDesc).toContain('CR-2026-001');
+      expect(crDesc).toContain('Trạng thái: "Done"');
 
-      const msDesc = await describeToolMutationWithContext(
-        'delete_milestone',
-        { id: 'ms-1' },
+      const sysDesc = await describeToolMutationWithContext(
+        'delete_change_request',
+        { id: 'cr-1' },
         mockDb as any
       );
-      expect(msDesc).toContain('"Backend API"');
+      expect(sysDesc).toContain('CR-2026-001');
     });
 
     it('resolves note title for update_note and delete_note', async () => {
@@ -1332,25 +1338,25 @@ describe('aiTools', () => {
           toArray: async () => mockTasks.filter(fn),
         }),
       },
-      projects: {
-        ...mockDb.projects,
-        add: vi.fn().mockResolvedValue('proj-new'),
-        put: vi.fn().mockResolvedValue('proj-updated'),
+      changeRequests: {
+        ...mockDb.changeRequests,
+        add: vi.fn().mockResolvedValue('cr-new'),
+        put: vi.fn().mockResolvedValue('cr-updated'),
         update: vi.fn().mockResolvedValue(1),
+        where: (field: string) => ({
+          equals: (val: string) => ({
+            toArray: async () => mockChangeRequests.filter((c: any) => c[field] === val),
+          }),
+        }),
         orderBy: (_field: string) => ({
           uniqueKeys: async () => [],
         }),
       },
-      milestones: {
-        ...mockDb.milestones,
-        add: vi.fn().mockResolvedValue('ms-new'),
-        put: vi.fn().mockResolvedValue('ms-updated'),
+      systems: {
+        ...mockDb.systems,
+        add: vi.fn().mockResolvedValue('sys-new'),
+        put: vi.fn().mockResolvedValue('sys-updated'),
         update: vi.fn().mockResolvedValue(1),
-        where: (field: string) => ({
-          equals: (val: string) => ({
-            toArray: async () => mockMilestones.filter((m: any) => m[field] === val),
-          }),
-        }),
         orderBy: (_field: string) => ({
           uniqueKeys: async () => [],
         }),
@@ -1517,7 +1523,7 @@ describe('aiTools', () => {
       expect(standupRes.markdownReport).toContain('BÁO CÁO STANDUP');
     });
 
-    it('executes get_item_insight for task, project, and milestone', async () => {
+    it('executes get_item_insight for task, change request, and system', async () => {
       const taskInsight = JSON.parse(
         await executeAiTool('get_item_insight', { type: 'task', id: 'task-1' }, testMutationDb)
       );
@@ -1525,17 +1531,17 @@ describe('aiTools', () => {
       expect(taskInsight.analysis).toBeDefined();
       expect(taskInsight.analysis.metrics).toBeDefined();
 
-      const projInsight = JSON.parse(
-        await executeAiTool('get_item_insight', { type: 'project', id: 'proj-1' }, testMutationDb)
+      const crInsight = JSON.parse(
+        await executeAiTool('get_item_insight', { type: 'cr', id: 'cr-1' }, testMutationDb)
       );
-      expect(projInsight.type).toBe('project');
-      expect(projInsight.analysis.metrics.totalTasks).toBeDefined();
+      expect(crInsight.type).toBe('cr');
+      expect(crInsight.analysis).toBeDefined();
 
-      const msInsight = JSON.parse(
-        await executeAiTool('get_item_insight', { type: 'milestone', id: 'ms-1' }, testMutationDb)
+      const sysInsight = JSON.parse(
+        await executeAiTool('get_item_insight', { type: 'system', id: 'sys-1' }, testMutationDb)
       );
-      expect(msInsight.type).toBe('milestone');
-      expect(msInsight.analysis.metrics.totalTasks).toBeDefined();
+      expect(sysInsight.type).toBe('system');
+      expect(sysInsight.analysis.taskCount).toBeDefined();
     });
 
     it('executes batch_plan_allocations and clear_allocations', async () => {
@@ -1581,8 +1587,8 @@ describe('aiTools', () => {
           'batch_create_tasks',
           {
             tasks: [
-              { name: 'Task A', estimateMinutes: 60 },
-              { name: 'Task B', priority: 'High' },
+              { name: 'Task A', crId: '00000000-0000-4000-8000-000000000010', estimateMinutes: 60 },
+              { name: 'Task B', crId: '00000000-0000-4000-8000-000000000010', priority: 'High' },
             ],
           },
           testMutationDb

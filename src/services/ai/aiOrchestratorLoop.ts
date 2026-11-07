@@ -108,8 +108,8 @@ function getFriendlyToolLabel(toolName: string): string {
   const normalized = normalizeToolName(toolName);
   switch (normalized) {
     case 'query_tasks': return 'Tra cứu tác vụ';
-    case 'query_projects': return 'Tra cứu dự án';
-    case 'query_milestones': return 'Tra cứu cột mốc';
+    case 'query_change_requests': return 'Tra cứu Change Request';
+    case 'query_systems': return 'Tra cứu hệ thống';
     case 'get_item_details': return 'Chi tiết mục';
     case 'query_worklogs': return 'Nhật ký công việc';
     case 'get_active_timer': return 'Trạng thái bấm giờ';
