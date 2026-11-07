@@ -63,15 +63,15 @@ export const Step1IntakeView: React.FC<Step1IntakeViewProps> = ({
 
   // The picker is optional; do not load every note body on Studio entry.
   const allNotes = useLiveQuery(() => notePickerOpen ? db.notes.toArray() : [], [db, notePickerOpen]) ?? [];
-  const allProjects = useLiveQuery(() => notePickerOpen ? db.projects.toArray() : [], [db, notePickerOpen]) ?? [];
+  const allCrs = useLiveQuery(() => notePickerOpen ? db.changeRequests.toArray() : [], [db, notePickerOpen]) ?? [];
 
-  const projectMap = useMemo(() => {
+  const crMap = useMemo(() => {
     const map = new Map<string, string>();
-    for (const p of allProjects) {
+    for (const p of allCrs) {
       map.set(p.id, p.name);
     }
     return map;
-  }, [allProjects]);
+  }, [allCrs]);
 
   const deferredSearch = useDeferredValue(searchQuery);
 
@@ -289,7 +289,7 @@ export const Step1IntakeView: React.FC<Step1IntakeViewProps> = ({
               aria-label="Lọc theo dự án"
               options={[
                 { label: 'Tất cả dự án', value: 'ALL' },
-                ...allProjects.map((p) => ({
+                ...allCrs.map((p) => ({
                   label: p.id === projectId ? `${p.name} (Hiện tại)` : p.name,
                   value: p.id,
                 })),
@@ -325,7 +325,7 @@ export const Step1IntakeView: React.FC<Step1IntakeViewProps> = ({
             role="list"
             aria-label="Danh sách ghi chú"
             renderItem={(item) => {
-              const projName = item.entityId ? projectMap.get(item.entityId) : undefined;
+              const projName = item.entityId ? crMap.get(item.entityId) : undefined;
               return (
                 <div
                   key={item.id}

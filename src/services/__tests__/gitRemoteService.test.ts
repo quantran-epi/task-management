@@ -9,8 +9,6 @@ import {
   getDiffSummary,
   getFileDiff,
   checkHeadDrift,
-  getProjectRepoSshBinding,
-  saveProjectRepoSshBinding,
 } from '../gitRemoteService';
 import * as sshService from '../sshService';
 
@@ -277,50 +275,6 @@ describe('gitRemoteService - Task 1 Tracer Slice', () => {
       );
       expect(res.drifted).toBe(true);
       expect(res.currentHeadSha).toBe('b2c3d4e5f6a10000000000000000000000000000');
-    });
-  });
-
-  describe('project repo ssh binding persistence', () => {
-    it('returns null when binding is not stored', async () => {
-      const mockDb: any = {
-        settings: {
-          get: vi.fn().mockResolvedValueOnce(undefined),
-        },
-      };
-
-      const binding = await getProjectRepoSshBinding('proj-123', mockDb);
-      expect(binding).toBeNull();
-      expect(mockDb.settings.get).toHaveBeenCalledWith('project_ssh_repo:proj-123');
-    });
-
-    it('saves and retrieves binding accurately', async () => {
-      const storedData: Record<string, any> = {};
-      const mockDb: any = {
-        settings: {
-          get: vi.fn().mockImplementation(async (key: string) => {
-            return storedData[key] ? { key, value: storedData[key] } : undefined;
-          }),
-          put: vi.fn().mockImplementation(async ({ key, value }: { key: string; value: any }) => {
-            storedData[key] = value;
-          }),
-        },
-      };
-
-      const testBinding = {
-        sshConfigId: 'ssh-cfg-1',
-        remoteRepoPath: '/var/www/repo',
-        defaultBaseBranch: 'origin/develop',
-        updatedAt: '2026-11-06T12:00:00.000Z',
-      };
-
-      await saveProjectRepoSshBinding('proj-123', testBinding, mockDb);
-      expect(mockDb.settings.put).toHaveBeenCalledWith({
-        key: 'project_ssh_repo:proj-123',
-        value: testBinding,
-      });
-
-      const retrieved = await getProjectRepoSshBinding('proj-123', mockDb);
-      expect(retrieved).toEqual(testBinding);
     });
   });
 });

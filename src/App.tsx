@@ -9,7 +9,6 @@ import { EmptyState } from './components/common/EmptyState';
 import { useHashRoute } from './hooks/useHashRoute';
 import { useThemeMode } from './hooks/useThemeMode';
 import { TasksView } from './views/TasksView';
-import { ProjectsView } from './views/ProjectsView';
 import { PlannerView } from './views/PlannerView';
 import { AnalyticsView } from './views/AnalyticsView';
 import { SettingsView } from './views/SettingsView';
@@ -55,8 +54,6 @@ export const App: React.FC = () => {
         return <DashboardView onNavigate={navigate} />;
       case 'tasks':
         return <TasksView onNavigate={navigate} />;
-      case 'projects':
-        return <ProjectsView />;
       case 'planner':
         return <PlannerView targetDate={params.date} />;
       case 'analytics':
@@ -77,9 +74,9 @@ export const App: React.FC = () => {
       case 'mermaid':
         return <MermaidAssistantView initialCode={params.code} />;
       case 'insight': {
-        const validTypes = ['task', 'project', 'milestone'] as const;
+        const validTypes = ['task', 'cr', 'system'] as const;
         const itemType = validTypes.includes(params.type as any)
-          ? (params.type as 'task' | 'project' | 'milestone')
+          ? (params.type as 'task' | 'cr' | 'system')
           : 'task';
         return (
           <ItemInsightView

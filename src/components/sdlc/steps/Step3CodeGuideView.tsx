@@ -22,7 +22,6 @@ import {
   FolderOpenOutlined,
   WarningOutlined,
   SearchOutlined,
-  SaveOutlined,
 } from '@ant-design/icons';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
 import { getSshConfigs, getSshSecret } from '../../../services/sshService';
@@ -31,8 +30,6 @@ import {
   checkDirtyStatus,
   getDiffSummary,
   getFileDiff,
-  getProjectRepoSshBinding,
-  saveProjectRepoSshBinding,
   checkHeadDrift,
 } from '../../../services/gitRemoteService';
 import type { SshConfig } from '../../../types/ssh';
@@ -50,15 +47,18 @@ import { RemoteDirectoryBrowserModal } from '../../common/RemoteDirectoryBrowser
 import { ConventionsSummaryCard, type ConventionsSummaryProps } from '../common/ConventionsSummaryCard';
 import type { SdlcStepId } from '../../../services/wizard/workflowSchemas';
 import { formatGuardMessage } from '../../../services/wizard/workflowGuards';
-import type { System } from '../../../types/models';
+import type { System, CrTarget } from '../../../types/models';
 
 export interface Step3CodeGuideViewProps {
   projectId?: string;
   crCode?: string;
   targetSystems?: System[] | undefined;
+  crTargets?: CrTarget[] | undefined;
   approvedSolutionMarkdown?: string | undefined;
   savedSnapshot?: BranchSnapshot | undefined;
   onCommitBranchSnapshot?: (snapshot: BranchSnapshot) => Promise<void>;
+  /** D-38b: a user-confirmed branch is written back onto the CR target, never guessed. */
+  onFeatureBranchChange?: ((systemId: string, branch: string) => void) | undefined;
   onProceedToStep4: () => void;
   onNavigateToStep?: ((step: SdlcStepId) => void) | undefined;
   conventionsSummary?: ConventionsSummaryProps | undefined;
@@ -66,12 +66,13 @@ export interface Step3CodeGuideViewProps {
 }
 
 export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
-  projectId = '',
   crCode = 'CR-UNKNOWN',
   targetSystems = [],
+  crTargets = [],
   approvedSolutionMarkdown,
   savedSnapshot: initialSavedSnapshot,
   onCommitBranchSnapshot,
+  onFeatureBranchChange,
   onProceedToStep4,
   onNavigateToStep,
   conventionsSummary,
@@ -111,6 +112,12 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
   const [baseBranch, setBaseBranch] = useState<string>('origin/main');
   const [targetBranch, setTargetBranch] = useState<string>('');
 
+  // D-38b: the target branch comes from the CR target, never a name heuristic.
+  useEffect(() => {
+    const target = crTargets.find((t) => t.systemId === selectedSystemId);
+    setTargetBranch(target?.featureBranch ?? '');
+  }, [crTargets, selectedSystemId]);
+
   // Remote data state
   const [branches, setBranches] = useState<RemoteGitBranch[]>([]);
   const [loadingBranches, setLoadingBranches] = useState<boolean>(false);
@@ -149,7 +156,8 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
     [sshConfigs, selectedSshConfigId]
   );
 
-  // Load available SSH profiles and project repo binding on mount
+  // Load available SSH profiles on mount. Repo/SSH/branch config comes from the CR's
+  // target subsystems (D-36/D-38b) — there is no settings-backed binding any more.
   useEffect(() => {
     let cancelled = false;
     async function loadInitial() {
@@ -157,25 +165,7 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
         const configs = await getSshConfigs(db);
         if (cancelled) return;
         setSshConfigs(configs);
-
-        if (projectId) {
-          const binding = await getProjectRepoSshBinding(projectId, db);
-          if (cancelled) return;
-          if (binding) {
-            setSelectedSshConfigId(binding.sshConfigId);
-            setRemoteRepoPath(binding.remoteRepoPath);
-            setLoadedRepoPath(binding.remoteRepoPath);
-            if (binding.defaultBaseBranch) {
-              setBaseBranch(binding.defaultBaseBranch);
-            }
-          } else if (configs.length > 0 && configs[0]) {
-            setSelectedSshConfigId(configs[0].id);
-            if (configs[0].defaultRemotePath) {
-              setRemoteRepoPath(configs[0].defaultRemotePath);
-              setLoadedRepoPath(configs[0].defaultRemotePath);
-            }
-          }
-        } else if (configs.length > 0 && configs[0]) {
+        if (configs.length > 0 && configs[0]) {
           setSelectedSshConfigId(configs[0].id);
           if (configs[0].defaultRemotePath) {
             setRemoteRepoPath(configs[0].defaultRemotePath);
@@ -193,29 +183,7 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [projectId, db]);
-
-  // Persist project binding when SSH config or repo path changes
-  const handleSaveBinding = useCallback(
-    async (sshId: string, path: string, base: string) => {
-      if (!projectId || !sshId || !path) return;
-      try {
-        await saveProjectRepoSshBinding(
-          projectId,
-          {
-            sshConfigId: sshId,
-            remoteRepoPath: path,
-            defaultBaseBranch: base,
-            updatedAt: new Date().toISOString(),
-          },
-          db
-        );
-      } catch {
-        // Non-blocking error
-      }
-    },
-    [projectId, db]
-  );
+  }, [db]);
 
   // Fetch only branches on-demand
   const fetchBranchesOnly = useCallback(async () => {
@@ -250,26 +218,11 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
       try {
         const secret = (await getSshSecret(activeSshConfig.id)) ?? undefined;
 
-        // 1. Fetch remote branches
+        // 1. Fetch remote branches (picker options only — D-38b forbids guessing)
         const branchList = await getRemoteBranches(activeSshConfig, pathToUse, secret);
         setBranches(branchList);
 
-        // Select default target branch: prefer feature/{crCode} or branch containing crCode
-        let resolvedTarget = targetBranch;
-        if (!resolvedTarget) {
-          const matchingBranch = branchList.find(
-            (b) =>
-              b.name === `feature/${crCode}` ||
-              b.name === `origin/feature/${crCode}` ||
-              b.name.includes(crCode)
-          );
-          if (matchingBranch) {
-            resolvedTarget = matchingBranch.name;
-          } else if (branchList.length > 0 && branchList[0]) {
-            resolvedTarget = branchList[0].name;
-          }
-          setTargetBranch(resolvedTarget);
-        }
+        const resolvedTarget = targetBranch;
 
         // 2. Check working tree dirty status
         const statusResult = await checkDirtyStatus(activeSshConfig, pathToUse, secret);
@@ -322,11 +275,10 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
 
   const handleLoad = useCallback(() => {
     setLoadedRepoPath(remoteRepoPath);
-    void handleSaveBinding(selectedSshConfigId, remoteRepoPath, baseBranch);
     if (loadedRepoPath === remoteRepoPath) {
       void fetchRemoteData(remoteRepoPath);
     }
-  }, [remoteRepoPath, loadedRepoPath, selectedSshConfigId, baseBranch, handleSaveBinding, fetchRemoteData]);
+  }, [remoteRepoPath, loadedRepoPath, fetchRemoteData]);
 
   // Load single file diff when selectedFilePath changes
   useEffect(() => {
@@ -527,9 +479,6 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
                 const cfg = sshConfigs.find((c) => c.id === chosenId);
                 if (cfg?.defaultRemotePath && !remoteRepoPath) {
                   setRemoteRepoPath(cfg.defaultRemotePath);
-                  void handleSaveBinding(chosenId, cfg.defaultRemotePath, baseBranch);
-                } else {
-                  void handleSaveBinding(chosenId, remoteRepoPath, baseBranch);
                 }
               }}
               options={sshConfigs.map((c) => ({
@@ -551,7 +500,6 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
               value={remoteRepoPath}
               onChange={(e) => setRemoteRepoPath(e.target.value)}
               onPressEnter={handleLoad}
-              onBlur={() => handleSaveBinding(selectedSshConfigId, remoteRepoPath, baseBranch)}
               style={{ fontFamily: 'monospace', fontSize: 12 }}
             />
             <Button
@@ -574,10 +522,7 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
               showSearch
               style={{ width: 150, fontFamily: 'monospace', fontSize: 12 }}
               value={baseBranch}
-              onChange={(val) => {
-                setBaseBranch(val);
-                void handleSaveBinding(selectedSshConfigId, remoteRepoPath, val);
-              }}
+              onChange={(val) => setBaseBranch(val)}
               options={
                 branches.length > 0
                   ? branches.map((b) => ({ label: b.name, value: b.name }))
@@ -609,7 +554,11 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
               style={{ width: 180, fontFamily: 'monospace', fontSize: 12 }}
               placeholder="Chọn nhánh review"
               value={targetBranch || undefined}
-              onChange={(val) => setTargetBranch(val ?? '')}
+              onChange={(val) => {
+                const next = val ?? '';
+                setTargetBranch(next);
+                if (next && selectedSystemId) onFeatureBranchChange?.(selectedSystemId, next);
+              }}
               options={branches.map((b) => ({
                 label: b.name,
                 value: b.name,
@@ -630,24 +579,6 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
             disabled={!activeSshConfig || !remoteRepoPath.trim()}
           >
             So sánh thay đổi
-          </Button>
-
-          {/* Save Binding Button */}
-          <Button
-            size="small"
-            icon={<SaveOutlined />}
-            onClick={async () => {
-              if (!selectedSshConfigId || !remoteRepoPath.trim()) {
-                message.warning('Vui lòng chọn cấu hình SSH và đường dẫn repository.');
-                return;
-              }
-              await handleSaveBinding(selectedSshConfigId, remoteRepoPath, baseBranch);
-              message.success('Đã lưu cấu hình liên kết SSH cho dự án!');
-            }}
-            disabled={!activeSshConfig || !remoteRepoPath.trim()}
-            data-testid="step3-btn-save-binding"
-          >
-            Lưu liên kết
           </Button>
         </div>
       </Card>
@@ -1052,7 +983,6 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
         onSelect={(selectedPath) => {
           setRemoteRepoPath(selectedPath);
           setBrowserModalOpen(false);
-          void handleSaveBinding(selectedSshConfigId, selectedPath, baseBranch);
         }}
         onCancel={() => setBrowserModalOpen(false)}
       />

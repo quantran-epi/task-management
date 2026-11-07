@@ -37,7 +37,8 @@ import {
 } from '../../../services/wizard/sdlcCrManager';
 import type { SdlcArtifactRef, SdlcStepId } from '../../../services/wizard/workflowSchemas';
 import type { BranchSnapshot } from '../../../types/gitRemote';
-import { checkHeadDrift, getProjectRepoSshBinding } from '../../../services/gitRemoteService';
+import type { System } from '../../../types/models';
+import { checkHeadDrift } from '../../../services/gitRemoteService';
 import { getSshConfigs } from '../../../services/sshService';
 import {
   createChangePackFromSnapshot,
@@ -50,6 +51,8 @@ export interface Step4ChangePackViewProps {
   crCode: string;
   solutionArtifact?: SdlcArtifactRef | undefined;
   branchSnapshot?: BranchSnapshot | undefined;
+  /** D-36: SSH/repo come from the CR's target subsystems, not a settings binding. */
+  targetSystems?: System[] | undefined;
   initialDriftResult?: ReconciliationResult | undefined;
   onCommitChangePackAndDrift: (
     packHash: string,
@@ -104,6 +107,7 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
   crCode,
   solutionArtifact,
   branchSnapshot,
+  targetSystems = [],
   initialDriftResult,
   onCommitChangePackAndDrift,
   onNavigateToStep,
@@ -251,9 +255,11 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
     setNeedsReupload(false);
 
     try {
-      const binding = await getProjectRepoSshBinding(projectId, db);
-      const sshConfigId = binding?.sshConfigId ?? branchSnapshot.sshConfigId;
-      const repoPath = binding?.remoteRepoPath ?? branchSnapshot.remoteRepoPath;
+      const sys =
+        targetSystems.find((s) => s.sshConfigId && s.sshConfigId === branchSnapshot.sshConfigId) ??
+        targetSystems.find((s) => s.remoteRepoPath);
+      const sshConfigId = sys?.sshConfigId ?? branchSnapshot.sshConfigId;
+      const repoPath = sys?.remoteRepoPath ?? branchSnapshot.remoteRepoPath;
       const configs = await getSshConfigs(db);
       const config = sshConfigId ? configs.find((c) => c.id === sshConfigId) : undefined;
       if (!config || !repoPath) {

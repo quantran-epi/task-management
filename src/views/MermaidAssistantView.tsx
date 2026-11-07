@@ -194,8 +194,8 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
   );
 
   const tasks = useLiveQuery(() => db.tasks.toArray(), [db], []);
-  const projects = useLiveQuery(() => db.projects.toArray(), [db], []);
-  const milestones = useLiveQuery(() => db.milestones.toArray(), [db], []);
+  const changeRequests = useLiveQuery(() => db.changeRequests.toArray(), [db], []);
+  const systems = useLiveQuery(() => db.systems.toArray(), [db], []);
 
   const [code, setCode] = useState<string>(() => {
     if (initialCode) return initialCode;
@@ -557,8 +557,8 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
                 options={[
                   { value: 'none', label: 'Không gắn' },
                   { value: 'task', label: '📌 Tác vụ' },
-                  { value: 'project', label: '📁 Dự án' },
-                  { value: 'milestone', label: '🚩 Milestone' },
+                  { value: 'cr', label: '📋 Change Request' },
+                  { value: 'system', label: '🖥️ System' },
                 ]}
               />
             </Tooltip>
@@ -576,9 +576,9 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
                 options={
                   entityType === 'task'
                     ? (tasks || []).map((t) => ({ value: t.id, label: t.name }))
-                    : entityType === 'project'
-                    ? (projects || []).map((p) => ({ value: p.id, label: p.name }))
-                    : (milestones || []).map((m) => ({ value: m.id, label: m.name }))
+                    : entityType === 'cr'
+                    ? (changeRequests || []).map((c) => ({ value: c.id, label: c.name }))
+                    : (systems || []).map((s) => ({ value: s.id, label: s.name }))
                 }
               />
             )}
