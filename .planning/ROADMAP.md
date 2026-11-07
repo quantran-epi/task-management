@@ -323,6 +323,7 @@ Plans: 11 plans in 11 sequential waves (every plan edits `AIChatDrawer.tsx` or i
 - [x] 25.1.1-11-PLAN.md — Regressions sweep: safety-gate list repaired, every Phase 25.1 guarantee re-run scoped, real-function proofs recorded, evidence written up
 
 **Phase 31 Progress:**
+
 - [x] 31-01-PLAN.md — Global conventions storage, settings UI, and backup inclusion
 - [x] 31-02-PLAN.md — Repository CONVENTIONS.md discovery and SSH loading
 - [x] 31-03-PLAN.md — Conventions prompt segment, conflict policy, and Step 1/2 visibility
@@ -801,21 +802,25 @@ Plans:
 4. Tasks and checklists remain intact, explicitly linked to the parent CR.
 5. SDLC Studio and AI Chat Drawer automatically resolve SSH connections, repo paths, and conventions from the selected CR's target systems without redundant global configuration.
 
-**Plans:** 4 plans in 4 waves
+**Plans:** 4/4 plans complete
 **UI hint**: yes
 
 Plans:
 
 **Wave 1**
+
 - [x] 31.1-01-PLAN.md — Schema migration: `systems` table, `changeRequests` entity model, and safe data migration from `projects`
 
 **Wave 2** *(depends on 31.1-01)*
+
 - [x] 31.1-02-PLAN.md — System Catalog management UI: hierarchical tree view, CRUD modal, SSH/repo binding configuration
 
 **Wave 3** *(depends on 31.1-02)*
+
 - [x] 31.1-03-PLAN.md — CR management UI overhaul: Project -> CR terminology, 3 CR types, multi-system selector, and task linkage
 
 **Wave 4** *(depends on 31.1-03)*
+
 - [x] 31.1-04-PLAN.md — SDLC Studio & AI Chat multi-system wiring: auto-load SSH and conventions from CR target systems, E2E verification
 
 ### Phase 32: External Research via Claude Code Headless
