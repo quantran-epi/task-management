@@ -375,9 +375,12 @@ const AppShellInner: React.FC<AppShellProps> = ({
     if (item.entityType === 'task' && item.entityId) {
       setInspectingTaskId(item.entityId);
     } else if (item.entityType === 'cr' && item.entityId) {
-      onNavigate('insight', { type: 'cr', id: item.entityId });
+      // Resolve before routing so a stale persisted row cannot open a dead view (T-31.2-56).
+      const cr = await db.changeRequests.get(item.entityId);
+      if (cr) onNavigate('insight', { type: 'cr', id: cr.id });
     } else if (item.entityType === 'system' && item.entityId) {
-      onNavigate('insight', { type: 'system', id: item.entityId });
+      const system = await db.systems.get(item.entityId);
+      if (system) onNavigate('insight', { type: 'system', id: system.id });
     } else if (item.entityType === 'capacity' && item.date) {
       // T-12-09: Sanitize date parameter before routing
       if (isValidCalendarDate(item.date)) {
