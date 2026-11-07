@@ -141,6 +141,12 @@
 | SDLC-RES-06 | Phase 32 | Pending |
 | SDLC-OBS-01 | Phase 33 | Pending |
 | SDLC-OBS-02 | Phase 33 | Pending |
+| ENT-SYS-01 | Phase 31.1 | Complete |
+| ENT-SYS-02 | Phase 31.1 | Complete |
+| ENT-SYS-03 | Phase 31.1 | Complete |
+| ENT-SYS-04 | Phase 31.1 | Complete |
+| ENT-CR-01 | Phase 31.1 | Complete |
+| ENT-CR-02 | Phase 31.1 | Complete |
 
 | EXPUI-01 | Phase 25.4 | Pending |
 | EXPUI-02 | Phase 25.4 | Pending |

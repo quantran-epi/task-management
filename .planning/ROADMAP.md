@@ -816,7 +816,7 @@ Plans:
 - [x] 31.1-03-PLAN.md — CR management UI overhaul: Project -> CR terminology, 3 CR types, multi-system selector, and task linkage
 
 **Wave 4** *(depends on 31.1-03)*
-- [ ] 31.1-04-PLAN.md — SDLC Studio & AI Chat multi-system wiring: auto-load SSH and conventions from CR target systems, E2E verification
+- [x] 31.1-04-PLAN.md — SDLC Studio & AI Chat multi-system wiring: auto-load SSH and conventions from CR target systems, E2E verification
 
 ### Phase 32: External Research via Claude Code Headless
 
