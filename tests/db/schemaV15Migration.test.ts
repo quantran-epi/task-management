@@ -47,7 +47,8 @@ describe('Dexie SCHEMA_V15 Migration & Data Transformation (ENT-SYS-01, ENT-CR-0
     const upgradedDb = new TaskPlannerDatabase(dbName);
     await upgradedDb.open();
 
-    expect(upgradedDb.verno).toBe(15);
+    // Opening at the current version runs V15 then V16, so verno is the live schema.
+    expect(upgradedDb.verno).toBe(16);
     expect(upgradedDb.tables.map((t) => t.name)).toContain('systems');
     expect(upgradedDb.tables.map((t) => t.name)).toContain('changeRequests');
 
@@ -62,7 +63,7 @@ describe('Dexie SCHEMA_V15 Migration & Data Transformation (ENT-SYS-01, ENT-CR-0
     expect(cr1?.description).toBe('First project');
     expect(cr1?.status).toBe('In Progress');
     expect(cr1?.type).toBe('ENHANCEMENT');
-    expect(cr1?.targetSystemIds).toEqual([]);
+    expect(cr1?.targets).toEqual([]);
     expect(cr1?.createdAt).toBe('2026-11-01T00:00:00.000Z');
     expect(cr1?.updatedAt).toBe('2026-11-02T00:00:00.000Z');
 
