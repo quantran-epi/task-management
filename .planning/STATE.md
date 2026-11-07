@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: SDLC Closed-Loop Engine & Repository Autonomy
 status: in_progress
-last_updated: "2026-11-07T14:10:00.000Z"
-last_activity: 2026-11-07 -- Phase 31.1 inserted
+last_updated: "2026-11-07T14:45:00.000Z"
+last_activity: 2026-11-07 -- Phase 31.1 plans created
 progress:
   total_phases: 10
   completed_phases: 6
-  total_plans: 30
+  total_plans: 34
   completed_plans: 21
-  percent: 60
+  percent: 61
 current_phase: 31.1
 current_phase_name: enterprise-systems-catalog-and-cr-transformation
 ---
@@ -24,20 +24,20 @@ See: .planning/PROJECT.md (updated 2026-11-03)
 
 ## Current Position
 
-Phase: 31.1 (enterprise-systems-catalog-and-cr-transformation) — READY TO PLAN
+Phase: 31.1 (enterprise-systems-catalog-and-cr-transformation) — PLANNED (Ready to Execute)
 Plan: 0 of 4
-Status: Phase inserted
-Last activity: 2026-11-07 -- Phase 31.1 inserted into ROADMAP.md
+Status: 4 plans in 4 waves generated
+Last activity: 2026-11-07 -- Phase 31.1 plans created (31.1-01 through 31.1-04)
 
 Phase sequence: 26 → 27 → 28 → 29 → 29.1 → 30 → 31 → 31.1
 (28 is independent of 26/27; 31 depends on 26 and 27; 31.1 depends on 31.)
 
 ## Session Continuity
 
-Last session: 2026-11-07T09:38:00.000Z
+Last session: 2026-11-07T14:45:00.000Z
 Resume file: None
 
-Progress: [██████░░░░] 60%
+Progress: [██████░░░░] 61%
 
 ## Milestone v1.3 Map
 
@@ -50,6 +50,7 @@ Progress: [██████░░░░] 60%
 - [x] Phase 29.1: Remote SSH Git Explorer & Headful Claude Code Terminal Flow
 - [ ] Phase 30: Automatic Change Packs, Fallback & Run Reliability
 - [x] Phase 31: Organization Conventions in the Solution Pipeline
+- [ ] Phase 31.1: Enterprise Systems Catalog & CR Transformation (PLANNED)
 - [ ] Phase 32: External Research via Claude Code
 
 ## Performance Metrics
@@ -112,3 +113,6 @@ Progress: [██████░░░░] 60%
 - [Phase 31]: D-13: ConventionsSummaryCard renders on Step 1 and Step 2 with manual refresh and detail modal
 - [Phase 31]: D-14: ResponseEnvelope<T> and correlationId mandate verified in SOLUTION prompt without user prompt mention
 - [Phase 31]: D-15: Conflict witness test confirms both sources and CONVENTIONS_CONFLICT_POLICY are surfaced cleanly
+- [Phase 31.1]: D-16: systems table added in Dexie SCHEMA_V15; projects table migrated to changeRequests with backward-compatibility for tasks
+- [Phase 31.1]: D-17: 3 explicit CR types with designated colors: New Feature (#1677ff), Enhancement (#52c41a), Bugfix (#faad14)
+- [Phase 31.1]: D-18: Subsystems own SSH profiles and repository paths; CRs multi-target subsystems
