@@ -36,9 +36,6 @@ import { ActiveTimerWidget } from '../timer/ActiveTimerWidget';
 import { NotificationBell } from '../notifications/NotificationBell';
 import { NotificationDrawer } from '../notifications/NotificationDrawer';
 import { TaskDrawer } from '../tasks/TaskDrawer';
-import { ProjectDetailModal } from '../projects/ProjectDetailModal';
-import { ProjectModal } from '../projects/ProjectModal';
-import { MilestoneModal } from '../projects/MilestoneModal';
 import { NoteDetailModal } from '../notes/NoteDetailModal';
 import { NoteEditor } from '../notes/NoteEditor';
 import { CommandPaletteModal } from '../palette/CommandPaletteModal';
@@ -55,12 +52,10 @@ import type { ShortcutItem } from '../../types/shortcuts';
 import { db } from '../../db';
 import { dismissAlertToday } from '../../db/repositories/notificationRepo';
 import { createTask, getTask } from '../../db/repositories/taskRepo';
-import { getProject, updateProject } from '../../db/repositories/projectRepo';
-import { getMilestone, updateMilestone } from '../../db/repositories/milestoneRepo';
 import { getTodayDateString, isValidCalendarDate } from '../../utils/date';
 import type { AppRoute, NavigateFunction } from '../../types/navigation';
 import type { AlertNotificationItem } from '../../types/notifications';
-import type { Project, Milestone, Note } from '../../types/models';
+import type { Note } from '../../types/models';
 
 const { Header, Sider, Content } = Layout;
 const { useBreakpoint } = Grid;
@@ -134,9 +129,6 @@ const AppShellInner: React.FC<AppShellProps> = ({
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [dailyReviewOpen, setDailyReviewOpen] = useState(false);
   const [inspectingTaskId, setInspectingTaskId] = useState<string | undefined>(undefined);
-  const [inspectingProject, setInspectingProject] = useState<Project | null>(null);
-  const [editingProject, setEditingProject] = useState<Project | null>(null);
-  const [inspectingMilestone, setInspectingMilestone] = useState<Milestone | null>(null);
   const [inspectingNote, setInspectingNote] = useState<Note | null>(null);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [creatingNote, setCreatingNote] = useState(false);
@@ -200,7 +192,8 @@ const AppShellInner: React.FC<AppShellProps> = ({
     };
   }, [inspectingTaskId]);
 
-  // Register open inspection item with AIChatContext so Cmd+J grounds automatically
+  // Register open inspection item with AIChatContext so Cmd+J grounds automatically.
+  // CR/System inspection lives in the workbench insight tab, which registers itself.
   useEffect(() => {
     if (inspectingTaskId) {
       return registerActiveItem({
@@ -208,21 +201,9 @@ const AppShellInner: React.FC<AppShellProps> = ({
         id: inspectingTaskId,
         title: activeTaskTitle || 'Tác vụ đang xem',
       });
-    } else if (inspectingProject) {
-      return registerActiveItem({
-        type: 'project',
-        id: inspectingProject.id,
-        title: inspectingProject.name,
-      });
-    } else if (inspectingMilestone) {
-      return registerActiveItem({
-        type: 'milestone',
-        id: inspectingMilestone.id,
-        title: inspectingMilestone.name,
-      });
     }
     return undefined;
-  }, [inspectingTaskId, activeTaskTitle, inspectingProject, inspectingMilestone, registerActiveItem]);
+  }, [inspectingTaskId, activeTaskTitle, registerActiveItem]);
 
   const activeScope: ActiveScope = contextActiveScope;
 
@@ -268,8 +249,16 @@ const AppShellInner: React.FC<AppShellProps> = ({
 
   const handleQuickCreateTask = React.useCallback(async () => {
     try {
+      // Task.crId is required (D-27); quick-create attaches to the most recent CR.
+      const crs = await db.changeRequests.toArray();
+      const cr = crs[crs.length - 1];
+      if (!cr) {
+        message.warning('Vui lòng tạo Change Request trước khi thêm tác vụ');
+        return;
+      }
       const task = await createTask(
         {
+          crId: cr.id,
           name: 'Tác vụ mới',
           status: 'Open',
           priority: 'Medium',
@@ -385,12 +374,10 @@ const AppShellInner: React.FC<AppShellProps> = ({
 
     if (item.entityType === 'task' && item.entityId) {
       setInspectingTaskId(item.entityId);
-    } else if (item.entityType === 'project' && item.entityId) {
-      const p = await getProject(item.entityId);
-      if (p) setInspectingProject(p);
-    } else if (item.entityType === 'milestone' && item.entityId) {
-      const m = await getMilestone(item.entityId);
-      if (m) setInspectingMilestone(m);
+    } else if (item.entityType === 'cr' && item.entityId) {
+      onNavigate('insight', { type: 'cr', id: item.entityId });
+    } else if (item.entityType === 'system' && item.entityId) {
+      onNavigate('insight', { type: 'system', id: item.entityId });
     } else if (item.entityType === 'capacity' && item.date) {
       // T-12-09: Sanitize date parameter before routing
       if (isValidCalendarDate(item.date)) {
@@ -731,74 +718,6 @@ const AppShellInner: React.FC<AppShellProps> = ({
         onClose={() => setInspectingTaskId(undefined)}
       />
 
-      {inspectingProject && (
-        <ProjectDetailModal
-          open={Boolean(inspectingProject)}
-          project={inspectingProject}
-          onClose={() => setInspectingProject(null)}
-          onEdit={(proj) => {
-            setInspectingProject(null);
-            setEditingProject(proj);
-          }}
-          onNavigateToProjects={() => {
-            setInspectingProject(null);
-            onNavigate('projects');
-          }}
-          onOpenTask={(taskId) => {
-            setInspectingProject(null);
-            setInspectingTaskId(taskId);
-          }}
-          onAddTask={async (projId) => {
-            setInspectingProject(null);
-            try {
-              const task = await createTask(
-                {
-                  name: 'Tác vụ mới',
-                  projectId: projId,
-                  status: 'Open',
-                  priority: 'Medium',
-                  estimateMinutes: 0,
-                },
-                db
-              );
-              message.success('Đã tạo tác vụ cho dự án');
-              setInspectingTaskId(task.id);
-            } catch {
-              message.error('Không thể tạo tác vụ');
-            }
-          }}
-          db={db}
-        />
-      )}
-
-      {editingProject && (
-        <ProjectModal
-          open={Boolean(editingProject)}
-          project={editingProject}
-          onClose={() => setEditingProject(null)}
-          onSave={async (values) => {
-            await updateProject(editingProject.id, values, db);
-            setEditingProject(null);
-            message.success('Đã cập nhật dự án');
-          }}
-          db={db}
-        />
-      )}
-
-      {inspectingMilestone && (
-        <MilestoneModal
-          open={Boolean(inspectingMilestone)}
-          projectId={inspectingMilestone.projectId}
-          milestone={inspectingMilestone}
-          onClose={() => setInspectingMilestone(null)}
-          onSave={async (values) => {
-            await updateMilestone(inspectingMilestone.id, values, db);
-            setInspectingMilestone(null);
-            message.success('Đã cập nhật mốc');
-          }}
-        />
-      )}
-
       {inspectingNote && (
         <NoteDetailModal
           open={Boolean(inspectingNote)}
@@ -844,13 +763,19 @@ const AppShellInner: React.FC<AppShellProps> = ({
         onClose={() => setCommandPaletteOpen(false)}
         onNavigate={onNavigate}
         onOpenTask={(taskId) => setInspectingTaskId(taskId)}
-        onOpenProject={(p) => setInspectingProject(p)}
-        onOpenMilestone={(m) => setInspectingMilestone(m)}
         onOpenNote={(note) => setInspectingNote(note)}
         onCreateTask={async (name) => {
           try {
+            // Task.crId is required (D-27); quick-create attaches to the most recent CR.
+            const crs = await db.changeRequests.toArray();
+            const cr = crs[crs.length - 1];
+            if (!cr) {
+              message.warning('Vui lòng tạo Change Request trước khi thêm tác vụ');
+              return;
+            }
             const task = await createTask(
               {
+                crId: cr.id,
                 name: name || 'Tác vụ mới',
                 status: 'Open',
                 priority: 'Medium',
