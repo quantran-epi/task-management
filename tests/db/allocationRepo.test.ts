@@ -25,7 +25,7 @@ describe('Planned Allocation Repository (PLAN-01, PLAN-02, PLAN-05, D-12, D-16)'
   });
 
   it('upsertAllocation creates a new PlannedAllocation when none exists for (taskId, date)', async () => {
-    const task = await createTask({ name: 'Write report', estimateMinutes: 120 }, testDb);
+    const task = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Write report', estimateMinutes: 120 }, testDb);
 
     const allocation = await upsertAllocation(task.id, '2026-10-15', 60, testDb);
     expect(allocation.id).toBeDefined();
@@ -38,7 +38,7 @@ describe('Planned Allocation Repository (PLAN-01, PLAN-02, PLAN-05, D-12, D-16)'
   });
 
   it('upsertAllocation updates existing record when allocation already exists for (taskId, date) maintaining unique constraint D-12', async () => {
-    const task = await createTask({ name: 'Write report', estimateMinutes: 120 }, testDb);
+    const task = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Write report', estimateMinutes: 120 }, testDb);
 
     const first = await upsertAllocation(task.id, '2026-10-15', 60, testDb);
     const second = await upsertAllocation(task.id, '2026-10-15', 90, testDb);
@@ -58,7 +58,7 @@ describe('Planned Allocation Repository (PLAN-01, PLAN-02, PLAN-05, D-12, D-16)'
   });
 
   it('updateAllocation modifies allocatedMinutes or date with validation per PLAN-02', async () => {
-    const task = await createTask({ name: 'Review docs', estimateMinutes: 60 }, testDb);
+    const task = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Review docs', estimateMinutes: 60 }, testDb);
     const alloc = await upsertAllocation(task.id, '2026-10-15', 30, testDb);
 
     const updated = await updateAllocation(alloc.id, 45, '2026-10-16', testDb);
@@ -72,7 +72,7 @@ describe('Planned Allocation Repository (PLAN-01, PLAN-02, PLAN-05, D-12, D-16)'
   });
 
   it('updateAllocation merges minutes if moving to a date that already has an allocation for the same task', async () => {
-    const task = await createTask({ name: 'Review docs', estimateMinutes: 180 }, testDb);
+    const task = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Review docs', estimateMinutes: 180 }, testDb);
     const alloc1 = await upsertAllocation(task.id, '2026-10-15', 30, testDb);
     await upsertAllocation(task.id, '2026-10-16', 40, testDb);
 
@@ -86,7 +86,7 @@ describe('Planned Allocation Repository (PLAN-01, PLAN-02, PLAN-05, D-12, D-16)'
   });
 
   it('deleteAllocation removes the allocation record cleanly per PLAN-02', async () => {
-    const task = await createTask({ name: 'Draft RFC', estimateMinutes: 60 }, testDb);
+    const task = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Draft RFC', estimateMinutes: 60 }, testDb);
     const alloc = await upsertAllocation(task.id, '2026-10-15', 45, testDb);
 
     await deleteAllocation(alloc.id, testDb);
@@ -96,7 +96,7 @@ describe('Planned Allocation Repository (PLAN-01, PLAN-02, PLAN-05, D-12, D-16)'
   });
 
   it('getAllocationsForTask and getTotalAllocatedMinutesForTask sum minutes accurately across dates', async () => {
-    const task = await createTask({ name: 'Feature A', estimateMinutes: 240 }, testDb);
+    const task = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Feature A', estimateMinutes: 240 }, testDb);
     await upsertAllocation(task.id, '2026-10-15', 60, testDb);
     await upsertAllocation(task.id, '2026-10-16', 90, testDb);
     await upsertAllocation(task.id, '2026-10-18', 30, testDb);
@@ -110,10 +110,10 @@ describe('Planned Allocation Repository (PLAN-01, PLAN-02, PLAN-05, D-12, D-16)'
   });
 
   it('getAllocationsForDate joins allocations with Task entities and accurately flags active vs inactive per PLAN-05 and D-16', async () => {
-    const taskOpen = await createTask({ name: 'Open Task', status: 'Open' }, testDb);
-    const taskProg = await createTask({ name: 'In Progress Task', status: 'In Progress' }, testDb);
-    const taskDone = await createTask({ name: 'Done Task', status: 'Done' }, testDb);
-    const taskCancel = await createTask({ name: 'Cancelled Task', status: 'Cancelled' }, testDb);
+    const taskOpen = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Open Task', status: 'Open' }, testDb);
+    const taskProg = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'In Progress Task', status: 'In Progress' }, testDb);
+    const taskDone = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Done Task', status: 'Done' }, testDb);
+    const taskCancel = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Cancelled Task', status: 'Cancelled' }, testDb);
 
     await upsertAllocation(taskOpen.id, '2026-10-20', 60, testDb);
     await upsertAllocation(taskProg.id, '2026-10-20', 90, testDb);
@@ -138,9 +138,9 @@ describe('Planned Allocation Repository (PLAN-01, PLAN-02, PLAN-05, D-12, D-16)'
   });
 
   it('getWeeklyAllocationsWithTasks aggregates active and inactive minutes and counts active tasks per day per PLAN-05', async () => {
-    const task1 = await createTask({ name: 'Active 1', status: 'Open' }, testDb);
-    const task2 = await createTask({ name: 'Active 2', status: 'In Progress' }, testDb);
-    const taskDone = await createTask({ name: 'Done Task', status: 'Done' }, testDb);
+    const task1 = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Active 1', status: 'Open' }, testDb);
+    const task2 = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Active 2', status: 'In Progress' }, testDb);
+    const taskDone = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Done Task', status: 'Done' }, testDb);
 
     // 2026-10-19 (Mon)
     await upsertAllocation(task1.id, '2026-10-19', 120, testDb);
@@ -167,7 +167,7 @@ describe('Planned Allocation Repository (PLAN-01, PLAN-02, PLAN-05, D-12, D-16)'
 
   describe('getTaskIdsWithAllocationsInRange (SRCH-01, D-05)', () => {
     it('returns empty set when no allocations exist in range', async () => {
-      const task = await createTask({ name: 'Task outside range' }, testDb);
+      const task = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Task outside range' }, testDb);
       await upsertAllocation(task.id, '2026-10-10', 60, testDb);
 
       const taskIds = await getTaskIdsWithAllocationsInRange('2026-10-15', '2026-10-20', testDb);
@@ -175,9 +175,9 @@ describe('Planned Allocation Repository (PLAN-01, PLAN-02, PLAN-05, D-12, D-16)'
     });
 
     it('returns matching taskIds when allocations fall within [startDate, endDate] inclusive', async () => {
-      const task1 = await createTask({ name: 'Task 1' }, testDb);
-      const task2 = await createTask({ name: 'Task 2' }, testDb);
-      const task3 = await createTask({ name: 'Task 3' }, testDb);
+      const task1 = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Task 1' }, testDb);
+      const task2 = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Task 2' }, testDb);
+      const task3 = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Task 3' }, testDb);
 
       await upsertAllocation(task1.id, '2026-10-15', 60, testDb); // on boundary start
       await upsertAllocation(task2.id, '2026-10-18', 45, testDb); // in middle
@@ -191,9 +191,9 @@ describe('Planned Allocation Repository (PLAN-01, PLAN-02, PLAN-05, D-12, D-16)'
     });
 
     it('excludes tasks with allocations strictly outside date range', async () => {
-      const insideTask = await createTask({ name: 'Inside' }, testDb);
-      const beforeTask = await createTask({ name: 'Before' }, testDb);
-      const afterTask = await createTask({ name: 'After' }, testDb);
+      const insideTask = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Inside' }, testDb);
+      const beforeTask = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Before' }, testDb);
+      const afterTask = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'After' }, testDb);
 
       await upsertAllocation(insideTask.id, '2026-10-16', 60, testDb);
       await upsertAllocation(beforeTask.id, '2026-10-14', 60, testDb);
@@ -207,7 +207,7 @@ describe('Planned Allocation Repository (PLAN-01, PLAN-02, PLAN-05, D-12, D-16)'
     });
 
     it('deduplicates when a task has multiple allocations within the range', async () => {
-      const task = await createTask({ name: 'Multiple days' }, testDb);
+      const task = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Multiple days' }, testDb);
       await upsertAllocation(task.id, '2026-10-16', 30, testDb);
       await upsertAllocation(task.id, '2026-10-17', 45, testDb);
       await upsertAllocation(task.id, '2026-10-18', 60, testDb);
@@ -218,8 +218,8 @@ describe('Planned Allocation Repository (PLAN-01, PLAN-02, PLAN-05, D-12, D-16)'
     });
 
     it('excludes allocations with allocatedMinutes <= 0', async () => {
-      const activeTask = await createTask({ name: 'Active task' }, testDb);
-      const zeroTask = await createTask({ name: 'Zero task' }, testDb);
+      const activeTask = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Active task' }, testDb);
+      const zeroTask = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Zero task' }, testDb);
 
       await upsertAllocation(activeTask.id, '2026-10-16', 60, testDb);
       // Directly put an allocation with 0 minutes to simulate zero allocation
@@ -237,7 +237,7 @@ describe('Planned Allocation Repository (PLAN-01, PLAN-02, PLAN-05, D-12, D-16)'
     });
 
     it('returns empty set if startDate > endDate or dates are empty', async () => {
-      const task = await createTask({ name: 'Task' }, testDb);
+      const task = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Task' }, testDb);
       await upsertAllocation(task.id, '2026-10-16', 60, testDb);
 
       expect((await getTaskIdsWithAllocationsInRange('2026-10-20', '2026-10-15', testDb)).size).toBe(0);
@@ -248,7 +248,7 @@ describe('Planned Allocation Repository (PLAN-01, PLAN-02, PLAN-05, D-12, D-16)'
 
   describe('Stale Task updatedAt Touch (D-13, NOTIF-05)', () => {
     it('calling upsertAllocation updates parent task updatedAt timestamp', async () => {
-      const task = await createTask({ name: 'Task to allocate', estimateMinutes: 60 }, testDb);
+      const task = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Task to allocate', estimateMinutes: 60 }, testDb);
       const initialUpdatedAt = '2026-09-01T00:00:00.000Z';
       await testDb.tasks.update(task.id, { updatedAt: initialUpdatedAt });
 
@@ -262,7 +262,7 @@ describe('Planned Allocation Repository (PLAN-01, PLAN-02, PLAN-05, D-12, D-16)'
     });
 
     it('calling updateAllocation updates parent task updatedAt timestamp', async () => {
-      const task = await createTask({ name: 'Task to update alloc', estimateMinutes: 120 }, testDb);
+      const task = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Task to update alloc', estimateMinutes: 120 }, testDb);
       const alloc = await upsertAllocation(task.id, '2026-10-15', 30, testDb);
 
       const initialUpdatedAt = '2026-09-01T00:00:00.000Z';
@@ -278,7 +278,7 @@ describe('Planned Allocation Repository (PLAN-01, PLAN-02, PLAN-05, D-12, D-16)'
     });
 
     it('calling deleteAllocation updates parent task updatedAt timestamp', async () => {
-      const task = await createTask({ name: 'Task to delete alloc', estimateMinutes: 60 }, testDb);
+      const task = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Task to delete alloc', estimateMinutes: 60 }, testDb);
       const alloc = await upsertAllocation(task.id, '2026-10-15', 30, testDb);
 
       const initialUpdatedAt = '2026-09-01T00:00:00.000Z';

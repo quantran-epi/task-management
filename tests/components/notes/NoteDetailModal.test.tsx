@@ -55,7 +55,7 @@ describe('NoteDetailModal', () => {
     await db.tasks.add({
       id: '22222222-2222-4222-8222-222222222222',
       name: 'Thiết kế giao diện',
-      projectId: 'proj-1',
+      crId: '11111111-1111-4111-8111-111111111111',
       status: 'In Progress',
       priority: 'High',
       progress: 0,

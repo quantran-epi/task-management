@@ -93,7 +93,7 @@ describe('PlannerView & App Route Integration (PLAN-03, PLAN-04, UX-02, UX-03, U
 
   it('allocates task to day column via + Allocate button and updates load and balance reactively', async () => {
     await createTask(
-      { name: 'Wireframe Dashboard', estimateMinutes: 240, status: 'In Progress', priority: 'High' },
+      { crId: '11111111-1111-4111-8111-111111111111', name: 'Wireframe Dashboard', estimateMinutes: 240, status: 'In Progress', priority: 'High' },
       testDb
     );
 

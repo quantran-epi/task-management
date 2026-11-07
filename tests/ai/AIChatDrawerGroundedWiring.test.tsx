@@ -207,7 +207,7 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
         open={true}
         onClose={() => {}}
         db={testDb}
-        activeScope={{ type: 'project', id: 'proj-1' }}
+        activeScope={{ type: 'cr', id: 'proj-1' }}
       />
     );
 
@@ -250,7 +250,7 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
         open={true}
         onClose={() => {}}
         db={testDb}
-        activeScope={{ type: 'project', id: 'proj-1' }}
+        activeScope={{ type: 'cr', id: 'proj-1' }}
       />
     );
     // Aborting a signal does not stop a pipeline that resolves anyway; the token must.

@@ -17,7 +17,7 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
     await testDb.open();
 
     const cr = await createChangeRequest(
-      { name: 'Alpha Core', code: 'CR-2026-001', type: 'ENHANCEMENT' },
+      { status: 'Open', targets: [], name: 'Alpha Core', code: 'CR-2026-001', type: 'ENHANCEMENT' },
       testDb
     );
     crId = cr.id;

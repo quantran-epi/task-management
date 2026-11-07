@@ -4,7 +4,7 @@ import { useTaskFilters } from '../../src/hooks/useTaskFilters';
 import type { Task } from '../../src/types/models';
 
 const sampleTasks: Task[] = [
-  {
+  { crId: '11111111-1111-4111-8111-111111111111',
     id: 't1',
     name: 'Write docs',
     status: 'Open',
@@ -14,7 +14,7 @@ const sampleTasks: Task[] = [
     createdAt: '2026-09-20T10:00:00Z',
     updatedAt: '2026-09-20T10:00:00Z',
   },
-  {
+  { crId: '11111111-1111-4111-8111-111111111111',
     id: 't2',
     name: 'Fix bug',
     status: 'In Progress',

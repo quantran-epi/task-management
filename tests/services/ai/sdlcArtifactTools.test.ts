@@ -53,6 +53,7 @@ async function seedWorkflow(
       date: '2026-11-04',
     },
     artifacts: {
+      branchSnapshots: {},
       pl01: { kind: 'PL01', version: 1, hash: '1'.repeat(64), title: 'PL01', content: 'PL01', sourceHashes: [], updatedAt: timestamp },
       pl02: { kind: 'PL02', version: 1, hash: '2'.repeat(64), title: 'PL02', content: 'PL02', sourceHashes: [], updatedAt: timestamp },
       solution: {

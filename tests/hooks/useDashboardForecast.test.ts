@@ -75,7 +75,7 @@ describe('useDashboardForecast hook', () => {
 
     // Add 1 active task (120m) and 1 done task (200m)
     await testDb.tasks.bulkAdd([
-      {
+      { crId: '11111111-1111-4111-8111-111111111111',
         id: 't-active',
         name: 'Active Task',
         status: 'In Progress',
@@ -85,7 +85,7 @@ describe('useDashboardForecast hook', () => {
         createdAt: today,
         updatedAt: today,
       },
-      {
+      { crId: '11111111-1111-4111-8111-111111111111',
         id: 't-done',
         name: 'Done Task',
         status: 'Done',
@@ -122,7 +122,7 @@ describe('useDashboardForecast hook', () => {
     });
 
     // Add active task allocated 300m for tomorrow -> excess 180m
-    await testDb.tasks.add({
+    await testDb.tasks.add({ crId: '11111111-1111-4111-8111-111111111111',
       id: 't-heavy',
       name: 'Heavy Task',
       status: 'Open',

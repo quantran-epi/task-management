@@ -28,7 +28,7 @@ describe('DashboardView Integration (DASH-01..DASH-06)', () => {
     // Create an overdue task and a due today task
     const yesterday = dayjs(today, 'YYYY-MM-DD').subtract(1, 'day').format('YYYY-MM-DD');
     await createTask(
-      {
+      { crId: '11111111-1111-4111-8111-111111111111',
         name: 'Urgent Overdue Bug',
         status: 'Open',
         priority: 'Urgent',
@@ -40,7 +40,7 @@ describe('DashboardView Integration (DASH-01..DASH-06)', () => {
     );
 
     await createTask(
-      {
+      { crId: '11111111-1111-4111-8111-111111111111',
         name: 'Task Due Today',
         status: 'In Progress',
         priority: 'High',
@@ -70,7 +70,7 @@ describe('DashboardView Integration (DASH-01..DASH-06)', () => {
   it('clicking attention task title opens TaskDrawer in-place without page transition', async () => {
     const today = getTodayDateString();
     await createTask(
-      {
+      { crId: '11111111-1111-4111-8111-111111111111',
         name: 'Inspectable Task Item',
         status: 'Open',
         priority: 'Medium',
@@ -97,7 +97,7 @@ describe('DashboardView Integration (DASH-01..DASH-06)', () => {
 
     // Create an overloaded day on tomorrow by allocating 600m when capacity is 480m (or if tomorrow is weekend, capacity is 0)
     const task = await createTask(
-      {
+      { crId: '11111111-1111-4111-8111-111111111111',
         name: 'Heavy Task',
         status: 'Open',
         priority: 'High',

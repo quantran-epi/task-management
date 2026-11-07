@@ -71,7 +71,10 @@ describe('artifact persistence', () => {
     await db.changeRequests.add({
       id: PROJECT_ID,
       name: 'Wizard project',
+      code: 'CR-WIZ',
       status: 'Open',
+      type: 'ENHANCEMENT',
+      targets: [],
       createdAt: NOW,
       updatedAt: NOW,
     });

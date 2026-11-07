@@ -118,8 +118,12 @@ function v11Envelope(): BackupEnvelope {
   };
 }
 
-/** A pre-31.2 envelope: rejected outright at the envelope stage (D-49). */
-function legacyEnvelope(): BackupEnvelope {
+/**
+ * A pre-31.2 envelope: rejected outright at the envelope stage (D-49).
+ * Deliberately NOT typed as `BackupEnvelope` — it carries the dropped `projects`/`milestones`
+ * tables, which is exactly what the guard must reject.
+ */
+function legacyEnvelope(): unknown {
   return {
     app: APP_MARKER,
     schemaVersion: 4,

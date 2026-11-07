@@ -13,7 +13,18 @@ export type RevisionModalPreview = {
 
 export type WorkflowArtifacts = SdlcWorkflowState['artifacts'];
 
-const ARTIFACT_KEY_BY_KIND: Partial<Record<SdlcArtifactKind, keyof WorkflowArtifacts>> = {
+/** The artifact-ref slots only; `branchSnapshots` and `crSummary` are not artifacts. */
+type SdlcArtifactKey =
+  | 'pl01'
+  | 'pl02'
+  | 'solution'
+  | 'codeGuide'
+  | 'changePack'
+  | 'pl03b'
+  | 'pl07'
+  | 'cab';
+
+const ARTIFACT_KEY_BY_KIND: Partial<Record<SdlcArtifactKind, SdlcArtifactKey>> = {
   PL01: 'pl01',
   PL02: 'pl02',
   SOLUTION: 'solution',
@@ -25,7 +36,7 @@ const ARTIFACT_KEY_BY_KIND: Partial<Record<SdlcArtifactKind, keyof WorkflowArtif
 };
 
 /** Artifacts invalidated by each step id, per the staleness DAG. */
-const ARTIFACT_KEYS_BY_STEP: Record<SdlcStepId, (keyof WorkflowArtifacts)[]> = {
+const ARTIFACT_KEYS_BY_STEP: Record<SdlcStepId, SdlcArtifactKey[]> = {
   INTAKE: ['pl01', 'pl02'],
   SOLUTION: ['solution'],
   CODE_GUIDE: ['codeGuide'],

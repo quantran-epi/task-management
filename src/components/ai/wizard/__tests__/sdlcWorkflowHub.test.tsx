@@ -24,6 +24,7 @@ describe('SdlcWorkflowHub', () => {
       date: '2026-10-30',
     },
     artifacts: {
+      branchSnapshots: {},
       pl01: {
         kind: 'PL01',
         version: 1,
@@ -701,6 +702,7 @@ describe('RevisionImpactModal', () => {
     currentStep: 'SOLUTION',
     metadata: { cr: 'CR-TEST-99', featureName: 'Feature', author: 'Dev', requestingUnit: 'Unit', date: '2026-10-30' },
     artifacts: {
+      branchSnapshots: {},
       pl01: { kind: 'PL01', version: 1, hash: '01'.repeat(32), title: 'PL01', content: 'old', sourceHashes: [], updatedAt: '2026-10-30T00:00:00.000Z' },
       pl02: { kind: 'PL02', version: 1, hash: '02'.repeat(32), title: 'PL02', content: 'old', sourceHashes: [], updatedAt: '2026-10-30T00:00:00.000Z' },
       solution: { kind: 'SOLUTION', version: 1, hash: '03'.repeat(32), title: 'SOLUTION', content: 'old', sourceHashes: [], updatedAt: '2026-10-30T00:00:00.000Z' },

@@ -13,7 +13,7 @@ import {
 import { saveHubSolution } from '../../src/services/wizard/hubSolution';
 import type { ReconciliationResult } from '../../src/services/wizard/reconciliation';
 import type { SdlcWorkflowMetadata } from '../../src/services/wizard/workflowSchemas';
-import type { Project } from '../../src/types/models';
+import type { ChangeRequest } from '../../src/types/models';
 
 const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
 const THREAD_ID = '22222222-2222-4222-8222-222222222222';
@@ -21,7 +21,7 @@ const SESSION_ID = '33333333-3333-4333-8333-333333333333';
 const NOW = '2026-11-01T12:00:00.000Z';
 const SET_ID = '44444444-4444-4444-8444-444444444444';
 
-const project: Project = { id: PROJECT_ID, name: 'Tech docs project', status: 'Open', createdAt: NOW, updatedAt: NOW };
+const project: ChangeRequest = { id: PROJECT_ID, name: 'Tech docs project', code: 'CR-1', status: 'Open', type: 'ENHANCEMENT', targets: [], createdAt: NOW, updatedAt: NOW };
 
 const metadata: SdlcWorkflowMetadata = {
   cr: 'CR-25001',

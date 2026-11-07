@@ -109,7 +109,7 @@ describe('Notification Repository (D-14, D-15, D-16)', () => {
       const taskId = 'task-rem-1';
       const remId1 = '00000000-0000-4000-8000-000000000001';
       const remId2 = '00000000-0000-4000-8000-000000000002';
-      await testDb.tasks.add({
+      await testDb.tasks.add({ crId: '11111111-1111-4111-8111-111111111111',
         id: taskId,
         name: 'Task with reminders',
         status: 'Open',
@@ -134,7 +134,7 @@ describe('Notification Repository (D-14, D-15, D-16)', () => {
 
     it('clears legacy reminder from task', async () => {
       const taskId = 'task-rem-legacy';
-      await testDb.tasks.add({
+      await testDb.tasks.add({ crId: '11111111-1111-4111-8111-111111111111',
         id: taskId,
         name: 'Task with legacy reminder',
         status: 'Open',
@@ -179,7 +179,7 @@ describe('Notification Repository (D-14, D-15, D-16)', () => {
     it('clears reminderDate when last reminder in reminders array is completed (prevents 2-click bug)', async () => {
       const taskId = 'task-2click-bug';
       const remId = '00000000-0000-4000-8000-000000000099';
-      await testDb.tasks.add({
+      await testDb.tasks.add({ crId: '11111111-1111-4111-8111-111111111111',
         id: taskId,
         name: 'Task with synced reminderDate and reminders',
         status: 'Open',

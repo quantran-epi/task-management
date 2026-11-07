@@ -4,7 +4,7 @@ import { TaskPlannerDatabase } from '../../src/db';
 import { saveHubSolution } from '../../src/services/wizard/hubSolution';
 import { persistConfirmedPack } from '../../src/services/wizard/artifactRepo';
 import type { ChangePackManifest } from '../../src/services/wizard/changePack';
-import type { Project } from '../../src/types/models';
+import type { ChangeRequest } from '../../src/types/models';
 
 const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
 const OTHER_PROJECT_ID = '99999999-9999-4999-8999-999999999999';
@@ -13,7 +13,7 @@ const OTHER_THREAD_ID = '88888888-8888-4888-8888-888888888888';
 const SESSION_ID = '33333333-3333-4333-8333-333333333333';
 const NOW = '2026-11-01T12:00:00.000Z';
 
-const project: Project = { id: PROJECT_ID, name: 'Hub solution project', status: 'Open', createdAt: NOW, updatedAt: NOW };
+const project: ChangeRequest = { id: PROJECT_ID, name: 'Hub solution project', code: 'CR-1', status: 'Open', type: 'ENHANCEMENT', targets: [], createdAt: NOW, updatedAt: NOW };
 
 function input(overrides: Record<string, unknown> = {}) {
   return {
@@ -34,7 +34,7 @@ beforeEach(async () => {
   db = new TaskPlannerDatabase(`hub-solution-${Date.now()}-${Math.random()}`);
   await db.open();
   await db.changeRequests.add(project);
-  await db.changeRequests.add({ ...project, id: OTHER_PROJECT_ID, name: 'Other project' });
+  await db.changeRequests.add({ ...project, id: OTHER_PROJECT_ID, name: 'Other project', code: 'CR-2' });
   await db.chatThreads.add({
     id: THREAD_ID,
     scopeKey: `cr:${PROJECT_ID}`,

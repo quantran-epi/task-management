@@ -133,7 +133,7 @@ export const TargetSystemsSelector: React.FC<TargetSystemsSelectorProps> = ({
       <TreeSelect
         treeData={treeData}
         value={value}
-        onChange={onChange}
+        onChange={onChange ?? (() => {})}
         treeCheckable
         showCheckedStrategy={TreeSelect.SHOW_CHILD}
         placeholder={placeholder}

@@ -427,7 +427,7 @@ describe('useDesktopNotification hook (D-09, D-12, NOTIF-07, TAURI-NOTIF-DESKTOP
           title: 'Quá tải 125% ngày 2026-04-01',
           tagColor: 'error',
           tagLabel: 'Quá tải',
-          entityType: 'project',
+          entityType: 'cr',
           canDismiss: false,
           priorityOrder: 2,
         },

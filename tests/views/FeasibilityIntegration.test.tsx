@@ -25,7 +25,7 @@ describe('Feasibility Integration (CALC-01, CALC-06, D-13, D-16)', () => {
   it('D-13 & D-16: launches FeasibilityModal from TaskDrawerPlanning, applies allocations, and updates database reactively', async () => {
     const deadline = dayjs().add(5, 'day').format('YYYY-MM-DD');
     const task = await createTask(
-      {
+      { crId: '11111111-1111-4111-8111-111111111111',
         name: 'Feasibility Integration Task',
         estimateMinutes: 240, // 4 hours
         status: 'Open',
@@ -68,7 +68,7 @@ describe('Feasibility Integration (CALC-01, CALC-06, D-13, D-16)', () => {
 
   it('D-13 & D-16: launches FeasibilityModal from PlannerView toolbar and updates weekly grid board reactively', async () => {
     await createTask(
-      {
+      { crId: '11111111-1111-4111-8111-111111111111',
         name: 'Planner Grid Feasibility Task',
         estimateMinutes: 120, // 2 hours
         status: 'Open',
@@ -104,7 +104,7 @@ describe('Feasibility Integration (CALC-01, CALC-06, D-13, D-16)', () => {
 
   it('D-13: provides Auto-Distribute quick action in TasksView', async () => {
     await createTask(
-      {
+      { crId: '11111111-1111-4111-8111-111111111111',
         name: 'Tasks View Feasibility Task',
         estimateMinutes: 180,
         status: 'Open',

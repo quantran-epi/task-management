@@ -85,6 +85,7 @@ describe('StepChatPanel artifact context and completion safety', () => {
   const solutionGrounding = buildSdlcStepGroundingResult({
     step: 'SOLUTION',
     artifacts: {
+      branchSnapshots: {},
       pl01: { kind: 'PL01', version: 1, hash: 'a'.repeat(64), title: 'PL01', content: 'Baseline', sourceHashes: [], updatedAt: '2026-11-03T00:00:00Z' },
       pl02: { kind: 'PL02', version: 1, hash: 'a'.repeat(64), title: 'PL02', content: 'Acceptance', sourceHashes: [], updatedAt: '2026-11-03T00:00:00Z' },
     },

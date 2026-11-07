@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../src/db';
-import { message } from 'antd';
 import { QuickAddBar } from '../../src/components/tasks/QuickAddBar';
 import { TaskDrawer } from '../../src/components/tasks/TaskDrawer';
 import type { ChangeRequest, System, Task } from '../../src/types/models';

@@ -396,8 +396,19 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       const workflow = tab.workflowState;
       if (workflow) {
         const missingIds: string[] = [];
-        for (const artifact of Object.values(workflow.artifacts)) {
-          if (!artifact || !('noteId' in artifact) || !artifact.noteId) continue;
+        // Only the artifact-ref slots carry `noteId`; `branchSnapshots` and `crSummary` do not.
+        const artifactRefs = [
+          workflow.artifacts.pl01,
+          workflow.artifacts.pl02,
+          workflow.artifacts.solution,
+          workflow.artifacts.codeGuide,
+          workflow.artifacts.changePack,
+          workflow.artifacts.pl03b,
+          workflow.artifacts.pl07,
+          workflow.artifacts.cab,
+        ];
+        for (const artifact of artifactRefs) {
+          if (!artifact || !artifact.noteId) continue;
           if (!noteIds.has(artifact.noteId)) {
             missingIds.push(artifact.noteId);
             if (!recovery.missingSources.some((source) => source.id === artifact.noteId)) {
@@ -582,8 +593,8 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       ...(knowledgeLinks !== undefined ? { knowledgeLinks } : {}),
       ...(telegramSettings !== undefined ? { telegramSettings } : {}),
       ...(telegramWhitelist !== undefined ? { telegramWhitelist } : {}),
-      ...(systems !== undefined ? { systems } : {}),
-      ...(changeRequests !== undefined ? { changeRequests } : {}),
+      ...(systems !== undefined ? { systems: systems as NonNullable<BackupEnvelope['tables']['systems']> } : {}),
+      ...(changeRequests !== undefined ? { changeRequests: changeRequests as NonNullable<BackupEnvelope['tables']['changeRequests']> } : {}),
     },
     counts: {
       tasks: tasks.length,

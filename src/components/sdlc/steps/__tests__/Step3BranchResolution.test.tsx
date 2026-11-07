@@ -67,7 +67,6 @@ const stubRemote = () => {
 const renderStep3 = (props: Partial<React.ComponentProps<typeof Step3CodeGuideView>> = {}) =>
   render(
     <Step3CodeGuideView
-      projectId="proj-1"
       crCode="CR-5"
       targetSystems={[SYSTEM]}
       crTargets={[{ systemId: 's1', featureBranch: 'feature/CR-5' }]}

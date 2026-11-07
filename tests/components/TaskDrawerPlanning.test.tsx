@@ -21,7 +21,7 @@ describe('TaskDrawerPlanning Component (PLAN-01, PLAN-02, PLAN-06, D-09, D-10)',
 
   it('renders progress bar, metrics, and empty table when no allocations exist', async () => {
     const task = await createTask(
-      { name: 'Implement feature', estimateMinutes: 240, status: 'Open' },
+      { crId: '11111111-1111-4111-8111-111111111111', name: 'Implement feature', estimateMinutes: 240, status: 'Open' },
       testDb
     );
 
@@ -35,7 +35,7 @@ describe('TaskDrawerPlanning Component (PLAN-01, PLAN-02, PLAN-06, D-09, D-10)',
 
   it('adding a 120m allocation updates the progress bar to 50% (PLAN-01, D-09)', async () => {
     const task = await createTask(
-      { name: 'Implement feature', estimateMinutes: 240, status: 'Open' },
+      { crId: '11111111-1111-4111-8111-111111111111', name: 'Implement feature', estimateMinutes: 240, status: 'Open' },
       testDb
     );
 
@@ -61,7 +61,7 @@ describe('TaskDrawerPlanning Component (PLAN-01, PLAN-02, PLAN-06, D-09, D-10)',
 
   it('deleting an allocation removes row and restores balance (PLAN-02)', async () => {
     const task = await createTask(
-      { name: 'Task with allocation', estimateMinutes: 180, status: 'Open' },
+      { crId: '11111111-1111-4111-8111-111111111111', name: 'Task with allocation', estimateMinutes: 180, status: 'Open' },
       testDb
     );
     await upsertAllocation(task.id, '2026-10-25', 60, testDb);
@@ -88,7 +88,7 @@ describe('TaskDrawerPlanning Component (PLAN-01, PLAN-02, PLAN-06, D-09, D-10)',
 
   it('shows soft warning alert when total allocated exceeds task estimate (D-10, PLAN-06)', async () => {
     const task = await createTask(
-      { name: 'Small task', estimateMinutes: 60, status: 'Open' },
+      { crId: '11111111-1111-4111-8111-111111111111', name: 'Small task', estimateMinutes: 60, status: 'Open' },
       testDb
     );
     // Allocate 120m to a 60m task
@@ -103,7 +103,7 @@ describe('TaskDrawerPlanning Component (PLAN-01, PLAN-02, PLAN-06, D-09, D-10)',
 
   it('integrates seamlessly inside TaskDrawer when task is loaded (D-09)', async () => {
     const task = await createTask(
-      { name: 'Drawer Task', estimateMinutes: 120, status: 'Open' },
+      { crId: '11111111-1111-4111-8111-111111111111', name: 'Drawer Task', estimateMinutes: 120, status: 'Open' },
       testDb
     );
     await upsertAllocation(task.id, '2026-10-26', 60, testDb);
@@ -119,7 +119,7 @@ describe('TaskDrawerPlanning Component (PLAN-01, PLAN-02, PLAN-06, D-09, D-10)',
   it('uses loaded task estimate while drawer form watchers are not hydrated', async () => {
     const useWatchSpy = vi.spyOn(Form, 'useWatch').mockReturnValue(undefined);
     const task = await createTask(
-      { name: 'Drawer Task', estimateMinutes: 120, status: 'Open' },
+      { crId: '11111111-1111-4111-8111-111111111111', name: 'Drawer Task', estimateMinutes: 120, status: 'Open' },
       testDb
     );
     await upsertAllocation(task.id, '2026-10-26', 60, testDb);

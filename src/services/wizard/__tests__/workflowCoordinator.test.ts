@@ -73,7 +73,7 @@ describe('createSdlcWorkflowCoordinator', () => {
         currentStep: 'SOLUTION',
         selectedStep: 'INTAKE',
         metadata: { cr: 'CR-001', featureName: 'Feature A', author: 'Author', requestingUnit: 'Unit', date: '2026-10-30' },
-        artifacts: {},
+        artifacts: { branchSnapshots: {} },
         staleSteps: [],
         checkpoint: { requestId: dummyUuid1, step: 'SOLUTION', status: 'running', startedAt: '2026-10-30T00:00:00.000Z' },
         createdAt: '2026-10-30T00:00:00.000Z',
@@ -150,6 +150,7 @@ function persistedState(overrides: Partial<SdlcWorkflowState> = {}): SdlcWorkflo
     currentStep: 'SOLUTION',
     metadata: restoreMetadata,
     artifacts: {
+      branchSnapshots: {},
       pl01: { kind: 'PL01', version: 1, hash: hashA, title: 'PL01', sourceHashes: [], updatedAt: '2026-10-30T00:00:00.000Z' },
       pl02: { kind: 'PL02', version: 1, hash: hashB, title: 'PL02', sourceHashes: [], updatedAt: '2026-10-30T00:00:00.000Z' },
       solution: { kind: 'SOLUTION', version: 1, hash: hashA, title: 'SOLUTION', sourceHashes: [], updatedAt: '2026-10-30T00:00:00.000Z' },

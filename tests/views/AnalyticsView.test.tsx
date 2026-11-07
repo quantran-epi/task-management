@@ -35,7 +35,7 @@ describe('AnalyticsView', () => {
   it('renders analytics view with stats and charts', async () => {
     // Seed sample task and work session
     const task = await createTask(
-      {
+      { crId: '11111111-1111-4111-8111-111111111111',
         name: 'Task mẫu phân tích',
         status: 'In Progress',
         priority: 'High',

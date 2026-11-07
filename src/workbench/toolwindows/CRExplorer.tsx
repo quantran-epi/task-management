@@ -270,7 +270,7 @@ export function CRExplorer({ db = defaultDb, onSelectProject }: CRExplorerProps)
                   items: getSystemMenu(
                     cr,
                     sys ?? ({ id: target.systemId, name: target.systemId, code: target.systemId } as System)
-                  ),
+                  ) ?? [],
                 }}
                 trigger={['contextMenu']}
               >
@@ -327,7 +327,7 @@ export function CRExplorer({ db = defaultDb, onSelectProject }: CRExplorerProps)
         return {
           key: `cr:${cr.id}`,
           title: (
-            <Dropdown menu={{ items: getCrMenu(cr) }} trigger={['contextMenu']}>
+            <Dropdown menu={{ items: getCrMenu(cr) ?? [] }} trigger={['contextMenu']}>
               <div style={{ display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0, overflow: 'hidden' }}>
                 <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', minWidth: 0, gap: 6 }}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>

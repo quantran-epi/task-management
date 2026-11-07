@@ -85,7 +85,7 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
 
   beforeEach(async () => {
     db = new TaskPlannerDatabase(`test-turn-${Date.now()}-${Math.random()}`);
-    const thread = await createOrGetThread({ scopeType: 'project', entityId: 'p-1' }, db);
+    const thread = await createOrGetThread({ scopeType: 'cr', entityId: 'p-1' }, db);
     threadId = thread.id;
     statuses = [];
     deltas = [];

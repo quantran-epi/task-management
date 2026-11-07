@@ -32,7 +32,7 @@ describe('System Repository (ENT-SYS-01)', () => {
 
   it('creates, retrieves, and updates systems with code, type, and ssh properties', async () => {
     const created = await createSystem(
-      {
+      { parentId: null,
         name: 'Payment Processing Group',
         code: 'PAYMENT_GRP',
         type: 'LOGICAL_GROUP',
@@ -67,7 +67,7 @@ describe('System Repository (ENT-SYS-01)', () => {
   it('retrieves parent systems and subsystems accurately', async () => {
     // 1 parent group
     const parent = await createSystem(
-      {
+      { parentId: null,
         name: 'Core Banking',
         code: 'CORE',
         type: 'LOGICAL_GROUP',
@@ -127,7 +127,7 @@ describe('System Repository (ENT-SYS-01)', () => {
 
   it('prevents deleting a system if child subsystems exist without cascade/force', async () => {
     const parent = await createSystem(
-      {
+      { parentId: null,
         name: 'Loan Management',
         code: 'LOAN',
         type: 'LOGICAL_GROUP',
@@ -161,7 +161,7 @@ describe('System Repository (ENT-SYS-01)', () => {
     const { restoreBackupPayload } = await import('../../src/services/backup/restoreBackup');
 
     const sys = await createSystem(
-      {
+      { parentId: null,
         name: 'Core System',
         code: 'CORE_SYS',
         type: 'SERVICE',
@@ -203,11 +203,11 @@ describe('System Repository (ENT-SYS-01)', () => {
       'getParentSystems returns only LOGICAL_GROUP rows',
       async () => {
         const parent = await createSystem(
-          { name: 'Group', code: 'GRP', type: 'LOGICAL_GROUP' },
+          { parentId: null, name: 'Group', code: 'GRP', type: 'LOGICAL_GROUP' },
           db
         );
         const unparentedService = await createSystem(
-          { name: 'Lonely service', code: 'LONE', type: 'SERVICE' },
+          { parentId: null, name: 'Lonely service', code: 'LONE', type: 'SERVICE' },
           db
         );
 
@@ -222,7 +222,7 @@ describe('System Repository (ENT-SYS-01)', () => {
       'rejects a subsystem whose parent is not a LOGICAL_GROUP',
       async () => {
         const service = await createSystem(
-          { name: 'Service', code: 'SVC', type: 'SERVICE' },
+          { parentId: null, name: 'Service', code: 'SVC', type: 'SERVICE' },
           db
         );
 
@@ -241,7 +241,7 @@ describe('System Repository (ENT-SYS-01)', () => {
       async () => {
         await expect(
           createSystem(
-            {
+            { parentId: null,
               name: 'Bad parent',
               code: 'BAD_PARENT',
               type: 'LOGICAL_GROUP',
@@ -258,7 +258,7 @@ describe('System Repository (ENT-SYS-01)', () => {
       'rejects a parentId cycle',
       async () => {
         const group = await createSystem(
-          { name: 'Group', code: 'CYCLE_GRP', type: 'LOGICAL_GROUP' },
+          { parentId: null, name: 'Group', code: 'CYCLE_GRP', type: 'LOGICAL_GROUP' },
           db
         );
 
@@ -273,7 +273,7 @@ describe('System Repository (ENT-SYS-01)', () => {
       'clears repo fields when a subsystem is promoted to a LOGICAL_GROUP',
       async () => {
         const group = await createSystem(
-          { name: 'Group', code: 'PROMO_GRP', type: 'LOGICAL_GROUP' },
+          { parentId: null, name: 'Group', code: 'PROMO_GRP', type: 'LOGICAL_GROUP' },
           db
         );
         const service = await createSystem(
@@ -304,7 +304,7 @@ describe('System Repository (ENT-SYS-01)', () => {
       'deleteSystem on a subsystem removes it from CR targets and clears task systemId',
       async () => {
         const group = await createSystem(
-          { name: 'Group', code: 'DEL_GRP', type: 'LOGICAL_GROUP' },
+          { parentId: null, name: 'Group', code: 'DEL_GRP', type: 'LOGICAL_GROUP' },
           db
         );
         const subsystem = await createSystem(

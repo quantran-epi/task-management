@@ -29,7 +29,7 @@ describe('KnowledgeLink Repository & Cascade Deletions (LINK-01, LINK-02, D-21, 
   });
 
   async function seedCr(code = 'CR-LINK-TASK') {
-    return createChangeRequest({ name: code, code }, testDb);
+    return createChangeRequest({ status: 'Open', type: 'ENHANCEMENT', targets: [], name: code, code }, testDb);
   }
 
   it('creates, retrieves, and deletes KnowledgeLink records', async () => {
@@ -123,7 +123,7 @@ describe('KnowledgeLink Repository & Cascade Deletions (LINK-01, LINK-02, D-21, 
 
   it('cascades deletion when deleting a Change Request', async () => {
     const parent = await createSystem(
-      { name: 'Linked Parent', code: 'LINK_P', type: 'LOGICAL_GROUP' },
+      { parentId: null, name: 'Linked Parent', code: 'LINK_P', type: 'LOGICAL_GROUP' },
       testDb
     );
     const subsystem = await createSystem(
@@ -131,7 +131,7 @@ describe('KnowledgeLink Repository & Cascade Deletions (LINK-01, LINK-02, D-21, 
       testDb
     );
     const cr = await createChangeRequest(
-      { name: 'Linked CR', code: 'CR-LINK', targets: [{ systemId: subsystem.id }] },
+      { status: 'Open', type: 'ENHANCEMENT', name: 'Linked CR', code: 'CR-LINK', targets: [{ systemId: subsystem.id }] },
       testDb
     );
     const task = await createTask(

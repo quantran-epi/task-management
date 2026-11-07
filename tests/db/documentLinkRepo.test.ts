@@ -46,7 +46,7 @@ describe('DocumentLink Repository — CR axis (ENT-NORM-01)', () => {
     });
 
     const cr = await createChangeRequest(
-      { name: 'CR', code: 'CR-1', type: 'ENHANCEMENT' },
+      { status: 'Open', targets: [], name: 'CR', code: 'CR-1', type: 'ENHANCEMENT' },
       db
     );
 

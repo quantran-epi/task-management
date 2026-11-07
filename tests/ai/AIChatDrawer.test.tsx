@@ -223,7 +223,7 @@ describe('AIChatDrawer', () => {
       charLimit: 12000,
     });
 
-    await db.tasks.add({
+    await db.tasks.add({ crId: '11111111-1111-4111-8111-111111111111',
       id: 'task-test-mention',
       name: 'Tối ưu hóa Database Index',
       status: 'In Progress',
@@ -310,7 +310,10 @@ describe('AIChatDrawer', () => {
     await db.changeRequests.add({
       id: 'p-1',
       name: 'Dự án Alpha',
+      code: 'CR-P1',
       status: 'In Progress',
+      type: 'ENHANCEMENT',
+      targets: [],
       createdAt: '2026-10-01',
       updatedAt: '2026-10-01',
     });
@@ -1272,7 +1275,7 @@ describe('AIChatDrawer', () => {
       charLimit: 12000,
     });
 
-    await db.tasks.add({
+    await db.tasks.add({ crId: '11111111-1111-4111-8111-111111111111',
       id: 'task-enrich-confirm',
       name: 'Nâng cấp bảo mật JWT',
       status: 'Open',

@@ -3,7 +3,6 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../../src/db';
 import { ChangeRequestSdlcView } from '../../../src/views/ChangeRequestSdlcView';
-import { createChangeRequest } from '../../../src/db/repositories/changeRequestRepo';
 import { SdlcSidebar } from '../../../src/components/sdlc/SdlcSidebar';
 import { StepChatPanel } from '../../../src/components/sdlc/chat/StepChatPanel';
 import type { SdlcWorkflowMetadata } from '../../../src/services/wizard/workflowSchemas';
@@ -89,7 +88,7 @@ describe('ChangeRequestSdlcView and IDE Layout', () => {
     const handleSelectStep = vi.fn();
     render(
       <SdlcSidebar
-        projectId={projectId}
+        changeRequestId={projectId}
         selectedStep="INTAKE"
         onSelectStep={handleSelectStep}
         db={db}

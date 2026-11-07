@@ -25,7 +25,7 @@ describe('detectWorkflowStaleness', () => {
       requestingUnit: 'IT',
       date: '2026-10-30',
     },
-    artifacts: {},
+    artifacts: { branchSnapshots: {} },
     staleSteps: [],
     createdAt: '2026-10-30T00:00:00.000Z',
     updatedAt: '2026-10-30T00:00:00.000Z',
@@ -40,6 +40,7 @@ describe('detectWorkflowStaleness', () => {
     const state: SdlcWorkflowState = {
       ...baseState,
       artifacts: {
+        branchSnapshots: {},
         pl01: {
           kind: 'PL01',
           version: 1,
@@ -76,6 +77,7 @@ describe('detectWorkflowStaleness', () => {
     const state: SdlcWorkflowState = {
       ...baseState,
       artifacts: {
+        branchSnapshots: {},
         solution: {
           kind: 'SOLUTION',
           version: 2,
@@ -96,7 +98,7 @@ describe('detectWorkflowStaleness', () => {
           schemaVersion: 1,
           status: 'NO_DRIFT_COMPLETE',
           identity: {
-            projectId: dummyUuid1,
+            changeRequestId: dummyUuid1,
             threadId: dummyUuid2,
             solutionNoteId: dummyUuid3,
             solutionVersion: 1,
@@ -138,6 +140,7 @@ describe('detectWorkflowStaleness', () => {
     const state: SdlcWorkflowState = {
       ...baseState,
       artifacts: {
+        branchSnapshots: {},
         solution: { kind: 'SOLUTION', version: 2, hash: hashNew, title: 'Solution', sourceHashes: [hash1, hash2], updatedAt: baseState.updatedAt },
         codeGuide: { kind: 'CODE_GUIDE', version: 1, hash: hash1, title: 'Guide', sourceHashes: [hash1], updatedAt: baseState.updatedAt },
         changePack: { kind: 'CHANGE_PACK', version: 1, hash: hash2, title: 'Pack', sourceHashes: [hash1], updatedAt: baseState.updatedAt },
@@ -154,6 +157,7 @@ describe('detectWorkflowStaleness', () => {
     const state: SdlcWorkflowState = {
       ...baseState,
       artifacts: {
+        branchSnapshots: {},
         pl02: {
           kind: 'PL02',
           version: 1,

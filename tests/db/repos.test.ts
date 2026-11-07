@@ -48,7 +48,7 @@ describe('System, ChangeRequest & Task Repositories & Schemas (ENT-NORM-01, ENT-
 
   async function seedSubsystem(code = 'CORE_SVC') {
     const parent = await createSystem(
-      { name: `${code} Parent`, code: `${code}_P`, type: 'LOGICAL_GROUP' },
+      { parentId: null, name: `${code} Parent`, code: `${code}_P`, type: 'LOGICAL_GROUP' },
       testDb
     );
     const subsystem = await createSystem(
@@ -67,7 +67,7 @@ describe('System, ChangeRequest & Task Repositories & Schemas (ENT-NORM-01, ENT-
 
     it('creates a system with generated UUID and valid defaults', async () => {
       const system = await createSystem(
-        { name: 'Core Banking', code: 'CORE_BANKING', type: 'LOGICAL_GROUP' },
+        { parentId: null, name: 'Core Banking', code: 'CORE_BANKING', type: 'LOGICAL_GROUP' },
         testDb
       );
 
@@ -85,7 +85,7 @@ describe('System, ChangeRequest & Task Repositories & Schemas (ENT-NORM-01, ENT-
     it('classifies parents without the parentId heuristic (H1)', async () => {
       const { parent, subsystem } = await seedSubsystem('ACCT_SVC');
       const orphanSubsystem = await createSystem(
-        { name: 'Orphan Sub', code: 'ORPHAN_SVC', type: 'SERVICE' },
+        { parentId: null, name: 'Orphan Sub', code: 'ORPHAN_SVC', type: 'SERVICE' },
         testDb
       );
 
@@ -123,7 +123,7 @@ describe('System, ChangeRequest & Task Repositories & Schemas (ENT-NORM-01, ENT-
 
     it('creates a CR with generated UUID and valid defaults', async () => {
       const cr = await createChangeRequest(
-        { name: 'Core Architecture', code: 'CR-ARCH', deadline: '2026-12-31' },
+        { status: 'Open', type: 'ENHANCEMENT', targets: [], name: 'Core Architecture', code: 'CR-ARCH', deadline: '2026-12-31' },
         testDb
       );
 
@@ -140,12 +140,12 @@ describe('System, ChangeRequest & Task Repositories & Schemas (ENT-NORM-01, ENT-
 
     it('rejects an invalid deadline format when creating a CR', async () => {
       await expect(
-        createChangeRequest({ name: 'Bad Date', code: 'CR-BAD', deadline: '2026/12/31' }, testDb)
+        createChangeRequest({ status: 'Open', type: 'ENHANCEMENT', targets: [], name: 'Bad Date', code: 'CR-BAD', deadline: '2026/12/31' }, testDb)
       ).rejects.toThrow();
     });
 
     it('updates CR fields and refreshes updatedAt', async () => {
-      const cr = await createChangeRequest({ name: 'Alpha', code: 'CR-A' }, testDb);
+      const cr = await createChangeRequest({ status: 'Open', type: 'ENHANCEMENT', targets: [], name: 'Alpha', code: 'CR-A' }, testDb);
       const originalUpdatedAt = cr.updatedAt;
 
       await new Promise((r) => setTimeout(r, 5));
@@ -164,14 +164,14 @@ describe('System, ChangeRequest & Task Repositories & Schemas (ENT-NORM-01, ENT-
     });
 
     it('gets all change requests', async () => {
-      await createChangeRequest({ name: 'C1', code: 'CR-1' }, testDb);
-      await createChangeRequest({ name: 'C2', code: 'CR-2' }, testDb);
+      await createChangeRequest({ status: 'Open', type: 'ENHANCEMENT', targets: [], name: 'C1', code: 'CR-1' }, testDb);
+      await createChangeRequest({ status: 'Open', type: 'ENHANCEMENT', targets: [], name: 'C2', code: 'CR-2' }, testDb);
       expect(await getAllChangeRequests(testDb)).toHaveLength(2);
     });
 
     it('creates and updates a CR with opsOwners and businessAnalysts', async () => {
       const cr = await createChangeRequest(
-        {
+        { status: 'Open', type: 'ENHANCEMENT', targets: [],
           name: 'Banking CR',
           code: 'CR-BANK',
           opsOwners: ['ops-infra', 'ops-db'],
@@ -198,7 +198,7 @@ describe('System, ChangeRequest & Task Repositories & Schemas (ENT-NORM-01, ENT-
     it('validates task input schema with defaults', async () => {
       const { subsystem } = await seedSubsystem('DEF_SVC');
       const cr = await createChangeRequest(
-        { name: 'CR', code: 'CR-DEF', targets: [{ systemId: subsystem.id }] },
+        { status: 'Open', type: 'ENHANCEMENT', name: 'CR', code: 'CR-DEF', targets: [{ systemId: subsystem.id }] },
         testDb
       );
 
@@ -213,7 +213,7 @@ describe('System, ChangeRequest & Task Repositories & Schemas (ENT-NORM-01, ENT-
     it('rejects invalid document links', async () => {
       const { subsystem } = await seedSubsystem('LINK_SVC');
       const cr = await createChangeRequest(
-        { name: 'CR', code: 'CR-LINK', targets: [{ systemId: subsystem.id }] },
+        { status: 'Open', type: 'ENHANCEMENT', name: 'CR', code: 'CR-LINK', targets: [{ systemId: subsystem.id }] },
         testDb
       );
 
@@ -230,7 +230,7 @@ describe('System, ChangeRequest & Task Repositories & Schemas (ENT-NORM-01, ENT-
     });
 
     it('creates a CR-level task with no systemId', async () => {
-      const cr = await createChangeRequest({ name: 'CR', code: 'CR-T1' }, testDb);
+      const cr = await createChangeRequest({ status: 'Open', type: 'ENHANCEMENT', targets: [], name: 'CR', code: 'CR-T1' }, testDb);
       const task = await createTask({ name: 'Standalone Task', crId: cr.id }, testDb);
 
       expect(task.id).toBeDefined();
@@ -245,7 +245,7 @@ describe('System, ChangeRequest & Task Repositories & Schemas (ENT-NORM-01, ENT-
     it('creates a subsystem-scoped task and queries by crId and systemId', async () => {
       const { subsystem } = await seedSubsystem('SCOPE_SVC');
       const cr = await createChangeRequest(
-        { name: 'CR', code: 'CR-SCOPE', targets: [{ systemId: subsystem.id }] },
+        { status: 'Open', type: 'ENHANCEMENT', name: 'CR', code: 'CR-SCOPE', targets: [{ systemId: subsystem.id }] },
         testDb
       );
 
@@ -264,7 +264,7 @@ describe('System, ChangeRequest & Task Repositories & Schemas (ENT-NORM-01, ENT-
     });
 
     it('updates task status across all 6 valid statuses per TASK-03', async () => {
-      const cr = await createChangeRequest({ name: 'CR', code: 'CR-ST' }, testDb);
+      const cr = await createChangeRequest({ status: 'Open', type: 'ENHANCEMENT', targets: [], name: 'CR', code: 'CR-ST' }, testDb);
       const task = await createTask({ name: 'Status Workflow', crId: cr.id }, testDb);
       const statuses = ['In Progress', 'Resolved', 'In Review', 'Done', 'Cancelled', 'Open'] as const;
 
@@ -275,7 +275,7 @@ describe('System, ChangeRequest & Task Repositories & Schemas (ENT-NORM-01, ENT-
     });
 
     it('preserves a soft-cancelled task in the DB per D-15', async () => {
-      const cr = await createChangeRequest({ name: 'CR', code: 'CR-CAN' }, testDb);
+      const cr = await createChangeRequest({ status: 'Open', type: 'ENHANCEMENT', targets: [], name: 'CR', code: 'CR-CAN' }, testDb);
       const task = await createTask({ name: 'Cancelled Task', crId: cr.id }, testDb);
       await updateTaskStatus(task.id, 'Cancelled', testDb);
 
@@ -285,7 +285,7 @@ describe('System, ChangeRequest & Task Repositories & Schemas (ENT-NORM-01, ENT-
     });
 
     it('updates task progress as an integer clamped between 0 and 100', async () => {
-      const cr = await createChangeRequest({ name: 'CR', code: 'CR-PROG' }, testDb);
+      const cr = await createChangeRequest({ status: 'Open', type: 'ENHANCEMENT', targets: [], name: 'CR', code: 'CR-PROG' }, testDb);
       const task = await createTask({ name: 'Progress Task', crId: cr.id }, testDb);
 
       expect((await updateTaskProgress(task.id, 50, testDb)).progress).toBe(50);
@@ -294,7 +294,7 @@ describe('System, ChangeRequest & Task Repositories & Schemas (ENT-NORM-01, ENT-
     });
 
     it('updates general task fields and fetches all tasks', async () => {
-      const cr = await createChangeRequest({ name: 'CR', code: 'CR-UPD' }, testDb);
+      const cr = await createChangeRequest({ status: 'Open', type: 'ENHANCEMENT', targets: [], name: 'CR', code: 'CR-UPD' }, testDb);
       const task = await createTask({ name: 'Original', crId: cr.id }, testDb);
 
       const updated = await updateTask(
@@ -311,7 +311,7 @@ describe('System, ChangeRequest & Task Repositories & Schemas (ENT-NORM-01, ENT-
     });
 
     it('clears optional task detail fields when explicitly patched as undefined', async () => {
-      const cr = await createChangeRequest({ name: 'CR', code: 'CR-CLR' }, testDb);
+      const cr = await createChangeRequest({ status: 'Open', type: 'ENHANCEMENT', targets: [], name: 'CR', code: 'CR-CLR' }, testDb);
       const task = await createTask(
         {
           name: 'Clear me',
@@ -352,7 +352,7 @@ describe('System, ChangeRequest & Task Repositories & Schemas (ENT-NORM-01, ENT-
     });
 
     it('defaults workType to "code" and updates workType, opsOwners, businessAnalysts', async () => {
-      const cr = await createChangeRequest({ name: 'CR', code: 'CR-WT' }, testDb);
+      const cr = await createChangeRequest({ status: 'Open', type: 'ENHANCEMENT', targets: [], name: 'CR', code: 'CR-WT' }, testDb);
       const task = await createTask({ name: 'Banking Task', crId: cr.id }, testDb);
       expect(task.workType).toBe('code');
 
@@ -387,7 +387,7 @@ describe('System, ChangeRequest & Task Repositories & Schemas (ENT-NORM-01, ENT-
 
     it('queries distinct Ops Owners across changeRequests and tasks and sorts alphabetically', async () => {
       const cr = await createChangeRequest(
-        { name: 'CR P', code: 'CR-TAG', opsOwners: ['Ops-Beta', 'Ops-Alpha'] },
+        { status: 'Open', type: 'ENHANCEMENT', targets: [], name: 'CR P', code: 'CR-TAG', opsOwners: ['Ops-Beta', 'Ops-Alpha'] },
         testDb
       );
       await createTask(
@@ -400,7 +400,7 @@ describe('System, ChangeRequest & Task Repositories & Schemas (ENT-NORM-01, ENT-
 
     it('queries distinct Business Analysts across changeRequests and tasks', async () => {
       const cr = await createChangeRequest(
-        { name: 'CR P2', code: 'CR-TAG2', businessAnalysts: ['BA-Zoe', 'BA-Alex'] },
+        { status: 'Open', type: 'ENHANCEMENT', targets: [], name: 'CR P2', code: 'CR-TAG2', businessAnalysts: ['BA-Zoe', 'BA-Alex'] },
         testDb
       );
       await createTask({ name: 'Task T2', crId: cr.id, businessAnalysts: ['BA-Charlie'] }, testDb);

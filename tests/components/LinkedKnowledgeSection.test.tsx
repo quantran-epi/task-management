@@ -15,7 +15,7 @@ describe('LinkedKnowledgeSection Component (LINK-04, D-24)', () => {
   });
 
   it('renders both first-class graph URNs and doc links with preview and delete actions', async () => {
-    const task = await createTask({ name: 'Task with Multi Links' }, testDb);
+    const task = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Task with Multi Links' }, testDb);
     const onOpenDocPreview = vi.fn();
 
     await createKnowledgeLink(

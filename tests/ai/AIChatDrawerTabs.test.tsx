@@ -117,7 +117,7 @@ describe('per-tab analysis mode is durable only (D-07)', () => {
   const TS = '2026-10-30T00:00:00.000Z';
 
   const mount = async (db: TaskPlannerDatabase, analysisMode: boolean) => {
-    await db.changeRequests.add({ id: PROJECT_ID, name: 'Analysis Project', status: 'Open', createdAt: TS, updatedAt: TS });
+    await db.changeRequests.add({ id: PROJECT_ID, name: 'Analysis Project', code: 'CR-AN', status: 'Open', type: 'ENHANCEMENT', targets: [], createdAt: TS, updatedAt: TS });
     const tab = await createChatTab(
       { scopeType: 'cr', scopeKey: SCOPE_KEY, entityId: PROJECT_ID, title: 'Chat', config: { analysisMode } },
       db

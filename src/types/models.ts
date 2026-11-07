@@ -6,8 +6,6 @@ import type {
 } from '../services/ai/wizardSchemas';
 import type { SdlcArtifactKind } from '../services/wizard/workflowSchemas';
 
-export type ProjectStatus = 'Open' | 'Pending' | 'In Progress' | 'Done' | 'Cancelled';
-export type MilestoneStatus = 'Open' | 'Pending' | 'In Progress' | 'Done' | 'Cancelled';
 export type TaskStatus = 'Open' | 'Pending' | 'In Progress' | 'Resolved' | 'In Review' | 'Done' | 'Cancelled';
 export type TaskPriority = 'Low' | 'Medium' | 'High' | 'Urgent';
 

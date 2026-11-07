@@ -14,7 +14,7 @@ describe('TimerContext & useTimer', () => {
     testDb = new TaskPlannerDatabase(`TestTimerDB_${Date.now()}_${Math.random()}`);
     await testDb.open();
 
-    const sampleTask: Task = {
+    const sampleTask: Task = { crId: '11111111-1111-4111-8111-111111111111',
       id: 'task-1',
       name: 'Task 1',
       status: 'In Progress',
@@ -27,7 +27,7 @@ describe('TimerContext & useTimer', () => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    const sampleTask2: Task = {
+    const sampleTask2: Task = { crId: '11111111-1111-4111-8111-111111111111',
       id: 'task-2',
       name: 'Task 2',
       status: 'Open',

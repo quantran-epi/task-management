@@ -15,10 +15,11 @@ type Refs = Partial<Record<'pl01' | 'pl02' | 'solution' | 'changePack' | 'pl03b'
 
 async function seed(db: TaskPlannerDatabase, refs: Refs, options: { crId?: string } = {}) {
   const crId = options.crId ?? CR;
-  const artifacts: Record<string, unknown> = {};
+  const artifacts: SdlcWorkflowState['artifacts'] = { branchSnapshots: {} };
+  const dynamicArtifacts = artifacts as Record<string, unknown>;
   for (const [key, content] of Object.entries(refs)) {
     if (content === undefined) continue;
-    artifacts[key] = {
+    dynamicArtifacts[key] = {
       kind: key === 'changePack' ? 'CHANGE_PACK' : key === 'solution' ? 'SOLUTION'
         : key === 'pl03b' ? 'PL03B' : key === 'pl07' ? 'PL07' : key === 'cab' ? 'CAB' : key.toUpperCase(),
       version: 1, hash: await defaultSha256(content.trim()), title: key,
@@ -26,9 +27,9 @@ async function seed(db: TaskPlannerDatabase, refs: Refs, options: { crId?: strin
       ...(key === 'changePack' ? {} : { approvedAt: AT }),
     };
   }
-  if (artifacts.changePack && artifacts.solution) {
-    (artifacts.changePack as { sourceHashes: string[] }).sourceHashes =
-      [(artifacts.solution as { hash: string }).hash];
+  if (dynamicArtifacts.changePack && dynamicArtifacts.solution) {
+    (dynamicArtifacts.changePack as { sourceHashes: string[] }).sourceHashes =
+      [(dynamicArtifacts.solution as { hash: string }).hash];
   }
   const state: SdlcWorkflowState = {
     schemaVersion: 1, sessionId: '33333333-3333-4333-8333-333333333333', projectId: PROJECT,

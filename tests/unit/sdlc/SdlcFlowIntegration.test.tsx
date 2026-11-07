@@ -45,6 +45,7 @@ describe('SDLC Flow Integration & Components', () => {
           date: '2026-11-01',
         },
         artifacts: {
+          branchSnapshots: {},
           solution: {
             kind: 'SOLUTION',
             version: 2,

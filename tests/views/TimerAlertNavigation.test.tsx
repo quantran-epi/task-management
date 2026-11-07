@@ -68,7 +68,7 @@ describe('Timer alert across navigation', () => {
 
     // Create task
     const taskId = 'task-alloc-nav-5';
-    await db.tasks.put({
+    await db.tasks.put({ crId: '11111111-1111-4111-8111-111111111111',
       id: taskId,
       name: 'Task Nav 5m',
       status: 'In Progress',
@@ -143,7 +143,7 @@ describe('Timer alert across navigation', () => {
     });
 
     const taskId = 'task-alloc-stay-5';
-    await db.tasks.put({
+    await db.tasks.put({ crId: '11111111-1111-4111-8111-111111111111',
       id: taskId,
       name: 'Task Stay 5m',
       status: 'In Progress',
@@ -202,7 +202,7 @@ describe('Timer alert across navigation', () => {
     });
 
     const taskId = 'task-alloc-start-ui';
-    await db.tasks.put({
+    await db.tasks.put({ crId: '11111111-1111-4111-8111-111111111111',
       id: taskId,
       name: 'Task Start UI 5m',
       status: 'Open',
