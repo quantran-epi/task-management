@@ -18,7 +18,7 @@ const NOW = '2026-11-01T12:00:00.000Z';
 const driftResult: ReconciliationResult = {
   schemaVersion: 1,
   identity: {
-    projectId: PROJECT_ID, threadId: THREAD_ID, solutionNoteId: NOTE_ID,
+    changeRequestId: PROJECT_ID, threadId: THREAD_ID, solutionNoteId: NOTE_ID,
     solutionVersion: 1, solutionHash: HASH, packHash: HASH, cr: 'CR-2026-999', base: 'base-1', head: 'head-2',
   },
   status: 'PARTIAL_COVERAGE',

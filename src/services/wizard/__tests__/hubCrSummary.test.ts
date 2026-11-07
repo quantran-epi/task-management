@@ -37,7 +37,7 @@ const SOLUTION_CONTENT = [
 const driftResult = (rollbackStatus: 'verified' | 'unknown', evidenceIds: string[]): ReconciliationResult => ({
   schemaVersion: 1,
   identity: {
-    projectId: PROJECT_ID, threadId: THREAD_ID, solutionNoteId: NOTE_ID,
+    changeRequestId: PROJECT_ID, threadId: THREAD_ID, solutionNoteId: NOTE_ID,
     solutionVersion: 1, solutionHash: HASH, packHash: HASH,
     cr: 'CR-25006', base: 'base-1', head: 'head-2',
   },

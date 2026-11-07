@@ -7,7 +7,7 @@ describe('createSdlcWorkflowCoordinator', () => {
   const dummyUuid2 = '22222222-2222-4222-8222-222222222222';
 
   const deps = {
-    projectId: dummyUuid1,
+    changeRequestId: dummyUuid1,
     threadId: dummyUuid2,
   };
 
@@ -164,7 +164,7 @@ function persistedState(overrides: Partial<SdlcWorkflowState> = {}): SdlcWorkflo
 describe('createSdlcWorkflowCoordinator restore-before-action', () => {
   it('restores persisted state before an action inspects artifacts', async () => {
     const coordinator = createSdlcWorkflowCoordinator({
-      projectId: restoreProjectId,
+      changeRequestId: restoreProjectId,
       threadId: restoreThreadId,
       hashText: async (text) => (text === 'new body' ? hashB : hashA),
       loadState: async () => persistedState(),
@@ -176,14 +176,14 @@ describe('createSdlcWorkflowCoordinator restore-before-action', () => {
   });
 
   it('fails with WORKFLOW_NOT_INITIALIZED when nothing is persisted', async () => {
-    const coordinator = createSdlcWorkflowCoordinator({ projectId: restoreProjectId, threadId: restoreThreadId, loadState: async () => undefined });
+    const coordinator = createSdlcWorkflowCoordinator({ changeRequestId: restoreProjectId, threadId: restoreThreadId, loadState: async () => undefined });
     await expect(coordinator.navigateToStep('CAB')).rejects.toThrow('WORKFLOW_NOT_INITIALIZED');
   });
 
   it('de-duplicates concurrent restores into one loadState call', async () => {
     let loadCalls = 0;
     const coordinator = createSdlcWorkflowCoordinator({
-      projectId: restoreProjectId,
+      changeRequestId: restoreProjectId,
       threadId: restoreThreadId,
       loadState: async () => {
         loadCalls += 1;
@@ -203,7 +203,7 @@ describe('createSdlcWorkflowCoordinator restore-before-action', () => {
 
   it('rejects malformed persisted state instead of adopting it', async () => {
     const coordinator = createSdlcWorkflowCoordinator({
-      projectId: restoreProjectId,
+      changeRequestId: restoreProjectId,
       threadId: restoreThreadId,
       loadState: async () => ({ sessionId: restoreProjectId }) as unknown as SdlcWorkflowState,
     });
@@ -215,7 +215,7 @@ describe('createSdlcWorkflowCoordinator restore-before-action', () => {
   it('does not let an in-flight load overwrite a newer in-memory state', async () => {
     const pending: Array<(state: SdlcWorkflowState) => void> = [];
     const coordinator = createSdlcWorkflowCoordinator({
-      projectId: restoreProjectId,
+      changeRequestId: restoreProjectId,
       threadId: restoreThreadId,
       loadState: () => new Promise<SdlcWorkflowState>((resolve) => { pending.push(resolve); }),
     });
@@ -235,7 +235,7 @@ describe('createSdlcWorkflowCoordinator restore-before-action', () => {
 
   it('adopts persisted state in startOrUpdateIntake instead of starting a new session', async () => {
     const coordinator = createSdlcWorkflowCoordinator({
-      projectId: restoreProjectId,
+      changeRequestId: restoreProjectId,
       threadId: restoreThreadId,
       hashText: async () => hashA,
       createSessionId: () => restoreThreadId,
