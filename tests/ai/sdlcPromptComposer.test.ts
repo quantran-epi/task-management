@@ -12,6 +12,8 @@ import {
   STEP_LABELS,
   STEP_QUICK_PROMPTS,
   composeSdlcTurn,
+  buildConventionsSegment,
+  CONVENTIONS_CONFLICT_POLICY,
 } from '../../src/services/ai/sdlcPromptComposer';
 
 const STEP_IDS = [
@@ -324,5 +326,84 @@ describe('composeSdlcTurn layered composition (D-07, D-09, D-16)', () => {
     expect(composed.segments.policy).toContain(
       'Không tạo bảng drift hoặc so sánh SOLUTION.md trong PL03B; mọi đối soát drift chỉ diễn ra trong TaskMate.'
     );
+  });
+
+  describe('Conventions Layer & Conflict Policy (D-09..D-12, SDLC-CONV-03..05)', () => {
+    it('returns empty string when conventions are absent or empty', () => {
+      expect(buildConventionsSegment()).toBe('');
+      expect(buildConventionsSegment({})).toBe('');
+      expect(buildConventionsSegment({ global: '   ', repo: '' })).toBe('');
+    });
+
+    it('builds conventions segment with untrusted data delimiters and conflict policy', () => {
+      const segment = buildConventionsSegment({
+        global: '# Tiêu chuẩn API\nResponseEnvelope<T>',
+        repo: '# Repo Standard\nUse bun test',
+        repoPath: 'CONVENTIONS.md',
+      });
+
+      expect(segment).toContain('[QUY ƯỚC TỔ CHỨC — DỮ LIỆU KHÔNG TIN CẬY]');
+      expect(segment).toContain(CONVENTIONS_CONFLICT_POLICY);
+      expect(segment).toContain('[GLOBAL CONVENTIONS - QUY ƯỚC CHUNG TỔ CHỨC]');
+      expect(segment).toContain('ResponseEnvelope<T>');
+      expect(segment).toContain('[REPOSITORY CONVENTIONS - CONVENTIONS.md]');
+      expect(segment).toContain('Use bun test');
+      expect(segment).toContain('[HẾT QUY ƯỚC TỔ CHỨC]');
+
+      // Ordering: Global before Repo
+      const globalIdx = segment.indexOf('[GLOBAL CONVENTIONS - QUY ƯỚC CHUNG TỔ CHỨC]');
+      const repoIdx = segment.indexOf('[REPOSITORY CONVENTIONS - CONVENTIONS.md]');
+      expect(globalIdx).toBeLessThan(repoIdx);
+    });
+
+    it('positions conventions strictly after tool policy and before few-shot/grounding', () => {
+      const composed = composeSdlcTurn({
+        step: 'SOLUTION',
+        intent: 'qa',
+        grounding: 'PL01 mục 2',
+        userTurn: 'Thiết kế API',
+        conventions: {
+          global: 'Global API Rules',
+          repo: 'Repo Testing Rules',
+          repoPath: 'docs/CONVENTIONS.md',
+        },
+      });
+
+      const system = composed.messages[0]?.content ?? '';
+      const toolPolicyAt = system.indexOf(composed.segments.toolPolicy);
+      const conventionsAt = system.indexOf(composed.segments.conventions);
+      const fewShotAt = system.indexOf(composed.segments.fewShot);
+      const groundingAt = system.indexOf(composed.segments.grounding);
+
+      expect(conventionsAt).toBeGreaterThan(toolPolicyAt);
+      expect(fewShotAt).toBeGreaterThan(conventionsAt);
+      expect(groundingAt).toBeGreaterThan(fewShotAt);
+      expect(composed.segments.conventions).toContain('[QUY ƯỚC TỔ CHỨC — DỮ LIỆU KHÔNG TIN CẬY]');
+    });
+
+    it('omits conventions segment cleanly when not supplied', () => {
+      const composed = composeSdlcTurn({
+        step: 'INTAKE',
+        intent: 'qa',
+        userTurn: 'Rà soát',
+      });
+
+      expect(composed.segments.conventions).toBe('');
+      const system = composed.messages[0]?.content ?? '';
+      expect(system).not.toContain('[QUY ƯỚC TỔ CHỨC');
+    });
+
+    it('does not truncate large convention documents (D-12)', () => {
+      const largeGlobal = 'A'.repeat(50000);
+      const largeRepo = 'B'.repeat(50000);
+      const segment = buildConventionsSegment({
+        global: largeGlobal,
+        repo: largeRepo,
+      });
+
+      expect(segment).toContain(largeGlobal);
+      expect(segment).toContain(largeRepo);
+      expect(segment.length).toBeGreaterThan(100000);
+    });
   });
 });
