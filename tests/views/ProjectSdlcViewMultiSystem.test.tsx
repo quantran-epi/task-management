@@ -90,7 +90,7 @@ describe('ProjectSdlcViewMultiSystem Integration', () => {
       expect(screen.getByTestId('sidebar-target-systems')).toBeInTheDocument();
       expect(screen.getByText('PAY-SVC')).toBeInTheDocument();
       expect(screen.getByText('BILL-DB')).toBeInTheDocument();
-      expect(screen.getByText('Tạo mới')).toBeInTheDocument();
+      expect(screen.getAllByText('Tạo mới').length).toBeGreaterThanOrEqual(1);
     });
   });
 

@@ -64,18 +64,26 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   const { token } = theme.useToken();
   const [selectedProjectId, setSelectedProjectId] = useState<string>(propProjectId);
   const allProjects = useLiveQuery(() => db.projects.toArray(), [db]) ?? [];
+  const allChangeRequests = useLiveQuery(() => db.changeRequests.toArray(), [db]) ?? [];
 
   useEffect(() => {
     if (propProjectId) {
       setSelectedProjectId(propProjectId);
+      setActiveCrId(propProjectId);
     }
   }, [propProjectId]);
 
   useEffect(() => {
-    if (!selectedProjectId && allProjects.length > 0 && allProjects[0]) {
-      setSelectedProjectId(allProjects[0].id);
+    if (!selectedProjectId && allChangeRequests.length > 0 && allChangeRequests[0]) {
+      const firstId = allChangeRequests[0].id;
+      setSelectedProjectId(firstId);
+      setActiveCrId(firstId);
+    } else if (!selectedProjectId && allProjects.length > 0 && allProjects[0]) {
+      const firstId = allProjects[0].id;
+      setSelectedProjectId(firstId);
+      setActiveCrId(firstId);
     }
-  }, [selectedProjectId, allProjects]);
+  }, [selectedProjectId, allChangeRequests, allProjects]);
 
   const projectId = selectedProjectId;
   const knowledgeConfig = useOptionalKnowledgeConfig();
@@ -320,6 +328,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
     }
     activeCrRef.current = crId;
     setActiveCrId(crId);
+    setSelectedProjectId(crId);
   }, [clearAnalysisTimer]);
 
   // Initialize active CR
@@ -332,6 +341,8 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
           selectCr(active.id);
         } else if (crList.length > 0 && crList[0]) {
           selectCr(crList[0].id);
+        } else if (projectId) {
+          selectCr(projectId);
         }
       }
     }
@@ -1028,25 +1039,16 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
           readOnly={Boolean(viewedVersion)}
           workflowState={workflowState}
           stepViewNode={
-            !projectId ? (
+            !projectId && !activeCrId ? (
               <div style={{ color: token.colorTextSecondary, padding: 48, textAlign: 'center' }}>
                 <Typography.Title level={4} style={{ color: token.colorTextSecondary }}>
-                  Chưa có Dự án nào
+                  Chưa chọn Change Request (CR) nào
                 </Typography.Title>
                 <Typography.Paragraph type="secondary">
-                  Vui lòng tạo Dự án trước từ Project Explorer để bắt đầu quy trình SDLC.
+                  Vui lòng tạo hoặc chọn Change Request từ CR Explorer hoặc thanh điều hướng bên trái để bắt đầu quy trình SDLC.
                 </Typography.Paragraph>
               </div>
-            ) : !activeCrId && !isConfigActive ? (
-              <div style={{ color: token.colorTextSecondary, padding: 48, textAlign: 'center' }}>
-                <Typography.Title level={4} style={{ color: token.colorTextSecondary }}>
-                  Dự án chưa có Change Request (CR) nào
-                </Typography.Title>
-                <Typography.Paragraph type="secondary">
-                  Hãy nhấn <b>"Tạo CR"</b> trên thanh điều hướng bên trái để khởi tạo một Change Request mới.
-                </Typography.Paragraph>
-              </div>
-            ) : activeCrId && !workflowRestored ? (
+            ) : !workflowRestored ? (
               <div data-testid="sdlc-step-loading" style={{ color: token.colorTextSecondary, padding: 32, textAlign: 'center' }}>
                 Đang khôi phục hồ sơ quy trình của CR này…
               </div>

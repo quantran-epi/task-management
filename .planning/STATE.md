@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: SDLC Closed-Loop Engine & Repository Autonomy
 status: completed
-last_updated: "2026-11-07T09:19:20.933Z"
+last_updated: "2026-11-07T09:36:27.117Z"
 last_activity: 2026-11-07
 progress:
   total_phases: 10
@@ -34,8 +34,8 @@ Phase sequence: 26 → 27 → 28 → 29 → 29.1 → 30 → 31 → 31.1
 
 ## Session Continuity
 
-Last session: 2026-11-07T09:19:20.927Z
-Resume file: .planning/phases/32-external-research-via-claude-code-headless/32-CONTEXT.md
+Last session: 2026-11-07T09:36:27.107Z
+Resume file: .planning/phases/32-external-research-via-claude-code-headless/32-UI-SPEC.md
 
 Progress: [███████░░░] 70%
 
@@ -104,6 +104,7 @@ Progress: [███████░░░] 70%
 | `261107-0jk-support-uncommitted-files-in-remotegitex` | 2026-11-06 | RemoteGitExplorer & BottomToolWindow | Show uncommitted files with status tags; fallback reader for untracked; inline rename for xterm tabs |
 | `20261107-sdlc-repo-config-tab` | 2026-11-07 | SDLC Sidebar & RepoConfigView & Step3 | Added dedicated "Cấu hình Repo & SSH" tab to SDLC sidebar; explicit save button and conventions card to Step 3 |
 | `20261107-ai-chat-conventions` | 2026-11-07 | AIChatDrawer & conventionService | Wires Global and Repo conventions into General AI Chat systemPromptContent with fail-safe resolution |
+| `261107-repo-path-picker-cr-explorer` | 2026-11-07 | SystemModal, CR Explorer, SdlcSidebar, SystemsExplorer | Added SSH remote directory picker; rebranded CR Explorer with New CR button; unified SDLC Studio on CR; opened SystemDetailView on system click |
 
 ## Decisions
 

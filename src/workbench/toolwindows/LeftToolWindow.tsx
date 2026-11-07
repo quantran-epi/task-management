@@ -38,7 +38,7 @@ export function LeftToolWindow({
     ? 'Diagram Explorer'
     : isDocs
     ? 'Docs Explorer'
-    : 'Project Explorer';
+    : 'CR Explorer';
   const icon = isSystems ? (
     <ApartmentOutlined style={{ fontSize: 13, color: '#722ed1' }} />
   ) : isRemoteExplorer ? (

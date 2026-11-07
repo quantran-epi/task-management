@@ -1,10 +1,11 @@
-import React, { useEffect } from 'react';
-import { Modal, Form, Input, Select, message } from 'antd';
-import { ApartmentOutlined, CloudServerOutlined } from '@ant-design/icons';
+import React, { useEffect, useState } from 'react';
+import { Modal, Form, Input, Select, Button, Space, message } from 'antd';
+import { ApartmentOutlined, CloudServerOutlined, FolderOpenOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { getParentSystems } from '../../db/repositories/systemRepo';
 import { getSshConfigs } from '../../services/sshService';
+import { RemoteDirectoryBrowserModal } from '../common/RemoteDirectoryBrowserModal';
 import type { System, SystemType } from '../../types/models';
 
 export interface SystemModalProps {
@@ -33,7 +34,9 @@ export const SystemModal: React.FC<SystemModalProps> = ({
   db = defaultDb,
 }) => {
   const [form] = Form.useForm();
+  const [remoteBrowserOpen, setRemoteBrowserOpen] = useState(false);
   const selectedType = Form.useWatch('type', form);
+  const selectedSshConfigId = Form.useWatch('sshConfigId', form);
 
   // Queries for parent systems & ssh configs
   const parentSystems = useLiveQuery(() => getParentSystems(db), [db]) ?? [];
@@ -231,8 +234,11 @@ export const SystemModal: React.FC<SystemModalProps> = ({
                 {
                   validator: async (_, value) => {
                     if (!value) return Promise.resolve();
-                    if (!value.startsWith('/')) {
-                      return Promise.reject(new Error('Đường dẫn repository phải là đường dẫn tuyệt đối (bắt đầu bằng /)'));
+                    const trimmed = String(value).trim();
+                    if (!trimmed.startsWith('/')) {
+                      return Promise.reject(
+                        new Error('Đường dẫn repository trên máy chủ phải là đường dẫn tuyệt đối (bắt đầu bằng /)')
+                      );
                     }
                     return Promise.resolve();
                   },
@@ -240,7 +246,22 @@ export const SystemModal: React.FC<SystemModalProps> = ({
               ]}
               style={{ marginBottom: 10 }}
             >
-              <Input placeholder="VD: /data/services/smartcard-api" />
+              <Space.Compact style={{ width: '100%' }}>
+                <Input placeholder="VD: /data/services/smartcard-api" />
+                <Button
+                  icon={<FolderOpenOutlined />}
+                  title="Duyệt thư mục trên máy chủ SSH"
+                  onClick={() => {
+                    if (!selectedSshConfigId) {
+                      message.warning('Vui lòng chọn Kết nối SSH máy chủ trước khi duyệt thư mục từ xa.');
+                      return;
+                    }
+                    setRemoteBrowserOpen(true);
+                  }}
+                >
+                  Duyệt SSH...
+                </Button>
+              </Space.Compact>
             </Form.Item>
 
             <Form.Item
@@ -254,6 +275,17 @@ export const SystemModal: React.FC<SystemModalProps> = ({
           </div>
         )}
       </Form>
+
+      <RemoteDirectoryBrowserModal
+        open={remoteBrowserOpen}
+        sshConfig={sshConfigs.find((c) => c.id === selectedSshConfigId)}
+        initialPath={form.getFieldValue('remoteRepoPath') || ''}
+        onSelect={(selectedPath) => {
+          form.setFieldValue('remoteRepoPath', selectedPath);
+          setRemoteBrowserOpen(false);
+        }}
+        onCancel={() => setRemoteBrowserOpen(false)}
+      />
     </Modal>
   );
 };

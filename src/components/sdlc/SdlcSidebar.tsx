@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button, Select, Typography, Progress, Tag, Space, Divider, theme } from 'antd';
+import { Button, Select, Typography, Progress, Tag, Space, Divider, message, theme } from 'antd';
 import {
   PlusOutlined,
   FileTextOutlined,
@@ -16,6 +16,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { listCrs, type SdlcCrRecord } from '../../services/wizard/sdlcCrManager';
 import { getProjectRepoSshBinding } from '../../services/gitRemoteService';
+import { createChangeRequest } from '../../db/repositories/changeRequestRepo';
+import { ChangeRequestModal } from '../changeRequests/ChangeRequestModal';
 import type { System, ChangeRequest } from '../../types/models';
 import type { SdlcStepId, SdlcWorkflowState } from '../../services/wizard/workflowSchemas';
 import { CrCreateModal } from './common/CrCreateModal';
@@ -62,21 +64,18 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
   const { token } = theme.useToken();
   const [createModalOpen, setCreateModalOpen] = useState(false);
 
-  // 1. Projects list for Tier 1
-  const projects = useLiveQuery(() => db.projects.toArray(), [db]) ?? [];
+  // 1. All Change Requests from primary db.changeRequests
+  const allChangeRequests = useLiveQuery(() => db.changeRequests.toArray(), [db]) ?? [];
 
-  // Project SSH binding for quick status badge
-  const binding = useLiveQuery(
-    () => (projectId ? getProjectRepoSshBinding(projectId, db) : null),
-    [projectId, db]
-  );
-
-  // 2. CRs list for Tier 2
-  const crs = useLiveQuery(
+  // Fallback to legacy CRs from sdlcCrManager if any
+  const legacyCrs = useLiveQuery(
     () => (projectId ? listCrs(projectId, db) : []),
     [projectId, db]
   ) ?? [];
-  const currentCr = crs.find((c) => (activeCrId ? c.id === activeCrId : c.status === 'active')) ?? crs[0];
+
+  // Unified CR list
+  const crs = allChangeRequests.length > 0 ? allChangeRequests : legacyCrs;
+  const currentCr = crs.find((c) => (activeCrId ? c.id === activeCrId : c.id === projectId)) ?? crs[0];
 
   // Resolve ChangeRequest and its target subsystems from DB
   const resolvedCrId = activeCrId || currentCr?.id || projectId;
@@ -88,6 +87,14 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
     if (!crRecord?.targetSystemIds || crRecord.targetSystemIds.length === 0) return [];
     return db.systems.where('id').anyOf(crRecord.targetSystemIds).toArray();
   }, [crRecord?.targetSystemIds, db]) ?? [];
+
+  // Remote SSH binding: check active target subsystem first, then legacy binding
+  const primarySubsystem = targetSystems.find((s) => s.remoteRepoPath) || targetSystems[0];
+  const legacyBinding = useLiveQuery(
+    () => (resolvedCrId ? getProjectRepoSshBinding(resolvedCrId, db) : null),
+    [resolvedCrId, db]
+  );
+  const bindingDisplay = primarySubsystem?.remoteRepoPath || legacyBinding?.remoteRepoPath || null;
 
   const isStepCompleted = (stepId: SdlcStepId): boolean => {
     if (!workflowState) return false;
@@ -134,7 +141,7 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
         boxSizing: 'border-box',
       }}
     >
-      {/* 📁 TẦNG 1: DỰ ÁN (PROJECT SELECTOR & REPO STATUS) */}
+      {/* 📋 TẦNG DUY NHẤT: CHANGE REQUEST (CR SELECTOR & TARGET SUBSYSTEMS) */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography.Text
@@ -149,90 +156,7 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
               gap: 5,
             }}
           >
-            <FolderOutlined />
-            Dự án (Project)
-          </Typography.Text>
-        </div>
-
-        <Select
-          style={{ width: '100%' }}
-          placeholder="Chọn dự án..."
-          value={projectId || undefined}
-          onChange={(val) => {
-            if (val) onSelectProject?.(val);
-          }}
-          data-testid="sidebar-project-select"
-          showSearch
-          filterOption={(input, option) =>
-            (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())
-          }
-          options={projects.map((p) => ({
-            value: p.id,
-            label: p.name,
-          }))}
-        />
-
-        {/* Project Repo SSH Binding Quick Banner */}
-        <div
-          onClick={onSelectConfig}
-          data-testid="sidebar-btn-repo-config"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '6px 8px',
-            borderRadius: token.borderRadiusSM,
-            cursor: 'pointer',
-            background: isConfigActive ? token.colorPrimaryBg : token.colorFillAlter,
-            border: `1px solid ${isConfigActive ? token.colorPrimaryBorder : token.colorBorderSecondary}`,
-            transition: 'all 0.15s ease',
-          }}
-          title="Nhấn để mở Cấu hình Repo & Quy ước của Dự án"
-        >
-          <Space size={6} style={{ overflow: 'hidden', minWidth: 0, flex: 1 }}>
-            <BranchesOutlined
-              style={{
-                fontSize: 13,
-                color: isConfigActive ? token.colorPrimary : binding ? token.colorSuccess : token.colorTextTertiary,
-              }}
-            />
-            <span
-              style={{
-                fontSize: 11,
-                fontFamily: binding ? 'monospace' : 'inherit',
-                color: isConfigActive ? token.colorPrimaryText : token.colorTextSecondary,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {binding ? binding.remoteRepoPath : 'Chưa liên kết SSH'}
-            </span>
-          </Space>
-          <Tag
-            color={isConfigActive ? 'processing' : binding ? 'success' : 'default'}
-            icon={<SettingOutlined style={{ fontSize: 10 }} />}
-            style={{ margin: 0, fontSize: 10, padding: '0 5px', lineHeight: '18px', cursor: 'pointer' }}
-          >
-            {isConfigActive ? 'Đang mở' : 'Cấu hình'}
-          </Tag>
-        </div>
-      </div>
-
-      <Divider style={{ margin: '2px 0' }} />
-
-      {/* 📋 TẦNG 2: CHANGE REQUEST (CR SELECTOR) */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography.Text
-            strong
-            style={{
-              fontSize: 11,
-              textTransform: 'uppercase',
-              letterSpacing: '0.04em',
-              color: token.colorTextTertiary,
-            }}
-          >
+            <BranchesOutlined />
             Change Request (CR)
           </Typography.Text>
           <Button
@@ -242,7 +166,6 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
             style={{ padding: 0, height: 'auto', fontSize: 12 }}
             onClick={() => setCreateModalOpen(true)}
             data-testid="sidebar-btn-create-cr"
-            disabled={!projectId}
           >
             Tạo CR
           </Button>
@@ -253,23 +176,43 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
             style={{ width: '100%' }}
             value={currentCr?.id}
             onChange={(val) => {
-              if (val) onSelectCr?.(val);
+              if (val) {
+                onSelectCr?.(val);
+                onSelectProject?.(val);
+              }
             }}
             data-testid="sidebar-cr-select"
-            options={crs.map((c) => ({
-              value: c.id,
-              label: (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontWeight: 600 }}>{c.crCode}</span>
-                  <Tag
-                    color={c.status === 'active' ? 'processing' : c.status === 'completed' ? 'success' : 'default'}
-                    style={{ margin: 0, fontSize: 10, padding: '0 4px', lineHeight: '18px' }}
-                  >
-                    {c.status === 'active' ? 'Đang chạy' : c.status === 'completed' ? 'Hoàn tất' : 'Lưu trữ'}
-                  </Tag>
-                </div>
-              ),
-            }))}
+            showSearch
+            filterOption={(input, option) =>
+              (option?.searchStr ?? '').toLowerCase().includes(input.toLowerCase())
+            }
+            options={crs.map((c) => {
+              const code = (c as any).code || (c as any).crCode || 'CR';
+              const name = c.name || (c as any).featureName || '';
+              const type = (c as any).type;
+              return {
+                value: c.id,
+                searchStr: `${code} ${name}`,
+                label: (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
+                      <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>{code}</span>
+                      <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {name}
+                      </span>
+                    </div>
+                    {type && (
+                      <Tag
+                        color={type === 'NEW_FEATURE' ? '#1677ff' : type === 'ENHANCEMENT' ? '#52c41a' : '#faad14'}
+                        style={{ margin: 0, fontSize: 10, lineHeight: '16px', padding: '0 4px' }}
+                      >
+                        {type === 'NEW_FEATURE' ? 'Tạo mới' : type === 'ENHANCEMENT' ? 'Nâng cấp' : 'Sửa lỗi'}
+                      </Tag>
+                    )}
+                  </div>
+                ),
+              };
+            })}
           />
         ) : (
           <Button
@@ -278,11 +221,57 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
             icon={<PlusOutlined />}
             onClick={() => setCreateModalOpen(true)}
             data-testid="sidebar-btn-first-cr"
-            disabled={!projectId}
           >
             Khởi tạo CR đầu tiên
           </Button>
         )}
+
+        {/* Quick Repo SSH Binding Status */}
+        <div
+          onClick={onSelectConfig}
+          data-testid="sidebar-btn-repo-config"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '5px 8px',
+            borderRadius: token.borderRadiusSM,
+            cursor: 'pointer',
+            background: isConfigActive ? token.colorPrimaryBg : token.colorFillAlter,
+            border: `1px solid ${isConfigActive ? token.colorPrimaryBorder : token.colorBorderSecondary}`,
+            transition: 'all 0.15s ease',
+            marginTop: 2,
+          }}
+          title="Nhấn để mở Cấu hình Repo & Quy ước của CR"
+        >
+          <Space size={6} style={{ overflow: 'hidden', minWidth: 0, flex: 1 }}>
+            <BranchesOutlined
+              style={{
+                fontSize: 12,
+                color: isConfigActive ? token.colorPrimary : bindingDisplay ? token.colorSuccess : token.colorTextTertiary,
+              }}
+            />
+            <span
+              style={{
+                fontSize: 11,
+                fontFamily: bindingDisplay ? 'monospace' : 'inherit',
+                color: isConfigActive ? token.colorPrimaryText : token.colorTextSecondary,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {bindingDisplay || 'Chưa liên kết SSH'}
+            </span>
+          </Space>
+          <Tag
+            color={isConfigActive ? 'processing' : bindingDisplay ? 'success' : 'default'}
+            icon={<SettingOutlined style={{ fontSize: 10 }} />}
+            style={{ margin: 0, fontSize: 10, padding: '0 5px', lineHeight: '18px', cursor: 'pointer' }}
+          >
+            {isConfigActive ? 'Đang mở' : 'Cấu hình'}
+          </Tag>
+        </div>
 
         {/* Target Subsystems pills for active CR (ENT-SYS-03, ENT-CR-02) */}
         {crRecord && (
@@ -441,23 +430,30 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
           }}
         >
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {projectId
-              ? 'Chưa có CR nào trong dự án này. Hãy nhấn "Tạo CR" ở trên để bắt đầu quy trình.'
-              : 'Vui lòng chọn một dự án ở trên.'}
+            Chưa chọn Change Request (CR) nào. Hãy nhấn "Tạo CR" ở trên để bắt đầu quy trình SDLC.
           </Typography.Text>
         </div>
       )}
 
       {/* New CR Modal */}
-      {projectId && (
-        <CrCreateModal
-          projectId={projectId}
-          open={createModalOpen}
-          onClose={() => setCreateModalOpen(false)}
-          onCrCreated={handleCrCreated}
-          db={db}
-        />
-      )}
+      <ChangeRequestModal
+        open={createModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+        onSave={async (values) => {
+          try {
+            const newCr = await createChangeRequest(values as any, db);
+            message.success('Đã tạo Change Request mới');
+            setCreateModalOpen(false);
+            if (newCr?.id) {
+              onSelectCr?.(newCr.id);
+              onSelectProject?.(newCr.id);
+            }
+          } catch (err: any) {
+            message.error(err?.message || 'Không thể tạo Change Request');
+          }
+        }}
+        db={db}
+      />
     </div>
   );
 };

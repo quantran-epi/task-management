@@ -4,12 +4,12 @@ import { SdlcSidebar } from '../SdlcSidebar';
 import * as sdlcCrManager from '../../../services/wizard/sdlcCrManager';
 import * as gitRemoteService from '../../../services/gitRemoteService';
 
-describe('SdlcSidebar Component (3-Tier Hierarchy)', () => {
+describe('SdlcSidebar Component (Unified CR Hierarchy)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('renders Tier 1 (Project), Tier 2 (CR), and Tier 3 (Steps)', async () => {
+  it('renders unified Change Request (CR), repo binding, and Steps', async () => {
     vi.spyOn(gitRemoteService, 'getProjectRepoSshBinding').mockResolvedValue({
       sshConfigId: 'ssh-1',
       remoteRepoPath: '/home/user/my-repo',
@@ -45,15 +45,12 @@ describe('SdlcSidebar Component (3-Tier Hierarchy)', () => {
       />
     );
 
-    // Tier 1: Project & Repo Binding
-    expect(screen.getByText(/Dự án \(Project\)/i)).toBeInTheDocument();
+    // Unified Change Request & Repo Binding
+    expect(screen.getAllByText(/Change Request \(CR\)/i).length).toBeGreaterThanOrEqual(1);
     expect(await screen.findByText('/home/user/my-repo')).toBeInTheDocument();
-
-    // Tier 2: Change Request
-    expect(screen.getByText(/Change Request \(CR\)/i)).toBeInTheDocument();
     expect(await screen.findByText('CR-2026-01')).toBeInTheDocument();
 
-    // Tier 3: Steps
+    // Steps
     expect(screen.getByText(/Bước 1: Nạp PL01 & PL02/i)).toBeInTheDocument();
     expect(screen.getByText(/Bước 2: Thiết kế giải pháp/i)).toBeInTheDocument();
     expect(screen.getByText(/Bước 3: Coding ngoài/i)).toBeInTheDocument();

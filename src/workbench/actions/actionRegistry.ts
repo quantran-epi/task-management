@@ -75,7 +75,7 @@ export function initStandardActions(): void {
   const standardActions: ActionDefinition[] = [
     {
       id: 'view.toggle-projects',
-      title: 'Tool Windows: Toggle Projects',
+      title: 'Tool Windows: Toggle CR Explorer',
       category: 'View',
       shortcut: 'Alt+1',
       perform: () => {

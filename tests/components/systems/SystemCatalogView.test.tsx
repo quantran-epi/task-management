@@ -5,6 +5,8 @@ import { TaskPlannerDatabase } from '../../../src/db';
 import { useLayoutStore, type EditorTab } from '../../../src/workbench/store/layoutStore';
 import { getAllActions, executeAction } from '../../../src/workbench/actions/actionRegistry';
 import { SystemCatalogView } from '../../../src/views/SystemCatalogView';
+import { SystemDetailView } from '../../../src/views/SystemDetailView';
+import { SystemsExplorer } from '../../../src/workbench/toolwindows/SystemsExplorer';
 import { SystemTable } from '../../../src/components/systems/SystemTable';
 import { SystemModal } from '../../../src/components/systems/SystemModal';
 import { createSystem } from '../../../src/db/repositories/systemRepo';
@@ -171,5 +173,33 @@ describe('SystemCatalogView, SystemTable, and SystemModal (Task 2)', () => {
         })
       );
     });
+  });
+
+  it('SystemModal renders repo path picker button for subsystems', () => {
+    render(
+      <SystemModal
+        open={true}
+        system={sampleSubsystem}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        db={db}
+      />
+    );
+
+    expect(screen.getByPlaceholderText('VD: /data/services/smartcard-api')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Duyệt SSH.../i })).toBeInTheDocument();
+  });
+
+  it('SystemDetailView renders full system details, remote repo, and related CRs', async () => {
+    const parent = await createSystem(sampleParent, db);
+    const child = await createSystem({ ...sampleSubsystem, parentId: parent.id }, db);
+
+    render(<SystemDetailView systemId={child.id} db={db} />);
+
+    expect(await screen.findByText('Card Authorization API')).toBeInTheDocument();
+    expect(screen.getByText('SC-AUTH-API')).toBeInTheDocument();
+    expect(screen.getByText('/data/services/smartcard-api')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Chỉnh sửa/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Tạo CR cho hệ thống này/i })).toBeInTheDocument();
   });
 });

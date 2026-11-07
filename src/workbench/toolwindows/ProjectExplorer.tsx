@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
-import { Tree, Input, Empty, Tag, Typography, Dropdown, Modal, Tooltip, message, type MenuProps } from 'antd';
+import { Tree, Input, Button, Empty, Tag, Typography, Dropdown, Modal, Tooltip, message, type MenuProps } from 'antd';
 import {
   FlagOutlined,
   CheckCircleOutlined,
@@ -730,8 +730,16 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
         if (contextMenu) setContextMenu(null);
       }}
     >
-      {/* Search Input Filter */}
-      <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border, #e9eaee)' }}>
+      {/* Search Input Filter & Quick Actions */}
+      <div
+        style={{
+          padding: '6px 8px',
+          borderBottom: '1px solid var(--border, #e9eaee)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+        }}
+      >
         <Input
           prefix={<SearchOutlined style={{ color: 'var(--fg-muted, #6c707e)', fontSize: 12 }} />}
           placeholder="Lọc Change Requests, tác vụ..."
@@ -740,10 +748,30 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           style={{
+            flex: 1,
             fontSize: 'var(--font-size-small, 12px)',
             borderRadius: 'var(--radius-control, 4px)',
           }}
         />
+        <Tooltip title="Tạo Change Request mới">
+          <Button
+            type="primary"
+            size="small"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              setEditingCR(null);
+              setCrModalOpen(true);
+            }}
+            data-testid="cr-explorer-btn-new-cr"
+            style={{
+              padding: '0 8px',
+              fontSize: 12,
+              height: 24,
+            }}
+          >
+            Tạo CR
+          </Button>
+        </Tooltip>
       </div>
 
       {/* Tree Content */}
@@ -797,7 +825,19 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
             image={<InboxOutlined style={{ fontSize: 28, color: 'var(--fg-muted, #6c707e)' }} />}
             description="Chưa có Change Request nào"
             style={{ marginTop: 24 }}
-          />
+          >
+            <Button
+              type="primary"
+              size="small"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                setEditingCR(null);
+                setCrModalOpen(true);
+              }}
+            >
+              Tạo Change Request mới
+            </Button>
+          </Empty>
         )}
       </div>
 
@@ -857,4 +897,5 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
   );
 }
 
+export { ProjectExplorer as CRExplorer };
 export default ProjectExplorer;

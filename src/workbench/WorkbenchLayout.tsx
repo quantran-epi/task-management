@@ -41,7 +41,7 @@ import '../styles/workbench-tokens.css';
 }
 
 const DEFAULT_LEFT_ITEMS: ToolWindowItem[] = [
-  { id: 'projects', name: 'Project Explorer', icon: <JetBrainsProjectIcon size={16} />, shortcut: 'Alt+1' },
+  { id: 'projects', name: 'CR Explorer', icon: <JetBrainsProjectIcon size={16} />, shortcut: 'Alt+1' },
   { id: 'docs', name: 'Docs Explorer', icon: <JetBrainsDocsIcon size={16} />, shortcut: 'Alt+2' },
   { id: 'diagrams', name: 'Diagram Explorer', icon: <JetBrainsDiagramIcon size={16} />, shortcut: 'Alt+5' },
   {

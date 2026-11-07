@@ -33,6 +33,16 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
 
   const systems = useLiveQuery(() => getAllSystems(db), [db]) ?? [];
 
+  const handleOpenDetail = (targetSystem: System) => {
+    openTab({
+      id: `system-${targetSystem.id}`,
+      title: targetSystem.name,
+      viewType: 'system_detail',
+      closable: true,
+      params: { systemId: targetSystem.id },
+    });
+  };
+
   const handleOpenCatalog = () => {
     openTab({
       id: 'systems',
@@ -76,10 +86,10 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
     const isParent = system.parentId === null || system.type === 'LOGICAL_GROUP';
     return [
       {
-        key: 'open-catalog',
+        key: 'open-detail',
         icon: <ExportOutlined style={{ color: 'var(--accent, #3871e1)' }} />,
-        label: 'Mở danh mục',
-        onClick: handleOpenCatalog,
+        label: 'Xem chi tiết',
+        onClick: () => handleOpenDetail(system),
       },
       ...(isParent
         ? [
@@ -250,7 +260,23 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
             blockNode
             defaultExpandAll
             treeData={treeData}
-            onDoubleClick={handleOpenCatalog}
+            onSelect={(selectedKeys) => {
+              if (selectedKeys.length === 0) return;
+              const key = selectedKeys[0]?.toString() || '';
+              const systemId = key.replace(/^sys:/, '');
+              const target = systems.find((s) => s.id === systemId);
+              if (target) {
+                handleOpenDetail(target);
+              }
+            }}
+            onDoubleClick={(_, node) => {
+              const key = node.key.toString();
+              const systemId = key.replace(/^sys:/, '');
+              const target = systems.find((s) => s.id === systemId);
+              if (target) {
+                handleOpenDetail(target);
+              }
+            }}
             style={{
               background: 'transparent',
               fontSize: 'var(--font-size-ui, 13px)',
