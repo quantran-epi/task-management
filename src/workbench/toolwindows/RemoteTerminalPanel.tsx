@@ -30,10 +30,15 @@ export interface RemoteTerminalPanelProps {
   onSessionReady?: ((sessionId: string) => void) | undefined;
 }
 
+/** POSIX single-quote a path so an unexpected character cannot break out of `cd`. */
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
 export function RemoteTerminalPanel({
   sessionId: propSessionId,
   config,
-  repoPath: _repoPath,
+  repoPath,
   db,
   isActive = true,
   onSessionReady,
@@ -49,6 +54,8 @@ export function RemoteTerminalPanel({
   const configId = config?.id;
   const configRef = useRef(config);
   configRef.current = config;
+  const repoPathRef = useRef(repoPath);
+  repoPathRef.current = repoPath;
 
   const [connected, setConnected] = useState<boolean>(false);
   const [connecting, setConnecting] = useState<boolean>(false);
@@ -172,6 +179,12 @@ export function RemoteTerminalPanel({
         term.write(`\r\n\x1B[32m[SSH PTY]\x1B[0m Connected.\r\n\r\n`);
         setConnected(true);
         onSessionReady?.(sessionId);
+
+        // 1-click Terminal (D-35): land the shell in the subsystem's repo.
+        const initialRepoPath = repoPathRef.current;
+        if (initialRepoPath) {
+          await writePtyInput(sessionId, `cd ${shellQuote(initialRepoPath)}\r`);
+        }
       } else {
         term.write(
           `\r\n\x1B[33m[TaskMate Terminal]\x1B[0m No remote SSH host selected.\r\n` +

@@ -29,6 +29,11 @@ export interface EditorTab {
   params?: Record<string, any>;
 }
 
+export interface PendingTerminalTarget {
+  sshConfigId: string | null;
+  repoPath: string;
+}
+
 export interface LayoutStateValues {
   leftActiveId: string | null;
   rightActiveId: string | null;
@@ -42,6 +47,8 @@ export interface LayoutStateValues {
   activeRemoteRepoPath: string;
   activeRemoteBranch: string;
   isBottomMaximized: boolean;
+  /** Transient 1-click Terminal request. Deliberately not persisted (T-31.2-19). */
+  pendingTerminalTarget: PendingTerminalTarget | null;
 }
 
 export interface LayoutActions {
@@ -57,6 +64,8 @@ export interface LayoutActions {
   setActiveTabId: (tabId: string) => void;
   setActiveRemoteTarget: (configId: string | null, repoPath: string, branch?: string) => void;
   setActiveRemoteBranch: (branch: string) => void;
+  setPendingTerminalTarget: (target: PendingTerminalTarget | null) => void;
+  consumePendingTerminalTarget: () => PendingTerminalTarget | null;
   resetLayout: () => void;
 }
 
@@ -81,6 +90,7 @@ export const DEFAULT_LAYOUT_STATE: LayoutStateValues = {
   activeRemoteRepoPath: '',
   activeRemoteBranch: '',
   isBottomMaximized: false,
+  pendingTerminalTarget: null,
 };
 
 export const LAYOUT_STORAGE_KEY = 'taskmate_workbench_layout_v1';
@@ -248,6 +258,16 @@ export const useLayoutStore = create<LayoutState>()(
 
       setActiveRemoteBranch: (branch: string) => {
         set(() => ({ activeRemoteBranch: branch }));
+      },
+
+      setPendingTerminalTarget: (target: PendingTerminalTarget | null) => {
+        set(() => ({ pendingTerminalTarget: target }));
+      },
+
+      consumePendingTerminalTarget: () => {
+        const target = useLayoutStore.getState().pendingTerminalTarget;
+        if (target) set(() => ({ pendingTerminalTarget: null }));
+        return target;
       },
 
       resetLayout: () => {
