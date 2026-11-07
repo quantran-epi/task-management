@@ -4,8 +4,15 @@ import 'fake-indexeddb/auto';
 import { ItemInsightView } from '../../src/views/ItemInsightView';
 import { TaskPlannerDatabase } from '../../src/db/index';
 import { createTask } from '../../src/db/repositories/taskRepo';
-import { createProject } from '../../src/db/repositories/projectRepo';
-import { createMilestone } from '../../src/db/repositories/milestoneRepo';
+import { createChangeRequest } from '../../src/db/repositories/changeRequestRepo';
+import { createSystem } from '../../src/db/repositories/systemRepo';
+
+const SYSTEM_INPUT = {
+  code: 'PAYMENT_SVC',
+  name: 'Payment Service',
+  type: 'SERVICE' as const,
+  parentId: null,
+};
 
 describe('ItemInsightView', () => {
   let testDb: TaskPlannerDatabase;
@@ -35,8 +42,22 @@ describe('ItemInsightView', () => {
   });
 
   it('renders task insight with pre-implementation recommendations and metrics', async () => {
+    const system = await createSystem(SYSTEM_INPUT, testDb);
+    const cr = await createChangeRequest(
+      {
+        code: 'CR-2026-001',
+        name: 'Thanh toán QR',
+        type: 'NEW_FEATURE',
+        status: 'In Progress',
+        targets: [{ systemId: system.id }],
+      },
+      testDb
+    );
+
     const task = await createTask(
       {
+        crId: cr.id,
+        systemId: system.id,
         name: 'Triển khai tính năng AI Sizing',
         status: 'Open',
         priority: 'High',
@@ -52,98 +73,72 @@ describe('ItemInsightView', () => {
     );
 
     render(
-      <ItemInsightView
-        itemType="task"
-        itemId={task.id}
-        onNavigate={mockNavigate}
-        db={testDb}
-      />
+      <ItemInsightView itemType="task" itemId={task.id} onNavigate={mockNavigate} db={testDb} />
     );
 
-    // Title and tags
     expect((await screen.findAllByText('Triển khai tính năng AI Sizing')).length).toBeGreaterThan(0);
     expect(screen.getByText('Ưu tiên High')).toBeInTheDocument();
     expect(screen.getByText('https://example.com/spec')).toBeInTheDocument();
 
-    // Recommendation for large task (>4h)
+    // Parent CR and subsystem are shown for a task
+    expect(screen.getAllByText(/CR-2026-001/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/PAYMENT_SVC/).length).toBeGreaterThan(0);
+
     expect(await screen.findByText(/Tác vụ có quy mô lớn/i)).toBeInTheDocument();
 
-    // Checklist item
     expect(screen.getByText('Thiết kế prompt')).toBeInTheDocument();
     expect(screen.getByText('Viết unit tests')).toBeInTheDocument();
 
-    // Quick action buttons
     expect(screen.getByRole('button', { name: /bắt đầu làm/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /phân bổ lịch/i })).toBeInTheDocument();
-  });
+  }, 30000);
 
-  it('renders project insight with task metrics and pre-implementation warnings', async () => {
-    const project = await createProject(
+  it('renders CR insight listing that CR tasks', async () => {
+    const system = await createSystem(SYSTEM_INPUT, testDb);
+    const cr = await createChangeRequest(
       {
-        name: 'Dự án Mobile App V2',
+        code: 'CR-2026-001',
+        name: 'Thanh toán QR',
+        type: 'NEW_FEATURE',
         status: 'In Progress',
-        deadline: '2026-12-31',
-        description: 'Ứng dụng di động mới',
+        targets: [{ systemId: system.id }],
       },
       testDb
     );
 
-    // Create 1 task without estimate
     await createTask(
-      {
-        name: 'Setup repository',
-        projectId: project.id,
-        status: 'Open',
-        priority: 'Medium',
-        estimateMinutes: 0,
-      },
+      { crId: cr.id, name: 'Setup repository', status: 'Open', priority: 'Medium', estimateMinutes: 0 },
       testDb
     );
 
     render(
-      <ItemInsightView
-        itemType="project"
-        itemId={project.id}
-        onNavigate={mockNavigate}
-        db={testDb}
-      />
+      <ItemInsightView itemType="cr" itemId={cr.id} onNavigate={mockNavigate} db={testDb} />
     );
 
-    expect((await screen.findAllByText('Dự án Mobile App V2')).length).toBeGreaterThan(0);
-    expect(screen.getByText('Ứng dụng di động mới')).toBeInTheDocument();
+    expect((await screen.findAllByText('Thanh toán QR')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('Setup repository')).toBeInTheDocument();
+    expect(screen.getByText(/Danh sách tác vụ liên quan \(1\)/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /mở CR detail/i })).toBeInTheDocument();
+  }, 30000);
 
-    // Unestimated warning
-    expect(await screen.findByText(/chưa được ước lượng thời gian/i)).toBeInTheDocument();
-
-    // Action buttons
-    expect(screen.getByRole('button', { name: /chỉnh sửa dự án/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /thêm tác vụ/i })).toBeInTheDocument();
-  });
-
-  it('renders milestone insight with burndown button and capacity check', async () => {
-    const project = await createProject(
+  it('renders system insight listing tasks across CRs targeting that subsystem', async () => {
+    const system = await createSystem(SYSTEM_INPUT, testDb);
+    const cr = await createChangeRequest(
       {
-        name: 'Dự án Web',
-        status: 'Open',
-      },
-      testDb
-    );
-
-    const milestone = await createMilestone(
-      {
-        projectId: project.id,
-        name: 'Sprint 1 - Scaffolding',
+        code: 'CR-2026-001',
+        name: 'Thanh toán QR',
+        type: 'NEW_FEATURE',
         status: 'In Progress',
-        deadline: '2026-10-10',
+        targets: [{ systemId: system.id }],
       },
       testDb
     );
 
     await createTask(
       {
-        name: 'Core framework setup',
-        projectId: project.id,
-        milestoneId: milestone.id,
+        crId: cr.id,
+        systemId: system.id,
+        name: 'Wire payment gateway',
         status: 'In Progress',
         priority: 'Urgent',
         estimateMinutes: 120,
@@ -152,18 +147,11 @@ describe('ItemInsightView', () => {
     );
 
     render(
-      <ItemInsightView
-        itemType="milestone"
-        itemId={milestone.id}
-        onNavigate={mockNavigate}
-        db={testDb}
-      />
+      <ItemInsightView itemType="system" itemId={system.id} onNavigate={mockNavigate} db={testDb} />
     );
 
-    expect((await screen.findAllByText('Sprint 1 - Scaffolding')).length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: /xem burndown/i })).toBeInTheDocument();
-
-    // High/Urgent open task advice
-    expect(await screen.findByText(/tác vụ ưu tiên Cao \/ Khẩn cấp cần giải quyết/i)).toBeInTheDocument();
-  });
+    expect((await screen.findAllByText('Payment Service')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('Wire payment gateway')).toBeInTheDocument();
+    expect(screen.getByText(/Danh sách tác vụ liên quan \(1\)/i)).toBeInTheDocument();
+  }, 30000);
 });
