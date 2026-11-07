@@ -15,6 +15,8 @@ export interface TargetSystemsSelectorProps {
   disabled?: boolean;
   /** Subsystem ids pre-selected by the caller (D-34 soft lock) — marked, still removable. */
   preselectedIds?: string[];
+  /** Caller already holds the system list; avoids a first-paint window where values render raw. */
+  systems?: System[];
 }
 
 interface TreeNode {
@@ -50,8 +52,10 @@ export const TargetSystemsSelector: React.FC<TargetSystemsSelectorProps> = ({
   db = defaultDb,
   disabled = false,
   preselectedIds = [],
+  systems,
 }) => {
-  const allSystems = useLiveQuery(() => db.systems.toArray(), [db]) ?? [];
+  const liveSystems = useLiveQuery(() => db.systems.toArray(), [db]) ?? [];
+  const allSystems = systems ?? liveSystems;
 
   const treeData = useMemo(() => {
     if (!allSystems || allSystems.length === 0) return [];

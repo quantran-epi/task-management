@@ -416,15 +416,10 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
       {/* Create CR targeting this system Modal */}
       <ChangeRequestModal
         open={createCrModalOpen}
+        initialTargets={[{ systemId: system.id }]}
         onClose={() => setCreateCrModalOpen(false)}
         onSave={async (values) => {
-          await createChangeRequest(
-            {
-              ...values,
-              targetSystemIds: Array.from(new Set([...(values.targetSystemIds || []), system.id])),
-            } as any,
-            db
-          );
+          await createChangeRequest(values as any, db);
           message.success('Đã tạo Change Request mới cho hệ thống này');
           setCreateCrModalOpen(false);
         }}

@@ -1,15 +1,15 @@
 import React, { useEffect } from 'react';
 import { Modal, Form, DatePicker, TimePicker, Input, message } from 'antd';
 import dayjs from 'dayjs';
-import type { Task, Project, ReminderItem } from '../../types/models';
+import type { Task, ChangeRequest, ReminderItem } from '../../types/models';
 import { updateTask } from '../../db/repositories/taskRepo';
-import { updateProject } from '../../db/repositories/projectRepo';
+import { updateChangeRequest } from '../../db/repositories/changeRequestRepo';
 import type { TaskPlannerDatabase } from '../../db';
 
 export interface QuickReminderModalProps {
   open: boolean;
   onClose: () => void;
-  target: { type: 'task'; entity: Task } | { type: 'project'; entity: Project } | null;
+  target: { type: 'task'; entity: Task } | { type: 'cr'; entity: ChangeRequest } | null;
   db?: TaskPlannerDatabase | undefined;
 }
 
@@ -66,14 +66,14 @@ export const QuickReminderModal: React.FC<QuickReminderModalProps> = ({
         message.success(`Đã thêm nhắc nhở cho tác vụ "${target.entity.name}"`);
       } else {
         const currentReminders = target.entity.reminders ?? [];
-        await updateProject(
+        await updateChangeRequest(
           target.entity.id,
           {
             reminders: [...currentReminders, newReminder],
           },
           db
         );
-        message.success(`Đã thêm nhắc nhở cho dự án "${target.entity.name}"`);
+        message.success(`Đã thêm nhắc nhở cho CR "${target.entity.name}"`);
       }
 
       onClose();
@@ -83,7 +83,7 @@ export const QuickReminderModal: React.FC<QuickReminderModalProps> = ({
   };
 
   const title = target
-    ? `Thêm nhắc nhở: ${target.type === 'task' ? 'Tác vụ' : 'Dự án'} "${target.entity.name}"`
+    ? `Thêm nhắc nhở: ${target.type === 'task' ? 'Tác vụ' : 'CR'} "${target.entity.name}"`
     : 'Thêm nhắc nhở';
 
   return (

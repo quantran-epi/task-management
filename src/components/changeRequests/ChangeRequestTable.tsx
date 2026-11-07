@@ -123,10 +123,10 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
   const taskMap = useMemo(() => {
     const map = new Map<string, Task[]>();
     for (const t of tasks) {
-      if (t.projectId) {
-        const arr = map.get(t.projectId) || [];
+      if (t.crId) {
+        const arr = map.get(t.crId) || [];
         arr.push(t);
-        map.set(t.projectId, arr);
+        map.set(t.crId, arr);
       }
     }
     return map;
@@ -319,22 +319,23 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
     },
     {
       title: 'Target Subsystems',
-      dataIndex: 'targetSystemIds',
-      key: 'targetSystemIds',
+      dataIndex: 'targets',
+      key: 'targets',
       width: 220,
-      render: (targetSystemIds: string[]) => {
-        if (!targetSystemIds || targetSystemIds.length === 0) {
+      render: (_: unknown, record) => {
+        const targets = record.targets ?? [];
+        if (targets.length === 0) {
           return <span style={{ color: token.colorTextTertiary, fontSize: 12 }}>Chưa chọn</span>;
         }
 
         return (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-            {targetSystemIds.map((id) => {
-              const sys = systemMap.get(id);
-              const label = sys ? sys.code : id.slice(0, 8);
-              const tooltipTitle = sys ? `${sys.name} (${sys.type})` : `System ${id}`;
+            {targets.map((target) => {
+              const sys = systemMap.get(target.systemId);
+              const label = sys ? sys.code : target.systemId.slice(0, 8);
+              const tooltipTitle = sys ? `${sys.name} (${sys.type})` : `System ${target.systemId}`;
               return (
-                <Tooltip key={id} title={tooltipTitle}>
+                <Tooltip key={target.systemId} title={tooltipTitle}>
                   <Tag
                     color="cyan"
                     icon={<BranchesOutlined />}
@@ -474,7 +475,7 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
         <QuickReminderModal
           open={!!reminderTargetCR}
           onClose={() => setReminderTargetCR(null)}
-          target={{ type: 'project', entity: reminderTargetCR as any }}
+          target={{ type: 'cr', entity: reminderTargetCR }}
           db={db}
         />
       )}
