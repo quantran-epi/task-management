@@ -2,8 +2,6 @@ import { z } from 'zod';
 import { isValidCalendarDate } from '../utils/date';
 import { isValidUuid } from '../utils/uuid';
 import type {
-  ProjectStatus,
-  MilestoneStatus,
   TaskStatus,
   TaskPriority,
   SystemType,
@@ -53,22 +51,6 @@ export const tagListSchema = z
   .array(z.string().trim().max(50, 'Tên thẻ tối đa 50 ký tự'))
   .max(10, 'Tối đa 10 thẻ cho mỗi trường')
   .transform(normalizeTags);
-
-export const PROJECT_STATUSES: [ProjectStatus, ...ProjectStatus[]] = [
-  'Open',
-  'Pending',
-  'In Progress',
-  'Done',
-  'Cancelled',
-];
-
-export const MILESTONE_STATUSES: [MilestoneStatus, ...MilestoneStatus[]] = [
-  'Open',
-  'Pending',
-  'In Progress',
-  'Done',
-  'Cancelled',
-];
 
 export const TASK_STATUSES: [TaskStatus, ...TaskStatus[]] = [
   'Open',
@@ -174,127 +156,141 @@ export const CR_STATUSES: [CrStatus, ...CrStatus[]] = [
 
 export const CrStatusSchema = z.enum(CR_STATUSES);
 
-export const SystemInputSchema = z.object({
-  name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
-  code: z.string().trim().min(1, 'Code is required').max(64, 'Code must be 64 characters or less'),
-  parentId: z.string().nullable().default(null),
-  type: SystemTypeSchema.default('SERVICE'),
-  description: z.string().optional(),
-  sshConfigId: uuidSchema.optional(),
-  remoteRepoPath: z.string().optional(),
-  defaultBaseBranch: z.string().optional(),
+/** A single CR target (D-25): one subsystem plus its optional feature branch. */
+export const CrTargetSchema = z.object({
+  systemId: uuidSchema,
+  featureBranch: z.string().min(1).optional(),
 });
 
-export const SystemUpdateSchema = z.object({
-  name: z.string().trim().min(1).max(120).optional(),
-  code: z.string().trim().min(1).max(64).optional(),
-  parentId: z.string().nullable().optional(),
-  type: SystemTypeSchema.optional(),
-  description: z.string().optional(),
-  sshConfigId: uuidSchema.optional().nullable(),
-  remoteRepoPath: z.string().optional().nullable(),
-  defaultBaseBranch: z.string().optional().nullable(),
-});
+export type CrTargetInput = z.infer<typeof CrTargetSchema>;
 
-export const ChangeRequestInputSchema = z.object({
-  name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
-  code: z.string().trim().max(64).optional(),
-  description: z.string().optional(),
-  deadline: calendarDateSchema.optional(),
-  status: CrStatusSchema.default('Open'),
-  type: CrTypeSchema.default('ENHANCEMENT'),
-  targetSystemIds: z.array(z.string()).default([]),
-  jiraEpicKey: jiraKeySchema.optional(),
-  opsOwners: tagListSchema.optional(),
-  businessAnalysts: tagListSchema.optional(),
-  documentLinks: z.array(linkSchema).optional(),
-  reminderDate: reminderDateSchema.optional(),
-  reminderNote: reminderNoteSchema,
-  reminders: remindersArraySchema,
-});
+const remoteRepoPathSchema = z
+  .string()
+  .refine((val) => val.startsWith('/'), {
+    message: 'Đường dẫn repo phải là đường dẫn tuyệt đối',
+  });
 
-export const ChangeRequestUpdateSchema = z.object({
-  name: z.string().trim().min(1).max(120).optional(),
-  code: z.string().trim().max(64).optional(),
-  description: z.string().optional(),
-  deadline: calendarDateSchema.optional(),
-  status: CrStatusSchema.optional(),
-  type: CrTypeSchema.optional(),
-  targetSystemIds: z.array(z.string()).optional(),
-  jiraEpicKey: jiraKeySchema.optional(),
-  opsOwners: tagListSchema.optional(),
-  businessAnalysts: tagListSchema.optional(),
-  documentLinks: z.array(linkSchema).optional(),
-  reminderDate: reminderDateSchema.optional(),
-  reminderNote: reminderNoteSchema,
-  reminders: remindersArraySchema,
-});
+// D-24 shape invariants. Cross-entity checks (parent exists, cycle) need the DB and
+// live in systemRepo (plan 03).
+function refineSystemShape(
+  data: {
+    type?: SystemType | undefined;
+    parentId?: string | null | undefined;
+    sshConfigId?: string | null | undefined;
+    remoteRepoPath?: string | null | undefined;
+    defaultBaseBranch?: string | null | undefined;
+  },
+  ctx: z.RefinementCtx
+): void {
+  if (data.type !== 'LOGICAL_GROUP') return;
+
+  if (data.sshConfigId != null || data.remoteRepoPath != null || data.defaultBaseBranch != null) {
+    ctx.addIssue({ code: 'custom', message: 'Hệ thống cha không được có SSH/Repo' });
+  }
+  if (data.parentId != null) {
+    ctx.addIssue({ code: 'custom', message: 'Hệ thống cha không được có hệ thống cha' });
+  }
+}
+
+export const SystemInputSchema = z
+  .object({
+    name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
+    code: z.string().trim().min(1, 'Code is required').max(64, 'Code must be 64 characters or less'),
+    parentId: z.string().nullable().default(null),
+    type: SystemTypeSchema.default('SERVICE'),
+    description: z.string().optional(),
+    sshConfigId: uuidSchema.optional(),
+    remoteRepoPath: remoteRepoPathSchema.optional(),
+    defaultBaseBranch: z.string().optional(),
+  })
+  .superRefine(refineSystemShape);
+
+export const SystemUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    code: z.string().trim().min(1).max(64).optional(),
+    parentId: z.string().nullable().optional(),
+    type: SystemTypeSchema.optional(),
+    description: z.string().optional(),
+    sshConfigId: uuidSchema.optional().nullable(),
+    remoteRepoPath: remoteRepoPathSchema.optional().nullable(),
+    defaultBaseBranch: z.string().optional().nullable(),
+  })
+  .superRefine(refineSystemShape);
+
+function refineUniqueTargets(data: { targets: CrTargetInput[] }, ctx: z.RefinementCtx): void {
+  const seen = new Set<string>();
+  data.targets.forEach((target, index) => {
+    if (seen.has(target.systemId)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['targets', index, 'systemId'],
+        message: 'Subsystem bị trùng trong CR',
+      });
+    }
+    seen.add(target.systemId);
+  });
+}
+
+export const ChangeRequestInputSchema = z
+  .object({
+    name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
+    code: z
+      .string()
+      .trim()
+      .min(1, 'Code is required')
+      .max(64, 'Code must be 64 characters or less')
+      .transform((val) => val.toUpperCase()),
+    description: z.string().optional(),
+    deadline: calendarDateSchema.optional(),
+    status: CrStatusSchema.default('Open'),
+    type: CrTypeSchema.default('ENHANCEMENT'),
+    targets: z.array(CrTargetSchema).default([]),
+    jiraEpicKey: jiraKeySchema.optional(),
+    opsOwners: tagListSchema.optional(),
+    businessAnalysts: tagListSchema.optional(),
+    documentLinks: z.array(linkSchema).optional(),
+    reminderDate: reminderDateSchema.optional(),
+    reminderNote: reminderNoteSchema,
+    reminders: remindersArraySchema,
+  })
+  .superRefine(refineUniqueTargets);
+
+export const ChangeRequestUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    code: z
+      .string()
+      .trim()
+      .min(1, 'Code is required')
+      .max(64, 'Code must be 64 characters or less')
+      .transform((val) => val.toUpperCase())
+      .optional(),
+    description: z.string().optional(),
+    deadline: calendarDateSchema.optional(),
+    status: CrStatusSchema.optional(),
+    type: CrTypeSchema.optional(),
+    targets: z.array(CrTargetSchema).optional(),
+    jiraEpicKey: jiraKeySchema.optional(),
+    opsOwners: tagListSchema.optional(),
+    businessAnalysts: tagListSchema.optional(),
+    documentLinks: z.array(linkSchema).optional(),
+    reminderDate: reminderDateSchema.optional(),
+    reminderNote: reminderNoteSchema,
+    reminders: remindersArraySchema,
+  })
+  .superRefine((data, ctx) => {
+    if (data.targets !== undefined) refineUniqueTargets({ targets: data.targets }, ctx);
+  });
 
 export type SystemInput = z.infer<typeof SystemInputSchema>;
 export type SystemUpdate = z.infer<typeof SystemUpdateSchema>;
 export type ChangeRequestInput = z.infer<typeof ChangeRequestInputSchema>;
 export type ChangeRequestUpdate = z.infer<typeof ChangeRequestUpdateSchema>;
 
-export const ProjectInputSchema = z.object({
-  name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
-  description: z.string().optional(),
-  deadline: calendarDateSchema.optional(),
-  notes: z.string().optional(),
-  status: z.enum(PROJECT_STATUSES).default('Open'),
-  jiraEpicKey: jiraKeySchema.optional(),
-  opsOwners: tagListSchema.optional(),
-  businessAnalysts: tagListSchema.optional(),
-  documentLinks: z.array(linkSchema).optional(),
-  reminderDate: reminderDateSchema.optional(),
-  reminderNote: reminderNoteSchema,
-  reminders: remindersArraySchema,
-});
-
-export const ProjectUpdateSchema = z.object({
-  name: z.string().trim().min(1).max(120).optional(),
-  description: z.string().optional(),
-  deadline: calendarDateSchema.optional(),
-  notes: z.string().optional(),
-  status: z.enum(PROJECT_STATUSES).optional(),
-  jiraEpicKey: jiraKeySchema.optional(),
-  opsOwners: tagListSchema.optional(),
-  businessAnalysts: tagListSchema.optional(),
-  documentLinks: z.array(linkSchema).optional(),
-  reminderDate: reminderDateSchema.optional(),
-  reminderNote: reminderNoteSchema,
-  reminders: remindersArraySchema,
-});
-
-export const MilestoneInputSchema = z.object({
-  projectId: uuidSchema,
-  name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
-  description: z.string().optional(),
-  deadline: calendarDateSchema.optional(),
-  notes: z.string().optional(),
-  status: z.enum(MILESTONE_STATUSES).default('Open'),
-  opsOwners: tagListSchema.optional(),
-  businessAnalysts: tagListSchema.optional(),
-  reminderDate: reminderDateSchema.optional(),
-  reminderNote: reminderNoteSchema,
-  reminders: remindersArraySchema,
-});
-
-export const MilestoneUpdateSchema = z.object({
-  name: z.string().trim().min(1).max(120).optional(),
-  description: z.string().optional(),
-  deadline: calendarDateSchema.optional(),
-  notes: z.string().optional(),
-  status: z.enum(MILESTONE_STATUSES).optional(),
-  opsOwners: tagListSchema.optional(),
-  businessAnalysts: tagListSchema.optional(),
-  reminderDate: reminderDateSchema.optional(),
-  reminderNote: reminderNoteSchema,
-  reminders: remindersArraySchema,
-});
-
 export const TaskInputSchema = z.object({
-  projectId: uuidSchema.optional(),
-  milestoneId: uuidSchema.optional(),
+  crId: uuidSchema,
+  systemId: uuidSchema.optional(),
   name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
   description: z.string().optional(),
   deadline: calendarDateSchema.optional(),
@@ -323,8 +319,8 @@ export const TaskInputSchema = z.object({
 });
 
 export const TaskUpdateSchema = z.object({
-  projectId: uuidSchema.optional(),
-  milestoneId: uuidSchema.optional(),
+  crId: uuidSchema.optional(),
+  systemId: uuidSchema.optional(),
   name: z.string().trim().min(1).max(120).optional(),
   description: z.string().optional(),
   deadline: calendarDateSchema.optional(),
@@ -415,7 +411,7 @@ export const WorkSessionInputSchema = z
     }
   );
 
-export const NOTE_ENTITY_TYPES = ['task', 'project', 'milestone'] as const;
+export const NOTE_ENTITY_TYPES = ['task', 'cr', 'system'] as const;
 export const NOTE_TYPES = ['quick_note', 'document', 'folder', 'diagram'] as const;
 
 export const NoteSchema = z.object({
@@ -479,10 +475,6 @@ export const NoteAttachmentSchema = z.object({
   createdAt: z.string().datetime({ message: 'createdAt must be a valid ISO 8601 string' }),
 });
 
-export type ProjectInput = z.input<typeof ProjectInputSchema>;
-export type ProjectUpdate = z.input<typeof ProjectUpdateSchema>;
-export type MilestoneInput = z.input<typeof MilestoneInputSchema>;
-export type MilestoneUpdate = z.input<typeof MilestoneUpdateSchema>;
 export type TaskInput = z.input<typeof TaskInputSchema>;
 export type TaskUpdate = z.input<typeof TaskUpdateSchema>;
 export type CapacityRuleInput = z.input<typeof CapacityRuleInputSchema>;
