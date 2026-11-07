@@ -24,8 +24,14 @@ vi.mock('../../views/SettingsView', () => ({
   SettingsView: () => <div data-testid="mock-settings-view">Mock Settings View</div>,
 }));
 
-vi.mock('../../views/ProjectsView', () => ({
-  ProjectsView: () => <div data-testid="mock-projects-view">Mock Projects View</div>,
+vi.mock('../../views/ChangeRequestDetailView', () => ({
+  ChangeRequestDetailView: ({ changeRequestId }: { changeRequestId: string }) => (
+    <div data-testid="mock-cr-detail-view">CR Detail: {changeRequestId}</div>
+  ),
+}));
+
+vi.mock('../../views/ChangeRequestSdlcView', () => ({
+  ChangeRequestSdlcView: () => <div data-testid="mock-cr-sdlc-view">Mock SDLC View</div>,
 }));
 
 describe('EditorArea', () => {
@@ -109,6 +115,22 @@ describe('EditorArea', () => {
     render(<EditorArea />);
     const dropdownBtn = screen.getByRole('button', { name: 'Show open tabs list' });
     expect(dropdownBtn).toBeDefined();
+  });
+
+  it('renders ChangeRequestDetailView for a cr_detail tab with its changeRequestId', () => {
+    render(<EditorArea />);
+
+    act(() => {
+      useLayoutStore.getState().openTab({
+        id: 'cr-cr-1',
+        title: 'CR-2026-001',
+        viewType: 'cr_detail',
+        closable: true,
+        params: { changeRequestId: 'cr-1' },
+      });
+    });
+
+    expect(screen.getByTestId('mock-cr-detail-view')).toHaveTextContent('CR Detail: cr-1');
   });
 
   it('pins and unpins tab via pin icon button', () => {

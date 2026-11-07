@@ -22,12 +22,12 @@ import { NotesView } from '../views/NotesView';
 import { PlannerView } from '../views/PlannerView';
 import { AnalyticsView } from '../views/AnalyticsView';
 import { SettingsView } from '../views/SettingsView';
-import { ProjectsView } from '../views/ProjectsView';
 import { DashboardView } from '../views/DashboardView';
 import { AgentControlView } from '../views/AgentControlView';
 import { TelegramMonitorView } from '../views/TelegramMonitorView';
 import { ItemInsightView } from '../views/ItemInsightView';
-import { ProjectSdlcView } from '../views/ProjectSdlcView';
+import { ChangeRequestSdlcView } from '../views/ChangeRequestSdlcView';
+import { ChangeRequestDetailView } from '../views/ChangeRequestDetailView';
 import { SystemCatalogView } from '../views/SystemCatalogView';
 import { SystemDetailView } from '../views/SystemDetailView';
 import { MermaidAssistantView } from '../views/MermaidAssistantView';
@@ -427,8 +427,13 @@ export function EditorArea({ db }: EditorAreaProps) {
         return <AnalyticsView {...dbProp} />;
       case 'settings':
         return <SettingsView {...dbProp} />;
-      case 'projects':
-        return <ProjectsView {...dbProp} />;
+      case 'cr_detail':
+        return (
+          <ChangeRequestDetailView
+            changeRequestId={String(tab.params?.changeRequestId ?? '')}
+            {...dbProp}
+          />
+        );
       case 'dashboard':
         return <DashboardView onNavigate={(route) => openTab({ id: route, title: route.toUpperCase(), viewType: route as any })} />;
       case 'agents':
@@ -445,8 +450,8 @@ export function EditorArea({ db }: EditorAreaProps) {
         return <RemoteFileViewer {...tab.params} />;
       case 'sdlc':
         return (
-          <ProjectSdlcView
-            projectId={tab.params?.projectId || ''}
+          <ChangeRequestSdlcView
+            changeRequestId={String(tab.params?.changeRequestId ?? tab.params?.projectId ?? '')}
             onBack={() => closeTab(tab.id)}
             {...dbProp}
           />
