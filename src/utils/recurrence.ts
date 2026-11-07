@@ -93,6 +93,7 @@ export async function spawnNextRecurringTask(
   const now = new Date().toISOString();
   const nextTask: Task = {
     id: crypto.randomUUID(),
+    crId: task.crId,
     name: task.name,
     status: 'Open',
     priority: task.priority,
@@ -106,8 +107,7 @@ export async function spawnNextRecurringTask(
   };
 
   if (task.description !== undefined) nextTask.description = task.description;
-  if (task.projectId !== undefined) nextTask.projectId = task.projectId;
-  if (task.milestoneId !== undefined) nextTask.milestoneId = task.milestoneId;
+  if (task.systemId !== undefined) nextTask.systemId = task.systemId;
   if (task.workType !== undefined) nextTask.workType = task.workType;
   if (task.opsOwners !== undefined) nextTask.opsOwners = task.opsOwners;
   if (task.businessAnalysts !== undefined) nextTask.businessAnalysts = task.businessAnalysts;

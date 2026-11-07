@@ -1,16 +1,16 @@
 import dayjs from 'dayjs';
-import type { Milestone, Project, Task, TaskPriority, TaskStatus, WorkType } from '../types/models';
+import type { ChangeRequest, System, Task, TaskPriority, TaskStatus, WorkType } from '../types/models';
 import { resolveInheritedTags } from '../domain/inheritance';
 
 export interface TaskFilterState {
   search: string;
-  hierarchyScope: 'all' | 'projects' | 'standalone';
-  projectId: string | null;
+  hierarchyScope: 'all' | 'cr' | 'standalone';
+  crId: string | null;
   statuses: TaskStatus[];
   priorities: TaskPriority[];
   horizon: 'all' | 'overdue' | 'today' | 'this_week';
   includeClosed: boolean;
-  milestoneId: string | null;
+  systemId: string | null;
   workTypes: WorkType[];
   opsOwners: string[];
   businessAnalysts: string[];
@@ -23,12 +23,12 @@ export interface TaskFilterState {
 export const DEFAULT_TASK_FILTER_STATE: TaskFilterState = {
   search: '',
   hierarchyScope: 'all',
-  projectId: null,
+  crId: null,
   statuses: ['Open', 'Pending', 'In Progress', 'Resolved', 'In Review'],
   priorities: [],
   horizon: 'all',
   includeClosed: false,
-  milestoneId: null,
+  systemId: null,
   workTypes: [],
   opsOwners: [],
   businessAnalysts: [],
@@ -40,8 +40,8 @@ export const DEFAULT_TASK_FILTER_STATE: TaskFilterState = {
 
 export interface FilterContext {
   todayStr: string;
-  projectMap?: Map<string, Project>;
-  milestoneMap?: Map<string, Milestone>;
+  crMap?: Map<string, ChangeRequest>;
+  systemMap?: Map<string, System>;
   executionTaskIds?: Set<string> | null;
   worklogTaskIds?: Set<string> | null;
 }
@@ -52,7 +52,7 @@ export interface FilterContext {
  */
 export function countActiveAdvancedFilters(filters: TaskFilterState): number {
   let count = 0;
-  if (filters.milestoneId) count++;
+  if (filters.systemId) count++;
   if (filters.workTypes && filters.workTypes.length > 0) count++;
   if (filters.opsOwners && filters.opsOwners.length > 0) count++;
   if (filters.businessAnalysts && filters.businessAnalysts.length > 0) count++;
@@ -118,7 +118,7 @@ export function filterTasks(
 ): Task[] {
   const normalizedContext: FilterContext =
     typeof context === 'string' ? { todayStr: context } : context;
-  const { todayStr, projectMap, milestoneMap, executionTaskIds, worklogTaskIds } = normalizedContext;
+  const { todayStr, crMap, systemMap, executionTaskIds, worklogTaskIds } = normalizedContext;
 
   const searchTerm = filterState.search.trim().toLowerCase();
 
@@ -136,18 +136,15 @@ export function filterTasks(
 
     // 2. Hierarchy scope filter (D-04)
     if (filterState.hierarchyScope === 'standalone') {
-      if (task.projectId !== undefined) {
+      if (task.systemId !== undefined) {
         return false;
       }
-    } else if (filterState.hierarchyScope === 'projects') {
-      if (task.projectId === undefined) {
-        return false;
-      }
-      if (filterState.projectId !== null && task.projectId !== filterState.projectId) {
+    } else if (filterState.hierarchyScope === 'cr') {
+      if (filterState.crId !== null && task.crId !== filterState.crId) {
         return false;
       }
     } else if (filterState.hierarchyScope === 'all') {
-      if (filterState.projectId !== null && task.projectId !== filterState.projectId) {
+      if (filterState.crId !== null && task.crId !== filterState.crId) {
         return false;
       }
     }
@@ -183,9 +180,9 @@ export function filterTasks(
       }
     }
 
-    // 6. Milestone filter (SRCH-03)
-    if (filterState.milestoneId) {
-      if (task.milestoneId !== filterState.milestoneId) {
+    // 6. Subsystem filter (SRCH-03)
+    if (filterState.systemId) {
+      if (task.systemId !== filterState.systemId) {
         return false;
       }
     }
@@ -235,13 +232,10 @@ export function filterTasks(
       }
     }
 
-    // Resolve ancestors for tag inheritance if needed
+    // Resolve the CR ancestor for tag inheritance if needed
     const ancestors =
-      projectMap || milestoneMap
-        ? {
-            project: task.projectId ? projectMap?.get(task.projectId) : undefined,
-            milestone: task.milestoneId ? milestoneMap?.get(task.milestoneId) : undefined,
-          }
+      crMap || systemMap
+        ? { cr: task.crId ? crMap?.get(task.crId) : undefined }
         : {};
 
     // 10. Ops Owners filter with inheritance (SRCH-03, D-03)
