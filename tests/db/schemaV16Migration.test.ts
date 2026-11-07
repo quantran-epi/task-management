@@ -10,7 +10,7 @@ import { SCHEMA_V15 } from '../../src/db/schema';
  * discoverable (`npx vitest list`) and every behaviour below is encoded as a real
  * assertion against a real V15 fixture database.
  *
- * `tests/setup.ts` already imports `fake-indexeddb/auto` globally — never re-import it.
+ * `tests/setup.ts` already installs the IndexedDB shim globally — never re-import it.
  */
 
 const NOW = '2026-11-07T00:00:00.000Z';
@@ -222,11 +222,11 @@ describe('Dexie SCHEMA_V16 Migration (ENT-NORM-01)', () => {
 
       const linked = await db.tasks.get('task-linked');
       expect(linked).toBeDefined();
-      expect((linked as Record<string, unknown>).crId).toBe('proj-1');
+      expect((linked as unknown as Record<string, unknown>).crId).toBe('proj-1');
 
       const linkedWithMilestone = await db.tasks.get('task-linked-ms');
       expect(linkedWithMilestone).toBeDefined();
-      expect((linkedWithMilestone as Record<string, unknown>).crId).toBe('proj-1');
+      expect((linkedWithMilestone as unknown as Record<string, unknown>).crId).toBe('proj-1');
 
       const orphan = await db.tasks.get('task-orphan');
       expect(orphan).toBeUndefined();
@@ -256,7 +256,7 @@ describe('Dexie SCHEMA_V16 Migration (ENT-NORM-01)', () => {
 
       const cr = await db.changeRequests.get('proj-1');
       expect(cr).toBeDefined();
-      expect((cr as Record<string, unknown>).targets).toEqual([
+      expect((cr as unknown as Record<string, unknown>).targets).toEqual([
         { systemId: 'a' },
         { systemId: 'b' },
       ]);
