@@ -310,10 +310,10 @@ export const CONVENTIONS_CONFLICT_POLICY = [
 ].join('\n');
 
 export function buildConventionsSegment(conventions?: {
-  global?: string;
-  repo?: string;
-  repoPath?: string;
-}): string {
+  global?: string | undefined;
+  repo?: string | undefined;
+  repoPath?: string | undefined;
+} | undefined): string {
   const globalText = conventions?.global?.trim();
   const repoText = conventions?.repo?.trim();
   if (!globalText && !repoText) return '';
@@ -346,10 +346,10 @@ export interface ComposeSdlcTurnInput {
   artifact?: SdlcArtifactKindForTurn;
   grounding?: string;
   conventions?: {
-    global?: string;
-    repo?: string;
-    repoPath?: string;
-  };
+    global?: string | undefined;
+    repo?: string | undefined;
+    repoPath?: string | undefined;
+  } | undefined;
   dynamicReadOnlyToolNames?: readonly string[];
   /** Exact names present in this turn's payload; the policy must not advertise anything else. */
   availableToolNames?: readonly string[];

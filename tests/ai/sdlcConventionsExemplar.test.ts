@@ -150,7 +150,7 @@ describe('SDLC Conventions Exemplar & Conflict Witness Test Suite (SDLC-CONV-06,
     });
 
     it('regression: cleanly omits conventions when empty or undefined without breaking layer order', () => {
-      const cases = [
+      const cases: Array<{ global?: string | undefined; repo?: string | undefined; repoPath?: string | undefined } | undefined> = [
         undefined,
         {},
         { global: '', repo: '' },

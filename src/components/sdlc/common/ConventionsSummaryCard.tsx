@@ -12,13 +12,13 @@ import dayjs from 'dayjs';
 import { ConventionsDetailModal } from './ConventionsDetailModal';
 
 export interface ConventionsSummaryProps {
-  globalText?: string;
-  repoText?: string;
-  repoPath?: string;
-  loadedAt?: string;
-  sshStatus?: 'connected' | 'not_linked' | 'error' | 'file_not_found';
-  loading?: boolean;
-  onRefresh?: () => void;
+  globalText?: string | undefined;
+  repoText?: string | undefined;
+  repoPath?: string | undefined;
+  loadedAt?: string | undefined;
+  sshStatus?: 'connected' | 'not_linked' | 'error' | 'file_not_found' | undefined;
+  loading?: boolean | undefined;
+  onRefresh?: (() => void) | undefined;
 }
 
 export const ConventionsSummaryCard: React.FC<ConventionsSummaryProps> = ({
