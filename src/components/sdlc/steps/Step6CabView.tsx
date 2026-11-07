@@ -17,14 +17,14 @@ import { formatGuardMessage } from '../../../services/wizard/workflowGuards';
 import { ConventionsSummaryCard, type ConventionsSummaryProps } from '../common/ConventionsSummaryCard';
 import { buildWizardDocx } from '../../../services/export/wizardDocx';
 import { createStoreZip, downloadBlob } from '../../../utils/fileExport';
-import { completeCr } from '../../../services/wizard/sdlcCrManager';
+import { updateChangeRequest } from '../../../db/repositories/changeRequestRepo';
 import type { SdlcWizardRuntime } from '../../../services/wizard/sdlcWizardRuntime';
 import type { SdlcStepId, SdlcWorkflowState } from '../../../services/wizard/workflowSchemas';
 
 export interface Step6CabViewProps {
   /** D-06: a historical card pins the CAB preview to that exact approved version, read-only. */
   viewedVersion?: { version: number; content: string; title: string } | undefined;
-  projectId: string;
+  changeRequestId: string;
   crId: string;
   workflowState?: SdlcWorkflowState | undefined;
   /** D-17: only ever called from the explicit `Lưu & Phê duyệt` action — never from generation. */
@@ -41,7 +41,7 @@ export interface Step6CabViewProps {
 }
 
 export const Step6CabView: React.FC<Step6CabViewProps> = ({
-  projectId,
+  changeRequestId,
   crId,
   workflowState,
   viewedVersion,
@@ -93,7 +93,7 @@ export const Step6CabView: React.FC<Step6CabViewProps> = ({
       setGenerating(true);
       const base = {
         db,
-        projectId,
+        changeRequestId,
         threadId: workflowState.threadId,
         sessionId: workflowState.sessionId,
         draftRevision: (cab?.version ?? 0) + 1,
@@ -143,8 +143,8 @@ export const Step6CabView: React.FC<Step6CabViewProps> = ({
       const res = await exportHubArtifact({
         db,
         kind,
-        projectId,
-        threadId: `sdlc:${projectId}:${crId}:CAB`,
+        changeRequestId,
+        threadId: `sdlc:${changeRequestId}:${crId}:CAB`,
         sessionId: workflowState.sessionId,
         metadata: workflowState.metadata,
         state: workflowState,
@@ -204,7 +204,8 @@ export const Step6CabView: React.FC<Step6CabViewProps> = ({
   };
 
   const handleCompleteCr = async () => {
-    await completeCr(projectId, crId, db);
+    // T-31.2-64: completion writes through the CR repo, never the legacy settings store.
+    await updateChangeRequest(crId, { status: 'Done' }, db);
     setCompleted(true);
     message.success('Đã hoàn tất quy trình SDLC và đóng CR thành công!');
   };

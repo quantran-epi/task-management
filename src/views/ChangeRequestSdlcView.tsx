@@ -933,7 +933,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
       case 'CAB':
         return (
           <Step6CabView
-            projectId={projectId}
+            changeRequestId={projectId}
             crId={activeCrId}
             workflowState={workflowState}
             incomingDraft={draftCab}
