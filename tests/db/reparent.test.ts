@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TaskPlannerDatabase } from '../../src/db/index';
-import { createProject } from '../../src/db/repositories/projectRepo';
-import { createMilestone } from '../../src/db/repositories/milestoneRepo';
 import { createTask, getTask, reparentTask } from '../../src/db/repositories/taskRepo';
+import { createChangeRequest } from '../../src/db/repositories/changeRequestRepo';
+import { createSystem } from '../../src/db/repositories/systemRepo';
 
 describe('Task Reparenting (WORK-04, D-09, D-10, T-02-02)', () => {
   let testDb: TaskPlannerDatabase;
@@ -16,78 +16,96 @@ describe('Task Reparenting (WORK-04, D-09, D-10, T-02-02)', () => {
     await testDb.delete();
   });
 
-  it('moves standalone task to project-level without changing task.id', async () => {
-    const task = await createTask({ name: 'Standalone Task' }, testDb);
-    const originalId = task.id;
-    const project = await createProject({ name: 'Project A' }, testDb);
+  async function seedCrWithTarget(name: string) {
+    const parent = await createSystem(
+      { name: `${name} Parent`, code: `${name.toUpperCase()}_P`, type: 'LOGICAL_GROUP' },
+      testDb
+    );
+    const subsystem = await createSystem(
+      { name: `${name} Sub`, code: `${name.toUpperCase()}_S`, type: 'SERVICE', parentId: parent.id },
+      testDb
+    );
+    const cr = await createChangeRequest(
+      {
+        name,
+        code: `${name.toUpperCase()}-1`,
+        type: 'ENHANCEMENT',
+        targets: [{ systemId: subsystem.id }],
+      },
+      testDb
+    );
+    return { cr, subsystem };
+  }
 
-    const reparented = await reparentTask(task.id, project.id, undefined, testDb);
+  it('moves a task to CR level without changing task.id', async () => {
+    const { cr } = await seedCrWithTarget('Alpha');
+    const task = await createTask({ name: 'Standalone Task', crId: cr.id }, testDb);
+    const originalId = task.id;
+
+    const reparented = await reparentTask(task.id, cr.id, undefined, testDb);
 
     expect(reparented.id).toBe(originalId);
-    expect(reparented.projectId).toBe(project.id);
-    expect(reparented.milestoneId).toBeUndefined();
+    expect(reparented.crId).toBe(cr.id);
+    expect(reparented.systemId).toBeUndefined();
 
     const fetched = await getTask(originalId, testDb);
-    expect(fetched?.projectId).toBe(project.id);
+    expect(fetched?.crId).toBe(cr.id);
   });
 
-  it('moves task to milestone-level under project without changing task.id', async () => {
-    const project = await createProject({ name: 'Project A' }, testDb);
-    const milestone = await createMilestone({ projectId: project.id, name: 'Milestone 1' }, testDb);
-    const task = await createTask({ name: 'Task 1', projectId: project.id }, testDb);
+  it('moves a task onto a target subsystem without changing task.id', async () => {
+    const { cr, subsystem } = await seedCrWithTarget('Beta');
+    const task = await createTask({ name: 'Task 1', crId: cr.id }, testDb);
     const originalId = task.id;
 
-    const reparented = await reparentTask(task.id, project.id, milestone.id, testDb);
+    const reparented = await reparentTask(task.id, cr.id, subsystem.id, testDb);
 
     expect(reparented.id).toBe(originalId);
-    expect(reparented.projectId).toBe(project.id);
-    expect(reparented.milestoneId).toBe(milestone.id);
+    expect(reparented.crId).toBe(cr.id);
+    expect(reparented.systemId).toBe(subsystem.id);
   });
 
-  it('resets milestoneId to undefined when moving task to standalone', async () => {
-    const project = await createProject({ name: 'Project A' }, testDb);
-    const milestone = await createMilestone({ projectId: project.id, name: 'Milestone 1' }, testDb);
+  it('resets systemId to undefined when moving a task off its subsystem', async () => {
+    const { cr, subsystem } = await seedCrWithTarget('Gamma');
     const task = await createTask(
-      {
-        name: 'Task with MS',
-        projectId: project.id,
-        milestoneId: milestone.id,
-      },
+      { name: 'Task with system', crId: cr.id, systemId: subsystem.id },
       testDb
     );
 
-    const standalone = await reparentTask(task.id, undefined, undefined, testDb);
+    const detached = await reparentTask(task.id, cr.id, undefined, testDb);
 
-    expect(standalone.id).toBe(task.id);
-    expect(standalone.projectId).toBeUndefined();
-    expect(standalone.milestoneId).toBeUndefined();
+    expect(detached.id).toBe(task.id);
+    expect(detached.crId).toBe(cr.id);
+    expect(detached.systemId).toBeUndefined();
   });
 
-  it('resets milestoneId when moving task to a different project without targetMilestoneId (D-10)', async () => {
-    const projectA = await createProject({ name: 'Project A' }, testDb);
-    const projectB = await createProject({ name: 'Project B' }, testDb);
-    const milestoneA = await createMilestone({ projectId: projectA.id, name: 'Milestone in A' }, testDb);
+  it('resets systemId when moving a task to a different CR without a target subsystem', async () => {
+    const { cr: crA, subsystem: subsystemA } = await seedCrWithTarget('Delta');
+    const { cr: crB } = await seedCrWithTarget('Epsilon');
 
     const task = await createTask(
-      {
-        name: 'Task from A',
-        projectId: projectA.id,
-        milestoneId: milestoneA.id,
-      },
+      { name: 'Task from A', crId: crA.id, systemId: subsystemA.id },
       testDb
     );
 
-    // Reparenting to Project B without specifying target milestone must reset milestoneId
-    const reparented = await reparentTask(task.id, projectB.id, undefined, testDb);
+    const reparented = await reparentTask(task.id, crB.id, undefined, testDb);
 
     expect(reparented.id).toBe(task.id);
-    expect(reparented.projectId).toBe(projectB.id);
-    expect(reparented.milestoneId).toBeUndefined();
+    expect(reparented.crId).toBe(crB.id);
+    expect(reparented.systemId).toBeUndefined();
+  });
+
+  it('rejects a target subsystem that is not one of the CR targets (T-31.2-01)', async () => {
+    const { cr: crA } = await seedCrWithTarget('Zeta');
+    const { subsystem: subsystemB } = await seedCrWithTarget('Eta');
+    const task = await createTask({ name: 'Task', crId: crA.id }, testDb);
+
+    await expect(reparentTask(task.id, crA.id, subsystemB.id, testDb)).rejects.toThrow();
   });
 
   it('throws error when reparenting non-existent task', async () => {
-    await expect(reparentTask('non-existent-uuid', undefined, undefined, testDb)).rejects.toThrow(
-      'Task not found'
-    );
+    const { cr } = await seedCrWithTarget('Theta');
+    await expect(
+      reparentTask('non-existent-uuid', cr.id, undefined, testDb)
+    ).rejects.toThrow('Task not found');
   });
 });

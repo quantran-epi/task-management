@@ -63,7 +63,7 @@ describe('localSqlitePersistence', () => {
 
     enqueueLocalSqliteChange(db, 'tasks', 'task-1', { id: 'task-1', name: 'old' }, false);
     enqueueLocalSqliteChange(db, 'tasks', 'task-1', { id: 'task-1', name: 'new' }, false);
-    enqueueLocalSqliteChange(db, 'projects', 'project-1', null, true);
+    enqueueLocalSqliteChange(db, 'changeRequests', 'cr-1', null, true);
 
     const result = await flushLocalSqliteNow(db);
 
@@ -72,7 +72,7 @@ describe('localSqlitePersistence', () => {
       path: 'tasks.sqlite',
       changes: expect.arrayContaining([
         { tableName: 'tasks', rowId: 'task-1', payloadJson: '{"id":"task-1","name":"new"}', deleted: false },
-        { tableName: 'projects', rowId: 'project-1', payloadJson: null, deleted: true },
+        { tableName: 'changeRequests', rowId: 'cr-1', payloadJson: null, deleted: true },
       ]),
     });
     await expect(db.settings.get(SQLITE_SETTING_KEYS.queue)).resolves.toMatchObject({ value: [] });

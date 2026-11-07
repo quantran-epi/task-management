@@ -93,6 +93,32 @@ async function seedKnowledge(db: TaskPlannerDatabase, suffix = ''): Promise<void
   await db.dlpAudits.add(dlpAudit);
 }
 
+/** D-49: the version-11 envelope — CR-axis tables only, no projects/milestones. */
+function v11Envelope(): BackupEnvelope {
+  return {
+    app: APP_MARKER,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    exportedAt: NOW,
+    tables: {
+      changeRequests: [],
+      systems: [],
+      tasks: [],
+      capacityRules: [],
+      capacityOverrides: [],
+      plannedAllocations: [],
+    },
+    counts: {
+      changeRequests: 0,
+      systems: 0,
+      tasks: 0,
+      capacityRules: 0,
+      capacityOverrides: 0,
+      plannedAllocations: 0,
+    },
+  };
+}
+
+/** A pre-31.2 envelope: rejected outright at the envelope stage (D-49). */
 function legacyEnvelope(): BackupEnvelope {
   return {
     app: APP_MARKER,
@@ -152,12 +178,12 @@ describe('Schema V10 knowledge backup lifecycle', () => {
     expect(JSON.stringify(envelope.tables.dlpAudits)).not.toContain('Canonical Markdown');
   });
 
-  it('rejects malformed knowledge records and accepts legacy payloads without V10 tables', () => {
-    const malformed = legacyEnvelope();
+  it('rejects malformed knowledge records and accepts v11 payloads without V10 tables', () => {
+    const malformed = v11Envelope();
     malformed.tables.documentSets = [{ ...documentSet, id: 'not-a-uuid' }];
 
     const invalidResult = validateBackupPayload(malformed);
-    const legacyResult = validateBackupPayload(legacyEnvelope());
+    const withoutSets = validateBackupPayload(v11Envelope());
 
     expect(invalidResult.valid).toBe(false);
     expect(invalidResult.errors).toEqual(
@@ -165,8 +191,17 @@ describe('Schema V10 knowledge backup lifecycle', () => {
         expect.objectContaining({ table: 'documentSets', field: 'id' }),
       ])
     );
-    expect(legacyResult).toMatchObject({ valid: true, errors: [] });
-    expect(legacyResult.envelope?.tables.documentSets).toBeUndefined();
+    expect(withoutSets).toMatchObject({ valid: true, errors: [] });
+    expect(withoutSets.envelope?.tables.documentSets).toBeUndefined();
+  });
+
+  it('rejects a pre-31.2 envelope carrying projects/milestones (D-49)', () => {
+    const result = validateBackupPayload(legacyEnvelope());
+
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((error) => error.message.includes('Backup phiên bản cũ không còn được hỗ trợ'))
+    ).toBe(true);
   });
 
   it('restores knowledge records, replaces stale data, and rolls back the pre-restore snapshot', async () => {
@@ -201,12 +236,12 @@ describe('Schema V10 knowledge backup lifecycle', () => {
     expect(await restoredDb.dlpAudits.toArray()).toEqual([dlpAudit]);
   });
 
-  it('restores a legacy payload without erasing the local knowledge catalog', async () => {
+  it('restores a v11 payload without erasing the local knowledge catalog', async () => {
     await seedKnowledge(restoredDb);
 
-    await restoreBackupPayload(legacyEnvelope(), restoredDb);
+    await restoreBackupPayload(v11Envelope(), restoredDb);
 
-    // Absent documentSets means "legacy payload did not know about sets", not "delete them".
+    // Absent documentSets means "payload did not know about sets", not "delete them".
     expect(await restoredDb.documentSets.toArray()).toEqual([documentSet]);
     expect(await restoredDb.publishedDocuments.toArray()).toEqual([publishedDocument]);
     expect(await restoredDb.publishAttempts.toArray()).toEqual([publishAttempt]);
@@ -216,7 +251,7 @@ describe('Schema V10 knowledge backup lifecycle', () => {
   it('clears knowledge tables when payload explicitly carries an empty documentSets array', async () => {
     await seedKnowledge(restoredDb);
 
-    const envelope = legacyEnvelope();
+    const envelope = v11Envelope();
     envelope.tables.documentSets = [];
 
     await restoreBackupPayload(envelope, restoredDb);
@@ -230,20 +265,20 @@ describe('Schema V10 knowledge backup lifecycle', () => {
   it('rolls back to a legacy snapshot without erasing the live knowledge catalog', async () => {
     await seedKnowledge(restoredDb);
 
-    // Simulate a pre-v10 snapshot (no documentSets field at all).
+    // Simulate a snapshot taken before the knowledge tables existed.
     const legacySnapshot = {
       timestamp: NOW,
       tables: {
-        projects: [],
-        milestones: [],
+        changeRequests: [],
+        systems: [],
         tasks: [],
         capacityRules: [],
         capacityOverrides: [],
         plannedAllocations: [],
       },
       counts: {
-        projects: 0,
-        milestones: 0,
+        changeRequests: 0,
+        systems: 0,
         tasks: 0,
         capacityRules: 0,
         capacityOverrides: 0,

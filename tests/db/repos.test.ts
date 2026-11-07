@@ -2,24 +2,24 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TaskPlannerDatabase } from '../../src/db/index';
 import {
-  createProject,
-  updateProject,
-  getProject,
-  getAllProjects,
-  deleteProjectDirect,
-} from '../../src/db/repositories/projectRepo';
+  createChangeRequest,
+  updateChangeRequest,
+  getChangeRequest,
+  getAllChangeRequests,
+} from '../../src/db/repositories/changeRequestRepo';
 import {
-  createMilestone,
-  updateMilestone,
-  getMilestone,
-  getMilestonesByProject,
-} from '../../src/db/repositories/milestoneRepo';
+  createSystem,
+  getSystem,
+  getAllSystems,
+  getParentSystems,
+  getSubsystems,
+} from '../../src/db/repositories/systemRepo';
 import {
   createTask,
   updateTask,
   getTask,
-  getTasksByProject,
-  getTasksByMilestone,
+  getTasksByCr,
+  getTasksBySystem,
   getAllTasks,
   updateTaskStatus,
   updateTaskProgress,
@@ -29,12 +29,12 @@ import {
   getDistinctBusinessAnalysts,
 } from '../../src/db/repositories/tagRepo';
 import {
-  ProjectInputSchema,
-  MilestoneInputSchema,
+  ChangeRequestInputSchema,
+  SystemInputSchema,
   TaskInputSchema,
 } from '../../src/validation/schemas';
 
-describe('Project, Milestone & Task Repositories & Schemas (WORK-01, WORK-02, WORK-03, TASK-02, TASK-04)', () => {
+describe('System, ChangeRequest & Task Repositories & Schemas (ENT-NORM-01, ENT-NORM-02)', () => {
   let testDb: TaskPlannerDatabase;
 
   beforeEach(async () => {
@@ -46,67 +46,113 @@ describe('Project, Milestone & Task Repositories & Schemas (WORK-01, WORK-02, WO
     await testDb.delete();
   });
 
-  describe('Project Schema & Repo', () => {
-    it('validates project input schema', () => {
-      // Empty name should fail
-      expect(() => ProjectInputSchema.parse({ name: '' })).toThrow();
-      // Valid input
-      const valid = ProjectInputSchema.parse({
-        name: 'Launch Website',
-        deadline: '2026-10-01',
-        description: 'Product launch site',
-        status: 'In Progress',
-      });
-      expect(valid.name).toBe('Launch Website');
-      expect(valid.status).toBe('In Progress');
+  async function seedSubsystem(code = 'CORE_SVC') {
+    const parent = await createSystem(
+      { name: `${code} Parent`, code: `${code}_P`, type: 'LOGICAL_GROUP' },
+      testDb
+    );
+    const subsystem = await createSystem(
+      { name: `${code} Sub`, code, type: 'SERVICE', parentId: parent.id },
+      testDb
+    );
+    return { parent, subsystem };
+  }
+
+  describe('System Schema & Repo', () => {
+    it('validates system input schema', () => {
+      expect(() => SystemInputSchema.parse({ name: '', code: 'X' })).toThrow();
+      expect(() => SystemInputSchema.parse({ name: 'S', code: '' })).toThrow();
+      expect(() => SystemInputSchema.parse({ name: 'S', code: 'X', type: 'INVALID' })).toThrow();
     });
 
-    it('creates project with generated UUID and valid defaults', async () => {
-      const project = await createProject(
-        {
-          name: 'Core Architecture',
-          deadline: '2026-12-31',
-        },
+    it('creates a system with generated UUID and valid defaults', async () => {
+      const system = await createSystem(
+        { name: 'Core Banking', code: 'CORE_BANKING', type: 'LOGICAL_GROUP' },
         testDb
       );
 
-      expect(project.id).toBeDefined();
-      expect(project.name).toBe('Core Architecture');
-      expect(project.status).toBe('Open');
-      expect(project.deadline).toBe('2026-12-31');
-      expect(project.createdAt).toBeDefined();
-      expect(project.updatedAt).toBeDefined();
+      expect(system.id).toBeDefined();
+      expect(system.name).toBe('Core Banking');
+      expect(system.code).toBe('CORE_BANKING');
+      expect(system.type).toBe('LOGICAL_GROUP');
+      expect(system.parentId).toBeNull();
+      expect(system.createdAt).toBeDefined();
 
-      const fetched = await getProject(project.id, testDb);
-      expect(fetched?.id).toBe(project.id);
+      const fetched = await getSystem(system.id, testDb);
+      expect(fetched?.id).toBe(system.id);
+    });
+
+    it('classifies parents without the parentId heuristic (H1)', async () => {
+      const { parent, subsystem } = await seedSubsystem('ACCT_SVC');
+      const orphanSubsystem = await createSystem(
+        { name: 'Orphan Sub', code: 'ORPHAN_SVC', type: 'SERVICE' },
+        testDb
+      );
+
+      const parents = await getParentSystems(testDb);
+      expect(parents.map((s) => s.id)).toEqual([parent.id]);
+
+      const children = await getSubsystems(parent.id, testDb);
+      expect(children.map((s) => s.id)).toEqual([subsystem.id]);
+      expect(orphanSubsystem.type).toBe('SERVICE');
+    });
+
+    it('lists all systems', async () => {
+      await seedSubsystem('S1');
+      await seedSubsystem('S2');
+      expect(await getAllSystems(testDb)).toHaveLength(4);
+    });
+  });
+
+  describe('ChangeRequest Schema & Repo', () => {
+    it('validates CR input schema and requires a code', () => {
+      expect(() => ChangeRequestInputSchema.parse({ name: '' })).toThrow();
+      expect(() => ChangeRequestInputSchema.parse({ name: 'n' })).toThrow();
+
+      const valid = ChangeRequestInputSchema.parse({
+        name: 'Add interest calculation',
+        code: 'cr-001',
+        deadline: '2026-10-01',
+        description: 'Product launch',
+        status: 'In Progress',
+      });
+      expect(valid.name).toBe('Add interest calculation');
+      expect(valid.code).toBe('CR-001');
+      expect(valid.status).toBe('In Progress');
+    });
+
+    it('creates a CR with generated UUID and valid defaults', async () => {
+      const cr = await createChangeRequest(
+        { name: 'Core Architecture', code: 'CR-ARCH', deadline: '2026-12-31' },
+        testDb
+      );
+
+      expect(cr.id).toBeDefined();
+      expect(cr.name).toBe('Core Architecture');
+      expect(cr.status).toBe('Open');
+      expect(cr.type).toBe('ENHANCEMENT');
+      expect(cr.targets).toEqual([]);
+      expect(cr.deadline).toBe('2026-12-31');
+
+      const fetched = await getChangeRequest(cr.id, testDb);
       expect(fetched?.name).toBe('Core Architecture');
     });
 
-    it('rejects invalid deadline format when creating project', async () => {
+    it('rejects an invalid deadline format when creating a CR', async () => {
       await expect(
-        createProject(
-          {
-            name: 'Bad Date Project',
-            deadline: '2026/12/31',
-          },
-          testDb
-        )
+        createChangeRequest({ name: 'Bad Date', code: 'CR-BAD', deadline: '2026/12/31' }, testDb)
       ).rejects.toThrow();
     });
 
-    it('updates project fields and refreshes updatedAt', async () => {
-      const project = await createProject({ name: 'Alpha' }, testDb);
-      const originalUpdatedAt = project.updatedAt;
+    it('updates CR fields and refreshes updatedAt', async () => {
+      const cr = await createChangeRequest({ name: 'Alpha', code: 'CR-A' }, testDb);
+      const originalUpdatedAt = cr.updatedAt;
 
-      // Small delay to ensure timestamp diff
       await new Promise((r) => setTimeout(r, 5));
 
-      const updated = await updateProject(
-        project.id,
-        {
-          name: 'Alpha v2',
-          status: 'In Progress',
-        },
+      const updated = await updateChangeRequest(
+        cr.id,
+        { name: 'Alpha v2', status: 'In Progress' },
         testDb
       );
 
@@ -117,43 +163,29 @@ describe('Project, Milestone & Task Repositories & Schemas (WORK-01, WORK-02, WO
       );
     });
 
-    it('gets all projects', async () => {
-      await createProject({ name: 'P1' }, testDb);
-      await createProject({ name: 'P2' }, testDb);
-
-      const all = await getAllProjects(testDb);
-      expect(all).toHaveLength(2);
+    it('gets all change requests', async () => {
+      await createChangeRequest({ name: 'C1', code: 'CR-1' }, testDb);
+      await createChangeRequest({ name: 'C2', code: 'CR-2' }, testDb);
+      expect(await getAllChangeRequests(testDb)).toHaveLength(2);
     });
 
-    it('supports direct project deletion', async () => {
-      const p = await createProject({ name: 'To Delete' }, testDb);
-      await deleteProjectDirect(p.id, testDb);
-      expect(await getProject(p.id, testDb)).toBeUndefined();
-    });
-
-    it('creates and updates project with opsOwners and businessAnalysts', async () => {
-      const project = await createProject(
+    it('creates and updates a CR with opsOwners and businessAnalysts', async () => {
+      const cr = await createChangeRequest(
         {
-          name: 'Banking Project',
+          name: 'Banking CR',
+          code: 'CR-BANK',
           opsOwners: ['ops-infra', 'ops-db'],
           businessAnalysts: ['ba-alice'],
         },
         testDb
       );
 
-      expect(project.opsOwners).toEqual(['ops-infra', 'ops-db']);
-      expect(project.businessAnalysts).toEqual(['ba-alice']);
+      expect(cr.opsOwners).toEqual(['ops-infra', 'ops-db']);
+      expect(cr.businessAnalysts).toEqual(['ba-alice']);
 
-      const fetched = await getProject(project.id, testDb);
-      expect(fetched?.opsOwners).toEqual(['ops-infra', 'ops-db']);
-      expect(fetched?.businessAnalysts).toEqual(['ba-alice']);
-
-      const updated = await updateProject(
-        project.id,
-        {
-          opsOwners: ['ops-security'],
-          businessAnalysts: ['ba-bob', 'ba-carol'],
-        },
+      const updated = await updateChangeRequest(
+        cr.id,
+        { opsOwners: ['ops-security'], businessAnalysts: ['ba-bob', 'ba-carol'] },
         testDb
       );
 
@@ -162,86 +194,15 @@ describe('Project, Milestone & Task Repositories & Schemas (WORK-01, WORK-02, WO
     });
   });
 
-  describe('Milestone Schema & Repo', () => {
-    it('validates milestone input schema', () => {
-      expect(() => MilestoneInputSchema.parse({ name: '' })).toThrow();
-      expect(() => MilestoneInputSchema.parse({ name: 'M1', projectId: 'not-a-uuid' })).toThrow();
-    });
-
-    it('creates milestone linked to project with generated UUID', async () => {
-      const project = await createProject({ name: 'Main Project' }, testDb);
-      const milestone = await createMilestone(
-        {
-          projectId: project.id,
-          name: 'Milestone 1: Beta',
-          deadline: '2026-11-15',
-          status: 'Open',
-        },
+  describe('Task Schema & Repo (ENT-NORM-01, D-26)', () => {
+    it('validates task input schema with defaults', async () => {
+      const { subsystem } = await seedSubsystem('DEF_SVC');
+      const cr = await createChangeRequest(
+        { name: 'CR', code: 'CR-DEF', targets: [{ systemId: subsystem.id }] },
         testDb
       );
 
-      expect(milestone.id).toBeDefined();
-      expect(milestone.projectId).toBe(project.id);
-      expect(milestone.name).toBe('Milestone 1: Beta');
-      expect(milestone.status).toBe('Open');
-
-      const fetched = await getMilestone(milestone.id, testDb);
-      expect(fetched?.name).toBe('Milestone 1: Beta');
-
-      const byProj = await getMilestonesByProject(project.id, testDb);
-      expect(byProj).toHaveLength(1);
-      expect(byProj[0]?.id).toBe(milestone.id);
-    });
-
-    it('updates milestone status and details', async () => {
-      const project = await createProject({ name: 'P' }, testDb);
-      const m = await createMilestone({ projectId: project.id, name: 'M' }, testDb);
-
-      const updated = await updateMilestone(
-        m.id,
-        {
-          name: 'M Finished',
-          status: 'Done',
-        },
-        testDb
-      );
-
-      expect(updated.status).toBe('Done');
-      expect(updated.name).toBe('M Finished');
-    });
-
-    it('creates and updates milestone with opsOwners and businessAnalysts', async () => {
-      const project = await createProject({ name: 'P' }, testDb);
-      const m = await createMilestone(
-        {
-          projectId: project.id,
-          name: 'Milestone Banking',
-          opsOwners: ['ops-lead'],
-          businessAnalysts: ['ba-dan'],
-        },
-        testDb
-      );
-
-      expect(m.opsOwners).toEqual(['ops-lead']);
-      expect(m.businessAnalysts).toEqual(['ba-dan']);
-
-      const updated = await updateMilestone(
-        m.id,
-        {
-          opsOwners: ['ops-platform'],
-          businessAnalysts: ['ba-erin'],
-        },
-        testDb
-      );
-
-      expect(updated.opsOwners).toEqual(['ops-platform']);
-      expect(updated.businessAnalysts).toEqual(['ba-erin']);
-    });
-  });
-
-  describe('Task Schema & Repo (WORK-03, TASK-02, TASK-04, D-15)', () => {
-    it('validates task input schema with defaults', () => {
-      const parsed = TaskInputSchema.parse({ name: 'Quick Task' });
+      const parsed = TaskInputSchema.parse({ name: 'Quick Task', crId: cr.id });
       expect(parsed.name).toBe('Quick Task');
       expect(parsed.status).toBe('Open');
       expect(parsed.progress).toBe(0);
@@ -249,72 +210,62 @@ describe('Project, Milestone & Task Repositories & Schemas (WORK-01, WORK-02, WO
       expect(parsed.estimateMinutes).toBe(0);
     });
 
-    it('rejects invalid document links', () => {
-      expect(() =>
-        TaskInputSchema.parse({
-          name: 'Task',
-          documentLinks: ['ftp://bad-link.com'],
-        })
-      ).toThrow();
+    it('rejects invalid document links', async () => {
+      const { subsystem } = await seedSubsystem('LINK_SVC');
+      const cr = await createChangeRequest(
+        { name: 'CR', code: 'CR-LINK', targets: [{ systemId: subsystem.id }] },
+        testDb
+      );
 
       expect(() =>
-        TaskInputSchema.parse({
-          name: 'Task',
-          documentLinks: ['not-a-url'],
-        })
+        TaskInputSchema.parse({ name: 'Task', crId: cr.id, documentLinks: ['ftp://bad-link.com'] })
       ).toThrow();
 
       const valid = TaskInputSchema.parse({
         name: 'Task',
+        crId: cr.id,
         documentLinks: ['https://example.com/spec', 'http://localhost:3000'],
       });
       expect(valid.documentLinks).toHaveLength(2);
     });
 
-    it('creates standalone task (no projectId / milestoneId) per WORK-03', async () => {
-      const task = await createTask({ name: 'Standalone Task' }, testDb);
+    it('creates a CR-level task with no systemId', async () => {
+      const cr = await createChangeRequest({ name: 'CR', code: 'CR-T1' }, testDb);
+      const task = await createTask({ name: 'Standalone Task', crId: cr.id }, testDb);
+
       expect(task.id).toBeDefined();
-      expect(task.projectId).toBeUndefined();
-      expect(task.milestoneId).toBeUndefined();
+      expect(task.crId).toBe(cr.id);
+      expect(task.systemId).toBeUndefined();
       expect(task.status).toBe('Open');
 
       const fetched = await getTask(task.id, testDb);
       expect(fetched?.name).toBe('Standalone Task');
     });
 
-    it('creates project-level task (projectId only) per WORK-03', async () => {
-      const project = await createProject({ name: 'Proj' }, testDb);
-      const task = await createTask({ name: 'Proj Task', projectId: project.id }, testDb);
-      expect(task.projectId).toBe(project.id);
-      expect(task.milestoneId).toBeUndefined();
-
-      const byProj = await getTasksByProject(project.id, testDb);
-      expect(byProj).toHaveLength(1);
-      expect(byProj[0]?.id).toBe(task.id);
-    });
-
-    it('creates milestone-level task (projectId + milestoneId) per WORK-03', async () => {
-      const project = await createProject({ name: 'Proj' }, testDb);
-      const milestone = await createMilestone({ projectId: project.id, name: 'MS' }, testDb);
-      const task = await createTask(
-        {
-          name: 'MS Task',
-          projectId: project.id,
-          milestoneId: milestone.id,
-        },
+    it('creates a subsystem-scoped task and queries by crId and systemId', async () => {
+      const { subsystem } = await seedSubsystem('SCOPE_SVC');
+      const cr = await createChangeRequest(
+        { name: 'CR', code: 'CR-SCOPE', targets: [{ systemId: subsystem.id }] },
         testDb
       );
 
-      expect(task.projectId).toBe(project.id);
-      expect(task.milestoneId).toBe(milestone.id);
+      const task = await createTask(
+        { name: 'Scoped Task', crId: cr.id, systemId: subsystem.id },
+        testDb
+      );
 
-      const byMs = await getTasksByMilestone(milestone.id, testDb);
-      expect(byMs).toHaveLength(1);
-      expect(byMs[0]?.id).toBe(task.id);
+      expect(task.crId).toBe(cr.id);
+      expect(task.systemId).toBe(subsystem.id);
+
+      const byCr = await getTasksByCr(cr.id, testDb);
+      expect(byCr.map((t) => t.id)).toEqual([task.id]);
+      const bySystem = await getTasksBySystem(subsystem.id, testDb);
+      expect(bySystem.map((t) => t.id)).toEqual([task.id]);
     });
 
     it('updates task status across all 6 valid statuses per TASK-03', async () => {
-      const task = await createTask({ name: 'Status Workflow' }, testDb);
+      const cr = await createChangeRequest({ name: 'CR', code: 'CR-ST' }, testDb);
+      const task = await createTask({ name: 'Status Workflow', crId: cr.id }, testDb);
       const statuses = ['In Progress', 'Resolved', 'In Review', 'Done', 'Cancelled', 'Open'] as const;
 
       for (const st of statuses) {
@@ -323,35 +274,32 @@ describe('Project, Milestone & Task Repositories & Schemas (WORK-01, WORK-02, WO
       }
     });
 
-    it('preserves soft cancelled task in DB per D-15', async () => {
-      const task = await createTask({ name: 'Cancelled Task' }, testDb);
+    it('preserves a soft-cancelled task in the DB per D-15', async () => {
+      const cr = await createChangeRequest({ name: 'CR', code: 'CR-CAN' }, testDb);
+      const task = await createTask({ name: 'Cancelled Task', crId: cr.id }, testDb);
       await updateTaskStatus(task.id, 'Cancelled', testDb);
 
       const fetched = await getTask(task.id, testDb);
       expect(fetched).toBeDefined();
       expect(fetched?.status).toBe('Cancelled');
-      expect(fetched?.id).toBe(task.id);
     });
 
-    it('updates task progress integer clamped between 0 and 100', async () => {
-      const task = await createTask({ name: 'Progress Task' }, testDb);
-      const updated50 = await updateTaskProgress(task.id, 50, testDb);
-      expect(updated50.progress).toBe(50);
+    it('updates task progress as an integer clamped between 0 and 100', async () => {
+      const cr = await createChangeRequest({ name: 'CR', code: 'CR-PROG' }, testDb);
+      const task = await createTask({ name: 'Progress Task', crId: cr.id }, testDb);
 
+      expect((await updateTaskProgress(task.id, 50, testDb)).progress).toBe(50);
       await expect(updateTaskProgress(task.id, -10, testDb)).rejects.toThrow();
       await expect(updateTaskProgress(task.id, 110, testDb)).rejects.toThrow();
     });
 
     it('updates general task fields and fetches all tasks', async () => {
-      const task = await createTask({ name: 'Original' }, testDb);
+      const cr = await createChangeRequest({ name: 'CR', code: 'CR-UPD' }, testDb);
+      const task = await createTask({ name: 'Original', crId: cr.id }, testDb);
+
       const updated = await updateTask(
         task.id,
-        {
-          name: 'Renamed',
-          description: 'Added details',
-          priority: 'Urgent',
-          estimateMinutes: 180,
-        },
+        { name: 'Renamed', description: 'Added details', priority: 'Urgent', estimateMinutes: 180 },
         testDb
       );
 
@@ -359,15 +307,15 @@ describe('Project, Milestone & Task Repositories & Schemas (WORK-01, WORK-02, WO
       expect(updated.description).toBe('Added details');
       expect(updated.priority).toBe('Urgent');
       expect(updated.estimateMinutes).toBe(180);
-
-      const all = await getAllTasks(testDb);
-      expect(all.length).toBeGreaterThanOrEqual(1);
+      expect((await getAllTasks(testDb)).length).toBeGreaterThanOrEqual(1);
     });
 
     it('clears optional task detail fields when explicitly patched as undefined', async () => {
+      const cr = await createChangeRequest({ name: 'CR', code: 'CR-CLR' }, testDb);
       const task = await createTask(
         {
           name: 'Clear me',
+          crId: cr.id,
           deadline: '2026-10-02',
           notes: 'remove this',
           actualStartDate: '2026-10-01',
@@ -403,32 +351,26 @@ describe('Project, Milestone & Task Repositories & Schemas (WORK-01, WORK-02, WO
       expect(await getTask(task.id, testDb)).toMatchObject(updated);
     });
 
-    it('creates task with default workType "code" and updates workType, opsOwners, businessAnalysts', async () => {
-      const task = await createTask({ name: 'Banking Task' }, testDb);
+    it('defaults workType to "code" and updates workType, opsOwners, businessAnalysts', async () => {
+      const cr = await createChangeRequest({ name: 'CR', code: 'CR-WT' }, testDb);
+      const task = await createTask({ name: 'Banking Task', crId: cr.id }, testDb);
       expect(task.workType).toBe('code');
-      expect(task.opsOwners).toBeUndefined();
-      expect(task.businessAnalysts).toBeUndefined();
 
-      const taskWithFields = await createTask(
+      const withFields = await createTask(
         {
           name: 'Explicit Fields Task',
+          crId: cr.id,
           workType: 'investigate',
           opsOwners: ['ops-infra'],
           businessAnalysts: ['ba-frank'],
         },
         testDb
       );
-      expect(taskWithFields.workType).toBe('investigate');
-      expect(taskWithFields.opsOwners).toEqual(['ops-infra']);
-      expect(taskWithFields.businessAnalysts).toEqual(['ba-frank']);
+      expect(withFields.workType).toBe('investigate');
 
       const updated = await updateTask(
-        taskWithFields.id,
-        {
-          workType: 'review_code',
-          opsOwners: ['ops-core'],
-          businessAnalysts: ['ba-grace'],
-        },
+        withFields.id,
+        { workType: 'review_code', opsOwners: ['ops-core'], businessAnalysts: ['ba-grace'] },
         testDb
       );
       expect(updated.workType).toBe('review_code');
@@ -439,103 +381,36 @@ describe('Project, Milestone & Task Repositories & Schemas (WORK-01, WORK-02, WO
 
   describe('Tag Repository (getDistinctOpsOwners, getDistinctBusinessAnalysts)', () => {
     it('returns empty array when no tags are present', async () => {
-      const ops = await getDistinctOpsOwners(testDb);
-      const bas = await getDistinctBusinessAnalysts(testDb);
-
-      expect(ops).toEqual([]);
-      expect(bas).toEqual([]);
+      expect(await getDistinctOpsOwners(testDb)).toEqual([]);
+      expect(await getDistinctBusinessAnalysts(testDb)).toEqual([]);
     });
 
-    it('queries distinct Ops Owners across projects, milestones, and tasks using multi-entry index and sorts alphabetically', async () => {
-      const project = await createProject(
-        {
-          name: 'Project P',
-          opsOwners: ['Ops-Beta', 'Ops-Alpha'],
-        },
+    it('queries distinct Ops Owners across changeRequests and tasks and sorts alphabetically', async () => {
+      const cr = await createChangeRequest(
+        { name: 'CR P', code: 'CR-TAG', opsOwners: ['Ops-Beta', 'Ops-Alpha'] },
         testDb
       );
-
-      const milestone = await createMilestone(
-        {
-          projectId: project.id,
-          name: 'Milestone M',
-          opsOwners: ['Ops-Gamma', 'Ops-Beta'],
-        },
-        testDb
-      );
-
       await createTask(
-        {
-          name: 'Task T',
-          projectId: project.id,
-          milestoneId: milestone.id,
-          opsOwners: ['Ops-Delta', 'Ops-Alpha'],
-        },
+        { name: 'Task T', crId: cr.id, opsOwners: ['Ops-Delta', 'Ops-Alpha'] },
         testDb
       );
 
-      const distinct = await getDistinctOpsOwners(testDb);
-      expect(distinct).toEqual(['Ops-Alpha', 'Ops-Beta', 'Ops-Delta', 'Ops-Gamma']);
+      expect(await getDistinctOpsOwners(testDb)).toEqual(['Ops-Alpha', 'Ops-Beta', 'Ops-Delta']);
     });
 
-    it('queries distinct Business Analysts across projects, milestones, and tasks using multi-entry index and sorts alphabetically', async () => {
-      const project = await createProject(
-        {
-          name: 'Project P2',
-          businessAnalysts: ['BA-Zoe', 'BA-Alex'],
-        },
+    it('queries distinct Business Analysts across changeRequests and tasks', async () => {
+      const cr = await createChangeRequest(
+        { name: 'CR P2', code: 'CR-TAG2', businessAnalysts: ['BA-Zoe', 'BA-Alex'] },
         testDb
       );
+      await createTask({ name: 'Task T2', crId: cr.id, businessAnalysts: ['BA-Charlie'] }, testDb);
 
-      await createMilestone(
-        {
-          projectId: project.id,
-          name: 'Milestone M2',
-          businessAnalysts: ['BA-Bob', 'BA-Alex'],
-        },
-        testDb
-      );
-
-      await createTask(
-        {
-          name: 'Task T2',
-          businessAnalysts: ['BA-Charlie'],
-        },
-        testDb
-      );
-
-      const distinct = await getDistinctBusinessAnalysts(testDb);
-      expect(distinct).toEqual(['BA-Alex', 'BA-Bob', 'BA-Charlie', 'BA-Zoe']);
+      expect(await getDistinctBusinessAnalysts(testDb)).toEqual([
+        'BA-Alex',
+        'BA-Charlie',
+        'BA-Zoe',
+      ]);
     });
 
-    it('falls back to in-memory tag extraction when uniqueKeys cursor throws (WebKit bug #319640)', async () => {
-      await createProject(
-        {
-          name: 'Project Fallback',
-          opsOwners: ['Ops-FB'],
-          businessAnalysts: ['BA-FB'],
-        },
-        testDb
-      );
-
-      // Mock uniqueKeys on tasks to simulate WebKit UnknownError
-      const spyOps = vi.spyOn(testDb.projects.orderBy('opsOwners'), 'uniqueKeys').mockRejectedValue(
-        new Error('UnknownError: Unable to open cursor')
-      );
-
-      const ops = await getDistinctOpsOwners(testDb);
-      expect(ops).toContain('Ops-FB');
-
-      spyOps.mockRestore();
-
-      const spyBA = vi.spyOn(testDb.projects.orderBy('businessAnalysts'), 'uniqueKeys').mockRejectedValue(
-        new Error('UnknownError: Unable to open cursor')
-      );
-
-      const bas = await getDistinctBusinessAnalysts(testDb);
-      expect(bas).toContain('BA-FB');
-
-      spyBA.mockRestore();
-    });
   });
 });

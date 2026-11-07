@@ -1,11 +1,11 @@
 // @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TaskPlannerDatabase } from '../../src/db/index';
-import { createProject } from '../../src/db/repositories/projectRepo';
-import { createMilestone } from '../../src/db/repositories/milestoneRepo';
 import { createTask } from '../../src/db/repositories/taskRepo';
+import { createChangeRequest } from '../../src/db/repositories/changeRequestRepo';
+import { createSystem } from '../../src/db/repositories/systemRepo';
 import {
-  deleteProjectWithCascade,
+  deleteChangeRequestWithCascade,
   deleteTaskWithAllocations,
 } from '../../src/db/repositories/cascadeRepo';
 import {
@@ -28,8 +28,13 @@ describe('KnowledgeLink Repository & Cascade Deletions (LINK-01, LINK-02, D-21, 
     await testDb.delete();
   });
 
+  async function seedCr(code = 'CR-LINK-TASK') {
+    return createChangeRequest({ name: code, code }, testDb);
+  }
+
   it('creates, retrieves, and deletes KnowledgeLink records', async () => {
-    const task = await createTask({ name: 'Link Test Task' }, testDb);
+    const cr = await seedCr('CR-LINK-1');
+    const task = await createTask({ name: 'Link Test Task', crId: cr.id }, testDb);
     const setId = '00000000-0000-4000-8000-000000000001';
 
     const link = await createKnowledgeLink(
@@ -62,7 +67,8 @@ describe('KnowledgeLink Repository & Cascade Deletions (LINK-01, LINK-02, D-21, 
   });
 
   it('rejects duplicate linkKey', async () => {
-    const task = await createTask({ name: 'Duplicate Key Task' }, testDb);
+    const cr = await seedCr('CR-LINK-2');
+    const task = await createTask({ name: 'Duplicate Key Task', crId: cr.id }, testDb);
     const setId = '00000000-0000-4000-8000-000000000001';
 
     await createKnowledgeLink(
@@ -91,7 +97,8 @@ describe('KnowledgeLink Repository & Cascade Deletions (LINK-01, LINK-02, D-21, 
   });
 
   it('cascades deletion when deleting a Task with allocations', async () => {
-    const task = await createTask({ name: 'Cascaded Task' }, testDb);
+    const cr = await seedCr('CR-LINK-3');
+    const task = await createTask({ name: 'Cascaded Task', crId: cr.id }, testDb);
     const setId = '00000000-0000-4000-8000-000000000001';
 
     await createKnowledgeLink(
@@ -114,18 +121,31 @@ describe('KnowledgeLink Repository & Cascade Deletions (LINK-01, LINK-02, D-21, 
     expect(after).toHaveLength(0);
   });
 
-  it('cascades deletion when deleting a Project with cascade mode', async () => {
-    const project = await createProject({ name: 'Linked Project' }, testDb);
-    const milestone = await createMilestone({ projectId: project.id, name: 'Linked Milestone' }, testDb);
-    const task = await createTask({ name: 'Linked Task', projectId: project.id, milestoneId: milestone.id }, testDb);
+  it('cascades deletion when deleting a Change Request', async () => {
+    const parent = await createSystem(
+      { name: 'Linked Parent', code: 'LINK_P', type: 'LOGICAL_GROUP' },
+      testDb
+    );
+    const subsystem = await createSystem(
+      { name: 'Linked Subsystem', code: 'LINK_S', type: 'SERVICE', parentId: parent.id },
+      testDb
+    );
+    const cr = await createChangeRequest(
+      { name: 'Linked CR', code: 'CR-LINK', targets: [{ systemId: subsystem.id }] },
+      testDb
+    );
+    const task = await createTask(
+      { name: 'Linked Task', crId: cr.id, systemId: subsystem.id },
+      testDb
+    );
     const setId = '00000000-0000-4000-8000-000000000001';
 
     await createKnowledgeLink(
-      { taskMateEntityType: 'project', taskMateEntityId: project.id, setId, urn: 'urn:node:proj', displayLabel: 'Project Graph' },
+      { taskMateEntityType: 'cr', taskMateEntityId: cr.id, setId, urn: 'urn:node:cr', displayLabel: 'CR Graph' },
       testDb
     );
     await createKnowledgeLink(
-      { taskMateEntityType: 'milestone', taskMateEntityId: milestone.id, setId, urn: 'urn:node:ms', displayLabel: 'Milestone Graph' },
+      { taskMateEntityType: 'system', taskMateEntityId: subsystem.id, setId, urn: 'urn:node:sys', displayLabel: 'System Graph' },
       testDb
     );
     await createKnowledgeLink(
@@ -133,38 +153,12 @@ describe('KnowledgeLink Repository & Cascade Deletions (LINK-01, LINK-02, D-21, 
       testDb
     );
 
-    await deleteProjectWithCascade(project.id, 'cascade', testDb);
+    await deleteChangeRequestWithCascade(cr.id, testDb);
 
-    expect(await getKnowledgeLinksForEntity('project', project.id, testDb)).toHaveLength(0);
-    expect(await getKnowledgeLinksForEntity('milestone', milestone.id, testDb)).toHaveLength(0);
+    expect(await getKnowledgeLinksForEntity('cr', cr.id, testDb)).toHaveLength(0);
     expect(await getKnowledgeLinksForEntity('task', task.id, testDb)).toHaveLength(0);
-  });
-
-  it('cleans up project and milestone links in orphan mode but retains orphaned task links', async () => {
-    const project = await createProject({ name: 'Orphan Project' }, testDb);
-    const milestone = await createMilestone({ projectId: project.id, name: 'Orphan Milestone' }, testDb);
-    const task = await createTask({ name: 'Preserved Task', projectId: project.id, milestoneId: milestone.id }, testDb);
-    const setId = '00000000-0000-4000-8000-000000000001';
-
-    await createKnowledgeLink(
-      { taskMateEntityType: 'project', taskMateEntityId: project.id, setId, urn: 'urn:node:proj', displayLabel: 'Project Graph' },
-      testDb
-    );
-    await createKnowledgeLink(
-      { taskMateEntityType: 'milestone', taskMateEntityId: milestone.id, setId, urn: 'urn:node:ms', displayLabel: 'Milestone Graph' },
-      testDb
-    );
-    await createKnowledgeLink(
-      { taskMateEntityType: 'task', taskMateEntityId: task.id, setId, urn: 'urn:node:task', displayLabel: 'Task Graph' },
-      testDb
-    );
-
-    await deleteProjectWithCascade(project.id, 'orphan', testDb);
-
-    expect(await getKnowledgeLinksForEntity('project', project.id, testDb)).toHaveLength(0);
-    expect(await getKnowledgeLinksForEntity('milestone', milestone.id, testDb)).toHaveLength(0);
-    // Task still exists, so its link must be preserved
-    expect(await getKnowledgeLinksForEntity('task', task.id, testDb)).toHaveLength(1);
+    // The subsystem itself survives, so its own link is untouched
+    expect(await getKnowledgeLinksForEntity('system', subsystem.id, testDb)).toHaveLength(1);
   });
 
   it('serializes and validates KnowledgeLinks in backup export/import round-trip', async () => {
@@ -172,7 +166,8 @@ describe('KnowledgeLink Repository & Cascade Deletions (LINK-01, LINK-02, D-21, 
     const { validateBackupPayload } = await import('../../src/services/backup/validateBackup');
     const { restoreBackupPayload } = await import('../../src/services/backup/restoreBackup');
 
-    const task = await createTask({ name: 'Backup Link Task' }, testDb);
+    const cr = await seedCr('CR-LINK-4');
+    const task = await createTask({ name: 'Backup Link Task', crId: cr.id }, testDb);
     const setId = '00000000-0000-4000-8000-000000000001';
     await createKnowledgeLink(
       {

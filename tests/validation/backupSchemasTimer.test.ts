@@ -7,13 +7,13 @@ import { validateBackupPayload } from '../../src/services/backup/validateBackup'
 import { restoreBackupPayload, rollbackToSnapshot } from '../../src/services/backup/restoreBackup';
 import { formatElapsedTicker } from '../../src/utils/time';
 import { createWorkSession } from '../../src/db/repositories/workSessionRepo';
-import type { Task, Project } from '../../src/types/models';
+import type { Task, ChangeRequest } from '../../src/types/models';
 
 describe('Backup Schemas & Restore with Timer Work Sessions (TIMER-01, TIMER-02)', () => {
   let db: TaskPlannerDatabase;
   const dbName = 'TestBackupTimerDB_' + Math.random().toString(36).slice(2);
 
-  const sampleProjectId = '11111111-1111-4111-8111-111111111111';
+  const sampleCrId = '11111111-1111-4111-8111-111111111111';
   const sampleTaskId = '33333333-3333-4333-8333-333333333331';
 
   beforeEach(async () => {
@@ -21,18 +21,21 @@ describe('Backup Schemas & Restore with Timer Work Sessions (TIMER-01, TIMER-02)
     await db.open();
 
     const now = new Date().toISOString();
-    const project: Project = {
-      id: sampleProjectId,
-      name: 'Backup Test Project',
+    const cr: ChangeRequest = {
+      id: sampleCrId,
+      name: 'Backup Test CR',
+      code: 'CR-BACKUP',
       status: 'In Progress',
+      type: 'ENHANCEMENT',
+      targets: [],
       createdAt: now,
       updatedAt: now,
     };
-    await db.projects.add(project);
+    await db.changeRequests.add(cr);
 
     const task: Task = {
       id: sampleTaskId,
-      projectId: sampleProjectId,
+      crId: sampleCrId,
       name: 'Backup Test Task',
       status: 'Open',
       progress: 0,
@@ -60,10 +63,10 @@ describe('Backup Schemas & Restore with Timer Work Sessions (TIMER-01, TIMER-02)
     await Dexie.delete(dbName);
   });
 
-  it('exports backup payload with schemaVersion 10 and includes workSessions', async () => {
+  it('exports backup payload with the version-11 envelope and includes workSessions', async () => {
     const payload = await exportBackupPayload(db);
 
-    expect(payload.schemaVersion).toBe(10);
+    expect(payload.schemaVersion).toBe(11);
     expect(payload.tables.workSessions).toBeDefined();
     expect(payload.tables.workSessions).toHaveLength(1);
     expect(payload.counts.workSessions).toBe(1);
@@ -80,7 +83,7 @@ describe('Backup Schemas & Restore with Timer Work Sessions (TIMER-01, TIMER-02)
     expect(result.envelope?.tables.workSessions).toHaveLength(1);
   });
 
-  it('validates backward-compatibility with v1 and v2 payloads without workSessions', async () => {
+  it('rejects a legacy v2 payload carrying projects/milestones (D-49)', async () => {
     const legacyV2Payload = {
       app: 'personal-task-planner',
       schemaVersion: 2,
@@ -88,7 +91,7 @@ describe('Backup Schemas & Restore with Timer Work Sessions (TIMER-01, TIMER-02)
       tables: {
         projects: [
           {
-            id: sampleProjectId,
+            id: sampleCrId,
             name: 'V2 Project',
             status: 'Open',
             createdAt: new Date().toISOString(),
@@ -96,19 +99,7 @@ describe('Backup Schemas & Restore with Timer Work Sessions (TIMER-01, TIMER-02)
           },
         ],
         milestones: [],
-        tasks: [
-          {
-            id: sampleTaskId,
-            projectId: sampleProjectId,
-            name: 'V2 Task',
-            status: 'Open',
-            progress: 0,
-            priority: 'Medium',
-            estimateMinutes: 30,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        ],
+        tasks: [],
         capacityRules: [],
         capacityOverrides: [],
         plannedAllocations: [],
@@ -116,7 +107,7 @@ describe('Backup Schemas & Restore with Timer Work Sessions (TIMER-01, TIMER-02)
       counts: {
         projects: 1,
         milestones: 0,
-        tasks: 1,
+        tasks: 0,
         capacityRules: 0,
         capacityOverrides: 0,
         plannedAllocations: 0,
@@ -124,8 +115,8 @@ describe('Backup Schemas & Restore with Timer Work Sessions (TIMER-01, TIMER-02)
     };
 
     const result = validateBackupPayload(legacyV2Payload);
-    expect(result.valid).toBe(true);
-    expect(result.errors).toHaveLength(0);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.message.includes('Backup phiên bản cũ không còn được hỗ trợ'))).toBe(true);
   });
 
   it('catches referential integrity errors when workSession references non-existent taskId', async () => {

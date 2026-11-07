@@ -6,12 +6,12 @@ import { exportBackupPayload } from '../../src/services/backup/exportBackup';
 import { restoreBackupPayload } from '../../src/services/backup/restoreBackup';
 import { validateBackupPayload } from '../../src/services/backup/validateBackup';
 import type { BackupEnvelope } from '../../src/types/backup';
-import type { ChatTab, ChatMessage, ChatThread, Note, Project } from '../../src/types/models';
+import type { ChatTab, ChatMessage, ChatThread, Note, ChangeRequest } from '../../src/types/models';
 
 const aiRunner = { run: vi.fn() };
 const noteCreator = { create: vi.fn() };
 
-const projectId = '11111111-1111-4111-8111-111111111111';
+const changeRequestId = '11111111-1111-4111-8111-111111111111';
 const threadId = '22222222-2222-4222-8222-222222222222';
 const tabId = '33333333-3333-4333-8333-333333333333';
 const sourceNoteId = '44444444-4444-4444-8444-444444444444';
@@ -20,19 +20,22 @@ const requestId = '66666666-6666-4666-8666-666666666666';
 const now = '2026-10-30T12:00:00.000Z';
 const hash = 'a'.repeat(64);
 
-const project: Project = {
-  id: projectId,
-  name: 'Backup project',
+const changeRequest: ChangeRequest = {
+  id: changeRequestId,
+  name: 'Backup CR',
+  code: 'CR-BACKUP',
   status: 'Open',
+  type: 'ENHANCEMENT',
+  targets: [],
   createdAt: now,
   updatedAt: now,
 };
 
 const thread: ChatThread = {
   id: threadId,
-  scopeKey: `project:${projectId}:sdlc`,
-  scopeType: 'project',
-  entityId: projectId,
+  scopeKey: `cr:${changeRequestId}:sdlc`,
+  scopeType: 'cr',
+  entityId: changeRequestId,
   title: 'SDLC',
   createdAt: now,
   updatedAt: now,
@@ -41,8 +44,8 @@ const thread: ChatThread = {
 const sourceNote: Note = {
   id: sourceNoteId,
   type: 'document',
-  entityType: 'project',
-  entityId: projectId,
+  entityType: 'cr',
+  entityId: changeRequestId,
   title: 'PL01 source',
   body: '# Requirement',
   isPinned: false,
@@ -53,7 +56,7 @@ const sourceNote: Note = {
 const workflowState = {
   schemaVersion: 1,
   sessionId,
-  projectId,
+  projectId: changeRequestId,
   threadId,
   currentStep: 'SOLUTION',
   metadata: {
@@ -64,6 +67,7 @@ const workflowState = {
     date: '2026-10-30',
   },
   artifacts: {
+    branchSnapshots: {},
     pl01: {
       noteId: sourceNoteId,
       kind: 'PL01',
@@ -90,7 +94,7 @@ function makeTab(overrides: Partial<ChatTab> = {}): ChatTab {
   return {
     id: tabId,
     threadId,
-    scopeKey: `project:${projectId}`,
+    scopeKey: `cr:${changeRequestId}`,
     type: 'sdlc',
     title: 'SDLC Workflow',
     order: 0,
@@ -111,8 +115,8 @@ function makeTab(overrides: Partial<ChatTab> = {}): ChatTab {
 
 function baseTables() {
   return {
-    projects: [project],
-    milestones: [],
+    changeRequests: [changeRequest],
+    systems: [],
     tasks: [],
     capacityRules: [],
     capacityOverrides: [],
@@ -128,12 +132,12 @@ function basePayload() {
   const tables = baseTables();
   return {
     app: 'personal-task-planner' as const,
-    schemaVersion: 10,
+    schemaVersion: 11,
     exportedAt: now,
     tables,
     counts: {
-      projects: 1,
-      milestones: 0,
+      changeRequests: 1,
+      systems: 0,
       tasks: 0,
       capacityRules: 0,
       capacityOverrides: 0,
@@ -152,7 +156,7 @@ describe('Phase 25.1 backup tab/checkpoint contract', () => {
   beforeEach(async () => {
     db = new TaskPlannerDatabase(`tab-backup-${Date.now()}-${Math.random()}`);
     await db.open();
-    await db.projects.add(project);
+    await db.changeRequests.add(changeRequest);
     await db.notes.add(sourceNote);
     await db.chatThreads.add(thread);
     await db.chatTabs.add(makeTab());
@@ -253,7 +257,7 @@ describe('Phase 25.1 backup tab/checkpoint contract', () => {
     expect(forbiddenResult.errors.some((error) => error.table === 'chatTabs' && (error.message.includes('FORBIDDEN_FIELD') || error.field.includes('workflowState')))).toBe(true);
   });
 
-  it('accepts pre-25.1 payloads without chatTabs or new workflow fields', () => {
+  it('accepts v11 payloads without chatTabs and backfills them on restore', () => {
     const legacy = basePayload();
     delete (legacy.tables as Partial<typeof legacy.tables>).chatTabs;
     delete (legacy.counts as Partial<typeof legacy.counts>).chatTabs;
@@ -264,13 +268,13 @@ describe('Phase 25.1 backup tab/checkpoint contract', () => {
     expect(result.envelope?.tables.chatTabs).toBeUndefined();
   });
 
-  it('backfills legacy threads into ordinary tabs plus one deterministic project SDLC singleton', async () => {
+  it('backfills legacy threads into ordinary tabs plus one deterministic CR SDLC singleton', async () => {
     const legacy = basePayload();
     delete (legacy.tables as Partial<typeof legacy.tables>).chatTabs;
     delete (legacy.counts as Partial<typeof legacy.counts>).chatTabs;
     legacy.tables.chatThreads = [
-      { ...thread, id: '88888888-8888-4888-8888-888888888888', scopeKey: `project:${projectId}`, title: 'Legacy chat' },
-      { ...thread, id: '99999999-9999-4999-8999-999999999999', scopeKey: `project:${projectId}:sdlc`, title: 'Legacy SDLC' },
+      { ...thread, id: '88888888-8888-4888-8888-888888888888', scopeKey: `cr:${changeRequestId}`, title: 'Legacy chat' },
+      { ...thread, id: '99999999-9999-4999-8999-999999999999', scopeKey: `cr:${changeRequestId}:sdlc`, title: 'Legacy SDLC' },
     ];
     const legacyMessages: ChatMessage[] = [{
       id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -293,7 +297,7 @@ describe('Phase 25.1 backup tab/checkpoint contract', () => {
     expect(tabs.filter((tab) => tab.type === 'chat')).toHaveLength(1);
     expect((await db.chatMessages.toArray())[0]?.content).toBe('Keep this history');
     expect(tabs.filter((tab) => tab.active)).toHaveLength(1);
-    expect(tabs.find((tab) => tab.type === 'sdlc')?.scopeKey).toBe(`project:${projectId}`);
+    expect(tabs.find((tab) => tab.type === 'sdlc')?.scopeKey).toBe(`cr:${changeRequestId}`);
   });
 
   it('restores missing-source checkpoint without AI or Note creation side effects', async () => {

@@ -6,9 +6,9 @@ import { exportBackupPayload } from '../../src/services/backup/exportBackup';
 import { restoreBackupPayload } from '../../src/services/backup/restoreBackup';
 import { validateBackupPayload } from '../../src/services/backup/validateBackup';
 import { saveSolutionVersion } from '../../src/services/wizard/artifactRepo';
-import type { Note, Project } from '../../src/types/models';
+import type { Note, ChangeRequest } from '../../src/types/models';
 
-const projectId = '11111111-1111-4111-8111-111111111111';
+const changeRequestId = '11111111-1111-4111-8111-111111111111';
 const threadId = '22222222-2222-4222-8222-222222222222';
 const sessionId = '33333333-3333-4333-8333-333333333333';
 const noteId = '44444444-4444-4444-8444-444444444444';
@@ -16,10 +16,13 @@ const setId = '55555555-5555-4555-8555-555555555555';
 const artifactHash = 'a'.repeat(64);
 const now = '2026-10-28T12:00:00.000Z';
 
-const project: Project = {
-  id: projectId,
-  name: 'Wizard project',
+const changeRequest: ChangeRequest = {
+  id: changeRequestId,
+  name: 'Wizard CR',
+  code: 'CR-WIZ',
   status: 'Open',
+  type: 'ENHANCEMENT',
+  targets: [],
   createdAt: now,
   updatedAt: now,
 };
@@ -27,8 +30,8 @@ const project: Project = {
 const note: Note = {
   id: noteId,
   type: 'document',
-  entityType: 'project',
-  entityId: projectId,
+  entityType: 'cr',
+  entityId: changeRequestId,
   title: 'SOLUTION v1',
   body: '# Solution',
   isPinned: false,
@@ -36,7 +39,7 @@ const note: Note = {
   updatedAt: now,
   sdlcArtifact: {
     kind: 'SOLUTION',
-    projectId,
+    changeRequestId,
     threadId,
     sessionId,
     version: 1,
@@ -51,7 +54,7 @@ const note: Note = {
 const wizard = {
   schemaVersion: 1 as const,
   sessionId,
-  projectId,
+  changeRequestId,
   threadId,
   skill: 'SOLUTION' as const,
   status: 'completed' as const,
@@ -74,21 +77,21 @@ describe('wizard backup parity and references', () => {
   });
 
   it('round-trips wizard, artifact, and exact SDLC set metadata', async () => {
-    await db.projects.add(project);
+    await db.changeRequests.add(changeRequest);
     await db.notes.add(note);
     await db.documentSets.add({
       id: setId,
-      name: 'Project SDLC set',
+      name: 'CR SDLC set',
       documentIds: [noteId],
-      sdlc: { projectId, purpose: 'sdlc' },
+      sdlc: { changeRequestId, purpose: 'sdlc' },
       createdAt: now,
       updatedAt: now,
     });
     await db.chatThreads.add({
       id: threadId,
-      scopeKey: `project:${projectId}`,
-      scopeType: 'project',
-      entityId: projectId,
+      scopeKey: `cr:${changeRequestId}`,
+      scopeType: 'cr',
+      entityId: changeRequestId,
       createdAt: now,
       updatedAt: now,
     });
@@ -109,7 +112,7 @@ describe('wizard backup parity and references', () => {
       await restoreBackupPayload(backup, restored);
       expect(await restored.notes.get(noteId)).toEqual(note);
       expect(await restored.documentSets.get(setId)).toMatchObject({
-        sdlc: { projectId, purpose: 'sdlc' },
+        sdlc: { changeRequestId, purpose: 'sdlc' },
       });
       expect((await restored.chatMessages.get((await db.chatMessages.toArray())[0]!.id))?.wizard).toEqual(wizard);
     } finally {
@@ -118,12 +121,12 @@ describe('wizard backup parity and references', () => {
   });
 
   it('round-trips canonical Markdown and export payload created by atomic save', async () => {
-    await db.projects.add(project);
+    await db.changeRequests.add(changeRequest);
     await db.chatThreads.add({
       id: threadId,
-      scopeKey: `project:${projectId}`,
-      scopeType: 'project',
-      entityId: projectId,
+      scopeKey: `cr:${changeRequestId}`,
+      scopeType: 'cr',
+      entityId: changeRequestId,
       createdAt: now,
       updatedAt: now,
     });
@@ -140,7 +143,7 @@ describe('wizard backup parity and references', () => {
       },
     });
     const saved = await saveSolutionVersion({
-      projectId,
+      changeRequestId,
       threadId,
       sessionId,
       inputRevision: 1,
@@ -166,49 +169,33 @@ describe('wizard backup parity and references', () => {
     }
   });
 
-  it('rejects orphan wizard project and duplicate project SDLC mapping before restore', async () => {
+  it('rejects a legacy pre-31.2 envelope before restore', async () => {
     const backup = {
       app: 'personal-task-planner' as const,
       schemaVersion: 10,
       exportedAt: now,
       tables: {
-        projects: [project],
+        projects: [changeRequest],
         milestones: [],
         tasks: [],
         capacityRules: [],
         capacityOverrides: [],
         plannedAllocations: [],
-        chatThreads: [{
-          id: threadId,
-          scopeKey: `project:${projectId}`,
-          scopeType: 'project' as const,
-          entityId: projectId,
-          createdAt: now,
-          updatedAt: now,
-        }],
-        chatMessages: [{
-          id: '66666666-6666-4666-8666-666666666666',
-          threadId,
-          role: 'assistant' as const,
-          content: 'bad',
-          createdAt: now,
-          wizard: { ...wizard, projectId: '77777777-7777-4777-8777-777777777777' },
-        }],
+        chatThreads: [],
+        chatMessages: [],
         notes: [],
-        documentSets: [
-          { id: setId, name: 'one', documentIds: [], sdlc: { projectId, purpose: 'sdlc' }, createdAt: now, updatedAt: now },
-          { id: '88888888-8888-4888-8888-888888888888', name: 'two', documentIds: [], sdlc: { projectId, purpose: 'sdlc' }, createdAt: now, updatedAt: now },
-        ],
+        documentSets: [],
       },
       counts: {
         projects: 1, milestones: 0, tasks: 0, capacityRules: 0, capacityOverrides: 0,
-        plannedAllocations: 0, chatThreads: 1, chatMessages: 1, notes: 0, documentSets: 2,
+        plannedAllocations: 0, chatThreads: 0, chatMessages: 0, notes: 0, documentSets: 0,
       },
     };
 
     const result = validateBackupPayload(backup);
     expect(result.valid).toBe(false);
-    expect(result.errors.some((error) => error.message.toLowerCase().includes('wizard'))).toBe(true);
-    expect(result.errors.some((error) => error.message.includes('SDLC'))).toBe(true);
+    expect(
+      result.errors.some((error) => error.message.includes('Backup phiên bản cũ không còn được hỗ trợ'))
+    ).toBe(true);
   });
 });

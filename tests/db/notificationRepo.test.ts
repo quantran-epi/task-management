@@ -33,8 +33,8 @@ describe('Notification Repository (D-14, D-15, D-16)', () => {
     it('returns true for stale tasks and custom reminders', () => {
       expect(isAlertDismissible('stale:task:123')).toBe(true);
       expect(isAlertDismissible('reminder:task:456')).toBe(true);
-      expect(isAlertDismissible('reminder:project:789')).toBe(true);
-      expect(isAlertDismissible('reminder:milestone:999')).toBe(true);
+      expect(isAlertDismissible('reminder:cr:789')).toBe(true);
+      expect(isAlertDismissible('reminder:system:999')).toBe(true);
     });
   });
 
@@ -155,21 +155,24 @@ describe('Notification Repository (D-14, D-15, D-16)', () => {
       expect(updated?.reminderNote).toBeUndefined();
     });
 
-    it('removes reminder from project', async () => {
-      const projId = 'proj-rem-1';
+    it('removes reminder from a Change Request', async () => {
+      const crId = '11111111-1111-4111-8111-111111111113';
       const remId = '00000000-0000-4000-8000-000000000003';
-      await testDb.projects.add({
-        id: projId,
-        name: 'Project with reminder',
+      await testDb.changeRequests.add({
+        id: crId,
+        name: 'CR with reminder',
+        code: 'CR-REM-1',
         status: 'Open',
+        type: 'ENHANCEMENT',
+        targets: [],
         reminders: [{ id: remId, date: '2026-09-28' }],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
 
-      await completeReminderAlert(`reminder:project:${projId}:${remId}`, testDb);
+      await completeReminderAlert(`reminder:cr:${crId}:${remId}`, testDb);
 
-      const updated = await testDb.projects.get(projId);
+      const updated = await testDb.changeRequests.get(crId);
       expect(updated?.reminders).toHaveLength(0);
     });
 

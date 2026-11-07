@@ -17,11 +17,14 @@ describe('restoreBackupPayload atomic failure handling', () => {
   });
 
   it('aborts all changes cleanly when error is thrown inside transaction', async () => {
-    // Populate original project
-    await testDb.projects.add({
+    // Populate an original CR
+    await testDb.changeRequests.add({
       id: '00000000-0000-4000-8000-000000000000',
-      name: 'Safe Initial Project',
+      name: 'Safe Initial CR',
+      code: 'CR-SAFE',
       status: 'Open',
+      type: 'ENHANCEMENT',
+      targets: [],
       createdAt: '2026-09-26T10:00:00.000Z',
       updatedAt: '2026-09-26T10:00:00.000Z',
     });
@@ -32,31 +35,37 @@ describe('restoreBackupPayload atomic failure handling', () => {
       schemaVersion: CURRENT_SCHEMA_VERSION,
       exportedAt: '2026-09-27T12:00:00.000Z',
       tables: {
-        projects: [
+        changeRequests: [
           {
             id: '11111111-1111-4111-8111-111111111111',
-            name: 'P1',
+            name: 'CR 1',
+            code: 'CR-1',
             status: 'Open',
+            type: 'ENHANCEMENT',
+            targets: [],
             createdAt: '2026-09-27T12:00:00.000Z',
             updatedAt: '2026-09-27T12:00:00.000Z',
           },
           {
             id: '11111111-1111-4111-8111-111111111111', // Duplicate PK triggers Dexie error
-            name: 'P2',
+            name: 'CR 2',
+            code: 'CR-2',
             status: 'Open',
+            type: 'ENHANCEMENT',
+            targets: [],
             createdAt: '2026-09-27T12:00:00.000Z',
             updatedAt: '2026-09-27T12:00:00.000Z',
           },
         ],
-        milestones: [],
+        systems: [],
         tasks: [],
         capacityRules: [],
         capacityOverrides: [],
         plannedAllocations: [],
       },
       counts: {
-        projects: 2,
-        milestones: 0,
+        changeRequests: 2,
+        systems: 0,
         tasks: 0,
         capacityRules: 0,
         capacityOverrides: 0,
@@ -67,8 +76,8 @@ describe('restoreBackupPayload atomic failure handling', () => {
     await expect(restoreBackupPayload(failingBackup, testDb)).rejects.toThrow();
 
     // Verify original data is preserved untouched
-    const projects = await testDb.projects.toArray();
-    expect(projects).toHaveLength(1);
-    expect(projects[0]?.name).toBe('Safe Initial Project');
+    const crs = await testDb.changeRequests.toArray();
+    expect(crs).toHaveLength(1);
+    expect(crs[0]?.name).toBe('Safe Initial CR');
   });
 });
