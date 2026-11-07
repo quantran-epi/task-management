@@ -88,7 +88,7 @@ const manifest = {
 const reconciliation = {
   schemaVersion: 1,
   identity: {
-    projectId: 'proj-1',
+    changeRequestId: 'proj-1',
     threadId: 'thread-1',
     solutionNoteId: solutionArtifact.noteId,
     solutionVersion: 1,
@@ -152,7 +152,7 @@ describe('Step4ChangePackView render', () => {
 
     render(
       <Step4ChangePackView
-        projectId="proj-1"
+        changeRequestId="proj-1"
         crId="cr-1"
         crCode="CR-001"
         branchSnapshots={{ [SYSTEM_A]: snapshot, [SYSTEM_B]: snapshotB }}
@@ -174,7 +174,7 @@ describe('Step4ChangePackView render', () => {
   it('renders the missing-snapshot warning and no pack-all CTA when there are no targets', async () => {
     render(
       <Step4ChangePackView
-        projectId="proj-1"
+        changeRequestId="proj-1"
         crId="cr-1"
         crCode="CR-001"
         solutionArtifact={solutionArtifact}
@@ -194,7 +194,7 @@ describe('Step4ChangePackView render', () => {
 
     render(
       <Step4ChangePackView
-        projectId="proj-1"
+        changeRequestId="proj-1"
         crId="cr-1"
         crCode="CR-001"
         branchSnapshots={{ [SYSTEM_A]: snapshot }}
@@ -228,7 +228,7 @@ describe('Step4ChangePackView per-subsystem packing', () => {
 
     render(
       <Step4ChangePackView
-        projectId="proj-1"
+        changeRequestId="proj-1"
         crId="cr-1"
         crCode="CR-001"
         branchSnapshots={{ [SYSTEM_A]: snapshot, [SYSTEM_B]: snapshotB }}
@@ -264,7 +264,7 @@ describe('Step4ChangePackView per-subsystem packing', () => {
 
     render(
       <Step4ChangePackView
-        projectId="proj-1"
+        changeRequestId="proj-1"
         crId="cr-1"
         crCode="CR-001"
         branchSnapshots={{ [SYSTEM_A]: snapshot, [SYSTEM_B]: snapshotB }}
@@ -311,7 +311,7 @@ describe('Step4ChangePackView per-subsystem packing', () => {
 
     render(
       <Step4ChangePackView
-        projectId="proj-1"
+        changeRequestId="proj-1"
         crId="cr-1"
         crCode="CR-001"
         branchSnapshots={{ [SYSTEM_A]: snapshot, [SYSTEM_B]: snapshotB }}
@@ -350,7 +350,7 @@ describe('Step4ChangePackView per-subsystem packing', () => {
 
     render(
       <Step4ChangePackView
-        projectId="proj-1"
+        changeRequestId="proj-1"
         crId="cr-1"
         crCode="CR-001"
         branchSnapshots={{ [SYSTEM_A]: snapshot, [SYSTEM_B]: snapshotB }}
@@ -390,7 +390,7 @@ describe('Step4ChangePackView drift & failure surface', () => {
 
     render(
       <Step4ChangePackView
-        projectId="proj-1"
+        changeRequestId="proj-1"
         crId="cr-1"
         crCode="CR-001"
         solutionArtifact={solutionArtifact}
@@ -415,7 +415,7 @@ describe('Step4ChangePackView drift & failure surface', () => {
 
     render(
       <Step4ChangePackView
-        projectId="proj-1"
+        changeRequestId="proj-1"
         crId="cr-1"
         crCode="CR-001"
         branchSnapshots={{ [SYSTEM_A]: snapshot }}
@@ -451,7 +451,7 @@ describe('Step4ChangePackView drift & failure surface', () => {
 
     render(
       <Step4ChangePackView
-        projectId="proj-1"
+        changeRequestId="proj-1"
         crId="cr-1"
         crCode="CR-001"
         branchSnapshots={{ [SYSTEM_A]: snapshot }}
@@ -478,7 +478,7 @@ describe('Step4ChangePackView drift & failure surface', () => {
 
     render(
       <Step4ChangePackView
-        projectId="proj-1"
+        changeRequestId="proj-1"
         crId="cr-1"
         crCode="CR-001"
         branchSnapshots={{ [SYSTEM_A]: snapshot }}
@@ -503,7 +503,7 @@ describe('Step4ChangePackView drift & failure surface', () => {
 
     render(
       <Step4ChangePackView
-        projectId="proj-1"
+        changeRequestId="proj-1"
         crId="cr-1"
         crCode="CR-001"
         branchSnapshots={{
@@ -540,7 +540,7 @@ describe('Step4ChangePackView drift & failure surface', () => {
 
     render(
       <Step4ChangePackView
-        projectId="proj-1"
+        changeRequestId="proj-1"
         crId="cr-1"
         crCode="CR-001"
         branchSnapshots={{ [SYSTEM_A]: snapshot, [SYSTEM_B]: snapshotB }}

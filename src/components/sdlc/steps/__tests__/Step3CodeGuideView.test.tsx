@@ -171,7 +171,7 @@ describe('Step3CodeGuideView: configuration and dirty banner', () => {
 
     render(
       <Step3CodeGuideView
-        projectId="proj-1"
+        changeRequestId="proj-1"
         crCode="CR-101"
         {...TARGET_PROPS}
         approvedSolutionMarkdown="# Approved Solution"
@@ -263,7 +263,7 @@ describe('Step3CodeGuideView: 2-column review pane and interactions', () => {
 
     render(
       <Step3CodeGuideView
-        projectId="proj-1"
+        changeRequestId="proj-1"
         crCode="CR-101"
         {...TARGET_PROPS}
         approvedSolutionMarkdown="# Approved Solution"
@@ -402,7 +402,7 @@ describe('Task 1: SdlcWorkflowState schema and coordinator BranchSnapshot persis
     };
 
     const coordinator = createSdlcWorkflowCoordinator({
-      projectId: '22222222-2222-4222-8222-222222222222',
+      changeRequestId: '22222222-2222-4222-8222-222222222222',
       threadId: '33333333-3333-4333-8333-333333333333',
       loadState: async () => dummyState,
       saveState: async (s) => {
@@ -448,7 +448,7 @@ describe('Task 1: SdlcWorkflowState schema and coordinator BranchSnapshot persis
     };
 
     const coordinator = createSdlcWorkflowCoordinator({
-      projectId: '22222222-2222-4222-8222-222222222222',
+      changeRequestId: '22222222-2222-4222-8222-222222222222',
       threadId: '33333333-3333-4333-8333-333333333333',
       loadState: async () => dummyStateWithoutSolution,
     });
@@ -534,7 +534,7 @@ describe('Task 2: approval snapshot and drift handling', () => {
 
     render(
       <Step3CodeGuideView
-        projectId="proj-1"
+        changeRequestId="proj-1"
         crCode="CR-101"
         {...TARGET_PROPS}
         approvedSolutionMarkdown="# Approved Solution"
@@ -581,7 +581,7 @@ describe('Task 2: approval snapshot and drift handling', () => {
 
     render(
       <Step3CodeGuideView
-        projectId="proj-1"
+        changeRequestId="proj-1"
         crCode="CR-101"
         {...TARGET_PROPS}
         approvedSolutionMarkdown="# Approved Solution"

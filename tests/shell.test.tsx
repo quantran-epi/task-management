@@ -43,7 +43,8 @@ describe('AppShell Component (UX-01)', () => {
     );
 
     // Plan 05 removed the `projects` route and its nav item outright.
-    expect(screen.queryByText('Dự án')).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /dự án/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/dự án & cột mốc/i)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Tác vụ'));
     expect(onNavigate).toHaveBeenCalledWith('tasks');
@@ -92,7 +93,7 @@ describe('App Integration & Hash Route & Live Query (UX-01, DATA-02)', () => {
 
     await waitFor(() => {
       expect(screen.queryByPlaceholderText(/Tìm kiếm tác vụ/i)).not.toBeInTheDocument();
-      expect(screen.queryByText('Dự án & Cột mốc')).not.toBeInTheDocument();
+      expect(screen.queryByText(/dự án & cột mốc/i)).not.toBeInTheDocument();
     });
   });
 

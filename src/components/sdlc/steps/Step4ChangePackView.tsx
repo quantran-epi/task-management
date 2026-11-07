@@ -46,7 +46,7 @@ import {
 } from '../../../services/changePackPackager';
 
 export interface Step4ChangePackViewProps {
-  projectId: string;
+  changeRequestId: string;
   crId: string;
   crCode: string;
   solutionArtifact?: SdlcArtifactRef | undefined;
@@ -86,8 +86,8 @@ interface PackCard {
 }
 
 /** The SOLUTION Note pins against the SOLUTION thread, not the CHANGE_PACK thread. */
-function solutionThreadId(projectId: string, crId: string): string {
-  return `sdlc:${projectId}:${crId}:SOLUTION`;
+function solutionThreadId(changeRequestId: string, crId: string): string {
+  return `sdlc:${changeRequestId}:${crId}:SOLUTION`;
 }
 
 /** Manifest minus raw entry bytes: only identity + path/status/coverage are needed to reconcile. */
@@ -113,7 +113,7 @@ const STATUS_TAG: Record<PackStatus, { color: string; label: string }> = {
 };
 
 export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
-  projectId,
+  changeRequestId,
   crId,
   crCode,
   solutionArtifact,
@@ -173,7 +173,7 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
   useEffect(() => {
     let cancelled = false;
     async function loadPacks() {
-      const state = await getMultiPackState(projectId, crId, db);
+      const state = await getMultiPackState(changeRequestId, crId, db);
       if (!cancelled) {
         setMultiPackState(state);
       }
@@ -182,7 +182,7 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [projectId, crId, db]);
+  }, [changeRequestId, crId, db]);
 
   /** Per-subsystem snapshot, with the legacy single slot used only when it is unambiguous. */
   const snapshotFor = (systemId: string): BranchSnapshot | undefined => {
@@ -202,8 +202,8 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
     }
     return buildHubReconciliation({
       db,
-      projectId,
-      threadId: solutionThreadId(projectId, crId),
+      changeRequestId,
+      threadId: solutionThreadId(changeRequestId, crId),
       manifest,
       solutionNoteId: solutionArtifact.noteId,
       solutionVersion: solutionArtifact.version,
@@ -243,7 +243,7 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
       packs: [newHistoryItem, ...existingWithoutCurrent],
     };
 
-    await saveMultiPackState(projectId, crId, nextState, db);
+    await saveMultiPackState(changeRequestId, crId, nextState, db);
     setMultiPackState(nextState);
     setDriftResult(reconciliation);
     setPackState((current) => ({
@@ -446,7 +446,7 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
       activePackHash: packHash,
     };
 
-    await saveMultiPackState(projectId, crId, nextState, db);
+    await saveMultiPackState(changeRequestId, crId, nextState, db);
     setMultiPackState(nextState);
 
     // Rows written before manifests were persisted carry no identity to reconcile from.
@@ -478,7 +478,7 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
       ...multiPackState,
       packs: nextPacks,
     };
-    await saveMultiPackState(projectId, crId, nextState, db);
+    await saveMultiPackState(changeRequestId, crId, nextState, db);
     setMultiPackState(nextState);
     message.success('Đã xóa pack khỏi lịch sử');
   };

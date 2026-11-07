@@ -12,8 +12,9 @@ describe('useHashRoute utilities', () => {
 
     it('parses basic routes without query parameters', () => {
       expect(parseHash('#/tasks')).toEqual({ route: 'tasks', params: {} });
-      // `projects` is no longer an AppRoute (plan 05), so it falls back to the default.
-      expect(parseHash('#/projects')).toEqual({ route: 'dashboard', params: {} });
+      // Unknown routes fall back to the default. The retired projects route is one of them
+      // (plan 05 removed it from AppRoute); shell.test.tsx covers that exact hash end-to-end.
+      expect(parseHash('#/no-such-route')).toEqual({ route: 'dashboard', params: {} });
       expect(parseHash('#/planner')).toEqual({ route: 'planner', params: {} });
       expect(parseHash('#/analytics')).toEqual({ route: 'analytics', params: {} });
       expect(parseHash('#/settings')).toEqual({ route: 'settings', params: {} });

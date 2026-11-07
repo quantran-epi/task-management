@@ -22,8 +22,8 @@ import type { System } from '../../types/models';
 import type { SdlcStepId, SdlcWorkflowState } from '../../services/wizard/workflowSchemas';
 
 export interface SdlcSidebarProps {
-  projectId: string;
-  onSelectProject?: ((projectId: string) => void) | undefined;
+  changeRequestId: string;
+  onSelectProject?: ((changeRequestId: string) => void) | undefined;
   selectedStep: SdlcStepId;
   onSelectStep: (step: SdlcStepId) => void;
   activeCrId?: string | undefined;
@@ -47,7 +47,7 @@ export const SDLC_STEPS_CONFIG: Array<{
 ];
 
 export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
-  projectId,
+  changeRequestId,
   onSelectProject,
   selectedStep,
   onSelectStep,
@@ -63,10 +63,10 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
 
   // Single CR source: db.changeRequests (D-36). No legacy sdlcCrManager fallback.
   const crs = useLiveQuery(() => db.changeRequests.toArray(), [db]) ?? [];
-  const currentCr = crs.find((c) => (activeCrId ? c.id === activeCrId : c.id === projectId)) ?? crs[0];
+  const currentCr = crs.find((c) => (activeCrId ? c.id === activeCrId : c.id === changeRequestId)) ?? crs[0];
 
   // Resolve ChangeRequest and its target subsystems from DB
-  const resolvedCrId = activeCrId || currentCr?.id || projectId;
+  const resolvedCrId = activeCrId || currentCr?.id || changeRequestId;
   const crRecord = useLiveQuery(
     () => (resolvedCrId ? db.changeRequests.get(resolvedCrId) : undefined),
     [resolvedCrId, db]

@@ -264,7 +264,7 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
 
       render(
         <Step4ChangePackView
-          projectId={projectId}
+          changeRequestId={projectId}
           crId="cr-001"
           crCode="CR-2026-999"
           onCommitChangePackAndDrift={handleCommitPack}
@@ -292,7 +292,7 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
 
       render(
         <Step4ChangePackView
-          projectId={projectId}
+          changeRequestId={projectId}
           crId="cr-001"
           crCode="CR-2026-999"
           onCommitChangePackAndDrift={handleCommitPack}
@@ -333,7 +333,7 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
 
       render(
         <Step4ChangePackView
-          projectId={projectId}
+          changeRequestId={projectId}
           crId="cr-legacy"
           crCode="CR-2026-999"
           solutionArtifact={{

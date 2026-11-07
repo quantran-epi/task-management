@@ -80,9 +80,9 @@ describe('ItemInsightView', () => {
     expect(screen.getByText('Ưu tiên High')).toBeInTheDocument();
     expect(screen.getByText('https://example.com/spec')).toBeInTheDocument();
 
-    // Parent CR and subsystem are shown for a task
-    expect(screen.getAllByText(/CR-2026-001/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/PAYMENT_SVC/).length).toBeGreaterThan(0);
+    // Parent CR and subsystem are shown for a task (live queries resolve after first paint).
+    expect((await screen.findAllByText(/CR-2026-001/)).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/PAYMENT_SVC/)).length).toBeGreaterThan(0);
 
     expect(await screen.findByText(/Tác vụ có quy mô lớn/i)).toBeInTheDocument();
 
