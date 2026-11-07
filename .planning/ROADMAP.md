@@ -838,7 +838,7 @@ Plans:
 5. SDLC Studio không còn cấu hình Repo & SSH; có view read-only "Subsystems & Repos"; Subsystem Context Bar dùng chung cho Step 3/4; Step 2 sinh solution phân mục theo từng Subsystem; Step 4 pack riêng từng Subsystem và Pack All có báo cáo lỗi từng phần.
 6. Khi CR chưa gán hoặc thiếu subsystem, AI đề xuất subsystem ảnh hưởng kèm lý do và độ tin cậy; chỉ ghi vào CR sau khi user xác nhận.
 
-**Plans:** 11/24 plans executed
+**Plans:** 14/24 plans executed
 **UI hint**: yes
 
 Plans:
@@ -861,11 +861,11 @@ Plans:
 
 **Wave 4** *(depends on Wave 3 — daily surfaces)*
 
-- [ ] 31.2-08-PLAN.md — Tasks view/table/drawer/filter/quick-add/breadcrumb + ItemInsightView on CR/Subsystem
+- [x] 31.2-08-PLAN.md — Tasks view/table/drawer/filter/quick-add/breadcrumb + ItemInsightView on CR/Subsystem
 - [x] 31.2-09-PLAN.md — Backup version 11, legacy payload rejection before any write
 - [x] 31.2-10-PLAN.md — AI tools, grounding and chat scope on CR/System
-- [ ] 31.2-11-PLAN.md — Dashboard, timer, planner, palette, notes, search, docx exports
-- [ ] 31.2-12-PLAN.md — Fix the parent predicate at all 7 sites, divergent Catalog action sets, pre-filled CR creation
+- [x] 31.2-11-PLAN.md — Dashboard, timer, planner, palette, notes, search, docx exports
+- [x] 31.2-12-PLAN.md — Fix the parent predicate at all 7 sites, divergent Catalog action sets, pre-filled CR creation
 
 **Wave 5** *(depends on Wave 4 — new views)*
 
