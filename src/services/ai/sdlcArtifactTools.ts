@@ -7,6 +7,7 @@ import {
   SdlcWorkflowStateSchema,
 } from '../wizard/workflowSchemas';
 import { defaultSha256, workflowStorageKey } from '../wizard/workflowCoordinator';
+import { isSubsystem } from '../../db/repositories/systemRepo';
 import { formatGuardMessage, WORKFLOW_GUARD_MESSAGES, WORKFLOW_GUARD_STEP_NUMBER, type WorkflowGuardCode } from '../wizard/workflowGuards';
 import { buildSectionIndex, splitLines, type ArtifactSection } from '../../utils/markdownSections';
 import {
@@ -86,7 +87,26 @@ export interface ArtifactPatchProposal {
   patchedMarkdown: string;
 }
 
-export type ArtifactToolResult = ArtifactToolSnapshot | ArtifactPatchProposal | ArtifactToolRefusal;
+/** D-41: one candidate subsystem, already validated against the System Catalog. */
+export interface SubsystemProposalItem {
+  systemId: string;
+  code: string;
+  name: string;
+  confidence: 'high' | 'medium' | 'low';
+  reason: string;
+}
+
+/** D-41/D-42: data only. The CR is written by the approval card, never by this tool. */
+export interface SubsystemProposalResult {
+  items: SubsystemProposalItem[];
+  evidence: string[];
+}
+
+export type ArtifactToolResult =
+  | ArtifactToolSnapshot
+  | ArtifactPatchProposal
+  | SubsystemProposalResult
+  | ArtifactToolRefusal;
 
 export interface ArtifactToolAccess {
   readOnly: boolean;
@@ -495,7 +515,7 @@ export async function prepareArtifactPatch(
   };
 }
 
-/** Registered dispatch entry point for both artifact tools. Never writes to the editor. */
+/** Registered dispatch entry point for the artifact and proposal tools. Never writes to the editor or the CR. */
 export async function executeSdlcArtifactTool(
   toolName: string,
   args: Record<string, unknown>,
@@ -508,6 +528,9 @@ export async function executeSdlcArtifactTool(
       'Công cụ tài liệu chỉ dùng được trong khung chat SDLC đang mở một CR cụ thể.'
     );
   }
+  if (toolName === 'propose_subsystems') {
+    return proposeSubsystems(db, args);
+  }
   if (toolName === 'get_artifact') {
     const parsed = getArtifactArgsSchema.safeParse(args);
     if (!parsed.success) {
@@ -516,4 +539,45 @@ export async function executeSdlcArtifactTool(
     return readArtifactSnapshot(db, context, parsed.data.kind);
   }
   return prepareArtifactPatch(db, context, args);
+}
+
+const proposalArgsSchema = z.object({
+  items: z.array(z.object({
+    systemId: z.string().min(1),
+    confidence: z.enum(['high', 'medium', 'low']).default('medium'),
+    reason: z.string().default(''),
+  })).default([]),
+  evidence: z.array(z.string()).default([]),
+});
+
+/**
+ * T-31.2-47: model output is untrusted. Every id is re-resolved against `db.systems` and
+ * must be a subsystem; `code`/`name` come from the catalog, never from the model.
+ */
+async function proposeSubsystems(
+  db: TaskPlannerDatabase,
+  rawArgs: Record<string, unknown>
+): Promise<SubsystemProposalResult | ArtifactToolRefusal> {
+  const parsed = proposalArgsSchema.safeParse(rawArgs);
+  if (!parsed.success) {
+    return refuse('INVALID_ARGUMENTS', 'Danh sách đề xuất subsystem không hợp lệ.');
+  }
+  const systems = await db.systems.toArray();
+  const byId = new Map(systems.map((system) => [system.id, system]));
+  const seen = new Set<string>();
+  const items: SubsystemProposalItem[] = [];
+  for (const candidate of parsed.data.items) {
+    if (seen.has(candidate.systemId)) continue;
+    seen.add(candidate.systemId);
+    const system = byId.get(candidate.systemId);
+    if (!system || !isSubsystem(system)) continue;
+    items.push({
+      systemId: system.id,
+      code: system.code,
+      name: system.name,
+      confidence: candidate.confidence,
+      reason: candidate.reason,
+    });
+  }
+  return { items, evidence: parsed.data.evidence };
 }

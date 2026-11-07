@@ -21,7 +21,9 @@ import type { SdlcStepId } from '../../../services/wizard/workflowSchemas';
 import { useStepChatToolbox } from './useStepChatToolbox';
 import type { ChatMessage } from '../../../types/models';
 import { normalizeToolName } from '../../../services/ai/aiTools';
-import { readArtifactSnapshot, type ArtifactPatchProposal, type ArtifactToolContext } from '../../../services/ai/sdlcArtifactTools';
+import { readArtifactSnapshot, type ArtifactPatchProposal, type ArtifactToolContext, type SubsystemProposalResult } from '../../../services/ai/sdlcArtifactTools';
+import { getChangeRequest, updateChangeRequest } from '../../../db/repositories/changeRequestRepo';
+import { SubsystemProposalCard, dismissProposal } from '../common/SubsystemProposalCard';
 
 export const ARTIFACT_PATCH_DECISION_PREFIX = 'ARTIFACT_PATCH_DECISION ';
 const DECISION_COPY = {
@@ -32,6 +34,8 @@ const DECISION_COPY = {
 type PatchRecord = { patch: ArtifactPatchProposal; scopeKey: string; callId?: string;
   decisionRow: ChatMessage; decision?: 'approved' | 'rejected' };
 type RefusalRecord = { callId: string; scopeKey: string; message: string; step?: SdlcStepId };
+/** D-41/D-42: a proposal is data until the user confirms it in the card. */
+type ProposalRecord = { proposal: SubsystemProposalResult; scopeKey: string; decision?: 'approved' | 'skipped' };
 
 function parseDecision(row: ChatMessage): { proposalId: string; decision: 'approved' | 'rejected' } | undefined {
   if (row.role !== 'system' || !row.content.startsWith(ARTIFACT_PATCH_DECISION_PREFIX)) return undefined;
@@ -207,6 +211,8 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
     () => (threadId ? db.chatMessages.where('threadId').equals(threadId).sortBy('createdAt') : []),
     [threadId, db]
   );
+  // D-43: additive proposals filter against the live targets, so a second confirm is a no-op.
+  const liveCr = useLiveQuery(() => getChangeRequest(crId, db), [crId, db]);
 
   const [preludePending, setPreludePending] = useState(false);
   // Stop is reachable while the prelude paints 'preparing', but the runtime is still idle —
@@ -227,6 +233,8 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   }, [scopeKey]);
 
   const [patchRecords, setPatchRecords] = useState<Record<string, PatchRecord>>({});
+  const [proposalRecord, setProposalRecord] = useState<ProposalRecord | null>(null);
+  const [proposalApproval, setProposalApproval] = useState<{ applying?: boolean; error?: string }>({});
   const [refusalRecords, setRefusalRecords] = useState<RefusalRecord[]>([]);
   const [approvalState, setApprovalState] = useState<{ stale?: boolean; applying?: boolean; error?: string }>({});
   const staleRef = useRef(false);
@@ -240,6 +248,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
 
   useEffect(() => {
     setPatchRecords({}); setRefusalRecords([]); setApprovalState({}); setActiveProposalId(null);
+    setProposalRecord(null); setProposalApproval({});
     pendingProposalRef.current = null; appliedProposalIdsRef.current.clear();
     freshnessGenerationRef.current += 1;
   }, [scopeKey, threadId]);
@@ -251,7 +260,19 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
       onToolEvent: (event) => {
         setToolEvents((prev) => [...prev, event]);
         const toolName = normalizeToolName(event.name);
-        if (event.phase !== 'result' || (toolName !== 'patch_artifact_section' && toolName !== 'get_artifact')) return;
+        if (event.phase !== 'result') return;
+        if (toolName === 'propose_subsystems') {
+          // D-42: parse and render only — the CR is untouched until the user clicks.
+          try {
+            const parsed = JSON.parse(event.result ?? '{}') as SubsystemProposalResult & { refused?: boolean };
+            if (!parsed.refused && Array.isArray(parsed.items) && parsed.items.length > 0) {
+              setProposalRecord({ proposal: { items: parsed.items, evidence: parsed.evidence ?? [] }, scopeKey });
+              setProposalApproval({});
+            }
+          } catch { /* A malformed proposal never becomes a card. */ }
+          return;
+        }
+        if (toolName !== 'patch_artifact_section' && toolName !== 'get_artifact') return;
         let parsed: { refused?: boolean; code?: string; message?: string; supplyingStep?: SdlcStepId;
           stepNumber?: number; missingArtifact?: string } | undefined;
         try { parsed = JSON.parse(event.result ?? '{}'); } catch { parsed = undefined; }
@@ -376,6 +397,9 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
           const name = normalizeToolName(tool.function.name);
           if (name === 'get_artifact') return artifactsAllowed;
           if (name === 'patch_artifact_section') return artifactsAllowed && contextKinds.length > 0;
+          // D-41: a proposal is only meaningful inside a live CR scope; without one the tool
+          // would refuse anyway, so it must not be advertised.
+          if (name === 'propose_subsystems') return artifactsAllowed;
           return true;
         });
 
@@ -493,6 +517,43 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
       setApprovalState({ error: 'Không thể ghi nhận quyết định từ chối. Đề xuất vẫn đang chờ — hãy thử lại.' });
     }
   }, [approvalState.stale, onApplyArtifactPatch, patchRecords, threadId, db, turn]);
+
+  const handleApproveProposal = useCallback(async (systemIds: string[]) => {
+    const record = proposalRecord;
+    if (!record || record.decision) return;
+    // A proposal from a scope that is no longer live must never write this CR.
+    if (liveContextRef.current?.scopeKey !== record.scopeKey) {
+      setProposalApproval({ error: 'Phạm vi quy trình đã thay đổi. Hãy mở lại CR và đề xuất lại.' });
+      return;
+    }
+    setProposalApproval({ applying: true });
+    try {
+      const cr = await getChangeRequest(crId, db);
+      if (!cr) throw new Error('Không tìm thấy CR');
+      const existing = new Set(cr.targets.map((target) => target.systemId));
+      const added = systemIds.filter((systemId) => !existing.has(systemId));
+      if (added.length > 0) {
+        // The repo re-validates every id against the catalog and applies branch defaults (D-25).
+        await updateChangeRequest(crId, {
+          targets: [...cr.targets.map((target) => ({ systemId: target.systemId, ...(target.featureBranch !== undefined ? { featureBranch: target.featureBranch } : {}) })),
+            ...added.map((systemId) => ({ systemId }))],
+        }, db);
+      }
+      setProposalRecord({ ...record, decision: 'approved' });
+      setProposalApproval({});
+    } catch (cause) {
+      const detail = cause instanceof Error ? cause.message : String(cause);
+      setProposalApproval({ error: `Không thể thêm subsystem vào CR: ${detail}` });
+    }
+  }, [proposalRecord, crId, db]);
+
+  const handleSkipProposal = useCallback(() => {
+    // D-42: persisted as the settings key `sdlc_proposal_dismissed:<crId>`; that key is what
+    // stops the same CR from showing the card again (the card reads it on mount).
+    void dismissProposal(crId, db);
+    setProposalRecord((prev) => (prev ? { ...prev, decision: 'skipped' } : prev));
+    setProposalApproval({});
+  }, [crId, db]);
 
   const launchArtifact = (kind: SdlcArtifactKindForTurn) => {
     if (readOnly || preludeTokenRef.current !== 0 || turn.runtime?.isRunning() || turn.status === 'awaiting-approval') return;
@@ -767,13 +828,31 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
         artifactApprovalState={approvalState}
         {...(activeRecord?.decision ? { artifactDecision: activeRecord.decision } : {})}
         {...(Object.keys(toolEventExtensions).length > 0 ? { toolEventExtensions } : {})}
-        transcriptExtensions={decisionRows.length > 0 ? (
-          <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 4 }} aria-label="Quyết định đề xuất chỉnh sửa">
-            {decisionRows.map((row) => (
-              <div key={row.proposalId} role="status" style={{ fontSize: 12, color: token.colorTextSecondary }}>
-                {row.decision === 'approved' ? 'Đã chấp thuận — bản nháp bước này đã được cập nhật.' : 'Đã từ chối đề xuất — tài liệu không thay đổi.'}
+        transcriptExtensions={(proposalRecord || decisionRows.length > 0) ? (
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {proposalRecord && liveCr && (
+              <div style={{ padding: '0 16px' }}>
+                <SubsystemProposalCard
+                  proposal={proposalRecord.proposal}
+                  changeRequest={liveCr}
+                  db={db}
+                  applying={proposalApproval.applying === true}
+                  {...(proposalApproval.error !== undefined ? { error: proposalApproval.error } : {})}
+                  {...(proposalRecord.decision !== undefined ? { decision: proposalRecord.decision } : {})}
+                  onApprove={(systemIds) => { void handleApproveProposal(systemIds); }}
+                  onSkip={handleSkipProposal}
+                />
               </div>
-            ))}
+            )}
+            {decisionRows.length > 0 && (
+              <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 4 }} aria-label="Quyết định đề xuất chỉnh sửa">
+                {decisionRows.map((row) => (
+                  <div key={row.proposalId} role="status" style={{ fontSize: 12, color: token.colorTextSecondary }}>
+                    {row.decision === 'approved' ? 'Đã chấp thuận — bản nháp bước này đã được cập nhật.' : 'Đã từ chối đề xuất — tài liệu không thay đổi.'}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : undefined}
         // D-03: the SDLC panel is a fixed 380px lane, so name it explicitly. Hosts with a
