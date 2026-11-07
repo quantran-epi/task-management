@@ -14,6 +14,7 @@ import { exportHubArtifact } from '../../../services/wizard/hubExport';
 import { generateHubCabDraft } from '../../../services/wizard/hubCab';
 import { buildHubCrSummary } from '../../../services/wizard/hubCrSummary';
 import { formatGuardMessage } from '../../../services/wizard/workflowGuards';
+import { ConventionsSummaryCard, type ConventionsSummaryProps } from '../common/ConventionsSummaryCard';
 import { buildWizardDocx } from '../../../services/export/wizardDocx';
 import { createStoreZip, downloadBlob } from '../../../utils/fileExport';
 import { completeCr } from '../../../services/wizard/sdlcCrManager';
@@ -30,6 +31,7 @@ export interface Step6CabViewProps {
   onCommitCab: (markdown: string, noteId?: string | undefined) => Promise<void>;
   db?: TaskPlannerDatabase | undefined;
   onNavigateToStep?: ((step: SdlcStepId) => void) | undefined;
+  conventionsSummary?: ConventionsSummaryProps | undefined;
   onDraftChange?: ((markdown: string) => void) | undefined;
   /** A chat-produced CAB draft; replaces the local draft without a remount. */
   incomingDraft?: string | undefined;
@@ -46,6 +48,7 @@ export const Step6CabView: React.FC<Step6CabViewProps> = ({
   onCommitCab,
   db = defaultDb,
   onNavigateToStep,
+  conventionsSummary,
   onDraftChange,
   incomingDraft,
   generateCabDraft,
@@ -211,6 +214,9 @@ export const Step6CabView: React.FC<Step6CabViewProps> = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1000 }}>
+      {conventionsSummary && (
+        <ConventionsSummaryCard {...conventionsSummary} />
+      )}
       <div>
         <Typography.Title level={4} style={{ margin: 0 }}>
           Bước 6: Tổng kết & Hồ sơ CAB (Change Advisory Board)

@@ -165,6 +165,7 @@ export function WorkbenchLayout({
         agents: 'Ghost Dev Agents',
         telegram: 'Telegram Bot',
         mermaid: 'Diagram Studio',
+        sdlc: 'SDLC Studio',
       };
       openTab({
         id: viewKey,

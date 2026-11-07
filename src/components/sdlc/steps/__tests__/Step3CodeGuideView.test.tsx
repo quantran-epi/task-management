@@ -560,6 +560,56 @@ describe('Task 2: approval snapshot and drift handling', () => {
     fireEvent.click(forwardBtn);
     expect(handleProceed).toHaveBeenCalledTimes(1);
   });
+
+  it('renders ConventionsSummaryCard and handles Save binding button', async () => {
+    vi.spyOn(sshService, 'getSshConfigs').mockResolvedValue([
+      {
+        id: 'ssh-1',
+        name: 'Dev WSL',
+        host: '127.0.0.1',
+        port: 2222,
+        username: 'dev',
+        authType: 'password',
+        createdAt: '2026-11-06T00:00:00Z',
+        updatedAt: '2026-11-06T00:00:00Z',
+      },
+    ]);
+
+    const saveSpy = vi.spyOn(gitRemoteService, 'saveProjectRepoSshBinding').mockResolvedValue();
+
+    render(
+      <Step3CodeGuideView
+        projectId="proj-1"
+        crCode="CR-101"
+        approvedSolutionMarkdown="# Approved Solution"
+        conventionsSummary={{
+          globalText: 'Global rule',
+          repoText: 'Repo rule',
+          sshStatus: 'connected',
+        }}
+        onProceedToStep4={vi.fn()}
+      />
+    );
+
+    // Verify convention summary renders
+    expect(await screen.findByText(/Global:/i)).toBeInTheDocument();
+    expect(screen.getByText(/Repository:/i)).toBeInTheDocument();
+
+    // Verify Save binding button
+    const saveBtn = await screen.findByTestId('step3-btn-save-binding');
+    expect(saveBtn).toBeInTheDocument();
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(saveSpy).toHaveBeenCalledWith(
+        'proj-1',
+        expect.objectContaining({
+          sshConfigId: 'ssh-1',
+        }),
+        expect.anything()
+      );
+    });
+  });
 });
 
 

@@ -12,6 +12,7 @@ import { renderSafeMarkdown } from '../../../utils/markdown';
 import { exportHubArtifact } from '../../../services/wizard/hubExport';
 import { generateHubTechDocDraft } from '../../../services/wizard/hubTechDocs';
 import { formatGuardMessage } from '../../../services/wizard/workflowGuards';
+import { ConventionsSummaryCard, type ConventionsSummaryProps } from '../common/ConventionsSummaryCard';
 import type { SdlcWizardRuntime } from '../../../services/wizard/sdlcWizardRuntime';
 import type { SdlcStepId, SdlcWorkflowState } from '../../../services/wizard/workflowSchemas';
 
@@ -28,6 +29,7 @@ export interface Step5TechDocsViewProps {
   onProceedToStep6?: (() => void) | undefined;
   db?: TaskPlannerDatabase | undefined;
   onNavigateToStep?: ((step: SdlcStepId) => void) | undefined;
+  conventionsSummary?: ConventionsSummaryProps | undefined;
   draftPl03b?: string | undefined;
   draftPl07?: string | undefined;
   onDraftChange?: ((kind: TechDocKind, markdown: string) => void) | undefined;
@@ -44,6 +46,7 @@ export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
   onProceedToStep6,
   db = defaultDb,
   onNavigateToStep,
+  conventionsSummary,
   draftPl03b,
   draftPl07,
   onDraftChange,
@@ -175,6 +178,9 @@ export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1000 }}>
+      {conventionsSummary && (
+        <ConventionsSummaryCard {...conventionsSummary} />
+      )}
       {/* Header Toolbar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div>

@@ -22,6 +22,7 @@ import {
 } from '@ant-design/icons';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
 import { ChangePackDropzone } from '../../ai/wizard/ChangePackDropzone';
+import { ConventionsSummaryCard, type ConventionsSummaryProps } from '../common/ConventionsSummaryCard';
 import { DriftMatrixView } from '../../ai/wizard/DriftMatrixView';
 import { MultiPackTable } from '../pack/MultiPackTable';
 import { buildHubReconciliation, validateHubChangePack } from '../../../services/wizard/hubChangePack';
@@ -58,6 +59,7 @@ export interface Step4ChangePackViewProps {
   /** Navigates to the step that supplies the missing prerequisite (D-20). */
   onNavigateToStep?: ((step: SdlcStepId) => void) | undefined;
   onProceedToStep5?: (() => void) | undefined;
+  conventionsSummary?: ConventionsSummaryProps | undefined;
   db?: TaskPlannerDatabase | undefined;
 }
 
@@ -106,6 +108,7 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
   onCommitChangePackAndDrift,
   onNavigateToStep,
   onProceedToStep5,
+  conventionsSummary,
   db = defaultDb,
 }) => {
   const { token } = theme.useToken();
@@ -376,6 +379,9 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1000 }}>
+      {conventionsSummary && (
+        <ConventionsSummaryCard {...conventionsSummary} />
+      )}
       <div>
         <Typography.Title level={4} style={{ margin: 0 }}>
           Bước 4: Nạp Change Pack & Đối chiếu Drift (Multi-Pack)

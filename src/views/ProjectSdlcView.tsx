@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { theme, Button, Popconfirm, Space, message } from 'antd';
+import { theme, Button, Popconfirm, Space, Typography, message } from 'antd';
 import { ArrowLeftOutlined, RedoOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -40,9 +40,10 @@ import type { ChatMessage } from '../types/models';
 import { readArtifactSnapshot, type ArtifactPatchProposal, type ArtifactToolContext, type ArtifactToolKind } from '../services/ai/sdlcArtifactTools';
 import { getGlobalConventions, loadRepoConventions, type RepoConventionResult } from '../services/conventionService';
 import type { ConventionsSummaryProps } from '../components/sdlc/common/ConventionsSummaryCard';
+import { RepoConfigView } from '../components/sdlc/config/RepoConfigView';
 
 export interface ProjectSdlcViewProps {
-  projectId: string;
+  projectId?: string;
   onBack: () => void;
   db?: TaskPlannerDatabase;
 }
@@ -56,11 +57,27 @@ function isGuardCode(code: unknown): code is keyof typeof WORKFLOW_GUARD_MESSAGE
 }
 
 export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
-  projectId,
+  projectId: propProjectId = '',
   onBack,
   db = defaultDb,
 }) => {
   const { token } = theme.useToken();
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(propProjectId);
+  const allProjects = useLiveQuery(() => db.projects.toArray(), [db]) ?? [];
+
+  useEffect(() => {
+    if (propProjectId) {
+      setSelectedProjectId(propProjectId);
+    }
+  }, [propProjectId]);
+
+  useEffect(() => {
+    if (!selectedProjectId && allProjects.length > 0 && allProjects[0]) {
+      setSelectedProjectId(allProjects[0].id);
+    }
+  }, [selectedProjectId, allProjects]);
+
+  const projectId = selectedProjectId;
   const knowledgeConfig = useOptionalKnowledgeConfig();
   const [selectedStep, setSelectedStep] = useState<SdlcStepId>('INTAKE');
   const selectedStepRef = useRef<SdlcStepId>('INTAKE');
@@ -118,6 +135,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   const [repoConventions, setRepoConventions] = useState<RepoConventionResult | null>(null);
   const [conventionsLoading, setConventionsLoading] = useState<boolean>(false);
   const [sshStatus, setSshStatus] = useState<'connected' | 'not_linked' | 'error' | 'file_not_found'>('not_linked');
+  const [isConfigActive, setIsConfigActive] = useState<boolean>(false);
 
   const fetchAllConventions = useCallback(async () => {
     setConventionsLoading(true);
@@ -179,7 +197,8 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
       },
       [threadId, projectId, activeCrId, selectedStep, db]
     ) ?? [];
-  const crStatus = crList.find((cr) => cr.id === activeCrId)?.status ?? 'active';
+  const currentCr = crList.find((cr) => cr.id === activeCrId);
+  const crStatus = currentCr?.status ?? 'active';
   const activeVersions = workflowState?.activeVersions ?? {};
   const artifactEvents: AiChatArtifactEvent[] = useMemo(
     () =>
@@ -733,6 +752,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
 
   const handleNavigateToStep = useCallback(
     (step: SdlcStepId) => {
+      setIsConfigActive(false);
       clearAnalysisTimer();
       setSelectedStepTracked(step);
       void coordinator.navigateToStep(step).catch(reportGuardError);
@@ -744,6 +764,16 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   );
 
   const renderStepNode = () => {
+    if (isConfigActive) {
+      return (
+        <RepoConfigView
+          projectId={projectId}
+          onBindingSaved={fetchAllConventions}
+          onNavigateToStep={handleNavigateToStep}
+          db={db}
+        />
+      );
+    }
     switch (selectedStep) {
       case 'INTAKE':
         return (
@@ -796,6 +826,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
             crCode={workflowState?.metadata.cr ?? ''}
             approvedSolutionMarkdown={workflowState?.artifacts.solution?.content}
             savedSnapshot={workflowState?.artifacts.branchSnapshot}
+            conventionsSummary={conventionsSummary}
             onCommitBranchSnapshot={async (snapshot) => {
               try {
                 await coordinator.commitBranchSnapshot(snapshot);
@@ -818,6 +849,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
             solutionArtifact={workflowState?.artifacts.solution}
             branchSnapshot={workflowState?.artifacts.branchSnapshot}
             initialDriftResult={workflowState?.artifacts.driftResult}
+            conventionsSummary={conventionsSummary}
             onCommitChangePackAndDrift={async (packHash, packTitle, driftResult) => {
               try {
                 await coordinator.commitChangePackAndDrift(
@@ -842,6 +874,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
             workflowState={workflowState}
             draftPl03b={draftPl03b}
             draftPl07={draftPl07}
+            conventionsSummary={conventionsSummary}
             onDraftChange={setRuntimeDraft}
             onCommitTechDoc={async (kind, markdown, noteId) => {
               try {
@@ -875,6 +908,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
             crId={activeCrId}
             workflowState={workflowState}
             incomingDraft={draftCab}
+            conventionsSummary={conventionsSummary}
             onDraftChange={(markdown) => setRuntimeDraft('CAB', markdown)}
             onCommitCab={async (markdown, noteId) => {
               try {
@@ -928,8 +962,12 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
         }}
       >
         <PageHeader
-          title={`SDLC Studio — ${project?.name ?? 'Dự án'}`}
-          subtitle="Môi trường phát triển & kiểm soát chất lượng bàn giao 6 bước"
+          title={`SDLC Studio — ${project?.name ?? 'Chọn dự án'}`}
+          subtitle={
+            currentCr
+              ? `Change Request: ${currentCr.crCode} — ${currentCr.featureName}`
+              : 'Môi trường phát triển & kiểm soát chất lượng bàn giao 6 bước'
+          }
           style={{ marginBottom: 0 }}
           extra={
             <Space>
@@ -955,6 +993,10 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <SdlcSidebar
           projectId={projectId}
+          onSelectProject={(newId) => {
+            setSelectedProjectId(newId);
+            setIsConfigActive(false);
+          }}
           selectedStep={selectedStep}
           // Sidebar navigation goes through the same path as every other step change, so a
           // pinned historical version is cleared and currentStep is persisted (D-06, D-23).
@@ -962,6 +1004,8 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
           activeCrId={activeCrId}
           onSelectCr={selectCr}
           workflowState={workflowState}
+          isConfigActive={isConfigActive}
+          onSelectConfig={() => setIsConfigActive(true)}
           db={db}
         />
         <SdlcWorkspace
@@ -972,11 +1016,33 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
           stepGroundingContext={stepGroundingContext}
           readOnly={Boolean(viewedVersion)}
           workflowState={workflowState}
-          stepViewNode={activeCrId && !workflowRestored ? (
-            <div data-testid="sdlc-step-loading" style={{ color: token.colorTextSecondary, padding: 32, textAlign: 'center' }}>
-              Đang khôi phục hồ sơ quy trình của CR này…
-            </div>
-          ) : renderStepNode()}
+          stepViewNode={
+            !projectId ? (
+              <div style={{ color: token.colorTextSecondary, padding: 48, textAlign: 'center' }}>
+                <Typography.Title level={4} style={{ color: token.colorTextSecondary }}>
+                  Chưa có Dự án nào
+                </Typography.Title>
+                <Typography.Paragraph type="secondary">
+                  Vui lòng tạo Dự án trước từ Project Explorer để bắt đầu quy trình SDLC.
+                </Typography.Paragraph>
+              </div>
+            ) : !activeCrId && !isConfigActive ? (
+              <div style={{ color: token.colorTextSecondary, padding: 48, textAlign: 'center' }}>
+                <Typography.Title level={4} style={{ color: token.colorTextSecondary }}>
+                  Dự án chưa có Change Request (CR) nào
+                </Typography.Title>
+                <Typography.Paragraph type="secondary">
+                  Hãy nhấn <b>"Tạo CR"</b> trên thanh điều hướng bên trái để khởi tạo một Change Request mới.
+                </Typography.Paragraph>
+              </div>
+            ) : activeCrId && !workflowRestored ? (
+              <div data-testid="sdlc-step-loading" style={{ color: token.colorTextSecondary, padding: 32, textAlign: 'center' }}>
+                Đang khôi phục hồ sơ quy trình của CR này…
+              </div>
+            ) : (
+              renderStepNode()
+            )
+          }
           onNavigateToStep={handleNavigateToStep}
           onSolutionExtracted={handleSolutionExtracted}
           onArtifactDraft={handleChatArtifactDraft}

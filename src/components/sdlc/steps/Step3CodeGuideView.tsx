@@ -21,6 +21,7 @@ import {
   FolderOpenOutlined,
   WarningOutlined,
   SearchOutlined,
+  SaveOutlined,
 } from '@ant-design/icons';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
 import { getSshConfigs, getSshSecret } from '../../../services/sshService';
@@ -45,6 +46,7 @@ import type { DiffViewMode } from '../../../types/agent';
 import { ResizeSplitter } from '../../common/ResizeSplitter';
 import { RemoteDiffViewer } from '../diff/RemoteDiffViewer';
 import { RemoteDirectoryBrowserModal } from '../../common/RemoteDirectoryBrowserModal';
+import { ConventionsSummaryCard, type ConventionsSummaryProps } from '../common/ConventionsSummaryCard';
 import type { SdlcStepId } from '../../../services/wizard/workflowSchemas';
 import { formatGuardMessage } from '../../../services/wizard/workflowGuards';
 
@@ -56,6 +58,7 @@ export interface Step3CodeGuideViewProps {
   onCommitBranchSnapshot?: (snapshot: BranchSnapshot) => Promise<void>;
   onProceedToStep4: () => void;
   onNavigateToStep?: ((step: SdlcStepId) => void) | undefined;
+  conventionsSummary?: ConventionsSummaryProps | undefined;
   db?: TaskPlannerDatabase;
 }
 
@@ -67,6 +70,7 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
   onCommitBranchSnapshot,
   onProceedToStep4,
   onNavigateToStep,
+  conventionsSummary,
   db = defaultDb,
 }) => {
   const { token } = theme.useToken();
@@ -414,6 +418,11 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
         </Typography.Paragraph>
       </div>
 
+      {/* Conventions Summary Card */}
+      {conventionsSummary && (
+        <ConventionsSummaryCard {...conventionsSummary} />
+      )}
+
       {/* Prerequisite Guard Alert if SOLUTION is not approved */}
       {!hasApprovedSolution && (
         <Alert
@@ -563,6 +572,24 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
             disabled={!activeSshConfig || !remoteRepoPath.trim()}
           >
             So sánh thay đổi
+          </Button>
+
+          {/* Save Binding Button */}
+          <Button
+            size="small"
+            icon={<SaveOutlined />}
+            onClick={async () => {
+              if (!selectedSshConfigId || !remoteRepoPath.trim()) {
+                message.warning('Vui lòng chọn cấu hình SSH và đường dẫn repository.');
+                return;
+              }
+              await handleSaveBinding(selectedSshConfigId, remoteRepoPath, baseBranch);
+              message.success('Đã lưu cấu hình liên kết SSH cho dự án!');
+            }}
+            disabled={!activeSshConfig || !remoteRepoPath.trim()}
+            data-testid="step3-btn-save-binding"
+          >
+            Lưu liên kết
           </Button>
         </div>
       </Card>
