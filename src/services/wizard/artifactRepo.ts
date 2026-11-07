@@ -1,5 +1,5 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import { getOrCreateProjectSdlcSetInTransaction } from '../../db/repositories/documentSetRepo';
+import { getOrCreateCrSdlcSetInTransaction } from '../../db/repositories/documentSetRepo';
 import type { ChatMessage, Note } from '../../types/models';
 import { generateId } from '../../utils/uuid';
 import {
@@ -196,7 +196,7 @@ async function commitArtifact(
       createdAt: now,
       updatedAt: now,
     };
-    const set = await getOrCreateProjectSdlcSetInTransaction(input.projectId, now, db);
+    const set = await getOrCreateCrSdlcSetInTransaction(input.projectId, now, db);
     await db.notes.add(note);
     await db.documentSets.update(set.id, {
       documentIds: set.documentIds.includes(note.id) ? set.documentIds : [...set.documentIds, note.id],
@@ -292,7 +292,7 @@ export async function persistConfirmedPack(
     }
 
     const now = new Date().toISOString();
-    const set = await getOrCreateProjectSdlcSetInTransaction(input.projectId, now, db);
+    const set = await getOrCreateCrSdlcSetInTransaction(input.projectId, now, db);
     let writes = 0;
     const injectFailure = () => {
       writes += 1;

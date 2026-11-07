@@ -60,7 +60,7 @@ export async function getOrCreateCrSdlcSetInTransaction(
   const matches = await db.documentSets
     .filter((set) => set.sdlc?.changeRequestId === changeRequestId && set.sdlc.purpose === 'sdlc')
     .toArray();
-  if (matches.length > 1) throw new Error('DUPLICATE_CR_SDLC_SET');
+  if (matches.length > 1) throw new Error('DUPLICATE_PROJECT_SDLC_SET');
   const existing = matches[0];
   if (existing) return existing;
 
