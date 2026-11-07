@@ -23,9 +23,9 @@ export interface SelectionContextPayload extends ResolvedHierarchyContext {
 }
 
 /**
- * Compact CR block. `contextGrounding`'s project serializer is retired with the
- * Project model, so the CR/system blocks are built here rather than importing a
- * symbol that only exists after the AI-surface plan lands.
+ * Compact CR block. The retired legacy serializer is gone with the old model,
+ * so the CR/system blocks are built here rather than importing a symbol that
+ * only exists after the AI-surface plan lands.
  */
 function serializeCrContext(cr: ChangeRequest): string {
   const lines: string[] = [`<item_context type="cr" id="${cr.id}">`, `## CR: ${cr.code} — ${cr.name}`];

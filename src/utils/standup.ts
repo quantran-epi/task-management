@@ -1,4 +1,4 @@
-import type { Milestone, Project, Task, WorkType } from '../types/models';
+import type { ChangeRequest, System, Task, WorkType } from '../types/models';
 import { resolveInheritedTags } from '../domain/inheritance';
 import { getTodayDateString } from './date';
 
@@ -13,21 +13,21 @@ export const VIETNAMESE_WORK_TYPE_LABELS: Record<WorkType, string> = {
 };
 
 export interface StandupTaskContext {
-  projectMap?: Map<string, Project>;
-  milestoneMap?: Map<string, Milestone>;
+  crMap?: Map<string, ChangeRequest>;
+  systemMap?: Map<string, System>;
   todayStr?: string;
 }
 
 /**
  * Formats a list of tasks into a standardized Vietnamese Markdown standup report (SRCH-04, D-08, D-09, D-10).
- * Groups tasks by status (Done, In Progress / In Review / Resolved, Open) and resolves project names and inherited tags.
+ * Groups tasks by status (Done, In Progress / In Review / Resolved, Open) and resolves CR names and inherited tags.
  * Excludes Cancelled tasks.
  */
 export function formatStandupSummary(
   tasks: Task[],
   context: StandupTaskContext = {}
 ): string {
-  const { projectMap, milestoneMap, todayStr = getTodayDateString() } = context;
+  const { crMap, systemMap, todayStr = getTodayDateString() } = context;
 
   // Filter out Cancelled tasks
   const eligibleTasks = tasks.filter((t) => t.status !== 'Cancelled');
@@ -49,16 +49,11 @@ export function formatStandupSummary(
   function formatTaskLine(task: Task): string {
     const workTypeLabel = task.workType ? VIETNAMESE_WORK_TYPE_LABELS[task.workType] : 'Khác';
     const jiraPart = task.jiraKey ? `[${task.jiraKey}]` : '';
-    const projectName = (task.projectId ? projectMap?.get(task.projectId)?.name : undefined) ?? 'Cá nhân';
+    const crName = crMap?.get(task.crId)?.name ?? 'Cá nhân';
+    const systemCode = task.systemId ? systemMap?.get(task.systemId)?.code : undefined;
     const deadline = task.deadline || 'Không có';
 
-    const ancestors =
-      projectMap || milestoneMap
-        ? {
-            project: task.projectId ? projectMap?.get(task.projectId) : undefined,
-            milestone: task.milestoneId ? milestoneMap?.get(task.milestoneId) : undefined,
-          }
-        : {};
+    const ancestors = crMap || systemMap ? { cr: crMap?.get(task.crId) } : {};
 
     const opsTags = resolveInheritedTags('opsOwners', task, ancestors).tags;
     const baTags = resolveInheritedTags('businessAnalysts', task, ancestors).tags;
@@ -67,7 +62,8 @@ export function formatStandupSummary(
     const baPart = baTags.length > 0 ? `BA: ${baTags.join(', ')}` : '';
     const assigneeStr = [opsPart, baPart].filter(Boolean).join(' | ') || 'Chưa gán';
 
-    let line = `- [${workTypeLabel}]${jiraPart} ${task.name} (Dự án: ${projectName} | Hạn: ${deadline} | Phụ trách: ${assigneeStr})`;
+    const crLabel = systemCode ? `${crName} / ${systemCode}` : crName;
+    let line = `- [${workTypeLabel}]${jiraPart} ${task.name} (CR: ${crLabel} | Hạn: ${deadline} | Phụ trách: ${assigneeStr})`;
 
     if (task.priority === 'Urgent') {
       line += '\n  - ⚠️ Ưu tiên khẩn cấp';

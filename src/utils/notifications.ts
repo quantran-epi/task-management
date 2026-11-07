@@ -1,8 +1,7 @@
 import dayjs from 'dayjs';
 import type {
   Task,
-  Project,
-  Milestone,
+  ChangeRequest,
   CapacityRule,
   CapacityOverride,
   PlannedAllocation,
@@ -17,8 +16,7 @@ import { evaluateDailyCapacitySpentAlert } from './timerAlerts';
 
 export interface EvaluateNotificationsParams {
   tasks: Task[];
-  projects: Project[];
-  milestones: Milestone[];
+  changeRequests: ChangeRequest[];
   rules: CapacityRule[];
   overrides: CapacityOverride[];
   allocations: PlannedAllocation[];
@@ -56,12 +54,12 @@ export function isReminderTriggered(
  * 5. Custom reminders (priorityOrder: 5, dismissible for today)
  */
 export function evaluateNotifications(params: EvaluateNotificationsParams): AlertNotificationItem[] {
-  const { tasks, projects, milestones, rules, overrides, allocations, dismissedMap, todayDate } =
+  const { tasks, changeRequests, rules, overrides, allocations, dismissedMap, todayDate } =
     params;
   const currentTime = params.currentTime ?? dayjs().format('HH:mm');
   const effectiveSettings = params.settings ?? DEFAULT_NOTIFICATION_SETTINGS;
 
-  const projectMap = new Map<string, string>(projects.map((p) => [p.id, p.name]));
+  const crMap = new Map<string, string>(changeRequests.map((cr) => [cr.id, cr.code]));
   const taskMap = new Map<string, Task>(tasks.map((t) => [t.id, t]));
   const results: AlertNotificationItem[] = [];
 
@@ -78,7 +76,7 @@ export function evaluateNotifications(params: EvaluateNotificationsParams): Aler
           id: `overdue:task:${task.id}`,
           category: 'overdue',
           title: task.name,
-          subtitle: task.projectId ? projectMap.get(task.projectId) : undefined,
+          subtitle: crMap.get(task.crId),
           date: task.deadline,
           tagColor: 'error',
           tagLabel: `Quá hạn ${daysOverdue} ngày`,
@@ -188,7 +186,7 @@ export function evaluateNotifications(params: EvaluateNotificationsParams): Aler
             id: `due-soon:task:${task.id}`,
             category: 'due-soon',
             title: task.name,
-            subtitle: task.projectId ? projectMap.get(task.projectId) : undefined,
+            subtitle: crMap.get(task.crId),
             date: task.deadline,
             tagColor: isToday ? 'processing' : 'blue',
             tagLabel,
@@ -219,7 +217,7 @@ export function evaluateNotifications(params: EvaluateNotificationsParams): Aler
             id: alertKey,
             category: 'stale',
             title: task.name,
-            subtitle: task.projectId ? projectMap.get(task.projectId) : undefined,
+            subtitle: crMap.get(task.crId),
             date: lastUpdatedDate,
             tagColor: 'purple',
             tagLabel: `Chưa cập nhật ${diffDays} ngày`,
@@ -234,108 +232,56 @@ export function evaluateNotifications(params: EvaluateNotificationsParams): Aler
     }
   }
 
-  // 5. Custom reminders (Project, Milestone, Task) per D-06, D-07, D-08, NOTIF-06
+  // 5. Custom reminders (CR, Task) per D-06, D-07, D-08, NOTIF-06.
+  // CR reminders come from the CR's own `reminders` array; there is no intermediate tier.
   if (effectiveSettings.enabledCategories.reminders) {
-    for (const project of projects) {
-      if (project.status === 'Done' || project.status === 'Cancelled') continue;
-      if (project.reminders && project.reminders.length > 0) {
-        for (const reminder of project.reminders) {
+    for (const cr of changeRequests) {
+      if (cr.status === 'Done' || cr.status === 'Cancelled') continue;
+      if (cr.reminders && cr.reminders.length > 0) {
+        for (const reminder of cr.reminders) {
           if (isReminderTriggered(reminder, todayDate, currentTime)) {
-            const alertKey = `reminder:project:${project.id}:${reminder.id}`;
+            const alertKey = `reminder:cr:${cr.id}:${reminder.id}`;
             if (dismissedMap[alertKey] === todayDate) continue;
             results.push({
               id: alertKey,
               category: 'reminder',
-              title: project.name,
-              subtitle: reminder.note || project.reminderNote,
+              title: cr.name,
+              subtitle: reminder.note || cr.reminderNote,
               date: reminder.time ? `${reminder.time} ${reminder.date}` : reminder.date,
               tagColor: 'gold',
               tagLabel: reminder.time ? `Nhắc nhở (${reminder.time})` : 'Nhắc nhở',
-              entityType: 'project',
-              entityId: project.id,
+              entityType: 'cr',
+              entityId: cr.id,
               canDismiss: true,
               priorityOrder: 5,
             });
           }
         }
-      } else if (project.reminderDate) {
+      } else if (cr.reminderDate) {
         const legacyReminder: ReminderItem = {
           id: '',
-          date: project.reminderDate,
+          date: cr.reminderDate,
         };
-        if (project.reminderNote) legacyReminder.note = project.reminderNote;
+        if (cr.reminderNote) legacyReminder.note = cr.reminderNote;
         if (isReminderTriggered(legacyReminder, todayDate, currentTime)) {
-          const alertKey = `reminder:project:${project.id}`;
+          const alertKey = `reminder:cr:${cr.id}`;
           if (dismissedMap[alertKey] === todayDate) continue;
           results.push({
             id: alertKey,
             category: 'reminder',
-            title: project.name,
-            subtitle: project.reminderNote,
-            date: project.reminderDate,
+            title: cr.name,
+            subtitle: cr.reminderNote,
+            date: cr.reminderDate,
             tagColor: 'gold',
             tagLabel: 'Nhắc nhở',
-            entityType: 'project',
-            entityId: project.id,
+            entityType: 'cr',
+            entityId: cr.id,
             canDismiss: true,
             priorityOrder: 5,
           });
         }
       }
     }
-
-  for (const milestone of milestones) {
-    if (milestone.status === 'Done' || milestone.status === 'Cancelled') continue;
-    if (milestone.reminders && milestone.reminders.length > 0) {
-      for (const reminder of milestone.reminders) {
-        if (isReminderTriggered(reminder, todayDate, currentTime)) {
-          const alertKey = `reminder:milestone:${milestone.id}:${reminder.id}`;
-          if (dismissedMap[alertKey] === todayDate) continue;
-          results.push({
-            id: alertKey,
-            category: 'reminder',
-            title: milestone.name,
-            subtitle:
-              reminder.note ||
-              milestone.reminderNote ||
-              (milestone.projectId ? projectMap.get(milestone.projectId) : undefined),
-            date: reminder.time ? `${reminder.time} ${reminder.date}` : reminder.date,
-            tagColor: 'gold',
-            tagLabel: reminder.time ? `Nhắc nhở (${reminder.time})` : 'Nhắc nhở',
-            entityType: 'milestone',
-            entityId: milestone.id,
-            canDismiss: true,
-            priorityOrder: 5,
-          });
-        }
-      }
-    } else if (milestone.reminderDate) {
-      const legacyReminder: ReminderItem = {
-        id: '',
-        date: milestone.reminderDate,
-      };
-      if (milestone.reminderNote) legacyReminder.note = milestone.reminderNote;
-      if (isReminderTriggered(legacyReminder, todayDate, currentTime)) {
-        const alertKey = `reminder:milestone:${milestone.id}`;
-        if (dismissedMap[alertKey] === todayDate) continue;
-        results.push({
-          id: alertKey,
-          category: 'reminder',
-          title: milestone.name,
-          subtitle:
-            milestone.reminderNote ||
-            (milestone.projectId ? projectMap.get(milestone.projectId) : undefined),
-          date: milestone.reminderDate,
-          tagColor: 'gold',
-          tagLabel: 'Nhắc nhở',
-          entityType: 'milestone',
-          entityId: milestone.id,
-          canDismiss: true,
-          priorityOrder: 5,
-        });
-      }
-    }
-  }
 
   for (const task of tasks) {
     if (task.status === 'Done' || task.status === 'Cancelled') continue;
@@ -348,10 +294,7 @@ export function evaluateNotifications(params: EvaluateNotificationsParams): Aler
             id: alertKey,
             category: 'reminder',
             title: task.name,
-            subtitle:
-              reminder.note ||
-              task.reminderNote ||
-              (task.projectId ? projectMap.get(task.projectId) : undefined),
+            subtitle: reminder.note || task.reminderNote || crMap.get(task.crId),
             date: reminder.time ? `${reminder.time} ${reminder.date}` : reminder.date,
             tagColor: 'gold',
             tagLabel: reminder.time ? `Nhắc nhở (${reminder.time})` : 'Nhắc nhở',
@@ -376,8 +319,7 @@ export function evaluateNotifications(params: EvaluateNotificationsParams): Aler
           id: alertKey,
           category: 'reminder',
           title: task.name,
-          subtitle:
-            task.reminderNote || (task.projectId ? projectMap.get(task.projectId) : undefined),
+          subtitle: task.reminderNote || crMap.get(task.crId),
           date: task.reminderDate,
           tagColor: 'gold',
           tagLabel: 'Nhắc nhở',
