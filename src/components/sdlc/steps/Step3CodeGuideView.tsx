@@ -10,7 +10,6 @@ import {
   Tag,
   Spin,
   Empty,
-  Segmented,
   theme,
   message,
 } from 'antd';
@@ -54,6 +53,8 @@ export interface Step3CodeGuideViewProps {
   crCode?: string;
   targetSystems?: System[] | undefined;
   crTargets?: CrTarget[] | undefined;
+  /** D-38: the single view-level selection, owned by the SDLC view and shared with Step 4. */
+  selectedSystemId?: string | undefined;
   approvedSolutionMarkdown?: string | undefined;
   savedSnapshot?: BranchSnapshot | undefined;
   onCommitBranchSnapshot?: (snapshot: BranchSnapshot) => Promise<void>;
@@ -66,9 +67,9 @@ export interface Step3CodeGuideViewProps {
 }
 
 export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
-  crCode = 'CR-UNKNOWN',
   targetSystems = [],
   crTargets = [],
+  selectedSystemId: selectedSystemIdProp,
   approvedSolutionMarkdown,
   savedSnapshot: initialSavedSnapshot,
   onCommitBranchSnapshot,
@@ -81,28 +82,17 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
   const { token } = theme.useToken();
   const hasApprovedSolution = Boolean(approvedSolutionMarkdown?.trim());
 
-  // Multi-subsystem selection state
-  const [selectedSystemId, setSelectedSystemId] = useState<string>(() => targetSystems[0]?.id ?? '');
+  // D-38: the selection is owned by the SDLC view (shared with Step 4 via the Context Bar).
+  const selectedSystemId = selectedSystemIdProp ?? targetSystems[0]?.id ?? '';
+  const selectedSystem = useMemo(
+    () => targetSystems.find((s) => s.id === selectedSystemId),
+    [targetSystems, selectedSystemId]
+  );
 
-  // Initialize from first subsystem if available
-  useEffect(() => {
-    if (targetSystems.length > 0) {
-      const activeSys = targetSystems.find((s) => s.id === selectedSystemId) || targetSystems[0]!;
-      if (!selectedSystemId) {
-        setSelectedSystemId(activeSys.id);
-      }
-      if (activeSys.sshConfigId && !selectedSshConfigId) {
-        setSelectedSshConfigId(activeSys.sshConfigId);
-      }
-      if (activeSys.remoteRepoPath && !remoteRepoPath) {
-        setRemoteRepoPath(activeSys.remoteRepoPath);
-        setLoadedRepoPath(activeSys.remoteRepoPath);
-      }
-      if (activeSys.defaultBaseBranch && baseBranch === 'origin/main') {
-        setBaseBranch(activeSys.defaultBaseBranch);
-      }
-    }
-  }, [targetSystems]);
+  // D-38b: the target branch comes from the CR target, never a name heuristic.
+  const targetBranch =
+    crTargets.find((t) => t.systemId === selectedSystemId)?.featureBranch ?? '';
+  const [pendingBranch, setPendingBranch] = useState<string>('');
 
   // Configuration state
   const [sshConfigs, setSshConfigs] = useState<SshConfig[]>([]);
@@ -110,13 +100,18 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
   const [remoteRepoPath, setRemoteRepoPath] = useState<string>('');
   const [loadedRepoPath, setLoadedRepoPath] = useState<string>('');
   const [baseBranch, setBaseBranch] = useState<string>('origin/main');
-  const [targetBranch, setTargetBranch] = useState<string>('');
 
-  // D-38b: the target branch comes from the CR target, never a name heuristic.
+  // Initialize SSH/repo from the selected subsystem (D-36/D-38b) — no settings-backed binding.
   useEffect(() => {
-    const target = crTargets.find((t) => t.systemId === selectedSystemId);
-    setTargetBranch(target?.featureBranch ?? '');
-  }, [crTargets, selectedSystemId]);
+    if (selectedSystem?.sshConfigId) {
+      setSelectedSshConfigId(selectedSystem.sshConfigId);
+    }
+    if (selectedSystem?.remoteRepoPath) {
+      setRemoteRepoPath(selectedSystem.remoteRepoPath);
+      setLoadedRepoPath(selectedSystem.remoteRepoPath);
+    }
+    setBaseBranch(selectedSystem?.defaultBaseBranch ?? 'origin/main');
+  }, [selectedSystem]);
 
   // Remote data state
   const [branches, setBranches] = useState<RemoteGitBranch[]>([]);
@@ -263,7 +258,7 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
         setLoading(false);
       }
     },
-    [activeSshConfig, loadedRepoPath, targetBranch, baseBranch, crCode, currentSnapshot]
+    [activeSshConfig, loadedRepoPath, targetBranch, baseBranch, currentSnapshot]
   );
 
   // Trigger query when loaded repository path, branches, or config changes
@@ -432,37 +427,6 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
         styles={{ body: { padding: '12px 16px' } }}
       >
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
-          {/* Subsystem Switcher if CR targets multiple subsystems */}
-          {targetSystems.length > 1 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', marginBottom: 4 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: token.colorPrimary }}>
-                Subsystem đang chọn:
-              </span>
-              <Segmented
-                size="small"
-                value={selectedSystemId}
-                onChange={(val) => {
-                  const id = String(val);
-                  setSelectedSystemId(id);
-                  const sys = targetSystems.find((s) => s.id === id);
-                  if (sys) {
-                    if (sys.sshConfigId) setSelectedSshConfigId(sys.sshConfigId);
-                    if (sys.remoteRepoPath) {
-                      setRemoteRepoPath(sys.remoteRepoPath);
-                      setLoadedRepoPath(sys.remoteRepoPath);
-                    }
-                    if (sys.defaultBaseBranch) setBaseBranch(sys.defaultBaseBranch);
-                  }
-                }}
-                options={targetSystems.map((s) => ({
-                  value: s.id,
-                  label: `${s.code} (${s.name})`,
-                }))}
-                data-testid="step3-subsystem-switcher"
-              />
-            </div>
-          )}
-
           {/* SSH Profile */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
@@ -543,30 +507,44 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
             />
           </div>
 
-          {/* Target Branch */}
+          {/* Target Branch — D-38b: read from the CR target; pick when the target has none */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
               Compare:
             </span>
-            <Select
-              size="small"
-              showSearch
-              style={{ width: 180, fontFamily: 'monospace', fontSize: 12 }}
-              placeholder="Chọn nhánh review"
-              value={targetBranch || undefined}
-              onChange={(val) => {
-                const next = val ?? '';
-                setTargetBranch(next);
-                if (next && selectedSystemId) onFeatureBranchChange?.(selectedSystemId, next);
-              }}
-              options={branches.map((b) => ({
-                label: b.name,
-                value: b.name,
-              }))}
-              filterOption={(input, option) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-              }
-            />
+            {targetBranch ? (
+              <Tag color="cyan" style={{ margin: 0, fontFamily: 'monospace', fontSize: 12 }}>
+                {targetBranch}
+              </Tag>
+            ) : (
+              <>
+                <Select
+                  size="small"
+                  showSearch
+                  data-testid="step3-branch-picker"
+                  style={{ width: 180, fontFamily: 'monospace', fontSize: 12 }}
+                  placeholder="Chọn nhánh review"
+                  value={pendingBranch || undefined}
+                  onChange={(val) => setPendingBranch(val ?? '')}
+                  options={branches.map((b) => ({ label: b.name, value: b.name }))}
+                  filterOption={(input, option) =>
+                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                  }
+                />
+                <Button
+                  size="small"
+                  type="primary"
+                  disabled={!pendingBranch || !selectedSystemId}
+                  onClick={() => {
+                    if (!pendingBranch || !selectedSystemId) return;
+                    onFeatureBranchChange?.(selectedSystemId, pendingBranch);
+                    setPendingBranch('');
+                  }}
+                >
+                  Xác nhận nhánh
+                </Button>
+              </>
+            )}
           </div>
 
           {/* Load Changes Button */}

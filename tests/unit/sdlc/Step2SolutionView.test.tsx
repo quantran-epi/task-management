@@ -21,10 +21,14 @@ describe('Step2SolutionView intake-baseline gate (D-20)', () => {
 
   beforeEach(async () => {
     db = new TaskPlannerDatabase(`test-step2-${Math.random()}`);
-    await db.projects.add({
+    // Migration V16 dropped `projects`; the CR row is the surviving owner of this id.
+    await db.changeRequests.add({
       id: projectId,
       name: 'Hệ thống Loyalty',
+      code: 'CR-TEST-1',
       status: 'In Progress',
+      type: 'NEW_FEATURE',
+      targets: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });

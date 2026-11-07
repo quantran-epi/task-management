@@ -355,6 +355,34 @@ export function buildConventionsSegment(conventions?: {
   return parts.join('\n\n');
 }
 
+/** D-39: the marker a model must use instead of inventing content for an untouched subsystem. */
+export const SUBSYSTEM_UNAFFECTED_MARKER = 'Không có thay đổi ở subsystem này';
+
+export interface SubsystemSectionTarget {
+  systemId: string;
+  code: string;
+  name: string;
+}
+
+/**
+ * D-39 / UI-SPEC §5d — Step 2 per-subsystem output shape.
+ *
+ * Lists the exact headings the model must emit, in `cr.targets` order, and forbids an empty
+ * section: an untouched subsystem gets the explicit marker instead.
+ */
+export function buildSubsystemSectionContract(
+  targets: readonly SubsystemSectionTarget[]
+): string {
+  if (targets.length === 0) return '';
+  return [
+    '[HỢP ĐỒNG MỤC THEO SUBSYSTEM — BƯỚC 2]',
+    'Bản thiết kế phải có đúng một mục cho mỗi subsystem dưới đây, theo đúng thứ tự này, dùng đúng tiêu đề:',
+    ...targets.map((t) => `### [${t.code}] ${t.name}`),
+    'Mỗi mục gồm danh sách gạch đầu dòng: thay đổi cần thực hiện và file dự kiến.',
+    `Nếu CR không chạm tới một subsystem đã gán, ghi đúng dòng \`${SUBSYSTEM_UNAFFECTED_MARKER}\` trong mục đó; không tạo mục rỗng và không bịa nội dung.`,
+  ].join('\n');
+}
+
 export type SdlcTurnIntent = 'qa' | 'artifact' | 'patch';
 
 export interface ComposeSdlcTurnInput {
@@ -376,6 +404,8 @@ export interface ComposeSdlcTurnInput {
     featureName?: string;
     requestingUnit?: string;
   };
+  /** D-39: CR target subsystems, in `cr.targets` order; only SOLUTION emits the contract. */
+  targets?: readonly SubsystemSectionTarget[] | undefined;
   history?: ReadonlyArray<{ role: 'user' | 'assistant'; content: string }>;
   userTurn: string;
 }
@@ -384,6 +414,7 @@ export interface ComposedSdlcTurn {
   segments: {
     policy: string;
     stepContract: string;
+    subsystemSections: string;
     toolPolicy: string;
     conventions: string;
     fewShot: string;
@@ -463,6 +494,9 @@ export function composeSdlcTurn(input: ComposeSdlcTurnInput): ComposedSdlcTurn {
   const segments = {
     policy: SHARED_EVIDENCE_POLICY,
     stepContract: SDLCS_STEP_CONTRACTS[input.step],
+    // D-39: only Step 2 splits the solution per subsystem.
+    subsystemSections:
+      input.step === 'SOLUTION' ? buildSubsystemSectionContract(input.targets ?? []) : '',
     toolPolicy,
     conventions: buildConventionsSegment(input.conventions),
     fewShot: buildFewShot(input.step, isPatch ? input.artifact : undefined),
@@ -474,6 +508,7 @@ export function composeSdlcTurn(input: ComposeSdlcTurnInput): ComposedSdlcTurn {
   const systemContent = [
     segments.policy,
     segments.stepContract,
+    segments.subsystemSections,
     segments.toolPolicy,
     segments.conventions,
     segments.fewShot,

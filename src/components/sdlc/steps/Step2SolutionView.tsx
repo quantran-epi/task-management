@@ -18,12 +18,90 @@ import {
   ArrowRightOutlined,
   RobotOutlined,
 } from '@ant-design/icons';
-import { renderSafeMarkdown } from '../../../utils/markdown';
-import { saveHubSolution } from '../../../services/wizard/hubSolution';
+import { SafeMarkdown } from '../common/SafeMarkdown';import { saveHubSolution } from '../../../services/wizard/hubSolution';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
 import type { SdlcArtifactRef, SdlcStepId, SdlcWorkflowMetadata } from '../../../services/wizard/workflowSchemas';
 import { formatGuardMessage } from '../../../services/wizard/workflowGuards';
 import { ConventionsSummaryCard, type ConventionsSummaryProps } from '../common/ConventionsSummaryCard';
+
+/** D-39 / UI-SPEC §5d — the explicit marker for a subsystem the CR does not touch. */
+export const SUBSYSTEM_UNAFFECTED_MARKER = 'Không có thay đổi ở subsystem này';
+
+const SUBSYSTEM_HEADING = /^###\s+\[([^\]]+)\]\s*(.*)$/;
+
+export interface SolutionSubsystemSection {
+  code: string;
+  name: string;
+  body: string;
+}
+
+/**
+ * Split the solution Markdown on `### [CODE] name` headings.
+ *
+ * `preamble` is everything before the first subsystem heading (rendered as plain Markdown);
+ * `sections` is empty when the document has no subsystem headings, so the caller falls back
+ * to the whole-document preview.
+ */
+export function parseSolutionSubsystemSections(markdown: string): {
+  preamble: string;
+  sections: SolutionSubsystemSection[];
+} {
+  const lines = markdown.split(/\r?\n/);
+  const preambleLines: string[] = [];
+  const sections: SolutionSubsystemSection[] = [];
+  let current: SolutionSubsystemSection | null = null;
+
+  for (const line of lines) {
+    const match = SUBSYSTEM_HEADING.exec(line);
+    if (match?.[1]) {
+      current = { code: match[1].trim(), name: (match[2] ?? '').trim(), body: '' };
+      sections.push(current);
+      continue;
+    }
+    if (current) current.body += `${line}\n`;
+    else preambleLines.push(line);
+  }
+
+  return {
+    preamble: preambleLines.join('\n').trim(),
+    sections: sections.map((s) => ({ ...s, body: s.body.trim() })),
+  };
+}
+
+/** D-39 / UI-SPEC §5d — render the solution split into one block per target subsystem. */
+const SolutionPreview: React.FC<{ content: string }> = ({ content }) => {
+  const { preamble, sections } = React.useMemo(
+    () => parseSolutionSubsystemSections(content),
+    [content]
+  );
+
+  if (sections.length === 0) {
+    return <SafeMarkdown source={content} />;
+  }
+
+  return (
+    <>
+      {preamble && <SafeMarkdown source={preamble} />}
+      {sections.map((section) => (
+        <div key={`${section.code}:${section.name}`} data-testid={`solution-subsystem-${section.code}`}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '16px 0 8px' }}>
+            <Tag color="cyan" style={{ margin: 0, fontFamily: 'monospace', fontWeight: 600 }}>
+              {section.code}
+            </Tag>
+            <span style={{ fontSize: 16, fontWeight: 600 }}>{section.name}</span>
+          </div>
+          {section.body === SUBSYSTEM_UNAFFECTED_MARKER ? (
+            <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+              {SUBSYSTEM_UNAFFECTED_MARKER}
+            </Typography.Text>
+          ) : (
+            <SafeMarkdown source={section.body} />
+          )}
+        </div>
+      ))}
+    </>
+  );
+};
 
 export interface Step2SolutionViewProps {
   projectId: string;
@@ -304,8 +382,9 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
               fontSize: 13,
               lineHeight: 1.6,
             }}
-            dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(content) }}
-          />
+          >
+            <SolutionPreview content={content} />
+          </div>
         )}
       </div>
     </div>
