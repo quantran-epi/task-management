@@ -21,11 +21,17 @@ function ordinaryTabs(tabs: ChatTab[]): ChatTab[] {
   return tabs.filter((tab) => tab.type === 'chat').sort((a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt));
 }
 
-function threadScopeParts(scopeKey: string, fallback?: ChatScopeInput): Pick<ChatThread, 'scopeType' | 'entityId'> {
+/**
+ * Maps a scope key to its thread scope. `cr` and `system` are whitelisted explicitly so a
+ * CR-scoped thread can never fall back to the shared `global` thread (T-31.2-11). Legacy
+ * `project:`/`milestone:` keys were purged by the V16 upgrade, so the `global` fallback is
+ * now only a defensive path for unknown prefixes.
+ */
+export function threadScopeParts(scopeKey: string, fallback?: ChatScopeInput): Pick<ChatThread, 'scopeType' | 'entityId'> {
   const [scopeType, entityId] = scopeKey.split(':', 2);
   if (scopeKey === 'global') return { scopeType: 'global' };
   if (fallback) return { scopeType: fallback.scopeType, ...(fallback.entityId ? { entityId: fallback.entityId } : {}) };
-  if (scopeType === 'task' || scopeType === 'project' || scopeType === 'milestone' || scopeType === 'document') {
+  if (scopeType === 'task' || scopeType === 'cr' || scopeType === 'system' || scopeType === 'document') {
     return { scopeType, ...(entityId ? { entityId } : {}) };
   }
   return { scopeType: 'global' };
@@ -72,8 +78,8 @@ export async function getActiveTab(scopeKey: string, db: TaskPlannerDatabase = d
   return (await listTabsByScope(scopeKey, db)).find((tab) => tab.active) ?? (await listTabsByScope(scopeKey, db))[0];
 }
 
-export async function getOrCreateSdlcTab(projectId: string, db: TaskPlannerDatabase = defaultDb): Promise<ChatTab> {
-  const scopeKey = `project:${projectId}`;
+export async function getOrCreateSdlcTab(crId: string, db: TaskPlannerDatabase = defaultDb): Promise<ChatTab> {
+  const scopeKey = `cr:${crId}`;
 
   return db.transaction('rw', [db.chatThreads, db.chatTabs], async () => {
     const scopeTabs = await db.chatTabs.where('scopeKey').equals(scopeKey).toArray();
@@ -81,16 +87,16 @@ export async function getOrCreateSdlcTab(projectId: string, db: TaskPlannerDatab
     if (existing) return existing;
 
     const now = new Date().toISOString();
-    const existingProjectThreads = await db.chatThreads.where('entityId').equals(projectId).toArray();
+    const existingCrThreads = await db.chatThreads.where('entityId').equals(crId).toArray();
     const claimedThreadIds = new Set((await db.chatTabs.toArray()).map((tab) => tab.threadId));
-    const sdlcThread = existingProjectThreads.find((thread) => thread.scopeKey === `${scopeKey}:sdlc`)
-      // Pre-tab legacy threads used `project:<id>` for the single project conversation; adopt one only if unclaimed.
-      ?? existingProjectThreads.find((thread) => thread.scopeKey === scopeKey && !claimedThreadIds.has(thread.id));
+    const sdlcThread = existingCrThreads.find((thread) => thread.scopeKey === `${scopeKey}:sdlc`)
+      // Pre-tab threads used `cr:<id>` for the single CR conversation; adopt one only if unclaimed.
+      ?? existingCrThreads.find((thread) => thread.scopeKey === scopeKey && !claimedThreadIds.has(thread.id));
     const thread: ChatThread = sdlcThread ?? {
       id: generateId(),
       scopeKey: `${scopeKey}:sdlc`,
-      scopeType: 'project',
-      entityId: projectId,
+      scopeType: 'cr',
+      entityId: crId,
       title: SDLC_TITLE,
       createdAt: now,
       updatedAt: now,
