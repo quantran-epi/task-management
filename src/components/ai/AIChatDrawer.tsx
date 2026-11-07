@@ -47,7 +47,7 @@ import { updateTask, getTask } from '../../db/repositories/taskRepo';
 import { createNote } from '../../db/repositories/noteRepo';
 import { getProject } from '../../db/repositories/projectRepo';
 import { getMilestone } from '../../db/repositories/milestoneRepo';
-import { getGlobalConventions, loadRepoConventions } from '../../services/conventionService';
+import { getGlobalConventions, loadRepoConventions, loadMultiRepoConventions } from '../../services/conventionService';
 import { buildConventionsSegment } from '../../services/ai/sdlcPromptComposer';
 import { getTodayDateString } from '../../utils/date';
 import dayjs from 'dayjs';

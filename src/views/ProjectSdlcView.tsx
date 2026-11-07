@@ -130,6 +130,16 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   const crList = useLiveQuery(() => listCrs(projectId, db), [projectId, db]) ?? [];
   const [readOnlySolution, setReadOnlySolution] = useState(false);
 
+  // Active ChangeRequest and target subsystems resolution
+  const activeCrRecord = useLiveQuery(
+    () => (activeCrId ? db.changeRequests.get(activeCrId) : undefined),
+    [activeCrId, db]
+  );
+  const crTargetSystems = useLiveQuery(async () => {
+    if (!activeCrRecord?.targetSystemIds || activeCrRecord.targetSystemIds.length === 0) return [];
+    return db.systems.where('id').anyOf(activeCrRecord.targetSystemIds).toArray();
+  }, [activeCrRecord?.targetSystemIds, db]) ?? [];
+
   // Conventions state (D-07, D-08, D-13)
   const [globalConventions, setGlobalConventions] = useState<string>('');
   const [repoConventions, setRepoConventions] = useState<RepoConventionResult | null>(null);
@@ -824,6 +834,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
           <Step3CodeGuideView
             projectId={projectId}
             crCode={workflowState?.metadata.cr ?? ''}
+            targetSystems={crTargetSystems}
             approvedSolutionMarkdown={workflowState?.artifacts.solution?.content}
             savedSnapshot={workflowState?.artifacts.branchSnapshot}
             conventionsSummary={conventionsSummary}

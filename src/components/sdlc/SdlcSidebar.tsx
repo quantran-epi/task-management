@@ -16,6 +16,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { listCrs, type SdlcCrRecord } from '../../services/wizard/sdlcCrManager';
 import { getProjectRepoSshBinding } from '../../services/gitRemoteService';
+import type { System, ChangeRequest } from '../../types/models';
 import type { SdlcStepId, SdlcWorkflowState } from '../../services/wizard/workflowSchemas';
 import { CrCreateModal } from './common/CrCreateModal';
 
@@ -76,6 +77,17 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
     [projectId, db]
   ) ?? [];
   const currentCr = crs.find((c) => (activeCrId ? c.id === activeCrId : c.status === 'active')) ?? crs[0];
+
+  // Resolve ChangeRequest and its target subsystems from DB
+  const resolvedCrId = activeCrId || currentCr?.id || projectId;
+  const crRecord = useLiveQuery(
+    () => (resolvedCrId ? db.changeRequests.get(resolvedCrId) : undefined),
+    [resolvedCrId, db]
+  );
+  const targetSystems = useLiveQuery(async () => {
+    if (!crRecord?.targetSystemIds || crRecord.targetSystemIds.length === 0) return [];
+    return db.systems.where('id').anyOf(crRecord.targetSystemIds).toArray();
+  }, [crRecord?.targetSystemIds, db]) ?? [];
 
   const isStepCompleted = (stepId: SdlcStepId): boolean => {
     if (!workflowState) return false;
@@ -270,6 +282,60 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
           >
             Khởi tạo CR đầu tiên
           </Button>
+        )}
+
+        {/* Target Subsystems pills for active CR (ENT-SYS-03, ENT-CR-02) */}
+        {crRecord && (
+          <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 4 }} data-testid="sidebar-target-systems">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Typography.Text style={{ fontSize: 11, color: token.colorTextTertiary }}>
+                Subsystems ảnh hưởng:
+              </Typography.Text>
+              {crRecord.type && (
+                <Tag
+                  color={
+                    crRecord.type === 'NEW_FEATURE'
+                      ? '#1677ff'
+                      : crRecord.type === 'ENHANCEMENT'
+                        ? '#52c41a'
+                        : '#faad14'
+                  }
+                  style={{ margin: 0, fontSize: 10, lineHeight: '16px', padding: '0 4px' }}
+                >
+                  {crRecord.type === 'NEW_FEATURE'
+                    ? 'Tạo mới'
+                    : crRecord.type === 'ENHANCEMENT'
+                      ? 'Nâng cấp'
+                      : 'Sửa lỗi'}
+                </Tag>
+              )}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {targetSystems.length > 0 ? (
+                targetSystems.map((sys) => (
+                  <Tag
+                    key={sys.id}
+                    color="cyan"
+                    icon={<BranchesOutlined style={{ fontSize: 10 }} />}
+                    style={{
+                      margin: 0,
+                      fontSize: 10,
+                      lineHeight: '18px',
+                      padding: '0 6px',
+                      fontFamily: 'monospace',
+                    }}
+                    title={`${sys.name} (${sys.code}) - ${sys.remoteRepoPath || 'Chưa có repo'}`}
+                  >
+                    {sys.code}
+                  </Tag>
+                ))
+              ) : (
+                <Tag color="warning" style={{ margin: 0, fontSize: 10, lineHeight: '18px' }}>
+                  Chưa gán subsystem
+                </Tag>
+              )}
+            </div>
+          </div>
         )}
       </div>
 

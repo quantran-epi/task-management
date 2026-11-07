@@ -10,6 +10,7 @@ import {
   Tag,
   Spin,
   Empty,
+  Segmented,
   theme,
   message,
 } from 'antd';
@@ -49,10 +50,12 @@ import { RemoteDirectoryBrowserModal } from '../../common/RemoteDirectoryBrowser
 import { ConventionsSummaryCard, type ConventionsSummaryProps } from '../common/ConventionsSummaryCard';
 import type { SdlcStepId } from '../../../services/wizard/workflowSchemas';
 import { formatGuardMessage } from '../../../services/wizard/workflowGuards';
+import type { System } from '../../../types/models';
 
 export interface Step3CodeGuideViewProps {
   projectId?: string;
   crCode?: string;
+  targetSystems?: System[] | undefined;
   approvedSolutionMarkdown?: string | undefined;
   savedSnapshot?: BranchSnapshot | undefined;
   onCommitBranchSnapshot?: (snapshot: BranchSnapshot) => Promise<void>;
@@ -65,6 +68,7 @@ export interface Step3CodeGuideViewProps {
 export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
   projectId = '',
   crCode = 'CR-UNKNOWN',
+  targetSystems = [],
   approvedSolutionMarkdown,
   savedSnapshot: initialSavedSnapshot,
   onCommitBranchSnapshot,
@@ -75,6 +79,29 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
 }) => {
   const { token } = theme.useToken();
   const hasApprovedSolution = Boolean(approvedSolutionMarkdown?.trim());
+
+  // Multi-subsystem selection state
+  const [selectedSystemId, setSelectedSystemId] = useState<string>(() => targetSystems[0]?.id ?? '');
+
+  // Initialize from first subsystem if available
+  useEffect(() => {
+    if (targetSystems.length > 0) {
+      const activeSys = targetSystems.find((s) => s.id === selectedSystemId) || targetSystems[0]!;
+      if (!selectedSystemId) {
+        setSelectedSystemId(activeSys.id);
+      }
+      if (activeSys.sshConfigId && !selectedSshConfigId) {
+        setSelectedSshConfigId(activeSys.sshConfigId);
+      }
+      if (activeSys.remoteRepoPath && !remoteRepoPath) {
+        setRemoteRepoPath(activeSys.remoteRepoPath);
+        setLoadedRepoPath(activeSys.remoteRepoPath);
+      }
+      if (activeSys.defaultBaseBranch && baseBranch === 'origin/main') {
+        setBaseBranch(activeSys.defaultBaseBranch);
+      }
+    }
+  }, [targetSystems]);
 
   // Configuration state
   const [sshConfigs, setSshConfigs] = useState<SshConfig[]>([]);
@@ -453,6 +480,37 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
         styles={{ body: { padding: '12px 16px' } }}
       >
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+          {/* Subsystem Switcher if CR targets multiple subsystems */}
+          {targetSystems.length > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', marginBottom: 4 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: token.colorPrimary }}>
+                Subsystem đang chọn:
+              </span>
+              <Segmented
+                size="small"
+                value={selectedSystemId}
+                onChange={(val) => {
+                  const id = String(val);
+                  setSelectedSystemId(id);
+                  const sys = targetSystems.find((s) => s.id === id);
+                  if (sys) {
+                    if (sys.sshConfigId) setSelectedSshConfigId(sys.sshConfigId);
+                    if (sys.remoteRepoPath) {
+                      setRemoteRepoPath(sys.remoteRepoPath);
+                      setLoadedRepoPath(sys.remoteRepoPath);
+                    }
+                    if (sys.defaultBaseBranch) setBaseBranch(sys.defaultBaseBranch);
+                  }
+                }}
+                options={targetSystems.map((s) => ({
+                  value: s.id,
+                  label: `${s.code} (${s.name})`,
+                }))}
+                data-testid="step3-subsystem-switcher"
+              />
+            </div>
+          )}
+
           {/* SSH Profile */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
