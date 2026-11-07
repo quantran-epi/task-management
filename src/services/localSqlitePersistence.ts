@@ -12,8 +12,8 @@ export const SQLITE_SETTING_KEYS = {
 } as const;
 
 export const SQLITE_DOMAIN_TABLES = [
-  'projects',
-  'milestones',
+  'systems',
+  'changeRequests',
   'tasks',
   'capacityRules',
   'capacityOverrides',

@@ -105,6 +105,17 @@ export const SCHEMA_V15 = {
   changeRequests: 'id, &code, status, type, createdAt, updatedAt',
 } as const;
 
+// Phase 31.2 (D-27): `null` is Dexie's marker for "drop this object store". `stores()`
+// merges cumulatively across versions, so the stores must be named explicitly here —
+// omitting the key would silently keep the V15 store. Dexie's deleteRemovedTables()
+// drops both object stores and their data atomically as part of the V15 → V16 upgrade.
+export const SCHEMA_V16 = {
+  ...SCHEMA_V15,
+  projects: null,
+  milestones: null,
+  tasks: 'id, crId, systemId, status, priority, deadline, workType, jiraKey, reminderDate, *opsOwners, *businessAnalysts',
+} as const;
+
 
 
 

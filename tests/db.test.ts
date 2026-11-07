@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TaskPlannerDatabase } from '../src/db/index';
 import { initializeDatabaseDefaults, resetDatabaseToDefaults } from '../src/db/seeds';
 import { generateId } from '../src/utils/uuid';
-import type { Project, Task } from '../src/types/models';
+import type { ChangeRequest, Task } from '../src/types/models';
 
 describe('Dexie Database Persistence & Seed Layer (DATA-02, D-05, D-07)', () => {
   let testDb: TaskPlannerDatabase;
@@ -31,11 +31,9 @@ describe('Dexie Database Persistence & Seed Layer (DATA-02, D-05, D-07)', () => 
       'dlpAudits',
       'documentSets',
       'knowledgeLinks',
-      'milestones',
       'noteAttachments',
       'notes',
       'plannedAllocations',
-      'projects',
       'publishAttempts',
       'publishedDocuments',
       'settings',
@@ -87,21 +85,22 @@ describe('Dexie Database Persistence & Seed Layer (DATA-02, D-05, D-07)', () => 
   });
 
   it('persists records across database close and reopen (DATA-02)', async () => {
-    const projectId = generateId();
+    const changeRequestId = generateId();
     const taskId = generateId();
     const now = new Date().toISOString();
 
-    const sampleProject: Project = {
-      id: projectId,
+    const sampleChangeRequest: ChangeRequest = {
+      id: changeRequestId,
       name: 'Launch PWA',
       status: 'In Progress',
+      type: 'ENHANCEMENT',
+      targetSystemIds: [],
       createdAt: now,
       updatedAt: now,
     };
 
     const sampleTask: Task = {
       id: taskId,
-      projectId,
       name: 'Write Unit Tests',
       status: 'Open',
       progress: 0,
@@ -111,7 +110,7 @@ describe('Dexie Database Persistence & Seed Layer (DATA-02, D-05, D-07)', () => 
       updatedAt: now,
     };
 
-    await testDb.projects.add(sampleProject);
+    await testDb.changeRequests.add(sampleChangeRequest);
     await testDb.tasks.add(sampleTask);
 
     // Simulate browser reload / db reconnect
@@ -120,11 +119,11 @@ describe('Dexie Database Persistence & Seed Layer (DATA-02, D-05, D-07)', () => 
     const reopenedDb = new TaskPlannerDatabase(testDbName);
     await reopenedDb.open();
 
-    const persistedProject = await reopenedDb.projects.get(projectId);
+    const persistedChangeRequest = await reopenedDb.changeRequests.get(changeRequestId);
     const persistedTask = await reopenedDb.tasks.get(taskId);
 
-    expect(persistedProject).toBeDefined();
-    expect(persistedProject?.name).toBe('Launch PWA');
+    expect(persistedChangeRequest).toBeDefined();
+    expect(persistedChangeRequest?.name).toBe('Launch PWA');
     expect(persistedTask).toBeDefined();
     expect(persistedTask?.estimateMinutes).toBe(120);
 
@@ -135,10 +134,12 @@ describe('Dexie Database Persistence & Seed Layer (DATA-02, D-05, D-07)', () => 
     await initializeDatabaseDefaults(testDb);
 
     const now = new Date().toISOString();
-    await testDb.projects.add({
+    await testDb.changeRequests.add({
       id: generateId(),
-      name: 'Temporary Project',
+      name: 'Temporary CR',
       status: 'Open',
+      type: 'ENHANCEMENT',
+      targetSystemIds: [],
       createdAt: now,
       updatedAt: now,
     });
@@ -154,13 +155,13 @@ describe('Dexie Database Persistence & Seed Layer (DATA-02, D-05, D-07)', () => 
       updatedAt: now,
     });
 
-    expect(await testDb.projects.count()).toBe(1);
+    expect(await testDb.changeRequests.count()).toBe(1);
     expect(await testDb.tasks.count()).toBe(1);
 
     await resetDatabaseToDefaults(testDb);
 
     // All custom entities cleared
-    expect(await testDb.projects.count()).toBe(0);
+    expect(await testDb.changeRequests.count()).toBe(0);
     expect(await testDb.tasks.count()).toBe(0);
 
     // Baseline capacity rules restored
