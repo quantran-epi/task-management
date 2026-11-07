@@ -26,7 +26,7 @@ import {
 } from '../../db/repositories/systemRepo';
 import { createChangeRequest } from '../../db/repositories/changeRequestRepo';
 import { useLayoutStore } from '../store/layoutStore';
-import { useSystemActions, SYSTEM_ACTIONS_DISABLED_REASON } from '../hooks/useSystemActions';
+import { useSystemActions } from '../hooks/useSystemActions';
 import { SystemModal } from '../../components/systems/SystemModal';
 import { ChangeRequestModal } from '../../components/changeRequests/ChangeRequestModal';
 import type { DataNode } from 'antd/es/tree';
@@ -158,7 +158,7 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
         icon: <CloudServerOutlined />,
         label: 'Mở Git',
         disabled: !!reason,
-        title: reason,
+        ...(reason ? { title: reason } : {}),
         onClick: () => openGit(system),
       },
       {
@@ -166,7 +166,7 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
         icon: <CodeOutlined />,
         label: 'Mở Terminal',
         disabled: !!reason,
-        title: reason,
+        ...(reason ? { title: reason } : {}),
         onClick: () => openTerminal(system),
       },
       editItem,

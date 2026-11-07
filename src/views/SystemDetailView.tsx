@@ -62,7 +62,7 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
   const sshConfig = system.sshConfigId ? sshConfigs.find((c) => c.id === system.sshConfigId) : null;
 
   // Change requests impacting this system
-  const relatedCrs = allCrs.filter((cr) => cr.targetSystemIds?.includes(system.id));
+  const relatedCrs = allCrs.filter((cr) => cr.targets?.some((t) => t.systemId === system.id));
 
   const handleOpenSystem = (targetSys: System) => {
     openTab({

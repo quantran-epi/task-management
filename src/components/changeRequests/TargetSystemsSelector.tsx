@@ -16,7 +16,7 @@ export interface TargetSystemsSelectorProps {
   /** Subsystem ids pre-selected by the caller (D-34 soft lock) — marked, still removable. */
   preselectedIds?: string[];
   /** Caller already holds the system list; avoids a first-paint window where values render raw. */
-  systems?: System[];
+  systems?: System[] | undefined;
 }
 
 interface TreeNode {

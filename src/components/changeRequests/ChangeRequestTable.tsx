@@ -138,7 +138,7 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
       icon: <RobotOutlined style={{ color: token.colorPrimary }} />,
       label: 'Hỏi Trợ lý AI',
       onClick: () => {
-        openChat({ type: 'project', id: record.id, title: record.name });
+        openChat({ type: 'cr', id: record.id, title: record.name });
       },
     },
     {

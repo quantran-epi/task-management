@@ -47,7 +47,7 @@ export interface ChangeRequestModalProps {
   /** D-34: subsystems pre-filled by the caller (e.g. "Tạo CR" from a subsystem). Soft lock. */
   initialTargets?: CrTarget[];
   /** Pre-loaded system list so preselected codes render on first paint, not as raw ids. */
-  systems?: import('../../types/models').System[];
+  systems?: import('../../types/models').System[] | undefined;
 }
 
 interface ChangeRequestFormValues {
