@@ -5,13 +5,14 @@ import type { SdlcStepId, SdlcWorkflowState } from '../../services/wizard/workfl
 import type { AiChatArtifactEvent } from '../ai/AiChatWidget';
 import type { SdlcArtifactKindForTurn } from '../../services/ai/sdlcPromptComposer';
 import type { SdlcGroundingResult } from '../../services/sdlc/groundingBuilder';
-import type { ChatMessage } from '../../types/models';
+import type { ChatMessage, CrTarget, System } from '../../types/models';
 import type { ArtifactPatchProposal, ArtifactToolContext, ArtifactToolKind } from '../../services/ai/sdlcArtifactTools';
 
 const EMPTY_GROUNDING: SdlcGroundingResult = { text: '', present: new Set() };
 import { StepChatPanel, type StepChatPanelHandle } from './chat/StepChatPanel';
 import { ResizeSplitter } from "../common/ResizeSplitter";
 import { SdlcStaleBanner } from './common/SdlcStaleBanner';
+import { SubsystemContextBar } from './SubsystemContextBar';
 import { detectDraftHashDivergence } from '../../services/wizard/stalenessDetector';
 
 export const SDLC_CHAT_WIDTH_MIN = 320;
@@ -48,6 +49,11 @@ export interface SdlcWorkspaceProps {
     repo?: string | undefined;
     repoPath?: string | undefined;
   } | undefined;
+  /** D-38: view-level selection shared by Step 3 and Step 4. */
+  selectedSystemId?: string | undefined;
+  onSelectSystem?: ((systemId: string) => void) | undefined;
+  crTargets?: CrTarget[] | undefined;
+  crTargetSystems?: System[] | undefined;
 }
 
 export const SdlcWorkspace: React.FC<SdlcWorkspaceProps> = ({
@@ -70,6 +76,10 @@ export const SdlcWorkspace: React.FC<SdlcWorkspaceProps> = ({
   onApplyArtifactPatch,
   draftHashes,
   conventions,
+  selectedSystemId,
+  onSelectSystem,
+  crTargets,
+  crTargetSystems,
 }) => {
   const { token } = theme.useToken();
   const chatPaneId = React.useId();
@@ -121,6 +131,14 @@ export const SdlcWorkspace: React.FC<SdlcWorkspaceProps> = ({
             workflowState={workflowState}
             {...(draftStaleness ? { draftStaleness } : {})}
             onNavigateToStep={onNavigateToStep}
+          />
+        )}
+        {crTargets && onSelectSystem && selectedSystemId !== undefined && (
+          <SubsystemContextBar
+            targets={crTargets}
+            systems={crTargetSystems ?? []}
+            selectedSystemId={selectedSystemId}
+            onSelect={onSelectSystem}
           />
         )}
         {stepViewNode || (

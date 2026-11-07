@@ -151,6 +151,17 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
     return db.systems.where('id').anyOf(ids).toArray();
   }, [activeCrRecord?.targets, db]) ?? [];
 
+  // D-38: one selected subsystem at view level, shared by Step 3 and Step 4. Reset on CR change
+  // so a stale id cannot drive either step (T-31.2-40).
+  const [selectedSystemId, setSelectedSystemId] = useState<string | null>(null);
+  useEffect(() => {
+    const first = activeCrRecord?.targets[0]?.systemId ?? null;
+    setSelectedSystemId((current) =>
+      current && activeCrRecord?.targets.some((t) => t.systemId === current) ? current : first
+    );
+  }, [activeCrRecord?.id, activeCrRecord?.targets]);
+  const onSelectSystem = useCallback((systemId: string) => setSelectedSystemId(systemId), []);
+
   // Conventions state (D-07, D-08, D-13)
   const [globalConventions, setGlobalConventions] = useState<string>('');
   const [repoConventions, setRepoConventions] = useState<MultiRepoConventionResult[]>([]);
@@ -1062,6 +1073,10 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
             repo: repoConventions[0]?.content,
             repoPath: repoConventions[0]?.foundPath,
           }}
+          crTargets={activeCrRecord?.targets ?? []}
+          crTargetSystems={crTargetSystems}
+          selectedSystemId={selectedSystemId ?? undefined}
+          onSelectSystem={onSelectSystem}
           db={db}
         />
       </div>

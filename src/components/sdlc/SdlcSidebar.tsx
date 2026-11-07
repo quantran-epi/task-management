@@ -12,8 +12,13 @@ import {
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import { createChangeRequest } from '../../db/repositories/changeRequestRepo';
+import { createChangeRequest, updateChangeRequest } from '../../db/repositories/changeRequestRepo';
+import { updateSystem } from '../../db/repositories/systemRepo';
+import { getSshConfigs } from '../../services/sshService';
 import { ChangeRequestModal } from '../changeRequests/ChangeRequestModal';
+import { SystemModal } from '../systems/SystemModal';
+import { SubsystemsReposPanel } from './SubsystemsReposPanel';
+import type { System } from '../../types/models';
 import type { SdlcStepId, SdlcWorkflowState } from '../../services/wizard/workflowSchemas';
 
 export interface SdlcSidebarProps {
@@ -53,6 +58,8 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
 }) => {
   const { token } = theme.useToken();
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [editingSystem, setEditingSystem] = useState<System | null>(null);
+  const [editCrOpen, setEditCrOpen] = useState(false);
 
   // Single CR source: db.changeRequests (D-36). No legacy sdlcCrManager fallback.
   const crs = useLiveQuery(() => db.changeRequests.toArray(), [db]) ?? [];
@@ -69,6 +76,7 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
     if (ids.length === 0) return [];
     return db.systems.where('id').anyOf(ids).toArray();
   }, [crRecord?.targets, db]) ?? [];
+  const sshConfigs = useLiveQuery(() => getSshConfigs(db), [db]) ?? [];
 
   const isStepCompleted = (stepId: SdlcStepId): boolean => {
     if (!workflowState) return false;
@@ -336,6 +344,17 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
               );
             })}
           </div>
+
+          {/* Read-only Subsystems & Repos observation panel (D-37, UI-SPEC §5b) */}
+          {crRecord && (
+            <SubsystemsReposPanel
+              changeRequest={crRecord}
+              systems={targetSystems}
+              sshConfigs={sshConfigs}
+              onEditSubsystem={(system) => setEditingSystem(system)}
+              onChooseSubsystem={() => setEditCrOpen(true)}
+            />
+          )}
         </>
       ) : (
         <div
@@ -374,6 +393,34 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
           } catch (err: any) {
             message.error(err?.message || 'Không thể tạo Change Request');
           }
+        }}
+        db={db}
+      />
+
+      {/* Read-only panel handoff: the only config path is System Catalog (T-31.2-38) */}
+      <SystemModal
+        open={Boolean(editingSystem)}
+        system={editingSystem}
+        onClose={() => setEditingSystem(null)}
+        onSave={async (values) => {
+          if (!editingSystem) return;
+          await updateSystem(editingSystem.id, values, db);
+          message.success('Đã cập nhật subsystem');
+          setEditingSystem(null);
+        }}
+        db={db}
+      />
+
+      {/* Empty state handoff: attach subsystems to the current CR */}
+      <ChangeRequestModal
+        open={editCrOpen}
+        changeRequest={crRecord ?? null}
+        onClose={() => setEditCrOpen(false)}
+        onSave={async (values) => {
+          if (!crRecord) return;
+          await updateChangeRequest(crRecord.id, values as any, db);
+          message.success('Đã cập nhật subsystem của CR');
+          setEditCrOpen(false);
         }}
         db={db}
       />
