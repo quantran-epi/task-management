@@ -118,6 +118,8 @@ GitHub synchronization is backup synchronization, not collaborative live sync. B
 | Start with scheduled process `60000006` as pilot corpus | Small enough to validate, rich enough for scheduler, call-chain, data, and diagnostic multi-hop queries | ✓ Validated — Phase 17 |
 | Synthesize grounded answers with closure validation | Prevents hallucination, enforces exact source ranges and graph paths | ✓ Validated — Phase 19 |
 | Automatic local BM25 fallback on daemon unavailability | Guarantees zero downtime and zero egress for local Markdown searches | ✓ Validated — Phase 19 |
+| Enterprise System Catalog with hierarchical physical subsystems | Models real enterprise systems owning SSH/repo paths and multi-repo SDLC context | ✓ Validated — Phase 31.1 |
+| Transform Project to Change Request impacting 1..N systems | Aligns personal workload with enterprise change management and multi-system delivery | ✓ Validated — Phase 31.1 |
 | Artifact edits from chat return a diff the user approves before the editor changes (v1.3) | Keeps "never claim a document was approved or saved" true; AI never overwrites work in progress | Planned — v1.3 |
 | Knowledge retrieve is query-only; the server owns set selection (v1.3) | A fresh install has no local document set to send, so client-side `setId` coupling breaks retrieval | Planned — v1.3 |
 | Repository autonomy goes through Claude Code headless via fs-gw (v1.3) | TaskMate must not re-implement an agent harness; Claude Code already owns file/tool orchestration inside the repo | Planned — v1.3 |
@@ -142,4 +144,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-03 at the start of milestone v1.3*
+*Last updated: 2026-11-07 after Phase 31.1 completion*
