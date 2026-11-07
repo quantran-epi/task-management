@@ -45,7 +45,7 @@
 
 ### Organization Conventions (SDLC-CONV)
 
-- [ ] **SDLC-CONV-01**: User can maintain one global convention document in TaskMate carrying the rules every system must follow (org standards, unwritten conventions, internal process rules), editable in Settings and stored locally with the app's canonical data.
+- [x] **SDLC-CONV-01**: User can maintain one global convention document in TaskMate carrying the rules every system must follow (org standards, unwritten conventions, internal process rules), editable in Settings and stored locally with the app's canonical data.
 - [ ] **SDLC-CONV-02**: Each project can bind a repository, and its `CONVENTIONS.md` is read through fs-gw and treated as that repository's own rules; a project without a repository or without the file still works with the global document alone.
 - [ ] **SDLC-CONV-03**: Every SDLC solution/artifact turn carries both convention sources in the composed prompt — global first, repository last — in a clearly delimited, untrusted-data-framed segment that cannot be mistaken for instructions overriding the safety policy.
 - [ ] **SDLC-CONV-04**: When a global rule and a repository rule conflict, the AI names the conflict with both sources and does not silently pick one; the composed prompt states this rule explicitly.
@@ -127,7 +127,7 @@
 | SDLC-REPO-05 | Phase 30 | Complete |
 | SDLC-REPO-06 | Phase 29 | Complete |
 | SDLC-REPO-07 | Phase 30 | Complete |
-| SDLC-CONV-01 | Phase 31 | Pending |
+| SDLC-CONV-01 | Phase 31 | Complete |
 | SDLC-CONV-02 | Phase 31 | Pending |
 | SDLC-CONV-03 | Phase 31 | Pending |
 | SDLC-CONV-04 | Phase 31 | Pending |

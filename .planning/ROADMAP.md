@@ -472,6 +472,7 @@ Plans:
 **Goal:** Chuyển đổi giao diện TaskMate sang phong cách IntelliJ IDEA (ExpUI Islands Light) tương tự OpenIDEA theo mô hình Isolated Shell trên branch riêng `feature/intellij-workbench`. Đạt 60fps, low latency, fast docking/switching; giữ nguyên 100% logic nghiệp vụ, Dexie DB, các services và views hiện có.
 
 **Architecture & Isolation:**
+
 1. Giữ nguyên business logic: không can thiệp `src/db/*`, `src/services/*`, `src/domain/*`. Các views hiện tại đóng vai trò Plug-in Components cắm vào các slot của Workbench.
 2. Shell mới cách ly: `src/workbench/`, `src/styles/workbench-tokens.css`, entry riêng `src/AppIntelliJ.tsx` (không ghi đè `src/App.tsx`).
 3. Thư viện bổ sung: `react-resizable-panels`, `zustand`, `@tanstack/react-virtual`.
@@ -479,6 +480,7 @@ Plans:
 **Requirements:** EXPUI-01, EXPUI-02, EXPUI-03, EXPUI-04, EXPUI-05
 **Depends on:** Isolated shell on branch `feature/intellij-workbench`
 **Success Criteria** (what must be TRUE):
+
 1. TitleBar tích hợp window controls, quick project switcher, Search Everywhere, mini timer widget.
 2. Tool Window Stripes hẹp 32px ở trái, phải, đáy với badge và phím tắt `Alt+1`..`Alt+5`.
 3. Docking slots / islands (left, right, bottom) resize mượt mà và lưu layout vào `localStorage`.
@@ -490,15 +492,19 @@ Plans:
 **Plans:** 4 plans in 4 waves
 
 **Wave 1**
+
 - [x] 25.4-01-PLAN.md — Khung Workbench & Light Theme (`tokens.css`, `TitleBar`, `Stripe`, `StatusBar`, `layoutStore.ts` Zustand)
 
 **Wave 2** *(depends on 25.4-01)*
+
 - [x] 25.4-02-PLAN.md — Tích hợp Views hiện có vào các Slots (`AntdThemeAdapter`, Left slot, Center Editor Area, Bottom slot)
 
 **Wave 3** *(depends on 25.4-02)*
+
 - [x] 25.4-03-PLAN.md — Search Everywhere (`Double Shift` / `Ctrl+K`) & Centralized Keymaps Registry
 
 **Wave 4** *(depends on 25.4-03)*
+
 - [x] 25.4-04-PLAN.md — Tối ưu hiệu năng ảo hóa (@tanstack/react-virtual) & Switchover test (`AppIntelliJ.tsx`)
 
 ### Phase 25.5: TaskMate Workbench UI/UX Comprehensive Restructure & Precision Layout (INSERTED)
@@ -506,6 +512,7 @@ Plans:
 **Goal:** Tái cấu trúc toàn diện layout, UI và UX của TaskMate Workbench theo phong cách JetBrains ExpUI chuẩn mực: sửa triệt để cơ chế resize handles (`react-resizable-panels`) cho mượt mà và trực quan; tăng font-size/typography và padding dễ đọc; tái cơ cấu TopBar (loại bỏ controls vô nghĩa, đưa quick views & actions chuẩn lên toolbar); phân bổ đúng chức năng cho Left Explorer (tách Projects Tree và Docs Tree với action click mở tab chi tiết ở Center); chuyển AI Chat sang Right Dockable Tool Window; tích hợp Active Timer và system status vào StatusBar 26px; đảm bảo 100% tính năng của TaskMate được tiếp cận tự nhiên, không gượng ép.
 
 **Architecture & Alignment:**
+
 1. Layout Resizing: Sửa tận gốc `PanelResizeHandle` để thanh phân cách hiển thị rõ ràng, hover highlight xanh dương (`var(--accent)`), hit-box 6-8px, con trỏ `col-resize`/`row-resize` mượt mà, không bị kẹt hay giật lag.
 2. Typography & Hierarchy: Chuẩn hóa scale chữ (`--font-size-ui: 13.5px`, body 14px, headers 15-16px, monospace 12.5px), khoảng cách giữa các island panel hài hòa, loại bỏ chữ li ti khó nhìn.
 3. TopBar Refinement: Bỏ hoàn toàn 3 nút minimize/maximize/close vô nghĩa; bố trí lại Project Switcher, Search Everywhere (`Double Shift`), Quick Views (Dashboard, Planner, Analytics), Settings và AI Assistant trigger.
@@ -518,6 +525,7 @@ Plans:
 **Requirements:** WB-RESIZE-01, WB-TYPO-01, WB-TOPBAR-01, WB-LEFT-EXPLORER-01, WB-RIGHT-DOCK-01, WB-STATUSBAR-01, WB-CENTER-TABS-01
 **Depends on:** Phase 25.4
 **Success Criteria** (what must be TRUE):
+
 1. Thanh phân cách giữa các panels (Left/Center, Center/Right) hiển thị rõ đường kẻ chia, có hover/active effect xanh dương, kéo thả resize mượt mà không vỡ layout.
 2. Cỡ chữ trên toàn bộ Workbench tăng lên 13.5px–14px, các chữ nhỏ 10px được nâng lên tối thiểu 11.5px–12px, độ tương phản và line-height đạt chuẩn JetBrains ExpUI.
 3. TopBar không còn nút minimize/maximize/close; có đầy đủ Project Switcher, Search Everywhere button, Quick View navigation, nút Settings và AI Assistant.
@@ -529,15 +537,19 @@ Plans:
 **Plans:** 4/4 plans complete
 
 **Wave 1**
+
 - [x] 25.5-01-PLAN.md — Resizable Panels Fix & Theme/Typography Scale Overhaul (`workbench-tokens.css`, `WorkbenchLayout.tsx`, `layoutStore.ts`)
 
 **Wave 2** *(depends on 25.5-01)*
+
 - [x] 25.5-02-PLAN.md — TopBar & StatusBar Streamlining (`TitleBar.tsx`, `StatusBar.tsx`, loại bỏ window controls, tích hợp Quick Nav & Timer)
 
 **Wave 3** *(depends on 25.5-02)*
+
 - [x] 25.5-03-PLAN.md — Left Tool Windows Restructure: Dual Explorer for Projects & Docs (`LeftToolWindow.tsx`, `DocsTree.tsx`, `ProjectTree.tsx`, `Stripe.tsx`)
 
 **Wave 4** *(depends on 25.5-03)*
+
 - [x] 25.5-04-PLAN.md — Right Tool Window Integration (AI Assistant & Inspector), Bottom Window Retirement & Full Navigation Verification (`RightToolWindow.tsx`, `EditorArea.tsx`)
 
 ---
@@ -590,6 +602,7 @@ Plans:
 3. Every patch result renders an approval card with added/removed lines; approve writes the editor draft and marks the step stale, reject leaves the editor untouched, and the decision is recorded in the transcript.
 4. Approving never commits a version and never claims the document was approved or saved.
 5. "Add this content to the solution" resolves to `get_artifact` + `patch_artifact_section` with a bounded diff, and artifact tools are refused in preview/historical versions and when the prerequisite artifact is missing.
+
 **UI hint**: yes
 
 **Plans:** 5 plans in 5 waves
@@ -660,6 +673,7 @@ Plans:
 2. Step 3 automatically targets the CR branch (`feature/{crCode}` with fallback to current HEAD or custom branch input), fetching commit log (`git log $BASE..HEAD`) and changed files status (`git diff --name-status $BASE..HEAD`).
 3. UI presents a clean review interface: commit timeline, changed file list with diff stats (+/-), and diff preview.
 4. User can approve the review, transitioning smoothly to Step 4 with verified branch snapshot context ({ base, head, branch, commits, files, diff }).
+
 **UI hint**: yes
 
 **Plans:** 3 plans in 3 waves
@@ -713,6 +727,7 @@ Plans:
 2. The generated zip passes `validateHubChangePack` with matching CR identity, and immediately executes `buildHubReconciliation` against the approved SOLUTION.
 3. The manual dropzone in Step 4 remains an explicit, labelled fallback for offline, disconnected, or manually built change packs.
 4. Edge cases (uncommitted changes, connection failure, non-zero git exit, oversized diff) display informative error banners without leaving orphan artifacts or blocking workflow navigation.
+
 **UI hint**: yes
 
 **Plans:** 3 plans in 3 waves
@@ -745,14 +760,14 @@ Plans:
 5. The intake step shows which conventions are in effect (global present/absent, repository present/absent, last-read time) before the solution is generated.
 6. A generated SOLUTION observably follows an in-effect convention the user never restated — proven by an exemplar test that asserts the mandated rule appears in the output.
 
-**Plans:** 4 plans in 4 waves
+**Plans:** 1/4 plans executed
 **UI hint**: yes
 
 Plans:
 
 **Wave 1** *(depends on Phase 29; edits Settings and Dexie/SQLite settings)*
 
-- [ ] 31-01-PLAN.md — Global convention document: schema, Settings editor, persistence, backup inclusion
+- [x] 31-01-PLAN.md — Global convention document: schema, Settings editor, persistence, backup inclusion
 
 **Wave 2** *(depends on 31-01; depends on Phase 29 fs-gw client)*
 
