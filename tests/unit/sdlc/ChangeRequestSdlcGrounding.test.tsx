@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../../src/db';
-import { createNewCr } from '../../../src/services/wizard/sdlcCrManager';
 import type { SdlcWorkflowMetadata } from '../../../src/services/wizard/workflowSchemas';
 
 const captured = vi.hoisted(() => ({ grounding: '', present: new Set<string>() as ReadonlySet<string> }));
@@ -15,16 +14,19 @@ vi.mock('../../../src/components/sdlc/SdlcWorkspace', () => ({
   },
 }));
 
-import { ProjectSdlcView } from '../../../src/views/ProjectSdlcView';
+import { ChangeRequestSdlcView } from '../../../src/views/ChangeRequestSdlcView';
 
-describe('ProjectSdlcView grounding supply', () => {
+describe('ChangeRequestSdlcView grounding supply', () => {
   it('forwards labeled non-empty grounding for workflow artifacts and missing derived sources', async () => {
     const db = new TaskPlannerDatabase(`grounding-${Math.random()}`);
     const projectId = crypto.randomUUID();
-    await db.projects.add({
+    await db.changeRequests.add({
       id: projectId,
-      name: 'Grounding project',
+      name: 'Grounding CR',
+      code: 'CR-GROUNDING',
       status: 'In Progress',
+      type: 'ENHANCEMENT',
+      targets: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
@@ -35,9 +37,8 @@ describe('ProjectSdlcView grounding supply', () => {
       requestingUnit: 'CNTT',
       date: '2026-11-03',
     };
-    const cr = await createNewCr(projectId, metadata, true, db);
     await db.settings.put({
-      key: `sdlc_workflow:${projectId}:${cr.id}`,
+      key: `sdlc_workflow:${projectId}:${projectId}`,
       value: JSON.stringify({
         schemaVersion: 1,
         sessionId: crypto.randomUUID(),
@@ -55,7 +56,7 @@ describe('ProjectSdlcView grounding supply', () => {
       }),
     });
 
-    render(<ProjectSdlcView projectId={projectId} onBack={vi.fn()} db={db} />);
+    render(<ChangeRequestSdlcView changeRequestId={projectId} onBack={vi.fn()} db={db} />);
     await waitFor(() => expect(captured.grounding).toContain('CR-GROUNDING'));
     expect(captured.grounding).toContain('[CR_METADATA]');
     expect(captured.grounding).toContain('CR-GROUNDING');

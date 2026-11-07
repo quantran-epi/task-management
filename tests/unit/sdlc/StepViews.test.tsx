@@ -16,10 +16,13 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
 
   beforeEach(async () => {
     db = new TaskPlannerDatabase(`test-steps-${Math.random()}`);
-    await db.projects.add({
+    await db.changeRequests.add({
       id: projectId,
       name: 'Hệ thống Loyalty',
+      code: 'CR-STEPS',
       status: 'In Progress',
+      type: 'ENHANCEMENT',
+      targets: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
@@ -83,7 +86,7 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
         {
           id: 'note-1',
           entityId: projectId,
-          entityType: 'project',
+          entityType: 'cr',
           title: 'Khảo sát nghiệp vụ CRM',
           body: 'Nội dung khảo sát chi tiết',
           isPinned: false,
@@ -93,7 +96,7 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
         {
           id: 'note-2',
           entityId: projectId,
-          entityType: 'project',
+          entityType: 'cr',
           title: 'Đặc tả API Gateway',
           body: 'Mô tả endpoints REST',
           isPinned: false,
@@ -202,9 +205,9 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
   });
 
   describe('Step3CodeGuideView', () => {
-    it('displays packaging command pre-filled with crCode and advances on click', () => {
+    it('gates the Step 4 handoff on an approved SOLUTION and an approved branch snapshot', () => {
       const handleProceed = vi.fn();
-      const { container } = render(
+      render(
         <Step3CodeGuideView
           crCode="CR-2026-999"
           approvedSolutionMarkdown="# SOLUTION đã duyệt"
@@ -212,19 +215,14 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
         />
       );
 
-      expect(screen.getByTestId('cli-command')).toHaveTextContent('node scripts/change-pack.mjs --cr CR-2026-999');
-
-      const advanceBtn = screen.getByRole('button', { name: /Đã code xong — Chuyển sang Nạp Change Pack/i });
-      expect(advanceBtn).not.toBeDisabled();
+      // D-38b: the handoff needs an approved snapshot, not a self-reported coding status.
+      const advanceBtn = screen.getByRole('button', { name: /Chuyển sang Bước 4: Change Pack/i });
+      expect(advanceBtn).toBeDisabled();
       fireEvent.click(advanceBtn);
-      expect(handleProceed).toHaveBeenCalledTimes(1);
+      expect(handleProceed).not.toHaveBeenCalled();
 
-      // D-12: coding handoff contract, no independent implementation-status tracker.
-      expect(container.querySelectorAll('input[type="checkbox"]')).toHaveLength(0);
+      // D-12: no independent implementation-status tracker.
       expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
-      expect(screen.getByText(/Hợp đồng bàn giao Coding & Change Pack/i)).toBeInTheDocument();
-      expect(screen.queryByText(/Checklist kiểm tra trước khi nạp pack/i)).toBeNull();
-      expect(screen.getByText(/repository nguồn đích/i)).toBeInTheDocument();
     });
 
     it('D-20: blocks the handoff when no approved SOLUTION exists', () => {
@@ -239,7 +237,7 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
       );
 
       expect(
-        screen.getByRole('button', { name: /Đã code xong — Chuyển sang Nạp Change Pack/i })
+        screen.getByRole('button', { name: /Chuyển sang Bước 4: Change Pack/i })
       ).toBeDisabled();
       expect(screen.getByTestId('step3-prerequisite-guard')).toHaveTextContent(
         /Chưa đủ điều kiện: Thiếu SOLUTION\.md từ Bước 2\./i
@@ -250,9 +248,12 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
       expect(handleProceed).not.toHaveBeenCalled();
     });
 
-    it('falls back to (chưa cung cấp) when the approved solution body is absent', () => {
+    it('renders the CR-scoped review surface with the SSH/repo configuration bar', () => {
       render(<Step3CodeGuideView crCode="CR-2026-999" onProceedToStep4={vi.fn()} />);
-      expect(screen.getByText('(chưa cung cấp)')).toBeInTheDocument();
+      expect(
+        screen.getByText(/Bước 3: Review Nhánh & Diff Repository Remote qua SSH/i)
+      ).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('/home/user/workspace/repo')).toBeInTheDocument();
     });
   });
 
@@ -365,7 +366,7 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
 
       render(
         <Step5TechDocsView
-          projectId={projectId}
+          changeRequestId={projectId}
           crId="cr-001"
           onCommitTechDoc={handleCommitTechDoc}
           db={db}

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../src/db';
 import { SdlcSidebar } from '../../src/components/sdlc/SdlcSidebar';
@@ -10,7 +10,7 @@ import { loadMultiRepoConventions } from '../../src/services/conventionService';
 import { buildConventionsSegment } from '../../src/services/ai/sdlcPromptComposer';
 import type { System } from '../../src/types/models';
 
-describe('ProjectSdlcViewMultiSystem Integration', () => {
+describe('ChangeRequestSdlcViewMultiSystem Integration', () => {
   let db: TaskPlannerDatabase;
   let parentSys: System;
   let subSys1: System;
@@ -70,7 +70,7 @@ describe('ProjectSdlcViewMultiSystem Integration', () => {
         code: 'CR-PAY-01',
         type: 'NEW_FEATURE',
         status: 'Open',
-        targetSystemIds: [subSys1.id, subSys2.id],
+        targets: [{ systemId: subSys1.id }, { systemId: subSys2.id }],
       },
       db
     );
@@ -87,40 +87,59 @@ describe('ProjectSdlcViewMultiSystem Integration', () => {
 
     // Subsystems pills render with cyan tags
     await waitFor(() => {
-      expect(screen.getByTestId('sidebar-target-systems')).toBeInTheDocument();
-      expect(screen.getByText('PAY-SVC')).toBeInTheDocument();
-      expect(screen.getByText('BILL-DB')).toBeInTheDocument();
+      const pills = screen.getByTestId('sidebar-target-systems');
+      expect(pills).toBeInTheDocument();
+      expect(within(pills).getByText('PAY-SVC')).toBeInTheDocument();
+      expect(within(pills).getByText('BILL-DB')).toBeInTheDocument();
       expect(screen.getAllByText('Tạo mới').length).toBeGreaterThanOrEqual(1);
     });
   });
 
-  it('Step3CodeGuideView provides Subsystem Switcher when CR targets multiple subsystems', async () => {
-    render(
+  it('Step3CodeGuideView resolves repo path from the view-selected subsystem (D-38)', async () => {
+    const onFeatureBranchChange = vi.fn();
+    const { rerender } = render(
       <Step3CodeGuideView
         projectId="test-cr-id"
         crCode="CR-PAY-01"
         targetSystems={[subSys1, subSys2]}
+        crTargets={[
+          { systemId: subSys1.id, featureBranch: 'feature/CR-PAY-01' },
+          { systemId: subSys2.id, featureBranch: 'feature/CR-PAY-01' },
+        ]}
+        selectedSystemId={subSys1.id}
+        onFeatureBranchChange={onFeatureBranchChange}
         approvedSolutionMarkdown="# Solution"
         onProceedToStep4={vi.fn()}
         db={db}
       />
     );
 
-    // Renders segmented switcher
-    const switcher = await screen.findByTestId('step3-subsystem-switcher');
-    expect(switcher).toBeInTheDocument();
-    expect(screen.getByText('PAY-SVC (Payment Service)')).toBeInTheDocument();
-    expect(screen.getByText('BILL-DB (Billing DB Schema)')).toBeInTheDocument();
-
-    // Default repo remote path input reflects first subsystem
-    const input = screen.getByPlaceholderText('/home/user/workspace/repo') as HTMLInputElement;
+    // Repo base/remote come from the selected subsystem, not a project binding.
+    const input = (await screen.findByDisplayValue('/var/repos/payment-service')) as HTMLInputElement;
     expect(input.value).toBe('/var/repos/payment-service');
 
-    // Switching to second subsystem updates remote path
-    fireEvent.click(screen.getByText('BILL-DB (Billing DB Schema)'));
+    // Switching the shared view-level selection re-derives every field.
+    rerender(
+      <Step3CodeGuideView
+        projectId="test-cr-id"
+        crCode="CR-PAY-01"
+        targetSystems={[subSys1, subSys2]}
+        crTargets={[
+          { systemId: subSys1.id, featureBranch: 'feature/CR-PAY-01' },
+          { systemId: subSys2.id, featureBranch: 'feature/CR-PAY-01' },
+        ]}
+        selectedSystemId={subSys2.id}
+        onFeatureBranchChange={onFeatureBranchChange}
+        approvedSolutionMarkdown="# Solution"
+        onProceedToStep4={vi.fn()}
+        db={db}
+      />
+    );
     await waitFor(() => {
-      expect(input.value).toBe('/var/repos/billing-db');
+      expect(screen.getByDisplayValue('/var/repos/billing-db')).toBeInTheDocument();
     });
+    // D-38b: the branch is read from cr.targets, never guessed from a heuristic.
+    expect(onFeatureBranchChange).not.toHaveBeenCalled();
   });
 
   it('Resolves and aggregates multi-system conventions for AI Assistant prompt formatting', async () => {
@@ -129,12 +148,12 @@ describe('ProjectSdlcViewMultiSystem Integration', () => {
         name: 'Multi-Repo Migration',
         code: 'CR-MIGRATE-01',
         type: 'ENHANCEMENT',
-        targetSystemIds: [subSys1.id, subSys2.id],
+        targets: [{ systemId: subSys1.id }, { systemId: subSys2.id }],
       },
       db
     );
 
-    expect(cr.targetSystemIds).toEqual([subSys1.id, subSys2.id]);
+    expect(cr.targets.map((t) => t.systemId)).toEqual([subSys1.id, subSys2.id]);
 
     // Format conventions block using prompt composer helper
     const promptSegment = buildConventionsSegment({

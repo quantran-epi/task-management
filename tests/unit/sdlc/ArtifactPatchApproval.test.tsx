@@ -35,7 +35,7 @@ describe('Artifact patch approval real panel/hook/runtime/widget', () => {
   beforeEach(async () => {
     db = new TaskPlannerDatabase(`patch-approval-${crypto.randomUUID()}`);
     markdown = BASE;
-    const coordinator = createSdlcWorkflowCoordinator({ projectId: crypto.randomUUID(), threadId: crypto.randomUUID() });
+    const coordinator = createSdlcWorkflowCoordinator({ changeRequestId: crypto.randomUUID(), threadId: crypto.randomUUID() });
     await coordinator.startOrUpdateIntake({ cr: 'CR', featureName: 'Test', author: 'Test', requestingUnit: 'IT', date: '2026-11-05' }, 'PL01', 'PL02');
     const state = await coordinator.commitSolution(BASE);
     context = { projectId: state.projectId, crId: 'cr', stepId: 'SOLUTION',

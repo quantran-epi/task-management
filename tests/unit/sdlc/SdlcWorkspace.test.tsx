@@ -35,7 +35,7 @@ describe('SdlcWorkspace chat width', () => {
     splitter.releasePointerCapture = vi.fn();
 
     fireEvent.pointerDown(splitter, { button: 0, clientX: 500, pointerId: 1 });
-    fireEvent(window, new PointerEvent('pointermove', { clientX: 0 }));
+    fireEvent(window, new PointerEvent('pointermove', { clientX: 0, pointerId: 1 }));
     expect(screen.getByTestId('sdlc-chat-pane')).toHaveStyle({ width: '480px' });
 
     fireEvent.keyDown(splitter, { key: 'Home' });

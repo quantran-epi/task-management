@@ -21,8 +21,8 @@ import type { RevisionPreview } from '../../src/services/wizard/workflowSchemas'
 vi.mock('../../src/utils/pptxExport', () => ({ exportPresentationAsFile: vi.fn() }));
 
 const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
-const SCOPE = { type: 'project' as const, id: PROJECT_ID, title: 'Recovery Project' };
-const SCOPE_KEY = `project:${PROJECT_ID}`;
+const SCOPE = { type: 'cr' as const, id: PROJECT_ID, title: 'Recovery CR' };
+const SCOPE_KEY = `cr:${PROJECT_ID}`;
 const TS = '2026-10-30T00:00:00.000Z';
 const SESSION_ID = '22222222-2222-4222-8222-222222222222';
 const ORIGINAL_CHECKPOINT_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -84,7 +84,7 @@ const makeState = (
 // assertion below keeps failing if that behaviour regresses.
 describe('SDLC checkpoint, revision, and cycle recovery — re-pointed at coordinator + host banner', () => {
   const coordinatorDeps = {
-    projectId: PROJECT_ID,
+    changeRequestId: PROJECT_ID,
     threadId: SESSION_ID,
   };
 
@@ -197,7 +197,7 @@ describe('SDLC checkpoint, revision, and cycle recovery — re-pointed at coordi
       const sdlc = await getOrCreateSdlcTab(PROJECT_ID, db);
       const chat = await createChatTab(
         {
-          scopeType: 'project',
+          scopeType: 'cr',
           scopeKey: SCOPE_KEY,
           entityId: PROJECT_ID,
           title: 'Chat',
@@ -213,10 +213,13 @@ describe('SDLC checkpoint, revision, and cycle recovery — re-pointed at coordi
     beforeEach(async () => {
       db = new TaskPlannerDatabase(`sdlc-recovery-${Date.now()}-${Math.random()}`);
       await db.open();
-      await db.projects.add({
+      await db.changeRequests.add({
         id: PROJECT_ID,
-        name: 'Recovery Project',
+        name: 'Recovery CR',
+        code: 'CR-RECOVERY',
         status: 'Open',
+        type: 'ENHANCEMENT',
+        targets: [],
         createdAt: TS,
         updatedAt: TS,
       });

@@ -3,8 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../../src/db';
-import { ProjectSdlcView } from '../../../src/views/ProjectSdlcView';
-import { createNewCr } from '../../../src/services/wizard/sdlcCrManager';
+import { ChangeRequestSdlcView } from '../../../src/views/ChangeRequestSdlcView';
 import type { StepChatPanelHandle, StepChatPanelProps } from '../../../src/components/sdlc/chat/StepChatPanel';
 
 const { requestArtifactAnalysis } = vi.hoisted(() => ({ requestArtifactAnalysis: vi.fn() }));
@@ -34,7 +33,7 @@ function holdAnalysisTimer() {
   };
 }
 
-describe('ProjectSdlcView intake auto-analysis', () => {
+describe('ChangeRequestSdlcView intake auto-analysis', () => {
   let db: TaskPlannerDatabase;
   let projectId: string;
 
@@ -43,7 +42,16 @@ describe('ProjectSdlcView intake auto-analysis', () => {
     projectId = crypto.randomUUID();
     db = new TaskPlannerDatabase(`test-auto-analysis-${crypto.randomUUID()}`);
     const timestamp = new Date().toISOString();
-    await db.projects.add({ id: projectId, name: 'Intake activation', status: 'In Progress', createdAt: timestamp, updatedAt: timestamp });
+    await db.changeRequests.add({
+      id: projectId,
+      name: 'Intake activation',
+      code: 'CR-INTAKE',
+      status: 'In Progress',
+      type: 'ENHANCEMENT',
+      targets: [],
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
   });
 
   afterEach(async () => {
@@ -54,9 +62,9 @@ describe('ProjectSdlcView intake auto-analysis', () => {
   });
 
   async function submitIntake() {
-    const view = render(<ProjectSdlcView projectId={projectId} onBack={vi.fn()} db={db} />);
+    const view = render(<ChangeRequestSdlcView changeRequestId={projectId} onBack={vi.fn()} db={db} />);
     await screen.findByText('SDLC Studio — Intake activation');
-    expect(await db.settings.get(`sdlc_crs:${projectId}`)).toBeUndefined();
+    expect(await db.changeRequests.count()).toBe(1);
     fireEvent.change(screen.getByPlaceholderText(/Mã CR \(ví dụ/i), { target: { value: 'CR-AUTO' } });
     fireEvent.change(screen.getByPlaceholderText(/Tên tính năng \(ví dụ/i), { target: { value: 'Phân tích đúng một lần' } });
     fireEvent.change(screen.getByPlaceholderText(/Nội dung Yêu cầu nghiệp vụ/i), { target: { value: 'PL01 yêu cầu nghiệp vụ' } });
@@ -81,7 +89,7 @@ describe('ProjectSdlcView intake auto-analysis', () => {
     expect(requestArtifactAnalysis).toHaveBeenCalledTimes(1);
     vi.useRealTimers();
     unmount();
-    render(<ProjectSdlcView projectId={projectId} onBack={vi.fn()} db={db} />);
+    render(<ChangeRequestSdlcView changeRequestId={projectId} onBack={vi.fn()} db={db} />);
     await screen.findByRole('button', { name: /Đặt lại quy trình/i }, { timeout: 5000 });
     fireEvent.click(screen.getByTestId('sidebar-step-SOLUTION'));
     await screen.findByRole('button', { name: /Phân tích lại bằng AI/i });
@@ -108,9 +116,18 @@ describe('ProjectSdlcView intake auto-analysis', () => {
 
   it('switching CR cancels pending activation and rejects stale callback', async () => {
     const { held } = await submitIntake();
-    const cr = await createNewCr(projectId, {
-      cr: 'CR-OTHER', featureName: 'Other scope', author: 'Tester', requestingUnit: 'CNTT', date: '2026-11-02',
-    }, false, db);
+    const timestamp = new Date().toISOString();
+    const cr = {
+      id: crypto.randomUUID(),
+      name: 'Other scope',
+      code: 'CR-OTHER',
+      status: 'Open' as const,
+      type: 'ENHANCEMENT' as const,
+      targets: [],
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    await db.changeRequests.add(cr);
     const select = await screen.findByTestId('sidebar-cr-select');
     fireEvent.mouseDown(within(select).getByRole('combobox'));
     fireEvent.click(await screen.findByText('CR-OTHER'));
@@ -128,7 +145,7 @@ describe('ProjectSdlcView intake auto-analysis', () => {
     unmount();
     expect(clearTimer).toHaveBeenCalledWith(held.timers[0]!.handle);
     held.release();
-    render(<ProjectSdlcView projectId={projectId} onBack={vi.fn()} db={db} />);
+    render(<ChangeRequestSdlcView changeRequestId={projectId} onBack={vi.fn()} db={db} />);
     await screen.findByRole('button', { name: /Đặt lại quy trình/i }, { timeout: 5000 });
     vi.useFakeTimers();
     act(() => { vi.advanceTimersByTime(500); });
