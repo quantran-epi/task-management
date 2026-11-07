@@ -109,27 +109,30 @@ describe('SettingsView Integration & Offline Independence (SYNC-07, SYNC-05)', (
 
     const sampleRemotePayload: BackupEnvelope = {
       app: 'personal-task-planner',
-      schemaVersion: 1,
+      schemaVersion: 11,
       exportedAt: '2026-09-27T10:00:00.000Z',
       tables: {
-        projects: [
+        changeRequests: [
           {
             id: '11111111-1111-4111-8111-111111111111',
-            name: 'Remote Pulled Project',
+            name: 'Remote Pulled CR',
+            code: 'CR-REMOTE-01',
             status: 'Open',
+            type: 'ENHANCEMENT',
+            targets: [],
             createdAt: '2026-09-27T10:00:00.000Z',
             updatedAt: '2026-09-27T10:00:00.000Z',
           },
         ],
-        milestones: [],
+        systems: [],
         tasks: [],
         capacityRules: [],
         capacityOverrides: [],
         plannedAllocations: [],
       },
       counts: {
-        projects: 1,
-        milestones: 0,
+        changeRequests: 1,
+        systems: 0,
         tasks: 0,
         capacityRules: 0,
         capacityOverrides: 0,
@@ -184,9 +187,9 @@ describe('SettingsView Integration & Offline Independence (SYNC-07, SYNC-05)', (
 
     // 5. Verify domain tables updated
     await waitFor(async () => {
-      const projects = await db.projects.toArray();
-      expect(projects).toHaveLength(1);
-      expect(projects[0]?.name).toBe('Remote Pulled Project');
+      const crs = await db.changeRequests.toArray();
+      expect(crs).toHaveLength(1);
+      expect(crs[0]?.name).toBe('Remote Pulled CR');
     });
 
     // 6. Verify last_synced_sha and last_synced_at saved in settings

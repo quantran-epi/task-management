@@ -12,7 +12,8 @@ describe('useHashRoute utilities', () => {
 
     it('parses basic routes without query parameters', () => {
       expect(parseHash('#/tasks')).toEqual({ route: 'tasks', params: {} });
-      expect(parseHash('#/projects')).toEqual({ route: 'projects', params: {} });
+      // `projects` is no longer an AppRoute (plan 05), so it falls back to the default.
+      expect(parseHash('#/projects')).toEqual({ route: 'dashboard', params: {} });
       expect(parseHash('#/planner')).toEqual({ route: 'planner', params: {} });
       expect(parseHash('#/analytics')).toEqual({ route: 'analytics', params: {} });
       expect(parseHash('#/settings')).toEqual({ route: 'settings', params: {} });

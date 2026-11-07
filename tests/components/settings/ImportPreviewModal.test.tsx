@@ -16,29 +16,34 @@ describe('ImportPreviewModal', () => {
     await testDb.delete();
   });
 
+  // D-49: v11 envelopes are CR-centric. A `projects`/`milestones` table is a pre-31.2 backup
+  // and is rejected at the envelope stage, so the fixture must not carry one.
   const validPayload = {
     app: APP_MARKER,
     schemaVersion: CURRENT_SCHEMA_VERSION,
     exportedAt: '2026-09-27T10:00:00.000Z',
     tables: {
-      projects: [
+      changeRequests: [
         {
           id: '11111111-1111-4111-8111-111111111111',
-          name: 'Imported Project',
+          name: 'Imported CR',
+          code: 'CR-IMPORT-01',
           status: 'Open',
+          type: 'ENHANCEMENT',
+          targets: [],
           createdAt: '2026-09-27T10:00:00.000Z',
           updatedAt: '2026-09-27T10:00:00.000Z',
         },
       ],
-      milestones: [],
+      systems: [],
       tasks: [],
       capacityRules: [],
       capacityOverrides: [],
       plannedAllocations: [],
     },
     counts: {
-      projects: 1,
-      milestones: 0,
+      changeRequests: 1,
+      systems: 0,
       tasks: 0,
       capacityRules: 0,
       capacityOverrides: 0,
