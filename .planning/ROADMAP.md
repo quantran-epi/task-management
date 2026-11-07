@@ -838,7 +838,7 @@ Plans:
 5. SDLC Studio không còn cấu hình Repo & SSH; có view read-only "Subsystems & Repos"; Subsystem Context Bar dùng chung cho Step 3/4; Step 2 sinh solution phân mục theo từng Subsystem; Step 4 pack riêng từng Subsystem và Pack All có báo cáo lỗi từng phần.
 6. Khi CR chưa gán hoặc thiếu subsystem, AI đề xuất subsystem ảnh hưởng kèm lý do và độ tin cậy; chỉ ghi vào CR sau khi user xác nhận.
 
-**Plans:** 18/24 plans executed
+**Plans:** 21/24 plans executed
 **UI hint**: yes
 
 Plans:
@@ -875,8 +875,8 @@ Plans:
 
 **Wave 6** *(depends on Wave 5 — SDLC content)*
 
-- [ ] 31.2-16-PLAN.md — Step 2 per-subsystem solution contract + Step 3 branch from `cr.targets`
-- [ ] 31.2-17-PLAN.md — Step 4 per-subsystem pack cards + Pack All with partial-failure reporting
+- [x] 31.2-16-PLAN.md — Step 2 per-subsystem solution contract + Step 3 branch from `cr.targets`
+- [x] 31.2-17-PLAN.md — Step 4 per-subsystem pack cards + Pack All with partial-failure reporting
 
 **Wave 7** *(depends on Wave 6 — AI proposal)*
 
