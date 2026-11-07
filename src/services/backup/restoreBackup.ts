@@ -44,6 +44,8 @@ const RESTORE_TABLES = (db: TaskPlannerDatabase) => [
   db.knowledgeLinks,
   db.telegramSettings,
   db.telegramWhitelist,
+  db.systems,
+  db.changeRequests,
   db.settings,
   db.backupMetadata,
 ];
@@ -174,8 +176,8 @@ function countsFor(tables: BackupTableData): BackupTableCounts {
 async function captureSnapshot(targetDb: TaskPlannerDatabase, timestamp: string): Promise<SnapshotData> {
   // activeTimers is part of the snapshot: replaceTables clears the table for both import and
   // rollback, so omitting it here would destroy the in-progress timer with no way back.
-  const [projects, milestones, tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, activeTimers, notes, rawAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettingsRaw, telegramWhitelist, settings] = await Promise.all([
-    targetDb.projects.toArray(), targetDb.milestones.toArray(), targetDb.tasks.toArray(), targetDb.capacityRules.toArray(), targetDb.capacityOverrides.toArray(), targetDb.plannedAllocations.toArray(), targetDb.workSessions.toArray(), targetDb.activeTimers.toArray(), targetDb.notes.toArray(), targetDb.noteAttachments.toArray(), targetDb.chatThreads.toArray(), targetDb.chatMessages.toArray(), targetDb.chatTabs.toArray(), targetDb.documentSets.toArray(), targetDb.publishedDocuments.toArray(), targetDb.publishAttempts.toArray(), targetDb.dlpAudits.toArray(), targetDb.knowledgeLinks.toArray(), targetDb.telegramSettings.toArray(), targetDb.telegramWhitelist.toArray(), targetDb.settings.toArray()
+  const [projects, milestones, tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, activeTimers, notes, rawAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettingsRaw, telegramWhitelist, systems, changeRequests, settings] = await Promise.all([
+    targetDb.projects.toArray(), targetDb.milestones.toArray(), targetDb.tasks.toArray(), targetDb.capacityRules.toArray(), targetDb.capacityOverrides.toArray(), targetDb.plannedAllocations.toArray(), targetDb.workSessions.toArray(), targetDb.activeTimers.toArray(), targetDb.notes.toArray(), targetDb.noteAttachments.toArray(), targetDb.chatThreads.toArray(), targetDb.chatMessages.toArray(), targetDb.chatTabs.toArray(), targetDb.documentSets.toArray(), targetDb.publishedDocuments.toArray(), targetDb.publishAttempts.toArray(), targetDb.dlpAudits.toArray(), targetDb.knowledgeLinks.toArray(), targetDb.telegramSettings.toArray(), targetDb.telegramWhitelist.toArray(), targetDb.systems.toArray(), targetDb.changeRequests.toArray(), targetDb.settings.toArray()
   ]);
   const telegramSettings = telegramSettingsRaw.map((setting) => ({ ...setting, botToken: '' }));
   const noteAttachments = await Promise.all(rawAttachments.map(async (attachment) => ({
@@ -188,7 +190,7 @@ async function captureSnapshot(targetDb: TaskPlannerDatabase, timestamp: string)
     ...(attachment.caption ? { caption: attachment.caption } : {}),
     createdAt: attachment.createdAt,
   })));
-  const tables: BackupTableData = { projects, milestones, tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, activeTimers, notes, noteAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettings, telegramWhitelist, settings };
+  const tables: BackupTableData = { projects, milestones, tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, activeTimers, notes, noteAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettings, telegramWhitelist, systems, changeRequests, settings };
   return { timestamp, tables, counts: countsFor(tables) };
 }
 
@@ -222,7 +224,7 @@ async function replaceTables(
         ]
       : [];
     await Promise.all([
-      targetDb.projects.clear(), targetDb.milestones.clear(), targetDb.tasks.clear(), targetDb.capacityRules.clear(), targetDb.capacityOverrides.clear(), targetDb.plannedAllocations.clear(), targetDb.workSessions.clear(), targetDb.activeTimers.clear(), targetDb.notes.clear(), targetDb.noteAttachments.clear(), targetDb.chatThreads.clear(), targetDb.chatMessages.clear(), targetDb.chatTabs.clear(), targetDb.telegramSettings.clear(), targetDb.telegramWhitelist.clear(), ...clearKnowledge, targetDb.settings.clear(), targetDb.backupMetadata.clear(),
+      targetDb.projects.clear(), targetDb.milestones.clear(), targetDb.tasks.clear(), targetDb.capacityRules.clear(), targetDb.capacityOverrides.clear(), targetDb.plannedAllocations.clear(), targetDb.workSessions.clear(), targetDb.activeTimers.clear(), targetDb.notes.clear(), targetDb.noteAttachments.clear(), targetDb.chatThreads.clear(), targetDb.chatMessages.clear(), targetDb.chatTabs.clear(), targetDb.telegramSettings.clear(), targetDb.telegramWhitelist.clear(), targetDb.systems.clear(), targetDb.changeRequests.clear(), ...clearKnowledge, targetDb.settings.clear(), targetDb.backupMetadata.clear(),
     ]);
 
     const add = async <T>(table: { bulkAdd: (rows: T[]) => Promise<unknown> }, rows: T[] | undefined) => {
@@ -247,6 +249,8 @@ async function replaceTables(
     await add(targetDb.knowledgeLinks, tables.knowledgeLinks);
     await add(targetDb.telegramSettings, tables.telegramSettings);
     await add(targetDb.telegramWhitelist, tables.telegramWhitelist);
+    await add(targetDb.systems, tables.systems);
+    await add(targetDb.changeRequests, tables.changeRequests);
     await add(targetDb.activeTimers, tables.activeTimers);
     for (const setting of tables.settings ?? []) if (isSafeBackupSetting(setting.key)) await targetDb.settings.put(setting);
     // The drawer restores SDLC workflow state from settings, not from the tab row. Mirror the tab's

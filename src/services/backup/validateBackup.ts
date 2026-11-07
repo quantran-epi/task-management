@@ -27,6 +27,8 @@ import {
   BackupKnowledgeLinkRecordSchema,
   BackupTelegramSettingsRecordSchema,
   BackupTelegramWhitelistUserSchema,
+  BackupSystemRecordSchema,
+  BackupChangeRequestRecordSchema,
 } from '../../validation/backupSchemas';
 
 
@@ -186,6 +188,12 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     : undefined;
   const telegramWhitelist = rawTables.telegramWhitelist !== undefined
     ? validateTable('telegramWhitelist', BackupTelegramWhitelistUserSchema, rawTables.telegramWhitelist)
+    : undefined;
+  const systems = rawTables.systems !== undefined
+    ? validateTable('systems', BackupSystemRecordSchema, rawTables.systems)
+    : undefined;
+  const changeRequests = rawTables.changeRequests !== undefined
+    ? validateTable('changeRequests', BackupChangeRequestRecordSchema, rawTables.changeRequests)
     : undefined;
 
   // If schema validation errors occurred, stop before referential checks
@@ -596,6 +604,8 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       ...(knowledgeLinks !== undefined ? { knowledgeLinks } : {}),
       ...(telegramSettings !== undefined ? { telegramSettings } : {}),
       ...(telegramWhitelist !== undefined ? { telegramWhitelist } : {}),
+      ...(systems !== undefined ? { systems } : {}),
+      ...(changeRequests !== undefined ? { changeRequests } : {}),
     },
     counts: {
       projects: projects.length,
@@ -619,6 +629,8 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       ...(knowledgeLinks !== undefined ? { knowledgeLinks: knowledgeLinks.length } : {}),
       ...(telegramSettings !== undefined ? { telegramSettings: telegramSettings.length } : {}),
       ...(telegramWhitelist !== undefined ? { telegramWhitelist: telegramWhitelist.length } : {}),
+      ...(systems !== undefined ? { systems: systems.length } : {}),
+      ...(changeRequests !== undefined ? { changeRequests: changeRequests.length } : {}),
     },
   };
 

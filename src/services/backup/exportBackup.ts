@@ -185,6 +185,8 @@ export async function exportBackupPayload(
     knowledgeLinks,
     telegramSettingsRaw,
     telegramWhitelist,
+    systems,
+    changeRequests,
   ] = await Promise.all([
     targetDb.projects.toArray(),
     targetDb.milestones.toArray(),
@@ -207,6 +209,8 @@ export async function exportBackupPayload(
     targetDb.knowledgeLinks.toArray(),
     targetDb.telegramSettings.toArray(),
     targetDb.telegramWhitelist.toArray(),
+    targetDb.systems.toArray(),
+    targetDb.changeRequests.toArray(),
   ]);
 
   // Strip sensitive botToken from telegramSettings before export
@@ -254,6 +258,8 @@ export async function exportBackupPayload(
     knowledgeLinks,
     telegramSettings,
     telegramWhitelist,
+    systems,
+    changeRequests,
   };
 
   const counts = {
@@ -278,6 +284,8 @@ export async function exportBackupPayload(
     knowledgeLinks: knowledgeLinks.length,
     telegramSettings: telegramSettings.length,
     telegramWhitelist: telegramWhitelist.length,
+    systems: systems.length,
+    changeRequests: changeRequests.length,
   };
 
   const envelope: BackupEnvelope = {

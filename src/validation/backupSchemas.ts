@@ -16,6 +16,9 @@ import {
   MILESTONE_STATUSES,
   TASK_STATUSES,
   TASK_PRIORITIES,
+  SYSTEM_TYPES,
+  CR_TYPES,
+  CR_STATUSES,
   tagListSchema,
   workTypeSchema,
   jiraKeySchema,
@@ -592,5 +595,41 @@ export const BackupTelegramWhitelistUserSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
 });
+
+// Phase 31.1: Backup schemas for System and ChangeRequest (ENT-SYS-01, ENT-CR-01)
+export const BackupSystemRecordSchema = z.object({
+  id: uuidSchema,
+  name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
+  code: z.string().trim().min(1, 'Code is required').max(64, 'Code must be 64 characters or less'),
+  parentId: z.string().nullable(),
+  type: z.enum(SYSTEM_TYPES),
+  description: z.string().optional(),
+  sshConfigId: uuidSchema.optional(),
+  remoteRepoPath: z.string().optional(),
+  defaultBaseBranch: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const BackupChangeRequestRecordSchema = z.object({
+  id: uuidSchema,
+  name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
+  code: z.string().trim().max(64).optional(),
+  description: z.string().optional(),
+  deadline: calendarDateSchema.optional(),
+  status: z.enum(CR_STATUSES),
+  type: z.enum(CR_TYPES),
+  targetSystemIds: z.array(z.string()),
+  jiraEpicKey: jiraKeySchema.optional(),
+  opsOwners: tagListSchema.optional(),
+  businessAnalysts: tagListSchema.optional(),
+  documentLinks: z.array(linkSchema).optional(),
+  reminderDate: reminderDateSchema.optional(),
+  reminderNote: reminderNoteSchema,
+  reminders: remindersArraySchema,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
 
 

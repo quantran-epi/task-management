@@ -19,6 +19,8 @@ import type {
   KnowledgeLink,
   TelegramSettingsRecord,
   TelegramWhitelistUser,
+  System,
+  ChangeRequest,
 } from './models';
 
 export interface MissingBackupSource {
@@ -74,6 +76,8 @@ export interface BackupTableData {
   knowledgeLinks?: KnowledgeLink[];
   telegramSettings?: TelegramSettingsRecord[];
   telegramWhitelist?: TelegramWhitelistUser[];
+  systems?: System[];
+  changeRequests?: ChangeRequest[];
 }
 
 export interface BackupTableCounts {
@@ -98,6 +102,8 @@ export interface BackupTableCounts {
   knowledgeLinks?: number;
   telegramSettings?: number;
   telegramWhitelist?: number;
+  systems?: number;
+  changeRequests?: number;
 }
 
 
