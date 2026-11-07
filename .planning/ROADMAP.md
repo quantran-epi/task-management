@@ -14,7 +14,7 @@
 - Phase 29: SSH Remote Repository Branch & Diff Review (v1.3)
 - Phase 29.1: Remote SSH Git Explorer & Headless Claude Code Trace Flow (v1.3)
 - Phase 30: Automatic Change Pack Packaging & Drift Reconciliation (v1.3)
-- Phase 31: Organization Conventions in the Solution Pipeline (v1.3)
+- Phase 31: Organization Conventions in the Solution Pipeline (COMPLETE — verified 2026-11-07)
 - Phase 32: External Research via Claude Code Headless (v1.3)
 - Phase 33: Prompt Transparency & Contract Documentation (v1.3)
 
@@ -766,7 +766,7 @@ Plans:
 5. The intake step shows which conventions are in effect (global present/absent, repository present/absent, last-read time) before the solution is generated.
 6. A generated SOLUTION observably follows an in-effect convention the user never restated — proven by an exemplar test that asserts the mandated rule appears in the output.
 
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans executed (COMPLETE)
 **UI hint**: yes
 
 Plans:
@@ -785,7 +785,7 @@ Plans:
 
 **Wave 4** *(depends on 31-03)*
 
-- [ ] 31-04-PLAN.md — Conflict-surfacing + convention-following exemplar tests and an intake-status regression
+- [x] 31-04-PLAN.md — Conflict-surfacing + convention-following exemplar tests and an intake-status regression
 
 ### Phase 32: External Research via Claude Code Headless
 
