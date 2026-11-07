@@ -4,6 +4,8 @@ import { TaskPlannerDatabase } from '../../src/db';
 import { createTask, updateTask } from '../../src/db/repositories/taskRepo';
 import { computeNextOccurrence, spawnNextRecurringTask } from '../../src/utils/recurrence';
 
+const CR_ID = '11111111-1111-4111-8111-111111111111';
+
 describe('Recurrence utilities & task repo integration', () => {
   describe('computeNextOccurrence', () => {
     it('computes next daily occurrence correctly', () => {
@@ -46,6 +48,7 @@ describe('Recurrence utilities & task repo integration', () => {
     it('spawns next instance when recurring task is marked Done', async () => {
       const task = await createTask(
         {
+          crId: CR_ID,
           name: 'Họp giao ban hàng ngày',
           status: 'In Progress',
           priority: 'High',
@@ -74,11 +77,13 @@ describe('Recurrence utilities & task repo integration', () => {
       expect(nextTask?.parentRecurringTaskId).toBe(task.id);
       expect(nextTask?.isRecurring).toBe(true);
       expect(nextTask?.recurrenceFrequency).toBe('daily');
+      expect(nextTask?.crId).toBe(CR_ID);
     });
 
     it('respects recurrenceEndDate and stops spawning when exceeded', async () => {
       const task = await createTask(
         {
+          crId: CR_ID,
           name: 'Báo cáo dự án',
           status: 'Open',
           priority: 'Medium',
@@ -101,6 +106,7 @@ describe('Recurrence utilities & task repo integration', () => {
     it('prevents duplicate generation if task for next deadline already exists', async () => {
       const task = await createTask(
         {
+          crId: CR_ID,
           name: 'Backup dữ liệu hàng ngày',
           status: 'Done',
           priority: 'Urgent',

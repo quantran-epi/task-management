@@ -5,7 +5,7 @@ import { isTaskActive } from '../db/repositories/allocationRepo';
 export interface DayInsightRow {
   taskId: string;
   taskName: string;
-  projectName?: string;
+  crName?: string;
   isActive: boolean;
   plannedMinutes: number;
   actualMinutes: number;
@@ -28,7 +28,7 @@ export interface BuildDayInsightInput {
   allocations: PlannedAllocationWithTask[];
   sessions: WorkSession[];
   taskMap: Map<string, Task>; // resolves task info for session-only rows
-  projectNameById: Map<string, string>;
+  crNameById: Map<string, string>;
   /**
    * Live minutes contributed by currently-active timers whose sessionStartTime
    * falls on the target date. Not yet persisted as WorkSession — added on top
@@ -56,10 +56,10 @@ export function buildDayInsight(input: BuildDayInsightInput): DayInsightData {
       actualMinutes: 0,
       deltaMinutes: -alloc.allocatedMinutes,
     };
-    const projectName = task.projectId
-      ? input.projectNameById.get(task.projectId)
+    const crName = task.crId
+      ? input.crNameById.get(task.crId)
       : undefined;
-    if (projectName !== undefined) row.projectName = projectName;
+    if (crName !== undefined) row.crName = crName;
     rowsByTask.set(alloc.taskId, row);
   }
 
@@ -79,10 +79,10 @@ export function buildDayInsight(input: BuildDayInsightInput): DayInsightData {
       actualMinutes: session.durationMinutes,
       deltaMinutes: session.durationMinutes,
     };
-    const projectName = task?.projectId
-      ? input.projectNameById.get(task.projectId)
+    const crName = task?.crId
+      ? input.crNameById.get(task.crId)
       : undefined;
-    if (projectName !== undefined) row.projectName = projectName;
+    if (crName !== undefined) row.crName = crName;
     rowsByTask.set(session.taskId, row);
   }
 
@@ -107,10 +107,10 @@ export function buildDayInsight(input: BuildDayInsightInput): DayInsightData {
         deltaMinutes: runningMinutes,
         isRunning: true,
       };
-      const projectName = task?.projectId
-        ? input.projectNameById.get(task.projectId)
+      const crName = task?.crId
+        ? input.crNameById.get(task.crId)
         : undefined;
-      if (projectName !== undefined) row.projectName = projectName;
+      if (crName !== undefined) row.crName = crName;
       rowsByTask.set(taskId, row);
     }
   }

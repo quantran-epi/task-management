@@ -57,9 +57,9 @@ export const DayInsightPanel: React.FC<DayInsightPanelProps> = ({ data }) => {
               </Tag>
             )}
           </Space>
-          {row.projectName && (
+          {row.crName && (
             <Text type="secondary" style={{ fontSize: 11 }}>
-              {row.projectName}
+              {row.crName}
             </Text>
           )}
           {!row.isActive && (

@@ -9,6 +9,7 @@ const NOW = '2026-09-30T00:00:00.000Z';
 function task(id: string, overrides: Partial<Task> = {}): Task {
   return {
     id,
+    crId: 'c-default',
     name: `Task ${id}`,
     status: 'In Progress',
     progress: 0,
@@ -57,7 +58,7 @@ describe('buildDayInsight', () => {
       allocations: [alloc('t1', 120)],
       sessions: [],
       taskMap: new Map(),
-      projectNameById: new Map(),
+      crNameById: new Map(),
     });
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0]).toMatchObject({
@@ -78,7 +79,7 @@ describe('buildDayInsight', () => {
       allocations: [],
       sessions: [session('t2', 45)],
       taskMap: new Map([[t.id, t]]),
-      projectNameById: new Map(),
+      crNameById: new Map(),
     });
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0]).toMatchObject({
@@ -96,7 +97,7 @@ describe('buildDayInsight', () => {
       allocations: [alloc('t3', 90)],
       sessions: [session('t3', 30, 1), session('t3', 20, 2)],
       taskMap: new Map([[t.id, t]]),
-      projectNameById: new Map(),
+      crNameById: new Map(),
     });
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0]).toMatchObject({
@@ -115,7 +116,7 @@ describe('buildDayInsight', () => {
       allocations: [],
       sessions: [session('gone', 15)],
       taskMap: new Map(),
-      projectNameById: new Map(),
+      crNameById: new Map(),
     });
     expect(result.rows[0]?.taskName).toBe('Deleted / Unknown Task');
     expect(result.rows[0]?.isActive).toBe(false);
@@ -141,7 +142,7 @@ describe('buildDayInsight', () => {
         session('c', 90),
       ],
       taskMap: new Map([tA, tB, tC, tD].map((t) => [t.id, t])),
-      projectNameById: new Map(),
+      crNameById: new Map(),
     });
 
     // b: actual 90, planned 30
@@ -151,8 +152,8 @@ describe('buildDayInsight', () => {
     expect(result.rows.map((r) => r.taskId)).toEqual(['b', 'c', 'a', 'd']);
   });
 
-  it('resolves projectName via projectNameById map', () => {
-    const t = task('t4', { projectId: 'p1', name: 'Ship it' });
+  it('resolves crName via crNameById map', () => {
+    const t = task('t4', { crId: 'c1', name: 'Ship it' });
     const result = buildDayInsight({
       date: '2026-09-30',
       capacityMinutes: 480,
@@ -168,9 +169,9 @@ describe('buildDayInsight', () => {
       ],
       sessions: [],
       taskMap: new Map([[t.id, t]]),
-      projectNameById: new Map([['p1', 'Growth']]),
+      crNameById: new Map([['c1', 'Growth']]),
     });
-    expect(result.rows[0]?.projectName).toBe('Growth');
+    expect(result.rows[0]?.crName).toBe('Growth');
   });
 
   it('inactive task from allocation preserves isActive=false', () => {
@@ -180,7 +181,7 @@ describe('buildDayInsight', () => {
       allocations: [alloc('done', 60, { status: 'Done' })],
       sessions: [],
       taskMap: new Map(),
-      projectNameById: new Map(),
+      crNameById: new Map(),
     });
     expect(result.rows[0]?.isActive).toBe(false);
   });
@@ -192,7 +193,7 @@ describe('buildDayInsight', () => {
       allocations: [],
       sessions: [],
       taskMap: new Map(),
-      projectNameById: new Map(),
+      crNameById: new Map(),
     });
     expect(result.rows).toEqual([]);
     expect(result.totalPlannedMinutes).toBe(0);
@@ -208,7 +209,7 @@ describe('buildDayInsight', () => {
       allocations: [alloc('running-task', 60)],
       sessions: [session('running-task', 30)],
       taskMap: new Map([[t.id, t]]),
-      projectNameById: new Map(),
+      crNameById: new Map(),
       runningMinutesByTask: new Map([['running-task', 15]]),
     });
     expect(result.rows).toHaveLength(1);
@@ -229,7 +230,7 @@ describe('buildDayInsight', () => {
       allocations: [],
       sessions: [],
       taskMap: new Map([[t.id, t]]),
-      projectNameById: new Map(),
+      crNameById: new Map(),
       runningMinutesByTask: new Map([['fresh-running', 10]]),
     });
     expect(result.rows).toHaveLength(1);
