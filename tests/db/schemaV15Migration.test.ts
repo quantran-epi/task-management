@@ -135,19 +135,27 @@ describe('Dexie SCHEMA_V15 Migration & Data Transformation (ENT-SYS-01, ENT-CR-0
     // ChangeRequestInputSchema valid
     const validCr = ChangeRequestInputSchema.parse({
       name: 'CR-001 Add Interest Calculation',
+      code: 'CR-001',
       type: 'NEW_FEATURE',
-      targetSystemIds: ['sys-1', 'sys-2'],
+      targets: [
+        { systemId: '11111111-1111-4111-8111-111111111111' },
+        { systemId: '22222222-2222-4222-8222-222222222222' },
+      ],
     });
     expect(validCr.name).toBe('CR-001 Add Interest Calculation');
     expect(validCr.type).toBe('NEW_FEATURE');
     expect(validCr.status).toBe('Open');
-    expect(validCr.targetSystemIds).toEqual(['sys-1', 'sys-2']);
+    expect(validCr.targets).toEqual([
+      { systemId: '11111111-1111-4111-8111-111111111111' },
+      { systemId: '22222222-2222-4222-8222-222222222222' },
+    ]);
 
     // ChangeRequestInputSchema default type ENHANCEMENT
     const defaultCr = ChangeRequestInputSchema.parse({
       name: 'CR-002 Routine Update',
+      code: 'CR-002',
     });
     expect(defaultCr.type).toBe('ENHANCEMENT');
-    expect(defaultCr.targetSystemIds).toEqual([]);
+    expect(defaultCr.targets).toEqual([]);
   });
 });

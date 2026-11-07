@@ -12,8 +12,6 @@ import {
 } from '../services/ai/wizardSchemas';
 import { SdlcWorkflowStateSchema } from '../services/wizard/workflowSchemas';
 import {
-  PROJECT_STATUSES,
-  MILESTONE_STATUSES,
   TASK_STATUSES,
   TASK_PRIORITIES,
   SYSTEM_TYPES,
@@ -63,7 +61,7 @@ export const BackupProjectRecordSchema = z.object({
   description: z.string().optional(),
   deadline: calendarDateSchema.optional(),
   notes: z.string().optional(),
-  status: z.enum(PROJECT_STATUSES),
+  status: z.enum(['Open', 'Pending', 'In Progress', 'Done', 'Cancelled']),
   jiraEpicKey: jiraKeySchema.optional(),
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
@@ -82,7 +80,7 @@ export const BackupMilestoneRecordSchema = z.object({
   description: z.string().optional(),
   deadline: calendarDateSchema.optional(),
   notes: z.string().optional(),
-  status: z.enum(MILESTONE_STATUSES),
+  status: z.enum(['Open', 'Pending', 'In Progress', 'Done', 'Cancelled']),
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
   reminderDate: reminderDateSchema.optional(),

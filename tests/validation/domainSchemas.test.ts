@@ -1,22 +1,29 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
+import * as models from '../../src/types/models';
 import {
   normalizeTags,
   tagListSchema,
   workTypeSchema,
   WORK_TYPES,
-  ProjectInputSchema,
-  ProjectUpdateSchema,
-  MilestoneInputSchema,
-  MilestoneUpdateSchema,
+  SystemInputSchema,
+  SystemUpdateSchema,
+  ChangeRequestInputSchema,
+  ChangeRequestUpdateSchema,
   TaskInputSchema,
   TaskUpdateSchema,
 } from '../../src/validation/schemas';
-import {
-  BackupProjectRecordSchema,
-  BackupMilestoneRecordSchema,
-  BackupTaskRecordSchema,
-} from '../../src/validation/backupSchemas';
+
+// Type-level contract for the CR-centric model (D-24/D-25/D-26). `tsc --noEmit` is the
+// assertion; these aliases exist only so the compiler checks them.
+// @ts-expect-error — Project was removed from the domain model (D-27)
+export type _RemovedProject = models.Project;
+// @ts-expect-error — Milestone was removed from the domain model (D-27)
+export type _RemovedMilestone = models.Milestone;
+// @ts-expect-error — ChangeRequest.targetSystemIds was replaced by `targets: CrTarget[]`
+export type _RemovedTargetSystemIds = models.ChangeRequest['targetSystemIds'];
+// @ts-expect-error — Task.projectId was replaced by `crId`
+export type _RemovedTaskProjectId = models.Task['projectId'];
 
 describe('Banking IT Domain Fields Validation & Normalization (D-01, D-02, D-03, D-04)', () => {
   describe('normalizeTags', () => {
@@ -80,43 +87,163 @@ describe('Banking IT Domain Fields Validation & Normalization (D-01, D-02, D-03,
     });
   });
 
-  describe('ProjectInputSchema & MilestoneInputSchema', () => {
-    it('accepts optional opsOwners and businessAnalysts', () => {
-      const project = ProjectInputSchema.parse({
-        name: 'Core Banking Upgrade',
-        opsOwners: ['Ops1', 'Ops2'],
-        businessAnalysts: ['BA1'],
+  describe('SystemInputSchema shape invariants (D-24, T-31.2-01)', () => {
+    it('rejects a LOGICAL_GROUP carrying a parentId', () => {
+      const result = SystemInputSchema.safeParse({
+        type: 'LOGICAL_GROUP',
+        parentId: '11111111-1111-4111-8111-111111111111',
+        name: 'A',
+        code: 'A',
       });
-      expect(project.opsOwners).toEqual(['Ops1', 'Ops2']);
-      expect(project.businessAnalysts).toEqual(['BA1']);
-
-      const milestone = MilestoneInputSchema.parse({
-        projectId: '11111111-1111-4111-8111-111111111111',
-        name: 'UAT Signoff',
-        opsOwners: ['OpsTeam'],
-      });
-      expect(milestone.opsOwners).toEqual(['OpsTeam']);
-      expect(milestone.businessAnalysts).toBeUndefined();
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues.map((i) => i.message)).toContain(
+          'Hệ thống cha không được có hệ thống cha'
+        );
+      }
     });
 
-    it('accepts Pending status for project and milestone input/update schemas', () => {
-      expect(ProjectInputSchema.parse({ name: 'Queued project', status: 'Pending' }).status).toBe('Pending');
-      expect(ProjectUpdateSchema.parse({ status: 'Pending' }).status).toBe('Pending');
+    it('rejects a LOGICAL_GROUP carrying SSH/repo fields', () => {
+      const result = SystemInputSchema.safeParse({
+        type: 'LOGICAL_GROUP',
+        sshConfigId: '11111111-1111-4111-8111-111111111111',
+        name: 'A',
+        code: 'A',
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues.map((i) => i.message)).toContain(
+          'Hệ thống cha không được có SSH/Repo'
+        );
+      }
+
       expect(
-        MilestoneInputSchema.parse({
-          projectId: '11111111-1111-4111-8111-111111111111',
-          name: 'Queued milestone',
-          status: 'Pending',
-        }).status
-      ).toBe('Pending');
-      expect(MilestoneUpdateSchema.parse({ status: 'Pending' }).status).toBe('Pending');
+        SystemInputSchema.safeParse({
+          type: 'LOGICAL_GROUP',
+          remoteRepoPath: '/repos/a',
+          name: 'A',
+          code: 'A',
+        }).success
+      ).toBe(false);
+      expect(
+        SystemInputSchema.safeParse({
+          type: 'LOGICAL_GROUP',
+          defaultBaseBranch: 'main',
+          name: 'A',
+          code: 'A',
+        }).success
+      ).toBe(false);
+    });
+
+    it('defaults parentId to null for a plain SERVICE', () => {
+      const parsed = SystemInputSchema.parse({ type: 'SERVICE', name: 'A', code: 'A' });
+      expect(parsed.parentId).toBeNull();
+    });
+
+    it('rejects a relative remoteRepoPath (T-31.2-02)', () => {
+      const result = SystemInputSchema.safeParse({
+        type: 'SERVICE',
+        remoteRepoPath: 'relative/path',
+        name: 'A',
+        code: 'A',
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0]?.message).toBe('Đường dẫn repo phải là đường dẫn tuyệt đối');
+      }
+      expect(
+        SystemInputSchema.safeParse({
+          type: 'SERVICE',
+          remoteRepoPath: '/absolute/path',
+          name: 'A',
+          code: 'A',
+        }).success
+      ).toBe(true);
+    });
+
+    it('applies the same invariants on SystemUpdateSchema', () => {
+      expect(SystemUpdateSchema.safeParse({ type: 'LOGICAL_GROUP', parentId: 'x' }).success).toBe(false);
+      expect(SystemUpdateSchema.safeParse({ type: 'SERVICE', remoteRepoPath: '/repos/a' }).success).toBe(
+        true
+      );
+    });
+  });
+
+  describe('ChangeRequestInputSchema targets & required code (D-25)', () => {
+    it('rejects duplicate systemIds in targets (T-31.2-03)', () => {
+      const result = ChangeRequestInputSchema.safeParse({
+        code: 'CR-1',
+        name: 'n',
+        type: 'BUGFIX',
+        status: 'Open',
+        targets: [
+          { systemId: '11111111-1111-4111-8111-111111111111' },
+          { systemId: '11111111-1111-4111-8111-111111111111' },
+        ],
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues.map((i) => i.message)).toContain('Subsystem bị trùng trong CR');
+      }
+    });
+
+    it('requires a non-empty code', () => {
+      expect(
+        ChangeRequestInputSchema.safeParse({ name: 'n', type: 'BUGFIX', status: 'Open', targets: [] })
+          .success
+      ).toBe(false);
+      expect(
+        ChangeRequestInputSchema.safeParse({
+          code: '   ',
+          name: 'n',
+          type: 'BUGFIX',
+          status: 'Open',
+          targets: [],
+        }).success
+      ).toBe(false);
+    });
+
+    it('uppercases the code and defaults targets to an empty array', () => {
+      const parsed = ChangeRequestInputSchema.parse({ code: 'cr-7', name: 'n' });
+      expect(parsed.code).toBe('CR-7');
+      expect(parsed.targets).toEqual([]);
+    });
+
+    it('rejects duplicate targets on update', () => {
+      expect(
+        ChangeRequestUpdateSchema.safeParse({
+          targets: [
+            { systemId: '11111111-1111-4111-8111-111111111111' },
+            { systemId: '11111111-1111-4111-8111-111111111111' },
+          ],
+        }).success
+      ).toBe(false);
     });
   });
 
   describe('TaskInputSchema & TaskUpdateSchema', () => {
+    const CR_ID = '11111111-1111-4111-8111-111111111111';
+
+    it('requires crId and accepts an absent systemId', () => {
+      const parsed = TaskInputSchema.parse({ name: 't', crId: CR_ID });
+      expect(parsed.crId).toBe(CR_ID);
+      expect(parsed.systemId).toBeUndefined();
+      expect(TaskInputSchema.safeParse({ name: 't' }).success).toBe(false);
+    });
+
+    it('accepts an optional systemId', () => {
+      const parsed = TaskInputSchema.parse({
+        name: 't',
+        crId: CR_ID,
+        systemId: '22222222-2222-4222-8222-222222222222',
+      });
+      expect(parsed.systemId).toBe('22222222-2222-4222-8222-222222222222');
+    });
+
     it('defaults workType to "code" if not provided', () => {
       const task = TaskInputSchema.parse({
         name: 'Implement Settlement Service',
+        crId: CR_ID,
       });
       expect(task.workType).toBe('code');
     });
@@ -124,19 +251,23 @@ describe('Banking IT Domain Fields Validation & Normalization (D-01, D-02, D-03,
     it('accepts explicit valid workType', () => {
       const task = TaskInputSchema.parse({
         name: 'Write SRS Document',
+        crId: CR_ID,
         workType: 'document',
       });
       expect(task.workType).toBe('document');
     });
 
     it('accepts Pending status for task input/update schemas', () => {
-      expect(TaskInputSchema.parse({ name: 'Queued task', status: 'Pending' }).status).toBe('Pending');
+      expect(TaskInputSchema.parse({ name: 'Queued task', crId: CR_ID, status: 'Pending' }).status).toBe(
+        'Pending'
+      );
       expect(TaskUpdateSchema.parse({ status: 'Pending' }).status).toBe('Pending');
     });
 
     it('accepts optional opsOwners and businessAnalysts on TaskInput and TaskUpdate', () => {
       const task = TaskInputSchema.parse({
         name: 'Fix ISO8583 message parsing',
+        crId: CR_ID,
         opsOwners: ['OpsSpecialist'],
         businessAnalysts: ['SeniorBA'],
       });
@@ -154,6 +285,7 @@ describe('Banking IT Domain Fields Validation & Normalization (D-01, D-02, D-03,
     it('validates jiraKey format matching JIRA_KEY_REGEX', () => {
       const validTask = TaskInputSchema.parse({
         name: 'Connect to Core API',
+        crId: CR_ID,
         jiraKey: 'SHB-1234',
       });
       expect(validTask.jiraKey).toBe('SHB-1234');
@@ -161,6 +293,7 @@ describe('Banking IT Domain Fields Validation & Normalization (D-01, D-02, D-03,
       expect(() =>
         TaskInputSchema.parse({
           name: 'Invalid Jira Key',
+          crId: CR_ID,
           jiraKey: 'invalid_key',
         })
       ).toThrow();
@@ -168,55 +301,10 @@ describe('Banking IT Domain Fields Validation & Normalization (D-01, D-02, D-03,
       expect(() =>
         TaskInputSchema.parse({
           name: 'Invalid Jira Key format',
+          crId: CR_ID,
           jiraKey: '123-ABC',
         })
       ).toThrow();
-    });
-  });
-
-  describe('Backup schemas with domain fields', () => {
-    it('validates backup records containing domain fields', () => {
-      const project = BackupProjectRecordSchema.parse({
-        id: '11111111-1111-4111-8111-111111111111',
-        name: 'Project 1',
-        status: 'Open',
-        opsOwners: ['Alice'],
-        businessAnalysts: ['Bob'],
-        createdAt: '2026-09-01T00:00:00.000Z',
-        updatedAt: '2026-09-01T00:00:00.000Z',
-      });
-      expect(project.opsOwners).toEqual(['Alice']);
-
-      const milestone = BackupMilestoneRecordSchema.parse({
-        id: '22222222-2222-4222-8222-222222222222',
-        projectId: '11111111-1111-4111-8111-111111111111',
-        name: 'Milestone 1',
-        status: 'Open',
-        opsOwners: ['Alice'],
-        businessAnalysts: ['Bob'],
-        createdAt: '2026-09-01T00:00:00.000Z',
-        updatedAt: '2026-09-01T00:00:00.000Z',
-      });
-      expect(milestone.businessAnalysts).toEqual(['Bob']);
-
-      const task = BackupTaskRecordSchema.parse({
-        id: '33333333-3333-4333-8333-333333333333',
-        name: 'Task 1',
-        status: 'Pending',
-        progress: 0,
-        priority: 'Medium',
-        estimateMinutes: 60,
-        workType: 'investigate',
-        opsOwners: ['Alice'],
-        businessAnalysts: ['Bob'],
-        jiraKey: 'SHB-1234',
-        createdAt: '2026-09-01T00:00:00.000Z',
-        updatedAt: '2026-09-01T00:00:00.000Z',
-      });
-      expect(task.status).toBe('Pending');
-      expect(task.workType).toBe('investigate');
-      expect(task.opsOwners).toEqual(['Alice']);
-      expect(task.jiraKey).toBe('SHB-1234');
     });
   });
 });

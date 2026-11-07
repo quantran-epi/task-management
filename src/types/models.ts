@@ -39,32 +39,19 @@ export interface ReminderItem {
   note?: string | undefined;
 }
 
-export interface Project {
-  id: string; // RFC 4122 v4 UUID
-  name: string;
-  description?: string;
-  deadline?: string; // YYYY-MM-DD
-  notes?: string;
-  status: ProjectStatus;
-  jiraEpicKey?: string; // Phase 13.1 D-05: Jira Epic key mapping
-  opsOwners?: string[];
-  businessAnalysts?: string[];
-  documentLinks?: string[];
-  reminderDate?: string; // YYYY-MM-DD
-  reminderNote?: string;
-  reminders?: ReminderItem[];
-  createdAt: string; // ISO string metadata
-  updatedAt: string; // ISO string metadata
-}
-
 // Phase 31.1: Enterprise Systems Catalog & Change Request Models (ENT-SYS-01, ENT-CR-01)
 export type SystemType = 'LOGICAL_GROUP' | 'SERVICE' | 'SCHEMA' | 'UI' | 'WORKER';
 
+/**
+ * D-24 invariant: `sshConfigId` / `remoteRepoPath` / `defaultBaseBranch` are only
+ * meaningful when `type !== 'LOGICAL_GROUP'`. A parent system is a grouping node
+ * with no repository binding of its own.
+ */
 export interface System {
   id: string; // RFC 4122 v4 UUID
   name: string;
   code: string; // Unique system identifier code (e.g. CORE_BANKING, CREDIT_SVC)
-  parentId: string | null; // null for top-level root systems / LOGICAL_GROUP
+  parentId: string | null; // null for a subsystem with no parent; parent rows are always roots
   type: SystemType;
   description?: string;
   sshConfigId?: string; // Foreign key referencing SshConfigRecord
@@ -77,37 +64,26 @@ export interface System {
 export type CrType = 'NEW_FEATURE' | 'ENHANCEMENT' | 'BUGFIX';
 export type CrStatus = 'Open' | 'Pending' | 'In Progress' | 'Done' | 'Cancelled';
 
+/** A single system targeted by a change request (D-25). */
+export interface CrTarget {
+  systemId: string; // Reference to System.id
+  featureBranch?: string; // Per-target feature branch; defaults to feature/{cr.code}
+}
+
 export interface ChangeRequest {
   id: string; // RFC 4122 v4 UUID (matches previous Project.id for migrated records)
   name: string;
-  code?: string; // Optional human code (e.g. CR-2026-001)
+  code: string; // Required human code (e.g. CR-2026-001)
   description?: string;
   deadline?: string; // YYYY-MM-DD
   status: CrStatus;
   type: CrType;
-  targetSystemIds: string[]; // Multi-system targeting
+  targets: CrTarget[]; // Multi-system targeting
   jiraEpicKey?: string;
   opsOwners?: string[];
   businessAnalysts?: string[];
   documentLinks?: string[];
   reminderDate?: string;
-  reminderNote?: string;
-  reminders?: ReminderItem[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface Milestone {
-  id: string; // RFC 4122 v4 UUID
-  projectId: string; // Reference to Project.id
-  name: string;
-  description?: string;
-  deadline?: string; // YYYY-MM-DD
-  notes?: string;
-  status: MilestoneStatus;
-  opsOwners?: string[];
-  businessAnalysts?: string[];
-  reminderDate?: string; // YYYY-MM-DD
   reminderNote?: string;
   reminders?: ReminderItem[];
   createdAt: string;
@@ -122,8 +98,8 @@ export interface TaskChecklistItem {
 
 export interface Task {
   id: string; // RFC 4122 v4 UUID
-  projectId?: string; // Optional reference to Project.id
-  milestoneId?: string; // Optional reference to Milestone.id
+  crId: string; // Required reference to ChangeRequest.id
+  systemId?: string; // Optional reference to System.id; must be one of the CR's targets
   name: string;
   description?: string;
   deadline?: string; // YYYY-MM-DD
@@ -214,7 +190,7 @@ export interface ActiveTimer {
   segments?: TimerSegment[] | undefined; // Phase 13.1 D-01: discrete running segments
 }
 
-export type NoteEntityType = 'task' | 'project' | 'milestone';
+export type NoteEntityType = 'task' | 'cr' | 'system';
 export type NoteType = 'quick_note' | 'document' | 'folder' | 'diagram';
 
 export interface Note {
@@ -246,7 +222,7 @@ export interface NoteAttachment {
   filePath?: string | undefined; // Local disk file path
 }
 
-export type ChatScopeType = 'global' | 'task' | 'project' | 'milestone' | 'document';
+export type ChatScopeType = 'global' | 'task' | 'cr' | 'system' | 'document';
 
 export interface ChatThread {
   id: string; // RFC 4122 v4 UUID
@@ -437,7 +413,7 @@ export interface DlpAuditRecord {
   userAction: 'confirmed' | 'cancelled' | 'auto_passed';
 }
 
-export type TaskMateEntityType = 'task' | 'project' | 'milestone';
+export type TaskMateEntityType = 'task' | 'cr' | 'system';
 
 export interface KnowledgeLink {
   id: string; // RFC 4122 v4 UUID
