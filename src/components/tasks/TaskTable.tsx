@@ -34,10 +34,9 @@ import {
   BellOutlined,
 } from '@ant-design/icons';
 import { useAIChat } from '../../context/AIChatContext';
-import type { Task, Project, Milestone, TaskPriority, WorkType } from '../../types/models';
+import type { Task, ChangeRequest, System, TaskPriority, WorkType } from '../../types/models';
 import { InlineStatusTag } from './InlineStatusTag';
 import { InlineProgress } from './InlineProgress';
-import { HierarchyBreadcrumb } from './HierarchyBreadcrumb';
 import { EmptyState } from '../common/EmptyState';
 import { formatMinutes, formatElapsedTicker } from '../../utils/time';
 import { getTodayDateString } from '../../utils/date';
@@ -64,12 +63,12 @@ import { QuickReminderModal } from '../common/QuickReminderModal';
 
 export interface TaskTableProps {
   tasks: Task[];
-  projects: Project[];
-  milestones: Milestone[];
+  changeRequests: ChangeRequest[];
+  systems: System[];
   selectedRowKeys: string[];
   onSelectRows: (keys: string[]) => void;
   onOpenDrawer: (taskId: string) => void;
-  onSelectProject?: (projectId: string) => void;
+  onSelectCr?: (crId: string) => void;
   isFiltered?: boolean;
   db?: TaskPlannerDatabase;
   loading?: boolean;
@@ -78,6 +77,13 @@ export interface TaskTableProps {
   onGlobalSortChange?: (key: TaskSortKey) => void;
   onNavigate?: ((route: AppRoute) => void) | undefined;
 }
+
+/** CR type colours fixed by UI-SPEC §7 / D-32. */
+const CR_TYPE_COLORS: Record<ChangeRequest['type'], string> = {
+  NEW_FEATURE: '#1677ff',
+  ENHANCEMENT: '#52c41a',
+  BUGFIX: '#faad14',
+};
 
 const PRIORITY_COLORS: Record<TaskPriority, string> = {
   Urgent: '#ff4d4f',
@@ -120,18 +126,23 @@ export interface ColumnConfig {
 }
 
 export const ALL_CUSTOMIZABLE_COLUMNS: ColumnConfig[] = [
-  { key: 'name', label: 'Tác vụ & Phân cấp', fixed: true, default: true },
+  { key: 'name', label: 'Tác vụ', fixed: true, default: true },
+  { key: 'cr', label: 'CR', fixed: true, default: true },
+  { key: 'subsystem', label: 'Subsystem', fixed: true, default: true },
   { key: 'status', label: 'Trạng thái', default: true },
   { key: 'priority', label: 'Độ ưu tiên', default: true },
   { key: 'workType', label: 'Loại việc', default: true },
   { key: 'opsOwners', label: 'Ops Owner', default: true },
   { key: 'businessAnalysts', label: 'Business Analyst (BA)', default: true },
-  { key: 'estimateMinutes', label: 'Thời gian làm / Ước tính', default: true },
+  { key: 'estimateMinutes', label: 'Ước lượng', default: true },
   { key: 'timer', label: 'Đồng hồ tính giờ', default: true },
   { key: 'progress', label: 'Tiến độ', default: true },
-  { key: 'deadline', label: 'Hạn chót', default: true },
+  { key: 'deadline', label: 'Hạn', default: true },
   { key: 'actions', label: 'Thao tác', default: true },
 ];
+
+/** Columns that are part of the fixed leading group (UI-SPEC §7) and cannot be hidden. */
+const ALWAYS_VISIBLE_COLUMNS = ['name', 'cr', 'subsystem'];
 
 export const DEFAULT_VISIBLE_COLUMNS: string[] = ALL_CUSTOMIZABLE_COLUMNS.filter(
   (c) => c.default
@@ -139,12 +150,12 @@ export const DEFAULT_VISIBLE_COLUMNS: string[] = ALL_CUSTOMIZABLE_COLUMNS.filter
 
 export const TaskTable: React.FC<TaskTableProps> = ({
   tasks,
-  projects,
-  milestones,
+  changeRequests,
+  systems,
   selectedRowKeys,
   onSelectRows,
   onOpenDrawer,
-  onSelectProject,
+  onSelectCr,
   isFiltered = false,
   db,
   loading = false,
@@ -171,8 +182,10 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       if (!raw) return DEFAULT_VISIBLE_COLUMNS;
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        // Enforce 'name' is always included
-        return Array.from(new Set(['name', ...parsed.filter((k) => typeof k === 'string')]));
+        // Enforce the fixed leading columns are always included
+        return Array.from(
+          new Set([...ALWAYS_VISIBLE_COLUMNS, ...parsed.filter((k) => typeof k === 'string')])
+        );
       }
       return DEFAULT_VISIBLE_COLUMNS;
     } catch {
@@ -181,13 +194,15 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   });
 
   const handleColumnToggle = (columnKey: string, checked: boolean) => {
-    if (columnKey === 'name') return; // Fixed mandatory column
+    if (ALWAYS_VISIBLE_COLUMNS.includes(columnKey)) return; // Fixed mandatory columns
     let next: string[];
     if (checked) {
       next = Array.from(new Set([...visibleColumns, columnKey]));
     } else {
       next = visibleColumns.filter((k) => k !== columnKey);
-      if (!next.includes('name')) next.unshift('name');
+      for (const key of ALWAYS_VISIBLE_COLUMNS) {
+        if (!next.includes(key)) next.unshift(key);
+      }
     }
     setVisibleColumns(next);
     try {
@@ -248,19 +263,19 @@ export const TaskTable: React.FC<TaskTableProps> = ({
 
   const effectiveJiraDomain = jiraDomain || settingsDomain;
 
-  // Fast project and milestone lookup maps
-  const projectMap = React.useMemo(() => {
-    return new Map(projects.map((p) => [p.id, p]));
-  }, [projects]);
+  // Fast CR and subsystem lookup maps
+  const crMap = React.useMemo(() => {
+    return new Map(changeRequests.map((cr) => [cr.id, cr]));
+  }, [changeRequests]);
 
-  const milestoneMap = React.useMemo(() => {
-    return new Map(milestones.map((m) => [m.id, m]));
-  }, [milestones]);
+  const systemMap = React.useMemo(() => {
+    return new Map(systems.map((s) => [s.id, s]));
+  }, [systems]);
 
   const handleCopyStandup = async () => {
     const summary = formatStandupSummary(tasks, {
-      projectMap,
-      milestoneMap,
+      crMap,
+      systemMap,
       todayStr: today,
     });
 
@@ -392,76 +407,18 @@ export const TaskTable: React.FC<TaskTableProps> = ({
 
   const columns: TableColumnsType<Task> = [
     {
-      title: 'Trạng thái',
-      dataIndex: 'status',
-      key: 'status',
-      width: 130,
-      sorter: (a, b) => (STATUS_WEIGHTS[a.status] || 0) - (STATUS_WEIGHTS[b.status] || 0),
-      sortDirections: ['ascend', 'descend'],
-      render: (status, record) => (
-        <InlineStatusTag
-          taskId={record.id}
-          status={status}
-          estimateMinutes={record.estimateMinutes}
-          db={db}
-        />
-      ),
-    },
-    {
-      title: 'Độ ưu tiên',
-      dataIndex: 'priority',
-      key: 'priority',
-      width: 105,
-      sorter: (a, b) => (PRIORITY_WEIGHTS[a.priority] || 0) - (PRIORITY_WEIGHTS[b.priority] || 0),
-      sortDirections: ['ascend', 'descend'],
-      render: (priority: TaskPriority) => (
-        <Tag
-          bordered={false}
-          style={{
-            color: PRIORITY_COLORS[priority] || '#8c8c8c',
-            backgroundColor: `${PRIORITY_COLORS[priority] || '#8c8c8c'}15`,
-            fontWeight: 600,
-            margin: 0,
-            fontSize: 12,
-          }}
-        >
-          {PRIORITY_LABELS[priority] || priority}
-        </Tag>
-      ),
-    },
-    {
-      title: 'Loại việc',
-      dataIndex: 'workType',
-      key: 'workType',
-      width: 140,
-      filters: WORK_TYPES.map((wt) => ({
-        text: WORK_TYPE_CONFIG[wt].label,
-        value: wt,
-      })),
-      onFilter: (value, record) => (record.workType || 'code') === value,
-      render: (workType?: WorkType) => <WorkTypeBadge workType={workType || 'code'} />,
-    },
-    {
-      title: 'Tác vụ & Phân cấp',
+      title: 'Tác vụ',
       dataIndex: 'name',
       key: 'name',
       sorter: (a, b) => a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' }),
       sortDirections: ['ascend', 'descend'],
       render: (_, record) => {
-        const project = record.projectId ? projectMap.get(record.projectId) : undefined;
-        const milestone = record.milestoneId ? milestoneMap.get(record.milestoneId) : undefined;
         const linkCount = record.documentLinks?.length ?? 0;
         const hasNotes = taskNotesSet.has(record.id);
 
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <HierarchyBreadcrumb
-                projectId={record.projectId}
-                projectName={project?.name}
-                milestoneName={milestone?.name}
-                onSelectProject={onSelectProject}
-              />
               <span
                 onClick={() => onOpenDrawer(record.id)}
                 style={{
@@ -605,35 +562,80 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       },
     },
     {
-      title: 'Ops Owner',
-      key: 'opsOwners',
-      width: 140,
+      title: 'CR',
+      key: 'cr',
+      width: 150,
       render: (_, record) => {
-        const project = record.projectId ? projectMap.get(record.projectId) : undefined;
-        const milestone = record.milestoneId ? milestoneMap.get(record.milestoneId) : undefined;
-        const res = resolveInheritedTags('opsOwners', record, {
-          project: project ? { name: project.name, opsOwners: project.opsOwners } : undefined,
-          milestone: milestone ? { name: milestone.name, opsOwners: milestone.opsOwners } : undefined,
-        });
-        return <TagListDisplay tags={res.tags} source={res.source} originName={res.originName} />;
+        const cr = crMap.get(record.crId);
+        if (!cr) {
+          return <span style={{ fontSize: 12, color: token.colorTextQuaternary }}>—</span>;
+        }
+        return (
+          <Tag
+            bordered={false}
+            title={cr.name}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelectCr?.(cr.id);
+            }}
+            style={{
+              margin: 0,
+              fontSize: 12,
+              fontWeight: 600,
+              color: CR_TYPE_COLORS[cr.type],
+              backgroundColor: `${CR_TYPE_COLORS[cr.type]}15`,
+              cursor: onSelectCr ? 'pointer' : 'default',
+            }}
+          >
+            {cr.code}
+          </Tag>
+        );
       },
     },
     {
-      title: 'BA',
-      key: 'businessAnalysts',
-      width: 140,
+      title: 'Subsystem',
+      key: 'subsystem',
+      width: 150,
       render: (_, record) => {
-        const project = record.projectId ? projectMap.get(record.projectId) : undefined;
-        const milestone = record.milestoneId ? milestoneMap.get(record.milestoneId) : undefined;
-        const res = resolveInheritedTags('businessAnalysts', record, {
-          project: project ? { name: project.name, businessAnalysts: project.businessAnalysts } : undefined,
-          milestone: milestone ? { name: milestone.name, businessAnalysts: milestone.businessAnalysts } : undefined,
-        });
-        return <TagListDisplay tags={res.tags} source={res.source} originName={res.originName} />;
+        const system = record.systemId ? systemMap.get(record.systemId) : undefined;
+        if (!system) {
+          return <span style={{ fontSize: 12, color: token.colorTextSecondary }}>Chung</span>;
+        }
+        return (
+          <Tag
+            bordered={false}
+            title={system.name}
+            style={{
+              margin: 0,
+              fontSize: 12,
+              fontFamily: 'monospace',
+              color: '#13c2c2',
+              backgroundColor: 'rgba(19, 194, 194, 0.12)',
+            }}
+          >
+            {system.code}
+          </Tag>
+        );
       },
     },
     {
-      title: 'Đã dùng / Ước tính',
+      title: 'Trạng thái',
+      dataIndex: 'status',
+      key: 'status',
+      width: 130,
+      sorter: (a, b) => (STATUS_WEIGHTS[a.status] || 0) - (STATUS_WEIGHTS[b.status] || 0),
+      sortDirections: ['ascend', 'descend'],
+      render: (status, record) => (
+        <InlineStatusTag
+          taskId={record.id}
+          status={status}
+          estimateMinutes={record.estimateMinutes}
+          db={db}
+        />
+      ),
+    },
+    {
+      title: 'Ước lượng',
       dataIndex: 'estimateMinutes',
       key: 'estimateMinutes',
       width: 140,
@@ -668,6 +670,94 @@ export const TaskTable: React.FC<TaskTableProps> = ({
             )}
           </div>
         );
+      },
+    },
+    {
+      title: 'Hạn',
+      dataIndex: 'deadline',
+      key: 'deadline',
+      width: 120,
+      sorter: (a, b, sortOrder) => {
+        if (!a.deadline && !b.deadline) return 0;
+        if (!a.deadline) return sortOrder === 'descend' ? -1 : 1;
+        if (!b.deadline) return sortOrder === 'descend' ? 1 : -1;
+        return a.deadline.localeCompare(b.deadline);
+      },
+      sortDirections: ['ascend', 'descend'],
+      render: (deadline?: string) => {
+        if (!deadline) {
+          return <span style={{ fontSize: 12, color: token.colorTextQuaternary }}>—</span>;
+        }
+        const isOverdue = deadline < today;
+        return (
+          <span
+            style={{
+              fontSize: 14,
+              color: isOverdue ? token.colorError : token.colorText,
+              fontWeight: isOverdue ? 600 : 400,
+            }}
+          >
+            {deadline}
+          </span>
+        );
+      },
+    },
+    {
+      title: 'Độ ưu tiên',
+      dataIndex: 'priority',
+      key: 'priority',
+      width: 105,
+      sorter: (a, b) => (PRIORITY_WEIGHTS[a.priority] || 0) - (PRIORITY_WEIGHTS[b.priority] || 0),
+      sortDirections: ['ascend', 'descend'],
+      render: (priority: TaskPriority) => (
+        <Tag
+          bordered={false}
+          style={{
+            color: PRIORITY_COLORS[priority] || '#8c8c8c',
+            backgroundColor: `${PRIORITY_COLORS[priority] || '#8c8c8c'}15`,
+            fontWeight: 600,
+            margin: 0,
+            fontSize: 12,
+          }}
+        >
+          {PRIORITY_LABELS[priority] || priority}
+        </Tag>
+      ),
+    },
+    {
+      title: 'Loại việc',
+      dataIndex: 'workType',
+      key: 'workType',
+      width: 140,
+      filters: WORK_TYPES.map((wt) => ({
+        text: WORK_TYPE_CONFIG[wt].label,
+        value: wt,
+      })),
+      onFilter: (value, record) => (record.workType || 'code') === value,
+      render: (workType?: WorkType) => <WorkTypeBadge workType={workType || 'code'} />,
+    },
+    {
+      title: 'Ops Owner',
+      key: 'opsOwners',
+      width: 140,
+      render: (_, record) => {
+        const cr = crMap.get(record.crId);
+        const res = resolveInheritedTags('opsOwners', record, {
+          cr: cr ? { name: cr.name, opsOwners: cr.opsOwners } : undefined,
+        });
+        return <TagListDisplay tags={res.tags} source={res.source} originName={res.originName} />;
+      },
+    },
+    {
+      title: 'BA',
+      key: 'businessAnalysts',
+      width: 140,
+      render: (_, record) => {
+        const cr = crMap.get(record.crId);
+        const res = resolveInheritedTags('businessAnalysts', record, {
+          cr: cr ? { name: cr.name, businessAnalysts: cr.businessAnalysts } : undefined,
+        });
+        return <TagListDisplay tags={res.tags} source={res.source} originName={res.originName} />;
       },
     },
     {
@@ -786,36 +876,6 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       render: (progress: number, record) => (
         <InlineProgress taskId={record.id} progress={progress} db={db} />
       ),
-    },
-    {
-      title: 'Hạn chót',
-      dataIndex: 'deadline',
-      key: 'deadline',
-      width: 120,
-      sorter: (a, b, sortOrder) => {
-        if (!a.deadline && !b.deadline) return 0;
-        if (!a.deadline) return sortOrder === 'descend' ? -1 : 1;
-        if (!b.deadline) return sortOrder === 'descend' ? 1 : -1;
-        return a.deadline.localeCompare(b.deadline);
-      },
-      sortDirections: ['ascend', 'descend'],
-      render: (deadline?: string) => {
-        if (!deadline) {
-          return <span style={{ fontSize: 12, color: token.colorTextQuaternary }}>—</span>;
-        }
-        const isOverdue = deadline < today;
-        return (
-          <span
-            style={{
-              fontSize: 14,
-              color: isOverdue ? token.colorError : token.colorText,
-              fontWeight: isOverdue ? 600 : 400,
-            }}
-          >
-            {deadline}
-          </span>
-        );
-      },
     },
     {
       title: 'Thao tác',

@@ -1,35 +1,58 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Input, Button, Select, Space, message, type InputRef } from 'antd';
 import { parseQuickAddInput } from '../../utils/time';
 import { createTask } from '../../db/repositories/taskRepo';
-import type { Task, WorkType } from '../../types/models';
+import type { ChangeRequest, System, Task, WorkType } from '../../types/models';
 import type { TaskPlannerDatabase } from '../../db';
 import { WORK_TYPE_CONFIG } from './WorkTypeBadge';
 import { WORK_TYPES } from '../../types/models';
 
 export interface QuickAddBarProps {
-  projects?: { id: string; name: string }[];
-  defaultProjectId?: string;
+  changeRequests?: ChangeRequest[];
+  systems?: System[];
+  /** CR currently selected in the task filter — pre-fills the CR select. */
+  activeCrId?: string | null | undefined;
   onTaskCreated?: (task: Task) => void;
   db?: TaskPlannerDatabase;
   inputRef?: React.Ref<InputRef>;
 }
 
 export const QuickAddBar: React.FC<QuickAddBarProps> = ({
-  projects = [],
-  defaultProjectId,
+  changeRequests = [],
+  systems = [],
+  activeCrId,
   onTaskCreated,
   db,
   inputRef,
 }) => {
   const [text, setText] = useState('');
   const [workType, setWorkType] = useState<WorkType>('code');
-  const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(defaultProjectId);
+  const [crId, setCrId] = useState<string | undefined>(activeCrId ?? undefined);
+  const [systemId, setSystemId] = useState<string | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
+
+  // Follow the active filter when it changes (D-46)
+  useEffect(() => {
+    setCrId(activeCrId ?? undefined);
+    setSystemId(undefined);
+  }, [activeCrId]);
+
+  const selectedCr = useMemo(
+    () => changeRequests.find((cr) => cr.id === crId),
+    [changeRequests, crId]
+  );
+
+  const subsystemOptions = useMemo(() => {
+    if (!selectedCr) return [];
+    return selectedCr.targets
+      .map((target) => systems.find((s) => s.id === target.systemId))
+      .filter((s): s is System => Boolean(s))
+      .map((s) => ({ value: s.id, label: s.name }));
+  }, [selectedCr, systems]);
 
   const handleSubmit = async () => {
     const raw = text.trim();
-    if (!raw || submitting) return;
+    if (!raw || submitting || !crId) return;
 
     const { name, estimateMinutes } = parseQuickAddInput(raw);
     if (!name) return;
@@ -43,7 +66,8 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
           priority: 'Medium',
           estimateMinutes,
           workType,
-          projectId: selectedProjectId || undefined,
+          crId,
+          ...(systemId ? { systemId } : {}),
         },
         db
       );
@@ -66,11 +90,6 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
     }
   };
 
-  const projectOptions = [
-    { value: '', label: 'Độc lập' },
-    ...projects.map((p) => ({ value: p.id, label: p.name })),
-  ];
-
   const workTypeOptions = WORK_TYPES.map((wt) => {
     const cfg = WORK_TYPE_CONFIG[wt];
     return {
@@ -86,15 +105,29 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
 
   return (
     <Space.Compact style={{ width: '100%' }}>
-      {projects.length > 0 && (
-        <Select
-          value={selectedProjectId || ''}
-          onChange={(val) => setSelectedProjectId(val || undefined)}
-          options={projectOptions}
-          style={{ width: 140 }}
-          aria-label="Gán vào dự án"
-        />
-      )}
+      <Select
+        showSearch
+        optionFilterProp="label"
+        value={crId}
+        onChange={(val) => {
+          setCrId(val || undefined);
+          setSystemId(undefined);
+        }}
+        placeholder="Chọn CR"
+        options={changeRequests.map((cr) => ({ value: cr.id, label: `${cr.code} · ${cr.name}` }))}
+        style={{ width: 220 }}
+        aria-label="Change Request (CR)"
+      />
+      <Select
+        allowClear
+        value={systemId}
+        onChange={(val) => setSystemId(val || undefined)}
+        placeholder="Chung (không gắn)"
+        options={subsystemOptions}
+        disabled={!crId || subsystemOptions.length === 0}
+        style={{ width: 170 }}
+        aria-label="Subsystem"
+      />
       <Select
         value={workType}
         onChange={(val) => setWorkType(val)}
@@ -106,11 +139,15 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
         ref={inputRef}
         id="quick-add-input"
         data-shortcut-id="quick-add-input"
-        placeholder="Thêm tác vụ nhanh (vd: 'Xem xét PR ~1h 30m'). Nhấn Enter để lưu..."
+        placeholder={
+          crId
+            ? "Thêm tác vụ nhanh (vd: 'Xem xét PR ~1h 30m'). Nhấn Enter để lưu..."
+            : 'Chọn CR trước khi thêm tác vụ'
+        }
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
-        disabled={submitting}
+        disabled={submitting || !crId}
         maxLength={120}
         aria-label="Thêm nhanh tên tác vụ và ước tính"
       />
@@ -118,7 +155,7 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
         type="primary"
         onClick={() => void handleSubmit()}
         loading={submitting}
-        disabled={!text.trim()}
+        disabled={!crId || !text.trim()}
       >
         Thêm
       </Button>

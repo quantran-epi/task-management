@@ -43,7 +43,14 @@ describe('QuickAddBar', () => {
   });
 
   it('renders input with placeholder and data-shortcut-id per D-05, D-29', () => {
-    render(<QuickAddBar db={testDb} changeRequests={changeRequests} systems={systems} />);
+    render(
+      <QuickAddBar
+        db={testDb}
+        changeRequests={changeRequests}
+        systems={systems}
+        activeCrId={CR_ID}
+      />
+    );
     const input = screen.getByPlaceholderText(/Thêm tác vụ nhanh/i);
     expect(input).toBeInTheDocument();
     expect(input).toHaveAttribute('data-shortcut-id', 'quick-add-input');
