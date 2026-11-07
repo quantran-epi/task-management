@@ -3,14 +3,14 @@ import { Modal, Input, Segmented, List, Tag, Typography, Select, Space, Empty, t
 import {
   SearchOutlined,
   CheckSquareOutlined,
-  ProjectOutlined,
-  FlagOutlined,
+  BranchesOutlined,
+  ApartmentOutlined,
   GlobalOutlined,
   CheckOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import type { Task, Project, Milestone } from '../../types/models';
+import type { Task, ChangeRequest, System } from '../../types/models';
 import type { ActiveScope } from '../../context/AIChatContext';
 
 const { Text } = Typography;
@@ -23,16 +23,16 @@ export interface ScopePickerModalProps {
   db?: TaskPlannerDatabase;
 }
 
-type ScopeTab = 'all' | 'task' | 'project' | 'milestone';
+type ScopeTab = 'all' | 'task' | 'cr' | 'system';
 
 interface ScopeListItem {
   id: string;
-  type: 'global' | 'task' | 'project' | 'milestone';
+  type: 'global' | 'task' | 'cr' | 'system';
   title: string;
   subtitle?: string | undefined;
   status?: string | undefined;
-  projectId?: string | undefined;
-  projectName?: string | undefined;
+  crId?: string | undefined;
+  crName?: string | undefined;
 }
 
 export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
@@ -45,30 +45,30 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
   const { token } = theme.useToken();
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState<ScopeTab>('all');
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [selectedCrId, setSelectedCrId] = useState<string | null>(null);
   const inputRef = useRef<any>(null);
 
   useEffect(() => {
     if (open) {
       setQuery('');
       setActiveTab('all');
-      setSelectedProjectId(null);
+      setSelectedCrId(null);
       setTimeout(() => inputRef.current?.focus(), 60);
     }
   }, [open]);
 
-  // Live queries for tasks, projects, milestones
+  // Live queries for tasks, change requests, and systems
   const tasks = useLiveQuery<Task[]>(() => db.tasks.toArray(), [db]) ?? [];
-  const projects = useLiveQuery<Project[]>(() => db.projects.toArray(), [db]) ?? [];
-  const milestones = useLiveQuery<Milestone[]>(() => db.milestones.toArray(), [db]) ?? [];
+  const changeRequests = useLiveQuery<ChangeRequest[]>(() => db.changeRequests.toArray(), [db]) ?? [];
+  const systems = useLiveQuery<System[]>(() => db.systems.toArray(), [db]) ?? [];
 
-  const projectMap = useMemo(() => {
-    const map = new Map<string, Project>();
-    for (const p of projects) {
-      map.set(p.id, p);
+  const crMap = useMemo(() => {
+    const map = new Map<string, ChangeRequest>();
+    for (const c of changeRequests) {
+      map.set(c.id, c);
     }
     return map;
-  }, [projects]);
+  }, [changeRequests]);
 
   // Build items list
   const filteredItems = useMemo<ScopeListItem[]>(() => {
@@ -76,7 +76,7 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
     const items: ScopeListItem[] = [];
 
     // Global option
-    if (activeTab === 'all' && !selectedProjectId) {
+    if (activeTab === 'all' && !selectedCrId) {
       if (!q || 'toàn cục không gắn global'.includes(q)) {
         items.push({
           id: 'global',
@@ -87,40 +87,39 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
       }
     }
 
-    // Projects
-    if (activeTab === 'all' || activeTab === 'project') {
-      if (!selectedProjectId) {
-        for (const p of projects) {
-          if (p.status === 'Done' || p.status === 'Cancelled') continue;
-          if (q && !p.name.toLowerCase().includes(q)) continue;
+    // Change requests
+    if (activeTab === 'all' || activeTab === 'cr') {
+      if (!selectedCrId) {
+        for (const c of changeRequests) {
+          if (c.status === 'Done' || c.status === 'Cancelled') continue;
+          if (q && !c.name.toLowerCase().includes(q) && !c.code.toLowerCase().includes(q)) continue;
           items.push({
-            id: p.id,
-            type: 'project',
-            title: p.name,
-            subtitle: `Dự án • ${p.status}`,
-            status: p.status,
+            id: c.id,
+            type: 'cr',
+            title: c.name,
+            subtitle: `CR • ${c.code} • ${c.status}`,
+            status: c.status,
           });
         }
       }
     }
 
-    // Milestones
-    if (activeTab === 'all' || activeTab === 'milestone') {
-      for (const m of milestones) {
-        if (m.status === 'Done' || m.status === 'Cancelled') continue;
-        if (selectedProjectId && m.projectId !== selectedProjectId) continue;
-        const parentP = projectMap.get(m.projectId);
-        if (q && !m.name.toLowerCase().includes(q) && !(parentP && parentP.name.toLowerCase().includes(q))) {
-          continue;
+    // Systems
+    if (activeTab === 'all' || activeTab === 'system') {
+      for (const s of systems) {
+        if (selectedCrId) {
+          const cr = crMap.get(selectedCrId);
+          if (!cr || !cr.targets.some((t) => t.systemId === s.id)) continue;
         }
+        if (q && !s.name.toLowerCase().includes(q) && !s.code.toLowerCase().includes(q)) continue;
+        const parentCr = selectedCrId ? crMap.get(selectedCrId) : undefined;
         items.push({
-          id: m.id,
-          type: 'milestone',
-          title: m.name,
-          subtitle: `Cột mốc • ${m.status}${parentP ? ` • [${parentP.name}]` : ''}`,
-          status: m.status,
-          projectId: m.projectId,
-          projectName: parentP?.name,
+          id: s.id,
+          type: 'system',
+          title: s.name,
+          subtitle: `Subsystem • ${s.code} • ${s.type}${parentCr ? ` • [${parentCr.code}]` : ''}`,
+          crId: parentCr?.id,
+          crName: parentCr?.name,
         });
       }
     }
@@ -129,25 +128,25 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
     if (activeTab === 'all' || activeTab === 'task') {
       for (const t of tasks) {
         if (t.status === 'Done' || t.status === 'Cancelled') continue;
-        if (selectedProjectId && t.projectId !== selectedProjectId) continue;
-        const parentP = t.projectId ? projectMap.get(t.projectId) : undefined;
-        if (q && !t.name.toLowerCase().includes(q) && !(parentP && parentP.name.toLowerCase().includes(q))) {
+        if (selectedCrId && t.crId !== selectedCrId) continue;
+        const parentCr = t.crId ? crMap.get(t.crId) : undefined;
+        if (q && !t.name.toLowerCase().includes(q) && !(parentCr && parentCr.name.toLowerCase().includes(q))) {
           continue;
         }
         items.push({
           id: t.id,
           type: 'task',
           title: t.name,
-          subtitle: `Tác vụ • ${t.status} • Ưu tiên: ${t.priority}${parentP ? ` • [${parentP.name}]` : ''}`,
+          subtitle: `Tác vụ • ${t.status} • Ưu tiên: ${t.priority}${parentCr ? ` • [${parentCr.code}]` : ''}`,
           status: t.status,
-          projectId: t.projectId,
-          projectName: parentP?.name,
+          crId: t.crId,
+          crName: parentCr?.name,
         });
       }
     }
 
     return items;
-  }, [query, activeTab, selectedProjectId, tasks, projects, milestones, projectMap]);
+  }, [query, activeTab, selectedCrId, tasks, changeRequests, systems, crMap]);
 
   const handleSelect = (item: ScopeListItem) => {
     if (item.type === 'global') {
@@ -175,10 +174,10 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
         return <GlobalOutlined style={{ color: token.colorPrimary, fontSize: 16 }} />;
       case 'task':
         return <CheckSquareOutlined style={{ color: '#52c41a', fontSize: 16 }} />;
-      case 'project':
-        return <ProjectOutlined style={{ color: '#fa8c16', fontSize: 16 }} />;
-      case 'milestone':
-        return <FlagOutlined style={{ color: '#722ed1', fontSize: 16 }} />;
+      case 'cr':
+        return <BranchesOutlined style={{ color: '#fa8c16', fontSize: 16 }} />;
+      case 'system':
+        return <ApartmentOutlined style={{ color: '#722ed1', fontSize: 16 }} />;
     }
   };
 
@@ -201,7 +200,7 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
         <Input
           ref={inputRef}
           prefix={<SearchOutlined style={{ color: token.colorTextSecondary }} />}
-          placeholder="Tìm kiếm tác vụ, dự án, cột mốc..."
+          placeholder="Tìm kiếm tác vụ, CR, subsystem..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           allowClear
@@ -216,20 +215,20 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
             options={[
               { label: 'Tất cả', value: 'all' },
               { label: 'Tác vụ', value: 'task' },
-              { label: 'Dự án', value: 'project' },
-              { label: 'Cột mốc', value: 'milestone' },
+              { label: 'CR', value: 'cr' },
+              { label: 'Subsystem', value: 'system' },
             ]}
           />
 
-          {(activeTab === 'all' || activeTab === 'task' || activeTab === 'milestone') && (
+          {(activeTab === 'all' || activeTab === 'task' || activeTab === 'system') && (
             <Select
               allowClear
-              placeholder="Lọc theo dự án"
-              value={selectedProjectId}
-              onChange={(val) => setSelectedProjectId(val ?? null)}
+              placeholder="Lọc theo CR"
+              value={selectedCrId}
+              onChange={(val) => setSelectedCrId(val ?? null)}
               style={{ minWidth: 160, flex: 1 }}
               size="middle"
-              options={projects.map((p) => ({ label: p.name, value: p.id }))}
+              options={changeRequests.map((c) => ({ label: `${c.code} · ${c.name}`, value: c.id }))}
             />
           )}
         </div>

@@ -46,17 +46,17 @@ export const AITaskPlannerInstructionsModal: React.FC<AITaskPlannerInstructionsM
               <div>
                 <Text strong>Đính kèm tác vụ vào ngữ cảnh</Text>
                 <div style={{ color: token.colorTextSecondary, fontSize: 13 }}>
-                  Gõ <code>@</code> và tên task để gắn thẻ tác vụ cụ thể vào tin nhắn. AI sẽ tự động đọc chi tiết task (tiến độ, hạn chót, checklist, dự án) để trả lời hoặc thao tác.
+                  Gõ <code>@</code> và tên task để gắn thẻ tác vụ cụ thể vào tin nhắn. AI sẽ tự động đọc chi tiết task (tiến độ, hạn chót, checklist, CR) để trả lời hoặc thao tác.
                 </div>
               </div>
             </Space>
 
             <Space align="start" style={{ marginBottom: 12 }}>
-              <Tag color="purple" style={{ fontSize: 13, padding: '2px 8px' }}># Project</Tag>
+              <Tag color="purple" style={{ fontSize: 13, padding: '2px 8px' }}># CR</Tag>
               <div>
-                <Text strong>Đính kèm dự án vào ngữ cảnh</Text>
+                <Text strong>Đính kèm Change Request hoặc hệ thống con vào ngữ cảnh</Text>
                 <div style={{ color: token.colorTextSecondary, fontSize: 13 }}>
-                  Gõ <code>#</code> và tên dự án để cung cấp ngữ cảnh toàn dự án cùng các mốc (milestone) liên quan cho AI.
+                  Gõ <code>#</code> và mã CR hoặc mã hệ thống con để cung cấp ngữ cảnh của CR cùng các subsystem mục tiêu cho AI.
                 </div>
               </div>
             </Space>
