@@ -49,25 +49,25 @@ export interface DocumentPublishStatus {
 }
 
 /**
- * Resolves one project SDLC set by structured metadata while an outer transaction owns atomicity.
+ * Resolves one CR SDLC set by structured metadata while an outer transaction owns atomicity.
  * Set names are display-only and never participate in identity.
  */
-export async function getOrCreateProjectSdlcSetInTransaction(
-  projectId: string,
+export async function getOrCreateCrSdlcSetInTransaction(
+  changeRequestId: string,
   now: string,
   db: TaskPlannerDatabase = defaultDb,
 ): Promise<DocumentSet> {
   const matches = await db.documentSets
-    .filter((set) => set.sdlc?.projectId === projectId && set.sdlc.purpose === 'sdlc')
+    .filter((set) => set.sdlc?.changeRequestId === changeRequestId && set.sdlc.purpose === 'sdlc')
     .toArray();
-  if (matches.length > 1) throw new Error('DUPLICATE_PROJECT_SDLC_SET');
+  if (matches.length > 1) throw new Error('DUPLICATE_CR_SDLC_SET');
   const existing = matches[0];
   if (existing) return existing;
 
   const set = DocumentSetSchema.parse({
     id: generateId(),
     name: 'SDLC artifacts',
-    description: 'Canonical project SDLC artifacts',
+    description: 'Canonical change-request SDLC artifacts',
     documentIds: [],
     createdAt: now,
     updatedAt: now,
@@ -77,7 +77,7 @@ export async function getOrCreateProjectSdlcSetInTransaction(
     isBase: false,
     presentationRevision: 0,
     preset: 'TuyChinh',
-    sdlc: { projectId, purpose: 'sdlc' },
+    sdlc: { changeRequestId, purpose: 'sdlc' },
   });
   await db.documentSets.add(set);
   return set;

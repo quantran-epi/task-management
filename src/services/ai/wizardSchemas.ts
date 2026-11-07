@@ -163,7 +163,7 @@ function requireSourceArtifacts(
 }
 
 export const SdlcDocumentSetMetadataSchema = z.strictObject({
-  projectId: uuidSchema,
+  changeRequestId: uuidSchema,
   purpose: z.literal('sdlc'),
 });
 export type SdlcDocumentSetMetadata = z.infer<typeof SdlcDocumentSetMetadataSchema>;

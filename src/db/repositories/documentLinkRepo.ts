@@ -1,16 +1,16 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../index';
-import type { Task, Project, Note } from '../../types/models';
+import type { Task, ChangeRequest, Note } from '../../types/models';
 import type { DetectedEntity } from '../../utils/smartIngestion';
 
 export interface BacklinksResult {
   tasks: Task[];
-  projects: Project[];
+  changeRequests: ChangeRequest[];
   referencingNotes: Note[];
 }
 
 export interface LinkableEntityItem {
   id: string;
-  type: 'task' | 'project' | 'milestone' | 'doc' | string;
+  type: 'task' | 'cr' | 'system' | 'doc' | string;
   title: string;
 }
 
@@ -20,9 +20,9 @@ export interface LinkEntitiesOptions {
 
 /**
  * Persists bidirectional links between a document and selected entities in a single Dexie transaction (D-06, D-08).
- * 1. For each selected task/project/doc:
+ * 1. For each selected task/CR/doc:
  *    - Appends `[[doc:${docId}|${docTitle}]]` to `notes` or `body` field if not already present.
- *    - For tasks: ensures `docId` is in `task.documentLinks`.
+ *    - For tasks: ensures `docId` is in `task.documentLinks`; for CRs: in `cr.documentLinks`.
  * 2. In the document:
  *    - Appends `[[${entity.type}:${entity.id}|${entity.title}]]` to doc's `body` if not already present (unless skipDocBodyUpdate is true).
  */
@@ -35,7 +35,7 @@ export async function linkEntitiesToDoc(
 ): Promise<void> {
   if (selectedEntities.length === 0) return;
 
-  await db.transaction('rw', [db.notes, db.tasks, db.projects], async () => {
+  await db.transaction('rw', [db.notes, db.tasks, db.changeRequests], async () => {
     const doc = await db.notes.get(docId);
     let docBody = doc?.body || '';
     const now = new Date().toISOString();
@@ -63,19 +63,16 @@ export async function linkEntitiesToDoc(
             updatedAt: now,
           });
         }
-      } else if (entity.type === 'project') {
-        const project = await db.projects.get(entity.id);
-        if (project) {
-          const currentNotes = project.notes || '';
-          const needsDocLink = !currentNotes.includes(`[[doc:${docId}`);
-          const newNotes = needsDocLink
-            ? currentNotes ? `${currentNotes}\n${docWikiLink}` : docWikiLink
-            : currentNotes;
-
-          await db.projects.update(project.id, {
-            notes: newNotes,
-            updatedAt: now,
-          });
+      } else if (entity.type === 'cr') {
+        const cr = await db.changeRequests.get(entity.id);
+        if (cr) {
+          const currentDocLinks = cr.documentLinks || [];
+          if (!currentDocLinks.includes(docId)) {
+            await db.changeRequests.update(cr.id, {
+              documentLinks: [...currentDocLinks, docId],
+              updatedAt: now,
+            });
+          }
         }
       } else if (entity.type === 'doc') {
         const targetDoc = await db.notes.get(entity.id);
@@ -120,7 +117,7 @@ export async function unlinkEntityFromDoc(
   entityId: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<void> {
-  await db.transaction('rw', [db.notes, db.tasks, db.projects], async () => {
+  await db.transaction('rw', [db.notes, db.tasks, db.changeRequests], async () => {
     const now = new Date().toISOString();
     const doc = await db.notes.get(docId);
 
@@ -149,12 +146,12 @@ export async function unlinkEntityFromDoc(
           updatedAt: now,
         });
       }
-    } else if (entityType === 'project') {
-      const project = await db.projects.get(entityId);
-      if (project) {
-        const updatedNotes = (project.notes || '').replace(docLinkPattern, '').trimEnd();
-        await db.projects.update(entityId, {
-          notes: updatedNotes,
+    } else if (entityType === 'cr') {
+      const cr = await db.changeRequests.get(entityId);
+      if (cr) {
+        const updatedDocLinks = (cr.documentLinks || []).filter((id) => id !== docId);
+        await db.changeRequests.update(entityId, {
+          documentLinks: updatedDocLinks,
           updatedAt: now,
         });
       }
@@ -163,15 +160,15 @@ export async function unlinkEntityFromDoc(
 }
 
 /**
- * Returns all active tasks, projects, and notes that contain a reference to target doc ID (D-08).
+ * Returns all active tasks, change requests, and notes that contain a reference to target doc ID (D-08).
  */
 export async function getBacklinksForDoc(
   docId: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<BacklinksResult> {
-  const [allTasks, allProjects, allNotes] = await Promise.all([
+  const [allTasks, allChangeRequests, allNotes] = await Promise.all([
     db.tasks.toArray(),
-    db.projects.toArray(),
+    db.changeRequests.toArray(),
     db.notes.toArray(),
   ]);
 
@@ -183,8 +180,8 @@ export async function getBacklinksForDoc(
     return Boolean(hasWikiNote || hasDocLink);
   });
 
-  const projects = allProjects.filter((p) => {
-    return Boolean(p.notes && p.notes.includes(docWikiPattern));
+  const changeRequests = allChangeRequests.filter((cr) => {
+    return Boolean(cr.documentLinks && cr.documentLinks.includes(docId));
   });
 
   const currentDoc = allNotes.find((n) => n.id === docId);
@@ -194,10 +191,10 @@ export async function getBacklinksForDoc(
       if (parentTask && !tasks.some((t) => t.id === parentTask.id)) {
         tasks.unshift(parentTask);
       }
-    } else if (currentDoc.entityType === 'project') {
-      const parentProject = allProjects.find((p) => p.id === currentDoc.entityId);
-      if (parentProject && !projects.some((p) => p.id === parentProject.id)) {
-        projects.unshift(parentProject);
+    } else if (currentDoc.entityType === 'cr') {
+      const parentCr = allChangeRequests.find((cr) => cr.id === currentDoc.entityId);
+      if (parentCr && !changeRequests.some((cr) => cr.id === parentCr.id)) {
+        changeRequests.unshift(parentCr);
       }
     }
   }
@@ -206,5 +203,5 @@ export async function getBacklinksForDoc(
     return n.id !== docId && !n.deletedAt && n.body.includes(docWikiPattern);
   });
 
-  return { tasks, projects, referencingNotes };
+  return { tasks, changeRequests, referencingNotes };
 }
