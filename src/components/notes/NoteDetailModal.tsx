@@ -52,12 +52,12 @@ export const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
           if (note.entityType === 'task') {
             const task = await db.tasks.get(note.entityId!);
             name = task?.name ?? null;
-          } else if (note.entityType === 'project') {
-            const project = await db.projects.get(note.entityId!);
-            name = project?.name ?? null;
-          } else if (note.entityType === 'milestone') {
-            const milestone = await db.milestones.get(note.entityId!);
-            name = milestone?.name ?? null;
+          } else if (note.entityType === 'cr') {
+            const cr = await db.changeRequests.get(note.entityId!);
+            name = cr?.code || cr?.name || null;
+          } else if (note.entityType === 'system') {
+            const system = await db.systems.get(note.entityId!);
+            name = system?.name ?? null;
           }
           if (active) setEntityName(name);
         } catch {
@@ -79,10 +79,10 @@ export const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
     const typeLabel =
       note.entityType === 'task'
         ? 'Tác vụ'
-        : note.entityType === 'project'
-          ? 'Dự án'
-          : note.entityType === 'milestone'
-            ? 'Cột mốc'
+        : note.entityType === 'cr'
+          ? 'Change Request'
+          : note.entityType === 'system'
+            ? 'Hệ thống'
             : note.entityType;
     const target = entityName || note.entityId;
     return target ? `${typeLabel}: ${target}` : typeLabel;

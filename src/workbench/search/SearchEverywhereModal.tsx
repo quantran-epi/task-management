@@ -16,7 +16,7 @@ import { getAllActions, executeAction } from '../actions/actionRegistry';
 import { useLayoutStore } from '../store/layoutStore';
 import { VirtualizedList } from '../virtual/VirtualizedList';
 
-export type SearchTabType = 'all' | 'tasks' | 'projects' | 'docs' | 'systems' | 'actions';
+export type SearchTabType = 'all' | 'tasks' | 'cr' | 'docs' | 'systems' | 'actions';
 
 export interface SearchEverywhereModalProps {
   open: boolean;
@@ -26,7 +26,7 @@ export interface SearchEverywhereModalProps {
 
 interface SearchResultItem {
   id: string;
-  category: 'task' | 'project' | 'doc' | 'system' | 'action';
+  category: 'task' | 'cr' | 'doc' | 'system' | 'action';
   title: string;
   subtitle?: string | undefined;
   shortcut?: string | undefined;
@@ -43,7 +43,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
 
   const openTab = useLayoutStore((s) => s.openTab);
 
-  // Live queries for tasks, projects, notes
+  // Live queries for tasks, CRs, notes
   const tasks = useLiveQuery(
     async () => {
       if (!open) return [];
@@ -54,11 +54,11 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
     []
   );
 
-  const projects = useLiveQuery(
+  const changeRequests = useLiveQuery(
     async () => {
       if (!open) return [];
-      const list = await activeDb.projects.toArray();
-      return list.filter((p) => !(p as any).deletedAt);
+      const list = await activeDb.changeRequests.toArray();
+      return list.filter((cr) => !(cr as any).deletedAt);
     },
     [open],
     []
@@ -141,22 +141,23 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
       }
     }
 
-    // 3. Projects
-    if (activeTab === 'all' || activeTab === 'projects') {
-      for (const proj of projects) {
-        if (!searchKeyword || proj.name.toLowerCase().includes(searchKeyword)) {
+    // 3. Change Requests
+    if (activeTab === 'all' || activeTab === 'cr') {
+      for (const cr of changeRequests) {
+        const crTitle = cr.code || cr.name;
+        if (!searchKeyword || crTitle.toLowerCase().includes(searchKeyword) || cr.name.toLowerCase().includes(searchKeyword)) {
           items.push({
-            id: `project:${proj.id}`,
-            category: 'project',
-            title: proj.name,
-            subtitle: proj.status ? `Status: ${proj.status}` : 'Project',
+            id: `cr:${cr.id}`,
+            category: 'cr',
+            title: crTitle,
+            subtitle: cr.name,
             onSelect: () => {
               openTab({
-                id: `project-${proj.id}`,
-                title: proj.name,
-                viewType: 'insight',
+                id: `cr-${cr.id}`,
+                title: crTitle,
+                viewType: 'cr_detail',
                 closable: true,
-                params: { itemType: 'project', itemId: proj.id },
+                params: { changeRequestId: cr.id },
               });
               onClose();
             },
@@ -201,10 +202,11 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
             subtitle: `System [${sys.code}] · ${sys.type}`,
             onSelect: () => {
               openTab({
-                id: 'systems',
-                title: 'Danh mục hệ thống',
-                viewType: 'systems',
+                id: `system-${sys.id}`,
+                title: sys.name,
+                viewType: 'system_detail',
                 closable: true,
+                params: { systemId: sys.id },
               });
               onClose();
             },
@@ -214,7 +216,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
     }
 
     return items;
-  }, [query, activeTab, tasks, projects, notes, systems, openTab, onClose]);
+  }, [query, activeTab, tasks, changeRequests, notes, systems, openTab, onClose]);
 
   // Reset selection index when query or tab changes
   useEffect(() => {
@@ -243,7 +245,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
 
     if (e.key === 'Tab') {
       e.preventDefault();
-      const tabs: SearchTabType[] = ['all', 'tasks', 'projects', 'docs', 'systems', 'actions'];
+      const tabs: SearchTabType[] = ['all', 'tasks', 'cr', 'docs', 'systems', 'actions'];
       const currentIndex = tabs.indexOf(activeTab);
       const nextIndex = e.shiftKey
         ? (currentIndex - 1 + tabs.length) % tabs.length
@@ -283,7 +285,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
   const TABS_CONFIG: { key: SearchTabType; label: string }[] = [
     { key: 'all', label: 'All' },
     { key: 'tasks', label: 'Tasks' },
-    { key: 'projects', label: 'Projects' },
+    { key: 'cr', label: 'CR' },
     { key: 'docs', label: 'Docs' },
     { key: 'systems', label: 'Systems' },
     { key: 'actions', label: 'Actions' },
@@ -295,7 +297,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
         return <ThunderboltOutlined style={{ color: 'var(--accent, #3871e1)', fontSize: 13 }} />;
       case 'task':
         return <JetBrainsTasksIcon size={14} />;
-      case 'project':
+      case 'cr':
         return <JetBrainsProjectIcon size={14} />;
       case 'doc':
         return <JetBrainsDocsIcon size={14} />;

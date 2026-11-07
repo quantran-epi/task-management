@@ -483,7 +483,7 @@ describe('wizard source fixtures', () => {
 
   describe('CAB minimal builder', () => {
     const sourceBase = {
-      projectId: '25000000-0000-4000-8000-000000000009',
+      changeRequestId: '25000000-0000-4000-8000-000000000009',
       threadId: '25000000-0000-4000-8000-000000000109',
     };
     const payload: CabDocxPayload = {
@@ -493,7 +493,7 @@ describe('wizard source fixtures', () => {
       inputRevision: 6,
       draftRevision: 4,
       approvedRevision: 4,
-      projectId: sourceBase.projectId,
+      changeRequestId: sourceBase.changeRequestId,
       threadId: sourceBase.threadId,
       sourceArtifactIds: {
         PL02: '25000000-0000-4000-8000-000000002009',
@@ -593,7 +593,7 @@ describe('wizard source fixtures', () => {
       inputRevision: 2,
       draftRevision: 1,
       approvedRevision: 1,
-      projectId: '25000000-0000-4000-8000-000000000015',
+      changeRequestId: '25000000-0000-4000-8000-000000000015',
       threadId: '25000000-0000-4000-8000-000000000115',
       sourceArtifactIds: {
         PL02: '25000000-0000-4000-8000-000000002015',
@@ -616,9 +616,9 @@ describe('wizard source fixtures', () => {
     const cab: CabDocxPayload = {
       ...cabBase,
       sources: [
-        { kind: 'PL02', artifactId: cabBase.sourceArtifactIds.PL02, version: 1, hash: cabBase.expectedHashes.PL02, projectId: cabBase.projectId, threadId: cabBase.threadId, approved: true },
-        { kind: 'PL03B', artifactId: cabBase.sourceArtifactIds.PL03B, version: 1, hash: cabBase.expectedHashes.PL03B, projectId: cabBase.projectId, threadId: cabBase.threadId, approved: true },
-        { kind: 'PL07', artifactId: cabBase.sourceArtifactIds.PL07, version: 1, hash: cabBase.expectedHashes.PL07, projectId: cabBase.projectId, threadId: cabBase.threadId, approved: true },
+        { kind: 'PL02', artifactId: cabBase.sourceArtifactIds.PL02, version: 1, hash: cabBase.expectedHashes.PL02, changeRequestId: cabBase.changeRequestId, threadId: cabBase.threadId, approved: true },
+        { kind: 'PL03B', artifactId: cabBase.sourceArtifactIds.PL03B, version: 1, hash: cabBase.expectedHashes.PL03B, changeRequestId: cabBase.changeRequestId, threadId: cabBase.threadId, approved: true },
+        { kind: 'PL07', artifactId: cabBase.sourceArtifactIds.PL07, version: 1, hash: cabBase.expectedHashes.PL07, changeRequestId: cabBase.changeRequestId, threadId: cabBase.threadId, approved: true },
       ],
     };
 

@@ -14,7 +14,7 @@ export interface CabSourceRef {
   artifactId: string;
   version: number;
   hash: string;
-  projectId: string;
+  changeRequestId: string;
   threadId: string;
   approved: boolean;
 }
@@ -26,7 +26,7 @@ export interface CabDocxPayload {
   inputRevision: number;
   draftRevision: number;
   approvedRevision: number;
-  projectId: string;
+  changeRequestId: string;
   threadId: string;
   sourceArtifactIds: Record<CabSourceKind, string>;
   sources: CabSourceRef[];

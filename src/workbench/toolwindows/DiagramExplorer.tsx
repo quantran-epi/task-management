@@ -108,8 +108,8 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
   );
 
   const tasks = useLiveQuery(() => db.tasks.toArray(), [db], []);
-  const projects = useLiveQuery(() => db.projects.toArray(), [db], []);
-  const milestones = useLiveQuery(() => db.milestones.toArray(), [db], []);
+  const changeRequests = useLiveQuery(() => db.changeRequests.toArray(), [db], []);
+  const systems = useLiveQuery(() => db.systems.toArray(), [db], []);
 
   // Filter active diagrams & diagram folders
   const activeNotes = useMemo(
@@ -476,7 +476,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
       },
       {
         key: 'link',
-        label: 'Gắn liên kết Task / Project...',
+        label: 'Gắn liên kết Task / CR...',
         icon: <LinkOutlined style={{ color: '#3871e1' }} />,
         onClick: () => {
           setLinkingDiagram(diag);
@@ -569,13 +569,13 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
                 <CheckSquareOutlined style={{ fontSize: 11, color: '#1677ff', flexShrink: 0 }} />
               </Tooltip>
             )}
-            {diag.entityType === 'project' && (
-              <Tooltip title="Gắn với dự án">
+            {diag.entityType === 'cr' && (
+              <Tooltip title="Gắn với Change Request">
                 <ProjectOutlined style={{ fontSize: 11, color: '#ea580c', flexShrink: 0 }} />
               </Tooltip>
             )}
-            {diag.entityType === 'milestone' && (
-              <Tooltip title="Gắn với milestone">
+            {diag.entityType === 'system' && (
+              <Tooltip title="Gắn với hệ thống">
                 <FlagOutlined style={{ fontSize: 11, color: '#8b5cf6', flexShrink: 0 }} />
               </Tooltip>
             )}
@@ -1205,7 +1205,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
         </div>
       </Modal>
 
-      {/* POPUP MODAL: Gắn liên kết Task / Project / Milestone */}
+      {/* POPUP MODAL: Gắn liên kết Task / CR / System */}
       <Modal
         title="Gắn liên kết biểu đồ"
         open={linkModalOpen}
@@ -1236,8 +1236,8 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
               options={[
                 { value: 'none', label: 'Không gắn liên kết' },
                 { value: 'task', label: '📌 Tác vụ (Task)' },
-                { value: 'project', label: '📁 Dự án (Project)' },
-                { value: 'milestone', label: '🚩 Milestone' },
+                { value: 'cr', label: '📁 Change Request (CR)' },
+                { value: 'system', label: '🚩 Hệ thống (System)' },
               ]}
             />
           </div>
@@ -1245,7 +1245,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
           {selectedEntityType && (
             <div>
               <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
-                Chọn {selectedEntityType === 'task' ? 'Tác vụ' : selectedEntityType === 'project' ? 'Dự án' : 'Milestone'}
+                Chọn {selectedEntityType === 'task' ? 'Tác vụ' : selectedEntityType === 'cr' ? 'Change Request' : 'Hệ thống'}
               </div>
               <Select
                 showSearch
@@ -1259,9 +1259,9 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
                 options={
                   selectedEntityType === 'task'
                     ? (tasks || []).map((t) => ({ value: t.id, label: t.name }))
-                    : selectedEntityType === 'project'
-                    ? (projects || []).map((p) => ({ value: p.id, label: p.name }))
-                    : (milestones || []).map((m) => ({ value: m.id, label: m.name }))
+                    : selectedEntityType === 'cr'
+                    ? (changeRequests || []).map((cr) => ({ value: cr.id, label: cr.code || cr.name }))
+                    : (systems || []).map((s) => ({ value: s.id, label: s.name }))
                 }
               />
             </div>

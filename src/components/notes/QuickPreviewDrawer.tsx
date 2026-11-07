@@ -8,7 +8,7 @@ import {
   ProjectOutlined,
 } from '@ant-design/icons';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import type { Note, Task, Project } from '../../types/models';
+import type { Note, Task, ChangeRequest } from '../../types/models';
 import { renderSafeMarkdown, renderInlineFormatting } from '../../utils/markdown';
 import { getBacklinksForDoc, type BacklinksResult } from '../../db/repositories/documentLinkRepo';
 import { computeSha256, normalizeMarkdownForHash } from '../../db/repositories/documentSetRepo';
@@ -146,14 +146,14 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [backlinks, setBacklinks] = useState<BacklinksResult>({
     tasks: [],
-    projects: [],
+    changeRequests: [],
     referencingNotes: [],
   });
   const [hashMismatch, setHashMismatch] = useState<boolean>(false);
   const [isHighlighted, setIsHighlighted] = useState<boolean>(false);
   const [isReducedMotion, setIsReducedMotion] = useState<boolean>(false);
   const [linkedParentTask, setLinkedParentTask] = useState<Task | null>(null);
-  const [linkedParentProject, setLinkedParentProject] = useState<Project | null>(null);
+  const [linkedParentCr, setLinkedParentCr] = useState<ChangeRequest | null>(null);
   const [activeDrawerTaskId, setActiveDrawerTaskId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'lines' | 'markdown'>('lines');
 
@@ -169,9 +169,9 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
     let active = true;
     if (!open || !docId) {
       setDoc(null);
-      setBacklinks({ tasks: [], projects: [], referencingNotes: [] });
+      setBacklinks({ tasks: [], changeRequests: [], referencingNotes: [] });
       setLinkedParentTask(null);
-      setLinkedParentProject(null);
+      setLinkedParentCr(null);
       setHashMismatch(false);
       setIsHighlighted(false);
       return () => {
@@ -189,7 +189,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
         setDoc(noteData || null);
         setBacklinks(backlinksData);
 
-        // Fetch direct parent entity if note belongs to task or project
+        // Fetch direct parent entity if note belongs to task or CR
         if (noteData?.entityType === 'task' && noteData.entityId) {
           const t = await db.tasks.get(noteData.entityId);
           if (active) setLinkedParentTask(t || null);
@@ -197,11 +197,11 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
           if (active) setLinkedParentTask(null);
         }
 
-        if (noteData?.entityType === 'project' && noteData.entityId) {
-          const p = await db.projects.get(noteData.entityId);
-          if (active) setLinkedParentProject(p || null);
+        if (noteData?.entityType === 'cr' && noteData.entityId) {
+          const cr = await db.changeRequests.get(noteData.entityId);
+          if (active) setLinkedParentCr(cr || null);
         } else {
-          if (active) setLinkedParentProject(null);
+          if (active) setLinkedParentCr(null);
         }
 
         // Check hash mismatch only for server authority when citedContentHash is present (D-10, D-21)
@@ -344,7 +344,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
 
   const hasBacklinks =
     backlinks.tasks.length > 0 ||
-    backlinks.projects.length > 0 ||
+    backlinks.changeRequests.length > 0 ||
     backlinks.referencingNotes.length > 0;
 
   return (
@@ -495,9 +495,9 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                   {linkedParentTask.jiraKey ? ` (${linkedParentTask.jiraKey})` : ''}
                 </Tag>
               )}
-              {linkedParentProject && (
+              {linkedParentCr && (
                 <Tag color="purple" icon={<ProjectOutlined />}>
-                  Dự án: {linkedParentProject.name}
+                  CR: {linkedParentCr.code || linkedParentCr.name}
                 </Tag>
               )}
               {doc.tags?.map((tag) => (
@@ -699,7 +699,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                 <LinkOutlined />
                 <span>
                   Liên kết đến tài liệu này (
-                  {backlinks.tasks.length + backlinks.projects.length + backlinks.referencingNotes.length}
+                  {backlinks.tasks.length + backlinks.changeRequests.length + backlinks.referencingNotes.length}
                   )
                 </span>
               </div>
@@ -732,9 +732,9 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                   </div>
                 ))}
 
-                {backlinks.projects.map((proj: Project) => (
+                {backlinks.changeRequests.map((cr: ChangeRequest) => (
                   <div
-                    key={`proj-backlink-${proj.id}`}
+                    key={`cr-backlink-${cr.id}`}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -746,7 +746,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                     }}
                   >
                     <ProjectOutlined style={{ color: '#722ed1' }} />
-                    <span style={{ fontWeight: 500 }}>{proj.name}</span>
+                    <span style={{ fontWeight: 500 }}>{cr.code || cr.name}</span>
                   </div>
                 ))}
 
