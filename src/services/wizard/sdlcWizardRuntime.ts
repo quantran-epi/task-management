@@ -26,7 +26,7 @@ export interface SdlcWizardRuntime {
   model: WizardModel;
   collectEvidence: (input: WizardEvidenceInput) => Promise<WizardEvidence>;
   /** Real published set ids for the project. Never a placeholder and never silently `[]`. */
-  resolveSetIds: (projectId: string) => Promise<readonly string[]>;
+  resolveSetIds: (changeRequestId: string) => Promise<readonly string[]>;
 }
 
 export interface CreateSdlcWizardRuntimeInput {
@@ -179,10 +179,10 @@ export async function createSdlcWizardRuntime(
   return {
     model,
     collectEvidence: (evidenceInput) => collectWizardEvidence(evidenceInput, deps),
-    resolveSetIds: async (projectId) => {
+    resolveSetIds: async (changeRequestId) => {
       const sets = await listDocumentSets(db);
       const projectSets = sets.filter(
-        (set) => set.sdlc?.projectId === projectId && set.sdlc.purpose === 'sdlc');
+        (set) => set.sdlc?.changeRequestId === changeRequestId && set.sdlc.purpose === 'sdlc');
       if (projectSets.length > 1) throw new Error('DUPLICATE_PROJECT_SDLC_SET');
       // Project SDLC set first, then base/baseline sets every project may ground on. Other
       // project-scoped sets stay out so one project cannot cite another's artifacts.

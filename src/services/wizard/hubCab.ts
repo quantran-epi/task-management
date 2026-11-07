@@ -16,7 +16,7 @@ import type { SdlcWorkflowMetadata, SdlcWorkflowState } from './workflowSchemas'
 export interface CabSourcePin {
   artifactId: string;
   kind: 'PL02' | 'PL03B' | 'PL07';
-  projectId: string;
+  changeRequestId: string;
   threadId: string;
   version: number;
   hash: string;
@@ -27,7 +27,7 @@ type CabSourceKind = CabSourcePin['kind'];
 
 export interface HubCabInput {
   db: TaskPlannerDatabase;
-  projectId: string;
+  changeRequestId: string;
   threadId: string;
   sessionId: string;
   draftRevision: number;
@@ -36,7 +36,7 @@ export interface HubCabInput {
   model: WizardModel;
   collectEvidence: (input: WizardEvidenceInput) => Promise<WizardEvidence>;
   /** Published SDLC sets for the project. Must not default to `[]` — an empty scope strips every citation. */
-  resolveSetIds: (projectId: string) => Promise<readonly string[]>;
+  resolveSetIds: (changeRequestId: string) => Promise<readonly string[]>;
   runStage?: typeof runWizardStage;
   signal?: AbortSignal;
   isCurrent?: () => boolean;
@@ -61,7 +61,7 @@ export interface HubCabDraftResult {
 
 export interface CabPayloadContext {
   metadata: SdlcWorkflowMetadata;
-  projectId: string;
+  changeRequestId: string;
   threadId: string;
   inputRevision: number;
   draftRevision: number;
@@ -90,7 +90,7 @@ export function toCabDocxPayload(proposal: unknown, ctx: CabPayloadContext): Cab
     inputRevision: ctx.inputRevision,
     draftRevision: ctx.draftRevision,
     approvedRevision: ctx.draftRevision,
-    projectId: ctx.projectId,
+    changeRequestId: ctx.changeRequestId,
     threadId: ctx.threadId,
     sourceArtifactIds: pinRecord(ctx.sources, (pin) => pin.artifactId),
     sources: ctx.sources,
@@ -184,16 +184,16 @@ async function generateCabBody(
   if (!pl03b?.noteId || !pl07?.noteId) throw new Error('CAB_SOURCE_CHAIN_REQUIRED');
 
   const pins: CabSourcePin[] = [
-    { artifactId: pl02.noteId, kind: 'PL02', projectId: input.projectId, threadId: input.threadId, version: pl02.version, hash: pl02.hash, approved: true },
-    { artifactId: pl03b.noteId, kind: 'PL03B', projectId: input.projectId, threadId: input.threadId, version: pl03b.version, hash: pl03b.hash, approved: true },
-    { artifactId: pl07.noteId, kind: 'PL07', projectId: input.projectId, threadId: input.threadId, version: pl07.version, hash: pl07.hash, approved: true },
+    { artifactId: pl02.noteId, kind: 'PL02', changeRequestId: input.changeRequestId, threadId: input.threadId, version: pl02.version, hash: pl02.hash, approved: true },
+    { artifactId: pl03b.noteId, kind: 'PL03B', changeRequestId: input.changeRequestId, threadId: input.threadId, version: pl03b.version, hash: pl03b.hash, approved: true },
+    { artifactId: pl07.noteId, kind: 'PL07', changeRequestId: input.changeRequestId, threadId: input.threadId, version: pl07.version, hash: pl07.hash, approved: true },
   ];
   const inputRevision = (input.state.artifacts.cab?.version ?? 0) + 1;
   const isCurrent = input.isCurrent ?? (() => true);
 
-  const resolvedSetIds = await input.resolveSetIds(input.projectId);
+  const resolvedSetIds = await input.resolveSetIds(input.changeRequestId);
   const evidence = await input.collectEvidence({
-    projectId: input.projectId,
+    changeRequestId: input.changeRequestId,
     threadId: input.threadId,
     sessionId: input.sessionId,
     inputRevision,
@@ -203,7 +203,7 @@ async function generateCabBody(
 
   const proposal = await (input.runStage ?? runWizardStage)({
     kind: 'CAB',
-    projectId: input.projectId,
+    changeRequestId: input.changeRequestId,
     threadId: input.threadId,
     sessionId: input.sessionId,
     inputRevision,
@@ -220,7 +220,7 @@ async function generateCabBody(
 
   const payload = toCabDocxPayload(proposal, {
     metadata: input.metadata,
-    projectId: input.projectId,
+    changeRequestId: input.changeRequestId,
     threadId: input.threadId,
     inputRevision,
     draftRevision: input.draftRevision,
@@ -260,7 +260,7 @@ export async function generateHubCab(input: HubCabInput): Promise<HubCabResult> 
 
   const pl02 = await ensurePl02ArtifactNote({
     db: input.db,
-    projectId: input.projectId,
+    changeRequestId: input.changeRequestId,
     threadId: input.threadId,
     sessionId: input.sessionId,
     markdown: input.state.artifacts.pl02.content ?? '',
@@ -272,7 +272,7 @@ export async function generateHubCab(input: HubCabInput): Promise<HubCabResult> 
 
   const saved = await saveApprovedArtifact({
     kind: 'CAB',
-    projectId: input.projectId,
+    changeRequestId: input.changeRequestId,
     threadId: input.threadId,
     sessionId: input.sessionId,
     inputRevision: generated.inputRevision,

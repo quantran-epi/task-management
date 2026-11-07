@@ -50,7 +50,7 @@ export type WizardRenderPayload = z.infer<typeof WizardRenderPayloadSchema>;
 export const WizardMetadataSchema = z.strictObject({
   schemaVersion: z.literal(1),
   sessionId: uuidSchema,
-  projectId: uuidSchema,
+  changeRequestId: uuidSchema,
   threadId: uuidSchema,
   skill: WizardSkillSchema,
   inputRevision: z.number().int().nonnegative(),
@@ -65,7 +65,7 @@ export type WizardMetadata = z.infer<typeof WizardMetadataSchema>;
 const baseSnapshotFields = {
   schemaVersion: z.literal(1),
   sessionId: uuidSchema,
-  projectId: uuidSchema,
+  changeRequestId: uuidSchema,
   threadId: uuidSchema,
   skill: WizardSkillSchema,
   inputRevision: z.number().int().nonnegative(),
@@ -115,7 +115,7 @@ export type WizardSnapshot = z.infer<typeof WizardSnapshotSchema>;
 
 const artifactBase = {
   kind: z.enum(['PL02', 'SOLUTION', 'CHANGE_PACK_ENTRY', 'PL03B', 'PL07', 'CAB']),
-  projectId: uuidSchema,
+  changeRequestId: uuidSchema,
   threadId: uuidSchema,
   sessionId: uuidSchema,
   version: z.number().int().positive(),
@@ -192,7 +192,7 @@ export function assertWizardTransition(previous: unknown, next: unknown): void {
   const from = WizardSnapshotSchema.parse(previous);
   const to = WizardSnapshotSchema.parse(next);
 
-  if (from.projectId !== to.projectId) throw new WizardTransitionError('WIZARD_PROJECT_MISMATCH');
+  if (from.changeRequestId !== to.changeRequestId) throw new WizardTransitionError('WIZARD_PROJECT_MISMATCH');
   if (from.threadId !== to.threadId) throw new WizardTransitionError('WIZARD_THREAD_MISMATCH');
   if (from.sessionId !== to.sessionId) throw new WizardTransitionError('WIZARD_SESSION_MISMATCH');
   if (to.inputRevision < from.inputRevision) throw new WizardTransitionError('WIZARD_INPUT_REVISION_STALE');

@@ -23,7 +23,7 @@ const PL07_SECTION_ITEM = /^(I|II|III|IV|V)\.(\d+)$/;
 
 export interface HubTechDocsInput {
   db: TaskPlannerDatabase;
-  projectId: string;
+  changeRequestId: string;
   threadId: string;
   sessionId: string;
   inputRevision: number;
@@ -35,7 +35,7 @@ export interface HubTechDocsInput {
   model: WizardModel;
   collectEvidence: (input: WizardEvidenceInput) => Promise<WizardEvidence>;
   /** Published SDLC sets for the project. Must not default to `[]` — an empty scope strips every citation. */
-  resolveSetIds: (projectId: string) => Promise<readonly string[]>;
+  resolveSetIds: (changeRequestId: string) => Promise<readonly string[]>;
   runStage?: typeof runWizardStage;
   isCurrent?: () => boolean;
   signal?: AbortSignal;
@@ -225,9 +225,9 @@ export async function generateHubTechDocDraft(input: HubTechDocsInput): Promise<
   // Resolve once: `WizardStageInput.isCurrent` is required (`exactOptionalPropertyTypes` is on).
   const isCurrent = input.isCurrent ?? (() => true);
 
-  const resolvedSetIds = await input.resolveSetIds(input.projectId);
+  const resolvedSetIds = await input.resolveSetIds(input.changeRequestId);
   const evidence = await input.collectEvidence({
-    projectId: input.projectId,
+    changeRequestId: input.changeRequestId,
     threadId: input.threadId,
     sessionId: input.sessionId,
     inputRevision: input.inputRevision,
@@ -235,17 +235,17 @@ export async function generateHubTechDocDraft(input: HubTechDocsInput): Promise<
     resolvedSetIds,
   });
 
-  // `requirePin` compares projectId/threadId and validates hash/version, so the pin must carry identity.
+  // `requirePin` compares changeRequestId/threadId and validates hash/version, so the pin must carry identity.
   const pl03Pin = {
     artifactId: input.solution.noteId,
-    projectId: input.projectId,
+    changeRequestId: input.changeRequestId,
     threadId: input.threadId,
     version: input.solution.version,
     hash: input.solution.hash,
   };
 
   const stageInput = {
-    projectId: input.projectId,
+    changeRequestId: input.changeRequestId,
     threadId: input.threadId,
     sessionId: input.sessionId,
     inputRevision: input.inputRevision,
@@ -291,7 +291,7 @@ export async function generateHubTechDocs(input: HubTechDocsInput): Promise<HubT
   const approvedAt = new Date().toISOString();
   const sourceArtifacts = [{ id: input.solution.noteId, hash: input.solution.hash }];
   const pl03bSaved = await saveApprovedArtifact({
-    projectId: input.projectId,
+    changeRequestId: input.changeRequestId,
     threadId: input.threadId,
     sessionId: input.sessionId,
     inputRevision: input.inputRevision,
@@ -304,7 +304,7 @@ export async function generateHubTechDocs(input: HubTechDocsInput): Promise<HubT
     sourceArtifacts,
   }, input.db);
   const pl07Saved = await saveApprovedArtifact({
-    projectId: input.projectId,
+    changeRequestId: input.changeRequestId,
     threadId: input.threadId,
     sessionId: input.sessionId,
     inputRevision: input.inputRevision,

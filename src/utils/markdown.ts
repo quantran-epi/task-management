@@ -53,13 +53,14 @@ export function renderInlineFormatting(rawText: string): string {
     return `<img class="markdown-image" src="${trimmedUrl}" alt="${alt}" loading="lazy" />`;
   });
 
-  // 4.6 Wiki-link chips ([[doc:id|Title]], [[task:id|Title]], [[project:id|Title]])
+  // 4.6 Wiki-link chips ([[doc:id|Title]], [[task:id|Title]], [[cr:id|Title]], [[system:id|Title]])
   // Note: text was already escapeHtml'd, so '|' is intact, entity ID matches alphanumeric/dash/underscore
-  text = text.replace(/\[\[(doc|task|project):([a-zA-Z0-9_-]+)(?:\|([^\]]+))?\]\]/g, (_match, type, id, label) => {
+  text = text.replace(/\[\[(doc|task|cr|system):([a-zA-Z0-9_-]+)(?:\|([^\]]+))?\]\]/g, (_match, type, id, label) => {
     const displayLabel = label?.trim() || id;
     let icon = '📄';
     if (type === 'task') icon = '✅';
-    if (type === 'project') icon = '📁';
+    if (type === 'cr') icon = '📋';
+    if (type === 'system') icon = '🖥️';
     return `<span class="wiki-link-chip" data-entity-type="${type}" data-entity-id="${id}" role="button" tabindex="0">${icon} ${displayLabel}</span>`;
   });
 

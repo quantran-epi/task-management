@@ -43,7 +43,7 @@ export interface WizardEvidence {
 }
 
 export interface WizardEvidenceInput {
-  projectId: string;
+  changeRequestId: string;
   threadId: string;
   sessionId: string;
   inputRevision: number;
@@ -323,7 +323,7 @@ export async function runValidatedStage<T>(input: RunValidatedStageInput<T>): Pr
 }
 
 export interface DetectWizardGapsInput {
-  projectId: string;
+  changeRequestId: string;
   threadId: string;
   sessionId: string;
   inputRevision: number;
@@ -366,7 +366,7 @@ export async function detectWizardGaps(input: DetectWizardGapsInput): Promise<Wi
 
 export interface WizardStageInput {
   kind: WizardSkill;
-  projectId: string;
+  changeRequestId: string;
   threadId: string;
   sessionId: string;
   inputRevision: number;
@@ -380,12 +380,12 @@ interface ArtifactPin {
   artifactId: string;
   version: number;
   hash: string;
-  projectId: string;
+  changeRequestId: string;
   threadId: string;
 }
 
 function requirePin(pin: ArtifactPin, input: WizardStageInput): void {
-  if (pin.projectId !== input.projectId || pin.threadId !== input.threadId) {
+  if (pin.changeRequestId !== input.changeRequestId || pin.threadId !== input.threadId) {
     throw new WizardStageError('INVALID_OUTPUT', 'ARTIFACT_IDENTITY_MISMATCH');
   }
   if (!/^[a-f0-9]{64}$/.test(pin.hash) || pin.version < 1) {

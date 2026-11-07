@@ -16,7 +16,7 @@ import {
 
 export interface HubPackConfirmInput {
   db: TaskPlannerDatabase;
-  projectId: string;
+  changeRequestId: string;
   threadId: string;
   sessionId: string;
   inputRevision: number;
@@ -92,7 +92,7 @@ export async function confirmHubChangePack(input: HubPackConfirmInput): Promise<
   const manifest = input.manifest;
   const persisted = await persistConfirmedPack(
     {
-      projectId: input.projectId,
+      changeRequestId: input.changeRequestId,
       threadId: input.threadId,
       sessionId: input.sessionId,
       inputRevision: input.inputRevision,
@@ -112,7 +112,7 @@ export async function confirmHubChangePack(input: HubPackConfirmInput): Promise<
 
   const reconciliation = await buildHubReconciliation({
     db: input.db,
-    projectId: input.projectId,
+    changeRequestId: input.changeRequestId,
     threadId: input.threadId,
     manifest,
     solutionNoteId: input.solution.noteId,
@@ -125,7 +125,7 @@ export async function confirmHubChangePack(input: HubPackConfirmInput): Promise<
 
 export interface BuildHubReconciliationInput {
   db: TaskPlannerDatabase;
-  projectId: string;
+  changeRequestId: string;
   threadId: string;
   manifest: Readonly<ChangePackManifest>;
   solutionNoteId: string;
@@ -153,10 +153,10 @@ export async function buildHubReconciliation(
   const artifact = note?.sdlcArtifact;
   if (
     !note ||
-    note.entityType !== 'project' ||
-    note.entityId !== input.projectId ||
+    note.entityType !== 'cr' ||
+    note.entityId !== input.changeRequestId ||
     artifact?.kind !== 'SOLUTION' ||
-    artifact.projectId !== input.projectId ||
+    artifact.changeRequestId !== input.changeRequestId ||
     artifact.threadId !== input.threadId ||
     artifact.version !== input.solutionVersion ||
     artifact.inputHash !== input.solutionHash
@@ -181,7 +181,7 @@ export async function buildHubReconciliation(
 
   const manifest = input.manifest;
   const reconciliationInput: ReconciliationInput = {
-    projectId: input.projectId,
+    changeRequestId: input.changeRequestId,
     threadId: input.threadId,
     solutionNoteId: input.solutionNoteId,
     solutionVersion: input.solutionVersion,
@@ -191,7 +191,7 @@ export async function buildHubReconciliation(
     base: manifest.identity.base,
     head: manifest.identity.head,
     solution: {
-      projectId: input.projectId,
+      changeRequestId: input.changeRequestId,
       threadId: input.threadId,
       noteId: input.solutionNoteId,
       version: input.solutionVersion,

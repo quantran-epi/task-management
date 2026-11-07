@@ -399,7 +399,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
   // Each CR owns its coordinator memory and fixed persistence key (D-23).
   const createCoordinator = useCallback(
     (crId: string) => createSdlcWorkflowCoordinator({
-        projectId,
+        changeRequestId: projectId,
         get threadId() {
           return threadIdRef.current;
         },
@@ -500,7 +500,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
         const resolvedSetIds = await wizardRuntime.resolveSetIds(projectId);
         if (cancelled || controller.signal.aborted) return;
         const evidence = await wizardRuntime.collectEvidence({
-          projectId,
+          changeRequestId: projectId,
           threadId,
           sessionId: evidenceSessionId,
           inputRevision: Date.parse(evidenceUpdatedAt) || 0,
@@ -898,7 +898,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
       case 'TECH_DOCS':
         return (
           <Step5TechDocsView
-            projectId={projectId}
+            changeRequestId={projectId}
             crId={activeCrId}
             workflowState={workflowState}
             draftPl03b={draftPl03b}

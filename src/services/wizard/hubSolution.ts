@@ -4,7 +4,7 @@ import { defaultSha256 } from './workflowCoordinator';
 
 export interface HubSolutionInput {
   db: TaskPlannerDatabase;
-  projectId: string;
+  changeRequestId: string;
   threadId: string;
   sessionId: string;
   markdown: string;
@@ -39,7 +39,7 @@ export async function saveHubSolution(input: HubSolutionInput): Promise<HubSolut
   const hash = await defaultSha256(markdown);
 
   const result = await saveSolutionVersion({
-    projectId: input.projectId,
+    changeRequestId: input.changeRequestId,
     threadId: input.threadId,
     sessionId: input.sessionId,
     inputRevision: input.draftRevision,

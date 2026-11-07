@@ -444,9 +444,8 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       }
       if (cm.wizard) {
         const thread = threadById.get(cm.threadId);
-        // The wizard snapshot still names its field `projectId` (renamed in a later wave);
-        // its value is a ChangeRequest id, so the thread must be CR-scoped.
-        if (!thread || thread.scopeType !== 'cr' || thread.entityId !== cm.wizard.projectId || thread.id !== cm.wizard.threadId) {
+        // The wizard snapshot's identity field is a ChangeRequest id, so the thread must be CR-scoped.
+        if (!thread || thread.scopeType !== 'cr' || thread.entityId !== cm.wizard.changeRequestId || thread.id !== cm.wizard.threadId) {
           errors.push({
             table: 'chatMessages',
             recordId: cm.id,
@@ -454,12 +453,12 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
             message: 'Wizard snapshot CR/thread identity does not match chat thread',
           });
         }
-        if (crIds && !crIds.has(cm.wizard.projectId)) {
+        if (crIds && !crIds.has(cm.wizard.changeRequestId)) {
           errors.push({
             table: 'chatMessages',
             recordId: cm.id,
-            field: 'wizard.projectId',
-            message: `Wizard references crId "${cm.wizard.projectId}" not found in changeRequests`,
+            field: 'wizard.changeRequestId',
+            message: `Wizard references crId "${cm.wizard.changeRequestId}" not found in changeRequests`,
           });
         }
         if (cm.wizard.artifactId && !noteIds.has(cm.wizard.artifactId)) {
@@ -476,13 +475,13 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
 
   if (notes) {
     notes.forEach((note) => {
-      // `sdlcArtifact.projectId` still carries the CR id until the wizard schema rename lands.
-      if (note.sdlcArtifact && crIds && !crIds.has(note.sdlcArtifact.projectId)) {
+      // `sdlcArtifact.changeRequestId` carries the CR id the artifact belongs to.
+      if (note.sdlcArtifact && crIds && !crIds.has(note.sdlcArtifact.changeRequestId)) {
         errors.push({
           table: 'notes',
           recordId: note.id,
-          field: 'sdlcArtifact.projectId',
-          message: `Artifact references crId "${note.sdlcArtifact.projectId}" not found in changeRequests`,
+          field: 'sdlcArtifact.changeRequestId',
+          message: `Artifact references crId "${note.sdlcArtifact.changeRequestId}" not found in changeRequests`,
         });
       }
       if (note.sdlcArtifact && !threadIds.has(note.sdlcArtifact.threadId)) {

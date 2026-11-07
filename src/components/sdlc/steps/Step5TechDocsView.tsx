@@ -21,7 +21,7 @@ type TechDocKind = 'PL03B' | 'PL07';
 export interface Step5TechDocsViewProps {
   /** D-06: a historical card pins the view to that exact approved version, read-only. */
   viewedVersion?: { kind: TechDocKind; version: number; content: string; title: string } | undefined;
-  projectId: string;
+  changeRequestId: string;
   crId: string;
   workflowState?: SdlcWorkflowState | undefined;
   /** D-17: only ever called from the explicit approve action — never from generation. */
@@ -38,7 +38,7 @@ export interface Step5TechDocsViewProps {
 }
 
 export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
-  projectId,
+  changeRequestId,
   crId,
   workflowState,
   viewedVersion,
@@ -110,7 +110,7 @@ export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
         }
         const draft = await generateHubTechDocDraft({
           db,
-          projectId,
+          changeRequestId,
           threadId: workflowState.threadId,
           sessionId: workflowState.sessionId,
           inputRevision: workflowState.artifacts.pl03b?.version ?? 0,
@@ -149,8 +149,8 @@ export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
       setExportingKind(kind);
       await exportHubArtifact({
         db,
-        projectId,
-        threadId: `sdlc:${projectId}:${crId}:TECH_DOCS`,
+        changeRequestId,
+        threadId: `sdlc:${changeRequestId}:${crId}:TECH_DOCS`,
         sessionId: workflowState.sessionId,
         metadata: workflowState.metadata,
         state: workflowState,

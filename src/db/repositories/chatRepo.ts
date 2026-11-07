@@ -142,7 +142,7 @@ export async function saveMessage(
       (error as Error & { code: string }).code = 'WIZARD_THREAD_MISMATCH';
       throw error;
     }
-    if (thread.scopeType !== 'cr' || thread.entityId !== wizard.projectId) {
+    if (thread.scopeType !== 'cr' || thread.entityId !== wizard.changeRequestId) {
       const error = new Error('Wizard change request does not match persisted chat thread');
       (error as Error & { code: string }).code = 'WIZARD_PROJECT_MISMATCH';
       throw error;

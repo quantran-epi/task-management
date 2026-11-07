@@ -3,21 +3,23 @@ import { Modal, Form, Input, DatePicker, Checkbox, message } from 'antd';
 import dayjs from 'dayjs';
 import type { TaskPlannerDatabase } from '../../../db';
 import { db as defaultDb } from '../../../db';
-import { createNewCr, type SdlcCrRecord } from '../../../services/wizard/sdlcCrManager';
+import { createChangeRequest } from '../../../db/repositories/changeRequestRepo';
+import type { ChangeRequest, CrTarget } from '../../../types/models';
 
 export interface CrCreateModalProps {
-  projectId: string;
   open: boolean;
   onClose: () => void;
-  onCrCreated?: (cr: SdlcCrRecord) => void;
+  onCrCreated?: (cr: ChangeRequest) => void;
+  /** Subsystem the modal was opened from; becomes the CR's single target. */
+  initialTargets?: readonly CrTarget[] | undefined;
   db?: TaskPlannerDatabase;
 }
 
 export const CrCreateModal: React.FC<CrCreateModalProps> = ({
-  projectId,
   open,
   onClose,
   onCrCreated,
+  initialTargets,
   db = defaultDb,
 }) => {
   const [form] = Form.useForm();
@@ -27,23 +29,28 @@ export const CrCreateModal: React.FC<CrCreateModalProps> = ({
     try {
       const values = await form.validateFields();
       setLoading(true);
-      const newCr = await createNewCr(
-        projectId,
+      const cr = await createChangeRequest(
         {
-          cr: values.cr.trim(),
-          featureName: values.featureName.trim(),
-          author: values.author.trim(),
-          requestingUnit: values.requestingUnit.trim(),
-          date: values.date.format('YYYY-MM-DD'),
+          code: values.cr.trim(),
+          name: values.featureName.trim(),
+          type: 'ENHANCEMENT',
+          status: 'Open',
+          targets: [...(initialTargets ?? [])],
+          // The CR model has no author/requestingUnit/date columns; keep the values the
+          // user typed rather than discarding them at the trust boundary.
+          description: [
+            `Người lập: ${values.author.trim()}`,
+            `Đơn vị yêu cầu: ${values.requestingUnit.trim()}`,
+            `Ngày lập: ${values.date.format('YYYY-MM-DD')}`,
+          ].join('\n'),
         },
-        Boolean(values.inheritContext),
         db
       );
 
       message.success('Đã tạo CR mới thành công');
       form.resetFields();
       onClose();
-      onCrCreated?.(newCr);
+      onCrCreated?.(cr);
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'errorFields' in err) {
         // Validation errors handled by Ant Form UI
