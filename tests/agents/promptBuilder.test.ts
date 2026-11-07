@@ -26,7 +26,7 @@ describe('ghostDevPrompt', () => {
   it('generateGhostDevMasterPrompt formats task title, repo path, description, and pending checklist items in English', () => {
     const prompt = generateGhostDevMasterPrompt(baseTask, '/Users/dev/repo');
     expect(prompt).toContain('You are the Master/Lead Agent');
-    expect(prompt).toContain('Project root directory: /Users/dev/repo');
+    expect(prompt).toContain('Repository root directory: /Users/dev/repo');
     expect(prompt).toContain('Detailed description:');
     expect(prompt).toContain('Goals to complete:');
     expect(prompt).toContain('Implement Ghost Dev Stream');

@@ -258,7 +258,7 @@ export async function resolveScopedContext(
     return { contextText: '', matchedSourceTitles: [] };
   }
 
-  // 1. Tasks & Projects Scope
+  // 1. Tasks & CRs Scope
   const shouldIncludeTasks =
     (scope === 'full' || scope === 'tasks_only') &&
     (!intent || intent === 'query_taskmate' || intent === 'operate_taskmate' || intent === 'mixed');
@@ -988,7 +988,7 @@ export async function processTelegramInboundMessage(
       const scopeDescriptions: Record<TelegramDataScope, string> = {
         full: 'Toàn bộ (Tasks + Projects + Docs)',
         knowledge_only: 'Chỉ Docs & Notes',
-        tasks_only: 'Chỉ Tasks & Projects',
+        tasks_only: 'Chỉ Tasks & CRs',
         pure_llm: 'Chỉ LLM (Không dữ liệu TaskMate)',
       };
 
@@ -1176,7 +1176,7 @@ export async function processTelegramInboundMessage(
   if (dataScope === 'tasks_only' && (routedIntent?.intent === 'query_knowledge' || routedIntent?.require_mcp === true)) {
     const scopeRefusal = routedIntent?.require_mcp === true
       ? `⚠️ Bạn chỉ có quyền truy cập dữ liệu công việc (tasks_only), không thể tra cứu công cụ hệ thống bên ngoài.`
-      : `⚠️ **Phạm vi truy cập bị giới hạn**\n\nTài khoản của bạn được cấu hình phạm vi **Chỉ Tasks & Projects** (\`tasks_only\`), không có quyền truy cập hệ thống tài liệu và tri thức (Knowledge Docs).\n\n💡 *Vui lòng chỉ đặt câu hỏi liên quan đến công việc hoặc liên hệ quản trị viên để mở rộng phạm vi.*`;
+      : `⚠️ **Phạm vi truy cập bị giới hạn**\n\nTài khoản của bạn được cấu hình phạm vi **Chỉ Tasks & CRs** (\`tasks_only\`), không có quyền truy cập hệ thống tài liệu và tri thức (Knowledge Docs).\n\n💡 *Vui lòng chỉ đặt câu hỏi liên quan đến công việc hoặc liên hệ quản trị viên để mở rộng phạm vi.*`;
     const htmlRefusal = markdownToTelegramHtml(scopeRefusal);
     await sendReply(botToken, chat_id, htmlRefusal, message_id);
     await logTelegramSession(
@@ -1197,7 +1197,7 @@ export async function processTelegramInboundMessage(
     dataScope === 'knowledge_only' &&
     (routedIntent?.intent === 'query_taskmate' || routedIntent?.intent === 'operate_taskmate')
   ) {
-    const scopeRefusal = `⚠️ **Phạm vi truy cập bị giới hạn**\n\nTài khoản của bạn được cấu hình phạm vi **Chỉ Docs & Notes** (\`knowledge_only\`), không có quyền truy cập hay thao tác dữ liệu công việc (Tasks & Projects).\n\n💡 *Vui lòng chỉ đặt câu hỏi liên quan đến tài liệu/kiến thức hoặc liên hệ quản trị viên để mở rộng phạm vi.*`;
+    const scopeRefusal = `⚠️ **Phạm vi truy cập bị giới hạn**\n\nTài khoản của bạn được cấu hình phạm vi **Chỉ Docs & Notes** (\`knowledge_only\`), không có quyền truy cập hay thao tác dữ liệu công việc (Tasks & CRs).\n\n💡 *Vui lòng chỉ đặt câu hỏi liên quan đến tài liệu/kiến thức hoặc liên hệ quản trị viên để mở rộng phạm vi.*`;
     const htmlRefusal = markdownToTelegramHtml(scopeRefusal);
     await sendReply(botToken, chat_id, htmlRefusal, message_id);
     await logTelegramSession(

@@ -250,8 +250,8 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
     if (!currentPayload) return;
     const prompt = formatSelectionMentionPrompt(currentPayload);
 
-    // Switch scope appropriately if attached to task or project
-    let scopeType: 'task' | 'project' | 'global' = 'global';
+    // Switch scope appropriately if attached to a task, CR or system
+    let scopeType: 'task' | 'cr' | 'system' | 'global' = 'global';
     let scopeId: string | undefined = undefined;
     let scopeTitle: string | undefined = undefined;
 
@@ -259,18 +259,26 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
       scopeType = 'task';
       scopeId = currentPayload.targetId;
       scopeTitle = currentPayload.targetTitle;
-    } else if (currentPayload.targetType === 'project') {
-      scopeType = 'project';
+    } else if (currentPayload.targetType === 'cr') {
+      scopeType = 'cr';
+      scopeId = currentPayload.targetId;
+      scopeTitle = currentPayload.targetTitle;
+    } else if (currentPayload.targetType === 'system') {
+      scopeType = 'system';
       scopeId = currentPayload.targetId;
       scopeTitle = currentPayload.targetTitle;
     } else if (currentPayload.parentTask) {
       scopeType = 'task';
       scopeId = currentPayload.parentTask.id;
       scopeTitle = currentPayload.parentTask.name;
-    } else if (currentPayload.parentProject) {
-      scopeType = 'project';
-      scopeId = currentPayload.parentProject.id;
-      scopeTitle = currentPayload.parentProject.name;
+    } else if (currentPayload.parentCr) {
+      scopeType = 'cr';
+      scopeId = currentPayload.parentCr.id;
+      scopeTitle = currentPayload.parentCr.name;
+    } else if (currentPayload.system) {
+      scopeType = 'system';
+      scopeId = currentPayload.system.id;
+      scopeTitle = currentPayload.system.name;
     }
 
     openChatWithDraft(
