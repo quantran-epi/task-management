@@ -42,7 +42,7 @@ describe('TargetSystemsSelector — parent vs subsystem classification (ENT-NORM
   }
 
   it('renders an unparented subsystem as a selectable leaf under the synthetic group', async () => {
-    await createSystem({ name: 'Orphan Ledger', code: 'ORPHAN-LEDGER', type: 'SERVICE' }, db);
+    await createSystem({ parentId: null, name: 'Orphan Ledger', code: 'ORPHAN-LEDGER', type: 'SERVICE' }, db);
 
     const tree = await openDropdown();
 
@@ -55,7 +55,7 @@ describe('TargetSystemsSelector — parent vs subsystem classification (ENT-NORM
 
   it('renders a LOGICAL_GROUP as a non-selectable group header', async () => {
     const parent = await createSystem(
-      { name: 'SmartCard Core', code: 'SC-CORE', type: 'LOGICAL_GROUP' },
+      { parentId: null, name: 'SmartCard Core', code: 'SC-CORE', type: 'LOGICAL_GROUP' },
       db
     );
     await createSystem(
@@ -73,7 +73,7 @@ describe('TargetSystemsSelector — parent vs subsystem classification (ENT-NORM
 
   it('nests a parented subsystem under its logical parent', async () => {
     const parent = await createSystem(
-      { name: 'SmartCard Core', code: 'SC-CORE', type: 'LOGICAL_GROUP' },
+      { parentId: null, name: 'SmartCard Core', code: 'SC-CORE', type: 'LOGICAL_GROUP' },
       db
     );
     await createSystem(
@@ -97,7 +97,7 @@ describe('TargetSystemsSelector — parent vs subsystem classification (ENT-NORM
   it('classifies by type alone, not by parentId presence', async () => {
     // A SERVICE with no parent is still a subsystem, and a LOGICAL_GROUP is still a
     // parent. This is the exact inversion the live predicate makes.
-    await createSystem({ name: 'Loose Worker', code: 'LOOSE-WORKER', type: 'WORKER' }, db);
+    await createSystem({ parentId: null, name: 'Loose Worker', code: 'LOOSE-WORKER', type: 'WORKER' }, db);
 
     const tree = await openDropdown();
 

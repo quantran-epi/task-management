@@ -171,7 +171,7 @@ describe('cascadeRepo Timer cleanup (D-16, TIMER-01, TIMER-02)', () => {
     });
     await db.notes.add({
       id: '55555555-5555-4555-8555-555555555555',
-      type: 'note',
+      type: 'quick_note',
       title: 'Linked note',
       body: 'body',
       isPinned: false,

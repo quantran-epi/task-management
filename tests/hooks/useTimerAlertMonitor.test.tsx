@@ -47,7 +47,7 @@ describe('useTimerAlertMonitor', () => {
     });
 
     // Create task
-    await testDb.tasks.put({
+    await testDb.tasks.put({ crId: '11111111-1111-4111-8111-111111111111',
       id: 'task-alloc-5',
       name: 'Task 5 minutes planned',
       status: 'Open',
@@ -129,7 +129,7 @@ describe('useTimerAlertMonitor', () => {
     const warningSpy = vi.spyOn(message, 'warning').mockImplementation((() => {}) as any);
 
     // Create task with 1 minute estimate (60s) and NO daily allocation
-    await testDb.tasks.put({
+    await testDb.tasks.put({ crId: '11111111-1111-4111-8111-111111111111',
       id: 'task-short-1m',
       name: 'Viết unit test',
       status: 'Open',
@@ -216,7 +216,7 @@ describe('useTimerAlertMonitor', () => {
       },
     });
 
-    await testDb.tasks.put({
+    await testDb.tasks.put({ crId: '11111111-1111-4111-8111-111111111111',
       id: 'task-no-timer-notif',
       name: 'Task with timer notif disabled',
       status: 'Open',

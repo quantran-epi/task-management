@@ -92,14 +92,15 @@ describe('Dexie Database Persistence & Seed Layer (DATA-02, D-05, D-07)', () => 
     const sampleChangeRequest: ChangeRequest = {
       id: changeRequestId,
       name: 'Launch PWA',
+      code: 'CR-PWA',
       status: 'In Progress',
       type: 'ENHANCEMENT',
-      targetSystemIds: [],
+      targets: [],
       createdAt: now,
       updatedAt: now,
     };
 
-    const sampleTask: Task = {
+    const sampleTask: Task = { crId: '11111111-1111-4111-8111-111111111111',
       id: taskId,
       name: 'Write Unit Tests',
       status: 'Open',
@@ -137,14 +138,15 @@ describe('Dexie Database Persistence & Seed Layer (DATA-02, D-05, D-07)', () => 
     await testDb.changeRequests.add({
       id: generateId(),
       name: 'Temporary CR',
+      code: 'CR-TMP',
       status: 'Open',
       type: 'ENHANCEMENT',
-      targetSystemIds: [],
+      targets: [],
       createdAt: now,
       updatedAt: now,
     });
 
-    await testDb.tasks.add({
+    await testDb.tasks.add({ crId: '11111111-1111-4111-8111-111111111111',
       id: generateId(),
       name: 'Temporary Task',
       status: 'Open',

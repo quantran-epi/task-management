@@ -5,7 +5,7 @@ import { TaskAllocationCard } from '../../../src/components/planner/TaskAllocati
 import type { Task, PlannedAllocation } from '../../../src/types/models';
 
 describe('TaskAllocationCard Jira micro-tag (JIRA-04, D-15)', () => {
-  const sampleTaskWithJira: Task = {
+  const sampleTaskWithJira: Task = { crId: '11111111-1111-4111-8111-111111111111',
     id: 'task-alloc-1',
     name: 'Implement Core API Service',
     jiraKey: 'SHB-888',
@@ -17,7 +17,7 @@ describe('TaskAllocationCard Jira micro-tag (JIRA-04, D-15)', () => {
     updatedAt: '2026-01-01T00:00:00.000Z',
   };
 
-  const sampleTaskWithoutJira: Task = {
+  const sampleTaskWithoutJira: Task = { crId: '11111111-1111-4111-8111-111111111111',
     id: 'task-alloc-2',
     name: 'Write unit tests',
     status: 'Open',

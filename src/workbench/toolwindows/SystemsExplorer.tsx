@@ -1,7 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Tree, Input, Empty, Typography, Button, Dropdown, Modal, message, type MenuProps } from 'antd';
 import {
-  ApartmentOutlined,
   FolderOutlined,
   BranchesOutlined,
   SearchOutlined,
@@ -55,15 +54,6 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
       viewType: 'system_detail',
       closable: true,
       params: { systemId: targetSystem.id },
-    });
-  };
-
-  const handleOpenCatalog = () => {
-    openTab({
-      id: 'systems',
-      title: 'Danh mục hệ thống',
-      viewType: 'systems',
-      closable: true,
     });
   };
 
@@ -178,7 +168,7 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
   const renderSubsystemNode = (c: System): DataNode => ({
     key: `sys:${c.id}`,
     title: (
-      <Dropdown menu={{ items: getNodeMenu(c) }} trigger={['contextMenu']}>
+      <Dropdown menu={{ items: getNodeMenu(c) ?? [] }} trigger={['contextMenu']}>
         <span
           style={{
             display: 'inline-flex',
@@ -229,7 +219,7 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
         return {
           key: `sys:${p.id}`,
           title: (
-            <Dropdown menu={{ items: getNodeMenu(p) }} trigger={['contextMenu']}>
+            <Dropdown menu={{ items: getNodeMenu(p) ?? [] }} trigger={['contextMenu']}>
               <span
                 style={{
                   display: 'inline-flex',

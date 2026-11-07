@@ -22,7 +22,7 @@ describe('ChangeRequestTable — targets pills and crId task counts (ENT-NORM-02
     db = new TaskPlannerDatabase('test-cr-table-' + Math.random().toString(36).slice(2));
     await db.open();
     parent = await createSystem(
-      { name: 'SmartCard Core', code: 'SC-CORE', type: 'LOGICAL_GROUP' },
+      { parentId: null, name: 'SmartCard Core', code: 'SC-CORE', type: 'LOGICAL_GROUP' },
       db
     );
     subsystem = await createSystem(

@@ -18,7 +18,7 @@ describe('Task Reparenting (WORK-04, D-09, D-10, T-02-02)', () => {
 
   async function seedCrWithTarget(name: string) {
     const parent = await createSystem(
-      { name: `${name} Parent`, code: `${name.toUpperCase()}_P`, type: 'LOGICAL_GROUP' },
+      { parentId: null, name: `${name} Parent`, code: `${name.toUpperCase()}_P`, type: 'LOGICAL_GROUP' },
       testDb
     );
     const subsystem = await createSystem(
@@ -26,7 +26,7 @@ describe('Task Reparenting (WORK-04, D-09, D-10, T-02-02)', () => {
       testDb
     );
     const cr = await createChangeRequest(
-      {
+      { status: 'Open',
         name,
         code: `${name.toUpperCase()}-1`,
         type: 'ENHANCEMENT',

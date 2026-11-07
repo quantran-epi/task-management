@@ -28,7 +28,7 @@ describe('ChangeRequest Repository (ENT-CR-01)', () => {
 
   async function seedGroupAndSubsystems() {
     const group = await createSystem(
-      { name: 'Core Banking', code: 'CORE', type: 'LOGICAL_GROUP' },
+      { parentId: null, name: 'Core Banking', code: 'CORE', type: 'LOGICAL_GROUP' },
       db
     );
     const subA = await createSystem(
@@ -84,12 +84,12 @@ describe('ChangeRequest Repository (ENT-CR-01)', () => {
   it('filters change requests by target system', async () => {
     const { subA, subB } = await seedGroupAndSubsystems();
     const subC = await createSystem(
-      { name: 'Audit Worker', code: 'AUDIT_WRK', type: 'WORKER' },
+      { parentId: null, name: 'Audit Worker', code: 'AUDIT_WRK', type: 'WORKER' },
       db
     );
 
     await createChangeRequest(
-      {
+      { status: 'Open',
         name: 'CR 1',
         code: 'CR-1',
         type: 'ENHANCEMENT',
@@ -99,7 +99,7 @@ describe('ChangeRequest Repository (ENT-CR-01)', () => {
     );
 
     await createChangeRequest(
-      {
+      { status: 'Open',
         name: 'CR 2',
         code: 'CR-2',
         type: 'BUGFIX',
@@ -109,7 +109,7 @@ describe('ChangeRequest Repository (ENT-CR-01)', () => {
     );
 
     await createChangeRequest(
-      {
+      { status: 'Open',
         name: 'CR 3',
         code: 'CR-3',
         type: 'NEW_FEATURE',
@@ -133,7 +133,7 @@ describe('ChangeRequest Repository (ENT-CR-01)', () => {
 
   it('deletes change request and cascade cleans up related items', async () => {
     const cr = await createChangeRequest(
-      { name: 'Temporary CR', code: 'CR-TMP', type: 'ENHANCEMENT' },
+      { status: 'Open', targets: [], name: 'Temporary CR', code: 'CR-TMP', type: 'ENHANCEMENT' },
       db
     );
 
@@ -263,7 +263,7 @@ describe('ChangeRequest Repository (ENT-CR-01)', () => {
       const { subA, subB } = await seedGroupAndSubsystems();
 
       const cr = await createChangeRequest(
-        {
+        { status: 'Open',
           name: 'n',
           code: 'CR-11',
           type: 'ENHANCEMENT',
@@ -299,8 +299,8 @@ describe('ChangeRequest Repository (ENT-CR-01)', () => {
   });
 
   it('lists all change requests', async () => {
-    await createChangeRequest({ name: 'One', code: 'CR-ONE', type: 'ENHANCEMENT' }, db);
-    await createChangeRequest({ name: 'Two', code: 'CR-TWO', type: 'BUGFIX' }, db);
+    await createChangeRequest({ status: 'Open', targets: [], name: 'One', code: 'CR-ONE', type: 'ENHANCEMENT' }, db);
+    await createChangeRequest({ status: 'Open', targets: [], name: 'Two', code: 'CR-TWO', type: 'BUGFIX' }, db);
 
     const all = await getAllChangeRequests(db);
     expect(all.map((c) => c.name).sort()).toEqual(['One', 'Two']);

@@ -26,7 +26,7 @@ describe('TargetSystemsSelector & ChangeRequestModal (Task 1)', () => {
 
   it('TargetSystemsSelector loads parent systems and child subsystems in treeData', async () => {
     const parent = await createSystem(
-      {
+      { parentId: null,
         name: 'SmartCard Core',
         code: 'SC-CORE',
         type: 'LOGICAL_GROUP',
@@ -104,7 +104,7 @@ describe('ChangeRequestsView, ChangeRequestTable, and CRExplorer (Task 2)', () =
 
   it('ChangeRequestTable displays CR with type badge, code, target subsystem tags, and task progress', async () => {
     const parent = await createSystem(
-      {
+      { parentId: null,
         name: 'SmartCard Core',
         code: 'SC-CORE',
         type: 'LOGICAL_GROUP',
@@ -171,11 +171,11 @@ describe('ChangeRequestsView, ChangeRequestTable, and CRExplorer (Task 2)', () =
 
   it('CRExplorer opens a cr_detail tab instead of swapping the view inline', async () => {
     const subsystem = await createSystem(
-      { name: 'Card Auth API', code: 'SC-AUTH-API', type: 'SERVICE' },
+      { parentId: null, name: 'Card Auth API', code: 'SC-AUTH-API', type: 'SERVICE' },
       db
     );
     const cr = await createChangeRequest(
-      {
+      { status: 'Open',
         name: 'Revamp Auth Flow',
         code: 'CR-AUTH-01',
         type: 'ENHANCEMENT',
@@ -197,7 +197,7 @@ describe('ChangeRequestsView, ChangeRequestTable, and CRExplorer (Task 2)', () =
 
   it('CRExplorer renders CR items with target subsystem pills', async () => {
     const parent = await createSystem(
-      {
+      { parentId: null,
         name: 'SmartCard Core',
         code: 'SC-CORE',
         type: 'LOGICAL_GROUP',
@@ -216,7 +216,7 @@ describe('ChangeRequestsView, ChangeRequestTable, and CRExplorer (Task 2)', () =
     );
 
     const cr = await createChangeRequest(
-      {
+      { status: 'Open',
         name: 'Revamp Auth Flow',
         code: 'CR-AUTH-01',
         type: 'ENHANCEMENT',

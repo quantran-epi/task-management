@@ -235,6 +235,7 @@ export function createSdlcWorkflowCoordinator(deps: WorkflowCoordinatorDeps) {
       metadata,
       artifacts: {
         ...(existing?.artifacts ?? {}),
+        branchSnapshots: existing?.artifacts.branchSnapshots ?? {},
         pl01: pl01Artifact,
         pl02: pl02Artifact,
       },

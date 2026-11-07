@@ -171,7 +171,6 @@ describe('Step3CodeGuideView: configuration and dirty banner', () => {
 
     render(
       <Step3CodeGuideView
-        changeRequestId="proj-1"
         crCode="CR-101"
         {...TARGET_PROPS}
         approvedSolutionMarkdown="# Approved Solution"
@@ -263,7 +262,6 @@ describe('Step3CodeGuideView: 2-column review pane and interactions', () => {
 
     render(
       <Step3CodeGuideView
-        changeRequestId="proj-1"
         crCode="CR-101"
         {...TARGET_PROPS}
         approvedSolutionMarkdown="# Approved Solution"
@@ -386,6 +384,7 @@ describe('Task 1: SdlcWorkflowState schema and coordinator BranchSnapshot persis
         date: '2026-11-06',
       },
       artifacts: {
+        branchSnapshots: {},
         solution: {
           kind: 'SOLUTION',
           version: 1,
@@ -441,7 +440,7 @@ describe('Task 1: SdlcWorkflowState schema and coordinator BranchSnapshot persis
         requestingUnit: 'Unit',
         date: '2026-11-06',
       },
-      artifacts: {},
+      artifacts: { branchSnapshots: {} },
       staleSteps: [],
       createdAt: '2026-11-06T00:00:00.000Z',
       updatedAt: '2026-11-06T00:00:00.000Z',
@@ -534,7 +533,6 @@ describe('Task 2: approval snapshot and drift handling', () => {
 
     render(
       <Step3CodeGuideView
-        changeRequestId="proj-1"
         crCode="CR-101"
         {...TARGET_PROPS}
         approvedSolutionMarkdown="# Approved Solution"
@@ -581,7 +579,6 @@ describe('Task 2: approval snapshot and drift handling', () => {
 
     render(
       <Step3CodeGuideView
-        changeRequestId="proj-1"
         crCode="CR-101"
         {...TARGET_PROPS}
         approvedSolutionMarkdown="# Approved Solution"

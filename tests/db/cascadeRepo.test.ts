@@ -18,7 +18,7 @@ describe('Atomic Cascade Deletion Transactions (D-13, D-14, D-16, WORK-05, T-02-
   });
 
   async function seedCr() {
-    return createChangeRequest({ name: 'CR', code: 'CR-1', type: 'ENHANCEMENT' }, testDb);
+    return createChangeRequest({ status: 'Open', targets: [], name: 'CR', code: 'CR-1', type: 'ENHANCEMENT' }, testDb);
   }
 
   describe('deleteTaskWithAllocations', () => {
@@ -42,7 +42,7 @@ describe('Atomic Cascade Deletion Transactions (D-13, D-14, D-16, WORK-05, T-02-
     it('removes the CR, its child tasks and their allocations atomically', async () => {
       const cr = await seedCr();
       const survivorCr = await createChangeRequest(
-        { name: 'Survivor', code: 'CR-KEEP', type: 'BUGFIX' },
+        { status: 'Open', targets: [], name: 'Survivor', code: 'CR-KEEP', type: 'BUGFIX' },
         testDb
       );
       const doomed = await createTask({ name: 'Doomed', crId: cr.id }, testDb);

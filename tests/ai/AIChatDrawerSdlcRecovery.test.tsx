@@ -44,6 +44,7 @@ const makeState = (
     date: '2026-10-30',
   },
   artifacts: {
+    branchSnapshots: {},
     pl01: {
       kind: 'PL01',
       version: 1,
@@ -394,6 +395,7 @@ describe('SDLC checkpoint, revision, and cycle recovery — re-pointed at coordi
       const state = makeState('33333333-3333-4333-8333-333333333333', {
         staleSteps: ['SOLUTION', 'TECH_DOCS', 'CAB'],
         artifacts: {
+          branchSnapshots: {},
           pl01: {
             kind: 'PL01',
             version: 1,
@@ -445,7 +447,7 @@ describe('SDLC checkpoint, revision, and cycle recovery — re-pointed at coordi
 
       const stripped = stripStaleArtifacts(state);
 
-      expect(Object.keys(stripped ?? {})).toEqual(['pl01']);
+      expect(Object.keys(stripped ?? {})).toEqual(['branchSnapshots', 'pl01']);
       expect(state.artifacts).toEqual(before);
       expect(previousArtifactContent(state, 'SOLUTION')).toBe('drop');
       expect(previousArtifactContent(state, 'PL01')).toBe('keep');
@@ -456,6 +458,7 @@ describe('SDLC checkpoint, revision, and cycle recovery — re-pointed at coordi
       const state = makeState('33333333-3333-4333-8333-333333333333', {
         staleSteps: ['INTAKE', 'CODE_GUIDE', 'CHANGE_PACK'],
         artifacts: {
+          branchSnapshots: {},
           pl01: {
             kind: 'PL01',
             version: 1,
@@ -477,7 +480,7 @@ describe('SDLC checkpoint, revision, and cycle recovery — re-pointed at coordi
         },
       });
 
-      expect(Object.keys(stripStaleArtifacts(state) ?? {})).toEqual([]);
+      expect(Object.keys(stripStaleArtifacts(state) ?? {})).toEqual(['branchSnapshots']);
     });
   });
 });

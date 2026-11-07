@@ -29,7 +29,7 @@ describe('SystemDetailView — 4 tabs with per-type visibility (ENT-NORM-03)', (
 
   async function seedParentAndChild(opts: { withRepo?: boolean } = {}) {
     const parent = await createSystem(
-      { name: 'SmartCard Core', code: 'SC-CORE', type: 'LOGICAL_GROUP' },
+      { parentId: null, name: 'SmartCard Core', code: 'SC-CORE', type: 'LOGICAL_GROUP' },
       db
     );
     const child = await createSystem(

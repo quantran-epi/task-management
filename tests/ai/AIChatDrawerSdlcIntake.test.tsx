@@ -19,7 +19,7 @@ const NOTE_A3 = 'aaaaaaaa-aaaa-4aaa-8aaa-000000000003';
 const NOTE_A4 = 'aaaaaaaa-aaaa-4aaa-8aaa-000000000004';
 const NOTE_B1 = 'bbbbbbbb-bbbb-4bbb-8bbb-000000000001';
 
-const scopeB = { type: 'project' as const, id: PROJECT_B, title: 'Project B' };
+const scopeB = { type: 'cr' as const, id: PROJECT_B, title: 'Project B' };
 
 async function sha256(text: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));

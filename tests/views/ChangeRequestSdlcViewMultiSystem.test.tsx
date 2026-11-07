@@ -1,12 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../src/db';
 import { SdlcSidebar } from '../../src/components/sdlc/SdlcSidebar';
 import { Step3CodeGuideView } from '../../src/components/sdlc/steps/Step3CodeGuideView';
 import { createSystem } from '../../src/db/repositories/systemRepo';
 import { createChangeRequest } from '../../src/db/repositories/changeRequestRepo';
-import { loadMultiRepoConventions } from '../../src/services/conventionService';
 import { buildConventionsSegment } from '../../src/services/ai/sdlcPromptComposer';
 import type { System } from '../../src/types/models';
 
@@ -24,7 +23,7 @@ describe('ChangeRequestSdlcViewMultiSystem Integration', () => {
     await db.open();
 
     parentSys = await createSystem(
-      {
+      { parentId: null,
         name: 'Enterprise Core System',
         code: 'CORE-SYS',
         type: 'LOGICAL_GROUP',
@@ -77,7 +76,7 @@ describe('ChangeRequestSdlcViewMultiSystem Integration', () => {
 
     render(
       <SdlcSidebar
-        projectId={cr.id}
+        changeRequestId={cr.id}
         activeCrId={cr.id}
         selectedStep="INTAKE"
         onSelectStep={vi.fn()}
@@ -99,7 +98,6 @@ describe('ChangeRequestSdlcViewMultiSystem Integration', () => {
     const onFeatureBranchChange = vi.fn();
     const { rerender } = render(
       <Step3CodeGuideView
-        projectId="test-cr-id"
         crCode="CR-PAY-01"
         targetSystems={[subSys1, subSys2]}
         crTargets={[
@@ -121,7 +119,6 @@ describe('ChangeRequestSdlcViewMultiSystem Integration', () => {
     // Switching the shared view-level selection re-derives every field.
     rerender(
       <Step3CodeGuideView
-        projectId="test-cr-id"
         crCode="CR-PAY-01"
         targetSystems={[subSys1, subSys2]}
         crTargets={[
@@ -144,7 +141,7 @@ describe('ChangeRequestSdlcViewMultiSystem Integration', () => {
 
   it('Resolves and aggregates multi-system conventions for AI Assistant prompt formatting', async () => {
     const cr = await createChangeRequest(
-      {
+      { status: 'Open',
         name: 'Multi-Repo Migration',
         code: 'CR-MIGRATE-01',
         type: 'ENHANCEMENT',
@@ -162,13 +159,13 @@ describe('ChangeRequestSdlcViewMultiSystem Integration', () => {
         {
           systemCode: subSys1.code,
           systemName: subSys1.name,
-          repoPath: subSys1.remoteRepoPath,
+          ...(subSys1.remoteRepoPath ? { repoPath: subSys1.remoteRepoPath } : {}),
           content: '# Rules for Payment Service',
         },
         {
           systemCode: subSys2.code,
           systemName: subSys2.name,
-          repoPath: subSys2.remoteRepoPath,
+          ...(subSys2.remoteRepoPath ? { repoPath: subSys2.remoteRepoPath } : {}),
           content: '# Rules for Billing DB',
         },
       ],

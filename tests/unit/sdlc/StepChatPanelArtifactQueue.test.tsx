@@ -243,7 +243,7 @@ describe('StepChatPanel artifact bootstrap queue', () => {
 
   it('accepts production-built TECH_DOCS grounding with exact prerequisite markers', async () => {
     const artifact = (kind: 'SOLUTION' | 'CHANGE_PACK') => ({ kind, title: kind, version: 1, hash: 'a'.repeat(64), content: 'Evidence', sourceHashes: [], updatedAt: '2026-11-03T00:00:00Z' });
-    mount(buildSdlcStepGroundingResult({ step: 'TECH_DOCS', artifacts: { solution: artifact('SOLUTION'), changePack: artifact('CHANGE_PACK') } }), 'TECH_DOCS');
+    mount(buildSdlcStepGroundingResult({ step: 'TECH_DOCS', artifacts: { branchSnapshots: {}, solution: artifact('SOLUTION'), changePack: artifact('CHANGE_PACK') } }), 'TECH_DOCS');
     await ready();
     fireEvent.click(screen.getByRole('button', { name: 'Soạn PL07 bằng AI' }));
     await waitFor(() => expectOnlyContract('PL07'));

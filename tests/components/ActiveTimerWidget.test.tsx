@@ -151,7 +151,7 @@ describe('ActiveTimerWidget', () => {
   });
 
   it('resolves and displays task name from database via bulkGet when tasksMap is omitted', async () => {
-    const task: Task = {
+    const task: Task = { crId: '11111111-1111-4111-8111-111111111111',
       id: 'task-100',
       name: 'Nâng cấp bảo mật OAuth2',
       status: 'In Progress',
@@ -186,7 +186,7 @@ describe('ActiveTimerWidget', () => {
   });
 
   it('prefers tasksMap over database lookup if both are present', async () => {
-    const task: Task = {
+    const task: Task = { crId: '11111111-1111-4111-8111-111111111111',
       id: 'task-101',
       name: 'Tên trong CSDL',
       status: 'Open',

@@ -228,11 +228,11 @@ describe('useWeeklyPlanner hook (PLAN-03, D-01, D-16)', () => {
     await setCapacityOverride('2026-09-29', 240, 'Doctor appointment', testDb);
 
     // 3. Create active task and allocate 120m to Monday
-    const task1 = await createTask({ name: 'Active Spec', estimateMinutes: 120, status: 'In Progress' }, testDb);
+    const task1 = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Active Spec', estimateMinutes: 120, status: 'In Progress' }, testDb);
     await upsertAllocation(task1.id, '2026-09-28', 120, testDb);
 
     // 4. Create done task and allocate 60m to Monday (excluded from active metrics)
-    const task2 = await createTask({ name: 'Done Task', estimateMinutes: 60, status: 'Done' }, testDb);
+    const task2 = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Done Task', estimateMinutes: 60, status: 'Done' }, testDb);
     await upsertAllocation(task2.id, '2026-09-28', 60, testDb);
 
     const { result } = renderHook(() => useWeeklyPlanner('2026-09-28', testDb));

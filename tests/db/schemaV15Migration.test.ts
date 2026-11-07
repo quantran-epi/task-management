@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Dexie from 'dexie';
 import { TaskPlannerDatabase } from '../../src/db/index';
-import { SCHEMA_V14, SCHEMA_V15 } from '../../src/db/schema';
-import type { System, ChangeRequest } from '../../src/types/models';
+import { SCHEMA_V14 } from '../../src/db/schema';
+import type { System } from '../../src/types/models';
 
 describe('Dexie SCHEMA_V15 Migration & Data Transformation (ENT-SYS-01, ENT-CR-01)', () => {
   let dbName: string;
@@ -109,9 +109,7 @@ describe('Dexie SCHEMA_V15 Migration & Data Transformation (ENT-SYS-01, ENT-CR-0
   it('validates System and ChangeRequest input schemas correctly', async () => {
     const {
       SystemInputSchema,
-      SystemUpdateSchema,
       ChangeRequestInputSchema,
-      ChangeRequestUpdateSchema,
     } = await import('../../src/validation/schemas');
 
     // SystemInputSchema valid

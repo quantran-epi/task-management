@@ -35,7 +35,7 @@ describe('Tag Repository — CR axis (ENT-NORM-01)', () => {
 
   it('unions ops owners over changeRequests and tasks, sorted alphabetically', async () => {
     const cr = await createChangeRequest(
-      {
+      { status: 'Open', targets: [],
         name: 'CR',
         code: 'CR-1',
         type: 'ENHANCEMENT',
@@ -61,7 +61,7 @@ describe('Tag Repository — CR axis (ENT-NORM-01)', () => {
 
   it('drops a tag once its only changeRequest is gone', async () => {
     const cr = await createChangeRequest(
-      { name: 'CR', code: 'CR-2', type: 'ENHANCEMENT', opsOwners: ['Ops-Gone'] },
+      { status: 'Open', targets: [], name: 'CR', code: 'CR-2', type: 'ENHANCEMENT', opsOwners: ['Ops-Gone'] },
       db
     );
 

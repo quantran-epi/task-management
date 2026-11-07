@@ -8,7 +8,7 @@ import * as jiraApi from '../../../src/services/jira/jiraApi';
 describe('CreateJiraIssueModal', () => {
   let testDb: TaskPlannerDatabase;
 
-  const mockTask: Task = {
+  const mockTask: Task = { crId: '11111111-1111-4111-8111-111111111111',
     id: '11111111-1111-4111-8111-111111111111',
     name: 'Implement OAuth Token Refresh',
     description: 'Line 1: description\nLine 2: details',

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../src/db';
 import { createSystem } from '../../src/db/repositories/systemRepo';
@@ -27,7 +27,7 @@ describe('SystemsExplorer — divergent action sets (ENT-NORM-02)', () => {
 
   async function renderWithFixtures(opts: { withRepo: boolean }) {
     const parent = await createSystem(
-      { name: 'SmartCard Core', code: 'SC-CORE', type: 'LOGICAL_GROUP' },
+      { parentId: null, name: 'SmartCard Core', code: 'SC-CORE', type: 'LOGICAL_GROUP' },
       db
     );
     await createSystem(

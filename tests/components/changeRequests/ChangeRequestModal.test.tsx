@@ -19,7 +19,7 @@ describe('ChangeRequestModal — pre-filled targets and targets payload (ENT-NOR
     db = new TaskPlannerDatabase('test-cr-modal-targets-' + Math.random().toString(36).slice(2));
     await db.open();
     const parent = await createSystem(
-      { name: 'SmartCard Core', code: 'SC-CORE', type: 'LOGICAL_GROUP' },
+      { parentId: null, name: 'SmartCard Core', code: 'SC-CORE', type: 'LOGICAL_GROUP' },
       db
     );
     const subsystem = await createSystem(

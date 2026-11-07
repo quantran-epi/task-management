@@ -98,7 +98,7 @@ export const MAX_OPEN_TABS = 20;
 
 export const useLayoutStore = create<LayoutState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...DEFAULT_LAYOUT_STATE,
 
       toggleToolWindow: (slot: ToolWindowSlot, id: string) => {
@@ -264,8 +264,8 @@ export const useLayoutStore = create<LayoutState>()(
         set(() => ({ pendingTerminalTarget: target }));
       },
 
-      consumePendingTerminalTarget: () => {
-        const target = useLayoutStore.getState().pendingTerminalTarget;
+      consumePendingTerminalTarget: (): PendingTerminalTarget | null => {
+        const target = get().pendingTerminalTarget;
         if (target) set(() => ({ pendingTerminalTarget: null }));
         return target;
       },

@@ -31,7 +31,10 @@ const artifact = (noteId: string, title: string) => ({
   updatedAt: TS,
 });
 
-const makeState = (threadId: string, artifacts: SdlcWorkflowState['artifacts']): SdlcWorkflowState => ({
+const makeState = (
+  threadId: string,
+  artifacts: Omit<SdlcWorkflowState['artifacts'], 'branchSnapshots'>
+): SdlcWorkflowState => ({
   schemaVersion: 1,
   sessionId: SESSION_ID,
   projectId: PROJECT_ID,
@@ -44,7 +47,7 @@ const makeState = (threadId: string, artifacts: SdlcWorkflowState['artifacts']):
     requestingUnit: 'Unit',
     date: '2026-10-30',
   },
-  artifacts,
+  artifacts: { ...artifacts, branchSnapshots: {} },
   staleSteps: [],
   createdAt: TS,
   updatedAt: TS,

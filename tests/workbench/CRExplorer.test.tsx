@@ -31,7 +31,7 @@ describe('CRExplorer — CR → Subsystem → Task tree (ENT-NORM-04)', () => {
 
   async function seed() {
     const parent = await createSystem(
-      { name: 'SmartCard Core', code: 'SC-CORE', type: 'LOGICAL_GROUP' },
+      { parentId: null, name: 'SmartCard Core', code: 'SC-CORE', type: 'LOGICAL_GROUP' },
       db
     );
     const subsystem = await createSystem(

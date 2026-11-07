@@ -221,7 +221,7 @@ describe('Feasibility Engine - Master Evaluator (CALC-01 through CALC-05, D-01 t
     { id: '7', dayOfWeek: 0, workMinutes: 0 },   // Sun: 0h
   ];
 
-  const sampleTask: Task = {
+  const sampleTask: Task = { crId: '11111111-1111-4111-8111-111111111111',
     id: 'task-100',
     name: 'Implement OAuth authentication',
     status: 'In Progress',

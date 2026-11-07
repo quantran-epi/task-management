@@ -23,7 +23,7 @@ import {
   BugOutlined,
 } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
-import type { ChangeRequest, CrTarget, CrType, CrStatus, ReminderItem } from '../../types/models';
+import type { ChangeRequest, CrTarget, CrType, CrStatus } from '../../types/models';
 import { openDocumentLink, browseLocalFolder } from '../../utils/documentLinks';
 import { createFocusRestorer } from '../../utils/focus';
 import { useRegisterActiveForm } from '../../context/FormGuardContext';

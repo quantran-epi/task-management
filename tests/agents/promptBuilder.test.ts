@@ -6,7 +6,7 @@ import {
 import type { Task } from '../../src/types/models';
 
 describe('ghostDevPrompt', () => {
-  const baseTask: Task = {
+  const baseTask: Task = { crId: '11111111-1111-4111-8111-111111111111',
     id: 'test-task-1',
     name: 'Implement Ghost Dev Stream',
     description: 'Connect Tauri IPC stream-json chunks to React view',

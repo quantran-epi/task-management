@@ -25,24 +25,12 @@ describe('SnapshotRollbackCard', () => {
     const sampleSnapshot: SnapshotData = {
       timestamp: '2026-09-27T14:30:00.000Z',
       tables: {
-        projects: [
-          {
-            id: '11111111-1111-4111-8111-111111111111',
-            name: 'Snapshot Project',
-            status: 'Open',
-            createdAt: '2026-09-27T10:00:00.000Z',
-            updatedAt: '2026-09-27T10:00:00.000Z',
-          },
-        ],
-        milestones: [],
         tasks: [],
         capacityRules: [],
         capacityOverrides: [],
         plannedAllocations: [],
       },
       counts: {
-        projects: 1,
-        milestones: 0,
         tasks: 0,
         capacityRules: 0,
         capacityOverrides: 0,

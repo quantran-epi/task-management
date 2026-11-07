@@ -6,7 +6,7 @@ import {
 import type { Task } from '../../src/types/models';
 
 describe('claudeCliService', () => {
-  const mockTask: Task = {
+  const mockTask: Task = { crId: '11111111-1111-4111-8111-111111111111',
     id: 'task-auth-01',
     name: 'Implement OAuth refresh & session store',
     status: 'In Progress',
@@ -32,7 +32,7 @@ describe('claudeCliService', () => {
     });
 
     it('safely escapes special characters and quotes to prevent command injection (T-13.2-07)', () => {
-      const maliciousTask: Task = {
+      const maliciousTask: Task = { crId: '11111111-1111-4111-8111-111111111111',
         id: 't-hack',
         name: 'Fix bug"; rm -rf /; echo "pwned',
         status: 'Open',

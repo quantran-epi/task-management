@@ -5,7 +5,7 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { TaskPlannerDatabase } from '../../src/db';
 import { persistConfirmedPack, saveSolutionVersion } from '../../src/services/wizard/artifactRepo';
-import type { Project } from '../../src/types/models';
+import type { ChangeRequest } from '../../src/types/models';
 import { buildWizardIdempotencyKey } from '../../src/services/ai/wizardSchemas';
 import {
   ChangePackLimits,
@@ -214,7 +214,7 @@ describe('persistConfirmedPack', () => {
   beforeEach(async () => {
     db = new TaskPlannerDatabase(`confirmed-pack-${Date.now()}-${Math.random()}`);
     await db.open();
-    const project: Project = { id: projectId, name: 'Pack project', status: 'Open', createdAt: now, updatedAt: now };
+    const project: ChangeRequest = { id: projectId, name: 'Pack project', code: 'CR-1', status: 'Open', type: 'ENHANCEMENT', targets: [], createdAt: now, updatedAt: now };
     await db.changeRequests.add(project);
     await db.chatThreads.add({
       id: threadId,

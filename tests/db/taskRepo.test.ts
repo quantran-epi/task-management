@@ -35,7 +35,7 @@ describe('Task Repository — CR axis (ENT-NORM-01)', () => {
 
   async function seedCrWithTargets() {
     const group = await createSystem(
-      { name: 'Core Banking', code: 'CORE', type: 'LOGICAL_GROUP' },
+      { parentId: null, name: 'Core Banking', code: 'CORE', type: 'LOGICAL_GROUP' },
       db
     );
     const targetSub = await createSystem(
@@ -48,7 +48,7 @@ describe('Task Repository — CR axis (ENT-NORM-01)', () => {
     );
 
     const cr = await createChangeRequest(
-      {
+      { status: 'Open',
         name: 'CR',
         code: 'CR-1',
         type: 'ENHANCEMENT',
@@ -61,7 +61,8 @@ describe('Task Repository — CR axis (ENT-NORM-01)', () => {
   }
 
   it('requires crId', async () => {
-    await expect(createTask({ name: 't' }, db)).rejects.toThrow();
+    // An empty crId fails the UUID refinement, which is the runtime form of "crId is required".
+    await expect(createTask({ crId: '', name: 't' }, db)).rejects.toThrow();
   }, 30000);
 
   it('rejects a systemId outside the CR targets', async () => {
@@ -95,7 +96,7 @@ describe('Task Repository — CR axis (ENT-NORM-01)', () => {
   it('scopes task queries by crId and systemId', async () => {
     const { cr, targetSub } = await seedCrWithTargets();
     const secondCr = await createChangeRequest(
-      { name: 'CR 2', code: 'CR-2', type: 'BUGFIX', targets: [{ systemId: targetSub.id }] },
+      { status: 'Open', name: 'CR 2', code: 'CR-2', type: 'BUGFIX', targets: [{ systemId: targetSub.id }] },
       db
     );
 
@@ -115,7 +116,7 @@ describe('Task Repository — CR axis (ENT-NORM-01)', () => {
   it('deleteChangeRequestWithCascade removes the CR, its tasks, note links and chat threads', async () => {
     const { cr, targetSub } = await seedCrWithTargets();
     const survivorCr = await createChangeRequest(
-      { name: 'Survivor', code: 'CR-KEEP', type: 'BUGFIX', targets: [{ systemId: targetSub.id }] },
+      { status: 'Open', name: 'Survivor', code: 'CR-KEEP', type: 'BUGFIX', targets: [{ systemId: targetSub.id }] },
       db
     );
 

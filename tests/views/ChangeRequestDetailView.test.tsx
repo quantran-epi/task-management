@@ -30,8 +30,8 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
   });
 
   async function seed(opts: { targets?: boolean; taskSystemId?: 'a' | 'b' } = {}) {
-    const sysA = await createSystem({ name: 'Payment Service', code: 'PAYMENT_SVC', type: 'SERVICE' }, db);
-    const sysB = await createSystem({ name: 'Ledger Service', code: 'LEDGER_SVC', type: 'SERVICE' }, db);
+    const sysA = await createSystem({ parentId: null, name: 'Payment Service', code: 'PAYMENT_SVC', type: 'SERVICE' }, db);
+    const sysB = await createSystem({ parentId: null, name: 'Ledger Service', code: 'LEDGER_SVC', type: 'SERVICE' }, db);
     const cr = await createChangeRequest(
       {
         name: 'Thanh toán QR',
@@ -178,9 +178,9 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
   }, 30000);
 
   it('shows the CR này chưa có tác vụ nào empty state when the CR has no tasks', async () => {
-    const sysA = await createSystem({ name: 'Payment Service', code: 'PAYMENT_SVC', type: 'SERVICE' }, db);
+    const sysA = await createSystem({ parentId: null, name: 'Payment Service', code: 'PAYMENT_SVC', type: 'SERVICE' }, db);
     const cr = await createChangeRequest(
-      { name: 'Thanh toán QR', code: 'CR-2026-002', type: 'ENHANCEMENT', targets: [{ systemId: sysA.id }] },
+      { status: 'Open', name: 'Thanh toán QR', code: 'CR-2026-002', type: 'ENHANCEMENT', targets: [{ systemId: sysA.id }] },
       db
     );
     render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
@@ -189,9 +189,9 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
   }, 30000);
 
   it('keeps the three secondary blocks collapsed by default and badges their counts', async () => {
-    const sysA = await createSystem({ name: 'Payment Service', code: 'PAYMENT_SVC', type: 'SERVICE' }, db);
+    const sysA = await createSystem({ parentId: null, name: 'Payment Service', code: 'PAYMENT_SVC', type: 'SERVICE' }, db);
     const cr = await createChangeRequest(
-      {
+      { status: 'Open',
         name: 'Thanh toán QR',
         code: 'CR-2026-003',
         type: 'BUGFIX',

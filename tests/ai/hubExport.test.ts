@@ -15,7 +15,7 @@ import {
   type SdlcWorkflowMetadata,
   type SdlcWorkflowState,
 } from '../../src/services/wizard/workflowSchemas';
-import type { Note, Project } from '../../src/types/models';
+import type { ChangeRequest, Note } from '../../src/types/models';
 
 const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
 const THREAD_ID = '22222222-2222-4222-8222-222222222222';
@@ -24,7 +24,7 @@ const PL03B_NOTE_ID = '44444444-4444-4444-8444-444444444444';
 const NOW = '2026-11-01T12:00:00.000Z';
 const PL02_MARKDOWN = '# PL02\nĐặc tả chức năng chuyển tiền nhanh.';
 
-const project: Project = { id: PROJECT_ID, name: 'Export project', status: 'Open', createdAt: NOW, updatedAt: NOW };
+const project: ChangeRequest = { id: PROJECT_ID, name: 'Export project', code: 'CR-1', status: 'Open', type: 'ENHANCEMENT', targets: [], createdAt: NOW, updatedAt: NOW };
 
 const metadata: SdlcWorkflowMetadata = {
   cr: 'CR-25006',

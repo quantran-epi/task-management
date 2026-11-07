@@ -8,7 +8,7 @@ import { getSshConfigs } from '../services/sshService';
 import { PageHeader } from '../components/common/PageHeader';
 import { SystemTable } from '../components/systems/SystemTable';
 import { SystemModal } from '../components/systems/SystemModal';
-import type { System, SystemType } from '../types/models';
+import type { System } from '../types/models';
 
 export interface SystemCatalogViewProps {
   db?: TaskPlannerDatabase | undefined;

@@ -169,7 +169,7 @@ describe('Telegram Headless Worker', () => {
     expect(pure.matchedSourceTitles).toEqual([]);
 
     // Seed task and note
-    await testDb.tasks.add({
+    await testDb.tasks.add({ crId: '11111111-1111-4111-8111-111111111111',
       id: 'task-1',
       name: 'Implement Telegram Bot',
       status: 'Open',
