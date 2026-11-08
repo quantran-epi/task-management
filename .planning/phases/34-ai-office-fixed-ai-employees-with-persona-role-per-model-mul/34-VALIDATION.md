@@ -48,7 +48,6 @@ Task IDs are filled in by the planner; the requirement → test binding below is
 | AIO-TEAM-01 | Plan card parks the run; approve dispatches; bypass toggle skips the card | unit + component | `npx vitest run tests/services/ai/office/teamRunCoordinator.test.ts tests/ai/office/AgentOfficeComponents.test.tsx` | ❌ W0 |
 | AIO-TEAM-02 | 3 concurrent employee turns all complete; lead waits for the whole batch; no round-robin path exists | unit | `npx vitest run tests/services/ai/office/teamRunCoordinator.test.ts` | ❌ W0 |
 | AIO-TEAM-03 | Employee prompt = own persona/skill description + instruction + request + same-batch results + own history + recent window; never the whole transcript | unit | `npx vitest run tests/services/ai/office/teamPrompts.test.ts` | ❌ W0 |
-| AIO-TEAM-04 | `@agent` routes to that agent; no mention routes to the lead | unit | `npx vitest run tests/services/ai/office/teamRunCoordinator.test.ts` | ❌ W0 |
 | AIO-MEM-01 | Messages persist with `agentId`/`messageKind`; no fake user rows from employee turns | unit + component | `npx vitest run tests/ai/chatTurnRuntime.test.ts tests/services/ai/office/teamTranscriptRepo.test.ts tests/ai/ChatMessageListAttribution.test.tsx` | ⚠️ runtime exists; attribution ❌ |
 | AIO-MEM-02 | BM25 hits return turnId/agent/timestamp/kind/excerpt; `read_team_turn` is team-scoped | unit | `npx vitest run tests/services/ai/office/teamTools.test.ts` | ❌ W0 |
 | AIO-MEM-03 | Both search tools work with no network and no Knowledge Server | unit | `npx vitest run tests/services/ai/office/teamTools.test.ts` | ❌ W0 |
