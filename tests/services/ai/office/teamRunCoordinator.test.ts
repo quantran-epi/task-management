@@ -231,6 +231,8 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
         pendingApproval: null,
         pausedAgentId: null,
         pausedAgentName: null,
+        lastPlan: null,
+        lastPlanDecision: null,
       });
 
       let calls = 0;
@@ -811,6 +813,56 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(resolveTeamToolName('delegate_batch')).toBe('coordinator');
       expect(resolveTeamToolName('search_team_history')).toBe('teamTools');
       expect(resolveTeamToolName('not_a_team_tool')).toBe('unknown');
+    });
+
+    it('accumulates a team top-up onto an edited total, not the construction snapshot', async () => {
+      harness = await createHarness({ scripts: {} });
+      const { coordinator, db, team } = harness;
+
+      // The settings drawer saves a new total; the coordinator adopts it.
+      coordinator.setTeamBudget(10000);
+      await coordinator.topUp({ kind: 'team' }, 2000);
+
+      const stored = await db.aiTeams.get(team.id);
+      expect(stored?.budgetTokens).toBe(12000);
+    });
+
+    it('keeps the decided plan in the snapshot so the status line is observable', async () => {
+      let harnessRef: Harness | null = null;
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              {
+                assignments: harnessRef!.employees.map((row) => ({
+                  agentId: row.id,
+                  task: 'Việc',
+                })),
+              },
+              harnessRef!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      harnessRef = harness;
+      const { coordinator } = harness;
+
+      const sent = coordinator.send('Làm báo cáo');
+      await waitFor(() => coordinator.getState().phase === 'awaiting-plan');
+      coordinator.resolvePlan(true);
+      await sent;
+
+      // The pending plan clears, but the decided one stays visible with its verdict.
+      const state = coordinator.getState();
+      expect(state.pendingPlan).toBeNull();
+      expect(state.lastPlan?.assignments).toHaveLength(3);
+      expect(state.lastPlanDecision).toBe('approved');
     });
 
     it('keeps delegate_batch out of the employee allowlist', () => {

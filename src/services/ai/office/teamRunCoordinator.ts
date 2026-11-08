@@ -93,6 +93,12 @@ export interface TeamRunSnapshot {
    */
   pausedAgentId: string | null;
   pausedAgentName: string | null;
+  /**
+   * UI-SPEC §7: the plan stays on screen with its `role="status"` decision line until
+   * the next plan replaces it, so the decision is observable.
+   */
+  lastPlan: AssignmentPlan | null;
+  lastPlanDecision: 'approved' | 'rejected' | null;
 }
 
 export type TopUpScope = { kind: 'agent'; agentId: string } | { kind: 'team' };
@@ -123,6 +129,8 @@ export interface TeamRunCoordinator {
   topUp(scope: TopUpScope, amount: number): Promise<void>;
   /** D-25: toggles apply to the live run, not only the next construction. */
   setTeamSettings(patch: Partial<Pick<AiTeam, 'autoSplitEnabled' | 'autoApproveMutations'>>): void;
+  /** AIO-BUDGET-01: adopt a team-total edit so the next top-up accumulates onto it. */
+  setTeamBudget(total: number): void;
   subscribe(listener: () => void): () => void;
   getState(): TeamRunSnapshot;
 }
@@ -201,6 +209,8 @@ export function createTeamRunCoordinator(
   const listeners = new Set<() => void>();
 
   let pendingPlan: AssignmentPlan | null = null;
+  let lastPlan: AssignmentPlan | null = null;
+  let lastPlanDecision: 'approved' | 'rejected' | null = null;
   let planResolver: ((approved: boolean) => void) | null = null;
   let pendingApproval: ChatTurnApprovalInfo | null = null;
   let batchIndex = 0;
@@ -641,7 +651,7 @@ export function createTeamRunCoordinator(
 
     if (liveTeam.autoSplitEnabled !== true) {
       batchIndex += 1;
-      pendingPlan = {
+      const plan: AssignmentPlan = {
         batchIndex,
         assignments: assignments.map((assignment) => {
           const employee = employees.find((row) => row.id === assignment.agentId);
@@ -654,6 +664,8 @@ export function createTeamRunCoordinator(
           };
         }),
       };
+      pendingPlan = plan;
+      lastPlanDecision = null;
       phase = 'awaiting-plan';
       notify();
       const approved = await new Promise<boolean>((resolve) => {
@@ -661,6 +673,10 @@ export function createTeamRunCoordinator(
       });
       planResolver = null;
       pendingPlan = null;
+      // UI-SPEC §7: the decided plan stays visible with its status line until the next
+      // plan replaces it, so the decision is observable rather than flashing away.
+      lastPlan = plan;
+      lastPlanDecision = approved ? 'approved' : 'rejected';
       if (!approved) {
         phase = 'ready';
         notify();
@@ -744,6 +760,19 @@ export function createTeamRunCoordinator(
     notify();
   }
 
+  /**
+   * AIO-BUDGET-01: a team-total edit made in the settings drawer must become the
+   * coordinator's base, otherwise the next top-up writes a stale total back.
+   */
+  function setTeamBudget(total: number): void {
+    teamBudget = total;
+    liveTeam = { ...liveTeam, budgetTokens: total };
+    lastTeamBucket = bucketOf(teamUsed, teamBudget);
+    // A raise that puts usage back under the 80% bucket reopens the team gate.
+    if (lastTeamBucket < 8) teamGate.open();
+    notify();
+  }
+
   function resolveApproval(approved: boolean): void {
     registry.get(lead.id).resolveApproval(approved);
     pendingApproval = null;
@@ -821,6 +850,8 @@ export function createTeamRunCoordinator(
         ? employees.find((row) => row.id === agentParked.agentId)?.name ??
           (agentParked.agentId === lead.id ? lead.name : agentParked.agentId)
         : null,
+      lastPlan,
+      lastPlanDecision,
     };
   }
 
@@ -833,6 +864,7 @@ export function createTeamRunCoordinator(
     abortAll,
     topUp,
     setTeamSettings,
+    setTeamBudget,
     subscribe,
     getState,
   };

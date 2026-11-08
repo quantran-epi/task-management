@@ -66,6 +66,8 @@ const EMPTY_SNAPSHOT: TeamRunSnapshot = {
   pendingApproval: null,
   pausedAgentId: null,
   pausedAgentName: null,
+  lastPlan: null,
+  lastPlanDecision: null,
 };
 
 const NO_MODEL_COPY =
@@ -302,6 +304,9 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
       },
       db
     );
+    // AIO-BUDGET-01: adopt the edited total before any member top-up, so a later team
+    // top-up accumulates onto the saved number instead of the construction snapshot.
+    coordinator?.setTeamBudget(input.budgetTokens);
     for (const [memberId, budgetTokens] of Object.entries(input.budgets)) {
       const row = liveMembers.find((member) => member.id === memberId);
       if (!row || row.budgetTokens === budgetTokens) continue;
@@ -347,10 +352,12 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   const transcriptExtensions = (
     <>
       {liveBubbles}
-      {snapshot.pendingPlan && (
+      {(snapshot.pendingPlan ?? snapshot.lastPlan) && (
         <AssignmentPlanCard
-          plan={snapshot.pendingPlan}
-          decision={planDecision}
+          plan={(snapshot.pendingPlan ?? snapshot.lastPlan)!}
+          decision={
+            snapshot.pendingPlan ? planDecision : snapshot.lastPlanDecision ?? undefined
+          }
           onApprove={() => {
             setPlanDecision('approved');
             coordinator?.resolvePlan(true);
@@ -406,7 +413,11 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
             employees={employees}
             links={linkRows}
             snapshot={snapshot}
-            onTopUp={() => setTopUpOpen(true)}
+            onTopUp={() => {
+              // A sidebar top-up is always team-scoped; never inherit a banner's agent scope.
+              setTopUpScope({ kind: 'team' });
+              setTopUpOpen(true);
+            }}
             onOpenSettings={() => setSettingsOpen(true)}
             onToggleAutoSplit={(next) => {
               void updateTeam(team.id, { autoSplitEnabled: next }, db);
