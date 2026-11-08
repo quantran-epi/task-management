@@ -30,6 +30,8 @@ export const UNSAFE_OR_EPHEMERAL_SETTING_KEYS = new Set<string>([
   'github_auto_sync_dirty_since',
   'github_auto_sync_missed_due_at',
   'last_pre_import_snapshot',
+  // Machine-local host inventory: hostnames, usernames and key paths.
+  'ssh_configurations',
 ]);
 
 export function isSafeBackupSetting(key: string): boolean {
@@ -215,14 +217,14 @@ export async function exportBackupPayload(
     botToken: '',
   }));
 
-  // Strictly exclude binary and base64 image data to prevent storage growth
+  // Strictly exclude binary and base64 image data to prevent storage growth. `filePath` is
+  // omitted too: it is an absolute local path (or a synthesized one), and restore re-derives it.
   const noteAttachments = rawAttachments.map((att) => ({
     id: att.id,
     noteId: att.noteId,
     fileName: att.fileName,
     mimeType: att.mimeType,
     sizeBytes: att.sizeBytes,
-    filePath: att.filePath || `attachments/${att.id}_${att.fileName}`,
     ...(att.caption ? { caption: att.caption } : {}),
     createdAt: att.createdAt,
   }));

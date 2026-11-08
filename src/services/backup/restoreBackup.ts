@@ -52,9 +52,13 @@ const SDLC_TITLE = '⚙️ SDLC Workflow';
 const DEFAULT_CHAT_TITLE = '💬 Cuộc trò chuyện';
 
 function scopeFromThread(thread: ChatThread): string {
-  return thread.scopeType === 'cr' && thread.scopeKey.endsWith(':sdlc')
-    ? thread.scopeKey.slice(0, -':sdlc'.length)
-    : thread.scopeKey;
+  if (thread.scopeType === 'cr' && thread.scopeKey.endsWith(':sdlc')) {
+    return thread.scopeKey.slice(0, -':sdlc'.length);
+  }
+  // WR-16: a `:chat:`-suffixed thread scope must not become a tab scope — the validator
+  // rejects a tab whose scopeKey carries the per-thread suffix.
+  const chatIndex = thread.scopeKey.indexOf(':chat:');
+  return chatIndex >= 0 ? thread.scopeKey.slice(0, chatIndex) : thread.scopeKey;
 }
 
 function legacyTabRows(
@@ -176,6 +180,9 @@ async function captureSnapshot(targetDb: TaskPlannerDatabase, timestamp: string)
     targetDb.tasks.toArray(), targetDb.capacityRules.toArray(), targetDb.capacityOverrides.toArray(), targetDb.plannedAllocations.toArray(), targetDb.workSessions.toArray(), targetDb.activeTimers.toArray(), targetDb.notes.toArray(), targetDb.noteAttachments.toArray(), targetDb.chatThreads.toArray(), targetDb.chatMessages.toArray(), targetDb.chatTabs.toArray(), targetDb.documentSets.toArray(), targetDb.publishedDocuments.toArray(), targetDb.publishAttempts.toArray(), targetDb.dlpAudits.toArray(), targetDb.knowledgeLinks.toArray(), targetDb.telegramSettings.toArray(), targetDb.telegramWhitelist.toArray(), targetDb.systems.toArray(), targetDb.changeRequests.toArray(), targetDb.settings.toArray()
   ]);
   const telegramSettings = telegramSettingsRaw.map((setting) => ({ ...setting, botToken: '' }));
+  // Never persist secrets (tokens, passphrases, SSH inventory) in a snapshot the UI offers
+  // for download; the export path filters the same way.
+  const safeSettings = settings.filter((setting) => isSafeBackupSetting(setting.key));
   const noteAttachments = await Promise.all(rawAttachments.map(async (attachment) => ({
     id: attachment.id,
     noteId: attachment.noteId,
@@ -186,7 +193,7 @@ async function captureSnapshot(targetDb: TaskPlannerDatabase, timestamp: string)
     ...(attachment.caption ? { caption: attachment.caption } : {}),
     createdAt: attachment.createdAt,
   })));
-  const tables: BackupTableData = { tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, activeTimers, notes, noteAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettings, telegramWhitelist, systems, changeRequests, settings };
+  const tables: BackupTableData = { tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, activeTimers, notes, noteAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettings, telegramWhitelist, systems, changeRequests, settings: safeSettings };
   return { timestamp, tables, counts: countsFor(tables) };
 }
 
@@ -208,10 +215,13 @@ async function replaceTables(
   targetDb: TaskPlannerDatabase,
   tables: BackupTableData,
   attachments: NoteAttachment[],
-  snapshot?: SnapshotData,
+  snapshot?: SnapshotData | (() => Promise<SnapshotData>),
   recordCount = Object.values(countsFor(tables)).reduce((sum, count) => sum + count, 0),
 ): Promise<void> {
   await targetDb.transaction('rw', RESTORE_TABLES(targetDb), async () => {
+    // Captured inside the transaction so a write landing between snapshot and replace cannot
+    // be lost without a rollback path.
+    const snapshotData = typeof snapshot === 'function' ? await snapshot() : snapshot;
     // Legacy/older payloads omit the knowledge tables; absent means "payload predates them", not "delete the catalog".
     const clearKnowledge = tables.documentSets !== undefined
       ? [
@@ -219,8 +229,16 @@ async function replaceTables(
           targetDb.dlpAudits.clear(), targetDb.knowledgeLinks.clear(),
         ]
       : [];
+    // Settings are replaced key-by-key, never cleared wholesale: secrets (tokens, passphrases)
+    // are not part of any payload and must survive an import and its rollback.
+    const incomingSettingKeys = new Set<string>([
+      ...(tables.settings ?? []).map((setting) => setting.key),
+      ...(tables.chatTabs ?? [])
+        .filter((tab) => tab.workflowState && tab.scopeKey.startsWith('cr:'))
+        .map((tab) => `sdlc_workflow:${tab.scopeKey.slice('cr:'.length)}:${tab.threadId}`),
+    ]);
     await Promise.all([
-      targetDb.tasks.clear(), targetDb.capacityRules.clear(), targetDb.capacityOverrides.clear(), targetDb.plannedAllocations.clear(), targetDb.workSessions.clear(), targetDb.activeTimers.clear(), targetDb.notes.clear(), targetDb.noteAttachments.clear(), targetDb.chatThreads.clear(), targetDb.chatMessages.clear(), targetDb.chatTabs.clear(), targetDb.telegramSettings.clear(), targetDb.telegramWhitelist.clear(), targetDb.systems.clear(), targetDb.changeRequests.clear(), ...clearKnowledge, targetDb.settings.clear(), targetDb.backupMetadata.clear(),
+      targetDb.tasks.clear(), targetDb.capacityRules.clear(), targetDb.capacityOverrides.clear(), targetDb.plannedAllocations.clear(), targetDb.workSessions.clear(), targetDb.activeTimers.clear(), targetDb.notes.clear(), targetDb.noteAttachments.clear(), targetDb.chatThreads.clear(), targetDb.chatMessages.clear(), targetDb.chatTabs.clear(), targetDb.telegramSettings.clear(), targetDb.telegramWhitelist.clear(), targetDb.systems.clear(), targetDb.changeRequests.clear(), ...clearKnowledge, targetDb.settings.bulkDelete([...incomingSettingKeys]), targetDb.backupMetadata.clear(),
     ]);
 
     const add = async <T>(table: { bulkAdd: (rows: T[]) => Promise<unknown> }, rows: T[] | undefined) => {
@@ -258,7 +276,7 @@ async function replaceTables(
       const checkpoint = tab.workflowState.checkpoint ?? base.checkpoint;
       await targetDb.settings.put({ key, value: { ...base, ...(checkpoint ? { checkpoint } : {}) } });
     }
-    if (snapshot) await targetDb.settings.put({ key: 'last_pre_import_snapshot', value: snapshot });
+    if (snapshotData) await targetDb.settings.put({ key: 'last_pre_import_snapshot', value: snapshotData });
     await targetDb.backupMetadata.add({ id: generateId(), timestamp: new Date().toISOString(), appVersion: '0.1.0', recordCount });
   });
 }
@@ -273,9 +291,14 @@ export async function restoreBackupPayload(backup: BackupEnvelope, targetDb: Tas
   const validatedBackup = validation.envelope;
   const snapshotTime = new Date().toISOString();
   const normalized = restoreRows(validatedBackup, snapshotTime);
-  const snapshot = await captureSnapshot(targetDb, snapshotTime);
   const totalRestored = Object.values(validatedBackup.counts).reduce((sum, count) => sum + count, 0);
-  await replaceTables(targetDb, normalized.tables, prepareAttachments(normalized.tables.noteAttachments), snapshot, totalRestored);
+  await replaceTables(
+    targetDb,
+    normalized.tables,
+    prepareAttachments(normalized.tables.noteAttachments),
+    () => captureSnapshot(targetDb, snapshotTime),
+    totalRestored,
+  );
   return { totalRestored, snapshotTime };
 }
 
@@ -290,6 +313,11 @@ export async function rollbackToSnapshot(targetDb: TaskPlannerDatabase = default
 
 export function downloadSnapshotFile(snapshot: SnapshotData): void {
   const fileName = `task-planner-snapshot-${snapshot.timestamp.replace(/[:.]/g, '-')}.json`;
-  const envelope: BackupEnvelope = { app: APP_MARKER, schemaVersion: CURRENT_SCHEMA_VERSION, exportedAt: snapshot.timestamp, tables: snapshot.tables, counts: snapshot.counts };
+  // Second line of defence: a snapshot captured by an older build may still carry secrets.
+  const settings = snapshot.tables.settings;
+  const tables: BackupTableData = settings
+    ? { ...snapshot.tables, settings: settings.filter((setting) => isSafeBackupSetting(setting.key)) }
+    : snapshot.tables;
+  const envelope: BackupEnvelope = { app: APP_MARKER, schemaVersion: CURRENT_SCHEMA_VERSION, exportedAt: snapshot.timestamp, tables, counts: countsFor(tables) };
   triggerDownload(JSON.stringify(envelope, null, 2), fileName);
 }
