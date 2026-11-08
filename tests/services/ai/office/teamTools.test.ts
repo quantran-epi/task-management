@@ -7,6 +7,8 @@ import {
   type TeamToolContext,
 } from '../../../../src/services/ai/office/teamTools';
 import { ensureTeamThread, saveTeamMessage } from '../../../../src/db/repositories/teamTranscriptRepo';
+import { EMPLOYEE_READ_ONLY_ALLOWLIST } from '../../../../src/services/ai/chatTurnTools';
+import { AI_DATABASE_TOOLS } from '../../../../src/services/ai/aiTools';
 import { generateId } from '../../../../src/utils/uuid';
 
 const LONG_BODY = [
@@ -403,5 +405,141 @@ describe('teamTools — linked-item retrieval with full content (AIO-LINK-01, D-
     expect(result.body).toBe(NOTE_BODY);
     expect(result).not.toHaveProperty('instructions');
     expect(await db.notes.count()).toBe(2); // nothing deleted or rewritten
+  });
+});
+
+describe('teamTools — delegate_batch validation (AIO-TEAM-02, D-02, D-03, D-33)', () => {
+  let db: TaskPlannerDatabase;
+  let dbName: string;
+  let teamId: string;
+  let threadId: string;
+  let agentId: string;
+  let employeeIds: string[];
+
+  const ctx = (overrides: Partial<TeamToolContext> = {}): TeamToolContext => ({
+    db,
+    teamId,
+    threadId,
+    agentId,
+    ...overrides,
+  });
+
+  beforeEach(async () => {
+    dbName = 'TestTeamToolsBatch_' + Math.random().toString(36).slice(2);
+    db = new TaskPlannerDatabase(dbName);
+    await db.open();
+
+    teamId = generateId();
+    agentId = generateId();
+    employeeIds = [generateId(), generateId(), generateId()];
+    const now = new Date().toISOString();
+
+    await db.aiTeams.add({
+      id: teamId,
+      name: 'Nhóm Giao Việc',
+      leadId: agentId,
+      status: 'idle',
+      budgetTokens: 0,
+      createdAt: now,
+      updatedAt: now,
+    });
+    for (const [memberAgentId, role] of [
+      [agentId, 'lead'],
+      ...employeeIds.map((id) => [id, 'employee']),
+    ] as const) {
+      await db.aiTeamMembers.add({
+        id: generateId(),
+        teamId,
+        agentId: memberAgentId,
+        role,
+        budgetTokens: 0,
+        usedTokens: 0,
+      });
+    }
+    threadId = (await ensureTeamThread(teamId, db)).id;
+  });
+
+  afterEach(async () => {
+    await db.delete();
+  });
+
+  it('refuses more than three assignments with BATCH_TOO_LARGE and resolves', async () => {
+    const assignments = employeeIds.map((id) => ({ agentId: id, task: 'Việc' }));
+    assignments.push({ agentId: employeeIds[0]!, task: 'Việc 4' });
+
+    const result = await executeTeamTool('delegate_batch', { assignments }, ctx());
+
+    expect(JSON.parse(result)).toMatchObject({ refused: true, code: 'BATCH_TOO_LARGE' });
+    expect(JSON.parse(result).message).toContain('3');
+  });
+
+  it('refuses an agentId outside the roster with AGENT_NOT_IN_ROSTER', async () => {
+    const outsider = generateId();
+    const result = JSON.parse(
+      await executeTeamTool(
+        'delegate_batch',
+        { assignments: [{ agentId: outsider, task: 'Việc' }] },
+        ctx()
+      )
+    );
+
+    expect(result).toMatchObject({ refused: true, code: 'AGENT_NOT_IN_ROSTER' });
+    expect(result.message).toContain(outsider);
+  });
+
+  it('refuses an empty assignments array with EMPTY_BATCH', async () => {
+    const empty = JSON.parse(
+      await executeTeamTool('delegate_batch', { assignments: [] }, ctx())
+    );
+    expect(empty).toMatchObject({ refused: true, code: 'EMPTY_BATCH' });
+
+    const missing = JSON.parse(await executeTeamTool('delegate_batch', {}, ctx()));
+    expect(missing).toMatchObject({ refused: true, code: 'EMPTY_BATCH' });
+  });
+
+  it('returns a normalized batch for a valid roster and ≤3 assignments', async () => {
+    const result = JSON.parse(
+      await executeTeamTool(
+        'delegate_batch',
+        {
+          assignments: [
+            { agentId: employeeIds[0], task: 'Kiểm thử hồi quy' },
+            { agentId: employeeIds[1], skillId: 'skill-x', task: 'Rà soát tài liệu' },
+          ],
+        },
+        ctx()
+      )
+    );
+
+    expect(result).toEqual({
+      assignments: [
+        { agentId: employeeIds[0], task: 'Kiểm thử hồi quy' },
+        { agentId: employeeIds[1], skillId: 'skill-x', task: 'Rà soát tài liệu' },
+      ],
+    });
+  });
+
+  it('accepts an unknown skillId untouched — the assigned skill stays authoritative', async () => {
+    const result = JSON.parse(
+      await executeTeamTool(
+        'delegate_batch',
+        {
+          assignments: [
+            { agentId: employeeIds[0], skillId: 'does-not-exist', task: 'Việc' },
+          ],
+        },
+        ctx()
+      )
+    );
+
+    expect(result.refused).toBeUndefined();
+    expect(result.assignments[0].skillId).toBe('does-not-exist');
+    expect(await db.aiSkills.count()).toBe(0);
+  });
+
+  it('is lead-only: absent from EMPLOYEE_READ_ONLY_ALLOWLIST and AI_DATABASE_TOOLS', () => {
+    expect(EMPLOYEE_READ_ONLY_ALLOWLIST).not.toContain('delegate_batch');
+    expect(AI_DATABASE_TOOLS.map((tool) => tool.function.name)).not.toContain('delegate_batch');
+    expect(TEAM_TOOL_DEFINITIONS.map((tool) => tool.function.name)).toContain('delegate_batch');
   });
 });
