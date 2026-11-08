@@ -768,8 +768,12 @@ export function createTeamRunCoordinator(
     teamBudget = total;
     liveTeam = { ...liveTeam, budgetTokens: total };
     lastTeamBucket = bucketOf(teamUsed, teamBudget);
-    // A raise that puts usage back under the 80% bucket reopens the team gate.
-    if (lastTeamBucket < 8) teamGate.open();
+    // A raise that puts usage back under the 80% bucket reopens the team gate and
+    // clears the paused phase, so the banner does not linger on a run that resumed.
+    if (lastTeamBucket < 8) {
+      teamGate.open();
+      if (phase === 'awaiting-budget') phase = 'batch-running';
+    }
     notify();
   }
 
