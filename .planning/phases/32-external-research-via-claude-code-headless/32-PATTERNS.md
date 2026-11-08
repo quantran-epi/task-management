@@ -14,7 +14,7 @@
 | `src/services/sshService.ts` | service | streaming / request-response | `src/services/sshService.ts` & `ssh_pty_service.rs` | exact |
 | `src/services/ai/researchService.ts` | service | streaming / event-driven | `src/services/wizard/artifactRepo.ts` & `sshService.ts` | role-match |
 | `src/services/ai/aiTools.ts` + `sdlcArtifactTools.ts` | tool definition / resolver | request-response | `propose_subsystems` (`aiTools.ts:1926`, `sdlcArtifactTools.ts:543`) | exact |
-| `src/components/sdlc/common/__tests__/ResearchSummaryCard.test.tsx` | test | batch / assertions | `src/components/sdlc/steps/__tests__/Step3CodeGuideView.test.tsx` | role-match |
+| `tests/unit/sdlc/ResearchSummaryCard.test.tsx` | test | batch / assertions | `tests/unit/sdlc/StepViews.test.tsx` | role-match |
 | `src/services/ai/wizardSchemas.ts` | model / validation | transform | `src/services/ai/wizardSchemas.ts` | exact |
 | `src/services/wizard/artifactRepo.ts` | service / repository | CRUD / transactional | `src/services/wizard/artifactRepo.ts` | exact |
 | `src/services/ai/sdlcPromptComposer.ts` | utility / composer | transform | `src/services/ai/sdlcPromptComposer.ts` | exact |
@@ -71,8 +71,12 @@ pub fn ssh_exec_stream(
     let session = ssh_service::connect_and_auth(&config, secret.as_deref())?;
     let mut channel = session.channel_session().map_err(|e| format!("Channel session error: {}", e))?;
 
-    // Wrap command with sh -c 'echo "$$" && exec ...' to capture remote PID on first stdout line
-    let wrapped_cmd = format!("sh -c 'echo \"$$\" && exec {}'", command);
+    // Prefix with `echo $$ && ` to capture the remote PID on the first stdout line.
+    // NO `sh -c` wrapper: channel.exec already runs the string through the remote login
+    // shell, and a nested `sh -c '...'` is terminated early by the single quotes that
+    // escapeShellArg emits ("unexpected EOF while looking for matching '"). It also breaks
+    // `exec cd ...` (cd is a builtin, so exec replaces the shell and the list never runs).
+    let wrapped_cmd = format!("echo $$ && {}", command);
     channel.exec(&wrapped_cmd).map_err(|e| format!("Exec error: {}", e))?;
 
     let app_handle = app.clone();
@@ -85,7 +89,9 @@ pub fn ssh_exec_stream(
             // State<'_, T> is a borrowed guard and cannot cross into a 'static thread.
             // Re-resolve the managed registry from the cloned AppHandle instead.
             let registry = app_handle.state::<SshStreamRegistry>();
-            let stdout_reader = BufReader::new(channel);
+            // Owned Stream keeps `channel` borrowable for stderr()/exit_status();
+            // `impl Read for Channel` consumes it by value (ssh2 channel.rs:507,533).
+            let stdout_reader = BufReader::new(channel.stream(0));
             let mut lines = stdout_reader.lines();
 
             // First line is PID
@@ -161,6 +167,12 @@ export interface SshStreamEvent {
   stream: 'stdout' | 'stderr';
   line: string;
 }
+
+export interface SshStreamExitEvent {
+  sessionId: string;
+  exitStatus: number;
+  error: string | null;
+}
 ```
 
 **Tauri IPC & Event Subscription pattern:**
@@ -170,7 +182,7 @@ export async function execRemoteCommandStream(
   command: string,
   sessionId: string,
   onData: (event: SshStreamEvent) => void,
-  onExit: () => void,
+  onExit: (event: SshStreamExitEvent) => void,
   secret?: string,
 ): Promise<() => Promise<void>> {
   if (!isTauriApp()) {
@@ -184,10 +196,12 @@ export async function execRemoteCommandStream(
     onData(evt.payload);
   });
 
-  const unlistenExit = await listen<void>(`ssh-stream:exit:${sessionId}`, () => {
+  // The exit payload carries a non-null `error` on a mid-stream SSH drop; a zero-argument
+  // callback could not observe it and the run would resolve with partial data (D-03).
+  const unlistenExit = await listen<SshStreamExitEvent>(`ssh-stream:exit:${sessionId}`, (evt) => {
     unlistenData();
     unlistenExit();
-    onExit();
+    onExit(evt.payload);
   });
 
   await invoke('ssh_exec_stream', {
@@ -267,6 +281,8 @@ export function executeMultiSystemResearch(options: {
   const allFindings: ResearchFinding[] = [];
   const skippedSystems: SkippedSystem[] = [];
   let summary = '';
+  // Closure-local, one per run. A module-level handle would be overwritten by a second
+  // concurrent run and cancel() would stop the wrong process (orphaned remote process, D-02).
   let cancelActive: (() => Promise<void>) | undefined;
 
   const promise = (async () => {
@@ -286,7 +302,11 @@ export function executeMultiSystemResearch(options: {
       if (!sshConfig) continue;
 
       // remoteRepoPath is untrusted too — escape it exactly like the prompt.
-      const cmd = `cd ${escapeShellArg(system.remoteRepoPath || '.')} && claude -p ${escapeShellArg(prompt)} --output-format json --allowedTools WebSearch,WebFetch,Glob,Grep,Read`;
+      // `exec` goes on claude, never on cd: `exec cd ...` replaces the shell with the
+      // builtin and exits before the rest of the list runs. With exec on claude, the PID
+      // from `echo $$` becomes the claude process, so ssh_kill_process signals the right one.
+      // No `sh -c` layer: the single quotes from escapeShellArg must reach the login shell intact.
+      const cmd = `cd ${escapeShellArg(system.remoteRepoPath || '.')} && exec claude -p ${escapeShellArg(prompt)} --output-format json --allowedTools WebSearch,WebFetch,Glob,Grep,Read`;
 
       // Stream lines via execRemoteCommandStream; keep its cancel handle in `cancelActive`.
       // Tag findings with systemCode: [EXTERNAL:REPO:{system.code}]
@@ -419,9 +439,12 @@ export function buildExternalResearchSegment(researchPayload?: ResearchPayload |
 **Composer Segment Insertion:**
 ```typescript
 // In composeSdlcTurn:
+// subsystemSections carries the Phase 31.2 D-39 per-subsystem SOLUTION contract — keep it.
 const segments = {
   policy: SHARED_EVIDENCE_POLICY,
   stepContract: SDLCS_STEP_CONTRACTS[input.step],
+  subsystemSections:
+    input.step === 'SOLUTION' ? buildSubsystemSectionContract(input.targets ?? []) : '',
   toolPolicy,
   conventions: buildConventionsSegment(input.conventions),
   fewShot: buildFewShot(input.step, isPatch ? input.artifact : undefined),

@@ -39,16 +39,16 @@ revised: 2026-11-08
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 32-01-01 | 01 | 1 | SDLC-RES-02 | T-32-01 | Remote command injection sanitized via shell escaping; `BufReader` reads `channel.stream(0)` so the channel stays usable for stderr/exit | unit | `cargo check --manifest-path src-tauri/Cargo.toml` | ✅ | ⬜ pending |
-| 32-01-02 | 01 | 1 | SDLC-RES-02 | T-32-02 | Remote PID capture and SIGTERM termination on stop | unit | `npx vitest run src/services/__tests__/sshService.test.ts` | ❌ W0 | ⬜ pending |
+| 32-01-01 | 01 | 1 | SDLC-RES-02 | T-32-01 | Remote command injection sanitized via shell escaping; command is `echo $$ && <command>` with NO `sh -c` wrapper; `BufReader` reads `channel.stream(0)` so the channel stays usable for stderr/exit | unit | `cargo check --manifest-path src-tauri/Cargo.toml` | ✅ | ⬜ pending |
+| 32-01-02 | 01 | 1 | SDLC-RES-02 | T-32-02 | Remote PID capture and SIGTERM termination on stop; `onExit` receives the `SshStreamExitEvent` payload | unit | `npx vitest run src/services/__tests__/sshService.test.ts` | ❌ W0 | ⬜ pending |
 | 32-02-01 | 02 | 2 | SDLC-RES-03, SDLC-RES-06 | T-32-13 | Artifact kind extension and versioned note persistence; UUID-valid sessionId | unit | `npx vitest run src/services/wizard/__tests__/artifactRepo.test.ts` | ❌ W0 | ⬜ pending |
 | 32-02-02 | 02 | 2 | SDLC-RES-01 | T-32-10 | propose_research reachable through the `executeAiTool` switch; ids re-resolved against `db.systems` AND `cr.targets` | unit | `npx vitest run tests/services/ai/researchProposal.test.ts tests/ai/aiTools.test.ts tests/ai/sdlcPromptIsolation.test.ts` | ❌ W0 | ⬜ pending |
 | 32-03-01 | 03 | 3 | SDLC-RES-03, SDLC-RES-05 | T-32-03, T-32-05 | Zod payload validation, shell escaping, parser fallback, availability pre-flight | unit | `npx vitest run src/services/ai/__tests__/researchService.test.ts` | ❌ W0 | ⬜ pending |
-| 32-04-01 | 04 | 4 | SDLC-RES-02, SDLC-RES-03, SDLC-RES-05 | T-32-02, T-32-03, T-32-04 | Multi-system runner: skipped systems reported, 300s timeout cancels, SSH failure maps to RESEARCH_SSH_ERROR | unit | `npx vitest run src/services/ai/__tests__/researchService.test.ts` | ❌ W0 | ⬜ pending |
+| 32-04-01 | 04 | 4 | SDLC-RES-02, SDLC-RES-03, SDLC-RES-05 | T-32-02, T-32-03, T-32-04 | Multi-system runner: exact remote command string (`cd … && exec claude …`, no `sh -c`), skipped systems reported, 300s timeout cancels, SSH throw AND exit-event error both map to RESEARCH_SSH_ERROR | unit | `npx vitest run src/services/ai/__tests__/researchService.test.ts && npx tsc --noEmit` | ❌ W0 | ⬜ pending |
 | 32-05-01 | 05 | 4 | SDLC-RES-01, SDLC-RES-04, SDLC-RES-05 | T-32-06, T-32-07, T-32-11 | External research delimited, subordinated, skipped systems disclosed, propose_research policy present | unit | `npx vitest run tests/ai/sdlcPromptComposer.test.ts tests/ai/sdlcPromptIsolation.test.ts tests/services/ai/subsystemProposal.test.ts` | ✅ | ⬜ pending |
 | 32-06-01 | 06 | 5 | SDLC-RES-06 | T-32-08 | Research summary card, detail modal with historical version selector, trigger modal | component | `npx vitest run tests/unit/sdlc/ResearchSummaryCard.test.tsx` | ❌ W0 | ⬜ pending |
-| 32-06-02 | 06 | 5 | SDLC-RES-01, SDLC-RES-03, SDLC-RES-05 | T-32-09, T-32-12 | StepChatPanel proposal, streaming, cancellation, completion, unavailable/timeout/SSH-error cards; `startResearch` handle | component | `npx vitest run tests/unit/sdlc/StepChatPanelResearch.test.tsx` | ❌ W0 | ⬜ pending |
-| 32-06-03 | 06 | 5 | SDLC-RES-06 | T-32-14 | Step 1/2 render ResearchSummaryCard from live artifact query; `ChangeRequestSdlcView` wires `onStartResearch` | typecheck | `npx vitest run tests/unit/sdlc/StepViews.test.tsx tests/unit/sdlc/ChangeRequestSdlcView.test.tsx && npx tsc --noEmit` | ✅ | ⬜ pending |
+| 32-06-02 | 06 | 5 | SDLC-RES-01, SDLC-RES-03, SDLC-RES-05 | T-32-09, T-32-12, T-32-15 | StepChatPanel proposal, streaming, cancellation, completion, unavailable/timeout/SSH-error cards; `startResearch` handle gated on non-null `threadId` | component | `npx vitest run tests/unit/sdlc/StepChatPanelResearch.test.tsx && npx tsc --noEmit` | ❌ W0 | ⬜ pending |
+| 32-06-03 | 06 | 5 | SDLC-RES-06 | T-32-14 | Step 1/2 render ResearchSummaryCard from live artifact query; `ChangeRequestSdlcView` wires `onStartResearch` | typecheck | `npx vitest run tests/unit/sdlc/StepViews.test.tsx tests/unit/sdlc/ChangeRequestSdlcView.test.tsx tests/unit/sdlc/Step2SolutionView.test.tsx tests/unit/sdlc/Step2SolutionSections.test.tsx tests/unit/sdlc/ChangeRequestSdlcPerformance.test.tsx tests/unit/sdlc/ChangeRequestSdlcViewAsyncCr.test.tsx && npx tsc --noEmit` | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -82,4 +82,4 @@ revised: 2026-11-08
 - [x] Feedback latency < 20s
 - [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** verified 2026-11-08 (revision round 3; plan set expanded to 6 plans in 5 waves)
+**Approval:** verified 2026-11-08 (revision round 4; remote-command `sh -c` wrapper removed, `onExit` widened to `SshStreamExitEvent`, exact-command-string test added)
