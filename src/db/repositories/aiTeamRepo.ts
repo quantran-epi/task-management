@@ -283,9 +283,25 @@ export async function topUpMemberBudget(
   const row = await db.aiTeamMembers.get(memberId);
   if (!row) throw new Error(`Không tìm thấy thành viên: ${memberId}`);
 
-  const budgetTokens = row.budgetTokens + added;
+  // CR-02: a budget is never negative. A decrease larger than the current value clamps
+  // at zero instead of writing a corrupt row that `bucketOf` reads as fully consumed.
+  const budgetTokens = Math.max(0, row.budgetTokens + added);
   await db.aiTeamMembers.update(memberId, { budgetTokens });
   return { ...row, budgetTokens };
+}
+
+/** CR-02: a budget *decrease* is a write, not a top-up — it must not open the gate. */
+export async function setMemberBudget(
+  memberId: string,
+  budgetTokens: number,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<AiTeamMember> {
+  const row = await db.aiTeamMembers.get(memberId);
+  if (!row) throw new Error(`Không tìm thấy thành viên: ${memberId}`);
+
+  const next = Math.max(0, budgetTokens);
+  await db.aiTeamMembers.update(memberId, { budgetTokens: next });
+  return { ...row, budgetTokens: next };
 }
 
 /** D-32: single-row write so three concurrent completions cannot lose usage. */

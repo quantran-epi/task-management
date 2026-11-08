@@ -8,6 +8,7 @@ import {
   listTeamLinks,
   listTeamMembers,
   removeTeamLink,
+  setMemberBudget,
   topUpMemberBudget,
   updateTeam,
 } from '../../../db/repositories/aiTeamRepo';
@@ -311,10 +312,14 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
       const row = liveMembers.find((member) => member.id === memberId);
       if (!row || row.budgetTokens === budgetTokens) continue;
       const delta = budgetTokens - row.budgetTokens;
-      // D-21: a raised member budget must also open that agent's gate, otherwise the
-      // paused turn stays parked and the batch never settles.
-      await coordinator?.topUp({ kind: 'agent', agentId: row.agentId }, delta);
-      if (!coordinator) await topUpMemberBudget(memberId, delta, db);
+      // CR-02: a decrease is a plain budget write — routing it through topUp would add a
+      // negative amount and open the gate on a budget that just went down.
+      if (delta > 0) {
+        await coordinator?.topUp({ kind: 'agent', agentId: row.agentId }, delta);
+        if (!coordinator) await topUpMemberBudget(memberId, delta, db);
+      } else if (delta < 0) {
+        await setMemberBudget(memberId, budgetTokens, db);
+      }
     }
     setSettingsOpen(false);
   };

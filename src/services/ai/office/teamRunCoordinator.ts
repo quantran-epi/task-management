@@ -22,7 +22,7 @@ import {
   type ChatTurnRuntimeDeps,
 } from '../../../components/ai/runtime/chatTurnRuntime';
 import { dispatchAiToolCall } from '../aiOrchestratorLoop';
-import { normalizeToolName, type AiToolDefinition } from '../aiTools';
+import { AI_DATABASE_TOOLS, isMutationTool, normalizeToolName, type AiToolDefinition } from '../aiTools';
 import {
   EMPLOYEE_READ_ONLY_ALLOWLIST,
   LEAD_TOOL_ALLOWLIST,
@@ -307,10 +307,17 @@ export function createTeamRunCoordinator(
   }
 
   function leadTools(): AiToolDefinition[] {
-    return [
-      ...getToolsForTurn(true, options.mcpTools ?? [], LEAD_TOOL_ALLOWLIST),
-      ...TEAM_TOOL_DEFINITIONS,
-    ];
+    // CR-04 / D-13: the lead is the only agent allowed to mutate, so its payload must
+    // actually advertise the mutation tools — the runtime parks each one on the
+    // approval card. Without them the prompt promises writes the payload forbids.
+    const reads = getToolsForTurn(true, options.mcpTools ?? [], LEAD_TOOL_ALLOWLIST);
+    const advertised = new Set(reads.map((tool) => normalizeToolName(tool.function.name)));
+    const mutations = AI_DATABASE_TOOLS.filter(
+      (tool) =>
+        isMutationTool(tool.function.name) &&
+        !advertised.has(normalizeToolName(tool.function.name))
+    );
+    return [...reads, ...mutations, ...TEAM_TOOL_DEFINITIONS];
   }
 
   function employeeTools(): AiToolDefinition[] {
@@ -388,6 +395,13 @@ export function createTeamRunCoordinator(
       memberUsed.set(row.agentId, row.usedTokens);
       lastBuckets.set(row.agentId, bucketOf(row.usedTokens, row.budgetTokens));
     }
+    // CR-05: the team total must hydrate from persisted usage too, otherwise a
+    // reactivated team starts over with a full budget. A team that is already past
+    // the threshold starts parked — the crossing rule only fires on a change, so
+    // seeding the bucket alone would leave the gate open.
+    teamUsed = rows.reduce((sum, row) => sum + row.usedTokens, 0);
+    lastTeamBucket = bucketOf(teamUsed, teamBudget);
+    if (lastTeamBucket >= 8) teamGate.close();
     membersLoaded = true;
   }
 
@@ -520,6 +534,9 @@ export function createTeamRunCoordinator(
     };
 
     currentRequests.set(employee.id, request);
+    // CR-01: each turn's usage total restarts at zero, so the cumulative baseline
+    // must reset too — otherwise the second turn's delta is zero or negative.
+    usageTotals.delete(employee.id);
     updateAgent(employee.id, {
       status: 'running',
       streamingText: '',
@@ -572,6 +589,8 @@ export function createTeamRunCoordinator(
     };
 
     currentRequests.set(lead.id, request);
+    // CR-01: same baseline reset as the employee path.
+    usageTotals.delete(lead.id);
     updateAgent(lead.id, {
       status: 'running',
       streamingText: '',
@@ -703,6 +722,9 @@ export function createTeamRunCoordinator(
           agentName: lead.name,
           agentKind: 'lead',
           messageKind: 'instruction',
+          // CR-06: display attribution is the lead's, but the row belongs to the assignee
+          // so `listAssignmentHistory` can find it.
+          targetAgentId: employee.id,
         },
         db
       );
@@ -785,11 +807,20 @@ export function createTeamRunCoordinator(
   }
 
   function stopAgent(agentId: string): void {
+    // CR-03: stopping the lead while its batch is parked must release the park too.
+    if (agentId === lead.id && planResolver) {
+      planResolver(false);
+      planResolver = null;
+    }
     registry.abort(agentId);
     settleAgent(agentId, 'stopped');
   }
 
   function abortAll(): void {
+    // CR-03: a plan park is only released by resolvePlan. Without this the lead's
+    // tool call stays pending forever and send() never resolves.
+    planResolver?.(false);
+    planResolver = null;
     registry.abortAll();
     for (const agentId of agents.keys()) settleAgent(agentId, 'stopped');
     phase = 'ready';

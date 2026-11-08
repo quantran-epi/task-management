@@ -21,6 +21,8 @@ export interface SaveTeamMessageInput {
   agentName?: string | undefined;
   agentKind?: 'lead' | 'employee' | undefined;
   messageKind?: 'instruction' | 'report' | 'synthesis' | 'plan' | undefined;
+  /** CR-06: the employee an instruction row is assigned to (display attribution stays the lead). */
+  targetAgentId?: string | undefined;
   tokenUsage?: ChatTokenUsage | undefined;
 }
 
@@ -52,6 +54,7 @@ export async function saveTeamMessage(
     ...(input.agentName ? { agentName: input.agentName } : {}),
     ...(input.agentKind ? { agentKind: input.agentKind } : {}),
     ...(input.messageKind ? { messageKind: input.messageKind } : {}),
+    ...(input.targetAgentId ? { targetAgentId: input.targetAgentId } : {}),
     ...(input.tokenUsage ? { tokenUsage: input.tokenUsage } : {}),
   };
 
@@ -94,7 +97,8 @@ export async function listAssignmentHistory(
   return rows
     .filter(
       (row) =>
-        row.agentId === agentId &&
+        // CR-06: an instruction row is displayed as the lead's but targets this employee.
+        (row.targetAgentId ? row.targetAgentId === agentId : row.agentId === agentId) &&
         (row.messageKind === 'instruction' || row.messageKind === 'report')
     )
     .reverse()

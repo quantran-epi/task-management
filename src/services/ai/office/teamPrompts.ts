@@ -114,7 +114,9 @@ export function buildEmployeeTurnRequest(input: BuildEmployeeTurnRequestInput): 
   const ownRows = assignmentHistory
     .filter(
       (row) =>
-        row.agentId === employee.id &&
+        // CR-06: an instruction row's display attribution is the lead's; the assignee
+        // is carried on targetAgentId.
+        (row.targetAgentId ? row.targetAgentId === employee.id : row.agentId === employee.id) &&
         (row.messageKind === 'instruction' || row.messageKind === 'report')
     )
     .slice(0, ASSIGNMENT_HISTORY_CAP)

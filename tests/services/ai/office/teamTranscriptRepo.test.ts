@@ -136,6 +136,42 @@ describe('teamTranscriptRepo (AIO-MEM-01, D-10, D-11, D-17, D-29, D-31)', () => 
     expect(history[0]?.content).toBe(`Việc ${ASSIGNMENT_HISTORY_CAP + 4}`);
   });
 
+  it('finds an instruction attributed to the lead when it targets this employee (CR-06)', async () => {
+    const employeeId = generateId();
+    const leadId = generateId();
+
+    // Production shape: the instruction is displayed as the lead's, targeting the employee.
+    await saveTeamMessage(
+      {
+        threadId,
+        role: 'assistant',
+        content: 'Việc được giao',
+        agentId: leadId,
+        agentName: 'Minh',
+        agentKind: 'lead',
+        messageKind: 'instruction',
+        targetAgentId: employeeId,
+      },
+      db
+    );
+    await new Promise((r) => setTimeout(r, 2));
+    await saveTeamMessage(
+      {
+        threadId,
+        role: 'assistant',
+        content: 'Báo cáo',
+        agentId: employeeId,
+        agentName: 'Lan',
+        agentKind: 'employee',
+        messageKind: 'report',
+      },
+      db
+    );
+
+    const history = await listAssignmentHistory(threadId, employeeId, undefined, db);
+    expect(history.map((row) => row.content)).toEqual(['Báo cáo', 'Việc được giao']);
+  });
+
   it('never returns a turn from another thread', async () => {
     const message = await saveTeamMessage(
       { threadId, role: 'assistant', content: 'Trong nhóm', agentId: generateId(), messageKind: 'report' },

@@ -5,6 +5,7 @@ import { rankBM25, extractRelevantSnippet } from '../../../utils/bm25';
 import { buildTeamBm25Docs, getTeamTurn } from '../../../db/repositories/teamTranscriptRepo';
 import { listTeamLinks, listTeamMembers } from '../../../db/repositories/aiTeamRepo';
 import { executeAiTool, normalizeToolName, type AiToolDefinition } from '../aiTools';
+import { wrapUntrusted } from './teamPrompts';
 
 /**
  * AI Office team tools (D-11, D-24, D-26, D-27, D-33).
@@ -162,7 +163,8 @@ async function searchTeamHistory(
     agent: doc.title,
     timestamp: doc.updatedAt ?? null,
     kind: doc.tags[0] ?? null,
-    excerpt: extractRelevantSnippet(doc.body, query, 400),
+    // CR-07: excerpts are untrusted data too.
+    excerpt: wrapUntrusted('TRÍCH ĐOẠN', extractRelevantSnippet(doc.body, query, 400)),
   }));
   return JSON.stringify(hits);
 }
@@ -176,7 +178,8 @@ async function readTeamTurn(args: Record<string, any>, ctx: TeamToolContext): Pr
     agent: row.agentName ?? (row.role === 'user' ? 'Người dùng' : 'Trợ lý'),
     timestamp: row.createdAt,
     kind: row.messageKind ?? row.role,
-    content: row.content,
+    // CR-07: transcript content is untrusted data on the tool path.
+    content: wrapUntrusted('LƯỢT HỘI THOẠI', row.content),
   });
 }
 
@@ -189,7 +192,13 @@ async function readSkill(ctx: TeamToolContext): Promise<string> {
   if (!skill) {
     return JSON.stringify(refuse('SKILL_NOT_ASSIGNED', 'Nhân viên này chưa được gán kỹ năng nào.'));
   }
-  return JSON.stringify({ name: skill.name, description: skill.description, body: skill.body });
+  // CR-07: tool results bypass the prompt assembler, so the untrusted-data boundary
+  // must be applied here, where the provenance is known.
+  return JSON.stringify({
+    name: skill.name,
+    description: skill.description,
+    body: wrapUntrusted(`KỸ NĂNG ${skill.name}`, skill.body),
+  });
 }
 
 interface LinkedItemLabel {
@@ -247,8 +256,8 @@ async function listLinkedItems(ctx: TeamToolContext): Promise<string> {
  * task/CR/system delegate to the existing `get_item_details` resolver so the two
  * implementations cannot drift.
  *
- * Returned text is data. The prompt assembler wraps it in the untrusted-data delimiter,
- * so no prompt framing is added here.
+ * Returned text is data. CR-07: the prompt assembler never sees tool results, so each
+ * handler wraps its own body in the untrusted-data delimiter before returning.
  */
 async function getLinkedContext(args: Record<string, any>, ctx: TeamToolContext): Promise<string> {
   const itemId = typeof args.itemId === 'string' ? args.itemId : '';
@@ -267,7 +276,8 @@ async function getLinkedContext(args: Record<string, any>, ctx: TeamToolContext)
       itemId,
       itemType: link.itemType,
       name: note.title ?? '',
-      body: note.body,
+      // CR-07: a linked note/document body is untrusted data.
+      body: wrapUntrusted(`MỤC LIÊN KẾT ${note.title ?? itemId}`, note.body),
     });
   }
 

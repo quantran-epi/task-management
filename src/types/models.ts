@@ -319,6 +319,12 @@ export interface ChatMessage {
   agentName?: string | undefined;
   agentKind?: 'lead' | 'employee' | undefined;
   messageKind?: 'instruction' | 'report' | 'synthesis' | 'plan' | undefined;
+  /**
+   * CR-06: an instruction is displayed as the lead's message but belongs to the
+   * employee it was assigned to. This carries the assignee so history lookups can
+   * find it without misattributing the row.
+   */
+  targetAgentId?: string | undefined;
 }
 
 // Phase 16: Knowledge Server Foundation, DLP Checks & AST Ingestion models (D-01, D-08, D-18, D-27, D-29)

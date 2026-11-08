@@ -17,6 +17,7 @@ import { payloadHasMutationTool } from '../../../../src/services/ai/chatTurnTool
 import { isMutationTool, normalizeToolName } from '../../../../src/services/ai/aiTools';
 import type { AiEmployee, AiLead, AiSkill, AiTeam } from '../../../../src/types/aiOffice';
 import type { AiOrchestratorLoopOptions } from '../../../../src/services/ai/aiOrchestratorLoop';
+import type { AiToolDefinition } from '../../../../src/services/ai/aiTools';
 import type { ChatTurnRuntimeDeps } from '../../../../src/components/ai/runtime/chatTurnRuntime';
 
 type LoopScript = (options: AiOrchestratorLoopOptions) => Promise<unknown>;
@@ -868,6 +869,110 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
     it('keeps delegate_batch out of the employee allowlist', () => {
       expect(EMPLOYEE_READ_ONLY_ALLOWLIST).not.toContain('delegate_batch');
       expect(EMPLOYEE_READ_ONLY_ALLOWLIST.some((name) => isMutationTool(name))).toBe(false);
+    });
+
+    it('counts usage on a second turn instead of treating it as already reported (CR-01)', async () => {
+      harness = await createHarness({
+        scripts: {
+          [EMP_A_MODEL]: async (options) => {
+            options.onUsage?.({ totalTokens: 700 });
+            return loopResult('A xong');
+          },
+        },
+      });
+      const { coordinator, employees, db, team } = harness;
+
+      await coordinator.send('@[An](agent:' + employees[0]!.id + ') việc 1');
+      await coordinator.send('@[An](agent:' + employees[0]!.id + ') việc 2');
+
+      const row = (await db.aiTeamMembers.where('teamId').equals(team.id).toArray()).find(
+        (member) => member.agentId === employees[0]!.id
+      );
+      // Both turns report 700; a stale baseline would leave this at 700.
+      expect(row?.usedTokens).toBe(1400);
+    });
+
+    it('releases the plan park on a global Stop so the lead turn does not hang (CR-03)', async () => {
+      let harnessRef: Harness | null = null;
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              {
+                assignments: harnessRef!.employees.map((row) => ({
+                  agentId: row.id,
+                  task: 'Việc',
+                })),
+              },
+              harnessRef!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+        },
+      });
+      harnessRef = harness;
+      const { coordinator } = harness;
+
+      const sent = coordinator.send('Làm báo cáo');
+      await waitFor(() => coordinator.getState().phase === 'awaiting-plan');
+
+      coordinator.abortAll();
+      // The park must resolve; without the fix this await never settles.
+      await sent;
+      expect(coordinator.getState().phase).toBe('ready');
+      expect(coordinator.getState().pendingPlan).toBeNull();
+    });
+
+    it('advertises mutation tools to the lead but never to an employee (CR-04)', async () => {
+      let leadTools: readonly AiToolDefinition[] = [];
+      let employeeTools: readonly AiToolDefinition[] = [];
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            leadTools = options.tools ?? [];
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async (options) => {
+            employeeTools = options.tools ?? [];
+            return loopResult('A xong');
+          },
+        },
+      });
+      const { coordinator, employees } = harness;
+
+      await coordinator.send('Xin chào');
+      await coordinator.send('@[An](agent:' + employees[0]!.id + ') việc A');
+
+      expect(payloadHasMutationTool(leadTools)).toBe(true);
+      expect(payloadHasMutationTool(employeeTools)).toBe(false);
+    });
+
+    it('hydrates the team total from persisted usage so a reactivated team is not reset (CR-05)', async () => {
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.beforeToolRound?.(2, options.signal);
+            return loopResult('Xong.');
+          },
+        },
+      });
+      const { db, team, lead } = harness;
+      // Pre-spend the team to 80% before the coordinator loads members.
+      const members = await db.aiTeamMembers.where('teamId').equals(team.id).toArray();
+      for (const member of members) {
+        await db.aiTeamMembers.update(member.id, { usedTokens: 800 });
+      }
+
+      const { coordinator } = harness;
+      void coordinator.send('Xin chào');
+      await sleep(50);
+      // Hydrated at 80%, the round boundary parks — without hydration the turn would
+      // have completed with a fresh full budget.
+      expect(coordinator.getState().agents.find((row) => row.agentId === lead.id)?.status).not.toBe(
+        'done'
+      );
     });
 
     it('names the parked agent in the snapshot so the UI tops up the right budget', async () => {

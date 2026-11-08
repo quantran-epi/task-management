@@ -136,7 +136,9 @@ describe('teamTools — transcript search and skill reader (AIO-MEM-02, AIO-MEM-
       timestamp: turn.createdAt,
       kind: 'report',
     });
-    expect(result.content).toBe(LONG_BODY);
+    // CR-07: the body arrives inside the untrusted-data delimiter but is not truncated.
+    expect(result.content).toContain(LONG_BODY);
+    expect(result.content).toContain('DỮ LIỆU');
   });
 
   it('refuses a turnId belonging to a different thread', async () => {
@@ -181,7 +183,9 @@ describe('teamTools — transcript search and skill reader (AIO-MEM-02, AIO-MEM-
 
     expect(result.name).toBe('Kiểm thử hồi quy');
     expect(result.description).toBe('Quy trình kiểm thử hồi quy');
-    expect(result.body).toBe('# Quy trình\n\nBước 1. Chạy bộ kiểm thử.\nBước 2. Ghi nhận kết quả.');
+    // CR-07: the body is wrapped as untrusted data but its text is intact.
+    expect(result.body).toContain('# Quy trình\n\nBước 1. Chạy bộ kiểm thử.\nBước 2. Ghi nhận kết quả.');
+    expect(result.body).toContain('DỮ LIỆU');
   });
 
   it('refuses read_skill when the agent has no skill assigned', async () => {
@@ -343,7 +347,8 @@ describe('teamTools — linked-item retrieval with full content (AIO-LINK-01, D-
     );
 
     expect(result.itemType).toBe('note');
-    expect(result.body).toBe(NOTE_BODY);
+    // CR-07: wrapped as untrusted data, but the full body survives (never truncated).
+    expect(result.body).toContain(NOTE_BODY);
     expect(result.body.length).toBeGreaterThan(400);
   });
 
@@ -354,7 +359,8 @@ describe('teamTools — linked-item retrieval with full content (AIO-LINK-01, D-
     );
 
     expect(result.itemType).toBe('document');
-    expect(result.body).toBe(stored!.body);
+    // CR-07: wrapped as untrusted data, body text intact.
+    expect(result.body).toContain(stored!.body);
   });
 
   it('resolves task, cr and system through get_item_details', async () => {
@@ -401,8 +407,9 @@ describe('teamTools — linked-item retrieval with full content (AIO-LINK-01, D-
       await executeTeamTool('get_linked_context', { itemId: noteId }, ctx())
     );
 
-    // Returned verbatim as JSON data; the handler adds no framing and executes nothing.
-    expect(result.body).toBe(NOTE_BODY);
+    // CR-07: returned as untrusted JSON data — wrapped, never executed.
+    expect(result.body).toContain(NOTE_BODY);
+    expect(result.body).toContain('DỮ LIỆU');
     expect(result).not.toHaveProperty('instructions');
     expect(await db.notes.count()).toBe(2); // nothing deleted or rewritten
   });
