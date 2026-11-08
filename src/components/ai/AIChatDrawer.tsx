@@ -1456,14 +1456,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           turnAnalysisMode = false;
         }
       }
-      let turnAutoApprove = Boolean(turnTab.config?.autoApproveMutations);
-      if (!turnAutoApprove) {
-        try {
-          turnAutoApprove = localStorage.getItem(AI_AUTO_APPROVE_MUTATIONS_KEY) === 'true';
-        } catch {
-          turnAutoApprove = false;
-        }
-      }
+      // Per-tab config is the only source. A global fallback would let a stale localStorage
+      // key auto-approve CR mutations with no prompt.
+      const turnAutoApprove = Boolean(turnTab.config?.autoApproveMutations);
       const turnMcpEnabled = turnTab.config?.mcpEnabled !== false;
 
       // Analysis Mode bypasses grounded routing and goes straight to the tool loop.
@@ -1948,6 +1943,8 @@ Rules:
         history: historyTurns,
         tools: toolsForTurn,
         ...(config.contextWindowTokens ? { contextWindowTokens: config.contextWindowTokens } : {}),
+        // WR-19: a CR-scoped turn may only touch that CR's entities.
+        ...(isCrScope && currentScope.id ? { crScopeId: currentScope.id } : {}),
       });
 
       const debugTurnId = debugTurnRef.current.get(turnTabId);

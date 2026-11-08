@@ -712,7 +712,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           },
           recurrenceEndDate: { type: 'string', description: 'End date for recurrence (YYYY-MM-DD).' },
         },
-        required: ['name'],
+        required: ['name', 'crId'],
       },
     },
   },
@@ -2099,6 +2099,38 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
 export interface ExecuteAiToolOptions {
   /** Trusted, request-bound SDLC artifact context. Never sourced from model arguments (T-27-01). */
   artifactContext?: ArtifactToolContext;
+  /**
+   * WR-19: the CR a CR-scoped turn is bound to. Entity ids outside it are rejected so a
+   * scoped turn cannot read or mutate another CR's data.
+   */
+  crScopeId?: string;
+}
+
+/** Tools whose first argument identifies a task; the task's `crId` must match the turn scope. */
+const TASK_SCOPED_TOOLS = new Set([
+  'update_task',
+  'delete_task',
+  'reparent_task',
+  'update_task_checklist',
+  'spawn_recurring_task_instance',
+]);
+
+async function assertCrScope(
+  toolName: string,
+  args: Record<string, any>,
+  db: TaskPlannerDatabase,
+  crScopeId: string
+): Promise<void> {
+  if (typeof args.crId === 'string' && args.crId !== crScopeId) {
+    throw new Error('Công cụ chỉ được thao tác trên Change Request đang mở.');
+  }
+  if (!TASK_SCOPED_TOOLS.has(toolName)) return;
+  const taskId = args.id ?? args.taskId;
+  if (typeof taskId !== 'string') return;
+  const task = await db.tasks.get(taskId);
+  if (task && task.crId !== crScopeId) {
+    throw new Error('Tác vụ không thuộc Change Request đang mở.');
+  }
 }
 
 export async function executeAiTool(
@@ -2109,6 +2141,13 @@ export async function executeAiTool(
   options?: ExecuteAiToolOptions
 ): Promise<string> {
   const normalized = normalizeToolName(toolName);
+  if (options?.crScopeId) {
+    try {
+      await assertCrScope(normalized, args, db, options.crScopeId);
+    } catch (err) {
+      return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
   try {
     switch (normalized) {
       case 'ssh_list_dir': {
@@ -3470,7 +3509,9 @@ export async function executeAiTool(
         if (args.tags !== undefined) patch.opsOwners = args.tags;
         if (args.businessAnalysts !== undefined) patch.businessAnalysts = args.businessAnalysts;
         if (args.crId !== undefined) patch.crId = args.crId;
-        if (args.systemId !== undefined) patch.systemId = args.systemId;
+        // `null` means "unassign", but `TaskUpdateSchema.systemId` rejects null; `undefined`
+        // with the key present is what `updateTask` reads as a clear.
+        if (args.systemId !== undefined) patch.systemId = args.systemId === null ? undefined : args.systemId;
         if (args.workType !== undefined) patch.workType = args.workType;
         if (args.jiraKey !== undefined) patch.jiraKey = args.jiraKey;
         if (args.reminders !== undefined) {
@@ -4728,6 +4769,8 @@ const MUTATION_TOOLS = new Set([
   'unlink_taskmate_knowledge',
   'dismiss_notification',
   'patch_artifact_section',
+  // Runs model-supplied JavaScript in the page realm — never without explicit approval.
+  'generate_file',
 ]);
 
 /**

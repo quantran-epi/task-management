@@ -73,6 +73,8 @@ export interface ChatTurnRequest {
   contextWindowTokens?: number;
   /** Trusted, request-bound SDLC artifact scope. Never read from a global registry. */
   artifactContext?: ArtifactToolContext;
+  /** WR-19: CR this turn is bound to; tool calls outside it are rejected. */
+  crScopeId?: string;
 }
 
 export interface ChatTurnOutcome {
@@ -297,6 +299,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
           return dispatchAiToolCall(name, args, toolDb, signal, {
             allowMutation: request.autoApprove,
             ...(request.artifactContext ? { artifactContext: request.artifactContext } : {}),
+            ...(request.crScopeId ? { crScopeId: request.crScopeId } : {}),
           });
         },
         onTextChunk: (delta) => {

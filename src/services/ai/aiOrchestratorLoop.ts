@@ -16,6 +16,8 @@ import type { ArtifactToolContext } from './sdlcArtifactTools';
 export interface DispatchAiToolCallOptions extends ExecuteMcpToolOptions {
   /** Trusted, request-bound SDLC artifact scope for the artifact tools. */
   artifactContext?: ArtifactToolContext;
+  /** WR-19: CR the turn is bound to; entity ids outside it are rejected. */
+  crScopeId?: string;
 }
 
 /** Default tool dispatch: local DB tools first, dynamic MCP tools otherwise. */
@@ -37,7 +39,10 @@ export async function dispatchAiToolCall(
         args,
         db,
         signal,
-        artifactContext ? { artifactContext } : undefined
+        {
+          ...(artifactContext ? { artifactContext } : {}),
+          ...(options?.crScopeId ? { crScopeId: options.crScopeId } : {}),
+        }
       )
     : executeDynamicMcpTool(normalized, args, db, options);
 }
