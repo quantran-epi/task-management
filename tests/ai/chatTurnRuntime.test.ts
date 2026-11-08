@@ -184,17 +184,16 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
     expect(statuses).toEqual(['preparing', 'streaming', 'tool', 'synthesizing', 'complete']);
   });
 
-  it('cancels mutations in Analysis Mode without consulting autoApprove or awaiting approval', async () => {
-    let checkedResult: { proceed: boolean; cancellationResult?: string } | undefined;
+  it('treats Analysis Mode as a prompt preference: autoApprove still wins', async () => {
+    let checkedResult: { proceed: boolean } | undefined;
     const runtime = runtimeWith(async (options) => {
       checkedResult = await options.onMutationCheck?.('update_task', { id: 't-1' });
-      return { fullResponse: 'cancelled turn', tokenUsage: {} };
+      return { fullResponse: 'updated turn', tokenUsage: {} };
     });
 
-    await runtime.start(makeRequest({ threadId, analysisMode: true, autoApprove: false }));
+    await runtime.start(makeRequest({ threadId, analysisMode: true, autoApprove: true }));
 
-    expect(checkedResult?.proceed).toBe(false);
-    expect(checkedResult?.cancellationResult).toContain('Analysis Mode');
+    expect(checkedResult?.proceed).toBe(true);
     expect(statuses).not.toContain('awaiting-approval');
     expect(approvals).toHaveLength(0);
   });
@@ -663,9 +662,24 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
     expect(JSON.parse(returned[0]!)).toEqual(proposal);
   });
 
-  it('still cancels unsolicited patch calls in Analysis Mode with the existing read-only result', async () => {
-    let checked: { proceed: boolean; cancellationResult?: string } | undefined;
-    const preparePatch = vi.fn();
+  it('parks an unsolicited patch call in Analysis Mode instead of hard-blocking it', async () => {
+    let checked: { proceed: boolean } | undefined;
+    const preparePatch = vi.fn().mockResolvedValue({
+      proposalId: 'proposal-analysis',
+      scopeKey: SCOPE_KEY,
+      changeRequestId: 'p-1',
+      crId: 'cr-active',
+      kind: 'SOLUTION' as const,
+      version: 1,
+      sectionId: '1.1',
+      sectionTitle: 'Muc tieu',
+      baseHash: 'e'.repeat(64),
+      baseMarkdown: '# SOLUTION',
+      diffText: '@@ -1,1 +1,2 @@\n # SOLUTION\n+x',
+      addedLines: 1,
+      removedLines: 0,
+      patchedMarkdown: '# SOLUTION\nx',
+    });
     const runtime = runtimeWith(
       async (options) => {
         checked = await options.onMutationCheck?.('patch_artifact_section', { sectionId: '1.1' });
@@ -673,11 +687,12 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
       },
       { preparePatch }
     );
-    await runtime.start(makeRequest({ threadId, analysisMode: true, artifactContext: ARTIFACT_CONTEXT }));
-    expect(checked?.proceed).toBe(false);
-    expect(checked?.cancellationResult).toContain('Analysis Mode');
-    expect(preparePatch).not.toHaveBeenCalled();
-    expect(statuses).not.toContain('awaiting-approval');
+    const turn = runtime.start(makeRequest({ threadId, analysisMode: true, artifactContext: ARTIFACT_CONTEXT }));
+    await waitForStatus(() => statuses.includes('awaiting-approval'));
+    runtime.resolveApproval(true);
+    await turn;
+    expect(checked?.proceed).toBe(true);
+    expect(preparePatch).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a second concurrent start with TURN_IN_PROGRESS and writes no message', async () => {
@@ -732,6 +747,175 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
     });
     expect(completed).toHaveLength(1);
     expect(deltas.join('')).toContain('Câu trả lời');
+  });
+});
+
+describe('chatTurnRuntime team seams (D-07, D-12, D-13, D-19, D-21)', () => {
+  let db: TaskPlannerDatabase;
+  let threadId: string;
+  let statuses: ChatTurnStatus[];
+  let approvals: ChatTurnApprovalInfo[];
+
+  const runtimeWith = (runLoop: LoopScript, extra: Partial<ChatTurnRuntimeDeps> = {}) => {
+    const deps = {
+      runLoop: runLoop as unknown as ChatTurnRuntimeDeps['runLoop'],
+      saveMessage,
+      describeMutation: async () => 'Cập nhật tác vụ "A"',
+      db,
+      onStatus: (s: ChatTurnStatus) => statuses.push(s),
+      onAwaitingApproval: (i: ChatTurnApprovalInfo) => approvals.push(i),
+      ...extra,
+    } as ChatTurnRuntimeDeps;
+    return createChatTurnRuntime(deps);
+  };
+
+  const messageRows = async () => getMessagesByThreadId(threadId, db);
+
+  beforeEach(async () => {
+    db = new TaskPlannerDatabase(`test-turn-team-${Date.now()}-${Math.random()}`);
+    const thread = await createOrGetThread({ scopeType: 'cr', entityId: 'p-1' }, db);
+    threadId = thread.id;
+    statuses = [];
+    approvals = [];
+  });
+
+  afterEach(async () => {
+    await db.delete();
+  });
+
+  it('writes no user row and exactly one assistant row when persistUserMessage is false', async () => {
+    const runtime = runtimeWith(async () => ({ fullResponse: 'báo cáo', tokenUsage: {} }));
+    const outcome = await runtime.start(makeRequest({ threadId, persistUserMessage: false }));
+
+    expect(outcome.phase).toBe('complete');
+    expect(outcome.userMessageId).toBeNull();
+    const rows = await messageRows();
+    expect(rows.filter((row) => row.role === 'user')).toHaveLength(0);
+    expect(rows.filter((row) => row.role === 'assistant')).toHaveLength(1);
+  });
+
+  it('refuses every mutation under mutationPolicy read-only without parking', async () => {
+    let checked: { proceed: boolean; cancellationResult?: string } | undefined;
+    const runtime = runtimeWith(async (options) => {
+      checked = await options.onMutationCheck?.('update_task', { id: 't-1' });
+      return { fullResponse: 'không ghi', tokenUsage: {} };
+    });
+
+    await runtime.start(makeRequest({ threadId, mutationPolicy: 'read-only', autoApprove: true }));
+
+    expect(checked?.proceed).toBe(false);
+    expect(JSON.parse(checked?.cancellationResult ?? '{}')).toMatchObject({
+      cancelled: true,
+      code: 'READ_ONLY_EMPLOYEE',
+    });
+    expect(statuses).not.toContain('awaiting-approval');
+    expect(approvals).toHaveLength(0);
+  });
+
+  it('refuses an artifact patch under read-only before the artifact branch', async () => {
+    const preparePatch = vi.fn();
+    let checked: { proceed: boolean; cancellationResult?: string } | undefined;
+    const runtime = runtimeWith(
+      async (options) => {
+        checked = await options.onMutationCheck?.('patch_artifact_section', { sectionId: '1.1' });
+        return { fullResponse: 'không ghi', tokenUsage: {} };
+      },
+      { preparePatch }
+    );
+
+    await runtime.start(makeRequest({ threadId, mutationPolicy: 'read-only', artifactContext: ARTIFACT_CONTEXT }));
+
+    expect(checked?.proceed).toBe(false);
+    expect(preparePatch).not.toHaveBeenCalled();
+    expect(statuses).not.toContain('awaiting-approval');
+  });
+
+  it('still parks a lead mutation under the default policy', async () => {
+    const runtime = runtimeWith(async (options) => {
+      await options.onMutationCheck?.('update_task', { id: 't-1' });
+      return { fullResponse: 'ok', tokenUsage: {} };
+    });
+    const turn = runtime.start(makeRequest({ threadId, mutationPolicy: 'approve' }));
+    await waitForStatus(() => statuses.includes('awaiting-approval'));
+    expect(approvals).toHaveLength(1);
+    runtime.resolveApproval(true);
+    expect((await turn).phase).toBe('complete');
+  });
+
+  it('persists all four attribution fields into the stored assistant row', async () => {
+    const runtime = runtimeWith(async () => ({ fullResponse: 'báo cáo', tokenUsage: {} }));
+    await runtime.start(makeRequest({
+      threadId,
+      persistUserMessage: false,
+      agentId: 'agent-1',
+      agentName: 'Lan',
+      agentKind: 'employee',
+      messageKind: 'report',
+    }));
+
+    const [row] = (await messageRows()).filter((m) => m.role === 'assistant');
+    expect(row).toMatchObject({
+      agentId: 'agent-1',
+      agentName: 'Lan',
+      agentKind: 'employee',
+      messageKind: 'report',
+    });
+  });
+
+  it('reports cumulative monotonically non-decreasing usage after each round', async () => {
+    const seen: ChatTokenUsage[] = [];
+    const runtime = runtimeWith(
+      async (options) => {
+        options.onUsage?.({ promptTokens: 10, completionTokens: 5, totalTokens: 15 });
+        options.onUsage?.({ promptTokens: 2, completionTokens: 3, totalTokens: 5 });
+        return { fullResponse: 'ok', tokenUsage: { totalTokens: 20 } };
+      },
+      { onUsage: (usage: ChatTokenUsage) => seen.push({ ...usage }) }
+    );
+
+    await runtime.start(makeRequest({ threadId }));
+
+    expect(seen).toHaveLength(2);
+    expect(seen[0]).toEqual({ promptTokens: 10, completionTokens: 5, totalTokens: 15 });
+    expect(seen[1]).toEqual({ promptTokens: 12, completionTokens: 8, totalTokens: 20 });
+    for (let i = 1; i < seen.length; i += 1) {
+      expect(seen[i]!.totalTokens!).toBeGreaterThanOrEqual(seen[i - 1]!.totalTokens!);
+    }
+  });
+
+  it('forwards beforeToolRound into the loop bound to the turn signal', async () => {
+    const rounds: number[] = [];
+    const signals: AbortSignal[] = [];
+    let loopSignal: AbortSignal | undefined;
+    const runtime = runtimeWith(async (options) => {
+      loopSignal = options.signal;
+      expect(typeof options.beforeToolRound).toBe('function');
+      await options.beforeToolRound?.(2);
+      return { fullResponse: 'ok', tokenUsage: {} };
+    });
+
+    await runtime.start(makeRequest({
+      threadId,
+      beforeToolRound: async (round, signal) => {
+        rounds.push(round);
+        signals.push(signal);
+      },
+    }));
+
+    expect(rounds).toEqual([2]);
+    expect(signals[0]).toBe(loopSignal);
+  });
+
+  it('omits the beforeToolRound option when the request has no hook', async () => {
+    let loopOptions: AiOrchestratorLoopOptions | undefined;
+    const runtime = runtimeWith(async (options) => {
+      loopOptions = options;
+      return { fullResponse: 'ok', tokenUsage: {} };
+    });
+
+    await runtime.start(makeRequest({ threadId }));
+
+    expect(Object.hasOwn(loopOptions!, 'beforeToolRound')).toBe(false);
   });
 });
 

@@ -125,4 +125,32 @@ describe('chatRepo scope keys (CR/System axis)', () => {
     expect(await db.chatThreads.where('scopeKey').equals('cr:cr-9').first()).toBeUndefined();
     expect(await db.chatMessages.where('threadId').equals(thread.id).count()).toBe(0);
   });
+
+  it('persists AI Office attribution into the stored row and omits the keys when absent', async () => {
+    const thread = await createOrGetThread({ scopeType: 'cr', entityId: 'cr-attrib' }, db);
+    await saveMessage(
+      {
+        threadId: thread.id,
+        role: 'assistant',
+        content: 'Báo cáo của nhân viên',
+        agentId: 'agent-1',
+        agentName: 'Lan',
+        agentKind: 'employee',
+        messageKind: 'report',
+      },
+      db
+    );
+    await saveMessage({ threadId: thread.id, role: 'assistant', content: 'Không gán' }, db);
+
+    const rows = await getMessagesByThreadId(thread.id, db);
+    expect(rows[0]).toMatchObject({
+      agentId: 'agent-1',
+      agentName: 'Lan',
+      agentKind: 'employee',
+      messageKind: 'report',
+    });
+    for (const key of ['agentId', 'agentName', 'agentKind', 'messageKind']) {
+      expect(Object.hasOwn(rows[1]!, key)).toBe(false);
+    }
+  });
 });
