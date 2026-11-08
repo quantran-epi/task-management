@@ -19,6 +19,7 @@
 - Phase 31.2: Enterprise Systems Catalog and CR Normalization (v1.3, INSERTED)
 - Phase 32: External Research via Claude Code Headless (v1.3)
 - Phase 33: Prompt Transparency & Contract Documentation (v1.3)
+- Phase 34: AI Office — AI Employees, Teams, and Skills (v1.3)
 
 ## Milestone: Knowledge System Implementation
 
@@ -560,6 +561,28 @@ Plans:
 **Wave 4** *(depends on 25.5-03)*
 
 - [x] 25.5-04-PLAN.md — Right Tool Window Integration (AI Assistant & Inspector), Bottom Window Retirement & Full Navigation Verification (`RightToolWindow.tsx`, `EditorArea.tsx`)
+
+### Phase 34: AI Office — fixed AI employees with persona/role/per-model, multi-agent teams that work independently and converse to complete a request, employee list tab and team workspace page
+
+**Goal:** A user can staff an AI Office of reusable employees and leads, assign one skill per employee, and run a team where a lead decomposes the request, proposes a confirmed assignment plan, and dispatches parallel read-only employee batches over a shared, offline-searchable transcript — with lead-only mutations parked on the existing approval card and per-team/per-agent token budgets that pause at 80% instead of auto-stopping.
+**Requirements**: AIO-EMP-01, AIO-EMP-02, AIO-SKILL-01, AIO-SKILL-02, AIO-TEAM-01, AIO-TEAM-02, AIO-TEAM-03, AIO-TEAM-04, AIO-MEM-01, AIO-MEM-02, AIO-MEM-03, AIO-WRITE-01, AIO-WRITE-02, AIO-BUDGET-01, AIO-BUDGET-02, AIO-LINK-01, AIO-BG-01, AIO-UI-01
+**Depends on:** Phase 33
+**Success Criteria** (what must be TRUE):
+
+1. A user can create employees (name, role, persona, per-agent model, at most one skill) and leads as separate global entities, and editing an employee persona changes it in every team that uses it.
+2. Activating a team dispatches the lead, which emits an assignment plan (agent + skill + task) on a confirmation card; approving it runs the batch concurrently (cap 3) and the lead synthesizes only after the whole batch returns.
+3. Every message in the team transcript is attributed to its agent and renders in one continuous channel; a user can `@agent` to address a specific employee, and a running agent streams into its own bubble with a status badge.
+4. An employee turn can read but never write — its tool set contains no mutation tool — while every lead mutation parks on the existing `MutationApprovalCard` unless the team's auto-approve toggle is on.
+5. With the Knowledge Server stopped and the network offline, an agent can still recall older team work through `search_team_history` and `read_team_turn`.
+6. At 80% of the team budget or of one agent's budget, that scope pauses between tool rounds, preserves context, and shows a visible "needs more tokens" state that resumes exactly where it stopped — nothing is auto-aborted and no pause reads as a hang.
+7. A stopped agent reports back to the lead explicitly marked incomplete, and a global Stop aborts the lead plus every running agent.
+8. Team runs continue when the user leaves the tab, and returning shows the full result.
+
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 34 to break down)
 
 ---
 

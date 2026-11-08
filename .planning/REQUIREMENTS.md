@@ -91,6 +91,27 @@
 - [x] **SDLC-REPO-EXP-04**: Interactive Remote Terminal in Workbench Bottom Panel powered by xterm.js and Tauri SSH PTY streaming session, automatically set to repo working directory where user can run headful `claude` CLI or any shell commands.
 - [x] **SDLC-REPO-EXP-05**: User can inspect Claude Code outputs/diagrams in terminal or remote files, with one-click copy or bridge to Diagram Studio (`type: 'diagram'`).
 
+### AI Office — Employees, Teams, and Skills (AIO, Phase 34)
+
+- [ ] **AIO-EMP-01**: Employees are global, reusable entities with name, role, persona, per-agent model, and at most one assigned skill; editing an employee changes it in every team that uses it. Leads are a separate global entity managed in their own section and selected per team.
+- [ ] **AIO-EMP-02**: A team holds exactly one lead and at most three employees; at most three teams may be `active` at once, the rest are `idle`, and reactivating an idle team resumes its accumulated transcript rather than starting a new session.
+- [ ] **AIO-SKILL-01**: A skill is a global `name` + `description` + Markdown `body` prompt template, managed in its own surface and assignable to at most one agent.
+- [ ] **AIO-SKILL-02**: An agent's system prompt receives only the skill's `description`; the full `body` is read on demand through a `read_skill` tool and never pasted wholesale into the prompt.
+- [ ] **AIO-TEAM-01**: The lead decomposes the user's request and emits an assignment plan (agent + skill + task) as a confirmation card; the batch runs only after approval, unless the team's "Tự động chia việc" bypass toggle is on.
+- [ ] **AIO-TEAM-02**: The lead dispatches a batch through a single `delegate_batch([{ agentId, instruction }])` tool whose agents run concurrently (cap 3 per batch) and whose results the lead sees only after the whole batch completes; employees never choose the next speaker and cannot address each other.
+- [ ] **AIO-TEAM-03**: Each agent sees its own system prompt plus persona/skill description, the lead's instruction, the original user request, the results of the other agents in its batch, its own full assignment history from this lead, and a recent-turn window — never the whole conversation.
+- [ ] **AIO-TEAM-04**: The user can address any agent directly with `@agent` in the team composer; a message without a mention goes to the lead.
+- [ ] **AIO-MEM-01**: One transcript per team, every message tagged by `agentId` (or lead/user), rendered as one continuous channel with avatar and agent name.
+- [ ] **AIO-MEM-02**: `search_team_history({ query, limit? })` returns compact BM25 hits (turn id, agent, timestamp, kind, excerpt) and `read_team_turn({ turnId })` returns one turn's full text, using the existing local `src/utils/bm25.ts`.
+- [ ] **AIO-MEM-03**: Transcript search works with the Knowledge Server stopped and the network offline — no retrieval path depends on the daemon.
+- [ ] **AIO-WRITE-01**: Employee turns are structurally read-only — their tool set contains no mutation tool — while the lead holds the full read-only set plus the team tools.
+- [ ] **AIO-WRITE-02**: Every lead mutation parks on the existing `MutationApprovalCard` for explicit approve/reject, and the team's auto-approve toggle still wins when enabled.
+- [ ] **AIO-BUDGET-01**: The user sets a team token budget and the app suggests an even split across the lead plus every employee, editable per row; budgets accumulate for the life of the team and can be topped up at any time.
+- [ ] **AIO-BUDGET-02**: At 80% of the team budget or of an agent's budget that scope pauses between tool rounds with context preserved, notifies the user, and resumes exactly where it stopped once tokens are granted — nothing is auto-aborted and no pause reads as a hang.
+- [ ] **AIO-LINK-01**: A team links to N items of type CR, task, system, note, or document; the lead receives `list_linked_items()` and `get_linked_context({ itemId })` returning full retrievable content (note body, document content, CR tasks, system details), not just metadata.
+- [ ] **AIO-BG-01**: Team runs continue when the user leaves the tab or switches views; returning shows the full result, each running agent streams into its own bubble with a status badge, and per-agent Stop plus a global Stop are both available.
+- [ ] **AIO-UI-01**: The workbench exposes an employee tab (employees, leads, and skills) and a team page (`EditorViewType 'teams'`) with the shared team transcript workspace.
+
 ## Future Requirements (Deferred)
 
 - **FUTR-SDLC-01**: Multi-agent coding runs (several worktrees in parallel) — needs reliability evidence from single-run first.
@@ -162,6 +183,24 @@
 | ENT-NORM-04 | Phase 31.2 | Pending |
 | ENT-NORM-05 | Phase 31.2 | Pending |
 | ENT-NORM-06 | Phase 31.2 | Pending |
+| AIO-EMP-01 | Phase 34 | Pending |
+| AIO-EMP-02 | Phase 34 | Pending |
+| AIO-SKILL-01 | Phase 34 | Pending |
+| AIO-SKILL-02 | Phase 34 | Pending |
+| AIO-TEAM-01 | Phase 34 | Pending |
+| AIO-TEAM-02 | Phase 34 | Pending |
+| AIO-TEAM-03 | Phase 34 | Pending |
+| AIO-TEAM-04 | Phase 34 | Pending |
+| AIO-MEM-01 | Phase 34 | Pending |
+| AIO-MEM-02 | Phase 34 | Pending |
+| AIO-MEM-03 | Phase 34 | Pending |
+| AIO-WRITE-01 | Phase 34 | Pending |
+| AIO-WRITE-02 | Phase 34 | Pending |
+| AIO-BUDGET-01 | Phase 34 | Pending |
+| AIO-BUDGET-02 | Phase 34 | Pending |
+| AIO-LINK-01 | Phase 34 | Pending |
+| AIO-BG-01 | Phase 34 | Pending |
+| AIO-UI-01 | Phase 34 | Pending |
 
 | EXPUI-01 | Phase 25.4 | Pending |
 | EXPUI-02 | Phase 25.4 | Pending |
@@ -176,8 +215,8 @@
 
 **Coverage:**
 
-- v1 requirements: 43 total
-- Mapped to phases: 43
+- v1 requirements: 61 total
+- Mapped to phases: 61
 - Unmapped: 0 ✓
 
 **Phase totals:**
@@ -192,6 +231,7 @@
 - Phase 31.2 (Enterprise Systems Catalog & CR Normalization): 6 requirements, plans TBD
 - Phase 32 (External Research via Claude Code): 6 requirements, ~4 plans
 - Phase 33 (Prompt Transparency & Contract Documentation): 2 requirements, 2 plans
+- Phase 34 (AI Office — AI Employees, Teams, and Skills): 18 requirements, plans TBD
 
 **Mapping changes vs initial proposal:** SDLC-REPO-06 moved from Phase 30 to Phase 29 so per-project opt-in and the repository path exist before any run or change-pack work relies on them. SDLC-CONV and SDLC-RES were added after the initial roadmap and occupy Phases 31–32; SDLC-OBS moved from Phase 31 to Phase 33 so it documents the final composer shape after conventions and research exist.
 
