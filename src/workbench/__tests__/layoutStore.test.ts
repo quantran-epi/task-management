@@ -14,7 +14,7 @@ describe('useLayoutStore', () => {
     expect(state.bottomActiveId).toBeNull();
     expect(state.leftPanelSize).toBe(20);
     expect(state.rightPanelSize).toBe(25);
-    expect(state.bottomPanelSize).toBe(30);
+    expect(state.bottomPanelSize).toBe(38);
   });
 
   it('uses the v2 persist key so a stale v1 layout cannot resolve', () => {

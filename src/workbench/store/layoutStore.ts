@@ -83,7 +83,7 @@ export const DEFAULT_LAYOUT_STATE: LayoutStateValues = {
   bottomActiveId: null,
   leftPanelSize: 20,
   rightPanelSize: 25,
-  bottomPanelSize: 30,
+  bottomPanelSize: 38,
   openTabs: DEFAULT_TABS,
   activeTabId: 'tasks',
   activeRemoteConfigId: null,
@@ -110,7 +110,11 @@ export const useLayoutStore = create<LayoutState>()(
             return { rightActiveId: state.rightActiveId === id ? null : id };
           }
           if (slot === 'bottom') {
-            return { bottomActiveId: state.bottomActiveId === id ? null : id };
+            const isOpening = state.bottomActiveId !== id;
+            return {
+              bottomActiveId: isOpening ? id : null,
+              bottomPanelSize: isOpening && state.bottomPanelSize < 38 ? 38 : state.bottomPanelSize,
+            };
           }
           return state;
         });
@@ -120,7 +124,12 @@ export const useLayoutStore = create<LayoutState>()(
         set((state) => {
           if (slot === 'left') return { leftActiveId: id };
           if (slot === 'right') return { rightActiveId: id };
-          if (slot === 'bottom') return { bottomActiveId: id };
+          if (slot === 'bottom') {
+            return {
+              bottomActiveId: id,
+              bottomPanelSize: id && state.bottomPanelSize < 38 ? 38 : state.bottomPanelSize,
+            };
+          }
           return state;
         });
       },
