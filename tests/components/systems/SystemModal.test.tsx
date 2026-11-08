@@ -88,4 +88,47 @@ describe('SystemModal — inline invariant errors (ENT-NORM-02)', () => {
     });
     expect(onSave).not.toHaveBeenCalled();
   });
+
+  it('normalizes lowercase code input to uppercase without reporting pattern error', async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<SystemModal open={true} onClose={vi.fn()} onSave={onSave} db={db} />);
+
+    fireEvent.change(screen.getByPlaceholderText('VD: SmartCard Core API'), {
+      target: { value: 'Payment Core' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('VD: SC-API'), {
+      target: { value: 'sc-api' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo hệ thống' }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          code: 'SC-API',
+        })
+      );
+    });
+    const explain = document.querySelectorAll('.ant-form-item-explain-error');
+    expect(explain.length).toBe(0);
+  });
+
+  it('surfaces duplicate code error inline on code field', async () => {
+    const onSave = vi.fn().mockRejectedValue(new Error('Mã hệ thống "SC-API" đã tồn tại.'));
+    render(<SystemModal open={true} onClose={vi.fn()} onSave={onSave} db={db} />);
+
+    fireEvent.change(screen.getByPlaceholderText('VD: SmartCard Core API'), {
+      target: { value: 'Payment Core' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('VD: SC-API'), {
+      target: { value: 'SC-API' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo hệ thống' }));
+
+    await waitFor(() => {
+      const explain = Array.from(
+        document.querySelectorAll<HTMLElement>('.ant-form-item-explain-error')
+      ).map((node) => node.textContent);
+      expect(explain).toContain('Mã hệ thống "SC-API" đã tồn tại.');
+    });
+  });
 });

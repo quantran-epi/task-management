@@ -32,6 +32,7 @@ const SYSTEM_TYPE_OPTIONS = [
  */
 function invariantFieldFor(msg: string, values: { type?: SystemType }): string {
   const isParent = values.type === 'LOGICAL_GROUP';
+  if (msg.includes('đã tồn tại')) return 'code';
   if (msg.includes('SSH/Repo')) return isParent ? 'type' : 'sshConfigId';
   if (msg.includes('Logical Parent') || msg.includes('vòng lặp')) {
     return isParent ? 'type' : 'parentId';
@@ -163,21 +164,17 @@ export const SystemModal: React.FC<SystemModalProps> = ({
           <Form.Item
             name="code"
             label="Mã hệ thống (Code)"
+            normalize={(val) => (val ? String(val).toUpperCase() : val)}
             rules={[
               { required: true, message: 'Vui lòng nhập mã code' },
               {
-                pattern: /^[A-Z0-9_\-]+$/,
-                message: 'Chỉ chấp nhận chữ in hoa, số, dấu gạch nối (- hoặc _)',
+                pattern: /^[A-Za-z0-9_-]+$/,
+                message: 'Chỉ chấp nhận chữ cái, số, dấu gạch nối (- hoặc _)',
               },
             ]}
             style={{ flex: 1 }}
           >
-            <Input
-              placeholder="VD: SC-API"
-              onChange={(e) => {
-                form.setFieldValue('code', e.target.value.toUpperCase());
-              }}
-            />
+            <Input placeholder="VD: SC-API" />
           </Form.Item>
         </div>
 
