@@ -32,9 +32,12 @@ export interface WorkflowCoordinatorDeps {
 /**
  * The coordinator module owns the persistence key format. Views must never re-type the
  * `sdlc_workflow:` literal (D-23).
+ *
+ * The second segment is the durable SDLC tab's thread id — the same key the backup restore
+ * path and the chat drawer read, so checkpoint recovery and the SDLC view share one row.
  */
-export function workflowStorageKey(changeRequestId: string, crId: string): string {
-  return `sdlc_workflow:${changeRequestId}:${crId}`;
+export function workflowStorageKey(changeRequestId: string, threadId: string): string {
+  return `sdlc_workflow:${changeRequestId}:${threadId}`;
 }
 
 

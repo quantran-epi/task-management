@@ -78,6 +78,15 @@ export async function getActiveTab(scopeKey: string, db: TaskPlannerDatabase = d
   return (await listTabsByScope(scopeKey, db)).find((tab) => tab.active) ?? (await listTabsByScope(scopeKey, db))[0];
 }
 
+/** Read-only lookup of the CR's durable SDLC tab thread — the `sdlc_workflow:` key segment. */
+export async function getSdlcTabThreadId(
+  crId: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<string | undefined> {
+  const tabs = await db.chatTabs.where('scopeKey').equals(`cr:${crId}`).toArray();
+  return tabs.find((tab) => tab.type === 'sdlc')?.threadId;
+}
+
 export async function getOrCreateSdlcTab(crId: string, db: TaskPlannerDatabase = defaultDb): Promise<ChatTab> {
   const scopeKey = `cr:${crId}`;
 

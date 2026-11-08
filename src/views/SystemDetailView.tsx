@@ -216,7 +216,8 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
       .toArray();
     const progress = new Map<string, number>();
     for (const row of rows) {
-      const crId = String(row.key).split(':').pop();
+      // Key format is `sdlc_workflow:<crId>:<threadId>`; the CR id is the second segment.
+      const crId = String(row.key).split(':')[1];
       if (!crId) continue;
       try {
         progress.set(crId, countCompletedSteps(JSON.parse(String(row.value))));
@@ -293,7 +294,7 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
       title: 'SDLC Studio',
       viewType: 'sdlc',
       closable: true,
-      params: { projectId: crId },
+      params: { changeRequestId: crId },
     });
   };
 

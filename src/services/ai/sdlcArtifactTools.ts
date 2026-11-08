@@ -244,9 +244,21 @@ async function loadWorkflowState(
 ): Promise<SdlcWorkflowState | ArtifactToolRefusal> {
   try {
     // A supplied but unavailable live state is unavailable, never a fallback to a stale DB snapshot.
-    const value: unknown = context.getWorkflowState
-      ? context.getWorkflowState()
-      : (await db.settings.get(workflowStorageKey(context.projectId, context.crId)))?.value;
+    // The DB row is keyed by the CR's durable SDLC tab thread (D-23); the `<crId>` second
+    // segment is the pre-fix key and is still read so upgraded workspaces keep their state.
+    let value: unknown;
+    if (context.getWorkflowState) {
+      value = context.getWorkflowState();
+    } else {
+      const tabs = await db.chatTabs.where('scopeKey').equals(`cr:${context.crId}`).toArray();
+      const threadId = tabs.find((tab) => tab.type === 'sdlc')?.threadId;
+      if (threadId) {
+        value = (await db.settings.get(workflowStorageKey(context.projectId, threadId)))?.value;
+      }
+      if (value === undefined) {
+        value = (await db.settings.get(workflowStorageKey(context.projectId, context.crId)))?.value;
+      }
+    }
     if (value === undefined) {
       return refuse('WORKFLOW_UNAVAILABLE', 'Chưa có trạng thái quy trình SDLC cho CR này.');
     }

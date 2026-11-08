@@ -13,6 +13,7 @@ import { Step4ChangePackView } from '../components/sdlc/steps/Step4ChangePackVie
 import { Step5TechDocsView } from '../components/sdlc/steps/Step5TechDocsView';
 import { Step6CabView } from '../components/sdlc/steps/Step6CabView';
 import { getStepThread } from '../services/wizard/sdlcCrManager';
+import { getOrCreateSdlcTab } from '../db/repositories/chatTabRepo';
 import { createChangeRequest } from '../db/repositories/changeRequestRepo';
 import {
   createSdlcWorkflowCoordinator,
@@ -49,6 +50,8 @@ import type { ConventionsSummaryProps } from '../components/sdlc/common/Conventi
 
 export interface ChangeRequestSdlcViewProps {
   changeRequestId?: string;
+  /** WR-07: preselected subsystem forwarded from CR Explorer's "Mở SDLC tại subsystem này". */
+  systemId?: string | undefined;
   onBack: () => void;
   db?: TaskPlannerDatabase;
 }
@@ -63,6 +66,7 @@ function isGuardCode(code: unknown): code is keyof typeof WORKFLOW_GUARD_MESSAGE
 
 export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
   changeRequestId: propChangeRequestId = '',
+  systemId: propSystemId,
   onBack,
   db = defaultDb,
 }) => {
@@ -154,13 +158,17 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
 
   // D-38: one selected subsystem at view level, shared by Step 3 and Step 4. Reset on CR change
   // so a stale id cannot drive either step (T-31.2-40).
-  const [selectedSystemId, setSelectedSystemId] = useState<string | null>(null);
+  const [selectedSystemId, setSelectedSystemId] = useState<string | null>(propSystemId ?? null);
   useEffect(() => {
     const first = activeCrRecord?.targets[0]?.systemId ?? null;
+    // A subsystem forwarded by the caller wins while it is still a target of this CR.
+    const preferred = propSystemId && activeCrRecord?.targets.some((t) => t.systemId === propSystemId)
+      ? propSystemId
+      : first;
     setSelectedSystemId((current) =>
-      current && activeCrRecord?.targets.some((t) => t.systemId === current) ? current : first
+      current && activeCrRecord?.targets.some((t) => t.systemId === current) ? current : preferred
     );
-  }, [activeCrRecord?.id, activeCrRecord?.targets]);
+  }, [activeCrRecord?.id, activeCrRecord?.targets, propSystemId]);
   const onSelectSystem = useCallback((systemId: string) => setSelectedSystemId(systemId), []);
 
   // Conventions state (D-07, D-08, D-13)
@@ -396,7 +404,20 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
   const threadIdRef = useRef(threadId);
   threadIdRef.current = threadId;
 
-  // Each CR owns its coordinator memory and fixed persistence key (D-23).
+  // Each CR owns its coordinator memory and fixed persistence key (D-23). The key's second
+  // segment is the CR's durable SDLC tab thread — the same row the drawer and the backup
+  // restore path read, so checkpoint recovery sees live state.
+  const sdlcThreadIdsRef = useRef(new Map<string, string>());
+  const resolveSdlcThreadId = useCallback(
+    async (crId: string): Promise<string> => {
+      const cached = sdlcThreadIdsRef.current.get(crId);
+      if (cached) return cached;
+      const tab = await getOrCreateSdlcTab(crId, db);
+      sdlcThreadIdsRef.current.set(crId, tab.threadId);
+      return tab.threadId;
+    },
+    [db]
+  );
   const createCoordinator = useCallback(
     (crId: string) => createSdlcWorkflowCoordinator({
         changeRequestId: projectId,
@@ -405,14 +426,19 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
         },
         saveState: async (state) => {
           if (!crId) return;
+          const threadId = await resolveSdlcThreadId(crId);
           await db.settings.put({
-            key: workflowStorageKey(projectId, crId),
+            key: workflowStorageKey(projectId, threadId),
             value: JSON.stringify(state),
           });
         },
         loadState: async () => {
           if (!crId) return undefined;
-          const row = await db.settings.get(workflowStorageKey(projectId, crId));
+          const threadId = await resolveSdlcThreadId(crId);
+          // Fall back to the pre-fix `<crId>:<crId>` row so an upgraded workspace keeps its
+          // version chain instead of re-committing v1.
+          const row = (await db.settings.get(workflowStorageKey(projectId, threadId)))
+            ?? (await db.settings.get(workflowStorageKey(projectId, crId)));
           if (!row?.value) return undefined;
           try {
             return JSON.parse(String(row.value)) as SdlcWorkflowState;
@@ -422,13 +448,14 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
         },
         deleteState: async () => {
           if (!crId) return;
-          await db.settings.delete(workflowStorageKey(projectId, crId));
+          const threadId = await resolveSdlcThreadId(crId);
+          await db.settings.delete(workflowStorageKey(projectId, threadId));
         },
         onStateChange: (newState) => {
           if (activeCrRef.current === crId) setWorkflowState(newState);
         },
       }),
-    [projectId, db]
+    [projectId, db, resolveSdlcThreadId]
   );
   const coordinator = useMemo(() => createCoordinator(activeCrId), [createCoordinator, activeCrId]);
 
