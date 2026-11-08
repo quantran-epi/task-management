@@ -578,7 +578,7 @@ Plans:
 7. A stopped agent reports back to the lead explicitly marked incomplete, and a global Stop aborts the lead plus every running agent.
 8. Team runs continue when the user leaves the tab, and returning shows the full result.
 
-**Plans:** 8/10 plans executed
+**Plans:** 9/10 plans executed
 
 **Wave 1** *(no dependencies; the hard gate — every later plan imports these types and tables)*
 
@@ -599,7 +599,7 @@ Plans:
 
 **Wave 4** *(depends on 34-03/34-04/34-05)*
 
-- [ ] 34-07-PLAN.md — Headless team-run coordinator: `@agent` routing, plan park, concurrent batch, terminal-only settle, budget pause, both stop controls
+- [x] 34-07-PLAN.md — Headless team-run coordinator: `@agent` routing, plan park, concurrent batch, terminal-only settle, budget pause, both stop controls
 
 **Wave 5** *(depends on 34-07/34-09)*
 
