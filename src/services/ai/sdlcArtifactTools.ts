@@ -102,10 +102,26 @@ export interface SubsystemProposalResult {
   evidence: string[];
 }
 
+/** D-08: a research question, already re-resolved against the catalog and the CR targets. */
+export interface ResearchProposalQuestion {
+  question: string;
+  systemId?: string;
+  systemCode?: string;
+}
+
+/** D-08: data only. Nothing here starts a research run. */
+export interface ResearchProposalResult {
+  questions: ResearchProposalQuestion[];
+  targetSystemIds: string[];
+  rationale: string;
+  unavailableSystemIds: string[];
+}
+
 export type ArtifactToolResult =
   | ArtifactToolSnapshot
   | ArtifactPatchProposal
   | SubsystemProposalResult
+  | ResearchProposalResult
   | ArtifactToolRefusal;
 
 export interface ArtifactToolAccess {
@@ -543,6 +559,9 @@ export async function executeSdlcArtifactTool(
   if (toolName === 'propose_subsystems') {
     return proposeSubsystems(db, args);
   }
+  if (toolName === 'propose_research') {
+    return proposeResearch(db, args, context);
+  }
   if (toolName === 'get_artifact') {
     const parsed = getArtifactArgsSchema.safeParse(args);
     if (!parsed.success) {
@@ -592,4 +611,52 @@ async function proposeSubsystems(
     });
   }
   return { items, evidence: parsed.data.evidence };
+}
+
+const researchArgsSchema = z.object({
+  questions: z.array(z.object({
+    question: z.string().min(1),
+    systemId: z.string().min(1).optional(),
+  })).default([]),
+  rationale: z.string().default(''),
+});
+
+/**
+ * T-32-10: model output is untrusted. Every `systemId` is re-resolved against `db.systems`
+ * AND intersected with the CR's targets; unknown or out-of-scope ids are dropped and never
+ * echoed back. `systemCode` always comes from the catalog.
+ */
+async function proposeResearch(
+  db: TaskPlannerDatabase,
+  rawArgs: Record<string, unknown>,
+  context: ArtifactToolContext
+): Promise<ResearchProposalResult | ArtifactToolRefusal> {
+  const parsed = researchArgsSchema.safeParse(rawArgs);
+  if (!parsed.success) {
+    return refuse('INVALID_ARGUMENTS', 'Danh sách câu hỏi nghiên cứu không hợp lệ.');
+  }
+  const systems = await db.systems.toArray();
+  const byId = new Map(systems.map((system) => [system.id, system]));
+  const cr = await db.changeRequests.get(context.crId);
+  const allowed = new Set((cr?.targets ?? []).map((target) => target.systemId));
+
+  const questions: ResearchProposalQuestion[] = [];
+  const targetSystemIds: string[] = [];
+  const seen = new Set<string>();
+  for (const candidate of parsed.data.questions) {
+    if (candidate.systemId === undefined) {
+      questions.push({ question: candidate.question });
+      continue;
+    }
+    const system = byId.get(candidate.systemId);
+    if (!system || !allowed.has(system.id)) continue;
+    questions.push({ question: candidate.question, systemId: system.id, systemCode: system.code });
+    if (!seen.has(system.id)) {
+      seen.add(system.id);
+      targetSystemIds.push(system.id);
+    }
+  }
+
+  const unavailableSystemIds = targetSystemIds.filter((id) => !byId.get(id)?.sshConfigId);
+  return { questions, targetSystemIds, rationale: parsed.data.rationale, unavailableSystemIds };
 }
