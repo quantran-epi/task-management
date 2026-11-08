@@ -438,4 +438,94 @@ describe('runAiOrchestratorLoop', () => {
       expect(result.generatedFiles[0]!.sizeBytes).toBeGreaterThan(0);
     }
   });
+
+  describe('beforeToolRound round boundary (D-21)', () => {
+    const toolThenText = () => {
+      let callCount = 0;
+      mockStreamChatEvents.mockImplementation(async function* () {
+        callCount += 1;
+        if (callCount === 1) {
+          yield {
+            type: 'tool_calls',
+            calls: [{ id: 'call_1', type: 'function', function: { name: 'custom_lookup', arguments: '{}' } }],
+          };
+        } else {
+          yield { type: 'text', delta: 'xong' };
+        }
+      });
+    };
+
+    it('is not called before the first round and gets the 1-based round number', async () => {
+      toolThenText();
+      const beforeToolRound = vi.fn().mockResolvedValue(undefined);
+
+      await runAiOrchestratorLoop({
+        endpoint: 'https://api.example.com', apiKey: 'test-key', model: 'test-model',
+        messages: [], db: testDb, executeToolFn: vi.fn().mockResolvedValue('{}'), beforeToolRound,
+      });
+
+      expect(beforeToolRound).toHaveBeenCalledTimes(1);
+      expect(beforeToolRound.mock.calls[0]![0]).toBe(2);
+    });
+
+    it('receives the loop signal as its second argument', async () => {
+      toolThenText();
+      const controller = new AbortController();
+      const beforeToolRound = vi.fn().mockResolvedValue(undefined);
+
+      await runAiOrchestratorLoop({
+        endpoint: 'https://api.example.com', apiKey: 'test-key', model: 'test-model',
+        messages: [], db: testDb, signal: controller.signal,
+        executeToolFn: vi.fn().mockResolvedValue('{}'), beforeToolRound,
+      });
+
+      expect(beforeToolRound.mock.calls[0]![1]).toBe(controller.signal);
+    });
+
+    it('suspends after the completed round tool results are appended', async () => {
+      toolThenText();
+      let release!: () => void;
+      const parked = new Promise<void>((resolve) => { release = resolve; });
+      const onToolResult = vi.fn();
+
+      const loop = runAiOrchestratorLoop({
+        endpoint: 'https://api.example.com', apiKey: 'test-key', model: 'test-model',
+        messages: [], db: testDb, executeToolFn: vi.fn().mockResolvedValue('{"found":true}'),
+        onToolResult, beforeToolRound: () => parked,
+      });
+
+      await vi.waitFor(() => expect(onToolResult).toHaveBeenCalledTimes(1));
+      expect(mockStreamChatEvents).toHaveBeenCalledTimes(1);
+
+      release();
+      const result = await loop;
+      expect(result.cleanResponse).toBe('xong');
+      expect(mockStreamChatEvents).toHaveBeenCalledTimes(2);
+    });
+
+    it('rejects with AbortError when the signal aborts while parked', async () => {
+      toolThenText();
+      const controller = new AbortController();
+
+      await expect(runAiOrchestratorLoop({
+        endpoint: 'https://api.example.com', apiKey: 'test-key', model: 'test-model',
+        messages: [], db: testDb, signal: controller.signal,
+        executeToolFn: vi.fn().mockResolvedValue('{}'),
+        beforeToolRound: (_round, signal) => new Promise<void>((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+          controller.abort();
+        }),
+      })).rejects.toMatchObject({ name: 'AbortError' });
+    });
+
+    it('leaves behavior unchanged when the hook is omitted', async () => {
+      toolThenText();
+      const result = await runAiOrchestratorLoop({
+        endpoint: 'https://api.example.com', apiKey: 'test-key', model: 'test-model',
+        messages: [], db: testDb, executeToolFn: vi.fn().mockResolvedValue('{}'),
+      });
+      expect(result.cleanResponse).toBe('xong');
+      expect(mockStreamChatEvents).toHaveBeenCalledTimes(2);
+    });
+  });
 });
