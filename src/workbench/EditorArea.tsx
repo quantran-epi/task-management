@@ -47,7 +47,8 @@ import { PlannerView } from '../views/PlannerView';
 import { AnalyticsView } from '../views/AnalyticsView';
 import { SettingsView } from '../views/SettingsView';
 import { DashboardView } from '../views/DashboardView';
-import { AgentControlView } from '../views/AgentControlView';
+import { AiOfficeView } from '../views/AiOfficeView';
+import { TeamsView } from '../views/TeamsView';
 import { TelegramMonitorView } from '../views/TelegramMonitorView';
 import { ItemInsightView } from '../views/ItemInsightView';
 import { ChangeRequestSdlcView } from '../views/ChangeRequestSdlcView';
@@ -590,7 +591,9 @@ export function EditorArea({ db }: EditorAreaProps) {
       case 'dashboard':
         return <DashboardView onNavigate={(route) => openTab({ id: route, title: route.toUpperCase(), viewType: route as any })} />;
       case 'agents':
-        return <AgentControlView />;
+        return <AiOfficeView {...dbProp} />;
+      case 'teams':
+        return <TeamsView {...dbProp} />;
       case 'telegram':
         return <TelegramMonitorView />;
       case 'mermaid':

@@ -373,6 +373,93 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     await waitFor(() => expect(seenModels).toContain('claude-sonnet-4'));
   });
 
+  it('renders the team composer placeholder', async () => {
+    renderView();
+
+    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    expect(
+      await screen.findByPlaceholderText('Nhắn cho lead hoặc @ một nhân viên...')
+    ).toBeInTheDocument();
+  });
+
+  it('routes a bare message to the lead and a mention to that employee', async () => {
+    await db.settings.put({ key: 'ninerouter_api_key', value: 'sk-test' });
+    await db.settings.put({ key: 'ninerouter_endpoint', value: 'https://example.invalid/v1' });
+
+    const routedTo: string[] = [];
+    const createRuntimeDeps = (agentId: string) => ({
+      runLoop: (async () => {
+        routedTo.push(agentId);
+        return {
+          fullResponse: 'Xong.',
+          cleanResponse: 'Xong.',
+          messages: [],
+          tokenUsage: {},
+          generatedFiles: [],
+          truncated: false,
+          loopLimitReached: false,
+        };
+      }) as any,
+    });
+
+    render(<TeamsView db={db} createRuntimeDeps={createRuntimeDeps} />);
+
+    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    const composer = await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
+
+    fireEvent.change(composer, { target: { value: 'Yêu cầu chung' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+    await waitFor(() => expect(routedTo).toContain(lead.id));
+    await screen.findByLabelText('Gửi tin nhắn');
+
+    fireEvent.change(composer, {
+      target: { value: `@[An Nguyễn](agent:${employees[0]!.id}) làm giúp` },
+    });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+    await waitFor(() => expect(routedTo).toContain(employees[0]!.id));
+  });
+
+  it('offers the team lead as the first @ option in the composer', async () => {
+    renderView();
+
+    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    const composer = (await screen.findByLabelText(
+      'Nội dung tin nhắn trò chuyện AI'
+    )) as HTMLTextAreaElement;
+    composer.focus();
+    fireEvent.change(composer, { target: { value: '@', selectionStart: 1, selectionEnd: 1 } });
+    fireEvent.keyUp(composer, { key: '@', keyCode: 50 });
+
+    await waitFor(() => {
+      expect(document.querySelector('.ant-mentions-dropdown')).toBeInTheDocument();
+    });
+    const items = Array.from(
+      document.querySelectorAll<HTMLElement>('.ant-mentions-dropdown li[role="menuitem"]')
+    );
+    expect(items[0]!.textContent).toContain('Bình Trần');
+  });
+
+  it('opens the teams view from the TitleBar AI Office entry', async () => {
+    const onOpenView = vi.fn();
+    const { TitleBar } = await import('../../src/workbench/TitleBar');
+
+    render(<TitleBar onOpenView={onOpenView} activeView="tasks" />);
+
+    fireEvent.click(screen.getByTestId('titlebar-ai-office'));
+    expect(onOpenView).toHaveBeenCalledWith('teams');
+  });
+
+  it('routes both the agents and teams views in renderViewContent', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const source = readFileSync(
+      resolve(process.cwd(), 'src', 'workbench', 'EditorArea.tsx'),
+      'utf8'
+    );
+    expect(source).toContain('<AiOfficeView {...dbProp} />');
+    expect(source).toContain('<TeamsView {...dbProp} />');
+  });
+
   it('renders the lead approval card and routes the decision to the coordinator', async () => {
     await db.settings.put({ key: 'ninerouter_api_key', value: 'sk-test' });
     await db.settings.put({ key: 'ninerouter_endpoint', value: 'https://example.invalid/v1' });

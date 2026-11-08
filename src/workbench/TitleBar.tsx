@@ -6,6 +6,7 @@ import {
   DesktopOutlined,
   CodeOutlined,
   SwapOutlined,
+  TeamOutlined,
 } from '@ant-design/icons';
 import { TaskMateLogo } from '../components/TaskMateLogo';
 import {
@@ -303,6 +304,31 @@ export function TitleBar({
                 {runningCount > 0 && (
                   <Badge count={runningCount} size="small" style={{ backgroundColor: 'var(--accent, #3871e1)' }} />
                 )}
+              </Button>
+            </Tooltip>
+
+            <Tooltip title="AI Office">
+              <Button
+                type="text"
+                size="small"
+                icon={<TeamOutlined style={{ fontSize: 14 }} />}
+                onClick={() => onOpenView?.('teams')}
+                aria-label="Mở AI Office"
+                data-testid="titlebar-ai-office"
+                style={{
+                  height: 24,
+                  padding: '0 7px',
+                  fontSize: 12,
+                  borderRadius: 3,
+                  color: activeView === 'teams' ? 'var(--accent, #3871e1)' : 'var(--fg-secondary, #5f6269)',
+                  background: activeView === 'teams' ? 'var(--bg-selected, #d0dffe)' : 'transparent',
+                  fontWeight: activeView === 'teams' ? 600 : 400,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <span>AI Office</span>
               </Button>
             </Tooltip>
 

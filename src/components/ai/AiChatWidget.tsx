@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Tag, Typography, theme } from 'antd';
 import { SyncOutlined, CheckCircleOutlined, StopOutlined } from '@ant-design/icons';
 import type { ChatMessage } from '../../types/models';
+import type { AgentRunStatus } from '../../types/aiOffice';
 import { formatToolLimitMessage, type ChatTurnStatus, type ChatTurnToolEvent } from './runtime/chatTurnRuntime';
 import type { McpServerConfig } from '../../services/ai/mcpClient';
 import { renderSafeMarkdown } from '../../utils/markdown';
@@ -110,6 +111,12 @@ export interface AiChatWidgetProps {
   onExternalValueConsumed?: (() => void) | undefined;
   draft: string;
   onDraftChange: (next: string) => void;
+  /** Phase 34 D-07: agent identity lookup forwarded to the transcript. */
+  agentDirectory?: Map<string, { agentId: string; name: string; role: string; isLead: boolean; color: string }> | undefined;
+  agentStatuses?: Map<string, AgentRunStatus> | undefined;
+  onStopAgent?: ((agentId: string) => void) | undefined;
+  /** Phase 34 D-08: lead-first `@agent` suggestions for the composer. */
+  agentMentionOptions?: Array<{ id: string; name: string; role: string; isLead: boolean }> | undefined;
 }
 
 /**
@@ -272,6 +279,10 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
   onExternalValueConsumed,
   draft,
   onDraftChange,
+  agentDirectory,
+  agentStatuses,
+  onStopAgent,
+  agentMentionOptions,
 }) => {
   const { token } = theme.useToken();
   const isTurnActive = ACTIVE_STAGES.has(turn.status);
@@ -400,6 +411,9 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
         // pendingConfirmation/onConfirmAction are deliberately not passed here.
         emptyState={emptyState}
         {...(messageListExtensions ?? {})}
+        {...(agentDirectory ? { agentDirectory } : {})}
+        {...(agentStatuses ? { agentStatuses } : {})}
+        {...(onStopAgent ? { onStopAgent } : {})}
       />
 
       {transcriptExtensions}
@@ -553,6 +567,7 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
         {...(onExternalValueConsumed ? { onExternalValueConsumed } : {})}
         value={draft}
         onValueChange={onDraftChange}
+        {...(agentMentionOptions ? { agentOptions: agentMentionOptions } : {})}
       />
     </div>
   );

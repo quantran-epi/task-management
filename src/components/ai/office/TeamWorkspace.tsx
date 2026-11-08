@@ -222,6 +222,17 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   }, [snapshot.agents]);
 
   const streamingAgent = snapshot.agents.find((row) => row.status === 'running');
+
+  const agentMentionOptions = useMemo(
+    () =>
+      roster.map((agent) => ({
+        id: agent.id,
+        name: agent.name,
+        role: agent.role,
+        isLead: agent.id === team.leadId,
+      })),
+    [roster, team.leadId]
+  );
   const turnStatus =
     snapshot.phase === 'awaiting-mutation-approval'
       ? 'awaiting-approval'
@@ -479,6 +490,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                     ...(coordinator ? { onStopAgent: (agentId: string) => coordinator.stopAgent(agentId) } : {}),
                   }}
                   transcriptExtensions={transcriptExtensions}
+                  agentMentionOptions={agentMentionOptions}
                 />
               )}
             </div>
