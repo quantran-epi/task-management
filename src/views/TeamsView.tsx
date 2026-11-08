@@ -3,12 +3,13 @@ import { Button, Empty, Tag, theme } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
-import { listEmployees, listLeads } from '../db/repositories/aiOfficeRepo';
+import { listEmployees, listLeads, listSkills } from '../db/repositories/aiOfficeRepo';
 import { activateTeam, listTeams, pauseTeam } from '../db/repositories/aiTeamRepo';
 import type { ChatTurnRuntimeDeps } from '../components/ai/runtime/chatTurnRuntime';
 import { PageHeader } from '../components/common/PageHeader';
 import { TeamCard, type TeamCardMember } from '../components/ai/office/TeamCard';
 import { TeamEditorDrawer } from '../components/ai/office/TeamEditorDrawer';
+import { TeamWorkspace } from '../components/ai/office/TeamWorkspace';
 import type { AiTeam } from '../types/aiOffice';
 
 export interface TeamsViewProps {
@@ -23,7 +24,7 @@ type TeamsMode = 'list' | 'workspace';
  * UI-SPEC §5 team page. Two modes in one view, driven by local state rather than
  * routing: the list is the entry surface and the workspace replaces it in place.
  */
-export const TeamsView: React.FC<TeamsViewProps> = ({ db = defaultDb }) => {
+export const TeamsView: React.FC<TeamsViewProps> = ({ db = defaultDb, createRuntimeDeps }) => {
   const { token } = theme.useToken();
   const [mode, setMode] = useState<TeamsMode>('list');
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null);
@@ -32,6 +33,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ db = defaultDb }) => {
   const teams = useLiveQuery(() => listTeams(db), [db]) ?? [];
   const leads = useLiveQuery(() => listLeads(db), [db]) ?? [];
   const employees = useLiveQuery(() => listEmployees(db), [db]) ?? [];
+  const skills = useLiveQuery(() => listSkills(db), [db]) ?? [];
   const allMembers = useLiveQuery(() => db.aiTeamMembers.toArray(), [db]) ?? [];
 
   const activeCount = teams.filter((team) => team.status === 'active').length;
@@ -64,8 +66,37 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ db = defaultDb }) => {
     setMode('workspace');
   };
 
+  const activeTeam = activeTeamId ? teams.find((team) => team.id === activeTeamId) : undefined;
+  const activeMembers = activeTeam
+    ? allMembers.filter((member) => member.teamId === activeTeam.id)
+    : [];
+
   if (mode === 'workspace') {
-    return <div data-testid="team-workspace-placeholder" data-team-id={activeTeamId ?? ''} />;
+    if (!activeTeam) {
+      // A stale id after a delete must not crash; fall back to the list.
+      return (
+        <div data-testid="teams-view" style={{ padding: 16 }}>
+          <Button onClick={() => setMode('list')}>Quay lại danh sách nhóm</Button>
+        </div>
+      );
+    }
+    return (
+      <div data-testid="teams-view" style={{ height: '100%', padding: 16 }}>
+        <TeamWorkspace
+          team={activeTeam}
+          lead={leadFor(activeTeam)}
+          members={activeMembers}
+          employees={employees}
+          skills={skills}
+          db={db}
+          onBack={() => {
+            setMode('list');
+            setActiveTeamId(null);
+          }}
+          {...(createRuntimeDeps ? { createRuntimeDeps } : {})}
+        />
+      </div>
+    );
   }
 
   return (

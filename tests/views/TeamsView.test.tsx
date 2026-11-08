@@ -249,10 +249,164 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     expect(screen.getByTestId('linked-item-picker')).toBeInTheDocument();
   });
 
-  it('renders the workspace placeholder when a team is opened', async () => {
+  it('renders the workspace with the sidebar and the transcript region', async () => {
     renderView();
 
     fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
-    expect(await screen.findByTestId('team-workspace-placeholder')).toBeInTheDocument();
+
+    expect(await screen.findByTestId('team-sidebar')).toBeInTheDocument();
+    expect(await screen.findByTestId('team-transcript-region')).toBeInTheDocument();
+    expect(screen.getByTestId('team-workspace')).toBeInTheDocument();
+  });
+
+  it('creates exactly one team thread on open and reuses it after a pause', async () => {
+    renderView();
+
+    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    await screen.findByTestId('team-transcript-region');
+
+    const first = await waitFor(async () => {
+      const rows = await db.chatThreads.where('scopeType').equals('team').toArray();
+      expect(rows).toHaveLength(1);
+      return rows;
+    });
+    expect(first[0]!.entityId).toBe(activeTeam.id);
+
+    fireEvent.click(screen.getByTestId('team-workspace-back'));
+    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    await screen.findByTestId('team-transcript-region');
+
+    const second = await db.chatThreads.where('scopeType').equals('team').toArray();
+    expect(second).toHaveLength(1);
+    expect(second[0]!.id).toBe(first[0]!.id);
+  });
+
+  it('makes the transcript region a single focus stop', async () => {
+    renderView();
+
+    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    const region = await screen.findByTestId('team-transcript-region');
+    expect(region).toHaveAttribute('tabindex', '0');
+    expect(region).toHaveAttribute('role', 'region');
+  });
+
+  it('renders the sidebar budget, links and mode sections', async () => {
+    renderView();
+
+    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    await screen.findByTestId('team-sidebar');
+
+    expect(screen.getByTestId('team-budget-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('team-linked-items')).toBeInTheDocument();
+    expect(screen.getByTestId('team-mode-toggles')).toBeInTheDocument();
+  });
+
+  it('keeps the settings split table rows summing to the team total', async () => {
+    const { TeamSettingsDrawer, evenSplitRows } = await import(
+      '../../src/components/ai/office/TeamSettingsDrawer'
+    );
+    const members = await listTeamMembers(activeTeam.id, db);
+    const rows = evenSplitRows(
+      5000,
+      members.map((member) => ({
+        memberId: member.id,
+        agentId: member.agentId,
+        name: member.agentId,
+        role: member.role,
+        usedTokens: member.usedTokens,
+      }))
+    );
+    expect(rows.reduce((sum, row) => sum + row.budgetTokens, 0)).toBe(5000);
+    expect(rows.find((row) => row.role === 'lead')!.budgetTokens).toBe(1668);
+
+    render(
+      <TeamSettingsDrawer
+        open
+        team={activeTeam}
+        members={members}
+        lead={lead}
+        employees={employees}
+        links={[]}
+        onCancel={vi.fn()}
+        onSave={vi.fn()}
+      />
+    );
+    expect(await screen.findByTestId('team-settings-drawer')).toBeInTheDocument();
+    expect(screen.getByText('Lưu cài đặt')).toBeInTheDocument();
+  });
+
+  it('uses the lead model for a bare message and the employee model for a mention', async () => {
+    await db.settings.put({ key: 'ninerouter_api_key', value: 'sk-test' });
+    await db.settings.put({ key: 'ninerouter_endpoint', value: 'https://example.invalid/v1' });
+
+    const seenModels: string[] = [];
+    const createRuntimeDeps = () => ({
+      runLoop: (async (loopOptions: any) => {
+        seenModels.push(loopOptions.model);
+        return {
+          fullResponse: 'Xong.',
+          cleanResponse: 'Xong.',
+          messages: [],
+          tokenUsage: {},
+          generatedFiles: [],
+          truncated: false,
+          loopLimitReached: false,
+        };
+      }) as any,
+    });
+
+    render(<TeamsView db={db} createRuntimeDeps={createRuntimeDeps} />);
+
+    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    const composer = await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
+
+    fireEvent.change(composer, { target: { value: 'Yêu cầu chung' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+    await waitFor(() => expect(seenModels).toContain('claude-opus-4'));
+    // The composer swaps Gửi for Dừng while a turn runs; wait for it to settle.
+    await screen.findByLabelText('Gửi tin nhắn');
+
+    fireEvent.change(composer, {
+      target: { value: `@[An Nguyễn](agent:${employees[0]!.id}) làm giúp` },
+    });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+    await waitFor(() => expect(seenModels).toContain('claude-sonnet-4'));
+  });
+
+  it('renders the lead approval card and routes the decision to the coordinator', async () => {
+    await db.settings.put({ key: 'ninerouter_api_key', value: 'sk-test' });
+    await db.settings.put({ key: 'ninerouter_endpoint', value: 'https://example.invalid/v1' });
+
+    let approvalSeen = false;
+    const createRuntimeDeps = () => ({
+      runLoop: (async (loopOptions: any) => {
+        const check = await loopOptions.onMutationCheck?.('update_task', { id: 't1' });
+        approvalSeen = true;
+        return {
+          fullResponse: check?.proceed ? 'Đã cập nhật.' : 'Đã hủy.',
+          cleanResponse: '',
+          messages: [],
+          tokenUsage: {},
+          generatedFiles: [],
+          truncated: false,
+          loopLimitReached: false,
+        };
+      }) as any,
+    });
+
+    render(<TeamsView db={db} createRuntimeDeps={createRuntimeDeps} />);
+
+    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    const composer = await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(composer, { target: { value: 'Cập nhật việc A' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    expect(await screen.findByTestId('ai-mutation-approval')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Chấp thuận'));
+
+    await waitFor(() => expect(approvalSeen).toBe(true));
+    await waitFor(() => {
+      expect(screen.queryByTestId('ai-mutation-approval')).not.toBeInTheDocument();
+    });
   });
 });
