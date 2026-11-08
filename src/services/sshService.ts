@@ -10,6 +10,8 @@ import {
   type RemoteFileInfo,
   type RemoteFileSliceResult,
   type CommandOutput,
+  type SshStreamEvent,
+  type SshStreamExitEvent,
   SSH_CONFIGS_SETTING_KEY,
 } from '../types/ssh';
 
@@ -260,4 +262,69 @@ export async function execRemoteCommand(
     secret: effectiveSecret ?? null,
     command,
   });
+}
+
+/**
+ * Run a remote command without a PTY and stream stdout/stderr lines as they arrive.
+ * Returns an idempotent cancel handle that SIGTERMs the remote process and unlistens.
+ */
+export async function execRemoteCommandStream(
+  config: SshConfig,
+  command: string,
+  sessionId: string,
+  onData: (event: SshStreamEvent) => void,
+  onExit: (event: SshStreamExitEvent) => void,
+  secret?: string,
+): Promise<() => Promise<void>> {
+  if (!isTauriApp()) {
+    throw new Error('Tính năng SSH chỉ hoạt động trên môi trường Desktop Tauri.');
+  }
+  const effectiveSecret = await resolveSecret(config, secret);
+  const { invoke } = await import('@tauri-apps/api/core');
+  const { listen } = await import('@tauri-apps/api/event');
+
+  let cancelled = false;
+  let unlistenData: (() => void) | undefined;
+  let unlistenExit: (() => void) | undefined;
+
+  const cleanup = () => {
+    unlistenData?.();
+    unlistenExit?.();
+    unlistenData = undefined;
+    unlistenExit = undefined;
+  };
+
+  unlistenData = await listen<SshStreamEvent>(`ssh-stream:data:${sessionId}`, (evt) => {
+    onData(evt.payload);
+  });
+  unlistenExit = await listen<SshStreamExitEvent>(`ssh-stream:exit:${sessionId}`, (evt) => {
+    cleanup();
+    onExit(evt.payload);
+  });
+
+  try {
+    await invoke('ssh_exec_stream', {
+      config,
+      secret: effectiveSecret ?? null,
+      sessionId,
+      command,
+    });
+  } catch (err) {
+    cleanup();
+    throw err;
+  }
+
+  return async () => {
+    if (cancelled) return;
+    cancelled = true;
+    try {
+      await invoke('ssh_kill_process', {
+        config,
+        secret: effectiveSecret ?? null,
+        sessionId,
+      });
+    } finally {
+      cleanup();
+    }
+  };
 }
