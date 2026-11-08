@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import React from 'react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../src/db';
 import {
@@ -10,7 +13,11 @@ import {
 } from '../../src/db/repositories/aiOfficeRepo';
 import { createTeam } from '../../src/db/repositories/aiTeamRepo';
 import { AiOfficeView } from '../../src/views/AiOfficeView';
-import { useLayoutStore } from '../../src/workbench/store/layoutStore';
+import { getEditorTabIcon } from '../../src/workbench/EditorArea';
+import {
+  useLayoutStore,
+  type EditorViewType,
+} from '../../src/workbench/store/layoutStore';
 
 // The model option source hits the network; stub it so the drawer has a non-empty list.
 vi.mock('../../src/services/ai/nineRouterTokenService', async (original) => ({
@@ -302,5 +309,30 @@ describe('AiOfficeView — employee tab shell (AIO-UI-01)', () => {
     expect(await screen.findByTestId('employee-editor-drawer')).toBeInTheDocument();
     expect(screen.getByLabelText('Tên')).toHaveValue('An Nguyễn');
     expect(screen.getByText('Sửa nhân viên')).toBeInTheDocument();
+  });
+});
+
+describe("workbench 'teams' view registration (AIO-UI-01)", () => {
+  const TEAMS_TITLE = 'AI Office — Nhóm';
+
+  function readSource(relative: string): string {
+    return readFileSync(resolve(process.cwd(), 'src', relative), 'utf8');
+  }
+
+  it("accepts 'teams' as an EditorViewType member", () => {
+    const viewType: EditorViewType = 'teams';
+    expect(viewType).toBe('teams');
+    expect(readSource('workbench/store/layoutStore.ts')).toContain("'teams'");
+  });
+
+  it("returns an icon element for 'teams'", () => {
+    const icon = getEditorTabIcon('teams');
+    expect(icon).toBeTruthy();
+    expect(React.isValidElement(icon)).toBe(true);
+  });
+
+  it('titles teams in both workbench title maps', () => {
+    expect(readSource('workbench/EditorArea.tsx')).toContain(`teams: '${TEAMS_TITLE}'`);
+    expect(readSource('workbench/WorkbenchLayout.tsx')).toContain(`teams: '${TEAMS_TITLE}'`);
   });
 });

@@ -12,6 +12,7 @@ export type EditorViewType =
   | 'cr_detail'
   | 'dashboard'
   | 'agents'
+  | 'teams'
   | 'telegram'
   | 'insight'
   | 'sdlc'
