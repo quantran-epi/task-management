@@ -198,7 +198,7 @@ export interface Note {
   tags?: string[] | undefined; // Taxonomy tags
   slug?: string | undefined; // URL / human readable slug
   entityType?: NoteEntityType | undefined; // Optional reference type
-  entityId?: string | undefined; // Optional reference to Task/Project/Milestone id
+  entityId?: string | undefined; // Optional reference to Task/CR/System id
   title?: string | undefined;
   body: string; // Markdown text content
   isPinned: boolean;
@@ -224,9 +224,9 @@ export type ChatScopeType = 'global' | 'task' | 'cr' | 'system' | 'document';
 
 export interface ChatThread {
   id: string; // RFC 4122 v4 UUID
-  scopeKey: string; // Unique index: 'global' | 'task:<taskId>' | 'project:<projectId>' | 'milestone:<milestoneId>'
+  scopeKey: string; // Unique index: 'global' | 'task:<taskId>' | 'cr:<crId>' | 'system:<systemId>' | 'document:<docId>'
   scopeType: ChatScopeType;
-  entityId?: string | undefined; // Target task/project/milestone id (undefined if global)
+  entityId?: string | undefined; // Optional reference to Task/CR/System id| undefined; // Target task/CR/system id (undefined if global)
   title?: string | undefined;
   createdAt: string; // ISO string metadata
   updatedAt: string; // ISO string metadata
@@ -417,7 +417,7 @@ export interface KnowledgeLink {
   id: string; // RFC 4122 v4 UUID
   linkKey: string; // Unique composite key `${taskMateEntityType}:${taskMateEntityId}:${setId}:${urn || docId}`
   taskMateEntityType: TaskMateEntityType;
-  taskMateEntityId: string; // UUID of task, project, or milestone
+  taskMateEntityId: string; // UUID of task, CR, or system
   setId: string; // UUID of DocumentSet
   urn?: string | undefined; // Optional canonical knowledge graph URN
   docId?: string | undefined; // Optional stable Note/Document UUID
