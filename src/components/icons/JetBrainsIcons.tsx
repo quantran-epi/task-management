@@ -431,3 +431,53 @@ export const JetBrainsSdlcIcon: React.FC<JetBrainsIconProps> = ({ size = 16, sty
   </svg>
 );
 
+// 12. Terminal (Midnight Indigo Console + Traffic Light Dots + Neon Cyan Prompt + Lime Cursor)
+export const JetBrainsTerminalIcon: React.FC<JetBrainsIconProps> = ({ size = 16, style, className }) => (
+  <svg
+    viewBox="0 0 24 24"
+    width={size}
+    height={size}
+    className={className}
+    style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style }}
+  >
+    <defs>
+      <linearGradient id="jbTermBg" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#1e1b4b" />
+        <stop offset="60%" stopColor="#1e293b" />
+        <stop offset="100%" stopColor="#0f172a" />
+      </linearGradient>
+      <linearGradient id="jbTermPrompt" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#38bdf8" />
+        <stop offset="100%" stopColor="#06b6d4" />
+      </linearGradient>
+      <linearGradient id="jbTermCursor" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#a3e635" />
+        <stop offset="100%" stopColor="#22c55e" />
+      </linearGradient>
+    </defs>
+    {/* Console Window Body */}
+    <rect x="2.5" y="3" width="19" height="18" rx="4" fill="url(#jbTermBg)" stroke="#334155" strokeWidth="0.8" />
+    {/* Top Header Dots (Traffic Lights) */}
+    <circle cx="6" cy="6.5" r="1.2" fill="#f43f5e" />
+    <circle cx="9.5" cy="6.5" r="1.2" fill="#fbbf24" />
+    <circle cx="13" cy="6.5" r="1.2" fill="#22c55e" />
+    {/* Header separator line */}
+    <line x1="2.5" y1="9.5" x2="21.5" y2="9.5" stroke="#334155" strokeWidth="0.8" opacity="0.6" />
+    {/* Prompt Arrow > */}
+    <path
+      d="M 6.5 13 L 9.8 15.5 L 6.5 18"
+      stroke="url(#jbTermPrompt)"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+    />
+    {/* Blinking Cursor _ */}
+    <line x1="12" y1="18" x2="17" y2="18" stroke="url(#jbTermCursor)" strokeWidth="2.2" strokeLinecap="round" />
+    {/* Mini output dot / indicator */}
+    <circle cx="13" cy="13.5" r="1" fill="#ec4899" opacity="0.9" />
+    <circle cx="16.5" cy="13.5" r="1" fill="#818cf8" opacity="0.9" />
+  </svg>
+);
+
+

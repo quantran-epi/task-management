@@ -119,6 +119,15 @@ export function initStandardActions(): void {
       },
     },
     {
+      id: 'view.toggle-terminal',
+      title: 'Tool Windows: Toggle Terminal',
+      category: 'View',
+      shortcut: 'Alt+F12',
+      perform: () => {
+        useLayoutStore.getState().toggleToolWindow('bottom', 'terminal');
+      },
+    },
+    {
       id: 'search.everywhere',
       title: 'Search Everywhere',
       category: 'Navigate',

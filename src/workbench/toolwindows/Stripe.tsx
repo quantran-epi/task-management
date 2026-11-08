@@ -8,6 +8,7 @@ export interface ToolWindowItem {
   icon: React.ReactNode;
   shortcut?: string;
   badge?: number;
+  slot?: ToolWindowSlot;
 }
 
 export interface StripeProps {
@@ -17,16 +18,21 @@ export interface StripeProps {
 }
 
 export function Stripe({ slot, items, bottomItems }: StripeProps) {
-  const activeId = useLayoutStore((state) => {
-    if (slot === 'left') return state.leftActiveId;
-    if (slot === 'right') return state.rightActiveId;
-    return state.bottomActiveId;
-  });
+  const leftActiveId = useLayoutStore((state) => state.leftActiveId);
+  const rightActiveId = useLayoutStore((state) => state.rightActiveId);
+  const bottomActiveId = useLayoutStore((state) => state.bottomActiveId);
   const toggleToolWindow = useLayoutStore((state) => state.toggleToolWindow);
 
   const isHorizontal = slot === 'bottom';
 
   const renderButton = (item: ToolWindowItem) => {
+    const targetSlot = item.slot ?? slot;
+    const activeId =
+      targetSlot === 'left'
+        ? leftActiveId
+        : targetSlot === 'right'
+        ? rightActiveId
+        : bottomActiveId;
     const isActive = activeId === item.id;
     const tooltipTitle = item.shortcut ? `${item.shortcut}: ${item.name}` : item.name;
 
@@ -34,7 +40,8 @@ export function Stripe({ slot, items, bottomItems }: StripeProps) {
       <Tooltip key={item.id} title={tooltipTitle} placement={isHorizontal ? 'top' : slot === 'left' ? 'right' : 'left'}>
         <button
           type="button"
-          onClick={() => toggleToolWindow(slot, item.id)}
+          data-testid={`stripe-btn-${item.id}`}
+          onClick={() => toggleToolWindow(targetSlot, item.id)}
           aria-label={tooltipTitle}
           aria-pressed={isActive}
           style={{

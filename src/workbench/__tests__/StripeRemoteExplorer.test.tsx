@@ -40,13 +40,15 @@ describe('Stripe Remote Git Explorer Integration (SDLC-REPO-EXP-01)', () => {
     const remoteExplorerBtn = screen.getByRole('button', { name: /Remote Git Explorer/i });
     expect(remoteExplorerBtn).toBeDefined();
 
-    // Verify ordering: CR Explorer -> Docs Explorer -> Diagram Explorer -> Remote Git Explorer
+    // Verify ordering: CR Explorer -> Docs Explorer -> Diagram Explorer -> Remote Git Explorer -> Terminal
     const buttonLabels = buttons.map((b) => b.getAttribute('aria-label') || '');
     const diagramIndex = buttonLabels.findIndex((label) => label.includes('Diagram Explorer'));
     const remoteIndex = buttonLabels.findIndex((label) => label.includes('Remote Git Explorer'));
+    const terminalIndex = buttonLabels.findIndex((label) => label.includes('Terminal'));
 
     expect(diagramIndex).toBeGreaterThan(-1);
     expect(remoteIndex).toBeGreaterThan(diagramIndex);
+    expect(terminalIndex).toBeGreaterThan(remoteIndex);
   });
 
   it('toggles leftActiveId to remote_explorer when clicked and renders Left Tool Window header', () => {

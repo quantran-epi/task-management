@@ -58,6 +58,11 @@ export function useGlobalKeymap(): void {
           executeAction('view.toggle-systems');
           return;
         }
+        if (e.key === 'F12') {
+          e.preventDefault();
+          executeAction('view.toggle-terminal');
+          return;
+        }
         if (e.key === 't' || e.key === 'T') {
           e.preventDefault();
           executeAction('timer.toggle');

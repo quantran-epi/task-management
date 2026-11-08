@@ -67,10 +67,10 @@ describe('WorkbenchBottomPanel Integration', () => {
     expect(screen.getByText('Terminal 1')).toBeInTheDocument();
   });
 
-  it('toggles bottom panel when StatusBar Terminal button is clicked', () => {
+  it('toggles bottom panel when Stripe Terminal trigger button is clicked', () => {
     render(<WorkbenchLayout />);
 
-    const terminalBtn = screen.getByTestId('statusbar-terminal-btn');
+    const terminalBtn = screen.getByTestId('stripe-btn-terminal');
     const bottomWindow = screen.getByTestId('bottom-tool-window');
     expect(bottomWindow.parentElement?.parentElement).toHaveStyle({ display: 'none' });
 

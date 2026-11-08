@@ -106,6 +106,7 @@ Progress: [███████░░░] 70%
 | `20261107-ai-chat-conventions` | 2026-11-07 | AIChatDrawer & conventionService | Wires Global and Repo conventions into General AI Chat systemPromptContent with fail-safe resolution |
 | `261107-repo-path-picker-cr-explorer` | 2026-11-07 | SystemModal, CR Explorer, SdlcSidebar, SystemsExplorer | Added SSH remote directory picker; rebranded CR Explorer with New CR button; unified SDLC Studio on CR; opened SystemDetailView on system click |
 | `261108-hga-cai-thien-icon-workbench` | 2026-11-08 | Workbench Layout, TitleBar, EditorArea, Explorers | Redesigned Diagram icon to flowchart; added 3D isometric Systems icon, Git branch Remote icon, SDLC infinity loop; added tab icons to EditorArea; synchronized tree view folder/leaf icon system |
+| `261108-ttb-terminal-trigger-bottom-left-colorful-icon` | 2026-11-08 | Workbench Stripe, StatusBar, Keymap, Icons | Moved terminal trigger from bottom status bar to bottom-left stripe below Remote Git Explorer; added colorful JetBrainsExpUI terminal icon with midnight console, traffic light dots, neon prompt & cursor; enabled Alt+F12 keymap |
 
 ## Decisions
 

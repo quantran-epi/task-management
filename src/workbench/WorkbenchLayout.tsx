@@ -24,6 +24,7 @@ import {
   JetBrainsDiagramIcon,
   JetBrainsSystemsIcon,
   JetBrainsRemoteGitIcon,
+  JetBrainsTerminalIcon,
   JetBrainsAIIcon,
   JetBrainsNotificationIcon,
 } from '../components/icons/JetBrainsIcons';
@@ -59,6 +60,13 @@ const DEFAULT_BOTTOM_LEFT_ITEMS: ToolWindowItem[] = [
     name: 'Remote Git Explorer',
     icon: <JetBrainsRemoteGitIcon size={16} />,
     shortcut: 'Alt+4',
+  },
+  {
+    id: 'terminal',
+    name: 'Terminal',
+    icon: <JetBrainsTerminalIcon size={16} />,
+    shortcut: 'Alt+F12',
+    slot: 'bottom',
   },
 ];
 
