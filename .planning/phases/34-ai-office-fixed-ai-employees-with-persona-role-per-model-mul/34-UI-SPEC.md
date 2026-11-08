@@ -1,10 +1,10 @@
 ---
 phase: 34
 slug: ai-office-fixed-ai-employees-with-persona-role-per-model-mul
-status: draft
-shadcn_initialized: false
+status: approved
 preset: none
 created: 2026-11-08
+reviewed_at: 2026-11-08
 ---
 
 # Phase 34 — UI Design Contract: AI Office
@@ -44,7 +44,7 @@ Declared values (multiples of 4, matching the IntelliJ ExpUI workbench):
 | 3xl | 64px | Not used in this phase (no full-page marketing layout) |
 
 Exceptions (existing-project conventions, must not be "fixed"):
-- `6px` — `--island-gap` workbench token; island gaps and icon micro-gaps.
+- `6px` — `--island-gap` workbench token; island gaps and icon micro-gaps. Also the sanctioned value for three avatar/row micro-gaps in this phase: `marginLeft: -6` (roster avatar overlap), `gap: 6` (transcript attribution row), `padding: '6px 0'` (assignment-plan row).
 - `10px` — antd `Space` default wrap gap.
 - `12px` — chat bubble padding `12px 16px` (existing `ChatMessageBubble`).
 - `22px` — icon-only control footprint (`width/height: 22`, matches `ChatTabToolbox` and `ActiveAiTurnIndicator`).
@@ -66,7 +66,7 @@ Declared 4 sizes, 2 weights (no others permitted in new code):
 | Caption (role, model tag, timestamps, budget numbers, help text) | 12px | 400 | 1.4 | UI |
 
 Exceptions:
-- `11px` — micro metadata already used by `ChatMessageBubble` (timestamp, `⏱`, `🪙`). Reuse it only for the same class of metadata; never for readable copy.
+- `11px` — micro metadata already used by `ChatMessageBubble` (timestamp, `⏱`, `🪙`). Reuse it only for the same class of metadata; never for readable copy. The role text in the §6 attribution row and the §10 `@mention` options is **not** micro metadata — it uses the 12px Caption size.
 - `14px / 1.57` — chat bubble body inside `ChatMessageBubble`. Do not change it; agent attribution wraps around the existing bubble, it does not restyle it.
 - Skill body textarea and diff/preview panes use the code family at `12px / 1.5`.
 
@@ -117,8 +117,8 @@ Resolved from Claude's Discretion.
 | Component | antd `<Avatar size={24}>` in transcript rows, `<Avatar size={32}>` in list cards, `<Avatar size={20}>` in `@mention` options |
 | Content | First grapheme of the employee/lead name, uppercased. No uploaded images in this phase. |
 | Shape | `square` for lead, `circle` for employee — shape alone distinguishes the two roles even in grayscale |
-| Color | Deterministic from `agentId`: index into a fixed 6-entry palette derived from existing tokens — `#5b4fe8`, `#22d3ee`, `#338555`, `#a56906`, `#c54e58`, `#6c707e`. Same id always renders the same color, in the list and in the transcript. |
-| Text color | `#ffffff` |
+| Color | Deterministic from `agentId` via `charCodeSum(agentId) % 6`, indexing a fixed 6-entry palette derived from existing tokens — `#5b4fe8`, `#22d3ee`, `#338555`, `#a56906`, `#c54e58`, `#6c707e`. Same id always renders the same color, in the list and in the transcript. |
+| Text color | `#ffffff`, except on the `#22d3ee` and `#338555` swatches which use `#1f2328` (white on those two fails WCAG AA at avatar glyph size). |
 | Lead marker | `<CrownOutlined style={{ fontSize: 11, color: token.colorPrimary }} />` immediately left of the name, plus `<Tag>Lead</Tag>` (default color) on list cards only |
 | Roster stack | Team card shows up to 4 overlapping avatars (`marginLeft: -6`), then `+N` in a `colorFillAlter` circle |
 
@@ -188,10 +188,11 @@ Two modes inside one view:
 - Header `PageHeader`: title `Nhóm AI`, subtitle `Mỗi nhóm gồm một lead và tối đa ba nhân viên`, extra `Button type="primary"` "Tạo nhóm".
 - Counter strip above the grid: `Đang hoạt động {n}/3` as a `<Tag color={n===3?'warning':'default'}>`; at 3 active the "Kích hoạt" action on idle cards is `disabled` with a `Tooltip` (see §Copywriting).
 - Grid: same `repeat(auto-fill, minmax(320px, 1fr))` / `gap:16`.
-- `TeamCard`: surface identical to `EmployeeCard`; rows: name (14/600) + status `<Tag>` (`Đang chạy` processing / `Đang hoạt động` success / `Tạm dừng` default) · lead avatar+name (12px) · roster avatar stack · budget `Progress` (`size="small"`, `strokeColor` = success below 80%, `token.colorWarning` at ≥80%, `showInfo={false}`) with `{used}/{total} token` caption · footer `Button size="small"` "Mở nhóm" (primary when idle → "Kích hoạt nhóm").
-- `data-testid`: `teams-view`, `team-card-{id}`, `team-activate-{id}`.
+- `TeamCard`: surface identical to `EmployeeCard`; rows: name (14/600) + status `<Tag>` (`Đang chạy` processing / `Đang hoạt động` success / `Tạm dừng` default) · lead avatar+name (12px) · roster avatar stack · budget `Progress` (`size="small"`, `strokeColor` = success below 80%, `token.colorWarning` at ≥80%, `showInfo={false}`) with `{used}/{total} token` caption · footer: **two distinct states** — `idle` → `Button size="small" type="primary"` "Kích hoạt nhóm"; `active` → `Button size="small"` "Mở nhóm" plus `Button size="small" type="text"` "Tạm dừng" (disabled on the last active team so the run surface is never left empty without confirmation).
+- `data-testid`: `teams-view`, `team-card-{id}`, `team-activate-{id}`, `team-pause-{id}`.
 
 **5b. Team workspace**
+- **Visual anchor (FLAG 3):** the transcript is the focal point of the whole phase — every other surface is navigation or configuration around it. Hierarchy: transcript (primary) → workspace header at 20/600 (secondary anchor) → sidebar (tertiary). Nothing in the workspace may out-weigh the transcript: no filled accent surfaces, no oversized headers, no elevated cards competing with it.
 - `<Splitter>` full height, `borderRadius: 8`, `overflow:'hidden'`, `background: token.colorBgContainer` (precedent: `AgentControlView`).
 - Left `<Splitter.Panel defaultSize="300px" min="260px" max="380px">` — `TeamSidebar` (see 5c).
 - Right panel — the shared transcript: `AiChatWidget` with `compact` left unset (the widget auto-compacts below 680px) and the new agent-attribution layer (see 6).
@@ -204,6 +205,22 @@ Two modes inside one view:
 3. **Liên kết** — linked items list (see 9) + `Button size="small" icon={<PlusOutlined/>}` "Liên kết mục".
 4. **Chế độ** — two `Switch` rows with 12px labels: `Tự động chia việc` (D-06 bypass) and `Tự động duyệt thay đổi` (existing `autoApproveMutations`, D-13). Each row: label left, switch right, `justifyContent:'space-between'`.
 - `data-testid`: `team-sidebar`, `team-budget-panel`, `team-linked-items`, `team-mode-toggles`.
+
+### 5d. `TeamEditorDrawer` — create team (D-15, D-16, D-19)
+
+`<Drawer width={560} placement="right">`, title `Tạo nhóm`. This is the only surface that creates a team; `TeamSettingsDrawer` (8a) edits an existing one.
+
+| Field | Control | Rules |
+|-------|---------|-------|
+| Tên nhóm | `Input` | required, max 60 |
+| Lead | `Select showSearch` | required, options = leads from `aiLeads`; empty list → inline `Alert type="warning"` with a "Tạo lead" link |
+| Nhân viên | `Select mode="multiple"` | 0–3 selections, `maxCount={3}`; options = employees; selected rows render the roster avatar stack |
+| Tổng ngân sách nhóm | `InputNumber` | required, `min={0}`, `step={1000}`; on change the even-split preview line below updates (`Chia đều {total} token cho {n} thành viên — sửa từng dòng nếu cần.`) |
+| Kích hoạt ngay | `Switch` | default off; when on and 3 teams are already active, the switch is `disabled` with the team-cap tooltip |
+
+- Footer: `Button` "Hủy" + `Button type="primary"` "Tạo nhóm".
+- On save: create the team row, seed per-agent budgets from the even split (remainder to the lead), and — if `Kích hoạt ngay` — set state `active`.
+- `data-testid`: `team-editor-drawer`, `team-editor-save`.
 
 ### 6. Agent attribution in the transcript (D-07, D-09, D-14)
 
@@ -224,6 +241,7 @@ Extend, do not replace:
 - Stop button: `Button type="text" size="small" danger icon={<StopOutlined/>}` at `22×22`, `aria-label={`Dừng ${name}`}`, `data-testid={`agent-stop-${agentId}`}`. No confirmation — the transcript is preserved and the partial result is explicitly marked.
 - User messages keep the existing right-aligned accent bubble. Lead messages are left-aligned like employees.
 - `@mention` rendering: extend `renderUserMessageWithMentions` with an `agent:` target, rendered as a pill using the same `Tag` style as task/doc pills but with the agent's avatar color as background at 100% and white text.
+- **Liveness (FLAG 6c):** a streaming agent bubble carries `aria-live="polite"` on its text region so new text is announced without stealing focus; the bubble's status badge is the visual affordance and the `ActiveAiTurn` capsule (§11) **stays visible with its elapsed ticker running** during `WAITING FOR TOKENS` — the paused state is never a silent screen.
 - `data-testid`: `agent-attribution-{agentId}`, `agent-status-{agentId}`.
 
 ### 7. `AssignmentPlanCard` (D-06)
@@ -268,7 +286,7 @@ Canonical card geometry copied from `MutationApprovalCard` / `ArtifactDiffApprov
 - Rows: `display:flex; alignItems:'center'; gap:8; padding:'4px 0'`; type icon (12px, `token.colorTextSecondary`) + name (13.5/400, ellipsis) + `Button type="text" size="small"` remove (`aria-label={`Bỏ liên kết ${name}`}`).
 - Type icons: CR `<BranchesOutlined/>`, task `<CheckSquareOutlined/>`, system `<ApartmentOutlined/>`, note `<FileTextOutlined/>`, document `<FileTextOutlined/>`.
 - Empty: `Chưa liên kết mục nào.` (12 secondary).
-- Picker: `Modal width={560}` "Liên kết mục" with a type `Select` (CR / Task / System / Note / Document) + search `Input` + a scrollable result list (`maxHeight: 360`). Selecting adds immediately; the modal stays open for multi-add. Footer: `Button type="primary"` "Xong".
+- Picker: `Modal width={560}` "Liên kết mục" with a type `Select` (Yêu cầu thay đổi / Công việc / Hệ thống / Ghi chú / Tài liệu) + search `Input` + a scrollable result list (`maxHeight: 360`). Selecting adds immediately; the modal stays open for multi-add. Footer: `Button type="primary"` "Xong".
 - `data-testid`: `linked-items-list`, `linked-item-{id}`, `linked-item-picker`.
 
 ### 10. Team composer `@agent` addressing (D-08)
@@ -361,6 +379,8 @@ Confirmation pattern: destructive actions use antd `Popconfirm` with `okText` = 
 ## Accessibility Contract
 
 - Every icon-only control has `aria-label` in Vietnamese (Stop, remove link, expand).
+- **Focus order in the team workspace:** sidebar controls → workspace header actions → transcript region → composer. The transcript region is one focus stop with `tabIndex={0}` and roving focus for per-agent Stop buttons, so a keyboard user reaches them without tabbing through every bubble.
+- **Streaming liveness:** an agent bubble streams under `aria-live="polite"`; the paused banner and the assignment-plan decision line use `role="status"`. Nothing announces the whole transcript on each token.
 - Status is never color-only: each state carries a text `<Tag>` (running / paused / stopped / error / done).
 - The paused banner uses `role="status"` so it is announced; the assignment-plan decision result uses `role="status"`.
 - Avatar color is decorative; the name is always adjacent text.
@@ -389,4 +409,4 @@ No shadcn, no Tailwind, no third-party UI registry. All components come from the
 - [ ] Dimension 5 Spacing: PASS
 - [ ] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Approval:** approved (gsd-ui-checker, 2026-11-08 — 8 non-blocking FLAGs applied: create-team surface added as §5d, team pause action added, avatar hash + contrast fixed, 11px role text moved to 12px, 6px uses named, English picker options localized, workspace focal point declared, streaming `aria-live` + focus order + capsule liveness declared)
