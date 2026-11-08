@@ -38,6 +38,18 @@ function applyFeatureBranchDefaults(
   }));
 }
 
+/** WR-10: `&code` is a unique index; a duplicate surfaces as a raw Dexie ConstraintError. */
+async function assertCodeAvailable(
+  code: string,
+  excludeId: string | undefined,
+  db: TaskPlannerDatabase
+): Promise<void> {
+  const existing = await db.changeRequests.where('code').equals(code).first();
+  if (existing && existing.id !== excludeId) {
+    throw new Error(`Mã CR "${code}" đã tồn tại.`);
+  }
+}
+
 export async function createChangeRequest(
   input: ChangeRequestInput,
   db: TaskPlannerDatabase = defaultDb
@@ -46,6 +58,7 @@ export async function createChangeRequest(
   const now = new Date().toISOString();
 
   await assertTargetsAreSubsystems(validated.targets, db);
+  await assertCodeAvailable(validated.code, undefined, db);
 
   const cr: ChangeRequest = {
     id: generateId(),
@@ -86,6 +99,9 @@ export async function updateChangeRequest(
   if (validated.targets !== undefined) {
     await assertTargetsAreSubsystems(validated.targets, db);
   }
+  if (validated.code !== undefined) {
+    await assertCodeAvailable(validated.code, id, db);
+  }
 
   const now = new Date().toISOString();
   const updated: ChangeRequest = {
@@ -106,9 +122,16 @@ export async function updateChangeRequest(
   if (validated.status !== undefined) updated.status = validated.status;
   if (validated.type !== undefined) updated.type = validated.type;
   // D-25: only re-derive branch defaults when targets are replaced. A code rename
-  // must not rewrite branches already attached to targets.
+  // must not rewrite branches already attached to targets, and a target that survives the
+  // edit keeps the branch Step 3 chose for it.
   if (validated.targets !== undefined) {
-    updated.targets = applyFeatureBranchDefaults(validated.targets, updated.code);
+    updated.targets = validated.targets.map((target) => {
+      const prior = existing.targets.find((p) => p.systemId === target.systemId);
+      return {
+        systemId: target.systemId,
+        featureBranch: target.featureBranch ?? prior?.featureBranch ?? `feature/${updated.code ?? ''}`,
+      };
+    });
   }
   if ('jiraEpicKey' in patch) {
     if (validated.jiraEpicKey !== undefined) updated.jiraEpicKey = validated.jiraEpicKey;
@@ -128,6 +151,27 @@ export async function updateChangeRequest(
   if ('reminders' in patch) {
     if (validated.reminders !== undefined) updated.reminders = validated.reminders;
     else delete updated.reminders;
+  }
+
+  // D-26: tasks whose subsystem was dropped from `targets` must lose `systemId` in the same
+  // transaction, or they keep pointing at a subsystem the CR no longer targets.
+  if (validated.targets !== undefined) {
+    const removed = existing.targets
+      .map((t) => t.systemId)
+      .filter((systemId) => !updated.targets.some((t) => t.systemId === systemId));
+    await db.transaction('rw', [db.changeRequests, db.tasks], async () => {
+      for (const systemId of removed) {
+        await db.tasks
+          .where('crId')
+          .equals(id)
+          .filter((task: Task) => task.systemId === systemId)
+          .modify((task: Task) => {
+            delete task.systemId;
+          });
+      }
+      await db.changeRequests.put(updated);
+    });
+    return updated;
   }
 
   await db.changeRequests.put(updated);
