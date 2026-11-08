@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Mentions, Button, Tooltip, Tag, theme, Modal, Input } from 'antd';
+import { Mentions, Avatar, Button, Tooltip, Tag, theme, Modal, Input } from 'antd';
 import type { MentionsRef } from 'antd';
 import {
   SendOutlined,
@@ -20,6 +20,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Task, ChangeRequest, System, Note } from '../../types/models';
 import { isTauriApp } from '../../utils/timerPopout';
+import { agentColorFor, agentTextColorFor } from './office/AgentAttributionRow';
 
 export interface ChatInputBarProps {
   onSubmit: (text: string) => void;
@@ -40,6 +41,8 @@ export interface ChatInputBarProps {
   value?: string | undefined;
   onValueChange?: ((next: string) => void) | undefined;
   leadingContent?: React.ReactNode;
+  /** Phase 34 D-08: lead-first `@agent` suggestions; absent leaves the bar unchanged. */
+  agentOptions?: Array<{ id: string; name: string; role: string; isLead: boolean }> | undefined;
 }
 
 const COMMANDS = [
@@ -124,6 +127,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   value,
   onValueChange,
   leadingContent,
+  agentOptions,
 }) => {
   const { token } = theme.useToken();
   const [internalValue, setInternalValue] = useState('');
@@ -465,6 +469,44 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
         return docOptions;
       }
 
+      const agentSection = (agentOptions ?? [])
+        .filter((agent) => {
+          if (!q) return true;
+          return (
+            agent.name.toLowerCase().includes(q) || agent.role.toLowerCase().includes(q)
+          );
+        })
+        .sort((a, b) => {
+          if (a.isLead !== b.isLead) return a.isLead ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        })
+        .slice(0, 5)
+        .map((agent) => {
+          const color = agentColorFor(agent.id);
+          return {
+            key: `agent-${agent.id}`,
+            value: `@[${agent.name}](agent:${agent.id})`,
+            label: (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0' }}>
+                <Avatar
+                  size={20}
+                  shape={agent.isLead ? 'square' : 'circle'}
+                  style={{ backgroundColor: color, color: agentTextColorFor(color), flexShrink: 0 }}
+                >
+                  {Array.from(agent.name.trim())[0]?.toUpperCase() ?? '?'}
+                </Avatar>
+                <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {agent.name}
+                </span>
+                <span style={{ fontSize: 11, color: '#8c8c8c' }}>{agent.role}</span>
+                {agent.isLead && (
+                  <Tag style={{ margin: 0, fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>Lead</Tag>
+                )}
+              </div>
+            ),
+          };
+        });
+
       const taskOptions = tasks
         .filter((t) => {
           if (t.status === 'Cancelled') return false;
@@ -557,7 +599,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
         ),
       };
 
-      return [...taskOptions, docHintOption];
+      return [...agentSection, ...taskOptions, docHintOption];
     }
 
     if (prefix === '#') {
@@ -700,7 +742,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
     }
 
     return [];
-  }, [searchInfo, tasks, changeRequests, systems]);
+  }, [searchInfo, tasks, changeRequests, systems, documents, agentOptions, token.colorBorderSecondary]);
 
   return (
     <div
