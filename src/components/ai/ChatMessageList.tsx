@@ -5,6 +5,8 @@ import type { ChatMessage } from '../../types/models';
 import { APP_NAME } from '../../constants/app';
 import { renderSafeMarkdown } from '../../utils/markdown';
 import { ChatMessageBubble, type GroundedAnswerCardCallbacks, type WizardMessageCallbacks } from './ChatMessageBubble';
+import type { AgentAttributionAgent } from './office/AgentAttributionRow';
+import type { AgentRunStatus } from '../../types/aiOffice';
 import { InlineApiErrorCard } from './InlineApiErrorCard';
 import { IntentRoutingPrompt } from './grounded/IntentRoutingPrompt';
 
@@ -44,6 +46,10 @@ export interface ChatMessageListProps {
   onCancelClarify?: (() => void) | undefined;
   /** Host-supplied empty state. Falls back to the app default when omitted. */
   emptyState?: { heading: string; body: string } | undefined;
+  /** Phase 34 D-07: agent identity lookup for attributed messages. */
+  agentDirectory?: Map<string, AgentAttributionAgent> | undefined;
+  agentStatuses?: Map<string, AgentRunStatus> | undefined;
+  onStopAgent?: ((agentId: string) => void) | undefined;
 }
 
 export const ChatMessageList: React.FC<ChatMessageListProps> = ({
@@ -68,6 +74,9 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   transientClarifyMessage,
   onCancelClarify,
   emptyState,
+  agentDirectory,
+  agentStatuses,
+  onStopAgent,
 }) => {
   const { token } = theme.useToken();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -159,6 +168,8 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
         }
 
         // Pass message with grounding intact for structured rendering
+        const agent = msg.agentId ? agentDirectory?.get(msg.agentId) : undefined;
+        const agentStatus = msg.agentId ? agentStatuses?.get(msg.agentId) : undefined;
         return (
           <React.Fragment key={msg.id}>
             <ChatMessageBubble
@@ -171,6 +182,11 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
               onRunClaudeCode={onRunClaudeCode}
               groundedCallbacks={groundedCallbacks}
               wizardCallbacks={wizardCallbacks}
+              agent={agent}
+              agentStatus={agentStatus}
+              onStopAgent={
+                msg.agentId && onStopAgent ? () => onStopAgent(msg.agentId!) : undefined
+              }
             />
           </React.Fragment>
         );

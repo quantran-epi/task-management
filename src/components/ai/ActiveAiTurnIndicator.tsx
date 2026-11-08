@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Badge, Button, Dropdown, MenuProps, Tooltip, Typography, theme } from 'antd';
-import { SyncOutlined, StopOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { Badge, Button, Dropdown, MenuProps, Popconfirm, Tooltip, Typography, theme } from 'antd';
+import { SyncOutlined, StopOutlined, CloseCircleOutlined, TeamOutlined } from '@ant-design/icons';
 import { aiTurnManager, useActiveAiTurns, type ActiveAiTurn } from '../../services/ai/aiTurnManager';
 import { formatElapsedTicker } from '../../utils/time';
 import { useAIChat } from '../../context/AIChatContext';
@@ -52,10 +52,37 @@ export const ActiveAiTurnIndicator: React.FC<ActiveAiTurnIndicatorProps> = ({ co
     const turn = activeTurns[0]!;
     const elapsedSec = getElapsedSeconds(turn.startedAt);
     const statusText = turn.streamingStatusLabel || 'Đang phản hồi...';
+    // D-14: a team run registers one turn whose id carries the `team:` prefix.
+    const isTeamRun = turn.id.startsWith('team:');
+
+    const stopButton = (
+      <Button
+        type="text"
+        size="small"
+        data-testid="abort-ai-turn-btn"
+        icon={<StopOutlined style={{ fontSize: compact ? 11 : 13, color: token.colorError }} />}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!isTeamRun) aiTurnManager.abortTurn(turn.id);
+        }}
+        aria-label="Dừng tiến trình AI"
+        style={{
+          minWidth: compact ? 18 : 22,
+          minHeight: compact ? 18 : 22,
+          width: compact ? 18 : 22,
+          height: compact ? 18 : 22,
+          padding: 0,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      />
+    );
 
     return (
       <div
         data-testid="active-ai-turn-capsule"
+        {...(isTeamRun ? { 'data-team-run': 'true' } : {})}
         onClick={() => handleOpenChat(turn)}
         style={{
           display: 'inline-flex',
@@ -71,15 +98,27 @@ export const ActiveAiTurnIndicator: React.FC<ActiveAiTurnIndicatorProps> = ({ co
         }}
         title="Nhấn để mở AI Chat"
       >
-        <SyncOutlined
-          spin
-          data-testid="ai-turn-spinner"
-          style={{
-            fontSize: compact ? 11 : 13,
-            color: token.colorPrimary,
-            flexShrink: 0,
-          }}
-        />
+        {isTeamRun ? (
+          <span data-testid="team-run-capsule" style={{ display: 'inline-flex' }}>
+            <TeamOutlined
+              style={{
+                fontSize: compact ? 11 : 13,
+                color: token.colorPrimary,
+                flexShrink: 0,
+              }}
+            />
+          </span>
+        ) : (
+          <SyncOutlined
+            spin
+            data-testid="ai-turn-spinner"
+            style={{
+              fontSize: compact ? 11 : 13,
+              color: token.colorPrimary,
+              flexShrink: 0,
+            }}
+          />
+        )}
 
         <div style={{ display: 'inline-flex', flexDirection: 'column', maxWidth: compact ? 130 : 160 }}>
           <Tooltip title={`${turn.title} (${statusText})`}>
@@ -111,27 +150,20 @@ export const ActiveAiTurnIndicator: React.FC<ActiveAiTurnIndicatorProps> = ({ co
         </Typography.Text>
 
         <Tooltip title="Dừng tiến trình AI">
-          <Button
-            type="text"
-            size="small"
-            data-testid="abort-ai-turn-btn"
-            icon={<StopOutlined style={{ fontSize: compact ? 11 : 13, color: token.colorError }} />}
-            onClick={(e) => {
-              e.stopPropagation();
-              aiTurnManager.abortTurn(turn.id);
-            }}
-            aria-label="Dừng tiến trình AI"
-            style={{
-              minWidth: compact ? 18 : 22,
-              minHeight: compact ? 18 : 22,
-              width: compact ? 18 : 22,
-              height: compact ? 18 : 22,
-              padding: 0,
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          />
+          {isTeamRun ? (
+            <Popconfirm
+              title="Dừng toàn bộ nhóm?"
+              description="Lead và mọi nhân viên đang chạy sẽ dừng ngay. Việc đã làm được giữ nguyên trong transcript."
+              okText="Dừng nhóm"
+              cancelText="Giữ chạy"
+              okButtonProps={{ danger: true }}
+              onConfirm={() => aiTurnManager.abortTurn(turn.id)}
+            >
+              {stopButton}
+            </Popconfirm>
+          ) : (
+            stopButton
+          )}
         </Tooltip>
       </div>
     );
