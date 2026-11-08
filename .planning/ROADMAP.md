@@ -578,7 +578,7 @@ Plans:
 7. A stopped agent reports back to the lead explicitly marked incomplete, and a global Stop aborts the lead plus every running agent.
 8. Team runs continue when the user leaves the tab, and returning shows the full result.
 
-**Plans:** 5/10 plans executed
+**Plans:** 8/10 plans executed
 
 **Wave 1** *(no dependencies; the hard gate — every later plan imports these types and tables)*
 
@@ -593,9 +593,9 @@ Plans:
 
 **Wave 3** *(depends on 34-02/34-03)*
 
-- [ ] 34-04-PLAN.md — Budget gate with the 80% crossing rule, per-agent runtime registry, lead/employee prompt assembly
-- [ ] 34-05-PLAN.md — Six team tools: offline BM25 search, team-scoped turn read, skill reader, linked-item full context, `delegate_batch` validation
-- [ ] 34-09-PLAN.md — Employee tab shell, cards, editor drawers, `'teams'` type/icon/title registration
+- [x] 34-04-PLAN.md — Budget gate with the 80% crossing rule, per-agent runtime registry, lead/employee prompt assembly
+- [x] 34-05-PLAN.md — Six team tools: offline BM25 search, team-scoped turn read, skill reader, linked-item full context, `delegate_batch` validation
+- [x] 34-09-PLAN.md — Employee tab shell, cards, editor drawers, `'teams'` type/icon/title registration
 
 **Wave 4** *(depends on 34-03/34-04/34-05)*
 
