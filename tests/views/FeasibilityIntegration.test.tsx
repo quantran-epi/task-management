@@ -16,6 +16,17 @@ describe('Feasibility Integration (CALC-01, CALC-06, D-13, D-16)', () => {
     testDb = new TaskPlannerDatabase('TestFeasibilityIntegration_' + Math.random().toString(36).slice(2));
     await testDb.open();
     await initializeDatabaseDefaults(testDb);
+    // CR-13: `createTask` now always resolves the owning CR.
+    await testDb.changeRequests.add({
+      id: '11111111-1111-4111-8111-111111111111',
+      name: 'Feasibility CR',
+      code: 'CR-FEAS',
+      status: 'Open',
+      type: 'ENHANCEMENT',
+      targets: [],
+      createdAt: '2026-09-01T00:00:00.000Z',
+      updatedAt: '2026-09-01T00:00:00.000Z',
+    });
   });
 
   afterEach(async () => {
