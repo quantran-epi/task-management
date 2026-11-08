@@ -652,20 +652,10 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, flex: 1 }}>
           <span
+            className="workbench-tree-expand-btn"
             role="button"
             tabIndex={0}
             onClick={(e) => toggleFolderExpand(id, e)}
-            style={{
-              width: 16,
-              height: 16,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 10,
-              color: '#9ca3af',
-              cursor: 'pointer',
-              flexShrink: 0,
-            }}
           >
             {count > 0 ? (
               isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />
@@ -860,20 +850,10 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, flex: 1 }}>
           <span
+            className="workbench-tree-expand-btn"
             role="button"
             tabIndex={0}
             onClick={(e) => toggleFolderExpand(node.id, e)}
-            style={{
-              width: 16,
-              height: 16,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 10,
-              color: '#9ca3af',
-              cursor: 'pointer',
-              flexShrink: 0,
-            }}
           >
             {node.children.length > 0 || count > 0 ? (
               isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />
@@ -970,20 +950,32 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
         padding: '8px 6px',
       }}
     >
-      {/* 1. Search Bar (Same design as DocFolderTree) */}
-      <div style={{ marginBottom: 8, padding: '0 4px' }}>
+      {/* 1. Search Bar + Create Button */}
+      <div style={{ marginBottom: 8, padding: '0 4px', display: 'flex', alignItems: 'center', gap: 6 }}>
         <Input
-          prefix={<SearchOutlined style={{ color: '#8c8c8c', fontSize: 13 }} />}
+          prefix={<SearchOutlined style={{ color: 'var(--fg-muted, #6c707e)', fontSize: 12 }} />}
           placeholder="Tìm kiếm biểu đồ..."
           allowClear
           size="small"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           style={{
+            flex: 1,
             fontSize: 12,
-            borderRadius: 6,
+            borderRadius: 'var(--radius-control, 4px)',
           }}
         />
+        <Button
+          type="primary"
+          size="small"
+          icon={<PlusOutlined />}
+          onClick={() => handleCreateDiagram(undefined)}
+          data-testid="diagram-explorer-btn-new"
+          title="Tạo biểu đồ mới"
+          style={{ height: 24, padding: '0 8px', fontSize: 12 }}
+        >
+          Tạo
+        </Button>
       </div>
 
       {/* 2. Content Scroll Area */}

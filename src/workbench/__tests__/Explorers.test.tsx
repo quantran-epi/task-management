@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import { CRExplorer } from '../toolwindows/CRExplorer';
 import { DocsExplorer } from '../toolwindows/DocsExplorer';
+import { DiagramExplorer } from '../toolwindows/DiagramExplorer';
 import { useLayoutStore } from '../store/layoutStore';
 
 // Mock dexie-react-hooks. The value must be referentially stable: DocsExplorer's
@@ -44,6 +45,23 @@ describe('Explorers Component Suite', () => {
     await waitFor(() => {
       const tabs = useLayoutStore.getState().openTabs;
       expect(tabs.some((t) => t.viewType === 'notes')).toBe(true);
+    });
+  });
+
+  it('renders DiagramExplorer with search and new diagram action button', async () => {
+    render(<DiagramExplorer />);
+
+    const searchInput = screen.getByPlaceholderText(/Tìm kiếm biểu đồ.../i);
+    expect(searchInput).toBeDefined();
+
+    const newBtn = screen.getByTestId('diagram-explorer-btn-new');
+    expect(newBtn).toBeDefined();
+    expect(newBtn.textContent).toContain('Tạo');
+
+    fireEvent.click(newBtn);
+    await waitFor(() => {
+      const tabs = useLayoutStore.getState().openTabs;
+      expect(tabs.some((t) => t.viewType === 'mermaid')).toBe(true);
     });
   });
 });

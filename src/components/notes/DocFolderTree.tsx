@@ -635,20 +635,10 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, flex: 1 }}>
           <span
+            className="workbench-tree-expand-btn"
             role="button"
             tabIndex={0}
             onClick={(e) => toggleFolderExpand(id, e)}
-            style={{
-              width: 16,
-              height: 16,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 10,
-              color: '#9ca3af',
-              cursor: 'pointer',
-              flexShrink: 0,
-            }}
           >
             {count > 0 ? (isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />) : <span style={{ width: 10 }} />}
           </span>
@@ -853,25 +843,15 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
         >
           {hasContent ? (
             <span
+              className="workbench-tree-expand-btn"
               role="button"
               tabIndex={0}
               onClick={(e) => toggleFolderExpand(node.id, e)}
-              style={{
-                width: 16,
-                height: 16,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 10,
-                color: '#9ca3af',
-                cursor: 'pointer',
-                flexShrink: 0,
-              }}
             >
               {isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />}
             </span>
           ) : (
-            <span style={{ width: 16, flexShrink: 0 }} />
+            <span style={{ width: 18, flexShrink: 0 }} />
           )}
 
           <span style={{ fontSize: 14, flexShrink: 0, display: 'flex', alignItems: 'center' }}>

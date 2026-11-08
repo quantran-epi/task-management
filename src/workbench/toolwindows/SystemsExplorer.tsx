@@ -315,6 +315,7 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '4px 6px' }}>
         {treeData.length > 0 ? (
           <Tree
+            motion={null}
             showIcon
             blockNode
             defaultExpandAll

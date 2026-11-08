@@ -203,7 +203,15 @@ html, body, #root {
   min-width: 0 !important;
 }
 
+/* JetBrains Instant Expand - Disable slide down animation */
+.workbench-toolwindow-left .ant-tree-motion,
+.workbench-toolwindow-left .ant-tree .ant-tree-node-content-wrapper {
+  transition: none !important;
+  animation: none !important;
+}
+
 .workbench-toolwindow-left .ant-tree .ant-tree-switcher {
+  position: relative !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -215,13 +223,57 @@ html, body, #root {
   align-self: center !important;
 }
 
+/* Balanced 18x18px hover pill centered around chevron, not exceeding item text height */
+.workbench-toolwindow-left .ant-tree .ant-tree-switcher:before {
+  content: "" !important;
+  position: absolute !important;
+  width: 18px !important;
+  height: 18px !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  border-radius: 4px !important;
+  transition: background-color 0.15s ease !important;
+}
+
+.workbench-toolwindow-left .ant-tree .ant-tree-switcher:not(.ant-tree-switcher-noop):hover:before {
+  background-color: var(--bg-hover, rgba(0, 0, 0, 0.06)) !important;
+}
+
 .workbench-toolwindow-left .ant-tree .ant-tree-switcher .ant-tree-switcher-icon {
+  position: relative !important;
+  z-index: 1 !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
   vertical-align: middle !important;
   line-height: 1 !important;
-  margin-top: 1px !important;
+  margin: 0 !important;
+  font-size: 10px !important;
+}
+
+/* Custom Tree Expand Pill (JetBrains style balanced 18x18 hover pill for DocFolderTree & DiagramExplorer) */
+.workbench-tree-expand-btn {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--fg-muted, #8c8c8c);
+  cursor: pointer;
+  flex-shrink: 0;
+  border-radius: 4px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  background: transparent;
+  border: none;
+  padding: 0;
+  user-select: none;
+}
+
+.workbench-tree-expand-btn:hover {
+  background-color: var(--bg-hover, rgba(0, 0, 0, 0.06));
+  color: var(--fg-default, #262626);
 }
 
 .workbench-toolwindow-left .ant-tree .ant-tree-node-content-wrapper {

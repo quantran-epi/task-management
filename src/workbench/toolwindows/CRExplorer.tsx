@@ -289,6 +289,7 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '4px 6px' }}>
         {treeData.length > 0 ? (
           <Tree
+            motion={null}
             showIcon
             blockNode
             treeData={treeData}
