@@ -18,10 +18,9 @@ async function assertSystemInCrTargets(
   systemId: string | undefined,
   db: TaskPlannerDatabase
 ): Promise<void> {
-  if (systemId === undefined) return;
   const cr = await db.changeRequests.get(crId);
   if (!cr) throw new Error('Change Request không tồn tại.');
-  if (!cr.targets.some((t) => t.systemId === systemId)) {
+  if (systemId !== undefined && !cr.targets.some((t) => t.systemId === systemId)) {
     throw new Error('Subsystem của tác vụ phải thuộc CR đã chọn.');
   }
 }

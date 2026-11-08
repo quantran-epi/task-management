@@ -96,6 +96,7 @@ export async function deleteTaskWithAllocations(
       db.activeTimers,
       db.notes,
       db.chatThreads,
+      db.chatTabs,
       db.chatMessages,
       db.knowledgeLinks,
     ],
@@ -111,10 +112,12 @@ export async function deleteTaskWithAllocations(
           note.updatedAt = now;
         });
 
-      // Purge chat threads and messages for task (D-07)
+      // Purge chat threads, tabs and messages for task (D-07). A surviving tab whose thread
+      // is gone makes the app's own backup fail validation.
       const threadsToPurge = await db.chatThreads.where('scopeKey').equals(`task:${taskId}`).toArray();
       if (threadsToPurge.length > 0) {
         const threadIds = threadsToPurge.map((t) => t.id);
+        await db.chatTabs.where('threadId').anyOf(threadIds).delete();
         await db.chatMessages.where('threadId').anyOf(threadIds).delete();
         await db.chatThreads.bulkDelete(threadIds);
       }
