@@ -578,7 +578,7 @@ Plans:
 7. A stopped agent reports back to the lead explicitly marked incomplete, and a global Stop aborts the lead plus every running agent.
 8. Team runs continue when the user leaves the tab, and returning shows the full result.
 
-**Plans:** 1/10 plans executed
+**Plans:** 5/10 plans executed
 
 **Wave 1** *(no dependencies; the hard gate — every later plan imports these types and tables)*
 
@@ -586,10 +586,10 @@ Plans:
 
 **Wave 2** *(depends on 34-01; four independent plans)*
 
-- [ ] 34-02-PLAN.md — Employee/lead/skill repo, team/member/link repo with activation and roster caps, team transcript repo
-- [ ] 34-03-PLAN.md — Runtime seams: read-only mutation policy, `persistUserMessage` opt-out, attribution forwarding, `beforeToolRound`, tool allowlists
-- [ ] 34-06-PLAN.md — Backup: six tables and four attribution fields through the five-file contract, envelope stays v11
-- [ ] 34-08-PLAN.md — Transcript attribution layer: attribution row, plan card, paused banner, top-up modal, team capsule
+- [x] 34-02-PLAN.md — Employee/lead/skill repo, team/member/link repo with activation and roster caps, team transcript repo
+- [x] 34-03-PLAN.md — Runtime seams: read-only mutation policy, `persistUserMessage` opt-out, attribution forwarding, `beforeToolRound`, tool allowlists
+- [x] 34-06-PLAN.md — Backup: six tables and four attribution fields through the five-file contract, envelope stays v11
+- [x] 34-08-PLAN.md — Transcript attribution layer: attribution row, plan card, paused banner, top-up modal, team capsule
 
 **Wave 3** *(depends on 34-02/34-03)*
 
