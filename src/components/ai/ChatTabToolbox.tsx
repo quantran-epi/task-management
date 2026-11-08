@@ -301,7 +301,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
       }}
     >
       {/* Left controls: Tab Model selection */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 180, flexShrink: 0, flex: 1 }}>
         <span style={{ fontSize: 11, color: token.colorTextSecondary, flexShrink: 0 }}>Mô hình:</span>
         <Select
           size="small"

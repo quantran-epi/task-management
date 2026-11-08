@@ -289,8 +289,8 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
     if (!node || typeof ResizeObserver === 'undefined') return undefined;
     const observer = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width ?? 0;
-      // Below 420px the full control bar cannot fit without clipping (UI-SPEC §1).
-      setMeasuredNarrow(width > 0 && width < 420);
+      // Below 680px the full control bar cannot fit without clipping model selector (UI-SPEC §1).
+      setMeasuredNarrow(width > 0 && width < 680);
     });
     observer.observe(node);
     return () => observer.disconnect();

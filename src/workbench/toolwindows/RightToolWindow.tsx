@@ -3,8 +3,8 @@ import { Tooltip } from 'antd';
 import {
   MinusOutlined,
   BellOutlined,
-  CommentOutlined,
 } from '@ant-design/icons';
+import { JetBrainsAIIcon } from '../../components/icons/JetBrainsIcons';
 import { useLayoutStore } from '../store/layoutStore';
 import { useAIChat } from '../../context/AIChatContext';
 import { AIChatDrawer } from '../../components/ai/AIChatDrawer';
@@ -44,7 +44,7 @@ export function RightToolWindow({
       default:
         return {
           title: 'AI Assistant',
-          icon: <CommentOutlined style={{ fontSize: 13, color: 'var(--accent, #3871e1)' }} />,
+          icon: <JetBrainsAIIcon size={14} />,
         };
     }
   };

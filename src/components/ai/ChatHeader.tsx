@@ -2,7 +2,6 @@ import React from 'react';
 import { Button, Tooltip, Dropdown, theme } from 'antd';
 import type { MenuProps } from 'antd';
 import {
-  RobotFilled,
   PushpinOutlined,
   PushpinFilled,
   CloseOutlined,
@@ -13,6 +12,7 @@ import {
   DeleteOutlined,
   DisconnectOutlined,
 } from '@ant-design/icons';
+import { JetBrainsAIIcon } from '../icons/JetBrainsIcons';
 import type { ActiveScope } from '../../context/AIChatContext';
 
 export interface ChatHeaderProps {
@@ -117,7 +117,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
-        <RobotFilled style={{ fontSize: 13, color: 'var(--accent, #3871e1)' }} />
+        <JetBrainsAIIcon size={14} />
         <span style={{ fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', color: 'var(--fg-strong, #000000)', flexShrink: 0 }}>
           Trợ lý AI
         </span>
