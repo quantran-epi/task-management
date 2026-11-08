@@ -226,8 +226,11 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
 
       await onSave(payload);
       handleClose();
-    } catch {
-      // Form validation error
+    } catch (err) {
+      // Ant Design validation errors carry `errorFields` and are already rendered inline.
+      if (err instanceof Error && !('errorFields' in err)) {
+        message.error(err.message);
+      }
     }
   };
 
@@ -264,7 +267,10 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
           <Form.Item
             name="code"
             label="Mã CR"
-            rules={[{ max: 64, message: 'Mã CR tối đa 64 ký tự.' }]}
+            rules={[
+              { required: true, message: 'Vui lòng nhập Mã CR.' },
+              { max: 64, message: 'Mã CR tối đa 64 ký tự.' },
+            ]}
           >
             <Input placeholder="vd: CR-2026-001" style={{ textTransform: 'uppercase' }} />
           </Form.Item>

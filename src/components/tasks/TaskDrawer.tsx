@@ -404,8 +404,12 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
       message.success({ content: 'Đã lưu tác vụ', duration: 1.5 });
       onSave?.(updated);
       handleClose();
-    } catch {
-      // Form validation error caught by Ant Design Form
+    } catch (err) {
+      // Ant Design validation errors carry `errorFields` and are already rendered inline;
+      // repository invariant errors (D-26) must surface or the drawer just sits there.
+      if (err instanceof Error && !('errorFields' in err)) {
+        message.error(err.message);
+      }
     } finally {
       setSaving(false);
     }
