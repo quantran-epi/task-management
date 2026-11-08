@@ -138,10 +138,11 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
 
   it('never includes another agent row outside the recent window', () => {
     const request = buildEmployee({
+      // Newest-first, as `listAssignmentHistory` returns it.
       assignmentHistory: [
-        instructionRow('i-1', 'chỉ dẫn của tôi'),
-        reportRow('r-1', 'báo cáo của tôi'),
         reportRow('r-other', 'BÁO CÁO-CỦA-AGENT-KHÁC', 'emp-2'),
+        reportRow('r-1', 'báo cáo của tôi'),
+        instructionRow('i-1', 'chỉ dẫn của tôi'),
       ],
       recentTurns: [],
     });
@@ -157,9 +158,14 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
       batchResults: [{ agentName: 'Hùng', content: 'KẾT-QUẢ-BATCH-xyz' }],
     });
     const system = request.systemMessages.map((m) => m.content).join('\n');
+    const [header, footer] = [
+      wrapUntrusted('KẾT QUẢ CỦA CÁC NHÂN VIÊN KHÁC', '').split('\n')[0]!,
+      wrapUntrusted('KẾT QUẢ CỦA CÁC NHÂN VIÊN KHÁC', '').split('\n').at(-1)!,
+    ];
 
-    expect(system).toContain(wrapUntrusted('KẾT QUẢ CỦA CÁC NHÂN VIÊN KHÁC', ''));
-    expect(system).toContain('KẾT-QUẢ-BATCH-xyz');
+    expect(system.indexOf(header)).toBeGreaterThanOrEqual(0);
+    expect(system.indexOf('KẾT-QUẢ-BATCH-xyz')).toBeGreaterThan(system.indexOf(header));
+    expect(system.indexOf(footer)).toBeGreaterThan(system.indexOf('KẾT-QUẢ-BATCH-xyz'));
   });
 
   it('states the read-only policy and the search_team_history escape hatch', () => {
