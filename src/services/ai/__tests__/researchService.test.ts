@@ -66,7 +66,7 @@ describe('ResearchService', () => {
       expect(escaped).toBe("'test'\\''; rm -rf /; echo '\\''pwned'");
       // Every literal quote must be part of an escape sequence, so the payload
       // stays one inert argument and `; rm -rf /` is never executed.
-      expect(escaped.replace(/'\\''/g, '')).not.toContain("'");
+      expect(escaped.slice(1, -1).replace(/'\\''/g, '')).not.toContain("'");
       expect(escaped).toContain('; rm -rf /');
     });
   });
