@@ -900,7 +900,7 @@ Plans:
 5. When fs-gw is not running, the AI states research is unavailable and offers to continue on internal evidence alone; it never substitutes unmarked model knowledge.
 6. Research artifacts appear in the step where they were produced, persist with the CR, and can be reopened and reused in later steps without re-running.
 
-**Plans:** 4 plans in 4 waves
+**Plans:** 6 plans in 5 waves
 **UI hint**: yes
 
 Plans:
@@ -909,17 +909,22 @@ Plans:
 
 - [ ] 32-01-PLAN.md — Non-PTY line streaming over SSH (`ssh_exec_stream`) with PID capture and SIGTERM stop (`ssh_kill_process`)
 
-**Wave 2** *(depends on 32-01; edits artifact repo, AI tools, and research service)*
+**Wave 2** *(depends on 32-01; edits artifact repo and AI tool dispatch)*
 
-- [ ] 32-02-PLAN.md — `RESEARCH` artifact kind + versioned persistence, `propose_research` tool, availability pre-flight, 300s timeout, multi-system runner
+- [ ] 32-02-PLAN.md — `RESEARCH` artifact kind + versioned persistence, `propose_research` tool wired through the `executeAiTool` switch, CR-scoped target resolution
 
-**Wave 3** *(depends on 32-02; edits `sdlcPromptComposer.ts`)*
+**Wave 3** *(depends on 32-02; creates `researchService.ts` schemas and pre-flight)*
 
-- [ ] 32-03-PLAN.md — EXTERNAL evidence class with rank disclosure and attribution; `propose_research` tool policy and unavailability message path
+- [ ] 32-03-PLAN.md — Research payload schemas, shell escaping, JSON parser, SSH availability pre-flight
 
-**Wave 4** *(depends on 32-02 and 32-03; edits SDLC Studio UI)*
+**Wave 4** *(32-04 depends on 32-03; 32-05 depends on 32-02 and 32-03)*
 
-- [ ] 32-04-PLAN.md — Research summary card, detail modal, manual trigger modal, in-chat proposal/streaming/completion/error cards, Step 1 & 2 integration
+- [ ] 32-04-PLAN.md — `executeMultiSystemResearch` orchestrator: sequential runs, 300s timeout, cancellation, SSH-error mapping, versioned persistence
+- [ ] 32-05-PLAN.md — EXTERNAL evidence class with rank disclosure and attribution; `propose_research` tool policy and unavailability message path
+
+**Wave 5** *(depends on 32-04 and 32-05; edits SDLC Studio UI)*
+
+- [ ] 32-06-PLAN.md — Research summary card with historical version selector, manual trigger modal wired through `ChangeRequestSdlcView`, in-chat proposal/streaming/completion/error cards, Step 1 & 2 integration
 
 ### Phase 33: Prompt Transparency & Contract Documentation
 
