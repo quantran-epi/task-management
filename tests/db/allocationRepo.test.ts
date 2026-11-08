@@ -18,6 +18,17 @@ describe('Planned Allocation Repository (PLAN-01, PLAN-02, PLAN-05, D-12, D-16)'
   beforeEach(async () => {
     testDb = new TaskPlannerDatabase('TestAllocationDB_' + Math.random().toString(36).slice(2));
     await testDb.open();
+    // CR-13: `createTask` now always resolves the owning CR.
+    await testDb.changeRequests.add({
+      id: '11111111-1111-4111-8111-111111111111',
+      name: 'Allocation CR',
+      code: 'CR-ALLOC',
+      status: 'Open',
+      type: 'ENHANCEMENT',
+      targets: [],
+      createdAt: '2026-09-01T00:00:00.000Z',
+      updatedAt: '2026-09-01T00:00:00.000Z',
+    });
   });
 
   afterEach(async () => {

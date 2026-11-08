@@ -185,6 +185,28 @@ async function seedV15Database(dbName: string): Promise<void> {
     { key: 'theme', value: 'dark' },
   ]);
 
+  // WR-11: only live subsystems may survive into `targets`.
+  await v15Db.table('systems').bulkAdd([
+    {
+      id: 'a',
+      name: 'Service A',
+      code: 'SVC-A',
+      parentId: null,
+      type: 'SERVICE',
+      createdAt: NOW,
+      updatedAt: NOW,
+    },
+    {
+      id: 'b',
+      name: 'Schema B',
+      code: 'SCH-B',
+      parentId: null,
+      type: 'SCHEMA',
+      createdAt: NOW,
+      updatedAt: NOW,
+    },
+  ]);
+
   await v15Db.close();
 }
 
@@ -216,7 +238,7 @@ describe('Dexie SCHEMA_V16 Migration (ENT-NORM-01)', () => {
   }
 
   it(
-    're-axes project-linked tasks onto crId and deletes standalone tasks',
+    're-axes project-linked tasks onto crId and parks standalone tasks',
     async () => {
       const db = await openAtCurrentVersion();
 
@@ -228,8 +250,11 @@ describe('Dexie SCHEMA_V16 Migration (ENT-NORM-01)', () => {
       expect(linkedWithMilestone).toBeDefined();
       expect((linkedWithMilestone as unknown as Record<string, unknown>).crId).toBe('proj-1');
 
+      // CR-03: a task with no resolvable project is parked, never deleted.
       const orphan = await db.tasks.get('task-orphan');
-      expect(orphan).toBeUndefined();
+      expect(orphan).toBeDefined();
+      const parkedCr = await db.changeRequests.get(orphan!.crId);
+      expect(parkedCr?.code).toMatch(/^CR-LEGACY-UNASSIGNED/);
     },
     30000
   );

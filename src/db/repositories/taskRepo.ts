@@ -101,7 +101,11 @@ export async function updateTask(
     else delete updated.systemId;
   }
 
-  await assertSystemInCrTargets(updated.crId, updated.systemId, db);
+  // Only re-validate the CR relationship when the patch touches it: an unrelated edit of a
+  // legacy row must not become uneditable because its CR is already gone.
+  if ('crId' in patch || 'systemId' in patch) {
+    await assertSystemInCrTargets(updated.crId, updated.systemId, db);
+  }
 
   const assignOptional = (key: keyof Pick<
     Task,
