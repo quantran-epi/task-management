@@ -92,6 +92,8 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
   const [drawerOpen, setDrawerOpen] = useState(false);
   // Set by TaskDrawer's onSave so closing after a save never deletes the real task.
   const taskSavedRef = useRef(false);
+  // ponytail: placeholderTaskIdRef tracks in-memory creation; upgrade when TaskDrawer supports unpersisted creation.
+  const placeholderTaskIdRef = useRef<string | null>(null);
 
   const openTab = useLayoutStore((s) => s.openTab);
 
@@ -135,7 +137,9 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
     });
   };
 
-  const openTaskDrawer = (taskId: string | null) => {
+  const openTaskDrawer = (taskId: string | null, isPlaceholder = false) => {
+    placeholderTaskIdRef.current = isPlaceholder ? taskId : null;
+    taskSavedRef.current = false;
     setDrawerTaskId(taskId);
     setDrawerOpen(true);
   };
@@ -148,7 +152,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
         { crId: cr.id, name: 'Tác vụ mới', status: 'Open', priority: 'Medium', estimateMinutes: 0 },
         db
       );
-      openTaskDrawer(created.id);
+      openTaskDrawer(created.id, true);
     } catch {
       message.error('Không thể tạo tác vụ');
     }
@@ -157,11 +161,16 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
   /** WR-13: a drawer closed without saving must not leave the placeholder row behind. */
   const handleCloseTaskDrawer = async () => {
     const id = drawerTaskId;
+    const isPlaceholder = Boolean(id && placeholderTaskIdRef.current === id);
     setDrawerOpen(false);
-    if (!id || taskSavedRef.current) {
+    setDrawerTaskId(null);
+    placeholderTaskIdRef.current = null;
+
+    if (!id || !isPlaceholder || taskSavedRef.current) {
       taskSavedRef.current = false;
       return;
     }
+    taskSavedRef.current = false;
     try {
       await deleteTaskWithAllocations(id, db);
     } catch {
@@ -540,6 +549,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
         onClose={() => void handleCloseTaskDrawer()}
         onSave={() => {
           taskSavedRef.current = true;
+          placeholderTaskIdRef.current = null;
         }}
         db={db}
       />

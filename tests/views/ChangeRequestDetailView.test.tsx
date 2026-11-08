@@ -213,4 +213,48 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
     // Collapsed: no panel body is mounted yet.
     expect(screen.queryByText('Chưa có')).not.toBeInTheDocument();
   }, 30000);
+
+  it('does not delete existing task when task drawer is opened and closed without saving', async () => {
+    const { cr, task } = await seed({ taskSystemId: 'a' });
+    render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
+
+    const taskElement = await screen.findByText('Implement OAuth callback');
+    fireEvent.click(taskElement);
+
+    // Drawer should open with "Chỉnh sửa tác vụ"
+    const cancelButton = await screen.findByRole('button', { name: 'Hủy' });
+    fireEvent.click(cancelButton);
+
+    // Wait and ensure task still exists in DB and in view
+    await waitFor(async () => {
+      const persisted = await db.tasks.get(task.id);
+      expect(persisted).toBeDefined();
+      expect(persisted?.name).toBe('Implement OAuth callback');
+    });
+    expect(screen.getByText('Implement OAuth callback')).toBeInTheDocument();
+  }, 30000);
+
+  it('deletes newly created placeholder task when task drawer is cancelled without saving (WR-13)', async () => {
+    const sysA = await createSystem({ parentId: null, name: 'Payment Service', code: 'PAYMENT_SVC', type: 'SERVICE' }, db);
+    const cr = await createChangeRequest(
+      { status: 'Open', name: 'Thanh toán QR', code: 'CR-2026-004', type: 'ENHANCEMENT', targets: [{ systemId: sysA.id }] },
+      db
+    );
+    render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
+
+    await screen.findByText('CR-2026-004');
+    const addButtons = await screen.findAllByRole('button', { name: /Thêm tác vụ/ });
+    expect(addButtons[0]).toBeDefined();
+    fireEvent.click(addButtons[0]!);
+
+    // Wait for drawer with "Hủy" button
+    const cancelButton = await screen.findByRole('button', { name: 'Hủy' });
+    fireEvent.click(cancelButton);
+
+    // Placeholder task should be cleaned up
+    await waitFor(async () => {
+      const tasksInCr = await db.tasks.where('crId').equals(cr.id).toArray();
+      expect(tasksInCr).toHaveLength(0);
+    });
+  }, 30000);
 });
