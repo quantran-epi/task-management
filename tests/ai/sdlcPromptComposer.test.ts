@@ -13,8 +13,10 @@ import {
   STEP_QUICK_PROMPTS,
   composeSdlcTurn,
   buildConventionsSegment,
+  buildExternalResearchSegment,
   CONVENTIONS_CONFLICT_POLICY,
 } from '../../src/services/ai/sdlcPromptComposer';
+import type { ResearchPayload } from '../../src/services/ai/researchService';
 
 const STEP_IDS = [
   'INTAKE',
@@ -97,7 +99,7 @@ describe('SDLC per-step tool policy', () => {
       expect(SDLC_STEP_ALLOWED_TOOLS[step]).toEqual([
         ...SDLC_READ_TOOL_NAMES,
         ...(ownsDocuments ? ['get_artifact', 'patch_artifact_section'] : []),
-        ...(offersProposal ? ['propose_subsystems'] : []),
+        ...(offersProposal ? ['propose_subsystems', 'propose_research'] : []),
       ]);
       expect(composeSdlcTurn({ step, intent: 'qa', userTurn: 'hỏi' }).segments.toolPolicy).toBe(policy);
       for (const name of SDLC_READ_TOOL_NAMES) expect(policy).toContain(name);
@@ -408,6 +410,116 @@ describe('composeSdlcTurn layered composition (D-07, D-09, D-16)', () => {
       expect(segment).toContain(largeGlobal);
       expect(segment).toContain(largeRepo);
       expect(segment.length).toBeGreaterThan(100000);
+    });
+  });
+
+  describe('External Research Evidence Segment', () => {
+    const payload: ResearchPayload = {
+      summary: 'Tóm tắt nghiên cứu',
+      findings: [
+        {
+          claim: 'Spring Cloud Gateway MVC hỗ trợ virtual threads',
+          scope: 'web',
+          source: 'https://docs.spring.io/spring-cloud-gateway/',
+          confidence: 0.95,
+        },
+        {
+          claim: 'SC-API cấu hình timeout 30s',
+          scope: 'repo',
+          systemCode: 'SC-API',
+          source: 'src/main/resources/application.yml:42',
+          confidence: 1,
+        },
+      ],
+      skippedSystems: [{ systemId: 'sys-1', code: 'CORE', reason: 'Thiếu cấu hình SSH' }],
+    };
+
+    it('wraps findings in the subordinate untrusted delimiter with the three mandatory policies', () => {
+      const segment = buildExternalResearchSegment(payload);
+      expect(segment.startsWith('<external_research_evidence rank="subordinate_to_internal">')).toBe(true);
+      expect(segment.endsWith('</external_research_evidence>')).toBe(true);
+      expect(segment).toContain('Bằng chứng này xếp sau quy ước tổ chức');
+      expect(segment).toContain('KHÔNG ĐƯỢC sử dụng các kết luận bên ngoài để ghi đè');
+      expect(segment).toContain('PHẢI giữ nguyên trích dẫn nguồn');
+    });
+
+    it('tags every claim by scope and keeps source plus confidence', () => {
+      const segment = buildExternalResearchSegment(payload);
+      expect(segment).toContain('[EXTERNAL:WEB]');
+      expect(segment).toContain('[EXTERNAL:REPO:SC-API]');
+      expect(segment).toContain('https://docs.spring.io/spring-cloud-gateway/');
+      expect(segment).toContain('src/main/resources/application.yml:42');
+      expect(segment).toContain('95%');
+      expect(segment).toContain('100%');
+    });
+
+    it('falls back to UNKNOWN for a repo claim without a system code', () => {
+      const segment = buildExternalResearchSegment({
+        summary: 'x',
+        findings: [{ claim: 'y', scope: 'repo', source: 'a.ts', confidence: 0.5 }],
+      });
+      expect(segment).toContain('[EXTERNAL:REPO:UNKNOWN]');
+    });
+
+    it('renders an explicit unavailability block for skipped systems', () => {
+      const segment = buildExternalResearchSegment(payload);
+      expect(segment).toContain('hệ thống không khả dụng');
+      expect(segment).toContain('CORE');
+      expect(segment).toContain('Thiếu cấu hình SSH');
+    });
+
+    it('returns an empty string for absent or empty research payloads', () => {
+      expect(buildExternalResearchSegment()).toBe('');
+      expect(buildExternalResearchSegment(null)).toBe('');
+      expect(buildExternalResearchSegment({ summary: 'x', findings: [] })).toBe('');
+    });
+
+    it('places externalResearch after grounding and before outputContract, keeping subsystemSections', () => {
+      const composed = composeSdlcTurn({
+        step: 'SOLUTION',
+        intent: 'artifact',
+        artifact: 'SOLUTION',
+        grounding: 'PL01 mục 2',
+        conventions: { global: 'Global rules' },
+        targets: [{ systemId: 'sys-1', code: 'SC-API', name: 'SC API' }],
+        externalResearch: payload,
+        userTurn: 'Thiết kế giải pháp',
+      });
+      const system = composed.messages[0]?.content ?? '';
+      const order = [
+        composed.segments.policy,
+        composed.segments.stepContract,
+        composed.segments.subsystemSections,
+        composed.segments.toolPolicy,
+        composed.segments.conventions,
+        composed.segments.fewShot,
+        composed.segments.grounding,
+        composed.segments.externalResearch,
+        composed.segments.outputContract,
+      ];
+      expect(composed.segments.subsystemSections).not.toBe('');
+      expect(composed.segments.externalResearch).toContain('<external_research_evidence');
+      for (let i = 1; i < order.length; i += 1) {
+        expect(system.indexOf(order[i - 1]!)).toBeGreaterThanOrEqual(0);
+        expect(system.indexOf(order[i - 1]!)).toBeLessThan(system.indexOf(order[i]!));
+      }
+    });
+
+    it('omits the segment and its tags when no research is supplied', () => {
+      const composed = composeSdlcTurn({ step: 'INTAKE', intent: 'qa', userTurn: 'Rà soát' });
+      expect(composed.segments.externalResearch).toBe('');
+      expect(composed.messages[0]?.content).not.toContain('<external_research_evidence');
+    });
+
+    it('offers propose_research only where the proposal policy applies', () => {
+      expect(SDLC_STEP_ALLOWED_TOOLS.INTAKE).toContain('propose_research');
+      expect(SDLC_STEP_ALLOWED_TOOLS.SOLUTION).toContain('propose_research');
+      expect(buildToolPolicy('SOLUTION', [], ['propose_research'])).toContain(
+        'propose_research chỉ trả về câu hỏi nghiên cứu'
+      );
+      expect(buildToolPolicy('CODE_GUIDE', [], ['propose_research'])).not.toContain(
+        'propose_research chỉ trả về câu hỏi nghiên cứu'
+      );
     });
   });
 });
