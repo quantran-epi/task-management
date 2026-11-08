@@ -5,9 +5,14 @@ import {
   escapeShellArg,
   parseResearchOutput,
   checkResearchAvailability,
+  buildResearchCommand,
+  buildResearchPrompt,
+  renderResearchMarkdown,
+  executeMultiSystemResearch,
   ResearchRunError,
 } from '../researchService';
 import * as sshService from '../../sshService';
+import * as artifactRepo from '../../wizard/artifactRepo';
 import type { TaskPlannerDatabase } from '../../../db';
 import type { System } from '../../../types/models';
 import type { SshConfig } from '../../../types/ssh';
@@ -15,10 +20,25 @@ import type { SshConfig } from '../../../types/ssh';
 vi.mock('../../sshService', () => ({
   getSshConfigById: vi.fn(),
   testSshConnection: vi.fn(),
+  execRemoteCommandStream: vi.fn(),
+}));
+
+vi.mock('../../wizard/artifactRepo', () => ({
+  saveResearchArtifact: vi.fn(),
+}));
+
+vi.mock('../../wizard/workflowCoordinator', () => ({
+  defaultSha256: vi.fn(async () => 'hash'),
 }));
 
 const mockedGetSshConfigById = vi.mocked(sshService.getSshConfigById);
 const mockedTestSshConnection = vi.mocked(sshService.testSshConnection);
+const mockedExecRemoteCommandStream = vi.mocked(sshService.execRemoteCommandStream);
+const mockedSaveResearchArtifact = vi.mocked(artifactRepo.saveResearchArtifact);
+
+const SESSION_ID = '11111111-1111-4111-8111-111111111111';
+const CHANGE_REQUEST_ID = '22222222-2222-4222-8222-222222222222';
+const THREAD_ID = '33333333-3333-4333-8333-333333333333';
 
 const sshConfig: SshConfig = {
   id: 'ssh-1',
@@ -200,6 +220,224 @@ describe('ResearchService', () => {
       expect(err).toBeInstanceOf(Error);
       expect(err.code).toBe('RESEARCH_TIMEOUT');
       expect(err.message).toBe('timed out');
+    });
+  });
+
+  describe('buildResearchCommand', () => {
+    it('emits the exact remote command with exec on claude and no sh -c wrapper', () => {
+      const cmd = buildResearchCommand('/srv/repo', "Fix the 'auth' flow", true);
+
+      expect(cmd).toBe(
+        "cd '/srv/repo' && exec claude -p 'Fix the '\\''auth'\\'' flow' --output-format json --allowedTools WebSearch,WebFetch,Glob,Grep,Read",
+      );
+      expect(cmd).not.toContain('sh -c');
+      expect(cmd).not.toMatch(/exec cd /);
+    });
+
+    it('drops web tools when includeWeb is false', () => {
+      const cmd = buildResearchCommand('/srv/repo', 'q', false);
+
+      expect(cmd.endsWith('--allowedTools Glob,Grep,Read')).toBe(true);
+      expect(cmd).not.toContain('WebSearch');
+    });
+
+    it('falls back to . for an empty repo path', () => {
+      expect(buildResearchCommand('', 'q', false)).toContain("cd '.' && exec claude -p");
+    });
+  });
+
+  describe('buildResearchPrompt', () => {
+    it('names the system code, lists questions, and forbids edits', () => {
+      const prompt = buildResearchPrompt(['Q1?', 'Q2?'], 'CORE');
+
+      expect(prompt).toContain('CORE');
+      expect(prompt).toContain('Q1?');
+      expect(prompt).toContain('Q2?');
+      expect(prompt).toContain('summary');
+      expect(prompt).toContain('findings');
+      expect(prompt).toContain('KHÔNG');
+    });
+  });
+
+  describe('renderResearchMarkdown', () => {
+    it('tags web and repo findings with their external scope', () => {
+      const md = renderResearchMarkdown({
+        summary: 'Sum',
+        findings: [
+          { claim: 'Web claim', scope: 'web', source: 'https://x', confidence: 0.9 },
+          { claim: 'Repo claim', scope: 'repo', systemCode: 'CORE', source: 'src/x.ts', confidence: 1 },
+        ],
+      });
+
+      expect(md).toContain('Sum');
+      expect(md).toContain('[EXTERNAL:WEB] Web claim');
+      expect(md).toContain('[EXTERNAL:REPO:CORE] Repo claim');
+      expect(md).toContain('src/x.ts');
+    });
+  });
+
+  describe('executeMultiSystemResearch', () => {
+    function baseOptions(overrides: Partial<Parameters<typeof executeMultiSystemResearch>[0]> = {}) {
+      return {
+        changeRequestId: CHANGE_REQUEST_ID,
+        threadId: THREAD_ID,
+        sessionId: SESSION_ID,
+        targetSystemIds: ['sys-1'],
+        questions: ['Q1?'],
+        onLog: vi.fn(),
+        ...overrides,
+      };
+    }
+
+    it('rejects RESEARCH_UNAVAILABLE when no target is available', async () => {
+      const db = makeDb([
+        makeSystem({ id: 'sys-1', code: 'CORE' }),
+        makeSystem({ id: 'sys-2', code: 'CREDIT' }),
+      ]);
+
+      const { promise } = executeMultiSystemResearch(baseOptions({ db, targetSystemIds: ['sys-1', 'sys-2'] }));
+
+      await expect(promise).rejects.toMatchObject({ code: 'RESEARCH_UNAVAILABLE' });
+      expect(mockedExecRemoteCommandStream).not.toHaveBeenCalled();
+      expect(mockedSaveResearchArtifact).not.toHaveBeenCalled();
+    });
+
+    it('reports an unavailable system in skippedSystems and onLog', async () => {
+      const db = makeDb([
+        makeSystem({ id: 'sys-1', code: 'CORE', sshConfigId: 'ssh-1', remoteRepoPath: '/srv/core' }),
+        makeSystem({ id: 'sys-2', code: 'CREDIT' }),
+      ]);
+      mockedGetSshConfigById.mockResolvedValue(sshConfig);
+      mockedTestSshConnection.mockResolvedValue('ok');
+      mockedExecRemoteCommandStream.mockImplementation(async (_c, _cmd, _sid, onData, onExit) => {
+        setTimeout(() => {
+          onData({
+            sessionId: SESSION_ID,
+            stream: 'stdout',
+            line: JSON.stringify({ summary: 'S', findings: [{ claim: 'c', scope: 'repo', source: 'src/x.ts' }] }),
+          });
+          onExit({ sessionId: SESSION_ID, exitStatus: 0, error: null });
+        }, 0);
+        return async () => {};
+      });
+      mockedSaveResearchArtifact.mockResolvedValue({ note: {} as never, created: true });
+
+      const onLog = vi.fn();
+      const { promise } = executeMultiSystemResearch(
+        baseOptions({ db, targetSystemIds: ['sys-1', 'sys-2'], onLog }),
+      );
+
+      const payload = await promise;
+
+      expect(payload.skippedSystems).toEqual([
+        { systemId: 'sys-2', code: 'CREDIT', reason: 'NO_SSH_CONFIG' },
+      ]);
+      expect(onLog.mock.calls.flat().join('\n')).toContain('CREDIT');
+    });
+
+    it('rejects RESEARCH_TIMEOUT and cancels the remote process', async () => {
+      const db = makeDb([makeSystem({ id: 'sys-1', code: 'CORE', sshConfigId: 'ssh-1' })]);
+      mockedGetSshConfigById.mockResolvedValue(sshConfig);
+      mockedTestSshConnection.mockResolvedValue('ok');
+      const cancelHandle = vi.fn(async () => {});
+      mockedExecRemoteCommandStream.mockImplementation(async () => cancelHandle);
+
+      const { promise } = executeMultiSystemResearch(baseOptions({ db, timeoutMs: 10 }));
+
+      await expect(promise).rejects.toMatchObject({ code: 'RESEARCH_TIMEOUT' });
+      expect(cancelHandle).toHaveBeenCalled();
+      expect(mockedSaveResearchArtifact).not.toHaveBeenCalled();
+    });
+
+    it('maps an SSH stream throw to RESEARCH_SSH_ERROR', async () => {
+      const db = makeDb([makeSystem({ id: 'sys-1', code: 'CORE', sshConfigId: 'ssh-1' })]);
+      mockedGetSshConfigById.mockResolvedValue(sshConfig);
+      mockedTestSshConnection.mockResolvedValue('ok');
+      mockedExecRemoteCommandStream.mockRejectedValue(new Error('channel open failed'));
+
+      const { promise } = executeMultiSystemResearch(baseOptions({ db }));
+
+      await expect(promise).rejects.toMatchObject({ code: 'RESEARCH_SSH_ERROR' });
+      expect(mockedSaveResearchArtifact).not.toHaveBeenCalled();
+    });
+
+    it('maps a non-null exit-event error to RESEARCH_SSH_ERROR instead of resolving partial data', async () => {
+      const db = makeDb([makeSystem({ id: 'sys-1', code: 'CORE', sshConfigId: 'ssh-1' })]);
+      mockedGetSshConfigById.mockResolvedValue(sshConfig);
+      mockedTestSshConnection.mockResolvedValue('ok');
+      mockedExecRemoteCommandStream.mockImplementation(async (_c, _cmd, _sid, onData, onExit) => {
+        setTimeout(() => {
+          onData({
+            sessionId: SESSION_ID,
+            stream: 'stdout',
+            line: JSON.stringify({ summary: 'partial', findings: [] }),
+          });
+          onExit({ sessionId: SESSION_ID, exitStatus: 1, error: 'connection reset' });
+        }, 0);
+        return async () => {};
+      });
+
+      const { promise } = executeMultiSystemResearch(baseOptions({ db }));
+
+      await expect(promise).rejects.toMatchObject({ code: 'RESEARCH_SSH_ERROR' });
+      expect(mockedSaveResearchArtifact).not.toHaveBeenCalled();
+    });
+
+    it('resolves with tagged findings and persists one artifact on success', async () => {
+      const db = makeDb([
+        makeSystem({ id: 'sys-1', code: 'CORE', sshConfigId: 'ssh-1', remoteRepoPath: '/srv/core' }),
+      ]);
+      mockedGetSshConfigById.mockResolvedValue(sshConfig);
+      mockedTestSshConnection.mockResolvedValue('ok');
+      mockedExecRemoteCommandStream.mockImplementation(async (_c, _cmd, _sid, onData, onExit) => {
+        setTimeout(() => {
+          onData({
+            sessionId: SESSION_ID,
+            stream: 'stdout',
+            line: JSON.stringify({
+              summary: 'Findings',
+              findings: [{ claim: 'Retry uses backoff', scope: 'repo', source: 'src/retry.ts' }],
+            }),
+          });
+          onExit({ sessionId: SESSION_ID, exitStatus: 0, error: null });
+        }, 0);
+        return async () => {};
+      });
+      mockedSaveResearchArtifact.mockResolvedValue({ note: {} as never, created: true });
+
+      const { promise } = executeMultiSystemResearch(baseOptions({ db }));
+
+      const payload = await promise;
+
+      expect(payload.summary).toBe('Findings');
+      expect(payload.findings).toHaveLength(1);
+      expect(payload.findings[0]?.systemCode).toBe('CORE');
+      expect(mockedSaveResearchArtifact).toHaveBeenCalledTimes(1);
+      expect(mockedSaveResearchArtifact.mock.calls[0]?.[0]).toMatchObject({
+        changeRequestId: CHANGE_REQUEST_ID,
+        threadId: THREAD_ID,
+        sessionId: SESSION_ID,
+      });
+    });
+
+    it('cancel() settles the run with RESEARCH_CANCELLED and stops the stream', async () => {
+      const db = makeDb([makeSystem({ id: 'sys-1', code: 'CORE', sshConfigId: 'ssh-1' })]);
+      mockedGetSshConfigById.mockResolvedValue(sshConfig);
+      mockedTestSshConnection.mockResolvedValue('ok');
+      const cancelHandle = vi.fn(async () => {});
+      mockedExecRemoteCommandStream.mockImplementation(async () => cancelHandle);
+
+      const { promise, cancel } = executeMultiSystemResearch(baseOptions({ db }));
+
+      // Let the stream start so the closure-local cancel handle is registered.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await cancel();
+
+      await expect(promise).rejects.toMatchObject({ code: 'RESEARCH_CANCELLED' });
+      expect(cancelHandle).toHaveBeenCalledTimes(1);
+      // Idempotent: a second cancel must not double-signal the remote process.
+      await cancel();
+      expect(cancelHandle).toHaveBeenCalledTimes(1);
     });
   });
 });
