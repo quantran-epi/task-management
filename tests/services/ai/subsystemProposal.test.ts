@@ -60,6 +60,14 @@ describe('propose_subsystems registration', () => {
     }
   });
 
+  it('keeps propose_research off non-proposal steps', () => {
+    expect(SDLC_STEP_ALLOWED_TOOLS.SOLUTION).toContain('propose_research');
+    expect(SDLC_STEP_ALLOWED_TOOLS.INTAKE).toContain('propose_research');
+    for (const step of ['CODE_GUIDE', 'CHANGE_PACK', 'TECH_DOCS', 'CAB'] as const) {
+      expect(SDLC_STEP_ALLOWED_TOOLS[step]).not.toContain('propose_research');
+    }
+  });
+
   it('never leaks into ordinary chat and returns when explicitly allowed', () => {
     const ordinary = getToolsForTurn(false, [], undefined).map((tool) => normalizeToolName(tool.function.name));
     expect(ordinary).not.toContain('propose_subsystems');
