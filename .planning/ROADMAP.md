@@ -578,7 +578,7 @@ Plans:
 7. A stopped agent reports back to the lead explicitly marked incomplete, and a global Stop aborts the lead plus every running agent.
 8. Team runs continue when the user leaves the tab, and returning shows the full result.
 
-**Plans:** 9/10 plans executed
+**Plans:** 10/10 plans complete
 
 **Wave 1** *(no dependencies; the hard gate — every later plan imports these types and tables)*
 
@@ -603,7 +603,7 @@ Plans:
 
 **Wave 5** *(depends on 34-07/34-09)*
 
-- [ ] 34-10-PLAN.md — Team page: list, create/settings drawers, workspace with shared transcript, sidebar, linked items, `renderViewContent` routing, TitleBar entry
+- [x] 34-10-PLAN.md — Team page: list, create/settings drawers, workspace with shared transcript, sidebar, linked items, `renderViewContent` routing, TitleBar entry
 
 ---
 
