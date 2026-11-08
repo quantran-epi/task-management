@@ -34,6 +34,11 @@ export interface SaveMessageInput {
   grounding?: ChatMessageGrounding | undefined;
   wizard?: WizardSnapshot | undefined;
   artifactEvent?: ChatArtifactEvent | undefined;
+  /** Phase 34 D-31: AI Office attribution, forwarded into the stored row. */
+  agentId?: string | undefined;
+  agentName?: string | undefined;
+  agentKind?: 'lead' | 'employee' | undefined;
+  messageKind?: 'instruction' | 'report' | 'synthesis' | 'plan' | undefined;
 }
 
 export function buildScopeKey(scopeType: ChatScopeType, entityId?: string): string {
@@ -165,6 +170,10 @@ export async function saveMessage(
     ...(input.grounding ? { grounding: input.grounding } : {}),
     ...(wizard ? { wizard } : {}),
     ...(artifactEvent ? { artifactEvent } : {}),
+    ...(input.agentId ? { agentId: input.agentId } : {}),
+    ...(input.agentName ? { agentName: input.agentName } : {}),
+    ...(input.agentKind ? { agentKind: input.agentKind } : {}),
+    ...(input.messageKind ? { messageKind: input.messageKind } : {}),
   };
 
   await db.transaction('rw', [db.chatMessages, db.chatThreads], async () => {
