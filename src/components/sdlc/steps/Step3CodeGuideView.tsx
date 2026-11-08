@@ -101,14 +101,11 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
   const [baseBranch, setBaseBranch] = useState<string>('origin/main');
 
   // Initialize SSH/repo from the selected subsystem (D-36/D-38b) — no settings-backed binding.
+  // Reset on every switch: a subsystem without a binding must not inherit the previous one's host.
   useEffect(() => {
-    if (selectedSystem?.sshConfigId) {
-      setSelectedSshConfigId(selectedSystem.sshConfigId);
-    }
-    if (selectedSystem?.remoteRepoPath) {
-      setRemoteRepoPath(selectedSystem.remoteRepoPath);
-      setLoadedRepoPath(selectedSystem.remoteRepoPath);
-    }
+    setSelectedSshConfigId(selectedSystem?.sshConfigId ?? '');
+    setRemoteRepoPath(selectedSystem?.remoteRepoPath ?? '');
+    setLoadedRepoPath(selectedSystem?.remoteRepoPath ?? '');
     setBaseBranch(selectedSystem?.defaultBaseBranch ?? 'origin/main');
   }, [selectedSystem]);
 
@@ -159,7 +156,9 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
         const configs = await getSshConfigs(db);
         if (cancelled) return;
         setSshConfigs(configs);
-        if (configs.length > 0 && configs[0]) {
+        // Only seed a default when no subsystem is selected; otherwise the subsystem-derived
+        // effect above owns SSH/repo and this would clobber it.
+        if (!selectedSystemId && configs.length > 0 && configs[0]) {
           setSelectedSshConfigId(configs[0].id);
           if (configs[0].defaultRemotePath) {
             setRemoteRepoPath(configs[0].defaultRemotePath);
@@ -177,7 +176,7 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [db]);
+  }, [db, selectedSystemId]);
 
   // Fetch only branches on-demand
   const fetchBranchesOnly = useCallback(async () => {
