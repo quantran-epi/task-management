@@ -1,7 +1,10 @@
 import { z } from 'zod';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { getSystem } from '../../db/repositories/systemRepo';
-import { getSshConfigById, testSshConnection } from '../sshService';
+import type { SshConfig } from '../../types/ssh';
+import { getSshConfigById, execRemoteCommandStream, testSshConnection } from '../sshService';
+import { saveResearchArtifact } from '../wizard/artifactRepo';
+import { defaultSha256 } from '../wizard/workflowCoordinator';
 
 // -------------------------------------------------------------------------------------------------
 // Schemas
@@ -180,4 +183,290 @@ export async function checkResearchAvailability(
   }
 
   return results;
+}
+
+// -------------------------------------------------------------------------------------------------
+// Prompt, remote command, and report rendering (D-04, D-13, T-32-03, T-32-04)
+// -------------------------------------------------------------------------------------------------
+
+const READ_ONLY_TOOLS = 'Glob,Grep,Read';
+const READ_ONLY_WEB_TOOLS = 'WebSearch,WebFetch,Glob,Grep,Read';
+
+/** Prompt sent to the remote headless CLI: strict JSON, read-only, scoped to one system. */
+export function buildResearchPrompt(questions: string[], systemCode: string): string {
+  return [
+    `Bạn đang nghiên cứu mã nguồn của hệ thống "${systemCode}" trong repository hiện tại.`,
+    'Trả lời các câu hỏi sau bằng cách đọc code trong repo (và tìm kiếm web nếu được phép):',
+    ...questions.map((question, index) => `${index + 1}. ${question}`),
+    '',
+    'QUY TẮC BẮT BUỘC:',
+    '- KHÔNG được sửa, tạo, hay xóa bất kỳ file nào. Chỉ đọc.',
+    '- KHÔNG được chạy lệnh git ghi (commit, push, checkout).',
+    '- Chỉ xuất ra MỘT đối tượng JSON hợp lệ, không kèm văn bản nào khác.',
+    '',
+    'Định dạng JSON đầu ra:',
+    '{"summary":"tóm tắt ngắn","findings":[{"claim":"kết luận","scope":"web"|"repo","source":"URL hoặc đường dẫn file","confidence":0.0}]}',
+  ].join('\n');
+}
+
+/**
+ * The only place the remote command string is built, so it stays unit-testable.
+ *
+ * `exec` sits on `claude`, never on `cd`: `cd` is a shell builtin, so `exec cd …`
+ * would replace the shell and exit before the rest of the list runs. With `exec`
+ * on `claude` the PID from `echo $$` becomes the claude process, so
+ * `ssh_kill_process` signals the real process and no child is orphaned (D-02).
+ *
+ * No nested shell layer: `channel.exec` already runs this through the remote
+ * login shell, and a nested shell invocation would be cut short by the single
+ * quotes `escapeShellArg` emits (T-32-03).
+ */
+export function buildResearchCommand(
+  remoteRepoPath: string,
+  prompt: string,
+  includeWeb: boolean,
+): string {
+  const tools = includeWeb ? READ_ONLY_WEB_TOOLS : READ_ONLY_TOOLS;
+  return `cd ${escapeShellArg(remoteRepoPath || '.')} && exec claude -p ${escapeShellArg(prompt)} --output-format json --allowedTools ${tools}`;
+}
+
+function findingTag(finding: ResearchFinding): string {
+  return finding.scope === 'web'
+    ? '[EXTERNAL:WEB]'
+    : `[EXTERNAL:REPO:${finding.systemCode ?? 'UNKNOWN'}]`;
+}
+
+/** Markdown report persisted as the RESEARCH artifact body. */
+export function renderResearchMarkdown(payload: ResearchPayload): string {
+  const lines = ['# External Research Report', '', '## Summary', '', payload.summary, ''];
+
+  lines.push('## Findings', '');
+  if (payload.findings.length === 0) {
+    lines.push('_No structured findings._', '');
+  } else {
+    for (const finding of payload.findings) {
+      lines.push(
+        `- ${findingTag(finding)} ${finding.claim} — source: ${finding.source} (confidence: ${finding.confidence})`,
+      );
+    }
+    lines.push('');
+  }
+
+  if (payload.skippedSystems && payload.skippedSystems.length > 0) {
+    lines.push('## Skipped Systems', '');
+    for (const skipped of payload.skippedSystems) {
+      lines.push(`- ${skipped.code}: ${skipped.reason}`);
+    }
+    lines.push('');
+  }
+
+  if (payload.rawOutput) {
+    lines.push('## Raw Output', '', '```', payload.rawOutput, '```', '');
+  }
+
+  return lines.join('\n');
+}
+
+// -------------------------------------------------------------------------------------------------
+// Multi-system orchestrator (D-02, D-03, D-12, D-13, SDLC-RES-02/03/05)
+// -------------------------------------------------------------------------------------------------
+
+export interface ExecuteMultiSystemResearchOptions {
+  changeRequestId: string;
+  threadId: string;
+  sessionId: string;
+  targetSystemIds: string[];
+  questions: string[];
+  includeWeb?: boolean;
+  onLog: (line: string) => void;
+  db?: TaskPlannerDatabase;
+  timeoutMs?: number;
+  now?: () => string;
+}
+
+const DEFAULT_TIMEOUT_MS = 300_000;
+
+/**
+ * Run research sequentially across the available target systems.
+ *
+ * The cancel handle is part of the return value, never a side channel, and the
+ * active stream handle is closure-local: a module-level handle would be
+ * overwritten by a second concurrent run and `cancel()` would kill the wrong
+ * remote process (D-02).
+ */
+export function executeMultiSystemResearch(
+  options: ExecuteMultiSystemResearchOptions,
+): { promise: Promise<ResearchPayload>; cancel: () => Promise<void> } {
+  const db = options.db ?? defaultDb;
+  const includeWeb = options.includeWeb !== false;
+
+  // Closure-local, one per run.
+  let cancelActive: (() => Promise<void>) | undefined;
+  let settled = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let resolveRun!: (value: ResearchPayload) => void;
+  let rejectRun!: (error: unknown) => void;
+
+  const promise = new Promise<ResearchPayload>((resolve, reject) => {
+    resolveRun = resolve;
+    rejectRun = reject;
+  });
+
+  const finishResolve = (value: ResearchPayload): void => {
+    if (settled) return;
+    settled = true;
+    if (timer !== undefined) clearTimeout(timer);
+    resolveRun(value);
+  };
+
+  const finishReject = (error: unknown): void => {
+    if (settled) return;
+    settled = true;
+    if (timer !== undefined) clearTimeout(timer);
+    rejectRun(error);
+  };
+
+  const stopRemote = async (): Promise<void> => {
+    const handle = cancelActive;
+    if (!handle) return;
+    try {
+      await handle();
+    } catch {
+      // The remote process may already be gone; cancellation is best-effort.
+    }
+  };
+
+  timer = setTimeout(() => {
+    finishReject(
+      new ResearchRunError('RESEARCH_TIMEOUT', `Nghiên cứu vượt quá ${options.timeoutMs ?? DEFAULT_TIMEOUT_MS}ms.`),
+    );
+    void stopRemote();
+  }, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+
+  void (async () => {
+    try {
+      const availability = await checkResearchAvailability(options.targetSystemIds, db);
+      if (settled) return;
+
+      const skippedSystems: SkippedSystem[] = [];
+      for (const entry of availability) {
+        if (entry.available) continue;
+        const reason = entry.reason ?? 'UNREACHABLE';
+        skippedSystems.push({ systemId: entry.systemId, code: entry.code, reason });
+        options.onLog(`Bỏ qua ${entry.code}: ${reason}`);
+      }
+
+      const runnable = availability.filter((entry) => entry.available);
+      if (runnable.length === 0) {
+        throw new ResearchRunError(
+          'RESEARCH_UNAVAILABLE',
+          'Không có hệ thống nào sẵn sàng cho nghiên cứu.',
+        );
+      }
+
+      const findings: ResearchFinding[] = [];
+      const summaries: string[] = [];
+      let rawOutput: string | undefined;
+
+      for (const entry of runnable) {
+        if (settled) return;
+
+        const system = await getSystem(entry.systemId, db);
+        if (!system?.sshConfigId) continue;
+
+        const sshConfig: SshConfig | null = await getSshConfigById(system.sshConfigId, db);
+        if (!sshConfig) continue;
+
+        options.onLog(`Bắt đầu nghiên cứu ${system.code}...`);
+
+        const command = buildResearchCommand(system.remoteRepoPath || '.', buildResearchPrompt(options.questions, system.code), includeWeb);
+
+        const lines: string[] = [];
+        let exitResolve!: () => void;
+        let exitReject!: (error: unknown) => void;
+        const streamDone = new Promise<void>((resolve, reject) => {
+          exitResolve = resolve;
+          exitReject = reject;
+        });
+
+        try {
+          cancelActive = await execRemoteCommandStream(
+            sshConfig,
+            command,
+            options.sessionId,
+            (event) => {
+              lines.push(event.line);
+              options.onLog(event.line);
+            },
+            (event) => {
+              if (event.error) {
+                exitReject(
+                  new ResearchRunError(
+                    'RESEARCH_SSH_ERROR',
+                    `Kết nối SSH tới ${system.code} bị ngắt: ${event.error}`,
+                  ),
+                );
+              } else {
+                exitResolve();
+              }
+            },
+          );
+        } catch (error) {
+          await stopRemote();
+          throw new ResearchRunError(
+            'RESEARCH_SSH_ERROR',
+            `Không thể chạy nghiên cứu trên ${system.code}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+
+        await streamDone;
+        if (settled) return;
+
+        const parsed = parseResearchOutput(lines.join('\n'));
+        summaries.push(parsed.summary);
+        if (parsed.rawOutput) rawOutput = parsed.rawOutput;
+        for (const finding of parsed.findings) {
+          findings.push(
+            finding.scope === 'repo' ? { ...finding, systemCode: system.code } : finding,
+          );
+        }
+      }
+
+      const payload: ResearchPayload = {
+        summary: summaries.join('\n\n'),
+        findings,
+        ...(skippedSystems.length > 0 ? { skippedSystems } : {}),
+        ...(rawOutput ? { rawOutput } : {}),
+      };
+
+      await saveResearchArtifact(
+        {
+          changeRequestId: options.changeRequestId,
+          threadId: options.threadId,
+          sessionId: options.sessionId,
+          inputRevision: 0,
+          draftRevision: 0,
+          inputHash: await defaultSha256(JSON.stringify(payload)),
+          markdown: renderResearchMarkdown(payload),
+          exportPayload: payload,
+          approvedAt: options.now?.() ?? new Date().toISOString(),
+        },
+        db,
+      );
+
+      finishResolve(payload);
+    } catch (error) {
+      finishReject(error);
+    }
+  })();
+
+  const cancel = async (): Promise<void> => {
+    if (settled) return;
+    settled = true;
+    if (timer !== undefined) clearTimeout(timer);
+    await stopRemote();
+    rejectRun(new ResearchRunError('RESEARCH_CANCELLED', 'Nghiên cứu đã bị hủy.'));
+  };
+
+  return { promise, cancel };
 }
