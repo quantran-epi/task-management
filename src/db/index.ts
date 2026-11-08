@@ -43,6 +43,12 @@ import type {
   ChangeRequest,
 } from '../types/models';
 
+/**
+ * Stable id of the recovery CR that parks tasks whose legacy project no longer resolves.
+ * A real v4 UUID so the parked rows still satisfy the backup schema's `crId` check.
+ */
+const LEGACY_UNASSIGNED_CR_ID = '00000000-0000-4000-8000-000000000001';
+
 export class TaskPlannerDatabase extends Dexie {
   tasks!: Table<Task, string>;
   capacityRules!: Table<CapacityRule, string>;
@@ -322,35 +328,75 @@ export class TaskPlannerDatabase extends Dexie {
           if (typeof cr.id === 'string') crIds.add(cr.id);
         }
 
-        // 2. Re-axis tasks: projectId -> crId; tasks with no resolvable CR are deleted
-        //    so no row can violate the required-crId invariant (T-31.2-06).
+        // 2. Re-axis tasks: projectId -> crId. A task whose project no longer resolves is
+        //    parked under a recovery CR rather than deleted — losing rows silently is worse
+        //    than showing them in a clearly-named bucket (data-safety goal).
         const taskRows = (await tasksTable.toCollection().toArray()) as Array<
           Record<string, unknown>
         >;
-        let deletedOrphans = 0;
+        const now = new Date().toISOString();
+        // `code` is a unique index: a legacy CR may already own the recovery code.
+        const takenCodes = new Set<string>();
+        for (const cr of crRows) {
+          if (typeof cr.code === 'string' && cr.code.trim() !== '') takenCodes.add(cr.code);
+        }
+        let recoveryCode = 'CR-LEGACY-UNASSIGNED';
+        for (let suffix = 2; takenCodes.has(recoveryCode); suffix += 1) {
+          recoveryCode = `CR-LEGACY-UNASSIGNED-${suffix}`;
+        }
+        let parkedTasks = 0;
         for (const task of taskRows) {
           const id = typeof task.id === 'string' ? task.id : '';
           const projectId = typeof task.projectId === 'string' ? task.projectId : undefined;
           if (projectId !== undefined && crIds.has(projectId)) {
             task.crId = projectId;
-            delete task.projectId;
-            delete task.milestoneId;
-            if (id) await tasksTable.put(task);
           } else {
-            if (id) await tasksTable.delete(id);
-            deletedOrphans += 1;
+            if (!crIds.has(LEGACY_UNASSIGNED_CR_ID)) {
+              const recoveryCr = {
+                id: LEGACY_UNASSIGNED_CR_ID,
+                name: 'Legacy unassigned tasks',
+                code: recoveryCode,
+                status: 'Open',
+                type: 'ENHANCEMENT',
+                targets: [],
+                createdAt: now,
+                updatedAt: now,
+              };
+              await changeRequestsTable.add(recoveryCr);
+              crIds.add(LEGACY_UNASSIGNED_CR_ID);
+              takenCodes.add(recoveryCode);
+              crRows.push(recoveryCr);
+            }
+            task.crId = LEGACY_UNASSIGNED_CR_ID;
+            parkedTasks += 1;
           }
+          delete task.projectId;
+          delete task.milestoneId;
+          if (id) await tasksTable.put(task);
         }
-        if (deletedOrphans > 0) {
-          console.warn(`[db v16] deleted ${deletedOrphans} orphan tasks`);
+        if (parkedTasks > 0) {
+          console.warn(`[db v16] parked ${parkedTasks} tasks under ${recoveryCode}`);
         }
 
-        // 3. Convert targetSystemIds -> targets and backfill a deterministic legacy code
-        //    (T-31.2-04: the legacy array never survives the upgrade).
+        // 3. Convert targetSystemIds -> targets, dropping ids that are not live subsystems
+        //    (D-25: a parent or a deleted system must never enter `targets`), then backfill a
+        //    deterministic legacy code (T-31.2-04: the legacy array never survives the upgrade).
+        const systemRows = (await tx.table('systems').toCollection().toArray()) as Array<
+          Record<string, unknown>
+        >;
+        const subsystemIds = new Set<string>();
+        for (const system of systemRows) {
+          if (typeof system.id === 'string' && system.type !== 'LOGICAL_GROUP') {
+            subsystemIds.add(system.id);
+          }
+        }
         for (const cr of crRows) {
           if (cr.targets === undefined) {
             cr.targets = Array.isArray(cr.targetSystemIds)
-              ? (cr.targetSystemIds as unknown[]).map((systemId) => ({ systemId }))
+              ? (cr.targetSystemIds as unknown[])
+                  .filter((systemId): systemId is string => typeof systemId === 'string')
+                  .filter((systemId) => subsystemIds.has(systemId))
+                  .map((systemId) => ({ systemId }))
               : [];
           }
           delete cr.targetSystemIds;
@@ -361,13 +407,38 @@ export class TaskPlannerDatabase extends Dexie {
         let legacyCodeCounter = 0;
         for (const cr of crsByCodeOrder) {
           if (typeof cr.code !== 'string' || cr.code.trim() === '') {
-            legacyCodeCounter += 1;
-            cr.code = `CR-LEGACY-${legacyCodeCounter}`;
+            let code: string;
+            do {
+              legacyCodeCounter += 1;
+              code = `CR-LEGACY-${legacyCodeCounter}`;
+            } while (takenCodes.has(code));
+            takenCodes.add(code);
+            cr.code = code;
           }
         }
         for (const cr of crRows) {
           if (typeof cr.id === 'string') await changeRequestsTable.put(cr);
         }
+
+        // 3b. Legacy project:/milestone: entity references would fail the v11 backup schema
+        //     (`entityType` only accepts task/cr/system). Detach notes and re-point links.
+        await tx
+          .table('notes')
+          .toCollection()
+          .modify((note: Record<string, unknown>) => {
+            if (note.entityType === 'project' || note.entityType === 'milestone') {
+              delete note.entityType;
+              delete note.entityId;
+            }
+          });
+        await tx
+          .table('knowledgeLinks')
+          .toCollection()
+          .modify((link: Record<string, unknown>) => {
+            if (link.taskMateEntityType === 'project' || link.taskMateEntityType === 'milestone') {
+              link.taskMateEntityType = 'cr';
+            }
+          });
 
         // 4. Purge legacy project:/milestone: chat threads, their tabs and messages.
         const threadRows = (await tx.table('chatThreads').toCollection().toArray()) as Array<

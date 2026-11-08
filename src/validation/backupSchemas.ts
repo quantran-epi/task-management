@@ -142,7 +142,7 @@ export const BackupWorkSessionRecordSchema = z
 
 export const BackupNoteRecordSchema = z.object({
   id: uuidSchema,
-  type: z.enum(['quick_note', 'document', 'folder']).optional(),
+  type: z.enum(['quick_note', 'document', 'folder', 'diagram']).optional(),
   parentId: z.string().optional(),
   tags: z.array(z.string()).optional(),
   slug: z.string().optional(),
