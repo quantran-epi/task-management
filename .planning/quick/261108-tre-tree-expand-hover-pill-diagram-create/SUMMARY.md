@@ -8,7 +8,10 @@ completed: 2026-11-08
 # Summary: JetBrains Instant Tree Expansion, Balanced Expand Icon Hover Pill, and Diagram Explorer Create Button
 
 ## Results
-- **Instant Tree Expansion**: Added `motion={null}` to Ant Design `<Tree>` in `CRExplorer.tsx`, `RemoteGitExplorer.tsx`, and `SystemsExplorer.tsx`. Added CSS rules in `workbench-tokens.css` to disable motion animation on `.ant-tree-motion`.
+- **Instant Tree Expansion**:
+  - Root cause: Antd source code uses `const motion = customMotion ?? { ...initCollapseMotion }`. In JavaScript, `null ?? fallback` evaluates to fallback! So `motion={null}` was ignored.
+  - Fix: Passed `motion={false as any}` (`false ?? fallback` evaluates to `false`). In `@rc-component/tree`, when `motion` is falsy, `mergedData` is raw `data` (skipping `MotionFlattenData` and `CSSMotion`).
+  - Added CSS rule targeting `.ant-motion-collapse`, `.ant-motion-collapse-active`, and `.ant-tree-switcher-icon svg` with `transition: none !important; animation: none !important` to guarantee zero-millisecond instant toggle.
 - **Balanced Expand Icon Hover Pill**:
   - Re-centered Ant Design switcher `:before` hover pill with `width: 18px; height: 18px; top: 50%; left: 50%; transform: translate(-50%, -50%); border-radius: 4px`. Removed `margin-top: 1px` from switcher icon so icon and hover pill are perfectly centered together. Hover pill does not exceed line text height.
   - Added `.workbench-tree-expand-btn` for custom trees (`DocFolderTree.tsx` and `DiagramExplorer.tsx`) with matching 18x18px dimensions, 4px border radius, and `--bg-hover` hover background.
