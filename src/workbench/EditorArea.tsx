@@ -5,6 +5,7 @@ import {
   PushpinOutlined,
   PushpinFilled,
   DownOutlined,
+  ReloadOutlined,
   FundProjectionScreenOutlined,
   FileTextOutlined,
 } from '@ant-design/icons';
@@ -104,6 +105,10 @@ interface SortableEditorTabItemProps {
   onSelect: () => void;
   onClose: () => void;
   onTogglePin: () => void;
+  onReload: () => void;
+  onReloadAll: () => void;
+  onCloseOthers: () => void;
+  onCloseAll: () => void;
   tabRef: (el: HTMLDivElement | null) => void;
 }
 
@@ -113,6 +118,10 @@ function SortableEditorTabItem({
   onSelect,
   onClose,
   onTogglePin,
+  onReload,
+  onReloadAll,
+  onCloseOthers,
+  onCloseAll,
   tabRef,
 }: SortableEditorTabItemProps) {
   const {
@@ -125,6 +134,45 @@ function SortableEditorTabItem({
   } = useSortable({ id: tab.id });
 
   const isPinned = Boolean(tab.pinned);
+
+  const contextMenuItems: MenuProps['items'] = [
+    {
+      key: 'reload',
+      label: 'Tải lại tab',
+      icon: <ReloadOutlined />,
+      onClick: onReload,
+    },
+    {
+      key: 'reload-all',
+      label: 'Tải lại tất cả tab',
+      icon: <ReloadOutlined />,
+      onClick: onReloadAll,
+    },
+    { type: 'divider' },
+    {
+      key: 'pin',
+      label: isPinned ? 'Bỏ ghim tab' : 'Ghim tab',
+      icon: isPinned ? <PushpinFilled /> : <PushpinOutlined />,
+      onClick: onTogglePin,
+    },
+    { type: 'divider' },
+    {
+      key: 'close',
+      label: 'Đóng tab',
+      icon: <CloseOutlined />,
+      onClick: onClose,
+    },
+    {
+      key: 'close-others',
+      label: 'Đóng các tab khác',
+      onClick: onCloseOthers,
+    },
+    {
+      key: 'close-all',
+      label: 'Đóng tất cả tab',
+      onClick: onCloseAll,
+    },
+  ];
 
   const style: React.CSSProperties = {
     transform: CSS.Translate.toString(transform),
@@ -164,129 +212,131 @@ function SortableEditorTabItem({
   };
 
   return (
-    <div
-      ref={(node) => {
-        setNodeRef(node);
-        tabRef(node);
-      }}
-      {...attributes}
-      {...listeners}
-      role="tab"
-      aria-selected={isActive}
-      tabIndex={0}
-      title={tab.title}
-      onClick={onSelect}
-      onAuxClick={(e) => {
-        if (e.button === 1) {
-          e.preventDefault();
-          e.stopPropagation();
-          onClose();
-        }
-      }}
-      onMouseDown={(e) => {
-        if (e.button === 1) {
-          e.preventDefault();
-        }
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          onSelect();
-        }
-      }}
-      style={style}
-    >
-      {/* Pin toggle button / icon */}
-      <button
-        type="button"
-        aria-label={isPinned ? `Unpin ${tab.title}` : `Pin ${tab.title}`}
-        title={isPinned ? 'Unpin tab' : 'Pin tab'}
-        onClick={(e) => {
-          e.stopPropagation();
-          onTogglePin();
+    <Dropdown menu={{ items: contextMenuItems }} trigger={['contextMenu']}>
+      <div
+        ref={(node) => {
+          setNodeRef(node);
+          tabRef(node);
         }}
-        onPointerDown={(e) => {
-          e.stopPropagation();
-        }}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'transparent',
-          border: 'none',
-          padding: 2,
-          marginRight: 4,
-          borderRadius: 3,
-          cursor: 'pointer',
-          color: isPinned ? 'var(--accent, #3871e1)' : 'var(--fg-muted, #6c707e)',
-          lineHeight: 1,
-          flexShrink: 0,
-          opacity: isPinned ? 1 : 0.45,
-          transition: 'opacity 0.15s ease, color 0.15s ease',
-        }}
-      >
-        {isPinned ? (
-          <PushpinFilled style={{ fontSize: 11, pointerEvents: 'none' }} />
-        ) : (
-          <PushpinOutlined style={{ fontSize: 11, pointerEvents: 'none' }} />
-        )}
-      </button>
-
-      {/* Tab Type Icon */}
-      <span
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginRight: 6,
-          flexShrink: 0,
-          pointerEvents: 'none',
-        }}
-      >
-        {getEditorTabIcon(tab.viewType, 13)}
-      </span>
-
-      <span
-        style={{
-          flex: 1,
-          minWidth: 0,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          marginRight: 6,
-          pointerEvents: 'none',
-        }}
+        {...attributes}
+        {...listeners}
+        role="tab"
+        aria-selected={isActive}
+        tabIndex={0}
         title={tab.title}
+        onClick={onSelect}
+        onAuxClick={(e) => {
+          if (e.button === 1) {
+            e.preventDefault();
+            e.stopPropagation();
+            onClose();
+          }
+        }}
+        onMouseDown={(e) => {
+          if (e.button === 1) {
+            e.preventDefault();
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            onSelect();
+          }
+        }}
+        style={style}
       >
-        {tab.title}
-      </span>
+        {/* Pin toggle button / icon */}
+        <button
+          type="button"
+          aria-label={isPinned ? `Unpin ${tab.title}` : `Pin ${tab.title}`}
+          title={isPinned ? 'Unpin tab' : 'Pin tab'}
+          onClick={(e) => {
+            e.stopPropagation();
+            onTogglePin();
+          }}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'transparent',
+            border: 'none',
+            padding: 2,
+            marginRight: 4,
+            borderRadius: 3,
+            cursor: 'pointer',
+            color: isPinned ? 'var(--accent, #3871e1)' : 'var(--fg-muted, #6c707e)',
+            lineHeight: 1,
+            flexShrink: 0,
+            opacity: isPinned ? 1 : 0.45,
+            transition: 'opacity 0.15s ease, color 0.15s ease',
+          }}
+        >
+          {isPinned ? (
+            <PushpinFilled style={{ fontSize: 11, pointerEvents: 'none' }} />
+          ) : (
+            <PushpinOutlined style={{ fontSize: 11, pointerEvents: 'none' }} />
+          )}
+        </button>
 
-      <button
-        type="button"
-        aria-label={`Close ${tab.title}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          onClose();
-        }}
-        onPointerDown={(e) => {
-          e.stopPropagation();
-        }}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'transparent',
-          border: 'none',
-          padding: 2,
-          borderRadius: 3,
-          cursor: 'pointer',
-          color: 'var(--fg-muted, #6c707e)',
-          lineHeight: 1,
-          flexShrink: 0,
-        }}
-      >
-        <CloseOutlined style={{ fontSize: 11, pointerEvents: 'none' }} />
-      </button>
-    </div>
+        {/* Tab Type Icon */}
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginRight: 6,
+            flexShrink: 0,
+            pointerEvents: 'none',
+          }}
+        >
+          {getEditorTabIcon(tab.viewType, 13)}
+        </span>
+
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            marginRight: 6,
+            pointerEvents: 'none',
+          }}
+          title={tab.title}
+        >
+          {tab.title}
+        </span>
+
+        <button
+          type="button"
+          aria-label={`Close ${tab.title}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'transparent',
+            border: 'none',
+            padding: 2,
+            borderRadius: 3,
+            cursor: 'pointer',
+            color: 'var(--fg-muted, #6c707e)',
+            lineHeight: 1,
+            flexShrink: 0,
+          }}
+        >
+          <CloseOutlined style={{ fontSize: 11, pointerEvents: 'none' }} />
+        </button>
+      </div>
+    </Dropdown>
   );
 }
 
@@ -295,9 +345,14 @@ export function EditorArea({ db }: EditorAreaProps) {
   const activeTabId = useLayoutStore((state) => state.activeTabId);
   const setActiveTabId = useLayoutStore((state) => state.setActiveTabId);
   const closeTab = useLayoutStore((state) => state.closeTab);
+  const closeOtherTabs = useLayoutStore((state) => state.closeOtherTabs);
+  const closeAllTabs = useLayoutStore((state) => state.closeAllTabs);
   const openTab = useLayoutStore((state) => state.openTab);
   const reorderTabs = useLayoutStore((state) => state.reorderTabs);
   const togglePinTab = useLayoutStore((state) => state.togglePinTab);
+  const tabReloadKeys = useLayoutStore((state) => state.tabReloadKeys);
+  const reloadTab = useLayoutStore((state) => state.reloadTab);
+  const reloadAllTabs = useLayoutStore((state) => state.reloadAllTabs);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const tabElementsRef = useRef<Record<string, HTMLDivElement | null>>({});
@@ -403,6 +458,25 @@ export function EditorArea({ db }: EditorAreaProps) {
               }}
             >
               {isPinned ? <PushpinFilled style={{ fontSize: 11 }} /> : <PushpinOutlined style={{ fontSize: 11 }} />}
+            </button>
+            <button
+              type="button"
+              aria-label={`Reload ${t.title}`}
+              title="Tải lại tab"
+              onClick={(e) => {
+                e.stopPropagation();
+                reloadTab(t.id);
+              }}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '2px 4px',
+                borderRadius: 3,
+                color: 'var(--fg-muted, #6c707e)',
+              }}
+            >
+              <ReloadOutlined style={{ fontSize: 10 }} />
             </button>
             <button
               type="button"
@@ -647,6 +721,10 @@ export function EditorArea({ db }: EditorAreaProps) {
                     onSelect={() => setActiveTabId(tab.id)}
                     onClose={() => closeTab(tab.id)}
                     onTogglePin={() => togglePinTab(tab.id)}
+                    onReload={() => reloadTab(tab.id)}
+                    onReloadAll={() => reloadAllTabs()}
+                    onCloseOthers={() => closeOtherTabs(tab.id)}
+                    onCloseAll={() => closeAllTabs()}
                     tabRef={(el) => {
                       tabElementsRef.current[tab.id] = el;
                     }}
@@ -657,7 +735,7 @@ export function EditorArea({ db }: EditorAreaProps) {
           </div>
         </DndContext>
 
-        {/* Dropdown button for all open tabs */}
+        {/* Tab actions: reload active tab + dropdown for all open tabs */}
         <div
           style={{
             display: 'flex',
@@ -667,8 +745,45 @@ export function EditorArea({ db }: EditorAreaProps) {
             height: '100%',
             flexShrink: 0,
             borderLeft: '1px solid var(--border, #e9eaee)',
+            gap: 2,
           }}
         >
+          <Tooltip title="Tải lại tab hiện tại (Alt+R)">
+            <button
+              type="button"
+              aria-label="Reload active tab"
+              onClick={() => reloadTab(activeTab?.id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: 24,
+                width: 24,
+                padding: 0,
+                background: 'transparent',
+                border: '1px solid transparent',
+                borderRadius: 'var(--radius-control, 4px)',
+                cursor: 'pointer',
+                color: 'var(--fg-secondary, #5f6269)',
+                fontSize: 12,
+                outline: 'none',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--bg-hover, #ededed)';
+                e.currentTarget.style.borderColor = 'var(--border-strong, #d1d3d9)';
+                e.currentTarget.style.color = 'var(--fg-strong, #000000)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.borderColor = 'transparent';
+                e.currentTarget.style.color = 'var(--fg-secondary, #5f6269)';
+              }}
+            >
+              <ReloadOutlined style={{ fontSize: 11 }} />
+            </button>
+          </Tooltip>
+
           <Dropdown
             menu={{
               items: dropdownMenuItems,
@@ -735,7 +850,20 @@ export function EditorArea({ db }: EditorAreaProps) {
       >
         <AntdThemeAdapter>
           {activeTab ? (
-            renderViewContent(activeTab)
+            <div
+              key={`${activeTab.id}-${tabReloadKeys[activeTab.id] ?? 0}`}
+              data-testid="workbench-tab-content"
+              style={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                flex: 1,
+                minHeight: 0,
+              }}
+            >
+              {renderViewContent(activeTab)}
+            </div>
           ) : (
             <div
               style={{

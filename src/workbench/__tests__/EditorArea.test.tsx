@@ -148,4 +148,15 @@ describe('EditorArea', () => {
     fireEvent.click(unpinTasksBtn);
     expect(useLayoutStore.getState().openTabs.find((t) => t.id === 'tasks')?.pinned).toBe(false);
   });
+
+  it('renders reload active tab button and increments reload counter on click', () => {
+    render(<EditorArea />);
+
+    const reloadBtn = screen.getByRole('button', { name: 'Reload active tab' });
+    expect(reloadBtn).toBeDefined();
+
+    expect(useLayoutStore.getState().tabReloadKeys['tasks']).toBeUndefined();
+    fireEvent.click(reloadBtn);
+    expect(useLayoutStore.getState().tabReloadKeys['tasks']).toBe(1);
+  });
 });

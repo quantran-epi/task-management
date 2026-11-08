@@ -99,4 +99,41 @@ describe('useLayoutStore', () => {
     state = useLayoutStore.getState();
     expect(state.activeRemoteBranch).toBe('main');
   });
+
+  it('increments tabReloadKeys on reloadTab and reloadAllTabs', () => {
+    expect(useLayoutStore.getState().tabReloadKeys).toEqual({});
+
+    // Reload active tab (default: 'tasks')
+    useLayoutStore.getState().reloadTab();
+    expect(useLayoutStore.getState().tabReloadKeys['tasks']).toBe(1);
+
+    // Reload specific tab
+    useLayoutStore.getState().reloadTab('notes');
+    expect(useLayoutStore.getState().tabReloadKeys['notes']).toBe(1);
+
+    // Reload all tabs
+    useLayoutStore.getState().reloadAllTabs();
+    expect(useLayoutStore.getState().tabReloadKeys['tasks']).toBe(2);
+    expect(useLayoutStore.getState().tabReloadKeys['notes']).toBe(2);
+    expect(useLayoutStore.getState().tabReloadKeys['planner']).toBe(1);
+  });
+
+  it('closes other tabs keeping target and pinned tabs', () => {
+    useLayoutStore.getState().togglePinTab('planner');
+    // tabs: planner (pinned), tasks, notes
+    useLayoutStore.getState().closeOtherTabs('tasks');
+
+    const tabs = useLayoutStore.getState().openTabs;
+    expect(tabs.map((t) => t.id)).toEqual(['planner', 'tasks']);
+    expect(useLayoutStore.getState().activeTabId).toBe('tasks');
+  });
+
+  it('closes all unpinned tabs', () => {
+    useLayoutStore.getState().togglePinTab('planner');
+    useLayoutStore.getState().closeAllTabs();
+
+    const tabs = useLayoutStore.getState().openTabs;
+    expect(tabs.map((t) => t.id)).toEqual(['planner']);
+    expect(useLayoutStore.getState().activeTabId).toBe('planner');
+  });
 });

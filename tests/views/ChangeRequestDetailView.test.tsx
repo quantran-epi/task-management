@@ -257,4 +257,42 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
       expect(tasksInCr).toHaveLength(0);
     });
   }, 30000);
+
+  it('updates SDLC step completion based on persisted workflow state', async () => {
+    const { cr } = await seed();
+    // Persist SDLC workflow state for this CR with pl01, pl02 (INTAKE) and solution (SOLUTION & CODE_GUIDE)
+    await db.settings.put({
+      key: `sdlc_workflow:${cr.id}:default-thread`,
+      value: JSON.stringify({
+        artifacts: {
+          pl01: { content: 'PL01 content' },
+          pl02: { content: 'PL02 content' },
+          solution: { content: 'Solution doc' },
+        },
+      }),
+    });
+
+    render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
+
+    await waitFor(() => {
+      const intakeBtn = screen.getByRole('button', { name: 'Nạp yêu cầu' });
+      expect(intakeBtn.querySelector('.anticon-check-circle')).not.toBeNull();
+      const solutionBtn = screen.getByRole('button', { name: 'Giải pháp' });
+      expect(solutionBtn.querySelector('.anticon-check-circle')).not.toBeNull();
+      const cabBtn = screen.getByRole('button', { name: 'CAB' });
+      expect(cabBtn.querySelector('.anticon-check-circle')).toBeNull();
+    });
+  }, 30000);
+
+  it('renders Tải lại button and triggers reloadTab', async () => {
+    const { cr } = await seed();
+    render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
+
+    const reloadBtn = await screen.findByRole('button', { name: /Tải lại/i });
+    expect(reloadBtn).toBeInTheDocument();
+
+    expect(useLayoutStore.getState().tabReloadKeys[`cr-${cr.id}`]).toBeUndefined();
+    fireEvent.click(reloadBtn);
+    expect(useLayoutStore.getState().tabReloadKeys[`cr-${cr.id}`]).toBe(1);
+  }, 30000);
 });

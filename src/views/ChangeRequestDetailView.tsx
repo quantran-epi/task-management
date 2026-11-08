@@ -7,6 +7,7 @@ import {
   DeleteOutlined,
   EditOutlined,
   PlusOutlined,
+  ReloadOutlined,
   RocketOutlined,
   ThunderboltOutlined,
   ToolOutlined,
@@ -96,6 +97,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
   const placeholderTaskIdRef = useRef<string | null>(null);
 
   const openTab = useLayoutStore((s) => s.openTab);
+  const reloadTab = useLayoutStore((s) => s.reloadTab);
 
   const cr = useLiveQuery(
     () => (changeRequestId ? getChangeRequest(changeRequestId, db) : undefined),
@@ -106,6 +108,45 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
     [changeRequestId, db]
   ) ?? [];
   const systems = useLiveQuery(() => getAllSystems(db), [db]) ?? [];
+
+  const workflowState = useLiveQuery(async () => {
+    if (!changeRequestId) return undefined;
+    const rows = await db.settings
+      .filter((row) => {
+        const key = String(row.key);
+        return key === `sdlc_workflow:${changeRequestId}` || key.startsWith(`sdlc_workflow:${changeRequestId}:`);
+      })
+      .toArray();
+    const row = rows[0];
+    if (!row?.value) return undefined;
+    try {
+      return JSON.parse(String(row.value));
+    } catch {
+      return undefined;
+    }
+  }, [changeRequestId, db]);
+
+  const isStepCompleted = (stepId: SdlcStepId): boolean => {
+    if (!workflowState) return false;
+    const artifacts = workflowState.artifacts;
+    if (!artifacts) return false;
+    switch (stepId) {
+      case 'INTAKE':
+        return Boolean(artifacts.pl01 && artifacts.pl02);
+      case 'SOLUTION':
+        return Boolean(artifacts.solution);
+      case 'CODE_GUIDE':
+        return Boolean(artifacts.solution);
+      case 'CHANGE_PACK':
+        return Boolean(artifacts.changePack);
+      case 'TECH_DOCS':
+        return Boolean(artifacts.pl03b && artifacts.pl07);
+      case 'CAB':
+        return Boolean(artifacts.cab);
+      default:
+        return false;
+    }
+  };
 
   const systemMap = useMemo(() => {
     const map = new Map<string, System>();
@@ -345,6 +386,9 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
           <Button type="primary" icon={<RocketOutlined />} onClick={() => openSdlc()}>
             Mở SDLC Studio
           </Button>
+          <Button icon={<ReloadOutlined />} onClick={() => reloadTab(`cr-${cr.id}`)}>
+            Tải lại
+          </Button>
           <Button icon={<EditOutlined />} onClick={() => setEditModalOpen(true)}>
             Sửa
           </Button>
@@ -356,48 +400,51 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
 
       {/* 3b. SDLC progress strip */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 0, height: 24 }}>
-        {SDLC_PROGRESS_STEPS.map((step, index) => (
-          <React.Fragment key={step.id}>
-            {index > 0 && (
-              <div style={{ flex: 1, height: 1, background: 'var(--border, #e9eaee)' }} />
-            )}
-            <Tooltip title={stepTitle(step.id)}>
-              <button
-                type="button"
-                aria-label={step.label}
-                onClick={() => openSdlc(step.id)}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  background: 'transparent',
-                  border: 'none',
-                  padding: '0 8px',
-                  cursor: 'pointer',
-                  fontSize: 12,
-                  fontWeight: 400,
-                  color: 'var(--fg-faint, #a8abb4)',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {index === 0 ? (
-                  <CheckCircleFilled style={{ color: '#52c41a' }} />
-                ) : (
-                  <span
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      background: 'var(--fg-faint, #a8abb4)',
-                      display: 'inline-block',
-                    }}
-                  />
-                )}
-                {step.label}
-              </button>
-            </Tooltip>
-          </React.Fragment>
-        ))}
+        {SDLC_PROGRESS_STEPS.map((step, index) => {
+          const completed = isStepCompleted(step.id);
+          return (
+            <React.Fragment key={step.id}>
+              {index > 0 && (
+                <div style={{ flex: 1, height: 1, background: 'var(--border, #e9eaee)' }} />
+              )}
+              <Tooltip title={stepTitle(step.id)}>
+                <button
+                  type="button"
+                  aria-label={step.label}
+                  onClick={() => openSdlc(step.id)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    background: 'transparent',
+                    border: 'none',
+                    padding: '0 8px',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: completed ? 500 : 400,
+                    color: completed ? 'var(--fg-strong, #000000)' : 'var(--fg-faint, #a8abb4)',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {completed ? (
+                    <CheckCircleFilled style={{ color: '#52c41a' }} />
+                  ) : (
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        background: 'var(--fg-faint, #a8abb4)',
+                        display: 'inline-block',
+                      }}
+                    />
+                  )}
+                  {step.label}
+                </button>
+              </Tooltip>
+            </React.Fragment>
+          );
+        })}
       </div>
 
       {/* 3c. Flat task table */}
