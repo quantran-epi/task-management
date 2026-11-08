@@ -614,10 +614,11 @@ return JSON.stringify(hits.map((h) => ({
 
 ```typescript
 // Source: aiOrchestratorLoop.ts:220 (loop head) and :467 (round end)
-const beforeToolRound = async () => {
+// The hook takes the loop's own signal as its second argument — never close over an outer one.
+const beforeToolRound = async (round: number, signal: AbortSignal) => {
   if (agentGate.isClosed()) await agentGate.wait(signal);
   if (teamGate.isClosed()) await teamGate.wait(signal);
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   const agentBucket = bucketOf(agentUsed, agentBudget);
   if (agentBucket >= 8 && lastAgentBucket < 8) coordinator.notifyAgentPaused(agentId);
   lastAgentBucket = agentBucket;

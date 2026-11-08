@@ -292,7 +292,7 @@ onUsage: (usage) => {
   }
   ```
   This means `delegate_batch` never reaches `dispatchAiToolCall`, so it never falls through to `executeDynamicMcpTool` (Pitfall 4). **This is a deliberate deviation from research's "register in `AI_DATABASE_TOOLS` + add an `executeAiTool` case"** — the interception path is smaller (zero edits to the 5 280-line `aiTools.ts` switch) and strictly safer. Guard it with a test that every advertised team tool name resolves to a coordinator handler.
-- Batch = `Promise.allSettled` over ≤3 `runtime.start()` promises. An entry settles only on a **terminal** state (`complete | stopped | error`); a budget-paused agent is non-terminal and keeps the batch pending (D-30, Pitfall 7).
+- Batch = `Promise.allSettled` over ≤3 `runtime.start()` promises. An entry settles only on a **terminal** state (`done | stopped | error`); a budget-paused agent is non-terminal and keeps the batch pending (D-30, Pitfall 7). `AgentRunStatus` has no `'complete'` member — do not invent one.
 - Stopped agent result carries `incomplete: true` in the JSON (D-14) — never prose-only.
 - Registers one `aiTurnManager` turn per agent (`team:<teamId>:agent:<agentId>`) and one team turn (`team:<teamId>`) with `abort` closures (Pitfall 11 — never reuse a `scopeKey` as a turn id).
 - Must **not** import React and must **not** live in a hook (D-22: survives view switches).
