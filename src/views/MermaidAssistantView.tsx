@@ -129,8 +129,8 @@ const TEMPLATES: Record<string, { label: string; code: string }> = {
   root((TaskMate System))
     Quản lý công việc
       Tasks
-      Projects
-      Milestones
+      Change Requests
+      Systems
     Kế hoạch & Tải trọng
       Capacity Rules
       Workload Forecast
@@ -142,7 +142,7 @@ const TEMPLATES: Record<string, { label: string; code: string }> = {
   gantt: {
     label: 'Gantt Chart (Tiến độ)',
     code: `gantt
-  title Tiến độ dự án
+  title Tiến độ Change Request
   dateFormat YYYY-MM-DD
   section Lập kế hoạch
     Nghiên cứu yêu cầu   :done, p1, 2026-11-01, 2026-11-03
@@ -540,7 +540,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
 
           {/* Entity Linker */}
           <Space size={4}>
-            <Tooltip title="Gắn liên kết với Task, Dự án hoặc Milestone">
+            <Tooltip title="Gắn liên kết với Task, Change Request hoặc System">
               <Select
                 size="small"
                 value={entityType || 'none'}

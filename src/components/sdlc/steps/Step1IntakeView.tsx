@@ -286,9 +286,9 @@ export const Step1IntakeView: React.FC<Step1IntakeViewProps> = ({
               style={{ width: 220 }}
               value={crFilter}
               onChange={setCrFilter}
-              aria-label="Lọc theo dự án"
+              aria-label="Lọc theo Change Request"
               options={[
-                { label: 'Tất cả dự án', value: 'ALL' },
+                { label: 'Tất cả Change Request', value: 'ALL' },
                 ...allCrs.map((p) => ({
                   label: p.id === changeRequestId ? `${p.name} (Hiện tại)` : p.name,
                   value: p.id,
