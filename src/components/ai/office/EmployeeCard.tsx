@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Avatar, Button, Tag, theme } from 'antd';
+import { Avatar, Button, Popconfirm, Tag, theme } from 'antd';
 import { CrownOutlined } from '@ant-design/icons';
 import type { AiEmployee, AiLead } from '../../../types/aiOffice';
 import { agentColorFor, agentTextColorFor } from './AgentAttributionRow';
@@ -78,9 +78,17 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
         <Button size="small" onClick={onEdit}>
           Sửa
         </Button>
-        <Button size="small" type="text" danger onClick={onDelete}>
-          Xóa
-        </Button>
+        <Popconfirm
+          title={`Xóa nhân viên: «${employee.name}» sẽ bị xóa khỏi mọi nhóm đang dùng. Lịch sử hội thoại vẫn được giữ.`}
+          okText="Xóa"
+          cancelText="Hủy"
+          okButtonProps={{ danger: true }}
+          onConfirm={onDelete}
+        >
+          <Button size="small" type="text" danger>
+            Xóa
+          </Button>
+        </Popconfirm>
       </div>
     </div>
   );
@@ -131,9 +139,17 @@ export const LeadCard: React.FC<LeadCardProps> = ({ lead, onEdit, onDelete }) =>
         <Button size="small" onClick={onEdit}>
           Sửa
         </Button>
-        <Button size="small" type="text" danger onClick={onDelete}>
-          Xóa
-        </Button>
+        <Popconfirm
+          title="Xóa lead: Các nhóm đang dùng lead này sẽ cần chọn lead khác trước khi chạy tiếp."
+          okText="Xóa"
+          cancelText="Hủy"
+          okButtonProps={{ danger: true }}
+          onConfirm={onDelete}
+        >
+          <Button size="small" type="text" danger>
+            Xóa
+          </Button>
+        </Popconfirm>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button, theme } from 'antd';
+import { Button, Popconfirm, theme } from 'antd';
 import type { AiSkill } from '../../../types/aiOffice';
 
 export interface SkillCardProps {
@@ -52,9 +52,17 @@ export const SkillCard: React.FC<SkillCardProps> = ({ skill, agentCount, onEdit,
         <Button size="small" onClick={onEdit}>
           Sửa
         </Button>
-        <Button size="small" type="text" danger onClick={onDelete}>
-          Xóa
-        </Button>
+        <Popconfirm
+          title="Xóa kỹ năng: Nhân viên đang dùng kỹ năng này sẽ chạy bằng persona thuần."
+          okText="Xóa"
+          cancelText="Hủy"
+          okButtonProps={{ danger: true }}
+          onConfirm={onDelete}
+        >
+          <Button size="small" type="text" danger>
+            Xóa
+          </Button>
+        </Popconfirm>
       </div>
     </div>
   );
