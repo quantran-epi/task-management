@@ -19,11 +19,21 @@ import {
   RobotOutlined,
 } from '@ant-design/icons';
 import { SafeMarkdown } from '../common/SafeMarkdown';import { saveHubSolution } from '../../../services/wizard/hubSolution';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
 import type { SdlcArtifactRef, SdlcStepId, SdlcWorkflowMetadata } from '../../../services/wizard/workflowSchemas';
 import type { ChatThread } from '../../../types/models';
 import { formatGuardMessage } from '../../../services/wizard/workflowGuards';
 import { ConventionsSummaryCard, type ConventionsSummaryProps } from '../common/ConventionsSummaryCard';
+import {
+  ResearchSummaryCard,
+  ResearchTriggerModal,
+  parseResearchPayload,
+  type ResearchTargetSystem,
+  type ResearchTriggerPayload,
+} from '../common/ResearchSummaryCard';
+import { loadAllResearchArtifacts } from '../../../services/wizard/artifactRepo';
+import { getChangeRequest } from '../../../db/repositories/changeRequestRepo';
 
 /** D-39 / UI-SPEC §5d — the explicit marker for a subsystem the CR does not touch. */
 export const SUBSYSTEM_UNAFFECTED_MARKER = 'Không có thay đổi ở subsystem này';
@@ -114,6 +124,8 @@ export interface Step2SolutionViewProps {
   pl02Content?: string | undefined;
   metadata?: SdlcWorkflowMetadata | undefined;
   conventionsSummary?: ConventionsSummaryProps | undefined;
+  /** D-08: supplied by the host so the toolbar can start a run through the chat panel. */
+  onStartResearch?: ((payload: ResearchTriggerPayload) => void) | undefined;
   /** Authoritative workflow-state answer; falls back to PL01/PL02 text when absent. */
   hasIntakeBaseline?: boolean | undefined;
   /** Navigates to the step that supplies the missing prerequisite (D-20). */
@@ -139,6 +151,7 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
   pl02Content = '',
   metadata,
   conventionsSummary,
+  onStartResearch,
   hasIntakeBaseline,
   onNavigateToStep,
   readOnly = false,
@@ -156,6 +169,24 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
   const [mode, setMode] = useState<'write' | 'preview' | 'split'>('write');
   const [saving, setSaving] = useState(false);
   const [isApproved, setIsApproved] = useState(Boolean(solutionArtifact?.approvedAt));
+  const [researchTriggerOpen, setResearchTriggerOpen] = useState(false);
+
+  // SDLC-RES-06: research is reused across steps of the same CR, so the read is CR-scoped.
+  const researchVersions = useLiveQuery(
+    () => loadAllResearchArtifacts(changeRequestId, db),
+    [changeRequestId, db]
+  ) ?? [];
+  const latestResearch = researchVersions[researchVersions.length - 1];
+  const researchPayload = latestResearch ? parseResearchPayload(latestResearch.payload) : null;
+
+  // T-32-14: the trigger modal offers only systems the CR already targets, never a free id.
+  const researchTargetSystems = useLiveQuery(async (): Promise<ResearchTargetSystem[]> => {
+    const cr = await getChangeRequest(changeRequestId, db);
+    const targets = cr?.targets ?? [];
+    if (targets.length === 0) return [];
+    const systems = await db.systems.where('id').anyOf(targets.map((target) => target.systemId)).toArray();
+    return systems.map((system) => ({ systemId: system.id, code: system.code, name: system.name }));
+  }, [changeRequestId, db]) ?? [];
 
   // T-25.3-45: host supplies the authoritative workflow-state answer; the fallback
   // only reads PL01/PL02 text, never the SOLUTION draft itself.
@@ -252,6 +283,23 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
       {conventionsSummary && (
         <ConventionsSummaryCard {...conventionsSummary} />
       )}
+
+      <ResearchSummaryCard
+        research={researchPayload}
+        {...(latestResearch ? { version: latestResearch.version } : {})}
+        versions={researchVersions}
+        onTriggerResearch={onStartResearch ? () => setResearchTriggerOpen(true) : undefined}
+      />
+
+      <ResearchTriggerModal
+        open={researchTriggerOpen}
+        targetSystems={researchTargetSystems}
+        onCancel={() => setResearchTriggerOpen(false)}
+        onSubmit={(payload) => {
+          setResearchTriggerOpen(false);
+          onStartResearch?.(payload);
+        }}
+      />
 
       {/* Header Toolbar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>

@@ -27,6 +27,15 @@ import type { Note } from '../../../types/models';
 import { VirtualizedList } from '../../../workbench/virtual/VirtualizedList';
 import dayjs from 'dayjs';
 import { ConventionsSummaryCard, type ConventionsSummaryProps } from '../common/ConventionsSummaryCard';
+import {
+  ResearchSummaryCard,
+  ResearchTriggerModal,
+  parseResearchPayload,
+  type ResearchTargetSystem,
+  type ResearchTriggerPayload,
+} from '../common/ResearchSummaryCard';
+import { loadAllResearchArtifacts } from '../../../services/wizard/artifactRepo';
+import { getChangeRequest } from '../../../db/repositories/changeRequestRepo';
 
 export interface Step1IntakeViewProps {
   changeRequestId: string;
@@ -34,6 +43,8 @@ export interface Step1IntakeViewProps {
   initialPl01?: string | undefined;
   initialPl02?: string | undefined;
   conventionsSummary?: ConventionsSummaryProps | undefined;
+  /** D-08: supplied by the host so the toolbar can start a run through the chat panel. */
+  onStartResearch?: ((payload: ResearchTriggerPayload) => void) | undefined;
   onStartIntake: (
     metadata: SdlcWorkflowMetadata,
     pl01Content: string,
@@ -48,12 +59,31 @@ export const Step1IntakeView: React.FC<Step1IntakeViewProps> = ({
   initialPl01 = '',
   initialPl02 = '',
   conventionsSummary,
+  onStartResearch,
   onStartIntake,
   db = defaultDb,
 }) => {
   const { token } = theme.useToken();
   const [form] = Form.useForm();
   const [submitting, setSubmitting] = useState(false);
+  const [researchTriggerOpen, setResearchTriggerOpen] = useState(false);
+
+  // SDLC-RES-06: research is reused across steps of the same CR, so the read is CR-scoped.
+  const researchVersions = useLiveQuery(
+    () => loadAllResearchArtifacts(changeRequestId, db),
+    [changeRequestId, db]
+  ) ?? [];
+  const latestResearch = researchVersions[researchVersions.length - 1];
+  const researchPayload = latestResearch ? parseResearchPayload(latestResearch.payload) : null;
+
+  // T-32-14: the trigger modal offers only systems the CR already targets, never a free id.
+  const researchTargetSystems = useLiveQuery(async (): Promise<ResearchTargetSystem[]> => {
+    const cr = await getChangeRequest(changeRequestId, db);
+    const targets = cr?.targets ?? [];
+    if (targets.length === 0) return [];
+    const systems = await db.systems.where('id').anyOf(targets.map((target) => target.systemId)).toArray();
+    return systems.map((system) => ({ systemId: system.id, code: system.code, name: system.name }));
+  }, [changeRequestId, db]) ?? [];
 
   // Note picker state
   const [notePickerOpen, setNotePickerOpen] = useState(false);
@@ -135,6 +165,23 @@ export const Step1IntakeView: React.FC<Step1IntakeViewProps> = ({
       {conventionsSummary && (
         <ConventionsSummaryCard {...conventionsSummary} />
       )}
+
+      <ResearchSummaryCard
+        research={researchPayload}
+        {...(latestResearch ? { version: latestResearch.version } : {})}
+        versions={researchVersions}
+        onTriggerResearch={onStartResearch ? () => setResearchTriggerOpen(true) : undefined}
+      />
+
+      <ResearchTriggerModal
+        open={researchTriggerOpen}
+        targetSystems={researchTargetSystems}
+        onCancel={() => setResearchTriggerOpen(false)}
+        onSubmit={(payload) => {
+          setResearchTriggerOpen(false);
+          onStartResearch?.(payload);
+        }}
+      />
 
       <div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
