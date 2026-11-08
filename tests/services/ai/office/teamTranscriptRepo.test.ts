@@ -87,6 +87,8 @@ describe('teamTranscriptRepo (AIO-MEM-01, D-10, D-11, D-17, D-29, D-31)', () => 
 
   it('returns the last N turns in chronological order', async () => {
     for (let i = 0; i < 12; i += 1) {
+      // Distinct milliseconds: same-ms rows tie-break on id, which is not insertion order.
+      if (i > 0) await new Promise((r) => setTimeout(r, 2));
       await saveTeamMessage({ threadId, role: 'user', content: `Lượt ${i}` }, db);
     }
 
@@ -102,6 +104,7 @@ describe('teamTranscriptRepo (AIO-MEM-01, D-10, D-11, D-17, D-29, D-31)', () => 
     const otherAgentId = generateId();
 
     for (let i = 0; i < ASSIGNMENT_HISTORY_CAP + 5; i += 1) {
+      if (i > 0) await new Promise((r) => setTimeout(r, 2));
       await saveTeamMessage(
         {
           threadId,
