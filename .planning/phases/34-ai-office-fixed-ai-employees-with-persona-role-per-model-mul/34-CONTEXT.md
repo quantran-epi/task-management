@@ -63,6 +63,15 @@ Also in scope: a **skill manager** (SKILL.md-style prompt templates with progres
 ### UI Surfaces
 - **D-28 (Employee tab + team page):** A new **employee tab** in the workbench lists and edits employees (the existing `EditorViewType` `'agents'` is the natural home; a separate section covers leads). A new **team page** (`EditorViewType` `'teams'`) lists teams and opens a team workspace with the shared transcript.
 
+### Research-Resolved Decisions (locked 2026-11-08, from 34-RESEARCH.md Open Questions)
+- **D-29 (Assignment history cap):** An employee's own assignment history is capped at the **50 most recent instruction/report pairs**, exposed as a named constant that can be raised. The employee prompt states that older work is retrievable through `search_team_history`. This reconciles D-05's "every instruction ever given" with D-10's externalized-memory model.
+- **D-30 (Batch stays pending under a pause):** When an agent pauses on its 80% budget gate, the lead's `delegate_batch` call **remains pending** — it does not resolve with a paused marker. Resolving would discard the paused agent's loop state and contradict D-21's "resuming continues exactly where it stopped". Other agents in the batch keep running.
+- **D-31 (Team thread scope type):** Add **`'team'`** to `ChatScopeType` and to the backup `scopeType` enum, rather than aliasing team threads to `'global'`. The alias would make the drawer's scope picker and `createOrGetThread` treat team threads as the shared global conversation.
+- **D-32 (Per-agent budgets live in a member table):** Per-agent budgets and usage live in an **`aiTeamMembers`** row (`id, teamId, agentId, role, budgetTokens, usedTokens`), not a JSON array on the team row. It is indexed by `teamId`, survives roster edits, and makes "used" a single-row update instead of a read-modify-write race when three agents finish at once.
+- **D-33 (`delegate_batch` schema):** `{ assignments: [{ agentId, skillId?, task }] }`. `skillId` is informational only — the agent's assigned skill is authoritative per D-25; `task` is the instruction text. The handler validates `agentId ∈ team roster` and `assignments.length ≤ 3` and returns a structured refusal `{refused: true, code, message}` otherwise, mirroring the artifact tools.
+- **D-34 (Backup envelope stays v11):** New tables and new chat-message attribution fields are **optional-absent** in the v11 envelope. Do not bump `CURRENT_SCHEMA_VERSION`; `validateBackup.ts` would then reject every existing backup.
+- **D-35 (`TeamRunPhase` is a new union):** Team run phases are a separate union owned by the team page. Do **not** extend `ChatTurnStatus` — it has five consumers including `AiChatWidget`'s stage machine.
+
 ### Claude's Discretion
 - Exact card layout for the assignment plan, budget top-up dialog, and paused-agent banner — follow the existing IntelliJ ExpUI Islands Light standards used by `MutationApprovalCard` and `ArtifactDiffApprovalCard`.
 - Avatar/icon treatment per employee.
