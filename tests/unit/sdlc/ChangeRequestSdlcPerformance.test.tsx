@@ -83,7 +83,7 @@ describe('SDLC navigation work budgets', () => {
     if (noteCount) await db.notes.add({ id: 'note-1', entityId: projectId, entityType: 'cr', title: 'PL01 source', body: 'Requirement body', isPinned: false, createdAt: timestamp, updatedAt: timestamp });
     const notesRead = vi.spyOn(db.notes, 'toArray');
     const crsRead = vi.spyOn(db.changeRequests, 'toArray');
-    render(<Step1IntakeView projectId={projectId} onStartIntake={vi.fn()} db={db} />);
+    render(<Step1IntakeView changeRequestId={projectId} onStartIntake={vi.fn()} db={db} />);
     // Flush async liveQuery subscription, including its initial scheduling task.
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 30)); });
     expect(notesRead).not.toHaveBeenCalled();

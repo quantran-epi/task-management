@@ -30,7 +30,7 @@ const MISSING_ID = '99999999-9999-4999-8999-999999999999';
 function makeContext(overrides: Partial<ArtifactToolContext> = {}): ArtifactToolContext {
   return {
     scopeKey: 'sdlc:project:cr:SOLUTION',
-    projectId: 'project',
+    changeRequestId: 'project',
     crId: 'cr',
     stepId: 'SOLUTION',
     getAccess: () => ({ readOnly: false, crActive: true, scopeValid: true }),

@@ -50,8 +50,8 @@ export interface MultiPackState {
 
 const PACK_SETTING_PREFIX = 'sdlc_packs:';
 
-function getPackSettingKey(projectId: string, crId: string): string {
-  return `${PACK_SETTING_PREFIX}${projectId}:${crId}`;
+function getPackSettingKey(changeRequestId: string, crId: string): string {
+  return `${PACK_SETTING_PREFIX}${changeRequestId}:${crId}`;
 }
 
 /** D-40: pack history grouped per subsystem for the per-card result and Pack All summary. */
@@ -66,16 +66,16 @@ export function groupPacksBySystem(
 }
 
 /**
- * Resolves an isolated ChatThread strictly keyed by `sdlc:${projectId}:${crId}:${stepId}` (D-02, D-05).
+ * Resolves an isolated ChatThread strictly keyed by `sdlc:${changeRequestId}:${crId}:${stepId}` (D-02, D-05).
  * Thread history is isolated per CR and per step.
  */
 export async function getStepThread(
-  projectId: string,
+  changeRequestId: string,
   crId: string,
   stepId: SdlcStepId,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<ChatThread> {
-  const scopeKey = `sdlc:${projectId}:${crId}:${stepId}`;
+  const scopeKey = `sdlc:${changeRequestId}:${crId}:${stepId}`;
   return db.transaction('rw', db.chatThreads, async () => {
     const existing = await db.chatThreads.where('scopeKey').equals(scopeKey).first();
     if (existing) {
@@ -90,7 +90,7 @@ export async function getStepThread(
       // rejects any other scopeType/entityId pair, so a 'project' thread here would make
       // every SOLUTION approval fail with WIZARD_THREAD_MISMATCH.
       scopeType: 'cr',
-      entityId: crId || projectId,
+      entityId: crId || changeRequestId,
       title: `[SDLC] ${stepId}`,
       createdAt: now,
       updatedAt: now,
@@ -108,11 +108,11 @@ export async function getStepThread(
 }
 
 export async function getMultiPackState(
-  projectId: string,
+  changeRequestId: string,
   crId: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<MultiPackState> {
-  const row = await db.settings.get(getPackSettingKey(projectId, crId));
+  const row = await db.settings.get(getPackSettingKey(changeRequestId, crId));
   if (!row || !row.value) {
     return { packs: [] };
   }
@@ -133,13 +133,13 @@ export async function getMultiPackState(
 }
 
 export async function saveMultiPackState(
-  projectId: string,
+  changeRequestId: string,
   crId: string,
   state: MultiPackState,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<void> {
   await db.settings.put({
-    key: getPackSettingKey(projectId, crId),
+    key: getPackSettingKey(changeRequestId, crId),
     value: JSON.stringify(state),
   });
 }

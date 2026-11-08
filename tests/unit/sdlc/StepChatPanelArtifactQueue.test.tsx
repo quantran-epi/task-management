@@ -67,7 +67,7 @@ describe('StepChatPanel artifact bootstrap queue', () => {
 
   function mount(grounding: SdlcGroundingResult = solutionGrounding, stepId: SdlcStepId = 'SOLUTION', readOnly = false) {
     const ref = React.createRef<StepChatPanelHandle>();
-    const props = { ref, projectId: 'project', crId: 'cr', stepId, db, stepGroundingContext: grounding, readOnly, onNavigateToStep: vi.fn() };
+    const props = { ref, changeRequestId: 'project', crId: 'cr', stepId, db, stepGroundingContext: grounding, readOnly, onNavigateToStep: vi.fn() };
     const view = render(<StepChatPanel {...props} />);
     return { ref, props, ...view };
   }
@@ -314,11 +314,11 @@ describe('StepChatPanel artifact bootstrap queue', () => {
   });
 
   it('asks which TECH_DOCS document before dispatching an ambiguous edit, then keeps the original text', async () => {
-    const context = { projectId: 'project', crId: 'cr', stepId: 'TECH_DOCS' as const,
+    const context = { changeRequestId: 'project', crId: 'cr', stepId: 'TECH_DOCS' as const,
       scopeKey: 'sdlc:project:cr:TECH_DOCS', getDraft: () => '# PL03B\nNội dung.',
       getAccess: () => ({ readOnly: false, crActive: true, scopeValid: true }) };
     const ref = React.createRef<StepChatPanelHandle>();
-    const props = { ref, projectId: 'project', crId: 'cr', stepId: 'TECH_DOCS' as const, db,
+    const props = { ref, changeRequestId: 'project', crId: 'cr', stepId: 'TECH_DOCS' as const, db,
       stepGroundingContext: grd('[SOLUTION v2]\nSolution\n\n[CHANGE_PACK]\nPack', ['SOLUTION', 'CHANGE_PACK']),
       artifactToolContext: context };
     render(<StepChatPanel {...props} />);
@@ -350,7 +350,7 @@ describe('StepChatPanel artifact bootstrap queue', () => {
 
   it.each(['Thêm nội dung kiểm tra đầu vào vào SOLUTION', 'Add this content to the solution'])(
     'routes %s as a bounded patch policy, never the full-document contract', async (text) => {
-      const context = { projectId: 'project', crId: 'cr', stepId: 'SOLUTION' as const,
+      const context = { changeRequestId: 'project', crId: 'cr', stepId: 'SOLUTION' as const,
         scopeKey: 'sdlc:project:cr:SOLUTION', getDraft: () => '# SOLUTION\nNội dung.',
         getAccess: () => ({ readOnly: false, crActive: true, scopeValid: true }) };
       const { props, rerender } = mount(solutionGrounding, 'SOLUTION');
@@ -371,7 +371,7 @@ describe('StepChatPanel artifact bootstrap queue', () => {
 
   it.each(['Soạn SOLUTION đầy đủ', 'Tạo tài liệu SOLUTION hoàn chỉnh'])(
     'keeps explicit full generation %s on the complete-document contract', async (text) => {
-      const context = { projectId: 'project', crId: 'cr', stepId: 'SOLUTION' as const,
+      const context = { changeRequestId: 'project', crId: 'cr', stepId: 'SOLUTION' as const,
         scopeKey: 'sdlc:project:cr:SOLUTION', getDraft: () => '# SOLUTION\nNội dung.',
         getAccess: () => ({ readOnly: false, crActive: true, scopeValid: true }) };
       const { props, rerender } = mount(solutionGrounding, 'SOLUTION');

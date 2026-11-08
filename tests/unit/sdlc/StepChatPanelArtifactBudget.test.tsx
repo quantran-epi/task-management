@@ -93,7 +93,7 @@ describe('StepChatPanel artifact context and completion safety', () => {
 
   async function mount(useFallback = false, grounding = solutionGrounding) {
     const ref = React.createRef<StepChatPanelHandle>();
-    render(<StepChatPanel ref={ref} projectId="project" crId="cr" stepId="SOLUTION" db={db}
+    render(<StepChatPanel ref={ref} changeRequestId="project" crId="cr" stepId="SOLUTION" db={db}
       stepGroundingContext={grounding}
       {...(!useFallback ? { onSolutionExtracted } : {})} onArtifactDraft={onArtifactDraft} />);
     await waitFor(() => expect(screen.getByTestId('thread')).toHaveTextContent('solution-thread'));

@@ -34,7 +34,7 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
 
       render(
         <Step1IntakeView
-          projectId={projectId}
+          changeRequestId={projectId}
           onStartIntake={handleStartIntake}
           db={db}
         />
@@ -107,7 +107,7 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
 
       render(
         <Step1IntakeView
-          projectId={projectId}
+          changeRequestId={projectId}
           onStartIntake={vi.fn()}
           db={db}
         />
@@ -143,7 +143,7 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
 
       const { unmount } = render(
         <Step2SolutionView
-          projectId={projectId}
+          changeRequestId={projectId}
           initialContent="# Kiến trúc Loyalty v1\n\nSử dụng Redis cache cho hạn mức điểm."
           pl01Content="PL01 text"
           pl02Content="PL02 text"
@@ -186,7 +186,7 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
       unmount();
       render(
         <Step2SolutionView
-          projectId={projectId}
+          changeRequestId={projectId}
           initialContent="# Kiến trúc Loyalty v2"
           onCommitSolution={handleCommitSolution}
           db={db}

@@ -54,7 +54,7 @@ export type SdlcGroundingSource = SdlcGroundingResult;
 const EMPTY_GROUNDING: SdlcGroundingSource = { text: '', present: new Set() };
 
 export interface StepChatPanelProps {
-  projectId: string;
+  changeRequestId: string;
   crId: string;
   stepId: SdlcStepId;
   /**
@@ -157,7 +157,7 @@ type ArtifactNotice =
  * `AiChatWidget` prop. It holds no chat loop of its own.
  */
 export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanelProps>(({
-  projectId,
+  changeRequestId,
   crId,
   stepId,
   stepGroundingContext = EMPTY_GROUNDING,
@@ -174,7 +174,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   db = defaultDb,
 }, ref) => {
   const { token } = theme.useToken();
-  const scopeKey = `sdlc:${projectId}:${crId}:${stepId}`;
+  const scopeKey = `sdlc:${changeRequestId}:${crId}:${stepId}`;
   const toolbox = useStepChatToolbox(db, stepId);
   const groundingText = stepGroundingContext.text;
 
@@ -190,13 +190,13 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
 
   useEffect(() => { setArtifactNotice(null); setPatchClarification(null); }, [scopeKey, threadId, readOnly]);
 
-  // Isolated thread for this step: sdlc:{projectId}:{crId}:{stepId}
+  // Isolated thread for this step: sdlc:{changeRequestId}:{crId}:{stepId}
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      if (!projectId || !crId || !stepId) return;
+      if (!changeRequestId || !crId || !stepId) return;
       try {
-        const thread = await getStepThread(projectId, crId, stepId, db);
+        const thread = await getStepThread(changeRequestId, crId, stepId, db);
         if (!cancelled) setThread({ scopeKey, id: thread.id });
       } catch {
         // A missing thread only disables sending; it must not break the step view.
@@ -205,7 +205,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
     return () => {
       cancelled = true;
     };
-  }, [projectId, crId, stepId, scopeKey, db]);
+  }, [changeRequestId, crId, stepId, scopeKey, db]);
 
   const messages = useLiveQuery(
     () => (threadId ? db.chatMessages.where('threadId').equals(threadId).sortBy('createdAt') : []),

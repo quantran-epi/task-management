@@ -118,7 +118,7 @@ describe('ChangeRequestSdlcView and IDE Layout', () => {
   it('Test 4: StepChatPanel loads step-specific thread and isolates chat messages', async () => {
     render(
       <StepChatPanel
-        projectId={projectId}
+        changeRequestId={projectId}
         crId="cr-test-01"
         stepId="INTAKE"
         stepGroundingContext={{ text: 'Grounding for INTAKE', present: new Set() }}
@@ -179,7 +179,7 @@ describe('ChangeRequestSdlcView and IDE Layout', () => {
   it('Test 6: StepChatPanel renders compact toolbox with Model selector and unified MCP button without header overflow', async () => {
     render(
       <StepChatPanel
-        projectId={projectId}
+        changeRequestId={projectId}
         crId="cr-test-01"
         stepId="INTAKE"
         stepGroundingContext={{ text: 'Grounding for INTAKE', present: new Set() }}
@@ -502,7 +502,7 @@ describe('ChangeRequestSdlcView and IDE Layout', () => {
 
     render(
       <StepChatPanel
-        projectId={projectId}
+        changeRequestId={projectId}
         crId="cr-test-01"
         stepId="SOLUTION"
         stepGroundingContext={{ text: 'Grounding context', present: new Set() }}

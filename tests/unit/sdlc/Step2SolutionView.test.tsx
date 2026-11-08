@@ -11,7 +11,7 @@ describe('Step2SolutionView intake-baseline gate (D-20)', () => {
   const renderView = (props: Partial<React.ComponentProps<typeof Step2SolutionView>> = {}) =>
     render(
       <Step2SolutionView
-        projectId={projectId}
+        changeRequestId={projectId}
         initialContent="# SOLUTION draft"
         onCommitSolution={vi.fn().mockResolvedValue(undefined)}
         db={db}
@@ -75,7 +75,7 @@ describe('Step2SolutionView intake-baseline gate (D-20)', () => {
       updatedAt: '2026-11-02T00:00:00.000Z',
     };
     const props = {
-      projectId,
+      changeRequestId: projectId,
       db,
       hasIntakeBaseline: true,
       onCommitSolution: vi.fn().mockResolvedValue(undefined),

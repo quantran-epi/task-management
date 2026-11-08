@@ -42,7 +42,7 @@ async function seed(db: TaskPlannerDatabase, refs: Refs, options: { crId?: strin
 
 function ctx(overrides: Partial<ArtifactToolContext> = {}): ArtifactToolContext {
   return {
-    scopeKey: `sdlc:${PROJECT}:${CR}:SOLUTION`, projectId: PROJECT, crId: CR, stepId: 'SOLUTION',
+    scopeKey: `sdlc:${PROJECT}:${CR}:SOLUTION`, changeRequestId: PROJECT, crId: CR, stepId: 'SOLUTION',
     getAccess: () => ({ readOnly: false, crActive: true, scopeValid: true }),
     getDraft: (kind) => (kind === 'SOLUTION' ? DOC : undefined),
     ...overrides,
@@ -166,7 +166,7 @@ describe('artifact tool access guards (SDLC-ART-06)', () => {
     'normalizes %s but never accepts forged access flags', async (name) => {
       await seed(db, FULL);
       const result = await call(db, name, { ...patchArgs({ baseHash: await defaultSha256(DOC.trim()) }),
-        projectId: 'other', crId: 'other', readOnly: false, approved: true, active: true },
+        changeRequestId: 'other', crId: 'other', readOnly: false, approved: true, active: true },
       ctx({ getAccess: () => ({ readOnly: true, crActive: true, scopeValid: true }) }));
       expect(result).toMatchObject({ refused: true, code: 'ARTIFACT_READ_ONLY' });
       expect(JSON.stringify(result)).not.toContain('Nội dung gốc.');

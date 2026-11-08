@@ -105,7 +105,7 @@ const SolutionPreview: React.FC<{ content: string }> = ({ content }) => {
 };
 
 export interface Step2SolutionViewProps {
-  projectId: string;
+  changeRequestId: string;
   crId?: string | undefined;
   solutionArtifact?: SdlcArtifactRef | undefined;
   initialContent?: string | undefined;
@@ -130,7 +130,7 @@ export interface Step2SolutionViewProps {
 }
 
 export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
-  projectId,
+  changeRequestId,
   crId,
   solutionArtifact,
   initialContent = '',
@@ -210,7 +210,7 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
     setSaving(true);
     try {
       // The CR-scoped SOLUTION thread is the artifact commit target (D-02, D-07).
-      const scopeKey = crId ? `sdlc:${projectId}:${crId}:SOLUTION` : `sdlc:${projectId}:SOLUTION`;
+      const scopeKey = crId ? `sdlc:${changeRequestId}:${crId}:SOLUTION` : `sdlc:${changeRequestId}:SOLUTION`;
       let thread: ChatThread | undefined = await db.chatThreads
         .where('scopeKey')
         .equals(scopeKey)
@@ -221,7 +221,7 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
           id: crypto.randomUUID(),
           scopeKey,
           scopeType: 'cr',
-          entityId: crId ?? projectId,
+          entityId: crId ?? changeRequestId,
           title: `[SDLC] SOLUTION`,
           createdAt: now,
           updatedAt: now,
@@ -231,7 +231,7 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
 
       const result = await saveHubSolution({
         db,
-        changeRequestId: crId ?? projectId,
+        changeRequestId: crId ?? changeRequestId,
         threadId: thread.id,
         sessionId: crypto.randomUUID(),
         markdown: trimmed,

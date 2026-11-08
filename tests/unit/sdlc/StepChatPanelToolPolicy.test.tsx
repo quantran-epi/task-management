@@ -59,7 +59,7 @@ describe('StepChatPanel tool-policy/payload parity', () => {
 
   async function send(stepId: typeof steps[number] = 'SOLUTION') {
     const ref = React.createRef<StepChatPanelHandle>();
-    render(<StepChatPanel ref={ref} projectId="project" crId="cr" stepId={stepId} db={db} stepGroundingContext={grounding} />);
+    render(<StepChatPanel ref={ref} changeRequestId="project" crId="cr" stepId={stepId} db={db} stepGroundingContext={grounding} />);
     await waitFor(() => expect(screen.getByTestId('thread')).toHaveTextContent('step-thread'));
     await act(async () => { await ref.current!.sendMessage('Giải thích bằng chứng'); });
     expect(mocks.start).toHaveBeenCalledOnce();
@@ -86,7 +86,7 @@ describe('StepChatPanel tool-policy/payload parity', () => {
 
   it('does not run model discovery network call on step mount', async () => {
     const ref = React.createRef<StepChatPanelHandle>();
-    render(<StepChatPanel ref={ref} projectId="project" crId="cr" stepId="SOLUTION" db={db} stepGroundingContext={grounding} />);
+    render(<StepChatPanel ref={ref} changeRequestId="project" crId="cr" stepId="SOLUTION" db={db} stepGroundingContext={grounding} />);
     await waitFor(() => expect(screen.getByTestId('thread')).toHaveTextContent('step-thread'));
     const { fetchAvailableModels } = await import('../../../src/services/ai/nineRouterTokenService');
     expect(fetchAvailableModels).not.toHaveBeenCalled();

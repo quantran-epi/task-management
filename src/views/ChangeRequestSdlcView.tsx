@@ -89,7 +89,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
     }
   }, [selectedChangeRequestId, allChangeRequests]);
 
-  const projectId = selectedChangeRequestId;
+  const activeChangeRequestId = selectedChangeRequestId;
   const knowledgeConfig = useOptionalKnowledgeConfig();
   const [selectedStep, setSelectedStep] = useState<SdlcStepId>('INTAKE');
   const selectedStepRef = useRef<SdlcStepId>('INTAKE');
@@ -104,7 +104,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
   const [activeCrId, setActiveCrId] = useState<string>('');
   const [stepThread, setStepThread] = useState(() => ({ id: generateId(), scopeKey: '' }));
   const threadId = stepThread.id;
-  const threadReady = stepThread.scopeKey === `sdlc:${projectId}:${activeCrId}:${selectedStep}`;
+  const threadReady = stepThread.scopeKey === `sdlc:${activeChangeRequestId}:${activeCrId}:${selectedStep}`;
   const [workflowState, setWorkflowState] = useState<SdlcWorkflowState | undefined>(undefined);
   // The step editors gate approval on a proven intake baseline, so they must not mount before
   // this CR's workflow restore settles: a transiently empty state renders a wrongly blocked
@@ -139,8 +139,8 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
   const activeCrRef = useRef<string>('');
 
   const project = useLiveQuery(
-    () => (projectId ? db.changeRequests.get(projectId) : undefined),
-    [projectId, db]
+    () => (activeChangeRequestId ? db.changeRequests.get(activeChangeRequestId) : undefined),
+    [activeChangeRequestId, db]
   );
   const crList = allChangeRequests;
   const [readOnlySolution, setReadOnlySolution] = useState(false);
@@ -222,10 +222,10 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
     useLiveQuery(
       async () => {
         const thread = await db.chatThreads.get(threadId);
-        if (thread?.scopeKey !== `sdlc:${projectId}:${activeCrId}:${selectedStep}`) return [];
+        if (thread?.scopeKey !== `sdlc:${activeChangeRequestId}:${activeCrId}:${selectedStep}`) return [];
         return db.chatMessages.where('threadId').equals(threadId).toArray();
       },
-      [threadId, projectId, activeCrId, selectedStep, db]
+      [threadId, activeChangeRequestId, activeCrId, selectedStep, db]
     ) ?? [];
   const currentCr = crList.find((cr) => cr.id === activeCrId);
   const crStatus: 'active' | 'completed' | 'archived' =
@@ -272,7 +272,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
       status: 'draft' | 'approved'
     ) => {
       if (!activeCrId) return;
-      const thread = await getStepThread(projectId, activeCrId, stepId, db);
+      const thread = await getStepThread(activeChangeRequestId, activeCrId, stepId, db);
       await saveMessage(
         {
           threadId: thread.id,
@@ -293,7 +293,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
         db
       );
     },
-    [projectId, db, activeCrId]
+    [activeChangeRequestId, db, activeCrId]
   );
 
   /** Historical opens target the owning step and render read-only when inactive (D-06). */
@@ -351,17 +351,17 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
   // Initialize active CR
   useEffect(() => {
     if (activeCrId) return;
-    const preferred = crList.find((cr) => cr.id === projectId) ?? crList[0];
+    const preferred = crList.find((cr) => cr.id === activeChangeRequestId) ?? crList[0];
     if (preferred) selectCr(preferred.id);
-    else if (projectId) selectCr(projectId);
-  }, [activeCrId, crList, projectId, selectCr]);
+    else if (activeChangeRequestId) selectCr(activeChangeRequestId);
+  }, [activeCrId, crList, activeChangeRequestId, selectCr]);
 
   // Sync isolated thread for current CR and step
   useEffect(() => {
     let cancelled = false;
     async function syncThread() {
       if (activeCrId) {
-        const t = await getStepThread(projectId, activeCrId, selectedStep, db);
+        const t = await getStepThread(activeChangeRequestId, activeCrId, selectedStep, db);
         if (!cancelled && t) {
           setStepThread({ id: t.id, scopeKey: t.scopeKey });
         }
@@ -371,7 +371,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [projectId, activeCrId, selectedStep, db]);
+  }, [activeChangeRequestId, activeCrId, selectedStep, db]);
 
   // Editor draft persistence (D-08). This is editor state, not workflow state.
   useEffect(() => {
@@ -380,7 +380,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
     async function loadDraft() {
       const crKey = activeCrId || 'default-cr';
       try {
-        const draftRow = await db.settings.get(draftSettingKey(projectId, crKey));
+        const draftRow = await db.settings.get(draftSettingKey(activeChangeRequestId, crKey));
         if (!cancelled && editEpochRef.current === editEpoch) {
           const text = typeof draftRow?.value === 'string' ? draftRow.value : undefined;
           if (text === undefined) delete draftRef.current.SOLUTION;
@@ -395,7 +395,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [projectId, activeCrId, db]);
+  }, [activeChangeRequestId, activeCrId, db]);
 
   // The coordinator's in-memory state is the version chain's source of truth. It must
   // survive step switches: `threadId` changes on every step navigation, so reading it from
@@ -420,7 +420,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
   );
   const createCoordinator = useCallback(
     (crId: string) => createSdlcWorkflowCoordinator({
-        changeRequestId: projectId,
+        changeRequestId: activeChangeRequestId,
         get threadId() {
           return threadIdRef.current;
         },
@@ -428,7 +428,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
           if (!crId) return;
           const threadId = await resolveSdlcThreadId(crId);
           await db.settings.put({
-            key: workflowStorageKey(projectId, threadId),
+            key: workflowStorageKey(activeChangeRequestId, threadId),
             value: JSON.stringify(state),
           });
         },
@@ -437,8 +437,8 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
           const threadId = await resolveSdlcThreadId(crId);
           // Fall back to the pre-fix `<crId>:<crId>` row so an upgraded workspace keeps its
           // version chain instead of re-committing v1.
-          const row = (await db.settings.get(workflowStorageKey(projectId, threadId)))
-            ?? (await db.settings.get(workflowStorageKey(projectId, crId)));
+          const row = (await db.settings.get(workflowStorageKey(activeChangeRequestId, threadId)))
+            ?? (await db.settings.get(workflowStorageKey(activeChangeRequestId, crId)));
           if (!row?.value) return undefined;
           try {
             return JSON.parse(String(row.value)) as SdlcWorkflowState;
@@ -452,15 +452,15 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
           // Delete the legacy `<crId>:<crId>` row too — loadState still falls back to it,
           // so leaving it behind makes reset() a no-op on upgraded workspaces.
           await db.settings.bulkDelete([
-            workflowStorageKey(projectId, threadId),
-            workflowStorageKey(projectId, crId),
+            workflowStorageKey(activeChangeRequestId, threadId),
+            workflowStorageKey(activeChangeRequestId, crId),
           ]);
         },
         onStateChange: (newState) => {
           if (activeCrRef.current === crId) setWorkflowState(newState);
         },
       }),
-    [projectId, db, resolveSdlcThreadId]
+    [activeChangeRequestId, db, resolveSdlcThreadId]
   );
   const coordinator = useMemo(() => createCoordinator(activeCrId), [createCoordinator, activeCrId]);
 
@@ -529,10 +529,10 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
     const query = [evidenceCr, evidenceFeature, selectedStep].join(' ');
     void (async () => {
       try {
-        const resolvedSetIds = await wizardRuntime.resolveSetIds(projectId);
+        const resolvedSetIds = await wizardRuntime.resolveSetIds(activeChangeRequestId);
         if (cancelled || controller.signal.aborted) return;
         const evidence = await wizardRuntime.collectEvidence({
-          changeRequestId: projectId,
+          changeRequestId: activeChangeRequestId,
           threadId,
           sessionId: evidenceSessionId,
           inputRevision: Date.parse(evidenceUpdatedAt) || 0,
@@ -550,7 +550,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
       cancelled = true;
       controller.abort();
     };
-  }, [threadReady, wizardRuntime, activeCrId, projectId, threadId, selectedStep, evidenceSessionId, evidenceUpdatedAt, evidenceCr, evidenceFeature]);
+  }, [threadReady, wizardRuntime, activeCrId, activeChangeRequestId, threadId, selectedStep, evidenceSessionId, evidenceUpdatedAt, evidenceCr, evidenceFeature]);
 
   // The chat gate reads the builder's real marker set, never the rendered text.
   const stepGroundingContext = useMemo(
@@ -593,7 +593,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
   }, [scheduleSolutionAnalysis]);
 
   const enqueueSolutionWrite = useCallback((crKey: string, write: () => Promise<void>) => {
-    const key = `${projectId}:${crKey}`;
+    const key = `${activeChangeRequestId}:${crKey}`;
     const previous = solutionWritesRef.current.get(key) ?? Promise.resolve();
     const pending = previous.catch(() => undefined).then(write);
     solutionWritesRef.current.set(key, pending);
@@ -601,7 +601,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
       if (solutionWritesRef.current.get(key) === pending) solutionWritesRef.current.delete(key);
     }).catch(() => undefined);
     return pending;
-  }, [projectId]);
+  }, [activeChangeRequestId]);
 
   const setRuntimeDraft = useCallback((kind: ArtifactToolKind, markdown: string) => {
     if (draftRef.current[kind] === markdown) return;
@@ -619,35 +619,35 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
       const crKey = activeCrId || 'default-cr';
       setRuntimeDraft('SOLUTION', markdown);
       return enqueueSolutionWrite(crKey, async () => {
-        await db.settings.put({ key: draftSettingKey(projectId, crKey), value: markdown });
+        await db.settings.put({ key: draftSettingKey(activeChangeRequestId, crKey), value: markdown });
       });
     },
-    [projectId, db, activeCrId, enqueueSolutionWrite, setRuntimeDraft]
+    [activeChangeRequestId, db, activeCrId, enqueueSolutionWrite, setRuntimeDraft]
   );
 
   // All getters read live refs, including access after an async hash/transaction boundary.
-  const liveArtifactStateRef = useRef({ projectId, activeCrId, selectedStep, crStatus, viewedVersion,
+  const liveArtifactStateRef = useRef({ activeChangeRequestId, activeCrId, selectedStep, crStatus, viewedVersion,
     readOnlySolution, workflowState });
-  liveArtifactStateRef.current = { projectId, activeCrId, selectedStep, crStatus, viewedVersion,
+  liveArtifactStateRef.current = { activeChangeRequestId, activeCrId, selectedStep, crStatus, viewedVersion,
     readOnlySolution, workflowState };
   const artifactToolContext = useMemo<ArtifactToolContext>(() => {
-    const scopeKey = `sdlc:${projectId}:${activeCrId}:${selectedStep}`;
+    const scopeKey = `sdlc:${activeChangeRequestId}:${activeCrId}:${selectedStep}`;
     const scopeEpoch = scopeEpochRef.current;
     return {
-      scopeKey, projectId, crId: activeCrId, stepId: selectedStep,
+      scopeKey, changeRequestId: activeChangeRequestId, crId: activeCrId, stepId: selectedStep,
       getDraft: (kind) => draftRef.current[kind],
       getWorkflowState: () => liveArtifactStateRef.current.workflowState,
       getAccess: () => {
         const live = liveArtifactStateRef.current;
         return {
-          scopeValid: mountedRef.current && scopeEpochRef.current === scopeEpoch && live.projectId === projectId &&
+          scopeValid: mountedRef.current && scopeEpochRef.current === scopeEpoch && live.activeChangeRequestId === activeChangeRequestId &&
             activeCrRef.current === activeCrId && selectedStepRef.current === selectedStep && Boolean(live.workflowState),
           crActive: live.crStatus === 'active',
           readOnly: Boolean(live.viewedVersion) || live.readOnlySolution,
         };
       },
     };
-  }, [projectId, activeCrId, selectedStep]);
+  }, [activeChangeRequestId, activeCrId, selectedStep]);
 
   const handleApplyArtifactPatch = useCallback(async (proposal: ArtifactPatchProposal, decision: ChatMessage) => {
     const context = artifactToolContext;
@@ -657,7 +657,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
       const access = context.getAccess();
       if (!access.scopeValid || access.readOnly || !access.crActive || epoch !== editEpochRef.current ||
         scopeEpoch !== scopeEpochRef.current || proposal.scopeKey !== context.scopeKey ||
-        proposal.projectId !== projectId || proposal.crId !== activeCrId || decision.role !== 'system' ||
+        proposal.changeRequestId !== activeChangeRequestId || proposal.crId !== activeCrId || decision.role !== 'system' ||
         !decision.content.startsWith('ARTIFACT_PATCH_DECISION ')) throw new Error('Đề xuất không còn thuộc bản nháp hiện tại. Hãy yêu cầu đề xuất mới.');
     };
     assertCurrent();
@@ -679,7 +679,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
             return;
           }
           if (proposal.kind === 'SOLUTION') {
-            await db.settings.put({ key: draftSettingKey(projectId, activeCrId), value: proposal.patchedMarkdown });
+            await db.settings.put({ key: draftSettingKey(activeChangeRequestId, activeCrId), value: proposal.patchedMarkdown });
           }
           assertCurrent();
           await db.chatMessages.put(decision);
@@ -697,7 +697,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
     };
     if (proposal.kind === 'SOLUTION') await enqueueSolutionWrite(activeCrId, commit);
     else await commit();
-  }, [artifactToolContext, db, projectId, activeCrId, enqueueSolutionWrite]);
+  }, [artifactToolContext, db, activeChangeRequestId, activeCrId, enqueueSolutionWrite]);
 
   useEffect(() => {
     let cancelled = false;
@@ -714,7 +714,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
       }
     })();
     return () => { cancelled = true; };
-  }, [projectId, activeCrId, incomingSolutionDraft, draftPl03b, draftPl07, draftCab]);
+  }, [activeChangeRequestId, activeCrId, incomingSolutionDraft, draftPl03b, draftPl07, draftCab]);
 
   // D-16: a chat-produced SOLUTION only updates the editor draft.
   const handleSolutionExtracted = useCallback(
@@ -783,7 +783,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
   const handleCommitSolution = async (markdown: string, noteId: string) => {
     try {
       const nextState = await coordinator.commitSolution(markdown, noteId);
-      await db.settings.delete(draftSettingKey(projectId, activeCrId || 'default-cr'));
+      await db.settings.delete(draftSettingKey(activeChangeRequestId, activeCrId || 'default-cr'));
       if (nextState.artifacts.solution) {
         await appendArtifactEvent('SOLUTION', 'SOLUTION', nextState.artifacts.solution, 'approved');
       }
@@ -797,7 +797,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
   const handleResetWorkflow = useCallback(async () => {
     try {
       await coordinator.reset();
-      await db.settings.delete(draftSettingKey(projectId, activeCrId || 'default-cr'));
+      await db.settings.delete(draftSettingKey(activeChangeRequestId, activeCrId || 'default-cr'));
       if (activeCrRef.current !== activeCrId) return;
       setWorkflowState(undefined);
       setIncomingSolutionDraft(undefined);
@@ -807,7 +807,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
     } catch (err) {
       reportGuardError(err);
     }
-  }, [coordinator, projectId, db, activeCrId, reportGuardError, clearAnalysisTimer, setSelectedStepTracked]);
+  }, [coordinator, activeChangeRequestId, db, activeCrId, reportGuardError, clearAnalysisTimer, setSelectedStepTracked]);
 
   const handleNavigateToStep = useCallback(
     (step: SdlcStepId) => {
@@ -826,7 +826,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
       case 'INTAKE':
         return (
           <Step1IntakeView
-            projectId={projectId}
+            changeRequestId={activeChangeRequestId}
             initialMetadata={workflowState?.metadata}
             initialPl01={workflowState?.artifacts.pl01?.content}
             initialPl02={workflowState?.artifacts.pl02?.content}
@@ -839,7 +839,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
         return (
           <Step2SolutionView
             key={`${activeCrId}:${viewedVersion?.kind === 'SOLUTION' ? viewedVersion.version : 'live'}`}
-            projectId={projectId}
+            changeRequestId={activeChangeRequestId}
             crId={activeCrId}
             solutionArtifact={workflowState?.artifacts.solution}
             initialContent={workflowState?.artifacts.solution?.content}
@@ -901,7 +901,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
       case 'CHANGE_PACK':
         return (
           <Step4ChangePackView
-            changeRequestId={projectId}
+            changeRequestId={activeChangeRequestId}
             crId={activeCrId}
             crCode={workflowState?.metadata.cr ?? ''}
             solutionArtifact={workflowState?.artifacts.solution}
@@ -929,7 +929,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
       case 'TECH_DOCS':
         return (
           <Step5TechDocsView
-            changeRequestId={projectId}
+            changeRequestId={activeChangeRequestId}
             crId={activeCrId}
             workflowState={workflowState}
             draftPl03b={draftPl03b}
@@ -964,7 +964,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
       case 'CAB':
         return (
           <Step6CabView
-            changeRequestId={projectId}
+            changeRequestId={activeChangeRequestId}
             crId={activeCrId}
             workflowState={workflowState}
             incomingDraft={draftCab}
@@ -1052,7 +1052,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
       </div>
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <SdlcSidebar
-          changeRequestId={projectId}
+          changeRequestId={activeChangeRequestId}
           onSelectProject={(newId) => {
             setSelectedChangeRequestId(newId);
           }}
@@ -1067,14 +1067,14 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
         />
         <SdlcWorkspace
           chatPanelRef={chatPanelRef}
-          projectId={projectId}
+          changeRequestId={activeChangeRequestId}
           crId={activeCrId}
           selectedStep={selectedStep}
           stepGroundingContext={stepGroundingContext}
           readOnly={Boolean(viewedVersion)}
           workflowState={workflowState}
           stepViewNode={
-            !projectId && !activeCrId ? (
+            !activeChangeRequestId && !activeCrId ? (
               <div style={{ color: token.colorTextSecondary, padding: 48, textAlign: 'center' }}>
                 <Typography.Title level={4} style={{ color: token.colorTextSecondary }}>
                   Chưa chọn Change Request (CR) nào

@@ -38,12 +38,12 @@ describe('Artifact patch approval real panel/hook/runtime/widget', () => {
     const coordinator = createSdlcWorkflowCoordinator({ changeRequestId: crypto.randomUUID(), threadId: crypto.randomUUID() });
     await coordinator.startOrUpdateIntake({ cr: 'CR', featureName: 'Test', author: 'Test', requestingUnit: 'IT', date: '2026-11-05' }, 'PL01', 'PL02');
     const state = await coordinator.commitSolution(BASE);
-    context = { projectId: state.projectId, crId: 'cr', stepId: 'SOLUTION',
+    context = { changeRequestId: state.projectId, crId: 'cr', stepId: 'SOLUTION',
       scopeKey: `sdlc:${state.projectId}:cr:SOLUTION`, getDraft: () => markdown,
       getWorkflowState: () => state, getAccess: () => ({ readOnly: false, crActive: true, scopeValid: true }) };
     patchArgs = { kind: 'SOLUTION', sectionId: '1.1', expectedHeading: 'Mục tiêu',
       baseHash: state.artifacts.solution!.hash, operation: 'append', newContent: 'Nội dung thêm.' };
-    props = { projectId: state.projectId, crId: 'cr', stepId: 'SOLUTION', db, artifactToolContext: context,
+    props = { changeRequestId: state.projectId, crId: 'cr', stepId: 'SOLUTION', db, artifactToolContext: context,
       onApplyArtifactPatch: vi.fn(async (proposal, decision) => {
         await db.transaction('rw', [db.settings, db.chatMessages], async () => {
           await db.settings.put({ key: 'test-draft', value: proposal.patchedMarkdown });
@@ -51,7 +51,7 @@ describe('Artifact patch approval real panel/hook/runtime/widget', () => {
         });
         markdown = proposal.patchedMarkdown;
       }), onSolutionExtracted: vi.fn(), onNavigateToStep: vi.fn() };
-    await getStepThread(props.projectId, 'cr', 'SOLUTION', db);
+    await getStepThread(props.changeRequestId, 'cr', 'SOLUTION', db);
     scriptedCalls = [{ name: 'patch_artifact_section', args: patchArgs }];
     synthesisError = false;
     stream.mockReset();

@@ -121,13 +121,13 @@ describe('detectDraftHashDivergence (SDLC-ART-04 read-only)', () => {
     const base = await state();
     const before = JSON.stringify(base);
     const onNavigateToStep = vi.fn();
-    const { rerender } = render(<SdlcWorkspace projectId={base.projectId} crId="cr" selectedStep="SOLUTION"
+    const { rerender } = render(<SdlcWorkspace changeRequestId={base.projectId} crId="cr" selectedStep="SOLUTION"
       workflowState={base} draftHashes={await hashes(COMMITTED)} onNavigateToStep={onNavigateToStep} />);
     expect(screen.queryByTestId('sdlc-stale-banner')).not.toBeInTheDocument();
-    rerender(<SdlcWorkspace projectId={base.projectId} crId="cr" selectedStep="SOLUTION" workflowState={base}
+    rerender(<SdlcWorkspace changeRequestId={base.projectId} crId="cr" selectedStep="SOLUTION" workflowState={base}
       draftHashes={await hashes({ SOLUTION: `${COMMITTED.SOLUTION}\nĐã sửa.` })} onNavigateToStep={onNavigateToStep} />);
     expect(screen.getByTestId('sdlc-stale-banner')).toHaveTextContent('Bản nháp SOLUTION khác với phiên bản đã lưu.');
-    rerender(<SdlcWorkspace projectId={base.projectId} crId="cr" selectedStep="SOLUTION" workflowState={base}
+    rerender(<SdlcWorkspace changeRequestId={base.projectId} crId="cr" selectedStep="SOLUTION" workflowState={base}
       draftHashes={await hashes({ SOLUTION: COMMITTED.SOLUTION })} onNavigateToStep={onNavigateToStep} />);
     expect(screen.queryByTestId('sdlc-stale-banner')).not.toBeInTheDocument();
     expect(JSON.stringify(base)).toBe(before);
@@ -137,15 +137,15 @@ describe('detectDraftHashDivergence (SDLC-ART-04 read-only)', () => {
     const base = await state();
     const onNavigateToStep = vi.fn();
     const approved = await hashes({ SOLUTION: `${COMMITTED.SOLUTION}\nDòng duyệt.` });
-    const { rerender } = render(<SdlcWorkspace projectId={base.projectId} crId="cr" selectedStep="SOLUTION"
+    const { rerender } = render(<SdlcWorkspace changeRequestId={base.projectId} crId="cr" selectedStep="SOLUTION"
       workflowState={base} draftHashes={await hashes({ SOLUTION: COMMITTED.SOLUTION })} onNavigateToStep={onNavigateToStep} />);
     expect(screen.queryByTestId('sdlc-stale-banner')).not.toBeInTheDocument();
-    rerender(<SdlcWorkspace projectId={base.projectId} crId="cr" selectedStep="SOLUTION" workflowState={base}
+    rerender(<SdlcWorkspace changeRequestId={base.projectId} crId="cr" selectedStep="SOLUTION" workflowState={base}
       draftHashes={approved} onNavigateToStep={onNavigateToStep} />);
     expect(screen.getByTestId('sdlc-stale-banner')).toHaveTextContent('Bản nháp SOLUTION khác với phiên bản đã lưu.');
     expect(base.artifacts.solution?.version).toBe(1);
     expect(base.artifacts.solution?.approvedAt).toBe('2026-11-05T00:00:00.000Z');
-    rerender(<SdlcWorkspace projectId={base.projectId} crId="cr" selectedStep="SOLUTION" workflowState={base}
+    rerender(<SdlcWorkspace changeRequestId={base.projectId} crId="cr" selectedStep="SOLUTION" workflowState={base}
       draftHashes={await hashes({ SOLUTION: COMMITTED.SOLUTION })} onNavigateToStep={onNavigateToStep} />);
     expect(screen.queryByTestId('sdlc-stale-banner')).not.toBeInTheDocument();
     expect(JSON.stringify(base.artifacts.solution)).toContain('"version":1');
@@ -155,7 +155,7 @@ describe('detectDraftHashDivergence (SDLC-ART-04 read-only)', () => {
   it('shows TECH_DOCS stale on its owning step only', async () => {
     const base = await state();
     const draftHashes = await hashes({ PL03B: `${COMMITTED.PL03B}\nx` });
-    render(<SdlcWorkspace projectId={base.projectId} crId="cr" selectedStep={'TECH_DOCS' as SdlcStepId}
+    render(<SdlcWorkspace changeRequestId={base.projectId} crId="cr" selectedStep={'TECH_DOCS' as SdlcStepId}
       workflowState={base} draftHashes={draftHashes} onNavigateToStep={vi.fn()} />);
     expect(screen.getByTestId('sdlc-stale-banner')).toHaveTextContent('Bản nháp PL03B khác với phiên bản đã lưu.');
   });

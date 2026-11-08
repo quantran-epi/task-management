@@ -16,12 +16,12 @@ import { SystemsExplorer } from './SystemsExplorer';
 
 export interface LeftToolWindowProps {
   db?: TaskPlannerDatabase | undefined;
-  onSelectProject?: ((projectId: string | null) => void) | undefined;
+  onSelectChangeRequest?: ((changeRequestId: string | null) => void) | undefined;
 }
 
 export function LeftToolWindow({
   db = defaultDb,
-  onSelectProject,
+  onSelectChangeRequest,
 }: LeftToolWindowProps) {
   const leftActiveId = useLayoutStore((s) => s.leftActiveId);
   const toggleToolWindow = useLayoutStore((s) => s.toggleToolWindow);
@@ -122,7 +122,7 @@ export function LeftToolWindow({
         ) : isDocs ? (
           <DocsExplorer db={db} />
         ) : (
-          <CRExplorer db={db} onSelectProject={onSelectProject} />
+          <CRExplorer db={db} onSelectChangeRequest={onSelectChangeRequest} />
         )}
       </div>
     </div>

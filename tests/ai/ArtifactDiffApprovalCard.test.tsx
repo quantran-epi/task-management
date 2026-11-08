@@ -8,7 +8,7 @@ import { createSdlcWorkflowCoordinator, defaultSha256 } from '../../src/services
 
 export const proposal: ArtifactPatchProposal = {
   proposalId: '11111111-1111-4111-8111-111111111111', scopeKey: 'sdlc:p:cr:SOLUTION',
-  projectId: 'p', crId: 'cr', kind: 'SOLUTION', version: 1, sectionId: '1.1',
+  changeRequestId: 'p', crId: 'cr', kind: 'SOLUTION', version: 1, sectionId: '1.1',
   sectionTitle: 'Mục tiêu', baseHash: 'a'.repeat(64), baseMarkdown: '# SOLUTION\n## Mục tiêu\nCũ',
   diffText: '--- a/SOLUTION\n+++ b/SOLUTION\n@@ -1,1 +1,1 @@\n-Cũ\n+<img src=x onerror=alert(1)>',
   addedLines: 1, removedLines: 1, patchedMarkdown: '# SOLUTION\n## Mục tiêu\nMới',
@@ -42,7 +42,7 @@ describe('ArtifactDiffApprovalCard through shared widget', () => {
       const markdown = '# SOLUTION\n## Mục tiêu\nCũ';
       const state = await coordinator.commitSolution(markdown);
       const result = await prepareArtifactPatch(db, {
-        projectId: state.projectId, crId: 'cr', scopeKey: 'sdlc:p:cr:SOLUTION', stepId: 'SOLUTION',
+        changeRequestId: state.projectId, crId: 'cr', scopeKey: 'sdlc:p:cr:SOLUTION', stepId: 'SOLUTION',
         getAccess: () => ({ readOnly: false, crActive: true, scopeValid: true }),
         getDraft: () => markdown, getWorkflowState: () => state,
       }, { kind: 'SOLUTION', sectionId: '1.1', expectedHeading: 'Mục tiêu',

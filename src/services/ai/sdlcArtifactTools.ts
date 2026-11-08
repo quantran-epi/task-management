@@ -73,7 +73,7 @@ export interface ArtifactToolSnapshot {
 export interface ArtifactPatchProposal {
   proposalId: string;
   scopeKey: string;
-  projectId: string;
+  changeRequestId: string;
   crId: string;
   kind: ArtifactToolKind;
   version: number;
@@ -120,7 +120,7 @@ export interface ArtifactToolAccess {
  */
 export interface ArtifactToolContext {
   scopeKey: string;
-  projectId: string;
+  changeRequestId: string;
   crId: string;
   stepId: SdlcStepId;
   getAccess: () => ArtifactToolAccess;
@@ -223,7 +223,7 @@ function prerequisiteRefusal(state: SdlcWorkflowState, kind: ArtifactToolKind): 
 
 function accessRefusal(context: ArtifactToolContext): ArtifactToolRefusal | undefined {
   const access = context.getAccess();
-  if (!access.scopeValid || !context.projectId || !context.crId || !context.scopeKey) {
+  if (!access.scopeValid || !context.changeRequestId || !context.crId || !context.scopeKey) {
     return refuse('ARTIFACT_SCOPE_INVALID', 'Phạm vi quy trình không còn hợp lệ. Hãy mở lại CR đang làm việc.');
   }
   if (access.readOnly) {
@@ -253,10 +253,10 @@ async function loadWorkflowState(
       const tabs = await db.chatTabs.where('scopeKey').equals(`cr:${context.crId}`).toArray();
       const threadId = tabs.find((tab) => tab.type === 'sdlc')?.threadId;
       if (threadId) {
-        value = (await db.settings.get(workflowStorageKey(context.projectId, threadId)))?.value;
+        value = (await db.settings.get(workflowStorageKey(context.changeRequestId, threadId)))?.value;
       }
       if (value === undefined) {
-        value = (await db.settings.get(workflowStorageKey(context.projectId, context.crId)))?.value;
+        value = (await db.settings.get(workflowStorageKey(context.changeRequestId, context.crId)))?.value;
       }
     }
     if (value === undefined) {
@@ -285,7 +285,7 @@ export function validateArtifactToolAccess(
   kind: ArtifactToolKind
 ): ArtifactToolRefusal | undefined {
   return accessRefusal(context) ??
-    (state.projectId !== context.projectId
+    (state.projectId !== context.changeRequestId
       ? refuse('ARTIFACT_SCOPE_INVALID', 'Trạng thái quy trình không thuộc dự án đang mở. Hãy mở lại CR đang làm việc.')
       : undefined) ??
     stepOwnershipRefusal(context.stepId, kind) ?? prerequisiteRefusal(state, kind);
@@ -512,7 +512,7 @@ export async function prepareArtifactPatch(
   return {
     proposalId: crypto.randomUUID(),
     scopeKey: context.scopeKey,
-    projectId: context.projectId,
+    changeRequestId: context.changeRequestId,
     crId: context.crId,
     kind: args.kind,
     version: current.version,

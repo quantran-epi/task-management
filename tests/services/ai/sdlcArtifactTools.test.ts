@@ -32,9 +32,9 @@ const OTHER_DRAFT = [
 
 async function seedWorkflow(
   db: TaskPlannerDatabase,
-  options: { projectId?: string; crId?: string; markdown?: string; committed?: string } = {}
+  options: { changeRequestId?: string; crId?: string; markdown?: string; committed?: string } = {}
 ): Promise<void> {
-  const projectId = options.projectId ?? PROJECT_ID;
+  const projectId = options.changeRequestId ?? PROJECT_ID;
   const crId = options.crId ?? 'cr-active';
   const markdown = options.markdown ?? DRAFT;
   const committed = options.committed ?? markdown;
@@ -80,7 +80,7 @@ async function seedWorkflow(
 function makeContext(overrides: Partial<ArtifactToolContext> = {}): ArtifactToolContext {
   return {
     scopeKey: `sdlc:${PROJECT_ID}:cr-active:SOLUTION`,
-    projectId: PROJECT_ID,
+    changeRequestId: PROJECT_ID,
     crId: 'cr-active',
     stepId: 'SOLUTION',
     getAccess: () => ({ readOnly: false, crActive: true, scopeValid: true }),
@@ -174,7 +174,7 @@ describe('sdlc artifact tools (SDLC-ART-01, SDLC-ART-02)', () => {
     expect(await db.settings.toArray()).toEqual(before);
   });
 
-  it('ignores forged projectId/crId arguments and keeps trusted scope identity', async () => {
+  it('ignores forged changeRequestId/crId arguments and keeps trusted scope identity', async () => {
     const proposal = await callTool(
       db,
       'patch_artifact_section',
@@ -185,13 +185,13 @@ describe('sdlc artifact tools (SDLC-ART-01, SDLC-ART-02)', () => {
         baseHash: await defaultSha256(DRAFT.trim()),
         operation: 'append',
         newContent: 'Dòng nối thêm.',
-        projectId: OTHER_PROJECT_ID,
+        changeRequestId: OTHER_PROJECT_ID,
         crId: 'cr-khac',
       },
       makeContext()
     );
 
-    expect(proposal.projectId).toBe(PROJECT_ID);
+    expect(proposal.changeRequestId).toBe(PROJECT_ID);
     expect(proposal.crId).toBe('cr-active');
     expect(proposal.baseMarkdown).toBe(DRAFT);
   });

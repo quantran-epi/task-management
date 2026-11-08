@@ -35,7 +35,7 @@ import type { ChangeRequest, CrStatus, CrType, System, Task } from '../../types/
 
 export interface CRExplorerProps {
   db?: TaskPlannerDatabase | undefined;
-  onSelectProject?: ((projectId: string | null) => void) | undefined;
+  onSelectChangeRequest?: ((changeRequestId: string | null) => void) | undefined;
 }
 
 export const UNATTACHED_KEY = 'sys:__none__';
@@ -75,7 +75,7 @@ function TaskLeafTitle({ task }: { task: Task }) {
   );
 }
 
-export function CRExplorer({ db = defaultDb, onSelectProject }: CRExplorerProps) {
+export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorerProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [crModalOpen, setCrModalOpen] = useState(false);
   const [editingCR, setEditingCR] = useState<ChangeRequest | null>(null);
@@ -94,7 +94,7 @@ export function CRExplorer({ db = defaultDb, onSelectProject }: CRExplorerProps)
   }, [systems]);
 
   const openCrDetail = (cr: ChangeRequest) => {
-    onSelectProject?.(cr.id);
+    onSelectChangeRequest?.(cr.id);
     openTab({
       id: `cr-${cr.id}`,
       title: cr.code || cr.name,
@@ -105,7 +105,7 @@ export function CRExplorer({ db = defaultDb, onSelectProject }: CRExplorerProps)
   };
 
   const openSdlc = (cr: ChangeRequest, systemId?: string) => {
-    onSelectProject?.(cr.id);
+    onSelectChangeRequest?.(cr.id);
     openTab({
       id: `sdlc-${cr.id}`,
       title: 'SDLC Studio',

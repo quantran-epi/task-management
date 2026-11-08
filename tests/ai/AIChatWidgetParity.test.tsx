@@ -112,7 +112,7 @@ const hosts: HostHarness[] = [
     scopeKey: SDLC_SCOPE_KEY,
     scopeLabel: 'SDLC — 1. Hồ sơ đầu vào',
     mount: async (db) => {
-      render(<StepChatPanel projectId={PROJECT_ID} crId={CR_ID} stepId={STEP_ID} db={db} />);
+      render(<StepChatPanel changeRequestId={PROJECT_ID} crId={CR_ID} stepId={STEP_ID} db={db} />);
     },
     prepare: async (db) => {
       await waitFor(async () => {

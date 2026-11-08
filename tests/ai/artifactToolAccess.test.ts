@@ -75,7 +75,7 @@ describe('artifact tool advertisement and runtime boundaries', () => {
     await coordinator.startOrUpdateIntake({ cr: 'CR', featureName: 'Test', author: 'T', requestingUnit: 'IT', date: '2026-11-05' }, 'PL01', 'PL02');
     const markdown = '# SOLUTION\n## Mục tiêu\nNội dung gốc.';
     const state = await coordinator.commitSolution(markdown);
-    const context: ArtifactToolContext = { scopeKey: 'sdlc:test:cr:SOLUTION', projectId: state.projectId,
+    const context: ArtifactToolContext = { scopeKey: 'sdlc:test:cr:SOLUTION', changeRequestId: state.projectId,
       crId: 'cr', stepId: 'SOLUTION', getDraft: () => markdown, getWorkflowState: () => state,
       getAccess: () => ({ readOnly: false, scopeValid: true, crActive: true }) };
     const onAwaitingApproval = vi.fn(() => runtime.resolveApproval(false));

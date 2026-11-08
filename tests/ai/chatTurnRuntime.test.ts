@@ -16,7 +16,7 @@ const SCOPE_KEY = 'project:11111111-1111-4111-8111-111111111111';
 
 const ARTIFACT_CONTEXT: ArtifactToolContext = {
   scopeKey: 'sdlc:project:cr:SOLUTION',
-  projectId: 'p-1',
+  changeRequestId: 'p-1',
   crId: 'cr-active',
   stepId: 'SOLUTION',
   getAccess: () => ({ readOnly: false, crActive: true, scopeValid: true }),
@@ -458,7 +458,7 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
     const proposal = {
       proposalId: 'proposal-1',
       scopeKey: SCOPE_KEY,
-      projectId: 'p-1',
+      changeRequestId: 'p-1',
       crId: 'cr-active',
       kind: 'SOLUTION' as const,
       version: 3,
@@ -491,7 +491,7 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
     const preparePatch = vi.fn().mockResolvedValue({
       proposalId: 'proposal-2',
       scopeKey: SCOPE_KEY,
-      projectId: 'p-1',
+      changeRequestId: 'p-1',
       crId: 'cr-active',
       kind: 'SOLUTION' as const,
       version: 1,
@@ -551,7 +551,7 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
     const proposals = [1, 2].map((index) => ({
       proposalId: `proposal-${index}`,
       scopeKey: SCOPE_KEY,
-      projectId: 'p-1',
+      changeRequestId: 'p-1',
       crId: 'cr-active',
       kind: 'SOLUTION' as const,
       version: 1,
@@ -604,7 +604,7 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
         preparePatch: vi.fn().mockResolvedValue({
           proposalId: 'proposal-abort',
           scopeKey: SCOPE_KEY,
-          projectId: 'p-1',
+          changeRequestId: 'p-1',
           crId: 'cr-active',
           kind: 'SOLUTION' as const,
           version: 1,
@@ -630,7 +630,7 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
     const proposal = {
       proposalId: 'proposal-cached',
       scopeKey: SCOPE_KEY,
-      projectId: 'p-1',
+      changeRequestId: 'p-1',
       crId: 'cr-active',
       kind: 'SOLUTION' as const,
       version: 2,

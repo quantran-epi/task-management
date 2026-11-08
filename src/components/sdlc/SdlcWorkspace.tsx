@@ -26,7 +26,7 @@ const clampChatWidth = (width: number): number =>
     : SDLC_CHAT_WIDTH_DEFAULT;
 
 export interface SdlcWorkspaceProps {
-  projectId: string;
+  changeRequestId: string;
   crId: string;
   selectedStep: SdlcStepId;
   workflowState?: SdlcWorkflowState | undefined;
@@ -57,7 +57,7 @@ export interface SdlcWorkspaceProps {
 }
 
 export const SdlcWorkspace: React.FC<SdlcWorkspaceProps> = ({
-  projectId,
+  changeRequestId,
   crId,
   selectedStep,
   workflowState,
@@ -175,7 +175,7 @@ export const SdlcWorkspace: React.FC<SdlcWorkspaceProps> = ({
       >
         <StepChatPanel
           ref={chatPanelRef}
-          projectId={projectId}
+          changeRequestId={changeRequestId}
           crId={crId}
           stepId={selectedStep}
           stepGroundingContext={stepGroundingContext}

@@ -29,7 +29,7 @@ import dayjs from 'dayjs';
 import { ConventionsSummaryCard, type ConventionsSummaryProps } from '../common/ConventionsSummaryCard';
 
 export interface Step1IntakeViewProps {
-  projectId: string;
+  changeRequestId: string;
   initialMetadata?: Partial<SdlcWorkflowMetadata> | undefined;
   initialPl01?: string | undefined;
   initialPl02?: string | undefined;
@@ -43,7 +43,7 @@ export interface Step1IntakeViewProps {
 }
 
 export const Step1IntakeView: React.FC<Step1IntakeViewProps> = ({
-  projectId,
+  changeRequestId,
   initialMetadata,
   initialPl01 = '',
   initialPl02 = '',
@@ -58,7 +58,7 @@ export const Step1IntakeView: React.FC<Step1IntakeViewProps> = ({
   // Note picker state
   const [notePickerOpen, setNotePickerOpen] = useState(false);
   const [noteTargetField, setNoteTargetField] = useState<'pl01' | 'pl02'>('pl01');
-  const [projectFilter, setProjectFilter] = useState<string>(projectId);
+  const [crFilter, setCrFilter] = useState<string>(changeRequestId);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // The picker is optional; do not load every note body on Studio entry.
@@ -78,7 +78,7 @@ export const Step1IntakeView: React.FC<Step1IntakeViewProps> = ({
   const filteredNotes = useMemo(() => {
     const q = deferredSearch.trim().toLowerCase();
     return allNotes.filter((note) => {
-      if (projectFilter !== 'ALL' && note.entityId !== projectFilter) {
+      if (crFilter !== 'ALL' && note.entityId !== crFilter) {
         return false;
       }
       if (q) {
@@ -89,11 +89,11 @@ export const Step1IntakeView: React.FC<Step1IntakeViewProps> = ({
       }
       return true;
     });
-  }, [allNotes, projectFilter, deferredSearch]);
+  }, [allNotes, crFilter, deferredSearch]);
 
   const handleOpenNotePicker = (field: 'pl01' | 'pl02') => {
     setNoteTargetField(field);
-    setProjectFilter(projectId);
+    setCrFilter(changeRequestId);
     setSearchQuery('');
     setNotePickerOpen(true);
   };
@@ -284,13 +284,13 @@ export const Step1IntakeView: React.FC<Step1IntakeViewProps> = ({
           <div style={{ display: 'flex', gap: 10 }}>
             <Select
               style={{ width: 220 }}
-              value={projectFilter}
-              onChange={setProjectFilter}
+              value={crFilter}
+              onChange={setCrFilter}
               aria-label="Lọc theo dự án"
               options={[
                 { label: 'Tất cả dự án', value: 'ALL' },
                 ...allCrs.map((p) => ({
-                  label: p.id === projectId ? `${p.name} (Hiện tại)` : p.name,
+                  label: p.id === changeRequestId ? `${p.name} (Hiện tại)` : p.name,
                   value: p.id,
                 })),
               ]}
@@ -357,7 +357,7 @@ export const Step1IntakeView: React.FC<Step1IntakeViewProps> = ({
                         </span>
                         {projName ? (
                           <Tag
-                            color={item.entityId === projectId ? 'blue' : 'default'}
+                            color={item.entityId === changeRequestId ? 'blue' : 'default'}
                             style={{ margin: 0, flexShrink: 0 }}
                           >
                             {projName}

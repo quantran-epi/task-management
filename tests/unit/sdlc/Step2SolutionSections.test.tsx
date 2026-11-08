@@ -27,7 +27,7 @@ const SOLUTION = [
 const renderPreview = (props: Partial<React.ComponentProps<typeof Step2SolutionView>> = {}) => {
   render(
     <Step2SolutionView
-      projectId="p1"
+      changeRequestId="p1"
       initialContent={SOLUTION}
       hasIntakeBaseline
       onCommitSolution={vi.fn().mockResolvedValue(undefined)}
@@ -67,7 +67,7 @@ describe('Step2SolutionView per-subsystem sections (D-39)', () => {
   it('falls back to the plain markdown body when the solution has no subsystem sections', () => {
     render(
       <Step2SolutionView
-        projectId="p1"
+        changeRequestId="p1"
         initialContent={'# SOLUTION\n\n## Kiến trúc\nNội dung.'}
         hasIntakeBaseline
         onCommitSolution={vi.fn().mockResolvedValue(undefined)}

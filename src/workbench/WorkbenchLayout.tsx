@@ -33,8 +33,8 @@ import '../styles/workbench-tokens.css';
   leftPanelContent?: React.ReactNode;
   rightPanelContent?: React.ReactNode;
   bottomPanelContent?: React.ReactNode;
-  selectedProjectId?: string | null | undefined;
-  onSelectProject?: ((projectId: string | null) => void) | undefined;
+  selectedChangeRequestId?: string | null | undefined;
+  onSelectChangeRequest?: ((changeRequestId: string | null) => void) | undefined;
   onOpenSearch?: (() => void) | undefined;
   onOpenSettings?: (() => void) | undefined;
   db?: TaskPlannerDatabase | undefined;
@@ -63,7 +63,7 @@ export function WorkbenchLayout({
   leftPanelContent,
   rightPanelContent,
   bottomPanelContent,
-  onSelectProject,
+  onSelectChangeRequest,
   onOpenSearch,
   onOpenSettings,
   db,
@@ -237,7 +237,7 @@ export function WorkbenchLayout({
                       {leftPanelContent || (
                         <LeftToolWindow
                           {...(db ? { db } : {})}
-                          {...(onSelectProject ? { onSelectProject } : {})}
+                          {...(onSelectChangeRequest ? { onSelectChangeRequest } : {})}
                         />
                       )}
                     </div>

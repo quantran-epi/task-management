@@ -107,7 +107,7 @@ describe('real scripted get → patch → approve path', () => {
     const coordinator = createSdlcWorkflowCoordinator({ changeRequestId: projectId, threadId: crypto.randomUUID() });
     await coordinator.startOrUpdateIntake({ cr: 'CR', featureName: 'Test', author: 'T', requestingUnit: 'IT', date: '2026-11-05' }, 'PL01', 'PL02');
     const state = await coordinator.commitSolution(BASE);
-    context = { projectId: state.projectId, crId: 'cr', stepId: 'SOLUTION',
+    context = { changeRequestId: state.projectId, crId: 'cr', stepId: 'SOLUTION',
       scopeKey: `sdlc:${state.projectId}:cr:SOLUTION`, getDraft: () => markdown, getWorkflowState: () => state,
       getAccess: () => ({ readOnly: false, crActive: true, scopeValid: true }) };
     const apply = async (proposal: ArtifactPatchProposal, decision: ChatMessage) => {
@@ -142,7 +142,7 @@ describe('real scripted get → patch → approve path', () => {
   afterEach(async () => { cleanup(); await db.delete(); });
 
   async function startTurn(text: string) {
-    const view = render(<StepChatPanel projectId={projectId} crId="cr" stepId="SOLUTION" db={db}
+    const view = render(<StepChatPanel changeRequestId={projectId} crId="cr" stepId="SOLUTION" db={db}
       stepGroundingContext={GROUNDING} artifactToolContext={context} onApplyArtifactPatch={onApply} />);
     // Sending requires the step thread; its scope key also proves the panel is bound.
     await waitFor(async () => expect(await db.chatThreads.where('scopeKey')
@@ -260,7 +260,7 @@ describe('real scripted get → patch → approve path', () => {
   });
 
   it('omits patch from the payload in Analysis Mode and keeps get_artifact', async () => {
-    render(<StepChatPanel projectId={projectId} crId="cr" stepId="SOLUTION" db={db}
+    render(<StepChatPanel changeRequestId={projectId} crId="cr" stepId="SOLUTION" db={db}
       stepGroundingContext={GROUNDING} artifactToolContext={context} onApplyArtifactPatch={onApply} />);
     // Sending before the panel binds its thread is dropped by design, so wait for the bound scope.
     await waitFor(() => expect(screen.getByTestId('ai-chat-widget').getAttribute('data-scope-key'))

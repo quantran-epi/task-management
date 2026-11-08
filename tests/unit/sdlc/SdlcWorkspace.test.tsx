@@ -14,7 +14,7 @@ describe('SdlcWorkspace chat width', () => {
   const renderWorkspace = () =>
     render(
       <SdlcWorkspace
-        projectId="project-1"
+        changeRequestId="project-1"
         crId="cr-1"
         selectedStep="INTAKE"
         stepViewNode={<div>step content</div>}
