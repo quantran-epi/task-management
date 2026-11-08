@@ -37,4 +37,16 @@ export interface CommandOutput {
   exitStatus: number;
 }
 
+export interface SshStreamEvent {
+  sessionId: string;
+  stream: 'stdout' | 'stderr';
+  line: string;
+}
+
+export interface SshStreamExitEvent {
+  sessionId: string;
+  exitStatus: number;
+  error: string | null;
+}
+
 export const SSH_CONFIGS_SETTING_KEY = 'ssh_configurations';
