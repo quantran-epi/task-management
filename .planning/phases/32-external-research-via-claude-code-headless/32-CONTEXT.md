@@ -20,7 +20,7 @@ Rescoped phase: Replaces fs-gw with direct SSH remote execution of Claude Code h
 
 ### Định dạng lệnh & Parser kết quả
 - **D-04 (Headless CLI & JSON Schema):** Remote command executes `claude -p "<prompt>" --output-format json`. Prompt instructs Claude Code to output a strict JSON payload: `{ summary: string, findings: Array<{ claim: string, scope: 'web' | 'repo', source: string, confidence: number }> }`. Frontend validates payload with Zod and falls back gracefully to raw text if JSON parsing fails.
-- **D-05 (Artifact Persistence):** Extend `SdlcArtifactMetadata` with `kind: 'RESEARCH'`. Research reports are stored in `db.notes` via `artifactRepo.ts` with `entityType: 'project'` (bound to the active CR thread). Inherits encrypted backup, thread association, and global searchability.
+- **D-05 (Artifact Persistence):** Extend `SdlcArtifactMetadata` with `kind: 'RESEARCH'`. Research reports are stored in `db.notes` via `artifactRepo.ts` with `entityType: 'cr'` and `entityId = changeRequestId` (bound to the active CR thread; `NoteEntityType` is `'task' | 'cr' | 'system'`). Inherits encrypted backup, thread association, and global searchability.
 - **D-06 (Multi-version History):** Each research execution produces a versioned artifact (`RESEARCH v1`, `v2`, ...). The latest version is automatically used in prompt composition, but historical versions remain inspectable in SDLC Studio.
 - **D-07 (Prompt Composer Integration):** Add a delimited segment `<external_research_evidence rank="subordinate_to_internal">` to `sdlcPromptComposer.ts` placed after internal grounding. Segment explicitly mandates that external evidence cannot override internal banking rules or conventions, and external claims must remain attributable to their cited source.
 
@@ -66,7 +66,7 @@ Rescoped phase: Replaces fs-gw with direct SSH remote execution of Claude Code h
 ### Artifacts & Composer
 - `src/services/wizard/artifactRepo.ts` — Canonical SDLC artifact commit and versioning pipeline
 - `src/services/ai/sdlcPromptComposer.ts` — Prompt layers, grounding, and untrusted delimiter policies
-- `src/components/sdlc/conventions/ConventionsSummaryCard.tsx` — Reference visual layout for summary cards on Step 1/2
+- `src/components/sdlc/common/ConventionsSummaryCard.tsx` — Reference visual layout for summary cards on Step 1/2
 
 </canonical_refs>
 
@@ -76,7 +76,7 @@ Rescoped phase: Replaces fs-gw with direct SSH remote execution of Claude Code h
 ### Reusable Assets
 - `src/services/sshService.ts`: `execRemoteCommand`, `readRemoteFile`, `testSshConnection` for basic SSH commands.
 - `src/services/wizard/artifactRepo.ts`: `commitArtifact`, `loadCanonicalArtifactChain` handles transactional note creation with idempotency and thread linking.
-- `src/components/sdlc/conventions/ConventionsSummaryCard.tsx`: Exemplar compact card with badge, status tag, and detail modal.
+- `src/components/sdlc/common/ConventionsSummaryCard.tsx`: Exemplar compact card with badge, status tag, and detail modal.
 - `src/db/repositories/systemRepo.ts`: System lookup by ID for resolving `sshConfigId` and `remoteRepoPath`.
 
 ### Established Patterns

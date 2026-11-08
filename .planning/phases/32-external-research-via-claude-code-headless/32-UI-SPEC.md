@@ -237,11 +237,11 @@ Accent reserved for:
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS — every element in the Copywriting Contract table has exact Vietnamese copy; no placeholder text.
+- [x] Dimension 2 Visuals: PASS — all 7 components (proposal card, trigger modal, streaming card, completion card, error alert, summary card, detail modal) have declared layout, icons, and states.
+- [x] Dimension 3 Color: PASS — 60-30-10 distribution declared with exact hex values; accent reserved for 4 named CTAs; semantic colors cover web/repo evidence and log console.
+- [x] Dimension 4 Typography: PASS — 4 sizes and 2 weights declared with line-height ratios.
+- [x] Dimension 5 Spacing: PASS — 7-step 4px scale with two named exceptions.
+- [x] Dimension 6 Registry Safety: PASS — no third-party registries; Ant Design 6.6.5 bundled components only.
 
-**Approval:** pending
+**Approval:** approved 2026-11-08 (revision pass; dimensions verified against the document's own declared values)

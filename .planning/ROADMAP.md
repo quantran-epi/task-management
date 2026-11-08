@@ -905,21 +905,21 @@ Plans:
 
 Plans:
 
-**Wave 1** *(depends on Phase 29 fs-gw client; edits research service and artifact repo)*
+**Wave 1** *(no dependencies; edits Tauri SSH backend and `sshService.ts`)*
 
-- [ ] 32-01-PLAN.md — Research proposal gate (explicit confirmation), Claude Code headless research run over web + repo, stop handling
+- [ ] 32-01-PLAN.md — Non-PTY line streaming over SSH (`ssh_exec_stream`) with PID capture and SIGTERM stop (`ssh_kill_process`)
 
-**Wave 2** *(depends on 32-01; edits artifact persistence and step chat)*
+**Wave 2** *(depends on 32-01; edits artifact repo, AI tools, and research service)*
 
-- [ ] 32-02-PLAN.md — Sourced research artifact (findings, sources, web/repo scope marker) persisted per CR and rendered in its step
+- [ ] 32-02-PLAN.md — `RESEARCH` artifact kind + versioned persistence, `propose_research` tool, availability pre-flight, 300s timeout, multi-system runner
 
-**Wave 3** *(depends on 32-02 and Phase 26 composer; edits `sdlcPromptComposer.ts`)*
+**Wave 3** *(depends on 32-02; edits `sdlcPromptComposer.ts`)*
 
-- [ ] 32-03-PLAN.md — EXTERNAL evidence class in the prompt with rank disclosure and attribution; fs-gw-unavailable message path
+- [ ] 32-03-PLAN.md — EXTERNAL evidence class with rank disclosure and attribution; `propose_research` tool policy and unavailability message path
 
-**Wave 4** *(depends on 32-03)*
+**Wave 4** *(depends on 32-02 and 32-03; edits SDLC Studio UI)*
 
-- [ ] 32-04-PLAN.md — Reuse-in-later-steps, proposal-gate, and unavailable-gateway regression tests
+- [ ] 32-04-PLAN.md — Research summary card, detail modal, manual trigger modal, in-chat proposal/streaming/completion/error cards, Step 1 & 2 integration
 
 ### Phase 33: Prompt Transparency & Contract Documentation
 
