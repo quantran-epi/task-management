@@ -138,7 +138,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
   // Guards late callbacks from a coordinator belonging to a previously selected CR.
   const activeCrRef = useRef<string>('');
 
-  const project = useLiveQuery(
+  const activeChangeRequest = useLiveQuery(
     () => (activeChangeRequestId ? db.changeRequests.get(activeChangeRequestId) : undefined),
     [activeChangeRequestId, db]
   );
@@ -1022,7 +1022,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
         }}
       >
         <PageHeader
-          title={`SDLC Studio — ${project?.name ?? 'Chọn Change Request'}`}
+          title={`SDLC Studio — ${activeChangeRequest?.name ?? 'Chọn Change Request'}`}
           subtitle={
             currentCr
               ? `Change Request: ${currentCr.code} — ${currentCr.name}`
@@ -1053,7 +1053,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <SdlcSidebar
           changeRequestId={activeChangeRequestId}
-          onSelectProject={(newId) => {
+          onSelectChangeRequest={(newId) => {
             setSelectedChangeRequestId(newId);
           }}
           selectedStep={selectedStep}

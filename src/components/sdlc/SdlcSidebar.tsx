@@ -23,7 +23,7 @@ import type { SdlcStepId, SdlcWorkflowState } from '../../services/wizard/workfl
 
 export interface SdlcSidebarProps {
   changeRequestId: string;
-  onSelectProject?: ((changeRequestId: string) => void) | undefined;
+  onSelectChangeRequest?: ((changeRequestId: string) => void) | undefined;
   selectedStep: SdlcStepId;
   onSelectStep: (step: SdlcStepId) => void;
   activeCrId?: string | undefined;
@@ -48,7 +48,7 @@ export const SDLC_STEPS_CONFIG: Array<{
 
 export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
   changeRequestId,
-  onSelectProject,
+  onSelectChangeRequest,
   selectedStep,
   onSelectStep,
   activeCrId,
@@ -159,7 +159,7 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
             onChange={(val) => {
               if (val) {
                 onSelectCr?.(val);
-                onSelectProject?.(val);
+                onSelectChangeRequest?.(val);
               }
             }}
             data-testid="sidebar-cr-select"
@@ -391,7 +391,7 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
             setCreateModalOpen(false);
             if (newCr?.id) {
               onSelectCr?.(newCr.id);
-              onSelectProject?.(newCr.id);
+              onSelectChangeRequest?.(newCr.id);
             }
           } catch (err: any) {
             message.error(err?.message || 'Không thể tạo Change Request');
