@@ -27,6 +27,13 @@ const CR_A = '11111111-1111-4111-8111-111111111111';
 const CR_B = '22222222-2222-4222-8222-222222222222';
 const threadId = '33333333-3333-4333-8333-333333333333';
 const key = (crId: string) => workflow.workflowStorageKey(crId, crId);
+// The view persists under `sdlc_workflow:<crId>:<threadId>` and only reads the pre-fix
+// `<crId>:<crId>` row as a fallback, so assertions must not pin the legacy shape.
+async function readRow(db: TaskPlannerDatabase, crId: string) {
+  const prefix = `sdlc_workflow:${crId}:`;
+  const rows = (await db.settings.toArray()).filter((row) => row.key.startsWith(prefix));
+  return rows.find((row) => row.key !== key(crId)) ?? rows[0];
+}
 type Coordinator = ReturnType<typeof workflow.createSdlcWorkflowCoordinator>;
 
 afterEach(() => vi.restoreAllMocks());
@@ -79,7 +86,7 @@ describe('CR-scoped workflow coordinator', () => {
     await waitFor(() => expect(screen.getByTestId('workflow-cr')).toHaveTextContent('empty'));
     fireEvent.click(screen.getByRole('button', { name: 'Navigate' }));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
-    expect(await db.settings.get(key(CR_B))).toBeUndefined();
+    expect(await readRow(db, CR_B)).toBeUndefined();
     expect(screen.getByTestId('workflow-cr')).toHaveTextContent('empty');
   });
 
@@ -90,14 +97,14 @@ describe('CR-scoped workflow coordinator', () => {
     const coordinatorA = coordinators.at(-1)!;
     await switchToB();
     await waitFor(() => expect(screen.getByTestId('workflow-cr')).toHaveTextContent('CR-B'));
-    const beforeB = await db.settings.get(key(CR_B));
+    const beforeB = await readRow(db, CR_B);
     await act(async () => { await coordinatorA.navigateToStep('CAB'); });
-    expect(JSON.parse(String((await db.settings.get(key(CR_A)))!.value)).currentStep).toBe('CAB');
-    expect(await db.settings.get(key(CR_B))).toEqual(beforeB);
+    expect(JSON.parse(String((await readRow(db, CR_A))!.value)).currentStep).toBe('CAB');
+    expect(await readRow(db, CR_B)).toEqual(beforeB);
     expect(screen.getByTestId('workflow-cr')).toHaveTextContent('CR-B');
     await act(async () => { await coordinatorA.reset(); });
-    expect(await db.settings.get(key(CR_A))).toBeUndefined();
-    expect(await db.settings.get(key(CR_B))).toEqual(beforeB);
+    expect(await readRow(db, CR_A)).toBeUndefined();
+    expect(await readRow(db, CR_B)).toEqual(beforeB);
     expect(screen.getByTestId('workflow-cr')).toHaveTextContent('CR-B');
   });
 
@@ -108,6 +115,21 @@ describe('CR-scoped workflow coordinator', () => {
     await switchToB();
     await act(async () => { release(); await pending; });
     await waitFor(() => expect(screen.getByTestId('workflow-cr')).toHaveTextContent('empty'));
-    expect(await db.settings.get(key(CR_B))).toBeUndefined();
+    expect(await readRow(db, CR_B)).toBeUndefined();
+  });
+
+  it('reset clears both the thread-keyed row and the pre-fix legacy row', async () => {
+    const { db, coordinators } = await setup();
+    render(<ChangeRequestSdlcView changeRequestId={CR_A} db={db} onBack={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('workflow-cr')).toHaveTextContent('CR-A'));
+    const coordinatorA = coordinators.at(-1)!;
+    // Simulate an upgraded workspace: saveState wrote the thread-keyed row, the pre-fix
+    // `<crId>:<crId>` row is still present, and loadState would fall back to it.
+    await act(async () => { await coordinatorA.navigateToStep('CAB'); });
+    expect(await db.settings.get(key(CR_A))).toBeDefined();
+    expect(await readRow(db, CR_A)).toBeDefined();
+    await act(async () => { await coordinatorA.reset(); });
+    expect(await db.settings.get(key(CR_A))).toBeUndefined();
+    expect(await readRow(db, CR_A)).toBeUndefined();
   });
 });

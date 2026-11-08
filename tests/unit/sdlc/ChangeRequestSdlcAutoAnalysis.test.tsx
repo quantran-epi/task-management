@@ -65,10 +65,10 @@ describe('ChangeRequestSdlcView intake auto-analysis', () => {
     const view = render(<ChangeRequestSdlcView changeRequestId={projectId} onBack={vi.fn()} db={db} />);
     await screen.findByText('SDLC Studio — Intake activation');
     expect(await db.changeRequests.count()).toBe(1);
-    fireEvent.change(screen.getByPlaceholderText(/Mã CR \(ví dụ/i), { target: { value: 'CR-AUTO' } });
-    fireEvent.change(screen.getByPlaceholderText(/Tên tính năng \(ví dụ/i), { target: { value: 'Phân tích đúng một lần' } });
-    fireEvent.change(screen.getByPlaceholderText(/Nội dung Yêu cầu nghiệp vụ/i), { target: { value: 'PL01 yêu cầu nghiệp vụ' } });
-    fireEvent.change(screen.getByPlaceholderText(/Nội dung Đặc tả chức năng/i), { target: { value: 'PL02 đặc tả chức năng' } });
+    fireEvent.change(await screen.findByPlaceholderText(/Mã CR \(ví dụ/i), { target: { value: 'CR-AUTO' } });
+    fireEvent.change(await screen.findByPlaceholderText(/Tên tính năng \(ví dụ/i), { target: { value: 'Phân tích đúng một lần' } });
+    fireEvent.change(await screen.findByPlaceholderText(/Nội dung Yêu cầu nghiệp vụ/i), { target: { value: 'PL01 yêu cầu nghiệp vụ' } });
+    fireEvent.change(await screen.findByPlaceholderText(/Nội dung Đặc tả chức năng/i), { target: { value: 'PL02 đặc tả chức năng' } });
     const held = holdAnalysisTimer();
     fireEvent.click(screen.getByRole('button', { name: /Bắt đầu phân tích Solution/i }));
     await waitFor(() => {

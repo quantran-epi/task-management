@@ -449,7 +449,12 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
         deleteState: async () => {
           if (!crId) return;
           const threadId = await resolveSdlcThreadId(crId);
-          await db.settings.delete(workflowStorageKey(projectId, threadId));
+          // Delete the legacy `<crId>:<crId>` row too — loadState still falls back to it,
+          // so leaving it behind makes reset() a no-op on upgraded workspaces.
+          await db.settings.bulkDelete([
+            workflowStorageKey(projectId, threadId),
+            workflowStorageKey(projectId, crId),
+          ]);
         },
         onStateChange: (newState) => {
           if (activeCrRef.current === crId) setWorkflowState(newState);

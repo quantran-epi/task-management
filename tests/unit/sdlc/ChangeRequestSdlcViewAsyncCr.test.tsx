@@ -46,6 +46,13 @@ function deferred() {
 const CR_A = '11111111-1111-4111-8111-111111111111';
 const CR_B = '22222222-2222-4222-8222-222222222222';
 const draftKey = (cr: string) => `sdlc_draft_solution:${cr}:${cr}`;
+// The view persists under `sdlc_workflow:<crId>:<threadId>`; the legacy `<crId>:<crId>`
+// row is only a read fallback, so assertions read by prefix instead of pinning a shape.
+const statePrefix = (cr: string) => `sdlc_workflow:${cr}:`;
+async function readStateRow(cr: string) {
+  const rows = (await db.settings.toArray()).filter((row) => row.key.startsWith(statePrefix(cr)));
+  return rows.find((row) => row.key !== workflowStorageKey(cr, cr)) ?? rows[0];
+}
 let db: TaskPlannerDatabase;
 afterEach(async () => {
   cleanup();
@@ -74,7 +81,7 @@ async function mount() {
   }
   render(<ChangeRequestSdlcView db={db} onBack={() => {}} />);
   await waitFor(() => expect(screen.getByTestId('version')).toHaveTextContent('2'));
-  return (await db.settings.get(workflowStorageKey(CR_B, CR_B)))!.value;
+  return (await readStateRow(CR_B))!.value;
 }
 
 async function switchCr() {
@@ -84,7 +91,7 @@ async function switchCr() {
 }
 
 async function expectBUnchanged(snapshot: unknown) {
-  const { updatedAt: restoredAt, ...actual } = JSON.parse(String((await db.settings.get(workflowStorageKey(CR_B, CR_B)))!.value));
+  const { updatedAt: restoredAt, ...actual } = JSON.parse(String((await readStateRow(CR_B))!.value));
   const { updatedAt: savedAt, ...expected } = JSON.parse(String(snapshot));
   expect(restoredAt).toBeTruthy();
   expect(savedAt).toBeTruthy();
@@ -135,7 +142,7 @@ describe('WR-05: controller giữ CR qua async boundary', () => {
     let blocked = false;
     const put = db.settings.put.bind(db.settings);
     vi.spyOn(db.settings, 'put').mockImplementation((row, ...args) => {
-      if (row.key === workflowStorageKey(CR_A, CR_A) && JSON.parse(String(row.value)).activeVersions.SOLUTION === 3) {
+      if (row.key.startsWith(statePrefix(CR_A)) && JSON.parse(String(row.value)).activeVersions.SOLUTION === 3) {
         blocked = true;
         return Dexie.Promise.resolve(gate.promise).then(() => put(row, ...args));
       }
@@ -147,7 +154,7 @@ describe('WR-05: controller giữ CR qua async boundary', () => {
     await act(async () => { gate.release(); });
     await waitFor(async () => expect(await db.chatMessages.count()).toBe(1));
     expect(await db.settings.get(draftKey(CR_A))).toBeUndefined();
-    const stateA = JSON.parse(String((await db.settings.get(workflowStorageKey(CR_A, CR_A)))!.value));
+    const stateA = JSON.parse(String((await readStateRow(CR_A))!.value));
     expect(stateA.versions.SOLUTION.map((ref: { version: number }) => ref.version)).toEqual([1, 2, 3]);
     expect(stateA.artifacts.solution.content).toBe('# SOLUTION approved A');
     await expectBUnchanged(snapshot);
