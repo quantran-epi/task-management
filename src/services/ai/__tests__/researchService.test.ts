@@ -62,10 +62,13 @@ function makeSystem(overrides: Partial<System> & { id: string; code: string }): 
   };
 }
 
-function makeDb(systems: System[]): TaskPlannerDatabase {
+function makeDb(systems: System[], targetIds: string[] = systems.map((s) => s.id)): TaskPlannerDatabase {
   return {
     systems: {
       get: vi.fn(async (id: string) => systems.find((s) => s.id === id)),
+    },
+    changeRequests: {
+      get: vi.fn(async () => ({ id: CHANGE_REQUEST_ID, targets: targetIds.map((systemId) => ({ systemId })) })),
     },
   } as unknown as TaskPlannerDatabase;
 }
@@ -267,16 +270,23 @@ describe('ResearchService', () => {
       const cmd = buildResearchCommand('/srv/repo', "Fix the 'auth' flow", true);
 
       expect(cmd).toBe(
-        "cd '/srv/repo' && exec claude -p 'Fix the '\\''auth'\\'' flow' --output-format json --allowedTools WebSearch,WebFetch,Glob,Grep,Read",
+        "cd '/srv/repo' && exec claude -p 'Fix the '\\''auth'\\'' flow' --output-format json --permission-mode plan --allowedTools WebSearch,WebFetch,Glob,Grep,Read --disallowedTools Bash,Edit,Write,MultiEdit,NotebookEdit",
       );
       expect(cmd).not.toContain('sh -c');
       expect(cmd).not.toMatch(/exec cd /);
     });
 
+    it('pins plan mode and denies mutating tools so read-only does not depend on remote config', () => {
+      const cmd = buildResearchCommand('/srv/repo', 'q', true);
+
+      expect(cmd).toContain('--permission-mode plan');
+      expect(cmd).toContain('--disallowedTools Bash,Edit,Write,MultiEdit,NotebookEdit');
+    });
+
     it('drops web tools when includeWeb is false', () => {
       const cmd = buildResearchCommand('/srv/repo', 'q', false);
 
-      expect(cmd.endsWith('--allowedTools Glob,Grep,Read')).toBe(true);
+      expect(cmd).toContain('--allowedTools Glob,Grep,Read');
       expect(cmd).not.toContain('WebSearch');
     });
 

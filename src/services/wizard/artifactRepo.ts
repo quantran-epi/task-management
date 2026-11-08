@@ -167,8 +167,16 @@ async function commitArtifact(
     }
 
     const sources = await validatedSources(input, db);
+    // RESEARCH is read CR-scoped (SDLC-RES-06: reused across steps), so its version must be
+    // allocated CR-scoped too. A per-thread counter would hand Step 1 and Step 2 runs the
+    // same version number, and "latest" would then resolve by index order, not by recency.
+    const versionScope = kind === 'RESEARCH' ? null : input.threadId;
     const version = projectArtifacts
-      .filter((note) => note.sdlcArtifact?.kind === kind && note.sdlcArtifact.threadId === input.threadId)
+      .filter(
+        (note) =>
+          note.sdlcArtifact?.kind === kind &&
+          (versionScope === null || note.sdlcArtifact.threadId === versionScope),
+      )
       .reduce((max, note) => Math.max(max, note.sdlcArtifact?.version ?? 0), 0) + 1;
     const metadata = SdlcArtifactMetadataSchema.parse({
       kind,
@@ -198,10 +206,15 @@ async function commitArtifact(
     };
     const set = await getOrCreateCrSdlcSetInTransaction(input.changeRequestId, now, db);
     await db.notes.add(note);
-    await db.documentSets.update(set.id, {
-      documentIds: set.documentIds.includes(note.id) ? set.documentIds : [...set.documentIds, note.id],
-      updatedAt: now,
-    });
+    // RESEARCH bodies carry unverified text fetched from the web. The CR SDLC document set
+    // is what the knowledge publish flow snapshots, so external evidence stays out of it —
+    // research is read CR-scoped anyway, not set-scoped.
+    if (kind !== 'RESEARCH') {
+      await db.documentSets.update(set.id, {
+        documentIds: set.documentIds.includes(note.id) ? set.documentIds : [...set.documentIds, note.id],
+        updatedAt: now,
+      });
+    }
 
     const event: ChatMessage = {
       id: generateId(),
@@ -258,7 +271,9 @@ async function loadResearchNotes(changeRequestId: string, db: TaskPlannerDatabas
     .filter((note) =>
       note.entityType === 'cr' &&
       note.sdlcArtifact?.kind === 'RESEARCH' &&
-      note.sdlcArtifact.changeRequestId === changeRequestId
+      note.sdlcArtifact.changeRequestId === changeRequestId &&
+      // A trashed research note must stop feeding the prompt as evidence.
+      !note.deletedAt
     )
     .toArray();
   return notes.sort((left, right) => (left.sdlcArtifact?.version ?? 0) - (right.sdlcArtifact?.version ?? 0));

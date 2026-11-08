@@ -377,16 +377,31 @@ export const EXTERNAL_RESEARCH_OPEN = '<external_research_evidence rank="subordi
 export const EXTERNAL_RESEARCH_CLOSE = '</external_research_evidence>';
 
 /**
+ * Untrusted web/repo text is interpolated between the segment delimiters, so a fetched
+ * page could otherwise place `</external_research_evidence>` inside a claim and land
+ * everything after it outside the block, impersonating policy text.
+ */
+function neutralizeDelimiters(text: string): string {
+  return text.replace(/<\/?external_research_evidence[^>]*>/gi, '[redacted-tag]');
+}
+
+/**
  * D-07 / SDLC-RES-04 / SDLC-RES-05 — external research evidence, ranked below internal evidence.
  *
  * Every claim keeps its scope tag, source and confidence so generated solutions stay
  * attributable (T-32-07). The segment is delimited as untrusted data and states the
  * subordination rules inline, so injected web content cannot promote itself (T-32-06).
  * Systems that could not be researched are listed explicitly (T-32-11).
+ *
+ * The segment is emitted whenever the run produced *anything* — a summary alone, or only
+ * the "these systems could not be researched" warning, is still evidence the model must
+ * not replace with its own knowledge.
  */
 export function buildExternalResearchSegment(payload?: ResearchPayload | null): string {
   const findings = payload?.findings ?? [];
-  if (findings.length === 0) return '';
+  const skipped = payload?.skippedSystems ?? [];
+  const summary = payload?.summary.trim() ?? '';
+  if (findings.length === 0 && !summary && skipped.length === 0) return '';
 
   const parts = [
     EXTERNAL_RESEARCH_OPEN,
@@ -396,21 +411,22 @@ export function buildExternalResearchSegment(payload?: ResearchPayload | null): 
     '3. Mọi dữ kiện bên ngoài khi đưa vào giải pháp PHẢI giữ nguyên trích dẫn nguồn.',
   ];
 
-  if (payload?.summary.trim()) parts.push(`Tóm tắt: ${payload.summary.trim()}`);
+  if (summary) parts.push(`Tóm tắt: ${neutralizeDelimiters(summary)}`);
 
   for (const finding of findings) {
     const tag = finding.scope === 'repo'
       ? `[EXTERNAL:REPO:${finding.systemCode || 'UNKNOWN'}]`
       : '[EXTERNAL:WEB]';
-    parts.push(`${tag} ${finding.claim} (nguồn: ${finding.source}; độ tin cậy: ${Math.round(finding.confidence * 100)}%)`);
+    parts.push(
+      `${tag} ${neutralizeDelimiters(finding.claim)} (nguồn: ${neutralizeDelimiters(finding.source)}; độ tin cậy: ${Math.round(finding.confidence * 100)}%)`,
+    );
   }
 
-  const skipped = payload?.skippedSystems ?? [];
   if (skipped.length > 0) {
     parts.push('[HỆ THỐNG KHÔNG KHẢ DỤNG — KHÔNG CÓ BẰNG CHỨNG REPO]');
     parts.push('Các hệ thống không khả dụng chưa được nghiên cứu:');
     for (const system of skipped) {
-      parts.push(`- ${system.code}: ${system.reason}. Không được trình bày kiến thức mô hình như bằng chứng repo cho hệ thống này.`);
+      parts.push(`- ${neutralizeDelimiters(system.code)}: ${neutralizeDelimiters(system.reason)}. Không được trình bày kiến thức mô hình như bằng chứng repo cho hệ thống này.`);
     }
   }
 
@@ -418,7 +434,8 @@ export function buildExternalResearchSegment(payload?: ResearchPayload | null): 
   return parts.join('\n');
 }
 
-/** D-39: the marker a model must use instead of inventing content for an untouched subsystem. */export const SUBSYSTEM_UNAFFECTED_MARKER = 'Không có thay đổi ở subsystem này';
+/** D-39: the marker a model must use instead of inventing content for an untouched subsystem. */
+export const SUBSYSTEM_UNAFFECTED_MARKER = 'Không có thay đổi ở subsystem này';
 
 export interface SubsystemSectionTarget {
   systemId: string;

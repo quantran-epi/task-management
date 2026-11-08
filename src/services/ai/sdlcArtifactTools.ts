@@ -115,6 +115,8 @@ export interface ResearchProposalResult {
   targetSystemIds: string[];
   rationale: string;
   unavailableSystemIds: string[];
+  /** Model-supplied system ids outside the CR's targets; their questions stay untargeted. */
+  rejectedSystemIds?: string[];
 }
 
 export type ArtifactToolResult =
@@ -642,6 +644,7 @@ async function proposeResearch(
 
   const questions: ResearchProposalQuestion[] = [];
   const targetSystemIds: string[] = [];
+  const rejectedSystemIds: string[] = [];
   const seen = new Set<string>();
   for (const candidate of parsed.data.questions) {
     if (candidate.systemId === undefined) {
@@ -649,7 +652,13 @@ async function proposeResearch(
       continue;
     }
     const system = byId.get(candidate.systemId);
-    if (!system || !allowed.has(system.id)) continue;
+    if (!system || !allowed.has(system.id)) {
+      // Keep the question untargeted rather than dropping it: a question bound to a system
+      // outside the CR is still answerable, and the model gets told the target was rejected.
+      questions.push({ question: candidate.question });
+      if (!rejectedSystemIds.includes(candidate.systemId)) rejectedSystemIds.push(candidate.systemId);
+      continue;
+    }
     questions.push({ question: candidate.question, systemId: system.id, systemCode: system.code });
     if (!seen.has(system.id)) {
       seen.add(system.id);
@@ -658,5 +667,11 @@ async function proposeResearch(
   }
 
   const unavailableSystemIds = targetSystemIds.filter((id) => !byId.get(id)?.sshConfigId);
-  return { questions, targetSystemIds, rationale: parsed.data.rationale, unavailableSystemIds };
+  return {
+    questions,
+    targetSystemIds,
+    rationale: parsed.data.rationale,
+    unavailableSystemIds,
+    ...(rejectedSystemIds.length > 0 ? { rejectedSystemIds } : {}),
+  };
 }

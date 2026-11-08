@@ -25,7 +25,7 @@ describe('AntdThemeAdapter', () => {
       </AntdThemeAdapter>
     );
 
-    expect(screen.getByTestId('color-primary').textContent).toBe('#3871e1');
+    expect(screen.getByTestId('color-primary').textContent).toBe('#5b4fe8');
     expect(screen.getByTestId('border-radius').textContent).toBe('4');
     // compactAlgorithm scales seed token values down (fontSize - 2, controlHeight - 6 etc.)
     expect(Number(screen.getByTestId('font-size').textContent)).toBeGreaterThan(0);

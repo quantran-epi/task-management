@@ -207,6 +207,12 @@ export const ResearchProposalCard: React.FC<ResearchProposalCardProps> = ({
   const { token } = theme.useToken();
   const [checked, setChecked] = useState<string[]>(() => proposal.targetSystemIds);
 
+  // The card instance is reused when a new proposal replaces the old one, so the selection
+  // must follow the proposal — otherwise confirming sends ids the card never displayed.
+  useEffect(() => {
+    setChecked(proposal.targetSystemIds);
+  }, [proposal]);
+
   if (decision) {
     return (
       <section data-testid="research-proposal" aria-label="Đề xuất nghiên cứu" role="status"
@@ -450,9 +456,6 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
 
   const [thread, setThread] = useState<{ scopeKey: string; id: string } | null>(null);
   const threadId = thread?.scopeKey === scopeKey ? thread.id : null;
-  // `saveResearchArtifact` validates the session id through `uuidSchema`, so it must be a real
-  // RFC 4122 v4 UUID — one per step scope, not per render.
-  const sessionId = useMemo(() => crypto.randomUUID(), [scopeKey]);
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
   const [toolEvents, setToolEvents] = useState<ChatTurnToolEvent[]>([]);
@@ -919,10 +922,15 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   const startResearch = useCallback((payload: ResearchStartPayload) => {
     if (!threadId) return;
     if (readOnly) return;
+    // One run at a time: two live runs would share the SSH event names and the remote
+    // PID registry key, so one run's exit would resolve the other's promise.
+    if (researchRun.phase === 'streaming') return;
     if (payload.questions.length === 0 || payload.targetSystemIds.length === 0) return;
 
     const runId = (researchRunIdRef.current += 1);
     const startedAt = Date.now();
+    // Per run, not per step scope — the session id keys the SSH stream listeners.
+    const runSessionId = crypto.randomUUID();
     setResearchProposal((prev) => (prev ? { ...prev, decision: 'approved' } : prev));
     setResearchRun({ phase: 'streaming', lines: [], startedAt });
     setResearchCancelling(false);
@@ -930,7 +938,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
     const { promise, cancel } = executeMultiSystemResearch({
       changeRequestId,
       threadId,
-      sessionId,
+      sessionId: runSessionId,
       targetSystemIds: payload.targetSystemIds,
       questions: payload.questions,
       includeWeb: payload.includeWeb,
@@ -971,7 +979,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
         });
       }
     );
-  }, [threadId, readOnly, changeRequestId, sessionId]);
+  }, [threadId, readOnly, changeRequestId, researchRun.phase]);
 
   const handleCancelResearch = useCallback(() => {
     const cancel = researchCancelRef.current;

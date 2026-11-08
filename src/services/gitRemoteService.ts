@@ -8,6 +8,11 @@ import type {
   RemoteDiffSummary,
 } from '../types/gitRemote';
 
+/**
+ * Canonical POSIX single-quote escape. Security-critical: every user/AI-derived string
+ * that reaches a remote shell goes through this. Kept in one place so a fix reaches all
+ * callers (research, git, change-pack, claude CLI).
+ */
 export function escapeShellArg(arg: string): string {
   return `'${arg.replace(/'/g, "'\\''")}'`;
 }

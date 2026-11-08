@@ -1,8 +1,10 @@
 import { z } from 'zod';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { getSystem } from '../../db/repositories/systemRepo';
+import { getChangeRequest } from '../../db/repositories/changeRequestRepo';
 import type { SshConfig } from '../../types/ssh';
 import { getSshConfigById, execRemoteCommandStream, testSshConnection } from '../sshService';
+import { escapeShellArg } from '../gitRemoteService';
 import { saveResearchArtifact } from '../wizard/artifactRepo';
 import { defaultSha256 } from '../wizard/workflowCoordinator';
 
@@ -10,25 +12,48 @@ import { defaultSha256 } from '../wizard/workflowCoordinator';
 // Schemas
 // -------------------------------------------------------------------------------------------------
 
+/**
+ * Untrusted model output is re-injected into every later prompt for the CR and persisted
+ * into IndexedDB + the encrypted backup, so every field is length-bounded at the boundary.
+ * Over-length text is truncated rather than rejected: rejecting would discard the whole
+ * payload (and with it every finding) over one long claim.
+ */
+const bounded = (max: number) => z.string().min(1).transform((value) => value.slice(0, max));
+
+/**
+ * Models routinely emit `confidence: 85` or `scope: "WEB"`. Rejecting the payload over
+ * that would silently drop every finding, so both are normalized instead.
+ */
+const normalizedConfidence = z
+  .number()
+  .transform((value) => (value > 1 ? value / 100 : value))
+  .pipe(z.number().min(0).max(1))
+  .default(1);
+
+const normalizedScope = z
+  .string()
+  .transform((value) => value.trim().toLowerCase())
+  .pipe(z.enum(['web', 'repo']));
+
 export const ResearchFindingSchema = z.object({
-  claim: z.string().min(1),
-  scope: z.enum(['web', 'repo']),
-  systemCode: z.string().optional(),
-  source: z.string().min(1),
-  confidence: z.number().min(0).max(1).default(1),
+  claim: bounded(2000),
+  scope: normalizedScope,
+  systemCode: z.string().max(200).optional(),
+  source: bounded(2000),
+  confidence: normalizedConfidence,
 });
 
 export const SkippedSystemSchema = z.object({
-  systemId: z.string().min(1),
-  code: z.string().min(1),
-  reason: z.string().min(1),
+  systemId: z.string().min(1).max(200),
+  code: z.string().min(1).max(200),
+  reason: bounded(500),
 });
 
 export const ResearchPayloadSchema = z.object({
-  summary: z.string().min(1),
-  findings: z.array(ResearchFindingSchema),
-  skippedSystems: z.array(SkippedSystemSchema).optional(),
-  rawOutput: z.string().optional(),
+  summary: bounded(4000),
+  findings: z.array(ResearchFindingSchema).max(200),
+  skippedSystems: z.array(SkippedSystemSchema).max(100).optional(),
+  rawOutput: z.string().max(200_000).optional(),
 });
 
 export type ResearchFinding = z.infer<typeof ResearchFindingSchema>;
@@ -43,7 +68,8 @@ export type ResearchErrorCode =
   | 'RESEARCH_UNAVAILABLE'
   | 'RESEARCH_TIMEOUT'
   | 'RESEARCH_CANCELLED'
-  | 'RESEARCH_SSH_ERROR';
+  | 'RESEARCH_SSH_ERROR'
+  | 'RESEARCH_UNPARSED';
 
 export class ResearchRunError extends Error {
   readonly code: ResearchErrorCode;
@@ -59,13 +85,8 @@ export class ResearchRunError extends Error {
 // Shell escaping (T-32-03)
 // -------------------------------------------------------------------------------------------------
 
-/**
- * Wrap `arg` in single quotes and escape embedded quotes as `'\''`, so shell
- * metacharacters stay literal. Used for both prompt text and remote repo paths.
- */
-export function escapeShellArg(arg: string): string {
-  return `'${arg.replace(/'/g, "'\\''")}'`;
-}
+// Single canonical implementation — see `gitRemoteService.escapeShellArg`.
+export { escapeShellArg } from '../gitRemoteService';
 
 // -------------------------------------------------------------------------------------------------
 // Output parsing (T-32-05)
@@ -167,6 +188,19 @@ export function parseResearchOutput(raw: string): ResearchPayload {
   return { summary: raw.slice(0, 2000), findings: [], rawOutput: raw };
 }
 
+/**
+ * Same as `parseResearchOutput`, but tells the caller whether the payload was actually
+ * recovered. A run whose output could not be parsed would otherwise render as
+ * "Hoàn thành nghiên cứu ngoài — 0 phát hiện", i.e. a silent success with no evidence.
+ */
+export function parseResearchOutputResult(
+  raw: string,
+): { payload: ResearchPayload; parsed: boolean } {
+  const payload = parseCandidates(extractCandidates(raw), true);
+  if (payload) return { payload, parsed: true };
+  return { payload: { summary: raw.slice(0, 2000), findings: [], rawOutput: raw }, parsed: false };
+}
+
 // -------------------------------------------------------------------------------------------------
 // Availability pre-flight (SDLC-RES-05)
 // -------------------------------------------------------------------------------------------------
@@ -228,6 +262,14 @@ export async function checkResearchAvailability(
 
 const READ_ONLY_TOOLS = 'Glob,Grep,Read';
 const READ_ONLY_WEB_TOOLS = 'WebSearch,WebFetch,Glob,Grep,Read';
+/**
+ * `--allowedTools` is an allowlist only: a remote `~/.claude/settings.json` can still
+ * pre-approve `Bash`/`Edit`/`Write`, and prompt-injected web content reaching the agent
+ * through `WebFetch` would then get arbitrary execution on the research host. Denying the
+ * mutating tools and pinning plan mode makes read-only a property of the invocation
+ * rather than of the remote machine's config (T-32-01).
+ */
+const DENIED_TOOLS = 'Bash,Edit,Write,MultiEdit,NotebookEdit';
 
 /** Prompt sent to the remote headless CLI: strict JSON, read-only, scoped to one system. */
 export function buildResearchPrompt(questions: string[], systemCode: string): string {
@@ -254,6 +296,11 @@ export function buildResearchPrompt(questions: string[], systemCode: string): st
  * on `claude` the PID from `echo $$` becomes the claude process, so
  * `ssh_kill_process` signals the real process and no child is orphaned (D-02).
  *
+ * Deliberately no `setsid`: it forks when the calling shell is already a process-group
+ * leader (the usual case under sshd), which would make the echoed PID the setsid parent
+ * rather than claude — and cancel would then signal the wrong process. `ssh_kill_process`
+ * still attempts a process-group kill with a plain-PID fallback.
+ *
  * No nested shell layer: `channel.exec` already runs this through the remote
  * login shell, and a nested shell invocation would be cut short by the single
  * quotes `escapeShellArg` emits (T-32-03).
@@ -264,7 +311,7 @@ export function buildResearchCommand(
   includeWeb: boolean,
 ): string {
   const tools = includeWeb ? READ_ONLY_WEB_TOOLS : READ_ONLY_TOOLS;
-  return `cd ${escapeShellArg(remoteRepoPath || '.')} && exec claude -p ${escapeShellArg(prompt)} --output-format json --allowedTools ${tools}`;
+  return `cd ${escapeShellArg(remoteRepoPath || '.')} && exec claude -p ${escapeShellArg(prompt)} --output-format json --permission-mode plan --allowedTools ${tools} --disallowedTools ${DENIED_TOOLS}`;
 }
 
 function findingTag(finding: ResearchFinding): string {
@@ -298,7 +345,10 @@ export function renderResearchMarkdown(payload: ResearchPayload): string {
   }
 
   if (payload.rawOutput) {
-    lines.push('## Raw Output', '', '```', payload.rawOutput, '```', '');
+    // A fence shorter than the longest backtick run inside would terminate early.
+    const longestRun = Math.max(0, ...(payload.rawOutput.match(/`+/g) ?? []).map((run) => run.length));
+    const fence = '`'.repeat(Math.max(3, longestRun + 1));
+    lines.push('## Raw Output', '', fence, payload.rawOutput, fence, '');
   }
 
   return lines.join('\n');
@@ -382,7 +432,27 @@ export function executeMultiSystemResearch(
 
   void (async () => {
     try {
-      const availability = await checkResearchAvailability(options.targetSystemIds, db);
+      // The execution boundary must not trust its caller for scope: the manual modal and a
+      // stale proposal card both supply ids directly. Intersect with the CR's targets.
+      const changeRequest = await getChangeRequest(options.changeRequestId, db);
+      if (settled) return;
+      if (!changeRequest) {
+        throw new ResearchRunError('RESEARCH_UNAVAILABLE', 'Không tìm thấy Change Request.');
+      }
+      const targetIds = new Set(changeRequest.targets.map((target) => target.systemId));
+      const scopedSystemIds = options.targetSystemIds.filter((systemId) => {
+        if (targetIds.has(systemId)) return true;
+        options.onLog(`Bỏ qua hệ thống ngoài phạm vi CR: ${systemId}`);
+        return false;
+      });
+      if (scopedSystemIds.length === 0) {
+        throw new ResearchRunError(
+          'RESEARCH_UNAVAILABLE',
+          'Không có hệ thống mục tiêu nào thuộc Change Request này.',
+        );
+      }
+
+      const availability = await checkResearchAvailability(scopedSystemIds, db);
       if (settled) return;
 
       const skippedSystems: SkippedSystem[] = [];
@@ -403,7 +473,8 @@ export function executeMultiSystemResearch(
 
       const findings: ResearchFinding[] = [];
       const summaries: string[] = [];
-      let rawOutput: string | undefined;
+      const rawParts: string[] = [];
+      let unparsedSystems = 0;
 
       for (const entry of runnable) {
         if (settled) return;
@@ -413,6 +484,9 @@ export function executeMultiSystemResearch(
 
         const sshConfig: SshConfig | null = await getSshConfigById(system.sshConfigId, db);
         if (!sshConfig) continue;
+
+        // A cancel during the awaits above must not start a remote process.
+        if (settled) return;
 
         options.onLog(`Bắt đầu nghiên cứu ${system.code}...`);
 
@@ -457,6 +531,7 @@ export function executeMultiSystemResearch(
             },
           );
         } catch (error) {
+          cancelActive = undefined;
           await stopRemote();
           throw new ResearchRunError(
             'RESEARCH_SSH_ERROR',
@@ -464,12 +539,23 @@ export function executeMultiSystemResearch(
           );
         }
 
+        // A cancel that landed while the stream was starting must still kill this process.
+        if (settled) {
+          await stopRemote();
+          return;
+        }
+
         await streamDone;
+        cancelActive = undefined;
         if (settled) return;
 
-        const parsed = parseResearchOutput(lines.join('\n'));
+        const { payload: parsed, parsed: recovered } = parseResearchOutputResult(lines.join('\n'));
+        if (!recovered) {
+          unparsedSystems += 1;
+          options.onLog(`Cảnh báo: không phân tích được JSON từ ${system.code}; giữ nguyên văn bản thô.`);
+        }
         summaries.push(parsed.summary);
-        if (parsed.rawOutput) rawOutput = parsed.rawOutput;
+        if (parsed.rawOutput) rawParts.push(`### ${system.code}\n${parsed.rawOutput}`);
         for (const finding of parsed.findings) {
           findings.push(
             finding.scope === 'repo' ? { ...finding, systemCode: system.code } : finding,
@@ -477,12 +563,21 @@ export function executeMultiSystemResearch(
         }
       }
 
+      if (unparsedSystems > 0 && findings.length === 0) {
+        throw new ResearchRunError(
+          'RESEARCH_UNPARSED',
+          `Không nhận được báo cáo JSON hợp lệ từ ${unparsedSystems} hệ thống.`,
+        );
+      }
+
       const payload: ResearchPayload = {
         summary: summaries.join('\n\n'),
         findings,
         ...(skippedSystems.length > 0 ? { skippedSystems } : {}),
-        ...(rawOutput ? { rawOutput } : {}),
+        ...(rawParts.length > 0 ? { rawOutput: rawParts.join('\n\n') } : {}),
       };
+
+      if (settled) return;
 
       await saveResearchArtifact(
         {
@@ -498,6 +593,9 @@ export function executeMultiSystemResearch(
         },
         db,
       );
+
+      // A cancel during the IndexedDB write must not report success.
+      if (settled) return;
 
       finishResolve(payload);
     } catch (error) {

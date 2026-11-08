@@ -288,7 +288,9 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
         research={researchPayload}
         {...(latestResearch ? { version: latestResearch.version } : {})}
         versions={researchVersions}
-        onTriggerResearch={onStartResearch ? () => setResearchTriggerOpen(true) : undefined}
+        onTriggerResearch={
+          onStartResearch && !readOnly ? () => setResearchTriggerOpen(true) : undefined
+        }
       />
 
       <ResearchTriggerModal

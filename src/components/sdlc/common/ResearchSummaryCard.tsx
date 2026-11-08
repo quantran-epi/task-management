@@ -389,10 +389,17 @@ export const ResearchTriggerModal: React.FC<ResearchTriggerModalProps> = ({
     setIncludeWeb(true);
   }, [open]);
 
-  const questions = questionText
+  // Every question becomes one shell argument and one remote prompt line, so bound both.
+  const MAX_QUESTIONS = 20;
+  const MAX_QUESTION_CHARS = 500;
+  const allQuestions = questionText
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
+  const questions = allQuestions
+    .slice(0, MAX_QUESTIONS)
+    .map((question) => question.slice(0, MAX_QUESTION_CHARS));
+  const overLimit = allQuestions.length > MAX_QUESTIONS;
   const canSubmit = questions.length > 0 && selectedSystemIds.length > 0;
 
   return (
@@ -415,6 +422,11 @@ export const ResearchTriggerModal: React.FC<ResearchTriggerModalProps> = ({
             onChange={(event) => setQuestionText(event.target.value)}
             placeholder="Nội dung câu hỏi cần nghiên cứu..."
           />
+          {overLimit && (
+            <Typography.Text type="warning" style={{ fontSize: 12 }}>
+              Chỉ {MAX_QUESTIONS} câu hỏi đầu tiên được gửi đi.
+            </Typography.Text>
+          )}
         </div>
 
         <div>

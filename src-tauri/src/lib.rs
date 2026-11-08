@@ -91,6 +91,9 @@ pub fn run() {
                 if let Some(pty_registry) = app_handle.try_state::<ssh_pty_service::SshPtyRegistry>() {
                     ssh_pty_service::cleanup_on_exit(&pty_registry);
                 }
+                if let Some(stream_registry) = app_handle.try_state::<ssh_service::SshStreamRegistry>() {
+                    ssh_service::cleanup_on_exit(&stream_registry);
+                }
             }
         });
 }

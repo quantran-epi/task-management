@@ -117,11 +117,16 @@ describe('propose_research dispatch and scope', () => {
       rationale: 'r',
     }, db, makeContext()) as ResearchProposalResult;
 
+    // A question bound to a rejected system is kept untargeted rather than dropped: it is
+    // still answerable, and the model is told which targets were rejected.
     expect(result.questions).toEqual([
       { question: 'spoofed', systemId: SERVICE_ID, systemCode: 'PAY-SVC' },
+      { question: 'unknown' },
+      { question: 'out of scope' },
       { question: 'unbound' },
     ]);
     expect(result.targetSystemIds).toEqual([SERVICE_ID]);
+    expect(result.rejectedSystemIds).toEqual([MISSING_ID, OUT_OF_SCOPE_ID]);
   });
 
   it('flags target systems without an SSH config as unavailable', async () => {

@@ -57,6 +57,17 @@ pub struct SshStreamRegistry {
     pub active_processes: Mutex<HashMap<String, u32>>,
 }
 
+/// Drop every tracked PID when the app exits.
+///
+/// ponytail: this only clears the map — it does not SIGTERM the remote processes, because
+/// the registry deliberately does not retain SSH configs or secrets. Remote orphans are
+/// still possible on a hard quit; adding a config-carrying entry here is the upgrade path.
+pub fn cleanup_on_exit(registry: &SshStreamRegistry) {
+    if let Ok(mut procs) = registry.active_processes.lock() {
+        procs.clear();
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SshStreamEvent {
@@ -380,7 +391,7 @@ pub fn ssh_exec_command(
 
     channel
         .exec(&command)
-        .map_err(|e| format!("Thực thi lệnh '{}' thất bại: {}", command, e))?;
+        .map_err(|e| format!("Thực thi lệnh thất bại: {}", e))?;
 
     let mut stdout_buf = Vec::new();
     let mut stderr_buf = Vec::new();
@@ -438,7 +449,10 @@ pub fn ssh_exec_stream(
             // State guards are borrowed; resolve the managed registry inside the thread.
             let registry = app_handle.state::<SshStreamRegistry>();
             let mut pid_registered = false;
-            let mut is_first_line = true;
+            // A login banner or `.bashrc` echo can precede the PID line, so keep scanning
+            // for it instead of only checking line 1 — otherwise the PID is never registered
+            // and `ssh_kill_process` can never cancel this run.
+            let mut pid_scan_lines_left = 5;
             // A mid-stream read error must reach the frontend: without it the exit event
             // reports success and the caller parses truncated output as a complete run.
             let mut stream_error: Option<String> = None;
@@ -460,8 +474,8 @@ pub fn ssh_exec_stream(
                 }
                 let line = raw_line.trim_end_matches(['\n', '\r']).to_string();
 
-                if is_first_line {
-                    is_first_line = false;
+                if !pid_registered && pid_scan_lines_left > 0 {
+                    pid_scan_lines_left -= 1;
                     if let Ok(pid) = line.trim().parse::<u32>() {
                         if let Ok(mut procs) = registry.active_processes.lock() {
                             procs.insert(sid.clone(), pid);
@@ -469,7 +483,6 @@ pub fn ssh_exec_stream(
                         pid_registered = true;
                         continue;
                     }
-                    // Not a PID (login banner/MOTD): emit as normal output, keep reading.
                 }
 
                 let _ = app_handle.emit(
@@ -509,7 +522,12 @@ pub fn ssh_exec_stream(
                 &exit_event,
                 SshStreamExitEvent {
                     session_id: sid.clone(),
-                    exit_status: channel.exit_status().unwrap_or(-1),
+                    // libssh2 only guarantees the exit-status packet is processed once the
+                    // channel closes; reading it before `wait_close` can report a stale value.
+                    exit_status: {
+                        let _ = channel.wait_close();
+                        channel.exit_status().unwrap_or(-1)
+                    },
                     error: stream_error,
                 },
             );
@@ -527,9 +545,11 @@ pub fn ssh_kill_process(
     secret: Option<String>,
     session_id: String,
 ) -> Result<(), String> {
+    // Peek first: removing the PID up front would strand the process if the kill connection
+    // fails, and no later retry could ever find it again.
     let pid = {
-        let mut procs = registry.active_processes.lock().map_err(|e| e.to_string())?;
-        procs.remove(&session_id)
+        let procs = registry.active_processes.lock().map_err(|e| e.to_string())?;
+        procs.get(&session_id).copied()
     };
 
     let Some(pid) = pid else {
@@ -540,13 +560,20 @@ pub fn ssh_kill_process(
     let mut channel = session
         .channel_session()
         .map_err(|e| format!("Không thể mở channel session: {}", e))?;
+    // Negative PID targets the process group, so children the agent spawned die with it.
+    // The command is started via `setsid` (see `buildResearchCommand`), which makes the
+    // PID its own PGID.
     channel
-        .exec(&format!("kill -TERM {}", pid))
+        .exec(&format!("kill -TERM -{} 2>/dev/null || kill -TERM {}", pid, pid))
         .map_err(|e| format!("Không thể gửi SIGTERM tới PID {}: {}", pid, e))?;
 
     let mut sink = String::new();
     let _ = channel.read_to_string(&mut sink);
     let _ = channel.wait_close();
+
+    if let Ok(mut procs) = registry.active_processes.lock() {
+        procs.remove(&session_id);
+    }
 
     Ok(())
 }
