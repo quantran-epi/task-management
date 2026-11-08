@@ -20,6 +20,14 @@ import type {
   System,
   ChangeRequest,
 } from './models';
+import type {
+  AiEmployee,
+  AiLead,
+  AiSkill,
+  AiTeam,
+  AiTeamMember,
+  AiTeamLink,
+} from './aiOffice';
 
 export interface MissingBackupSource {
   id: string;
@@ -74,6 +82,12 @@ export interface BackupTableData {
   telegramWhitelist?: TelegramWhitelistUser[];
   systems?: System[];
   changeRequests?: ChangeRequest[];
+  aiEmployees?: AiEmployee[];
+  aiLeads?: AiLead[];
+  aiSkills?: AiSkill[];
+  aiTeams?: AiTeam[];
+  aiTeamMembers?: AiTeamMember[];
+  aiTeamLinks?: AiTeamLink[];
 }
 
 export interface BackupTableCounts {
@@ -98,6 +112,12 @@ export interface BackupTableCounts {
   telegramWhitelist?: number;
   systems?: number;
   changeRequests?: number;
+  aiEmployees?: number;
+  aiLeads?: number;
+  aiSkills?: number;
+  aiTeams?: number;
+  aiTeamMembers?: number;
+  aiTeamLinks?: number;
 }
 
 

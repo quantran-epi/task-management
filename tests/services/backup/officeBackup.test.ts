@@ -1,0 +1,277 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { TaskPlannerDatabase } from '../../../src/db';
+import {
+  APP_MARKER,
+  CURRENT_SCHEMA_VERSION,
+  exportBackupPayload,
+} from '../../../src/services/backup/exportBackup';
+import { restoreBackupPayload } from '../../../src/services/backup/restoreBackup';
+import { validateBackupPayload } from '../../../src/services/backup/validateBackup';
+import type { BackupEnvelope } from '../../../src/types/backup';
+import type {
+  AiEmployee,
+  AiLead,
+  AiSkill,
+  AiTeam,
+  AiTeamLink,
+  AiTeamMember,
+} from '../../../src/types/aiOffice';
+import type { ChatMessage, ChatThread } from '../../../src/types/models';
+
+const NOW = '2026-11-08T12:00:00.000Z';
+
+const SKILL_ID = '11111111-1111-4111-8111-111111111111';
+const EMPLOYEE_ID = '22222222-2222-4222-8222-222222222222';
+const LEAD_ID = '33333333-3333-4333-8333-333333333333';
+const TEAM_ID = '44444444-4444-4444-8444-444444444444';
+const MEMBER_LEAD_ID = '55555555-5555-4555-8555-555555555555';
+const MEMBER_EMPLOYEE_ID = '66666666-6666-4666-8666-666666666666';
+const LINK_ID = '77777777-7777-4777-8777-777777777777';
+const THREAD_ID = '88888888-8888-4888-8888-888888888888';
+const MESSAGE_ID = '99999999-9999-4999-8999-999999999999';
+const CR_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
+const skill: AiSkill = {
+  id: SKILL_ID,
+  name: 'Code review',
+  description: 'Reviews diffs for correctness',
+  body: '# Code review\n\nCheck tests.',
+  createdAt: NOW,
+  updatedAt: NOW,
+};
+
+const employee: AiEmployee = {
+  id: EMPLOYEE_ID,
+  name: 'Bảo',
+  role: 'Backend engineer',
+  capability: 'Writes and reviews service code',
+  persona: 'Careful and terse.',
+  model: 'claude-sonnet-4',
+  skillId: SKILL_ID,
+  createdAt: NOW,
+  updatedAt: NOW,
+};
+
+const lead: AiLead = {
+  id: LEAD_ID,
+  name: 'An',
+  role: 'Tech lead',
+  capability: 'Splits work and synthesizes reports',
+  persona: 'Direct, evidence-first.',
+  model: 'claude-opus-4',
+  createdAt: NOW,
+  updatedAt: NOW,
+};
+
+const team: AiTeam = {
+  id: TEAM_ID,
+  name: 'Squad Alpha',
+  leadId: LEAD_ID,
+  status: 'active',
+  budgetTokens: 200000,
+  autoSplitEnabled: true,
+  autoApproveMutations: false,
+  createdAt: NOW,
+  updatedAt: NOW,
+};
+
+const leadMember: AiTeamMember = {
+  id: MEMBER_LEAD_ID,
+  teamId: TEAM_ID,
+  agentId: LEAD_ID,
+  role: 'lead',
+  budgetTokens: 80000,
+  usedTokens: 1200,
+};
+
+const employeeMember: AiTeamMember = {
+  id: MEMBER_EMPLOYEE_ID,
+  teamId: TEAM_ID,
+  agentId: EMPLOYEE_ID,
+  role: 'employee',
+  budgetTokens: 120000,
+  usedTokens: 3400,
+};
+
+const teamLink: AiTeamLink = {
+  id: LINK_ID,
+  teamId: TEAM_ID,
+  itemType: 'cr',
+  itemId: CR_ID,
+  createdAt: NOW,
+};
+
+const teamThread: ChatThread = {
+  id: THREAD_ID,
+  scopeKey: `team:${TEAM_ID}`,
+  scopeType: 'team',
+  entityId: TEAM_ID,
+  title: 'Squad Alpha run',
+  createdAt: NOW,
+  updatedAt: NOW,
+};
+
+const attributedMessage: ChatMessage = {
+  id: MESSAGE_ID,
+  threadId: THREAD_ID,
+  role: 'assistant',
+  content: 'Report: done.',
+  createdAt: NOW,
+  agentId: EMPLOYEE_ID,
+  agentName: 'Bảo',
+  agentKind: 'employee',
+  messageKind: 'report',
+};
+
+async function seedOffice(db: TaskPlannerDatabase): Promise<void> {
+  await db.aiSkills.add(skill);
+  await db.aiEmployees.add(employee);
+  await db.aiLeads.add(lead);
+  await db.aiTeams.add(team);
+  await db.aiTeamMembers.bulkAdd([leadMember, employeeMember]);
+  await db.aiTeamLinks.add(teamLink);
+  await db.chatThreads.add(teamThread);
+  await db.chatMessages.add(attributedMessage);
+}
+
+/** D-34: a v11 payload that predates the AI Office tables — every new key absent. */
+function v11EnvelopeWithoutOffice(): BackupEnvelope {
+  return {
+    app: APP_MARKER,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    exportedAt: NOW,
+    tables: {
+      tasks: [],
+      capacityRules: [],
+      capacityOverrides: [],
+      plannedAllocations: [],
+    },
+    counts: {
+      tasks: 0,
+      capacityRules: 0,
+      capacityOverrides: 0,
+      plannedAllocations: 0,
+    },
+  };
+}
+
+describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
+  let sourceDb: TaskPlannerDatabase;
+  let restoredDb: TaskPlannerDatabase;
+
+  beforeEach(async () => {
+    sourceDb = new TaskPlannerDatabase(`OfficeBackupSource_${crypto.randomUUID()}`);
+    restoredDb = new TaskPlannerDatabase(`OfficeBackupRestore_${crypto.randomUUID()}`);
+    await Promise.all([sourceDb.open(), restoredDb.open()]);
+  });
+
+  afterEach(async () => {
+    await Promise.all([sourceDb.delete(), restoredDb.delete()]);
+  });
+
+  it('exports the six AI Office tables at schemaVersion 11', async () => {
+    await seedOffice(sourceDb);
+
+    const envelope = await exportBackupPayload(sourceDb);
+
+    expect(envelope.schemaVersion).toBe(11);
+    expect(envelope.tables.aiEmployees).toEqual([employee]);
+    expect(envelope.tables.aiLeads).toEqual([lead]);
+    expect(envelope.tables.aiSkills).toEqual([skill]);
+    expect(envelope.tables.aiTeams).toEqual([team]);
+    expect(envelope.tables.aiTeamMembers).toEqual([leadMember, employeeMember]);
+    expect(envelope.tables.aiTeamLinks).toEqual([teamLink]);
+    expect(envelope.counts).toMatchObject({
+      aiEmployees: 1,
+      aiLeads: 1,
+      aiSkills: 1,
+      aiTeams: 1,
+      aiTeamMembers: 2,
+      aiTeamLinks: 1,
+    });
+  });
+
+  it('round-trips every AI Office row and the four message attribution fields', async () => {
+    await seedOffice(sourceDb);
+    const envelope = await exportBackupPayload(sourceDb);
+
+    expect(validateBackupPayload(envelope)).toMatchObject({ valid: true, errors: [] });
+
+    await restoreBackupPayload(envelope, restoredDb);
+
+    expect(await restoredDb.aiSkills.get(SKILL_ID)).toEqual(skill);
+    expect(await restoredDb.aiEmployees.get(EMPLOYEE_ID)).toEqual(employee);
+    expect(await restoredDb.aiLeads.get(LEAD_ID)).toEqual(lead);
+    expect(await restoredDb.aiTeams.get(TEAM_ID)).toEqual(team);
+    expect(await restoredDb.aiTeamMembers.get(MEMBER_LEAD_ID)).toEqual(leadMember);
+    expect(await restoredDb.aiTeamMembers.get(MEMBER_EMPLOYEE_ID)).toEqual(employeeMember);
+    expect(await restoredDb.aiTeamLinks.get(LINK_ID)).toEqual(teamLink);
+    expect(await restoredDb.chatThreads.get(THREAD_ID)).toEqual(teamThread);
+
+    const restoredMessage = await restoredDb.chatMessages.get(MESSAGE_ID);
+    expect(restoredMessage).toEqual(attributedMessage);
+    expect(restoredMessage?.agentId).toBe(EMPLOYEE_ID);
+    expect(restoredMessage?.agentName).toBe('Bảo');
+    expect(restoredMessage?.agentKind).toBe('employee');
+    expect(restoredMessage?.messageKind).toBe('report');
+  });
+
+  it('validates a v11 payload without AI Office keys and leaves local rows untouched', async () => {
+    await seedOffice(restoredDb);
+
+    const payload = v11EnvelopeWithoutOffice();
+    expect(validateBackupPayload(payload)).toMatchObject({ valid: true, errors: [] });
+
+    await restoreBackupPayload(payload, restoredDb);
+
+    // Absent means "payload predates the tables", not "delete them".
+    expect(await restoredDb.aiEmployees.toArray()).toEqual([employee]);
+    expect(await restoredDb.aiLeads.toArray()).toEqual([lead]);
+    expect(await restoredDb.aiSkills.toArray()).toEqual([skill]);
+    expect(await restoredDb.aiTeams.toArray()).toEqual([team]);
+    expect(await restoredDb.aiTeamMembers.count()).toBe(2);
+    expect(await restoredDb.aiTeamLinks.toArray()).toEqual([teamLink]);
+  });
+
+  it('rejects an aiTeamMembers row whose teamId names no team', async () => {
+    await seedOffice(sourceDb);
+    const envelope = await exportBackupPayload(sourceDb);
+
+    const dangling = {
+      ...envelope,
+      tables: {
+        ...envelope.tables,
+        aiTeams: [],
+        aiTeamLinks: [],
+        aiTeamMembers: [{ ...employeeMember, teamId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' }],
+      },
+    };
+
+    const result = validateBackupPayload(dangling);
+
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((error) => error.table === 'aiTeamMembers' && error.field === 'teamId')
+    ).toBe(true);
+  });
+
+  it('rejects a message whose agentKind is outside lead/employee', async () => {
+    await seedOffice(sourceDb);
+    const envelope = await exportBackupPayload(sourceDb);
+
+    const invalid = {
+      ...envelope,
+      tables: {
+        ...envelope.tables,
+        chatMessages: [{ ...attributedMessage, agentKind: 'manager' }],
+      },
+    };
+
+    const result = validateBackupPayload(invalid);
+
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((error) => error.table === 'chatMessages' && error.field === 'agentKind')
+    ).toBe(true);
+  });
+});

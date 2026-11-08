@@ -152,6 +152,12 @@ describe('exportBackup service', () => {
         telegramWhitelist: 0,
         systems: 1,
         changeRequests: 1,
+        aiEmployees: 0,
+        aiLeads: 0,
+        aiSkills: 0,
+        aiTeams: 0,
+        aiTeamMembers: 0,
+        aiTeamLinks: 0,
       });
 
       // Export history logged in backupMetadata
@@ -192,6 +198,12 @@ describe('exportBackup service', () => {
         telegramWhitelist: 0,
         systems: 0,
         changeRequests: 0,
+        aiEmployees: 0,
+        aiLeads: 0,
+        aiSkills: 0,
+        aiTeams: 0,
+        aiTeamMembers: 0,
+        aiTeamLinks: 0,
       });
 
       const metadataEntries = await testDb.backupMetadata.toArray();

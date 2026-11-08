@@ -178,7 +178,7 @@ export const BackupChatThreadRecordSchema = z
   .object({
     id: uuidSchema,
     scopeKey: z.string().min(1),
-    scopeType: z.enum(['global', 'task', 'cr', 'system', 'document']),
+    scopeType: z.enum(['global', 'task', 'cr', 'system', 'document', 'team']),
     entityId: uuidSchema.optional(),
     title: z.string().optional(),
     createdAt: z.string(),
@@ -325,6 +325,12 @@ export const BackupChatMessageRecordSchema = z
       .optional(),
     grounding: z.unknown().optional() as z.ZodType<ChatMessageGrounding | undefined>,
     wizard: WizardSnapshotSchema.optional(),
+    // Phase 34 D-31: AI Office attribution. Declared explicitly — this is a plain z.object,
+    // so an undeclared key is silently stripped and restored messages render unattributed.
+    agentId: uuidSchema.optional(),
+    agentName: z.string().max(60).optional(),
+    agentKind: z.enum(['lead', 'employee']).optional(),
+    messageKind: z.enum(['instruction', 'report', 'synthesis', 'plan']).optional(),
   })
   .superRefine((msg, ctx) => {
     if (msg.grounding === undefined || msg.grounding === null) return;
@@ -599,10 +605,89 @@ export const BackupChangeRequestRecordSchema = z.object({
   updatedAt: z.string(),
 });
 
-/** D-49: the current backup envelope contract. Version 11 is CR-centric; older versions are rejected. */
-export const BACKUP_SCHEMA_VERSION = 11 as const;
+// Phase 34: AI Office backup schemas (AIO-BACKUP-01). `strictObject` mirrors
+// `BackupChatTabRecordSchema`: an undeclared key such as `systemPrompt` is rejected
+// rather than silently stripped (T-34-28). Free text is limited to `persona` and `body`,
+// neither of which collides with FORBIDDEN_BACKUP_KEYS.
+const aiNameSchema = z.string().trim().min(1, 'Name is required').max(60, 'Name must be 60 characters or less');
+const aiRoleSchema = z.string().trim().min(1, 'Role is required').max(60, 'Role must be 60 characters or less');
+const aiCapabilitySchema = z
+  .string()
+  .trim()
+  .min(1, 'Capability is required')
+  .max(300, 'Capability must be 300 characters or less');
+const aiSkillDescriptionSchema = z
+  .string()
+  .trim()
+  .min(1, 'Description is required')
+  .max(300, 'Description must be 300 characters or less');
+const aiPersonaSchema = z.string().trim().min(1, 'Persona is required');
+const aiModelSchema = z.string().trim().min(1, 'Model is required');
+const aiTokensSchema = z.number().int().nonnegative('Token count must be zero or greater');
 
-export const BackupEnvelopeSchema = z.object({
+export const BackupAiEmployeeRecordSchema = z.strictObject({
+  id: uuidSchema,
+  name: aiNameSchema,
+  role: aiRoleSchema,
+  capability: aiCapabilitySchema,
+  persona: aiPersonaSchema,
+  model: aiModelSchema,
+  skillId: uuidSchema.optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const BackupAiLeadRecordSchema = z.strictObject({
+  id: uuidSchema,
+  name: aiNameSchema,
+  role: aiRoleSchema,
+  capability: aiCapabilitySchema,
+  persona: aiPersonaSchema,
+  model: aiModelSchema,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const BackupAiSkillRecordSchema = z.strictObject({
+  id: uuidSchema,
+  name: aiNameSchema,
+  description: aiSkillDescriptionSchema,
+  body: z.string().trim().min(1, 'Body is required'),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const BackupAiTeamRecordSchema = z.strictObject({
+  id: uuidSchema,
+  name: aiNameSchema,
+  leadId: uuidSchema,
+  status: z.enum(['active', 'idle']),
+  budgetTokens: aiTokensSchema,
+  autoSplitEnabled: z.boolean().optional(),
+  autoApproveMutations: z.boolean().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const BackupAiTeamMemberRecordSchema = z.strictObject({
+  id: uuidSchema,
+  teamId: uuidSchema,
+  agentId: uuidSchema,
+  role: z.enum(['lead', 'employee']),
+  budgetTokens: aiTokensSchema,
+  usedTokens: aiTokensSchema,
+});
+
+export const BackupAiTeamLinkRecordSchema = z.strictObject({
+  id: uuidSchema,
+  teamId: uuidSchema,
+  itemType: z.enum(['cr', 'task', 'system', 'note', 'document']),
+  itemId: uuidSchema,
+  createdAt: z.string(),
+});
+
+/** D-49: the current backup envelope contract. Version 11 is CR-centric; older versions are rejected. */
+export const BACKUP_SCHEMA_VERSION = 11 as const;export const BackupEnvelopeSchema = z.object({
   app: z.literal('personal-task-planner'),
   schemaVersion: z.literal(BACKUP_SCHEMA_VERSION),
   exportedAt: z.string(),

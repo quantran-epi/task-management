@@ -27,6 +27,12 @@ import {
   BackupTelegramWhitelistUserSchema,
   BackupSystemRecordSchema,
   BackupChangeRequestRecordSchema,
+  BackupAiEmployeeRecordSchema,
+  BackupAiLeadRecordSchema,
+  BackupAiSkillRecordSchema,
+  BackupAiTeamRecordSchema,
+  BackupAiTeamMemberRecordSchema,
+  BackupAiTeamLinkRecordSchema,
   assertNoLegacyTables,
   LEGACY_BACKUP_MESSAGE,
 } from '../../validation/backupSchemas';
@@ -212,6 +218,24 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     : undefined;
   const changeRequests = rawTables.changeRequests !== undefined
     ? validateTable('changeRequests', BackupChangeRequestRecordSchema, rawTables.changeRequests)
+    : undefined;
+  const aiEmployees = rawTables.aiEmployees !== undefined
+    ? validateTable('aiEmployees', BackupAiEmployeeRecordSchema, rawTables.aiEmployees)
+    : undefined;
+  const aiLeads = rawTables.aiLeads !== undefined
+    ? validateTable('aiLeads', BackupAiLeadRecordSchema, rawTables.aiLeads)
+    : undefined;
+  const aiSkills = rawTables.aiSkills !== undefined
+    ? validateTable('aiSkills', BackupAiSkillRecordSchema, rawTables.aiSkills)
+    : undefined;
+  const aiTeams = rawTables.aiTeams !== undefined
+    ? validateTable('aiTeams', BackupAiTeamRecordSchema, rawTables.aiTeams)
+    : undefined;
+  const aiTeamMembers = rawTables.aiTeamMembers !== undefined
+    ? validateTable('aiTeamMembers', BackupAiTeamMemberRecordSchema, rawTables.aiTeamMembers)
+    : undefined;
+  const aiTeamLinks = rawTables.aiTeamLinks !== undefined
+    ? validateTable('aiTeamLinks', BackupAiTeamLinkRecordSchema, rawTables.aiTeamLinks)
     : undefined;
 
   // If schema validation errors occurred, stop before referential checks
@@ -596,6 +620,32 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     }
   }
 
+  // Stage 5: AI Office referential integrity (T-34-31). `replaceTables` bulk-adds, so the
+  // repository guards never run on import — the payload itself must be checked.
+  const aiTeamIds = new Set((aiTeams ?? []).map((team) => team.id));
+  const aiLeadIds = new Set((aiLeads ?? []).map((lead) => lead.id));
+  const aiSkillIds = new Set((aiSkills ?? []).map((skill) => skill.id));
+  for (const team of aiTeams ?? []) {
+    if (!aiLeadIds.has(team.leadId)) {
+      errors.push({ table: 'aiTeams', recordId: team.id, field: 'leadId', message: `AiTeam references leadId "${team.leadId}" not found in aiLeads` });
+    }
+  }
+  for (const member of aiTeamMembers ?? []) {
+    if (!aiTeamIds.has(member.teamId)) {
+      errors.push({ table: 'aiTeamMembers', recordId: member.id, field: 'teamId', message: `AiTeamMember references teamId "${member.teamId}" not found in aiTeams` });
+    }
+  }
+  for (const link of aiTeamLinks ?? []) {
+    if (!aiTeamIds.has(link.teamId)) {
+      errors.push({ table: 'aiTeamLinks', recordId: link.id, field: 'teamId', message: `AiTeamLink references teamId "${link.teamId}" not found in aiTeams` });
+    }
+  }
+  for (const employee of aiEmployees ?? []) {
+    if (employee.skillId && !aiSkillIds.has(employee.skillId)) {
+      errors.push({ table: 'aiEmployees', recordId: employee.id, field: 'skillId', message: `AiEmployee references skillId "${employee.skillId}" not found in aiSkills` });
+    }
+  }
+
   if (errors.length > 0) {
     return { valid: false, errors };
   }
@@ -635,6 +685,12 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       ...(telegramWhitelist !== undefined ? { telegramWhitelist } : {}),
       ...(systems !== undefined ? { systems: systems as NonNullable<BackupEnvelope['tables']['systems']> } : {}),
       ...(changeRequests !== undefined ? { changeRequests: changeRequests as NonNullable<BackupEnvelope['tables']['changeRequests']> } : {}),
+      ...(aiEmployees !== undefined ? { aiEmployees: aiEmployees as NonNullable<BackupEnvelope['tables']['aiEmployees']> } : {}),
+      ...(aiLeads !== undefined ? { aiLeads: aiLeads as NonNullable<BackupEnvelope['tables']['aiLeads']> } : {}),
+      ...(aiSkills !== undefined ? { aiSkills: aiSkills as NonNullable<BackupEnvelope['tables']['aiSkills']> } : {}),
+      ...(aiTeams !== undefined ? { aiTeams: aiTeams as NonNullable<BackupEnvelope['tables']['aiTeams']> } : {}),
+      ...(aiTeamMembers !== undefined ? { aiTeamMembers: aiTeamMembers as NonNullable<BackupEnvelope['tables']['aiTeamMembers']> } : {}),
+      ...(aiTeamLinks !== undefined ? { aiTeamLinks: aiTeamLinks as NonNullable<BackupEnvelope['tables']['aiTeamLinks']> } : {}),
     },
     counts: {
       tasks: tasks.length,
@@ -658,6 +714,12 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       ...(telegramWhitelist !== undefined ? { telegramWhitelist: telegramWhitelist.length } : {}),
       ...(systems !== undefined ? { systems: systems.length } : {}),
       ...(changeRequests !== undefined ? { changeRequests: changeRequests.length } : {}),
+      ...(aiEmployees !== undefined ? { aiEmployees: aiEmployees.length } : {}),
+      ...(aiLeads !== undefined ? { aiLeads: aiLeads.length } : {}),
+      ...(aiSkills !== undefined ? { aiSkills: aiSkills.length } : {}),
+      ...(aiTeams !== undefined ? { aiTeams: aiTeams.length } : {}),
+      ...(aiTeamMembers !== undefined ? { aiTeamMembers: aiTeamMembers.length } : {}),
+      ...(aiTeamLinks !== undefined ? { aiTeamLinks: aiTeamLinks.length } : {}),
     },
   };
 
