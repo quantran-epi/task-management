@@ -13,6 +13,17 @@ describe('TaskDrawerPlanning Component (PLAN-01, PLAN-02, PLAN-06, D-09, D-10)',
   beforeEach(async () => {
     testDb = new TaskPlannerDatabase('TestPlanningDrawerDB_' + Math.random().toString(36).slice(2));
     await testDb.open();
+    // CR-13: `createTask` now always resolves the owning CR.
+    await testDb.changeRequests.add({
+      id: '11111111-1111-4111-8111-111111111111',
+      name: 'Planning CR',
+      code: 'CR-PLAN',
+      status: 'Open',
+      type: 'ENHANCEMENT',
+      targets: [],
+      createdAt: '2026-10-01T00:00:00.000Z',
+      updatedAt: '2026-10-01T00:00:00.000Z',
+    });
   });
 
   afterEach(async () => {

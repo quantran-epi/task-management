@@ -62,11 +62,14 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
   const [editCrOpen, setEditCrOpen] = useState(false);
 
   // Single CR source: db.changeRequests (D-36). No legacy sdlcCrManager fallback.
+  // WR-14: never fall back to `crs[0]` — a stale active id must render the empty state,
+  // not another CR's code, targets and progress.
   const crs = useLiveQuery(() => db.changeRequests.toArray(), [db]) ?? [];
-  const currentCr = crs.find((c) => (activeCrId ? c.id === activeCrId : c.id === changeRequestId)) ?? crs[0];
+  const requestedCrId = activeCrId || changeRequestId;
+  const currentCr = requestedCrId ? crs.find((c) => c.id === requestedCrId) : crs[0];
 
   // Resolve ChangeRequest and its target subsystems from DB
-  const resolvedCrId = activeCrId || currentCr?.id || changeRequestId;
+  const resolvedCrId = currentCr?.id;
   const crRecord = useLiveQuery(
     () => (resolvedCrId ? db.changeRequests.get(resolvedCrId) : undefined),
     [resolvedCrId, db]

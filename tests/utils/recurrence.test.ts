@@ -39,6 +39,17 @@ describe('Recurrence utilities & task repo integration', () => {
     beforeEach(async () => {
       testDb = new TaskPlannerDatabase('TestRecurrence_' + Math.random().toString(36).slice(2));
       await testDb.open();
+      // CR-13: `createTask` now always resolves the CR, so the fixture must own one.
+      await testDb.changeRequests.add({
+        id: CR_ID,
+        name: 'Recurrence CR',
+        code: 'CR-RECUR',
+        status: 'Open',
+        type: 'ENHANCEMENT',
+        targets: [],
+        createdAt: '2026-10-01T00:00:00.000Z',
+        updatedAt: '2026-10-01T00:00:00.000Z',
+      });
     });
 
     afterEach(async () => {

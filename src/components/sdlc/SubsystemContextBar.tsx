@@ -1,5 +1,5 @@
 import React from 'react';
-import { Segmented, Tag, Tooltip, theme } from 'antd';
+import { Segmented, Tag, Tooltip, theme, message } from 'antd';
 import { CodeOutlined, ConsoleSqlOutlined } from '@ant-design/icons';
 import type { CrTarget, System } from '../../types/models';
 import { useSystemActions } from '../../workbench/hooks/useSystemActions';
@@ -100,7 +100,14 @@ export const SubsystemContextBar: React.FC<SubsystemContextBarProps> = ({
             type="button"
             aria-label={reason ?? 'Mở SSH Terminal'}
             disabled={Boolean(reason)}
-            onClick={() => selectedSystem && openTerminal(selectedSystem)}
+            onClick={() => {
+              if (!selectedSystem) return;
+              try {
+                openTerminal(selectedSystem);
+              } catch (err) {
+                message.error(err instanceof Error ? err.message : 'Không mở được SSH Terminal.');
+              }
+            }}
             style={iconButtonStyle}
           >
             <ConsoleSqlOutlined />

@@ -452,6 +452,7 @@ export function EditorArea({ db }: EditorAreaProps) {
         return (
           <ChangeRequestSdlcView
             changeRequestId={String(tab.params?.changeRequestId ?? '')}
+            systemId={tab.params?.systemId ? String(tab.params.systemId) : undefined}
             onBack={() => closeTab(tab.id)}
             {...dbProp}
           />

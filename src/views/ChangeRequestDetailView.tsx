@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Button, Collapse, Empty, Modal, Select, Space, Table, Tag, Tooltip, Typography, message } from 'antd';
 import {
   BranchesOutlined,
@@ -20,6 +20,7 @@ import {
   updateChangeRequest,
 } from '../db/repositories/changeRequestRepo';
 import { createTask, getTasksByCr, updateTask } from '../db/repositories/taskRepo';
+import { deleteTaskWithAllocations } from '../db/repositories/cascadeRepo';
 import { useLayoutStore } from '../workbench/store/layoutStore';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
 import { ChangeRequestModal } from '../components/changeRequests/ChangeRequestModal';
@@ -89,6 +90,8 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Set by TaskDrawer's onSave so closing after a save never deletes the real task.
+  const taskSavedRef = useRef(false);
 
   const openTab = useLayoutStore((s) => s.openTab);
 
@@ -146,6 +149,21 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
       openTaskDrawer(created.id);
     } catch {
       message.error('Không thể tạo tác vụ');
+    }
+  };
+
+  /** WR-13: a drawer closed without saving must not leave the placeholder row behind. */
+  const handleCloseTaskDrawer = async () => {
+    const id = drawerTaskId;
+    setDrawerOpen(false);
+    if (!id || taskSavedRef.current) {
+      taskSavedRef.current = false;
+      return;
+    }
+    try {
+      await deleteTaskWithAllocations(id, db);
+    } catch {
+      // Leaving an unsaved placeholder is preferable to deleting real work.
     }
   };
 
@@ -517,7 +535,10 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
       <TaskDrawer
         taskId={drawerTaskId}
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        onClose={() => void handleCloseTaskDrawer()}
+        onSave={() => {
+          taskSavedRef.current = true;
+        }}
         db={db}
       />
     </div>

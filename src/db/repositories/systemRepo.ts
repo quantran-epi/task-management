@@ -59,6 +59,18 @@ function assertParentHasNoRepoFields(system: SystemShape): void {
   }
 }
 
+/** WR-10: `&code` is a unique index; a duplicate surfaces as a raw Dexie ConstraintError. */
+async function assertCodeAvailable(
+  code: string,
+  excludeId: string | undefined,
+  db: TaskPlannerDatabase
+): Promise<void> {
+  const existing = await db.systems.where('code').equals(code).first();
+  if (existing && existing.id !== excludeId) {
+    throw new Error(`Mã hệ thống "${code}" đã tồn tại.`);
+  }
+}
+
 export async function createSystem(
   input: SystemInput,
   db: TaskPlannerDatabase = defaultDb
@@ -68,6 +80,7 @@ export async function createSystem(
 
   assertParentHasNoRepoFields(validated);
   await assertParentIsLogicalGroup(validated.parentId ?? null, db);
+  await assertCodeAvailable(validated.code, undefined, db);
 
   const system: System = {
     id: generateId(),
@@ -140,6 +153,8 @@ export async function updateSystem(
   }
 
   assertParentHasNoRepoFields(updated);
+
+  if (validated.code !== undefined) await assertCodeAvailable(updated.code, id, db);
 
   await db.systems.put(updated);
   return updated;

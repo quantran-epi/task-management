@@ -249,9 +249,12 @@ const AppShellInner: React.FC<AppShellProps> = ({
 
   const handleQuickCreateTask = React.useCallback(async () => {
     try {
-      // Task.crId is required (D-27); quick-create attaches to the most recent CR.
+      // Task.crId is required (D-27); quick-create attaches to the most recently updated CR.
       const crs = await db.changeRequests.toArray();
-      const cr = crs[crs.length - 1];
+      const cr = crs.reduce<(typeof crs)[number] | undefined>(
+        (latest, candidate) => (!latest || candidate.updatedAt > latest.updatedAt ? candidate : latest),
+        undefined
+      );
       if (!cr) {
         message.warning('Vui lòng tạo Change Request trước khi thêm tác vụ');
         return;
@@ -769,9 +772,12 @@ const AppShellInner: React.FC<AppShellProps> = ({
         onOpenNote={(note) => setInspectingNote(note)}
         onCreateTask={async (name) => {
           try {
-            // Task.crId is required (D-27); quick-create attaches to the most recent CR.
+            // Task.crId is required (D-27); quick-create attaches to the most recently updated CR.
             const crs = await db.changeRequests.toArray();
-            const cr = crs[crs.length - 1];
+            const cr = crs.reduce<(typeof crs)[number] | undefined>(
+              (latest, candidate) => (!latest || candidate.updatedAt > latest.updatedAt ? candidate : latest),
+              undefined
+            );
             if (!cr) {
               message.warning('Vui lòng tạo Change Request trước khi thêm tác vụ');
               return;

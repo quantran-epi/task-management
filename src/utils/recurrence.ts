@@ -107,7 +107,13 @@ export async function spawnNextRecurringTask(
   };
 
   if (task.description !== undefined) nextTask.description = task.description;
-  if (task.systemId !== undefined) nextTask.systemId = task.systemId;
+  // D-26: copy `systemId` only while it is still one of the CR's targets.
+  if (task.systemId !== undefined) {
+    const cr = await db.changeRequests.get(task.crId);
+    if (cr?.targets.some((target) => target.systemId === task.systemId)) {
+      nextTask.systemId = task.systemId;
+    }
+  }
   if (task.workType !== undefined) nextTask.workType = task.workType;
   if (task.opsOwners !== undefined) nextTask.opsOwners = task.opsOwners;
   if (task.businessAnalysts !== undefined) nextTask.businessAnalysts = task.businessAnalysts;

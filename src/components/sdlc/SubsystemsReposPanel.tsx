@@ -1,6 +1,6 @@
 import React from 'react';
-import { Tag, Tooltip, Typography, theme } from 'antd';
-import { BranchesOutlined, CodeOutlined, ConsoleSqlOutlined } from '@ant-design/icons';
+import { Tag, Tooltip, Typography, theme, message } from 'antd';
+import { BranchesOutlined, CodeOutlined, ConsoleSqlOutlined, EditOutlined } from '@ant-design/icons';
 import type { ChangeRequest, System, SystemType } from '../../types/models';
 import type { SshConfig } from '../../types/ssh';
 import { useSystemActions } from '../../workbench/hooks/useSystemActions';
@@ -158,12 +158,35 @@ export const SubsystemsReposPanel: React.FC<SubsystemsReposPanelProps> = ({
                     <CodeOutlined />
                   </button>
                 </Tooltip>
+                <Tooltip title="Chỉnh sửa trong System Catalog">
+                  <button
+                    type="button"
+                    aria-label={`Chỉnh sửa ${system.name} trong System Catalog`}
+                    onClick={() => onEditSubsystem(system)}
+                    style={{
+                      width: 30,
+                      height: 30,
+                      border: '1px solid var(--border, #e9eaee)',
+                      borderRadius: 4,
+                      background: 'transparent',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <EditOutlined />
+                  </button>
+                </Tooltip>
                 <Tooltip title={reason ?? 'Mở SSH Terminal'}>
                   <button
                     type="button"
                     aria-label={reason ?? 'Mở SSH Terminal'}
                     disabled={Boolean(reason)}
-                    onClick={() => openTerminal(system)}
+                    onClick={() => {
+                      try {
+                        openTerminal(system);
+                      } catch (err) {
+                        message.error(err instanceof Error ? err.message : 'Không mở được SSH Terminal.');
+                      }
+                    }}
                     style={{
                       width: 30,
                       height: 30,
@@ -216,12 +239,14 @@ export const SubsystemsReposPanel: React.FC<SubsystemsReposPanelProps> = ({
         })
       )}
 
-      {rows.length > 0 && (
+      {/* WR-08: with several targets the footer link would edit an arbitrary one; each row
+          carries its own edit affordance instead. */}
+      {rows.length === 1 && rows[0] && (
         <Typography.Link
           style={{ fontSize: 12, alignSelf: 'flex-start' }}
           onClick={() => {
-            const first = rows[0];
-            if (first) onEditSubsystem(first.system);
+            const only = rows[0];
+            if (only) onEditSubsystem(only.system);
           }}
         >
           Chỉnh sửa trong System Catalog

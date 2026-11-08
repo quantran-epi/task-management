@@ -224,6 +224,19 @@ describe('aiTools', () => {
     },
   ];
 
+  // CR-13: `updateTask`/`createTask` now always resolve the owning CR, so ad-hoc task
+  // fixtures need one that accepts any task's crId.
+  const mockCrForTask = {
+    id: 'cr-1',
+    code: 'CR-1',
+    name: 'Fixture CR',
+    status: 'Open',
+    type: 'ENHANCEMENT',
+    targets: [],
+    createdAt: '2026-10-01T00:00:00.000Z',
+    updatedAt: '2026-10-01T00:00:00.000Z',
+  };
+
   const mockDb: any = {
     tasks: {
       toArray: async () => mockTasks,
@@ -677,6 +690,8 @@ describe('aiTools', () => {
           get: vi.fn().mockResolvedValue(mockTask),
           put: vi.fn().mockResolvedValue('t-chk'),
         },
+        // CR-13: `updateTask` always resolves the owning CR.
+        changeRequests: { get: vi.fn().mockResolvedValue(mockCrForTask) },
       };
 
       const res = await executeAiTool(
@@ -842,6 +857,8 @@ describe('aiTools', () => {
           get: vi.fn().mockResolvedValue({ id: 'existing-t', name: 'Task', status: 'Open', priority: 'Medium', progress: 0, estimateMinutes: 0 }),
           put: vi.fn().mockResolvedValue('existing-t'),
         },
+        // CR-13: `createTask`/`updateTask` always resolve the owning CR.
+        changeRequests: { get: vi.fn().mockResolvedValue(mockCrForTask) },
       };
 
       // create_task with full fields
@@ -908,6 +925,8 @@ describe('aiTools', () => {
           get: vi.fn().mockResolvedValue(mockTaskWithReminders),
           put: vi.fn().mockResolvedValue(mockTaskWithReminders.id),
         },
+        // CR-13: `updateTask` always resolves the owning CR.
+        changeRequests: { get: vi.fn().mockResolvedValue(mockCrForTask) },
       };
 
       // 1. List reminders
@@ -1340,6 +1359,8 @@ describe('aiTools', () => {
       },
       changeRequests: {
         ...mockDb.changeRequests,
+        // CR-13: `createTask` resolves the CR, so an ad-hoc crId must still resolve.
+        get: async (id: string) => mockChangeRequests.find((c) => c.id === id) ?? { ...mockCrForTask, id },
         add: vi.fn().mockResolvedValue('cr-new'),
         put: vi.fn().mockResolvedValue('cr-updated'),
         update: vi.fn().mockResolvedValue(1),

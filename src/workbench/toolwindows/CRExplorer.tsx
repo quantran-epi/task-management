@@ -263,7 +263,7 @@ export function CRExplorer({ db = defaultDb, onSelectProject }: CRExplorerProps)
           const sysMatches = crMatches || matches(sys?.code) || matches(sys?.name);
           const visibleTasks = sysMatches ? sysTasks : sysTasks.filter((t) => matches(t.name));
           const node: DataNode = {
-            key: `sys:${target.systemId}`,
+            key: `sys:${cr.id}:${target.systemId}`,
             title: (
               <Dropdown
                 menu={{
@@ -370,8 +370,10 @@ export function CRExplorer({ db = defaultDb, onSelectProject }: CRExplorerProps)
       return;
     }
     if (key.startsWith('sys:')) {
-      const systemId = key.slice(4);
-      const cr = changeRequests.find((c) => c.targets.some((t) => t.systemId === systemId));
+      // Key is `sys:<crId>:<systemId>` — the CR whose node was clicked owns the selection.
+      const [, crId, systemId] = key.split(':');
+      if (!crId || !systemId) return;
+      const cr = changeRequests.find((c) => c.id === crId);
       if (cr) openSdlc(cr, systemId);
       return;
     }
