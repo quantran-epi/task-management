@@ -153,6 +153,45 @@ describe('ResearchService', () => {
     it('never throws on empty input', () => {
       expect(() => parseResearchOutput('')).not.toThrow();
     });
+
+    it('unwraps the claude CLI result envelope and keeps findings', () => {
+      const payload = parseResearchOutput(
+        JSON.stringify({
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: JSON.stringify({
+            summary: 'From envelope',
+            findings: [{ claim: 'c', scope: 'web', source: 'https://example.com' }],
+          }),
+        }),
+      );
+
+      expect(payload.summary).toBe('From envelope');
+      expect(payload.findings).toHaveLength(1);
+      expect(payload.rawOutput).toBeUndefined();
+    });
+
+    it('unwraps an envelope whose result carries fenced JSON', () => {
+      const payload = parseResearchOutput(
+        JSON.stringify({
+          type: 'result',
+          is_error: false,
+          result: 'Here:\n```json\n{"summary":"Fenced inside","findings":[{"claim":"c","scope":"repo","source":"a.ts"}]}\n```',
+        }),
+      );
+
+      expect(payload.summary).toBe('Fenced inside');
+      expect(payload.findings[0]?.scope).toBe('repo');
+    });
+
+    it('does not treat an is_error envelope as a payload', () => {
+      const raw = JSON.stringify({ type: 'result', is_error: true, result: 'API error' });
+      const payload = parseResearchOutput(raw);
+
+      expect(payload.findings).toEqual([]);
+      expect(payload.rawOutput).toBe(raw);
+    });
   });
 
   describe('checkResearchAvailability', () => {
@@ -373,6 +412,28 @@ describe('ResearchService', () => {
             line: JSON.stringify({ summary: 'partial', findings: [] }),
           });
           onExit({ sessionId: SESSION_ID, exitStatus: 1, error: 'connection reset' });
+        }, 0);
+        return async () => {};
+      });
+
+      const { promise } = executeMultiSystemResearch(baseOptions({ db }));
+
+      await expect(promise).rejects.toMatchObject({ code: 'RESEARCH_SSH_ERROR' });
+      expect(mockedSaveResearchArtifact).not.toHaveBeenCalled();
+    });
+
+    it('maps a non-zero exit status to RESEARCH_SSH_ERROR', async () => {
+      const db = makeDb([makeSystem({ id: 'sys-1', code: 'CORE', sshConfigId: 'ssh-1' })]);
+      mockedGetSshConfigById.mockResolvedValue(sshConfig);
+      mockedTestSshConnection.mockResolvedValue('ok');
+      mockedExecRemoteCommandStream.mockImplementation(async (_c, _cmd, _sid, onData, onExit) => {
+        setTimeout(() => {
+          onData({
+            sessionId: SESSION_ID,
+            stream: 'stdout',
+            line: JSON.stringify({ summary: 'partial', findings: [] }),
+          });
+          onExit({ sessionId: SESSION_ID, exitStatus: 127, error: null });
         }, 0);
         return async () => {};
       });

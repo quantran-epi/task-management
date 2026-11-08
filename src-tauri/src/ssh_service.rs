@@ -439,6 +439,9 @@ pub fn ssh_exec_stream(
             let registry = app_handle.state::<SshStreamRegistry>();
             let mut pid_registered = false;
             let mut is_first_line = true;
+            // A mid-stream read error must reach the frontend: without it the exit event
+            // reports success and the caller parses truncated output as a complete run.
+            let mut stream_error: Option<String> = None;
 
             // `channel.stream(0)` yields an owned `Stream` that implements Read while the
             // channel itself stays usable for stderr()/exit_status(). Moving `channel` into
@@ -450,7 +453,10 @@ pub fn ssh_exec_stream(
                 match stdout_reader.read_line(&mut raw_line) {
                     Ok(0) => break,
                     Ok(_) => {}
-                    Err(_) => break,
+                    Err(e) => {
+                        stream_error = Some(format!("Đọc stdout thất bại: {}", e));
+                        break;
+                    }
                 }
                 let line = raw_line.trim_end_matches(['\n', '\r']).to_string();
 
@@ -504,7 +510,7 @@ pub fn ssh_exec_stream(
                 SshStreamExitEvent {
                     session_id: sid.clone(),
                     exit_status: channel.exit_status().unwrap_or(-1),
-                    error: None,
+                    error: stream_error,
                 },
             );
         })

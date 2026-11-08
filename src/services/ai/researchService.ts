@@ -102,11 +102,19 @@ function extractBalancedObject(text: string): string | null {
 }
 
 /**
- * Recover a research payload from model output. Tries a fenced ```json block,
- * then the first balanced object, then the raw text. Never throws: unparseable
- * output degrades to inert `rawOutput` text rather than fabricated claims.
+ * `claude -p --output-format json` wraps the model's answer in a result
+ * envelope: `{"type":"result","is_error":false,"result":"<model text>",...}`.
+ * The payload lives inside `result`, so the envelope must be unwrapped before
+ * schema validation — otherwise every real run degrades to zero findings.
  */
-export function parseResearchOutput(raw: string): ResearchPayload {
+const CliResultEnvelopeSchema = z.object({
+  type: z.literal('result'),
+  is_error: z.boolean().optional(),
+  result: z.string().optional(),
+});
+
+/** Split raw output into the JSON fragments worth trying, most specific first. */
+function extractCandidates(raw: string): string[] {
   const candidates: string[] = [];
 
   const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(raw);
@@ -116,16 +124,45 @@ export function parseResearchOutput(raw: string): ResearchPayload {
   if (balanced) candidates.push(balanced);
 
   candidates.push(raw.trim());
+  return candidates;
+}
 
+function parseCandidates(candidates: string[], allowEnvelope: boolean): ResearchPayload | null {
   for (const candidate of candidates) {
     if (!candidate) continue;
+
+    let json: unknown;
     try {
-      const parsed = ResearchPayloadSchema.safeParse(JSON.parse(candidate));
-      if (parsed.success) return parsed.data;
+      json = JSON.parse(candidate);
     } catch {
-      // Not JSON — fall through to the next candidate.
+      continue; // Not JSON — fall through to the next candidate.
     }
+
+    const direct = ResearchPayloadSchema.safeParse(json);
+    if (direct.success) return direct.data;
+
+    if (!allowEnvelope) continue;
+
+    const envelope = CliResultEnvelopeSchema.safeParse(json);
+    if (!envelope.success || typeof envelope.data.result !== 'string') continue;
+    if (envelope.data.is_error) continue; // An error envelope carries no payload.
+
+    const inner = parseCandidates(extractCandidates(envelope.data.result), false);
+    if (inner) return inner;
   }
+
+  return null;
+}
+
+/**
+ * Recover a research payload from model output. Tries a fenced ```json block,
+ * then the first balanced object, then the raw text — and unwraps the Claude CLI
+ * result envelope when present. Never throws: unparseable output degrades to
+ * inert `rawOutput` text rather than fabricated claims.
+ */
+export function parseResearchOutput(raw: string): ResearchPayload {
+  const payload = parseCandidates(extractCandidates(raw), true);
+  if (payload) return payload;
 
   return { summary: raw.slice(0, 2000), findings: [], rawOutput: raw };
 }
@@ -404,6 +441,14 @@ export function executeMultiSystemResearch(
                   new ResearchRunError(
                     'RESEARCH_SSH_ERROR',
                     `Kết nối SSH tới ${system.code} bị ngắt: ${event.error}`,
+                  ),
+                );
+              } else if (event.exitStatus !== 0) {
+                // A non-zero exit means the CLI failed; its stdout is not a report.
+                exitReject(
+                  new ResearchRunError(
+                    'RESEARCH_SSH_ERROR',
+                    `Lệnh nghiên cứu trên ${system.code} kết thúc với mã ${event.exitStatus}.`,
                   ),
                 );
               } else {
