@@ -1,0 +1,258 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { TaskPlannerDatabase } from '../../src/db';
+import { createEmployee, createLead, createSkill } from '../../src/db/repositories/aiOfficeRepo';
+import { createTeam, listTeamMembers, listTeams } from '../../src/db/repositories/aiTeamRepo';
+import { TeamsView } from '../../src/views/TeamsView';
+import { useLayoutStore } from '../../src/workbench/store/layoutStore';
+import type { AiEmployee, AiLead, AiTeam } from '../../src/types/aiOffice';
+
+/**
+ * Phase 34 plan 10 — the team page (AIO-UI-01, AIO-TEAM-01, AIO-TEAM-04, AIO-BG-01,
+ * AIO-BUDGET-01, AIO-LINK-01, AIO-EMP-02).
+ *
+ * Rendered directly rather than through `EditorArea` so the suite does not depend on
+ * the routing switch; the routing itself is asserted from the source in Task 3.
+ */
+describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
+  let db: TaskPlannerDatabase;
+  let lead: AiLead;
+  let employees: AiEmployee[];
+  let activeTeam: AiTeam;
+  let idleTeam: AiTeam;
+
+  beforeEach(async () => {
+    db = new TaskPlannerDatabase('test-teams-view-' + Math.random().toString(36).slice(2));
+    await db.open();
+    useLayoutStore.getState().resetLayout();
+
+    lead = await createLead(
+      {
+        name: 'Bình Trần',
+        role: 'Lead điều phối',
+        capability: 'Chia việc và tổng hợp kết quả.',
+        persona: 'Bạn là lead điều phối.',
+        model: 'claude-opus-4',
+      },
+      db
+    );
+    employees = [
+      await createEmployee(
+        {
+          name: 'An Nguyễn',
+          role: 'Chuyên viên phân tích',
+          capability: 'Phân tích nghiệp vụ.',
+          persona: 'Bạn là An.',
+          model: 'claude-sonnet-4',
+        },
+        db
+      ),
+      await createEmployee(
+        {
+          name: 'Chi Lê',
+          role: 'Kỹ sư kiểm thử',
+          capability: 'Viết kiểm thử.',
+          persona: 'Bạn là Chi.',
+          model: 'claude-sonnet-4',
+        },
+        db
+      ),
+      await createEmployee(
+        {
+          name: 'Dung Phạm',
+          role: 'Chuyên viên tài liệu',
+          capability: 'Viết tài liệu.',
+          persona: 'Bạn là Dung.',
+          model: 'claude-sonnet-4',
+        },
+        db
+      ),
+    ];
+    await createSkill(
+      { name: 'Viết đặc tả', description: 'Quy trình viết đặc tả.', body: '# Quy trình' },
+      db
+    );
+
+    activeTeam = await createTeam(
+      {
+        name: 'Nhóm Thanh Toán',
+        leadId: lead.id,
+        status: 'active',
+        budgetTokens: 4000,
+        employeeIds: [employees[0]!.id, employees[1]!.id],
+      },
+      db
+    );
+    idleTeam = await createTeam(
+      {
+        name: 'Nhóm Báo Cáo',
+        leadId: lead.id,
+        status: 'idle',
+        budgetTokens: 2000,
+        employeeIds: [employees[2]!.id],
+      },
+      db
+    );
+  });
+
+  afterEach(async () => {
+    await db.delete();
+    vi.restoreAllMocks();
+  });
+
+  function renderView() {
+    return render(<TeamsView db={db} />);
+  }
+
+  it('renders the view wrapper and one card per seeded team', async () => {
+    renderView();
+
+    expect(await screen.findByTestId('teams-view')).toBeInTheDocument();
+    expect(await screen.findByTestId(`team-card-${activeTeam.id}`)).toBeInTheDocument();
+    expect(screen.getByTestId(`team-card-${idleTeam.id}`)).toBeInTheDocument();
+  });
+
+  it('shows the active counter tag', async () => {
+    renderView();
+
+    expect(await screen.findByText('Đang hoạt động 1/3')).toBeInTheDocument();
+  });
+
+  it('shows the lead name, roster avatars and the budget caption on a card', async () => {
+    renderView();
+
+    const card = await screen.findByTestId(`team-card-${activeTeam.id}`);
+    expect(card).toHaveTextContent('Nhóm Thanh Toán');
+    expect(card).toHaveTextContent('Bình Trần');
+    expect(card).toHaveTextContent('0/4000 token');
+    expect(card.querySelectorAll('.ant-avatar').length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('activates an idle team and pauses an active one', async () => {
+    renderView();
+
+    fireEvent.click(await screen.findByTestId(`team-activate-${idleTeam.id}`));
+    await waitFor(async () => {
+      const teams = await listTeams(db);
+      expect(teams.find((team) => team.id === idleTeam.id)?.status).toBe('active');
+    });
+
+    fireEvent.click(await screen.findByTestId(`team-pause-${idleTeam.id}`));
+    await waitFor(async () => {
+      const teams = await listTeams(db);
+      expect(teams.find((team) => team.id === idleTeam.id)?.status).toBe('idle');
+    });
+  });
+
+  it('disables activation at three active teams and shows the cap tooltip', async () => {
+    await createTeam(
+      { name: 'Nhóm Ba', leadId: lead.id, status: 'active', budgetTokens: 1000 },
+      db
+    );
+    await createTeam(
+      { name: 'Nhóm Bốn', leadId: lead.id, status: 'active', budgetTokens: 1000 },
+      db
+    );
+
+    renderView();
+
+    const activate = await screen.findByTestId(`team-activate-${idleTeam.id}`);
+    expect(activate).toBeDisabled();
+    fireEvent.mouseEnter(activate.parentElement!);
+    expect(
+      await screen.findByText(
+        'Đã có 3 nhóm đang hoạt động. Tạm dừng một nhóm khác trước khi kích hoạt nhóm này.'
+      )
+    ).toBeInTheDocument();
+  });
+
+  it('disables pause on the last active team', async () => {
+    renderView();
+
+    expect(await screen.findByTestId(`team-pause-${activeTeam.id}`)).toBeDisabled();
+  });
+
+  it('opens the create drawer, caps employee selection at 3 and persists the team with its member rows', async () => {
+    renderView();
+
+    fireEvent.click((await screen.findAllByRole('button', { name: /Tạo nhóm/ }))[0]!);
+    expect(await screen.findByTestId('team-editor-drawer')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Tên nhóm'), { target: { value: 'Nhóm Mới' } });
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Lead' }));
+    fireEvent.click(await screen.findByTitle('Bình Trần · Lead điều phối'));
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Nhân viên' }));
+    fireEvent.click(await screen.findByTitle('An Nguyễn · Chuyên viên phân tích'));
+    fireEvent.click(await screen.findByTitle('Chi Lê · Kỹ sư kiểm thử'));
+    fireEvent.click(await screen.findByTitle('Dung Phạm · Chuyên viên tài liệu'));
+
+    fireEvent.change(screen.getByLabelText('Tổng ngân sách nhóm'), { target: { value: '3000' } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('team-editor-save')).toBeEnabled();
+    });
+    fireEvent.click(screen.getByTestId('team-editor-save'));
+
+    await waitFor(async () => {
+      const teams = await listTeams(db);
+      expect(teams.some((team) => team.name === 'Nhóm Mới')).toBe(true);
+    });
+
+    const created = (await listTeams(db)).find((team) => team.name === 'Nhóm Mới')!;
+    const members = await listTeamMembers(created.id, db);
+    expect(members).toHaveLength(4);
+    expect(members.reduce((sum, row) => sum + row.budgetTokens, 0)).toBe(3000);
+    const leadRow = members.find((row) => row.role === 'lead')!;
+    expect(leadRow.budgetTokens).toBe(750);
+  });
+
+  it('renders the linked-items empty state and rows', async () => {
+    const { LinkedItemsList } = await import('../../src/components/ai/office/LinkedItemsList');
+
+    const { unmount } = render(<LinkedItemsList items={[]} />);
+    expect(screen.getByText('Chưa liên kết mục nào.')).toBeInTheDocument();
+    unmount();
+
+    render(
+      <LinkedItemsList
+        items={[{ id: 'link-1', itemType: 'task', name: 'Việc A' }]}
+        onRemove={vi.fn()}
+      />
+    );
+    expect(screen.getByTestId('linked-item-link-1')).toHaveTextContent('Việc A');
+  });
+
+  it('adds an item from the picker and keeps the modal open', async () => {
+    const { LinkedItemPicker } = await import('../../src/components/ai/office/LinkedItemPicker');
+    await db.changeRequests.add({
+      id: 'cr-1',
+      code: 'CR-101',
+      name: 'Nghiệp vụ thanh toán',
+      status: 'In Progress',
+      type: 'ENHANCEMENT',
+      targets: [],
+      createdAt: '2026-10-01',
+      updatedAt: '2026-10-01',
+    } as any);
+
+    const onAdd = vi.fn();
+    render(<LinkedItemPicker open db={db} onCancel={vi.fn()} onAdd={onAdd} />);
+
+    fireEvent.click(await screen.findByTestId('linked-picker-add-cr-1'));
+    expect(onAdd).toHaveBeenCalledWith({
+      id: 'cr-1',
+      itemType: 'cr',
+      name: 'CR-101 · Nghiệp vụ thanh toán',
+    });
+    expect(screen.getByTestId('linked-item-picker')).toBeInTheDocument();
+  });
+
+  it('renders the workspace placeholder when a team is opened', async () => {
+    renderView();
+
+    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    expect(await screen.findByTestId('team-workspace-placeholder')).toBeInTheDocument();
+  });
+});
