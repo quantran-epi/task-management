@@ -20,6 +20,14 @@ import {
   FolderOpenOutlined,
 } from '@ant-design/icons';
 import type { ChatMessage, ChatGeneratedFile } from '../../types/models';
+import type { AgentRunStatus } from '../../types/aiOffice';
+import {
+  AgentAttributionRow,
+  AgentStatusRow,
+  agentColorFor,
+  agentTextColorFor,
+  type AgentAttributionAgent,
+} from './office/AgentAttributionRow';
 import { APP_NAME, APP_SLUG } from '../../constants/app';
 import { renderSafeMarkdown } from '../../utils/markdown';
 import {
@@ -90,6 +98,10 @@ export interface ChatMessageBubbleProps {
   onRunClaudeCode?: (() => Promise<void> | void) | undefined;
   groundedCallbacks?: GroundedAnswerCardCallbacks | undefined;
   wizardCallbacks?: WizardMessageCallbacks | undefined;
+  /** Phase 34 D-07: attribution identity for an agent-authored message. */
+  agent?: AgentAttributionAgent | undefined;
+  agentStatus?: AgentRunStatus | undefined;
+  onStopAgent?: (() => void) | undefined;
 }
 
 /**
@@ -116,11 +128,13 @@ export function parseChecklistFromText(text: string): string[] {
 }
 
 /**
- * Parses markdown mentions (@[Task](task:id), #[CR](cr:id) and #[System](system:id))
- * and renders them as sleek visual pill tags inside user messages.
+ * Parses markdown mentions (@[Task](task:id), #[CR](cr:id), #[System](system:id),
+ * @[Doc](doc:id) and @[Name](agent:id)) and renders them as sleek visual pill tags
+ * inside user messages. The `agent:` alternative is appended last so the earlier
+ * capture-group indices stay stable (T-34-41).
  */
 export function renderUserMessageWithMentions(content: string): React.ReactNode {
-  const mentionRegex = /(@\[([^\]]+)\]\(task:([a-zA-Z0-9_-]+)\))|(#\[([^\]]+)\]\((?:cr|system):([a-zA-Z0-9_-]+)\))|(@\[([^\]]+)\]\(doc:([a-zA-Z0-9_-]+)\))/g;
+  const mentionRegex = /(@\[([^\]]+)\]\(task:([a-zA-Z0-9_-]+)\))|(#\[([^\]]+)\]\((?:cr|system):([a-zA-Z0-9_-]+)\))|(@\[([^\]]+)\]\(doc:([a-zA-Z0-9_-]+)\))|(@\[([^\]]+)\]\(agent:([a-zA-Z0-9-]+)\))/g;
   if (!mentionRegex.test(content)) {
     return content;
   }
@@ -208,6 +222,29 @@ export function renderUserMessageWithMentions(content: string): React.ReactNode 
           }}
         >
           {docTitle}
+        </Tag>
+      );
+    } else if (match[10]) {
+      // Agent mention (D-08): pill uses the agent's deterministic avatar color.
+      const agentName = match[11];
+      const agentId = match[12];
+      const agentBg = agentId ? agentColorFor(agentId) : '#5b4fe8';
+      parts.push(
+        <Tag
+          key={`agent-pill-${agentId}-${match.index}`}
+          style={{
+            margin: '0 3px',
+            verticalAlign: 'middle',
+            borderRadius: 4,
+            fontWeight: 500,
+            backgroundColor: agentBg,
+            color: agentTextColorFor(agentBg),
+            border: `1px solid ${agentBg}`,
+            fontSize: 12,
+            padding: '1px 6px',
+          }}
+        >
+          {agentName}
         </Tag>
       );
     }
@@ -310,6 +347,9 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   onRunClaudeCode,
   groundedCallbacks,
   wizardCallbacks,
+  agent,
+  agentStatus,
+  onStopAgent,
 }) => {
   const { token } = theme.useToken();
   const [copied, setCopied] = useState(false);
@@ -1159,6 +1199,36 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
     [hasMarkdownTable, token.colorPrimary, msg.content]
   );
 
+  const messageTextRegion = (
+    <>
+      <MarkdownContentRenderer content={msg.content} onMarkdownClick={handleMarkdownClick} />
+      {isStreaming && (
+        <span
+          style={{
+            display: 'inline-block',
+            color: token.colorPrimary,
+            fontWeight: 'bold',
+            marginLeft: 2,
+            animation: 'blink 1s infinite',
+          }}
+        >
+          ▋
+        </span>
+      )}
+      {isStreaming && (
+        <div style={{ marginTop: 8 }}>
+          <Tag
+            icon={<SyncOutlined spin />}
+            color="processing"
+            style={{ borderRadius: 10, padding: '2px 8px', fontSize: 11 }}
+          >
+            {streamingStatus || 'Đang tạo câu trả lời...'}
+          </Tag>
+        </div>
+      )}
+    </>
+  );
+
   return (
     <div
       data-role={msg.role}
@@ -1170,6 +1240,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         width: '100%',
       }}
     >
+      {agent && <AgentAttributionRow agent={agent} />}
       <div
         style={{
           maxWidth: isUser ? '85%' : '95%',
@@ -1200,39 +1271,16 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               </Text>
             </div>
           </div>
+        ) : agent && isStreaming ? (
+          <div aria-live="polite" aria-atomic="false">{messageTextRegion}</div>
         ) : (
-          <div>
-            <MarkdownContentRenderer
-              content={msg.content}
-              onMarkdownClick={handleMarkdownClick}
-            />
-            {isStreaming && (
-              <span
-                style={{
-                  display: 'inline-block',
-                  color: token.colorPrimary,
-                  fontWeight: 'bold',
-                  marginLeft: 2,
-                  animation: 'blink 1s infinite',
-                }}
-              >
-                ▋
-              </span>
-            )}
-            {isStreaming && (
-              <div style={{ marginTop: 8 }}>
-                <Tag
-                  icon={<SyncOutlined spin />}
-                  color="processing"
-                  style={{ borderRadius: 10, padding: '2px 8px', fontSize: 11 }}
-                >
-                  {streamingStatus || 'Đang tạo câu trả lời...'}
-                </Tag>
-              </div>
-            )}
-          </div>
+          <div>{messageTextRegion}</div>
         )}
       </div>
+
+      {agent && agentStatus && (
+        <AgentStatusRow agent={agent} status={agentStatus} onStop={onStopAgent} />
+      )}
 
       {/* AI-Generated Files Cards */}
       {!isUser && !isStreaming && msg.generatedFiles && msg.generatedFiles.length > 0 && (
