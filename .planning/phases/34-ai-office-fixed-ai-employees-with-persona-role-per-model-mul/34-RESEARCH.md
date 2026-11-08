@@ -692,32 +692,36 @@ this.version(17).stores(SCHEMA_V17);   // no .upgrade(): purely additive, no bac
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Assignment-history cap**
+All five questions below were resolved in `34-CONTEXT.md`; the decision id is cited per question and the recommendation text is kept for provenance.
+
+1. **Assignment-history cap** — **RESOLVED by D-29**: capped at the 50 most recent instruction/report pairs, exposed as `ASSIGNMENT_HISTORY_CAP`, with older work reachable via `search_team_history`.
    - What we know: D-05 says "every instruction ever given to it"; D-10 says the transcript is external memory and older content is searched.
    - What's unclear: whether "every" is literal or means "not truncated by the recent-window rule".
    - Recommendation: cap at the 50 most recent instruction/report pairs, state in the employee prompt that older work is retrievable via `search_team_history`, and record the cap as a constant the user can raise.
 
-2. **Batch resolution under a pause**
+2. **Batch resolution under a pause** — **RESOLVED by D-30**: the lead's `delegate_batch` stays pending; it never resolves with a paused marker, so the paused agent's loop state survives.
    - What we know: D-21 says the run "stays in a waiting state rather than appearing hung".
    - What's unclear: whether the lead's `delegate_batch` tool call should remain pending (context preserved) or resolve with a paused marker (lead continues).
    - Recommendation: remain pending. Resolving discards the paused agent's loop state, which contradicts "resuming continues exactly where it stopped".
 
-3. **Team thread scope type**
+3. **Team thread scope type** — **RESOLVED by D-31**: `'team'` is added to `ChatScopeType` as a first-class member; team threads are never aliased to `'global'`.
    - What we know: `ChatScopeType` is `'global'|'task'|'cr'|'system'|'document'` (`models.ts:223`) and `BackupChatThreadRecordSchema.scopeType` is a strict enum (`backupSchemas.ts:181`).
    - What's unclear: whether to add `'team'` to both (5 touch points: `models.ts`, backup enum, `threadScopeParts` whitelist `chatTabRepo.ts:31-39`, `ScopePickerModal.tsx:30`, `AIPopoutView.tsx:33`) or to store the team thread as `scopeType:'global'` with a `team:` scopeKey.
    - Recommendation: add `'team'`. The `global` alias would make the drawer's scope picker and `createOrGetThread` treat team threads as the shared global conversation.
 
-4. **Where per-agent budgets live**
+4. **Where per-agent budgets live** — **RESOLVED by D-32**: an `aiTeamMembers` row (`id, teamId, agentId, role, budgetTokens, usedTokens`), not a JSON array on the team row.
    - What we know: D-19 wants an even split that the user can edit per row, and budgets accumulate for the team's life.
    - What's unclear: array on the team row vs a member table.
    - Recommendation: `aiTeamMembers` table (`id, teamId, agentId, role, budgetTokens, usedTokens`). It is indexed by `teamId`, survives roster edits, and makes "used" a single-row update instead of a read-modify-write of a JSON array under concurrency (three agents finishing at once).
 
-5. **`delegate_batch` tool schema shape**
+5. **`delegate_batch` tool schema shape** — **RESOLVED by D-33**: `{ assignments: [{ agentId, skillId?, task }] }`, validated against the roster and `MAX_BATCH_SIZE`, refusing with `{refused: true, code, message}`.
    - What we know: D-02 fixes `delegate_batch([{ agentId, instruction }, ...])`.
    - What's unclear: whether the plan card needs a `skill` and `task` field per row (D-06 says "which agent, which skill, which task").
    - Recommendation: `{ assignments: [{ agentId, skillId?, task }] }` — `skillId` is informational (the agent's assigned skill is authoritative per D-25), `task` is the instruction text. Validate `agentId ∈ team roster` and `assignments.length ≤ 3` server-side (in the handler) and return a structured refusal otherwise, mirroring the artifact tools' `{refused:true, code, message}` shape.
+
+**Related decisions resolved outside this list:** D-34 keeps the backup envelope at v11 with the new tables optional-absent (see §Common Pitfalls 5 and plan 34-06); D-35 makes `TeamRunPhase` a separate union rather than an extension of `ChatTurnStatus` (see §Pattern 4 and plan 34-01).
 
 ---
 

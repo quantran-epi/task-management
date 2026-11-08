@@ -37,7 +37,7 @@
 | **MOD** `src/components/ai/runtime/chatTurnRuntime.ts` | service (runtime) | event-driven | itself | exact |
 | **MOD** `src/services/ai/aiOrchestratorLoop.ts` | service (loop) | event-driven | itself | exact |
 | **MOD** `src/services/ai/chatTurnTools.ts` | utility | transform | itself | exact |
-| **MOD** `src/services/ai/aiTools.ts` | service (tool registry) | request-response | itself | exact |
+| **REUSE-ONLY** `src/services/ai/aiTools.ts` | service (tool registry) | request-response | itself | exact — read for `AI_DATABASE_TOOLS` / `MUTATION_TOOLS` / `dispatchAiToolCall` names only; **no plan modifies this file** (the `delegate_batch` interception path deliberately avoids the 5 280-line switch, see §`teamTools.ts`) |
 | **MOD** `src/components/ai/ChatMessageList.tsx` | component | streaming | itself | exact |
 | **MOD** `src/components/ai/ChatMessageBubble.tsx` | component | streaming | itself | exact |
 | **MOD** `src/components/ai/ActiveAiTurnIndicator.tsx` | component | event-driven | itself | exact |

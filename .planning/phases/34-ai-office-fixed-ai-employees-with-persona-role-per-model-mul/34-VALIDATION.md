@@ -1,9 +1,9 @@
 ---
 phase: 34
 slug: ai-office-fixed-ai-employees-with-persona-role-per-model-mul
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: approved
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-11-08
 ---
 
@@ -58,7 +58,7 @@ Task IDs are filled in by the planner; the requirement → test binding below is
 | AIO-TEAM-04 | `@agent` routes to that agent; no mention routes to the lead; the composer offers lead-first options | unit + component | `npx vitest run tests/services/ai/office/teamRunCoordinator.test.ts tests/views/TeamsView.test.tsx tests/ai/ChatInputBarAgentMentions.test.tsx` | ❌ W0 |
 | AIO-LINK-01 | `get_linked_context` returns full note/document body, not metadata; `itemId ∉ links` is refused | unit | `npx vitest run tests/services/ai/office/teamTools.test.ts` | ❌ W0 |
 | AIO-BG-01 | A team run survives view switch; per-agent stop marks incomplete; global stop aborts lead + all agents | unit | `npx vitest run tests/services/ai/office/teamRunCoordinator.test.ts` | ❌ W0 |
-| AIO-UI-01 | `'teams'` routes to `TeamsView`; `'agents'` shell defaults to Văn phòng AI and keeps Ghost Dev reachable | component | `npx vitest run tests/views/TeamsView.test.tsx tests/views/AiOfficeView.test.tsx` | ❌ W0 |
+| AIO-UI-01 | `'teams'` routes to `TeamsView`; `'agents'` shell defaults to Văn phòng AI and keeps Ghost Dev reachable; the create drawers mount from the view | component | `npx vitest run tests/views/TeamsView.test.tsx tests/views/AiOfficeView.test.tsx` | ❌ W0 |
 | AIO-BACKUP-01 | Export → validate → restore round-trips new tables and message attribution; a v11 payload without them still restores | integration | `npx vitest run tests/services/backup/officeBackup.test.ts` | ❌ W0 |
 | (schema) | `version(17)` adds the new tables; V16 data survives the upgrade | migration | `npx vitest run tests/db/schemaV17Migration.test.ts` | ❌ W0 |
 
@@ -68,26 +68,26 @@ Task IDs are filled in by the planner; the requirement → test binding below is
 
 ## Wave 0 Requirements
 
-- [ ] `tests/services/ai/office/teamRunCoordinator.test.ts` — AIO-TEAM-01/02/04, AIO-BG-01, AIO-WRITE-02 (fake `runLoop` per agent, pattern: `tests/ai/chatTurnRuntime.test.ts:36-60`). Created in plan 34-07 Task 1, extended by Tasks 2-3.
-- [ ] `tests/services/ai/office/budgetGate.test.ts` — AIO-BUDGET-02
-- [ ] `tests/services/ai/office/teamRunRegistry.test.ts` — per-agent instance identity and abort isolation
-- [ ] `tests/services/ai/office/teamTools.test.ts` — AIO-MEM-02/03, AIO-LINK-01
-- [ ] `tests/services/ai/office/aiTeamRepo.test.ts` — AIO-EMP-02, AIO-BUDGET-01
-- [ ] `tests/services/ai/office/aiOfficeRepo.test.ts` — AIO-EMP-01, AIO-SKILL-01
-- [ ] `tests/services/ai/office/teamTranscriptRepo.test.ts` — AIO-MEM-01 (attribution persistence, recent window, assignment-history cap, cross-team guard)
-- [ ] `tests/services/ai/office/teamPrompts.test.ts` — AIO-SKILL-02, AIO-TEAM-03
-- [ ] `tests/db/schemaV17Migration.test.ts` — schema (pattern: `tests/db/schemaV16Migration.test.ts`)
-- [ ] `tests/services/backup/officeBackup.test.ts` — AIO-BACKUP-01
-- [ ] `tests/ai/ChatMessageListAttribution.test.tsx` — AIO-MEM-01 (attribution, status badges, `aria-live`, `agent:` mention)
-- [ ] `tests/ai/office/AgentOfficeComponents.test.tsx` — AIO-TEAM-01 (plan card), AIO-BUDGET-02 (paused banner, top-up modal)
-- [ ] `tests/ai/ChatInputBarAgentMentions.test.tsx` — AIO-TEAM-04 (lead-first `@` options, `@[Name](agent:<id>)` value)
-- [ ] `tests/ai/chatTurnTools.test.ts` — allowlist purity, `delegate_batch` absent from `AI_DATABASE_TOOLS`
-- [ ] `tests/views/TeamsView.test.tsx`, `tests/views/AiOfficeView.test.tsx` — AIO-UI-01
-- [ ] Extend `tests/ai/chatTurnRuntime.test.ts` — AIO-MEM-01, AIO-WRITE-01/02 (`persistUserMessage:false`, `mutationPolicy:'read-only'`, `onUsage` forward, attribution read back from `db.chatMessages`)
-- [ ] Extend `tests/services/ai/aiOrchestratorLoop.test.ts` — `beforeToolRound` ordering + abort
-- [ ] Extend `tests/ai/ActiveAiTurnIndicator.test.tsx` — team capsule + confirmed stop
-- [ ] Extend `src/db/repositories/__tests__/chatTabRepo.test.ts` — `threadScopeParts('team:<uuid>')` returns `scopeType: 'team'`
-- [ ] **Update** `tests/db.test.ts:20-45` — the exact-table-list assertion fails when the new tables are added
+- [x] `tests/services/ai/office/teamRunCoordinator.test.ts` — AIO-TEAM-01/02/04, AIO-BG-01, AIO-WRITE-02 (fake `runLoop` per agent, pattern: `tests/ai/chatTurnRuntime.test.ts:36-60`). Created in plan 34-07 Task 1, extended by Tasks 2-3.
+- [x] `tests/services/ai/office/budgetGate.test.ts` — AIO-BUDGET-02
+- [x] `tests/services/ai/office/teamRunRegistry.test.ts` — per-agent instance identity and abort isolation
+- [x] `tests/services/ai/office/teamTools.test.ts` — AIO-MEM-02/03, AIO-LINK-01
+- [x] `tests/services/ai/office/aiTeamRepo.test.ts` — AIO-EMP-02, AIO-BUDGET-01
+- [x] `tests/services/ai/office/aiOfficeRepo.test.ts` — AIO-EMP-01, AIO-SKILL-01
+- [x] `tests/services/ai/office/teamTranscriptRepo.test.ts` — AIO-MEM-01 (attribution persistence, recent window, assignment-history cap, cross-team guard)
+- [x] `tests/services/ai/office/teamPrompts.test.ts` — AIO-SKILL-02, AIO-TEAM-03
+- [x] `tests/db/schemaV17Migration.test.ts` — schema (pattern: `tests/db/schemaV16Migration.test.ts`)
+- [x] `tests/services/backup/officeBackup.test.ts` — AIO-BACKUP-01
+- [x] `tests/ai/ChatMessageListAttribution.test.tsx` — AIO-MEM-01 (attribution, status badges, `aria-live`, `agent:` mention)
+- [x] `tests/ai/office/AgentOfficeComponents.test.tsx` — AIO-TEAM-01 (plan card), AIO-BUDGET-02 (paused banner, top-up modal)
+- [x] `tests/ai/ChatInputBarAgentMentions.test.tsx` — AIO-TEAM-04 (lead-first `@` options, `@[Name](agent:<id>)` value)
+- [x] `tests/ai/chatTurnTools.test.ts` — allowlist purity, `delegate_batch` absent from `AI_DATABASE_TOOLS`
+- [x] `tests/views/TeamsView.test.tsx`, `tests/views/AiOfficeView.test.tsx` — AIO-UI-01
+- [x] Extend `tests/ai/chatTurnRuntime.test.ts` — AIO-MEM-01, AIO-WRITE-01/02 (`persistUserMessage:false`, `mutationPolicy:'read-only'`, `onUsage` forward, attribution read back from `db.chatMessages`)
+- [x] Extend `tests/services/ai/aiOrchestratorLoop.test.ts` — `beforeToolRound` ordering + abort
+- [x] Extend `tests/ai/ActiveAiTurnIndicator.test.tsx` — team capsule + confirmed stop
+- [x] Extend `src/db/repositories/__tests__/chatTabRepo.test.ts` — `threadScopeParts('team:<uuid>')` returns `scopeType: 'team'`
+- [x] **Update** `tests/db.test.ts:20-45` — the exact-table-list assertion fails when the new tables are added
 - No framework install needed.
 
 ---
@@ -107,11 +107,11 @@ Task IDs are filled in by the planner; the requirement → test binding below is
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 120s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 120s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved
