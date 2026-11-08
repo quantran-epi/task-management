@@ -143,14 +143,17 @@ describe('chatRepo scope keys (CR/System axis)', () => {
     await saveMessage({ threadId: thread.id, role: 'assistant', content: 'Không gán' }, db);
 
     const rows = await getMessagesByThreadId(thread.id, db);
-    expect(rows[0]).toMatchObject({
+    // Both rows can share a millisecond; select by content, not by index.
+    const attributed = rows.find((row) => row.content === 'Báo cáo của nhân viên')!;
+    const plain = rows.find((row) => row.content === 'Không gán')!;
+    expect(attributed).toMatchObject({
       agentId: 'agent-1',
       agentName: 'Lan',
       agentKind: 'employee',
       messageKind: 'report',
     });
     for (const key of ['agentId', 'agentName', 'agentKind', 'messageKind']) {
-      expect(Object.hasOwn(rows[1]!, key)).toBe(false);
+      expect(Object.hasOwn(plain, key)).toBe(false);
     }
   });
 });

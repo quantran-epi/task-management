@@ -25,7 +25,9 @@ describe('artifact tool advertisement and runtime boundaries', () => {
     expect(tools).not.toContain('get_artifact');
     expect(tools).not.toContain('patch_artifact_section');
     expect(tools).toContain('query_notes');
-    expect(tools.includes('create_task')).toBe(!analysis);
+    // Analysis Mode is a prompt preference in ordinary chat: the runtime approval card
+    // guards mutations, so mutation tools stay advertised in both modes.
+    expect(tools.includes('create_task')).toBe(true);
   });
 
   it('advertises both tools only on explicit studio allowlist with Analysis Mode OFF', () => {
@@ -41,7 +43,7 @@ describe('artifact tool advertisement and runtime boundaries', () => {
   });
 
   it.each(['patch_artifact_section', 'proxy_patch_artifact_section_cc', 'tool_patch_artifact_section_ide'])(
-    'cancels unsolicited %s in the real loop before any preparation or approval even with Auto-approve', async (name) => {
+    'refuses unsolicited %s in the real loop before any preparation or approval even with Auto-approve', async (name) => {
       db = new TaskPlannerDatabase(`artifact-runtime-access-${crypto.randomUUID()}`);
       const thread = await createOrGetThread({ scopeType: 'global' }, db);
       const preparePatch = vi.fn();
@@ -63,7 +65,9 @@ describe('artifact tool advertisement and runtime boundaries', () => {
       expect(preparePatch).not.toHaveBeenCalled();
       expect(onAwaitingApproval).not.toHaveBeenCalled();
       expect(events).toHaveLength(1);
-      expect(JSON.parse(events[0]!)).toEqual({ cancelled: true, message: 'Analysis Mode chỉ đọc; không có dữ liệu nào bị thay đổi.' });
+      // No artifact context in this turn, so the patch tool refuses on scope before any
+      // preparation. Analysis Mode is a prompt preference and no longer cancels here.
+      expect(JSON.parse(events[0]!)).toMatchObject({ refused: true, code: 'ARTIFACT_SCOPE_REQUIRED' });
       expect(await db.settings.count()).toBe(0);
     }
   );
