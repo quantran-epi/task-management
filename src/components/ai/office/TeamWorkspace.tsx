@@ -64,6 +64,8 @@ const EMPTY_SNAPSHOT: TeamRunSnapshot = {
   agents: [],
   pendingPlan: null,
   pendingApproval: null,
+  pausedAgentId: null,
+  pausedAgentName: null,
 };
 
 const NO_MODEL_COPY =
@@ -95,17 +97,25 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [topUpOpen, setTopUpOpen] = useState(false);
+  // D-21: which budget the top-up dialog targets. Defaults to the team; the paused
+  // banner switches it to the parked agent so the right gate opens.
+  const [topUpScope, setTopUpScope] = useState<{ kind: 'team' } | { kind: 'agent'; agentId: string }>({
+    kind: 'team',
+  });
+  const [planDecision, setPlanDecision] = useState<'approved' | 'rejected' | undefined>(undefined);
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const lastUserTextRef = useRef<string>('');
-
-  const roster = useMemo(
-    () => (lead ? [lead, ...employees] : employees),
-    [lead, employees]
-  );
 
   const links = useLiveQuery(() => listTeamLinks(team.id, db), [db, team.id]) ?? [];
   const liveMembers = useLiveQuery(() => listTeamMembers(team.id, db), [db, team.id]) ?? members;
 
+  // AIO-TEAM-04: only this team's own roster is addressable. A non-member has no member
+  // row, so its budget is 0 and an @mention would park that turn forever.
+  const roster = useMemo(() => {
+    const memberIds = new Set(liveMembers.map((member) => member.agentId));
+    const members = employees.filter((employee) => memberIds.has(employee.id));
+    return lead ? [lead, ...members] : members;
+  }, [lead, employees, liveMembers]);
   // Link rows carry only (itemType, itemId); resolve the display name from the source table.
   const linkRows = useLiveQuery<LinkedItemRow[]>(async () => {
     const rows: LinkedItemRow[] = [];
@@ -201,6 +211,19 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     return coordinator.subscribe(() => setSnapshot(coordinator.getState()));
   }, [coordinator]);
 
+  // D-25: a toggle changed in the sidebar or settings drawer must reach the live run.
+  useEffect(() => {
+    coordinator?.setTeamSettings({
+      autoSplitEnabled: team.autoSplitEnabled === true,
+      autoApproveMutations: team.autoApproveMutations === true,
+    });
+  }, [coordinator, team.autoSplitEnabled, team.autoApproveMutations]);
+
+  // A fresh plan clears the previous decision so the card shows its buttons again.
+  useEffect(() => {
+    setPlanDecision(undefined);
+  }, [snapshot.pendingPlan]);
+
   const agentDirectory = useMemo(() => {
     const map = new Map<string, { agentId: string; name: string; role: string; isLead: boolean; color: string }>();
     for (const agent of roster) {
@@ -282,7 +305,11 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     for (const [memberId, budgetTokens] of Object.entries(input.budgets)) {
       const row = liveMembers.find((member) => member.id === memberId);
       if (!row || row.budgetTokens === budgetTokens) continue;
-      await topUpMemberBudget(memberId, budgetTokens - row.budgetTokens, db);
+      const delta = budgetTokens - row.budgetTokens;
+      // D-21: a raised member budget must also open that agent's gate, otherwise the
+      // paused turn stays parked and the batch never settles.
+      await coordinator?.topUp({ kind: 'agent', agentId: row.agentId }, delta);
+      if (!coordinator) await topUpMemberBudget(memberId, delta, db);
     }
     setSettingsOpen(false);
   };
@@ -323,15 +350,30 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
       {snapshot.pendingPlan && (
         <AssignmentPlanCard
           plan={snapshot.pendingPlan}
-          decision={undefined}
-          onApprove={() => coordinator?.resolvePlan(true)}
-          onReject={() => coordinator?.resolvePlan(false)}
+          decision={planDecision}
+          onApprove={() => {
+            setPlanDecision('approved');
+            coordinator?.resolvePlan(true);
+          }}
+          onReject={() => {
+            setPlanDecision('rejected');
+            coordinator?.resolvePlan(false);
+          }}
         />
       )}
       {snapshot.phase === 'awaiting-budget' && (
         <AgentPausedBanner
           teamName={team.name}
-          onTopUp={() => setTopUpOpen(true)}
+          {...(snapshot.pausedAgentName ? { agentName: snapshot.pausedAgentName } : {})}
+          onTopUp={() => {
+            // D-21: target the parked agent's own budget when one agent's gate is closed.
+            setTopUpScope(
+              snapshot.pausedAgentId
+                ? { kind: 'agent', agentId: snapshot.pausedAgentId }
+                : { kind: 'team' }
+            );
+            setTopUpOpen(true);
+          }}
         />
       )}
     </>
@@ -522,13 +564,35 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
 
       <BudgetTopUpModal
         open={topUpOpen}
-        scope={{ kind: 'team', name: team.name }}
-        used={liveMembers.reduce((sum, row) => sum + row.usedTokens, 0)}
-        budget={team.budgetTokens}
+        scope={
+          topUpScope.kind === 'agent'
+            ? {
+                kind: 'agent',
+                name:
+                  roster.find((agent) => agent.id === topUpScope.agentId)?.name ??
+                  topUpScope.agentId,
+              }
+            : { kind: 'team', name: team.name }
+        }
+        used={
+          topUpScope.kind === 'agent'
+            ? liveMembers.find((row) => row.agentId === topUpScope.agentId)?.usedTokens ?? 0
+            : liveMembers.reduce((sum, row) => sum + row.usedTokens, 0)
+        }
+        budget={
+          topUpScope.kind === 'agent'
+            ? liveMembers.find((row) => row.agentId === topUpScope.agentId)?.budgetTokens ?? 0
+            : team.budgetTokens
+        }
         onCancel={() => setTopUpOpen(false)}
         onConfirm={(amount) => {
           setTopUpOpen(false);
-          void coordinator?.topUp({ kind: 'team' }, amount);
+          void coordinator?.topUp(
+            topUpScope.kind === 'agent'
+              ? { kind: 'agent', agentId: topUpScope.agentId }
+              : { kind: 'team' },
+            amount
+          );
         }}
       />
     </div>

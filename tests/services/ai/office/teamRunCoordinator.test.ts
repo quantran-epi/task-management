@@ -229,6 +229,8 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
         agents: [],
         pendingPlan: null,
         pendingApproval: null,
+        pausedAgentId: null,
+        pausedAgentName: null,
       });
 
       let calls = 0;
@@ -814,6 +816,155 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
     it('keeps delegate_batch out of the employee allowlist', () => {
       expect(EMPLOYEE_READ_ONLY_ALLOWLIST).not.toContain('delegate_batch');
       expect(EMPLOYEE_READ_ONLY_ALLOWLIST.some((name) => isMutationTool(name))).toBe(false);
+    });
+
+    it('names the parked agent in the snapshot so the UI tops up the right budget', async () => {
+      harness = await createHarness({
+        scripts: {
+          [EMP_A_MODEL]: async (options) => {
+            options.onUsage?.({ totalTokens: 700 });
+            await options.beforeToolRound?.(1, options.signal);
+            return loopResult('A xong');
+          },
+        },
+      });
+      const { coordinator, employees } = harness;
+
+      const sent = coordinator.send('@[An](agent:' + employees[0]!.id + ') việc A');
+      await waitFor(() => coordinator.getState().phase === 'awaiting-budget');
+
+      expect(coordinator.getState().pausedAgentId).toBe(employees[0]!.id);
+      expect(coordinator.getState().pausedAgentName).toBe('An');
+
+      await coordinator.topUp({ kind: 'agent', agentId: employees[0]!.id }, 2000);
+      await sent;
+      expect(coordinator.getState().pausedAgentId).toBeNull();
+      expect(coordinator.getState().pausedAgentName).toBeNull();
+    });
+
+    it('applies a toggle change to the live run without reconstructing the coordinator', async () => {
+      let planParked = false;
+      let harnessRef: Harness | null = null;
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              {
+                assignments: harnessRef!.employees.map((row) => ({
+                  agentId: row.id,
+                  task: 'Việc',
+                })),
+              },
+              harnessRef!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      harnessRef = harness;
+      const { coordinator } = harness;
+
+      // Auto-split off at construction: the batch parks on the plan card.
+      const sent = coordinator.send('Làm báo cáo');
+      await waitFor(() => coordinator.getState().phase === 'awaiting-plan');
+      planParked = true;
+      expect(planParked).toBe(true);
+
+      // The sidebar switch flips auto-split on mid-run; the live run must see it.
+      coordinator.setTeamSettings({ autoSplitEnabled: true });
+      coordinator.resolvePlan(true);
+      await sent;
+
+      expect(coordinator.getState().phase).not.toBe('awaiting-plan');
+    });
+
+    it('feeds a settled batch report into the next batch prompt', async () => {
+      const employeePrompts: string[] = [];
+      let harnessRef: Harness | null = null;
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              {
+                assignments: harnessRef!.employees.map((row) => ({
+                  agentId: row.id,
+                  task: 'Việc',
+                })),
+              },
+              harnessRef!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async (options) => {
+            employeePrompts.push(JSON.stringify(options.messages));
+            return loopResult('BÁO-CÁO-A');
+          },
+          [EMP_B_MODEL]: async (options) => {
+            employeePrompts.push(JSON.stringify(options.messages));
+            return loopResult('BÁO-CÁO-B');
+          },
+          [EMP_C_MODEL]: async (options) => {
+            employeePrompts.push(JSON.stringify(options.messages));
+            return loopResult('BÁO-CÁO-C');
+          },
+        },
+      });
+      harnessRef = harness;
+      const { coordinator, employees } = harness;
+
+      // First batch settles, then a direct @mention starts a later turn for the same agent.
+      const first = coordinator.send('Làm báo cáo');
+      await waitFor(() => coordinator.getState().phase === 'awaiting-plan');
+      coordinator.resolvePlan(true);
+      await first;
+      await waitFor(() => coordinator.getState().phase === 'ready');
+
+      const beforeLater = employeePrompts.length;
+      await coordinator.send('@[An](agent:' + employees[0]!.id + ') làm tiếp');
+      await waitFor(() => coordinator.getState().phase === 'ready');
+
+      // The later turn's prompt carries the earlier batch's peer reports as untrusted data.
+      const laterPrompt = employeePrompts.slice(beforeLater).join('\n');
+      expect(laterPrompt).toContain('BÁO-CÁO-B');
+    });
+
+    it('ignores an @mention of an employee outside the team roster', async () => {
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async () => loopResult('Lead xử lý.'),
+        },
+      });
+      const { coordinator, employees, db, team, lead, skill, threadId } = harness;
+      const outsider = employees[0]!;
+      // Drop the member row so the employee is no longer on this team.
+      await db.aiTeamMembers.where('agentId').equals(outsider.id).delete();
+
+      // A fresh coordinator loads the trimmed roster.
+      const rebuilt = createTeamRunCoordinator({
+        db,
+        team,
+        lead,
+        employees,
+        skills: [skill],
+        threadId,
+        model: LEAD_MODEL,
+        endpoint: 'https://example.invalid/v1',
+        apiKey: 'sk-test',
+      });
+      await rebuilt.send('@[An](agent:' + outsider.id + ') việc riêng');
+
+      // No employee turn starts; the message falls through to the lead instead.
+      expect(
+        rebuilt.getState().agents.some((row) => row.agentId === outsider.id)
+      ).toBe(false);
+      expect(coordinator).not.toBe(rebuilt);
     });
   });
 });

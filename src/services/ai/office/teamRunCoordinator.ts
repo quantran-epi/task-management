@@ -40,6 +40,7 @@ import {
 import {
   buildEmployeeTurnRequest,
   buildLeadTurnRequest,
+  type BatchResult,
   type LinkedItemIndexEntry,
 } from './teamPrompts';
 import {
@@ -86,6 +87,12 @@ export interface TeamRunSnapshot {
   agents: AgentRunState[];
   pendingPlan: AssignmentPlan | null;
   pendingApproval: ChatTurnApprovalInfo | null;
+  /**
+   * D-21: the scope that is actually parked. The banner names the agent when one
+   * agent's own gate is closed, so the user tops up the right budget.
+   */
+  pausedAgentId: string | null;
+  pausedAgentName: string | null;
 }
 
 export type TopUpScope = { kind: 'agent'; agentId: string } | { kind: 'team' };
@@ -114,6 +121,8 @@ export interface TeamRunCoordinator {
   stopAgent(agentId: string): void;
   abortAll(): void;
   topUp(scope: TopUpScope, amount: number): Promise<void>;
+  /** D-25: toggles apply to the live run, not only the next construction. */
+  setTeamSettings(patch: Partial<Pick<AiTeam, 'autoSplitEnabled' | 'autoApproveMutations'>>): void;
   subscribe(listener: () => void): () => void;
   getState(): TeamRunSnapshot;
 }
@@ -182,6 +191,9 @@ export function createTeamRunCoordinator(
 ): TeamRunCoordinator {
   const { db, team, lead, employees, skills } = options;
   const teamId = team.id;
+  // D-25: the toggles are read at run time, so a change in the sidebar or settings
+  // drawer applies without reconstructing the coordinator.
+  let liveTeam: AiTeam = team;
 
   let phase: TeamRunPhase = 'idle';
   const agents = new Map<string, AgentRunState>();
@@ -193,6 +205,9 @@ export function createTeamRunCoordinator(
   let pendingApproval: ChatTurnApprovalInfo | null = null;
   let batchIndex = 0;
   let lastUserRequest = '';
+  // D-03 / AIO-TEAM-03: a later batch's employees see the previous batch's settled
+  // reports. Same-batch peers stay isolated — no mid-batch barrier.
+  let priorBatchResults: BatchResult[] = [];
 
   const agentGates = new Map<string, BudgetGate>();
   const teamGate = createBudgetGate();
@@ -410,7 +425,7 @@ export function createTeamRunCoordinator(
     aiTurnManager.registerTurn({
       id: teamTurnId,
       scopeKey: teamId,
-      title: team.name,
+      title: liveTeam.name,
       status: 'preparing',
       streamingStatusLabel: null,
       abort: () => abortAll(),
@@ -456,7 +471,8 @@ export function createTeamRunCoordinator(
   async function startEmployeeTurn(
     employee: AiEmployee,
     instruction: string,
-    originalRequest: string
+    originalRequest: string,
+    batchResults?: readonly BatchResult[]
   ): Promise<void> {
     const [assignmentHistory, recentTurns] = await Promise.all([
       listAssignmentHistory(options.threadId, employee.id, ASSIGNMENT_HISTORY_CAP, db),
@@ -466,9 +482,10 @@ export function createTeamRunCoordinator(
     const prompt = buildEmployeeTurnRequest({
       employee,
       ...(skill ? { skill } : {}),
-      team,
+      team: liveTeam,
       instruction,
       originalRequest,
+      ...(batchResults && batchResults.length > 0 ? { batchResults } : {}),
       assignmentHistory,
       recentTurns,
     });
@@ -533,7 +550,7 @@ export function createTeamRunCoordinator(
       apiKey: options.apiKey,
       model: lead.model || options.model,
       analysisMode: true,
-      autoApprove: team.autoApproveMutations === true,
+      autoApprove: liveTeam.autoApproveMutations === true,
       tools: leadTools(),
       mutationPolicy: 'approve',
       persistUserMessage: false,
@@ -571,7 +588,12 @@ export function createTeamRunCoordinator(
     const match = AGENT_MENTION.exec(text);
     if (!match) return null;
     const id = match[2];
-    return employees.find((row) => row.id === id) ?? null;
+    const employee = employees.find((row) => row.id === id);
+    if (!employee) return null;
+    // AIO-TEAM-04: only this team's members are addressable. A non-member has no
+    // aiTeamMembers row, so its budget is 0 and the turn would park forever.
+    if (!memberIds.has(employee.id)) return null;
+    return employee;
   }
 
   async function send(text: string): Promise<void> {
@@ -617,7 +639,7 @@ export function createTeamRunCoordinator(
       ? parsed.assignments
       : [];
 
-    if (team.autoSplitEnabled !== true) {
+    if (liveTeam.autoSplitEnabled !== true) {
       batchIndex += 1;
       pendingPlan = {
         batchIndex,
@@ -669,7 +691,9 @@ export function createTeamRunCoordinator(
         db
       );
       agentDeferreds.set(employee.id, createDeferred());
-      started.push(startEmployeeTurn(employee, assignment.task, lastUserRequest));
+      started.push(
+        startEmployeeTurn(employee, assignment.task, lastUserRequest, priorBatchResults)
+      );
     }
 
     // Concurrency: one runtime per agent, so three turns really do run at once (D-02).
@@ -696,6 +720,11 @@ export function createTeamRunCoordinator(
     });
 
     agentDeferreds.clear();
+    // Carry this batch's settled reports into the next one (AIO-TEAM-03). A stopped or
+    // errored agent contributes nothing readable, so only real reports are kept.
+    priorBatchResults = results
+      .filter((row) => row.status === 'done' && row.report.trim().length > 0)
+      .map((row) => ({ agentName: row.agentName, content: row.report }));
     phase = 'lead-synthesizing';
     notify();
     return JSON.stringify(results);
@@ -705,6 +734,14 @@ export function createTeamRunCoordinator(
     const resolver = planResolver;
     planResolver = null;
     resolver?.(approved);
+  }
+
+  /** D-25: the sidebar switches and the settings drawer both land here. */
+  function setTeamSettings(
+    patch: Partial<Pick<AiTeam, 'autoSplitEnabled' | 'autoApproveMutations'>>
+  ): void {
+    liveTeam = { ...liveTeam, ...patch };
+    notify();
   }
 
   function resolveApproval(approved: boolean): void {
@@ -770,11 +807,20 @@ export function createTeamRunCoordinator(
   }
 
   function getState(): TeamRunSnapshot {
+    const paused = [...agents.values()].filter((row) => row.status === 'paused');
+    // Only an agent whose own gate is closed needs an agent-scoped top-up; a pause that
+    // comes from the team gate alone is fixed by the team top-up.
+    const agentParked = paused.find((row) => gateFor(row.agentId).isClosed()) ?? null;
     return {
       phase,
       agents: [...agents.values()],
       pendingPlan,
       pendingApproval,
+      pausedAgentId: agentParked?.agentId ?? null,
+      pausedAgentName: agentParked
+        ? employees.find((row) => row.id === agentParked.agentId)?.name ??
+          (agentParked.agentId === lead.id ? lead.name : agentParked.agentId)
+        : null,
     };
   }
 
@@ -786,6 +832,7 @@ export function createTeamRunCoordinator(
     stopAgent,
     abortAll,
     topUp,
+    setTeamSettings,
     subscribe,
     getState,
   };
