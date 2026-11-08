@@ -114,7 +114,7 @@ export const WizardSnapshotSchema = z.discriminatedUnion('status', [
 export type WizardSnapshot = z.infer<typeof WizardSnapshotSchema>;
 
 const artifactBase = {
-  kind: z.enum(['PL02', 'SOLUTION', 'CHANGE_PACK_ENTRY', 'PL03B', 'PL07', 'CAB']),
+  kind: z.enum(['PL02', 'SOLUTION', 'CHANGE_PACK_ENTRY', 'PL03B', 'PL07', 'CAB', 'RESEARCH']),
   changeRequestId: uuidSchema,
   threadId: uuidSchema,
   sessionId: uuidSchema,
@@ -138,6 +138,7 @@ export const SdlcArtifactMetadataSchema = z.discriminatedUnion('kind', [
   z.strictObject({ ...artifactBase, kind: z.literal('PL03B') }).superRefine(requireSourceArtifacts),
   z.strictObject({ ...artifactBase, kind: z.literal('PL07') }).superRefine(requireSourceArtifacts),
   z.strictObject({ ...artifactBase, kind: z.literal('CAB') }).superRefine(requireSourceArtifacts),
+  z.strictObject({ ...artifactBase, kind: z.literal('RESEARCH') }),
 ]).superRefine((artifact, ctx) => {
   if (artifact.sourceArtifactIds.length !== artifact.sourceArtifactHashes.length) {
     ctx.addIssue({

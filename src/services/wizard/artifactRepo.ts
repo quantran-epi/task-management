@@ -24,7 +24,7 @@ interface SourceArtifactIdentity {
   hash: string;
 }
 
-interface ArtifactCommitInput {
+export interface ArtifactCommitInput {
   changeRequestId: string;
   threadId: string;
   sessionId: string;
@@ -135,7 +135,7 @@ async function validatedSources(
 }
 
 async function commitArtifact(
-  kind: SaveApprovedArtifactInput['kind'] | 'SOLUTION',
+  kind: SdlcArtifactMetadata['kind'],
   input: ArtifactCommitInput,
   db: TaskPlannerDatabase,
 ): Promise<ArtifactCommitResult> {
@@ -228,6 +228,77 @@ export function saveApprovedArtifact(
   db: TaskPlannerDatabase = defaultDb,
 ): Promise<ArtifactCommitResult> {
   return commitArtifact(input.kind, input, db);
+}
+
+/** Research payload rides in `exportPayload`; `artifactBody` already serializes it. */
+export type SaveResearchArtifactInput = ArtifactCommitInput;
+
+export interface ResearchArtifactVersion {
+  version: number;
+  noteId: string;
+  payload: unknown;
+  approvedAt: string;
+}
+
+export function saveResearchArtifact(
+  input: SaveResearchArtifactInput,
+  db: TaskPlannerDatabase = defaultDb,
+): Promise<ArtifactCommitResult> {
+  return commitArtifact('RESEARCH', input, db);
+}
+
+/**
+ * SDLC-RES-06: research is reused across steps of the same CR, so lookups are CR-scoped
+ * only — step views hold the CR id but no thread id.
+ */
+async function loadResearchNotes(changeRequestId: string, db: TaskPlannerDatabase): Promise<Note[]> {
+  const notes = await db.notes
+    .where('entityId')
+    .equals(changeRequestId)
+    .filter((note) =>
+      note.entityType === 'cr' &&
+      note.sdlcArtifact?.kind === 'RESEARCH' &&
+      note.sdlcArtifact.changeRequestId === changeRequestId
+    )
+    .toArray();
+  return notes.sort((left, right) => (left.sdlcArtifact?.version ?? 0) - (right.sdlcArtifact?.version ?? 0));
+}
+
+function researchVersion(note: Note): ResearchArtifactVersion | null {
+  const artifact = note.sdlcArtifact;
+  if (!artifact) return null;
+  try {
+    const parsed: unknown = JSON.parse(note.body);
+    if (typeof parsed !== 'object' || parsed === null) return null;
+    return {
+      version: artifact.version,
+      noteId: note.id,
+      payload: (parsed as { exportPayload?: unknown }).exportPayload,
+      approvedAt: artifact.approvedAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function loadLatestResearchArtifact(
+  changeRequestId: string,
+  db: TaskPlannerDatabase = defaultDb,
+): Promise<ResearchArtifactVersion | null> {
+  const notes = await loadResearchNotes(changeRequestId, db);
+  for (let index = notes.length - 1; index >= 0; index -= 1) {
+    const version = researchVersion(notes[index]!);
+    if (version) return version;
+  }
+  return null;
+}
+
+export async function loadAllResearchArtifacts(
+  changeRequestId: string,
+  db: TaskPlannerDatabase = defaultDb,
+): Promise<ResearchArtifactVersion[]> {
+  const notes = await loadResearchNotes(changeRequestId, db);
+  return notes.map(researchVersion).filter((version): version is ResearchArtifactVersion => version !== null);
 }
 
 function samePackIdentity(left: ChangePackIdentity, right: ChangePackIdentity): boolean {
