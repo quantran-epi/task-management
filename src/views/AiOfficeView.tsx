@@ -3,11 +3,24 @@ import { Button, Empty, Input, Segmented, Space, theme } from 'antd';
 import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
-import { listEmployees, listLeads, listSkills } from '../db/repositories/aiOfficeRepo';
+import {
+  deleteEmployee,
+  deleteLead,
+  deleteSkill,
+  listEmployees,
+  listLeads,
+  listSkills,
+} from '../db/repositories/aiOfficeRepo';
 import { PageHeader } from '../components/common/PageHeader';
 import { AgentControlView } from './AgentControlView';
 import { EmployeeCard, LeadCard } from '../components/ai/office/EmployeeCard';
 import { SkillCard } from '../components/ai/office/SkillCard';
+import {
+  EmployeeEditorDrawer,
+  LeadEditorDrawer,
+} from '../components/ai/office/EmployeeEditorDrawer';
+import { SkillEditorDrawer } from '../components/ai/office/SkillEditorDrawer';
+import type { AiEmployee, AiLead, AiSkill } from '../types/aiOffice';
 
 export interface AiOfficeViewProps {
   db?: TaskPlannerDatabase | undefined;
@@ -51,9 +64,10 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
   const [shell, setShell] = useState<'office' | 'ghost-dev'>('office');
   const [segment, setSegment] = useState<OfficeSegment>('employees');
   const [search, setSearch] = useState('');
-  // Drawer state is consumed by the editor drawers (plan task 2); the value slot stays
-  // elided until a reader exists so `noUnusedLocals` stays green.
-  const [, setDrawer] = useState<'employee' | 'lead' | 'skill' | null>(null);
+  const [drawer, setDrawer] = useState<'employee' | 'lead' | 'skill' | null>(null);
+  const [editingEmployee, setEditingEmployee] = useState<AiEmployee | null>(null);
+  const [editingLead, setEditingLead] = useState<AiLead | null>(null);
+  const [editingSkill, setEditingSkill] = useState<AiSkill | null>(null);
 
   const employees = useLiveQuery(() => listEmployees(db), [db]) ?? [];
   const leads = useLiveQuery(() => listLeads(db), [db]) ?? [];
@@ -94,7 +108,22 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
       : visibleSkills.length;
 
   const openCreate = () => {
+    setEditingEmployee(null);
+    setEditingLead(null);
+    setEditingSkill(null);
     setDrawer(segment === 'employees' ? 'employee' : segment === 'leads' ? 'lead' : 'skill');
+  };
+
+  const closeDrawer = () => setDrawer(null);
+
+  const handleDeleteEmployee = (employee: AiEmployee) => {
+    void deleteEmployee(employee.id, db);
+  };
+  const handleDeleteLead = (lead: AiLead) => {
+    void deleteLead(lead.id, db);
+  };
+  const handleDeleteSkill = (skill: AiSkill) => {
+    void deleteSkill(skill.id, db);
   };
 
   const emptyBlock = (
@@ -226,8 +255,11 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
                     employee={employee}
                     skillName={skills.find((s) => s.id === employee.skillId)?.name}
                     teamCount={teamCountByAgent.get(employee.id) ?? 0}
-                    onEdit={() => setDrawer('employee')}
-                    onDelete={() => {}}
+                    onEdit={() => {
+                      setEditingEmployee(employee);
+                      setDrawer('employee');
+                    }}
+                    onDelete={() => handleDeleteEmployee(employee)}
                   />
                 ))}
               {segment === 'leads' &&
@@ -235,8 +267,11 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
                   <LeadCard
                     key={lead.id}
                     lead={lead}
-                    onEdit={() => setDrawer('lead')}
-                    onDelete={() => {}}
+                    onEdit={() => {
+                      setEditingLead(lead);
+                      setDrawer('lead');
+                    }}
+                    onDelete={() => handleDeleteLead(lead)}
                   />
                 ))}
               {segment === 'skills' &&
@@ -245,14 +280,39 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
                     key={skill.id}
                     skill={skill}
                     agentCount={agentCountBySkill.get(skill.id) ?? 0}
-                    onEdit={() => setDrawer('skill')}
-                    onDelete={() => {}}
+                    onEdit={() => {
+                      setEditingSkill(skill);
+                      setDrawer('skill');
+                    }}
+                    onDelete={() => handleDeleteSkill(skill)}
                   />
                 ))}
             </div>
           )}
         </>
       )}
+
+      <EmployeeEditorDrawer
+        open={drawer === 'employee'}
+        employee={editingEmployee}
+        onCancel={closeDrawer}
+        onSaved={closeDrawer}
+        db={db}
+      />
+      <LeadEditorDrawer
+        open={drawer === 'lead'}
+        lead={editingLead}
+        onCancel={closeDrawer}
+        onSaved={closeDrawer}
+        db={db}
+      />
+      <SkillEditorDrawer
+        open={drawer === 'skill'}
+        skill={editingSkill}
+        onCancel={closeDrawer}
+        onSaved={closeDrawer}
+        db={db}
+      />
     </div>
   );
 };

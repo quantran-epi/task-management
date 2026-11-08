@@ -1,13 +1,22 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../src/db';
 import {
   createEmployee,
   createLead,
   createSkill,
+  listEmployees,
+  listSkills,
 } from '../../src/db/repositories/aiOfficeRepo';
+import { createTeam } from '../../src/db/repositories/aiTeamRepo';
 import { AiOfficeView } from '../../src/views/AiOfficeView';
 import { useLayoutStore } from '../../src/workbench/store/layoutStore';
+
+// The model option source hits the network; stub it so the drawer has a non-empty list.
+vi.mock('../../src/services/ai/nineRouterTokenService', async (original) => ({
+  ...(await original<typeof import('../../src/services/ai/nineRouterTokenService')>()),
+  fetchAvailableModels: async () => ['claude-sonnet-4', 'claude-opus-4'],
+}));
 
 /**
  * Phase 34 plan 09 — the employee tab (`EditorViewType 'agents'`).
@@ -197,5 +206,101 @@ describe('AiOfficeView — employee tab shell (AIO-UI-01)', () => {
 
     expect(await screen.findByText('Chưa có phiên Ghost Dev nào được chọn')).toBeInTheDocument();
     expect(screen.queryByTestId('ai-office-segment-employees')).not.toBeInTheDocument();
+  });
+
+  async function pickModel(model: string) {
+    const modelSelect = screen.getByRole('combobox', { name: 'Mô hình' });
+    fireEvent.mouseDown(modelSelect);
+    fireEvent.click(await screen.findByTitle(model));
+  }
+
+  it('creates an employee through the drawer and persists it', async () => {
+    renderView();
+
+    fireEvent.click((await screen.findAllByRole('button', { name: /Tạo nhân viên/ }))[0]!);
+    expect(await screen.findByTestId('employee-editor-drawer')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Tên'), { target: { value: 'Dung Phạm' } });
+    fireEvent.change(screen.getByLabelText('Vai trò'), { target: { value: 'Kỹ sư kiểm thử' } });
+    fireEvent.change(screen.getByLabelText('Mô tả năng lực (lead nhìn thấy)'), {
+      target: { value: 'Viết và chạy kiểm thử hồi quy.' },
+    });
+    fireEvent.change(screen.getByLabelText('Persona'), {
+      target: { value: 'Bạn là kỹ sư kiểm thử kỹ tính.' },
+    });
+    await pickModel('claude-sonnet-4');
+
+    const save = screen.getByTestId('employee-editor-save');
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
+
+    await waitFor(async () => {
+      const rows = await listEmployees(db);
+      expect(rows.some((row) => row.name === 'Dung Phạm')).toBe(true);
+    });
+    await waitFor(() =>
+      expect(screen.queryByTestId('employee-editor-drawer')).not.toBeInTheDocument()
+    );
+  });
+
+  it('creates a skill through the drawer and persists it', async () => {
+    renderView();
+    fireEvent.click(await screen.findByTestId('ai-office-segment-skills'));
+
+    fireEvent.click((await screen.findAllByRole('button', { name: /Tạo kỹ năng/ }))[0]!);
+    expect(await screen.findByTestId('skill-editor-drawer')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Tên'), { target: { value: 'Rà soát mã' } });
+    fireEvent.change(screen.getByLabelText('Mô tả (nhân viên chỉ thấy phần này)'), {
+      target: { value: 'Quy trình rà soát mã nguồn.' },
+    });
+    fireEvent.change(screen.getByLabelText('Nội dung'), {
+      target: { value: '# Các bước\n1. Đọc diff' },
+    });
+
+    fireEvent.click(screen.getByTestId('skill-editor-save'));
+
+    await waitFor(async () => {
+      const rows = await listSkills(db);
+      expect(rows.some((row) => row.name === 'Rà soát mã')).toBe(true);
+    });
+  });
+
+  it('shows the shared-edit alert when editing an employee used by a team', async () => {
+    const employee = await seedEmployee();
+    const lead = await createLead(
+      {
+        name: 'Bình Trần',
+        role: 'Lead điều phối',
+        capability: 'Chia việc và tổng hợp kết quả.',
+        persona: 'Bạn là lead điều phối.',
+        model: 'claude-opus-4',
+      },
+      db
+    );
+    await createTeam(
+      { name: 'Nhóm Alpha', leadId: lead.id, status: 'idle', budgetTokens: 10000, employeeIds: [employee.id] },
+      db
+    );
+
+    renderView();
+    const card = await screen.findByTestId(`employee-card-${employee.id}`);
+    fireEvent.click(within(card).getByRole('button', { name: 'Sửa' }));
+
+    expect(
+      await screen.findByText('Thay đổi này áp dụng cho mọi nhóm đang dùng nhân viên này.')
+    ).toBeInTheDocument();
+  });
+
+  it('opens the employee drawer pre-filled from a card edit action', async () => {
+    const employee = await seedEmployee({ name: 'An Nguyễn' });
+
+    renderView();
+    const card = await screen.findByTestId(`employee-card-${employee.id}`);
+    fireEvent.click(within(card).getByRole('button', { name: 'Sửa' }));
+
+    expect(await screen.findByTestId('employee-editor-drawer')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tên')).toHaveValue('An Nguyễn');
+    expect(screen.getByText('Sửa nhân viên')).toBeInTheDocument();
   });
 });
