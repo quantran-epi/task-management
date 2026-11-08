@@ -187,6 +187,12 @@ export async function exportBackupPayload(
     telegramWhitelist,
     systems,
     changeRequests,
+    aiEmployees,
+    aiLeads,
+    aiSkills,
+    aiTeams,
+    aiTeamMembers,
+    aiTeamLinks,
   ] = await Promise.all([
     targetDb.tasks.toArray(),
     targetDb.capacityRules.toArray(),
@@ -209,6 +215,12 @@ export async function exportBackupPayload(
     targetDb.telegramWhitelist.toArray(),
     targetDb.systems.toArray(),
     targetDb.changeRequests.toArray(),
+    targetDb.aiEmployees.toArray(),
+    targetDb.aiLeads.toArray(),
+    targetDb.aiSkills.toArray(),
+    targetDb.aiTeams.toArray(),
+    targetDb.aiTeamMembers.toArray(),
+    targetDb.aiTeamLinks.toArray(),
   ]);
 
   // Strip sensitive botToken from telegramSettings before export
@@ -256,6 +268,12 @@ export async function exportBackupPayload(
     telegramWhitelist,
     systems,
     changeRequests,
+    aiEmployees,
+    aiLeads,
+    aiSkills,
+    aiTeams,
+    aiTeamMembers,
+    aiTeamLinks,
   };
 
   const counts = {
@@ -280,6 +298,12 @@ export async function exportBackupPayload(
     telegramWhitelist: telegramWhitelist.length,
     systems: systems.length,
     changeRequests: changeRequests.length,
+    aiEmployees: aiEmployees.length,
+    aiLeads: aiLeads.length,
+    aiSkills: aiSkills.length,
+    aiTeams: aiTeams.length,
+    aiTeamMembers: aiTeamMembers.length,
+    aiTeamLinks: aiTeamLinks.length,
   };
 
   const envelope: BackupEnvelope = {
