@@ -54,6 +54,11 @@ describe('chatTabRepo', () => {
     expect(threadScopeParts('milestone:abc')).toEqual({ scopeType: 'global' });
   });
 
+  it('resolves a team scope key to its own scope type, never to global', () => {
+    expect(threadScopeParts(`team:${crId}`)).toEqual({ scopeType: 'team', entityId: crId });
+    expect(threadScopeParts('unknown:abc')).toEqual({ scopeType: 'global' });
+  });
+
   it('creates one default ordinary tab for every supported scope', async () => {
     const scopes = [
       ['global', 'global'],

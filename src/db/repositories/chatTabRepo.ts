@@ -22,16 +22,16 @@ function ordinaryTabs(tabs: ChatTab[]): ChatTab[] {
 }
 
 /**
- * Maps a scope key to its thread scope. `cr` and `system` are whitelisted explicitly so a
- * CR-scoped thread can never fall back to the shared `global` thread (T-31.2-11). Legacy
- * `project:`/`milestone:` keys were purged by the V16 upgrade, so the `global` fallback is
- * now only a defensive path for unknown prefixes.
+ * Maps a scope key to its thread scope. `cr`, `system` and `team` are whitelisted explicitly
+ * so those threads can never fall back to the shared `global` thread (T-31.2-11, T-34-03).
+ * Legacy `project:`/`milestone:` keys were purged by the V16 upgrade, so the `global`
+ * fallback is now only a defensive path for unknown prefixes.
  */
 export function threadScopeParts(scopeKey: string, fallback?: ChatScopeInput): Pick<ChatThread, 'scopeType' | 'entityId'> {
   const [scopeType, entityId] = scopeKey.split(':', 2);
   if (scopeKey === 'global') return { scopeType: 'global' };
   if (fallback) return { scopeType: fallback.scopeType, ...(fallback.entityId ? { entityId: fallback.entityId } : {}) };
-  if (scopeType === 'task' || scopeType === 'cr' || scopeType === 'system' || scopeType === 'document') {
+  if (scopeType === 'task' || scopeType === 'cr' || scopeType === 'system' || scopeType === 'document' || scopeType === 'team') {
     return { scopeType, ...(entityId ? { entityId } : {}) };
   }
   return { scopeType: 'global' };

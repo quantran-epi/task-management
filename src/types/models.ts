@@ -220,7 +220,7 @@ export interface NoteAttachment {
   filePath?: string | undefined; // Local disk file path
 }
 
-export type ChatScopeType = 'global' | 'task' | 'cr' | 'system' | 'document';
+export type ChatScopeType = 'global' | 'task' | 'cr' | 'system' | 'document' | 'team';
 
 export interface ChatThread {
   id: string; // RFC 4122 v4 UUID
@@ -314,6 +314,11 @@ export interface ChatMessage {
   grounding?: ChatMessageGrounding | undefined; // Structured grounding (Plan 19-10 D-46)
   wizard?: WizardSnapshot | undefined;
   artifactEvent?: ChatArtifactEvent | undefined;
+  // Phase 34 D-31: AI Office attribution. All optional so existing rows stay valid.
+  agentId?: string | undefined;
+  agentName?: string | undefined;
+  agentKind?: 'lead' | 'employee' | undefined;
+  messageKind?: 'instruction' | 'report' | 'synthesis' | 'plan' | undefined;
 }
 
 // Phase 16: Knowledge Server Foundation, DLP Checks & AST Ingestion models (D-01, D-08, D-18, D-27, D-29)

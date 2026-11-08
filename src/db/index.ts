@@ -16,6 +16,7 @@ import {
   SCHEMA_V14,
   SCHEMA_V15,
   SCHEMA_V16,
+  SCHEMA_V17,
 } from './schema';
 import type {
   Task,
@@ -42,6 +43,14 @@ import type {
   System,
   ChangeRequest,
 } from '../types/models';
+import type {
+  AiEmployee,
+  AiLead,
+  AiSkill,
+  AiTeam,
+  AiTeamMember,
+  AiTeamLink,
+} from '../types/aiOffice';
 
 /**
  * Stable id of the recovery CR that parks tasks whose legacy project no longer resolves.
@@ -73,6 +82,12 @@ export class TaskPlannerDatabase extends Dexie {
   telegramSessionLogs!: Table<TelegramSessionLog, string>;
   systems!: Table<System, string>;
   changeRequests!: Table<ChangeRequest, string>;
+  aiEmployees!: Table<AiEmployee, string>;
+  aiLeads!: Table<AiLead, string>;
+  aiSkills!: Table<AiSkill, string>;
+  aiTeams!: Table<AiTeam, string>;
+  aiTeamMembers!: Table<AiTeamMember, string>;
+  aiTeamLinks!: Table<AiTeamLink, string>;
 
 
   constructor(databaseName = 'PersonalTaskPlannerDB') {
@@ -471,6 +486,10 @@ export class TaskPlannerDatabase extends Dexie {
           }
         }
       });
+
+    // Phase 34 (D-18, D-23, D-25, D-32): AI Office stores. Purely additive — nothing to
+    // backfill, so no `.upgrade()` hook.
+    this.version(17).stores(SCHEMA_V17);
 
     // Multi-tab concurrency handlers (DATA-04, D-09, D-10)
     this.on('blocked', () => {

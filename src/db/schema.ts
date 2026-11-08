@@ -116,6 +116,18 @@ export const SCHEMA_V16 = {
   tasks: 'id, crId, systemId, status, priority, deadline, workType, jiraKey, reminderDate, *opsOwners, *businessAnalysts',
 } as const;
 
+// Phase 34 (D-18, D-23, D-25, D-32): AI Office stores. Purely additive — no existing
+// store index spec is touched, so no index rebuild and no `.upgrade()` hook is needed.
+export const SCHEMA_V17 = {
+  ...SCHEMA_V16,
+  aiEmployees: 'id, name, skillId, model, createdAt',
+  aiLeads: 'id, name, model, createdAt',
+  aiSkills: 'id, name, createdAt',
+  aiTeams: 'id, name, leadId, status, createdAt',
+  aiTeamMembers: 'id, teamId, agentId, role',
+  aiTeamLinks: 'id, teamId, itemType, itemId',
+} as const;
+
 
 
 
