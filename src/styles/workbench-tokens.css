@@ -204,8 +204,11 @@ html, body, #root {
 }
 
 /* JetBrains Instant Expand - Disable slide down animation */
+.workbench-toolwindow-left .ant-motion-collapse,
+.workbench-toolwindow-left .ant-motion-collapse-active,
 .workbench-toolwindow-left .ant-tree-motion,
-.workbench-toolwindow-left .ant-tree .ant-tree-node-content-wrapper {
+.workbench-toolwindow-left .ant-tree .ant-tree-node-content-wrapper,
+.workbench-toolwindow-left .ant-tree .ant-tree-switcher-icon svg {
   transition: none !important;
   animation: none !important;
 }

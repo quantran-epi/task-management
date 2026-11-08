@@ -524,7 +524,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         <Spin spinning={loadingTree}>
           {treeData.length > 0 ? (
             <Tree
-              motion={null}
+              motion={false as any}
               loadData={onLoadData}
               treeData={treeData}
               onSelect={handleSelectNode}
