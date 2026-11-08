@@ -180,13 +180,14 @@ describe('AiOfficeView — employee tab shell (AIO-UI-01)', () => {
   it('exposes the three create buttons', async () => {
     renderView();
 
-    expect(await screen.findByRole('button', { name: /Tạo nhân viên/ })).toBeInTheDocument();
+    // The header CTA and the empty-state CTA share the same label.
+    expect((await screen.findAllByRole('button', { name: /Tạo nhân viên/ })).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByTestId('ai-office-segment-leads'));
-    expect(await screen.findByRole('button', { name: /Tạo lead/ })).toBeInTheDocument();
+    expect((await screen.findAllByRole('button', { name: /Tạo lead/ })).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByTestId('ai-office-segment-skills'));
-    expect(await screen.findByRole('button', { name: /Tạo kỹ năng/ })).toBeInTheDocument();
+    expect((await screen.findAllByRole('button', { name: /Tạo kỹ năng/ })).length).toBeGreaterThan(0);
   });
 
   it('keeps Ghost Dev reachable from the second segment', async () => {
