@@ -21,6 +21,12 @@ describe('Dexie Database Persistence & Seed Layer (DATA-02, D-05, D-07)', () => 
   it('registers all core tables in schema', () => {
     expect(testDb.tables.map((t) => t.name).sort()).toEqual([
       'activeTimers',
+      'aiEmployees',
+      'aiLeads',
+      'aiSkills',
+      'aiTeamLinks',
+      'aiTeamMembers',
+      'aiTeams',
       'backupMetadata',
       'capacityOverrides',
       'capacityRules',

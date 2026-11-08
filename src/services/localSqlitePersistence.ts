@@ -24,6 +24,12 @@ export const SQLITE_DOMAIN_TABLES = [
   'chatThreads',
   'chatMessages',
   'chatTabs',
+  'aiEmployees',
+  'aiLeads',
+  'aiSkills',
+  'aiTeams',
+  'aiTeamMembers',
+  'aiTeamLinks',
 ] as const;
 
 export const SQLITE_LOCAL_TABLES = ['settings', 'backupMetadata', 'activeTimers'] as const;
