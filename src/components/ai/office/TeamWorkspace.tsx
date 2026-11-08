@@ -149,6 +149,9 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
 
   // Thread first (D-17), then provider config, then the coordinator. A coordinator
   // constructed with an empty endpoint would fail every turn, so it is never built.
+  // WR-06: keyed on team.id only. `employees`/`skills` are live-query arrays whose
+  // identity changes on every DB write; depending on them tore the effect down mid-run
+  // while the registry still returned the old coordinator.
   useEffect(() => {
     let cancelled = false;
     setConfigError(null);
@@ -206,7 +209,8 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [team.id, db, lead, employees, skills, createRuntimeDeps]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- WR-06: roster arrays are read at construction only
+  }, [team.id, db, createRuntimeDeps]);
 
   useEffect(() => {
     if (!coordinator) return undefined;
@@ -247,8 +251,6 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     return map;
   }, [snapshot.agents]);
 
-  const streamingAgent = snapshot.agents.find((row) => row.status === 'running');
-
   const agentMentionOptions = useMemo(
     () =>
       roster.map((agent) => ({
@@ -259,12 +261,6 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
       })),
     [roster, team.leadId]
   );
-  const turnStatus =
-    snapshot.phase === 'awaiting-mutation-approval'
-      ? 'awaiting-approval'
-      : snapshot.phase === 'batch-running' || snapshot.phase === 'lead-thinking'
-      ? 'streaming'
-      : 'idle';
 
   const handleSubmit = useCallback(
     (text: string) => {
@@ -504,8 +500,10 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                   }}
                   messages={messages}
                   turn={{
-                    status: turnStatus,
-                    streamingText: streamingAgent?.streamingText ?? '',
+                    // WR-11: the coordinator renders one attributed bubble per live agent,
+                    // so the widget's anonymous streaming bubble is suppressed here.
+                    status: 'idle',
+                    streamingText: '',
                     streamingStatusLabel: null,
                     pendingApproval: snapshot.pendingApproval,
                   }}

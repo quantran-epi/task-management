@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Avatar, Button, Drawer, Input, InputNumber, Select, Switch, Tooltip, theme } from 'antd';
 import type { AiEmployee, AiLead } from '../../../types/aiOffice';
-import { ACTIVE_TEAM_CAP_MESSAGE, applyEvenSplit, createTeam } from '../../../db/repositories/aiTeamRepo';
+import { ACTIVE_TEAM_CAP_MESSAGE, createTeam } from '../../../db/repositories/aiTeamRepo';
 import type { TaskPlannerDatabase } from '../../../db';
 import { agentColorFor, agentTextColorFor } from './AgentAttributionRow';
 
@@ -63,7 +63,7 @@ export const TeamEditorDrawer: React.FC<TeamEditorDrawerProps> = ({
     setSaving(true);
     setError(null);
     try {
-      const team = await createTeam(
+      await createTeam(
         {
           name: name.trim(),
           leadId,
@@ -73,8 +73,7 @@ export const TeamEditorDrawer: React.FC<TeamEditorDrawerProps> = ({
         },
         db
       );
-      // `createTeam` seeds the member rows; the split needs those rows to exist.
-      await applyEvenSplit(team.id, budget, db);
+      // WR-09: `createTeam` already writes the even split inside its own transaction.
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

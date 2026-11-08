@@ -55,6 +55,7 @@ import {
 } from '../../../db/repositories/teamTranscriptRepo';
 import {
   addUsedTokens,
+  getTeam,
   listTeamMembers,
   topUpMemberBudget,
   updateTeam,
@@ -274,19 +275,23 @@ export function createTeamRunCoordinator(
 
   function settleAgent(agentId: string, status: AgentRunStatus, report?: string): void {
     const state = agents.get(agentId);
-    if (!state || TERMINAL_STATUSES.includes(state.status)) return;
-    agents.set(agentId, {
-      ...state,
-      status,
-      ...(status === 'stopped' ? { incomplete: true } : {}),
-    });
-    if (report !== undefined) reports.set(agentId, report);
-    // `finishTurn`'s default final status is the completed one; only the two failure
-    // outcomes need naming.
-    if (status === 'error') aiTurnManager.finishTurn(agentTurnId(agentId), 'error');
-    else if (status === 'stopped') aiTurnManager.finishTurn(agentTurnId(agentId), 'aborted');
-    else aiTurnManager.finishTurn(agentTurnId(agentId));
+    // WR-01: the status write and the deferred release are independent — a settle that
+    // lands on an already-terminal agent must still release the batch's await.
+    if (state && !TERMINAL_STATUSES.includes(state.status)) {
+      agents.set(agentId, {
+        ...state,
+        status,
+        ...(status === 'stopped' ? { incomplete: true } : {}),
+      });
+      if (report !== undefined) reports.set(agentId, report);
+      // `finishTurn`'s default final status is the completed one; only the two failure
+      // outcomes need naming.
+      if (status === 'error') aiTurnManager.finishTurn(agentTurnId(agentId), 'error');
+      else if (status === 'stopped') aiTurnManager.finishTurn(agentTurnId(agentId), 'aborted');
+      else aiTurnManager.finishTurn(agentTurnId(agentId));
+    }
     agentDeferreds.get(agentId)?.resolve();
+    agentDeferreds.delete(agentId);
     notify();
   }
 
@@ -419,21 +424,30 @@ export function createTeamRunCoordinator(
     const previous = lastBuckets.get(agentId) ?? 0;
     lastBuckets.set(agentId, current);
     // D-20: pause, never abort. The turn parks at its next tool-round boundary.
+    // WR-04: a late usage chunk after settle must not flip a ready coordinator back to
+    // awaiting-budget with nothing parked.
+    const anyLive = () =>
+      [...agents.values()].some((row) => !TERMINAL_STATUSES.includes(row.status));
+
     if (shouldNotifyPause(previous, current)) {
       gateFor(agentId).close();
       const state = agents.get(agentId);
       if (state && !TERMINAL_STATUSES.includes(state.status)) {
         updateAgent(agentId, { status: 'paused' });
       }
-      phase = 'awaiting-budget';
-      notify();
+      if (anyLive()) {
+        phase = 'awaiting-budget';
+        notify();
+      }
     }
 
     const teamCurrent = bucketOf(teamUsed, teamBudget);
     if (shouldNotifyPause(lastTeamBucket, teamCurrent)) {
       teamGate.close();
-      phase = 'awaiting-budget';
-      notify();
+      if (anyLive()) {
+        phase = 'awaiting-budget';
+        notify();
+      }
     }
     lastTeamBucket = teamCurrent;
 
@@ -543,6 +557,12 @@ export function createTeamRunCoordinator(
       startedAt: new Date().toISOString(),
     });
     registerAgentTurn(employee.id, employee.name);
+
+    // WR-02: every employee turn gets a deferred, not just the batch path, so a paused
+    // mention turn is awaited instead of letting `send()` report the team ready.
+    if (!agentDeferreds.has(employee.id)) {
+      agentDeferreds.set(employee.id, createDeferred());
+    }
 
     const outcome = await registry.get(employee.id).start(request);
     const state = agents.get(employee.id);
@@ -728,7 +748,7 @@ export function createTeamRunCoordinator(
         },
         db
       );
-      agentDeferreds.set(employee.id, createDeferred());
+      // WR-02: the deferred is created by startEmployeeTurn for both paths.
       started.push(
         startEmployeeTurn(employee, assignment.task, lastUserRequest, priorBatchResults)
       );
@@ -800,7 +820,8 @@ export function createTeamRunCoordinator(
   }
 
   function resolveApproval(approved: boolean): void {
-    registry.get(lead.id).resolveApproval(approved);
+    // WR-05: `get` would instantiate a runtime when the lead turn already settled.
+    registry.peek(lead.id)?.resolveApproval(approved);
     pendingApproval = null;
     if (phase === 'awaiting-mutation-approval') phase = 'lead-thinking';
     notify();
@@ -847,7 +868,11 @@ export function createTeamRunCoordinator(
         if (state?.status === 'paused') updateAgent(scope.agentId, { status: 'running' });
       }
     } else {
-      const updated = await updateTeam(teamId, { budgetTokens: teamBudget + amount }, db);
+      // WR-03: read the persisted total inside the call — another writer (a second tab,
+      // a restore, applyEvenSplit) may have moved it since construction.
+      const current = await getTeam(teamId, db);
+      const base = current?.budgetTokens ?? teamBudget;
+      const updated = await updateTeam(teamId, { budgetTokens: base + amount }, db);
       teamBudget = updated.budgetTokens;
       lastTeamBucket = bucketOf(teamUsed, teamBudget);
       teamGate.open();
@@ -857,8 +882,12 @@ export function createTeamRunCoordinator(
         }
       }
     }
+    // WR-04: only claim a paused phase when something is actually parked.
     if (phase === 'awaiting-budget' && !teamGate.isClosed()) {
-      phase = 'batch-running';
+      const anyLive = [...agents.values()].some(
+        (state) => !TERMINAL_STATUSES.includes(state.status)
+      );
+      phase = anyLive ? 'batch-running' : 'ready';
     }
     notify();
   }

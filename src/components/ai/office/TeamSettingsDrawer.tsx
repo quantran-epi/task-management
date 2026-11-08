@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Avatar, Button, Drawer, InputNumber, Switch, Table, theme } from 'antd';
 import type { AiEmployee, AiLead, AiTeam, AiTeamMember } from '../../../types/aiOffice';
 import { agentColorFor, agentTextColorFor } from './AgentAttributionRow';
@@ -82,8 +82,17 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
     [members, lead, employees]
   );
 
+  // WR-08: seed only when the drawer opens (or the team changes). `members` is a live
+  // query whose identity changes on every usage write, which would otherwise reset the
+  // user's in-progress edits mid-run.
+  const seededFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      seededFor.current = null;
+      return;
+    }
+    if (seededFor.current === team.id) return;
+    seededFor.current = team.id;
     setTotal(team.budgetTokens);
     setAutoSplit(team.autoSplitEnabled === true);
     setAutoApprove(team.autoApproveMutations === true);
@@ -104,7 +113,8 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
         })
         .filter((row): row is SplitRow => row !== null)
     );
-  }, [open, team, members, lead, employees]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seeded once per open
+  }, [open, team.id]);
 
   const applyTotal = (next: number) => {
     setTotal(next);

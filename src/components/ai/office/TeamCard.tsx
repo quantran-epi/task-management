@@ -142,7 +142,6 @@ export const TeamCard: React.FC<TeamCardProps> = ({
               size="small"
               type="text"
               onClick={onPause}
-              disabled={activeCount <= 1}
               data-testid={`team-pause-${team.id}`}
             >
               Tạm dừng

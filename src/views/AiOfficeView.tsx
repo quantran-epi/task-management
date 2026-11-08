@@ -239,7 +239,13 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
           </div>
 
           {visibleCount === 0 ? (
-            emptyBlock
+            // WR-07: a search that matches nothing is not an empty collection — showing
+            // the "create your first employee" panel here would be factually wrong.
+            query ? (
+              <Empty description="Không có kết quả phù hợp" />
+            ) : (
+              emptyBlock
+            )
           ) : (
             <div
               style={{

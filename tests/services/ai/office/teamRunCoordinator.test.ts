@@ -9,7 +9,7 @@ import {
 } from '../../../../src/services/ai/office/teamRunCoordinator';
 import { TEAM_TOOL_DEFINITIONS } from '../../../../src/services/ai/office/teamTools';
 import { createEmployee, createLead, createSkill } from '../../../../src/db/repositories/aiOfficeRepo';
-import { createTeam } from '../../../../src/db/repositories/aiTeamRepo';
+import { createTeam, updateTeam } from '../../../../src/db/repositories/aiTeamRepo';
 import { ensureTeamThread, saveTeamMessage } from '../../../../src/db/repositories/teamTranscriptRepo';
 import { aiTurnManager } from '../../../../src/services/ai/aiTurnManager';
 import { EMPLOYEE_READ_ONLY_ALLOWLIST } from '../../../../src/services/ai/chatTurnTools';
@@ -820,7 +820,9 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       harness = await createHarness({ scripts: {} });
       const { coordinator, db, team } = harness;
 
-      // The settings drawer saves a new total; the coordinator adopts it.
+      // Production order: the settings drawer persists the new total, then tells the
+      // coordinator to adopt it.
+      await updateTeam(team.id, { budgetTokens: 10000 }, db);
       coordinator.setTeamBudget(10000);
       await coordinator.topUp({ kind: 'team' }, 2000);
 

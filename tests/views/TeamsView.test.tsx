@@ -166,10 +166,11 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     ).toBeInTheDocument();
   });
 
-  it('disables pause on the last active team', async () => {
+  it('allows pausing the last active team — no minimum-active rule exists', async () => {
     renderView();
 
-    expect(await screen.findByTestId(`team-pause-${activeTeam.id}`)).toBeDisabled();
+    // WR-10: pausing the last active team is a legal transition.
+    expect(await screen.findByTestId(`team-pause-${activeTeam.id}`)).toBeEnabled();
   });
 
   it('opens the create drawer, caps employee selection at 3 and persists the team with its member rows', async () => {
