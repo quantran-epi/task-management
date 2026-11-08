@@ -565,7 +565,7 @@ Plans:
 ### Phase 34: AI Office — fixed AI employees with persona/role/per-model, multi-agent teams that work independently and converse to complete a request, employee list tab and team workspace page
 
 **Goal:** A user can staff an AI Office of reusable employees and leads, assign one skill per employee, and run a team where a lead decomposes the request, proposes a confirmed assignment plan, and dispatches parallel read-only employee batches over a shared, offline-searchable transcript — with lead-only mutations parked on the existing approval card and per-team/per-agent token budgets that pause at 80% instead of auto-stopping.
-**Requirements**: AIO-EMP-01, AIO-EMP-02, AIO-SKILL-01, AIO-SKILL-02, AIO-TEAM-01, AIO-TEAM-02, AIO-TEAM-03, AIO-TEAM-04, AIO-MEM-01, AIO-MEM-02, AIO-MEM-03, AIO-WRITE-01, AIO-WRITE-02, AIO-BUDGET-01, AIO-BUDGET-02, AIO-LINK-01, AIO-BG-01, AIO-UI-01
+**Requirements**: AIO-EMP-01, AIO-EMP-02, AIO-SKILL-01, AIO-SKILL-02, AIO-TEAM-01, AIO-TEAM-02, AIO-TEAM-03, AIO-TEAM-04, AIO-MEM-01, AIO-MEM-02, AIO-MEM-03, AIO-WRITE-01, AIO-WRITE-02, AIO-BUDGET-01, AIO-BUDGET-02, AIO-LINK-01, AIO-BG-01, AIO-UI-01, AIO-BACKUP-01
 **Depends on:** Phase 33
 **Success Criteria** (what must be TRUE):
 

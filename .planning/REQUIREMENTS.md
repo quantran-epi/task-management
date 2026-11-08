@@ -111,6 +111,7 @@
 - [ ] **AIO-LINK-01**: A team links to N items of type CR, task, system, note, or document; the lead receives `list_linked_items()` and `get_linked_context({ itemId })` returning full retrievable content (note body, document content, CR tasks, system details), not just metadata.
 - [ ] **AIO-BG-01**: Team runs continue when the user leaves the tab or switches views; returning shows the full result, each running agent streams into its own bubble with a status badge, and per-agent Stop plus a global Stop are both available.
 - [ ] **AIO-UI-01**: The workbench exposes an employee tab (employees, leads, and skills) and a team page (`EditorViewType 'teams'`) with the shared team transcript workspace.
+- [ ] **AIO-BACKUP-01**: The new AI Office tables and the new chat-message attribution fields survive backup export → validate → restore round-trip without bumping the backup envelope version, and a pre-existing v11 backup without them still restores.
 
 ## Future Requirements (Deferred)
 
@@ -201,6 +202,7 @@
 | AIO-LINK-01 | Phase 34 | Pending |
 | AIO-BG-01 | Phase 34 | Pending |
 | AIO-UI-01 | Phase 34 | Pending |
+| AIO-BACKUP-01 | Phase 34 | Pending |
 
 | EXPUI-01 | Phase 25.4 | Pending |
 | EXPUI-02 | Phase 25.4 | Pending |
@@ -215,8 +217,8 @@
 
 **Coverage:**
 
-- v1 requirements: 61 total
-- Mapped to phases: 61
+- v1 requirements: 62 total
+- Mapped to phases: 62
 - Unmapped: 0 ✓
 
 **Phase totals:**
@@ -231,7 +233,7 @@
 - Phase 31.2 (Enterprise Systems Catalog & CR Normalization): 6 requirements, plans TBD
 - Phase 32 (External Research via Claude Code): 6 requirements, ~4 plans
 - Phase 33 (Prompt Transparency & Contract Documentation): 2 requirements, 2 plans
-- Phase 34 (AI Office — AI Employees, Teams, and Skills): 18 requirements, plans TBD
+- Phase 34 (AI Office — AI Employees, Teams, and Skills): 19 requirements, plans TBD
 
 **Mapping changes vs initial proposal:** SDLC-REPO-06 moved from Phase 30 to Phase 29 so per-project opt-in and the repository path exist before any run or change-pack work relies on them. SDLC-CONV and SDLC-RES were added after the initial roadmap and occupy Phases 31–32; SDLC-OBS moved from Phase 31 to Phase 33 so it documents the final composer shape after conventions and research exist.
 
