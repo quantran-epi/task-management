@@ -227,7 +227,6 @@ describe.each(hosts)('$name lifecycle parity through the shared widget', (host) 
     expect(pending[0]!.options).toBeTruthy();
     const indicator = await screen.findByTestId('ai-staged-loading');
     expect(indicator).toHaveAttribute('role', 'status');
-    expect(within(indicator).getByText('Chuẩn bị ngữ cảnh')).toBeInTheDocument();
 
     pending[0]!.resolve({ fullResponse: 'Đã trả lời xong', tokenUsage: {} });
     await waitFor(() => expect(screen.getByText('Đã trả lời xong')).toBeInTheDocument());

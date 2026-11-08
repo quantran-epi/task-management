@@ -123,10 +123,9 @@ describe('AiChatWidget lifecycle and host extension points (D-01..D-06, D-19, D-
     const indicator = screen.getByTestId('ai-staged-loading');
     expect(indicator).toBeInTheDocument();
     expect(indicator).toHaveAttribute('role', 'status');
-    expect(screen.getAllByText('Chuẩn bị ngữ cảnh').length).toBeGreaterThan(0);
-    expect(screen.getByText('Truy xuất công cụ')).toBeInTheDocument();
-    expect(screen.getByText('Đang phản hồi')).toBeInTheDocument();
-    expect(screen.getByText('Chờ phê duyệt')).toBeInTheDocument();
+    expect(screen.queryByText('Truy xuất công cụ')).not.toBeInTheDocument();
+    expect(screen.queryByText('Đang phản hồi')).not.toBeInTheDocument();
+    expect(screen.queryByText('Chờ phê duyệt')).not.toBeInTheDocument();
   });
 
   it('collapses tool badges and never leaks reasoning into the DOM', () => {

@@ -113,6 +113,12 @@ import {
 import type { ChatTab } from '../../types/models';
 import type { TabRuntimePatch, TabRuntimeStatus } from './runtime/tabTypes';
 import { stageLabelFor } from './runtime/useChatTurn';
+import { aiTurnManager, ACTIVE_AI_STATUSES } from '../../services/ai/aiTurnManager';
+
+// Module-level registry so background AI turns survive drawer unmounts and view navigation
+let globalTabTurnRegistry: TabTurnRegistry | null = null;
+let globalDbInstance: TaskPlannerDatabase | null = null;
+const globalHostAbortMap = new Map<string, AbortController>();
 
 /** Runtime turn status → drawer tab badge status. */
 export const TURN_STATUS_TO_TAB: Record<ChatTurnStatus, TabRuntimeStatus> = {
@@ -444,6 +450,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     : internalScope;
 
   const scopeKey = buildScopeKey(currentScope.type, currentScope.id);
+  const scopeKeyRef = useRef(scopeKey);
+  scopeKeyRef.current = scopeKey;
 
   const isCrScope = currentScope.type === 'cr' && Boolean(currentScope.id);
 
@@ -461,11 +469,11 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   // (T-25.3-35). No `useChatTurn` here: a hook keyed on the active tab would
   // abort the previous runtime on every tab switch and kill background turns.
   // ---------------------------------------------------------------------------
-  const turnRegistryRef = useRef<TabTurnRegistry | null>(null);
+  const turnRegistryRef = useRef<TabTurnRegistry | null>(globalTabTurnRegistry);
   const configRef = useRef<{ endpoint: string; contextWindowTokens?: number } | null>(null);
   // Host-side prelude (grounded routing, prompt assembly) is abortable per tab; the tool loop
   // itself is aborted by the runtime's own controller.
-  const hostAbortRef = useRef(new Map<string, AbortController>());
+  const hostAbortRef = useRef(globalHostAbortMap);
   // Debug-log turn ids per tab, so the drawer's own debug console keeps tracking turns.
   const debugTurnRef = useRef(new Map<string, string>());
   const hostSignal = (tabId: string) => {
@@ -494,11 +502,15 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     []
   );
 
-  if (!turnRegistryRef.current) {
-    turnRegistryRef.current = createTabTurnRegistry((tabId) => {
+  const runDrawerTurnLoopRef = useRef(runDrawerTurnLoop);
+  runDrawerTurnLoopRef.current = runDrawerTurnLoop;
+
+  if (!globalTabTurnRegistry || globalDbInstance !== db) {
+    globalDbInstance = db;
+    globalTabTurnRegistry = createTabTurnRegistry((tabId) => {
       const patch = (value: TabRuntimePatch) => tabRuntimesRef.current.patch(tabId, value);
       return {
-        runLoop: runDrawerTurnLoop,
+        runLoop: (options) => runDrawerTurnLoopRef.current(options),
         saveMessage,
         describeMutation: describeToolMutationWithContext,
         db,
@@ -513,18 +525,45 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
             ...(status === 'tool-limit' ? { streamingText: '', partialBuffer: '', toolProgress: null, groundedLoadingStatus: null } : {}),
           });
           setTurnRevision((prev) => prev + 1);
+
+          if (ACTIVE_AI_STATUSES.includes(status)) {
+            const currentTab = durableTabsRef.current.find((t) => t.id === tabId);
+            const title = currentTab?.title ? `Chat: ${currentTab.title}` : 'AI Chat';
+            aiTurnManager.registerTurn({
+              id: tabId,
+              scopeKey: scopeKeyRef.current,
+              title,
+              status,
+              streamingStatusLabel: stageLabelFor(status),
+              streamingText: tabRuntimesRef.current.get(tabId)?.streamingText ?? '',
+              toolEvents: tabRuntimesRef.current.get(tabId)?.toolEvents ?? [],
+              abort: () => {
+                abortHostTurn(tabId);
+                globalTabTurnRegistry?.abortTab(tabId);
+              },
+            });
+          } else {
+            aiTurnManager.finishTurn(tabId, status);
+          }
         },
         onDelta: (delta) => {
           const current = tabRuntimesRef.current.get(tabId)?.streamingText ?? '';
-          patch({ streamingText: current + delta, partialBuffer: current + delta });
+          const next = current + delta;
+          patch({ streamingText: next, partialBuffer: next });
           const debugTurnId = debugTurnRef.current.get(tabId);
           if (debugTurnId) aiDebugService.appendStreamChunk(debugTurnId, delta);
+          aiTurnManager.updateTurn(tabId, { streamingText: next });
         },
         onToolEvent: (event) => {
           const existing = tabRuntimesRef.current.get(tabId)?.toolProgress;
+          const nextEvents = [...(tabRuntimesRef.current.get(tabId)?.toolEvents ?? []), event];
           patch({
             toolProgress: existing === event.name ? null : event.name,
-            toolEvents: [...(tabRuntimesRef.current.get(tabId)?.toolEvents ?? []), event],
+            toolEvents: nextEvents,
+          });
+          aiTurnManager.updateTurn(tabId, {
+            toolEvents: nextEvents,
+            toolProgress: existing === event.name ? null : event.name,
           });
           const debugTurnId = debugTurnRef.current.get(tabId);
           if (!debugTurnId) return;
@@ -541,6 +580,10 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         onAwaitingApproval: ({ toolName, summary }) => {
           patch({ pendingConfirmation: { toolName, summary }, streamingStatus: 'Chờ xác nhận hành động...' });
           setTurnRevision((prev) => prev + 1);
+          aiTurnManager.updateTurn(tabId, {
+            status: 'awaiting-approval',
+            streamingStatusLabel: 'Chờ xác nhận hành động...',
+          });
         },
         onError: (info) => {
           patch({
@@ -551,10 +594,12 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
             groundedLoadingStatus: null,
           });
           setTurnRevision((prev) => prev + 1);
+          aiTurnManager.finishTurn(tabId, 'error');
         },
       } satisfies ChatTurnRuntimeDeps;
     });
   }
+  turnRegistryRef.current = globalTabTurnRegistry;
 
   const [syncTrigger, setSyncTrigger] = useState(0);
 
@@ -562,6 +607,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const durableTabs = useLiveQuery<ChatTab[]>(async () => {
     return listTabsByScope(scopeKey, db);
   }, [db, scopeKey, syncTrigger]) ?? [];
+  const durableTabsRef = useRef<ChatTab[]>([]);
+  durableTabsRef.current = durableTabs;
 
   const [selectedTabId, setSelectedTabId] = useState<string | null>(null);
   const activeTab = (selectedTabId ? durableTabs.find((t) => t.id === selectedTabId) : undefined)
@@ -1140,36 +1187,20 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const activeToolEvents = activeRuntime?.toolEvents ?? [];
   const activeRoutedScope = routedScopeByTab[activeRuntimeTabId] ?? null;
 
-  // Abort every tab's request on unmount only. Drawer close must not abort an in-flight turn (D-09).
+  // Background turns continue running when the drawer unmounts or view switches.
+  // Abort only occurs on explicit user Stop action or tab deletion.
   useEffect(() => {
     return () => {
-      for (const tabId of hostAbortRef.current.keys()) abortHostTurn(tabId);
-      turnRegistryRef.current?.abortAll();
-      for (const runtime of Object.values(tabRuntimesRef.current.getSnapshot())) {
-        runtime.confirmationResolver?.(false);
-        runtime.requestController?.abort();
-      }
+      // Intentionally do NOT abort tab runtimes on unmount.
     };
   }, []);
 
-  // Abort every outgoing-scope request on scope change (AI-SPEC §4b).
-  // Chat tab ids are scope-scoped, so every runtime present here belongs to the outgoing scope;
-  // the new scope's runtimes are created later by the initialize effect.
+  // On scope change: clear ephemeral prelude states without killing in-flight tab turns
   useEffect(() => {
-    for (const tabId of hostAbortRef.current.keys()) abortHostTurn(tabId);
-    turnRegistryRef.current?.abortAll();
-    // The prelude token is the only cancel record a parked ground turn respects: aborting
-    // controllers is not enough, because the pipeline may resolve instead of throwing.
     for (const tabId of preludeTokenRef.current.keys()) {
       preludeTokenRef.current.delete(tabId);
     }
     setPreludeTabs({});
-    for (const runtime of Object.values(tabRuntimesRef.current.getSnapshot())) {
-      if (!runtime.requestController) continue;
-      runtime.requestController.abort();
-      tabRuntimesRef.current.patch(runtime.tabId, { groundedLoadingStatus: null });
-    }
-    setClarifyByTab({});
   }, [currentScope.type, currentScope.id]);
 
   const handleStopGeneration = () => {
@@ -1184,6 +1215,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     }
     abortHostTurn(activeRuntimeTabId);
     turnRegistryRef.current?.abortTab(activeRuntimeTabId);
+    aiTurnManager.abortTurn(activeRuntimeTabId);
     runtime?.requestController?.abort();
     runtime?.confirmationResolver?.(false);
     tabRuntimesRef.current.patch(activeRuntimeTabId, {

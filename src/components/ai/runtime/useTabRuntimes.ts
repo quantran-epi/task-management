@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createTabRuntime, type TabRuntime, type TabRuntimePatch } from './tabTypes';
 
 export interface TabRuntimeRegistry {
@@ -12,63 +12,86 @@ export interface TabRuntimeRegistry {
   snapshot: Readonly<Record<string, TabRuntime>>;
 }
 
-export function useTabRuntimes(): TabRuntimeRegistry {
-  const runtimesRef = useRef(new Map<string, TabRuntime>());
-  const [snapshot, setSnapshot] = useState<Record<string, TabRuntime>>({});
+// Module-level store so tab runtimes survive drawer unmounts and view navigation
+const globalRuntimes = new Map<string, TabRuntime>();
+const globalListeners = new Set<() => void>();
 
-  const publish = useCallback(() => {
-    setSnapshot(Object.fromEntries(runtimesRef.current));
+function notifyListeners() {
+  globalListeners.forEach((listener) => {
+    try {
+      listener();
+    } catch (err) {
+      console.error('[useTabRuntimes] Listener error:', err);
+    }
+  });
+}
+
+export function useTabRuntimes(): TabRuntimeRegistry {
+  const [snapshot, setSnapshot] = useState<Record<string, TabRuntime>>(() =>
+    Object.fromEntries(globalRuntimes)
+  );
+
+  useEffect(() => {
+    const listener = () => {
+      setSnapshot(Object.fromEntries(globalRuntimes));
+    };
+    globalListeners.add(listener);
+    // Sync immediately in case state changed before subscription attached
+    listener();
+    return () => {
+      globalListeners.delete(listener);
+    };
   }, []);
 
   const ensure = useCallback((tabId: string, threadId: string) => {
-    const current = runtimesRef.current.get(tabId);
+    const current = globalRuntimes.get(tabId);
     if (!current) {
       const next = createTabRuntime(tabId, threadId);
-      runtimesRef.current.set(tabId, next);
+      globalRuntimes.set(tabId, next);
       return next;
     }
     if (current.threadId !== threadId) {
       const next = { ...current, threadId };
-      runtimesRef.current.set(tabId, next);
+      globalRuntimes.set(tabId, next);
       return next;
     }
     return current;
   }, []);
 
   const get = useCallback((tabId: string, threadId?: string) => {
-    const runtime = runtimesRef.current.get(tabId);
+    const runtime = globalRuntimes.get(tabId);
     return runtime && (!threadId || runtime.threadId === threadId) ? runtime : undefined;
   }, []);
 
   const patch = useCallback((tabId: string, patchValue: TabRuntimePatch, threadId?: string) => {
-    const runtime = runtimesRef.current.get(tabId);
+    const runtime = globalRuntimes.get(tabId);
     if (!runtime || (threadId && runtime.threadId !== threadId)) return runtime;
     const next = { ...runtime, ...patchValue };
-    runtimesRef.current.set(tabId, next);
-    publish();
+    globalRuntimes.set(tabId, next);
+    notifyListeners();
     return next;
-  }, [publish]);
+  }, []);
 
   const initialize = useCallback((tabId: string, threadId: string) => {
-    const current = runtimesRef.current.get(tabId);
+    const current = globalRuntimes.get(tabId);
     const runtime = ensure(tabId, threadId);
-    if (current !== runtime) publish();
+    if (current !== runtime) notifyListeners();
     return runtime;
-  }, [ensure, publish]);
+  }, [ensure]);
 
   const reset = useCallback((tabId: string, threadId: string) => {
     const next = createTabRuntime(tabId, threadId);
-    runtimesRef.current.set(tabId, next);
-    publish();
+    globalRuntimes.set(tabId, next);
+    notifyListeners();
     return next;
-  }, [publish]);
+  }, []);
 
   const discard = useCallback((tabId: string) => {
-    if (!runtimesRef.current.delete(tabId)) return;
-    publish();
-  }, [publish]);
+    if (!globalRuntimes.delete(tabId)) return;
+    notifyListeners();
+  }, []);
 
-  const getSnapshot = useCallback(() => Object.fromEntries(runtimesRef.current), []);
+  const getSnapshot = useCallback(() => Object.fromEntries(globalRuntimes), []);
 
   return useMemo(
     () => ({ get, initialize, patch, reset, discard, getSnapshot, snapshot }),

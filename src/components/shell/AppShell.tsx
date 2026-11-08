@@ -33,6 +33,7 @@ import { useGitHubAutoSync } from '../../hooks/useGitHubAutoSync';
 import { useTelegramHeadlessWorker } from '../../services/telegram/telegramHeadlessWorker';
 import { GitHubSyncStatusDot } from './GitHubSyncStatusDot';
 import { ActiveTimerWidget } from '../timer/ActiveTimerWidget';
+import { ActiveAiTurnIndicator } from '../ai/ActiveAiTurnIndicator';
 import { NotificationBell } from '../notifications/NotificationBell';
 import { NotificationDrawer } from '../notifications/NotificationDrawer';
 import { TaskDrawer } from '../tasks/TaskDrawer';
@@ -601,10 +602,11 @@ const AppShellInner: React.FC<AppShellProps> = ({
             )}
           </Space>
 
-          {/* Right: GitHub sync dot, ActiveTimerWidget, Mobile search, Daily Review, AI Assistant, NotificationBell, InstallButton, UpdateBadge */}
+          {/* Right: GitHub sync dot, ActiveTimerWidget, ActiveAiTurnIndicator, Mobile search, Daily Review, AI Assistant, NotificationBell, InstallButton, UpdateBadge */}
           <Space size="small" align="center">
             <GitHubSyncStatusDot />
             <ActiveTimerWidget />
+            <ActiveAiTurnIndicator />
 
             {isMobile && (
               <Tooltip title="Tìm kiếm & Lệnh nhanh">

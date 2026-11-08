@@ -108,6 +108,7 @@ Progress: [███████░░░] 70%
 | `261108-hga-cai-thien-icon-workbench` | 2026-11-08 | Workbench Layout, TitleBar, EditorArea, Explorers | Redesigned Diagram icon to flowchart; added 3D isometric Systems icon, Git branch Remote icon, SDLC infinity loop; added tab icons to EditorArea; synchronized tree view folder/leaf icon system |
 | `261108-ttb-terminal-trigger-bottom-left-colorful-icon` | 2026-11-08 | Workbench Stripe, StatusBar, Keymap, Icons | Moved terminal trigger from bottom status bar to bottom-left stripe below Remote Git Explorer; added colorful JetBrainsExpUI terminal icon with midnight console, traffic light dots, neon prompt & cursor; enabled Alt+F12 keymap |
 | `261108-tre-tree-expand-hover-pill-diagram-create` | 2026-11-08 | Workbench Trees, Styles, DiagramExplorer | Set instant tree expand with motion=null; balanced 18x18px hover pill centered on chevron without text height overflow; added Tạo button next to search box in DiagramExplorer |
+| `261108-bgc-background-ai-chat-runner-indicator` | 2026-11-08 | AI Turn Manager, Drawer, StepChatPanel, StatusBar | Implemented global background AI turn execution surviving unmount/navigation; added bottom pill indicator with live elapsed ticker and manual abort |
 
 ## Decisions
 

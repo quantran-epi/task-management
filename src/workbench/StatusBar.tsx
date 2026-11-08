@@ -9,6 +9,7 @@ import { useTimer } from '../hooks/useTimer';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { ActiveTimerWidget } from '../components/timer/ActiveTimerWidget';
+import { ActiveAiTurnIndicator } from '../components/ai/ActiveAiTurnIndicator';
 import { useLayoutStore } from './store/layoutStore';
 
 export interface StatusBarProps {
@@ -128,9 +129,10 @@ export function StatusBar({
         </Tooltip>
       </div>
 
-      {/* Right: Active Timer Widget & Sync status */}
+      {/* Right: Active AI Turn Indicator, Active Timer Widget & Sync status */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <ActiveAiTurnIndicator compact />
           <ActiveTimerWidget compact />
         </div>
 

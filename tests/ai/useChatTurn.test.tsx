@@ -66,13 +66,24 @@ describe('useChatTurn binding', () => {
     expect(result.current.runtime).not.toBe(firstRuntime);
   });
 
-  it('aborts the in-flight runtime on unmount', () => {
+  it('aborts the in-flight runtime on unmount when background is false', () => {
     const deps = baseDeps(async () => ({ fullResponse: 'ok', tokenUsage: {} }));
     const { result, unmount } = renderHook(() => useChatTurn({ scopeKey: SCOPE_KEY, deps }));
 
     const abortSpy = vi.spyOn(result.current.runtime, 'abort');
     unmount();
     expect(abortSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves the in-flight runtime on unmount when background is true', () => {
+    const deps = baseDeps(async () => ({ fullResponse: 'ok', tokenUsage: {} }));
+    const { result, unmount } = renderHook(() =>
+      useChatTurn({ scopeKey: 'sdlc:bg-test', deps, background: true })
+    );
+
+    const abortSpy = vi.spyOn(result.current.runtime, 'abort');
+    unmount();
+    expect(abortSpy).not.toHaveBeenCalled();
   });
 
   it('maps statuses to the four UI-SPEC staged labels', () => {

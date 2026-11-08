@@ -553,6 +553,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
 
   const turn = useChatTurn({
     scopeKey,
+    background: true,
     deps: {
       ...createDefaultChatTurnDeps(db),
       onToolEvent: (event) => {

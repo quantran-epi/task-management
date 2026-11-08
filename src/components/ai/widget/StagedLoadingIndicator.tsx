@@ -1,5 +1,5 @@
 import React from 'react';
-import { Tag, Typography, theme } from 'antd';
+import { Tag } from 'antd';
 import { SyncOutlined, CheckCircleOutlined } from '@ant-design/icons';
 
 export type StagedLoadingStage =
@@ -15,23 +15,11 @@ export interface StagedLoadingIndicatorProps {
   toolPhase?: 'call' | 'result';
 }
 
-/** UI-SPEC §2 order: the four staged labels, never raw reasoning (D-04, D-19). */
-const STAGES: Array<{ id: StagedLoadingStage; label: string }> = [
-  { id: 'preparing', label: 'Chuẩn bị ngữ cảnh' },
-  { id: 'tool', label: 'Truy xuất công cụ' },
-  { id: 'streaming', label: 'Đang phản hồi' },
-  { id: 'awaiting-approval', label: 'Chờ phê duyệt' },
-];
-
 export const StagedLoadingIndicator: React.FC<StagedLoadingIndicatorProps> = ({
   stage,
   toolName,
   toolPhase,
 }) => {
-  const { token } = theme.useToken();
-  const activeId: StagedLoadingStage =
-    stage === 'synthesizing' ? 'streaming' : stage;
-
   return (
     <div
       role="status"
@@ -42,26 +30,10 @@ export const StagedLoadingIndicator: React.FC<StagedLoadingIndicatorProps> = ({
         flexWrap: 'wrap',
         alignItems: 'center',
         gap: 8,
-        padding: '4px 0',
+        padding: stage === 'tool' && toolName ? '4px 0' : 0,
         fontSize: 12,
       }}
     >
-      {STAGES.map((entry) => {
-        const active = entry.id === activeId;
-        return (
-          <Typography.Text
-            key={entry.id}
-            style={{
-              fontSize: 12,
-              fontWeight: active ? 600 : 400,
-              color: active ? token.colorPrimary : token.colorTextTertiary,
-            }}
-          >
-            {entry.label}
-          </Typography.Text>
-        );
-      })}
-
       {stage === 'tool' && toolName && (
         <Tag
           icon={
