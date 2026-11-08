@@ -578,11 +578,11 @@ Plans:
 7. A stopped agent reports back to the lead explicitly marked incomplete, and a global Stop aborts the lead plus every running agent.
 8. Team runs continue when the user leaves the tab, and returning shows the full result.
 
-**Plans:** 10 plans in 5 waves
+**Plans:** 1/10 plans executed
 
 **Wave 1** *(no dependencies; the hard gate — every later plan imports these types and tables)*
 
-- [ ] 34-01-PLAN.md — AI Office type contract, Zod schemas, additive Dexie `version(17)`, `'team'` scope, message attribution, SQLite mirror allowlists
+- [x] 34-01-PLAN.md — AI Office type contract, Zod schemas, additive Dexie `version(17)`, `'team'` scope, message attribution, SQLite mirror allowlists
 
 **Wave 2** *(depends on 34-01; four independent plans)*
 
