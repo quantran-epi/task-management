@@ -77,6 +77,8 @@ export function getEditorTabIcon(viewType: EditorViewType, size = 13): React.Rea
       return <JetBrainsDashboardIcon size={size} />;
     case 'agents':
       return <JetBrainsAgentsIcon size={size} />;
+    case 'teams':
+      return <JetBrainsAgentsIcon size={size} />;
     case 'telegram':
       return <JetBrainsTelegramIcon size={size} />;
     case 'sdlc':
@@ -638,6 +640,7 @@ export function EditorArea({ db }: EditorAreaProps) {
                 notes: 'Docs',
                 settings: 'Settings',
                 agents: 'Ghost Dev',
+                teams: 'AI Office — Nhóm',
                 telegram: 'Telegram',
               };
               const tabId = params?.doc

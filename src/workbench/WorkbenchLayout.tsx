@@ -181,6 +181,7 @@ export function WorkbenchLayout({
         notes: 'Docs',
         projects: 'Projects',
         agents: 'Ghost Dev Agents',
+        teams: 'AI Office — Nhóm',
         telegram: 'Telegram Bot',
         mermaid: 'Diagram Studio',
         sdlc: 'SDLC Studio',
