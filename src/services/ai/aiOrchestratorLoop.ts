@@ -96,6 +96,11 @@ export interface AiOrchestratorLoopOptions {
   contextWindowTokens?: number | undefined;
   /** Fraction of the window that triggers compaction. Default 0.8. */
   compactAtRatio?: number;
+  /**
+   * D-21: awaited at every round boundary after the first, before the next model
+   * call. Receives the loop's own signal so a parked gate can reject on abort.
+   */
+  beforeToolRound?: ((round: number, signal?: AbortSignal) => Promise<void>) | undefined;
 }
 
 export interface AiOrchestratorLoopResult {
@@ -177,6 +182,7 @@ export async function runAiOrchestratorLoop(
     maxOldToolChars = 500,
     contextWindowTokens,
     compactAtRatio = 0.8,
+    beforeToolRound,
   } = options;
 
   const maxLoops = Number.isFinite(requestedMaxLoops) && requestedMaxLoops > 0
@@ -219,6 +225,14 @@ export async function runAiOrchestratorLoop(
 
   while (loopCount < maxLoops) {
     loopCount++;
+    // D-21: round boundary — every tool result from the previous round is already
+    // appended, so parking here resumes exactly where it stopped. The signal is
+    // passed in so a gate parked inside the hook rejects on Stop (Pitfall 8);
+    // throwIfAborted covers a hook that resolves normally after an abort.
+    if (loopCount > 1 && beforeToolRound) {
+      await beforeToolRound(loopCount, signal);
+      signal?.throwIfAborted();
+    }
     fullResponse = '';
     let hasToolCalls = false;
     let toolCallsToRun: ToolCall[] = [];

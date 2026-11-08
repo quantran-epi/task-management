@@ -75,6 +75,17 @@ export interface ChatTurnRequest {
   artifactContext?: ArtifactToolContext;
   /** WR-19: CR this turn is bound to; tool calls outside it are rejected. */
   crScopeId?: string;
+  /** Phase 34 D-31: AI Office attribution forwarded into the persisted assistant row. */
+  agentId?: string | undefined;
+  agentName?: string | undefined;
+  agentKind?: 'lead' | 'employee' | undefined;
+  messageKind?: 'instruction' | 'report' | 'synthesis' | 'plan' | undefined;
+  /** D-12: employee turns write no user row, so concurrent turns cannot fake human bubbles. */
+  persistUserMessage?: boolean | undefined;
+  /** D-12: `read-only` refuses every mutation before the artifact and auto-approve branches. */
+  mutationPolicy?: 'approve' | 'read-only' | undefined;
+  /** D-21: awaited at every loop round boundary after the first, with the turn signal. */
+  beforeToolRound?: ((round: number, signal: AbortSignal) => Promise<void>) | undefined;
 }
 
 export interface ChatTurnOutcome {
@@ -101,6 +112,8 @@ export interface ChatTurnRuntimeDeps {
   onError?: (error: ChatTurnErrorInfo) => void;
   /** Tool-produced files, forwarded to the host so it can keep rendering them. */
   onFileGenerated?: (file: ChatGeneratedFile) => void;
+  /** Cumulative per-turn usage, so a coordinator never re-sums round deltas. */
+  onUsage?: (usage: ChatTokenUsage) => void;
 }
 
 export interface ChatTurnRuntime {
@@ -143,6 +156,14 @@ const DECLINED_CANCELLATION = JSON.stringify({
 });
 
 const PATCH_TOOL_NAME = 'patch_artifact_section';
+
+/** D-12: structural refusal for an employee turn, before any approval path. */
+export const READ_ONLY_REFUSAL = JSON.stringify({
+  cancelled: true,
+  code: 'READ_ONLY_EMPLOYEE',
+  message:
+    'Nhân viên AI chỉ được đọc dữ liệu. Thao tác ghi này bị từ chối và không có thay đổi nào được thực hiện.',
+});
 
 const SYNTHESIS_STATUS_MARKER = 'tổng hợp';
 
@@ -234,14 +255,14 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
       if (!isCurrent(turnId, turnController)) {
         return { phase: 'aborted', requestId: turnId, userMessageId };
       }
-      if (!userMessageId) {
+      if (!userMessageId && request.persistUserMessage !== false) {
         const saved = await (pendingSave = deps.saveMessage(
           { threadId: request.threadId, role: 'user', content: request.text },
           deps.db
         ));
         userMessageId = saved.id;
       }
-      lastUserMessageId = userMessageId;
+      if (userMessageId) lastUserMessageId = userMessageId;
 
       if (!isCurrent(turnId, turnController)) {
         publish('aborted');
@@ -279,6 +300,9 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
           : {}),
         db: deps.db,
         signal: turnController.signal,
+        ...(request.beforeToolRound
+          ? { beforeToolRound: (r: number) => request.beforeToolRound!(r, turnController.signal) }
+          : {}),
         ...(request.analysisMode
           ? { keepRecentToolOutputs: 20, maxOldToolChars: 100_000 }
           : {}),
@@ -319,6 +343,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
             completionTokens: (tokenUsage.completionTokens || 0) + (usage.completionTokens || 0),
             totalTokens: (tokenUsage.totalTokens || 0) + (usage.totalTokens || 0),
           };
+          deps.onUsage?.(tokenUsage);
         },
         onToolCall: (call) => {
           publish('tool');
@@ -346,6 +371,12 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
           deps.onFileGenerated?.(file);
         },
         onMutationCheck: async (toolName, args) => {
+          // D-12: an employee turn is structurally read-only. This must precede the
+          // artifact branch and autoApprove — a hallucinated mutation name still
+          // matches isMutationTool and would otherwise park an approvable card.
+          if (request.mutationPolicy === 'read-only') {
+            return { proceed: false, cancellationResult: READ_ONLY_REFUSAL };
+          }
           // Fixed guard order (T-25.3-21): artifact patch, auto-approve, explicit wait.
           // Analysis Mode is a prompt preference only; it never blocks or bypasses execution.
           if (normalizeToolName(toolName) === PATCH_TOOL_NAME) {
@@ -461,6 +492,10 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
           tokenUsage,
           durationMs: Date.now() - startedAt,
           ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
+          ...(request.agentId ? { agentId: request.agentId } : {}),
+          ...(request.agentName ? { agentName: request.agentName } : {}),
+          ...(request.agentKind ? { agentKind: request.agentKind } : {}),
+          ...(request.messageKind ? { messageKind: request.messageKind } : {}),
         },
         deps.db
       ));
