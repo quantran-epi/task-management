@@ -75,7 +75,7 @@ describe('Artifact patch approval real panel/hook/runtime/widget', () => {
     await waitFor(() => expect(screen.getByTestId('ai-chat-widget')).not.toHaveAttribute('data-scope-key', 'default'));
     await waitFor(() => expect(screen.getByText('test')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('tab-compact-more-btn'));
-    fireEvent.click(await screen.findByText('Chế độ phân tích (chỉ đọc)'));
+    fireEvent.click(await screen.findByText('Chế độ phân tích (ưu tiên tra cứu)'));
     fireEvent.click(screen.getByTestId('tab-compact-more-btn'));
     await waitFor(() => expect(screen.queryByText('Phân tích')).not.toBeInTheDocument());
     await act(async () => { void ref.current!.sendMessage('Xem đề xuất hiện tại'); });

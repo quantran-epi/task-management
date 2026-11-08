@@ -49,6 +49,8 @@ export interface LayoutStateValues {
   isBottomMaximized: boolean;
   /** Transient 1-click Terminal request. Deliberately not persisted (T-31.2-19). */
   pendingTerminalTarget: PendingTerminalTarget | null;
+  /** Transient per-tab reload counter. Deliberately not persisted. */
+  tabReloadKeys: Record<string, number>;
 }
 
 export interface LayoutActions {
@@ -59,6 +61,10 @@ export interface LayoutActions {
   setBottomMaximized: (maximized: boolean) => void;
   openTab: (tab: EditorTab) => void;
   closeTab: (tabId: string) => void;
+  closeOtherTabs: (tabId: string) => void;
+  closeAllTabs: () => void;
+  reloadTab: (tabId?: string) => void;
+  reloadAllTabs: () => void;
   togglePinTab: (tabId: string) => void;
   reorderTabs: (fromIndex: number, toIndex: number) => void;
   setActiveTabId: (tabId: string) => void;
@@ -91,6 +97,7 @@ export const DEFAULT_LAYOUT_STATE: LayoutStateValues = {
   activeRemoteBranch: '',
   isBottomMaximized: false,
   pendingTerminalTarget: null,
+  tabReloadKeys: {},
 };
 
 export const LAYOUT_STORAGE_KEY = 'taskmate_workbench_layout_v2';
@@ -207,6 +214,49 @@ export const useLayoutStore = create<LayoutState>()(
             openTabs: newTabs,
             activeTabId: newActiveId,
           };
+        });
+      },
+
+      closeOtherTabs: (tabId: string) => {
+        set((state) => {
+          const remaining = state.openTabs.filter((t) => t.id === tabId || t.pinned);
+          return {
+            openTabs: remaining,
+            activeTabId: tabId,
+          };
+        });
+      },
+
+      closeAllTabs: () => {
+        set((state) => {
+          const pinnedOnly = state.openTabs.filter((t) => t.pinned);
+          return {
+            openTabs: pinnedOnly,
+            activeTabId: pinnedOnly[0]?.id ?? null,
+          };
+        });
+      },
+
+      reloadTab: (tabId?: string) => {
+        set((state) => {
+          const targetId = tabId ?? state.activeTabId;
+          if (!targetId) return state;
+          return {
+            tabReloadKeys: {
+              ...state.tabReloadKeys,
+              [targetId]: (state.tabReloadKeys[targetId] ?? 0) + 1,
+            },
+          };
+        });
+      },
+
+      reloadAllTabs: () => {
+        set((state) => {
+          const nextKeys = { ...state.tabReloadKeys };
+          for (const tab of state.openTabs) {
+            nextKeys[tab.id] = (nextKeys[tab.id] ?? 0) + 1;
+          }
+          return { tabReloadKeys: nextKeys };
         });
       },
 

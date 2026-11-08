@@ -166,6 +166,23 @@ export function initStandardActions(): void {
         window.dispatchEvent(new CustomEvent('taskmate:open-mermaid-studio'));
       },
     },
+    {
+      id: 'tab.reload-active',
+      title: 'Reload Active Tab',
+      category: 'Tab',
+      shortcut: 'Alt+R',
+      perform: () => {
+        useLayoutStore.getState().reloadTab();
+      },
+    },
+    {
+      id: 'tab.reload-all',
+      title: 'Reload All Tabs',
+      category: 'Tab',
+      perform: () => {
+        useLayoutStore.getState().reloadAllTabs();
+      },
+    },
   ];
 
   for (const action of standardActions) {

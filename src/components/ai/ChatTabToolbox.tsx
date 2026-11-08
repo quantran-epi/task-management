@@ -218,7 +218,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
                   onToggleAnalysisMode(activeTabId);
                 }}
               >
-                <span>Chế độ phân tích (chỉ đọc)</span>
+                <span>Chế độ phân tích (ưu tiên tra cứu)</span>
                 <Switch size="small" checked={analysisMode} />
               </div>
             ),
@@ -396,7 +396,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
           <>
             {/* Analysis Mode Toggle */}
             {onToggleAnalysisMode && (
-              <Tooltip title={analysisMode ? "Chế độ phân tích: ĐANG BẬT (AI chỉ đọc dữ liệu & tra cứu tri thức)" : "Chế độ phân tích: ĐANG TẮT (Bật để AI ưu tiên tra cứu tri thức/DB)"}>
+              <Tooltip title={analysisMode ? "Chế độ phân tích: ĐANG BẬT (AI ưu tiên tra cứu dữ liệu & tri thức; thay đổi chỉ tự chạy khi bật Tự động duyệt)" : "Chế độ phân tích: ĐANG TẮT (Bật để AI ưu tiên tra cứu tri thức/DB)"}>
                 <Button
                   size="small"
                   type={analysisMode ? 'primary' : 'default'}

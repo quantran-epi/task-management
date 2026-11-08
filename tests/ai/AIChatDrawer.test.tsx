@@ -5,7 +5,7 @@ import { AIChatDrawer, TURN_STATUS_TO_TAB } from '../../src/components/ai/AIChat
 import * as orchestrator from '../../src/services/ai/aiOrchestratorLoop';
 import { TaskPlannerDatabase } from '../../src/db';
 import * as chatRepo from '../../src/db/repositories/chatRepo';
-import { getOrCreateActiveChatTab } from '../../src/db/repositories/chatTabRepo';
+import { getOrCreateActiveChatTab, updateChatTab } from '../../src/db/repositories/chatTabRepo';
 import * as nineRouterClient from '../../src/services/ai/nineRouterClient';
 import * as nineRouterTokenService from '../../src/services/ai/nineRouterTokenService';
 import * as graphitiMcpClient from '../../src/services/ai/graphitiMcpClient';
@@ -908,7 +908,9 @@ describe('AIChatDrawer', () => {
   });
 
   it('bypasses confirmation prompt and automatically executes mutation when auto-approve is enabled', async () => {
-    localStorage.setItem('planner:ai_auto_approve_mutations', 'true');
+    // Auto-approve is durable per-tab config (the legacy global key never feeds a turn).
+    const tab = await getOrCreateActiveChatTab({ scopeKey: 'global', scopeType: 'global' }, db);
+    await updateChatTab(tab.id, { config: { ...(tab.config ?? {}), autoApproveMutations: true } }, db);
 
     vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
     vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
@@ -1493,7 +1495,7 @@ describe('AIChatDrawer', () => {
     expect(systemContents).toContain('[ANALYSIS MODE ACTIVE]');
   });
 
-  it('strictly blocks database mutation in analysis mode and returns Vietnamese read-only message', async () => {
+  it('parks a database mutation behind the approval card in analysis mode and applies it only when approved', async () => {
     localStorage.setItem('planner:ai_analysis_mode', 'true');
     vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
     vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
@@ -1513,17 +1515,17 @@ describe('AIChatDrawer', () => {
             type: 'tool_calls',
             calls: [
               {
-                id: 'call_blocked_create_task',
+                id: 'call_parked_create_task',
                 type: 'function',
                 function: {
                   name: 'create_task',
-                  arguments: JSON.stringify({ crId: CR_ID, name: 'Task khong duoc tao trong analysis mode' }),
+                  arguments: JSON.stringify({ crId: CR_ID, name: 'Task cho duyet trong analysis mode' }),
                 },
               },
             ],
           };
         } else {
-          yield { type: 'text', delta: 'Đã nhận kết quả chặn phân tích.' };
+          yield { type: 'text', delta: 'Đã xử lý xong.' };
         }
       })() as any;
     });
@@ -1537,21 +1539,22 @@ describe('AIChatDrawer', () => {
     });
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
+    // The mutation tool is offered in Analysis Mode, and the turn parks on the approval card.
     await waitFor(() => {
-      expect(screen.getByText(/Đã nhận kết quả chặn phân tích/i)).toBeInTheDocument();
+      expect(screen.getByTestId('ai-mutation-approval')).toBeInTheDocument();
     });
+    const offered = payloads[0].tools.map((tool: any) => tool.function.name);
+    expect(offered).toContain('create_task');
 
-    expect(screen.queryByTestId('ai-mutation-approval')).not.toBeInTheDocument();
+    // Nothing is written before the user decides.
+    expect((await db.tasks.toArray()).some((t) => t.name === 'Task cho duyet trong analysis mode')).toBe(false);
 
-    expect(payloads[1].messages).toContainEqual(
-      expect.objectContaining({
-        role: 'tool',
-        name: 'create_task',
-        content: expect.stringContaining('Analysis Mode chỉ đọc; không có dữ liệu nào bị thay đổi.'),
-      })
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Chấp thuận' }));
 
+    await waitFor(() => {
+      expect(screen.getByText(/Đã xử lý xong/i)).toBeInTheDocument();
+    });
     const tasksInDb = await db.tasks.toArray();
-    expect(tasksInDb.some((t) => t.name === 'Task khong duoc tao trong analysis mode')).toBe(false);
+    expect(tasksInDb.some((t) => t.name === 'Task cho duyet trong analysis mode')).toBe(true);
   });
 });

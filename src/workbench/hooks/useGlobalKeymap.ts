@@ -68,6 +68,11 @@ export function useGlobalKeymap(): void {
           executeAction('timer.toggle');
           return;
         }
+        if (e.key === 'r' || e.key === 'R') {
+          e.preventDefault();
+          executeAction('tab.reload-active');
+          return;
+        }
         if (e.key === 'Insert') {
           e.preventDefault();
           executeAction('task.create');

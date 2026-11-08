@@ -137,11 +137,6 @@ export const SANITIZED_TURN_ERROR =
 export const formatToolLimitMessage = (rounds: number): string =>
   `Đã dừng thu thập bằng chứng sau ${rounds} vòng. Câu trả lời có thể chưa đầy đủ — xem danh sách công cụ bên trên hoặc thử lại với câu hỏi hẹp hơn.`;
 
-const ANALYSIS_MODE_CANCELLATION = JSON.stringify({
-  cancelled: true,
-  message: 'Analysis Mode chỉ đọc; không có dữ liệu nào bị thay đổi.',
-});
-
 const DECLINED_CANCELLATION = JSON.stringify({
   cancelled: true,
   message: 'Người dùng đã từ chối thao tác này. Không có dữ liệu nào bị thay đổi.',
@@ -351,13 +346,8 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
           deps.onFileGenerated?.(file);
         },
         onMutationCheck: async (toolName, args) => {
-          // Fixed guard order (T-25.3-21): read-only cancel, artifact patch, auto-approve,
-          // explicit wait. Analysis Mode stays first so patches keep its read-only contract.
-          if (request.analysisMode) {
-            cancellationResult = ANALYSIS_MODE_CANCELLATION;
-            return { proceed: false, cancellationResult: ANALYSIS_MODE_CANCELLATION };
-          }
-
+          // Fixed guard order (T-25.3-21): artifact patch, auto-approve, explicit wait.
+          // Analysis Mode is a prompt preference only; it never blocks or bypasses execution.
           if (normalizeToolName(toolName) === PATCH_TOOL_NAME) {
             const callId = currentCallId;
             const context = request.artifactContext;
@@ -396,6 +386,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
             return { proceed: false, cancellationResult: rejectedJson };
           }
 
+          // Analysis Mode does not gate execution: auto-approve still wins when the user enabled it.
           if (request.autoApprove) {
             return { proceed: true };
           }

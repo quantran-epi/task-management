@@ -1926,10 +1926,10 @@ Never perform mutations silently without providing this full change summary in y
 ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the currently active item or workspace:\n${systemInstruction}\n` : ''}${
         turnAnalysisMode
           ? `\n\n[ANALYSIS MODE ACTIVE]:
-READ ONLY:
-This turn is read-only. You may retrieve knowledge, read local files, reason, compare, propose, and generate artifacts with \`generate_file\`, \`generate_pptx\`, or \`generate_image\`.
+PREFER READ-ONLY:
+This turn prioritizes retrieval, reading local files, reasoning, comparison, and artifact generation with \`generate_file\`, \`generate_pptx\`, or \`generate_image\`.
 Rules:
-1. NEVER mutate tasks, change requests, timers, notes, capacity, document links, or any MCP-backed data. For change requests, propose a plan instead of executing it.
+1. Prefer read-only tools. A mutation (task, change request, timer, note, capacity, document link, MCP-backed data) is allowed when the user asks for it; unless auto-approve is on, it is shown to the user for approval before it is applied — never claim a change was made before the approval card is accepted.
 2. Use the \`retrieve_knowledge\` tool repeatedly to gather evidence. Keep each query short and focused (<= 200 characters): an entity name, an identifier, or a narrow topic phrase. Split broad questions into multiple focused queries instead of one long query.
 3. If a retrieval returns only entity names with no excerpts, retry using the entity name itself as the query.
 4. Read attached local files with \`read_file\` FIRST (offset/limit pagination) before answering about them.

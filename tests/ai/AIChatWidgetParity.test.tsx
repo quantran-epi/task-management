@@ -136,7 +136,7 @@ const hosts: HostHarness[] = [
       fireEvent.click(screen.getByTestId('tab-compact-more-btn'));
       return {
         model: screen.getByLabelText('Chọn mô hình AI cho tab này'),
-        analysis: await screen.findByText('Chế độ phân tích (chỉ đọc)'),
+        analysis: await screen.findByText('Chế độ phân tích (ưu tiên tra cứu)'),
         autoApprove: await screen.findByText('Tự động duyệt thay đổi'),
         mcp: screen.getByTestId('tab-mcp-manage-btn'),
       };

@@ -29,8 +29,10 @@ describe('SDLC explicit tool allowlist', () => {
     const ordinaryTools = AI_DATABASE_TOOLS.filter((tool) =>
       !['get_artifact', 'patch_artifact_section', 'propose_subsystems', 'propose_research'].includes(normalizeToolName(tool.function.name)));
     expect(getToolsForTurn(false, dynamicTools)).toEqual([...ordinaryTools, ...dynamicTools]);
+    // Analysis Mode keeps mutation DB tools in ordinary chat (the approval card guards them);
+    // only dynamic MCP tools stay read-only.
     expect(getToolsForTurn(true, dynamicTools)).toEqual([
-      ...ordinaryTools.filter((tool) => !isMutationTool(normalizeToolName(tool.function.name))),
+      ...ordinaryTools,
       ...dynamicTools.filter((tool) => isReadOnlyMcpTool(normalizeToolName(tool.function.name))),
     ]);
   });
@@ -114,12 +116,17 @@ describe('SDLC prompt isolation and analysis mode enforcement (D-31, D-33, D-35)
     }
   });
 
-  it('restricts tools to read-only tools when analysisMode is active', () => {
-    const readOnlyTools = getToolsForTurn(true, []);
-    for (const tool of readOnlyTools) {
-      const toolName = normalizeToolName(tool.function.name);
-      expect(isMutationTool(toolName)).toBe(false);
-    }
+  it('keeps mutation tools in ordinary-chat Analysis Mode and strips them under an explicit allowlist', () => {
+    // Ordinary chat: Analysis Mode is a prompt preference; the runtime approval card guards writes.
+    const analysisTools = getToolsForTurn(true, []);
+    expect(analysisTools.some((tool) => isMutationTool(normalizeToolName(tool.function.name)))).toBe(true);
+
+    // SDLC step chat passes an allowlist, so its Analysis Mode payload stays read-only.
+    const allowlisted = getToolsForTurn(true, [], ['get_artifact', 'create_task', 'query_notes']);
+    const allowlistedNames = allowlisted.map((tool) => normalizeToolName(tool.function.name));
+    expect(allowlistedNames).toContain('get_artifact');
+    expect(allowlistedNames).toContain('query_notes');
+    expect(allowlistedNames).not.toContain('create_task');
 
     // Normal mode (analysisMode = false) includes mutation tools like update_task or create_task
     const normalTools = getToolsForTurn(false, []);

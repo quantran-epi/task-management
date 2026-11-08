@@ -148,7 +148,7 @@ describe('real scripted get → patch → approve path', () => {
     await waitFor(async () => expect(await db.chatThreads.where('scopeKey')
       .equals(`sdlc:${projectId}:cr:SOLUTION`).first()).toBeDefined());
     fireEvent.click(screen.getByTestId('tab-compact-more-btn'));
-    fireEvent.click(await screen.findByText('Chế độ phân tích (chỉ đọc)'));
+    fireEvent.click(await screen.findByText('Chế độ phân tích (ưu tiên tra cứu)'));
     fireEvent.click(screen.getByTestId('tab-compact-more-btn'));
     await waitFor(() => expect(screen.queryByText('Phân tích')).not.toBeInTheDocument());
     const composer = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
