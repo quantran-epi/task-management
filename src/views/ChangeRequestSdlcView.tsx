@@ -850,6 +850,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
             initialPl01={workflowState?.artifacts.pl01?.content}
             initialPl02={workflowState?.artifacts.pl02?.content}
             conventionsSummary={conventionsSummary}
+            onStartResearch={(payload) => chatPanelRef.current?.startResearch(payload)}
             onStartIntake={handleStartIntake}
             db={db}
           />
@@ -867,6 +868,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
             pl02Content={workflowState?.artifacts.pl02?.content}
             metadata={workflowState?.metadata}
             conventionsSummary={conventionsSummary}
+            onStartResearch={(payload) => chatPanelRef.current?.startResearch(payload)}
             hasIntakeBaseline={Boolean(
               workflowState?.artifacts.pl01 && workflowState?.artifacts.pl02
             )}
