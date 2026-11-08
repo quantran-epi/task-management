@@ -578,11 +578,32 @@ Plans:
 7. A stopped agent reports back to the lead explicitly marked incomplete, and a global Stop aborts the lead plus every running agent.
 8. Team runs continue when the user leaves the tab, and returning shows the full result.
 
-**Plans:** 0 plans
+**Plans:** 10 plans in 5 waves
 
-Plans:
+**Wave 1** *(no dependencies; the hard gate — every later plan imports these types and tables)*
 
-- [ ] TBD (run /gsd-plan-phase 34 to break down)
+- [ ] 34-01-PLAN.md — AI Office type contract, Zod schemas, additive Dexie `version(17)`, `'team'` scope, message attribution, SQLite mirror allowlists
+
+**Wave 2** *(depends on 34-01; four independent plans)*
+
+- [ ] 34-02-PLAN.md — Employee/lead/skill repo, team/member/link repo with activation and roster caps, team transcript repo
+- [ ] 34-03-PLAN.md — Runtime seams: read-only mutation policy, `persistUserMessage` opt-out, attribution forwarding, `beforeToolRound`, tool allowlists
+- [ ] 34-06-PLAN.md — Backup: six tables and four attribution fields through the five-file contract, envelope stays v11
+- [ ] 34-08-PLAN.md — Transcript attribution layer: attribution row, plan card, paused banner, top-up modal, team capsule
+
+**Wave 3** *(depends on 34-02/34-03)*
+
+- [ ] 34-04-PLAN.md — Budget gate with the 80% crossing rule, per-agent runtime registry, lead/employee prompt assembly
+- [ ] 34-05-PLAN.md — Six team tools: offline BM25 search, team-scoped turn read, skill reader, linked-item full context, `delegate_batch` validation
+- [ ] 34-09-PLAN.md — Employee tab shell, cards, editor drawers, `'teams'` type/icon/title registration
+
+**Wave 4** *(depends on 34-03/34-04/34-05)*
+
+- [ ] 34-07-PLAN.md — Headless team-run coordinator: `@agent` routing, plan park, concurrent batch, terminal-only settle, budget pause, both stop controls
+
+**Wave 5** *(depends on 34-07/34-09)*
+
+- [ ] 34-10-PLAN.md — Team page: list, create/settings drawers, workspace with shared transcript, sidebar, linked items, `renderViewContent` routing, TitleBar entry
 
 ---
 
