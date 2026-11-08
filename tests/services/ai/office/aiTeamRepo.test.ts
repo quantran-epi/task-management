@@ -95,19 +95,23 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-15, D-16, D-17, D-19, D-26, D-32)', () =>
   });
 
   it('rejects a 4th employee and a second lead', async () => {
-    const team = await makeTeam('Roster');
+    const team = await createTeam(
+      { name: 'Roster', leadId, status: 'idle', budgetTokens: 0, employeeIds },
+      db
+    );
+    expect(
+      (await listTeamMembers(team.id, db)).filter((m) => m.role === 'employee')
+    ).toHaveLength(MAX_EMPLOYEES_PER_TEAM);
 
     await expect(
-      addTeamMember({ teamId: team.id, agentId: employeeIds[2]!, role: 'employee', budgetTokens: 0 }, db)
+      addTeamMember({ teamId: team.id, agentId: generateId(), role: 'employee', budgetTokens: 0 }, db)
     ).rejects.toThrow(/3/);
 
     await expect(
       addTeamMember({ teamId: team.id, agentId: generateId(), role: 'lead', budgetTokens: 0 }, db)
     ).rejects.toThrow();
 
-    expect(
-      (await listTeamMembers(team.id, db)).filter((m) => m.role === 'employee')
-    ).toHaveLength(MAX_EMPLOYEES_PER_TEAM - 1);
+    expect(await listTeamMembers(team.id, db)).toHaveLength(MAX_EMPLOYEES_PER_TEAM + 1);
   });
 
   it('splits an evenly divisible budget across 4 members', async () => {
