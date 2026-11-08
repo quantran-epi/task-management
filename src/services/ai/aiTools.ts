@@ -1954,6 +1954,36 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
   {
     type: 'function',
     function: {
+      name: 'propose_research',
+      description:
+        'Propose external research questions for the open Change Request, each optionally bound to a target system. Returns data only — it never executes research; the user must confirm in the proposal card. Use systemId values from the System Catalog, never invented codes.',
+      parameters: {
+        type: 'object',
+        properties: {
+          questions: {
+            type: 'array',
+            description: 'Research questions that internal evidence cannot answer.',
+            items: {
+              type: 'object',
+              properties: {
+                question: { type: 'string', description: 'The concrete question to research.' },
+                systemId: { type: 'string', description: 'Optional System Catalog id the question targets.' },
+              },
+              required: ['question'],
+            },
+          },
+          rationale: {
+            type: 'string',
+            description: 'Which internal evidence is missing and why external research is needed.',
+          },
+        },
+        required: ['questions'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'oracle_query',
       description:
         'Execute a read-only SQL query on the configured remote Oracle database via SQLcl over SSH. Strict read-only enforcement (SET TRANSACTION READ ONLY). Results formatted in JSON.',
@@ -2172,7 +2202,8 @@ export async function executeAiTool(
 
       case 'get_artifact':
       case 'patch_artifact_section':
-      case 'propose_subsystems': {
+      case 'propose_subsystems':
+      case 'propose_research': {
         const result = await executeSdlcArtifactTool(normalized, args, db, options?.artifactContext);
         return JSON.stringify(result);
       }
