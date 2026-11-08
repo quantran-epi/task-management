@@ -3,9 +3,7 @@ import { Select, Input, Tree, Button, Tooltip, Tag, Spin, Alert, Empty } from 'a
 import type { DataNode } from 'antd/es/tree';
 import FolderOutlined from '@ant-design/icons/FolderOutlined';
 import FolderOpenOutlined from '@ant-design/icons/FolderOpenOutlined';
-import FileOutlined from '@ant-design/icons/FileOutlined';
 import FileTextOutlined from '@ant-design/icons/FileTextOutlined';
-import CodeOutlined from '@ant-design/icons/CodeOutlined';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import BranchesOutlined from '@ant-design/icons/BranchesOutlined';
 import CloudServerOutlined from '@ant-design/icons/CloudServerOutlined';

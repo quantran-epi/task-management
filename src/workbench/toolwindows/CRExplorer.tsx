@@ -10,7 +10,6 @@ import {
   FolderOutlined,
   FolderOpenOutlined,
   FileTextOutlined,
-  CheckSquareOutlined,
   ExportOutlined,
   RocketOutlined,
   EditOutlined,

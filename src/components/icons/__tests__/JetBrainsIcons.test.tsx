@@ -5,9 +5,6 @@ import {
   JetBrainsSystemsIcon,
   JetBrainsRemoteGitIcon,
   JetBrainsSdlcIcon,
-  JetBrainsProjectIcon,
-  JetBrainsDocsIcon,
-  JetBrainsTasksIcon,
 } from '../JetBrainsIcons';
 
 describe('JetBrains Colorful Icons', () => {

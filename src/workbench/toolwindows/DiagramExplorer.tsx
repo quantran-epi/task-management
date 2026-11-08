@@ -14,7 +14,6 @@ import {
 import {
   FolderOutlined,
   FolderOpenOutlined,
-  FolderFilled,
   PlusOutlined,
   FileTextOutlined,
   DeleteOutlined,
