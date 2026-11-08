@@ -3,7 +3,7 @@ import type { AiTeamLinkItemType } from '../../../types/aiOffice';
 import { MAX_BATCH_SIZE } from '../../../types/aiOffice';
 import { rankBM25, extractRelevantSnippet } from '../../../utils/bm25';
 import { buildTeamBm25Docs, getTeamTurn } from '../../../db/repositories/teamTranscriptRepo';
-import { listTeamLinks } from '../../../db/repositories/aiTeamRepo';
+import { listTeamLinks, listTeamMembers } from '../../../db/repositories/aiTeamRepo';
 import { executeAiTool, normalizeToolName, type AiToolDefinition } from '../aiTools';
 
 /**
@@ -274,6 +274,42 @@ async function getLinkedContext(args: Record<string, any>, ctx: TeamToolContext)
   return executeAiTool('get_item_details', { type: link.itemType, id: itemId }, ctx.db);
 }
 
+/**
+ * D-33: the validator the coordinator calls. It never dispatches anything: the
+ * coordinator intercepts `delegate_batch` in the lead's `executeToolFn` before
+ * `dispatchAiToolCall`, so this must never be wired into `AI_DATABASE_TOOLS`.
+ */
+async function delegateBatch(args: Record<string, any>, ctx: TeamToolContext): Promise<string> {
+  const assignments: any[] = Array.isArray(args.assignments) ? args.assignments : [];
+  if (assignments.length === 0) {
+    return JSON.stringify(refuse('EMPTY_BATCH', 'Danh sách giao việc đang trống.'));
+  }
+  if (assignments.length > MAX_BATCH_SIZE) {
+    return JSON.stringify(
+      refuse('BATCH_TOO_LARGE', `Mỗi lần chỉ được giao tối đa ${MAX_BATCH_SIZE} việc.`)
+    );
+  }
+
+  const members = await listTeamMembers(ctx.teamId, ctx.db);
+  const roster = new Set(members.map((member) => member.agentId));
+
+  const normalized = [];
+  for (const raw of assignments) {
+    const agentId = typeof raw?.agentId === 'string' ? raw.agentId : '';
+    if (!roster.has(agentId)) {
+      return JSON.stringify(
+        refuse('AGENT_NOT_IN_ROSTER', `Nhân viên "${agentId}" không thuộc nhóm này.`)
+      );
+    }
+    const task = typeof raw?.task === 'string' ? raw.task : '';
+    // D-33: skillId is informational only; the agent's assigned skill stays authoritative.
+    const skillId = typeof raw?.skillId === 'string' ? raw.skillId : undefined;
+    normalized.push({ agentId, ...(skillId ? { skillId } : {}), task });
+  }
+
+  return JSON.stringify({ assignments: normalized });
+}
+
 export async function executeTeamTool(
   name: string,
   args: Record<string, any>,
@@ -291,6 +327,8 @@ export async function executeTeamTool(
       return listLinkedItems(ctx);
     case 'get_linked_context':
       return getLinkedContext(input, ctx);
+    case 'delegate_batch':
+      return delegateBatch(input, ctx);
     default:
       return JSON.stringify({ error: `Unknown team tool: ${name}` });
   }

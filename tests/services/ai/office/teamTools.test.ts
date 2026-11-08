@@ -446,7 +446,7 @@ describe('teamTools — delegate_batch validation (AIO-TEAM-02, D-02, D-03, D-33
     for (const [memberAgentId, role] of [
       [agentId, 'lead'],
       ...employeeIds.map((id) => [id, 'employee']),
-    ] as const) {
+    ] as Array<[string, 'lead' | 'employee']>) {
       await db.aiTeamMembers.add({
         id: generateId(),
         teamId,
