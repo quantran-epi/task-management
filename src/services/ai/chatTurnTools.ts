@@ -7,6 +7,44 @@ import {
 import { isReadOnlyMcpTool } from './mcpClient';
 
 /**
+ * D-12: the DB read tools an employee may call. Team-scoped tools
+ * (`search_team_history`, `read_team_turn`, `read_skill`) are appended by the
+ * coordinator from `TEAM_TOOL_DEFINITIONS` — they are not `AI_DATABASE_TOOLS`
+ * members. `delegate_batch` is lead-only (Pitfall 10: no nested batches).
+ */
+export const EMPLOYEE_READ_ONLY_ALLOWLIST: readonly string[] = [
+  'query_tasks',
+  'query_change_requests',
+  'query_systems',
+  'query_notes',
+  'query_worklogs',
+  'get_item_details',
+  'get_active_timer',
+  'get_daily_schedule',
+  'check_capacity_feasibility',
+  'get_day_insight',
+  'get_analytics_summary',
+  'query_attention_items',
+  'query_recurring_tasks',
+  'get_system_status',
+  'search_knowledge_base',
+  'read_file',
+];
+
+/** D-27: the lead's DB read set plus the linked-item tools and `delegate_batch`. */
+export const LEAD_TOOL_ALLOWLIST: readonly string[] = [
+  ...EMPLOYEE_READ_ONLY_ALLOWLIST,
+  'list_linked_items',
+  'get_linked_context',
+  'delegate_batch',
+];
+
+/** Single guard so a payload assertion lives in one place. */
+export function payloadHasMutationTool(tools: readonly AiToolDefinition[]): boolean {
+  return tools.some((tool) => isMutationTool(tool.function.name));
+}
+
+/**
  * Tool set for a single chat turn. In ordinary chat Analysis Mode no longer strips
  * mutation DB tools: the runtime parks every mutation for explicit user approval, so
  * read-only is a prompt preference rather than a hard block. Dynamic MCP tools stay
