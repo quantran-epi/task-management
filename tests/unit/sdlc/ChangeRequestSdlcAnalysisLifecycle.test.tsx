@@ -11,7 +11,7 @@ const { requestArtifactAnalysis } = vi.hoisted(() => ({ requestArtifactAnalysis:
 
 vi.mock('../../../src/components/sdlc/chat/StepChatPanel', () => ({
   StepChatPanel: forwardRef<StepChatPanelHandle, StepChatPanelProps>(({ stepId }, ref) => {
-    useImperativeHandle(ref, () => ({ sendMessage: vi.fn(), requestArtifactAnalysis, requestArtifact: vi.fn() }));
+    useImperativeHandle(ref, () => ({ sendMessage: vi.fn(), requestArtifactAnalysis, requestArtifact: vi.fn(), startResearch: vi.fn() }));
     return <div data-testid="analysis-panel" data-step={stepId} />;
   }),
 }));

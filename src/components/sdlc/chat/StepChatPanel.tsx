@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, message, Modal, Space, theme } from 'antd';
+import { Alert, Button, Checkbox, Collapse, message, Modal, Space, Tag, theme } from 'antd';
+import { BulbOutlined, CheckCircleFilled, ExperimentOutlined, StopOutlined, SyncOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
 import { clearThreadMessages } from '../../../db/repositories/chatRepo';
@@ -21,9 +22,18 @@ import type { SdlcStepId } from '../../../services/wizard/workflowSchemas';
 import { useStepChatToolbox } from './useStepChatToolbox';
 import type { ChatMessage } from '../../../types/models';
 import { normalizeToolName } from '../../../services/ai/aiTools';
-import { readArtifactSnapshot, type ArtifactPatchProposal, type ArtifactToolContext, type SubsystemProposalResult } from '../../../services/ai/sdlcArtifactTools';
+import { readArtifactSnapshot, type ArtifactPatchProposal, type ArtifactToolContext, type ResearchProposalResult, type SubsystemProposalResult } from '../../../services/ai/sdlcArtifactTools';
 import { getChangeRequest, updateChangeRequest } from '../../../db/repositories/changeRequestRepo';
 import { SubsystemProposalCard, dismissProposal } from '../common/SubsystemProposalCard';
+import { ResearchDetailModal } from '../common/ResearchSummaryCard';
+import {
+  executeMultiSystemResearch,
+  ResearchPayloadSchema,
+  ResearchRunError,
+  type ResearchErrorCode,
+  type ResearchPayload,
+} from '../../../services/ai/researchService';
+import { loadLatestResearchArtifact } from '../../../services/wizard/artifactRepo';
 
 export const ARTIFACT_PATCH_DECISION_PREFIX = 'ARTIFACT_PATCH_DECISION ';
 const DECISION_COPY = {
@@ -36,6 +46,23 @@ type PatchRecord = { patch: ArtifactPatchProposal; scopeKey: string; callId?: st
 type RefusalRecord = { callId: string; scopeKey: string; message: string; step?: SdlcStepId };
 /** D-41/D-42: a proposal is data until the user confirms it in the card. */
 type ProposalRecord = { proposal: SubsystemProposalResult; scopeKey: string; decision?: 'approved' | 'skipped' };
+/** D-08: the research proposal is likewise data — nothing runs until the card is confirmed. */
+type ResearchProposalRecord = { proposal: ResearchProposalResult; scopeKey: string; decision?: 'approved' | 'skipped' };
+
+export interface ResearchStartPayload {
+  questions: string[];
+  targetSystemIds: string[];
+  includeWeb: boolean;
+}
+
+type ResearchRunState =
+  | { phase: 'idle' }
+  | { phase: 'streaming'; lines: string[]; startedAt: number }
+  | { phase: 'completed'; payload: ResearchPayload }
+  | { phase: 'error'; code: ResearchErrorCode; message: string; retry?: ResearchStartPayload };
+
+/** T-32-09: the live console keeps only the newest lines, so a chatty run cannot bloat the DOM. */
+export const RESEARCH_LOG_LINE_CAP = 500;
 
 function parseDecision(row: ChatMessage): { proposalId: string; decision: 'approved' | 'rejected' } | undefined {
   if (row.role !== 'system' || !row.content.startsWith(ARTIFACT_PATCH_DECISION_PREFIX)) return undefined;
@@ -87,6 +114,8 @@ export interface StepChatPanelHandle {
   /** Submits an explicit artifact-intent turn (D-16) — the editor's "analyse again" path. */
   requestArtifactAnalysis: () => void;
   requestArtifact: (kind: SdlcArtifactKindForTurn) => void;
+  /** D-08: starts a research run from the step-view toolbar through this panel's state machine. */
+  startResearch: (payload: ResearchStartPayload) => void;
 }
 
 const ARTIFACT_ANALYSIS_PROMPT =
@@ -151,6 +180,247 @@ type ArtifactNotice =
   | { type: 'warning'; message: string; step?: SdlcStepId }
   | { type: 'info'; targets: readonly SdlcArtifactKindForTurn[] };
 
+// -------------------------------------------------------------------------------------------------
+// External research cards (D-08, D-09, D-11, UI-SPEC §1/§3/§4/§5)
+// -------------------------------------------------------------------------------------------------
+
+/** D-11: the follow-up turn the completion CTA dispatches — never sent automatically. */
+export const PROCEED_WITH_RESEARCH_PROMPT =
+  'Áp dụng bằng chứng nghiên cứu bên ngoài vừa thu thập để hoàn thiện giải pháp hiện tại (xếp sau bằng chứng nội bộ, giữ nguyên trích dẫn nguồn).';
+
+export interface ResearchProposalCardProps {
+  proposal: ResearchProposalResult;
+  applying?: boolean | undefined;
+  decision?: 'approved' | 'skipped' | undefined;
+  onConfirm: (payload: ResearchStartPayload) => void;
+  onSkip: () => void;
+}
+
+/**
+ * D-08 / T-32-12: questions and system codes come only from the `propose_research` result,
+ * which already re-resolved both against the catalog and the CR targets. The card never
+ * trusts a model-supplied name and never starts a run on mount.
+ */
+export const ResearchProposalCard: React.FC<ResearchProposalCardProps> = ({
+  proposal, applying = false, decision, onConfirm, onSkip,
+}) => {
+  const { token } = theme.useToken();
+  const [checked, setChecked] = useState<string[]>(() => proposal.targetSystemIds);
+
+  if (decision) {
+    return (
+      <section data-testid="research-proposal" aria-label="Đề xuất nghiên cứu" role="status"
+        style={{ padding: '8px 12px', margin: '8px 0 16px', fontSize: 12, color: token.colorTextSecondary }}>
+        {decision === 'approved' ? 'Đã xác nhận nghiên cứu bên ngoài' : 'Đã bỏ qua đề xuất nghiên cứu'}
+      </section>
+    );
+  }
+
+  // A proposal with no resolvable target system can never start a run; say so instead.
+  const unavailable = new Set(proposal.unavailableSystemIds);
+
+  return (
+    <section data-testid="research-proposal" aria-label="Đề xuất nghiên cứu"
+      style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0, maxWidth: '100%',
+        backgroundColor: '#ffffff', border: '1px solid #e9eaee', borderLeft: '3px solid #faad14',
+        borderRadius: 4, margin: '8px 0 16px', color: token.colorText }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 16, fontWeight: 600 }}>
+        <BulbOutlined style={{ color: '#faad14', flexShrink: 0 }} />
+        <span>Đề xuất nghiên cứu từ bên ngoài (Claude Code)</span>
+      </div>
+      {proposal.rationale && (
+        <div style={{ fontSize: 12, color: token.colorTextSecondary }}>{proposal.rationale}</div>
+      )}
+      <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {proposal.questions.map((entry, index) => (
+          <li key={`${index}:${entry.question}`}>
+            {entry.question}
+            {entry.systemCode && (
+              <Tag color="cyan" style={{ marginLeft: 6, fontFamily: 'monospace' }}>{entry.systemCode}</Tag>
+            )}
+          </li>
+        ))}
+      </ul>
+      {proposal.targetSystemIds.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={{ fontSize: 12, fontWeight: 600 }}>Hệ thống mục tiêu</span>
+          <Checkbox.Group
+            value={checked}
+            onChange={(values) => setChecked(values as string[])}
+            options={proposal.targetSystemIds.map((systemId) => {
+              const code = proposal.questions.find((entry) => entry.systemId === systemId)?.systemCode ?? systemId;
+              return {
+                label: unavailable.has(systemId) ? `${code} (chưa cấu hình SSH)` : code,
+                value: systemId,
+              };
+            })}
+          />
+        </div>
+      )}
+      {unavailable.size > 0 && (
+        <div role="alert" style={{ fontSize: 12, color: '#ad6800' }}>
+          Không thể nghiên cứu: {[...unavailable].map((systemId) =>
+            proposal.questions.find((entry) => entry.systemId === systemId)?.systemCode ?? systemId).join(', ')}.
+          Bạn vẫn có thể tiếp tục bằng bằng chứng nội bộ.
+        </div>
+      )}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+        <Button disabled={applying} onClick={onSkip} style={{ minHeight: 32, fontSize: 12 }}>
+          Tiếp tục bằng bằng chứng nội bộ
+        </Button>
+        <Button type="primary" disabled={checked.length === 0 || applying} style={{ minHeight: 32, fontSize: 12 }}
+          onClick={() => onConfirm({
+            questions: proposal.questions.map((entry) => entry.question),
+            targetSystemIds: checked,
+            includeWeb: true,
+          })}>
+          Xác nhận nghiên cứu
+        </Button>
+      </div>
+    </section>
+  );
+};
+
+export interface ResearchStreamingCardProps {
+  lines: readonly string[];
+  startedAt: number;
+  cancelling?: boolean | undefined;
+  onCancel: () => void;
+}
+
+/** D-09 / T-32-09: elapsed timer, line count, and a capped live console. */
+export const ResearchStreamingCard: React.FC<ResearchStreamingCardProps> = ({
+  lines, startedAt, cancelling = false, onCancel,
+}) => {
+  const { token } = theme.useToken();
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const elapsedSeconds = Math.max(0, Math.floor((now - startedAt) / 1000));
+  const elapsed = `${String(Math.floor(elapsedSeconds / 60)).padStart(2, '0')}:${String(elapsedSeconds % 60).padStart(2, '0')}`;
+  const visible = lines.slice(-RESEARCH_LOG_LINE_CAP);
+
+  return (
+    <section data-testid="research-streaming" aria-label="Đang nghiên cứu bên ngoài"
+      style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0, maxWidth: '100%',
+        backgroundColor: '#ffffff', border: '1px solid #e9eaee', borderRadius: 4, margin: '8px 0 16px', color: token.colorText }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14, fontWeight: 600 }}>
+        <SyncOutlined spin style={{ color: token.colorPrimary }} />
+        <span>Đang thực thi Claude Code headless...</span>
+      </div>
+      <Space size={8} wrap>
+        <Tag color="processing" style={{ margin: 0, fontFamily: 'monospace' }}>{elapsed}</Tag>
+        <Tag style={{ margin: 0 }}>{lines.length} dòng</Tag>
+      </Space>
+      <Collapse size="small" items={[{
+        key: 'stdout',
+        label: 'Xem nhật ký stdout theo thời gian thực',
+        children: (
+          <pre style={{ margin: 0, maxHeight: 200, overflowY: 'auto', padding: 8, background: '#1e1f22',
+            color: '#d1d3d9', fontFamily: "'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, monospace",
+            fontSize: 12, lineHeight: 1.4 }}>
+            {visible.join('\n')}
+          </pre>
+        ),
+      }]} />
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <Button danger icon={<StopOutlined />} loading={cancelling} onClick={onCancel} style={{ minHeight: 32, fontSize: 12 }}>
+          Hủy nghiên cứu
+        </Button>
+      </div>
+    </section>
+  );
+};
+
+export interface ResearchCompletionCardProps {
+  payload: ResearchPayload;
+  elapsedMs?: number | undefined;
+  onProceed: () => void;
+  onViewDetail?: (() => void) | undefined;
+}
+
+/** D-11: the follow-up turn is dispatched only by this explicit CTA. */
+export const ResearchCompletionCard: React.FC<ResearchCompletionCardProps> = ({
+  payload, elapsedMs, onProceed, onViewDetail,
+}) => {
+  const { token } = theme.useToken();
+  const webCount = payload.findings.filter((finding) => finding.scope === 'web').length;
+  const repoCount = payload.findings.filter((finding) => finding.scope === 'repo').length;
+
+  return (
+    <section data-testid="research-completion" aria-label="Hoàn thành nghiên cứu bên ngoài"
+      style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0, maxWidth: '100%',
+        backgroundColor: '#ffffff', border: '1px solid #e9eaee', borderRadius: 4, margin: '8px 0 16px', color: token.colorText }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14, fontWeight: 600 }}>
+        <CheckCircleFilled style={{ color: '#52c41a' }} />
+        <span>Hoàn thành nghiên cứu bên ngoài</span>
+      </div>
+      <Space size={8} wrap>
+        <Tag color="blue" style={{ margin: 0 }}>[EXTERNAL:WEB] {webCount} phát hiện</Tag>
+        <Tag color="cyan" style={{ margin: 0 }}>[EXTERNAL:REPO] {repoCount} phát hiện</Tag>
+        {elapsedMs !== undefined && (
+          <Tag style={{ margin: 0 }}>{Math.max(1, Math.round(elapsedMs / 1000))}s</Tag>
+        )}
+      </Space>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+        {onViewDetail && (
+          <Button icon={<ExperimentOutlined />} onClick={onViewDetail} style={{ minHeight: 32, fontSize: 12 }}>
+            Xem chi tiết phát hiện
+          </Button>
+        )}
+        <Button type="primary" onClick={onProceed} style={{ minHeight: 32, fontSize: 12 }}>
+          Tiếp tục sinh Solution với bằng chứng này
+        </Button>
+      </div>
+    </section>
+  );
+};
+
+export interface ResearchErrorAlertProps {
+  code: ResearchErrorCode;
+  message: string;
+  onRetry?: (() => void) | undefined;
+  onSkip: () => void;
+}
+
+/** D-03: unavailable, timeout/SSH, and cancelled each get their own copy and CTAs. */
+export const ResearchErrorAlert: React.FC<ResearchErrorAlertProps> = ({ code, message, onRetry, onSkip }) => {
+  if (code === 'RESEARCH_CANCELLED') {
+    return (
+      <div role="status" data-testid="research-cancelled"
+        style={{ padding: '8px 12px', margin: '8px 0 16px', fontSize: 12, color: 'rgba(0, 0, 0, 0.65)' }}>
+        Tiến trình nghiên cứu đã được hủy bỏ an toàn
+      </div>
+    );
+  }
+
+  const unavailable = code === 'RESEARCH_UNAVAILABLE';
+  return (
+    <Alert
+      type="warning"
+      showIcon
+      style={{ margin: '8px 0 16px' }}
+      title={unavailable
+        ? `Không có hệ thống nào sẵn sàng cho nghiên cứu qua SSH. ${message}`
+        : 'Không thể hoàn thành nghiên cứu qua SSH (quá thời gian 300s hoặc mất kết nối). Kiểm tra lại kết nối mạng hoặc thử lại.'}
+      action={
+        <Space size={8} wrap>
+          {!unavailable && onRetry && (
+            <Button size="small" style={{ minHeight: 32, fontSize: 12 }} onClick={onRetry}>Thử lại</Button>
+          )}
+          <Button size="small" style={{ minHeight: 32, fontSize: 12 }} onClick={onSkip}>
+            Bỏ qua, tiếp tục bằng bằng chứng nội bộ
+          </Button>
+        </Space>
+      }
+    />
+  );
+};
+
 /**
  * Thin host adapter (D-25). Owns exactly one turn (`useChatTurn`) for one step scope,
  * composes every turn through the layered SDLC composer, and supplies every
@@ -180,6 +450,9 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
 
   const [thread, setThread] = useState<{ scopeKey: string; id: string } | null>(null);
   const threadId = thread?.scopeKey === scopeKey ? thread.id : null;
+  // `saveResearchArtifact` validates the session id through `uuidSchema`, so it must be a real
+  // RFC 4122 v4 UUID — one per step scope, not per render.
+  const sessionId = useMemo(() => crypto.randomUUID(), [scopeKey]);
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
   const [toolEvents, setToolEvents] = useState<ChatTurnToolEvent[]>([]);
@@ -246,11 +519,33 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   const liveContextRef = useRef(artifactToolContext);
   liveContextRef.current = artifactToolContext;
 
+  const [researchProposal, setResearchProposal] = useState<ResearchProposalRecord | null>(null);
+  const [researchRun, setResearchRun] = useState<ResearchRunState>({ phase: 'idle' });
+  const [researchCancelling, setResearchCancelling] = useState(false);
+  const [researchDetailOpen, setResearchDetailOpen] = useState(false);
+  const researchCancelRef = useRef<(() => Promise<void>) | null>(null);
+  const researchRunIdRef = useRef(0);
+  // D-07: the latest persisted payload feeds the composer as subordinate external evidence.
+  const latestResearch = useLiveQuery(
+    () => loadLatestResearchArtifact(changeRequestId, db),
+    [changeRequestId, db]
+  );
+  const externalResearch = useMemo(() => {
+    const parsed = ResearchPayloadSchema.safeParse(latestResearch?.payload);
+    return parsed.success ? parsed.data : null;
+  }, [latestResearch]);
+
   useEffect(() => {
     setPatchRecords({}); setRefusalRecords([]); setApprovalState({}); setActiveProposalId(null);
     setProposalRecord(null); setProposalApproval({});
     pendingProposalRef.current = null; appliedProposalIdsRef.current.clear();
     freshnessGenerationRef.current += 1;
+    // A run belongs to the scope that started it; leaving the scope drops the card and handle.
+    researchRunIdRef.current += 1;
+    researchCancelRef.current = null;
+    setResearchProposal(null);
+    setResearchRun({ phase: 'idle' });
+    setResearchCancelling(false);
   }, [scopeKey, threadId]);
 
   const turn = useChatTurn({
@@ -268,6 +563,24 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
             if (!parsed.refused && Array.isArray(parsed.items) && parsed.items.length > 0) {
               setProposalRecord({ proposal: { items: parsed.items, evidence: parsed.evidence ?? [] }, scopeKey });
               setProposalApproval({});
+            }
+          } catch { /* A malformed proposal never becomes a card. */ }
+          return;
+        }
+        if (toolName === 'propose_research') {
+          // D-08/T-32-12: parse and render only — nothing runs until the user confirms.
+          try {
+            const parsed = JSON.parse(event.result ?? '{}') as ResearchProposalResult & { refused?: boolean };
+            if (!parsed.refused && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+              setResearchProposal({
+                proposal: {
+                  questions: parsed.questions,
+                  targetSystemIds: parsed.targetSystemIds ?? [],
+                  rationale: parsed.rationale ?? '',
+                  unavailableSystemIds: parsed.unavailableSystemIds ?? [],
+                },
+                scopeKey,
+              });
             }
           } catch { /* A malformed proposal never becomes a card. */ }
           return;
@@ -400,6 +713,8 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
           // D-41: a proposal is only meaningful inside a live CR scope; without one the tool
           // would refuse anyway, so it must not be advertised.
           if (name === 'propose_subsystems') return artifactsAllowed;
+          // D-08: same gate — a research proposal outside a live CR scope would refuse anyway.
+          if (name === 'propose_research') return artifactsAllowed;
           return true;
         });
 
@@ -412,6 +727,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
           dynamicReadOnlyToolNames,
           availableToolNames: tools.map((tool) => normalizeToolName(tool.function.name)),
           metadata: { cr: crId },
+          externalResearch,
           history,
           userTurn: text,
         });
@@ -465,7 +781,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
         }
       }
     },
-    [threadId, messages, db, stepId, crId, groundingText, turn, scopeKey, toolbox, extractArtifactDraft, artifactToolContext]
+    [threadId, messages, db, stepId, crId, groundingText, turn, scopeKey, toolbox, extractArtifactDraft, artifactToolContext, externalResearch]
   );
 
   const handleResolveArtifactApproval = useCallback(async (approved: boolean) => {
@@ -594,6 +910,81 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
     launchArtifactRef.current(kind);
   }, [threadId, scopeKey]);
 
+  /**
+   * D-08/D-09/D-11: the single research entry point for both trigger paths.
+   *
+   * T-32-15: the run is gated on a non-null `threadId`, so an artifact can never be persisted
+   * against a thread this panel is not actually showing.
+   */
+  const startResearch = useCallback((payload: ResearchStartPayload) => {
+    if (!threadId) return;
+    if (readOnly) return;
+    if (payload.questions.length === 0 || payload.targetSystemIds.length === 0) return;
+
+    const runId = (researchRunIdRef.current += 1);
+    const startedAt = Date.now();
+    setResearchProposal((prev) => (prev ? { ...prev, decision: 'approved' } : prev));
+    setResearchRun({ phase: 'streaming', lines: [], startedAt });
+    setResearchCancelling(false);
+
+    const { promise, cancel } = executeMultiSystemResearch({
+      changeRequestId,
+      threadId,
+      sessionId,
+      targetSystemIds: payload.targetSystemIds,
+      questions: payload.questions,
+      includeWeb: payload.includeWeb,
+      onLog: (line) => {
+        if (researchRunIdRef.current !== runId) return;
+        setResearchRun((prev) => prev.phase === 'streaming'
+          ? { ...prev, lines: [...prev.lines, line].slice(-RESEARCH_LOG_LINE_CAP) }
+          : prev);
+      },
+    });
+    researchCancelRef.current = cancel;
+
+    void promise.then(
+      (result) => {
+        if (researchRunIdRef.current !== runId) return;
+        researchCancelRef.current = null;
+        setResearchCancelling(false);
+        setResearchRun({ phase: 'completed', payload: result });
+      },
+      (cause: unknown) => {
+        if (researchRunIdRef.current !== runId) return;
+        researchCancelRef.current = null;
+        setResearchCancelling(false);
+        if (cause instanceof ResearchRunError) {
+          setResearchRun({
+            phase: 'error',
+            code: cause.code,
+            message: cause.message,
+            ...(cause.code === 'RESEARCH_CANCELLED' ? {} : { retry: payload }),
+          });
+          return;
+        }
+        setResearchRun({
+          phase: 'error',
+          code: 'RESEARCH_SSH_ERROR',
+          message: cause instanceof Error ? cause.message : String(cause),
+          retry: payload,
+        });
+      }
+    );
+  }, [threadId, readOnly, changeRequestId, sessionId]);
+
+  const handleCancelResearch = useCallback(() => {
+    const cancel = researchCancelRef.current;
+    if (!cancel) return;
+    setResearchCancelling(true);
+    void cancel();
+  }, []);
+
+  const handleSkipResearch = useCallback(() => {
+    setResearchRun({ phase: 'idle' });
+    setResearchProposal((prev) => (prev ? { ...prev, decision: 'skipped' } : prev));
+  }, []);
+
   const sendMessage = async (text: string) => {
     // T-27-13: a bounded edit naming a document this step does not own is refused, never
     // silently downgraded to Q&A or retargeted at another step's artifact.
@@ -670,6 +1061,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
     sendMessage,
     requestArtifactAnalysis: () => launchArtifact('SOLUTION'),
     requestArtifact: launchArtifact,
+    startResearch,
   }));
 
   // Decisions are durable transcript data; pending bodies never enter `messages`.
@@ -828,8 +1220,51 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
         artifactApprovalState={approvalState}
         {...(activeRecord?.decision ? { artifactDecision: activeRecord.decision } : {})}
         {...(Object.keys(toolEventExtensions).length > 0 ? { toolEventExtensions } : {})}
-        transcriptExtensions={(proposalRecord || decisionRows.length > 0) ? (
+        transcriptExtensions={(proposalRecord || decisionRows.length > 0 || researchProposal || researchRun.phase !== 'idle') ? (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {researchProposal && (
+              <div style={{ padding: '0 16px' }}>
+                <ResearchProposalCard
+                  proposal={researchProposal.proposal}
+                  applying={researchRun.phase === 'streaming'}
+                  {...(researchProposal.decision !== undefined ? { decision: researchProposal.decision } : {})}
+                  onConfirm={startResearch}
+                  onSkip={handleSkipResearch}
+                />
+              </div>
+            )}
+            {researchRun.phase === 'streaming' && (
+              <div style={{ padding: '0 16px' }}>
+                <ResearchStreamingCard
+                  lines={researchRun.lines}
+                  startedAt={researchRun.startedAt}
+                  cancelling={researchCancelling}
+                  onCancel={handleCancelResearch}
+                />
+              </div>
+            )}
+            {researchRun.phase === 'completed' && (
+              <div style={{ padding: '0 16px' }}>
+                <ResearchCompletionCard
+                  payload={researchRun.payload}
+                  onProceed={() => {
+                    setResearchRun({ phase: 'idle' });
+                    void sendMessage(PROCEED_WITH_RESEARCH_PROMPT);
+                  }}
+                  onViewDetail={() => setResearchDetailOpen(true)}
+                />
+              </div>
+            )}
+            {researchRun.phase === 'error' && (
+              <div style={{ padding: '0 16px' }}>
+                <ResearchErrorAlert
+                  code={researchRun.code}
+                  message={researchRun.message}
+                  {...(researchRun.retry ? { onRetry: () => startResearch(researchRun.retry!) } : {})}
+                  onSkip={handleSkipResearch}
+                />
+              </div>
+            )}
             {proposalRecord && liveCr && (
               <div style={{ padding: '0 16px' }}>
                 <SubsystemProposalCard
@@ -861,6 +1296,13 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
         placeholder={`Hỏi AI trợ giúp bước này (${stepId})...`}
         draft={draft}
         onDraftChange={setDraft}
+      />
+      <ResearchDetailModal
+        open={researchDetailOpen}
+        research={researchRun.phase === 'completed' ? researchRun.payload : externalResearch}
+        {...(latestResearch ? { version: latestResearch.version } : {})}
+        onCancel={() => setResearchDetailOpen(false)}
+        {...(liveCr?.code ? { crCode: liveCr.code } : {})}
       />
     </div>
   );
