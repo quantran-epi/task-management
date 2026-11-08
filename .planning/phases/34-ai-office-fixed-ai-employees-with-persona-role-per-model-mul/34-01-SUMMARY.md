@@ -107,3 +107,7 @@ None. No new network endpoint, auth path, or trust boundary was introduced beyon
 - `6d8670cc` feat(34-01): add AI Office type contract and Zod input schemas
 - `be925f01` feat(34-01): add Dexie version(17), team chat scope and message attribution
 - `468ad817` test(34-01): prove the V16 to V17 upgrade preserves data
+
+## Self-Check: PASSED
+
+All four artifacts exist on disk (`src/types/aiOffice.ts`, `src/validation/aiOfficeSchemas.ts`, `tests/db/schemaV17Migration.test.ts`, this SUMMARY). All four commits are reachable from the worktree branch. Working tree clean.
