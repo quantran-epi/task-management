@@ -556,6 +556,46 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     });
   }
 
+  // Stage 4: CR/system invariants (D-24/D-25/D-26). `replaceTables` bulk-adds, so the
+  // repository guards never run on import — the payload itself must be checked.
+  const systemById = new Map((systems ?? []).map((s) => [s.id, s]));
+  const crById = new Map((changeRequests ?? []).map((cr) => [cr.id, cr]));
+  if (systems) {
+    for (const system of systems) {
+      if (system.type === 'LOGICAL_GROUP') {
+        if (system.parentId) {
+          errors.push({ table: 'systems', recordId: system.id, field: 'parentId', message: 'Parent system cannot have a parent' });
+        }
+        if (system.sshConfigId !== undefined || system.remoteRepoPath !== undefined || system.defaultBaseBranch !== undefined) {
+          errors.push({ table: 'systems', recordId: system.id, field: 'type', message: 'Parent system cannot carry SSH/repo fields' });
+        }
+      } else if (system.parentId) {
+        const parent = systemById.get(system.parentId);
+        if (!parent || parent.type !== 'LOGICAL_GROUP') {
+          errors.push({ table: 'systems', recordId: system.id, field: 'parentId', message: 'Subsystem parent must be a logical group' });
+        }
+      }
+    }
+  }
+  for (const cr of changeRequests ?? []) {
+    for (const target of cr.targets) {
+      const system = systemById.get(target.systemId);
+      if (!system) {
+        errors.push({ table: 'changeRequests', recordId: cr.id, field: 'targets', message: `Unknown systemId "${target.systemId}"` });
+      } else if (system.type === 'LOGICAL_GROUP') {
+        errors.push({ table: 'changeRequests', recordId: cr.id, field: 'targets', message: 'Parent system cannot be a CR target' });
+      }
+    }
+  }
+  for (const task of tasks) {
+    const cr = crById.get(task.crId);
+    if (!cr) {
+      errors.push({ table: 'tasks', recordId: task.id, field: 'crId', message: `Task references crId "${task.crId}" not found in changeRequests` });
+    } else if (task.systemId && !cr.targets.some((target) => target.systemId === task.systemId)) {
+      errors.push({ table: 'tasks', recordId: task.id, field: 'systemId', message: 'systemId is not a target of the task CR' });
+    }
+  }
+
   if (errors.length > 0) {
     return { valid: false, errors };
   }
