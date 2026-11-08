@@ -229,3 +229,25 @@ Scoped suites: 177 + 31 + 114 tests passing, `tsc --noEmit` clean. One warning-l
 
 _Verified: 2026-11-08T18:00:33Z_
 _Verifier: Claude (gsd-verifier)_
+
+## Post-Verification Code Review Round
+
+A standard-depth code review of the 51 phase source files (`34-REVIEW.md`) found
+7 critical and 11 warning findings. All 18 were fixed in `5f14ace6` and `e4bc0605`:
+
+| ID | Finding | Fix |
+|----|---------|-----|
+| CR-01 | Per-agent usage baseline never reset, so a second turn counted as free | baseline cleared at every turn start; two-turn regression test |
+| CR-02 | Settings-drawer budget decrease routed through `topUp`, could go negative | decrease uses `setMemberBudget`; `topUpMemberBudget` clamps at 0 |
+| CR-03 | Global Stop left the plan park unresolved, hanging the lead turn | `abortAll`/lead `stopAgent` release the park; regression test |
+| CR-04 | Lead payload had no mutation tools, making the approval card unreachable | lead payload advertises mutation tools; employees stay read-only |
+| CR-05 | `teamUsed` never hydrated, so a reactivated team got a fresh budget | hydrates from persisted usage and starts parked past 80% |
+| CR-06 | Instructions attributed to the lead, so assignment history was always empty | `targetAgentId` carries the assignee; regression test |
+| CR-07 | Retrieval tools returned raw bodies, bypassing the untrusted-data boundary | every retrieval handler wraps its own body |
+| WR-01..11 | deferred release, mention-path park, stale team total, phase flips, `peek` vs `get`, effect churn, empty-state copy, drawer reseed, double split, pause rule, duplicate streaming bubble | all fixed, tests updated |
+
+Post-fix gate: `tsc --noEmit` clean; 218 tests green across `tests/services/ai/office`
+and `tests/views`.
+
+The two human-verification items above still stand — they need a live model and a
+real keyboard/screen-reader walk-through.
