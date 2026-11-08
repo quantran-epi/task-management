@@ -58,7 +58,7 @@ export const AppSplashScreen: React.FC<AppSplashScreenProps> = ({
         position: 'fixed',
         inset: 0,
         zIndex: 99999,
-        background: 'linear-gradient(145deg, #18191c 0%, #1e1f22 50%, #111215 100%)',
+        background: 'linear-gradient(145deg, #0a0d14 0%, #101420 50%, #0a0d14 100%)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -75,11 +75,11 @@ export const AppSplashScreen: React.FC<AppSplashScreenProps> = ({
       <div
         style={{
           position: 'absolute',
-          width: 480,
-          height: 480,
+          width: 520,
+          height: 520,
           borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, rgba(236, 72, 153, 0.08) 50%, transparent 70%)',
-          filter: 'blur(40px)',
+          background: 'radial-gradient(circle, rgba(91, 79, 232, 0.25) 0%, rgba(34, 211, 238, 0.14) 45%, rgba(168, 85, 247, 0.08) 70%, transparent 85%)',
+          filter: 'blur(45px)',
           pointerEvents: 'none',
         }}
       />
@@ -98,7 +98,7 @@ export const AppSplashScreen: React.FC<AppSplashScreenProps> = ({
         <div
           style={{
             marginBottom: 24,
-            filter: 'drop-shadow(0 12px 30px rgba(99, 102, 241, 0.35))',
+            filter: 'drop-shadow(0 12px 32px rgba(91, 79, 232, 0.45))',
             animation: 'pulse 2.5s infinite ease-in-out',
           }}
         >

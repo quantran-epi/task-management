@@ -70,7 +70,7 @@ export const JetBrainsDocsIcon: React.FC<JetBrainsIconProps> = ({ size = 16, sty
   </svg>
 );
 
-// 2b. Diagram Explorer (Emerald Teal + Vivid Violet + Flowchart Nodes)
+// 2b. Diagram Explorer (Mermaid Flowchart: Decision Diamond + Process Rect + Terminal Node)
 export const JetBrainsDiagramIcon: React.FC<JetBrainsIconProps> = ({ size = 16, style, className }) => (
   <svg
     viewBox="0 0 24 24"
@@ -80,27 +80,110 @@ export const JetBrainsDiagramIcon: React.FC<JetBrainsIconProps> = ({ size = 16, 
     style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style }}
   >
     <defs>
-      <linearGradient id="jbDiagNode1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <linearGradient id="jbDiagDiamond" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stopColor="#10b981" />
         <stop offset="100%" stopColor="#059669" />
       </linearGradient>
-      <linearGradient id="jbDiagNode2" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#8b5cf6" />
-        <stop offset="100%" stopColor="#6d28d9" />
+      <linearGradient id="jbDiagRect" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#38bdf8" />
+        <stop offset="100%" stopColor="#0284c7" />
       </linearGradient>
-      <linearGradient id="jbDiagNode3" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#06b6d4" />
+      <linearGradient id="jbDiagCircle" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#a855f7" />
+        <stop offset="100%" stopColor="#7c3aed" />
+      </linearGradient>
+    </defs>
+    {/* Flowchart Connector Lines with Branching */}
+    <path
+      d="M 12 11.5 L 12 14 M 12 14 L 6 14 L 6 16.5 M 12 14 L 18 14 L 18 16.5"
+      stroke="#94a3b8"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+    />
+    {/* Top Decision Diamond (Mermaid flowchart decision) */}
+    <polygon points="12,2.5 17.5,7 12,11.5 6.5,7" fill="url(#jbDiagDiamond)" />
+    {/* Left Process Rect (Operation step) */}
+    <rect x="2.5" y="16.5" width="7" height="5" rx="1.5" fill="url(#jbDiagRect)" />
+    {/* Right Terminal Circle (State/Endpoint) */}
+    <circle cx="18" cy="19" r="3.2" fill="url(#jbDiagCircle)" />
+  </svg>
+);
+
+// 2c. Systems Explorer (3-Tier Isometric Architecture Stack: App + Services + DB)
+export const JetBrainsSystemsIcon: React.FC<JetBrainsIconProps> = ({ size = 16, style, className }) => (
+  <svg
+    viewBox="0 0 24 24"
+    width={size}
+    height={size}
+    className={className}
+    style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style }}
+  >
+    <defs>
+      <linearGradient id="jbSysLayer1" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#c084fc" />
+        <stop offset="100%" stopColor="#7c3aed" />
+      </linearGradient>
+      <linearGradient id="jbSysLayer2" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#818cf8" />
+        <stop offset="100%" stopColor="#4338ca" />
+      </linearGradient>
+      <linearGradient id="jbSysLayer3" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#38bdf8" />
+        <stop offset="100%" stopColor="#0369a1" />
+      </linearGradient>
+    </defs>
+    {/* Bottom Layer: Infrastructure / DB Tier */}
+    <path d="M 12 14.5 L 20.5 18.5 L 12 22.5 L 3.5 18.5 Z" fill="url(#jbSysLayer3)" />
+    {/* Middle Layer: Services / Middleware Tier */}
+    <path d="M 12 8.5 L 20.5 12.5 L 12 16.5 L 3.5 12.5 Z" fill="url(#jbSysLayer2)" />
+    {/* Top Layer: Application / Presentation Tier */}
+    <path d="M 12 2.5 L 20.5 6.5 L 12 10.5 L 3.5 6.5 Z" fill="url(#jbSysLayer1)" />
+  </svg>
+);
+
+// 2d. Remote Git Explorer (Git Branch Fork + Commit Nodes + Remote Globe Badge)
+export const JetBrainsRemoteGitIcon: React.FC<JetBrainsIconProps> = ({ size = 16, style, className }) => (
+  <svg
+    viewBox="0 0 24 24"
+    width={size}
+    height={size}
+    className={className}
+    style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style }}
+  >
+    <defs>
+      <linearGradient id="jbGitOrange" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#fb923c" />
+        <stop offset="100%" stopColor="#ea580c" />
+      </linearGradient>
+      <linearGradient id="jbRemoteGlobe" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#38bdf8" />
         <stop offset="100%" stopColor="#0284c7" />
       </linearGradient>
     </defs>
-    {/* Connecting lines */}
-    <path d="M 12 7 L 12 11 M 12 11 L 6.5 11 L 6.5 14 M 12 11 L 17.5 11 L 17.5 14" stroke="#64748b" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    {/* Root node */}
-    <rect x="8.5" y="2.5" width="7" height="5" rx="1.5" fill="url(#jbDiagNode1)" />
-    {/* Left leaf node */}
-    <rect x="3" y="14" width="7" height="5" rx="1.5" fill="url(#jbDiagNode2)" />
-    {/* Right leaf node */}
-    <rect x="14" y="14" width="7" height="5" rx="1.5" fill="url(#jbDiagNode3)" />
+    {/* Remote Globe background badge */}
+    <circle cx="15.5" cy="8.5" r="5.5" fill="url(#jbRemoteGlobe)" opacity="0.35" />
+    <ellipse cx="15.5" cy="8.5" rx="2.5" ry="5.5" stroke="#0284c7" strokeWidth="0.9" fill="none" opacity="0.75" />
+    <line x1="10" y1="8.5" x2="21" y2="8.5" stroke="#0284c7" strokeWidth="0.9" opacity="0.75" />
+
+    {/* Main trunk line */}
+    <line x1="6.5" y1="5.5" x2="6.5" y2="18.5" stroke="#ea580c" strokeWidth="2.2" strokeLinecap="round" />
+    {/* Feature branch fork curve */}
+    <path
+      d="M 6.5 13.5 C 6.5 10.5 15.5 12 15.5 9"
+      stroke="#ea580c"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      fill="none"
+    />
+
+    {/* Root commit node */}
+    <circle cx="6.5" cy="18.5" r="2.8" fill="url(#jbGitOrange)" stroke="#ffffff" strokeWidth="1.2" />
+    {/* Trunk commit node */}
+    <circle cx="6.5" cy="5.5" r="2.8" fill="url(#jbGitOrange)" stroke="#ffffff" strokeWidth="1.2" />
+    {/* Remote branch commit node */}
+    <circle cx="15.5" cy="8.5" r="2.8" fill="#fbbf24" stroke="#ea580c" strokeWidth="1.2" />
   </svg>
 );
 
@@ -314,3 +397,37 @@ export const JetBrainsAnalyticsIcon: React.FC<JetBrainsIconProps> = ({ size = 16
     <rect x="15" y="6" width="3" height="13" rx="1" fill="#ffffff" />
   </svg>
 );
+
+// 11. SDLC Studio (DevOps Continuous Lifecycle Infinity Loop: Cyan -> Blue -> Violet -> Emerald)
+export const JetBrainsSdlcIcon: React.FC<JetBrainsIconProps> = ({ size = 16, style, className }) => (
+  <svg
+    viewBox="0 0 24 24"
+    width={size}
+    height={size}
+    className={className}
+    style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style }}
+  >
+    <defs>
+      <linearGradient id="jbSdlcGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#06b6d4" />
+        <stop offset="35%" stopColor="#3b82f6" />
+        <stop offset="70%" stopColor="#8b5cf6" />
+        <stop offset="100%" stopColor="#10b981" />
+      </linearGradient>
+    </defs>
+    {/* Continuous SDLC Lifecycle Infinity Loop */}
+    <path
+      d="M 7.5 7.5 C 4.5 7.5 2.5 9.5 2.5 12 C 2.5 14.5 4.5 16.5 7.5 16.5 C 10.5 16.5 12.5 13.5 12 12 C 11.5 10.5 13.5 7.5 16.5 7.5 C 19.5 7.5 21.5 9.5 21.5 12 C 21.5 14.5 19.5 16.5 16.5 16.5 C 13.5 16.5 11.5 13.5 12 12 C 12.5 10.5 10.5 7.5 7.5 7.5 Z"
+      fill="none"
+      stroke="url(#jbSdlcGrad)"
+      strokeWidth="2.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* Architecture / Design Milestone Dot */}
+    <circle cx="7.5" cy="12" r="1.6" fill="#06b6d4" />
+    {/* Deploy / Release Milestone Dot */}
+    <circle cx="16.5" cy="12" r="1.6" fill="#10b981" />
+  </svg>
+);
+

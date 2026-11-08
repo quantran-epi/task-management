@@ -35,18 +35,18 @@
   --fg-icon: #6c707e;
 
   /* Accent & Status */
-  --accent: #3871e1;
-  --accent-soft: #edf3ff;
-  --link: #2f5eb9;
-  --link-hover: #2e4d89;
+  --accent: #5b4fe8;
+  --accent-soft: #eef0fe;
+  --link: #5b4fe8;
+  --link-hover: #4333c8;
   --danger: #c54e58;
   --warning: #a56906;
   --success: #338555;
-  --info: #3871e1;
+  --info: #22d3ee;
 
   /* Project Theme Gradients */
-  --project-color: #3574f0;
-  --project-color-end: #7a64f0;
+  --project-color: #22d3ee;
+  --project-color-end: #a855f7;
   --project-gradient-strength: 18%;
 
   /* Metrics & Radii */
@@ -104,7 +104,7 @@
 .workbench-resize-handle[data-direction="horizontal"][data-resize-handle-state="drag"]::before {
   background: var(--handle-line-color-hover);
   width: 2px;
-  box-shadow: 0 0 4px rgba(56, 113, 225, 0.4);
+  box-shadow: 0 0 4px rgba(91, 79, 232, 0.4);
 }
 
 .workbench-resize-handle[data-direction="vertical"] {
@@ -128,7 +128,7 @@
 .workbench-resize-handle[data-direction="vertical"][data-resize-handle-state="drag"]::before {
   background: var(--handle-line-color-hover);
   height: 2px;
-  box-shadow: 0 0 4px rgba(56, 113, 225, 0.4);
+  box-shadow: 0 0 4px rgba(91, 79, 232, 0.4);
 }
 
 /* Viewport locking - prevent window-level scrollbars */

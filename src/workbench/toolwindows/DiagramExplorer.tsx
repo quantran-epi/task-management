@@ -13,9 +13,10 @@ import {
 } from 'antd';
 import {
   FolderOutlined,
+  FolderOpenOutlined,
   FolderFilled,
   PlusOutlined,
-  ApartmentOutlined,
+  FileTextOutlined,
   DeleteOutlined,
   MoreOutlined,
   EditOutlined,
@@ -453,7 +454,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
       {
         key: 'open',
         label: 'Mở trong Diagram Studio',
-        icon: <ApartmentOutlined style={{ color: '#10b981' }} />,
+        icon: <FileTextOutlined style={{ color: '#10b981' }} />,
         onClick: () => handleOpenDiagram(diag),
       },
       {
@@ -547,7 +548,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
             <span style={{ fontSize: 13, flexShrink: 0, color: isSelected ? '#059669' : '#10b981' }}>
-              <ApartmentOutlined />
+              <FileTextOutlined />
             </span>
             <span
               style={{
@@ -881,8 +882,8 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
               <span style={{ width: 10 }} />
             )}
           </span>
-          <span style={{ fontSize: 14, flexShrink: 0, color: '#eab308', display: 'flex', alignItems: 'center' }}>
-            {isExpanded ? <FolderFilled /> : <FolderOutlined />}
+          <span style={{ fontSize: 14, flexShrink: 0, color: '#10b981', display: 'flex', alignItems: 'center' }}>
+            {isExpanded ? <FolderOpenOutlined /> : <FolderOutlined />}
           </span>
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {node.title}
@@ -1021,7 +1022,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
             {renderSpecialCategory(
               'root_diagrams',
               'Biểu đồ chung (Chưa phân loại)',
-              <ApartmentOutlined style={{ color: '#10b981' }} />,
+              <FolderOutlined style={{ color: '#10b981' }} />,
               rootDiagrams,
               '#10b981',
               <Tooltip title="Tạo biểu đồ mới">

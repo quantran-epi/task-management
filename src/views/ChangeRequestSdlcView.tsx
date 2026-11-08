@@ -52,6 +52,10 @@ export interface ChangeRequestSdlcViewProps {
   changeRequestId?: string;
   /** WR-07: preselected subsystem forwarded from CR Explorer's "Mở SDLC tại subsystem này". */
   systemId?: string | undefined;
+  /** Step to open on mount / when the caller changes it (CR Detail progress strip). */
+  initialStepId?: SdlcStepId | undefined;
+  /** Changes on every progress-strip click so re-clicking the same step re-applies it. */
+  stepRequestId?: string | undefined;
   onBack: () => void;
   db?: TaskPlannerDatabase;
 }
@@ -67,6 +71,8 @@ function isGuardCode(code: unknown): code is keyof typeof WORKFLOW_GUARD_MESSAGE
 export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
   changeRequestId: propChangeRequestId = '',
   systemId: propSystemId,
+  initialStepId: propInitialStepId,
+  stepRequestId: propStepRequestId,
   onBack,
   db = defaultDb,
 }) => {
@@ -821,6 +827,19 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
     [coordinator, reportGuardError, clearAnalysisTimer, setSelectedStepTracked]
   );
 
+  // CR Detail's progress strip opens SDLC at a step. The tab is reused when already open, so
+  // this reacts to the param instead of only seeding state — `stepRequestId` makes a repeat
+  // click on the same step re-apply it. View-level only: a CR with no workflow yet must not
+  // trip the coordinator's WORKFLOW_NOT_INITIALIZED guard.
+  useEffect(() => {
+    if (!propInitialStepId || !activeCrId) return;
+    // Only for the CR the caller asked for — switching CR inside the view must not re-apply it.
+    if (propChangeRequestId && activeCrId !== propChangeRequestId) return;
+    clearAnalysisTimer();
+    setSelectedStepTracked(propInitialStepId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propInitialStepId, propStepRequestId, activeCrId]);
+
   const renderStepNode = () => {
     switch (selectedStep) {
       case 'INTAKE':
@@ -873,8 +892,14 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
             crCode={workflowState?.metadata.cr ?? ''}
             targetSystems={crTargetSystems}
             crTargets={activeCrRecord?.targets ?? []}
+            selectedSystemId={selectedSystemId ?? undefined}
             approvedSolutionMarkdown={workflowState?.artifacts.solution?.content}
-            savedSnapshot={workflowState?.artifacts.branchSnapshot}
+            savedSnapshot={
+              selectedSystemId
+                ? workflowState?.artifacts.branchSnapshots?.[selectedSystemId]
+                : workflowState?.artifacts.branchSnapshot
+            }
+            approvedSystemIds={Object.keys(workflowState?.artifacts.branchSnapshots ?? {})}
             conventionsSummary={conventionsSummary}
             onFeatureBranchChange={(systemId, branch) => {
               if (!activeCrRecord) return;
@@ -887,7 +912,7 @@ export const ChangeRequestSdlcView: React.FC<ChangeRequestSdlcViewProps> = ({
             }}
             onCommitBranchSnapshot={async (snapshot) => {
               try {
-                await coordinator.commitBranchSnapshot(snapshot);
+                await coordinator.commitBranchSnapshot(snapshot, selectedSystemId ?? undefined);
                 message.success('Đã phê duyệt branch snapshot thành công!');
               } catch (err) {
                 reportGuardError(err);

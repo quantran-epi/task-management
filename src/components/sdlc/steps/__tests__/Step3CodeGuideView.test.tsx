@@ -426,6 +426,65 @@ describe('Task 1: SdlcWorkflowState schema and coordinator BranchSnapshot persis
     expect(savedState?.artifacts.branchSnapshot?.headSha).toBe(snapshot.headSha);
   });
 
+  it('commitBranchSnapshot with a systemId keeps one snapshot per subsystem (D-40)', async () => {
+    const dummyState: SdlcWorkflowState = {
+      schemaVersion: 1,
+      sessionId: '11111111-1111-4111-8111-111111111111',
+      projectId: '22222222-2222-4222-8222-222222222222',
+      threadId: '33333333-3333-4333-8333-333333333333',
+      currentStep: 'CODE_GUIDE',
+      metadata: {
+        cr: 'CR-101',
+        featureName: 'Test',
+        author: 'Dev',
+        requestingUnit: 'Unit',
+        date: '2026-11-06',
+      },
+      artifacts: {
+        branchSnapshots: {},
+        solution: {
+          kind: 'SOLUTION',
+          version: 1,
+          hash: 'a'.repeat(64),
+          title: 'SOLUTION.md',
+          content: 'Solution content',
+          sourceHashes: [],
+          updatedAt: '2026-11-06T00:00:00.000Z',
+        },
+      },
+      staleSteps: [],
+      createdAt: '2026-11-06T00:00:00.000Z',
+      updatedAt: '2026-11-06T00:00:00.000Z',
+    };
+
+    const coordinator = createSdlcWorkflowCoordinator({
+      changeRequestId: '22222222-2222-4222-8222-222222222222',
+      threadId: '33333333-3333-4333-8333-333333333333',
+      loadState: async () => dummyState,
+    });
+
+    const snapshotFor = (sha: string) => ({
+      baseBranch: 'origin/main',
+      targetBranch: 'feature/CR-101',
+      headSha: sha,
+      commitShas: [sha],
+      fileStats: [],
+      totalAdditions: 0,
+      totalDeletions: 0,
+      approvedAt: '2026-11-06T12:00:00.000Z',
+    });
+
+    const shaA = '0123456789abcdef0123456789abcdef01234567';
+    const shaB = 'fedcba9876543210fedcba9876543210fedcba98';
+
+    await coordinator.commitBranchSnapshot(snapshotFor(shaA), 'sys-a');
+    const res = await coordinator.commitBranchSnapshot(snapshotFor(shaB), 'sys-b');
+
+    expect(res.artifacts.branchSnapshots['sys-a']?.headSha).toBe(shaA);
+    expect(res.artifacts.branchSnapshots['sys-b']?.headSha).toBe(shaB);
+    expect(res.artifacts.branchSnapshot).toBeUndefined();
+  });
+
   it('attempting to commit branch snapshot without approved SOLUTION throws guard error', async () => {
     const dummyStateWithoutSolution: SdlcWorkflowState = {
       schemaVersion: 1,

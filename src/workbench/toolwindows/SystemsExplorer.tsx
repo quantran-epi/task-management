@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { Tree, Input, Empty, Typography, Button, Dropdown, Modal, message, type MenuProps } from 'antd';
 import {
   FolderOutlined,
+  FolderOpenOutlined,
   BranchesOutlined,
   SearchOutlined,
   InboxOutlined,
@@ -248,7 +249,12 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
               </span>
             </Dropdown>
           ),
-          icon: <FolderOutlined style={{ color: '#722ed1' }} />,
+          icon: ({ expanded }: { expanded?: boolean }) =>
+            expanded ? (
+              <FolderOpenOutlined style={{ color: '#722ed1' }} />
+            ) : (
+              <FolderOutlined style={{ color: '#722ed1' }} />
+            ),
           children: childNodes,
         };
       })

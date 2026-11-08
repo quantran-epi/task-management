@@ -1,13 +1,14 @@
 import { Tooltip } from 'antd';
-import {
-  MinusOutlined,
-  ProjectOutlined,
-  FileTextOutlined,
-  ApartmentOutlined,
-  CloudServerOutlined,
-} from '@ant-design/icons';
+import { MinusOutlined } from '@ant-design/icons';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { useLayoutStore } from '../store/layoutStore';
+import {
+  JetBrainsProjectIcon,
+  JetBrainsDocsIcon,
+  JetBrainsDiagramIcon,
+  JetBrainsSystemsIcon,
+  JetBrainsRemoteGitIcon,
+} from '../../components/icons/JetBrainsIcons';
 import { CRExplorer } from './CRExplorer';
 import { DocsExplorer } from './DocsExplorer';
 import { DiagramExplorer } from './DiagramExplorer';
@@ -40,15 +41,15 @@ export function LeftToolWindow({
     ? 'Docs Explorer'
     : 'CR Explorer';
   const icon = isSystems ? (
-    <ApartmentOutlined style={{ fontSize: 13, color: '#722ed1' }} />
+    <JetBrainsSystemsIcon size={15} />
   ) : isRemoteExplorer ? (
-    <CloudServerOutlined style={{ fontSize: 13, color: '#f59e0b' }} />
+    <JetBrainsRemoteGitIcon size={15} />
   ) : isDiagrams ? (
-    <ApartmentOutlined style={{ fontSize: 13, color: '#10b981' }} />
+    <JetBrainsDiagramIcon size={15} />
   ) : isDocs ? (
-    <FileTextOutlined style={{ fontSize: 13, color: 'var(--accent, #3871e1)' }} />
+    <JetBrainsDocsIcon size={15} />
   ) : (
-    <ProjectOutlined style={{ fontSize: 13, color: 'var(--accent, #3871e1)' }} />
+    <JetBrainsProjectIcon size={15} />
   );
 
   return (

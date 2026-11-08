@@ -129,7 +129,9 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
       title: 'SDLC Studio',
       viewType: 'sdlc',
       closable: true,
-      params: stepId ? { changeRequestId: cr.id, stepId } : { changeRequestId: cr.id },
+      params: stepId
+        ? { changeRequestId: cr.id, stepId, stepRequestId: Date.now() }
+        : { changeRequestId: cr.id },
     });
   };
 

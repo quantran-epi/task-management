@@ -4,6 +4,7 @@ import type { DataNode } from 'antd/es/tree';
 import FolderOutlined from '@ant-design/icons/FolderOutlined';
 import FolderOpenOutlined from '@ant-design/icons/FolderOpenOutlined';
 import FileOutlined from '@ant-design/icons/FileOutlined';
+import FileTextOutlined from '@ant-design/icons/FileTextOutlined';
 import CodeOutlined from '@ant-design/icons/CodeOutlined';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import BranchesOutlined from '@ant-design/icons/BranchesOutlined';
@@ -195,15 +196,6 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
             userSelect: 'none',
           }}
         >
-          {node.isLeaf ? (
-            isCode ? (
-              <CodeOutlined style={{ color: 'var(--accent, #3871e1)' }} />
-            ) : (
-              <FileOutlined style={{ color: 'var(--fg-muted, #6c707e)' }} />
-            )
-          ) : (
-            <FolderOutlined style={{ color: '#eab308' }} />
-          )}
           <span>{node.title}</span>
           {renderGitStatusBadge(node.gitStatus)}
           {node.isLeaf && node.size !== undefined && (
@@ -222,6 +214,16 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
           )}
         </span>
       ),
+      icon: ({ expanded }: { expanded?: boolean }) =>
+        node.isLeaf ? (
+          <FileTextOutlined
+            style={{ color: isCode ? 'var(--accent, #3871e1)' : 'var(--fg-muted, #6c707e)' }}
+          />
+        ) : expanded ? (
+          <FolderOpenOutlined style={{ color: '#f59e0b' }} />
+        ) : (
+          <FolderOutlined style={{ color: '#f59e0b' }} />
+        ),
       isLeaf: node.isLeaf,
       ...(node.size !== undefined ? { size: node.size } : {}),
       sha: node.sha,
@@ -527,7 +529,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
               loadData={onLoadData}
               treeData={treeData}
               onSelect={handleSelectNode}
-              showIcon={false}
+              showIcon
               blockNode
               style={{
                 background: 'transparent',

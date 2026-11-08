@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Typography,
   Button,
@@ -55,7 +55,10 @@ export interface Step3CodeGuideViewProps {
   /** D-38: the single view-level selection, owned by the SDLC view and shared with Step 4. */
   selectedSystemId?: string | undefined;
   approvedSolutionMarkdown?: string | undefined;
+  /** D-40: the approved snapshot for the currently selected subsystem. */
   savedSnapshot?: BranchSnapshot | undefined;
+  /** D-40: subsystems that already have an approved snapshot — Step 4 needs all of them. */
+  approvedSystemIds?: string[] | undefined;
   onCommitBranchSnapshot?: (snapshot: BranchSnapshot) => Promise<void>;
   /** D-38b: a user-confirmed branch is written back onto the CR target, never guessed. */
   onFeatureBranchChange?: ((systemId: string, branch: string) => void) | undefined;
@@ -71,6 +74,7 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
   selectedSystemId: selectedSystemIdProp,
   approvedSolutionMarkdown,
   savedSnapshot: initialSavedSnapshot,
+  approvedSystemIds = [],
   onCommitBranchSnapshot,
   onFeatureBranchChange,
   onProceedToStep4,
@@ -101,13 +105,38 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
   const [baseBranch, setBaseBranch] = useState<string>('origin/main');
 
   // Initialize SSH/repo from the selected subsystem (D-36/D-38b) — no settings-backed binding.
-  // Reset on every switch: a subsystem without a binding must not inherit the previous one's host.
+  // Keyed on the id + the fields it reads, never the object identity: a fresh `System` object
+  // per render used to re-run this effect on every render and cascade into a re-render loop.
+  const selectedSshConfigIdValue = selectedSystem?.sshConfigId ?? '';
+  const selectedRepoPathValue = selectedSystem?.remoteRepoPath ?? '';
+  const selectedBaseBranchValue = selectedSystem?.defaultBaseBranch ?? 'origin/main';
   useEffect(() => {
-    setSelectedSshConfigId(selectedSystem?.sshConfigId ?? '');
-    setRemoteRepoPath(selectedSystem?.remoteRepoPath ?? '');
-    setLoadedRepoPath(selectedSystem?.remoteRepoPath ?? '');
-    setBaseBranch(selectedSystem?.defaultBaseBranch ?? 'origin/main');
-  }, [selectedSystem]);
+    setSelectedSshConfigId(selectedSshConfigIdValue);
+    setRemoteRepoPath(selectedRepoPathValue);
+    setLoadedRepoPath(selectedRepoPathValue);
+    setBaseBranch(selectedBaseBranchValue);
+
+    // Switch instantly: drop the previous subsystem's remote data so nothing stale is shown,
+    // then hydrate from cache when this subsystem was already fetched in this session.
+    const cached = remoteCacheRef.current.get(selectedSystemId || selectedRepoPathValue);
+    requestSeqRef.current += 1;
+    setErrorMessage(null);
+    if (cached) {
+      setBranches(cached.branches);
+      setDirtyStatus(cached.dirtyStatus);
+      setDiffSummary(cached.diffSummary);
+      setSelectedFilePath(cached.selectedFilePath);
+      setCurrentFileDiff('');
+      setLoading(false);
+    } else {
+      setBranches([]);
+      setDirtyStatus(null);
+      setDiffSummary(null);
+      setSelectedFilePath('');
+      setCurrentFileDiff('');
+      setLoading(Boolean(selectedSshConfigIdValue && selectedRepoPathValue));
+    }
+  }, [selectedSystemId, selectedSshConfigIdValue, selectedRepoPathValue, selectedBaseBranchValue]);
 
   // Remote data state
   const [branches, setBranches] = useState<RemoteGitBranch[]>([]);
@@ -119,16 +148,32 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
   const [currentFileDiff, setCurrentFileDiff] = useState<string>('');
   const [fileSearchQuery, setFileSearchQuery] = useState<string>('');
 
+  // Switching subsystem must not re-run four SSH round-trips. Cache the remote result per
+  // subsystem and hydrate instantly on a revisit; explicit refreshes bypass it.
+  const remoteCacheRef = useRef<
+    Map<
+      string,
+      {
+        branches: RemoteGitBranch[];
+        dirtyStatus: RemoteGitStatus | null;
+        diffSummary: RemoteDiffSummary | null;
+        selectedFilePath: string;
+      }
+    >
+  >(new Map());
+  // Guards late responses from a previously selected subsystem overwriting the current one.
+  const requestSeqRef = useRef(0);
+
   // Review & snapshot state
   const [currentSnapshot, setCurrentSnapshot] = useState<BranchSnapshot | undefined>(
     initialSavedSnapshot
   );
 
   useEffect(() => {
-    if (initialSavedSnapshot) {
-      setCurrentSnapshot(initialSavedSnapshot);
-    }
-  }, [initialSavedSnapshot]);
+    // Switching subsystem must not keep the previous subsystem's approval on screen.
+    setCurrentSnapshot(initialSavedSnapshot);
+    setDriftInfo(null);
+  }, [initialSavedSnapshot, selectedSystemId]);
   const [driftInfo, setDriftInfo] = useState<{ drifted: boolean; currentHeadSha: string } | null>(
     null
   );
@@ -205,6 +250,8 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
       if (!activeSshConfig || !pathToUse) {
         return;
       }
+      const seq = ++requestSeqRef.current;
+      const cacheKey = selectedSystemId || pathToUse;
       setLoading(true);
       setErrorMessage(null);
 
@@ -213,23 +260,29 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
 
         // 1. Fetch remote branches (picker options only — D-38b forbids guessing)
         const branchList = await getRemoteBranches(activeSshConfig, pathToUse, secret);
+        if (seq !== requestSeqRef.current) return;
         setBranches(branchList);
 
         const resolvedTarget = targetBranch;
 
         // 2. Check working tree dirty status
         const statusResult = await checkDirtyStatus(activeSshConfig, pathToUse, secret);
+        if (seq !== requestSeqRef.current) return;
         setDirtyStatus(statusResult);
+
+        let summary: RemoteDiffSummary | null = null;
+        let nextSelectedFile = '';
 
         // 3. If target branch resolved, fetch diff summary and commits
         if (resolvedTarget && baseBranch) {
-          const summary = await getDiffSummary(
+          summary = await getDiffSummary(
             activeSshConfig,
             pathToUse,
             baseBranch,
             resolvedTarget,
             secret
           );
+          if (seq !== requestSeqRef.current) return;
           setDiffSummary(summary);
 
           // Check drift if we have an approved snapshot
@@ -241,37 +294,50 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
               currentSnapshot.headSha,
               secret
             );
+            if (seq !== requestSeqRef.current) return;
             setDriftInfo(drift);
           }
 
           // Auto-select first changed file if none selected
           if (summary.files.length > 0 && summary.files[0]) {
-            setSelectedFilePath(summary.files[0].path);
+            nextSelectedFile = summary.files[0].path;
+            setSelectedFilePath(nextSelectedFile);
           }
         }
+
+        remoteCacheRef.current.set(cacheKey, {
+          branches: branchList,
+          dirtyStatus: statusResult,
+          diffSummary: summary,
+          selectedFilePath: nextSelectedFile,
+        });
       } catch (err: unknown) {
+        if (seq !== requestSeqRef.current) return;
         const msg = err instanceof Error ? err.message : String(err);
         setErrorMessage(`Lỗi Git/SSH: ${msg}`);
       } finally {
-        setLoading(false);
+        if (seq === requestSeqRef.current) setLoading(false);
       }
     },
-    [activeSshConfig, loadedRepoPath, targetBranch, baseBranch, currentSnapshot]
+    [activeSshConfig, loadedRepoPath, targetBranch, baseBranch, currentSnapshot, selectedSystemId]
   );
 
-  // Trigger query when loaded repository path, branches, or config changes
+  // Trigger the SSH query when the repo/config/branch changes. The init effect above already
+  // hydrated a cached subsystem, so a cache hit here means there is nothing left to fetch.
   useEffect(() => {
-    if (activeSshConfig && loadedRepoPath.trim()) {
-      void fetchRemoteData();
-    }
-  }, [activeSshConfig, loadedRepoPath, baseBranch, targetBranch]);
+    if (!activeSshConfig || !loadedRepoPath.trim()) return;
+    if (remoteCacheRef.current.has(selectedSystemId || loadedRepoPath)) return;
+    void fetchRemoteData();
+  }, [activeSshConfig, loadedRepoPath, baseBranch, targetBranch, selectedSystemId]);
 
   const handleLoad = useCallback(() => {
     setLoadedRepoPath(remoteRepoPath);
+    // An explicit load is a refresh request — drop the cached entry so it re-fetches.
+    remoteCacheRef.current.delete(selectedSystemId || remoteRepoPath);
     if (loadedRepoPath === remoteRepoPath) {
       void fetchRemoteData(remoteRepoPath);
     }
-  }, [remoteRepoPath, loadedRepoPath, fetchRemoteData]);
+  }, [remoteRepoPath, loadedRepoPath, fetchRemoteData, selectedSystemId]);
 
   // Load single file diff when selectedFilePath changes
   useEffect(() => {
@@ -350,8 +416,9 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
     }
   };
 
-  // Re-inspect drift handler
+  // Re-inspect drift handler — an explicit refresh must bypass the cache.
   const handleReInspectDrift = async () => {
+    remoteCacheRef.current.delete(selectedSystemId || loadedRepoPath);
     await fetchRemoteData();
     message.info('Đã kiểm tra lại trạng thái remote repository.');
   };
@@ -645,21 +712,24 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
           </Typography.Text>
         </div>
       ) : diffSummary && diffSummary.commits.length === 0 && diffSummary.files.length === 0 ? (
-        <Card style={{ border: `1px solid ${token.colorBorderSecondary}`, textAlign: 'center', padding: 40 }}>
-          <Empty
-            description={
-              <div>
-                <Typography.Text strong style={{ fontSize: 16 }}>
-                  Không có thay đổi Git nào
-                </Typography.Text>
-                <Typography.Paragraph type="secondary" style={{ marginTop: 8, fontSize: 13 }}>
-                  Nhánh {targetBranch} đồng nhất với nhánh gốc {baseBranch}. Không tìm thấy commit hoặc diff nào cần review.
-                </Typography.Paragraph>
-              </div>
-            }
-          />
-        </Card>
+        <Spin spinning={loading} tip="Đang truy vấn repository remote qua SSH...">
+          <Card style={{ border: `1px solid ${token.colorBorderSecondary}`, textAlign: 'center', padding: 40, minHeight: 240 }}>
+            <Empty
+              description={
+                <div>
+                  <Typography.Text strong style={{ fontSize: 16 }}>
+                    Không có thay đổi Git nào
+                  </Typography.Text>
+                  <Typography.Paragraph type="secondary" style={{ marginTop: 8, fontSize: 13 }}>
+                    Nhánh {targetBranch} đồng nhất với nhánh gốc {baseBranch}. Không tìm thấy commit hoặc diff nào cần review.
+                  </Typography.Paragraph>
+                </div>
+              }
+            />
+          </Card>
+        </Spin>
       ) : (
+        <Spin spinning={loading} tip="Đang truy vấn repository remote qua SSH...">
         <div
           data-testid="two-column-review-pane"
           style={{
@@ -902,6 +972,7 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
             )}
           </div>
         </div>
+        </Spin>
       )}
 
       {/* Action & Approval Footer */}
@@ -926,6 +997,14 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
             <Typography.Text type="secondary" style={{ fontSize: 13 }}>
               Trạng thái: Chưa duyệt snapshot nhánh
             </Typography.Text>
+          )}
+          {targetSystems.length > 1 && (
+            <div style={{ marginTop: 4 }}>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                Đã duyệt {approvedSystemIds.filter((id) => targetSystems.some((s) => s.id === id)).length}/
+                {targetSystems.length} subsystem — duyệt từng subsystem trước khi sang Bước 4.
+              </Typography.Text>
+            </div>
           )}
         </div>
 

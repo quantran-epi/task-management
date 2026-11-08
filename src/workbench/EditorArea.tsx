@@ -1,5 +1,13 @@
 import { useEffect, useRef } from 'react';
-import { CloseOutlined, InboxOutlined, PushpinOutlined, PushpinFilled, DownOutlined } from '@ant-design/icons';
+import {
+  CloseOutlined,
+  InboxOutlined,
+  PushpinOutlined,
+  PushpinFilled,
+  DownOutlined,
+  FundProjectionScreenOutlined,
+  FileTextOutlined,
+} from '@ant-design/icons';
 import { Dropdown, Tooltip, type MenuProps } from 'antd';
 import {
   DndContext,
@@ -16,7 +24,22 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { AntdThemeAdapter } from './AntdThemeAdapter';
-import { useLayoutStore, type EditorTab } from './store/layoutStore';
+import { useLayoutStore, type EditorTab, type EditorViewType } from './store/layoutStore';
+import {
+  JetBrainsTasksIcon,
+  JetBrainsDocsIcon,
+  JetBrainsPlannerIcon,
+  JetBrainsAnalyticsIcon,
+  JetBrainsDashboardIcon,
+  JetBrainsAgentsIcon,
+  JetBrainsTelegramIcon,
+  JetBrainsProjectIcon,
+  JetBrainsDiagramIcon,
+  JetBrainsSystemsIcon,
+  JetBrainsRemoteGitIcon,
+  JetBrainsSdlcIcon,
+} from '../components/icons/JetBrainsIcons';
+import { SettingOutlined } from '@ant-design/icons';
 import { TasksView } from '../views/TasksView';
 import { NotesView } from '../views/NotesView';
 import { PlannerView } from '../views/PlannerView';
@@ -27,6 +50,7 @@ import { AgentControlView } from '../views/AgentControlView';
 import { TelegramMonitorView } from '../views/TelegramMonitorView';
 import { ItemInsightView } from '../views/ItemInsightView';
 import { ChangeRequestSdlcView } from '../views/ChangeRequestSdlcView';
+import type { SdlcStepId } from '../services/wizard/workflowSchemas';
 import { ChangeRequestDetailView } from '../views/ChangeRequestDetailView';
 import { SystemCatalogView } from '../views/SystemCatalogView';
 import { SystemDetailView } from '../views/SystemDetailView';
@@ -36,6 +60,42 @@ import type { TaskPlannerDatabase } from '../db';
 
 export interface EditorAreaProps {
   db?: TaskPlannerDatabase | undefined;
+}
+
+export function getEditorTabIcon(viewType: EditorViewType, size = 13): React.ReactNode {
+  switch (viewType) {
+    case 'tasks':
+      return <JetBrainsTasksIcon size={size} />;
+    case 'notes':
+      return <JetBrainsDocsIcon size={size} />;
+    case 'planner':
+      return <JetBrainsPlannerIcon size={size} />;
+    case 'analytics':
+      return <JetBrainsAnalyticsIcon size={size} />;
+    case 'dashboard':
+      return <JetBrainsDashboardIcon size={size} />;
+    case 'agents':
+      return <JetBrainsAgentsIcon size={size} />;
+    case 'telegram':
+      return <JetBrainsTelegramIcon size={size} />;
+    case 'sdlc':
+      return <JetBrainsSdlcIcon size={size} />;
+    case 'cr_detail':
+      return <JetBrainsProjectIcon size={size} />;
+    case 'systems':
+    case 'system_detail':
+      return <JetBrainsSystemsIcon size={size} />;
+    case 'mermaid':
+      return <JetBrainsDiagramIcon size={size} />;
+    case 'remote_file':
+      return <JetBrainsRemoteGitIcon size={size} />;
+    case 'insight':
+      return <FundProjectionScreenOutlined style={{ fontSize: size - 1, color: '#10b981' }} />;
+    case 'settings':
+      return <SettingOutlined style={{ fontSize: size - 1, color: 'var(--fg-muted, #6c707e)' }} />;
+    default:
+      return <FileTextOutlined style={{ fontSize: size - 1, color: 'var(--accent, #3871e1)' }} />;
+  }
 }
 
 interface SortableEditorTabItemProps {
@@ -171,6 +231,20 @@ function SortableEditorTabItem({
         )}
       </button>
 
+      {/* Tab Type Icon */}
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginRight: 6,
+          flexShrink: 0,
+          pointerEvents: 'none',
+        }}
+      >
+        {getEditorTabIcon(tab.viewType, 13)}
+      </span>
+
       <span
         style={{
           flex: 1,
@@ -285,6 +359,9 @@ export function EditorArea({ db }: EditorAreaProps) {
                 }}
               />
             )}
+            <span style={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
+              {getEditorTabIcon(t.viewType, 14)}
+            </span>
             <span
               style={{
                 flex: 1,
@@ -453,6 +530,8 @@ export function EditorArea({ db }: EditorAreaProps) {
           <ChangeRequestSdlcView
             changeRequestId={String(tab.params?.changeRequestId ?? '')}
             systemId={tab.params?.systemId ? String(tab.params.systemId) : undefined}
+            initialStepId={(tab.params?.stepId as SdlcStepId | undefined) ?? undefined}
+            stepRequestId={tab.params?.stepRequestId ? String(tab.params.stepRequestId) : undefined}
             onBack={() => closeTab(tab.id)}
             {...dbProp}
           />

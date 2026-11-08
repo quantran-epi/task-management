@@ -11,7 +11,8 @@ export function AntdThemeAdapter({ children }: AntdThemeAdapterProps) {
       theme={{
         algorithm: [theme.defaultAlgorithm, theme.compactAlgorithm],
         token: {
-          colorPrimary: '#3871e1',
+          colorPrimary: '#5b4fe8',
+          colorInfo: '#22d3ee',
           colorBgBase: '#ffffff',
           colorBgContainer: '#ffffff',
           colorBgElevated: '#f7f8fa',

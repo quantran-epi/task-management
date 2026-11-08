@@ -27,13 +27,32 @@ import { KnowledgeConfigProvider } from './services/knowledge/knowledgeConfig';
 const { defaultAlgorithm, darkAlgorithm } = theme;
 
 const themeTokens = {
-  colorPrimary: '#4f46e5',
-  colorPrimaryHover: '#4338ca',
-  colorPrimaryActive: '#3730a3',
+  colorPrimary: '#5b4fe8',
+  colorPrimaryHover: '#4f40dc',
+  colorPrimaryActive: '#4333c8',
+  colorInfo: '#22d3ee',
   borderRadius: 8,
   controlHeight: 36,
   fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
 };
+
+const getAppTheme = (isDark: boolean) => ({
+  algorithm: isDark ? darkAlgorithm : defaultAlgorithm,
+  token: {
+    ...themeTokens,
+    ...(isDark
+      ? {
+          colorBgBase: '#0a0d14',
+          colorBgLayout: '#0d1018',
+        }
+      : {
+          colorBgLayout: '#f8fafc',
+          boxShadowSecondary: '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05)',
+          boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+          wireframe: false,
+        }),
+  },
+});
 
 export const App: React.FC = () => {
   const { route, params, navigate } = useHashRoute('dashboard');
@@ -95,18 +114,7 @@ export const App: React.FC = () => {
     return (
       <ConfigProvider
         locale={viVN}
-        theme={{
-          algorithm: isDark ? darkAlgorithm : defaultAlgorithm,
-          token: {
-            ...themeTokens,
-            ...(isDark ? {} : {
-              colorBgLayout: '#f8fafc',
-              boxShadowSecondary: '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05)',
-              boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-              wireframe: false,
-            }),
-          },
-        }}
+        theme={getAppTheme(isDark)}
       >
         <TimerProvider>
           <TimerPopoutView />
@@ -119,18 +127,7 @@ export const App: React.FC = () => {
     return (
       <ConfigProvider
         locale={viVN}
-        theme={{
-          algorithm: isDark ? darkAlgorithm : defaultAlgorithm,
-          token: {
-            ...themeTokens,
-            ...(isDark ? {} : {
-              colorBgLayout: '#f8fafc',
-              boxShadowSecondary: '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05)',
-              boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-              wireframe: false,
-            }),
-          },
-        }}
+        theme={getAppTheme(isDark)}
       >
         <NotesPopoutView />
       </ConfigProvider>
@@ -141,18 +138,7 @@ export const App: React.FC = () => {
     return (
       <ConfigProvider
         locale={viVN}
-        theme={{
-          algorithm: isDark ? darkAlgorithm : defaultAlgorithm,
-          token: {
-            ...themeTokens,
-            ...(isDark ? {} : {
-              colorBgLayout: '#f8fafc',
-              boxShadowSecondary: '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05)',
-              boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-              wireframe: false,
-            }),
-          },
-        }}
+        theme={getAppTheme(isDark)}
       >
         <AIPopoutView />
       </ConfigProvider>
@@ -162,18 +148,7 @@ export const App: React.FC = () => {
   return (
     <ConfigProvider
       locale={viVN}
-      theme={{
-        algorithm: isDark ? darkAlgorithm : defaultAlgorithm,
-        token: {
-          ...themeTokens,
-          ...(isDark ? {} : {
-            colorBgLayout: '#f8fafc',
-            boxShadowSecondary: '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05)',
-            boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-            wireframe: false,
-          }),
-        },
-      }}
+      theme={getAppTheme(isDark)}
     >
       <KnowledgeConfigProvider>
         <AppShell currentRoute={route} onNavigate={navigate} isDark={isDark}>

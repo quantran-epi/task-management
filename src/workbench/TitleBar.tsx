@@ -15,6 +15,7 @@ import {
   JetBrainsAgentsIcon,
   JetBrainsTelegramIcon,
   JetBrainsAnalyticsIcon,
+  JetBrainsSdlcIcon,
 } from '../components/icons/JetBrainsIcons';
 import { isTauriApp } from '../utils/timerPopout';
 import { useGhostDevSessions } from '../hooks/useGhostDevSessions';
@@ -260,7 +261,7 @@ export function TitleBar({
               <Button
                 type="text"
                 size="small"
-                icon={<CodeOutlined style={{ fontSize: 13 }} />}
+                icon={<JetBrainsSdlcIcon size={14} />}
                 onClick={() => onOpenView?.('sdlc')}
                 aria-label="Open SDLC Studio"
                 data-testid="titlebar-btn-sdlc"

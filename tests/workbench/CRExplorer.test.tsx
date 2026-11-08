@@ -8,15 +8,13 @@ import { useLayoutStore } from '../../src/workbench/store/layoutStore';
 import type { Task } from '../../src/types/models';
 
 /**
- * Wave 0 contract for plan 31.2-06 Task 2 (ENT-NORM-04, D-29/D-31).
- *
- * `CRExplorer` becomes a real CR → Subsystem pill → Task tree: no Milestone tier, a
- * `cr_detail` tab on CR click, an `sdlc` tab on pill click, both context menus, three empty
- * states, and a search filter.
+ * `CRExplorer` is a flat CR → Task tree: no Milestone tier, no subsystem grouping,
+ * a `cr_detail` tab on CR click, an insight tab on task click, a CR context menu,
+ * an empty state, and a search filter.
  */
 const NOW = '2026-01-01T00:00:00.000Z';
 
-describe('CRExplorer — CR → Subsystem → Task tree (ENT-NORM-04)', () => {
+describe('CRExplorer — CR → Task tree (ENT-NORM-04)', () => {
   let db: TaskPlannerDatabase;
 
   beforeEach(async () => {
@@ -48,9 +46,6 @@ describe('CRExplorer — CR → Subsystem → Task tree (ENT-NORM-04)', () => {
       },
       db
     );
-    // `crId`/`systemId` are the post-normalization Task shape (plan 01); the current Task
-    // type still carries `projectId`, so the fixture is asserted into place rather than
-    // widening the production type from a Wave 0 test.
     const attached = {
       id: '11111111-1111-4111-8111-111111111111',
       crId: cr.id,
@@ -78,15 +73,26 @@ describe('CRExplorer — CR → Subsystem → Task tree (ENT-NORM-04)', () => {
     return { cr, subsystem };
   }
 
-  it('renders a CR node, a subsystem pill, and tasks split by systemId', async () => {
+  async function expandCr(name: string) {
+    const label = await screen.findByText(name);
+    const treenode = label.closest('.ant-tree-treenode') as HTMLElement;
+    const switcher = treenode.querySelector('.ant-tree-switcher') as HTMLElement;
+    fireEvent.click(switcher);
+  }
+
+  it('renders a CR node collapsed, with its tasks as direct children once expanded', async () => {
     await seed();
     render(<CRExplorer db={db} />);
 
     expect(await screen.findByText('Instant Payment')).toBeInTheDocument();
-    expect(await screen.findByText('SC-AUTH-API')).toBeInTheDocument();
+    expect(screen.queryByText('Attached task')).not.toBeInTheDocument();
+
+    await expandCr('Instant Payment');
+
     expect(await screen.findByText('Attached task')).toBeInTheDocument();
-    expect(await screen.findByText('Chung (không gắn)')).toBeInTheDocument();
     expect(await screen.findByText('Unattached task')).toBeInTheDocument();
+    expect(screen.queryByText('SC-AUTH-API')).not.toBeInTheDocument();
+    expect(screen.queryByText('Chung (không gắn)')).not.toBeInTheDocument();
   });
 
   it('renders no Milestone tier', async () => {
@@ -111,17 +117,17 @@ describe('CRExplorer — CR → Subsystem → Task tree (ENT-NORM-04)', () => {
     });
   });
 
-  it('opens an sdlc tab with params.systemId on subsystem pill click', async () => {
-    const { cr, subsystem } = await seed();
+  it('opens an insight tab for a task click', async () => {
+    await seed();
     render(<CRExplorer db={db} />);
 
-    fireEvent.click(await screen.findByText('SC-AUTH-API'));
+    await expandCr('Instant Payment');
+    fireEvent.click(await screen.findByText('Attached task'));
 
     await waitFor(() => {
-      const tab = useLayoutStore.getState().openTabs.find((t) => t.viewType === 'sdlc');
+      const tab = useLayoutStore.getState().openTabs.find((t) => t.viewType === 'insight');
       expect(tab).toBeDefined();
-      expect(tab?.params?.changeRequestId).toBe(cr.id);
-      expect(tab?.params?.systemId).toBe(subsystem.id);
+      expect(tab?.params?.itemId).toBe('11111111-1111-4111-8111-111111111111');
     });
   });
 
@@ -141,22 +147,6 @@ describe('CRExplorer — CR → Subsystem → Task tree (ENT-NORM-04)', () => {
     expect(menu.textContent).toContain('Xóa');
   });
 
-  it('renders the subsystem context menu with the exact entries', async () => {
-    await seed();
-    render(<CRExplorer db={db} />);
-
-    fireEvent.contextMenu(await screen.findByText('SC-AUTH-API'), { clientX: 200, clientY: 300 });
-
-    await waitFor(() => {
-      expect(document.querySelector('.ant-dropdown-menu')).not.toBeNull();
-    });
-    const menu = document.querySelector('.ant-dropdown-menu') as HTMLElement;
-    expect(menu.textContent).toContain('Mở Git Explorer');
-    expect(menu.textContent).toContain('Mở SSH Terminal');
-    expect(menu.textContent).toContain('Mở SDLC tại subsystem này');
-    expect(menu.textContent).toContain('Gỡ khỏi CR');
-  });
-
   it('renders the zero-CR empty state with heading and CTA', async () => {
     render(<CRExplorer db={db} />);
 
@@ -164,7 +154,7 @@ describe('CRExplorer — CR → Subsystem → Task tree (ENT-NORM-04)', () => {
     expect(screen.getByRole('button', { name: /Tạo Change Request/i })).toBeInTheDocument();
   });
 
-  it('renders the no-targets and no-tasks muted rows', async () => {
+  it('renders the no-tasks muted row', async () => {
     await createChangeRequest(
       { name: 'Empty CR', code: 'CR-2', type: 'BUGFIX', status: 'Open', targets: [] },
       db
@@ -172,21 +162,19 @@ describe('CRExplorer — CR → Subsystem → Task tree (ENT-NORM-04)', () => {
     render(<CRExplorer db={db} />);
 
     expect(await screen.findByText('Empty CR')).toBeInTheDocument();
-    expect(screen.getByText('Chưa gắn subsystem')).toBeInTheDocument();
-    expect(screen.getByText('Chưa có tác vụ')).toBeInTheDocument();
+
+    await expandCr('Empty CR');
+    expect(await screen.findByText('Chưa có tác vụ')).toBeInTheDocument();
   });
 
-  it('filters by CR name, CR code, subsystem code and task name', async () => {
+  it('filters by CR name, CR code and task name', async () => {
     await seed();
     render(<CRExplorer db={db} />);
     await screen.findByText('Instant Payment');
 
-    const search = screen.getByPlaceholderText('Lọc CR, subsystem, tác vụ...');
+    const search = screen.getByPlaceholderText('Lọc CR, tác vụ...');
 
     fireEvent.change(search, { target: { value: 'CR-1' } });
-    expect(screen.getByText('Instant Payment')).toBeInTheDocument();
-
-    fireEvent.change(search, { target: { value: 'SC-AUTH-API' } });
     expect(screen.getByText('Instant Payment')).toBeInTheDocument();
 
     fireEvent.change(search, { target: { value: 'Attached task' } });

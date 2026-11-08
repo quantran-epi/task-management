@@ -308,7 +308,8 @@ export function createSdlcWorkflowCoordinator(deps: WorkflowCoordinatorDeps) {
    * Lưu snapshot nhánh đã được phê duyệt ở Bước 3 (Code Guide & Remote Diff Review)
    */
   const commitBranchSnapshot = async (
-    snapshot: BranchSnapshot
+    snapshot: BranchSnapshot,
+    systemId?: string
   ): Promise<SdlcWorkflowState> => {
     const state = await ensureState();
     if (!state.artifacts.solution) {
@@ -317,12 +318,19 @@ export function createSdlcWorkflowCoordinator(deps: WorkflowCoordinatorDeps) {
 
     const validatedSnapshot = BranchSnapshotSchema.parse(snapshot);
 
+    // D-40: one approved snapshot per target subsystem. Without a systemId the legacy
+    // single-slot behaviour is preserved for a CR that has no targets yet.
     const nextState: SdlcWorkflowState = {
       ...state,
-      artifacts: {
-        ...state.artifacts,
-        branchSnapshot: validatedSnapshot,
-      },
+      artifacts: systemId
+        ? {
+            ...state.artifacts,
+            branchSnapshots: { ...state.artifacts.branchSnapshots, [systemId]: validatedSnapshot },
+          }
+        : {
+            ...state.artifacts,
+            branchSnapshot: validatedSnapshot,
+          },
       updatedAt: now(),
     };
 

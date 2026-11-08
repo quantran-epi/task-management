@@ -22,10 +22,11 @@ import {
   JetBrainsProjectIcon,
   JetBrainsDocsIcon,
   JetBrainsDiagramIcon,
+  JetBrainsSystemsIcon,
+  JetBrainsRemoteGitIcon,
   JetBrainsAIIcon,
   JetBrainsNotificationIcon,
 } from '../components/icons/JetBrainsIcons';
-import { CloudServerOutlined, ApartmentOutlined } from '@ant-design/icons';
 import '../styles/workbench-tokens.css';
 
   export interface WorkbenchLayoutProps {
@@ -47,13 +48,16 @@ const DEFAULT_LEFT_ITEMS: ToolWindowItem[] = [
   {
     id: 'systems',
     name: 'Systems Explorer',
-    icon: <ApartmentOutlined style={{ fontSize: 13, color: '#722ed1' }} />,
+    icon: <JetBrainsSystemsIcon size={16} />,
     shortcut: 'Alt+6',
   },
+];
+
+const DEFAULT_BOTTOM_LEFT_ITEMS: ToolWindowItem[] = [
   {
     id: 'remote_explorer',
     name: 'Remote Git Explorer',
-    icon: <CloudServerOutlined style={{ fontSize: 13, color: '#f59e0b' }} />,
+    icon: <JetBrainsRemoteGitIcon size={16} />,
     shortcut: 'Alt+4',
   },
 ];
@@ -209,7 +213,7 @@ export function WorkbenchLayout({
         {/* Middle Body with Stripes and Splitters (padded for Tauri window bounds) */}
         <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden', position: 'relative', padding: '0 4px' }}>
           {/* Left Tool Window Stripe */}
-          <Stripe slot="left" items={DEFAULT_LEFT_ITEMS} />
+          <Stripe slot="left" items={DEFAULT_LEFT_ITEMS} bottomItems={DEFAULT_BOTTOM_LEFT_ITEMS} />
 
           {/* Master Resizable Panel Group (Horizontal: Left Panel | Center Editor | Right Panel) */}
           <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', overflow: 'hidden', padding: '0 4px 6px 4px' }}>

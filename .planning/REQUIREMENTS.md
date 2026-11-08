@@ -66,6 +66,15 @@
 - [ ] **SDLC-OBS-01**: A developer-facing view shows exactly what the SDLC composer emitted for the current step (which segments, how long each is, which tools were offered, which convention sources were included), so prompt changes are inspectable without reading source.
 - [ ] **SDLC-OBS-02**: The current prompt contract for every SDLC step and artifact intent is documented in one file that matches what the composer emits, with a test that fails when they drift.
 
+### Enterprise Systems Catalog & CR Normalization (ENT-NORM, Phase 31.2 INSERTED)
+
+- [ ] **ENT-NORM-01**: `projects` and `milestones` no longer exist in schema, types, code or tests; `Task.crId` is required, `Task.systemId` is optional and must always belong to `cr.targets`; `cr.targets` is a `CrTarget[]` of `{ systemId, featureBranch? }` accepting only deployable subsystems, never a logical parent. Every daily surface (Tasks view, TaskDrawer, TaskFilterBar, chat scope, backup, notifications, standup, planner, command palette, doc export) reads CR/Subsystem instead, and a legacy backup containing `projects`/`milestones` is rejected with a clear message.
+- [ ] **ENT-NORM-02**: System Catalog enforces the invariants — a logical parent has no SSH/repo/base-branch and offers no "create CR" action; a subsystem binds exactly one remote SSH repo; creating a CR from a subsystem pre-selects that subsystem.
+- [ ] **ENT-NORM-03**: SystemDetailView is a 4-tab view (Overview / Subsystems / Impacted CRs / Git & Branches), and every subsystem offers one-click open of the Remote Git Explorer and one-click open of an SSH Terminal at its repo path.
+- [ ] **ENT-NORM-04**: CR Explorer is the default left tool window (Alt+1) showing CR → Subsystem → Task with no Milestone tier; clicking a CR opens a CR Detail tab whose task table has a Subsystem column and a prominent "Open SDLC Studio" action.
+- [ ] **ENT-NORM-05**: SDLC Studio has no repo/SSH configuration surface; it shows a read-only "Subsystems & Repos" view, a shared Subsystem Context Bar driving Step 3 and Step 4, a Step 2 solution split into per-subsystem sections, and a Step 4 that packs per subsystem plus Pack All with per-subsystem failure reporting.
+- [ ] **ENT-NORM-06**: When a CR has no or too few target subsystems, the AI proposes affected subsystems with reasons and confidence; nothing is written to the CR until the user confirms.
+
 ### IntelliJ ExpUI Workbench Migration (Phase 25.4 INSERTED)
 
 - [ ] **EXPUI-01**: User can boot TaskMate in IntelliJ ExpUI Islands Light workbench via `src/AppIntelliJ.tsx` side-by-side with zero changes to `src/db/*`, `src/services/*`, or `src/domain/*`.
@@ -147,6 +156,12 @@
 | ENT-SYS-04 | Phase 31.1 | Complete |
 | ENT-CR-01 | Phase 31.1 | Complete |
 | ENT-CR-02 | Phase 31.1 | Complete |
+| ENT-NORM-01 | Phase 31.2 | Pending |
+| ENT-NORM-02 | Phase 31.2 | Pending |
+| ENT-NORM-03 | Phase 31.2 | Pending |
+| ENT-NORM-04 | Phase 31.2 | Pending |
+| ENT-NORM-05 | Phase 31.2 | Pending |
+| ENT-NORM-06 | Phase 31.2 | Pending |
 
 | EXPUI-01 | Phase 25.4 | Pending |
 | EXPUI-02 | Phase 25.4 | Pending |
@@ -174,6 +189,7 @@
 - Phase 29.1 (Remote SSH Git Explorer & Headless Claude Code Trace Flow): 5 requirements, 3 plans
 - Phase 30 (Automatic Change Packs, Fallback & Run Reliability): 3 requirements, 4 plans
 - Phase 31 (Org Conventions in the Solution Pipeline): 6 requirements, ~4 plans
+- Phase 31.2 (Enterprise Systems Catalog & CR Normalization): 6 requirements, plans TBD
 - Phase 32 (External Research via Claude Code): 6 requirements, ~4 plans
 - Phase 33 (Prompt Transparency & Contract Documentation): 2 requirements, 2 plans
 

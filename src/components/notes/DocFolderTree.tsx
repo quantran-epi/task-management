@@ -2,8 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Button, Dropdown, Input, Modal, Segmented, Tooltip, Typography, Empty, type MenuProps } from 'antd';
 import {
   FolderOutlined,
-  FolderFilled,
-  FolderOpenFilled,
+  FolderOpenOutlined,
   PlusOutlined,
   PushpinOutlined,
   PushpinFilled,
@@ -876,10 +875,10 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
           )}
 
           <span style={{ fontSize: 14, flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-            {isActive ? (
-              <FolderOpenFilled style={{ color: '#d97706' }} />
+            {isExpanded || isActive ? (
+              <FolderOpenOutlined style={{ color: '#eab308' }} />
             ) : (
-              <FolderFilled style={{ color: '#f59e0b' }} />
+              <FolderOutlined style={{ color: '#eab308' }} />
             )}
           </span>
           <span
@@ -1139,14 +1138,14 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
             renderSpecialFolder(
               'root_docs',
               'Tài liệu chung (Chưa phân loại)',
-              <FileTextOutlined style={{ color: '#6366f1' }} />,
+              <FolderOutlined style={{ color: '#eab308' }} />,
               rootDirectDocs,
-              '#6366f1',
+              '#eab308',
               <Tooltip title="Tạo tài liệu mới ở cấp gốc">
                 <Button
                   type="text"
                   size="small"
-                  icon={<PlusOutlined style={{ fontSize: 11, color: '#6366f1' }} />}
+                  icon={<PlusOutlined style={{ fontSize: 11, color: '#eab308' }} />}
                   onClick={(e) => {
                     e.stopPropagation();
                     onCreateDoc(undefined);

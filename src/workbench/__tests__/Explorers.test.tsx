@@ -23,7 +23,7 @@ describe('Explorers Component Suite', () => {
   it('renders CRExplorer search input and new-CR action', () => {
     render(<CRExplorer />);
 
-    const searchInput = screen.getByPlaceholderText(/Lọc CR, subsystem, tác vụ.../i);
+    const searchInput = screen.getByPlaceholderText(/Lọc CR, tác vụ.../i);
     expect(searchInput).toBeDefined();
 
     fireEvent.change(searchInput, { target: { value: 'Test' } });
