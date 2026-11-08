@@ -93,25 +93,25 @@
 
 ### AI Office — Employees, Teams, and Skills (AIO, Phase 34)
 
-- [ ] **AIO-EMP-01**: Employees are global, reusable entities with name, role, persona, per-agent model, and at most one assigned skill; editing an employee changes it in every team that uses it. Leads are a separate global entity managed in their own section and selected per team.
-- [ ] **AIO-EMP-02**: A team holds exactly one lead and at most three employees; at most three teams may be `active` at once, the rest are `idle`, and reactivating an idle team resumes its accumulated transcript rather than starting a new session.
-- [ ] **AIO-SKILL-01**: A skill is a global `name` + `description` + Markdown `body` prompt template, managed in its own surface and assignable to at most one agent.
-- [ ] **AIO-SKILL-02**: An agent's system prompt receives only the skill's `description`; the full `body` is read on demand through a `read_skill` tool and never pasted wholesale into the prompt.
-- [ ] **AIO-TEAM-01**: The lead decomposes the user's request and emits an assignment plan (agent + skill + task) as a confirmation card; the batch runs only after approval, unless the team's "Tự động chia việc" bypass toggle is on.
-- [ ] **AIO-TEAM-02**: The lead dispatches a batch through a single `delegate_batch([{ agentId, instruction }])` tool whose agents run concurrently (cap 3 per batch) and whose results the lead sees only after the whole batch completes; employees never choose the next speaker and cannot address each other.
-- [ ] **AIO-TEAM-03**: Each agent sees its own system prompt plus persona/skill description, the lead's instruction, the original user request, the results of the other agents in its batch, its own full assignment history from this lead, and a recent-turn window — never the whole conversation.
-- [ ] **AIO-TEAM-04**: The user can address any agent directly with `@agent` in the team composer; a message without a mention goes to the lead.
-- [ ] **AIO-MEM-01**: One transcript per team, every message tagged by `agentId` (or lead/user), rendered as one continuous channel with avatar and agent name.
-- [ ] **AIO-MEM-02**: `search_team_history({ query, limit? })` returns compact BM25 hits (turn id, agent, timestamp, kind, excerpt) and `read_team_turn({ turnId })` returns one turn's full text, using the existing local `src/utils/bm25.ts`.
-- [ ] **AIO-MEM-03**: Transcript search works with the Knowledge Server stopped and the network offline — no retrieval path depends on the daemon.
-- [ ] **AIO-WRITE-01**: Employee turns are structurally read-only — their tool set contains no mutation tool — while the lead holds the full read-only set plus the team tools.
-- [ ] **AIO-WRITE-02**: Every lead mutation parks on the existing `MutationApprovalCard` for explicit approve/reject, and the team's auto-approve toggle still wins when enabled.
-- [ ] **AIO-BUDGET-01**: The user sets a team token budget and the app suggests an even split across the lead plus every employee, editable per row; budgets accumulate for the life of the team and can be topped up at any time.
-- [ ] **AIO-BUDGET-02**: At 80% of the team budget or of an agent's budget that scope pauses between tool rounds with context preserved, notifies the user, and resumes exactly where it stopped once tokens are granted — nothing is auto-aborted and no pause reads as a hang.
-- [ ] **AIO-LINK-01**: A team links to N items of type CR, task, system, note, or document; the lead receives `list_linked_items()` and `get_linked_context({ itemId })` returning full retrievable content (note body, document content, CR tasks, system details), not just metadata.
-- [ ] **AIO-BG-01**: Team runs continue when the user leaves the tab or switches views; returning shows the full result, each running agent streams into its own bubble with a status badge, and per-agent Stop plus a global Stop are both available.
-- [ ] **AIO-UI-01**: The workbench exposes an employee tab (employees, leads, and skills) and a team page (`EditorViewType 'teams'`) with the shared team transcript workspace.
-- [ ] **AIO-BACKUP-01**: The new AI Office tables and the new chat-message attribution fields survive backup export → validate → restore round-trip without bumping the backup envelope version, and a pre-existing v11 backup without them still restores.
+- [x] **AIO-EMP-01**: Employees are global, reusable entities with name, role, persona, per-agent model, and at most one assigned skill; editing an employee changes it in every team that uses it. Leads are a separate global entity managed in their own section and selected per team.
+- [x] **AIO-EMP-02**: A team holds exactly one lead and at most three employees; at most three teams may be `active` at once, the rest are `idle`, and reactivating an idle team resumes its accumulated transcript rather than starting a new session.
+- [x] **AIO-SKILL-01**: A skill is a global `name` + `description` + Markdown `body` prompt template, managed in its own surface and assignable to at most one agent.
+- [x] **AIO-SKILL-02**: An agent's system prompt receives only the skill's `description`; the full `body` is read on demand through a `read_skill` tool and never pasted wholesale into the prompt.
+- [x] **AIO-TEAM-01**: The lead decomposes the user's request and emits an assignment plan (agent + skill + task) as a confirmation card; the batch runs only after approval, unless the team's "Tự động chia việc" bypass toggle is on.
+- [x] **AIO-TEAM-02**: The lead dispatches a batch through a single `delegate_batch([{ agentId, instruction }])` tool whose agents run concurrently (cap 3 per batch) and whose results the lead sees only after the whole batch completes; employees never choose the next speaker and cannot address each other.
+- [x] **AIO-TEAM-03**: Each agent sees its own system prompt plus persona/skill description, the lead's instruction, the original user request, the results of the other agents in its batch, its own full assignment history from this lead, and a recent-turn window — never the whole conversation.
+- [x] **AIO-TEAM-04**: The user can address any agent directly with `@agent` in the team composer; a message without a mention goes to the lead.
+- [x] **AIO-MEM-01**: One transcript per team, every message tagged by `agentId` (or lead/user), rendered as one continuous channel with avatar and agent name.
+- [x] **AIO-MEM-02**: `search_team_history({ query, limit? })` returns compact BM25 hits (turn id, agent, timestamp, kind, excerpt) and `read_team_turn({ turnId })` returns one turn's full text, using the existing local `src/utils/bm25.ts`.
+- [x] **AIO-MEM-03**: Transcript search works with the Knowledge Server stopped and the network offline — no retrieval path depends on the daemon.
+- [x] **AIO-WRITE-01**: Employee turns are structurally read-only — their tool set contains no mutation tool — while the lead holds the full read-only set plus the team tools.
+- [x] **AIO-WRITE-02**: Every lead mutation parks on the existing `MutationApprovalCard` for explicit approve/reject, and the team's auto-approve toggle still wins when enabled.
+- [x] **AIO-BUDGET-01**: The user sets a team token budget and the app suggests an even split across the lead plus every employee, editable per row; budgets accumulate for the life of the team and can be topped up at any time.
+- [x] **AIO-BUDGET-02**: At 80% of the team budget or of an agent's budget that scope pauses between tool rounds with context preserved, notifies the user, and resumes exactly where it stopped once tokens are granted — nothing is auto-aborted and no pause reads as a hang.
+- [x] **AIO-LINK-01**: A team links to N items of type CR, task, system, note, or document; the lead receives `list_linked_items()` and `get_linked_context({ itemId })` returning full retrievable content (note body, document content, CR tasks, system details), not just metadata.
+- [x] **AIO-BG-01**: Team runs continue when the user leaves the tab or switches views; returning shows the full result, each running agent streams into its own bubble with a status badge, and per-agent Stop plus a global Stop are both available.
+- [x] **AIO-UI-01**: The workbench exposes an employee tab (employees, leads, and skills) and a team page (`EditorViewType 'teams'`) with the shared team transcript workspace.
+- [x] **AIO-BACKUP-01**: The new AI Office tables and the new chat-message attribution fields survive backup export → validate → restore round-trip without bumping the backup envelope version, and a pre-existing v11 backup without them still restores.
 
 ## Future Requirements (Deferred)
 
@@ -184,25 +184,25 @@
 | ENT-NORM-04 | Phase 31.2 | Pending |
 | ENT-NORM-05 | Phase 31.2 | Pending |
 | ENT-NORM-06 | Phase 31.2 | Pending |
-| AIO-EMP-01 | Phase 34 | Pending |
-| AIO-EMP-02 | Phase 34 | Pending |
-| AIO-SKILL-01 | Phase 34 | Pending |
-| AIO-SKILL-02 | Phase 34 | Pending |
-| AIO-TEAM-01 | Phase 34 | Pending |
-| AIO-TEAM-02 | Phase 34 | Pending |
-| AIO-TEAM-03 | Phase 34 | Pending |
-| AIO-TEAM-04 | Phase 34 | Pending |
-| AIO-MEM-01 | Phase 34 | Pending |
-| AIO-MEM-02 | Phase 34 | Pending |
-| AIO-MEM-03 | Phase 34 | Pending |
-| AIO-WRITE-01 | Phase 34 | Pending |
-| AIO-WRITE-02 | Phase 34 | Pending |
-| AIO-BUDGET-01 | Phase 34 | Pending |
-| AIO-BUDGET-02 | Phase 34 | Pending |
-| AIO-LINK-01 | Phase 34 | Pending |
-| AIO-BG-01 | Phase 34 | Pending |
-| AIO-UI-01 | Phase 34 | Pending |
-| AIO-BACKUP-01 | Phase 34 | Pending |
+| AIO-EMP-01 | Phase 34 | Complete |
+| AIO-EMP-02 | Phase 34 | Complete |
+| AIO-SKILL-01 | Phase 34 | Complete |
+| AIO-SKILL-02 | Phase 34 | Complete |
+| AIO-TEAM-01 | Phase 34 | Complete |
+| AIO-TEAM-02 | Phase 34 | Complete |
+| AIO-TEAM-03 | Phase 34 | Complete |
+| AIO-TEAM-04 | Phase 34 | Complete |
+| AIO-MEM-01 | Phase 34 | Complete |
+| AIO-MEM-02 | Phase 34 | Complete |
+| AIO-MEM-03 | Phase 34 | Complete |
+| AIO-WRITE-01 | Phase 34 | Complete |
+| AIO-WRITE-02 | Phase 34 | Complete |
+| AIO-BUDGET-01 | Phase 34 | Complete |
+| AIO-BUDGET-02 | Phase 34 | Complete |
+| AIO-LINK-01 | Phase 34 | Complete |
+| AIO-BG-01 | Phase 34 | Complete |
+| AIO-UI-01 | Phase 34 | Complete |
+| AIO-BACKUP-01 | Phase 34 | Complete |
 
 | EXPUI-01 | Phase 25.4 | Pending |
 | EXPUI-02 | Phase 25.4 | Pending |
