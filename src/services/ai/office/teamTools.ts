@@ -1,8 +1,10 @@
 import type { TaskPlannerDatabase } from '../../../db';
+import type { AiTeamLinkItemType } from '../../../types/aiOffice';
 import { MAX_BATCH_SIZE } from '../../../types/aiOffice';
 import { rankBM25, extractRelevantSnippet } from '../../../utils/bm25';
 import { buildTeamBm25Docs, getTeamTurn } from '../../../db/repositories/teamTranscriptRepo';
-import { normalizeToolName, type AiToolDefinition } from '../aiTools';
+import { listTeamLinks } from '../../../db/repositories/aiTeamRepo';
+import { executeAiTool, normalizeToolName, type AiToolDefinition } from '../aiTools';
 
 /**
  * AI Office team tools (D-11, D-24, D-26, D-27, D-33).
@@ -190,6 +192,88 @@ async function readSkill(ctx: TeamToolContext): Promise<string> {
   return JSON.stringify({ name: skill.name, description: skill.description, body: skill.body });
 }
 
+interface LinkedItemLabel {
+  name: string;
+  code?: string;
+}
+
+async function resolveLinkedItemLabel(
+  itemType: AiTeamLinkItemType,
+  itemId: string,
+  db: TaskPlannerDatabase
+): Promise<LinkedItemLabel | undefined> {
+  switch (itemType) {
+    case 'cr': {
+      const row = await db.changeRequests.get(itemId);
+      return row ? { name: row.name, code: row.code } : undefined;
+    }
+    case 'system': {
+      const row = await db.systems.get(itemId);
+      return row ? { name: row.name, code: row.code } : undefined;
+    }
+    case 'task': {
+      const row = await db.tasks.get(itemId);
+      return row ? { name: row.name } : undefined;
+    }
+    case 'note':
+    case 'document': {
+      const row = await db.notes.get(itemId);
+      if (!row || row.deletedAt) return undefined;
+      const firstLine = row.body.split('\n')[0]?.trim() ?? '';
+      return { name: row.title?.trim() || firstLine };
+    }
+  }
+}
+
+/** Compact only — no bodies (D-26). */
+async function listLinkedItems(ctx: TeamToolContext): Promise<string> {
+  const links = await listTeamLinks(ctx.teamId, ctx.db);
+  const items = [];
+  for (const link of links) {
+    const label = await resolveLinkedItemLabel(link.itemType, link.itemId, ctx.db);
+    items.push({
+      itemId: link.itemId,
+      itemType: link.itemType,
+      name: label?.name ?? link.itemId,
+      ...(label?.code ? { code: label.code } : {}),
+    });
+  }
+  return JSON.stringify(items);
+}
+
+/**
+ * D-27: the lead reaches the full content of a linked item. Notes and documents are
+ * returned whole (Phase 31 "entire document retained without truncation" precedent);
+ * task/CR/system delegate to the existing `get_item_details` resolver so the two
+ * implementations cannot drift.
+ *
+ * Returned text is data. The prompt assembler wraps it in the untrusted-data delimiter,
+ * so no prompt framing is added here.
+ */
+async function getLinkedContext(args: Record<string, any>, ctx: TeamToolContext): Promise<string> {
+  const itemId = typeof args.itemId === 'string' ? args.itemId : '';
+  const links = await listTeamLinks(ctx.teamId, ctx.db);
+  const link = links.find((row) => row.itemId === itemId);
+  if (!link) {
+    return JSON.stringify(refuse('ITEM_NOT_LINKED', 'Mục này không được liên kết với nhóm.'));
+  }
+
+  if (link.itemType === 'note' || link.itemType === 'document') {
+    const note = await ctx.db.notes.get(itemId);
+    if (!note || note.deletedAt) {
+      return JSON.stringify(refuse('ITEM_NOT_LINKED', 'Mục này không được liên kết với nhóm.'));
+    }
+    return JSON.stringify({
+      itemId,
+      itemType: link.itemType,
+      name: note.title ?? '',
+      body: note.body,
+    });
+  }
+
+  return executeAiTool('get_item_details', { type: link.itemType, id: itemId }, ctx.db);
+}
+
 export async function executeTeamTool(
   name: string,
   args: Record<string, any>,
@@ -203,6 +287,10 @@ export async function executeTeamTool(
       return readTeamTurn(input, ctx);
     case 'read_skill':
       return readSkill(ctx);
+    case 'list_linked_items':
+      return listLinkedItems(ctx);
+    case 'get_linked_context':
+      return getLinkedContext(input, ctx);
     default:
       return JSON.stringify({ error: `Unknown team tool: ${name}` });
   }
