@@ -240,7 +240,7 @@ export interface ResearchArtifactVersion {
   approvedAt: string;
 }
 
-export function saveResearchArtifact(
+export async function saveResearchArtifact(
   input: SaveResearchArtifactInput,
   db: TaskPlannerDatabase = defaultDb,
 ): Promise<ArtifactCommitResult> {

@@ -89,13 +89,10 @@ describe('propose_research dispatch and scope', () => {
   });
 
   it('is reachable through executeAiTool and returns a proposal payload', async () => {
-    const raw = await executeAiTool(
-      'propose_research',
-      { questions: [{ question: 'Which retry policy?', systemId: SERVICE_ID }], rationale: 'no internal evidence' },
-      db,
-      undefined,
-      { artifactContext: makeContext() },
-    );
+    const raw = await executeAiTool('propose_research', {
+      questions: [{ question: 'Which retry policy?', systemId: SERVICE_ID }],
+      rationale: 'no internal evidence',
+    }, db, undefined, { artifactContext: makeContext() });
     const parsed = JSON.parse(raw) as ResearchProposalResult & { error?: string };
     expect(parsed.error).toBeUndefined();
     expect(parsed.targetSystemIds).toEqual([SERVICE_ID]);
