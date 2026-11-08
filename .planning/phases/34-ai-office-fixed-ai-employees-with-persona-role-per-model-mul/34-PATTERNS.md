@@ -564,14 +564,16 @@ while (loopCount < maxLoops) {
   fullResponse = '';
 ```
 
-**Apply to:** `aiOrchestratorLoop.ts` — add `beforeToolRound?: (round: number) => Promise<void>` to `AiOrchestratorLoopOptions`, destructure it, and insert after `loopCount++`:
+**Apply to:** `aiOrchestratorLoop.ts` — add `beforeToolRound?: (round: number, signal?: AbortSignal) => Promise<void>` to `AiOrchestratorLoopOptions`, destructure it, and insert after `loopCount++`:
 
 ```ts
 if (loopCount > 1 && beforeToolRound) {
-  await beforeToolRound(loopCount);
+  await beforeToolRound(loopCount, signal);   // the gate observes this signal, so a Stop while parked rejects
   signal?.throwIfAborted();
 }
 ```
+
+The hook takes the loop's own `AbortSignal` as its second argument. A gate parked inside the hook must be able to reject on abort — passing the signal is what makes `gate.wait(signal)` settle instead of hanging (Pitfall 8). Do not document or implement a one-argument form.
 
 The boundary at `:467` is after every tool result is appended and before the next model call — in-flight tool completes, message list intact, resume continues exactly where it stopped (D-21).
 

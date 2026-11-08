@@ -366,7 +366,7 @@ Defense in depth, all three layers:
 
 ### Pattern 5: Budget gate at the round boundary (D-20, D-21)
 
-**What:** A new optional `beforeToolRound?: (round: number) => Promise<void>` on `AiOrchestratorLoopOptions`, awaited at the top of each iteration after the first.
+**What:** A new optional `beforeToolRound?: (round: number, signal?: AbortSignal) => Promise<void>` on `AiOrchestratorLoopOptions`, awaited at the top of each iteration after the first, with the loop's own signal passed through so a parked gate can reject on abort.
 **When to use:** Every team turn (lead and employees).
 **Why:** The boundary at `aiOrchestratorLoop.ts:467` is after every tool result has been appended and before the next model call — so the in-flight tool completes, the message list is intact, and resuming continues exactly where it stopped.
 
@@ -375,7 +375,7 @@ Defense in depth, all three layers:
 while (loopCount < maxLoops) {
   loopCount++;
   if (loopCount > 1 && beforeToolRound) {
-    await beforeToolRound(loopCount);          // parks here when a budget gate is closed
+    await beforeToolRound(loopCount, signal);  // parks here when a budget gate is closed
     signal?.throwIfAborted();                  // Stop while parked must exit the loop
   }
   // …existing compaction → stream → tool loop…
