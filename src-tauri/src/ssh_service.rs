@@ -1,8 +1,12 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::path::Path;
+use std::sync::Mutex;
+use std::thread;
 use std::time::Duration;
+use tauri::{AppHandle, Emitter, Manager, State};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,6 +49,28 @@ pub struct CommandOutput {
     pub stdout: String,
     pub stderr: String,
     pub exit_status: i32,
+}
+
+/// Tracks remote PIDs of streaming commands so they can be terminated (T-32-02).
+#[derive(Default)]
+pub struct SshStreamRegistry {
+    pub active_processes: Mutex<HashMap<String, u32>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshStreamEvent {
+    pub session_id: String,
+    pub stream: String, // "stdout" | "stderr"
+    pub line: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshStreamExitEvent {
+    pub session_id: String,
+    pub exit_status: i32,
+    pub error: Option<String>,
 }
 
 pub fn connect_and_auth(config: &SshConfig, secret: Option<&str>) -> Result<ssh2::Session, String> {
@@ -376,4 +402,145 @@ pub fn ssh_exec_command(
         stderr: String::from_utf8_lossy(&stderr_buf).to_string(),
         exit_status,
     })
+}
+
+/// Run a remote command without a PTY and stream stdout/stderr line by line.
+///
+/// The command string is handed to `channel.exec` unwrapped: the remote login shell
+/// parses it directly, so the single-quoted arguments the frontend emits survive intact.
+/// An extra `sh -c` layer would add a second quoting level and break them (T-32-01).
+#[tauri::command]
+pub fn ssh_exec_stream(
+    app: AppHandle,
+    config: SshConfig,
+    secret: Option<String>,
+    session_id: String,
+    command: String,
+) -> Result<(), String> {
+    let session = connect_and_auth(&config, secret.as_deref())?;
+    let mut channel = session
+        .channel_session()
+        .map_err(|e| format!("Không thể mở channel session: {}", e))?;
+
+    let remote_command = format!("echo $$ && {}", command);
+    channel
+        .exec(&remote_command)
+        .map_err(|e| format!("Thực thi lệnh stream thất bại: {}", e))?;
+
+    let app_handle = app.clone();
+    let sid = session_id.clone();
+    let data_event = format!("ssh-stream:data:{}", sid);
+    let exit_event = format!("ssh-stream:exit:{}", sid);
+
+    thread::Builder::new()
+        .name(format!("ssh-stream-{}", session_id))
+        .spawn(move || {
+            // State guards are borrowed; resolve the managed registry inside the thread.
+            let registry = app_handle.state::<SshStreamRegistry>();
+            let mut pid_registered = false;
+            let mut is_first_line = true;
+
+            // `channel.stream(0)` yields an owned `Stream` that implements Read while the
+            // channel itself stays usable for stderr()/exit_status(). Moving `channel` into
+            // BufReader would consume it and break those later calls.
+            let mut stdout_reader = BufReader::new(channel.stream(0));
+            let mut raw_line = String::new();
+            loop {
+                raw_line.clear();
+                match stdout_reader.read_line(&mut raw_line) {
+                    Ok(0) => break,
+                    Ok(_) => {}
+                    Err(_) => break,
+                }
+                let line = raw_line.trim_end_matches(['\n', '\r']).to_string();
+
+                if is_first_line {
+                    is_first_line = false;
+                    if let Ok(pid) = line.trim().parse::<u32>() {
+                        if let Ok(mut procs) = registry.active_processes.lock() {
+                            procs.insert(sid.clone(), pid);
+                        }
+                        pid_registered = true;
+                        continue;
+                    }
+                    // Not a PID (login banner/MOTD): emit as normal output, keep reading.
+                }
+
+                let _ = app_handle.emit(
+                    &data_event,
+                    SshStreamEvent {
+                        session_id: sid.clone(),
+                        stream: "stdout".to_string(),
+                        line,
+                    },
+                );
+            }
+
+            let mut stderr_buf = String::new();
+            let mut stderr_stream = channel.stderr();
+            let _ = stderr_stream.read_to_string(&mut stderr_buf);
+            for line in stderr_buf.lines() {
+                if line.is_empty() {
+                    continue;
+                }
+                let _ = app_handle.emit(
+                    &data_event,
+                    SshStreamEvent {
+                        session_id: sid.clone(),
+                        stream: "stderr".to_string(),
+                        line: line.to_string(),
+                    },
+                );
+            }
+
+            if pid_registered {
+                if let Ok(mut procs) = registry.active_processes.lock() {
+                    procs.remove(&sid);
+                }
+            }
+
+            let _ = app_handle.emit(
+                &exit_event,
+                SshStreamExitEvent {
+                    session_id: sid.clone(),
+                    exit_status: channel.exit_status().unwrap_or(-1),
+                    error: None,
+                },
+            );
+        })
+        .map_err(|e| format!("Không thể tạo thread stream: {}", e))?;
+
+    Ok(())
+}
+
+/// Send SIGTERM to the remote process started by `ssh_exec_stream` for this session (T-32-02).
+#[tauri::command]
+pub fn ssh_kill_process(
+    registry: State<'_, SshStreamRegistry>,
+    config: SshConfig,
+    secret: Option<String>,
+    session_id: String,
+) -> Result<(), String> {
+    let pid = {
+        let mut procs = registry.active_processes.lock().map_err(|e| e.to_string())?;
+        procs.remove(&session_id)
+    };
+
+    let Some(pid) = pid else {
+        return Ok(());
+    };
+
+    let session = connect_and_auth(&config, secret.as_deref())?;
+    let mut channel = session
+        .channel_session()
+        .map_err(|e| format!("Không thể mở channel session: {}", e))?;
+    channel
+        .exec(&format!("kill -TERM {}", pid))
+        .map_err(|e| format!("Không thể gửi SIGTERM tới PID {}: {}", pid, e))?;
+
+    let mut sink = String::new();
+    let _ = channel.read_to_string(&mut sink);
+    let _ = channel.wait_close();
+
+    Ok(())
 }

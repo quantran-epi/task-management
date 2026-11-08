@@ -21,6 +21,7 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .manage(telegram_gateway::TelegramGatewayState::new())
         .manage(ssh_pty_service::SshPtyRegistry::default())
+        .manage(ssh_service::SshStreamRegistry::default())
         .invoke_handler(tauri::generate_handler![
             open_devtools,
             sqlite_persistence::select_sqlite_path,
@@ -74,6 +75,8 @@ pub fn run() {
             ssh_service::ssh_delete_entry,
             ssh_service::ssh_rename,
             ssh_service::ssh_exec_command,
+            ssh_service::ssh_exec_stream,
+            ssh_service::ssh_kill_process,
             ssh_pty_service::ssh_pty_start,
             ssh_pty_service::ssh_pty_write,
             ssh_pty_service::ssh_pty_resize,
