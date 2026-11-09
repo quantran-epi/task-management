@@ -12,16 +12,16 @@ Make planned work realistically fit available time by exposing overload early an
 
 Shipped **v1.0 MVP** on 2026-09-27 with all 8 foundational phases complete. Shipped v1.1 Banking IT Enhancements. Phase 16 knowledge server foundation and Phase 17 pilot ontology & Neo4j graph projection complete (all 5 plans in Phase 17 executed, GRAPH-01..GRAPH-06 satisfied). Codebase features closed ontology contracts, deterministic AST extraction, bounded LLM prose fallback, factKey deduplication, parameterized Neo4j adapter, Fastify inspection endpoints, and DocumentSetDrawer graph controls with PlannerMate offline isolation.
 
-## Current Milestone: v1.3 SDLC Closed-Loop Engine & Repository Autonomy
+## Current Milestone: v1.4 Unified AI Office
 
-**Goal:** Turn SDLC Studio into a real AI-agent loop — a prompt architecture with a tool-use policy that actually runs the available tools, chat turns that edit studio artifacts through reviewable diff patches, a knowledge retrieve API that no longer depends on locally stored set IDs, and TaskMate coding directly into a real repository through fs-gw + Claude Code headless.
+**Goal:** Hợp nhất SDLC Studio và AI Office thành một workspace AI duy nhất (Unified AI Office) dạng chat-first, free-style; loại bỏ hoàn toàn SDLC Studio; quản lý đội ngũ AI leader và agent với kỹ năng chuyên biệt, điều phối công việc linh hoạt kèm cơ chế token budget cứng và luyện tập kỹ năng (skill enrichment).
 
 **Target features:**
-- **Trụ 1 — SDLC prompt + tool loop + artifact tools:** layered composer gains real grounding, a per-step tool-use policy, and true per-intent artifact contracts; new studio tools (`get_artifact`, `patch_artifact_section`) return diff patches that the user reviews before the editor is written; multi-round tool loop with visible, bounded tool activity.
-- **Trụ 2 — Query-only knowledge retrieval:** client posts `{query, limit}` and the server chooses published sets itself, so a fresh install without local documents still retrieves; removes the local `fetchSetCatalog` dependency and normalizes responses across AI Chat, SDLC, and Telegram.
-- **Trụ 3 — Repository autonomy through native SSH:** TaskMate native Tauri SSH & SFTP backend lets SDLC steps 3–4 inspect remote repository branches (commits, changed files, inline diff), stream progress into the UI, and automatically package change packs directly from remote git diff; the manual `generate-change-pack.mjs` script degrades to an explicit fallback.
-- **Trụ 4 — Org conventions:** a single global convention file in TaskMate carries rules every system must follow, and each repository supplies its own `CONVENTIONS.md` through native SSH/SFTP; the SDLC composer injects both so generated solutions reflect the organization's real development standards instead of generic advice, and any conflict between global and repo rules is surfaced rather than silently resolved.
-- **Trụ 5 — External research via Claude Code:** when internal knowledge is insufficient, the AI proposes research instead of guessing; after explicit user confirmation it runs Claude Code headless through native SSH against both the web and the repository, stores the sourced report as an EXTERNAL-marked artifact, and combines it with internal evidence to produce a grounded solution.
+- **Trụ 1 — Xóa bỏ SDLC Studio & Tái cấu trúc Navigation**: Loại bỏ hoàn toàn SDLC Studio (views, state machines, wizard routes); thanh điều hướng chỉ còn một trigger "AI Office"; explorer 2 tầng (tầng trên: Leader & Agent; tầng dưới: Danh sách nhóm chat/hội thoại); click mở chi tiết tại center editor.
+- **Trụ 2 — Mô hình Nhóm chat Chat-First & Phân công Free-style**: Tạo nhóm chat không giới hạn; mỗi nhóm gồm 1 Leader và N Agent tùy ý; Leader tự động phân tích yêu cầu từ người dùng và phân công cho Agent phù hợp theo skill; CR và tài liệu SDLC chỉ là context tùy chọn đính kèm.
+- **Trụ 3 — Token Budget cứng & Kiểm soát chi phí**: Cấp token budget chia đều cho Leader và các Agent khi bắt đầu nhóm; đo lường chính xác cả input + output token trên từng request; cảnh báo khi chạm ngưỡng; cho phép cấp thêm token cho từng agent và tự động tăng tổng ngân sách nhóm.
+- **Trụ 4 — Quản lý Kỹ năng & Làm giàu Skill (Skill Enrichment)**: CRUD Leader, Agent, Skill hoạt động chuẩn xác không lỗi; cơ chế học hỏi và bổ sung kinh nghiệm sau các lượt chạy (Agent đề xuất bài học, User duyệt version Markdown mới).
+- **Trụ 5 — Concurrency Control & Thực thi ổn định**: Giới hạn số lượng Agent chạy song song để bảo vệ tài nguyên; xử lý lỗi vặt và cải thiện toàn diện UX AI Office.
 
 ## Requirements
 
@@ -50,15 +50,11 @@ Shipped **v1.0 MVP** on 2026-09-27 with all 8 foundational phases complete. Ship
 
 ### Active
 
-- [ ] Verify retrieval and multi-hop answer quality against a 30-50 question benchmark corpus.
-- [ ] Harden index rebuild performance and enforce server-side secret isolation.
-- [ ] v1.3: SDLC composer emits grounding and a per-step tool-use policy; every step's artifact intent reaches its own output contract.
-- [ ] v1.3: Studio chat can read and patch artifacts through reviewable diffs before the editor is written.
-- [ ] v1.3: Knowledge retrieval accepts a query alone and works on a machine with no local document set.
-- [ ] v1.3: SDLC steps 3–4 run Claude Code headless in a real repo worktree through fs-gw and produce change packs automatically.
-- [ ] v1.3: fs-gw unavailability degrades to the manual change-pack script without blocking the flow.
-- [ ] v1.3: Global org conventions plus a repository `CONVENTIONS.md` reach every SDLC solution prompt, and conflicts between them are surfaced.
-- [ ] v1.3: When internal evidence is insufficient the AI proposes research, and after confirmation produces an EXTERNAL-marked sourced report covering web and repository.
+- [ ] v1.4: Xóa bỏ hoàn toàn SDLC Studio và tái cấu trúc điều hướng thành trigger duy nhất "AI Office" với Explorer 2 tầng (Leader/Agent + Nhóm chat).
+- [ ] v1.4: Triển khai mô hình nhóm chat chat-first, free-style với 1 Leader và N Agent, không giới hạn số nhóm/agent, CR và docs là context tùy chọn.
+- [ ] v1.4: Enforce token budget cứng tính toán cả input + output token, cảnh báo ngưỡng, và hỗ trợ top-up per-agent tăng tổng ngân sách nhóm.
+- [ ] v1.4: Quản lý kỹ năng chuyên biệt và cơ chế làm giàu skill (skill enrichment) có user phê duyệt version Markdown.
+- [ ] v1.4: Runtime concurrency control và xử lý triệt để toàn bộ lỗi lớn, lỗi vặt UX trong AI Office.
 
 ### Out of Scope
 
@@ -144,4 +140,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-07 after Phase 31.1 completion*
+*Last updated: 2026-11-09 for Milestone v1.4 Unified AI Office kickoff*

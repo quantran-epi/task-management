@@ -1,36 +1,31 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.3
-milestone_name: SDLC Closed-Loop Engine & Repository Autonomy
-status: executing
-last_updated: "2026-11-08T19:19:40.401Z"
-last_activity: 2026-11-08
+milestone: v1.4
+milestone_name: Unified AI Office
+status: planning
+last_updated: "2026-11-09T11:59:07.015Z"
+last_activity: 2026-11-09
 progress:
-  total_phases: 11
-  completed_phases: 9
-  total_plans: 60
-  completed_plans: 56
-  percent: 82
-current_phase: 31.2
-current_phase_name: enterprise-systems-catalog-and-cr-normalization
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
-# Project State: TaskMate — Milestone v1.3
+# Project State: TaskMate — Milestone v1.4
 
-See: .planning/PROJECT.md (updated 2026-11-03)
+See: .planning/PROJECT.md (updated 2026-11-09)
 
-**Core value:** Make planned work realistically fit available time while giving the personal user evidence-grounded access to their local banking IT knowledge.
-**Current focus:** Phase 34 complete — AI Office (AI employees, teams, and skills)
+**Core value:** Hợp nhất SDLC Studio và AI Office thành Unified AI Office dạng chat-first, free-style với token budget cứng và làm giàu skill.
+**Current focus:** Khởi động Milestone v1.4 — xác định requirements và roadmap từ Phase 35.
 
 ## Current Position
 
-Phase: 34 — complete (10/10 plans, 35/35 must-haves verified)
-Plan: All plans complete
-Status: Phase 34 complete — awaiting human verification (keyboard walk-through, live per-agent pause/resume)
-Last activity: 2026-11-09
-
-Phase sequence: 26 → 27 → 28 → 29 → 29.1 → 30 → 31 → 31.1
-(28 is independent of 26/27; 31 depends on 26 and 27; 31.1 depends on 31.)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-11-09 — Milestone v1.4 started
 
 ## Session Continuity
 
