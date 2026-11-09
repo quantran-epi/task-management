@@ -5,7 +5,6 @@ status: draft-for-review
 gathered: 2026-11-09
 starts_at_phase: 35
 previous_milestone: v1.3 SDLC Closed-Loop Engine & Repository Autonomy
-source_session: 98174f4b-0b71-421d-baba-3fbdd438bdf7
 ---
 
 # Milestone v1.4 — Unified AI Office
@@ -37,7 +36,7 @@ Chỉ các mục dưới đây được coi là chốt. Mọi thứ khác trong 
 - **C-09 Không giới hạn số agent mỗi nhóm** (thay đổi so với Phase 34).
 - **C-10 Concurrency cấu hình được**: user chọn "Setting giới hạn runtime" — không giới hạn roster; user đặt số agent chạy đồng thời để bảo vệ CPU/API/token. Giá trị mặc định và ngữ nghĩa chính xác chưa chốt.
 - **C-11 Token budget cứng, đo input+output**: theo dõi input + output token từng request; pause giữa tool rounds khi vượt ngưỡng.
-- **C-12 Cảnh báo ngưỡng + cấp thêm per-agent**: có cảnh báo khi gần ngưỡng; user cấp thêm cho từng agent; cấp thêm cho agent **tăng cả tổng token của nhóm**.
+- **C-12 Cấp budget, chia đều, cảnh báo, top-up**: khi bắt đầu nhóm, user cấp tổng token và chia đều cho leader cùng các agent; có cảnh báo khi gần ngưỡng; user cấp thêm cho từng agent; cấp thêm cho agent **tăng cả tổng token của nhóm**. Leader cũng được tính là thành viên nhận budget; chi tiết top-up leader cần discuss.
 - **C-13 Skill enrichment do user duyệt version**: agent đề xuất lesson/evidence; user chọn và duyệt bản Markdown skill mới. Không tự động cập nhật.
 - **C-14 UI**: một trigger duy nhất ở sidebar tên "AI Office"; explorer có 2 phần — trên là danh sách leader + agent, dưới là danh sách cuộc hội thoại; click mở chi tiết ở editor center. CRUD leader/agent giữ nguyên hành vi nhưng phải hoạt động chính xác, không lỗi.
 - **C-15 Phương pháp thực thi**: phase nhỏ, discuss + research kỹ từng phase, làm triệt để kể cả lỗi vặt; không tuyên bố "không còn lỗi" khi chưa verify thực tế.
@@ -87,8 +86,6 @@ Các mục sau là lựa chọn lịch sử của Phase 34 hoặc chi tiết thi
 
 - PWA / GitHub Pages.
 - Multi-user collaboration.
-- Semantic/embedding search cho transcript.
-- Peer-to-peer agent chat độc lập (trừ khi research mở lại R-10).
 - Khôi phục SDLC step gating dưới bất kỳ hình thức nào.
 - Chọn runtime/schema/package/provider mới ở bước context này.
 
@@ -166,6 +163,8 @@ Không giới hạn số lượng; gom theo chủ đề.
 **UX/lỗi hiện có**
 - Liệt kê toàn bộ lỗi đã biết của AI Office/Staff/Team (từ walkthrough user).
 - Hành vi tab center khi mở/đóng/relaunch.
+- Có cần semantic/embedding search cho transcript thay BM25 hay không?
+- Có cần peer-to-peer agent chat độc lập hay giữ leader-mediated flow?
 
 ## Tài liệu tham chiếu
 
