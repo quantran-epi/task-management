@@ -1,11 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { Input, Button, Tag, Typography, Tooltip, Empty } from 'antd';
+import { Input, Button, Tag, Typography, Tooltip } from 'antd';
 import {
   SearchOutlined,
   PlusOutlined,
   UserOutlined,
   CrownOutlined,
-  ReloadOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -15,7 +14,6 @@ import {
   EmployeeEditorDrawer,
   LeadEditorDrawer,
 } from '../../components/ai/office/EmployeeEditorDrawer';
-import type { AiEmployee, AiLead } from '../../types/aiOffice';
 
 export interface AiStaffExplorerProps {
   db?: TaskPlannerDatabase | undefined;

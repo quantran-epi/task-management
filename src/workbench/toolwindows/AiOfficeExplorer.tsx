@@ -1,11 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { Input, Button, Tag, Typography, Tooltip, Empty } from 'antd';
+import { Input, Button, Tag, Typography, Tooltip } from 'antd';
 import {
   SearchOutlined,
   PlusOutlined,
   TeamOutlined,
-  UserOutlined,
-  CrownOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';

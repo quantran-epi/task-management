@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import React from 'react';
 import { TaskPlannerDatabase } from '../../src/db';
 import { createEmployee, createLead } from '../../src/db/repositories/aiOfficeRepo';
 import { createTeam } from '../../src/db/repositories/aiTeamRepo';
