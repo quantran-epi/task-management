@@ -1,5 +1,5 @@
 import { Tooltip } from 'antd';
-import { MinusOutlined } from '@ant-design/icons';
+import { MinusOutlined, TeamOutlined } from '@ant-design/icons';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { useLayoutStore } from '../store/layoutStore';
 import {
@@ -8,12 +8,15 @@ import {
   JetBrainsDiagramIcon,
   JetBrainsSystemsIcon,
   JetBrainsRemoteGitIcon,
+  JetBrainsAgentsIcon,
 } from '../../components/icons/JetBrainsIcons';
 import { CRExplorer } from './CRExplorer';
 import { DocsExplorer } from './DocsExplorer';
 import { DiagramExplorer } from './DiagramExplorer';
 import { RemoteGitExplorer } from './RemoteGitExplorer';
 import { SystemsExplorer } from './SystemsExplorer';
+import { AiStaffExplorer } from './AiStaffExplorer';
+import { AiOfficeExplorer } from './AiOfficeExplorer';
 
 export interface LeftToolWindowProps {
   db?: TaskPlannerDatabase | undefined;
@@ -31,6 +34,9 @@ export function LeftToolWindow({
   const isDocs = leftActiveId === 'docs';
   const isDiagrams = leftActiveId === 'diagrams';
   const isRemoteExplorer = leftActiveId === 'remote_explorer';
+  const isAiStaff = leftActiveId === 'ai_staff';
+  const isAiOffice = leftActiveId === 'ai_office';
+
   const title = isSystems
     ? 'Systems Explorer'
     : isRemoteExplorer
@@ -39,7 +45,12 @@ export function LeftToolWindow({
     ? 'Diagram Explorer'
     : isDocs
     ? 'Docs Explorer'
+    : isAiStaff
+    ? 'AI Staff'
+    : isAiOffice
+    ? 'AI Office'
     : 'CR Explorer';
+
   const icon = isSystems ? (
     <JetBrainsSystemsIcon size={15} />
   ) : isRemoteExplorer ? (
@@ -48,6 +59,10 @@ export function LeftToolWindow({
     <JetBrainsDiagramIcon size={15} />
   ) : isDocs ? (
     <JetBrainsDocsIcon size={15} />
+  ) : isAiStaff ? (
+    <JetBrainsAgentsIcon size={15} />
+  ) : isAiOffice ? (
+    <TeamOutlined style={{ fontSize: 15 }} />
   ) : (
     <JetBrainsProjectIcon size={15} />
   );
@@ -122,6 +137,10 @@ export function LeftToolWindow({
           <DiagramExplorer db={db} />
         ) : isDocs ? (
           <DocsExplorer db={db} />
+        ) : isAiStaff ? (
+          <AiStaffExplorer db={db} />
+        ) : isAiOffice ? (
+          <AiOfficeExplorer db={db} />
         ) : (
           <CRExplorer db={db} onSelectChangeRequest={onSelectChangeRequest} />
         )}
