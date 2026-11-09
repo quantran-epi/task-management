@@ -49,8 +49,8 @@
 **Depends on:** —
 **Success Criteria** (what must be TRUE):
 
-1. `conventionsSegment.ts`, `components/common/DiffSyntaxHighlighter.tsx`, `patchProposal.ts`, `types/legacySdlc.ts`, and `teamRunManager.ts` exist and are imported by the surviving consumers.
-2. No SDLC launch point remains; `grep -rn "sdlc\|Sdlc" src` returns only legacy-schema and migration hits, with no stubs and no `as any`.
+1. `conventionsSegment.ts`, `components/common/DiffSyntaxHighlighter.tsx`, `patchProposal.ts`, and `PatchDiffApprovalCard.tsx` exist and are imported by the surviving consumers. (Corrected from the original criterion, which named `types/legacySdlc.ts` and `teamRunManager.ts` — both are void under C-16 and D-12; `teamRunRegistry.ts` already exists and `TeamWorkspace.tsx` has zero SDLC references.)
+2. No SDLC launch point remains; `grep -rn "sdlc\|Sdlc" src` returns only the enumerated residual list (Dexie migration history, Dexie upgrade hooks, neutral identifiers), with no stubs and no `as any`.
 3. Ordinary chat, knowledge publish, and backup round-trip still pass after deletion.
 4. A persisted `viewType:'sdlc'` tab is dropped on launch and `activeTabId` re-points to a valid tab.
 5. `restoreBackup` no longer creates SDLC tabs; `validateBackup` no longer enforces SDLC invariants.
@@ -64,7 +64,7 @@
 **Depends on:** Phase 35
 **Success Criteria** (what must be TRUE):
 
-1. Dexie V18 adds `aiSkillVersions` and the additive indexes; all five coordinated table lists are updated in one change, with a TS⊆Rust assertion test.
+1. Dexie V19 adds `aiSkillVersions` and the additive indexes; all five coordinated table lists are updated in one change, with a TS⊆Rust assertion test. (V18 is taken by Phase 35's SDLC purge migration.)
 2. `targetAgentId` survives export → restore; agent assignment history is no longer stripped.
 3. Export → validate → restore round-trips a pre-v1.4 fixture and a v1.4 fixture with matching counts.
 4. A backup from the previous build still imports; a backup from this build is read by the previous build without corruption.
