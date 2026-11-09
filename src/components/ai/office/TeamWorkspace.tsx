@@ -82,6 +82,17 @@ function initialOf(name: string): string {
 }
 
 /** UI-SPEC §5b workspace: splitter, sidebar, transcript region and the shared widget. */
+interface TeamDebugLog {
+  timestamp: string;
+  agentId: string;
+  agentName: string;
+  agentKind: string;
+  model: string;
+  text: string;
+  systemMessages: string[];
+  toolNames: string[];
+}
+
 export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   team,
   lead,
@@ -109,7 +120,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   const [planDecision, setPlanDecision] = useState<'approved' | 'rejected' | undefined>(undefined);
   const [analysisMode, setAnalysisMode] = useState<boolean>(true);
   const [mcpEnabled, setMcpEnabled] = useState<boolean>(false);
-  const [debugLogs, setDebugLogs] = useState<Array<{ timestamp: string; agentId: string; request: any }>>([]);
+  const [debugLogs, setDebugLogs] = useState<TeamDebugLog[]>([]);
   const [debugModalOpen, setDebugModalOpen] = useState<boolean>(false);
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const lastUserTextRef = useRef<string>('');
@@ -209,21 +220,28 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
           return {
             ...clientDeps,
             runLoop: async (opts) => {
+              const agent = agentId === team.leadId ? lead : employees.find((e) => e.id === agentId);
+              const agentName = agent?.name ?? (agentId === team.leadId ? 'Lead' : agentId);
+              const agentKind = agentId === team.leadId ? 'Lead' : 'Employee';
+              const systemMessages = (opts.messages || [])
+                .filter((m) => m.role === 'system' && typeof m.content === 'string')
+                .map((m) => m.content as string);
+              const userMessages = (opts.messages || []).filter((m) => m.role === 'user');
+              const lastUserMsg = userMessages[userMessages.length - 1]?.content ?? '';
+              const text = typeof lastUserMsg === 'string' ? lastUserMsg : JSON.stringify(lastUserMsg);
+              const toolNames = (opts.tools || []).map((t: any) => t.function?.name ?? t.name ?? 'tool');
+
               setDebugLogs((prev) => [
                 ...prev,
                 {
                   timestamp: new Date().toLocaleTimeString(),
                   agentId,
-                  request: {
-                    model: opts.request.model,
-                    agentName: opts.request.agentName,
-                    agentKind: opts.request.agentKind,
-                    systemMessages: opts.request.systemMessages,
-                    historyTurnsCount: opts.request.history?.length ?? 0,
-                    text: opts.request.text,
-                    toolsCount: opts.request.tools?.length ?? 0,
-                    toolNames: opts.request.tools?.map((t: any) => t.function?.name ?? t.name),
-                  },
+                  agentName,
+                  agentKind,
+                  model: opts.model,
+                  text,
+                  systemMessages,
+                  toolNames,
                 },
               ]);
               if (clientDeps.runLoop) {
@@ -681,21 +699,21 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <Tag color="blue">{log.request.agentKind?.toUpperCase() ?? 'AGENT'}: {log.request.agentName}</Tag>
+                  <Tag color="blue">{log.agentKind.toUpperCase()}: {log.agentName}</Tag>
                   <Typography.Text type="secondary" style={{ fontSize: 11 }}>{log.timestamp}</Typography.Text>
                 </div>
                 <div style={{ fontSize: 12, marginBottom: 4 }}>
-                  <strong>Model:</strong> {log.request.model} | <strong>Tools:</strong> {log.request.toolNames?.join(', ') || 'none'}
+                  <strong>Model:</strong> {log.model} | <strong>Tools:</strong> {log.toolNames.join(', ') || 'none'}
                 </div>
                 <div style={{ fontSize: 12, marginBottom: 4 }}>
                   <strong>User / Instruction Input:</strong>
                   <pre style={{ whiteSpace: 'pre-wrap', background: token.colorBgContainer, padding: 6, borderRadius: 4, margin: '4px 0' }}>
-                    {log.request.text}
+                    {log.text}
                   </pre>
                 </div>
                 <div style={{ fontSize: 12 }}>
                   <strong>System Prompt:</strong>
-                  {log.request.systemMessages?.map((sm: any, smIdx: number) => (
+                  {log.systemMessages.map((sm, smIdx) => (
                     <pre
                       key={smIdx}
                       style={{
@@ -708,7 +726,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                         margin: '4px 0',
                       }}
                     >
-                      {sm.content}
+                      {sm}
                     </pre>
                   ))}
                 </div>
