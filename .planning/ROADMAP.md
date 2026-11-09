@@ -55,7 +55,7 @@
 4. A persisted `viewType:'sdlc'` tab is dropped on launch and `activeTabId` re-points to a valid tab.
 5. `restoreBackup` no longer creates SDLC tabs; `validateBackup` no longer enforces SDLC invariants.
 
-**Plans:** 12 plans
+**Plans:** 12 plans in 7 waves
 
 Plans:
 - [ ] 35-01-PLAN.md — Extract the generic patch core into `services/ai/patchProposal.ts` (D-02/D-03) + its test
@@ -63,13 +63,15 @@ Plans:
 - [ ] 35-03-PLAN.md — Move + rename `ArtifactDiffApprovalCard` → `PatchDiffApprovalCard` (D-04)
 - [ ] 35-04-PLAN.md — Rescope `get_artifact`/`patch_artifact_section` to `{noteId}|{skillId}`; delete `propose_subsystems`/`propose_research`
 - [ ] 35-05-PLAN.md — Delete SDLC-only tests; rewrite `tests/phase25_1SafetyGates.test.ts`
-- [ ] 35-06-PLAN.md — Delete the five SDLC directories, eight orphaned services, and the wizard chat branch
-- [ ] 35-07-PLAN.md — Delete the SDLC view + six launch points; prune `'sdlc'` from the editor; apply AIO-REMOVE-04
-- [ ] 35-08-PLAN.md — Strip SDLC fields from `models.ts`, validation schemas, and three repositories
-- [ ] 35-09-PLAN.md — Narrow the backup envelope to `type: z.enum(['chat'])`; strip restore/validate SDLC logic
-- [ ] 35-10-PLAN.md — Add Dexie V18 with the SDLC row-purge migration
-- [ ] 35-11-PLAN.md — Clean the last chat-UI consumers; trim `InterruptedBanner`
+- [ ] 35-06-PLAN.md — Wave 5a: delete the five SDLC directories, eight orphaned services, and the wizard chat branch
+- [ ] 35-07-PLAN.md — Wave 5b: delete the SDLC view + six launch points; prune `'sdlc'` from the editor; apply AIO-REMOVE-04
+- [ ] 35-08-PLAN.md — Wave 5c: clean the last chat-UI consumers; trim `InterruptedBanner`; recreate its test + the artifact-tool allowlist test
+- [ ] 35-09-PLAN.md — Wave 5d: strip SDLC fields from `models.ts`, validation schemas, and three repositories
+- [ ] 35-10-PLAN.md — Wave 5e: narrow the backup envelope to `type: z.enum(['chat'])`; strip restore/validate SDLC logic
+- [ ] 35-11-PLAN.md — Add Dexie V18 with the SDLC row-purge migration
 - [ ] 35-12-PLAN.md — Finish test rewrites; run the phase acceptance sweep (tsc, greps, scoped suites, build)
+
+> **Wave 5 is atomic.** Plans 06-10 are mutually dependent: delete-set files read the domain fields plan 09 removes, and `backupSchemas.ts` imports the schema modules plan 06 deletes. They must land together; `npx tsc --noEmit` is clean at every wave boundary.
 
 **Research flag:** needs `--research-phase` — audit verdicts must be re-verified against the live tree before deletion.
 

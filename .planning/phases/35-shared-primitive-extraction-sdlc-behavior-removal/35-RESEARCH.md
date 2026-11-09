@@ -701,33 +701,31 @@ This file is a **structural gate** that reads other files as text. It will break
 
 ## 8. Deletion Order
 
-Each step states why it sits where it does. Extraction is steps 1-4; nothing in the delete set may be touched before step 5.
+**Corrected after plan review.** The earlier version of this section claimed step 7 could delete every leaf module because "all importers were re-pointed in 1-6". That contradicted §4.1 and §4.6: `src/types/models.ts`, `src/validation/schemas.ts`, `src/validation/knowledgeSchemas.ts`, `src/validation/backupSchemas.ts`, `src/db/repositories/chatRepo.ts`, `src/workbench/EditorArea.tsx`, `src/views/ChangeRequestDetailView.tsx`, and the three chat-UI components still imported the delete set at that point. The order below is the one the plans implement.
 
-| # | Step | Why here |
-|---|---|---|
-| 1 | Create `src/services/ai/patchProposal.ts`: move `ArtifactPatchProposal`, `ArtifactToolRefusal(+Code)`, `PATCH_LINE_CAP`, `locateSection`, `detectEol`, `applyOperation`, `countLogicalLines`, `refuse`, `isRefusal`, `defaultSha256`; **export** the previously-private core functions. | Phase 39 depends on this shape (D-02). Must exist before `sdlcArtifactTools.ts` can be deleted. |
-| 2 | Create `src/services/ai/conventionsSegment.ts`: move `:323-374`. | Dependency-free block; `AIChatDrawer.tsx:51` must be re-pointed before `sdlcPromptComposer.ts` can go. |
-| 3 | Move `src/components/sdlc/diff/DiffSyntaxHighlighter.tsx` → `src/components/common/DiffSyntaxHighlighter.tsx`; update `RemoteFileViewer.tsx:17`. | `RemoteFileViewer` is a surviving workbench view; it must stop importing from the delete set before `components/sdlc/**` is removed. |
-| 4 | Move + rename `ArtifactDiffApprovalCard` → `src/components/ai/widget/PatchDiffApprovalCard.tsx`; re-point `AiChatWidget.tsx:15,491` and its `:4` type import to `patchProposal`. | `AiChatWidget` is the ordinary-chat surface; it must not import from the delete set. |
-| 5 | **Delete all tests in §7.1.** | Removes the test-side import edges first, so `tsc` reports only real source breakages. Also unblocks `tests/phase25_1SafetyGates.test.ts`'s `phaseTestFiles` list (edited in the same commit). |
-| 6 | Rescope the two artifact tools (§6.3) — schemas, dispatch, options plumbing, prompt text, `chatTurnRuntime` approval branch. | Must precede deleting `sdlcArtifactTools.ts`; must precede the `ChatArtifactEvent`/`workflowState` removals because `chatTurnRuntime` still references the old context type. |
-| 7 | Delete `src/components/sdlc/**`, `src/components/ai/wizard/**`, `src/services/wizard/**`, `src/services/sdlc/**`, `src/services/export/**`, `sdlcSolutionParser.ts`, `changePackPackager.ts`, `researchService.ts`, `wizardService.ts`, `wizardPrompts.ts`, `wizardSchemas.ts`, `sdlcPromptComposer.ts`, `sdlcArtifactTools.ts`. | All importers were re-pointed in 1-6 or are inside the delete set. `sdlcArtifactTools.ts`/`sdlcPromptComposer.ts` go last in this step because their replacements (1, 2) must be wired. |
-| 8 | Delete `src/views/ChangeRequestSdlcView.tsx`. | Its 11 `components/sdlc` imports and 7 `services/wizard` imports are gone after step 7; the file would already fail to compile. |
-| 9 | Delete the 5 launch points + the 6th indirect one: `TitleBar.tsx:255-272` (+ icon import `:17`), `CRExplorer.tsx:104-110,133-137`, `ChangeRequestsView.tsx:195-202`, `SystemDetailView.tsx:91,135-149,212-230,291-299,536-556`, `ChangeRequestDetailView.tsx:30-31,65-77,112-149,169-179,386-388,401-...`, `ChangeRequestTable.tsx:47,99,144-149,412-420`, `WorkbenchLayout.tsx:201`. | Only after the view is gone — otherwise the launch points open a missing module. |
-| 10 | Prune `EditorViewType` (`layoutStore.ts:18`), `EditorArea.tsx:43,56-57,89-90,615-626`, `getEditorTabIcon`'s `sdlc` case, and `JetBrainsSdlcIcon` (`JetBrainsIcons.tsx:401-432`). | Requires step 9 (no remaining `'sdlc'` producers) and step 8 (no `ChangeRequestSdlcView` import). |
-| 11 | Apply AIO-REMOVE-04: `partialize` filter + `activeTabId` re-point (and/or key bump), plus a `merge`/hydration guard. | Requires step 10 — the type no longer has `'sdlc'`, so the filter can be typed as `EditorViewType`-safe. |
-| 12 | Persisted-surface removals: `models.ts` (`:3-7,205,235,267,288-302,315,316,377`), `validation/schemas.ts:11,428,444`, `knowledgeSchemas.ts:3,123`, `documentSetRepo.ts:23,36,55-88,151,233`, `chatRepo.ts:11,16,35,36,88-93,105-133,135-155,171,254,262-281`, `chatTabRepo.ts:6,20-22,81-128,211,229,234`, `backupSchemas.ts:9-13,154,241,253,327,447`, `exportBackup.ts:158`, `validateBackup.ts:250,392-418,420-465,469-509,511-543,545-567,731`, `restoreBackup.ts:67,70-78,80-173,257-262,297-307`. | Types and schemas must be consistent before the Dexie migration is written; the migration's `t.type === 'sdlc'` comparison needs the field to still exist in the row shape (it does — Dexie rows are untyped at runtime). |
-| 13 | Add Dexie `version(18)` purge migration (§5.12). | Last data step: it deletes rows whose shape the previous steps stopped producing. Runs after the code can no longer recreate them. |
-| 14 | Chat-UI cleanup: `ChatMessageBubble.tsx:52-60,100,349,392-468`, `ChatMessageList.tsx:7,44,73,184`, `ChatTabBar.tsx` (all 18 sites), `AiChatWidget.tsx:12,18,33-35,87-89,259-261,505-517`, `AIChatDrawer.tsx:65-66,103,956-1040,1079-1081,1403-1406,2451,2562,2580`, `useChatTurn.ts:96,196`, `ImportPreviewModal.tsx:134-147,303-310`, `types/backup.ts:46-49,143`, `InterruptedBanner.tsx`, `RestoredSourceNotice.tsx`, `ArtifactEventCard.tsx`. | These are the last consumers of the deleted components; doing them last keeps the compiler's error list short and ordered. |
-| 15 | Rewrite the §7.2 tests; run the scoped suites; run `tsc`. | Verification. |
+**The governing constraint:** the wholesale deletion and the domain-field removal are *mutually dependent*. Delete-set files read the fields being removed (`services/wizard/artifactRepo.ts:126,156`, `hubExport.ts:123`, `hubSolution.ts:55`, `hubChangePack.ts:153`, `components/ai/wizard/NoteSourcePickerModal.tsx:179`, `components/sdlc/chat/StepChatPanel.tsx:691`), while `models.ts` / `validation/*` / `backupSchemas.ts` import the modules being deleted. Neither can land alone. Therefore **wave 5 is one atomic cut of five file-disjoint plans**, and `npx tsc --noEmit` must exit 0 at every wave boundary from wave 1 onward. There is no "intentionally mid-surgery" allowance.
 
-**Ordering invariants (violating any of these produces the Pitfall-1 cascade):**
-- Never delete `sdlcArtifactTools.ts` before `chatTurnRuntime.ts`, `aiTools.ts`, `aiOrchestratorLoop.ts`, and `ArtifactDiffApprovalCard.tsx` stop importing it.
-- Never delete `workflowSchemas.ts` before `models.ts`, `backupSchemas.ts`, `chatRepo.ts`, `EditorArea.tsx`, and `ChangeRequestDetailView.tsx` stop importing it.
-- Never narrow `ChatTabType` before `restoreBackup.ts` and `validateBackup.ts` stop comparing `type === 'sdlc'` (TypeScript will reject the comparison, but the *behavior* — the duplicate-tab invariant — must be removed deliberately, not accidentally).
-- Never delete `components/sdlc/**` before `DiffSyntaxHighlighter` is moved out.
+| Wave | Plan | Step | Why here |
+|---|---|---|---|
+| 1 | 01 | Create `src/services/ai/patchProposal.ts`: move `ArtifactPatchProposal`, `ArtifactToolRefusal(+Code)`, `PATCH_LINE_CAP`, `locateSection`, `detectEol`, `applyOperation`, `countLogicalLines`, `refuse`, `isRefusal`, `defaultSha256`; **export** the previously-private core functions. Rewrite its test against `{ target, id }`. | Phase 39 depends on this shape (D-02). Must exist before `sdlcArtifactTools.ts` can be deleted. |
+| 1 | 02 | Create `src/services/ai/conventionsSegment.ts` (move `sdlcPromptComposer.ts:323-374`); move `components/sdlc/diff/DiffSyntaxHighlighter.tsx` → `components/common/DiffSyntaxHighlighter.tsx`; re-point `AIChatDrawer.tsx:51` and `RemoteFileViewer.tsx:17`. | Both blocks are dependency-free; both consumers are surviving files. |
+| 2 | 03 | Move + rename `ArtifactDiffApprovalCard` → `src/components/ai/widget/PatchDiffApprovalCard.tsx`; re-point `AiChatWidget.tsx:15,491` and its `:4` type import to `patchProposal`. | `AiChatWidget` is the ordinary-chat surface; it must not import from the delete set. |
+| 3 | 04 | Rescope the two artifact tools (§6.3) — schemas, dispatch, options plumbing, `chatTurnRuntime` approval branch, and the stale `ArtifactToolContext` import in `tests/ai/chatTurnRuntime.test.ts:13`. | Must precede deleting `sdlcArtifactTools.ts`. |
+| 4 | 05 | **Delete all tests in §7.1**; rewrite `tests/phase25_1SafetyGates.test.ts`. | Removes the test-side import edges first, so `tsc` reports only real source breakages. Also unblocks the `phaseTestFiles` list (landmine L8). |
+| 5 | 06 | Delete `src/components/sdlc/**`, `src/components/ai/wizard/**`, `src/services/wizard/**`, `src/services/sdlc/**`, `src/services/export/**`, `sdlcSolutionParser.ts`, `changePackPackager.ts`, `researchService.ts`, `wizardService.ts`, `wizardPrompts.ts`, `wizardSchemas.ts`, `sdlcPromptComposer.ts`, `sdlcArtifactTools.ts`; de-wizard `ChatMessageBubble`/`ChatMessageList`. | Safe only because plans 07-10 of this same wave remove the last importers. |
+| 5 | 07 | Delete `src/views/ChangeRequestSdlcView.tsx`; delete the 5 launch points + `ChangeRequestTable` prop + `WorkbenchLayout.tsx:201`; prune `EditorViewType`, `EditorArea` branches, `JetBrainsSdlcIcon`; apply AIO-REMOVE-04 (`_v3` key + `RETIRED_VIEW_TYPES` filter + `activeTabId` re-point + `merge` guard). | Same wave as 06 — `EditorArea.tsx:56` imports the view being deleted. |
+| 5 | 08 | Chat-UI cleanup: `ChatTabBar.tsx`, `AiChatWidget.tsx`, `AIChatDrawer.tsx`, `useChatTurn.ts`, `ImportPreviewModal.tsx`, trim `InterruptedBanner.tsx`, delete `RestoredSourceNotice.tsx` + `ArtifactEventCard.tsx`; recreate `InterruptedBanner` and artifact-tool-allowlist coverage. | Same wave — `ChatTabBar` narrowing needs `ChatTabType` narrowed by 09; `AIChatDrawer` imports `./wizard/restoreRecovery` deleted by 06. |
+| 5 | 09 | Persisted-surface removals: `models.ts`, `validation/schemas.ts`, `knowledgeSchemas.ts`, `documentSetRepo.ts`, `chatRepo.ts`, `chatTabRepo.ts`. | Same wave — every delete-set reader of these fields dies in 06. |
+| 5 | 10 | Backup surface: `backupSchemas.ts`, `exportBackup.ts`, `validateBackup.ts`, `restoreBackup.ts`, `types/backup.ts`. | Same wave — `backupSchemas.ts` imports both schema modules deleted by 06. |
+| 6 | 11 | Add Dexie `version(18)` purge migration (§5.12). | Last data step: it deletes rows whose shape wave 5 stopped producing. Runs after the code can no longer recreate them. |
+| 7 | 12 | Rewrite the §7.2 tests; run the scoped suites; run `tsc`; run the acceptance gates. | Verification. |
 
----
+**Ordering invariants (violating any produces the Pitfall-1 cascade):**
+- Never delete `sdlcArtifactTools.ts` before `chatTurnRuntime.ts`, `aiTools.ts`, `aiOrchestratorLoop.ts`, and `ArtifactDiffApprovalCard.tsx` stop importing it (plans 03-04).
+- Never delete `wizardSchemas.ts` or `workflowSchemas.ts` before `models.ts`, `validation/schemas.ts`, `knowledgeSchemas.ts`, `backupSchemas.ts`, `chatRepo.ts`, `EditorArea.tsx`, and `ChangeRequestDetailView.tsx` stop importing them — which is why those edits are in the *same wave*, not a later one.
+- Never narrow `ChatTabType` before `restoreBackup.ts` and `validateBackup.ts` stop comparing `type === 'sdlc'` (TypeScript rejects the comparison, but the *behavior* — the duplicate-tab invariant — must be removed deliberately). Plans 08-10 are in one wave for this reason.
+- Never delete `components/sdlc/**` before `DiffSyntaxHighlighter` is moved out (plan 02).
+- Never apply the `partialize` filter with a direct `viewType !== 'sdlc'` comparison after the union narrows — use `RETIRED_VIEW_TYPES` (TS2367).
 
 ## 9. Risks / Landmines
 
@@ -1021,28 +1019,23 @@ grep -rn "'sdlc'" src/components/ai/ChatTabBar.tsx src/types/models.ts src/valid
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Does Phase 35 own the Dexie version number, or does Phase 36?**
-   - What we know: `src/db/index.ts` ends at `version(17)`. D-05 requires deleting SDLC rows. ROADMAP Phase 36 claims V18 for `aiSkillVersions`.
-   - What's unclear: whether the user prefers one combined migration in Phase 36 or a Phase-35 purge.
-   - Recommendation: Phase 35 takes V18 (the purge); report the Phase 36 criterion as stale. A build that ships SDLC rows with no cleanup path contradicts D-05 and C-16.
+1. **Does Phase 35 own the Dexie version number, or does Phase 36?** — **(RESOLVED: Phase 35 takes V18.)**
+   - What we knew: `src/db/index.ts` ends at `version(17)`. D-05 requires deleting SDLC rows. ROADMAP Phase 36 claims V18 for `aiSkillVersions`.
+   - Resolution: Phase 35 takes V18 (the purge); Phase 36's `aiSkillVersions` becomes V19. A build that ships SDLC rows with no cleanup path contradicts D-05 and C-16. Implemented by plan 11; the ROADMAP Phase 36 criterion is recorded as stale.
 
-2. **Should `ChatMessage.artifactEvent` / `ChatArtifactEvent` / `ArtifactEventCard` be deleted?**
-   - What we know: CONTEXT.md's DELETE table lists `ArtifactEventCard` but not the two `ChatMessage` fields. No backup schema references them. Their only producers are deleted views.
-   - What's unclear: whether the user wants the "artifact version card" concept preserved for Phase 39's skill-version events.
-   - Recommendation: delete now; Phase 39 can reintroduce a typed card for skill versions. Keeping it requires keeping `SdlcArtifactKind` alive, which C-16 forbids.
+2. **Should `ChatMessage.artifactEvent` / `ChatArtifactEvent` / `ArtifactEventCard` be deleted?** — **(RESOLVED: delete all three.)**
+   - What we knew: CONTEXT.md's DELETE table lists `ArtifactEventCard` but not the two `ChatMessage` fields. No backup schema references them. Their only producers are deleted views.
+   - Resolution: delete now. Phase 39 can reintroduce a typed card for skill versions. Keeping it would require keeping `SdlcArtifactKind` alive, which C-16 forbids. Implemented by plans 06, 08, 09.
 
-3. **`interrupted` checkpoint recovery for ordinary chat.**
-   - What we know: `InterruptedBanner` (`AIChatDrawer.tsx:2580`) also renders for `activeRuntime?.status === 'interrupted'` — a **non-SDLC** path. The banner's default copy is generic ("Yêu cầu trước bị gián đoạn khi ứng dụng đóng."). Only its `SdlcCheckpoint` type import (`:3`) and the `activeCheckpoint` branch (`:2562`) are SDLC.
-   - What's unclear: CONTEXT.md D-08 says delete `InterruptedBanner`; Claude's Discretion says "replaced by a plain-text notice or dropped entirely".
-   - Recommendation: keep a **trimmed** `InterruptedBanner` with the `SdlcCheckpoint` type import removed and the `checkpoint` prop deleted; the `activeRuntime.status === 'interrupted'` path is ordinary-chat behavior that must not regress. If the planner prefers deletion, `AIChatDrawer.tsx:2578-2588` needs a plain `<Alert>` replacement.
+3. **`interrupted` checkpoint recovery for ordinary chat.** — **(RESOLVED: trim `InterruptedBanner`, do not delete it.)**
+   - What we knew: `InterruptedBanner` (`AIChatDrawer.tsx:2580`) also renders for `activeRuntime?.status === 'interrupted'` — a **non-SDLC** path. The banner's default copy is generic. Only its `SdlcCheckpoint` type import (`:3`) and the `activeCheckpoint` branch (`:2562`) are SDLC.
+   - Resolution: keep a **trimmed** `InterruptedBanner` with the `SdlcCheckpoint` import and the `checkpoint` prop removed; the `activeRuntime.status === 'interrupted'` path is ordinary-chat behavior that must not regress. Coverage is recreated in `src/components/ai/__tests__/InterruptedBanner.test.tsx` because plan 05 deletes the only existing test. Implemented by plan 08.
 
-4. **`RestoredSourceNotice` / `deriveMissingSources` — delete or keep?**
-   - What we know: both are fed exclusively by `sdlc_workflow:*` settings (`AIChatDrawer.tsx:956-974`). Under D-05 those rows are purged, so both become permanently dead.
-   - Recommendation: delete both, plus `BackupRecoveryInfo` (`types/backup.ts:46-49`) and the `recovery` field (`:143`), plus `ImportPreviewModal.tsx:134-147,303-310`.
-
----
+4. **`RestoredSourceNotice` / `deriveMissingSources` — delete or keep?** — **(RESOLVED: delete both.)**
+   - What we knew: both are fed exclusively by `sdlc_workflow:*` settings (`AIChatDrawer.tsx:956-974`). Under D-05 those rows are purged, so both become permanently dead.
+   - Resolution: delete both, plus `BackupRecoveryInfo` (`types/backup.ts:46-49`), the `recovery` field (`:143`), and `ImportPreviewModal.tsx:134-147,303-310`. Implemented by plans 08 and 10.
 
 ## Sources
 
