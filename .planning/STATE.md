@@ -29,82 +29,26 @@ Last activity: 2026-11-09 — Milestone v1.4 started
 
 ## Session Continuity
 
-Last session: 2026-11-08T12:10:19.022Z
-Resume file: .planning/phases/34-ai-office-fixed-ai-employees-with-persona-role-per-model-mul/34-CONTEXT.md
+Last session: 2026-11-09
+Resume file: .planning/MILESTONE-CONTEXT.md (C-01..C-15 locked, R-01..R-21 open)
 
-Progress: [███████░░░] 70%
+Progress: [░░░░░░░░░░] 0%
 
-## Milestone v1.3 Map
+## Milestone v1.4 Map
 
-- [x] Phase 25.4: IntelliJ EXPUI Workbench UI/UX Migration
-- [x] Phase 25.5: TaskMate Workbench UI/UX Precision Layout
-- [x] Phase 26: Grounded Context & Safe Model Protocol
-- [x] Phase 27: Studio Artifact Tools & Diff Approval
-- [ ] Phase 28: Query-Only Knowledge Retrieval
-- [x] Phase 29: Safe Local Agent Automation
-- [x] Phase 29.1: Remote SSH Git Explorer & Headful Claude Code Terminal Flow
-- [ ] Phase 30: Automatic Change Packs, Fallback & Run Reliability
-- [x] Phase 31: Organization Conventions in the Solution Pipeline
-- [x] Phase 31.1: Enterprise Systems Catalog & CR Transformation (COMPLETE)
-- [ ] Phase 32: External Research via Claude Code
-
-## Performance Metrics
-
-| Phase | Plan | Duration | Notes |
-|-------|------|----------|-------|
-| Phase 25.4 P04 | 10 min | 2 tasks | 8 files |
-| Phase 25.4 P03 | 10 min | 2 tasks | 7 files |
-| Phase 25.4 P02 | 15 min | 2 tasks | 7 files |
-| Phase 25.4 P01 | 15 min | 3 tasks | 7 files |
-| Phase 25.3 P13 | 30 min | 3 tasks | 6 files |
-| Phase 25.3 P16 | 15 min | 2 tasks | 2 files |
-| Phase 27 P01 | 38 min | 3 tasks | 11 files |
-| Phase 27 P02 | 33 min | 3 tasks | 8 files |
-| Phase 27 P05 | 16 min | 2 tasks | 6 files |
-| Phase 27 P03 | 46 min | 2 tasks | 6 files |
-| Phase 27 P04 | 24 min | 2 tasks | 7 files |
-| Phase 29.1 P01 | 8 min | 3 tasks | 9 files |
-| Phase 29.1 P02 | 40 min | 3 tasks | 10 files |
-| Phase 29.1 P03 | 10 min | 3 tasks | 13 files |
-| Phase 30 P01 | 19 min | 2 tasks | 3 files |
-| Phase 30 P02 | 13 min | 2 tasks | 3 files |
-**Per-Plan Metrics:**
-
-| Plan | Duration | Tasks | Files |
-|------|----------|-------|-------|
-| Phase 31.1 P04 | 12m | 2 tasks | 8 files |
-| Phase 31.1 P03 | 10m | 2 tasks | 7 files |
-| Phase 31.1 P02 | 12m | 2 tasks | 10 files |
-| Phase 31.1 P01 | 15m | 2 tasks | 11 files |
-| Phase 30 P03 | 9min | 2 tasks | 2 files |
-| Phase 31 P01 | 10m | 2 tasks | 4 files |
-| Phase 31 P02 | 12m | 2 tasks | 3 files |
-| Phase 31 P03 | 10m | 3 tasks | 8 files |
-| Phase 31 P04 | 5m | 2 tasks | 1 file |
+- [ ] Phase 35: Shared-primitive extraction + SDLC behavior removal
+- [ ] Phase 36: Data model, multi-chat identity, backup/migration
+- [ ] Phase 37: Runtime reliability + concurrency
+- [ ] Phase 38: Hard token budget + accurate measurement
+- [ ] Phase 39: Skill versioning + enrichment approval
+- [ ] Phase 40: Explorer UX, CRUD correctness, observed walkthrough
 
 ## Accumulated Context
 
-- Phase 26 grounded context + bounded tool loops verified.
-- Phase 27 artifact diff cards + scoped approval verified.
-- Phase 25.4/25.5 IntelliJ workbench + SSH & SFTP backend verified.
-- Phase 29.1 Remote SSH Git Explorer + headful interactive terminal in bottom panel verified.
-- Phase 31.1 Enterprise Systems Catalog & CR Transformation verified.
-
-## Quick Tasks Completed
-
-| Task | Date | Scope | Outcome |
-|------|------|-------|---------|
-| `261106-rfe-remote-explorer-picker-and-step2-header-fix` | 2026-11-06 | RemoteGitExplorer & Step2SolutionView | Added remote folder picker modal via SFTP; fixed Step 2 header title nowrap & flex wrap |
-| `261107-0cw-fix-remote-file-explorer-state-loss-when` | 2026-11-06 | RemoteGitExplorer & layoutStore | Auto-reload branches and tree on remount; retain selected branch across toolwindow toggles |
-| `261107-0jk-support-uncommitted-files-in-remotegitex` | 2026-11-06 | RemoteGitExplorer & BottomToolWindow | Show uncommitted files with status tags; fallback reader for untracked; inline rename for xterm tabs |
-| `20261107-sdlc-repo-config-tab` | 2026-11-07 | SDLC Sidebar & RepoConfigView & Step3 | Added dedicated "Cấu hình Repo & SSH" tab to SDLC sidebar; explicit save button and conventions card to Step 3 |
-| `20261107-ai-chat-conventions` | 2026-11-07 | AIChatDrawer & conventionService | Wires Global and Repo conventions into General AI Chat systemPromptContent with fail-safe resolution |
-| `261107-repo-path-picker-cr-explorer` | 2026-11-07 | SystemModal, CR Explorer, SdlcSidebar, SystemsExplorer | Added SSH remote directory picker; rebranded CR Explorer with New CR button; unified SDLC Studio on CR; opened SystemDetailView on system click |
-| `261108-hga-cai-thien-icon-workbench` | 2026-11-08 | Workbench Layout, TitleBar, EditorArea, Explorers | Redesigned Diagram icon to flowchart; added 3D isometric Systems icon, Git branch Remote icon, SDLC infinity loop; added tab icons to EditorArea; synchronized tree view folder/leaf icon system |
-| `261108-ttb-terminal-trigger-bottom-left-colorful-icon` | 2026-11-08 | Workbench Stripe, StatusBar, Keymap, Icons | Moved terminal trigger from bottom status bar to bottom-left stripe below Remote Git Explorer; added colorful JetBrainsExpUI terminal icon with midnight console, traffic light dots, neon prompt & cursor; enabled Alt+F12 keymap |
-| `261108-tre-tree-expand-hover-pill-diagram-create` | 2026-11-08 | Workbench Trees, Styles, DiagramExplorer | Set instant tree expand with motion=null; balanced 18x18px hover pill centered on chevron without text height overflow; added Tạo button next to search box in DiagramExplorer |
-| `261108-bgc-background-ai-chat-runner-indicator` | 2026-11-08 | AI Turn Manager, Drawer, StepChatPanel, StatusBar | Implemented global background AI turn execution surviving unmount/navigation; added bottom pill indicator with live elapsed ticker and manual abort |
-| `261109-eme-refactor-ai-office-staff-to-left-stripe-` | 2026-11-09 | TitleBar, LeftStripe, LeftToolWindow, AiExplorers, EditorArea | Hid Ghost Dev & TitleBar buttons; added AI Office explorer and AI Staff explorer (above Remote Git); opened staff_detail and team_workspace editor tabs |
+- Phase 34 marked complete with zero tests covering the AI Office runtime and five live defects (hung batch run, unguarded double-submit, phantom active turn, `targetAgentId` stripped on restore, bare deletes breaking export). "Phase 34 complete" is not evidence of quality.
+- Research verdict: keep and harden the existing coordinator/budget gate; zero new npm dependencies.
+- SDLC deletion is behavior-only; four persisted schema modules must survive as type-only legacy (backup envelope v11 validates them).
+- Seven surviving modules import SDLC code on the hot path — extraction must precede deletion.
 
 ## Decisions
 

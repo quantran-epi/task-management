@@ -1,6 +1,15 @@
 # Project Roadmap
 
-## Active Phase
+## Active Milestone: v1.4 Unified AI Office
+
+- Phase 35: Shared-primitive extraction + SDLC behavior removal (v1.4)
+- Phase 36: Data model, multi-chat identity, backup/migration (v1.4)
+- Phase 37: Runtime reliability + concurrency (v1.4)
+- Phase 38: Hard token budget + accurate measurement (v1.4)
+- Phase 39: Skill versioning + enrichment approval (v1.4)
+- Phase 40: Explorer UX, CRUD correctness, observed walkthrough (v1.4)
+
+## Previous Milestone: v1.3
 
 - Phase 25.1.1: Unify SDLC workflow into the hub, retire the wizard (COMPLETE — verified 2026-11-01)
 - Phase 25.1.2: Fix the SDLC hub user flow end to end (COMPLETE — verified 2026-11-01)
@@ -992,3 +1001,114 @@ Plans:
 **Wave 2** *(depends on 33-01)*
 
 - [ ] 33-02-PLAN.md — Prompt contract document for all steps, artifact intents, convention segment, and EXTERNAL evidence, plus drift-detection test
+
+---
+
+## Milestone: v1.4 Unified AI Office
+
+**Goal:** Hợp nhất SDLC Studio và AI Office thành một workspace AI duy nhất dạng chat-first, free-style; xóa hoàn toàn SDLC Studio; đội ngũ AI leader + agent với kỹ năng chuyên biệt, token budget cứng, concurrency cấu hình được, và skill enrichment có duyệt version.
+
+**Requirements:** AIO-REMOVE-01..05, AIO-NAV-01..05, AIO-GROUP-01..05, AIO-LEAD-01..05, AIO-RUNTIME-01..05, AIO-BUDGET-01..09, AIO-SKILL-01..06, AIO-DATA-01..05, AIO-VERIFY-01..03
+**Source:** `.planning/MILESTONE-CONTEXT.md` (C-01..C-15 locked, R-01..R-21 open), `.planning/research/SUMMARY.md`
+**UI hint:** yes
+
+> **Quality gate (C-15):** Phase 34 was marked complete with zero tests covering the AI Office runtime and five live defects. No phase in this milestone closes on code reading alone. Every phase ends with an observed behavior.
+
+### Phase 35: Shared-primitive extraction + SDLC behavior removal
+
+**Goal:** Extract the primitives AI Office reuses, then remove every SDLC Studio behavior entry point — without breaking ordinary chat, knowledge publish, or backup.
+**Requirements**: AIO-REMOVE-01, AIO-REMOVE-02, AIO-REMOVE-03, AIO-REMOVE-04, AIO-REMOVE-05
+**Depends on:** —
+**Success Criteria** (what must be TRUE):
+
+1. `conventionsSegment.ts`, `components/common/DiffSyntaxHighlighter.tsx`, `patchProposal.ts`, `types/legacySdlc.ts`, and `teamRunManager.ts` exist and are imported by the surviving consumers.
+2. No SDLC launch point remains; `grep -rn "sdlc\|Sdlc" src` returns only legacy-schema and migration hits, with no stubs and no `as any`.
+3. Ordinary chat, knowledge publish, and backup round-trip still pass after deletion.
+4. A persisted `viewType:'sdlc'` tab is dropped on launch and `activeTabId` re-points to a valid tab.
+5. `restoreBackup` no longer creates SDLC tabs; `validateBackup` no longer enforces SDLC invariants.
+
+**Research flag:** needs `--research-phase` — audit verdicts must be re-verified against the live tree before deletion.
+
+### Phase 36: Data model, multi-chat identity, backup/migration
+
+**Goal:** Establish the group-chat data model, the skill-version store, and a backup path that loses nothing — before any runtime work depends on it.
+**Requirements**: AIO-GROUP-02, AIO-GROUP-03, AIO-GROUP-05, AIO-DATA-01, AIO-DATA-02, AIO-DATA-03, AIO-DATA-04, AIO-DATA-05
+**Depends on:** Phase 35
+**Success Criteria** (what must be TRUE):
+
+1. Dexie V18 adds `aiSkillVersions` and the additive indexes; all five coordinated table lists are updated in one change, with a TS⊆Rust assertion test.
+2. `targetAgentId` survives export → restore; agent assignment history is no longer stripped.
+3. Export → validate → restore round-trips a pre-v1.4 fixture and a v1.4 fixture with matching counts.
+4. A backup from the previous build still imports; a backup from this build is read by the previous build without corruption.
+5. Deleting a leader, agent, or skill with live references refuses or cascades in one transaction; the user's own next export validates.
+6. `MAX_ACTIVE_TEAMS` and `MAX_EMPLOYEES_PER_TEAM` are gone; roster editing after creation works.
+
+**Research flag:** needs `--research-phase` — R-14 (migration) and R-02 (envelope version) are open.
+
+### Phase 37: Runtime reliability + concurrency
+
+**Goal:** A run always terminates, a double submit never corrupts state, and the number of agents running at once is a real, configurable limit.
+**Requirements**: AIO-GROUP-04, AIO-RUNTIME-01, AIO-RUNTIME-02, AIO-RUNTIME-03, AIO-RUNTIME-04, AIO-RUNTIME-05, AIO-LEAD-05
+**Depends on:** Phase 36
+**Success Criteria** (what must be TRUE):
+
+1. Injecting a throwing `registry.start` produces an error row and a resolved batch — never a hang.
+2. Double-submit yields one user message, one turn, and phase `ready`; the rejection is visible at the composer.
+3. `getActiveTurns()` is empty after every run; the status indicator clears.
+4. With limit 2 and a batch of 5, at most 2 agents run at once and all 5 settle.
+5. Deleting a group mid-run leaves no active turns and no further writes.
+6. Per-agent stop and global abort both work; stopped work is marked incomplete.
+
+**Research flag:** standard patterns — skip research-phase; defects are specified to `file:line`.
+
+### Phase 38: Hard token budget + accurate measurement
+
+**Goal:** The budget is genuinely hard, input and output are both charged on every request, and the numbers the user sees are correct.
+**Requirements**: AIO-BUDGET-01, AIO-BUDGET-02, AIO-BUDGET-03, AIO-BUDGET-04, AIO-BUDGET-05, AIO-BUDGET-06, AIO-BUDGET-07, AIO-BUDGET-08, AIO-BUDGET-09
+**Depends on:** Phase 37
+**Success Criteria** (what must be TRUE):
+
+1. A turn whose prompt already exceeds the remaining budget is refused, not run.
+2. A response with no usage still increments the ledger under a stated policy.
+3. A retry charges both attempts.
+4. 20 concurrent increments sum correctly with no lost update.
+5. Starting a group splits the budget evenly with a deterministic remainder.
+6. The threshold warning fires at a configurable value; reaching it pauses visibly between tool rounds and resumes on top-up.
+7. Topping up one agent raises that agent's share and the group total in one transaction.
+8. The display shows granted, used, and remaining per group and per member, with input and output separate.
+
+**Research flag:** needs `--research-phase` — R-03/R-04/R-06/R-15/R-19 are all open.
+
+### Phase 39: Skill versioning + enrichment approval
+
+**Goal:** An agent can propose a lesson, the user reviews it as a diff, and only an explicit approval creates a new skill version.
+**Requirements**: AIO-SKILL-01, AIO-SKILL-02, AIO-SKILL-03, AIO-SKILL-04, AIO-SKILL-05, AIO-SKILL-06
+**Depends on:** Phase 38
+**Success Criteria** (what must be TRUE):
+
+1. Leader, agent, and skill CRUD work with validation, empty states, and error handling — no crash on network or AI failure.
+2. After a run an agent can propose a lesson; the proposal changes nothing until approved.
+3. The user reviews the proposal as a diff and approves or rejects; approval creates exactly one new approved version and the previous stays retrievable.
+4. No AI tool can write an approved version.
+5. Approving mid-batch does not change a running agent's skill — the assignment pins its version.
+6. Skill bodies, including approved ones, are wrapped as untrusted data.
+
+**Research flag:** needs `--research-phase` — R-11/R-12 are open and the feature has zero existing code.
+
+### Phase 40: Explorer UX, CRUD correctness, observed walkthrough
+
+**Goal:** One AI Office trigger, two explorer sections, correct CRUD, and a real walkthrough that replaces "Phase 34 complete" as the quality gate.
+**Requirements**: AIO-NAV-01, AIO-NAV-02, AIO-NAV-03, AIO-NAV-04, AIO-NAV-05, AIO-LEAD-01, AIO-LEAD-02, AIO-LEAD-03, AIO-LEAD-04, AIO-VERIFY-01, AIO-VERIFY-02, AIO-VERIFY-03
+**Depends on:** Phase 39
+**Success Criteria** (what must be TRUE):
+
+1. Exactly one sidebar trigger opens AI Office; Alt+7 is bound and works.
+2. The explorer has two sections — leaders + agents above, conversations below — with a virtualized conversation list and create CTAs in both empty states.
+3. Clicking any entry opens its detail in the center editor; switching tool windows and relaunching does not lose the tab or its state.
+4. The leader delegates a free-style request with a visible plan and per-agent attribution; the user can @mention an agent.
+5. CR/PL attachments are optional and their absence does not degrade output quality.
+6. Automated tests cover the coordinator, budget gate, team tools, and team repository.
+7. Each of the five live defects is reproduced by a failing test before its fix.
+8. The full walkthrough runs in the real UI: create a group, staff it, assign work, watch delegation, hit the budget warning, top up, approve a skill version, restore a backup.
+
+**Research flag:** standard patterns — skip research-phase.

@@ -17,10 +17,10 @@ Shipped **v1.0 MVP** on 2026-09-27 with all 8 foundational phases complete. Ship
 **Goal:** Hợp nhất SDLC Studio và AI Office thành một workspace AI duy nhất (Unified AI Office) dạng chat-first, free-style; loại bỏ hoàn toàn SDLC Studio; quản lý đội ngũ AI leader và agent với kỹ năng chuyên biệt, điều phối công việc linh hoạt kèm cơ chế token budget cứng và luyện tập kỹ năng (skill enrichment).
 
 **Target features:**
-- **Trụ 1 — Xóa bỏ SDLC Studio & Tái cấu trúc Navigation**: Loại bỏ hoàn toàn SDLC Studio (views, state machines, wizard routes); thanh điều hướng chỉ còn một trigger "AI Office"; explorer 2 tầng (tầng trên: Leader & Agent; tầng dưới: Danh sách nhóm chat/hội thoại); click mở chi tiết tại center editor.
-- **Trụ 2 — Mô hình Nhóm chat Chat-First & Phân công Free-style**: Tạo nhóm chat không giới hạn; mỗi nhóm gồm 1 Leader và N Agent tùy ý; Leader tự động phân tích yêu cầu từ người dùng và phân công cho Agent phù hợp theo skill; CR và tài liệu SDLC chỉ là context tùy chọn đính kèm.
-- **Trụ 3 — Token Budget cứng & Kiểm soát chi phí**: Cấp token budget chia đều cho Leader và các Agent khi bắt đầu nhóm; đo lường chính xác cả input + output token trên từng request; cảnh báo khi chạm ngưỡng; cho phép cấp thêm token cho từng agent và tự động tăng tổng ngân sách nhóm.
-- **Trụ 4 — Quản lý Kỹ năng & Làm giàu Skill (Skill Enrichment)**: CRUD Leader, Agent, Skill hoạt động chuẩn xác không lỗi; cơ chế học hỏi và bổ sung kinh nghiệm sau các lượt chạy (Agent đề xuất bài học, User duyệt version Markdown mới).
+- **Trụ 1 — Xóa bỏ SDLC Studio & Tái cấu trúc Navigation**: Audit shared-service trước, tách phần AI Office thực sự dùng, rồi xóa mọi entry point/view/state machine/wizard route của SDLC Studio; thanh điều hướng chỉ còn một trigger "AI Office"; explorer 2 tầng (tầng trên: Leader & Agent; tầng dưới: Danh sách nhóm chat/hội thoại); click mở chi tiết tại center editor.
+- **Trụ 2 — Mô hình Nhóm chat Chat-First & Phân công Free-style**: Tạo nhóm chat không giới hạn; mỗi nhóm gồm 1 Leader và N Agent tùy ý; Leader tự động phân tích yêu cầu từ người dùng và phân công cho Agent phù hợp theo skill; user vẫn có thể @mention agent trực tiếp; CR và tài liệu SDLC chỉ là context tùy chọn — thiếu context không chặn và không giảm chất lượng.
+- **Trụ 3 — Token Budget cứng & Kiểm soát chi phí**: Cấp token budget chia đều cho Leader và các Agent khi bắt đầu nhóm; đo lường chính xác cả input + output token trên từng request; pause giữa các tool round khi chạm ngưỡng; cảnh báo ngưỡng; cho phép cấp thêm token cho từng agent và tự động tăng tổng ngân sách nhóm (chi tiết top-up cho Leader còn mở — R-12).
+- **Trụ 4 — Quản lý Kỹ năng & Làm giàu Skill (Skill Enrichment)**: CRUD Leader, Agent, Skill phải hoạt động đúng theo tiêu chí verify quan sát được (không tuyên bố "không lỗi" khi chưa walkthrough thực tế); cơ chế học hỏi và bổ sung kinh nghiệm sau các lượt chạy (Agent đề xuất bài học, User duyệt version Markdown mới).
 - **Trụ 5 — Concurrency Control & Thực thi ổn định**: Giới hạn số lượng Agent chạy song song để bảo vệ tài nguyên; xử lý lỗi vặt và cải thiện toàn diện UX AI Office.
 
 ## Requirements
@@ -91,9 +91,13 @@ GitHub synchronization is backup synchronization, not collaborative live sync. B
 - **Evidence integrity**: Every extracted relationship must retain document, section, and source-range provenance plus evidence classification.
 - **Pilot scope**: MVP targets only `docs/sample-markdown-flow/60000006-SHB-Credit-calculations/`; broader card-system ingestion is deferred.
 - **Sensitive data**: Every publish attempt must scan for PAN, CVV, PIN/PIN block, HSM keys, credentials, and customer PII before content leaves PlannerMate. Findings require masked details and fresh explicit confirmation; no trust bypass persists.
-- **Studio artifact writes**: Chat-driven artifact edits are proposals. The editor changes only after explicit user approval of a diff; no tool may commit a version or claim approval.
+- **Artifact writes**: Chat-driven artifact edits are proposals. The editor changes only after explicit user approval of a diff; no tool may commit a version or claim approval.
+- **Skill writes**: No AI tool may write an approved skill version. Only the user's explicit approval action creates one.
 - **Repository autonomy**: Every filesystem/process operation on a real repository runs through the external fs-gw gateway — TaskMate never spawns repo processes itself. Missing fs-gw degrades to the manual change-pack fallback, never to a silent failure.
 - **Retrieve coupling**: Retrieval requests carry a query, not a locally-derived set ID list. A device with no published documents locally must still retrieve from the server.
+- **Hard budget**: Token budget is enforced before each model call, measured on input + output, and charged per attempt including retries. A response without usage data is never free.
+- **Optional context**: CR, PL01, PL02, and documents are optional attachments for a group chat. Their absence must not block a run or degrade output quality.
+- **Verification honesty**: No phase is complete on code reading alone. Every claim of correctness requires an observed walkthrough.
 
 ## Key Decisions
 
