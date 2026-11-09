@@ -8,6 +8,8 @@ import {
   ReloadOutlined,
   FundProjectionScreenOutlined,
   FileTextOutlined,
+  UserOutlined,
+  TeamOutlined,
 } from '@ant-design/icons';
 import { Dropdown, Tooltip, type MenuProps } from 'antd';
 import {
@@ -57,6 +59,8 @@ import { ChangeRequestDetailView } from '../views/ChangeRequestDetailView';
 import { SystemCatalogView } from '../views/SystemCatalogView';
 import { SystemDetailView } from '../views/SystemDetailView';
 import { MermaidAssistantView } from '../views/MermaidAssistantView';
+import { StaffDetailView } from '../views/StaffDetailView';
+import { TeamWorkspaceView } from '../views/TeamWorkspaceView';
 import { RemoteFileViewer } from './editor/RemoteFileViewer';
 import type { TaskPlannerDatabase } from '../db';
 
@@ -95,6 +99,10 @@ export function getEditorTabIcon(viewType: EditorViewType, size = 13): React.Rea
       return <JetBrainsRemoteGitIcon size={size} />;
     case 'insight':
       return <FundProjectionScreenOutlined style={{ fontSize: size - 1, color: '#10b981' }} />;
+    case 'staff_detail':
+      return <UserOutlined style={{ fontSize: size - 1, color: 'var(--accent, #3871e1)' }} />;
+    case 'team_workspace':
+      return <TeamOutlined style={{ fontSize: size - 1, color: 'var(--accent, #3871e1)' }} />;
     case 'settings':
       return <SettingOutlined style={{ fontSize: size - 1, color: 'var(--fg-muted, #6c707e)' }} />;
     default:
@@ -658,6 +666,21 @@ export function EditorArea({ db }: EditorAreaProps) {
                 ...(params ? { params } : {}),
               });
             }}
+            {...dbProp}
+          />
+        );
+      case 'staff_detail':
+        return (
+          <StaffDetailView
+            staffId={String(tab.params?.staffId ?? '')}
+            role={(tab.params?.role ?? 'employee') as 'employee' | 'lead'}
+            {...dbProp}
+          />
+        );
+      case 'team_workspace':
+        return (
+          <TeamWorkspaceView
+            teamId={String(tab.params?.teamId ?? '')}
             {...dbProp}
           />
         );

@@ -19,7 +19,9 @@ export type EditorViewType =
   | 'mermaid'
   | 'systems'
   | 'system_detail'
-  | 'remote_file';
+  | 'remote_file'
+  | 'staff_detail'
+  | 'team_workspace';
 
 export interface EditorTab {
   id: string;
