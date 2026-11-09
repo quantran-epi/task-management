@@ -12,42 +12,77 @@ Extract the primitives AI Office reuses, then delete every SDLC Studio behavior 
 
 **Out of scope:** the group-chat data model, multi-chat identity, budget work, skill versioning, explorer redesign. Those are Phases 36–40.
 
-**Governing principle from the user:** *the app has never run in production — every row in Dexie is test data. Do not preserve SDLC data for its own sake. Keep only tooling that is genuinely reusable.*
+**Governing principle — C-16:** *The app has never run in production. Every row in Dexie, SQLite, and backup is test data. There is no data-preservation requirement.* Delete SDLC data, schemas, types, backup fields, and migration paths along with the feature. Keep only code whose **functionality** AI Office reuses. Any decision to "keep X so an old backup still imports" or "keep a schema so rows aren't lost" is wrong for this milestone.
 
 </domain>
 
 <decisions>
 ## Implementation Decisions
 
-### Artifact tools — keep the reusable half
-- **D-01:** Keep `get_artifact` and `patch_artifact_section`. Delete `propose_subsystems` and `propose_research` — both are CR/SDLC-specific and have no meaning in a free-style AI Office (C-06).
-- **D-02:** Extract the patch core (`locateSection`, `applyOperation`, `detectEol`, `createUnifiedLineDiff` wiring) from `src/services/ai/sdlcArtifactTools.ts` into a new `src/services/ai/patchProposal.ts`. Phase 39 skill enrichment reuses this — it must not be rebuilt from scratch.
-- **D-03:** The two surviving tools change scope from `{ changeRequestId, stepId }` to `{ noteId }` or `{ skillId }`. No CR, no SDLC step. This satisfies C-06/C-07 and lets Phase 39 reuse the same signature.
-- **D-04:** `ArtifactDiffApprovalCard` is kept and generalized as `PatchDiffApprovalCard` — it is the approval surface for any patch, including skill versions in Phase 39.
+### The complete keep/delete inventory
+
+**KEEP — 6 reusable functional assets:**
+
+| # | Asset | Function AI Office reuses |
+|---|---|---|
+| 1 | `buildConventionsSegment` → `src/services/ai/conventionsSegment.ts` | Injects org + repo conventions into any prompt. Live consumer: `AIChatDrawer.tsx:51`. |
+| 2 | `DiffSyntaxHighlighter` → `src/components/common/` | Renders a diff. Live consumer: `RemoteFileViewer.tsx:17`. |
+| 3 | Patch core (`locateSection`, `applyOperation`, `detectEol`, diff wiring) → `src/services/ai/patchProposal.ts` | "Replace section X with this text → produce a diff". Phase 39 reuses it for skill versions. |
+| 4 | `ArtifactDiffApprovalCard` → generalized `PatchDiffApprovalCard` | Diff + approve/reject UI. Live consumer: `AiChatWidget.tsx:491`. Phase 39 reuses it. |
+| 5 | `get_artifact` + `patch_artifact_section` tools | Read a document / patch a section — rescoped from CR+step to `{ noteId }` or `{ skillId }`. |
+| 6 | `createUnifiedLineDiff` (`src/utils/lineDiff.ts:110`), `buildSectionIndex`/`splitLines` (`src/utils/markdownSections.ts`) | Already-generic utilities; no change needed, just keep. |
+
+**DELETE — everything else, including all four schema modules:**
+
+| Asset | Why it goes |
+|---|---|
+| `src/components/sdlc/**` (26 files), `src/components/ai/wizard/**` (20 files), `src/services/wizard/**` (21 files) | SDLC behavior. |
+| `src/views/ChangeRequestSdlcView.tsx` + 5 launch points | SDLC entry points. |
+| `src/services/sdlc/groundingBuilder.ts` | SDLC-only; no other consumer. |
+| `src/services/changePackPackager.ts`, `src/services/export/wizardDocx.ts`, `src/services/export/pl03bDocx.ts` | SDLC-only consumers. |
+| `propose_subsystems`, `propose_research` tools | CR/SDLC-specific. |
+| `DocumentPreviewCard`, `SolutionReviewCard`, `GapFillQuestionCard` | Bound to SDLC payloads; not reusable. |
+| `InterruptedBanner` | Only message is SDLC-specific; `AIChatDrawer` gets a plain-text equivalent if needed. |
+| `ArtifactEventCard` | Typed on `SdlcArtifactKind`; no non-SDLC consumer. |
+| `Note.sdlcArtifact` (type, `backupSchemas.ts:154`, `validateBackup.ts:513-540`) | SDLC metadata. |
+| `ChatMessage.wizard` (type, `chatRepo.ts:135-137`, `backupSchemas.ts:327`, `validateBackup.ts:480-504`, `ChatMessageBubble.tsx:392-460`) | SDLC history payload. |
+| `ChatTab.workflowState` (`backupSchemas.ts:253`) | SDLC workflow state. |
+| `ChatTabType = 'chat' \| 'sdlc'` → `'chat'` only (`models.ts:235`, `ChatTabBar.tsx:28`, `backupSchemas.ts:241`) | Narrowed. |
+| `DocumentSet.sdlc` (`models.ts:377`, `validation/schemas.ts:428/444`, `knowledgeSchemas.ts:123`, `documentSetRepo.ts:61/80/151/233`, `backupSchemas.ts:447`, `validateBackup.ts:546-565`) | SDLC document-set binding. |
+| `src/services/wizard/workflowSchemas.ts` | Every consumer is being deleted or is itself SDLC metadata. |
+| `src/services/ai/wizardSchemas.ts` | Same. |
+| `src/services/wizard/changePack.ts`, `reconciliation.ts` | Only consumers are SDLC exporters being deleted. |
+
+**No `types/legacySdlc.ts` shim.** C-16 forbids keeping schemas for old-backup compatibility. If a type is still referenced after the deletions above, that reference is a missed deletion — fix the reference, do not resurrect the schema.
+
+### Artifact tools — rescope, don't rebuild
+- **D-01:** Keep `get_artifact` and `patch_artifact_section`. Delete `propose_subsystems` and `propose_research`.
+- **D-02:** Extract the patch core into `src/services/ai/patchProposal.ts` — Phase 39 reuses it; it must not be rebuilt.
+- **D-03:** Rescope both tools from `{ changeRequestId, stepId }` to `{ noteId }` or `{ skillId }`. No CR, no SDLC step (C-06/C-07).
+- **D-04:** `ArtifactDiffApprovalCard` becomes `PatchDiffApprovalCard` — the approval surface for any patch, including skill versions in Phase 39.
 
 ### SDLC persisted data — delete
-- **D-05:** Delete SDLC rows outright: `chatTabs` with `type='sdlc'`, `chatThreads` whose `scopeKey` ends `:sdlc`, and `settings` keys matching `sdlc_workflow:*`. No archival, no filtering-only approach.
-- **D-06:** Narrow the backup tab-type enum from `z.enum(['chat','sdlc'])` to `z.enum(['chat'])` in Phase 35. A legacy backup containing an `sdlc` tab is rejected — acceptable because all data is test data.
-- **D-07:** `restoreBackup` must stop *creating* SDLC tabs and threads for CRs whose `chatTabs` are absent. The generator at `restoreBackup.ts:80-140` is removed, not merely bypassed.
+- **D-05:** Delete SDLC rows: `chatTabs` with `type='sdlc'`, `chatThreads` whose `scopeKey` ends `:sdlc`, `settings` keys matching `sdlc_workflow:*`. No archival, no filter-only approach.
+- **D-06:** Narrow the backup tab-type enum to `z.enum(['chat'])`. A legacy backup containing an `sdlc` tab is rejected — acceptable under C-16.
+- **D-07:** `restoreBackup` stops creating SDLC tabs and threads. The generator at `restoreBackup.ts:80-140` is removed, not bypassed.
 
 ### SDLC history cards — delete
-- **D-08:** Delete `DocumentPreviewCard`, `SolutionReviewCard`, and `GapFillQuestionCard`. None is reusable: they are bound to `ReconciliationResult`, `templateSection`, and `WizardSavedNoteBanner` respectively. Old `ChatMessage.wizard` rows render as ordinary text.
+- **D-08:** Delete `DocumentPreviewCard`, `SolutionReviewCard`, `GapFillQuestionCard`, and the `ChatMessage.wizard` render branch in `ChatMessageBubble.tsx:392-460`. None is reusable.
 
 ### Note artifact metadata — delete
-- **D-09:** Remove `Note.sdlcArtifact` entirely — from the Note type, from `backupSchemas.ts:154`, and from the integrity checks at `validateBackup.ts:513-540`. No neutral replacement field in this phase.
+- **D-09:** Remove `Note.sdlcArtifact` entirely — type, `backupSchemas.ts:154`, `validateBackup.ts:513-540`.
 
 ### Confirmed by research (carried forward, not re-decided)
-- **D-10:** `buildConventionsSegment` moves to `src/services/ai/conventionsSegment.ts` — `AIChatDrawer.tsx:51` is a live consumer.
-- **D-11:** `DiffSyntaxHighlighter` moves to `src/components/common/` — `RemoteFileViewer.tsx:17` is a live consumer.
-- **D-12:** The coordinator registry moves out of `TeamWorkspace.tsx` into `src/services/ai/office/teamRunManager.ts`.
-- **D-13:** Four persisted schema modules survive as type-only legacy in `src/types/legacySdlc.ts`: `workflowSchemas.ts`, `ai/wizardSchemas.ts`, `wizard/changePack.ts`, `wizard/reconciliation.ts`. Backup envelope v11 validates them; deleting the files breaks import of any existing backup.
-- **D-14:** `groundingBuilder.ts` is NOT shared — delete it.
+- **D-10:** `buildConventionsSegment` → `src/services/ai/conventionsSegment.ts` — `AIChatDrawer.tsx:51` is a live consumer.
+- **D-11:** `DiffSyntaxHighlighter` → `src/components/common/` — `RemoteFileViewer.tsx:17` is a live consumer.
+- **D-12:** ~~Coordinator registry → `teamRunManager.ts`~~ — **removed from Phase 35.** `TeamWorkspace.tsx` contains zero SDLC code (verified by grep); relocating its registry is an AI Office improvement belonging to Phase 37 or 40, not a deletion phase.
 
 ### Claude's Discretion
 - Exact file split inside `patchProposal.ts`.
-- Whether `SafeMarkdown` is deleted (ARCHITECTURE recommends delete; STACK recommends relocate) — verify by grep during execution.
-- Order of deletion within the phase, provided extraction lands first.
-- Whether `LAYOUT_STORAGE_KEY` bumps to `_v3` or the existing `partialize` gains a view-type filter — both satisfy AIO-REMOVE-04.
+- Whether `SafeMarkdown` is deleted or relocated — verify by grep during execution.
+- Deletion ordering within the phase, provided extraction lands first.
+- Whether `LAYOUT_STORAGE_KEY` bumps to `_v3` or `partialize` gains a view-type filter — both satisfy AIO-REMOVE-04.
+- Whether `InterruptedBanner` is replaced by a plain-text notice or dropped entirely.
 
 </decisions>
 
@@ -57,14 +92,14 @@ Extract the primitives AI Office reuses, then delete every SDLC Studio behavior 
 **Downstream agents MUST read these before planning or implementing.**
 
 ### Milestone authority
-- `.planning/MILESTONE-CONTEXT.md` — C-01..C-15 are LOCKED user decisions; R-01..R-21 are OPEN. C-02 (delete SDLC completely, audit shared first) and C-15 (no completion claim without observed verification) govern this phase.
+- `.planning/MILESTONE-CONTEXT.md` — C-01..C-16 are LOCKED user decisions; R-01..R-21 are OPEN. **C-16 is the governing rule for this phase: the app has never run in production, all data is test data, no data preservation.** C-02 (delete SDLC completely, audit shared first) and C-15 (no completion claim without observed verification) also apply.
 - `.planning/REQUIREMENTS.md` § SDLC Studio Removal — AIO-REMOVE-01..05 are this phase's acceptance criteria.
 - `.planning/ROADMAP.md` § Phase 35 — success criteria and research flag.
 
-### Research
-- `.planning/research/ARCHITECTURE.md` — the per-module SDLC audit table (delete now / extract first / keep) is the authoritative verdict list. Re-verify against the live tree before deleting.
-- `.planning/research/PITFALLS.md` — Pitfalls 1 (delete-by-file-list), 2/3 (persisted rows and backup enum), 22 (`targetAgentId`), 23 (five coordinated table lists).
-- `.planning/research/SUMMARY.md` — § Phase 35 and § Conflicts Between Research Files (four open conflicts; D-05/D-06/D-08/D-09 resolve three of them).
+### Research — read with C-16 applied
+- `.planning/research/ARCHITECTURE.md` — the per-module SDLC audit table. **Its "KEEP as type-only legacy" verdicts for the four schema modules are overridden by C-16 — delete them.** Re-verify the rest against the live tree.
+- `.planning/research/PITFALLS.md` — Pitfall 1 (delete-by-file-list) still applies. **Pitfalls 2/3 (persisted rows, backup enum) are downgraded by C-16: delete the rows and reject old backups rather than preserving compatibility.**
+- `.planning/research/SUMMARY.md` — § Phase 35. **§ Conflicts Between Research Files items 1 and 2 (SDLC row deletion, backup version bump) are resolved by C-16: delete rows, do not preserve.**
 
 ### Code — extraction targets
 - `src/services/ai/sdlcPromptComposer.ts` — source of `buildConventionsSegment`; consumer at `src/components/ai/AIChatDrawer.tsx:51`.
@@ -87,8 +122,8 @@ Extract the primitives AI Office reuses, then delete every SDLC Studio behavior 
 
 ### Reusable Assets
 - `createUnifiedLineDiff` (`src/utils/lineDiff.ts:110`) — already the diff engine for patch proposals; no new diff dependency.
-- `renderSafeMarkdown` — the markdown renderer ordinary chat uses; the SDLC wrapper `SafeMarkdown` is redundant.
 - `buildSectionIndex` / `splitLines` (`src/utils/markdownSections.ts`) — section addressing for patches; survives extraction.
+- `renderSafeMarkdown` — the markdown renderer ordinary chat uses; the SDLC wrapper `SafeMarkdown` is redundant.
 - `useLiveQuery` — the pattern every workbench view uses to read Dexie.
 
 ### Established Patterns
@@ -96,6 +131,14 @@ Extract the primitives AI Office reuses, then delete every SDLC Studio behavior 
 - `EditorArea` renders by `switch (tab.viewType)` with a `default:` branch — an unknown persisted view type silently renders the default view. This is why AIO-REMOVE-04 exists.
 - Zustand `persist` with an explicit `partialize` allowlist — new persisted fields must be added there or they vanish on reload.
 - Backup schemas are validated on import; `FORBIDDEN_BACKUP_KEYS` (`backupSchemas.ts:200-221`) rejects field names matching `prompt|error|stack|diagnostic|secret|token|runtime|partial`.
+
+### Deletion order (extraction must land first)
+1. Extract assets 1–4 from the KEEP table.
+2. Rescope `get_artifact` / `patch_artifact_section` to `{ noteId } | { skillId }` (D-03).
+3. Remove SDLC metadata fields from types and Dexie schema: `Note.sdlcArtifact`, `ChatMessage.wizard`, `ChatTab.workflowState`, `DocumentSet.sdlc`, `ChatTabType`.
+4. Delete the four schema modules and every remaining SDLC file.
+5. Delete the SDLC rows and the `restoreBackup` generator.
+6. Prune `EditorViewType`, `EditorArea` branches, and persisted-tab handling.
 
 ### Integration Points
 - `src/services/ai/aiTools.ts` — tool definitions (~1867-1957) and dispatch (~2203-2208).
@@ -108,7 +151,8 @@ Extract the primitives AI Office reuses, then delete every SDLC Studio behavior 
 <specifics>
 ## Specific Ideas
 
-- The user's framing: *"giữ lại công cụ tái sử dụng được của sdlc, xoá hết"* — keep reusable tooling, delete everything else. Data preservation is explicitly not a goal.
+- The user's framing: *"giữ lại công cụ tái sử dụng được của sdlc, xoá hết"* — keep reusable tooling, delete everything else.
+- The user's rule, verbatim: *"app toàn dữ liệu test, app đang xây dựng, data không cần giữ gì hết, chỉ cần giữ functionality"* — this is C-16 and it overrides every research recommendation about compatibility.
 - Phase 39 depends on D-02 and D-03: skill enrichment approval uses the same patch core and the same `{ skillId }` scope. Getting the extraction shape right here avoids rework there.
 
 </specifics>

@@ -98,6 +98,7 @@ GitHub synchronization is backup synchronization, not collaborative live sync. B
 - **Hard budget**: Token budget is enforced before each model call, measured on input + output, and charged per attempt including retries. A response without usage data is never free.
 - **Optional context**: CR, PL01, PL02, and documents are optional attachments for a group chat. Their absence must not block a run or degrade output quality.
 - **Verification honesty**: No phase is complete on code reading alone. Every claim of correctness requires an observed walkthrough.
+- **No data preservation (C-16)**: The app has never run in production — every row in Dexie, SQLite, and backup is test data. Deleting a feature deletes its data, schema, types, backup fields, and migration path. Keep only code whose *functionality* the new feature reuses. Never keep a schema, type, or migration solely to import an old backup or preserve old rows.
 
 ## Key Decisions
 

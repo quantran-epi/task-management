@@ -40,6 +40,9 @@ Chỉ các mục dưới đây được coi là chốt. Mọi thứ khác trong 
 - **C-13 Skill enrichment do user duyệt version**: agent đề xuất lesson/evidence; user chọn và duyệt bản Markdown skill mới. Không tự động cập nhật.
 - **C-14 UI**: một trigger duy nhất ở sidebar tên "AI Office"; explorer có 2 phần — trên là danh sách leader + agent, dưới là danh sách cuộc hội thoại; click mở chi tiết ở editor center. CRUD leader/agent giữ nguyên hành vi nhưng phải hoạt động chính xác, không lỗi.
 - **C-15 Phương pháp thực thi**: phase nhỏ, discuss + research kỹ từng phase, làm triệt để kể cả lỗi vặt; không tuyên bố "không còn lỗi" khi chưa verify thực tế.
+- **C-16 Ứng dụng đang xây dựng — dữ liệu KHÔNG cần giữ**: TaskMate chưa từng chạy production. Toàn bộ dữ liệu trong Dexie, backup, SQLite chỉ là dữ liệu test. **Không có yêu cầu bảo toàn dữ liệu.** Khi xóa một tính năng, xóa cả dữ liệu, schema, type, backup field và migration path của nó — chỉ giữ lại phần **tái sử dụng được về mặt chức năng**. Không giữ "cầu tương thích backup cũ", không giữ schema chỉ để import file cũ, không viết migration bảo toàn dữ liệu cũ. Tiêu chí duy nhất để giữ một đoạn code: nó có chức năng mà tính năng mới cần dùng lại.
+
+  **Hệ quả trực tiếp:** mọi quyết định "giữ X để backup cũ vẫn import được" hoặc "giữ schema để không mất dữ liệu người dùng" là **sai** trong milestone này và phải bị bác bỏ khi gặp trong research/plan/execute.
 
 ## Điểm phải mở lại — KHÔNG tự động giữ
 
