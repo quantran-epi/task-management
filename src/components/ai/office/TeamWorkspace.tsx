@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Avatar, Button, Splitter, Tag, theme } from 'antd';
+import { Alert, Avatar, Button, Modal, Splitter, Tag, Typography, theme } from 'antd';
+import { BugOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { TaskPlannerDatabase } from '../../../db';
 import type { AiEmployee, AiLead, AiSkill, AiTeam, AiTeamMember } from '../../../types/aiOffice';
@@ -106,6 +107,10 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     kind: 'team',
   });
   const [planDecision, setPlanDecision] = useState<'approved' | 'rejected' | undefined>(undefined);
+  const [analysisMode, setAnalysisMode] = useState<boolean>(true);
+  const [mcpEnabled, setMcpEnabled] = useState<boolean>(false);
+  const [debugLogs, setDebugLogs] = useState<Array<{ timestamp: string; agentId: string; request: any }>>([]);
+  const [debugModalOpen, setDebugModalOpen] = useState<boolean>(false);
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const lastUserTextRef = useRef<string>('');
 
@@ -199,7 +204,36 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         model: config.defaultModel,
         endpoint: config.endpoint,
         apiKey,
-        ...(createRuntimeDeps ? { createRuntimeDeps } : {}),
+        createRuntimeDeps: (agentId: string) => {
+          const clientDeps = createRuntimeDeps?.(agentId) ?? {};
+          return {
+            ...clientDeps,
+            runLoop: async (opts) => {
+              setDebugLogs((prev) => [
+                ...prev,
+                {
+                  timestamp: new Date().toLocaleTimeString(),
+                  agentId,
+                  request: {
+                    model: opts.request.model,
+                    agentName: opts.request.agentName,
+                    agentKind: opts.request.agentKind,
+                    systemMessages: opts.request.systemMessages,
+                    historyTurnsCount: opts.request.history?.length ?? 0,
+                    text: opts.request.text,
+                    toolsCount: opts.request.tools?.length ?? 0,
+                    toolNames: opts.request.tools?.map((t: any) => t.function?.name ?? t.name),
+                  },
+                },
+              ]);
+              if (clientDeps.runLoop) {
+                return clientDeps.runLoop(opts);
+              }
+              const defaultDeps = (await import('../runtime/chatTurnRuntime')).createDefaultChatTurnDeps(db);
+              return defaultDeps.runLoop(opts);
+            },
+          };
+        },
       });
       coordinatorRegistry.set(registryKey(db, team.id), { coordinator: created, threadId: thread.id });
       setCoordinator(created);
@@ -406,7 +440,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
           background: token.colorBgContainer,
         }}
       >
-        <Splitter.Panel defaultSize="300px" min="260px" max="380px">
+        <Splitter.Panel defaultSize={300} min={260} max={380}>
           <TeamSidebar
             team={team}
             lead={lead}
@@ -463,7 +497,15 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
               </Tag>
               <Button
                 size="small"
+                icon={<BugOutlined />}
                 style={{ marginLeft: 'auto' }}
+                onClick={() => setDebugModalOpen(true)}
+                data-testid="team-header-debug"
+              >
+                Debug Prompt ({debugLogs.length})
+              </Button>
+              <Button
+                size="small"
                 onClick={() => setSettingsOpen(true)}
                 data-testid="team-header-settings"
               >
@@ -518,8 +560,8 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                     selectedModel: lead?.model ?? '',
                     availableModels: [],
                     onModelChange: () => {},
-                    analysisMode: true,
-                    onToggleAnalysisMode: () => {},
+                    analysisMode,
+                    onToggleAnalysisMode: () => setAnalysisMode((prev) => !prev),
                     autoApproveMutations: team.autoApproveMutations === true,
                     onToggleAutoApproveMutations: () => {
                       void updateTeam(
@@ -528,8 +570,8 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                         db
                       );
                     },
-                    mcpEnabled: false,
-                    onToggleMcpEnabled: () => {},
+                    mcpEnabled,
+                    onToggleMcpEnabled: () => setMcpEnabled((prev) => !prev),
                   }}
                   quickPrompts={[]}
                   onClearThread={() => {}}
@@ -609,6 +651,72 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
           );
         }}
       />
+
+      <Modal
+        title="Debug: Lịch sử Prompt gửi tới AI trong nhóm"
+        open={debugModalOpen}
+        onCancel={() => setDebugModalOpen(false)}
+        footer={[
+          <Button key="clear" danger onClick={() => setDebugLogs([])}>
+            Xóa nhật ký debug
+          </Button>,
+          <Button key="close" type="primary" onClick={() => setDebugModalOpen(false)}>
+            Đóng
+          </Button>,
+        ]}
+        width={800}
+      >
+        {debugLogs.length === 0 ? (
+          <Typography.Text type="secondary">Chưa có lượt gửi AI nào trong phiên này.</Typography.Text>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: '60vh', overflowY: 'auto' }}>
+            {debugLogs.map((log, index) => (
+              <div
+                key={index}
+                style={{
+                  padding: 10,
+                  border: `1px solid ${token.colorBorderSecondary}`,
+                  borderRadius: 6,
+                  background: token.colorFillAlter,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <Tag color="blue">{log.request.agentKind?.toUpperCase() ?? 'AGENT'}: {log.request.agentName}</Tag>
+                  <Typography.Text type="secondary" style={{ fontSize: 11 }}>{log.timestamp}</Typography.Text>
+                </div>
+                <div style={{ fontSize: 12, marginBottom: 4 }}>
+                  <strong>Model:</strong> {log.request.model} | <strong>Tools:</strong> {log.request.toolNames?.join(', ') || 'none'}
+                </div>
+                <div style={{ fontSize: 12, marginBottom: 4 }}>
+                  <strong>User / Instruction Input:</strong>
+                  <pre style={{ whiteSpace: 'pre-wrap', background: token.colorBgContainer, padding: 6, borderRadius: 4, margin: '4px 0' }}>
+                    {log.request.text}
+                  </pre>
+                </div>
+                <div style={{ fontSize: 12 }}>
+                  <strong>System Prompt:</strong>
+                  {log.request.systemMessages?.map((sm: any, smIdx: number) => (
+                    <pre
+                      key={smIdx}
+                      style={{
+                        whiteSpace: 'pre-wrap',
+                        background: token.colorBgContainer,
+                        padding: 6,
+                        borderRadius: 4,
+                        maxHeight: 180,
+                        overflowY: 'auto',
+                        margin: '4px 0',
+                      }}
+                    >
+                      {sm.content}
+                    </pre>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

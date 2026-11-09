@@ -28,6 +28,29 @@ export const ActiveAiTurnIndicator: React.FC<ActiveAiTurnIndicatorProps> = ({ co
   }
 
   const handleOpenChat = (turn?: ActiveAiTurn) => {
+    // If turn belongs to a team run, open/focus the team workspace tab instead of right ai_chat drawer
+    const isTeam = turn?.id.startsWith('team:') || turn?.scopeKey?.startsWith('team:');
+    if (isTeam) {
+      const teamId = (turn?.scopeKey ?? turn?.id ?? '').replace(/^team:/, '').split(':')[0];
+      if (teamId) {
+        const { openTab, setActiveTabId, openTabs } = useLayoutStore.getState();
+        const tabId = `team_workspace:${teamId}`;
+        const existing = openTabs.find((t) => t.id === tabId);
+        if (existing) {
+          setActiveTabId(tabId);
+        } else {
+          openTab({
+            id: tabId,
+            title: turn?.title || 'Nhóm AI',
+            viewType: 'team_workspace',
+            closable: true,
+            params: { teamId },
+          });
+        }
+        return;
+      }
+    }
+
     try {
       // In IntelliJ Workbench, ensure right tool window is open with ai_chat
       const setToolWindowActive = useLayoutStore.getState().setToolWindowActive;
