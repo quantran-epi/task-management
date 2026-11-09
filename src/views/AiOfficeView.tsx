@@ -12,7 +12,6 @@ import {
   listSkills,
 } from '../db/repositories/aiOfficeRepo';
 import { PageHeader } from '../components/common/PageHeader';
-import { AgentControlView } from './AgentControlView';
 import { EmployeeCard, LeadCard } from '../components/ai/office/EmployeeCard';
 import { SkillCard } from '../components/ai/office/SkillCard';
 import {
@@ -61,7 +60,6 @@ const SEGMENT_COPY: Record<
  */
 export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) => {
   const { token } = theme.useToken();
-  const [shell, setShell] = useState<'office' | 'ghost-dev'>('office');
   const [segment, setSegment] = useState<OfficeSegment>('employees');
   const [search, setSearch] = useState('');
   const [drawer, setDrawer] = useState<'employee' | 'lead' | 'skill' | null>(null);
@@ -171,28 +169,15 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
         background: token.colorBgContainer,
       }}
     >
-      <Segmented
-        value={shell}
-        onChange={(value) => setShell(value as 'office' | 'ghost-dev')}
-        options={[
-          { label: 'Văn phòng AI', value: 'office' },
-          { label: 'Ghost Dev', value: 'ghost-dev' },
-        ]}
+      <PageHeader
+        title="Văn phòng AI"
+        subtitle="Nhân viên AI, lead và kỹ năng dùng chung cho mọi nhóm"
+        extra={
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+            {copy.cta}
+          </Button>
+        }
       />
-
-      {shell === 'ghost-dev' ? (
-        <AgentControlView />
-      ) : (
-        <>
-          <PageHeader
-            title="Văn phòng AI"
-            subtitle="Nhân viên AI, lead và kỹ năng dùng chung cho mọi nhóm"
-            extra={
-              <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-                {copy.cta}
-              </Button>
-            }
-          />
 
           <Segmented
             value={segment}
@@ -295,8 +280,6 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
                 ))}
             </div>
           )}
-        </>
-      )}
 
       <EmployeeEditorDrawer
         open={drawer === 'employee'}

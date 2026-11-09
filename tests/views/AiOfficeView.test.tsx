@@ -206,15 +206,6 @@ describe('AiOfficeView — employee tab shell (AIO-UI-01)', () => {
     expect((await screen.findAllByRole('button', { name: /Tạo kỹ năng/ })).length).toBeGreaterThan(0);
   });
 
-  it('keeps Ghost Dev reachable from the second segment', async () => {
-    renderView();
-
-    fireEvent.click(await screen.findByText('Ghost Dev'));
-
-    expect(await screen.findByText('Chưa có phiên Ghost Dev nào được chọn')).toBeInTheDocument();
-    expect(screen.queryByTestId('ai-office-segment-employees')).not.toBeInTheDocument();
-  });
-
   async function pickModel(model: string) {
     const modelSelect = screen.getByRole('combobox', { name: 'Mô hình' });
     fireEvent.mouseDown(modelSelect);
