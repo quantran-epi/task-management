@@ -20,7 +20,7 @@ created: 2026-11-09
 | **Framework** | Vitest 5.0.2 (jsdom, `globals: true`) |
 | **Config file** | `vite.config.ts` — `test:` block |
 | **Quick run command** | `npx vitest run <touched paths>` |
-| **Full suite command** | **Never `npm test`** — project memory: >1 hour. Use `npx vitest run src tests/services tests/ai tests/backup tests/workbench src/workbench` |
+| **Full suite command** | **Never `npm test`** — project memory: >1 hour. Widest allowed form is the explicit touched-path list in `35-12-PLAN.md` step 9 (~37 paths); never a directory that pulls in the whole tree. |
 | **Typecheck** | `npx tsc --noEmit` |
 | **Estimated runtime** | ~30–90s scoped; ~5–10 min wave-scoped |
 
@@ -31,7 +31,7 @@ created: 2026-11-09
 ## Sampling Rate
 
 - **After every task commit:** `npx tsc --noEmit` + `npx vitest run <files that task touched>`
-- **After every plan wave:** `npx vitest run src tests/services tests/ai tests/backup tests/workbench src/workbench`
+- **After every plan wave:** the union of the paths that wave's plans name in their `<acceptance_criteria>`; never a directory-wide run
 - **Before `/gsd-verify-work`:** `npx tsc --noEmit` clean + the §11 grep equal to the enumerated residual list + scoped suites green
 - **Max feedback latency:** 90 seconds per task
 
