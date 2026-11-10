@@ -126,10 +126,64 @@ describe('generic patch proposal core', () => {
     expect(await db.notes.get(NOTE_ID)).toEqual(before);
   });
 
-  it('refuses a missing target id', async () => {
-    const result = await readPatchTarget(db, { target: 'note', id: 'missing-note' });
-    expect(isRefusal(result)).toBe(true);
-    if (!isRefusal(result)) return;
-    expect(result.code).toBe('ARTIFACT_NOT_FOUND');
+  it.each(['note', 'skill'])('refuses a missing %s target id', async (target) => {
+    const result = await readPatchTarget(db, { target, id: 'missing-target' });
+    expect(result).toMatchObject({ refused: true, code: 'ARTIFACT_NOT_FOUND' });
+  });
+
+  it('reads and patches skill Markdown without writing', async () => {
+    const skill = {
+      id: 'skill-35-01', name: 'Skill', description: 'Patch target', body: MARKDOWN,
+      createdAt: '2026-11-10T00:00:00.000Z', updatedAt: '2026-11-10T00:00:00.000Z',
+    };
+    await db.aiSkills.add(skill);
+    const target = { target: 'skill', id: skill.id };
+    expect(await readPatchTarget(db, target)).toMatchObject({
+      ...target, markdown: MARKDOWN, version: 0, approvalState: 'unapproved',
+      baseHash: await defaultSha256(MARKDOWN.trim()),
+      sectionIndex: [{ id: '1' }, { id: '1.1' }, { id: '1.2' }],
+    });
+    const result = await preparePatch(db, {
+      ...target, sectionId: '1.1', expectedHeading: 'First',
+      baseHash: await defaultSha256(MARKDOWN.trim()), operation: 'replace', newContent: 'New lesson.',
+    });
+    expect(result).toMatchObject({ ...target, patchedMarkdown: MARKDOWN.replace('Original text.', 'New lesson.') });
+    expect(await db.aiSkills.get(skill.id)).toEqual(skill);
+  });
+
+  it('rejects missing and unsupported target arguments without throwing', async () => {
+    for (const args of [{}, { target: 'settings', id: NOTE_ID }, { target: 'note', id: '' }]) {
+      expect(await readPatchTarget(db, args)).toMatchObject({ refused: true, code: 'INVALID_ARGUMENTS' });
+      expect(await preparePatch(db, args)).toMatchObject({ refused: true, code: 'INVALID_ARGUMENTS' });
+    }
+  });
+
+  it('keeps an existing empty note distinct from a missing note', async () => {
+    await db.notes.update(NOTE_ID, { body: '' });
+    expect(await readPatchTarget(db, { target: 'note', id: NOTE_ID })).toMatchObject({
+      markdown: '', sectionIndex: [], baseHash: await defaultSha256(''),
+    });
+  });
+
+  it('refuses renamed, unknown and empty sections', async () => {
+    const args = {
+      target: 'note', id: NOTE_ID, sectionId: '1.1', expectedHeading: 'First',
+      baseHash: await defaultSha256(MARKDOWN.trim()), operation: 'append', newContent: 'Added.',
+    };
+    expect(await preparePatch(db, { ...args, expectedHeading: 'Renamed' })).toMatchObject({ code: 'SECTION_DRIFT' });
+    expect(await preparePatch(db, { ...args, sectionId: '9.9' })).toMatchObject({ code: 'SECTION_NOT_FOUND' });
+    const empty = MARKDOWN.replace('Original text.', '');
+    await db.notes.update(NOTE_ID, { body: empty });
+    expect(await preparePatch(db, { ...args, baseHash: await defaultSha256(empty.trim()) })).toMatchObject({ code: 'SECTION_EMPTY' });
+  });
+
+  it('caps combined additions and removals even when supplied content fits', async () => {
+    const body = '# First\n' + Array.from({ length: 70 }, (_, i) => `old ${i}`).join('\n');
+    await db.notes.update(NOTE_ID, { body });
+    expect(await preparePatch(db, {
+      target: 'note', id: NOTE_ID, sectionId: '1', expectedHeading: 'First',
+      baseHash: await defaultSha256(body.trim()), operation: 'replace',
+      newContent: Array.from({ length: 70 }, (_, i) => `new ${i}`).join('\n'),
+    })).toMatchObject({ refused: true, code: 'PATCH_TOO_LARGE', cap: 120, addedLines: 70, removedLines: 70 });
   });
 });
