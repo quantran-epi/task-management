@@ -58,17 +58,30 @@
 **Plans:** 12 plans in 7 waves
 
 Plans:
+**Wave 1**
 - [ ] 35-01-PLAN.md — Extract the generic patch core into `services/ai/patchProposal.ts` (D-02/D-03) + its test
 - [ ] 35-02-PLAN.md — Extract `conventionsSegment.ts` and move `DiffSyntaxHighlighter` to `components/common/`
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 35-03-PLAN.md — Move + rename `ArtifactDiffApprovalCard` → `PatchDiffApprovalCard` (D-04)
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 35-04-PLAN.md — Rescope `get_artifact`/`patch_artifact_section` to `{noteId}|{skillId}`; delete `propose_subsystems`/`propose_research`
+
+**Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 35-05-PLAN.md — Delete SDLC-only tests; rewrite `tests/phase25_1SafetyGates.test.ts`
+
+**Wave 5** *(blocked on Wave 4 completion)*
 - [ ] 35-06-PLAN.md — Wave 5a: delete the five SDLC directories, eight orphaned services, and the wizard chat branch
 - [ ] 35-07-PLAN.md — Wave 5b: delete the SDLC view + six launch points; prune `'sdlc'` from the editor; apply AIO-REMOVE-04
 - [ ] 35-08-PLAN.md — Wave 5c: clean the last chat-UI consumers; trim `InterruptedBanner`; recreate its test + the artifact-tool allowlist test
 - [ ] 35-09-PLAN.md — Wave 5d: strip SDLC fields from `models.ts`, validation schemas, and three repositories
 - [ ] 35-10-PLAN.md — Wave 5e: narrow the backup envelope to `type: z.enum(['chat'])`; strip restore/validate SDLC logic
+
+**Wave 6** *(blocked on Wave 5 completion)*
 - [ ] 35-11-PLAN.md — Add Dexie V18 with the SDLC row-purge migration
+
+**Wave 7** *(blocked on Wave 6 completion)*
 - [ ] 35-12-PLAN.md — Finish test rewrites; run the phase acceptance sweep (tsc, greps, scoped suites, build)
 
 > **Wave 5 is atomic.** Plans 06-10 are mutually dependent: delete-set files read the domain fields plan 09 removes, and `backupSchemas.ts` imports the schema modules plan 06 deletes. They must land together; `npx tsc --noEmit` is clean at every wave boundary.

@@ -1,12 +1,12 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v1.3",
+  "milestone": "v1.4 — Unified AI Office (Phase Details)",
   "phases": [],
   "next": {
     "command": "/gsd-progress --next",
     "label": "Advance to the next step",
-    "reason": "Phase 5 of 9 · 33% · executing"
+    "reason": "Phase 1 of 6 · 0% · executing"
   },
-  "updated_at": "2026-11-06T10:23:45.401Z"
+  "updated_at": "2026-11-10T03:59:55.324Z"
 }
