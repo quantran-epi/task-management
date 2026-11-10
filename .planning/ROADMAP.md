@@ -60,19 +60,24 @@
 
 Plans:
 **Wave 1**
+
 - [x] 35-01-PLAN.md — Extract the generic patch core into `services/ai/patchProposal.ts` (D-02/D-03) + its test
 - [x] 35-02-PLAN.md — Extract `conventionsSegment.ts` and move `DiffSyntaxHighlighter` to `components/common/`
 
 **Wave 2** *(blocked on Wave 1 completion)*
+
 - [x] 35-03-PLAN.md — Move + rename `ArtifactDiffApprovalCard` → `PatchDiffApprovalCard` (D-04)
 
 **Wave 3** *(blocked on Wave 2 completion)*
+
 - [x] 35-04-PLAN.md — Rescope `get_artifact`/`patch_artifact_section` to `{noteId}|{skillId}`; delete `propose_subsystems`/`propose_research`
 
 **Wave 4** *(blocked on Wave 3 completion)*
+
 - [x] 35-05-PLAN.md — Delete SDLC-only tests; rewrite `tests/phase25_1SafetyGates.test.ts`
 
 **Wave 5** *(blocked on Wave 4 completion)*
+
 - [x] 35-06-PLAN.md — Wave 5a: delete the five SDLC directories, eight orphaned services, and the wizard chat branch
 - [x] 35-07-PLAN.md — Wave 5b: delete the SDLC view + six launch points; prune `'sdlc'` from the editor; apply AIO-REMOVE-04
 - [x] 35-08-PLAN.md — Wave 5c: clean the last chat-UI consumers; trim `InterruptedBanner`; recreate its test + the artifact-tool allowlist test
@@ -80,9 +85,11 @@ Plans:
 - [x] 35-10-PLAN.md — Wave 5e: narrow the backup envelope to `type: z.enum(['chat'])`; strip restore/validate SDLC logic
 
 **Wave 6** *(blocked on Wave 5 completion)*
+
 - [x] 35-11-PLAN.md — Add Dexie V18 with the SDLC row-purge migration
 
 **Wave 7** *(blocked on Wave 6 completion)*
+
 - [x] 35-12-PLAN.md — Finish test rewrites; run the phase acceptance sweep (tsc, greps, scoped suites, build)
 
 > **Wave 5 is atomic.** Plans 06-10 are mutually dependent: delete-set files read the domain fields plan 09 removes, and `backupSchemas.ts` imports the schema modules plan 06 deletes. They must land together; `npx tsc --noEmit` is clean at every wave boundary.
@@ -105,21 +112,26 @@ Plans:
 
 **Criterion overrides (locked in 36-CONTEXT.md):** criterion 3's pre-v1.4 fixture and criterion 4's two-way old-build compatibility are **replaced by C-16** (D-23) — verified instead as a fresh-data v12 round-trip covering IDs, counts, attribution, pending state and the leader lock. Criterion 1 reads **V19**, not V18 (D-22). AIO-DATA-05's "keep SDLC rows" is replaced by C-16 + the Phase 35 deletion (D-24). See `36-CONTEXT.md` D-22..D-25.
 
-**Plans:** 5 plans
+**Plans:** 1/5 plans executed
 
 **Wave 1**
-- [ ] 36-01-PLAN.md — Tracer: `aiSkillVersions` end-to-end (Dexie V19 → all nine coordinated lists → export → validate → restore → TS/Rust SQLite parity), envelope v12
+
+- [x] 36-01-PLAN.md — Tracer: `aiSkillVersions` end-to-end (Dexie V19 → all nine coordinated lists → export → validate → restore → TS/Rust SQLite parity), envelope v12
 
 **Wave 2** *(blocked on Wave 1)*
+
 - [ ] 36-02-PLAN.md — Optional leader + durable `leaderLockedAt` (lock enforced on every repo write path), cap removal, `targetAgentId`/`leaderLockedAt` round-trip, live-vs-historical validation
 
 **Wave 3** *(blocked on Wave 2)*
+
 - [ ] 36-03-PLAN.md — Live-use registry, guarded deletes with typed refusal + skill-version cascade, per-turn roster snapshot
 
 **Wave 4** *(blocked on Wave 3)*
+
 - [ ] 36-04-PLAN.md — Minimal roster/leader UI, first-run lock wiring, delete-refusal alerts and corrected copy
 
 **Wave 5** *(blocked on Wave 4)*
+
 - [ ] 36-05-PLAN.md — `aiSkillVersionRepo` contract tests + D-19 unfinished-turn inference reader (no persisted runtime status) and its workspace warning
 
 **Research flag:** resolved — R-02 (envelope version) is settled at v12 by D-23, and R-14 (multi-chat migration) is settled by D-25 (one team = one chat, no namespace). No `--research-phase` needed.
