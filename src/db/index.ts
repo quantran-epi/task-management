@@ -524,7 +524,17 @@ export class TaskPlannerDatabase extends Dexie {
           await tx.table('chatThreads').delete(threadId);
         }
 
-        // 3. Workflow-state settings written by the removed SDLC surface.
+        // 3. Retired document-set SDLC metadata. DocumentSetSchema is strict, so a surviving
+        //    `sdlc` key makes every updateDocumentSet/updatePresentationOrder throw. Strip the
+        //    key only — the set, its id, and the notes it references are preserved untouched.
+        await tx
+          .table('documentSets')
+          .toCollection()
+          .modify((documentSet: Record<string, unknown>) => {
+            if ('sdlc' in documentSet) delete documentSet.sdlc;
+          });
+
+        // 4. Workflow-state settings written by the removed SDLC surface.
         const settingRows = (await tx.table('settings').toCollection().toArray()) as Array<
           Record<string, unknown>
         >;

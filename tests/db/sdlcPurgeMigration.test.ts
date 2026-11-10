@@ -2,6 +2,10 @@ import { describe, it, expect, afterEach } from 'vitest';
 import Dexie from 'dexie';
 import { TaskPlannerDatabase } from '../../src/db/index';
 import { SCHEMA_V17 } from '../../src/db/schema';
+import {
+  updateDocumentSet,
+  updatePresentationOrder,
+} from '../../src/db/repositories/documentSetRepo';
 
 /**
  * Phase 35 (C-16, D-05): the V17 → V18 upgrade purges every SDLC row class.
@@ -70,6 +74,40 @@ const CHAT_MESSAGES: Row[] = [
   { id: 'msg-chat-2', threadId: 'thread-chat', role: 'assistant', content: 'Vẫn còn đây', createdAt: NOW },
 ];
 
+const LEGACY_SET_ID = '11111111-1111-4111-8111-111111111111';
+const ORDINARY_SET_ID = '22222222-2222-4222-8222-222222222222';
+const MEMBER_NOTE_ID = '33333333-3333-4333-8333-333333333333';
+
+/**
+ * A V17 document set that still carries the retired `sdlc` metadata block. Stripping the
+ * key is the only allowed change: the set, its id, its membership, and the notes survive.
+ */
+const LEGACY_SDLC_SET: Row = {
+  id: LEGACY_SET_ID,
+  name: 'Legacy SDLC set',
+  documentIds: [MEMBER_NOTE_ID],
+  createdAt: NOW,
+  updatedAt: NOW,
+  sdlc: { stage: 'SOLUTION', artifactKind: 'design' },
+};
+
+const ORDINARY_SET: Row = {
+  id: ORDINARY_SET_ID,
+  name: 'Ordinary set',
+  documentIds: [],
+  createdAt: NOW,
+  updatedAt: NOW,
+};
+
+const MEMBER_NOTE: Row = {
+  id: MEMBER_NOTE_ID,
+  title: 'Member note',
+  body: 'Canonical markdown body',
+  isPinned: false,
+  createdAt: NOW,
+  updatedAt: NOW,
+};
+
 /**
  * Extra rows a malformed legacy database might carry. Every field is read through a
  * `typeof` guard in the upgrade hook, so none of these may throw mid-upgrade.
@@ -95,6 +133,8 @@ async function seedV17Database(dbName: string, extraRows: Array<[string, Row]> =
     { key: 'sdlc_workflow:cr-1:t1', value: { step: 'research' } },
     { key: 'theme', value: 'dark' },
   ]);
+  await v17Db.table('notes').add(MEMBER_NOTE);
+  await v17Db.table('documentSets').bulkAdd([LEGACY_SDLC_SET, ORDINARY_SET]);
 
   for (const [table, row] of extraRows) {
     await v17Db.table(table).add(row);
@@ -178,7 +218,42 @@ describe('Dexie SCHEMA_V18 SDLC purge migration (Phase 35)', () => {
     expect(await db.chatMessages.count()).toBe(2);
   });
 
-  it('6. survives malformed legacy rows without throwing', async () => {
+  it('6. strips the retired sdlc key from documentSets without deleting the set or its notes', async () => {
+    const db = await openUpgraded();
+    const legacySet = (await db.documentSets.get(LEGACY_SET_ID)) as unknown as Row;
+    const ordinarySet = (await db.documentSets.get(ORDINARY_SET_ID)) as unknown as Row;
+
+    expect(legacySet).toBeDefined();
+    expect('sdlc' in legacySet).toBe(false);
+    expect(legacySet).toMatchObject({
+      id: LEGACY_SET_ID,
+      name: 'Legacy SDLC set',
+      documentIds: [MEMBER_NOTE_ID],
+      createdAt: NOW,
+    });
+    expect('sdlc' in ordinarySet).toBe(false);
+    expect(ordinarySet).toMatchObject({ id: ORDINARY_SET_ID, name: 'Ordinary set' });
+    expect(await db.documentSets.count()).toBe(2);
+    expect(await db.notes.get(MEMBER_NOTE_ID)).toMatchObject({
+      title: 'Member note',
+      body: 'Canonical markdown body',
+    });
+  });
+
+  it('7. lets a migrated document set be edited and reordered after the upgrade', async () => {
+    const db = await openUpgraded();
+
+    const updated = await updateDocumentSet(LEGACY_SET_ID, { name: 'Renamed after upgrade' }, db);
+    expect(updated?.name).toBe('Renamed after upgrade');
+    expect(await db.notes.get(MEMBER_NOTE_ID)).toBeDefined();
+
+    await updatePresentationOrder(LEGACY_SET_ID, [MEMBER_NOTE_ID], db);
+    const reordered = await db.documentSets.get(LEGACY_SET_ID);
+    expect(reordered?.documentIds).toEqual([MEMBER_NOTE_ID]);
+    expect(reordered?.presentationRevision).toBe(1);
+  });
+
+  it('8. survives malformed legacy rows without throwing', async () => {
     const db = await openUpgraded(MALFORMED_ROWS);
 
     expect(db.verno).toBe(18);
