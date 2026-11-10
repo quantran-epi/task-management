@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../index';
 import {
-  getOrCreateSdlcThread,
   createChatTabThread,
   getCrThreads,
   deleteChatTabThread,
@@ -10,7 +9,7 @@ import {
   getMessagesByThreadId,
 } from '../chatRepo';
 
-describe('chatRepo - CR Multi-Tab & SDLC Threads', () => {
+describe('chatRepo - CR Multi-Tab Threads', () => {
   let db: TaskPlannerDatabase;
   const crId = '11111111-1111-4111-8111-111111111111';
 
@@ -20,18 +19,6 @@ describe('chatRepo - CR Multi-Tab & SDLC Threads', () => {
 
   afterEach(async () => {
     await db.delete();
-  });
-
-  it('đảm bảo mỗi CR chỉ có tối đa 1 thread SDLC', async () => {
-    const thread1 = await getOrCreateSdlcThread(crId, 'SDLC 1', db);
-    const thread2 = await getOrCreateSdlcThread(crId, 'SDLC 2', db);
-
-    expect(thread1.id).toBe(thread2.id);
-    expect(thread1.scopeKey).toBe(`cr:${crId}:sdlc`);
-    expect(thread1.scopeType).toBe('cr');
-
-    const allThreads = await db.chatThreads.where('scopeKey').equals(`cr:${crId}:sdlc`).toArray();
-    expect(allThreads.length).toBe(1);
   });
 
   it('tạo nhiều tab chat thường độc lập trong cùng 1 CR', async () => {
