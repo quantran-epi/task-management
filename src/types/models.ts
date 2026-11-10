@@ -1,10 +1,4 @@
 import type { ChatMessageGrounding } from '../services/ai/groundedAnswerSchemas';
-import type {
-  SdlcArtifactMetadata,
-  SdlcDocumentSetMetadata,
-  WizardSnapshot,
-} from '../services/ai/wizardSchemas';
-import type { SdlcArtifactKind } from '../services/wizard/workflowSchemas';
 
 export type TaskStatus = 'Open' | 'Pending' | 'In Progress' | 'Resolved' | 'In Review' | 'Done' | 'Cancelled';
 export type TaskPriority = 'Low' | 'Medium' | 'High' | 'Urgent';
@@ -202,7 +196,6 @@ export interface Note {
   title?: string | undefined;
   body: string; // Markdown text content
   isPinned: boolean;
-  sdlcArtifact?: SdlcArtifactMetadata | undefined;
   deletedAt?: string | undefined; // D-17: Soft delete timestamp
   createdAt: string; // ISO string metadata
   updatedAt: string; // ISO string metadata
@@ -232,7 +225,7 @@ export interface ChatThread {
   updatedAt: string; // ISO string metadata
 }
 
-export type ChatTabType = 'chat' | 'sdlc';
+export type ChatTabType = 'chat';
 export type ChatTabStatus = 'idle' | 'processing' | 'interrupted' | 'error' | 'stale' | 'complete';
 
 /** Per-tab settings only. Endpoint, API keys, tokens, and passphrases stay global/session-only. */
@@ -264,7 +257,6 @@ export interface ChatTab {
   status?: ChatTabStatus | undefined;
   checkpoint?: ChatTabCheckpoint | undefined;
   config?: ChatTabConfig | undefined;
-  workflowState?: Record<string, unknown> | undefined;
   createdAt: string;
   updatedAt: string;
 }
@@ -286,21 +278,6 @@ export interface ChatGeneratedFile {
   content?: string | undefined;
 }
 
-/**
- * Durable per-version artifact event carried by a chat row (`artifactEvent`).
- * Metadata only: the artifact body never enters the transcript.
- */
-export interface ChatArtifactEvent {
-  /** Id of the persisted card message; lets a host reopen that exact version. */
-  eventId?: string | undefined;
-  kind: SdlcArtifactKind;
-  title: string;
-  version: number;
-  hash: string;
-  status: 'draft' | 'approved';
-  ctaLabel?: string | undefined;
-}
-
 export interface ChatMessage {
   id: string; // RFC 4122 v4 UUID
   threadId: string; // Reference to ChatThread.id
@@ -312,8 +289,6 @@ export interface ChatMessage {
   tokenUsage?: ChatTokenUsage | undefined; // Model token usage metrics
   generatedFiles?: ChatGeneratedFile[] | undefined; // AI-generated downloadable files
   grounding?: ChatMessageGrounding | undefined; // Structured grounding (Plan 19-10 D-46)
-  wizard?: WizardSnapshot | undefined;
-  artifactEvent?: ChatArtifactEvent | undefined;
   // Phase 34 D-31: AI Office attribution. All optional so existing rows stay valid.
   agentId?: string | undefined;
   agentName?: string | undefined;
@@ -374,7 +349,6 @@ export interface DocumentSet {
   isBase?: boolean | undefined;
   presentationRevision?: number | undefined;
   preset?: DocumentSetPreset | undefined;
-  sdlc?: SdlcDocumentSetMetadata | undefined;
 }
 
 export interface PublishedDocumentMetadata {
