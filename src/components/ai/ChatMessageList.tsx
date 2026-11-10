@@ -4,7 +4,7 @@ import { SyncOutlined, ExclamationCircleOutlined, ExpandAltOutlined } from '@ant
 import type { ChatMessage } from '../../types/models';
 import { APP_NAME } from '../../constants/app';
 import { renderSafeMarkdown } from '../../utils/markdown';
-import { ChatMessageBubble, type GroundedAnswerCardCallbacks, type WizardMessageCallbacks } from './ChatMessageBubble';
+import { ChatMessageBubble, type GroundedAnswerCardCallbacks } from './ChatMessageBubble';
 import type { AgentAttributionAgent } from './office/AgentAttributionRow';
 import type { AgentRunStatus } from '../../types/aiOffice';
 import { InlineApiErrorCard } from './InlineApiErrorCard';
@@ -41,7 +41,6 @@ export interface ChatMessageListProps {
   pendingConfirmation?: PendingConfirmationInfo | null;
   onConfirmAction?: (confirmed: boolean) => void;
   groundedCallbacks?: GroundedAnswerCardCallbacks | undefined;
-  wizardCallbacks?: WizardMessageCallbacks | undefined;
   transientClarifyMessage?: TransientClarifyState | null | undefined;
   onCancelClarify?: (() => void) | undefined;
   /** Host-supplied empty state. Falls back to the app default when omitted. */
@@ -70,7 +69,6 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   pendingConfirmation,
   onConfirmAction,
   groundedCallbacks,
-  wizardCallbacks,
   transientClarifyMessage,
   onCancelClarify,
   emptyState,
@@ -181,7 +179,6 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
               onSaveStickyNote={onSaveStickyNote}
               onRunClaudeCode={onRunClaudeCode}
               groundedCallbacks={groundedCallbacks}
-              wizardCallbacks={wizardCallbacks}
               agent={agent}
               agentStatus={agentStatus}
               onStopAgent={

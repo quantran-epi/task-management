@@ -49,15 +49,6 @@ import { EvidenceOnlyCard } from './grounded/EvidenceOnlyCard';
 import { SeedEntityCard } from './grounded/SeedEntityCard';
 import type { PersistedEntityRef } from '../../services/ai/groundedAnswerSchemas';
 import { MermaidViewer } from './MermaidViewer';
-import { DocumentPreviewCard, type DocumentPreviewPayload } from './wizard/DocumentPreviewCard';
-import { SolutionReviewCard, type SolutionReviewPayload } from './wizard/SolutionReviewCard';
-import { GapFillQuestionCard } from './wizard/GapFillQuestionCard';
-
-/** Historic `wizard` rows render read-only: no callback can reach a removed coordinator. */
-export interface WizardMessageCallbacks {
-  exportedFiles?: ReadonlyMap<string, DocumentPreviewPayload['exportedFile']> | undefined;
-  onOpenNote?: ((noteId: string) => void) | undefined;
-}
 
 const { Text } = Typography;
 
@@ -97,7 +88,6 @@ export interface ChatMessageBubbleProps {
   onSaveStickyNote?: ((content: string) => Promise<void> | void) | undefined;
   onRunClaudeCode?: (() => Promise<void> | void) | undefined;
   groundedCallbacks?: GroundedAnswerCardCallbacks | undefined;
-  wizardCallbacks?: WizardMessageCallbacks | undefined;
   /** Phase 34 D-07: attribution identity for an agent-authored message. */
   agent?: AgentAttributionAgent | undefined;
   agentStatus?: AgentRunStatus | undefined;
@@ -346,7 +336,6 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   onSaveStickyNote,
   onRunClaudeCode,
   groundedCallbacks,
-  wizardCallbacks,
   agent,
   agentStatus,
   onStopAgent,
@@ -388,84 +377,6 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       }
     }
   };
-
-  if (!isUser && !isStreaming && msg.wizard && wizardCallbacks) {
-    const snapshot = msg.wizard;
-    const payload = snapshot.renderPayload;
-    const wizardCard = (() => {
-      if (msg.content.startsWith('Đã bỏ qua:')) {
-        return (
-          <div style={GapFillQuestionCard.stackStyle}>
-            <GapFillQuestionCard
-              question={{
-                id: msg.id,
-                topic: payload.title,
-                description: msg.content,
-                templateSection: payload.title,
-                suggestions: [],
-                evidenceSources: [],
-                answer: msg.content.match(/^Đã bỏ qua:\s*(.+?)\s*·/)?.[1] ?? '(chưa cung cấp)',
-                outcome: 'omitted',
-              }}
-              onSuggestion={() => undefined}
-              onSkip={() => undefined}
-            />
-          </div>
-        );
-      }
-      if (snapshot.status === 'gap_fill') {
-        return (
-          <div style={GapFillQuestionCard.stackStyle}>
-            <span style={{ fontSize: 12, fontWeight: 400, color: token.colorTextSecondary }}>
-              Bản nháp lịch sử đang chờ làm rõ.
-            </span>
-            <GapFillQuestionCard
-              question={{
-                id: msg.id,
-                topic: payload.title,
-                description: msg.content,
-                templateSection: payload.title,
-                suggestions: [],
-                evidenceSources: [],
-                answer: msg.content.match(/^Đã bỏ qua:\s*(.+?)\s*·/)?.[1] ?? null,
-                outcome: msg.content.includes('Đã bỏ qua:') ? 'omitted' : 'open',
-              }}
-              onSuggestion={() => undefined}
-              onSkip={() => undefined}
-            />
-          </div>
-        );
-      }
-      if (snapshot.skill === 'SOLUTION' && snapshot.status === 'review' && snapshot.draftRevision !== null) {
-        const solution: SolutionReviewPayload = {
-          messageId: msg.id,
-          version: snapshot.draftRevision,
-          title: payload.title,
-          featureMode: 'featureMode' in payload ? payload.featureMode : 'new',
-          currentSystem: 'currentSystem' in payload ? payload.currentSystem : undefined,
-          affectedSurfaces: 'affectedSurfaces' in payload ? payload.affectedSurfaces : undefined,
-          markdown: 'markdown' in payload && payload.markdown ? payload.markdown : msg.content,
-        };
-        return <SolutionReviewCard solution={solution} onOpenNote={(noteId) => wizardCallbacks.onOpenNote?.(noteId)} />;
-      }
-      if (snapshot.status === 'review' && snapshot.draftRevision !== null) {
-        const preview: DocumentPreviewPayload = {
-          messageId: msg.id,
-          draftRevision: snapshot.draftRevision,
-          skill: snapshot.skill === 'SOLUTION' ? 'PL03' : snapshot.skill,
-          title: payload.title,
-          metadata: { cr: payload.title, requestingUnit: '', author: '', date: snapshot.createdAt.slice(0, 10) },
-          markdown: 'markdown' in payload && payload.markdown ? payload.markdown : msg.content,
-          exportedFile: wizardCallbacks.exportedFiles?.get(msg.id),
-        };
-        return <DocumentPreviewCard preview={preview} />;
-      }
-      return null;
-    })();
-    if (wizardCard) {
-      return <div data-role="assistant" data-testid="wizard-bubble" style={{ width: '100%', marginBottom: 12 }}>{wizardCard}</div>;
-    }
-  }
 
   // Branch assistant display on message.grounding payload
   if (!isUser && msg.grounding) {
