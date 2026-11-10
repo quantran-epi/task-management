@@ -410,6 +410,32 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
     ).toBe(true);
   });
 
+  it('refuses the whole payload before any write (D-20)', async () => {
+    await seedOffice(restoredDb);
+    const before = {
+      teams: await restoredDb.aiTeams.toArray(),
+      members: await restoredDb.aiTeamMembers.toArray(),
+      messages: await restoredDb.chatMessages.toArray(),
+    };
+
+    await expect(
+      restoreBackupPayload(
+        {
+          ...v11EnvelopeWithoutOffice(),
+          tables: {
+            ...v11EnvelopeWithoutOffice().tables,
+            aiTeams: [{ ...team, leadId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' }],
+          },
+        },
+        restoredDb
+      )
+    ).rejects.toThrow(/validation/i);
+
+    expect(await restoredDb.aiTeams.toArray()).toEqual(before.teams);
+    expect(await restoredDb.aiTeamMembers.toArray()).toEqual(before.members);
+    expect(await restoredDb.chatMessages.toArray()).toEqual(before.messages);
+  });
+
   it('rejects a message whose agentKind is outside lead/employee', async () => {
     await seedOffice(sourceDb);
     const envelope = await exportBackupPayload(sourceDb);

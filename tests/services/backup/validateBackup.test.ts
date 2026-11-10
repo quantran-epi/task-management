@@ -272,8 +272,7 @@ describe('validateBackupPayload', () => {
     expect(result.errors.some((e) => e.table === 'notes' && e.field === 'entityId')).toBe(true);
   });
 
-  it('validates document-scoped chat thread and rejects broken or missing document reference', () => {
-    const NOTE_UUID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  it('validates document-scoped chat thread and rejects broken or missing document reference', () => {    const NOTE_UUID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
     const THREAD_UUID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
     const validDocChat = {
@@ -367,5 +366,147 @@ describe('validateBackupPayload', () => {
     expect(
       absentDocRes.errors.some((e) => e.table === 'chatThreads' && e.field === 'entityId')
     ).toBe(true);
+  });
+
+  describe('Phase 36 AI Office live references (D-05, D-09, D-14, D-25, T-36-07)', () => {
+    const LEAD_ID = '11111111-1111-4111-8111-aaaaaaaaaaaa';
+    const OTHER_LEAD_ID = '11111111-1111-4111-8111-bbbbbbbbbbbb';
+    const EMPLOYEE_ID = '22222222-2222-4222-8222-aaaaaaaaaaaa';
+    const TEAM_ID = '33333333-3333-4333-8333-aaaaaaaaaaaa';
+    const LEAD_ROW_ID = '44444444-4444-4444-8444-aaaaaaaaaaaa';
+    const EMPLOYEE_ROW_ID = '55555555-5555-4555-8555-aaaaaaaaaaaa';
+    const SKILL_ID = '66666666-6666-4666-8666-aaaaaaaaaaaa';
+    const VERSION_ID = '77777777-7777-4777-8777-aaaaaaaaaaaa';
+    const THREAD_ID = '88888888-8888-4888-8888-aaaaaaaaaaaa';
+    const MESSAGE_ID = '99999999-9999-4999-8999-aaaaaaaaaaaa';
+    const NOW = '2026-11-08T12:00:00.000Z';
+
+    const lead = { id: LEAD_ID, name: 'An', role: 'Lead', capability: 'c', persona: 'p', model: 'm', createdAt: NOW, updatedAt: NOW };
+    const employee = { id: EMPLOYEE_ID, name: 'Bảo', role: 'Dev', capability: 'c', persona: 'p', model: 'm', createdAt: NOW, updatedAt: NOW };
+    const skill = { id: SKILL_ID, name: 'Review', description: 'd', body: 'b', createdAt: NOW, updatedAt: NOW };
+    const team = { id: TEAM_ID, name: 'Squad', leadId: LEAD_ID, status: 'active', budgetTokens: 0, createdAt: NOW, updatedAt: NOW };
+    const leadRow = { id: LEAD_ROW_ID, teamId: TEAM_ID, agentId: LEAD_ID, role: 'lead', budgetTokens: 0, usedTokens: 0 };
+    const employeeRow = { id: EMPLOYEE_ROW_ID, teamId: TEAM_ID, agentId: EMPLOYEE_ID, role: 'employee', budgetTokens: 0, usedTokens: 0 };
+    const teamThread = { id: THREAD_ID, scopeKey: `team:${TEAM_ID}`, scopeType: 'team', entityId: TEAM_ID, createdAt: NOW, updatedAt: NOW };
+    const version = { id: VERSION_ID, skillId: SKILL_ID, version: 1, status: 'approved', name: 'Review', description: 'd', body: 'b', createdAt: NOW };
+
+    function officePayload(overrides: Record<string, unknown[]> = {}) {
+      return {
+        ...validPayload,
+        tables: {
+          ...validPayload.tables,
+          aiEmployees: [employee],
+          aiLeads: [lead],
+          aiSkills: [skill],
+          aiTeams: [team],
+          aiTeamMembers: [leadRow, employeeRow],
+          chatThreads: [teamThread],
+          aiSkillVersions: [version],
+          ...overrides,
+        },
+      };
+    }
+
+    it('accepts a valid AI Office payload and an empty group', () => {
+      expect(validateBackupPayload(officePayload()).valid).toBe(true);
+
+      const emptyGroup = { id: TEAM_ID, name: 'Nhóm rỗng', status: 'idle', budgetTokens: 0, createdAt: NOW, updatedAt: NOW };
+      const result = validateBackupPayload(
+        officePayload({ aiTeams: [emptyGroup], aiTeamMembers: [], chatThreads: [] })
+      );
+      expect(result.errors).toEqual([]);
+      expect(result.valid).toBe(true);
+    });
+
+    it('accepts an envelope with no aiSkillVersions key', () => {
+      const payload = officePayload();
+      delete (payload.tables as Record<string, unknown>).aiSkillVersions;
+      expect(validateBackupPayload(payload).valid).toBe(true);
+    });
+
+    it('rejects a leadId naming a missing lead', () => {
+      const result = validateBackupPayload(
+        officePayload({ aiLeads: [], aiTeamMembers: [], aiTeams: [{ ...team, leadId: OTHER_LEAD_ID }] })
+      );
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.table === 'aiTeams' && e.field === 'leadId')).toBe(true);
+    });
+
+    it('rejects leaderLockedAt with no lead row', () => {
+      const result = validateBackupPayload(
+        officePayload({ aiTeamMembers: [employeeRow], aiTeams: [{ ...team, leaderLockedAt: NOW }] })
+      );
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.table === 'aiTeams' && e.field === 'leadId')).toBe(true);
+    });
+
+    it('rejects a leader-locked group with no leadId', () => {
+      const result = validateBackupPayload(
+        officePayload({
+          aiTeams: [{ id: TEAM_ID, name: 'Squad', status: 'idle', budgetTokens: 0, leaderLockedAt: NOW, createdAt: NOW, updatedAt: NOW }],
+          aiTeamMembers: [],
+          chatThreads: [],
+        })
+      );
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.table === 'aiTeams' && e.field === 'leaderLockedAt')).toBe(true);
+    });
+
+    it('rejects a member naming an unknown agent', () => {
+      const result = validateBackupPayload(
+        officePayload({
+          aiTeamMembers: [leadRow, { ...employeeRow, agentId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' }],
+        })
+      );
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.table === 'aiTeamMembers' && e.field === 'agentId')).toBe(true);
+    });
+
+    it('rejects a skill version naming a missing skill', () => {
+      const result = validateBackupPayload(
+        officePayload({ aiSkillVersions: [{ ...version, skillId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' }] })
+      );
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.table === 'aiSkillVersions' && e.field === 'skillId')).toBe(true);
+    });
+
+    it('rejects duplicate (skillId, version)', () => {
+      const result = validateBackupPayload(
+        officePayload({ aiSkillVersions: [version, { ...version, id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' }] })
+      );
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.table === 'aiSkillVersions' && e.field === 'version')).toBe(true);
+    });
+
+    it('rejects a team thread whose scope key is not exactly team:<entityId>', () => {
+      const result = validateBackupPayload(
+        officePayload({ chatThreads: [{ ...teamThread, scopeKey: `team:${TEAM_ID}:chat:${THREAD_ID}` }] })
+      );
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.table === 'chatThreads' && e.field === 'scopeKey')).toBe(true);
+    });
+
+    it('accepts a message whose targetAgentId names a deleted employee (D-14 historical ref)', () => {
+      const result = validateBackupPayload(
+        officePayload({
+          aiEmployees: [],
+          aiTeamMembers: [leadRow],
+          chatMessages: [{
+            id: MESSAGE_ID,
+            threadId: THREAD_ID,
+            role: 'assistant',
+            content: 'Instruction for a deleted employee.',
+            createdAt: NOW,
+            agentId: LEAD_ID,
+            agentName: 'An',
+            agentKind: 'lead',
+            messageKind: 'instruction',
+            targetAgentId: EMPLOYEE_ID,
+          }],
+        })
+      );
+      expect(result.errors).toEqual([]);
+      expect(result.valid).toBe(true);
+    });
   });
 });

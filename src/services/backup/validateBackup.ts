@@ -470,20 +470,54 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     }
   }
 
-  // Stage 5: AI Office referential integrity (T-34-31). `replaceTables` bulk-adds, so the
-  // repository guards never run on import — the payload itself must be checked.
+  // Stage 5: AI Office referential integrity (T-34-31, T-36-07). `replaceTables` bulk-adds, so
+  // the repository guards never run on import — the payload itself must be checked.
+  //
+  // HISTORICAL vs LIVE (D-14/D-18): `chatMessages.targetAgentId`, `agentId` and `agentName` are
+  // attribution recorded at write time. They are deliberately NOT live-validated — a backup
+  // taken after deleting an employee must still import. Do not "fix" this gap.
   const aiTeamIds = new Set((aiTeams ?? []).map((team) => team.id));
   const aiLeadIds = new Set((aiLeads ?? []).map((lead) => lead.id));
+  const aiEmployeeIds = new Set((aiEmployees ?? []).map((employee) => employee.id));
   const aiSkillIds = new Set((aiSkills ?? []).map((skill) => skill.id));
+  const membersByTeam = new Map<string, typeof aiTeamMembers>();
+  for (const member of aiTeamMembers ?? []) {
+    const bucket = membersByTeam.get(member.teamId) ?? [];
+    bucket.push(member);
+    membersByTeam.set(member.teamId, bucket);
+  }
+  const teamById = new Map((aiTeams ?? []).map((team) => [team.id, team]));
+
   for (const team of aiTeams ?? []) {
     // D-05: an empty group has no leader; only a present leadId is a live reference.
     if (team.leadId !== undefined && !aiLeadIds.has(team.leadId)) {
       errors.push({ table: 'aiTeams', recordId: team.id, field: 'leadId', message: `AiTeam references leadId "${team.leadId}" not found in aiLeads` });
     }
+    // Pitfall 5: both sources of truth must agree — both absent or both present.
+    const leadRows = (membersByTeam.get(team.id) ?? []).filter((row) => row.role === 'lead');
+    if (team.leadId === undefined) {
+      if (leadRows.length > 0) {
+        errors.push({ table: 'aiTeams', recordId: team.id, field: 'leadId', message: 'AiTeam has a lead member row but no leadId' });
+      }
+    } else if (!leadRows.some((row) => row.agentId === team.leadId)) {
+      errors.push({ table: 'aiTeams', recordId: team.id, field: 'leadId', message: `AiTeam leadId "${team.leadId}" has no matching lead member row` });
+    }
+    if (team.leaderLockedAt !== undefined && team.leadId === undefined) {
+      errors.push({ table: 'aiTeams', recordId: team.id, field: 'leaderLockedAt', message: 'AiTeam is leader-locked but has no leadId' });
+    }
   }
   for (const member of aiTeamMembers ?? []) {
     if (!aiTeamIds.has(member.teamId)) {
       errors.push({ table: 'aiTeamMembers', recordId: member.id, field: 'teamId', message: `AiTeamMember references teamId "${member.teamId}" not found in aiTeams` });
+      continue;
+    }
+    if (member.role === 'lead') {
+      const team = teamById.get(member.teamId);
+      if (team?.leadId !== member.agentId) {
+        errors.push({ table: 'aiTeamMembers', recordId: member.id, field: 'agentId', message: `Lead member "${member.agentId}" does not match the team leadId` });
+      }
+    } else if (!aiEmployeeIds.has(member.agentId) && !aiLeadIds.has(member.agentId)) {
+      errors.push({ table: 'aiTeamMembers', recordId: member.id, field: 'agentId', message: `AiTeamMember references agentId "${member.agentId}" not found in aiEmployees or aiLeads` });
     }
   }
   for (const link of aiTeamLinks ?? []) {
@@ -494,6 +528,28 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
   for (const employee of aiEmployees ?? []) {
     if (employee.skillId && !aiSkillIds.has(employee.skillId)) {
       errors.push({ table: 'aiEmployees', recordId: employee.id, field: 'skillId', message: `AiEmployee references skillId "${employee.skillId}" not found in aiSkills` });
+    }
+  }
+  const seenVersions = new Set<string>();
+  for (const version of aiSkillVersions ?? []) {
+    if (!aiSkillIds.has(version.skillId)) {
+      errors.push({ table: 'aiSkillVersions', recordId: version.id, field: 'skillId', message: `AiSkillVersion references skillId "${version.skillId}" not found in aiSkills` });
+    }
+    const key = `${version.skillId}:${version.version}`;
+    if (seenVersions.has(key)) {
+      errors.push({ table: 'aiSkillVersions', recordId: version.id, field: 'version', message: `Duplicate AiSkillVersion for skillId "${version.skillId}" version ${version.version}` });
+    }
+    seenVersions.add(key);
+  }
+  // D-25/D-04: one team = one chat. A nested scope key would merge two groups' transcripts.
+  for (const thread of chatThreads ?? []) {
+    if (thread.scopeType !== 'team') continue;
+    const entityId = thread.entityId;
+    if (entityId === undefined || !aiTeamIds.has(entityId)) {
+      errors.push({ table: 'chatThreads', recordId: thread.id, field: 'entityId', message: `Team ChatThread references entityId "${String(entityId)}" not found in aiTeams` });
+    }
+    if (thread.scopeKey !== `team:${String(entityId)}`) {
+      errors.push({ table: 'chatThreads', recordId: thread.id, field: 'scopeKey', message: 'Team ChatThread scopeKey must be exactly "team:<entityId>"' });
     }
   }
 
