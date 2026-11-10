@@ -247,7 +247,6 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
   const taskIds = new Set(tasks.map((t) => t.id));
   const threadIds = new Set((chatThreads || []).map((thread) => thread.id));
   const threadById = new Map((chatThreads || []).map((thread) => [thread.id, thread]));
-  const recovery = { missingSources: [] as Array<{ id: string; title: string; version?: number; hash?: string }>, blockedTabs: [] as Array<{ tabId: string; threadId: string; step: string; missingSourceIds: string[] }> };
 
   // Check plannedAllocations refer to existing task
   plannedAllocations.forEach((pa) => {
@@ -391,7 +390,6 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
 
   if (chatTabs && chatThreads) {
     const activeByScope = new Map<string, string>();
-    const sdlcByScope = new Set<string>();
     const tabIdsSeen = new Set<string>();
     chatTabs.forEach((tab) => {
       if (tabIdsSeen.has(tab.id)) errors.push({ table: 'chatTabs', recordId: tab.id, field: 'id', message: 'Duplicate ChatTab id' });
@@ -400,169 +398,17 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       if (!thread) {
         errors.push({ table: 'chatTabs', recordId: tab.id, field: 'threadId', message: `ChatTab references threadId "${tab.threadId}" not found in chatThreads` });
       } else {
-        const expectedScope = thread.scopeType === 'cr' && thread.scopeKey.endsWith(':sdlc')
-          ? thread.scopeKey.slice(0, -5)
-          : thread.scopeKey.includes(':chat:')
-            ? thread.scopeKey.slice(0, thread.scopeKey.indexOf(':chat:'))
-            : thread.scopeKey;
+        const expectedScope = thread.scopeKey.includes(':chat:')
+          ? thread.scopeKey.slice(0, thread.scopeKey.indexOf(':chat:'))
+          : thread.scopeKey;
         if (tab.scopeKey !== expectedScope && tab.scopeKey !== thread.scopeKey) {
           errors.push({ table: 'chatTabs', recordId: tab.id, field: 'scopeKey', message: 'ChatTab scope does not match chat thread' });
-        }
-        if (thread.scopeType === 'cr' && thread.entityId && tab.scopeKey === `cr:${thread.entityId}` && tab.type === 'sdlc') {
-          if (sdlcByScope.has(tab.scopeKey)) errors.push({ table: 'chatTabs', recordId: tab.id, field: 'type', message: 'Duplicate SDLC tab for CR scope' });
-          sdlcByScope.add(tab.scopeKey);
         }
       }
       if (tab.active) {
         if (activeByScope.has(tab.scopeKey)) errors.push({ table: 'chatTabs', recordId: tab.id, field: 'active', message: 'Multiple active tabs for scope' });
         activeByScope.set(tab.scopeKey, tab.id);
       }
-      const workflow = tab.workflowState;
-      if (workflow) {
-        const missingIds: string[] = [];
-        // Only the artifact-ref slots carry `noteId`; `branchSnapshots` and `crSummary` do not.
-        const artifactRefs = [
-          workflow.artifacts.pl01,
-          workflow.artifacts.pl02,
-          workflow.artifacts.solution,
-          workflow.artifacts.codeGuide,
-          workflow.artifacts.changePack,
-          workflow.artifacts.pl03b,
-          workflow.artifacts.pl07,
-          workflow.artifacts.cab,
-        ];
-        for (const artifact of artifactRefs) {
-          if (!artifact || !artifact.noteId) continue;
-          if (!noteIds.has(artifact.noteId)) {
-            missingIds.push(artifact.noteId);
-            if (!recovery.missingSources.some((source) => source.id === artifact.noteId)) {
-              recovery.missingSources.push({
-                id: artifact.noteId,
-                title: artifact.title,
-                version: artifact.version,
-                hash: artifact.hash,
-              });
-            }
-          }
-        }
-        if (missingIds.length > 0) {
-          recovery.blockedTabs.push({
-            tabId: tab.id,
-            threadId: tab.threadId,
-            step: workflow.currentStep,
-            missingSourceIds: [...new Set(missingIds)],
-          });
-          tab.workflowState = {
-            ...workflow,
-            checkpoint: {
-              requestId: workflow.checkpoint?.requestId ?? tab.checkpoint?.requestId ?? tab.id,
-              step: workflow.currentStep,
-              status: 'interrupted',
-              startedAt: workflow.checkpoint?.startedAt ?? tab.updatedAt,
-            },
-          };
-        }
-      }
-    });
-  }
-
-  // Check chatMessages refer to existing thread and wizard identity
-  if (chatMessages && chatThreads) {
-    chatMessages.forEach((cm) => {
-      if (!threadIds.has(cm.threadId)) {
-        errors.push({
-          table: 'chatMessages',
-          recordId: cm.id,
-          field: 'threadId',
-          message: `ChatMessage references threadId "${cm.threadId}" not found in chatThreads`,
-        });
-      }
-      if (cm.wizard) {
-        const thread = threadById.get(cm.threadId);
-        // The wizard snapshot's identity field is a ChangeRequest id, so the thread must be CR-scoped.
-        if (!thread || thread.scopeType !== 'cr' || thread.entityId !== cm.wizard.changeRequestId || thread.id !== cm.wizard.threadId) {
-          errors.push({
-            table: 'chatMessages',
-            recordId: cm.id,
-            field: 'wizard',
-            message: 'Wizard snapshot CR/thread identity does not match chat thread',
-          });
-        }
-        if (crIds && !crIds.has(cm.wizard.changeRequestId)) {
-          errors.push({
-            table: 'chatMessages',
-            recordId: cm.id,
-            field: 'wizard.changeRequestId',
-            message: `Wizard references crId "${cm.wizard.changeRequestId}" not found in changeRequests`,
-          });
-        }
-        if (cm.wizard.artifactId && !noteIds.has(cm.wizard.artifactId)) {
-          errors.push({
-            table: 'chatMessages',
-            recordId: cm.id,
-            field: 'wizard.artifactId',
-            message: `Wizard references artifactId "${cm.wizard.artifactId}" not found in notes`,
-          });
-        }
-      }
-    });
-  }
-
-  if (notes) {
-    notes.forEach((note) => {
-      // `sdlcArtifact.changeRequestId` carries the CR id the artifact belongs to.
-      if (note.sdlcArtifact && crIds && !crIds.has(note.sdlcArtifact.changeRequestId)) {
-        errors.push({
-          table: 'notes',
-          recordId: note.id,
-          field: 'sdlcArtifact.changeRequestId',
-          message: `Artifact references crId "${note.sdlcArtifact.changeRequestId}" not found in changeRequests`,
-        });
-      }
-      if (note.sdlcArtifact && !threadIds.has(note.sdlcArtifact.threadId)) {
-        errors.push({
-          table: 'notes',
-          recordId: note.id,
-          field: 'sdlcArtifact.threadId',
-          message: `Artifact references threadId "${note.sdlcArtifact.threadId}" not found in chatThreads`,
-        });
-      }
-      if (note.sdlcArtifact) {
-        note.sdlcArtifact.sourceArtifactIds.forEach((sourceId) => {
-          if (!noteIds.has(sourceId)) {
-            errors.push({
-              table: 'notes',
-              recordId: note.id,
-              field: 'sdlcArtifact.sourceArtifactIds',
-              message: `Artifact references sourceArtifactId "${sourceId}" not found in notes`,
-            });
-          }
-        });
-      }
-    });
-  }
-
-  if (documentSets) {
-    const sdlcCrIds = new Set<string>();
-    documentSets.forEach((set) => {
-      if (!set.sdlc) return;
-      if (crIds && !crIds.has(set.sdlc.changeRequestId)) {
-        errors.push({
-          table: 'documentSets',
-          recordId: set.id,
-          field: 'sdlc.changeRequestId',
-          message: `SDLC set references crId "${set.sdlc.changeRequestId}" not found in changeRequests`,
-        });
-      }
-      if (sdlcCrIds.has(set.sdlc.changeRequestId)) {
-        errors.push({
-          table: 'documentSets',
-          recordId: set.id,
-          field: 'sdlc',
-          message: `Duplicate SDLC mapping for crId "${set.sdlc.changeRequestId}"`,
-        });
-      }
-      sdlcCrIds.add(set.sdlc.changeRequestId);
     });
   }
 
@@ -728,6 +574,5 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     valid: true,
     envelope: validEnvelope,
     errors: [],
-    ...(recovery.missingSources.length > 0 ? { recovery } : {}),
   };
 }

@@ -64,39 +64,44 @@ const AI_OFFICE_TABLE_KEYS = [
   'aiTeamLinks',
 ] as const;
 
-const SDLC_TITLE = '⚙️ SDLC Workflow';
 const DEFAULT_CHAT_TITLE = '💬 Cuộc trò chuyện';
 
 function scopeFromThread(thread: ChatThread): string {
-  if (thread.scopeType === 'cr' && thread.scopeKey.endsWith(':sdlc')) {
-    return thread.scopeKey.slice(0, -':sdlc'.length);
-  }
   // WR-16: a `:chat:`-suffixed thread scope must not become a tab scope — the validator
   // rejects a tab whose scopeKey carries the per-thread suffix.
   const chatIndex = thread.scopeKey.indexOf(':chat:');
   return chatIndex >= 0 ? thread.scopeKey.slice(0, chatIndex) : thread.scopeKey;
 }
 
+// C-16: a legacy SDLC thread scope suffix. Such rows are deleted, never restored — the tab is
+// not generated either — but the CR scope still needs its ordinary chat thread.
+const LEGACY_SDLC_SCOPE_SUFFIX = ':sdlc';
+
 function legacyTabRows(
   threads: ChatThread[],
   now: string,
 ): { threads: ChatThread[]; tabs: ChatTab[] } {
-  const importedThreads = [...threads];
+  const importedThreads: ChatThread[] = [];
   const tabs: ChatTab[] = [];
   const scopes = new Set<string>();
   const threadByScope = new Map<string, ChatThread[]>();
 
-  for (const thread of importedThreads) {
+  for (const thread of threads) {
+    if (thread.scopeKey.endsWith(LEGACY_SDLC_SCOPE_SUFFIX)) {
+      scopes.add(thread.scopeKey.slice(0, -LEGACY_SDLC_SCOPE_SUFFIX.length));
+      continue;
+    }
     const scopeKey = scopeFromThread(thread);
+    importedThreads.push(thread);
     scopes.add(scopeKey);
     const scoped = threadByScope.get(scopeKey) ?? [];
     scoped.push(thread);
     threadByScope.set(scopeKey, scoped);
     tabs.push({
-      id: thread.scopeKey === `${scopeKey}:sdlc` && thread.scopeType === 'cr' ? generateId() : thread.id,
+      id: thread.id,
       threadId: thread.id,
       scopeKey,
-      type: thread.scopeKey === `${scopeKey}:sdlc` && thread.scopeType === 'cr' ? 'sdlc' : 'chat',
+      type: 'chat',
       title: thread.title?.trim() || DEFAULT_CHAT_TITLE,
       order: 0,
       active: false,
@@ -108,35 +113,7 @@ function legacyTabRows(
   const orderedScopes = [...scopes].sort();
   for (const scopeKey of orderedScopes) {
     const scopedThreads = threadByScope.get(scopeKey) ?? [];
-    const hasSdlc = scopedThreads.some((thread) => thread.scopeKey === `${scopeKey}:sdlc` && thread.scopeType === 'cr');
-    const crId = scopeKey.startsWith('cr:') ? scopeKey.slice('cr:'.length) : undefined;
-    if (crId && !hasSdlc) {
-      const threadId = generateId();
-      const sdlcThread: ChatThread = {
-        id: threadId,
-        scopeKey: `${scopeKey}:sdlc`,
-        scopeType: 'cr',
-        entityId: crId,
-        title: SDLC_TITLE,
-        createdAt: now,
-        updatedAt: now,
-      };
-      importedThreads.push(sdlcThread);
-      scopedThreads.push(sdlcThread);
-      threadByScope.set(scopeKey, scopedThreads);
-      tabs.push({
-        id: generateId(),
-        threadId,
-        scopeKey,
-        type: 'sdlc',
-        title: SDLC_TITLE,
-        order: 0,
-        active: false,
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
-    if (!scopedThreads.some((thread) => thread.scopeKey !== `${scopeKey}:sdlc` || thread.scopeType !== 'cr')) {
+    if (scopedThreads.length === 0) {
       const threadId = generateId();
       const thread: ChatThread = {
         id: threadId,
@@ -256,9 +233,6 @@ async function replaceTables(
     // are not part of any payload and must survive an import and its rollback.
     const incomingSettingKeys = new Set<string>([
       ...(tables.settings ?? []).map((setting) => setting.key),
-      ...(tables.chatTabs ?? [])
-        .filter((tab) => tab.workflowState && tab.scopeKey.startsWith('cr:'))
-        .map((tab) => `sdlc_workflow:${tab.scopeKey.slice('cr:'.length)}:${tab.threadId}`),
     ]);
     await Promise.all([
       targetDb.tasks.clear(), targetDb.capacityRules.clear(), targetDb.capacityOverrides.clear(), targetDb.plannedAllocations.clear(), targetDb.workSessions.clear(), targetDb.activeTimers.clear(), targetDb.notes.clear(), targetDb.noteAttachments.clear(), targetDb.chatThreads.clear(), targetDb.chatMessages.clear(), targetDb.chatTabs.clear(), targetDb.telegramSettings.clear(), targetDb.telegramWhitelist.clear(), targetDb.systems.clear(), targetDb.changeRequests.clear(), ...clearKnowledge, ...clearAiOffice, targetDb.settings.bulkDelete([...incomingSettingKeys]), targetDb.backupMetadata.clear(),
@@ -294,17 +268,6 @@ async function replaceTables(
     await add(targetDb.aiTeamLinks, tables.aiTeamLinks);
     await add(targetDb.activeTimers, tables.activeTimers);
     for (const setting of tables.settings ?? []) if (isSafeBackupSetting(setting.key)) await targetDb.settings.put(setting);
-    // The drawer restores SDLC workflow state from settings, not from the tab row. Mirror the tab's
-    // exported workflowState into that key (and let the validator's `interrupted` checkpoint win),
-    // so the two stores cannot disagree about a restored, blocked workflow.
-    for (const tab of tables.chatTabs ?? []) {
-      if (!tab.workflowState || !tab.scopeKey.startsWith('cr:')) continue;
-      const key = `sdlc_workflow:${tab.scopeKey.slice('cr:'.length)}:${tab.threadId}`;
-      const existing = await targetDb.settings.get(key);
-      const base = (existing?.value ?? tab.workflowState) as Record<string, unknown>;
-      const checkpoint = tab.workflowState.checkpoint ?? base.checkpoint;
-      await targetDb.settings.put({ key, value: { ...base, ...(checkpoint ? { checkpoint } : {}) } });
-    }
     if (snapshotData) await targetDb.settings.put({ key: 'last_pre_import_snapshot', value: snapshotData });
     await targetDb.backupMetadata.add({ id: generateId(), timestamp: new Date().toISOString(), appVersion: '0.1.0', recordCount });
   });
