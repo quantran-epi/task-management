@@ -170,3 +170,11 @@ gained placeholder data.
 
 None. No new network endpoint, auth path, file access pattern, or schema boundary was
 introduced.
+
+## Self-Check: PASSED
+
+- `35-12-SUMMARY.md` — FOUND
+- `deferred-items.md` — FOUND
+- `d7542c7d` ancestor of HEAD — FOUND
+- `dde451aa` ancestor of HEAD — FOUND
+- `0c59b7ff` (this summary) — FOUND
