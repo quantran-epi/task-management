@@ -112,9 +112,9 @@ describe('Dexie SCHEMA_V17 Migration (Phase 34)', () => {
     return upgraded;
   }
 
-  it('opens at version 17', async () => {
+  it('opens at version 18', async () => {
     const db = await openAtCurrentVersion();
-    expect(db.verno).toBe(17);
+    expect(db.verno).toBe(18);
   });
 
   it('keeps every seeded V16 row readable with its original content', async () => {

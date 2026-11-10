@@ -128,6 +128,11 @@ export const SCHEMA_V17 = {
   aiTeamLinks: 'id, teamId, itemType, itemId',
 } as const;
 
+// Phase 35 (C-16): SDLC rows are purged in the V18 upgrade hook. No index changes —
+// the purge is a row delete, not a schema reshape.
+export const SCHEMA_V18 = { ...SCHEMA_V17 } as const;
+
+
 
 
 

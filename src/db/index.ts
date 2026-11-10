@@ -17,6 +17,7 @@ import {
   SCHEMA_V15,
   SCHEMA_V16,
   SCHEMA_V17,
+  SCHEMA_V18,
 } from './schema';
 import type {
   Task,
@@ -490,6 +491,48 @@ export class TaskPlannerDatabase extends Dexie {
     // Phase 34 (D-18, D-23, D-25, D-32): AI Office stores. Purely additive — nothing to
     // backfill, so no `.upgrade()` hook.
     this.version(17).stores(SCHEMA_V17);
+
+    // Phase 35 (C-16, D-05): SDLC is deleted. Purge its rows — tab, thread, message, and
+    // workflow-state settings — so no removed surface can be re-read after the upgrade.
+    this.version(18)
+      .stores(SCHEMA_V18)
+      .upgrade(async (tx) => {
+        // 1. SDLC tabs. Bulk-collect then delete by id — the V16 hook's convention.
+        const tabRows = (await tx.table('chatTabs').toCollection().toArray()) as Array<
+          Record<string, unknown>
+        >;
+        const sdlcTabIds = tabRows
+          .filter((tab) => tab.type === 'sdlc')
+          .map((tab) => (typeof tab.id === 'string' ? tab.id : ''))
+          .filter((tabId) => tabId !== '');
+        for (const tabId of sdlcTabIds) {
+          await tx.table('chatTabs').delete(tabId);
+        }
+
+        // 2. SDLC threads and everything hanging off them. Messages go first so the
+        //    backup schema's `threadId ∈ chatThreads` invariant holds afterwards (L5).
+        const threadRows = (await tx.table('chatThreads').toCollection().toArray()) as Array<
+          Record<string, unknown>
+        >;
+        const sdlcThreadIds = threadRows
+          .filter((thread) => typeof thread.scopeKey === 'string' && thread.scopeKey.endsWith(':sdlc'))
+          .map((thread) => (typeof thread.id === 'string' ? thread.id : ''))
+          .filter((threadId) => threadId !== '');
+        for (const threadId of sdlcThreadIds) {
+          await tx.table('chatMessages').where('threadId').equals(threadId).delete();
+          await tx.table('chatTabs').where('threadId').equals(threadId).delete();
+          await tx.table('chatThreads').delete(threadId);
+        }
+
+        // 3. Workflow-state settings written by the removed SDLC surface.
+        const settingRows = (await tx.table('settings').toCollection().toArray()) as Array<
+          Record<string, unknown>
+        >;
+        for (const setting of settingRows) {
+          const key = typeof setting.key === 'string' ? setting.key : '';
+          if (key.startsWith('sdlc_workflow:')) await tx.table('settings').delete(key);
+        }
+      });
 
     // Multi-tab concurrency handlers (DATA-04, D-09, D-10)
     this.on('blocked', () => {

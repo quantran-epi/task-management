@@ -48,7 +48,7 @@ describe('Dexie SCHEMA_V15 Migration & Data Transformation (ENT-SYS-01, ENT-CR-0
     await upgradedDb.open();
 
     // Opening at the current version runs every later upgrade, so verno is the live schema.
-    expect(upgradedDb.verno).toBe(17);
+    expect(upgradedDb.verno).toBe(18);
     expect(upgradedDb.tables.map((t) => t.name)).toContain('systems');
     expect(upgradedDb.tables.map((t) => t.name)).toContain('changeRequests');
 
