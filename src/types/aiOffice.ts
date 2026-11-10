@@ -96,6 +96,23 @@ export interface AiTeamLink {
   createdAt: string;
 }
 
+/** Phase 36 (D-16, D-22): a stored skill revision. `pending` is data, never an approval. */
+export type AiSkillVersionStatus = 'pending' | 'approved' | 'rejected';
+
+export interface AiSkillVersion {
+  id: string;
+  skillId: string;
+  /** 1-based, monotonic per skill. */
+  version: number;
+  status: AiSkillVersionStatus;
+  name: string; // ≤ 60
+  description: string; // ≤ 300
+  body: string; // Markdown
+  evidence?: string | undefined;
+  createdAt: string;
+  decidedAt?: string | undefined;
+}
+
 export interface AgentRunState {
   agentId: string;
   status: AgentRunStatus;

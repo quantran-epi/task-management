@@ -4,7 +4,7 @@ import type { ChatTab } from '../../types/models';
 import { generateId } from '../../utils/uuid';
 
 export const APP_MARKER = 'personal-task-planner' as const;
-export const CURRENT_SCHEMA_VERSION = 11 as const;
+export const CURRENT_SCHEMA_VERSION = 12 as const;
 
 export const UNSAFE_OR_EPHEMERAL_SETTING_KEYS = new Set<string>([
   'jira_api_token',
@@ -192,6 +192,7 @@ export async function exportBackupPayload(
     aiTeams,
     aiTeamMembers,
     aiTeamLinks,
+    aiSkillVersions,
   ] = await Promise.all([
     targetDb.tasks.toArray(),
     targetDb.capacityRules.toArray(),
@@ -220,6 +221,7 @@ export async function exportBackupPayload(
     targetDb.aiTeams.toArray(),
     targetDb.aiTeamMembers.toArray(),
     targetDb.aiTeamLinks.toArray(),
+    targetDb.aiSkillVersions.toArray(),
   ]);
 
   // Strip sensitive botToken from telegramSettings before export
@@ -273,6 +275,7 @@ export async function exportBackupPayload(
     aiTeams,
     aiTeamMembers,
     aiTeamLinks,
+    aiSkillVersions,
   };
 
   const counts = {
@@ -303,6 +306,7 @@ export async function exportBackupPayload(
     aiTeams: aiTeams.length,
     aiTeamMembers: aiTeamMembers.length,
     aiTeamLinks: aiTeamLinks.length,
+    aiSkillVersions: aiSkillVersions.length,
   };
 
   const envelope: BackupEnvelope = {

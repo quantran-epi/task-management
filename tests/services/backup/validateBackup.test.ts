@@ -87,7 +87,7 @@ describe('validateBackupPayload', () => {
     expect(result.errors).toHaveLength(0);
     expect(result.envelope).toBeDefined();
     expect(result.envelope?.app).toBe(APP_MARKER);
-    expect(result.envelope?.schemaVersion).toBe(11);
+    expect(result.envelope?.schemaVersion).toBe(12);
   });
 
   it('rejects non-object or null payloads', () => {

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { isValidCalendarDate } from '../utils/date';
 import { isValidUuid } from '../utils/uuid';
+import { AiSkillVersionStatusSchema } from './aiOfficeSchemas';
 import {
   ChatMessageGroundingSchema,
   type ChatMessageGrounding,
@@ -676,8 +677,22 @@ export const BackupAiTeamLinkRecordSchema = z.strictObject({
   createdAt: z.string(),
 });
 
-/** D-49: the current backup envelope contract. Version 11 is CR-centric; older versions are rejected. */
-export const BACKUP_SCHEMA_VERSION = 11 as const;export const BackupEnvelopeSchema = z.object({
+/** Phase 36 (D-16, D-22): a stored revision round-trips verbatim — `status` is never normalized. */
+export const BackupAiSkillVersionRecordSchema = z.strictObject({
+  id: uuidSchema,
+  skillId: uuidSchema,
+  version: z.number().int().positive(),
+  status: AiSkillVersionStatusSchema,
+  name: aiNameSchema,
+  description: aiSkillDescriptionSchema,
+  body: z.string().trim().min(1, 'Body is required'),
+  evidence: z.string().optional(),
+  createdAt: z.string(),
+  decidedAt: z.string().optional(),
+});
+
+/** D-49: the current backup envelope contract. Version 12 adds `aiSkillVersions`; older versions are rejected. */
+export const BACKUP_SCHEMA_VERSION = 12 as const;export const BackupEnvelopeSchema = z.object({
   app: z.literal('personal-task-planner'),
   schemaVersion: z.literal(BACKUP_SCHEMA_VERSION),
   exportedAt: z.string(),

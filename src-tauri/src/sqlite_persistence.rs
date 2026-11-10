@@ -24,6 +24,10 @@ const ALLOWED_TABLES: &[&str] = &[
     "aiTeams",
     "aiTeamMembers",
     "aiTeamLinks",
+    "aiSkillVersions",
+    "chatTabs",
+    "systems",
+    "changeRequests",
 ];
 
 #[derive(Debug, Deserialize)]

@@ -115,6 +115,18 @@ export const AiTeamLinkInputSchema = z.object({
   itemId: uuidSchema,
 });
 
+/** Phase 36 (D-16, D-22): defined once and reused by the backup record schema. */
+export const AiSkillVersionStatusSchema = z.enum(['pending', 'approved', 'rejected']);
+
+export const AiSkillVersionInputSchema = z.object({
+  skillId: uuidSchema,
+  status: AiSkillVersionStatusSchema.default('pending'),
+  name: nameSchema,
+  description: skillDescriptionSchema,
+  body: z.string().trim().min(1, 'Body is required'),
+  evidence: z.string().optional(),
+});
+
 export type AiEmployeeInput = z.infer<typeof AiEmployeeInputSchema>;
 export type AiEmployeeUpdate = z.infer<typeof AiEmployeeUpdateSchema>;
 export type AiLeadInput = z.infer<typeof AiLeadInputSchema>;
@@ -125,3 +137,4 @@ export type AiTeamInput = z.infer<typeof AiTeamInputSchema>;
 export type AiTeamUpdate = z.infer<typeof AiTeamUpdateSchema>;
 export type AiTeamMemberInput = z.infer<typeof AiTeamMemberInputSchema>;
 export type AiTeamLinkInput = z.infer<typeof AiTeamLinkInputSchema>;
+export type AiSkillVersionInput = z.infer<typeof AiSkillVersionInputSchema>;

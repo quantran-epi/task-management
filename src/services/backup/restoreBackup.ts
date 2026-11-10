@@ -50,6 +50,7 @@ const RESTORE_TABLES = (db: TaskPlannerDatabase) => [
   db.aiTeams,
   db.aiTeamMembers,
   db.aiTeamLinks,
+  db.aiSkillVersions,
   db.settings,
   db.backupMetadata,
 ];
@@ -62,6 +63,7 @@ const AI_OFFICE_TABLE_KEYS = [
   'aiTeams',
   'aiTeamMembers',
   'aiTeamLinks',
+  'aiSkillVersions',
 ] as const;
 
 const DEFAULT_CHAT_TITLE = '💬 Cuộc trò chuyện';
@@ -180,8 +182,8 @@ function countsFor(tables: BackupTableData): BackupTableCounts {
 async function captureSnapshot(targetDb: TaskPlannerDatabase, timestamp: string): Promise<SnapshotData> {
   // activeTimers is part of the snapshot: replaceTables clears the table for both import and
   // rollback, so omitting it here would destroy the in-progress timer with no way back.
-  const [tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, activeTimers, notes, rawAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettingsRaw, telegramWhitelist, systems, changeRequests, aiEmployees, aiLeads, aiSkills, aiTeams, aiTeamMembers, aiTeamLinks, settings] = await Promise.all([
-    targetDb.tasks.toArray(), targetDb.capacityRules.toArray(), targetDb.capacityOverrides.toArray(), targetDb.plannedAllocations.toArray(), targetDb.workSessions.toArray(), targetDb.activeTimers.toArray(), targetDb.notes.toArray(), targetDb.noteAttachments.toArray(), targetDb.chatThreads.toArray(), targetDb.chatMessages.toArray(), targetDb.chatTabs.toArray(), targetDb.documentSets.toArray(), targetDb.publishedDocuments.toArray(), targetDb.publishAttempts.toArray(), targetDb.dlpAudits.toArray(), targetDb.knowledgeLinks.toArray(), targetDb.telegramSettings.toArray(), targetDb.telegramWhitelist.toArray(), targetDb.systems.toArray(), targetDb.changeRequests.toArray(), targetDb.aiEmployees.toArray(), targetDb.aiLeads.toArray(), targetDb.aiSkills.toArray(), targetDb.aiTeams.toArray(), targetDb.aiTeamMembers.toArray(), targetDb.aiTeamLinks.toArray(), targetDb.settings.toArray()
+  const [tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, activeTimers, notes, rawAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettingsRaw, telegramWhitelist, systems, changeRequests, aiEmployees, aiLeads, aiSkills, aiTeams, aiTeamMembers, aiTeamLinks, aiSkillVersions, settings] = await Promise.all([
+    targetDb.tasks.toArray(), targetDb.capacityRules.toArray(), targetDb.capacityOverrides.toArray(), targetDb.plannedAllocations.toArray(), targetDb.workSessions.toArray(), targetDb.activeTimers.toArray(), targetDb.notes.toArray(), targetDb.noteAttachments.toArray(), targetDb.chatThreads.toArray(), targetDb.chatMessages.toArray(), targetDb.chatTabs.toArray(), targetDb.documentSets.toArray(), targetDb.publishedDocuments.toArray(), targetDb.publishAttempts.toArray(), targetDb.dlpAudits.toArray(), targetDb.knowledgeLinks.toArray(), targetDb.telegramSettings.toArray(), targetDb.telegramWhitelist.toArray(), targetDb.systems.toArray(), targetDb.changeRequests.toArray(), targetDb.aiEmployees.toArray(), targetDb.aiLeads.toArray(), targetDb.aiSkills.toArray(), targetDb.aiTeams.toArray(), targetDb.aiTeamMembers.toArray(), targetDb.aiTeamLinks.toArray(), targetDb.aiSkillVersions.toArray(), targetDb.settings.toArray()
   ]);
   const telegramSettings = telegramSettingsRaw.map((setting) => ({ ...setting, botToken: '' }));
   // Never persist secrets (tokens, passphrases, SSH inventory) in a snapshot the UI offers
@@ -197,7 +199,7 @@ async function captureSnapshot(targetDb: TaskPlannerDatabase, timestamp: string)
     ...(attachment.caption ? { caption: attachment.caption } : {}),
     createdAt: attachment.createdAt,
   })));
-  const tables: BackupTableData = { tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, activeTimers, notes, noteAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettings, telegramWhitelist, systems, changeRequests, aiEmployees, aiLeads, aiSkills, aiTeams, aiTeamMembers, aiTeamLinks, settings: safeSettings };
+  const tables: BackupTableData = { tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, activeTimers, notes, noteAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettings, telegramWhitelist, systems, changeRequests, aiEmployees, aiLeads, aiSkills, aiTeams, aiTeamMembers, aiTeamLinks, aiSkillVersions, settings: safeSettings };
   return { timestamp, tables, counts: countsFor(tables) };
 }
 
@@ -238,6 +240,7 @@ async function replaceTables(
       ? [
           targetDb.aiEmployees.clear(), targetDb.aiLeads.clear(), targetDb.aiSkills.clear(),
           targetDb.aiTeams.clear(), targetDb.aiTeamMembers.clear(), targetDb.aiTeamLinks.clear(),
+          targetDb.aiSkillVersions.clear(),
         ]
       : [];
     // Settings are replaced key-by-key, never cleared wholesale: secrets (tokens, passphrases)
@@ -277,6 +280,8 @@ async function replaceTables(
     await add(targetDb.aiTeams, tables.aiTeams);
     await add(targetDb.aiTeamMembers, tables.aiTeamMembers);
     await add(targetDb.aiTeamLinks, tables.aiTeamLinks);
+    // D-22: `status` is written verbatim — a restored `pending` row is stored data, not an approval.
+    await add(targetDb.aiSkillVersions, tables.aiSkillVersions);
     await add(targetDb.activeTimers, tables.activeTimers);
     for (const setting of tables.settings ?? []) if (isSafeBackupSetting(setting.key)) await targetDb.settings.put(setting);
     if (snapshotData) await targetDb.settings.put({ key: 'last_pre_import_snapshot', value: snapshotData });

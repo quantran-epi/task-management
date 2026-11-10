@@ -21,8 +21,8 @@ describe('Backup envelope v11 and legacy rejection (D-49)', () => {
       await testDb.open();
 
       const envelope = await exportBackupPayload(testDb);
-      expect(CURRENT_SCHEMA_VERSION).toBe(11);
-      expect(envelope.schemaVersion).toBe(11);
+      expect(CURRENT_SCHEMA_VERSION).toBe(12);
+      expect(envelope.schemaVersion).toBe(12);
       expect(envelope.app).toBe(APP_MARKER);
 
       await testDb.delete();
@@ -70,7 +70,7 @@ describe('Backup envelope v11 and legacy rejection (D-49)', () => {
     });
 
     it('rejects a payload carrying a projects table before any table validation', () => {
-      const payload = legacyPayload(11, {
+      const payload = legacyPayload(12, {
         projects: [],
         changeRequests: [],
         systems: [],
@@ -83,7 +83,7 @@ describe('Backup envelope v11 and legacy rejection (D-49)', () => {
     });
 
     it('rejects a payload carrying a milestones table', () => {
-      const payload = legacyPayload(11, {
+      const payload = legacyPayload(12, {
         milestones: [],
         changeRequests: [],
         systems: [],

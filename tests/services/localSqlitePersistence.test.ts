@@ -171,6 +171,40 @@ describe('localSqlitePersistence', () => {
     });
   });
 
+  it('enqueues an aiSkillVersions row with its payload', async () => {
+    expect(SQLITE_DOMAIN_TABLES).toContain('aiSkillVersions');
+    await db.settings.bulkPut([
+      { key: SQLITE_SETTING_KEYS.path, value: 'tasks.sqlite' },
+      { key: SQLITE_SETTING_KEYS.enabled, value: true },
+    ]);
+    invokeMock.mockResolvedValueOnce(undefined);
+
+    const version = {
+      id: 'version-1',
+      skillId: 'skill-1',
+      version: 1,
+      status: 'pending',
+      name: 'Code review',
+      description: 'Reviews diffs',
+      body: '# Body',
+      createdAt: new Date().toISOString(),
+    };
+    enqueueLocalSqliteChange(db, 'aiSkillVersions', version.id, version, false);
+    await flushLocalSqliteNow(db);
+
+    expect(invokeMock).toHaveBeenCalledWith('sqlite_apply_changes', {
+      path: 'tasks.sqlite',
+      changes: expect.arrayContaining([
+        expect.objectContaining({
+          tableName: 'aiSkillVersions',
+          rowId: 'version-1',
+          payloadJson: JSON.stringify(version),
+          deleted: false,
+        }),
+      ]),
+    });
+  });
+
   it('never copies AI or knowledge credentials into the local SQLite queue', async () => {
     for (const key of ['ninerouter_api_key', 'knowledge_server_token', 'image_api_key', 'github_token']) {
       enqueueLocalSqliteChange(db, 'settings', key, { key, value: 'secret-value' }, false);

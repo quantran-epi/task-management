@@ -67,12 +67,12 @@ describe('backupSchemas — version-11 CR-centric envelope (ENT-NORM-01)', () =>
     expect(typeof mod.BackupEnvelopeSchema?.parse).toBe('function');
     const parsed = mod.BackupEnvelopeSchema.parse({
       app: 'personal-task-planner',
-      schemaVersion: 11,
+      schemaVersion: 12,
       exportedAt: NOW,
       tables: { tasks: [], systems: [], changeRequests: [] },
       counts: { tasks: 0, systems: 0, changeRequests: 0 },
     });
-    expect(parsed.schemaVersion).toBe(11);
+    expect(parsed.schemaVersion).toBe(12);
   });
 
   it('rejects a version-10 envelope', () => {
@@ -145,7 +145,7 @@ describe('exportBackupPayload — version 11 without project/milestone tables', 
 
   it('reports schemaVersion 11 and exports systems and changeRequests', async () => {
     const envelope = await exportBackupPayload(testDb);
-    expect(envelope.schemaVersion).toBe(11);
+    expect(envelope.schemaVersion).toBe(12);
     expect(Object.keys(envelope.tables)).toContain('systems');
     expect(Object.keys(envelope.tables)).toContain('changeRequests');
   });

@@ -158,6 +158,7 @@ describe('exportBackup service', () => {
         aiTeams: 0,
         aiTeamMembers: 0,
         aiTeamLinks: 0,
+        aiSkillVersions: 0,
       });
 
       // Export history logged in backupMetadata
@@ -204,6 +205,7 @@ describe('exportBackup service', () => {
         aiTeams: 0,
         aiTeamMembers: 0,
         aiTeamLinks: 0,
+        aiSkillVersions: 0,
       });
 
       const metadataEntries = await testDb.backupMetadata.toArray();

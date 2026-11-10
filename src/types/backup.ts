@@ -27,6 +27,7 @@ import type {
   AiTeam,
   AiTeamMember,
   AiTeamLink,
+  AiSkillVersion,
 } from './aiOffice';
 
 export interface BackupAttachmentRecord {
@@ -69,6 +70,7 @@ export interface BackupTableData {
   aiTeams?: AiTeam[];
   aiTeamMembers?: AiTeamMember[];
   aiTeamLinks?: AiTeamLink[];
+  aiSkillVersions?: AiSkillVersion[];
 }
 
 export interface BackupTableCounts {
@@ -99,6 +101,7 @@ export interface BackupTableCounts {
   aiTeams?: number;
   aiTeamMembers?: number;
   aiTeamLinks?: number;
+  aiSkillVersions?: number;
 }
 
 

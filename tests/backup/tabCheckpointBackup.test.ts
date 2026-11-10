@@ -75,7 +75,7 @@ function basePayload() {
   const tables = baseTables();
   return {
     app: 'personal-task-planner' as const,
-    schemaVersion: 11,
+    schemaVersion: 12,
     exportedAt: now,
     tables,
     counts: {

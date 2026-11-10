@@ -24,6 +24,7 @@ describe('Dexie Database Persistence & Seed Layer (DATA-02, D-05, D-07)', () => 
       'aiEmployees',
       'aiLeads',
       'aiSkills',
+      'aiSkillVersions',
       'aiTeamLinks',
       'aiTeamMembers',
       'aiTeams',

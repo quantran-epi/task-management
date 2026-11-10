@@ -132,6 +132,13 @@ export const SCHEMA_V17 = {
 // the purge is a row delete, not a schema reshape.
 export const SCHEMA_V18 = { ...SCHEMA_V17 } as const;
 
+// Phase 36 (D-16, D-22): skill revisions. Purely additive — no existing store index spec
+// is touched, so no index rebuild and no `.upgrade()` hook is needed.
+export const SCHEMA_V19 = {
+  ...SCHEMA_V18,
+  aiSkillVersions: 'id, skillId, [skillId+version], status, createdAt',
+} as const;
+
 
 
 

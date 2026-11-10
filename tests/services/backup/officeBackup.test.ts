@@ -12,6 +12,7 @@ import type {
   AiEmployee,
   AiLead,
   AiSkill,
+  AiSkillVersion,
   AiTeam,
   AiTeamLink,
   AiTeamMember,
@@ -30,6 +31,8 @@ const LINK_ID = '77777777-7777-4777-8777-777777777777';
 const THREAD_ID = '88888888-8888-4888-8888-888888888888';
 const MESSAGE_ID = '99999999-9999-4999-8999-999999999999';
 const CR_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const PENDING_VERSION_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const APPROVED_VERSION_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 
 const skill: AiSkill = {
   id: SKILL_ID,
@@ -123,6 +126,30 @@ const attributedMessage: ChatMessage = {
   messageKind: 'report',
 };
 
+const pendingVersion: AiSkillVersion = {
+  id: PENDING_VERSION_ID,
+  skillId: SKILL_ID,
+  version: 2,
+  status: 'pending',
+  name: 'Code review',
+  description: 'Reviews diffs for correctness',
+  body: '# Code review v2\n\nCheck tests and coverage.',
+  evidence: 'Turn 4',
+  createdAt: NOW,
+};
+
+const approvedVersion: AiSkillVersion = {
+  id: APPROVED_VERSION_ID,
+  skillId: SKILL_ID,
+  version: 1,
+  status: 'approved',
+  name: 'Code review',
+  description: 'Reviews diffs for correctness',
+  body: '# Code review\n\nCheck tests.',
+  createdAt: NOW,
+  decidedAt: NOW,
+};
+
 async function seedOffice(db: TaskPlannerDatabase): Promise<void> {
   await db.aiSkills.add(skill);
   await db.aiEmployees.add(employee);
@@ -132,9 +159,10 @@ async function seedOffice(db: TaskPlannerDatabase): Promise<void> {
   await db.aiTeamLinks.add(teamLink);
   await db.chatThreads.add(teamThread);
   await db.chatMessages.add(attributedMessage);
+  await db.aiSkillVersions.bulkAdd([pendingVersion, approvedVersion]);
 }
 
-/** D-34: a v11 payload that predates the AI Office tables — every new key absent. */
+/** D-34: a current-version payload that predates the AI Office tables — every new key absent. */
 function v11EnvelopeWithoutOffice(): BackupEnvelope {
   return {
     app: APP_MARKER,
@@ -169,18 +197,19 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
     await Promise.all([sourceDb.delete(), restoredDb.delete()]);
   });
 
-  it('exports the six AI Office tables at schemaVersion 11', async () => {
+  it('exports the AI Office tables at schemaVersion 12', async () => {
     await seedOffice(sourceDb);
 
     const envelope = await exportBackupPayload(sourceDb);
 
-    expect(envelope.schemaVersion).toBe(11);
+    expect(envelope.schemaVersion).toBe(12);
     expect(envelope.tables.aiEmployees).toEqual([employee]);
     expect(envelope.tables.aiLeads).toEqual([lead]);
     expect(envelope.tables.aiSkills).toEqual([skill]);
     expect(envelope.tables.aiTeams).toEqual([team]);
     expect(envelope.tables.aiTeamMembers).toEqual([leadMember, employeeMember]);
     expect(envelope.tables.aiTeamLinks).toEqual([teamLink]);
+    expect(envelope.tables.aiSkillVersions).toEqual([pendingVersion, approvedVersion]);
     expect(envelope.counts).toMatchObject({
       aiEmployees: 1,
       aiLeads: 1,
@@ -188,6 +217,7 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
       aiTeams: 1,
       aiTeamMembers: 2,
       aiTeamLinks: 1,
+      aiSkillVersions: 2,
     });
   });
 
@@ -214,9 +244,74 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
     expect(restoredMessage?.agentName).toBe('Bảo');
     expect(restoredMessage?.agentKind).toBe('employee');
     expect(restoredMessage?.messageKind).toBe('report');
+
+    expect(await restoredDb.aiSkillVersions.get(PENDING_VERSION_ID)).toEqual(pendingVersion);
+    expect(await restoredDb.aiSkillVersions.get(APPROVED_VERSION_ID)).toEqual(approvedVersion);
   });
 
-  it('validates a v11 payload without AI Office keys and leaves local rows untouched', async () => {
+  it('keeps a restored pending skill version pending (D-22)', async () => {
+    await seedOffice(sourceDb);
+    const envelope = await exportBackupPayload(sourceDb);
+
+    await restoreBackupPayload(envelope, restoredDb);
+
+    const restored = await restoredDb.aiSkillVersions.get(PENDING_VERSION_ID);
+    expect(restored?.status).toBe('pending');
+    expect(restored?.decidedAt).toBeUndefined();
+  });
+
+  it('restores the same envelope twice with identical counts (no accumulation)', async () => {
+    await seedOffice(sourceDb);
+    const envelope = await exportBackupPayload(sourceDb);
+
+    await restoreBackupPayload(envelope, restoredDb);
+    const firstCounts = {
+      versions: await restoredDb.aiSkillVersions.count(),
+      skills: await restoredDb.aiSkills.count(),
+      teams: await restoredDb.aiTeams.count(),
+    };
+
+    await restoreBackupPayload(envelope, restoredDb);
+    const secondCounts = {
+      versions: await restoredDb.aiSkillVersions.count(),
+      skills: await restoredDb.aiSkills.count(),
+      teams: await restoredDb.aiTeams.count(),
+    };
+
+    expect(secondCounts).toEqual(firstCounts);
+    expect(secondCounts.versions).toBe(2);
+  });
+
+  it('never exports a runtime buffer, secret or forbidden key, and keeps recorded token usage (D-19)', async () => {
+    await seedOffice(sourceDb);
+    await sourceDb.chatMessages.update(MESSAGE_ID, {
+      tokenUsage: { promptTokens: 120, completionTokens: 80, totalTokens: 200 },
+    });
+
+    const envelope = await exportBackupPayload(sourceDb);
+
+    const forbidden = ['partialBuffer', 'streamingText', 'runtime', 'error', 'stack'];
+    const seen: string[] = [];
+    const walk = (value: unknown): void => {
+      if (!value || typeof value !== 'object') return;
+      if (Array.isArray(value)) {
+        value.forEach(walk);
+        return;
+      }
+      for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+        seen.push(key);
+        walk(nested);
+      }
+    };
+    walk(envelope.tables);
+    for (const key of forbidden) expect(seen).not.toContain(key);
+
+    await restoreBackupPayload(envelope, restoredDb);
+    const restored = await restoredDb.chatMessages.get(MESSAGE_ID);
+    expect(restored?.tokenUsage).toEqual({ promptTokens: 120, completionTokens: 80, totalTokens: 200 });
+  });
+
+  it('validates a payload without AI Office keys and leaves local rows untouched', async () => {
     await seedOffice(restoredDb);
 
     const payload = v11EnvelopeWithoutOffice();

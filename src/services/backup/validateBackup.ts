@@ -33,6 +33,7 @@ import {
   BackupAiTeamRecordSchema,
   BackupAiTeamMemberRecordSchema,
   BackupAiTeamLinkRecordSchema,
+  BackupAiSkillVersionRecordSchema,
   assertNoLegacyTables,
   LEGACY_BACKUP_MESSAGE,
 } from '../../validation/backupSchemas';
@@ -236,6 +237,9 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     : undefined;
   const aiTeamLinks = rawTables.aiTeamLinks !== undefined
     ? validateTable('aiTeamLinks', BackupAiTeamLinkRecordSchema, rawTables.aiTeamLinks)
+    : undefined;
+  const aiSkillVersions = rawTables.aiSkillVersions !== undefined
+    ? validateTable('aiSkillVersions', BackupAiSkillVersionRecordSchema, rawTables.aiSkillVersions)
     : undefined;
 
   // If schema validation errors occurred, stop before referential checks
@@ -537,6 +541,7 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       ...(aiTeams !== undefined ? { aiTeams: aiTeams as NonNullable<BackupEnvelope['tables']['aiTeams']> } : {}),
       ...(aiTeamMembers !== undefined ? { aiTeamMembers: aiTeamMembers as NonNullable<BackupEnvelope['tables']['aiTeamMembers']> } : {}),
       ...(aiTeamLinks !== undefined ? { aiTeamLinks: aiTeamLinks as NonNullable<BackupEnvelope['tables']['aiTeamLinks']> } : {}),
+      ...(aiSkillVersions !== undefined ? { aiSkillVersions: aiSkillVersions as NonNullable<BackupEnvelope['tables']['aiSkillVersions']> } : {}),
     },
     counts: {
       tasks: tasks.length,
@@ -566,6 +571,7 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       ...(aiTeams !== undefined ? { aiTeams: aiTeams.length } : {}),
       ...(aiTeamMembers !== undefined ? { aiTeamMembers: aiTeamMembers.length } : {}),
       ...(aiTeamLinks !== undefined ? { aiTeamLinks: aiTeamLinks.length } : {}),
+      ...(aiSkillVersions !== undefined ? { aiSkillVersions: aiSkillVersions.length } : {}),
     },
   };
 

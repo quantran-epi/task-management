@@ -18,6 +18,7 @@ import {
   SCHEMA_V16,
   SCHEMA_V17,
   SCHEMA_V18,
+  SCHEMA_V19,
 } from './schema';
 import type {
   Task,
@@ -51,6 +52,7 @@ import type {
   AiTeam,
   AiTeamMember,
   AiTeamLink,
+  AiSkillVersion,
 } from '../types/aiOffice';
 
 /**
@@ -89,6 +91,7 @@ export class TaskPlannerDatabase extends Dexie {
   aiTeams!: Table<AiTeam, string>;
   aiTeamMembers!: Table<AiTeamMember, string>;
   aiTeamLinks!: Table<AiTeamLink, string>;
+  aiSkillVersions!: Table<AiSkillVersion, string>;
 
 
   constructor(databaseName = 'PersonalTaskPlannerDB') {
@@ -543,6 +546,10 @@ export class TaskPlannerDatabase extends Dexie {
           if (key.startsWith('sdlc_workflow:')) await tx.table('settings').delete(key);
         }
       });
+
+    // Phase 36 (D-16, D-22): skill revisions. Purely additive — nothing to backfill, so no
+    // `.upgrade()` hook. The V18 purge hook above stays attached to version(18) only.
+    this.version(19).stores(SCHEMA_V19);
 
     // Multi-tab concurrency handlers (DATA-04, D-09, D-10)
     this.on('blocked', () => {

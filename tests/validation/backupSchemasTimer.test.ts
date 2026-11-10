@@ -66,7 +66,7 @@ describe('Backup Schemas & Restore with Timer Work Sessions (TIMER-01, TIMER-02)
   it('exports backup payload with the version-11 envelope and includes workSessions', async () => {
     const payload = await exportBackupPayload(db);
 
-    expect(payload.schemaVersion).toBe(11);
+    expect(payload.schemaVersion).toBe(12);
     expect(payload.tables.workSessions).toBeDefined();
     expect(payload.tables.workSessions).toHaveLength(1);
     expect(payload.counts.workSessions).toBe(1);
