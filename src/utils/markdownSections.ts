@@ -1,5 +1,5 @@
 /**
- * Fence-aware, hierarchical section index for SDLC artifact Markdown (D-05).
+ * Fence-aware, hierarchical section index for Markdown documents.
  *
  * IDs are derived from heading order, not heading text, so unrelated body edits and
  * duplicate titles never move them. A skipped level nests under the nearest preceding

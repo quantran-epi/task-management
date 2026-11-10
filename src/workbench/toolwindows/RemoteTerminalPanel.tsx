@@ -324,7 +324,7 @@ export function RemoteTerminalPanel({
     }
   };
 
-  // SDLC-REPO-EXP-05: Extract diagrams from terminal buffer logs
+  // Extract diagrams from terminal buffer logs
   const handleExtractDiagrams = async () => {
     setExtracting(true);
     try {

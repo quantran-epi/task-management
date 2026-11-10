@@ -111,7 +111,7 @@ export function RemoteFileViewer({
     }
   };
 
-  // SDLC-REPO-EXP-05: Save extracted Mermaid diagram to Diagram Studio
+  // Save extracted Mermaid diagram to Diagram Studio
   const handleSaveDiagram = async () => {
     if (mermaidBlocks.length === 0) return;
     setSavingDiagram(true);

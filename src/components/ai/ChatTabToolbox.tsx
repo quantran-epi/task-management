@@ -20,7 +20,7 @@ export interface ChatTabToolboxProps {
   // Tab ID
   activeTabId: string;
 
-  // Compact layout (e.g. for SDLC StepChatPanel or narrow sidebars)
+  // Compact layout (e.g. for narrow sidebars)
   compact?: boolean;
 
   // Model (tab-isolated)

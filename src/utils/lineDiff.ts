@@ -1,5 +1,5 @@
 /**
- * Deterministic, bounded unified line diff (SDLC-ART-02, D-09).
+ * Deterministic, bounded unified line diff.
  *
  * Line-based LCS with common prefix/suffix trimming and a hard cell budget, so a
  * model-supplied section can never allocate an unbounded matrix. Inputs are split on
