@@ -6,12 +6,6 @@ import {
   type ChatMessageGrounding,
 } from '../services/ai/groundedAnswerSchemas';
 import {
-  SdlcArtifactMetadataSchema,
-  SdlcDocumentSetMetadataSchema,
-  WizardSnapshotSchema,
-} from '../services/ai/wizardSchemas';
-import { SdlcWorkflowStateSchema } from '../services/wizard/workflowSchemas';
-import {
   TASK_STATUSES,
   TASK_PRIORITIES,
   SYSTEM_TYPES,
@@ -151,7 +145,6 @@ export const BackupNoteRecordSchema = z.object({
   title: z.string().trim().max(120, 'Title must be 120 characters or less').optional(),
   body: z.string().max(50000, 'Body must be 50000 characters or less'),
   isPinned: z.boolean(),
-  sdlcArtifact: SdlcArtifactMetadataSchema.optional(),
   deletedAt: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -238,7 +231,7 @@ export const BackupChatTabRecordSchema = z
     id: uuidSchema,
     threadId: uuidSchema,
     scopeKey: z.string().min(1),
-    type: z.enum(['chat', 'sdlc']),
+    type: z.enum(['chat']),
     title: z.string().trim().min(1).max(200),
     order: z.number().int().nonnegative(),
     active: z.boolean().optional(),
@@ -250,7 +243,6 @@ export const BackupChatTabRecordSchema = z
       status: z.enum(['interrupted', 'error']).optional(),
     }).optional(),
     config: backupTabConfigSchema.optional(),
-    workflowState: SdlcWorkflowStateSchema.optional(),
     createdAt: z.string(),
     updatedAt: z.string(),
   })
@@ -324,7 +316,6 @@ export const BackupChatMessageRecordSchema = z
       )
       .optional(),
     grounding: z.unknown().optional() as z.ZodType<ChatMessageGrounding | undefined>,
-    wizard: WizardSnapshotSchema.optional(),
     // Phase 34 D-31: AI Office attribution. Declared explicitly — this is a plain z.object,
     // so an undeclared key is silently stripped and restored messages render unattributed.
     agentId: uuidSchema.optional(),
@@ -444,7 +435,6 @@ export const BackupDocumentSetRecordSchema = z.object({
     .optional(),
   isBase: z.boolean().optional(),
   presentationRevision: z.number().int().nonnegative().optional(),
-  sdlc: SdlcDocumentSetMetadataSchema.optional(),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
 });

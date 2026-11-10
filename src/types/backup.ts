@@ -29,25 +29,6 @@ import type {
   AiTeamLink,
 } from './aiOffice';
 
-export interface MissingBackupSource {
-  id: string;
-  title: string;
-  version?: number | undefined;
-  hash?: string | undefined;
-}
-
-export interface MissingSourceCheckpoint {
-  tabId: string;
-  threadId: string;
-  step: string;
-  missingSourceIds: string[];
-}
-
-export interface BackupRecoveryInfo {
-  missingSources: MissingBackupSource[];
-  blockedTabs: MissingSourceCheckpoint[];
-}
-
 export interface BackupAttachmentRecord {
   id: string;
   noteId: string;
@@ -140,7 +121,6 @@ export interface BackupValidationResult {
   valid: boolean;
   envelope?: BackupEnvelope;
   errors: ValidationErrorDetail[];
-  recovery?: BackupRecoveryInfo;
 }
 
 export interface SnapshotData {

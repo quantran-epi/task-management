@@ -155,7 +155,6 @@ function projectSafeChatTab(tab: ChatTab): ChatTab {
     ...(tab.status !== undefined ? { status: tab.status } : {}),
     ...(tab.checkpoint !== undefined ? { checkpoint: tab.checkpoint } : {}),
     ...(config && Object.keys(config).length > 0 ? { config } : {}),
-    ...(tab.workflowState !== undefined ? { workflowState: projectSafeTabValue(tab.workflowState) as Record<string, unknown> } : {}),
     createdAt: tab.createdAt,
     updatedAt: tab.updatedAt,
   };
