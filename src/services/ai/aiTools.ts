@@ -71,7 +71,7 @@ import { exportContentAsFile, inferFormatFromFilename, type ExportFormat } from 
 import { exportPresentationAsFile, type SlideData } from '../../utils/pptxExport';
 import { executeDynamicFileScript } from '../../utils/dynamicFileSandbox';
 import { generateImage } from './imageGenerationClient';
-import { executeSdlcArtifactTool, type ArtifactToolContext } from './sdlcArtifactTools';
+import { preparePatch, readPatchTarget } from './patchProposal';
 import { executeKnowledgeRetrievalTool } from './knowledgeRetrievalTool';
 import { getImageConfig, getImageApiKey } from './nineRouterTokenService';
 import { redactApiKey } from './nineRouterClient';
@@ -1866,17 +1866,21 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'get_artifact',
       description:
-        'Read the current SDLC artifact of the open Change Request: kind, committed version, approval state, full current draft Markdown, base hash, and the stable section index. Read-only; call it before proposing any edit.',
+        'Read the current Markdown of a note or skill: target, id, full current draft, base hash, and the stable section index. Read-only; call it before proposing any edit.',
       parameters: {
         type: 'object',
         properties: {
-          kind: {
+          target: {
             type: 'string',
-            enum: ['SOLUTION', 'PL03B', 'PL07', 'CAB'],
-            description: 'Artifact to read in the currently open CR.',
+            enum: ['note', 'skill'],
+            description: 'Document kind to read.',
+          },
+          id: {
+            type: 'string',
+            description: 'noteId or skillId of the document.',
           },
         },
-        required: ['kind'],
+        required: ['target', 'id'],
       },
     },
   },
@@ -1885,14 +1889,18 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'patch_artifact_section',
       description:
-        'Propose an append or replace edit to one section of the current SDLC artifact. Returns a unified diff and the resulting Markdown; it never writes the editor — the user must approve the change. Requires the sectionId, exact expectedHeading, and baseHash returned by get_artifact.',
+        'Propose an append or replace edit to one section of a note or skill. Returns a unified diff and the resulting Markdown; it never writes the editor — the user must approve the change. Requires the sectionId, exact expectedHeading, and baseHash returned by get_artifact.',
       parameters: {
         type: 'object',
         properties: {
-          kind: {
+          target: {
             type: 'string',
-            enum: ['SOLUTION', 'PL03B', 'PL07', 'CAB'],
-            description: 'Artifact to patch in the currently open CR.',
+            enum: ['note', 'skill'],
+            description: 'Document kind to patch.',
+          },
+          id: {
+            type: 'string',
+            description: 'noteId or skillId of the document.',
           },
           sectionId: {
             type: 'string',
@@ -1916,68 +1924,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
             description: 'Markdown text to append or use as the replacement body (max 120 lines).',
           },
         },
-        required: ['kind', 'sectionId', 'expectedHeading', 'baseHash', 'operation', 'newContent'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'propose_subsystems',
-      description:
-        'Propose candidate subsystems of the open Change Request with a reason and a confidence for each. Returns data only — it never writes the CR; the user must confirm in the approval card. Use systemId values from the System Catalog, never invented codes.',
-      parameters: {
-        type: 'object',
-        properties: {
-          items: {
-            type: 'array',
-            description: 'Candidate subsystems, each with systemId, confidence and reason.',
-            items: {
-              type: 'object',
-              properties: {
-                systemId: { type: 'string', description: 'System Catalog id of a subsystem (never a logical parent).' },
-                confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
-                reason: { type: 'string', description: 'Evidence-based reason this CR affects the subsystem.' },
-              },
-              required: ['systemId', 'reason'],
-            },
-          },
-          evidence: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Short evidence references supporting the proposal.',
-          },
-        },
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'propose_research',
-      description:
-        'Propose external research questions for the open Change Request, each optionally bound to a target system. Returns data only — it never executes research; the user must confirm in the proposal card. Use systemId values from the System Catalog, never invented codes.',
-      parameters: {
-        type: 'object',
-        properties: {
-          questions: {
-            type: 'array',
-            description: 'Research questions that internal evidence cannot answer.',
-            items: {
-              type: 'object',
-              properties: {
-                question: { type: 'string', description: 'The concrete question to research.' },
-                systemId: { type: 'string', description: 'Optional System Catalog id the question targets.' },
-              },
-              required: ['question'],
-            },
-          },
-          rationale: {
-            type: 'string',
-            description: 'Which internal evidence is missing and why external research is needed.',
-          },
-        },
-        required: ['questions'],
+        required: ['target', 'id', 'sectionId', 'expectedHeading', 'baseHash', 'operation', 'newContent'],
       },
     },
   },
@@ -2127,8 +2074,6 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
 ];
 
 export interface ExecuteAiToolOptions {
-  /** Trusted, request-bound SDLC artifact context. Never sourced from model arguments (T-27-01). */
-  artifactContext?: ArtifactToolContext;
   /**
    * WR-19: the CR a CR-scoped turn is bound to. Entity ids outside it are rejected so a
    * scoped turn cannot read or mutate another CR's data.
@@ -2200,12 +2145,12 @@ export async function executeAiTool(
         return await executeOracleDescribe(args as any, db);
       }
 
-      case 'get_artifact':
-      case 'patch_artifact_section':
-      case 'propose_subsystems':
-      case 'propose_research': {
-        const result = await executeSdlcArtifactTool(normalized, args, db, options?.artifactContext);
-        return JSON.stringify(result);
+      case 'get_artifact': {
+        return JSON.stringify(await readPatchTarget(db, args));
+      }
+
+      case 'patch_artifact_section': {
+        return JSON.stringify(await preparePatch(db, args));
       }
 
       case 'query_tasks': {
