@@ -6,10 +6,14 @@ import type { TaskPlannerDatabase } from '../../../db';
 import type { AiEmployee, AiLead, AiSkill, AiTeam, AiTeamMember } from '../../../types/aiOffice';
 import {
   addTeamLink,
+  addTeamMember,
+  assignLeader,
   getTeam,
   listTeamLinks,
   listTeamMembers,
+  lockLeader,
   removeTeamLink,
+  removeTeamMember,
   setMemberBudget,
   topUpMemberBudget,
   updateTeam,
@@ -128,11 +132,14 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   const [mcpEnabled, setMcpEnabled] = useState<boolean>(false);
   const [debugLogs, setDebugLogs] = useState<TeamDebugLog[]>([]);
   const [debugModalOpen, setDebugModalOpen] = useState<boolean>(false);
+  const [sendError, setSendError] = useState<{ code: string; message: string } | null>(null);
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const lastUserTextRef = useRef<string>('');
 
   const links = useLiveQuery(() => listTeamLinks(team.id, db), [db, team.id]) ?? [];
   const liveMembers = useLiveQuery(() => listTeamMembers(team.id, db), [db, team.id]) ?? members;
+  // D-09: the leader Select's option source. `lead` stays the current-selection display.
+  const leads = useLiveQuery(() => listLeads(db), [db]) ?? [];
 
   // AIO-TEAM-04: only this team's own roster is addressable. A non-member has no member
   // row, so its budget is 0 and an @mention would park that turn forever.
@@ -339,13 +346,39 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     [roster, team.leadId]
   );
 
+  /**
+   * D-09: the first run locks the leader. Both the decision and the write read the PERSISTED
+   * team row at send time — a leader assigned through the settings drawer after mount is
+   * invisible to the `team` prop. A failed lock surfaces an error instead of running silently.
+   */
+  const sendTurn = useCallback(
+    async (text: string) => {
+      if (!coordinator) return;
+      setSendError(null);
+      try {
+        const persisted = await getTeam(team.id, db);
+        if (persisted && persisted.leaderLockedAt === undefined && persisted.leadId !== undefined) {
+          await lockLeader(team.id, db);
+        }
+      } catch (err) {
+        setSendError({
+          code: 'LEADER_LOCK_FAILED',
+          message: err instanceof Error ? err.message : String(err),
+        });
+        return;
+      }
+      await coordinator.send(text);
+    },
+    [coordinator, db, team.id]
+  );
+
   const handleSubmit = useCallback(
     (text: string) => {
       lastUserTextRef.current = text;
       setDraft('');
-      void coordinator?.send(text);
+      void sendTurn(text);
     },
-    [coordinator]
+    [sendTurn]
   );
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -523,7 +556,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
               }}
             >
               <span style={{ fontSize: 20, fontWeight: 600 }}>{team.name}</span>
-              {lead && (
+              {lead ? (
                 <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Avatar
                     size={20}
@@ -533,6 +566,13 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                     {initialOf(lead.name)}
                   </Avatar>
                   <span style={{ fontSize: 12 }}>{lead.name}</span>
+                </span>
+              ) : (
+                <span
+                  data-testid="team-header-no-lead"
+                  style={{ fontSize: 12, color: token.colorTextSecondary }}
+                >
+                  Chưa chọn lead
                 </span>
               )}
               <Tag color={team.status === 'active' ? 'success' : 'default'}>
@@ -596,9 +636,9 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                   onStop={() => coordinator?.abortAll()}
                   onResolveApproval={(approved) => coordinator?.resolveApproval(approved)}
                   onRetry={() => {
-                    if (lastUserTextRef.current) void coordinator?.send(lastUserTextRef.current);
+                    if (lastUserTextRef.current) void sendTurn(lastUserTextRef.current);
                   }}
-                  error={null}
+                  error={sendError}
                   toolbox={{
                     selectedModel: lead?.model ?? '',
                     availableModels: [],
@@ -645,8 +685,21 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         members={liveMembers}
         lead={lead}
         employees={employees}
+        leads={leads}
         links={linkRows}
         onCancel={() => setSettingsOpen(false)}
+        onAssignLeader={async (leadId) => {
+          await assignLeader(team.id, leadId, db);
+        }}
+        onAddMember={async (agentId) => {
+          await addTeamMember(
+            { teamId: team.id, agentId, role: 'employee', budgetTokens: 0 },
+            db
+          );
+        }}
+        onRemoveMember={async (memberId) => {
+          await removeTeamMember(memberId, db);
+        }}
         onSave={(input) => {
           void handleSaveSettings(input);
         }}

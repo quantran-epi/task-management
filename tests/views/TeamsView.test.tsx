@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../src/db';
 import { createEmployee, createLead, createSkill, updateLead } from '../../src/db/repositories/aiOfficeRepo';
-import { createTeam, listTeamMembers, listTeams } from '../../src/db/repositories/aiTeamRepo';
+import { createTeam, getTeam, listTeamMembers, listTeams } from '../../src/db/repositories/aiTeamRepo';
 import { TeamsView } from '../../src/views/TeamsView';
 import { useLayoutStore } from '../../src/workbench/store/layoutStore';
 import type { AiEmployee, AiLead, AiTeam } from '../../src/types/aiOffice';
@@ -363,8 +363,12 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
         members={members}
         lead={lead}
         employees={employees}
+        leads={[lead]}
         links={[]}
         onCancel={vi.fn()}
+        onAssignLeader={vi.fn()}
+        onAddMember={vi.fn()}
+        onRemoveMember={vi.fn()}
         onSave={vi.fn()}
       />
     );
@@ -461,6 +465,196 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     expect(seen[0]!.system).toContain('Bạn là lead điều phối.');
     expect(seen[1]!.model).toBe('claude-opus-5');
     expect(seen[1]!.system).toContain('Bạn là lead phiên bản hai.');
+  });
+
+  it('lists roster members with role and removes an employee without touching the lead row', async () => {
+    renderView();
+
+    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    fireEvent.click(await screen.findByTestId('team-header-settings'));
+
+    const members = await listTeamMembers(activeTeam.id, db);
+    const employeeRow = members.find((row) => row.role === 'employee')!;
+    const leadRow = members.find((row) => row.role === 'lead')!;
+
+    expect(await screen.findByTestId(`team-member-row-${employeeRow.id}`)).toBeInTheDocument();
+    expect(screen.queryByTestId(`team-member-remove-${leadRow.id}`)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId(`team-member-remove-${employeeRow.id}`));
+    fireEvent.click(await screen.findByText('Gỡ'));
+
+    await waitFor(async () => {
+      const after = await listTeamMembers(activeTeam.id, db);
+      expect(after.some((row) => row.id === employeeRow.id)).toBe(false);
+      expect(after.some((row) => row.role === 'lead')).toBe(true);
+    });
+  });
+
+  it('adds an agent from the settings drawer, excluding agents already on the roster', async () => {
+    renderView();
+
+    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    fireEvent.click(await screen.findByTestId('team-header-settings'));
+    await screen.findByTestId('team-roster-block');
+
+    // Dung Phạm belongs to the other team, so she is the only addable agent.
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Thêm nhân viên' }));
+    expect(screen.queryByTitle('An Nguyễn · Chuyên viên phân tích')).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByTitle('Dung Phạm · Chuyên viên tài liệu'));
+
+    await waitFor(async () => {
+      const after = await listTeamMembers(activeTeam.id, db);
+      expect(after.some((row) => row.agentId === employees[2]!.id)).toBe(true);
+      expect(after.find((row) => row.agentId === employees[2]!.id)?.budgetTokens).toBe(0);
+    });
+  });
+
+  it('offers every persisted lead and locks the leader control once leaderLockedAt is set', async () => {
+    const secondLead = await createLead(
+      {
+        name: 'Cường Vũ',
+        role: 'Lead dự phòng',
+        capability: 'Điều phối dự phòng.',
+        persona: 'Bạn là lead dự phòng.',
+        model: 'claude-opus-4',
+      },
+      db
+    );
+
+    renderView();
+    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    fireEvent.click(await screen.findByTestId('team-header-settings'));
+
+    const leaderSelect = await screen.findByRole('combobox', { name: 'Leader' });
+    expect(leaderSelect).toBeEnabled();
+    fireEvent.mouseDown(leaderSelect);
+    fireEvent.click(await screen.findByTitle('Cường Vũ · Lead dự phòng'));
+
+    await waitFor(async () => {
+      const row = await getTeam(activeTeam.id, db);
+      expect(row?.leadId).toBe(secondLead.id);
+    });
+
+    await db.aiTeams.update(activeTeam.id, { leaderLockedAt: new Date().toISOString() });
+    await waitFor(async () => {
+      expect(screen.getByRole('combobox', { name: 'Leader' })).toBeDisabled();
+    });
+    expect(
+      screen.getByText(/Leader đã khóa từ lượt chạy đầu tiên và cố định suốt đời nhóm/)
+    ).toBeInTheDocument();
+  });
+
+  it('renders an empty group workspace without crashing', async () => {
+    const empty = await createTeam({ name: 'Nhóm Rỗng' }, db);
+
+    renderView();
+    fireEvent.click(await screen.findByTestId(`team-open-${empty.id}`));
+
+    expect(await screen.findByTestId('team-workspace')).toBeInTheDocument();
+    expect(screen.getByTestId('team-header-no-lead')).toHaveTextContent('Chưa chọn lead');
+  });
+
+  it('locks the leader on the first send only', async () => {
+    await db.settings.put({ key: 'ninerouter_api_key', value: 'sk-test' });
+    await db.settings.put({ key: 'ninerouter_endpoint', value: 'https://example.invalid/v1' });
+
+    const createRuntimeDeps = () => ({
+      runLoop: (async () => ({
+        fullResponse: 'Xong.',
+        cleanResponse: 'Xong.',
+        messages: [],
+        tokenUsage: {},
+        generatedFiles: [],
+        truncated: false,
+        loopLimitReached: false,
+      })) as any,
+    });
+
+    render(<TeamsView db={db} createRuntimeDeps={createRuntimeDeps} />);
+
+    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    const composer = await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
+
+    fireEvent.change(composer, { target: { value: 'Lượt một' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+    await screen.findByLabelText('Gửi tin nhắn');
+
+    const first = await waitFor(async () => {
+      const row = await getTeam(activeTeam.id, db);
+      expect(row?.leaderLockedAt).toBeTruthy();
+      return row!.leaderLockedAt;
+    });
+
+    fireEvent.change(composer, { target: { value: 'Lượt hai' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+    await screen.findByLabelText('Gửi tin nhắn');
+
+    const second = await getTeam(activeTeam.id, db);
+    expect(second?.leaderLockedAt).toBe(first);
+  });
+
+  it('runs the assigned lead after mount and locks it (assign-then-first-send)', async () => {
+    await db.settings.put({ key: 'ninerouter_api_key', value: 'sk-test' });
+    await db.settings.put({ key: 'ninerouter_endpoint', value: 'https://example.invalid/v1' });
+
+    const assignedLead = await createLead(
+      {
+        name: 'Cường Vũ',
+        role: 'Lead dự phòng',
+        capability: 'Điều phối dự phòng.',
+        persona: 'Bạn là lead dự phòng.',
+        model: 'claude-opus-5',
+      },
+      db
+    );
+    const empty = await createTeam({ name: 'Nhóm Rỗng' }, db);
+
+    const seen: Array<{ agentId: string; model: string; system: string }> = [];
+    const createRuntimeDeps = (agentId: string) => ({
+      runLoop: (async (loopOptions: any) => {
+        seen.push({
+          agentId,
+          model: loopOptions.model,
+          system: (loopOptions.messages ?? [])
+            .filter((message: any) => message.role === 'system')
+            .map((message: any) => String(message.content))
+            .join('\n'),
+        });
+        return {
+          fullResponse: 'Xong.',
+          cleanResponse: 'Xong.',
+          messages: [],
+          tokenUsage: {},
+          generatedFiles: [],
+          truncated: false,
+          loopLimitReached: false,
+        };
+      }) as any,
+    });
+
+    render(<TeamsView db={db} createRuntimeDeps={createRuntimeDeps} />);
+
+    fireEvent.click(await screen.findByTestId(`team-open-${empty.id}`));
+    fireEvent.click(await screen.findByTestId('team-header-settings'));
+
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: 'Leader' }));
+    fireEvent.click(await screen.findByTitle('Cường Vũ · Lead dự phòng'));
+    await waitFor(async () => {
+      expect((await getTeam(empty.id, db))?.leadId).toBe(assignedLead.id);
+    });
+    fireEvent.click(screen.getByText('Hủy'));
+
+    const composer = await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(composer, { target: { value: 'Bắt đầu' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    await waitFor(() => expect(seen).toHaveLength(1));
+    expect(seen[0]!.agentId).toBe(assignedLead.id);
+    expect(seen[0]!.model).toBe('claude-opus-5');
+    expect(seen[0]!.system).toContain('Bạn là lead dự phòng.');
+    await waitFor(async () => {
+      expect((await getTeam(empty.id, db))?.leaderLockedAt).toBeTruthy();
+    });
   });
 
   it('renders the team composer placeholder', async () => {

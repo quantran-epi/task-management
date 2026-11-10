@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Avatar, Button, Drawer, InputNumber, Switch, Table, theme } from 'antd';
+import { Alert, Avatar, Button, Drawer, InputNumber, Popconfirm, Select, Switch, Table, Tag, theme } from 'antd';
 import type { AiEmployee, AiLead, AiTeam, AiTeamMember } from '../../../types/aiOffice';
 import { agentColorFor, agentTextColorFor } from './AgentAttributionRow';
 import { LinkedItemsList, type LinkedItemRow } from './LinkedItemsList';
@@ -10,8 +10,13 @@ export interface TeamSettingsDrawerProps {
   members: AiTeamMember[];
   lead: AiLead | undefined;
   employees: AiEmployee[];
+  /** Every persisted lead — the leader Select's option source (D-09). */
+  leads: AiLead[];
   links: LinkedItemRow[];
   onCancel: () => void;
+  onAssignLeader: (leadId: string) => Promise<void> | void;
+  onAddMember: (agentId: string) => Promise<void> | void;
+  onRemoveMember: (memberId: string) => Promise<void> | void;
   onSave: (input: {
     budgetTokens: number;
     budgets: Record<string, number>;
@@ -53,8 +58,12 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
   members,
   lead,
   employees,
+  leads,
   links,
   onCancel,
+  onAssignLeader,
+  onAddMember,
+  onRemoveMember,
   onSave,
 }) => {
   const { token } = theme.useToken();
@@ -62,6 +71,23 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
   const [rows, setRows] = useState<SplitRow[]>([]);
   const [autoSplit, setAutoSplit] = useState(team.autoSplitEnabled === true);
   const [autoApprove, setAutoApprove] = useState(team.autoApproveMutations === true);
+  const [rosterError, setRosterError] = useState<string | null>(null);
+
+  const memberAgentIds = useMemo(
+    () => new Set(members.filter((row) => row.role === 'employee').map((row) => row.agentId)),
+    [members]
+  );
+
+  // A refusal from the repo (locked leader, duplicate member) is rendered here rather than
+  // left as an unhandled rejection. The UI never decides whether the write is allowed.
+  const runRosterAction = async (action: () => Promise<void> | void) => {
+    setRosterError(null);
+    try {
+      await action();
+    } catch (err) {
+      setRosterError(err instanceof Error ? err.message : String(err));
+    }
+  };
 
   const baseRows = useMemo(
     () =>
@@ -156,6 +182,109 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
       }
     >
       <div data-testid="team-settings-drawer" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div data-testid="team-roster-block">
+          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Thành viên</div>
+          {rosterError && (
+            <Alert
+              type="warning"
+              showIcon
+              closable
+              style={{ marginBottom: 8 }}
+              message={rosterError}
+              onClose={() => setRosterError(null)}
+            />
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {members.length === 0 && (
+              <div style={{ fontSize: 12, color: token.colorTextSecondary }}>
+                Nhóm chưa có thành viên nào.
+              </div>
+            )}
+            {members.map((member) => {
+              const isLead = member.role === 'lead';
+              const agent = isLead ? lead : employees.find((row) => row.id === member.agentId);
+              const name = agent?.name ?? 'Không xác định';
+              const color = agentColorFor(member.agentId);
+              return (
+                <div
+                  key={member.id}
+                  data-testid={`team-member-row-${member.id}`}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                >
+                  <Avatar
+                    size={20}
+                    shape={isLead ? 'square' : 'circle'}
+                    style={{ backgroundColor: color, color: agentTextColorFor(color) }}
+                  >
+                    {initialOf(name)}
+                  </Avatar>
+                  <span style={{ fontSize: 13 }}>{name}</span>
+                  <Tag style={{ fontSize: 11 }}>{isLead ? 'Lead' : 'Nhân viên'}</Tag>
+                  {!isLead && (
+                    <Popconfirm
+                      title={`Gỡ «${name}» khỏi nhóm? Tin nhắn và phân công cũ vẫn được giữ.`}
+                      okText="Gỡ"
+                      cancelText="Hủy"
+                      onConfirm={() => runRosterAction(() => onRemoveMember(member.id))}
+                    >
+                      <Button
+                        size="small"
+                        type="text"
+                        danger
+                        style={{ marginLeft: 'auto' }}
+                        data-testid={`team-member-remove-${member.id}`}
+                      >
+                        Gỡ khỏi nhóm
+                      </Button>
+                    </Popconfirm>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 12, marginBottom: 4 }}>Thêm nhân viên</div>
+            <Select
+              showSearch
+              style={{ width: '100%' }}
+              value={null}
+              onChange={(agentId: string) => runRosterAction(() => onAddMember(agentId))}
+              options={employees
+                .filter((employee) => !memberAgentIds.has(employee.id))
+                .map((employee) => ({
+                  label: `${employee.name} · ${employee.role}`,
+                  value: employee.id,
+                }))}
+              optionFilterProp="label"
+              aria-label="Thêm nhân viên"
+              placeholder="Chọn nhân viên để thêm"
+            />
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 12, marginBottom: 4 }}>Leader</div>
+            <Select
+              showSearch
+              style={{ width: '100%' }}
+              value={team.leadId ?? null}
+              onChange={(leadId: string) => runRosterAction(() => onAssignLeader(leadId))}
+              options={leads.map((row) => ({ label: `${row.name} · ${row.role}`, value: row.id }))}
+              optionFilterProp="label"
+              aria-label="Leader"
+              placeholder="Chọn leader"
+              disabled={Boolean(team.leaderLockedAt)}
+            />
+            {team.leaderLockedAt ? (
+              <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>
+                Leader đã khóa từ lượt chạy đầu tiên và cố định suốt đời nhóm. Cần leader khác thì
+                tạo nhóm mới.
+              </div>
+            ) : null}
+          </div>
+        </div>
+
         <div>
           <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Ngân sách token</div>
           <InputNumber
