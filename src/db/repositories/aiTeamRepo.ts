@@ -1,6 +1,5 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../index';
 import type { AiTeam, AiTeamLink, AiTeamMember } from '../../types/aiOffice';
-import { MAX_ACTIVE_TEAMS, MAX_EMPLOYEES_PER_TEAM } from '../../types/aiOffice';
 import { generateId } from '../../utils/uuid';
 import {
   AiTeamInputSchema,
@@ -14,11 +13,12 @@ import {
 } from '../../validation/aiOfficeSchemas';
 
 /**
- * Team persistence (D-15, D-16, D-17, D-19, D-26, D-32).
+ * Team persistence (D-05, D-09, D-17, D-19, D-26, D-32).
  *
- * Caps are enforced inside `db.transaction('rw', ...)` so two racing callers cannot both pass
- * the count check. Budgets live on `aiTeamMembers` rows and are always written one row at a
- * time — never a read-modify-write of a shared array.
+ * D-06: no roster or group cap. Leader assignment writes both sources of truth — the
+ * `aiTeams.leadId` column and the single `role='lead'` member row — inside one transaction.
+ * Budgets live on `aiTeamMembers` rows and are always written one row at a time — never a
+ * read-modify-write of a shared array.
  */
 
 export const ACTIVE_TEAM_CAP_MESSAGE =
@@ -43,10 +43,6 @@ function byCreatedAt<T extends { createdAt: string }>(rows: T[]): T[] {
 async function assertCanActivate(teamId: string, db: TaskPlannerDatabase): Promise<void> {
   const target = await db.aiTeams.get(teamId);
   if (!target) throw new Error(`Không tìm thấy nhóm: ${teamId}`);
-  if (target.status === 'active') return;
-
-  const activeCount = await db.aiTeams.where('status').equals('active').count();
-  if (activeCount >= MAX_ACTIVE_TEAMS) throw new Error(ACTIVE_TEAM_CAP_MESSAGE);
 }
 
 /** UI-SPEC §8a: floor per row, remainder on the lead row so the sum is exact. */
@@ -91,9 +87,6 @@ export async function createTeam(
 ): Promise<AiTeam> {
   const validated = AiTeamInputSchema.parse(input);
   const employeeIds = input.employeeIds ?? [];
-  if (employeeIds.length > MAX_EMPLOYEES_PER_TEAM) {
-    throw new Error(`Một nhóm chỉ có tối đa ${MAX_EMPLOYEES_PER_TEAM} nhân viên.`);
-  }
 
   const now = new Date().toISOString();
   const team: AiTeam = {
@@ -111,10 +104,6 @@ export async function createTeam(
   }
 
   await db.transaction('rw', [db.aiTeams, db.aiTeamMembers], async () => {
-    if (team.status === 'active') {
-      const activeCount = await db.aiTeams.where('status').equals('active').count();
-      if (activeCount >= MAX_ACTIVE_TEAMS) throw new Error(ACTIVE_TEAM_CAP_MESSAGE);
-    }
     await db.aiTeams.add(team);
 
     const rows: AiTeamMember[] = [
@@ -146,42 +135,137 @@ export async function createTeam(
   return team;
 }
 
+const LEADER_LOCKED_MESSAGE =
+  'Nhóm đã khóa leader từ lượt chạy đầu tiên. Tạo nhóm mới nếu muốn dùng leader khác.';
+
+/**
+ * D-09: the lock is durable and applies to every write path, so the guard lives next to the
+ * writes rather than in the UI. A patch that omits `leadId` stays legal.
+ */
+function assertLeaderUnlocked(existing: AiTeam, nextLeadId: string | undefined): void {
+  if (nextLeadId === undefined) return;
+  if (existing.leaderLockedAt !== undefined && nextLeadId !== existing.leadId) {
+    throw new Error(LEADER_LOCKED_MESSAGE);
+  }
+}
+
 export async function updateTeam(
   id: string,
   patch: AiTeamUpdate,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<AiTeam> {
   const validated = AiTeamUpdateSchema.parse(patch);
-  const existing = await db.aiTeams.get(id);
-  if (!existing) throw new Error(`Không tìm thấy nhóm: ${id}`);
 
-  const updated: AiTeam = { ...existing, updatedAt: new Date().toISOString() };
+  return db.transaction('rw', [db.aiTeams, db.aiTeamMembers], async () => {
+    const existing = await db.aiTeams.get(id);
+    if (!existing) throw new Error(`Không tìm thấy nhóm: ${id}`);
+    assertLeaderUnlocked(existing, validated.leadId);
 
-  if (validated.name !== undefined) updated.name = validated.name;
-  if (validated.leadId !== undefined) updated.leadId = validated.leadId;
-  if (validated.status !== undefined) updated.status = validated.status;
-  if (validated.budgetTokens !== undefined) updated.budgetTokens = validated.budgetTokens;
-  if ('autoSplitEnabled' in patch) {
-    if (validated.autoSplitEnabled !== undefined) {
-      updated.autoSplitEnabled = validated.autoSplitEnabled;
-    } else {
-      delete updated.autoSplitEnabled;
+    const updated: AiTeam = { ...existing, updatedAt: new Date().toISOString() };
+
+    if (validated.name !== undefined) updated.name = validated.name;
+    if (validated.leadId !== undefined) updated.leadId = validated.leadId;
+    if (validated.status !== undefined) updated.status = validated.status;
+    if (validated.budgetTokens !== undefined) updated.budgetTokens = validated.budgetTokens;
+    if ('autoSplitEnabled' in patch) {
+      if (validated.autoSplitEnabled !== undefined) {
+        updated.autoSplitEnabled = validated.autoSplitEnabled;
+      } else {
+        delete updated.autoSplitEnabled;
+      }
     }
-  }
-  if ('autoApproveMutations' in patch) {
-    if (validated.autoApproveMutations !== undefined) {
-      updated.autoApproveMutations = validated.autoApproveMutations;
-    } else {
-      delete updated.autoApproveMutations;
+    if ('autoApproveMutations' in patch) {
+      if (validated.autoApproveMutations !== undefined) {
+        updated.autoApproveMutations = validated.autoApproveMutations;
+      } else {
+        delete updated.autoApproveMutations;
+      }
     }
-  }
 
-  await db.transaction('rw', [db.aiTeams], async () => {
-    if (updated.status === 'active') await assertCanActivate(id, db);
+    // Pitfall 5: the lead member row must move with `leadId` — never two sources that disagree.
+    if (validated.leadId !== undefined && validated.leadId !== existing.leadId) {
+      await writeLeadRow(id, validated.leadId, db);
+    }
+
     await db.aiTeams.put(updated);
+    return updated;
   });
+}
 
-  return updated;
+/** Replaces the single `role='lead'` member row for a team. */
+async function writeLeadRow(
+  teamId: string,
+  leadId: string,
+  db: TaskPlannerDatabase
+): Promise<void> {
+  const siblings = await db.aiTeamMembers.where('teamId').equals(teamId).toArray();
+  for (const row of siblings) {
+    if (row.role === 'lead') await db.aiTeamMembers.delete(row.id);
+  }
+  await db.aiTeamMembers.add({
+    id: generateId(),
+    teamId,
+    agentId: leadId,
+    role: 'lead',
+    budgetTokens: 0,
+    usedTokens: 0,
+  });
+}
+
+/**
+ * D-05/D-09: assign (or re-assign) the leader before the first run. Both sources of truth —
+ * `aiTeams.leadId` and the single `role='lead'` member row — are written in one transaction.
+ */
+export async function assignLeader(
+  teamId: string,
+  leadId: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<AiTeam> {
+  return db.transaction('rw', [db.aiTeams, db.aiTeamMembers, db.aiLeads], async () => {
+    const existing = await db.aiTeams.get(teamId);
+    if (!existing) throw new Error(`Không tìm thấy nhóm: ${teamId}`);
+    assertLeaderUnlocked(existing, leadId);
+
+    const lead = await db.aiLeads.get(leadId);
+    if (!lead) throw new Error(`Không tìm thấy lead: ${leadId}`);
+
+    await writeLeadRow(teamId, leadId, db);
+
+    const updated: AiTeam = { ...existing, leadId, updatedAt: new Date().toISOString() };
+    await db.aiTeams.put(updated);
+    return updated;
+  });
+}
+
+/** D-09: the first run calls this once; a second call keeps the original timestamp. */
+export async function lockLeader(
+  teamId: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<AiTeam> {
+  return db.transaction('rw', [db.aiTeams, db.aiTeamMembers], async () => {
+    const existing = await db.aiTeams.get(teamId);
+    if (!existing) throw new Error(`Không tìm thấy nhóm: ${teamId}`);
+    if (existing.leaderLockedAt !== undefined) return existing;
+
+    if (existing.leadId === undefined) {
+      throw new Error('Nhóm chưa có leader nên chưa thể khóa leader.');
+    }
+    const siblings = await db.aiTeamMembers.where('teamId').equals(teamId).toArray();
+    const hasLeadRow = siblings.some(
+      (row) => row.role === 'lead' && row.agentId === existing.leadId
+    );
+    if (!hasLeadRow) {
+      throw new Error('Nhóm chưa có leader nên chưa thể khóa leader.');
+    }
+
+    const updated: AiTeam = {
+      ...existing,
+      leaderLockedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await db.aiTeams.put(updated);
+    return updated;
+  });
 }
 
 /** Child rows die with the team; links and members have no meaning without it. */
@@ -245,10 +329,6 @@ export async function addTeamMember(
     if (validated.role === 'lead' && siblings.some((row) => row.role === 'lead')) {
       throw new Error('Nhóm đã có lead. Mỗi nhóm chỉ có một lead.');
     }
-    const employeeCount = siblings.filter((row) => row.role === 'employee').length;
-    if (validated.role === 'employee' && employeeCount >= MAX_EMPLOYEES_PER_TEAM) {
-      throw new Error(`Một nhóm chỉ có tối đa ${MAX_EMPLOYEES_PER_TEAM} nhân viên.`);
-    }
 
     const member: AiTeamMember = {
       id: generateId(),
@@ -267,7 +347,14 @@ export async function removeTeamMember(
   memberId: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<void> {
-  await db.aiTeamMembers.delete(memberId);
+  await db.transaction('rw', [db.aiTeamMembers, db.aiTeams], async () => {
+    const row = await db.aiTeamMembers.get(memberId);
+    if (!row) return;
+    if (row.role === 'lead') {
+      throw new Error('Không thể gỡ leader khỏi nhóm. Hãy đổi leader trước khi khóa.');
+    }
+    await db.aiTeamMembers.delete(memberId);
+  });
 }
 
 export async function applyEvenSplit(

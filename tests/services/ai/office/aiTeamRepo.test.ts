@@ -2,7 +2,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TaskPlannerDatabase } from '../../../../src/db/index';
 import {
-  listTeams,
   getTeam,
   createTeam,
   updateTeam,
@@ -18,14 +17,14 @@ import {
   addTeamLink,
   removeTeamLink,
   listTeamLinks,
+  assignLeader,
+  lockLeader,
 } from '../../../../src/db/repositories/aiTeamRepo';
-import { MAX_ACTIVE_TEAMS, MAX_EMPLOYEES_PER_TEAM } from '../../../../src/types/aiOffice';
 import { generateId } from '../../../../src/utils/uuid';
 
-const CAP_MESSAGE =
-  'Đã có 3 nhóm đang hoạt động. Tạm dừng một nhóm khác trước khi kích hoạt nhóm này.';
+const NOW = '2026-11-08T12:00:00.000Z';
 
-describe('aiTeamRepo (AIO-BUDGET-01, D-15, D-16, D-17, D-19, D-26, D-32)', () => {
+describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)', () => {
   let db: TaskPlannerDatabase;
   let dbName: string;
   let leadId: string;
@@ -56,6 +55,11 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-15, D-16, D-17, D-19, D-26, D-32)', () =>
     );
   }
 
+  async function leadRows(teamId: string): Promise<string[]> {
+    const rows = await db.aiTeamMembers.where('teamId').equals(teamId).toArray();
+    return rows.filter((row) => row.role === 'lead').map((row) => row.agentId);
+  }
+
   it('seeds one member row per selected employee plus the lead with an even split', async () => {
     const team = await makeTeam('Alpha');
     const members = await listTeamMembers(team.id, db);
@@ -73,45 +77,144 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-15, D-16, D-17, D-19, D-26, D-32)', () =>
     ]);
   });
 
-  it('rejects a 4th active team with the exact UI-SPEC message', async () => {
-    for (let i = 0; i < MAX_ACTIVE_TEAMS; i += 1) {
-      await makeTeam(`Active ${i}`, 'active');
-    }
-    const fourth = await makeTeam('Fourth');
+  it('creates more than three active groups (no cap, D-06)', async () => {
+    const created = [];
+    for (let i = 0; i < 5; i += 1) created.push(await makeTeam(`Active ${i}`, 'active'));
 
-    await expect(activateTeam(fourth.id, db)).rejects.toThrow(CAP_MESSAGE);
-    expect((await getTeam(fourth.id, db))?.status).toBe('idle');
+    expect(await db.aiTeams.where('status').equals('active').count()).toBe(5);
+    const extra = await makeTeam('Sixth');
+    await expect(activateTeam(extra.id, db)).resolves.toMatchObject({ status: 'active' });
+    expect(created).toHaveLength(5);
   });
 
-  it('leaves exactly 3 active when activations run past the cap', async () => {
-    const teams = [];
-    for (let i = 0; i < 4; i += 1) teams.push(await makeTeam(`Team ${i}`));
-
-    for (const team of teams.slice(0, 3)) await activateTeam(team.id, db);
-    await expect(activateTeam(teams[3]!.id, db)).rejects.toThrow(CAP_MESSAGE);
-
-    const active = (await listTeams(db)).filter((t) => t.status === 'active');
-    expect(active).toHaveLength(MAX_ACTIVE_TEAMS);
-  });
-
-  it('rejects a 4th employee and a second lead', async () => {
+  it('adds more than three employees to one group (no cap, D-06)', async () => {
     const team = await createTeam(
       { name: 'Roster', leadId, status: 'idle', budgetTokens: 0, employeeIds },
       db
     );
-    expect(
-      (await listTeamMembers(team.id, db)).filter((m) => m.role === 'employee')
-    ).toHaveLength(MAX_EMPLOYEES_PER_TEAM);
+    for (let i = 0; i < 2; i += 1) {
+      await addTeamMember(
+        { teamId: team.id, agentId: generateId(), role: 'employee', budgetTokens: 0 },
+        db
+      );
+    }
 
-    await expect(
-      addTeamMember({ teamId: team.id, agentId: generateId(), role: 'employee', budgetTokens: 0 }, db)
-    ).rejects.toThrow(/3/);
+    const employees = (await listTeamMembers(team.id, db)).filter((m) => m.role === 'employee');
+    expect(employees).toHaveLength(5);
 
     await expect(
       addTeamMember({ teamId: team.id, agentId: generateId(), role: 'lead', budgetTokens: 0 }, db)
-    ).rejects.toThrow();
+    ).rejects.toThrow(/một lead/i);
 
-    expect(await listTeamMembers(team.id, db)).toHaveLength(MAX_EMPLOYEES_PER_TEAM + 1);
+    expect(await listTeamMembers(team.id, db)).toHaveLength(6);
+  });
+
+  it('creates an empty group with no leader and zero member rows (D-05)', async () => {
+    const team = await createTeam({ name: 'Nhóm rỗng' }, db);
+
+    expect(team.leadId).toBeUndefined();
+    expect(await listTeamMembers(team.id, db)).toHaveLength(0);
+  });
+
+  it('assigns and re-assigns a leader in one transaction, keeping one lead row (D-09)', async () => {
+    const otherLeadId = generateId();
+    await db.aiLeads.bulkAdd([
+      { id: leadId, name: 'An', role: 'Lead', capability: 'c', persona: 'p', model: 'm', createdAt: NOW, updatedAt: NOW },
+      { id: otherLeadId, name: 'Bình', role: 'Lead', capability: 'c', persona: 'p', model: 'm', createdAt: NOW, updatedAt: NOW },
+    ]);
+    const team = await createTeam({ name: 'Assign' }, db);
+
+    await assignLeader(team.id, leadId, db);
+    expect((await getTeam(team.id, db))?.leadId).toBe(leadId);
+    expect(await leadRows(team.id)).toEqual([leadId]);
+
+    await assignLeader(team.id, otherLeadId, db);
+    expect((await getTeam(team.id, db))?.leadId).toBe(otherLeadId);
+    expect(await leadRows(team.id)).toEqual([otherLeadId]);
+  });
+
+  it('assignLeader refuses a locked team and writes nothing (D-09)', async () => {
+    const otherLeadId = generateId();
+    await db.aiLeads.bulkAdd([
+      { id: leadId, name: 'An', role: 'Lead', capability: 'c', persona: 'p', model: 'm', createdAt: NOW, updatedAt: NOW },
+      { id: otherLeadId, name: 'Bình', role: 'Lead', capability: 'c', persona: 'p', model: 'm', createdAt: NOW, updatedAt: NOW },
+    ]);
+    const team = await makeTeam('Locked');
+    const locked = await lockLeader(team.id, db);
+    const membersBefore = await listTeamMembers(team.id, db);
+
+    await expect(assignLeader(team.id, otherLeadId, db)).rejects.toThrow(/khóa leader/i);
+
+    expect((await getTeam(team.id, db))?.leadId).toBe(leadId);
+    expect((await getTeam(team.id, db))?.leaderLockedAt).toBe(locked.leaderLockedAt);
+    expect(await listTeamMembers(team.id, db)).toEqual(membersBefore);
+  });
+
+  it('locks the leader idempotently and refuses a leaderless group (D-09)', async () => {
+    const team = await makeTeam('Idempotent');
+    const first = await lockLeader(team.id, db);
+    expect(first.leaderLockedAt).toBeDefined();
+
+    await new Promise((r) => setTimeout(r, 3));
+    const second = await lockLeader(team.id, db);
+    expect(second.leaderLockedAt).toBe(first.leaderLockedAt);
+
+    const empty = await createTeam({ name: 'Không leader' }, db);
+    await expect(lockLeader(empty.id, db)).rejects.toThrow(/chưa có leader/i);
+    expect((await getTeam(empty.id, db))?.leaderLockedAt).toBeUndefined();
+  });
+
+  it('updateTeam cannot change a locked leader, but other patches still work (D-09)', async () => {
+    const otherLeadId = generateId();
+    await db.aiLeads.bulkAdd([
+      { id: leadId, name: 'An', role: 'Lead', capability: 'c', persona: 'p', model: 'm', createdAt: NOW, updatedAt: NOW },
+      { id: otherLeadId, name: 'Bình', role: 'Lead', capability: 'c', persona: 'p', model: 'm', createdAt: NOW, updatedAt: NOW },
+    ]);
+    const team = await makeTeam('Guarded');
+    const locked = await lockLeader(team.id, db);
+    const membersBefore = await listTeamMembers(team.id, db);
+
+    await expect(updateTeam(team.id, { leadId: otherLeadId }, db)).rejects.toThrow(/khóa leader/i);
+
+    const after = await getTeam(team.id, db);
+    expect(after?.leadId).toBe(leadId);
+    expect(after?.leaderLockedAt).toBe(locked.leaderLockedAt);
+    expect(await listTeamMembers(team.id, db)).toEqual(membersBefore);
+
+    const renamed = await updateTeam(team.id, { name: 'Đổi tên' }, db);
+    expect(renamed.name).toBe('Đổi tên');
+    expect(renamed.leadId).toBe(leadId);
+  });
+
+  it('updateTeam on an unlocked team still accepts a leadId patch and keeps sources in step', async () => {
+    const otherLeadId = generateId();
+    await db.aiLeads.bulkAdd([
+      { id: leadId, name: 'An', role: 'Lead', capability: 'c', persona: 'p', model: 'm', createdAt: NOW, updatedAt: NOW },
+    ]);
+    const team = await makeTeam('Unlocked');
+
+    const updated = await updateTeam(team.id, { leadId: otherLeadId }, db);
+    expect(updated.leadId).toBe(otherLeadId);
+    expect(await leadRows(team.id)).toEqual([otherLeadId]);
+
+    await assignLeader(team.id, leadId, db);
+    expect(await leadRows(team.id)).toEqual([leadId]);
+    expect((await getTeam(team.id, db))?.leadId).toBe(leadId);
+  });
+
+  it('removeTeamMember refuses the lead row and deletes an employee row', async () => {
+    const team = await makeTeam('RemoveMember');
+    const members = await listTeamMembers(team.id, db);
+    const leadRow = members.find((m) => m.role === 'lead')!;
+    const employeeRow = members.find((m) => m.role === 'employee')!;
+
+    await expect(removeTeamMember(leadRow.id, db)).rejects.toThrow(/leader/i);
+    expect(await db.aiTeamMembers.get(leadRow.id)).toBeDefined();
+    expect((await getTeam(team.id, db))?.leadId).toBe(leadId);
+
+    await removeTeamMember(employeeRow.id, db);
+    expect(await db.aiTeamMembers.get(employeeRow.id)).toBeUndefined();
+    expect(await db.aiTeamMembers.get(leadRow.id)).toBeDefined();
   });
 
   it('splits an evenly divisible budget across 4 members', async () => {
@@ -195,7 +298,7 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-15, D-16, D-17, D-19, D-26, D-32)', () =>
 
   it('removes a member row', async () => {
     const team = await makeTeam('Remove');
-    const member = (await listTeamMembers(team.id, db))[0]!;
+    const member = (await listTeamMembers(team.id, db)).find((m) => m.role === 'employee')!;
 
     await removeTeamMember(member.id, db);
     expect(await db.aiTeamMembers.get(member.id)).toBeUndefined();

@@ -132,8 +132,6 @@ export interface AgentIdentity {
   color: string;
 }
 
-export const MAX_ACTIVE_TEAMS = 3; // D-15
-export const MAX_EMPLOYEES_PER_TEAM = 3; // D-16
 export const MAX_BATCH_SIZE = 3; // D-02
 export const RECENT_WINDOW_TURNS = 10; // D-10
 export const ASSIGNMENT_HISTORY_CAP = 50; // D-29

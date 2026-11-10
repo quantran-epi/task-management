@@ -88,7 +88,8 @@ export const AiTeamInputSchema = z.object({
   /** D-05: optional so an empty group can be created from a name alone. */
   leadId: uuidSchema.optional(),
   status: AiTeamStatusSchema.default('active'),
-  budgetTokens: budgetSchema,
+  /** D-05: a name-only group is legal, so the budget defaults to zero. */
+  budgetTokens: budgetSchema.default(0),
   autoSplitEnabled: z.boolean().optional(),
   autoApproveMutations: z.boolean().optional(),
 });
@@ -134,7 +135,8 @@ export type AiLeadInput = z.infer<typeof AiLeadInputSchema>;
 export type AiLeadUpdate = z.infer<typeof AiLeadUpdateSchema>;
 export type AiSkillInput = z.infer<typeof AiSkillInputSchema>;
 export type AiSkillUpdate = z.infer<typeof AiSkillUpdateSchema>;
-export type AiTeamInput = z.infer<typeof AiTeamInputSchema>;
+/** D-05: the *input* type — `status`/`budgetTokens` have defaults, so a name-only group is legal. */
+export type AiTeamInput = z.input<typeof AiTeamInputSchema>;
 export type AiTeamUpdate = z.infer<typeof AiTeamUpdateSchema>;
 export type AiTeamMemberInput = z.infer<typeof AiTeamMemberInputSchema>;
 export type AiTeamLinkInput = z.infer<typeof AiTeamLinkInputSchema>;
