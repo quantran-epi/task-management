@@ -1,9 +1,9 @@
 import React from 'react';
 import { Alert, Button, Tooltip, theme } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, DiffOutlined } from '@ant-design/icons';
-import type { ArtifactPatchProposal } from '../../../services/ai/sdlcArtifactTools';
+import type { ArtifactPatchProposal } from '../../../services/ai/patchProposal';
 
-export interface ArtifactDiffApprovalCardProps {
+export interface PatchDiffApprovalCardProps {
   patch: ArtifactPatchProposal;
   stale?: boolean | undefined;
   applying?: boolean | undefined;
@@ -23,7 +23,7 @@ export function isDarkBase(colorBgBase?: string | undefined): boolean {
   return false;
 }
 
-export const ArtifactDiffApprovalCard: React.FC<ArtifactDiffApprovalCardProps> = ({
+export const PatchDiffApprovalCard: React.FC<PatchDiffApprovalCardProps> = ({
   patch, stale = false, applying = false, error, decision, onApprove, onReject,
 }) => {
   const { token } = theme.useToken();
@@ -32,7 +32,7 @@ export const ArtifactDiffApprovalCard: React.FC<ArtifactDiffApprovalCardProps> =
   const delBg = dark ? '#4d1f24' : '#ffeef0';
   const lines = patch.diffText.split(/(?<=\n)/);
   return (
-    <section data-testid="artifact-diff-approval" aria-label={`Đề xuất chỉnh sửa: ${patch.sectionTitle}`}
+    <section data-testid="patch-diff-approval" aria-label={`Đề xuất chỉnh sửa: ${patch.sectionTitle}`}
       style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0, maxWidth: '100%',
         borderRadius: 8, margin: '8px 0 16px', color: token.colorText,
         backgroundColor: stale ? token.colorWarningBg : token.colorBgContainer,
@@ -43,9 +43,9 @@ export const ArtifactDiffApprovalCard: React.FC<ArtifactDiffApprovalCardProps> =
           Đề xuất chỉnh sửa: {patch.sectionTitle}
         </span>
       </div>
-      <div title={`${patch.kind} · phiên bản ${patch.version} · mục ${patch.sectionId}`}
+      <div title={`${patch.target === 'note' ? 'Ghi chú' : 'Kỹ năng'} · ${patch.id} · mục ${patch.sectionId}`}
         style={{ fontSize: 12, color: token.colorTextSecondary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {patch.kind} · phiên bản {patch.version} · mục {patch.sectionId}
+        {patch.target === 'note' ? 'Ghi chú' : 'Kỹ năng'} · {patch.id} · mục {patch.sectionId}
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
         {/* non-color signals: explicit +/− prefixes and text counts */}

@@ -12,7 +12,7 @@ import { ChatInputBar } from './ChatInputBar';
 import { ArtifactEventCard, type ArtifactEvent } from './artifacts/ArtifactEventCard';
 import { StagedLoadingIndicator, type StagedLoadingStage } from './widget/StagedLoadingIndicator';
 import { MutationApprovalCard } from './widget/MutationApprovalCard';
-import { ArtifactDiffApprovalCard } from './widget/ArtifactDiffApprovalCard';
+import { PatchDiffApprovalCard } from './widget/PatchDiffApprovalCard';
 import type { ChatTurnApprovalInfo } from './runtime/chatTurnRuntime';
 
 export type AiChatScopeKind = 'chat' | 'sdlc';
@@ -488,7 +488,7 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
       {turn.pendingApproval && (
         <div style={{ padding: '0 16px' }}>
           {turn.pendingApproval.patch ? (
-            <ArtifactDiffApprovalCard patch={turn.pendingApproval.patch} {...artifactApprovalState}
+            <PatchDiffApprovalCard patch={turn.pendingApproval.patch} {...artifactApprovalState}
               {...(artifactDecision ? { decision: artifactDecision } : {})}
               onApprove={() => onResolveApproval(true)} onReject={() => onResolveApproval(false)} />
           ) : (
