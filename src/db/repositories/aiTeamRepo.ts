@@ -99,12 +99,12 @@ export async function createTeam(
   const team: AiTeam = {
     id: generateId(),
     name: validated.name,
-    leadId: validated.leadId,
     status: validated.status,
     budgetTokens: validated.budgetTokens,
     createdAt: now,
     updatedAt: now,
   };
+  if (validated.leadId !== undefined) team.leadId = validated.leadId;
   if (validated.autoSplitEnabled !== undefined) team.autoSplitEnabled = validated.autoSplitEnabled;
   if (validated.autoApproveMutations !== undefined) {
     team.autoApproveMutations = validated.autoApproveMutations;
@@ -118,14 +118,18 @@ export async function createTeam(
     await db.aiTeams.add(team);
 
     const rows: AiTeamMember[] = [
-      {
-        id: generateId(),
-        teamId: team.id,
-        agentId: team.leadId,
-        role: 'lead',
-        budgetTokens: 0,
-        usedTokens: 0,
-      },
+      ...(team.leadId !== undefined
+        ? [
+            {
+              id: generateId(),
+              teamId: team.id,
+              agentId: team.leadId,
+              role: 'lead' as const,
+              budgetTokens: 0,
+              usedTokens: 0,
+            },
+          ]
+        : []),
       ...employeeIds.map<AiTeamMember>((agentId) => ({
         id: generateId(),
         teamId: team.id,

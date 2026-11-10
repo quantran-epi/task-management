@@ -200,7 +200,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         db,
         team,
         lead: lead ?? {
-          id: team.leadId,
+          id: team.leadId ?? '',
           name: 'Lead',
           role: 'Lead',
           capability: '',

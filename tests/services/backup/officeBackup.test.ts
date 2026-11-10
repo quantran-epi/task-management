@@ -33,6 +33,9 @@ const MESSAGE_ID = '99999999-9999-4999-8999-999999999999';
 const CR_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const PENDING_VERSION_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const APPROVED_VERSION_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+const ASSIGNED_MESSAGE_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+const EMPTY_TEAM_ID = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+const LOCKED_AT = '2026-11-09T08:00:00.000Z';
 
 const skill: AiSkill = {
   id: SKILL_ID,
@@ -247,6 +250,63 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
 
     expect(await restoredDb.aiSkillVersions.get(PENDING_VERSION_ID)).toEqual(pendingVersion);
     expect(await restoredDb.aiSkillVersions.get(APPROVED_VERSION_ID)).toEqual(approvedVersion);
+  });
+
+  it('round-trips targetAgentId so a restored instruction keeps its assignee (D-18, AIO-DATA-02)', async () => {
+    await seedOffice(sourceDb);
+    const assigned: ChatMessage = {
+      id: ASSIGNED_MESSAGE_ID,
+      threadId: THREAD_ID,
+      role: 'assistant',
+      content: 'Instruction for Bảo.',
+      createdAt: NOW,
+      agentId: LEAD_ID,
+      agentName: 'An',
+      agentKind: 'lead',
+      messageKind: 'instruction',
+      targetAgentId: EMPLOYEE_ID,
+    };
+    await sourceDb.chatMessages.add(assigned);
+
+    const envelope = await exportBackupPayload(sourceDb);
+    expect(validateBackupPayload(envelope)).toMatchObject({ valid: true, errors: [] });
+    await restoreBackupPayload(envelope, restoredDb);
+
+    const restored = await restoredDb.chatMessages.get(ASSIGNED_MESSAGE_ID);
+    expect(restored?.targetAgentId).toBe(EMPLOYEE_ID);
+  });
+
+  it('round-trips leaderLockedAt (D-09)', async () => {
+    await seedOffice(sourceDb);
+    await sourceDb.aiTeams.update(TEAM_ID, { leaderLockedAt: LOCKED_AT });
+
+    const envelope = await exportBackupPayload(sourceDb);
+    expect(validateBackupPayload(envelope)).toMatchObject({ valid: true, errors: [] });
+    await restoreBackupPayload(envelope, restoredDb);
+
+    expect((await restoredDb.aiTeams.get(TEAM_ID))?.leaderLockedAt).toBe(LOCKED_AT);
+  });
+
+  it('round-trips an empty group with no leadId and no member rows (D-05)', async () => {
+    await seedOffice(sourceDb);
+    const emptyTeam: AiTeam = {
+      id: EMPTY_TEAM_ID,
+      name: 'Nhóm rỗng',
+      status: 'idle',
+      budgetTokens: 0,
+      createdAt: NOW,
+      updatedAt: NOW,
+    };
+    await sourceDb.aiTeams.add(emptyTeam);
+
+    const envelope = await exportBackupPayload(sourceDb);
+    expect(validateBackupPayload(envelope)).toMatchObject({ valid: true, errors: [] });
+    await restoreBackupPayload(envelope, restoredDb);
+
+    const restored = await restoredDb.aiTeams.get(EMPTY_TEAM_ID);
+    expect(restored).toEqual(emptyTeam);
+    expect(restored?.leadId).toBeUndefined();
+    expect(await restoredDb.aiTeamMembers.where('teamId').equals(EMPTY_TEAM_ID).count()).toBe(0);
   });
 
   it('keeps a restored pending skill version pending (D-22)', async () => {

@@ -323,6 +323,9 @@ export const BackupChatMessageRecordSchema = z
     agentName: z.string().max(60).optional(),
     agentKind: z.enum(['lead', 'employee']).optional(),
     messageKind: z.enum(['instruction', 'report', 'synthesis', 'plan']).optional(),
+    // Phase 36 D-14/D-18: HISTORICAL assignee attribution. Never live-validated — a backup
+    // taken after deleting the employee must still import.
+    targetAgentId: uuidSchema.optional(),
   })
   .superRefine((msg, ctx) => {
     if (msg.grounding === undefined || msg.grounding === null) return;
@@ -651,7 +654,9 @@ export const BackupAiSkillRecordSchema = z.strictObject({
 export const BackupAiTeamRecordSchema = z.strictObject({
   id: uuidSchema,
   name: aiNameSchema,
-  leadId: uuidSchema,
+  /** D-05: an empty group has no leader. D-09: the lock timestamp round-trips verbatim. */
+  leadId: uuidSchema.optional(),
+  leaderLockedAt: z.string().optional(),
   status: z.enum(['active', 'idle']),
   budgetTokens: aiTokensSchema,
   autoSplitEnabled: z.boolean().optional(),

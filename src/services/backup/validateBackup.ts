@@ -476,7 +476,8 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
   const aiLeadIds = new Set((aiLeads ?? []).map((lead) => lead.id));
   const aiSkillIds = new Set((aiSkills ?? []).map((skill) => skill.id));
   for (const team of aiTeams ?? []) {
-    if (!aiLeadIds.has(team.leadId)) {
+    // D-05: an empty group has no leader; only a present leadId is a live reference.
+    if (team.leadId !== undefined && !aiLeadIds.has(team.leadId)) {
       errors.push({ table: 'aiTeams', recordId: team.id, field: 'leadId', message: `AiTeam references leadId "${team.leadId}" not found in aiLeads` });
     }
   }

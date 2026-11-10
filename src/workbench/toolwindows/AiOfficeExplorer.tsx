@@ -62,7 +62,7 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
   const filteredTeams = useMemo(() => {
     if (!query) return teams;
     return teams.filter((team) => {
-      const leadName = leadMap.get(team.leadId) ?? '';
+      const leadName = (team.leadId ? leadMap.get(team.leadId) : undefined) ?? '';
       return (
         team.name.toLowerCase().includes(query) ||
         leadName.toLowerCase().includes(query)
@@ -156,7 +156,7 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
           </div>
         ) : (
           filteredTeams.map((team) => {
-            const leadName = leadMap.get(team.leadId);
+            const leadName = team.leadId ? leadMap.get(team.leadId) : undefined;
             const count = memberCountMap.get(team.id) ?? 0;
             const statusColor = STATUS_COLOR_MAP[team.status] || 'default';
             const statusLabel = STATUS_LABEL_MAP[team.status] || team.status;

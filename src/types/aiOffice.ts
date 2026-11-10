@@ -67,7 +67,10 @@ export interface AiSkill {
 export interface AiTeam {
   id: string;
   name: string; // ≤ 60
-  leadId: string;
+  /** D-05: a group may exist without a leader — an empty group is a legal stored row. */
+  leadId?: string | undefined;
+  /** D-09: durable leader lock, set at the first run; survives relaunch and backup. */
+  leaderLockedAt?: string | undefined;
   status: AiTeamStatus;
   budgetTokens: number;
   /** D-06: "Tự động chia việc" bypass. */

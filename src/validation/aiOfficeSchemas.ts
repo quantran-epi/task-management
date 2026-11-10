@@ -85,7 +85,8 @@ export const AiSkillUpdateSchema = z.object({
 
 export const AiTeamInputSchema = z.object({
   name: nameSchema,
-  leadId: uuidSchema,
+  /** D-05: optional so an empty group can be created from a name alone. */
+  leadId: uuidSchema.optional(),
   status: AiTeamStatusSchema.default('active'),
   budgetTokens: budgetSchema,
   autoSplitEnabled: z.boolean().optional(),
