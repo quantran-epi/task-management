@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Avatar, Button, Drawer, Input, InputNumber, Select, Switch, Tooltip, theme } from 'antd';
+import { Alert, Avatar, Button, Drawer, Input, InputNumber, Select, Switch, theme } from 'antd';
 import type { AiEmployee, AiLead } from '../../../types/aiOffice';
-import { ACTIVE_TEAM_CAP_MESSAGE, createTeam } from '../../../db/repositories/aiTeamRepo';
+import { createTeam } from '../../../db/repositories/aiTeamRepo';
 import type { TaskPlannerDatabase } from '../../../db';
 import { agentColorFor, agentTextColorFor } from './AgentAttributionRow';
 
@@ -9,7 +9,6 @@ export interface TeamEditorDrawerProps {
   open: boolean;
   leads: AiLead[];
   employees: AiEmployee[];
-  activeCount: number;
   db: TaskPlannerDatabase;
   onCancel: () => void;
   onSaved: () => void;
@@ -24,7 +23,6 @@ export const TeamEditorDrawer: React.FC<TeamEditorDrawerProps> = ({
   open,
   leads,
   employees,
-  activeCount,
   db,
   onCancel,
   onSaved,
@@ -35,6 +33,7 @@ export const TeamEditorDrawer: React.FC<TeamEditorDrawerProps> = ({
   const [employeeIds, setEmployeeIds] = useState<string[]>([]);
   const [budget, setBudget] = useState<number | null>(null);
   const [activateNow, setActivateNow] = useState(false);
+  const [leadSelectTouched, setLeadSelectTouched] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,13 +44,14 @@ export const TeamEditorDrawer: React.FC<TeamEditorDrawerProps> = ({
     setEmployeeIds([]);
     setBudget(null);
     setActivateNow(false);
+    setLeadSelectTouched(false);
     setError(null);
   }, [open]);
 
-  const capReached = activeCount >= 3;
   const memberCount = (leadId ? 1 : 0) + employeeIds.length;
   const total = budget ?? 0;
-  const valid = name.trim().length > 0 && Boolean(leadId) && budget !== null && budget >= 0;
+  // D-05: a name is the only requirement — leader, agents and budget are added later.
+  const valid = name.trim().length > 0;
 
   const selectedEmployees = useMemo(
     () => employees.filter((row) => employeeIds.includes(row.id)),
@@ -59,16 +59,16 @@ export const TeamEditorDrawer: React.FC<TeamEditorDrawerProps> = ({
   );
 
   const handleSave = async () => {
-    if (!valid || !leadId || budget === null) return;
+    if (!valid) return;
     setSaving(true);
     setError(null);
     try {
       await createTeam(
         {
           name: name.trim(),
-          leadId,
+          ...(leadId ? { leadId } : {}),
           status: activateNow ? 'active' : 'idle',
-          budgetTokens: budget,
+          budgetTokens: total,
           employeeIds,
         },
         db
@@ -129,13 +129,16 @@ export const TeamEditorDrawer: React.FC<TeamEditorDrawerProps> = ({
             optionFilterProp="label"
             aria-label="Lead"
             placeholder="Chọn lead"
+            onOpenChange={(next) => {
+              if (next) setLeadSelectTouched(true);
+            }}
           />
-          {leads.length === 0 && (
+          {leadSelectTouched && leads.length === 0 && (
             <Alert
-              type="warning"
+              type="info"
               showIcon
               style={{ marginTop: 8 }}
-              message="Chưa có lead nào. Tạo lead trước khi lập nhóm."
+              message="Chưa có lead nào. Bạn vẫn có thể tạo nhóm trước, rồi chọn lead trong Cài đặt nhóm."
             />
           )}
         </div>
@@ -144,7 +147,6 @@ export const TeamEditorDrawer: React.FC<TeamEditorDrawerProps> = ({
           <div style={{ fontSize: 12, marginBottom: 4 }}>Nhân viên</div>
           <Select
             mode="multiple"
-            maxCount={3}
             style={{ width: '100%' }}
             value={employeeIds}
             onChange={(value: string[]) => setEmployeeIds(value)}
@@ -154,7 +156,7 @@ export const TeamEditorDrawer: React.FC<TeamEditorDrawerProps> = ({
             }))}
             optionFilterProp="label"
             aria-label="Nhân viên"
-            placeholder="Chọn tối đa 3 nhân viên"
+            placeholder="Chọn nhân viên"
           />
           {selectedEmployees.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', marginTop: 8 }}>
@@ -196,14 +198,11 @@ export const TeamEditorDrawer: React.FC<TeamEditorDrawerProps> = ({
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 12 }}>Kích hoạt ngay</span>
-          <Tooltip title={capReached ? ACTIVE_TEAM_CAP_MESSAGE : ''}>
-            <Switch
-              checked={activateNow}
-              onChange={setActivateNow}
-              disabled={capReached}
-              aria-label="Kích hoạt ngay"
-            />
-          </Tooltip>
+          <Switch
+            checked={activateNow}
+            onChange={setActivateNow}
+            aria-label="Kích hoạt ngay"
+          />
         </div>
       </div>
     </Drawer>

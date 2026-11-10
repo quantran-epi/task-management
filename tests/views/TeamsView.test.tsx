@@ -112,10 +112,11 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     expect(screen.getByTestId(`team-card-${idleTeam.id}`)).toBeInTheDocument();
   });
 
-  it('shows the active counter tag', async () => {
+  it('shows the active counter tag without a denominator', async () => {
     renderView();
 
-    expect(await screen.findByText('Đang hoạt động 1/3')).toBeInTheDocument();
+    expect(await screen.findByText('Đang hoạt động 1')).toBeInTheDocument();
+    expect(screen.queryByText(/Đang hoạt động 1\/3/)).not.toBeInTheDocument();
   });
 
   it('shows the lead name, roster avatars and the budget caption on a card', async () => {
@@ -144,7 +145,7 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     });
   });
 
-  it('disables activation at three active teams and shows the cap tooltip', async () => {
+  it('keeps activation enabled with four active teams and shows no cap copy', async () => {
     await createTeam(
       { name: 'Nhóm Ba', leadId: lead.id, status: 'active', budgetTokens: 1000 },
       db
@@ -157,13 +158,9 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     renderView();
 
     const activate = await screen.findByTestId(`team-activate-${idleTeam.id}`);
-    expect(activate).toBeDisabled();
-    fireEvent.mouseEnter(activate.parentElement!);
-    expect(
-      await screen.findByText(
-        'Đã có 3 nhóm đang hoạt động. Tạm dừng một nhóm khác trước khi kích hoạt nhóm này.'
-      )
-    ).toBeInTheDocument();
+    expect(activate).toBeEnabled();
+    expect(screen.queryByText(/Đã có 3 nhóm đang hoạt động/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/tối đa ba nhân viên/)).not.toBeInTheDocument();
   });
 
   it('allows pausing the last active team — no minimum-active rule exists', async () => {
@@ -173,7 +170,42 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     expect(await screen.findByTestId(`team-pause-${activeTeam.id}`)).toBeEnabled();
   });
 
-  it('opens the create drawer, caps employee selection at 3 and persists the team with its member rows', async () => {
+  it('creates a group from a name alone — no lead, no members, zero budget', async () => {
+    renderView();
+
+    fireEvent.click((await screen.findAllByRole('button', { name: /Tạo nhóm/ }))[0]!);
+    expect(await screen.findByTestId('team-editor-drawer')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Tên nhóm'), { target: { value: 'Nhóm Rỗng' } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('team-editor-save')).toBeEnabled();
+    });
+    fireEvent.click(screen.getByTestId('team-editor-save'));
+
+    await waitFor(async () => {
+      const teams = await listTeams(db);
+      expect(teams.some((team) => team.name === 'Nhóm Rỗng')).toBe(true);
+    });
+
+    const created = (await listTeams(db)).find((team) => team.name === 'Nhóm Rỗng')!;
+    expect(created.leadId).toBeUndefined();
+    expect(created.budgetTokens).toBe(0);
+    expect(await listTeamMembers(created.id, db)).toHaveLength(0);
+  });
+
+  it('stores four selected employees without a cap complaint', async () => {
+    const fourth = await createEmployee(
+      {
+        name: 'Em Võ',
+        role: 'Chuyên viên hỗ trợ',
+        capability: 'Hỗ trợ chung.',
+        persona: 'Bạn là Em.',
+        model: 'claude-sonnet-4',
+      },
+      db
+    );
+
     renderView();
 
     fireEvent.click((await screen.findAllByRole('button', { name: /Tạo nhóm/ }))[0]!);
@@ -188,6 +220,7 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     fireEvent.click(await screen.findByTitle('An Nguyễn · Chuyên viên phân tích'));
     fireEvent.click(await screen.findByTitle('Chi Lê · Kỹ sư kiểm thử'));
     fireEvent.click(await screen.findByTitle('Dung Phạm · Chuyên viên tài liệu'));
+    fireEvent.click(await screen.findByTitle('Em Võ · Chuyên viên hỗ trợ'));
 
     fireEvent.change(screen.getByLabelText('Tổng ngân sách nhóm'), { target: { value: '3000' } });
 
@@ -203,10 +236,13 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
 
     const created = (await listTeams(db)).find((team) => team.name === 'Nhóm Mới')!;
     const members = await listTeamMembers(created.id, db);
-    expect(members).toHaveLength(4);
+    expect(members).toHaveLength(5);
+    expect(members.filter((row) => row.role === 'employee').map((row) => row.agentId)).toContain(
+      fourth.id
+    );
     expect(members.reduce((sum, row) => sum + row.budgetTokens, 0)).toBe(3000);
     const leadRow = members.find((row) => row.role === 'lead')!;
-    expect(leadRow.budgetTokens).toBe(750);
+    expect(leadRow.budgetTokens).toBe(600);
   });
 
   it('renders the linked-items empty state and rows', async () => {

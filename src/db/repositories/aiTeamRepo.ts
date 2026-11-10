@@ -21,9 +21,6 @@ import {
  * read-modify-write of a shared array.
  */
 
-export const ACTIVE_TEAM_CAP_MESSAGE =
-  'Đã có 3 nhóm đang hoạt động. Tạm dừng một nhóm khác trước khi kích hoạt nhóm này.';
-
 export interface CreateTeamInput extends AiTeamInput {
   /** Employees to seed as member rows; the lead row is created from `leadId`. */
   employeeIds?: string[];

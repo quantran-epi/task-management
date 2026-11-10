@@ -146,7 +146,7 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
         >
           <span>Nhóm AI ({filteredTeams.length})</span>
           <span style={{ fontWeight: 400, textTransform: 'none', fontSize: 10 }}>
-            {activeCount}/3 hoạt động
+            {activeCount} hoạt động
           </span>
         </div>
 
@@ -230,7 +230,6 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
         open={createTeamOpen}
         leads={leads}
         employees={employees}
-        activeCount={activeCount}
         db={db}
         onCancel={() => setCreateTeamOpen(false)}
         onSaved={() => setCreateTeamOpen(false)}

@@ -106,7 +106,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ db = defaultDb, createRunt
     >
       <PageHeader
         title="Nhóm AI"
-        subtitle="Mỗi nhóm gồm một lead và tối đa ba nhân viên"
+        subtitle="Mỗi nhóm bắt đầu rỗng — chọn lead và thêm nhân viên trong Cài đặt nhóm"
         extra={
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setEditorOpen(true)}>
             Tạo nhóm
@@ -115,7 +115,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ db = defaultDb, createRunt
       />
 
       <div>
-        <Tag color={activeCount === 3 ? 'warning' : 'default'}>{`Đang hoạt động ${activeCount}/3`}</Tag>
+        <Tag color="default">{`Đang hoạt động ${activeCount}`}</Tag>
       </div>
 
       {teams.length === 0 ? (
@@ -134,7 +134,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ db = defaultDb, createRunt
               <div>
                 <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 6 }}>Chưa có nhóm nào</div>
                 <div style={{ color: token.colorTextSecondary, maxWidth: 460, margin: '0 auto 16px' }}>
-                  Nhóm gồm một lead và tối đa ba nhân viên. Tạo nhóm để lead nhận yêu cầu và chia việc.
+                  Nhóm bắt đầu rỗng. Tạo nhóm trước, rồi chọn lead và thêm nhân viên trong Cài đặt nhóm.
                 </div>
               </div>
             }
@@ -159,12 +159,10 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ db = defaultDb, createRunt
               lead={leadFor(team)}
               members={rosterByTeam.get(team.id) ?? []}
               usedTokens={usedByTeam.get(team.id) ?? 0}
-              activeCount={activeCount}
               onOpen={() => openTeam(team)}
+              onOpenSettings={() => openTeam(team)}
               onActivate={() => {
-                void activateTeam(team.id, db).catch(() => {
-                  /* the cap message is surfaced by the disabled button */
-                });
+                void activateTeam(team.id, db);
               }}
               onPause={() => {
                 void pauseTeam(team.id, db);
@@ -178,7 +176,6 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ db = defaultDb, createRunt
         open={editorOpen}
         leads={leads}
         employees={employees}
-        activeCount={activeCount}
         db={db}
         onCancel={() => setEditorOpen(false)}
         onSaved={() => setEditorOpen(false)}

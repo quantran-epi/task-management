@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Avatar, Button, Progress, Tag, Tooltip, theme } from 'antd';
+import { Avatar, Button, Progress, Tag, theme } from 'antd';
 import type { AiLead, AiTeam } from '../../../types/aiOffice';
-import { ACTIVE_TEAM_CAP_MESSAGE } from '../../../db/repositories/aiTeamRepo';
 import { agentColorFor, agentTextColorFor } from './AgentAttributionRow';
 
 /** Roster row rendered inside the avatar stack — names only, no domain payload. */
@@ -15,12 +14,13 @@ export interface TeamCardProps {
   lead: AiLead | undefined;
   members: TeamCardMember[];
   usedTokens: number;
-  activeCount: number;
   onOpen: () => void;
   onActivate: () => void;
   onPause: () => void;
+  onOpenSettings: () => void;
 }
 
+/** Avatar-stack overflow display only — not a roster cap (D-06). */
 const ROSTER_CAP = 4;
 
 function initialOf(name: string): string {
@@ -33,10 +33,10 @@ export const TeamCard: React.FC<TeamCardProps> = ({
   lead,
   members,
   usedTokens,
-  activeCount,
   onOpen,
   onActivate,
   onPause,
+  onOpenSettings,
 }) => {
   const { token } = theme.useToken();
   const [hovered, setHovered] = useState(false);
@@ -44,7 +44,6 @@ export const TeamCard: React.FC<TeamCardProps> = ({
   const isActive = team.status === 'active';
   const total = team.budgetTokens;
   const ratio = total > 0 ? Math.min(usedTokens / total, 1) : 0;
-  const capReached = activeCount >= 3;
   const visibleRoster = members.slice(0, ROSTER_CAP);
   const overflow = members.length - visibleRoster.length;
 
@@ -72,7 +71,7 @@ export const TeamCard: React.FC<TeamCardProps> = ({
         </Tag>
       </div>
 
-      {lead && (
+      {lead ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <Avatar
             size={20}
@@ -84,6 +83,8 @@ export const TeamCard: React.FC<TeamCardProps> = ({
           <span style={{ fontSize: 12 }}>{lead.name}</span>
           <span style={{ fontSize: 12, color: token.colorTextSecondary }}>{lead.role}</span>
         </div>
+      ) : (
+        <span style={{ fontSize: 12, color: token.colorTextSecondary }}>Chưa chọn lead</span>
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', paddingLeft: 0 }}>
@@ -133,6 +134,9 @@ export const TeamCard: React.FC<TeamCardProps> = ({
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <Button size="small" type="text" onClick={onOpenSettings} data-testid={`team-settings-${team.id}`}>
+          Cài đặt nhóm
+        </Button>
         {isActive ? (
           <>
             <Button size="small" onClick={onOpen} data-testid={`team-open-${team.id}`}>
@@ -148,20 +152,14 @@ export const TeamCard: React.FC<TeamCardProps> = ({
             </Button>
           </>
         ) : (
-          <Tooltip title={capReached ? ACTIVE_TEAM_CAP_MESSAGE : ''}>
-            {/* A disabled antd Button swallows pointer events, so the tooltip needs a live wrapper. */}
-            <span style={{ display: 'inline-flex' }}>
-              <Button
-                size="small"
-                type="primary"
-                disabled={capReached}
-                onClick={onActivate}
-                data-testid={`team-activate-${team.id}`}
-              >
-                Kích hoạt nhóm
-              </Button>
-            </span>
-          </Tooltip>
+          <Button
+            size="small"
+            type="primary"
+            onClick={onActivate}
+            data-testid={`team-activate-${team.id}`}
+          >
+            Kích hoạt nhóm
+          </Button>
         )}
       </div>
     </div>
