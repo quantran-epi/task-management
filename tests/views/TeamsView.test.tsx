@@ -408,8 +408,9 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     fireEvent.change(composer, { target: { value: 'Yêu cầu chung' } });
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
     await waitFor(() => expect(seenModels).toContain('claude-opus-4'));
-    // The composer swaps Gửi for Dừng while a turn runs; wait for it to settle.
-    await screen.findByLabelText('Gửi tin nhắn');
+    // WR-02: `send()` now drops a submit while a turn is live, so the test must wait for
+    // the lead turn to settle (its reply lands in the transcript) before sending again.
+    await waitFor(() => expect(screen.getAllByText('Xong.').length).toBeGreaterThan(0));
 
     fireEvent.change(composer, {
       target: { value: `@[An Nguyễn](agent:${employees[0]!.id}) làm giúp` },
@@ -757,7 +758,8 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     fireEvent.change(composer, { target: { value: 'Yêu cầu chung' } });
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
     await waitFor(() => expect(routedTo).toContain(lead.id));
-    await screen.findByLabelText('Gửi tin nhắn');
+    // WR-02: wait for the lead turn to settle before the next submit.
+    await waitFor(() => expect(screen.getAllByText('Xong.').length).toBeGreaterThan(0));
 
     fireEvent.change(composer, {
       target: { value: `@[An Nguyễn](agent:${employees[0]!.id}) làm giúp` },

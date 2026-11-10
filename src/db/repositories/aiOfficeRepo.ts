@@ -196,7 +196,10 @@ export async function deleteLead(
 ): Promise<AiOfficeDeleteResult> {
   return db.transaction('rw', [db.aiLeads, db.aiTeams, db.aiTeamMembers], async () => {
     const teams = await db.aiTeams.where('leadId').equals(id).toArray();
-    if (teams.length > 0 || isAgentInUse(id)) {
+    // WR-06: a lead may also sit in a roster as a plain member (the validator allows it),
+    // so a dangling member row would make the next export unrestorable.
+    const memberships = await db.aiTeamMembers.where('agentId').equals(id).toArray();
+    if (teams.length > 0 || memberships.length > 0 || isAgentInUse(id)) {
       return {
         deleted: false,
         code: 'IN_USE',

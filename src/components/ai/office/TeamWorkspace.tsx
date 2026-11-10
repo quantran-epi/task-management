@@ -251,7 +251,11 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
           return {
             teamRow,
             lead: leads.find((row) => row.id === teamRow?.leadId),
-            employees: allEmployees,
+            // WR-03: the lead prompt must advertise only this team's roster. Handing it
+            // every global employee makes `delegate_batch` refuse the whole batch.
+            employees: allEmployees.filter((row) =>
+              memberRows.some((member) => member.agentId === row.id)
+            ),
             skills: allSkills,
             memberAgentIds: memberRows.map((row) => row.agentId),
           };

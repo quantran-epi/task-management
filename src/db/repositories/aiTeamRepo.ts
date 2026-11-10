@@ -342,14 +342,25 @@ export async function addTeamMember(
 ): Promise<AiTeamMember> {
   const validated = AiTeamMemberInputSchema.parse(input);
 
-  return db.transaction('rw', [db.aiTeamMembers], async () => {
+  // WR-04: a lead row written here would bypass `assignLeader` and the leader lock, and
+  // leave `aiTeams.leadId` out of step — the exact state the backup validator rejects.
+  if (validated.role === 'lead') {
+    throw new Error('Dùng assignLeader để chọn leader.');
+  }
+
+  return db.transaction('rw', [db.aiTeamMembers, db.aiEmployees], async () => {
+    // WR-05: a dangling agentId produces a backup the app's own validator rejects.
+    const agent = await db.aiEmployees.get(validated.agentId);
+    if (!agent) throw new Error(`Không tìm thấy nhân viên: ${validated.agentId}`);
+
     const siblings = await db.aiTeamMembers
       .where('teamId')
       .equals(validated.teamId)
       .toArray();
 
-    if (validated.role === 'lead' && siblings.some((row) => row.role === 'lead')) {
-      throw new Error('Nhóm đã có lead. Mỗi nhóm chỉ có một lead.');
+    // WR-04: a double click can race the Select's option list.
+    if (siblings.some((row) => row.agentId === validated.agentId)) {
+      throw new Error('Nhân viên đã có trong nhóm.');
     }
 
     const member: AiTeamMember = {

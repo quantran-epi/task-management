@@ -21,6 +21,7 @@ import {
   lockLeader,
 } from '../../../../src/db/repositories/aiTeamRepo';
 import { generateId } from '../../../../src/utils/uuid';
+import { createEmployee } from '../../../../src/db/repositories/aiOfficeRepo';
 
 const NOW = '2026-11-08T12:00:00.000Z';
 
@@ -92,9 +93,16 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
       { name: 'Roster', leadId, status: 'idle', budgetTokens: 0, employeeIds },
       db
     );
-    for (let i = 0; i < 2; i += 1) {
+    // WR-05: the repo now refuses a dangling agentId, so each addition is a real profile.
+    const makeEmployee = (name: string) =>
+      createEmployee(
+        { name, role: 'Dev', capability: 'c', persona: 'p', model: 'claude-haiku-4' },
+        db
+      );
+    const extra = [await makeEmployee('E4'), await makeEmployee('E5')];
+    for (const employee of extra) {
       await addTeamMember(
-        { teamId: team.id, agentId: generateId(), role: 'employee', budgetTokens: 0 },
+        { teamId: team.id, agentId: employee.id, role: 'employee', budgetTokens: 0 },
         db
       );
     }
@@ -102,10 +110,12 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
     const employees = (await listTeamMembers(team.id, db)).filter((m) => m.role === 'employee');
     expect(employees).toHaveLength(5);
 
+    // WR-04: a lead row must go through assignLeader, never this path.
     await expect(
-      addTeamMember({ teamId: team.id, agentId: generateId(), role: 'lead', budgetTokens: 0 }, db)
-    ).rejects.toThrow(/một lead/i);
+      addTeamMember({ teamId: team.id, agentId: leadId, role: 'lead', budgetTokens: 0 }, db)
+    ).rejects.toThrow(/assignLeader/i);
 
+    // 3 seeded employees + 2 added + the lead row; the refused lead add changed nothing.
     expect(await listTeamMembers(team.id, db)).toHaveLength(6);
   });
 

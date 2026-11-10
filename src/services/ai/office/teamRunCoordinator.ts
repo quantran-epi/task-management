@@ -171,6 +171,14 @@ const AGENT_MENTION = /@\[([^\]]+)\]\(agent:([a-zA-Z0-9-]+)\)/;
 
 const TERMINAL_STATUSES: readonly AgentRunStatus[] = ['done', 'stopped', 'error'];
 
+/** WR-02: phases in which a turn is actually running — a second `send()` must be dropped. */
+export const LIVE_PHASES: ReadonlySet<TeamRunPhase> = new Set<TeamRunPhase>([
+  'lead-thinking',
+  'awaiting-plan',
+  'batch-running',
+  'lead-synthesizing',
+]);
+
 const OUTCOME_STATUS: Record<ChatTurnPhase, AgentRunStatus> = {
   complete: 'done',
   cancelled: 'done',
@@ -659,7 +667,16 @@ export function createTeamRunCoordinator(
       agentDeferreds.set(employee.id, createDeferred());
     }
 
-    const outcome = await registry.get(employee.id).start(request);
+    let outcome;
+    try {
+      outcome = await registry.get(employee.id).start(request);
+    } catch (err) {
+      // WR-01: `start()` throws TURN_IN_PROGRESS when the agent already runs. Without this
+      // release the claim leaks and the profile becomes permanently undeletable.
+      releaseLiveUse(employee.id);
+      settleAgent(employee.id, 'error');
+      throw err;
+    }
     const state = agents.get(employee.id);
     // A parked loop cannot resolve `start()`; if the state is still paused the deferred is
     // the authority, so the batch keeps waiting (D-30).
@@ -720,7 +737,17 @@ export function createTeamRunCoordinator(
     phase = 'lead-thinking';
     notify();
 
-    const outcome = await registry.get(lead.id).start(request);
+    let outcome;
+    try {
+      outcome = await registry.get(lead.id).start(request);
+    } catch (err) {
+      // WR-01: same leak as the employee path — release before rethrowing.
+      releaseLiveUse(lead.id);
+      settleAgent(lead.id, 'error');
+      phase = 'ready';
+      notify();
+      throw err;
+    }
     const state = agents.get(lead.id);
     if (state && state.status === 'paused') {
       await agentDeferreds.get(lead.id)?.promise;
@@ -746,6 +773,11 @@ export function createTeamRunCoordinator(
   }
 
   async function send(text: string): Promise<void> {
+    // WR-02: a second submit while a turn is live would persist a duplicate user row and
+    // then throw TURN_IN_PROGRESS out of `void sendTurn(...)` as an unhandled rejection.
+    // A parked phase (`awaiting-budget` / `awaiting-mutation-approval`) is not live: the
+    // user may send after topping up, and approval is answered on the card.
+    if (LIVE_PHASES.has(phase)) return;
     // D-03/D-07: read the roster exactly ONCE per turn, before any read of it.
     if (options.loadRoster) {
       roster = await options.loadRoster();
