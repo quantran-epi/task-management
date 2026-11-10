@@ -112,7 +112,7 @@ Plans:
 
 **Criterion overrides (locked in 36-CONTEXT.md):** criterion 3's pre-v1.4 fixture and criterion 4's two-way old-build compatibility are **replaced by C-16** (D-23) — verified instead as a fresh-data v12 round-trip covering IDs, counts, attribution, pending state and the leader lock. Criterion 1 reads **V19**, not V18 (D-22). AIO-DATA-05's "keep SDLC rows" is replaced by C-16 + the Phase 35 deletion (D-24). See `36-CONTEXT.md` D-22..D-25.
 
-**Plans:** 2/5 plans executed
+**Plans:** 3/5 plans executed
 
 **Wave 1**
 
@@ -124,7 +124,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 36-03-PLAN.md — Live-use registry, guarded deletes with typed refusal + skill-version cascade, per-turn roster snapshot
+- [x] 36-03-PLAN.md — Live-use registry, guarded deletes with typed refusal + skill-version cascade, per-turn roster snapshot
 
 **Wave 4** *(blocked on Wave 3)*
 
