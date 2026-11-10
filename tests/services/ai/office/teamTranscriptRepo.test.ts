@@ -6,16 +6,21 @@ import {
   saveTeamMessage,
   listRecentTurns,
   listAssignmentHistory,
+  listInterruptedAssignments,
   getTeamTurn,
   buildTeamBm25Docs,
 } from '../../../../src/db/repositories/teamTranscriptRepo';
 import { ASSIGNMENT_HISTORY_CAP } from '../../../../src/types/aiOffice';
 import {
   createEmployee,
+  createLead,
   deleteEmployee,
   updateEmployee,
 } from '../../../../src/db/repositories/aiOfficeRepo';
 import { generateId } from '../../../../src/utils/uuid';
+import { assignLeader } from '../../../../src/db/repositories/aiTeamRepo';
+import { exportBackupPayload } from '../../../../src/services/backup/exportBackup';
+import { restoreBackupPayload } from '../../../../src/services/backup/restoreBackup';
 
 describe('teamTranscriptRepo (AIO-MEM-01, D-10, D-11, D-17, D-29, D-31)', () => {
   let db: TaskPlannerDatabase;
@@ -283,5 +288,124 @@ describe('teamTranscriptRepo (AIO-MEM-01, D-10, D-11, D-17, D-29, D-31)', () => 
       updatedAt: agentMessage.createdAt,
     });
     expect(userDoc).toMatchObject({ title: 'Người dùng', tags: ['user'], body: 'Tìm giúp tôi' });
+  });
+
+  describe('listInterruptedAssignments (D-19)', () => {
+    async function seedEmployee(name = 'Lan') {
+      return createEmployee(
+        { name, role: 'Chuyên viên', capability: 'x', persona: 'y', model: 'm' },
+        db
+      );
+    }
+
+    async function saveInstruction(agentId: string, task: string) {
+      const leadId = generateId();
+      return saveTeamMessage(
+        {
+          threadId,
+          role: 'assistant',
+          content: task,
+          agentId: leadId,
+          agentName: 'Minh',
+          agentKind: 'lead',
+          messageKind: 'instruction',
+          targetAgentId: agentId,
+        },
+        db
+      );
+    }
+
+    async function saveReport(agentId: string, content = 'Báo cáo') {
+      return saveTeamMessage(
+        {
+          threadId,
+          role: 'assistant',
+          content,
+          agentId,
+          agentName: 'Lan',
+          agentKind: 'employee',
+          messageKind: 'report',
+        },
+        db
+      );
+    }
+
+    it('reports nothing when an instruction has a later report from its agent', async () => {
+      const employee = await seedEmployee();
+      await saveInstruction(employee.id, 'Việc A');
+      await new Promise((r) => setTimeout(r, 2));
+      await saveReport(employee.id);
+
+      expect(await listInterruptedAssignments(threadId, db)).toEqual([]);
+    });
+
+    it('reports an unanswered instruction with the agent name and task text', async () => {
+      const employee = await seedEmployee('Lan');
+      const instruction = await saveInstruction(employee.id, 'Việc chưa xong');
+
+      expect(await listInterruptedAssignments(threadId, db)).toEqual([
+        {
+          agentId: employee.id,
+          agentName: 'Lan',
+          task: 'Việc chưa xong',
+          createdAt: instruction.createdAt,
+        },
+      ]);
+    });
+
+    it('does not let a report older than the instruction satisfy it', async () => {
+      const employee = await seedEmployee();
+      await saveReport(employee.id, 'Báo cáo cũ');
+      await new Promise((r) => setTimeout(r, 2));
+      await saveInstruction(employee.id, 'Việc mới');
+
+      const interrupted = await listInterruptedAssignments(threadId, db);
+      expect(interrupted).toHaveLength(1);
+      expect(interrupted[0]!.task).toBe('Việc mới');
+    });
+
+    it('still reports the unfinished turn after a real export → restore round-trip', async () => {
+      // The backup validator requires the team's leadId to resolve to a lead member row.
+      const lead = await createLead(
+        { name: 'Minh', role: 'Lead', capability: 'x', persona: 'y', model: 'm' },
+        db
+      );
+      await assignLeader(teamId, lead.id, db);
+
+      const employee = await seedEmployee('Lan');
+      await saveInstruction(employee.id, 'Việc bị gián đoạn');
+
+      const envelope = await exportBackupPayload(db);
+      const restoredName = 'TestTeamTranscriptRestored_' + Math.random().toString(36).slice(2);
+      const restored = new TaskPlannerDatabase(restoredName);
+      await restored.open();
+      try {
+        await restoreBackupPayload(envelope, restored);
+
+        expect(await listInterruptedAssignments(threadId, restored)).toEqual([
+          {
+            agentId: employee.id,
+            agentName: 'Lan',
+            task: 'Việc bị gián đoạn',
+            createdAt: expect.any(String),
+          },
+        ]);
+      } finally {
+        await restored.delete();
+      }
+    });
+
+    it('writes nothing while reading', async () => {
+      const employee = await seedEmployee();
+      await saveInstruction(employee.id, 'Việc A');
+
+      const messagesBefore = await db.chatMessages.count();
+      const tabsBefore = await db.chatTabs.toArray();
+
+      await listInterruptedAssignments(threadId, db);
+
+      expect(await db.chatMessages.count()).toBe(messagesBefore);
+      expect(await db.chatTabs.toArray()).toEqual(tabsBefore);
+    });
   });
 });

@@ -23,7 +23,7 @@ import {
   listLeads,
   listSkills,
 } from '../../../db/repositories/aiOfficeRepo';
-import { ensureTeamThread } from '../../../db/repositories/teamTranscriptRepo';
+import { ensureTeamThread, listInterruptedAssignments } from '../../../db/repositories/teamTranscriptRepo';
 import { getMessagesByThreadId } from '../../../db/repositories/chatRepo';
 import {
   getNineRouterApiKey,
@@ -175,6 +175,15 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     () => (threadId ? getMessagesByThreadId(threadId, db) : Promise.resolve([])),
     [db, threadId]
   ) ?? [];
+
+  // D-19: an unfinished turn is inferred from persisted rows (no runtime status is stored).
+  // The warning is advisory only — it never gates the composer and offers no resume.
+  const interrupted = useLiveQuery(
+    () => (threadId ? listInterruptedAssignments(threadId, db) : Promise.resolve([])),
+    [db, threadId]
+  ) ?? [];
+  const [interruptedDismissed, setInterruptedDismissed] = useState(false);
+  useEffect(() => setInterruptedDismissed(false), [threadId]);
 
   // Thread first (D-17), then provider config, then the coordinator. A coordinator
   // constructed with an empty endpoint would fail every turn, so it is never built.
@@ -605,6 +614,30 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
               onKeyDown={handleKeyDown}
               style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', outline: 'none' }}
             >
+              {interrupted.length > 0 && !interruptedDismissed && (
+                <div style={{ padding: '8px 16px 0' }}>
+                  <Alert
+                    type="warning"
+                    showIcon
+                    closable
+                    onClose={() => setInterruptedDismissed(true)}
+                    message="Lượt trước bị gián đoạn"
+                    description={
+                      <>
+                        <div>
+                          {interrupted
+                            .map((entry) => `${entry.agentName}: ${entry.task}`)
+                            .join(' · ')}
+                        </div>
+                        <div>
+                          Lượt này chưa hoàn tất và không được tự động chạy lại. Hãy gửi lại yêu cầu
+                          nếu vẫn cần kết quả.
+                        </div>
+                      </>
+                    }
+                  />
+                </div>
+              )}
               {configError ? (
                 <div style={{ padding: 16 }}>
                   <Alert type="warning" showIcon message={configError} />

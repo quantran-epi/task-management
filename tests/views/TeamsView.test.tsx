@@ -4,6 +4,10 @@ import { TaskPlannerDatabase } from '../../src/db';
 import { createEmployee, createLead, createSkill, updateLead } from '../../src/db/repositories/aiOfficeRepo';
 import { createTeam, getTeam, listTeamMembers, listTeams } from '../../src/db/repositories/aiTeamRepo';
 import { TeamsView } from '../../src/views/TeamsView';
+import {
+  ensureTeamThread,
+  saveTeamMessage,
+} from '../../src/db/repositories/teamTranscriptRepo';
 import { useLayoutStore } from '../../src/workbench/store/layoutStore';
 import type { AiEmployee, AiLead, AiTeam } from '../../src/types/aiOffice';
 
@@ -552,6 +556,65 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
 
     expect(await screen.findByTestId('team-workspace')).toBeInTheDocument();
     expect(screen.getByTestId('team-header-no-lead')).toHaveTextContent('Chưa chọn lead');
+  });
+
+  it('warns about an unfinished turn in the restored transcript (D-19)', async () => {
+    const thread = await ensureTeamThread(activeTeam.id, db);
+    await saveTeamMessage(
+      {
+        threadId: thread.id,
+        role: 'assistant',
+        content: 'Viết đặc tả thanh toán',
+        agentId: lead.id,
+        agentName: lead.name,
+        agentKind: 'lead',
+        messageKind: 'instruction',
+        targetAgentId: employees[0]!.id,
+      },
+      db
+    );
+
+    renderView();
+    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+
+    expect(await screen.findByText('Lượt trước bị gián đoạn')).toBeInTheDocument();
+    expect(screen.getByText(/An Nguyễn: Viết đặc tả thanh toán/)).toBeInTheDocument();
+  });
+
+  it('shows no interrupted warning when every instruction has a report', async () => {
+    const thread = await ensureTeamThread(activeTeam.id, db);
+    await saveTeamMessage(
+      {
+        threadId: thread.id,
+        role: 'assistant',
+        content: 'Viết đặc tả thanh toán',
+        agentId: lead.id,
+        agentName: lead.name,
+        agentKind: 'lead',
+        messageKind: 'instruction',
+        targetAgentId: employees[0]!.id,
+      },
+      db
+    );
+    await new Promise((r) => setTimeout(r, 2));
+    await saveTeamMessage(
+      {
+        threadId: thread.id,
+        role: 'assistant',
+        content: 'Đã xong.',
+        agentId: employees[0]!.id,
+        agentName: employees[0]!.name,
+        agentKind: 'employee',
+        messageKind: 'report',
+      },
+      db
+    );
+
+    renderView();
+    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    await screen.findByTestId('team-transcript-region');
+
+    expect(screen.queryByText('Lượt trước bị gián đoạn')).not.toBeInTheDocument();
   });
 
   it('locks the leader on the first send only', async () => {

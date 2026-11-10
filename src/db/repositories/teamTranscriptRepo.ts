@@ -105,6 +105,58 @@ export async function listAssignmentHistory(
     .slice(0, cap);
 }
 
+export interface InterruptedAssignment {
+  agentId: string;
+  agentName: string;
+  task: string;
+  createdAt: string;
+}
+
+/**
+ * D-19: an unfinished turn is *inferred*, never persisted.
+ *
+ * A `report` row is only written after a complete turn (`chatTurnRuntime` saves only
+ * validated complete turns), so an `instruction` row with no later report from its
+ * `targetAgentId` is exactly a turn that never finished — including one interrupted by a
+ * relaunch or a restore. Nothing here writes, and no `chatTabs.status`/`ai*` column is
+ * written to represent an in-flight turn (36-03 prohibition).
+ *
+ * Scope ceiling: this covers instruction/report turn pairs (the batch path). A mention
+ * turn writes no instruction row, so it cannot be inferred this way; extending to mention
+ * turns needs the user-message → report pairing that Phase 37's turn lifecycle owns.
+ */
+export async function listInterruptedAssignments(
+  threadId: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<InterruptedAssignment[]> {
+  const rows = await readThreadMessages(threadId, db);
+  const pending: Array<{ agentId: string; task: string; createdAt: string }> = [];
+
+  rows.forEach((row, index) => {
+    if (row.messageKind !== 'instruction' || !row.targetAgentId) return;
+    // Index comparison mirrors `readThreadMessages` ordering, so a same-millisecond tie
+    // is resolved the same way the transcript renders it. A report written earlier is stale.
+    const answered = rows.some(
+      (later, laterIndex) =>
+        laterIndex > index &&
+        later.messageKind === 'report' &&
+        later.agentId === row.targetAgentId
+    );
+    if (answered) return;
+    pending.push({ agentId: row.targetAgentId, task: row.content, createdAt: row.createdAt });
+  });
+
+  if (pending.length === 0) return [];
+
+  // The instruction row is attributed to the lead (D-31), so the affected agent's name
+  // comes from the roster, not from the row. T-36-18: only names leave this function.
+  const employees = await db.aiEmployees.bulkGet(pending.map((entry) => entry.agentId));
+  return pending.map((entry, index) => ({
+    ...entry,
+    agentName: employees[index]?.name ?? 'Nhân viên',
+  }));
+}
+
 /**
  * Cross-team read guard (T-34-07): the thread id comes from the caller's request-bound
  * context, never from model arguments, so a foreign turn id can never leak another team's data.
