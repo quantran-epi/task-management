@@ -40,7 +40,6 @@ import {
   JetBrainsDiagramIcon,
   JetBrainsSystemsIcon,
   JetBrainsRemoteGitIcon,
-  JetBrainsSdlcIcon,
 } from '../components/icons/JetBrainsIcons';
 import { SettingOutlined } from '@ant-design/icons';
 import { TasksView } from '../views/TasksView';
@@ -53,8 +52,6 @@ import { AiOfficeView } from '../views/AiOfficeView';
 import { TeamsView } from '../views/TeamsView';
 import { TelegramMonitorView } from '../views/TelegramMonitorView';
 import { ItemInsightView } from '../views/ItemInsightView';
-import { ChangeRequestSdlcView } from '../views/ChangeRequestSdlcView';
-import type { SdlcStepId } from '../services/wizard/workflowSchemas';
 import { ChangeRequestDetailView } from '../views/ChangeRequestDetailView';
 import { SystemCatalogView } from '../views/SystemCatalogView';
 import { SystemDetailView } from '../views/SystemDetailView';
@@ -86,8 +83,6 @@ export function getEditorTabIcon(viewType: EditorViewType, size = 13): React.Rea
       return <JetBrainsAgentsIcon size={size} />;
     case 'telegram':
       return <JetBrainsTelegramIcon size={size} />;
-    case 'sdlc':
-      return <JetBrainsSdlcIcon size={size} />;
     case 'cr_detail':
       return <JetBrainsProjectIcon size={size} />;
     case 'systems':
@@ -612,17 +607,6 @@ export function EditorArea({ db }: EditorAreaProps) {
         return <SystemDetailView systemId={tab.params?.systemId || ''} {...dbProp} />;
       case 'remote_file':
         return <RemoteFileViewer {...tab.params} />;
-      case 'sdlc':
-        return (
-          <ChangeRequestSdlcView
-            changeRequestId={String(tab.params?.changeRequestId ?? '')}
-            systemId={tab.params?.systemId ? String(tab.params.systemId) : undefined}
-            initialStepId={(tab.params?.stepId as SdlcStepId | undefined) ?? undefined}
-            stepRequestId={tab.params?.stepRequestId ? String(tab.params.stepRequestId) : undefined}
-            onBack={() => closeTab(tab.id)}
-            {...dbProp}
-          />
-        );
       case 'insight':
         return (
           <ItemInsightView

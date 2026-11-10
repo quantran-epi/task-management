@@ -15,7 +15,6 @@ export type EditorViewType =
   | 'teams'
   | 'telegram'
   | 'insight'
-  | 'sdlc'
   | 'mermaid'
   | 'systems'
   | 'system_detail'

@@ -30,10 +30,6 @@ vi.mock('../../views/ChangeRequestDetailView', () => ({
   ),
 }));
 
-vi.mock('../../views/ChangeRequestSdlcView', () => ({
-  ChangeRequestSdlcView: () => <div data-testid="mock-cr-sdlc-view">Mock SDLC View</div>,
-}));
-
 describe('EditorArea', () => {
   beforeEach(() => {
     localStorage.clear();

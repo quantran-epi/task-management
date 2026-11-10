@@ -398,39 +398,6 @@ export const JetBrainsAnalyticsIcon: React.FC<JetBrainsIconProps> = ({ size = 16
   </svg>
 );
 
-// 11. SDLC Studio (DevOps Continuous Lifecycle Infinity Loop: Cyan -> Blue -> Violet -> Emerald)
-export const JetBrainsSdlcIcon: React.FC<JetBrainsIconProps> = ({ size = 16, style, className }) => (
-  <svg
-    viewBox="0 0 24 24"
-    width={size}
-    height={size}
-    className={className}
-    style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style }}
-  >
-    <defs>
-      <linearGradient id="jbSdlcGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#06b6d4" />
-        <stop offset="35%" stopColor="#3b82f6" />
-        <stop offset="70%" stopColor="#8b5cf6" />
-        <stop offset="100%" stopColor="#10b981" />
-      </linearGradient>
-    </defs>
-    {/* Continuous SDLC Lifecycle Infinity Loop */}
-    <path
-      d="M 7.5 7.5 C 4.5 7.5 2.5 9.5 2.5 12 C 2.5 14.5 4.5 16.5 7.5 16.5 C 10.5 16.5 12.5 13.5 12 12 C 11.5 10.5 13.5 7.5 16.5 7.5 C 19.5 7.5 21.5 9.5 21.5 12 C 21.5 14.5 19.5 16.5 16.5 16.5 C 13.5 16.5 11.5 13.5 12 12 C 12.5 10.5 10.5 7.5 7.5 7.5 Z"
-      fill="none"
-      stroke="url(#jbSdlcGrad)"
-      strokeWidth="2.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    {/* Architecture / Design Milestone Dot */}
-    <circle cx="7.5" cy="12" r="1.6" fill="#06b6d4" />
-    {/* Deploy / Release Milestone Dot */}
-    <circle cx="16.5" cy="12" r="1.6" fill="#10b981" />
-  </svg>
-);
-
 // 12. Terminal (Midnight Indigo Console + Traffic Light Dots + Neon Cyan Prompt + Lime Cursor)
 export const JetBrainsTerminalIcon: React.FC<JetBrainsIconProps> = ({ size = 16, style, className }) => (
   <svg

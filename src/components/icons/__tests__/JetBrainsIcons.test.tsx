@@ -4,7 +4,6 @@ import {
   JetBrainsDiagramIcon,
   JetBrainsSystemsIcon,
   JetBrainsRemoteGitIcon,
-  JetBrainsSdlcIcon,
 } from '../JetBrainsIcons';
 
 describe('JetBrains Colorful Icons', () => {
@@ -34,16 +33,5 @@ describe('JetBrains Colorful Icons', () => {
     expect(svg?.getAttribute('width')).toBe('16');
     const circles = container.querySelectorAll('circle');
     expect(circles.length).toBeGreaterThanOrEqual(3); // globe + commit dots
-  });
-
-  it('renders JetBrainsSdlcIcon with infinity loop path and milestone dots', () => {
-    const { container } = render(<JetBrainsSdlcIcon size={14} />);
-    const svg = container.querySelector('svg');
-    expect(svg).toBeDefined();
-    expect(svg?.getAttribute('width')).toBe('14');
-    const path = container.querySelector('path');
-    expect(path).toBeDefined();
-    const circles = container.querySelectorAll('circle');
-    expect(circles.length).toBe(2); // 2 milestone dots
   });
 });
