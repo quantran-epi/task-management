@@ -3,7 +3,7 @@ import { theme, Segmented, Button, Alert } from 'antd';
 import { FullscreenOutlined, FullscreenExitOutlined } from '@ant-design/icons';
 import { parseGitDiff } from '../../../utils/gitDiffParser';
 import type { DiffViewMode, DiffHunk, DiffLine } from '../../../types/agent';
-import { DiffLineCodeRenderer } from './DiffSyntaxHighlighter';
+import { DiffLineCodeRenderer } from '../../common/DiffSyntaxHighlighter';
 
 export interface RemoteDiffViewerProps {
   rawDiff: string;

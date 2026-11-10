@@ -14,7 +14,7 @@ import type { SshConfig } from '../../types/ssh';
 import { getRemoteFileContent } from '../../services/gitRemoteTreeService';
 import { getSshSecret } from '../../services/sshService';
 import { extractMermaidBlocks, saveDiagramToStudio, openDiagramInStudio } from '../../services/diagramSaveBridge';
-import { DiffLineCodeRenderer } from '../../components/sdlc/diff/DiffSyntaxHighlighter';
+import { DiffLineCodeRenderer } from '../../components/common/DiffSyntaxHighlighter';
 
 export interface RemoteFileViewerProps {
   config?: SshConfig;

@@ -7,7 +7,7 @@ import {
 import {
   buildConventionsSegment,
   CONVENTIONS_CONFLICT_POLICY,
-} from '../../src/services/ai/sdlcPromptComposer';
+} from '../../src/services/ai/conventionsSegment';
 import * as sshService from '../../src/services/sshService';
 import * as timerPopout from '../../src/utils/timerPopout';
 import type { SshConfig } from '../../src/types/ssh';
