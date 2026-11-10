@@ -156,8 +156,19 @@ function restoreRows(
   const tables = backup.tables;
   if (tables.chatTabs !== undefined) return { tables, tabs: tables.chatTabs };
   const backfilled = legacyTabRows(tables.chatThreads ?? [], now);
+  // C-16: legacyTabRows deletes `:sdlc` threads, so their messages must go too — otherwise the
+  // restored DB carries orphans that its own exporter/validator then rejects (L5).
+  const survivingThreadIds = new Set(backfilled.threads.map((thread) => thread.id));
+  const chatMessages = tables.chatMessages?.filter((message) =>
+    survivingThreadIds.has(message.threadId)
+  );
   return {
-    tables: { ...tables, chatThreads: backfilled.threads, chatTabs: backfilled.tabs },
+    tables: {
+      ...tables,
+      chatThreads: backfilled.threads,
+      chatTabs: backfilled.tabs,
+      ...(chatMessages !== undefined ? { chatMessages } : {}),
+    },
     tabs: backfilled.tabs,
   };
 }

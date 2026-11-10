@@ -262,6 +262,75 @@ describe('restoreBackupPayload & rollbackToSnapshot', () => {
     expect(await testDb.chatMessages.toArray()).toEqual([localMessage]);
   });
 
+  it('drops legacy :sdlc threads and their messages when chatTabs is absent (v11 legacy backup)', async () => {
+    const SDLC_THREAD_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+    const CHAT_THREAD_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+    const legacyThreads: ChatThread[] = [
+      {
+        id: SDLC_THREAD_ID,
+        scopeKey: `cr:${CR_ID}:sdlc`,
+        scopeType: 'cr',
+        entityId: CR_ID,
+        title: 'SDLC Workflow',
+        createdAt: '2026-09-27T12:00:00.000Z',
+        updatedAt: '2026-09-27T12:00:00.000Z',
+      },
+      {
+        id: CHAT_THREAD_ID,
+        scopeKey: `cr:${CR_ID}:chat:${CHAT_THREAD_ID}`,
+        scopeType: 'cr',
+        entityId: CR_ID,
+        title: 'Ordinary chat',
+        createdAt: '2026-09-27T12:00:00.000Z',
+        updatedAt: '2026-09-27T12:00:00.000Z',
+      },
+    ];
+    const legacyMessages: ChatMessage[] = [
+      {
+        id: '11111111-1111-4111-8111-111111111112',
+        threadId: SDLC_THREAD_ID,
+        role: 'user',
+        content: 'Legacy SDLC turn',
+        createdAt: '2026-09-27T12:00:00.000Z',
+      },
+      {
+        id: '11111111-1111-4111-8111-111111111113',
+        threadId: CHAT_THREAD_ID,
+        role: 'user',
+        content: 'Ordinary turn',
+        createdAt: '2026-09-27T12:00:00.000Z',
+      },
+    ];
+    // v11 legacy envelope predating chatTabs: accepted without tabs, backfilled from threads.
+    const legacyBackup: BackupEnvelope = {
+      ...sampleBackup,
+      tables: {
+        ...sampleBackup.tables,
+        chatThreads: legacyThreads,
+        chatMessages: legacyMessages,
+      },
+      counts: { ...sampleBackup.counts, chatThreads: 2, chatMessages: 2 },
+    };
+    expect(legacyBackup.tables.chatTabs).toBeUndefined();
+    expect(validateBackupPayload(legacyBackup).valid).toBe(true);
+
+    await restoreBackupPayload(legacyBackup, testDb);
+
+    const restoredThreads = await testDb.chatThreads.toArray();
+    const restoredMessages = await testDb.chatMessages.toArray();
+    const threadIds = new Set(restoredThreads.map((thread) => thread.id));
+
+    expect(threadIds.has(SDLC_THREAD_ID)).toBe(false);
+    expect(threadIds.has(CHAT_THREAD_ID)).toBe(true);
+    expect(restoredMessages.map((message) => message.id)).toEqual(['11111111-1111-4111-8111-111111111113']);
+    expect(restoredMessages.every((message) => threadIds.has(message.threadId))).toBe(true);
+
+    const exported = await exportBackupModule.exportBackupPayload(testDb);
+    const validation = validateBackupPayload(exported);
+    expect(validation.valid).toBe(true);
+    expect(validation.errors).toHaveLength(0);
+  });
+
   it('keeps chat tabs and snapshot unchanged when a replacement write fails', async () => {
     const localThread: ChatThread = {
       id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
