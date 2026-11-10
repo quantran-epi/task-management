@@ -112,7 +112,7 @@ Plans:
 
 **Criterion overrides (locked in 36-CONTEXT.md):** criterion 3's pre-v1.4 fixture and criterion 4's two-way old-build compatibility are **replaced by C-16** (D-23) — verified instead as a fresh-data v12 round-trip covering IDs, counts, attribution, pending state and the leader lock. Criterion 1 reads **V19**, not V18 (D-22). AIO-DATA-05's "keep SDLC rows" is replaced by C-16 + the Phase 35 deletion (D-24). See `36-CONTEXT.md` D-22..D-25.
 
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans complete
 
 **Wave 1**
 
@@ -132,7 +132,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4)*
 
-- [ ] 36-05-PLAN.md — `aiSkillVersionRepo` contract tests + D-19 unfinished-turn inference reader (no persisted runtime status) and its workspace warning
+- [x] 36-05-PLAN.md — `aiSkillVersionRepo` contract tests + D-19 unfinished-turn inference reader (no persisted runtime status) and its workspace warning
 
 **Research flag:** resolved — R-02 (envelope version) is settled at v12 by D-23, and R-14 (multi-chat migration) is settled by D-25 (one team = one chat, no namespace). No `--research-phase` needed.
 
