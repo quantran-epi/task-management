@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import Dexie from 'dexie';
 import { TaskPlannerDatabase } from '../../src/db/index';
-import { SCHEMA_V17 } from '../../src/db/schema';
+import { SCHEMA_V17, LATEST_SCHEMA_VERSION } from '../../src/db/schema';
 import {
   updateDocumentSet,
   updatePresentationOrder,
@@ -256,7 +256,7 @@ describe('Dexie SCHEMA_V18 SDLC purge migration (Phase 35)', () => {
   it('8. survives malformed legacy rows without throwing', async () => {
     const db = await openUpgraded(MALFORMED_ROWS);
 
-    expect(db.verno).toBe(18);
+    expect(db.verno).toBe(LATEST_SCHEMA_VERSION);
     expect(await db.settings.get('theme')).toMatchObject({ value: 'dark' });
     expect(await db.chatThreads.get('thread-chat')).toBeDefined();
   });

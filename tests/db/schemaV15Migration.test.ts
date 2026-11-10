@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Dexie from 'dexie';
 import { TaskPlannerDatabase } from '../../src/db/index';
-import { SCHEMA_V14 } from '../../src/db/schema';
+import { SCHEMA_V14, LATEST_SCHEMA_VERSION } from '../../src/db/schema';
 import type { System } from '../../src/types/models';
 
 describe('Dexie SCHEMA_V15 Migration & Data Transformation (ENT-SYS-01, ENT-CR-01)', () => {
@@ -48,7 +48,7 @@ describe('Dexie SCHEMA_V15 Migration & Data Transformation (ENT-SYS-01, ENT-CR-0
     await upgradedDb.open();
 
     // Opening at the current version runs every later upgrade, so verno is the live schema.
-    expect(upgradedDb.verno).toBe(18);
+    expect(upgradedDb.verno).toBe(LATEST_SCHEMA_VERSION);
     expect(upgradedDb.tables.map((t) => t.name)).toContain('systems');
     expect(upgradedDb.tables.map((t) => t.name)).toContain('changeRequests');
 

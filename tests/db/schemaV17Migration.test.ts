@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Dexie from 'dexie';
 import { TaskPlannerDatabase } from '../../src/db/index';
-import { SCHEMA_V16 } from '../../src/db/schema';
+import { SCHEMA_V16, LATEST_SCHEMA_VERSION } from '../../src/db/schema';
 
 /**
  * Wave 1 suite for the V16 → V17 upgrade (Phase 34, D-18/D-23/D-25/D-32).
@@ -112,9 +112,9 @@ describe('Dexie SCHEMA_V17 Migration (Phase 34)', () => {
     return upgraded;
   }
 
-  it('opens at version 18', async () => {
+  it('opens at the latest schema version', async () => {
     const db = await openAtCurrentVersion();
-    expect(db.verno).toBe(18);
+    expect(db.verno).toBe(LATEST_SCHEMA_VERSION);
   });
 
   it('keeps every seeded V16 row readable with its original content', async () => {
