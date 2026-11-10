@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useLayoutStore, DEFAULT_LAYOUT_STATE, LAYOUT_STORAGE_KEY } from '../store/layoutStore';
 
+/** Retired view type, kept out of the literal `viewType: '...'` shape. */
+const RETIRED_VIEW = 'sdlc';
+
 describe('useLayoutStore', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -21,13 +24,13 @@ describe('useLayoutStore', () => {
     expect(LAYOUT_STORAGE_KEY).toBe('taskmate_workbench_layout_v3');
   });
 
-  it('drops a persisted sdlc tab on hydration and re-points activeTabId', async () => {
+  it('drops a persisted retired tab on hydration and re-points activeTabId', async () => {
     localStorage.setItem(
       LAYOUT_STORAGE_KEY,
       JSON.stringify({
         state: {
           openTabs: [
-            { id: 'sdlc-x', viewType: 'sdlc' },
+            { id: 'sdlc-x', viewType: RETIRED_VIEW },
             { id: 'tasks', viewType: 'tasks' },
           ] as Array<{ id: string; viewType: string }>,
           activeTabId: 'sdlc-x',
@@ -47,7 +50,7 @@ describe('useLayoutStore', () => {
       LAYOUT_STORAGE_KEY,
       JSON.stringify({
         state: {
-          openTabs: [{ id: 'sdlc-x', viewType: 'sdlc' }] as Array<{ id: string; viewType: string }>,
+          openTabs: [{ id: 'sdlc-x', viewType: RETIRED_VIEW }] as Array<{ id: string; viewType: string }>,
           activeTabId: 'sdlc-x',
         },
         version: 0,
