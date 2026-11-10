@@ -103,7 +103,26 @@ Plans:
 5. Deleting a leader, agent, or skill with live references refuses or cascades in one transaction; the user's own next export validates.
 6. `MAX_ACTIVE_TEAMS` and `MAX_EMPLOYEES_PER_TEAM` are gone; roster editing after creation works.
 
-**Research flag:** needs `--research-phase` — R-14 (migration) and R-02 (envelope version) are open.
+**Criterion overrides (locked in 36-CONTEXT.md):** criterion 3's pre-v1.4 fixture and criterion 4's two-way old-build compatibility are **replaced by C-16** (D-23) — verified instead as a fresh-data v12 round-trip covering IDs, counts, attribution, pending state and the leader lock. Criterion 1 reads **V19**, not V18 (D-22). AIO-DATA-05's "keep SDLC rows" is replaced by C-16 + the Phase 35 deletion (D-24). See `36-CONTEXT.md` D-22..D-25.
+
+**Plans:** 5 plans
+
+**Wave 1**
+- [ ] 36-01-PLAN.md — Tracer: `aiSkillVersions` end-to-end (Dexie V19 → all nine coordinated lists → export → validate → restore → TS/Rust SQLite parity), envelope v12
+
+**Wave 2** *(blocked on Wave 1)*
+- [ ] 36-02-PLAN.md — Optional leader + durable `leaderLockedAt` (lock enforced on every repo write path), cap removal, `targetAgentId`/`leaderLockedAt` round-trip, live-vs-historical validation
+
+**Wave 3** *(blocked on Wave 2)*
+- [ ] 36-03-PLAN.md — Live-use registry, guarded deletes with typed refusal + skill-version cascade, per-turn roster snapshot
+
+**Wave 4** *(blocked on Wave 3)*
+- [ ] 36-04-PLAN.md — Minimal roster/leader UI, first-run lock wiring, delete-refusal alerts and corrected copy
+
+**Wave 5** *(blocked on Wave 4)*
+- [ ] 36-05-PLAN.md — `aiSkillVersionRepo` contract tests + D-19 unfinished-turn inference reader (no persisted runtime status) and its workspace warning
+
+**Research flag:** resolved — R-02 (envelope version) is settled at v12 by D-23, and R-14 (multi-chat migration) is settled by D-25 (one team = one chat, no namespace). No `--research-phase` needed.
 
 ### Phase 37: Runtime reliability + concurrency
 
