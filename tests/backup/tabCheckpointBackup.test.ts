@@ -1,24 +1,17 @@
 // @vitest-environment node
 import 'fake-indexeddb/auto';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TaskPlannerDatabase } from '../../src/db';
 import { exportBackupPayload } from '../../src/services/backup/exportBackup';
 import { restoreBackupPayload } from '../../src/services/backup/restoreBackup';
 import { validateBackupPayload } from '../../src/services/backup/validateBackup';
 import type { BackupEnvelope } from '../../src/types/backup';
-import type { ChatTab, ChatMessage, ChatThread, Note, ChangeRequest } from '../../src/types/models';
-
-const aiRunner = { run: vi.fn() };
-const noteCreator = { create: vi.fn() };
+import type { ChatTab, ChatMessage, ChatThread, ChangeRequest } from '../../src/types/models';
 
 const changeRequestId = '11111111-1111-4111-8111-111111111111';
 const threadId = '22222222-2222-4222-8222-222222222222';
 const tabId = '33333333-3333-4333-8333-333333333333';
-const sourceNoteId = '44444444-4444-4444-8444-444444444444';
-const sessionId = '55555555-5555-4555-8555-555555555555';
-const requestId = '66666666-6666-4666-8666-666666666666';
 const now = '2026-10-30T12:00:00.000Z';
-const hash = 'a'.repeat(64);
 
 const changeRequest: ChangeRequest = {
   id: changeRequestId,
@@ -33,59 +26,10 @@ const changeRequest: ChangeRequest = {
 
 const thread: ChatThread = {
   id: threadId,
-  scopeKey: `cr:${changeRequestId}:sdlc`,
+  scopeKey: `cr:${changeRequestId}`,
   scopeType: 'cr',
   entityId: changeRequestId,
-  title: 'SDLC',
-  createdAt: now,
-  updatedAt: now,
-};
-
-const sourceNote: Note = {
-  id: sourceNoteId,
-  type: 'document',
-  entityType: 'cr',
-  entityId: changeRequestId,
-  title: 'PL01 source',
-  body: '# Requirement',
-  isPinned: false,
-  createdAt: now,
-  updatedAt: now,
-};
-
-const workflowState = {
-  schemaVersion: 1,
-  sessionId,
-  projectId: changeRequestId,
-  threadId,
-  currentStep: 'SOLUTION',
-  metadata: {
-    cr: 'CR-1',
-    featureName: 'Backup contract',
-    author: 'Dev',
-    requestingUnit: 'IT',
-    date: '2026-10-30',
-  },
-  artifacts: {
-    branchSnapshots: {},
-    pl01: {
-      noteId: sourceNoteId,
-      kind: 'PL01',
-      version: 2,
-      hash,
-      title: 'PL01 source',
-      content: '# Requirement',
-      sourceHashes: [],
-      updatedAt: now,
-    },
-  },
-  staleSteps: [],
-  checkpoint: {
-    requestId,
-    step: 'SOLUTION',
-    status: 'interrupted',
-    startedAt: now,
-  },
+  title: 'Chat',
   createdAt: now,
   updatedAt: now,
 };
@@ -95,8 +39,8 @@ function makeTab(overrides: Partial<ChatTab> = {}): ChatTab {
     id: tabId,
     threadId,
     scopeKey: `cr:${changeRequestId}`,
-    type: 'sdlc',
-    title: 'SDLC Workflow',
+    type: 'chat',
+    title: 'Chat',
     order: 0,
     active: true,
     config: {
@@ -106,7 +50,6 @@ function makeTab(overrides: Partial<ChatTab> = {}): ChatTab {
       knowledgeEnabled: true,
       promptContextOptions: { maxChars: 12000 },
     },
-    workflowState,
     createdAt: now,
     updatedAt: now,
     ...overrides,
@@ -121,7 +64,7 @@ function baseTables() {
     capacityRules: [],
     capacityOverrides: [],
     plannedAllocations: [],
-    notes: [sourceNote],
+    notes: [],
     chatThreads: [thread],
     chatMessages: [],
     chatTabs: [makeTab()],
@@ -142,7 +85,7 @@ function basePayload() {
       capacityRules: 0,
       capacityOverrides: 0,
       plannedAllocations: 0,
-      notes: 1,
+      notes: 0,
       chatThreads: 1,
       chatMessages: 0,
       chatTabs: 1,
@@ -150,14 +93,13 @@ function basePayload() {
   };
 }
 
-describe('Phase 25.1 backup tab/checkpoint contract', () => {
+describe('backup tab contract', () => {
   let db: TaskPlannerDatabase;
 
   beforeEach(async () => {
     db = new TaskPlannerDatabase(`tab-backup-${Date.now()}-${Math.random()}`);
     await db.open();
     await db.changeRequests.add(changeRequest);
-    await db.notes.add(sourceNote);
     await db.chatThreads.add(thread);
     await db.chatTabs.add(makeTab());
   });
@@ -166,12 +108,12 @@ describe('Phase 25.1 backup tab/checkpoint contract', () => {
     await db.delete();
   });
 
-  it('round-trips durable tab, active pointer, safe config, checkpoint, workflow, and valid history', async () => {
+  it('round-trips durable tab, active pointer, safe config, and valid history', async () => {
     await db.chatMessages.add({
       id: '77777777-7777-4777-8777-777777777777',
       threadId,
       role: 'user',
-      content: 'Continue workflow',
+      content: 'Continue chat',
       createdAt: now,
     });
 
@@ -182,16 +124,16 @@ describe('Phase 25.1 backup tab/checkpoint contract', () => {
     expect(backup.tables.chatTabs?.[0]).toMatchObject({
       id: tabId,
       threadId,
+      type: 'chat',
       active: true,
       config: { model: 'model-a', analysisMode: true },
-      workflowState: { checkpoint: { requestId, status: 'interrupted' } },
     });
     expect(JSON.stringify(backup)).not.toContain('apiKey');
     expect(JSON.stringify(backup)).not.toContain('passphrase');
 
     const validation = validateBackupPayload(backup);
     expect(validation.valid).toBe(true);
-    expect(validation.envelope?.tables.chatTabs?.[0]?.workflowState).toEqual(workflowState);
+    expect(validation.envelope?.tables.chatTabs?.[0]?.type).toBe('chat');
     expect(validation.envelope?.tables.chatMessages).toHaveLength(1);
   });
 
@@ -201,16 +143,14 @@ describe('Phase 25.1 backup tab/checkpoint contract', () => {
         ...makeTab().config,
         apiKey: 'secret-api-key',
         passphrase: 'secret-passphrase',
-      } as ChatTab['config'],
-      workflowState: {
-        ...workflowState,
-        runtime: {
-          partialBuffer: 'partial output',
-          error: { stack: 'secret stack' },
-          prompt: 'private prompt',
-          rawModelResponse: 'raw provider response',
+        promptContextOptions: {
+          maxChars: 12000,
+          partial_buffer: 'partial output',
+          error_stack: 'secret stack',
+          private_prompt: 'private prompt',
+          raw_model_response: 'raw provider response',
         },
-      },
+      } as ChatTab['config'],
     });
 
     const backup = await exportBackupPayload(db);
@@ -224,24 +164,7 @@ describe('Phase 25.1 backup tab/checkpoint contract', () => {
     expect(validateBackupPayload(backup).valid).toBe(true);
   });
 
-  it('normalizes missing source Note to blocked interrupted recovery without side effects', () => {
-    const payload = basePayload();
-    payload.tables.notes = [];
-
-    const result = validateBackupPayload(payload);
-
-    expect(result.valid).toBe(true);
-    expect(result.recovery?.missingSources).toEqual([expect.objectContaining({ id: sourceNoteId, title: 'PL01 source', version: 2, hash })]);
-    expect(result.recovery?.blockedTabs).toEqual([
-      expect.objectContaining({ tabId, threadId, missingSourceIds: [sourceNoteId] }),
-    ]);
-    expect(result.envelope?.tables.chatTabs?.[0]?.workflowState).toMatchObject({
-      checkpoint: expect.objectContaining({ status: 'interrupted', step: 'SOLUTION' }),
-    });
-    expect(result.envelope?.tables.chatTabs?.[0]?.workflowState).not.toHaveProperty('runtime');
-  });
-
-  it('rejects duplicate SDLC tabs, orphan pointers, stale thread links, and forbidden nested keys', () => {
+  it('rejects orphan pointers, stale thread links, and forbidden nested keys', () => {
     const duplicate = basePayload();
     duplicate.tables.chatTabs = [makeTab(), makeTab({ id: '88888888-8888-4888-8888-888888888888' })];
     expect(validateBackupPayload(duplicate).valid).toBe(false);
@@ -251,10 +174,16 @@ describe('Phase 25.1 backup tab/checkpoint contract', () => {
     expect(validateBackupPayload(orphan).valid).toBe(false);
 
     const forbidden = basePayload();
-    forbidden.tables.chatTabs = [makeTab({ workflowState: { ...workflowState, nested: { bearerToken: 'x' } } })];
+    forbidden.tables.chatTabs = [makeTab({
+      config: { promptContextOptions: { bearerToken: 'x' } } as unknown as ChatTab['config'],
+    })];
     const forbiddenResult = validateBackupPayload(forbidden);
     expect(forbiddenResult.valid).toBe(false);
-    expect(forbiddenResult.errors.some((error) => error.table === 'chatTabs' && (error.message.includes('FORBIDDEN_FIELD') || error.field.includes('workflowState')))).toBe(true);
+    expect(
+      forbiddenResult.errors.some(
+        (error) => error.table === 'chatTabs' && error.message.includes('FORBIDDEN_FIELD')
+      )
+    ).toBe(true);
   });
 
   it('accepts v11 payloads without chatTabs and backfills them on restore', () => {
@@ -268,12 +197,11 @@ describe('Phase 25.1 backup tab/checkpoint contract', () => {
     expect(result.envelope?.tables.chatTabs).toBeUndefined();
   });
 
-  it('backfills legacy threads into ordinary tabs plus one deterministic CR SDLC singleton', async () => {
+  it('restores a legacy SDLC thread as one ordinary chat tab and creates no sdlc tab', async () => {
     const legacy = basePayload();
     delete (legacy.tables as Partial<typeof legacy.tables>).chatTabs;
     delete (legacy.counts as Partial<typeof legacy.counts>).chatTabs;
     legacy.tables.chatThreads = [
-      { ...thread, id: '88888888-8888-4888-8888-888888888888', scopeKey: `cr:${changeRequestId}`, title: 'Legacy chat' },
       { ...thread, id: '99999999-9999-4999-8999-999999999999', scopeKey: `cr:${changeRequestId}:sdlc`, title: 'Legacy SDLC' },
     ];
     const legacyMessages: ChatMessage[] = [{
@@ -284,7 +212,7 @@ describe('Phase 25.1 backup tab/checkpoint contract', () => {
       createdAt: now,
     }];
     (legacy.tables as unknown as { chatMessages: ChatMessage[] }).chatMessages = legacyMessages;
-    legacy.counts.chatThreads = 2;
+    legacy.counts.chatThreads = 1;
     legacy.counts.chatMessages = 1;
 
     const validation = validateBackupPayload(legacy);
@@ -292,30 +220,11 @@ describe('Phase 25.1 backup tab/checkpoint contract', () => {
     await restoreBackupPayload(validation.envelope as BackupEnvelope, db);
 
     const tabs = await db.chatTabs.orderBy('scopeKey').toArray();
-    expect(tabs).toHaveLength(2);
-    expect(tabs.filter((tab) => tab.type === 'sdlc')).toHaveLength(1);
+    expect(tabs).toHaveLength(1);
+    expect(tabs.filter((tab) => (tab as { type: string }).type === 'sdlc')).toHaveLength(0);
     expect(tabs.filter((tab) => tab.type === 'chat')).toHaveLength(1);
+    expect(tabs[0]?.active).toBe(true);
+    expect(tabs[0]?.scopeKey).toBe(`cr:${changeRequestId}`);
     expect((await db.chatMessages.toArray())[0]?.content).toBe('Keep this history');
-    expect(tabs.filter((tab) => tab.active)).toHaveLength(1);
-    expect(tabs.find((tab) => tab.type === 'sdlc')?.scopeKey).toBe(`cr:${changeRequestId}`);
-  });
-
-  it('restores missing-source checkpoint without AI or Note creation side effects', async () => {
-    const payload = basePayload();
-    payload.tables.notes = [];
-    const validation = validateBackupPayload(payload);
-    expect(validation.valid).toBe(true);
-    await restoreBackupPayload(validation.envelope as BackupEnvelope, db);
-
-    const restoredTab = await db.chatTabs.get(tabId);
-    expect(restoredTab?.workflowState).toMatchObject({
-      checkpoint: { status: 'interrupted', step: 'SOLUTION' },
-    });
-    expect(validation.recovery?.blockedTabs).toEqual([
-      expect.objectContaining({ tabId, threadId, missingSourceIds: [sourceNoteId] }),
-    ]);
-    expect(aiRunner.run).not.toHaveBeenCalled();
-    expect(noteCreator.create).not.toHaveBeenCalled();
-    expect(await db.notes.count()).toBe(0);
   });
 });

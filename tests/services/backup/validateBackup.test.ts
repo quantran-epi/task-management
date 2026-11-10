@@ -137,6 +137,69 @@ describe('validateBackupPayload', () => {
     });
   });
 
+  it('rejects a chat tab whose type is sdlc', () => {
+    const CR_ID = '22222222-2222-4222-8222-222222222222';
+    const THREAD_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    const TAB_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    const result = validateBackupPayload({
+      ...validPayload,
+      tables: {
+        ...validPayload.tables,
+        chatThreads: [{
+          id: THREAD_ID,
+          scopeKey: `cr:${CR_ID}`,
+          scopeType: 'cr',
+          entityId: CR_ID,
+          createdAt: '2026-09-27T10:00:00.000Z',
+          updatedAt: '2026-09-27T10:00:00.000Z',
+        }],
+        chatTabs: [{
+          id: TAB_ID,
+          threadId: THREAD_ID,
+          scopeKey: `cr:${CR_ID}`,
+          type: 'sdlc',
+          title: 'SDLC Workflow',
+          order: 0,
+          createdAt: '2026-09-27T10:00:00.000Z',
+          updatedAt: '2026-09-27T10:00:00.000Z',
+        }],
+      },
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.table === 'chatTabs')).toBe(true);
+  });
+
+  it('accepts a chat tab whose type is chat', () => {
+    const CR_ID = '22222222-2222-4222-8222-222222222222';
+    const THREAD_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    const TAB_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    const result = validateBackupPayload({
+      ...validPayload,
+      tables: {
+        ...validPayload.tables,
+        chatThreads: [{
+          id: THREAD_ID,
+          scopeKey: `cr:${CR_ID}`,
+          scopeType: 'cr',
+          entityId: CR_ID,
+          createdAt: '2026-09-27T10:00:00.000Z',
+          updatedAt: '2026-09-27T10:00:00.000Z',
+        }],
+        chatTabs: [{
+          id: TAB_ID,
+          threadId: THREAD_ID,
+          scopeKey: `cr:${CR_ID}`,
+          type: 'chat',
+          title: 'Chat',
+          order: 0,
+          createdAt: '2026-09-27T10:00:00.000Z',
+          updatedAt: '2026-09-27T10:00:00.000Z',
+        }],
+      },
+    });
+    expect(result.valid).toBe(true);
+  });
+
   it('rejects records with invalid fields (e.g. invalid UUID, bad status)', () => {
     const invalid = {
       ...validPayload,
