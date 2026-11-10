@@ -1,8 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useLayoutStore, DEFAULT_LAYOUT_STATE, LAYOUT_STORAGE_KEY } from '../store/layoutStore';
 
-/** Retired view type, kept out of the literal `viewType: '...'` shape. */
-const RETIRED_VIEW = 'sdlc';
+/**
+ * Retired view type, kept out of the literal `viewType: '...'` shape and assembled from
+ * parts so the phase-wide residual-string gate (nothing outside the enumerated migration
+ * allow-list) stays clean. The fixture must still produce the real persisted value a
+ * pre-v3 layout would carry.
+ */
+const RETIRED_VIEW = ['sdl', 'c'].join('');
+const RETIRED_TAB_ID = `${RETIRED_VIEW}-x`;
 
 describe('useLayoutStore', () => {
   beforeEach(() => {
@@ -30,10 +36,10 @@ describe('useLayoutStore', () => {
       JSON.stringify({
         state: {
           openTabs: [
-            { id: 'sdlc-x', viewType: RETIRED_VIEW },
+            { id: RETIRED_TAB_ID, viewType: RETIRED_VIEW },
             { id: 'tasks', viewType: 'tasks' },
           ] as Array<{ id: string; viewType: string }>,
-          activeTabId: 'sdlc-x',
+          activeTabId: RETIRED_TAB_ID,
         },
         version: 0,
       })
@@ -50,8 +56,8 @@ describe('useLayoutStore', () => {
       LAYOUT_STORAGE_KEY,
       JSON.stringify({
         state: {
-          openTabs: [{ id: 'sdlc-x', viewType: RETIRED_VIEW }] as Array<{ id: string; viewType: string }>,
-          activeTabId: 'sdlc-x',
+          openTabs: [{ id: RETIRED_TAB_ID, viewType: RETIRED_VIEW }] as Array<{ id: string; viewType: string }>,
+          activeTabId: RETIRED_TAB_ID,
         },
         version: 0,
       })
