@@ -41,7 +41,10 @@ metrics:
 actuals:
   tokens: 2772
   tasks: 2
-  commits: 2
+  # Measured `git rev-list --count 0374e719..HEAD` = 4 at summary write (2 task commits
+  # + summary + deferred-items). This bookkeeping edit makes 5; verification-only plan,
+  # so no code commit is missing.
+  commits: 4
 requirements-completed: [AIO-REMOVE-02, AIO-REMOVE-03, AIO-REMOVE-04, AIO-REMOVE-05]
 status: complete
 ---
