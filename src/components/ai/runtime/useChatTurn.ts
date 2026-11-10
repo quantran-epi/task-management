@@ -93,7 +93,7 @@ export function useChatTurn({ scopeKey, deps, background = false }: UseChatTurnO
             aiTurnManager.registerTurn({
               id: scopeKey,
               scopeKey,
-              title: scopeKey.startsWith('sdlc:') ? `SDLC: ${scopeKey.split(':').slice(-1)[0]}` : scopeKey,
+              title: scopeKey,
               status: next,
               streamingStatusLabel: stageLabelFor(next),
               streamingText: '',
@@ -146,7 +146,7 @@ export function useChatTurn({ scopeKey, deps, background = false }: UseChatTurnO
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scopeKey, background]);
 
-  // Sync state whenever scopeKey changes (e.g. switching SDLC steps)
+  // Sync state whenever scopeKey changes (e.g. switching chat scopes)
   useEffect(() => {
     const turn = aiTurnManager.getTurn(scopeKey);
     if (background && turn && ACTIVE_AI_STATUSES.includes(turn.status)) {
@@ -193,7 +193,7 @@ export function useChatTurn({ scopeKey, deps, background = false }: UseChatTurnO
         aiTurnManager.registerTurn({
           id: scopeKey,
           scopeKey,
-          title: scopeKey.startsWith('sdlc:') ? `SDLC: ${scopeKey.split(':').slice(-1)[0]}` : scopeKey,
+          title: scopeKey,
           status: 'preparing',
           streamingStatusLabel: stageLabelFor('preparing'),
           streamingText: '',

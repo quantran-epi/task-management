@@ -62,8 +62,6 @@ import { getOracleToolConfig } from '../../services/ai/oracleSqlclService';
 import { SshFsSettingsModal } from './SshFsSettingsModal';
 import { getSshFsToolConfig } from '../../services/ai/sshFsToolService';
 import { logAiChatError } from './aiChatDiagnostics';
-import { RestoredSourceNotice } from './RestoredSourceNotice';
-import { deriveMissingSources } from './wizard/restoreRecovery';
 import { aiDebugService } from '../../services/ai/aiDebugService';
 import { IntentRouterUnavailableError } from '../../services/ai/intentRouter';
 import { APP_NAME } from '../../constants/app';
@@ -159,58 +157,6 @@ const DRAWER_QUICK_PROMPTS = [
 export const DEFAULT_AI_CHAT_WIDTH = 380;
 export const MIN_AI_CHAT_WIDTH = 320;
 export const MAX_AI_CHAT_WIDTH = 650;
-
-type SdlcPromptArtifact = {
-  content?: string | undefined;
-  sourceReferences?: string[] | undefined;
-  version?: number | undefined;
-};
-
-export interface SdlcWrapperPromptInput {
-  userQuery: string;
-  step?: string | undefined;
-  metadata?: {
-    cr?: string | undefined;
-    featureName?: string | undefined;
-    requestingUnit?: string | undefined;
-  } | undefined;
-  artifacts?: {
-    pl01?: SdlcPromptArtifact | undefined;
-    pl02?: SdlcPromptArtifact | undefined;
-    solution?: SdlcPromptArtifact | undefined;
-  } | undefined;
-}
-
-export function buildSdlcWrapperPrompt(input: SdlcWrapperPromptInput): string {
-  const parts: string[] = [];
-  const step = input.step ?? 'INTAKE';
-  parts.push(`[Quy trình SDLC - Bước: ${step}]`);
-  if (input.metadata) {
-    if (input.metadata.cr) parts.push(`- CR: ${input.metadata.cr}`);
-    if (input.metadata.featureName) parts.push(`- Tính năng: ${input.metadata.featureName}`);
-    if (input.metadata.requestingUnit) parts.push(`- Đơn vị yêu cầu: ${input.metadata.requestingUnit}`);
-  }
-
-  parts.push(`\n[CHÍNH SÁCH BẮT BUỘC CHẾ ĐỘ PHÂN TÍCH (ANALYSIS MODE)]:
-1. Chỉ sử dụng các công cụ tra cứu chỉ đọc (read-only tools). Không thay đổi CSDL trực tiếp khi chưa có XÁC NHẬN TỪ NGƯỜI DÙNG.
-2. Tra cứu hiện trạng mã nguồn, tài liệu và cấu trúc bảng CSDL để đưa ra phân tích chính xác.`);
-
-  if (input.artifacts?.pl01?.content) {
-    const refs = input.artifacts.pl01.sourceReferences?.length ? ` (Nguồn: ${input.artifacts.pl01.sourceReferences.join(', ')})` : '';
-    parts.push(`\n[YÊU CẦU NGHIỆP VỤ (PL01)]${refs}:\n${input.artifacts.pl01.content}`);
-  }
-  if (input.artifacts?.pl02?.content) {
-    const refs = input.artifacts.pl02.sourceReferences?.length ? ` (Nguồn: ${input.artifacts.pl02.sourceReferences.join(', ')})` : '';
-    parts.push(`\n[ĐẶC TẢ CHỨC NĂNG (PL02)]${refs}:\n${input.artifacts.pl02.content}`);
-  }
-  if (input.artifacts?.solution?.content) {
-    const ver = input.artifacts.solution.version ? ` v${input.artifacts.solution.version}` : '';
-    parts.push(`\n[GIẢI PHÁP KỸ THUẬT HIỆN TẠI (SOLUTION.md${ver})]:\n${input.artifacts.solution.content}`);
-  }
-
-  parts.push(`\n[YÊU CẦU CỦA NGƯỜI DÙNG]:\n${input.userQuery}`);
-  return parts.join('\n');
-}
 
 export interface ActiveScope {
   type: ChatScopeType;
@@ -616,7 +562,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     ?? durableTabs[0];
   const activeTabId = activeTab?.id ?? 'default';
   const activeTabThreadId = activeTab?.threadId;
-  const isSdlcActiveTab = false;
   // Async hub handlers compare against the live tab id, not the one closed over at call time.
   const activeTabIdRef = useRef(activeTabId);
   activeTabIdRef.current = activeTabId;
@@ -952,77 +897,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     [db, durableTabs]
   );
 
-  // D-30: a restored workflow whose source Notes vanished blocks the next AI step.
-  const restoredMissingSourcesRef = useRef<Array<{ id: string; title: string }>>([]);
-  const restoredMissingSources = useLiveQuery(async () => {
-    // The workflow row is keyed by the SDLC tab's durable thread, not by the CR alone.
-    const sdlcTabs = durableTabs.filter((tab) => tab.type === 'sdlc' && tab.threadId);
-    if (sdlcTabs.length === 0) return [];
-    const notes = await db.notes.toArray();
-    const missing = new Map<string, { id: string; title: string }>();
-    for (const tab of sdlcTabs) {
-      const row = await db.settings.get(`sdlc_workflow:${currentScope.id}:${tab.threadId}`);
-      for (const source of deriveMissingSources(
-        row?.value as Parameters<typeof deriveMissingSources>[0],
-        new Set(notes.map((note) => note.id))
-      )) {
-        missing.set(source.id, source);
-      }
-    }
-    return [...missing.values()];
-  }, [db, currentScope.id, durableTabs, messages.length]) ?? [];
-  restoredMissingSourcesRef.current = restoredMissingSources;
-
-  // D-30 / checkpoint recovery: a persisted `interrupted` checkpoint renders a Continue/Discard banner.
-  const sdlcCheckpoints = useLiveQuery(async () => {
-    const sdlcTabs = durableTabs.filter((tab) => tab.type === 'sdlc' && tab.threadId);
-    const found: Array<{ tabId: string; requestId: string; step?: string }> = [];
-    for (const tab of sdlcTabs) {
-      const row = await db.settings.get(`sdlc_workflow:${currentScope.id}:${tab.threadId}`);
-      const checkpoint = (row?.value as { checkpoint?: { status?: string; step?: string; requestId?: string } })
-        ?.checkpoint;
-      // A checkpoint still marked `running` belongs to a previous app session: restore() reads
-      // it as interrupted, and the banner must offer the same recovery (D-30).
-      if (
-        (checkpoint?.status === 'interrupted' || checkpoint?.status === 'running') &&
-        checkpoint.requestId
-      ) {
-        found.push({ tabId: tab.id, requestId: checkpoint.requestId, ...(checkpoint.step ? { step: checkpoint.step } : {}) });
-      }
-    }
-    return found;
-  }, [db, currentScope.id, durableTabs, messages.length]) ?? [];
-  const [discardedCheckpoints, setDiscardedCheckpoints] = useState<Record<string, true>>({});
-  const activeCheckpoint =
-    sdlcCheckpoints.find((checkpoint) => !discardedCheckpoints[checkpoint.requestId]) ?? null;
-
-  /** Continue/Discard persist their decision through the SDLC coordinator before any transport call. */
-  const resolveCheckpoint = async (decision: 'continue' | 'discard') => {
-    const checkpoint = activeCheckpoint;
-    if (!checkpoint) return;
-    const tab = durableTabs.find((entry) => entry.id === checkpoint.tabId);
-    if (!tab?.threadId) return;
-    const key = `sdlc_workflow:${currentScope.id}:${tab.threadId}`;
-    const row = await db.settings.get(key);
-    if (!row) return;
-    setDiscardedCheckpoints((prev) => ({ ...prev, [checkpoint.requestId]: true }));
-    if (decision === 'discard') {
-      const next = { ...(row.value as Record<string, unknown>) };
-      delete next.checkpoint;
-      await db.settings.put({ key, value: next });
-      return;
-    }
-    if (restoredMissingSources.length > 0) return;
-    await db.settings.put({
-      key,
-      value: {
-        ...(row.value as Record<string, unknown>),
-        checkpoint: { requestId: generateId(), step: checkpoint.step, status: 'running', startedAt: new Date().toISOString() },
-      },
-    });
-    void handleSendTurn('Tiếp tục công việc đang dở dang sau khi bị gián đoạn.');
-  };
-
   // Evidence synthesis state (not part of a chat turn)
   const [synthesizingEvidenceId, setSynthesizingEvidenceId] = useState<string | null>(null);
   const [evidenceSynthesisError, setEvidenceSynthesisError] = useState<{
@@ -1076,9 +950,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     }
   }, [db]);
 
-  // Analysis mode: durable per-tab state via ChatTab.config. Tab 'sdlc' is always true.
+  // Analysis mode: durable per-tab state via ChatTab.config.
   // The legacy global key never feeds this expression; it only seeds durable config once (D-07).
-  const currentTabAnalysisMode = isSdlcActiveTab ? true : Boolean(activeTab?.config?.analysisMode);
+  const currentTabAnalysisMode = Boolean(activeTab?.config?.analysisMode);
 
   const handleToggleAnalysisMode = useCallback(async (tabId?: string) => {
     const targetId = tabId || activeTabIdRef.current;
@@ -1152,7 +1026,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const displayTabs: ChatTabItem[] = useMemo(() => {
     return durableTabs.map((t) => ({
       id: t.id,
-      type: t.type,
+      type: 'chat' as const,
       title: t.title,
       threadId: t.threadId,
       createdAt: t.createdAt,
@@ -1398,17 +1272,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     } else if (trimmed.startsWith('/help')) {
       const extra = trimmed.replace(/^\/help\s*/, '').trim();
       effectivePrompt = extra ? `Hướng dẫn: ${extra}` : 'Hướng dẫn sử dụng trợ lý AI và các lệnh';
-    }
-
-    if (restoredMissingSourcesRef.current.length > 0) {
-      patchTurnError(
-        'request_failed',
-        `Thiếu tài liệu nguồn của workflow đã khôi phục: ${restoredMissingSourcesRef.current
-          .map((source) => source.title)
-          .join(', ')}.`,
-        turnTabId
-      );
-      return;
     }
 
     // Each send gets its own prelude token; the stale one may not touch the tab afterwards.
@@ -2448,8 +2311,6 @@ Rules:
         onConfigChange={reloadSshFsConfig}
       />
 
-      <RestoredSourceNotice missingSources={restoredMissingSources} />
-
       {activeRoutedScope && hasMeaningfulRoutedScope(activeRoutedScope.routedScope) && (
         <div style={{ padding: '0 14px' }}>
           <ScopeChipsBar
@@ -2557,24 +2418,6 @@ Rules:
           }}
           statusExtensions={
             <>
-              {activeCheckpoint && (
-                <div style={{ width: '100%', padding: '0 12px 6px', boxSizing: 'border-box' }}>
-                  <InterruptedBanner
-                    {...(activeCheckpoint.step ? { checkpoint: { step: activeCheckpoint.step } } : {})}
-                    message={
-                      activeCheckpoint.step
-                        ? `Công việc SDLC bị gián đoạn tại ${activeCheckpoint.step}.`
-                        : 'Yêu cầu trước bị gián đoạn khi ứng dụng đóng.'
-                    }
-                    onContinue={() => {
-                      void resolveCheckpoint('continue');
-                    }}
-                    onDiscard={() => {
-                      void resolveCheckpoint('discard');
-                    }}
-                  />
-                </div>
-              )}
               {activeRuntime?.status === 'interrupted' && (
                 <div style={{ width: '100%', padding: '0 12px 6px', boxSizing: 'border-box' }}>
                   <InterruptedBanner
