@@ -211,7 +211,9 @@ function prepareAttachments(attachments: BackupTableData['noteAttachments']): No
     mimeType: attachment.mimeType,
     sizeBytes: attachment.sizeBytes,
     data: attachment.data ? base64ToBlob(attachment.data, attachment.mimeType) : new Blob([], { type: attachment.mimeType }),
-    ...(attachment.filePath ? { filePath: attachment.filePath } : {}),
+    // Export strips `filePath` (it can be an absolute local path), so restore re-derives the
+    // deterministic attachment path here — this is what makes the export comment true.
+    filePath: attachment.filePath ?? `attachments/${attachment.id}_${attachment.fileName}`,
     ...(attachment.caption ? { caption: attachment.caption } : {}),
     createdAt: attachment.createdAt,
   }));

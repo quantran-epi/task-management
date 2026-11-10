@@ -138,7 +138,8 @@ describe('Note Attachments & Backup Serialization', () => {
 
       const exportedAttachment = (backup.tables as any).noteAttachments[0];
       expect(exportedAttachment.data).toBeUndefined();
-      expect(exportedAttachment.filePath).toBe(`attachments/${att.id}_${att.fileName}`);
+      // Export strips filePath (it can be an absolute local path); restore re-derives it.
+      expect(exportedAttachment.filePath).toBeUndefined();
 
       // Validate
       const validation = validateBackupPayload(backup);
@@ -227,7 +228,8 @@ describe('Note Attachments & Backup Serialization', () => {
       expect((backup.tables as any).noteAttachments).toHaveLength(1);
 
       const exportedAtt = (backup.tables as any).noteAttachments[0];
-      expect(exportedAtt.filePath).toBe('/Users/me/Documents/screenshot-local.png');
+      // Absolute local paths never leave the machine; restore re-derives a relative path.
+      expect(exportedAtt.filePath).toBeUndefined();
       expect(exportedAtt.data).toBeUndefined();
 
       // Validation passes without data
@@ -241,7 +243,7 @@ describe('Note Attachments & Backup Serialization', () => {
       await restoreBackupPayload(backup);
       const restored = await db.noteAttachments.toArray();
       expect(restored).toHaveLength(1);
-      expect(restored[0]?.filePath).toBe('/Users/me/Documents/screenshot-local.png');
+      expect(restored[0]?.filePath).toMatch(/^attachments\/[0-9a-f-]+_screenshot-local\.png$/);
       expect(restored[0]?.fileName).toBe('screenshot-local.png');
     });
   });

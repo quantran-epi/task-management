@@ -197,7 +197,7 @@ describe('backup tab contract', () => {
     expect(result.envelope?.tables.chatTabs).toBeUndefined();
   });
 
-  it('restores a legacy SDLC thread as one ordinary chat tab and creates no sdlc tab', async () => {
+  it('drops a legacy SDLC thread and its messages, backfilling only an empty chat tab', async () => {
     const legacy = basePayload();
     delete (legacy.tables as Partial<typeof legacy.tables>).chatTabs;
     delete (legacy.counts as Partial<typeof legacy.counts>).chatTabs;
@@ -219,12 +219,13 @@ describe('backup tab contract', () => {
     expect(validation.valid).toBe(true);
     await restoreBackupPayload(validation.envelope as BackupEnvelope, db);
 
-    const tabs = await db.chatTabs.orderBy('scopeKey').toArray();
+    // C-16 / D-24: SDLC is gone. The legacy `:sdlc` thread and its message are dropped; the
+    // scope still gets one ordinary empty chat tab, so the CR keeps a place to chat.
+    const tabs = await db.chatTabs.toArray();
     expect(tabs).toHaveLength(1);
-    expect(tabs.filter((tab) => (tab as { type: string }).type === 'sdlc')).toHaveLength(0);
-    expect(tabs.filter((tab) => tab.type === 'chat')).toHaveLength(1);
-    expect(tabs[0]?.active).toBe(true);
+    expect(tabs[0]?.type).toBe('chat');
     expect(tabs[0]?.scopeKey).toBe(`cr:${changeRequestId}`);
-    expect((await db.chatMessages.toArray())[0]?.content).toBe('Keep this history');
+    expect(await db.chatThreads.toArray()).toHaveLength(1);
+    expect(await db.chatMessages.toArray()).toHaveLength(0);
   });
 });
