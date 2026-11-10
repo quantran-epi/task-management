@@ -1,6 +1,14 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TaskPlannerDatabase } from '../../../../src/db/index';
+import {
+  beginTurn,
+  endTurn,
+  isAgentInUse,
+  isSkillInUse,
+  reset,
+} from '../../../../src/services/ai/office/liveUseRegistry';
 import {
   listEmployees,
   createEmployee,
@@ -172,5 +180,67 @@ describe('aiOfficeRepo (AIO-EMP-01, AIO-EMP-02, AIO-SKILL-01)', () => {
 
     const cleared = await updateEmployee(employee.id, { skillId: null }, db);
     expect(cleared.skillId).toBeUndefined();
+  });
+});
+
+describe('liveUseRegistry (D-13, D-19)', () => {
+  afterEach(() => {
+    reset();
+  });
+
+  it('marks an agent and its skill in use between beginTurn and endTurn', () => {
+    beginTurn('agent-1', ['skill-1']);
+
+    expect(isAgentInUse('agent-1')).toBe(true);
+    expect(isSkillInUse('skill-1')).toBe(true);
+
+    endTurn('agent-1');
+
+    expect(isAgentInUse('agent-1')).toBe(false);
+    expect(isSkillInUse('skill-1')).toBe(false);
+  });
+
+  it('keeps a shared skill in use until both concurrent turns end', () => {
+    beginTurn('agent-1', ['skill-1']);
+    beginTurn('agent-2', ['skill-1']);
+
+    endTurn('agent-1');
+    expect(isSkillInUse('skill-1')).toBe(true);
+
+    endTurn('agent-2');
+    expect(isSkillInUse('skill-1')).toBe(false);
+  });
+
+  it('refcounts a duplicate start so one end does not release early', () => {
+    beginTurn('agent-1', []);
+    beginTurn('agent-1', []);
+
+    endTurn('agent-1');
+    expect(isAgentInUse('agent-1')).toBe(true);
+
+    endTurn('agent-1');
+    expect(isAgentInUse('agent-1')).toBe(false);
+  });
+
+  it('clears every entry on reset', () => {
+    beginTurn('agent-1', ['skill-1']);
+    beginTurn('agent-2', ['skill-2']);
+
+    reset();
+
+    expect(isAgentInUse('agent-1')).toBe(false);
+    expect(isAgentInUse('agent-2')).toBe(false);
+    expect(isSkillInUse('skill-1')).toBe(false);
+    expect(isSkillInUse('skill-2')).toBe(false);
+  });
+
+  it('imports neither React nor Dexie', () => {
+    const source = readFileSync(
+      new URL('../../../../src/services/ai/office/liveUseRegistry.ts', import.meta.url),
+      'utf8'
+    );
+    expect(source).not.toMatch(/from ['"]react['"]/);
+    expect(source).not.toMatch(/from ['"][^'"]*\/db['"]/);
+    expect(source).not.toMatch(/from ['"]dexie['"]/);
   });
 });
