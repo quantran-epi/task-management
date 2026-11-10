@@ -20,7 +20,6 @@ export interface CreateDocumentSetInput {
   isBase?: boolean | undefined;
   presentationRevision?: number | undefined;
   preset?: DocumentSetPreset | undefined;
-  sdlc?: DocumentSet['sdlc'];
 }
 
 export interface UpdateDocumentSetInput {
@@ -33,7 +32,6 @@ export interface UpdateDocumentSetInput {
   isBase?: boolean | undefined;
   presentationRevision?: number | undefined;
   preset?: DocumentSetPreset | undefined;
-  sdlc?: DocumentSet['sdlc'];
 }
 
 export interface DocumentSetMemberStatus {
@@ -46,41 +44,6 @@ export interface DocumentPublishStatus {
   documentId: string;
   aggregateState: PublishPrimaryState;
   containingSets: DocumentSetMemberStatus[];
-}
-
-/**
- * Resolves one CR SDLC set by structured metadata while an outer transaction owns atomicity.
- * Set names are display-only and never participate in identity.
- */
-export async function getOrCreateCrSdlcSetInTransaction(
-  changeRequestId: string,
-  now: string,
-  db: TaskPlannerDatabase = defaultDb,
-): Promise<DocumentSet> {
-  const matches = await db.documentSets
-    .filter((set) => set.sdlc?.changeRequestId === changeRequestId && set.sdlc.purpose === 'sdlc')
-    .toArray();
-  if (matches.length > 1) throw new Error('DUPLICATE_PROJECT_SDLC_SET');
-  const existing = matches[0];
-  if (existing) return existing;
-
-  const set = DocumentSetSchema.parse({
-    id: generateId(),
-    name: 'SDLC artifacts',
-    description: 'Canonical change-request SDLC artifacts',
-    documentIds: [],
-    createdAt: now,
-    updatedAt: now,
-    scope: { domain: 'SDLC', environment: null, version: null },
-    aliases: [],
-    relations: [],
-    isBase: false,
-    presentationRevision: 0,
-    preset: 'TuyChinh',
-    sdlc: { changeRequestId, purpose: 'sdlc' },
-  });
-  await db.documentSets.add(set);
-  return set;
 }
 
 const PRIMARY_STATE_PRIORITY: Record<PublishPrimaryState, number> = {
@@ -148,7 +111,6 @@ export async function createDocumentSet(
     isBase: input.isBase ?? false,
     presentationRevision: input.presentationRevision ?? 0,
     preset: input.preset ?? 'TuyChinh',
-    ...(input.sdlc ? { sdlc: input.sdlc } : {}),
   };
 
   const validated = DocumentSetSchema.parse(candidate);
@@ -230,7 +192,6 @@ export async function updateDocumentSet(
         ? { presentationRevision: updates.presentationRevision }
         : {}),
       ...(updates.preset !== undefined ? { preset: updates.preset } : {}),
-      ...(updates.sdlc !== undefined ? { sdlc: updates.sdlc } : {}),
       updatedAt: now,
     };
 

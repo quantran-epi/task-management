@@ -3,7 +3,6 @@ import type { ChatScopeType, ChatTab, ChatThread } from '../../types/models';
 import { generateId } from '../../utils/uuid';
 import { notifyAIChatSync } from '../../services/ai/aiSyncChannel';
 
-const SDLC_TITLE = '⚙️ SDLC Workflow';
 const DEFAULT_CHAT_TITLE = '💬 Cuộc trò chuyện';
 
 type ChatScopeInput = {
@@ -18,7 +17,7 @@ type CreateChatTabInput = ChatScopeInput & {
 };
 
 function ordinaryTabs(tabs: ChatTab[]): ChatTab[] {
-  return tabs.filter((tab) => tab.type === 'chat').sort((a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt));
+  return [...tabs].sort((a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt));
 }
 
 /**
@@ -76,55 +75,6 @@ export async function listTabsByScope(scopeKey: string, db: TaskPlannerDatabase 
 
 export async function getActiveTab(scopeKey: string, db: TaskPlannerDatabase = defaultDb): Promise<ChatTab | undefined> {
   return (await listTabsByScope(scopeKey, db)).find((tab) => tab.active) ?? (await listTabsByScope(scopeKey, db))[0];
-}
-
-/** Read-only lookup of the CR's durable SDLC tab thread — the `sdlc_workflow:` key segment. */
-export async function getSdlcTabThreadId(
-  crId: string,
-  db: TaskPlannerDatabase = defaultDb
-): Promise<string | undefined> {
-  const tabs = await db.chatTabs.where('scopeKey').equals(`cr:${crId}`).toArray();
-  return tabs.find((tab) => tab.type === 'sdlc')?.threadId;
-}
-
-export async function getOrCreateSdlcTab(crId: string, db: TaskPlannerDatabase = defaultDb): Promise<ChatTab> {
-  const scopeKey = `cr:${crId}`;
-
-  return db.transaction('rw', [db.chatThreads, db.chatTabs], async () => {
-    const scopeTabs = await db.chatTabs.where('scopeKey').equals(scopeKey).toArray();
-    const existing = scopeTabs.find((tab) => tab.type === 'sdlc');
-    if (existing) return existing;
-
-    const now = new Date().toISOString();
-    const existingCrThreads = await db.chatThreads.where('entityId').equals(crId).toArray();
-    const claimedThreadIds = new Set((await db.chatTabs.toArray()).map((tab) => tab.threadId));
-    const sdlcThread = existingCrThreads.find((thread) => thread.scopeKey === `${scopeKey}:sdlc`)
-      // Pre-tab threads used `cr:<id>` for the single CR conversation; adopt one only if unclaimed.
-      ?? existingCrThreads.find((thread) => thread.scopeKey === scopeKey && !claimedThreadIds.has(thread.id));
-    const thread: ChatThread = sdlcThread ?? {
-      id: generateId(),
-      scopeKey: `${scopeKey}:sdlc`,
-      scopeType: 'cr',
-      entityId: crId,
-      title: SDLC_TITLE,
-      createdAt: now,
-      updatedAt: now,
-    };
-    const tab: ChatTab = {
-      id: generateId(),
-      threadId: thread.id,
-      scopeKey,
-      type: 'sdlc',
-      title: SDLC_TITLE,
-      order: 0,
-      active: false,
-      createdAt: thread.createdAt,
-      updatedAt: now,
-    };
-    if (!sdlcThread) await db.chatThreads.add(thread);
-    await db.chatTabs.add(tab);
-    return tab;
-  });
 }
 
 export async function createChatTab(input: CreateChatTabInput, db: TaskPlannerDatabase = defaultDb): Promise<ChatTab> {
@@ -208,7 +158,7 @@ export async function setActiveTab(scopeKey: string, tabId: string, db: TaskPlan
 
 export async function updateChatTab(
   tabId: string,
-  patch: Partial<Pick<ChatTab, 'title' | 'config' | 'checkpoint' | 'status' | 'workflowState'>>,
+  patch: Partial<Pick<ChatTab, 'title' | 'config' | 'checkpoint' | 'status'>>,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<ChatTab> {
   const tab = await db.chatTabs.get(tabId);
@@ -226,7 +176,6 @@ export async function updateChatTab(
 export async function deleteChatTab(tabId: string, db: TaskPlannerDatabase = defaultDb): Promise<void> {
   const tab = await db.chatTabs.get(tabId);
   if (!tab) return;
-  if (tab.type === 'sdlc') throw new Error('SDLC tab cannot be deleted');
   await db.transaction('rw', [db.chatTabs, db.chatThreads, db.chatMessages], async () => {
     await db.chatMessages.where('threadId').equals(tab.threadId).delete();
     await db.chatTabs.delete(tabId);
@@ -236,8 +185,8 @@ export async function deleteChatTab(tabId: string, db: TaskPlannerDatabase = def
       const now = new Date().toISOString();
       const id = generateId();
       const title = `${DEFAULT_CHAT_TITLE} #1`;
-      // Closing the last ordinary tab must not produce a second active tab: the SDLC tab is often
-      // the active one, and two `active: true` rows in a scope fail the app's own backup validator.
+      // Closing the last tab must not produce a second active tab: two `active: true` rows in a
+      // scope fail the app's own backup validator.
       const stillActive = (await listTabsByScope(tab.scopeKey, db)).some((row) => row.active);
       await db.chatThreads.add({
         id,
