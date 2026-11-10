@@ -11,9 +11,8 @@ import { useLayoutStore } from '../../src/workbench/store/layoutStore';
  * Plan 31.2-13 Task 1 (ENT-NORM-04, D-31/D-32).
  *
  * `ChangeRequestDetailView` is the single-screen CR detail tab: header with target
- * subsystem pills, a 6-step SDLC progress strip that deep-links into the SDLC tab,
- * a flat CR-scoped task table whose Subsystem cell is constrained to `cr.targets`,
- * and three collapsed secondary blocks.
+ * subsystem pills, a flat CR-scoped task table whose Subsystem cell is constrained
+ * to `cr.targets`, and three collapsed secondary blocks.
  */
 describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
   let db: TaskPlannerDatabase;
@@ -99,31 +98,6 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
 
     expect(await screen.findByText('Chưa gắn subsystem')).toBeInTheDocument();
     expect(screen.getByText('Chọn subsystem')).toBeInTheDocument();
-  }, 30000);
-
-  it('renders the six SDLC progress steps with their short labels', async () => {
-    const { cr } = await seed();
-    render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
-
-    await screen.findByText('CR-2026-001');
-    for (const label of ['Nạp yêu cầu', 'Giải pháp', 'Coding', 'Change Pack', 'Tài liệu', 'CAB']) {
-      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
-    }
-  }, 30000);
-
-  it('opens the SDLC tab at the clicked step', async () => {
-    const { cr } = await seed();
-    render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Coding' }));
-
-    await waitFor(() => {
-      const tab = useLayoutStore.getState().openTabs.find((t) => t.id === `sdlc-${cr.id}`);
-      expect(tab).toBeDefined();
-      expect(tab?.viewType).toBe('sdlc');
-      expect(tab?.params?.stepId).toBe('CODE_GUIDE');
-      expect(tab?.params?.changeRequestId).toBe(cr.id);
-    });
   }, 30000);
 
   it('renders exactly the Task, Subsystem, Status, Ước lượng and Hạn columns in order', async () => {
@@ -255,32 +229,6 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
     await waitFor(async () => {
       const tasksInCr = await db.tasks.where('crId').equals(cr.id).toArray();
       expect(tasksInCr).toHaveLength(0);
-    });
-  }, 30000);
-
-  it('updates SDLC step completion based on persisted workflow state', async () => {
-    const { cr } = await seed();
-    // Persist SDLC workflow state for this CR with pl01, pl02 (INTAKE) and solution (SOLUTION & CODE_GUIDE)
-    await db.settings.put({
-      key: `sdlc_workflow:${cr.id}:default-thread`,
-      value: JSON.stringify({
-        artifacts: {
-          pl01: { content: 'PL01 content' },
-          pl02: { content: 'PL02 content' },
-          solution: { content: 'Solution doc' },
-        },
-      }),
-    });
-
-    render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
-
-    await waitFor(() => {
-      const intakeBtn = screen.getByRole('button', { name: 'Nạp yêu cầu' });
-      expect(intakeBtn.querySelector('.anticon-check-circle')).not.toBeNull();
-      const solutionBtn = screen.getByRole('button', { name: 'Giải pháp' });
-      expect(solutionBtn.querySelector('.anticon-check-circle')).not.toBeNull();
-      const cabBtn = screen.getByRole('button', { name: 'CAB' });
-      expect(cabBtn.querySelector('.anticon-check-circle')).toBeNull();
     });
   }, 30000);
 

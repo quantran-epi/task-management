@@ -25,7 +25,7 @@ vi.mock('dexie-react-hooks', () => {
   return { useLiveQuery: () => EMPTY };
 });
 
-describe('Stripe Remote Git Explorer Integration (SDLC-REPO-EXP-01)', () => {
+describe('Stripe Remote Git Explorer Integration', () => {
   beforeEach(() => {
     localStorage.clear();
     act(() => {

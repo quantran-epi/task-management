@@ -21,7 +21,7 @@ const mockSshConfigs: SshConfig[] = [
   },
 ];
 
-describe('RemoteGitExplorer Component (SDLC-REPO-EXP-02)', () => {
+describe('RemoteGitExplorer Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();

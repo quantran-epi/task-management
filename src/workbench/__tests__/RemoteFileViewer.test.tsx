@@ -31,7 +31,7 @@ flowchart TD
 \`\`\`
 `;
 
-describe('RemoteFileViewer Component (SDLC-REPO-EXP-03)', () => {
+describe('RemoteFileViewer Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(sshService, 'getSshSecret').mockResolvedValue('secret-123');

@@ -7,7 +7,7 @@ import { createChangeRequest } from '../../src/db/repositories/changeRequestRepo
 
 /**
  * The default shell has no CR route after the 31.2 normalization — CRs live in the workbench
- * (CR Explorer + `cr_detail`/`sdlc` tabs). These tests therefore cover the surviving route
+ * (CR Explorer + `cr_detail` tabs). These tests therefore cover the surviving route
  * integration: the tasks route, and the dashboard fallback the router applies to the removed
  * `#/projects` route.
  */

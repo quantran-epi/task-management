@@ -142,7 +142,6 @@ describe('CRExplorer — CR → Task tree (ENT-NORM-04)', () => {
     });
     const menu = document.querySelector('.ant-dropdown-menu') as HTMLElement;
     expect(menu.textContent).toContain('Mở CR Detail');
-    expect(menu.textContent).toContain('Mở SDLC Studio');
     expect(menu.textContent).toContain('Sửa');
     expect(menu.textContent).toContain('Xóa');
   });

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readNoteMarkdown } from '../../src/utils/noteBody';
 
 describe('readNoteMarkdown', () => {
-  it('unwraps the SDLC artifact envelope that artifactRepo writes', () => {
+  it('unwraps a JSON envelope Note body', () => {
     const body = JSON.stringify({ markdown: '# SOLUTION v1\n\nNội dung', exportPayload: {} });
     expect(readNoteMarkdown(body)).toBe('# SOLUTION v1\n\nNội dung');
   });

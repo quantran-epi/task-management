@@ -101,7 +101,6 @@ describe('CR → Subsystem hierarchy components', () => {
 
   it('ChangeRequestTable renders CRs with their subsystem targets and task counts', async () => {
     const onViewTasks = vi.fn();
-    const onOpenSdlcStudio = vi.fn();
     render(
       <ChangeRequestTable
         changeRequests={[sampleCr]}
@@ -110,7 +109,6 @@ describe('CR → Subsystem hierarchy components', () => {
         onEditChangeRequest={vi.fn()}
         onDeleteChangeRequest={vi.fn()}
         onViewTasks={onViewTasks}
-        onOpenSdlcStudio={onOpenSdlcStudio}
         db={db}
       />
     );
@@ -122,9 +120,6 @@ describe('CR → Subsystem hierarchy components', () => {
 
     fireEvent.click(screen.getByText('Website Redesign'));
     expect(onViewTasks).toHaveBeenCalledWith('cr-1');
-
-    fireEvent.click(screen.getByRole('button', { name: /SDLC/ }));
-    expect(onOpenSdlcStudio).toHaveBeenCalledWith('cr-1');
   });
 
   it('ChangeRequestModal refuses to save a CR with no target subsystem', async () => {
