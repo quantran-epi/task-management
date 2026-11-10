@@ -112,7 +112,7 @@ Plans:
 
 **Criterion overrides (locked in 36-CONTEXT.md):** criterion 3's pre-v1.4 fixture and criterion 4's two-way old-build compatibility are **replaced by C-16** (D-23) — verified instead as a fresh-data v12 round-trip covering IDs, counts, attribution, pending state and the leader lock. Criterion 1 reads **V19**, not V18 (D-22). AIO-DATA-05's "keep SDLC rows" is replaced by C-16 + the Phase 35 deletion (D-24). See `36-CONTEXT.md` D-22..D-25.
 
-**Plans:** 1/5 plans executed
+**Plans:** 2/5 plans executed
 
 **Wave 1**
 
@@ -120,7 +120,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 36-02-PLAN.md — Optional leader + durable `leaderLockedAt` (lock enforced on every repo write path), cap removal, `targetAgentId`/`leaderLockedAt` round-trip, live-vs-historical validation
+- [x] 36-02-PLAN.md — Optional leader + durable `leaderLockedAt` (lock enforced on every repo write path), cap removal, `targetAgentId`/`leaderLockedAt` round-trip, live-vs-historical validation
 
 **Wave 3** *(blocked on Wave 2)*
 
