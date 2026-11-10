@@ -11,11 +11,8 @@ import {
   normalizeToolName,
 } from './aiTools';
 import { executeDynamicMcpTool, type ExecuteMcpToolOptions } from './mcpClient';
-import type { ArtifactToolContext } from './sdlcArtifactTools';
 
 export interface DispatchAiToolCallOptions extends ExecuteMcpToolOptions {
-  /** Trusted, request-bound SDLC artifact scope for the artifact tools. */
-  artifactContext?: ArtifactToolContext;
   /** WR-19: CR the turn is bound to; entity ids outside it are rejected. */
   crScopeId?: string;
 }
@@ -32,7 +29,6 @@ export async function dispatchAiToolCall(
   const isLocalDbTool = AI_DATABASE_TOOLS.some(
     (t) => normalizeToolName(t.function.name) === normalized
   );
-  const artifactContext = options?.artifactContext;
   return isLocalDbTool
     ? executeAiTool(
         name,
@@ -40,7 +36,6 @@ export async function dispatchAiToolCall(
         db,
         signal,
         {
-          ...(artifactContext ? { artifactContext } : {}),
           ...(options?.crScopeId ? { crScopeId: options.crScopeId } : {}),
         }
       )
@@ -83,8 +78,6 @@ export interface AiOrchestratorLoopOptions {
     signal?: AbortSignal,
     options?: DispatchAiToolCallOptions
   ) => Promise<string>;
-  /** Trusted scope forwarded to every tool dispatch in this turn (artifact tools). */
-  artifactContext?: ArtifactToolContext;
   /** Recent tool outputs kept intact when pruning; older ones truncate. */
   keepRecentToolOutputs?: number;
   /** Character cap applied to older tool outputs. */
@@ -177,7 +170,6 @@ export async function runAiOrchestratorLoop(
     onMutationCheck,
     onFileGenerated,
     executeToolFn,
-    artifactContext,
     keepRecentToolOutputs = 2,
     maxOldToolChars = 500,
     contextWindowTokens,
@@ -412,14 +404,9 @@ export async function runAiOrchestratorLoop(
       const toolStartTime = Date.now();
       let toolResult: string;
       try {
-        const dispatchOptions = artifactContext ? { artifactContext } : undefined;
         toolResult = executeToolFn
-          ? await (dispatchOptions
-              ? executeToolFn(tc.function.name, args, db, signal, dispatchOptions)
-              : executeToolFn(tc.function.name, args, db, signal))
-          : await (dispatchOptions
-              ? dispatchAiToolCall(tc.function.name, args, db, signal, dispatchOptions)
-              : dispatchAiToolCall(tc.function.name, args, db, signal));
+          ? await executeToolFn(tc.function.name, args, db, signal)
+          : await dispatchAiToolCall(tc.function.name, args, db, signal);
       } catch (toolErr: any) {
         if (toolErr?.name === 'AbortError' || signal?.aborted) throw toolErr;
         toolResult = JSON.stringify({

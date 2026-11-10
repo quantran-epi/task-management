@@ -10,13 +10,11 @@ import { saveMessage } from '../../../db/repositories/chatRepo';
 import { describeToolMutationWithContext, normalizeToolName } from '../../../services/ai/aiTools';
 import { stripThinkingBlocks } from '../../../services/ai/nineRouterClient';
 import {
-  executeSdlcArtifactTool,
-  prepareArtifactPatch,
+  preparePatch,
   type ArtifactPatchProposal,
-  type ArtifactToolContext,
   type ArtifactToolRefusal,
   type ArtifactToolResult,
-} from '../../../services/ai/sdlcArtifactTools';
+} from '../../../services/ai/patchProposal';
 
 export type ChatTurnStatus =
   | 'idle'
@@ -45,7 +43,7 @@ export interface ChatTurnToolEvent {
 export interface ChatTurnApprovalInfo {
   toolName: string;
   summary: string;
-  /** Prepared, immutable artifact patch shown in the diff card (SDLC-ART-03). */
+  /** Prepared, immutable artifact patch shown in the diff card. */
   patch?: ArtifactPatchProposal;
 }
 
@@ -71,8 +69,6 @@ export interface ChatTurnRequest {
   maxToolRounds?: number;
   /** Provider context window, when the host resolves one (auto-compaction threshold). */
   contextWindowTokens?: number;
-  /** Trusted, request-bound SDLC artifact scope. Never read from a global registry. */
-  artifactContext?: ArtifactToolContext;
   /** WR-19: CR this turn is bound to; tool calls outside it are rejected. */
   crScopeId?: string;
   /** Phase 34 D-31: AI Office attribution forwarded into the persisted assistant row. */
@@ -102,7 +98,7 @@ export interface ChatTurnRuntimeDeps {
   saveMessage: typeof saveMessage;
   describeMutation: typeof describeToolMutationWithContext;
   /** Prepares the artifact patch shown before approval; injectable for tests. */
-  preparePatch?: typeof prepareArtifactPatch;
+  preparePatch?: typeof preparePatch;
   db: TaskPlannerDatabase;
   onStatus?: (status: ChatTurnStatus) => void;
   onDelta?: (text: string) => void;
@@ -138,7 +134,7 @@ export function createDefaultChatTurnDeps(
     runLoop: runAiOrchestratorLoop,
     saveMessage,
     describeMutation: describeToolMutationWithContext,
-    preparePatch: prepareArtifactPatch,
+    preparePatch,
     db,
   };
 }
@@ -282,7 +278,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
       // checked and dispatched, so a prepared proposal is keyed by that exact call.
       let currentCallId: string | null = null;
       const preparedPatches = new Map<string, ArtifactPatchProposal>();
-      const preparePatch = deps.preparePatch ?? prepareArtifactPatch;
+      const preparePatchFn = deps.preparePatch ?? preparePatch;
 
       const result: AiOrchestratorLoopResult = await deps.runLoop({
         endpoint: request.endpoint,
@@ -308,7 +304,6 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
           : {}),
         compactAtRatio: request.analysisMode ? 0.9 : 0.75,
         ...(request.contextWindowTokens ? { contextWindowTokens: request.contextWindowTokens } : {}),
-        ...(request.artifactContext ? { artifactContext: request.artifactContext } : {}),
         executeToolFn: (name, args, toolDb, signal) => {
           // Post-approve execution returns the exact prepared proposal, never a recompute
           // against an editor that may have moved on (T-27-02).
@@ -317,7 +312,6 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
           if (prepared) return Promise.resolve(JSON.stringify(prepared));
           return dispatchAiToolCall(name, args, toolDb, signal, {
             allowMutation: request.autoApprove,
-            ...(request.artifactContext ? { artifactContext: request.artifactContext } : {}),
             ...(request.crScopeId ? { crScopeId: request.crScopeId } : {}),
           });
         },
@@ -381,10 +375,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
           // Analysis Mode is a prompt preference only; it never blocks or bypasses execution.
           if (normalizeToolName(toolName) === PATCH_TOOL_NAME) {
             const callId = currentCallId;
-            const context = request.artifactContext;
-            const prepared: ArtifactToolResult = context
-              ? await preparePatch(deps.db, context, args)
-              : await executeSdlcArtifactTool(PATCH_TOOL_NAME, args, deps.db, undefined);
+            const prepared: ArtifactToolResult = await preparePatchFn(deps.db, args);
             if (!isCurrent(turnId, turnController)) {
               return { proceed: false, cancellationResult: DECLINED_CANCELLATION };
             }

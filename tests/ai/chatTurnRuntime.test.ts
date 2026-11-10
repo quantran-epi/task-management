@@ -10,18 +10,8 @@ import {
   type ChatTurnStatus,
 } from '../../src/components/ai/runtime/chatTurnRuntime';
 import type { AiOrchestratorLoopOptions } from '../../src/services/ai/aiOrchestratorLoop';
-import type { ArtifactToolContext } from '../../src/services/ai/sdlcArtifactTools';
 
 const SCOPE_KEY = 'project:11111111-1111-4111-8111-111111111111';
-
-const ARTIFACT_CONTEXT: ArtifactToolContext = {
-  scopeKey: 'sdlc:project:cr:SOLUTION',
-  changeRequestId: 'p-1',
-  crId: 'cr-active',
-  stepId: 'SOLUTION',
-  getAccess: () => ({ readOnly: false, crActive: true, scopeValid: true }),
-  getDraft: () => '# SOLUTION',
-};
 
 function makeRequest(overrides: Partial<ChatTurnRequest> = {}): ChatTurnRequest {
   return {
@@ -456,10 +446,8 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
   it('prepares the artifact patch before awaiting approval and forwards the real diff payload', async () => {
     const proposal = {
       proposalId: 'proposal-1',
-      scopeKey: SCOPE_KEY,
-      changeRequestId: 'p-1',
-      crId: 'cr-active',
-      kind: 'SOLUTION' as const,
+      target: 'note' as const,
+      id: 'note-1',
       version: 3,
       sectionId: '1.2',
       sectionTitle: 'Ki\xe1\xba\xbfn tr\xc3\xbac',
@@ -473,12 +461,12 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
     const preparePatch = vi.fn().mockResolvedValue(proposal);
     const approveRuntime = runtimeWith(
       async (options) => {
-        await options.onMutationCheck?.('patch_artifact_section', { sectionId: '1.2' });
+        await options.onMutationCheck?.('patch_artifact_section', { target: 'note', id: 'note-1', sectionId: '1.2' });
         return { fullResponse: 'ok', tokenUsage: {} };
       },
       { preparePatch }
     );
-    const turn = approveRuntime.start(makeRequest({ artifactContext: ARTIFACT_CONTEXT, threadId }));
+    const turn = approveRuntime.start(makeRequest({ threadId }));
     await waitForStatus(() => statuses.includes('awaiting-approval'));
     expect(preparePatch).toHaveBeenCalledTimes(1);
     expect(approvals[0]?.patch).toEqual(proposal);
@@ -489,10 +477,8 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
   it('never lets autoApprove bypass an artifact patch decision', async () => {
     const preparePatch = vi.fn().mockResolvedValue({
       proposalId: 'proposal-2',
-      scopeKey: SCOPE_KEY,
-      changeRequestId: 'p-1',
-      crId: 'cr-active',
-      kind: 'SOLUTION' as const,
+      target: 'note' as const,
+      id: 'note-1',
       version: 1,
       sectionId: '1',
       sectionTitle: 'SOLUTION',
@@ -505,12 +491,12 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
     });
     const runtime = runtimeWith(
       async (options) => {
-        await options.onMutationCheck?.('patch_artifact_section', { sectionId: '1' });
+        await options.onMutationCheck?.('patch_artifact_section', { target: 'note', id: 'note-1', sectionId: '1' });
         return { fullResponse: 'ok', tokenUsage: {} };
       },
       { preparePatch }
     );
-    const turn = runtime.start(makeRequest({ artifactContext: ARTIFACT_CONTEXT, threadId, autoApprove: true }));
+    const turn = runtime.start(makeRequest({ threadId, autoApprove: true }));
     await waitForStatus(() => statuses.includes('awaiting-approval'));
     runtime.resolveApproval(true);
     expect((await turn).phase).toBe('complete');
@@ -535,12 +521,12 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
     let checked: { proceed: boolean; cancellationResult?: string } | undefined;
     const runtime = runtimeWith(
       async (options) => {
-        checked = await options.onMutationCheck?.('patch_artifact_section', { sectionId: '1.2' });
+        checked = await options.onMutationCheck?.('patch_artifact_section', { target: 'note', id: 'note-1', sectionId: '1.2' });
         return { fullResponse: 'ok', tokenUsage: {} };
       },
       { preparePatch: vi.fn().mockResolvedValue(refusal) }
     );
-    await runtime.start(makeRequest({ threadId, artifactContext: ARTIFACT_CONTEXT }));
+    await runtime.start(makeRequest({ threadId }));
     expect(checked?.proceed).toBe(false);
     expect(JSON.parse(checked?.cancellationResult ?? '{}')).toEqual(refusal);
     expect(statuses).not.toContain('awaiting-approval');
@@ -549,10 +535,8 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
   it('parks two patch calls in order and keeps a rejected patch from cancelling later artifacts', async () => {
     const proposals = [1, 2].map((index) => ({
       proposalId: `proposal-${index}`,
-      scopeKey: SCOPE_KEY,
-      changeRequestId: 'p-1',
-      crId: 'cr-active',
-      kind: 'SOLUTION' as const,
+      target: 'note' as const,
+      id: 'note-1',
       version: 1,
       sectionId: `1.${index}`,
       sectionTitle: `Muc ${index}`,
@@ -570,7 +554,7 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
     const runtime = runtimeWith(
       async (options) => {
         for (const sectionId of ['1.1', '1.2']) {
-          const result = await options.onMutationCheck?.('patch_artifact_section', { sectionId });
+          const result = await options.onMutationCheck?.('patch_artifact_section', { target: 'note', id: 'note-1', sectionId });
           seen.push(result?.proceed ? 'proceed' : 'cancel');
         }
         return { fullResponse: 'sau khi xu ly', tokenUsage: {} };
@@ -580,7 +564,7 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
         onAwaitingApproval: (info: ChatTurnApprovalInfo) => approvals.push(info),
       }
     );
-    const turn = runtime.start(makeRequest({ threadId, artifactContext: ARTIFACT_CONTEXT }));
+    const turn = runtime.start(makeRequest({ threadId }));
     await waitForStatus(() => approvals.length === 1);
     runtime.resolveApproval(false);
     await waitForStatus(() => approvals.length === 2);
@@ -596,16 +580,14 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
   it('abort releases a parked patch turn', async () => {
     const runtime = runtimeWith(
       async (options) => {
-        await options.onMutationCheck?.('patch_artifact_section', { sectionId: '1.2' });
+        await options.onMutationCheck?.('patch_artifact_section', { target: 'note', id: 'note-1', sectionId: '1.2' });
         return { fullResponse: 'never', tokenUsage: {} };
       },
       {
         preparePatch: vi.fn().mockResolvedValue({
           proposalId: 'proposal-abort',
-          scopeKey: SCOPE_KEY,
-          changeRequestId: 'p-1',
-          crId: 'cr-active',
-          kind: 'SOLUTION' as const,
+          target: 'note' as const,
+          id: 'note-1',
           version: 1,
           sectionId: '1.2',
           sectionTitle: 'Muc',
@@ -618,7 +600,7 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
         }),
       }
     );
-    const turn = runtime.start(makeRequest({ threadId, artifactContext: ARTIFACT_CONTEXT }));
+    const turn = runtime.start(makeRequest({ threadId }));
     await waitForStatus(() => statuses.includes('awaiting-approval'));
     runtime.abort();
     expect((await turn).phase).toBe('aborted');
@@ -628,10 +610,8 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
   it('describes an approved patch and returns the cached proposal instead of recomputing', async () => {
     const proposal = {
       proposalId: 'proposal-cached',
-      scopeKey: SCOPE_KEY,
-      changeRequestId: 'p-1',
-      crId: 'cr-active',
-      kind: 'SOLUTION' as const,
+      target: 'note' as const,
+      id: 'note-1',
       version: 2,
       sectionId: '1.1',
       sectionTitle: 'Muc tieu',
@@ -645,16 +625,16 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
     const returned: string[] = [];
     const runtime = runtimeWith(
       async (options) => {
-        options.onToolCall?.({ id: 'call-patch-1', name: 'patch_artifact_section', args: { sectionId: '1.1' } });
-        const check = await options.onMutationCheck?.('patch_artifact_section', { sectionId: '1.1' });
+        options.onToolCall?.({ id: 'call-patch-1', name: 'patch_artifact_section', args: { target: 'note', id: 'note-1', sectionId: '1.1' } });
+        const check = await options.onMutationCheck?.('patch_artifact_section', { target: 'note', id: 'note-1', sectionId: '1.1' });
         expect(check?.proceed).toBe(true);
-        const raw = await options.executeToolFn?.('patch_artifact_section', { sectionId: '1.1' }, db, undefined, undefined);
+        const raw = await options.executeToolFn?.('patch_artifact_section', { target: 'note', id: 'note-1', sectionId: '1.1' }, db, undefined, undefined);
         returned.push(raw ?? '');
         return { fullResponse: 'done', tokenUsage: {} };
       },
       { preparePatch: vi.fn().mockResolvedValue(proposal) }
     );
-    const turn = runtime.start(makeRequest({ threadId, artifactContext: ARTIFACT_CONTEXT }));
+    const turn = runtime.start(makeRequest({ threadId }));
     await waitForStatus(() => statuses.includes('awaiting-approval'));
     runtime.resolveApproval(true);
     await turn;
@@ -666,10 +646,8 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
     let checked: { proceed: boolean } | undefined;
     const preparePatch = vi.fn().mockResolvedValue({
       proposalId: 'proposal-analysis',
-      scopeKey: SCOPE_KEY,
-      changeRequestId: 'p-1',
-      crId: 'cr-active',
-      kind: 'SOLUTION' as const,
+      target: 'note' as const,
+      id: 'note-1',
       version: 1,
       sectionId: '1.1',
       sectionTitle: 'Muc tieu',
@@ -682,12 +660,12 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
     });
     const runtime = runtimeWith(
       async (options) => {
-        checked = await options.onMutationCheck?.('patch_artifact_section', { sectionId: '1.1' });
+        checked = await options.onMutationCheck?.('patch_artifact_section', { target: 'note', id: 'note-1', sectionId: '1.1' });
         return { fullResponse: 'read only', tokenUsage: {} };
       },
       { preparePatch }
     );
-    const turn = runtime.start(makeRequest({ threadId, analysisMode: true, artifactContext: ARTIFACT_CONTEXT }));
+    const turn = runtime.start(makeRequest({ threadId, analysisMode: true }));
     await waitForStatus(() => statuses.includes('awaiting-approval'));
     runtime.resolveApproval(true);
     await turn;
@@ -817,13 +795,13 @@ describe('chatTurnRuntime team seams (D-07, D-12, D-13, D-19, D-21)', () => {
     let checked: { proceed: boolean; cancellationResult?: string } | undefined;
     const runtime = runtimeWith(
       async (options) => {
-        checked = await options.onMutationCheck?.('patch_artifact_section', { sectionId: '1.1' });
+        checked = await options.onMutationCheck?.('patch_artifact_section', { target: 'note', id: 'note-1', sectionId: '1.1' });
         return { fullResponse: 'không ghi', tokenUsage: {} };
       },
       { preparePatch }
     );
 
-    await runtime.start(makeRequest({ threadId, mutationPolicy: 'read-only', artifactContext: ARTIFACT_CONTEXT }));
+    await runtime.start(makeRequest({ threadId, mutationPolicy: 'read-only' }));
 
     expect(checked?.proceed).toBe(false);
     expect(preparePatch).not.toHaveBeenCalled();
