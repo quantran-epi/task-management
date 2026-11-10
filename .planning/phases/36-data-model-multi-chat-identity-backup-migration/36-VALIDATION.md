@@ -51,7 +51,7 @@ npx vitest run \
   tests/services/backup/validateBackup.test.ts \
   tests/services/backup/v2Compatibility.test.ts \
   tests/services/backup/exportBackup.test.ts \
-  tests/services/backup/tabCheckpointBackup.test.ts \
+  tests/backup/tabCheckpointBackup.test.ts \
   tests/services/github/githubPullRestore.test.ts \
   tests/validation/backupSchemas.test.ts \
   tests/validation/backupSchemasTimer.test.ts \
