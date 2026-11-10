@@ -55,12 +55,12 @@
 4. A persisted `viewType:'sdlc'` tab is dropped on launch and `activeTabId` re-points to a valid tab.
 5. `restoreBackup` no longer creates SDLC tabs; `validateBackup` no longer enforces SDLC invariants.
 
-**Plans:** 12 plans in 7 waves
+**Plans:** 2/12 plans executed in 7 waves
 
 Plans:
 **Wave 1**
-- [ ] 35-01-PLAN.md — Extract the generic patch core into `services/ai/patchProposal.ts` (D-02/D-03) + its test
-- [ ] 35-02-PLAN.md — Extract `conventionsSegment.ts` and move `DiffSyntaxHighlighter` to `components/common/`
+- [x] 35-01-PLAN.md — Extract the generic patch core into `services/ai/patchProposal.ts` (D-02/D-03) + its test
+- [x] 35-02-PLAN.md — Extract `conventionsSegment.ts` and move `DiffSyntaxHighlighter` to `components/common/`
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 35-03-PLAN.md — Move + rename `ArtifactDiffApprovalCard` → `PatchDiffApprovalCard` (D-04)

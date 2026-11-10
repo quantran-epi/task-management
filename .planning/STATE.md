@@ -5,10 +5,10 @@ milestone_name: Unified AI Office (Phase Details)
 current_phase: 35
 current_phase_name: Shared-primitive extraction + SDLC behavior removal
 status: executing
-last_updated: "2026-11-10T03:59:55.303Z"
+last_updated: "2026-11-10T04:05:50.682Z"
 last_activity: 2026-11-10
-last_activity_desc: Phase 35 planning verified — 12 plans in 7 waves, ready to execute
-state_head: 6856efccc01b415e09b93298784c67daa3a9af2f
+last_activity_desc: Phase 35 execution started
+state_head: b0b7f24aa71cbed0e4ace89883f9e898c305ecbb
 progress:
   total_phases: 6
   completed_phases: 0
@@ -22,14 +22,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-09)
 
 **Core value:** Hợp nhất SDLC Studio và AI Office thành Unified AI Office dạng chat-first, free-style với token budget cứng và làm giàu skill.
-**Current focus:** Khởi động Milestone v1.4 — xác định requirements và roadmap từ Phase 35.
+**Current focus:** Phase 35 — Shared-primitive extraction + SDLC behavior removal
 
 ## Current Position
 
-Phase: 35 (Shared-primitive extraction + SDLC behavior removal) — READY TO EXECUTE
-Plan: —
-Status: Ready to execute
-Last activity: 2026-11-10 — Phase 35 planning verified; 12 plans in 7 waves ready to execute
+Phase: 35 (Shared-primitive extraction + SDLC behavior removal) — EXECUTING
+Plan: 1 of 12
+Status: Executing Phase 35
+Last activity: 2026-11-10 — Phase 35 execution started
 
 ## Session Continuity
 
