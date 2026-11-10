@@ -55,7 +55,7 @@
 4. A persisted `viewType:'sdlc'` tab is dropped on launch and `activeTabId` re-points to a valid tab.
 5. `restoreBackup` no longer creates SDLC tabs; `validateBackup` no longer enforces SDLC invariants.
 
-**Plans:** 10/12 plans executed in 7 waves
+**Plans:** 12/12 plans executed in 7 waves
 
 Plans:
 **Wave 1**
@@ -79,10 +79,10 @@ Plans:
 - [x] 35-10-PLAN.md — Wave 5e: narrow the backup envelope to `type: z.enum(['chat'])`; strip restore/validate SDLC logic
 
 **Wave 6** *(blocked on Wave 5 completion)*
-- [ ] 35-11-PLAN.md — Add Dexie V18 with the SDLC row-purge migration
+- [x] 35-11-PLAN.md — Add Dexie V18 with the SDLC row-purge migration
 
 **Wave 7** *(blocked on Wave 6 completion)*
-- [ ] 35-12-PLAN.md — Finish test rewrites; run the phase acceptance sweep (tsc, greps, scoped suites, build)
+- [x] 35-12-PLAN.md — Finish test rewrites; run the phase acceptance sweep (tsc, greps, scoped suites, build)
 
 > **Wave 5 is atomic.** Plans 06-10 are mutually dependent: delete-set files read the domain fields plan 09 removes, and `backupSchemas.ts` imports the schema modules plan 06 deletes. They must land together; `npx tsc --noEmit` is clean at every wave boundary.
 
