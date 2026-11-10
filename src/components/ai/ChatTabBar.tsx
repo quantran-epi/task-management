@@ -25,10 +25,10 @@ import { CSS } from '@dnd-kit/utilities';
 import { Badge, Input, Tooltip, theme } from 'antd';
 import type { TabRuntimeStatus } from './runtime/tabTypes';
 
-export type ChatTabType = 'sdlc' | 'chat';
+export type ChatTabType = 'chat';
 
 export interface ChatTabItem {
-  id: string; // 'sdlc' hoặc uuid của chat thread
+  id: string; // uuid của chat thread
   type: ChatTabType;
   title: string;
   threadId: string;
@@ -43,7 +43,6 @@ export interface ChatTabBarProps {
   onCloseTab: (tabId: string) => void;
   onRenameTab?: (tabId: string, title: string) => void;
   onReorderTabs?: (fromIndex: number, toIndex: number) => void;
-  sdlcStatus?: 'wait' | 'process' | 'stale' | 'finish';
   tabStatuses?: Record<string, TabRuntimeStatus>;
   tabAnalysisModes?: Record<string, boolean>;
 }
@@ -60,7 +59,6 @@ interface SortableChatTabItemProps {
   tab: ChatTabItem;
   index: number;
   isActive: boolean;
-  isSdlc: boolean;
   isAnalysisActive: boolean;
   resolvedStatus: TabRuntimeStatus;
   statusText?: string | undefined;
@@ -82,7 +80,6 @@ interface SortableChatTabItemProps {
 function SortableChatTabItem({
   tab,
   isActive,
-  isSdlc,
   isAnalysisActive,
   resolvedStatus,
   statusText,
@@ -107,7 +104,7 @@ function SortableChatTabItem({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: tab.id, disabled: isSdlc });
+  } = useSortable({ id: tab.id });
 
   const renderStatusIndicator = () => {
     if (resolvedStatus === 'processing') {
@@ -129,9 +126,6 @@ function SortableChatTabItem({
     }
     if (resolvedStatus === 'complete') {
       return <Badge status="success" style={{ flexShrink: 0 }} />;
-    }
-    if (isSdlc) {
-      return <Badge status="default" style={{ flexShrink: 0 }} />;
     }
     return <MessageOutlined style={{ fontSize: 11, color: token.colorTextTertiary, flexShrink: 0 }} />;
   };
@@ -186,7 +180,7 @@ function SortableChatTabItem({
       tabIndex={isActive ? 0 : -1}
       onClick={() => onSelectTab(tab.id)}
       onDoubleClick={() => {
-        if (!isSdlc && onRenameTab) startEditing(tab);
+        if (onRenameTab) startEditing(tab);
       }}
       onKeyDown={onKeyDown}
       style={style}
@@ -250,7 +244,7 @@ function SortableChatTabItem({
 
       {/* Icon biểu thị Chế độ Phân tích (Analysis Mode) trên từng tab */}
       {isAnalysisActive && (
-        <Tooltip title={isSdlc ? 'Quy trình SDLC: Bắt buộc Analysis Mode' : 'Tab này đang bật Analysis Mode'}>
+        <Tooltip title="Tab này đang bật Analysis Mode">
           <ExperimentFilled
             aria-label="Analysis Mode"
             style={{
@@ -262,46 +256,44 @@ function SortableChatTabItem({
         </Tooltip>
       )}
 
-      {/* Chỉ tab chat thường mới có nút đóng tab */}
-      {!isSdlc && (
-        <button
-          type="button"
-          tabIndex={-1}
-          aria-label={`Đóng ${tab.title}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onCloseTab(tab.id);
-          }}
-          onPointerDown={(e) => {
-            e.stopPropagation();
-          }}
-          style={{
-            width: 16,
-            height: 16,
-            padding: 0,
-            border: 'none',
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 10,
-            color: token.colorTextQuaternary,
-            backgroundColor: 'transparent',
-            flexShrink: 0,
-            transition: 'background-color 0.15s, color 0.15s',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = token.colorFillSecondary;
-            e.currentTarget.style.color = token.colorText;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.color = token.colorTextQuaternary;
-          }}
-        >
-          <CloseOutlined style={{ fontSize: 9 }} />
-        </button>
-      )}
+      {/* Nút đóng tab */}
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label={`Đóng ${tab.title}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onCloseTab(tab.id);
+        }}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+        }}
+        style={{
+          width: 16,
+          height: 16,
+          padding: 0,
+          border: 'none',
+          borderRadius: '50%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 10,
+          color: token.colorTextQuaternary,
+          backgroundColor: 'transparent',
+          flexShrink: 0,
+          transition: 'background-color 0.15s, color 0.15s',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = token.colorFillSecondary;
+          e.currentTarget.style.color = token.colorText;
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = 'transparent';
+          e.currentTarget.style.color = token.colorTextQuaternary;
+        }}
+      >
+        <CloseOutlined style={{ fontSize: 9 }} />
+      </button>
     </div>
   );
 }
@@ -314,7 +306,6 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
   onCloseTab,
   onRenameTab,
   onReorderTabs,
-  sdlcStatus = 'wait',
   tabStatuses,
   tabAnalysisModes,
 }) => {
@@ -339,7 +330,7 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
     if (over && active.id !== over.id) {
       const fromIndex = tabs.findIndex((t) => t.id === active.id);
       const toIndex = tabs.findIndex((t) => t.id === over.id);
-      if (fromIndex !== -1 && toIndex !== -1 && tabs[toIndex]?.type !== 'sdlc') {
+      if (fromIndex !== -1 && toIndex !== -1) {
         onReorderTabs?.(fromIndex, toIndex);
       }
     }
@@ -497,16 +488,9 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
           >
             {tabs.map((tab, index) => {
               const isActive = tab.id === activeTabId;
-              const isSdlc = tab.type === 'sdlc';
-              const isAnalysisActive = isSdlc || Boolean(tabAnalysisModes?.[tab.id]);
+              const isAnalysisActive = Boolean(tabAnalysisModes?.[tab.id]);
 
-              let resolvedStatus: TabRuntimeStatus = tabStatuses?.[tab.id] ?? 'idle';
-              if (!tabStatuses?.[tab.id] && isSdlc) {
-                if (sdlcStatus === 'process') resolvedStatus = 'processing';
-                else if (sdlcStatus === 'stale') resolvedStatus = 'stale';
-                else if (sdlcStatus === 'finish') resolvedStatus = 'complete';
-                else resolvedStatus = 'idle';
-              }
+              const resolvedStatus: TabRuntimeStatus = tabStatuses?.[tab.id] ?? 'idle';
 
               const statusText = resolvedStatus !== 'idle' ? STATUS_TEXT[resolvedStatus] : undefined;
               const ariaLabel = statusText ? `${tab.title} — ${statusText}` : tab.title;
@@ -514,7 +498,7 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
               const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
                 if (editingTabId === tab.id) return;
                 if (e.key === 'F2') {
-                  if (!isSdlc && onRenameTab) {
+                  if (onRenameTab) {
                     e.preventDefault();
                     startEditing(tab);
                   }
@@ -536,10 +520,8 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
                   e.preventDefault();
                   onSelectTab(tab.id);
                 } else if (e.key === 'Delete' || e.key === 'Backspace') {
-                  if (!isSdlc) {
-                    e.preventDefault();
-                    onCloseTab(tab.id);
-                  }
+                  e.preventDefault();
+                  onCloseTab(tab.id);
                 }
               };
 
@@ -549,7 +531,6 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
                   tab={tab}
                   index={index}
                   isActive={isActive}
-                  isSdlc={isSdlc}
                   isAnalysisActive={isAnalysisActive}
                   resolvedStatus={resolvedStatus}
                   statusText={statusText}

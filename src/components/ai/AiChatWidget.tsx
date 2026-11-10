@@ -9,13 +9,12 @@ import { renderSafeMarkdown } from '../../utils/markdown';
 import { ChatTabToolbox } from './ChatTabToolbox';
 import { ChatMessageList } from './ChatMessageList';
 import { ChatInputBar } from './ChatInputBar';
-import { ArtifactEventCard, type ArtifactEvent } from './artifacts/ArtifactEventCard';
 import { StagedLoadingIndicator, type StagedLoadingStage } from './widget/StagedLoadingIndicator';
 import { MutationApprovalCard } from './widget/MutationApprovalCard';
 import { PatchDiffApprovalCard } from './widget/PatchDiffApprovalCard';
 import type { ChatTurnApprovalInfo } from './runtime/chatTurnRuntime';
 
-export type AiChatScopeKind = 'chat' | 'sdlc';
+export type AiChatScopeKind = 'chat';
 
 export interface AiChatScope {
   kind: AiChatScopeKind;
@@ -28,10 +27,6 @@ export interface AiChatQuickPrompt {
   id: string;
   label: string;
   prompt: string;
-}
-
-export interface AiChatArtifactEvent extends ArtifactEvent {
-  ctaLabel?: string;
 }
 
 /**
@@ -84,9 +79,6 @@ export interface AiChatWidgetProps {
   error: { code: string; message: string } | null;
   toolbox: AiChatToolboxProps;
   quickPrompts: AiChatQuickPrompt[];
-  artifactEvents?: AiChatArtifactEvent[] | undefined;
-  onArtifactOpen?: ((eventId: string, readOnly: boolean) => void) | undefined;
-  onArtifactCta?: ((eventId: string) => void) | undefined;
   /** Thread-scoped clear only: never workflow state, drafts or other threads. */
   onClearThread: () => void;
   /** Optional "clear everything" affordance; hosts that own global history pass it. */
@@ -256,9 +248,6 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
   error,
   toolbox,
   quickPrompts,
-  artifactEvents,
-  onArtifactOpen,
-  onArtifactCta,
   onClearThread,
   onClearAllHistory,
   onOpenSettings,
@@ -499,19 +488,6 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
               onReject={() => onResolveApproval(false)}
             />
           )}
-        </div>
-      )}
-
-      {artifactEvents && artifactEvents.length > 0 && (
-        <div style={{ padding: '8px 16px 0' }}>
-          {artifactEvents.map((event) => (
-            <ArtifactEventCard
-              key={event.id}
-              event={event}
-              onOpen={(eventId) => onArtifactOpen?.(eventId, event.readOnly === true)}
-              {...(onArtifactCta ? { onCta: onArtifactCta } : {})}
-            />
-          ))}
         </div>
       )}
 
