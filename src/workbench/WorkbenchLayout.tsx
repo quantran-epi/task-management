@@ -198,7 +198,6 @@ export function WorkbenchLayout({
         teams: 'AI Office — Nhóm',
         telegram: 'Telegram Bot',
         mermaid: 'Diagram Studio',
-        sdlc: 'SDLC Studio',
         systems: 'System Catalog',
       };
       openTab({

@@ -21,7 +21,6 @@ import {
   RobotOutlined,
   MoreOutlined,
   BellOutlined,
-  SettingOutlined,
   ThunderboltOutlined,
   ToolOutlined,
   BugOutlined,
@@ -44,7 +43,6 @@ export interface ChangeRequestTableProps {
   onAddChangeRequest?: () => void;
   onEditChangeRequest: (cr: ChangeRequest) => void;
   onDeleteChangeRequest: (cr: ChangeRequest) => void;
-  onOpenSdlcStudio?: (crId: string) => void;
   onViewTasks?: (crId: string) => void;
   loading?: boolean;
   db?: TaskPlannerDatabase;
@@ -96,7 +94,6 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
   systems: propSystems,
   onEditChangeRequest,
   onDeleteChangeRequest,
-  onOpenSdlcStudio,
   onViewTasks,
   loading = false,
   db = defaultDb,
@@ -138,14 +135,6 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
       label: 'Hỏi Trợ lý AI',
       onClick: () => {
         openChat({ type: 'cr', id: record.id, title: record.name });
-      },
-    },
-    {
-      key: 'sdlc-studio',
-      icon: <SettingOutlined style={{ color: token.colorPrimary }} />,
-      label: '⚙️ SDLC Studio',
-      onClick: () => {
-        onOpenSdlcStudio?.(record.id);
       },
     },
     {
@@ -409,15 +398,6 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
       width: 180,
       render: (_, record) => (
         <Space orientation="horizontal" size="small">
-          {onOpenSdlcStudio && (
-            <Button
-              size="small"
-              icon={<SettingOutlined />}
-              onClick={() => onOpenSdlcStudio(record.id)}
-            >
-              SDLC
-            </Button>
-          )}
           <Button
             size="small"
             icon={<EditOutlined />}
@@ -463,7 +443,7 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
           emptyText: (
             <EmptyState
               heading="Chưa có Change Request (CR) nào"
-              body="Tạo Change Request mới (Tính năng mới, Nâng cấp, hoặc Sửa lỗi) và chọn các subsystem bị ảnh hưởng để bắt đầu quy trình SDLC 6 bước."
+              body="Tạo Change Request mới (Tính năng mới, Nâng cấp, hoặc Sửa lỗi) và chọn các subsystem bị ảnh hưởng."
             />
           ),
         }}

@@ -14,7 +14,6 @@ import {
   JetBrainsPlannerIcon,
   JetBrainsTelegramIcon,
   JetBrainsAnalyticsIcon,
-  JetBrainsSdlcIcon,
 } from '../components/icons/JetBrainsIcons';
 import { isTauriApp } from '../utils/timerPopout';
 import { useTelegramPendingUsers } from '../hooks/useTelegramPendingUsers';
@@ -248,28 +247,6 @@ export function TitleBar({
                 }}
               >
                 Planner
-              </Button>
-            </Tooltip>
-
-            <Tooltip title="SDLC Studio (Quy trình phát triển phần mềm chuẩn ngân hàng)">
-              <Button
-                type="text"
-                size="small"
-                icon={<JetBrainsSdlcIcon size={14} />}
-                onClick={() => onOpenView?.('sdlc')}
-                aria-label="Open SDLC Studio"
-                data-testid="titlebar-btn-sdlc"
-                style={{
-                  height: 24,
-                  padding: '0 7px',
-                  fontSize: 12,
-                  borderRadius: 3,
-                  color: activeView === 'sdlc' ? 'var(--accent, #3871e1)' : 'var(--fg-secondary, #5f6269)',
-                  background: activeView === 'sdlc' ? 'var(--bg-selected, #d0dffe)' : 'transparent',
-                  fontWeight: activeView === 'sdlc' ? 600 : 400,
-                }}
-              >
-                SDLC Studio
               </Button>
             </Tooltip>
 

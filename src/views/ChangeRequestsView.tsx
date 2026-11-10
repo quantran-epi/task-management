@@ -91,7 +91,7 @@ export const ChangeRequestsView: React.FC<ChangeRequestsViewProps> = ({ db = def
       content: (
         <div>
           <p>
-            Toàn bộ các tác vụ con ({childTasks.length} tác vụ), tài liệu SDLC (SOLUTION, PL03B, CAB) và lịch sử thảo luận liên quan sẽ bị xóa vĩnh viễn.
+            Toàn bộ các tác vụ con ({childTasks.length} tác vụ) và lịch sử thảo luận liên quan sẽ bị xóa vĩnh viễn.
           </p>
         </div>
       ),
@@ -192,15 +192,6 @@ export const ChangeRequestsView: React.FC<ChangeRequestsViewProps> = ({ db = def
         systems={systems}
         onEditChangeRequest={handleOpenEditCR}
         onDeleteChangeRequest={handleDeleteCRPrompt}
-        onOpenSdlcStudio={(crId) => {
-          openTab({
-            id: `sdlc-${crId}`,
-            title: 'SDLC Studio',
-            viewType: 'sdlc',
-            closable: true,
-            params: { changeRequestId: crId },
-          });
-        }}
         onViewTasks={(crId) => {
           openTab({
             id: 'tasks',

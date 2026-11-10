@@ -11,7 +11,6 @@ import {
   FolderOpenOutlined,
   FileTextOutlined,
   ExportOutlined,
-  RocketOutlined,
   EditOutlined,
   DeleteOutlined,
 } from '@ant-design/icons';
@@ -101,17 +100,6 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
     });
   };
 
-  const openSdlc = (cr: ChangeRequest) => {
-    onSelectChangeRequest?.(cr.id);
-    openTab({
-      id: `sdlc-${cr.id}`,
-      title: 'SDLC Studio',
-      viewType: 'sdlc',
-      closable: true,
-      params: { changeRequestId: cr.id },
-    });
-  };
-
   const openTaskInsight = (task: Task) => {
     openTab({
       id: `task-${task.id}`,
@@ -128,12 +116,6 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
       icon: <ExportOutlined style={{ color: 'var(--accent, #3871e1)' }} />,
       label: 'Mở CR Detail',
       onClick: () => openCrDetail(cr),
-    },
-    {
-      key: 'open-sdlc',
-      icon: <RocketOutlined style={{ color: 'var(--accent, #3871e1)' }} />,
-      label: 'Mở SDLC Studio',
-      onClick: () => openSdlc(cr),
     },
     {
       key: 'edit',
@@ -153,7 +135,7 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
       onClick: () => {
         Modal.confirm({
           title: `Xóa Change Request '${cr.code || cr.name}'?`,
-          content: 'Toàn bộ tác vụ con và tài liệu SDLC liên quan sẽ bị xóa vĩnh viễn.',
+          content: 'Toàn bộ tác vụ con liên quan sẽ bị xóa vĩnh viễn.',
           okText: 'Xóa vĩnh viễn',
           okType: 'danger',
           cancelText: 'Hủy',
@@ -305,7 +287,7 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span style={{ fontSize: 16, fontWeight: 600 }}>Chưa có Change Request nào</span>
                 <span style={{ fontSize: 12, color: 'var(--fg-muted, #6c707e)' }}>
-                  Tạo CR đầu tiên để bắt đầu vòng đời SDLC.
+                  Tạo CR đầu tiên để bắt đầu.
                 </span>
               </div>
             }

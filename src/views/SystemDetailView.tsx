@@ -88,8 +88,6 @@ const CR_STATUS_LABEL: Record<CrStatus, string> = {
   Cancelled: 'Đã hủy',
 };
 
-const SDLC_STEP_COUNT = 6;
-
 interface BranchRow {
   name: string;
   isRemote: boolean;
@@ -130,21 +128,6 @@ async function loadBranchDetails(
     });
   }
   return details;
-}
-
-/** Mirrors `SdlcSidebar.isStepCompleted`; only the count is needed here. */
-function countCompletedSteps(raw: unknown): number {
-  const artifacts = (raw as { artifacts?: Record<string, unknown> } | null)?.artifacts;
-  if (!artifacts) return 0;
-  const has = (key: string) => Boolean(artifacts[key]);
-  let completed = 0;
-  if (has('pl01') && has('pl02')) completed += 1;
-  if (has('solution')) completed += 1;
-  if (has('solution')) completed += 1;
-  if (has('changePack')) completed += 1;
-  if (has('pl03b') && has('pl07')) completed += 1;
-  if (has('cab')) completed += 1;
-  return completed;
 }
 
 const CONNECTION_STATUS: Record<'connected' | 'unconfigured' | 'error', { color: string; label: string }> = {
@@ -209,25 +192,6 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
     return getChangeRequestsBySystem(system.id, db);
   }, [system?.id, system?.type, db]) ?? [];
 
-  // SDLC progress (`x/6`) is derived from the persisted workflow state per CR.
-  const sdlcProgressByCr = useLiveQuery(async () => {
-    const rows = await db.settings
-      .filter((row) => String(row.key).startsWith('sdlc_workflow:'))
-      .toArray();
-    const progress = new Map<string, number>();
-    for (const row of rows) {
-      // Key format is `sdlc_workflow:<crId>:<threadId>`; the CR id is the second segment.
-      const crId = String(row.key).split(':')[1];
-      if (!crId) continue;
-      try {
-        progress.set(crId, countCompletedSteps(JSON.parse(String(row.value))));
-      } catch {
-        progress.set(crId, 0);
-      }
-    }
-    return progress;
-  }, [db]) ?? new Map<string, number>();
-
   const gitTarget = useMemo(
     () => ({ sshConfig, repoPath: system?.remoteRepoPath ?? '' }),
     [sshConfig, system?.remoteRepoPath]
@@ -288,15 +252,6 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
     });
   };
 
-  const handleOpenSdlc = (crId: string) => {
-    openTab({
-      id: `sdlc-${crId}`,
-      title: 'SDLC Studio',
-      viewType: 'sdlc',
-      closable: true,
-      params: { changeRequestId: crId },
-    });
-  };
 
   const handleOpenTerminal = (target: System) => {
     try {
@@ -532,26 +487,6 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
               width: 120,
               render: (status: CrStatus) => (
                 <Tag color={CR_STATUS_COLOR[status]}>{CR_STATUS_LABEL[status]}</Tag>
-              ),
-            },
-            {
-              title: 'Tiến độ SDLC',
-              key: 'sdlcProgress',
-              width: 110,
-              render: (_: unknown, record: ChangeRequest) => (
-                <Typography.Text style={{ fontSize: 12 }}>
-                  {`${sdlcProgressByCr.get(record.id) ?? 0}/${SDLC_STEP_COUNT}`}
-                </Typography.Text>
-              ),
-            },
-            {
-              title: 'Thao tác',
-              key: 'action',
-              width: 140,
-              render: (_: unknown, record: ChangeRequest) => (
-                <Button type="link" size="small" onClick={() => handleOpenSdlc(record.id)}>
-                  Mở SDLC Studio
-                </Button>
               ),
             },
           ]}

@@ -3,12 +3,10 @@ import { Button, Collapse, Empty, Modal, Select, Space, Table, Tag, Tooltip, Typ
 import {
   BranchesOutlined,
   BugOutlined,
-  CheckCircleFilled,
   DeleteOutlined,
   EditOutlined,
   PlusOutlined,
   ReloadOutlined,
-  RocketOutlined,
   ThunderboltOutlined,
   ToolOutlined,
 } from '@ant-design/icons';
@@ -27,8 +25,6 @@ import { TaskDrawer } from '../components/tasks/TaskDrawer';
 import { ChangeRequestModal } from '../components/changeRequests/ChangeRequestModal';
 import { formatMinutes } from '../utils/time';
 import type { CrStatus, CrType, System, Task, TaskStatus } from '../types/models';
-import { SDLC_STEPS_CONFIG } from '../components/sdlc/SdlcSidebar';
-import type { SdlcStepId } from '../services/wizard/workflowSchemas';
 
 export interface ChangeRequestDetailViewProps {
   changeRequestId: string;
@@ -62,20 +58,6 @@ const TASK_STATUS_LABEL: Record<TaskStatus, { label: string; color: string }> = 
   Cancelled: { label: 'Đã hủy', color: 'default' },
 };
 
-/** UI-SPEC §3b: the six compact strip steps, in SDLC order. */
-export const SDLC_PROGRESS_STEPS: Array<{ id: SdlcStepId; label: string }> = [
-  { id: 'INTAKE', label: 'Nạp yêu cầu' },
-  { id: 'SOLUTION', label: 'Giải pháp' },
-  { id: 'CODE_GUIDE', label: 'Coding' },
-  { id: 'CHANGE_PACK', label: 'Change Pack' },
-  { id: 'TECH_DOCS', label: 'Tài liệu' },
-  { id: 'CAB', label: 'CAB' },
-];
-
-function stepTitle(id: SdlcStepId): string {
-  return SDLC_STEPS_CONFIG.find((s) => s.id === id)?.title ?? id;
-}
-
 const isOverdue = (deadline: string | undefined): boolean => {
   if (!deadline) return false;
   const today = new Date().toISOString().slice(0, 10);
@@ -96,7 +78,6 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
   // ponytail: placeholderTaskIdRef tracks in-memory creation; upgrade when TaskDrawer supports unpersisted creation.
   const placeholderTaskIdRef = useRef<string | null>(null);
 
-  const openTab = useLayoutStore((s) => s.openTab);
   const reloadTab = useLayoutStore((s) => s.reloadTab);
 
   const cr = useLiveQuery(
@@ -108,45 +89,6 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
     [changeRequestId, db]
   ) ?? [];
   const systems = useLiveQuery(() => getAllSystems(db), [db]) ?? [];
-
-  const workflowState = useLiveQuery(async () => {
-    if (!changeRequestId) return undefined;
-    const rows = await db.settings
-      .filter((row) => {
-        const key = String(row.key);
-        return key === `sdlc_workflow:${changeRequestId}` || key.startsWith(`sdlc_workflow:${changeRequestId}:`);
-      })
-      .toArray();
-    const row = rows[0];
-    if (!row?.value) return undefined;
-    try {
-      return JSON.parse(String(row.value));
-    } catch {
-      return undefined;
-    }
-  }, [changeRequestId, db]);
-
-  const isStepCompleted = (stepId: SdlcStepId): boolean => {
-    if (!workflowState) return false;
-    const artifacts = workflowState.artifacts;
-    if (!artifacts) return false;
-    switch (stepId) {
-      case 'INTAKE':
-        return Boolean(artifacts.pl01 && artifacts.pl02);
-      case 'SOLUTION':
-        return Boolean(artifacts.solution);
-      case 'CODE_GUIDE':
-        return Boolean(artifacts.solution);
-      case 'CHANGE_PACK':
-        return Boolean(artifacts.changePack);
-      case 'TECH_DOCS':
-        return Boolean(artifacts.pl03b && artifacts.pl07);
-      case 'CAB':
-        return Boolean(artifacts.cab);
-      default:
-        return false;
-    }
-  };
 
   const systemMap = useMemo(() => {
     const map = new Map<string, System>();
@@ -165,18 +107,6 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
   const targetSystems = cr.targets
     .map((t) => systemMap.get(t.systemId))
     .filter((s): s is System => Boolean(s));
-
-  const openSdlc = (stepId?: SdlcStepId) => {
-    openTab({
-      id: `sdlc-${cr.id}`,
-      title: 'SDLC Studio',
-      viewType: 'sdlc',
-      closable: true,
-      params: stepId
-        ? { changeRequestId: cr.id, stepId, stepRequestId: Date.now() }
-        : { changeRequestId: cr.id },
-    });
-  };
 
   const openTaskDrawer = (taskId: string | null, isPlaceholder = false) => {
     placeholderTaskIdRef.current = isPlaceholder ? taskId : null;
@@ -222,7 +152,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
   const handleDelete = () => {
     Modal.confirm({
       title: 'Xóa Change Request',
-      content: `Xóa CR '${cr.code} — ${cr.name}'? Toàn bộ ${tasks.length} tác vụ, tài liệu SDLC (SOLUTION, PL03B, CAB) và lịch sử thảo luận của CR sẽ bị xóa vĩnh viễn.`,
+      content: `Xóa CR '${cr.code} — ${cr.name}'? Toàn bộ ${tasks.length} tác vụ và lịch sử thảo luận của CR sẽ bị xóa vĩnh viễn.`,
       okText: 'Xóa vĩnh viễn',
       okType: 'danger',
       cancelText: 'Hủy',
@@ -383,9 +313,6 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
         </div>
 
         <Space wrap>
-          <Button type="primary" icon={<RocketOutlined />} onClick={() => openSdlc()}>
-            Mở SDLC Studio
-          </Button>
           <Button icon={<ReloadOutlined />} onClick={() => reloadTab(`cr-${cr.id}`)}>
             Tải lại
           </Button>
@@ -396,55 +323,6 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
             Xóa
           </Button>
         </Space>
-      </div>
-
-      {/* 3b. SDLC progress strip */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 0, height: 24 }}>
-        {SDLC_PROGRESS_STEPS.map((step, index) => {
-          const completed = isStepCompleted(step.id);
-          return (
-            <React.Fragment key={step.id}>
-              {index > 0 && (
-                <div style={{ flex: 1, height: 1, background: 'var(--border, #e9eaee)' }} />
-              )}
-              <Tooltip title={stepTitle(step.id)}>
-                <button
-                  type="button"
-                  aria-label={step.label}
-                  onClick={() => openSdlc(step.id)}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    background: 'transparent',
-                    border: 'none',
-                    padding: '0 8px',
-                    cursor: 'pointer',
-                    fontSize: 12,
-                    fontWeight: completed ? 500 : 400,
-                    color: completed ? 'var(--fg-strong, #000000)' : 'var(--fg-faint, #a8abb4)',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {completed ? (
-                    <CheckCircleFilled style={{ color: '#52c41a' }} />
-                  ) : (
-                    <span
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        background: 'var(--fg-faint, #a8abb4)',
-                        display: 'inline-block',
-                      }}
-                    />
-                  )}
-                  {step.label}
-                </button>
-              </Tooltip>
-            </React.Fragment>
-          );
-        })}
       </div>
 
       {/* 3c. Flat task table */}
