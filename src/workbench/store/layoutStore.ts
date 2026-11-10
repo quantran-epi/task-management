@@ -102,8 +102,11 @@ export const DEFAULT_LAYOUT_STATE: LayoutStateValues = {
   tabReloadKeys: {},
 };
 
-export const LAYOUT_STORAGE_KEY = 'taskmate_workbench_layout_v2';
+export const LAYOUT_STORAGE_KEY = 'taskmate_workbench_layout_v3';
 export const MAX_OPEN_TABS = 20;
+
+/** Phase 35 (AIO-REMOVE-04): view types retired from `EditorViewType` but still possibly persisted. */
+const RETIRED_VIEW_TYPES = new Set<string>(['sdlc']);
 
 export const useLayoutStore = create<LayoutState>()(
   persist(
@@ -343,6 +346,18 @@ export const useLayoutStore = create<LayoutState>()(
       // T-25.4-01: Validate stored state against schema/shape with fallback to defaults on corrupt data
       // T-31.2-16: the persist key moved to `_v2`, so a pre-normalization blob is never read and
       // no retired tool-window or editor-tab id can resolve.
+      // Phase 35 (AIO-REMOVE-04): `_v3` retires the `sdlc` editor view type; RETIRED_VIEW_TYPES plus the filter below also guard any future unknown view type at write time.
+      merge: (persisted, current) => {
+        const incoming = (persisted ?? {}) as Partial<LayoutStateValues>;
+        const tabs = Array.isArray(incoming.openTabs)
+          ? incoming.openTabs.filter((tab) => !RETIRED_VIEW_TYPES.has(tab.viewType))
+          : current.openTabs;
+        const activeTabId =
+          tabs.some((tab) => tab.id === incoming.activeTabId) && incoming.activeTabId
+            ? incoming.activeTabId
+            : (tabs[0]?.id ?? DEFAULT_LAYOUT_STATE.activeTabId);
+        return { ...current, ...incoming, openTabs: tabs, activeTabId };
+      },
       partialize: (state) => ({
         leftActiveId:
           typeof state.leftActiveId === 'string' ? state.leftActiveId : null,
@@ -353,6 +368,7 @@ export const useLayoutStore = create<LayoutState>()(
         bottomPanelSize: typeof state.bottomPanelSize === 'number' && state.bottomPanelSize > 0 ? state.bottomPanelSize : DEFAULT_LAYOUT_STATE.bottomPanelSize,
         openTabs: Array.isArray(state.openTabs) && state.openTabs.length > 0
           ? state.openTabs
+              .filter((tab) => !RETIRED_VIEW_TYPES.has(tab.viewType))
               .slice(0, MAX_OPEN_TABS)
               .map((tab) => ({
                 ...tab,
@@ -360,7 +376,14 @@ export const useLayoutStore = create<LayoutState>()(
                 pinned: Boolean(tab.pinned),
               }))
           : DEFAULT_LAYOUT_STATE.openTabs,
-        activeTabId: typeof state.activeTabId === 'string' ? state.activeTabId : DEFAULT_LAYOUT_STATE.activeTabId,
+        activeTabId: (() => {
+          const tabs = Array.isArray(state.openTabs)
+            ? state.openTabs.filter((tab) => !RETIRED_VIEW_TYPES.has(tab.viewType))
+            : [];
+          return tabs.some((tab) => tab.id === state.activeTabId)
+            ? state.activeTabId
+            : (tabs[0]?.id ?? DEFAULT_LAYOUT_STATE.activeTabId);
+        })(),
         activeRemoteConfigId: typeof state.activeRemoteConfigId === 'string' ? state.activeRemoteConfigId : null,
         activeRemoteRepoPath: typeof state.activeRemoteRepoPath === 'string' ? state.activeRemoteRepoPath : '',
         activeRemoteBranch: typeof state.activeRemoteBranch === 'string' ? state.activeRemoteBranch : '',

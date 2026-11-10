@@ -17,8 +17,64 @@ describe('useLayoutStore', () => {
     expect(state.bottomPanelSize).toBe(38);
   });
 
-  it('uses the v2 persist key so a stale v1 layout cannot resolve', () => {
-    expect(LAYOUT_STORAGE_KEY).toBe('taskmate_workbench_layout_v2');
+  it('uses the v3 persist key so a stale v2 layout cannot resolve', () => {
+    expect(LAYOUT_STORAGE_KEY).toBe('taskmate_workbench_layout_v3');
+  });
+
+  it('drops a persisted sdlc tab on hydration and re-points activeTabId', async () => {
+    localStorage.setItem(
+      LAYOUT_STORAGE_KEY,
+      JSON.stringify({
+        state: {
+          openTabs: [
+            { id: 'sdlc-x', viewType: 'sdlc' },
+            { id: 'tasks', viewType: 'tasks' },
+          ] as Array<{ id: string; viewType: string }>,
+          activeTabId: 'sdlc-x',
+        },
+        version: 0,
+      })
+    );
+    await useLayoutStore.persist.rehydrate();
+
+    const state = useLayoutStore.getState();
+    expect(state.openTabs.map((t) => t.id)).toEqual(['tasks']);
+    expect(state.activeTabId).toBe('tasks');
+  });
+
+  it('falls back to the default active tab when every persisted tab is retired', async () => {
+    localStorage.setItem(
+      LAYOUT_STORAGE_KEY,
+      JSON.stringify({
+        state: {
+          openTabs: [{ id: 'sdlc-x', viewType: 'sdlc' }] as Array<{ id: string; viewType: string }>,
+          activeTabId: 'sdlc-x',
+        },
+        version: 0,
+      })
+    );
+    await useLayoutStore.persist.rehydrate();
+
+    expect(useLayoutStore.getState().activeTabId).toBe(DEFAULT_LAYOUT_STATE.activeTabId);
+  });
+
+  it('keeps a valid activeTabId unchanged on hydration', async () => {
+    localStorage.setItem(
+      LAYOUT_STORAGE_KEY,
+      JSON.stringify({
+        state: {
+          openTabs: [
+            { id: 'tasks', viewType: 'tasks' },
+            { id: 'notes', viewType: 'notes' },
+          ],
+          activeTabId: 'notes',
+        },
+        version: 0,
+      })
+    );
+    await useLayoutStore.persist.rehydrate();
+
+    expect(useLayoutStore.getState().activeTabId).toBe('notes');
   });
 
   it('toggles tool windows correctly', () => {
