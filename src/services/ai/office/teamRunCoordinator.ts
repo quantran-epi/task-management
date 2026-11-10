@@ -6,6 +6,7 @@ import type {
   AiLead,
   AiSkill,
   AiTeam,
+  AiTeamMember,
   TeamRunPhase,
 } from '../../../types/aiOffice';
 import {
@@ -30,6 +31,7 @@ import {
 } from '../chatTurnTools';
 import { aiTurnManager } from '../aiTurnManager';
 import { createTeamRunRegistry, type TeamRunRegistry } from './teamRunRegistry';
+import { beginTurn, endTurn } from './liveUseRegistry';
 import {
   bucketOf,
   createBudgetGate,
@@ -104,6 +106,20 @@ export interface TeamRunSnapshot {
 
 export type TopUpScope = { kind: 'agent'; agentId: string } | { kind: 'team' };
 
+/**
+ * D-02/D-03/D-07: the roster a turn runs with, read once at the turn's start.
+ * `lead` and `teamRow` are optional so an empty group (D-05) and a vanished team row
+ * resolve without a fabricated profile.
+ */
+export interface TurnRoster {
+  teamRow: AiTeam | undefined;
+  lead: AiLead | undefined;
+  employees: AiEmployee[];
+  skills: AiSkill[];
+  /** D-08: live membership — a de-rostered agent is not mentionable from the next turn. */
+  memberAgentIds: string[];
+}
+
 export interface TeamRunCoordinatorOptions {
   db: TaskPlannerDatabase;
   team: AiTeam;
@@ -118,6 +134,11 @@ export interface TeamRunCoordinatorOptions {
   mcpTools?: AiToolDefinition[] | undefined;
   /** Test seam: production omits it and the coordinator uses the default chat-turn deps. */
   createRuntimeDeps?: ((agentId: string) => Partial<ChatTurnRuntimeDeps>) | undefined;
+  /**
+   * Production seam (D-03): resolve a fresh roster from persisted rows at every turn start.
+   * When supplied, no construction-time `lead`/`employees`/`skills` value reaches a turn.
+   */
+  loadRoster?: (() => Promise<TurnRoster>) | undefined;
 }
 
 export interface TeamRunCoordinator {
@@ -198,11 +219,26 @@ function createDeferred(): Deferred {
 export function createTeamRunCoordinator(
   options: TeamRunCoordinatorOptions
 ): TeamRunCoordinator {
-  const { db, team, lead, employees, skills } = options;
+  const { db, team } = options;
   const teamId = team.id;
   // D-25: the toggles are read at run time, so a change in the sidebar or settings
   // drawer applies without reconstructing the coordinator.
   let liveTeam: AiTeam = team;
+
+  /**
+   * D-03/D-07: the roster a turn runs with. With a `loadRoster` seam it starts EMPTY, so no
+   * construction-time profile can reach a turn; without one it seeds from the options exactly
+   * as before (legacy harness path).
+   */
+  let roster: TurnRoster = options.loadRoster
+    ? { teamRow: undefined, lead: undefined, employees: [], skills: [], memberAgentIds: [] }
+    : {
+        teamRow: team,
+        lead: options.lead,
+        employees: options.employees,
+        skills: options.skills,
+        memberAgentIds: [],
+      };
 
   let phase: TeamRunPhase = 'idle';
   const agents = new Map<string, AgentRunState>();
@@ -236,6 +272,8 @@ export function createTeamRunCoordinator(
 
   const currentRequests = new Map<string, ChatTurnRequest>();
   const agentDeferreds = new Map<string, Deferred>();
+  /** D-13: agents whose live-use claim is currently held (pairing guard for release). */
+  const liveAgents = new Set<string>();
 
   const notify = () => {
     for (const listener of listeners) {
@@ -290,13 +328,27 @@ export function createTeamRunCoordinator(
       else if (status === 'stopped') aiTurnManager.finishTurn(agentTurnId(agentId), 'aborted');
       else aiTurnManager.finishTurn(agentTurnId(agentId));
     }
+    releaseLiveUse(agentId);
     agentDeferreds.get(agentId)?.resolve();
     agentDeferreds.delete(agentId);
     notify();
   }
 
+  /** D-13: claim the profile (and skill) a turn is about to run with. */
+  function claimLiveUse(agentId: string, skillId: string | undefined): void {
+    if (liveAgents.has(agentId)) return;
+    liveAgents.add(agentId);
+    beginTurn(agentId, skillId ? [skillId] : []);
+  }
+
+  /** Paired with `claimLiveUse`: a double settle must not decrement twice. */
+  function releaseLiveUse(agentId: string): void {
+    if (!liveAgents.delete(agentId)) return;
+    endTurn(agentId);
+  }
+
   function toolContext(agentId: string): TeamToolContext {
-    const employee = employees.find((row) => row.id === agentId);
+    const employee = roster.employees.find((row) => row.id === agentId);
     const skillId = employee?.skillId;
     return {
       db,
@@ -308,7 +360,9 @@ export function createTeamRunCoordinator(
   }
 
   function skillFor(employee: AiEmployee): AiSkill | undefined {
-    return employee.skillId ? skills.find((row) => row.id === employee.skillId) : undefined;
+    return employee.skillId
+      ? roster.skills.find((row) => row.id === employee.skillId)
+      : undefined;
   }
 
   function leadTools(): AiToolDefinition[] {
@@ -344,7 +398,7 @@ export function createTeamRunCoordinator(
       const ctx = toolContext(agentId);
 
       if (normalized === 'delegate_batch') {
-        if (agentId !== lead.id) return EMPLOYEE_DELEGATE_REFUSAL;
+        if (!roster.lead || agentId !== roster.lead.id) return EMPLOYEE_DELEGATE_REFUSAL;
         const assignments = Array.isArray(args?.assignments) ? args.assignments : [];
         return runBatch(assignments, signal);
       }
@@ -391,11 +445,14 @@ export function createTeamRunCoordinator(
     };
   }
 
-  async function ensureMembers(): Promise<void> {
-    if (membersLoaded) return;
+  /**
+   * Budget/usage hydrate from persisted member rows. Runs once per turn when the
+   * `loadRoster` seam supplies membership (see `applyRosterMembership`), and once per
+   * coordinator on the legacy path. Membership itself is the caller's decision.
+   */
+  async function hydrateBudgets(): Promise<AiTeamMember[]> {
     const rows = await listTeamMembers(teamId, db);
     for (const row of rows) {
-      memberIds.set(row.agentId, row.id);
       memberBudgets.set(row.agentId, row.budgetTokens);
       memberUsed.set(row.agentId, row.usedTokens);
       lastBuckets.set(row.agentId, bucketOf(row.usedTokens, row.budgetTokens));
@@ -407,6 +464,31 @@ export function createTeamRunCoordinator(
     teamUsed = rows.reduce((sum, row) => sum + row.usedTokens, 0);
     lastTeamBucket = bucketOf(teamUsed, teamBudget);
     if (lastTeamBucket >= 8) teamGate.close();
+    return rows;
+  }
+
+  async function ensureMembers(): Promise<void> {
+    if (membersLoaded) return;
+    const rows = await hydrateBudgets();
+    for (const row of rows) memberIds.set(row.agentId, row.id);
+    membersLoaded = true;
+  }
+
+  /**
+   * D-08 blocker fix: with a `loadRoster` seam, membership comes from the turn's snapshot,
+   * not from a construction-lifetime cache. `ensureMembers()`'s early return would otherwise
+   * keep a de-rostered agent mentionable forever.
+   */
+  function applyRosterMembership(rows: AiTeamMember[]): void {
+    const live = new Set(roster.memberAgentIds);
+    memberIds.clear();
+    memberBudgets.clear();
+    for (const row of rows) {
+      if (!live.has(row.agentId)) continue;
+      // The value is the member row id, which `addUsedTokens` needs.
+      memberIds.set(row.agentId, row.id);
+      memberBudgets.set(row.agentId, row.budgetTokens);
+    }
     membersLoaded = true;
   }
 
@@ -482,8 +564,9 @@ export function createTeamRunCoordinator(
   }
 
   async function loadLinkedItems(): Promise<LinkedItemIndexEntry[]> {
+    if (!roster.lead) return [];
     try {
-      const raw = await executeTeamTool('list_linked_items', {}, toolContext(lead.id));
+      const raw = await executeTeamTool('list_linked_items', {}, toolContext(roster.lead.id));
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) return [];
       return parsed.map((item: any) => ({
@@ -551,6 +634,8 @@ export function createTeamRunCoordinator(
     // CR-01: each turn's usage total restarts at zero, so the cumulative baseline
     // must reset too — otherwise the second turn's delta is zero or negative.
     usageTotals.delete(employee.id);
+    // D-13: the batch's employees are only known here, so this is where they claim live use.
+    claimLiveUse(employee.id, employee.skillId);
     updateAgent(employee.id, {
       status: 'running',
       streamingText: '',
@@ -576,14 +661,17 @@ export function createTeamRunCoordinator(
   }
 
   async function startLeadTurn(text: string): Promise<void> {
+    // D-05: an empty group has no lead — a silent no-op, not a throw.
+    const lead = roster.lead;
+    if (!lead) return;
     const [recentTurns, linkedItems] = await Promise.all([
       listRecentTurns(options.threadId, RECENT_WINDOW_TURNS, db),
       loadLinkedItems(),
     ]);
     const prompt = buildLeadTurnRequest({
       lead,
-      team,
-      roster: employees,
+      team: roster.teamRow ?? team,
+      roster: roster.employees,
       linkedItems,
       originalRequest: text,
       recentTurns,
@@ -611,6 +699,8 @@ export function createTeamRunCoordinator(
     currentRequests.set(lead.id, request);
     // CR-01: same baseline reset as the employee path.
     usageTotals.delete(lead.id);
+    // D-13: leads have no skill, so the claim carries an empty skill list.
+    claimLiveUse(lead.id, undefined);
     updateAgent(lead.id, {
       status: 'running',
       streamingText: '',
@@ -637,7 +727,7 @@ export function createTeamRunCoordinator(
     const match = AGENT_MENTION.exec(text);
     if (!match) return null;
     const id = match[2];
-    const employee = employees.find((row) => row.id === id);
+    const employee = roster.employees.find((row) => row.id === id);
     if (!employee) return null;
     // AIO-TEAM-04: only this team's members are addressable. A non-member has no
     // aiTeamMembers row, so its budget is 0 and the turn would park forever.
@@ -646,7 +736,14 @@ export function createTeamRunCoordinator(
   }
 
   async function send(text: string): Promise<void> {
-    await ensureMembers();
+    // D-03/D-07: read the roster exactly ONCE per turn, before any read of it.
+    if (options.loadRoster) {
+      roster = await options.loadRoster();
+      // D-08: membership is per turn, so a de-rostered agent stops being mentionable.
+      applyRosterMembership(await hydrateBudgets());
+    } else {
+      await ensureMembers();
+    }
     lastUserRequest = text;
     const target = parseMentionTarget(text);
 
@@ -668,6 +765,9 @@ export function createTeamRunCoordinator(
   }
 
   async function runBatch(rawAssignments: unknown[], signal?: AbortSignal): Promise<string> {
+    // D-05: no lead means no delegation authority — refuse rather than throw.
+    const lead = roster.lead;
+    if (!lead) return EMPLOYEE_DELEGATE_REFUSAL;
     const validation = await executeTeamTool(
       'delegate_batch',
       { assignments: rawAssignments },
@@ -693,7 +793,7 @@ export function createTeamRunCoordinator(
       const plan: AssignmentPlan = {
         batchIndex,
         assignments: assignments.map((assignment) => {
-          const employee = employees.find((row) => row.id === assignment.agentId);
+          const employee = roster.employees.find((row) => row.id === assignment.agentId);
           const skill = employee ? skillFor(employee) : undefined;
           return {
             agentId: assignment.agentId,
@@ -729,7 +829,7 @@ export function createTeamRunCoordinator(
 
     const started: Array<Promise<void>> = [];
     for (const assignment of assignments) {
-      const employee = employees.find((row) => row.id === assignment.agentId);
+      const employee = roster.employees.find((row) => row.id === assignment.agentId);
       if (!employee) continue;
       // D-31: the instruction row is attributed to the lead, so the employee's own history
       // reads as (instruction, report) pairs.
@@ -763,7 +863,7 @@ export function createTeamRunCoordinator(
     );
 
     const results = assignments.map((assignment) => {
-      const employee = employees.find((row) => row.id === assignment.agentId);
+      const employee = roster.employees.find((row) => row.id === assignment.agentId);
       const state = agents.get(assignment.agentId);
       const status: AgentRunStatus = state?.status ?? 'error';
       const report =
@@ -821,7 +921,7 @@ export function createTeamRunCoordinator(
 
   function resolveApproval(approved: boolean): void {
     // WR-05: `get` would instantiate a runtime when the lead turn already settled.
-    registry.peek(lead.id)?.resolveApproval(approved);
+    if (roster.lead) registry.peek(roster.lead.id)?.resolveApproval(approved);
     pendingApproval = null;
     if (phase === 'awaiting-mutation-approval') phase = 'lead-thinking';
     notify();
@@ -829,7 +929,7 @@ export function createTeamRunCoordinator(
 
   function stopAgent(agentId: string): void {
     // CR-03: stopping the lead while its batch is parked must release the park too.
-    if (agentId === lead.id && planResolver) {
+    if (roster.lead !== undefined && agentId === roster.lead.id && planResolver) {
       planResolver(false);
       planResolver = null;
     }
@@ -911,8 +1011,10 @@ export function createTeamRunCoordinator(
       pendingApproval,
       pausedAgentId: agentParked?.agentId ?? null,
       pausedAgentName: agentParked
-        ? employees.find((row) => row.id === agentParked.agentId)?.name ??
-          (agentParked.agentId === lead.id ? lead.name : agentParked.agentId)
+        ? roster.employees.find((row) => row.id === agentParked.agentId)?.name ??
+          (roster.lead && agentParked.agentId === roster.lead.id
+            ? roster.lead.name
+            : agentParked.agentId)
         : null,
       lastPlan,
       lastPlanDecision,

@@ -6,6 +6,7 @@ import type { TaskPlannerDatabase } from '../../../db';
 import type { AiEmployee, AiLead, AiSkill, AiTeam, AiTeamMember } from '../../../types/aiOffice';
 import {
   addTeamLink,
+  getTeam,
   listTeamLinks,
   listTeamMembers,
   removeTeamLink,
@@ -13,6 +14,11 @@ import {
   topUpMemberBudget,
   updateTeam,
 } from '../../../db/repositories/aiTeamRepo';
+import {
+  listEmployees,
+  listLeads,
+  listSkills,
+} from '../../../db/repositories/aiOfficeRepo';
 import { ensureTeamThread } from '../../../db/repositories/teamTranscriptRepo';
 import { getMessagesByThreadId } from '../../../db/repositories/chatRepo';
 import {
@@ -215,6 +221,25 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         model: config.defaultModel,
         endpoint: config.endpoint,
         apiKey,
+        // D-03/D-07: every turn reads a fresh roster from Dexie. The team row is read
+        // inside the turn and the lead is matched against ITS `leadId`, so neither the
+        // construction-time `lead` prop nor a captured `team.leadId` decides a turn.
+        loadRoster: async () => {
+          const teamRow = await getTeam(team.id, db);
+          const [leads, allEmployees, allSkills, memberRows] = await Promise.all([
+            listLeads(db),
+            listEmployees(db),
+            listSkills(db),
+            listTeamMembers(team.id, db),
+          ]);
+          return {
+            teamRow,
+            lead: leads.find((row) => row.id === teamRow?.leadId),
+            employees: allEmployees,
+            skills: allSkills,
+            memberAgentIds: memberRows.map((row) => row.agentId),
+          };
+        },
         createRuntimeDeps: (agentId: string) => {
           const clientDeps = createRuntimeDeps?.(agentId) ?? {};
           return {
@@ -261,7 +286,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- WR-06: roster arrays are read at construction only
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- WR-06: the roster is read per turn via loadRoster, so it must not be an effect dependency
   }, [team.id, db, createRuntimeDeps]);
 
   useEffect(() => {

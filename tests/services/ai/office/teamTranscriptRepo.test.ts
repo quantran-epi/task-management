@@ -10,6 +10,11 @@ import {
   buildTeamBm25Docs,
 } from '../../../../src/db/repositories/teamTranscriptRepo';
 import { ASSIGNMENT_HISTORY_CAP } from '../../../../src/types/aiOffice';
+import {
+  createEmployee,
+  deleteEmployee,
+  updateEmployee,
+} from '../../../../src/db/repositories/aiOfficeRepo';
 import { generateId } from '../../../../src/utils/uuid';
 
 describe('teamTranscriptRepo (AIO-MEM-01, D-10, D-11, D-17, D-29, D-31)', () => {
@@ -183,8 +188,74 @@ describe('teamTranscriptRepo (AIO-MEM-01, D-10, D-11, D-17, D-29, D-31)', () => 
     expect(await getTeamTurn(threadId, generateId(), db)).toBeUndefined();
   });
 
-  it('projects rows into BM25 documents with agent name and message kind', async () => {
-    const agentMessage = await saveTeamMessage(
+  it('keeps the stored agentName when the profile is renamed (D-17)', async () => {
+    const agentId = generateId();
+    const stored = await saveTeamMessage(
+      {
+        threadId,
+        role: 'assistant',
+        content: 'Báo cáo cũ.',
+        agentId,
+        agentName: 'Lan',
+        agentKind: 'employee',
+        messageKind: 'report',
+      },
+      db
+    );
+
+    // A rename is a profile write; the transcript row is never rewritten.
+    const employee = await createEmployee(
+      { name: 'Lan', role: 'Chuyên viên', capability: 'x', persona: 'y', model: 'm' },
+      db
+    );
+    await updateEmployee(employee.id, { name: 'Lan Mới' }, db);
+
+    expect((await db.chatMessages.get(stored.id))?.agentName).toBe('Lan');
+
+    const fresh = await saveTeamMessage(
+      {
+        threadId,
+        role: 'assistant',
+        content: 'Báo cáo mới.',
+        agentId: employee.id,
+        agentName: 'Lan Mới',
+        agentKind: 'employee',
+        messageKind: 'report',
+      },
+      db
+    );
+    expect((await db.chatMessages.get(fresh.id))?.agentName).toBe('Lan Mới');
+  });
+
+  it('reads back a message whose employee was deleted, attribution intact (D-17)', async () => {
+    const employee = await createEmployee(
+      { name: 'Đã Xóa', role: 'Chuyên viên', capability: 'x', persona: 'y', model: 'm' },
+      db
+    );
+    const stored = await saveTeamMessage(
+      {
+        threadId,
+        role: 'assistant',
+        content: 'Báo cáo của người đã xóa.',
+        agentId: employee.id,
+        agentName: 'Đã Xóa',
+        agentKind: 'employee',
+        messageKind: 'report',
+      },
+      db
+    );
+
+    expect(await deleteEmployee(employee.id, db)).toEqual({ deleted: true });
+
+    const readBack = await db.chatMessages.get(stored.id);
+    expect(readBack?.agentName).toBe('Đã Xóa');
+    expect(readBack?.agentId).toBe(employee.id);
+
+    const history = await listAssignmentHistory(threadId, employee.id, undefined, db);
+    expect(history.map((row) => row.content)).toContain('Báo cáo của người đã xóa.');
+  });
+
+  it('projects rows into BM25 documents with agent name and message kind', async () => {    const agentMessage = await saveTeamMessage(
       {
         threadId,
         role: 'assistant',

@@ -6,9 +6,20 @@ import {
   createTeamRunCoordinator,
   resolveTeamToolName,
   type TeamRunCoordinator,
+  type TurnRoster,
 } from '../../../../src/services/ai/office/teamRunCoordinator';
 import { TEAM_TOOL_DEFINITIONS } from '../../../../src/services/ai/office/teamTools';
-import { createEmployee, createLead, createSkill } from '../../../../src/db/repositories/aiOfficeRepo';
+import {
+  createEmployee,
+  createLead,
+  createSkill,
+  deleteEmployee,
+} from '../../../../src/db/repositories/aiOfficeRepo';
+import {
+  isAgentInUse,
+  isSkillInUse,
+  reset,
+} from '../../../../src/services/ai/office/liveUseRegistry';
 import { createTeam, updateTeam } from '../../../../src/db/repositories/aiTeamRepo';
 import { ensureTeamThread, saveTeamMessage } from '../../../../src/db/repositories/teamTranscriptRepo';
 import { aiTurnManager } from '../../../../src/services/ai/aiTurnManager';
@@ -59,6 +70,8 @@ async function waitFor(predicate: () => boolean, timeoutMs = 3000): Promise<void
 interface HarnessOptions {
   scripts: Record<string, LoopScript>;
   teamPatch?: Partial<Pick<AiTeam, 'autoSplitEnabled' | 'autoApproveMutations' | 'budgetTokens'>>;
+  /** D-03 seam: when true, the coordinator reads its roster from `harness.roster` per turn. */
+  useSeam?: boolean;
 }
 
 interface Harness {
@@ -69,6 +82,8 @@ interface Harness {
   skill: AiSkill;
   threadId: string;
   coordinator: TeamRunCoordinator;
+  /** Mutable per-turn roster when `useSeam` is on; a test edits it between sends. */
+  roster: TurnRoster;
 }
 
 async function createHarness(options: HarnessOptions): Promise<Harness> {
@@ -130,6 +145,14 @@ async function createHarness(options: HarnessOptions): Promise<Harness> {
     }) as unknown as ChatTurnRuntimeDeps['runLoop'],
   });
 
+  const roster: TurnRoster = {
+    teamRow: team,
+    lead,
+    employees,
+    skills: [skill],
+    memberAgentIds: employees.map((row) => row.id),
+  };
+
   const coordinator = createTeamRunCoordinator({
     db,
     team,
@@ -141,9 +164,20 @@ async function createHarness(options: HarnessOptions): Promise<Harness> {
     endpoint: 'https://example.invalid/v1',
     apiKey: 'sk-test',
     createRuntimeDeps,
+    // A fresh snapshot object per turn, so a later mutation of `roster` cannot reach a turn.
+    ...(options.useSeam
+      ? {
+          loadRoster: async (): Promise<TurnRoster> => ({
+            ...roster,
+            employees: [...roster.employees],
+            skills: [...roster.skills],
+            memberAgentIds: [...roster.memberAgentIds],
+          }),
+        }
+      : {}),
   });
 
-  return { db, team, lead, employees, skill, threadId, coordinator };
+  return { db, team, lead, employees, skill, threadId, coordinator, roster };
 }
 
 describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', () => {
@@ -1124,6 +1158,280 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
         rebuilt.getState().agents.some((row) => row.agentId === outsider.id)
       ).toBe(false);
       expect(coordinator).not.toBe(rebuilt);
+    });
+  });
+
+
+  describe('Task 3 — per-turn roster snapshot (D-03, D-07, D-08, D-13)', () => {
+    const systemText = (options: AiOrchestratorLoopOptions): string =>
+      (options.messages ?? [])
+        .filter((message) => message.role === 'system')
+        .map((message) => String(message.content))
+        .join('\n');
+
+    /** A loop script that records the request and returns a fixed answer. */
+    const recordingLoop =
+      (record: (options: AiOrchestratorLoopOptions) => void, response = 'Xong.') =>
+      (options: AiOrchestratorLoopOptions) => {
+        record(options);
+        return Promise.resolve(loopResult(response));
+      };
+
+    afterEach(() => {
+      reset();
+    });
+
+    it('runs the second turn with a persona edited between sends', async () => {
+      const prompts: string[] = [];
+      harness = await createHarness({
+        useSeam: true,
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            prompts.push(systemText(options));
+            return loopResult('Xong.');
+          },
+        },
+      });
+      const { coordinator, roster, lead } = harness;
+
+      await coordinator.send('Lượt một');
+      roster.lead = { ...lead, persona: 'Bạn là Minh phiên bản mới.' };
+      await coordinator.send('Lượt hai');
+
+      expect(prompts[0]).toContain('Bạn là Minh.');
+      expect(prompts[0]).not.toContain('phiên bản mới');
+      expect(prompts[1]).toContain('Bạn là Minh phiên bản mới.');
+    });
+
+    it('uses the seam lead and model, never the construction-time option', async () => {
+      const seen: Array<{ model: string; system: string }> = [];
+      harness = await createHarness({ useSeam: true, scripts: {} });
+      const otherLead = await createLead(
+        {
+          name: 'Hà',
+          role: 'Trưởng nhóm khác',
+          capability: 'Điều phối',
+          persona: 'Bạn là Hà.',
+          model: 'seam-lead-model',
+        },
+        harness.db
+      );
+      harness.roster.lead = otherLead;
+
+      const coordinator = createTeamRunCoordinator({
+        db: harness.db,
+        team: harness.team,
+        lead: harness.lead,
+        employees: harness.employees,
+        skills: [harness.skill],
+        threadId: harness.threadId,
+        model: LEAD_MODEL,
+        endpoint: 'https://example.invalid/v1',
+        apiKey: 'sk-test',
+        createRuntimeDeps: () => ({
+          runLoop: recordingLoop((options) => {
+            seen.push({ model: options.model, system: systemText(options) });
+          }) as unknown as ChatTurnRuntimeDeps['runLoop'],
+        }),
+        loadRoster: async () => harness!.roster,
+      });
+
+      await coordinator.send('Xin chào');
+
+      expect(seen).toHaveLength(1);
+      expect(seen[0]!.model).toBe('seam-lead-model');
+      expect(seen[0]!.system).toContain('Bạn là Hà.');
+      expect(seen[0]!.system).not.toContain('Bạn là Minh.');
+    });
+
+    it('freezes the roster for a turn parked on the plan card', async () => {
+      const started: string[] = [];
+      let harnessRef: Harness | null = null;
+      harness = await createHarness({
+        useSeam: true,
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              {
+                assignments: harnessRef!.employees.map((row) => ({
+                  agentId: row.id,
+                  task: 'Việc',
+                })),
+              },
+              harnessRef!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async () => {
+            started.push('a');
+            return loopResult('A');
+          },
+          [EMP_B_MODEL]: async () => {
+            started.push('b');
+            return loopResult('B');
+          },
+          [EMP_C_MODEL]: async () => {
+            started.push('c');
+            return loopResult('C');
+          },
+        },
+      });
+      harnessRef = harness;
+      const { coordinator, roster } = harness;
+
+      const sent = coordinator.send('Làm báo cáo');
+      await waitFor(() => coordinator.getState().phase === 'awaiting-plan');
+
+      // The roster shrinks while the turn is parked; the running turn must not see it.
+      roster.employees = roster.employees.slice(0, 1);
+      coordinator.resolvePlan(true);
+      await sent;
+
+      expect(started.sort()).toEqual(['a', 'b', 'c']);
+    });
+
+    it('registers live use for the duration of a lead turn', async () => {
+      const gate = deferred();
+      harness = await createHarness({
+        useSeam: true,
+        scripts: {
+          [LEAD_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('Xong.');
+          },
+        },
+      });
+      const { coordinator, lead } = harness;
+
+      void coordinator.send('Xin chào');
+      await waitFor(() => isAgentInUse(lead.id));
+      expect(isAgentInUse(lead.id)).toBe(true);
+
+      gate.release();
+      await waitFor(() => !isAgentInUse(lead.id));
+      expect(isAgentInUse(lead.id)).toBe(false);
+    });
+
+    it('registers a mention turn target and its skill, and releases both on stop', async () => {
+      const gate = deferred();
+      harness = await createHarness({
+        useSeam: true,
+        scripts: {
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('báo cáo');
+          },
+        },
+      });
+      const { coordinator, employees, skill } = harness;
+      const employee = employees[0]!;
+
+      const sent = coordinator.send('@[An](agent:' + employee.id + ') kiểm tra');
+      await waitFor(() => isAgentInUse(employee.id));
+      expect(isSkillInUse(skill.id)).toBe(true);
+
+      coordinator.stopAgent(employee.id);
+      gate.release();
+      await sent;
+
+      expect(isAgentInUse(employee.id)).toBe(false);
+      expect(isSkillInUse(skill.id)).toBe(false);
+    });
+
+    it('refuses to delete a de-rostered agent whose turn is still running', async () => {
+      const gate = deferred();
+      harness = await createHarness({
+        useSeam: true,
+        scripts: {
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('báo cáo');
+          },
+        },
+      });
+      const { coordinator, employees, roster, db } = harness;
+      const employee = employees[0]!;
+
+      const sent = coordinator.send('@[An](agent:' + employee.id + ') kiểm tra');
+      await waitFor(() => isAgentInUse(employee.id));
+
+      // De-rostered for the next turn, still running this one.
+      roster.memberAgentIds = [];
+      await db.aiTeamMembers.where('agentId').equals(employee.id).delete();
+
+      const result = await deleteEmployee(employee.id, db);
+      expect(result).toMatchObject({ deleted: false, code: 'IN_USE' });
+      expect(await db.aiEmployees.get(employee.id)).toBeDefined();
+
+      gate.release();
+      await sent;
+    });
+
+    it('stops mentioning a de-rostered agent from the next turn', async () => {
+      harness = await createHarness({ useSeam: true, scripts: {} });
+      const { employees, roster, lead, db, team, skill, threadId } = harness;
+      const employee = employees[0]!;
+      const routed: string[] = [];
+      const coordinatorWithRecorder = createTeamRunCoordinator({
+        db,
+        team,
+        lead,
+        employees,
+        skills: [skill],
+        threadId,
+        model: LEAD_MODEL,
+        endpoint: 'https://example.invalid/v1',
+        apiKey: 'sk-test',
+        createRuntimeDeps: (agentId) => ({
+          runLoop: recordingLoop(() => {
+            routed.push(agentId);
+          }) as unknown as ChatTurnRuntimeDeps['runLoop'],
+        }),
+        loadRoster: async () => ({
+          ...roster,
+          employees: [...roster.employees],
+          memberAgentIds: [...roster.memberAgentIds],
+        }),
+      });
+
+      await coordinatorWithRecorder.send('@[An](agent:' + employee.id + ') việc một');
+      expect(routed).toEqual([employee.id]);
+
+      // The agent leaves the roster: the same mention now falls back to the lead.
+      roster.memberAgentIds = [];
+      routed.length = 0;
+      await coordinatorWithRecorder.send('@[An](agent:' + employee.id + ') việc hai');
+
+      expect(routed).toEqual([lead.id]);
+    });
+
+    it('never mentions a global employee that is not on this team', async () => {
+      harness = await createHarness({
+        useSeam: true,
+        scripts: { [LEAD_MODEL]: async () => loopResult('Xong.') },
+      });
+      const { coordinator, employees, roster, lead, db } = harness;
+      const outsider = await createEmployee(
+        { name: 'Người Ngoài', role: 'x', capability: 'y', persona: 'z', model: EMP_A_MODEL },
+        db
+      );
+      roster.employees = [...employees, outsider];
+
+      await coordinator.send('@[Người Ngoài](agent:' + outsider.id + ') việc riêng');
+
+      expect(coordinator.getState().agents.map((row) => row.agentId)).toEqual([lead.id]);
+    });
+
+    it('does nothing when the seam reports no lead (empty group, D-05)', async () => {
+      harness = await createHarness({ useSeam: true, scripts: {} });
+      const { coordinator, roster } = harness;
+      roster.lead = undefined;
+      roster.teamRow = { ...harness.team, leadId: undefined };
+
+      await expect(coordinator.send('Xin chào')).resolves.toBeUndefined();
+      expect(coordinator.getState().agents).toEqual([]);
     });
   });
 });

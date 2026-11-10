@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../src/db';
-import { createEmployee, createLead, createSkill } from '../../src/db/repositories/aiOfficeRepo';
+import { createEmployee, createLead, createSkill, updateLead } from '../../src/db/repositories/aiOfficeRepo';
 import { createTeam, listTeamMembers, listTeams } from '../../src/db/repositories/aiTeamRepo';
 import { TeamsView } from '../../src/views/TeamsView';
 import { useLayoutStore } from '../../src/workbench/store/layoutStore';
@@ -372,6 +372,59 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     });
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
     await waitFor(() => expect(seenModels).toContain('claude-sonnet-4'));
+  });
+
+  it('uses a lead persona/model edited between two sends on the second turn (D-03)', async () => {
+    await db.settings.put({ key: 'ninerouter_api_key', value: 'sk-test' });
+    await db.settings.put({ key: 'ninerouter_endpoint', value: 'https://example.invalid/v1' });
+
+    const seen: Array<{ model: string; system: string }> = [];
+    const createRuntimeDeps = () => ({
+      runLoop: (async (loopOptions: any) => {
+        seen.push({
+          model: loopOptions.model,
+          system: (loopOptions.messages ?? [])
+            .filter((message: any) => message.role === 'system')
+            .map((message: any) => String(message.content))
+            .join('\n'),
+        });
+        return {
+          fullResponse: 'Xong.',
+          cleanResponse: 'Xong.',
+          messages: [],
+          tokenUsage: {},
+          generatedFiles: [],
+          truncated: false,
+          loopLimitReached: false,
+        };
+      }) as any,
+    });
+
+    render(<TeamsView db={db} createRuntimeDeps={createRuntimeDeps} />);
+
+    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    const composer = await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
+
+    fireEvent.change(composer, { target: { value: 'Lượt một' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+    await waitFor(() => expect(seen).toHaveLength(1));
+    await screen.findByLabelText('Gửi tin nhắn');
+
+    // Production edit path: the persisted lead row changes, no remount.
+    await updateLead(
+      lead.id,
+      { persona: 'Bạn là lead phiên bản hai.', model: 'claude-opus-5' },
+      db
+    );
+
+    fireEvent.change(composer, { target: { value: 'Lượt hai' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+    await waitFor(() => expect(seen).toHaveLength(2));
+
+    expect(seen[0]!.model).toBe('claude-opus-4');
+    expect(seen[0]!.system).toContain('Bạn là lead điều phối.');
+    expect(seen[1]!.model).toBe('claude-opus-5');
+    expect(seen[1]!.system).toContain('Bạn là lead phiên bản hai.');
   });
 
   it('renders the team composer placeholder', async () => {
