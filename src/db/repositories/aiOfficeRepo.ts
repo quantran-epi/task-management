@@ -16,13 +16,35 @@ import {
   type AiSkillUpdate,
 } from '../../validation/aiOfficeSchemas';
 
+import { isAgentInUse, isSkillInUse } from '../../services/ai/office/liveUseRegistry';
+
 /**
- * Global AI Office catalogue persistence (D-18, D-23, D-25).
+ * Global AI Office catalogue persistence (D-10..D-15, D-18, D-23, D-25).
  *
  * Employees, leads and skills are global rows: teams store only ids, so an edit here is
- * visible to every team that references the row. Deletes never cascade — the team row keeps
- * the dangling id and resolves it (or shows it as missing) at read time.
+ * visible to every team that references the row.
+ *
+ * Deletes refuse instead of leaving dangling ids. The guard and the write share one `rw`
+ * transaction, and the guard also consults the in-memory live-use registry, so a profile a
+ * running turn still uses cannot be removed even after it left every roster (D-13).
+ * Historical ids in transcripts stay readable — they are not live references (D-14).
  */
+
+/** D-10/D-11/D-12: a refusal names the groups or agents blocking the delete, never a UUID. */
+export type AiOfficeDeleteResult =
+  | { deleted: true }
+  | {
+      deleted: false;
+      code: 'IN_USE';
+      entity: 'lead' | 'employee';
+      usedBy: Array<{ teamId: string; teamName: string }>;
+    }
+  | {
+      deleted: false;
+      code: 'IN_USE';
+      entity: 'employee' | 'skill';
+      usedBy: Array<{ agentId: string; agentName: string }>;
+    };
 
 function byCreatedAt<T extends { createdAt: string }>(rows: T[]): T[] {
   return rows.sort((a, b) =>
@@ -84,12 +106,31 @@ export async function updateEmployee(
   return updated;
 }
 
-/** D-18: no cascade — team member rows keep the id and resolve it at read time. */
+/**
+ * D-11: refuse while any roster still lists the agent, or while a running turn uses it.
+ * The membership rows are never cascaded — the user removes the agent from each roster first.
+ */
 export async function deleteEmployee(
   id: string,
   db: TaskPlannerDatabase = defaultDb
-): Promise<void> {
-  await db.aiEmployees.delete(id);
+): Promise<AiOfficeDeleteResult> {
+  return db.transaction('rw', [db.aiEmployees, db.aiTeamMembers, db.aiTeams], async () => {
+    const memberships = await db.aiTeamMembers.where('agentId').equals(id).toArray();
+    if (memberships.length > 0 || isAgentInUse(id)) {
+      const teamIds = [...new Set(memberships.map((row) => row.teamId))];
+      const teams = await db.aiTeams.bulkGet(teamIds);
+      return {
+        deleted: false,
+        code: 'IN_USE',
+        entity: 'employee',
+        usedBy: teams.flatMap((team) =>
+          team ? [{ teamId: team.id, teamName: team.name }] : []
+        ),
+      };
+    }
+    await db.aiEmployees.delete(id);
+    return { deleted: true };
+  });
 }
 
 export async function countTeamsUsingEmployee(
@@ -148,11 +189,24 @@ export async function updateLead(
   return updated;
 }
 
+/** D-10: refuse while any group still names the lead, or while a running turn uses it. */
 export async function deleteLead(
   id: string,
   db: TaskPlannerDatabase = defaultDb
-): Promise<void> {
-  await db.aiLeads.delete(id);
+): Promise<AiOfficeDeleteResult> {
+  return db.transaction('rw', [db.aiLeads, db.aiTeams, db.aiTeamMembers], async () => {
+    const teams = await db.aiTeams.where('leadId').equals(id).toArray();
+    if (teams.length > 0 || isAgentInUse(id)) {
+      return {
+        deleted: false,
+        code: 'IN_USE',
+        entity: 'lead',
+        usedBy: teams.map((team) => ({ teamId: team.id, teamName: team.name })),
+      };
+    }
+    await db.aiLeads.delete(id);
+    return { deleted: true };
+  });
 }
 
 export async function listSkills(
@@ -200,12 +254,28 @@ export async function updateSkill(
   return updated;
 }
 
-/** D-18/D-25: no cascade — employees keep the dangling scalar `skillId`. */
+/**
+ * D-12: refuse while any profile still carries the skill, or while a running turn uses it.
+ * A permitted delete cascades the skill's version rows in the same transaction (A3).
+ */
 export async function deleteSkill(
   id: string,
   db: TaskPlannerDatabase = defaultDb
-): Promise<void> {
-  await db.aiSkills.delete(id);
+): Promise<AiOfficeDeleteResult> {
+  return db.transaction('rw', [db.aiSkills, db.aiEmployees, db.aiSkillVersions], async () => {
+    const employees = await db.aiEmployees.where('skillId').equals(id).toArray();
+    if (employees.length > 0 || isSkillInUse(id)) {
+      return {
+        deleted: false,
+        code: 'IN_USE',
+        entity: 'skill',
+        usedBy: employees.map((row) => ({ agentId: row.id, agentName: row.name })),
+      };
+    }
+    await db.aiSkillVersions.where('skillId').equals(id).delete();
+    await db.aiSkills.delete(id);
+    return { deleted: true };
+  });
 }
 
 export async function countAgentsUsingSkill(

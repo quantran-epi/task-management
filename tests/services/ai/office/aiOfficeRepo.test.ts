@@ -26,6 +26,13 @@ import {
   countAgentsUsingSkill,
 } from '../../../../src/db/repositories/aiOfficeRepo';
 import { generateId } from '../../../../src/utils/uuid';
+import { createTeam } from '../../../../src/db/repositories/aiTeamRepo';
+import {
+  ensureTeamThread,
+  saveTeamMessage,
+} from '../../../../src/db/repositories/teamTranscriptRepo';
+import { exportBackupPayload } from '../../../../src/services/backup/exportBackup';
+import { validateBackupPayload } from '../../../../src/services/backup/validateBackup';
 
 const EMPLOYEE = {
   name: 'Lan',
@@ -48,6 +55,7 @@ describe('aiOfficeRepo (AIO-EMP-01, AIO-EMP-02, AIO-SKILL-01)', () => {
   });
 
   afterEach(async () => {
+    reset();
     await db.delete();
   });
 
@@ -90,23 +98,44 @@ describe('aiOfficeRepo (AIO-EMP-01, AIO-EMP-02, AIO-SKILL-01)', () => {
     expect(await countTeamsUsingEmployee(target.id, db)).toBe(1);
   });
 
-  it('deletes an employee without cascading into team member rows', async () => {
+  it('refuses to delete an employee still on a roster and names the group', async () => {
     const employee = await createEmployee(EMPLOYEE, db);
-    const teamId = generateId();
-    const memberId = generateId();
-    await db.aiTeamMembers.add({
-      id: memberId,
-      teamId,
-      agentId: employee.id,
-      role: 'employee',
-      budgetTokens: 0,
-      usedTokens: 0,
+    const team = await createTeam(
+      { name: 'Nhóm A', leadId: undefined, status: 'active', budgetTokens: 0, employeeIds: [employee.id] },
+      db
+    );
+    const memberRows = await db.aiTeamMembers.where('teamId').equals(team.id).toArray();
+
+    const result = await deleteEmployee(employee.id, db);
+
+    expect(result).toEqual({
+      deleted: false,
+      code: 'IN_USE',
+      entity: 'employee',
+      usedBy: [{ teamId: team.id, teamName: 'Nhóm A' }],
     });
+    expect(await db.aiEmployees.get(employee.id)).toBeDefined();
+    expect(await db.aiTeamMembers.where('teamId').equals(team.id).toArray()).toHaveLength(
+      memberRows.length
+    );
+  });
 
-    await deleteEmployee(employee.id, db);
+  it('refuses to delete an employee a running turn still uses', async () => {
+    const employee = await createEmployee(EMPLOYEE, db);
+    beginTurn(employee.id, []);
 
+    const result = await deleteEmployee(employee.id, db);
+
+    expect(result.deleted).toBe(false);
+    expect(result).toMatchObject({ code: 'IN_USE', entity: 'employee' });
+    expect(await db.aiEmployees.get(employee.id)).toBeDefined();
+  });
+
+  it('deletes an unreferenced employee', async () => {
+    const employee = await createEmployee(EMPLOYEE, db);
+
+    expect(await deleteEmployee(employee.id, db)).toEqual({ deleted: true });
     expect(await db.aiEmployees.get(employee.id)).toBeUndefined();
-    expect(await db.aiTeamMembers.get(memberId)).toBeDefined();
   });
 
   it('round-trips a skill body byte-identically and leaves description untouched on body update', async () => {
@@ -123,20 +152,83 @@ describe('aiOfficeRepo (AIO-EMP-01, AIO-EMP-02, AIO-SKILL-01)', () => {
     expect(updated.description).toBe('Quy trình nghiên cứu');
   });
 
-  it('keeps employees when their skill is deleted and counts skill usage', async () => {
+  it('refuses to delete a skill assigned to a profile and names the agent', async () => {
     const skill = await createSkill(
       { name: 'Research', description: 'Quy trình nghiên cứu', body: SKILL_BODY },
       db
     );
     const employee = await createEmployee({ ...EMPLOYEE, skillId: skill.id }, db);
 
-    expect(employee.skillId).toBe(skill.id);
     expect(await countAgentsUsingSkill(skill.id, db)).toBe(1);
 
-    await deleteSkill(skill.id, db);
+    const result = await deleteSkill(skill.id, db);
+
+    expect(result).toEqual({
+      deleted: false,
+      code: 'IN_USE',
+      entity: 'skill',
+      usedBy: [{ agentId: employee.id, agentName: employee.name }],
+    });
+    expect(await db.aiSkills.get(skill.id)).toBeDefined();
+    expect((await db.aiEmployees.get(employee.id))?.skillId).toBe(skill.id);
+  });
+
+  it('refuses to delete a skill a running turn still uses', async () => {
+    const skill = await createSkill({ name: 'S', description: 'd', body: 'b' }, db);
+    beginTurn('agent-1', [skill.id]);
+
+    expect((await deleteSkill(skill.id, db)).deleted).toBe(false);
+    expect(await db.aiSkills.get(skill.id)).toBeDefined();
+  });
+
+  it('deletes an unreferenced skill together with its version rows', async () => {
+    const skill = await createSkill({ name: 'S', description: 'd', body: 'b' }, db);
+    await db.aiSkillVersions.bulkAdd([
+      {
+        id: generateId(),
+        skillId: skill.id,
+        version: 1,
+        status: 'approved',
+        name: 'S',
+        description: 'd',
+        body: 'b',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: generateId(),
+        skillId: skill.id,
+        version: 2,
+        status: 'pending',
+        name: 'S',
+        description: 'd',
+        body: 'b2',
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+
+    expect(await deleteSkill(skill.id, db)).toEqual({ deleted: true });
 
     expect(await db.aiSkills.get(skill.id)).toBeUndefined();
-    expect((await db.aiEmployees.get(employee.id))?.skillId).toBe(skill.id);
+    expect(await db.aiSkillVersions.where('skillId').equals(skill.id).count()).toBe(0);
+  });
+
+  it('leaves version rows intact when the skill delete is refused', async () => {
+    const skill = await createSkill({ name: 'S', description: 'd', body: 'b' }, db);
+    const versionId = generateId();
+    await db.aiSkillVersions.add({
+      id: versionId,
+      skillId: skill.id,
+      version: 1,
+      status: 'approved',
+      name: 'S',
+      description: 'd',
+      body: 'b',
+      createdAt: new Date().toISOString(),
+    });
+    await createEmployee({ ...EMPLOYEE, skillId: skill.id }, db);
+
+    expect((await deleteSkill(skill.id, db)).deleted).toBe(false);
+    expect(await db.aiSkillVersions.get(versionId)).toBeDefined();
   });
 
   it('lists employees, leads and skills sorted by createdAt', async () => {
@@ -158,14 +250,76 @@ describe('aiOfficeRepo (AIO-EMP-01, AIO-EMP-02, AIO-SKILL-01)', () => {
     expect((await listSkills(db)).map((s) => s.id)).toEqual([skillA.id, skillB.id]);
   });
 
-  it('updates and deletes leads', async () => {
+  it('updates a lead and refuses to delete one a group still names', async () => {
     const lead = await createLead({ ...EMPLOYEE, name: 'Lead' }, db);
     const updated = await updateLead(lead.id, { capability: 'Điều phối' }, db);
     expect(updated.capability).toBe('Điều phối');
     expect(updated.name).toBe('Lead');
 
-    await deleteLead(lead.id, db);
+    const team = await createTeam(
+      { name: 'Nhóm Lead', leadId: lead.id, status: 'active', budgetTokens: 0 },
+      db
+    );
+
+    expect(await deleteLead(lead.id, db)).toEqual({
+      deleted: false,
+      code: 'IN_USE',
+      entity: 'lead',
+      usedBy: [{ teamId: team.id, teamName: 'Nhóm Lead' }],
+    });
+    expect(await db.aiLeads.get(lead.id)).toBeDefined();
+  });
+
+  it('deletes an unreferenced lead', async () => {
+    const lead = await createLead({ ...EMPLOYEE, name: 'Lead' }, db);
+
+    expect(await deleteLead(lead.id, db)).toEqual({ deleted: true });
     expect(await db.aiLeads.get(lead.id)).toBeUndefined();
+  });
+
+  it('keeps the next export valid after an assigned skill is unassigned and deleted', async () => {
+    const skill = await createSkill({ name: 'S', description: 'd', body: 'b' }, db);
+    const employee = await createEmployee({ ...EMPLOYEE, skillId: skill.id }, db);
+
+    const before = validateBackupPayload(await exportBackupPayload(db));
+    expect(before.valid).toBe(true);
+
+    await updateEmployee(employee.id, { skillId: null }, db);
+    expect(await deleteSkill(skill.id, db)).toEqual({ deleted: true });
+
+    const after = validateBackupPayload(await exportBackupPayload(db));
+    expect(after.valid).toBe(true);
+    expect(after.errors).toEqual([]);
+  });
+
+  it('keeps the next export valid after a lead referenced only historically is deleted', async () => {
+    const lead = await createLead({ ...EMPLOYEE, name: 'Lead' }, db);
+    const employee = await createEmployee(EMPLOYEE, db);
+    // D-05: a group with no leader is legal, so the lead has no live reference here.
+    const team = await createTeam(
+      { name: 'Nhóm Cũ', status: 'idle', budgetTokens: 0, employeeIds: [employee.id] },
+      db
+    );
+    const thread = await ensureTeamThread(team.id, db);
+    await saveTeamMessage(
+      {
+        threadId: thread.id,
+        role: 'assistant',
+        content: 'Tổng hợp cũ.',
+        agentId: lead.id,
+        agentName: 'Lead',
+        agentKind: 'lead',
+        messageKind: 'synthesis',
+        targetAgentId: employee.id,
+      },
+      db
+    );
+
+    expect(await deleteLead(lead.id, db)).toEqual({ deleted: true });
+
+    const result = validateBackupPayload(await exportBackupPayload(db));
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
   });
 
   it('throws a not-found error when updating a missing row', async () => {
