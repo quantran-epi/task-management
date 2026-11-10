@@ -110,7 +110,7 @@ export async function readPatchTarget(
     ? await db.notes.get(id)
     : await db.aiSkills.get(id);
   const markdown = target === 'note'
-    ? readNoteMarkdown((row as Note | undefined)?.body)
+    ? row && readNoteMarkdown((row as Note).body)
     : (row as AiSkill | undefined)?.body;
   if (markdown === undefined) {
     return refuse('ARTIFACT_NOT_FOUND', 'Không tìm thấy tài liệu. Hãy chọn tài liệu hiện có rồi thử lại.');

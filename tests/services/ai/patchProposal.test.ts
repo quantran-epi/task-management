@@ -40,8 +40,8 @@ describe('generic patch proposal core', () => {
 
   it('locates a section and its non-blank body core', () => {
     const result = locateSection(MARKDOWN, '1.1');
-    expect(isRefusal(result)).toBe(false);
-    if (isRefusal(result)) return;
+    expect('refused' in result).toBe(false);
+    if ('refused' in result) return;
     expect(result.section.title).toBe('First');
     expect(result.coreStart).toBe(4);
     expect(result.coreEnd).toBe(4);
@@ -49,8 +49,8 @@ describe('generic patch proposal core', () => {
 
   it('refuses an unknown section id', () => {
     const result = locateSection(MARKDOWN, '9.9');
-    expect(isRefusal(result)).toBe(true);
-    if (!isRefusal(result)) return;
+    expect('refused' in result).toBe(true);
+    if (!('refused' in result)) return;
     expect(result.code).toBe('SECTION_NOT_FOUND');
   });
 
@@ -61,8 +61,8 @@ describe('generic patch proposal core', () => {
 
   it('appends or replaces section body while preserving surrounding sections', () => {
     const slice = locateSection(MARKDOWN, '1.1');
-    expect(isRefusal(slice)).toBe(false);
-    if (isRefusal(slice)) return;
+    expect('refused' in slice).toBe(false);
+    if ('refused' in slice) return;
     expect(applyOperation(MARKDOWN, slice, 'append', 'Added.')).toBe(
       '# Note\n\n## First\n\nOriginal text.\nAdded.\n\n## Second\n\nKeep this.'
     );
@@ -117,6 +117,8 @@ describe('generic patch proposal core', () => {
     });
     expect(isRefusal(result)).toBe(false);
     if (isRefusal(result)) return;
+    expect('diffText' in result).toBe(true);
+    if (!('diffText' in result)) return;
     expect(result.target).toBe('note');
     expect(result.id).toBe(NOTE_ID);
     expect(result.diffText.startsWith(`--- a/note:${NOTE_ID}\n+++ b/note:${NOTE_ID}`)).toBe(true);
