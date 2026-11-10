@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Button, Empty, Input, Segmented, Space, theme } from 'antd';
+import { Alert, Button, Empty, Input, Segmented, Space, theme } from 'antd';
 import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -10,6 +10,7 @@ import {
   listEmployees,
   listLeads,
   listSkills,
+  type AiOfficeDeleteResult,
 } from '../db/repositories/aiOfficeRepo';
 import { PageHeader } from '../components/common/PageHeader';
 import { EmployeeCard, LeadCard } from '../components/ai/office/EmployeeCard';
@@ -58,10 +59,37 @@ const SEGMENT_COPY: Record<
  * UI-SPEC §1 employee tab. `'agents'` is a shell: the Ghost Dev surface stays mounted
  * behind the second segment, so the phase adds a surface rather than replacing one (T-34-50).
  */
+/**
+ * D-10/D-11/D-12: the repo decides, the view only renders. Names only — never an id (T-36-15).
+ * An empty `usedBy` means a running turn holds the profile (D-13), not a roster reference.
+ */
+function refusalMessage(result: AiOfficeDeleteResult): string | null {
+  if (result.deleted) return null;
+  // The union overlaps on `entity: 'employee'`, so narrow on the payload shape instead.
+  if (result.entity === 'skill' || result.usedBy.some((row) => 'agentName' in row)) {
+    const names = result.usedBy
+      .map((row) => ('agentName' in row ? row.agentName : ''))
+      .filter(Boolean)
+      .join(', ');
+    return names
+      ? `Không thể xóa kỹ năng vì đang được gán cho: ${names}. Gỡ kỹ năng khỏi các nhân viên đó trước.`
+      : 'Không thể xóa kỹ năng vì một lượt chạy đang dùng nó. Đợi lượt chạy kết thúc rồi thử lại.';
+  }
+  const names = result.usedBy
+    .map((row) => ('teamName' in row ? row.teamName : ''))
+    .filter(Boolean)
+    .join(', ');
+  const subject = result.entity === 'lead' ? 'lead' : 'nhân viên';
+  return names
+    ? `Không thể xóa ${subject} vì đang được dùng trong nhóm: ${names}. Gỡ khỏi các nhóm đó trước.`
+    : `Không thể xóa ${subject} vì một lượt chạy đang dùng hồ sơ này. Đợi lượt chạy kết thúc rồi thử lại.`;
+}
+
 export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) => {
   const { token } = theme.useToken();
   const [segment, setSegment] = useState<OfficeSegment>('employees');
   const [search, setSearch] = useState('');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [drawer, setDrawer] = useState<'employee' | 'lead' | 'skill' | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<AiEmployee | null>(null);
   const [editingLead, setEditingLead] = useState<AiLead | null>(null);
@@ -114,14 +142,14 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
 
   const closeDrawer = () => setDrawer(null);
 
-  const handleDeleteEmployee = (employee: AiEmployee) => {
-    void deleteEmployee(employee.id, db);
+  const handleDeleteEmployee = async (employee: AiEmployee) => {
+    setDeleteError(refusalMessage(await deleteEmployee(employee.id, db)));
   };
-  const handleDeleteLead = (lead: AiLead) => {
-    void deleteLead(lead.id, db);
+  const handleDeleteLead = async (lead: AiLead) => {
+    setDeleteError(refusalMessage(await deleteLead(lead.id, db)));
   };
-  const handleDeleteSkill = (skill: AiSkill) => {
-    void deleteSkill(skill.id, db);
+  const handleDeleteSkill = async (skill: AiSkill) => {
+    setDeleteError(refusalMessage(await deleteSkill(skill.id, db)));
   };
 
   const emptyBlock = (
@@ -184,6 +212,7 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
             onChange={(value) => {
               setSegment(value as OfficeSegment);
               setSearch('');
+              setDeleteError(null);
             }}
             options={[
               {
@@ -194,6 +223,17 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
               { label: <span data-testid="ai-office-segment-skills">Kỹ năng</span>, value: 'skills' },
             ]}
           />
+
+          {deleteError && (
+            <Alert
+              type="warning"
+              showIcon
+              closable
+              data-testid="ai-office-delete-error"
+              message={deleteError}
+              onClose={() => setDeleteError(null)}
+            />
+          )}
 
           <div
             style={{

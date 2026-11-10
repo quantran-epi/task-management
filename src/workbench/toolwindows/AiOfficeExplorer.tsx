@@ -202,11 +202,9 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
                       {team.name}
                     </Typography.Text>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                      {leadName && (
-                        <span style={{ fontSize: 11, color: 'var(--fg-secondary, #5f6269)' }}>
-                          Lead: {leadName}
-                        </span>
-                      )}
+                      <span style={{ fontSize: 11, color: 'var(--fg-secondary, #5f6269)' }}>
+                        {leadName ? `Lead: ${leadName}` : 'Chưa chọn lead'}
+                      </span>
                       <span style={{ fontSize: 10, color: 'var(--fg-muted, #8c8f9c)' }}>
                         • {count} thành viên
                       </span>

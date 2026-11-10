@@ -737,6 +737,16 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     expect(tab?.params).toMatchObject({ teamId: activeTeam.id });
   });
 
+  it('renders an empty group in the AI Office explorer with a no-leader label', async () => {
+    const { AiOfficeExplorer } = await import('../../src/workbench/toolwindows/AiOfficeExplorer');
+    const empty = await createTeam({ name: 'Nhóm Rỗng' }, db);
+
+    render(<AiOfficeExplorer db={db} />);
+
+    const row = await screen.findByTestId(`ai-office-team-${empty.id}`);
+    expect(row).toHaveTextContent('Chưa chọn lead');
+  });
+
   it('routes both the agents and teams views in renderViewContent', async () => {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');

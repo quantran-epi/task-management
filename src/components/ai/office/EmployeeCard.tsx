@@ -79,7 +79,7 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
           Sửa
         </Button>
         <Popconfirm
-          title={`Xóa nhân viên: «${employee.name}» sẽ bị xóa khỏi mọi nhóm đang dùng. Lịch sử hội thoại vẫn được giữ.`}
+          title={`Xóa nhân viên «${employee.name}»? Nếu nhân viên còn trong nhóm, thao tác sẽ bị chặn và bạn cần gỡ khỏi các nhóm trước. Lịch sử hội thoại vẫn được giữ.`}
           okText="Xóa"
           cancelText="Hủy"
           okButtonProps={{ danger: true }}
@@ -140,7 +140,7 @@ export const LeadCard: React.FC<LeadCardProps> = ({ lead, onEdit, onDelete }) =>
           Sửa
         </Button>
         <Popconfirm
-          title="Xóa lead: Các nhóm đang dùng lead này sẽ cần chọn lead khác trước khi chạy tiếp."
+          title={`Xóa lead «${lead.name}»? Lead còn trong nhóm sẽ không xóa được — nhóm phải đổi leader trước, và nhóm đã khóa leader thì không đổi được nữa.`}
           okText="Xóa"
           cancelText="Hủy"
           okButtonProps={{ danger: true }}

@@ -49,6 +49,16 @@ describe('AiOfficeView — employee tab shell (AIO-UI-01)', () => {
     return render(<AiOfficeView db={db} />);
   }
 
+  /** The card button and the Popconfirm's OK button share the label "Xóa". */
+  async function confirmDelete() {
+    const popconfirm = await waitFor(() => {
+      const node = document.querySelector('.ant-popconfirm');
+      expect(node).toBeInTheDocument();
+      return node as HTMLElement;
+    });
+    fireEvent.click(within(popconfirm).getByRole('button', { name: 'Xóa' }));
+  }
+
   async function seedEmployee(overrides: Partial<{ name: string; role: string; model: string }> = {}) {
     return createEmployee(
       {
@@ -300,6 +310,124 @@ describe('AiOfficeView — employee tab shell (AIO-UI-01)', () => {
     expect(await screen.findByTestId('employee-editor-drawer')).toBeInTheDocument();
     expect(screen.getByLabelText('Tên')).toHaveValue('An Nguyễn');
     expect(screen.getByText('Sửa nhân viên')).toBeInTheDocument();
+  });
+
+  it('refuses to delete an employee still on a roster and names the group', async () => {
+    const employee = await seedEmployee();
+    const lead = await createLead(
+      {
+        name: 'Bình Trần',
+        role: 'Lead điều phối',
+        capability: 'Chia việc và tổng hợp kết quả.',
+        persona: 'Bạn là lead điều phối.',
+        model: 'claude-opus-4',
+      },
+      db
+    );
+    await createTeam(
+      {
+        name: 'Nhóm Alpha',
+        leadId: lead.id,
+        status: 'idle',
+        budgetTokens: 10000,
+        employeeIds: [employee.id],
+      },
+      db
+    );
+
+    renderView();
+    const card = await screen.findByTestId(`employee-card-${employee.id}`);
+    fireEvent.click(within(card).getByRole('button', { name: 'Xóa' }));
+    await confirmDelete();
+
+    const alert = await screen.findByTestId('ai-office-delete-error');
+    expect(alert).toHaveTextContent('Nhóm Alpha');
+    expect(alert).not.toHaveTextContent(employee.id);
+    expect(screen.getByTestId(`employee-card-${employee.id}`)).toBeInTheDocument();
+    expect((await listEmployees(db)).some((row) => row.id === employee.id)).toBe(true);
+  });
+
+  it('deletes an unreferenced employee and shows no alert', async () => {
+    const employee = await seedEmployee();
+
+    renderView();
+    const card = await screen.findByTestId(`employee-card-${employee.id}`);
+    fireEvent.click(within(card).getByRole('button', { name: 'Xóa' }));
+    await confirmDelete();
+
+    await waitFor(async () => {
+      expect((await listEmployees(db)).some((row) => row.id === employee.id)).toBe(false);
+    });
+    expect(screen.queryByTestId('ai-office-delete-error')).not.toBeInTheDocument();
+  });
+
+  it('refuses to delete a skill assigned to an agent and names the agent', async () => {
+    const skill = await createSkill(
+      { name: 'Viết đặc tả', description: 'Quy trình viết đặc tả.', body: '# Quy trình' },
+      db
+    );
+    await createEmployee(
+      {
+        name: 'An Nguyễn',
+        role: 'Chuyên viên phân tích',
+        capability: 'Phân tích nghiệp vụ.',
+        persona: 'Bạn là An.',
+        model: 'claude-sonnet-4',
+        skillId: skill.id,
+      },
+      db
+    );
+
+    renderView();
+    fireEvent.click(await screen.findByTestId('ai-office-segment-skills'));
+
+    const card = await screen.findByTestId(`skill-card-${skill.id}`);
+    fireEvent.click(within(card).getByRole('button', { name: 'Xóa' }));
+    await confirmDelete();
+
+    const alert = await screen.findByTestId('ai-office-delete-error');
+    expect(alert).toHaveTextContent('An Nguyễn');
+    expect(screen.getByTestId(`skill-card-${skill.id}`)).toBeInTheDocument();
+    expect((await listSkills(db)).some((row) => row.id === skill.id)).toBe(true);
+  });
+
+  it('promises refusal, not cascade, in the delete confirmation copy', async () => {
+    const employee = await seedEmployee();
+    const lead = await createLead(
+      {
+        name: 'Bình Trần',
+        role: 'Lead điều phối',
+        capability: 'Chia việc và tổng hợp kết quả.',
+        persona: 'Bạn là lead điều phối.',
+        model: 'claude-opus-4',
+      },
+      db
+    );
+    const skill = await createSkill(
+      { name: 'Viết đặc tả', description: 'Quy trình viết đặc tả.', body: '# Quy trình' },
+      db
+    );
+
+    renderView();
+    const employeeCard = await screen.findByTestId(`employee-card-${employee.id}`);
+    fireEvent.click(within(employeeCard).getByRole('button', { name: 'Xóa' }));
+    expect(
+      await screen.findByText(/nếu nhân viên còn trong nhóm, thao tác sẽ bị chặn/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/sẽ bị xóa khỏi mọi nhóm đang dùng/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Hủy' }));
+
+    fireEvent.click(screen.getByTestId('ai-office-segment-leads'));
+    const leadCard = await screen.findByTestId(`lead-card-${lead.id}`);
+    fireEvent.click(within(leadCard).getByRole('button', { name: 'Xóa' }));
+    expect(await screen.findByText(/Lead còn trong nhóm sẽ không xóa được/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Hủy' }));
+
+    fireEvent.click(screen.getByTestId('ai-office-segment-skills'));
+    const skillCard = await screen.findByTestId(`skill-card-${skill.id}`);
+    fireEvent.click(within(skillCard).getByRole('button', { name: 'Xóa' }));
+    expect(await screen.findByText(/Kỹ năng còn được gán cho nhân viên sẽ không xóa được/i)).toBeInTheDocument();
+    expect(screen.queryByText(/persona thuần/i)).not.toBeInTheDocument();
   });
 });
 

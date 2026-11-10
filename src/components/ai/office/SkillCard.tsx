@@ -53,7 +53,7 @@ export const SkillCard: React.FC<SkillCardProps> = ({ skill, agentCount, onEdit,
           Sửa
         </Button>
         <Popconfirm
-          title="Xóa kỹ năng: Nhân viên đang dùng kỹ năng này sẽ chạy bằng persona thuần."
+          title={`Xóa kỹ năng «${skill.name}»? Kỹ năng còn được gán cho nhân viên sẽ không xóa được — gỡ khỏi các nhân viên đó trước.`}
           okText="Xóa"
           cancelText="Hủy"
           okButtonProps={{ danger: true }}
