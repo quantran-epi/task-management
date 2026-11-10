@@ -48,7 +48,7 @@ import { createNote } from '../../db/repositories/noteRepo';
 import { getChangeRequest } from '../../db/repositories/changeRequestRepo';
 import { getSystem } from '../../db/repositories/systemRepo';
 import { getGlobalConventions, loadMultiRepoConventions } from '../../services/conventionService';
-import { buildConventionsSegment } from '../../services/ai/sdlcPromptComposer';
+import { buildConventionsSegment } from '../../services/ai/conventionsSegment';
 import { getTodayDateString } from '../../utils/date';
 import dayjs from 'dayjs';
 import { ChatHeader } from './ChatHeader';
