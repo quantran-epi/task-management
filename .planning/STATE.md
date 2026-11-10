@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v1.4
 milestone_name: Unified AI Office (Phase Details)
-current_phase: 35
-current_phase_name: Shared-primitive extraction + SDLC behavior removal
-status: executing
-last_updated: "2026-11-10T04:05:50.682Z"
+current_phase: 36
+current_phase_name: Data model, multi-chat identity, backup/migration
+status: planning
+last_updated: "2026-11-10T09:46:05.346Z"
 last_activity: 2026-11-10
-last_activity_desc: Phase 35 execution started
-state_head: b0b7f24aa71cbed0e4ace89883f9e898c305ecbb
+last_activity_desc: Phase 35 complete, transitioned to Phase 36
+state_head: a8fa7130d5b77fd634be22cefdb2ab6c68735f91
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 12
-  completed_plans: 0
-  percent: 0
+  completed_plans: 12
+  percent: 17
 ---
 
 # Project State: TaskMate — Milestone v1.4
@@ -22,25 +22,25 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-09)
 
 **Core value:** Hợp nhất SDLC Studio và AI Office thành Unified AI Office dạng chat-first, free-style với token budget cứng và làm giàu skill.
-**Current focus:** Phase 35 — Shared-primitive extraction + SDLC behavior removal
+**Current focus:** Phase 36 — Data model, multi-chat identity, backup/migration
 
 ## Current Position
 
-Phase: 35 (Shared-primitive extraction + SDLC behavior removal) — EXECUTING
-Plan: 1 of 12
-Status: Executing Phase 35
-Last activity: 2026-11-10 — Phase 35 execution started
+Phase: 36 — Data model, multi-chat identity, backup/migration
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-11-10 — Phase 35 complete, transitioned to Phase 36
 
 ## Session Continuity
 
 Last session: 2026-11-09T12:55:20.368Z
 Resume file: .planning/phases/35-shared-primitive-extraction-sdlc-behavior-removal/35-CONTEXT.md
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██░░░░░░░░] 17%
 
 ## Milestone v1.4 Map
 
-- [ ] Phase 35: Shared-primitive extraction + SDLC behavior removal
+- [x] Phase 35: Shared-primitive extraction + SDLC behavior removal
 - [ ] Phase 36: Data model, multi-chat identity, backup/migration
 - [ ] Phase 37: Runtime reliability + concurrency
 - [ ] Phase 38: Hard token budget + accurate measurement
@@ -51,7 +51,7 @@ Progress: [░░░░░░░░░░] 0%
 
 - Phase 34 marked complete with zero tests covering the AI Office runtime and five live defects (hung batch run, unguarded double-submit, phantom active turn, `targetAgentId` stripped on restore, bare deletes breaking export). "Phase 34 complete" is not evidence of quality.
 - Research verdict: keep and harden the existing coordinator/budget gate; zero new npm dependencies.
-- SDLC deletion is behavior-only; four persisted schema modules must survive as type-only legacy (backup envelope v11 validates them).
+- Phase 35 completed under fresh-data-only scope: SDLC schema modules removed, no legacy compatibility requirement. Targeted tests/typecheck/build passed; exact copy, legacy-layout walkthrough, and existing unrelated selector test recorded as non-blocking debt.
 - Seven surviving modules import SDLC code on the hot path — extraction must precede deletion.
 
 ## Decisions

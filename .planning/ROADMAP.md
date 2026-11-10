@@ -55,7 +55,8 @@
 4. A persisted `viewType:'sdlc'` tab is dropped on launch and `activeTabId` re-points to a valid tab.
 5. `restoreBackup` no longer creates SDLC tabs; `validateBackup` no longer enforces SDLC invariants.
 
-**Plans:** 12/12 plans executed in 7 waves
+**Status:** Complete — 2026-11-10; accepted fresh-data-only scope, verification debt recorded in 35-VERIFICATION.md.
+**Plans:** 12/12 plans complete in 7 waves (plus two corrective fixes)
 
 Plans:
 **Wave 1**

@@ -32,4 +32,4 @@ Review returned 3 critical, 6 warning, 6 info claims. These counts are reviewer 
 - Phase focused test sweep reported 580 passing assertions plus one failing pre-existing KnowledgeServerConfigCard selector test; not an all-green sweep.
 - Manual Tauri layout hydration walkthrough remains pending; no claim of runtime verification.
 - InterruptedBanner description and backup invalid-tab copy differ from untracked UI-SPEC; not fixed yet.
-- Phase is not marked complete while confirmed data defects remain open.
+- Confirmed data defects CR-01/WR-04 are fixed. User clarified fresh-data-only scope; legacy compatibility, legacy-layout walkthrough, and exact copy differences are accepted non-blocking debt. Phase may advance; no claim that these debt items were fixed.

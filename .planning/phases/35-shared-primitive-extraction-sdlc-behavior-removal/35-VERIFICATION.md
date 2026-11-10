@@ -1,13 +1,13 @@
 ---
 phase: 35-shared-primitive-extraction-sdlc-behavior-removal
 verified: 2026-11-10
-status: gaps_found
+status: passed
 verification_mode: targeted-inline
 ---
 
 # Phase 35 Verification
 
-12/12 planned executions merged locally. Phase completion is NOT declared. No push until phase done. Security, separate validation audit, and UI audit stopped at user's request; no new audit agents launched.
+12/12 planned executions merged locally. Phase accepted under the user's clarified fresh-data-only scope. Legacy-data compatibility, legacy-layout walkthrough, and exact UI copy differences are not completion blockers. User authorized phase completion and push. Security, separate validation audit, and UI audit stopped at user's request; no new audit agents launched. This acceptance does not claim an observed Tauri runtime walkthrough or an all-green broad test sweep.
 
 ## Observed results
 
@@ -30,7 +30,9 @@ verification_mode: targeted-inline
 | AIO-REMOVE-04 | Partial | Retired sdlc tabs filtered and layout key v3; automated layout tests passed. Requirement wording also asks filtering unknown view types; current code filters only RETIRED_VIEW_TYPES. Manual Tauri hydration walkthrough unrun. |
 | AIO-REMOVE-05 | Implementation follows locked plans; wording conflict | Restore no longer creates SDLC tabs; orphan-message regression fixed. D-06/UI-SPEC mandate rejecting explicit sdlc tabs, whereas REQUIREMENTS.md says import-tolerant. Do not silently undo locked decision or label intentional rejection a critical regression. |
 
-## Remaining gaps / debt
+## Accepted non-blocking debt
+
+User explicitly clarified that only fresh data matters and retired-data compatibility must not delay progression. Items below are disclosed, not claimed fixed, and do not block Phase 36.
 
 1. InterruptedBanner description differs from exact UI-SPEC copy: checkpoint word was removed despite contract requesting it be preserved.
 2. BackupChatTabRecordSchema.type lacks UI-SPEC's fixed Vietnamese invalid-sdlc-tab message; rejection is safe but copy defaults to English.
