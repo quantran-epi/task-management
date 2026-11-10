@@ -1,17 +1,36 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { ReactNode } from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ChatTabBar, type ChatTabItem } from '../ChatTabBar';
 import type { TabRuntimeStatus } from '../runtime/tabTypes';
 
+// jsdom cannot activate dnd-kit's pointer/keyboard sensors (no layout rects), so the
+// drag gesture is simulated by invoking the DndContext's onDragEnd with ids.
+vi.mock('@dnd-kit/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@dnd-kit/core')>();
+  return {
+    ...actual,
+    DndContext: ({
+      children,
+      onDragEnd,
+    }: {
+      children: ReactNode;
+      onDragEnd: (event: { active: { id: string }; over: { id: string } }) => void;
+    }) => (
+      <>
+        <button
+          type="button"
+          data-testid="simulate-drag"
+          onClick={() => onDragEnd({ active: { id: 'chat-1' }, over: { id: 'chat-2' } })}
+        />
+        {children}
+      </>
+    ),
+  };
+});
+
 describe('ChatTabBar', () => {
   const dummyTabs: ChatTabItem[] = [
-    {
-      id: 'sdlc',
-      type: 'sdlc',
-      title: '⚙️ SDLC: CR-001',
-      threadId: 'thread-sdlc-1',
-      createdAt: '2026-10-30T00:00:00.000Z',
-    },
     {
       id: 'chat-1',
       type: 'chat',
@@ -32,30 +51,15 @@ describe('ChatTabBar', () => {
     render(
       <ChatTabBar
         tabs={dummyTabs}
-        activeTabId="sdlc"
+        activeTabId="chat-1"
         onSelectTab={vi.fn()}
         onAddTab={vi.fn()}
         onCloseTab={vi.fn()}
       />
     );
 
-    expect(screen.getByText('⚙️ SDLC: CR-001')).toBeInTheDocument();
     expect(screen.getByText('💬 Tra cứu Oracle')).toBeInTheDocument();
-  });
-
-  it('không có nút đóng cho tab SDLC, nhưng có nút đóng cho tab chat thường', () => {
-    render(
-      <ChatTabBar
-        tabs={dummyTabs}
-        activeTabId="sdlc"
-        onSelectTab={vi.fn()}
-        onAddTab={vi.fn()}
-        onCloseTab={vi.fn()}
-      />
-    );
-
-    expect(screen.queryByLabelText('Đóng ⚙️ SDLC: CR-001')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Đóng 💬 Tra cứu Oracle')).toBeInTheDocument();
+    expect(screen.getByText('💬 Thiết kế API')).toBeInTheDocument();
   });
 
   it('kích hoạt onSelectTab khi click tab', () => {
@@ -63,7 +67,7 @@ describe('ChatTabBar', () => {
     render(
       <ChatTabBar
         tabs={dummyTabs}
-        activeTabId="sdlc"
+        activeTabId="chat-1"
         onSelectTab={handleSelect}
         onAddTab={vi.fn()}
         onCloseTab={vi.fn()}
@@ -79,7 +83,7 @@ describe('ChatTabBar', () => {
     render(
       <ChatTabBar
         tabs={dummyTabs}
-        activeTabId="sdlc"
+        activeTabId="chat-1"
         onSelectTab={vi.fn()}
         onAddTab={handleAdd}
         onCloseTab={vi.fn()}
@@ -95,7 +99,7 @@ describe('ChatTabBar', () => {
     render(
       <ChatTabBar
         tabs={dummyTabs}
-        activeTabId="sdlc"
+        activeTabId="chat-1"
         onSelectTab={vi.fn()}
         onAddTab={vi.fn()}
         onCloseTab={handleClose}
@@ -106,11 +110,11 @@ describe('ChatTabBar', () => {
     expect(handleClose).toHaveBeenCalledWith('chat-1');
   });
 
-  it('hiển thị indicator Analysis Mode cho tab SDLC và các tab chat được bật', () => {
+  it('hiển thị indicator Analysis Mode cho tab chat được bật', () => {
     render(
       <ChatTabBar
         tabs={dummyTabs}
-        activeTabId="sdlc"
+        activeTabId="chat-1"
         tabAnalysisModes={{ 'chat-1': true }}
         onSelectTab={vi.fn()}
         onAddTab={vi.fn()}
@@ -119,7 +123,7 @@ describe('ChatTabBar', () => {
     );
 
     const icons = screen.getAllByLabelText('Analysis Mode');
-    expect(icons.length).toBe(2); // cả sdlc và chat-1 đều có
+    expect(icons.length).toBe(1);
   });
 
   it('gán roving tabindex: tabIndex=0 cho active tab và -1 cho tab khác', () => {
@@ -134,14 +138,12 @@ describe('ChatTabBar', () => {
     );
 
     const tabs = screen.getAllByRole('tab');
-    expect(tabs[0]).toHaveAttribute('tabIndex', '-1');
-    expect(tabs[1]).toHaveAttribute('tabIndex', '0');
-    expect(tabs[2]).toHaveAttribute('tabIndex', '-1');
+    expect(tabs[0]).toHaveAttribute('tabIndex', '0');
+    expect(tabs[1]).toHaveAttribute('tabIndex', '-1');
   });
 
   it('hiển thị aria-label và assistive text theo trạng thái tabStatuses', () => {
     const statuses: Record<string, TabRuntimeStatus> = {
-      sdlc: 'processing',
       'chat-1': 'error',
       'chat-2': 'interrupted',
     };
@@ -157,9 +159,6 @@ describe('ChatTabBar', () => {
       />
     );
 
-    const sdlcTab = screen.getByRole('tab', { name: /⚙️ SDLC: CR-001 — Đang xử lý/ });
-    expect(sdlcTab).toBeInTheDocument();
-
     const chat1Tab = screen.getByRole('tab', { name: /💬 Tra cứu Oracle — Lỗi/ });
     expect(chat1Tab).toBeInTheDocument();
 
@@ -172,7 +171,7 @@ describe('ChatTabBar', () => {
     render(
       <ChatTabBar
         tabs={dummyTabs}
-        activeTabId="sdlc"
+        activeTabId="chat-1"
         onSelectTab={handleSelect}
         onAddTab={vi.fn()}
         onCloseTab={vi.fn()}
@@ -185,10 +184,10 @@ describe('ChatTabBar', () => {
     fireEvent.keyDown(tabs[0]!, { key: 'ArrowRight' });
     expect(document.activeElement).toBe(tabs[1]);
 
-    fireEvent.keyDown(tabs[1]!, { key: 'End' });
-    expect(document.activeElement).toBe(tabs[2]);
+    fireEvent.keyDown(tabs[1]!, { key: 'ArrowLeft' });
+    expect(document.activeElement).toBe(tabs[0]);
 
-    fireEvent.keyDown(tabs[2]!, { key: 'ArrowLeft' });
+    fireEvent.keyDown(tabs[0]!, { key: 'End' });
     expect(document.activeElement).toBe(tabs[1]);
 
     fireEvent.keyDown(tabs[1]!, { key: 'Home' });
@@ -200,7 +199,7 @@ describe('ChatTabBar', () => {
     render(
       <ChatTabBar
         tabs={dummyTabs}
-        activeTabId="sdlc"
+        activeTabId="chat-1"
         onSelectTab={handleSelect}
         onAddTab={vi.fn()}
         onCloseTab={vi.fn()}
@@ -208,19 +207,19 @@ describe('ChatTabBar', () => {
     );
 
     const tabs = screen.getAllByRole('tab');
-    fireEvent.keyDown(tabs[1]!, { key: 'Enter' });
+    fireEvent.keyDown(tabs[0]!, { key: 'Enter' });
     expect(handleSelect).toHaveBeenCalledWith('chat-1');
 
-    fireEvent.keyDown(tabs[2]!, { key: ' ' });
+    fireEvent.keyDown(tabs[1]!, { key: ' ' });
     expect(handleSelect).toHaveBeenCalledWith('chat-2');
   });
 
-  it('hỗ trợ Delete và Backspace để đóng tab chat thường, không đóng tab SDLC', () => {
+  it('hỗ trợ Delete và Backspace để đóng tab chat thường', () => {
     const handleClose = vi.fn();
     render(
       <ChatTabBar
         tabs={dummyTabs}
-        activeTabId="sdlc"
+        activeTabId="chat-1"
         onSelectTab={vi.fn()}
         onAddTab={vi.fn()}
         onCloseTab={handleClose}
@@ -228,16 +227,12 @@ describe('ChatTabBar', () => {
     );
 
     const tabs = screen.getAllByRole('tab');
-    // Tab SDLC: Delete không làm gì
-    fireEvent.keyDown(tabs[0]!, { key: 'Delete' });
-    expect(handleClose).not.toHaveBeenCalled();
-
     // Tab chat thường: Delete gọi onCloseTab
-    fireEvent.keyDown(tabs[1]!, { key: 'Delete' });
+    fireEvent.keyDown(tabs[0]!, { key: 'Delete' });
     expect(handleClose).toHaveBeenCalledWith('chat-1');
 
     // Tab chat thường: Backspace gọi onCloseTab
-    fireEvent.keyDown(tabs[2]!, { key: 'Backspace' });
+    fireEvent.keyDown(tabs[1]!, { key: 'Backspace' });
     expect(handleClose).toHaveBeenCalledWith('chat-2');
   });
 
@@ -260,7 +255,7 @@ describe('ChatTabBar', () => {
       const onRenameTab = renderBar();
       const tabs = screen.getAllByRole('tab');
 
-      fireEvent.keyDown(tabs[1]!, { key: 'F2' });
+      fireEvent.keyDown(tabs[0]!, { key: 'F2' });
       const input = screen.getByLabelText('Đổi tên tab');
       expect(input).toHaveValue('💬 Tra cứu Oracle');
 
@@ -283,28 +278,16 @@ describe('ChatTabBar', () => {
       expect(screen.queryByLabelText('Đổi tên tab')).not.toBeInTheDocument();
     });
 
-    it('không cho đổi tên tab SDLC', () => {
-      const onRenameTab = renderBar();
-      const tabs = screen.getAllByRole('tab');
-
-      fireEvent.keyDown(tabs[0]!, { key: 'F2' });
-      expect(screen.queryByLabelText('Đổi tên tab')).not.toBeInTheDocument();
-
-      fireEvent.doubleClick(screen.getByText('⚙️ SDLC: CR-001'));
-      expect(screen.queryByLabelText('Đổi tên tab')).not.toBeInTheDocument();
-      expect(onRenameTab).not.toHaveBeenCalled();
-    });
-
     it('không gọi onRenameTab khi tiêu đề rỗng hoặc không đổi', () => {
       const onRenameTab = renderBar();
       const tabs = screen.getAllByRole('tab');
 
-      fireEvent.keyDown(tabs[1]!, { key: 'F2' });
+      fireEvent.keyDown(tabs[0]!, { key: 'F2' });
       fireEvent.change(screen.getByLabelText('Đổi tên tab'), { target: { value: '   ' } });
       fireEvent.keyDown(screen.getByLabelText('Đổi tên tab'), { key: 'Enter' });
       expect(onRenameTab).not.toHaveBeenCalled();
 
-      fireEvent.keyDown(tabs[1]!, { key: 'F2' });
+      fireEvent.keyDown(tabs[0]!, { key: 'F2' });
       fireEvent.change(screen.getByLabelText('Đổi tên tab'), {
         target: { value: '💬 Tra cứu Oracle' },
       });
@@ -314,7 +297,7 @@ describe('ChatTabBar', () => {
   });
 
   describe('drag-and-drop & scrollable tabs', () => {
-    it('tab SDLC không draggable, các tab chat thường draggable=true', () => {
+    it('mỗi tab chat thường được wire làm sortable', () => {
       render(
         <ChatTabBar
           tabs={dummyTabs}
@@ -326,9 +309,10 @@ describe('ChatTabBar', () => {
       );
 
       const tabs = screen.getAllByRole('tab');
-      expect(tabs[0]).not.toHaveAttribute('draggable', 'true');
-      expect(tabs[1]).toHaveAttribute('draggable', 'true');
-      expect(tabs[2]).toHaveAttribute('draggable', 'true');
+      expect(tabs[0]).toHaveAttribute('aria-roledescription', 'sortable');
+      expect(tabs[1]).toHaveAttribute('aria-roledescription', 'sortable');
+      expect(tabs[0]).not.toHaveAttribute('aria-disabled', 'true');
+      expect(tabs[1]).not.toHaveAttribute('aria-disabled', 'true');
     });
 
     it('kéo thả tab thường kích hoạt onReorderTabs(fromIndex, toIndex)', () => {
@@ -344,48 +328,10 @@ describe('ChatTabBar', () => {
         />
       );
 
-      const tabs = screen.getAllByRole('tab');
-      // Drag tab index 1 (chat-1)
-      fireEvent.dragStart(tabs[1]!, {
-        dataTransfer: {
-          setData: vi.fn(),
-          effectAllowed: 'move',
-        },
-      });
+      // Drag chat-1 (index 0) onto chat-2 (index 1).
+      fireEvent.click(screen.getByTestId('simulate-drag'));
 
-      // Dragover tab index 2 (chat-2)
-      fireEvent.dragOver(tabs[2]!);
-
-      // Drop on tab index 2
-      fireEvent.drop(tabs[2]!);
-
-      expect(handleReorder).toHaveBeenCalledWith(1, 2);
-    });
-
-    it('không kích hoạt onReorderTabs khi drop vào tab SDLC', () => {
-      const handleReorder = vi.fn();
-      render(
-        <ChatTabBar
-          tabs={dummyTabs}
-          activeTabId="chat-1"
-          onSelectTab={vi.fn()}
-          onAddTab={vi.fn()}
-          onCloseTab={vi.fn()}
-          onReorderTabs={handleReorder}
-        />
-      );
-
-      const tabs = screen.getAllByRole('tab');
-      fireEvent.dragStart(tabs[1]!, {
-        dataTransfer: {
-          setData: vi.fn(),
-          effectAllowed: 'move',
-        },
-      });
-
-      // Drop onto SDLC tab (index 0)
-      fireEvent.drop(tabs[0]!);
-      expect(handleReorder).not.toHaveBeenCalled();
+      expect(handleReorder).toHaveBeenCalledWith(0, 1);
     });
 
     it('hỗ trợ cuộn chuột ngang onWheel trên container', () => {

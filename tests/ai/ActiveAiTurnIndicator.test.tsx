@@ -53,7 +53,7 @@ describe('ActiveAiTurnIndicator', () => {
       });
       aiTurnManager.registerTurn({
         id: 'turn-2',
-        scopeKey: 'sdlc:intake',
+        scopeKey: 'chat:intake',
         title: 'Task 2',
         status: 'tool',
         streamingStatusLabel: 'Truy xuất',

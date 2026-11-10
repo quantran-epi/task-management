@@ -8,7 +8,6 @@ import { TaskPlannerDatabase } from '../../src/db';
 import {
   createChatTab,
   getActiveTab,
-  getOrCreateSdlcTab,
   setActiveTab,
   updateChatTab,
 } from '../../src/db/repositories/chatTabRepo';
@@ -76,11 +75,6 @@ describe('AI tab runtime ownership gates', () => {
     const db = new TaskPlannerDatabase(`TestTabsDb_${Date.now()}`);
     const projectId = 'p-100';
     const scopeKey = `cr:${projectId}`;
-
-    // 1. Ensure SDLC tab is singleton
-    const sdlcTab = await getOrCreateSdlcTab(projectId, db);
-    expect(sdlcTab.type).toBe('sdlc');
-    expect(sdlcTab.scopeKey).toBe(scopeKey);
 
     // 2. Create ordinary tab
     const chatTab1 = await createChatTab({

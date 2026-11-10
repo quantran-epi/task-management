@@ -9,7 +9,7 @@ import type {
 } from '../../src/components/ai/runtime/chatTurnRuntime';
 import type { AiOrchestratorLoopOptions } from '../../src/services/ai/aiOrchestratorLoop';
 
-const SCOPE_KEY = 'sdlc:project-1:cr-1:INTAKE';
+const SCOPE_KEY = 'chat:project-1:cr-1:INTAKE';
 
 function makeRequest(overrides: Partial<ChatTurnRequest> = {}): ChatTurnRequest {
   return {
@@ -60,7 +60,7 @@ describe('useChatTurn binding', () => {
     const firstRuntime = result.current.runtime;
     const abortSpy = vi.spyOn(firstRuntime, 'abort');
 
-    rerender({ scopeKey: 'sdlc:project-1:cr-2:INTAKE' });
+    rerender({ scopeKey: 'chat:project-1:cr-2:INTAKE' });
 
     expect(abortSpy).toHaveBeenCalledTimes(1);
     expect(result.current.runtime).not.toBe(firstRuntime);
@@ -78,7 +78,7 @@ describe('useChatTurn binding', () => {
   it('preserves the in-flight runtime on unmount when background is true', () => {
     const deps = baseDeps(async () => ({ fullResponse: 'ok', tokenUsage: {} }));
     const { result, unmount } = renderHook(() =>
-      useChatTurn({ scopeKey: 'sdlc:bg-test', deps, background: true })
+      useChatTurn({ scopeKey: 'chat:bg-test', deps, background: true })
     );
 
     const abortSpy = vi.spyOn(result.current.runtime, 'abort');
