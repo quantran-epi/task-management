@@ -440,14 +440,18 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     expect(items[0]!.textContent).toContain('Bình Trần');
   });
 
-  it('opens the teams view from the TitleBar AI Office entry', async () => {
-    const onOpenView = vi.fn();
-    const { TitleBar } = await import('../../src/workbench/TitleBar');
+  it('opens a team workspace tab from the AI Office explorer', async () => {
+    // Phase 35 moved the AI Office launch point from TitleBar to the left tool-window
+    // stripe (Alt+7). The explorer is the surface that actually opens a team.
+    const { AiOfficeExplorer } = await import('../../src/workbench/toolwindows/AiOfficeExplorer');
 
-    render(<TitleBar onOpenView={onOpenView} activeView="tasks" />);
+    render(<AiOfficeExplorer db={db} />);
 
-    fireEvent.click(screen.getByTestId('titlebar-ai-office'));
-    expect(onOpenView).toHaveBeenCalledWith('teams');
+    fireEvent.click(await screen.findByTestId(`ai-office-team-${activeTeam.id}`));
+
+    const tab = useLayoutStore.getState().openTabs.find((t) => t.viewType === 'team_workspace');
+    expect(tab).toBeDefined();
+    expect(tab?.params).toMatchObject({ teamId: activeTeam.id });
   });
 
   it('routes both the agents and teams views in renderViewContent', async () => {
