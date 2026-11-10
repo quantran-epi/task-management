@@ -457,13 +457,23 @@ export function createTeamRunCoordinator(
       memberUsed.set(row.agentId, row.usedTokens);
       lastBuckets.set(row.agentId, bucketOf(row.usedTokens, row.budgetTokens));
     }
+    // CR-01: the persisted team row is the budget authority once a turn supplies it.
+    // Without this a budget edited in another tab (or restored) is ignored, and a
+    // name-only group (budget 0) closes the gate before the first turn.
+    const persistedBudget = roster.teamRow?.budgetTokens;
+    if (persistedBudget !== undefined) teamBudget = persistedBudget;
     // CR-05: the team total must hydrate from persisted usage too, otherwise a
     // reactivated team starts over with a full budget. A team that is already past
     // the threshold starts parked — the crossing rule only fires on a change, so
     // seeding the bucket alone would leave the gate open.
     teamUsed = rows.reduce((sum, row) => sum + row.usedTokens, 0);
     lastTeamBucket = bucketOf(teamUsed, teamBudget);
-    if (lastTeamBucket >= 8) teamGate.close();
+    if (lastTeamBucket >= 8) {
+      teamGate.close();
+      // CR-01: a closed gate with no banner is an invisible hang. Surface the park.
+      phase = 'awaiting-budget';
+      notify();
+    }
     return rows;
   }
 

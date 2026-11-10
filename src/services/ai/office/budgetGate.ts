@@ -62,11 +62,13 @@ export function createBudgetGate(): BudgetGate {
 }
 
 /**
- * D-20: tenths of the budget consumed. A zero (or negative) budget counts as fully
- * consumed rather than dividing by zero.
+ * D-20: tenths of the budget consumed. A zero (or negative) budget means "no budget
+ * configured yet" — D-05 lets a group be created with a name alone — so it counts as
+ * nothing consumed. Treating it as fully consumed closed the gate before the first turn
+ * and parked every turn forever with no banner.
  */
 export function bucketOf(used: number, budget: number): number {
-  if (!Number.isFinite(budget) || budget <= 0) return 10;
+  if (!Number.isFinite(budget) || budget <= 0) return 0;
   if (!Number.isFinite(used) || used <= 0) return 0;
   return Math.floor((used / budget) * 10);
 }

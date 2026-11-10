@@ -189,23 +189,28 @@ export async function updateTeam(
   });
 }
 
-/** Replaces the single `role='lead'` member row for a team. */
+/** Replaces the single `role='lead'` member row for a team, carrying any existing budget. */
 async function writeLeadRow(
   teamId: string,
   leadId: string,
-  db: TaskPlannerDatabase
+  db: TaskPlannerDatabase,
+  previous?: AiTeamMember | undefined
 ): Promise<void> {
   const siblings = await db.aiTeamMembers.where('teamId').equals(teamId).toArray();
   for (const row of siblings) {
     if (row.role === 'lead') await db.aiTeamMembers.delete(row.id);
   }
+  // CR-02: a re-assignment to the same agent must not wipe its budget or recorded usage.
+  const carried =
+    previous && previous.agentId === leadId
+      ? { budgetTokens: previous.budgetTokens, usedTokens: previous.usedTokens }
+      : { budgetTokens: 0, usedTokens: 0 };
   await db.aiTeamMembers.add({
     id: generateId(),
     teamId,
     agentId: leadId,
     role: 'lead',
-    budgetTokens: 0,
-    usedTokens: 0,
+    ...carried,
   });
 }
 
@@ -226,7 +231,14 @@ export async function assignLeader(
     const lead = await db.aiLeads.get(leadId);
     if (!lead) throw new Error(`Không tìm thấy lead: ${leadId}`);
 
-    await writeLeadRow(teamId, leadId, db);
+    // CR-02: re-assigning the current leader is a no-op — recreating the row would
+    // silently reset its budget and usage.
+    if (existing.leadId === leadId) return existing;
+
+    const previousLeadRow = (
+      await db.aiTeamMembers.where('teamId').equals(teamId).toArray()
+    ).find((row) => row.role === 'lead');
+    await writeLeadRow(teamId, leadId, db, previousLeadRow);
 
     const updated: AiTeam = { ...existing, leadId, updatedAt: new Date().toISOString() };
     await db.aiTeams.put(updated);
@@ -267,11 +279,24 @@ export async function lockLeader(
 
 /** Child rows die with the team; links and members have no meaning without it. */
 export async function deleteTeam(id: string, db: TaskPlannerDatabase = defaultDb): Promise<void> {
-  await db.transaction('rw', [db.aiTeams, db.aiTeamMembers, db.aiTeamLinks], async () => {
-    await db.aiTeamMembers.where('teamId').equals(id).delete();
-    await db.aiTeamLinks.where('teamId').equals(id).delete();
-    await db.aiTeams.delete(id);
-  });
+  // CR-03: the team's chat thread is a live reference the backup validator enforces
+  // (`scopeType: 'team'` must resolve to an existing aiTeams row). Leaving it behind made
+  // the app's own next export unrestorable, so the thread dies with the team.
+  await db.transaction(
+    'rw',
+    [db.aiTeams, db.aiTeamMembers, db.aiTeamLinks, db.chatThreads, db.chatMessages, db.chatTabs],
+    async () => {
+      const threads = await db.chatThreads.where('scopeKey').equals(`team:${id}`).toArray();
+      for (const thread of threads) {
+        await db.chatMessages.where('threadId').equals(thread.id).delete();
+        await db.chatTabs.where('threadId').equals(thread.id).delete();
+        await db.chatThreads.delete(thread.id);
+      }
+      await db.aiTeamMembers.where('teamId').equals(id).delete();
+      await db.aiTeamLinks.where('teamId').equals(id).delete();
+      await db.aiTeams.delete(id);
+    }
+  );
 }
 
 export async function activateTeam(

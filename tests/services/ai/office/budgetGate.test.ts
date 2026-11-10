@@ -71,11 +71,12 @@ describe('budgetGate (D-20, D-21, T-34-19)', () => {
     expect(gate.isClosed()).toBe(false);
   });
 
-  it('buckets usage into tenths and treats a zero budget as fully consumed', () => {
+  it('buckets usage into tenths and treats a zero budget as nothing consumed', () => {
     expect(bucketOf(799, 1000)).toBe(7);
     expect(bucketOf(800, 1000)).toBe(8);
-    expect(bucketOf(0, 0)).toBe(10);
-    expect(bucketOf(50, 0)).toBe(10);
+    // D-05: a group may exist with no budget yet — that must not close the gate.
+    expect(bucketOf(0, 0)).toBe(0);
+    expect(bucketOf(50, 0)).toBe(0);
     expect(Number.isFinite(bucketOf(1, 0))).toBe(true);
   });
 
