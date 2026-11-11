@@ -1603,9 +1603,11 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
       const { assignments, messages } = await rowsFor(current);
       const attempt = assignments[0]!;
+      // D-10: a per-agent Stop on a running assignment records `user-per-agent`; the stop
+      // path now commits the transition itself instead of losing to the settle path.
       expect(attempt).toMatchObject({
         runStatus: 'stopped',
-        stopReason: 'user-abort',
+        stopReason: 'user-per-agent',
         incomplete: true,
       });
       const reports = messages.filter(
@@ -1678,7 +1680,13 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       const current = harness;
 
       const sent = current.coordinator.send('Làm báo cáo');
-      await waitFor(() => current.coordinator.getState().agents.filter((r) => r.status === 'running').length === 3);
+      // Wait for the STOP target to be running: A and C settle instantly, so any assertion
+      // on them (or on a fixed "3 running" count) is racy.
+      await waitFor(() =>
+        current.coordinator
+          .getState()
+          .agents.some((r) => r.agentId === current.employees[1]!.id && r.status === 'running')
+      );
       current.coordinator.stopAgent(current.employees[1]!.id);
       await waitFor(() => current.coordinator.getState().agents.some(r => r.status === 'stopped'));
       gate.release();
@@ -2093,10 +2101,10 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       });
       const sent = current.coordinator.send('Làm báo cáo');
       await waitFor(() => current.coordinator.getRunningCount() === 2);
-      unsubscribe();
 
       for (const gate of gates.values()) gate.release();
       await sent;
+      unsubscribe();
 
       expect(Math.max(...runningSamples)).toBe(2);
       const parsed = JSON.parse(toolResult as unknown as string);
@@ -2297,6 +2305,130 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       for (const gate of gates.values()) gate.release();
       await sent;
       expect(current.coordinator.getRunningCount()).toBe(0);
+    });
+
+    it('stops a QUEUED agent without invoking its script, and names it incomplete (D-10)', async () => {
+      const gates = new Map<string, ReturnType<typeof deferred>>([
+        [EMP_A_MODEL, deferred()],
+        [EMP_B_MODEL, deferred()],
+        [EMP_C_MODEL, deferred()],
+      ]);
+      const started: string[] = [];
+      let toolResult: string | null = null;
+      const scriptFor = (model: string): LoopScript => async () => {
+        started.push(model);
+        await gates.get(model)!.promise;
+        return loopResult(`${model} xong`);
+      };
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            toolResult = await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: scriptFor(EMP_A_MODEL),
+          [EMP_B_MODEL]: scriptFor(EMP_B_MODEL),
+          [EMP_C_MODEL]: scriptFor(EMP_C_MODEL),
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getRunningCount() === 1);
+      await sleep(20);
+      // The queued target is the SECOND assignment; aborting its acquire must not hang.
+      current.coordinator.stopAgent(current.employees[1]!.id);
+      for (const gate of gates.values()) gate.release();
+      await sent;
+
+      expect(started).toEqual([EMP_A_MODEL, EMP_C_MODEL]);
+
+      const rows = await current.db.aiTeamAssignments.toArray();
+      const stopped = rows.find((row) => row.agentId === current.employees[1]!.id)!;
+      // `stopped`, not `running`: proves the `from: 'queued'` call was the one that committed.
+      expect(stopped).toMatchObject({
+        runStatus: 'stopped',
+        stopReason: 'user-per-agent',
+        incomplete: true,
+      });
+      const rowsWithReport = await current.db.chatMessages
+        .where('threadId')
+        .equals(current.threadId)
+        .toArray();
+      const report = rowsWithReport.find(
+        (row) => row.assignmentId === stopped.id && row.messageKind === 'report'
+      );
+      expect(report).toBeDefined();
+      expect(report).toMatchObject({
+        runStatus: 'stopped',
+        stopReason: 'user-per-agent',
+        incomplete: true,
+      });
+
+      const parsed = JSON.parse(toolResult as unknown as string);
+      const entry = parsed.find((row: any) => row.agentId === current.employees[1]!.id);
+      expect(entry).toMatchObject({
+        status: 'stopped',
+        stopReason: 'user-per-agent',
+        incomplete: true,
+      });
+    });
+
+    it('abortAll settles every queued assignment and closes the batch as a user abort (D-11)', async () => {
+      const gate = deferred();
+      let toolResult: string | null = null;
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            toolResult = await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getRunningCount() === 1);
+
+      current.coordinator.abortAll();
+      gate.release();
+      await sent;
+
+      const rows = await current.db.aiTeamAssignments.toArray();
+      expect(rows).toHaveLength(3);
+      expect(
+        rows.every((row) => row.runStatus === 'stopped' && row.incomplete === true)
+      ).toBe(true);
+      expect(rows.every((row) => row.stopReason === 'user-abort')).toBe(true);
+      expect(current.coordinator.getRunningCount()).toBe(0);
+
+      const batches = await current.db.aiTeamBatches.toArray();
+      expect(batches).toHaveLength(1);
+      expect(batches[0]!.abortedBy).toBe('user');
+      expect(batches[0]!.endedAt).toBeDefined();
+      expect(current.coordinator.getState().phase).toBe('ready');
+
+      const parsed = JSON.parse(toolResult as unknown as string);
+      expect(parsed).toHaveLength(3);
+      expect(parsed.every((entry: any) => entry.incomplete === true)).toBe(true);
     });
 
     it('dispose mid-batch rejects the parked acquire and settles the queued assignment (limit 1)', async () => {

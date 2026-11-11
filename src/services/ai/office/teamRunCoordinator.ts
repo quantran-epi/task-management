@@ -215,6 +215,13 @@ const AGENT_MENTION = /@\[([^\]]+)\]\(agent:([a-zA-Z0-9-]+)\)/;
 
 const TERMINAL_STATUSES: readonly AgentRunStatus[] = ['done', 'stopped', 'error'];
 
+/** D-22: a ledger row in one of these is settled — it must never take a second report row. */
+const TERMINAL_RUN_STATUSES: ReadonlySet<AiTeamAssignmentRunStatus> = new Set([
+  'done',
+  'stopped',
+  'error',
+]);
+
 /** WR-02: phases in which a turn is actually running — a second `send()` must be dropped. */
 export const LIVE_PHASES: ReadonlySet<TeamRunPhase> = new Set<TeamRunPhase>([
   'lead-thinking',
@@ -414,11 +421,12 @@ export function createTeamRunCoordinator(
   /** D-13: agents whose live-use claim is currently held (pairing guard for release). */
   const liveAgents = new Set<string>();
   /**
-   * D-10: agents the user stopped. `settleAgent` can be called by the settle path too, so the
-   * UI state alone cannot prove who stopped the turn — this marker can, and it makes the
-   * ledger record `stopped`/`user-abort` rather than a contradicted `done`.
+   * D-10/D-11: agents the user stopped, and WHY. `settleAgent` can be called by the settle
+   * path too, so the UI state alone cannot prove who stopped the turn — this marker can, and
+   * the value is the stop reason both racing writers must record, so the row can never end
+   * with one path's reason and the other path's status.
    */
-  const userStopped = new Set<string>();
+  const userStopped = new Map<string, 'user-per-agent' | 'user-abort'>();
 
   const notify = () => {
     for (const listener of listeners) {
@@ -709,15 +717,30 @@ export function createTeamRunCoordinator(
         if (!active || input.role !== 'assistant' || input.messageKind !== 'report') {
           return row;
         }
-        await db.chatMessages.update(row.id, {
-          batchId: active.batchId,
-          assignmentId: active.assignmentId,
-          attemptNo: active.attemptNo,
-          runStatus: 'running',
-          stopReason: 'none',
-        });
-        await db.aiTeamAssignments.update(active.assignmentId, {
-          reportMessageId: row.id,
+        // One transaction so this stamp and a racing `finalizeAttempt` cannot interleave:
+        // Dexie serializes `rw` scopes, so either the attempt is still live here (stamp, and
+        // the terminal writer patches THIS row) or it already settled (this row arrived after
+        // the terminal one — drop it, or the attempt would own two report bubbles).
+        await db.transaction('rw', [db.chatMessages, db.aiTeamAssignments], async () => {
+          const assignment = await db.aiTeamAssignments.get(active.assignmentId);
+          const settled =
+            !assignment ||
+            assignment.reportMessageId !== undefined ||
+            TERMINAL_RUN_STATUSES.has(assignment.runStatus);
+          if (settled) {
+            await db.chatMessages.delete(row.id);
+            return;
+          }
+          await db.chatMessages.update(row.id, {
+            batchId: active.batchId,
+            assignmentId: active.assignmentId,
+            attemptNo: active.attemptNo,
+            runStatus: 'running',
+            stopReason: 'none',
+          });
+          await db.aiTeamAssignments.update(active.assignmentId, {
+            reportMessageId: row.id,
+          });
         });
         return row;
       }) as ChatTurnRuntimeDeps['saveMessage'],
@@ -1015,9 +1038,9 @@ export function createTeamRunCoordinator(
         //
         // A Stop that landed while this turn was unwinding already settled the agent, so the
         // ledger must record what the user saw — never a `done` for a turn they stopped.
-        const stoppedByUser = userStopped.has(employee.id);
-        const runStatus = stoppedByUser ? 'stopped' : OUTCOME_RUN_STATUS[outcome.phase];
-        const stopReason = stoppedByUser ? 'user-abort' : OUTCOME_STOP_REASON[outcome.phase];
+        const stopReasonByUser = userStopped.get(employee.id);
+        const runStatus = stopReasonByUser ? 'stopped' : OUTCOME_RUN_STATUS[outcome.phase];
+        const stopReason = stopReasonByUser ?? OUTCOME_STOP_REASON[outcome.phase];
         await finalizeAttempt(
           attempt.assignmentId,
           'running',
@@ -1032,15 +1055,28 @@ export function createTeamRunCoordinator(
       releaseLiveUse(employee.id);
       try {
         if (attempt) {
-          const current = (await getAssignment(attempt.assignmentId, db))?.runStatus ?? 'queued';
-          await finalizeAttempt(
-            attempt.assignmentId,
-            current,
-            'error',
-            'provider',
-            SANITIZED_TURN_ERROR,
-            boundedDiagnostic(err)
-          );
+          // `from` must be a literal status, so read the row and branch rather than passing
+          // whatever it happens to hold: an already-terminal row must not be re-finalized.
+          const current = (await getAssignment(attempt.assignmentId, db))?.runStatus;
+          if (current === 'queued') {
+            await finalizeAttempt(
+              attempt.assignmentId,
+              'queued',
+              'error',
+              'provider',
+              SANITIZED_TURN_ERROR,
+              boundedDiagnostic(err)
+            );
+          } else if (current === 'running') {
+            await finalizeAttempt(
+              attempt.assignmentId,
+              'running',
+              'error',
+              'provider',
+              SANITIZED_TURN_ERROR,
+              boundedDiagnostic(err)
+            );
+          }
         }
       } finally {
         settleAgent(employee.id, 'error', SANITIZED_TURN_ERROR);
@@ -1218,12 +1254,15 @@ export function createTeamRunCoordinator(
         (err instanceof DOMException && err.name === 'AbortError');
       try {
         if (aborted) {
+          // The abort may be a per-agent Stop (its marker is already in `userStopped`) or a
+          // global abort/dispose. The stop path and this catch race to finalize; the `from`
+          // guard decides, so either writer produces one row and one terminal status.
           // `null` is expected when `stopAgent`/`abortAll` already committed the transition.
           await finalizeAttempt(
             assignmentId,
             'queued',
             'stopped',
-            'user-abort',
+            userStopped.get(employee.id) ?? 'user-abort',
             STOPPED_REPORT_COPY
           );
           settleAgent(employee.id, 'stopped');
@@ -1366,6 +1405,8 @@ export function createTeamRunCoordinator(
     setPhase('batch-running');
 
     const started: Array<Promise<void>> = [];
+    /** This batch's attempt ids by agent, kept after the dispatch `finally` for the result. */
+    const attemptIdsByAgent = new Map<string, string>();
     for (const assignment of assignments) {
       const employee = roster.employees.find((row) => row.id === assignment.agentId);
       if (!employee) continue;
@@ -1385,6 +1426,7 @@ export function createTeamRunCoordinator(
       // D-10/D-11: registered at CREATION time (queued), so a stop can find the assignment
       // before any runtime exists. Cleared by the dispatch task's `finally`.
       assignmentIdsByAgent.set(employee.id, attemptRow.id);
+      attemptIdsByAgent.set(employee.id, attemptRow.id);
       // Queued means nothing has started: no runtime, no live-use claim, no turn registration.
       updateAgent(employee.id, { status: 'queued', streamingText: '' });
       // D-31: the instruction row is attributed to the lead, so the employee's own history
@@ -1437,20 +1479,28 @@ export function createTeamRunCoordinator(
       [...agentDeferreds.values()].map((deferred) => deferred.promise)
     );
 
-    const results = assignments.map((assignment) => {
+    // D-14: the lead must be able to say what is missing, so every entry carries the
+    // ledger's terminal triple — `status`, `stopReason`, `incomplete` — not just the UI state.
+    const results = await Promise.all(
+      assignments.map(async (assignment) => {
         const employee = roster.employees.find((row) => row.id === assignment.agentId);
         const state = agents.get(assignment.agentId);
         const status: AgentRunStatus = state?.status ?? 'error';
         const report =
           status === 'error' ? SANITIZED_TURN_ERROR : reports.get(assignment.agentId) ?? '';
+        const assignmentId = attemptIdsByAgent.get(assignment.agentId);
+        const row = assignmentId ? await getAssignment(assignmentId, db) : undefined;
+        const stopped = status === 'stopped' || row?.runStatus === 'stopped';
         return {
           agentId: assignment.agentId,
           agentName: employee?.name ?? assignment.agentId,
           status,
           report,
-          ...(status === 'stopped' ? { incomplete: true } : {}),
+          stopReason: row?.stopReason ?? (stopped ? 'user-abort' : 'none'),
+          incomplete: row?.incomplete ?? stopped,
         };
-      });
+      })
+    );
 
     agentDeferreds.clear();
     // Carry this batch's settled reports into the next one (AIO-TEAM-03). A stopped or
@@ -1522,28 +1572,42 @@ export function createTeamRunCoordinator(
       planResolver(false);
       planResolver = null;
     }
-    userStopped.add(agentId);
+    userStopped.set(agentId, 'user-per-agent');
+    // D-10/D-11: creation-time link, because a QUEUED assignment has no runtime entry and
+    // no `activeAssignmentByAgent` row yet. Without it the queue would be unstoppable.
+    const assignmentId = assignmentIdsByAgent.get(agentId);
     registry.abort(agentId);
     settleAgent(agentId, 'stopped');
-    // D-10/D-13: a stopped attempt still owes the transcript a bubble. `from` is what the
-    // row actually holds, so this works for a queued assignment and a running one alike;
-    // a racing settle loses the `from` guard and `finalizeAttempt` tolerates that (`null`).
-    const active = activeAssignmentByAgent.get(agentId);
-    if (active) {
-      void (async () => {
-        const current = (await getAssignment(active.assignmentId, db))?.runStatus;
-        if (current !== 'queued' && current !== 'running') return;
+    if (assignmentId === undefined) return;
+    // The assignment's own controller is the cancellation channel: aborting it rejects a
+    // parked `scheduler.acquire` with `AbortError`. `scheduler.cancel` cannot do this — no
+    // handle exists before admission (37-02). A running assignment's controller is a no-op.
+    assignmentControllers.get(assignmentId)?.abort();
+    // D-10/D-13: a stopped attempt still owes the transcript a bubble, and the `from`
+    // token must be the row's ACTUAL status. `from: 'queued'` is what proves the queued
+    // path committed; a racing settle loses the guard and `finalizeAttempt` returns `null`.
+    void (async () => {
+      const current = (await getAssignment(assignmentId, db))?.runStatus;
+      if (current === 'queued') {
         await finalizeAttempt(
-          active.assignmentId,
-          current,
+          assignmentId,
+          'queued',
           'stopped',
           'user-per-agent',
           STOPPED_REPORT_COPY
         );
-      })().catch(() => {
-        /* a stop must never throw out of the abort path */
-      });
-    }
+      } else if (current === 'running') {
+        await finalizeAttempt(
+          assignmentId,
+          'running',
+          'stopped',
+          'user-per-agent',
+          STOPPED_REPORT_COPY
+        );
+      }
+    })().catch(() => {
+      /* a stop must never throw out of the abort path */
+    });
   }
 
   function abortAll(): void {
@@ -1551,9 +1615,37 @@ export function createTeamRunCoordinator(
     // tool call stays pending forever and send() never resolves.
     planResolver?.(false);
     planResolver = null;
+    // D-11: a global abort ends EVERY agent as a user abort, so the turn's own settle path
+    // (which may win the race for a running agent) must map to stopped/user-abort too.
+    for (const agentId of agents.keys()) userStopped.set(agentId, 'user-abort');
+    // D-11: the queue is torn down first. Aborting each controller rejects its parked
+    // acquire; the queued rows get their terminal write here, in case the dispatch task's
+    // own catch loses the race. A running row fails the `from: 'queued'` guard and is
+    // settled by its own turn's abort path instead.
+    for (const assignmentId of assignmentIdsByAgent.values()) {
+      assignmentControllers.get(assignmentId)?.abort();
+      void finalizeAttempt(
+        assignmentId,
+        'queued',
+        'stopped',
+        'user-abort',
+        STOPPED_REPORT_COPY
+      ).catch(() => {
+        /* the run must end even if the ledger write fails */
+      });
+    }
     registry.abortAll();
     for (const agentId of agents.keys()) settleAgent(agentId, 'stopped');
     setPhase('ready');
+    // D-11: close the batch row here, because `runBatch`'s own close (abortedBy: 'none')
+    // would otherwise win the race and misreport a user abort. `closeBatch` is idempotent.
+    if (openBatchId !== null) {
+      const batchId = openBatchId;
+      openBatchId = null;
+      void closeBatch(batchId, { phaseAtEnd: 'ready', abortedBy: 'user' }, db).catch(() => {
+        /* teardown must not throw out of the abort path */
+      });
+    }
   }
 
   /**
