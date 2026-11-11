@@ -1,18 +1,14 @@
 ---
-status: testing
+status: complete
 phase: 36-data-model-multi-chat-identity-backup-migration
 source: [36-VERIFICATION.md]
 started: 2026-11-11T00:10:00Z
-updated: 2026-11-11T00:20:00Z
+updated: 2026-11-11T06:39:11.948Z
 ---
 
 ## Current Test
 
-number: 3
-name: Export → restore keeps attribution and pending state
-expected: |
-  Attribution and targetAgentId intact, the pending version still pending, counts match.
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -54,7 +50,7 @@ steps:
   6. Mở lại nhóm + Văn phòng AI, đối chiếu file JSON (attribution, `targetAgentId`, status).
 expected: Sau bước 4 nhóm không còn trong danh sách; sau bước 5 nhóm trở lại với attribution và `targetAgentId` nguyên vẹn, version vẫn `pending` (không `decidedAt`), số row khớp file xuất.
 why_human: AIO-DATA-02/03 need the real filesystem + process path, not the in-memory envelope.
-result: [pending]
+result: pass
 
 ### 4. SQLite flush accepts the new tables
 steps:
@@ -65,7 +61,8 @@ steps:
   5. Tìm `SQLITE_INVALID_TABLE` trong log app.
 expected: Không có `SQLITE_INVALID_TABLE`; 4 bảng trên có row trong file `.sqlite`.
 why_human: The Rust allowlist only takes effect in a Tauri build; the parity test is static.
-result: [pending]
+result: skipped
+reason: "Policy máy host không cho dùng SQLite — không thể tạo đường dẫn SQLite trong Settings."
 
 ### 5. Optional: Rust allowlist test
 steps:
@@ -73,15 +70,16 @@ steps:
   2. Nếu build lỗi do fixture, ghi lại lỗi kèm tên test.
 expected: Test `sqlite_persistence` pass. Fixture đã chuyển sang seed `notes` thay cho `projects`/`milestones` (IN-04, quick 261111-d2p) nhưng chưa từng compile — cần một lần cargo thật.
 why_human: `src-tauri/target/` does not exist; the first build compiles rusqlite bundled + vendored openssl.
-result: [pending]
+result: skipped
+reason: "User skipped — first cargo build compiles bundled rusqlite + vendored openssl; not worth the run."
 
 ## Summary
 
 total: 5
-passed: 1
+passed: 2
 issues: 1
-pending: 3
-skipped: 0
+pending: 0
+skipped: 2
 blocked: 0
 
 ## Gaps
