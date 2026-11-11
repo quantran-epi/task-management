@@ -62,6 +62,7 @@ import {
   topUpMemberBudget,
   updateTeam,
 } from '../../../db/repositories/aiTeamRepo';
+import { closeBatch } from '../../../db/repositories/aiTeamRunRepo';
 
 /**
  * Headless team-run coordinator (D-01/D-02/D-03, D-06, D-08, D-12/D-13, D-14, D-20/D-21,
@@ -149,6 +150,12 @@ export interface TeamRunCoordinator {
   stopAgent(agentId: string): void;
   abortAll(): void;
   topUp(scope: TopUpScope, amount: number): Promise<void>;
+  /**
+   * D-18: ends a live run in bounded time and leaves the coordinator inert. Resolves once
+   * the parks are released and every runtime is aborted — the in-flight `send()` may still
+   * be unwinding, so every post-await phase write is gated on `disposed`. Idempotent.
+   */
+  dispose(): Promise<void>;
   /** D-25: toggles apply to the live run, not only the next construction. */
   setTeamSettings(patch: Partial<Pick<AiTeam, 'autoSplitEnabled' | 'autoApproveMutations'>>): void;
   /** AIO-BUDGET-01: adopt a team-total edit so the next top-up accumulates onto it. */
@@ -191,6 +198,23 @@ const PLAN_REJECTED = JSON.stringify({
   cancelled: true,
   message: 'Người dùng đã từ chối kế hoạch phân việc. Không nhân viên nào được giao việc.',
 });
+
+/** D-18: a disposed run accepts no new batch, so the lead gets a structured refusal. */
+const DISPOSED_REFUSAL = JSON.stringify({
+  cancelled: true,
+  message: 'Nhóm đã bị đóng. Không nhân viên nào được giao việc.',
+});
+
+/**
+ * D-18/D-11: abort every per-assignment controller and empty the map, so every parked
+ * `scheduler.acquire` rejects with `AbortError` instead of parking forever.
+ */
+export function abortAllAssignmentControllers(
+  controllers: Map<string, AbortController>
+): void {
+  for (const controller of controllers.values()) controller.abort();
+  controllers.clear();
+}
 
 /** Lead-only tool: an employee that hallucinates the name gets a structured refusal. */
 const EMPLOYEE_DELEGATE_REFUSAL = JSON.stringify({
@@ -249,6 +273,19 @@ export function createTeamRunCoordinator(
       };
 
   let phase: TeamRunPhase = 'idle';
+  /**
+   * D-18: set once at the top of `dispose()` and never cleared. Every post-await phase
+   * write checks it, because `dispose()` cannot await the in-flight `send()`/`runBatch` —
+   * releasing the parks is what lets them finish, so a late tail would resurrect a phase.
+   */
+  let disposed = false;
+  /**
+   * 37-03 writes this when a batch row is opened; 37-02 establishes the slot so the
+   * dispose close is a no-op until then.
+   */
+  let openBatchId: string | null = null;
+  /** D-10/D-11/D-18: the cancellation channel for a still-queued assignment. */
+  const assignmentControllers = new Map<string, AbortController>();
   const agents = new Map<string, AgentRunState>();
   const reports = new Map<string, string>();
   const listeners = new Set<() => void>();
@@ -291,6 +328,17 @@ export function createTeamRunCoordinator(
         /* a subscriber must never break the run */
       }
     }
+  };
+
+  /**
+   * D-18: the single phase writer. A write that lands after `dispose()` resolved would
+   * resurrect a dead run (the in-flight `send()` is still unwinding), so it is dropped —
+   * and dropping it drops the `notify()` with it.
+   */
+  const setPhase = (next: TeamRunPhase): void => {
+    if (disposed) return;
+    phase = next;
+    notify();
   };
 
   const registry: TeamRunRegistry = createTeamRunRegistry((agentId) =>
@@ -447,8 +495,7 @@ export function createTeamRunCoordinator(
       onUsage: (usage) => handleUsage(agentId, usage),
       onAwaitingApproval: (info) => {
         pendingApproval = info;
-        phase = 'awaiting-mutation-approval';
-        notify();
+        setPhase('awaiting-mutation-approval');
       },
     };
   }
@@ -479,8 +526,7 @@ export function createTeamRunCoordinator(
     if (lastTeamBucket >= 8) {
       teamGate.close();
       // CR-01: a closed gate with no banner is an invisible hang. Surface the park.
-      phase = 'awaiting-budget';
-      notify();
+      setPhase('awaiting-budget');
     }
     return rows;
   }
@@ -536,8 +582,7 @@ export function createTeamRunCoordinator(
         updateAgent(agentId, { status: 'paused' });
       }
       if (anyLive()) {
-        phase = 'awaiting-budget';
-        notify();
+        setPhase('awaiting-budget');
       }
     }
 
@@ -545,8 +590,7 @@ export function createTeamRunCoordinator(
     if (shouldNotifyPause(lastTeamBucket, teamCurrent)) {
       teamGate.close();
       if (anyLive()) {
-        phase = 'awaiting-budget';
-        notify();
+        setPhase('awaiting-budget');
       }
     }
     lastTeamBucket = teamCurrent;
@@ -734,8 +778,7 @@ export function createTeamRunCoordinator(
       startedAt: new Date().toISOString(),
     });
     registerAgentTurn(lead.id, lead.name);
-    phase = 'lead-thinking';
-    notify();
+    setPhase('lead-thinking');
 
     let outcome;
     try {
@@ -744,8 +787,7 @@ export function createTeamRunCoordinator(
       // WR-01: same leak as the employee path — release before rethrowing.
       releaseLiveUse(lead.id);
       settleAgent(lead.id, 'error');
-      phase = 'ready';
-      notify();
+      setPhase('ready');
       throw err;
     }
     const state = agents.get(lead.id);
@@ -755,8 +797,7 @@ export function createTeamRunCoordinator(
     }
     settleAgent(lead.id, OUTCOME_STATUS[outcome.phase]);
     if (phase === 'lead-thinking' || phase === 'lead-synthesizing') {
-      phase = 'ready';
-      notify();
+      setPhase('ready');
     }
   }
 
@@ -773,6 +814,8 @@ export function createTeamRunCoordinator(
   }
 
   async function send(text: string): Promise<void> {
+    // D-18: a disposed coordinator is inert. Nothing may start, persist or register.
+    if (disposed) return;
     // WR-02: a second submit while a turn is live would persist a duplicate user row and
     // then throw TURN_IN_PROGRESS out of `void sendTurn(...)` as an unhandled rejection.
     // A parked phase (`awaiting-budget` / `awaiting-mutation-approval`) is not live: the
@@ -786,6 +829,8 @@ export function createTeamRunCoordinator(
     } else {
       await ensureMembers();
     }
+    // The roster load is an await: a dispose during it must not let the turn start.
+    if (disposed) return;
     lastUserRequest = text;
     const target = parseMentionTarget(text);
 
@@ -793,12 +838,10 @@ export function createTeamRunCoordinator(
     registerTeamTurn();
 
     if (target) {
-      phase = 'batch-running';
-      notify();
+      setPhase('batch-running');
       await startEmployeeTurn(target, text, text);
       if (phase === 'batch-running') {
-        phase = 'ready';
-        notify();
+        setPhase('ready');
       }
       return;
     }
@@ -807,6 +850,8 @@ export function createTeamRunCoordinator(
   }
 
   async function runBatch(rawAssignments: unknown[], signal?: AbortSignal): Promise<string> {
+    // D-18: a disposed coordinator starts no batch and opens no ledger row.
+    if (disposed) return DISPOSED_REFUSAL;
     // D-05: no lead means no delegation authority — refuse rather than throw.
     const lead = roster.lead;
     if (!lead) return EMPLOYEE_DELEGATE_REFUSAL;
@@ -847,8 +892,7 @@ export function createTeamRunCoordinator(
       };
       pendingPlan = plan;
       lastPlanDecision = null;
-      phase = 'awaiting-plan';
-      notify();
+      setPhase('awaiting-plan');
       const approved = await new Promise<boolean>((resolve) => {
         planResolver = resolve;
       });
@@ -859,15 +903,13 @@ export function createTeamRunCoordinator(
       lastPlan = plan;
       lastPlanDecision = approved ? 'approved' : 'rejected';
       if (!approved) {
-        phase = 'ready';
-        notify();
+        setPhase('ready');
         return PLAN_REJECTED;
       }
     }
 
     signal?.throwIfAborted();
-    phase = 'batch-running';
-    notify();
+    setPhase('batch-running');
 
     const started: Array<Promise<void>> = [];
     for (const assignment of assignments) {
@@ -925,8 +967,9 @@ export function createTeamRunCoordinator(
     priorBatchResults = results
       .filter((row) => row.status === 'done' && row.report.trim().length > 0)
       .map((row) => ({ agentName: row.agentName, content: row.report }));
-    phase = 'lead-synthesizing';
-    notify();
+    // D-18: `Promise.all(deferreds)` is an await, so a dispose during it must not resurrect
+    // `lead-synthesizing` on an already-disposed coordinator.
+    setPhase('lead-synthesizing');
     return JSON.stringify(results);
   }
 
@@ -956,7 +999,7 @@ export function createTeamRunCoordinator(
     // clears the paused phase, so the banner does not linger on a run that resumed.
     if (lastTeamBucket < 8) {
       teamGate.open();
-      if (phase === 'awaiting-budget') phase = 'batch-running';
+      if (phase === 'awaiting-budget') setPhase('batch-running');
     }
     notify();
   }
@@ -965,7 +1008,7 @@ export function createTeamRunCoordinator(
     // WR-05: `get` would instantiate a runtime when the lead turn already settled.
     if (roster.lead) registry.peek(roster.lead.id)?.resolveApproval(approved);
     pendingApproval = null;
-    if (phase === 'awaiting-mutation-approval') phase = 'lead-thinking';
+    if (phase === 'awaiting-mutation-approval') setPhase('lead-thinking');
     notify();
   }
 
@@ -986,7 +1029,47 @@ export function createTeamRunCoordinator(
     planResolver = null;
     registry.abortAll();
     for (const agentId of agents.keys()) settleAgent(agentId, 'stopped');
+    setPhase('ready');
+  }
+
+  /**
+   * D-18: end a live run in bounded time and leave the coordinator inert.
+   *
+   * It cannot await the in-flight `send()`/`runBatch` — releasing the parks is what lets
+   * them finish — so the `disposed` flag is what keeps a late tail from resurrecting a
+   * phase. Idempotent: the second call finds every collection already empty.
+   */
+  async function dispose(): Promise<void> {
+    disposed = true;
+    // `ready` is the terminal state; set it before the ledger await so no observer sees a
+    // live phase after the flag is up and before the close resolves.
     phase = 'ready';
+
+    // Release every park: plan card, agent gates, team gate.
+    planResolver?.(false);
+    planResolver = null;
+    for (const gate of agentGates.values()) gate.open();
+    teamGate.open();
+
+    // D-11/D-18: a per-assignment controller is the only cancellation channel for a
+    // queued assignment, so aborting them all is what rejects every parked acquire.
+    abortAllAssignmentControllers(assignmentControllers);
+
+    // `clear()` aborts and drops every runtime (teamRunRegistry).
+    registry.clear();
+
+    for (const agentId of agents.keys()) settleAgent(agentId, 'stopped');
+
+    if (openBatchId !== null) {
+      const batchId = openBatchId;
+      openBatchId = null;
+      try {
+        await closeBatch(batchId, { phaseAtEnd: 'ready', abortedBy: 'team-deleted' }, db);
+      } catch {
+        /* the ledger close must never block the teardown */
+      }
+    }
+
     notify();
   }
 
@@ -1025,11 +1108,13 @@ export function createTeamRunCoordinator(
       }
     }
     // WR-04: only claim a paused phase when something is actually parked.
+    // D-18: this tail runs after two awaits, so a top-up that resolves after `dispose()`
+    // must not resurrect `batch-running` on a coordinator that is already gone.
     if (phase === 'awaiting-budget' && !teamGate.isClosed()) {
       const anyLive = [...agents.values()].some(
         (state) => !TERMINAL_STATUSES.includes(state.status)
       );
-      phase = anyLive ? 'batch-running' : 'ready';
+      setPhase(anyLive ? 'batch-running' : 'ready');
     }
     notify();
   }
@@ -1072,6 +1157,7 @@ export function createTeamRunCoordinator(
     stopAgent,
     abortAll,
     topUp,
+    dispose,
     setTeamSettings,
     setTeamBudget,
     subscribe,
