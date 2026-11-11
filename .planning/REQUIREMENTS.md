@@ -46,9 +46,9 @@
 
 ### Runtime Reliability (AIO-RUNTIME)
 
-- [ ] **AIO-RUNTIME-01**: A throwing agent `start()` settles that agent as an error row and the batch resolves. A run can never hang in `batch-running`. (Pitfall 7)
+- [x] **AIO-RUNTIME-01**: A throwing agent `start()` settles that agent as an error row and the batch resolves. A run can never hang in `batch-running`. (Pitfall 7)
 - [ ] **AIO-RUNTIME-02**: A second submit while a turn is running is rejected visibly at the composer — one user message, one turn, phase returns to `ready`. No `TURN_IN_PROGRESS` thrown into the void. (Pitfall 8)
-- [ ] **AIO-RUNTIME-03**: Every registered `teamTurnId` is finished in `finally`; `getActiveTurns()` is empty after a run and the status indicator clears. (Pitfall 9)
+- [x] **AIO-RUNTIME-03**: Every registered `teamTurnId` is finished in `finally`; `getActiveTurns()` is empty after a run and the status indicator clears. (Pitfall 9)
 - [ ] **AIO-RUNTIME-04**: Deleting a group mid-run tears down its coordinator and registry — no active turns, no further writes. (Pitfall 25)
 - [x] **AIO-RUNTIME-05**: Concurrency is a real scheduler — with limit 2 and a batch of 5, at most 2 agents run at once and all 5 settle. The limit is a persisted setting, not a constant. (C-10, R-05)
 

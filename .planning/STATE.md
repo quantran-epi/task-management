@@ -5,16 +5,16 @@ milestone_name: Unified AI Office (Phase Details)
 current_phase: 37
 current_phase_name: Runtime reliability + concurrency
 status: executing
-stopped_at: Completed 37-05-PLAN.md
-last_updated: "2026-11-11T19:31:08.806Z"
+stopped_at: Completed 37-03-PLAN.md
+last_updated: "2026-11-11T20:11:35.426Z"
 last_activity: 2026-11-12
 last_activity_desc: Phase 37 execution started
-state_head: ef323fdc00f34175f31e9e01c7cd2d601950a263
+state_head: 619788c5f22988b8e45b2e2e4b03725c82ea5a4b
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 25
-  completed_plans: 20
+  completed_plans: 21
   percent: 50
 ---
 
@@ -28,14 +28,14 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 37 (Runtime reliability + concurrency) — EXECUTING
-Plan: 4 of 8
+Plan: 5 of 8
 Status: Ready to execute
 Last activity: 2026-11-12 — Phase 37 execution started
 
 ## Session Continuity
 
-Last session: 2026-11-11T19:31:08.476Z
-Stopped at: Completed 37-05-PLAN.md
+Last session: 2026-11-11T20:11:35.123Z
+Stopped at: Completed 37-03-PLAN.md
 Resume file: None
 
 Progress: [█████░░░░░] 50%
@@ -121,6 +121,8 @@ Progress: [█████░░░░░] 50%
 - [Phase 37]: diagnosticDetail stripped by row projection (projectSafeAssignment) in export AND captureSnapshot, not at envelope level
 - [Phase 37]: assignment backup record omits diagnosticDetail entirely so a hand-crafted payload carrying it is rejected by strictObject
 - [Phase 37]: parity test pins LATEST_SCHEMA_VERSION = 22 so a future schema bump cannot silently desync its store source
+- [Phase 37]: finalizeAttempt is exported on the coordinator interface so 37-04 and the concurrency test share one terminal writer
+- [Phase 37]: a userStopped marker is required: settleAgent state cannot prove who ended the turn, and without it the ledger recorded done for a stopped attempt
 
 ## Performance Metrics
 
@@ -129,3 +131,4 @@ Progress: [█████░░░░░] 50%
 | Phase 37-runtime-reliability-concurrency P01 | 6 min | 3 tasks | 10 files |
 | Phase 37 P02 | 15 min | 3 tasks | 6 files |
 | Phase 37 P05 | 10 min | 3 tasks | 18 files |
+| Phase 37 P03 | 68 min | 3 tasks | 5 files |

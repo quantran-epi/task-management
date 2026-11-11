@@ -154,7 +154,7 @@ Plans:
 
 > **Criterion 2 is superseded by D-20.** The user locked a queue/outbox model during discuss: a second submit is *not* rejected at the composer — it is queued visibly and dispatched when the current turn settles. Verify against D-20, not against the "rejection is visible at the composer" wording above.
 
-**Plans:** 3/8 plans executed in 7 waves
+**Plans:** 4/8 plans executed in 7 waves
 
 Plans:
 **Wave 1**
@@ -168,7 +168,7 @@ Plans:
 
 **Wave 3**
 
-- [ ] 37-03-PLAN.md — Ledger writes in the run path; thrown `start()` terminates; `teamTurnId` finished in `finally` (AIO-RUNTIME-01/03, D-16/D-17/D-19)
+- [x] 37-03-PLAN.md — Ledger writes in the run path; thrown `start()` terminates; `teamTurnId` finished in `finally` (AIO-RUNTIME-01/03, D-16/D-17/D-19)
 
 **Wave 4**
 
