@@ -28,6 +28,7 @@ interface StubCoordinator {
   getRunningCount: () => number;
   finalizeAttempt: ReturnType<typeof vi.fn>;
   runBatch: ReturnType<typeof vi.fn>;
+  retryAssignment: ReturnType<typeof vi.fn>;
   subscribe: (fn: () => void) => () => void;
   getState: () => unknown;
   setPhase: (phase: TeamRunPhase) => void;
@@ -60,6 +61,7 @@ function createStub(initialPhase: TeamRunPhase = 'ready'): StubCoordinator {
     getRunningCount: () => 0,
     finalizeAttempt: vi.fn(async () => null),
     runBatch: vi.fn(async () => ''),
+    retryAssignment: vi.fn(async () => undefined),
     subscribe: (fn: () => void) => {
       listeners.add(fn);
       return () => {
@@ -110,6 +112,7 @@ vi.mock('../../../../src/db/repositories/aiTeamRepo', async (importOriginal) => 
 
 import { TeamWorkspace } from '../../../../src/components/ai/office/TeamWorkspace';
 import { BUSY_PHASES as BUSY } from '../../../../src/services/ai/office/teamRunCoordinator';
+import { ensureTeamThread, saveTeamMessage } from '../../../../src/db/repositories/teamTranscriptRepo';
 
 describe('TeamWorkspace outbox (37-06, D-20/D-21)', () => {
   let db: TaskPlannerDatabase;
@@ -321,5 +324,66 @@ describe('TeamWorkspace outbox (37-06, D-20/D-21)', () => {
     await waitFor(() => expect(currentStub.send).toHaveBeenCalledTimes(1));
     expect(currentStub.send).toHaveBeenCalledWith('Thử lại khi rảnh');
     await waitFor(() => expect(screen.queryByLabelText('Thử lại')).not.toBeInTheDocument());
+  });
+
+  // WR-02: `retryAssignment` throws for a busy phase / disposed run. The only call site
+  // discarded it, so the user got no feedback and the app got an unhandled rejection.
+  it('surfaces a refused assignment retry as fixed copy, not a rejection', async () => {
+    const thread = await ensureTeamThread(team.id, db);
+    // The workspace renders `employees={[]}`, so only the lead is in the agent directory —
+    // attribute the failed report to the lead so the status row (and its retry) renders.
+    await saveTeamMessage(
+      {
+        threadId: thread.id,
+        role: 'assistant',
+        content: 'Báo cáo lỗi',
+        agentId: team.leadId!,
+        agentName: 'Bình Lead',
+        agentKind: 'lead',
+        messageKind: 'report',
+        assignmentId: 'assignment-1',
+        attemptNo: 1,
+        runStatus: 'error',
+        stopReason: 'provider',
+        incomplete: true,
+      },
+      db
+    );
+    currentStub = createStub('ready');
+    currentStub.retryAssignment = vi.fn().mockRejectedValue(
+      new Error('raw repo detail: assignment 9f3a2b')
+    ) as never;
+
+    const unhandled: unknown[] = [];
+    const onUnhandled = (err: unknown) => unhandled.push(err);
+    process.on('unhandledRejection', onUnhandled);
+
+    try {
+      // `renderWorkspace` passes no lead, so its agent directory is empty. This case needs
+      // the attributed bubble, so pass the persisted lead explicitly.
+      const leadRow = await db.aiLeads.get(team.leadId!);
+      render(
+        <TeamWorkspace
+          team={team}
+          lead={leadRow}
+          members={[]}
+          employees={[]}
+          skills={[]}
+          db={db}
+          onBack={() => {}}
+        />
+      );
+      const retry = await screen.findByTestId('agent-retry-assignment-1');
+      fireEvent.click(retry);
+
+      const card = await screen.findByTestId('team-action-error');
+      expect(card.textContent).toContain('Chưa thể chạy lại lần này');
+      // The raw coordinator message never reaches the UI.
+      expect(card.textContent).not.toContain('raw repo detail');
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(unhandled).toHaveLength(0);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
   });
 });

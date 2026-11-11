@@ -34,6 +34,18 @@ describe('AgentStatusRow — queued (D-10)', () => {
 });
 
 describe('AgentStatusRow — retry affordance (37-08 D-13)', () => {
+  // WR-02: `retryAssignment` refuses every non-terminal status, so the button must not exist.
+  it.each(['queued', 'running', 'paused'] as const)(
+    'renders no retry button for a %s attempt',
+    (status) => {
+      const { container } = render(
+        <AgentStatusRow agent={agent} status={status} assignmentId="assignment-A" onRetry={vi.fn()} />
+      );
+
+      expect(container.querySelector('[data-testid^="agent-retry-"]')).toBeNull();
+    }
+  );
+
   it('renders the label and the retry button for a stopped assignment', () => {
     const onRetry = vi.fn();
     render(

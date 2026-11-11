@@ -82,6 +82,9 @@ const NO_MODEL_COPY =
 /** WR-12: one fixed message for every fire-and-forget failure — repo errors can embed ids. */
 const ACTION_ERROR_COPY = 'Không lưu được thay đổi. Vui lòng thử lại.';
 
+/** WR-02: a refused retry is a normal outcome (busy phase, disposed run), not a dead end. */
+const RETRY_ERROR_COPY = 'Chưa thể chạy lại lần này. Hãy chờ lượt hiện tại kết thúc rồi thử lại.';
+
 const TERMINAL = new Set(['done', 'stopped', 'error']);
 
 function initialOf(name: string): string {
@@ -877,7 +880,19 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                     agentStatuses,
                     ...(coordinator ? { onStopAgent: (agentId: string) => coordinator.stopAgent(agentId) } : {}),
                     // 37-08 D-13: same extension path as onStopAgent — no new widget API.
-                    ...(coordinator ? { onRetryAgent: (assignmentId: string) => { void coordinator.retryAssignment(assignmentId); } } : {}),
+                    // WR-02: a refusal (busy phase, disposed run) must land somewhere the
+                    // user can see; forwarding `err.message` is not allowed here, so the
+                    // fixed copy goes to the one action-error channel.
+                    ...(coordinator
+                      ? {
+                          onRetryAgent: (assignmentId: string) => {
+                            setActionError(null);
+                            void coordinator
+                              .retryAssignment(assignmentId)
+                              .catch(() => setActionError(RETRY_ERROR_COPY));
+                          },
+                        }
+                      : {}),
                   }}
                   transcriptExtensions={transcriptExtensions}
                   statusExtensions={

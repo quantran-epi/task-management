@@ -106,6 +106,10 @@ export const AgentStatusRow: React.FC<AgentStatusRowProps> = ({
   })();
 
   const showStop = status === 'running' || status === 'paused' || status === 'queued';
+  // WR-02: `retryAssignment` refuses anything but stopped/error (and a busy phase or a
+  // disposed run). Offering the button on every other status produced a click that always
+  // refused — with the only call site discarding the rejection.
+  const showRetry = status === 'stopped' || status === 'error';
 
   return (
     <div
@@ -113,7 +117,7 @@ export const AgentStatusRow: React.FC<AgentStatusRowProps> = ({
       style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}
     >
       {badge}
-      {onRetry && assignmentId && (
+      {onRetry && assignmentId && showRetry && (
         <Button
           type="text"
           size="small"
