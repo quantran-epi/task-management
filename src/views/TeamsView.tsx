@@ -29,6 +29,8 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ db = defaultDb, createRunt
   const [mode, setMode] = useState<TeamsMode>('list');
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  // IN-08b: the card's settings button must land in the drawer, not just the workspace.
+  const [settingsOnOpen, setSettingsOnOpen] = useState(false);
 
   const teams = useLiveQuery(() => listTeams(db), [db]) ?? [];
   const leads = useLiveQuery(() => listLeads(db), [db]) ?? [];
@@ -61,8 +63,9 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ db = defaultDb, createRunt
 
   const leadFor = (team: AiTeam) => leads.find((lead) => lead.id === team.leadId);
 
-  const openTeam = (team: AiTeam) => {
+  const openTeam = (team: AiTeam, openSettings = false) => {
     setActiveTeamId(team.id);
+    setSettingsOnOpen(openSettings);
     setMode('workspace');
   };
 
@@ -89,9 +92,11 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ db = defaultDb, createRunt
           employees={employees}
           skills={skills}
           db={db}
+          initialSettingsOpen={settingsOnOpen}
           onBack={() => {
             setMode('list');
             setActiveTeamId(null);
+            setSettingsOnOpen(false);
           }}
           {...(createRuntimeDeps ? { createRuntimeDeps } : {})}
         />
@@ -160,7 +165,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ db = defaultDb, createRunt
               members={rosterByTeam.get(team.id) ?? []}
               usedTokens={usedByTeam.get(team.id) ?? 0}
               onOpen={() => openTeam(team)}
-              onOpenSettings={() => openTeam(team)}
+              onOpenSettings={() => openTeam(team, true)}
               onActivate={() => {
                 // WR-12: a rejection must reach the user, not escape as an unhandled one.
                 void activateTeam(team.id, db).catch(() =>

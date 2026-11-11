@@ -1056,7 +1056,8 @@ export function createTeamRunCoordinator(
         ? roster.employees.find((row) => row.id === agentParked.agentId)?.name ??
           (roster.lead && agentParked.agentId === roster.lead.id
             ? roster.lead.name
-            : agentParked.agentId)
+            // IN-08d: never a raw UUID in UI copy — a neutral label until the roster loads.
+            : 'Nhân viên')
         : null,
       lastPlan,
       lastPlanDecision,

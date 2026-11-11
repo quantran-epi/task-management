@@ -167,5 +167,15 @@ describe('AiStaffExplorer and AiOfficeExplorer tool windows', () => {
       expect(teamTab?.viewType).toBe('team_workspace');
       expect(teamTab?.params).toEqual({ teamId: team.id });
     });
+
+    it('shows the Vietnamese idle label instead of the raw enum (IN-08a)', async () => {
+      const team = await createTeam({ name: 'Beta Team', status: 'idle' }, db);
+
+      render(<AiOfficeExplorer db={db} />);
+
+      const row = await screen.findByTestId(`ai-office-team-${team.id}`);
+      expect(row).toHaveTextContent('Nhàn rỗi');
+      expect(row).not.toHaveTextContent('idle');
+    });
   });
 });

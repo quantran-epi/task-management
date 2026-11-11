@@ -43,24 +43,28 @@ Warnings (`5a305174`):
 - `addTeamMember({ role: 'lead' })` bypassed `assignLeader` and the lock; also now rejects a duplicate `(teamId, agentId)`.
 - `deleteLead` ignored lead ids used as plain member rows.
 
-## Open warnings — NOT fixed (none blocks a phase criterion)
+## Open warnings — status after review fixes
 
-Source: `36-REVIEW.md`. Verified against code at `b3e1ee3b`.
+Source: `36-REVIEW.md`. Verified against code at `b3e1ee3b`; statuses below updated by
+quick `261111-c35` (WR-05, WR-10) and quick `261111-d2p` (the rest).
 
-| ID | Issue | Owner / notes |
+| ID | Issue | Status |
 |---|---|---|
-| **WR-05** | Repo writers accept dangling ids → exports the validator rejects. **Partially fixed:** `addTeamMember`, `assignLeader`, `updateTeam({leadId})` now check. **Still open:** `createTeam` (`aiTeamRepo.ts:80-133`) accepts `leadId`/`employeeIds` without lookup, and `createSkillVersion` (`aiSkillVersionRepo.ts:43-66`) accepts any `skillId`. | Phase 37 hardening. D-15 wants the check at the repo boundary. |
-| **WR-07** | Interrupted-turn inference fires for a turn that is still running (no report row yet). Advisory banner can appear mid-run. | Phase 37 (owns turn lifecycle). |
-| **WR-08** | `decideSkillVersion` can overwrite an already-decided row. | Phase 39 (skill versioning + enrichment approval). |
-| **WR-09** | `evidence` is unbounded free text that round-trips through backup; not in the forbidden-key scan. | Phase 39. |
-| **WR-10** | `restoreBackup` clears the whole AI Office group when any single AI table key is present — a partial payload wipes the group. | Phase 37. |
-| **WR-11** | Delete guard and delete are not atomic across the live-use check (awaits between check and delete). | Phase 37 (concurrency). |
-| **WR-12** | Repo calls fired with `void` and no `.catch()` → unhandled rejections (`TeamWorkspace.tsx:408-440, 542-547, 683-688`; `TeamsView.tsx:164-166`). | Phase 37. |
-| **WR-13** | `topUp` cannot top up a member added since the last turn snapshot. | Phase 38 (token budget). |
+| **WR-05** | Repo writers accept dangling ids → exports the validator rejects. | **Fixed** (quick 261111-c35, `74fc4fee`): `createTeam`, `updateTeam({leadId})`, `addTeamMember`, `assignLeader` and `createSkillVersion` now refuse a missing row inside the transaction. |
+| **WR-07** | Interrupted-turn inference fires for a turn that is still running (no report row yet). | **Fixed** (quick 261111-d2p): the render site filters entries whose agent is non-terminal in the snapshot; the reader stays pure for phase 37. |
+| **WR-08** | `decideSkillVersion` can overwrite an already-decided row. | **Fixed** (quick 261111-d2p): a non-pending row is refused, and both refusals use UUID-free copy. |
+| **WR-09** | `evidence` is unbounded free text that round-trips through backup. | **Fixed** (quick 261111-d2p): capped at 2000 characters in both schemas; the type header documents why the key-matched denylist cannot see it. |
+| **WR-10** | `restoreBackup` clears the whole AI Office group when any single AI table key is present. | **Fixed** (quick 261111-c35, `2237dc0c`): a partial AI Office payload is rejected whole before the clear. |
+| **WR-11** | Delete guard and delete are not atomic across the live-use check. | **Fixed** (quick 261111-d2p): all three delete guards re-consult the registry after their last await; the comment states the remaining window honestly. |
+| **WR-12** | Repo calls fired with `void` and no `.catch()` → unhandled rejections. | **Fixed** (quick 261111-d2p): one action-error Alert in `TeamWorkspace` and a fixed toast in `TeamsView`. |
+| **WR-13** | `topUp` cannot top up a member added since the last turn snapshot. | **Recorded** in ROADMAP phase 38 as a follow-up note with file:line anchors. Code untouched — the fix belongs to that phase's roster/budget redesign. |
 
-## Info items — NOT fixed
+## Info items — status after review fixes
 
-IN-01 duplicate envelope version literal; IN-02 dead `schemaVersion === 1` normalization; IN-03 unused `AiSkillVersionInput`; IN-04 Rust `ALLOWED_TABLES` still lists dropped `projects`/`milestones`; IN-05 `deleteLead` tx includes an untouched table; IN-06 sort comparator returns `0` for unequal timestamps; IN-07 formatting/whitespace; IN-08 stale status maps + mislabelled settings button.
+IN-01, IN-02, IN-03, IN-04, IN-06, IN-07, IN-08 all fixed by quick `261111-d2p`.
+IN-04's Rust edit is compile-unverified (no `src-tauri/target/`); its only automated guard is
+`tests/db/tableListParity.test.ts` reading the source, and UAT item 5 still needs one real cargo run.
+IN-05 was resolved by the WR-06 membership read.
 
 ## Known non-defects
 

@@ -38,7 +38,7 @@ why_human: The Rust allowlist only takes effect in a Tauri build; the parity tes
 result: [pending]
 
 ### 5. Optional: Rust allowlist test
-expected: `cargo test --manifest-path src-tauri/Cargo.toml sqlite_persistence` passes (the fixture still seeds dropped `projects`/`milestones` tables — IN-04).
+expected: `cargo test --manifest-path src-tauri/Cargo.toml sqlite_persistence` passes. The fixture now seeds `notes` instead of the dropped `projects`/`milestones` stores (IN-04, allowlist trimmed by quick 261111-d2p), but that edit is compile-unverified — it still needs one real cargo run.
 why_human: `src-tauri/target/` does not exist; the first build compiles rusqlite bundled + vendored openssl.
 result: [pending]
 

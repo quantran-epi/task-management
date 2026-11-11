@@ -725,6 +725,14 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     );
   });
 
+  it('opens the settings drawer from the card settings button (IN-08b)', async () => {
+    renderView();
+
+    fireEvent.click(await screen.findByTestId(`team-settings-${activeTeam.id}`));
+
+    expect(await screen.findByTestId('team-settings-drawer')).toBeInTheDocument();
+  });
+
   it('locks the leader on the first send only', async () => {
     await db.settings.put({ key: 'ninerouter_api_key', value: 'sk-test' });
     await db.settings.put({ key: 'ninerouter_endpoint', value: 'https://example.invalid/v1' });

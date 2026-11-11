@@ -11,22 +11,20 @@ import { listEmployees, listLeads } from '../../db/repositories/aiOfficeRepo';
 import { listTeams } from '../../db/repositories/aiTeamRepo';
 import { useLayoutStore } from '../store/layoutStore';
 import { TeamEditorDrawer } from '../../components/ai/office/TeamEditorDrawer';
-import type { AiTeam } from '../../types/aiOffice';
+import type { AiTeam, AiTeamStatus } from '../../types/aiOffice';
 
 export interface AiOfficeExplorerProps {
   db?: TaskPlannerDatabase | undefined;
 }
 
-const STATUS_COLOR_MAP: Record<string, string> = {
+const STATUS_COLOR_MAP: Record<AiTeamStatus, string> = {
   active: 'green',
-  paused: 'gold',
-  archived: 'default',
+  idle: 'default',
 };
 
-const STATUS_LABEL_MAP: Record<string, string> = {
+const STATUS_LABEL_MAP: Record<AiTeamStatus, string> = {
   active: 'Hoạt động',
-  paused: 'Tạm dừng',
-  archived: 'Lưu trữ',
+  idle: 'Nhàn rỗi',
 };
 
 export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = defaultDb }) => {
@@ -158,8 +156,8 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
           filteredTeams.map((team) => {
             const leadName = team.leadId ? leadMap.get(team.leadId) : undefined;
             const count = memberCountMap.get(team.id) ?? 0;
-            const statusColor = STATUS_COLOR_MAP[team.status] || 'default';
-            const statusLabel = STATUS_LABEL_MAP[team.status] || team.status;
+            const statusColor = STATUS_COLOR_MAP[team.status];
+            const statusLabel = STATUS_LABEL_MAP[team.status];
 
             return (
               <div

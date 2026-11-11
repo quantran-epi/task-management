@@ -54,6 +54,8 @@ export interface TeamWorkspaceProps {
   skills: AiSkill[];
   db: TaskPlannerDatabase;
   onBack: () => void;
+  /** IN-08b: the card's settings button lands here so the drawer is already open. */
+  initialSettingsOpen?: boolean;
   createRuntimeDeps?: ((agentId: string) => Partial<ChatTurnRuntimeDeps>) | undefined;
 }
 
@@ -114,6 +116,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   skills,
   db,
   onBack,
+  initialSettingsOpen = false,
   createRuntimeDeps,
 }) => {
   const { token } = theme.useToken();
@@ -122,7 +125,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   const [snapshot, setSnapshot] = useState<TeamRunSnapshot>(EMPTY_SNAPSHOT);
   const [configError, setConfigError] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(initialSettingsOpen);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [topUpOpen, setTopUpOpen] = useState(false);
   // D-21: which budget the top-up dialog targets. Defaults to the team; the paused

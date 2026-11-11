@@ -170,6 +170,8 @@ Plans:
 
 **Research flag:** needs `--research-phase` — R-03/R-04/R-06/R-15/R-19 are all open.
 
+**Follow-up from phase 36 review:** WR-13 — `topUp` cannot top up a member added since the last turn snapshot (`src/services/ai/office/teamRunCoordinator.ts:993-997` calls `ensureMembers`, whose early return is at `:488-493`). Recorded here, not fixed: the fix belongs with this phase's roster/budget redesign.
+
 ### Phase 39: Skill versioning + enrichment approval
 
 **Goal:** An agent can propose a lesson, the user reviews it as a diff, and only an explicit approval creates a new skill version.
