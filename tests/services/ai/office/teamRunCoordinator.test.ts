@@ -2806,6 +2806,53 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(current.coordinator.getRunningCount()).toBe(0);
     });
 
+    it('refuses a retry whose agent has left the roster, and writes no attempt row', async () => {
+      let bAttempts = 0;
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+          [EMP_B_MODEL]: async () => {
+            bAttempts += 1;
+            throw new Error('B hỏng');
+          },
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+      await current.coordinator.send('Làm báo cáo');
+
+      const bFirst = (await current.db.aiTeamAssignments.toArray()).find(
+        (row) => row.agentId === current.employees[1]!.id && row.attemptNo === 1
+      )!;
+      expect(bFirst.runStatus).toBe('error');
+      expect(bAttempts).toBe(1);
+
+      const before = await current.db.aiTeamAssignments.count();
+      // The coordinator's `roster.employees` is this SAME array (no `loadRoster` seam), so
+      // removing the member here removes him from the roster the retry reads.
+      current.employees.splice(1, 1);
+
+      await expect(current.coordinator.retryAssignment(bFirst.id)).rejects.toThrow(
+        'Nhân viên không còn trong nhóm'
+      );
+
+      expect(await current.db.aiTeamAssignments.count()).toBe(before);
+      // WR-03: the refusal throws AFTER the phase claim, so the `finally` must still hold.
+      expect(current.coordinator.getState().phase).toBe('ready');
+      expect(current.coordinator.getRunningCount()).toBe(0);
+      expect(bAttempts).toBe(1);
+    });
+
     // WR-03: everything after the phase claim must be covered by one `finally`. Before this,
     // a throwing transcription write left `phase === 'batch-running'` — a BUSY phase — so
     // every later submit queued and the release effect never fired.
