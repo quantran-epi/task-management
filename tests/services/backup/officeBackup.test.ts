@@ -388,6 +388,30 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
     expect(await restoredDb.aiTeamLinks.toArray()).toEqual([teamLink]);
   });
 
+  it('refuses a partial AI Office payload before any clear (WR-10, D-20)', async () => {
+    await seedOffice(restoredDb);
+
+    // Carries one of the seven AI Office keys and omits the rest: the old `.some()` trigger
+    // wiped the whole group and restored nothing in its place.
+    const partial: BackupEnvelope = {
+      ...v11EnvelopeWithoutOffice(),
+      tables: { ...v11EnvelopeWithoutOffice().tables, aiSkillVersions: [] },
+      counts: { ...v11EnvelopeWithoutOffice().counts, aiSkillVersions: 0 },
+    };
+    expect(validateBackupPayload(partial)).toMatchObject({ valid: true, errors: [] });
+
+    await expect(restoreBackupPayload(partial, restoredDb)).rejects.toThrow(
+      /thiếu bảng AI Office/
+    );
+
+    expect(await restoredDb.aiEmployees.toArray()).toEqual([employee]);
+    expect(await restoredDb.aiLeads.toArray()).toEqual([lead]);
+    expect(await restoredDb.aiTeams.toArray()).toEqual([team]);
+    expect(await restoredDb.aiSkills.toArray()).toEqual([skill]);
+    expect(await restoredDb.aiTeamMembers.count()).toBe(2);
+    expect(await restoredDb.aiSkillVersions.count()).toBe(2);
+  });
+
   it('rejects an aiTeamMembers row whose teamId names no team', async () => {
     await seedOffice(sourceDb);
     const envelope = await exportBackupPayload(sourceDb);

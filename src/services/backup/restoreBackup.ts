@@ -226,6 +226,15 @@ async function replaceTables(
   snapshot?: SnapshotData | (() => Promise<SnapshotData>),
   recordCount = Object.values(countsFor(tables)).reduce((sum, count) => sum + count, 0),
 ): Promise<void> {
+  // WR-10/D-20: the AI Office group is all-present or all-absent. A payload carrying only some
+  // of the seven keys would wipe the group and restore nothing, so it is refused whole — and
+  // refused *outside* the transaction, so no clear() or bulkAdd can run. `captureSnapshot`
+  // always emits all seven keys, so a rollback replay can never be refused here.
+  const aiPresent = AI_OFFICE_TABLE_KEYS.filter((key) => tables[key] !== undefined);
+  if (aiPresent.length > 0 && aiPresent.length !== AI_OFFICE_TABLE_KEYS.length) {
+    throw new Error('Backup thiếu bảng AI Office — từ chối nhập để tránh mất dữ liệu.');
+  }
+
   await targetDb.transaction('rw', RESTORE_TABLES(targetDb), async () => {
     // Captured inside the transaction so a write landing between snapshot and replace cannot
     // be lost without a rollback path.
