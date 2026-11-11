@@ -115,6 +115,10 @@ export async function deleteEmployee(
   db: TaskPlannerDatabase = defaultDb
 ): Promise<AiOfficeDeleteResult> {
   return db.transaction('rw', [db.aiEmployees, db.aiTeamMembers, db.aiTeams], async () => {
+    // WR-11: Dexie serialises transactions that overlap on the same object stores, so no
+    // competing writer can interleave here. The remaining window is the synchronous
+    // in-memory registry lookup — hence the second check right before the delete, after
+    // the last await. Not full atomicity, just no async boundary between check and write.
     const memberships = await db.aiTeamMembers.where('agentId').equals(id).toArray();
     if (memberships.length > 0 || isAgentInUse(id)) {
       const teamIds = [...new Set(memberships.map((row) => row.teamId))];
@@ -127,6 +131,10 @@ export async function deleteEmployee(
           team ? [{ teamId: team.id, teamName: team.name }] : []
         ),
       };
+    }
+    // WR-11: a turn may have claimed the profile while the roster read was in flight.
+    if (isAgentInUse(id)) {
+      return { deleted: false, code: 'IN_USE', entity: 'employee', usedBy: [] };
     }
     await db.aiEmployees.delete(id);
     return { deleted: true };
@@ -207,6 +215,10 @@ export async function deleteLead(
         usedBy: teams.map((team) => ({ teamId: team.id, teamName: team.name })),
       };
     }
+    // WR-11: re-check after the last await — see deleteEmployee for the window rationale.
+    if (isAgentInUse(id)) {
+      return { deleted: false, code: 'IN_USE', entity: 'lead', usedBy: [] };
+    }
     await db.aiLeads.delete(id);
     return { deleted: true };
   });
@@ -274,6 +286,10 @@ export async function deleteSkill(
         entity: 'skill',
         usedBy: employees.map((row) => ({ agentId: row.id, agentName: row.name })),
       };
+    }
+    // WR-11: re-check after the last await — see deleteEmployee for the window rationale.
+    if (isSkillInUse(id)) {
+      return { deleted: false, code: 'IN_USE', entity: 'skill', usedBy: [] };
     }
     await db.aiSkillVersions.where('skillId').equals(id).delete();
     await db.aiSkills.delete(id);

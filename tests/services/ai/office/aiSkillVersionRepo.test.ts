@@ -98,15 +98,32 @@ describe('aiSkillVersionRepo (AIO-DATA-01, D-05)', () => {
     expect(approved.version).toBe(pending.version);
   });
 
-  it('rejects a pending version and throws the not-found error for a missing id', async () => {
+  it('rejects a pending version and throws a UUID-free not-found error for a missing id', async () => {
     const pending = await createSkillVersion(draft(skillId), db);
 
     expect((await decideSkillVersion(pending.id, 'rejected', db)).status).toBe('rejected');
 
+    await expect(decideSkillVersion(pending.id, 'approved', db)).rejects.toThrow(
+      /đã được quyết định/
+    );
+
     const missingId = generateId();
     await expect(decideSkillVersion(missingId, 'approved', db)).rejects.toThrow(
-      `Không tìm thấy phiên bản kỹ năng: ${missingId}`
+      /^Không tìm thấy phiên bản kỹ năng đã chọn\.$/
     );
+  });
+
+  it('keeps an approved row status and decidedAt when a second decision is refused (WR-08)', async () => {
+    const pending = await createSkillVersion(draft(skillId), db);
+    const approved = await decideSkillVersion(pending.id, 'approved', db);
+
+    await expect(decideSkillVersion(pending.id, 'rejected', db)).rejects.toThrow(
+      /đã được quyết định/
+    );
+
+    const stored = await db.aiSkillVersions.get(pending.id);
+    expect(stored?.status).toBe('approved');
+    expect(stored?.decidedAt).toBe(approved.decidedAt);
   });
 
   it('omits evidence entirely when the input has none', async () => {

@@ -25,6 +25,13 @@ export type AiSkillVersionDraft = z.input<typeof AiSkillVersionInputSchema>;
 const MISSING_SKILL_MESSAGE =
   'Không tìm thấy kỹ năng đã chọn. Hãy chọn lại kỹ năng từ danh sách.';
 
+/** WR-08: a decision is final — re-deciding would overwrite the recorded status/decidedAt. */
+const ALREADY_DECIDED_MESSAGE =
+  'Phiên bản kỹ năng đã được quyết định, không thể đổi trạng thái.';
+
+/** WR-08: no id in the message — it renders in the UI. */
+const MISSING_VERSION_MESSAGE = 'Không tìm thấy phiên bản kỹ năng đã chọn.';
+
 export async function listSkillVersions(
   skillId: string,
   db: TaskPlannerDatabase = defaultDb
@@ -79,7 +86,9 @@ export async function decideSkillVersion(
 ): Promise<AiSkillVersion> {
   return db.transaction('rw', [db.aiSkillVersions], async () => {
     const existing = await db.aiSkillVersions.get(id);
-    if (!existing) throw new Error(`Không tìm thấy phiên bản kỹ năng: ${id}`);
+    if (!existing) throw new Error(MISSING_VERSION_MESSAGE);
+    // WR-08/D-16: the recorded decision is preserved, never flipped.
+    if (existing.status !== 'pending') throw new Error(ALREADY_DECIDED_MESSAGE);
 
     const updated: AiSkillVersion = {
       ...existing,

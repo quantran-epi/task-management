@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TaskPlannerDatabase } from '../../../../src/db/index';
 import {
   beginTurn,
@@ -9,6 +9,17 @@ import {
   isSkillInUse,
   reset,
 } from '../../../../src/services/ai/office/liveUseRegistry';
+
+// WR-11: delegate to the real registry by default; individual tests override one call.
+vi.mock('../../../../src/services/ai/office/liveUseRegistry', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../../../src/services/ai/office/liveUseRegistry')>();
+  return {
+    ...actual,
+    isAgentInUse: vi.fn((id: string) => actual.isAgentInUse(id)),
+    isSkillInUse: vi.fn((id: string) => actual.isSkillInUse(id)),
+  };
+});
 import {
   listEmployees,
   createEmployee,
@@ -49,6 +60,7 @@ describe('aiOfficeRepo (AIO-EMP-01, AIO-EMP-02, AIO-SKILL-01)', () => {
   let dbName: string;
 
   beforeEach(async () => {
+    vi.clearAllMocks();
     dbName = 'TestAiOfficeRepo_' + Math.random().toString(36).slice(2);
     db = new TaskPlannerDatabase(dbName);
     await db.open();
@@ -131,6 +143,23 @@ describe('aiOfficeRepo (AIO-EMP-01, AIO-EMP-02, AIO-SKILL-01)', () => {
     expect(await db.aiEmployees.get(employee.id)).toBeDefined();
   });
 
+  it('refuses when a turn claims the employee after the roster check passed (WR-11)', async () => {
+    const employee = await createEmployee(EMPLOYEE, db);
+    beginTurn(employee.id, []);
+    // First (roster) check sees a clear registry; the pre-delete check sees the real claim.
+    vi.mocked(isAgentInUse).mockReturnValueOnce(false);
+
+    const result = await deleteEmployee(employee.id, db);
+
+    expect(result).toEqual({
+      deleted: false,
+      code: 'IN_USE',
+      entity: 'employee',
+      usedBy: [],
+    });
+    expect(await db.aiEmployees.get(employee.id)).toBeDefined();
+  });
+
   it('deletes an unreferenced employee', async () => {
     const employee = await createEmployee(EMPLOYEE, db);
 
@@ -179,6 +208,29 @@ describe('aiOfficeRepo (AIO-EMP-01, AIO-EMP-02, AIO-SKILL-01)', () => {
 
     expect((await deleteSkill(skill.id, db)).deleted).toBe(false);
     expect(await db.aiSkills.get(skill.id)).toBeDefined();
+  });
+
+  it('refuses when a turn claims the skill after the profile check passed (WR-11)', async () => {
+    const skill = await createSkill({ name: 'S', description: 'd', body: 'b' }, db);
+    const versionId = generateId();
+    await db.aiSkillVersions.add({
+      id: versionId,
+      skillId: skill.id,
+      version: 1,
+      status: 'pending',
+      name: 'S',
+      description: 'd',
+      body: 'b',
+      createdAt: new Date().toISOString(),
+    });
+    beginTurn('agent-1', [skill.id]);
+    vi.mocked(isSkillInUse).mockReturnValueOnce(false);
+
+    const result = await deleteSkill(skill.id, db);
+
+    expect(result).toEqual({ deleted: false, code: 'IN_USE', entity: 'skill', usedBy: [] });
+    expect(await db.aiSkills.get(skill.id)).toBeDefined();
+    expect(await db.aiSkillVersions.get(versionId)).toBeDefined();
   });
 
   it('deletes an unreferenced skill together with its version rows', async () => {
