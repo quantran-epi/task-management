@@ -185,6 +185,16 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   const [interruptedDismissed, setInterruptedDismissed] = useState(false);
   useEffect(() => setInterruptedDismissed(false), [threadId]);
 
+  // WR-07: the inference is persisted-row-only, so an in-flight turn also looks interrupted
+  // (instruction saved, report not yet). Filtering happens HERE at the render site, not in
+  // the reader: `listInterruptedAssignments` stays pure and phase 37 can extend it.
+  const interruptedVisible = useMemo(() => {
+    const live = new Set(
+      snapshot.agents.filter((row) => !TERMINAL.has(row.status)).map((row) => row.agentId)
+    );
+    return interrupted.filter((entry) => !live.has(entry.agentId));
+  }, [interrupted, snapshot.agents]);
+
   // Thread first (D-17), then provider config, then the coordinator. A coordinator
   // constructed with an empty endpoint would fail every turn, so it is never built.
   // WR-06: keyed on team.id only. `employees`/`skills` are live-query arrays whose
@@ -618,7 +628,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
               onKeyDown={handleKeyDown}
               style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', outline: 'none' }}
             >
-              {interrupted.length > 0 && !interruptedDismissed && (
+              {interruptedVisible.length > 0 && !interruptedDismissed && (
                 <div style={{ padding: '8px 16px 0' }}>
                   <Alert
                     type="warning"
@@ -629,7 +639,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                     description={
                       <>
                         <div>
-                          {interrupted
+                          {interruptedVisible
                             .map((entry) => `${entry.agentName}: ${entry.task}`)
                             .join(' · ')}
                         </div>

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../src/db';
 import { createEmployee, createLead, createSkill, updateLead } from '../../src/db/repositories/aiOfficeRepo';
-import { createTeam, getTeam, listTeamMembers, listTeams } from '../../src/db/repositories/aiTeamRepo';
+import { createTeam, getTeam, listTeamMembers, listTeams, updateTeam } from '../../src/db/repositories/aiTeamRepo';
 import { TeamsView } from '../../src/views/TeamsView';
 import {
   ensureTeamThread,
@@ -615,6 +615,68 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
     await screen.findByTestId('team-transcript-region');
 
+    expect(screen.queryByText('Lượt trước bị gián đoạn')).not.toBeInTheDocument();
+  });
+
+  it('suppresses the interrupted banner while the assigned agent is still running (WR-07)', async () => {
+    await db.settings.put({ key: 'ninerouter_api_key', value: 'sk-test' });
+    await db.settings.put({ key: 'ninerouter_endpoint', value: 'https://example.invalid/v1' });
+    await updateTeam(activeTeam.id, { autoSplitEnabled: true }, db);
+
+    let employeeStarted = false;
+    let releaseEmployee: (() => void) | undefined;
+    const employeeGate = new Promise<void>((resolve) => {
+      releaseEmployee = resolve;
+    });
+    let leadCalls = 0;
+
+    const createRuntimeDeps = (agentId: string) => ({
+      runLoop: (async (loopOptions: any) => {
+        if (agentId === lead.id) {
+          leadCalls += 1;
+          // Only the first lead turn delegates; the synthesis pass just answers.
+          if (leadCalls === 1) {
+            await loopOptions.executeToolFn('delegate_batch', {
+              assignments: [{ agentId: employees[0]!.id, task: 'Viết đặc tả thanh toán' }],
+            });
+          }
+        } else {
+          employeeStarted = true;
+          await employeeGate;
+        }
+        return {
+          fullResponse: 'Xong.',
+          cleanResponse: 'Xong.',
+          messages: [],
+          tokenUsage: {},
+          generatedFiles: [],
+          truncated: false,
+          loopLimitReached: false,
+        };
+      }) as any,
+    });
+
+    render(<TeamsView db={db} createRuntimeDeps={createRuntimeDeps} />);
+
+    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    const composer = await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(composer, { target: { value: 'Chia việc giúp tôi' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    // The instruction row is persisted before the employee turn starts, so the inference
+    // would report an interruption; only the live-agent filter keeps the banner away.
+    await waitFor(async () => {
+      const rows = await db.chatMessages
+        .where('threadId')
+        .equals((await ensureTeamThread(activeTeam.id, db)).id)
+        .toArray();
+      expect(rows.some((row) => row.messageKind === 'instruction')).toBe(true);
+    });
+    await waitFor(() => expect(employeeStarted).toBe(true));
+    expect(screen.queryByText('Lượt trước bị gián đoạn')).not.toBeInTheDocument();
+
+    releaseEmployee!();
+    await waitFor(() => expect(screen.getAllByText('Xong.').length).toBeGreaterThan(0));
     expect(screen.queryByText('Lượt trước bị gián đoạn')).not.toBeInTheDocument();
   });
 
