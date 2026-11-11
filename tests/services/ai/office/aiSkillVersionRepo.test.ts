@@ -8,8 +8,13 @@ import {
   decideSkillVersion,
 } from '../../../../src/db/repositories/aiSkillVersionRepo';
 import { generateId } from '../../../../src/utils/uuid';
+import { createSkill } from '../../../../src/db/repositories/aiOfficeRepo';
 
 const BODY = '# Skill\nBước 1: đọc.\nBước 2: tóm tắt.';
+
+function skillInput(name: string) {
+  return { name, description: 'Mô tả.', body: BODY };
+}
 
 function draft(skillId: string, overrides: Record<string, unknown> = {}) {
   return {
@@ -28,7 +33,8 @@ describe('aiSkillVersionRepo (AIO-DATA-01, D-05)', () => {
   beforeEach(async () => {
     db = new TaskPlannerDatabase('TestAiSkillVersionRepo_' + Math.random().toString(36).slice(2));
     await db.open();
-    skillId = generateId();
+    // WR-05: fixture ids must name real aiSkills rows or the new existence guard refuses them.
+    skillId = (await createSkill(skillInput('Viết đặc tả'), db)).id;
   });
 
   afterEach(async () => {
@@ -52,7 +58,7 @@ describe('aiSkillVersionRepo (AIO-DATA-01, D-05)', () => {
   });
 
   it('numbers versions monotonically per skill and restarts at 1 for another skill', async () => {
-    const otherSkillId = generateId();
+    const otherSkillId = (await createSkill(skillInput('Kỹ năng khác'), db)).id;
 
     const first = await createSkillVersion(draft(skillId), db);
     const second = await createSkillVersion(draft(skillId), db);
@@ -109,6 +115,15 @@ describe('aiSkillVersionRepo (AIO-DATA-01, D-05)', () => {
     expect('evidence' in created).toBe(false);
     const stored = await db.aiSkillVersions.get(created.id);
     expect('evidence' in stored!).toBe(false);
+  });
+
+  it('refuses a dangling skillId and writes no version row (WR-05, D-15)', async () => {
+    const ghost = generateId();
+
+    await expect(createSkillVersion(draft(ghost), db)).rejects.toThrow(
+      /Không tìm thấy kỹ năng/
+    );
+    expect(await db.aiSkillVersions.count()).toBe(0);
   });
 
   it('never assigns the same version to two concurrent creates', async () => {

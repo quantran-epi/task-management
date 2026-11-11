@@ -21,9 +21,11 @@ import {
   lockLeader,
 } from '../../../../src/db/repositories/aiTeamRepo';
 import { generateId } from '../../../../src/utils/uuid';
-import { createEmployee } from '../../../../src/db/repositories/aiOfficeRepo';
+import { createEmployee, createLead } from '../../../../src/db/repositories/aiOfficeRepo';
 
-const NOW = '2026-11-08T12:00:00.000Z';
+function leadInput(name: string) {
+  return { name, role: 'Lead', capability: 'c', persona: 'p', model: 'm' };
+}
 
 describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)', () => {
   let db: TaskPlannerDatabase;
@@ -35,8 +37,13 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
     dbName = 'TestAiTeamRepo_' + Math.random().toString(36).slice(2);
     db = new TaskPlannerDatabase(dbName);
     await db.open();
-    leadId = generateId();
-    employeeIds = [generateId(), generateId(), generateId()];
+    // WR-05: the repo now refuses dangling ids, so every fixture id names a real row.
+    leadId = (await createLead(leadInput('An'), db)).id;
+    employeeIds = [
+      (await createEmployee({ name: 'E1', role: 'Dev', capability: 'c', persona: 'p', model: 'm' }, db)).id,
+      (await createEmployee({ name: 'E2', role: 'Dev', capability: 'c', persona: 'p', model: 'm' }, db)).id,
+      (await createEmployee({ name: 'E3', role: 'Dev', capability: 'c', persona: 'p', model: 'm' }, db)).id,
+    ];
   });
 
   afterEach(async () => {
@@ -127,11 +134,7 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
   });
 
   it('assigns and re-assigns a leader in one transaction, keeping one lead row (D-09)', async () => {
-    const otherLeadId = generateId();
-    await db.aiLeads.bulkAdd([
-      { id: leadId, name: 'An', role: 'Lead', capability: 'c', persona: 'p', model: 'm', createdAt: NOW, updatedAt: NOW },
-      { id: otherLeadId, name: 'Bình', role: 'Lead', capability: 'c', persona: 'p', model: 'm', createdAt: NOW, updatedAt: NOW },
-    ]);
+    const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
     const team = await createTeam({ name: 'Assign' }, db);
 
     await assignLeader(team.id, leadId, db);
@@ -144,11 +147,7 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
   });
 
   it('assignLeader refuses a locked team and writes nothing (D-09)', async () => {
-    const otherLeadId = generateId();
-    await db.aiLeads.bulkAdd([
-      { id: leadId, name: 'An', role: 'Lead', capability: 'c', persona: 'p', model: 'm', createdAt: NOW, updatedAt: NOW },
-      { id: otherLeadId, name: 'Bình', role: 'Lead', capability: 'c', persona: 'p', model: 'm', createdAt: NOW, updatedAt: NOW },
-    ]);
+    const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
     const team = await makeTeam('Locked');
     const locked = await lockLeader(team.id, db);
     const membersBefore = await listTeamMembers(team.id, db);
@@ -175,11 +174,7 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
   });
 
   it('updateTeam cannot change a locked leader, but other patches still work (D-09)', async () => {
-    const otherLeadId = generateId();
-    await db.aiLeads.bulkAdd([
-      { id: leadId, name: 'An', role: 'Lead', capability: 'c', persona: 'p', model: 'm', createdAt: NOW, updatedAt: NOW },
-      { id: otherLeadId, name: 'Bình', role: 'Lead', capability: 'c', persona: 'p', model: 'm', createdAt: NOW, updatedAt: NOW },
-    ]);
+    const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
     const team = await makeTeam('Guarded');
     const locked = await lockLeader(team.id, db);
     const membersBefore = await listTeamMembers(team.id, db);
@@ -197,10 +192,7 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
   });
 
   it('updateTeam on an unlocked team still accepts a leadId patch and keeps sources in step', async () => {
-    const otherLeadId = generateId();
-    await db.aiLeads.bulkAdd([
-      { id: leadId, name: 'An', role: 'Lead', capability: 'c', persona: 'p', model: 'm', createdAt: NOW, updatedAt: NOW },
-    ]);
+    const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
     const team = await makeTeam('Unlocked');
 
     const updated = await updateTeam(team.id, { leadId: otherLeadId }, db);
@@ -312,6 +304,32 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
 
     await removeTeamMember(member.id, db);
     expect(await db.aiTeamMembers.get(member.id)).toBeUndefined();
+  });
+
+  it('refuses a dangling lead, employee or leadId patch without writing (WR-05, D-15)', async () => {
+    const ghost = generateId();
+    const teamsBefore = await db.aiTeams.count();
+    const membersBefore = await db.aiTeamMembers.count();
+
+    await expect(
+      createTeam({ name: 'Ghost lead', leadId: ghost, budgetTokens: 0 }, db)
+    ).rejects.toThrow(/Không tìm thấy lead/);
+    await expect(
+      createTeam(
+        { name: 'Ghost member', leadId, budgetTokens: 0, employeeIds: [employeeIds[0]!, ghost] },
+        db
+      )
+    ).rejects.toThrow(/Không tìm thấy nhân viên/);
+
+    expect(await db.aiTeams.count()).toBe(teamsBefore);
+    expect(await db.aiTeamMembers.count()).toBe(membersBefore);
+
+    const team = await makeTeam('Patch');
+    await expect(updateTeam(team.id, { leadId: ghost }, db)).rejects.toThrow(
+      /Không tìm thấy lead/
+    );
+    expect((await getTeam(team.id, db))?.leadId).toBe(leadId);
+    expect(await leadRows(team.id)).toEqual([leadId]);
   });
 
   it('adds, lists and removes links with a duplicate guard', async () => {

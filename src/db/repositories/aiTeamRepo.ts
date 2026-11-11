@@ -31,6 +31,28 @@ export type AddTeamMemberInput = Omit<AiTeamMemberInput, 'usedTokens'> & {
   usedTokens?: number | undefined;
 };
 
+/** WR-05/D-15: ids reach the repo from the UI; a dangling one produces an unrestorable export. */
+const MISSING_LEAD_MESSAGE =
+  'Không tìm thấy lead đã chọn. Hãy chọn lại lead từ danh sách.';
+const MISSING_EMPLOYEE_MESSAGE =
+  'Không tìm thấy nhân viên đã chọn. Hãy chọn lại nhân viên từ danh sách.';
+
+/** Messages never interpolate the id: the string reaches the UI, where a raw UUID is noise. */
+async function assertAgentsExist(
+  leadId: string | undefined,
+  employeeIds: string[],
+  db: TaskPlannerDatabase
+): Promise<void> {
+  if (leadId !== undefined) {
+    const lead = await db.aiLeads.get(leadId);
+    if (!lead) throw new Error(MISSING_LEAD_MESSAGE);
+  }
+  if (employeeIds.length > 0) {
+    const employees = await db.aiEmployees.bulkGet(employeeIds);
+    if (employees.some((employee) => employee === undefined)) throw new Error(MISSING_EMPLOYEE_MESSAGE);
+  }
+}
+
 function byCreatedAt<T extends { createdAt: string }>(rows: T[]): T[] {
   return rows.sort((a, b) =>
     a.createdAt === b.createdAt ? 0 : a.createdAt < b.createdAt ? -1 : 1
@@ -100,7 +122,8 @@ export async function createTeam(
     team.autoApproveMutations = validated.autoApproveMutations;
   }
 
-  await db.transaction('rw', [db.aiTeams, db.aiTeamMembers], async () => {
+  await db.transaction('rw', [db.aiTeams, db.aiTeamMembers, db.aiLeads, db.aiEmployees], async () => {
+    await assertAgentsExist(team.leadId, employeeIds, db);
     await db.aiTeams.add(team);
 
     const rows: AiTeamMember[] = [
@@ -153,10 +176,12 @@ export async function updateTeam(
 ): Promise<AiTeam> {
   const validated = AiTeamUpdateSchema.parse(patch);
 
-  return db.transaction('rw', [db.aiTeams, db.aiTeamMembers], async () => {
+  return db.transaction('rw', [db.aiTeams, db.aiTeamMembers, db.aiLeads], async () => {
     const existing = await db.aiTeams.get(id);
     if (!existing) throw new Error(`Không tìm thấy nhóm: ${id}`);
     assertLeaderUnlocked(existing, validated.leadId);
+    // A patch that omits leadId stays legal; a patch that sets one must name a real lead.
+    if (validated.leadId !== undefined) await assertAgentsExist(validated.leadId, [], db);
 
     const updated: AiTeam = { ...existing, updatedAt: new Date().toISOString() };
 

@@ -21,6 +21,10 @@ export type AiSkillVersionDraft = z.input<typeof AiSkillVersionInputSchema>;
  * field on members, messages or assignments (research Open Question 2).
  */
 
+/** WR-05/D-15: no id in the message — it renders in the UI, and the field name suffices. */
+const MISSING_SKILL_MESSAGE =
+  'Không tìm thấy kỹ năng đã chọn. Hãy chọn lại kỹ năng từ danh sách.';
+
 export async function listSkillVersions(
   skillId: string,
   db: TaskPlannerDatabase = defaultDb
@@ -46,7 +50,10 @@ export async function createSkillVersion(
 ): Promise<AiSkillVersion> {
   const validated = AiSkillVersionInputSchema.parse(input);
 
-  return db.transaction('rw', [db.aiSkillVersions], async () => {
+  return db.transaction('rw', [db.aiSkillVersions, db.aiSkills], async () => {
+    const skill = await db.aiSkills.get(validated.skillId);
+    if (!skill) throw new Error(MISSING_SKILL_MESSAGE);
+
     const latest = await getLatestSkillVersion(validated.skillId, db);
     const row: AiSkillVersion = {
       id: generateId(),
