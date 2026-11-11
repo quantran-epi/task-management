@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import Dexie from 'dexie';
 import { TaskPlannerDatabase } from '../../src/db/index';
-import { SCHEMA_V19, LATEST_SCHEMA_VERSION } from '../../src/db/schema';
+import { SCHEMA_V19, SCHEMA_V20, LATEST_SCHEMA_VERSION } from '../../src/db/schema';
 
 /**
  * V19 → V20 repair: a chat thread carrying a retired `scopeType` (`project`/`milestone`)
@@ -101,6 +101,87 @@ describe('V19 → V20 chatThreads.scopeType repair', () => {
       const row = await db.chatThreads.get('t-ok');
       expect(row?.scopeType).toBe('cr');
       expect(row?.entityId).toBe('cr-1');
+    } finally {
+      await db.delete();
+    }
+  });
+});
+
+/**
+ * V21 repair, shaped from a real export that failed import with
+ * `ChatTab references threadId "…" not found`. Two leaks:
+ *  - `sdlc:`-PREFIXED threads (V18 matched only the `:sdlc` suffix),
+ *  - tabs whose thread was deleted without them, leaving a `project:` scope.
+ */
+describe('V20 → V21 SDLC thread and orphan-tab purge', () => {
+  it('drops sdlc-prefixed threads with their messages, and orphaned tabs', async () => {
+    const dbName = 'TestSchemaV21_' + Math.random().toString(36).slice(2);
+    const v20Db = new Dexie(dbName);
+    v20Db.version(20).stores(SCHEMA_V20);
+    await v20Db.open();
+
+    await v20Db.table('chatThreads').bulkAdd([
+      // Leak 1: SDLC thread with the prefix form V18 never matched.
+      {
+        id: 'sdlc-1',
+        scopeKey: 'sdlc:cr-1:cr-1:INTAKE',
+        scopeType: 'global',
+        createdAt: NOW,
+        updatedAt: NOW,
+      },
+      // The suffix form V18 did remove — must stay gone either way.
+      {
+        id: 'sdlc-2',
+        scopeKey: 'cr:cr-1:sdlc',
+        scopeType: 'cr',
+        entityId: 'cr-1',
+        createdAt: NOW,
+        updatedAt: NOW,
+      },
+      {
+        id: 'live-1',
+        scopeKey: 'team:team-1',
+        scopeType: 'team',
+        entityId: 'team-1',
+        createdAt: NOW,
+        updatedAt: NOW,
+      },
+    ]);
+
+    await v20Db.table('chatMessages').bulkAdd([
+      { id: 'm-1', threadId: 'sdlc-1', role: 'user', content: 'x', createdAt: NOW },
+      { id: 'm-2', threadId: 'live-1', role: 'user', content: 'y', createdAt: NOW },
+    ]);
+
+    await v20Db.table('chatTabs').bulkAdd([
+      { id: 'tab-sdlc', threadId: 'sdlc-1', scopeKey: 'cr:cr-1', type: 'chat', title: 'a', order: 0, active: false, createdAt: NOW, updatedAt: NOW },
+      // Leak 2: the thread is already gone; the tab survived.
+      { id: 'tab-orphan', threadId: 'missing-thread', scopeKey: 'project:p-1', type: 'chat', title: 'b', order: 0, active: true, createdAt: NOW, updatedAt: NOW },
+      { id: 'tab-live', threadId: 'live-1', scopeKey: 'team:team-1', type: 'chat', title: 'c', order: 0, active: true, createdAt: NOW, updatedAt: NOW },
+    ]);
+    v20Db.close();
+
+    const db = new TaskPlannerDatabase(dbName);
+    await db.open();
+    try {
+      expect(db.verno).toBe(LATEST_SCHEMA_VERSION);
+
+      expect(await db.chatThreads.get('sdlc-1')).toBeUndefined();
+      expect(await db.chatMessages.get('m-1')).toBeUndefined();
+      expect(await db.chatTabs.get('tab-sdlc')).toBeUndefined();
+
+      expect(await db.chatTabs.get('tab-orphan')).toBeUndefined();
+
+      // The live team thread, its message and its tab all survive untouched.
+      expect((await db.chatThreads.get('live-1'))?.scopeType).toBe('team');
+      expect(await db.chatMessages.get('m-2')).toBeDefined();
+      expect(await db.chatTabs.get('tab-live')).toBeDefined();
+
+      // The exporter's own invariant: every surviving tab resolves to a surviving thread.
+      const threadIds = new Set((await db.chatThreads.toArray()).map((row) => row.id));
+      for (const tab of await db.chatTabs.toArray()) {
+        expect(threadIds.has(tab.threadId)).toBe(true);
+      }
     } finally {
       await db.delete();
     }

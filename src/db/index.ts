@@ -20,6 +20,7 @@ import {
   SCHEMA_V18,
   SCHEMA_V19,
   SCHEMA_V20,
+  SCHEMA_V21,
 } from './schema';
 import type {
   Task,
@@ -573,6 +574,50 @@ export class TaskPlannerDatabase extends Dexie {
             if (thread.scopeType === 'global' || !entityId) delete thread.entityId;
             else thread.entityId = entityId;
           });
+      });
+
+    // Repair (post-36, second pass): a real export still failed import with
+    // `ChatTab references threadId … not found`. Two leaks the earlier purges missed:
+    //  1. `sdlc:`-PREFIXED threads — V18 matched only the `:sdlc` SUFFIX, so 13 legacy rows
+    //     survived and were exported.
+    //  2. Tabs whose thread was deleted without them (`project:…` scopes), which no surface can
+    //     display and the backup validator refuses.
+    // Messages go first so the exporter's own `threadId ∈ chatThreads` invariant holds.
+    this.version(21)
+      .stores(SCHEMA_V21)
+      .upgrade(async (tx) => {
+        const threadRows = (await tx.table('chatThreads').toCollection().toArray()) as Array<
+          Record<string, unknown>
+        >;
+        const deadThreadIds = new Set<string>();
+        for (const thread of threadRows) {
+          const scopeKey = typeof thread.scopeKey === 'string' ? thread.scopeKey : '';
+          const id = typeof thread.id === 'string' ? thread.id : '';
+          if (!id) continue;
+          if (scopeKey.startsWith('sdlc:') || scopeKey.endsWith(':sdlc')) deadThreadIds.add(id);
+        }
+
+        for (const threadId of deadThreadIds) {
+          await tx.table('chatMessages').where('threadId').equals(threadId).delete();
+          await tx.table('chatTabs').where('threadId').equals(threadId).delete();
+          await tx.table('chatThreads').delete(threadId);
+        }
+
+        const survivingThreadIds = new Set(
+          ((await tx.table('chatThreads').toCollection().toArray()) as Array<Record<string, unknown>>)
+            .map((thread) => (typeof thread.id === 'string' ? thread.id : ''))
+            .filter((id) => id !== '')
+        );
+        const tabRows = (await tx.table('chatTabs').toCollection().toArray()) as Array<
+          Record<string, unknown>
+        >;
+        for (const tab of tabRows) {
+          const threadId = typeof tab.threadId === 'string' ? tab.threadId : '';
+          const id = typeof tab.id === 'string' ? tab.id : '';
+          if (id && threadId && !survivingThreadIds.has(threadId)) {
+            await tx.table('chatTabs').delete(id);
+          }
+        }
       });
 
     // Multi-tab concurrency handlers (DATA-04, D-09, D-10)

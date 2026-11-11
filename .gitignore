@@ -20,3 +20,6 @@ src-tauri/target/
 test-results/
 .openidea/
 *.har
+
+# Local backup captures used for restore debugging — never commit personal data.
+docs/task-planner-backup-*.json
