@@ -389,9 +389,15 @@ try {
 ```
 The `settleAgent` already resolves the deferred — so the irreducible Phase 37 fix is the `finally` ledger transition + sanitized `diagnosticDetail`, not a new catch. Verify: nothing may `throw` past `startEmployeeTurn` before the deferred exists (`:666-668`).
 
-**Global abort (D-11, `:982-991`):** `abortAll()` must additionally: settle every **queued** (never-started) assignment as `stopped`/`incomplete`, `scheduler.cancel` each queued handle, `open()` both gates, and close the batch row with `abortedBy:'user'`.
+**Global abort (D-11, `:982-991`):** `abortAll()` must additionally: settle every **queued** (never-started) assignment as `stopped`/`incomplete` through `finalizeAttempt`, abort each queued assignment's own `AbortController` (never `scheduler.cancel` — no handle exists before admission), `open()` both gates, and close the batch row with `abortedBy:'user'`.
 
-**Per-agent stop on a queued agent (D-10):** `stopAgent` (`:972-980`) today only aborts a runtime + settles the in-memory state. Add: if the assignment is still `queued`, `transitionAssignment(id,'queued','stopped',{stopReason:'user-per-agent',incomplete:true})` and `scheduler.cancel(handle)` — never call `start()`.
+**Per-agent stop on a queued agent (D-10):** `stopAgent` (`:972-980`) today only aborts a runtime + settles the in-memory state. Add: if the assignment is still `queued`, `finalizeAttempt(id, 'queued', 'stopped', 'user-per-agent', <copy>)` and abort its `AbortController` — never call `start()`, never `scheduler.cancel(handle)`.
+
+> **Superseded by the plans.** Two mechanisms sketched in the earlier draft of this file are
+> deliberately not implemented: `scheduler.cancel(handle)` for queued work (there is no handle
+> before `acquire` resolves — cancellation is via a per-assignment `AbortController`), and
+> `MAX_BATCH_SIZE`/`BATCH_TOO_LARGE` as live code (D-06 deletes both in 37-04). The PLAN files are
+> the contract; this document is background.
 
 ---
 
