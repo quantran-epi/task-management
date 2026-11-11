@@ -3,8 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../../../src/db';
 import { createEmployee, createLead } from '../../../../src/db/repositories/aiOfficeRepo';
 import { createTeam } from '../../../../src/db/repositories/aiTeamRepo';
-import type { AiTeam } from '../../../../src/types/aiOffice';
-import type { TeamRunPhase } from '../../../../src/services/ai/office/teamRunCoordinator';
+import type { AiTeam, TeamRunPhase } from '../../../../src/types/aiOffice';
 
 /**
  * Phase 37 plan 06 — D-20/D-21 outbox (AIO-RUNTIME-02 as overridden).
@@ -213,17 +212,26 @@ describe('TeamWorkspace outbox (37-06, D-20/D-21)', () => {
 
   it("puts the text back in the outbox when send resolves 'busy', and dispatches it later", async () => {
     currentStub = createStub('ready');
-    currentStub.send = vi
-      .fn()
-      .mockResolvedValueOnce('busy' as SendOutcome)
-      .mockResolvedValue('started' as SendOutcome) as never;
+    // The snapshot said `ready`, the coordinator disagrees — a turn started elsewhere in the
+    // same tick. That is exactly the requeue edge `runTurn` owns.
+    currentStub.send = vi.fn(async () => {
+      currentStub.setPhase('batch-running');
+      return 'busy' as SendOutcome;
+    }) as never;
 
     const composer = await renderWorkspace();
     await submit(composer, 'Chen ngang');
 
     await waitFor(() => expect(screen.getAllByTestId('team-outbox-item')).toHaveLength(1));
-    await waitFor(() => expect(currentStub.send).toHaveBeenCalledTimes(2));
-    expect(currentStub.send).toHaveBeenLastCalledWith('Chen ngang');
+    expect(screen.getByTestId('team-outbox-item').textContent).toContain('Chen ngang');
+    expect(currentStub.send).toHaveBeenCalledTimes(1);
+
+    // The live turn settles; now the queued text may run.
+    currentStub.send = vi.fn(async () => 'started' as SendOutcome) as never;
+    currentStub.setPhase('ready');
+
+    await waitFor(() => expect(currentStub.send).toHaveBeenCalledTimes(1));
+    expect(currentStub.send).toHaveBeenCalledWith('Chen ngang');
     await waitFor(() => expect(screen.queryAllByTestId('team-outbox-item')).toHaveLength(0));
   });
 
@@ -249,6 +257,38 @@ describe('TeamWorkspace outbox (37-06, D-20/D-21)', () => {
     await waitFor(() => expect((composer as HTMLTextAreaElement).value).toBe('Khoá leader thất bại'));
     expect(currentStub.send).not.toHaveBeenCalled();
     expect(screen.queryAllByTestId('team-outbox-item')).toHaveLength(0);
+  });
+
+  it('renders three queued entries, cancels the middle one, and keeps the rest in order', async () => {
+    currentStub = createStub('batch-running');
+    const composer = await renderWorkspace();
+    await submit(composer, 'Một');
+
+    // Type into the draft again: the composer stays usable while a turn runs (WR-11).
+    fireEvent.change(composer, { target: { value: 'Hai' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+    fireEvent.change(composer, { target: { value: 'Ba' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    const items = () => screen.getAllByTestId('team-outbox-item');
+    await waitFor(() => expect(items()).toHaveLength(3));
+    expect(screen.getByTestId('team-outbox').textContent).toContain('Đang xếp hàng (3)');
+    expect(items().map((el) => el.textContent)).toEqual([
+      expect.stringContaining('Một'),
+      expect.stringContaining('Hai'),
+      expect.stringContaining('Ba'),
+    ]);
+
+    fireEvent.click(screen.getAllByTestId('team-outbox-cancel')[1]!);
+
+    await waitFor(() => expect(items()).toHaveLength(2));
+    expect(screen.getByTestId('team-outbox').textContent).toContain('Đang xếp hàng (2)');
+    expect(items().map((el) => el.textContent)).toEqual([
+      expect.stringContaining('Một'),
+      expect.stringContaining('Ba'),
+    ]);
+    expect(screen.queryByText('Hai')).not.toBeInTheDocument();
+    expect(currentStub.send).not.toHaveBeenCalled();
   });
 
   it('retry from the API-error card while a turn is live lands in the outbox and clears the error', async () => {

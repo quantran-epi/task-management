@@ -64,10 +64,14 @@ export interface AgentStatusRowProps {
 }
 
 export const AgentStatusRow: React.FC<AgentStatusRowProps> = ({ agent, status, onStop }) => {
-  if (status === 'done' || status === 'queued') return null;
+  if (status === 'done') return null;
 
   const badge = (() => {
     switch (status) {
+      case 'queued':
+        // D-10: a queued agent waits on a scheduler slot, so it must be visible and
+        // stoppable — the stop settles the assignment without ever invoking its script.
+        return <Tag>Đang xếp hàng</Tag>;
       case 'running':
         return (
           <Tag color="processing" icon={<SyncOutlined spin />}>
@@ -89,7 +93,7 @@ export const AgentStatusRow: React.FC<AgentStatusRowProps> = ({ agent, status, o
     }
   })();
 
-  const showStop = status === 'running' || status === 'paused';
+  const showStop = status === 'running' || status === 'paused' || status === 'queued';
 
   return (
     <div

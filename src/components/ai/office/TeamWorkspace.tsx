@@ -100,9 +100,10 @@ function initialOf(name: string): string {
 /** D-20: the queue is visible above the composer, in dispatch order. */
 interface OutboxPanelProps {
   entries: Array<{ id: string; text: string }>;
+  onCancel: (id: string) => void;
 }
 
-const OutboxPanel: React.FC<OutboxPanelProps> = ({ entries }) => {
+const OutboxPanel: React.FC<OutboxPanelProps> = ({ entries, onCancel }) => {
   const { token } = theme.useToken();
   if (entries.length === 0) return null;
   return (
@@ -135,10 +136,21 @@ const OutboxPanel: React.FC<OutboxPanelProps> = ({ entries }) => {
             <span style={{ color: token.colorTextTertiary, flexShrink: 0 }}>tiếp theo</span>
           )}
           <span
-            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}
           >
             {entry.text}
           </span>
+          <Button
+            type="text"
+            size="small"
+            danger
+            style={{ width: 20, height: 20, padding: 0, flexShrink: 0 }}
+            aria-label="Huỷ tin nhắn đang xếp hàng"
+            data-testid="team-outbox-cancel"
+            onClick={() => onCancel(entry.id)}
+          >
+            ×
+          </Button>
         </div>
       ))}
     </div>
@@ -877,7 +889,14 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                     ...(coordinator ? { onStopAgent: (agentId: string) => coordinator.stopAgent(agentId) } : {}),
                   }}
                   transcriptExtensions={transcriptExtensions}
-                  statusExtensions={<OutboxPanel entries={outbox} />}
+                  statusExtensions={
+                    <OutboxPanel
+                      entries={outbox}
+                      // T-37-19: cancel is the ONLY path that drops text, and it is an
+                      // explicit action on a visible chip — no user message was written.
+                      onCancel={(id) => setOutbox((queue) => queue.filter((entry) => entry.id !== id))}
+                    />
+                  }
                   agentMentionOptions={agentMentionOptions}
                 />
               )}
