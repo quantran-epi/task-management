@@ -217,6 +217,25 @@ async function readThreadMessages(
   );
 }
 
+/**
+ * WR-05/D-12: the newest synthesis row that is still current (not superseded).
+ *
+ * Re-synthesis supersession cannot depend on coordinator memory: a retry after a remount or
+ * relaunch constructs a fresh coordinator, so the previous synthesis id must come from the
+ * transcript. The caller keeps its in-memory id only as a fast path.
+ */
+export async function findCurrentSynthesisMessageId(
+  threadId: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<string | undefined> {
+  const rows = await readThreadMessages(threadId, db);
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    const row = rows[index]!;
+    if (row.messageKind === 'synthesis' && row.supersededByMessageId === undefined) return row.id;
+  }
+  return undefined;
+}
+
 /** D-10: the bounded recent window fed to `sanitizeHistoryTurns`. */
 export async function listRecentTurns(
   threadId: string,

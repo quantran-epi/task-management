@@ -2919,6 +2919,81 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(after.filter((row) => row.attemptNo === 2)).toHaveLength(1);
     });
 
+    // WR-05: `lastSynthesisMessageId` is coordinator memory and `getOrCreateRun` builds a
+    // fresh coordinator on every mount. Retrying after a remount therefore superseded
+    // nothing, leaving two "current" syntheses — the D-12 violation.
+    it('supersedes the previous synthesis after a remount (fresh coordinator)', async () => {
+      let bAttempts = 0;
+      const scripts: Record<string, LoopScript> = {
+        [LEAD_MODEL]: async (options) => {
+          if (String(options.messages.at(-1)?.content).includes('Tổng hợp lại kết quả của lô')) {
+            return loopResult('Tổng hợp lần hai.');
+          }
+          await options.executeToolFn!(
+            'delegate_batch',
+            { assignments: assignmentsFor(harness!.employees) },
+            harness!.db,
+            options.signal
+          );
+          return loopResult('Xong lần một.');
+        },
+        [EMP_A_MODEL]: async () => loopResult('A xong'),
+        [EMP_B_MODEL]: async () => {
+          bAttempts += 1;
+          if (bAttempts === 1) throw new Error('B hỏng');
+          return loopResult('B xong lần hai.');
+        },
+        [EMP_C_MODEL]: async () => loopResult('C xong'),
+      };
+      harness = await createHarness({ teamPatch: { autoSplitEnabled: true }, scripts });
+      const current = harness;
+
+      await current.coordinator.send('Làm báo cáo');
+
+      const firstSynthesis = (await current.db.chatMessages
+        .where('threadId')
+        .equals(current.threadId)
+        .toArray()).find((row) => row.messageKind === 'synthesis')!;
+      expect(firstSynthesis.supersededByMessageId).toBeUndefined();
+
+      const bFirst = (await current.db.aiTeamAssignments.toArray()).find(
+        (row) => row.agentId === current.employees[1]!.id && row.attemptNo === 1
+      )!;
+
+      // Remount: a NEW coordinator for the same team/thread, no memory of the first run.
+      const remounted = createTeamRunCoordinator({
+        db: current.db,
+        team: current.team,
+        lead: current.lead,
+        employees: current.employees,
+        skills: [current.skill],
+        threadId: current.threadId,
+        model: LEAD_MODEL,
+        endpoint: 'https://example.invalid/v1',
+        apiKey: 'sk-test',
+        createRuntimeDeps: (agentId: string) => ({
+          runLoop: ((loopOptions: AiOrchestratorLoopOptions) => {
+            const script = scripts[loopOptions.model];
+            if (!script) throw new Error(`No script for ${loopOptions.model} (${agentId})`);
+            return script(loopOptions);
+          }) as unknown as ChatTurnRuntimeDeps['runLoop'],
+        }),
+      });
+
+      await remounted.retryAssignment(bFirst.id);
+
+      const syntheses = (await current.db.chatMessages
+        .where('threadId')
+        .equals(current.threadId)
+        .toArray()).filter((row) => row.messageKind === 'synthesis');
+      expect(syntheses).toHaveLength(2);
+      const second = syntheses.find((row) => row.id !== firstSynthesis.id)!;
+      expect(second.supersededByMessageId).toBeUndefined();
+      const firstAfter = await current.db.chatMessages.get(firstSynthesis.id);
+      expect(firstAfter!.supersededByMessageId).toBe(second.id);
+      expect(remounted.getState().phase).toBe('ready');
+    });
+
     // WR-07: `stopAgent` writes its ledger entry from a detached async block, so attempt 1's
     // finalize can resolve AFTER attempt 2 registered. The unlink must not remove attempt 2's
     // entry — doing so saved attempt 2's report with no link fields and then read its `done`

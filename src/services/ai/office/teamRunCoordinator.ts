@@ -57,6 +57,7 @@ import {
   type TeamToolContext,
 } from './teamTools';
 import {
+  findCurrentSynthesisMessageId,
   insertReportMessage,
   listAssignmentHistory,
   listRecentTurns,
@@ -1781,7 +1782,14 @@ export function createTeamRunCoordinator(
       await supersedeTeamMessage(source.reportMessageId, settled.reportMessageId, db);
 
       // D-12: the lead sees the FULL batch — including agents that succeeded on attempt 1.
-      const previousSynthesisId = lastSynthesisMessageId;
+      // WR-05: resolve the predecessor from the TRANSCRIPT, not the memory slot. A retry
+      // after a remount/relaunch runs on a fresh coordinator whose `lastSynthesisMessageId`
+      // is null, so a memory-only lookup left the old synthesis current forever. The slot
+      // stays as a fast path (it is what a same-session retry already knows).
+      const previousSynthesisId =
+        lastSynthesisMessageId ??
+        (await findCurrentSynthesisMessageId(options.threadId, db)) ??
+        null;
       lastSynthesisMessageId = null;
       try {
         await startLeadTurn(SYNTHESIS_INSTRUCTION, await collectBatchReports(source.batchId));
