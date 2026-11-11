@@ -42,7 +42,7 @@
 - [ ] **AIO-LEAD-02**: The delegation plan is visible to the user with per-agent attribution on every message. The transcript distinguishes user, leader, and each agent. (C-05, R-09)
 - [ ] **AIO-LEAD-03**: The user can @mention an agent directly; agents otherwise receive work only from the leader. (C-05)
 - [ ] **AIO-LEAD-04**: CR and PL documents are optional attachments. With no attachment the group still runs at full quality; with one, the leader and agents read it through the existing tools. (C-07)
-- [ ] **AIO-LEAD-05**: Per-agent stop and a global abort both work, and stopped work is marked incomplete rather than silently dropped. (R-18)
+- [x] **AIO-LEAD-05**: Per-agent stop and a global abort both work, and stopped work is marked incomplete rather than silently dropped. (R-18)
 
 ### Runtime Reliability (AIO-RUNTIME)
 
