@@ -92,6 +92,8 @@ export interface ChatMessageBubbleProps {
   agent?: AgentAttributionAgent | undefined;
   agentStatus?: AgentRunStatus | undefined;
   onStopAgent?: (() => void) | undefined;
+  /** 37-08 D-13: retry of one assignment attempt; absent means this surface cannot retry. */
+  onRetryAgent?: ((assignmentId: string) => void) | undefined;
 }
 
 /**
@@ -339,6 +341,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   agent,
   agentStatus,
   onStopAgent,
+  onRetryAgent,
 }) => {
   const { token } = theme.useToken();
   const [copied, setCopied] = useState(false);
@@ -1189,9 +1192,27 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         )}
       </div>
 
-      {agent && agentStatus && (
-        <AgentStatusRow agent={agent} status={agentStatus} onStop={onStopAgent} />
-      )}
+      {/*
+        37-08 D-13: the gate prefers the PERSISTED status (`message.runStatus`), so the row
+        survives a remount with no live snapshot; the live `agentStatus` is only a fallback for
+        rows written before the ledger links existed. A superseded report renders no row at all
+        — supersession is suppressed HERE, not by hiding the button.
+      */}
+      {agent &&
+        msg.supersededByMessageId === undefined &&
+        (msg.runStatus ?? agentStatus) && (
+          <AgentStatusRow
+            agent={agent}
+            status={msg.runStatus ?? agentStatus!}
+            {...(msg.assignmentId ? { assignmentId: msg.assignmentId } : {})}
+            onStop={onStopAgent}
+            onRetry={
+              onRetryAgent && msg.assignmentId
+                ? () => onRetryAgent(msg.assignmentId!)
+                : undefined
+            }
+          />
+        )}
 
       {/* AI-Generated Files Cards */}
       {!isUser && !isStreaming && msg.generatedFiles && msg.generatedFiles.length > 0 && (

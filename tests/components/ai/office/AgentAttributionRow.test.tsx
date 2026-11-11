@@ -32,3 +32,61 @@ describe('AgentStatusRow — queued (D-10)', () => {
     expect(container).toBeEmptyDOMElement();
   });
 });
+
+describe('AgentStatusRow — retry affordance (37-08 D-13)', () => {
+  it('renders the label and the retry button for a stopped assignment', () => {
+    const onRetry = vi.fn();
+    render(
+      <AgentStatusRow
+        agent={agent}
+        status="stopped"
+        assignmentId="assignment-A"
+        onRetry={onRetry}
+      />
+    );
+
+    expect(screen.getByText('Chưa hoàn tất')).toBeInTheDocument();
+    // The old label was REPLACED, not stacked beside the new one.
+    expect(screen.queryByText('Đã dừng giữa chừng')).toBeNull();
+    const retry = screen.getByTestId('agent-retry-assignment-A');
+    expect(retry).toBeInTheDocument();
+
+    fireEvent.click(retry);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the label and the retry button for an errored assignment', () => {
+    render(<AgentStatusRow agent={agent} status="error" assignmentId="assignment-A" onRetry={vi.fn()} />);
+
+    expect(screen.getByText('Chưa hoàn tất')).toBeInTheDocument();
+    expect(screen.queryByText('Lỗi')).toBeNull();
+    expect(screen.getByTestId('agent-retry-assignment-A')).toBeInTheDocument();
+  });
+
+  it('shows the label alone when the surface cannot retry', () => {
+    const { container } = render(<AgentStatusRow agent={agent} status="stopped" />);
+
+    expect(screen.getByText('Chưa hoàn tất')).toBeInTheDocument();
+    expect(container.querySelector('[data-testid^="agent-retry-"]')).toBeNull();
+  });
+
+  it('keys the retry test id by assignment so two attempts never collide', () => {
+    render(
+      <>
+        <AgentStatusRow agent={agent} status="stopped" assignmentId="assignment-A" onRetry={vi.fn()} />
+        <AgentStatusRow agent={agent} status="stopped" assignmentId="assignment-B" onRetry={vi.fn()} />
+      </>
+    );
+
+    expect(screen.getByTestId('agent-retry-assignment-A')).toBeInTheDocument();
+    expect(screen.getByTestId('agent-retry-assignment-B')).toBeInTheDocument();
+  });
+
+  it('renders no badge for ledger-only statuses', () => {
+    for (const status of ['skipped', 'blocked', 'needs-input'] as const) {
+      const { container, unmount } = render(<AgentStatusRow agent={agent} status={status} />);
+      expect(container.querySelector('.ant-tag')).toBeNull();
+      unmount();
+    }
+  });
+});

@@ -49,6 +49,8 @@ export interface ChatMessageListProps {
   agentDirectory?: Map<string, AgentAttributionAgent> | undefined;
   agentStatuses?: Map<string, AgentRunStatus> | undefined;
   onStopAgent?: ((agentId: string) => void) | undefined;
+  /** 37-08 D-13: retry one assignment attempt, read from the persisted message row. */
+  onRetryAgent?: ((assignmentId: string) => void) | undefined;
 }
 
 export const ChatMessageList: React.FC<ChatMessageListProps> = ({
@@ -75,6 +77,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   agentDirectory,
   agentStatuses,
   onStopAgent,
+  onRetryAgent,
 }) => {
   const { token } = theme.useToken();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -184,6 +187,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
               onStopAgent={
                 msg.agentId && onStopAgent ? () => onStopAgent(msg.agentId!) : undefined
               }
+              {...(onRetryAgent ? { onRetryAgent } : {})}
             />
           </React.Fragment>
         );

@@ -876,6 +876,8 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                     agentDirectory,
                     agentStatuses,
                     ...(coordinator ? { onStopAgent: (agentId: string) => coordinator.stopAgent(agentId) } : {}),
+                    // 37-08 D-13: same extension path as onStopAgent — no new widget API.
+                    ...(coordinator ? { onRetryAgent: (assignmentId: string) => { void coordinator.retryAssignment(assignmentId); } } : {}),
                   }}
                   transcriptExtensions={transcriptExtensions}
                   statusExtensions={

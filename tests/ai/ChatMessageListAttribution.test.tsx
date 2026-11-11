@@ -79,16 +79,17 @@ describe('ChatMessageBubble agent attribution', () => {
     expect(screen.getByTestId(`agent-stop-${AGENT_ID}`)).toBeInTheDocument();
   });
 
-  it('renders the stopped badge without a stop button', () => {
+  it('renders the stopped label without a stop button', () => {
     render(<ChatMessageBubble message={msg()} agent={agent} agentStatus="stopped" onStopAgent={vi.fn()} />);
-    expect(screen.getByText('Đã dừng giữa chừng')).toBeInTheDocument();
+    expect(screen.getByText('Chưa hoàn tất')).toBeInTheDocument();
+    expect(screen.queryByText('Đã dừng giữa chừng')).toBeNull();
     expect(screen.queryByTestId(`agent-stop-${AGENT_ID}`)).toBeNull();
   });
 
   it('renders no badge for a done agent', () => {
     render(<ChatMessageBubble message={msg()} agent={agent} agentStatus="done" onStopAgent={vi.fn()} />);
     expect(screen.queryByText('Đang làm việc')).toBeNull();
-    expect(screen.queryByText('Đã dừng giữa chừng')).toBeNull();
+    expect(screen.queryByText('Chưa hoàn tất')).toBeNull();
     expect(screen.queryByTestId(`agent-stop-${AGENT_ID}`)).toBeNull();
   });
 
@@ -112,6 +113,63 @@ describe('ChatMessageBubble agent attribution', () => {
       <ChatMessageBubble message={msg({ content: 'Đang viết' })} isStreaming />
     );
     expect(container.querySelector('[aria-live]')).toBeNull();
+  });
+
+  it('renders no status row for a done agent', () => {
+    render(<ChatMessageBubble message={msg()} agent={agent} agentStatus="done" />);
+    expect(screen.queryByTestId(`agent-status-${AGENT_ID}`)).toBeNull();
+  });
+
+  // 37-08 D-13: the remount case — no live snapshot, no `agentStatus` prop, only the
+  // persisted link fields. Proves the gate changed from `agent && agentStatus`.
+  it('renders the retry button from the persisted runStatus alone', () => {
+    const onRetryAgent = vi.fn();
+    render(
+      <ChatMessageBubble
+        message={msg({ agentId: AGENT_ID, assignmentId: 'assignment-1', runStatus: 'stopped' })}
+        agent={agent}
+        onRetryAgent={onRetryAgent}
+      />
+    );
+
+    expect(screen.getByText('Chưa hoàn tất')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('agent-retry-assignment-1'));
+    // The retry targets the ATTEMPT, never the agent.
+    expect(onRetryAgent).toHaveBeenCalledTimes(1);
+    expect(onRetryAgent).toHaveBeenCalledWith('assignment-1');
+  });
+
+  it('shows the persisted label without a button when the surface cannot retry', () => {
+    render(
+      <ChatMessageBubble
+        message={msg({ agentId: AGENT_ID, assignmentId: 'assignment-1', runStatus: 'error' })}
+        agent={agent}
+      />
+    );
+
+    expect(screen.getByText('Chưa hoàn tất')).toBeInTheDocument();
+    expect(screen.queryByTestId('agent-retry-assignment-1')).toBeNull();
+  });
+
+  // Supersession is suppressed at the bubble gate: the WHOLE row is gone.
+  it('renders no status row at all for a superseded report', () => {
+    render(
+      <ChatMessageBubble
+        message={msg({
+          agentId: AGENT_ID,
+          assignmentId: 'assignment-1',
+          runStatus: 'stopped',
+          supersededByMessageId: 'synthesis-2',
+        })}
+        agent={agent}
+        agentStatus="stopped"
+        onRetryAgent={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByTestId(`agent-status-${AGENT_ID}`)).toBeNull();
+    expect(screen.queryByText('Chưa hoàn tất')).toBeNull();
+    expect(screen.queryByTestId('agent-retry-assignment-1')).toBeNull();
   });
 });
 

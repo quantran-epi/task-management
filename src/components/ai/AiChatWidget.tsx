@@ -107,6 +107,8 @@ export interface AiChatWidgetProps {
   agentDirectory?: Map<string, { agentId: string; name: string; role: string; isLead: boolean; color: string }> | undefined;
   agentStatuses?: Map<string, AgentRunStatus> | undefined;
   onStopAgent?: ((agentId: string) => void) | undefined;
+  /** 37-08 D-13: retry one assignment attempt from a persisted report bubble. */
+  onRetryAgent?: ((assignmentId: string) => void) | undefined;
   /** Phase 34 D-08: lead-first `@agent` suggestions for the composer. */
   agentMentionOptions?: Array<{ id: string; name: string; role: string; isLead: boolean }> | undefined;
 }
@@ -271,6 +273,7 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
   agentDirectory,
   agentStatuses,
   onStopAgent,
+  onRetryAgent,
   agentMentionOptions,
 }) => {
   const { token } = theme.useToken();
@@ -403,6 +406,7 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
         {...(agentDirectory ? { agentDirectory } : {})}
         {...(agentStatuses ? { agentStatuses } : {})}
         {...(onStopAgent ? { onStopAgent } : {})}
+        {...(onRetryAgent ? { onRetryAgent } : {})}
       />
 
       {transcriptExtensions}

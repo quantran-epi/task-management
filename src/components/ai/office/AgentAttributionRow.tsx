@@ -1,7 +1,7 @@
 import React from 'react';
 import { Avatar, Button, Tag, theme } from 'antd';
 import { CrownOutlined, PauseCircleOutlined, StopOutlined, SyncOutlined } from '@ant-design/icons';
-import type { AgentRunStatus } from '../../../types/aiOffice';
+import type { AgentRunStatus, AiTeamAssignmentRunStatus } from '../../../types/aiOffice';
 
 /** UI-SPEC §Avatar & Identity Treatment — fixed six-entry palette. */
 const AGENT_PALETTE = ['#5b4fe8', '#22d3ee', '#338555', '#a56906', '#c54e58', '#6c707e'] as const;
@@ -59,11 +59,22 @@ export const AgentAttributionRow: React.FC<AgentAttributionRowProps> = ({ agent 
 
 export interface AgentStatusRowProps {
   agent: AgentAttributionAgent;
-  status: AgentRunStatus;
+  /** The persisted ledger status (`message.runStatus`) is wider than the UI union. */
+  status: AgentRunStatus | AiTeamAssignmentRunStatus;
+  /** Keyed by ASSIGNMENT id so two attempts of one agent never collide (37-08). */
+  assignmentId?: string | undefined;
   onStop?: (() => void) | undefined;
+  /** 37-08: supplied only when the surface can retry; drives the button, never the label. */
+  onRetry?: (() => void) | undefined;
 }
 
-export const AgentStatusRow: React.FC<AgentStatusRowProps> = ({ agent, status, onStop }) => {
+export const AgentStatusRow: React.FC<AgentStatusRowProps> = ({
+  agent,
+  status,
+  assignmentId,
+  onStop,
+  onRetry,
+}) => {
   if (status === 'done') return null;
 
   const badge = (() => {
@@ -84,10 +95,11 @@ export const AgentStatusRow: React.FC<AgentStatusRowProps> = ({ agent, status, o
             Tạm dừng — cần cấp thêm token
           </Tag>
         );
+      // 37-08 D-13: stopped and error share one honest, retryable framing.
       case 'stopped':
-        return <Tag icon={<StopOutlined />}>Đã dừng giữa chừng</Tag>;
+        return <Tag icon={<StopOutlined />}>Chưa hoàn tất</Tag>;
       case 'error':
-        return <Tag color="error">Lỗi</Tag>;
+        return <Tag color="error">Chưa hoàn tất</Tag>;
       default:
         return null;
     }
@@ -101,6 +113,17 @@ export const AgentStatusRow: React.FC<AgentStatusRowProps> = ({ agent, status, o
       style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}
     >
       {badge}
+      {onRetry && assignmentId && (
+        <Button
+          type="text"
+          size="small"
+          style={{ height: 22, padding: '0 6px', fontSize: 12 }}
+          data-testid={`agent-retry-${assignmentId}`}
+          onClick={onRetry}
+        >
+          Chạy lại
+        </Button>
+      )}
       {showStop && (
         <Button
           type="text"
