@@ -1531,6 +1531,25 @@ export function createTeamRunCoordinator(
     );
 
     agentDeferreds.clear();
+    // D-14: a batch with unfinished agents must not read as complete. The result stays an
+    // ARRAY — the `delegate_batch` contract and every existing consumer/tests treat it as
+    // one — so the honesty travels as a final `kind: 'unfinished'` ENTRY rather than a
+    // wrapper object, which would change the tool result's shape for every caller.
+    const unfinished = results.filter(
+      (row) => row.incomplete === true || row.status === 'stopped' || row.status === 'error'
+    );
+    const resultPayload: Array<Record<string, unknown>> = [...results];
+    if (unfinished.length > 0) {
+      resultPayload.push({
+        kind: 'unfinished',
+        agents: unfinished.map((row) => ({
+          agentId: row.agentId,
+          agentName: row.agentName,
+          status: row.status,
+          stopReason: row.stopReason,
+        })),
+      });
+    }
     // Carry this batch's settled reports into the next one (AIO-TEAM-03). A stopped or
     // errored agent contributes nothing readable, so only real reports are kept.
     priorBatchResults = results
@@ -1545,7 +1564,7 @@ export function createTeamRunCoordinator(
       openBatchId = null;
       await closeBatch(batchId, { phaseAtEnd: 'lead-synthesizing', abortedBy: 'none' }, db);
     }
-    return JSON.stringify(results);
+    return JSON.stringify(resultPayload);
   }
 
   /** D-12: text handed to the lead for a re-synthesis pass (no delegation expected). */

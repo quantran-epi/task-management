@@ -163,6 +163,7 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
       '3. Chờ toàn bộ lô trả về rồi mới tổng hợp; không tuyên bố kết quả trước khi có báo cáo từ nhân viên.',
       '4. Không khẳng định suy luận nội bộ của nhân viên; chỉ dùng nội dung họ báo cáo.',
       '5. Chỉ bạn được phép thay đổi dữ liệu; thao tác ghi sẽ dừng ở thẻ phê duyệt của người dùng.',
+      "6. Nếu kết quả lô có mục `kind: 'unfinished'`, BẮT BUỘC nêu rõ trong câu tổng hợp những việc chưa hoàn tất và lý do; không được trình bày lô là đã xong.",
     ].join('\n'),
     [
       '[DANH SÁCH NHÂN VIÊN]',

@@ -673,6 +673,33 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(errored.report).not.toContain('raw provider secret detail');
     });
 
+    it('adds no unfinished entry when every assignment completed (D-14)', async () => {
+      let toolResult: string | null = null;
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            toolResult = await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+
+      await harness.coordinator.send('Làm báo cáo');
+
+      const parsed = JSON.parse(toolResult as unknown as string);
+      expect(parsed).toHaveLength(3);
+      expect(parsed.some((entry: any) => entry.kind === 'unfinished')).toBe(false);
+    });
+
     it('returns a refused batch to the lead and starts no agent', async () => {
       let toolResult: string | null = null;
       const scripts: Record<string, LoopScript> = {
@@ -1867,8 +1894,18 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       await current.coordinator.send('Làm báo cáo');
 
       const parsed = JSON.parse(toolResult as unknown as string);
-      expect(parsed).toHaveLength(3);
-      expect(parsed.map((entry: any) => entry.status)).toEqual(['done', 'error', 'done']);
+      const entries = parsed.filter((entry: any) => entry.kind !== 'unfinished');
+      expect(entries).toHaveLength(3);
+      expect(entries.map((entry: any) => entry.status)).toEqual(['done', 'error', 'done']);
+      // D-14: the honest tail names the agent that did not finish.
+      const unfinished = parsed.at(-1);
+      expect(unfinished).toMatchObject({ kind: 'unfinished' });
+      expect(unfinished.agents.map((row: any) => row.agentId)).toEqual([current.employees[1]!.id]);
+      expect(unfinished.agents[0]).toMatchObject({
+        status: 'error',
+        stopReason: 'provider',
+        agentName: current.employees[1]!.name,
+      });
       expect(current.coordinator.getState().phase).not.toBe('batch-running');
     });
 
@@ -2427,8 +2464,14 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(current.coordinator.getState().phase).toBe('ready');
 
       const parsed = JSON.parse(toolResult as unknown as string);
-      expect(parsed).toHaveLength(3);
-      expect(parsed.every((entry: any) => entry.incomplete === true)).toBe(true);
+      const entries = parsed.filter((entry: any) => entry.kind !== 'unfinished');
+      expect(entries).toHaveLength(3);
+      expect(entries.every((entry: any) => entry.incomplete === true)).toBe(true);
+      // D-14: every unfinished agent is named once in the tail entry.
+      const unfinished = parsed.at(-1);
+      expect(unfinished).toMatchObject({ kind: 'unfinished' });
+      expect(unfinished.agents).toHaveLength(3);
+      expect(unfinished.agents.every((row: any) => row.stopReason === 'user-abort')).toBe(true);
     });
 
     it('dispose mid-batch rejects the parked acquire and settles the queued assignment (limit 1)', async () => {
@@ -2472,8 +2515,10 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
         queued.every((row) => row.runStatus === 'stopped' && row.incomplete === true)
       ).toBe(true);
       const parsed = JSON.parse(toolResult as unknown as string);
-      expect(parsed).toHaveLength(3);
-      expect(parsed.filter((entry: any) => entry.incomplete === true).length).toBeGreaterThan(0);
+      const entries = parsed.filter((entry: any) => entry.kind !== 'unfinished');
+      expect(entries).toHaveLength(3);
+      expect(entries.filter((entry: any) => entry.incomplete === true).length).toBeGreaterThan(0);
+      expect(parsed.at(-1)).toMatchObject({ kind: 'unfinished' });
       expect(current.coordinator.getRunningCount()).toBe(0);
       expect(current.coordinator.getState().phase).toBe('ready');
     });
