@@ -30,6 +30,7 @@ import {
   getNineRouterConfig,
 } from '../../../services/ai/nineRouterTokenService';
 import {
+  BUSY_PHASES,
   createTeamRunCoordinator,
   type TeamRunCoordinator,
   type TeamRunSnapshot,
@@ -96,6 +97,54 @@ function initialOf(name: string): string {
   return Array.from(name.trim())[0]?.toUpperCase() ?? '?';
 }
 
+/** D-20: the queue is visible above the composer, in dispatch order. */
+interface OutboxPanelProps {
+  entries: Array<{ id: string; text: string }>;
+}
+
+const OutboxPanel: React.FC<OutboxPanelProps> = ({ entries }) => {
+  const { token } = theme.useToken();
+  if (entries.length === 0) return null;
+  return (
+    <div
+      data-testid="team-outbox"
+      style={{
+        margin: '0 16px 4px',
+        padding: '6px 10px',
+        borderRadius: 6,
+        background: token.colorFillQuaternary,
+        fontSize: 12,
+      }}
+    >
+      <div style={{ color: token.colorTextSecondary, marginBottom: 2 }}>
+        Đang xếp hàng ({entries.length})
+      </div>
+      {entries.map((entry, index) => (
+        <div
+          key={entry.id}
+          data-testid="team-outbox-item"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            color: token.colorText,
+            minWidth: 0,
+          }}
+        >
+          {index === 0 && (
+            <span style={{ color: token.colorTextTertiary, flexShrink: 0 }}>tiếp theo</span>
+          )}
+          <span
+            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          >
+            {entry.text}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 /** UI-SPEC §5b workspace: splitter, sidebar, transcript region and the shared widget. */
 interface TeamDebugLog {
   timestamp: string;
@@ -139,6 +188,10 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   const [debugLogs, setDebugLogs] = useState<TeamDebugLog[]>([]);
   const [debugModalOpen, setDebugModalOpen] = useState<boolean>(false);
   const [sendError, setSendError] = useState<{ code: string; message: string } | null>(null);
+  // D-20/D-21: a submit while a turn is live or parked waits here, never at the composer.
+  const [outbox, setOutbox] = useState<Array<{ id: string; text: string }>>([]);
+  const [dispatchInFlight, setDispatchInFlight] = useState(false);
+  const releasingRef = useRef(false);
   // WR-12: every fire-and-forget repo call in this component reports here instead of
   // escaping as an unhandled rejection.
   const [actionError, setActionError] = useState<string | null>(null);
@@ -387,9 +440,13 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
    * invisible to the `team` prop. A failed lock surfaces an error instead of running silently.
    */
   const sendTurn = useCallback(
-    async (text: string) => {
-      if (!coordinator) return;
-      setSendError(null);
+    async (text: string): Promise<'started' | 'busy' | 'blocked'> => {
+      // D-20: every non-starting path states WHY, so the caller can route the text
+      // (outbox on `busy`, draft on `blocked`) instead of dropping it.
+      if (!coordinator) {
+        setSendError({ code: 'NO_COORDINATOR', message: 'Nhóm chưa sẵn sàng để nhận tin nhắn.' });
+        return 'blocked';
+      }
       try {
         const persisted = await getTeam(team.id, db);
         if (persisted && persisted.leaderLockedAt === undefined && persisted.leadId !== undefined) {
@@ -400,21 +457,84 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
           code: 'LEADER_LOCK_FAILED',
           message: err instanceof Error ? err.message : String(err),
         });
-        return;
+        return 'blocked';
       }
-      await coordinator.send(text);
+      const outcome = await coordinator.send(text);
+      if (outcome === 'blocked') {
+        setSendError({
+          code: 'COORDINATOR_DISPOSED',
+          message: 'Nhóm này đã bị xoá hoặc dừng. Mở lại nhóm để tiếp tục.',
+        });
+      }
+      return outcome;
     },
     [coordinator, db, team.id]
   );
 
-  const handleSubmit = useCallback(
-    (text: string) => {
-      lastUserTextRef.current = text;
-      setDraft('');
-      void sendTurn(text);
+  /**
+   * D-20: the ONLY dispatcher. It clears `sendError` first (so `InlineApiErrorCard` comes
+   * down the moment a retry starts) and gives every outcome a no-loss home: `busy` goes to
+   * the front of the outbox, `blocked` restores the draft. Requeueing `blocked` would loop
+   * forever — a disposed coordinator's phase never leaves `ready`.
+   */
+  const runTurn = useCallback(
+    async (text: string) => {
+      setSendError(null);
+      setDispatchInFlight(true);
+      try {
+        const outcome = await sendTurn(text);
+        if (outcome === 'busy') {
+          setOutbox((queue) => [{ id: crypto.randomUUID(), text }, ...queue]);
+        } else if (outcome === 'blocked') {
+          setDraft(text);
+        }
+      } catch (err) {
+        // A throw is a `blocked` submit with a different cause: keep the text, not the error.
+        setSendError({
+          code: 'TURN_FAILED',
+          message: err instanceof Error ? err.message : String(err),
+        });
+        setDraft(text);
+      } finally {
+        setDispatchInFlight(false);
+      }
     },
     [sendTurn]
   );
+
+  /**
+   * D-20: one entry rule for the composer. The authoritative gate is the coordinator's
+   * phase, never a component-local flag: a turn started by a retry or surviving a remount
+   * must still queue the next submit.
+   */
+  const handleSubmit = useCallback(
+    (text: string) => {
+      lastUserTextRef.current = text;
+      if (!text.trim()) return;
+      if (BUSY_PHASES.has(snapshot.phase) || dispatchInFlight || outbox.length > 0) {
+        setOutbox((queue) => [...queue, { id: crypto.randomUUID(), text }]);
+        setDraft('');
+        return;
+      }
+      setDraft('');
+      void runTurn(text);
+    },
+    [snapshot.phase, dispatchInFlight, outbox.length, runTurn]
+  );
+
+  // D-21: exactly one entry is released per settle, and only once the phase is free again.
+  useEffect(() => {
+    if (!coordinator || dispatchInFlight || outbox.length === 0) return undefined;
+    if (BUSY_PHASES.has(snapshot.phase)) return undefined;
+    const next = outbox[0];
+    if (!next || releasingRef.current) return undefined;
+    releasingRef.current = true;
+    setOutbox((queue) => (queue[0]?.id === next.id ? queue.slice(1) : queue));
+    void runTurn(next.text).finally(() => {
+      releasingRef.current = false;
+    });
+    return undefined;
+  }, [coordinator, dispatchInFlight, snapshot.phase, outbox, runTurn]);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
@@ -718,7 +838,9 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                   onStop={() => coordinator?.abortAll()}
                   onResolveApproval={(approved) => coordinator?.resolveApproval(approved)}
                   onRetry={() => {
-                    if (lastUserTextRef.current) void sendTurn(lastUserTextRef.current);
+                    // D-20: the retry is a dispatch like any other — it goes through
+                    // `runTurn`, so its text lands in the outbox or the draft, never nowhere.
+                    if (lastUserTextRef.current) void runTurn(lastUserTextRef.current);
                   }}
                   error={sendError}
                   toolbox={{
@@ -755,6 +877,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                     ...(coordinator ? { onStopAgent: (agentId: string) => coordinator.stopAgent(agentId) } : {}),
                   }}
                   transcriptExtensions={transcriptExtensions}
+                  statusExtensions={<OutboxPanel entries={outbox} />}
                   agentMentionOptions={agentMentionOptions}
                 />
               )}
