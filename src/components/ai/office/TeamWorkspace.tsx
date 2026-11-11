@@ -85,6 +85,9 @@ const EMPTY_SNAPSHOT: TeamRunSnapshot = {
 const NO_MODEL_COPY =
   'Chưa có mô hình AI nào khả dụng. Mở Cài đặt để cấu hình nhà cung cấp mô hình trước khi lưu.';
 
+/** WR-12: one fixed message for every fire-and-forget failure — repo errors can embed ids. */
+const ACTION_ERROR_COPY = 'Không lưu được thay đổi. Vui lòng thử lại.';
+
 const TERMINAL = new Set(['done', 'stopped', 'error']);
 
 function initialOf(name: string): string {
@@ -133,6 +136,9 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   const [debugLogs, setDebugLogs] = useState<TeamDebugLog[]>([]);
   const [debugModalOpen, setDebugModalOpen] = useState<boolean>(false);
   const [sendError, setSendError] = useState<{ code: string; message: string } | null>(null);
+  // WR-12: every fire-and-forget repo call in this component reports here instead of
+  // escaping as an unhandled rejection.
+  const [actionError, setActionError] = useState<string | null>(null);
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const lastUserTextRef = useRef<string>('');
 
@@ -419,6 +425,12 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     next?.focus();
   };
 
+  /** WR-12: fire-and-forget, but a rejection lands in the one action-error channel. */
+  const runAction = useCallback((action: () => Promise<unknown>) => {
+    setActionError(null);
+    void action().catch(() => setActionError(ACTION_ERROR_COPY));
+  }, []);
+
   const handleSaveSettings = async (input: {
     budgetTokens: number;
     budgets: Record<string, number>;
@@ -456,8 +468,10 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   const handleAddLink = async (item: LinkedItemCandidate) => {
     try {
       await addTeamLink({ teamId: team.id, itemType: item.itemType, itemId: item.id }, db);
-    } catch {
-      /* a duplicate link is already linked — nothing to add */
+    } catch (err) {
+      // IN-08c: only a duplicate link is silent — anything else means the write failed.
+      if (err instanceof Error && err.message === 'Mục này đã được liên kết với nhóm.') return;
+      setActionError(ACTION_ERROR_COPY);
     }
   };
 
@@ -554,14 +568,14 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
             }}
             onOpenSettings={() => setSettingsOpen(true)}
             onToggleAutoSplit={(next) => {
-              void updateTeam(team.id, { autoSplitEnabled: next }, db);
+              runAction(() => updateTeam(team.id, { autoSplitEnabled: next }, db));
             }}
             onToggleAutoApprove={(next) => {
-              void updateTeam(team.id, { autoApproveMutations: next }, db);
+              runAction(() => updateTeam(team.id, { autoApproveMutations: next }, db));
             }}
             onAddLink={() => setPickerOpen(true)}
             onRemoveLink={(linkId) => {
-              void removeTeamLink(linkId, db);
+              runAction(() => removeTeamLink(linkId, db));
             }}
           />
         </Splitter.Panel>
@@ -652,6 +666,17 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                   />
                 </div>
               )}
+              {actionError && (
+                <div style={{ padding: '8px 16px 0' }} data-testid="team-action-error">
+                  <Alert
+                    type="error"
+                    showIcon
+                    closable
+                    onClose={() => setActionError(null)}
+                    message={actionError}
+                  />
+                </div>
+              )}
               {configError ? (
                 <div style={{ padding: 16 }}>
                   <Alert type="warning" showIcon message={configError} />
@@ -694,10 +719,12 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                     onToggleAnalysisMode: () => setAnalysisMode((prev) => !prev),
                     autoApproveMutations: team.autoApproveMutations === true,
                     onToggleAutoApproveMutations: () => {
-                      void updateTeam(
-                        team.id,
-                        { autoApproveMutations: team.autoApproveMutations !== true },
-                        db
+                      runAction(() =>
+                        updateTeam(
+                          team.id,
+                          { autoApproveMutations: team.autoApproveMutations !== true },
+                          db
+                        )
                       );
                     },
                     mcpEnabled,
@@ -748,7 +775,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
           await removeTeamMember(memberId, db);
         }}
         onSave={(input) => {
-          void handleSaveSettings(input);
+          runAction(() => handleSaveSettings(input));
         }}
       />
 

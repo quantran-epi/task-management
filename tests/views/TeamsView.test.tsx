@@ -3,6 +3,20 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../src/db';
 import { createEmployee, createLead, createSkill, updateLead } from '../../src/db/repositories/aiOfficeRepo';
 import { createTeam, getTeam, listTeamMembers, listTeams, updateTeam } from '../../src/db/repositories/aiTeamRepo';
+import { activateTeam } from '../../src/db/repositories/aiTeamRepo';
+import { message } from 'antd';
+
+// WR-12: let each test make one write reject; every other case uses the real repo.
+vi.mock('../../src/db/repositories/aiTeamRepo', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../src/db/repositories/aiTeamRepo')>();
+  return {
+    ...actual,
+    updateTeam: vi.fn(actual.updateTeam),
+    activateTeam: vi.fn(actual.activateTeam),
+    pauseTeam: vi.fn(actual.pauseTeam),
+  };
+});
 import { TeamsView } from '../../src/views/TeamsView';
 import {
   ensureTeamThread,
@@ -26,6 +40,8 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
   let idleTeam: AiTeam;
 
   beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.spyOn(message, 'error').mockImplementation(() => undefined as never);
     db = new TaskPlannerDatabase('test-teams-view-' + Math.random().toString(36).slice(2));
     await db.open();
     useLayoutStore.getState().resetLayout();
@@ -678,6 +694,35 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     releaseEmployee!();
     await waitFor(() => expect(screen.getAllByText('Xong.').length).toBeGreaterThan(0));
     expect(screen.queryByText('Lượt trước bị gián đoạn')).not.toBeInTheDocument();
+  });
+
+  it('shows one error alert when saving group settings fails (WR-12)', async () => {
+    renderView();
+
+    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    fireEvent.click(await screen.findByTestId('team-header-settings'));
+    await screen.findByTestId('team-settings-drawer');
+
+    vi.mocked(updateTeam).mockRejectedValueOnce(new Error('Không tìm thấy nhóm: 1234'));
+
+    fireEvent.click(screen.getByTestId('team-settings-save'));
+
+    const alert = await screen.findByTestId('team-action-error');
+    expect(alert).toHaveTextContent('Không lưu được thay đổi. Vui lòng thử lại.');
+    // The raw repo message (which embeds an id) must never reach the UI.
+    expect(screen.queryByText(/Không tìm thấy nhóm: 1234/)).not.toBeInTheDocument();
+  });
+
+  it('shows a toast when activating a group fails (WR-12)', async () => {
+    renderView();
+
+    vi.mocked(activateTeam).mockRejectedValueOnce(new Error('boom'));
+
+    fireEvent.click(await screen.findByTestId(`team-activate-${idleTeam.id}`));
+
+    await waitFor(() =>
+      expect(message.error).toHaveBeenCalledWith('Không đổi được trạng thái nhóm. Vui lòng thử lại.')
+    );
   });
 
   it('locks the leader on the first send only', async () => {

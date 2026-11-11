@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Button, Empty, Tag, theme } from 'antd';
+import { Button, Empty, Tag, message, theme } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -162,10 +162,15 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ db = defaultDb, createRunt
               onOpen={() => openTeam(team)}
               onOpenSettings={() => openTeam(team)}
               onActivate={() => {
-                void activateTeam(team.id, db);
+                // WR-12: a rejection must reach the user, not escape as an unhandled one.
+                void activateTeam(team.id, db).catch(() =>
+                  message.error('Không đổi được trạng thái nhóm. Vui lòng thử lại.')
+                );
               }}
               onPause={() => {
-                void pauseTeam(team.id, db);
+                void pauseTeam(team.id, db).catch(() =>
+                  message.error('Không đổi được trạng thái nhóm. Vui lòng thử lại.')
+                );
               }}
             />
           ))}
