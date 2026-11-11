@@ -154,7 +154,7 @@ Plans:
 
 > **Criterion 2 is superseded by D-20.** The user locked a queue/outbox model during discuss: a second submit is *not* rejected at the composer — it is queued visibly and dispatched when the current turn settles. Verify against D-20, not against the "rejection is visible at the composer" wording above.
 
-**Plans:** 7 plans in 6 waves
+**Plans:** 8 plans in 7 waves
 
 Plans:
 **Wave 1**
@@ -180,7 +180,11 @@ Plans:
 
 **Wave 6**
 
-- [ ] 37-07-PLAN.md — Retry one assignment + re-synthesize the batch; lead names unfinished work; observed Tauri walkthrough (D-12/D-13/D-14/D-27)
+- [ ] 37-07-PLAN.md — Retry one assignment + re-synthesize the batch; lead names unfinished work (D-12/D-13/D-14)
+
+**Wave 7**
+
+- [ ] 37-08-PLAN.md — "Chưa hoàn tất" + "Chạy lại" bubble affordance wiring; observed Tauri walkthrough closing the phase (D-13/D-27, C-15)
 
 ### Phase 38: Hard token budget + accurate measurement
 
