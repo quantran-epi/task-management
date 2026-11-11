@@ -114,6 +114,77 @@ describe('AiStaffExplorer and AiOfficeExplorer tool windows', () => {
         expect(screen.getByText('Hải Backend')).toBeInTheDocument();
       });
     });
+
+    it('refuses to delete a lead in a team, naming the team and never an id', async () => {
+      const lead = await createLead(
+        {
+          name: 'Trí Lead',
+          role: 'Tech Lead',
+          capability: 'Điều phối.',
+          persona: 'Lead.',
+          model: 'claude-opus-4',
+        },
+        db
+      );
+      await createTeam({ name: 'Nhóm Alpha', leadId: lead.id }, db);
+
+      render(<AiStaffExplorer db={db} />);
+      const leadRow = await screen.findByTestId(`ai-staff-lead-${lead.id}`);
+
+      // D-10: the delete lives on the row's context menu.
+      fireEvent.contextMenu(leadRow, { clientX: 200, clientY: 300 });
+      await waitFor(() => {
+        expect(document.querySelector('.ant-dropdown-menu')).not.toBeNull();
+      });
+      const leadMenu = document.querySelector('.ant-dropdown-menu') as HTMLElement;
+      const leadDelete = [...leadMenu.querySelectorAll('.ant-dropdown-menu-item')].find((el) =>
+        el.textContent?.includes('Xóa')
+      ) as HTMLElement;
+      fireEvent.click(leadDelete);
+
+      // Modal.confirm, then the repo refuses inside its own transaction.
+      fireEvent.click(await screen.findByRole('button', { name: 'Xóa' }));
+
+      const alert = await screen.findByTestId('ai-staff-delete-error');
+      expect(alert.textContent).toContain('Nhóm Alpha');
+      expect(alert.textContent).not.toContain(lead.id);
+      // No row disappears on a refusal.
+      expect(screen.getByText('Trí Lead')).toBeInTheDocument();
+      expect(await db.aiLeads.get(lead.id)).toBeDefined();
+    });
+
+    it('deletes an unreferenced employee from the context menu', async () => {
+      const emp = await createEmployee(
+        {
+          name: 'Lan Rảnh',
+          role: 'Frontend Dev',
+          capability: 'React UI',
+          persona: 'Senior Frontend',
+          model: 'claude-sonnet-4',
+        },
+        db
+      );
+
+      render(<AiStaffExplorer db={db} />);
+      fireEvent.contextMenu(await screen.findByTestId(`ai-staff-employee-${emp.id}`), {
+        clientX: 200,
+        clientY: 300,
+      });
+      await waitFor(() => {
+        expect(document.querySelector('.ant-dropdown-menu')).not.toBeNull();
+      });
+      const empMenu = document.querySelector('.ant-dropdown-menu') as HTMLElement;
+      const empDelete = [...empMenu.querySelectorAll('.ant-dropdown-menu-item')].find((el) =>
+        el.textContent?.includes('Xóa')
+      ) as HTMLElement;
+      fireEvent.click(empDelete);
+      fireEvent.click(await screen.findByRole('button', { name: 'Xóa' }));
+
+      await waitFor(async () => {
+        expect(await db.aiEmployees.get(emp.id)).toBeUndefined();
+      });
+      expect(screen.queryByTestId('ai-staff-delete-error')).not.toBeInTheDocument();
+    });
   });
 
   describe('AiOfficeExplorer', () => {

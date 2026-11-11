@@ -1,19 +1,28 @@
 import React, { useMemo, useState } from 'react';
-import { Input, Button, Tag, Typography, Tooltip } from 'antd';
+import { Alert, Input, Button, Tag, Typography, Tooltip, Dropdown, Modal, type MenuProps } from 'antd';
 import {
   SearchOutlined,
   PlusOutlined,
   UserOutlined,
   CrownOutlined,
+  EditOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import { listEmployees, listLeads } from '../../db/repositories/aiOfficeRepo';
+import {
+  deleteEmployee,
+  deleteLead,
+  listEmployees,
+  listLeads,
+  type AiOfficeDeleteResult,
+} from '../../db/repositories/aiOfficeRepo';
 import { useLayoutStore } from '../store/layoutStore';
 import {
   EmployeeEditorDrawer,
   LeadEditorDrawer,
 } from '../../components/ai/office/EmployeeEditorDrawer';
+import { refusalMessage } from '../../components/ai/office/deleteRefusalMessage';
 
 export interface AiStaffExplorerProps {
   db?: TaskPlannerDatabase | undefined;
@@ -22,6 +31,8 @@ export interface AiStaffExplorerProps {
 export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb }) => {
   const [search, setSearch] = useState('');
   const [createKind, setCreateKind] = useState<'employee' | 'lead' | null>(null);
+  /** D-10/D-11/D-12: the refusal copy names the blocking groups/agents, never a UUID. */
+  const [refusal, setRefusal] = useState<string | null>(null);
 
   const openTab = useLayoutStore((s) => s.openTab);
 
@@ -50,6 +61,47 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
       params: { staffId: id, role: roleType },
     });
   };
+
+  const applyRefusal = (result: AiOfficeDeleteResult) => setRefusal(refusalMessage(result));
+
+  /**
+   * Confirms, then lets the repo decide. A refusal is not an error dialog: the row is still
+   * there and the alert names what blocks it, so the user knows which roster to edit first.
+   */
+  const confirmDelete = (name: string, run: () => Promise<AiOfficeDeleteResult>) => {
+    Modal.confirm({
+      title: `Xóa «${name}»?`,
+      content: 'Nếu hồ sơ còn được dùng, thao tác sẽ bị chặn và bạn cần gỡ khỏi nhóm trước.',
+      okText: 'Xóa',
+      okType: 'danger',
+      cancelText: 'Hủy',
+      onOk: async () => applyRefusal(await run()),
+    });
+  };
+
+  const staffMenu = (
+    id: string,
+    name: string,
+    roleType: 'employee' | 'lead'
+  ): NonNullable<MenuProps['items']> => [
+    {
+      key: 'edit',
+      icon: <EditOutlined />,
+      label: 'Mở chi tiết',
+      onClick: () => handleOpenStaff(id, name, roleType),
+    },
+    { type: 'divider' },
+    {
+      key: 'delete',
+      icon: <DeleteOutlined style={{ color: 'var(--danger, #c54e58)' }} />,
+      danger: true,
+      label: 'Xóa',
+      onClick: () =>
+        confirmDelete(name, () =>
+          roleType === 'lead' ? deleteLead(id, db) : deleteEmployee(id, db)
+        ),
+    },
+  ];
 
   return (
     <div
@@ -134,8 +186,8 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
             </div>
           ) : (
             filteredLeads.map((lead) => (
+              <Dropdown key={lead.id} menu={{ items: staffMenu(lead.id, lead.name, 'lead') }} trigger={['contextMenu']}>
               <div
-                key={lead.id}
                 role="button"
                 tabIndex={0}
                 data-testid={`ai-staff-lead-${lead.id}`}
@@ -185,6 +237,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
                   Lead
                 </Tag>
               </div>
+              </Dropdown>
             ))
           )}
         </div>
@@ -213,8 +266,8 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
             </div>
           ) : (
             filteredEmployees.map((emp) => (
+              <Dropdown key={emp.id} menu={{ items: staffMenu(emp.id, emp.name, 'employee') }} trigger={['contextMenu']}>
               <div
-                key={emp.id}
                 role="button"
                 tabIndex={0}
                 data-testid={`ai-staff-employee-${emp.id}`}
@@ -266,10 +319,24 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
                   </Tag>
                 )}
               </div>
+              </Dropdown>
             ))
           )}
         </div>
       </div>
+
+      {refusal && (
+        <div style={{ padding: '0 8px 8px' }}>
+          <Alert
+            type="warning"
+            showIcon
+            closable
+            message={refusal}
+            onClose={() => setRefusal(null)}
+            data-testid="ai-staff-delete-error"
+          />
+        </div>
+      )}
 
       <EmployeeEditorDrawer
         open={createKind === 'employee'}
