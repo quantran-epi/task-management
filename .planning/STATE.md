@@ -5,16 +5,16 @@ milestone_name: Unified AI Office (Phase Details)
 current_phase: 37
 current_phase_name: Runtime reliability + concurrency
 status: executing
-stopped_at: Completed 37-04-PLAN.md
-last_updated: "2026-11-11T20:55:42.147Z"
+stopped_at: Completed 37-06-PLAN.md
+last_updated: "2026-11-11T21:12:51.828Z"
 last_activity: 2026-11-12
 last_activity_desc: Phase 37 execution started
-state_head: 109b7e5a0b6bde48f4ce13f7b71a86d4bbaf3205
+state_head: 6cf58aff2187f8017e9c66ba13a1edbadaa99123
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 25
-  completed_plans: 22
+  completed_plans: 23
   percent: 50
 ---
 
@@ -28,14 +28,14 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 37 (Runtime reliability + concurrency) — EXECUTING
-Plan: 6 of 8
+Plan: 7 of 8
 Status: Ready to execute
 Last activity: 2026-11-12 — Phase 37 execution started
 
 ## Session Continuity
 
-Last session: 2026-11-11T20:55:41.823Z
-Stopped at: Completed 37-04-PLAN.md
+Last session: 2026-11-11T21:12:51.572Z
+Stopped at: Completed 37-06-PLAN.md
 Resume file: None
 
 Progress: [█████░░░░░] 50%
@@ -126,6 +126,8 @@ Progress: [█████░░░░░] 50%
 - [Phase 37]: 37-04: dispatchAssignment owns the whole acquire->start->settle->release span; release happens only in its finally
 - [Phase 37]: 37-04: userStopped is a Map<agentId, stopReason> so the stop path and the settle path record the same reason
 - [Phase 37]: 37-04: the report-link stamp and finalizeAttempt share one rw transaction, so a settled attempt can never own two bubbles
+- [Phase 37]: 37-06: a throw inside sendTurn is a fourth blocked cause (TURN_FAILED) — draft restored, text never dropped
+- [Phase 37]: 37-06: the API-error-card retry shares the composer's BUSY_PHASES entry rule, so one decision governs every dispatch path
 
 ## Performance Metrics
 
@@ -136,3 +138,4 @@ Progress: [█████░░░░░] 50%
 | Phase 37 P05 | 10 min | 3 tasks | 18 files |
 | Phase 37 P03 | 68 min | 3 tasks | 5 files |
 | Phase 37 P04 | 48 min | 3 tasks | 10 files |
+| Phase 37 P06 | 32 min | 3 tasks | 6 files |

@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 7
+open_count: 8
 waived_count: 0
 fixed_count: 0
-total_count: 7
-last_updated: 2026-11-11T20:55:12.237Z
+total_count: 8
+last_updated: 2026-11-11T21:12:38.532Z
 ---
 
 # Broken Windows Ledger
@@ -22,6 +22,7 @@ last_updated: 2026-11-11T20:55:12.237Z
 | 5 | 37 | stub | src/services/ai/office/teamRunCoordinator.ts | 264 | assignmentControllers has no producers until 37-04 task 1 wires per-assignment AbortControllers; dispose()'s abort-all is proven directly in tests | open |  | 2026-11-11T19:20:57.170Z |  |
 | 6 | 37 | deviation | tests/views/TeamsView.test.tsx |  | Pre-existing unhandled DatabaseClosedError rejections (7-8 per run) in TeamsView suite; tests themselves pass, reproduced on base 6a2e736e | open |  | 2026-11-11T20:55:11.959Z |  |
 | 7 | 37 | deviation | src/services/ai/office/teamRunCoordinator.ts |  | Scheduler admission is gated, so tests must wait on admission/running facts instead of fixed counts; three pre-existing coordinator tests were made deterministic | open |  | 2026-11-11T20:55:12.237Z |  |
+| 8 | 37 | unrun-verify | tests/workbench/AiExplorers.test.tsx |  | Pre-existing flake: renders AiOfficeExplorer and AiStaffExplorer on one DB; one of four runs reported duplicate lead label. Unrelated to 37-06 delete path. | open |  | 2026-11-11T21:12:38.532Z |  |
 
 ````json
 [
@@ -113,6 +114,19 @@ last_updated: 2026-11-11T20:55:12.237Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-11-11T20:55:12.237Z",
+    "resolved_at": null,
+    "milestone": "v1.4"
+  },
+  {
+    "id": 8,
+    "kind": "unrun-verify",
+    "phase": "37",
+    "file": "tests/workbench/AiExplorers.test.tsx",
+    "line": null,
+    "description": "Pre-existing flake: renders AiOfficeExplorer and AiStaffExplorer on one DB; one of four runs reported duplicate lead label. Unrelated to 37-06 delete path.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-11-11T21:12:38.532Z",
     "resolved_at": null,
     "milestone": "v1.4"
   }
