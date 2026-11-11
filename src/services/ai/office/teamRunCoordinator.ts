@@ -400,8 +400,6 @@ export function createTeamRunCoordinator(
   const scheduler = createTeamRunScheduler(
     team.concurrencyLimit ?? DEFAULT_TEAM_CONCURRENCY
   );
-  /** Admitted slots, keyed by assignment id, released in the per-assignment `finally`. */
-  const scheduledHandles = new Map<string, SchedulerHandle>();
   /**
    * D-10/D-11: agentId → its current assignment id, registered at CREATION time. A queued
    * assignment has no runtime and no `activeAssignmentByAgent` entry, so this map is the only
@@ -1290,7 +1288,6 @@ export function createTeamRunCoordinator(
     let handle: SchedulerHandle | undefined;
     try {
       handle = await scheduler.acquire(controller.signal);
-      scheduledHandles.set(assignmentId, handle);
       // CR-02: `acquire` resolving is an await boundary. If dispose landed while parked its
       // `registry.clear()` already ran, so starting now would build a fresh runtime for a
       // deleted team. Throw the abort the catch below already knows how to settle — a bare
@@ -1340,7 +1337,6 @@ export function createTeamRunCoordinator(
       // The single release point. `release` is idempotent (37-02), so a stop path that
       // already released cannot corrupt the count.
       if (handle !== undefined) {
-        scheduledHandles.delete(assignmentId);
         scheduler.release(handle);
       }
     }
@@ -1764,7 +1760,6 @@ export function createTeamRunCoordinator(
       let handle: SchedulerHandle | undefined;
       try {
         handle = await scheduler.acquire(controller.signal);
-        scheduledHandles.set(attemptRow.id, handle);
         // CR-02: same await boundary as the batch path — a dispose during the park cleared
         // the registry, so a start here would create a runtime for a deleted team.
         if (disposed) throw new DOMException('Aborted', 'AbortError');
@@ -1790,7 +1785,6 @@ export function createTeamRunCoordinator(
           assignmentIdsByAgent.delete(source.agentId);
         }
         if (handle !== undefined) {
-          scheduledHandles.delete(attemptRow.id);
           scheduler.release(handle);
         }
       }
