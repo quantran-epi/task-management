@@ -1902,6 +1902,103 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
     });
   });
 
+  describe('Team turn finishes so getActiveTurns() drains (D-19, AIO-RUNTIME-03)', () => {
+    /** Above the manager's 800ms purge, so an unfinished turn would still show up. */
+    const PURGE_WINDOW_MS = 1200;
+    const drained = () => aiTurnManager.getActiveTurns().length === 0;
+
+    const assignmentsFor = (employees: AiEmployee[]) =>
+      employees.map((row, index) => ({ agentId: row.id, task: `Việc ${index + 1}` }));
+
+    const delegatingLead =
+      (harnessRef: () => Harness): LoopScript =>
+      async (options) => {
+        await options.executeToolFn!(
+          'delegate_batch',
+          { assignments: assignmentsFor(harnessRef().employees) },
+          harnessRef().db,
+          options.signal
+        );
+        return loopResult('Xong.');
+      };
+
+    it('keeps the team turn registered while the lead is parked, then drains it', async () => {
+      const gate = deferred();
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('Xong.');
+          },
+        },
+      });
+      const { coordinator, team } = harness;
+
+      const sent = coordinator.send('Xin chào');
+      await waitFor(() => coordinator.getState().phase === 'lead-thinking');
+      // Finishing too early would clear the status indicator mid-run.
+      expect(aiTurnManager.getTurn(`team:${team.id}`)).toBeDefined();
+
+      gate.release();
+      await sent;
+      await waitFor(drained, PURGE_WINDOW_MS + 2000);
+      expect(aiTurnManager.getActiveTurns()).toHaveLength(0);
+    });
+
+    it('drains after a rejected plan', async () => {
+      harness = await createHarness({
+        scripts: { [LEAD_MODEL]: delegatingLead(() => harness!) },
+      });
+      const { coordinator } = harness;
+
+      const sent = coordinator.send('Làm báo cáo');
+      await waitFor(() => coordinator.getState().phase === 'awaiting-plan');
+      coordinator.resolvePlan(false);
+      await sent;
+
+      await waitFor(drained, PURGE_WINDOW_MS + 2000);
+      expect(aiTurnManager.getActiveTurns()).toHaveLength(0);
+      expect(coordinator.getState().phase).toBe('ready');
+    });
+
+    it('drains after a completed batch and after abortAll mid-run', async () => {
+      const gate = deferred();
+      let harnessRef: Harness | null = null;
+      const employeeScript: LoopScript = async () => {
+        await gate.promise;
+        return loopResult('báo cáo');
+      };
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: delegatingLead(() => harnessRef!),
+          [EMP_A_MODEL]: employeeScript,
+          [EMP_B_MODEL]: employeeScript,
+          [EMP_C_MODEL]: employeeScript,
+        },
+      });
+      harnessRef = harness;
+      const { coordinator, team } = harness;
+
+      const sent = coordinator.send('Làm báo cáo');
+      await waitFor(() => coordinator.getState().phase === 'batch-running');
+      // Both the team turn and an agent turn are live at once and never collide.
+      expect(aiTurnManager.getTurn(`team:${team.id}`)).toBeDefined();
+      expect(
+        aiTurnManager.getTurn(`team:${team.id}:agent:${harness.employees[0]!.id}`)
+      ).toBeDefined();
+      expect(`team:${team.id}`).not.toBe(`team:${team.id}:agent:${harness.employees[0]!.id}`);
+
+      coordinator.abortAll();
+      gate.release();
+      await sent;
+
+      await waitFor(drained, PURGE_WINDOW_MS + 2000);
+      expect(aiTurnManager.getActiveTurns()).toHaveLength(0);
+      expect(coordinator.getState().phase).toBe('ready');
+    });
+  });
+
   describe('Dispose — a live run ends in bounded time (D-11, D-18)', () => {
     const assignmentsFor = (employees: AiEmployee[]) =>
       employees.map((row, index) => ({ agentId: row.id, task: `Việc ${index + 1}` }));
