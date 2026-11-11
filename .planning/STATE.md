@@ -6,10 +6,10 @@ current_phase: 36
 current_phase_name: Data model, multi-chat identity, backup/migration
 status: executing
 stopped_at: Phase 36 context gathered
-last_updated: "2026-11-11T02:07:57.934Z"
-last_activity: 2026-11-10
+last_updated: "2026-11-11T02:53:01.126Z"
+last_activity: 2026-11-11
 last_activity_desc: Phase 36 execution started
-state_head: 505e780d1299646fbf5baad04782736d22308f70
+state_head: 8918643336b2cfb1aa1e0aea74e85c2b87460559
 progress:
   total_phases: 6
   completed_phases: 1
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 Phase: 36 (data-model-multi-chat-identity-backup-migration) — EXECUTING
 Plan: 1 of 5
 Status: Executing Phase 36
-Last activity: 2026-11-11 -- Completed quick task 261111-c35: Fix WR-05 + WR-10 data-safety warnings from phase 36 review
+Last activity: 2026-11-11 -- Completed quick task 261111-d2p: Close remaining phase-36 review findings
 
 ## Session Continuity
 
@@ -54,6 +54,7 @@ Progress: [██░░░░░░░░] 17%
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 261111-c35 | Fix WR-05 + WR-10 data-safety warnings from phase 36 review | 2026-11-11 | 505e780d | [261111-c35-fix-wr-05-wr-10-data-safety-warnings-fro](./quick/261111-c35-fix-wr-05-wr-10-data-safety-warnings-fro/) |
+| 261111-d2p | Close remaining phase-36 review findings: WR-07/08/09/11/12 and IN-01..IN-04/06/07/08, record WR-13 in ROADMAP phase 38 | 2026-11-11 | 89186433 | [261111-d2p-close-phase-36-review-findings-part-two](./quick/261111-d2p-close-phase-36-review-findings-part-two/) |
 
 ## Accumulated Context
 
