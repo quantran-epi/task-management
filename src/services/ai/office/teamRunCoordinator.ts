@@ -234,8 +234,12 @@ const TERMINAL_RUN_STATUSES: ReadonlySet<AiTeamAssignmentRunStatus> = new Set([
   'error',
 ]);
 
-/** WR-02: phases in which a turn is actually running — a second `send()` must be dropped. */
-export const LIVE_PHASES: ReadonlySet<TeamRunPhase> = new Set<TeamRunPhase>([
+/**
+ * IN-02: phases in which a turn is actually running. Module-local — no UI imports it (the
+ * workspace gates on `BUSY_PHASES`), so exporting it only invited the stale claim that an
+ * "is the team working" indicator read it.
+ */
+const LIVE_PHASES: ReadonlySet<TeamRunPhase> = new Set<TeamRunPhase>([
   'lead-thinking',
   'awaiting-plan',
   'batch-running',
@@ -244,8 +248,8 @@ export const LIVE_PHASES: ReadonlySet<TeamRunPhase> = new Set<TeamRunPhase>([
 
 /**
  * D-21: live phases PLUS the two park phases. A parked turn still owns the slot — a second
- * turn beside it is exactly what `send()` must refuse, so `send()` gates on this set while
- * "is the team working" UI stays on `LIVE_PHASES`.
+ * turn beside it is exactly what `send()` must refuse, so `send()` AND the composer gate on
+ * this one set.
  */
 export const BUSY_PHASES: ReadonlySet<TeamRunPhase> = new Set<TeamRunPhase>([
   ...LIVE_PHASES,
