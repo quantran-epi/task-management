@@ -51,11 +51,13 @@ const RESTORE_TABLES = (db: TaskPlannerDatabase) => [
   db.aiTeamMembers,
   db.aiTeamLinks,
   db.aiSkillVersions,
+  db.aiTeamBatches,
+  db.aiTeamAssignments,
   db.settings,
   db.backupMetadata,
 ];
 
-/** Phase 34: the six AI Office tables, cleared and re-added as one group. */
+/** Phase 34/37: the nine AI Office tables, cleared and re-added as one group. */
 const AI_OFFICE_TABLE_KEYS = [
   'aiEmployees',
   'aiLeads',
@@ -64,6 +66,8 @@ const AI_OFFICE_TABLE_KEYS = [
   'aiTeamMembers',
   'aiTeamLinks',
   'aiSkillVersions',
+  'aiTeamBatches',
+  'aiTeamAssignments',
 ] as const;
 
 const DEFAULT_CHAT_TITLE = '💬 Cuộc trò chuyện';
@@ -182,9 +186,11 @@ function countsFor(tables: BackupTableData): BackupTableCounts {
 async function captureSnapshot(targetDb: TaskPlannerDatabase, timestamp: string): Promise<SnapshotData> {
   // activeTimers is part of the snapshot: replaceTables clears the table for both import and
   // rollback, so omitting it here would destroy the in-progress timer with no way back.
-  const [tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, activeTimers, notes, rawAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettingsRaw, telegramWhitelist, systems, changeRequests, aiEmployees, aiLeads, aiSkills, aiTeams, aiTeamMembers, aiTeamLinks, aiSkillVersions, settings] = await Promise.all([
-    targetDb.tasks.toArray(), targetDb.capacityRules.toArray(), targetDb.capacityOverrides.toArray(), targetDb.plannedAllocations.toArray(), targetDb.workSessions.toArray(), targetDb.activeTimers.toArray(), targetDb.notes.toArray(), targetDb.noteAttachments.toArray(), targetDb.chatThreads.toArray(), targetDb.chatMessages.toArray(), targetDb.chatTabs.toArray(), targetDb.documentSets.toArray(), targetDb.publishedDocuments.toArray(), targetDb.publishAttempts.toArray(), targetDb.dlpAudits.toArray(), targetDb.knowledgeLinks.toArray(), targetDb.telegramSettings.toArray(), targetDb.telegramWhitelist.toArray(), targetDb.systems.toArray(), targetDb.changeRequests.toArray(), targetDb.aiEmployees.toArray(), targetDb.aiLeads.toArray(), targetDb.aiSkills.toArray(), targetDb.aiTeams.toArray(), targetDb.aiTeamMembers.toArray(), targetDb.aiTeamLinks.toArray(), targetDb.aiSkillVersions.toArray(), targetDb.settings.toArray()
+  const [tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, activeTimers, notes, rawAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettingsRaw, telegramWhitelist, systems, changeRequests, aiEmployees, aiLeads, aiSkills, aiTeams, aiTeamMembers, aiTeamLinks, aiSkillVersions, aiTeamBatches, rawAiTeamAssignments, settings] = await Promise.all([
+    targetDb.tasks.toArray(), targetDb.capacityRules.toArray(), targetDb.capacityOverrides.toArray(), targetDb.plannedAllocations.toArray(), targetDb.workSessions.toArray(), targetDb.activeTimers.toArray(), targetDb.notes.toArray(), targetDb.noteAttachments.toArray(), targetDb.chatThreads.toArray(), targetDb.chatMessages.toArray(), targetDb.chatTabs.toArray(), targetDb.documentSets.toArray(), targetDb.publishedDocuments.toArray(), targetDb.publishAttempts.toArray(), targetDb.dlpAudits.toArray(), targetDb.knowledgeLinks.toArray(), targetDb.telegramSettings.toArray(), targetDb.telegramWhitelist.toArray(), targetDb.systems.toArray(), targetDb.changeRequests.toArray(), targetDb.aiEmployees.toArray(), targetDb.aiLeads.toArray(), targetDb.aiSkills.toArray(), targetDb.aiTeams.toArray(), targetDb.aiTeamMembers.toArray(), targetDb.aiTeamLinks.toArray(), targetDb.aiSkillVersions.toArray(), targetDb.aiTeamBatches.toArray(), targetDb.aiTeamAssignments.toArray(), targetDb.settings.toArray()
   ]);
+  // T-37-14: the snapshot is downloadable as an envelope, so the same projection applies here.
+  const aiTeamAssignments = rawAiTeamAssignments.map(({ diagnosticDetail: _detail, ...row }) => row);
   const telegramSettings = telegramSettingsRaw.map((setting) => ({ ...setting, botToken: '' }));
   // Never persist secrets (tokens, passphrases, SSH inventory) in a snapshot the UI offers
   // for download; the export path filters the same way.
@@ -199,7 +205,7 @@ async function captureSnapshot(targetDb: TaskPlannerDatabase, timestamp: string)
     ...(attachment.caption ? { caption: attachment.caption } : {}),
     createdAt: attachment.createdAt,
   })));
-  const tables: BackupTableData = { tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, activeTimers, notes, noteAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettings, telegramWhitelist, systems, changeRequests, aiEmployees, aiLeads, aiSkills, aiTeams, aiTeamMembers, aiTeamLinks, aiSkillVersions, settings: safeSettings };
+  const tables: BackupTableData = { tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, activeTimers, notes, noteAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettings, telegramWhitelist, systems, changeRequests, aiEmployees, aiLeads, aiSkills, aiTeams, aiTeamMembers, aiTeamLinks, aiSkillVersions, aiTeamBatches, aiTeamAssignments, settings: safeSettings };
   return { timestamp, tables, counts: countsFor(tables) };
 }
 
@@ -227,9 +233,9 @@ async function replaceTables(
   recordCount = Object.values(countsFor(tables)).reduce((sum, count) => sum + count, 0),
 ): Promise<void> {
   // WR-10/D-20: the AI Office group is all-present or all-absent. A payload carrying only some
-  // of the seven keys would wipe the group and restore nothing, so it is refused whole — and
+  // of the nine keys would wipe the group and restore nothing, so it is refused whole — and
   // refused *outside* the transaction, so no clear() or bulkAdd can run. `captureSnapshot`
-  // always emits all seven keys, so a rollback replay can never be refused here.
+  // always emits all nine keys, so a rollback replay can never be refused here.
   const aiPresent = AI_OFFICE_TABLE_KEYS.filter((key) => tables[key] !== undefined);
   if (aiPresent.length > 0 && aiPresent.length !== AI_OFFICE_TABLE_KEYS.length) {
     throw new Error('Backup thiếu bảng AI Office — từ chối nhập để tránh mất dữ liệu.');
@@ -252,6 +258,7 @@ async function replaceTables(
           targetDb.aiEmployees.clear(), targetDb.aiLeads.clear(), targetDb.aiSkills.clear(),
           targetDb.aiTeams.clear(), targetDb.aiTeamMembers.clear(), targetDb.aiTeamLinks.clear(),
           targetDb.aiSkillVersions.clear(),
+          targetDb.aiTeamBatches.clear(), targetDb.aiTeamAssignments.clear(),
         ]
       : [];
     // Settings are replaced key-by-key, never cleared wholesale: secrets (tokens, passphrases)
@@ -293,6 +300,8 @@ async function replaceTables(
     await add(targetDb.aiTeamLinks, tables.aiTeamLinks);
     // D-22: `status` is written verbatim — a restored `pending` row is stored data, not an approval.
     await add(targetDb.aiSkillVersions, tables.aiSkillVersions);
+    await add(targetDb.aiTeamBatches, tables.aiTeamBatches);
+    await add(targetDb.aiTeamAssignments, tables.aiTeamAssignments);
     await add(targetDb.activeTimers, tables.activeTimers);
     for (const setting of tables.settings ?? []) if (isSafeBackupSetting(setting.key)) await targetDb.settings.put(setting);
     if (snapshotData) await targetDb.settings.put({ key: 'last_pre_import_snapshot', value: snapshotData });

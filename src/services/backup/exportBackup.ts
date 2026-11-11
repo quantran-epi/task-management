@@ -1,5 +1,6 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { BackupEnvelope } from '../../types/backup';
+import type { AiTeamAssignment } from '../../types/aiOffice';
 import type { ChatTab } from '../../types/models';
 import { generateId } from '../../utils/uuid';
 import { BACKUP_SCHEMA_VERSION } from '../../validation/backupSchemas';
@@ -162,6 +163,16 @@ function projectSafeChatTab(tab: ChatTab): ChatTab {
   };
 }
 
+/**
+ * T-37-14 / D-17: `diagnosticDetail` is the only place raw technical detail is allowed to
+ * live. It must not exist on the exported row at all — stripping it at the envelope level
+ * would still leave it inside a nested projection.
+ */
+function projectSafeAssignment(assignment: AiTeamAssignment): AiTeamAssignment {
+  const { diagnosticDetail: _diagnosticDetail, ...safe } = assignment;
+  return safe;
+}
+
 export async function exportBackupPayload(
   targetDb: TaskPlannerDatabase = defaultDb,
   _options?: ExportBackupOptions
@@ -195,6 +206,8 @@ export async function exportBackupPayload(
     aiTeamMembers,
     aiTeamLinks,
     aiSkillVersions,
+    aiTeamBatches,
+    rawAiTeamAssignments,
   ] = await Promise.all([
     targetDb.tasks.toArray(),
     targetDb.capacityRules.toArray(),
@@ -224,7 +237,11 @@ export async function exportBackupPayload(
     targetDb.aiTeamMembers.toArray(),
     targetDb.aiTeamLinks.toArray(),
     targetDb.aiSkillVersions.toArray(),
+    targetDb.aiTeamBatches.toArray(),
+    targetDb.aiTeamAssignments.toArray(),
   ]);
+
+  const aiTeamAssignments = rawAiTeamAssignments.map(projectSafeAssignment);
 
   // Strip sensitive botToken from telegramSettings before export
   const telegramSettings = telegramSettingsRaw.map((s) => ({
@@ -278,6 +295,8 @@ export async function exportBackupPayload(
     aiTeamMembers,
     aiTeamLinks,
     aiSkillVersions,
+    aiTeamBatches,
+    aiTeamAssignments,
   };
 
   const counts = {
@@ -309,6 +328,8 @@ export async function exportBackupPayload(
     aiTeamMembers: aiTeamMembers.length,
     aiTeamLinks: aiTeamLinks.length,
     aiSkillVersions: aiSkillVersions.length,
+    aiTeamBatches: aiTeamBatches.length,
+    aiTeamAssignments: aiTeamAssignments.length,
   };
 
   const envelope: BackupEnvelope = {

@@ -14,6 +14,8 @@ import type {
   AiSkill,
   AiSkillVersion,
   AiTeam,
+  AiTeamAssignment,
+  AiTeamBatch,
   AiTeamLink,
   AiTeamMember,
 } from '../../../src/types/aiOffice';
@@ -35,6 +37,9 @@ const PENDING_VERSION_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const APPROVED_VERSION_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 const ASSIGNED_MESSAGE_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 const EMPTY_TEAM_ID = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+const BATCH_ID = '12121212-1212-4212-8212-121212121212';
+const ASSIGNMENT_1_ID = '13131313-1313-4313-8313-131313131313';
+const ASSIGNMENT_2_ID = '14141414-1414-4414-8414-141414141414';
 const LOCKED_AT = '2026-11-09T08:00:00.000Z';
 
 const skill: AiSkill = {
@@ -153,6 +158,54 @@ const approvedVersion: AiSkillVersion = {
   decidedAt: NOW,
 };
 
+/** Phase 37 D-22: a batch plus two attempts. Attempt 2 carries the local-only `diagnosticDetail`. */
+const batch: AiTeamBatch = {
+  id: BATCH_ID,
+  teamId: TEAM_ID,
+  threadId: THREAD_ID,
+  batchIndex: 1,
+  userRequest: 'Review the diff and report.',
+  leadId: LEAD_ID,
+  planSnapshot: {
+    original: [{ agentId: EMPLOYEE_ID, agentName: 'Bảo', task: 'Review the diff' }],
+  },
+  planDecision: 'approved',
+  startedAt: NOW,
+  abortedBy: 'none',
+};
+
+const assignmentAttempt1: AiTeamAssignment = {
+  id: ASSIGNMENT_1_ID,
+  batchId: BATCH_ID,
+  agentId: EMPLOYEE_ID,
+  agentName: 'Bảo',
+  skillId: SKILL_ID,
+  skillVersion: 1,
+  model: 'claude-sonnet-4',
+  task: 'Review the diff',
+  runStatus: 'needs-input',
+  stopReason: 'none',
+  attemptNo: 1,
+  incomplete: true,
+  queuedAt: NOW,
+};
+
+const assignmentAttempt2: AiTeamAssignment = {
+  id: ASSIGNMENT_2_ID,
+  batchId: BATCH_ID,
+  agentId: EMPLOYEE_ID,
+  agentName: 'Bảo',
+  model: 'claude-sonnet-4',
+  task: 'Review the diff',
+  runStatus: 'blocked',
+  stopReason: 'tool-limit',
+  attemptNo: 2,
+  retryOfAssignmentId: ASSIGNMENT_1_ID,
+  incomplete: true,
+  queuedAt: NOW,
+  diagnosticDetail: 'provider stack detail — must never leave the app',
+};
+
 async function seedOffice(db: TaskPlannerDatabase): Promise<void> {
   await db.aiSkills.add(skill);
   await db.aiEmployees.add(employee);
@@ -163,6 +216,8 @@ async function seedOffice(db: TaskPlannerDatabase): Promise<void> {
   await db.chatThreads.add(teamThread);
   await db.chatMessages.add(attributedMessage);
   await db.aiSkillVersions.bulkAdd([pendingVersion, approvedVersion]);
+  await db.aiTeamBatches.add(batch);
+  await db.aiTeamAssignments.bulkAdd([assignmentAttempt1, assignmentAttempt2]);
 }
 
 /** D-34: a current-version payload that predates the AI Office tables — every new key absent. */
@@ -200,12 +255,12 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
     await Promise.all([sourceDb.delete(), restoredDb.delete()]);
   });
 
-  it('exports the AI Office tables at schemaVersion 12', async () => {
+  it('exports the AI Office tables at schemaVersion 13', async () => {
     await seedOffice(sourceDb);
 
     const envelope = await exportBackupPayload(sourceDb);
 
-    expect(envelope.schemaVersion).toBe(12);
+    expect(envelope.schemaVersion).toBe(13);
     expect(envelope.tables.aiEmployees).toEqual([employee]);
     expect(envelope.tables.aiLeads).toEqual([lead]);
     expect(envelope.tables.aiSkills).toEqual([skill]);
@@ -213,6 +268,8 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
     expect(envelope.tables.aiTeamMembers).toEqual([leadMember, employeeMember]);
     expect(envelope.tables.aiTeamLinks).toEqual([teamLink]);
     expect(envelope.tables.aiSkillVersions).toEqual([pendingVersion, approvedVersion]);
+    expect(envelope.tables.aiTeamBatches).toEqual([batch]);
+    expect(envelope.tables.aiTeamAssignments).toHaveLength(2);
     expect(envelope.counts).toMatchObject({
       aiEmployees: 1,
       aiLeads: 1,
@@ -221,7 +278,36 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
       aiTeamMembers: 2,
       aiTeamLinks: 1,
       aiSkillVersions: 2,
+      aiTeamBatches: 1,
+      aiTeamAssignments: 2,
     });
+  });
+
+  it('round-trips the ledger and never exports diagnosticDetail (D-17, T-37-14)', async () => {
+    await seedOffice(sourceDb);
+
+    const envelope = await exportBackupPayload(sourceDb);
+
+    expect(envelope.schemaVersion).toBe(13);
+    expect(envelope.counts.aiTeamAssignments).toBe(2);
+    // The local row carries the field; the artifact must not.
+    expect((await sourceDb.aiTeamAssignments.get(ASSIGNMENT_2_ID))?.diagnosticDetail).toBeDefined();
+    expect(JSON.stringify(envelope.tables.aiTeamAssignments)).not.toContain('diagnosticDetail');
+
+    expect(validateBackupPayload(envelope)).toMatchObject({ valid: true, errors: [] });
+    await restoreBackupPayload(envelope, restoredDb);
+
+    expect(await restoredDb.aiTeamBatches.get(BATCH_ID)).toEqual(batch);
+    expect(await restoredDb.aiTeamAssignments.get(ASSIGNMENT_1_ID)).toEqual({
+      ...assignmentAttempt1,
+    });
+    const restoredRetry = await restoredDb.aiTeamAssignments.get(ASSIGNMENT_2_ID);
+    expect(restoredRetry?.retryOfAssignmentId).toBe(ASSIGNMENT_1_ID);
+    expect(restoredRetry?.attemptNo).toBe(2);
+    expect(restoredRetry?.diagnosticDetail).toBeUndefined();
+    // D-24: states with no runtime yet still round-trip.
+    expect(restoredRetry?.runStatus).toBe('blocked');
+    expect((await restoredDb.aiTeamAssignments.get(ASSIGNMENT_1_ID))?.runStatus).toBe('needs-input');
   });
 
   it('round-trips every AI Office row and the four message attribution fields', async () => {
@@ -391,12 +477,12 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
   it('refuses a partial AI Office payload before any clear (WR-10, D-20)', async () => {
     await seedOffice(restoredDb);
 
-    // Carries one of the seven AI Office keys and omits the rest: the old `.some()` trigger
+    // Carries one of the nine AI Office keys and omits the rest: the old `.some()` trigger
     // wiped the whole group and restored nothing in its place.
     const partial: BackupEnvelope = {
       ...v11EnvelopeWithoutOffice(),
-      tables: { ...v11EnvelopeWithoutOffice().tables, aiSkillVersions: [] },
-      counts: { ...v11EnvelopeWithoutOffice().counts, aiSkillVersions: 0 },
+      tables: { ...v11EnvelopeWithoutOffice().tables, aiTeamBatches: [] },
+      counts: { ...v11EnvelopeWithoutOffice().counts, aiTeamBatches: 0 },
     };
     expect(validateBackupPayload(partial)).toMatchObject({ valid: true, errors: [] });
 

@@ -326,6 +326,29 @@ export const BackupChatMessageRecordSchema = z
     // Phase 36 D-14/D-18: HISTORICAL assignee attribution. Never live-validated — a backup
     // taken after deleting the employee must still import.
     targetAgentId: uuidSchema.optional(),
+    // Phase 37 D-22/D-24: ledger links. Declared explicitly for the same reason as the block
+    // above — this is a plain z.object, so an undeclared key is silently stripped and a
+    // restored report loses its assignment link. Historical: never live-validated.
+    batchId: uuidSchema.optional(),
+    assignmentId: uuidSchema.optional(),
+    attemptNo: z.number().int().positive().optional(),
+    runStatus: z
+      .enum(['queued', 'running', 'done', 'stopped', 'error', 'skipped', 'blocked', 'needs-input'])
+      .optional(),
+    stopReason: z
+      .enum([
+        'user-per-agent',
+        'user-abort',
+        'team-deleted',
+        'provider',
+        'tool-limit',
+        'budget-pause',
+        'none',
+      ])
+      .optional(),
+    incomplete: z.boolean().optional(),
+    supersededByMessageId: uuidSchema.optional(),
+    supersededAt: z.string().optional(),
   })
   .superRefine((msg, ctx) => {
     if (msg.grounding === undefined || msg.grounding === null) return;
@@ -624,6 +647,8 @@ export const BackupAiTeamRecordSchema = z.strictObject({
   budgetTokens: aiTokensSchema,
   autoSplitEnabled: z.boolean().optional(),
   autoApproveMutations: z.boolean().optional(),
+  /** Phase 37 D-03/D-02: per-team run concurrency. Absent means the default; range 1-12. */
+  concurrencyLimit: z.number().int().min(1).max(12).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -659,8 +684,102 @@ export const BackupAiSkillVersionRecordSchema = z.strictObject({
   decidedAt: z.string().optional(),
 });
 
-/** D-49: the current backup envelope contract. Version 12 adds `aiSkillVersions`; older versions are rejected. */
-export const BACKUP_SCHEMA_VERSION = 12 as const;
+/**
+ * Phase 37 (D-22, D-24, D-26): the run ledger.
+ *
+ * `strictObject` throughout: an undeclared key is rejected rather than silently stripped.
+ * `diagnosticDetail` (D-17) is deliberately absent — the export projection removes it before
+ * the row ever reaches the envelope, and a hand-crafted payload carrying it is refused here.
+ */
+const aiTeamPlanEntrySchema = z.strictObject({
+  agentId: uuidSchema,
+  /** Snapshot at plan time (D-25) — the roster may change before a retry. */
+  agentName: aiNameSchema,
+  task: z.string(),
+});
+
+export const BackupAiTeamBatchRecordSchema = z.strictObject({
+  id: uuidSchema,
+  teamId: uuidSchema,
+  threadId: uuidSchema,
+  batchIndex: z.number().int().nonnegative(),
+  userRequest: z.string(),
+  leadId: uuidSchema,
+  planSnapshot: z.strictObject({
+    original: z.array(aiTeamPlanEntrySchema),
+    edited: z.array(aiTeamPlanEntrySchema).optional(),
+  }),
+  planDecision: z.enum(['approved', 'rejected', 'auto']),
+  startedAt: z.string(),
+  endedAt: z.string().optional(),
+  phaseAtEnd: z
+    .enum([
+      'idle',
+      'ready',
+      'lead-thinking',
+      'awaiting-plan',
+      'batch-running',
+      'awaiting-budget',
+      'awaiting-mutation-approval',
+      'lead-synthesizing',
+      'error',
+    ])
+    .optional(),
+  abortedBy: z.enum(['user', 'team-deleted', 'app-exit', 'none']),
+});
+
+export const BackupAiTeamAssignmentRecordSchema = z.strictObject({
+  id: uuidSchema,
+  batchId: uuidSchema,
+  agentId: uuidSchema,
+  /** Snapshot (D-25) — never live-validated against the current roster. */
+  agentName: aiNameSchema,
+  skillId: uuidSchema.optional(),
+  skillVersion: z.number().int().positive().optional(),
+  model: aiModelSchema,
+  task: z.string(),
+  // D-24: `blocked` and `needs-input` are legal stored states even before their flows ship.
+  runStatus: z.enum([
+    'queued',
+    'running',
+    'done',
+    'stopped',
+    'error',
+    'skipped',
+    'blocked',
+    'needs-input',
+  ]),
+  stopReason: z.enum([
+    'user-per-agent',
+    'user-abort',
+    'team-deleted',
+    'provider',
+    'tool-limit',
+    'budget-pause',
+    'none',
+  ]),
+  attemptNo: z.number().int().positive(),
+  retryOfAssignmentId: uuidSchema.optional(),
+  incomplete: z.boolean(),
+  queuedAt: z.string(),
+  startedAt: z.string().optional(),
+  endedAt: z.string().optional(),
+  instructionMessageId: uuidSchema.optional(),
+  reportMessageId: uuidSchema.optional(),
+  tokenUsage: z
+    .object({
+      promptTokens: z.number().optional(),
+      completionTokens: z.number().optional(),
+      totalTokens: z.number().optional(),
+    })
+    .optional(),
+  toolCallCount: z.number().int().nonnegative().optional(),
+  /** D-24 handoff: upstream assignments that must finish first. */
+  dependsOn: z.array(uuidSchema).optional(),
+});
+
+/** D-49: the current backup envelope contract. Version 13 adds `aiTeamBatches`, `aiTeamAssignments` and `AiTeam.concurrencyLimit`; older versions are rejected. */
+export const BACKUP_SCHEMA_VERSION = 13 as const;
 
 export const BackupEnvelopeSchema = z.object({
   app: z.literal('personal-task-planner'),

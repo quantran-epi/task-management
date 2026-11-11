@@ -34,6 +34,8 @@ import {
   BackupAiTeamMemberRecordSchema,
   BackupAiTeamLinkRecordSchema,
   BackupAiSkillVersionRecordSchema,
+  BackupAiTeamBatchRecordSchema,
+  BackupAiTeamAssignmentRecordSchema,
   assertNoLegacyTables,
   LEGACY_BACKUP_MESSAGE,
 } from '../../validation/backupSchemas';
@@ -240,6 +242,12 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     : undefined;
   const aiSkillVersions = rawTables.aiSkillVersions !== undefined
     ? validateTable('aiSkillVersions', BackupAiSkillVersionRecordSchema, rawTables.aiSkillVersions)
+    : undefined;
+  const aiTeamBatches = rawTables.aiTeamBatches !== undefined
+    ? validateTable('aiTeamBatches', BackupAiTeamBatchRecordSchema, rawTables.aiTeamBatches)
+    : undefined;
+  const aiTeamAssignments = rawTables.aiTeamAssignments !== undefined
+    ? validateTable('aiTeamAssignments', BackupAiTeamAssignmentRecordSchema, rawTables.aiTeamAssignments)
     : undefined;
 
   // If schema validation errors occurred, stop before referential checks
@@ -541,6 +549,27 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     }
     seenVersions.add(key);
   }
+  // Phase 37 (T-37-15, D-25): the ledger's own references must resolve, or a restore writes
+  // rows that point at nothing. `agentName`/`skillId`/`skillVersion`/`model` are snapshots and
+  // are deliberately NOT live-validated — same rule as `targetAgentId` above.
+  const batchById = new Map((aiTeamBatches ?? []).map((batch) => [batch.id, batch]));
+  const assignmentIds = new Set((aiTeamAssignments ?? []).map((row) => row.id));
+  for (const batch of aiTeamBatches ?? []) {
+    if (!aiTeamIds.has(batch.teamId)) {
+      errors.push({ table: 'aiTeamBatches', recordId: batch.id, field: 'teamId', message: `AiTeamBatch references teamId "${batch.teamId}" not found in aiTeams` });
+    }
+    if (!threadIds.has(batch.threadId)) {
+      errors.push({ table: 'aiTeamBatches', recordId: batch.id, field: 'threadId', message: `AiTeamBatch references threadId "${batch.threadId}" not found in chatThreads` });
+    }
+  }
+  for (const assignment of aiTeamAssignments ?? []) {
+    if (!batchById.has(assignment.batchId)) {
+      errors.push({ table: 'aiTeamAssignments', recordId: assignment.id, field: 'batchId', message: `AiTeamAssignment references batchId "${assignment.batchId}" not found in aiTeamBatches` });
+    }
+    if (assignment.retryOfAssignmentId !== undefined && !assignmentIds.has(assignment.retryOfAssignmentId)) {
+      errors.push({ table: 'aiTeamAssignments', recordId: assignment.id, field: 'retryOfAssignmentId', message: `AiTeamAssignment references retryOfAssignmentId "${assignment.retryOfAssignmentId}" not found in aiTeamAssignments` });
+    }
+  }
   // D-25/D-04: one team = one chat. A nested scope key would merge two groups' transcripts.
   for (const thread of chatThreads ?? []) {
     if (thread.scopeType !== 'team') continue;
@@ -590,6 +619,8 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       ...(aiTeamMembers !== undefined ? { aiTeamMembers: aiTeamMembers as NonNullable<BackupEnvelope['tables']['aiTeamMembers']> } : {}),
       ...(aiTeamLinks !== undefined ? { aiTeamLinks: aiTeamLinks as NonNullable<BackupEnvelope['tables']['aiTeamLinks']> } : {}),
       ...(aiSkillVersions !== undefined ? { aiSkillVersions: aiSkillVersions as NonNullable<BackupEnvelope['tables']['aiSkillVersions']> } : {}),
+      ...(aiTeamBatches !== undefined ? { aiTeamBatches: aiTeamBatches as NonNullable<BackupEnvelope['tables']['aiTeamBatches']> } : {}),
+      ...(aiTeamAssignments !== undefined ? { aiTeamAssignments: aiTeamAssignments as NonNullable<BackupEnvelope['tables']['aiTeamAssignments']> } : {}),
     },
     counts: {
       tasks: tasks.length,
@@ -620,6 +651,8 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       ...(aiTeamMembers !== undefined ? { aiTeamMembers: aiTeamMembers.length } : {}),
       ...(aiTeamLinks !== undefined ? { aiTeamLinks: aiTeamLinks.length } : {}),
       ...(aiSkillVersions !== undefined ? { aiSkillVersions: aiSkillVersions.length } : {}),
+      ...(aiTeamBatches !== undefined ? { aiTeamBatches: aiTeamBatches.length } : {}),
+      ...(aiTeamAssignments !== undefined ? { aiTeamAssignments: aiTeamAssignments.length } : {}),
     },
   };
 
