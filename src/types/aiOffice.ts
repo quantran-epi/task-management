@@ -20,7 +20,14 @@ export type AiTeamMemberRole = 'lead' | 'employee';
 
 export type AiTeamLinkItemType = 'cr' | 'task' | 'system' | 'note' | 'document';
 
-/** D-35: a NEW run-state union, independent of the chat turn status surface. */
+/**
+ * D-35: a NEW run-state union, independent of the chat turn status surface.
+ *
+ * IN-08: there is deliberately no `'error'` phase. A failed turn settles back to `ready`
+ * (D-16 forbids parking in a running phase), and an `'error'` member nothing writes would be
+ * silently NON-busy — letting a new turn start beside a failed one. Every member here has a
+ * writer in `teamRunCoordinator`.
+ */
 export type TeamRunPhase =
   | 'idle'
   | 'ready'
@@ -29,8 +36,7 @@ export type TeamRunPhase =
   | 'batch-running'
   | 'awaiting-budget'
   | 'awaiting-mutation-approval'
-  | 'lead-synthesizing'
-  | 'error';
+  | 'lead-synthesizing';
 
 export type AgentRunStatus = 'queued' | 'running' | 'paused' | 'stopped' | 'error' | 'done';
 

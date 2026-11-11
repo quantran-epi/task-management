@@ -116,6 +116,36 @@ describe('validateBackupPayload', () => {
     expect(result.errors[0]?.message).toContain(LEGACY_MESSAGE);
   });
 
+  describe('IN-08 — no unreachable phase value', () => {
+    it('refuses phaseAtEnd "error", which no writer ever produces', async () => {
+      const { BackupAiTeamBatchRecordSchema } = await import(
+        '../../../src/validation/backupSchemas'
+      );
+      const row = {
+        id: 'aeaeaeae-aeae-4aea-8aea-aeaeaeaeaeae',
+        teamId: '11111111-1111-4111-8111-111111111111',
+        threadId: '22222222-2222-4222-8222-222222222222',
+        batchIndex: 1,
+        userRequest: 'x',
+        leadId: '33333333-3333-4333-8333-333333333333',
+        planSnapshot: { original: [] },
+        planDecision: 'auto' as const,
+        startedAt: '2026-09-27T10:00:00.000Z',
+        abortedBy: 'none' as const,
+      };
+
+      expect(BackupAiTeamBatchRecordSchema.safeParse(row).success).toBe(true);
+      expect(
+        BackupAiTeamBatchRecordSchema.safeParse({ ...row, phaseAtEnd: 'ready' }).success
+      ).toBe(true);
+      // IN-08: the phase union dropped `error`; the schema must agree or a hand-crafted
+      // payload could restore a state the app can never enter.
+      expect(
+        BackupAiTeamBatchRecordSchema.safeParse({ ...row, phaseAtEnd: 'error' }).success
+      ).toBe(false);
+    });
+  });
+
   describe('D-49 legacy rejection', () => {
     it('rejects a payload carrying a projects table before any table validation', () => {
       const result = validateBackupPayload({

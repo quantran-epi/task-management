@@ -722,7 +722,6 @@ export const BackupAiTeamBatchRecordSchema = z.strictObject({
       'awaiting-budget',
       'awaiting-mutation-approval',
       'lead-synthesizing',
-      'error',
     ])
     .optional(),
   abortedBy: z.enum(['user', 'team-deleted', 'app-exit', 'none']),
