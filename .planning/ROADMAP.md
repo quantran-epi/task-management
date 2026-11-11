@@ -152,6 +152,36 @@ Plans:
 
 **Research flag:** standard patterns — skip research-phase; defects are specified to `file:line`.
 
+> **Criterion 2 is superseded by D-20.** The user locked a queue/outbox model during discuss: a second submit is *not* rejected at the composer — it is queued visibly and dispatched when the current turn settles. Verify against D-20, not against the "rejection is visible at the composer" wording above.
+
+**Plans:** 7 plans in 6 waves
+
+Plans:
+**Wave 1**
+
+- [ ] 37-01-PLAN.md — Ledger contract: Dexie V22 tables, guarded `transitionAssignment`, `concurrencyLimit` on `AiTeam` (D-02/D-03/D-09/D-22/D-24)
+
+**Wave 2** *(parallel: runtime primitives vs backup surface)*
+
+- [ ] 37-02-PLAN.md — `scheduler.ts` (FIFO, live limit) + `teamRunManager.ts` + coordinator `dispose()` (D-01/D-04/D-07/D-18)
+- [ ] 37-05-PLAN.md — Backup envelope 12→13, two ledger tables through export/restore/validate/SQLite TS+Rust, parity test (D-26)
+
+**Wave 3**
+
+- [ ] 37-03-PLAN.md — Ledger writes in the run path; thrown `start()` terminates; `teamTurnId` finished in `finally` (AIO-RUNTIME-01/03, D-16/D-17/D-19)
+
+**Wave 4**
+
+- [ ] 37-04-PLAN.md — Scheduler-gated `runBatch`, live limit changes, `MAX_BATCH_SIZE` deleted, stop/abort reach the queue (D-04/D-05/D-06/D-10/D-11)
+
+**Wave 5**
+
+- [ ] 37-06-PLAN.md — Outbox replaces fire-and-forget submit; manager ownership; dispose-before-delete in the explorer (D-18/D-20/D-21)
+
+**Wave 6**
+
+- [ ] 37-07-PLAN.md — Retry one assignment + re-synthesize the batch; lead names unfinished work; observed Tauri walkthrough (D-12/D-13/D-14/D-27)
+
 ### Phase 38: Hard token budget + accurate measurement
 
 **Goal:** The budget is genuinely hard, input and output are both charged on every request, and the numbers the user sees are correct.
