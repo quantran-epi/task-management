@@ -2944,6 +2944,57 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(started).toEqual([]);
     });
 
+    it('refuses a batch when dispose lands inside the delegate_batch validation (CR-02)', async () => {
+      const gate = deferred();
+      const teamTools = await import('../../../../src/services/ai/office/teamTools');
+      const original = teamTools.executeTeamTool;
+      const spy = vi.spyOn(teamTools, 'executeTeamTool').mockImplementation(async (name, args, ctx) => {
+        if (normalizeToolName(name) === 'delegate_batch') await gate.promise;
+        return original(name, args, ctx);
+      });
+
+      let toolResult: string | null = null;
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            toolResult = await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+        },
+      });
+      const current = harness;
+
+      try {
+        const sent = current.coordinator.send('Làm báo cáo');
+        await waitFor(() => toolResult === null && current.coordinator.getState().phase === 'lead-thinking');
+
+        // The delete lands while the lead is still inside `delegate_batch`.
+        await current.coordinator.dispose();
+        gate.release();
+        await sent;
+
+        // No batch row, no attempt row, no runtime — and the lead got a refusal, not a hang.
+        expect(await current.db.aiTeamBatches.count()).toBe(0);
+        expect(await current.db.aiTeamAssignments.count()).toBe(0);
+        expect(current.coordinator.getRunningCount()).toBe(0);
+        // Only the lead (settled by dispose) — no employee ever registered a runtime.
+        expect(
+          current.coordinator.getState().agents.filter((row) => row.agentId !== current.lead.id)
+        ).toEqual([]);
+        expect(current.coordinator.getState().phase).toBe('ready');
+        expect(JSON.parse(toolResult as unknown as string)).toMatchObject({ cancelled: true });
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
     it('aborts every assignment controller and empties the map', () => {
       // 37-02 establishes the map and the abort-all loop; 37-04 wires the producers, so
       // here the loop is proven directly against a populated map.

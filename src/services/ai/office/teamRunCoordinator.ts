@@ -1273,6 +1273,11 @@ export function createTeamRunCoordinator(
     try {
       handle = await scheduler.acquire(controller.signal);
       scheduledHandles.set(assignmentId, handle);
+      // CR-02: `acquire` resolving is an await boundary. If dispose landed while parked its
+      // `registry.clear()` already ran, so starting now would build a fresh runtime for a
+      // deleted team. Throw the abort the catch below already knows how to settle — a bare
+      // `return` would leave the attempt row `queued` forever.
+      if (disposed) throw new DOMException('Aborted', 'AbortError');
       await startEmployeeTurn(employee, task, lastUserRequest, priorBatchResults, attempt);
     } catch (err) {
       // The acquire rejected (a stop/abort/dispose) or the prologue threw. The agent and
@@ -1334,6 +1339,9 @@ export function createTeamRunCoordinator(
       { assignments: rawAssignments },
       toolContext(lead.id)
     );
+    // CR-02: `executeTeamTool` is an await — a dispose that landed during it must not open
+    // a batch or start agents against a deleted team.
+    if (disposed) return DISPOSED_REFUSAL;
     let parsed: any;
     try {
       parsed = JSON.parse(validation);
@@ -1384,6 +1392,9 @@ export function createTeamRunCoordinator(
       });
       planResolver = null;
       pendingPlan = null;
+      // CR-02: `dispose()` releases this park, so the resolution is an await like any other.
+      // Opening a ledger row now would write into a team the delete is removing.
+      if (disposed) return DISPOSED_REFUSAL;
       // UI-SPEC §7: the decided plan stays visible with its status line until the next
       // plan replaces it, so the decision is observable rather than flashing away.
       lastPlan = plan;
@@ -1428,6 +1439,17 @@ export function createTeamRunCoordinator(
       },
       db
     );
+    // CR-02: `openBatch` is an await and `dispose()` may have run during it — it saw
+    // `openBatchId === null`, so this row would never be closed. Close it here, in the
+    // teardown's own vocabulary, and refuse the batch.
+    if (disposed) {
+      try {
+        await closeBatch(batch.id, { phaseAtEnd: 'ready', abortedBy: 'team-deleted' }, db);
+      } catch {
+        /* the refusal must not throw on a ledger write */
+      }
+      return DISPOSED_REFUSAL;
+    }
     openBatchId = batch.id;
 
     setPhase('batch-running');
@@ -1451,9 +1473,16 @@ export function createTeamRunCoordinator(
         },
         db
       );
-      // D-10/D-11: registered at CREATION time (queued), so a stop can find the assignment
-      // before any runtime exists. Cleared by the dispatch task's `finally`.
-      assignmentIdsByAgent.set(employee.id, attemptRow.id);
+      // CR-02: `createAssignment` is an await; a dispose that landed during it means this
+      // attempt (and the batch) must not be dispatched at all.
+      if (disposed) {
+        try {
+          await closeBatch(batch.id, { phaseAtEnd: 'ready', abortedBy: 'team-deleted' }, db);
+        } catch {
+          /* the refusal must not throw on a ledger write */
+        }
+        return DISPOSED_REFUSAL;
+      }
       attemptIdsByAgent.set(employee.id, attemptRow.id);
       // Queued means nothing has started: no runtime, no live-use claim, no turn registration.
       updateAgent(employee.id, { status: 'queued', streamingText: '' });
@@ -1654,6 +1683,24 @@ export function createTeamRunCoordinator(
         db
       );
 
+      // CR-02: a dispose that landed during `createAssignment` means no agent may start.
+      // The teardown already closed the batch, so this row must be settled here or it
+      // would sit `queued` forever with no writer left.
+      if (disposed) {
+        try {
+          await finalizeAttempt(
+            attemptRow.id,
+            'queued',
+            'stopped',
+            'team-deleted',
+            STOPPED_REPORT_COPY
+          );
+        } catch {
+          /* the refusal must not throw on a ledger write */
+        }
+        return;
+      }
+
       claimed = true;
       claimedAgentId = source.agentId;
       retryingAgents.add(source.agentId);
@@ -1677,6 +1724,9 @@ export function createTeamRunCoordinator(
       try {
         handle = await scheduler.acquire(controller.signal);
         scheduledHandles.set(attemptRow.id, handle);
+        // CR-02: same await boundary as the batch path — a dispose during the park cleared
+        // the registry, so a start here would create a runtime for a deleted team.
+        if (disposed) throw new DOMException('Aborted', 'AbortError');
         await startEmployeeTurn(employee, source.task, batch.userRequest, priorBatchResults, attempt);
       } catch {
         // Same terminal contract as the batch wrapper: an aborted parked retry still owes
