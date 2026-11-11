@@ -341,46 +341,9 @@ export const BackupChatMessageRecordSchema = z
       return;
     }
 
-    if (typeof msg.grounding === 'object' && msg.grounding !== null) {
-      const rawG = msg.grounding as Record<string, unknown>;
-      if (Array.isArray(rawG.citations)) {
-        if (rawG.citations.length > 20) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['grounding', 'citations'],
-            message: 'GROUNDING_SIZE_EXCEEDED: citations count exceeds 20',
-            params: { code: 'GROUNDING_SIZE_EXCEEDED' },
-          });
-        }
-        rawG.citations.forEach((c: unknown, idx: number) => {
-          if (c && typeof c === 'object' && typeof (c as any).citedExcerpt === 'string' && (c as any).citedExcerpt.length > 2500) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              path: ['grounding', 'citations', idx, 'citedExcerpt'],
-              message: 'GROUNDING_SIZE_EXCEEDED: citation excerpt exceeds 2500 characters',
-              params: { code: 'GROUNDING_SIZE_EXCEEDED' },
-            });
-          }
-        });
-      }
-      if (Array.isArray(rawG.paths) && rawG.paths.length > 20) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['grounding', 'paths'],
-          message: 'GROUNDING_SIZE_EXCEEDED: paths count exceeds 20',
-          params: { code: 'GROUNDING_SIZE_EXCEEDED' },
-        });
-      }
-      if (Array.isArray(rawG.conflicts) && rawG.conflicts.length > 10) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['grounding', 'conflicts'],
-          message: 'GROUNDING_SIZE_EXCEEDED: conflicts count exceeds 10',
-          params: { code: 'GROUNDING_SIZE_EXCEEDED' },
-        });
-      }
-    }
-
+    // Size bounds live in `ChatMessageGroundingSchema` alone (500 citations, 16000-char
+    // excerpt, 50 paths, 20 conflicts). Duplicating them here at tighter values made the
+    // app's own export unrestorable: a grounding the app can persist failed import.
     const parsedGrounding = ChatMessageGroundingSchema.safeParse(msg.grounding);
     if (!parsedGrounding.success) {
       parsedGrounding.error.issues.forEach((issue) => {

@@ -139,6 +139,9 @@ export const SCHEMA_V19 = {
   aiSkillVersions: 'id, skillId, [skillId+version], status, createdAt',
 } as const;
 
+// Post-36 repair: rewrites a legacy `scopeType` value only, so no index spec changes.
+export const SCHEMA_V20 = { ...SCHEMA_V19 } as const;
+
 // Bump with every new `this.version(n)` in db/index.ts. Migration tests assert
 // against this instead of a literal, so a schema bump never silently breaks them.
-export const LATEST_SCHEMA_VERSION = 19;
+export const LATEST_SCHEMA_VERSION = 20;

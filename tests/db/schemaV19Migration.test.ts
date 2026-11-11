@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Dexie from 'dexie';
 import { TaskPlannerDatabase } from '../../src/db/index';
-import { SCHEMA_V17 } from '../../src/db/schema';
+import { SCHEMA_V17, LATEST_SCHEMA_VERSION } from '../../src/db/schema';
 import type { AiSkillVersion } from '../../src/types/aiOffice';
 
 /**
@@ -94,9 +94,9 @@ describe('Dexie SCHEMA_V19 Migration (Phase 36)', () => {
     return upgraded;
   }
 
-  it('opens at version 19', async () => {
+  it('opens at the latest version', async () => {
     const db = await openAtCurrentVersion();
-    expect(db.verno).toBe(19);
+    expect(db.verno).toBe(LATEST_SCHEMA_VERSION);
   });
 
   it('keeps every non-SDLC seeded V17 row readable with its original content', async () => {
@@ -144,7 +144,7 @@ describe('Dexie SCHEMA_V19 Migration (Phase 36)', () => {
     await reopened.open();
     upgraded = reopened;
 
-    expect(reopened.verno).toBe(19);
+    expect(reopened.verno).toBe(LATEST_SCHEMA_VERSION);
     expect(await reopened.aiSkillVersions.get(VERSION_ID)).toEqual(row);
     expect((await reopened.aiSkillVersions.get(VERSION_ID))?.status).toBe('pending');
   });

@@ -170,7 +170,7 @@ describe('Backup Chat Grounding (Plan 19-10 Task 2, D-46, D-48)', () => {
     }
   });
 
-  it('2. Export rejects grounding with 21 citations -> safeParse fails with GROUNDING_SIZE_EXCEEDED', () => {
+  it('2. Backup schema accepts 21 citations (the app can persist 500; a tighter cap broke its own export)', () => {
     const citations: PersistedCitation[] = [];
     for (let i = 1; i <= 21; i++) {
       citations.push({
@@ -179,52 +179,52 @@ describe('Backup Chat Grounding (Plan 19-10 Task 2, D-46, D-48)', () => {
       });
     }
 
-    const oversizedGrounding = {
-      ...validLocalGrounding,
-      citations,
-    };
-
     const msg = {
       id: generateId(),
       threadId: generateId(),
       role: 'assistant' as const,
       content: 'Cau tra loi',
       createdAt: '2026-10-11T12:00:00.000Z',
-      grounding: oversizedGrounding,
+      grounding: { ...validLocalGrounding, citations },
     };
 
-    const result = BackupChatMessageRecordSchema.safeParse(msg);
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      const issue = result.error.issues.find(
-        (i) => i.message.includes('GROUNDING_SIZE_EXCEEDED')
-      );
-      expect(issue).toBeDefined();
-    }
+    expect(BackupChatMessageRecordSchema.safeParse(msg).success).toBe(true);
   });
 
-  it('3. Export rejects grounding with a citation citedExcerpt of 2501 chars', () => {
-    const longCitation: PersistedCitation = {
-      ...localCitation,
-      citedExcerpt: 'A'.repeat(2501),
-    };
+  it('2b. Backup schema still rejects the true persisted ceiling: 501 citations', () => {
+    const citations: PersistedCitation[] = [];
+    for (let i = 1; i <= 501; i++) {
+      citations.push({ ...localCitation, citationId: `L${i}` });
+    }
 
-    const invalidGrounding = {
-      ...validLocalGrounding,
-      citations: [longCitation],
-    };
-
-    const msg = {
+    const result = BackupChatMessageRecordSchema.safeParse({
       id: generateId(),
       threadId: generateId(),
       role: 'assistant' as const,
       content: 'Cau tra loi',
       createdAt: '2026-10-11T12:00:00.000Z',
-      grounding: invalidGrounding,
-    };
+      grounding: { ...validLocalGrounding, citations },
+    });
 
-    const result = BackupChatMessageRecordSchema.safeParse(msg);
     expect(result.success).toBe(false);
+  });
+
+  it('3. Backup schema accepts a 2501-char excerpt but rejects one over the 16000 ceiling', () => {
+    const parse = (citedExcerpt: string) =>
+      BackupChatMessageRecordSchema.safeParse({
+        id: generateId(),
+        threadId: generateId(),
+        role: 'assistant' as const,
+        content: 'Cau tra loi',
+        createdAt: '2026-10-11T12:00:00.000Z',
+        grounding: {
+          ...validLocalGrounding,
+          citations: [{ ...localCitation, citedExcerpt }],
+        },
+      });
+
+    expect(parse('A'.repeat(2501)).success).toBe(true);
+    expect(parse('A'.repeat(16001)).success).toBe(false);
   });
 
   it('4. Export rejects grounding containing a nested apiKey key anywhere -> safeParse fails with FORBIDDEN_FIELD', () => {

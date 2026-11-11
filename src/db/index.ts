@@ -19,6 +19,7 @@ import {
   SCHEMA_V17,
   SCHEMA_V18,
   SCHEMA_V19,
+  SCHEMA_V20,
 } from './schema';
 import type {
   Task,
@@ -550,6 +551,29 @@ export class TaskPlannerDatabase extends Dexie {
     // Phase 36 (D-16, D-22): skill revisions. Purely additive — nothing to backfill, so no
     // `.upgrade()` hook. The V18 purge hook above stays attached to version(18) only.
     this.version(19).stores(SCHEMA_V19);
+
+    // Repair (post-36): the V16 purge filtered on `scopeKey` prefix only, but the pre-31.2
+    // `buildScopeKey` collapsed a project/milestone scope with no entityId to `scopeKey:
+    // 'global'`. Those rows kept `scopeType: 'project' | 'milestone'` and made the app's own
+    // export unrestorable (BackupChatThreadRecordSchema rejects the enum value). Rewrite the
+    // value from the scope key; an unrecognized key becomes `global`, its entityId dropped.
+    this.version(20)
+      .stores(SCHEMA_V20)
+      .upgrade(async (tx) => {
+        const valid = new Set(['global', 'task', 'cr', 'system', 'document', 'team']);
+        await tx
+          .table('chatThreads')
+          .toCollection()
+          .modify((thread: Record<string, unknown>) => {
+            if (typeof thread.scopeType !== 'string' || valid.has(thread.scopeType)) return;
+            const scopeKey = typeof thread.scopeKey === 'string' ? thread.scopeKey : '';
+            const prefix = scopeKey === 'global' ? 'global' : scopeKey.split(':', 1)[0] || '';
+            const entityId = scopeKey.split(':')[1];
+            thread.scopeType = valid.has(prefix) ? prefix : 'global';
+            if (thread.scopeType === 'global' || !entityId) delete thread.entityId;
+            else thread.entityId = entityId;
+          });
+      });
 
     // Multi-tab concurrency handlers (DATA-04, D-09, D-10)
     this.on('blocked', () => {
