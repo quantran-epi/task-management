@@ -1197,9 +1197,15 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         survives a remount with no live snapshot; the live `agentStatus` is only a fallback for
         rows written before the ledger links existed. A superseded report renders no row at all
         — supersession is suppressed HERE, not by hiding the button.
+
+        WR-01: only a report (or a pre-ledger row with no `messageKind`) carries attempt
+        status. An `instruction` row links to the attempt for pairing, but its status lives on
+        the report — rendering a row here gave the lead a queue badge, a stop button that
+        aborts the whole batch, and a retry button that refuses.
       */}
       {agent &&
         msg.supersededByMessageId === undefined &&
+        (msg.messageKind === 'report' || msg.messageKind === undefined) &&
         (msg.runStatus ?? agentStatus) && (
           <AgentStatusRow
             agent={agent}

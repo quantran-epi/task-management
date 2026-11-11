@@ -1473,21 +1473,18 @@ export function createTeamRunCoordinator(
         },
         db
       );
-      // CR-02: `createAssignment` is an await; a dispose that landed during it means this
-      // attempt (and the batch) must not be dispatched at all.
-      if (disposed) {
-        try {
-          await closeBatch(batch.id, { phaseAtEnd: 'ready', abortedBy: 'team-deleted' }, db);
-        } catch {
-          /* the refusal must not throw on a ledger write */
-        }
-        return DISPOSED_REFUSAL;
-      }
+      // D-10/D-11: registered at CREATION time (queued), so a stop can find the assignment
+      // before any runtime exists. Cleared by the dispatch task's `finally`.
+      assignmentIdsByAgent.set(employee.id, attemptRow.id);
       attemptIdsByAgent.set(employee.id, attemptRow.id);
       // Queued means nothing has started: no runtime, no live-use claim, no turn registration.
       updateAgent(employee.id, { status: 'queued', streamingText: '' });
       // D-31: the instruction row is attributed to the lead, so the employee's own history
       // reads as (instruction, report) pairs. D-22 links make the pair explicit.
+      // WR-01: link fields ONLY. Nothing updates an instruction row's `runStatus`/
+      // `stopReason` (the terminal writer patches the REPORT row), so stamping `queued` here
+      // rendered a permanent queue badge, a stop button for the lead, and a retry button
+      // that refuses. The ledger row is the single source of attempt status.
       const instructionRow = await saveTeamMessage(
         {
           threadId: options.threadId,
@@ -1503,8 +1500,6 @@ export function createTeamRunCoordinator(
           batchId: batch.id,
           assignmentId: attemptRow.id,
           attemptNo: attemptRow.attemptNo,
-          runStatus: 'queued',
-          stopReason: 'none',
         },
         db
       );

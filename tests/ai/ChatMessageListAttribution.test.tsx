@@ -139,6 +139,56 @@ describe('ChatMessageBubble agent attribution', () => {
     expect(onRetryAgent).toHaveBeenCalledWith('assignment-1');
   });
 
+  // WR-01: `runBatch` links the instruction row to its attempt for pairing, but attempt
+  // STATUS lives on the report row. Rendering it here gave the lead a permanent queue
+  // badge, a stop button that aborts the whole batch, and a retry that refuses.
+  it('renders no status row, stop or retry for an instruction row', () => {
+    render(
+      <ChatMessageBubble
+        message={msg({
+          messageKind: 'instruction',
+          agentId: AGENT_ID,
+          assignmentId: 'assignment-1',
+          attemptNo: 1,
+          runStatus: 'queued',
+          stopReason: 'none',
+        })}
+        agent={lead}
+        onStopAgent={vi.fn()}
+        onRetryAgent={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByTestId(`agent-status-${AGENT_ID}`)).toBeNull();
+    expect(screen.queryByText('Đang xếp hàng')).toBeNull();
+    expect(screen.queryByTestId(`agent-stop-${AGENT_ID}`)).toBeNull();
+    expect(screen.queryByTestId('agent-retry-assignment-1')).toBeNull();
+  });
+
+  // The report row of the same attempt still renders its status row and retry button, so
+  // the gate is the KIND, not the presence of link fields.
+  it('still renders the report row of the same attempt', () => {
+    const onRetry = vi.fn();
+    render(
+      <ChatMessageBubble
+        message={msg({
+          messageKind: 'report',
+          agentId: AGENT_ID,
+          assignmentId: 'assignment-1',
+          attemptNo: 1,
+          runStatus: 'stopped',
+        })}
+        agent={agent}
+        onStopAgent={vi.fn()}
+        onRetryAgent={onRetry}
+      />
+    );
+
+    expect(screen.getByText('Chưa hoàn tất')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('agent-retry-assignment-1'));
+    expect(onRetry).toHaveBeenCalledWith('assignment-1');
+  });
+
   it('shows the persisted label without a button when the surface cannot retry', () => {
     render(
       <ChatMessageBubble
