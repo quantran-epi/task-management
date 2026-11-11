@@ -320,9 +320,21 @@ export async function deleteTeam(id: string, db: TaskPlannerDatabase = defaultDb
   // CR-03: the team's chat thread is a live reference the backup validator enforces
   // (`scopeType: 'team'` must resolve to an existing aiTeams row). Leaving it behind made
   // the app's own next export unrestorable, so the thread dies with the team.
+  // Phase 37 CR-01: the run ledger is the same class of reference (`aiTeamBatches.teamId`,
+  // `.threadId`, `aiTeamAssignments.batchId`), so it dies in the same transaction — in
+  // dependency order, assignments before their batch, before the parent rows.
   await db.transaction(
     'rw',
-    [db.aiTeams, db.aiTeamMembers, db.aiTeamLinks, db.chatThreads, db.chatMessages, db.chatTabs],
+    [
+      db.aiTeams,
+      db.aiTeamMembers,
+      db.aiTeamLinks,
+      db.chatThreads,
+      db.chatMessages,
+      db.chatTabs,
+      db.aiTeamBatches,
+      db.aiTeamAssignments,
+    ],
     async () => {
       const threads = await db.chatThreads.where('scopeKey').equals(`team:${id}`).toArray();
       for (const thread of threads) {
@@ -330,6 +342,12 @@ export async function deleteTeam(id: string, db: TaskPlannerDatabase = defaultDb
         await db.chatTabs.where('threadId').equals(thread.id).delete();
         await db.chatThreads.delete(thread.id);
       }
+      // An assignment row has no `teamId`, so its batch ids are the only way to reach it.
+      const batchIds = await db.aiTeamBatches.where('teamId').equals(id).primaryKeys();
+      if (batchIds.length > 0) {
+        await db.aiTeamAssignments.where('batchId').anyOf(batchIds).delete();
+      }
+      await db.aiTeamBatches.where('teamId').equals(id).delete();
       await db.aiTeamMembers.where('teamId').equals(id).delete();
       await db.aiTeamLinks.where('teamId').equals(id).delete();
       await db.aiTeams.delete(id);

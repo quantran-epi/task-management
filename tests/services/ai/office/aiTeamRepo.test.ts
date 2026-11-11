@@ -299,6 +299,69 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
     expect(await db.aiTeamLinks.where('teamId').equals(team.id).count()).toBe(0);
   });
 
+  // Phase 37 CR-01: the run ledger is a live reference enforced by the backup validator.
+  // Leaving the two ledger tables behind made the app's OWN next export unrestorable.
+  it('deletes the team run ledger so the next export still validates (CR-01)', async () => {
+    const { openBatch, createAssignment } = await import(
+      '../../../../src/db/repositories/aiTeamRunRepo'
+    );
+    const { ensureTeamThread, saveTeamMessage } = await import(
+      '../../../../src/db/repositories/teamTranscriptRepo'
+    );
+    const { exportBackupPayload } = await import('../../../../src/services/backup/exportBackup');
+    const { validateBackupPayload } = await import('../../../../src/services/backup/validateBackup');
+
+    const team = await makeTeam('Ledger');
+    const thread = await ensureTeamThread(team.id, db);
+    const batch = await openBatch(
+      {
+        teamId: team.id,
+        threadId: thread.id,
+        batchIndex: 1,
+        userRequest: 'x',
+        leadId,
+        planSnapshot: { original: [] },
+        planDecision: 'auto',
+      },
+      db
+    );
+    const assignment = await createAssignment(
+      {
+        batchId: batch.id,
+        agentId: employeeIds[0]!,
+        agentName: 'E1',
+        model: 'm',
+        task: 'Việc',
+      },
+      db
+    );
+    await saveTeamMessage(
+      {
+        threadId: thread.id,
+        role: 'assistant',
+        content: 'Báo cáo',
+        agentId: employeeIds[0]!,
+        agentName: 'E1',
+        messageKind: 'report',
+        batchId: batch.id,
+        assignmentId: assignment.id,
+        attemptNo: 1,
+        runStatus: 'done',
+        stopReason: 'none',
+        incomplete: false,
+      },
+      db
+    );
+
+    await deleteTeam(team.id, db);
+
+    expect(await db.aiTeamBatches.count()).toBe(0);
+    expect(await db.aiTeamAssignments.count()).toBe(0);
+
+    const envelope = await exportBackupPayload(db);
+    expect(validateBackupPayload(envelope)).toMatchObject({ valid: true });
+  });
+
   it('removes a member row', async () => {
     const team = await makeTeam('Remove');
     const member = (await listTeamMembers(team.id, db)).find((m) => m.role === 'employee')!;
