@@ -5,16 +5,16 @@ milestone_name: Unified AI Office (Phase Details)
 current_phase: 37
 current_phase_name: Runtime reliability + concurrency
 status: executing
-stopped_at: Completed 37-06-PLAN.md
-last_updated: "2026-11-11T21:12:51.828Z"
+stopped_at: Completed 37-07-PLAN.md
+last_updated: "2026-11-11T21:35:20.588Z"
 last_activity: 2026-11-12
 last_activity_desc: Phase 37 execution started
-state_head: 6cf58aff2187f8017e9c66ba13a1edbadaa99123
+state_head: 06ff92d726a5e24624713c34f0cd779afcd4680f
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 25
-  completed_plans: 23
+  completed_plans: 24
   percent: 50
 ---
 
@@ -28,14 +28,14 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 37 (Runtime reliability + concurrency) — EXECUTING
-Plan: 7 of 8
+Plan: 8 of 8
 Status: Ready to execute
 Last activity: 2026-11-12 — Phase 37 execution started
 
 ## Session Continuity
 
-Last session: 2026-11-11T21:12:51.572Z
-Stopped at: Completed 37-06-PLAN.md
+Last session: 2026-11-11T21:35:20.272Z
+Stopped at: Completed 37-07-PLAN.md
 Resume file: None
 
 Progress: [█████░░░░░] 50%
@@ -128,6 +128,8 @@ Progress: [█████░░░░░] 50%
 - [Phase 37]: 37-04: the report-link stamp and finalizeAttempt share one rw transaction, so a settled attempt can never own two bubbles
 - [Phase 37]: 37-06: a throw inside sendTurn is a fourth blocked cause (TURN_FAILED) — draft restored, text never dropped
 - [Phase 37]: 37-06: the API-error-card retry shares the composer's BUSY_PHASES entry rule, so one decision governs every dispatch path
+- [Phase 37]: retryAssignment claims the assignment id before any await and checks it before the busy-phase guard, so a double click is ignored rather than refused as a busy team
+- [Phase 37]: the delegate_batch result keeps its array shape and gains a final kind:'unfinished' entry, because a wrapper object would break every caller and the tool contract
 
 ## Performance Metrics
 
@@ -139,3 +141,4 @@ Progress: [█████░░░░░] 50%
 | Phase 37 P03 | 68 min | 3 tasks | 5 files |
 | Phase 37 P04 | 48 min | 3 tasks | 10 files |
 | Phase 37 P06 | 32 min | 3 tasks | 6 files |
+| Phase 37 P07 | 42 min | 2 tasks | 5 files |

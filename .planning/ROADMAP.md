@@ -154,7 +154,7 @@ Plans:
 
 > **Criterion 2 is superseded by D-20.** The user locked a queue/outbox model during discuss: a second submit is *not* rejected at the composer — it is queued visibly and dispatched when the current turn settles. Verify against D-20, not against the "rejection is visible at the composer" wording above.
 
-**Plans:** 5/8 plans executed in 7 waves
+**Plans:** 7/8 plans executed in 7 waves
 
 Plans:
 **Wave 1**
@@ -176,11 +176,11 @@ Plans:
 
 **Wave 5**
 
-- [ ] 37-06-PLAN.md — Outbox replaces fire-and-forget submit; manager ownership; dispose-before-delete in the explorer (D-18/D-20/D-21)
+- [x] 37-06-PLAN.md — Outbox replaces fire-and-forget submit; manager ownership; dispose-before-delete in the explorer (D-18/D-20/D-21)
 
 **Wave 6**
 
-- [ ] 37-07-PLAN.md — Retry one assignment + re-synthesize the batch; lead names unfinished work (D-12/D-13/D-14)
+- [x] 37-07-PLAN.md — Retry one assignment + re-synthesize the batch; lead names unfinished work (D-12/D-13/D-14)
 
 **Wave 7**
 
