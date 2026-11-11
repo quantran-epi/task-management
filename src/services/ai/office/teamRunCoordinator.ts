@@ -199,8 +199,12 @@ export interface TeamRunCoordinator {
    * D-18: ends a live run in bounded time and leaves the coordinator inert. Resolves once
    * the parks are released and every runtime is aborted — the in-flight `send()` may still
    * be unwinding, so every post-await phase write is gated on `disposed`. Idempotent.
+   *
+   * `cause` is the teardown's own vocabulary (IN-04/IN-07): a team delete, or app exit. The
+   * attempt rows settled by this teardown carry it as `stopReason`, so the ledger and the
+   * batch row (`abortedBy`) agree.
    */
-  dispose(): Promise<void>;
+  dispose(cause?: 'team-deleted' | 'app-exit'): Promise<void>;
   /** D-25: toggles apply to the live run, not only the next construction. */
   setTeamSettings(
     patch: Partial<Pick<AiTeam, 'autoSplitEnabled' | 'autoApproveMutations' | 'concurrencyLimit'>>
@@ -447,9 +451,21 @@ export function createTeamRunCoordinator(
    * D-10/D-11: agents the user stopped, and WHY. `settleAgent` can be called by the settle
    * path too, so the UI state alone cannot prove who stopped the turn — this marker can, and
    * the value is the stop reason both racing writers must record, so the row can never end
-   * with one path's reason and the other path's status.
+   * with one path's reason and the other path's status. IN-07: a teardown (delete / app
+   * exit) writes its OWN reason here, so the ledger agrees with the batch row.
    */
-  const userStopped = new Map<string, 'user-per-agent' | 'user-abort'>();
+  const userStopped = new Map<string, AiTeamAssignmentStopReason>();
+  /**
+   * IN-07: the teardown reason, when one happened. `dispose()` marks the agents it can SEE,
+   * but an assignment created just after it (or one whose marker was cleared by its turn's
+   * start) still owes the ledger this reason instead of the generic `user-abort`.
+   *
+   * Only `team-deleted` is an assignment `stopReason` (D-22 union). `app-exit` has no
+   * assignment-level value and adding one would change the backup schema, so an app exit
+   * keeps `user-abort` on the attempt rows while the BATCH row carries `abortedBy:
+   * 'app-exit'` — the exit fact lives where the union can express it.
+   */
+  let disposeCause: 'team-deleted' | null = null;
   /** T-37-22: agents with a retry in flight, so a double click cannot append a third row. */
   const retryingAgents = new Set<string>();
   /** Same guard keyed by assignment id, set BEFORE any await so a double click cannot race. */
@@ -1314,7 +1330,7 @@ export function createTeamRunCoordinator(
             assignmentId,
             'queued',
             'stopped',
-            userStopped.get(employee.id) ?? 'user-abort',
+            userStopped.get(employee.id) ?? disposeCause ?? 'user-abort',
             STOPPED_REPORT_COPY
           );
           settleAgent(employee.id, 'stopped');
@@ -1981,11 +1997,21 @@ export function createTeamRunCoordinator(
    * them finish — so the `disposed` flag is what keeps a late tail from resurrecting a
    * phase. Idempotent: the second call finds every collection already empty.
    */
-  async function dispose(): Promise<void> {
+  async function dispose(cause: 'team-deleted' | 'app-exit' = 'team-deleted'): Promise<void> {
     disposed = true;
     // `ready` is the terminal state; set it before the ledger await so no observer sees a
     // live phase after the flag is up and before the close resolves.
     phase = 'ready';
+    // IN-07: the stop path and this teardown race to settle the same attempts. Marking every
+    // live agent with the teardown's own reason is what makes both writers record
+    // `team-deleted`/`app-exit` instead of the generic `user-abort`.
+    // IN-07: `team-deleted` IS an assignment stop reason; `app-exit` is only a batch
+    // `abortedBy` value, so an app exit records `user-abort` on the attempt rows and the
+    // exit fact lives on the batch row.
+    if (cause === 'team-deleted') {
+      disposeCause = 'team-deleted';
+      for (const agentId of agents.keys()) userStopped.set(agentId, 'team-deleted');
+    }
 
     // Release every park: plan card, agent gates, team gate.
     planResolver?.(false);
@@ -2006,7 +2032,7 @@ export function createTeamRunCoordinator(
       const batchId = openBatchId;
       openBatchId = null;
       try {
-        await closeBatch(batchId, { phaseAtEnd: 'ready', abortedBy: 'team-deleted' }, db);
+        await closeBatch(batchId, { phaseAtEnd: 'ready', abortedBy: cause }, db);
       } catch {
         /* the ledger close must never block the teardown */
       }

@@ -29,6 +29,7 @@ import { useNotifications } from '../../hooks/useNotifications';
 import { useDesktopNotification } from '../../hooks/useDesktopNotification';
 import { useTimerAlertMonitor } from '../../hooks/useTimerAlertMonitor';
 import { useLocalSqlitePersistence } from '../../hooks/useLocalSqlitePersistence';
+import { useTeamRunTeardown } from '../../hooks/useTeamRunTeardown';
 import { useGitHubAutoSync } from '../../hooks/useGitHubAutoSync';
 import { useTelegramHeadlessWorker } from '../../services/telegram/telegramHeadlessWorker';
 import { GitHubSyncStatusDot } from './GitHubSyncStatusDot';
@@ -118,6 +119,9 @@ const AppShellInner: React.FC<AppShellProps> = ({
 
   // Desktop SQLite mirror persistence
   useLocalSqlitePersistence();
+
+  // IN-04/D-18: app exit disposes every live AI team run (the `app-exit` writer).
+  useTeamRunTeardown();
 
   // Scheduled dirty-only GitHub auto sync
   useGitHubAutoSync();

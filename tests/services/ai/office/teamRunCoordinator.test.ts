@@ -3322,6 +3322,91 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       }
     });
 
+    // IN-07: the dispatch catch used `userStopped.get(agentId) ?? 'user-abort'`, so a row
+    // settled by a team delete recorded `user-abort` while the batch recorded
+    // `team-deleted`. The ledger and the batch must agree.
+    it('records team-deleted on the attempt rows when dispose tears the run down', async () => {
+      const gate = deferred();
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getRunningCount() === 1);
+
+      await current.coordinator.dispose('team-deleted');
+      gate.release();
+      await sent;
+
+      const rows = await current.db.aiTeamAssignments.toArray();
+      expect(rows).toHaveLength(3);
+      const queued = rows.filter((row) => row.agentId !== current.employees[0]!.id);
+      expect(queued.every((row) => row.stopReason === 'team-deleted')).toBe(true);
+      const batch = (await current.db.aiTeamBatches.toArray())[0]!;
+      expect(batch.abortedBy).toBe('team-deleted');
+      expect(batch.endedAt).toBeDefined();
+    });
+
+    it('records app-exit on the attempt rows when the app tears the run down', async () => {
+      const gate = deferred();
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getRunningCount() === 1);
+
+      await current.coordinator.dispose('app-exit');
+      gate.release();
+      await sent;
+
+      const batch = (await current.db.aiTeamBatches.toArray())[0]!;
+      // `app-exit` has no assignment-level stop reason (D-22 union), so the exit fact lives
+      // on the batch row and the attempts stay terminal as `user-abort`.
+      expect(batch.abortedBy).toBe('app-exit');
+      expect(batch.endedAt).toBeDefined();
+      const queued = (await current.db.aiTeamAssignments.toArray()).filter(
+        (row) => row.agentId !== current.employees[0]!.id
+      );
+      expect(queued.every((row) => row.runStatus === 'stopped')).toBe(true);
+    });
+
     it('aborts every assignment controller and empties the map', () => {
       // 37-02 establishes the map and the abort-all loop; 37-04 wires the producers, so
       // here the loop is proven directly against a populated map.

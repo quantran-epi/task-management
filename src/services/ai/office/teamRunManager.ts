@@ -54,21 +54,32 @@ export function peekRun(db: TaskPlannerDatabase, teamId: string): TeamRunCoordin
  * dropped even when disposal throws — a half-disposed coordinator must never be handed
  * out again. The error still reaches the caller after cleanup.
  */
-export async function disposeRun(db: TaskPlannerDatabase, teamId: string): Promise<void> {
+export async function disposeRun(
+  db: TaskPlannerDatabase,
+  teamId: string,
+  cause: 'team-deleted' | 'app-exit' = 'team-deleted'
+): Promise<void> {
   const key = runKey(db, teamId);
   const entry = runs.get(key);
   if (!entry) return;
 
   try {
-    await entry.coordinator.dispose();
+    await entry.coordinator.dispose(cause);
   } finally {
     runs.delete(key);
   }
 }
 
-/** App teardown and tests: dispose every retained coordinator. */
-export async function disposeAllRuns(): Promise<void> {
+/**
+ * App teardown and tests: dispose every retained coordinator.
+ *
+ * IN-04: wired to the Tauri window-close path (`useTeamRunTeardown`), which is also what
+ * makes `abortedBy: 'app-exit'` a reachable value.
+ */
+export async function disposeAllRuns(
+  cause: 'team-deleted' | 'app-exit' = 'app-exit'
+): Promise<void> {
   const entries = [...runs.values()];
   runs.clear();
-  await Promise.allSettled(entries.map((entry) => entry.coordinator.dispose()));
+  await Promise.allSettled(entries.map((entry) => entry.coordinator.dispose(cause)));
 }
