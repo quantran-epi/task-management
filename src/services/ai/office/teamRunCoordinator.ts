@@ -6,6 +6,9 @@ import type {
   AiLead,
   AiSkill,
   AiTeam,
+  AiTeamAssignment,
+  AiTeamAssignmentRunStatus,
+  AiTeamAssignmentStopReason,
   AiTeamMember,
   TeamRunPhase,
 } from '../../../types/aiOffice';
@@ -18,6 +21,7 @@ import {
   createDefaultChatTurnDeps,
   SANITIZED_TURN_ERROR,
   type ChatTurnApprovalInfo,
+  type ChatTurnOutcome,
   type ChatTurnPhase,
   type ChatTurnRequest,
   type ChatTurnRuntimeDeps,
@@ -51,8 +55,10 @@ import {
   type TeamToolContext,
 } from './teamTools';
 import {
+  insertReportMessage,
   listAssignmentHistory,
   listRecentTurns,
+  notifyAIChatSync,
   saveTeamMessage,
 } from '../../../db/repositories/teamTranscriptRepo';
 import {
@@ -62,7 +68,14 @@ import {
   topUpMemberBudget,
   updateTeam,
 } from '../../../db/repositories/aiTeamRepo';
-import { closeBatch } from '../../../db/repositories/aiTeamRunRepo';
+import {
+  closeBatch,
+  createAssignment,
+  getAssignment,
+  openBatch,
+  transitionAssignment,
+} from '../../../db/repositories/aiTeamRunRepo';
+import { generateId } from '../../../utils/uuid';
 
 /**
  * Headless team-run coordinator (D-01/D-02/D-03, D-06, D-08, D-12/D-13, D-14, D-20/D-21,
@@ -143,7 +156,25 @@ export interface TeamRunCoordinatorOptions {
 }
 
 export interface TeamRunCoordinator {
-  send(text: string): Promise<void>;
+  /**
+   * D-20/D-21: the three-way dispatch edge 37-06 needs. `'busy'` means a live OR parked
+   * turn holds the slot and will settle on its own (requeue); `'blocked'` means the
+   * coordinator is disposed and never will (surface an error, requeue nothing).
+   */
+  send(text: string): Promise<'started' | 'busy' | 'blocked'>;
+  /**
+   * Internal seam (D-09/D-22): the ONE terminal writer for an attempt. 37-04's `stopAgent`
+   * and `abortAll` call it; exported so the "exactly one report row under concurrency"
+   * invariant is testable without going through a provider.
+   */
+  finalizeAttempt(
+    assignmentId: string,
+    from: AiTeamAssignmentRunStatus,
+    to: 'done' | 'stopped' | 'error',
+    stopReason: AiTeamAssignmentStopReason,
+    contentWhenMissing?: string,
+    diagnosticDetail?: string
+  ): Promise<AiTeamAssignment | null>;
   runBatch(assignments: unknown[], signal?: AbortSignal): Promise<string>;
   resolvePlan(approved: boolean): void;
   resolveApproval(approved: boolean): void;
@@ -186,6 +217,17 @@ export const LIVE_PHASES: ReadonlySet<TeamRunPhase> = new Set<TeamRunPhase>([
   'lead-synthesizing',
 ]);
 
+/**
+ * D-21: live phases PLUS the two park phases. A parked turn still owns the slot — a second
+ * turn beside it is exactly what `send()` must refuse, so `send()` gates on this set while
+ * "is the team working" UI stays on `LIVE_PHASES`.
+ */
+export const BUSY_PHASES: ReadonlySet<TeamRunPhase> = new Set<TeamRunPhase>([
+  ...LIVE_PHASES,
+  'awaiting-budget',
+  'awaiting-mutation-approval',
+]);
+
 const OUTCOME_STATUS: Record<ChatTurnPhase, AgentRunStatus> = {
   complete: 'done',
   cancelled: 'done',
@@ -193,6 +235,35 @@ const OUTCOME_STATUS: Record<ChatTurnPhase, AgentRunStatus> = {
   error: 'error',
   'tool-limit': 'error',
 };
+
+/** D-22 terminal mapping for the LEDGER, by what the turn actually did. */
+const OUTCOME_RUN_STATUS: Record<ChatTurnPhase, 'done' | 'stopped' | 'error'> = {
+  complete: 'done',
+  cancelled: 'stopped',
+  aborted: 'stopped',
+  error: 'error',
+  'tool-limit': 'error',
+};
+
+const OUTCOME_STOP_REASON: Record<ChatTurnPhase, AiTeamAssignmentStopReason> = {
+  complete: 'none',
+  cancelled: 'user-abort',
+  aborted: 'user-abort',
+  error: 'provider',
+  'tool-limit': 'tool-limit',
+};
+
+/** D-13: the bubble a stopped attempt gets when the runtime wrote no row of its own. */
+export const STOPPED_REPORT_COPY =
+  'Nhân viên đã dừng trước khi hoàn tất công việc. Bấm "Chạy lại" để tiếp tục mà không phải giao lại việc.';
+
+/**
+ * D-17/T-37-07: the ONLY carrier of raw error detail. It reaches `diagnosticDetail` on the
+ * assignment row and nothing else — never `content`, a `ChatMessage`, or the backup.
+ */
+function boundedDiagnostic(err: unknown): string {
+  return err instanceof Error ? `${err.name}: ${err.message}`.slice(0, 300) : 'unknown';
+}
 
 const PLAN_REJECTED = JSON.stringify({
   cancelled: true,
@@ -284,6 +355,11 @@ export function createTeamRunCoordinator(
    * dispose close is a no-op until then.
    */
   let openBatchId: string | null = null;
+  /** D-22: which attempt the agent's next report save belongs to (cleared on terminal). */
+  const activeAssignmentByAgent = new Map<
+    string,
+    { batchId: string; assignmentId: string; attemptNo: number }
+  >();
   /** D-10/D-11/D-18: the cancellation channel for a still-queued assignment. */
   const assignmentControllers = new Map<string, AbortController>();
   const agents = new Map<string, AgentRunState>();
@@ -319,6 +395,12 @@ export function createTeamRunCoordinator(
   const agentDeferreds = new Map<string, Deferred>();
   /** D-13: agents whose live-use claim is currently held (pairing guard for release). */
   const liveAgents = new Set<string>();
+  /**
+   * D-10: agents the user stopped. `settleAgent` can be called by the settle path too, so the
+   * UI state alone cannot prove who stopped the turn — this marker can, and it makes the
+   * ledger record `stopped`/`user-abort` rather than a contradicted `done`.
+   */
+  const userStopped = new Set<string>();
 
   const notify = () => {
     for (const listener of listeners) {
@@ -403,6 +485,115 @@ export function createTeamRunCoordinator(
     endTurn(agentId);
   }
 
+  /**
+   * D-09/D-22: THE terminal writer for one attempt — the single place a report row's link
+   * fields reach their terminal values and the only caller of the attempt's terminal
+   * `transitionAssignment`.
+   *
+   * Round-2 design wrote the ledger id in one step and decided on it in another, so a
+   * stop/settle race produced two report rows. One `rw` transaction over BOTH tables closes
+   * that window: Dexie serializes overlapping transactions, so a losing concurrent caller
+   * observes the winner's terminal status, inserts nothing and reuses `reportMessageId`.
+   *
+   * `from` is the attempt's ACTUAL prior status (`'queued'` before `start()`, `'running'`
+   * after), so the guard rejects a caller that lost the race instead of patching twice.
+   */
+  async function finalizeAttempt(
+    assignmentId: string,
+    from: AiTeamAssignmentRunStatus,
+    to: 'done' | 'stopped' | 'error',
+    stopReason: AiTeamAssignmentStopReason,
+    contentWhenMissing?: string,
+    diagnosticDetail?: string
+  ): Promise<AiTeamAssignment | null> {
+    const threadId = options.threadId;
+    // Only the caller that actually committed the terminal write notifies; a losing
+    // concurrent caller must not emit a second `message_saved` for the same commit.
+    let committed = false;
+
+    const finalized = await db.transaction(
+      'rw',
+      [db.chatMessages, db.aiTeamAssignments],
+      async (): Promise<AiTeamAssignment | null> => {
+        const row = await db.aiTeamAssignments.get(assignmentId);
+        // A vanished row (team deleted mid-run) writes nothing — there is no ledger to link.
+        if (!row) return null;
+
+        let reportId = row.reportMessageId;
+        if (row.runStatus !== from) {
+          // Lost the race: the winner already wrote the terminal row (and usually the row's
+          // id). Report what is stored; never insert a second message.
+          return row.runStatus === 'done' || row.runStatus === 'stopped' || row.runStatus === 'error'
+            ? row
+            : null;
+        }
+
+        if (reportId === undefined) {
+          if (contentWhenMissing === undefined) {
+            // `done` normally has a runtime row. If it does not, a bubble is still better
+            // than silence (D-13), but the missing copy is a programming error, not a state.
+            throw new Error(`finalizeAttempt: missing report content for ${assignmentId}`);
+          }
+          reportId = generateId();
+          await insertReportMessage(
+            {
+              id: reportId,
+              threadId,
+              content: contentWhenMissing,
+              createdAt: new Date().toISOString(),
+              agentId: row.agentId,
+              agentName: row.agentName,
+              batchId: row.batchId,
+              assignmentId: row.id,
+              attemptNo: row.attemptNo,
+              runStatus: to,
+              stopReason,
+              incomplete: to !== 'done',
+            },
+            db
+          );
+        } else {
+          // The runtime saved this row through `saveMessage` and the override stamped
+          // `runStatus: 'running'` as its INITIAL value. Exactly three fields are superseded;
+          // `content` (the runtime's clean text) and `supersededByMessageId` (37-07) are not.
+          await db.chatMessages.update(reportId, {
+            runStatus: to,
+            stopReason,
+            incomplete: to !== 'done',
+          });
+        }
+
+        // D-09: the one status writer, composed INSIDE this transaction so its get/put join
+        // the outer `rw` lock. `reportMessageId` must be carried or the re-read drops it.
+        const transitioned = await transitionAssignment(
+          assignmentId,
+          from,
+          to,
+          {
+            endedAt: new Date().toISOString(),
+            stopReason,
+            reportMessageId: reportId,
+            incomplete: to !== 'done',
+            ...(diagnosticDetail !== undefined ? { diagnosticDetail } : {}),
+          },
+          db
+        );
+        if (transitioned !== null) committed = true;
+        return transitioned;
+      }
+    );
+
+    if (committed) {
+      // After the commit, never inside it: one owner, and the row and the notification
+      // carry the same `threadId` value.
+      notifyAIChatSync({ type: 'message_saved', threadId });
+    }
+    // The `userStopped` marker is cleared only when that agent starts its NEXT turn: the
+    // stop path and the settle path race to finalize, and both must map to `stopped`.
+    if (finalized !== null) activeAssignmentByAgent.delete(finalized.agentId);
+    return finalized;
+  }
+
   function toolContext(agentId: string): TeamToolContext {
     const employee = roster.employees.find((row) => row.id === agentId);
     const skillId = employee?.skillId;
@@ -474,6 +665,7 @@ export function createTeamRunCoordinator(
     const base = createDefaultChatTurnDeps(db);
     const overrides = options.createRuntimeDeps?.(agentId) ?? {};
     const innerRunLoop = overrides.runLoop ?? base.runLoop;
+    const innerSaveMessage = overrides.saveMessage ?? base.saveMessage;
 
     return {
       ...base,
@@ -485,6 +677,32 @@ export function createTeamRunCoordinator(
           ...loopOptions,
           executeToolFn: makeExecuteToolFn(agentId),
         })) as ChatTurnRuntimeDeps['runLoop'],
+      /**
+       * D-22: TAG the row the runtime wrote — it is the report row for the active attempt.
+       * `runStatus: 'running'` is the correct INITIAL value for the live render;
+       * `finalizeAttempt` supersedes it with the terminal triple in the same transaction as
+       * the assignment transition. `reportMessageId` is the durable idempotency key: without
+       * it the `complete` path's row would be invisible to the terminal writer and it would
+       * insert a duplicate. Only non-status fields are written, so D-09 is untouched.
+       */
+      saveMessage: (async (input: Parameters<typeof innerSaveMessage>[0], inputDb: any) => {
+        const row = await innerSaveMessage(input, inputDb ?? db);
+        const active = activeAssignmentByAgent.get(agentId);
+        if (!active || input.role !== 'assistant' || input.messageKind !== 'report') {
+          return row;
+        }
+        await db.chatMessages.update(row.id, {
+          batchId: active.batchId,
+          assignmentId: active.assignmentId,
+          attemptNo: active.attemptNo,
+          runStatus: 'running',
+          stopReason: 'none',
+        });
+        await db.aiTeamAssignments.update(active.assignmentId, {
+          reportMessageId: row.id,
+        });
+        return row;
+      }) as ChatTurnRuntimeDeps['saveMessage'],
       onDelta: (delta) => {
         const state = agents.get(agentId);
         if (!state) return;
@@ -651,153 +869,241 @@ export function createTeamRunCoordinator(
     };
   }
 
+  /** The ledger identity of one attempt, when the turn is a delegated assignment. */
+  interface AttemptRef {
+    batchId: string;
+    assignmentId: string;
+    attemptNo: number;
+    instructionMessageId: string;
+  }
+
+  /** D-22 content for the insert branch: sanitized, never provider text (D-17). */
+  function reportContentFor(outcome: ChatTurnOutcome): string | undefined {
+    if (outcome.phase === 'complete') return undefined;
+    // `cancelled` covers a declined proposal and a read-only refusal; the runtime already
+    // sanitized the richer copy, so use it when present.
+    if (outcome.phase === 'cancelled') {
+      return outcome.cancellationResult ?? STOPPED_REPORT_COPY;
+    }
+    if (outcome.phase === 'aborted') return STOPPED_REPORT_COPY;
+    return SANITIZED_TURN_ERROR;
+  }
+
+  /** D-17: the technical detail is bounded and goes to the ledger row only. */
+  function diagnosticFor(outcome: ChatTurnOutcome): string | undefined {
+    if (outcome.phase !== 'error') return undefined;
+    const code = outcome.error?.code ?? 'provider';
+    return boundedDiagnostic(new Error(code));
+  }
+
   async function startEmployeeTurn(
     employee: AiEmployee,
     instruction: string,
     originalRequest: string,
-    batchResults?: readonly BatchResult[]
+    batchResults?: readonly BatchResult[],
+    attempt?: AttemptRef
   ): Promise<void> {
-    const [assignmentHistory, recentTurns] = await Promise.all([
-      listAssignmentHistory(options.threadId, employee.id, ASSIGNMENT_HISTORY_CAP, db),
-      listRecentTurns(options.threadId, RECENT_WINDOW_TURNS, db),
-    ]);
-    const skill = skillFor(employee);
-    const prompt = buildEmployeeTurnRequest({
-      employee,
-      ...(skill ? { skill } : {}),
-      team: liveTeam,
-      instruction,
-      originalRequest,
-      ...(batchResults && batchResults.length > 0 ? { batchResults } : {}),
-      assignmentHistory,
-      recentTurns,
-    });
-
-    const request: ChatTurnRequest = {
-      ...prompt,
-      threadId: options.threadId,
-      scopeKey: 'team:' + teamId,
-      endpoint: options.endpoint,
-      apiKey: options.apiKey,
-      model: employee.model || options.model,
-      analysisMode: true,
-      autoApprove: false,
-      tools: employeeTools(),
-      mutationPolicy: 'read-only',
-      persistUserMessage: false,
-      agentKind: 'employee',
-      messageKind: 'report',
-      agentId: employee.id,
-      agentName: employee.name,
-      beforeToolRound: beforeToolRoundFor(employee.id),
-    };
-
-    currentRequests.set(employee.id, request);
-    // CR-01: each turn's usage total restarts at zero, so the cumulative baseline
-    // must reset too — otherwise the second turn's delta is zero or negative.
-    usageTotals.delete(employee.id);
-    // D-13: the batch's employees are only known here, so this is where they claim live use.
-    claimLiveUse(employee.id, employee.skillId);
-    updateAgent(employee.id, {
-      status: 'running',
-      streamingText: '',
-      startedAt: new Date().toISOString(),
-    });
-    registerAgentTurn(employee.id, employee.name);
-
-    // WR-02: every employee turn gets a deferred, not just the batch path, so a paused
-    // mention turn is awaited instead of letting `send()` report the team ready.
+    // Created first so a throw anywhere below still has a release target (Pitfall 7).
     if (!agentDeferreds.has(employee.id)) {
       agentDeferreds.set(employee.id, createDeferred());
     }
 
-    let outcome;
     try {
-      outcome = await registry.get(employee.id).start(request);
+      const [assignmentHistory, recentTurns] = await Promise.all([
+        listAssignmentHistory(options.threadId, employee.id, ASSIGNMENT_HISTORY_CAP, db),
+        listRecentTurns(options.threadId, RECENT_WINDOW_TURNS, db),
+      ]);
+      const skill = skillFor(employee);
+      const prompt = buildEmployeeTurnRequest({
+        employee,
+        ...(skill ? { skill } : {}),
+        team: liveTeam,
+        instruction,
+        originalRequest,
+        ...(batchResults && batchResults.length > 0 ? { batchResults } : {}),
+        assignmentHistory,
+        recentTurns,
+      });
+
+      const request: ChatTurnRequest = {
+        ...prompt,
+        threadId: options.threadId,
+        scopeKey: 'team:' + teamId,
+        endpoint: options.endpoint,
+        apiKey: options.apiKey,
+        model: employee.model || options.model,
+        analysisMode: true,
+        autoApprove: false,
+        tools: employeeTools(),
+        mutationPolicy: 'read-only',
+        persistUserMessage: false,
+        agentKind: 'employee',
+        messageKind: 'report',
+        agentId: employee.id,
+        agentName: employee.name,
+        beforeToolRound: beforeToolRoundFor(employee.id),
+      };
+
+      currentRequests.set(employee.id, request);
+      userStopped.delete(employee.id);
+      // CR-01: each turn's usage total restarts at zero, so the cumulative baseline
+      // must reset too — otherwise the second turn's delta is zero or negative.
+      usageTotals.delete(employee.id);
+      // D-13: the batch's employees are only known here, so this is where they claim live use.
+      claimLiveUse(employee.id, employee.skillId);
+      updateAgent(employee.id, {
+        status: 'running',
+        streamingText: '',
+        startedAt: new Date().toISOString(),
+      });
+      registerAgentTurn(employee.id, employee.name);
+
+      if (attempt) {
+        // D-09: the one status writer moves queued -> running immediately before the turn.
+        await transitionAssignment(
+          attempt.assignmentId,
+          'queued',
+          'running',
+          { startedAt: new Date().toISOString() },
+          db
+        );
+        // D-22/D-09: a non-status field, written at START time (describes when the attempt
+        // began, not how it ended) — outside the terminal transaction by design.
+        await db.aiTeamAssignments.update(attempt.assignmentId, {
+          instructionMessageId: attempt.instructionMessageId,
+        });
+        activeAssignmentByAgent.set(employee.id, {
+          batchId: attempt.batchId,
+          assignmentId: attempt.assignmentId,
+          attemptNo: attempt.attemptNo,
+        });
+      }
+
+      const outcome = await registry.get(employee.id).start(request);
+      const state = agents.get(employee.id);
+      // A parked loop cannot resolve `start()`; if the state is still paused the deferred is
+      // the authority, so the batch keeps waiting (D-30). Stop/abort ledger writes for a
+      // parked attempt belong to the stop path (37-04), not here.
+      if (state && state.status === 'paused') {
+        await agentDeferreds.get(employee.id)?.promise;
+        return;
+      }
+      settleAgent(employee.id, OUTCOME_STATUS[outcome.phase]);
+      if (attempt) {
+        // The ONE terminal writer. On `complete` the runtime already saved the report row
+        // through `deps.saveMessage`, so this takes the existing-row patch branch (and its
+        // `runStatus: 'running'` stamp is superseded); every other outcome returned before
+        // that save and gets a sanitized row inserted here (D-13).
+        //
+        // A Stop that landed while this turn was unwinding already settled the agent, so the
+        // ledger must record what the user saw — never a `done` for a turn they stopped.
+        const stoppedByUser = userStopped.has(employee.id);
+        const runStatus = stoppedByUser ? 'stopped' : OUTCOME_RUN_STATUS[outcome.phase];
+        const stopReason = stoppedByUser ? 'user-abort' : OUTCOME_STOP_REASON[outcome.phase];
+        await finalizeAttempt(
+          attempt.assignmentId,
+          'running',
+          runStatus,
+          stopReason,
+          reportContentFor(outcome) ?? (runStatus === 'done' ? undefined : STOPPED_REPORT_COPY),
+          diagnosticFor(outcome)
+        );
+      }
     } catch (err) {
-      // WR-01: `start()` throws TURN_IN_PROGRESS when the agent already runs. Without this
-      // release the claim leaks and the profile becomes permanently undeletable.
+      // D-16/T-37-08: a throw must settle the agent AND its ledger row, never hang the batch.
       releaseLiveUse(employee.id);
-      settleAgent(employee.id, 'error');
+      try {
+        if (attempt) {
+          const current = (await getAssignment(attempt.assignmentId, db))?.runStatus ?? 'queued';
+          await finalizeAttempt(
+            attempt.assignmentId,
+            current,
+            'error',
+            'provider',
+            SANITIZED_TURN_ERROR,
+            boundedDiagnostic(err)
+          );
+        }
+      } finally {
+        settleAgent(employee.id, 'error', SANITIZED_TURN_ERROR);
+      }
       throw err;
+    } finally {
+      // Pitfall 7: no deferred outlives its turn. `settleAgent` normally removed it already.
+      agentDeferreds.delete(employee.id);
     }
-    const state = agents.get(employee.id);
-    // A parked loop cannot resolve `start()`; if the state is still paused the deferred is
-    // the authority, so the batch keeps waiting (D-30).
-    if (state && state.status === 'paused') {
-      await agentDeferreds.get(employee.id)?.promise;
-      return;
-    }
-    settleAgent(employee.id, OUTCOME_STATUS[outcome.phase]);
   }
 
   async function startLeadTurn(text: string): Promise<void> {
     // D-05: an empty group has no lead — a silent no-op, not a throw.
     const lead = roster.lead;
     if (!lead) return;
-    const [recentTurns, linkedItems] = await Promise.all([
-      listRecentTurns(options.threadId, RECENT_WINDOW_TURNS, db),
-      loadLinkedItems(),
-    ]);
-    const prompt = buildLeadTurnRequest({
-      lead,
-      team: roster.teamRow ?? team,
-      roster: roster.employees,
-      linkedItems,
-      originalRequest: text,
-      recentTurns,
-    });
-
-    const request: ChatTurnRequest = {
-      ...prompt,
-      threadId: options.threadId,
-      scopeKey: 'team:' + teamId,
-      endpoint: options.endpoint,
-      apiKey: options.apiKey,
-      model: lead.model || options.model,
-      analysisMode: true,
-      autoApprove: liveTeam.autoApproveMutations === true,
-      tools: leadTools(),
-      mutationPolicy: 'approve',
-      persistUserMessage: false,
-      agentKind: 'lead',
-      messageKind: 'synthesis',
-      agentId: lead.id,
-      agentName: lead.name,
-      beforeToolRound: beforeToolRoundFor(lead.id),
-    };
-
-    currentRequests.set(lead.id, request);
-    // CR-01: same baseline reset as the employee path.
-    usageTotals.delete(lead.id);
-    // D-13: leads have no skill, so the claim carries an empty skill list.
-    claimLiveUse(lead.id, undefined);
-    updateAgent(lead.id, {
-      status: 'running',
-      streamingText: '',
-      startedAt: new Date().toISOString(),
-    });
-    registerAgentTurn(lead.id, lead.name);
-    setPhase('lead-thinking');
-
-    let outcome;
     try {
-      outcome = await registry.get(lead.id).start(request);
+      const [recentTurns, linkedItems] = await Promise.all([
+        listRecentTurns(options.threadId, RECENT_WINDOW_TURNS, db),
+        loadLinkedItems(),
+      ]);
+      const prompt = buildLeadTurnRequest({
+        lead,
+        team: roster.teamRow ?? team,
+        roster: roster.employees,
+        linkedItems,
+        originalRequest: text,
+        recentTurns,
+      });
+
+      const request: ChatTurnRequest = {
+        ...prompt,
+        threadId: options.threadId,
+        scopeKey: 'team:' + teamId,
+        endpoint: options.endpoint,
+        apiKey: options.apiKey,
+        model: lead.model || options.model,
+        analysisMode: true,
+        autoApprove: liveTeam.autoApproveMutations === true,
+        tools: leadTools(),
+        mutationPolicy: 'approve',
+        persistUserMessage: false,
+        agentKind: 'lead',
+        messageKind: 'synthesis',
+        agentId: lead.id,
+        agentName: lead.name,
+        beforeToolRound: beforeToolRoundFor(lead.id),
+      };
+
+      currentRequests.set(lead.id, request);
+      userStopped.delete(lead.id);
+      // CR-01: same baseline reset as the employee path.
+      usageTotals.delete(lead.id);
+      // D-13: leads have no skill, so the claim carries an empty skill list.
+      claimLiveUse(lead.id, undefined);
+      updateAgent(lead.id, {
+        status: 'running',
+        streamingText: '',
+        startedAt: new Date().toISOString(),
+      });
+      registerAgentTurn(lead.id, lead.name);
+      setPhase('lead-thinking');
+
+      const outcome = await registry.get(lead.id).start(request);
+      const state = agents.get(lead.id);
+      if (state && state.status === 'paused') {
+        await agentDeferreds.get(lead.id)?.promise;
+        return;
+      }
+      settleAgent(lead.id, OUTCOME_STATUS[outcome.phase]);
+      if (phase === 'lead-thinking' || phase === 'lead-synthesizing') {
+        setPhase('ready');
+      }
     } catch (err) {
-      // WR-01: same leak as the employee path — release before rethrowing.
+      // WR-01: same leak as the employee path — release before rethrowing. The lead is not
+      // an assignment, so there is no ledger row to finalize here.
       releaseLiveUse(lead.id);
+      setPhase('ready');
       settleAgent(lead.id, 'error');
-      setPhase('ready');
       throw err;
-    }
-    const state = agents.get(lead.id);
-    if (state && state.status === 'paused') {
-      await agentDeferreds.get(lead.id)?.promise;
-      return;
-    }
-    settleAgent(lead.id, OUTCOME_STATUS[outcome.phase]);
-    if (phase === 'lead-thinking' || phase === 'lead-synthesizing') {
-      setPhase('ready');
+    } finally {
+      agentDeferreds.delete(lead.id);
     }
   }
 
@@ -813,14 +1119,14 @@ export function createTeamRunCoordinator(
     return employee;
   }
 
-  async function send(text: string): Promise<void> {
-    // D-18: a disposed coordinator is inert. Nothing may start, persist or register.
-    if (disposed) return;
-    // WR-02: a second submit while a turn is live would persist a duplicate user row and
-    // then throw TURN_IN_PROGRESS out of `void sendTurn(...)` as an unhandled rejection.
-    // A parked phase (`awaiting-budget` / `awaiting-mutation-approval`) is not live: the
-    // user may send after topping up, and approval is answered on the card.
-    if (LIVE_PHASES.has(phase)) return;
+  async function send(text: string): Promise<'started' | 'busy' | 'blocked'> {
+    // D-18: a disposed coordinator is inert. Nothing may start, persist or register — and
+    // no state change will ever make it work again, so the caller must not requeue.
+    if (disposed) return 'blocked';
+    // WR-02/D-21: a second submit while a turn is live OR parked would persist a duplicate
+    // user row. A parked turn will settle on its own, so this is `'busy'` (requeue), never a
+    // dropped submit the caller cannot distinguish from a started turn.
+    if (BUSY_PHASES.has(phase)) return 'busy';
     // D-03/D-07: read the roster exactly ONCE per turn, before any read of it.
     if (options.loadRoster) {
       roster = await options.loadRoster();
@@ -830,23 +1136,30 @@ export function createTeamRunCoordinator(
       await ensureMembers();
     }
     // The roster load is an await: a dispose during it must not let the turn start.
-    if (disposed) return;
+    if (disposed) return 'blocked';
     lastUserRequest = text;
     const target = parseMentionTarget(text);
 
     await saveTeamMessage({ threadId: options.threadId, role: 'user', content: text }, db);
     registerTeamTurn();
 
-    if (target) {
-      setPhase('batch-running');
-      await startEmployeeTurn(target, text, text);
-      if (phase === 'batch-running') {
-        setPhase('ready');
+    // D-19: the team turn is finished here, in `finally`, so an early return or a throw
+    // cannot leave `team:<teamId>` registered forever.
+    try {
+      if (target) {
+        setPhase('batch-running');
+        await startEmployeeTurn(target, text, text);
+        if (phase === 'batch-running') {
+          setPhase('ready');
+        }
+        return 'started';
       }
-      return;
-    }
 
-    await startLeadTurn(text);
+      await startLeadTurn(text);
+      return 'started';
+    } finally {
+      aiTurnManager.finishTurn(teamTurnId);
+    }
   }
 
   async function runBatch(rawAssignments: unknown[], signal?: AbortSignal): Promise<string> {
@@ -875,6 +1188,18 @@ export function createTeamRunCoordinator(
       ? parsed.assignments
       : [];
 
+    // D-24: the plan the user actually saw is the snapshot, captured before any card.
+    const planSnapshot = {
+      original: assignments.map((assignment) => ({
+        agentId: assignment.agentId,
+        agentName:
+          roster.employees.find((row) => row.id === assignment.agentId)?.name ??
+          assignment.agentId,
+        task: assignment.task,
+      })),
+    };
+
+    let planDecision: 'approved' | 'rejected' | 'auto' = 'auto';
     if (liveTeam.autoSplitEnabled !== true) {
       batchIndex += 1;
       const plan: AssignmentPlan = {
@@ -902,22 +1227,70 @@ export function createTeamRunCoordinator(
       // plan replaces it, so the decision is observable rather than flashing away.
       lastPlan = plan;
       lastPlanDecision = approved ? 'approved' : 'rejected';
+      planDecision = approved ? 'approved' : 'rejected';
       if (!approved) {
+        // A rejected plan still leaves a ledger row — the decision is part of the record —
+        // and it is closed immediately because no attempt exists.
+        const rejectedBatch = await openBatch(
+          {
+            teamId,
+            threadId: options.threadId,
+            batchIndex,
+            userRequest: lastUserRequest,
+            leadId: lead.id,
+            planSnapshot,
+            planDecision: 'rejected',
+          },
+          db
+        );
+        await closeBatch(rejectedBatch.id, { phaseAtEnd: 'ready', abortedBy: 'user' }, db);
         setPhase('ready');
         return PLAN_REJECTED;
       }
+    } else {
+      batchIndex += 1;
     }
 
     signal?.throwIfAborted();
+
+    // D-24/D-08: the row opens only once the decision resolved, so its snapshot is the list
+    // the user saw. `openBatchId` is what `abortAll`/`dispose` close.
+    const batch = await openBatch(
+      {
+        teamId,
+        threadId: options.threadId,
+        batchIndex,
+        userRequest: lastUserRequest,
+        leadId: lead.id,
+        planSnapshot,
+        planDecision,
+      },
+      db
+    );
+    openBatchId = batch.id;
+
     setPhase('batch-running');
 
     const started: Array<Promise<void>> = [];
     for (const assignment of assignments) {
       const employee = roster.employees.find((row) => row.id === assignment.agentId);
       if (!employee) continue;
+      // D-22: one attempt row per run, `queued` until the turn actually starts.
+      const skill = skillFor(employee);
+      const attemptRow = await createAssignment(
+        {
+          batchId: batch.id,
+          agentId: employee.id,
+          agentName: employee.name,
+          ...(skill ? { skillId: skill.id } : {}),
+          model: employee.model || options.model,
+          task: assignment.task,
+        },
+        db
+      );
       // D-31: the instruction row is attributed to the lead, so the employee's own history
-      // reads as (instruction, report) pairs.
-      await saveTeamMessage(
+      // reads as (instruction, report) pairs. D-22 links make the pair explicit.
+      const instructionRow = await saveTeamMessage(
         {
           threadId: options.threadId,
           role: 'assistant',
@@ -929,12 +1302,21 @@ export function createTeamRunCoordinator(
           // CR-06: display attribution is the lead's, but the row belongs to the assignee
           // so `listAssignmentHistory` can find it.
           targetAgentId: employee.id,
+          batchId: batch.id,
+          assignmentId: attemptRow.id,
+          attemptNo: attemptRow.attemptNo,
+          runStatus: 'queued',
+          stopReason: 'none',
         },
         db
       );
-      // WR-02: the deferred is created by startEmployeeTurn for both paths.
       started.push(
-        startEmployeeTurn(employee, assignment.task, lastUserRequest, priorBatchResults)
+        startEmployeeTurn(employee, assignment.task, lastUserRequest, priorBatchResults, {
+          batchId: batch.id,
+          assignmentId: attemptRow.id,
+          attemptNo: attemptRow.attemptNo,
+          instructionMessageId: instructionRow.id,
+        })
       );
     }
 
@@ -947,19 +1329,19 @@ export function createTeamRunCoordinator(
     );
 
     const results = assignments.map((assignment) => {
-      const employee = roster.employees.find((row) => row.id === assignment.agentId);
-      const state = agents.get(assignment.agentId);
-      const status: AgentRunStatus = state?.status ?? 'error';
-      const report =
-        status === 'error' ? SANITIZED_TURN_ERROR : reports.get(assignment.agentId) ?? '';
-      return {
-        agentId: assignment.agentId,
-        agentName: employee?.name ?? assignment.agentId,
-        status,
-        report,
-        ...(status === 'stopped' ? { incomplete: true } : {}),
-      };
-    });
+        const employee = roster.employees.find((row) => row.id === assignment.agentId);
+        const state = agents.get(assignment.agentId);
+        const status: AgentRunStatus = state?.status ?? 'error';
+        const report =
+          status === 'error' ? SANITIZED_TURN_ERROR : reports.get(assignment.agentId) ?? '';
+        return {
+          agentId: assignment.agentId,
+          agentName: employee?.name ?? assignment.agentId,
+          status,
+          report,
+          ...(status === 'stopped' ? { incomplete: true } : {}),
+        };
+      });
 
     agentDeferreds.clear();
     // Carry this batch's settled reports into the next one (AIO-TEAM-03). A stopped or
@@ -970,6 +1352,12 @@ export function createTeamRunCoordinator(
     // D-18: `Promise.all(deferreds)` is an await, so a dispose during it must not resurrect
     // `lead-synthesizing` on an already-disposed coordinator.
     setPhase('lead-synthesizing');
+    // The run is over: close the batch row so `dispose`/`abortAll` never double-close it.
+    if (openBatchId !== null) {
+      const batchId = openBatchId;
+      openBatchId = null;
+      await closeBatch(batchId, { phaseAtEnd: 'lead-synthesizing', abortedBy: 'none' }, db);
+    }
     return JSON.stringify(results);
   }
 
@@ -1018,8 +1406,28 @@ export function createTeamRunCoordinator(
       planResolver(false);
       planResolver = null;
     }
+    userStopped.add(agentId);
     registry.abort(agentId);
     settleAgent(agentId, 'stopped');
+    // D-10/D-13: a stopped attempt still owes the transcript a bubble. `from` is what the
+    // row actually holds, so this works for a queued assignment and a running one alike;
+    // a racing settle loses the `from` guard and `finalizeAttempt` tolerates that (`null`).
+    const active = activeAssignmentByAgent.get(agentId);
+    if (active) {
+      void (async () => {
+        const current = (await getAssignment(active.assignmentId, db))?.runStatus;
+        if (current !== 'queued' && current !== 'running') return;
+        await finalizeAttempt(
+          active.assignmentId,
+          current,
+          'stopped',
+          'user-per-agent',
+          STOPPED_REPORT_COPY
+        );
+      })().catch(() => {
+        /* a stop must never throw out of the abort path */
+      });
+    }
   }
 
   function abortAll(): void {
@@ -1151,6 +1559,7 @@ export function createTeamRunCoordinator(
 
   return {
     send,
+    finalizeAttempt,
     runBatch,
     resolvePlan,
     resolveApproval,

@@ -3,13 +3,17 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TaskPlannerDatabase } from '../../../../src/db/index';
 import {
   ensureTeamThread,
+  insertReportMessage,
   saveTeamMessage,
   listRecentTurns,
   listAssignmentHistory,
   listInterruptedAssignments,
   getTeamTurn,
   buildTeamBm25Docs,
+  notifyAIChatSync,
 } from '../../../../src/db/repositories/teamTranscriptRepo';
+import * as syncChannel from '../../../../src/services/ai/aiSyncChannel';
+import { vi } from 'vitest';
 import { ASSIGNMENT_HISTORY_CAP } from '../../../../src/types/aiOffice';
 import {
   createEmployee,
@@ -406,6 +410,89 @@ describe('teamTranscriptRepo (AIO-MEM-01, D-10, D-11, D-17, D-29, D-31)', () => 
 
       expect(await db.chatMessages.count()).toBe(messagesBefore);
       expect(await db.chatTabs.toArray()).toEqual(tabsBefore);
+    });
+  });
+
+  describe('insertReportMessage + link fields (D-22)', () => {
+    it('writes every required ChatMessage field from its input alone and never notifies', async () => {
+      const notifySpy = vi.spyOn(syncChannel, 'notifyAIChatSync');
+      const createdAt = '2026-11-11T10:00:00.000Z';
+      const row = await insertReportMessage(
+        {
+          id: generateId(),
+          threadId,
+          content: 'Báo cáo',
+          createdAt,
+          agentId: 'agent-1',
+          agentName: 'An',
+          batchId: 'batch-1',
+          assignmentId: 'assignment-1',
+          attemptNo: 2,
+          runStatus: 'stopped',
+          stopReason: 'user-abort',
+          incomplete: true,
+        },
+        db
+      );
+
+      const stored = await db.chatMessages.get(row.id);
+      expect(stored).toMatchObject({
+        threadId,
+        role: 'assistant',
+        content: 'Báo cáo',
+        createdAt,
+        agentId: 'agent-1',
+        agentName: 'An',
+        agentKind: 'employee',
+        messageKind: 'report',
+        batchId: 'batch-1',
+        assignmentId: 'assignment-1',
+        attemptNo: 2,
+        runStatus: 'stopped',
+        stopReason: 'user-abort',
+        incomplete: true,
+      });
+      // The post-commit notify belongs to `finalizeAttempt`, never to the insert helper.
+      expect(notifySpy).not.toHaveBeenCalled();
+      // `notifyAIChatSync` is the same function object, exported for one import site.
+      expect(notifyAIChatSync).toBe(syncChannel.notifyAIChatSync);
+      notifySpy.mockRestore();
+    });
+
+    it('saveTeamMessage carries the link fields and leaves them absent when not given', async () => {
+      const linked = await saveTeamMessage(
+        {
+          threadId,
+          role: 'assistant',
+          content: 'Việc A',
+          agentId: 'lead-1',
+          agentName: 'Minh',
+          agentKind: 'lead',
+          messageKind: 'instruction',
+          targetAgentId: 'agent-1',
+          batchId: 'batch-1',
+          assignmentId: 'assignment-1',
+          attemptNo: 1,
+          runStatus: 'queued',
+          stopReason: 'none',
+        },
+        db
+      );
+      expect(linked).toMatchObject({
+        batchId: 'batch-1',
+        assignmentId: 'assignment-1',
+        attemptNo: 1,
+        runStatus: 'queued',
+        stopReason: 'none',
+      });
+
+      const plain = await saveTeamMessage(
+        { threadId, role: 'user', content: 'xin chào' },
+        db
+      );
+      expect(plain).not.toHaveProperty('batchId');
+      expect(plain).not.toHaveProperty('runStatus');
+      expect(plain).not.toHaveProperty('incomplete');
     });
   });
 });

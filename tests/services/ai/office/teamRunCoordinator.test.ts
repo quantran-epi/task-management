@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs';
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { TaskPlannerDatabase } from '../../../../src/db/index';
 import {
   abortAllAssignmentControllers,
@@ -23,6 +23,10 @@ import {
 } from '../../../../src/services/ai/office/liveUseRegistry';
 import { createTeam, updateTeam } from '../../../../src/db/repositories/aiTeamRepo';
 import { ensureTeamThread, saveTeamMessage } from '../../../../src/db/repositories/teamTranscriptRepo';
+import {
+  createAssignment,
+  openBatch,
+} from '../../../../src/db/repositories/aiTeamRunRepo';
 import { aiTurnManager } from '../../../../src/services/ai/aiTurnManager';
 import { EMPLOYEE_READ_ONLY_ALLOWLIST } from '../../../../src/services/ai/chatTurnTools';
 import { payloadHasMutationTool } from '../../../../src/services/ai/chatTurnTools';
@@ -910,6 +914,9 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
     it('counts usage on a second turn instead of treating it as already reported (CR-01)', async () => {
       harness = await createHarness({
+        // A budget that does not park at 700, so both turns can run back to back: D-21
+        // makes a send during a parked phase `'busy'` instead of a second turn.
+        teamPatch: { budgetTokens: 12000 },
         scripts: {
           [EMP_A_MODEL]: async (options) => {
             options.onUsage?.({ totalTokens: 700 });
@@ -1431,8 +1438,350 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       roster.lead = undefined;
       roster.teamRow = { ...harness.team, leadId: undefined };
 
-      await expect(coordinator.send('Xin chào')).resolves.toBeUndefined();
+      // The submit was accepted (it is not `'busy'`/`'blocked'`), it simply starts nothing.
+      await expect(coordinator.send('Xin chào')).resolves.toBe('started');
       expect(coordinator.getState().agents).toEqual([]);
+    });
+  });
+
+  describe('Ledger writes and report linking (D-09, D-22, D-23)', () => {
+    const assignmentsFor = (employees: AiEmployee[]) =>
+      employees.map((row, index) => ({ agentId: row.id, task: `Việc ${index + 1}` }));
+
+    /** A lead script that delegates the whole roster, then answers. */
+    const delegatingLead =
+      (harnessRef: () => Harness): LoopScript =>
+      async (options) => {
+        await options.executeToolFn!(
+          'delegate_batch',
+          { assignments: assignmentsFor(harnessRef().employees) },
+          harnessRef().db,
+          options.signal
+        );
+        return loopResult('Xong.');
+      };
+
+    const rowsFor = async (harness: Harness) => ({
+      batches: await harness.db.aiTeamBatches.toArray(),
+      assignments: await harness.db.aiTeamAssignments.toArray(),
+      messages: await harness.db.chatMessages
+        .where('threadId')
+        .equals(harness.threadId)
+        .toArray(),
+    });
+
+    it('writes one batch row, one assignment per attempt, and links the report both ways', async () => {
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: delegatingLead(() => harness!),
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+        },
+      });
+      const current = harness;
+      current.employees = current.employees.slice(0, 1);
+      current.roster.employees = current.employees;
+
+      await current.coordinator.send('Làm báo cáo');
+
+      const { batches, assignments, messages } = await rowsFor(current);
+      expect(batches).toHaveLength(1);
+      expect(batches[0]).toMatchObject({ planDecision: 'auto', batchIndex: 1, leadId: current.lead.id });
+      expect(batches[0]!.endedAt).toBeDefined();
+
+      expect(assignments).toHaveLength(1);
+      const attempt = assignments[0]!;
+      expect(attempt).toMatchObject({
+        runStatus: 'done',
+        stopReason: 'none',
+        attemptNo: 1,
+        batchId: batches[0]!.id,
+      });
+      expect(attempt.startedAt).toBeDefined();
+      expect(attempt.endedAt).toBeDefined();
+
+      // The report row and the ledger row point at each other.
+      const report = messages.find((row) => row.id === attempt.reportMessageId);
+      expect(report).toBeDefined();
+      expect(report).toMatchObject({
+        messageKind: 'report',
+        assignmentId: attempt.id,
+        batchId: batches[0]!.id,
+        attemptNo: 1,
+        // The runtime stamped `running`; the terminal patch inside the same transaction
+        // supersedes it, so no settled report ever renders as still running.
+        runStatus: 'done',
+        stopReason: 'none',
+      });
+      expect(report!.content).toBe('A xong');
+
+      const instruction = messages.find((row) => row.messageKind === 'instruction');
+      expect(attempt.instructionMessageId).toBe(instruction!.id);
+    });
+
+    it('links nothing but status fields when the plan is rejected: batch row only', async () => {
+      harness = await createHarness({
+        scripts: { [LEAD_MODEL]: delegatingLead(() => harness!) },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getState().phase === 'awaiting-plan');
+      current.coordinator.resolvePlan(false);
+      await sent;
+
+      const { batches, assignments } = await rowsFor(current);
+      expect(batches).toHaveLength(1);
+      expect(batches[0]).toMatchObject({
+        planDecision: 'rejected',
+        abortedBy: 'user',
+        phaseAtEnd: 'ready',
+      });
+      expect(batches[0]!.endedAt).toBeDefined();
+      expect(assignments).toEqual([]);
+    });
+
+    it('leaves a stopped attempt with one sanitized report row the transcript can read', async () => {
+      const gate = deferred();
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: delegatingLead(() => harness!),
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+        },
+      });
+      const current = harness;
+      const first = current.employees[0]!;
+      current.employees = [first];
+      current.roster.employees = [first];
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      // Wait for THIS employee's turn, not the lead's — the lead is also an agent entry.
+      await waitFor(() =>
+        current.coordinator
+          .getState()
+          .agents.some((row) => row.agentId === first.id && row.status === 'running')
+      );
+      current.coordinator.stopAgent(first.id);
+      gate.release();
+      await sent;
+
+      const { assignments, messages } = await rowsFor(current);
+      const attempt = assignments[0]!;
+      expect(attempt).toMatchObject({
+        runStatus: 'stopped',
+        stopReason: 'user-abort',
+        incomplete: true,
+      });
+      const reports = messages.filter(
+        (row) => row.assignmentId === attempt.id && row.messageKind === 'report'
+      );
+      expect(reports).toHaveLength(1);
+      expect(reports[0]).toMatchObject({
+        id: attempt.reportMessageId,
+        runStatus: 'stopped',
+        stopReason: attempt.stopReason,
+        incomplete: true,
+      });
+      // The row exists and carries the terminal triple. Its content is either the runtime's
+      // already-saved clean text (the `complete`-then-stopped race) or the fixed stopped
+      // copy — never provider text and never a diagnostic string.
+      expect(reports[0]!.content.length).toBeGreaterThan(0);
+      expect(reports[0]!.content).not.toContain('Error:');
+    });
+
+    it('gives an errored attempt a report row with the sanitized string and no provider text', async () => {
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: delegatingLead(() => harness!),
+          [EMP_A_MODEL]: async () => {
+            throw new Error('raw provider secret detail');
+          },
+        },
+      });
+      const current = harness;
+      current.employees = current.employees.slice(0, 1);
+      current.roster.employees = current.employees;
+
+      await current.coordinator.send('Làm báo cáo');
+
+      const { assignments, messages } = await rowsFor(current);
+      const attempt = assignments[0]!;
+      expect(attempt).toMatchObject({ runStatus: 'error', stopReason: 'provider', incomplete: true });
+      // D-17: the detail is bounded technical metadata, never the provider string.
+      expect(attempt.diagnosticDetail).toBeTruthy();
+      expect(attempt.diagnosticDetail!.length).toBeLessThanOrEqual(300);
+
+      const reports = messages.filter(
+        (row) => row.assignmentId === attempt.id && row.messageKind === 'report'
+      );
+      expect(reports).toHaveLength(1);
+      expect(reports[0]!.runStatus).toBe('error');
+      expect(reports[0]!.content).not.toContain('raw provider secret detail');
+      for (const row of messages) {
+        expect(row.content).not.toContain('raw provider secret detail');
+      }
+    });
+
+    it('links exactly one report row per terminal attempt in a mixed batch', async () => {
+      const gate = deferred();
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: delegatingLead(() => harness!),
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+          [EMP_B_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('B xong');
+          },
+          [EMP_C_MODEL]: async () => {
+            throw new Error('C hỏng');
+          },
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getState().agents.filter((r) => r.status === 'running').length === 3);
+      current.coordinator.stopAgent(current.employees[1]!.id);
+      await waitFor(() => current.coordinator.getState().agents.some(r => r.status === 'stopped'));
+      gate.release();
+      await sent;
+
+      const { assignments, messages } = await rowsFor(current);
+      const byAgent = new Map(assignments.map((row) => [row.agentId, row]));
+      expect(byAgent.get(current.employees[0]!.id)?.runStatus).toBe('done');
+      expect(byAgent.get(current.employees[1]!.id)?.runStatus).toBe('stopped');
+      expect(byAgent.get(current.employees[2]!.id)?.runStatus).toBe('error');
+
+      for (const attempt of assignments) {
+        const reports = messages.filter(
+          (row) => row.assignmentId === attempt.id && row.messageKind === 'report'
+        );
+        expect(reports).toHaveLength(1);
+        expect(reports[0]!.id).toBe(attempt.reportMessageId);
+        expect(reports[0]!.runStatus).toBe(attempt.runStatus);
+        expect(reports[0]!.incomplete).toBe(attempt.incomplete);
+      }
+    });
+
+    it('resolves send() as started, busy or blocked and never as a dropped submit', async () => {
+      const gate = deferred();
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: delegatingLead(() => harness!),
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+        },
+      });
+      const current = harness;
+      current.employees = current.employees.slice(0, 1);
+      current.roster.employees = current.employees;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getState().phase === 'batch-running');
+      // A live turn: requeue.
+      await expect(current.coordinator.send('chen ngang')).resolves.toBe('busy');
+
+      gate.release();
+      await sent;
+
+      await expect(current.coordinator.send('lượt mới')).resolves.toBe('started');
+
+      await current.coordinator.dispose();
+      // Disposed: nothing about this state will change by waiting, so never requeue.
+      await expect(current.coordinator.send('sau dispose')).resolves.toBe('blocked');
+    });
+
+    it('never writes an assignment status outside transitionAssignment', async () => {
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: delegatingLead(() => harness!),
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+        },
+      });
+      const current = harness;
+      current.employees = current.employees.slice(0, 1);
+      current.roster.employees = current.employees;
+
+      const rawUpdate = vi.spyOn(current.db.aiTeamAssignments, 'update');
+      const rawPut = vi.spyOn(current.db.aiTeamAssignments, 'put');
+      await current.coordinator.send('Làm báo cáo');
+
+      // Non-status fields (`reportMessageId`, `instructionMessageId`) may be written directly;
+      // a `runStatus` patch may not.
+      for (const call of rawUpdate.mock.calls) {
+        const patch = call[1] as Record<string, unknown>;
+        expect(patch).not.toHaveProperty('runStatus');
+        expect(patch).not.toHaveProperty('stopReason');
+        expect(patch).not.toHaveProperty('incomplete');
+      }
+      // `transitionAssignment` is the only `put` on this table (its own guarded write).
+      expect(rawPut.mock.calls.length).toBeGreaterThan(0);
+
+      const { assignments } = await rowsFor(current);
+      expect(assignments[0]!.runStatus).toBe('done');
+    });
+
+    it('writes exactly one report row when two finalizeAttempt calls race from queued', async () => {
+      harness = await createHarness({ scripts: {} });
+      const current = harness;
+      const batch = await openBatch(
+        {
+          teamId: current.team.id,
+          threadId: current.threadId,
+          batchIndex: 1,
+          userRequest: 'x',
+          leadId: current.lead.id,
+          planSnapshot: { original: [] },
+          planDecision: 'auto',
+        },
+        current.db
+      );
+      const attempt = await createAssignment(
+        {
+          batchId: batch.id,
+          agentId: current.employees[0]!.id,
+          agentName: current.employees[0]!.name,
+          model: EMP_A_MODEL,
+          task: 'Việc',
+        },
+        current.db
+      );
+
+      await Promise.all([
+        current.coordinator.finalizeAttempt(
+          attempt.id,
+          'queued',
+          'stopped',
+          'user-abort',
+          'Đã dừng.'
+        ),
+        current.coordinator.finalizeAttempt(
+          attempt.id,
+          'queued',
+          'stopped',
+          'user-abort',
+          'Đã dừng.'
+        ),
+      ]);
+
+      const reports = await current.db.chatMessages
+        .where('threadId')
+        .equals(current.threadId)
+        .toArray();
+      expect(reports.filter((row) => row.assignmentId === attempt.id)).toHaveLength(1);
+      const stored = await current.db.aiTeamAssignments.get(attempt.id);
+      expect(stored).toMatchObject({ runStatus: 'stopped', incomplete: true });
+      expect(stored!.reportMessageId).toBeDefined();
     });
   });
 

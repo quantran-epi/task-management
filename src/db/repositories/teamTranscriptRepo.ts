@@ -1,10 +1,21 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../index';
 import type { ChatMessage, ChatRole, ChatThread, ChatTokenUsage } from '../../types/models';
-import { ASSIGNMENT_HISTORY_CAP, RECENT_WINDOW_TURNS } from '../../types/aiOffice';
+import {
+  ASSIGNMENT_HISTORY_CAP,
+  RECENT_WINDOW_TURNS,
+  type AiTeamAssignmentRunStatus,
+  type AiTeamAssignmentStopReason,
+} from '../../types/aiOffice';
 import type { BM25Document } from '../../utils/bm25';
 import { generateId } from '../../utils/uuid';
 import { createOrGetThread } from './chatRepo';
 import { notifyAIChatSync } from '../../services/ai/aiSyncChannel';
+
+/**
+ * Re-exported so the coordinator has ONE import site for the transcript + its
+ * post-commit notification (`finalizeAttempt` owns the notify, 37-03).
+ */
+export { notifyAIChatSync };
 
 /**
  * Team transcript persistence (D-07, D-10, D-11, D-17, D-29, D-31).
@@ -24,6 +35,15 @@ export interface SaveTeamMessageInput {
   /** CR-06: the employee an instruction row is assigned to (display attribution stays the lead). */
   targetAgentId?: string | undefined;
   tokenUsage?: ChatTokenUsage | undefined;
+  // Phase 37 D-22 links; each is spread only when defined so existing rows stay byte-identical.
+  batchId?: string | undefined;
+  assignmentId?: string | undefined;
+  attemptNo?: number | undefined;
+  runStatus?: AiTeamAssignmentRunStatus | undefined;
+  stopReason?: AiTeamAssignmentStopReason | undefined;
+  incomplete?: boolean | undefined;
+  supersededByMessageId?: string | undefined;
+  supersededAt?: string | undefined;
 }
 
 /**
@@ -37,6 +57,46 @@ export async function ensureTeamThread(
   const team = await db.aiTeams.get(teamId);
   if (!team) throw new Error(`Không tìm thấy nhóm: ${teamId}`);
   return createOrGetThread({ scopeType: 'team', entityId: teamId, title: team.name }, db);
+}
+
+/** Phase 37 D-22: spread only the link fields that are present, matching the attribution idiom. */
+function linkFields(
+  input: Partial<
+    Pick<
+      ChatMessage,
+      | 'batchId'
+      | 'assignmentId'
+      | 'attemptNo'
+      | 'runStatus'
+      | 'stopReason'
+      | 'incomplete'
+      | 'supersededByMessageId'
+      | 'supersededAt'
+    >
+  >
+): Pick<
+  ChatMessage,
+  | 'batchId'
+  | 'assignmentId'
+  | 'attemptNo'
+  | 'runStatus'
+  | 'stopReason'
+  | 'incomplete'
+  | 'supersededByMessageId'
+  | 'supersededAt'
+> {
+  return {
+    ...(input.batchId ? { batchId: input.batchId } : {}),
+    ...(input.assignmentId ? { assignmentId: input.assignmentId } : {}),
+    ...(input.attemptNo !== undefined ? { attemptNo: input.attemptNo } : {}),
+    ...(input.runStatus ? { runStatus: input.runStatus } : {}),
+    ...(input.stopReason ? { stopReason: input.stopReason } : {}),
+    ...(input.incomplete !== undefined ? { incomplete: input.incomplete } : {}),
+    ...(input.supersededByMessageId
+      ? { supersededByMessageId: input.supersededByMessageId }
+      : {}),
+    ...(input.supersededAt ? { supersededAt: input.supersededAt } : {}),
+  };
 }
 
 export async function saveTeamMessage(
@@ -56,6 +116,7 @@ export async function saveTeamMessage(
     ...(input.messageKind ? { messageKind: input.messageKind } : {}),
     ...(input.targetAgentId ? { targetAgentId: input.targetAgentId } : {}),
     ...(input.tokenUsage ? { tokenUsage: input.tokenUsage } : {}),
+    ...linkFields(input),
   };
 
   await db.transaction('rw', [db.chatMessages, db.chatThreads], async () => {
@@ -64,6 +125,51 @@ export async function saveTeamMessage(
   });
 
   notifyAIChatSync({ type: 'message_saved', threadId: input.threadId });
+  return message;
+}
+
+export interface InsertReportMessageInput
+  extends Pick<
+    ChatMessage,
+    | 'id'
+    | 'threadId'
+    | 'content'
+    | 'createdAt'
+    | 'batchId'
+    | 'assignmentId'
+    | 'attemptNo'
+    | 'runStatus'
+    | 'stopReason'
+    | 'incomplete'
+  > {
+  agentId: string;
+  agentName: string;
+}
+
+/**
+ * Phase 37 D-22: the one write a terminal attempt needs when the runtime wrote no row.
+ *
+ * Explicit input, NO transaction of its own and NO notification: `finalizeAttempt` calls it
+ * inside its own `rw` scope, so the row commits atomically with the assignment transition and
+ * `notifyAIChatSync` fires exactly once, after that transaction resolves.
+ */
+export async function insertReportMessage(
+  input: InsertReportMessageInput,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<ChatMessage> {
+  const message: ChatMessage = {
+    id: input.id,
+    threadId: input.threadId,
+    role: 'assistant',
+    content: input.content,
+    createdAt: input.createdAt,
+    agentId: input.agentId,
+    agentName: input.agentName,
+    agentKind: 'employee',
+    messageKind: 'report',
+    ...linkFields(input),
+  };
+  await db.chatMessages.add(message);
   return message;
 }
 

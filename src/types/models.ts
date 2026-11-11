@@ -1,4 +1,8 @@
 import type { ChatMessageGrounding } from '../services/ai/groundedAnswerSchemas';
+import type {
+  AiTeamAssignmentRunStatus,
+  AiTeamAssignmentStopReason,
+} from './aiOffice';
 
 export type TaskStatus = 'Open' | 'Pending' | 'In Progress' | 'Resolved' | 'In Review' | 'Done' | 'Cancelled';
 export type TaskPriority = 'Low' | 'Medium' | 'High' | 'Urgent';
@@ -300,6 +304,18 @@ export interface ChatMessage {
    * find it without misattributing the row.
    */
   targetAgentId?: string | undefined;
+  // Phase 37 D-22: ledger links. The truth of an attempt's status lives on the
+  // `aiTeamAssignments` row; these fields let the transcript render and pair rows
+  // without a join. Written by the coordinator's terminal writer, not by chat.
+  batchId?: string | undefined;
+  assignmentId?: string | undefined;
+  attemptNo?: number | undefined;
+  runStatus?: AiTeamAssignmentRunStatus | undefined;
+  stopReason?: AiTeamAssignmentStopReason | undefined;
+  incomplete?: boolean | undefined;
+  /** 37-07: the synthesis row that replaced this one (write path is `supersedeTeamMessage`). */
+  supersededByMessageId?: string | undefined;
+  supersededAt?: string | undefined;
 }
 
 // Phase 16: Knowledge Server Foundation, DLP Checks & AST Ingestion models (D-01, D-08, D-18, D-27, D-29)
