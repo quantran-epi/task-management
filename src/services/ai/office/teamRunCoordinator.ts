@@ -14,6 +14,7 @@ import type {
 } from '../../../types/aiOffice';
 import {
   ASSIGNMENT_HISTORY_CAP,
+  DEFAULT_TEAM_CONCURRENCY,
   RECENT_WINDOW_TURNS,
 } from '../../../types/aiOffice';
 import type { ChatTokenUsage } from '../../../types/models';
@@ -35,6 +36,7 @@ import {
 } from '../chatTurnTools';
 import { aiTurnManager } from '../aiTurnManager';
 import { createTeamRunRegistry, type TeamRunRegistry } from './teamRunRegistry';
+import { createTeamRunScheduler, type SchedulerHandle } from './scheduler';
 import { beginTurn, endTurn } from './liveUseRegistry';
 import {
   bucketOf,
@@ -191,6 +193,8 @@ export interface TeamRunCoordinator {
   setTeamSettings(patch: Partial<Pick<AiTeam, 'autoSplitEnabled' | 'autoApproveMutations'>>): void;
   /** AIO-BUDGET-01: adopt a team-total edit so the next top-up accumulates onto it. */
   setTeamBudget(total: number): void;
+  /** D-07 diagnostic seam: live scheduler slots, so a leak is observable without a provider. */
+  getRunningCount(): number;
   subscribe(listener: () => void): () => void;
   getState(): TeamRunSnapshot;
 }
@@ -362,6 +366,18 @@ export function createTeamRunCoordinator(
   >();
   /** D-10/D-11/D-18: the cancellation channel for a still-queued assignment. */
   const assignmentControllers = new Map<string, AbortController>();
+  /** D-07/D-05: the per-team scheduler — the ONLY rule deciding how many agents run. */
+  const scheduler = createTeamRunScheduler(
+    team.concurrencyLimit ?? DEFAULT_TEAM_CONCURRENCY
+  );
+  /** Admitted slots, keyed by assignment id, released in the per-assignment `finally`. */
+  const scheduledHandles = new Map<string, SchedulerHandle>();
+  /**
+   * D-10/D-11: agentId → its current assignment id, registered at CREATION time. A queued
+   * assignment has no runtime and no `activeAssignmentByAgent` entry, so this map is the only
+   * way a stop can find what to cancel.
+   */
+  const assignmentIdsByAgent = new Map<string, string>();
   const agents = new Map<string, AgentRunState>();
   const reports = new Map<string, string>();
   const listeners = new Set<() => void>();
@@ -1162,6 +1178,82 @@ export function createTeamRunCoordinator(
     }
   }
 
+  /**
+   * D-07/D-10: one assignment = one async task that owns the WHOLE
+   * `acquire -> start -> settle -> release` span inside a single `try/finally`.
+   *
+   * The `try` begins before `acquire`, so a parked assignment (queued) and a started one
+   * share one release point. `finally` is the ONLY place a slot is released: `startEmployeeTurn`
+   * settles the agent itself, so a release there is always after `settleAgent` (Pitfall 10).
+   */
+  async function dispatchAssignment(
+    employee: AiEmployee,
+    task: string,
+    attempt: AttemptRef,
+    signal: AbortSignal | undefined
+  ): Promise<void> {
+    const assignmentId = attempt.assignmentId;
+    // D-10/D-11: the controller — never a scheduler handle — is the cancellation channel
+    // for a queued assignment; no handle exists before `acquire` resolves.
+    const controller = new AbortController();
+    assignmentControllers.set(assignmentId, controller);
+    const onAbort = () => controller.abort();
+    if (signal) {
+      if (signal.aborted) controller.abort();
+      else signal.addEventListener('abort', onAbort, { once: true });
+    }
+
+    let handle: SchedulerHandle | undefined;
+    try {
+      handle = await scheduler.acquire(controller.signal);
+      scheduledHandles.set(assignmentId, handle);
+      await startEmployeeTurn(employee, task, lastUserRequest, priorBatchResults, attempt);
+    } catch (err) {
+      // The acquire rejected (a stop/abort/dispose) or the prologue threw. The agent and
+      // its ledger row must still settle — nothing may hang the batch (T-37-11).
+      const aborted =
+        controller.signal.aborted ||
+        (err instanceof DOMException && err.name === 'AbortError');
+      try {
+        if (aborted) {
+          // `null` is expected when `stopAgent`/`abortAll` already committed the transition.
+          await finalizeAttempt(
+            assignmentId,
+            'queued',
+            'stopped',
+            'user-abort',
+            STOPPED_REPORT_COPY
+          );
+          settleAgent(employee.id, 'stopped');
+        } else {
+          await finalizeAttempt(
+            assignmentId,
+            'queued',
+            'error',
+            'provider',
+            SANITIZED_TURN_ERROR,
+            boundedDiagnostic(err)
+          );
+          settleAgent(employee.id, 'error', SANITIZED_TURN_ERROR);
+        }
+      } catch {
+        /* a ledger write must never leak the slot */
+      }
+    } finally {
+      if (signal) signal.removeEventListener('abort', onAbort);
+      assignmentControllers.delete(assignmentId);
+      if (assignmentIdsByAgent.get(employee.id) === assignmentId) {
+        assignmentIdsByAgent.delete(employee.id);
+      }
+      // The single release point. `release` is idempotent (37-02), so a stop path that
+      // already released cannot corrupt the count.
+      if (handle !== undefined) {
+        scheduledHandles.delete(assignmentId);
+        scheduler.release(handle);
+      }
+    }
+  }
+
   async function runBatch(rawAssignments: unknown[], signal?: AbortSignal): Promise<string> {
     // D-18: a disposed coordinator starts no batch and opens no ledger row.
     if (disposed) return DISPOSED_REFUSAL;
@@ -1288,6 +1380,11 @@ export function createTeamRunCoordinator(
         },
         db
       );
+      // D-10/D-11: registered at CREATION time (queued), so a stop can find the assignment
+      // before any runtime exists. Cleared by the dispatch task's `finally`.
+      assignmentIdsByAgent.set(employee.id, attemptRow.id);
+      // Queued means nothing has started: no runtime, no live-use claim, no turn registration.
+      updateAgent(employee.id, { status: 'queued', streamingText: '' });
       // D-31: the instruction row is attributed to the lead, so the employee's own history
       // reads as (instruction, report) pairs. D-22 links make the pair explicit.
       const instructionRow = await saveTeamMessage(
@@ -1310,17 +1407,22 @@ export function createTeamRunCoordinator(
         },
         db
       );
-      // D-16/T-37-08: the promise is settled by `Promise.allSettled`, but a `finally`-only
-      // rejection (a throw in the pre-start reads) must still not surface as unhandled, so the
-      // batch's own await is the only observer and it ignores the rejection.
+      // D-16/T-37-08: the promise is settled by `Promise.allSettled`, but a rejection from
+      // the dispatch task must still not surface as unhandled — the task itself settles the
+      // agent and its ledger row.
       started.push(
-        startEmployeeTurn(employee, assignment.task, lastUserRequest, priorBatchResults, {
-          batchId: batch.id,
-          assignmentId: attemptRow.id,
-          attemptNo: attemptRow.attemptNo,
-          instructionMessageId: instructionRow.id,
-        }).catch(() => {
-          /* startEmployeeTurn already settled the agent and its ledger row */
+        dispatchAssignment(
+          employee,
+          assignment.task,
+          {
+            batchId: batch.id,
+            assignmentId: attemptRow.id,
+            attemptNo: attemptRow.attemptNo,
+            instructionMessageId: instructionRow.id,
+          },
+          signal
+        ).catch(() => {
+          /* dispatchAssignment already settled the agent and its ledger row */
         })
       );
     }
@@ -1532,6 +1634,10 @@ export function createTeamRunCoordinator(
     notify();
   }
 
+  function getRunningCount(): number {
+    return scheduler.getRunningCount();
+  }
+
   function subscribe(listener: () => void): () => void {
     listeners.add(listener);
     return () => {
@@ -1574,6 +1680,7 @@ export function createTeamRunCoordinator(
     dispose,
     setTeamSettings,
     setTeamBudget,
+    getRunningCount,
     subscribe,
     getState,
   };

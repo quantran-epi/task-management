@@ -1,7 +1,6 @@
 import type { ChatMessage } from '../../../types/models';
 import {
   ASSIGNMENT_HISTORY_CAP,
-  MAX_BATCH_SIZE,
   type AiEmployee,
   type AiLead,
   type AiSkill,
@@ -158,7 +157,7 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
     [
       '[QUY TẮC ĐIỀU HÀNH NHÓM]',
       '1. BẮT BUỘC: Luôn phân rã yêu cầu của người dùng thành các phần việc và giao cho nhân viên trong nhóm xử lý. Không được tự ý làm thay công việc chuyên môn của nhân viên.',
-      `2. BẮT BUỘC: Giao việc bằng cách gọi công cụ delegate_batch với danh sách assignments phù hợp, tối đa ${MAX_BATCH_SIZE} phân công mỗi lần.`,
+      '2. BẮT BUỘC: Giao việc bằng cách gọi công cụ delegate_batch với danh sách assignments phù hợp.',
       '3. Chờ toàn bộ lô trả về rồi mới tổng hợp; không tuyên bố kết quả trước khi có báo cáo từ nhân viên.',
       '4. Không khẳng định suy luận nội bộ của nhân viên; chỉ dùng nội dung họ báo cáo.',
       '5. Chỉ bạn được phép thay đổi dữ liệu; thao tác ghi sẽ dừng ở thẻ phê duyệt của người dùng.',

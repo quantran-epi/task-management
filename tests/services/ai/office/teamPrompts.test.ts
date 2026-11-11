@@ -7,7 +7,6 @@ import {
 } from '../../../../src/services/ai/office/teamPrompts';
 import {
   ASSIGNMENT_HISTORY_CAP,
-  MAX_BATCH_SIZE,
   RECENT_WINDOW_TURNS,
   type AiEmployee,
   type AiLead,
@@ -194,7 +193,8 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
     expect(system).not.toContain(PERSONA_SENTINEL);
     expect(system).not.toContain(SKILL_BODY_SENTINEL);
     expect(system).toContain('task-1');
-    expect(system).toContain(String(MAX_BATCH_SIZE));
+    // D-06: no batch-size cap survives anywhere in the lead prompt.
+    expect(system).not.toMatch(/tối đa \d+ phân công/);
   });
 
   it('maps lead/employee rows to assistant and user rows to user in lead history', () => {

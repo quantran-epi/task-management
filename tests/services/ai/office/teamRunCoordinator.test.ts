@@ -53,6 +53,8 @@ const LEAD_MODEL = 'lead-model';
 const EMP_A_MODEL = 'emp-a-model';
 const EMP_B_MODEL = 'emp-b-model';
 const EMP_C_MODEL = 'emp-c-model';
+const EMP_D_MODEL = 'emp-d-model';
+const EMP_E_MODEL = 'emp-e-model';
 
 const sleep = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -75,9 +77,13 @@ async function waitFor(predicate: () => boolean, timeoutMs = 3000): Promise<void
 
 interface HarnessOptions {
   scripts: Record<string, LoopScript>;
-  teamPatch?: Partial<Pick<AiTeam, 'autoSplitEnabled' | 'autoApproveMutations' | 'budgetTokens'>>;
+  teamPatch?: Partial<
+    Pick<AiTeam, 'autoSplitEnabled' | 'autoApproveMutations' | 'budgetTokens' | 'concurrencyLimit'>
+  >;
   /** D-03 seam: when true, the coordinator reads its roster from `harness.roster` per turn. */
   useSeam?: boolean;
+  /** Extra roster members beyond A/B/C (each gets a distinct model `emp-<d|e>-model`). */
+  extraEmployees?: number;
 }
 
 interface Harness {
@@ -124,6 +130,24 @@ async function createHarness(options: HarnessOptions): Promise<Harness> {
     db
   );
   const employees = [employeeA, employeeB, employeeC];
+  // Task 1 of 37-04 needs a batch larger than the limit; the extra members keep the three
+  // canonical employees untouched so no existing test changes shape.
+  const extraNames = ['Dũng', 'Em'];
+  const extraModels = [EMP_D_MODEL, EMP_E_MODEL];
+  for (let index = 0; index < (options.extraEmployees ?? 0); index += 1) {
+    employees.push(
+      await createEmployee(
+        {
+          name: extraNames[index] ?? `Phụ ${index}`,
+          role: 'Chuyên viên',
+          capability: 'Hỗ trợ',
+          persona: `Bạn là ${extraNames[index] ?? `Phụ ${index}`}.`,
+          model: extraModels[index] ?? `emp-extra-${index}-model`,
+        },
+        db
+      )
+    );
+  }
 
   const team = await createTeam(
     {
@@ -136,6 +160,9 @@ async function createHarness(options: HarnessOptions): Promise<Harness> {
         : {}),
       ...(options.teamPatch?.autoApproveMutations !== undefined
         ? { autoApproveMutations: options.teamPatch.autoApproveMutations }
+        : {}),
+      ...(options.teamPatch?.concurrencyLimit !== undefined
+        ? { concurrencyLimit: options.teamPatch.concurrencyLimit }
         : {}),
       employeeIds: employees.map((row) => row.id),
     },
@@ -1987,11 +2014,11 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
       const sent = coordinator.send('Làm báo cáo');
       await waitFor(() => coordinator.getState().phase === 'batch-running');
+      // A queued agent registers its turn only once admitted, so wait for the admission.
+      const firstAgentTurn = `team:${team.id}:agent:${harness.employees[0]!.id}`;
+      await waitFor(() => aiTurnManager.getTurn(firstAgentTurn) !== undefined);
       // Both the team turn and an agent turn are live at once and never collide.
       expect(aiTurnManager.getTurn(`team:${team.id}`)).toBeDefined();
-      expect(
-        aiTurnManager.getTurn(`team:${team.id}:agent:${harness.employees[0]!.id}`)
-      ).toBeDefined();
       expect(`team:${team.id}`).not.toBe(`team:${team.id}:agent:${harness.employees[0]!.id}`);
 
       coordinator.abortAll();
@@ -2001,6 +2028,236 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       await waitFor(drained, PURGE_WINDOW_MS + 2000);
       expect(aiTurnManager.getActiveTurns()).toHaveLength(0);
       expect(coordinator.getState().phase).toBe('ready');
+    });
+  });
+
+  describe('Scheduler — one queue, plan order, every slot released (D-04, D-05, AIO-RUNTIME-05)', () => {
+    const assignmentsFor = (employees: AiEmployee[]) =>
+      employees.map((row, index) => ({ agentId: row.id, task: `Việc ${index + 1}` }));
+
+    /** A lead script that delegates the whole roster, then answers. */
+    const delegatingLead =
+      (harnessRef: () => Harness): LoopScript =>
+      async (options) => {
+        await options.executeToolFn!(
+          'delegate_batch',
+          { assignments: assignmentsFor(harnessRef().employees) },
+          harnessRef().db,
+          options.signal
+        );
+        return loopResult('Xong.');
+      };
+
+    it('never runs more than the limit and still finishes all five assignments (limit 2)', async () => {
+      const gates = new Map<string, ReturnType<typeof deferred>>();
+      const runningSamples: number[] = [];
+      let toolResult: string | null = null;
+      let harnessRef: Harness | null = null;
+      const scriptFor = (model: string): LoopScript => async () => {
+        const gate = gates.get(model)!;
+        await gate.promise;
+        return loopResult(`báo cáo ${model}`);
+      };
+      const models = [EMP_A_MODEL, EMP_B_MODEL, EMP_C_MODEL, EMP_D_MODEL, EMP_E_MODEL];
+      for (const model of models) gates.set(model, deferred());
+
+      const scripts: Record<string, LoopScript> = {
+        [LEAD_MODEL]: async (options) => {
+          toolResult = await options.executeToolFn!(
+            'delegate_batch',
+            { assignments: assignmentsFor(harnessRef!.employees) },
+            harnessRef!.db,
+            options.signal
+          );
+          return loopResult('Xong.');
+        },
+      };
+      for (const model of models) scripts[model] = scriptFor(model);
+
+      harness = await createHarness({
+        scripts,
+        extraEmployees: 2,
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 2 },
+      });
+      harnessRef = harness;
+      const current = harness;
+
+      const employeeIds = new Set(current.employees.map((row) => row.id));
+      const unsubscribe = current.coordinator.subscribe(() => {
+        runningSamples.push(
+          current.coordinator
+            .getState()
+            .agents.filter((row) => row.status === 'running' && employeeIds.has(row.agentId))
+            .length
+        );
+      });
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getRunningCount() === 2);
+      unsubscribe();
+
+      for (const gate of gates.values()) gate.release();
+      await sent;
+
+      expect(Math.max(...runningSamples)).toBe(2);
+      const parsed = JSON.parse(toolResult as unknown as string);
+      expect(parsed).toHaveLength(5);
+      expect(parsed.every((entry: any) => entry.status === 'done')).toBe(true);
+
+      const rows = await current.db.aiTeamAssignments.toArray();
+      expect(rows).toHaveLength(5);
+      expect(rows.every((row) => row.runStatus === 'done')).toBe(true);
+      expect(current.coordinator.getRunningCount()).toBe(0);
+    });
+
+    it('admits in plan order at limit 1 (D-05)', async () => {
+      const startOrder: string[] = [];
+      const scripts: Record<string, LoopScript> = {
+        [LEAD_MODEL]: delegatingLead(() => harness!),
+        [EMP_A_MODEL]: async () => {
+          startOrder.push('a');
+          return loopResult('A');
+        },
+        [EMP_B_MODEL]: async () => {
+          startOrder.push('b');
+          return loopResult('B');
+        },
+        [EMP_C_MODEL]: async () => {
+          startOrder.push('c');
+          return loopResult('C');
+        },
+      };
+      harness = await createHarness({
+        scripts,
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+      });
+
+      await harness.coordinator.send('Làm báo cáo');
+
+      expect(startOrder).toEqual(['a', 'b', 'c']);
+    });
+
+    it('leaves the third assignment queued and never starts its script while two run', async () => {
+      const gates = new Map<string, ReturnType<typeof deferred>>([
+        [EMP_A_MODEL, deferred()],
+        [EMP_B_MODEL, deferred()],
+        [EMP_C_MODEL, deferred()],
+      ]);
+      const started: string[] = [];
+      const scriptFor = (model: string): LoopScript => async () => {
+        started.push(model);
+        await gates.get(model)!.promise;
+        return loopResult('xong');
+      };
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: delegatingLead(() => harness!),
+          [EMP_A_MODEL]: scriptFor(EMP_A_MODEL),
+          [EMP_B_MODEL]: scriptFor(EMP_B_MODEL),
+          [EMP_C_MODEL]: scriptFor(EMP_C_MODEL),
+        },
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 2 },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getRunningCount() === 2);
+      await sleep(20);
+
+      // Queued means nothing has started: no runtime, no started script.
+      expect(started).toEqual([EMP_A_MODEL, EMP_B_MODEL]);
+      const third = current.coordinator
+        .getState()
+        .agents.find((row) => row.agentId === current.employees[2]!.id);
+      expect(third?.status).toBe('queued');
+
+      for (const gate of gates.values()) gate.release();
+      await sent;
+      expect(current.coordinator.getRunningCount()).toBe(0);
+    });
+
+    it('releases the slot of a pre-start throw so the rest of the queue still runs', async () => {
+      const repo = await import('../../../../src/db/repositories/teamTranscriptRepo');
+      const original = repo.listRecentTurns;
+      let calls = 0;
+      const spy = vi
+        .spyOn(repo, 'listRecentTurns')
+        .mockImplementation(async (threadId, n, targetDb) => {
+          calls += 1;
+          // The first employee's pre-start read fails; the lead's and the siblings' do not.
+          if (calls === 2) throw new Error('history hỏng');
+          return original(threadId, n, targetDb);
+        });
+
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: delegatingLead(() => harness!),
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+
+      try {
+        await current.coordinator.send('Làm báo cáo');
+      } finally {
+        spy.mockRestore();
+      }
+
+      const rows = await current.db.aiTeamAssignments.toArray();
+      expect(rows).toHaveLength(3);
+      expect(rows.filter((row) => row.runStatus === 'error')).toHaveLength(1);
+      expect(rows.filter((row) => row.runStatus === 'done')).toHaveLength(2);
+      expect(current.coordinator.getRunningCount()).toBe(0);
+      expect(current.coordinator.getState().phase).not.toBe('batch-running');
+    });
+
+    it('dispose mid-batch rejects the parked acquire and settles the queued assignment (limit 1)', async () => {
+      const gate = deferred();
+      let toolResult: string | null = null;
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            toolResult = await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getRunningCount() === 1);
+
+      await current.coordinator.dispose();
+      gate.release();
+      // Must resolve: a parked acquire that outlives the dispose would hang here.
+      await sent;
+
+      const rows = await current.db.aiTeamAssignments.toArray();
+      expect(rows).toHaveLength(3);
+      const queued = rows.filter((row) => row.agentId !== current.employees[0]!.id);
+      expect(queued).toHaveLength(2);
+      expect(
+        queued.every((row) => row.runStatus === 'stopped' && row.incomplete === true)
+      ).toBe(true);
+      const parsed = JSON.parse(toolResult as unknown as string);
+      expect(parsed).toHaveLength(3);
+      expect(parsed.filter((entry: any) => entry.incomplete === true).length).toBeGreaterThan(0);
+      expect(current.coordinator.getRunningCount()).toBe(0);
+      expect(current.coordinator.getState().phase).toBe('ready');
     });
   });
 

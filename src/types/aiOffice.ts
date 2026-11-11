@@ -234,7 +234,6 @@ export interface AgentIdentity {
   color: string;
 }
 
-export const MAX_BATCH_SIZE = 3; // D-02
 export const RECENT_WINDOW_TURNS = 10; // D-10
 export const ASSIGNMENT_HISTORY_CAP = 50; // D-29
 export const BUDGET_PAUSE_THRESHOLD = 0.8; // D-20

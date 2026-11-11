@@ -1,6 +1,5 @@
 import type { TaskPlannerDatabase } from '../../../db';
 import type { AiTeamLinkItemType } from '../../../types/aiOffice';
-import { MAX_BATCH_SIZE } from '../../../types/aiOffice';
 import { rankBM25, extractRelevantSnippet } from '../../../utils/bm25';
 import { buildTeamBm25Docs, getTeamTurn } from '../../../db/repositories/teamTranscriptRepo';
 import { listTeamLinks, listTeamMembers } from '../../../db/repositories/aiTeamRepo';
@@ -32,7 +31,6 @@ export type TeamToolRefusalCode =
   | 'SKILL_NOT_ASSIGNED'
   | 'ITEM_NOT_LINKED'
   | 'AGENT_NOT_IN_ROSTER'
-  | 'BATCH_TOO_LARGE'
   | 'EMPTY_BATCH';
 
 /** Mirrors `ArtifactToolRefusal`: a refusal is a returned value, never a thrown error. */
@@ -124,13 +122,14 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'delegate_batch',
-      description: `Giao một lô việc cho các nhân viên trong nhóm. Tối đa ${MAX_BATCH_SIZE} việc mỗi lô. Lead phải chờ toàn bộ lô hoàn tất rồi mới tổng hợp. skillId chỉ mang tính thông tin — kỹ năng được gán cho nhân viên mới là căn cứ.`,
+      description:
+        'Giao một lô việc cho các nhân viên trong nhóm. Lead phải chờ toàn bộ lô hoàn tất rồi mới tổng hợp. skillId chỉ mang tính thông tin — kỹ năng được gán cho nhân viên mới là căn cứ.',
       parameters: {
         type: 'object',
         properties: {
           assignments: {
             type: 'array',
-            description: `Danh sách việc, tối đa ${MAX_BATCH_SIZE} phần tử.`,
+            description: 'Danh sách việc cần giao.',
             items: {
               type: 'object',
               properties: {
@@ -293,11 +292,6 @@ async function delegateBatch(args: Record<string, any>, ctx: TeamToolContext): P
   const assignments: any[] = Array.isArray(args.assignments) ? args.assignments : [];
   if (assignments.length === 0) {
     return JSON.stringify(refuse('EMPTY_BATCH', 'Danh sách giao việc đang trống.'));
-  }
-  if (assignments.length > MAX_BATCH_SIZE) {
-    return JSON.stringify(
-      refuse('BATCH_TOO_LARGE', `Mỗi lần chỉ được giao tối đa ${MAX_BATCH_SIZE} việc.`)
-    );
   }
 
   const members = await listTeamMembers(ctx.teamId, ctx.db);

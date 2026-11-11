@@ -470,14 +470,18 @@ describe('teamTools — delegate_batch validation (AIO-TEAM-02, D-02, D-03, D-33
     await db.delete();
   });
 
-  it('refuses more than three assignments with BATCH_TOO_LARGE and resolves', async () => {
-    const assignments = employeeIds.map((id) => ({ agentId: id, task: 'Việc' }));
-    assignments.push({ agentId: employeeIds[0]!, task: 'Việc 4' });
+  it('accepts a 30-assignment batch — the scheduler, not a cap, bounds concurrency (D-06)', async () => {
+    const assignments = Array.from({ length: 30 }, (_, index) => ({
+      agentId: employeeIds[index % employeeIds.length]!,
+      task: `Việc ${index + 1}`,
+    }));
 
-    const result = await executeTeamTool('delegate_batch', { assignments }, ctx());
+    const result = JSON.parse(
+      await executeTeamTool('delegate_batch', { assignments }, ctx())
+    );
 
-    expect(JSON.parse(result)).toMatchObject({ refused: true, code: 'BATCH_TOO_LARGE' });
-    expect(JSON.parse(result).message).toContain('3');
+    expect(result.refused).toBeUndefined();
+    expect(result.assignments).toHaveLength(30);
   });
 
   it('refuses an agentId outside the roster with AGENT_NOT_IN_ROSTER', async () => {
