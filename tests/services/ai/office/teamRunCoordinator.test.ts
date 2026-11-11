@@ -2994,6 +2994,72 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(remounted.getState().phase).toBe('ready');
     });
 
+    // WR-06: a throw inside the create/dispatch loop escaped `runBatch` as a tool error.
+    // `startLeadTurn` only resets `ready` from the lead phases, so the coordinator stayed
+    // in `batch-running`: every later submit queued forever and the batch row never ended.
+    it('closes the batch and restores ready when createAssignment throws mid-loop', async () => {
+      const repo = await import('../../../../src/db/repositories/aiTeamRunRepo');
+      const original = repo.createAssignment;
+      let calls = 0;
+      const spy = vi.spyOn(repo, 'createAssignment').mockImplementation(async (input, targetDb) => {
+        calls += 1;
+        // The second assignment's insert fails after the first was created.
+        if (calls === 2) throw new Error('ledger hỏng');
+        return original(input, targetDb);
+      });
+
+      const started: string[] = [];
+      let toolResult: string | null = null;
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            toolResult = await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async () => {
+            started.push('a');
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => {
+            started.push('b');
+            return loopResult('B xong');
+          },
+          [EMP_C_MODEL]: async () => {
+            started.push('c');
+            return loopResult('C xong');
+          },
+        },
+      });
+      const current = harness;
+
+      try {
+        await current.coordinator.send('Làm báo cáo');
+      } finally {
+        spy.mockRestore();
+      }
+
+      // The lead got a refusal, not a thrown tool error.
+      expect(JSON.parse(toolResult as unknown as string)).toMatchObject({ cancelled: true });
+      expect(current.coordinator.getState().phase).toBe('ready');
+
+      const batches = await current.db.aiTeamBatches.toArray();
+      expect(batches).toHaveLength(1);
+      expect(batches[0]!.endedAt).toBeDefined();
+      expect(batches[0]!.abortedBy).toBe('none');
+      // Whatever was dispatched before the throw still settled itself.
+      expect(started).toEqual(['a']);
+      // Its dispatch task is not awaited by this call, so it releases its slot on its own.
+      await waitFor(() => current.coordinator.getRunningCount() === 0);
+      // The next submit starts a real turn instead of queueing behind a wedged phase.
+      await expect(current.coordinator.send('Lượt nữa')).resolves.toBe('started');
+    });
+
     // WR-07: `stopAgent` writes its ledger entry from a detached async block, so attempt 1's
     // finalize can resolve AFTER attempt 2 registered. The unlink must not remove attempt 2's
     // entry — doing so saved attempt 2's report with no link fields and then read its `done`

@@ -302,6 +302,15 @@ const DISPOSED_REFUSAL = JSON.stringify({
 });
 
 /**
+ * WR-06: the batch's create/dispatch loop failed (a ledger or transcript write threw). The
+ * lead gets a refusal instead of a thrown tool error, so its turn completes normally.
+ */
+const BATCH_DISPATCH_FAILED = JSON.stringify({
+  cancelled: true,
+  message: 'Không mở được lô chạy. Chưa nhân viên nào được giao việc.',
+});
+
+/**
  * D-18/D-11: abort every per-assignment controller and empty the map, so every parked
  * `scheduler.acquire` rejects with `AbortError` instead of parking forever.
  */
@@ -1466,70 +1475,90 @@ export function createTeamRunCoordinator(
     const started: Array<Promise<void>> = [];
     /** This batch's attempt ids by agent, kept after the dispatch `finally` for the result. */
     const attemptIdsByAgent = new Map<string, string>();
-    for (const assignment of assignments) {
-      const employee = roster.employees.find((row) => row.id === assignment.agentId);
-      if (!employee) continue;
-      // D-22: one attempt row per run, `queued` until the turn actually starts.
-      const skill = skillFor(employee);
-      const attemptRow = await createAssignment(
-        {
-          batchId: batch.id,
-          agentId: employee.id,
-          agentName: employee.name,
-          ...(skill ? { skillId: skill.id } : {}),
-          model: employee.model || options.model,
-          task: assignment.task,
-        },
-        db
-      );
-      // D-10/D-11: registered at CREATION time (queued), so a stop can find the assignment
-      // before any runtime exists. Cleared by the dispatch task's `finally`.
-      assignmentIdsByAgent.set(employee.id, attemptRow.id);
-      attemptIdsByAgent.set(employee.id, attemptRow.id);
-      // Queued means nothing has started: no runtime, no live-use claim, no turn registration.
-      updateAgent(employee.id, { status: 'queued', streamingText: '' });
-      // D-31: the instruction row is attributed to the lead, so the employee's own history
-      // reads as (instruction, report) pairs. D-22 links make the pair explicit.
-      // WR-01: link fields ONLY. Nothing updates an instruction row's `runStatus`/
-      // `stopReason` (the terminal writer patches the REPORT row), so stamping `queued` here
-      // rendered a permanent queue badge, a stop button for the lead, and a retry button
-      // that refuses. The ledger row is the single source of attempt status.
-      const instructionRow = await saveTeamMessage(
-        {
-          threadId: options.threadId,
-          role: 'assistant',
-          content: assignment.task,
-          agentId: lead.id,
-          agentName: lead.name,
-          agentKind: 'lead',
-          messageKind: 'instruction',
-          // CR-06: display attribution is the lead's, but the row belongs to the assignee
-          // so `listAssignmentHistory` can find it.
-          targetAgentId: employee.id,
-          batchId: batch.id,
-          assignmentId: attemptRow.id,
-          attemptNo: attemptRow.attemptNo,
-        },
-        db
-      );
-      // D-16/T-37-08: the promise is settled by `Promise.allSettled`, but a rejection from
-      // the dispatch task must still not surface as unhandled — the task itself settles the
-      // agent and its ledger row.
-      started.push(
-        dispatchAssignment(
-          employee,
-          assignment.task,
+    // WR-06: the create/dispatch loop awaits `createAssignment`/`saveTeamMessage` per
+    // assignment. A throw there escapes `runBatch` to the orchestrator's tool-error path;
+    // `startLeadTurn` only resets `ready` from the lead phases, so the coordinator was left
+    // in `batch-running` — every submit queued forever and the batch row had no `endedAt`.
+    // Close the batch, release the phase, and hand the lead a structured refusal.
+    try {
+      for (const assignment of assignments) {
+        const employee = roster.employees.find((row) => row.id === assignment.agentId);
+        if (!employee) continue;
+        // D-22: one attempt row per run, `queued` until the turn actually starts.
+        const skill = skillFor(employee);
+        const attemptRow = await createAssignment(
           {
+            batchId: batch.id,
+            agentId: employee.id,
+            agentName: employee.name,
+            ...(skill ? { skillId: skill.id } : {}),
+            model: employee.model || options.model,
+            task: assignment.task,
+          },
+          db
+        );
+        // D-10/D-11: registered at CREATION time (queued), so a stop can find the assignment
+        // before any runtime exists. Cleared by the dispatch task's `finally`.
+        assignmentIdsByAgent.set(employee.id, attemptRow.id);
+        attemptIdsByAgent.set(employee.id, attemptRow.id);
+        // Queued means nothing has started: no runtime, no live-use claim, no turn registration.
+        updateAgent(employee.id, { status: 'queued', streamingText: '' });
+        // D-31: the instruction row is attributed to the lead, so the employee's own history
+        // reads as (instruction, report) pairs. D-22 links make the pair explicit.
+        // WR-01: link fields ONLY. Nothing updates an instruction row's `runStatus`/
+        // `stopReason` (the terminal writer patches the REPORT row), so stamping `queued` here
+        // rendered a permanent queue badge, a stop button for the lead, and a retry button
+        // that refuses. The ledger row is the single source of attempt status.
+        const instructionRow = await saveTeamMessage(
+          {
+            threadId: options.threadId,
+            role: 'assistant',
+            content: assignment.task,
+            agentId: lead.id,
+            agentName: lead.name,
+            agentKind: 'lead',
+            messageKind: 'instruction',
+            // CR-06: display attribution is the lead's, but the row belongs to the assignee
+            // so `listAssignmentHistory` can find it.
+            targetAgentId: employee.id,
             batchId: batch.id,
             assignmentId: attemptRow.id,
             attemptNo: attemptRow.attemptNo,
-            instructionMessageId: instructionRow.id,
           },
-          signal
-        ).catch(() => {
-          /* dispatchAssignment already settled the agent and its ledger row */
-        })
-      );
+          db
+        );
+        // D-16/T-37-08: the promise is settled by `Promise.allSettled`, but a rejection from
+        // the dispatch task must still not surface as unhandled — the task itself settles the
+        // agent and its ledger row.
+        started.push(
+          dispatchAssignment(
+            employee,
+            assignment.task,
+            {
+              batchId: batch.id,
+              assignmentId: attemptRow.id,
+              attemptNo: attemptRow.attemptNo,
+              instructionMessageId: instructionRow.id,
+            },
+            signal
+          ).catch(() => {
+            /* dispatchAssignment already settled the agent and its ledger row */
+          })
+        );
+      }
+    } catch {
+      // Anything already dispatched still settles itself; the batch is closed here so the
+      // ledger tail is honest and `dispose`/`abortAll` cannot double-close it.
+      if (openBatchId === batch.id) {
+        openBatchId = null;
+        try {
+          await closeBatch(batch.id, { phaseAtEnd: 'ready', abortedBy: 'none' }, db);
+        } catch {
+          /* the ledger close must never mask the original failure */
+        }
+      }
+      setPhase('ready');
+      return BATCH_DISPATCH_FAILED;
     }
 
     // Concurrency: one runtime per agent, so three turns really do run at once (D-02).
