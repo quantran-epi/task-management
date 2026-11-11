@@ -165,7 +165,8 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
     ].join('\n'),
     [
       '[DANH SÁCH NHÂN VIÊN]',
-      ...roster.map((e) => `- ${e.name} — ${e.role}: ${e.capability}`),
+      ...roster.map((e) => `- ${e.name} — ${e.role}: ${e.capability} (agentId: ${e.id})`),
+      'Khi gọi delegate_batch, trường agentId PHẢI là giá trị agentId ở trên — không dùng tên.',
     ].join('\n'),
   ];
 

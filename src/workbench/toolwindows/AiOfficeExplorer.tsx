@@ -1,14 +1,15 @@
 import React, { useMemo, useState } from 'react';
-import { Input, Button, Tag, Typography, Tooltip } from 'antd';
+import { Input, Button, Tag, Typography, Tooltip, Popconfirm } from 'antd';
 import {
   SearchOutlined,
   PlusOutlined,
   TeamOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { listEmployees, listLeads } from '../../db/repositories/aiOfficeRepo';
-import { listTeams } from '../../db/repositories/aiTeamRepo';
+import { deleteTeam, listTeams } from '../../db/repositories/aiTeamRepo';
 import { useLayoutStore } from '../store/layoutStore';
 import { TeamEditorDrawer } from '../../components/ai/office/TeamEditorDrawer';
 import type { AiTeam, AiTeamStatus } from '../../types/aiOffice';
@@ -32,6 +33,8 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
   const [createTeamOpen, setCreateTeamOpen] = useState(false);
 
   const openTab = useLayoutStore((s) => s.openTab);
+  const closeTab = useLayoutStore((s) => s.closeTab);
+  const openTabs = useLayoutStore((s) => s.openTabs);
 
   const teams = useLiveQuery(() => listTeams(db), [db]) ?? [];
   const leads = useLiveQuery(() => listLeads(db), [db]) ?? [];
@@ -76,6 +79,12 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
       closable: true,
       params: { teamId: team.id },
     });
+  };
+
+  const handleDeleteTeam = async (team: AiTeam) => {
+    await deleteTeam(team.id, db);
+    const workspaceTab = openTabs.find((tab) => tab.id === `team_workspace:${team.id}`);
+    if (workspaceTab) closeTab(workspaceTab.id);
   };
 
   return (
@@ -216,6 +225,30 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
                 >
                   {statusLabel}
                 </Tag>
+
+                <span
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  role="presentation"
+                  style={{ marginLeft: 4, flexShrink: 0 }}
+                >
+                  <Popconfirm
+                    title={`Xóa nhóm «${team.name}»? Toàn bộ transcript, phân công và tab chat của nhóm sẽ bị xóa. Dùng Sao lưu để khôi phục nếu đã xuất trước đó.`}
+                    okText="Xóa"
+                    cancelText="Hủy"
+                    okButtonProps={{ danger: true }}
+                    onConfirm={() => handleDeleteTeam(team)}
+                  >
+                    <Button
+                      size="small"
+                      type="text"
+                      danger
+                      icon={<DeleteOutlined />}
+                      aria-label={`Xóa nhóm ${team.name}`}
+                      data-testid={`ai-office-team-delete-${team.id}`}
+                    />
+                  </Popconfirm>
+                </span>
               </div>
             );
           })

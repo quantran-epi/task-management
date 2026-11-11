@@ -189,6 +189,8 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
     expect(system).toContain(employee.name);
     expect(system).toContain(employee.role);
     expect(system).toContain(employee.capability);
+    // delegate_batch keys on agentId; without it the lead invents names and the batch is refused.
+    expect(system).toContain(employee.id);
     expect(system).not.toContain(PERSONA_SENTINEL);
     expect(system).not.toContain(SKILL_BODY_SENTINEL);
     expect(system).toContain('task-1');
