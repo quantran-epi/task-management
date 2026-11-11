@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Input, Button, Tag, Typography, Tooltip, Popconfirm } from 'antd';
+import { Alert, Input, Button, Tag, Typography, Tooltip, Popconfirm } from 'antd';
 import {
   SearchOutlined,
   PlusOutlined,
@@ -10,6 +10,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { listEmployees, listLeads } from '../../db/repositories/aiOfficeRepo';
 import { deleteTeam, listTeams } from '../../db/repositories/aiTeamRepo';
+import { disposeRun } from '../../services/ai/office/teamRunManager';
 import { useLayoutStore } from '../store/layoutStore';
 import { TeamEditorDrawer } from '../../components/ai/office/TeamEditorDrawer';
 import type { AiTeam, AiTeamStatus } from '../../types/aiOffice';
@@ -28,9 +29,13 @@ const STATUS_LABEL_MAP: Record<AiTeamStatus, string> = {
   idle: 'Nhàn rỗi',
 };
 
+/** WR-12 idiom: one fixed message for a failed teardown — repo errors can embed ids. */
+const ACTION_ERROR_COPY = 'Không xoá được nhóm. Vui lòng thử lại.';
+
 export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = defaultDb }) => {
   const [search, setSearch] = useState('');
   const [createTeamOpen, setCreateTeamOpen] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const openTab = useLayoutStore((s) => s.openTab);
   const closeTab = useLayoutStore((s) => s.closeTab);
@@ -81,7 +86,17 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
     });
   };
 
+  /**
+   * D-18: a live run is torn down BEFORE the row is deleted, so no coordinator can write to
+   * a deleted parent. A dispose failure aborts the delete — data safety over completion.
+   */
   const handleDeleteTeam = async (team: AiTeam) => {
+    try {
+      await disposeRun(db, team.id);
+    } catch {
+      setActionError(ACTION_ERROR_COPY);
+      return;
+    }
     await deleteTeam(team.id, db);
     const workspaceTab = openTabs.find((tab) => tab.id === `team_workspace:${team.id}`);
     if (workspaceTab) closeTab(workspaceTab.id);
@@ -129,6 +144,19 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
           />
         </Tooltip>
       </div>
+
+      {/* D-18: a dispose failure skips the delete, so it has to be visible. */}
+      {actionError && (
+        <div style={{ padding: '6px 8px 0' }} data-testid="ai-office-team-delete-error">
+          <Alert
+            type="error"
+            showIcon
+            closable
+            onClose={() => setActionError(null)}
+            message={actionError}
+          />
+        </div>
+      )}
 
       {/* Team List */}
       <div

@@ -35,6 +35,7 @@ import {
   type TeamRunCoordinator,
   type TeamRunSnapshot,
 } from '../../../services/ai/office/teamRunCoordinator';
+import { getOrCreateRun } from '../../../services/ai/office/teamRunManager';
 import type { ChatTurnRuntimeDeps } from '../runtime/chatTurnRuntime';
 import { AiChatWidget } from '../AiChatWidget';
 import { ChatMessageBubble } from '../ChatMessageBubble';
@@ -60,20 +61,10 @@ export interface TeamWorkspaceProps {
   createRuntimeDeps?: ((agentId: string) => Partial<ChatTurnRuntimeDeps>) | undefined;
 }
 
-interface CoordinatorEntry {
-  coordinator: TeamRunCoordinator;
-  threadId: string;
-}
-
 /**
- * D-22: one coordinator per team, held outside component state so a run survives a
- * view switch. Disposed only when the team is deleted (never on unmount).
- * Keyed by database name too, so a test database never inherits another one's run.
+ * D-18: coordinator ownership lives in `teamRunManager`, so the explorer's delete path —
+ * which never mounts this workspace — can tear a run down too.
  */
-const coordinatorRegistry = new Map<string, CoordinatorEntry>();
-
-const registryKey = (db: TaskPlannerDatabase, teamId: string) => `${db.name}:${teamId}`;
-
 const EMPTY_SNAPSHOT: TeamRunSnapshot = {
   phase: 'idle',
   agents: [],
@@ -295,14 +286,10 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         return;
       }
 
-      const existing = coordinatorRegistry.get(registryKey(db, team.id));
-      if (existing && existing.threadId === thread.id) {
-        setCoordinator(existing.coordinator);
-        setSnapshot(existing.coordinator.getState());
-        return;
-      }
-
-      const created = createTeamRunCoordinator({
+      // D-18: the manager owns the entry, so a stale-thread coordinator is disposed before
+      // the replacement is handed back — one live coordinator per team at every instant.
+      const created = await getOrCreateRun(db, team.id, thread.id, () =>
+        createTeamRunCoordinator({
         db,
         team,
         lead: lead ?? {
@@ -381,8 +368,10 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
             },
           };
         },
-      });
-      coordinatorRegistry.set(registryKey(db, team.id), { coordinator: created, threadId: thread.id });
+        })
+      );
+      // The await is a dispose window: a remount or team switch in between must not set state.
+      if (cancelled) return;
       setCoordinator(created);
       setSnapshot(created.getState());
     })();
