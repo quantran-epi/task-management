@@ -1310,12 +1310,17 @@ export function createTeamRunCoordinator(
         },
         db
       );
+      // D-16/T-37-08: the promise is settled by `Promise.allSettled`, but a `finally`-only
+      // rejection (a throw in the pre-start reads) must still not surface as unhandled, so the
+      // batch's own await is the only observer and it ignores the rejection.
       started.push(
         startEmployeeTurn(employee, assignment.task, lastUserRequest, priorBatchResults, {
           batchId: batch.id,
           assignmentId: attemptRow.id,
           attemptNo: attemptRow.attemptNo,
           instructionMessageId: instructionRow.id,
+        }).catch(() => {
+          /* startEmployeeTurn already settled the agent and its ledger row */
         })
       );
     }
