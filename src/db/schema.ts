@@ -145,6 +145,15 @@ export const SCHEMA_V20 = { ...SCHEMA_V19 } as const;
 // Post-36 repair: purges SDLC threads and orphan tabs. Deletes only, no index changes.
 export const SCHEMA_V21 = { ...SCHEMA_V20 } as const;
 
+// Phase 37 (D-22): the run ledger. Purely additive — no existing store index spec is
+// touched, so no index rebuild and no `.upgrade()` hook is needed (C-16: no backfill).
+export const SCHEMA_V22 = {
+  ...SCHEMA_V21,
+  aiTeamBatches: 'id, teamId, threadId, [threadId+batchIndex], startedAt',
+  aiTeamAssignments:
+    'id, batchId, agentId, [batchId+attemptNo], runStatus, retryOfAssignmentId',
+} as const;
+
 // Bump with every new `this.version(n)` in db/index.ts. Migration tests assert
 // against this instead of a literal, so a schema bump never silently breaks them.
-export const LATEST_SCHEMA_VERSION = 21;
+export const LATEST_SCHEMA_VERSION = 22;

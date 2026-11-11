@@ -12,6 +12,8 @@
  * is what bounds it.
  */
 
+import type { ChatTokenUsage } from './models';
+
 export type AiTeamStatus = 'active' | 'idle';
 
 export type AiTeamMemberRole = 'lead' | 'employee';
@@ -80,6 +82,8 @@ export interface AiTeam {
   autoSplitEnabled?: boolean | undefined;
   /** D-13: skip the mutation approval gate. */
   autoApproveMutations?: boolean | undefined;
+  /** Phase 37 D-03: per-team run concurrency; absent means `DEFAULT_TEAM_CONCURRENCY`. */
+  concurrencyLimit?: number | undefined;
   createdAt: string;
   updatedAt: string;
 }
@@ -119,6 +123,101 @@ export interface AiSkillVersion {
   decidedAt?: string | undefined;
 }
 
+/** Phase 37 (D-22): why a batch stopped. `none` = still running or ended normally. */
+export type AiTeamBatchAbortedBy = 'user' | 'team-deleted' | 'app-exit' | 'none';
+
+/** D-24: `auto` = the plan card was skipped; the other two are an explicit choice. */
+export type AiTeamBatchPlanDecision = 'approved' | 'rejected' | 'auto';
+
+/**
+ * Phase 37 (D-22, D-24): the ledger's run status.
+ *
+ * Deliberately NOT `AgentRunStatus` — that union is the UI surface (`paused`/`done`) and
+ * cannot carry `skipped`, `blocked` or `needs-input`.
+ */
+export type AiTeamAssignmentRunStatus =
+  | 'queued'
+  | 'running'
+  | 'done'
+  | 'stopped'
+  | 'error'
+  | 'skipped'
+  | 'blocked'
+  | 'needs-input';
+
+export type AiTeamAssignmentStopReason =
+  | 'user-per-agent'
+  | 'user-abort'
+  | 'team-deleted'
+  | 'provider'
+  | 'tool-limit'
+  | 'budget-pause'
+  | 'none';
+
+export interface AiTeamPlanEntry {
+  agentId: string;
+  /** Snapshot at plan time (D-25) — the roster may change before a retry. */
+  agentName: string;
+  task: string;
+}
+
+/** D-24: the approved original is never overwritten by an edited plan. */
+export interface AiTeamPlanSnapshot {
+  original: AiTeamPlanEntry[];
+  edited?: AiTeamPlanEntry[] | undefined;
+}
+
+export interface AiTeamBatch {
+  id: string;
+  teamId: string;
+  threadId: string;
+  /** D-24: 1-based, monotonic within one turn's thread. */
+  batchIndex: number;
+  userRequest: string;
+  leadId: string;
+  planSnapshot: AiTeamPlanSnapshot;
+  planDecision: AiTeamBatchPlanDecision;
+  startedAt: string;
+  endedAt?: string | undefined;
+  phaseAtEnd?: TeamRunPhase | undefined;
+  abortedBy: AiTeamBatchAbortedBy;
+}
+
+/**
+ * Phase 37 (D-22, D-23, D-25): one row per attempt. Retry appends, never mutates.
+ *
+ * The profile fields are snapshots so history and retry never depend on the live roster.
+ * `diagnosticDetail` (D-17) stays out of the transcript and out of backup-facing keys.
+ */
+export interface AiTeamAssignment {
+  id: string;
+  batchId: string;
+  agentId: string;
+  agentName: string;
+  skillId?: string | undefined;
+  skillVersion?: number | undefined;
+  model: string;
+  task: string;
+  runStatus: AiTeamAssignmentRunStatus;
+  stopReason: AiTeamAssignmentStopReason;
+  /** D-23: 1-based per attempt chain; allocated inside the insert transaction. */
+  attemptNo: number;
+  /** Points at the first attempt of this chain for attempt 2+; absent on attempt 1. */
+  retryOfAssignmentId?: string | undefined;
+  incomplete: boolean;
+  queuedAt: string;
+  startedAt?: string | undefined;
+  endedAt?: string | undefined;
+  instructionMessageId?: string | undefined;
+  reportMessageId?: string | undefined;
+  tokenUsage?: ChatTokenUsage | undefined;
+  toolCallCount?: number | undefined;
+  /** D-17: technical detail for debugging; never rendered and never exported. */
+  diagnosticDetail?: string | undefined;
+  /** D-24 handoff: upstream assignments that must finish first. */
+  dependsOn?: string[] | undefined;
+}
+
 export interface AgentRunState {
   agentId: string;
   status: AgentRunStatus;
@@ -139,3 +238,19 @@ export const MAX_BATCH_SIZE = 3; // D-02
 export const RECENT_WINDOW_TURNS = 10; // D-10
 export const ASSIGNMENT_HISTORY_CAP = 50; // D-29
 export const BUDGET_PAUSE_THRESHOLD = 0.8; // D-20
+
+/**
+ * Phase 37 (D-02): per-team run concurrency.
+ *
+ * Only the *range* matches `ghostDevConfig.ts:54`; the ghost-dev default is 6, so 3 here
+ * is a Phase 37 choice, not parity.
+ */
+export const DEFAULT_TEAM_CONCURRENCY = 3;
+export const MIN_TEAM_CONCURRENCY = 1;
+export const MAX_TEAM_CONCURRENCY = 12;
+
+/** Total: every input yields an integer in [1, 12]; non-finite input falls back to the default. */
+export function clampTeamConcurrency(n: number): number {
+  const finite = Number.isFinite(n) ? n : DEFAULT_TEAM_CONCURRENCY;
+  return Math.max(MIN_TEAM_CONCURRENCY, Math.min(MAX_TEAM_CONCURRENCY, Math.round(finite)));
+}

@@ -21,6 +21,7 @@ import {
   SCHEMA_V19,
   SCHEMA_V20,
   SCHEMA_V21,
+  SCHEMA_V22,
 } from './schema';
 import type {
   Task,
@@ -55,6 +56,8 @@ import type {
   AiTeamMember,
   AiTeamLink,
   AiSkillVersion,
+  AiTeamBatch,
+  AiTeamAssignment,
 } from '../types/aiOffice';
 
 /**
@@ -94,6 +97,8 @@ export class TaskPlannerDatabase extends Dexie {
   aiTeamMembers!: Table<AiTeamMember, string>;
   aiTeamLinks!: Table<AiTeamLink, string>;
   aiSkillVersions!: Table<AiSkillVersion, string>;
+  aiTeamBatches!: Table<AiTeamBatch, string>;
+  aiTeamAssignments!: Table<AiTeamAssignment, string>;
 
 
   constructor(databaseName = 'PersonalTaskPlannerDB') {
@@ -619,6 +624,10 @@ export class TaskPlannerDatabase extends Dexie {
           }
         }
       });
+
+    // Phase 37 (D-22): run ledger. Purely additive — nothing to backfill, so no
+    // `.upgrade()` hook. The V20/V21 repair hooks stay attached to their own versions.
+    this.version(22).stores(SCHEMA_V22);
 
     // Multi-tab concurrency handlers (DATA-04, D-09, D-10)
     this.on('blocked', () => {
