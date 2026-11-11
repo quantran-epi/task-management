@@ -1,6 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Avatar, Button, Drawer, InputNumber, Popconfirm, Select, Switch, Table, Tag, theme } from 'antd';
 import type { AiEmployee, AiLead, AiTeam, AiTeamMember } from '../../../types/aiOffice';
+import {
+  DEFAULT_TEAM_CONCURRENCY,
+  MAX_TEAM_CONCURRENCY,
+  MIN_TEAM_CONCURRENCY,
+} from '../../../types/aiOffice';
 import { agentColorFor, agentTextColorFor } from './AgentAttributionRow';
 import { LinkedItemsList, type LinkedItemRow } from './LinkedItemsList';
 
@@ -22,6 +27,7 @@ export interface TeamSettingsDrawerProps {
     budgets: Record<string, number>;
     autoSplitEnabled: boolean;
     autoApproveMutations: boolean;
+    concurrencyLimit: number;
   }) => void;
 }
 
@@ -71,6 +77,9 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
   const [rows, setRows] = useState<SplitRow[]>([]);
   const [autoSplit, setAutoSplit] = useState(team.autoSplitEnabled === true);
   const [autoApprove, setAutoApprove] = useState(team.autoApproveMutations === true);
+  const [concurrency, setConcurrency] = useState<number>(
+    team.concurrencyLimit ?? DEFAULT_TEAM_CONCURRENCY
+  );
   const [rosterError, setRosterError] = useState<string | null>(null);
 
   const memberAgentIds = useMemo(
@@ -122,6 +131,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
     setTotal(team.budgetTokens);
     setAutoSplit(team.autoSplitEnabled === true);
     setAutoApprove(team.autoApproveMutations === true);
+    setConcurrency(team.concurrencyLimit ?? DEFAULT_TEAM_CONCURRENCY);
     setRows(
       members
         .map((member) => {
@@ -161,6 +171,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
       budgets,
       autoSplitEnabled: autoSplit,
       autoApproveMutations: autoApprove,
+      concurrencyLimit: concurrency,
     });
   };
 
@@ -357,6 +368,32 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
         <div>
           <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Liên kết mục</div>
           <LinkedItemsList items={links} />
+        </div>
+
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Chạy đồng thời</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 12 }}>Số nhân viên chạy đồng thời</span>
+            <InputNumber
+              min={MIN_TEAM_CONCURRENCY}
+              max={MAX_TEAM_CONCURRENCY}
+              step={1}
+              style={{ width: 90 }}
+              value={concurrency}
+              onChange={(value) =>
+                setConcurrency(
+                  typeof value === 'number'
+                    ? value
+                    : team.concurrencyLimit ?? DEFAULT_TEAM_CONCURRENCY
+                )
+              }
+              aria-label="Số nhân viên chạy đồng thời"
+              data-testid="team-concurrency-limit"
+            />
+          </div>
+          <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>
+            {`Từ ${MIN_TEAM_CONCURRENCY} đến ${MAX_TEAM_CONCURRENCY} nhân viên chạy cùng lúc; thay đổi áp dụng ngay cho lô đang chạy.`}
+          </div>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

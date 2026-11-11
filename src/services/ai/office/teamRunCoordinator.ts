@@ -190,7 +190,9 @@ export interface TeamRunCoordinator {
    */
   dispose(): Promise<void>;
   /** D-25: toggles apply to the live run, not only the next construction. */
-  setTeamSettings(patch: Partial<Pick<AiTeam, 'autoSplitEnabled' | 'autoApproveMutations'>>): void;
+  setTeamSettings(
+    patch: Partial<Pick<AiTeam, 'autoSplitEnabled' | 'autoApproveMutations' | 'concurrencyLimit'>>
+  ): void;
   /** AIO-BUDGET-01: adopt a team-total edit so the next top-up accumulates onto it. */
   setTeamBudget(total: number): void;
   /** D-07 diagnostic seam: live scheduler slots, so a leak is observable without a provider. */
@@ -1474,11 +1476,18 @@ export function createTeamRunCoordinator(
     resolver?.(approved);
   }
 
-  /** D-25: the sidebar switches and the settings drawer both land here. */
+  /**
+   * D-25: the sidebar switches and the settings drawer both land here.
+   * D-04: a limit change applies to the run in flight — the scheduler drains its queue on a
+   * raise and preempts nothing on a lower.
+   */
   function setTeamSettings(
-    patch: Partial<Pick<AiTeam, 'autoSplitEnabled' | 'autoApproveMutations'>>
+    patch: Partial<
+      Pick<AiTeam, 'autoSplitEnabled' | 'autoApproveMutations' | 'concurrencyLimit'>
+    >
   ): void {
     liveTeam = { ...liveTeam, ...patch };
+    scheduler.setLimit(liveTeam.concurrencyLimit ?? DEFAULT_TEAM_CONCURRENCY);
     notify();
   }
 

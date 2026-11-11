@@ -394,6 +394,8 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     );
     expect(await screen.findByTestId('team-settings-drawer')).toBeInTheDocument();
     expect(screen.getByText('Lưu cài đặt')).toBeInTheDocument();
+    // Phase 37 D-03/D-04: the per-team concurrency limit is editable here.
+    expect(screen.getByLabelText('Số nhân viên chạy đồng thời')).toBeInTheDocument();
   });
 
   it('uses the lead model for a bare message and the employee model for a mention', async () => {

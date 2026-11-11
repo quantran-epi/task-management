@@ -339,8 +339,11 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     coordinator?.setTeamSettings({
       autoSplitEnabled: team.autoSplitEnabled === true,
       autoApproveMutations: team.autoApproveMutations === true,
+      ...(team.concurrencyLimit !== undefined
+        ? { concurrencyLimit: team.concurrencyLimit }
+        : {}),
     });
-  }, [coordinator, team.autoSplitEnabled, team.autoApproveMutations]);
+  }, [coordinator, team.autoSplitEnabled, team.autoApproveMutations, team.concurrencyLimit]);
 
   // A fresh plan clears the previous decision so the card shows its buttons again.
   useEffect(() => {
@@ -439,6 +442,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     budgets: Record<string, number>;
     autoSplitEnabled: boolean;
     autoApproveMutations: boolean;
+    concurrencyLimit: number;
   }) => {
     await updateTeam(
       team.id,
@@ -446,9 +450,12 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         budgetTokens: input.budgetTokens,
         autoSplitEnabled: input.autoSplitEnabled,
         autoApproveMutations: input.autoApproveMutations,
+        concurrencyLimit: input.concurrencyLimit,
       },
       db
     );
+    // D-04: the limit applies to the run in flight, not only the next construction.
+    coordinator?.setTeamSettings({ concurrencyLimit: input.concurrencyLimit });
     // AIO-BUDGET-01: adopt the edited total before any member top-up, so a later team
     // top-up accumulates onto the saved number instead of the construction snapshot.
     coordinator?.setTeamBudget(input.budgetTokens);

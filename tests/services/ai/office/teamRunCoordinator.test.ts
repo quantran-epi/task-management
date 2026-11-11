@@ -2213,6 +2213,92 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(current.coordinator.getState().phase).not.toBe('batch-running');
     });
 
+    it('raises the limit mid-batch and admits the queued agent without rebuilding (D-04)', async () => {
+      const gates = new Map<string, ReturnType<typeof deferred>>([
+        [EMP_A_MODEL, deferred()],
+        [EMP_B_MODEL, deferred()],
+        [EMP_C_MODEL, deferred()],
+      ]);
+      const started: string[] = [];
+      const scriptFor = (model: string): LoopScript => async () => {
+        started.push(model);
+        await gates.get(model)!.promise;
+        return loopResult('xong');
+      };
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: delegatingLead(() => harness!),
+          [EMP_A_MODEL]: scriptFor(EMP_A_MODEL),
+          [EMP_B_MODEL]: scriptFor(EMP_B_MODEL),
+          [EMP_C_MODEL]: scriptFor(EMP_C_MODEL),
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getRunningCount() === 1);
+      await sleep(20);
+      expect(started).toEqual([EMP_A_MODEL]);
+
+      current.coordinator.setTeamSettings({ concurrencyLimit: 3 });
+      await waitFor(() => current.coordinator.getRunningCount() === 3);
+      // Admission precedes the script call by the pre-start reads; wait for all three.
+      await waitFor(() => started.length === 3);
+      expect(started).toEqual([EMP_A_MODEL, EMP_B_MODEL, EMP_C_MODEL]);
+
+      for (const gate of gates.values()) gate.release();
+      await sent;
+      expect(current.coordinator.getRunningCount()).toBe(0);
+    });
+
+    it('lowers the limit mid-batch: both keep running and nothing new starts (D-04)', async () => {
+      const gates = new Map<string, ReturnType<typeof deferred>>([
+        [EMP_A_MODEL, deferred()],
+        [EMP_B_MODEL, deferred()],
+        [EMP_C_MODEL, deferred()],
+      ]);
+      const started: string[] = [];
+      const scriptFor = (model: string): LoopScript => async () => {
+        started.push(model);
+        await gates.get(model)!.promise;
+        return loopResult('xong');
+      };
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 2 },
+        scripts: {
+          [LEAD_MODEL]: delegatingLead(() => harness!),
+          [EMP_A_MODEL]: scriptFor(EMP_A_MODEL),
+          [EMP_B_MODEL]: scriptFor(EMP_B_MODEL),
+          [EMP_C_MODEL]: scriptFor(EMP_C_MODEL),
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getRunningCount() === 2);
+
+      current.coordinator.setTeamSettings({ concurrencyLimit: 1 });
+      await sleep(30);
+
+      // Preemption is not a thing: both admitted agents keep running, the third stays queued.
+      expect(current.coordinator.getRunningCount()).toBe(2);
+      expect(started).toEqual([EMP_A_MODEL, EMP_B_MODEL]);
+      const third = current.coordinator
+        .getState()
+        .agents.find((row) => row.agentId === current.employees[2]!.id);
+      expect(third?.status).toBe('queued');
+
+      gates.get(EMP_A_MODEL)!.release();
+      await sleep(30);
+      // Still one slot in use above the new limit, so the third is still not admitted.
+      expect(started).toEqual([EMP_A_MODEL, EMP_B_MODEL]);
+
+      for (const gate of gates.values()) gate.release();
+      await sent;
+      expect(current.coordinator.getRunningCount()).toBe(0);
+    });
+
     it('dispose mid-batch rejects the parked acquire and settles the queued assignment (limit 1)', async () => {
       const gate = deferred();
       let toolResult: string | null = null;
