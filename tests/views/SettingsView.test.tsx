@@ -109,7 +109,7 @@ describe('SettingsView Integration & Offline Independence (SYNC-07, SYNC-05)', (
 
     const sampleRemotePayload: BackupEnvelope = {
       app: 'personal-task-planner',
-      schemaVersion: 12,
+      schemaVersion: 13,
       exportedAt: '2026-09-27T10:00:00.000Z',
       tables: {
         changeRequests: [

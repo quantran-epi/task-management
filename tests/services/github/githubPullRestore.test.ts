@@ -33,7 +33,7 @@ describe('githubPullRestore service', () => {
   // D-49: only a v11 CR-centric envelope is accepted; a projects table is a legacy backup.
   const validPayload: BackupEnvelope = {
     app: 'personal-task-planner',
-    schemaVersion: 12,
+    schemaVersion: 13,
     exportedAt: '2026-09-27T10:00:00.000Z',
     tables: {
       changeRequests: [

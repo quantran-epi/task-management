@@ -81,13 +81,13 @@ describe('validateBackupPayload', () => {
     },
   };
 
-  it('validates a correct version-11 backup envelope successfully', () => {
+  it('validates a correct version-13 backup envelope successfully', () => {
     const result = validateBackupPayload(validPayload);
     expect(result.valid).toBe(true);
     expect(result.errors).toHaveLength(0);
     expect(result.envelope).toBeDefined();
     expect(result.envelope?.app).toBe(APP_MARKER);
-    expect(result.envelope?.schemaVersion).toBe(12);
+    expect(result.envelope?.schemaVersion).toBe(13);
   });
 
   it('rejects non-object or null payloads', () => {
@@ -106,6 +106,14 @@ describe('validateBackupPayload', () => {
     const result = validateBackupPayload({ ...validPayload, schemaVersion: 999 });
     expect(result.valid).toBe(false);
     expect(result.errors.some((e) => e.field === 'schemaVersion')).toBe(true);
+  });
+
+  it('rejects a version-12 envelope with the existing legacy message and names schemaVersion', () => {
+    const result = validateBackupPayload({ ...validPayload, schemaVersion: 12 });
+    expect(result.valid).toBe(false);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]?.field).toBe('schemaVersion');
+    expect(result.errors[0]?.message).toContain(LEGACY_MESSAGE);
   });
 
   describe('D-49 legacy rejection', () => {
