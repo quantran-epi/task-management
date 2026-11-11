@@ -197,12 +197,3 @@ export async function listBatchAssignments(
     return a.id.localeCompare(b.id);
   });
 }
-
-/** D-13: the retry surface — only `stopped`/`error` attempts are re-runnable. */
-export async function listRetryableAssignments(
-  batchId: string,
-  db: TaskPlannerDatabase = defaultDb
-): Promise<AiTeamAssignment[]> {
-  const rows = await listBatchAssignments(batchId, db);
-  return rows.filter((row) => row.runStatus === 'stopped' || row.runStatus === 'error');
-}

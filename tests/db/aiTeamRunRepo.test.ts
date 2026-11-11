@@ -8,7 +8,6 @@ import {
   transitionAssignment,
   getAssignment,
   listBatchAssignments,
-  listRetryableAssignments,
 } from '../../src/db/repositories/aiTeamRunRepo';
 import type { AiTeamBatch } from '../../src/types/aiOffice';
 
@@ -142,7 +141,7 @@ describe('aiTeamRunRepo (Phase 37, D-09, D-22, D-23, D-25)', () => {
     ).rejects.toThrow('Không tìm thấy lô chạy.');
   });
 
-  it('lists assignments FIFO and exposes only stopped/error as retryable', async () => {
+  it('lists assignments FIFO in plan order', async () => {
     const a = await createAssignment(assignmentInput({ agentName: 'E1' }), db);
     const b = await createAssignment(assignmentInput({ agentName: 'E2' }), db);
     const c = await createAssignment(assignmentInput({ agentName: 'E3' }), db);
@@ -157,8 +156,5 @@ describe('aiTeamRunRepo (Phase 37, D-09, D-22, D-23, D-25)', () => {
       x.queuedAt === y.queuedAt ? x.id.localeCompare(y.id) : x.queuedAt < y.queuedAt ? -1 : 1
     );
     expect(listed.map((row) => row.id)).toEqual(expectedOrder.map((row) => row.id));
-
-    const retryable = await listRetryableAssignments(batch.id, db);
-    expect(retryable.map((row) => row.id).sort()).toEqual([b.id, c.id].sort());
   });
 });
