@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 8
+open_count: 9
 waived_count: 0
 fixed_count: 0
-total_count: 8
-last_updated: 2026-11-11T21:12:38.532Z
+total_count: 9
+last_updated: 2026-11-11T21:35:45.233Z
 ---
 
 # Broken Windows Ledger
@@ -23,6 +23,7 @@ last_updated: 2026-11-11T21:12:38.532Z
 | 6 | 37 | deviation | tests/views/TeamsView.test.tsx |  | Pre-existing unhandled DatabaseClosedError rejections (7-8 per run) in TeamsView suite; tests themselves pass, reproduced on base 6a2e736e | open |  | 2026-11-11T20:55:11.959Z |  |
 | 7 | 37 | deviation | src/services/ai/office/teamRunCoordinator.ts |  | Scheduler admission is gated, so tests must wait on admission/running facts instead of fixed counts; three pre-existing coordinator tests were made deterministic | open |  | 2026-11-11T20:55:12.237Z |  |
 | 8 | 37 | unrun-verify | tests/workbench/AiExplorers.test.tsx |  | Pre-existing flake: renders AiOfficeExplorer and AiStaffExplorer on one DB; one of four runs reported duplicate lead label. Unrelated to 37-06 delete path. | open |  | 2026-11-11T21:12:38.532Z |  |
+| 9 | 37 | skipped-test | tests/services/ai/office/teamRunCoordinator.test.ts | 768 | pauses one agent at 80% flakes ~3/4 runs (expected undefined to be 'running'); reproduces on base 86de027c without this plan's changes | open |  | 2026-11-11T21:35:45.233Z |  |
 
 ````json
 [
@@ -127,6 +128,19 @@ last_updated: 2026-11-11T21:12:38.532Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-11-11T21:12:38.532Z",
+    "resolved_at": null,
+    "milestone": "v1.4"
+  },
+  {
+    "id": 9,
+    "kind": "skipped-test",
+    "phase": "37",
+    "file": "tests/services/ai/office/teamRunCoordinator.test.ts",
+    "line": 768,
+    "description": "pauses one agent at 80% flakes ~3/4 runs (expected undefined to be 'running'); reproduces on base 86de027c without this plan's changes",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-11-11T21:35:45.233Z",
     "resolved_at": null,
     "milestone": "v1.4"
   }
