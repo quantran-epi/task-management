@@ -31,6 +31,8 @@ export const SQLITE_DOMAIN_TABLES = [
   'aiTeamMembers',
   'aiTeamLinks',
   'aiSkillVersions',
+  'aiTeamBatches',
+  'aiTeamAssignments',
 ] as const;
 
 export const SQLITE_LOCAL_TABLES = ['settings', 'backupMetadata', 'activeTimers'] as const;

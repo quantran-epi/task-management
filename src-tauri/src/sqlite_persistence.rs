@@ -23,6 +23,8 @@ const ALLOWED_TABLES: &[&str] = &[
     "aiTeamMembers",
     "aiTeamLinks",
     "aiSkillVersions",
+    "aiTeamBatches",
+    "aiTeamAssignments",
     "chatTabs",
     "systems",
     "changeRequests",
