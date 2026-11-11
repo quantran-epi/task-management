@@ -89,6 +89,9 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
   /**
    * D-18: a live run is torn down BEFORE the row is deleted, so no coordinator can write to
    * a deleted parent. A dispose failure aborts the delete — data safety over completion.
+   * IN-06: the delete itself is guarded too — the `onConfirm` arrow discards the promise, so
+   * an unguarded rejection was an unhandled rejection with no `actionError`, after the run
+   * had already been torn down.
    */
   const handleDeleteTeam = async (team: AiTeam) => {
     try {
@@ -97,7 +100,12 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
       setActionError(ACTION_ERROR_COPY);
       return;
     }
-    await deleteTeam(team.id, db);
+    try {
+      await deleteTeam(team.id, db);
+    } catch {
+      setActionError(ACTION_ERROR_COPY);
+      return;
+    }
     const workspaceTab = openTabs.find((tab) => tab.id === `team_workspace:${team.id}`);
     if (workspaceTab) closeTab(workspaceTab.id);
   };

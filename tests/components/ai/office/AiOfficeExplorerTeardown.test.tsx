@@ -17,6 +17,7 @@ import { useLayoutStore } from '../../../../src/workbench/store/layoutStore';
 
 const callOrder: string[] = [];
 let disposeRejects = false;
+let deleteTeamRejects = false;
 
 vi.mock('../../../../src/db/repositories/aiTeamRepo', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../../src/db/repositories/aiTeamRepo')>();
@@ -24,6 +25,7 @@ vi.mock('../../../../src/db/repositories/aiTeamRepo', async (importOriginal) => 
     ...actual,
     deleteTeam: vi.fn(async (...args: Parameters<typeof actual.deleteTeam>) => {
       callOrder.push('delete');
+      if (deleteTeamRejects) throw new Error('raw repo detail: team 7c1f9e');
       return actual.deleteTeam(...args);
     }),
   };
@@ -48,6 +50,7 @@ describe('AiOfficeExplorer teardown on delete (37-06, D-18)', () => {
   beforeEach(async () => {
     callOrder.length = 0;
     disposeRejects = false;
+    deleteTeamRejects = false;
     db = new TaskPlannerDatabase('test-office-teardown-' + Math.random().toString(36).slice(2));
     await db.open();
     useLayoutStore.getState().resetLayout();
@@ -115,5 +118,27 @@ describe('AiOfficeExplorer teardown on delete (37-06, D-18)', () => {
     expect(await screen.findByTestId('ai-office-team-delete-error')).toBeInTheDocument();
     expect(await getTeam(team.id, db)).toBeDefined();
     expect(callOrder).toEqual(['dispose']);
+  });
+
+  // IN-06: `onConfirm` discards the promise, so an unguarded rejection was an unhandled
+  // rejection with no `actionError` — after the run had already been torn down.
+  it('reports a failed delete instead of an unhandled rejection', async () => {
+    await getOrCreateRun(db, team.id, 'thread-1', stubCoordinator);
+    const unhandled: unknown[] = [];
+    const onUnhandled = (err: unknown) => unhandled.push(err);
+    process.on('unhandledRejection', onUnhandled);
+
+    try {
+      deleteTeamRejects = true;
+      await deleteThroughUi();
+
+      expect(await screen.findByTestId('ai-office-team-delete-error')).toBeInTheDocument();
+      expect(await getTeam(team.id, db)).toBeDefined();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(unhandled).toHaveLength(0);
+    } finally {
+      deleteTeamRejects = false;
+      process.off('unhandledRejection', onUnhandled);
+    }
   });
 });
