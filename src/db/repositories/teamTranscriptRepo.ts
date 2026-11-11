@@ -173,6 +173,34 @@ export async function insertReportMessage(
   return message;
 }
 
+/**
+ * Phase 37 D-12/D-23: the ONLY writer of `supersededByMessageId` / `supersededAt`.
+ *
+ * 37-03's `finalizeAttempt` deliberately never touches these two fields, so a superseded
+ * report has exactly one writer. The row is patched, never deleted: the transcript keeps
+ * every report and the ledger keeps every attempt; supersession is a link to what is current.
+ * The FIRST supersession wins — re-superseding cannot repoint an already-stale row.
+ */
+export async function supersedeTeamMessage(
+  messageId: string,
+  supersededByMessageId: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<ChatMessage | null> {
+  if (messageId === supersededByMessageId) return null;
+  const row = await db.chatMessages.get(messageId);
+  if (!row) return null;
+  if (row.supersededByMessageId !== undefined) return row;
+
+  const updated: ChatMessage = {
+    ...row,
+    supersededByMessageId,
+    supersededAt: new Date().toISOString(),
+  };
+  await db.chatMessages.put(updated);
+  notifyAIChatSync({ type: 'message_saved', threadId: row.threadId });
+  return updated;
+}
+
 async function readThreadMessages(
   threadId: string,
   db: TaskPlannerDatabase

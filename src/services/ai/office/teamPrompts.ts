@@ -146,10 +146,12 @@ export interface BuildLeadTurnRequestInput {
   linkedItems: readonly LinkedItemIndexEntry[];
   originalRequest: string;
   recentTurns: readonly ChatMessage[];
+  /** D-12: the batch's current reports, resolved from the ledger on a re-synthesis pass. */
+  batchResults?: readonly BatchResult[] | undefined;
 }
 
 export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTurn {
-  const { lead, team, roster, linkedItems, originalRequest, recentTurns } = input;
+  const { lead, team, roster, linkedItems, originalRequest, recentTurns, batchResults } = input;
 
   const parts = [
     `Bạn là ${lead.name}, ${lead.role} của nhóm "${team.name}".`,
@@ -168,6 +170,15 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
       'Khi gọi delegate_batch, trường agentId PHẢI là giá trị agentId ở trên — không dùng tên.',
     ].join('\n'),
   ];
+
+  if (batchResults && batchResults.length > 0) {
+    parts.push(
+      wrapUntrusted(
+        'KẾT QUẢ CỦA LÔ',
+        batchResults.map((r) => `${r.agentName}:\n${r.content}`).join('\n\n')
+      )
+    );
+  }
 
   if (linkedItems.length > 0) {
     parts.push(

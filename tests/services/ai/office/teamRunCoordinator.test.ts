@@ -2479,6 +2479,287 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
     });
   });
 
+  describe('Retry — one assignment re-runs, its report is superseded, the batch re-synthesizes (D-12, D-13, D-23)', () => {
+    const assignmentsFor = (employees: AiEmployee[]) =>
+      employees.map((row, index) => ({ agentId: row.id, task: `Việc ${index + 1}` }));
+
+    it('re-runs only the failed agent, appends attempt 2, and re-synthesizes the full batch', async () => {
+      const invocations = new Map<string, number>();
+      const synthesisPrompts: string[] = [];
+      let bAttempts = 0;
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            const system = options.messages
+              .filter((message) => message.role === 'system')
+              .map((message) => String(message.content))
+              .join('\n');
+            // The re-synthesis turn is the one whose user text is the synthesis instruction.
+            if (String(options.messages.at(-1)?.content).includes('Tổng hợp lại kết quả của lô')) {
+              synthesisPrompts.push(system);
+              return loopResult('Tổng hợp lần hai.');
+            }
+            const result = await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            return loopResult(`Đã giao việc: ${result}`);
+          },
+          [EMP_A_MODEL]: async () => {
+            invocations.set('a', (invocations.get('a') ?? 0) + 1);
+            return loopResult('A xong lần một.');
+          },
+          [EMP_B_MODEL]: async () => {
+            invocations.set('b', (invocations.get('b') ?? 0) + 1);
+            bAttempts += 1;
+            if (bAttempts === 1) throw new Error('B hỏng lần một');
+            return loopResult('B xong lần hai.');
+          },
+          [EMP_C_MODEL]: async () => {
+            invocations.set('c', (invocations.get('c') ?? 0) + 1);
+            return loopResult('C xong lần một.');
+          },
+        },
+      });
+      const current = harness;
+
+      await current.coordinator.send('Làm báo cáo');
+
+      // The lead ran once for the batch; A, C once each; B once (failed).
+      expect(synthesisPrompts).toHaveLength(0);
+      const batchRows = await current.db.aiTeamAssignments.toArray();
+      const bFirst = batchRows.find(
+        (row) => row.agentId === current.employees[1]!.id && row.attemptNo === 1
+      )!;
+      expect(bFirst.runStatus).toBe('error');
+      // 37-03's insert path ran: an errored attempt owns a real report row.
+      expect(bFirst.reportMessageId).toBeDefined();
+      const firstReport = await current.db.chatMessages.get(bFirst.reportMessageId!);
+      expect(firstReport).toBeDefined();
+
+      await current.coordinator.retryAssignment(bFirst.id);
+
+      const retryRows = (await current.db.aiTeamAssignments.toArray()).filter(
+        (row) => row.agentId === current.employees[1]!.id
+      );
+      expect(retryRows.map((row) => row.attemptNo).sort()).toEqual([1, 2]);
+      const bSecond = retryRows.find((row) => row.attemptNo === 2)!;
+      expect(bSecond.retryOfAssignmentId).toBe(bFirst.id);
+      expect(bSecond.runStatus).toBe('done');
+      expect(bSecond.task).toBe(bFirst.task);
+
+      // The prior row is never mutated (D-23).
+      const bFirstAfter = await current.db.aiTeamAssignments.get(bFirst.id);
+      expect(bFirstAfter).toMatchObject({ runStatus: 'error', attemptNo: 1 });
+      expect(bFirstAfter!.retryOfAssignmentId).toBeUndefined();
+
+      // Siblings were not re-run (T-37-23).
+      expect(invocations.get('a')).toBe(1);
+      expect(invocations.get('c')).toBe(1);
+      expect(invocations.get('b')).toBe(2);
+
+      // The old report points at the new one; both fields are written.
+      const superseded = await current.db.chatMessages.get(bFirst.reportMessageId!);
+      expect(superseded!.supersededByMessageId).toBe(bSecond.reportMessageId);
+      expect(superseded!.supersededAt).toBeDefined();
+
+      // D-12: the lead's second turn carried the WHOLE batch, resolved from report rows.
+      expect(synthesisPrompts).toHaveLength(1);
+      expect(synthesisPrompts[0]).toContain('A xong lần một.');
+      expect(synthesisPrompts[0]).toContain('C xong lần một.');
+      expect(synthesisPrompts[0]).toContain('B xong lần hai.');
+      expect(synthesisPrompts[0]).not.toContain('Không có báo cáo cho lần chạy này.');
+      expect(current.coordinator.getRunningCount()).toBe(0);
+    });
+
+    it('holds exactly one scheduler slot during the retry and refuses a done assignment', async () => {
+      const gate = deferred();
+      let bAttempts = 0;
+      const runningSamples: number[] = [];
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            // The re-synthesis turn must not delegate again (it is a synthesis-only pass).
+            if (String(options.messages.at(-1)?.content).includes('Tổng hợp lại kết quả của lô')) {
+              return loopResult('Tổng hợp lần hai.');
+            }
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+          [EMP_B_MODEL]: async () => {
+            bAttempts += 1;
+            if (bAttempts === 1) throw new Error('B hỏng');
+            await gate.promise;
+            return loopResult('B xong lần hai');
+          },
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+
+      await current.coordinator.send('Làm báo cáo');
+      const rows = await current.db.aiTeamAssignments.toArray();
+      const bFirst = rows.find(
+        (row) => row.agentId === current.employees[1]!.id && row.attemptNo === 1
+      )!;
+      const aFirst = rows.find(
+        (row) => row.agentId === current.employees[0]!.id && row.attemptNo === 1
+      )!;
+
+      const retried = current.coordinator.retryAssignment(bFirst.id);
+      await waitFor(() => current.coordinator.getRunningCount() === 1);
+      runningSamples.push(current.coordinator.getRunningCount());
+      // A second click on the SAME assignment while its retry runs is ignored.
+      await current.coordinator.retryAssignment(bFirst.id);
+      gate.release();
+      await retried;
+
+      // A retry of a `done` assignment is refused on a free phase and appends no row.
+      await expect(current.coordinator.retryAssignment(aFirst.id)).rejects.toThrow();
+
+      expect(runningSamples).toEqual([1]);
+      expect(current.coordinator.getRunningCount()).toBe(0);
+      const bRows = (await current.db.aiTeamAssignments.toArray()).filter(
+        (row) => row.agentId === current.employees[1]!.id
+      );
+      expect(bRows).toHaveLength(2);
+      const aRows = (await current.db.aiTeamAssignments.toArray()).filter(
+        (row) => row.agentId === current.employees[0]!.id
+      );
+      expect(aRows).toHaveLength(1);
+    });
+
+    it('refuses a retry while the phase is busy', async () => {
+      const gate = deferred();
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+      const batch = await openBatch(
+        {
+          teamId: current.team.id,
+          threadId: current.threadId,
+          batchIndex: 9,
+          userRequest: 'x',
+          leadId: current.lead.id,
+          planSnapshot: { original: [] },
+          planDecision: 'auto',
+        },
+        current.db
+      );
+      const stopped = await createAssignment(
+        {
+          batchId: batch.id,
+          agentId: current.employees[0]!.id,
+          agentName: current.employees[0]!.name,
+          model: EMP_A_MODEL,
+          task: 'Việc cũ',
+        },
+        current.db
+      );
+      await current.db.aiTeamAssignments.update(stopped.id, {
+        runStatus: 'stopped',
+        stopReason: 'user-per-agent',
+        incomplete: true,
+        reportMessageId: 'missing-row',
+      });
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getState().phase === 'batch-running');
+
+      await expect(current.coordinator.retryAssignment(stopped.id)).rejects.toThrow();
+      gate.release();
+      await sent;
+    });
+
+    it('leaves exactly one report row when the retry is stopped before it settles', async () => {
+      const gate = deferred();
+      let bAttempts = 0;
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            if (String(options.messages.at(-1)?.content).includes('Tổng hợp lại kết quả của lô')) {
+              return loopResult('Tổng hợp lần hai.');
+            }
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+          [EMP_B_MODEL]: async () => {
+            bAttempts += 1;
+            if (bAttempts === 1) throw new Error('B hỏng');
+            await gate.promise;
+            return loopResult('B xong lần hai');
+          },
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+      await current.coordinator.send('Làm báo cáo');
+
+      const bFirst = (await current.db.aiTeamAssignments.toArray()).find(
+        (row) => row.agentId === current.employees[1]!.id && row.attemptNo === 1
+      )!;
+
+      const retried = current.coordinator.retryAssignment(bFirst.id);
+      await waitFor(() => current.coordinator.getRunningCount() === 1);
+      current.coordinator.stopAgent(current.employees[1]!.id);
+      gate.release();
+      await retried;
+
+      const bRows = (await current.db.aiTeamAssignments.toArray()).filter(
+        (row) => row.agentId === current.employees[1]!.id
+      );
+      const attempt2 = bRows.find((row) => row.attemptNo === 2)!;
+      expect(attempt2.runStatus).toBe('stopped');
+      expect(attempt2.incomplete).toBe(true);
+      const reports = await current.db.chatMessages
+        .where('threadId')
+        .equals(current.threadId)
+        .toArray();
+      const attempt2Reports = reports.filter(
+        (row) => row.assignmentId === attempt2.id && row.messageKind === 'report'
+      );
+      expect(attempt2Reports).toHaveLength(1);
+      expect(attempt2Reports[0]!.runStatus).toBe('stopped');
+      expect(attempt2Reports[0]!.incomplete).toBe(true);
+      expect(current.coordinator.getRunningCount()).toBe(0);
+    });
+  });
+
   describe('Dispose — a live run ends in bounded time (D-11, D-18)', () => {
     const assignmentsFor = (employees: AiEmployee[]) =>
       employees.map((row, index) => ({ agentId: row.id, task: `Việc ${index + 1}` }));

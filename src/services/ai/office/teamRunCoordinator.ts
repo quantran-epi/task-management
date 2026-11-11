@@ -62,6 +62,7 @@ import {
   listRecentTurns,
   notifyAIChatSync,
   saveTeamMessage,
+  supersedeTeamMessage,
 } from '../../../db/repositories/teamTranscriptRepo';
 import {
   addUsedTokens,
@@ -74,6 +75,8 @@ import {
   closeBatch,
   createAssignment,
   getAssignment,
+  getBatch,
+  listBatchAssignments,
   openBatch,
   transitionAssignment,
 } from '../../../db/repositories/aiTeamRunRepo';
@@ -178,6 +181,14 @@ export interface TeamRunCoordinator {
     diagnosticDetail?: string
   ): Promise<AiTeamAssignment | null>;
   runBatch(assignments: unknown[], signal?: AbortSignal): Promise<string>;
+  /**
+   * D-12/D-13/D-23: re-run exactly ONE stopped/errored attempt as a NEW attempt row, mark
+   * the previous report superseded, then re-synthesize the whole batch once.
+   *
+   * The task comes from the stored assignment row — never text the user re-typed — and a
+   * `done` attempt, a removed agent, a busy phase or an in-flight retry is refused.
+   */
+  retryAssignment(assignmentId: string): Promise<void>;
   resolvePlan(approved: boolean): void;
   resolveApproval(approved: boolean): void;
   stopAgent(agentId: string): void;
@@ -427,6 +438,12 @@ export function createTeamRunCoordinator(
    * with one path's reason and the other path's status.
    */
   const userStopped = new Map<string, 'user-per-agent' | 'user-abort'>();
+  /** T-37-22: agents with a retry in flight, so a double click cannot append a third row. */
+  const retryingAgents = new Set<string>();
+  /** Same guard keyed by assignment id, set BEFORE any await so a double click cannot race. */
+  const retryingAssignments = new Set<string>();
+  /** Latest synthesis row written by the runtime, so a retry can supersede its predecessor. */
+  let lastSynthesisMessageId: string | null = null;
 
   const notify = () => {
     for (const listener of listeners) {
@@ -713,6 +730,10 @@ export function createTeamRunCoordinator(
        */
       saveMessage: (async (input: Parameters<typeof innerSaveMessage>[0], inputDb: any) => {
         const row = await innerSaveMessage(input, inputDb ?? db);
+        // D-12/T-37-25: remember the synthesis row so a re-synthesis can mark it superseded.
+        if (input.role === 'assistant' && input.messageKind === 'synthesis') {
+          lastSynthesisMessageId = row.id;
+        }
         const active = activeAssignmentByAgent.get(agentId);
         if (!active || input.role !== 'assistant' || input.messageKind !== 'report') {
           return row;
@@ -915,7 +936,8 @@ export function createTeamRunCoordinator(
     batchId: string;
     assignmentId: string;
     attemptNo: number;
-    instructionMessageId: string;
+    /** Reused from the source row on a retry, so one instruction pairs with every attempt. */
+    instructionMessageId?: string | undefined;
   }
 
   /** D-22 content for the insert branch: sanitized, never provider text (D-17). */
@@ -1010,9 +1032,11 @@ export function createTeamRunCoordinator(
         );
         // D-22/D-09: a non-status field, written at START time (describes when the attempt
         // began, not how it ended) — outside the terminal transaction by design.
-        await db.aiTeamAssignments.update(attempt.assignmentId, {
-          instructionMessageId: attempt.instructionMessageId,
-        });
+        if (attempt.instructionMessageId !== undefined) {
+          await db.aiTeamAssignments.update(attempt.assignmentId, {
+            instructionMessageId: attempt.instructionMessageId,
+          });
+        }
         activeAssignmentByAgent.set(employee.id, {
           batchId: attempt.batchId,
           assignmentId: attempt.assignmentId,
@@ -1088,7 +1112,10 @@ export function createTeamRunCoordinator(
     }
   }
 
-  async function startLeadTurn(text: string): Promise<void> {
+  async function startLeadTurn(
+    text: string,
+    batchResults?: readonly BatchResult[]
+  ): Promise<void> {
     // D-05: an empty group has no lead — a silent no-op, not a throw.
     const lead = roster.lead;
     if (!lead) return;
@@ -1104,6 +1131,7 @@ export function createTeamRunCoordinator(
         linkedItems,
         originalRequest: text,
         recentTurns,
+        ...(batchResults && batchResults.length > 0 ? { batchResults } : {}),
       });
 
       const request: ChatTurnRequest = {
@@ -1520,6 +1548,186 @@ export function createTeamRunCoordinator(
     return JSON.stringify(results);
   }
 
+  /** D-12: text handed to the lead for a re-synthesis pass (no delegation expected). */
+  const SYNTHESIS_INSTRUCTION =
+    'Tổng hợp lại kết quả của lô vừa chạy. BẮT BUỘC nêu rõ những việc chưa hoàn tất và lý do.';
+
+  /** D-12/D-14: a latest attempt with no current report still contributes an entry. */
+  function unfinishedReportCopy(row: AiTeamAssignment): string {
+    const reason = row.stopReason === 'none' ? row.runStatus : `${row.runStatus}/${row.stopReason}`;
+    return `Chưa hoàn tất (${reason}). Không có báo cáo cho lần chạy này.`;
+  }
+
+  /**
+   * D-12: resolve the batch's current report TEXT from the ledger.
+   *
+   * The ledger stores `reportMessageId`, not content: every entry here is a
+   * `db.chatMessages.get()` on the latest attempt's report, skipping superseded ones so
+   * the lead synthesizes only what is current.
+   */
+  async function collectBatchReports(batchId: string): Promise<BatchResult[]> {
+    const rows = await listBatchAssignments(batchId, db);
+    const latestByAgent = new Map<string, AiTeamAssignment>();
+    for (const row of rows) {
+      const previous = latestByAgent.get(row.agentId);
+      if (!previous || row.attemptNo > previous.attemptNo) latestByAgent.set(row.agentId, row);
+    }
+
+    const results: BatchResult[] = [];
+    for (const row of latestByAgent.values()) {
+      const message =
+        row.reportMessageId === undefined ? undefined : await db.chatMessages.get(row.reportMessageId);
+      if (!message || message.supersededByMessageId !== undefined) {
+        results.push({ agentName: row.agentName, content: unfinishedReportCopy(row) });
+        continue;
+      }
+      results.push({ agentName: row.agentName, content: message.content });
+    }
+    return results;
+  }
+
+  /**
+   * D-12/D-13/D-23: run ONE stored assignment again as a new attempt, supersede its old
+   * report, then re-synthesize the batch once with the full report set.
+   *
+   * Refusals: disposed, a busy phase, an in-flight retry (ignored), a non-retryable status,
+   * or a de-rostered agent. The task is the STORED one — never text the user re-typed — and
+   * the plan card is never reopened (D-13).
+   */
+  async function retryAssignment(assignmentId: string): Promise<void> {
+    if (disposed) throw new Error('Nhóm đã bị đóng. Không thể chạy lại.');
+    // T-37-22: claimed BEFORE any await, so two clicks in the same tick cannot both pass.
+    // Checked before the busy guard too: a second click on the SAME assignment while its
+    // retry runs is the double click this guard exists for, not a busy-phase refusal.
+    if (retryingAssignments.has(assignmentId)) return;
+    if (BUSY_PHASES.has(phase)) throw new Error('Nhóm đang chạy. Hãy chờ lượt hiện tại kết thúc.');
+    retryingAssignments.add(assignmentId);
+
+    let claimed = false;
+    let claimedAgentId: string | null = null;
+    try {
+      const source = await getAssignment(assignmentId, db);
+      if (!source) throw new Error('Không tìm thấy lần chạy cần chạy lại.');
+      if (source.runStatus !== 'stopped' && source.runStatus !== 'error') {
+        throw new Error('Chỉ chạy lại được lần chạy đã dừng hoặc bị lỗi.');
+      }
+      // A retry already in flight for this agent (a second, different assignment id) is
+      // the same double-click: ignored, so no third attempt row appears.
+      if (retryingAgents.has(source.agentId)) return;
+
+      const employee = roster.employees.find((row) => row.id === source.agentId);
+      if (!employee) throw new Error('Nhân viên không còn trong nhóm. Không thể chạy lại.');
+
+      const batch = await getBatch(source.batchId, db);
+      if (!batch) throw new Error('Không tìm thấy lô chạy.');
+
+      const attemptRow = await createAssignment(
+        {
+          batchId: source.batchId,
+          agentId: source.agentId,
+          agentName: source.agentName,
+          ...(source.skillId !== undefined ? { skillId: source.skillId } : {}),
+          ...(source.skillVersion !== undefined ? { skillVersion: source.skillVersion } : {}),
+          model: source.model,
+          task: source.task,
+          retryOfAssignmentId: source.id,
+        },
+        db
+      );
+
+      claimed = true;
+      claimedAgentId = source.agentId;
+      retryingAgents.add(source.agentId);
+      assignmentIdsByAgent.set(source.agentId, attemptRow.id);
+      updateAgent(source.agentId, { status: 'queued', streamingText: '', incomplete: false });
+      // 37-06: the outbox queues against this phase instead of dispatching beside the retry.
+      setPhase('batch-running');
+
+      const attempt: AttemptRef = {
+        batchId: source.batchId,
+        assignmentId: attemptRow.id,
+        attemptNo: attemptRow.attemptNo,
+        ...(source.instructionMessageId !== undefined
+          ? { instructionMessageId: source.instructionMessageId }
+          : {}),
+      };
+      const controller = new AbortController();
+      assignmentControllers.set(attemptRow.id, controller);
+
+      let handle: SchedulerHandle | undefined;
+      try {
+        handle = await scheduler.acquire(controller.signal);
+        scheduledHandles.set(attemptRow.id, handle);
+        await startEmployeeTurn(employee, source.task, batch.userRequest, priorBatchResults, attempt);
+      } catch {
+        // Same terminal contract as the batch wrapper: an aborted parked retry still owes
+        // exactly one report row, and `null` is expected when the stop path already won.
+        try {
+          await finalizeAttempt(
+            attemptRow.id,
+            'queued',
+            'stopped',
+            'user-abort',
+            STOPPED_REPORT_COPY
+          );
+          settleAgent(source.agentId, 'stopped');
+        } catch {
+          /* a ledger write must never leak the slot */
+        }
+      } finally {
+        assignmentControllers.delete(attemptRow.id);
+        if (assignmentIdsByAgent.get(source.agentId) === attemptRow.id) {
+          assignmentIdsByAgent.delete(source.agentId);
+        }
+        if (handle !== undefined) {
+          scheduledHandles.delete(attemptRow.id);
+          scheduler.release(handle);
+        }
+      }
+
+      const settled = await getAssignment(attemptRow.id, db);
+      if (!settled || settled.reportMessageId === undefined) {
+        // No terminal write means the attempt never ran (disposed mid-park). Nothing to
+        // supersede and nothing new to synthesize.
+        if (phase === 'batch-running' || phase === 'lead-synthesizing') setPhase('ready');
+        return;
+      }
+
+      // D-23: the SOURCE report is superseded by the new one. `finalizeAttempt` always sets
+      // `reportMessageId` for a terminal attempt (including one stopped before `start()`), so
+      // an absent id is a broken invariant, not a state to skip silently.
+      if (source.reportMessageId === undefined) {
+        throw new Error(`retryAssignment: source attempt ${source.id} has no report to supersede`);
+      }
+      await supersedeTeamMessage(source.reportMessageId, settled.reportMessageId, db);
+
+      // D-12: the lead sees the FULL batch — including agents that succeeded on attempt 1.
+      const previousSynthesisId = lastSynthesisMessageId;
+      lastSynthesisMessageId = null;
+      try {
+        await startLeadTurn(SYNTHESIS_INSTRUCTION, await collectBatchReports(source.batchId));
+      } finally {
+        if (lastSynthesisMessageId !== null && previousSynthesisId !== null) {
+          await supersedeTeamMessage(previousSynthesisId, lastSynthesisMessageId, db);
+        }
+        if (phase === 'batch-running' || phase === 'lead-synthesizing') setPhase('ready');
+      }
+
+      // The batch was closed when the first attempt run ended; the retry is its new tail.
+      try {
+        const batchRow = await getBatch(source.batchId, db);
+        if (batchRow?.endedAt !== undefined && batchRow.phaseAtEnd !== 'ready') {
+          await db.aiTeamBatches.update(source.batchId, { phaseAtEnd: 'ready' });
+        }
+      } catch {
+        /* the ledger tail must never fail the retry */
+      }
+    } finally {
+      retryingAssignments.delete(assignmentId);
+      if (claimed && claimedAgentId !== null) retryingAgents.delete(claimedAgentId);
+    }
+  }
+
   function resolvePlan(approved: boolean): void {
     const resolver = planResolver;
     planResolver = null;
@@ -1773,6 +1981,7 @@ export function createTeamRunCoordinator(
     send,
     finalizeAttempt,
     runBatch,
+    retryAssignment,
     resolvePlan,
     resolveApproval,
     stopAgent,
