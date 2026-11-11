@@ -23,6 +23,7 @@ import {
 } from '../../../../src/services/ai/office/liveUseRegistry';
 import { createTeam, updateTeam } from '../../../../src/db/repositories/aiTeamRepo';
 import { ensureTeamThread, saveTeamMessage } from '../../../../src/db/repositories/teamTranscriptRepo';
+import { getMessagesByThreadId } from '../../../../src/db/repositories/chatRepo';
 import {
   createAssignment,
   openBatch,
@@ -1517,6 +1518,10 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
       const instruction = messages.find((row) => row.messageKind === 'instruction');
       expect(attempt.instructionMessageId).toBe(instruction!.id);
+
+      // Reachable through the SAME reader the transcript uses (`TeamWorkspace`).
+      const transcript = await getMessagesByThreadId(current.threadId, current.db);
+      expect(transcript.some((row) => row.id === attempt.reportMessageId)).toBe(true);
     });
 
     it('links nothing but status fields when the plan is rejected: batch row only', async () => {
