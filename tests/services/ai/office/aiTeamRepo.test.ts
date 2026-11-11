@@ -21,6 +21,7 @@ import {
   lockLeader,
 } from '../../../../src/db/repositories/aiTeamRepo';
 import { generateId } from '../../../../src/utils/uuid';
+import { clampTeamConcurrency, DEFAULT_TEAM_CONCURRENCY } from '../../../../src/types/aiOffice';
 import { createEmployee, createLead } from '../../../../src/db/repositories/aiOfficeRepo';
 
 function leadInput(name: string) {
@@ -345,5 +346,59 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
 
     await removeTeamLink(link.id, db);
     expect(await listTeamLinks(team.id, db)).toHaveLength(0);
+  });
+
+  describe('concurrencyLimit (Phase 37, D-02, D-03)', () => {
+    it('stores the boundaries 1 and 12 verbatim', async () => {
+      const team = await makeTeam('Concurrency');
+
+      expect((await updateTeam(team.id, { concurrencyLimit: 1 }, db)).concurrencyLimit).toBe(1);
+      expect((await updateTeam(team.id, { concurrencyLimit: 12 }, db)).concurrencyLimit).toBe(12);
+      expect((await getTeam(team.id, db))?.concurrencyLimit).toBe(12);
+    });
+
+    it.each([0, 13, 2.5])('rejects %s and leaves the stored value untouched', async (value) => {
+      const team = await makeTeam('ConcurrencyReject');
+      await updateTeam(team.id, { concurrencyLimit: 7 }, db);
+
+      await expect(updateTeam(team.id, { concurrencyLimit: value }, db)).rejects.toThrow();
+
+      expect((await getTeam(team.id, db))?.concurrencyLimit).toBe(7);
+    });
+
+    it('preserves the stored value when the key is omitted', async () => {
+      const team = await makeTeam('ConcurrencyOmit');
+      await updateTeam(team.id, { concurrencyLimit: 5 }, db);
+
+      await updateTeam(team.id, { name: 'ConcurrencyOmit renamed' }, db);
+
+      expect((await getTeam(team.id, db))?.concurrencyLimit).toBe(5);
+    });
+
+    it('removes the key when concurrencyLimit is passed as undefined', async () => {
+      const team = await makeTeam('ConcurrencyClear');
+      await updateTeam(team.id, { concurrencyLimit: 4 }, db);
+
+      const cleared = await updateTeam(team.id, { concurrencyLimit: undefined }, db);
+
+      expect('concurrencyLimit' in cleared).toBe(false);
+      expect('concurrencyLimit' in ((await getTeam(team.id, db)) ?? {})).toBe(false);
+    });
+
+    it('accepts concurrencyLimit on create', async () => {
+      const team = await createTeam({ name: 'ConcurrencyCreate', concurrencyLimit: 9 }, db);
+
+      expect(team.concurrencyLimit).toBe(9);
+    });
+
+    it('clampTeamConcurrency is total across every input', () => {
+      expect(clampTeamConcurrency(2.5)).toBe(3);
+      expect(clampTeamConcurrency(0)).toBe(1);
+      expect(clampTeamConcurrency(13)).toBe(12);
+      expect(clampTeamConcurrency(Number.NaN)).toBe(DEFAULT_TEAM_CONCURRENCY);
+      expect(clampTeamConcurrency(Number.POSITIVE_INFINITY)).toBe(DEFAULT_TEAM_CONCURRENCY);
+      expect(clampTeamConcurrency(1)).toBe(1);
+      expect(clampTeamConcurrency(12)).toBe(12);
+    });
   });
 });

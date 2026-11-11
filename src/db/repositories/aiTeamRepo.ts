@@ -1,5 +1,6 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../index';
 import type { AiTeam, AiTeamLink, AiTeamMember } from '../../types/aiOffice';
+import { clampTeamConcurrency } from '../../types/aiOffice';
 import { generateId } from '../../utils/uuid';
 import {
   AiTeamInputSchema,
@@ -121,6 +122,9 @@ export async function createTeam(
   if (validated.autoApproveMutations !== undefined) {
     team.autoApproveMutations = validated.autoApproveMutations;
   }
+  if (validated.concurrencyLimit !== undefined) {
+    team.concurrencyLimit = clampTeamConcurrency(validated.concurrencyLimit);
+  }
 
   await db.transaction('rw', [db.aiTeams, db.aiTeamMembers, db.aiLeads, db.aiEmployees], async () => {
     await assertAgentsExist(team.leadId, employeeIds, db);
@@ -201,6 +205,15 @@ export async function updateTeam(
         updated.autoApproveMutations = validated.autoApproveMutations;
       } else {
         delete updated.autoApproveMutations;
+      }
+    }
+    // Phase 37 D-03: same add/remove idiom, so clearing stays expressible. The range is
+    // already enforced by zod; the clamp is the runtime belt for values that bypass the form.
+    if ('concurrencyLimit' in patch) {
+      if (validated.concurrencyLimit !== undefined) {
+        updated.concurrencyLimit = clampTeamConcurrency(validated.concurrencyLimit);
+      } else {
+        delete updated.concurrencyLimit;
       }
     }
 

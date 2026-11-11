@@ -33,6 +33,12 @@ const skillDescriptionSchema = z
   .max(300, 'Description must be 300 characters or less');
 const budgetSchema = z.number().int().nonnegative('Budget must be zero or greater');
 
+/**
+ * Phase 37 D-02: per-team run concurrency, 1–12. Rejects out-of-range and fractional values
+ * at the trust boundary before the repo write; `clampTeamConcurrency` is the runtime belt.
+ */
+const concurrencyLimitSchema = z.number().int().min(1).max(12).optional();
+
 const AiTeamStatusSchema = z.enum(['active', 'idle']);
 const AiTeamMemberRoleSchema = z.enum(['lead', 'employee']);
 const AiTeamLinkItemTypeSchema = z.enum(['cr', 'task', 'system', 'note', 'document']);
@@ -92,6 +98,8 @@ export const AiTeamInputSchema = z.object({
   budgetTokens: budgetSchema.default(0),
   autoSplitEnabled: z.boolean().optional(),
   autoApproveMutations: z.boolean().optional(),
+  /** Phase 37 D-02: only the *range* matches `ghostDevConfig.ts:54` (its default is 6). */
+  concurrencyLimit: concurrencyLimitSchema,
 });
 
 export const AiTeamUpdateSchema = z.object({
@@ -101,6 +109,8 @@ export const AiTeamUpdateSchema = z.object({
   budgetTokens: budgetSchema.optional(),
   autoSplitEnabled: z.boolean().optional(),
   autoApproveMutations: z.boolean().optional(),
+  /** Phase 37 D-02: range matches `ghostDevConfig.ts:54`; 3 is this phase's default. */
+  concurrencyLimit: concurrencyLimitSchema,
 });
 
 export const AiTeamMemberInputSchema = z.object({
