@@ -4,17 +4,17 @@ milestone: v1.4
 milestone_name: Unified AI Office (Phase Details)
 current_phase: 37
 current_phase_name: Runtime reliability + concurrency
-status: executing
-stopped_at: Completed 37-07-PLAN.md
-last_updated: "2026-11-11T21:35:20.588Z"
+status: verifying
+stopped_at: Completed 37-08-PLAN.md
+last_updated: "2026-11-11T21:46:06.675Z"
 last_activity: 2026-11-12
 last_activity_desc: Phase 37 execution started
-state_head: 06ff92d726a5e24624713c34f0cd779afcd4680f
+state_head: 5ee86cc3bb9f90c7b9e85a1ef16d85b575066a9f
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 25
-  completed_plans: 24
+  completed_plans: 25
   percent: 50
 ---
 
@@ -29,13 +29,13 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 
 Phase: 37 (Runtime reliability + concurrency) — EXECUTING
 Plan: 8 of 8
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-11-12 — Phase 37 execution started
 
 ## Session Continuity
 
-Last session: 2026-11-11T21:35:20.272Z
-Stopped at: Completed 37-07-PLAN.md
+Last session: 2026-11-11T21:46:06.461Z
+Stopped at: Completed 37-08-PLAN.md
 Resume file: None
 
 Progress: [█████░░░░░] 50%
@@ -130,6 +130,7 @@ Progress: [█████░░░░░] 50%
 - [Phase 37]: 37-06: the API-error-card retry shares the composer's BUSY_PHASES entry rule, so one decision governs every dispatch path
 - [Phase 37]: retryAssignment claims the assignment id before any await and checks it before the busy-phase guard, so a double click is ignored rather than refused as a busy team
 - [Phase 37]: the delegate_batch result keeps its array shape and gains a final kind:'unfinished' entry, because a wrapper object would break every caller and the tool contract
+- [Phase 37]: persisted message.runStatus beats the live agentStatus: terminal agents are filtered out of snapshot.agents, so a stopped attempt has no live status and a remount has none at all
 
 ## Performance Metrics
 
@@ -142,3 +143,4 @@ Progress: [█████░░░░░] 50%
 | Phase 37 P04 | 48 min | 3 tasks | 10 files |
 | Phase 37 P06 | 32 min | 3 tasks | 6 files |
 | Phase 37 P07 | 42 min | 2 tasks | 5 files |
+| Phase 37 P08 | 22 min | 2 tasks | 8 files |
