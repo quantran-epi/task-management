@@ -5,16 +5,16 @@ milestone_name: Unified AI Office (Phase Details)
 current_phase: 37
 current_phase_name: Runtime reliability + concurrency
 status: executing
-stopped_at: Completed 37-02-PLAN.md
-last_updated: "2026-11-11T19:21:25.706Z"
+stopped_at: Completed 37-05-PLAN.md
+last_updated: "2026-11-11T19:31:08.806Z"
 last_activity: 2026-11-12
 last_activity_desc: Phase 37 execution started
-state_head: b0a3f996f95c309344e18857473c7126f4cc4142
+state_head: ef323fdc00f34175f31e9e01c7cd2d601950a263
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 25
-  completed_plans: 19
+  completed_plans: 20
   percent: 50
 ---
 
@@ -28,14 +28,14 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 37 (Runtime reliability + concurrency) — EXECUTING
-Plan: 3 of 8
+Plan: 4 of 8
 Status: Ready to execute
 Last activity: 2026-11-12 — Phase 37 execution started
 
 ## Session Continuity
 
-Last session: 2026-11-11T19:21:25.404Z
-Stopped at: Completed 37-02-PLAN.md
+Last session: 2026-11-11T19:31:08.476Z
+Stopped at: Completed 37-05-PLAN.md
 Resume file: None
 
 Progress: [█████░░░░░] 50%
@@ -118,6 +118,9 @@ Progress: [█████░░░░░] 50%
 - [Phase 37]: Scheduler acquire(signal) requires the signal; cancel(handle) is release-equivalent only — a queued assignment is cancelled by aborting its own AbortController (no handle exists before admission)
 - [Phase 37]: Coordinator phase writes all route through setPhase(), which drops the write and its notify() once disposed, so runBatch/topUp tails cannot resurrect a dead run
 - [Phase 37]: teamRunManager deletes the map entry before awaiting a stale dispose, so a concurrent get during the dispose window constructs fresh rather than observing a half-torn-down coordinator
+- [Phase 37]: diagnosticDetail stripped by row projection (projectSafeAssignment) in export AND captureSnapshot, not at envelope level
+- [Phase 37]: assignment backup record omits diagnosticDetail entirely so a hand-crafted payload carrying it is rejected by strictObject
+- [Phase 37]: parity test pins LATEST_SCHEMA_VERSION = 22 so a future schema bump cannot silently desync its store source
 
 ## Performance Metrics
 
@@ -125,3 +128,4 @@ Progress: [█████░░░░░] 50%
 |------|----------|-------|-------|
 | Phase 37-runtime-reliability-concurrency P01 | 6 min | 3 tasks | 10 files |
 | Phase 37 P02 | 15 min | 3 tasks | 6 files |
+| Phase 37 P05 | 10 min | 3 tasks | 18 files |

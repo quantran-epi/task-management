@@ -33,7 +33,7 @@
 - [ ] **AIO-GROUP-01**: Chat-first creation — a user can create an empty group chat, then add exactly one leader and any number of agents. No form requires name + leader + budget up front. (C-03, C-04)
 - [x] **AIO-GROUP-02**: `AiTeam` *is* the group chat; no new container entity wraps it. The transcript stays a `ChatThread` with `scopeKey = 'team:<teamId>'`. (C-04)
 - [x] **AIO-GROUP-03**: The group roster is editable after creation — add and remove agents at any time. `MAX_ACTIVE_TEAMS` and `MAX_EMPLOYEES_PER_TEAM` are removed from `aiTeamRepo`, `teamTools`, and `TeamEditorDrawer`. (C-08, C-09)
-- [ ] **AIO-GROUP-04**: `MAX_BATCH_SIZE` no longer doubles as a concurrency cap; assignments-per-batch and agents-running-at-once are two separate controls. (C-09, C-10)
+- [x] **AIO-GROUP-04**: `MAX_BATCH_SIZE` no longer doubles as a concurrency cap; assignments-per-batch and agents-running-at-once are two separate controls. (C-09, C-10)
 - [x] **AIO-GROUP-05**: Deleting a leader, agent, or skill with live references either refuses with a clear message or cascades in one transaction. The user's own next backup export must validate. (C-14)
 
 ### Leader Orchestration (AIO-LEAD)
@@ -50,7 +50,7 @@
 - [ ] **AIO-RUNTIME-02**: A second submit while a turn is running is rejected visibly at the composer — one user message, one turn, phase returns to `ready`. No `TURN_IN_PROGRESS` thrown into the void. (Pitfall 8)
 - [ ] **AIO-RUNTIME-03**: Every registered `teamTurnId` is finished in `finally`; `getActiveTurns()` is empty after a run and the status indicator clears. (Pitfall 9)
 - [ ] **AIO-RUNTIME-04**: Deleting a group mid-run tears down its coordinator and registry — no active turns, no further writes. (Pitfall 25)
-- [ ] **AIO-RUNTIME-05**: Concurrency is a real scheduler — with limit 2 and a batch of 5, at most 2 agents run at once and all 5 settle. The limit is a persisted setting, not a constant. (C-10, R-05)
+- [x] **AIO-RUNTIME-05**: Concurrency is a real scheduler — with limit 2 and a batch of 5, at most 2 agents run at once and all 5 settle. The limit is a persisted setting, not a constant. (C-10, R-05)
 
 ### Token Budget (AIO-BUDGET)
 
