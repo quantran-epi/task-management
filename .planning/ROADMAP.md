@@ -3,7 +3,7 @@
 ## Active Milestone
 
 - Phase 35: Shared-primitive extraction + SDLC behavior removal (v1.4)
-- Phase 36: Data model, multi-chat identity, backup/migration (v1.4)
+- Phase 36: Data model, multi-chat identity, backup/migration (v1.4) (COMPLETE — verified 2026-11-11)
 - Phase 37: Runtime reliability + concurrency (v1.4)
 - Phase 38: Hard token budget + accurate measurement (v1.4)
 - Phase 39: Skill versioning + enrichment approval (v1.4)

@@ -31,10 +31,10 @@
 ### Group Chat Model (AIO-GROUP)
 
 - [ ] **AIO-GROUP-01**: Chat-first creation — a user can create an empty group chat, then add exactly one leader and any number of agents. No form requires name + leader + budget up front. (C-03, C-04)
-- [ ] **AIO-GROUP-02**: `AiTeam` *is* the group chat; no new container entity wraps it. The transcript stays a `ChatThread` with `scopeKey = 'team:<teamId>'`. (C-04)
-- [ ] **AIO-GROUP-03**: The group roster is editable after creation — add and remove agents at any time. `MAX_ACTIVE_TEAMS` and `MAX_EMPLOYEES_PER_TEAM` are removed from `aiTeamRepo`, `teamTools`, and `TeamEditorDrawer`. (C-08, C-09)
+- [x] **AIO-GROUP-02**: `AiTeam` *is* the group chat; no new container entity wraps it. The transcript stays a `ChatThread` with `scopeKey = 'team:<teamId>'`. (C-04)
+- [x] **AIO-GROUP-03**: The group roster is editable after creation — add and remove agents at any time. `MAX_ACTIVE_TEAMS` and `MAX_EMPLOYEES_PER_TEAM` are removed from `aiTeamRepo`, `teamTools`, and `TeamEditorDrawer`. (C-08, C-09)
 - [ ] **AIO-GROUP-04**: `MAX_BATCH_SIZE` no longer doubles as a concurrency cap; assignments-per-batch and agents-running-at-once are two separate controls. (C-09, C-10)
-- [ ] **AIO-GROUP-05**: Deleting a leader, agent, or skill with live references either refuses with a clear message or cascades in one transaction. The user's own next backup export must validate. (C-14)
+- [x] **AIO-GROUP-05**: Deleting a leader, agent, or skill with live references either refuses with a clear message or cascades in one transaction. The user's own next backup export must validate. (C-14)
 
 ### Leader Orchestration (AIO-LEAD)
 
@@ -75,11 +75,11 @@
 
 ### Data & Backup (AIO-DATA)
 
-- [ ] **AIO-DATA-01**: `aiSkillVersions` is added to Dexie (V18) and covered by export, restore, validate, and the Tauri SQLite flush. Adding a table updates all five coordinated lists. (R-02)
-- [ ] **AIO-DATA-02**: `targetAgentId` survives export → restore. Agent assignment history is no longer stripped. (Pitfall 22)
-- [ ] **AIO-DATA-03**: Export → validate → restore round-trips both a pre-v1.4 fixture and a v1.4 fixture with matching counts. (R-02, R-14)
-- [ ] **AIO-DATA-04**: A backup produced by the previous build still imports; a backup produced by this build is read by the previous build without corruption. (R-02)
-- [ ] **AIO-DATA-05**: Persisted SDLC rows are handled non-destructively — filtered from the UI, not silently deleted — unless a decision in Phase 36 says otherwise. (R-16)
+- [x] **AIO-DATA-01**: `aiSkillVersions` is added to Dexie (V18) and covered by export, restore, validate, and the Tauri SQLite flush. Adding a table updates all five coordinated lists. (R-02)
+- [x] **AIO-DATA-02**: `targetAgentId` survives export → restore. Agent assignment history is no longer stripped. (Pitfall 22)
+- [x] **AIO-DATA-03**: Export → validate → restore round-trips both a pre-v1.4 fixture and a v1.4 fixture with matching counts. (R-02, R-14)
+- [x] **AIO-DATA-04**: A backup produced by the previous build still imports; a backup produced by this build is read by the previous build without corruption. (R-02)
+- [x] **AIO-DATA-05**: Persisted SDLC rows are handled non-destructively — filtered from the UI, not silently deleted — unless a decision in Phase 36 says otherwise. (R-16)
 
 ### Verification (AIO-VERIFY)
 

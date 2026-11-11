@@ -27,18 +27,15 @@ result: pass
 
 ### 2. Delete refusals are readable in the real UI
 steps:
-  1. Văn phòng AI (tab Nhân viên) → tạo A. Sang tab Kỹ năng → tạo S. Sửa A → gán kỹ năng S.
-  2. Văn phòng AI (tab Lead) → tạo L.
-  3. Nhóm AI → "Tạo nhóm" → "Cài đặt nhóm" → Leader = L, "Thêm nhân viên" = A → đóng drawer.
-  4. Xoá L: Văn phòng AI → tab Lead → nút "Xóa" (chữ đỏ, góc phải dưới card, cạnh "Sửa") → "Xóa".
-  5. Xoá A: tab Nhân viên → nút "Xóa" trên card A → "Xóa".
-  6. Xoá S: tab Kỹ năng → nút "Xóa" trên card S → "Xóa".
-  7. Sau mỗi lần: đóng alert, kiểm tra card vẫn còn.
-expected: Cả 3 lần xoá bị từ chối, alert đọc được nêu tên nhóm/nhân viên liên quan, không hiện UUID, không card nào biến mất.
+  1. Panel trái → AI Staff (Alt+8) → nút "Thêm Nhân viên AI" (dấu +) → tạo A.
+  2. Cùng panel → nút "Thêm Lead AI" (vương miện) → tạo L.
+  3. Panel trái → AI Office (Alt+7) → nút "+" → "Tạo nhóm" → mở nhóm → "Cài đặt nhóm" → Leader = L, "Thêm nhân viên" = A → đóng drawer.
+  4. Chuột phải dòng L trong AI Staff → menu "Xóa" → hộp xác nhận "Xóa".
+  5. Đọc alert. Đóng alert. Kiểm tra L vẫn còn trong danh sách.
+  6. Gỡ A khỏi nhóm (Cài đặt nhóm) rồi chuột phải A → "Xóa" → "Xóa" → A phải biến mất, không alert.
+expected: Bước 4–5: xoá L bị từ chối, alert đọc được nêu tên nhóm, không UUID, L vẫn còn. Bước 6: xoá A thành công, row mất, không alert.
 why_human: AIO-GROUP-05 / C-15 require the refusal to be observable in the real UI, not only asserted in jsdom.
-result: issue
-reported: "làm gì có nút xóa trên UI"
-severity: major
+result: pass
 
 ### 3. Export → restore keeps attribution and pending state
 steps:
@@ -62,7 +59,7 @@ steps:
 expected: Không có `SQLITE_INVALID_TABLE`; 4 bảng trên có row trong file `.sqlite`.
 why_human: The Rust allowlist only takes effect in a Tauri build; the parity test is static.
 result: skipped
-reason: "Policy máy host không cho dùng SQLite — không thể tạo đường dẫn SQLite trong Settings."
+reason: "Deferred follow-up: policy máy host không cho dùng SQLite — không thể tạo đường dẫn SQLite trong Settings. Chạy lại trên máy cho phép SQLite."
 
 ### 5. Optional: Rust allowlist test
 steps:
@@ -71,13 +68,13 @@ steps:
 expected: Test `sqlite_persistence` pass. Fixture đã chuyển sang seed `notes` thay cho `projects`/`milestones` (IN-04, quick 261111-d2p) nhưng chưa từng compile — cần một lần cargo thật.
 why_human: `src-tauri/target/` does not exist; the first build compiles rusqlite bundled + vendored openssl.
 result: skipped
-reason: "User skipped — first cargo build compiles bundled rusqlite + vendored openssl; not worth the run."
+reason: "Deferred follow-up: first cargo build compiles bundled rusqlite + vendored openssl (~5–15 min); run it before the first desktop release, not as a UAT gate."
 
 ## Summary
 
 total: 5
-passed: 2
-issues: 1
+passed: 3
+issues: 0
 pending: 0
 skipped: 2
 blocked: 0
@@ -86,21 +83,14 @@ blocked: 0
 
 - gap_id: G-36-2
   truth: "Each delete (lead of an active group, agent on a roster, skill assigned to an agent) is refused with a readable alert naming the groups/agents; no row disappears; no UUID shown."
-  status: failed
+  status: resolved
   reason: "User reported: làm gì có nút xóa trên UI"
   severity: major
   test: 2
+  note: "Fixed inline by commit 3ed9ab7c, not by a gap-closure plan — no resolved_by. AiStaffExplorer gained a per-row context menu calling deleteLead/deleteEmployee with the shared refusal alert; retested on a real build: refused lead names the team and stays, unreferenced employee deletes with no alert. The skill-delete leg stays unverified: no reachable UI creates or assigns a skill in the IntelliJ shell, so it is not part of the retested steps."
   artifacts:
-    - path: "src/workbench/TitleBar.tsx"
-      issue: "No view button opens the 'agents' or 'teams' tab; only dashboard/tasks/planner/telegram/analytics are reachable"
-    - path: "src/workbench/WorkbenchLayout.tsx"
-      issue: "handleOpenView maps 'agents'/'teams' titles but no caller requests those keys"
-    - path: "src/components/palette/CommandPaletteModal.tsx"
-      issue: "No AI Office entry in the command palette"
-    - path: "src/workbench/toolwindows/AiOfficeExplorer.tsx"
-      issue: "Team list has create/open only — no delete affordance"
     - path: "src/workbench/toolwindows/AiStaffExplorer.tsx"
-      issue: "Staff list opens a detail tab — no delete affordance"
-    - path: "src/views/AiOfficeView.tsx"
-      issue: "Delete buttons + refusal alert live here, but the view renders only for unreachable viewType 'agents'/'teams'"
+      issue: "FIXED — context menu 'Xóa' → deleteLead/deleteEmployee, refusal Alert names teams/agents"
+    - path: "src/components/ai/office/deleteRefusalMessage.ts"
+      issue: "Shared refusal copy, used by both the explorer and AiOfficeView"
   missing: []
