@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, it, expect, afterEach } from 'vitest';
 import { TaskPlannerDatabase } from '../../../../src/db/index';
 import {
+  abortAllAssignmentControllers,
   createTeamRunCoordinator,
   resolveTeamToolName,
   type TeamRunCoordinator,
@@ -1432,6 +1433,163 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
       await expect(coordinator.send('Xin chào')).resolves.toBeUndefined();
       expect(coordinator.getState().agents).toEqual([]);
+    });
+  });
+
+  describe('Dispose — a live run ends in bounded time (D-11, D-18)', () => {
+    const assignmentsFor = (employees: AiEmployee[]) =>
+      employees.map((row, index) => ({ agentId: row.id, task: `Việc ${index + 1}` }));
+
+    it('resolves a send() parked on the plan card and leaves the phase ready', async () => {
+      let harnessRef: Harness | null = null;
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harnessRef!.employees) },
+              harnessRef!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+        },
+      });
+      harnessRef = harness;
+      const { coordinator } = harness;
+
+      const sent = coordinator.send('Làm báo cáo');
+      await waitFor(() => coordinator.getState().phase === 'awaiting-plan');
+
+      await coordinator.dispose();
+      await sent;
+
+      const state = coordinator.getState();
+      expect(state.phase).toBe('ready');
+      expect(state.agents.every((row) => row.status !== 'running')).toBe(true);
+      expect(state.pendingPlan).toBeNull();
+    });
+
+    it('leaves the phase ready when disposed mid-runBatch', async () => {
+      let harnessRef: Harness | null = null;
+      const gate = deferred();
+      const employeeScript: LoopScript = async () => {
+        await gate.promise;
+        return loopResult('báo cáo');
+      };
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harnessRef!.employees) },
+              harnessRef!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: employeeScript,
+          [EMP_B_MODEL]: employeeScript,
+          [EMP_C_MODEL]: employeeScript,
+        },
+        teamPatch: { autoSplitEnabled: true },
+      });
+      harnessRef = harness;
+      const { coordinator, employees } = harness;
+
+      const sent = coordinator.send('Làm báo cáo');
+      await waitFor(
+        () =>
+          employees.filter((row) =>
+            coordinator.getState().agents.some(
+              (state) => state.agentId === row.id && state.status === 'running'
+            )
+          ).length === 3
+      );
+
+      await coordinator.dispose();
+      gate.release();
+      await sent;
+
+      // The `lead-synthesizing` tail runs after `Promise.all(deferreds)`; a disposed
+      // coordinator must never write it.
+      expect(coordinator.getState().phase).toBe('ready');
+    });
+
+    it('starts no script when send() is called after dispose', async () => {
+      const started: string[] = [];
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async () => {
+            started.push('lead');
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async () => {
+            started.push('emp-a');
+            return loopResult('báo cáo');
+          },
+        },
+      });
+      const { coordinator, employees } = harness;
+
+      await coordinator.dispose();
+      await coordinator.send('Xin chào');
+      await coordinator.send('@[An](agent:' + employees[0]!.id + ') kiểm tra');
+
+      expect(started).toEqual([]);
+      expect(coordinator.getState().agents).toEqual([]);
+    });
+
+    it('is idempotent: a second dispose resolves and changes nothing', async () => {
+      harness = await createHarness({
+        scripts: { [LEAD_MODEL]: async () => loopResult('Xong.') },
+      });
+      const { coordinator, db, threadId } = harness;
+
+      await coordinator.dispose();
+      const afterFirst = await db.chatMessages.where('threadId').equals(threadId).count();
+      await expect(coordinator.dispose()).resolves.toBeUndefined();
+
+      expect(coordinator.getState().phase).toBe('ready');
+      expect(await db.chatMessages.where('threadId').equals(threadId).count()).toBe(afterFirst);
+    });
+
+    it('refuses a batch run after dispose and starts no employee turn', async () => {
+      const started: string[] = [];
+      harness = await createHarness({
+        scripts: {
+          [EMP_A_MODEL]: async () => {
+            started.push('emp-a');
+            return loopResult('báo cáo');
+          },
+        },
+      });
+      const { coordinator } = harness;
+
+      await coordinator.dispose();
+      const result = await coordinator.runBatch([
+        { agentId: harness.employees[0]!.id, task: 'Việc' },
+      ]);
+
+      expect(JSON.parse(result)).toMatchObject({ cancelled: true });
+      expect(started).toEqual([]);
+    });
+
+    it('aborts every assignment controller and empties the map', () => {
+      // 37-02 establishes the map and the abort-all loop; 37-04 wires the producers, so
+      // here the loop is proven directly against a populated map.
+      const first = new AbortController();
+      const second = new AbortController();
+      const controllers = new Map<string, AbortController>([
+        ['assignment-1', first],
+        ['assignment-2', second],
+      ]);
+
+      abortAllAssignmentControllers(controllers);
+
+      expect(first.signal.aborted).toBe(true);
+      expect(second.signal.aborted).toBe(true);
+      expect(controllers.size).toBe(0);
     });
   });
 });
