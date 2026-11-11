@@ -85,6 +85,9 @@ const ACTION_ERROR_COPY = 'Không lưu được thay đổi. Vui lòng thử l�
 /** WR-02: a refused retry is a normal outcome (busy phase, disposed run), not a dead end. */
 const RETRY_ERROR_COPY = 'Chưa thể chạy lại lần này. Hãy chờ lượt hiện tại kết thúc rồi thử lại.';
 
+/** IN-05: fixed copy — a repo error message can embed ids, which must not reach the UI. */
+const LEADER_LOCK_FAILED_COPY = 'Không khoá được leader cho nhóm. Vui lòng thử lại.';
+
 const TERMINAL = new Set(['done', 'stopped', 'error']);
 
 function initialOf(name: string): string {
@@ -456,11 +459,9 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         if (persisted && persisted.leaderLockedAt === undefined && persisted.leadId !== undefined) {
           await lockLeader(team.id, db);
         }
-      } catch (err) {
-        setSendError({
-          code: 'LEADER_LOCK_FAILED',
-          message: err instanceof Error ? err.message : String(err),
-        });
+      } catch {
+        // IN-05: the repo message can embed ids, so the fixed copy is what reaches the UI.
+        setSendError({ code: 'LEADER_LOCK_FAILED', message: LEADER_LOCK_FAILED_COPY });
         return 'blocked';
       }
       const outcome = await coordinator.send(text);

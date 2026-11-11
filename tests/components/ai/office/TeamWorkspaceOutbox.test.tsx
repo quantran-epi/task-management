@@ -104,7 +104,7 @@ vi.mock('../../../../src/db/repositories/aiTeamRepo', async (importOriginal) => 
   return {
     ...actual,
     lockLeader: vi.fn(async (...args: Parameters<typeof actual.lockLeader>) => {
-      if (lockLeaderRejects) throw new Error('Không khoá được leader');
+      if (lockLeaderRejects) throw new Error('raw repo detail: team 7c1f9e');
       return actual.lockLeader(...args);
     }),
   };
@@ -260,6 +260,11 @@ describe('TeamWorkspace outbox (37-06, D-20/D-21)', () => {
     await waitFor(() => expect((composer as HTMLTextAreaElement).value).toBe('Khoá leader thất bại'));
     expect(currentStub.send).not.toHaveBeenCalled();
     expect(screen.queryAllByTestId('team-outbox-item')).toHaveLength(0);
+    // IN-05: the repo error text (which can embed ids) must never reach the UI.
+    await waitFor(() =>
+      expect(document.body.textContent).toContain('Không khoá được leader cho nhóm')
+    );
+    expect(document.body.textContent).not.toContain('raw repo detail');
   });
 
   it('renders three queued entries, cancels the middle one, and keeps the rest in order', async () => {
