@@ -1785,6 +1785,123 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
     });
   });
 
+  describe('Termination guarantees (D-16, AIO-RUNTIME-01)', () => {
+    const assignmentsFor = (employees: AiEmployee[]) =>
+      employees.map((row, index) => ({ agentId: row.id, task: `Việc ${index + 1}` }));
+
+    const delegatingLead =
+      (harnessRef: () => Harness): LoopScript =>
+      async (options) => {
+        await options.executeToolFn!(
+          'delegate_batch',
+          { assignments: assignmentsFor(harnessRef().employees) },
+          harnessRef().db,
+          options.signal
+        );
+        return loopResult('Xong.');
+      };
+
+    it('resolves the batch when one of three agents throws, and never stays in batch-running', async () => {
+      let toolResult: string | null = null;
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            toolResult = await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+          [EMP_B_MODEL]: async () => {
+            throw new Error('B nổ');
+          },
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+
+      await current.coordinator.send('Làm báo cáo');
+
+      const parsed = JSON.parse(toolResult as unknown as string);
+      expect(parsed).toHaveLength(3);
+      expect(parsed.map((entry: any) => entry.status)).toEqual(['done', 'error', 'done']);
+      expect(current.coordinator.getState().phase).not.toBe('batch-running');
+    });
+
+    it('still resolves the batch when a pre-start read throws for one agent', async () => {
+      const repo = await import('../../../../src/db/repositories/teamTranscriptRepo');
+      const original = repo.listRecentTurns;
+      let calls = 0;
+      const spy = vi
+        .spyOn(repo, 'listRecentTurns')
+        .mockImplementation(async (threadId, n, targetDb) => {
+          calls += 1;
+          // The first employee's pre-start read fails; the lead's and the siblings' do not.
+          if (calls === 2) throw new Error('history hỏng');
+          return original(threadId, n, targetDb);
+        });
+
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: delegatingLead(() => harness!),
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+
+      try {
+        await current.coordinator.send('Làm báo cáo');
+      } finally {
+        spy.mockRestore();
+      }
+
+      expect(calls).toBeGreaterThan(1);
+      const rows = await current.db.aiTeamAssignments.toArray();
+      expect(rows.filter((row) => row.runStatus === 'error')).toHaveLength(1);
+      expect(rows.filter((row) => row.runStatus === 'done').length).toBeGreaterThan(0);
+      expect(current.coordinator.getState().phase).not.toBe('batch-running');
+      // The deferred map drained: a second submit is accepted rather than reported busy.
+      await expect(current.coordinator.send('Lượt nữa')).resolves.toBe('started');
+    });
+
+    it('keeps the thrown literal out of every stored message and in the ledger detail', async () => {
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: delegatingLead(() => harness!),
+          [EMP_A_MODEL]: async () => {
+            throw new Error('raw provider secret detail');
+          },
+        },
+      });
+      const current = harness;
+      current.employees = current.employees.slice(0, 1);
+      current.roster.employees = current.employees;
+
+      await current.coordinator.send('Làm báo cáo');
+
+      const assignment = (await current.db.aiTeamAssignments.toArray())[0]!;
+      expect(assignment.runStatus).toBe('error');
+      expect(assignment.stopReason).toBe('provider');
+      expect(assignment.diagnosticDetail).toBeTruthy();
+
+      const messages = await current.db.chatMessages
+        .where('threadId')
+        .equals(current.threadId)
+        .toArray();
+      for (const row of messages) {
+        expect(row.content).not.toContain('raw provider secret detail');
+      }
+    });
+  });
+
   describe('Dispose — a live run ends in bounded time (D-11, D-18)', () => {
     const assignmentsFor = (employees: AiEmployee[]) =>
       employees.map((row, index) => ({ agentId: row.id, task: `Việc ${index + 1}` }));
