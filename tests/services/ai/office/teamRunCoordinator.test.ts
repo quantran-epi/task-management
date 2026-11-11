@@ -2805,6 +2805,120 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(current.coordinator.getRunningCount()).toBe(0);
     });
 
+    // WR-03: everything after the phase claim must be covered by one `finally`. Before this,
+    // a throwing transcription write left `phase === 'batch-running'` — a BUSY phase — so
+    // every later submit queued and the release effect never fired.
+    it('restores ready when the retry throws after claiming the phase', async () => {
+      let bAttempts = 0;
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            if (String(options.messages.at(-1)?.content).includes('Tổng hợp lại kết quả của lô')) {
+              return loopResult('Tổng hợp lần hai.');
+            }
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+          [EMP_B_MODEL]: async () => {
+            bAttempts += 1;
+            if (bAttempts === 1) throw new Error('B hỏng');
+            return loopResult('B xong lần hai');
+          },
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+      await current.coordinator.send('Làm báo cáo');
+
+      const bFirst = (await current.db.aiTeamAssignments.toArray()).find(
+        (row) => row.agentId === current.employees[1]!.id && row.attemptNo === 1
+      )!;
+
+      const repo = await import('../../../../src/db/repositories/teamTranscriptRepo');
+      const spy = vi
+        .spyOn(repo, 'supersedeTeamMessage')
+        .mockRejectedValueOnce(new Error('transcript hỏng'));
+      try {
+        await expect(current.coordinator.retryAssignment(bFirst.id)).rejects.toThrow(
+          'transcript hỏng'
+        );
+      } finally {
+        spy.mockRestore();
+      }
+
+      expect(current.coordinator.getState().phase).toBe('ready');
+      // The next submit starts a real turn instead of being queued behind a wedged phase.
+      await expect(current.coordinator.send('Lượt nữa')).resolves.toBe('started');
+    });
+
+    // WR-04: the busy guard and the phase claim must be in the SAME tick. With awaits
+    // between them two clicks passed the guard, both created attempts, and both ran a
+    // synthesis — which then raced on the previous synthesis id.
+    it('claims the phase synchronously so two same-tick retries cannot both run', async () => {
+      let bAttempts = 0;
+      let cAttempts = 0;
+      let synthesisRuns = 0;
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 2 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            if (String(options.messages.at(-1)?.content).includes('Tổng hợp lại kết quả của lô')) {
+              synthesisRuns += 1;
+              return loopResult('Tổng hợp lần hai.');
+            }
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+          [EMP_B_MODEL]: async () => {
+            bAttempts += 1;
+            if (bAttempts === 1) throw new Error('B hỏng');
+            return loopResult('B xong lần hai');
+          },
+          [EMP_C_MODEL]: async () => {
+            cAttempts += 1;
+            if (cAttempts === 1) throw new Error('C hỏng');
+            return loopResult('C xong lần hai');
+          },
+        },
+      });
+      const current = harness;
+      await current.coordinator.send('Làm báo cáo');
+
+      const rows = await current.db.aiTeamAssignments.toArray();
+      const bFirst = rows.find(
+        (row) => row.agentId === current.employees[1]!.id && row.attemptNo === 1
+      )!;
+      const cFirst = rows.find(
+        (row) => row.agentId === current.employees[2]!.id && row.attemptNo === 1
+      )!;
+
+      const results = await Promise.allSettled([
+        current.coordinator.retryAssignment(bFirst.id),
+        current.coordinator.retryAssignment(cFirst.id),
+      ]);
+
+      expect(results.filter((row) => row.status === 'fulfilled')).toHaveLength(1);
+      const refused = results.find((row) => row.status === 'rejected') as PromiseRejectedResult;
+      expect(String(refused.reason)).toContain('Nhóm đang chạy');
+      // Exactly one retry ran: one extra attempt row, one synthesis.
+      expect(synthesisRuns).toBe(1);
+      const after = await current.db.aiTeamAssignments.toArray();
+      expect(after.filter((row) => row.attemptNo === 2)).toHaveLength(1);
+    });
+
     // WR-07: `stopAgent` writes its ledger entry from a detached async block, so attempt 1's
     // finalize can resolve AFTER attempt 2 registered. The unlink must not remove attempt 2's
     // entry — doing so saved attempt 2's report with no link fields and then read its `done`

@@ -1653,9 +1653,19 @@ export function createTeamRunCoordinator(
     if (retryingAssignments.has(assignmentId)) return;
     if (BUSY_PHASES.has(phase)) throw new Error('Nhóm đang chạy. Hãy chờ lượt hiện tại kết thúc.');
     retryingAssignments.add(assignmentId);
+    // WR-04: the phase is claimed SYNCHRONOUSLY, with no await between the guard above and
+    // this write. Otherwise two clicks on different bubbles in one tick both pass the guard,
+    // both create attempts, and both run a lead synthesis — which then race on the previous
+    // synthesis id and leave one synthesis current forever.
+    // 37-06: the outbox queues against this phase instead of dispatching beside the retry.
+    setPhase('batch-running');
 
     let claimed = false;
     let claimedAgentId: string | null = null;
+    // WR-03: ONE try/finally from the phase claim onward. The method throws by design
+    // (missing row, non-retryable status, no report to supersede, a throwing transcription
+    // write); before this, any such throw left `phase === 'batch-running'` — a BUSY phase —
+    // so every later submit queued and the release effect never fired.
     try {
       const source = await getAssignment(assignmentId, db);
       if (!source) throw new Error('Không tìm thấy lần chạy cần chạy lại.');
@@ -1709,8 +1719,6 @@ export function createTeamRunCoordinator(
       retryingAgents.add(source.agentId);
       assignmentIdsByAgent.set(source.agentId, attemptRow.id);
       updateAgent(source.agentId, { status: 'queued', streamingText: '', incomplete: false });
-      // 37-06: the outbox queues against this phase instead of dispatching beside the retry.
-      setPhase('batch-running');
 
       const attempt: AttemptRef = {
         batchId: source.batchId,
@@ -1760,8 +1768,7 @@ export function createTeamRunCoordinator(
       const settled = await getAssignment(attemptRow.id, db);
       if (!settled || settled.reportMessageId === undefined) {
         // No terminal write means the attempt never ran (disposed mid-park). Nothing to
-        // supersede and nothing new to synthesize.
-        if (phase === 'batch-running' || phase === 'lead-synthesizing') setPhase('ready');
+        // supersede and nothing new to synthesize; the outer `finally` restores the phase.
         return;
       }
 
@@ -1782,7 +1789,6 @@ export function createTeamRunCoordinator(
         if (lastSynthesisMessageId !== null && previousSynthesisId !== null) {
           await supersedeTeamMessage(previousSynthesisId, lastSynthesisMessageId, db);
         }
-        if (phase === 'batch-running' || phase === 'lead-synthesizing') setPhase('ready');
       }
 
       // The batch was closed when the first attempt run ended; the retry is its new tail.
@@ -1795,6 +1801,11 @@ export function createTeamRunCoordinator(
         /* the ledger tail must never fail the retry */
       }
     } finally {
+      // WR-03: the ONE phase reset for this call. Whatever escaped the body — a refusal
+      // throw with no attempt created, a missing source report, a throwing transcription
+      // write — leaves the coordinator `ready` and the guards clear, so the next send()
+      // starts instead of returning 'busy' forever.
+      if (phase === 'batch-running' || phase === 'lead-synthesizing') setPhase('ready');
       retryingAssignments.delete(assignmentId);
       if (claimed && claimedAgentId !== null) retryingAgents.delete(claimedAgentId);
     }
