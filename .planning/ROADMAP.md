@@ -154,7 +154,7 @@ Plans:
 
 > **Criterion 2 is superseded by D-20.** The user locked a queue/outbox model during discuss: a second submit is *not* rejected at the composer — it is queued visibly and dispatched when the current turn settles. Verify against D-20, not against the "rejection is visible at the composer" wording above.
 
-**Plans:** 1/8 plans executed in 7 waves
+**Plans:** 2/8 plans executed in 7 waves
 
 Plans:
 **Wave 1**
@@ -163,7 +163,7 @@ Plans:
 
 **Wave 2** *(parallel: runtime primitives vs backup surface)*
 
-- [ ] 37-02-PLAN.md — `scheduler.ts` (FIFO, live limit) + `teamRunManager.ts` + coordinator `dispose()` (D-01/D-04/D-07/D-18)
+- [x] 37-02-PLAN.md — `scheduler.ts` (FIFO, live limit) + `teamRunManager.ts` + coordinator `dispose()` (D-01/D-04/D-07/D-18)
 - [ ] 37-05-PLAN.md — Backup envelope 12→13, two ledger tables through export/restore/validate/SQLite TS+Rust, parity test (D-26)
 
 **Wave 3**
