@@ -6,6 +6,7 @@ import {
   abortAllAssignmentControllers,
   createTeamRunCoordinator,
   resolveTeamToolName,
+  STOPPED_REPORT_COPY,
   type TeamRunCoordinator,
   type TurnRoster,
 } from '../../../../src/services/ai/office/teamRunCoordinator';
@@ -2802,6 +2803,77 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(attempt2Reports[0]!.runStatus).toBe('stopped');
       expect(attempt2Reports[0]!.incomplete).toBe(true);
       expect(current.coordinator.getRunningCount()).toBe(0);
+    });
+
+    // WR-07: `stopAgent` writes its ledger entry from a detached async block, so attempt 1's
+    // finalize can resolve AFTER attempt 2 registered. The unlink must not remove attempt 2's
+    // entry — doing so saved attempt 2's report with no link fields and then read its `done`
+    // as the missing-report error.
+    it('keeps a newer attempt linked when an older attempt finalizes late', async () => {
+      const gate = deferred();
+      let bAttempts = 0;
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            if (String(options.messages.at(-1)?.content).includes('Tổng hợp lại kết quả của lô')) {
+              return loopResult('Tổng hợp lần hai.');
+            }
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+          [EMP_B_MODEL]: async () => {
+            bAttempts += 1;
+            if (bAttempts === 1) throw new Error('B hỏng');
+            await gate.promise;
+            return loopResult('B xong lần hai');
+          },
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+      await current.coordinator.send('Làm báo cáo');
+
+      const bFirst = (await current.db.aiTeamAssignments.toArray()).find(
+        (row) => row.agentId === current.employees[1]!.id && row.attemptNo === 1
+      )!;
+
+      const retried = current.coordinator.retryAssignment(bFirst.id);
+      // Attempt 2 is now RUNNING and registered as the active attempt for B.
+      await waitFor(() => current.coordinator.getRunningCount() === 1);
+      await waitFor(
+        () =>
+          current.coordinator.getState().agents.find(
+            (row) => row.agentId === current.employees[1]!.id
+          )?.status === 'running'
+      );
+
+      // The late finalize of attempt 1 loses the `from` guard but still returns its row.
+      const late = await current.coordinator.finalizeAttempt(
+        bFirst.id,
+        'running',
+        'stopped',
+        'user-abort',
+        STOPPED_REPORT_COPY
+      );
+      expect(late).not.toBeNull();
+
+      gate.release();
+      await retried;
+
+      const attempt2 = (await current.db.aiTeamAssignments.toArray()).find(
+        (row) => row.agentId === current.employees[1]!.id && row.attemptNo === 2
+      )!;
+      expect(attempt2.runStatus).toBe('done');
+      expect(attempt2.reportMessageId).toBeDefined();
+      const report = await current.db.chatMessages.get(attempt2.reportMessageId!);
+      expect(report).toMatchObject({ content: 'B xong lần hai', runStatus: 'done' });
     });
   });
 

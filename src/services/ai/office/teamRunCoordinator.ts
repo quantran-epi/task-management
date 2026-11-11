@@ -633,7 +633,15 @@ export function createTeamRunCoordinator(
     }
     // The `userStopped` marker is cleared only when that agent starts its NEXT turn: the
     // stop path and the settle path race to finalize, and both must map to `stopped`.
-    if (finalized !== null) activeAssignmentByAgent.delete(finalized.agentId);
+    // WR-07: unlink only when the stored entry is STILL this attempt. A late finalize of
+    // attempt 1 must not remove attempt 2's link — that would save attempt 2's report with
+    // no link fields and then read its `done` as the missing-report error.
+    if (finalized !== null) {
+      const active = activeAssignmentByAgent.get(finalized.agentId);
+      if (active?.assignmentId === finalized.id) {
+        activeAssignmentByAgent.delete(finalized.agentId);
+      }
+    }
     return finalized;
   }
 
