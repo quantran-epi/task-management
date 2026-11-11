@@ -2,9 +2,11 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { BackupEnvelope } from '../../types/backup';
 import type { ChatTab } from '../../types/models';
 import { generateId } from '../../utils/uuid';
+import { BACKUP_SCHEMA_VERSION } from '../../validation/backupSchemas';
 
 export const APP_MARKER = 'personal-task-planner' as const;
-export const CURRENT_SCHEMA_VERSION = 12 as const;
+/** IN-01: one literal only — the envelope schema owns it. */
+export const CURRENT_SCHEMA_VERSION = BACKUP_SCHEMA_VERSION;
 
 export const UNSAFE_OR_EPHEMERAL_SETTING_KEYS = new Set<string>([
   'jira_api_token',

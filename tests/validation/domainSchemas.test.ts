@@ -13,6 +13,7 @@ import {
   TaskInputSchema,
   TaskUpdateSchema,
 } from '../../src/validation/schemas';
+import { AiSkillVersionInputSchema } from '../../src/validation/aiOfficeSchemas';
 
 // Type-level contract for the CR-centric model (D-24/D-25/D-26). `tsc --noEmit` is the
 // assertion; these aliases exist only so the compiler checks them.
@@ -306,5 +307,23 @@ describe('Banking IT Domain Fields Validation & Normalization (D-01, D-02, D-03,
         })
       ).toThrow();
     });
+  });
+});
+
+describe('AiSkillVersionInputSchema evidence cap (WR-09)', () => {
+  const base = {
+    skillId: '11111111-1111-4111-8111-111111111111',
+    name: 'Viết đặc tả',
+    description: 'Quy trình.',
+    body: '# Body',
+  };
+
+  it('accepts 2000 characters and rejects 2001', () => {
+    expect(
+      AiSkillVersionInputSchema.parse({ ...base, evidence: 'x'.repeat(2000) }).evidence
+    ).toHaveLength(2000);
+    expect(() =>
+      AiSkillVersionInputSchema.parse({ ...base, evidence: 'x'.repeat(2001) })
+    ).toThrow(/2000/);
   });
 });

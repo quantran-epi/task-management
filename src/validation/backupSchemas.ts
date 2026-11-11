@@ -691,13 +691,15 @@ export const BackupAiSkillVersionRecordSchema = z.strictObject({
   name: aiNameSchema,
   description: aiSkillDescriptionSchema,
   body: z.string().trim().min(1, 'Body is required'),
-  evidence: z.string().optional(),
+  evidence: z.string().max(2000, 'Evidence must be at most 2000 characters').optional(),
   createdAt: z.string(),
   decidedAt: z.string().optional(),
 });
 
 /** D-49: the current backup envelope contract. Version 12 adds `aiSkillVersions`; older versions are rejected. */
-export const BACKUP_SCHEMA_VERSION = 12 as const;export const BackupEnvelopeSchema = z.object({
+export const BACKUP_SCHEMA_VERSION = 12 as const;
+
+export const BackupEnvelopeSchema = z.object({
   app: z.literal('personal-task-planner'),
   schemaVersion: z.literal(BACKUP_SCHEMA_VERSION),
   exportedAt: z.string(),

@@ -104,7 +104,6 @@ export interface BackupTableCounts {
   aiSkillVersions?: number;
 }
 
-
 export interface BackupEnvelope {
   app: 'personal-task-planner';
   schemaVersion: number;

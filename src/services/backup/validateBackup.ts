@@ -557,15 +557,6 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     return { valid: false, errors };
   }
 
-  // Normalization for schemaVersion 1 (backfill Banking IT domain fields per D-16)
-  if (candidate.schemaVersion === 1) {
-    tasks.forEach((t) => {
-      if (!t.opsOwners) t.opsOwners = [];
-      if (!t.businessAnalysts) t.businessAnalysts = [];
-      if (!t.workType) t.workType = 'code';
-    });
-  }
-
   const validEnvelope: BackupEnvelope = {
     app: APP_MARKER,
     schemaVersion: candidate.schemaVersion as number,

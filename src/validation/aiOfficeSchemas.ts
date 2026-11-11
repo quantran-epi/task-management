@@ -126,7 +126,7 @@ export const AiSkillVersionInputSchema = z.object({
   name: nameSchema,
   description: skillDescriptionSchema,
   body: z.string().trim().min(1, 'Body is required'),
-  evidence: z.string().optional(),
+  evidence: z.string().max(2000, 'Evidence must be at most 2000 characters').optional(),
 });
 
 export type AiEmployeeInput = z.infer<typeof AiEmployeeInputSchema>;
@@ -140,4 +140,3 @@ export type AiTeamInput = z.input<typeof AiTeamInputSchema>;
 export type AiTeamUpdate = z.infer<typeof AiTeamUpdateSchema>;
 export type AiTeamMemberInput = z.infer<typeof AiTeamMemberInputSchema>;
 export type AiTeamLinkInput = z.infer<typeof AiTeamLinkInputSchema>;
-export type AiSkillVersionInput = z.infer<typeof AiSkillVersionInputSchema>;

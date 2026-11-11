@@ -5,8 +5,11 @@
  * Every persisted date is an ISO string; every id is a client-generated UUID.
  *
  * The backup-schema denylist in `src/validation/backupSchemas.ts` rejects credential
- * and instruction-text field names recursively, so the only free-text carriers here
- * are `persona` (agents/leads) and `body` (skills).
+ * and instruction-text field names recursively (it matches object KEYS), so the free-text
+ * carriers here are `persona` (agents/leads), `body` (skills) and `evidence`
+ * (skill versions, capped at 2000 characters). `evidence` is exempt from the denylist
+ * because it is a value, not a key — the key-matched scan cannot see it; the length cap
+ * is what bounds it.
  */
 
 export type AiTeamStatus = 'active' | 'idle';

@@ -156,3 +156,31 @@ describe('exportBackupPayload — version 11 without project/milestone tables', 
     expect(Object.keys(envelope.tables)).not.toContain('milestones');
   });
 });
+
+describe('BackupAiSkillVersionRecordSchema evidence cap (WR-09)', () => {
+  const base = {
+    id: TASK_ID,
+    skillId: CR_ID,
+    version: 1,
+    status: 'pending' as const,
+    name: 'Viết đặc tả',
+    description: 'Quy trình.',
+    body: '# Body',
+    createdAt: NOW,
+  };
+
+  it('accepts 2000 characters and rejects 2001', () => {
+    expect(
+      backupSchemas.BackupAiSkillVersionRecordSchema.parse({
+        ...base,
+        evidence: 'x'.repeat(2000),
+      }).evidence
+    ).toHaveLength(2000);
+    expect(() =>
+      backupSchemas.BackupAiSkillVersionRecordSchema.parse({
+        ...base,
+        evidence: 'x'.repeat(2001),
+      })
+    ).toThrow(/2000/);
+  });
+});
