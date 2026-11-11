@@ -1594,7 +1594,8 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(batches).toHaveLength(1);
       expect(batches[0]).toMatchObject({
         planDecision: 'rejected',
-        abortedBy: 'user',
+        // IN-09: a rejection is not a user abort — the decision field carries the fact.
+        abortedBy: 'none',
         phaseAtEnd: 'ready',
       });
       expect(batches[0]!.endedAt).toBeDefined();

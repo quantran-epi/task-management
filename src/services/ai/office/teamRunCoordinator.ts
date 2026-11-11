@@ -1449,7 +1449,9 @@ export function createTeamRunCoordinator(
           },
           db
         );
-        await closeBatch(rejectedBatch.id, { phaseAtEnd: 'ready', abortedBy: 'user' }, db);
+        // IN-09: a rejection is not an abort — `planDecision: 'rejected'` already carries the
+        // fact, and a reader of `abortedBy` alone must not confuse it with a user Stop.
+        await closeBatch(rejectedBatch.id, { phaseAtEnd: 'ready', abortedBy: 'none' }, db);
         setPhase('ready');
         return PLAN_REJECTED;
       }
