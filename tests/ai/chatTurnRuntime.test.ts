@@ -10,6 +10,7 @@ import {
   type ChatTurnStatus,
 } from '../../src/components/ai/runtime/chatTurnRuntime';
 import type { AiOrchestratorLoopOptions } from '../../src/services/ai/aiOrchestratorLoop';
+import type { ChatCompletionMessage } from '../../src/services/ai/types';
 
 const SCOPE_KEY = 'project:11111111-1111-4111-8111-111111111111';
 
@@ -865,10 +866,14 @@ describe('chatTurnRuntime team seams (D-07, D-12, D-13, D-19, D-21)', () => {
     const rounds: number[] = [];
     const signals: AbortSignal[] = [];
     let loopSignal: AbortSignal | undefined;
+    const steer: ChatCompletionMessage[] = [
+      { role: 'user', content: '[Chỉ đạo từ người dùng] đổi hướng' },
+    ];
+    let returned: ChatCompletionMessage[] | void = undefined;
     const runtime = runtimeWith(async (options) => {
       loopSignal = options.signal;
       expect(typeof options.beforeToolRound).toBe('function');
-      await options.beforeToolRound?.(2);
+      returned = await options.beforeToolRound?.(2);
       return { fullResponse: 'ok', tokenUsage: {} };
     });
 
@@ -877,11 +882,13 @@ describe('chatTurnRuntime team seams (D-07, D-12, D-13, D-19, D-21)', () => {
       beforeToolRound: async (round, signal) => {
         rounds.push(round);
         signals.push(signal);
+        return steer;
       },
     }));
 
     expect(rounds).toEqual([2]);
     expect(signals[0]).toBe(loopSignal);
+    expect(returned).toBe(steer);
   });
 
   it('omits the beforeToolRound option when the request has no hook', async () => {

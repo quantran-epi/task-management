@@ -527,5 +527,56 @@ describe('runAiOrchestratorLoop', () => {
       expect(result.cleanResponse).toBe('xong');
       expect(mockStreamChatEvents).toHaveBeenCalledTimes(2);
     });
+
+    it('appends the messages the hook returns so the next model call sees them', async () => {
+      toolThenText();
+      const steer: ChatCompletionMessage = {
+        role: 'user',
+        content: '[Chỉ đạo từ người dùng] đổi hướng',
+      };
+      const beforeToolRound = vi.fn()
+        .mockResolvedValueOnce([steer])
+        .mockResolvedValueOnce(undefined);
+
+      await runAiOrchestratorLoop({
+        endpoint: 'https://api.example.com', apiKey: 'test-key', model: 'test-model',
+        messages: [], db: testDb, executeToolFn: vi.fn().mockResolvedValue('{}'), beforeToolRound,
+      });
+
+      const secondPayload = mockStreamChatEvents.mock.calls[1]![0].payload;
+      expect(
+        secondPayload.messages.some((m: ChatCompletionMessage) =>
+          typeof m.content === 'string' && m.content.startsWith('[Chỉ đạo từ người dùng]')
+        )
+      ).toBe(true);
+    });
+
+    it('does not append anything when the hook returns void or an empty array', async () => {
+      toolThenText();
+      const baseline = await (async () => {
+        const run = await runAiOrchestratorLoop({
+          endpoint: 'https://api.example.com', apiKey: 'test-key', model: 'test-model',
+          messages: [], db: testDb, executeToolFn: vi.fn().mockResolvedValue('{}'),
+        });
+        return run.messages.length;
+      })();
+      toolThenText();
+
+      const result = await runAiOrchestratorLoop({
+        endpoint: 'https://api.example.com', apiKey: 'test-key', model: 'test-model',
+        messages: [], db: testDb, executeToolFn: vi.fn().mockResolvedValue('{}'),
+        beforeToolRound: () => Promise.resolve([]),
+      });
+
+      expect(result.messages.length).toBe(baseline);
+      for (const [request] of mockStreamChatEvents.mock.calls) {
+        expect(
+          request.payload.messages.some(
+            (m: ChatCompletionMessage) =>
+              typeof m.content === 'string' && m.content.includes('[Chỉ đạo từ người dùng]')
+          )
+        ).toBe(false);
+      }
+    });
   });
 });
