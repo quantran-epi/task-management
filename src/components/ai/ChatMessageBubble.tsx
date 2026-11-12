@@ -110,6 +110,12 @@ export interface ChatMessageBubbleProps {
    * scrolls to the original. Absent means this message starts a thread.
    */
   replyTo?: { id: string; authorName: string; content: string } | undefined;
+  /**
+   * 37.1: who this message is addressed to. `to[]` is the obligation to respond, and without
+   * it a reader cannot tell which agent the leader just asked — the bubble only names the
+   * sender.
+   */
+  addressedTo?: Array<{ id: string; name: string }> | undefined;
 }
 
 /**
@@ -360,6 +366,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   onRetryAgent,
   seenBy,
   replyTo,
+  addressedTo,
 }) => {
   const { token } = theme.useToken();
   const [copied, setCopied] = useState(false);
@@ -1174,6 +1181,19 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       }}
     >
       {agent && <AgentAttributionRow agent={agent} />}
+      {addressedTo !== undefined && addressedTo.length > 0 && (
+        <div
+          data-testid={`addressed-to-${msg.id}`}
+          style={{
+            fontSize: 11,
+            color: token.colorTextSecondary,
+            marginBottom: 2,
+            alignSelf: isUser ? 'flex-end' : 'flex-start',
+          }}
+        >
+          → {addressedTo.map((entry) => entry.name).join(', ')}
+        </div>
+      )}
       <div
         style={{
           maxWidth: isUser ? '85%' : '95%',

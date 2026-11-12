@@ -61,6 +61,8 @@ export interface ChatMessageListProps {
    * the bottom, so the host advances the user's cursor only while this is true.
    */
   onAtBottomChange?: ((atBottom: boolean) => void) | undefined;
+  /** 37.1: recipients per message id, read from the log's `to[]`. */
+  addressedTo?: Map<string, Array<{ id: string; name: string }>> | undefined;
 }
 
 export const ChatMessageList: React.FC<ChatMessageListProps> = ({
@@ -91,6 +93,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   seenStates,
   firstUnreadMessageId,
   onAtBottomChange,
+  addressedTo,
 }) => {
   const { token } = theme.useToken();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -235,6 +238,9 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
               }
               {...(onRetryAgent ? { onRetryAgent } : {})}
               seenBy={seenStates?.get(msg.id)}
+              {...(addressedTo?.get(msg.id) !== undefined
+                ? { addressedTo: addressedTo.get(msg.id) }
+                : {})}
               {...(quoted
                 ? {
                     replyTo: {

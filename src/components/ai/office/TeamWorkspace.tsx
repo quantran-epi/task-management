@@ -409,6 +409,24 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     [teamLog, userCursorSeq]
   );
 
+  /**
+   * 37.1: who each message is addressed to, so a leader→agent message shows the agent's name.
+   * Read from the log's `to[]` — the same field routing uses, so the label cannot drift from
+   * who actually acts. The user is never listed: they are the reader, not a recipient to name.
+   */
+  const addressedTo = useMemo(() => {
+    const map = new Map<string, Array<{ id: string; name: string }>>();
+    const nameOf = new Map<string, string>();
+    for (const agent of roster) nameOf.set(agent.id, agent.name);
+    for (const message of teamLog) {
+      const named = message.to
+        .filter((id) => id !== USER_PARTICIPANT_ID)
+        .map((id) => ({ id, name: nameOf.get(id) ?? id }));
+      if (named.length > 0) map.set(message.id, named);
+    }
+    return map;
+  }, [teamLog, roster]);
+
   const seenStates = useMemo(() => {
     const map = new Map<string, MessageSeenEntry[]>();
     if (teamLog.length === 0 || teamCursors.length === 0) return map;
@@ -882,6 +900,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                     agentDirectory,
                     agentStatuses,
                     seenStates,
+                    addressedTo,
                     ...(firstUnreadMessageId !== undefined
                       ? { firstUnreadMessageId }
                       : {}),

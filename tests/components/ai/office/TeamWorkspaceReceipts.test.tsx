@@ -64,6 +64,8 @@ describe('TeamWorkspace receipts (37.1 R10, R11, R13)', () => {
   let threadId: string;
   let leadId: string;
   let employeeId: string;
+  let leadRow: Awaited<ReturnType<typeof createLead>>;
+  let employeeRow: Awaited<ReturnType<typeof createEmployee>>;
 
   beforeEach(async () => {
     db = new TaskPlannerDatabase('test-team-receipts-' + Math.random().toString(36).slice(2));
@@ -81,6 +83,7 @@ describe('TeamWorkspace receipts (37.1 R10, R11, R13)', () => {
       db
     );
     leadId = lead.id;
+    leadRow = lead;
     const employee = await createEmployee(
       {
         name: 'An Nhân viên',
@@ -92,6 +95,7 @@ describe('TeamWorkspace receipts (37.1 R10, R11, R13)', () => {
       db
     );
     employeeId = employee.id;
+    employeeRow = employee;
     team = await createTeam(
       {
         name: 'Nhóm thử',
@@ -114,9 +118,19 @@ describe('TeamWorkspace receipts (37.1 R10, R11, R13)', () => {
     render(
       <TeamWorkspace
         team={team}
-        lead={undefined}
-        members={[]}
-        employees={[]}
+        lead={leadRow}
+        members={[
+          { id: 'm-lead', teamId: team.id, agentId: leadId, role: 'lead', budgetTokens: 0, usedTokens: 0 },
+          {
+            id: 'm-emp',
+            teamId: team.id,
+            agentId: employeeId,
+            role: 'employee',
+            budgetTokens: 0,
+            usedTokens: 0,
+          },
+        ]}
+        employees={[employeeRow]}
         skills={[]}
         db={db}
         onBack={() => {}}
@@ -226,6 +240,29 @@ describe('TeamWorkspace receipts (37.1 R10, R11, R13)', () => {
       const receipt = await screen.findByTestId(`seen-${row.id}`);
       expect(receipt.textContent).toBe('✓✓');
     });
+  });
+
+  it('names who a message is addressed to', async () => {
+    const row = await saveTeamMessage(
+      { threadId, role: 'assistant', content: 'Java có kiểu Integer không?', agentId: leadId, agentName: 'Bình Lead' },
+      db
+    );
+    await appendForExistingMessage(
+      {
+        id: row.id,
+        teamId: team.id,
+        from: leadId,
+        to: [employeeId],
+        content: row.content,
+        kind: 'chat',
+        createdAt: row.createdAt,
+      },
+      db
+    );
+    renderWorkspace();
+
+    const label = await screen.findByTestId(`addressed-to-${row.id}`);
+    expect(label.textContent).toContain('An Nhân viên');
   });
 
   it('R14: a reply renders the message it answers', async () => {
