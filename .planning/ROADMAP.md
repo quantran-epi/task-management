@@ -203,14 +203,26 @@ Plans:
 **Research flag:** standard patterns — `beforeToolRound` seam exists at `src/services/ai/aiOrchestratorLoop.ts`; defects/contracts are at `file:line` in 37-CONTEXT.
 
 **Plans:** 6 plans
-
 Plans:
+**Wave 1**
 
 - [ ] 37.1-01-PLAN.md — D-24 event-driven: `dispatchBatch` + `onBatchSettled`, batch abort controller, per-turn usage baseline, team turn lifetime
 - [ ] 37.1-02-PLAN.md — return-value `beforeToolRound` hook firing on round 1
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 37.1-03-PLAN.md — persisted contract: `'steer'` in six `messageKind` sites, `steerMessageIds`, `'leader-amend'`, `'skipped'`
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 37.1-04-PLAN.md — `send()` steer routing, leader-as-gate `deliver_steer`, inbox drain, lead prompt, SC5 teardown
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 37.1-05-PLAN.md — `amend_assignments` (cancel/rewrite `queued`)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 37.1-06-PLAN.md — team chat UI: remove outbox + streaming bubbles, inline indicator + popover, hover-gated Stop
 
 ### Phase 38: Hard token budget + accurate measurement

@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
-status: verifying
+status: executing
 stopped_at: Phase 37.1 context gathered
-last_updated: "2026-11-12T01:57:18.835Z"
+last_updated: "2026-11-12T04:01:23.784Z"
 last_activity: 2026-11-12 — Phase 37 execution started
 progress:
   total_phases: 7
@@ -21,20 +21,20 @@ current_phase_name: Runtime reliability + concurrency
 See: .planning/PROJECT.md (updated 2026-11-09)
 
 **Core value:** Hợp nhất SDLC Studio và AI Office thành Unified AI Office dạng chat-first, free-style với token budget cứng và làm giàu skill.
-**Current focus:** Phase 37 — Runtime reliability + concurrency
+**Current focus:** Phase 37.1 — Live steering
 
 ## Current Position
 
-Phase: 37 (Runtime reliability + concurrency) — EXECUTING
-Plan: 8 of 8
-Status: Phase complete — ready for verification
-Last activity: 2026-11-12 — Phase 37 execution started
+Phase: 37.1 (Live steering — leader amends assignments and steers running agents mid-run) — PLANNED
+Plan: 0 of 6
+Status: Ready to execute
+Last activity: 2026-11-12 — Phase 37.1 planned (6 plans, 5 waves)
 
 ## Session Continuity
 
 Last session: 2026-11-12T01:57:18.830Z
-Stopped at: Phase 37.1 context gathered
-Resume file: .planning/phases/37.1-live-steering-leader-amends-assignments-and-steers-running-a/37.1-CONTEXT.md
+Stopped at: Phase 37.1 planned — ready for /gsd-execute-phase 37.1
+Resume file: .planning/phases/37.1-live-steering-leader-amends-assignments-and-steers-running-a/37.1-01-PLAN.md
 
 Progress: [█████░░░░░] 50%
 
