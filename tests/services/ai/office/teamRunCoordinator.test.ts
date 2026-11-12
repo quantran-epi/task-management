@@ -5322,11 +5322,13 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       // No replacement attempt was created.
       expect(target.map((row) => row.attemptNo)).toEqual([1]);
     });
-    // WR-03: only a REWRITE can lose a delivered steer. A cancel ends the row, and the badge
-    // derivation already suppresses a terminal attempt, so the guard must not block it.
-    it('allows a cancel on a queued row that holds a delivered steer', async () => {
+    // IN-01: a cancel ends the row, and the badge derivation suppresses a terminal attempt —
+    // so a steer the agent never read would render as delivered. Both ops are refused while a
+    // delivered steer is still undrained.
+    it('refuses a cancel on a queued row that holds a delivered steer', async () => {
       const gate = deferred();
       let response = '';
+      let statusAfterRefusal = '';
       harness = await createHarness({
         teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
         scripts: {
@@ -5359,7 +5361,9 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
               harness!.db,
               options.signal
             );
-            return loopResult('Đã huỷ.');
+            // Read before the gate opens: the refusal must not have ended the row.
+            statusAfterRefusal = (await harness!.db.aiTeamAssignments.get(cancel.id))!.runStatus;
+            return loopResult('Không huỷ được.');
           },
           [EMP_A_MODEL]: async () => {
             await gate.promise;
@@ -5378,11 +5382,9 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       await sent;
       await waitForReady(current.coordinator);
 
-      expect(JSON.parse(response)).toMatchObject({ applied: [{ op: 'cancel' }] });
-      const cancelled = (await current.db.aiTeamAssignments.toArray()).find(
-        (row) => row.agentId === current.employees[2]!.id
-      )!;
-      expect(cancelled).toMatchObject({ runStatus: 'stopped', stopReason: 'leader-amend' });
+      expect(JSON.parse(response)).toMatchObject({ refused: true, code: 'STEER_PENDING' });
+      // The row was still queued when the refusal came back — the cancel never landed.
+      expect(statusAfterRefusal).toBe('queued');
     });
   });
 });

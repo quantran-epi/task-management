@@ -1857,17 +1857,20 @@ export function createTeamRunCoordinator(
           message: 'Chỉ huỷ hoặc sửa được việc đang xếp hàng. Việc đang chạy chỉ nhận chỉ đạo.',
         });
       }
-      // CR-03/WR-03: a queued row can already hold delivered-but-undrained steers (D-28). A
-      // replacement row would not carry them, so the user's instruction would vanish after
-      // `deliver_steer` reported success. Only a REWRITE loses them — a cancel ends the row,
-      // and the badge derivation already suppresses a terminal attempt — so the guard is
-      // scoped to `rewrite_task` and names the real condition.
-      if (operation.op === 'rewrite_task' && (row.steerMessageIds ?? []).length > 0) {
+      // CR-03/WR-03/IN-01: a queued row can already hold delivered-but-undrained steers
+      // (D-28). Neither amend op can carry them: a replacement row would not inherit them,
+      // and a cancel ends the row — the badge derivation suppresses a terminal attempt, so a
+      // steer the agent never read would render as delivered. Refuse BOTH while any steer is
+      // pending; the leader must let the agent read it first (it drains on the first round of
+      // its turn). A row that never starts is still ended by the settle-poll deadline.
+      if ((row.steerMessageIds ?? []).length > 0) {
         return JSON.stringify({
           refused: true,
           code: 'STEER_PENDING',
           message:
-            'Việc này đang có chỉ đạo chưa đọc. Hãy để nhân viên nhận chỉ đạo trước khi sửa việc.',
+            operation.op === 'rewrite_task'
+              ? 'Việc này đang có chỉ đạo chưa đọc. Hãy để nhân viên nhận chỉ đạo trước khi sửa việc.'
+              : 'Việc này đang có chỉ đạo chưa đọc. Hãy để nhân viên nhận chỉ đạo trước khi huỷ việc.',
         });
       }
       if (operation.op === 'rewrite_task' && batchController === undefined) {
