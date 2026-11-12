@@ -205,3 +205,222 @@ describe('delete a team mid-run through disposeRun + deleteTeam (SC5, D-18)', ()
     expect(aiTurnManager.getActiveTurns()).toHaveLength(0);
   }, 20000);
 });
+
+describe('delete a team while a steer is in flight (SC5)', () => {
+  let db: TaskPlannerDatabase | null = null;
+
+  afterEach(async () => {
+    aiTurnManager.abortAll();
+    for (const turn of aiTurnManager.getAllTurns()) aiTurnManager.finishTurn(turn.id);
+    if (db) await db.delete();
+    db = null;
+  });
+
+  /** Shared fixture: a real coordinator with one employee parked on a gate. */
+  async function setup() {
+    const gate = deferred();
+    const steerTurnGate = deferred();
+    const startedModels: string[] = [];
+    /** Proves the steer turn was really in flight when the teardown landed. */
+    const steerTurnStarted = { count: 0 };
+
+    db = new TaskPlannerDatabase('TestDisposeSteer_' + Math.random().toString(36).slice(2));
+    await db.open();
+
+    const lead = await createLead(
+      {
+        name: 'Minh',
+        role: 'Trưởng nhóm',
+        capability: 'Điều phối',
+        persona: 'Bạn là Minh.',
+        model: LEAD_MODEL,
+      },
+      db
+    );
+    const employees: AiEmployee[] = [];
+    for (let index = 0; index < EMP_MODELS.length; index += 1) {
+      employees.push(
+        await createEmployee(
+          {
+            name: `Nhân viên ${index + 1}`,
+            role: 'Chuyên viên',
+            capability: 'Hỗ trợ',
+            persona: `Bạn là nhân viên ${index + 1}.`,
+            model: EMP_MODELS[index]!,
+          },
+          db
+        )
+      );
+    }
+    const team: AiTeam = await createTeam(
+      {
+        name: 'Nhóm xoá giữa chỉ đạo',
+        status: 'active',
+        budgetTokens: 3000,
+        autoSplitEnabled: true,
+        concurrencyLimit: 3,
+        leadId: lead.id,
+        employeeIds: employees.map((row) => row.id),
+      },
+      db
+    );
+    const threadId = (await ensureTeamThread(team.id, db)).id;
+
+    const scripts: Record<string, LoopScript> = {
+      [LEAD_MODEL]: async (options) => {
+        const last = String(options.messages.at(-1)?.content ?? '');
+        if (last === 'Làm báo cáo') {
+          await options.executeToolFn!(
+            'delegate_batch',
+            {
+              assignments: employees.map((row, index) => ({
+                agentId: row.id,
+                task: `Việc ${index + 1}`,
+              })),
+            },
+            db!,
+            options.signal
+          );
+          return loopResult('Xong.');
+        }
+        // The steer turn: park so the teardown lands while it is in flight.
+        steerTurnStarted.count += 1;
+        await steerTurnGate.promise;
+        return loopResult('Đã đọc chỉ đạo.');
+      },
+    };
+    for (const model of EMP_MODELS) {
+      scripts[model] = async () => {
+        startedModels.push(model);
+        await gate.promise;
+        return loopResult(`báo cáo ${model}`);
+      };
+    }
+
+    const createRuntimeDeps = (agentId: string): Partial<ChatTurnRuntimeDeps> => ({
+      runLoop: ((loopOptions: AiOrchestratorLoopOptions) => {
+        const script = scripts[loopOptions.model];
+        if (!script) throw new Error(`No script for model ${loopOptions.model} (agent ${agentId})`);
+        return script(loopOptions);
+      }) as unknown as ChatTurnRuntimeDeps['runLoop'],
+    });
+
+    const coordinator: TeamRunCoordinator = await getOrCreateRun(db, team.id, threadId, () =>
+      createTeamRunCoordinator({
+        db: db!,
+        team,
+        lead,
+        employees,
+        skills: [],
+        threadId,
+        model: LEAD_MODEL,
+        endpoint: 'https://example.invalid/v1',
+        apiKey: 'sk-test',
+        createRuntimeDeps,
+      })
+    );
+
+    return {
+      gate,
+      steerTurnGate,
+      startedModels,
+      steerTurnStarted,
+      coordinator,
+      team,
+      threadId,
+      employees,
+    };
+  }
+
+  it('an in-flight steer turn leaves no active turns', async () => {
+    const { gate, steerTurnGate, steerTurnStarted, coordinator, team } = await setup();
+
+    const sent = coordinator.send('Làm báo cáo');
+    await waitFor(() => coordinator.getState().phase === 'batch-running');
+    await waitFor(() => coordinator.getState().agents.filter((r) => r.status === 'running').length === 3);
+
+    await expect(coordinator.send('chỉ đạo giữa lô')).resolves.toBe('steered');
+    expect(coordinator.getState().pendingSteerMessageIds).toHaveLength(1);
+    await waitFor(() => steerTurnStarted.count === 1);
+
+    await disposeRun(db!, team.id);
+    await deleteTeam(team.id, db!);
+
+    gate.release();
+    steerTurnGate.release();
+    await sent;
+
+    await waitFor(() => aiTurnManager.getActiveTurns().length === 0, PURGE_WINDOW_MS + 2000);
+    expect(aiTurnManager.getActiveTurns()).toHaveLength(0);
+    expect(coordinator.getState().pendingSteerMessageIds).toEqual([]);
+    expect(coordinator.getState().undeliveredSteerCountByAgent).toEqual({});
+  }, 20000);
+
+  it('no row is written after deletedAt', async () => {
+    const { gate, steerTurnGate, coordinator, team, threadId } = await setup();
+
+    const sent = coordinator.send('Làm báo cáo');
+    await waitFor(() => coordinator.getState().phase === 'batch-running');
+    await waitFor(() => coordinator.getState().agents.filter((r) => r.status === 'running').length === 3);
+    await coordinator.send('chỉ đạo giữa lô');
+    await waitFor(() => coordinator.getState().pendingSteerMessageIds.length === 1);
+
+    // Asserted BEFORE `deleteTeam`: that call empties both tables, so a post-delete
+    // assertion would pass trivially.
+    const cutoff = new Date().toISOString();
+    await disposeRun(db!, team.id);
+    await sleep(50);
+
+    const messages = await db!.chatMessages.where('threadId').equals(threadId).toArray();
+    expect(messages.filter((row) => row.createdAt > cutoff)).toHaveLength(0);
+
+    const assignments = await db!.aiTeamAssignments.toArray();
+    for (const row of assignments) {
+      // `AiTeamAssignment` has no `createdAt`/`updatedAt` — asserting either is vacuous.
+      expect(row.queuedAt > cutoff).toBe(false);
+      if (row.startedAt !== undefined) expect(row.startedAt > cutoff).toBe(false);
+      if (row.endedAt !== undefined) expect(row.endedAt > cutoff).toBe(false);
+    }
+
+    gate.release();
+    steerTurnGate.release();
+    await sent;
+    await deleteTeam(team.id, db!);
+    await waitFor(() => aiTurnManager.getActiveTurns().length === 0, PURGE_WINDOW_MS + 2000);
+  }, 20000);
+
+  it('a delivered-but-undrained steer id is not cleared by a post-dispose drain', async () => {
+    const { gate, steerTurnGate, coordinator, team, employees } = await setup();
+
+    const sent = coordinator.send('Làm báo cáo');
+    await waitFor(() => coordinator.getState().phase === 'batch-running');
+    await waitFor(() => coordinator.getState().agents.filter((r) => r.status === 'running').length === 3);
+
+    // `steer()` never writes the field (D-28), so deliver first — the scenario under test is
+    // a DELIVERED id surviving teardown, not an undelivered one.
+    const target = employees[0]!;
+    await coordinator.send(`@[${target.name}](agent:${target.id}) đổi hướng`);
+    const steerId = coordinator.getState().pendingSteerMessageIds[0]!;
+    expect(steerId).toBeDefined();
+
+    const assignment = (await db!.aiTeamAssignments.toArray()).find(
+      (row) => row.agentId === target.id
+    )!;
+    // Write the delivery state directly: the tool path needs a live lead turn, and the
+    // behaviour under test is the DRAIN's disposed gate, not `deliver_steer`.
+    await db!.aiTeamAssignments.update(assignment.id, { steerMessageIds: [steerId] });
+
+    // `disposeRun` ONLY — `deleteTeam` would empty the table and make the assertion vacuous.
+    await disposeRun(db!, team.id);
+
+    const injected = await coordinator.drainSteerInbox(target.id, assignment.id);
+    expect(injected).toEqual([]);
+    const after = await db!.aiTeamAssignments.get(assignment.id);
+    expect(after?.steerMessageIds).toEqual([steerId]);
+
+    gate.release();
+    steerTurnGate.release();
+    await sent;
+    await waitFor(() => aiTurnManager.getActiveTurns().length === 0, PURGE_WINDOW_MS + 2000);
+  }, 20000);
+});
