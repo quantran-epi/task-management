@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Avatar, Button, Tag, theme } from 'antd';
 import { CrownOutlined, PauseCircleOutlined, StopOutlined, SyncOutlined } from '@ant-design/icons';
 import type { AgentRunStatus, AiTeamAssignmentRunStatus } from '../../../types/aiOffice';
@@ -81,6 +81,14 @@ export const AgentStatusRow: React.FC<AgentStatusRowProps> = ({
   onRetry,
   idPrefix = 'agent',
 }) => {
+  // 37.1 D-23: a normally-running agent keeps the transcript clean — its buttons appear on
+  // hover or keyboard focus. A stopped/errored one shows them permanently so "Chạy lại" is
+  // always reachable. Opacity, not unmounting: `TeamWorkspace.handleKeyDown` walks
+  // `[data-testid^="agent-stop-"]` to move focus between agents. Declared before the
+  // `done` early return so the hook order is stable.
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+
   if (status === 'done') return null;
 
   const badge = (() => {
@@ -117,35 +125,53 @@ export const AgentStatusRow: React.FC<AgentStatusRowProps> = ({
   // refused — with the only call site discarding the rejection.
   const showRetry = status === 'stopped' || status === 'error';
 
+  const alwaysVisible = status === 'stopped' || status === 'error';
+  const actionsVisible = alwaysVisible || hovered || focused;
+
   return (
     <div
       data-testid={`agent-status-${agent.agentId}`}
       style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
     >
       {badge}
-      {onRetry && assignmentId && showRetry && (
-        <Button
-          type="text"
-          size="small"
-          style={{ height: 22, padding: '0 6px', fontSize: 12 }}
-          data-testid={`${idPrefix}-retry-${assignmentId}`}
-          onClick={onRetry}
-        >
-          Chạy lại
-        </Button>
-      )}
-      {showStop && (
-        <Button
-          type="text"
-          size="small"
-          danger
-          icon={<StopOutlined />}
-          style={{ width: 22, height: 22, padding: 0 }}
-          aria-label={`Dừng ${agent.name}`}
-          data-testid={`${idPrefix}-stop-${agent.agentId}`}
-          onClick={onStop}
-        />
-      )}
+      <div
+        data-testid={`agent-actions-${agent.agentId}`}
+        data-visible={actionsVisible ? 'true' : 'false'}
+        style={{
+          display: 'flex',
+          gap: 4,
+          opacity: actionsVisible ? 1 : 0,
+          transition: 'opacity .12s',
+        }}
+      >
+        {onRetry && assignmentId && showRetry && (
+          <Button
+            type="text"
+            size="small"
+            style={{ height: 22, padding: '0 6px', fontSize: 12 }}
+            data-testid={`${idPrefix}-retry-${assignmentId}`}
+            onClick={onRetry}
+          >
+            Chạy lại
+          </Button>
+        )}
+        {showStop && (
+          <Button
+            type="text"
+            size="small"
+            danger
+            icon={<StopOutlined />}
+            style={{ width: 22, height: 22, padding: 0 }}
+            aria-label={`Dừng ${agent.name}`}
+            data-testid={`${idPrefix}-stop-${agent.agentId}`}
+            onClick={onStop}
+          />
+        )}
+      </div>
     </div>
   );
 };

@@ -26,7 +26,6 @@ describe('AgentStatusRow — queued (D-10)', () => {
     fireEvent.click(stop);
     expect(onStop).toHaveBeenCalledTimes(1);
   });
-
   it('renders nothing for a done agent', () => {
     const { container } = render(<AgentStatusRow agent={agent} status="done" onStop={vi.fn()} />);
     expect(container).toBeEmptyDOMElement();
@@ -129,6 +128,50 @@ describe('AgentStatusRow — idPrefix (37.1)', () => {
   it('defaults to the agent prefix', () => {
     render(<AgentStatusRow agent={agent} status="running" onStop={vi.fn()} />);
 
+    expect(screen.getByTestId('agent-stop-agent-1')).toBeInTheDocument();
+  });
+});
+
+describe('AgentStatusRow — hover-gated actions (37.1 D-23)', () => {
+  const actions = () => screen.getByTestId('agent-actions-agent-1');
+
+  it.each(['queued', 'running', 'paused'] as const)(
+    'hides the actions for a %s agent until hover',
+    (status) => {
+      render(<AgentStatusRow agent={agent} status={status} onStop={vi.fn()} />);
+
+      expect(actions().getAttribute('data-visible')).toBe('false');
+      fireEvent.mouseEnter(screen.getByTestId('agent-status-agent-1'));
+      expect(actions().getAttribute('data-visible')).toBe('true');
+      fireEvent.mouseLeave(screen.getByTestId('agent-status-agent-1'));
+      expect(actions().getAttribute('data-visible')).toBe('false');
+    }
+  );
+
+  it.each(['stopped', 'error'] as const)(
+    'shows the actions permanently for a %s agent',
+    (status) => {
+      render(
+        <AgentStatusRow agent={agent} status={status} assignmentId="assignment-A" onRetry={vi.fn()} />
+      );
+
+      expect(actions().getAttribute('data-visible')).toBe('true');
+      expect(screen.getByTestId('agent-retry-assignment-A')).toBeInTheDocument();
+    }
+  );
+
+  it('reveals the actions on keyboard focus', () => {
+    render(<AgentStatusRow agent={agent} status="running" onStop={vi.fn()} />);
+
+    expect(actions().getAttribute('data-visible')).toBe('false');
+    fireEvent.focus(screen.getByTestId('agent-stop-agent-1'));
+    expect(actions().getAttribute('data-visible')).toBe('true');
+  });
+
+  it('keeps the buttons in the DOM while hidden so arrow-key focus still finds them', () => {
+    render(<AgentStatusRow agent={agent} status="running" onStop={vi.fn()} />);
+
+    expect(actions().getAttribute('data-visible')).toBe('false');
     expect(screen.getByTestId('agent-stop-agent-1')).toBeInTheDocument();
   });
 });

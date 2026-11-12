@@ -51,6 +51,8 @@ export interface ChatMessageListProps {
   onStopAgent?: ((agentId: string) => void) | undefined;
   /** 37-08 D-13: retry one assignment attempt, read from the persisted message row. */
   onRetryAgent?: ((assignmentId: string) => void) | undefined;
+  /** 37.1 D-03: per-steer-row delivery state, keyed by message id. Absent = delivered. */
+  steerStates?: Map<string, 'pending' | 'held'> | undefined;
 }
 
 export const ChatMessageList: React.FC<ChatMessageListProps> = ({
@@ -78,6 +80,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   agentStatuses,
   onStopAgent,
   onRetryAgent,
+  steerStates,
 }) => {
   const { token } = theme.useToken();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -188,6 +191,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
                 msg.agentId && onStopAgent ? () => onStopAgent(msg.agentId!) : undefined
               }
               {...(onRetryAgent ? { onRetryAgent } : {})}
+              steerState={steerStates?.get(msg.id)}
             />
           </React.Fragment>
         );

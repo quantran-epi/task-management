@@ -35,8 +35,8 @@ export interface TeamActivityIndicatorProps {
  * no spinner, no second line. Clicking it opens the per-agent detail popover, which is
  * also the only Stop affordance for a QUEUED agent once the live bubbles are gone.
  *
- * T-37.1-06-02: reads `status` and `steps` only — never `streamingText`, so a half-written
- * answer cannot leak through this surface.
+ * T-37.1-06-02: reads `status` and `steps` only — never the partial answer text, so a
+ * half-written reply cannot leak through this surface.
  */
 export const TeamActivityIndicator: React.FC<TeamActivityIndicatorProps> = ({
   phase,

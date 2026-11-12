@@ -94,6 +94,11 @@ export interface ChatMessageBubbleProps {
   onStopAgent?: (() => void) | undefined;
   /** 37-08 D-13: retry of one assignment attempt; absent means this surface cannot retry. */
   onRetryAgent?: ((assignmentId: string) => void) | undefined;
+  /**
+   * 37.1 D-03/D-15: the steer row's delivery state. `'pending'` = the leader has not read
+   * it yet, `'held'` = read but not handed to an agent, undefined = delivered (no badge).
+   */
+  steerState?: 'pending' | 'held' | undefined;
 }
 
 /**
@@ -342,6 +347,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   agentStatus,
   onStopAgent,
   onRetryAgent,
+  steerState,
 }) => {
   const { token } = theme.useToken();
   const [copied, setCopied] = useState(false);
@@ -1155,6 +1161,25 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       }}
     >
       {agent && <AgentAttributionRow agent={agent} />}
+      {/* 37.1 D-15: a steer row is a USER row — the caption names its target so it can never
+          be mistaken for an agent bubble. D-03: the badge walks pending -> held -> gone. */}
+      {msg.messageKind === 'steer' && (
+        <div
+          data-testid={`steer-label-${msg.id}`}
+          style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}
+        >
+          <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
+            {msg.targetAgentId === undefined
+              ? 'Chỉ đạo'
+              : 'Chỉ đạo → ' + (agent?.name ?? msg.targetAgentId)}
+          </Tag>
+          {steerState !== undefined && (
+            <Tag style={{ margin: 0, fontSize: 11 }} data-testid={`steer-badge-${msg.id}`}>
+              {steerState === 'pending' ? 'chờ leader đọc' : 'chưa giao'}
+            </Tag>
+          )}
+        </div>
+      )}
       <div
         style={{
           maxWidth: isUser ? '85%' : '95%',

@@ -3,7 +3,14 @@ import { Alert, Avatar, Button, Modal, Splitter, Tag, Typography, theme } from '
 import { BugOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { TaskPlannerDatabase } from '../../../db';
-import type { AiEmployee, AiLead, AiSkill, AiTeam, AiTeamMember } from '../../../types/aiOffice';
+import type {
+  AiEmployee,
+  AiLead,
+  AiSkill,
+  AiTeam,
+  AiTeamAssignment,
+  AiTeamMember,
+} from '../../../types/aiOffice';
 import {
   addTeamLink,
   addTeamMember,
@@ -360,6 +367,41 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     }
     return map;
   }, [roster, team.leadId]);
+
+  // 37.1 D-03: a steer row's delivery state. `steerMessageIds` is NOT indexed, so the read
+  // is scoped by `batchId` (which IS indexed) — otherwise every assignment write would
+  // trigger a full-table scan.
+  const steerBatchIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const row of messages) {
+      if (row.messageKind === 'steer' && row.batchId !== undefined) ids.add(row.batchId);
+    }
+    return [...ids];
+  }, [messages]);
+  const steerAssignments = useLiveQuery<AiTeamAssignment[]>(
+    () =>
+      steerBatchIds.length === 0
+        ? Promise.resolve([])
+        : db.aiTeamAssignments.where('batchId').anyOf(steerBatchIds).toArray(),
+    [db, steerBatchIds.join(',')]
+  ) ?? [];
+  const deliveredSteerIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const row of steerAssignments) {
+      for (const id of row.steerMessageIds ?? []) ids.add(id);
+    }
+    return ids;
+  }, [steerAssignments]);
+  const steerStates = useMemo(() => {
+    const map = new Map<string, 'pending' | 'held'>();
+    const pending = new Set(snapshot.pendingSteerMessageIds);
+    for (const row of messages) {
+      if (row.messageKind !== 'steer') continue;
+      if (deliveredSteerIds.has(row.id)) continue;
+      map.set(row.id, pending.has(row.id) ? 'pending' : 'held');
+    }
+    return map;
+  }, [messages, snapshot.pendingSteerMessageIds, deliveredSteerIds]);
 
   const agentStatuses = useMemo(() => {
     const map = new Map<string, 'queued' | 'running' | 'paused' | 'stopped' | 'error' | 'done'>();
@@ -729,8 +771,9 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                   }}
                   messages={messages}
                   turn={{
-                    // WR-11: the coordinator renders one attributed bubble per live agent,
-                    // so the widget's anonymous streaming bubble is suppressed here.
+                    // 37.1 D-19: the team transcript never streams. An assistant bubble appears
+                    // only once its turn completes, so the widget's anonymous streaming bubble
+                    // is suppressed here and `TeamActivityIndicator` carries the live state.
                     status: 'idle',
                     streamingText: '',
                     streamingStatusLabel: null,
@@ -776,6 +819,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                   messageListExtensions={{
                     agentDirectory,
                     agentStatuses,
+                    steerStates,
                     ...(coordinator ? { onStopAgent: (agentId: string) => coordinator.stopAgent(agentId) } : {}),
                     // 37-08 D-13: same extension path as onStopAgent — no new widget API.
                     // WR-02: a refusal (busy phase, disposed run) must land somewhere the
