@@ -1526,12 +1526,18 @@ export function createTeamRunCoordinator(
       injectedSteerIdsByAttempt.get(attempt.assignmentId) ?? new Set<string>();
     const fresh = delivered.filter((id) => !injected.has(id));
     if (fresh.length === 0) return [];
+    // WR-01 (pass 6): claim the ids BEFORE the await. The settle-poll deadline reads this set
+    // to decide which markers are safe to drop; claiming after `bulkGet` left a window where a
+    // steer being read right now looked undrained and lost its marker.
+    for (const id of fresh) injected.add(id);
+    injectedSteerIdsByAttempt.set(attempt.assignmentId, injected);
     const messages = await db.chatMessages.bulkGet(fresh);
     // 37.1 SC5: a teardown must leave the ledger honest for the post-relaunch `undelivered`
     // read (D-14) — and must not consume a steer nobody read.
-    if (disposed) return [];
-    for (const id of fresh) injected.add(id);
-    injectedSteerIdsByAttempt.set(attempt.assignmentId, injected);
+    if (disposed) {
+      for (const id of fresh) injected.delete(id);
+      return [];
+    }
     notify();
     return messages
       .filter((message): message is ChatMessage => message !== undefined)
@@ -1928,6 +1934,9 @@ export function createTeamRunCoordinator(
     // WR-04: rows that lost the `queued -> running` race after pre-validation. Reported, not
     // silently dropped — the leader's report must match the ledger (T-37.1-24).
     const refused: Array<{ assignmentId: string; code: 'NOT_QUEUED' }> = [];
+    // WR-02 (pass 6): a failed replacement write is a different cause from a lost race, so
+    // the summary message must not claim the row started running.
+    let createFailed = false;
     for (const operation of operations) {
       const row = byId.get(operation.assignmentId)!;
 
@@ -2029,6 +2038,10 @@ export function createTeamRunCoordinator(
         // here, then drop the marker so the row's identity guard is not left armed.
         settleAgent(row.agentId, 'stopped', undefined, row.id);
         retiredAssignmentIds.delete(row.id);
+        // WR-02 (pass 6): the cause is a failed replacement write, not a row that started
+        // running — the old row is already `skipped` and the transcript says so. Reporting
+        // "vừa bắt đầu chạy" would be a false statement the leader repeats to the user.
+        createFailed = true;
         refused.push({ assignmentId: row.id, code: 'NOT_QUEUED' });
         continue;
       }
@@ -2062,7 +2075,9 @@ export function createTeamRunCoordinator(
         applied,
         refused: true,
         code: 'NOT_QUEUED',
-        message: 'Một số việc vừa bắt đầu chạy nên không sửa được. Việc đang chạy chỉ nhận chỉ đạo.',
+        message: createFailed
+          ? 'Một số việc không tạo được bản sửa. Việc cũ đã dừng, hãy giao lại nếu cần.'
+          : 'Một số việc vừa bắt đầu chạy nên không sửa được. Việc đang chạy chỉ nhận chỉ đạo.',
       });
     }
     return JSON.stringify({ applied });
@@ -2531,15 +2546,21 @@ export function createTeamRunCoordinator(
               // terminal, so no later round can drain it: drop only the ids never injected
               // (an injected one WAS read). Inside a transaction so a concurrent write during
               // this await cannot be lost (CR-05).
-              const injected = injectedSteerIdsByAttempt.get(row.id);
-              await db.transaction('rw', [db.aiTeamAssignments], async () => {
-                const live = await db.aiTeamAssignments.get(row.id);
-                const ids = live?.steerMessageIds ?? [];
-                const kept = ids.filter((id) => injected?.has(id) ?? false);
-                if (kept.length !== ids.length) {
-                  await db.aiTeamAssignments.update(row.id, { steerMessageIds: kept });
-                }
-              });
+              //
+              // WR-01 (pass 6): `dispose()` clears `injectedSteerIdsByAttempt`, so after a
+              // teardown every id would look undrained. The ledger is the user's only record
+              // then — leave it untouched.
+              if (!disposed) {
+                const injected = injectedSteerIdsByAttempt.get(row.id);
+                await db.transaction('rw', [db.aiTeamAssignments], async () => {
+                  const live = await db.aiTeamAssignments.get(row.id);
+                  const ids = live?.steerMessageIds ?? [];
+                  const kept = ids.filter((id) => injected?.has(id) ?? false);
+                  if (kept.length !== ids.length) {
+                    await db.aiTeamAssignments.update(row.id, { steerMessageIds: kept });
+                  }
+                });
+              }
             } finally {
               userStopped.delete(row.agentId);
             }
