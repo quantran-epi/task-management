@@ -73,9 +73,9 @@ describe('teamTools — transcript search and skill reader (AIO-MEM-02, AIO-MEM-
     );
   }
 
-  it('exposes the seven team tool definitions', () => {
+  it('exposes the eight team tool definitions', () => {
     const names = TEAM_TOOL_DEFINITIONS.map((tool) => tool.function.name);
-    expect(names).toHaveLength(7);
+    expect(names).toHaveLength(8);
     expect(names).toEqual(
       expect.arrayContaining([
         'search_team_history',
@@ -85,6 +85,7 @@ describe('teamTools — transcript search and skill reader (AIO-MEM-02, AIO-MEM-
         'get_linked_context',
         'delegate_batch',
         'deliver_steer',
+        'amend_assignments',
       ])
     );
   });
@@ -556,12 +557,96 @@ describe('teamTools — delegate_batch validation (AIO-TEAM-02, D-02, D-03, D-33
     expect(TEAM_TOOL_DEFINITIONS.map((tool) => tool.function.name)).toContain('delegate_batch');
   });
 
-  it('declares delegate_batch and deliver_steer as the lead-only set (D-27/D-28)', () => {
+  it('declares delegate_batch, deliver_steer and amend_assignments as the lead-only set (D-27/D-28)', () => {
     expect(LEAD_ONLY_TEAM_TOOLS.has('delegate_batch')).toBe(true);
     expect(LEAD_ONLY_TEAM_TOOLS.has('deliver_steer')).toBe(true);
+    expect(LEAD_ONLY_TEAM_TOOLS.has('amend_assignments')).toBe(true);
     expect(LEAD_ONLY_TEAM_TOOLS.has('search_team_history')).toBe(false);
-    expect(EMPLOYEE_READ_ONLY_ALLOWLIST).not.toContain('deliver_steer');
-    expect(AI_DATABASE_TOOLS.map((tool) => tool.function.name)).not.toContain('deliver_steer');
+    for (const name of ['delegate_batch', 'deliver_steer', 'amend_assignments']) {
+      expect(EMPLOYEE_READ_ONLY_ALLOWLIST).not.toContain(name);
+      expect(AI_DATABASE_TOOLS.map((tool) => tool.function.name)).not.toContain(name);
+    }
+  });
+});
+
+describe('teamTools — amend_assignments validation (37.1 D-06/D-07/D-27)', () => {
+  let db: TaskPlannerDatabase;
+
+  const ctx = (): TeamToolContext => ({
+    db,
+    teamId: 'team-1',
+    threadId: 'thread-1',
+    agentId: 'agent-1',
+  });
+
+  beforeEach(async () => {
+    db = new TaskPlannerDatabase('TestTeamToolsAmend_' + Math.random().toString(36).slice(2));
+    await db.open();
+  });
+
+  afterEach(async () => {
+    await db.delete();
+  });
+
+  it('refuses an empty or missing operations list with EMPTY_BATCH', async () => {
+    for (const args of [{ operations: [] }, {}]) {
+      const result = JSON.parse(await executeTeamTool('amend_assignments', args, ctx()));
+      expect(result).toMatchObject({ refused: true, code: 'EMPTY_BATCH' });
+    }
+  });
+
+  it('refuses an unknown op without writing anything', async () => {
+    const result = JSON.parse(
+      await executeTeamTool(
+        'amend_assignments',
+        { operations: [{ op: 'delete', assignmentId: 'a-1' }] },
+        ctx()
+      )
+    );
+    expect(result).toMatchObject({ refused: true, code: 'NOT_QUEUED' });
+    expect(await db.aiTeamAssignments.count()).toBe(0);
+  });
+
+  it('refuses a rewrite_task with no new task', async () => {
+    const result = JSON.parse(
+      await executeTeamTool(
+        'amend_assignments',
+        { operations: [{ op: 'rewrite_task', assignmentId: 'a-1' }] },
+        ctx()
+      )
+    );
+    expect(result).toMatchObject({ refused: true, code: 'NOT_QUEUED' });
+    expect(result.message).toContain('Thiếu nội dung mới');
+  });
+
+  it('refuses a missing assignmentId', async () => {
+    const result = JSON.parse(
+      await executeTeamTool('amend_assignments', { operations: [{ op: 'cancel' }] }, ctx())
+    );
+    expect(result).toMatchObject({ refused: true, code: 'NOT_QUEUED' });
+    expect(result.message).toContain('Thiếu id');
+  });
+
+  it('normalizes a valid two-op list', async () => {
+    const result = JSON.parse(
+      await executeTeamTool(
+        'amend_assignments',
+        {
+          operations: [
+            { op: 'cancel', assignmentId: 'a-1', reason: 'không cần nữa' },
+            { op: 'rewrite_task', assignmentId: 'a-2', task: 'Việc mới' },
+          ],
+        },
+        ctx()
+      )
+    );
+
+    expect(result).toEqual({
+      operations: [
+        { op: 'cancel', assignmentId: 'a-1', reason: 'không cần nữa' },
+        { op: 'rewrite_task', assignmentId: 'a-2', task: 'Việc mới' },
+      ],
+    });
   });
 });
 

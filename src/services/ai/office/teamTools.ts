@@ -32,7 +32,9 @@ export type TeamToolRefusalCode =
   | 'ITEM_NOT_LINKED'
   | 'AGENT_NOT_IN_ROSTER'
   | 'EMPTY_BATCH'
-  | 'INVALID_ARGUMENT';
+  | 'INVALID_ARGUMENT'
+  | 'NOT_QUEUED'
+  | 'ASSIGNMENT_NOT_IN_BATCH';
 
 /** Mirrors `ArtifactToolRefusal`: a refusal is a returned value, never a thrown error. */
 export interface TeamToolRefusal {
@@ -164,16 +166,47 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'amend_assignments',
+      description:
+        'Huỷ hoặc sửa một việc còn ĐANG XẾP HÀNG trong lô đang chạy. Không dùng cho việc đang chạy — việc đang chạy chỉ nhận chỉ đạo (steer).',
+      parameters: {
+        type: 'object',
+        properties: {
+          operations: {
+            type: 'array',
+            description: 'Danh sách thao tác cần áp.',
+            items: {
+              type: 'object',
+              properties: {
+                op: { type: 'string', enum: ['cancel', 'rewrite_task'] },
+                assignmentId: {
+                  type: 'string',
+                  description: 'Id dòng assignment lấy từ hiện trạng lô.',
+                },
+                task: { type: 'string', description: 'Nội dung mới, chỉ khi op = rewrite_task.' },
+                reason: { type: 'string', description: 'Lý do ngắn để báo cáo lại cho người dùng.' },
+              },
+              required: ['op', 'assignmentId'],
+            },
+          },
+        },
+        required: ['operations'],
+      },
+    },
+  },
 ];
 
 /**
- * 37.1 D-27/D-28: tools only the leader may call. Declared ONCE here (plan 05 extends this
- * same set in place with `amend_assignments`); the coordinator derives its employee payload
- * from it, so adding a tool above can never leak it to an employee.
+ * 37.1 D-27/D-28: tools only the leader may call. Declared ONCE here; the coordinator derives
+ * its employee payload from it, so adding a tool above can never leak it to an employee.
  */
 export const LEAD_ONLY_TEAM_TOOLS: ReadonlySet<string> = new Set([
   'delegate_batch',
   'deliver_steer',
+  'amend_assignments',
 ]);
 
 /** D-11: compact BM25 hits; the full body is only reachable through `read_team_turn`. */
@@ -355,6 +388,55 @@ async function deliverSteer(args: Record<string, any>): Promise<string> {
   return JSON.stringify({ steerMessageId });
 }
 
+/**
+ * 37.1 D-06/D-27: argument validation only, exactly like `delegateBatch`. Ledger membership is
+ * NOT checked here — the validator has no `batchId`; the coordinator's tier-1 executor owns it
+ * against the live `openBatchId`.
+ */
+async function amendAssignments(args: Record<string, any>): Promise<string> {
+  const operations: any[] = Array.isArray(args.operations) ? args.operations : [];
+  if (operations.length === 0) {
+    return JSON.stringify(refuse('EMPTY_BATCH', 'Danh sách thao tác đang trống.'));
+  }
+
+  const normalized: Array<{ op: 'cancel' | 'rewrite_task'; assignmentId: string; task?: string; reason?: string }> = [];
+  for (const raw of operations) {
+    const op = raw?.op;
+    if (op !== 'cancel' && op !== 'rewrite_task') {
+      return JSON.stringify({
+        refused: true,
+        code: 'NOT_QUEUED',
+        message: 'Thao tác không hợp lệ: chỉ hỗ trợ cancel hoặc rewrite_task.',
+      });
+    }
+    const assignmentId = typeof raw?.assignmentId === 'string' ? raw.assignmentId : '';
+    if (!assignmentId) {
+      return JSON.stringify({
+        refused: true,
+        code: 'NOT_QUEUED',
+        message: 'Thiếu id việc cần áp dụng.',
+      });
+    }
+    const task = typeof raw?.task === 'string' ? raw.task.trim() : '';
+    if (op === 'rewrite_task' && !task) {
+      return JSON.stringify({
+        refused: true,
+        code: 'NOT_QUEUED',
+        message: 'Thiếu nội dung mới cho thao tác sửa việc.',
+      });
+    }
+    const reason = typeof raw?.reason === 'string' && raw.reason ? raw.reason : undefined;
+    normalized.push({
+      op,
+      assignmentId,
+      ...(op === 'rewrite_task' ? { task } : {}),
+      ...(reason ? { reason } : {}),
+    });
+  }
+
+  return JSON.stringify({ operations: normalized });
+}
+
 export async function executeTeamTool(
   name: string,
   args: Record<string, any>,
@@ -376,6 +458,8 @@ export async function executeTeamTool(
       return delegateBatch(input, ctx);
     case 'deliver_steer':
       return deliverSteer(input);
+    case 'amend_assignments':
+      return amendAssignments(input);
     default:
       return JSON.stringify({ error: `Unknown team tool: ${name}` });
   }
