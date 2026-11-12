@@ -4883,12 +4883,76 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       await sent;
       await waitForReady(current.coordinator);
 
-      expect(JSON.parse(refusal)).toMatchObject({ refused: true, code: 'NOT_QUEUED' });
+      // WR-03: the code names the real condition, so the model does not re-send the same
+      // rewrite against another id.
+      expect(JSON.parse(refusal)).toMatchObject({ refused: true, code: 'STEER_PENDING' });
       const target = (await current.db.aiTeamAssignments.toArray()).filter(
         (row) => row.agentId === current.employees[1]!.id
       );
       // No replacement attempt was created.
       expect(target.map((row) => row.attemptNo)).toEqual([1]);
+    });
+    // WR-03: only a REWRITE can lose a delivered steer. A cancel ends the row, and the badge
+    // derivation already suppresses a terminal attempt, so the guard must not block it.
+    it('allows a cancel on a queued row that holds a delivered steer', async () => {
+      const gate = deferred();
+      let response = '';
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            const cancel = (await harness!.db.aiTeamAssignments.toArray()).find(
+              (row) => row.agentId === harness!.employees[2]!.id && row.runStatus === 'queued'
+            )!;
+            const steerRow = await saveTeamMessage(
+              {
+                threadId: harness!.threadId,
+                role: 'user',
+                content: 'đổi hướng',
+                messageKind: 'steer',
+                targetAgentId: harness!.employees[2]!.id,
+              },
+              harness!.db
+            );
+            await harness!.db.aiTeamAssignments.update(cancel.id, {
+              steerMessageIds: [steerRow.id],
+            });
+            response = await options.executeToolFn!(
+              'amend_assignments',
+              { operations: [{ op: 'cancel', assignmentId: cancel.id }] },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Đã huỷ.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getRunningCount() === 1);
+      await sleep(30);
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+
+      expect(JSON.parse(response)).toMatchObject({ applied: [{ op: 'cancel' }] });
+      const cancelled = (await current.db.aiTeamAssignments.toArray()).find(
+        (row) => row.agentId === current.employees[2]!.id
+      )!;
+      expect(cancelled).toMatchObject({ runStatus: 'stopped', stopReason: 'leader-amend' });
     });
   });
 });

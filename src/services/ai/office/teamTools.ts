@@ -34,6 +34,7 @@ export type TeamToolRefusalCode =
   | 'EMPTY_BATCH'
   | 'INVALID_ARGUMENT'
   | 'NOT_QUEUED'
+  | 'STEER_PENDING'
   | 'ASSIGNMENT_NOT_IN_BATCH';
 
 /** Mirrors `ArtifactToolRefusal`: a refusal is a returned value, never a thrown error. */

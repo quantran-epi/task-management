@@ -1819,13 +1819,15 @@ export function createTeamRunCoordinator(
           message: 'Chỉ huỷ hoặc sửa được việc đang xếp hàng. Việc đang chạy chỉ nhận chỉ đạo.',
         });
       }
-      // CR-03: a queued row can already hold delivered-but-undrained steers (D-28). A
+      // CR-03/WR-03: a queued row can already hold delivered-but-undrained steers (D-28). A
       // replacement row would not carry them, so the user's instruction would vanish after
-      // `deliver_steer` reported success. Refuse the whole list instead.
-      if ((row.steerMessageIds ?? []).length > 0) {
+      // `deliver_steer` reported success. Only a REWRITE loses them — a cancel ends the row,
+      // and the badge derivation already suppresses a terminal attempt — so the guard is
+      // scoped to `rewrite_task` and names the real condition.
+      if (operation.op === 'rewrite_task' && (row.steerMessageIds ?? []).length > 0) {
         return JSON.stringify({
           refused: true,
-          code: 'NOT_QUEUED',
+          code: 'STEER_PENDING',
           message:
             'Việc này đang có chỉ đạo chưa đọc. Hãy để nhân viên nhận chỉ đạo trước khi sửa việc.',
         });
