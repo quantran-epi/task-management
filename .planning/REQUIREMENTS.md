@@ -47,10 +47,18 @@
 ### Runtime Reliability (AIO-RUNTIME)
 
 - [x] **AIO-RUNTIME-01**: A throwing agent `start()` settles that agent as an error row and the batch resolves. A run can never hang in `batch-running`. (Pitfall 7)
-- [x] **AIO-RUNTIME-02**: A second submit while a turn is running is rejected visibly at the composer — one user message, one turn, phase returns to `ready`. No `TURN_IN_PROGRESS` thrown into the void. (Pitfall 8)
+- [x] **AIO-RUNTIME-02**: ~~A second submit while a turn is running is rejected visibly at the composer — one user message, one turn, phase returns to `ready`. No `TURN_IN_PROGRESS` thrown into the void.~~ **Superseded by 37.1 D-01/D-02:** a second submit is never rejected — the composer always accepts and `send()` routes it to the leader as a steer turn. The invariant that survives is "no `TURN_IN_PROGRESS` is ever thrown into the void, and no user text is ever lost." (Pitfall 8)
 - [x] **AIO-RUNTIME-03**: Every registered `teamTurnId` is finished in `finally`; `getActiveTurns()` is empty after a run and the status indicator clears. (Pitfall 9)
 - [x] **AIO-RUNTIME-04**: Deleting a group mid-run tears down its coordinator and registry — no active turns, no further writes. (Pitfall 25)
 - [x] **AIO-RUNTIME-05**: Concurrency is a real scheduler — with limit 2 and a batch of 5, at most 2 agents run at once and all 5 settle. The limit is a persisted setting, not a constant. (C-10, R-05)
+
+### Live Steering (AIO-STEER) — Phase 37.1
+
+- [ ] **AIO-STEER-01**: A message sent while a batch is running reaches the leader and produces a visible re-plan, not a queued second turn. The composer is always usable — no outbox, no "busy" refusal. (D-01, D-02, D-24)
+- [ ] **AIO-STEER-02**: The leader can cancel a `queued` assignment and rewrite another's task via `amend_assignments`; the scheduler honours both without a second source of truth. (D-06, D-07, D-08, D-27)
+- [ ] **AIO-STEER-03**: A steering message addressed to a running agent is drained at its next `beforeToolRound` (including round 1) and appears in its transcript attribution. (D-09, D-10, D-15, D-17)
+- [ ] **AIO-STEER-04**: Steering an agent that already settled is refused visibly; the ledger stays consistent. The leader is the gate for every `@agent` steer and holds a problematic one before it is delivered. (D-11, D-16, D-18, D-28)
+- [ ] **AIO-STEER-05**: Abort/teardown while steering is in flight leaves no active turns and no further writes. (D-12, D-14, D-24)
 
 ### Token Budget (AIO-BUDGET)
 
