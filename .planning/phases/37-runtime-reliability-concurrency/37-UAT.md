@@ -8,11 +8,11 @@ updated: 2026-11-12T06:30:00Z
 
 ## Current Test
 
-number: 1
-name: Limited batch — limit 2, five assignments
+number: 2
+name: Outbox — second submit during a live turn
 expected: |
-  At most two agent bubbles read "Đang làm việc" at any moment, the rest read
-  "Đang xếp hàng", and all five reach a terminal state.
+  Message appears in the outbox above the composer marked queued, composer keeps
+  accepting input, dispatch happens automatically once the first turn settles.
 awaiting: user response
 
 ## Tests
@@ -24,7 +24,7 @@ steps: |
   Open/create a group with one leader and at least five agents.
   Team Settings → "Số nhân viên chạy đồng thời" = 2 → save.
   Send a request that makes the lead delegate five assignments.
-result: [pending]
+result: pass
 
 ### 2. Outbox — second submit during a live turn
 expected: Message appears in the outbox above the composer marked queued, composer keeps accepting input, dispatch happens automatically once the first turn settles.
@@ -60,9 +60,9 @@ result: [pending]
 ## Summary
 
 total: 7
-passed: 0
+passed: 1
 issues: 0
-pending: 7
+pending: 6
 skipped: 0
 blocked: 0
 
