@@ -322,7 +322,7 @@ export const BackupChatMessageRecordSchema = z
     agentId: uuidSchema.optional(),
     agentName: z.string().max(60).optional(),
     agentKind: z.enum(['lead', 'employee']).optional(),
-    messageKind: z.enum(['instruction', 'report', 'synthesis', 'plan']).optional(),
+    messageKind: z.enum(['instruction', 'report', 'synthesis', 'plan', 'steer']).optional(),
     // Phase 36 D-14/D-18: HISTORICAL assignee attribution. Never live-validated — a backup
     // taken after deleting the employee must still import.
     targetAgentId: uuidSchema.optional(),
@@ -343,6 +343,7 @@ export const BackupChatMessageRecordSchema = z
         'provider',
         'tool-limit',
         'budget-pause',
+        'leader-amend',
         'none',
       ])
       .optional(),
@@ -755,6 +756,7 @@ export const BackupAiTeamAssignmentRecordSchema = z.strictObject({
     'provider',
     'tool-limit',
     'budget-pause',
+    'leader-amend',
     'none',
   ]),
   attemptNo: z.number().int().positive(),
@@ -765,6 +767,8 @@ export const BackupAiTeamAssignmentRecordSchema = z.strictObject({
   endedAt: z.string().optional(),
   instructionMessageId: uuidSchema.optional(),
   reportMessageId: uuidSchema.optional(),
+  /** 37.1 D-14/D-25: steer rows not yet drained into this attempt's prompt. */
+  steerMessageIds: z.array(uuidSchema).optional(),
   tokenUsage: z
     .object({
       promptTokens: z.number().optional(),
