@@ -2549,6 +2549,38 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(ack).toMatchObject({ dispatched: 3, status: 'dispatched' });
     });
 
+    // 37.1 UAT gap 9: `onBatchSettled` used to claim `lead-synthesizing` before the
+    // synthesis turn could start. Because that is a BUSY phase, every later submit routed
+    // into `steer()` and the leader could never be reached again.
+    it('never leaves a busy phase behind after the batch settles', async () => {
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            if (isSynthesisTurn(options)) return loopResult('Tổng hợp xong.');
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Đã giao.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+
+      await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
+
+      // The leader is reachable again: a new submit starts a turn instead of steering.
+      const outcome = await current.coordinator.send('Việc tiếp theo');
+      expect(outcome).toBe('started');
+    });
+
     it('dispose mid-batch rejects the parked acquire and settles the queued assignment (limit 1)', async () => {
       const gate = deferred();
       let toolResult: string | null = null;
@@ -3975,6 +4007,123 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(rows.every((row) => (row.steerMessageIds ?? []).length === 0)).toBe(true);
       // The row survives as the honest record of a held steer.
       expect(await steerRows(current)).toHaveLength(1);
+    });
+
+    // 37.1 UAT gap 5: a steer typed as plain text carries no `targetAgentId` (that field is
+    // written only when the user picks the agent from the @-mention dropdown), so it used to
+    // be permanently undeliverable — the leader could only report "không khả dụng".
+    it('delivers a plain-text steer when the leader names the target', async () => {
+      const gate = deferred();
+      const injected: string[] = [];
+      const deliveries: string[] = [];
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            if (!lastTextOf(options).includes('gửi')) {
+              await options.executeToolFn!(
+                'delegate_batch',
+                { assignments: assignmentsFor(harness!.employees) },
+                harness!.db,
+                options.signal
+              );
+              return loopResult('Đã giao việc.');
+            }
+            // The steer turn: the id comes from the prompt, the target from the roster.
+            const steerId = /- id: ([0-9a-f-]{36})/.exec(systemPromptOf(options))?.[1] ?? '';
+            deliveries.push(
+              await options.executeToolFn!(
+                'deliver_steer',
+                { steerMessageId: steerId, agentId: harness!.employees[0]!.id },
+                harness!.db,
+                options.signal
+              )
+            );
+            return loopResult('Đã giao chỉ đạo.');
+          },
+          [EMP_A_MODEL]: async (options) => {
+            await gate.promise;
+            const messages = await options.beforeToolRound?.(2, options.signal);
+            if (messages && messages.length > 0) injected.push(JSON.stringify(messages));
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+      const target = current.employees[0]!;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getState().phase === 'batch-running');
+
+      // Plain text — no structured @mention, exactly what the user typed in UAT.
+      await expect(current.coordinator.send(`gửi ${target.name}: đổi hướng`)).resolves.toBe(
+        'steered'
+      );
+
+      await waitFor(() => deliveries.length === 1);
+      expect(JSON.parse(deliveries[0]!)).toMatchObject({ delivered: true, agentId: target.id });
+
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+
+      expect(injected).toHaveLength(1);
+      expect(injected[0]).toContain('đổi hướng');
+    });
+
+    // The leader must not be able to route a steer to an agent outside this team.
+    it('refuses a steer target that is not in the roster', async () => {
+      const gate = deferred();
+      const deliveries: string[] = [];
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            if (!lastTextOf(options).includes('gửi')) {
+              await options.executeToolFn!(
+                'delegate_batch',
+                { assignments: assignmentsFor(harness!.employees) },
+                harness!.db,
+                options.signal
+              );
+              return loopResult('Đã giao việc.');
+            }
+            const steerId = /- id: ([0-9a-f-]{36})/.exec(systemPromptOf(options))?.[1] ?? '';
+            deliveries.push(
+              await options.executeToolFn!(
+                'deliver_steer',
+                { steerMessageId: steerId, agentId: 'not-a-member' },
+                harness!.db,
+                options.signal
+              )
+            );
+            return loopResult('Không giao được.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getState().phase === 'batch-running');
+      await current.coordinator.send('gửi ai đó: đổi hướng');
+
+      await waitFor(() => deliveries.length === 1);
+      expect(JSON.parse(deliveries[0]!)).toMatchObject({
+        refused: true,
+        code: 'INVALID_ARGUMENT',
+      });
+
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
     });
 
     it('a steer to a settled agent returns refused and writes no steerMessageIds', async () => {

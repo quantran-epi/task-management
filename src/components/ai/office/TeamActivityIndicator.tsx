@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button, Popover, Typography } from 'antd';
-import type { AgentRunState, TeamRunPhase } from '../../../types/aiOffice';
+import dayjs from 'dayjs';
+import type { AgentLiveStep, AgentRunState, TeamRunPhase } from '../../../types/aiOffice';
 import {
   AgentStatusRow,
   type AgentAttributionAgent,
@@ -19,6 +20,13 @@ export const PHASE_ACTIVITY_VERB: Partial<Record<TeamRunPhase, string>> = {
   'awaiting-budget': 'đang chờ ngân sách',
 };
 
+/**
+ * 37.1 UAT gap 6: while the batch runs, the LEAD is not doing batch work — it is finishing
+ * its own dispatch answer. Giving it the batch verb made "Minh đang làm việc" read as
+ * "the leader is still working on the batch".
+ */
+const LEAD_DISPATCH_VERB = 'đang giao việc';
+
 const WORKING = 'đang làm việc';
 const WAITING_BUDGET = 'đang chờ ngân sách';
 
@@ -29,6 +37,53 @@ export interface TeamActivityIndicatorProps {
   leadId: string | undefined;
   onStopAgent?: ((agentId: string) => void) | undefined;
 }
+
+/** One step: label + clock, expandable to its tool arguments when the step carries them. */
+const StepRow: React.FC<{ step: AgentLiveStep }> = ({ step }) => {
+  const [open, setOpen] = useState(false);
+  const hasDetail = step.detail !== undefined && step.detail.length > 0;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <div
+        role={hasDetail ? 'button' : undefined}
+        tabIndex={hasDetail ? 0 : undefined}
+        onClick={hasDetail ? () => setOpen((prev) => !prev) : undefined}
+        onKeyDown={
+          hasDetail
+            ? (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  setOpen((prev) => !prev);
+                }
+              }
+            : undefined
+        }
+        style={{
+          display: 'flex',
+          gap: 6,
+          alignItems: 'baseline',
+          cursor: hasDetail ? 'pointer' : 'default',
+        }}
+      >
+        <Typography.Text type="secondary" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+          {dayjs(step.at).format('HH:mm:ss')}
+        </Typography.Text>
+        <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+          {step.label}
+          {hasDetail ? (open ? ' ▾' : ' ▸') : ''}
+        </Typography.Text>
+      </div>
+      {hasDetail && open ? (
+        <Typography.Text
+          code
+          style={{ fontSize: 10, whiteSpace: 'pre-wrap', wordBreak: 'break-all', marginLeft: 44 }}
+        >
+          {step.detail}
+        </Typography.Text>
+      ) : null}
+    </div>
+  );
+};
 
 /**
  * 37.1 D-20/D-22: one inline line at the end of the transcript, Slack-style. No bubble,
@@ -64,7 +119,9 @@ export const TeamActivityIndicator: React.FC<TeamActivityIndicatorProps> = ({
               row.status === 'paused'
                 ? WAITING_BUDGET
                 : row.agentId === leadId
-                  ? PHASE_ACTIVITY_VERB[phase] ?? WORKING
+                  ? phase === 'batch-running'
+                    ? LEAD_DISPATCH_VERB
+                    : PHASE_ACTIVITY_VERB[phase] ?? WORKING
                   : WORKING;
             return `${nameOf(row.agentId)} ${verb}`;
           })
@@ -76,7 +133,16 @@ export const TeamActivityIndicator: React.FC<TeamActivityIndicatorProps> = ({
   const content = (
     <div
       data-testid="team-activity-popover"
-      style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 220 }}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+        minWidth: 220,
+        // 37.1 UAT: a long run must show every step, so the body scrolls instead of the
+        // data layer truncating it.
+        maxHeight: 360,
+        overflowY: 'auto',
+      }}
     >
       {pending.map((row) => {
         const agent: AgentAttributionAgent = agentDirectory.get(row.agentId) ?? {
@@ -92,11 +158,7 @@ export const TeamActivityIndicator: React.FC<TeamActivityIndicatorProps> = ({
               {agent.name}
             </Typography.Text>
             {row.steps && row.steps.length > 0 ? (
-              row.steps.map((step) => (
-                <Typography.Text key={step.id} type="secondary" style={{ fontSize: 11 }}>
-                  {step.label}
-                </Typography.Text>
-              ))
+              row.steps.map((step) => <StepRow key={step.id} step={step} />)
             ) : (
               <Typography.Text type="secondary" style={{ fontSize: 11 }}>
                 Chưa có bước nào

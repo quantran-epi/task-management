@@ -57,6 +57,20 @@ describe('chatRepo scope keys (CR/System axis)', () => {
     expect(crThread.scopeType).toBe('cr');
   });
 
+  // 37.1 UAT gap 4: React StrictMode double-invokes the first mount, so two callers race
+  // the read-then-add. `scopeKey` is a unique index, so the loser used to throw
+  // `ConstraintError` and the workspace stayed stuck on "Đang chuẩn bị nhóm...".
+  it('createOrGetThread resolves concurrent callers to one thread without throwing', async () => {
+    const results = await Promise.all([
+      createOrGetThread({ scopeType: 'team', entityId: 'team-race' }, db),
+      createOrGetThread({ scopeType: 'team', entityId: 'team-race' }, db),
+      createOrGetThread({ scopeType: 'team', entityId: 'team-race' }, db),
+    ]);
+
+    expect(new Set(results.map((row) => row.id)).size).toBe(1);
+    expect(await db.chatThreads.count()).toBe(1);
+  });
+
   it('saveMessage appends user and assistant messages and updates thread updatedAt', async () => {
     const thread = await createOrGetThread({ scopeType: 'global' }, db);
     const msg1 = await saveMessage(

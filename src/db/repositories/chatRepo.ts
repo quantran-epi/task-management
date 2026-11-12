@@ -55,24 +55,31 @@ export async function createOrGetThread(
   db: TaskPlannerDatabase = defaultDb
 ): Promise<ChatThread> {
   const scopeKey = buildScopeKey(input.scopeType, input.entityId);
-  const existing = await db.chatThreads.where('scopeKey').equals(scopeKey).first();
-  if (existing) {
-    return existing;
-  }
+  // The read and the insert MUST share one `rw` transaction. `chatThreads.scopeKey` is a
+  // unique index, so two callers that both see "no row" would otherwise both insert and the
+  // loser throws `ConstraintError` — which is exactly what React StrictMode's double-invoked
+  // first mount does. IndexedDB serializes `rw` transactions over the same store, so the
+  // second caller's read sees the first caller's row.
+  return db.transaction('rw', db.chatThreads, async () => {
+    const existing = await db.chatThreads.where('scopeKey').equals(scopeKey).first();
+    if (existing) {
+      return existing;
+    }
 
-  const now = new Date().toISOString();
-  const thread: ChatThread = {
-    id: generateId(),
-    scopeKey,
-    scopeType: input.scopeType,
-    ...(input.entityId ? { entityId: input.entityId } : {}),
-    ...(input.title?.trim() ? { title: input.title.trim() } : {}),
-    createdAt: now,
-    updatedAt: now,
-  };
+    const now = new Date().toISOString();
+    const thread: ChatThread = {
+      id: generateId(),
+      scopeKey,
+      scopeType: input.scopeType,
+      ...(input.entityId ? { entityId: input.entityId } : {}),
+      ...(input.title?.trim() ? { title: input.title.trim() } : {}),
+      createdAt: now,
+      updatedAt: now,
+    };
 
-  await db.chatThreads.add(thread);
-  return thread;
+    await db.chatThreads.add(thread);
+    return thread;
+  });
 }
 
 export async function saveMessage(

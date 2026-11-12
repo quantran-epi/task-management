@@ -263,6 +263,12 @@ const TERMINAL_STATUSES: readonly AgentRunStatus[] = ['done', 'stopped', 'error'
 /** 37.1 D-22: monotonic id source for `AgentLiveStep` — ids are unique, never meaningful. */
 let stepSeq = 0;
 
+/**
+ * T-37.1-06-05: the snapshot must stay bounded. This ceiling is a DoS guard, not a UX
+ * choice — the popover scrolls, so a real run's steps all fit within it.
+ */
+const MAX_LIVE_STEPS = 200;
+
 /** D-22: a ledger row in one of these is settled — it must never take a second report row. */
 const TERMINAL_RUN_STATUSES: ReadonlySet<AiTeamAssignmentRunStatus> = new Set([
   'done',
@@ -630,18 +636,28 @@ export function createTeamRunCoordinator(
   }
 
   /**
-   * 37.1 D-22: one live step for the indicator popover. Capped at 6 — the popover is a
-   * glance, not a log — and a repeated label is dropped so a `streaming` status that fires
-   * per token cannot grow the snapshot or force a re-render per delta.
+   * 37.1 D-22: one live step for the indicator popover. Bounded at `MAX_LIVE_STEPS` — a
+   * long turn must not grow the snapshot without limit (T-37.1-06-05), but the cap is far
+   * above what a user reads at a glance, so the popover can show the whole run. A repeated
+   * label is dropped so a `streaming` status that fires per token cannot force a re-render
+   * per delta.
    */
-  function pushStep(agentId: string, label: string): void {
+  function pushStep(agentId: string, label: string, detail?: string): void {
     const state = agents.get(agentId);
     if (!state) return;
     const steps = state.steps ?? [];
     if (steps[steps.length - 1]?.label === label) return;
     stepSeq += 1;
-    const next = [...steps, { id: 'step-' + stepSeq, label, at: new Date().toISOString() }];
-    updateAgent(agentId, { steps: next.slice(-6) });
+    const next = [
+      ...steps,
+      {
+        id: 'step-' + stepSeq,
+        label,
+        at: new Date().toISOString(),
+        ...(detail !== undefined ? { detail } : {}),
+      },
+    ];
+    updateAgent(agentId, { steps: next.slice(-MAX_LIVE_STEPS) });
   }
 
   /**
@@ -874,7 +890,11 @@ export function createTeamRunCoordinator(
         if (!roster.lead || agentId !== roster.lead.id) return EMPLOYEE_DELIVER_STEER_REFUSAL;
         const steerMessageId =
           typeof args?.steerMessageId === 'string' ? args.steerMessageId : '';
-        return deliverSteer(steerMessageId);
+        // 37.1 UAT gap 5: a plain-text steer carries no `targetAgentId`, so the leader names
+        // the target at delivery time. Resolved against the roster below.
+        const explicitAgentId =
+          typeof args?.agentId === 'string' && args.agentId.trim() ? args.agentId.trim() : undefined;
+        return deliverSteer(steerMessageId, explicitAgentId);
       }
 
       // 37.1 D-27: the leader's one mid-run mutation. Same lead-only shape as `delegate_batch`.
@@ -973,10 +993,15 @@ export function createTeamRunCoordinator(
                 : null;
         if (label) pushStep(agentId, label);
       },
-      // A tool result is noise at this altitude; only the call is a step.
+      // A tool result is noise at this altitude; only the call is a step. 37.1 UAT: the
+      // serialized args are kept so the popover can expand a step into its detail.
       onToolEvent: (event) => {
         if (event.phase !== 'call') return;
-        pushStep(agentId, event.name === 'read_skill' ? 'đã đọc skill' : 'đang gọi tool ' + event.name);
+        pushStep(
+          agentId,
+          event.name === 'read_skill' ? 'đã đọc skill' : 'đang gọi tool ' + event.name,
+          event.args
+        );
       },
       onCompleted: ({ content }) => settleAgent(agentId, 'done', content),
       onError: () => settleAgent(agentId, 'error', SANITIZED_TURN_ERROR),
@@ -1358,7 +1383,13 @@ export function createTeamRunCoordinator(
 
   async function startLeadTurn(
     text: string,
-    batchResults?: readonly BatchResult[]
+    batchResults?: readonly BatchResult[],
+    /**
+     * 37.1 UAT gap 6: the phase this turn announces. The synthesis turn must not overwrite
+     * `lead-synthesizing` with `lead-thinking` — that made the "đang tổng hợp" verb
+     * unreachable and left the user reading "đang phân tích" during synthesis.
+     */
+    announcedPhase: 'lead-thinking' | 'lead-synthesizing' = 'lead-thinking'
   ): Promise<void> {
     // D-05: an empty group has no lead — a silent no-op, not a throw.
     const lead = roster.lead;
@@ -1414,12 +1445,19 @@ export function createTeamRunCoordinator(
         steps: [],
       });
       registerAgentTurn(lead.id, lead.name);
-      setPhase('lead-thinking');
+      setPhase(announcedPhase);
 
       const outcome = await registry.get(lead.id).start(request);
       const state = agents.get(lead.id);
       if (state && state.status === 'paused') {
-        await agentDeferreds.get(lead.id)?.promise;
+        // 37.1 UAT gap 9: the parked branch is still a branch of this turn. Returning
+        // without releasing the phase left `lead-thinking`/`lead-synthesizing` — both BUSY —
+        // set forever, so every later submit routed into `steer()`.
+        try {
+          await agentDeferreds.get(lead.id)?.promise;
+        } finally {
+          if (phase === 'lead-thinking' || phase === 'lead-synthesizing') setPhase('ready');
+        }
         return;
       }
       settleAgent(lead.id, OUTCOME_STATUS[outcome.phase]);
@@ -1568,7 +1606,13 @@ export function createTeamRunCoordinator(
     const messages = await db.chatMessages.bulkGet(ids);
     return messages
       .filter((message): message is ChatMessage => message !== undefined)
-      .map((message) => ({ role: 'user' as const, content: STEER_PREFIX + message.content }));
+      .map((message) => ({
+        role: 'user' as const,
+        // 37.1 UAT gap 5: carry the id. A steer read mid-turn (the steer turn could not
+        // start because the lead runtime was live) otherwise reaches the leader with no id
+        // to pass to `deliver_steer`, so it can never be delivered.
+        content: `${STEER_PREFIX}[steer:${message.id}] ${message.content}`,
+      }));
   }
 
   /**
@@ -1699,8 +1743,17 @@ export function createTeamRunCoordinator(
         ) {
           for (const id of promptSteerIds) pendingSteerMessageIds.delete(id);
         }
-      } catch {
-        /* a steer turn must never break the batch; the ids stay pending */
+      } catch (err) {
+        // 37.1 UAT gap 1: this used to be a bare swallow, so a failed steer turn left the
+        // phase BUSY forever and every later submit routed back into `steer()` — the leader
+        // could never be reached again. The ids stay pending (D-28: never silently lost);
+        // a live lead turn drains them at its next round boundary.
+        //
+        // Deliberately no `settleAgent` here: `start()` throwing means `started === false`,
+        // and the `finally` below restores the PRIOR turn's full state — settling would be
+        // overwritten and would corrupt a live turn's snapshot.
+        console.error('[teamRun] steer turn failed', err);
+        if (phase === 'lead-thinking' || phase === 'lead-synthesizing') setPhase('ready');
       } finally {
         if (started && !disposed) {
           settleAgent(lead.id, steerStatus);
@@ -1736,7 +1789,10 @@ export function createTeamRunCoordinator(
    * drop ids a terminal write proves were never read). Every check is against the live
    * ledger — the model's id is never trusted. Idempotent: a repeat call appends nothing.
    */
-  async function deliverSteer(steerMessageId: string): Promise<string> {
+  async function deliverSteer(
+    steerMessageId: string,
+    explicitAgentId?: string
+  ): Promise<string> {
     if (disposed) return DISPOSED_REFUSAL;
     const message = await db.chatMessages.get(steerMessageId);
     // WR-07: same cross-team read guard every other team tool enforces (T-34-07) — a
@@ -1748,14 +1804,34 @@ export function createTeamRunCoordinator(
         message: 'Không tìm thấy chỉ đạo hợp lệ để giao.',
       });
     }
-    if (message.messageKind !== 'steer' || message.targetAgentId === undefined) {
+    if (message.messageKind !== 'steer') {
       return JSON.stringify({
         refused: true,
         code: 'INVALID_ARGUMENT',
         message: 'Không tìm thấy chỉ đạo hợp lệ để giao.',
       });
     }
-    const assignmentId = assignmentIdsByAgent.get(message.targetAgentId);
+    // 37.1 UAT gap 5: the row's `targetAgentId` is written only when the user picked the
+    // agent from the @-mention dropdown. A steer typed as plain text ("gửi Eva: ...") has
+    // none, and used to be permanently undeliverable. The leader names the target here
+    // instead; the roster is the authority, never the model's guess.
+    const targetAgentId = message.targetAgentId ?? explicitAgentId;
+    if (targetAgentId === undefined) {
+      return JSON.stringify({
+        refused: true,
+        code: 'INVALID_ARGUMENT',
+        message:
+          'Chỉ đạo này chưa nêu rõ nhân viên nhận. Hãy gọi lại kèm agentId của nhân viên trong danh sách.',
+      });
+    }
+    if (!roster.employees.some((employee) => employee.id === targetAgentId)) {
+      return JSON.stringify({
+        refused: true,
+        code: 'INVALID_ARGUMENT',
+        message: 'Nhân viên nhận chỉ đạo không có trong nhóm này.',
+      });
+    }
+    const assignmentId = assignmentIdsByAgent.get(targetAgentId);
     const assignment = assignmentId ? await getAssignment(assignmentId, db) : undefined;
     if (
       !assignment ||
@@ -1797,7 +1873,12 @@ export function createTeamRunCoordinator(
         await db.aiTeamAssignments.update(assignment.id, {
           steerMessageIds: [...current, steerMessageId],
         });
-        await db.chatMessages.update(steerMessageId, { batchId: live.batchId });
+        // 37.1 UAT gap 5: stamp the resolved target onto the row too, so the transcript and
+        // every later reader see the same recipient the delivery used.
+        await db.chatMessages.update(steerMessageId, {
+          batchId: live.batchId,
+          targetAgentId,
+        });
         return true;
       }
     );
@@ -1809,11 +1890,11 @@ export function createTeamRunCoordinator(
       });
     }
     if (!appended) {
-      return JSON.stringify({ delivered: true, duplicate: true, agentId: message.targetAgentId });
+      return JSON.stringify({ delivered: true, duplicate: true, agentId: targetAgentId });
     }
     pendingSteerMessageIds.delete(steerMessageId);
     notify();
-    return JSON.stringify({ delivered: true, agentId: message.targetAgentId });
+    return JSON.stringify({ delivered: true, agentId: targetAgentId });
   }
 
   /**
@@ -2654,7 +2735,11 @@ export function createTeamRunCoordinator(
             : row.report,
       }));
 
-      setPhase('lead-synthesizing');
+      // 37.1 UAT gap 9: do NOT claim `lead-synthesizing` here. This line runs before the
+      // synthesis turn can start — the dispatch turn may still be in flight, and the turn
+      // is queued behind it on `leadTurnChain`. Claiming the phase early made it describe a
+      // turn that was merely queued, and because `lead-synthesizing` is a BUSY phase every
+      // later submit routed into `steer()`. `startLeadTurn` announces it when it starts.
       // The run is over: close the batch row so `dispose`/`abortAll` never double-close it.
       if (openBatchId === batchId) openBatchId = null;
       await closeBatch(batchId, { phaseAtEnd: 'lead-synthesizing', abortedBy: 'none' }, db);
@@ -2667,7 +2752,9 @@ export function createTeamRunCoordinator(
         null;
       lastSynthesisMessageId = null;
       try {
-        await runLeadTurnSerialized(() => startLeadTurn(SYNTHESIS_INSTRUCTION, synthesisResults));
+        await runLeadTurnSerialized(() =>
+          startLeadTurn(SYNTHESIS_INSTRUCTION, synthesisResults, 'lead-synthesizing')
+        );
       } finally {
         if (
           lastSynthesisMessageId !== null &&
@@ -2685,6 +2772,12 @@ export function createTeamRunCoordinator(
       // D-24/T-37.1-03: the team turn spans the whole batch, so it finishes exactly here.
       batchOwnsTeamTurn = false;
       aiTurnManager.finishTurn(teamTurnId);
+      // 37.1 UAT gap 9: the phase must never outlive this handler. Every early return above
+      // (disposed, aborted, lost race) left `batch-running` — a BUSY phase — so every later
+      // submit routed into `steer()` and the leader could never be reached again. Only the
+      // batch phase is released here: a live lead turn owns `lead-thinking` /
+      // `lead-synthesizing` and resets those itself.
+      if (phase === 'batch-running') setPhase('ready');
     }
   }
 

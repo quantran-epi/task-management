@@ -6,6 +6,12 @@ use std::net::Ipv4Addr;
 const GRAPHITI_MCP_URL: &str = "http://10.4.97.70:30456/mcp";
 const GRAPHITI_MAX_REQUEST_BYTES: usize = 256 * 1024;
 const GRAPHITI_MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
+/**
+ * 37.1 UAT gap 1/9: the whole response is buffered before it reaches JS, so this bound is
+ * the only thing that stops a stalled provider from hanging the caller forever. It matches
+ * the JS-side 90 s watchdog on the non-Tauri path.
+ */
+const AI_PROXY_TIMEOUT_SECS: u64 = 90;
 const GRAPHITI_ALLOWED_TOOLS: [&str; 4] = [
     "list_advertised_groups",
     "search_nodes",
@@ -85,8 +91,14 @@ pub async fn ai_proxy_request(
         return Err("Blocked AI proxy target".to_string());
     }
 
+    // 37.1 UAT gap 1/9: this command buffers the WHOLE response, so without a bound a
+    // stalled provider leaves the caller's `await` pending forever. The JS side's 90 s
+    // `AbortSignal.timeout` only exists on the non-Tauri path, and this command never
+    // received the turn's signal — so a hung request wedged the runtime permanently.
     let client = reqwest::Client::builder()
         .user_agent("PlannerMateAIProxy/1.0")
+        .connect_timeout(std::time::Duration::from_secs(15))
+        .timeout(std::time::Duration::from_secs(AI_PROXY_TIMEOUT_SECS))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 

@@ -57,7 +57,6 @@ describe('TeamActivityIndicator — inline line (D-20/D-21)', () => {
   it.each([
     ['lead-thinking', 'đang phân tích'],
     ['awaiting-plan', 'đang lập kế hoạch'],
-    ['batch-running', 'đang làm việc'],
     ['lead-synthesizing', 'đang tổng hợp'],
     ['awaiting-budget', 'đang chờ ngân sách'],
   ] as const)('renders the %s verb for a running lead', (phase, verb) => {
@@ -66,6 +65,16 @@ describe('TeamActivityIndicator — inline line (D-20/D-21)', () => {
 
     expect(screen.getByTestId('team-activity-indicator').textContent).toContain(
       `Bình ${verb}`
+    );
+  });
+
+  // 37.1 UAT gap 6: while the batch runs the lead is finishing its dispatch answer, not
+  // doing batch work. Giving it the batch verb read as "the leader is still working".
+  it('gives the lead its own verb while the batch runs', () => {
+    renderIndicator('batch-running', [agentState({ agentId: LEAD_ID })]);
+
+    expect(screen.getByTestId('team-activity-indicator').textContent).toBe(
+      'Bình đang giao việc'
     );
   });
 
@@ -136,6 +145,66 @@ describe('TeamActivityIndicator — detail popover (D-22)', () => {
     renderIndicator('batch-running', [agentState({ agentId: AN_ID })]);
     openPopover();
     expect(screen.getByTestId('team-activity-popover').textContent).toContain('Chưa có bước nào');
+  });
+
+  // 37.1 UAT gap 8: every step carries its clock.
+  it('renders a timestamp per step', () => {
+    renderIndicator('batch-running', [
+      agentState({
+        agentId: AN_ID,
+        steps: [{ id: 'step-1', label: 'đã đọc skill', at: '2026-11-12T10:34:56.000Z' }],
+      }),
+    ]);
+
+    openPopover();
+
+    // Local-time rendering, so assert the shape rather than a fixed clock.
+    expect(screen.getByTestId('team-activity-popover').textContent).toMatch(/\d{2}:\d{2}:\d{2}/);
+  });
+
+  // 37.1 UAT gap 8: a step with tool args expands to show them.
+  it('expands a step that carries tool arguments', () => {
+    renderIndicator('batch-running', [
+      agentState({
+        agentId: AN_ID,
+        steps: [
+          {
+            id: 'step-1',
+            label: 'đang gọi tool search',
+            at: '2026-11-12T10:00:00.000Z',
+            detail: '{"query":"api docs"}',
+          },
+        ],
+      }),
+    ]);
+
+    openPopover();
+    const popover = screen.getByTestId('team-activity-popover');
+    expect(popover.textContent).not.toContain('{"query":"api docs"}');
+
+    fireEvent.click(screen.getByText(/đang gọi tool search/));
+    expect(popover.textContent).toContain('{"query":"api docs"}');
+  });
+
+  // 37.1 UAT gap 8: the popover body scrolls instead of truncating the list.
+  it('scrolls the popover body when steps overflow', () => {
+    renderIndicator('batch-running', [
+      agentState({
+        agentId: AN_ID,
+        steps: Array.from({ length: 40 }, (_, index) => ({
+          id: `step-${index}`,
+          label: `bước ${index}`,
+          at: '2026-11-12T10:00:00.000Z',
+        })),
+      }),
+    ]);
+
+    openPopover();
+
+    const popover = screen.getByTestId('team-activity-popover');
+    expect(popover.style.overflowY).toBe('auto');
+    expect(popover.style.maxHeight).not.toBe('');
+    expect(popover.textContent).toContain('bước 39');
   });
 
   it('includes a queued agent and offers Stop for it', () => {

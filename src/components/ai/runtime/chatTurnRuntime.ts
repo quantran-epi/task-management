@@ -215,6 +215,15 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
     // A turn parked on an approval must not stay parked after abort.
     resolveApproval(false);
     declined = false;
+    // 37.1 UAT gap 1: abort must be AUTHORITATIVE, not advisory. `running` used to clear
+    // only in `start()`'s `finally`, i.e. once `deps.runLoop()` settled — and a loop parked
+    // on an unabortable provider call never settles, so every later `start()` threw
+    // `TURN_IN_PROGRESS` and the runtime was permanently wedged. Detaching the controller
+    // here makes the late loop result a no-op: `isCurrent()` already rejects it, and
+    // `start()`'s `finally` only touches `running` when `controller === turnController`.
+    controller = null;
+    approvalResolver = null;
+    running = false;
     publish('aborted');
   };
 

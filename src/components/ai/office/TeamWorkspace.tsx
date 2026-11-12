@@ -89,6 +89,10 @@ const NO_MODEL_COPY =
 /** WR-12: one fixed message for every fire-and-forget failure — repo errors can embed ids. */
 const ACTION_ERROR_COPY = 'Không lưu được thay đổi. Vui lòng thử lại.';
 
+/** IN-05: fixed copy — a repo error message can embed ids, which must not reach the UI. */
+const BOOTSTRAP_ERROR_COPY =
+  'Không mở được nhóm. Đóng rồi mở lại nhóm; nếu vẫn lỗi, kiểm tra nhật ký ứng dụng.';
+
 /** WR-02: a refused retry is a normal outcome (busy phase, disposed run), not a dead end. */
 const RETRY_ERROR_COPY = 'Chưa thể chạy lại lần này. Hãy chờ lượt hiện tại kết thúc rồi thử lại.';
 
@@ -323,7 +327,13 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
       if (cancelled) return;
       setCoordinator(created);
       setSnapshot(created.getState());
-    })();
+    })().catch((err: unknown) => {
+      // Without this the IIFE's rejection is unhandled and `coordinator` stays null forever,
+      // so the gate below paints "Đang chuẩn bị nhóm..." with no way out. Surface it instead.
+      if (cancelled) return;
+      console.error('[TeamWorkspace] bootstrap failed', err);
+      setConfigError(BOOTSTRAP_ERROR_COPY);
+    });
 
     return () => {
       cancelled = true;

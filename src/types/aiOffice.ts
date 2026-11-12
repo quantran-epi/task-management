@@ -235,6 +235,8 @@ export interface AgentLiveStep {
   id: string;
   label: string;
   at: string;
+  /** Serialized tool arguments from `ChatTurnToolEvent.args`; absent for status steps. */
+  detail?: string | undefined;
 }
 
 export interface AgentRunState {

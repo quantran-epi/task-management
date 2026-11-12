@@ -162,6 +162,11 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
             type: 'string',
             description: 'Id của chỉ đạo trong mục [CHỈ ĐẠO CHỜ XỬ LÝ].',
           },
+          agentId: {
+            type: 'string',
+            description:
+              'Id nhân viên nhận chỉ đạo. Bắt buộc khi chỉ đạo không được nhắc tới bằng @[Tên](agent:id) — ví dụ người dùng gõ tay tên nhân viên.',
+          },
         },
         required: ['steerMessageId'],
       },
@@ -386,7 +391,10 @@ async function deliverSteer(args: Record<string, any>): Promise<string> {
   if (!steerMessageId) {
     return JSON.stringify(refuse('INVALID_ARGUMENT', 'Thiếu steerMessageId.'));
   }
-  return JSON.stringify({ steerMessageId });
+  // 37.1 UAT gap 5: a steer typed as plain text (no structured @mention) carries no
+  // `targetAgentId`, so the coordinator needs the target named at delivery time.
+  const agentId = typeof args.agentId === 'string' && args.agentId.trim() ? args.agentId.trim() : undefined;
+  return JSON.stringify({ steerMessageId, ...(agentId ? { agentId } : {}) });
 }
 
 /**
