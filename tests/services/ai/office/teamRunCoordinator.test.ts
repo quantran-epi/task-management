@@ -76,6 +76,20 @@ async function waitFor(predicate: () => boolean, timeoutMs = 3000): Promise<void
   }
 }
 
+/**
+ * D-24: the lead runs TWICE per batch — the dispatch turn, then a synthesis turn opened by
+ * `onBatchSettled`. A script that delegates must answer on the synthesis turn instead of
+ * opening a second batch, or it would re-dispatch the whole roster.
+ */
+const SYNTHESIS_MARKER = 'Tổng hợp lại kết quả của lô';
+
+const isSynthesisTurn = (options: AiOrchestratorLoopOptions): boolean =>
+  String(options.messages.at(-1)?.content).includes(SYNTHESIS_MARKER);
+
+/** The whole batch is over — synthesis included — once the phase is back to `ready`. */
+const waitForReady = (coordinator: TeamRunCoordinator, timeoutMs = 5000): Promise<void> =>
+  waitFor(() => coordinator.getState().phase === 'ready', timeoutMs);
+
 interface HarnessOptions {
   scripts: Record<string, LoopScript>;
   teamPatch?: Partial<
@@ -85,6 +99,12 @@ interface HarnessOptions {
   useSeam?: boolean;
   /** Extra roster members beyond A/B/C (each gets a distinct model `emp-<d|e>-model`). */
   extraEmployees?: number;
+  /**
+   * D-24: the lead runs twice per batch. This script runs on the SYNTHESIS turn instead of
+   * `scripts[LEAD_MODEL]`, so a delegating lead script cannot open a second batch. Tests that
+   * assert synthesis-prompt content pass their own.
+   */
+  synthesisScript?: LoopScript;
 }
 
 interface Harness {
@@ -173,7 +193,12 @@ async function createHarness(options: HarnessOptions): Promise<Harness> {
 
   const createRuntimeDeps = (agentId: string): Partial<ChatTurnRuntimeDeps> => ({
     runLoop: ((loopOptions: AiOrchestratorLoopOptions) => {
-      const script = options.scripts[loopOptions.model];
+      // D-24: the synthesis turn is a separate lead turn. Default it to a canned answer so a
+      // delegating lead script cannot dispatch a second batch; tests that assert the
+      // synthesis prompt pass `synthesisScript`.
+      const script = isSynthesisTurn(loopOptions)
+        ? options.synthesisScript ?? (async () => loopResult('Đã tổng hợp.'))
+        : options.scripts[loopOptions.model];
       if (!script) throw new Error(`No script for model ${loopOptions.model} (agent ${agentId})`);
       return script(loopOptions);
     }) as unknown as ChatTurnRuntimeDeps['runLoop'],
@@ -421,13 +446,14 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       let harnessRef: Harness | null = null;
       const scripts: Record<string, LoopScript> = {
         [LEAD_MODEL]: async (options) => {
+          if (isSynthesisTurn(options)) return loopResult('Đã tổng hợp.');
           toolResult = await options.executeToolFn!(
             'delegate_batch',
             { assignments: assignmentsFor(harnessRef!.employees) },
             harnessRef!.db,
             options.signal
           );
-          return loopResult('Đã tổng hợp.');
+          return loopResult('Đã giao việc.');
         },
         [EMP_A_MODEL]: async () => loopResult('A xong'),
         [EMP_B_MODEL]: async () => loopResult('B xong'),
@@ -447,12 +473,17 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
       coordinator.resolvePlan(true);
       await sent;
+      await waitForReady(coordinator);
 
       expect(coordinator.getState().pendingPlan).toBeNull();
-      const parsed = JSON.parse(toolResult as unknown as string);
-      expect(Array.isArray(parsed)).toBe(true);
-      expect(parsed).toHaveLength(3);
-      expect(parsed.map((entry: any) => entry.status)).toEqual(['done', 'done', 'done']);
+      // D-24: the tool result is an ACK, not settled results.
+      const ack = JSON.parse(toolResult as unknown as string);
+      expect(ack).toMatchObject({ dispatched: 3, status: 'dispatched' });
+      expect(ack.agents).toHaveLength(3);
+
+      await waitForReady(coordinator);
+      const rows = await harness.db.aiTeamAssignments.toArray();
+      expect(rows.map((row) => row.runStatus)).toEqual(['done', 'done', 'done']);
     });
 
     it('starts nothing when the plan is rejected', async () => {
@@ -482,6 +513,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       await waitFor(() => coordinator.getState().phase === 'awaiting-plan');
       coordinator.resolvePlan(false);
       await sent;
+      await waitForReady(coordinator);
 
       expect(employeeStarts).toEqual([]);
       expect(JSON.parse(toolResult as unknown as string).cancelled).toBe(true);
@@ -509,8 +541,11 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       harnessRef = harness;
 
       await harness.coordinator.send('Làm báo cáo');
+      await waitForReady(harness.coordinator);
 
-      expect(JSON.parse(toolResult as unknown as string)).toHaveLength(3);
+      const ack = JSON.parse(toolResult as unknown as string);
+      expect(ack).toMatchObject({ dispatched: 3, status: 'dispatched' });
+      expect(ack.agents).toHaveLength(3);
       expect(harness.coordinator.getState().pendingPlan).toBeNull();
     });
 
@@ -543,19 +578,21 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       harnessRef = harness;
 
       await harness.coordinator.send('Làm báo cáo');
+      await waitForReady(harness.coordinator);
+      await waitForReady(harness.coordinator);
 
       expect(startedCount).toBe(3);
-      const parsed = JSON.parse(toolResult as unknown as string);
-      expect(parsed).toHaveLength(3);
-      expect(parsed.every((entry: any) => entry.status === 'done')).toBe(true);
+      expect(JSON.parse(toolResult as unknown as string)).toMatchObject({ dispatched: 3 });
+      const rows = await harness.db.aiTeamAssignments.toArray();
+      expect(rows).toHaveLength(3);
+      expect(rows.every((row) => row.runStatus === 'done')).toBe(true);
     });
 
     it('keeps the batch pending while one agent is paused', async () => {
-      let toolResult: string | null = null;
       let harnessRef: Harness | null = null;
       const scripts: Record<string, LoopScript> = {
         [LEAD_MODEL]: async (options) => {
-          toolResult = await options.executeToolFn!(
+          await options.executeToolFn!(
             'delegate_batch',
             { assignments: assignmentsFor(harnessRef!.employees) },
             harnessRef!.db,
@@ -575,11 +612,11 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       harnessRef = harness;
       const { coordinator, employees } = harness;
 
-      const sent = coordinator.send('Làm báo cáo');
+      void coordinator.send('Làm báo cáo');
       await waitFor(() => coordinator.getState().phase === 'awaiting-budget');
       await sleep(20);
 
-      expect(toolResult).toBeNull();
+      // D-24: the batch is still open — the settle handler is parked on the paused agent.
       expect(coordinator.getState().agents.find((row) => row.agentId === employees[0]!.id)?.status).toBe(
         'paused'
       );
@@ -588,20 +625,19 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       );
 
       await coordinator.topUp({ kind: 'agent', agentId: employees[0]!.id }, 2000);
-      await sent;
+      await waitForReady(coordinator);
 
-      const parsed = JSON.parse(toolResult as unknown as string);
-      expect(parsed).toHaveLength(3);
-      expect(parsed[0].status).toBe('done');
+      const rows = await harness.db.aiTeamAssignments.toArray();
+      expect(rows).toHaveLength(3);
+      expect(rows.every((row) => row.runStatus === 'done')).toBe(true);
     });
 
     it('marks a stopped agent incomplete and leaves siblings running', async () => {
-      let toolResult: string | null = null;
       let harnessRef: Harness | null = null;
       const others = deferred();
       const scripts: Record<string, LoopScript> = {
         [LEAD_MODEL]: async (options) => {
-          toolResult = await options.executeToolFn!(
+          await options.executeToolFn!(
             'delegate_batch',
             { assignments: assignmentsFor(harnessRef!.employees) },
             harnessRef!.db,
@@ -626,7 +662,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       harnessRef = harness;
       const { coordinator, employees } = harness;
 
-      const sent = coordinator.send('Làm báo cáo');
+      void coordinator.send('Làm báo cáo');
       await waitFor(
         () =>
           employees.every((row) =>
@@ -635,21 +671,19 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       );
       coordinator.stopAgent(employees[0]!.id);
       others.release();
-      await sent;
+      await waitForReady(coordinator);
 
-      const parsed = JSON.parse(toolResult as unknown as string);
-      const stopped = parsed.find((entry: any) => entry.agentId === employees[0]!.id);
-      expect(stopped.status).toBe('stopped');
-      expect(stopped.incomplete).toBe(true);
-      expect(parsed.filter((entry: any) => entry.status === 'done')).toHaveLength(2);
+      const rows = await harness.db.aiTeamAssignments.toArray();
+      const stopped = rows.find((row) => row.agentId === employees[0]!.id)!;
+      expect(stopped).toMatchObject({ runStatus: 'stopped', incomplete: true });
+      expect(rows.filter((row) => row.runStatus === 'done')).toHaveLength(2);
     });
 
     it('reports an errored agent with sanitized text only', async () => {
-      let toolResult: string | null = null;
       let harnessRef: Harness | null = null;
       const scripts: Record<string, LoopScript> = {
         [LEAD_MODEL]: async (options) => {
-          toolResult = await options.executeToolFn!(
+          await options.executeToolFn!(
             'delegate_batch',
             { assignments: assignmentsFor(harnessRef!.employees) },
             harnessRef!.db,
@@ -667,17 +701,25 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       harnessRef = harness;
 
       await harness.coordinator.send('Làm báo cáo');
+      await waitForReady(harness.coordinator);
+      await waitForReady(harness.coordinator);
 
-      const parsed = JSON.parse(toolResult as unknown as string);
-      const errored = parsed.find((entry: any) => entry.status === 'error');
+      const rows = await harness.db.aiTeamAssignments.toArray();
+      const errored = rows.find((row) => row.runStatus === 'error');
       expect(errored).toBeDefined();
-      expect(errored.report).not.toContain('raw provider secret detail');
+      const report = await harness.db.chatMessages.get(errored!.reportMessageId!);
+      expect(report!.content).not.toContain('raw provider secret detail');
     });
 
-    it('adds no unfinished entry when every assignment completed (D-14)', async () => {
+    it('lists every dispatched agent in the ack and names no unfinished work (D-14)', async () => {
       let toolResult: string | null = null;
+      const synthesisPrompts: string[] = [];
       harness = await createHarness({
         teamPatch: { autoSplitEnabled: true },
+        synthesisScript: async (options) => {
+          synthesisPrompts.push(JSON.stringify(options.messages));
+          return loopResult('Đã tổng hợp.');
+        },
         scripts: {
           [LEAD_MODEL]: async (options) => {
             toolResult = await options.executeToolFn!(
@@ -695,10 +737,17 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       });
 
       await harness.coordinator.send('Làm báo cáo');
+      await waitForReady(harness.coordinator);
+      await waitForReady(harness.coordinator);
 
-      const parsed = JSON.parse(toolResult as unknown as string);
-      expect(parsed).toHaveLength(3);
-      expect(parsed.some((entry: any) => entry.kind === 'unfinished')).toBe(false);
+      const ack = JSON.parse(toolResult as unknown as string);
+      expect(ack.dispatched).toBe(3);
+      expect(ack.agents.map((entry: any) => entry.agentId).sort()).toEqual(
+        harness.employees.map((row) => row.id).sort()
+      );
+      // D-14: an all-done batch carries no unfinished marker into the synthesis prompt.
+      expect(synthesisPrompts).toHaveLength(1);
+      expect(synthesisPrompts[0]).not.toContain('Chưa hoàn tất');
     });
 
     it('returns a refused batch to the lead and starts no agent', async () => {
@@ -839,6 +888,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
       await coordinator.topUp({ kind: 'agent', agentId: employees[0]!.id }, 2000);
       await sent;
+      await waitForReady(coordinator);
       await waitFor(
         () => coordinator.getState().agents.find((row) => row.agentId === employees[0]!.id)?.status === 'done'
       );
@@ -955,6 +1005,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       await waitFor(() => coordinator.getState().phase === 'awaiting-plan');
       coordinator.resolvePlan(true);
       await sent;
+      await waitForReady(coordinator);
 
       // The pending plan clears, but the decided one stays visible with its verdict.
       const state = coordinator.getState();
@@ -1021,6 +1072,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       coordinator.abortAll();
       // The park must resolve; without the fix this await never settles.
       await sent;
+      await waitForReady(coordinator);
       expect(coordinator.getState().phase).toBe('ready');
       expect(coordinator.getState().pendingPlan).toBeNull();
     });
@@ -1095,6 +1147,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
       await coordinator.topUp({ kind: 'agent', agentId: employees[0]!.id }, 2000);
       await sent;
+      await waitForReady(coordinator);
       expect(coordinator.getState().pausedAgentId).toBeNull();
       expect(coordinator.getState().pausedAgentName).toBeNull();
     });
@@ -1136,6 +1189,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       coordinator.setTeamSettings({ autoSplitEnabled: true });
       coordinator.resolvePlan(true);
       await sent;
+      await waitForReady(coordinator);
 
       expect(coordinator.getState().phase).not.toBe('awaiting-plan');
     });
@@ -1352,6 +1406,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       roster.employees = roster.employees.slice(0, 1);
       coordinator.resolvePlan(true);
       await sent;
+      await waitForReady(coordinator);
 
       expect(started.sort()).toEqual(['a', 'b', 'c']);
     });
@@ -1399,6 +1454,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       coordinator.stopAgent(employee.id);
       gate.release();
       await sent;
+      await waitForReady(coordinator);
 
       expect(isAgentInUse(employee.id)).toBe(false);
       expect(isSkillInUse(skill.id)).toBe(false);
@@ -1431,6 +1487,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
       gate.release();
       await sent;
+      await waitForReady(coordinator);
     });
 
     it('stops mentioning a de-rostered agent from the next turn', async () => {
@@ -1539,6 +1596,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       current.roster.employees = current.employees;
 
       await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
 
       const { batches, assignments, messages } = await rowsFor(current);
       expect(batches).toHaveLength(1);
@@ -1589,6 +1647,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       await waitFor(() => current.coordinator.getState().phase === 'awaiting-plan');
       current.coordinator.resolvePlan(false);
       await sent;
+      await waitForReady(current.coordinator);
 
       const { batches, assignments } = await rowsFor(current);
       expect(batches).toHaveLength(1);
@@ -1629,6 +1688,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       current.coordinator.stopAgent(first.id);
       gate.release();
       await sent;
+      await waitForReady(current.coordinator);
 
       const { assignments, messages } = await rowsFor(current);
       const attempt = assignments[0]!;
@@ -1671,6 +1731,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       current.roster.employees = current.employees;
 
       await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
 
       const { assignments, messages } = await rowsFor(current);
       const attempt = assignments[0]!;
@@ -1720,6 +1781,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       await waitFor(() => current.coordinator.getState().agents.some(r => r.status === 'stopped'));
       gate.release();
       await sent;
+      await waitForReady(current.coordinator);
 
       const { assignments, messages } = await rowsFor(current);
       const byAgent = new Map(assignments.map((row) => [row.agentId, row]));
@@ -1757,10 +1819,12 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       const sent = current.coordinator.send('Làm báo cáo');
       await waitFor(() => current.coordinator.getState().phase === 'batch-running');
       // A live turn: requeue.
+      // plan 04 flips this to 'steered'
       await expect(current.coordinator.send('chen ngang')).resolves.toBe('busy');
 
       gate.release();
       await sent;
+      await waitForReady(current.coordinator);
 
       await expect(current.coordinator.send('lượt mới')).resolves.toBe('started');
 
@@ -1784,6 +1848,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       const rawUpdate = vi.spyOn(current.db.aiTeamAssignments, 'update');
       const rawPut = vi.spyOn(current.db.aiTeamAssignments, 'put');
       await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
 
       // Non-status fields (`reportMessageId`, `instructionMessageId`) may be written directly;
       // a `runStatus` patch may not.
@@ -1871,19 +1936,15 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       };
 
     it('resolves the batch when one of three agents throws, and never stays in batch-running', async () => {
-      let toolResult: string | null = null;
+      const synthesisPrompts: string[] = [];
       harness = await createHarness({
         teamPatch: { autoSplitEnabled: true },
+        synthesisScript: async (options) => {
+          synthesisPrompts.push(JSON.stringify(options.messages));
+          return loopResult('Đã tổng hợp.');
+        },
         scripts: {
-          [LEAD_MODEL]: async (options) => {
-            toolResult = await options.executeToolFn!(
-              'delegate_batch',
-              { assignments: assignmentsFor(harness!.employees) },
-              harness!.db,
-              options.signal
-            );
-            return loopResult('Xong.');
-          },
+          [LEAD_MODEL]: delegatingLead(() => harness!),
           [EMP_A_MODEL]: async () => loopResult('A xong'),
           [EMP_B_MODEL]: async () => {
             throw new Error('B nổ');
@@ -1894,20 +1955,14 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       const current = harness;
 
       await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
 
-      const parsed = JSON.parse(toolResult as unknown as string);
-      const entries = parsed.filter((entry: any) => entry.kind !== 'unfinished');
-      expect(entries).toHaveLength(3);
-      expect(entries.map((entry: any) => entry.status)).toEqual(['done', 'error', 'done']);
-      // D-14: the honest tail names the agent that did not finish.
-      const unfinished = parsed.at(-1);
-      expect(unfinished).toMatchObject({ kind: 'unfinished' });
-      expect(unfinished.agents.map((row: any) => row.agentId)).toEqual([current.employees[1]!.id]);
-      expect(unfinished.agents[0]).toMatchObject({
-        status: 'error',
-        stopReason: 'provider',
-        agentName: current.employees[1]!.name,
-      });
+      const rows = await current.db.aiTeamAssignments.toArray();
+      expect(rows.map((row) => row.runStatus).sort()).toEqual(['done', 'done', 'error']);
+      // D-14: the honest tail reaches the LEAD through the synthesis prompt, not the tool result.
+      expect(synthesisPrompts).toHaveLength(1);
+      expect(synthesisPrompts[0]).toContain(current.employees[1]!.name);
+      expect(synthesisPrompts[0]).toContain('Chưa hoàn tất');
       expect(current.coordinator.getState().phase).not.toBe('batch-running');
     });
 
@@ -1937,6 +1992,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
       try {
         await current.coordinator.send('Làm báo cáo');
+        await waitForReady(current.coordinator);
       } finally {
         spy.mockRestore();
       }
@@ -1965,6 +2021,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       current.roster.employees = current.employees;
 
       await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
 
       const assignment = (await current.db.aiTeamAssignments.toArray())[0]!;
       expect(assignment.runStatus).toBe('error');
@@ -2020,6 +2077,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
       gate.release();
       await sent;
+      await waitForReady(coordinator);
       await waitFor(drained, PURGE_WINDOW_MS + 2000);
       expect(aiTurnManager.getActiveTurns()).toHaveLength(0);
     });
@@ -2034,6 +2092,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       await waitFor(() => coordinator.getState().phase === 'awaiting-plan');
       coordinator.resolvePlan(false);
       await sent;
+      await waitForReady(coordinator);
 
       await waitFor(drained, PURGE_WINDOW_MS + 2000);
       expect(aiTurnManager.getActiveTurns()).toHaveLength(0);
@@ -2071,6 +2130,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       coordinator.abortAll();
       gate.release();
       await sent;
+      await waitForReady(coordinator);
 
       await waitFor(drained, PURGE_WINDOW_MS + 2000);
       expect(aiTurnManager.getActiveTurns()).toHaveLength(0);
@@ -2143,12 +2203,14 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
       for (const gate of gates.values()) gate.release();
       await sent;
+      await waitForReady(current.coordinator);
       unsubscribe();
 
       expect(Math.max(...runningSamples)).toBe(2);
-      const parsed = JSON.parse(toolResult as unknown as string);
-      expect(parsed).toHaveLength(5);
-      expect(parsed.every((entry: any) => entry.status === 'done')).toBe(true);
+      // D-24: the tool result is an ack naming every dispatched agent, not settled results.
+      const ack = JSON.parse(toolResult as unknown as string);
+      expect(ack).toMatchObject({ dispatched: 5, status: 'dispatched' });
+      expect(ack.agents).toHaveLength(5);
 
       const rows = await current.db.aiTeamAssignments.toArray();
       expect(rows).toHaveLength(5);
@@ -2179,6 +2241,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       });
 
       await harness.coordinator.send('Làm báo cáo');
+      await waitForReady(harness.coordinator);
 
       expect(startOrder).toEqual(['a', 'b', 'c']);
     });
@@ -2219,6 +2282,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
       for (const gate of gates.values()) gate.release();
       await sent;
+      await waitForReady(current.coordinator);
       expect(current.coordinator.getRunningCount()).toBe(0);
     });
 
@@ -2248,6 +2312,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
       try {
         await current.coordinator.send('Làm báo cáo');
+        await waitForReady(current.coordinator);
       } finally {
         spy.mockRestore();
       }
@@ -2296,6 +2361,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
       for (const gate of gates.values()) gate.release();
       await sent;
+      await waitForReady(current.coordinator);
       expect(current.coordinator.getRunningCount()).toBe(0);
     });
 
@@ -2343,6 +2409,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
       for (const gate of gates.values()) gate.release();
       await sent;
+      await waitForReady(current.coordinator);
       expect(current.coordinator.getRunningCount()).toBe(0);
     });
 
@@ -2385,6 +2452,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       current.coordinator.stopAgent(current.employees[1]!.id);
       for (const gate of gates.values()) gate.release();
       await sent;
+      await waitForReady(current.coordinator);
 
       expect(started).toEqual([EMP_A_MODEL, EMP_C_MODEL]);
 
@@ -2410,13 +2478,10 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
         incomplete: true,
       });
 
-      const parsed = JSON.parse(toolResult as unknown as string);
-      const entry = parsed.find((row: any) => row.agentId === current.employees[1]!.id);
-      expect(entry).toMatchObject({
-        status: 'stopped',
-        stopReason: 'user-per-agent',
-        incomplete: true,
-      });
+      // D-24: the ack names every dispatched agent; the outcome lives in the ledger.
+      const ack = JSON.parse(toolResult as unknown as string);
+      expect(ack).toMatchObject({ dispatched: 3, status: 'dispatched' });
+      expect(ack.agents.map((row: any) => row.agentId)).toContain(current.employees[1]!.id);
     });
 
     it('abortAll settles every queued assignment and closes the batch as a user abort (D-11)', async () => {
@@ -2450,6 +2515,9 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       current.coordinator.abortAll();
       gate.release();
       await sent;
+      // D-24: the abort settles the ledger asynchronously, after the dispatch turn returned.
+      await waitFor(() => current.coordinator.getRunningCount() === 0);
+      await sleep(50);
 
       const rows = await current.db.aiTeamAssignments.toArray();
       expect(rows).toHaveLength(3);
@@ -2465,15 +2533,9 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(batches[0]!.endedAt).toBeDefined();
       expect(current.coordinator.getState().phase).toBe('ready');
 
-      const parsed = JSON.parse(toolResult as unknown as string);
-      const entries = parsed.filter((entry: any) => entry.kind !== 'unfinished');
-      expect(entries).toHaveLength(3);
-      expect(entries.every((entry: any) => entry.incomplete === true)).toBe(true);
-      // D-14: every unfinished agent is named once in the tail entry.
-      const unfinished = parsed.at(-1);
-      expect(unfinished).toMatchObject({ kind: 'unfinished' });
-      expect(unfinished.agents).toHaveLength(3);
-      expect(unfinished.agents.every((row: any) => row.stopReason === 'user-abort')).toBe(true);
+      // D-24: the ack is not a result set; the ledger is the authority on what happened.
+      const ack = JSON.parse(toolResult as unknown as string);
+      expect(ack).toMatchObject({ dispatched: 3, status: 'dispatched' });
     });
 
     it('dispose mid-batch rejects the parked acquire and settles the queued assignment (limit 1)', async () => {
@@ -2508,6 +2570,8 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       gate.release();
       // Must resolve: a parked acquire that outlives the dispose would hang here.
       await sent;
+      await waitFor(() => current.coordinator.getRunningCount() === 0);
+      await sleep(50);
 
       const rows = await current.db.aiTeamAssignments.toArray();
       expect(rows).toHaveLength(3);
@@ -2516,11 +2580,9 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(
         queued.every((row) => row.runStatus === 'stopped' && row.incomplete === true)
       ).toBe(true);
-      const parsed = JSON.parse(toolResult as unknown as string);
-      const entries = parsed.filter((entry: any) => entry.kind !== 'unfinished');
-      expect(entries).toHaveLength(3);
-      expect(entries.filter((entry: any) => entry.incomplete === true).length).toBeGreaterThan(0);
-      expect(parsed.at(-1)).toMatchObject({ kind: 'unfinished' });
+      // D-24: the ack is not a result set; the ledger above is the authority.
+      const ack = JSON.parse(toolResult as unknown as string);
+      expect(ack).toMatchObject({ dispatched: 3, status: 'dispatched' });
       expect(current.coordinator.getRunningCount()).toBe(0);
       expect(current.coordinator.getState().phase).toBe('ready');
     });
@@ -2536,17 +2598,17 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       let bAttempts = 0;
       harness = await createHarness({
         teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
-        scripts: {
-          [LEAD_MODEL]: async (options) => {
-            const system = options.messages
+        synthesisScript: async (options) => {
+          synthesisPrompts.push(
+            options.messages
               .filter((message) => message.role === 'system')
               .map((message) => String(message.content))
-              .join('\n');
-            // The re-synthesis turn is the one whose user text is the synthesis instruction.
-            if (String(options.messages.at(-1)?.content).includes('Tổng hợp lại kết quả của lô')) {
-              synthesisPrompts.push(system);
-              return loopResult('Tổng hợp lần hai.');
-            }
+              .join('\n')
+          );
+          return loopResult('Tổng hợp lần hai.');
+        },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
             const result = await options.executeToolFn!(
               'delegate_batch',
               { assignments: assignmentsFor(harness!.employees) },
@@ -2574,9 +2636,10 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       const current = harness;
 
       await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
 
-      // The lead ran once for the batch; A, C once each; B once (failed).
-      expect(synthesisPrompts).toHaveLength(0);
+      // D-24: the batch itself ends with one synthesis turn; A, C ran once each; B once (failed).
+      expect(synthesisPrompts).toHaveLength(1);
       const batchRows = await current.db.aiTeamAssignments.toArray();
       const bFirst = batchRows.find(
         (row) => row.agentId === current.employees[1]!.id && row.attemptNo === 1
@@ -2613,12 +2676,12 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(superseded!.supersededByMessageId).toBe(bSecond.reportMessageId);
       expect(superseded!.supersededAt).toBeDefined();
 
-      // D-12: the lead's second turn carried the WHOLE batch, resolved from report rows.
-      expect(synthesisPrompts).toHaveLength(1);
-      expect(synthesisPrompts[0]).toContain('A xong lần một.');
-      expect(synthesisPrompts[0]).toContain('C xong lần một.');
-      expect(synthesisPrompts[0]).toContain('B xong lần hai.');
-      expect(synthesisPrompts[0]).not.toContain('Không có báo cáo cho lần chạy này.');
+      // D-12: the retry's synthesis turn carried the WHOLE batch, resolved from report rows.
+      expect(synthesisPrompts).toHaveLength(2);
+      expect(synthesisPrompts[1]).toContain('A xong lần một.');
+      expect(synthesisPrompts[1]).toContain('C xong lần một.');
+      expect(synthesisPrompts[1]).toContain('B xong lần hai.');
+      expect(synthesisPrompts[1]).not.toContain('Không có báo cáo cho lần chạy này.');
       expect(current.coordinator.getRunningCount()).toBe(0);
     });
 
@@ -2655,6 +2718,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       const current = harness;
 
       await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
       const rows = await current.db.aiTeamAssignments.toArray();
       const bFirst = rows.find(
         (row) => row.agentId === current.employees[1]!.id && row.attemptNo === 1
@@ -2744,6 +2808,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       await expect(current.coordinator.retryAssignment(stopped.id)).rejects.toThrow();
       gate.release();
       await sent;
+      await waitForReady(current.coordinator);
     });
 
     it('leaves exactly one report row when the retry is stopped before it settles', async () => {
@@ -2776,6 +2841,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       });
       const current = harness;
       await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
 
       const bFirst = (await current.db.aiTeamAssignments.toArray()).find(
         (row) => row.agentId === current.employees[1]!.id && row.attemptNo === 1
@@ -2830,6 +2896,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       });
       const current = harness;
       await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
 
       const bFirst = (await current.db.aiTeamAssignments.toArray()).find(
         (row) => row.agentId === current.employees[1]!.id && row.attemptNo === 1
@@ -2884,6 +2951,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       });
       const current = harness;
       await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
 
       const bFirst = (await current.db.aiTeamAssignments.toArray()).find(
         (row) => row.agentId === current.employees[1]!.id && row.attemptNo === 1
@@ -2915,12 +2983,12 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       let synthesisRuns = 0;
       harness = await createHarness({
         teamPatch: { autoSplitEnabled: true, concurrencyLimit: 2 },
+        synthesisScript: async () => {
+          synthesisRuns += 1;
+          return loopResult('Tổng hợp lần hai.');
+        },
         scripts: {
           [LEAD_MODEL]: async (options) => {
-            if (String(options.messages.at(-1)?.content).includes('Tổng hợp lại kết quả của lô')) {
-              synthesisRuns += 1;
-              return loopResult('Tổng hợp lần hai.');
-            }
             await options.executeToolFn!(
               'delegate_batch',
               { assignments: assignmentsFor(harness!.employees) },
@@ -2944,6 +3012,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       });
       const current = harness;
       await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
 
       const rows = await current.db.aiTeamAssignments.toArray();
       const bFirst = rows.find(
@@ -2961,8 +3030,9 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(results.filter((row) => row.status === 'fulfilled')).toHaveLength(1);
       const refused = results.find((row) => row.status === 'rejected') as PromiseRejectedResult;
       expect(String(refused.reason)).toContain('Nhóm đang chạy');
-      // Exactly one retry ran: one extra attempt row, one synthesis.
-      expect(synthesisRuns).toBe(1);
+      // Exactly one retry ran: one extra attempt row, one extra synthesis (the batch's own
+      // synthesis turn already ran, so the count is 2).
+      expect(synthesisRuns).toBe(2);
       const after = await current.db.aiTeamAssignments.toArray();
       expect(after.filter((row) => row.attemptNo === 2)).toHaveLength(1);
     });
@@ -2997,12 +3067,21 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       const current = harness;
 
       await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
 
-      const firstSynthesis = (await current.db.chatMessages
+      // D-24: the dispatch turn's answer and the batch's synthesis are both synthesis rows,
+      // and the dispatch one is superseded — exactly one synthesis stays current.
+      const batchSyntheses = (await current.db.chatMessages
         .where('threadId')
         .equals(current.threadId)
-        .toArray()).find((row) => row.messageKind === 'synthesis')!;
-      expect(firstSynthesis.supersededByMessageId).toBeUndefined();
+        .toArray()).filter((row) => row.messageKind === 'synthesis');
+      expect(batchSyntheses).toHaveLength(2);
+      const firstSynthesis = batchSyntheses.find(
+        (row) => row.supersededByMessageId === undefined
+      )!;
+      expect(
+        batchSyntheses.filter((row) => row.supersededByMessageId === undefined)
+      ).toHaveLength(1);
 
       const bFirst = (await current.db.aiTeamAssignments.toArray()).find(
         (row) => row.agentId === current.employees[1]!.id && row.attemptNo === 1
@@ -3034,11 +3113,16 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
         .where('threadId')
         .equals(current.threadId)
         .toArray()).filter((row) => row.messageKind === 'synthesis');
-      expect(syntheses).toHaveLength(2);
-      const second = syntheses.find((row) => row.id !== firstSynthesis.id)!;
-      expect(second.supersededByMessageId).toBeUndefined();
+      // D-24: the batch ends with its own synthesis turn, so the retry's synthesis is the
+      // third row — and exactly one synthesis stays current afterwards.
+      const currentSyntheses = syntheses.filter(
+        (row) => row.supersededByMessageId === undefined
+      );
+      expect(currentSyntheses).toHaveLength(1);
+      const latest = currentSyntheses[0]!;
+      expect(latest.id).not.toBe(firstSynthesis.id);
       const firstAfter = await current.db.chatMessages.get(firstSynthesis.id);
-      expect(firstAfter!.supersededByMessageId).toBe(second.id);
+      expect(firstAfter!.supersededByMessageId).toBe(latest.id);
       expect(remounted.getState().phase).toBe('ready');
     });
 
@@ -3088,6 +3172,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
       try {
         await current.coordinator.send('Làm báo cáo');
+        await waitForReady(current.coordinator);
       } finally {
         spy.mockRestore();
       }
@@ -3142,6 +3227,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       });
       const current = harness;
       await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
 
       const bFirst = (await current.db.aiTeamAssignments.toArray()).find(
         (row) => row.agentId === current.employees[1]!.id && row.attemptNo === 1
@@ -3207,6 +3293,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
       await coordinator.dispose();
       await sent;
+      await waitForReady(coordinator);
 
       const state = coordinator.getState();
       expect(state.phase).toBe('ready');
@@ -3254,6 +3341,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       await coordinator.dispose();
       gate.release();
       await sent;
+      await waitForReady(coordinator);
 
       // The `lead-synthesizing` tail runs after `Promise.all(deferreds)`; a disposed
       // coordinator must never write it.
@@ -3354,6 +3442,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
         await current.coordinator.dispose();
         gate.release();
         await sent;
+        await waitForReady(current.coordinator);
 
         // No batch row, no attempt row, no runtime — and the lead got a refusal, not a hang.
         expect(await current.db.aiTeamBatches.count()).toBe(0);
@@ -3403,6 +3492,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       await current.coordinator.dispose('team-deleted');
       gate.release();
       await sent;
+      await waitForReady(current.coordinator);
 
       const rows = await current.db.aiTeamAssignments.toArray();
       expect(rows).toHaveLength(3);
@@ -3443,6 +3533,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       await current.coordinator.dispose('app-exit');
       gate.release();
       await sent;
+      await waitForReady(current.coordinator);
 
       const batch = (await current.db.aiTeamBatches.toArray())[0]!;
       // `app-exit` has no assignment-level stop reason (D-22 union), so the exit fact lives
@@ -3470,6 +3561,222 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(first.signal.aborted).toBe(true);
       expect(second.signal.aborted).toBe(true);
       expect(controllers.size).toBe(0);
+    });
+  });
+
+  describe('D-24 event-driven batch', () => {
+    const assignmentsFor = (employees: AiEmployee[]) =>
+      employees.map((row, index) => ({ agentId: row.id, task: `Việc ${index + 1}` }));
+
+    it('the leader turn ends while agents are still running', async () => {
+      const employeeGate = deferred();
+      let leadTurnFinished = false;
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            leadTurnFinished = true;
+            return loopResult('Đã giao việc.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await employeeGate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+
+      await current.coordinator.send('Làm báo cáo');
+
+      // The dispatch turn returned, but the batch is still open and A has not settled.
+      expect(leadTurnFinished).toBe(true);
+      expect(current.coordinator.getState().phase).toBe('batch-running');
+      expect(
+        current.coordinator.getState().agents.find(
+          (row) => row.agentId === current.employees[0]!.id
+        )?.status
+      ).toBe('running');
+
+      employeeGate.release();
+      await waitForReady(current.coordinator);
+    });
+
+    it('aborting the leader tool-call signal does not abort the batch', async () => {
+      const employeeGate = deferred();
+      const toolCallController = new AbortController();
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              toolCallController.signal
+            );
+            // The lead's turn is over: its own signal aborts. Under D-24 that must not
+            // reach any agent.
+            toolCallController.abort();
+            return loopResult('Đã giao việc.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await employeeGate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => {
+            await employeeGate.promise;
+            return loopResult('B xong');
+          },
+          [EMP_C_MODEL]: async () => {
+            await employeeGate.promise;
+            return loopResult('C xong');
+          },
+        },
+      });
+      const current = harness;
+
+      await current.coordinator.send('Làm báo cáo');
+      employeeGate.release();
+      await waitForReady(current.coordinator);
+
+      const rows = await current.db.aiTeamAssignments.toArray();
+      expect(rows).toHaveLength(3);
+      expect(rows.every((row) => row.runStatus === 'done')).toBe(true);
+      expect(rows.some((row) => row.stopReason === 'user-abort')).toBe(false);
+    });
+
+    it('refuses a second batch while one is open', async () => {
+      const employeeGate = deferred();
+      const results: string[] = [];
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            results.push(
+              await options.executeToolFn!(
+                'delegate_batch',
+                { assignments: assignmentsFor(harness!.employees) },
+                harness!.db,
+                options.signal
+              )
+            );
+            results.push(
+              await options.executeToolFn!(
+                'delegate_batch',
+                { assignments: assignmentsFor(harness!.employees) },
+                harness!.db,
+                options.signal
+              )
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await employeeGate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => {
+            await employeeGate.promise;
+            return loopResult('B xong');
+          },
+          [EMP_C_MODEL]: async () => {
+            await employeeGate.promise;
+            return loopResult('C xong');
+          },
+        },
+      });
+      const current = harness;
+
+      await current.coordinator.send('Làm báo cáo');
+
+      expect(results).toHaveLength(2);
+      expect(JSON.parse(results[0]!).status).toBe('dispatched');
+      expect(JSON.parse(results[1]!).cancelled).toBe(true);
+      expect(await current.db.aiTeamBatches.count()).toBe(1);
+
+      employeeGate.release();
+      await waitForReady(current.coordinator);
+    });
+
+    it('keeps the team turn registered through batch-running and finishes it once', async () => {
+      const employeeGate = deferred();
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Đã giao việc.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await employeeGate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+      const teamTurnId = `team:${current.team.id}`;
+
+      await current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getState().phase === 'batch-running');
+      // The dispatch turn ended, yet the team turn must still be live.
+      expect(aiTurnManager.getTurn(teamTurnId)).toBeDefined();
+      expect(aiTurnManager.getActiveTurns().some((turn) => turn.id === teamTurnId)).toBe(true);
+
+      employeeGate.release();
+      await waitForReady(current.coordinator);
+      await waitFor(
+        () => !aiTurnManager.getActiveTurns().some((turn) => turn.id === teamTurnId),
+        1200 + 2000
+      );
+    });
+
+    it('counts tokens from both lead turns', async () => {
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, budgetTokens: 100000 },
+        synthesisScript: async (options) => {
+          options.onUsage?.({ totalTokens: 400 });
+          return loopResult('Đã tổng hợp.');
+        },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            options.onUsage?.({ totalTokens: 300 });
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Đã giao việc.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+
+      await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
+
+      const leadMember = (
+        await current.db.aiTeamMembers.where('teamId').equals(current.team.id).toArray()
+      ).find((row) => row.agentId === current.lead.id)!;
+      // Both lead turns report; a per-agent baseline would lose the dispatch turn's 300.
+      expect(leadMember.usedTokens).toBe(700);
     });
   });
 });
