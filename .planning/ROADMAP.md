@@ -202,7 +202,7 @@ Plans:
 **Scope source:** deferred from `.planning/phases/37-runtime-reliability-concurrency/37-CONTEXT.md` (D-08/D-19/D-22/D-24). Schema is already in place from Phase 37.
 **Research flag:** standard patterns — `beforeToolRound` seam exists at `src/services/ai/aiOrchestratorLoop.ts`; defects/contracts are at `file:line` in 37-CONTEXT.
 
-**Plans:** 3/6 plans executed
+**Plans:** 4/6 plans executed
 Plans:
 **Wave 1**
 
@@ -215,7 +215,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 37.1-04-PLAN.md — `send()` steer routing, leader-as-gate `deliver_steer`, inbox drain, lead prompt, SC5 teardown
+- [x] 37.1-04-PLAN.md — `send()` steer routing, leader-as-gate `deliver_steer`, inbox drain, lead prompt, SC5 teardown
 
 **Wave 4** *(blocked on Wave 3 completion)*
 

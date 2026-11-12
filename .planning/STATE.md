@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
 status: executing
-stopped_at: Completed 37.1-03-PLAN.md
-last_updated: "2026-11-12T04:21:33.000Z"
-last_activity: 2026-11-12 -- Phase 37.1 plan 03 complete (persisted steer contract)
+stopped_at: Completed 37.1-04-PLAN.md
+last_updated: "2026-11-12T04:35:00.000Z"
+last_activity: 2026-11-12 -- Phase 37.1 plan 04 complete (steer routing + leader gate)
 progress:
   total_phases: 7
   completed_phases: 3
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 37.1 (live-steering-leader-amends-assignments-and-steers-running-a) — EXECUTING
-Plan: 3 of 6
+Plan: 4 of 6
 Status: Ready to execute
-Last activity: 2026-11-12 -- Phase 37.1 plan 03 complete (persisted steer contract)
+Last activity: 2026-11-12 -- Phase 37.1 plan 04 complete (steer routing + leader gate)
 
 ## Session Continuity
 
-Last session: 2026-11-12T04:21:33.000Z
-Stopped at: Completed 37.1-03-PLAN.md
-Resume file: .planning/phases/37.1-live-steering-leader-amends-assignments-and-steers-running-a/37.1-04-PLAN.md
+Last session: 2026-11-12T04:35:00.000Z
+Stopped at: Completed 37.1-04-PLAN.md
+Resume file: .planning/phases/37.1-live-steering-leader-amends-assignments-and-steers-running-a/37.1-05-PLAN.md
 
-Progress: [██████░░░░] 60%
+Progress: [███████░░░] 67%
 
 ## Milestone v1.4 Map
 

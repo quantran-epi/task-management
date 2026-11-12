@@ -40,7 +40,7 @@
 
 - [ ] **AIO-LEAD-01**: The leader analyzes a free-style request, selects agents by their skill, splits the work, and synthesizes the result. No CR, PL01, or PL02 is required to run. (C-05, C-06)
 - [ ] **AIO-LEAD-02**: The delegation plan is visible to the user with per-agent attribution on every message. The transcript distinguishes user, leader, and each agent. (C-05, R-09)
-- [ ] **AIO-LEAD-03**: The user can @mention an agent directly; agents otherwise receive work only from the leader. (C-05)
+- [x] **AIO-LEAD-03**: The user can @mention an agent directly; agents otherwise receive work only from the leader. (C-05)
 - [ ] **AIO-LEAD-04**: CR and PL documents are optional attachments. With no attachment the group still runs at full quality; with one, the leader and agents read it through the existing tools. (C-07)
 - [x] **AIO-LEAD-05**: Per-agent stop and a global abort both work, and stopped work is marked incomplete rather than silently dropped. (R-18)
 
@@ -57,8 +57,8 @@
 - [x] **AIO-STEER-01**: A message sent while a batch is running reaches the leader and produces a visible re-plan, not a queued second turn. The composer is always usable — no outbox, no "busy" refusal. (D-01, D-02, D-24)
 - [ ] **AIO-STEER-02**: The leader can cancel a `queued` assignment and rewrite another's task via `amend_assignments`; the scheduler honours both without a second source of truth. (D-06, D-07, D-08, D-27)
 - [x] **AIO-STEER-03**: A steering message addressed to a running agent is drained at its next `beforeToolRound` (including round 1) and appears in its transcript attribution. (D-09, D-10, D-15, D-17)
-- [ ] **AIO-STEER-04**: Steering an agent that already settled is refused visibly; the ledger stays consistent. The leader is the gate for every `@agent` steer and holds a problematic one before it is delivered. (D-11, D-16, D-18, D-28)
-- [ ] **AIO-STEER-05**: Abort/teardown while steering is in flight leaves no active turns and no further writes. (D-12, D-14, D-24)
+- [x] **AIO-STEER-04**: Steering an agent that already settled is refused visibly; the ledger stays consistent. The leader is the gate for every `@agent` steer and holds a problematic one before it is delivered. (D-11, D-16, D-18, D-28)
+- [x] **AIO-STEER-05**: Abort/teardown while steering is in flight leaves no active turns and no further writes. (D-12, D-14, D-24)
 
 ### Token Budget (AIO-BUDGET)
 
