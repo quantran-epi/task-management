@@ -4874,6 +4874,65 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       // The batch really closed, so the next send starts a new turn rather than steering.
       expect(synthesisPrompts).toHaveLength(1);
     });
+
+    // WR-02 (pass 5): the deadline finalized the row but left `steerMessageIds` intact, so a
+    // steer the agent never drained still rendered as delivered. The row is terminal, so no
+    // later round can drain it — the marker must not survive.
+    it('drops an undrained steer marker when the deadline stops a row', async () => {
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        settlePollDeadlineMs: 50,
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: [{ agentId: harness!.employees[0]!.id, task: 'Việc 1' }] },
+              harness!.db,
+              options.signal
+            );
+            const batch = (await harness!.db.aiTeamBatches.toArray())[0]!;
+            const stuck = await createAssignment(
+              {
+                batchId: batch.id,
+                agentId: harness!.employees[1]!.id,
+                agentName: harness!.employees[1]!.name,
+                model: EMP_B_MODEL,
+                task: 'Việc mồ côi',
+              },
+              harness!.db
+            );
+            const steerRow = await saveTeamMessage(
+              {
+                threadId: harness!.threadId,
+                role: 'user',
+                content: 'đổi hướng',
+                messageKind: 'steer',
+                targetAgentId: harness!.employees[1]!.id,
+              },
+              harness!.db
+            );
+            // Delivered to the row, but the row never runs — the agent never reads it.
+            await harness!.db.aiTeamAssignments.update(stuck.id, {
+              steerMessageIds: [steerRow.id],
+            });
+            return loopResult('Đã giao việc.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+        },
+      });
+      const current = harness;
+
+      await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
+
+      const stuck = (await current.db.aiTeamAssignments.toArray()).find(
+        (row) => row.task === 'Việc mồ côi'
+      )!;
+      expect(stuck).toMatchObject({ runStatus: 'stopped', stopReason: 'tool-limit' });
+      // The undrained marker is gone, so the badge tells the truth again.
+      expect(stuck.steerMessageIds ?? []).toEqual([]);
+    });
   });
 
   describe('amend_assignments (37.1 D-06/D-07/D-08/D-27)', () => {

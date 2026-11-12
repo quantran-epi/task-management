@@ -1313,8 +1313,9 @@ export function createTeamRunCoordinator(
         // CR-01: `onBatchSettled` awaits this agent's deferred. The amend path owns the
         // terminal write, but leaving the deferred unresolved hangs the batch forever — no
         // synthesis, `openBatchId` stuck, phase stuck `batch-running`, and `dispose()` cannot
-        // unblock it. Release it without settling: a replacement dispatch registers its own
-        // deferred, and the ledger poll covers the gap.
+        // unblock it. Release it without settling: the amend path's replacement dispatch
+        // registers its own deferred, and the ledger poll covers the gap. If the amend path
+        // refuses instead (create throw), it settles the agent itself.
         agentDeferreds.get(employee.id)?.resolve();
         agentDeferreds.delete(employee.id);
         throw err;
@@ -2022,8 +2023,11 @@ export function createTeamRunCoordinator(
           db
         );
       } catch {
-        // The old row is already `skipped` and its agent is settled by the retired dispatch's
-        // own catch, so the batch can still settle. Report the refusal honestly.
+        // WR-01: the retired dispatch's own catch early-returns on the marker without
+        // settling, so after this refusal NO writer is left — the agent would stay
+        // `queued`/`running` forever and the synthesis would report it unfinished. Settle it
+        // here, then drop the marker so the row's identity guard is not left armed.
+        settleAgent(row.agentId, 'stopped', undefined, row.id);
         retiredAssignmentIds.delete(row.id);
         refused.push({ assignmentId: row.id, code: 'NOT_QUEUED' });
         continue;
@@ -2521,6 +2525,21 @@ export function createTeamRunCoordinator(
                 'tool-limit',
                 STOPPED_REPORT_COPY
               );
+              // WR-02: `steerMessageIds` is the durable "delivered" marker, and the badge
+              // suppresses on it. A steer this row never drained was NOT read by the agent —
+              // leaving the marker would tell the user their instruction landed. The row is
+              // terminal, so no later round can drain it: drop only the ids never injected
+              // (an injected one WAS read). Inside a transaction so a concurrent write during
+              // this await cannot be lost (CR-05).
+              const injected = injectedSteerIdsByAttempt.get(row.id);
+              await db.transaction('rw', [db.aiTeamAssignments], async () => {
+                const live = await db.aiTeamAssignments.get(row.id);
+                const ids = live?.steerMessageIds ?? [];
+                const kept = ids.filter((id) => injected?.has(id) ?? false);
+                if (kept.length !== ids.length) {
+                  await db.aiTeamAssignments.update(row.id, { steerMessageIds: kept });
+                }
+              });
             } finally {
               userStopped.delete(row.agentId);
             }
