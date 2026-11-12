@@ -22,6 +22,7 @@ import {
   SCHEMA_V20,
   SCHEMA_V21,
   SCHEMA_V22,
+  SCHEMA_V23,
 } from './schema';
 import type {
   Task,
@@ -59,6 +60,11 @@ import type {
   AiTeamBatch,
   AiTeamAssignment,
 } from '../types/aiOffice';
+import type {
+  TeamMessage,
+  TeamParticipant,
+  TeamReadCursor,
+} from '../types/teamChat';
 
 /**
  * Stable id of the recovery CR that parks tasks whose legacy project no longer resolves.
@@ -99,6 +105,9 @@ export class TaskPlannerDatabase extends Dexie {
   aiSkillVersions!: Table<AiSkillVersion, string>;
   aiTeamBatches!: Table<AiTeamBatch, string>;
   aiTeamAssignments!: Table<AiTeamAssignment, string>;
+  teamParticipants!: Table<TeamParticipant, string>;
+  teamMessages!: Table<TeamMessage, string>;
+  teamReadCursors!: Table<TeamReadCursor, string>;
 
 
   constructor(databaseName = 'PersonalTaskPlannerDB') {
@@ -628,6 +637,9 @@ export class TaskPlannerDatabase extends Dexie {
     // Phase 37 (D-22): run ledger. Purely additive — nothing to backfill, so no
     // `.upgrade()` hook. The V20/V21 repair hooks stay attached to their own versions.
     this.version(22).stores(SCHEMA_V22);
+
+    // 37.1 rework: the unified team-chat model. Purely additive, nothing to backfill.
+    this.version(23).stores(SCHEMA_V23);
 
     // Multi-tab concurrency handlers (DATA-04, D-09, D-10)
     this.on('blocked', () => {

@@ -154,6 +154,17 @@ export const SCHEMA_V22 = {
     'id, batchId, agentId, [batchId+attemptNo], runStatus, retryOfAssignmentId',
 } as const;
 
+// 37.1 rework: the unified team-chat model. Purely additive — no existing store index spec
+// is touched, so no index rebuild and no `.upgrade()` hook is needed. `teamMessages` needs a
+// monotonic `seq` per team, which is allocated inside the append transaction, not by an
+// auto-increment store (a compound `[teamId+seq]` unique index is what enforces it).
+export const SCHEMA_V23 = {
+  ...SCHEMA_V22,
+  teamParticipants: 'id, teamId, [teamId+kind]',
+  teamMessages: 'id, teamId, [teamId+seq], [teamId+createdAt], assignmentId',
+  teamReadCursors: 'id, [teamId+participantId]',
+} as const;
+
 // Bump with every new `this.version(n)` in db/index.ts. Migration tests assert
 // against this instead of a literal, so a schema bump never silently breaks them.
-export const LATEST_SCHEMA_VERSION = 22;
+export const LATEST_SCHEMA_VERSION = 23;

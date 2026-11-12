@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { SCHEMA_V22 } from '../../src/db/schema';
+import { SCHEMA_V23 } from '../../src/db/schema';
 
 /**
  * Static parity guard (Phase 36, T-36-03, AIO-DATA-05).
@@ -38,9 +38,9 @@ function dexieTableNames(): string[] {
   return [...DB_SOURCE.matchAll(/^\s{2}([A-Za-z][A-Za-z0-9]*)!: Table</gm)].map((match) => match[1]!);
 }
 
-function schemaV22Stores(): string[] {
-  // Resolved object, not the literal: SCHEMA_V22 spreads its predecessors.
-  return Object.keys(SCHEMA_V22);
+function schemaV23Stores(): string[] {
+  // Resolved object, not the literal: SCHEMA_V23 spreads its predecessors.
+  return Object.keys(SCHEMA_V23);
 }
 
 describe('TS ⊆ Rust SQLite table parity', () => {
@@ -62,7 +62,7 @@ describe('TS ⊆ Rust SQLite table parity', () => {
     }
   });
 
-  it('keeps the AI Office tables in the Dexie declarations, V22 stores and TS SQLite list', () => {
+  it('keeps the AI Office tables in the Dexie declarations, V23 stores and TS SQLite list', () => {
     const aiOffice = [
       'aiEmployees',
       'aiLeads',
@@ -73,9 +73,12 @@ describe('TS ⊆ Rust SQLite table parity', () => {
       'aiSkillVersions',
       'aiTeamBatches',
       'aiTeamAssignments',
+      'teamParticipants',
+      'teamMessages',
+      'teamReadCursors',
     ];
     const dexie = dexieTableNames();
-    const stores = schemaV22Stores();
+    const stores = schemaV23Stores();
     const ts = tsDomainTables();
 
     for (const name of aiOffice) {
@@ -95,7 +98,7 @@ describe('TS ⊆ Rust SQLite table parity', () => {
   it('reads its store list from the schema version that is actually latest', () => {
     const match = /export const LATEST_SCHEMA_VERSION = (\d+);/.exec(SCHEMA_SOURCE);
     expect(match).not.toBeNull();
-    expect(Number(match![1])).toBe(22);
-    expect(SCHEMA_SOURCE).toContain('export const SCHEMA_V22 =');
+    expect(Number(match![1])).toBe(23);
+    expect(SCHEMA_SOURCE).toContain('export const SCHEMA_V23 =');
   });
 });

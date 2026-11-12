@@ -7,6 +7,7 @@ import { renderSafeMarkdown } from '../../utils/markdown';
 import { ChatMessageBubble, type GroundedAnswerCardCallbacks } from './ChatMessageBubble';
 import type { AgentAttributionAgent } from './office/AgentAttributionRow';
 import type { AgentRunStatus } from '../../types/aiOffice';
+import type { MessageSeenEntry } from '../../types/teamChat';
 import { InlineApiErrorCard } from './InlineApiErrorCard';
 import { IntentRoutingPrompt } from './grounded/IntentRoutingPrompt';
 
@@ -53,6 +54,8 @@ export interface ChatMessageListProps {
   onRetryAgent?: ((assignmentId: string) => void) | undefined;
   /** 37.1 D-03: per-steer-row delivery state, keyed by message id. Absent = delivered. */
   steerStates?: Map<string, 'pending' | 'held'> | undefined;
+  /** 37.1 rework: read receipts, keyed by message id. Absent = nobody has read it. */
+  seenStates?: Map<string, MessageSeenEntry[]> | undefined;
 }
 
 export const ChatMessageList: React.FC<ChatMessageListProps> = ({
@@ -81,6 +84,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   onStopAgent,
   onRetryAgent,
   steerStates,
+  seenStates,
 }) => {
   const { token } = theme.useToken();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -199,6 +203,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
               }
               {...(onRetryAgent ? { onRetryAgent } : {})}
               steerState={steerStates?.get(msg.id)}
+              seenBy={seenStates?.get(msg.id)}
             />
           </React.Fragment>
         );

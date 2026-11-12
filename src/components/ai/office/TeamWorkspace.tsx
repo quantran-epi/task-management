@@ -42,6 +42,7 @@ import {
   type TeamRunSnapshot,
 } from '../../../services/ai/office/teamRunCoordinator';
 import { getOrCreateRun } from '../../../services/ai/office/teamRunManager';
+import { USER_PARTICIPANT_ID, type MessageSeenEntry } from '../../../types/teamChat';
 import type { ChatTurnRuntimeDeps } from '../runtime/chatTurnRuntime';
 import { AiChatWidget } from '../AiChatWidget';
 import { agentColorFor } from './AgentAttributionRow';
@@ -426,6 +427,42 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     }
     return map;
   }, [messages, snapshot.pendingSteerMessageIds, deliveredSteerIds]);
+
+  /**
+   * 37.1 rework: read receipts. A message is read by a participant when that participant's
+   * cursor covers its `seq`; the cursor's `updatedAt` is the "read at" time. This is the
+   * single source for the seen indicator — no per-message read field exists.
+   */
+  const teamLog = useLiveQuery(
+    () => db.teamMessages.where('teamId').equals(team.id).toArray(),
+    [db, team.id]
+  ) ?? [];
+  const teamCursors = useLiveQuery(
+    () => db.teamReadCursors.where('teamId').equals(team.id).toArray(),
+    [db, team.id]
+  ) ?? [];
+  const seenStates = useMemo(() => {
+    const map = new Map<string, MessageSeenEntry[]>();
+    if (teamLog.length === 0 || teamCursors.length === 0) return map;
+    const nameOf = new Map<string, string>();
+    for (const agent of roster) nameOf.set(agent.id, agent.name);
+    nameOf.set(USER_PARTICIPANT_ID, 'Bạn');
+    for (const message of teamLog) {
+      const readers = teamCursors.filter(
+        (cursor) => message.to.includes(cursor.participantId) && cursor.lastSeq >= message.seq
+      );
+      if (readers.length === 0) continue;
+      map.set(
+        message.id,
+        readers.map((cursor) => ({
+          participantId: cursor.participantId,
+          participantName: nameOf.get(cursor.participantId) ?? cursor.participantId,
+          at: cursor.updatedAt,
+        }))
+      );
+    }
+    return map;
+  }, [teamLog, teamCursors, roster]);
 
   const agentStatuses = useMemo(() => {
     const map = new Map<string, 'queued' | 'running' | 'paused' | 'stopped' | 'error' | 'done'>();
@@ -845,6 +882,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                     agentDirectory,
                     agentStatuses,
                     steerStates,
+                    seenStates,
                     ...(coordinator ? { onStopAgent: (agentId: string) => coordinator.stopAgent(agentId) } : {}),
                     // 37-08 D-13: same extension path as onStopAgent — no new widget API.
                     // WR-02: a refusal (busy phase, disposed run) must land somewhere the

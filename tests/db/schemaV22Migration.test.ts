@@ -66,7 +66,8 @@ describe('Dexie SCHEMA_V22 Migration (Phase 37)', () => {
   }
 
   it('opens at the latest version, which is 22', async () => {
-    expect(LATEST_SCHEMA_VERSION).toBe(22);
+    // 37.1 rework: V23 adds the unified team-chat tables on top of V22's ledger.
+    expect(LATEST_SCHEMA_VERSION).toBe(23);
     const db = await openAtCurrentVersion();
     expect(db.verno).toBe(LATEST_SCHEMA_VERSION);
   });

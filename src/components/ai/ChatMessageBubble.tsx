@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import dayjs from 'dayjs';
 import { Typography, Button, Tooltip, theme, message, Spin, Tag, Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
 import {
@@ -21,6 +22,7 @@ import {
 } from '@ant-design/icons';
 import type { ChatMessage, ChatGeneratedFile } from '../../types/models';
 import type { AgentRunStatus } from '../../types/aiOffice';
+import type { MessageSeenEntry } from '../../types/teamChat';
 import {
   AgentAttributionRow,
   AgentStatusRow,
@@ -99,6 +101,11 @@ export interface ChatMessageBubbleProps {
    * it yet, `'held'` = read but not handed to an agent, undefined = delivered (no badge).
    */
   steerState?: 'pending' | 'held' | undefined;
+  /**
+   * 37.1 rework: the read receipt for this row, from the participant cursors. Empty/absent
+   * means nobody has read it yet; the UI then shows a single "đã gửi" mark.
+   */
+  seenBy?: MessageSeenEntry[] | undefined;
 }
 
 /**
@@ -348,6 +355,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   onStopAgent,
   onRetryAgent,
   steerState,
+  seenBy,
 }) => {
   const { token } = theme.useToken();
   const [copied, setCopied] = useState(false);
@@ -1248,6 +1256,37 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
             }
           />
         )}
+
+      {/* 37.1 rework: the read receipt. A real chat shows whether the other side has read
+          what you sent; this is the same fact, read from the participant cursors. Clicking
+          names who read it and when. */}
+      {isUser && !isStreaming && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+          <Tooltip
+            title={
+              seenBy && seenBy.length > 0
+                ? seenBy
+                    .map(
+                      (entry) =>
+                        `${entry.participantName} đã đọc lúc ${dayjs(entry.at).format('HH:mm DD/MM/YYYY')}`
+                    )
+                    .join(' · ')
+                : 'Chưa ai đọc tin này'
+            }
+          >
+            <Typography.Text
+              data-testid={`seen-${msg.id}`}
+              style={{
+                fontSize: 11,
+                color: seenBy && seenBy.length > 0 ? token.colorPrimary : token.colorTextTertiary,
+                cursor: 'default',
+              }}
+            >
+              {seenBy && seenBy.length > 0 ? '✓✓' : '✓'}
+            </Typography.Text>
+          </Tooltip>
+        </div>
+      )}
 
       {/* AI-Generated Files Cards */}
       {!isUser && !isStreaming && msg.generatedFiles && msg.generatedFiles.length > 0 && (

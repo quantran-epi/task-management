@@ -25,6 +25,8 @@ import {
   reset,
 } from '../../../../src/services/ai/office/liveUseRegistry';
 import { createTeam, updateTeam } from '../../../../src/db/repositories/aiTeamRepo';
+import { appendForExistingMessage, getCursor } from '../../../../src/services/ai/office/teamEventLog';
+import { USER_PARTICIPANT_ID } from '../../../../src/types/teamChat';
 import {
   ensureTeamThread,
   listInterruptedAssignments,
@@ -329,8 +331,10 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       const { coordinator } = harness;
 
       const initial = coordinator.getState();
+      // 37.1 rework: `phase` is derived, and "not busy" is `ready` — `idle` was only ever
+      // "never used yet", which no caller needs.
       expect(initial).toEqual({
-        phase: 'idle',
+        phase: 'ready',
         agents: [],
         pendingPlan: null,
         pendingApproval: null,
@@ -4668,6 +4672,8 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       const sent = current.coordinator.send('Làm báo cáo');
       await waitFor(() => current.coordinator.getState().phase === 'batch-running');
 
+      // 37.1 rework: a steer reaches the agent as a REAL message on the durable log, so the
+      // drain reads the log by this agent's cursor instead of an assignment marker.
       const steerRow = await saveTeamMessage(
         {
           threadId: current.threadId,
@@ -4678,20 +4684,29 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
         },
         current.db
       );
+      await appendForExistingMessage(
+        {
+          id: steerRow.id,
+          teamId: current.team.id,
+          from: USER_PARTICIPANT_ID,
+          to: [target.id],
+          content: steerRow.content,
+          kind: 'instruction',
+        },
+        current.db
+      );
       const assignment = (await current.db.aiTeamAssignments.toArray()).find(
         (row) => row.agentId === target.id
       )!;
-      await current.db.aiTeamAssignments.update(assignment.id, {
-        steerMessageIds: [steerRow.id],
-      });
 
       const first = await current.coordinator.drainSteerInbox(target.id, assignment.id);
       expect(first).toHaveLength(1);
       expect(first[0]!.content).toContain('đổi hướng');
 
-      // The durable marker survives, so the badge stays "delivered" (D-14/D-25).
-      const after = await current.db.aiTeamAssignments.get(assignment.id);
-      expect(after?.steerMessageIds).toEqual([steerRow.id]);
+      // The cursor advanced, which IS the read receipt — the durable replacement for the
+      // old `steerMessageIds` marker (D-14/D-25).
+      const cursor = await getCursor(current.team.id, target.id, current.db);
+      expect(cursor.lastSeq).toBeGreaterThan(0);
 
       // A second boundary does not re-inject the same text.
       expect(await current.coordinator.drainSteerInbox(target.id, assignment.id)).toEqual([]);

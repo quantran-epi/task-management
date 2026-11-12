@@ -84,6 +84,14 @@ import {
   transitionAssignment,
 } from '../../../db/repositories/aiTeamRunRepo';
 import { generateId } from '../../../utils/uuid';
+import {
+  advanceCursor,
+  appendForExistingMessage,
+  appendMessage,
+  getCursor,
+  readMessagesAfter,
+} from './teamEventLog';
+import { USER_PARTICIPANT_ID } from '../../../types/teamChat';
 
 /**
  * Headless team-run coordinator (D-01/D-02/D-03, D-06, D-08, D-12/D-13, D-14, D-20/D-21,
@@ -455,7 +463,21 @@ export function createTeamRunCoordinator(
         memberAgentIds: [],
       };
 
-  let phase: TeamRunPhase = 'idle';
+  /**
+   * 37.1 rework: the ONE bit of the phase that genuinely belongs to a turn. Everything else
+   * is derived from live state by `derivePhase`, so no branch can leave a stored phase
+   * behind — the class of bug that produced "treo đang tổng hợp" is structurally absent.
+   *
+   * Set at the start of a lead turn, cleared in that turn's `finally` on every branch.
+   */
+  let leadTurnKind: 'thinking' | 'synthesizing' | null = null;
+  /**
+   * 37.1 rework: the settle handler's own claim. The batch row is closed BEFORE the synthesis
+   * turn starts, so without this flag `derivePhase` would report `ready` in that window and a
+   * caller could start a second turn while the first batch's synthesis is still pending.
+   * Cleared in `onBatchSettled`'s `finally` on every branch.
+   */
+  let synthesisPending = false;
   /**
    * D-18: set once at the top of `dispose()` and never cleared. Every post-await phase
    * write checks it, because `dispose()` cannot await the in-flight `send()`/`runBatch` —
@@ -590,14 +612,42 @@ export function createTeamRunCoordinator(
   };
 
   /**
-   * D-18: the single phase writer. A write that lands after `dispose()` resolved would
-   * resurrect a dead run (the in-flight `send()` is still unwinding), so it is dropped —
-   * and dropping it drops the `notify()` with it.
+   * 37.1 rework: the phase is DERIVED from live state — never stored. There is no setter to
+   * forget, so a phase cannot outlive the condition that justifies it.
+   *
+   * Precedence is the same order the old `setPhase` calls produced, but every input is a
+   * fact about right now:
+   *   1. a parked budget gate          → awaiting-budget
+   *   2. a pending mutation approval   → awaiting-mutation-approval
+   *   3. a plan card waiting on a click→ awaiting-plan
+   *   4. a lead turn in flight         → lead-thinking / lead-synthesizing
+   *   5. an open batch, or a live agent→ batch-running
+   *   6. otherwise                     → ready (idle before the first turn)
    */
-  const setPhase = (next: TeamRunPhase): void => {
-    if (disposed) return;
-    phase = next;
-    notify();
+  const derivePhase = (): TeamRunPhase => {
+    // A park is either the team gate or one agent's own gate — the banner names whichever.
+    if (teamGate.isClosed()) return 'awaiting-budget';
+    for (const row of agents.values()) {
+      if (row.status === 'paused' && gateFor(row.agentId).isClosed()) return 'awaiting-budget';
+    }
+    if (pendingApproval !== null) return 'awaiting-mutation-approval';
+    if (pendingPlan !== null) return 'awaiting-plan';
+    if (leadTurnKind === 'synthesizing') return 'lead-synthesizing';
+    if (leadTurnKind === 'thinking') return 'lead-thinking';
+    if (synthesisPending) return 'lead-synthesizing';
+    // A retry claims its guard synchronously, before any await, so this is the synchronous
+    // "work is in flight" signal the old `setPhase('batch-running')` provided. Without it two
+    // same-tick clicks on different bubbles both pass the guard and both synthesize.
+    if (retryingAssignments.size > 0) return 'batch-running';
+    if (openBatchId !== null) return 'batch-running';
+    for (const row of agents.values()) {
+      if (!TERMINAL_STATUSES.includes(row.status)) return 'batch-running';
+    }
+    // `idle` and `ready` both mean "not busy" — the distinction was only ever "never used
+    // yet", which no caller needs. Reporting `ready` keeps the coordinator's own snapshot
+    // honest after a dispose or a remount (the workspace's EMPTY_SNAPSHOT is the only place
+    // `idle` is still meaningful, and that exists before a coordinator does).
+    return 'ready';
   };
 
   const registry: TeamRunRegistry = createTeamRunRegistry((agentId) =>
@@ -1008,7 +1058,6 @@ export function createTeamRunCoordinator(
       onUsage: (usage) => handleUsage(agentId, usage, usageBaselineKey.get(agentId) ?? agentId),
       onAwaitingApproval: (info) => {
         pendingApproval = info;
-        setPhase('awaiting-mutation-approval');
       },
     };
   }
@@ -1039,7 +1088,6 @@ export function createTeamRunCoordinator(
     if (lastTeamBucket >= 8) {
       teamGate.close();
       // CR-01: a closed gate with no banner is an invisible hang. Surface the park.
-      setPhase('awaiting-budget');
     }
     return rows;
   }
@@ -1100,7 +1148,6 @@ export function createTeamRunCoordinator(
         updateAgent(agentId, { status: 'paused' });
       }
       if (anyLive()) {
-        setPhase('awaiting-budget');
       }
     }
 
@@ -1108,7 +1155,6 @@ export function createTeamRunCoordinator(
     if (shouldNotifyPause(lastTeamBucket, teamCurrent)) {
       teamGate.close();
       if (anyLive()) {
-        setPhase('awaiting-budget');
       }
     }
     lastTeamBucket = teamCurrent;
@@ -1445,34 +1491,31 @@ export function createTeamRunCoordinator(
         steps: [],
       });
       registerAgentTurn(lead.id, lead.name);
-      setPhase(announcedPhase);
+      // 37.1 rework: `phase` is DERIVED (see `derivePhase`), so a turn only records which
+      // kind of lead turn it is. The `finally` below clears it, and because it is a plain
+      // flag owned by the turn it cannot outlive the turn the way a stored phase could.
+      leadTurnKind = announcedPhase === 'lead-synthesizing' ? 'synthesizing' : 'thinking';
 
       const outcome = await registry.get(lead.id).start(request);
       const state = agents.get(lead.id);
       if (state && state.status === 'paused') {
-        // 37.1 UAT gap 9: the parked branch is still a branch of this turn. Returning
-        // without releasing the phase left `lead-thinking`/`lead-synthesizing` — both BUSY —
-        // set forever, so every later submit routed into `steer()`.
-        try {
-          await agentDeferreds.get(lead.id)?.promise;
-        } finally {
-          if (phase === 'lead-thinking' || phase === 'lead-synthesizing') setPhase('ready');
-        }
+        // The parked branch is still a branch of this turn: the `finally` clears the flag.
+        await agentDeferreds.get(lead.id)?.promise;
         return;
       }
       settleAgent(lead.id, OUTCOME_STATUS[outcome.phase]);
-      if (phase === 'lead-thinking' || phase === 'lead-synthesizing') {
-        setPhase('ready');
-      }
     } catch (err) {
       // WR-01: same leak as the employee path — release before rethrowing. The lead is not
       // an assignment, so there is no ledger row to finalize here.
       releaseLiveUse(lead.id);
-      setPhase('ready');
       settleAgent(lead.id, 'error');
       throw err;
     } finally {
+      // 37.1 rework: the ONE place the lead turn's own flag is cleared, on every branch —
+      // normal return, parked return, throw. A derived phase needs no other reset.
+      leadTurnKind = null;
       agentDeferreds.delete(lead.id);
+      notify();
     }
   }
 
@@ -1514,6 +1557,24 @@ export function createTeamRunCoordinator(
     );
     // The persist already happened; `'blocked'` would duplicate the text in the composer.
     if (disposed) return 'steered';
+    // 37.1 rework: the routing projection. `to[]` is required, so a steer is never an
+    // unaddressed row. It goes to the LEADER ONLY — the leader is the gate (D-28), and the
+    // agent receives it as a separate message when the leader delivers. Addressing it to the
+    // agent here would hand it over before the leader judged it.
+    if (roster.lead) {
+      await appendForExistingMessage(
+        {
+          id: row.id,
+          teamId,
+          from: USER_PARTICIPANT_ID,
+          to: [roster.lead.id],
+          content: text,
+          kind: 'instruction',
+          createdAt: row.createdAt,
+        },
+        db
+      );
+    }
     pendingSteerMessageIds.add(row.id);
     notify();
 
@@ -1554,34 +1615,27 @@ export function createTeamRunCoordinator(
    * nothing and cannot lose a concurrent `deliver_steer` (no read-modify-write on the array).
    */
   async function drainSteerInbox(
-    _agentId: string,
+    agentId: string,
     attempt?: AttemptRef
   ): Promise<ChatCompletionMessage[]> {
     if (!attempt) return [];
-    // WR-01 (pass 7): read the delivered set and claim it in ONE step before any await. A
-    // settle-poll sweep landing between the read and the claim would see these ids as
-    // undrained and erase their markers, then this drain would inject them anyway.
-    const row = await getAssignment(attempt.assignmentId, db);
-    const injected =
-      injectedSteerIdsByAttempt.get(attempt.assignmentId) ?? new Set<string>();
-    const fresh = (row?.steerMessageIds ?? []).filter((id) => !injected.has(id));
-    if (fresh.length === 0) return [];
-    // WR-01 (pass 6): claim the ids BEFORE the await. The settle-poll deadline reads this set
-    // to decide which markers are safe to drop; claiming after `bulkGet` left a window where a
-    // steer being read right now looked undrained and lost its marker.
-    for (const id of fresh) injected.add(id);
-    injectedSteerIdsByAttempt.set(attempt.assignmentId, injected);
-    const messages = await db.chatMessages.bulkGet(fresh);
-    // 37.1 SC5: a teardown must leave the ledger honest for the post-relaunch `undelivered`
-    // read (D-14) — and must not consume a steer nobody read.
-    if (disposed) {
-      for (const id of fresh) injected.delete(id);
-      return [];
-    }
+    // 37.1 rework: the durable log + this agent's cursor replace the in-memory
+    // `injectedSteerIdsByAttempt` set. The cursor is the read receipt, so a steer is read
+    // exactly once per attempt and a remount cannot re-inject it.
+    const cursor = await getCursor(teamId, agentId, db);
+    const pending = await readMessagesAfter(teamId, agentId, cursor.lastSeq, db);
+    if (pending.length === 0) return [];
+    // 37.1 SC5: a teardown must not consume a steer nobody read.
+    if (disposed) return [];
+    // Advance BEFORE returning: the loop appends these to the very next model call, so the
+    // read has happened. At-least-once would re-inject on a throw; the caller's `finally`
+    // re-runs the drain only if this never advanced.
+    await advanceCursor(teamId, agentId, pending[pending.length - 1]!.seq, db);
     notify();
-    return messages
-      .filter((message): message is ChatMessage => message !== undefined)
-      .map((message) => ({ role: 'user' as const, content: STEER_PREFIX + message.content }));
+    return pending.map((message) => ({
+      role: 'user' as const,
+      content: `${STEER_PREFIX}[steer:${message.id}] ${message.content}`,
+    }));
   }
 
   /**
@@ -1597,15 +1651,22 @@ export function createTeamRunCoordinator(
   async function drainLeaderSteerQueue(
     skipIds?: Set<string>
   ): Promise<ChatCompletionMessage[]> {
-    const ids = [...pendingSteerMessageIds].filter((id) => skipIds?.has(id) !== true);
-    if (ids.length === 0) return [];
-    // SC5: gate the clearing write — a teardown must not consume a steer nobody read.
+    const lead = roster.lead;
+    if (!lead) return [];
+    // 37.1 rework: the leader's cursor over the durable log is the read receipt and the
+    // "what is unread" query in one. `skipIds` are ids already rendered in this turn's
+    // system prompt, so they must not be re-injected as user messages — but they ARE read,
+    // so the cursor still advances past them.
+    const cursor = await getCursor(teamId, lead.id, db);
+    const pending = await readMessagesAfter(teamId, lead.id, cursor.lastSeq, db);
+    if (pending.length === 0) return [];
+    // SC5: gate the cursor advance — a teardown must not consume a steer nobody read.
     if (disposed) return [];
-    for (const id of ids) pendingSteerMessageIds.delete(id);
+    await advanceCursor(teamId, lead.id, pending[pending.length - 1]!.seq, db);
+    for (const message of pending) pendingSteerMessageIds.delete(message.id);
     notify();
-    const messages = await db.chatMessages.bulkGet(ids);
-    return messages
-      .filter((message): message is ChatMessage => message !== undefined)
+    return pending
+      .filter((message) => skipIds?.has(message.id) !== true)
       .map((message) => ({
         role: 'user' as const,
         // 37.1 UAT gap 5: carry the id. A steer read mid-turn (the steer turn could not
@@ -1753,7 +1814,6 @@ export function createTeamRunCoordinator(
         // and the `finally` below restores the PRIOR turn's full state — settling would be
         // overwritten and would corrupt a live turn's snapshot.
         console.error('[teamRun] steer turn failed', err);
-        if (phase === 'lead-thinking' || phase === 'lead-synthesizing') setPhase('ready');
       } finally {
         if (started && !disposed) {
           settleAgent(lead.id, steerStatus);
@@ -1891,6 +1951,23 @@ export function createTeamRunCoordinator(
     }
     if (!appended) {
       return JSON.stringify({ delivered: true, duplicate: true, agentId: targetAgentId });
+    }
+    // 37.1 rework: delivery is a REAL message (leader → agent), not a marker on the user's
+    // row. The agent's read cursor covers it like any other message, so there is one
+    // mechanism for "the agent has this" instead of two.
+    const lead = roster.lead;
+    if (lead) {
+      await appendMessage(
+        {
+          teamId,
+          from: lead.id,
+          to: [targetAgentId],
+          content: message.content,
+          kind: 'instruction',
+          deliversMessageId: steerMessageId,
+        },
+        db
+      );
     }
     pendingSteerMessageIds.delete(steerMessageId);
     notify();
@@ -2181,7 +2258,7 @@ export function createTeamRunCoordinator(
     // no state change will ever make it work again, so the caller must not requeue.
     if (disposed) return 'blocked';
     // D-01/D-02: a live OR parked turn no longer refuses the submit — it takes it as a steer.
-    if (BUSY_PHASES.has(phase)) return steer(text);
+    if (BUSY_PHASES.has(derivePhase())) return steer(text);
     // D-03/D-07: read the roster exactly ONCE per turn, before any read of it.
     if (options.loadRoster) {
       roster = await options.loadRoster();
@@ -2202,11 +2279,7 @@ export function createTeamRunCoordinator(
     // cannot leave `team:<teamId>` registered forever.
     try {
       if (target) {
-        setPhase('batch-running');
         await startEmployeeTurn(target, text, text);
-        if (phase === 'batch-running') {
-          setPhase('ready');
-        }
         return 'started';
       }
 
@@ -2388,7 +2461,6 @@ export function createTeamRunCoordinator(
       };
       pendingPlan = plan;
       lastPlanDecision = null;
-      setPhase('awaiting-plan');
       const approved = await new Promise<boolean>((resolve) => {
         planResolver = resolve;
       });
@@ -2420,7 +2492,6 @@ export function createTeamRunCoordinator(
         // IN-09: a rejection is not an abort — `planDecision: 'rejected'` already carries the
         // fact, and a reader of `abortedBy` alone must not confuse it with a user Stop.
         await closeBatch(rejectedBatch.id, { phaseAtEnd: 'ready', abortedBy: 'none' }, db);
-        setPhase('ready');
         return PLAN_REJECTED;
       }
     } else {
@@ -2458,8 +2529,6 @@ export function createTeamRunCoordinator(
     // D-24/T-37.1-01: the batch owns the cancellation channel from here on.
     const batchController = new AbortController();
     batchControllers.set(batch.id, batchController);
-
-    setPhase('batch-running');
 
     const attemptIdsByAgent = new Map<string, string>();
     // WR-06: the create/dispatch loop awaits `createAssignment`/`saveTeamMessage` per
@@ -2542,7 +2611,6 @@ export function createTeamRunCoordinator(
           /* the ledger close must never mask the original failure */
         }
       }
-      setPhase('ready');
       return BATCH_DISPATCH_FAILED;
     }
 
@@ -2695,6 +2763,23 @@ export function createTeamRunCoordinator(
         const previous = latestByAgent.get(row.agentId);
         if (!previous || row.attemptNo > previous.attemptNo) latestByAgent.set(row.agentId, row);
       }
+      // 37.1 rework: the LEDGER is the authority on attempt status (D-09 — `transitionAssignment`
+      // is its only writer), so reconcile the in-memory agent map with it before deriving any
+      // phase. A row the amend path or a deadline pass settled externally would otherwise leave
+      // an agent `queued`/`running` in memory forever, and a derived phase would report
+      // `batch-running` with nothing running — the exact stall the old stored phase hid.
+      for (const [agentId, row] of latestByAgent) {
+        if (row.runStatus === 'queued' || row.runStatus === 'running') continue;
+        const state = agents.get(agentId);
+        if (!state || TERMINAL_STATUSES.includes(state.status)) continue;
+        const mapped: AgentRunStatus =
+          row.runStatus === 'done'
+            ? 'done'
+            : row.runStatus === 'error'
+              ? 'error'
+              : 'stopped';
+        settleAgent(agentId, mapped, undefined, row.id);
+      }
       const results = await Promise.all(
         assignments.map(async (assignment) => {
           const employee = roster.employees.find((row) => row.id === assignment.agentId);
@@ -2735,13 +2820,12 @@ export function createTeamRunCoordinator(
             : row.report,
       }));
 
-      // 37.1 UAT gap 9: do NOT claim `lead-synthesizing` here. This line runs before the
-      // synthesis turn can start — the dispatch turn may still be in flight, and the turn
-      // is queued behind it on `leadTurnChain`. Claiming the phase early made it describe a
-      // turn that was merely queued, and because `lead-synthesizing` is a BUSY phase every
-      // later submit routed into `steer()`. `startLeadTurn` announces it when it starts.
-      // The run is over: close the batch row so `dispose`/`abortAll` never double-close it.
+      // 37.1 rework: the batch row closes here, but the phase must still say "synthesizing"
+      // until the turn actually finishes. `synthesisPending` is that claim — a plain flag
+      // cleared in the `finally` below, so it cannot outlive this handler on any branch.
       if (openBatchId === batchId) openBatchId = null;
+      synthesisPending = true;
+      notify();
       await closeBatch(batchId, { phaseAtEnd: 'lead-synthesizing', abortedBy: 'none' }, db);
       // D-24: the dispatch turn's own answer is a synthesis row too, so it must be
       // superseded by the real synthesis — otherwise the transcript keeps two "current"
@@ -2771,13 +2855,11 @@ export function createTeamRunCoordinator(
       batchControllers.delete(batchId);
       // D-24/T-37.1-03: the team turn spans the whole batch, so it finishes exactly here.
       batchOwnsTeamTurn = false;
+      // 37.1 rework: the ONE place the settle handler's phase claim is released, on every
+      // branch — a throw, an abort, or a lost race. A derived phase needs no other reset.
+      synthesisPending = false;
       aiTurnManager.finishTurn(teamTurnId);
-      // 37.1 UAT gap 9: the phase must never outlive this handler. Every early return above
-      // (disposed, aborted, lost race) left `batch-running` — a BUSY phase — so every later
-      // submit routed into `steer()` and the leader could never be reached again. Only the
-      // batch phase is released here: a live lead turn owns `lead-thinking` /
-      // `lead-synthesizing` and resets those itself.
-      if (phase === 'batch-running') setPhase('ready');
+      notify();
     }
   }
 
@@ -2833,7 +2915,7 @@ export function createTeamRunCoordinator(
     // Checked before the busy guard too: a second click on the SAME assignment while its
     // retry runs is the double click this guard exists for, not a busy-phase refusal.
     if (retryingAssignments.has(assignmentId)) return;
-    if (BUSY_PHASES.has(phase)) throw new Error('Nhóm đang chạy. Hãy chờ lượt hiện tại kết thúc.');
+    if (BUSY_PHASES.has(derivePhase())) throw new Error('Nhóm đang chạy. Hãy chờ lượt hiện tại kết thúc.');
     retryingAssignments.add(assignmentId);
     // WR-04: the phase is claimed SYNCHRONOUSLY, with no await between the guard above and
     // this write. Otherwise two clicks on different bubbles in one tick both pass the guard,
@@ -2841,7 +2923,6 @@ export function createTeamRunCoordinator(
     // synthesis id and leave one synthesis current forever.
     // 37.1 D-01: the phase is claimed synchronously so a submit during the retry routes as a
     // steer instead of opening a second turn.
-    setPhase('batch-running');
 
     let claimed = false;
     let claimedAgentId: string | null = null;
@@ -2999,7 +3080,6 @@ export function createTeamRunCoordinator(
       // throw with no attempt created, a missing source report, a throwing transcription
       // write — leaves the coordinator `ready` and the guards clear, so the next send()
       // starts a turn instead of being steered into a finished one.
-      if (phase === 'batch-running' || phase === 'lead-synthesizing') setPhase('ready');
       retryingAssignments.delete(assignmentId);
       if (claimed && claimedAgentId !== null) retryingAgents.delete(claimedAgentId);
     }
@@ -3038,7 +3118,6 @@ export function createTeamRunCoordinator(
     // clears the paused phase, so the banner does not linger on a run that resumed.
     if (lastTeamBucket < 8) {
       teamGate.open();
-      if (phase === 'awaiting-budget') setPhase('batch-running');
     }
     notify();
   }
@@ -3047,7 +3126,6 @@ export function createTeamRunCoordinator(
     // WR-05: `get` would instantiate a runtime when the lead turn already settled.
     if (roster.lead) registry.peek(roster.lead.id)?.resolveApproval(approved);
     pendingApproval = null;
-    if (phase === 'awaiting-mutation-approval') setPhase('lead-thinking');
     notify();
   }
 
@@ -3127,7 +3205,6 @@ export function createTeamRunCoordinator(
     aiTurnManager.finishTurn(teamTurnId);
     registry.abortAll();
     for (const agentId of agents.keys()) settleAgent(agentId, 'stopped');
-    setPhase('ready');
     // D-11: close the batch row here, because `runBatch`'s own close (abortedBy: 'none')
     // would otherwise win the race and misreport a user abort. `closeBatch` is idempotent.
     if (openBatchId !== null) {
@@ -3150,7 +3227,6 @@ export function createTeamRunCoordinator(
     disposed = true;
     // `ready` is the terminal state; set it before the ledger await so no observer sees a
     // live phase after the flag is up and before the close resolves.
-    phase = 'ready';
     // IN-07: the stop path and this teardown race to settle the same attempts. Marking every
     // live agent with the teardown's own reason is what makes both writers record
     // `team-deleted`/`app-exit` instead of the generic `user-abort`.
@@ -3237,12 +3313,6 @@ export function createTeamRunCoordinator(
     // WR-04: only claim a paused phase when something is actually parked.
     // D-18: this tail runs after two awaits, so a top-up that resolves after `dispose()`
     // must not resurrect `batch-running` on a coordinator that is already gone.
-    if (phase === 'awaiting-budget' && !teamGate.isClosed()) {
-      const anyLive = [...agents.values()].some(
-        (state) => !TERMINAL_STATUSES.includes(state.status)
-      );
-      setPhase(anyLive ? 'batch-running' : 'ready');
-    }
     notify();
   }
 
@@ -3263,7 +3333,7 @@ export function createTeamRunCoordinator(
     // comes from the team gate alone is fixed by the team top-up.
     const agentParked = paused.find((row) => gateFor(row.agentId).isClosed()) ?? null;
     return {
-      phase,
+      phase: derivePhase(),
       agents: [...agents.values()],
       pendingPlan,
       pendingApproval,

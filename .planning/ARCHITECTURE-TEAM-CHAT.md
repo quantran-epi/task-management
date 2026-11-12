@@ -1,8 +1,26 @@
 # Kiến trúc: Team Chat thống nhất (Participant / Message / Cursor)
 
-**Trạng thái:** CHỐT — dùng làm chuẩn cho mọi thay đổi tiếp theo của AI Office team chat.
+**Trạng thái:** ĐÃ TRIỂN KHAI (Đợt 1 + Đợt 2) — dùng làm chuẩn cho mọi thay đổi tiếp theo.
 **Ngày chốt:** 2026-11-12
 **Bối cảnh:** Phase 37.1 UAT phát hiện 9 lỗi. Phân tích cho thấy 5 lỗi (1, 5, 6, 7, 9) cùng một nguyên nhân: có **5 đường riêng biệt** cho cùng một hành vi "A gửi tin cho B".
+
+## Ghi chú triển khai (khác so với bản thiết kế ban đầu)
+
+Thực tế đã làm hẹp hơn bản nháp ở hai điểm, có lý do:
+
+1. **`phase` không bị xoá khỏi type — nó trở thành HÀM SUY RA (`derivePhase`).**
+   Bản nháp nói "xoá `phase`". Thực tế: xoá biến lưu, thay bằng hàm đọc state sống. Không có
+   setter thì không thể kẹt — đúng mục tiêu — nhưng `TeamRunPhase` vẫn còn vì UI cần một nhãn
+   để chọn động từ. Hai bit thật sự thuộc về lượt (`leadTurnKind`, `synthesisPending`) được
+   set/clear trong `finally` của chính lượt đó.
+
+2. **`chatMessages` giữ nguyên làm bản ghi hiển thị; `teamMessages` là projection định tuyến.**
+   Cùng một id, ghi trong cùng transaction (`appendForExistingMessage`). Không thay bảng cũ,
+   nên backup schema, BM25, `ChatMessageList` không phải sửa.
+
+3. **`deliver_steer` vẫn còn như công cụ của leader** — nhưng giờ nó *sinh ra một message thật*
+   (`leader → agent`) trên log, thay vì ghi marker lên row của người dùng. Cursor của agent
+   phủ message đó như mọi message khác.
 
 ---
 
@@ -327,3 +345,47 @@ Hai lỗi này độc lập với kiến trúc, phải sửa riêng:
 
 Đợt 3 — UAT hồi quy 9 test + test năng lực mới
 ```
+
+---
+
+## 11. Trạng thái triển khai (2026-11-12)
+
+### Đã xong
+
+| Hạng mục | File |
+|---|---|
+| Types participant/message/cursor + bảng quyền | `src/types/teamChat.ts` |
+| Schema V23 + 3 bảng mới | `src/db/schema.ts`, `src/db/index.ts` |
+| Event log (append/read/cursor/seen) | `src/services/ai/office/teamEventLog.ts` |
+| Phase suy ra thay vì lưu | `teamRunCoordinator.ts` — `derivePhase()` |
+| Steer đi qua log, leader là cổng | `steer()`, `deliverSteer()` |
+| Drain đọc bằng cursor | `drainSteerInbox()`, `drainLeaderSteerQueue()` |
+| Seen receipt UI | `ChatMessageBubble.tsx`, `ChatMessageList.tsx`, `TeamWorkspace.tsx` |
+| Popover: scroll, timestamp, expand | `TeamActivityIndicator.tsx` |
+| Race tạo thread | `chatRepo.ts` |
+| Abort có thẩm quyền | `chatTurnRuntime.ts` |
+| Proxy Tauri có timeout | `src-tauri/src/ai_proxy.rs` |
+
+### Bất biến đã có test
+
+| # | Bất biến | Test |
+|---|---|---|
+| L1 | Tin nhắn phải có người nhận | `teamEventLog.test.ts` — "refuses to append a message with no recipient" |
+| L2 | `seq` đơn điệu, không trùng khi concurrent | "allocates a monotonic seq per team, even under concurrent appends" |
+| L3 | Cursor chỉ tiến | "never moves a cursor backward" |
+| I4 | Cursor tiến = đã đọc | "reports who read a message and when" |
+| — | Phase không kẹt busy sau batch | `teamRunCoordinator.test.ts` — "never leaves a busy phase behind after the batch settles" |
+| — | Steer gõ tay giao được | "delivers a plain-text steer when the leader names the target" |
+| — | Target ngoài roster bị từ chối | "refuses a steer target that is not in the roster" |
+| — | Thread race không throw | `chatRepo.test.ts` — "createOrGetThread resolves concurrent callers to one thread without throwing" |
+| — | Popover đủ bước/giờ/expand | `TeamChatIndicator.test.tsx` — 3 test mới |
+
+### Chưa làm (còn lại của kiến trúc đích)
+
+- `pendingSteerMessageIds` vẫn còn như **cache hiển thị** trong snapshot (nguồn sự thật là cursor).
+- `injectedSteerIdsByAttempt` đã bỏ khỏi đường drain; còn dùng ở nhánh deadline — dọn tiếp khi chạm.
+- `steerMessageIds` trên ledger vẫn được ghi (backup schema đã khai báo) nhưng không còn là nguồn
+  sự thật cho badge; UI đọc `seenStates` từ cursor.
+- `runLeadTurnSerialized` vẫn còn: nó tuần tự hoá các lượt trên MỘT runtime, không phải cơ chế
+  "busy phase". Consumer loop thật (mỗi participant một vòng) là bước tiếp theo nếu cần.
+- `listeners:Set` + `notify()` vẫn còn; UI đã đọc thêm `useLiveQuery` trên log.
