@@ -186,7 +186,7 @@ export interface TeamRunCoordinator {
   finalizeAttempt(
     assignmentId: string,
     from: AiTeamAssignmentRunStatus,
-    to: 'done' | 'stopped' | 'error',
+    to: 'done' | 'stopped' | 'error' | 'skipped',
     stopReason: AiTeamAssignmentStopReason,
     contentWhenMissing?: string,
     diagnosticDetail?: string
@@ -315,6 +315,10 @@ const OUTCOME_STOP_REASON: Record<ChatTurnPhase, AiTeamAssignmentStopReason> = {
 export const STOPPED_REPORT_COPY =
   'Nhân viên đã dừng trước khi hoàn tất công việc. Bấm "Chạy lại" để tiếp tục mà không phải giao lại việc.';
 
+/** 37.1 D-07: the bubble a leader-amended (cancelled or rewritten) attempt gets. */
+const AMENDED_REPORT_COPY =
+  'Việc này đã được trưởng nhóm huỷ hoặc thay đổi trước khi bắt đầu. Không có kết quả nào được tạo.';
+
 /**
  * D-17/T-37-07: the ONLY carrier of raw error detail. It reaches `diagnosticDetail` on the
  * assignment row and nothing else — never `content`, a `ChatMessage`, or the backup.
@@ -377,6 +381,13 @@ export const EMPLOYEE_DELIVER_STEER_REFUSAL = JSON.stringify({
   message: 'Chỉ trưởng nhóm được giao chỉ đạo cho nhân viên.',
 });
 
+/** 37.1 D-27: `amend_assignments` is leader-only — same shape as the delegate refusal. */
+export const EMPLOYEE_AMEND_REFUSAL = JSON.stringify({
+  refused: true,
+  code: 'AGENT_NOT_IN_ROSTER',
+  message: 'Chỉ trưởng nhóm được huỷ hoặc sửa việc.',
+});
+
 /**
  * Every advertised team tool must resolve to a handler. `dispatchAiToolCall` only routes
  * `AI_DATABASE_TOOLS` members to `executeAiTool`; anything else falls through to the dynamic
@@ -384,7 +395,13 @@ export const EMPLOYEE_DELIVER_STEER_REFUSAL = JSON.stringify({
  */
 export function resolveTeamToolName(name: string): 'coordinator' | 'teamTools' | 'unknown' {
   const normalized = normalizeToolName(name);
-  if (normalized === 'delegate_batch' || normalized === 'deliver_steer') return 'coordinator';
+  if (
+    normalized === 'delegate_batch' ||
+    normalized === 'deliver_steer' ||
+    normalized === 'amend_assignments'
+  ) {
+    return 'coordinator';
+  }
   if (TEAM_TOOL_NAMES.has(normalized)) return 'teamTools';
   return 'unknown';
 }
@@ -646,7 +663,7 @@ export function createTeamRunCoordinator(
   async function finalizeAttempt(
     assignmentId: string,
     from: AiTeamAssignmentRunStatus,
-    to: 'done' | 'stopped' | 'error',
+    to: 'done' | 'stopped' | 'error' | 'skipped',
     stopReason: AiTeamAssignmentStopReason,
     contentWhenMissing?: string,
     diagnosticDetail?: string
@@ -810,6 +827,12 @@ export function createTeamRunCoordinator(
         const steerMessageId =
           typeof args?.steerMessageId === 'string' ? args.steerMessageId : '';
         return deliverSteer(steerMessageId);
+      }
+
+      // 37.1 D-27: the leader's one mid-run mutation. Same lead-only shape as `delegate_batch`.
+      if (normalized === 'amend_assignments') {
+        if (!roster.lead || agentId !== roster.lead.id) return EMPLOYEE_AMEND_REFUSAL;
+        return amendAssignments(args ?? {});
       }
 
       if (TEAM_TOOL_NAMES.has(normalized)) {
@@ -1438,16 +1461,17 @@ export function createTeamRunCoordinator(
   }
 
   /**
-   * 37.1 D-28: the steer turn's tool list. Reads only plus `deliver_steer` — the leader is
-   * the gate, so it must be able to see the tool. `delegate_batch` is deliberately absent (a
-   * second batch would overwrite `openBatchId`); plan 05 appends `amend_assignments` here.
+   * 37.1 D-28: the steer turn's tool list. Reads plus `deliver_steer` and `amend_assignments`
+   * — the leader is the gate, so it must be able to see both. `delegate_batch` is deliberately
+   * absent (a second batch would overwrite `openBatchId`).
    */
   function leadSteerTools(): AiToolDefinition[] {
     const reads = getToolsForTurn(true, options.mcpTools ?? [], LEAD_TOOL_ALLOWLIST);
-    const deliverSteerTool = TEAM_TOOL_DEFINITIONS.filter(
-      (tool) => normalizeToolName(tool.function.name) === 'deliver_steer'
-    );
-    return [...reads, ...deliverSteerTool];
+    const leadToolsForSteer = TEAM_TOOL_DEFINITIONS.filter((tool) => {
+      const name = normalizeToolName(tool.function.name);
+      return name === 'deliver_steer' || name === 'amend_assignments';
+    });
+    return [...reads, ...leadToolsForSteer];
   }
 
   /** The pending steers as prompt rows, so the leader has a real id to pass to `deliver_steer`. */
@@ -1573,6 +1597,142 @@ export function createTeamRunCoordinator(
     pendingSteerMessageIds.delete(steerMessageId);
     notify();
     return JSON.stringify({ delivered: true, agentId: message.targetAgentId });
+  }
+
+  /**
+   * 37.1 D-06/D-07/D-08: the leader's ONE mid-run mutation — cancel or rewrite a `queued`
+   * assignment, applied immediately. A `running` assignment is refused (only steer reaches
+   * it), and the WHOLE list is refused when any row is not queued, so the leader's report
+   * always matches the ledger (T-37.1-24).
+   *
+   * Both operations write through `finalizeAttempt` — the single terminal writer — so a
+   * retired row always gets its report bubble and `listInterruptedAssignments` stays quiet
+   * (T-37.1-22). Ledger membership is checked against `listBatchAssignments(openBatchId)`,
+   * never `getAssignment` alone (T-37.1-20).
+   */
+  async function amendAssignments(rawArgs: Record<string, any>): Promise<string> {
+    if (disposed) return DISPOSED_REFUSAL;
+    const batchId = openBatchId;
+    if (batchId === null) {
+      return JSON.stringify({
+        refused: true,
+        code: 'ASSIGNMENT_NOT_IN_BATCH',
+        message: 'Không có lô nào đang chạy.',
+      });
+    }
+    const validation = await executeTeamTool(
+      'amend_assignments',
+      rawArgs,
+      toolContext(roster.lead?.id ?? '')
+    );
+    let parsed: any;
+    try {
+      parsed = JSON.parse(validation);
+    } catch {
+      return validation;
+    }
+    if (parsed?.refused === true) return validation;
+    const operations: Array<{ op: 'cancel' | 'rewrite_task'; assignmentId: string; task?: string; reason?: string }> =
+      Array.isArray(parsed?.operations) ? parsed.operations : [];
+
+    const rows = await listBatchAssignments(batchId, db);
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    for (const operation of operations) {
+      if (!byId.has(operation.assignmentId)) {
+        return JSON.stringify({
+          refused: true,
+          code: 'ASSIGNMENT_NOT_IN_BATCH',
+          message: 'Việc này không thuộc lô đang chạy.',
+        });
+      }
+    }
+    for (const operation of operations) {
+      const row = byId.get(operation.assignmentId)!;
+      if (row.runStatus !== 'queued') {
+        return JSON.stringify({
+          refused: true,
+          code: 'NOT_QUEUED',
+          message: 'Chỉ huỷ hoặc sửa được việc đang xếp hàng. Việc đang chạy chỉ nhận chỉ đạo.',
+        });
+      }
+    }
+    // A dispose that landed during the two reads above must not mutate a dead run.
+    if (disposed) return DISPOSED_REFUSAL;
+
+    const applied: Array<{ op: string; assignmentId: string; replacementId?: string }> = [];
+    for (const operation of operations) {
+      const row = byId.get(operation.assignmentId)!;
+
+      if (operation.op === 'cancel') {
+        // The marker goes in BEFORE the abort: the parked `dispatchAssignment` catch races
+        // this finalize with `userStopped.get(...) ?? disposeCause ?? 'user-abort'`, and
+        // whichever transaction commits first wins the `from: 'queued'` guard. `stopAgent`
+        // sets the marker first for exactly this reason.
+        userStopped.set(row.agentId, 'leader-amend');
+        try {
+          assignmentControllers.get(row.id)?.abort();
+          await finalizeAttempt(row.id, 'queued', 'stopped', 'leader-amend', AMENDED_REPORT_COPY);
+          settleAgent(row.agentId, 'stopped');
+          if (assignmentIdsByAgent.get(row.agentId) === row.id) {
+            assignmentIdsByAgent.delete(row.agentId);
+          }
+        } finally {
+          userStopped.delete(row.agentId);
+        }
+        applied.push({ op: 'cancel', assignmentId: row.id });
+        continue;
+      }
+
+      const employee = roster.employees.find((candidate) => candidate.id === row.agentId);
+      if (!employee) {
+        return JSON.stringify({
+          refused: true,
+          code: 'AGENT_NOT_IN_ROSTER',
+          message: 'Nhân viên không còn trong nhóm.',
+        });
+      }
+      // D-08: append, never mutate in place — attempt = a new row (D-23).
+      const next = await createAssignment(
+        {
+          batchId,
+          agentId: row.agentId,
+          agentName: row.agentName,
+          ...(row.skillId !== undefined ? { skillId: row.skillId } : {}),
+          ...(row.skillVersion !== undefined ? { skillVersion: row.skillVersion } : {}),
+          model: row.model,
+          task: operation.task ?? row.task,
+          retryOfAssignmentId: row.id,
+        },
+        db
+      );
+      await finalizeAttempt(row.id, 'queued', 'skipped', 'leader-amend', AMENDED_REPORT_COPY);
+      assignmentIdsByAgent.set(row.agentId, next.id);
+      updateAgent(row.agentId, { status: 'queued', streamingText: '', incomplete: false });
+      // The replacement must actually run; `onBatchSettled`'s ledger poll is what makes the
+      // batch wait for it (T-37.1-23).
+      const controller = batchControllers.get(batchId);
+      if (controller) {
+        void dispatchAssignment(
+          employee,
+          next.task,
+          {
+            batchId,
+            assignmentId: next.id,
+            attemptNo: next.attemptNo,
+            ...(row.instructionMessageId !== undefined
+              ? { instructionMessageId: row.instructionMessageId }
+              : {}),
+          },
+          controller
+        ).catch(() => {
+          /* dispatchAssignment already settled the agent and its ledger row */
+        });
+      }
+      applied.push({ op: 'rewrite_task', assignmentId: row.id, replacementId: next.id });
+    }
+
+    notify();
+    return JSON.stringify({ applied });
   }
 
   async function send(
@@ -1989,6 +2149,14 @@ export function createTeamRunCoordinator(
 
       // D-14: the lead must be able to say what is missing, so every entry carries the
       // ledger's terminal triple — `status`, `stopReason`, `incomplete` — not just the UI state.
+      // 37.1 D-08: an amended assignment's replacement is a NEW attempt row, so the latest
+      // attempt per agent is what the synthesis must read — never the dispatch-time id.
+      const ledgerRows = await listBatchAssignments(batchId, db);
+      const latestByAgent = new Map<string, AiTeamAssignment>();
+      for (const row of ledgerRows) {
+        const previous = latestByAgent.get(row.agentId);
+        if (!previous || row.attemptNo > previous.attemptNo) latestByAgent.set(row.agentId, row);
+      }
       const results = await Promise.all(
         assignments.map(async (assignment) => {
           const employee = roster.employees.find((row) => row.id === assignment.agentId);
@@ -1997,7 +2165,9 @@ export function createTeamRunCoordinator(
           const report =
             status === 'error' ? SANITIZED_TURN_ERROR : reports.get(assignment.agentId) ?? '';
           const assignmentId = attemptIdsByAgent.get(assignment.agentId);
-          const row = assignmentId ? await getAssignment(assignmentId, db) : undefined;
+          const row =
+            latestByAgent.get(assignment.agentId) ??
+            (assignmentId ? await getAssignment(assignmentId, db) : undefined);
           const stopped = status === 'stopped' || row?.runStatus === 'stopped';
           return {
             agentId: assignment.agentId,

@@ -5,6 +5,7 @@ import { TaskPlannerDatabase } from '../../../../src/db/index';
 import {
   abortAllAssignmentControllers,
   createTeamRunCoordinator,
+  EMPLOYEE_AMEND_REFUSAL,
   resolveTeamToolName,
   STOPPED_REPORT_COPY,
   type TeamRunCoordinator,
@@ -23,7 +24,11 @@ import {
   reset,
 } from '../../../../src/services/ai/office/liveUseRegistry';
 import { createTeam, updateTeam } from '../../../../src/db/repositories/aiTeamRepo';
-import { ensureTeamThread, saveTeamMessage } from '../../../../src/db/repositories/teamTranscriptRepo';
+import {
+  ensureTeamThread,
+  listInterruptedAssignments,
+  saveTeamMessage,
+} from '../../../../src/db/repositories/teamTranscriptRepo';
 import { getMessagesByThreadId } from '../../../../src/db/repositories/chatRepo';
 import {
   createAssignment,
@@ -4145,6 +4150,311 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       gate.release();
       await sent;
       await waitForReady(current.coordinator);
+    });
+  });
+
+  describe('amend_assignments (37.1 D-06/D-07/D-08/D-27)', () => {
+    const assignmentsFor = (employees: AiEmployee[]) =>
+      employees.map((row, index) => ({ agentId: row.id, task: `Việc ${index + 1}` }));
+
+    const reportsFor = async (current: Harness, assignmentId: string) =>
+      (
+        await current.db.chatMessages.where('threadId').equals(current.threadId).toArray()
+      ).filter((row) => row.assignmentId === assignmentId && row.messageKind === 'report');
+
+    it('cancels queued assignments so their agents never start', async () => {
+      const gate = deferred();
+      const started: string[] = [];
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            const queued = (await harness!.db.aiTeamAssignments.toArray()).filter(
+              (row) => row.runStatus === 'queued'
+            );
+            await options.executeToolFn!(
+              'amend_assignments',
+              {
+                operations: queued.map((row) => ({
+                  op: 'cancel',
+                  assignmentId: row.id,
+                  reason: 'không cần nữa',
+                })),
+              },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Đã huỷ hai việc.');
+          },
+          [EMP_A_MODEL]: async () => {
+            started.push(EMP_A_MODEL);
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => {
+            started.push(EMP_B_MODEL);
+            return loopResult('B xong');
+          },
+          [EMP_C_MODEL]: async () => {
+            started.push(EMP_C_MODEL);
+            return loopResult('C xong');
+          },
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getRunningCount() === 1);
+      await sleep(30);
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+
+      // The queued agents never started — only the one that already held the slot.
+      expect(started).toEqual([EMP_A_MODEL]);
+      expect(current.coordinator.getRunningCount()).toBe(0);
+
+      for (const employee of current.employees.slice(1)) {
+        const row = (await current.db.aiTeamAssignments.toArray()).find(
+          (candidate) => candidate.agentId === employee.id
+        )!;
+        expect(row).toMatchObject({
+          runStatus: 'stopped',
+          stopReason: 'leader-amend',
+          incomplete: true,
+        });
+        // T-37.1-22: the terminal writer inserted the report row, so no banner appears.
+        expect(await reportsFor(current, row.id)).toHaveLength(1);
+      }
+      expect(await listInterruptedAssignments(current.threadId, current.db)).toEqual([]);
+    });
+
+    it('rewrites a queued assignment into a new attempt that actually runs', async () => {
+      const gate = deferred();
+      const instructions: string[] = [];
+      const synthesisPrompts: string[] = [];
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        synthesisScript: async (options) => {
+          synthesisPrompts.push(
+            options.messages
+              .filter((message) => message.role === 'system')
+              .map((message) => String(message.content))
+              .join('\n')
+          );
+          return loopResult('Đã tổng hợp.');
+        },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            const rows = await harness!.db.aiTeamAssignments.toArray();
+            const rewrite = rows.find(
+              (row) => row.agentId === harness!.employees[1]!.id && row.runStatus === 'queued'
+            )!;
+            const cancel = rows.find(
+              (row) => row.agentId === harness!.employees[2]!.id && row.runStatus === 'queued'
+            )!;
+            await options.executeToolFn!(
+              'amend_assignments',
+              {
+                operations: [
+                  { op: 'rewrite_task', assignmentId: rewrite.id, task: 'Việc mới cho B' },
+                  { op: 'cancel', assignmentId: cancel.id },
+                ],
+              },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Đã sửa việc.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async (options) => {
+            instructions.push(String(options.messages.at(-1)?.content ?? ''));
+            return loopResult('B xong việc mới');
+          },
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+      const target = current.employees[1]!;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getRunningCount() === 1);
+      await sleep(30);
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+
+      const rows = (await current.db.aiTeamAssignments.toArray()).filter(
+        (row) => row.agentId === target.id
+      );
+      expect(rows.map((row) => row.attemptNo).sort()).toEqual([1, 2]);
+      const first = rows.find((row) => row.attemptNo === 1)!;
+      const second = rows.find((row) => row.attemptNo === 2)!;
+      expect(first).toMatchObject({ runStatus: 'skipped', stopReason: 'leader-amend' });
+      expect(second).toMatchObject({ runStatus: 'done', task: 'Việc mới cho B' });
+      expect(second.retryOfAssignmentId).toBe(first.id);
+      // The replacement really ran, with the new task.
+      expect(instructions).toEqual(['Việc mới cho B']);
+      expect(synthesisPrompts[0]).toContain('B xong việc mới');
+    });
+
+    it('refuses a running assignment with no ledger write', async () => {
+      const gate = deferred();
+      let refusal = '';
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            const running = (await harness!.db.aiTeamAssignments.toArray()).find(
+              (row) => row.runStatus === 'running'
+            )!;
+            refusal = await options.executeToolFn!(
+              'amend_assignments',
+              { operations: [{ op: 'cancel', assignmentId: running.id }] },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Không huỷ được.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getRunningCount() === 1);
+      await sleep(30);
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+
+      expect(JSON.parse(refusal)).toMatchObject({ refused: true, code: 'NOT_QUEUED' });
+      const running = (await current.db.aiTeamAssignments.toArray()).find(
+        (row) => row.agentId === current.employees[0]!.id
+      )!;
+      expect(running).toMatchObject({ runStatus: 'done', stopReason: 'none' });
+    });
+
+    it('refuses an assignment id from another batch', async () => {
+      const gate = deferred();
+      let refusal = '';
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            // A row in a DIFFERENT batch must never be addressable from this one.
+            const otherBatch = await openBatch(
+              {
+                teamId: harness!.team.id,
+                threadId: harness!.threadId,
+                batchIndex: 99,
+                userRequest: 'lô khác',
+                leadId: harness!.lead.id,
+                planSnapshot: { original: [] },
+                planDecision: 'auto',
+              },
+              harness!.db
+            );
+            const foreign = await createAssignment(
+              {
+                batchId: otherBatch.id,
+                agentId: harness!.employees[1]!.id,
+                agentName: 'Bình',
+                model: EMP_B_MODEL,
+                task: 'Việc của lô khác',
+              },
+              harness!.db
+            );
+            refusal = await options.executeToolFn!(
+              'amend_assignments',
+              { operations: [{ op: 'cancel', assignmentId: foreign.id }] },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Không thuộc lô này.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getRunningCount() === 1);
+      await sleep(30);
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+
+      expect(JSON.parse(refusal)).toMatchObject({
+        refused: true,
+        code: 'ASSIGNMENT_NOT_IN_BATCH',
+      });
+      const foreign = (await current.db.aiTeamAssignments.toArray()).find(
+        (row) => row.task === 'Việc của lô khác'
+      )!;
+      expect(foreign.runStatus).toBe('queued');
+    });
+
+    it('refuses an employee caller at tier-1 dispatch', async () => {
+      let refusal = '';
+      harness = await createHarness({
+        scripts: {
+          [EMP_A_MODEL]: async (options) => {
+            refusal = await options.executeToolFn!(
+              'amend_assignments',
+              { operations: [{ op: 'cancel', assignmentId: 'anything' }] },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('A xong');
+          },
+        },
+      });
+      const current = harness;
+
+      await current.coordinator.send(
+        `@[${current.employees[0]!.name}](agent:${current.employees[0]!.id}) kiểm tra`
+      );
+
+      expect(refusal).toBe(EMPLOYEE_AMEND_REFUSAL);
+      expect(await current.db.aiTeamAssignments.count()).toBe(0);
     });
   });
 });
