@@ -171,8 +171,15 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
           );
         }
 
-        // Pass message with grounding intact for structured rendering
-        const agent = msg.agentId ? agentDirectory?.get(msg.agentId) : undefined;
+        // Pass message with grounding intact for structured rendering.
+        // CR-06: a steer row deliberately carries NO `agentId` (D-15 — it must render as a
+        // user row), so its caption's target must be resolved from `targetAgentId` here.
+        // Without this the label fell back to a raw UUID in production (IN-08d).
+        const agent = msg.agentId
+          ? agentDirectory?.get(msg.agentId)
+          : msg.targetAgentId
+            ? agentDirectory?.get(msg.targetAgentId)
+            : undefined;
         const agentStatus = msg.agentId ? agentStatuses?.get(msg.agentId) : undefined;
         return (
           <React.Fragment key={msg.id}>

@@ -287,10 +287,13 @@ describe('ChatMessageBubble steer row (37.1 D-03/D-15)', () => {
     expect(label.textContent).not.toContain('→');
   });
 
-  it('falls back to the target id when the agent is unknown', () => {
+  it('falls back to a neutral label when the agent is unknown', () => {
     render(<ChatMessageBubble message={steerMsg({ targetAgentId: 'ghost-agent' })} />);
 
-    expect(screen.getByTestId('steer-label-steer-1').textContent).toContain('Chỉ đạo → ghost-agent');
+    // IN-08d: never a raw UUID in UI copy.
+    const label = screen.getByTestId('steer-label-steer-1');
+    expect(label.textContent).toContain('Chỉ đạo → Nhân viên');
+    expect(label.textContent).not.toContain('ghost-agent');
   });
 
   it('renders the pending badge', () => {
@@ -329,8 +332,24 @@ describe('ChatMessageBubble steer row (37.1 D-03/D-15)', () => {
     expect(screen.getByTestId('steer-label-steer-1').closest('[data-role]')?.getAttribute('data-role')).toBe(
       'user'
     );
-    // The attribution row also carries the name, so the pill is asserted by count.
-    expect(screen.getAllByText('An').length).toBeGreaterThan(1);
+    // CR-06/D-15: a steer row renders as a USER row — no agent attribution header.
+    expect(screen.queryByTestId(`agent-attribution-${AGENT_ID}`)).toBeNull();
+    expect(screen.getByText('An')).toBeInTheDocument();
+  });
+
+  it('resolves the steer target name through the list directory, never the raw id', () => {
+    render(
+      <ChatMessageList
+        messages={[steerMsg({ targetAgentId: AGENT_ID })]}
+        agentDirectory={new Map([[AGENT_ID, agent]])}
+      />
+    );
+
+    const label = screen.getByTestId('steer-label-steer-1');
+    expect(label.textContent).toContain('Chỉ đạo → An');
+    expect(label.textContent).not.toContain(AGENT_ID);
+    // D-15: still a user row, so no agent attribution header appears above it.
+    expect(screen.queryByTestId(`agent-attribution-${AGENT_ID}`)).toBeNull();
   });
 
   it('forwards steerStates from the list to the bubble', () => {

@@ -1160,7 +1160,9 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         width: '100%',
       }}
     >
-      {agent && <AgentAttributionRow agent={agent} />}
+      {/* CR-06: a steer row now resolves `agent` from its `targetAgentId` (for the caption),
+          but it must still render as a USER row — never with an agent attribution header. */}
+      {agent && msg.messageKind !== 'steer' && <AgentAttributionRow agent={agent} />}
       {/* 37.1 D-15: a steer row is a USER row — the caption names its target so it can never
           be mistaken for an agent bubble. D-03: the badge walks pending -> held -> gone. */}
       {msg.messageKind === 'steer' && (
@@ -1171,7 +1173,9 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
             {msg.targetAgentId === undefined
               ? 'Chỉ đạo'
-              : 'Chỉ đạo → ' + (agent?.name ?? msg.targetAgentId)}
+              : // IN-08d: never a raw UUID in UI copy — a neutral label when the directory
+                // has no entry (a de-rostered agent's historical steer row).
+                'Chỉ đạo → ' + (agent?.name ?? 'Nhân viên')}
           </Tag>
           {steerState !== undefined && (
             <Tag style={{ margin: 0, fontSize: 11 }} data-testid={`steer-badge-${msg.id}`}>
