@@ -2746,7 +2746,8 @@ export function createTeamRunCoordinator(
     // this write. Otherwise two clicks on different bubbles in one tick both pass the guard,
     // both create attempts, and both run a lead synthesis — which then race on the previous
     // synthesis id and leave one synthesis current forever.
-    // 37-06: the outbox queues against this phase instead of dispatching beside the retry.
+    // 37.1 D-01: the phase is claimed synchronously so a submit during the retry routes as a
+    // steer instead of opening a second turn.
     setPhase('batch-running');
 
     let claimed = false;
