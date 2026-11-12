@@ -4192,6 +4192,11 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       const sent = log.find((row) => row.from === current.lead.id && row.kind === 'chat');
       expect(sent).toBeDefined();
       expect(sent!.to).toEqual([current.employees[0]!.id]);
+      // The row must ALSO be in the transcript, or the user never sees what the leader said
+      // and the agent's answer renders above the question it answers.
+      const rendered = await current.db.chatMessages.get(sent!.id);
+      expect(rendered?.content).toBe('Kiểm tra giúp mình luồng đối soát');
+      expect(rendered?.agentId).toBe(current.lead.id);
       expect(seenByAgent).toHaveLength(1);
       expect(seenByAgent[0]).toContain('Kiểm tra giúp mình luồng đối soát');
     });

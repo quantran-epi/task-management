@@ -87,7 +87,6 @@ import { generateId } from '../../../utils/uuid';
 import {
   advanceCursor,
   appendForExistingMessage,
-  appendMessage,
   getCursor,
   readMessagesAfter,
 } from './teamEventLog';
@@ -2077,14 +2076,35 @@ export function createTeamRunCoordinator(
     // R14: the message answers whatever this turn was answering, so a chain of exchanges
     // stays readable. A participant with no open turn starts a thread.
     const replyToId = replyTargetByAgent.get(fromId);
-    const row = await appendMessage(
+    // The row must exist in `chatMessages` too, or the transcript never renders it and the
+    // recipient's answer appears BEFORE the question. Same id in both tables, exactly like
+    // the composer path — one message, two projections.
+    const sender = roster.employees.find((entry) => entry.id === fromId);
+    const saved = await saveTeamMessage(
       {
+        threadId: options.threadId,
+        role: 'assistant',
+        content,
+        ...(sender
+          ? { agentId: sender.id, agentName: sender.name, agentKind: 'employee' as const }
+          : roster.lead && fromId === roster.lead.id
+            ? { agentId: roster.lead.id, agentName: roster.lead.name, agentKind: 'lead' as const }
+            : {}),
+        // R14: the rendered row carries the same link as the log row, so the bubble quotes.
+        ...(replyToId !== undefined ? { replyToId } : {}),
+      },
+      db
+    );
+    await appendForExistingMessage(
+      {
+        id: saved.id,
         teamId,
         from: fromId,
         to,
         content,
         kind: 'chat',
         ...(replyToId !== undefined ? { replyToId } : {}),
+        createdAt: saved.createdAt,
       },
       db
     );
@@ -2111,7 +2131,7 @@ export function createTeamRunCoordinator(
         }
         registerTeamTurn();
         try {
-          await startEmployeeTurn(employee, content, content, undefined, undefined, row.message.id);
+          await startEmployeeTurn(employee, content, content, undefined, undefined, saved.id);
           outcomes.push({ to: recipientId, outcome: 'started' });
         } finally {
           aiTurnManager.finishTurn(teamTurnId);
@@ -2125,13 +2145,13 @@ export function createTeamRunCoordinator(
           outcomes.push({ to: recipientId, outcome: 'queued' });
           continue;
         }
-        await runLeadTurn(content, undefined, 'lead-thinking', row.message.id);
+        await runLeadTurn(content, undefined, 'lead-thinking', saved.id);
         outcomes.push({ to: recipientId, outcome: 'started' });
         continue;
       }
       outcomes.push({ to: recipientId, outcome: 'unknown' });
     }
-    return JSON.stringify({ sent: row.message.id, outcomes });
+    return JSON.stringify({ sent: saved.id, outcomes });
   }
 
   /**
