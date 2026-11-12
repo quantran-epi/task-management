@@ -396,34 +396,28 @@ async function deliverSteer(args: Record<string, any>): Promise<string> {
 async function amendAssignments(args: Record<string, any>): Promise<string> {
   const operations: any[] = Array.isArray(args.operations) ? args.operations : [];
   if (operations.length === 0) {
-    return JSON.stringify(refuse('EMPTY_BATCH', 'Danh sách thao tác đang trống.'));
+    return JSON.stringify(refuse('INVALID_ARGUMENT', 'Danh sách thao tác đang trống.'));
   }
 
   const normalized: Array<{ op: 'cancel' | 'rewrite_task'; assignmentId: string; task?: string; reason?: string }> = [];
   for (const raw of operations) {
     const op = raw?.op;
+    // WR-08: an argument-shape failure is `INVALID_ARGUMENT`, not `NOT_QUEUED` — the model
+    // self-corrects on the code, and `NOT_QUEUED` sent it retrying against another id.
     if (op !== 'cancel' && op !== 'rewrite_task') {
-      return JSON.stringify({
-        refused: true,
-        code: 'NOT_QUEUED',
-        message: 'Thao tác không hợp lệ: chỉ hỗ trợ cancel hoặc rewrite_task.',
-      });
+      return JSON.stringify(
+        refuse('INVALID_ARGUMENT', 'Thao tác không hợp lệ: chỉ hỗ trợ cancel hoặc rewrite_task.')
+      );
     }
     const assignmentId = typeof raw?.assignmentId === 'string' ? raw.assignmentId : '';
     if (!assignmentId) {
-      return JSON.stringify({
-        refused: true,
-        code: 'NOT_QUEUED',
-        message: 'Thiếu id việc cần áp dụng.',
-      });
+      return JSON.stringify(refuse('INVALID_ARGUMENT', 'Thiếu id việc cần áp dụng.'));
     }
     const task = typeof raw?.task === 'string' ? raw.task.trim() : '';
     if (op === 'rewrite_task' && !task) {
-      return JSON.stringify({
-        refused: true,
-        code: 'NOT_QUEUED',
-        message: 'Thiếu nội dung mới cho thao tác sửa việc.',
-      });
+      return JSON.stringify(
+        refuse('INVALID_ARGUMENT', 'Thiếu nội dung mới cho thao tác sửa việc.')
+      );
     }
     const reason = typeof raw?.reason === 'string' && raw.reason ? raw.reason : undefined;
     normalized.push({

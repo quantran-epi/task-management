@@ -588,10 +588,10 @@ describe('teamTools — amend_assignments validation (37.1 D-06/D-07/D-27)', () 
     await db.delete();
   });
 
-  it('refuses an empty or missing operations list with EMPTY_BATCH', async () => {
+  it('refuses an empty or missing operations list with INVALID_ARGUMENT', async () => {
     for (const args of [{ operations: [] }, {}]) {
       const result = JSON.parse(await executeTeamTool('amend_assignments', args, ctx()));
-      expect(result).toMatchObject({ refused: true, code: 'EMPTY_BATCH' });
+      expect(result).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
     }
   });
 
@@ -603,7 +603,7 @@ describe('teamTools — amend_assignments validation (37.1 D-06/D-07/D-27)', () 
         ctx()
       )
     );
-    expect(result).toMatchObject({ refused: true, code: 'NOT_QUEUED' });
+    expect(result).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
     expect(await db.aiTeamAssignments.count()).toBe(0);
   });
 
@@ -615,7 +615,7 @@ describe('teamTools — amend_assignments validation (37.1 D-06/D-07/D-27)', () 
         ctx()
       )
     );
-    expect(result).toMatchObject({ refused: true, code: 'NOT_QUEUED' });
+    expect(result).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
     expect(result.message).toContain('Thiếu nội dung mới');
   });
 
@@ -623,7 +623,7 @@ describe('teamTools — amend_assignments validation (37.1 D-06/D-07/D-27)', () 
     const result = JSON.parse(
       await executeTeamTool('amend_assignments', { operations: [{ op: 'cancel' }] }, ctx())
     );
-    expect(result).toMatchObject({ refused: true, code: 'NOT_QUEUED' });
+    expect(result).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
     expect(result.message).toContain('Thiếu id');
   });
 
