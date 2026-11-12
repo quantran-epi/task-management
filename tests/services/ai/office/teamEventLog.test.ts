@@ -114,9 +114,16 @@ describe('teamEventLog — the unified message log', () => {
     expect(seen[0]).toMatchObject({ participantId: AGENT, participantName: 'Eva' });
     expect(seen[0]!.at).toBeTruthy();
 
-    // A participant the message was not addressed to never counts as a reader.
+    // 37.1: the receipt answers "who has READ this", not "who was addressed". Everyone
+    // reads the whole log — `to[]` only decides who owes a reply — so a reader outside
+    // `to[]` still counts. This is what makes an agent→lead reply show "Bạn đã đọc".
     await advanceCursor(TEAM, 'stranger', message.seq, db);
-    expect(await seenBy(message, names, db)).toHaveLength(1);
+    expect(await seenBy(message, names, db)).toHaveLength(2);
+
+    // The author is never a reader of their own message.
+    await advanceCursor(TEAM, USER_PARTICIPANT_ID, message.seq, db);
+    const afterAuthor = await seenBy(message, names, db);
+    expect(afterAuthor.map((row) => row.participantId)).not.toContain(USER_PARTICIPANT_ID);
   });
 
   it('derives the three delivery states from the cursor', async () => {

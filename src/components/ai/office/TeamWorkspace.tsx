@@ -434,8 +434,11 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     for (const agent of roster) nameOf.set(agent.id, agent.name);
     nameOf.set(USER_PARTICIPANT_ID, 'Bạn');
     for (const message of teamLog) {
+      // 37.1: "who has read", not "who was addressed" — mirrors `seenBy` in teamEventLog.
+      // Everyone reads the whole log; `to[]` only decides who owes a reply. The author is
+      // never a reader of their own message.
       const readers = teamCursors.filter(
-        (cursor) => message.to.includes(cursor.participantId) && cursor.lastSeq >= message.seq
+        (cursor) => cursor.participantId !== message.from && cursor.lastSeq >= message.seq
       );
       if (readers.length === 0) continue;
       map.set(

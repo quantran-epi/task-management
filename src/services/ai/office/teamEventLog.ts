@@ -226,8 +226,12 @@ export async function advanceCursor(
 }
 
 /**
- * Who has read this message. This is the seen receipt: a recipient has read it when their
- * cursor covers its `seq`, and the time is that cursor's `updatedAt`.
+ * Who has read this message. This is the seen receipt.
+ *
+ * 37.1: the question a receipt answers is "who has READ this", not "who was addressed". In a
+ * group chat everyone may read everything — `to[]` only decides who owes a reply — so a
+ * reader is anyone whose cursor covers the message, minus its author. Filtering by `to[]`
+ * hid the receipt on every agent→lead reply, because the user is not the addressee.
  */
 export async function seenBy(
   message: TeamMessage,
@@ -236,7 +240,7 @@ export async function seenBy(
 ): Promise<MessageSeenEntry[]> {
   const rows = await db.teamReadCursors.where('teamId').equals(message.teamId).toArray();
   return rows
-    .filter((row) => message.to.includes(row.participantId) && row.lastSeq >= message.seq)
+    .filter((row) => row.participantId !== message.from && row.lastSeq >= message.seq)
     .map((row) => ({
       participantId: row.participantId,
       participantName: names.get(row.participantId) ?? row.participantId,

@@ -1059,6 +1059,32 @@ export function createTeamRunCoordinator(
         }
         const active = activeAssignmentByAgent.get(agentId);
         if (!active || input.role !== 'assistant' || input.messageKind !== 'report') {
+          // 37.1: a turn started by a mention or by `send_message` has NO assignment, so the
+          // branch below never ran and this answer was never logged. Without a log row no
+          // cursor covers it, so the user never saw a read receipt on the agent's reply —
+          // the one direction UAT caught. Every assistant answer is a message to the lead.
+          if (
+            !active &&
+            input.role === 'assistant' &&
+            input.messageKind === 'report' &&
+            roster.lead
+          ) {
+            await appendForExistingMessage(
+              {
+                id: row.id,
+                teamId,
+                from: agentId,
+                to: [roster.lead.id],
+                content: row.content,
+                kind: 'report',
+                ...(replyTargetByAgent.get(agentId) !== undefined
+                  ? { replyToId: replyTargetByAgent.get(agentId)! }
+                  : {}),
+                createdAt: row.createdAt,
+              },
+              db
+            );
+          }
           return row;
         }
         // One transaction so this stamp and a racing `finalizeAttempt` cannot interleave:

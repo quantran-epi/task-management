@@ -4302,6 +4302,32 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(current.coordinator.getState().lastPlan).toBeNull();
     });
 
+    it('a mention-started agent answer is logged, so it has a read receipt', async () => {
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async () => loopResult('Chào.'),
+          [EMP_A_MODEL]: async () => loopResult('Có, Integer là kiểu wrapper.'),
+        },
+      });
+      const current = harness;
+      const target = current.employees[0]!;
+
+      await current.coordinator.send(
+        `@[${target.name}](agent:${target.id}) java có kiểu Integer không`
+      );
+      await waitForReady(current.coordinator);
+
+      const log = await teamLog(current);
+      const answer = log.find(
+        (row) => row.from === target.id && row.content.includes('Integer')
+      );
+      // No assignment exists on this path, so the report branch never ran. Without this row
+      // no cursor can cover the answer and the user sees no receipt on it.
+      expect(answer).toBeDefined();
+      expect(answer!.to).toEqual([current.lead.id]);
+      expect(answer!.kind).toBe('report');
+    });
+
     it('R9: an agent still cannot call delegate_batch', async () => {
       let refusal = '';
       harness = await createHarness({

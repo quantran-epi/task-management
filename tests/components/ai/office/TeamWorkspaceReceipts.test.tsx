@@ -265,6 +265,38 @@ describe('TeamWorkspace receipts (37.1 R10, R11, R13)', () => {
     expect(label.textContent).toContain('An Nhân viên');
   });
 
+  it('an agent reply to the leader still shows the USER as a reader', async () => {
+    const row = await saveTeamMessage(
+      {
+        threadId,
+        role: 'assistant',
+        content: 'Có, Integer là kiểu wrapper.',
+        agentId: employeeId,
+        agentName: 'An Nhân viên',
+      },
+      db
+    );
+    // Addressed to the LEAD — the user is not a recipient, yet the user has read it.
+    await appendForExistingMessage(
+      {
+        id: row.id,
+        teamId: team.id,
+        from: employeeId,
+        to: [leadId],
+        content: row.content,
+        kind: 'report',
+        createdAt: row.createdAt,
+      },
+      db
+    );
+    renderWorkspace();
+
+    await waitFor(async () => {
+      const receipt = await screen.findByTestId(`seen-${row.id}`);
+      expect(receipt.textContent).toBe('✓✓');
+    });
+  });
+
   it('R14: a reply renders the message it answers', async () => {
     const question = await saveTeamMessage(
       { threadId, role: 'user', content: 'Luồng đối soát có vấn đề gì?' },
