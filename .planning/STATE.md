@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
 status: executing
-stopped_at: Phase 37.1 context gathered
-last_updated: "2026-11-12T04:01:23.784Z"
-last_activity: 2026-11-12 — Phase 37 execution started
+stopped_at: Phase 37.1 planned — ready for /gsd-execute-phase 37.1
+last_updated: "2026-11-12T04:05:57.281Z"
+last_activity: 2026-11-12 -- Phase 37.1 execution started
 progress:
   total_phases: 7
   completed_phases: 3
-  total_plans: 25
+  total_plans: 31
   completed_plans: 26
   percent: 43
 current_phase: 37
@@ -21,20 +21,20 @@ current_phase_name: Runtime reliability + concurrency
 See: .planning/PROJECT.md (updated 2026-11-09)
 
 **Core value:** Hợp nhất SDLC Studio và AI Office thành Unified AI Office dạng chat-first, free-style với token budget cứng và làm giàu skill.
-**Current focus:** Phase 37.1 — Live steering
+**Current focus:** Phase 37.1 — live-steering-leader-amends-assignments-and-steers-running-a
 
 ## Current Position
 
-Phase: 37.1 (Live steering — leader amends assignments and steers running agents mid-run) — PLANNED
-Plan: 0 of 6
-Status: Ready to execute
-Last activity: 2026-11-12 — Phase 37.1 planned (6 plans, 5 waves)
+Phase: 37.1 (live-steering-leader-amends-assignments-and-steers-running-a) — EXECUTING
+Plan: 2 of 6
+Status: Executing Phase 37.1
+Last activity: 2026-11-12 -- Phase 37.1 plan 01 complete (event-driven delegate_batch)
 
 ## Session Continuity
 
-Last session: 2026-11-12T01:57:18.830Z
-Stopped at: Phase 37.1 planned — ready for /gsd-execute-phase 37.1
-Resume file: .planning/phases/37.1-live-steering-leader-amends-assignments-and-steers-running-a/37.1-01-PLAN.md
+Last session: 2026-11-12T04:20:00.000Z
+Stopped at: Completed 37.1-01-PLAN.md
+Resume file: .planning/phases/37.1-live-steering-leader-amends-assignments-and-steers-running-a/37.1-02-PLAN.md
 
 Progress: [█████░░░░░] 50%
 
@@ -68,6 +68,10 @@ Progress: [█████░░░░░] 50%
 
 ## Decisions
 
+- [Phase 37.1]: D-24: `delegate_batch` returns an ack `{dispatched,batchId,status,agents[]}`; settled results reach the lead only through the synthesis turn opened by `onBatchSettled`
+- [Phase 37.1]: Agent cancellation is owned by a per-batch `AbortController`; the leader tool-call signal is never wired to an agent
+- [Phase 37.1]: The `kind:'unfinished'` tail travels in the synthesis prompt (`KẾT QUẢ CỦA LÔ`), not in the tool result
+- [Phase 37.1]: `usageTotals` is keyed per TURN (`usageBaselineKey`), so the dispatch turn's tokens survive the synthesis turn
 - [Phase ?]: D-01: Global conventions stored in Dexie settings under global_conventions key
 - [Phase ?]: D-02: GlobalConventionsCard embedded inside SDLC / AI tab of SettingsView
 - [Phase ?]: D-03: Setting key complies with isSafeBackupSetting whitelist, included in encrypted backups
@@ -147,3 +151,4 @@ Progress: [█████░░░░░] 50%
 | Phase 37 P06 | 32 min | 3 tasks | 6 files |
 | Phase 37 P07 | 42 min | 2 tasks | 5 files |
 | Phase 37 P08 | 22 min | 2 tasks | 8 files |
+| Phase 37.1 P01 | 55 min | 3 tasks | 2 files |

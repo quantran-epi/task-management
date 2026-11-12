@@ -206,7 +206,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 37.1-01-PLAN.md — D-24 event-driven: `dispatchBatch` + `onBatchSettled`, batch abort controller, per-turn usage baseline, team turn lifetime
+- [x] 37.1-01-PLAN.md — D-24 event-driven: `dispatchBatch` + `onBatchSettled`, batch abort controller, per-turn usage baseline, team turn lifetime
 - [ ] 37.1-02-PLAN.md — return-value `beforeToolRound` hook firing on round 1
 
 **Wave 2** *(blocked on Wave 1 completion)*
