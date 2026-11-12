@@ -329,8 +329,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
         pendingPlan: null,
         pendingApproval: null,
         pendingSteerMessageIds: [],
-        undeliveredSteerCountByAgent: {},
-        pausedAgentId: null,
+          pausedAgentId: null,
         pausedAgentName: null,
         lastPlan: null,
         lastPlanDecision: null,
@@ -4151,6 +4150,174 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       await sent;
       await waitForReady(current.coordinator);
     });
+
+    // CR-01: the steer turn used to clear the pending set BEFORE `start()`, which throws
+    // TURN_IN_PROGRESS while the lead is parked on the plan card — the id was lost and the
+    // running turn's drain saw nothing.
+    it('keeps a steer pending while the lead is parked, then injects it at the next round', async () => {
+      const injected: string[] = [];
+      let harnessRef: Harness | null = null;
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            if (!isSynthesisTurn(options) && lastTextOf(options) === 'Làm báo cáo') {
+              await options.executeToolFn!(
+                'delegate_batch',
+                { assignments: assignmentsFor(harnessRef!.employees) },
+                harnessRef!.db,
+                options.signal
+              );
+              // The plan resolved; the running turn's next round boundary must drain.
+              const messages = await options.beforeToolRound?.(2, options.signal);
+              if (messages && messages.length > 0) injected.push(JSON.stringify(messages));
+              return loopResult('Đã giao việc.');
+            }
+            return loopResult('Đã tổng hợp.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      harnessRef = harness;
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getState().phase === 'awaiting-plan');
+
+      await expect(current.coordinator.send('chỉ đạo khi đang chờ')).resolves.toBe('steered');
+      // The lead runtime is live, so the steer turn cannot start — the id must stay pending.
+      expect(current.coordinator.getState().pendingSteerMessageIds).toHaveLength(1);
+
+      current.coordinator.resolvePlan(true);
+      await sent;
+      await waitForReady(current.coordinator);
+
+      expect(injected).toHaveLength(1);
+      expect(injected[0]).toContain('chỉ đạo khi đang chờ');
+      expect(current.coordinator.getState().pendingSteerMessageIds).toEqual([]);
+    });
+
+    // CR-04/CR-05: the ledger field is the durable "delivered" marker. The drain used to
+    // clear it, which erased delivery AND made a concurrent `deliver_steer` lose its id.
+    it('keeps the delivered ids on the ledger after the drain, and injects each once', async () => {
+      const gate = deferred();
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            if (lastTextOf(options) === 'Làm báo cáo') {
+              await options.executeToolFn!(
+                'delegate_batch',
+                { assignments: assignmentsFor(harness!.employees) },
+                harness!.db,
+                options.signal
+              );
+              return loopResult('Đã giao việc.');
+            }
+            return loopResult('Đã đọc.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+      const target = current.employees[1]!;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getState().phase === 'batch-running');
+
+      const steerRow = await saveTeamMessage(
+        {
+          threadId: current.threadId,
+          role: 'user',
+          content: 'đổi hướng',
+          messageKind: 'steer',
+          targetAgentId: target.id,
+        },
+        current.db
+      );
+      const assignment = (await current.db.aiTeamAssignments.toArray()).find(
+        (row) => row.agentId === target.id
+      )!;
+      await current.db.aiTeamAssignments.update(assignment.id, {
+        steerMessageIds: [steerRow.id],
+      });
+
+      const first = await current.coordinator.drainSteerInbox(target.id, assignment.id);
+      expect(first).toHaveLength(1);
+      expect(first[0]!.content).toContain('đổi hướng');
+
+      // The durable marker survives, so the badge stays "delivered" (D-14/D-25).
+      const after = await current.db.aiTeamAssignments.get(assignment.id);
+      expect(after?.steerMessageIds).toEqual([steerRow.id]);
+
+      // A second boundary does not re-inject the same text.
+      expect(await current.coordinator.drainSteerInbox(target.id, assignment.id)).toEqual([]);
+
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+    });
+
+    // WR-07: every other team tool enforces the cross-team read guard (T-34-07).
+    it('refuses a steer row from another thread', async () => {
+      const gate = deferred();
+      let refusal = '';
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            const foreign = await saveTeamMessage(
+              {
+                threadId: '00000000-0000-4000-8000-0000000000ff',
+                role: 'user',
+                content: 'chỉ đạo của nhóm khác',
+                messageKind: 'steer',
+                targetAgentId: harness!.employees[0]!.id,
+              },
+              harness!.db
+            );
+            refusal = await options.executeToolFn!(
+              'deliver_steer',
+              { steerMessageId: foreign.id },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Không giao được.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getState().phase === 'batch-running');
+      await waitFor(() => refusal.length > 0);
+
+      expect(JSON.parse(refusal)).toMatchObject({ refused: true, code: 'TURN_NOT_IN_TEAM' });
+      const rows = await current.db.aiTeamAssignments.toArray();
+      expect(rows.every((row) => (row.steerMessageIds ?? []).length === 0)).toBe(true);
+
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+    });
   });
 
   describe('amend_assignments (37.1 D-06/D-07/D-08/D-27)', () => {
@@ -4455,6 +4622,147 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
       expect(refusal).toBe(EMPLOYEE_AMEND_REFUSAL);
       expect(await current.db.aiTeamAssignments.count()).toBe(0);
+    });
+
+    // CR-02: the roster check used to live in the apply loop, so [cancel A, rewrite B] with a
+    // de-rostered B cancelled A and THEN reported a total refusal.
+    it('refuses the whole list before mutating when a rewrite target left the roster', async () => {
+      const gate = deferred();
+      let refusal = '';
+      let cancelStatusAfterRefusal = '';
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            const rows = await harness!.db.aiTeamAssignments.toArray();
+            const cancel = rows.find(
+              (row) => row.agentId === harness!.employees[2]!.id && row.runStatus === 'queued'
+            )!;
+            // A queued row whose agent is no longer in the roster — the ledger state a
+            // mid-batch de-roster leaves behind.
+            const orphan = await createAssignment(
+              {
+                batchId: cancel.batchId,
+                agentId: '00000000-0000-4000-8000-00000000dead',
+                agentName: 'Đã rời nhóm',
+                model: EMP_B_MODEL,
+                task: 'Việc cũ',
+              },
+              harness!.db
+            );
+            refusal = await options.executeToolFn!(
+              'amend_assignments',
+              {
+                operations: [
+                  { op: 'cancel', assignmentId: cancel.id },
+                  { op: 'rewrite_task', assignmentId: orphan.id, task: 'Việc mới' },
+                ],
+              },
+              harness!.db,
+              options.signal
+            );
+            // The fixture row is not dispatched, so settle it or the batch's ledger poll
+            // would wait on a `queued` row nobody owns.
+            await harness!.db.aiTeamAssignments.update(orphan.id, {
+              runStatus: 'stopped',
+              stopReason: 'leader-amend',
+            });
+            // Snapshot NOW: the batch keeps running after the refusal, so a later read would
+            // show the cancel target's eventual terminal status instead of "not cancelled".
+            cancelStatusAfterRefusal = (await harness!.db.aiTeamAssignments.get(cancel.id))!
+              .runStatus;
+            return loopResult('Không sửa được.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getRunningCount() === 1);
+      await sleep(30);
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+
+      expect(JSON.parse(refusal)).toMatchObject({ refused: true, code: 'AGENT_NOT_IN_ROSTER' });
+      // The cancel in the SAME list must not have been applied at refusal time.
+      expect(cancelStatusAfterRefusal).toBe('queued');
+    });
+
+    // CR-03: a queued row can already hold delivered steers (D-28). Rewriting it silently
+    // dropped them, so the rewrite is refused while any steer is undrained.
+    it('refuses a rewrite while the queued row still holds an undrained steer', async () => {
+      const gate = deferred();
+      let refusal = '';
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            const rewrite = (await harness!.db.aiTeamAssignments.toArray()).find(
+              (row) => row.agentId === harness!.employees[1]!.id && row.runStatus === 'queued'
+            )!;
+            const steerRow = await saveTeamMessage(
+              {
+                threadId: harness!.threadId,
+                role: 'user',
+                content: 'đổi hướng',
+                messageKind: 'steer',
+                targetAgentId: harness!.employees[1]!.id,
+              },
+              harness!.db
+            );
+            await harness!.db.aiTeamAssignments.update(rewrite.id, {
+              steerMessageIds: [steerRow.id],
+            });
+            refusal = await options.executeToolFn!(
+              'amend_assignments',
+              { operations: [{ op: 'rewrite_task', assignmentId: rewrite.id, task: 'Việc mới' }] },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Không sửa được.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getRunningCount() === 1);
+      await sleep(30);
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+
+      expect(JSON.parse(refusal)).toMatchObject({ refused: true, code: 'NOT_QUEUED' });
+      const target = (await current.db.aiTeamAssignments.toArray()).filter(
+        (row) => row.agentId === current.employees[1]!.id
+      );
+      // No replacement attempt was created.
+      expect(target.map((row) => row.attemptNo)).toEqual([1]);
     });
   });
 });

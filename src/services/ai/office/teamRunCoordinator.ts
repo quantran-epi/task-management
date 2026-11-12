@@ -117,8 +117,6 @@ export interface TeamRunSnapshot {
    * badge. Live-session only; the durable state is derived from the ledger (D-14).
    */
   pendingSteerMessageIds: string[];
-  /** 37.1 D-03: delivered-but-undrained steers per agent — the "chưa giao" badge. */
-  undeliveredSteerCountByAgent: Record<string, number>;
   /**
    * D-21: the scope that is actually parked. The banner names the agent when one
    * agent's own gate is closed, so the user tops up the right budget.
@@ -555,8 +553,12 @@ export function createTeamRunCoordinator(
    * only — the durable "undelivered" state is derived from the ledger (D-14).
    */
   const pendingSteerMessageIds = new Set<string>();
-  /** 37.1 D-03: delivered-but-undrained steers per agent (the "chưa giao" badge). */
-  const undeliveredSteerCountByAgent = new Map<string, number>();
+  /**
+   * 37.1 D-03/D-28: steer ids already injected into an attempt's prompt this session. The
+   * ledger field is the durable "delivered" marker and is never cleared (D-25/D-14), so this
+   * set is what stops a second round boundary from re-injecting the same text.
+   */
+  const injectedSteerIdsByAttempt = new Map<string, Set<string>>();
 
   const notify = () => {
     for (const listener of listeners) {
@@ -629,7 +631,22 @@ export function createTeamRunCoordinator(
     updateAgent(agentId, { steps: next.slice(-6) });
   }
 
-  function settleAgent(agentId: string, status: AgentRunStatus, report?: string): void {
+  /**
+   * WR-04: `attemptId` makes the settle identity-aware. A rewritten assignment's old parked
+   * dispatch can wake AFTER the replacement is registered; settling then would overwrite the
+   * replacement's `queued`/`running` state and release ITS deferred, so the batch would
+   * synthesize before the replacement finished. A settle for a superseded attempt is dropped.
+   */
+  function settleAgent(
+    agentId: string,
+    status: AgentRunStatus,
+    report?: string,
+    attemptId?: string
+  ): void {
+    if (attemptId !== undefined) {
+      const current = assignmentIdsByAgent.get(agentId);
+      if (current !== undefined && current !== attemptId) return;
+    }
     const state = agents.get(agentId);
     // WR-01: the status write and the deferred release are independent — a settle that
     // lands on an already-terminal agent must still release the batch's await.
@@ -1249,7 +1266,7 @@ export function createTeamRunCoordinator(
         await agentDeferreds.get(employee.id)?.promise;
         return;
       }
-      settleAgent(employee.id, OUTCOME_STATUS[outcome.phase]);
+      settleAgent(employee.id, OUTCOME_STATUS[outcome.phase], undefined, attempt?.assignmentId);
       if (attempt) {
         // The ONE terminal writer. On `complete` the runtime already saved the report row
         // through `deps.saveMessage`, so this takes the existing-row patch branch (and its
@@ -1299,7 +1316,7 @@ export function createTeamRunCoordinator(
           }
         }
       } finally {
-        settleAgent(employee.id, 'error', SANITIZED_TURN_ERROR);
+        settleAgent(employee.id, 'error', SANITIZED_TURN_ERROR, attempt?.assignmentId);
       }
       throw err;
     } finally {
@@ -1438,7 +1455,10 @@ export function createTeamRunCoordinator(
 
     const assignmentId = assignmentIdsByAgent.get(target.id);
     const assignment = assignmentId ? await getAssignment(assignmentId, db) : undefined;
-    if (disposed) return 'blocked';
+    // WR-03: the row is already persisted, so `'blocked'` would duplicate the text in the
+    // composer (D-12's "keep the text" rule is about the nothing-was-written case). The
+    // leader still reads it, so the honest outcome is `'steered'`.
+    if (disposed) return 'steered';
     // D-11: the agent already settled. The row stays pending and the leader reports it
     // honestly; the leader turn still runs so the user gets an answer.
     if (
@@ -1456,24 +1476,32 @@ export function createTeamRunCoordinator(
   /**
    * 37.1 D-09/D-17: drain the steers delivered to this attempt into its next round. The
    * caller runs this AFTER the budget gates, so a parked agent never consumes a steer while
-   * paused. Returns the messages the loop appends; the ledger is cleared FIRST so a second
-   * drain cannot re-inject the same text.
+   * paused.
+   *
+   * CR-04/CR-05: the ledger field is the DURABLE delivered marker (D-14/D-25) and is never
+   * cleared — clearing it erased the "delivered" fact and made every consumed steer render
+   * "chưa giao" forever. Re-injection inside one session is prevented by
+   * `injectedSteerIdsByAttempt`, so the drain writes nothing and cannot lose a concurrent
+   * `deliver_steer` (no read-modify-write on the array).
    */
   async function drainSteerInbox(
-    agentId: string,
+    _agentId: string,
     attempt?: AttemptRef
   ): Promise<ChatCompletionMessage[]> {
     if (!attempt) return [];
     const row = await getAssignment(attempt.assignmentId, db);
-    const pending = row?.steerMessageIds ?? [];
-    if (pending.length === 0) return [];
-    const messages = await db.chatMessages.bulkGet(pending);
-    // 37.1 SC5: gate the CLEARING write, do not follow it. A check after the update could
-    // not prevent it, and a teardown must leave the ledger honest for the post-relaunch
-    // `undelivered` read (D-14).
+    const delivered = row?.steerMessageIds ?? [];
+    if (delivered.length === 0) return [];
+    const injected =
+      injectedSteerIdsByAttempt.get(attempt.assignmentId) ?? new Set<string>();
+    const fresh = delivered.filter((id) => !injected.has(id));
+    if (fresh.length === 0) return [];
+    const messages = await db.chatMessages.bulkGet(fresh);
+    // 37.1 SC5: a teardown must leave the ledger honest for the post-relaunch `undelivered`
+    // read (D-14) — and must not consume a steer nobody read.
     if (disposed) return [];
-    await db.aiTeamAssignments.update(attempt.assignmentId, { steerMessageIds: [] });
-    undeliveredSteerCountByAgent.delete(agentId);
+    for (const id of fresh) injected.add(id);
+    injectedSteerIdsByAttempt.set(attempt.assignmentId, injected);
     notify();
     return messages
       .filter((message): message is ChatMessage => message !== undefined)
@@ -1553,11 +1581,6 @@ export function createTeamRunCoordinator(
       ]);
       const ledger = openBatchId === null ? [] : await listBatchAssignments(openBatchId, db);
       if (disposed) return;
-      // 37.1 D-03: the leader has now READ these — the "chờ leader đọc" badge clears here.
-      // A steer that arrives after this point is picked up by `drainLeaderSteerQueue` at the
-      // next round boundary instead.
-      for (const steer of pendingSteers) pendingSteerMessageIds.delete(steer.id);
-      notify();
       const prompt = buildLeadTurnRequest({
         lead,
         team: roster.teamRow ?? team,
@@ -1586,11 +1609,59 @@ export function createTeamRunCoordinator(
         agentName: lead.name,
         beforeToolRound: beforeToolRoundFor(lead.id),
       };
+      // WR-02: the steer turn is a real lead turn — its own usage baseline (D-13 bills the
+      // read to the lead) and a live state, so the indicator shows the leader reading.
+      // CR-01: `start()` throws `TURN_IN_PROGRESS` on a live lead runtime, and the running
+      // turn's own round-boundary drain injects the pending steers (D-16). Claim nothing in
+      // that case — the ids stay pending and are never lost.
+      const priorLeadStatus = agents.get(lead.id)?.status ?? 'done';
+      const priorAccountingKey = usageBaselineKey.get(lead.id);
+      const alreadyLive = liveAgents.has(lead.id);
+      currentRequests.set(lead.id, request);
+      leadTurnSeq += 1;
+      const leadAccountingKey = `${lead.id}:${leadTurnSeq}`;
+      usageBaselineKey.set(lead.id, leadAccountingKey);
+      usageTotals.delete(leadAccountingKey);
+      claimLiveUse(lead.id, undefined);
+      updateAgent(lead.id, {
+        status: 'running',
+        streamingText: '',
+        startedAt: new Date().toISOString(),
+        steps: [],
+      });
+      registerAgentTurn(lead.id, lead.name);
+      let started = false;
+      let steerStatus: AgentRunStatus = 'done';
       try {
-        await registry.get(lead.id).start(request);
+        const outcome = await registry.get(lead.id).start(request);
+        started = true;
+        steerStatus = OUTCOME_STATUS[outcome.phase];
+        // CR-01: the leader has now READ these — the "chờ leader đọc" badge clears here. A
+        // steer that arrives after this point is picked up by `drainLeaderSteerQueue` at the
+        // next round boundary instead. A failed turn keeps the ids pending (D-28: never
+        // silently lost).
+        if (
+          outcome.phase === 'complete' ||
+          outcome.phase === 'cancelled' ||
+          outcome.phase === 'tool-limit'
+        ) {
+          for (const steer of pendingSteers) pendingSteerMessageIds.delete(steer.id);
+        }
       } catch {
-        /* a steer turn must never break the batch */
+        /* a steer turn must never break the batch; the ids stay pending */
+      } finally {
+        if (started && !disposed) {
+          settleAgent(lead.id, steerStatus);
+        } else if (!started) {
+          // Not this turn's claim: hand every piece of state back untouched, so the turn
+          // that IS running keeps its accounting key, live-use claim and status.
+          if (priorAccountingKey !== undefined) usageBaselineKey.set(lead.id, priorAccountingKey);
+          if (!alreadyLive) releaseLiveUse(lead.id);
+          updateAgent(lead.id, { status: priorLeadStatus });
+          aiTurnManager.finishTurn(agentTurnId(lead.id));
+        }
       }
+      notify();
       // SC5: a teardown during the turn must leave nothing behind for a new instance.
       if (disposed) return;
     });
@@ -1603,9 +1674,19 @@ export function createTeamRunCoordinator(
   async function deliverSteer(steerMessageId: string): Promise<string> {
     if (disposed) return DISPOSED_REFUSAL;
     const message = await db.chatMessages.get(steerMessageId);
-    if (message?.messageKind !== 'steer' || message.targetAgentId === undefined) {
+    // WR-07: same cross-team read guard every other team tool enforces (T-34-07) — a
+    // model-supplied id from another thread must never enter this team's agent prompt.
+    if (message?.threadId !== options.threadId) {
       return JSON.stringify({
         refused: true,
+        code: 'TURN_NOT_IN_TEAM',
+        message: 'Không tìm thấy chỉ đạo hợp lệ để giao.',
+      });
+    }
+    if (message.messageKind !== 'steer' || message.targetAgentId === undefined) {
+      return JSON.stringify({
+        refused: true,
+        code: 'INVALID_ARGUMENT',
         message: 'Không tìm thấy chỉ đạo hợp lệ để giao.',
       });
     }
@@ -1618,20 +1699,24 @@ export function createTeamRunCoordinator(
     ) {
       return JSON.stringify({
         refused: true,
+        code: 'NOT_QUEUED',
         message: 'Việc của nhân viên này không còn nhận chỉ đạo được nữa.',
       });
     }
-    if ((assignment.steerMessageIds ?? []).includes(steerMessageId)) {
+    // CR-05: one `rw` transaction so a concurrent drain cannot lose this id. The array is
+    // read INSIDE the lock, never from the stale pre-await snapshot.
+    const appended = await db.transaction('rw', [db.aiTeamAssignments], async () => {
+      const live = await db.aiTeamAssignments.get(assignment.id);
+      const current = live?.steerMessageIds ?? [];
+      if (current.includes(steerMessageId)) return false;
+      await db.aiTeamAssignments.update(assignment.id, {
+        steerMessageIds: [...current, steerMessageId],
+      });
+      return true;
+    });
+    if (!appended) {
       return JSON.stringify({ delivered: true, duplicate: true, agentId: message.targetAgentId });
     }
-    // D-28: a `queued` agent has no turn yet, but its round-1 drain reads this field.
-    await db.aiTeamAssignments.update(assignment.id, {
-      steerMessageIds: [...(assignment.steerMessageIds ?? []), steerMessageId],
-    });
-    undeliveredSteerCountByAgent.set(
-      message.targetAgentId,
-      (undeliveredSteerCountByAgent.get(message.targetAgentId) ?? 0) + 1
-    );
     pendingSteerMessageIds.delete(steerMessageId);
     notify();
     return JSON.stringify({ delivered: true, agentId: message.targetAgentId });
@@ -1658,10 +1743,12 @@ export function createTeamRunCoordinator(
         message: 'Không có lô nào đang chạy.',
       });
     }
+    // IN-04: the validator ignores its context, so pass the real lead id rather than
+    // fabricating an empty caller. Tier-1 dispatch already proved the caller IS the lead.
     const validation = await executeTeamTool(
       'amend_assignments',
       rawArgs,
-      toolContext(roster.lead?.id ?? '')
+      toolContext(roster.lead!.id)
     );
     let parsed: any;
     try {
@@ -1675,17 +1762,19 @@ export function createTeamRunCoordinator(
 
     const rows = await listBatchAssignments(batchId, db);
     const byId = new Map(rows.map((row) => [row.id, row]));
+    // WR-09: a rewrite needs a live batch controller to dispatch its replacement. Without
+    // one the row would sit `queued` forever and hang the settle poll, so refuse the WHOLE
+    // list before mutating anything.
+    const batchController = batchControllers.get(batchId);
     for (const operation of operations) {
-      if (!byId.has(operation.assignmentId)) {
+      const row = byId.get(operation.assignmentId);
+      if (!row) {
         return JSON.stringify({
           refused: true,
           code: 'ASSIGNMENT_NOT_IN_BATCH',
           message: 'Việc này không thuộc lô đang chạy.',
         });
       }
-    }
-    for (const operation of operations) {
-      const row = byId.get(operation.assignmentId)!;
       if (row.runStatus !== 'queued') {
         return JSON.stringify({
           refused: true,
@@ -1693,8 +1782,38 @@ export function createTeamRunCoordinator(
           message: 'Chỉ huỷ hoặc sửa được việc đang xếp hàng. Việc đang chạy chỉ nhận chỉ đạo.',
         });
       }
+      // CR-03: a queued row can already hold delivered-but-undrained steers (D-28). A
+      // replacement row would not carry them, so the user's instruction would vanish after
+      // `deliver_steer` reported success. Refuse the whole list instead.
+      if ((row.steerMessageIds ?? []).length > 0) {
+        return JSON.stringify({
+          refused: true,
+          code: 'NOT_QUEUED',
+          message:
+            'Việc này đang có chỉ đạo chưa đọc. Hãy để nhân viên nhận chỉ đạo trước khi sửa việc.',
+        });
+      }
+      if (operation.op === 'rewrite_task' && batchController === undefined) {
+        return JSON.stringify({
+          refused: true,
+          code: 'NOT_QUEUED',
+          message: 'Lô đang chạy không còn nhận thay đổi. Hãy chờ lô kết thúc.',
+        });
+      }
+      // CR-02: the roster check belongs in pre-validation, not the apply loop — a list of
+      // [cancel A, rewrite_task B] must not cancel A and then report a total refusal.
+      if (
+        operation.op === 'rewrite_task' &&
+        !roster.employees.some((candidate) => candidate.id === row.agentId)
+      ) {
+        return JSON.stringify({
+          refused: true,
+          code: 'AGENT_NOT_IN_ROSTER',
+          message: 'Nhân viên không còn trong nhóm.',
+        });
+      }
     }
-    // A dispose that landed during the two reads above must not mutate a dead run.
+    // A dispose that landed during the reads above must not mutate a dead run.
     if (disposed) return DISPOSED_REFUSAL;
 
     const applied: Array<{ op: string; assignmentId: string; replacementId?: string }> = [];
@@ -1710,7 +1829,9 @@ export function createTeamRunCoordinator(
         try {
           assignmentControllers.get(row.id)?.abort();
           await finalizeAttempt(row.id, 'queued', 'stopped', 'leader-amend', AMENDED_REPORT_COPY);
-          settleAgent(row.agentId, 'stopped');
+          // WR-04: identity-aware — a replacement registered for this agent must not be
+          // settled by the retired row's cancel.
+          settleAgent(row.agentId, 'stopped', undefined, row.id);
           if (assignmentIdsByAgent.get(row.agentId) === row.id) {
             assignmentIdsByAgent.delete(row.agentId);
           }
@@ -1721,14 +1842,8 @@ export function createTeamRunCoordinator(
         continue;
       }
 
-      const employee = roster.employees.find((candidate) => candidate.id === row.agentId);
-      if (!employee) {
-        return JSON.stringify({
-          refused: true,
-          code: 'AGENT_NOT_IN_ROSTER',
-          message: 'Nhân viên không còn trong nhóm.',
-        });
-      }
+      // The roster check already passed in pre-validation, so this cannot be undefined.
+      const employee = roster.employees.find((candidate) => candidate.id === row.agentId)!;
       // D-08: append, never mutate in place — attempt = a new row (D-23).
       const next = await createAssignment(
         {
@@ -1737,35 +1852,43 @@ export function createTeamRunCoordinator(
           agentName: row.agentName,
           ...(row.skillId !== undefined ? { skillId: row.skillId } : {}),
           ...(row.skillVersion !== undefined ? { skillVersion: row.skillVersion } : {}),
+          ...(row.dependsOn !== undefined ? { dependsOn: row.dependsOn } : {}),
           model: row.model,
           task: operation.task ?? row.task,
           retryOfAssignmentId: row.id,
         },
         db
       );
-      await finalizeAttempt(row.id, 'queued', 'skipped', 'leader-amend', AMENDED_REPORT_COPY);
+      // WR-04: retire the old attempt BEFORE the replacement can be settled by it. The map
+      // moves first (so the identity guard in `settleAgent` rejects the old dispatch's
+      // settle) and the `leader-amend` marker goes in before the abort (so whichever writer
+      // wins the `from: 'queued'` guard records the leader's reason, not `user-abort`).
       assignmentIdsByAgent.set(row.agentId, next.id);
+      userStopped.set(row.agentId, 'leader-amend');
+      try {
+        assignmentControllers.get(row.id)?.abort();
+        await finalizeAttempt(row.id, 'queued', 'skipped', 'leader-amend', AMENDED_REPORT_COPY);
+      } finally {
+        userStopped.delete(row.agentId);
+      }
       updateAgent(row.agentId, { status: 'queued', streamingText: '', incomplete: false });
       // The replacement must actually run; `onBatchSettled`'s ledger poll is what makes the
-      // batch wait for it (T-37.1-23).
-      const controller = batchControllers.get(batchId);
-      if (controller) {
-        void dispatchAssignment(
-          employee,
-          next.task,
-          {
-            batchId,
-            assignmentId: next.id,
-            attemptNo: next.attemptNo,
-            ...(row.instructionMessageId !== undefined
-              ? { instructionMessageId: row.instructionMessageId }
-              : {}),
-          },
-          controller
-        ).catch(() => {
-          /* dispatchAssignment already settled the agent and its ledger row */
-        });
-      }
+      // batch wait for it (T-37.1-23). Pre-validation proved the controller exists.
+      void dispatchAssignment(
+        employee,
+        next.task,
+        {
+          batchId,
+          assignmentId: next.id,
+          attemptNo: next.attemptNo,
+          ...(row.instructionMessageId !== undefined
+            ? { instructionMessageId: row.instructionMessageId }
+            : {}),
+        },
+        batchController!
+      ).catch(() => {
+        /* dispatchAssignment already settled the agent and its ledger row */
+      });
       applied.push({ op: 'rewrite_task', assignmentId: row.id, replacementId: next.id });
     }
 
@@ -1881,7 +2004,7 @@ export function createTeamRunCoordinator(
             userStopped.get(employee.id) ?? disposeCause ?? 'user-abort',
             STOPPED_REPORT_COPY
           );
-          settleAgent(employee.id, 'stopped');
+          settleAgent(employee.id, 'stopped', undefined, assignmentId);
         } else {
           await finalizeAttempt(
             assignmentId,
@@ -1891,7 +2014,7 @@ export function createTeamRunCoordinator(
             SANITIZED_TURN_ERROR,
             boundedDiagnostic(err)
           );
-          settleAgent(employee.id, 'error', SANITIZED_TURN_ERROR);
+          settleAgent(employee.id, 'error', SANITIZED_TURN_ERROR, assignmentId);
         }
       } catch {
         /* a ledger write must never leak the slot */
@@ -2178,9 +2301,13 @@ export function createTeamRunCoordinator(
       // synthesize past it (D-30, Pitfall 7).
       await Promise.all([...agentDeferreds.values()].map((deferred) => deferred.promise));
       // Ledger poll (Pitfall 5): a cancelled queued row may never have had a deferred.
+      // WR-09: bounded — a row that can never settle must not hang the team turn forever
+      // (`finishTurn` would never fire and every later submit would route as a steer).
+      const deadline = Date.now() + 120_000;
       while (!disposed && !batchController?.signal.aborted) {
         const rows = await listBatchAssignments(batchId, db);
         if (!rows.some((row) => row.runStatus === 'queued' || row.runStatus === 'running')) break;
+        if (Date.now() > deadline) break;
         await new Promise((resolve) => setTimeout(resolve, 25));
       }
       if (disposed || batchController?.signal.aborted) return;
@@ -2419,7 +2546,7 @@ export function createTeamRunCoordinator(
             'user-abort',
             STOPPED_REPORT_COPY
           );
-          settleAgent(source.agentId, 'stopped');
+          settleAgent(source.agentId, 'stopped', undefined, attemptRow.id);
         } catch {
           /* a ledger write must never leak the slot */
         }
@@ -2459,7 +2586,13 @@ export function createTeamRunCoordinator(
         null;
       lastSynthesisMessageId = null;
       try {
-        await startLeadTurn(SYNTHESIS_INSTRUCTION, await collectBatchReports(source.batchId));
+        // WR-01: same serialization as every other lead turn. A steer turn does not change
+        // the phase, so a retry clicked during one would otherwise hit TURN_IN_PROGRESS and
+        // half-apply (new report saved, source superseded, no synthesis).
+        const retryResults = await collectBatchReports(source.batchId);
+        await runLeadTurnSerialized(() =>
+          startLeadTurn(SYNTHESIS_INSTRUCTION, retryResults)
+        );
       } finally {
         if (lastSynthesisMessageId !== null && previousSynthesisId !== null) {
           await supersedeTeamMessage(previousSynthesisId, lastSynthesisMessageId, db);
@@ -2664,7 +2797,7 @@ export function createTeamRunCoordinator(
 
     // 37.1 SC5: no stale steer badge may survive into a new coordinator for this team id.
     pendingSteerMessageIds.clear();
-    undeliveredSteerCountByAgent.clear();
+    injectedSteerIdsByAttempt.clear();
 
     for (const agentId of agents.keys()) settleAgent(agentId, 'stopped');
 
@@ -2749,7 +2882,6 @@ export function createTeamRunCoordinator(
       pendingPlan,
       pendingApproval,
       pendingSteerMessageIds: [...pendingSteerMessageIds],
-      undeliveredSteerCountByAgent: Object.fromEntries(undeliveredSteerCountByAgent),
       pausedAgentId: agentParked?.agentId ?? null,
       pausedAgentName: agentParked
         ? roster.employees.find((row) => row.id === agentParked.agentId)?.name ??

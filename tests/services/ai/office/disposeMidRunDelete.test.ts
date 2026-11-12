@@ -353,7 +353,6 @@ describe('delete a team while a steer is in flight (SC5)', () => {
     await waitFor(() => aiTurnManager.getActiveTurns().length === 0, PURGE_WINDOW_MS + 2000);
     expect(aiTurnManager.getActiveTurns()).toHaveLength(0);
     expect(coordinator.getState().pendingSteerMessageIds).toEqual([]);
-    expect(coordinator.getState().undeliveredSteerCountByAgent).toEqual({});
   }, 20000);
 
   it('no row is written after deletedAt', async () => {

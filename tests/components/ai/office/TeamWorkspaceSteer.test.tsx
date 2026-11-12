@@ -67,7 +67,6 @@ function createStub(initialPhase: TeamRunPhase = 'ready'): StubCoordinator {
       pendingPlan: null,
       pendingApproval: null,
       pendingSteerMessageIds: [],
-      undeliveredSteerCountByAgent: {},
       pausedAgentId: null,
       pausedAgentName: null,
       lastPlan: null,
