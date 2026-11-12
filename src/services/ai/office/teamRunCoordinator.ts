@@ -1309,7 +1309,16 @@ export function createTeamRunCoordinator(
       // WR-03: a retired row's own dispatch neither starts nor settles — the amend path owns
       // the terminal write and the replacement's live state. Settling here would race the
       // replacement's `queued` state with a phantom `error`.
-      if (attempt && retiredAssignmentIds.has(attempt.assignmentId)) throw err;
+      if (attempt && retiredAssignmentIds.has(attempt.assignmentId)) {
+        // CR-01: `onBatchSettled` awaits this agent's deferred. The amend path owns the
+        // terminal write, but leaving the deferred unresolved hangs the batch forever — no
+        // synthesis, `openBatchId` stuck, phase stuck `batch-running`, and `dispose()` cannot
+        // unblock it. Release it without settling: a replacement dispatch registers its own
+        // deferred, and the ledger poll covers the gap.
+        agentDeferreds.get(employee.id)?.resolve();
+        agentDeferreds.delete(employee.id);
+        throw err;
+      }
       try {
         if (attempt) {
           // `from` must be a literal status, so read the row and branch rather than passing
@@ -1993,20 +2002,32 @@ export function createTeamRunCoordinator(
         continue;
       }
       // D-08: append, never mutate in place — attempt = a new row (D-23).
-      const next = await createAssignment(
-        {
-          batchId,
-          agentId: row.agentId,
-          agentName: row.agentName,
-          ...(row.skillId !== undefined ? { skillId: row.skillId } : {}),
-          ...(row.skillVersion !== undefined ? { skillVersion: row.skillVersion } : {}),
-          ...(row.dependsOn !== undefined ? { dependsOn: row.dependsOn } : {}),
-          model: row.model,
-          task: operation.task ?? row.task,
-          retryOfAssignmentId: row.id,
-        },
-        db
-      );
+      // WR-01: a throwing create (batch row deleted mid-amend) must not leave the retired row
+      // terminal with no replacement and the agent stuck `queued` — that row would never
+      // settle and the whole `applied` list would be discarded by the throw. Refuse instead.
+      let next: AiTeamAssignment;
+      try {
+        next = await createAssignment(
+          {
+            batchId,
+            agentId: row.agentId,
+            agentName: row.agentName,
+            ...(row.skillId !== undefined ? { skillId: row.skillId } : {}),
+            ...(row.skillVersion !== undefined ? { skillVersion: row.skillVersion } : {}),
+            ...(row.dependsOn !== undefined ? { dependsOn: row.dependsOn } : {}),
+            model: row.model,
+            task: operation.task ?? row.task,
+            retryOfAssignmentId: row.id,
+          },
+          db
+        );
+      } catch {
+        // The old row is already `skipped` and its agent is settled by the retired dispatch's
+        // own catch, so the batch can still settle. Report the refusal honestly.
+        retiredAssignmentIds.delete(row.id);
+        refused.push({ assignmentId: row.id, code: 'NOT_QUEUED' });
+        continue;
+      }
       // WR-04: the map moves before the replacement can be settled by the retired dispatch's
       // catch — its identity guard then rejects the old attempt's settle.
       assignmentIdsByAgent.set(row.agentId, next.id);

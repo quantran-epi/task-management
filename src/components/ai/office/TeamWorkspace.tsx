@@ -393,36 +393,28 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   }, [steerAssignments]);
   /**
    * CR-04: `steerMessageIds` is the durable "delivered" marker (D-25) and is never cleared,
-   * so presence means delivered. An unaddressed steer has no delivery concept at all (D-28),
-   * and a steer whose target attempt is already terminal has been consumed — neither renders
-   * a badge.
+   * so presence means delivered. An unaddressed steer has no delivery concept at all (D-28)
+   * and renders no badge.
    *
-   * CR-01: `deliverSteer` stamps the batch onto the steer row in the same transaction as the
-   * delivery marker, so a row with NO `batchId` has never been delivered — the leader is
-   * holding it (D-28) and its "chưa giao" badge is the honest state. A row that DOES carry a
-   * `batchId` but has no assignment in any queried batch has nothing left to deliver to (the
-   * attempt settled and the row was left behind), so it must not keep a badge forever.
+   * Everything else is either still pending in the coordinator (leader has not read it) or
+   * held (the leader read it and chose not to hand it over, D-28) — both render "chưa giao".
+   * A terminal attempt is NOT evidence of delivery: a row can settle without ever draining
+   * its steer, so only the marker suppresses the badge.
    */
   const steerStates = useMemo(() => {
     const map = new Map<string, 'pending' | 'held'>();
     const pending = new Set(snapshot.pendingSteerMessageIds);
-    const assignmentByAgent = new Map<string, AiTeamAssignment>();
-    for (const row of steerAssignments) {
-      const previous = assignmentByAgent.get(row.agentId);
-      if (!previous || row.attemptNo > previous.attemptNo) assignmentByAgent.set(row.agentId, row);
-    }
     for (const row of messages) {
       if (row.messageKind !== 'steer') continue;
       if (row.targetAgentId === undefined) continue;
+      // The durable delivery marker is the ONLY positive evidence of delivery. A terminal
+      // attempt is not: a row can settle (cancel, settle-poll deadline) without ever draining
+      // its steer, and suppressing the badge there would claim a delivery that never happened.
       if (deliveredSteerIds.has(row.id)) continue;
-      const assignment = assignmentByAgent.get(row.targetAgentId);
-      if (assignment !== undefined && TERMINAL.has(assignment.runStatus)) continue;
-      // A steer with no batch link has never been delivered; keep its honest 'held' badge.
-      if (assignment === undefined && row.batchId !== undefined) continue;
       map.set(row.id, pending.has(row.id) ? 'pending' : 'held');
     }
     return map;
-  }, [messages, snapshot.pendingSteerMessageIds, deliveredSteerIds, steerAssignments]);
+  }, [messages, snapshot.pendingSteerMessageIds, deliveredSteerIds]);
 
   const agentStatuses = useMemo(() => {
     const map = new Map<string, 'queued' | 'running' | 'paused' | 'stopped' | 'error' | 'done'>();
