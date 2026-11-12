@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
 status: executing
-stopped_at: Phase 37.1 planned — ready for /gsd-execute-phase 37.1
-last_updated: "2026-11-12T04:05:57.281Z"
-last_activity: 2026-11-12 -- Phase 37.1 execution started
+stopped_at: Completed 37.1-02-PLAN.md
+last_updated: "2026-11-12T04:19:53.154Z"
+last_activity: 2026-11-12 -- Phase 37.1 plan 01 complete (event-driven delegate_batch)
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 31
-  completed_plans: 26
+  completed_plans: 28
   percent: 43
 current_phase: 37
 current_phase_name: Runtime reliability + concurrency
@@ -26,15 +26,15 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 37.1 (live-steering-leader-amends-assignments-and-steers-running-a) — EXECUTING
-Plan: 2 of 6
-Status: Executing Phase 37.1
+Plan: 3 of 6
+Status: Ready to execute
 Last activity: 2026-11-12 -- Phase 37.1 plan 01 complete (event-driven delegate_batch)
 
 ## Session Continuity
 
-Last session: 2026-11-12T04:20:00.000Z
-Stopped at: Completed 37.1-01-PLAN.md
-Resume file: .planning/phases/37.1-live-steering-leader-amends-assignments-and-steers-running-a/37.1-02-PLAN.md
+Last session: 2026-11-12T04:19:53.149Z
+Stopped at: Completed 37.1-02-PLAN.md
+Resume file: .planning/phases/37.1-live-steering-leader-amends-assignments-and-steers-running-a/37.1-03-PLAN.md
 
 Progress: [█████░░░░░] 50%
 
@@ -138,6 +138,8 @@ Progress: [█████░░░░░] 50%
 - [Phase 37]: retryAssignment claims the assignment id before any await and checks it before the busy-phase guard, so a double click is ignored rather than refused as a busy team
 - [Phase 37]: the delegate_batch result keeps its array shape and gains a final kind:'unfinished' entry, because a wrapper object would break every caller and the tool contract
 - [Phase 37]: persisted message.runStatus beats the live agentStatus: terminal agents are filtered out of snapshot.agents, so a stopped attempt has no live status and a remount has none at all
+- [Phase ?]: beforeToolRound returns messages instead of being fire-and-forget; the loop appends them verbatim
+- [Phase ?]: The round-boundary hook runs after in-loop compaction and fires on round 1 too
 
 ## Performance Metrics
 
@@ -152,3 +154,4 @@ Progress: [█████░░░░░] 50%
 | Phase 37 P07 | 42 min | 2 tasks | 5 files |
 | Phase 37 P08 | 22 min | 2 tasks | 8 files |
 | Phase 37.1 P01 | 55 min | 3 tasks | 2 files |
+| Phase 37.1 P02 | ~12m | 3 tasks | 4 files |

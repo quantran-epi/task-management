@@ -202,12 +202,12 @@ Plans:
 **Scope source:** deferred from `.planning/phases/37-runtime-reliability-concurrency/37-CONTEXT.md` (D-08/D-19/D-22/D-24). Schema is already in place from Phase 37.
 **Research flag:** standard patterns — `beforeToolRound` seam exists at `src/services/ai/aiOrchestratorLoop.ts`; defects/contracts are at `file:line` in 37-CONTEXT.
 
-**Plans:** 6 plans
+**Plans:** 2/6 plans executed
 Plans:
 **Wave 1**
 
 - [x] 37.1-01-PLAN.md — D-24 event-driven: `dispatchBatch` + `onBatchSettled`, batch abort controller, per-turn usage baseline, team turn lifetime
-- [ ] 37.1-02-PLAN.md — return-value `beforeToolRound` hook firing on round 1
+- [x] 37.1-02-PLAN.md — return-value `beforeToolRound` hook firing on round 1
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

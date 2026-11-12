@@ -54,9 +54,9 @@
 
 ### Live Steering (AIO-STEER) — Phase 37.1
 
-- [ ] **AIO-STEER-01**: A message sent while a batch is running reaches the leader and produces a visible re-plan, not a queued second turn. The composer is always usable — no outbox, no "busy" refusal. (D-01, D-02, D-24)
+- [x] **AIO-STEER-01**: A message sent while a batch is running reaches the leader and produces a visible re-plan, not a queued second turn. The composer is always usable — no outbox, no "busy" refusal. (D-01, D-02, D-24)
 - [ ] **AIO-STEER-02**: The leader can cancel a `queued` assignment and rewrite another's task via `amend_assignments`; the scheduler honours both without a second source of truth. (D-06, D-07, D-08, D-27)
-- [ ] **AIO-STEER-03**: A steering message addressed to a running agent is drained at its next `beforeToolRound` (including round 1) and appears in its transcript attribution. (D-09, D-10, D-15, D-17)
+- [x] **AIO-STEER-03**: A steering message addressed to a running agent is drained at its next `beforeToolRound` (including round 1) and appears in its transcript attribution. (D-09, D-10, D-15, D-17)
 - [ ] **AIO-STEER-04**: Steering an agent that already settled is refused visibly; the ledger stays consistent. The leader is the gate for every `@agent` steer and holds a problematic one before it is delivered. (D-11, D-16, D-18, D-28)
 - [ ] **AIO-STEER-05**: Abort/teardown while steering is in flight leaves no active turns and no further writes. (D-12, D-14, D-24)
 
