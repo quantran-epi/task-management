@@ -33,7 +33,7 @@ export interface SaveMessageInput {
   agentId?: string | undefined;
   agentName?: string | undefined;
   agentKind?: 'lead' | 'employee' | undefined;
-  messageKind?: 'instruction' | 'report' | 'synthesis' | 'plan' | undefined;
+  messageKind?: 'instruction' | 'report' | 'synthesis' | 'plan' | 'steer' | undefined;
 }
 
 export function buildScopeKey(scopeType: ChatScopeType, entityId?: string): string {

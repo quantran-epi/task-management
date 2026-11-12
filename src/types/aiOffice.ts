@@ -40,7 +40,7 @@ export type TeamRunPhase =
 
 export type AgentRunStatus = 'queued' | 'running' | 'paused' | 'stopped' | 'error' | 'done';
 
-export type AiMessageKind = 'instruction' | 'report' | 'synthesis' | 'plan';
+export type AiMessageKind = 'instruction' | 'report' | 'synthesis' | 'plan' | 'steer';
 
 export interface AiEmployee {
   id: string;
@@ -158,6 +158,7 @@ export type AiTeamAssignmentStopReason =
   | 'provider'
   | 'tool-limit'
   | 'budget-pause'
+  | 'leader-amend'
   | 'none';
 
 export interface AiTeamPlanEntry {
@@ -216,6 +217,8 @@ export interface AiTeamAssignment {
   endedAt?: string | undefined;
   instructionMessageId?: string | undefined;
   reportMessageId?: string | undefined;
+  /** 37.1 D-14/D-25: steer message ids not yet drained into this attempt's prompt. */
+  steerMessageIds?: string[] | undefined;
   tokenUsage?: ChatTokenUsage | undefined;
   toolCallCount?: number | undefined;
   /** D-17: technical detail for debugging; never rendered and never exported. */
