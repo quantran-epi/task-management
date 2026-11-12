@@ -6,14 +6,15 @@ import { createTeam } from '../../../../src/db/repositories/aiTeamRepo';
 import type { AiTeam, TeamRunPhase } from '../../../../src/types/aiOffice';
 
 /**
- * Phase 37 plan 06 — D-20/D-21 outbox (AIO-RUNTIME-02 as overridden).
+ * 37.1 D-01/D-02: the composer is always usable. A submit during a live run is a steer, not
+ * a queued second turn, so there is no outbox and no phase gate. The only outcome that
+ * restores the draft is `'blocked'` (D-12).
  *
- * The composer never rejects and never loses text: a submit while the coordinator is busy
- * queues, a busy/blocked outcome lands in the outbox or the draft, and every dispatch path
- * (composer, outbox release, API-error-card retry) goes through `runTurn`.
+ * (Plan 06 renames this file to `TeamWorkspaceSteer.test.tsx` and adds the steer-row UI
+ * assertions; the contract assertions live here already.)
  */
 
-type SendOutcome = 'started' | 'busy' | 'blocked';
+type SendOutcome = 'started' | 'steered' | 'refused' | 'blocked';
 
 interface StubCoordinator {
   send: ReturnType<typeof vi.fn>;
@@ -29,27 +30,18 @@ interface StubCoordinator {
   finalizeAttempt: ReturnType<typeof vi.fn>;
   runBatch: ReturnType<typeof vi.fn>;
   retryAssignment: ReturnType<typeof vi.fn>;
+  drainSteerInbox: ReturnType<typeof vi.fn>;
   subscribe: (fn: () => void) => () => void;
   getState: () => unknown;
   setPhase: (phase: TeamRunPhase) => void;
 }
 
-const deferred = <T,>() => {
-  let resolve!: (value: T) => void;
-  let reject!: (error: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-};
-
 function createStub(initialPhase: TeamRunPhase = 'ready'): StubCoordinator {
   let phase: TeamRunPhase = initialPhase;
   const listeners = new Set<() => void>();
   const stub: StubCoordinator = {
-    // Mirrors the real coordinator (37-03): a busy phase resolves 'busy', never a turn.
-    send: vi.fn(async () => (BUSY.has(phase) ? 'busy' : 'started') as SendOutcome),
+    // 37.1: every submit is accepted; the coordinator decides start vs steer.
+    send: vi.fn(async () => 'started' as SendOutcome),
     stopAgent: vi.fn(),
     abortAll: vi.fn(),
     resolvePlan: vi.fn(),
@@ -62,6 +54,7 @@ function createStub(initialPhase: TeamRunPhase = 'ready'): StubCoordinator {
     finalizeAttempt: vi.fn(async () => null),
     runBatch: vi.fn(async () => ''),
     retryAssignment: vi.fn(async () => undefined),
+    drainSteerInbox: vi.fn(async () => []),
     subscribe: (fn: () => void) => {
       listeners.add(fn);
       return () => {
@@ -73,6 +66,8 @@ function createStub(initialPhase: TeamRunPhase = 'ready'): StubCoordinator {
       agents: [],
       pendingPlan: null,
       pendingApproval: null,
+      pendingSteerMessageIds: [],
+      undeliveredSteerCountByAgent: {},
       pausedAgentId: null,
       pausedAgentName: null,
       lastPlan: null,
@@ -111,10 +106,9 @@ vi.mock('../../../../src/db/repositories/aiTeamRepo', async (importOriginal) => 
 });
 
 import { TeamWorkspace } from '../../../../src/components/ai/office/TeamWorkspace';
-import { BUSY_PHASES as BUSY } from '../../../../src/services/ai/office/teamRunCoordinator';
 import { ensureTeamThread, saveTeamMessage } from '../../../../src/db/repositories/teamTranscriptRepo';
 
-describe('TeamWorkspace outbox (37-06, D-20/D-21)', () => {
+describe('TeamWorkspace composer (37.1 D-01/D-02/D-12)', () => {
   let db: TaskPlannerDatabase;
   let team: AiTeam;
 
@@ -172,30 +166,49 @@ describe('TeamWorkspace outbox (37-06, D-20/D-21)', () => {
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
   };
 
-  it('queues a second submit, renders it above the composer, and dispatches it once the first settles', async () => {
-    const first = deferred<SendOutcome>();
-    currentStub.send = vi.fn(() => first.promise) as never;
-
+  it('dispatches a submit during a live phase immediately, with no outbox', async () => {
+    currentStub = createStub('batch-running');
     const composer = await renderWorkspace();
-    await submit(composer, 'A');
-    await waitFor(() => expect(currentStub.send).toHaveBeenCalledTimes(1));
-    expect(currentStub.send).toHaveBeenCalledWith('A');
+    await submit(composer, 'Chen ngang');
 
-    await submit(composer, 'B');
-    // The second submit is queued, not dropped, and not sent concurrently.
-    expect(currentStub.send).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText('B')).toBeInTheDocument();
-    expect(screen.getAllByTestId('team-outbox-item')).toHaveLength(1);
+    await waitFor(() => expect(currentStub.send).toHaveBeenCalledWith('Chen ngang'));
+    expect(screen.queryByTestId('team-outbox')).not.toBeInTheDocument();
     expect((composer as HTMLTextAreaElement).value).toBe('');
-
-    first.resolve('started');
-    await waitFor(() => expect(currentStub.send).toHaveBeenCalledTimes(2));
-    expect(currentStub.send).toHaveBeenLastCalledWith('B');
-    await waitFor(() => expect(screen.queryAllByTestId('team-outbox-item')).toHaveLength(0));
   });
 
-  // 37-06 backstop: `handleSubmit` guards with `if (!text.trim()) return`, and the composer
-  // refuses whitespace too. Both submit paths must be a no-op that keeps the draft.
+  it('never queues: three rapid submits produce three send calls', async () => {
+    currentStub = createStub('batch-running');
+    const composer = await renderWorkspace();
+    await submit(composer, 'Một');
+    await submit(composer, 'Hai');
+    await submit(composer, 'Ba');
+
+    await waitFor(() => expect(currentStub.send).toHaveBeenCalledTimes(3));
+    expect(currentStub.send.mock.calls.map((call) => call[0])).toEqual(['Một', 'Hai', 'Ba']);
+    expect(screen.queryByTestId('team-outbox')).not.toBeInTheDocument();
+  });
+
+  it("leaves the input empty and shows no error on 'steered'", async () => {
+    currentStub.send = vi.fn().mockResolvedValue('steered' as SendOutcome) as never;
+    const composer = await renderWorkspace();
+    await submit(composer, 'Chỉ đạo giữa lô');
+
+    await waitFor(() => expect(currentStub.send).toHaveBeenCalledTimes(1));
+    expect((composer as HTMLTextAreaElement).value).toBe('');
+    expect(screen.queryByLabelText('Thử lại')).not.toBeInTheDocument();
+  });
+
+  it("leaves the input empty and shows no error on 'refused'", async () => {
+    currentStub.send = vi.fn().mockResolvedValue('refused' as SendOutcome) as never;
+    const composer = await renderWorkspace();
+    await submit(composer, 'Nhân viên đã xong');
+
+    await waitFor(() => expect(currentStub.send).toHaveBeenCalledTimes(1));
+    // Plan 04 already persisted the row — restoring the draft would send it twice.
+    expect((composer as HTMLTextAreaElement).value).toBe('');
+    expect(screen.queryByLabelText('Thử lại')).not.toBeInTheDocument();
+  });
+
   it('ignores a whitespace-only submit on both the click and the Cmd+Enter path', async () => {
     const composer = await renderWorkspace();
     for (const text of ['   ', '\n\t']) {
@@ -207,7 +220,6 @@ describe('TeamWorkspace outbox (37-06, D-20/D-21)', () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     expect(currentStub.send).not.toHaveBeenCalled();
-    expect(screen.queryAllByTestId('team-outbox-item')).toHaveLength(0);
     // A no-op submit never consumes the text.
     expect((composer as HTMLTextAreaElement).value).toBe('\n\t');
 
@@ -216,50 +228,6 @@ describe('TeamWorkspace outbox (37-06, D-20/D-21)', () => {
       (row) => row.role === 'user'
     );
     expect(userRows).toHaveLength(0);
-  });
-
-  it('queues while the coordinator is parked on a budget gate (D-21)', async () => {
-    currentStub = createStub('awaiting-budget');
-    const composer = await renderWorkspace();
-    await submit(composer, 'Trong lúc chờ ngân sách');
-
-    expect(currentStub.send).not.toHaveBeenCalled();
-    expect(screen.getAllByTestId('team-outbox-item')).toHaveLength(1);
-  });
-
-  it('queues when a turn this component never started holds the phase', async () => {
-    currentStub = createStub('batch-running');
-    const composer = await renderWorkspace();
-    await submit(composer, 'C');
-
-    expect(currentStub.send).not.toHaveBeenCalled();
-    expect(await screen.findByText('C')).toBeInTheDocument();
-    expect(screen.getAllByTestId('team-outbox-item')).toHaveLength(1);
-  });
-
-  it("puts the text back in the outbox when send resolves 'busy', and dispatches it later", async () => {
-    currentStub = createStub('ready');
-    // The snapshot said `ready`, the coordinator disagrees — a turn started elsewhere in the
-    // same tick. That is exactly the requeue edge `runTurn` owns.
-    currentStub.send = vi.fn(async () => {
-      currentStub.setPhase('batch-running');
-      return 'busy' as SendOutcome;
-    }) as never;
-
-    const composer = await renderWorkspace();
-    await submit(composer, 'Chen ngang');
-
-    await waitFor(() => expect(screen.getAllByTestId('team-outbox-item')).toHaveLength(1));
-    expect(screen.getByTestId('team-outbox-item').textContent).toContain('Chen ngang');
-    expect(currentStub.send).toHaveBeenCalledTimes(1);
-
-    // The live turn settles; now the queued text may run.
-    currentStub.send = vi.fn(async () => 'started' as SendOutcome) as never;
-    currentStub.setPhase('ready');
-
-    await waitFor(() => expect(currentStub.send).toHaveBeenCalledTimes(1));
-    expect(currentStub.send).toHaveBeenCalledWith('Chen ngang');
-    await waitFor(() => expect(screen.queryAllByTestId('team-outbox-item')).toHaveLength(0));
   });
 
   it("surfaces a 'blocked' send, restores the draft, and never requeues (no loop)", async () => {
@@ -271,7 +239,6 @@ describe('TeamWorkspace outbox (37-06, D-20/D-21)', () => {
 
     expect(await screen.findByLabelText('Thử lại')).toBeInTheDocument();
     await waitFor(() => expect((composer as HTMLTextAreaElement).value).toBe('Nhóm đã bị xoá'));
-    expect(screen.queryAllByTestId('team-outbox-item')).toHaveLength(0);
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(currentStub.send).toHaveBeenCalledTimes(1);
   });
@@ -283,7 +250,6 @@ describe('TeamWorkspace outbox (37-06, D-20/D-21)', () => {
 
     await waitFor(() => expect((composer as HTMLTextAreaElement).value).toBe('Khoá leader thất bại'));
     expect(currentStub.send).not.toHaveBeenCalled();
-    expect(screen.queryAllByTestId('team-outbox-item')).toHaveLength(0);
     // IN-05: the repo error text (which can embed ids) must never reach the UI.
     await waitFor(() =>
       expect(document.body.textContent).toContain('Không khoá được leader cho nhóm')
@@ -291,56 +257,7 @@ describe('TeamWorkspace outbox (37-06, D-20/D-21)', () => {
     expect(document.body.textContent).not.toContain('raw repo detail');
   });
 
-  it('renders three queued entries, cancels the middle one, and keeps the rest in order', async () => {
-    currentStub = createStub('batch-running');
-    const composer = await renderWorkspace();
-    await submit(composer, 'Một');
-
-    // Type into the draft again: the composer stays usable while a turn runs (WR-11).
-    fireEvent.change(composer, { target: { value: 'Hai' } });
-    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
-    fireEvent.change(composer, { target: { value: 'Ba' } });
-    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
-
-    const items = () => screen.getAllByTestId('team-outbox-item');
-    await waitFor(() => expect(items()).toHaveLength(3));
-    expect(screen.getByTestId('team-outbox').textContent).toContain('Đang xếp hàng (3)');
-    expect(items().map((el) => el.textContent)).toEqual([
-      expect.stringContaining('Một'),
-      expect.stringContaining('Hai'),
-      expect.stringContaining('Ba'),
-    ]);
-
-    fireEvent.click(screen.getAllByTestId('team-outbox-cancel')[1]!);
-
-    await waitFor(() => expect(items()).toHaveLength(2));
-    expect(screen.getByTestId('team-outbox').textContent).toContain('Đang xếp hàng (2)');
-    expect(items().map((el) => el.textContent)).toEqual([
-      expect.stringContaining('Một'),
-      expect.stringContaining('Ba'),
-    ]);
-    expect(screen.queryByText('Hai')).not.toBeInTheDocument();
-    expect(currentStub.send).not.toHaveBeenCalled();
-  });
-
-  it('retry from the API-error card while a turn is live lands in the outbox and clears the error', async () => {
-    currentStub = createStub('ready');
-    currentStub.send = vi.fn().mockResolvedValue('blocked' as SendOutcome) as never;
-    const composer = await renderWorkspace();
-    await submit(composer, 'Thử lại khi đang chạy');
-    const retry = await screen.findByLabelText('Thử lại');
-
-    currentStub.setPhase('batch-running');
-    // 37-03 contract: a submit during a live phase resolves 'busy', so this is the requeue edge.
-    currentStub.send = vi.fn(async () => 'busy' as SendOutcome) as never;
-    fireEvent.click(retry);
-
-    await waitFor(() => expect(screen.getAllByTestId('team-outbox-item')).toHaveLength(1));
-    // `runTurn` clears the error before dispatching, so the card cannot outlive its retry.
-    await waitFor(() => expect(screen.queryByLabelText('Thử lại')).not.toBeInTheDocument());
-  });
-
-  it('retry from the API-error card on a free phase dispatches and clears the error', async () => {
+  it('retry from the API-error card dispatches and clears the error', async () => {
     currentStub = createStub('ready');
     currentStub.send = vi.fn().mockResolvedValue('blocked' as SendOutcome) as never;
     const composer = await renderWorkspace();
@@ -353,6 +270,23 @@ describe('TeamWorkspace outbox (37-06, D-20/D-21)', () => {
     await waitFor(() => expect(currentStub.send).toHaveBeenCalledTimes(1));
     expect(currentStub.send).toHaveBeenCalledWith('Thử lại khi rảnh');
     await waitFor(() => expect(screen.queryByLabelText('Thử lại')).not.toBeInTheDocument());
+  });
+
+  it('retry from the API-error card while a turn is live steers and clears the error', async () => {
+    currentStub = createStub('ready');
+    currentStub.send = vi.fn().mockResolvedValue('blocked' as SendOutcome) as never;
+    const composer = await renderWorkspace();
+    await submit(composer, 'Thử lại khi đang chạy');
+    const retry = await screen.findByLabelText('Thử lại');
+
+    currentStub.setPhase('batch-running');
+    currentStub.send = vi.fn(async () => 'steered' as SendOutcome) as never;
+    fireEvent.click(retry);
+
+    await waitFor(() => expect(currentStub.send).toHaveBeenCalledTimes(1));
+    // `runTurn` clears the error before dispatching, so the card cannot outlive its retry.
+    await waitFor(() => expect(screen.queryByLabelText('Thử lại')).not.toBeInTheDocument());
+    expect(screen.queryByTestId('team-outbox')).not.toBeInTheDocument();
   });
 
   // WR-02: `retryAssignment` throws for a busy phase / disposed run. The only call site

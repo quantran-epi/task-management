@@ -9,9 +9,10 @@ import type { AiTeam } from '../../../../src/types/aiOffice';
 /**
  * 37-06 backstop, at the guard itself. `TeamWorkspaceOutbox.test.tsx` proves the property
  * through the real composer — but `ChatInputBar` trims before calling `onSubmit`, so that
- * test cannot distinguish `TeamWorkspace.handleSubmit`'s own `if (!text.trim()) return`
- * (TeamWorkspace.tsx:518). Removing that line left the composer test green, so this file
- * mocks the widget and calls `onSubmit` with raw whitespace, exactly as a caller could.
+ * test cannot distinguish `TeamWorkspace.handleSubmit`'s own `if (!text.trim()) return`.
+ * Removing that line left the composer test green, so this file mocks the widget and calls
+ * `onSubmit` with raw whitespace, exactly as a caller could. 37.1: there is no outbox any
+ * more, so "queued" is asserted as "no outbox panel exists at all".
  */
 
 vi.mock('../../../../src/components/ai/AiChatWidget', () => ({
@@ -121,7 +122,7 @@ describe('TeamWorkspace whitespace submit guard (37-06)', () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     expect(send).not.toHaveBeenCalled();
-    expect(screen.queryAllByTestId('team-outbox-item')).toHaveLength(0);
+    expect(screen.queryByTestId('team-outbox')).not.toBeInTheDocument();
 
     const thread = await ensureTeamThread(team.id, db);
     const messages = await db.chatMessages.where('threadId').equals(thread.id).toArray();
