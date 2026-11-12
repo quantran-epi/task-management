@@ -4267,6 +4267,52 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       await waitForReady(current.coordinator);
     });
 
+    // WR-01: the steer turn renders the pending ids in its system prompt
+    // (`[CHỈ ĐẠO CHỜ XỬ LÝ]`), so the round-1 drain must not append the same text again.
+    it('injects a steer once per steer turn, not twice', async () => {
+      const gate = deferred();
+      const injected: string[] = [];
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            if (lastTextOf(options) === 'Làm báo cáo') {
+              await options.executeToolFn!(
+                'delegate_batch',
+                { assignments: assignmentsFor(harness!.employees) },
+                harness!.db,
+                options.signal
+              );
+              return loopResult('Đã giao việc.');
+            }
+            // The steer turn's round boundary — must contribute nothing for the ids the
+            // system prompt already rendered.
+            const messages = await options.beforeToolRound?.(1, options.signal);
+            if (messages && messages.length > 0) injected.push(JSON.stringify(messages));
+            return loopResult('Đã đọc.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getState().phase === 'batch-running');
+      await current.coordinator.send('chỉ đạo giữa lô');
+      await waitFor(() => current.coordinator.getState().pendingSteerMessageIds.length === 0);
+
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+
+      expect(injected).toEqual([]);
+    });
+
     // CR-04/CR-05: the ledger field is the durable "delivered" marker. The drain used to
     // clear it, which erased delivery AND made a concurrent `deliver_steer` lose its id.
     it('keeps the delivered ids on the ledger after the drain, and injects each once', async () => {

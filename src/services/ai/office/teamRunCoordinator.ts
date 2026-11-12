@@ -1121,7 +1121,7 @@ export function createTeamRunCoordinator(
     }
   }
 
-  function beforeToolRoundFor(agentId: string, attempt?: AttemptRef) {
+  function beforeToolRoundFor(agentId: string, attempt?: AttemptRef, skipSteerIds?: Set<string>) {
     // D-21 / Pitfall 8: the loop's own signal reaches both gates, so a Stop while parked
     // rejects instead of hanging. The trailing throw covers a hook that resolved post-abort.
     // 37.1 D-09: the drain runs AFTER the gates — a parked agent must not consume its steer
@@ -1134,7 +1134,7 @@ export function createTeamRunCoordinator(
       await teamGate.wait(signal);
       signal.throwIfAborted();
       return roster.lead && agentId === roster.lead.id
-        ? drainLeaderSteerQueue()
+        ? drainLeaderSteerQueue(skipSteerIds)
         : drainSteerInbox(agentId, attempt);
     };
   }
@@ -1512,13 +1512,20 @@ export function createTeamRunCoordinator(
    * 37.1 D-16: the leader reads EVERY user message, including the ones addressed to an
    * agent. Draining at the round boundary is what makes that true for a steer that arrived
    * mid-turn.
+   *
+   * WR-01: `skipIds` are the ids already rendered in this turn's system prompt
+   * (`[CHỈ ĐẠO CHỜ XỬ LÝ]`). Re-injecting them as user messages would make the leader read
+   * one instruction twice and could double-apply an amend. They stay pending, so a turn that
+   * never reads them re-injects them next time (CR-01).
    */
-  async function drainLeaderSteerQueue(): Promise<ChatCompletionMessage[]> {
-    if (pendingSteerMessageIds.size === 0) return [];
-    const ids = [...pendingSteerMessageIds];
+  async function drainLeaderSteerQueue(
+    skipIds?: Set<string>
+  ): Promise<ChatCompletionMessage[]> {
+    const ids = [...pendingSteerMessageIds].filter((id) => skipIds?.has(id) !== true);
+    if (ids.length === 0) return [];
     // SC5: gate the clearing write — a teardown must not consume a steer nobody read.
     if (disposed) return [];
-    pendingSteerMessageIds.clear();
+    for (const id of ids) pendingSteerMessageIds.delete(id);
     notify();
     const messages = await db.chatMessages.bulkGet(ids);
     return messages
@@ -1581,6 +1588,11 @@ export function createTeamRunCoordinator(
       ]);
       const ledger = openBatchId === null ? [] : await listBatchAssignments(openBatchId, db);
       if (disposed) return;
+      // WR-01: these ids are about to be rendered in the system prompt, so the round-1
+      // `beforeToolRound` drain must skip them — otherwise the leader reads the same
+      // instruction twice (once as `[CHỈ ĐẠO CHỜ XỬ LÝ]`, once as `[Chỉ đạo từ người dùng]`)
+      // and can double-apply an amend. They stay pending until a read outcome (CR-01).
+      const promptSteerIds = new Set(pendingSteers.map((steer) => steer.id));
       const prompt = buildLeadTurnRequest({
         lead,
         team: roster.teamRow ?? team,
@@ -1607,7 +1619,7 @@ export function createTeamRunCoordinator(
         messageKind: 'plan',
         agentId: lead.id,
         agentName: lead.name,
-        beforeToolRound: beforeToolRoundFor(lead.id),
+        beforeToolRound: beforeToolRoundFor(lead.id, undefined, promptSteerIds),
       };
       // WR-02: the steer turn is a real lead turn — its own usage baseline (D-13 bills the
       // read to the lead) and a live state, so the indicator shows the leader reading.
@@ -1645,7 +1657,7 @@ export function createTeamRunCoordinator(
           outcome.phase === 'cancelled' ||
           outcome.phase === 'tool-limit'
         ) {
-          for (const steer of pendingSteers) pendingSteerMessageIds.delete(steer.id);
+          for (const id of promptSteerIds) pendingSteerMessageIds.delete(id);
         }
       } catch {
         /* a steer turn must never break the batch; the ids stay pending */
