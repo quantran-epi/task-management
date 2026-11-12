@@ -1763,14 +1763,14 @@ export function createTeamRunCoordinator(
           return null;
         }
         const current = live.steerMessageIds ?? [];
-        if (current.includes(steerMessageId)) {
-          await db.chatMessages.update(steerMessageId, { batchId: assignment.batchId });
-          return false;
-        }
+        // WR-02: the delivery marker lives on the assignment that was APPENDED, possibly in
+        // an earlier batch. Re-stamping here would repoint the row at the current batch,
+        // whose assignments do not carry the marker — the badge would say "chưa giao" again.
+        if (current.includes(steerMessageId)) return false;
         await db.aiTeamAssignments.update(assignment.id, {
           steerMessageIds: [...current, steerMessageId],
         });
-        await db.chatMessages.update(steerMessageId, { batchId: assignment.batchId });
+        await db.chatMessages.update(steerMessageId, { batchId: live.batchId });
         return true;
       }
     );

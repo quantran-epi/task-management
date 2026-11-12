@@ -4368,6 +4368,78 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       await waitForReady(current.coordinator);
     });
 
+    // WR-02: the delivery marker lives on the attempt that was APPENDED, possibly in an
+    // earlier batch. A repeat `deliver_steer` must not repoint the steer row at the current
+    // batch — the workspace would stop seeing the marker and re-render "chưa giao".
+    it('does not move the delivery stamp on a duplicate delivery', async () => {
+      const gate = deferred();
+      let response = '';
+      let steerId = '';
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            if (lastTextOf(options) === 'Làm báo cáo') {
+              await options.executeToolFn!(
+                'delegate_batch',
+                { assignments: assignmentsFor(harness!.employees) },
+                harness!.db,
+                options.signal
+              );
+              return loopResult('Đã giao việc.');
+            }
+            const target = harness!.employees[1]!;
+            const parked = (await harness!.db.aiTeamAssignments.toArray()).find(
+              (row) => row.agentId === target.id
+            )!;
+            const steerRow = await saveTeamMessage(
+              {
+                threadId: harness!.threadId,
+                role: 'user',
+                content: 'đổi hướng',
+                messageKind: 'steer',
+                targetAgentId: target.id,
+                // Delivered in an EARLIER batch — the marker and the stamp agree on that one.
+                batchId: 'earlier-batch',
+              },
+              harness!.db
+            );
+            await harness!.db.aiTeamAssignments.update(parked.id, {
+              steerMessageIds: [steerRow.id],
+            });
+            steerId = steerRow.id;
+            response = await options.executeToolFn!(
+              'deliver_steer',
+              { steerMessageId: steerRow.id },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Đã giao rồi.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getRunningCount() === 1);
+      await current.coordinator.send(
+        `@[${current.employees[1]!.name}](agent:${current.employees[1]!.id}) đổi hướng`
+      );
+      await waitFor(() => response.length > 0);
+
+      expect(JSON.parse(response)).toMatchObject({ delivered: true, duplicate: true });
+      expect((await current.db.chatMessages.get(steerId))?.batchId).toBe('earlier-batch');
+
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+    });
+
     // WR-01: the steer turn renders the pending ids in its system prompt
     // (`[CHỈ ĐẠO CHỜ XỬ LÝ]`), so the round-1 drain must not append the same text again.
     it('injects a steer once per steer turn, not twice', async () => {
