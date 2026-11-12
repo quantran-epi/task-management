@@ -90,10 +90,14 @@ export interface AiOrchestratorLoopOptions {
   /** Fraction of the window that triggers compaction. Default 0.8. */
   compactAtRatio?: number;
   /**
-   * D-21: awaited at every round boundary after the first, before the next model
-   * call. Receives the loop's own signal so a parked gate can reject on abort.
+   * D-09/D-21: awaited at EVERY round boundary including round 1, after in-loop
+   * compaction and before the next model call. Receives the loop's own signal so a
+   * parked gate can reject on abort. Any returned messages are appended to the
+   * conversation before the next model call.
    */
-  beforeToolRound?: ((round: number, signal?: AbortSignal) => Promise<void>) | undefined;
+  beforeToolRound?:
+    | ((round: number, signal?: AbortSignal) => Promise<ChatCompletionMessage[] | void>)
+    | undefined;
 }
 
 export interface AiOrchestratorLoopResult {
@@ -217,14 +221,6 @@ export async function runAiOrchestratorLoop(
 
   while (loopCount < maxLoops) {
     loopCount++;
-    // D-21: round boundary — every tool result from the previous round is already
-    // appended, so parking here resumes exactly where it stopped. The signal is
-    // passed in so a gate parked inside the hook rejects on Stop (Pitfall 8);
-    // throwIfAborted covers a hook that resolves normally after an abort.
-    if (loopCount > 1 && beforeToolRound) {
-      await beforeToolRound(loopCount, signal);
-      signal?.throwIfAborted();
-    }
     fullResponse = '';
     let hasToolCalls = false;
     let toolCallsToRun: ToolCall[] = [];
@@ -252,6 +248,18 @@ export async function runAiOrchestratorLoop(
         // we do not compact again immediately.
         currentPromptTokens = 0;
       }
+    }
+
+    // D-09/D-21: round boundary — every tool result from the previous round is already
+    // appended, so parking here resumes exactly where it stopped. The signal is
+    // passed in so a gate parked inside the hook rejects on Stop (Pitfall 8);
+    // throwIfAborted covers a hook that resolves normally after an abort.
+    // Runs AFTER compaction on purpose: a steer appended before it could be
+    // summarized away in the same round (Pitfall 7).
+    if (beforeToolRound) {
+      const injected = await beforeToolRound(loopCount, signal);
+      signal?.throwIfAborted();
+      if (injected && injected.length > 0) currentMessages.push(...injected);
     }
 
     const messagesToSend = prune(currentMessages);

@@ -455,7 +455,7 @@ describe('runAiOrchestratorLoop', () => {
       });
     };
 
-    it('is not called before the first round and gets the 1-based round number', async () => {
+    it('fires on round 1 and every later round with the 1-based round number', async () => {
       toolThenText();
       const beforeToolRound = vi.fn().mockResolvedValue(undefined);
 
@@ -464,8 +464,8 @@ describe('runAiOrchestratorLoop', () => {
         messages: [], db: testDb, executeToolFn: vi.fn().mockResolvedValue('{}'), beforeToolRound,
       });
 
-      expect(beforeToolRound).toHaveBeenCalledTimes(1);
-      expect(beforeToolRound.mock.calls[0]![0]).toBe(2);
+      expect(beforeToolRound).toHaveBeenCalledTimes(2);
+      expect(beforeToolRound.mock.calls.map((c) => c[0])).toEqual([1, 2]);
     });
 
     it('receives the loop signal as its second argument', async () => {
@@ -491,7 +491,7 @@ describe('runAiOrchestratorLoop', () => {
       const loop = runAiOrchestratorLoop({
         endpoint: 'https://api.example.com', apiKey: 'test-key', model: 'test-model',
         messages: [], db: testDb, executeToolFn: vi.fn().mockResolvedValue('{"found":true}'),
-        onToolResult, beforeToolRound: () => parked,
+        onToolResult, beforeToolRound: (round) => (round > 1 ? parked : Promise.resolve()),
       });
 
       await vi.waitFor(() => expect(onToolResult).toHaveBeenCalledTimes(1));
