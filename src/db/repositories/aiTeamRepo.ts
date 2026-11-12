@@ -334,6 +334,9 @@ export async function deleteTeam(id: string, db: TaskPlannerDatabase = defaultDb
       db.chatTabs,
       db.aiTeamBatches,
       db.aiTeamAssignments,
+      db.teamMessages,
+      db.teamReadCursors,
+      db.teamParticipants,
     ],
     async () => {
       const threads = await db.chatThreads.where('scopeKey').equals(`team:${id}`).toArray();
@@ -348,6 +351,12 @@ export async function deleteTeam(id: string, db: TaskPlannerDatabase = defaultDb
         await db.aiTeamAssignments.where('batchId').anyOf(batchIds).delete();
       }
       await db.aiTeamBatches.where('teamId').equals(id).delete();
+      // 37.1 WR-07: the message log and its cursors belong to the team. Leaving them behind
+      // would orphan rows the backup never covers, and a re-created team id would inherit
+      // another conversation's read state.
+      await db.teamMessages.where('teamId').equals(id).delete();
+      await db.teamReadCursors.where('teamId').equals(id).delete();
+      await db.teamParticipants.where('teamId').equals(id).delete();
       await db.aiTeamMembers.where('teamId').equals(id).delete();
       await db.aiTeamLinks.where('teamId').equals(id).delete();
       await db.aiTeams.delete(id);

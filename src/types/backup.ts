@@ -31,6 +31,7 @@ import type {
   AiTeamBatch,
   AiTeamAssignment,
 } from './aiOffice';
+import type { TeamMessage, TeamReadCursor } from './teamChat';
 
 export interface BackupAttachmentRecord {
   id: string;
@@ -75,6 +76,9 @@ export interface BackupTableData {
   aiSkillVersions?: AiSkillVersion[];
   aiTeamBatches?: AiTeamBatch[];
   aiTeamAssignments?: AiTeamAssignment[];
+  /** 37.1 R1/WR-07: the team message log and its read cursors travel with the backup. */
+  teamMessages?: TeamMessage[];
+  teamReadCursors?: TeamReadCursor[];
 }
 
 export interface BackupTableCounts {
@@ -108,6 +112,8 @@ export interface BackupTableCounts {
   aiSkillVersions?: number;
   aiTeamBatches?: number;
   aiTeamAssignments?: number;
+  teamMessages?: number;
+  teamReadCursors?: number;
 }
 
 export interface BackupEnvelope {

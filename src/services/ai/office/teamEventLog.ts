@@ -35,6 +35,7 @@ export interface AppendMessageInput {
   kind?: TeamMessageKind | undefined;
   assignmentId?: string | undefined;
   deliversMessageId?: string | undefined;
+  replyToId?: string | undefined;
 }
 
 export interface AppendMessageResult {
@@ -79,6 +80,7 @@ export async function appendMessage(
       ...(input.deliversMessageId !== undefined
         ? { deliversMessageId: input.deliversMessageId }
         : {}),
+      ...(input.replyToId !== undefined ? { replyToId: input.replyToId } : {}),
       createdAt: now,
     };
     await db.teamMessages.add(row);
@@ -105,6 +107,7 @@ export async function appendForExistingMessage(
     kind?: TeamMessageKind | undefined;
     assignmentId?: string | undefined;
     deliversMessageId?: string | undefined;
+    replyToId?: string | undefined;
     createdAt?: string | undefined;
   },
   db: TaskPlannerDatabase
@@ -129,6 +132,7 @@ export async function appendForExistingMessage(
       ...(input.deliversMessageId !== undefined
         ? { deliversMessageId: input.deliversMessageId }
         : {}),
+      ...(input.replyToId !== undefined ? { replyToId: input.replyToId } : {}),
       createdAt: input.createdAt ?? new Date().toISOString(),
     };
     await db.teamMessages.add(row);

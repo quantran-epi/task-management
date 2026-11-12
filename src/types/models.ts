@@ -313,6 +313,8 @@ export interface ChatMessage {
   runStatus?: AiTeamAssignmentRunStatus | undefined;
   stopReason?: AiTeamAssignmentStopReason | undefined;
   incomplete?: boolean | undefined;
+  /** 37.1 R14: the message this one answers, so the UI can quote it. */
+  replyToId?: string | undefined;
   /** 37-07: the synthesis row that replaced this one (write path is `supersedeTeamMessage`). */
   supersededByMessageId?: string | undefined;
   supersededAt?: string | undefined;

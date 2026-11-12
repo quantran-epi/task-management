@@ -36,6 +36,8 @@ import {
   BackupAiSkillVersionRecordSchema,
   BackupAiTeamBatchRecordSchema,
   BackupAiTeamAssignmentRecordSchema,
+  BackupTeamMessageRecordSchema,
+  BackupTeamReadCursorRecordSchema,
   assertNoLegacyTables,
   LEGACY_BACKUP_MESSAGE,
 } from '../../validation/backupSchemas';
@@ -186,14 +188,21 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
   const chatMessages = rawTables.chatMessages !== undefined
     ? validateTable('chatMessages', BackupChatMessageRecordSchema, rawTables.chatMessages)?.map(
         (row) => {
-          // 37.1 §1.1: `messageKind: 'steer'` no longer exists. A pre-37.1 backup still
-          // restores — the row is an ordinary user message now, so it keeps its content and
-          // loses only the label nothing reads.
+          // 37.1 §1.1: `messageKind: 'steer'` no longer exists. WR-06: the label is DROPPED,
+          // not remapped — a steer was a user message, never an instruction. Mapping it to
+          // `instruction` made `listInterruptedAssignments` report every restored steer as
+          // unfinished work that owed a report.
           if (row.messageKind !== 'steer') return row;
           const { messageKind: _steer, ...rest } = row;
-          return { ...rest, messageKind: 'instruction' as const };
+          return rest;
         }
       ) as NonNullable<BackupEnvelope['tables']['chatMessages']> | undefined
+    : undefined;
+  const teamMessages = rawTables.teamMessages !== undefined
+    ? validateTable('teamMessages', BackupTeamMessageRecordSchema, rawTables.teamMessages)
+    : undefined;
+  const teamReadCursors = rawTables.teamReadCursors !== undefined
+    ? validateTable('teamReadCursors', BackupTeamReadCursorRecordSchema, rawTables.teamReadCursors)
     : undefined;
   const chatTabs = rawTables.chatTabs !== undefined
     ? validateTable('chatTabs', BackupChatTabRecordSchema, rawTables.chatTabs)
@@ -630,6 +639,8 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       ...(aiSkillVersions !== undefined ? { aiSkillVersions: aiSkillVersions as NonNullable<BackupEnvelope['tables']['aiSkillVersions']> } : {}),
       ...(aiTeamBatches !== undefined ? { aiTeamBatches: aiTeamBatches as NonNullable<BackupEnvelope['tables']['aiTeamBatches']> } : {}),
       ...(aiTeamAssignments !== undefined ? { aiTeamAssignments: aiTeamAssignments as NonNullable<BackupEnvelope['tables']['aiTeamAssignments']> } : {}),
+      ...(teamMessages !== undefined ? { teamMessages: teamMessages as NonNullable<BackupEnvelope['tables']['teamMessages']> } : {}),
+      ...(teamReadCursors !== undefined ? { teamReadCursors: teamReadCursors as NonNullable<BackupEnvelope['tables']['teamReadCursors']> } : {}),
     },
     counts: {
       tasks: tasks.length,
@@ -662,6 +673,8 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       ...(aiSkillVersions !== undefined ? { aiSkillVersions: aiSkillVersions.length } : {}),
       ...(aiTeamBatches !== undefined ? { aiTeamBatches: aiTeamBatches.length } : {}),
       ...(aiTeamAssignments !== undefined ? { aiTeamAssignments: aiTeamAssignments.length } : {}),
+      ...(teamMessages !== undefined ? { teamMessages: teamMessages.length } : {}),
+      ...(teamReadCursors !== undefined ? { teamReadCursors: teamReadCursors.length } : {}),
     },
   };
 

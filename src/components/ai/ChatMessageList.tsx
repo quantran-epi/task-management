@@ -54,6 +54,13 @@ export interface ChatMessageListProps {
   onRetryAgent?: ((assignmentId: string) => void) | undefined;
   /** 37.1 rework: read receipts, keyed by message id. Absent = nobody has read it. */
   seenStates?: Map<string, MessageSeenEntry[]> | undefined;
+  /** 37.1 R13: the first message the user has not read — a "Tin mới" divider sits above it. */
+  firstUnreadMessageId?: string | undefined;
+  /**
+   * 37.1 R11/R13: whether the viewport is pinned to the newest message. Reading happens at
+   * the bottom, so the host advances the user's cursor only while this is true.
+   */
+  onAtBottomChange?: ((atBottom: boolean) => void) | undefined;
 }
 
 export const ChatMessageList: React.FC<ChatMessageListProps> = ({
@@ -82,6 +89,8 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   onStopAgent,
   onRetryAgent,
   seenStates,
+  firstUnreadMessageId,
+  onAtBottomChange,
 }) => {
   const { token } = theme.useToken();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -91,6 +100,12 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   const renderedSummaryHtml = useMemo(() => {
     return pendingConfirmation?.summary ? renderSafeMarkdown(pendingConfirmation.summary) : '';
   }, [pendingConfirmation?.summary]);
+
+  const reportAtBottom = () => {
+    const node = containerRef.current;
+    if (!node || !onAtBottomChange) return;
+    onAtBottomChange(node.scrollHeight - node.scrollTop - node.clientHeight < 48);
+  };
 
   const scrollToBottom = (instant = false) => {
     if (containerRef.current) {
@@ -113,6 +128,12 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
     scrollToBottom(false);
   }, [messages.length, pendingConfirmation, transientClarifyMessage]);
 
+  // Report the initial position once the transcript has laid out.
+  useEffect(() => {
+    reportAtBottom();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length, onAtBottomChange]);
+
   // Keep pinned to bottom during streaming or errors
   useEffect(() => {
     if (isStreaming || streamingText || error || pendingConfirmation || transientClarifyMessage) {
@@ -123,6 +144,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   return (
     <div
       ref={containerRef}
+      onScroll={reportAtBottom}
       style={{
         flex: 1,
         overflowY: 'auto',
@@ -182,8 +204,21 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
             ? agentDirectory?.get(msg.targetAgentId)
             : undefined;
         const agentStatus = msg.agentId ? agentStatuses?.get(msg.agentId) : undefined;
+        // 37.1 R14: resolve the quoted row from the same list being rendered. A message whose
+        // parent is outside the window still shows what it answers — the text is on the row.
+        const quoted = msg.replyToId
+          ? messages.find((row) => row.id === msg.replyToId)
+          : undefined;
         return (
           <React.Fragment key={msg.id}>
+            {msg.id === firstUnreadMessageId && (
+              <Divider
+                data-testid="team-new-divider"
+                style={{ margin: '8px 0', fontSize: 12, color: token.colorError }}
+              >
+                Tin mới
+              </Divider>
+            )}
             <ChatMessageBubble
               message={msg}
               canAddToChecklist={canAddToChecklist}
@@ -200,6 +235,16 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
               }
               {...(onRetryAgent ? { onRetryAgent } : {})}
               seenBy={seenStates?.get(msg.id)}
+              {...(quoted
+                ? {
+                    replyTo: {
+                      id: quoted.id,
+                      authorName:
+                        quoted.agentName ?? (quoted.role === 'user' ? 'Bạn' : 'Trợ lý'),
+                      content: quoted.content,
+                    },
+                  }
+                : {})}
             />
           </React.Fragment>
         );

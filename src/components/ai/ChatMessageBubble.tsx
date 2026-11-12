@@ -105,6 +105,11 @@ export interface ChatMessageBubbleProps {
    * means nobody has read it yet; the UI then shows a single "đã gửi" mark.
    */
   seenBy?: MessageSeenEntry[] | undefined;
+  /**
+   * 37.1 R14: the message this one answers. Rendered as a quote above the bubble; clicking it
+   * scrolls to the original. Absent means this message starts a thread.
+   */
+  replyTo?: { id: string; authorName: string; content: string } | undefined;
 }
 
 /**
@@ -354,6 +359,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   onStopAgent,
   onRetryAgent,
   seenBy,
+  replyTo,
 }) => {
   const { token } = theme.useToken();
   const [copied, setCopied] = useState(false);
@@ -1158,6 +1164,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   return (
     <div
       data-role={msg.role}
+      data-message-id={msg.id}
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -1181,6 +1188,49 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
         }}
       >
+        {replyTo && (
+          <div
+            data-testid={`reply-quote-${msg.id}`}
+            role="button"
+            tabIndex={0}
+            onClick={() => {
+              document
+                .querySelector(`[data-message-id="${replyTo.id}"]`)
+                ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              document
+                .querySelector(`[data-message-id="${replyTo.id}"]`)
+                ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }}
+            style={{
+              marginBottom: 6,
+              padding: '4px 8px',
+              borderLeft: `2px solid ${isUser ? 'rgba(255,255,255,0.6)' : token.colorBorder}`,
+              borderRadius: 4,
+              background: isUser ? 'rgba(255,255,255,0.14)' : token.colorFillQuaternary,
+              fontSize: 12,
+              lineHeight: 1.4,
+              cursor: 'pointer',
+              opacity: 0.9,
+            }}
+          >
+            <div style={{ fontWeight: 600 }}>{replyTo.authorName}</div>
+            <div
+              style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+              }}
+            >
+              {replyTo.content}
+            </div>
+          </div>
+        )}
         {isUser ? (
           <div style={{ whiteSpace: 'pre-wrap' }}>{renderUserMessageWithMentions(msg.content)}</div>
         ) : isStreaming && !msg.content ? (
@@ -1235,8 +1285,14 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       {/* 37.1 rework: the read receipt. A real chat shows whether the other side has read
           what you sent; this is the same fact, read from the participant cursors. Clicking
           names who read it and when. */}
-      {isUser && !isStreaming && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+      {!isStreaming && (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: isUser ? 'flex-end' : 'flex-start',
+            marginTop: 4,
+          }}
+        >
           <Tooltip
             title={
               seenBy && seenBy.length > 0

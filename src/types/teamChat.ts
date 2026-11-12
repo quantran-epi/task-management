@@ -60,6 +60,12 @@ export interface TeamMessage {
    * agent's read cursor covers it like any other message.
    */
   deliversMessageId?: string | undefined;
+  /**
+   * 37.1 R14: the message this one answers. A reply that does not name its question makes a
+   * long conversation unreadable — the reader cannot tell which of their messages was
+   * answered. Absent only for a message that starts a thread.
+   */
+  replyToId?: string | undefined;
   createdAt: string;
 }
 

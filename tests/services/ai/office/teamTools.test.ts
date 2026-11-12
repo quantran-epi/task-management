@@ -74,9 +74,9 @@ describe('teamTools — transcript search and skill reader (AIO-MEM-02, AIO-MEM-
   }
 
   // 37.1 §1.1: `deliver_steer` is gone — a message reaches its recipient without a gate.
-  it('exposes the seven team tool definitions', () => {
+  it('exposes the eight team tool definitions', () => {
     const names = TEAM_TOOL_DEFINITIONS.map((tool) => tool.function.name);
-    expect(names).toHaveLength(7);
+    expect(names).toHaveLength(8);
     expect(names).toEqual(
       expect.arrayContaining([
         'search_team_history',
@@ -86,9 +86,101 @@ describe('teamTools — transcript search and skill reader (AIO-MEM-02, AIO-MEM-
         'get_linked_context',
         'delegate_batch',
         'amend_assignments',
+        // 37.1 R6/R9: everyone may speak to everyone.
+        'send_message',
       ])
     );
     expect(names).not.toContain('deliver_steer');
+  });
+
+  // 37.1 R9: `send_message` must be in the EMPLOYEE payload — the leader-only set is what
+  // an agent may not call, and a chat primitive is not a mutation.
+  it('R9: send_message is available to an employee, delegate_batch is not', () => {
+    expect(LEAD_ONLY_TEAM_TOOLS.has('send_message')).toBe(false);
+    expect(LEAD_ONLY_TEAM_TOOLS.has('delegate_batch')).toBe(true);
+  });
+
+  // 37.1 R8: addressedToMe narrows the search to messages whose `to[]` names the caller.
+  it('R8: addressedToMe filters to messages addressed to the caller', async () => {
+    const mine = await seedTurn('Báo cáo thanh toán của tôi');
+    const other = await seedTurn('Báo cáo thanh toán của người khác');
+    const { appendForExistingMessage } = await import(
+      '../../../../src/services/ai/office/teamEventLog'
+    );
+    await appendForExistingMessage(
+      {
+        id: mine.id,
+        teamId,
+        from: agentId,
+        to: [agentId],
+        content: mine.content,
+        kind: 'report',
+        createdAt: mine.createdAt,
+      },
+      db
+    );
+    await appendForExistingMessage(
+      {
+        id: other.id,
+        teamId,
+        from: agentId,
+        to: [generateId()],
+        content: other.content,
+        kind: 'report',
+        createdAt: other.createdAt,
+      },
+      db
+    );
+
+    const all = JSON.parse(
+      await executeTeamTool('search_team_history', { query: 'thanh toán' }, ctx())
+    );
+    expect(all).toHaveLength(2);
+
+    const addressed = JSON.parse(
+      await executeTeamTool(
+        'search_team_history',
+        { query: 'thanh toán', addressedToMe: true },
+        ctx()
+      )
+    );
+    expect(addressed).toHaveLength(1);
+    expect(addressed[0].turnId).toBe(mine.id);
+  });
+
+  // 37.1 R6/R9: the validator refuses recipients outside the team and self-addressed messages.
+  it('R6/R9: send_message validates recipients against the team', async () => {
+    const leadId = generateId();
+    await db.aiTeams.update(teamId, { leadId });
+    await db.aiTeamMembers.add({
+      id: generateId(),
+      teamId,
+      agentId,
+      role: 'employee',
+      budgetTokens: 0,
+      usedTokens: 0,
+    });
+
+    const ok = JSON.parse(
+      await executeTeamTool('send_message', { to: [leadId], content: 'Xong rồi' }, ctx())
+    );
+    expect(ok).toEqual({ to: [leadId], content: 'Xong rồi' });
+
+    const foreign = JSON.parse(
+      await executeTeamTool('send_message', { to: [generateId()], content: 'Xong rồi' }, ctx())
+    );
+    expect(foreign.refused).toBe(true);
+    expect(foreign.code).toBe('RECIPIENT_NOT_IN_ROSTER');
+
+    const self = JSON.parse(
+      await executeTeamTool('send_message', { to: [agentId], content: 'Xong rồi' }, ctx())
+    );
+    expect(self.refused).toBe(true);
+
+    const empty = JSON.parse(
+      await executeTeamTool('send_message', { to: [leadId], content: '   ' }, ctx())
+    );
+    expect(empty.code).toBe('EMPTY_MESSAGE');
   });
 
   it('returns compact BM25 hits with exactly turnId, agent, timestamp, kind, excerpt', async () => {

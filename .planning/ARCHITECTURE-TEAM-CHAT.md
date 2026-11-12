@@ -180,6 +180,11 @@ const PERMISSIONS: Record<TeamParticipant['role'], ReadonlySet<Permission>> = {
 
 Kiểm tra quyền ở **một chỗ duy nhất**: hàm gửi tin. Không rải `if (isLead)` khắp nơi.
 
+`send_message` là tool duy nhất mà **cả ba vai** đều có — vì gửi tin không phải thao tác ghi dữ
+liệu. `delegate_batch` và `amend_assignments` nằm trong `LEAD_ONLY_TEAM_TOOLS`; payload của
+employee được suy ra bằng cách lọc bỏ đúng tập đó (`EMPLOYEE_TEAM_TOOLS`), nên thêm tool mới
+không thể vô tình lọt xuống agent.
+
 ---
 
 ## 4. Luồng chạy
@@ -191,10 +196,15 @@ hành động**. Không có nguồn nào ghi tin mà không biết người nh�
 
 | Nguồn ghi | Ai phải hành động | Khởi động bằng |
 |---|---|---|
-| User gõ trong composer | người được tag, hoặc leader | `send()` gọi thẳng `runLeadTurn` / `startEmployeeTurn` |
+| User gõ trong composer | **mọi** người được tag, hoặc leader | `send()` gọi thẳng `runLeadTurn` / `startEmployeeTurn` |
 | Leader gọi `delegate_batch` | từng agent trong lô | `dispatchBatch` → `dispatchAssignment` |
 | Agent viết báo cáo | leader | `onBatchSettled` → `runLeadTurn` (tổng hợp) |
+| **Ai đó gọi `send_message`** (R6/R9) | người nhận đang rảnh | `sendFromParticipant` → `startEmployeeTurn` / `runLeadTurn` |
 | Lượt đang chạy nhận tin mới | chính lượt đó | `beforeToolRound` → `drainInbox` |
+
+`send_message` là **cùng một primitive** với composer của user: ghi log rồi định tuyến theo
+`to[]`. Leader và agent dùng chung một implementation, khác nhau chỉ ở `from`. Người nhận đang
+chạy thì tin chờ ở log và được đọc ở vòng công cụ kế tiếp — đó là chat, không phải gọi hàm.
 
 Vì vậy **không có vòng lặp nền**. Thêm một consumer loop nữa là cơ chế thứ hai cho cùng một
 việc — đúng thứ §5 cấm. Hành vi người dùng thấy vẫn là event-driven: tin đến → lượt chạy ngay,
@@ -215,39 +225,43 @@ không poll, không chờ.
 4. **Mọi tin đều vào log.** User, instruction, report, synthesis — cùng `id` với
    `chatMessages`, nên cursor của mọi người phủ được toàn bộ cuộc nói chuyện.
 
-### 4.2 Xử lý một message
+### 4.2 Một tin đến tay người nhận bằng cách nào
+
+Có **đúng một** cơ chế: `beforeToolRound` → `drainInbox(participantId, skipIds)`.
 
 ```ts
-async function handle(participantId: string, msg: TeamMessage) {
-  const me = await getParticipant(participantId);
-
-  // 1. User/lead gửi cho agent → có thể sinh assignment
-  if (msg.kind === 'instruction' && me.role !== 'employee') {
-    const agentIds = msg.to.filter(isAgent);
-    for (const agentId of agentIds) {
-      if (!hasPermission(me, 'dispatch')) continue;
-      await createAssignment({ agentId, originMessageId: msg.id });
-    }
-    return;
-  }
-
-  // 2. Agent nhận chỉ đạo giữa lúc đang chạy → chèn vào vòng công cụ kế tiếp
-  if (me.role === 'employee') {
-    const runtime = registry.get(participantId);
-    runtime.injectUserMessage(msg.content);   // ← thay cho drainSteerInbox
-    return;
-  }
-
-  // 3. Leader/agent nhận tin → mở một lượt trả lời
-  await runTurn(participantId, msg);
+async function drainInbox(participantId: string, skipIds?: ReadonlySet<string>) {
+  const cursor = await getCursor(teamId, participantId, db);
+  const batch = await readMessagesAfter(teamId, cursor.lastSeq, db);   // CẢ log
+  if (batch.length === 0) return [];
+  await advanceCursor(teamId, participantId, batch.at(-1)!.seq, db);   // đọc = tiến cursor
+  return batch
+    .filter((m) => m.to.includes(participantId) && !skipIds?.has(m.id)) // chỉ trả tin gọi mình
+    .map((m) => ({ role: 'user', content: `[Tin nhắn từ nhóm — ${m.from}] ${m.content}` }));
 }
 ```
 
-**Lưu ý quan trọng:** `runtime.injectUserMessage` là cơ chế **duy nhất** để chỉ đạo agent đang chạy. Không còn `deliver_steer` tool, không còn `steerMessageIds`, không còn `injectedSteerIdsByAttempt`. Agent đọc tin ở vòng công cụ kế tiếp — đúng như `beforeToolRound` hiện có, chỉ đổi nguồn.
+Ba điểm không được đổi:
+
+- **Cursor tiến qua TOÀN BỘ log**, không chỉ tin gọi mình. Đó là thứ làm "leader đã thấy tin
+  tôi gửi Eva" kiểm chứng được.
+- **Chỉ tin có `to[]` chứa mình mới được trả về.** `to[]` là nghĩa vụ trả lời, không phải quyền
+  đọc — ai cũng đọc hết.
+- **`skipIds`** là dòng đã nằm trong prompt của lượt này (tin kích hoạt). Không có nó, model đọc
+  tin của chính nó hai lần (CR-01).
+
+> **`injectUserMessage` đã bị xoá (IN-01, 2026-11-12).** Nó từng được mô tả ở đây là "cơ chế
+> duy nhất" nhưng chỉ có test gọi, không có caller production — đúng lỗi "test xanh cho code
+> chết". Đường thật là `drainInbox`. `grep -rc injectUserMessage src/` phải bằng 0.
 
 ### 4.3 Leader giao việc — không phải tool đặc biệt
 
-Leader gọi `send({ to: [eva], content: '...', kind: 'instruction' })`. Đó là **cùng hàm** user gọi. Không có `deliver_steer`.
+Leader gọi `send_message({ to: [eva], content: '...' })`. Đó là **cùng primitive** user gọi từ
+composer, và cũng là cùng primitive agent gọi cho agent khác (R9). Không có `deliver_steer`.
+
+Khác biệt duy nhất giữa hai đường là **quyền**: agent có `send_message` nhưng không có
+`delegate_batch`/`amend_assignments` (xem §3.5). Một tin nhắn không phải một thao tác ghi dữ
+liệu, nên nó không thuộc nhóm lead-only.
 
 `delegate_batch` vẫn là tool riêng vì nó là **quyền `dispatch`**: một lần gửi cho nhiều người + tạo nhiều assignment trong một transaction. Nhưng nó chỉ là lớp mỏng trên `send`:
 
@@ -382,12 +396,17 @@ Hai lỗi này độc lập với kiến trúc, phải sửa riêng:
 | Hạng mục | File |
 |---|---|
 | Types participant/message/cursor + bảng quyền | `src/types/teamChat.ts` |
-| Schema V23 + 3 bảng mới | `src/db/schema.ts`, `src/db/index.ts` |
+| Schema V24 (log, cursor, `replyToId`) | `src/db/schema.ts`, `src/db/index.ts` |
 | Event log (append/read/cursor/seen) | `src/services/ai/office/teamEventLog.ts` |
 | Phase suy ra thay vì lưu | `teamRunCoordinator.ts` — `derivePhase()` |
-| Steer đi qua log, leader là cổng | `steer()`, `deliverSteer()` |
-| Drain đọc bằng cursor | `drainSteerInbox()`, `drainLeaderSteerQueue()` |
-| Seen receipt UI | `ChatMessageBubble.tsx`, `ChatMessageList.tsx`, `TeamWorkspace.tsx` |
+| Một primitive: `send()` + `send_message` tool | `teamRunCoordinator.ts` — `send`, `sendFromParticipant` |
+| Drain đọc bằng cursor, bỏ tin kích hoạt | `drainInbox(participantId, skipIds)` |
+| Nhiều người nhận (R12) | `parseMentionTargets`, `to[]` nhiều phần tử |
+| Reply gắn câu gốc (R14) | `replyToId` trên `teamMessages` + `chatMessages`, UI trích dẫn |
+| Seen hai chiều (R10) + user cursor (R11) | `TeamWorkspace.tsx`, `ChatMessageBubble.tsx` |
+| Chưa đọc: badge + vạch "Tin mới" (R13) | `TeamSidebar.tsx`, `ChatMessageList.tsx` |
+| Search lọc theo người nhận (R8) | `teamTools.ts` — `addressedToMe` |
+| Log + cursor trong backup, xoá nhóm xoá log (WR-07) | `backup/*`, `aiTeamRepo.ts` |
 | Popover: scroll, timestamp, expand | `TeamActivityIndicator.tsx` |
 | Race tạo thread | `chatRepo.ts` |
 | Abort có thẩm quyền | `chatTurnRuntime.ts` |
@@ -401,18 +420,22 @@ Hai lỗi này độc lập với kiến trúc, phải sửa riêng:
 | L2 | `seq` đơn điệu, không trùng khi concurrent | "allocates a monotonic seq per team, even under concurrent appends" |
 | L3 | Cursor chỉ tiến | "never moves a cursor backward" |
 | I4 | Cursor tiến = đã đọc | "reports who read a message and when" |
-| — | Phase không kẹt busy sau batch | `teamRunCoordinator.test.ts` — "never leaves a busy phase behind after the batch settles" |
-| — | Steer gõ tay giao được | "delivers a plain-text steer when the leader names the target" |
-| — | Target ngoài roster bị từ chối | "refuses a steer target that is not in the roster" |
+| R6 | Leader gửi tin cho agent rảnh → agent chạy lượt | `teamRunCoordinator.test.ts` — "R6: the leader sends a message to an idle agent…" |
+| R9 | Agent gửi tin cho leader; agent không có `delegate_batch` | "R9: an agent sends a message to the leader…", "R9: an agent still cannot call delegate_batch" |
+| R12 | Tag 2 agent → MỘT message, `to[]` cả hai | "R12: tagging two agents sends ONE message addressed to both" |
+| R14 | Report trả lời instruction; synthesis trả lời user | "R14: an agent report answers its instruction row", "R14: the leader synthesis answers the user message…" |
+| R7 | Prompt chỉ 10 tin gần nhất | "R7: the prompt carries only the newest 10 turns" |
+| R8 | Search lọc theo người nhận | `teamTools.test.ts` — "R8: addressedToMe filters to messages addressed to the caller" |
+| R10 | Biên lai đọc hai chiều | `TeamWorkspaceReceipts.test.tsx` — "R10: …" (2 test) |
+| R11 | User cursor tiến khi xem, không tiến khi tab ẩn | "R11: opening the transcript advances…", "R11: a hidden tab never marks messages read" |
+| R13 | Số chưa đọc + vạch "Tin mới" | "R13: a hidden tab shows the unread count…", "R13: reading everything clears the badge" |
+| WR-05 | Nhóm không leader trả `'refused'`, không row mồ côi | "does nothing when the seam reports no lead (empty group, D-05)" |
+| — | Phase không kẹt busy sau batch | "never leaves a busy phase behind after the batch settles" |
 | — | Thread race không throw | `chatRepo.test.ts` — "createOrGetThread resolves concurrent callers to one thread without throwing" |
-| — | Popover đủ bước/giờ/expand | `TeamChatIndicator.test.tsx` — 3 test mới |
+| — | Popover đủ bước/giờ/expand | `TeamChatIndicator.test.tsx` |
 
-### Chưa làm (còn lại của kiến trúc đích)
+### Cổng verify
 
-- `pendingSteerMessageIds` vẫn còn như **cache hiển thị** trong snapshot (nguồn sự thật là cursor).
-- `injectedSteerIdsByAttempt` đã bỏ khỏi đường drain; còn dùng ở nhánh deadline — dọn tiếp khi chạm.
-- `steerMessageIds` trên ledger vẫn được ghi (backup schema đã khai báo) nhưng không còn là nguồn
-  sự thật cho badge; UI đọc `seenStates` từ cursor.
-- `runLeadTurnSerialized` vẫn còn: nó tuần tự hoá các lượt trên MỘT runtime, không phải cơ chế
-  "busy phase". Consumer loop thật (mỗi participant một vòng) là bước tiếp theo nếu cần.
-- `listeners:Set` + `notify()` vẫn còn; UI đã đọc thêm `useLiveQuery` trên log.
+`bash .planning/scripts/verify-team-chat-architecture.sh` — kiểm §5 (grep = 0), kiểm ngoại lệ có
+chủ đích còn tồn tại, và kiểm **không có module chết** trong `src/services/ai/office/` (mọi file
+phải có importer production). Cổng này tồn tại vì `teamConsumer.ts` từng xanh test mà không ai gọi.

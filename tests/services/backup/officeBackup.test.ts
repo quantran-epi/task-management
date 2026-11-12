@@ -569,10 +569,10 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
     ).toBe(true);
   });
 
-  // 37.1 §1.1: a pre-37.1 backup may still hold `messageKind: 'steer'` and the
-  // `steerMessageIds` marker. Restoring must not fail, and the label must be normalized away
-  // because nothing in the app reads it any more.
-  it('restores a legacy steer row as an ordinary instruction', async () => {
+  // 37.1 §1.1 / WR-06: a pre-37.1 backup may still hold `messageKind: 'steer'`. Restoring
+  // must not fail, and the label is DROPPED — not remapped to `instruction`, which would make
+  // `listInterruptedAssignments` report the restored row as unfinished work.
+  it('restores a legacy steer row as an ordinary user message', async () => {
     await seedOffice(sourceDb);
     const steerMessage: ChatMessage = {
       id: STEER_MESSAGE_ID,
@@ -593,7 +593,7 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
     await restoreBackupPayload(envelope, restoredDb);
 
     const restoredMessage = await restoredDb.chatMessages.get(STEER_MESSAGE_ID);
-    expect(restoredMessage?.messageKind).toBe('instruction');
+    expect(restoredMessage?.messageKind).toBeUndefined();
     expect(restoredMessage?.targetAgentId).toBe(EMPLOYEE_ID);
     expect(restoredMessage?.batchId).toBe(BATCH_ID);
   });

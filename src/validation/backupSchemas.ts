@@ -782,6 +782,33 @@ export const BackupAiTeamAssignmentRecordSchema = z.strictObject({
   dependsOn: z.array(uuidSchema).optional(),
 });
 
+/**
+ * 37.1 R1/WR-07: the team message log. `seq` is per team and monotonic; `to` is the routing
+ * list and must never be empty (invariant L1). `replyToId` is optional so a backup taken
+ * before R14 still restores.
+ */
+export const BackupTeamMessageRecordSchema = z.strictObject({
+  id: uuidSchema,
+  teamId: uuidSchema,
+  seq: z.number().int().positive(),
+  from: z.string().min(1),
+  to: z.array(z.string().min(1)).min(1),
+  content: z.string(),
+  kind: z.enum(['chat', 'instruction', 'report', 'synthesis']),
+  assignmentId: uuidSchema.optional(),
+  deliversMessageId: uuidSchema.optional(),
+  replyToId: uuidSchema.optional(),
+  createdAt: z.string(),
+});
+
+export const BackupTeamReadCursorRecordSchema = z.strictObject({
+  id: z.string().min(1),
+  teamId: uuidSchema,
+  participantId: z.string().min(1),
+  lastSeq: z.number().int().nonnegative(),
+  updatedAt: z.string(),
+});
+
 /** D-49: the current backup envelope contract. Version 13 adds `aiTeamBatches`, `aiTeamAssignments` and `AiTeam.concurrencyLimit`; older versions are rejected. */
 export const BACKUP_SCHEMA_VERSION = 13 as const;
 

@@ -41,6 +41,7 @@ import {
   type TeamRunSnapshot,
 } from '../../../services/ai/office/teamRunCoordinator';
 import { getOrCreateRun } from '../../../services/ai/office/teamRunManager';
+import { advanceCursor } from '../../../services/ai/office/teamEventLog';
 import { USER_PARTICIPANT_ID, type MessageSeenEntry } from '../../../types/teamChat';
 import type { ChatTurnRuntimeDeps } from '../runtime/chatTurnRuntime';
 import { AiChatWidget } from '../AiChatWidget';
@@ -389,6 +390,25 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     () => db.teamReadCursors.where('teamId').equals(team.id).toArray(),
     [db, team.id]
   ) ?? [];
+  /**
+   * 37.1 R13: how many messages the user has not read. `headSeq` minus the user's cursor.
+   * Read from the same log as the receipts, so the badge and the ✓✓ can never disagree.
+   */
+  const userCursorSeq = useMemo(() => {
+    const mine = teamCursors.find((row) => row.participantId === USER_PARTICIPANT_ID);
+    return mine?.lastSeq ?? 0;
+  }, [teamCursors]);
+  const unreadCount = useMemo(
+    () => teamLog.filter((row) => row.seq > userCursorSeq && row.from !== USER_PARTICIPANT_ID).length,
+    [teamLog, userCursorSeq]
+  );
+
+  const firstUnreadMessageId = useMemo(
+    () =>
+      teamLog.find((row) => row.seq > userCursorSeq && row.from !== USER_PARTICIPANT_ID)?.id,
+    [teamLog, userCursorSeq]
+  );
+
   const seenStates = useMemo(() => {
     const map = new Map<string, MessageSeenEntry[]>();
     if (teamLog.length === 0 || teamCursors.length === 0) return map;
@@ -411,6 +431,30 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     }
     return map;
   }, [teamLog, teamCursors, roster]);
+
+  /**
+   * 37.1 R11: the user is a participant, so the user has a cursor too. Without it the
+   * leader→user direction has no seen data at all — not hidden in the UI, simply absent.
+   *
+   * Two conditions, both necessary for the receipt to be true: the tab is visible (a
+   * background tab has not been read) and the transcript is scrolled to the newest message
+   * (a message below the fold has not been read either). Anything looser makes ✓✓ a lie.
+   */
+  const headSeq = teamLog.reduce((max, row) => (row.seq > max ? row.seq : max), 0);
+  const [atBottom, setAtBottom] = useState(true);
+  const [tabVisible, setTabVisible] = useState(
+    () => typeof document === 'undefined' || document.visibilityState !== 'hidden'
+  );
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const onVisibility = () => setTabVisible(document.visibilityState !== 'hidden');
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, []);
+  useEffect(() => {
+    if (headSeq === 0 || !tabVisible || !atBottom) return;
+    void advanceCursor(team.id, USER_PARTICIPANT_ID, headSeq, db);
+  }, [team.id, headSeq, db, tabVisible, atBottom]);
 
   const agentStatuses = useMemo(() => {
     const map = new Map<string, 'queued' | 'running' | 'paused' | 'stopped' | 'error' | 'done'>();
@@ -459,9 +503,16 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
           message: 'Nhóm này đã bị xoá hoặc dừng. Mở lại nhóm để tiếp tục.',
         });
       }
+      // WR-05: a leadless team has nobody to answer. Say so instead of looking delivered.
+      if (outcome === 'refused' && team.leadId === undefined) {
+        setSendError({
+          code: 'NO_LEAD',
+          message: 'Nhóm chưa có trưởng nhóm nên không ai trả lời được. Hãy thêm trưởng nhóm trong cài đặt nhóm.',
+        });
+      }
       return outcome;
     },
-    [coordinator, db, team.id]
+    [coordinator, db, team.id, team.leadId]
   );
 
   /**
@@ -644,6 +695,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
             members={liveMembers}
             employees={employees}
             links={linkRows}
+            unreadCount={unreadCount}
             snapshot={snapshot}
             onTopUp={() => {
               // A sidebar top-up is always team-scoped; never inherit a banner's agent scope.
@@ -830,6 +882,10 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                     agentDirectory,
                     agentStatuses,
                     seenStates,
+                    ...(firstUnreadMessageId !== undefined
+                      ? { firstUnreadMessageId }
+                      : {}),
+                    onAtBottomChange: setAtBottom,
                     ...(coordinator ? { onStopAgent: (agentId: string) => coordinator.stopAgent(agentId) } : {}),
                     // 37-08 D-13: same extension path as onStopAgent — no new widget API.
                     // WR-02: a refusal (busy phase, disposed run) must land somewhere the

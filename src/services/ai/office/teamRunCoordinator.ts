@@ -87,6 +87,7 @@ import { generateId } from '../../../utils/uuid';
 import {
   advanceCursor,
   appendForExistingMessage,
+  appendMessage,
   getCursor,
   readMessagesAfter,
 } from './teamEventLog';
@@ -258,7 +259,7 @@ const EMPLOYEE_TEAM_TOOLS = TEAM_TOOL_DEFINITIONS.filter(
  * only translates the mention into `to[]`; `send()` stays the one write path, so there is no
  * second routing mechanism hiding here.
  */
-const AGENT_MENTION = /@\[([^\]]+)\]\(agent:([a-zA-Z0-9-]+)\)/;
+const AGENT_MENTION = /@\[([^\]]+)\]\(agent:([a-zA-Z0-9-]+)\)/g;
 
 const TERMINAL_STATUSES: readonly AgentRunStatus[] = ['done', 'stopped', 'error'];
 
@@ -470,6 +471,11 @@ export function createTeamRunCoordinator(
     string,
     { batchId: string; assignmentId: string; attemptNo: number }
   >();
+  /**
+   * 37.1 R14: the message each live turn is answering. Set when the turn starts, cleared in
+   * its `finally`, so a reply can never be attributed to a previous turn's question.
+   */
+  const replyTargetByAgent = new Map<string, string>();
   /** D-10/D-11/D-18: the cancellation channel for a still-queued assignment. */
   const assignmentControllers = new Map<string, AbortController>();
   /**
@@ -774,6 +780,10 @@ export function createTeamRunCoordinator(
     // Only the caller that actually committed the terminal write notifies; a losing
     // concurrent caller must not emit a second `message_saved` for the same commit.
     let committed = false;
+    // WR-04: the insert branch writes a bubble no other path logs. Remembered in a holder
+    // (not a nullable local — TS narrows those to `never` across the closure) so the append
+    // can run after the commit; Dexie cannot nest `rw` scopes.
+    const inserted: { row?: { id: string; agentId: string; content: string; createdAt: string } } = {};
 
     const finalized = await db.transaction(
       'rw',
@@ -799,12 +809,19 @@ export function createTeamRunCoordinator(
             throw new Error(`finalizeAttempt: missing report content for ${assignmentId}`);
           }
           reportId = generateId();
+          const reportCreatedAt = new Date().toISOString();
+          inserted.row = {
+            id: reportId,
+            agentId: row.agentId,
+            content: contentWhenMissing,
+            createdAt: reportCreatedAt,
+          };
           await insertReportMessage(
             {
               id: reportId,
               threadId,
               content: contentWhenMissing,
-              createdAt: new Date().toISOString(),
+              createdAt: reportCreatedAt,
               agentId: row.agentId,
               agentName: row.agentName,
               batchId: row.batchId,
@@ -851,6 +868,29 @@ export function createTeamRunCoordinator(
       // After the commit, never inside it: one owner, and the row and the notification
       // carry the same `threadId` value.
       notifyAIChatSync({ type: 'message_saved', threadId });
+    }
+    // WR-04 / R1: a report this call INSERTED is a real message in the conversation, so it
+    // must be in the log too — otherwise a stopped/errored agent's bubble is absent from
+    // every cursor and the log stops describing the conversation it claims to record.
+    // Appended after the transaction: `appendForExistingMessage` opens its own `rw` scope.
+    const insertedRow = inserted.row;
+    if (committed && insertedRow !== undefined && roster.lead) {
+      await appendForExistingMessage(
+        {
+          id: insertedRow.id,
+          teamId,
+          from: insertedRow.agentId,
+          to: [roster.lead.id],
+          content: insertedRow.content,
+          kind: 'report',
+          assignmentId,
+          ...(finalized?.instructionMessageId !== undefined
+            ? { replyToId: finalized.instructionMessageId }
+            : {}),
+          createdAt: insertedRow.createdAt,
+        },
+        db
+      );
     }
     // The `userStopped` marker is cleared only when that agent starts its NEXT turn: the
     // stop path and the settle path race to finalize, and both must map to `stopped`.
@@ -928,6 +968,12 @@ export function createTeamRunCoordinator(
         return amendAssignments(args ?? {});
       }
 
+      // 37.1 R6/R9: `send_message` is the one team tool with a side effect beyond its own
+      // row — it starts turns — so it is intercepted before the generic team-tool branch.
+      if (normalized === 'send_message') {
+        return sendFromParticipant(agentId, args ?? {});
+      }
+
       if (TEAM_TOOL_NAMES.has(normalized)) {
         return executeTeamTool(name, args, ctx);
       }
@@ -964,7 +1010,13 @@ export function createTeamRunCoordinator(
        * insert a duplicate. Only non-status fields are written, so D-09 is untouched.
        */
       saveMessage: (async (input: Parameters<typeof innerSaveMessage>[0], inputDb: any) => {
-        const row = await innerSaveMessage(input, inputDb ?? db);
+        const replyToId = replyTargetByAgent.get(agentId);
+        const row = await innerSaveMessage(
+          replyToId !== undefined && input.role === 'assistant'
+            ? { ...input, replyToId }
+            : input,
+          inputDb ?? db
+        );
         // D-12/T-37-25: remember the synthesis row so a re-synthesis can mark it superseded.
         if (input.role === 'assistant' && input.messageKind === 'synthesis') {
           lastSynthesisMessageId = row.id;
@@ -980,6 +1032,9 @@ export function createTeamRunCoordinator(
                 to: [USER_PARTICIPANT_ID],
                 content: row.content,
                 kind: 'synthesis',
+                ...(replyTargetByAgent.get(agentId) !== undefined
+                  ? { replyToId: replyTargetByAgent.get(agentId)! }
+                  : {}),
                 createdAt: row.createdAt,
               },
               db
@@ -1031,6 +1086,9 @@ export function createTeamRunCoordinator(
               content: row.content,
               kind: 'report',
               assignmentId: active.assignmentId,
+              ...(replyTargetByAgent.get(agentId) !== undefined
+                ? { replyToId: replyTargetByAgent.get(agentId)! }
+                : {}),
               createdAt: row.createdAt,
             },
             db
@@ -1071,6 +1129,10 @@ export function createTeamRunCoordinator(
       onUsage: (usage) => handleUsage(agentId, usage, usageBaselineKey.get(agentId) ?? agentId),
       onAwaitingApproval: (info) => {
         pendingApproval = info;
+        // The card is rendered from the snapshot, and no status transition follows this
+        // callback — without the notify the approval card never appears and the turn parks
+        // forever behind a prompt nobody can see.
+        notify();
       },
     };
   }
@@ -1333,6 +1395,11 @@ export function createTeamRunCoordinator(
       usageTotals.delete(accountingKey);
       // D-13: the batch's employees are only known here, so this is where they claim live use.
       claimLiveUse(employee.id, employee.skillId);
+      // 37.1 R14: what this turn is answering. A dispatch answers its instruction row; a
+      // mention-started turn answers the user's message. Cleared in the `finally` below.
+      const replyTarget = triggerMessageId ?? attempt?.instructionMessageId;
+      if (replyTarget !== undefined) replyTargetByAgent.set(employee.id, replyTarget);
+      else replyTargetByAgent.delete(employee.id);
       updateAgent(employee.id, {
         status: 'running',
         streamingText: '',
@@ -1447,6 +1514,8 @@ export function createTeamRunCoordinator(
     } finally {
       // Pitfall 7: no deferred outlives its turn. `settleAgent` normally removed it already.
       agentDeferreds.delete(employee.id);
+      // 37.1 R14: the reply target belongs to THIS turn; a later turn must not inherit it.
+      replyTargetByAgent.delete(employee.id);
     }
   }
 
@@ -1509,6 +1578,9 @@ export function createTeamRunCoordinator(
       usageTotals.delete(leadAccountingKey);
       // D-13: leads have no skill, so the claim carries an empty skill list.
       claimLiveUse(lead.id, undefined);
+      // 37.1 R14: the synthesis answers the batch; a chat turn answers the user's message.
+      if (triggerMessageId !== undefined) replyTargetByAgent.set(lead.id, triggerMessageId);
+      else replyTargetByAgent.delete(lead.id);
       updateAgent(lead.id, {
         status: 'running',
         streamingText: '',
@@ -1540,20 +1612,28 @@ export function createTeamRunCoordinator(
       // normal return, parked return, throw. A derived phase needs no other reset.
       leadTurnKind = null;
       agentDeferreds.delete(lead.id);
+      replyTargetByAgent.delete(lead.id);
       notify();
     }
   }
 
-  function parseMentionTarget(text: string): AiEmployee | null {
-    const match = AGENT_MENTION.exec(text);
-    if (!match) return null;
-    const id = match[2];
-    const employee = roster.employees.find((row) => row.id === id);
-    if (!employee) return null;
-    // AIO-TEAM-04: only this team's members are addressable. A non-member has no
-    // aiTeamMembers row, so its budget is 0 and the turn would park forever.
-    if (!memberIds.has(employee.id)) return null;
-    return employee;
+  /**
+   * 37.1 R12: EVERY mention in the message, in order, deduplicated. Tagging two agents sends
+   * ONE message addressed to both — the same thing a group chat does when you @ two people.
+   */
+  function parseMentionTargets(text: string): AiEmployee[] {
+    const found: AiEmployee[] = [];
+    for (const match of text.matchAll(AGENT_MENTION)) {
+      const id = match[2];
+      if (found.some((row) => row.id === id)) continue;
+      const employee = roster.employees.find((row) => row.id === id);
+      if (!employee) continue;
+      // AIO-TEAM-04: only this team's members are addressable. A non-member has no
+      // aiTeamMembers row, so its budget is 0 and the turn would park forever.
+      if (!memberIds.has(employee.id)) continue;
+      found.push(employee);
+    }
+    return found;
   }
 
   /**
@@ -1879,57 +1959,76 @@ export function createTeamRunCoordinator(
     // 37.1 §1.1: ONE primitive. The message is appended first — always, whatever is running.
     // `to[]` is who must RESPOND; everyone reads it, so the leader can see a message the user
     // sent to Eva and intervene, and the user can ask the leader to check it.
-    const target = parseMentionTarget(text);
-    const recipient = target?.id ?? roster.lead?.id;
+    const targets = parseMentionTargets(text);
+    // R12: one message, many addressees. A plain message (no tag) goes to the leader.
+    const recipients = targets.length > 0 ? targets.map((row) => row.id) : [];
+    if (recipients.length === 0 && roster.lead) recipients.push(roster.lead.id);
 
     const row = await saveTeamMessage(
       { threadId: options.threadId, role: 'user', content: text },
       db
     );
-    if (recipient) {
-      await appendForExistingMessage(
-        {
-          id: row.id,
-          teamId,
-          from: USER_PARTICIPANT_ID,
-          to: [recipient],
-          content: text,
-          kind: target ? 'instruction' : 'chat',
-          createdAt: row.createdAt,
-        },
-        db
-      );
+    // WR-05: a team with no lead has nobody to answer a plain message. The old code saved the
+    // row, appended nothing and returned `'started'` — a silent drop that looked like success.
+    // The message stays in the transcript (the user's text is never lost) but it is NOT
+    // appended to the log, because the log is the addressing record and there is no addressee.
+    // The caller turns this into a visible refusal.
+    if (recipients.length === 0) {
+      notify();
+      return 'refused';
     }
+    await appendForExistingMessage(
+      {
+        id: row.id,
+        teamId,
+        from: USER_PARTICIPANT_ID,
+        to: recipients,
+        content: text,
+        kind: targets.length > 0 ? 'instruction' : 'chat',
+        createdAt: row.createdAt,
+      },
+      db
+    );
     notify();
     if (disposed) return 'steered';
 
     // AIO-LEAD-03: a mention is a direct instruction. If the agent is live it reads the
     // message at its next tool round; if the team is idle it starts a turn of its own.
-    if (target) {
+    if (targets.length > 0) {
+      // AIO-STEER-04: mid-batch, an agent that has already settled has no attempt to attach
+      // a turn to. Starting an untracked turn would leave the batch ledger describing a
+      // different run than the one happening. Refuse visibly — the leader still answers.
+      const busy = openBatchId !== null || synthesisPending;
       // CR-03: liveness comes from the LIVE state, not the ledger map. `assignmentIdsByAgent`
       // is only written by dispatch/amend/retry, so a turn started by a mention was invisible
       // here — a second mention then tried to start a competing turn, hit TURN_IN_PROGRESS,
       // and marked the running agent `error`. The runtime is the authority on "is it running".
-      const runtime = registry.peek(target.id);
-      const agentState = agents.get(target.id);
-      const live =
-        runtime?.isRunning() === true ||
-        (agentState !== undefined &&
-          agentState.status !== 'done' &&
-          agentState.status !== 'stopped' &&
-          agentState.status !== 'error');
-      if (live) return 'steered';
-      // AIO-STEER-04: mid-batch, an agent that has already settled has no attempt to attach
-      // a turn to. Starting an untracked turn would leave the batch ledger describing a
-      // different run than the one happening. Refuse visibly — the leader still answers.
-      if (openBatchId !== null || synthesisPending) {
+      const idle = targets.filter((target) => {
+        const runtime = registry.peek(target.id);
+        const agentState = agents.get(target.id);
+        const live =
+          runtime?.isRunning() === true ||
+          (agentState !== undefined &&
+            agentState.status !== 'done' &&
+            agentState.status !== 'stopped' &&
+            agentState.status !== 'error');
+        return !live;
+      });
+      // A live addressee reads it at its next round — that is a steer, batch or not.
+      if (idle.length === 0) return 'steered';
+      if (busy) {
         await runLeadTurn(text, undefined, 'lead-thinking', row.id);
         return 'refused';
       }
-      // Team idle: this message IS the agent's turn.
+      // Team idle: this message IS each agent's turn. They run one after another — the
+      // scheduler already bounds concurrency, and awaiting keeps one failure from stranding
+      // the rest.
       registerTeamTurn();
       try {
-        await startEmployeeTurn(target, text, text, undefined, undefined, row.id);
+        for (const target of idle) {
+          if (disposed) break;
+          await startEmployeeTurn(target, text, text, undefined, undefined, row.id);
+        }
         return 'started';
       } finally {
         aiTurnManager.finishTurn(teamTurnId);
@@ -1944,6 +2043,95 @@ export function createTeamRunCoordinator(
     if (leadTurnKind !== null || synthesisPending) return 'steered';
     await runLeadTurn(text, undefined, 'lead-thinking', row.id);
     return 'started';
+  }
+
+  /**
+   * 37.1 R6/R9: `send_message` — the fourth way a turn starts, and the ONLY one an agent can
+   * use. It is the same primitive as the user's composer: append to the log, then route by
+   * `to[]`. Nothing here knows who the sender is beyond its participant id, which is why the
+   * leader and an employee share one implementation.
+   *
+   * A recipient that is already running is left to read the message at its next tool round
+   * (that is what makes it a chat, not a call). A recipient that is idle starts a turn, and
+   * the sender waits for it — the alternative is a report nobody ever reads, because no
+   * mechanism wakes the leader when an agent speaks. Waiting cannot deadlock: the liveness
+   * check runs first, so a reply to a participant that is mid-turn is always a steer.
+   */
+  async function sendFromParticipant(
+    fromId: string,
+    rawArgs: Record<string, any>
+  ): Promise<string> {
+    if (disposed) return DISPOSED_REFUSAL;
+    const validation = await executeTeamTool('send_message', rawArgs, toolContext(fromId));
+    let parsed: any;
+    try {
+      parsed = JSON.parse(validation);
+    } catch {
+      return validation;
+    }
+    if (parsed?.refused === true) return validation;
+    const to: string[] = Array.isArray(parsed?.to) ? parsed.to : [];
+    const content = String(parsed?.content ?? '');
+    if (to.length === 0 || !content) return validation;
+
+    // R14: the message answers whatever this turn was answering, so a chain of exchanges
+    // stays readable. A participant with no open turn starts a thread.
+    const replyToId = replyTargetByAgent.get(fromId);
+    const row = await appendMessage(
+      {
+        teamId,
+        from: fromId,
+        to,
+        content,
+        kind: 'chat',
+        ...(replyToId !== undefined ? { replyToId } : {}),
+      },
+      db
+    );
+    notify();
+
+    const outcomes: Array<{ to: string; outcome: string }> = [];
+    for (const recipientId of to) {
+      if (recipientId === USER_PARTICIPANT_ID) {
+        outcomes.push({ to: recipientId, outcome: 'delivered' });
+        continue;
+      }
+      const employee = roster.employees.find((entry) => entry.id === recipientId);
+      if (employee) {
+        const runtime = registry.peek(employee.id);
+        const agentState = agents.get(employee.id);
+        const live =
+          runtime?.isRunning() === true ||
+          (agentState !== undefined && !TERMINAL_STATUSES.includes(agentState.status));
+        // Mid-batch the ledger owns the turn, so a new one would describe a different run
+        // than the batch does. The message waits in the log and is read at the next round.
+        if (live || openBatchId !== null || synthesisPending) {
+          outcomes.push({ to: recipientId, outcome: 'queued' });
+          continue;
+        }
+        registerTeamTurn();
+        try {
+          await startEmployeeTurn(employee, content, content, undefined, undefined, row.message.id);
+          outcomes.push({ to: recipientId, outcome: 'started' });
+        } finally {
+          aiTurnManager.finishTurn(teamTurnId);
+        }
+        continue;
+      }
+      if (roster.lead && recipientId === roster.lead.id) {
+        // A lead that is mid-turn (including the one calling this tool) reads the message at
+        // its next round; starting a second lead turn here would be a re-entrant turn.
+        if (leadTurnKind !== null || synthesisPending) {
+          outcomes.push({ to: recipientId, outcome: 'queued' });
+          continue;
+        }
+        await runLeadTurn(content, undefined, 'lead-thinking', row.message.id);
+        outcomes.push({ to: recipientId, outcome: 'started' });
+        continue;
+      }
+      outcomes.push({ to: recipientId, outcome: 'unknown' });
+    }
+    return JSON.stringify({ sent: row.message.id, outcomes });
   }
 
   /**

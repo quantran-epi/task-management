@@ -44,6 +44,8 @@ export interface SaveTeamMessageInput {
   incomplete?: boolean | undefined;
   supersededByMessageId?: string | undefined;
   supersededAt?: string | undefined;
+  /** 37.1 R14: the message this row answers. */
+  replyToId?: string | undefined;
 }
 
 /**
@@ -115,6 +117,7 @@ export async function saveTeamMessage(
     ...(input.agentKind ? { agentKind: input.agentKind } : {}),
     ...(input.messageKind ? { messageKind: input.messageKind } : {}),
     ...(input.targetAgentId ? { targetAgentId: input.targetAgentId } : {}),
+    ...(input.replyToId ? { replyToId: input.replyToId } : {}),
     ...(input.tokenUsage ? { tokenUsage: input.tokenUsage } : {}),
     ...linkFields(input),
   };

@@ -1562,13 +1562,16 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
     it('does nothing when the seam reports no lead (empty group, D-05)', async () => {
       harness = await createHarness({ useSeam: true, scripts: {} });
-      const { coordinator, roster } = harness;
+      const { coordinator, roster, db, team } = harness;
       roster.lead = undefined;
       roster.teamRow = { ...harness.team, leadId: undefined };
 
-      // The submit was accepted (it is not `'blocked'`), it simply starts nothing.
-      await expect(coordinator.send('Xin chào')).resolves.toBe('started');
+      // WR-05: a leadless team has nobody to answer, so the outcome says so instead of
+      // pretending a turn began. The transcript keeps the text; the log gets no orphan row.
+      await expect(coordinator.send('Xin chào')).resolves.toBe('refused');
       expect(coordinator.getState().agents).toEqual([]);
+      const log = await db.teamMessages.where('teamId').equals(team.id).toArray();
+      expect(log).toEqual([]);
     });
   });
 
@@ -4151,6 +4154,228 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
         .toArray();
       const cursor = await getCursor(current.team.id, target.id, current.db);
       expect(cursor.lastSeq).toBe(Math.max(...log.map((row) => row.seq)));
+    });
+  });
+
+  // 37.1 R6/R9/R12/R14: everyone may speak to everyone, one message may name several
+  // recipients, and every answer says what it answers.
+  describe('real chat: send_message, multi-recipient, reply linkage (R6, R9, R12, R14)', () => {
+    const teamLog = async (current: Harness) =>
+      current.db.teamMessages.where('teamId').equals(current.team.id).sortBy('seq');
+
+    it('R6: the leader sends a message to an idle agent and the agent runs a turn', async () => {
+      const seenByAgent: string[] = [];
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'send_message',
+              { to: [harness!.employees[0]!.id], content: 'Kiểm tra giúp mình luồng đối soát' },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Đã hỏi An.');
+          },
+          [EMP_A_MODEL]: async (options) => {
+            seenByAgent.push(String(options.messages.at(-1)?.content ?? ''));
+            return loopResult('Đã kiểm tra xong.');
+          },
+        },
+      });
+      const current = harness;
+
+      await current.coordinator.send('Kiểm tra luồng đối soát');
+      await waitForReady(current.coordinator);
+
+      const log = await teamLog(current);
+      const sent = log.find((row) => row.from === current.lead.id && row.kind === 'chat');
+      expect(sent).toBeDefined();
+      expect(sent!.to).toEqual([current.employees[0]!.id]);
+      expect(seenByAgent).toHaveLength(1);
+      expect(seenByAgent[0]).toContain('Kiểm tra giúp mình luồng đối soát');
+    });
+
+    it('R9: an agent sends a message to the leader and the leader answers', async () => {
+      const leadSaw: string[] = [];
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            leadSaw.push(String(options.messages.at(-1)?.content ?? ''));
+            return loopResult('Đã nắm.');
+          },
+          [EMP_A_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'send_message',
+              { to: [harness!.lead.id], content: 'Cần thêm dữ liệu đối soát tháng 9' },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Đã hỏi trưởng nhóm.');
+          },
+        },
+      });
+      const current = harness;
+      const target = current.employees[0]!;
+
+      await current.coordinator.send(`@[${target.name}](agent:${target.id}) làm báo cáo`);
+      await waitForReady(current.coordinator);
+
+      const log = await teamLog(current);
+      const fromAgent = log.find((row) => row.from === target.id && row.kind === 'chat');
+      expect(fromAgent).toBeDefined();
+      expect(fromAgent!.to).toEqual([current.lead.id]);
+      // The leader's own turn is what ran the script, so it read the message in the same turn.
+      expect(leadSaw.join('\n')).toContain('Cần thêm dữ liệu đối soát tháng 9');
+    });
+
+    it('R9: an agent still cannot call delegate_batch', async () => {
+      let refusal = '';
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async () => loopResult('Chào.'),
+          [EMP_A_MODEL]: async (options) => {
+            refusal = await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: [{ agentId: harness!.employees[1]!.id, task: 'Việc' }] },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+        },
+      });
+      const current = harness;
+      const target = current.employees[0]!;
+
+      await current.coordinator.send(`@[${target.name}](agent:${target.id}) tự làm đi`);
+      await waitForReady(current.coordinator);
+
+      expect(JSON.parse(refusal).refused).toBe(true);
+    });
+
+    it('R12: tagging two agents sends ONE message addressed to both, and both run', async () => {
+      const ran: string[] = [];
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async () => loopResult('Chào.'),
+          [EMP_A_MODEL]: async () => {
+            ran.push('A');
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => {
+            ran.push('B');
+            return loopResult('B xong');
+          },
+        },
+      });
+      const current = harness;
+      const [a, b] = current.employees;
+
+      await current.coordinator.send(
+        `@[${a!.name}](agent:${a!.id}) @[${b!.name}](agent:${b!.id}) cùng xem việc này`
+      );
+      await waitForReady(current.coordinator);
+
+      const log = await teamLog(current);
+      const userRows = log.filter((row) => row.from === USER_PARTICIPANT_ID);
+      expect(userRows).toHaveLength(1);
+      expect(userRows[0]!.to).toEqual([a!.id, b!.id]);
+      expect(ran.sort()).toEqual(['A', 'B']);
+    });
+
+    it('R14: an agent report answers its instruction row', async () => {
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: [{ agentId: harness!.employees[0]!.id, task: 'Việc 1' }] },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Đã giao việc.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+        },
+      });
+      const current = harness;
+
+      await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
+
+      const log = await teamLog(current);
+      const instruction = log.find((row) => row.kind === 'instruction')!;
+      const report = log.find((row) => row.kind === 'report')!;
+      expect(report.replyToId).toBe(instruction.id);
+
+      // The rendered row carries the same link, so the UI can quote it.
+      const chatReport = await current.db.chatMessages.get(report.id);
+      expect(chatReport?.replyToId).toBe(instruction.id);
+    });
+
+    it('R14: the leader synthesis answers the user message that started the run', async () => {
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: [{ agentId: harness!.employees[0]!.id, task: 'Việc 1' }] },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Đã giao việc.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+        },
+      });
+      const current = harness;
+
+      await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
+
+      const log = await teamLog(current);
+      const userRow = log.find((row) => row.from === USER_PARTICIPANT_ID)!;
+      const synthesis = log.find((row) => row.kind === 'synthesis')!;
+      expect(synthesis.replyToId).toBe(userRow.id);
+    });
+
+    it('R7: the prompt carries only the newest 10 turns, never the whole log', async () => {
+      const promptSizes: number[] = [];
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            promptSizes.push(options.messages.length);
+            return loopResult('Chào.');
+          },
+        },
+      });
+      const current = harness;
+      for (let index = 0; index < 15; index += 1) {
+        await saveTeamMessage(
+          {
+            threadId: current.threadId,
+            role: index % 2 === 0 ? 'user' : 'assistant',
+            content: `Tin cũ số ${index}`,
+          },
+          current.db
+        );
+      }
+
+      await current.coordinator.send('Xin chào');
+      await waitForReady(current.coordinator);
+
+      const last = await current.db.chatMessages
+        .where('threadId')
+        .equals(current.threadId)
+        .toArray();
+      expect(last.length).toBeGreaterThan(10);
+      // The transcript row count is unbounded; the prompt is not.
+      expect(promptSizes[0]).toBeLessThanOrEqual(10 + 2);
     });
   });
 

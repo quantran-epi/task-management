@@ -165,6 +165,13 @@ export const SCHEMA_V23 = {
   teamReadCursors: 'id, [teamId+participantId]',
 } as const;
 
+// V24: `replyToId` on both message tables (37.1 R14). Purely additive and unindexed — the
+// reply target is read by id from the rows already in memory, never queried by. No index
+// rebuild, no `.upgrade()` hook.
+export const SCHEMA_V24 = {
+  ...SCHEMA_V23,
+} as const;
+
 // Bump with every new `this.version(n)` in db/index.ts. Migration tests assert
 // against this instead of a literal, so a schema bump never silently breaks them.
-export const LATEST_SCHEMA_VERSION = 23;
+export const LATEST_SCHEMA_VERSION = 24;

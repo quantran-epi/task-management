@@ -11,6 +11,8 @@ export interface TeamSidebarProps {
   members: AiTeamMember[];
   employees: AiEmployee[];
   links: LinkedItemRow[];
+  /** 37.1 R13: messages the user has not read yet. 0 hides the badge. */
+  unreadCount?: number | undefined;
   snapshot: { phase: TeamRunPhase; agents: Array<{ agentId: string; status: AgentRunStatus }> };
   onTopUp: () => void;
   onOpenSettings: () => void;
@@ -39,6 +41,7 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
   members,
   employees,
   links,
+  unreadCount = 0,
   snapshot,
   onTopUp,
   onOpenSettings,
@@ -75,7 +78,27 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
       }}
     >
       <div>
-        <div style={{ ...SECTION_LABEL, color: token.colorTextSecondary }}>Thành viên</div>
+        <div style={{ ...SECTION_LABEL, color: token.colorTextSecondary }}>
+          Thành viên
+          {unreadCount > 0 && (
+            <span
+              data-testid="team-unread-badge"
+              style={{
+                marginLeft: 8,
+                padding: '0 6px',
+                borderRadius: 9,
+                background: token.colorError,
+                color: '#fff',
+                fontSize: 11,
+                fontWeight: 600,
+                letterSpacing: 0,
+                textTransform: 'none',
+              }}
+            >
+              {unreadCount} tin mới
+            </span>
+          )}
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {memberRows.map(({ member, agent, isLead }) => {
             const status = statusByAgent.get(member.agentId);

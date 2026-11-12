@@ -34,6 +34,8 @@ export interface SaveMessageInput {
   agentName?: string | undefined;
   agentKind?: 'lead' | 'employee' | undefined;
   messageKind?: 'instruction' | 'report' | 'synthesis' | 'plan' | undefined;
+  /** 37.1 R14: the message this row answers. */
+  replyToId?: string | undefined;
 }
 
 export function buildScopeKey(scopeType: ChatScopeType, entityId?: string): string {
@@ -113,6 +115,7 @@ export async function saveMessage(
     ...(input.agentName ? { agentName: input.agentName } : {}),
     ...(input.agentKind ? { agentKind: input.agentKind } : {}),
     ...(input.messageKind ? { messageKind: input.messageKind } : {}),
+    ...(input.replyToId ? { replyToId: input.replyToId } : {}),
   };
 
   await db.transaction('rw', [db.chatMessages, db.chatThreads], async () => {

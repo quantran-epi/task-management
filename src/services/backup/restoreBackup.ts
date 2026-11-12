@@ -53,6 +53,8 @@ const RESTORE_TABLES = (db: TaskPlannerDatabase) => [
   db.aiSkillVersions,
   db.aiTeamBatches,
   db.aiTeamAssignments,
+  db.teamMessages,
+  db.teamReadCursors,
   db.settings,
   db.backupMetadata,
 ];
@@ -259,6 +261,9 @@ async function replaceTables(
           targetDb.aiTeams.clear(), targetDb.aiTeamMembers.clear(), targetDb.aiTeamLinks.clear(),
           targetDb.aiSkillVersions.clear(),
           targetDb.aiTeamBatches.clear(), targetDb.aiTeamAssignments.clear(),
+          // 37.1 WR-07: the log is part of the same group — a payload that predates it must
+          // not wipe it, and one that carries it must replace it wholesale.
+          targetDb.teamMessages.clear(), targetDb.teamReadCursors.clear(),
         ]
       : [];
     // Settings are replaced key-by-key, never cleared wholesale: secrets (tokens, passphrases)
@@ -302,6 +307,9 @@ async function replaceTables(
     await add(targetDb.aiSkillVersions, tables.aiSkillVersions);
     await add(targetDb.aiTeamBatches, tables.aiTeamBatches);
     await add(targetDb.aiTeamAssignments, tables.aiTeamAssignments);
+    // 37.1 WR-07: restore the log and its cursors with the transcript they belong to.
+    await add(targetDb.teamMessages, tables.teamMessages);
+    await add(targetDb.teamReadCursors, tables.teamReadCursors);
     await add(targetDb.activeTimers, tables.activeTimers);
     for (const setting of tables.settings ?? []) if (isSafeBackupSetting(setting.key)) await targetDb.settings.put(setting);
     if (snapshotData) await targetDb.settings.put({ key: 'last_pre_import_snapshot', value: snapshotData });

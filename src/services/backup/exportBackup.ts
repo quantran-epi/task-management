@@ -208,6 +208,8 @@ export async function exportBackupPayload(
     aiSkillVersions,
     aiTeamBatches,
     rawAiTeamAssignments,
+    teamMessages,
+    teamReadCursors,
   ] = await Promise.all([
     targetDb.tasks.toArray(),
     targetDb.capacityRules.toArray(),
@@ -239,6 +241,8 @@ export async function exportBackupPayload(
     targetDb.aiSkillVersions.toArray(),
     targetDb.aiTeamBatches.toArray(),
     targetDb.aiTeamAssignments.toArray(),
+    targetDb.teamMessages.toArray(),
+    targetDb.teamReadCursors.toArray(),
   ]);
 
   const aiTeamAssignments = rawAiTeamAssignments.map(projectSafeAssignment);
@@ -297,6 +301,8 @@ export async function exportBackupPayload(
     aiSkillVersions,
     aiTeamBatches,
     aiTeamAssignments,
+    ...(teamMessages.length > 0 ? { teamMessages } : {}),
+    ...(teamReadCursors.length > 0 ? { teamReadCursors } : {}),
   };
 
   const counts = {
@@ -330,6 +336,8 @@ export async function exportBackupPayload(
     aiSkillVersions: aiSkillVersions.length,
     aiTeamBatches: aiTeamBatches.length,
     aiTeamAssignments: aiTeamAssignments.length,
+    teamMessages: teamMessages.length,
+    teamReadCursors: teamReadCursors.length,
   };
 
   const envelope: BackupEnvelope = {

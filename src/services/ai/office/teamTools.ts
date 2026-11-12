@@ -5,6 +5,7 @@ import { buildTeamBm25Docs, getTeamTurn } from '../../../db/repositories/teamTra
 import { listTeamLinks, listTeamMembers } from '../../../db/repositories/aiTeamRepo';
 import { executeAiTool, normalizeToolName, type AiToolDefinition } from '../aiTools';
 import { wrapUntrusted } from './teamPrompts';
+import { USER_PARTICIPANT_ID } from '../../../types/teamChat';
 
 /**
  * AI Office team tools (D-11, D-24, D-26, D-27, D-33).
@@ -34,7 +35,9 @@ export type TeamToolRefusalCode =
   | 'EMPTY_BATCH'
   | 'INVALID_ARGUMENT'
   | 'NOT_QUEUED'
-  | 'ASSIGNMENT_NOT_IN_BATCH';
+  | 'ASSIGNMENT_NOT_IN_BATCH'
+  | 'RECIPIENT_NOT_IN_ROSTER'
+  | 'EMPTY_MESSAGE';
 
 /** Mirrors `ArtifactToolRefusal`: a refusal is a returned value, never a thrown error. */
 export interface TeamToolRefusal {
@@ -61,6 +64,11 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
           limit: {
             type: 'number',
             description: 'Số lượt tối đa trả về (mặc định 8, tối đa 20).',
+          },
+          addressedToMe: {
+            type: 'boolean',
+            description:
+              'Chỉ tìm trong các tin được gửi tới bạn (to[] chứa bạn). Bỏ trống để tìm toàn bộ lịch sử nhóm.',
           },
         },
         required: ['query'],
@@ -179,6 +187,26 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'send_message',
+      description:
+        'Gửi một tin nhắn cho một hoặc nhiều thành viên trong nhóm (trưởng nhóm, nhân viên, người dùng). Người nhận đang chạy sẽ đọc tin ở vòng công cụ kế tiếp; người nhận đang rảnh sẽ bắt đầu một lượt mới. Dùng khi cần trao đổi trực tiếp thay vì giao việc.',
+      parameters: {
+        type: 'object',
+        properties: {
+          to: {
+            type: 'array',
+            description: 'Danh sách id người nhận trong nhóm.',
+            items: { type: 'string' },
+          },
+          content: { type: 'string', description: 'Nội dung tin nhắn.' },
+        },
+        required: ['to', 'content'],
+      },
+    },
+  },
 ];
 
 /**
@@ -200,6 +228,26 @@ async function searchTeamHistory(
   // ponytail: rankBM25 tokenizes the whole candidate set per call. Cap to the last 2 000
   // rows if a personal transcript ever gets that large.
   const docs = await buildTeamBm25Docs(ctx.threadId, ctx.db);
+  // 37.1 R8: `addressedToMe` narrows to messages whose `to[]` names the caller. The log is
+  // the addressing record; `chatMessages` only carries the text, so the filter reads the log
+  // and the ranking still runs on the transcript docs.
+  if (args.addressedToMe === true) {
+    const mine = await ctx.db.teamMessages
+      .where('teamId')
+      .equals(ctx.teamId)
+      .filter((row) => row.to.includes(ctx.agentId))
+      .toArray();
+    const allowed = new Set(mine.map((row) => row.id));
+    const addressed = docs.filter((doc) => allowed.has(doc.id));
+    const hits = rankBM25(query, addressed, { limit }).map(({ doc }) => ({
+      turnId: doc.id,
+      agent: doc.title,
+      timestamp: doc.updatedAt ?? null,
+      kind: doc.tags[0] ?? null,
+      excerpt: wrapUntrusted('TRÍCH ĐOẠN', extractRelevantSnippet(doc.body, query, 400)),
+    }));
+    return JSON.stringify(hits);
+  }
   const hits = rankBM25(query, docs, { limit }).map(({ doc }) => ({
     turnId: doc.id,
     agent: doc.title,
@@ -404,6 +452,41 @@ async function amendAssignments(args: Record<string, any>): Promise<string> {
   return JSON.stringify({ operations: normalized });
 }
 
+/**
+ * 37.1 R6/R9: argument validation for `send_message`. Recipients must be participants of THIS
+ * team — the roster comes from stored rows, never from the model's claim. The coordinator owns
+ * the routing half (append to the log, start a turn), because only it knows what is running.
+ */
+async function sendMessage(args: Record<string, any>, ctx: TeamToolContext): Promise<string> {
+  const content = typeof args.content === 'string' ? args.content.trim() : '';
+  if (!content) return JSON.stringify(refuse('EMPTY_MESSAGE', 'Nội dung tin nhắn đang trống.'));
+
+  const requested = Array.isArray(args.to) ? args.to : [];
+  const members = await listTeamMembers(ctx.teamId, ctx.db);
+  const team = await ctx.db.aiTeams.get(ctx.teamId);
+  const allowed = new Set<string>([USER_PARTICIPANT_ID, ...members.map((row) => row.agentId)]);
+  if (team?.leadId !== undefined) allowed.add(team.leadId);
+
+  const to: string[] = [];
+  for (const raw of requested) {
+    const id = typeof raw === 'string' ? raw : '';
+    if (!allowed.has(id)) {
+      return JSON.stringify(
+        refuse('RECIPIENT_NOT_IN_ROSTER', `Người nhận "${id}" không thuộc nhóm này.`)
+      );
+    }
+    if (id === ctx.agentId) {
+      return JSON.stringify(refuse('RECIPIENT_NOT_IN_ROSTER', 'Không thể tự gửi tin cho chính mình.'));
+    }
+    if (!to.includes(id)) to.push(id);
+  }
+  if (to.length === 0) {
+    return JSON.stringify(refuse('RECIPIENT_NOT_IN_ROSTER', 'Chưa chọn người nhận nào.'));
+  }
+
+  return JSON.stringify({ to, content });
+}
+
 export async function executeTeamTool(
   name: string,
   args: Record<string, any>,
@@ -425,6 +508,8 @@ export async function executeTeamTool(
       return delegateBatch(input, ctx);
     case 'amend_assignments':
       return amendAssignments(input);
+    case 'send_message':
+      return sendMessage(input, ctx);
     default:
       return JSON.stringify({ error: `Unknown team tool: ${name}` });
   }

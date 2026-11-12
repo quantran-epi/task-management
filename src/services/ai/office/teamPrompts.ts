@@ -82,6 +82,7 @@ export function buildEmployeeTurnRequest(input: BuildEmployeeTurnRequestInput): 
       '[CHÍNH SÁCH CHỈ ĐỌC]',
       'Bạn chỉ được đọc dữ liệu. Mọi thao tác ghi đều bị từ chối tự động và không có thay đổi nào được thực hiện.',
       'Nếu cần thay đổi dữ liệu, hãy nêu rõ trong báo cáo để trưởng nhóm thực hiện.',
+      'Bạn có thể nhắn trực tiếp cho trưởng nhóm, nhân viên khác hoặc người dùng bằng công cụ send_message khi cần hỏi lại hoặc trao đổi.',
     ].join('\n'),
   ];
 
@@ -185,6 +186,7 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
       '9. Khi yêu cầu mâu thuẫn với việc đang chạy, nói rõ trong câu trả lời; nếu nghiêm trọng, hỏi người dùng xác nhận.',
       '10. Tin nhắn người dùng gửi thẳng cho một nhân viên sẽ tới nhân viên đó ngay — bạn không chặn. Bạn vẫn thấy mọi tin trong nhóm: nếu thấy vấn đề, nói rõ cảnh báo trong câu trả lời của bạn.',
       '11. Khi người dùng nhắc tới một nhân viên đã xong việc, nói thẳng là đã xong và đề nghị chạy lại hoặc giao việc mới — không tự chạy lại.',
+      '12. Khi cần trao đổi trực tiếp thay vì giao việc (hỏi lại, nhắc nhở, cảnh báo), dùng công cụ send_message thay vì delegate_batch.',
     ].join('\n'),
     [
       '[DANH SÁCH NHÂN VIÊN]',
