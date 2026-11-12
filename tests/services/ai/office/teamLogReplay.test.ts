@@ -8,7 +8,6 @@ import {
   getCursor,
   readMessagesAfter,
 } from '../../../../src/services/ai/office/teamEventLog';
-import { createTeamConsumer } from '../../../../src/services/ai/office/teamConsumer';
 import { USER_PARTICIPANT_ID } from '../../../../src/types/teamChat';
 
 /**
@@ -28,7 +27,7 @@ describe('team log — replay and crash recovery (37.1 §7)', () => {
     db = new TaskPlannerDatabase(`test-replay-${Date.now()}-${Math.random()}`);
   });
 
-  // §7.3: a remount mid-batch must not lose a message. The new consumer finds it because the
+  // §7.3: a remount mid-batch must not lose a message. The new reader finds it because the
   // cursor — not an in-memory set — says what has been read.
   it('a remount mid-batch re-reads the messages nobody read', async () => {
     await appendMessage({ teamId: TEAM, from: USER_PARTICIPANT_ID, to: [AGENT], content: 'one' }, db);
@@ -38,15 +37,9 @@ describe('team log — replay and crash recovery (37.1 §7)', () => {
     await advanceCursor(TEAM, AGENT, 1, db);
 
     // The remount reads exactly what the first mount never consumed.
-    const handledRemount: string[] = [];
-    await createTeamConsumer({
-      teamId: TEAM,
-      participantId: AGENT,
-      db,
-      handle: async (message) => void handledRemount.push(message.content),
-    }).pump();
-
-    expect(handledRemount).toEqual(['two']);
+    const cursor = await getCursor(TEAM, AGENT, db);
+    const pending = await readMessagesAfter(TEAM, cursor.lastSeq, db);
+    expect(pending.map((row) => row.content)).toEqual(['two']);
   });
 
   // §7.4: closing the database is a crash. An unread message is still unread on reopen,

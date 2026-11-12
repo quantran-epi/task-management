@@ -46,4 +46,21 @@ check_present() {
 check_present 'AGENT_MENTION'
 check_present 'derivePhase'
 
+# R3: no dead module. Every file in the office service must have a production caller.
+# This gate exists because `teamConsumer.ts` shipped with 10 passing tests and zero callers —
+# unit tests call the module directly, so they cannot prove the app uses it.
+echo "--- dead module check"
+for f in src/services/ai/office/*.ts; do
+  base=$(basename "$f" .ts)
+  case "$base" in
+    teamRunCoordinator|teamEventLog|teamPrompts|teamTools|teamRunManager|teamRunRegistry|scheduler|budgetGate|liveUseRegistry|deleteRefusalMessage|teamTranscriptRepo) ;;
+  esac
+  # Count import sites outside the file itself.
+  n=$(grep -rn "from '.*$base'" src/ --include='*.ts' --include='*.tsx' 2>/dev/null | grep -v "$f" | wc -l | tr -d ' ')
+  if [ "$n" = "0" ]; then
+    echo "FAIL: $f has no production importer"
+    fail=1
+  fi
+done
+
 exit $fail

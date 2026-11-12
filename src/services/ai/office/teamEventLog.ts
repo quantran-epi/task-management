@@ -85,7 +85,6 @@ export async function appendMessage(
     return row;
   });
 
-  notifyAppend(input.teamId);
   return { message, newlyDelivered: [...input.to] };
 }
 /**
@@ -135,7 +134,6 @@ export async function appendForExistingMessage(
     await db.teamMessages.add(row);
     return row;
   });
-  notifyAppend(input.teamId);
   return row;
 }
 
@@ -170,49 +168,6 @@ export async function readMessagesAfter(
     .between([teamId, afterSeq], [teamId, Infinity], false, false)
     .limit(limit)
     .toArray();
-}
-
-/**
- * Wake every consumer waiting on this team. Push, not poll: the consumer parks on this
- * promise instead of re-reading the log every 25 ms.
- */
-const appendWaiters = new Map<string, Set<() => void>>();
-
-function notifyAppend(teamId: string): void {
-  const waiters = appendWaiters.get(teamId);
-  if (!waiters) return;
-  appendWaiters.delete(teamId);
-  for (const resolve of waiters) resolve();
-}
-
-/** Resolves on the next append to this team, or rejects when `signal` aborts. */
-export function waitForAppend(teamId: string, signal?: AbortSignal): Promise<void> {
-  if (signal?.aborted) {
-    return Promise.reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
-  }
-  return new Promise<void>((resolve, reject) => {
-    let waiters = appendWaiters.get(teamId);
-    if (!waiters) {
-      waiters = new Set();
-      appendWaiters.set(teamId, waiters);
-    }
-    const set = waiters;
-    const cleanup = () => {
-      set.delete(wake);
-      if (set.size === 0) appendWaiters.delete(teamId);
-      signal?.removeEventListener('abort', onAbort);
-    };
-    const wake = () => {
-      cleanup();
-      resolve();
-    };
-    const onAbort = () => {
-      cleanup();
-      reject(signal?.reason ?? new DOMException('Aborted', 'AbortError'));
-    };
-    set.add(wake);
-    signal?.addEventListener('abort', onAbort, { once: true });
-  });
 }
 
 /** Every message in the team, oldest first — for rendering the transcript. */

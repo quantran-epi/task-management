@@ -962,6 +962,23 @@ export function createTeamRunCoordinator(
         // D-12/T-37-25: remember the synthesis row so a re-synthesis can mark it superseded.
         if (input.role === 'assistant' && input.messageKind === 'synthesis') {
           lastSynthesisMessageId = row.id;
+          // 37.1 R1: the synthesis is the leader's message to the USER. Agents read it (their
+          // cursor covers the whole log) but owe no reply — addressing them would inject the
+          // synthesis into their next tool round and make them answer it.
+          if (roster.lead) {
+            await appendForExistingMessage(
+              {
+                id: row.id,
+                teamId,
+                from: roster.lead.id,
+                to: [USER_PARTICIPANT_ID],
+                content: row.content,
+                kind: 'synthesis',
+                createdAt: row.createdAt,
+              },
+              db
+            );
+          }
         }
         const active = activeAssignmentByAgent.get(agentId);
         if (!active || input.role !== 'assistant' || input.messageKind !== 'report') {
@@ -971,6 +988,7 @@ export function createTeamRunCoordinator(
         // Dexie serializes `rw` scopes, so either the attempt is still live here (stamp, and
         // the terminal writer patches THIS row) or it already settled (this row arrived after
         // the terminal one — drop it, or the attempt would own two report bubbles).
+        let kept = false;
         await db.transaction('rw', [db.chatMessages, db.aiTeamAssignments], async () => {
           const assignment = await db.aiTeamAssignments.get(active.assignmentId);
           const settled =
@@ -991,7 +1009,27 @@ export function createTeamRunCoordinator(
           await db.aiTeamAssignments.update(active.assignmentId, {
             reportMessageId: row.id,
           });
+          kept = true;
         });
+        // 37.1 R1: the report is a real message (agent → lead). Logged only when the report
+        // row survived — a superseded report was deleted above and must not be in the log.
+        // Appended outside the transaction: `appendForExistingMessage` opens its own `rw`
+        // scope on `teamMessages`, which Dexie cannot nest inside this one.
+        if (kept) {
+          await appendForExistingMessage(
+            {
+              id: row.id,
+              teamId,
+              from: agentId,
+              to: [roster.lead?.id ?? USER_PARTICIPANT_ID],
+              content: row.content,
+              kind: 'report',
+              assignmentId: active.assignmentId,
+              createdAt: row.createdAt,
+            },
+            db
+          );
+        }
         return row;
       }) as ChatTurnRuntimeDeps['saveMessage'],
       onDelta: (delta) => {
@@ -2147,6 +2185,22 @@ export function createTeamRunCoordinator(
             batchId: batch.id,
             assignmentId: attemptRow.id,
             attemptNo: attemptRow.attemptNo,
+          },
+          db
+        );
+        // 37.1 R1: the dispatch is a real message (lead → agent) in the team log. Without
+        // this row the leader's own cursor would never cover what it told the agent, so
+        // "the leader has seen the whole conversation" would be false for its own turns.
+        await appendForExistingMessage(
+          {
+            id: instructionRow.id,
+            teamId,
+            from: lead.id,
+            to: [employee.id],
+            content: assignment.task,
+            kind: 'instruction',
+            assignmentId: attemptRow.id,
+            createdAt: instructionRow.createdAt,
           },
           db
         );

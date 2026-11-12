@@ -184,42 +184,36 @@ Kiểm tra quyền ở **một chỗ duy nhất**: hàm gửi tin. Không rải 
 
 ## 4. Luồng chạy
 
-### 4.1 Consumer loop — mỗi participant một vòng
+### 4.1 Ai khởi động lượt — một cơ chế, không phải hai
 
-```ts
-async function runConsumer(participantId: string): Promise<void> {
-  let presence = 'idle';                    // TẠM THỜI, không lưu DB
-  while (!disposed) {
-    const cursor = await getCursor(teamId, participantId);
-    // MỌI message trong log, không lọc theo `to` — ai cũng thấy cả nhóm đang nói gì.
-    const pending = await readMessagesAfter(teamId, cursor.lastSeq);
-    if (pending.length === 0) {
-      presence = 'idle';
-      await waitForAppend(teamId);          // push, không poll
-      continue;
-    }
-    for (const msg of pending) {
-      // Chỉ người được gọi tên mới có nghĩa vụ chạy; người khác chỉ đọc.
-      const addressed = msg.to.includes(participantId);
-      if (addressed) presence = 'working';
-      try {
-        if (addressed) await handle(participantId, msg);   // spawn task riêng (§4.2)
-      } finally {
-        await advanceCursor(teamId, participantId, msg.seq);   // ← seen by X at T
-      }
-    }
-  }
-  presence = 'offline';
-}
-```
+**Sự thật đã kiểm chứng (2026-11-12):** mọi nguồn ghi tin trong app này đều **biết ai phải
+hành động**. Không có nguồn nào ghi tin mà không biết người nhận cần làm gì.
 
-**Bốn điểm cốt lõi:**
+| Nguồn ghi | Ai phải hành động | Khởi động bằng |
+|---|---|---|
+| User gõ trong composer | người được tag, hoặc leader | `send()` gọi thẳng `runLeadTurn` / `startEmployeeTurn` |
+| Leader gọi `delegate_batch` | từng agent trong lô | `dispatchBatch` → `dispatchAssignment` |
+| Agent viết báo cáo | leader | `onBatchSettled` → `runLeadTurn` (tổng hợp) |
+| Lượt đang chạy nhận tin mới | chính lượt đó | `beforeToolRound` → `drainInbox` |
 
-0. **Cursor tiến qua MỌI message, `handle()` chỉ chạy khi được gọi tên.** Đây là điều làm "leader đã xem tin của tao với Eva" thành sự thật kiểm chứng được, mà leader không bị kéo chạy mỗi lượt (§1.1).
-1. **`presence` là biến cục bộ trong vòng lặp.** Không ai phải nhớ reset nó. Consumer chết → presence chết. Đây là lý do lỗi "treo đang tổng hợp mãi" (gap 9) **không thể tái diễn**: không có biến toàn cục nào để kẹt.
-2. **`advanceCursor` nằm trong `finally`.** Tin đã đọc thì đã đọc — kể cả khi `handle()` ném lỗi. Lý do: `handle()` có side-effect (ghi report, mở lượt), nên chạy lại sẽ nhân đôi. Lỗi của `handle()` là việc của `handle()` (nó tự báo trong transcript); consumer không được kẹt vòng lặp vì một tin hỏng. Message vẫn nằm nguyên trong log để người dùng đọc lại — mất phản hồi, không mất tin.
-3. **`waitForAppend` là push.** Không poll 25ms. Dùng Dexie `liveQuery` hoặc một `Promise` được resolve bởi `appendMessage`.
-4. **Không có "busy phase".** Leader rảnh = `cursor == head`. Gõ tin mới = append → consumer tỉnh. Gap 1 và 6 biến mất.
+Vì vậy **không có vòng lặp nền**. Thêm một consumer loop nữa là cơ chế thứ hai cho cùng một
+việc — đúng thứ §5 cấm. Hành vi người dùng thấy vẫn là event-driven: tin đến → lượt chạy ngay,
+không poll, không chờ.
+
+> **Đã xoá `teamConsumer.ts` (2026-11-12).** Nó được viết ở plan 07 nhưng **không có caller
+> production nào** — test của nó xanh vì test gọi trực tiếp nó, không phải vì app dùng nó.
+> Test xanh cho code chết vẫn xanh. Bài học: verify phải kiểm tra *đường chạy thật*, không chỉ
+> test đơn vị.
+
+**Bốn điểm cốt lõi (giữ nguyên tinh thần):**
+
+1. **Không có biến "presence" lưu DB.** Nó suy từ `AgentRunState` trong bộ nhớ, chết cùng
+   coordinator. Đây là lý do lỗi "treo đang tổng hợp mãi" (gap 9) không thể tái diễn.
+2. **`advanceCursor` nằm trong `finally`.** Tin đã đọc thì đã đọc — kể cả khi `handle()` ném
+   lỗi. Lý do: `handle()` có side-effect (ghi report, mở lượt), nên chạy lại sẽ nhân đôi.
+3. **Không có "busy phase".** Leader rảnh = cursor == head. Gõ tin mới → lượt mới.
+4. **Mọi tin đều vào log.** User, instruction, report, synthesis — cùng `id` với
+   `chatMessages`, nên cursor của mọi người phủ được toàn bộ cuộc nói chuyện.
 
 ### 4.2 Xử lý một message
 
@@ -289,8 +283,8 @@ Phân biệt:
 | Xoá | File | Vì sao |
 |---|---|---|
 | `phase`, `setPhase`, `LIVE_PHASES`, `BUSY_PHASES` | `teamRunCoordinator.ts:278-296,452,591` | Presence thay thế |
-| `runLeadTurnSerialized` | `:608` | Consumer loop thay thế; không cần xếp hàng |
-| Vòng poll 25ms trong `onBatchSettled` | `:2516-2525` | Push thay poll |
+| `runLeadTurnSerialized` | `:608` | `withLeadRuntime` thay thế |
+| Vòng poll 25ms trong `onBatchSettled` | `:2516-2525` | **GIỮ** — đây là chờ ledger settle, không phải chờ tin nhắn |
 | `pendingSteerMessageIds` | `:567` | Cursor thay thế |
 | `injectedSteerIdsByAttempt` | `:574` | Cursor thay thế |
 | `listeners:Set` + `notify()` | `:507,576` | **GIỮ** — xem ngoại lệ dưới |
@@ -371,7 +365,7 @@ Hai lỗi này độc lập với kiến trúc, phải sửa riêng:
 
 Đợt 2 — nền tảng participant/message/cursor
   ├── Schema V23: teamParticipants, teamMessages, teamReadCursors
-  ├── teamEventLog.ts + teamConsumer.ts
+  ├── teamEventLog.ts
   ├── Di trú coordinator sang consumer loop
   ├── Xoá §5 (grep = 0)
   └── Chứng minh I1-I5 + replay + crash

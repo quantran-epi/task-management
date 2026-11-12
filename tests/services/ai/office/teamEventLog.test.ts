@@ -12,7 +12,6 @@ import {
   listMessages,
   readMessagesAfter,
   seenBy,
-  waitForAppend,
 } from '../../../../src/services/ai/office/teamEventLog';
 import { USER_PARTICIPANT_ID } from '../../../../src/types/teamChat';
 
@@ -163,41 +162,5 @@ describe('teamEventLog — the unified message log', () => {
     await appendMessage({ teamId: TEAM, from: LEAD, to: [USER_PARTICIPANT_ID], content: 'b' }, db);
     const rows = await listMessages(TEAM, db);
     expect(rows.map((row) => row.content)).toEqual(['a', 'b']);
-  });
-
-  // I2: a consumer parked on the log wakes on the append — push, not a 25 ms poll.
-  it('wakes a waiter when a message is appended', async () => {
-    const waiter = waitForAppend(TEAM);
-    let woke = false;
-    void waiter.then(() => {
-      woke = true;
-    });
-
-    await appendMessage({ teamId: TEAM, from: USER_PARTICIPANT_ID, to: [LEAD], content: 'ping' }, db);
-    await waiter;
-    expect(woke).toBe(true);
-  });
-
-  it('does not wake a waiter for another team', async () => {
-    let woke = false;
-    const waiter = waitForAppend('team-2').then(() => {
-      woke = true;
-    });
-
-    await appendMessage({ teamId: TEAM, from: USER_PARTICIPANT_ID, to: [LEAD], content: 'ping' }, db);
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(woke).toBe(false);
-
-    await appendMessage({ teamId: 'team-2', from: USER_PARTICIPANT_ID, to: [LEAD], content: 'pong' }, db);
-    await waiter;
-    expect(woke).toBe(true);
-  });
-
-  // AIO-STEER-05: teardown while a consumer is parked must not hang.
-  it('rejects a waiter when its signal aborts', async () => {
-    const controller = new AbortController();
-    const waiter = waitForAppend(TEAM, controller.signal);
-    controller.abort();
-    await expect(waiter).rejects.toBeTruthy();
   });
 });

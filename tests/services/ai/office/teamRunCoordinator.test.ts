@@ -3839,6 +3839,62 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
     const teamLog = async (current: Harness) =>
       current.db.teamMessages.where('teamId').equals(current.team.id).sortBy('seq');
 
+    // 37.1 R1: the log must hold EVERY message a participant can see, not just the user's.
+    // Each of the four writers is checked by id, because the id is the join key between
+    // `chatMessages` (what the UI renders) and `teamMessages` (what routes and receipts).
+    it('logs every message: user, instruction, report, synthesis', async () => {
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            if (lastTextOf(options) === 'Làm báo cáo') {
+              await options.executeToolFn!(
+                'delegate_batch',
+                { assignments: [{ agentId: harness!.employees[0]!.id, task: 'Việc 1' }] },
+                harness!.db,
+                options.signal
+              );
+              return loopResult('Đã giao việc.');
+            }
+            return loopResult('Tổng hợp xong.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+        },
+      });
+      const current = harness;
+
+      await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
+
+      const chatRows = await current.db.chatMessages
+        .where('threadId')
+        .equals(current.threadId)
+        .toArray();
+      const log = await teamLog(current);
+      const loggedIds = new Set(log.map((row) => row.id));
+
+      // Every rendered message has a routing row with the same id.
+      for (const row of chatRows) {
+        expect(loggedIds.has(row.id)).toBe(true);
+      }
+
+      // And each writer is present, not just the user's.
+      const kinds = new Set(log.map((row) => row.kind));
+      expect(kinds.has('chat')).toBe(true);        // the user's request
+      expect(kinds.has('instruction')).toBe(true); // lead → agent
+      expect(kinds.has('report')).toBe(true);      // agent → lead
+      expect(kinds.has('synthesis')).toBe(true);   // lead → team
+
+      // Addressing is real: the instruction names the agent, the report names the lead.
+      const instruction = log.find((row) => row.kind === 'instruction')!;
+      expect(instruction.from).toBe(current.lead.id);
+      expect(instruction.to).toEqual([current.employees[0]!.id]);
+
+      const report = log.find((row) => row.kind === 'report')!;
+      expect(report.from).toBe(current.employees[0]!.id);
+      expect(report.to).toEqual([current.lead.id]);
+    });
+
     it('appends a mid-batch message addressed to the leader and the leader reads it', async () => {
       const gate = deferred();
       const leadTexts: string[] = [];
@@ -4087,8 +4143,14 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
       const drained = await current.coordinator.drainInbox(target.id);
       expect(drained).toEqual([]);
+      // The cursor covers the WHOLE log (so "seen" is real), including the leader's own
+      // reply — the agent simply owes nothing to any of it.
+      const log = await current.db.teamMessages
+        .where('teamId')
+        .equals(current.team.id)
+        .toArray();
       const cursor = await getCursor(current.team.id, target.id, current.db);
-      expect(cursor.lastSeq).toBe(1);
+      expect(cursor.lastSeq).toBe(Math.max(...log.map((row) => row.seq)));
     });
   });
 
