@@ -9,6 +9,7 @@ import {
 import { saveMessage } from '../../../db/repositories/chatRepo';
 import { describeToolMutationWithContext, normalizeToolName } from '../../../services/ai/aiTools';
 import { stripThinkingBlocks } from '../../../services/ai/nineRouterClient';
+import type { ChatCompletionMessage } from '../../../services/ai/types';
 import {
   preparePatch,
   type ArtifactPatchProposal,
@@ -80,8 +81,13 @@ export interface ChatTurnRequest {
   persistUserMessage?: boolean | undefined;
   /** D-12: `read-only` refuses every mutation before the artifact and auto-approve branches. */
   mutationPolicy?: 'approve' | 'read-only' | undefined;
-  /** D-21: awaited at every loop round boundary after the first, with the turn signal. */
-  beforeToolRound?: ((round: number, signal: AbortSignal) => Promise<void>) | undefined;
+  /**
+   * D-09/D-21: awaited at every loop round boundary including round 1, with the turn
+   * signal. Messages it returns are appended by the loop before the next model call.
+   */
+  beforeToolRound?:
+    | ((round: number, signal: AbortSignal) => Promise<ChatCompletionMessage[] | void>)
+    | undefined;
 }
 
 export interface ChatTurnOutcome {
