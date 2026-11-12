@@ -42,6 +42,7 @@ import {
 } from '../../../services/ai/office/teamRunCoordinator';
 import { getOrCreateRun } from '../../../services/ai/office/teamRunManager';
 import { advanceCursor } from '../../../services/ai/office/teamEventLog';
+import { setActiveTeamView } from '../../../services/ai/office/activeTeamView';
 import { USER_PARTICIPANT_ID, type MessageSeenEntry } from '../../../types/teamChat';
 import type { ChatTurnRuntimeDeps } from '../runtime/chatTurnRuntime';
 import { AiChatWidget } from '../AiChatWidget';
@@ -461,6 +462,13 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
    * background tab has not been read) and the transcript is scrolled to the newest message
    * (a message below the fold has not been read either). Anything looser makes ✓✓ a lie.
    */
+  // 37.1 R13: tell the shell this team is the one on screen, so its messages do not also
+  // raise an OS notification. Cleared on unmount — a closed workspace is not focused.
+  useEffect(() => {
+    setActiveTeamView(team.id);
+    return () => setActiveTeamView(null);
+  }, [team.id]);
+
   const headSeq = teamLog.reduce((max, row) => (row.seq > max ? row.seq : max), 0);
   const [atBottom, setAtBottom] = useState(true);
   const [tabVisible, setTabVisible] = useState(
@@ -468,7 +476,15 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   );
   useEffect(() => {
     if (typeof document === 'undefined') return;
-    const onVisibility = () => setTabVisible(document.visibilityState !== 'hidden');
+    const onVisibility = () => {
+      const visible = document.visibilityState !== 'hidden';
+      setTabVisible(visible);
+      // 37.1 R13: leaving the tab un-pins the viewport. Without this, coming back would
+      // immediately mark everything read (the viewport was still "at bottom"), so the badge
+      // and the "Tin mới" divider would flash and vanish before the user could see them.
+      // Now the user has to scroll to the newest message — which is what "read" means.
+      if (!visible) setAtBottom(false);
+    };
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
   }, []);

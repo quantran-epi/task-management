@@ -104,13 +104,25 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
     return pendingConfirmation?.summary ? renderSafeMarkdown(pendingConfirmation.summary) : '';
   }, [pendingConfirmation?.summary]);
 
+  /**
+   * 37.1 R11/R13: only a scroll the USER performed counts as reading. The transcript
+   * auto-scrolls on every new message, and treating that as "read" made the unread badge
+   * flash and vanish the instant a hidden tab was focused again.
+   */
+  const programmaticScrollRef = useRef(false);
+
   const reportAtBottom = () => {
     const node = containerRef.current;
     if (!node || !onAtBottomChange) return;
+    if (programmaticScrollRef.current) return;
     onAtBottomChange(node.scrollHeight - node.scrollTop - node.clientHeight < 48);
   };
 
   const scrollToBottom = (instant = false) => {
+    programmaticScrollRef.current = true;
+    requestAnimationFrame(() => {
+      programmaticScrollRef.current = false;
+    });
     if (containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }

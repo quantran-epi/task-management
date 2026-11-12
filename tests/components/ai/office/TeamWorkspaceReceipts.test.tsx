@@ -207,6 +207,26 @@ describe('TeamWorkspace receipts (37.1 R10, R11, R13)', () => {
     spy.mockRestore();
   });
 
+  it('R13: returning to the tab keeps the badge until the user scrolls', async () => {
+    const visibility = vi
+      .spyOn(document, 'visibilityState', 'get')
+      .mockReturnValue('hidden' as DocumentVisibilityState);
+    await seedLeadMessage('Tin đến khi tab đang ẩn.');
+    renderWorkspace();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('team-unread-badge')).toBeInTheDocument();
+    });
+
+    // Back to the visible tab. The transcript is still not "read" — nothing was scrolled by
+    // the user — so the badge must survive the focus event.
+    visibility.mockReturnValue('visible' as DocumentVisibilityState);
+    document.dispatchEvent(new Event('visibilitychange'));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.getByTestId('team-unread-badge')).toBeInTheDocument();
+    visibility.mockRestore();
+  });
+
   it('R13: reading everything clears the badge', async () => {
     await seedLeadMessage('Tin duy nhất.');
     renderWorkspace();

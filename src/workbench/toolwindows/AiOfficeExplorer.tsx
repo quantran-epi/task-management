@@ -10,6 +10,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { listEmployees, listLeads } from '../../db/repositories/aiOfficeRepo';
 import { deleteTeam, listTeams } from '../../db/repositories/aiTeamRepo';
+import { USER_PARTICIPANT_ID } from '../../types/teamChat';
 import { disposeRun } from '../../services/ai/office/teamRunManager';
 import { useLayoutStore } from '../store/layoutStore';
 import { TeamEditorDrawer } from '../../components/ai/office/TeamEditorDrawer';
@@ -45,6 +46,29 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
   const leads = useLiveQuery(() => listLeads(db), [db]) ?? [];
   const employees = useLiveQuery(() => listEmployees(db), [db]) ?? [];
   const members = useLiveQuery(() => db.aiTeamMembers.toArray(), [db]) ?? [];
+
+  /**
+   * 37.1 R13: unread per team, live. Read from the log and the user's cursors — the same two
+   * tables the workspace uses — so the explorer badge and the in-chat badge cannot disagree.
+   * A `liveQuery` means a message arriving while the user is elsewhere updates this without
+   * any interaction.
+   */
+  const unreadByTeam = useLiveQuery(async () => {
+    const cursors = await db.teamReadCursors.toArray();
+    const cursorSeq = new Map(
+      cursors
+        .filter((row) => row.participantId === USER_PARTICIPANT_ID)
+        .map((row) => [row.teamId, row.lastSeq])
+    );
+    const rows = await db.teamMessages.toArray();
+    const counts = new Map<string, number>();
+    for (const message of rows) {
+      if (message.from === USER_PARTICIPANT_ID) continue;
+      if (message.seq <= (cursorSeq.get(message.teamId) ?? 0)) continue;
+      counts.set(message.teamId, (counts.get(message.teamId) ?? 0) + 1);
+    }
+    return counts;
+  }, [db]) ?? new Map<string, number>();
 
   const activeCount = teams.filter((t) => t.status === 'active').length;
 
@@ -254,6 +278,28 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
                     </div>
                   </div>
                 </div>
+
+                {(unreadByTeam.get(team.id) ?? 0) > 0 && (
+                  <span
+                    data-testid={`ai-office-team-unread-${team.id}`}
+                    aria-label={`${unreadByTeam.get(team.id)} tin chưa đọc`}
+                    style={{
+                      flexShrink: 0,
+                      minWidth: 18,
+                      height: 18,
+                      padding: '0 5px',
+                      borderRadius: 9,
+                      background: 'var(--danger, #c54e58)',
+                      color: '#fff',
+                      fontSize: 10,
+                      fontWeight: 700,
+                      lineHeight: '18px',
+                      textAlign: 'center',
+                    }}
+                  >
+                    {unreadByTeam.get(team.id)}
+                  </span>
+                )}
 
                 <Tag
                   color={statusColor}

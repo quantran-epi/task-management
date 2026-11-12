@@ -27,6 +27,7 @@ import { AIChatProvider, useAIChat } from '../../context/AIChatContext';
 import { useServiceWorkerUpdate } from '../../hooks/useServiceWorkerUpdate';
 import { useNotifications } from '../../hooks/useNotifications';
 import { useDesktopNotification } from '../../hooks/useDesktopNotification';
+import { useTeamChatNotifications } from '../../hooks/useTeamChatNotifications';
 import { useTimerAlertMonitor } from '../../hooks/useTimerAlertMonitor';
 import { useLocalSqlitePersistence } from '../../hooks/useLocalSqlitePersistence';
 import { useTeamRunTeardown } from '../../hooks/useTeamRunTeardown';
@@ -113,6 +114,10 @@ const AppShellInner: React.FC<AppShellProps> = ({
 
   // Desktop Notification Startup Hook (D-18, D-19)
   useDesktopNotification({ notifications });
+
+  // 37.1 R13: a team message the user has not read raises an OS notification in real time,
+  // whether or not the team workspace is open.
+  useTeamChatNotifications();
 
   // Global Running Timer Threshold & Allocation Alert Monitor
   useTimerAlertMonitor();
