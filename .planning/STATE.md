@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
 status: executing
-stopped_at: Completed 37.1-02-PLAN.md
-last_updated: "2026-11-12T04:19:53.154Z"
-last_activity: 2026-11-12 -- Phase 37.1 plan 01 complete (event-driven delegate_batch)
+stopped_at: Completed 37.1-03-PLAN.md
+last_updated: "2026-11-12T04:21:33.000Z"
+last_activity: 2026-11-12 -- Phase 37.1 plan 03 complete (persisted steer contract)
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 31
-  completed_plans: 28
+  completed_plans: 29
   percent: 43
 current_phase: 37
 current_phase_name: Runtime reliability + concurrency
@@ -28,15 +28,15 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 Phase: 37.1 (live-steering-leader-amends-assignments-and-steers-running-a) — EXECUTING
 Plan: 3 of 6
 Status: Ready to execute
-Last activity: 2026-11-12 -- Phase 37.1 plan 01 complete (event-driven delegate_batch)
+Last activity: 2026-11-12 -- Phase 37.1 plan 03 complete (persisted steer contract)
 
 ## Session Continuity
 
-Last session: 2026-11-12T04:19:53.149Z
-Stopped at: Completed 37.1-02-PLAN.md
-Resume file: .planning/phases/37.1-live-steering-leader-amends-assignments-and-steers-running-a/37.1-03-PLAN.md
+Last session: 2026-11-12T04:21:33.000Z
+Stopped at: Completed 37.1-03-PLAN.md
+Resume file: .planning/phases/37.1-live-steering-leader-amends-assignments-and-steers-running-a/37.1-04-PLAN.md
 
-Progress: [█████░░░░░] 50%
+Progress: [██████░░░░] 60%
 
 ## Milestone v1.4 Map
 
@@ -140,6 +140,9 @@ Progress: [█████░░░░░] 50%
 - [Phase 37]: persisted message.runStatus beats the live agentStatus: terminal agents are filtered out of snapshot.agents, so a stopped attempt has no live status and a remount has none at all
 - [Phase ?]: beforeToolRound returns messages instead of being fire-and-forget; the loop appends them verbatim
 - [Phase ?]: The round-boundary hook runs after in-loop compaction and fires on round 1 too
+- [Phase 37.1]: 'steer' is widened in all six messageKind declarations at once — a partial widen either fails tsc or silently strips the row on restore
+- [Phase 37.1]: steerMessageIds is declared on the strictObject assignment backup schema (an undeclared key fails loudly) and is safe against the forbidden-key gate
+- [Phase 37.1]: the steer contract adds no table, no Dexie version and no BACKUP_SCHEMA_VERSION bump — every addition is optional
 
 ## Performance Metrics
 
@@ -155,3 +158,4 @@ Progress: [█████░░░░░] 50%
 | Phase 37 P08 | 22 min | 2 tasks | 8 files |
 | Phase 37.1 P01 | 55 min | 3 tasks | 2 files |
 | Phase 37.1 P02 | ~12m | 3 tasks | 4 files |
+| Phase 37.1 P03 | ~6m | 3 tasks | 7 files |

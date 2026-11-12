@@ -202,7 +202,7 @@ Plans:
 **Scope source:** deferred from `.planning/phases/37-runtime-reliability-concurrency/37-CONTEXT.md` (D-08/D-19/D-22/D-24). Schema is already in place from Phase 37.
 **Research flag:** standard patterns — `beforeToolRound` seam exists at `src/services/ai/aiOrchestratorLoop.ts`; defects/contracts are at `file:line` in 37-CONTEXT.
 
-**Plans:** 2/6 plans executed
+**Plans:** 3/6 plans executed
 Plans:
 **Wave 1**
 
@@ -211,7 +211,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 37.1-03-PLAN.md — persisted contract: `'steer'` in six `messageKind` sites, `steerMessageIds`, `'leader-amend'`, `'skipped'`
+- [x] 37.1-03-PLAN.md — persisted contract: `'steer'` in six `messageKind` sites, `steerMessageIds`, `'leader-amend'`, `'skipped'`
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
