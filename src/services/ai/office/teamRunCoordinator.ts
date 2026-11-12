@@ -182,7 +182,7 @@ export interface TeamRunCoordinator {
    * read it at its next round; `'refused'` means the addressed agent already settled (the
    * leader answers instead); `'blocked'` means the coordinator is disposed.
    */
-  send(text: string, targetAgentId?: string): Promise<'started' | 'steered' | 'refused' | 'blocked'>;
+  send(text: string): Promise<'started' | 'steered' | 'refused' | 'blocked'>;
   /**
    * Internal seam (D-09/D-22): the ONE terminal writer for an attempt. 37-04's `stopAgent`
    * and `abortAll` call it; exported so the "exactly one report row under concurrency"
@@ -1787,8 +1787,7 @@ export function createTeamRunCoordinator(
   }
 
   async function send(
-    text: string,
-    targetAgentId?: string
+    text: string
   ): Promise<'started' | 'steered' | 'refused' | 'blocked'> {
     // D-18: a disposed coordinator is inert. Nothing may start, persist or register — and
     // no state change will ever make it work again, so the caller must not requeue.
@@ -1808,9 +1807,7 @@ export function createTeamRunCoordinator(
     // 37.1 §1.1: ONE primitive. The message is appended first — always, whatever is running.
     // `to[]` is who must RESPOND; everyone reads it, so the leader can see a message the user
     // sent to Eva and intervene, and the user can ask the leader to check it.
-    const target = targetAgentId
-      ? roster.employees.find((row) => row.id === targetAgentId && memberIds.has(row.id))
-      : parseMentionTarget(text);
+    const target = parseMentionTarget(text);
     const recipient = target?.id ?? roster.lead?.id;
 
     const row = await saveTeamMessage(
