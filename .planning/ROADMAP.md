@@ -186,6 +186,28 @@ Plans:
 
 - [x] 37-08-PLAN.md — "Chưa hoàn tất" + "Chạy lại" bubble affordance wiring; observed Tauri walkthrough closing the phase (D-13/D-27, C-15)
 
+### Phase 37.1: Live steering — leader amends assignments and steers running agents mid-run (INSERTED)
+
+**Goal:** The user can add a requirement mid-run, the leader re-plans against the live ledger, cancels or rewrites `queued` assignments, and pushes a steering message that a running agent actually reads at its next tool round — without restarting the batch.
+**Requirements**: TBD (candidate IDs: AIO-STEER-01..05 — settle in discuss)
+**Depends on:** Phase 37
+**Success Criteria** (what must be TRUE):
+
+1. A message sent while a batch is running reaches the leader and produces a visible re-plan, not a queued second turn.
+2. The leader can cancel a `queued` assignment and update the task of another via `amend_assignments`; the scheduler honours both without a second source of truth.
+3. A steering message addressed to a running agent is drained at its next `beforeToolRound` and appears in its transcript attribution.
+4. Steering an agent that already settled is refused visibly; the ledger stays consistent.
+5. Abort/teardown while steering is in flight leaves no active turns and no further writes.
+
+**Scope source:** deferred from `.planning/phases/37-runtime-reliability-concurrency/37-CONTEXT.md` (D-08/D-19/D-22/D-24). Schema is already in place from Phase 37.
+**Research flag:** standard patterns — `beforeToolRound` seam exists at `src/services/ai/aiOrchestratorLoop.ts`; defects/contracts are at `file:line` in 37-CONTEXT.
+
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 37.1 to break down)
+
 ### Phase 38: Hard token budget + accurate measurement
 
 **Goal:** The budget is genuinely hard, input and output are both charged on every request, and the numbers the user sees are correct.

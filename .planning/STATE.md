@@ -45,6 +45,7 @@ Progress: [█████░░░░░] 50%
 - [x] Phase 35: Shared-primitive extraction + SDLC behavior removal
 - [x] Phase 36: Data model, multi-chat identity, backup/migration
 - [ ] Phase 37: Runtime reliability + concurrency
+- [ ] Phase 37.1: Live steering — leader amends assignments, steers running agents (INSERTED)
 - [ ] Phase 38: Hard token budget + accurate measurement
 - [ ] Phase 39: Skill versioning + enrichment approval
 - [ ] Phase 40: Explorer UX, CRUD correctness, observed walkthrough
@@ -57,6 +58,10 @@ Progress: [█████░░░░░] 50%
 | 261111-d2p | Close remaining phase-36 review findings: WR-07/08/09/11/12 and IN-01..IN-04/06/07/08, record WR-13 in ROADMAP phase 38 | 2026-11-11 | 89186433 | [261111-d2p-close-phase-36-review-findings-part-two](./quick/261111-d2p-close-phase-36-review-findings-part-two/) |
 
 ## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 37.1 inserted after Phase 37 (URGENT): Live steering — leader amends assignments and steers running agents mid-run. Scope deferred from 37-CONTEXT.md D-19: outbox+inbox agent, drain at `beforeToolRound`, `amend_assignments` tool, leader re-plan mid-batch, steer UI.
 
 - Phase 34 marked complete with zero tests covering the AI Office runtime and five live defects (hung batch run, unguarded double-submit, phantom active turn, `targetAgentId` stripped on restore, bare deletes breaking export). "Phase 34 complete" is not evidence of quality.
 - Research verdict: keep and harden the existing coordinator/budget gate; zero new npm dependencies.
