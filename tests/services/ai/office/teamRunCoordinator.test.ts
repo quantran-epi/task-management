@@ -323,6 +323,8 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
         agents: [],
         pendingPlan: null,
         pendingApproval: null,
+        pendingSteerMessageIds: [],
+        undeliveredSteerCountByAgent: {},
         pausedAgentId: null,
         pausedAgentName: null,
         lastPlan: null,
@@ -1021,8 +1023,8 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
     it('counts usage on a second turn instead of treating it as already reported (CR-01)', async () => {
       harness = await createHarness({
-        // A budget that does not park at 700, so both turns can run back to back: D-21
-        // makes a send during a parked phase `'busy'` instead of a second turn.
+        // A budget that does not park at 700, so both turns can run back to back instead of
+        // the second submit being routed as a steer.
         teamPatch: { budgetTokens: 12000 },
         scripts: {
           [EMP_A_MODEL]: async (options) => {
@@ -1551,7 +1553,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       roster.lead = undefined;
       roster.teamRow = { ...harness.team, leadId: undefined };
 
-      // The submit was accepted (it is not `'busy'`/`'blocked'`), it simply starts nothing.
+      // The submit was accepted (it is not `'blocked'`), it simply starts nothing.
       await expect(coordinator.send('Xin chào')).resolves.toBe('started');
       expect(coordinator.getState().agents).toEqual([]);
     });
@@ -1800,7 +1802,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       }
     });
 
-    it('resolves send() as started, busy or blocked and never as a dropped submit', async () => {
+    it('resolves send() as started, steered or blocked and never as a dropped submit', async () => {
       const gate = deferred();
       harness = await createHarness({
         teamPatch: { autoSplitEnabled: true },
@@ -1818,9 +1820,8 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
       const sent = current.coordinator.send('Làm báo cáo');
       await waitFor(() => current.coordinator.getState().phase === 'batch-running');
-      // A live turn: requeue.
-      // plan 04 flips this to 'steered'
-      await expect(current.coordinator.send('chen ngang')).resolves.toBe('busy');
+      // D-01/D-02: a live turn takes the message as a steer instead of refusing it.
+      await expect(current.coordinator.send('chen ngang')).resolves.toBe('steered');
 
       gate.release();
       await sent;
@@ -3777,6 +3778,373 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       ).find((row) => row.agentId === current.lead.id)!;
       // Both lead turns report; a per-agent baseline would lose the dispatch turn's 300.
       expect(leadMember.usedTokens).toBe(700);
+    });
+  });
+
+  describe('steer delivery (37.1 D-01/D-02/D-16/D-17/D-28)', () => {
+    const assignmentsFor = (employees: AiEmployee[]) =>
+      employees.map((row, index) => ({ agentId: row.id, task: `Việc ${index + 1}` }));
+
+    const steerRows = async (current: Harness) =>
+      (
+        await current.db.chatMessages.where('threadId').equals(current.threadId).toArray()
+      ).filter((row) => row.messageKind === 'steer');
+
+    const systemPromptOf = (options: AiOrchestratorLoopOptions): string =>
+      options.messages
+        .filter((message) => message.role === 'system')
+        .map((message) => String(message.content))
+        .join('\n');
+
+    const lastTextOf = (options: AiOrchestratorLoopOptions): string =>
+      String(options.messages.at(-1)?.content ?? '');
+
+    it('a mid-batch message returns steered and starts a lead re-plan turn', async () => {
+      const gate = deferred();
+      const leadTexts: string[] = [];
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            leadTexts.push(lastTextOf(options));
+            if (leadTexts.length === 1) {
+              await options.executeToolFn!(
+                'delegate_batch',
+                { assignments: assignmentsFor(harness!.employees) },
+                harness!.db,
+                options.signal
+              );
+              return loopResult('Đã giao việc.');
+            }
+            return loopResult('Đã đọc chỉ đạo.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getState().phase === 'batch-running');
+
+      await expect(
+        current.coordinator.send('đổi hướng sang kiểm thử')
+      ).resolves.toBe('steered');
+
+      const rows = await steerRows(current);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        role: 'user',
+        messageKind: 'steer',
+        content: 'đổi hướng sang kiểm thử',
+      });
+      // D-15: a user row, never an agent bubble.
+      expect(rows[0]!.agentId).toBeUndefined();
+
+      await waitFor(() => leadTexts.length === 2);
+      expect(leadTexts[1]).toBe('đổi hướng sang kiểm thử');
+
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+    });
+
+    it('an @agent steer is NOT delivered until the leader calls deliver_steer', async () => {
+      const gate = deferred();
+      const injected: string[] = [];
+      const deliveries: string[] = [];
+      let steerId = '';
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            if (!lastTextOf(options).includes('@[')) {
+              await options.executeToolFn!(
+                'delegate_batch',
+                { assignments: assignmentsFor(harness!.employees) },
+                harness!.db,
+                options.signal
+              );
+              return loopResult('Đã giao việc.');
+            }
+            // The steer turn: the id comes from the prompt, exactly as a real lead would.
+            steerId = /id: ([0-9a-f-]{36})/.exec(systemPromptOf(options))?.[1] ?? '';
+            deliveries.push(
+              await options.executeToolFn!(
+                'deliver_steer',
+                { steerMessageId: steerId },
+                harness!.db,
+                options.signal
+              )
+            );
+            return loopResult('Đã giao chỉ đạo.');
+          },
+          [EMP_A_MODEL]: async (options) => {
+            await gate.promise;
+            const messages = await options.beforeToolRound?.(2, options.signal);
+            if (messages && messages.length > 0) injected.push(JSON.stringify(messages));
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+      const target = current.employees[0]!;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getState().phase === 'batch-running');
+
+      await expect(
+        current.coordinator.send(`@[${target.name}](agent:${target.id}) đổi hướng`)
+      ).resolves.toBe('steered');
+
+      // D-28: the leader is the gate — nothing is written to the assignment yet.
+      const beforeDelivery = await current.db.aiTeamAssignments.toArray();
+      expect(beforeDelivery.every((row) => (row.steerMessageIds ?? []).length === 0)).toBe(true);
+
+      await waitFor(() => deliveries.length === 1);
+      expect(JSON.parse(deliveries[0]!)).toMatchObject({ delivered: true, agentId: target.id });
+
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+
+      expect(injected).toHaveLength(1);
+      expect(injected[0]).toContain('[Chỉ đạo từ người dùng]');
+      expect(injected[0]).toContain('đổi hướng');
+    });
+
+    it('a held steer never reaches the agent', async () => {
+      const gate = deferred();
+      const injected: string[] = [];
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            if (!lastTextOf(options).includes('@[')) {
+              await options.executeToolFn!(
+                'delegate_batch',
+                { assignments: assignmentsFor(harness!.employees) },
+                harness!.db,
+                options.signal
+              );
+              return loopResult('Đã giao việc.');
+            }
+            // D-18: the leader holds a problematic steer and never calls deliver_steer.
+            return loopResult('Chỉ đạo này mâu thuẫn với việc đang chạy, bạn xác nhận giúp.');
+          },
+          [EMP_A_MODEL]: async (options) => {
+            await gate.promise;
+            const messages = await options.beforeToolRound?.(2, options.signal);
+            if (messages && messages.length > 0) injected.push(JSON.stringify(messages));
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+      const target = current.employees[0]!;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getState().phase === 'batch-running');
+      await current.coordinator.send(`@[${target.name}](agent:${target.id}) đổi hướng`);
+      await waitFor(() => current.coordinator.getState().pendingSteerMessageIds.length === 0);
+
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+
+      expect(injected).toEqual([]);
+      const rows = await current.db.aiTeamAssignments.toArray();
+      expect(rows.every((row) => (row.steerMessageIds ?? []).length === 0)).toBe(true);
+      // The row survives as the honest record of a held steer.
+      expect(await steerRows(current)).toHaveLength(1);
+    });
+
+    it('a steer to a settled agent returns refused and writes no steerMessageIds', async () => {
+      const gate = deferred();
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            if (lastTextOf(options) === 'Làm báo cáo') {
+              await options.executeToolFn!(
+                'delegate_batch',
+                { assignments: assignmentsFor(harness!.employees) },
+                harness!.db,
+                options.signal
+              );
+              return loopResult('Đã giao việc.');
+            }
+            return loopResult('Nhân viên đã xong việc.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+          [EMP_B_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('B xong');
+          },
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+      const settled = current.employees[0]!;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getState().phase === 'batch-running');
+      await waitFor(
+        () =>
+          current.coordinator
+            .getState()
+            .agents.some((row) => row.agentId === settled.id && row.status === 'done')
+      );
+
+      await expect(
+        current.coordinator.send(`@[${settled.name}](agent:${settled.id}) đổi hướng`)
+      ).resolves.toBe('refused');
+
+      const rows = await current.db.aiTeamAssignments.toArray();
+      expect(rows.every((row) => (row.steerMessageIds ?? []).length === 0)).toBe(true);
+
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+    });
+
+    it('the leader reads an @agent steer too', async () => {
+      const gate = deferred();
+      const leadPrompts: string[] = [];
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            if (!lastTextOf(options).includes('@[')) {
+              await options.executeToolFn!(
+                'delegate_batch',
+                { assignments: assignmentsFor(harness!.employees) },
+                harness!.db,
+                options.signal
+              );
+              return loopResult('Đã giao việc.');
+            }
+            leadPrompts.push(lastTextOf(options));
+            return loopResult('Đã đọc.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+      const target = current.employees[0]!;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getState().phase === 'batch-running');
+      await current.coordinator.send(`@[${target.name}](agent:${target.id}) đổi hướng`);
+      await waitFor(() => leadPrompts.length === 1);
+
+      // D-16: the group chat rule — the leader reads every message, mentions included.
+      expect(leadPrompts[0]).toContain('đổi hướng');
+
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+    });
+
+    it('the lead prompt carries the pending steer id so deliver_steer is callable', async () => {
+      const gate = deferred();
+      let prompt = '';
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            if (!lastTextOf(options).includes('@[')) {
+              await options.executeToolFn!(
+                'delegate_batch',
+                { assignments: assignmentsFor(harness!.employees) },
+                harness!.db,
+                options.signal
+              );
+              return loopResult('Đã giao việc.');
+            }
+            prompt = systemPromptOf(options);
+            return loopResult('Đã đọc.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+      const target = current.employees[0]!;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getState().phase === 'batch-running');
+      await current.coordinator.send(`@[${target.name}](agent:${target.id}) đổi hướng`);
+      await waitFor(() => prompt.length > 0);
+
+      const steer = (await steerRows(current))[0]!;
+      expect(prompt).toContain('CHỈ ĐẠO CHỜ XỬ LÝ');
+      expect(prompt).toContain(steer.id);
+      expect(prompt).toContain('deliver_steer');
+      // D-04: the ledger is what the leader reports from.
+      expect(prompt).toContain('HIỆN TRẠNG LÔ ĐANG CHẠY');
+      expect(prompt).toContain(target.name);
+
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+    });
+
+    it('clears the unread badge when the leader drains', async () => {
+      const gate = deferred();
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            if (lastTextOf(options) === 'Làm báo cáo') {
+              await options.executeToolFn!(
+                'delegate_batch',
+                { assignments: assignmentsFor(harness!.employees) },
+                harness!.db,
+                options.signal
+              );
+              return loopResult('Đã giao việc.');
+            }
+            return loopResult('Đã đọc.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getState().phase === 'batch-running');
+
+      await current.coordinator.send('chỉ đạo giữa lô');
+      // D-03: the row is unread until the leader's re-plan turn reads it.
+      expect(current.coordinator.getState().pendingSteerMessageIds).toHaveLength(1);
+      await waitFor(() => current.coordinator.getState().pendingSteerMessageIds.length === 0);
+
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
     });
   });
 });

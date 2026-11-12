@@ -12,6 +12,7 @@ import {
   type AiLead,
   type AiSkill,
   type AiTeam,
+  type AiTeamAssignment,
 } from '../../../../src/types/aiOffice';
 import type { ChatMessage } from '../../../../src/types/models';
 
@@ -75,6 +76,26 @@ function instructionRow(id: string, content: string, agentId = employee.id): Cha
 
 function reportRow(id: string, content: string, agentId = employee.id): ChatMessage {
   return row({ id, content, role: 'assistant', agentId, agentKind: 'employee', messageKind: 'report' });
+}
+
+function assignmentRow(
+  id: string,
+  runStatus: 'queued' | 'running',
+  task = 'Việc đang giao'
+): AiTeamAssignment {
+  return {
+    id,
+    batchId: 'batch-1',
+    agentId: employee.id,
+    agentName: employee.name,
+    model: 'model-x',
+    task,
+    runStatus,
+    stopReason: 'none',
+    attemptNo: 1,
+    incomplete: false,
+    queuedAt: '2026-01-01T00:00:00.000Z',
+  };
 }
 
 function buildEmployee(overrides: Partial<Parameters<typeof buildEmployeeTurnRequest>[0]> = {}) {
@@ -265,5 +286,105 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
     expect(block.match(/NHÃN/g)?.length).toBeGreaterThanOrEqual(2);
     // The body cannot close the block early.
     expect(block.split('\n').filter((l) => l.includes('KẾT THÚC DỮ LIỆU KHÔNG ĐÁNG TIN'))).toHaveLength(1);
+  });
+
+  it('renders the live ledger with the queued/running distinction', () => {
+    const system = buildLeadTurnRequest({
+      lead,
+      team,
+      roster: [employee],
+      linkedItems: [],
+      originalRequest: 'Chỉ đạo giữa lô',
+      recentTurns: [],
+      ledger: [assignmentRow('a-queued', 'queued'), assignmentRow('a-running', 'running')],
+    })
+      .systemMessages.map((m) => m.content)
+      .join('\n');
+
+    expect(system).toContain('HIỆN TRẠNG LÔ ĐANG CHẠY');
+    expect(system).toContain('a-queued');
+    expect(system).toContain('a-running');
+    // Only the queued row may be cancelled or rewritten (D-06).
+    const queuedLine = system.split('\n').find((line) => line.includes('a-queued'))!;
+    const runningLine = system.split('\n').find((line) => line.includes('a-running'))!;
+    expect(queuedLine).toContain('có thể huỷ hoặc sửa');
+    expect(runningLine).not.toContain('có thể huỷ hoặc sửa');
+    expect(runningLine).toContain('chỉ có thể gửi chỉ đạo');
+  });
+
+  it('wraps a ledger task as untrusted data', () => {
+    const system = buildLeadTurnRequest({
+      lead,
+      team,
+      roster: [employee],
+      linkedItems: [],
+      originalRequest: 'Chỉ đạo giữa lô',
+      recentTurns: [],
+      ledger: [assignmentRow('a-1', 'queued', 'VIỆC-TỪ-MODEL-xyz')],
+    })
+      .systemMessages.map((m) => m.content)
+      .join('\n');
+
+    const [header, footer] = [
+      wrapUntrusted('VIỆC ĐANG GIAO', '').split('\n')[0]!,
+      wrapUntrusted('VIỆC ĐANG GIAO', '').split('\n').at(-1)!,
+    ];
+    expect(system.indexOf(header)).toBeGreaterThanOrEqual(0);
+    expect(system.indexOf('VIỆC-TỪ-MODEL-xyz')).toBeGreaterThan(system.indexOf(header));
+    expect(system.indexOf(footer)).toBeGreaterThan(system.indexOf('VIỆC-TỪ-MODEL-xyz'));
+  });
+
+  it('lists pending steers with their ids so the leader can deliver them', () => {
+    const system = buildLeadTurnRequest({
+      lead,
+      team,
+      roster: [employee],
+      linkedItems: [],
+      originalRequest: 'Chỉ đạo giữa lô',
+      recentTurns: [],
+      pendingSteers: [{ id: 'steer-abc', content: 'đổi hướng sang kiểm thử', targetAgentName: 'Lan' }],
+    })
+      .systemMessages.map((m) => m.content)
+      .join('\n');
+
+    expect(system).toContain('CHỈ ĐẠO CHỜ XỬ LÝ');
+    expect(system).toContain('steer-abc');
+    expect(system).toContain('đổi hướng sang kiểm thử');
+    expect(system).toContain('deliver_steer');
+  });
+
+  it('never shows agent B a steer addressed to agent A', () => {
+    const other: AiEmployee = { ...employee, id: 'emp-2', name: 'Bình' };
+    const steerRow = row({
+      id: 's-1',
+      role: 'user',
+      content: 'CHỈ-ĐẠO-CHO-A-xyz',
+      messageKind: 'steer',
+      targetAgentId: employee.id,
+    });
+    // `sanitizeHistoryTurns` drops a trailing unanswered user row, so pair the steer with a
+    // reply — otherwise the assertion would pass for the wrong reason.
+    const reply = row({ id: 'r-1', role: 'assistant', content: 'đã nhận chỉ đạo' });
+    const recentTurns = [steerRow, reply];
+
+    const forB = buildEmployeeTurnRequest({
+      employee: other,
+      team,
+      instruction: 'việc của B',
+      originalRequest: 'yêu cầu',
+      assignmentHistory: [],
+      recentTurns,
+    });
+    const forA = buildEmployeeTurnRequest({
+      employee,
+      team,
+      instruction: 'việc của A',
+      originalRequest: 'yêu cầu',
+      assignmentHistory: [],
+      recentTurns,
+    });
+
+    expect(JSON.stringify(forB.history)).not.toContain('CHỈ-ĐẠO-CHO-A-xyz');
+    expect(JSON.stringify(forA.history)).toContain('CHỈ-ĐẠO-CHO-A-xyz');
   });
 });
