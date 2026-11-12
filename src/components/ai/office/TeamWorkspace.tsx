@@ -77,7 +77,6 @@ const EMPTY_SNAPSHOT: TeamRunSnapshot = {
   pendingPlan: null,
   pendingApproval: null,
   pendingSteerMessageIds: [],
-  undeliveredSteerCountByAgent: {},
   pausedAgentId: null,
   pausedAgentName: null,
   lastPlan: null,
@@ -392,16 +391,30 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     }
     return ids;
   }, [steerAssignments]);
+  /**
+   * CR-04: `steerMessageIds` is the durable "delivered" marker (D-25) and is never cleared,
+   * so presence means delivered. An unaddressed steer has no delivery concept at all (D-28),
+   * and a steer whose target attempt is already terminal has been consumed — neither renders
+   * a badge.
+   */
   const steerStates = useMemo(() => {
     const map = new Map<string, 'pending' | 'held'>();
     const pending = new Set(snapshot.pendingSteerMessageIds);
+    const assignmentByAgent = new Map<string, AiTeamAssignment>();
+    for (const row of steerAssignments) {
+      const previous = assignmentByAgent.get(row.agentId);
+      if (!previous || row.attemptNo > previous.attemptNo) assignmentByAgent.set(row.agentId, row);
+    }
     for (const row of messages) {
       if (row.messageKind !== 'steer') continue;
+      if (row.targetAgentId === undefined) continue;
       if (deliveredSteerIds.has(row.id)) continue;
+      const assignment = assignmentByAgent.get(row.targetAgentId);
+      if (assignment !== undefined && TERMINAL.has(assignment.runStatus)) continue;
       map.set(row.id, pending.has(row.id) ? 'pending' : 'held');
     }
     return map;
-  }, [messages, snapshot.pendingSteerMessageIds, deliveredSteerIds]);
+  }, [messages, snapshot.pendingSteerMessageIds, deliveredSteerIds, steerAssignments]);
 
   const agentStatuses = useMemo(() => {
     const map = new Map<string, 'queued' | 'running' | 'paused' | 'stopped' | 'error' | 'done'>();
@@ -470,12 +483,11 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         if (outcome === 'blocked') {
           setDraft(text);
         }
-      } catch (err) {
-        // A throw is a `blocked` submit with a different cause: keep the text, not the error.
-        setSendError({
-          code: 'TURN_FAILED',
-          message: err instanceof Error ? err.message : String(err),
-        });
+      } catch {
+        // WR-10: a throw is a `blocked` submit with a different cause: keep the text, not the
+        // error. IN-05: repo/coordinator messages can embed ids, so only fixed copy reaches
+        // the UI (same channel discipline as ACTION_ERROR_COPY / RETRY_ERROR_COPY).
+        setSendError({ code: 'TURN_FAILED', message: ACTION_ERROR_COPY });
         setDraft(text);
       }
     },
@@ -488,8 +500,10 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
    */
   const handleSubmit = useCallback(
     (text: string) => {
-      lastUserTextRef.current = text;
+      // IN-05: a whitespace-only submit must not replace the last real request, or the
+      // widget's retry button would resend whitespace.
       if (!text.trim()) return;
+      lastUserTextRef.current = text;
       setDraft('');
       void runTurn(text);
     },
