@@ -1519,12 +1519,13 @@ export function createTeamRunCoordinator(
     attempt?: AttemptRef
   ): Promise<ChatCompletionMessage[]> {
     if (!attempt) return [];
+    // WR-01 (pass 7): read the delivered set and claim it in ONE step before any await. A
+    // settle-poll sweep landing between the read and the claim would see these ids as
+    // undrained and erase their markers, then this drain would inject them anyway.
     const row = await getAssignment(attempt.assignmentId, db);
-    const delivered = row?.steerMessageIds ?? [];
-    if (delivered.length === 0) return [];
     const injected =
       injectedSteerIdsByAttempt.get(attempt.assignmentId) ?? new Set<string>();
-    const fresh = delivered.filter((id) => !injected.has(id));
+    const fresh = (row?.steerMessageIds ?? []).filter((id) => !injected.has(id));
     if (fresh.length === 0) return [];
     // WR-01 (pass 6): claim the ids BEFORE the await. The settle-poll deadline reads this set
     // to decide which markers are safe to drop; claiming after `bulkGet` left a window where a
@@ -1933,10 +1934,11 @@ export function createTeamRunCoordinator(
     const applied: Array<{ op: string; assignmentId: string; replacementId?: string }> = [];
     // WR-04: rows that lost the `queued -> running` race after pre-validation. Reported, not
     // silently dropped — the leader's report must match the ledger (T-37.1-24).
-    const refused: Array<{ assignmentId: string; code: 'NOT_QUEUED' }> = [];
-    // WR-02 (pass 6): a failed replacement write is a different cause from a lost race, so
-    // the summary message must not claim the row started running.
-    let createFailed = false;
+    // WR-02 (pass 7): the cause is per entry — one rewrite can lose the race while another's
+    // replacement write fails, and a single call-wide message would then describe one of them
+    // wrongly.
+    const refused: Array<{ assignmentId: string; code: 'NOT_QUEUED'; cause: 'race' | 'write' }> =
+      [];
     for (const operation of operations) {
       const row = byId.get(operation.assignmentId)!;
 
@@ -1983,7 +1985,7 @@ export function createTeamRunCoordinator(
       if (liveRow?.runStatus !== 'queued') {
         userStopped.delete(row.agentId);
         retiredAssignmentIds.delete(row.id);
-        refused.push({ assignmentId: row.id, code: 'NOT_QUEUED' });
+        refused.push({ assignmentId: row.id, code: 'NOT_QUEUED', cause: 'race' });
         continue;
       }
       // WR-03: the finalize is the authoritative claim on the row. `null` means it left
@@ -2008,7 +2010,7 @@ export function createTeamRunCoordinator(
         // Not retired after all: the row is running and its own turn owns the settle, so the
         // marker must not make that turn's catch skip its finalize.
         retiredAssignmentIds.delete(row.id);
-        refused.push({ assignmentId: row.id, code: 'NOT_QUEUED' });
+        refused.push({ assignmentId: row.id, code: 'NOT_QUEUED', cause: 'race' });
         continue;
       }
       // D-08: append, never mutate in place — attempt = a new row (D-23).
@@ -2038,11 +2040,10 @@ export function createTeamRunCoordinator(
         // here, then drop the marker so the row's identity guard is not left armed.
         settleAgent(row.agentId, 'stopped', undefined, row.id);
         retiredAssignmentIds.delete(row.id);
-        // WR-02 (pass 6): the cause is a failed replacement write, not a row that started
+        // WR-02 (pass 6/7): the cause is a failed replacement write, not a row that started
         // running — the old row is already `skipped` and the transcript says so. Reporting
         // "vừa bắt đầu chạy" would be a false statement the leader repeats to the user.
-        createFailed = true;
-        refused.push({ assignmentId: row.id, code: 'NOT_QUEUED' });
+        refused.push({ assignmentId: row.id, code: 'NOT_QUEUED', cause: 'write' });
         continue;
       }
       // WR-04: the map moves before the replacement can be settled by the retired dispatch's
@@ -2071,13 +2072,20 @@ export function createTeamRunCoordinator(
 
     notify();
     if (refused.length > 0) {
+      // WR-02 (pass 7): describe each cause honestly. A write failure means the old row was
+      // already stopped and no replacement exists; a lost race means the row is running now.
+      const writeFailed = refused.some((entry) => entry.cause === 'write');
+      const raceLost = refused.some((entry) => entry.cause === 'race');
+      const message = writeFailed
+        ? raceLost
+          ? 'Một số việc không tạo được bản sửa, một số việc khác vừa bắt đầu chạy. Hãy kiểm tra lại danh sách việc.'
+          : 'Một số việc không tạo được bản sửa. Việc cũ đã dừng, hãy giao lại nếu cần.'
+        : 'Một số việc vừa bắt đầu chạy nên không sửa được. Việc đang chạy chỉ nhận chỉ đạo.';
       return JSON.stringify({
         applied,
         refused: true,
         code: 'NOT_QUEUED',
-        message: createFailed
-          ? 'Một số việc không tạo được bản sửa. Việc cũ đã dừng, hãy giao lại nếu cần.'
-          : 'Một số việc vừa bắt đầu chạy nên không sửa được. Việc đang chạy chỉ nhận chỉ đạo.',
+        message,
       });
     }
     return JSON.stringify({ applied });
@@ -2547,10 +2555,15 @@ export function createTeamRunCoordinator(
               // (an injected one WAS read). Inside a transaction so a concurrent write during
               // this await cannot be lost (CR-05).
               //
+              // WR-01 (pass 7): ONLY a row that was still `queued` is safe to strip. A
+              // `running` row's turn is not aborted by `assignmentControllers.abort()` (that
+              // only rejects `scheduler.acquire`), so it can still drain at its next round
+              // boundary — erasing the marker first would make the delivered fact false.
+              //
               // WR-01 (pass 6): `dispose()` clears `injectedSteerIdsByAttempt`, so after a
               // teardown every id would look undrained. The ledger is the user's only record
               // then — leave it untouched.
-              if (!disposed) {
+              if (!disposed && row.runStatus === 'queued') {
                 const injected = injectedSteerIdsByAttempt.get(row.id);
                 await db.transaction('rw', [db.aiTeamAssignments], async () => {
                   const live = await db.aiTeamAssignments.get(row.id);
