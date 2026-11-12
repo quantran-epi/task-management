@@ -189,7 +189,7 @@ Plans:
 ### Phase 37.1: Live steering — leader amends assignments and steers running agents mid-run (INSERTED)
 
 **Goal:** The user can add a requirement mid-run, the leader re-plans against the live ledger, cancels or rewrites `queued` assignments, and pushes a steering message that a running agent actually reads at its next tool round — without restarting the batch.
-**Requirements**: TBD (candidate IDs: AIO-STEER-01..05 — settle in discuss)
+**Requirements**: AIO-STEER-01, AIO-STEER-02, AIO-STEER-03, AIO-STEER-04, AIO-STEER-05, AIO-LEAD-03
 **Depends on:** Phase 37
 **Success Criteria** (what must be TRUE):
 
@@ -202,11 +202,16 @@ Plans:
 **Scope source:** deferred from `.planning/phases/37-runtime-reliability-concurrency/37-CONTEXT.md` (D-08/D-19/D-22/D-24). Schema is already in place from Phase 37.
 **Research flag:** standard patterns — `beforeToolRound` seam exists at `src/services/ai/aiOrchestratorLoop.ts`; defects/contracts are at `file:line` in 37-CONTEXT.
 
-**Plans:** 0 plans
+**Plans:** 6 plans
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 37.1 to break down)
+- [ ] 37.1-01-PLAN.md — D-24 event-driven: `dispatchBatch` + `onBatchSettled`, batch abort controller, per-turn usage baseline, team turn lifetime
+- [ ] 37.1-02-PLAN.md — return-value `beforeToolRound` hook firing on round 1
+- [ ] 37.1-03-PLAN.md — persisted contract: `'steer'` in six `messageKind` sites, `steerMessageIds`, `'leader-amend'`, `'skipped'`
+- [ ] 37.1-04-PLAN.md — `send()` steer routing, leader-as-gate `deliver_steer`, inbox drain, lead prompt, SC5 teardown
+- [ ] 37.1-05-PLAN.md — `amend_assignments` (cancel/rewrite `queued`)
+- [ ] 37.1-06-PLAN.md — team chat UI: remove outbox + streaming bubbles, inline indicator + popover, hover-gated Stop
 
 ### Phase 38: Hard token budget + accurate measurement
 
