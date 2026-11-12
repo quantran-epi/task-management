@@ -2537,11 +2537,17 @@ export function createTeamRunCoordinator(
           if (live.length === 0) break;
           for (const row of live) {
             assignmentControllers.get(row.id)?.abort();
+            // WR-02 (pass 8): `assignmentControllers.abort()` only rejects a parked
+            // `scheduler.acquire`. A row already `running` keeps its turn alive past the
+            // terminal write, spending tokens and possibly draining a steer the ledger now
+            // calls undelivered. Abort the runtime too, so "terminal" is true for both
+            // statuses and the marker strip below is honest.
+            registry.abort(row.agentId);
             // Both writers (this one and the row's own dispatch catch) must record the same
             // reason, or the row ends with one path's reason and the other path's status.
             userStopped.set(row.agentId, 'tool-limit');
             try {
-              await finalizeAttempt(
+              const finalized = await finalizeAttempt(
                 row.id,
                 row.runStatus,
                 'stopped',
@@ -2555,15 +2561,20 @@ export function createTeamRunCoordinator(
               // (an injected one WAS read). Inside a transaction so a concurrent write during
               // this await cannot be lost (CR-05).
               //
-              // WR-01 (pass 7): ONLY a row that was still `queued` is safe to strip. A
-              // `running` row's turn is not aborted by `assignmentControllers.abort()` (that
-              // only rejects `scheduler.acquire`), so it can still drain at its next round
-              // boundary — erasing the marker first would make the delivered fact false.
+              // WR-01 (pass 8): gate on the TRANSITION RESULT, not the stale list snapshot.
+              // `finalizeAttempt` returns the stored row when it lost the `from` guard — that
+              // row may have gone `running` and its turn may still drain, so its markers must
+              // survive. `null` means the write did not commit either.
               //
               // WR-01 (pass 6): `dispose()` clears `injectedSteerIdsByAttempt`, so after a
               // teardown every id would look undrained. The ledger is the user's only record
               // then — leave it untouched.
-              if (!disposed && row.runStatus === 'queued') {
+              if (
+                !disposed &&
+                finalized !== null &&
+                finalized.runStatus === 'stopped' &&
+                finalized.stopReason === 'tool-limit'
+              ) {
                 const injected = injectedSteerIdsByAttempt.get(row.id);
                 await db.transaction('rw', [db.aiTeamAssignments], async () => {
                   const live = await db.aiTeamAssignments.get(row.id);
