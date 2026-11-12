@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TaskPlannerDatabase } from '../../../../src/db/index';
 import {
+  LEAD_ONLY_TEAM_TOOLS,
   TEAM_TOOL_DEFINITIONS,
   executeTeamTool,
   type TeamToolContext,
@@ -72,9 +73,9 @@ describe('teamTools — transcript search and skill reader (AIO-MEM-02, AIO-MEM-
     );
   }
 
-  it('exposes the six team tool definitions', () => {
+  it('exposes the seven team tool definitions', () => {
     const names = TEAM_TOOL_DEFINITIONS.map((tool) => tool.function.name);
-    expect(names).toHaveLength(6);
+    expect(names).toHaveLength(7);
     expect(names).toEqual(
       expect.arrayContaining([
         'search_team_history',
@@ -83,6 +84,7 @@ describe('teamTools — transcript search and skill reader (AIO-MEM-02, AIO-MEM-
         'list_linked_items',
         'get_linked_context',
         'delegate_batch',
+        'deliver_steer',
       ])
     );
   });
@@ -552,5 +554,49 @@ describe('teamTools — delegate_batch validation (AIO-TEAM-02, D-02, D-03, D-33
     expect(EMPLOYEE_READ_ONLY_ALLOWLIST).not.toContain('delegate_batch');
     expect(AI_DATABASE_TOOLS.map((tool) => tool.function.name)).not.toContain('delegate_batch');
     expect(TEAM_TOOL_DEFINITIONS.map((tool) => tool.function.name)).toContain('delegate_batch');
+  });
+
+  it('declares delegate_batch and deliver_steer as the lead-only set (D-27/D-28)', () => {
+    expect(LEAD_ONLY_TEAM_TOOLS.has('delegate_batch')).toBe(true);
+    expect(LEAD_ONLY_TEAM_TOOLS.has('deliver_steer')).toBe(true);
+    expect(LEAD_ONLY_TEAM_TOOLS.has('search_team_history')).toBe(false);
+    expect(EMPLOYEE_READ_ONLY_ALLOWLIST).not.toContain('deliver_steer');
+    expect(AI_DATABASE_TOOLS.map((tool) => tool.function.name)).not.toContain('deliver_steer');
+  });
+});
+
+describe('teamTools — deliver_steer validation (37.1 D-28)', () => {
+  let db: TaskPlannerDatabase;
+
+  const ctx = (): TeamToolContext => ({
+    db,
+    teamId: 'team-1',
+    threadId: 'thread-1',
+    agentId: 'agent-1',
+  });
+
+  beforeEach(async () => {
+    db = new TaskPlannerDatabase('TestTeamToolsSteer_' + Math.random().toString(36).slice(2));
+    await db.open();
+  });
+
+  afterEach(async () => {
+    await db.delete();
+  });
+
+  it('returns the steer id when it is a string', async () => {
+    const result = JSON.parse(
+      await executeTeamTool('deliver_steer', { steerMessageId: 'steer-1' }, ctx())
+    );
+    expect(result).toEqual({ steerMessageId: 'steer-1' });
+  });
+
+  it('refuses a missing or non-string steerMessageId without writing anything', async () => {
+    for (const args of [{}, { steerMessageId: 42 }]) {
+      const result = JSON.parse(await executeTeamTool('deliver_steer', args, ctx()));
+      expect(result).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
+    }
+    expect(await db.chatMessages.count()).toBe(0);
+    expect(await db.aiTeamAssignments.count()).toBe(0);
   });
 });
