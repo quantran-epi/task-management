@@ -567,8 +567,9 @@ export function createTeamRunCoordinator(
   const pendingSteerMessageIds = new Set<string>();
   /**
    * 37.1 D-03/D-28: steer ids already injected into an attempt's prompt this session. The
-   * ledger field is the durable "delivered" marker and is never cleared (D-25/D-14), so this
-   * set is what stops a second round boundary from re-injecting the same text.
+   * ledger field is the durable "delivered" marker (D-25/D-14) and is cleared only when a
+   * terminal write proves the steer was never read (settle-poll deadline), so this set is
+   * what stops a second round boundary from re-injecting the same text.
    */
   const injectedSteerIdsByAttempt = new Map<string, Set<string>>();
 
@@ -1508,11 +1509,11 @@ export function createTeamRunCoordinator(
    * caller runs this AFTER the budget gates, so a parked agent never consumes a steer while
    * paused.
    *
-   * CR-04/CR-05: the ledger field is the DURABLE delivered marker (D-14/D-25) and is never
-   * cleared — clearing it erased the "delivered" fact and made every consumed steer render
-   * "chưa giao" forever. Re-injection inside one session is prevented by
-   * `injectedSteerIdsByAttempt`, so the drain writes nothing and cannot lose a concurrent
-   * `deliver_steer` (no read-modify-write on the array).
+   * CR-04/CR-05: the ledger field is the DURABLE delivered marker (D-14/D-25) — clearing it
+   * wholesale erased the "delivered" fact and made every consumed steer render "chưa giao"
+   * forever. It is dropped only for ids a terminal write proves were never read. Re-injection
+   * inside one session is prevented by `injectedSteerIdsByAttempt`, so the drain writes
+   * nothing and cannot lose a concurrent `deliver_steer` (no read-modify-write on the array).
    */
   async function drainSteerInbox(
     _agentId: string,
@@ -1731,8 +1732,9 @@ export function createTeamRunCoordinator(
   }
 
   /**
-   * 37.1 D-28: the ONLY writer of `steerMessageIds`. Every check is against the live ledger —
-   * the model's id is never trusted. Idempotent: a repeat call appends nothing.
+   * 37.1 D-28: the ONLY writer that ADDS to `steerMessageIds` (the settle-poll deadline may
+   * drop ids a terminal write proves were never read). Every check is against the live
+   * ledger — the model's id is never trusted. Idempotent: a repeat call appends nothing.
    */
   async function deliverSteer(steerMessageId: string): Promise<string> {
     if (disposed) return DISPOSED_REFUSAL;

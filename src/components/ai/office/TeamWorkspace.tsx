@@ -392,9 +392,10 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     return ids;
   }, [steerAssignments]);
   /**
-   * CR-04: `steerMessageIds` is the durable "delivered" marker (D-25) and is never cleared,
-   * so presence means delivered. An unaddressed steer has no delivery concept at all (D-28)
-   * and renders no badge.
+   * CR-04: `steerMessageIds` is the durable "delivered" marker (D-25), so presence means
+   * delivered. It is dropped only when a terminal write proves the steer was never read, so
+   * the badge reappears honestly in that case. An unaddressed steer has no delivery concept
+   * at all (D-28) and renders no badge.
    *
    * Everything else is either still pending in the coordinator (leader has not read it) or
    * held (the leader read it and chose not to hand it over, D-28) — both render "chưa giao".
