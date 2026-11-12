@@ -10,8 +10,8 @@ import type { AiTeam, TeamRunPhase } from '../../../../src/types/aiOffice';
  * a queued second turn, so there is no outbox and no phase gate. The only outcome that
  * restores the draft is `'blocked'` (D-12).
  *
- * (Plan 06 renames this file to `TeamWorkspaceSteer.test.tsx` and adds the steer-row UI
- * assertions; the contract assertions live here already.)
+ * Renamed from `TeamWorkspaceOutbox.test.tsx` by plan 06 — the outbox no longer exists, so
+ * every assertion here is about steering, not queueing.
  */
 
 type SendOutcome = 'started' | 'steered' | 'refused' | 'blocked';
@@ -165,6 +165,22 @@ describe('TeamWorkspace composer (37.1 D-01/D-02/D-12)', () => {
     fireEvent.change(composer, { target: { value: text } });
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
   };
+
+  it.each<TeamRunPhase>([
+    'idle',
+    'ready',
+    'lead-thinking',
+    'awaiting-plan',
+    'batch-running',
+    'awaiting-budget',
+    'awaiting-mutation-approval',
+    'lead-synthesizing',
+  ])('never renders an outbox panel in phase %s', async (phase) => {
+    currentStub = createStub(phase);
+    await renderWorkspace();
+    expect(screen.queryByTestId('team-outbox')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('team-outbox-item')).not.toBeInTheDocument();
+  });
 
   it('dispatches a submit during a live phase immediately, with no outbox', async () => {
     currentStub = createStub('batch-running');

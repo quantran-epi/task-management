@@ -7,7 +7,7 @@ import { ensureTeamThread } from '../../../../src/db/repositories/teamTranscript
 import type { AiTeam } from '../../../../src/types/aiOffice';
 
 /**
- * 37-06 backstop, at the guard itself. `TeamWorkspaceOutbox.test.tsx` proves the property
+ * 37-06 backstop, at the guard itself. `TeamWorkspaceSteer.test.tsx` proves the property
  * through the real composer — but `ChatInputBar` trims before calling `onSubmit`, so that
  * test cannot distinguish `TeamWorkspace.handleSubmit`'s own `if (!text.trim()) return`.
  * Removing that line left the composer test green, so this file mocks the widget and calls
