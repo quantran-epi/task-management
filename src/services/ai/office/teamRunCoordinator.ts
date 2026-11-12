@@ -634,12 +634,18 @@ export function createTeamRunCoordinator(
   async function runLeadTurn(
     text: string,
     batchResults?: readonly BatchResult[],
-    announcedPhase: 'lead-thinking' | 'lead-synthesizing' = 'lead-thinking'
+    announcedPhase: 'lead-thinking' | 'lead-synthesizing' = 'lead-thinking',
+    triggerMessageId?: string
   ): Promise<void> {
     if (disposed) return;
     registerTeamTurn();
     try {
-      await withLeadRuntime(() => startLeadTurn(text, batchResults, announcedPhase));
+      // WR-02: `dispose()` can land while this task waits behind another lead turn. Without
+      // this check the turn runs against a deleted team and writes orphan rows.
+      await withLeadRuntime(async () => {
+        if (disposed) return;
+        await startLeadTurn(text, batchResults, announcedPhase, triggerMessageId);
+      });
     } finally {
       // D-24: one team turn spans dispatch + batch + synthesis. An open batch owns the turn,
       // so `onBatchSettled` finishes it instead. Derived from `openBatchId`, never stored —
@@ -1212,11 +1218,14 @@ export function createTeamRunCoordinator(
     }
   }
 
-  function beforeToolRoundFor(agentId: string) {
+  function beforeToolRoundFor(agentId: string, triggerMessageId?: string) {
     // D-21 / Pitfall 8: the loop's own signal reaches both gates, so a Stop while parked
     // rejects instead of hanging. The trailing throw covers a hook that resolved post-abort.
     // 37.1 §4.2: the drain runs AFTER the gates — a parked agent must not consume a message
     // while paused — and its returned messages are appended by the loop.
+    // CR-01: the row that triggered this turn is already the prompt text, so it must not be
+    // injected again on round 1.
+    const skip = triggerMessageId ? new Set([triggerMessageId]) : undefined;
     return async (
       _round: number,
       signal: AbortSignal
@@ -1224,7 +1233,7 @@ export function createTeamRunCoordinator(
       await gateFor(agentId).wait(signal);
       await teamGate.wait(signal);
       signal.throwIfAborted();
-      return drainInbox(agentId);
+      return drainInbox(agentId, skip);
     };
   }
 
@@ -1261,7 +1270,13 @@ export function createTeamRunCoordinator(
     instruction: string,
     originalRequest: string,
     batchResults?: readonly BatchResult[],
-    attempt?: AttemptRef
+    attempt?: AttemptRef,
+    /**
+     * CR-01: the log row whose text IS this turn's instruction. Its own round-1 drain must
+     * skip it, or the model reads its trigger twice. `attempt.instructionMessageId` covers
+     * the dispatch path; a mention-started turn passes the user row's id here.
+     */
+    triggerMessageId?: string
   ): Promise<void> {
     // Created first so a throw anywhere below still has a release target (Pitfall 7).
     if (!agentDeferreds.has(employee.id)) {
@@ -1301,7 +1316,10 @@ export function createTeamRunCoordinator(
         messageKind: 'report',
         agentId: employee.id,
         agentName: employee.name,
-        beforeToolRound: beforeToolRoundFor(employee.id),
+        beforeToolRound: beforeToolRoundFor(
+          employee.id,
+          triggerMessageId ?? attempt?.instructionMessageId
+        ),
       };
 
       currentRequests.set(employee.id, request);
@@ -1440,7 +1458,9 @@ export function createTeamRunCoordinator(
      * `lead-synthesizing` with `lead-thinking` — that made the "đang tổng hợp" verb
      * unreachable and left the user reading "đang phân tích" during synthesis.
      */
-    announcedPhase: 'lead-thinking' | 'lead-synthesizing' = 'lead-thinking'
+    announcedPhase: 'lead-thinking' | 'lead-synthesizing' = 'lead-thinking',
+    /** CR-01: the row already rendered as this turn's prompt; its drain must skip it. */
+    triggerMessageId?: string
   ): Promise<void> {
     // D-05: an empty group has no lead — a silent no-op, not a throw.
     const lead = roster.lead;
@@ -1476,7 +1496,7 @@ export function createTeamRunCoordinator(
         messageKind: 'synthesis',
         agentId: lead.id,
         agentName: lead.name,
-        beforeToolRound: beforeToolRoundFor(lead.id),
+        beforeToolRound: beforeToolRoundFor(lead.id, triggerMessageId),
       };
 
       currentRequests.set(lead.id, request);
@@ -1543,23 +1563,37 @@ export function createTeamRunCoordinator(
    *
    * The cursor advances over the WHOLE log (so "seen" is real), but only messages that name
    * this participant are returned for injection.
+   *
+   * `skipIds` are messages whose text is ALREADY in this turn's prompt — the row that
+   * triggered the turn. Without this the model reads its own trigger twice (once as the
+   * prompt, once as an injected message), which is a real regression: the deleted steer
+   * turn carried exactly this skip set. They are still READ (the cursor advances past
+   * them), just not re-injected.
    */
   async function drainInbox(
-    participantId: string
+    participantId: string,
+    skipIds?: ReadonlySet<string>
   ): Promise<ChatCompletionMessage[]> {
     if (disposed) return [];
     const cursor = await getCursor(teamId, participantId, db);
     const batch = await readMessagesAfter(teamId, cursor.lastSeq, db);
     if (batch.length === 0) return [];
+    // SC5: a teardown that landed during the read must not consume messages nobody read.
+    if (disposed) return [];
     // Advance BEFORE returning: the loop appends these to the very next model call, so the
     // read has happened. A teardown must not consume a message nobody read.
     await advanceCursor(teamId, participantId, batch[batch.length - 1]!.seq, db);
     notify();
     return batch
-      .filter((message) => message.to.includes(participantId))
+      .filter(
+        (message) =>
+          message.to.includes(participantId) && skipIds?.has(message.id) !== true
+      )
       .map((message) => ({
         role: 'user' as const,
-        content: `[Tin nhắn từ nhóm] ${message.content}`,
+        // The sender is named: an anonymous user-role message is indistinguishable from the
+        // prompt itself, and agent reports must not read as if the user said them.
+        content: `[Tin nhắn từ nhóm — ${message.from}] ${message.content}`,
       }));
   }
 
@@ -1872,21 +1906,30 @@ export function createTeamRunCoordinator(
     // AIO-LEAD-03: a mention is a direct instruction. If the agent is live it reads the
     // message at its next tool round; if the team is idle it starts a turn of its own.
     if (target) {
-      const assignmentId = assignmentIdsByAgent.get(target.id);
-      const assignment = assignmentId ? await getAssignment(assignmentId, db) : undefined;
-      const live = assignment?.runStatus === 'queued' || assignment?.runStatus === 'running';
+      // CR-03: liveness comes from the LIVE state, not the ledger map. `assignmentIdsByAgent`
+      // is only written by dispatch/amend/retry, so a turn started by a mention was invisible
+      // here — a second mention then tried to start a competing turn, hit TURN_IN_PROGRESS,
+      // and marked the running agent `error`. The runtime is the authority on "is it running".
+      const runtime = registry.peek(target.id);
+      const agentState = agents.get(target.id);
+      const live =
+        runtime?.isRunning() === true ||
+        (agentState !== undefined &&
+          agentState.status !== 'done' &&
+          agentState.status !== 'stopped' &&
+          agentState.status !== 'error');
       if (live) return 'steered';
       // AIO-STEER-04: mid-batch, an agent that has already settled has no attempt to attach
       // a turn to. Starting an untracked turn would leave the batch ledger describing a
       // different run than the one happening. Refuse visibly — the leader still answers.
       if (openBatchId !== null || synthesisPending) {
-        await runLeadTurn(text);
+        await runLeadTurn(text, undefined, 'lead-thinking', row.id);
         return 'refused';
       }
       // Team idle: this message IS the agent's turn.
       registerTeamTurn();
       try {
-        await startEmployeeTurn(target, text, text);
+        await startEmployeeTurn(target, text, text, undefined, undefined, row.id);
         return 'started';
       } finally {
         aiTurnManager.finishTurn(teamTurnId);
@@ -1895,8 +1938,11 @@ export function createTeamRunCoordinator(
 
     // Plain chat with the leader. If its consumer is already turning, the message waits in
     // the log and the current turn's next round drains it — never a second concurrent turn.
-    if (leadTurnKind !== null) return 'steered';
-    await runLeadTurn(text);
+    // WR-03: `synthesisPending` counts as busy too — the batch row is already closed at that
+    // point, so `leadTurnKind` is still null and a message here would start a second answer
+    // alongside the synthesis.
+    if (leadTurnKind !== null || synthesisPending) return 'steered';
+    await runLeadTurn(text, undefined, 'lead-thinking', row.id);
     return 'started';
   }
 
