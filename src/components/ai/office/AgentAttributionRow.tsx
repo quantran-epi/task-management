@@ -138,13 +138,18 @@ export const AgentStatusRow: React.FC<AgentStatusRowProps> = ({
       onBlur={() => setFocused(false)}
     >
       {badge}
+      {/* WR-06: opacity alone left the buttons focusable and clickable while invisible, so a
+          stray click in the gap triggered a stop. Gate pointer/tab interaction too; the
+          buttons stay mounted so `TeamWorkspace.handleKeyDown` can still find them. */}
       <div
         data-testid={`agent-actions-${agent.agentId}`}
         data-visible={actionsVisible ? 'true' : 'false'}
+        aria-hidden={!actionsVisible}
         style={{
           display: 'flex',
           gap: 4,
           opacity: actionsVisible ? 1 : 0,
+          pointerEvents: actionsVisible ? 'auto' : 'none',
           transition: 'opacity .12s',
         }}
       >
@@ -154,6 +159,7 @@ export const AgentStatusRow: React.FC<AgentStatusRowProps> = ({
             size="small"
             style={{ height: 22, padding: '0 6px', fontSize: 12 }}
             data-testid={`${idPrefix}-retry-${assignmentId}`}
+            tabIndex={actionsVisible ? 0 : -1}
             onClick={onRetry}
           >
             Chạy lại
@@ -168,6 +174,7 @@ export const AgentStatusRow: React.FC<AgentStatusRowProps> = ({
             style={{ width: 22, height: 22, padding: 0 }}
             aria-label={`Dừng ${agent.name}`}
             data-testid={`${idPrefix}-stop-${agent.agentId}`}
+            tabIndex={actionsVisible ? 0 : -1}
             onClick={onStop}
           />
         )}

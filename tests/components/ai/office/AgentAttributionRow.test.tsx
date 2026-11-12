@@ -174,4 +174,18 @@ describe('AgentStatusRow — hover-gated actions (37.1 D-23)', () => {
     expect(actions().getAttribute('data-visible')).toBe('false');
     expect(screen.getByTestId('agent-stop-agent-1')).toBeInTheDocument();
   });
+
+  // WR-06: opacity alone left the hidden buttons focusable and clickable.
+  it('blocks pointer and tab interaction while the actions are hidden', () => {
+    render(<AgentStatusRow agent={agent} status="running" onStop={vi.fn()} />);
+
+    expect(actions().getAttribute('aria-hidden')).toBe('true');
+    expect(actions().style.pointerEvents).toBe('none');
+    expect(screen.getByTestId('agent-stop-agent-1').getAttribute('tabindex')).toBe('-1');
+
+    fireEvent.mouseEnter(screen.getByTestId('agent-status-agent-1'));
+    expect(actions().getAttribute('aria-hidden')).toBe('false');
+    expect(actions().style.pointerEvents).toBe('auto');
+    expect(screen.getByTestId('agent-stop-agent-1').getAttribute('tabindex')).toBe('0');
+  });
 });
