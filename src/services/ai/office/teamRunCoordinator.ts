@@ -459,11 +459,6 @@ export function createTeamRunCoordinator(
    * `onBatchSettled`'s `finally` owns deletion.
    */
   const batchControllers = new Map<string, AbortController>();
-  /**
-   * D-24: one team turn spans dispatch + batch + synthesis. `send()`'s `finally` must not
-   * finish it while a batch is still running; `onBatchSettled` finishes it instead.
-   */
-  let batchOwnsTeamTurn = false;
   /** D-24: two lead turns per batch, so the usage baseline is keyed per TURN, not per agent. */
   const usageBaselineKey = new Map<string, string>();
   let leadTurnSeq = 0;
@@ -566,7 +561,7 @@ export function createTeamRunCoordinator(
    * 37.1 rework: the phase is DERIVED from live state — never stored. There is no setter to
    * forget, so a phase cannot outlive the condition that justifies it.
    *
-   * Precedence is the same order the old `setPhase` calls produced, but every input is a
+   * Every input below is a
    * fact about right now:
    *   1. a parked budget gate          → awaiting-budget
    *   2. a pending mutation approval   → awaiting-mutation-approval
@@ -587,8 +582,8 @@ export function createTeamRunCoordinator(
     if (leadTurnKind === 'thinking') return 'lead-thinking';
     if (synthesisPending) return 'lead-synthesizing';
     // A retry claims its guard synchronously, before any await, so this is the synchronous
-    // "work is in flight" signal the old `setPhase('batch-running')` provided. Without it two
-    // same-tick clicks on different bubbles both pass the guard and both synthesize.
+    // "work is in flight" signal. Without it two same-tick clicks on different bubbles both
+    // pass the guard and both synthesize.
     if (retryingAssignments.size > 0) return 'batch-running';
     if (openBatchId !== null) return 'batch-running';
     for (const row of agents.values()) {
@@ -602,9 +597,8 @@ export function createTeamRunCoordinator(
   };
 
   /**
-   * 37.1 §5: replaces `BUSY_PHASES`. The old set was a phase NAMES list, so it could only
-   * answer "is the team busy" by asking a label — and a label that was ever wrong made the
-   * answer wrong. This asks the live state directly.
+   * 37.1 §5: "is the team busy" must be asked of the live state, never of a phase label —
+   * a label that was ever wrong made the answer wrong.
    */
   const isBusy = (): boolean => {
     if (teamGate.isClosed() || pendingApproval !== null || pendingPlan !== null) return true;
@@ -647,7 +641,10 @@ export function createTeamRunCoordinator(
     try {
       await withLeadRuntime(() => startLeadTurn(text, batchResults, announcedPhase));
     } finally {
-      if (!batchOwnsTeamTurn) aiTurnManager.finishTurn(teamTurnId);
+      // D-24: one team turn spans dispatch + batch + synthesis. An open batch owns the turn,
+      // so `onBatchSettled` finishes it instead. Derived from `openBatchId`, never stored —
+      // a flag would need a reset on every path and could outlive its condition.
+      if (openBatchId === null) aiTurnManager.finishTurn(teamTurnId);
     }
   }
 
@@ -2201,8 +2198,6 @@ export function createTeamRunCoordinator(
       })),
     });
 
-    // D-24: one team turn spans dispatch + batch + synthesis, so `send()` must not finish it.
-    batchOwnsTeamTurn = true;
     // Fire-and-forget: the settle handler must never throw into the void, and the lead's turn
     // has to end now.
     void onBatchSettled(batch.id, assignments, attemptIdsByAgent).catch(() => {
@@ -2396,7 +2391,6 @@ export function createTeamRunCoordinator(
     } finally {
       batchControllers.delete(batchId);
       // D-24/T-37.1-03: the team turn spans the whole batch, so it finishes exactly here.
-      batchOwnsTeamTurn = false;
       // 37.1 rework: the ONE place the settle handler's phase claim is released, on every
       // branch — a throw, an abort, or a lost race. A derived phase needs no other reset.
       synthesisPending = false;
@@ -2743,7 +2737,6 @@ export function createTeamRunCoordinator(
     // running agent. `onBatchSettled`'s `finally` owns the map deletion.
     for (const controller of batchControllers.values()) controller.abort();
     // D-24: a teardown mid-batch still owes the team turn a finish.
-    batchOwnsTeamTurn = false;
     aiTurnManager.finishTurn(teamTurnId);
     registry.abortAll();
     for (const agentId of agents.keys()) settleAgent(agentId, 'stopped');
@@ -2793,7 +2786,6 @@ export function createTeamRunCoordinator(
     // D-24/T-37.1-01: abort every batch controller so a parked `onBatchSettled` ledger poll
     // and every queued acquire reject instead of resuming on a dead coordinator.
     for (const controller of batchControllers.values()) controller.abort();
-    batchOwnsTeamTurn = false;
     aiTurnManager.finishTurn(teamTurnId);
 
     // `clear()` aborts and drops every runtime (teamRunRegistry).

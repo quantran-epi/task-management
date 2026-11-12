@@ -293,7 +293,7 @@ Phân biệt:
 | Vòng poll 25ms trong `onBatchSettled` | `:2516-2525` | Push thay poll |
 | `pendingSteerMessageIds` | `:567` | Cursor thay thế |
 | `injectedSteerIdsByAttempt` | `:574` | Cursor thay thế |
-| `listeners:Set` + `notify()` | `:507,576` | `liveQuery` thay thế |
+| `listeners:Set` + `notify()` | `:507,576` | **GIỮ** — xem ngoại lệ dưới |
 | `batchOwnsTeamTurn` | `:2483` | Cursor quyết định |
 | `steer()`, `deliverSteer`, tool `deliver_steer` | `:1455-1505, 1739-1817`, `teamTools.ts` | `send` thay thế |
 | `parseMentionTarget`, `AGENT_MENTION` | `:253,1441-1451` | **GIỮ** — xem ghi chú dưới |
@@ -310,6 +310,8 @@ Ba mục dưới đây **không** bị xoá, và lý do phải rõ để review 
 | `parseMentionTarget` + `AGENT_MENTION` | Đây là **cách người dùng chọn người nhận** ("tag và nhắn trực tiếp", §1.1). Nó chỉ *dịch* cú pháp `@[Tên](agent:id)` thành `to[]`, rồi `send()` mới là đường duy nhất ghi message. Không phải đường định tuyến thứ hai. |
 | `steerMessageIds` trong `backupSchemas.ts` | Chỉ để backup tạo trước 37.1 vẫn restore được. Không còn writer, không còn reader. `validateBackup` map `messageKind: 'steer'` cũ → `'instruction'` khi nạp. |
 | `'steered'` trong kiểu trả về của `send()` | Không phải khái niệm "steer"; nó nghĩa là "tin đã ghi vào log, lượt đang chạy sẽ đọc ở vòng kế tiếp". Composer dùng để biết không cần khôi phục draft. |
+| `TeamRunPhase` + `derivePhase()` | **Phase là hàm suy ra, không phải biến lưu** — nên nó không thể kẹt, đúng mục tiêu §5. Đổi sang `presence` chỉ là đổi tên. |
+| `listeners:Set` + `notify()` | `liveQuery` chỉ đọc bảng Dexie. Cờ "đang chạy", text đang stream và các bước live là state **bộ nhớ** (`AgentRunState`), không có bảng nào để query. Thay bằng `liveQuery` là bất khả thi về mặt kỹ thuật, không phải lười. UI đọc **cả hai**: `useLiveQuery` cho log/cursor/ledger (đã có), `subscribe` cho state live của lượt đang chạy. |
 
 ## 6. Giữ nguyên (đã đúng)
 
