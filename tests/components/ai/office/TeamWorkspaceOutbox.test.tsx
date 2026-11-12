@@ -194,6 +194,30 @@ describe('TeamWorkspace outbox (37-06, D-20/D-21)', () => {
     await waitFor(() => expect(screen.queryAllByTestId('team-outbox-item')).toHaveLength(0));
   });
 
+  // 37-06 backstop: `handleSubmit` guards with `if (!text.trim()) return`, and the composer
+  // refuses whitespace too. Both submit paths must be a no-op that keeps the draft.
+  it('ignores a whitespace-only submit on both the click and the Cmd+Enter path', async () => {
+    const composer = await renderWorkspace();
+    for (const text of ['   ', '\n\t']) {
+      fireEvent.change(composer, { target: { value: text } });
+      fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+      fireEvent.keyDown(composer, { key: 'Enter', ctrlKey: true });
+    }
+    // Give any stray async dispatch a chance to land before asserting silence.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(currentStub.send).not.toHaveBeenCalled();
+    expect(screen.queryAllByTestId('team-outbox-item')).toHaveLength(0);
+    // A no-op submit never consumes the text.
+    expect((composer as HTMLTextAreaElement).value).toBe('\n\t');
+
+    const thread = await ensureTeamThread(team.id, db);
+    const userRows = (await db.chatMessages.where('threadId').equals(thread.id).toArray()).filter(
+      (row) => row.role === 'user'
+    );
+    expect(userRows).toHaveLength(0);
+  });
+
   it('queues while the coordinator is parked on a budget gate (D-21)', async () => {
     currentStub = createStub('awaiting-budget');
     const composer = await renderWorkspace();
