@@ -1703,17 +1703,28 @@ export function createTeamRunCoordinator(
         message: 'Việc của nhân viên này không còn nhận chỉ đạo được nữa.',
       });
     }
-    // CR-05: one `rw` transaction so a concurrent drain cannot lose this id. The array is
-    // read INSIDE the lock, never from the stale pre-await snapshot.
-    const appended = await db.transaction('rw', [db.aiTeamAssignments], async () => {
-      const live = await db.aiTeamAssignments.get(assignment.id);
-      const current = live?.steerMessageIds ?? [];
-      if (current.includes(steerMessageId)) return false;
-      await db.aiTeamAssignments.update(assignment.id, {
-        steerMessageIds: [...current, steerMessageId],
-      });
-      return true;
-    });
+    // CR-01: the steer row may have been persisted while no batch was open (the ordinary
+    // "steer while the plan card is up" flow), so it carries no `batchId`. The workspace
+    // derives delivery state by querying assignments on the STEER's `batchId`, so the batch
+    // must be stamped onto the row here — this is the one place it is known. Same `rw` scope
+    // as the append, so the marker and the delivery fact can never disagree.
+    const appended = await db.transaction(
+      'rw',
+      [db.aiTeamAssignments, db.chatMessages],
+      async () => {
+        const live = await db.aiTeamAssignments.get(assignment.id);
+        const current = live?.steerMessageIds ?? [];
+        if (current.includes(steerMessageId)) {
+          await db.chatMessages.update(steerMessageId, { batchId: assignment.batchId });
+          return false;
+        }
+        await db.aiTeamAssignments.update(assignment.id, {
+          steerMessageIds: [...current, steerMessageId],
+        });
+        await db.chatMessages.update(steerMessageId, { batchId: assignment.batchId });
+        return true;
+      }
+    );
     if (!appended) {
       return JSON.stringify({ delivered: true, duplicate: true, agentId: message.targetAgentId });
     }

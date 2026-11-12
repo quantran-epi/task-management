@@ -396,6 +396,11 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
    * so presence means delivered. An unaddressed steer has no delivery concept at all (D-28),
    * and a steer whose target attempt is already terminal has been consumed — neither renders
    * a badge.
+   *
+   * CR-01: a steer persisted while no batch was open carries no `batchId` until
+   * `deliverSteer` stamps one (which it now does). A steer whose target has NO assignment in
+   * any of the queried batches therefore has nothing left to deliver to — it must not keep a
+   * "chưa giao" badge forever.
    */
   const steerStates = useMemo(() => {
     const map = new Map<string, 'pending' | 'held'>();
@@ -411,6 +416,9 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
       if (deliveredSteerIds.has(row.id)) continue;
       const assignment = assignmentByAgent.get(row.targetAgentId);
       if (assignment !== undefined && TERMINAL.has(assignment.runStatus)) continue;
+      // Nothing to deliver to: the attempt settled and left the queried batches, or the
+      // steer predates the batch and was never stamped. Either way the badge would lie.
+      if (assignment === undefined && !pending.has(row.id)) continue;
       map.set(row.id, pending.has(row.id) ? 'pending' : 'held');
     }
     return map;

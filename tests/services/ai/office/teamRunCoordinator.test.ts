@@ -4198,6 +4198,75 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(current.coordinator.getState().pendingSteerMessageIds).toEqual([]);
     });
 
+    // CR-01: a steer persisted while no batch is open carries no `batchId`, so the workspace
+    // ledger query (scoped by the steer's `batchId`) could never see its delivery. The
+    // delivery write must stamp the batch onto the steer row.
+    it('stamps the batch onto a steer row that had none when it was persisted', async () => {
+      const gate = deferred();
+      const leadGate = deferred();
+      let delivered: string | null = null;
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            if (lastTextOf(options) === 'Làm báo cáo') {
+              // Hold the dispatch turn open so the steer is persisted while NO batch exists.
+              await leadGate.promise;
+              await options.executeToolFn!(
+                'delegate_batch',
+                { assignments: assignmentsFor(harness!.employees) },
+                harness!.db,
+                options.signal
+              );
+              return loopResult('Đã giao việc.');
+            }
+            // The steer turn: the id comes from the prompt, exactly as a real lead would.
+            const steerId = /id: ([0-9a-f-]{36})/.exec(systemPromptOf(options))?.[1] ?? '';
+            delivered = await options.executeToolFn!(
+              'deliver_steer',
+              { steerMessageId: steerId },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Đã giao chỉ đạo.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+      const target = current.employees[0]!;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getState().phase === 'lead-thinking');
+
+      // The headline flow: the leader is still planning, so no batch row exists yet.
+      await current.coordinator.send(`@[${target.name}](agent:${target.id}) làm thêm X`);
+      const steer = (await steerRows(current))[0]!;
+      expect(steer.batchId).toBeUndefined();
+
+      // The dispatch turn ends, the batch opens, and the queued steer turn delivers the row.
+      leadGate.release();
+      await waitFor(() => delivered !== null);
+      expect(JSON.parse(delivered!)).toMatchObject({ delivered: true, agentId: target.id });
+
+      // The workspace derives delivery from the STEER's `batchId`, so it must now be set.
+      const assignment = (await current.db.aiTeamAssignments.toArray()).find(
+        (row) => row.agentId === target.id
+      )!;
+      const stamped = await current.db.chatMessages.get(steer.id);
+      expect(stamped?.batchId).toBe(assignment.batchId);
+      expect(assignment.steerMessageIds).toEqual([steer.id]);
+
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+    });
+
     // CR-04/CR-05: the ledger field is the durable "delivered" marker. The drain used to
     // clear it, which erased delivery AND made a concurrent `deliver_steer` lose its id.
     it('keeps the delivered ids on the ledger after the drain, and injects each once', async () => {
