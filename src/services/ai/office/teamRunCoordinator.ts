@@ -17,7 +17,7 @@ import {
   DEFAULT_TEAM_CONCURRENCY,
   RECENT_WINDOW_TURNS,
 } from '../../../types/aiOffice';
-import type { ChatTokenUsage } from '../../../types/models';
+import type { ChatMessage, ChatTokenUsage } from '../../../types/models';
 import {
   createDefaultChatTurnDeps,
   SANITIZED_TURN_ERROR,
@@ -28,6 +28,7 @@ import {
   type ChatTurnRuntimeDeps,
 } from '../../../components/ai/runtime/chatTurnRuntime';
 import { dispatchAiToolCall } from '../aiOrchestratorLoop';
+import type { ChatCompletionMessage } from '../types';
 import { AI_DATABASE_TOOLS, isMutationTool, normalizeToolName, type AiToolDefinition } from '../aiTools';
 import {
   EMPLOYEE_READ_ONLY_ALLOWLIST,
@@ -52,6 +53,7 @@ import {
   type LinkedItemIndexEntry,
 } from './teamPrompts';
 import {
+  LEAD_ONLY_TEAM_TOOLS,
   TEAM_TOOL_DEFINITIONS,
   executeTeamTool,
   type TeamToolContext,
@@ -111,6 +113,13 @@ export interface TeamRunSnapshot {
   pendingPlan: AssignmentPlan | null;
   pendingApproval: ChatTurnApprovalInfo | null;
   /**
+   * 37.1 D-03/D-28: steer rows the leader has not drained yet — the "chờ leader đọc"
+   * badge. Live-session only; the durable state is derived from the ledger (D-14).
+   */
+  pendingSteerMessageIds: string[];
+  /** 37.1 D-03: delivered-but-undrained steers per agent — the "chưa giao" badge. */
+  undeliveredSteerCountByAgent: Record<string, number>;
+  /**
    * D-21: the scope that is actually parked. The banner names the agent when one
    * agent's own gate is closed, so the user tops up the right budget.
    */
@@ -163,11 +172,12 @@ export interface TeamRunCoordinatorOptions {
 
 export interface TeamRunCoordinator {
   /**
-   * D-20/D-21: the three-way dispatch edge 37-06 needs. `'busy'` means a live OR parked
-   * turn holds the slot and will settle on its own (requeue); `'blocked'` means the
-   * coordinator is disposed and never will (surface an error, requeue nothing).
+   * D-01/D-02: the single chat box, always usable. `'started'` means a turn began;
+   * `'steered'` means a live run took the message as a steer; `'refused'` means the
+   * mentioned agent already settled (the leader reports it honestly); `'blocked'` means
+   * the coordinator is disposed and nothing will ever happen.
    */
-  send(text: string): Promise<'started' | 'busy' | 'blocked'>;
+  send(text: string): Promise<'started' | 'steered' | 'refused' | 'blocked'>;
   /**
    * Internal seam (D-09/D-22): the ONE terminal writer for an attempt. 37-04's `stopAgent`
    * and `abortAll` call it; exported so the "exactly one report row under concurrency"
@@ -217,6 +227,12 @@ export interface TeamRunCoordinator {
   setTeamBudget(total: number): void;
   /** D-07 diagnostic seam: live scheduler slots, so a leak is observable without a provider. */
   getRunningCount(): number;
+  /**
+   * 37.1 SC5 test seam: the inbox drain, so the disposed gate is provable without a provider.
+   * Production reaches it through `beforeToolRound`; this exists for the same reason
+   * `finalizeAttempt` is exported.
+   */
+  drainSteerInbox(agentId: string, assignmentId: string): Promise<ChatCompletionMessage[]>;
   subscribe(listener: () => void): () => void;
   getState(): TeamRunSnapshot;
 }
@@ -227,11 +243,17 @@ const TEAM_TOOL_NAMES = new Set(
 
 /** The employee payload is the payload-layer half of D-12; the runtime policy is the other. */
 const EMPLOYEE_TEAM_TOOLS = TEAM_TOOL_DEFINITIONS.filter(
-  (tool) => normalizeToolName(tool.function.name) !== 'delegate_batch'
+  (tool) => !LEAD_ONLY_TEAM_TOOLS.has(normalizeToolName(tool.function.name))
 );
 
 /** `@[Name](agent:<id>)` — same syntax `ChatMessageBubble.renderUserMessageWithMentions` parses. */
 const AGENT_MENTION = /@\[([^\]]+)\]\(agent:([a-zA-Z0-9-]+)\)/;
+
+/**
+ * D-10: a steer reaches an agent as a `role: 'user'` message with this prefix — never a
+ * system message, never a tool result. One constant so both drains cannot drift.
+ */
+const STEER_PREFIX = '[Chỉ đạo từ người dùng] ';
 
 const TERMINAL_STATUSES: readonly AgentRunStatus[] = ['done', 'stopped', 'error'];
 
@@ -255,9 +277,8 @@ const LIVE_PHASES: ReadonlySet<TeamRunPhase> = new Set<TeamRunPhase>([
 ]);
 
 /**
- * D-21: live phases PLUS the two park phases. A parked turn still owns the slot — a second
- * turn beside it is exactly what `send()` must refuse, so `send()` AND the composer gate on
- * this one set.
+ * D-21: live phases PLUS the two park phases. A parked turn still owns the slot, so a
+ * second submit is routed as a steer instead of starting a second turn (D-01/D-02).
  */
 export const BUSY_PHASES: ReadonlySet<TeamRunPhase> = new Set<TeamRunPhase>([
   ...LIVE_PHASES,
@@ -349,6 +370,13 @@ const EMPLOYEE_DELEGATE_REFUSAL = JSON.stringify({
   message: 'Chỉ trưởng nhóm được giao việc cho nhân viên.',
 });
 
+/** 37.1 D-28: `deliver_steer` is the leader's gate — an employee call writes nothing. */
+export const EMPLOYEE_DELIVER_STEER_REFUSAL = JSON.stringify({
+  refused: true,
+  code: 'AGENT_NOT_IN_ROSTER',
+  message: 'Chỉ trưởng nhóm được giao chỉ đạo cho nhân viên.',
+});
+
 /**
  * Every advertised team tool must resolve to a handler. `dispatchAiToolCall` only routes
  * `AI_DATABASE_TOOLS` members to `executeAiTool`; anything else falls through to the dynamic
@@ -356,7 +384,7 @@ const EMPLOYEE_DELEGATE_REFUSAL = JSON.stringify({
  */
 export function resolveTeamToolName(name: string): 'coordinator' | 'teamTools' | 'unknown' {
   const normalized = normalizeToolName(name);
-  if (normalized === 'delegate_batch') return 'coordinator';
+  if (normalized === 'delegate_batch' || normalized === 'deliver_steer') return 'coordinator';
   if (TEAM_TOOL_NAMES.has(normalized)) return 'teamTools';
   return 'unknown';
 }
@@ -502,6 +530,13 @@ export function createTeamRunCoordinator(
   const retryingAssignments = new Set<string>();
   /** Latest synthesis row written by the runtime, so a retry can supersede its predecessor. */
   let lastSynthesisMessageId: string | null = null;
+  /**
+   * 37.1 D-03/D-28: steer rows persisted but not yet read by the leader. Live-session
+   * only — the durable "undelivered" state is derived from the ledger (D-14).
+   */
+  const pendingSteerMessageIds = new Set<string>();
+  /** 37.1 D-03: delivered-but-undrained steers per agent (the "chưa giao" badge). */
+  const undeliveredSteerCountByAgent = new Map<string, number>();
 
   const notify = () => {
     for (const listener of listeners) {
@@ -768,6 +803,15 @@ export function createTeamRunCoordinator(
         return dispatchBatch(assignments, signal);
       }
 
+      // 37.1 D-28: same lead-only shape as `delegate_batch`, but the coordinator — not the
+      // validator — decides, because only it can check the live ledger.
+      if (normalized === 'deliver_steer') {
+        if (!roster.lead || agentId !== roster.lead.id) return EMPLOYEE_DELIVER_STEER_REFUSAL;
+        const steerMessageId =
+          typeof args?.steerMessageId === 'string' ? args.steerMessageId : '';
+        return deliverSteer(steerMessageId);
+      }
+
       if (TEAM_TOOL_NAMES.has(normalized)) {
         return executeTeamTool(name, args, ctx);
       }
@@ -1001,13 +1045,21 @@ export function createTeamRunCoordinator(
     }
   }
 
-  function beforeToolRoundFor(agentId: string) {
+  function beforeToolRoundFor(agentId: string, attempt?: AttemptRef) {
     // D-21 / Pitfall 8: the loop's own signal reaches both gates, so a Stop while parked
     // rejects instead of hanging. The trailing throw covers a hook that resolved post-abort.
-    return async (_round: number, signal: AbortSignal): Promise<void> => {
+    // 37.1 D-09: the drain runs AFTER the gates — a parked agent must not consume its steer
+    // while paused — and its returned messages are appended by the loop.
+    return async (
+      _round: number,
+      signal: AbortSignal
+    ): Promise<ChatCompletionMessage[] | void> => {
       await gateFor(agentId).wait(signal);
       await teamGate.wait(signal);
       signal.throwIfAborted();
+      return roster.lead && agentId === roster.lead.id
+        ? drainLeaderSteerQueue()
+        : drainSteerInbox(agentId, attempt);
     };
   }
 
@@ -1084,7 +1136,7 @@ export function createTeamRunCoordinator(
         messageKind: 'report',
         agentId: employee.id,
         agentName: employee.name,
-        beforeToolRound: beforeToolRoundFor(employee.id),
+        beforeToolRound: beforeToolRoundFor(employee.id, attempt),
       };
 
       currentRequests.set(employee.id, request);
@@ -1289,14 +1341,248 @@ export function createTeamRunCoordinator(
     return employee;
   }
 
-  async function send(text: string): Promise<'started' | 'busy' | 'blocked'> {
+  /**
+   * 37.1 D-01/D-02/D-28: a submit while a turn is live is a STEER, not a refusal and not a
+   * queued second turn. The row is persisted immediately — the leader always reads it —
+   * and the leader decides whether the mentioned agent ever receives it (`deliver_steer`).
+   *
+   * `steer()` NEVER writes `steerMessageIds`: the leader is the gate (D-28). A direct write
+   * here would hand the text to the agent before the leader judged it.
+   */
+  async function steer(text: string): Promise<'steered' | 'refused' | 'blocked'> {
+    if (disposed) return 'blocked';
+    const target = parseMentionTarget(text);
+    // D-16: the leader always sees the message, so the row is persisted unconditionally.
+    // D-15: a user row — never `agentId`/`agentName`, which would render an agent bubble.
+    const row = await saveTeamMessage(
+      {
+        threadId: options.threadId,
+        role: 'user',
+        content: text,
+        messageKind: 'steer',
+        ...(target ? { targetAgentId: target.id } : {}),
+        ...(openBatchId !== null ? { batchId: openBatchId } : {}),
+      },
+      db
+    );
+    // The persist already happened; `'blocked'` would duplicate the text in the composer.
+    if (disposed) return 'steered';
+    pendingSteerMessageIds.add(row.id);
+    notify();
+
+    if (!target) {
+      void runLeadSteerTurn(text);
+      return 'steered';
+    }
+
+    const assignmentId = assignmentIdsByAgent.get(target.id);
+    const assignment = assignmentId ? await getAssignment(assignmentId, db) : undefined;
+    if (disposed) return 'blocked';
+    // D-11: the agent already settled. The row stays pending and the leader reports it
+    // honestly; the leader turn still runs so the user gets an answer.
+    if (
+      !assignment ||
+      (assignment.runStatus !== 'queued' && assignment.runStatus !== 'running')
+    ) {
+      void runLeadSteerTurn(text);
+      return 'refused';
+    }
+    // D-28: write nothing to the assignment. The leader decides whether to `deliver_steer`.
+    void runLeadSteerTurn(text);
+    return 'steered';
+  }
+
+  /**
+   * 37.1 D-09/D-17: drain the steers delivered to this attempt into its next round. The
+   * caller runs this AFTER the budget gates, so a parked agent never consumes a steer while
+   * paused. Returns the messages the loop appends; the ledger is cleared FIRST so a second
+   * drain cannot re-inject the same text.
+   */
+  async function drainSteerInbox(
+    agentId: string,
+    attempt?: AttemptRef
+  ): Promise<ChatCompletionMessage[]> {
+    if (!attempt) return [];
+    const row = await getAssignment(attempt.assignmentId, db);
+    const pending = row?.steerMessageIds ?? [];
+    if (pending.length === 0) return [];
+    const messages = await db.chatMessages.bulkGet(pending);
+    // 37.1 SC5: gate the CLEARING write, do not follow it. A check after the update could
+    // not prevent it, and a teardown must leave the ledger honest for the post-relaunch
+    // `undelivered` read (D-14).
+    if (disposed) return [];
+    await db.aiTeamAssignments.update(attempt.assignmentId, { steerMessageIds: [] });
+    undeliveredSteerCountByAgent.delete(agentId);
+    notify();
+    return messages
+      .filter((message): message is ChatMessage => message !== undefined)
+      .map((message) => ({ role: 'user' as const, content: STEER_PREFIX + message.content }));
+  }
+
+  /**
+   * 37.1 D-16: the leader reads EVERY user message, including the ones addressed to an
+   * agent. Draining at the round boundary is what makes that true for a steer that arrived
+   * mid-turn.
+   */
+  async function drainLeaderSteerQueue(): Promise<ChatCompletionMessage[]> {
+    if (pendingSteerMessageIds.size === 0) return [];
+    const ids = [...pendingSteerMessageIds];
+    // SC5: gate the clearing write — a teardown must not consume a steer nobody read.
+    if (disposed) return [];
+    pendingSteerMessageIds.clear();
+    notify();
+    const messages = await db.chatMessages.bulkGet(ids);
+    return messages
+      .filter((message): message is ChatMessage => message !== undefined)
+      .map((message) => ({ role: 'user' as const, content: STEER_PREFIX + message.content }));
+  }
+
+  /**
+   * 37.1 D-28: the steer turn's tool list. Reads only plus `deliver_steer` — the leader is
+   * the gate, so it must be able to see the tool. `delegate_batch` is deliberately absent (a
+   * second batch would overwrite `openBatchId`); plan 05 appends `amend_assignments` here.
+   */
+  function leadSteerTools(): AiToolDefinition[] {
+    const reads = getToolsForTurn(true, options.mcpTools ?? [], LEAD_TOOL_ALLOWLIST);
+    const deliverSteerTool = TEAM_TOOL_DEFINITIONS.filter(
+      (tool) => normalizeToolName(tool.function.name) === 'deliver_steer'
+    );
+    return [...reads, ...deliverSteerTool];
+  }
+
+  /** The pending steers as prompt rows, so the leader has a real id to pass to `deliver_steer`. */
+  async function loadPendingSteers(): Promise<
+    Array<{ id: string; content: string; targetAgentName?: string }>
+  > {
+    const ids = [...pendingSteerMessageIds];
+    if (ids.length === 0) return [];
+    const rows = await db.chatMessages.bulkGet(ids);
+    return rows
+      .filter((row): row is ChatMessage => row !== undefined)
+      .map((row) => {
+        const target = row.targetAgentId
+          ? roster.employees.find((employee) => employee.id === row.targetAgentId)
+          : undefined;
+        return {
+          id: row.id,
+          content: row.content,
+          ...(target ? { targetAgentName: target.name } : {}),
+        };
+      });
+  }
+
+  /**
+   * 37.1 D-04/D-28: the lead re-plan turn a steer opens. It reads the live ledger, reports
+   * where every agent is, and decides whether to deliver the steer.
+   *
+   * It never touches the phase, the plan resolver or the batch: the batch owns all of them.
+   * Serialized through `runLeadTurnSerialized` so it can never overlap the synthesis turn.
+   */
+  async function runLeadSteerTurn(text: string): Promise<void> {
+    if (disposed) return;
+    const lead = roster.lead;
+    if (!lead) return;
+    await runLeadTurnSerialized(async () => {
+      if (disposed) return;
+      const [recentTurns, linkedItems, pendingSteers] = await Promise.all([
+        listRecentTurns(options.threadId, RECENT_WINDOW_TURNS, db),
+        loadLinkedItems(),
+        loadPendingSteers(),
+      ]);
+      const ledger = openBatchId === null ? [] : await listBatchAssignments(openBatchId, db);
+      if (disposed) return;
+      // 37.1 D-03: the leader has now READ these — the "chờ leader đọc" badge clears here.
+      // A steer that arrives after this point is picked up by `drainLeaderSteerQueue` at the
+      // next round boundary instead.
+      for (const steer of pendingSteers) pendingSteerMessageIds.delete(steer.id);
+      notify();
+      const prompt = buildLeadTurnRequest({
+        lead,
+        team: roster.teamRow ?? team,
+        roster: roster.employees,
+        linkedItems,
+        originalRequest: text,
+        recentTurns,
+        ledger,
+        pendingSteers,
+      });
+      const request: ChatTurnRequest = {
+        ...prompt,
+        threadId: options.threadId,
+        scopeKey: 'team:' + teamId,
+        endpoint: options.endpoint,
+        apiKey: options.apiKey,
+        model: lead.model || options.model,
+        analysisMode: true,
+        autoApprove: liveTeam.autoApproveMutations === true,
+        tools: leadSteerTools(),
+        mutationPolicy: 'approve',
+        persistUserMessage: false,
+        agentKind: 'lead',
+        messageKind: 'plan',
+        agentId: lead.id,
+        agentName: lead.name,
+        beforeToolRound: beforeToolRoundFor(lead.id),
+      };
+      try {
+        await registry.get(lead.id).start(request);
+      } catch {
+        /* a steer turn must never break the batch */
+      }
+      // SC5: a teardown during the turn must leave nothing behind for a new instance.
+      if (disposed) return;
+    });
+  }
+
+  /**
+   * 37.1 D-28: the ONLY writer of `steerMessageIds`. Every check is against the live ledger —
+   * the model's id is never trusted. Idempotent: a repeat call appends nothing.
+   */
+  async function deliverSteer(steerMessageId: string): Promise<string> {
+    if (disposed) return DISPOSED_REFUSAL;
+    const message = await db.chatMessages.get(steerMessageId);
+    if (message?.messageKind !== 'steer' || message.targetAgentId === undefined) {
+      return JSON.stringify({
+        refused: true,
+        message: 'Không tìm thấy chỉ đạo hợp lệ để giao.',
+      });
+    }
+    const assignmentId = assignmentIdsByAgent.get(message.targetAgentId);
+    const assignment = assignmentId ? await getAssignment(assignmentId, db) : undefined;
+    if (
+      !assignment ||
+      assignment.batchId !== openBatchId ||
+      (assignment.runStatus !== 'queued' && assignment.runStatus !== 'running')
+    ) {
+      return JSON.stringify({
+        refused: true,
+        message: 'Việc của nhân viên này không còn nhận chỉ đạo được nữa.',
+      });
+    }
+    if ((assignment.steerMessageIds ?? []).includes(steerMessageId)) {
+      return JSON.stringify({ delivered: true, duplicate: true, agentId: message.targetAgentId });
+    }
+    // D-28: a `queued` agent has no turn yet, but its round-1 drain reads this field.
+    await db.aiTeamAssignments.update(assignment.id, {
+      steerMessageIds: [...(assignment.steerMessageIds ?? []), steerMessageId],
+    });
+    undeliveredSteerCountByAgent.set(
+      message.targetAgentId,
+      (undeliveredSteerCountByAgent.get(message.targetAgentId) ?? 0) + 1
+    );
+    pendingSteerMessageIds.delete(steerMessageId);
+    notify();
+    return JSON.stringify({ delivered: true, agentId: message.targetAgentId });
+  }
+
+  async function send(
+    text: string
+  ): Promise<'started' | 'steered' | 'refused' | 'blocked'> {
     // D-18: a disposed coordinator is inert. Nothing may start, persist or register — and
     // no state change will ever make it work again, so the caller must not requeue.
     if (disposed) return 'blocked';
-    // WR-02/D-21: a second submit while a turn is live OR parked would persist a duplicate
-    // user row. A parked turn will settle on its own, so this is `'busy'` (requeue), never a
-    // dropped submit the caller cannot distinguish from a started turn.
-    if (BUSY_PHASES.has(phase)) return 'busy';
+    // D-01/D-02: a live OR parked turn no longer refuses the submit — it takes it as a steer.
+    if (BUSY_PHASES.has(phase)) return steer(text);
     // D-03/D-07: read the roster exactly ONCE per turn, before any read of it.
     if (options.loadRoster) {
       roster = await options.loadRoster();
@@ -1325,7 +1611,9 @@ export function createTeamRunCoordinator(
         return 'started';
       }
 
-      await startLeadTurn(text);
+      // D-24/37.1: serialized so a steer turn arriving during `lead-thinking` queues behind
+      // this one instead of hitting `TURN_IN_PROGRESS` on a live runtime.
+      await runLeadTurnSerialized(() => startLeadTurn(text));
       return 'started';
     } finally {
       // D-24: when the turn opened a batch, the batch owns the team turn — `onBatchSettled`
@@ -1983,7 +2271,7 @@ export function createTeamRunCoordinator(
       // WR-03: the ONE phase reset for this call. Whatever escaped the body — a refusal
       // throw with no attempt created, a missing source report, a throwing transcription
       // write — leaves the coordinator `ready` and the guards clear, so the next send()
-      // starts instead of returning 'busy' forever.
+      // starts a turn instead of being steered into a finished one.
       if (phase === 'batch-running' || phase === 'lead-synthesizing') setPhase('ready');
       retryingAssignments.delete(assignmentId);
       if (claimed && claimedAgentId !== null) retryingAgents.delete(claimedAgentId);
@@ -2166,6 +2454,10 @@ export function createTeamRunCoordinator(
     // `clear()` aborts and drops every runtime (teamRunRegistry).
     registry.clear();
 
+    // 37.1 SC5: no stale steer badge may survive into a new coordinator for this team id.
+    pendingSteerMessageIds.clear();
+    undeliveredSteerCountByAgent.clear();
+
     for (const agentId of agents.keys()) settleAgent(agentId, 'stopped');
 
     if (openBatchId !== null) {
@@ -2248,6 +2540,8 @@ export function createTeamRunCoordinator(
       agents: [...agents.values()],
       pendingPlan,
       pendingApproval,
+      pendingSteerMessageIds: [...pendingSteerMessageIds],
+      undeliveredSteerCountByAgent: Object.fromEntries(undeliveredSteerCountByAgent),
       pausedAgentId: agentParked?.agentId ?? null,
       pausedAgentName: agentParked
         ? roster.employees.find((row) => row.id === agentParked.agentId)?.name ??
@@ -2275,6 +2569,8 @@ export function createTeamRunCoordinator(
     setTeamSettings,
     setTeamBudget,
     getRunningCount,
+    drainSteerInbox: (agentId: string, assignmentId: string) =>
+      drainSteerInbox(agentId, { batchId: '', assignmentId, attemptNo: 1 }),
     subscribe,
     getState,
   };

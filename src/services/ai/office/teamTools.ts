@@ -31,7 +31,8 @@ export type TeamToolRefusalCode =
   | 'SKILL_NOT_ASSIGNED'
   | 'ITEM_NOT_LINKED'
   | 'AGENT_NOT_IN_ROSTER'
-  | 'EMPTY_BATCH';
+  | 'EMPTY_BATCH'
+  | 'INVALID_ARGUMENT';
 
 /** Mirrors `ArtifactToolRefusal`: a refusal is a returned value, never a thrown error. */
 export interface TeamToolRefusal {
@@ -145,7 +146,35 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'deliver_steer',
+      description:
+        'Giao một chỉ đạo đang chờ của người dùng cho nhân viên được nhắc tới. Chỉ gọi khi chỉ đạo an toàn để giao; nếu có vấn đề, giữ lại và hỏi người dùng trước.',
+      parameters: {
+        type: 'object',
+        properties: {
+          steerMessageId: {
+            type: 'string',
+            description: 'Id của chỉ đạo trong mục [CHỈ ĐẠO CHỜ XỬ LÝ].',
+          },
+        },
+        required: ['steerMessageId'],
+      },
+    },
+  },
 ];
+
+/**
+ * 37.1 D-27/D-28: tools only the leader may call. Declared ONCE here (plan 05 extends this
+ * same set in place with `amend_assignments`); the coordinator derives its employee payload
+ * from it, so adding a tool above can never leak it to an employee.
+ */
+export const LEAD_ONLY_TEAM_TOOLS: ReadonlySet<string> = new Set([
+  'delegate_batch',
+  'deliver_steer',
+]);
 
 /** D-11: compact BM25 hits; the full body is only reachable through `read_team_turn`. */
 async function searchTeamHistory(
@@ -314,6 +343,18 @@ async function delegateBatch(args: Record<string, any>, ctx: TeamToolContext): P
   return JSON.stringify({ assignments: normalized });
 }
 
+/**
+ * 37.1 D-28: argument validation only. The coordinator owns the real gate — it re-validates
+ * the id against the live ledger, because a model-supplied id must never be trusted.
+ */
+async function deliverSteer(args: Record<string, any>): Promise<string> {
+  const steerMessageId = typeof args.steerMessageId === 'string' ? args.steerMessageId : '';
+  if (!steerMessageId) {
+    return JSON.stringify(refuse('INVALID_ARGUMENT', 'Thiếu steerMessageId.'));
+  }
+  return JSON.stringify({ steerMessageId });
+}
+
 export async function executeTeamTool(
   name: string,
   args: Record<string, any>,
@@ -333,6 +374,8 @@ export async function executeTeamTool(
       return getLinkedContext(input, ctx);
     case 'delegate_batch':
       return delegateBatch(input, ctx);
+    case 'deliver_steer':
+      return deliverSteer(input);
     default:
       return JSON.stringify({ error: `Unknown team tool: ${name}` });
   }

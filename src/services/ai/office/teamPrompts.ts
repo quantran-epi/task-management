@@ -5,6 +5,7 @@ import {
   type AiLead,
   type AiSkill,
   type AiTeam,
+  type AiTeamAssignment,
 } from '../../../types/aiOffice';
 import { sanitizeHistoryTurns } from '../contextCompaction';
 
@@ -125,9 +126,15 @@ export function buildEmployeeTurnRequest(input: BuildEmployeeTurnRequestInput): 
       role: row.messageKind === 'instruction' ? ('user' as const) : ('assistant' as const),
     }));
 
+  // 37.1 D-17: a steer row is thread-wide, but only the addressed agent may see it in its
+  // prompt — otherwise every agent pays the token cost and misreads another's work.
+  const visibleTurns = recentTurns.filter(
+    (row) => row.messageKind !== 'steer' || row.targetAgentId === employee.id
+  );
+
   return {
     systemMessages: [{ role: 'system', content: parts.join('\n\n') }],
-    history: [...sanitizeHistoryTurns(ownRows), ...sanitizeHistoryTurns(recentTurns)],
+    history: [...sanitizeHistoryTurns(ownRows), ...sanitizeHistoryTurns(visibleTurns)],
     text: instruction,
   };
 }
@@ -148,10 +155,28 @@ export interface BuildLeadTurnRequestInput {
   recentTurns: readonly ChatMessage[];
   /** D-12: the batch's current reports, resolved from the ledger on a re-synthesis pass. */
   batchResults?: readonly BatchResult[] | undefined;
+  /** 37.1 D-04: the live assignment list, so the leader can report where every agent is. */
+  ledger?: readonly AiTeamAssignment[] | undefined;
+  /** 37.1 D-28: steers awaiting the leader's decision — the ids `deliver_steer` takes. */
+  pendingSteers?: ReadonlyArray<{
+    id: string;
+    content: string;
+    targetAgentName?: string;
+  }> | undefined;
 }
 
 export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTurn {
-  const { lead, team, roster, linkedItems, originalRequest, recentTurns, batchResults } = input;
+  const {
+    lead,
+    team,
+    roster,
+    linkedItems,
+    originalRequest,
+    recentTurns,
+    batchResults,
+    ledger,
+    pendingSteers,
+  } = input;
 
   const parts = [
     `Bạn là ${lead.name}, ${lead.role} của nhóm "${team.name}".`,
@@ -164,6 +189,11 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
       '4. Không khẳng định suy luận nội bộ của nhân viên; chỉ dùng nội dung họ báo cáo.',
       '5. Chỉ bạn được phép thay đổi dữ liệu; thao tác ghi sẽ dừng ở thẻ phê duyệt của người dùng.',
       "6. Nếu kết quả lô có mục `kind: 'unfinished'`, BẮT BUỘC nêu rõ trong câu tổng hợp những việc chưa hoàn tất và lý do; không được trình bày lô là đã xong.",
+      '7. Trước khi sửa hay giao chỉ đạo, đọc [HIỆN TRẠNG LÔ ĐANG CHẠY] và báo cáo trung thực từng nhân viên đang ở đâu.',
+      '8. Hỏi lại người dùng khi chỉ đạo mơ hồ hoặc thay đổi việc của nhiều nhân viên; chỉ đạo rõ và nhỏ thì áp ngay rồi báo lại sau.',
+      '9. Khi chỉ đạo mâu thuẫn với việc đang chạy, nói rõ trong câu trả lời; nếu nghiêm trọng, giữ lại và hỏi người dùng xác nhận trước khi nhân viên nhận.',
+      '10. Bạn là cửa chặn cho mọi chỉ đạo @nhân viên — nhân viên KHÔNG nhận được cho tới khi bạn gọi deliver_steer với id của chỉ đạo. Chỉ đạo bình thường thì giao ngay; chỉ đạo có vấn đề thì giữ lại và hỏi.',
+      '11. Khi người dùng nhắc tới một nhân viên đã xong việc, nói thẳng là đã xong và đề nghị chạy lại hoặc giao việc mới — không tự chạy lại.',
     ].join('\n'),
     [
       '[DANH SÁCH NHÂN VIÊN]',
@@ -171,6 +201,37 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
       'Khi gọi delegate_batch, trường agentId PHẢI là giá trị agentId ở trên — không dùng tên.',
     ].join('\n'),
   ];
+
+  // 37.1 D-04/D-06: the live ledger is how the leader reports honestly and knows which rows
+  // it may amend. `task` originated from a model, so it enters as untrusted data.
+  if (ledger && ledger.length > 0) {
+    parts.push(
+      [
+        '[HIỆN TRẠNG LÔ ĐANG CHẠY]',
+        ...ledger.map(
+          (row) =>
+            `- assignmentId: ${row.id} · ${row.agentName} · ${row.runStatus}` +
+            `${row.runStatus === 'queued' ? ' · có thể huỷ hoặc sửa' : ' · chỉ có thể gửi chỉ đạo'}` +
+            `\n  việc: ${wrapUntrusted('VIỆC ĐANG GIAO', row.task)}`
+        ),
+        'Chỉ huỷ/sửa được dòng `queued`. Dòng `running` chỉ nhận chỉ đạo.',
+      ].join('\n')
+    );
+  }
+
+  // 37.1 D-28: without the ids the leader cannot call `deliver_steer` at all.
+  if (pendingSteers && pendingSteers.length > 0) {
+    parts.push(
+      [
+        '[CHỈ ĐẠO CHỜ XỬ LÝ]',
+        ...pendingSteers.map(
+          (steer) =>
+            `- id: ${steer.id} · gửi tới: ${steer.targetAgentName ?? 'cả nhóm'}\n  nội dung: ${steer.content}`
+        ),
+        'Gọi deliver_steer với id ở trên để giao chỉ đạo cho nhân viên được nhắc tới.',
+      ].join('\n')
+    );
+  }
 
   if (batchResults && batchResults.length > 0) {
     parts.push(
