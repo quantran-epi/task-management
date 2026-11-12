@@ -1248,13 +1248,17 @@ export function createTeamRunCoordinator(
 
       if (attempt) {
         // D-09: the one status writer moves queued -> running immediately before the turn.
-        await transitionAssignment(
+        // WR-03: `null` means the row is no longer `queued` — a leader amend retired it while
+        // this task was parked past its last ledger read. Running the turn anyway would spend
+        // tokens on an attempt whose report is dropped by `saveMessage`'s settled guard.
+        const started = await transitionAssignment(
           attempt.assignmentId,
           'queued',
           'running',
           { startedAt: new Date().toISOString() },
           db
         );
+        if (started === null) throw new DOMException('Aborted', 'AbortError');
         // D-22/D-09: a non-status field, written at START time (describes when the attempt
         // began, not how it ended) — outside the terminal transaction by design.
         if (attempt.instructionMessageId !== undefined) {
@@ -1302,6 +1306,10 @@ export function createTeamRunCoordinator(
     } catch (err) {
       // D-16/T-37-08: a throw must settle the agent AND its ledger row, never hang the batch.
       releaseLiveUse(employee.id);
+      // WR-03: a retired row's own dispatch neither starts nor settles — the amend path owns
+      // the terminal write and the replacement's live state. Settling here would race the
+      // replacement's `queued` state with a phantom `error`.
+      if (attempt && retiredAssignmentIds.has(attempt.assignmentId)) throw err;
       try {
         if (attempt) {
           // `from` must be a literal status, so read the row and branch rather than passing
@@ -1956,6 +1964,31 @@ export function createTeamRunCoordinator(
         refused.push({ assignmentId: row.id, code: 'NOT_QUEUED' });
         continue;
       }
+      // WR-03: the finalize is the authoritative claim on the row. `null` means it left
+      // `queued` between the re-read above and this write (a dispatch already past its own
+      // ledger read). Dispatching a replacement then would start a SECOND turn for one agent
+      // while the leader is told the rewrite applied, so refuse instead. Finalizing BEFORE
+      // the create keeps the refusal free of an orphan replacement row that the settle poll
+      // would then wait on forever.
+      let skipped: AiTeamAssignment | null;
+      try {
+        skipped = await finalizeAttempt(
+          row.id,
+          'queued',
+          'skipped',
+          'leader-amend',
+          AMENDED_REPORT_COPY
+        );
+      } finally {
+        userStopped.delete(row.agentId);
+      }
+      if (skipped === null) {
+        // Not retired after all: the row is running and its own turn owns the settle, so the
+        // marker must not make that turn's catch skip its finalize.
+        retiredAssignmentIds.delete(row.id);
+        refused.push({ assignmentId: row.id, code: 'NOT_QUEUED' });
+        continue;
+      }
       // D-08: append, never mutate in place — attempt = a new row (D-23).
       const next = await createAssignment(
         {
@@ -1971,14 +2004,9 @@ export function createTeamRunCoordinator(
         },
         db
       );
-      // WR-04: retire the old attempt BEFORE the replacement can be settled by it. The map
-      // moves first so the identity guard in `settleAgent` rejects the old dispatch's settle.
+      // WR-04: the map moves before the replacement can be settled by the retired dispatch's
+      // catch — its identity guard then rejects the old attempt's settle.
       assignmentIdsByAgent.set(row.agentId, next.id);
-      try {
-        await finalizeAttempt(row.id, 'queued', 'skipped', 'leader-amend', AMENDED_REPORT_COPY);
-      } finally {
-        userStopped.delete(row.agentId);
-      }
       updateAgent(row.agentId, { status: 'queued', streamingText: '', incomplete: false });
       // The replacement must actually run; `onBatchSettled`'s ledger poll is what makes the
       // batch wait for it (T-37.1-23). Pre-validation proved the controller exists.

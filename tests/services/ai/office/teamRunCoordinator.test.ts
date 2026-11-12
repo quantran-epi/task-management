@@ -4685,6 +4685,132 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
         .map((row) => row.attemptNo);
       expect(attempts).toEqual([1]);
     });
+
+    // WR-03: a dispatch already past the retired check can still reach the transition. The
+    // transition's `null` is the authoritative "this row is not mine" signal — ignoring it
+    // ran a turn whose report the settled guard then dropped.
+    it('aborts the turn when the queued→running transition loses the row', async () => {
+      const started: string[] = [];
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: [{ agentId: harness!.employees[0]!.id, task: 'Việc 1' }] },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Đã giao việc.');
+          },
+          [EMP_A_MODEL]: async () => {
+            started.push('emp-a');
+            return loopResult('A xong');
+          },
+        },
+      });
+      const current = harness;
+      const target = current.employees[0]!;
+      const table = current.db.aiTeamAssignments;
+      const realGet = table.get.bind(table);
+      let faked = false;
+      // One shot: the FIRST in-transaction read of this row is `transitionAssignment`'s, and
+      // it reports the row as already taken — the exact interleaving WR-03 describes.
+      const spy = vi.spyOn(table, 'get').mockImplementation((async (id: string) => {
+        const row = await realGet(id);
+        if (faked || row === undefined || Dexie.currentTransaction === null) return row;
+        if (row.agentId !== target.id) return row;
+        faked = true;
+        return { ...row, runStatus: 'running' };
+      }) as never);
+
+      try {
+        await current.coordinator.send('Làm báo cáo');
+        await waitForReady(current.coordinator);
+      } finally {
+        spy.mockRestore();
+      }
+
+      // The runtime never started for the lost row.
+      expect(started).toEqual([]);
+      // The row is terminal, not left `queued` for the settle poll to hang on.
+      const row = (await current.db.aiTeamAssignments.toArray()).find(
+        (candidate) => candidate.agentId === target.id
+      )!;
+      expect(['done', 'stopped', 'error', 'skipped']).toContain(row.runStatus);
+    });
+
+    // WR-03: the finalize is the authoritative claim. If it loses the row, dispatching the
+    // replacement would start a SECOND turn for one agent while the leader is told it applied.
+    it('refuses the rewrite when the finalize loses the row', async () => {
+      const gate = deferred();
+      let response = '';
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            const rewrite = (await harness!.db.aiTeamAssignments.toArray()).find(
+              (row) => row.agentId === harness!.employees[1]!.id && row.runStatus === 'queued'
+            )!;
+            const table = harness!.db.aiTeamAssignments;
+            const realGet = table.get.bind(table);
+            let faked = false;
+            // One shot: the first in-transaction read of the rewrite row is the finalize's.
+            const spy = vi.spyOn(table, 'get').mockImplementation((async (id: string) => {
+              const row = await realGet(id);
+              if (faked || row === undefined || Dexie.currentTransaction === null) return row;
+              if (id !== rewrite.id) return row;
+              faked = true;
+              return { ...row, runStatus: 'running' };
+            }) as never);
+            try {
+              response = await options.executeToolFn!(
+                'amend_assignments',
+                { operations: [{ op: 'rewrite_task', assignmentId: rewrite.id, task: 'Việc mới' }] },
+                harness!.db,
+                options.signal
+              );
+            } finally {
+              spy.mockRestore();
+            }
+            // The fake only changed what the transaction SAW; the row is still `queued` and
+            // has no dispatch task, so settle it or the settle poll would wait on it.
+            await harness!.db.aiTeamAssignments.update(rewrite.id, {
+              runStatus: 'stopped',
+              stopReason: 'leader-amend',
+            });
+            return loopResult('Không sửa được.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getRunningCount() === 1);
+      await sleep(30);
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+
+      expect(JSON.parse(response)).toMatchObject({ refused: true, code: 'NOT_QUEUED' });
+      // No replacement attempt was created for the row that left `queued`.
+      const attempts = (await current.db.aiTeamAssignments.toArray())
+        .filter((row) => row.agentId === current.employees[1]!.id)
+        .map((row) => row.attemptNo);
+      expect(attempts).toEqual([1]);
+    });
   });
 
   // WR-05: the bounded settle poll used to `break` straight into the synthesis path, closing
