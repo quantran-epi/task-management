@@ -384,6 +384,66 @@ describe('TeamWorkspace composer (37.1 D-01/D-02/D-12)', () => {
     );
   });
 
+  // CR-01 (iteration 3): a steer the leader HOLDS keeps no `batchId` — `deliverSteer` is the
+  // only writer of that stamp. Treating "no assignment" as nothing-to-deliver therefore hid
+  // the badge and told the user the instruction had reached the agent.
+  it('keeps the held badge on a pre-batch steer the leader never delivered', async () => {
+    const thread = await ensureTeamThread(team.id, db);
+    const leadRow = (await db.aiLeads.get(team.leadId!))!;
+    const employee = (await db.aiEmployees.toArray())[0]!;
+    const batch = await openBatch(
+      {
+        teamId: team.id,
+        threadId: thread.id,
+        batchIndex: 1,
+        userRequest: 'Làm báo cáo',
+        leadId: leadRow.id,
+        planSnapshot: { original: [] },
+        planDecision: 'auto',
+      },
+      db
+    );
+    const assignment = await createAssignment(
+      {
+        batchId: batch.id,
+        agentId: employee.id,
+        agentName: employee.name,
+        model: 'claude-sonnet-4',
+        task: 'Việc 1',
+      },
+      db
+    );
+    const steer = await saveTeamMessage(
+      {
+        threadId: thread.id,
+        role: 'user',
+        content: `@[${employee.name}](agent:${employee.id}) làm thêm X`,
+        messageKind: 'steer',
+        targetAgentId: employee.id,
+      },
+      db
+    );
+    expect(steer.batchId).toBeUndefined();
+    // The leader's steer turn completed and held the instruction: no longer pending, and the
+    // assignment carries no delivery marker.
+    expect(assignment.steerMessageIds).toBeUndefined();
+
+    render(
+      <TeamWorkspace
+        team={team}
+        lead={leadRow}
+        members={[]}
+        employees={[employee]}
+        skills={[]}
+        db={db}
+        onBack={() => {}}
+      />
+    );
+
+    const badge = await screen.findByTestId(`steer-badge-${steer.id}`);
+    expect(badge.textContent).toBe('chưa giao');
+  });
+
   // WR-02: `retryAssignment` throws for a busy phase / disposed run. The only call site
   // discarded it, so the user got no feedback and the app got an unhandled rejection.
   it('surfaces a refused assignment retry as fixed copy, not a rejection', async () => {

@@ -397,10 +397,11 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
    * and a steer whose target attempt is already terminal has been consumed — neither renders
    * a badge.
    *
-   * CR-01: a steer persisted while no batch was open carries no `batchId` until
-   * `deliverSteer` stamps one (which it now does). A steer whose target has NO assignment in
-   * any of the queried batches therefore has nothing left to deliver to — it must not keep a
-   * "chưa giao" badge forever.
+   * CR-01: `deliverSteer` stamps the batch onto the steer row in the same transaction as the
+   * delivery marker, so a row with NO `batchId` has never been delivered — the leader is
+   * holding it (D-28) and its "chưa giao" badge is the honest state. A row that DOES carry a
+   * `batchId` but has no assignment in any queried batch has nothing left to deliver to (the
+   * attempt settled and the row was left behind), so it must not keep a badge forever.
    */
   const steerStates = useMemo(() => {
     const map = new Map<string, 'pending' | 'held'>();
@@ -416,9 +417,8 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
       if (deliveredSteerIds.has(row.id)) continue;
       const assignment = assignmentByAgent.get(row.targetAgentId);
       if (assignment !== undefined && TERMINAL.has(assignment.runStatus)) continue;
-      // Nothing to deliver to: the attempt settled and left the queried batches, or the
-      // steer predates the batch and was never stamped. Either way the badge would lie.
-      if (assignment === undefined && !pending.has(row.id)) continue;
+      // A steer with no batch link has never been delivered; keep its honest 'held' badge.
+      if (assignment === undefined && row.batchId !== undefined) continue;
       map.set(row.id, pending.has(row.id) ? 'pending' : 'held');
     }
     return map;
