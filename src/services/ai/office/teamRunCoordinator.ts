@@ -366,6 +366,17 @@ const EMPLOYEE_DELEGATE_REFUSAL = JSON.stringify({
   message: 'Chỉ trưởng nhóm được giao việc cho nhân viên.',
 });
 
+/**
+ * 37.1: one routing per lead turn. Returned as a tool result so the model can correct itself
+ * instead of silently double-delivering the request.
+ */
+const ROUTE_ALREADY_CHOSEN_REFUSAL = JSON.stringify({
+  refused: true,
+  code: 'ROUTE_ALREADY_CHOSEN',
+  message:
+    'Lượt này đã chọn một đường (giao việc hoặc gửi tin). Không dùng cả hai cho cùng một yêu cầu — hãy trả lời người dùng bằng kết quả đã có.',
+});
+
 /** 37.1 D-27: `amend_assignments` is leader-only — same shape as the delegate refusal. */
 export const EMPLOYEE_AMEND_REFUSAL = JSON.stringify({
   refused: true,
@@ -435,6 +446,12 @@ export function createTeamRunCoordinator(
    * Set at the start of a lead turn, cleared in that turn's `finally` on every branch.
    */
   let leadTurnKind: 'thinking' | 'synthesizing' | null = null;
+  /**
+   * 37.1: which routing the CURRENT lead turn already chose. A turn may either delegate or
+   * message, never both — doing both delivers the same request twice and shows the user two
+   * answers. Enforced here, not only in the prompt: a model can ignore a rule.
+   */
+  let leadTurnRoute: 'delegated' | 'messaged' | null = null;
   /**
    * 37.1 rework: the settle handler's own claim. The batch row is closed BEFORE the synthesis
    * turn starts, so without this flag `derivePhase` would report `ready` in that window and a
@@ -1591,6 +1608,7 @@ export function createTeamRunCoordinator(
       // kind of lead turn it is. The `finally` below clears it, and because it is a plain
       // flag owned by the turn it cannot outlive the turn the way a stored phase could.
       leadTurnKind = announcedPhase === 'lead-synthesizing' ? 'synthesizing' : 'thinking';
+      leadTurnRoute = null;
 
       const outcome = await registry.get(lead.id).start(request);
       const state = agents.get(lead.id);
@@ -1610,6 +1628,7 @@ export function createTeamRunCoordinator(
       // 37.1 rework: the ONE place the lead turn's own flag is cleared, on every branch —
       // normal return, parked return, throw. A derived phase needs no other reset.
       leadTurnKind = null;
+      leadTurnRoute = null;
       agentDeferreds.delete(lead.id);
       replyTargetByAgent.delete(lead.id);
       notify();
@@ -2061,6 +2080,11 @@ export function createTeamRunCoordinator(
     rawArgs: Record<string, any>
   ): Promise<string> {
     if (disposed) return DISPOSED_REFUSAL;
+    // 37.1: symmetric guard — an agent may always speak, but a LEAD turn that already opened
+    // a batch must not also message the same people.
+    if (fromId === roster.lead?.id && leadTurnRoute === 'delegated') {
+      return ROUTE_ALREADY_CHOSEN_REFUSAL;
+    }
     const validation = await executeTeamTool('send_message', rawArgs, toolContext(fromId));
     let parsed: any;
     try {
@@ -2108,6 +2132,7 @@ export function createTeamRunCoordinator(
       },
       db
     );
+    if (fromId === roster.lead?.id) leadTurnRoute = 'messaged';
     notify();
 
     const outcomes: Array<{ to: string; outcome: string }> = [];
@@ -2268,6 +2293,10 @@ export function createTeamRunCoordinator(
     // D-05: no lead means no delegation authority — refuse rather than throw.
     const lead = roster.lead;
     if (!lead) return EMPLOYEE_DELEGATE_REFUSAL;
+    // 37.1: one routing per turn. A lead that already messaged an agent must not also open a
+    // batch for the same request — the recipient would get it twice.
+    if (leadTurnRoute === 'messaged') return ROUTE_ALREADY_CHOSEN_REFUSAL;
+    leadTurnRoute = 'delegated';
     const validation = await executeTeamTool(
       'delegate_batch',
       { assignments: rawAssignments },
@@ -2320,6 +2349,11 @@ export function createTeamRunCoordinator(
       };
       pendingPlan = plan;
       lastPlanDecision = null;
+      // Nothing else publishes this state: the lead turn is parked on the resolver, so no
+      // status transition follows. Without the notify the card only appears when some
+      // unrelated write re-renders the host (a tab switch, in UAT) — and the leader looks
+      // stuck at "đang phân tích" behind a decision the user cannot see.
+      notify();
       const approved = await new Promise<boolean>((resolve) => {
         planResolver = resolve;
       });

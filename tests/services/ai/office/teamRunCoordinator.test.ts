@@ -4235,6 +4235,73 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(leadSaw.join('\n')).toContain('Cần thêm dữ liệu đối soát tháng 9');
     });
 
+    it('one routing per lead turn: delegate_batch then send_message is refused', async () => {
+      let secondResult = '';
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: [{ agentId: harness!.employees[0]!.id, task: 'Việc 1' }] },
+              harness!.db,
+              options.signal
+            );
+            secondResult = await options.executeToolFn!(
+              'send_message',
+              { to: [harness!.employees[0]!.id], content: 'Việc 1' },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Đã giao việc.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+        },
+      });
+      const current = harness;
+
+      await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
+
+      expect(JSON.parse(secondResult).code).toBe('ROUTE_ALREADY_CHOSEN');
+      // The agent got ONE delivery, not two.
+      const log = await teamLog(current);
+      const toAgent = log.filter((row) => row.to.includes(current.employees[0]!.id));
+      expect(toAgent).toHaveLength(1);
+    });
+
+    it('one routing per lead turn: send_message then delegate_batch is refused', async () => {
+      let secondResult = '';
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'send_message',
+              { to: [harness!.employees[0]!.id], content: 'Java có kiểu Integer không?' },
+              harness!.db,
+              options.signal
+            );
+            secondResult = await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: [{ agentId: harness!.employees[0]!.id, task: 'Trả lời câu hỏi' }] },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Đã hỏi.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('Có, Integer là kiểu wrapper.'),
+        },
+      });
+      const current = harness;
+
+      await current.coordinator.send('hỏi An giúp tôi java có kiểu Integer không');
+      await waitForReady(current.coordinator);
+
+      expect(JSON.parse(secondResult).code).toBe('ROUTE_ALREADY_CHOSEN');
+      // No batch was opened, so no plan card was ever shown for a one-line question.
+      expect(current.coordinator.getState().lastPlan).toBeNull();
+    });
+
     it('R9: an agent still cannot call delegate_batch', async () => {
       let refusal = '';
       harness = await createHarness({

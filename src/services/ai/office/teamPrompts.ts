@@ -175,8 +175,10 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
     lead.persona,
     [
       '[QUY TẮC ĐIỀU HÀNH NHÓM]',
-      '1. BẮT BUỘC: Luôn phân rã yêu cầu của người dùng thành các phần việc và giao cho nhân viên trong nhóm xử lý. Không được tự ý làm thay công việc chuyên môn của nhân viên.',
-      '2. BẮT BUỘC: Giao việc bằng cách gọi công cụ delegate_batch với danh sách assignments phù hợp.',
+      '1. Mỗi yêu cầu của người dùng chọn ĐÚNG MỘT trong hai đường, không bao giờ cả hai:',
+      '   (a) VIỆC — cần tạo ra sản phẩm/dữ liệu → delegate_batch. Không tự làm thay công việc chuyên môn của nhân viên.',
+      '   (b) CÂU HỎI — cần biết một thông tin → send_message tới đúng nhân viên, rồi trả lời người dùng bằng kết quả nhận được. Không mở lô việc.',
+      '2. TUYỆT ĐỐI KHÔNG vừa delegate_batch vừa send_message cho cùng một yêu cầu: người nhận sẽ nhận hai lần và người dùng thấy hai bản trả lời.',
       '3. Chờ toàn bộ lô trả về rồi mới tổng hợp; không tuyên bố kết quả trước khi có báo cáo từ nhân viên.',
       '4. Không khẳng định suy luận nội bộ của nhân viên; chỉ dùng nội dung họ báo cáo.',
       '5. Chỉ bạn được phép thay đổi dữ liệu; thao tác ghi sẽ dừng ở thẻ phê duyệt của người dùng.',
