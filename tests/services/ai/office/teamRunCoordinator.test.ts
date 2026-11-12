@@ -4446,6 +4446,85 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
     });
   });
 
+  // WR-04: a parked dispatch can take a free slot between pre-validation and the apply
+  // loop. The abort must land BEFORE `createAssignment`, or two turns start for one agent
+  // and the replacement hits TURN_IN_PROGRESS after the leader was told it applied.
+  describe('amend race (WR-04)', () => {
+    const assignmentsFor = (employees: AiEmployee[]) =>
+      employees.map((row, index) => ({ agentId: row.id, task: `Việc ${index + 1}` }));
+
+    it('refuses the whole list when a row went live after pre-validation', async () => {
+      const gate = deferred();
+      let response = '';
+      let cancelStatus = '';
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            const rows = await harness!.db.aiTeamAssignments.toArray();
+            const cancel = rows.find(
+              (row) => row.agentId === harness!.employees[2]!.id && row.runStatus === 'queued'
+            )!;
+            const rewrite = rows.find(
+              (row) => row.agentId === harness!.employees[1]!.id && row.runStatus === 'queued'
+            )!;
+            // The rewrite target starts behind the amend's back — the race WR-04 closes.
+            await harness!.db.aiTeamAssignments.update(rewrite.id, {
+              runStatus: 'running',
+              startedAt: new Date().toISOString(),
+            });
+            response = await options.executeToolFn!(
+              'amend_assignments',
+              {
+                operations: [
+                  { op: 'cancel', assignmentId: cancel.id },
+                  { op: 'rewrite_task', assignmentId: rewrite.id, task: 'Việc mới' },
+                ],
+              },
+              harness!.db,
+              options.signal
+            );
+            cancelStatus = (await harness!.db.aiTeamAssignments.get(cancel.id))!.runStatus;
+            // The fixture row is not dispatched, so settle it or the poll would wait on it.
+            await harness!.db.aiTeamAssignments.update(rewrite.id, {
+              runStatus: 'stopped',
+              stopReason: 'leader-amend',
+            });
+            return loopResult('Không sửa được.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getRunningCount() === 1);
+      await sleep(30);
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+
+      expect(JSON.parse(response)).toMatchObject({ refused: true, code: 'NOT_QUEUED' });
+      // All-or-nothing: the cancel in the SAME list was not applied either.
+      expect(cancelStatus).toBe('queued');
+      const attempts = (await current.db.aiTeamAssignments.toArray())
+        .filter((row) => row.agentId === current.employees[1]!.id)
+        .map((row) => row.attemptNo);
+      expect(attempts).toEqual([1]);
+    });
+  });
+
   describe('amend_assignments (37.1 D-06/D-07/D-08/D-27)', () => {
     const assignmentsFor = (employees: AiEmployee[]) =>
       employees.map((row, index) => ({ agentId: row.id, task: `Việc ${index + 1}` }));

@@ -296,12 +296,14 @@ export async function listInterruptedAssignments(
     if (row.messageKind !== 'instruction' || !row.targetAgentId) return;
     // Index comparison mirrors `readThreadMessages` ordering, so a same-millisecond tie
     // is resolved the same way the transcript renders it. A report written earlier is stale.
-    const answered = rows.some(
-      (later, laterIndex) =>
-        laterIndex > index &&
-        later.messageKind === 'report' &&
-        later.agentId === row.targetAgentId
-    );
+    // WR-04: that tie-break sorts by id, so a report written in the SAME millisecond as its
+    // instruction can land before it and look unanswered. Both rows carry `assignmentId`
+    // (D-22), so pair on that when it is present — exact, and independent of ordering.
+    const answered = rows.some((later, laterIndex) => {
+      if (later.messageKind !== 'report' || later.agentId !== row.targetAgentId) return false;
+      if (row.assignmentId !== undefined) return later.assignmentId === row.assignmentId;
+      return laterIndex > index;
+    });
     if (answered) return;
     pending.push({ agentId: row.targetAgentId, task: row.content, createdAt: row.createdAt });
   });

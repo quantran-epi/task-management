@@ -480,6 +480,13 @@ export function createTeamRunCoordinator(
   >();
   /** D-10/D-11/D-18: the cancellation channel for a still-queued assignment. */
   const assignmentControllers = new Map<string, AbortController>();
+  /**
+   * WR-04: attempts the leader has retired. A parked dispatch that wakes after the amend
+   * must not settle the agent — that would release the batch's deferred before the
+   * replacement ran. The terminal write is already guarded by `from: 'queued'`; this guards
+   * the in-memory settle, which has no such guard.
+   */
+  const retiredAssignmentIds = new Set<string>();
   /** D-07/D-05: the per-team scheduler — the ONLY rule deciding how many agents run. */
   const scheduler = createTeamRunScheduler(
     team.concurrencyLimit ?? DEFAULT_TEAM_CONCURRENCY
@@ -1855,7 +1862,28 @@ export function createTeamRunCoordinator(
     // A dispose that landed during the reads above must not mutate a dead run.
     if (disposed) return DISPOSED_REFUSAL;
 
+    // WR-04: pre-validation ran before several awaits, so a parked dispatch may have taken a
+    // free slot and moved a row `queued -> running` since. Re-read the WHOLE list here, before
+    // any mutation, so the all-or-nothing contract still holds (a mid-loop refusal would have
+    // applied the earlier operations and then reported a total refusal).
+    const liveById = new Map(
+      (await listBatchAssignments(batchId, db)).map((row) => [row.id, row])
+    );
+    for (const operation of operations) {
+      if (liveById.get(operation.assignmentId)?.runStatus !== 'queued') {
+        return JSON.stringify({
+          refused: true,
+          code: 'NOT_QUEUED',
+          message: 'Chỉ huỷ hoặc sửa được việc đang xếp hàng. Việc đang chạy chỉ nhận chỉ đạo.',
+        });
+      }
+    }
+    if (disposed) return DISPOSED_REFUSAL;
+
     const applied: Array<{ op: string; assignmentId: string; replacementId?: string }> = [];
+    // WR-04: rows that lost the `queued -> running` race after pre-validation. Reported, not
+    // silently dropped — the leader's report must match the ledger (T-37.1-24).
+    const refused: Array<{ assignmentId: string; code: 'NOT_QUEUED' }> = [];
     for (const operation of operations) {
       const row = byId.get(operation.assignmentId)!;
 
@@ -1866,6 +1894,10 @@ export function createTeamRunCoordinator(
         // sets the marker first for exactly this reason.
         userStopped.set(row.agentId, 'leader-amend');
         try {
+          // WR-04: abort BEFORE the finalize, so a parked dispatch cannot start a turn the
+          // abort could no longer stop. The whole-list re-read above proves every row was
+          // still queued, and `finalizeAttempt`'s `from` guard keeps the ledger honest if one
+          // went running in between (its own turn then owns the settle).
           assignmentControllers.get(row.id)?.abort();
           await finalizeAttempt(row.id, 'queued', 'stopped', 'leader-amend', AMENDED_REPORT_COPY);
           // WR-04: identity-aware — a replacement registered for this agent must not be
@@ -1883,6 +1915,24 @@ export function createTeamRunCoordinator(
 
       // The roster check already passed in pre-validation, so this cannot be undefined.
       const employee = roster.employees.find((candidate) => candidate.id === row.agentId)!;
+      // WR-04: retire the old attempt's controller BEFORE `createAssignment`. During that
+      // await a parked dispatch can take a free slot and start a turn the abort could no
+      // longer stop, which would leave two turns for one agent. Aborting first rejects the
+      // parked `acquire`, so the row cannot transition behind our back. The `leader-amend`
+      // marker goes in BEFORE the abort, so whichever writer wins the `from: 'queued'` guard
+      // records the leader's reason rather than `user-abort`.
+      userStopped.set(row.agentId, 'leader-amend');
+      retiredAssignmentIds.add(row.id);
+      assignmentControllers.get(row.id)?.abort();
+      // Re-read after the abort: if the row still left `queued`, it is running and must not
+      // be rewritten. Report it honestly instead of claiming an apply that did not happen.
+      const liveRow = await getAssignment(row.id, db);
+      if (liveRow?.runStatus !== 'queued') {
+        userStopped.delete(row.agentId);
+        retiredAssignmentIds.delete(row.id);
+        refused.push({ assignmentId: row.id, code: 'NOT_QUEUED' });
+        continue;
+      }
       // D-08: append, never mutate in place — attempt = a new row (D-23).
       const next = await createAssignment(
         {
@@ -1899,13 +1949,9 @@ export function createTeamRunCoordinator(
         db
       );
       // WR-04: retire the old attempt BEFORE the replacement can be settled by it. The map
-      // moves first (so the identity guard in `settleAgent` rejects the old dispatch's
-      // settle) and the `leader-amend` marker goes in before the abort (so whichever writer
-      // wins the `from: 'queued'` guard records the leader's reason, not `user-abort`).
+      // moves first so the identity guard in `settleAgent` rejects the old dispatch's settle.
       assignmentIdsByAgent.set(row.agentId, next.id);
-      userStopped.set(row.agentId, 'leader-amend');
       try {
-        assignmentControllers.get(row.id)?.abort();
         await finalizeAttempt(row.id, 'queued', 'skipped', 'leader-amend', AMENDED_REPORT_COPY);
       } finally {
         userStopped.delete(row.agentId);
@@ -1932,6 +1978,14 @@ export function createTeamRunCoordinator(
     }
 
     notify();
+    if (refused.length > 0) {
+      return JSON.stringify({
+        applied,
+        refused: true,
+        code: 'NOT_QUEUED',
+        message: 'Một số việc vừa bắt đầu chạy nên không sửa được. Việc đang chạy chỉ nhận chỉ đạo.',
+      });
+    }
     return JSON.stringify({ applied });
   }
 
@@ -2017,6 +2071,11 @@ export function createTeamRunCoordinator(
       // deleted team. Throw the abort the catch below already knows how to settle — a bare
       // `return` would leave the attempt row `queued` forever.
       if (disposed) throw new DOMException('Aborted', 'AbortError');
+      // WR-04: the leader retired this attempt while it was parked. The amend path owns the
+      // terminal write and the replacement's settle, so this task must touch neither.
+      if (retiredAssignmentIds.has(assignmentId)) {
+        throw new DOMException('Aborted', 'AbortError');
+      }
       // T-37.1-04: a stop/amend that landed while this assignment was parked has already
       // written a terminal status. Re-read the ledger so a cancelled row never starts.
       const ledgerRow = await getAssignment(assignmentId, db);
@@ -2025,6 +2084,10 @@ export function createTeamRunCoordinator(
       }
       await startEmployeeTurn(employee, task, lastUserRequest, priorBatchResults, attempt);
     } catch (err) {
+      // WR-04: a retired attempt is already finalized by the amend path. Settling here would
+      // release the batch's deferred before the replacement ran (and could overwrite the
+      // replacement's live state), so this task is done.
+      if (retiredAssignmentIds.has(assignmentId)) return;
       // The acquire rejected (a stop/abort/dispose) or the prologue threw. The agent and
       // its ledger row must still settle — nothing may hang the batch (T-37-11).
       const aborted =
@@ -2061,6 +2124,8 @@ export function createTeamRunCoordinator(
     } finally {
       batchController.signal.removeEventListener('abort', onBatchAbort);
       assignmentControllers.delete(assignmentId);
+      // The retired marker has done its job once this task has ended.
+      retiredAssignmentIds.delete(assignmentId);
       if (assignmentIdsByAgent.get(employee.id) === assignmentId) {
         assignmentIdsByAgent.delete(employee.id);
       }
