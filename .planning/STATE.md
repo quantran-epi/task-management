@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
 status: executing
-stopped_at: Completed 37.1-04-PLAN.md
-last_updated: "2026-11-12T04:35:00.000Z"
-last_activity: 2026-11-12 -- Phase 37.1 plan 04 complete (steer routing + leader gate)
+stopped_at: Completed 37.1-05-PLAN.md
+last_updated: "2026-11-12T04:41:31.881Z"
+last_activity: 2026-11-12 -- Phase 37.1 plan 05 complete (leader amends queued assignments)
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 31
-  completed_plans: 29
+  completed_plans: 31
   percent: 43
 current_phase: 37
 current_phase_name: Runtime reliability + concurrency
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 37.1 (live-steering-leader-amends-assignments-and-steers-running-a) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
-Last activity: 2026-11-12 -- Phase 37.1 plan 04 complete (steer routing + leader gate)
+Last activity: 2026-11-12 -- Phase 37.1 plan 05 complete (leader amends queued assignments)
 
 ## Session Continuity
 
-Last session: 2026-11-12T04:35:00.000Z
-Stopped at: Completed 37.1-04-PLAN.md
-Resume file: .planning/phases/37.1-live-steering-leader-amends-assignments-and-steers-running-a/37.1-05-PLAN.md
+Last session: 2026-11-12T04:41:27.363Z
+Stopped at: Completed 37.1-05-PLAN.md
+Resume file: None
 
-Progress: [███████░░░] 67%
+Progress: [████████░░] 83%
 
 ## Milestone v1.4 Map
 
@@ -143,6 +143,9 @@ Progress: [███████░░░] 67%
 - [Phase 37.1]: 'steer' is widened in all six messageKind declarations at once — a partial widen either fails tsc or silently strips the row on restore
 - [Phase 37.1]: steerMessageIds is declared on the strictObject assignment backup schema (an undeclared key fails loudly) and is safe against the forbidden-key gate
 - [Phase 37.1]: the steer contract adds no table, no Dexie version and no BACKUP_SCHEMA_VERSION bump — every addition is optional
+- [Phase ?]: The amend validator owns argument shape only; ledger membership stays in the coordinator, the only holder of openBatchId
+- [Phase ?]: A non-queued row refuses the whole amend list, so the leader's report always matches the ledger
+- [Phase ?]: Amend-cancel sets userStopped before aborting so leader-amend wins the from:queued guard; a rewrite appends an attempt and re-dispatches it
 
 ## Performance Metrics
 
@@ -159,3 +162,4 @@ Progress: [███████░░░] 67%
 | Phase 37.1 P01 | 55 min | 3 tasks | 2 files |
 | Phase 37.1 P02 | ~12m | 3 tasks | 4 files |
 | Phase 37.1 P03 | ~6m | 3 tasks | 7 files |
+| Phase 37.1 P05 | 12 | 2 tasks | 4 files |

@@ -202,7 +202,7 @@ Plans:
 **Scope source:** deferred from `.planning/phases/37-runtime-reliability-concurrency/37-CONTEXT.md` (D-08/D-19/D-22/D-24). Schema is already in place from Phase 37.
 **Research flag:** standard patterns — `beforeToolRound` seam exists at `src/services/ai/aiOrchestratorLoop.ts`; defects/contracts are at `file:line` in 37-CONTEXT.
 
-**Plans:** 4/6 plans executed
+**Plans:** 5/6 plans executed
 Plans:
 **Wave 1**
 
@@ -219,7 +219,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 37.1-05-PLAN.md — `amend_assignments` (cancel/rewrite `queued`)
+- [x] 37.1-05-PLAN.md — `amend_assignments` (cancel/rewrite `queued`)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
