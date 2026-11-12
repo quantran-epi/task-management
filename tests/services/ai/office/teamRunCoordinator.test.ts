@@ -4185,9 +4185,20 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       const sent = current.coordinator.send('Làm báo cáo');
       await waitFor(() => current.coordinator.getState().phase === 'awaiting-plan');
 
+      // WR-02: the running turn's own live state, which the rollback must hand back intact.
+      const leadId = current.lead.id;
+      const before = current.coordinator.getState().agents.find((row) => row.agentId === leadId)!;
+      expect(before.status).toBe('running');
+      expect(aiTurnManager.getTurn(`team:${current.team.id}:agent:${leadId}`)).toBeDefined();
+
       await expect(current.coordinator.send('chỉ đạo khi đang chờ')).resolves.toBe('steered');
       // The lead runtime is live, so the steer turn cannot start — the id must stay pending.
       expect(current.coordinator.getState().pendingSteerMessageIds).toHaveLength(1);
+      // WR-02: the rollback must not wipe the running turn's live state or finish its turn.
+      const after = current.coordinator.getState().agents.find((row) => row.agentId === leadId)!;
+      expect(after.status).toBe('running');
+      expect(after.startedAt).toBe(before.startedAt);
+      expect(aiTurnManager.getTurn(`team:${current.team.id}:agent:${leadId}`)).toBeDefined();
 
       current.coordinator.resolvePlan(true);
       await sent;

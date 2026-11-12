@@ -1625,8 +1625,10 @@ export function createTeamRunCoordinator(
       // read to the lead) and a live state, so the indicator shows the leader reading.
       // CR-01: `start()` throws `TURN_IN_PROGRESS` on a live lead runtime, and the running
       // turn's own round-boundary drain injects the pending steers (D-16). Claim nothing in
-      // that case — the ids stay pending and are never lost.
-      const priorLeadStatus = agents.get(lead.id)?.status ?? 'done';
+      // that case — every piece of prior state is restored below.
+      const priorAgent = agents.get(lead.id);
+      const priorRequest = currentRequests.get(lead.id);
+      const priorTurn = aiTurnManager.getTurn(agentTurnId(lead.id));
       const priorAccountingKey = usageBaselineKey.get(lead.id);
       const alreadyLive = liveAgents.has(lead.id);
       currentRequests.set(lead.id, request);
@@ -1665,12 +1667,24 @@ export function createTeamRunCoordinator(
         if (started && !disposed) {
           settleAgent(lead.id, steerStatus);
         } else if (!started) {
-          // Not this turn's claim: hand every piece of state back untouched, so the turn
-          // that IS running keeps its accounting key, live-use claim and status.
+          // WR-02: this turn never registered one of its own, so restore the FULL prior
+          // state — not just `status`. The running turn's live steps, streaming text and
+          // request must survive, and the turn manager must not be finished (that would
+          // purge the running turn's entry after 800 ms and drop it from the indicator).
           if (priorAccountingKey !== undefined) usageBaselineKey.set(lead.id, priorAccountingKey);
+          else usageBaselineKey.delete(lead.id);
           if (!alreadyLive) releaseLiveUse(lead.id);
-          updateAgent(lead.id, { status: priorLeadStatus });
-          aiTurnManager.finishTurn(agentTurnId(lead.id));
+          if (priorRequest !== undefined) currentRequests.set(lead.id, priorRequest);
+          else currentRequests.delete(lead.id);
+          if (priorAgent !== undefined) agents.set(lead.id, priorAgent);
+          else agents.delete(lead.id);
+          if (priorTurn !== undefined) {
+            aiTurnManager.registerTurn(priorTurn);
+          } else {
+            // No prior entry to restore: purge the one this turn registered, or the
+            // indicator shows a lead turn that will never run (there is no plain delete).
+            aiTurnManager.finishTurn(agentTurnId(lead.id), 'aborted');
+          }
         }
       }
       notify();
