@@ -12,6 +12,7 @@ import {
   listMessages,
   readMessagesAfter,
   seenBy,
+  waitForAppend,
 } from '../../../../src/services/ai/office/teamEventLog';
 import { USER_PARTICIPANT_ID } from '../../../../src/types/teamChat';
 
@@ -58,16 +59,21 @@ describe('teamEventLog — the unified message log', () => {
     expect(other.message.seq).toBe(1);
   });
 
-  it('reads only messages addressed to the participant, after the cursor', async () => {
+  // 37.1 §1.1: everyone reads the whole log; `to[]` only decides who must respond.
+  it('reads the whole log, so a non-recipient still sees the message', async () => {
     await appendMessage({ teamId: TEAM, from: USER_PARTICIPANT_ID, to: [LEAD], content: 'to lead' }, db);
     await appendMessage({ teamId: TEAM, from: USER_PARTICIPANT_ID, to: [AGENT], content: 'to agent' }, db);
     await appendMessage({ teamId: TEAM, from: LEAD, to: [AGENT], content: 'lead to agent' }, db);
 
-    const forAgent = await readMessagesAfter(TEAM, AGENT, 0, db);
-    expect(forAgent.map((row) => row.content)).toEqual(['to agent', 'lead to agent']);
+    const all = await readMessagesAfter(TEAM, 0, db);
+    expect(all.map((row) => row.content)).toEqual(['to lead', 'to agent', 'lead to agent']);
 
-    const forLead = await readMessagesAfter(TEAM, LEAD, 0, db);
-    expect(forLead.map((row) => row.content)).toEqual(['to lead']);
+    // What each participant owes a reply to is a filter, not a different query.
+    expect(all.filter((row) => row.to.includes(AGENT)).map((row) => row.content)).toEqual([
+      'to agent',
+      'lead to agent',
+    ]);
+    expect(all.filter((row) => row.to.includes(LEAD)).map((row) => row.content)).toEqual(['to lead']);
   });
 
   // The exclusive lower bound is what stops a drained steer from being injected twice.
@@ -79,7 +85,7 @@ describe('teamEventLog — the unified message log', () => {
     await appendMessage({ teamId: TEAM, from: USER_PARTICIPANT_ID, to: [AGENT], content: 'two' }, db);
 
     await advanceCursor(TEAM, AGENT, first.message.seq, db);
-    const rest = await readMessagesAfter(TEAM, AGENT, first.message.seq, db);
+    const rest = await readMessagesAfter(TEAM, first.message.seq, db);
     expect(rest.map((row) => row.content)).toEqual(['two']);
   });
 
@@ -157,5 +163,41 @@ describe('teamEventLog — the unified message log', () => {
     await appendMessage({ teamId: TEAM, from: LEAD, to: [USER_PARTICIPANT_ID], content: 'b' }, db);
     const rows = await listMessages(TEAM, db);
     expect(rows.map((row) => row.content)).toEqual(['a', 'b']);
+  });
+
+  // I2: a consumer parked on the log wakes on the append — push, not a 25 ms poll.
+  it('wakes a waiter when a message is appended', async () => {
+    const waiter = waitForAppend(TEAM);
+    let woke = false;
+    void waiter.then(() => {
+      woke = true;
+    });
+
+    await appendMessage({ teamId: TEAM, from: USER_PARTICIPANT_ID, to: [LEAD], content: 'ping' }, db);
+    await waiter;
+    expect(woke).toBe(true);
+  });
+
+  it('does not wake a waiter for another team', async () => {
+    let woke = false;
+    const waiter = waitForAppend('team-2').then(() => {
+      woke = true;
+    });
+
+    await appendMessage({ teamId: TEAM, from: USER_PARTICIPANT_ID, to: [LEAD], content: 'ping' }, db);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(woke).toBe(false);
+
+    await appendMessage({ teamId: 'team-2', from: USER_PARTICIPANT_ID, to: [LEAD], content: 'pong' }, db);
+    await waiter;
+    expect(woke).toBe(true);
+  });
+
+  // AIO-STEER-05: teardown while a consumer is parked must not hang.
+  it('rejects a waiter when its signal aborts', async () => {
+    const controller = new AbortController();
+    const waiter = waitForAppend(TEAM, controller.signal);
+    controller.abort();
+    await expect(waiter).rejects.toBeTruthy();
   });
 });

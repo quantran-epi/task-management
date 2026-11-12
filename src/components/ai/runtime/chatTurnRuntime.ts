@@ -123,6 +123,13 @@ export interface ChatTurnRuntime {
   retry(): Promise<ChatTurnOutcome>;
   abort(): void;
   resolveApproval(approved: boolean): void;
+  /**
+   * 37.1 §4.2: the ONE way to reach a running turn. The message is appended to the next
+   * tool round, exactly like `beforeToolRound` already does for a drained steer — only the
+   * source changed. Returns false when no turn is live, so the caller can tell "injected"
+   * from "nobody is listening" instead of pretending.
+   */
+  injectUserMessage(content: string): boolean;
   getStatus(): ChatTurnStatus;
   getToolLimitRounds(): number | null;
   isRunning(): boolean;
@@ -189,6 +196,11 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
   let lastRequest: ChatTurnRequest | null = null;
   let lastUserMessageId: string | null = null;
   let pendingSave: Promise<ChatMessage> | null = null;
+  /**
+   * 37.1 §4.2: messages that arrived while this turn was live, waiting for the next tool
+   * round. Cleared per turn, so a message can never leak into a later turn.
+   */
+  let injected: string[] = [];
 
   const publish = (next: ChatTurnStatus) => {
     if (status === next) return;
@@ -224,6 +236,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
     controller = null;
     approvalResolver = null;
     running = false;
+    injected = [];
     publish('aborted');
   };
 
@@ -238,6 +251,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
       : DEFAULT_MAX_TOOL_ROUNDS;
     declined = false;
     approvalResolver = null;
+    injected = [];
     lastRequest = request;
     const turnId = crypto.randomUUID();
     const turnController = new AbortController();
@@ -311,9 +325,20 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
           : {}),
         db: deps.db,
         signal: turnController.signal,
-        ...(request.beforeToolRound
-          ? { beforeToolRound: (r: number) => request.beforeToolRound!(r, turnController.signal) }
-          : {}),
+        beforeToolRound: async (r: number) => {
+          // 37.1 §4.2: the turn's own drain runs first (it is the durable read), then
+          // anything injected mid-turn joins the same round. One array, one append.
+          const drained = request.beforeToolRound
+            ? await request.beforeToolRound(r, turnController.signal)
+            : undefined;
+          const queued = injected;
+          injected = [];
+          const merged: ChatCompletionMessage[] = [
+            ...(drained ?? []),
+            ...queued.map((content) => ({ role: 'user' as const, content })),
+          ];
+          return merged.length > 0 ? merged : undefined;
+        },
         ...(request.analysisMode
           ? { keepRecentToolOutputs: 20, maxOldToolChars: 100_000 }
           : {}),
@@ -530,6 +555,8 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
         approvalResolver = null;
         running = false;
       }
+      // A message queued for a turn that ended must not leak into the next one.
+      injected = [];
     }
   };
 
@@ -546,6 +573,11 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
     retry,
     abort,
     resolveApproval,
+    injectUserMessage: (content: string) => {
+      if (!running || !controller) return false;
+      injected.push(content);
+      return true;
+    },
     getStatus: () => status,
     getToolLimitRounds: () => toolLimitRounds,
     isRunning: () => running,

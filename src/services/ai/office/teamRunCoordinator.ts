@@ -1623,15 +1623,20 @@ export function createTeamRunCoordinator(
     // `injectedSteerIdsByAttempt` set. The cursor is the read receipt, so a steer is read
     // exactly once per attempt and a remount cannot re-inject it.
     const cursor = await getCursor(teamId, agentId, db);
-    const pending = await readMessagesAfter(teamId, agentId, cursor.lastSeq, db);
-    if (pending.length === 0) return [];
+    // 37.1 §1.1: the cursor reads the WHOLE log (so "seen" is real), but only messages that
+    // name this agent oblige it to act. Advance over everything read; return only the
+    // addressed ones.
+    const batch = await readMessagesAfter(teamId, cursor.lastSeq, db);
+    const pending = batch.filter((message) => message.to.includes(agentId));
+    if (batch.length === 0) return [];
     // 37.1 SC5: a teardown must not consume a steer nobody read.
     if (disposed) return [];
     // Advance BEFORE returning: the loop appends these to the very next model call, so the
     // read has happened. At-least-once would re-inject on a throw; the caller's `finally`
     // re-runs the drain only if this never advanced.
-    await advanceCursor(teamId, agentId, pending[pending.length - 1]!.seq, db);
+    await advanceCursor(teamId, agentId, batch[batch.length - 1]!.seq, db);
     notify();
+    if (pending.length === 0) return [];
     return pending.map((message) => ({
       role: 'user' as const,
       content: `${STEER_PREFIX}[steer:${message.id}] ${message.content}`,
@@ -1658,13 +1663,17 @@ export function createTeamRunCoordinator(
     // system prompt, so they must not be re-injected as user messages — but they ARE read,
     // so the cursor still advances past them.
     const cursor = await getCursor(teamId, lead.id, db);
-    const pending = await readMessagesAfter(teamId, lead.id, cursor.lastSeq, db);
-    if (pending.length === 0) return [];
+    // 37.1 §1.1: the leader sees every message in the group; only the ones naming it (or
+    // naming nobody — plain chat with the leader) oblige it to act.
+    const batch = await readMessagesAfter(teamId, cursor.lastSeq, db);
+    const pending = batch.filter((message) => message.to.includes(lead.id));
+    if (batch.length === 0) return [];
     // SC5: gate the cursor advance — a teardown must not consume a steer nobody read.
     if (disposed) return [];
-    await advanceCursor(teamId, lead.id, pending[pending.length - 1]!.seq, db);
-    for (const message of pending) pendingSteerMessageIds.delete(message.id);
+    await advanceCursor(teamId, lead.id, batch[batch.length - 1]!.seq, db);
+    for (const message of batch) pendingSteerMessageIds.delete(message.id);
     notify();
+    if (pending.length === 0) return [];
     return pending
       .filter((message) => skipIds?.has(message.id) !== true)
       .map((message) => ({

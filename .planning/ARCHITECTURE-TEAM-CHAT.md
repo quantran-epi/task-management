@@ -32,6 +32,25 @@ Khác nhau duy nhất: **quyền hạn** của người gửi.
 
 Hệ quả trực tiếp: nếu chỉ có một primitive, thì chỉ có một chỗ để viết, một chỗ để test, một chỗ để sửa. Mọi lỗi "đường này làm được, đường kia không" biến mất về mặt cấu trúc.
 
+### 1.1 Cách dùng thực tế: freestyle, như group chat thật
+
+Người dùng vận hành nhóm bằng chat tự do, không qua menu hay lệnh đặc biệt:
+
+- Muốn chỉ đạo trực tiếp một agent → **tag và nhắn thẳng** cho agent đó.
+- **Leader vẫn thấy** tin đó (nó nằm trong log của nhóm), và có thể **tự can thiệp cảnh báo** nếu thấy vấn đề.
+- Hoặc người dùng **chủ động** nhắn leader: "check tin nhắn của tao với Eva" → leader đọc log và xử lý.
+
+Điều này buộc phải tách hai thứ mà bản nháp gộp làm một:
+
+| Khái niệm | Nghĩa | Trường |
+|---|---|---|
+| **Định tuyến** (ai phải trả lời) | nghĩa vụ hành động | `to[]` |
+| **Nhìn thấy** (ai đọc được) | quyền đọc transcript | toàn bộ log — mọi participant |
+
+Nên: `to[]` **không** phải danh sách người được xem. Nó là danh sách người **có nghĩa vụ phản hồi**. Cả nhóm xem được mọi tin, như một group chat có @mention.
+
+Hệ quả cho consumer (§4.1): cursor tiến qua **mọi** message trong log, nhưng `handle()` chỉ chạy khi `msg.to` chứa chính mình. Nhờ vậy "leader đã xem" là sự thật kiểm chứng được, mà leader không bị kéo vào mọi lượt.
+
 ---
 
 ## 2. Bốn khái niệm, không hơn
@@ -91,7 +110,7 @@ Index: `id, teamId, [teamId+seq], [teamId+createdAt], assignmentId`
 
 | # | Bất biến | Vì sao |
 |---|---|---|
-| M1 | `to.length > 0` | Không có tin nhắn mồ côi. Đây chính là lỗi gap 5: `targetAgentId` là trường phụ, chỉ ghi khi user chọn dropdown. |
+| M1 | `to.length > 0` | Không có tin nhắn mồ côi. Đây chính là lỗi gap 5: `targetAgentId` là trường phụ, chỉ ghi khi user chọn dropdown. **`to[]` là nghĩa vụ phản hồi, không phải danh sách người được xem** (§1.1). |
 | M2 | Bất biến — sửa tin = thêm tin mới | Có `seq` để replay. Audit được. |
 | M3 | `seq` đơn điệu trong team | Cursor chỉ cần so sánh số. |
 
@@ -172,18 +191,19 @@ async function runConsumer(participantId: string): Promise<void> {
   let presence = 'idle';                    // TẠM THỜI, không lưu DB
   while (!disposed) {
     const cursor = await getCursor(teamId, participantId);
-    const pending = await readMessagesAfter(teamId, cursor.lastSeq, {
-      to: participantId,
-    });
+    // MỌI message trong log, không lọc theo `to` — ai cũng thấy cả nhóm đang nói gì.
+    const pending = await readMessagesAfter(teamId, cursor.lastSeq);
     if (pending.length === 0) {
       presence = 'idle';
       await waitForAppend(teamId);          // push, không poll
       continue;
     }
     for (const msg of pending) {
-      presence = 'working';
+      // Chỉ người được gọi tên mới có nghĩa vụ chạy; người khác chỉ đọc.
+      const addressed = msg.to.includes(participantId);
+      if (addressed) presence = 'working';
       try {
-        await handle(participantId, msg);   // spawn task riêng (§4.2)
+        if (addressed) await handle(participantId, msg);   // spawn task riêng (§4.2)
       } finally {
         await advanceCursor(teamId, participantId, msg.seq);   // ← seen by X at T
       }
@@ -195,6 +215,7 @@ async function runConsumer(participantId: string): Promise<void> {
 
 **Bốn điểm cốt lõi:**
 
+0. **Cursor tiến qua MỌI message, `handle()` chỉ chạy khi được gọi tên.** Đây là điều làm "leader đã xem tin của tao với Eva" thành sự thật kiểm chứng được, mà leader không bị kéo chạy mỗi lượt (§1.1).
 1. **`presence` là biến cục bộ trong vòng lặp.** Không ai phải nhớ reset nó. Consumer chết → presence chết. Đây là lý do lỗi "treo đang tổng hợp mãi" (gap 9) **không thể tái diễn**: không có biến toàn cục nào để kẹt.
 2. **`advanceCursor` nằm trong `finally`.** Đọc xong mới tiến; lỗi giữa chừng thì không tiến → đọc lại. Đây là at-least-once, đúng chuẩn.
 3. **`waitForAppend` là push.** Không poll 25ms. Dùng Dexie `liveQuery` hoặc một `Promise` được resolve bởi `appendMessage`.

@@ -888,19 +888,65 @@ describe('chatTurnRuntime team seams (D-07, D-12, D-13, D-19, D-21)', () => {
 
     expect(rounds).toEqual([2]);
     expect(signals[0]).toBe(loopSignal);
-    expect(returned).toBe(steer);
+    // The hook merges its drain with anything injected, so the array is rebuilt.
+    expect(returned).toEqual(steer);
   });
 
-  it('omits the beforeToolRound option when the request has no hook', async () => {
+  it('still exposes a round hook when the request has none, so a message can be injected', async () => {
     let loopOptions: AiOrchestratorLoopOptions | undefined;
     const runtime = runtimeWith(async (options) => {
       loopOptions = options;
+      // Nothing was injected, so the hook must contribute nothing to the round.
+      expect(await options.beforeToolRound?.(1)).toBeUndefined();
       return { fullResponse: 'ok', tokenUsage: {} };
     });
 
     await runtime.start(makeRequest({ threadId }));
 
-    expect(Object.hasOwn(loopOptions!, 'beforeToolRound')).toBe(false);
+    expect(typeof loopOptions!.beforeToolRound).toBe('function');
+  });
+
+  // 37.1 §4.2: injection is the ONE way to reach a running turn. The message joins the
+  // next tool round, which is exactly where a drained steer used to land.
+  it('injects a message into the next tool round', async () => {
+    let injectResult: boolean | undefined;
+    let withoutHook: ChatCompletionMessage[] | void;
+    const runtime = runtimeWith(async (options) => {
+      injectResult = runtime.injectUserMessage('đổi sang bảng');
+      withoutHook = await options.beforeToolRound?.(1);
+      // Consumed: a second round must not repeat it.
+      expect(await options.beforeToolRound?.(2)).toBeUndefined();
+      return { fullResponse: 'ok', tokenUsage: {} };
+    });
+
+    await runtime.start(makeRequest({ threadId }));
+
+    expect(injectResult).toBe(true);
+    expect(withoutHook).toEqual([{ role: 'user', content: 'đổi sang bảng' }]);
+  });
+
+  it('injects alongside a drained message in the same round', async () => {
+    let merged: ChatCompletionMessage[] | void;
+    const runtime = runtimeWith(async (options) => {
+      runtime.injectUserMessage('từ chat');
+      merged = await options.beforeToolRound?.(1);
+      return { fullResponse: 'ok', tokenUsage: {} };
+    });
+
+    await runtime.start(makeRequest({
+      threadId,
+      beforeToolRound: async () => [{ role: 'user', content: 'từ drain' }],
+    }));
+
+    expect(merged).toEqual([
+      { role: 'user', content: 'từ drain' },
+      { role: 'user', content: 'từ chat' },
+    ]);
+  });
+
+  it('reports false when no turn is running, instead of pretending', async () => {
+    const runtime = runtimeWith(async () => ({ fullResponse: 'ok', tokenUsage: {} }));
+    expect(runtime.injectUserMessage('không ai nghe')).toBe(false);
   });
 });
 
