@@ -66,6 +66,11 @@ export interface AgentStatusRowProps {
   onStop?: (() => void) | undefined;
   /** 37-08: supplied only when the surface can retry; drives the button, never the label. */
   onRetry?: (() => void) | undefined;
+  /**
+   * 37.1: test-id namespace. The activity popover renders one row per agent beside the
+   * transcript's report rows, so the two must not share ids.
+   */
+  idPrefix?: string | undefined;
 }
 
 export const AgentStatusRow: React.FC<AgentStatusRowProps> = ({
@@ -74,6 +79,7 @@ export const AgentStatusRow: React.FC<AgentStatusRowProps> = ({
   assignmentId,
   onStop,
   onRetry,
+  idPrefix = 'agent',
 }) => {
   if (status === 'done') return null;
 
@@ -122,7 +128,7 @@ export const AgentStatusRow: React.FC<AgentStatusRowProps> = ({
           type="text"
           size="small"
           style={{ height: 22, padding: '0 6px', fontSize: 12 }}
-          data-testid={`agent-retry-${assignmentId}`}
+          data-testid={`${idPrefix}-retry-${assignmentId}`}
           onClick={onRetry}
         >
           Chạy lại
@@ -136,7 +142,7 @@ export const AgentStatusRow: React.FC<AgentStatusRowProps> = ({
           icon={<StopOutlined />}
           style={{ width: 22, height: 22, padding: 0 }}
           aria-label={`Dừng ${agent.name}`}
-          data-testid={`agent-stop-${agent.agentId}`}
+          data-testid={`${idPrefix}-stop-${agent.agentId}`}
           onClick={onStop}
         />
       )}

@@ -102,3 +102,33 @@ describe('AgentStatusRow — retry affordance (37-08 D-13)', () => {
     }
   });
 });
+
+describe('AgentStatusRow — idPrefix (37.1)', () => {
+  it('namespaces the stop id under the given prefix', () => {
+    render(<AgentStatusRow agent={agent} status="running" onStop={vi.fn()} idPrefix="indicator" />);
+
+    expect(screen.getByTestId('indicator-stop-agent-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('agent-stop-agent-1')).toBeNull();
+  });
+
+  it('namespaces the retry id under the given prefix', () => {
+    render(
+      <AgentStatusRow
+        agent={agent}
+        status="stopped"
+        assignmentId="assignment-A"
+        onRetry={vi.fn()}
+        idPrefix="indicator"
+      />
+    );
+
+    expect(screen.getByTestId('indicator-retry-assignment-A')).toBeInTheDocument();
+    expect(screen.queryByTestId('agent-retry-assignment-A')).toBeNull();
+  });
+
+  it('defaults to the agent prefix', () => {
+    render(<AgentStatusRow agent={agent} status="running" onStop={vi.fn()} />);
+
+    expect(screen.getByTestId('agent-stop-agent-1')).toBeInTheDocument();
+  });
+});

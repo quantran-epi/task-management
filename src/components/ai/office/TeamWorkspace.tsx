@@ -37,10 +37,10 @@ import {
 import { getOrCreateRun } from '../../../services/ai/office/teamRunManager';
 import type { ChatTurnRuntimeDeps } from '../runtime/chatTurnRuntime';
 import { AiChatWidget } from '../AiChatWidget';
-import { ChatMessageBubble } from '../ChatMessageBubble';
 import { agentColorFor } from './AgentAttributionRow';
 import { AssignmentPlanCard } from './AssignmentPlanCard';
 import { AgentPausedBanner } from './AgentPausedBanner';
+import { TeamActivityIndicator } from './TeamActivityIndicator';
 import { BudgetTopUpModal } from './BudgetTopUpModal';
 import { TeamSidebar } from './TeamSidebar';
 import { TeamSettingsDrawer } from './TeamSettingsDrawer';
@@ -523,31 +523,15 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     }
   };
 
-  const liveBubbles = snapshot.agents
-    .filter((row) => !TERMINAL.has(row.status))
-    .map((row) => {
-      const agent = agentDirectory.get(row.agentId);
-      return (
-        <ChatMessageBubble
-          key={`live-${row.agentId}`}
-          message={{
-            id: `live-${row.agentId}`,
-            threadId: threadId ?? '',
-            role: 'assistant',
-            content: row.streamingText,
-            createdAt: new Date().toISOString(),
-          }}
-          isStreaming={row.status === 'running'}
-          {...(agent ? { agent } : {})}
-          agentStatus={row.status}
-          {...(coordinator ? { onStopAgent: () => coordinator.stopAgent(row.agentId) } : {})}
-        />
-      );
-    });
-
   const transcriptExtensions = (
     <>
-      {liveBubbles}
+      <TeamActivityIndicator
+        phase={snapshot.phase}
+        agents={snapshot.agents}
+        agentDirectory={agentDirectory}
+        leadId={team.leadId}
+        {...(coordinator ? { onStopAgent: (agentId: string) => coordinator.stopAgent(agentId) } : {})}
+      />
       {(snapshot.pendingPlan ?? snapshot.lastPlan) && (
         <AssignmentPlanCard
           plan={(snapshot.pendingPlan ?? snapshot.lastPlan)!}

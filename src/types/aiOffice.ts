@@ -227,12 +227,24 @@ export interface AiTeamAssignment {
   dependsOn?: string[] | undefined;
 }
 
+/**
+ * 37.1 D-22: one live step for the activity popover. Runtime-only — never persisted, so no
+ * backup schema or Dexie version changes.
+ */
+export interface AgentLiveStep {
+  id: string;
+  label: string;
+  at: string;
+}
+
 export interface AgentRunState {
   agentId: string;
   status: AgentRunStatus;
   streamingText: string;
   startedAt?: string | undefined;
   incomplete?: boolean | undefined;
+  /** 37.1 D-22: capped live step list for the indicator popover. Never rendered as text. */
+  steps?: AgentLiveStep[] | undefined;
 }
 
 export interface AgentIdentity {

@@ -257,6 +257,9 @@ const STEER_PREFIX = '[Chỉ đạo từ người dùng] ';
 
 const TERMINAL_STATUSES: readonly AgentRunStatus[] = ['done', 'stopped', 'error'];
 
+/** 37.1 D-22: monotonic id source for `AgentLiveStep` — ids are unique, never meaningful. */
+let stepSeq = 0;
+
 /** D-22: a ledger row in one of these is settled — it must never take a second report row. */
 const TERMINAL_RUN_STATUSES: ReadonlySet<AiTeamAssignmentRunStatus> = new Set([
   'done',
@@ -611,6 +614,21 @@ export function createTeamRunCoordinator(
     notify();
   }
 
+  /**
+   * 37.1 D-22: one live step for the indicator popover. Capped at 6 — the popover is a
+   * glance, not a log — and a repeated label is dropped so a `streaming` status that fires
+   * per token cannot grow the snapshot or force a re-render per delta.
+   */
+  function pushStep(agentId: string, label: string): void {
+    const state = agents.get(agentId);
+    if (!state) return;
+    const steps = state.steps ?? [];
+    if (steps[steps.length - 1]?.label === label) return;
+    stepSeq += 1;
+    const next = [...steps, { id: 'step-' + stepSeq, label, at: new Date().toISOString() }];
+    updateAgent(agentId, { steps: next.slice(-6) });
+  }
+
   function settleAgent(agentId: string, status: AgentRunStatus, report?: string): void {
     const state = agents.get(agentId);
     // WR-01: the status write and the deferred release are independent — a settle that
@@ -912,6 +930,24 @@ export function createTeamRunCoordinator(
         if (!state) return;
         updateAgent(agentId, { streamingText: state.streamingText + delta });
       },
+      // 37.1 D-22: the popover's live steps. Only three statuses say anything a user would
+      // repeat back; the rest are runtime bookkeeping.
+      onStatus: (status) => {
+        const label =
+          status === 'streaming'
+            ? 'đang viết'
+            : status === 'synthesizing'
+              ? 'đang tổng hợp'
+              : status === 'preparing'
+                ? 'đang chuẩn bị'
+                : null;
+        if (label) pushStep(agentId, label);
+      },
+      // A tool result is noise at this altitude; only the call is a step.
+      onToolEvent: (event) => {
+        if (event.phase !== 'call') return;
+        pushStep(agentId, event.name === 'read_skill' ? 'đã đọc skill' : 'đang gọi tool ' + event.name);
+      },
       onCompleted: ({ content }) => settleAgent(agentId, 'done', content),
       onError: () => settleAgent(agentId, 'error', SANITIZED_TURN_ERROR),
       onUsage: (usage) => handleUsage(agentId, usage, usageBaselineKey.get(agentId) ?? agentId),
@@ -1177,6 +1213,7 @@ export function createTeamRunCoordinator(
         status: 'running',
         streamingText: '',
         startedAt: new Date().toISOString(),
+        steps: [],
       });
       registerAgentTurn(employee.id, employee.name);
 
@@ -1326,6 +1363,7 @@ export function createTeamRunCoordinator(
         status: 'running',
         streamingText: '',
         startedAt: new Date().toISOString(),
+        steps: [],
       });
       registerAgentTurn(lead.id, lead.name);
       setPhase('lead-thinking');
@@ -2039,7 +2077,7 @@ export function createTeamRunCoordinator(
         assignmentIdsByAgent.set(employee.id, attemptRow.id);
         attemptIdsByAgent.set(employee.id, attemptRow.id);
         // Queued means nothing has started: no runtime, no live-use claim, no turn registration.
-        updateAgent(employee.id, { status: 'queued', streamingText: '' });
+        updateAgent(employee.id, { status: 'queued', streamingText: '', steps: [] });
         // D-31: the instruction row is attributed to the lead, so the employee's own history
         // reads as (instruction, report) pairs. D-22 links make the pair explicit.
         // WR-01: link fields ONLY. Nothing updates an instruction row's `runStatus`/
