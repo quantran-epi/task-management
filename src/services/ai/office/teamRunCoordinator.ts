@@ -1746,12 +1746,23 @@ export function createTeamRunCoordinator(
     // derives delivery state by querying assignments on the STEER's `batchId`, so the batch
     // must be stamped onto the row here — this is the one place it is known. Same `rw` scope
     // as the append, so the marker and the delivery fact can never disagree.
+    //
+    // WR-01: the outer guard read the row two awaits ago, so the attempt can have settled or
+    // the batch can have changed since. Re-validate INSIDE the transaction — a stamp on a
+    // terminal/foreign row would report a delivery no `drainSteerInbox` can ever honour.
     const appended = await db.transaction(
       'rw',
       [db.aiTeamAssignments, db.chatMessages],
-      async () => {
+      async (): Promise<boolean | null> => {
         const live = await db.aiTeamAssignments.get(assignment.id);
-        const current = live?.steerMessageIds ?? [];
+        if (
+          !live ||
+          live.batchId !== openBatchId ||
+          (live.runStatus !== 'queued' && live.runStatus !== 'running')
+        ) {
+          return null;
+        }
+        const current = live.steerMessageIds ?? [];
         if (current.includes(steerMessageId)) {
           await db.chatMessages.update(steerMessageId, { batchId: assignment.batchId });
           return false;
@@ -1763,6 +1774,13 @@ export function createTeamRunCoordinator(
         return true;
       }
     );
+    if (appended === null) {
+      return JSON.stringify({
+        refused: true,
+        code: 'NOT_QUEUED',
+        message: 'Việc của nhân viên này không còn nhận chỉ đạo được nữa.',
+      });
+    }
     if (!appended) {
       return JSON.stringify({ delivered: true, duplicate: true, agentId: message.targetAgentId });
     }

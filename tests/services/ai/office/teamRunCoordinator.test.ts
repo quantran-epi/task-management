@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs';
+import Dexie from 'dexie';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { TaskPlannerDatabase } from '../../../../src/db/index';
 import {
@@ -4277,6 +4278,90 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       const stamped = await current.db.chatMessages.get(steer.id);
       expect(stamped?.batchId).toBe(assignment.batchId);
       expect(assignment.steerMessageIds).toEqual([steer.id]);
+
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+    });
+
+    // WR-01: the outer guard reads the attempt two awaits before the transaction. If the
+    // attempt settles in that window, the append would land on a terminal row: `deliver_steer`
+    // reports success, the badge is suppressed, and no `drainSteerInbox` ever runs.
+    it('refuses a delivery whose attempt settled during the read→write window', async () => {
+      const gate = deferred();
+      let response = '';
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            if (lastTextOf(options) === 'Làm báo cáo') {
+              await options.executeToolFn!(
+                'delegate_batch',
+                { assignments: assignmentsFor(harness!.employees) },
+                harness!.db,
+                options.signal
+              );
+              return loopResult('Đã giao việc.');
+            }
+            const target = harness!.employees[1]!;
+            const parked = (await harness!.db.aiTeamAssignments.toArray()).find(
+              (row) => row.agentId === target.id
+            )!;
+            const steerRow = await saveTeamMessage(
+              {
+                threadId: harness!.threadId,
+                role: 'user',
+                content: 'đổi hướng',
+                messageKind: 'steer',
+                targetAgentId: target.id,
+              },
+              harness!.db
+            );
+            // Settle the attempt between the outer read and the transaction — exactly the
+            // window the outer guard cannot see. The fake applies only inside a transaction,
+            // so the outer guard still sees the honest `queued` row.
+            const table = harness!.db.aiTeamAssignments;
+            const realGet = table.get.bind(table);
+            const spy = vi.spyOn(table, 'get').mockImplementation((async (id: string) => {
+              const row = await realGet(id);
+              if (id !== parked.id || row === undefined || Dexie.currentTransaction === null) {
+                return row;
+              }
+              return { ...row, runStatus: 'stopped', stopReason: 'user-abort' };
+            }) as never);
+            try {
+              response = await options.executeToolFn!(
+                'deliver_steer',
+                { steerMessageId: steerRow.id },
+                harness!.db,
+                options.signal
+              );
+            } finally {
+              spy.mockRestore();
+            }
+            return loopResult('Không giao được.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getRunningCount() === 1);
+      await current.coordinator.send(
+        `@[${current.employees[1]!.name}](agent:${current.employees[1]!.id}) đổi hướng`
+      );
+      await waitFor(() => response.length > 0);
+
+      expect(JSON.parse(response)).toMatchObject({ refused: true, code: 'NOT_QUEUED' });
+      const parked = (await current.db.aiTeamAssignments.toArray()).find(
+        (row) => row.agentId === current.employees[1]!.id
+      )!;
+      expect(parked.steerMessageIds ?? []).toEqual([]);
 
       gate.release();
       await sent;
