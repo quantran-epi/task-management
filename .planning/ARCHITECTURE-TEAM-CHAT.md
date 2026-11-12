@@ -217,7 +217,7 @@ async function runConsumer(participantId: string): Promise<void> {
 
 0. **Cursor tiến qua MỌI message, `handle()` chỉ chạy khi được gọi tên.** Đây là điều làm "leader đã xem tin của tao với Eva" thành sự thật kiểm chứng được, mà leader không bị kéo chạy mỗi lượt (§1.1).
 1. **`presence` là biến cục bộ trong vòng lặp.** Không ai phải nhớ reset nó. Consumer chết → presence chết. Đây là lý do lỗi "treo đang tổng hợp mãi" (gap 9) **không thể tái diễn**: không có biến toàn cục nào để kẹt.
-2. **`advanceCursor` nằm trong `finally`.** Đọc xong mới tiến; lỗi giữa chừng thì không tiến → đọc lại. Đây là at-least-once, đúng chuẩn.
+2. **`advanceCursor` nằm trong `finally`.** Tin đã đọc thì đã đọc — kể cả khi `handle()` ném lỗi. Lý do: `handle()` có side-effect (ghi report, mở lượt), nên chạy lại sẽ nhân đôi. Lỗi của `handle()` là việc của `handle()` (nó tự báo trong transcript); consumer không được kẹt vòng lặp vì một tin hỏng. Message vẫn nằm nguyên trong log để người dùng đọc lại — mất phản hồi, không mất tin.
 3. **`waitForAppend` là push.** Không poll 25ms. Dùng Dexie `liveQuery` hoặc một `Promise` được resolve bởi `appendMessage`.
 4. **Không có "busy phase".** Leader rảnh = `cursor == head`. Gõ tin mới = append → consumer tỉnh. Gap 1 và 6 biến mất.
 
@@ -296,10 +296,20 @@ Phân biệt:
 | `listeners:Set` + `notify()` | `:507,576` | `liveQuery` thay thế |
 | `batchOwnsTeamTurn` | `:2483` | Cursor quyết định |
 | `steer()`, `deliverSteer`, tool `deliver_steer` | `:1455-1505, 1739-1817`, `teamTools.ts` | `send` thay thế |
-| `parseMentionTarget`, `AGENT_MENTION` | `:253,1441-1451` | `to[]` thay thế |
+| `parseMentionTarget`, `AGENT_MENTION` | `:253,1441-1451` | **GIỮ** — xem ghi chú dưới |
 | `targetAgentId` trên message | `models.ts`, `aiOffice.ts` | `to[]` thay thế |
 | `messageKind: 'steer'` | 6 nơi | Không cần phân biệt |
 | `TeamRunPhase` union | `aiOffice.ts:29-38` | Presence thay thế |
+
+### Ngoại lệ có chủ đích (không phải sót)
+
+Ba mục dưới đây **không** bị xoá, và lý do phải rõ để review không hiểu nhầm là di trú nửa vời:
+
+| Mục | Vì sao giữ |
+|---|---|
+| `parseMentionTarget` + `AGENT_MENTION` | Đây là **cách người dùng chọn người nhận** ("tag và nhắn trực tiếp", §1.1). Nó chỉ *dịch* cú pháp `@[Tên](agent:id)` thành `to[]`, rồi `send()` mới là đường duy nhất ghi message. Không phải đường định tuyến thứ hai. |
+| `steerMessageIds` trong `backupSchemas.ts` | Chỉ để backup tạo trước 37.1 vẫn restore được. Không còn writer, không còn reader. `validateBackup` map `messageKind: 'steer'` cũ → `'instruction'` khi nạp. |
+| `'steered'` trong kiểu trả về của `send()` | Không phải khái niệm "steer"; nó nghĩa là "tin đã ghi vào log, lượt đang chạy sẽ đọc ở vòng kế tiếp". Composer dùng để biết không cần khôi phục draft. |
 
 ## 6. Giữ nguyên (đã đúng)
 

@@ -8,7 +8,6 @@ import type {
   AiLead,
   AiSkill,
   AiTeam,
-  AiTeamAssignment,
   AiTeamMember,
 } from '../../../types/aiOffice';
 import {
@@ -77,7 +76,6 @@ const EMPTY_SNAPSHOT: TeamRunSnapshot = {
   agents: [],
   pendingPlan: null,
   pendingApproval: null,
-  pendingSteerMessageIds: [],
   pausedAgentId: null,
   pausedAgentName: null,
   lastPlan: null,
@@ -377,56 +375,6 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     }
     return map;
   }, [roster, team.leadId]);
-
-  // 37.1 D-03: a steer row's delivery state. `steerMessageIds` is NOT indexed, so the read
-  // is scoped by `batchId` (which IS indexed) — otherwise every assignment write would
-  // trigger a full-table scan.
-  const steerBatchIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const row of messages) {
-      if (row.messageKind === 'steer' && row.batchId !== undefined) ids.add(row.batchId);
-    }
-    return [...ids];
-  }, [messages]);
-  const steerAssignments = useLiveQuery<AiTeamAssignment[]>(
-    () =>
-      steerBatchIds.length === 0
-        ? Promise.resolve([])
-        : db.aiTeamAssignments.where('batchId').anyOf(steerBatchIds).toArray(),
-    [db, steerBatchIds.join(',')]
-  ) ?? [];
-  const deliveredSteerIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const row of steerAssignments) {
-      for (const id of row.steerMessageIds ?? []) ids.add(id);
-    }
-    return ids;
-  }, [steerAssignments]);
-  /**
-   * CR-04: `steerMessageIds` is the durable "delivered" marker (D-25), so presence means
-   * delivered. It is dropped only when a terminal write proves the steer was never read, so
-   * the badge reappears honestly in that case. An unaddressed steer has no delivery concept
-   * at all (D-28) and renders no badge.
-   *
-   * Everything else is either still pending in the coordinator (leader has not read it) or
-   * held (the leader read it and chose not to hand it over, D-28) — both render "chưa giao".
-   * A terminal attempt is NOT evidence of delivery: a row can settle without ever draining
-   * its steer, so only the marker suppresses the badge.
-   */
-  const steerStates = useMemo(() => {
-    const map = new Map<string, 'pending' | 'held'>();
-    const pending = new Set(snapshot.pendingSteerMessageIds);
-    for (const row of messages) {
-      if (row.messageKind !== 'steer') continue;
-      if (row.targetAgentId === undefined) continue;
-      // The durable delivery marker is the ONLY positive evidence of delivery. A terminal
-      // attempt is not: a row can settle (cancel, settle-poll deadline) without ever draining
-      // its steer, and suppressing the badge there would claim a delivery that never happened.
-      if (deliveredSteerIds.has(row.id)) continue;
-      map.set(row.id, pending.has(row.id) ? 'pending' : 'held');
-    }
-    return map;
-  }, [messages, snapshot.pendingSteerMessageIds, deliveredSteerIds]);
 
   /**
    * 37.1 rework: read receipts. A message is read by a participant when that participant's
@@ -881,7 +829,6 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                   messageListExtensions={{
                     agentDirectory,
                     agentStatuses,
-                    steerStates,
                     seenStates,
                     ...(coordinator ? { onStopAgent: (agentId: string) => coordinator.stopAgent(agentId) } : {}),
                     // 37-08 D-13: same extension path as onStopAgent — no new widget API.

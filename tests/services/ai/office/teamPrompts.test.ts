@@ -309,7 +309,7 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
     const runningLine = system.split('\n').find((line) => line.includes('a-running'))!;
     expect(queuedLine).toContain('có thể huỷ hoặc sửa');
     expect(runningLine).not.toContain('có thể huỷ hoặc sửa');
-    expect(runningLine).toContain('chỉ có thể gửi chỉ đạo');
+    expect(runningLine).toContain('chỉ có thể gửi tin nhắn mới');
   });
 
   it('wraps a ledger task as untrusted data', () => {
@@ -334,7 +334,9 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
     expect(system.indexOf(footer)).toBeGreaterThan(system.indexOf('VIỆC-TỪ-MODEL-xyz'));
   });
 
-  it('lists pending steers with their ids so the leader can deliver them', () => {
+  // 37.1 §1.1: the leader is not a gate. The prompt says so, and there is no pending-steer
+  // block to deliver from — a message reaches its recipient on its own.
+  it('tells the leader it does not gate messages to agents', () => {
     const system = buildLeadTurnRequest({
       lead,
       team,
@@ -342,30 +344,27 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
       linkedItems: [],
       originalRequest: 'Chỉ đạo giữa lô',
       recentTurns: [],
-      pendingSteers: [{ id: 'steer-abc', content: 'đổi hướng sang kiểm thử', targetAgentName: 'Lan' }],
     })
       .systemMessages.map((m) => m.content)
       .join('\n');
 
-    expect(system).toContain('CHỈ ĐẠO CHỜ XỬ LÝ');
-    expect(system).toContain('steer-abc');
-    expect(system).toContain('đổi hướng sang kiểm thử');
-    expect(system).toContain('deliver_steer');
+    expect(system).not.toContain('CHỈ ĐẠO CHỜ XỬ LÝ');
+    expect(system).not.toContain('deliver_steer');
+    expect(system).toContain('bạn không chặn');
   });
 
-  it('never shows agent B a steer addressed to agent A', () => {
+  // §1.1: `to[]` decides who ACTS; it never hides the transcript from the other members.
+  it('gives every agent the same team transcript', () => {
     const other: AiEmployee = { ...employee, id: 'emp-2', name: 'Bình' };
-    const steerRow = row({
+    const addressed = row({
       id: 's-1',
       role: 'user',
       content: 'CHỈ-ĐẠO-CHO-A-xyz',
-      messageKind: 'steer',
+      messageKind: 'instruction',
       targetAgentId: employee.id,
     });
-    // `sanitizeHistoryTurns` drops a trailing unanswered user row, so pair the steer with a
-    // reply — otherwise the assertion would pass for the wrong reason.
     const reply = row({ id: 'r-1', role: 'assistant', content: 'đã nhận chỉ đạo' });
-    const recentTurns = [steerRow, reply];
+    const recentTurns = [addressed, reply];
 
     const forB = buildEmployeeTurnRequest({
       employee: other,
@@ -384,7 +383,7 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
       recentTurns,
     });
 
-    expect(JSON.stringify(forB.history)).not.toContain('CHỈ-ĐẠO-CHO-A-xyz');
+    expect(JSON.stringify(forB.history)).toContain('CHỈ-ĐẠO-CHO-A-xyz');
     expect(JSON.stringify(forA.history)).toContain('CHỈ-ĐẠO-CHO-A-xyz');
   });
 });

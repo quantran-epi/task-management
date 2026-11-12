@@ -34,7 +34,6 @@ export type TeamToolRefusalCode =
   | 'EMPTY_BATCH'
   | 'INVALID_ARGUMENT'
   | 'NOT_QUEUED'
-  | 'STEER_PENDING'
   | 'ASSIGNMENT_NOT_IN_BATCH';
 
 /** Mirrors `ArtifactToolRefusal`: a refusal is a returned value, never a thrown error. */
@@ -152,32 +151,9 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
   {
     type: 'function',
     function: {
-      name: 'deliver_steer',
-      description:
-        'Giao một chỉ đạo đang chờ của người dùng cho nhân viên được nhắc tới. Chỉ gọi khi chỉ đạo an toàn để giao; nếu có vấn đề, giữ lại và hỏi người dùng trước.',
-      parameters: {
-        type: 'object',
-        properties: {
-          steerMessageId: {
-            type: 'string',
-            description: 'Id của chỉ đạo trong mục [CHỈ ĐẠO CHỜ XỬ LÝ].',
-          },
-          agentId: {
-            type: 'string',
-            description:
-              'Id nhân viên nhận chỉ đạo. Bắt buộc khi chỉ đạo không được nhắc tới bằng @[Tên](agent:id) — ví dụ người dùng gõ tay tên nhân viên.',
-          },
-        },
-        required: ['steerMessageId'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
       name: 'amend_assignments',
       description:
-        'Huỷ hoặc sửa một việc còn ĐANG XẾP HÀNG trong lô đang chạy. Không dùng cho việc đang chạy — việc đang chạy chỉ nhận chỉ đạo (steer).',
+        'Huỷ hoặc sửa một việc còn ĐANG XẾP HÀNG trong lô đang chạy. Không dùng cho việc đang chạy — việc đang chạy chỉ nhận tin nhắn mới.',
       parameters: {
         type: 'object',
         properties: {
@@ -211,7 +187,6 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
  */
 export const LEAD_ONLY_TEAM_TOOLS: ReadonlySet<string> = new Set([
   'delegate_batch',
-  'deliver_steer',
   'amend_assignments',
 ]);
 
@@ -386,17 +361,6 @@ async function delegateBatch(args: Record<string, any>, ctx: TeamToolContext): P
  * 37.1 D-28: argument validation only. The coordinator owns the real gate — it re-validates
  * the id against the live ledger, because a model-supplied id must never be trusted.
  */
-async function deliverSteer(args: Record<string, any>): Promise<string> {
-  const steerMessageId = typeof args.steerMessageId === 'string' ? args.steerMessageId : '';
-  if (!steerMessageId) {
-    return JSON.stringify(refuse('INVALID_ARGUMENT', 'Thiếu steerMessageId.'));
-  }
-  // 37.1 UAT gap 5: a steer typed as plain text (no structured @mention) carries no
-  // `targetAgentId`, so the coordinator needs the target named at delivery time.
-  const agentId = typeof args.agentId === 'string' && args.agentId.trim() ? args.agentId.trim() : undefined;
-  return JSON.stringify({ steerMessageId, ...(agentId ? { agentId } : {}) });
-}
-
 /**
  * 37.1 D-06/D-27: argument validation only, exactly like `delegateBatch`. Ledger membership is
  * NOT checked here — the validator has no `batchId`; the coordinator's tier-1 executor owns it
@@ -459,8 +423,6 @@ export async function executeTeamTool(
       return getLinkedContext(input, ctx);
     case 'delegate_batch':
       return delegateBatch(input, ctx);
-    case 'deliver_steer':
-      return deliverSteer(input);
     case 'amend_assignments':
       return amendAssignments(input);
     default:

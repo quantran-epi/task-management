@@ -297,7 +297,7 @@ export interface ChatMessage {
   agentId?: string | undefined;
   agentName?: string | undefined;
   agentKind?: 'lead' | 'employee' | undefined;
-  messageKind?: 'instruction' | 'report' | 'synthesis' | 'plan' | 'steer' | undefined;
+  messageKind?: 'instruction' | 'report' | 'synthesis' | 'plan' | undefined;
   /**
    * CR-06: an instruction is displayed as the lead's message but belongs to the
    * employee it was assigned to. This carries the assignee so history lookups can

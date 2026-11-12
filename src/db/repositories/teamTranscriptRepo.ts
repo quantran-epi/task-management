@@ -31,7 +31,7 @@ export interface SaveTeamMessageInput {
   agentId?: string | undefined;
   agentName?: string | undefined;
   agentKind?: 'lead' | 'employee' | undefined;
-  messageKind?: 'instruction' | 'report' | 'synthesis' | 'plan' | 'steer' | undefined;
+  messageKind?: 'instruction' | 'report' | 'synthesis' | 'plan' | undefined;
   /** CR-06: the employee an instruction row is assigned to (display attribution stays the lead). */
   targetAgentId?: string | undefined;
   tokenUsage?: ChatTokenUsage | undefined;

@@ -126,11 +126,9 @@ export function buildEmployeeTurnRequest(input: BuildEmployeeTurnRequestInput): 
       role: row.messageKind === 'instruction' ? ('user' as const) : ('assistant' as const),
     }));
 
-  // 37.1 D-17: a steer row is thread-wide, but only the addressed agent may see it in its
-  // prompt — otherwise every agent pays the token cost and misreads another's work.
-  const visibleTurns = recentTurns.filter(
-    (row) => row.messageKind !== 'steer' || row.targetAgentId === employee.id
-  );
+  // 37.1 §1.1: the transcript is the team's shared record. Addressing (`to[]`) decides who
+  // must act; it never hides what was said from the other members.
+  const visibleTurns = recentTurns;
 
   return {
     systemMessages: [{ role: 'system', content: parts.join('\n\n') }],
@@ -157,12 +155,6 @@ export interface BuildLeadTurnRequestInput {
   batchResults?: readonly BatchResult[] | undefined;
   /** 37.1 D-04: the live assignment list, so the leader can report where every agent is. */
   ledger?: readonly AiTeamAssignment[] | undefined;
-  /** 37.1 D-28: steers awaiting the leader's decision — the ids `deliver_steer` takes. */
-  pendingSteers?: ReadonlyArray<{
-    id: string;
-    content: string;
-    targetAgentName?: string;
-  }> | undefined;
 }
 
 export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTurn {
@@ -175,7 +167,6 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
     recentTurns,
     batchResults,
     ledger,
-    pendingSteers,
   } = input;
 
   const parts = [
@@ -189,10 +180,10 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
       '4. Không khẳng định suy luận nội bộ của nhân viên; chỉ dùng nội dung họ báo cáo.',
       '5. Chỉ bạn được phép thay đổi dữ liệu; thao tác ghi sẽ dừng ở thẻ phê duyệt của người dùng.',
       "6. Nếu kết quả lô có mục `kind: 'unfinished'`, BẮT BUỘC nêu rõ trong câu tổng hợp những việc chưa hoàn tất và lý do; không được trình bày lô là đã xong.",
-      '7. Trước khi sửa hay giao chỉ đạo, đọc [HIỆN TRẠNG LÔ ĐANG CHẠY] và báo cáo trung thực từng nhân viên đang ở đâu.',
-      '8. Hỏi lại người dùng khi chỉ đạo mơ hồ hoặc thay đổi việc của nhiều nhân viên; chỉ đạo rõ và nhỏ thì áp ngay rồi báo lại sau.',
-      '9. Khi chỉ đạo mâu thuẫn với việc đang chạy, nói rõ trong câu trả lời; nếu nghiêm trọng, giữ lại và hỏi người dùng xác nhận trước khi nhân viên nhận.',
-      '10. Bạn là cửa chặn cho mọi chỉ đạo @nhân viên — nhân viên KHÔNG nhận được cho tới khi bạn gọi deliver_steer với id của chỉ đạo. Chỉ đạo bình thường thì giao ngay; chỉ đạo có vấn đề thì giữ lại và hỏi.',
+      '7. Trước khi sửa việc, đọc [HIỆN TRẠNG LÔ ĐANG CHẠY] và báo cáo trung thực từng nhân viên đang ở đâu.',
+      '8. Hỏi lại người dùng khi yêu cầu mơ hồ hoặc thay đổi việc của nhiều nhân viên; yêu cầu rõ và nhỏ thì áp ngay rồi báo lại sau.',
+      '9. Khi yêu cầu mâu thuẫn với việc đang chạy, nói rõ trong câu trả lời; nếu nghiêm trọng, hỏi người dùng xác nhận.',
+      '10. Tin nhắn người dùng gửi thẳng cho một nhân viên sẽ tới nhân viên đó ngay — bạn không chặn. Bạn vẫn thấy mọi tin trong nhóm: nếu thấy vấn đề, nói rõ cảnh báo trong câu trả lời của bạn.',
       '11. Khi người dùng nhắc tới một nhân viên đã xong việc, nói thẳng là đã xong và đề nghị chạy lại hoặc giao việc mới — không tự chạy lại.',
     ].join('\n'),
     [
@@ -211,24 +202,10 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
         ...ledger.map(
           (row) =>
             `- assignmentId: ${row.id} · ${row.agentName} · ${row.runStatus}` +
-            `${row.runStatus === 'queued' ? ' · có thể huỷ hoặc sửa' : ' · chỉ có thể gửi chỉ đạo'}` +
+            `${row.runStatus === 'queued' ? ' · có thể huỷ hoặc sửa' : ' · chỉ có thể gửi tin nhắn mới'}` +
             `\n  việc: ${wrapUntrusted('VIỆC ĐANG GIAO', row.task)}`
         ),
-        'Chỉ huỷ/sửa được dòng `queued`. Dòng `running` chỉ nhận chỉ đạo.',
-      ].join('\n')
-    );
-  }
-
-  // 37.1 D-28: without the ids the leader cannot call `deliver_steer` at all.
-  if (pendingSteers && pendingSteers.length > 0) {
-    parts.push(
-      [
-        '[CHỈ ĐẠO CHỜ XỬ LÝ]',
-        ...pendingSteers.map(
-          (steer) =>
-            `- id: ${steer.id} · gửi tới: ${steer.targetAgentName ?? 'cả nhóm'}\n  nội dung: ${steer.content}`
-        ),
-        'Gọi deliver_steer với id ở trên để giao chỉ đạo cho nhân viên được nhắc tới.',
+        'Chỉ huỷ/sửa được dòng `queued`. Dòng `running` chỉ nhận tin nhắn mới.',
       ].join('\n')
     );
   }

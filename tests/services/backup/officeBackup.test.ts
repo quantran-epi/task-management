@@ -41,7 +41,6 @@ const BATCH_ID = '12121212-1212-4212-8212-121212121212';
 const ASSIGNMENT_1_ID = '13131313-1313-4313-8313-131313131313';
 const ASSIGNMENT_2_ID = '14141414-1414-4414-8414-141414141414';
 const STEER_MESSAGE_ID = '15151515-1515-4515-8515-151515151515';
-const STEERED_ASSIGNMENT_ID = '16161616-1616-4616-8616-161616161616';
 const AMENDED_MESSAGE_ID = '17171717-1717-4717-8717-171717171717';
 const AMENDED_ASSIGNMENT_ID = '18181818-1818-4818-8818-181818181818';
 const LOCKED_AT = '2026-11-09T08:00:00.000Z';
@@ -570,7 +569,10 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
     ).toBe(true);
   });
 
-  it('round-trips a steer row and the assignment delivery state', async () => {
+  // 37.1 §1.1: a pre-37.1 backup may still hold `messageKind: 'steer'` and the
+  // `steerMessageIds` marker. Restoring must not fail, and the label must be normalized away
+  // because nothing in the app reads it any more.
+  it('restores a legacy steer row as an ordinary instruction', async () => {
     await seedOffice(sourceDb);
     const steerMessage: ChatMessage = {
       id: STEER_MESSAGE_ID,
@@ -578,38 +580,22 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
       role: 'user',
       content: 'Chỉ đạo: ưu tiên kiểm tra migration.',
       createdAt: NOW,
-      messageKind: 'steer',
+      // A legacy row: the type no longer allows this, which is exactly what is under test.
+      messageKind: 'steer' as ChatMessage['messageKind'],
       targetAgentId: EMPLOYEE_ID,
       batchId: BATCH_ID,
     };
-    const steeredAssignment: AiTeamAssignment = {
-      ...assignmentAttempt1,
-      id: STEERED_ASSIGNMENT_ID,
-      runStatus: 'queued',
-      stopReason: 'leader-amend',
-      steerMessageIds: [STEER_MESSAGE_ID],
-    };
     await sourceDb.chatMessages.add(steerMessage);
-    await sourceDb.aiTeamAssignments.add(steeredAssignment);
 
     const envelope = await exportBackupPayload(sourceDb);
-
-    // `steerMessageIds` is the key under test for the forbidden-key gate (T-37.1-09):
-    // `valid === true` proves it is not rejected, and the strictObject assignment schema
-    // proves it is declared rather than stripped (T-37.1-10).
     expect(validateBackupPayload(envelope)).toMatchObject({ valid: true, errors: [] });
-    expect(JSON.stringify(envelope.tables.aiTeamAssignments)).toContain('steerMessageIds');
 
     await restoreBackupPayload(envelope, restoredDb);
 
     const restoredMessage = await restoredDb.chatMessages.get(STEER_MESSAGE_ID);
-    expect(restoredMessage?.messageKind).toBe('steer');
+    expect(restoredMessage?.messageKind).toBe('instruction');
     expect(restoredMessage?.targetAgentId).toBe(EMPLOYEE_ID);
     expect(restoredMessage?.batchId).toBe(BATCH_ID);
-
-    const restoredAssignment = await restoredDb.aiTeamAssignments.get(STEERED_ASSIGNMENT_ID);
-    expect(restoredAssignment?.steerMessageIds).toEqual([STEER_MESSAGE_ID]);
-    expect(restoredAssignment?.stopReason).toBe('leader-amend');
   });
 
   it('accepts leader-amend as a stop reason on both schemas', async () => {

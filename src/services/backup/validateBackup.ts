@@ -184,7 +184,16 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     ? validateTable('chatThreads', BackupChatThreadRecordSchema, rawTables.chatThreads)
     : undefined;
   const chatMessages = rawTables.chatMessages !== undefined
-    ? validateTable('chatMessages', BackupChatMessageRecordSchema, rawTables.chatMessages)
+    ? validateTable('chatMessages', BackupChatMessageRecordSchema, rawTables.chatMessages)?.map(
+        (row) => {
+          // 37.1 §1.1: `messageKind: 'steer'` no longer exists. A pre-37.1 backup still
+          // restores — the row is an ordinary user message now, so it keeps its content and
+          // loses only the label nothing reads.
+          if (row.messageKind !== 'steer') return row;
+          const { messageKind: _steer, ...rest } = row;
+          return { ...rest, messageKind: 'instruction' as const };
+        }
+      ) as NonNullable<BackupEnvelope['tables']['chatMessages']> | undefined
     : undefined;
   const chatTabs = rawTables.chatTabs !== undefined
     ? validateTable('chatTabs', BackupChatTabRecordSchema, rawTables.chatTabs)

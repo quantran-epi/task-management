@@ -10,6 +10,7 @@ import { createTeam, deleteTeam } from '../../../../src/db/repositories/aiTeamRe
 import { ensureTeamThread } from '../../../../src/db/repositories/teamTranscriptRepo';
 import { disposeRun, getOrCreateRun } from '../../../../src/services/ai/office/teamRunManager';
 import { aiTurnManager } from '../../../../src/services/ai/aiTurnManager';
+import { getCursor } from '../../../../src/services/ai/office/teamEventLog';
 import type { AiEmployee, AiTeam } from '../../../../src/types/aiOffice';
 import type { AiOrchestratorLoopOptions } from '../../../../src/services/ai/aiOrchestratorLoop';
 import type { ChatTurnRuntimeDeps } from '../../../../src/components/ai/runtime/chatTurnRuntime';
@@ -339,8 +340,9 @@ describe('delete a team while a steer is in flight (SC5)', () => {
     await waitFor(() => coordinator.getState().phase === 'batch-running');
     await waitFor(() => coordinator.getState().agents.filter((r) => r.status === 'running').length === 3);
 
-    await expect(coordinator.send('chỉ đạo giữa lô')).resolves.toBe('steered');
-    expect(coordinator.getState().pendingSteerMessageIds).toHaveLength(1);
+    // Not awaited: the composer is fire-and-forget, and this turn parks on the gate so the
+    // teardown can land while it is genuinely in flight.
+    const steered = coordinator.send('chỉ đạo giữa lô');
     await waitFor(() => steerTurnStarted.count === 1);
 
     await disposeRun(db!, team.id);
@@ -349,20 +351,29 @@ describe('delete a team while a steer is in flight (SC5)', () => {
     gate.release();
     steerTurnGate.release();
     await sent;
+    await steered;
 
     await waitFor(() => aiTurnManager.getActiveTurns().length === 0, PURGE_WINDOW_MS + 2000);
     expect(aiTurnManager.getActiveTurns()).toHaveLength(0);
-    expect(coordinator.getState().pendingSteerMessageIds).toEqual([]);
   }, 20000);
 
   it('no row is written after deletedAt', async () => {
     const { gate, steerTurnGate, coordinator, team, threadId } = await setup();
 
+    let teamMessageCount = 0;
+    const stopWatching = setInterval(() => {
+      void db!.teamMessages.count().then((n) => {
+        teamMessageCount = n;
+      });
+    }, 5);
+
     const sent = coordinator.send('Làm báo cáo');
     await waitFor(() => coordinator.getState().phase === 'batch-running');
     await waitFor(() => coordinator.getState().agents.filter((r) => r.status === 'running').length === 3);
-    await coordinator.send('chỉ đạo giữa lô');
-    await waitFor(() => coordinator.getState().pendingSteerMessageIds.length === 1);
+    const steered = coordinator.send('chỉ đạo giữa lô');
+    // The message is in the log; the coordinator's own drain owns the read.
+    await waitFor(() => teamMessageCount > 0);
+    clearInterval(stopWatching);
 
     // Asserted BEFORE `deleteTeam`: that call empties both tables, so a post-delete
     // assertion would pass trivially.
@@ -384,42 +395,36 @@ describe('delete a team while a steer is in flight (SC5)', () => {
     gate.release();
     steerTurnGate.release();
     await sent;
+    await steered;
     await deleteTeam(team.id, db!);
     await waitFor(() => aiTurnManager.getActiveTurns().length === 0, PURGE_WINDOW_MS + 2000);
   }, 20000);
 
-  it('a delivered-but-undrained steer id is not cleared by a post-dispose drain', async () => {
+  // AIO-STEER-05 / SC5: after a teardown the drain must consume nothing, so a message the
+  // agent never read stays unread in the log. The cursor is the only read receipt now.
+  it('a post-dispose drain consumes no message and advances no cursor', async () => {
     const { gate, steerTurnGate, coordinator, team, employees } = await setup();
 
     const sent = coordinator.send('Làm báo cáo');
     await waitFor(() => coordinator.getState().phase === 'batch-running');
     await waitFor(() => coordinator.getState().agents.filter((r) => r.status === 'running').length === 3);
 
-    // `steer()` never writes the field (D-28), so deliver first — the scenario under test is
-    // a DELIVERED id surviving teardown, not an undelivered one.
     const target = employees[0]!;
-    await coordinator.send(`@[${target.name}](agent:${target.id}) đổi hướng`);
-    const steerId = coordinator.getState().pendingSteerMessageIds[0]!;
-    expect(steerId).toBeDefined();
-
-    const assignment = (await db!.aiTeamAssignments.toArray()).find(
-      (row) => row.agentId === target.id
-    )!;
-    // Write the delivery state directly: the tool path needs a live lead turn, and the
-    // behaviour under test is the DRAIN's disposed gate, not `deliver_steer`.
-    await db!.aiTeamAssignments.update(assignment.id, { steerMessageIds: [steerId] });
+    const steered = coordinator.send(`@[${target.name}](agent:${target.id}) đổi hướng`);
 
     // `disposeRun` ONLY — `deleteTeam` would empty the table and make the assertion vacuous.
     await disposeRun(db!, team.id);
 
-    const injected = await coordinator.drainSteerInbox(target.id, assignment.id);
+    const cursorBefore = await getCursor(team.id, target.id, db!);
+    const injected = await coordinator.drainInbox(target.id);
     expect(injected).toEqual([]);
-    const after = await db!.aiTeamAssignments.get(assignment.id);
-    expect(after?.steerMessageIds).toEqual([steerId]);
+    const cursorAfter = await getCursor(team.id, target.id, db!);
+    expect(cursorAfter.lastSeq).toBe(cursorBefore.lastSeq);
 
     gate.release();
     steerTurnGate.release();
     await sent;
+    await steered;
     await waitFor(() => aiTurnManager.getActiveTurns().length === 0, PURGE_WINDOW_MS + 2000);
   }, 20000);
 });

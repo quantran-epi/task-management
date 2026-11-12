@@ -910,7 +910,7 @@ describe('chatTurnRuntime team seams (D-07, D-12, D-13, D-19, D-21)', () => {
   // next tool round, which is exactly where a drained steer used to land.
   it('injects a message into the next tool round', async () => {
     let injectResult: boolean | undefined;
-    let withoutHook: ChatCompletionMessage[] | void;
+    let withoutHook: ChatCompletionMessage[] | void = undefined;
     const runtime = runtimeWith(async (options) => {
       injectResult = runtime.injectUserMessage('đổi sang bảng');
       withoutHook = await options.beforeToolRound?.(1);
@@ -926,7 +926,7 @@ describe('chatTurnRuntime team seams (D-07, D-12, D-13, D-19, D-21)', () => {
   });
 
   it('injects alongside a drained message in the same round', async () => {
-    let merged: ChatCompletionMessage[] | void;
+    let merged: ChatCompletionMessage[] | void = undefined;
     const runtime = runtimeWith(async (options) => {
       runtime.injectUserMessage('từ chat');
       merged = await options.beforeToolRound?.(1);

@@ -261,106 +261,25 @@ describe('ChatMessageList agent directory wiring', () => {
   });
 });
 
-describe('ChatMessageBubble steer row (37.1 D-03/D-15)', () => {
-  const steerMsg = (overrides: Partial<ChatMessage> = {}) =>
-    msg({
-      id: 'steer-1',
-      role: 'user',
-      content: `Chỉ đạo @[An](agent:${AGENT_ID})`,
-      messageKind: 'steer',
-      batchId: 'batch-1',
-      ...overrides,
-    });
-
-  it('captions a targeted steer with the agent name', () => {
-    render(<ChatMessageBubble message={steerMsg({ targetAgentId: AGENT_ID })} agent={agent} />);
-
-    const label = screen.getByTestId('steer-label-steer-1');
-    expect(label.textContent).toContain('Chỉ đạo → An');
-  });
-
-  it('captions a leader steer with no arrow', () => {
-    render(<ChatMessageBubble message={steerMsg()} />);
-
-    const label = screen.getByTestId('steer-label-steer-1');
-    expect(label.textContent).toContain('Chỉ đạo');
-    expect(label.textContent).not.toContain('→');
-  });
-
-  it('falls back to a neutral label when the agent is unknown', () => {
-    render(<ChatMessageBubble message={steerMsg({ targetAgentId: 'ghost-agent' })} />);
-
-    // IN-08d: never a raw UUID in UI copy.
-    const label = screen.getByTestId('steer-label-steer-1');
-    expect(label.textContent).toContain('Chỉ đạo → Nhân viên');
-    expect(label.textContent).not.toContain('ghost-agent');
-  });
-
-  it('renders the pending badge', () => {
-    render(<ChatMessageBubble message={steerMsg()} steerState="pending" />);
-
-    expect(screen.getByTestId('steer-badge-steer-1').textContent).toBe('chờ leader đọc');
-  });
-
-  it('renders the held badge', () => {
-    render(<ChatMessageBubble message={steerMsg()} steerState="held" />);
-
-    expect(screen.getByTestId('steer-badge-steer-1').textContent).toBe('chưa giao');
-  });
-
-  it('renders no badge once delivered', () => {
-    render(<ChatMessageBubble message={steerMsg()} />);
-
-    expect(screen.getByTestId('steer-label-steer-1')).toBeInTheDocument();
-    expect(screen.queryByTestId('steer-badge-steer-1')).toBeNull();
-  });
-
-  it('renders no steer caption on a report row', () => {
+describe('ChatMessageBubble — one message primitive (37.1 §1.1)', () => {
+  // The "Chỉ đạo" caption and its pending/held badge are gone: a message to an agent is an
+  // ordinary user message. What it says and who read it are the only facts shown.
+  it('renders a message that mentions an agent as a plain user row', () => {
     render(
       <ChatMessageBubble
-        message={msg({ id: 'report-1', messageKind: 'report', agentId: AGENT_ID })}
+        message={msg({
+          id: 'm-1',
+          role: 'user',
+          content: `@[An](agent:${AGENT_ID}) đổi sang bảng`,
+        })}
         agent={agent}
       />
     );
 
-    expect(screen.queryByTestId('steer-label-report-1')).toBeNull();
-  });
-
-  it('still renders the steer row through the user branch with its mention pill', () => {
-    render(<ChatMessageBubble message={steerMsg({ targetAgentId: AGENT_ID })} agent={agent} />);
-
-    expect(screen.getByTestId('steer-label-steer-1').closest('[data-role]')?.getAttribute('data-role')).toBe(
-      'user'
-    );
-    // CR-06/D-15: a steer row renders as a USER row — no agent attribution header.
-    expect(screen.queryByTestId(`agent-attribution-${AGENT_ID}`)).toBeNull();
-    expect(screen.getByText('An')).toBeInTheDocument();
-  });
-
-  it('resolves the steer target name through the list directory, never the raw id', () => {
-    render(
-      <ChatMessageList
-        messages={[steerMsg({ targetAgentId: AGENT_ID })]}
-        agentDirectory={new Map([[AGENT_ID, agent]])}
-      />
-    );
-
-    const label = screen.getByTestId('steer-label-steer-1');
-    expect(label.textContent).toContain('Chỉ đạo → An');
-    expect(label.textContent).not.toContain(AGENT_ID);
-    // D-15: still a user row, so no agent attribution header appears above it.
-    expect(screen.queryByTestId(`agent-attribution-${AGENT_ID}`)).toBeNull();
-  });
-
-  it('forwards steerStates from the list to the bubble', () => {
-    render(
-      <ChatMessageList
-        messages={[steerMsg({ targetAgentId: AGENT_ID })]}
-        agentDirectory={new Map([[AGENT_ID, agent]])}
-        steerStates={new Map([['steer-1', 'pending']])}
-      />
-    );
-
-    expect(screen.getByTestId('steer-badge-steer-1').textContent).toBe('chờ leader đọc');
+    const row = document.querySelector('[data-role="user"]');
+    expect(row).not.toBeNull();
+    // No special caption and no badge — a message to an agent is an ordinary message.
+    expect(screen.queryByTestId('steer-label-m-1')).toBeNull();
+    expect(screen.queryByTestId('steer-badge-m-1')).toBeNull();
   });
 });

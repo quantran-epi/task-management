@@ -106,7 +106,6 @@ vi.mock('../../../../src/db/repositories/aiTeamRepo', async (importOriginal) => 
 
 import { TeamWorkspace } from '../../../../src/components/ai/office/TeamWorkspace';
 import { ensureTeamThread, saveTeamMessage } from '../../../../src/db/repositories/teamTranscriptRepo';
-import { createAssignment, openBatch } from '../../../../src/db/repositories/aiTeamRunRepo';
 
 describe('TeamWorkspace composer (37.1 D-01/D-02/D-12)', () => {
   let db: TaskPlannerDatabase;
@@ -305,128 +304,21 @@ describe('TeamWorkspace composer (37.1 D-01/D-02/D-12)', () => {
     expect(screen.queryByTestId('team-outbox')).not.toBeInTheDocument();
   });
 
-  // CR-01: a steer persisted while no batch was open carried no `batchId`, so the ledger
-  // query (scoped by the steer's `batchId`) could never see its delivery and the bubble kept
-  // "chưa giao" forever. `deliverSteer` now stamps the batch onto the steer row.
-  it('clears the steer badge once the delivery stamps the batch onto the row', async () => {
+  // 37.1 §1.1: a message to an agent is an ordinary user message. There is no "Chỉ đạo"
+  // caption and no delivery badge — the recipient's cursor is the only read receipt, and it
+  // renders as the seen indicator on the message itself.
+  it('renders a message to an agent with no steer caption and no badge', async () => {
     const thread = await ensureTeamThread(team.id, db);
     const leadRow = (await db.aiLeads.get(team.leadId!))!;
     const employee = (await db.aiEmployees.toArray())[0]!;
-    const batch = await openBatch(
-      {
-        teamId: team.id,
-        threadId: thread.id,
-        batchIndex: 1,
-        userRequest: 'Làm báo cáo',
-        leadId: leadRow.id,
-        planSnapshot: { original: [] },
-        planDecision: 'auto',
-      },
-      db
-    );
-    const assignment = await createAssignment(
-      {
-        batchId: batch.id,
-        agentId: employee.id,
-        agentName: employee.name,
-        model: 'claude-sonnet-4',
-        task: 'Việc 1',
-      },
-      db
-    );
-    // Persisted BEFORE the batch existed — exactly the plan-card flow.
-    const steer = await saveTeamMessage(
+    await saveTeamMessage(
       {
         threadId: thread.id,
         role: 'user',
         content: `@[${employee.name}](agent:${employee.id}) làm thêm X`,
-        messageKind: 'steer',
-        targetAgentId: employee.id,
       },
       db
     );
-    expect(steer.batchId).toBeUndefined();
-
-    // The live session still holds it as unread, so the badge is honest before delivery.
-    currentStub.getState = () => ({
-      phase: 'batch-running',
-      agents: [],
-      pendingPlan: null,
-      pendingApproval: null,
-      pendingSteerMessageIds: [steer.id],
-      pausedAgentId: null,
-      pausedAgentName: null,
-      lastPlan: null,
-      lastPlanDecision: null,
-    });
-
-    render(
-      <TeamWorkspace
-        team={team}
-        lead={leadRow}
-        members={[]}
-        employees={[employee]}
-        skills={[]}
-        db={db}
-        onBack={() => {}}
-      />
-    );
-    expect(await screen.findByTestId(`steer-badge-${steer.id}`)).toBeInTheDocument();
-
-    // The delivery write: the ledger marker AND the batch stamp, in one transaction.
-    await db.transaction('rw', [db.aiTeamAssignments, db.chatMessages], async () => {
-      await db.aiTeamAssignments.update(assignment.id, { steerMessageIds: [steer.id] });
-      await db.chatMessages.update(steer.id, { batchId: batch.id });
-    });
-
-    await waitFor(() =>
-      expect(screen.queryByTestId(`steer-badge-${steer.id}`)).not.toBeInTheDocument()
-    );
-  });
-
-  // CR-01 (iteration 3): a steer the leader HOLDS keeps no `batchId` — `deliverSteer` is the
-  // only writer of that stamp. Treating "no assignment" as nothing-to-deliver therefore hid
-  // the badge and told the user the instruction had reached the agent.
-  it('keeps the held badge on a pre-batch steer the leader never delivered', async () => {
-    const thread = await ensureTeamThread(team.id, db);
-    const leadRow = (await db.aiLeads.get(team.leadId!))!;
-    const employee = (await db.aiEmployees.toArray())[0]!;
-    const batch = await openBatch(
-      {
-        teamId: team.id,
-        threadId: thread.id,
-        batchIndex: 1,
-        userRequest: 'Làm báo cáo',
-        leadId: leadRow.id,
-        planSnapshot: { original: [] },
-        planDecision: 'auto',
-      },
-      db
-    );
-    const assignment = await createAssignment(
-      {
-        batchId: batch.id,
-        agentId: employee.id,
-        agentName: employee.name,
-        model: 'claude-sonnet-4',
-        task: 'Việc 1',
-      },
-      db
-    );
-    const steer = await saveTeamMessage(
-      {
-        threadId: thread.id,
-        role: 'user',
-        content: `@[${employee.name}](agent:${employee.id}) làm thêm X`,
-        messageKind: 'steer',
-        targetAgentId: employee.id,
-      },
-      db
-    );
-    expect(steer.batchId).toBeUndefined();
-    // The leader's steer turn completed and held the instruction: no longer pending, and the
-    // assignment carries no delivery marker.
-    expect(assignment.steerMessageIds).toBeUndefined();
 
     render(
       <TeamWorkspace
@@ -440,8 +332,10 @@ describe('TeamWorkspace composer (37.1 D-01/D-02/D-12)', () => {
       />
     );
 
-    const badge = await screen.findByTestId(`steer-badge-${steer.id}`);
-    expect(badge.textContent).toBe('chưa giao');
+    expect(await screen.findByText(/làm thêm X/)).toBeInTheDocument();
+    expect(screen.queryByTestId(/^steer-label-/)).toBeNull();
+    expect(screen.queryByTestId(/^steer-badge-/)).toBeNull();
+    expect(screen.queryByText('Chỉ đạo')).toBeNull();
   });
 
   // WR-02: `retryAssignment` throws for a busy phase / disposed run. The only call site

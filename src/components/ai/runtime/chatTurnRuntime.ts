@@ -76,7 +76,7 @@ export interface ChatTurnRequest {
   agentId?: string | undefined;
   agentName?: string | undefined;
   agentKind?: 'lead' | 'employee' | undefined;
-  messageKind?: 'instruction' | 'report' | 'synthesis' | 'plan' | 'steer' | undefined;
+  messageKind?: 'instruction' | 'report' | 'synthesis' | 'plan' | undefined;
   /** D-12: employee turns write no user row, so concurrent turns cannot fake human bubbles. */
   persistUserMessage?: boolean | undefined;
   /** D-12: `read-only` refuses every mutation before the artifact and auto-approve branches. */
