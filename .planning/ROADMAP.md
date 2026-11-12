@@ -202,7 +202,7 @@ Plans:
 **Scope source:** deferred from `.planning/phases/37-runtime-reliability-concurrency/37-CONTEXT.md` (D-08/D-19/D-22/D-24). Schema is already in place from Phase 37.
 **Research flag:** standard patterns — `beforeToolRound` seam exists at `src/services/ai/aiOrchestratorLoop.ts`; defects/contracts are at `file:line` in 37-CONTEXT.
 
-**Plans:** 5/6 plans executed
+**Plans:** 6/6 plans complete
 Plans:
 **Wave 1**
 
@@ -223,7 +223,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 37.1-06-PLAN.md — team chat UI: remove outbox + streaming bubbles, inline indicator + popover, hover-gated Stop
+- [x] 37.1-06-PLAN.md — team chat UI: remove outbox + streaming bubbles, inline indicator + popover, hover-gated Stop
 
 ### Phase 38: Hard token budget + accurate measurement
 

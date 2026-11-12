@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
 status: executing
-stopped_at: Completed 37.1-05-PLAN.md
-last_updated: "2026-11-12T04:41:31.881Z"
+stopped_at: Completed 37.1-06-PLAN.md
+last_updated: "2026-11-12T04:47:49.209Z"
 last_activity: 2026-11-12 -- Phase 37.1 plan 05 complete (leader amends queued assignments)
 progress:
   total_phases: 7
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 31
-  completed_plans: 31
-  percent: 43
+  completed_plans: 32
+  percent: 57
 current_phase: 37
 current_phase_name: Runtime reliability + concurrency
 ---
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 37.1 (live-steering-leader-amends-assignments-and-steers-running-a) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Ready to execute
 Last activity: 2026-11-12 -- Phase 37.1 plan 05 complete (leader amends queued assignments)
 
 ## Session Continuity
 
-Last session: 2026-11-12T04:41:27.363Z
-Stopped at: Completed 37.1-05-PLAN.md
+Last session: 2026-11-12T04:47:49.204Z
+Stopped at: Completed 37.1-06-PLAN.md
 Resume file: None
 
 Progress: [████████░░] 83%
@@ -146,6 +146,8 @@ Progress: [████████░░] 83%
 - [Phase ?]: The amend validator owns argument shape only; ledger membership stays in the coordinator, the only holder of openBatchId
 - [Phase ?]: A non-queued row refuses the whole amend list, so the leader's report always matches the ledger
 - [Phase ?]: Amend-cancel sets userStopped before aborting so leader-amend wins the from:queued guard; a rewrite appends an attempt and re-dispatches it
+- [Phase 37.1]: Team chat UI: a queued-only pending set still renders the indicator trigger so Stop stays reachable
+- [Phase 37.1]: AgentLiveStep is runtime-only; the delivered-steer set is derived from a batchId-scoped read because steerMessageIds is unindexed
 
 ## Performance Metrics
 
@@ -163,3 +165,4 @@ Progress: [████████░░] 83%
 | Phase 37.1 P02 | ~12m | 3 tasks | 4 files |
 | Phase 37.1 P03 | ~6m | 3 tasks | 7 files |
 | Phase 37.1 P05 | 12 | 2 tasks | 4 files |
+| Phase 37.1 P06 | 35m | 3 tasks | 12 files |
