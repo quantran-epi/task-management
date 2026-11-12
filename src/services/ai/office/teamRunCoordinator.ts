@@ -181,6 +181,10 @@ export interface TeamRunCoordinator {
     contentWhenMissing?: string,
     diagnosticDetail?: string
   ): Promise<AiTeamAssignment | null>;
+  /**
+   * D-24: dispatches a batch and returns an ACKNOWLEDGEMENT, not settled results. The lead's
+   * turn ends here; `onBatchSettled` opens a new lead turn once every agent is terminal.
+   */
   runBatch(assignments: unknown[], signal?: AbortSignal): Promise<string>;
   /**
    * D-12/D-13/D-23: re-run exactly ONE stopped/errored attempt as a NEW attempt row, mark
@@ -319,6 +323,15 @@ const BATCH_DISPATCH_FAILED = JSON.stringify({
 });
 
 /**
+ * D-24/T-37.1-02: a second `delegate_batch` while a batch is open would overwrite
+ * `openBatchId` and orphan the first batch's settle handler. Refuse it.
+ */
+const ALREADY_RUNNING_REFUSAL = JSON.stringify({
+  cancelled: true,
+  message: 'Một lô đang chạy. Hãy chờ lô đó xong rồi giao việc mới.',
+});
+
+/**
  * D-18/D-11: abort every per-assignment controller and empty the map, so every parked
  * `scheduler.acquire` rejects with `AbortError` instead of parking forever.
  */
@@ -397,6 +410,23 @@ export function createTeamRunCoordinator(
    * dispose close is a no-op until then.
    */
   let openBatchId: string | null = null;
+  /**
+   * D-24/T-37.1-01: the batch owns cancellation, never the lead's tool-call signal. One
+   * controller per open batch; `abortAll`/`dispose` abort every entry, and
+   * `onBatchSettled`'s `finally` owns deletion.
+   */
+  const batchControllers = new Map<string, AbortController>();
+  /**
+   * D-24: one team turn spans dispatch + batch + synthesis. `send()`'s `finally` must not
+   * finish it while a batch is still running; `onBatchSettled` finishes it instead.
+   */
+  let batchOwnsTeamTurn = false;
+  /** D-24: two lead turns per batch, so the usage baseline is keyed per TURN, not per agent. */
+  const usageBaselineKey = new Map<string, string>();
+  let leadTurnSeq = 0;
+  let employeeTurnSeq = 0;
+  /** D-24: two lead turns must never overlap on one runtime. */
+  let leadTurnChain: Promise<void> = Promise.resolve();
   /** D-22: which attempt the agent's next report save belongs to (cleared on terminal). */
   const activeAssignmentByAgent = new Map<
     string,
@@ -500,6 +530,15 @@ export function createTeamRunCoordinator(
 
   const teamTurnId = `team:${teamId}`;
   const agentTurnId = (agentId: string) => `team:${teamId}:agent:${agentId}`;
+
+  /**
+   * D-24: serializes lead turns on the one lead runtime. A rejected task must not break the
+   * chain for the next turn, so both arms continue it.
+   */
+  function runLeadTurnSerialized(task: () => Promise<void>): Promise<void> {
+    leadTurnChain = leadTurnChain.then(task, task).catch(() => {});
+    return leadTurnChain;
+  }
 
   function gateFor(agentId: string): BudgetGate {
     let gate = agentGates.get(agentId);
@@ -726,7 +765,7 @@ export function createTeamRunCoordinator(
       if (normalized === 'delegate_batch') {
         if (!roster.lead || agentId !== roster.lead.id) return EMPLOYEE_DELEGATE_REFUSAL;
         const assignments = Array.isArray(args?.assignments) ? args.assignments : [];
-        return runBatch(assignments, signal);
+        return dispatchBatch(assignments, signal);
       }
 
       if (TEAM_TOOL_NAMES.has(normalized)) {
@@ -808,7 +847,7 @@ export function createTeamRunCoordinator(
       },
       onCompleted: ({ content }) => settleAgent(agentId, 'done', content),
       onError: () => settleAgent(agentId, 'error', SANITIZED_TURN_ERROR),
-      onUsage: (usage) => handleUsage(agentId, usage),
+      onUsage: (usage) => handleUsage(agentId, usage, usageBaselineKey.get(agentId) ?? agentId),
       onAwaitingApproval: (info) => {
         pendingApproval = info;
         setPhase('awaiting-mutation-approval');
@@ -872,12 +911,17 @@ export function createTeamRunCoordinator(
     membersLoaded = true;
   }
 
-  function handleUsage(agentId: string, usage: ChatTokenUsage): void {
+  /**
+   * D-24: `accountingKey` identifies the TURN that reported, so two lead turns in one batch
+   * each get their own baseline. Everything user-facing (member totals, buckets, gates) stays
+   * keyed by the real `agentId`.
+   */
+  function handleUsage(agentId: string, usage: ChatTokenUsage, accountingKey: string): void {
     const total = normalizeUsageTotal(usage);
-    const previousTotal = usageTotals.get(agentId) ?? 0;
+    const previousTotal = usageTotals.get(accountingKey) ?? 0;
     const delta = total - previousTotal;
     if (delta <= 0) return;
-    usageTotals.set(agentId, total);
+    usageTotals.set(accountingKey, total);
     teamUsed += delta;
 
     const used = (memberUsed.get(agentId) ?? 0) + delta;
@@ -1047,7 +1091,11 @@ export function createTeamRunCoordinator(
       userStopped.delete(employee.id);
       // CR-01: each turn's usage total restarts at zero, so the cumulative baseline
       // must reset too — otherwise the second turn's delta is zero or negative.
-      usageTotals.delete(employee.id);
+      // D-24: the baseline is keyed per TURN, so a still-running turn's key is never deleted.
+      employeeTurnSeq += 1;
+      const accountingKey = `${employee.id}:${employeeTurnSeq}`;
+      usageBaselineKey.set(employee.id, accountingKey);
+      usageTotals.delete(accountingKey);
       // D-13: the batch's employees are only known here, so this is where they claim live use.
       claimLiveUse(employee.id, employee.skillId);
       updateAgent(employee.id, {
@@ -1191,8 +1239,12 @@ export function createTeamRunCoordinator(
 
       currentRequests.set(lead.id, request);
       userStopped.delete(lead.id);
-      // CR-01: same baseline reset as the employee path.
-      usageTotals.delete(lead.id);
+      // CR-01: same baseline reset as the employee path. D-24: keyed per turn, so the
+      // dispatch turn's baseline survives the synthesis turn that follows it.
+      leadTurnSeq += 1;
+      const leadAccountingKey = `${lead.id}:${leadTurnSeq}`;
+      usageBaselineKey.set(lead.id, leadAccountingKey);
+      usageTotals.delete(leadAccountingKey);
       // D-13: leads have no skill, so the claim carries an empty skill list.
       claimLiveUse(lead.id, undefined);
       updateAgent(lead.id, {
@@ -1276,7 +1328,10 @@ export function createTeamRunCoordinator(
       await startLeadTurn(text);
       return 'started';
     } finally {
-      aiTurnManager.finishTurn(teamTurnId);
+      // D-24: when the turn opened a batch, the batch owns the team turn — `onBatchSettled`
+      // finishes it once the synthesis turn is done. Finishing here would drop the indicator
+      // while agents are still running.
+      if (!batchOwnsTeamTurn) aiTurnManager.finishTurn(teamTurnId);
     }
   }
 
@@ -1292,18 +1347,19 @@ export function createTeamRunCoordinator(
     employee: AiEmployee,
     task: string,
     attempt: AttemptRef,
-    signal: AbortSignal | undefined
+    batchController: AbortController
   ): Promise<void> {
     const assignmentId = attempt.assignmentId;
     // D-10/D-11: the controller — never a scheduler handle — is the cancellation channel
     // for a queued assignment; no handle exists before `acquire` resolves.
     const controller = new AbortController();
     assignmentControllers.set(assignmentId, controller);
-    const onAbort = () => controller.abort();
-    if (signal) {
-      if (signal.aborted) controller.abort();
-      else signal.addEventListener('abort', onAbort, { once: true });
-    }
+    // D-24/T-37.1-01: the batch controller is the ONLY bridge from a teardown to this agent.
+    // The lead's tool-call signal is deliberately not wired — its turn ends as soon as the
+    // batch is dispatched, and that abort must not cancel a running batch.
+    const onBatchAbort = () => controller.abort();
+    if (batchController.signal.aborted) controller.abort();
+    else batchController.signal.addEventListener('abort', onBatchAbort, { once: true });
 
     let handle: SchedulerHandle | undefined;
     try {
@@ -1313,6 +1369,12 @@ export function createTeamRunCoordinator(
       // deleted team. Throw the abort the catch below already knows how to settle — a bare
       // `return` would leave the attempt row `queued` forever.
       if (disposed) throw new DOMException('Aborted', 'AbortError');
+      // T-37.1-04: a stop/amend that landed while this assignment was parked has already
+      // written a terminal status. Re-read the ledger so a cancelled row never starts.
+      const ledgerRow = await getAssignment(assignmentId, db);
+      if (!ledgerRow || ledgerRow.runStatus !== 'queued') {
+        throw new DOMException('Aborted', 'AbortError');
+      }
       await startEmployeeTurn(employee, task, lastUserRequest, priorBatchResults, attempt);
     } catch (err) {
       // The acquire rejected (a stop/abort/dispose) or the prologue threw. The agent and
@@ -1349,7 +1411,7 @@ export function createTeamRunCoordinator(
         /* a ledger write must never leak the slot */
       }
     } finally {
-      if (signal) signal.removeEventListener('abort', onAbort);
+      batchController.signal.removeEventListener('abort', onBatchAbort);
       assignmentControllers.delete(assignmentId);
       if (assignmentIdsByAgent.get(employee.id) === assignmentId) {
         assignmentIdsByAgent.delete(employee.id);
@@ -1362,7 +1424,15 @@ export function createTeamRunCoordinator(
     }
   }
 
-  async function runBatch(rawAssignments: unknown[], signal?: AbortSignal): Promise<string> {
+  /**
+   * D-24: the dispatch half of the old `runBatch`. Opens the batch row, creates one attempt
+   * per assignment, starts every agent, and returns an ACK — the lead's turn ends here.
+   * `onBatchSettled` owns the wait, the reports and the synthesis turn.
+   */
+  async function dispatchBatch(rawAssignments: unknown[], signal?: AbortSignal): Promise<string> {
+    // T-37.1-02: a second dispatch while a batch is open would overwrite `openBatchId` and
+    // orphan the first batch's settle handler. Checked before `disposed` on purpose.
+    if (openBatchId !== null) return ALREADY_RUNNING_REFUSAL;
     // D-18: a disposed coordinator starts no batch and opens no ledger row.
     if (disposed) return DISPOSED_REFUSAL;
     // D-05: no lead means no delegation authority — refuse rather than throw.
@@ -1487,11 +1557,12 @@ export function createTeamRunCoordinator(
       return DISPOSED_REFUSAL;
     }
     openBatchId = batch.id;
+    // D-24/T-37.1-01: the batch owns the cancellation channel from here on.
+    const batchController = new AbortController();
+    batchControllers.set(batch.id, batchController);
 
     setPhase('batch-running');
 
-    const started: Array<Promise<void>> = [];
-    /** This batch's attempt ids by agent, kept after the dispatch `finally` for the result. */
     const attemptIdsByAgent = new Map<string, string>();
     // WR-06: the create/dispatch loop awaits `createAssignment`/`saveTeamMessage` per
     // assignment. A throw there escapes `runBatch` to the orchestrator's tool-error path;
@@ -1545,28 +1616,26 @@ export function createTeamRunCoordinator(
           },
           db
         );
-        // D-16/T-37-08: the promise is settled by `Promise.allSettled`, but a rejection from
-        // the dispatch task must still not surface as unhandled — the task itself settles the
-        // agent and its ledger row.
-        started.push(
-          dispatchAssignment(
-            employee,
-            assignment.task,
-            {
-              batchId: batch.id,
-              assignmentId: attemptRow.id,
-              attemptNo: attemptRow.attemptNo,
-              instructionMessageId: instructionRow.id,
-            },
-            signal
-          ).catch(() => {
-            /* dispatchAssignment already settled the agent and its ledger row */
-          })
-        );
+        // D-16/T-37-08: the dispatch task is not awaited here, but a rejection must still not
+        // surface as unhandled — the task itself settles the agent and its ledger row.
+        void dispatchAssignment(
+          employee,
+          assignment.task,
+          {
+            batchId: batch.id,
+            assignmentId: attemptRow.id,
+            attemptNo: attemptRow.attemptNo,
+            instructionMessageId: instructionRow.id,
+          },
+          batchController
+        ).catch(() => {
+          /* dispatchAssignment already settled the agent and its ledger row */
+        });
       }
     } catch {
       // Anything already dispatched still settles itself; the batch is closed here so the
       // ledger tail is honest and `dispose`/`abortAll` cannot double-close it.
+      batchControllers.delete(batch.id);
       if (openBatchId === batch.id) {
         openBatchId = null;
         try {
@@ -1579,72 +1648,129 @@ export function createTeamRunCoordinator(
       return BATCH_DISPATCH_FAILED;
     }
 
-    // Concurrency: one runtime per agent, so three turns really do run at once (D-02).
-    await Promise.allSettled(started);
-    // Terminal-only settle: a paused agent's deferred is still pending, so the lead cannot
-    // synthesize past it (D-30, Pitfall 7).
-    await Promise.all(
-      [...agentDeferreds.values()].map((deferred) => deferred.promise)
-    );
+    // D-24: the ack is all the lead needs — the settled results arrive through the synthesis
+    // turn that `onBatchSettled` opens. Building it here keeps the tool result honest about
+    // what was dispatched without waiting for anyone.
+    const ack = JSON.stringify({
+      dispatched: attemptIdsByAgent.size,
+      batchId: batch.id,
+      status: 'dispatched',
+      agents: [...attemptIdsByAgent.entries()].map(([agentId, assignmentId]) => ({
+        agentId,
+        agentName: roster.employees.find((row) => row.id === agentId)?.name ?? agentId,
+        assignmentId,
+      })),
+    });
 
-    // D-14: the lead must be able to say what is missing, so every entry carries the
-    // ledger's terminal triple — `status`, `stopReason`, `incomplete` — not just the UI state.
-    const results = await Promise.all(
-      assignments.map(async (assignment) => {
-        const employee = roster.employees.find((row) => row.id === assignment.agentId);
-        const state = agents.get(assignment.agentId);
-        const status: AgentRunStatus = state?.status ?? 'error';
-        const report =
-          status === 'error' ? SANITIZED_TURN_ERROR : reports.get(assignment.agentId) ?? '';
-        const assignmentId = attemptIdsByAgent.get(assignment.agentId);
-        const row = assignmentId ? await getAssignment(assignmentId, db) : undefined;
-        const stopped = status === 'stopped' || row?.runStatus === 'stopped';
-        return {
-          agentId: assignment.agentId,
-          agentName: employee?.name ?? assignment.agentId,
-          status,
-          report,
-          stopReason: row?.stopReason ?? (stopped ? 'user-abort' : 'none'),
-          incomplete: row?.incomplete ?? stopped,
-        };
-      })
-    );
+    // D-24: one team turn spans dispatch + batch + synthesis, so `send()` must not finish it.
+    batchOwnsTeamTurn = true;
+    // Fire-and-forget: the settle handler must never throw into the void, and the lead's turn
+    // has to end now.
+    void onBatchSettled(batch.id, assignments, attemptIdsByAgent).catch(() => {
+      /* a settle handler must never surface as an unhandled rejection */
+    });
+    return ack;
+  }
 
-    agentDeferreds.clear();
-    // D-14: a batch with unfinished agents must not read as complete. The result stays an
-    // ARRAY — the `delegate_batch` contract and every existing consumer/tests treat it as
-    // one — so the honesty travels as a final `kind: 'unfinished'` ENTRY rather than a
-    // wrapper object, which would change the tool result's shape for every caller.
-    const unfinished = results.filter(
-      (row) => row.incomplete === true || row.status === 'stopped' || row.status === 'error'
-    );
-    const resultPayload: Array<Record<string, unknown>> = [...results];
-    if (unfinished.length > 0) {
-      resultPayload.push({
-        kind: 'unfinished',
-        agents: unfinished.map((row) => ({
-          agentId: row.agentId,
-          agentName: row.agentName,
-          status: row.status,
-          stopReason: row.stopReason,
-        })),
-      });
-    }
-    // Carry this batch's settled reports into the next one (AIO-TEAM-03). A stopped or
-    // errored agent contributes nothing readable, so only real reports are kept.
-    priorBatchResults = results
-      .filter((row) => row.status === 'done' && row.report.trim().length > 0)
-      .map((row) => ({ agentName: row.agentName, content: row.report }));
-    // D-18: `Promise.all(deferreds)` is an await, so a dispose during it must not resurrect
-    // `lead-synthesizing` on an already-disposed coordinator.
-    setPhase('lead-synthesizing');
-    // The run is over: close the batch row so `dispose`/`abortAll` never double-close it.
-    if (openBatchId !== null) {
-      const batchId = openBatchId;
-      openBatchId = null;
+  /**
+   * D-24: the event half of the old `runBatch`. Waits for every agent to reach a terminal
+   * state, polls the ledger so a cancelled-but-still-parked row cannot be missed, builds the
+   * batch results, closes the batch row, and opens the synthesis lead turn.
+   *
+   * Cancellable by design: `abortAll`/`dispose` abort the batch controller, which rejects the
+   * ledger poll's park and every agent's `acquire`, so this handler never resurrects a lead
+   * turn on a closed coordinator.
+   */
+  async function onBatchSettled(
+    batchId: string,
+    assignments: Array<{ agentId: string; task: string }>,
+    attemptIdsByAgent: Map<string, string>
+  ): Promise<void> {
+    const batchController = batchControllers.get(batchId);
+    try {
+      // Terminal-only settle: a paused agent's deferred is still pending, so the lead cannot
+      // synthesize past it (D-30, Pitfall 7).
+      await Promise.all([...agentDeferreds.values()].map((deferred) => deferred.promise));
+      // Ledger poll (Pitfall 5): a cancelled queued row may never have had a deferred.
+      while (!disposed && !batchController?.signal.aborted) {
+        const rows = await listBatchAssignments(batchId, db);
+        if (!rows.some((row) => row.runStatus === 'queued' || row.runStatus === 'running')) break;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      if (disposed || batchController?.signal.aborted) return;
+
+      // D-14: the lead must be able to say what is missing, so every entry carries the
+      // ledger's terminal triple — `status`, `stopReason`, `incomplete` — not just the UI state.
+      const results = await Promise.all(
+        assignments.map(async (assignment) => {
+          const employee = roster.employees.find((row) => row.id === assignment.agentId);
+          const state = agents.get(assignment.agentId);
+          const status: AgentRunStatus = state?.status ?? 'error';
+          const report =
+            status === 'error' ? SANITIZED_TURN_ERROR : reports.get(assignment.agentId) ?? '';
+          const assignmentId = attemptIdsByAgent.get(assignment.agentId);
+          const row = assignmentId ? await getAssignment(assignmentId, db) : undefined;
+          const stopped = status === 'stopped' || row?.runStatus === 'stopped';
+          return {
+            agentId: assignment.agentId,
+            agentName: employee?.name ?? assignment.agentId,
+            status,
+            report,
+            stopReason: row?.stopReason ?? (stopped ? 'user-abort' : 'none'),
+            incomplete: row?.incomplete ?? stopped,
+          };
+        })
+      );
+
+      agentDeferreds.clear();
+      // Carry this batch's settled reports into the next one (AIO-TEAM-03).
+      priorBatchResults = results
+        .filter((row) => row.status === 'done' && row.report.trim().length > 0)
+        .map((row) => ({ agentName: row.agentName, content: row.report }));
+
+      // D-14: the `kind: 'unfinished'` tail no longer travels in the tool result, so the
+      // honesty has to reach the lead through the synthesis prompt. An unfinished agent is
+      // named in the `KẾT QUẢ CỦA LÔ` block with its terminal triple.
+      const synthesisResults: BatchResult[] = results.map((row) => ({
+        agentName: row.agentName,
+        content:
+          row.incomplete === true || row.status !== 'done'
+            ? `${row.report}\n[Chưa hoàn tất — ${row.status}/${row.stopReason}]`
+            : row.report,
+      }));
+
+      setPhase('lead-synthesizing');
+      // The run is over: close the batch row so `dispose`/`abortAll` never double-close it.
+      if (openBatchId === batchId) openBatchId = null;
       await closeBatch(batchId, { phaseAtEnd: 'lead-synthesizing', abortedBy: 'none' }, db);
+      // D-24: the dispatch turn's own answer is a synthesis row too, so it must be
+      // superseded by the real synthesis — otherwise the transcript keeps two "current"
+      // syntheses. Same shape as `retryAssignment`'s predecessor handling.
+      const previousSynthesisId =
+        lastSynthesisMessageId ??
+        (await findCurrentSynthesisMessageId(options.threadId, db)) ??
+        null;
+      lastSynthesisMessageId = null;
+      try {
+        await runLeadTurnSerialized(() => startLeadTurn(SYNTHESIS_INSTRUCTION, synthesisResults));
+      } finally {
+        if (
+          lastSynthesisMessageId !== null &&
+          previousSynthesisId !== null &&
+          previousSynthesisId !== lastSynthesisMessageId
+        ) {
+          await supersedeTeamMessage(previousSynthesisId, lastSynthesisMessageId, db);
+        }
+      }
+    } catch {
+      // A settle handler must never throw into the void: an AbortError from a teardown and a
+      // ledger failure both end here.
+    } finally {
+      batchControllers.delete(batchId);
+      // D-24/T-37.1-03: the team turn spans the whole batch, so it finishes exactly here.
+      batchOwnsTeamTurn = false;
+      aiTurnManager.finishTurn(teamTurnId);
     }
-    return JSON.stringify(resultPayload);
   }
 
   /** D-12: text handed to the lead for a re-synthesis pass (no delegation expected). */
@@ -1978,6 +2104,12 @@ export function createTeamRunCoordinator(
         /* the run must end even if the ledger write fails */
       });
     }
+    // D-24/T-37.1-01: the batch controller is the only channel that reaches a parked or
+    // running agent. `onBatchSettled`'s `finally` owns the map deletion.
+    for (const controller of batchControllers.values()) controller.abort();
+    // D-24: a teardown mid-batch still owes the team turn a finish.
+    batchOwnsTeamTurn = false;
+    aiTurnManager.finishTurn(teamTurnId);
     registry.abortAll();
     for (const agentId of agents.keys()) settleAgent(agentId, 'stopped');
     setPhase('ready');
@@ -2024,6 +2156,12 @@ export function createTeamRunCoordinator(
     // D-11/D-18: a per-assignment controller is the only cancellation channel for a
     // queued assignment, so aborting them all is what rejects every parked acquire.
     abortAllAssignmentControllers(assignmentControllers);
+
+    // D-24/T-37.1-01: abort every batch controller so a parked `onBatchSettled` ledger poll
+    // and every queued acquire reject instead of resuming on a dead coordinator.
+    for (const controller of batchControllers.values()) controller.abort();
+    batchOwnsTeamTurn = false;
+    aiTurnManager.finishTurn(teamTurnId);
 
     // `clear()` aborts and drops every runtime (teamRunRegistry).
     registry.clear();
@@ -2126,7 +2264,7 @@ export function createTeamRunCoordinator(
   return {
     send,
     finalizeAttempt,
-    runBatch,
+    runBatch: dispatchBatch,
     retryAssignment,
     resolvePlan,
     resolveApproval,
