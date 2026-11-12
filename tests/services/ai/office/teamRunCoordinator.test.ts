@@ -110,6 +110,8 @@ interface HarnessOptions {
    * assert synthesis-prompt content pass their own.
    */
   synthesisScript?: LoopScript;
+  /** WR-05 test seam: shorten the bounded settle poll so a stuck row is reachable. */
+  settlePollDeadlineMs?: number;
 }
 
 interface Harness {
@@ -228,6 +230,9 @@ async function createHarness(options: HarnessOptions): Promise<Harness> {
     endpoint: 'https://example.invalid/v1',
     apiKey: 'sk-test',
     createRuntimeDeps,
+    ...(options.settlePollDeadlineMs !== undefined
+      ? { settlePollDeadlineMs: options.settlePollDeadlineMs }
+      : {}),
     // A fresh snapshot object per turn, so a later mutation of `roster` cannot reach a turn.
     ...(options.useSeam
       ? {
@@ -4522,6 +4527,69 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
         .filter((row) => row.agentId === current.employees[1]!.id)
         .map((row) => row.attemptNo);
       expect(attempts).toEqual([1]);
+    });
+  });
+
+  // WR-05: the bounded settle poll used to `break` straight into the synthesis path, closing
+  // the batch while rows were still live. A later `send()` then opened a SECOND batch and
+  // overwrote `assignmentIdsByAgent`, leaving a phantom `running` entry behind.
+  describe('settle poll deadline (WR-05)', () => {
+    it('finalizes a stuck row instead of closing the batch around it', async () => {
+      const synthesisPrompts: string[] = [];
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        settlePollDeadlineMs: 50,
+        synthesisScript: async (options) => {
+          synthesisPrompts.push(
+            options.messages
+              .filter((message) => message.role === 'system')
+              .map((message) => String(message.content))
+              .join('\n')
+          );
+          return loopResult('Đã tổng hợp.');
+        },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: [{ agentId: harness!.employees[0]!.id, task: 'Việc 1' }] },
+              harness!.db,
+              options.signal
+            );
+            // A queued row nobody dispatches — the poll can never see it settle.
+            const batch = (await harness!.db.aiTeamBatches.toArray())[0]!;
+            await createAssignment(
+              {
+                batchId: batch.id,
+                agentId: harness!.employees[1]!.id,
+                agentName: harness!.employees[1]!.name,
+                model: EMP_B_MODEL,
+                task: 'Việc mồ côi',
+              },
+              harness!.db
+            );
+            return loopResult('Đã giao việc.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+        },
+      });
+      const current = harness;
+
+      await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
+
+      // The stuck row got a terminal triple rather than being reported as still running.
+      const stuck = (await current.db.aiTeamAssignments.toArray()).find(
+        (row) => row.task === 'Việc mồ côi'
+      )!;
+      expect(stuck).toMatchObject({ runStatus: 'stopped', stopReason: 'tool-limit' });
+      // No phantom live agent survives the deadline.
+      expect(
+        current.coordinator.getState().agents.some((row) => row.status === 'running')
+      ).toBe(false);
+      // The batch really closed, so the next send starts a new turn rather than steering.
+      expect(synthesisPrompts).toHaveLength(1);
     });
   });
 

@@ -162,6 +162,11 @@ export interface TeamRunCoordinatorOptions {
   /** Test seam: production omits it and the coordinator uses the default chat-turn deps. */
   createRuntimeDeps?: ((agentId: string) => Partial<ChatTurnRuntimeDeps>) | undefined;
   /**
+   * Test seam (WR-05): the bounded settle-poll deadline. Production omits it — the 120 s
+   * default is what stops a row that can never settle from hanging the team turn forever.
+   */
+  settlePollDeadlineMs?: number | undefined;
+  /**
    * Production seam (D-03): resolve a fresh roster from persisted rows at every turn start.
    * When supplied, no construction-time `lead`/`employees`/`skills` value reaches a turn.
    */
@@ -2407,14 +2412,61 @@ export function createTeamRunCoordinator(
       // Ledger poll (Pitfall 5): a cancelled queued row may never have had a deferred.
       // WR-09: bounded — a row that can never settle must not hang the team turn forever
       // (`finishTurn` would never fire and every later submit would route as a steer).
-      const deadline = Date.now() + 120_000;
+      const deadline = Date.now() + (options.settlePollDeadlineMs ?? 120_000);
+      let deadlineExpired = false;
       while (!disposed && !batchController?.signal.aborted) {
         const rows = await listBatchAssignments(batchId, db);
         if (!rows.some((row) => row.runStatus === 'queued' || row.runStatus === 'running')) break;
-        if (Date.now() > deadline) break;
+        if (Date.now() > deadline) {
+          deadlineExpired = true;
+          break;
+        }
         await new Promise((resolve) => setTimeout(resolve, 25));
       }
       if (disposed || batchController?.signal.aborted) return;
+
+      // WR-05: the deadline must not be mistaken for a settled batch. Closing it here would
+      // report a still-`running` agent as unfinished, and a later `send()` would open a
+      // SECOND batch and overwrite `assignmentIdsByAgent`. Finalize the stuck rows instead:
+      // abort their controllers, write the terminal triple, and settle the agent so no
+      // phantom "đang làm việc" line survives.
+      if (deadlineExpired) {
+        // A few bounded passes: an aborted dispatch settles itself asynchronously, so one
+        // pass can still observe a row mid-transition.
+        for (let pass = 0; pass < 5; pass += 1) {
+          const live = (await listBatchAssignments(batchId, db)).filter(
+            (row) => row.runStatus === 'queued' || row.runStatus === 'running'
+          );
+          if (live.length === 0) break;
+          for (const row of live) {
+            assignmentControllers.get(row.id)?.abort();
+            // Both writers (this one and the row's own dispatch catch) must record the same
+            // reason, or the row ends with one path's reason and the other path's status.
+            userStopped.set(row.agentId, 'tool-limit');
+            try {
+              await finalizeAttempt(
+                row.id,
+                row.runStatus,
+                'stopped',
+                'tool-limit',
+                STOPPED_REPORT_COPY
+              );
+            } finally {
+              userStopped.delete(row.agentId);
+            }
+            settleAgent(row.agentId, 'stopped', undefined, row.id);
+          }
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        const stillLive = (await listBatchAssignments(batchId, db)).some(
+          (row) => row.runStatus === 'queued' || row.runStatus === 'running'
+        );
+        // A row that survived the abort is a lost race, not a settled batch: leave
+        // `openBatchId` set (the reviewer's floor) so no second batch opens over this one.
+        // The ceiling: the team turn finishes in `finally` and the phase stays
+        // `batch-running`, so later submits route as steers until the row settles.
+        if (stillLive) return;
+      }
 
       // D-14: the lead must be able to say what is missing, so every entry carries the
       // ledger's terminal triple — `status`, `stopReason`, `incomplete` — not just the UI state.
