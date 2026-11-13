@@ -21,6 +21,7 @@ import { GitHubConfigCard } from '../components/settings/GitHubConfigCard';
 import { GitHubSyncCard } from '../components/settings/GitHubSyncCard';
 import { JiraConfigCard } from '../components/settings/JiraConfigCard';
 import { NineRouterConfigCard } from '../components/settings/NineRouterConfigCard';
+import { BudgetWarnThresholdCard } from '../components/settings/BudgetWarnThresholdCard';
 import { KnowledgeServerConfigCard } from '../components/settings/KnowledgeServerConfigCard';
 import { GhostDevConfigCard } from '../components/settings/GhostDevConfigCard';
 import { GlobalConventionsCard } from '../components/settings/GlobalConventionsCard';
@@ -236,6 +237,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <SshFsAiToolConfigCard db={db} />
           <GhostDevConfigCard />
           <NineRouterConfigCard db={db} />
+          <BudgetWarnThresholdCard db={db} />
           <KnowledgeServerConfigCard />
         </Space>
       ),
