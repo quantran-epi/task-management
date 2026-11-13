@@ -195,18 +195,34 @@ describe('splitUsage / threshold math (AIO-BUDGET-02, AIO-BUDGET-06, D-05, D-09)
 
   it('clamps every out-of-band percentage into 1..100', () => {
     expect(resolveThresholdPct({ budgetWarnThresholdPct: 0 }, undefined)).toBe(80);
+    expect(resolveThresholdPct({ budgetWarnThresholdPct: 1000 }, 42)).toBe(42);
     expect(resolveThresholdPct({}, Number.NaN)).toBe(80);
+    expect(resolveThresholdPct({ budgetWarnThresholdPct: 0.5 }, undefined)).toBe(1);
+    expect(resolveThresholdPct({ budgetWarnThresholdPct: -3 }, undefined)).toBe(80);
     expect(resolveThresholdPct({ budgetWarnThresholdPct: 100 }, undefined)).toBe(100);
   });
 
   it('is inclusive at the threshold boundary', () => {
     expect(isAtThreshold(799, 1000, 80)).toBe(false);
     expect(isAtThreshold(800, 1000, 80)).toBe(true);
+    expect(isAtThreshold(801, 1000, 80)).toBe(true);
+    expect(isAtThreshold(999, 1000, 100)).toBe(false);
+    expect(isAtThreshold(1000, 1000, 100)).toBe(true);
+    expect(isAtThreshold(1001, 1000, 100)).toBe(true);
+    // Exact boundary on a small budget.
+    expect(isAtThreshold(5, 10, 50)).toBe(true);
   });
 
   it('never treats an unconfigured budget as reached', () => {
     expect(isAtThreshold(0, 0, 80)).toBe(false);
     expect(isAtThreshold(1, 0, 80)).toBe(false);
     expect(isAtThreshold(Number.NaN, 1000, 80)).toBe(false);
+  });
+
+  it('decides the crossing on the raw comparison, not on display rounding', () => {
+    // 3 * 33 / 100 = 0.99, so 1 token is already at the threshold. Percentage DISPLAY
+    // rounding (33%) must never decide the crossing; the raw comparison is the contract
+    // (plan 09 colours on this same comparison and only rounds for display).
+    expect(isAtThreshold(1, 3, 33)).toBe(true);
   });
 });

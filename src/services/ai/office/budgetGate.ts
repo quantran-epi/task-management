@@ -5,13 +5,14 @@ import {
 import type { ChatTokenUsage } from '../../../types/models';
 
 /**
- * Budget threshold math (D-01/D-02, D-04/D-05, D-09).
+ * Budget threshold math (D-01/D-02, D-04/D-05, D-09) plus the deprecated parking gate.
  *
  * The budget surface is warning-only: `splitUsage`, `resolveThresholdPct` and
  * `isAtThreshold` compute numbers and never refuse a call, never park a turn and never
  * throw. The legacy `BudgetGate` below is the old parking gate; it is still called from
  * `beforeToolRoundFor` and is deleted — implementation, call sites and tests — by plan 08.
- * This intermediate tree is NOT gate-free yet.
+ * This intermediate tree is NOT gate-free yet, and the legacy gate stays byte-identical
+ * until then.
  *
  * Usage policy (RESEARCH §Usage policy), written down here because this is where the code
  * that enforces it lives:
@@ -31,6 +32,17 @@ import type { ChatTokenUsage } from '../../../types/models';
  * 7. Retries and failures are charged per attempt (D-11); a failed attempt is not free.
  * 8. Deltas, not totals, reach the ledger — the coordinator converts the runtime's
  *    cumulative per-turn total into a delta against a per-turn baseline.
+ *
+ * The legacy gate (deprecated): the coordinator awaits `wait(signal)` at every tool-round
+ * boundary. While the team's budget is under the pause threshold the gate is open and the
+ * await resolves instantly; when the 80% crossing is detected the coordinator closes it,
+ * and the turn parks here instead of continuing to spend. `open()` (the user's "continue" /
+ * top-up) releases it.
+ *
+ * The park copies the approval park in `chatTurnRuntime.ts:371-403`: the resolver slot is
+ * installed before anything is published, so a synchronous subscriber cannot lose the
+ * release. It also copies the abort path at `:189-196` — a parked turn must never hang
+ * after Stop (Pitfall 8, T-34-19).
  */
 export interface BudgetGate {
   close(): void;
