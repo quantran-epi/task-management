@@ -95,6 +95,23 @@ describe('TS ⊆ Rust SQLite table parity', () => {
     }
   });
 
+  it('(D-23, membership) keeps aiTeams and aiTeamMembers in all three lists', () => {
+    // Phase 38 adds columns inside existing tables, never a new table — so the two AI Office
+    // tables must be present in each list. Membership, not length: at HEAD the lists differ
+    // (35 Dexie / 27 TS+local / 27 Rust) for reasons outside this phase, and a length-equality
+    // assertion would be a gate this phase cannot make green. Removing a table from any ONE
+    // list still fails here.
+    const dexie = dexieTableNames();
+    const ts = tsDomainTables();
+    const rust = rustAllowedTables();
+
+    for (const name of ['aiTeams', 'aiTeamMembers']) {
+      expect(dexie).toContain(name);
+      expect(ts).toContain(name);
+      expect(rust).toContain(name);
+    }
+  });
+
   it('reads its store list from the schema version that is actually latest', () => {
     const match = /export const LATEST_SCHEMA_VERSION = (\d+);/.exec(SCHEMA_SOURCE);
     expect(match).not.toBeNull();
