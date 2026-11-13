@@ -21,6 +21,7 @@ export function makeTeamRunSnapshot(overrides: Partial<TeamRunSnapshot> = {}): T
     lastPlan: null,
     lastPlanDecision: null,
     budgetWarnThresholdPct: DEFAULT_BUDGET_WARN_THRESHOLD_PCT,
+    budgetWarnings: { member: false, team: false },
     memberUsage: [],
     ...overrides,
   };

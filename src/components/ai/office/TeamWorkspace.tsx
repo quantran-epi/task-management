@@ -84,6 +84,7 @@ const EMPTY_SNAPSHOT: TeamRunSnapshot = {
   lastPlan: null,
   lastPlanDecision: null,
   budgetWarnThresholdPct: DEFAULT_BUDGET_WARN_THRESHOLD_PCT,
+  budgetWarnings: { member: false, team: false },
   memberUsage: [],
 };
 

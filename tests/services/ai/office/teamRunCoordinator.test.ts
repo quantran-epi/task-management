@@ -50,6 +50,30 @@ import {
   resetTokenEstimatorForTests,
   setEncoderLoaderForTests,
 } from '../../../../src/services/ai/office/tokenEstimate';
+import {
+  dispatchBudgetWarning,
+  resetAllBudgetWarnings,
+} from '../../../../src/services/ai/office/budgetWarning';
+
+/**
+ * Phase 38 D-06/T-38-20: the OS notification channel is the only observable for a warning.
+ * The payloads are captured so a test can count per level and assert the body carries
+ * numbers and names only.
+ */
+const notificationPayloads: Array<{ title: string; body?: string; tag?: string }> = [];
+const sendDesktopNotification = vi.fn(
+  async (payload: { title: string; body?: string; tag?: string }) => {
+    notificationPayloads.push(payload);
+    return true;
+  }
+);
+vi.mock('../../../../src/utils/desktopNotification', () => ({
+  sendDesktopNotification: (payload: { title: string; body?: string; tag?: string }) =>
+    sendDesktopNotification(payload),
+  isNotificationPermissionGranted: async () => true,
+  requestNotificationPermission: async () => true,
+  isTauriEnvironment: () => false,
+}));
 
 type LoopScript = (options: AiOrchestratorLoopOptions) => Promise<unknown>;
 
@@ -264,6 +288,9 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
     aiTurnManager.abortAll();
     for (const turn of aiTurnManager.getAllTurns()) aiTurnManager.finishTurn(turn.id);
     resetTokenEstimatorForTests();
+    resetAllBudgetWarnings();
+    notificationPayloads.length = 0;
+    sendDesktopNotification.mockClear();
     if (harness) await harness.db.delete();
     harness = null;
   });
@@ -600,8 +627,9 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(rows.every((row) => row.runStatus === 'done')).toBe(true);
     });
 
-    it('keeps the batch pending while one agent is paused', async () => {
+    it('(AIO-BUDGET-01, D-01) keeps running a batch whose budget is already exhausted', async () => {
       let harnessRef: Harness | null = null;
+      const phases: string[] = [];
       const scripts: Record<string, LoopScript> = {
         [LEAD_MODEL]: async (options) => {
           await options.executeToolFn!(
@@ -613,7 +641,8 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
           return loopResult('Xong.');
         },
         [EMP_A_MODEL]: async (options) => {
-          options.onUsage?.({ totalTokens: 700 });
+          // Far past both the member share (750) and the group total (3 000).
+          options.onUsage?.({ totalTokens: 5000 });
           await options.beforeToolRound?.(1, options.signal);
           return loopResult('A xong');
         },
@@ -622,26 +651,22 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       };
       harness = await createHarness({ scripts, teamPatch: { autoSplitEnabled: true } });
       harnessRef = harness;
-      const { coordinator, employees } = harness;
+      const { coordinator } = harness;
+      // Poll the snapshot across the whole turn: the parked phase must never appear.
+      const unsubscribe = coordinator.subscribe(() => {
+        phases.push(coordinator.getState().phase);
+      });
 
-      void coordinator.send('Làm báo cáo');
-      await waitFor(() => coordinator.getState().phase === 'awaiting-budget');
-      await sleep(20);
-
-      // D-24: the batch is still open — the settle handler is parked on the paused agent.
-      expect(coordinator.getState().agents.find((row) => row.agentId === employees[0]!.id)?.status).toBe(
-        'paused'
-      );
-      expect(coordinator.getState().agents.find((row) => row.agentId === employees[1]!.id)?.status).toBe(
-        'done'
-      );
-
-      await coordinator.topUp({ kind: 'agent', agentId: employees[0]!.id }, 2000);
+      await coordinator.send('Làm báo cáo');
       await waitForReady(coordinator);
+      unsubscribe();
 
+      expect(phases).not.toContain('awaiting-budget');
       const rows = await harness.db.aiTeamAssignments.toArray();
       expect(rows).toHaveLength(3);
       expect(rows.every((row) => row.runStatus === 'done')).toBe(true);
+      expect(coordinator.getState().budgetWarnings).toEqual({ member: true, team: true });
+      expect(coordinator.getState().agents.every((row) => row.status !== 'paused')).toBe(true);
     });
 
     it('marks a stopped agent incomplete and leaves siblings running', async () => {
@@ -853,137 +878,69 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
     });
   });
 
-  describe('Task 3 — budget pause, usage accounting, tool resolution guard', () => {
-    it.each([599, 600, 601])('exposes a retained leader budget park on the next chat after %i tokens', async (usedTokens) => {
-      let turns = 0;
-      const secondBoundary = deferred();
-      harness = await createHarness({
-        useSeam: true,
-        scripts: {
-          [LEAD_MODEL]: async (options) => {
-            turns += 1;
-            const boundary = options.beforeToolRound!(1, options.signal);
-            if (turns === 2) secondBoundary.release();
-            await boundary;
-            // Final response usage closes only the member gate; no next round in this turn.
-            if (turns === 1) options.onUsage?.({ totalTokens: usedTokens });
-            return loopResult('Xong.');
+  describe('Task 3 — budget warnings, usage accounting, tool resolution guard', () => {
+    it.each([599, 600, 601])(
+      '(AIO-BUDGET-06, D-03) warns at the member level from %i tokens and never parks the next chat',
+      async (usedTokens) => {
+        let turns = 0;
+        harness = await createHarness({
+          useSeam: true,
+          scripts: {
+            [LEAD_MODEL]: async (options) => {
+              turns += 1;
+              await options.beforeToolRound?.(1, options.signal);
+              if (turns === 1) options.onUsage?.({ totalTokens: usedTokens });
+              return loopResult('Xong.');
+            },
           },
-        },
-      });
-      const { coordinator, db, team, lead } = harness;
-      // Production loadRoster includes leader's membership, not only employees.
-      harness.roster.memberAgentIds.push(lead.id);
-      await coordinator.send('Lượt đầu');
-      expect(coordinator.getState().phase).toBe('ready');
-      const firstCursor = await getCursor(team.id, lead.id, db);
-      const sent = coordinator.send('Tin nhắn tiếp theo');
-      await secondBoundary.promise;
-      try {
-        if (usedTokens >= 600) {
-          expect(coordinator.getState().phase).toBe('awaiting-budget');
-          expect(coordinator.getState().pausedAgentId).toBe(lead.id);
-          expect((await getCursor(team.id, lead.id, db)).lastSeq).toBe(firstCursor.lastSeq);
-        } else {
-          await sent;
-          expect(coordinator.getState().phase).toBe('ready');
-        }
-      } finally {
-        // Release baseline's hidden park too, so a failed assertion leaves no pending turn.
-        await coordinator.topUp({ kind: 'agent', agentId: lead.id }, 2000);
-        await sent;
+        });
+        const { coordinator, db, team, lead } = harness;
+        // Production loadRoster includes leader's membership, not only employees.
+        harness.roster.memberAgentIds.push(lead.id);
+        await coordinator.send('Lượt đầu');
+        expect(coordinator.getState().phase).toBe('ready');
+        // The lead's share is 750 of the 3 000 team budget, so 80% is 600.
+        expect(coordinator.getState().budgetWarnings.member).toBe(usedTokens >= 600);
+
+        const firstCursor = await getCursor(team.id, lead.id, db);
+        await coordinator.send('Tin nhắn tiếp theo');
+        await waitForReady(coordinator);
+        expect(coordinator.getState().phase).toBe('ready');
+        expect(coordinator.getState().agents.find((row) => row.agentId === lead.id)?.status).toBe(
+          'done'
+        );
+        const lastUser = await db.teamMessages
+          .where('teamId')
+          .equals(team.id)
+          .filter((row) => row.content === 'Tin nhắn tiếp theo')
+          .first();
+        expect(lastUser).toBeDefined();
+        expect((await getCursor(team.id, lead.id, db)).lastSeq).toBeGreaterThanOrEqual(
+          lastUser!.seq
+        );
+        expect(firstCursor.lastSeq).toBeLessThan(lastUser!.seq);
+        expect(turns).toBe(2);
       }
-      expect(coordinator.getState().phase).toBe('ready');
-      expect(coordinator.getState().agents.find((row) => row.agentId === lead.id)?.status).toBe('done');
-      const lastUser = await db.teamMessages.where('teamId').equals(team.id)
-        .filter((row) => row.content === 'Tin nhắn tiếp theo').first();
-      expect(lastUser).toBeDefined();
-      expect((await getCursor(team.id, lead.id, db)).lastSeq).toBeGreaterThanOrEqual(lastUser!.seq);
-      expect(turns).toBe(2);
-    });
+    );
 
-    it('pauses one agent at 80% and leaves the sibling running', async () => {
-      const sibling = deferred();
+    it('(AIO-BUDGET-06, D-03) warns at the member level only while the group still has room', async () => {
       harness = await createHarness({
         scripts: {
           [EMP_A_MODEL]: async (options) => {
+            // 700 of the member's 750 share is past 80%; the group is at 700 of 3 000.
             options.onUsage?.({ totalTokens: 700 });
-            await options.beforeToolRound?.(1, options.signal);
-            return loopResult('A xong');
-          },
-          [EMP_B_MODEL]: async () => {
-            await sibling.promise;
-            return loopResult('B xong');
-          },
-        },
-      });
-      const { coordinator, employees } = harness;
-
-      void coordinator.send('@[An](agent:' + employees[0]!.id + ') việc A');
-      void coordinator.send('@[Bình](agent:' + employees[1]!.id + ') việc B');
-      await waitFor(() => coordinator.getState().phase === 'awaiting-budget');
-
-      expect(coordinator.getState().agents.find((row) => row.agentId === employees[0]!.id)?.status).toBe(
-        'paused'
-      );
-      expect(coordinator.getState().agents.find((row) => row.agentId === employees[1]!.id)?.status).toBe(
-        'running'
-      );
-      sibling.release();
-    });
-    it('resumes the parked turn after a top-up and reaches a terminal state', async () => {
-      harness = await createHarness({
-        scripts: {
-          [EMP_A_MODEL]: async (options) => {
-            options.onUsage?.({ totalTokens: 700 });
-            await options.beforeToolRound?.(1, options.signal);
             return loopResult('A xong');
           },
         },
       });
       const { coordinator, employees } = harness;
 
-      const sent = coordinator.send('@[An](agent:' + employees[0]!.id + ') việc A');
-      await waitFor(() => coordinator.getState().phase === 'awaiting-budget');
+      await coordinator.send('@[An](agent:' + employees[0]!.id + ') việc A');
 
-      await coordinator.topUp({ kind: 'agent', agentId: employees[0]!.id }, 2000);
-      await sent;
-      await waitForReady(coordinator);
-      await waitFor(
-        () => coordinator.getState().agents.find((row) => row.agentId === employees[0]!.id)?.status === 'done'
-      );
-
-      const stored = await harness.db.aiTeamMembers
-        .where('teamId')
-        .equals(harness.team.id)
-        .toArray();
-      const memberRow = stored.find((row) => row.agentId === employees[0]!.id);
-      expect(memberRow?.usedTokens).toBeGreaterThan(0);
+      expect(coordinator.getState().budgetWarnings).toEqual({ member: true, team: false });
     });
 
-    it('settles a stop while parked as stopped instead of hanging', async () => {
-      harness = await createHarness({
-        scripts: {
-          [EMP_A_MODEL]: async (options) => {
-            options.onUsage?.({ totalTokens: 700 });
-            await options.beforeToolRound?.(1, options.signal);
-            return loopResult('A xong');
-          },
-        },
-      });
-      const { coordinator, employees } = harness;
-
-      const sent = coordinator.send('@[An](agent:' + employees[0]!.id + ') việc A');
-      await waitFor(() => coordinator.getState().phase === 'awaiting-budget');
-      coordinator.stopAgent(employees[0]!.id);
-      await sent;
-
-      const state = coordinator.getState().agents.find((row) => row.agentId === employees[0]!.id);
-      expect(state?.status).toBe('stopped');
-      expect(state?.incomplete).toBe(true);
-    });
-
-    it('parks the lead when the team budget crosses 80%', async () => {
+    it('(AIO-BUDGET-06, D-02) warns at the team level and lets the run finish', async () => {
       harness = await createHarness({
         scripts: {
           [LEAD_MODEL]: async (options) => {
@@ -995,21 +952,265 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       });
       const { coordinator, lead } = harness;
 
-      const sent = coordinator.send('Xin chào');
-      await waitFor(() => coordinator.getState().phase === 'awaiting-budget');
-      expect(coordinator.getState().agents.find((row) => row.agentId === lead.id)?.status).toBe('paused');
+      await coordinator.send('Xin chào');
+      await waitForReady(coordinator);
 
-      // The lead's own share is 750 of the 3 000 team budget, so both scopes crossed.
-      // Each top-up opens one gate; the turn resumes only once both are open.
-      await coordinator.topUp({ kind: 'agent', agentId: lead.id }, 5000);
-      await sleep(20);
-      expect(coordinator.getState().agents.find((row) => row.agentId === lead.id)?.status).toBe('paused');
-
-      await coordinator.topUp({ kind: 'team' }, 5000);
-      await sent;
-      await waitFor(
-        () => coordinator.getState().agents.find((row) => row.agentId === lead.id)?.status === 'done'
+      expect(coordinator.getState().budgetWarnings.team).toBe(true);
+      expect(coordinator.getState().phase).toBe('ready');
+      expect(coordinator.getState().agents.find((row) => row.agentId === lead.id)?.status).toBe(
+        'done'
       );
+    });
+
+    it('(D-06, B6) sends one notification per level however many members and rounds cross', async () => {
+      let harnessRef: Harness | null = null;
+      const scripts: Record<string, LoopScript> = {
+        [LEAD_MODEL]: async (options) => {
+          if (isSynthesisTurn(options)) return loopResult('Đã tổng hợp.');
+          await options.executeToolFn!(
+            'delegate_batch',
+            {
+              assignments: harnessRef!.employees.map((row, index) => ({
+                agentId: row.id,
+                task: `Việc ${index + 1}`,
+              })),
+            },
+            harnessRef!.db,
+            options.signal
+          );
+          return loopResult('Đã giao việc.');
+        },
+        [EMP_A_MODEL]: async (options) => {
+          // Five successive rounds past both thresholds.
+          for (let round = 1; round <= 5; round += 1) {
+            options.onUsage?.({ totalTokens: 200 * round });
+          }
+          return loopResult('A xong');
+        },
+        [EMP_B_MODEL]: async (options) => {
+          options.onUsage?.({ totalTokens: 800 });
+          return loopResult('B xong');
+        },
+        [EMP_C_MODEL]: async (options) => {
+          options.onUsage?.({ totalTokens: 800 });
+          return loopResult('C xong');
+        },
+      };
+      harness = await createHarness({ scripts, teamPatch: { autoSplitEnabled: true } });
+      harnessRef = harness;
+
+      await harness.coordinator.send('Làm báo cáo');
+      await waitForReady(harness.coordinator);
+
+      const tags = notificationPayloads.map((payload) => payload.tag);
+      expect(tags.filter((tag) => tag?.endsWith(':member'))).toHaveLength(1);
+      expect(tags.filter((tag) => tag?.endsWith(':team'))).toHaveLength(1);
+    });
+
+    it('(D-07) warns at dispatch from the outgoing prompt alone, before any report', async () => {
+      // A holder: TS narrows a `let` assigned inside a callback to its initial value.
+      const captured: {
+        member: boolean | null;
+        row: { inputTokens?: number | undefined; outputTokens?: number | undefined } | null;
+      } = { member: null, row: null };
+      let harnessRef: Harness | null = null;
+      harness = await createHarness({
+        // A tiny budget so the measured prompt alone is past the member's share.
+        teamPatch: { budgetTokens: 40 },
+        scripts: {
+          [EMP_A_MODEL]: async () => {
+            const current = harnessRef!;
+            captured.member = current.coordinator.getState().budgetWarnings.member;
+            captured.row =
+              (await current.db.aiTeamMembers.where('teamId').equals(current.team.id).toArray()).find(
+                (row) => row.agentId === current.employees[0]!.id
+              ) ?? null;
+            return loopResult('A xong');
+          },
+        },
+      });
+      harnessRef = harness;
+      const { coordinator, employees } = harness;
+
+      await coordinator.send('@[An](agent:' + employees[0]!.id + ') việc A');
+
+      expect(captured.member).toBe(true);
+      // D-07: the provisional number feeds the warning only — it is never charged.
+      expect(captured.row?.inputTokens ?? 0).toBe(0);
+      expect(captured.row?.outputTokens ?? 0).toBe(0);
+    });
+
+    it('(B6, D-06) scopes a top-up reset to the owning team', async () => {
+      const first = await createHarness({ scripts: {} });
+      const second = await createHarness({ scripts: {} });
+      try {
+        expect(
+          await dispatchBudgetWarning({
+            level: 'member',
+            teamId: first.team.id,
+            teamName: first.team.name,
+            usedPct: 90,
+            agentName: 'An',
+          })
+        ).toBe(true);
+        expect(
+          await dispatchBudgetWarning({
+            level: 'member',
+            teamId: second.team.id,
+            teamName: second.team.name,
+            usedPct: 90,
+            agentName: 'An',
+          })
+        ).toBe(true);
+
+        await first.coordinator.topUp({ kind: 'team' }, 1000);
+
+        // Team B's marker survives a top-up on team A.
+        expect(
+          await dispatchBudgetWarning({
+            level: 'member',
+            teamId: second.team.id,
+            teamName: second.team.name,
+            usedPct: 95,
+            agentName: 'An',
+          })
+        ).toBe(false);
+        // Team A's marker was cleared, so its next crossing notifies again.
+        expect(
+          await dispatchBudgetWarning({
+            level: 'member',
+            teamId: first.team.id,
+            teamName: first.team.name,
+            usedPct: 95,
+            agentName: 'An',
+          })
+        ).toBe(true);
+      } finally {
+        await first.db.delete();
+        await second.db.delete();
+      }
+    });
+
+    it('(B6, D-06) dispose clears only the disposing team’s markers', async () => {
+      const first = await createHarness({ scripts: {} });
+      const second = await createHarness({ scripts: {} });
+      try {
+        for (const current of [first, second]) {
+          await dispatchBudgetWarning({
+            level: 'team',
+            teamId: current.team.id,
+            teamName: current.team.name,
+            usedPct: 90,
+          });
+        }
+
+        await first.coordinator.dispose();
+
+        expect(
+          await dispatchBudgetWarning({
+            level: 'team',
+            teamId: second.team.id,
+            teamName: second.team.name,
+            usedPct: 95,
+          })
+        ).toBe(false);
+        expect(
+          await dispatchBudgetWarning({
+            level: 'team',
+            teamId: first.team.id,
+            teamName: first.team.name,
+            usedPct: 95,
+          })
+        ).toBe(true);
+      } finally {
+        await first.db.delete();
+        await second.db.delete();
+      }
+    });
+
+    it('(T-38-20) the notification body carries numbers and names only', async () => {
+      const PROMPT_SECRET = 'BÍ-MẬT-PROMPT-9f3';
+      const OUTPUT_SECRET = 'BÍ-MẬT-OUTPUT-7a1';
+      harness = await createHarness({
+        teamPatch: { budgetTokens: 400 },
+        scripts: {
+          [EMP_A_MODEL]: async (options) => {
+            options.onUsage?.({ totalTokens: 900 });
+            return loopResult(OUTPUT_SECRET);
+          },
+        },
+      });
+      const { coordinator, employees } = harness;
+
+      await coordinator.send('@[An](agent:' + employees[0]!.id + ') ' + PROMPT_SECRET);
+
+      expect(notificationPayloads.length).toBeGreaterThan(0);
+      for (const payload of notificationPayloads) {
+        expect(payload.body).toMatch(/\d+%/);
+        expect(payload.body).not.toContain(PROMPT_SECRET);
+        expect(payload.body).not.toContain(OUTPUT_SECRET);
+        expect(payload.title).not.toContain(PROMPT_SECRET);
+        expect(payload.title).not.toContain(OUTPUT_SECRET);
+      }
+    });
+
+    it('(AIO-BUDGET-09, D-02) an over-budget turn still reaches a terminal state and charges', async () => {
+      harness = await createHarness({
+        scripts: {
+          [EMP_A_MODEL]: async (options) => {
+            options.onUsage?.({ totalTokens: 700 });
+            await options.beforeToolRound?.(1, options.signal);
+            return loopResult('A xong');
+          },
+        },
+      });
+      const { coordinator, employees } = harness;
+
+      await coordinator.send('@[An](agent:' + employees[0]!.id + ') việc A');
+      await waitForReady(coordinator);
+      await waitFor(
+        () =>
+          coordinator.getState().agents.find((row) => row.agentId === employees[0]!.id)?.status ===
+          'done'
+      );
+
+      const stored = await harness.db.aiTeamMembers
+        .where('teamId')
+        .equals(harness.team.id)
+        .toArray();
+      const memberRow = stored.find((row) => row.agentId === employees[0]!.id);
+      expect(memberRow?.usedTokens).toBeGreaterThan(0);
+    });
+
+    it('(D-02) settles a user Stop during an over-budget turn as stopped', async () => {
+      const hold = deferred();
+      let harnessRef: Harness | null = null;
+      harness = await createHarness({
+        scripts: {
+          [EMP_A_MODEL]: async (options) => {
+            options.onUsage?.({ totalTokens: 700 });
+            await options.beforeToolRound?.(1, options.signal);
+            await hold.promise;
+            return loopResult('A xong');
+          },
+        },
+      });
+      harnessRef = harness;
+      const { coordinator, employees } = harness;
+
+      const sent = coordinator.send('@[An](agent:' + employees[0]!.id + ') việc A');
+      await waitFor(
+        () =>
+          harnessRef!.coordinator.getState().agents.find((row) => row.agentId === employees[0]!.id)
+            ?.status === 'running'
+      );
+      coordinator.stopAgent(employees[0]!.id);
+      hold.release();
+      await sent;
+
+      const state = coordinator.getState().agents.find((row) => row.agentId === employees[0]!.id);
+      expect(state?.status).toBe('stopped');
+      expect(state?.incomplete).toBe(true);
     });
 
     it('resolves every advertised team tool name to a handler', () => {
@@ -1264,16 +1465,17 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       }
 
       const { coordinator } = harness;
-      void coordinator.send('Xin chào');
-      await sleep(50);
-      // Hydrated at 80%, the round boundary parks — without hydration the turn would
-      // have completed with a fresh full budget.
-      expect(coordinator.getState().agents.find((row) => row.agentId === lead.id)?.status).not.toBe(
+      await coordinator.send('Xin chào');
+      await waitForReady(coordinator);
+      // Hydrated at 800/3000 (>80%), the team level warns — without hydration the run would
+      // have started from a fresh full budget and stayed under the threshold.
+      expect(coordinator.getState().budgetWarnings.team).toBe(true);
+      expect(coordinator.getState().agents.find((row) => row.agentId === lead.id)?.status).toBe(
         'done'
       );
     });
 
-    it('names the parked agent in the snapshot so the UI tops up the right budget', async () => {
+    it('(D-01) exposes no parked agent in the snapshot, only the warning flags', async () => {
       harness = await createHarness({
         scripts: {
           [EMP_A_MODEL]: async (options) => {
@@ -1285,17 +1487,13 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       });
       const { coordinator, employees } = harness;
 
-      const sent = coordinator.send('@[An](agent:' + employees[0]!.id + ') việc A');
-      await waitFor(() => coordinator.getState().phase === 'awaiting-budget');
+      await coordinator.send('@[An](agent:' + employees[0]!.id + ') việc A');
 
-      expect(coordinator.getState().pausedAgentId).toBe(employees[0]!.id);
-      expect(coordinator.getState().pausedAgentName).toBe('An');
-
-      await coordinator.topUp({ kind: 'agent', agentId: employees[0]!.id }, 2000);
-      await sent;
-      await waitForReady(coordinator);
+      expect(coordinator.getState().budgetWarnings.member).toBe(true);
+      // D-01: nothing parks, so the legacy park fields stay null and the phase stays running.
       expect(coordinator.getState().pausedAgentId).toBeNull();
       expect(coordinator.getState().pausedAgentName).toBeNull();
+      expect(coordinator.getState().phase).not.toBe('awaiting-budget');
     });
 
     it('applies a toggle change to the live run without reconstructing the coordinator', async () => {

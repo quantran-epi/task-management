@@ -41,14 +41,12 @@ import { createTeamRunRegistry, type TeamRunRegistry } from './teamRunRegistry';
 import { createTeamRunScheduler, type SchedulerHandle } from './scheduler';
 import { beginTurn, endTurn } from './liveUseRegistry';
 import {
-  bucketOf,
-  createBudgetGate,
+  isAtThreshold,
   nextThresholdOverride,
   resolveThresholdPct,
-  shouldNotifyPause,
   splitUsage,
-  type BudgetGate,
 } from './budgetGate';
+import { dispatchBudgetWarning, resetBudgetWarnings } from './budgetWarning';
 import { estimateTokens } from './tokenEstimate';
 import { getGlobalBudgetWarnThresholdPct } from '../budgetWarnSettings';
 import {
@@ -123,8 +121,8 @@ export interface TeamRunSnapshot {
   pendingPlan: AssignmentPlan | null;
   pendingApproval: ChatTurnApprovalInfo | null;
   /**
-   * D-21: the scope that is actually parked. The banner names the agent when one
-   * agent's own gate is closed, so the user tops up the right budget.
+   * D-21: kept for old backups and the banner's legacy shape. Nothing parks for budget any
+   * more (D-01), so both fields are always null; the phase value stays legal.
    */
   pausedAgentId: string | null;
   pausedAgentName: string | null;
@@ -142,6 +140,12 @@ export interface TeamRunSnapshot {
   budgetWarnThresholdPct: number;
   /** The team's own value; the key is omitted when the team inherits the global default. */
   budgetWarnThresholdPctOverride?: number | undefined;
+  /**
+   * Phase 38 D-03/D-06: the two independent warning levels. `member` is the aggregate —
+   * true while ANY member is at or past its own share; plan 09 renders the per-member badge
+   * from `memberUsage` and the same `isAtThreshold` comparison.
+   */
+  budgetWarnings: { member: boolean; team: boolean };
   /**
    * Phase 38 D-07/D-22: per-request usage. Plan 08 reads `provisionalInputTokens` for the
    * warning; plan 09 renders an estimated number with a `~` marker.
@@ -585,15 +589,11 @@ export function createTeamRunCoordinator(
   // reports. Same-batch peers stay isolated — no mid-batch barrier.
   let priorBatchResults: BatchResult[] = [];
 
-  const agentGates = new Map<string, BudgetGate>();
-  const teamGate = createBudgetGate();
-
   const memberIds = new Map<string, string>();
   const memberBudgets = new Map<string, number>();
   const memberUsedInput = new Map<string, number>();
   const memberUsedOutput = new Map<string, number>();
   const memberUsed = new Map<string, number>();
-  const lastBuckets = new Map<string, number>();
   let membersLoaded = false;
 
   /**
@@ -609,7 +609,6 @@ export function createTeamRunCoordinator(
 
   let teamUsed = 0;
   let teamBudget = team.budgetTokens;
-  let lastTeamBucket = 0;
 
   /**
    * D-04: the override (what the team stores) and the effective value (what every surface
@@ -690,19 +689,16 @@ export function createTeamRunCoordinator(
    *
    * Every input below is a
    * fact about right now:
-   *   1. a parked budget gate          → awaiting-budget
-   *   2. a pending mutation approval   → awaiting-mutation-approval
-   *   3. a plan card waiting on a click→ awaiting-plan
-   *   4. a lead turn in flight         → lead-thinking / lead-synthesizing
-   *   5. an open batch, or a live agent→ batch-running
-   *   6. otherwise                     → ready (idle before the first turn)
+   *   1. a pending mutation approval   → awaiting-mutation-approval
+   *   2. a plan card waiting on a click→ awaiting-plan
+   *   3. a lead turn in flight         → lead-thinking / lead-synthesizing
+   *   4. an open batch, or a live agent→ batch-running
+   *   5. otherwise                     → ready (idle before the first turn)
+   *
+   * D-01: a budget crossing has NO phase. The run stays `batch-running`/`lead-thinking`;
+   * the legacy parked phase value survives only as a legal value for old backups.
    */
   const derivePhase = (): TeamRunPhase => {
-    // A park is either the team gate or one agent's own gate — the banner names whichever.
-    if (teamGate.isClosed()) return 'awaiting-budget';
-    for (const row of agents.values()) {
-      if (row.status === 'paused' && gateFor(row.agentId).isClosed()) return 'awaiting-budget';
-    }
     if (pendingApproval !== null) return 'awaiting-mutation-approval';
     if (pendingPlan !== null) return 'awaiting-plan';
     if (leadTurnKind === 'synthesizing') return 'lead-synthesizing';
@@ -728,7 +724,7 @@ export function createTeamRunCoordinator(
    * a label that was ever wrong made the answer wrong.
    */
   const isBusy = (): boolean => {
-    if (teamGate.isClosed() || pendingApproval !== null || pendingPlan !== null) return true;
+    if (pendingApproval !== null || pendingPlan !== null) return true;
     if (leadTurnKind !== null || synthesisPending) return true;
     if (retryingAssignments.size > 0 || openBatchId !== null) return true;
     for (const row of agents.values()) {
@@ -779,15 +775,6 @@ export function createTeamRunCoordinator(
       // a flag would need a reset on every path and could outlive its condition.
       if (openBatchId === null) aiTurnManager.finishTurn(teamTurnId);
     }
-  }
-
-  function gateFor(agentId: string): BudgetGate {
-    let gate = agentGates.get(agentId);
-    if (!gate) {
-      gate = createBudgetGate();
-      agentGates.set(agentId, gate);
-    }
-    return gate;
   }
 
   function updateAgent(agentId: string, patch: Partial<AgentRunState>): void {
@@ -1319,23 +1306,14 @@ export function createTeamRunCoordinator(
       memberUsed.set(row.agentId, row.usedTokens);
       memberUsedInput.set(row.agentId, row.inputTokens ?? 0);
       memberUsedOutput.set(row.agentId, row.outputTokens ?? 0);
-      lastBuckets.set(row.agentId, bucketOf(row.usedTokens, row.budgetTokens));
     }
     // CR-01: the persisted team row is the budget authority once a turn supplies it.
-    // Without this a budget edited in another tab (or restored) is ignored, and a
-    // name-only group (budget 0) closes the gate before the first turn.
+    // Without this a budget edited in another tab (or restored) is ignored.
     const persistedBudget = roster.teamRow?.budgetTokens;
     if (persistedBudget !== undefined) teamBudget = persistedBudget;
-    // CR-05: the team total must hydrate from persisted usage too, otherwise a
-    // reactivated team starts over with a full budget. A team that is already past
-    // the threshold starts parked — the crossing rule only fires on a change, so
-    // seeding the bucket alone would leave the gate open.
+    // CR-05: the team total must hydrate from persisted usage too, otherwise a reactivated
+    // team starts over with a full budget.
     teamUsed = rows.reduce((sum, row) => sum + row.usedTokens, 0);
-    lastTeamBucket = bucketOf(teamUsed, teamBudget);
-    if (lastTeamBucket >= 8) {
-      teamGate.close();
-      // CR-01: a closed gate with no banner is an invisible hang. Surface the park.
-    }
     return rows;
   }
 
@@ -1398,42 +1376,79 @@ export function createTeamRunCoordinator(
   }
 
   /**
-   * The live counters plus the derived total and the bucket/gate evaluation.
+   * The live counters plus the derived total.
    *
-   * `evaluateGates` is false for an ESTIMATED charge: D-07 says an estimate is never consulted
-   * for a decision, and closing the legacy gate is a decision. The numbers still move (plan 09
-   * renders them); plan 08 deletes the gate entirely.
+   * D-01: a crossing is never a decision — it raises a warning and the run continues. An
+   * estimated charge moves the numbers and may warn too; nothing here can park a turn.
    */
-  function applyLiveUsage(
-    agentId: string,
-    inputDelta: number,
-    outputDelta: number,
-    evaluateGates = true
-  ): void {
+  function applyLiveUsage(agentId: string, inputDelta: number, outputDelta: number): void {
     if (inputDelta === 0 && outputDelta === 0) return;
     memberUsedInput.set(agentId, (memberUsedInput.get(agentId) ?? 0) + inputDelta);
     memberUsedOutput.set(agentId, (memberUsedOutput.get(agentId) ?? 0) + outputDelta);
-    const used = (memberUsed.get(agentId) ?? 0) + inputDelta + outputDelta;
-    memberUsed.set(agentId, used);
+    memberUsed.set(agentId, (memberUsed.get(agentId) ?? 0) + inputDelta + outputDelta);
     teamUsed += inputDelta + outputDelta;
-    if (!evaluateGates) return;
+    evaluateBudgetWarnings();
+  }
 
-    const current = bucketOf(used, memberBudgets.get(agentId) ?? 0);
-    const previous = lastBuckets.get(agentId) ?? 0;
-    lastBuckets.set(agentId, current);
-    // D-20: pause, never abort. The turn parks at its next tool-round boundary.
-    // WR-04: a late usage chunk after settle must not flip a ready coordinator back to
-    // awaiting-budget with nothing parked.
-    if (shouldNotifyPause(previous, current)) {
-      gateFor(agentId).close();
-      const state = agents.get(agentId);
-      if (state && !TERMINAL_STATUSES.includes(state.status)) {
-        updateAgent(agentId, { status: 'paused' });
+  /** D-07: a member's live total, plus the pre-call guess until a report supersedes it. */
+  function memberWarningTotal(agentId: string): number {
+    const provisional = usageAccounting.get(agentId)?.provisionalInputTokens ?? 0;
+    return (memberUsedInput.get(agentId) ?? 0) + (memberUsedOutput.get(agentId) ?? 0) + provisional;
+  }
+
+  function percentOf(used: number, budget: number): number {
+    if (!Number.isFinite(budget) || budget <= 0) return 0;
+    return (used / budget) * 100;
+  }
+
+  function agentNameFor(agentId: string): string | undefined {
+    return (
+      roster.employees.find((row) => row.id === agentId)?.name ??
+      (roster.lead && roster.lead.id === agentId ? roster.lead.name : undefined)
+    );
+  }
+
+  /**
+   * D-03/D-06/D-07: evaluate BOTH levels independently, in a fixed order (member, then
+   * team), and dispatch at most one notification per `(teamId, level)` — the marker set in
+   * `budgetWarning` owns the dedupe, so firing on every observation is safe.
+   *
+   * Pure over live maps apart from the dispatch: it never writes a counter, never touches
+   * the ledger, and never parks a turn. A member whose agent row is missing from the
+   * directory still warns — the notification key is the team and the level, never the name.
+   */
+  function evaluateBudgetWarnings(): void {
+    const candidates = new Set([...memberBudgets.keys(), ...memberUsed.keys()]);
+    for (const agentId of candidates) {
+      const budget = memberBudgets.get(agentId) ?? 0;
+      if (!isAtThreshold(memberWarningTotal(agentId), budget, budgetWarnThresholdPct)) continue;
+      void dispatchBudgetWarning({
+        level: 'member',
+        teamId,
+        teamName: liveTeam.name,
+        usedPct: percentOf(memberWarningTotal(agentId), budget),
+        agentName: agentNameFor(agentId),
+      });
+      break;
+    }
+    if (isAtThreshold(teamUsed, teamBudget, budgetWarnThresholdPct)) {
+      void dispatchBudgetWarning({
+        level: 'team',
+        teamId,
+        teamName: liveTeam.name,
+        usedPct: percentOf(teamUsed, teamBudget),
+      });
+    }
+  }
+
+  /** D-03: the aggregate badge state — true while ANY member is at or past its own share. */
+  function anyMemberAtThreshold(): boolean {
+    for (const agentId of new Set([...memberBudgets.keys(), ...memberUsed.keys()])) {
+      if (isAtThreshold(memberWarningTotal(agentId), memberBudgets.get(agentId) ?? 0, budgetWarnThresholdPct)) {
+        return true;
       }
     }
-    const teamCurrent = bucketOf(teamUsed, teamBudget);
-    if (shouldNotifyPause(lastTeamBucket, teamCurrent)) teamGate.close();
-    lastTeamBucket = teamCurrent;
+    return false;
   }
 
   /**
@@ -1457,8 +1472,8 @@ export function createTeamRunCoordinator(
    * never consulted for a decision, and it is never added to the ledger.
    *
    * The number lives on the accounting record (and so on `getState().memberUsage`), NOT in the
-   * live charge maps: the legacy gate still reads `memberUsed`, and a guess must not park a
-   * turn that the provider's real number would not have parked.
+   * live charge maps: it feeds the warning math only, and `handleUsage` zeroes it the moment a
+   * provider report supersedes it, so a turn can never be counted twice toward the threshold.
    */
   async function measureProvisionalInput(agentId: string, request: ChatTurnRequest): Promise<void> {
     const acc = usageAccounting.get(agentId);
@@ -1468,6 +1483,8 @@ export function createTeamRunCoordinator(
       // A turn may have been superseded while the encoder ran; never stamp a stale record.
       if (usageAccounting.get(agentId) !== acc) return;
       acc.provisionalInputTokens = tokens;
+      // D-07: a prompt that already blows the share warns at dispatch, before the call.
+      evaluateBudgetWarnings();
     } catch {
       /* warning input only, never blocks the turn */
     }
@@ -1521,7 +1538,7 @@ export function createTeamRunCoordinator(
         acc.outputTokens = outputTokens;
         // The estimate REPLACES the pre-call guess instead of stacking on it.
         acc.provisionalInputTokens = 0;
-        applyLiveUsage(agentId, inputTokens, outputTokens, false);
+        applyLiveUsage(agentId, inputTokens, outputTokens);
       } catch {
         // D-10: a failed estimate falls back to whatever the provider reported (usually
         // nothing) and still completes the flush — the turn must not be blocked by it.
@@ -1568,10 +1585,8 @@ export function createTeamRunCoordinator(
       memberUsed.set(row.agentId, row.usedTokens);
       memberUsedInput.set(row.agentId, row.inputTokens ?? 0);
       memberUsedOutput.set(row.agentId, row.outputTokens ?? 0);
-      lastBuckets.set(row.agentId, bucketOf(row.usedTokens, row.budgetTokens));
     }
     teamUsed = rows.reduce((sum, row) => sum + row.usedTokens, 0);
-    lastTeamBucket = bucketOf(teamUsed, teamBudget);
   }
 
   function registerTeamTurn(): void {
@@ -1613,10 +1628,9 @@ export function createTeamRunCoordinator(
   }
 
   function beforeToolRoundFor(agentId: string, triggerMessageId?: string) {
-    // D-21 / Pitfall 8: the loop's own signal reaches both gates, so a Stop while parked
-    // rejects instead of hanging. The trailing throw covers a hook that resolved post-abort.
-    // 37.1 §4.2: the drain runs AFTER the gates — a parked agent must not consume a message
-    // while paused — and its returned messages are appended by the loop.
+    // D-01: budget never parks a turn — no gate, no wait, no `paused` status write. This
+    // round boundary only drains the inbox and honours the loop's own abort signal.
+    // 37.1 §4.2: the drain's returned messages are appended by the loop.
     // CR-01: the row that triggered this turn is already the prompt text, so it must not be
     // injected again on round 1.
     const skip = triggerMessageId ? new Set([triggerMessageId]) : undefined;
@@ -1624,13 +1638,6 @@ export function createTeamRunCoordinator(
       _round: number,
       signal: AbortSignal
     ): Promise<ChatCompletionMessage[] | void> => {
-      // Final usage can leave a member gate closed after its previous turn settled.
-      // A new turn resets the row to running; expose its park before waiting.
-      if (gateFor(agentId).isClosed() || teamGate.isClosed()) {
-        updateAgent(agentId, { status: 'paused' });
-      }
-      await gateFor(agentId).wait(signal);
-      await teamGate.wait(signal);
       signal.throwIfAborted();
       return drainInbox(agentId, skip);
     };
@@ -1777,14 +1784,6 @@ export function createTeamRunCoordinator(
       }
 
       const outcome = await registry.get(employee.id).start(request);
-      const state = agents.get(employee.id);
-      // A parked loop cannot resolve `start()`; if the state is still paused the deferred is
-      // the authority, so the batch keeps waiting (D-30). Stop/abort ledger writes for a
-      // parked attempt belong to the stop path (37-04), not here.
-      if (state && state.status === 'paused') {
-        await agentDeferreds.get(employee.id)?.promise;
-        return;
-      }
       settleAgent(employee.id, OUTCOME_STATUS[outcome.phase], undefined, attempt?.assignmentId);
       if (attempt) {
         // The ONE terminal writer. On `complete` the runtime already saved the report row
@@ -1947,12 +1946,6 @@ export function createTeamRunCoordinator(
       leadTurnRoute = null;
 
       const outcome = await registry.get(lead.id).start(request);
-      const state = agents.get(lead.id);
-      if (state && state.status === 'paused') {
-        // The parked branch is still a branch of this turn: the `finally` clears the flag.
-        await agentDeferreds.get(lead.id)?.promise;
-        return;
-      }
       settleAgent(lead.id, OUTCOME_STATUS[outcome.phase]);
       // Phase 38 D-22: a leader turn never calls `finalizeAttempt`, so this is its terminal
       // seam — flush, then reconcile, before the `finally`'s `notify()`.
@@ -2326,6 +2319,8 @@ export function createTeamRunCoordinator(
     }
     // The roster load is an await: a dispose during it must not let the turn start.
     if (disposed) return 'blocked';
+    // D-06: a new turn is a reset — the next crossing notifies again. Team-scoped only.
+    resetBudgetWarnings(teamId);
     lastUserRequest = text;
 
     // 37.1 §1.1: ONE primitive. The message is appended first — always, whatever is running.
@@ -3344,12 +3339,6 @@ export function createTeamRunCoordinator(
   function setTeamBudget(total: number): void {
     teamBudget = total;
     liveTeam = { ...liveTeam, budgetTokens: total };
-    lastTeamBucket = bucketOf(teamUsed, teamBudget);
-    // A raise that puts usage back under the 80% bucket reopens the team gate and
-    // clears the paused phase, so the banner does not linger on a run that resumed.
-    if (lastTeamBucket < 8) {
-      teamGate.open();
-    }
     notify();
   }
 
@@ -3479,11 +3468,11 @@ export function createTeamRunCoordinator(
       for (const agentId of agents.keys()) userStopped.set(agentId, 'team-deleted');
     }
 
-    // Release every park: plan card, agent gates, team gate.
+    // Release every park: the plan card. Budget no longer parks anything (D-01).
     planResolver?.(false);
     planResolver = null;
-    for (const gate of agentGates.values()) gate.open();
-    teamGate.open();
+    // D-06/T-38-33: the team-scoped reset — disposing team A must never clear team B.
+    resetBudgetWarnings(teamId);
 
     // D-11/D-18: a per-assignment controller is the only cancellation channel for a
     // queued assignment, so aborting them all is what rejects every parked acquire.
@@ -3518,24 +3507,8 @@ export function createTeamRunCoordinator(
     // what made it unreachable (WR-13) — it must not be on this path.
     const result = await applyTopUp(teamId, scope, amount, db);
     mirrorBudgetResult(result);
-
-    if (scope.kind === 'agent') {
-      gateFor(scope.agentId).open();
-      // A turn parked on the team gate too is still parked; only flip it back when both
-      // scopes are open, otherwise the snapshot would claim a running turn that is waiting.
-      if (!teamGate.isClosed()) {
-        const state = agents.get(scope.agentId);
-        if (state?.status === 'paused') updateAgent(scope.agentId, { status: 'running' });
-      }
-    } else {
-      teamGate.open();
-      for (const [agentId, state] of agents) {
-        if (state.status === 'paused' && !gateFor(agentId).isClosed()) {
-          updateAgent(agentId, { status: 'running' });
-        }
-      }
-    }
-    // WR-04: only claim a paused phase when something is actually parked.
+    // D-06: a top-up is a reset — the next crossing notifies again. The mirror already did
+    // the team-scoped reset, so nothing else is needed here.
     // D-18: this tail runs after an await, so a top-up that resolves after `dispose()` must
     // not resurrect `batch-running` on a coordinator that is already gone.
     notify();
@@ -3551,7 +3524,6 @@ export function createTeamRunCoordinator(
     for (const row of result.members) {
       memberIds.set(row.agentId, row.id);
       memberBudgets.set(row.agentId, row.budgetTokens);
-      lastBuckets.set(row.agentId, bucketOf(memberUsed.get(row.agentId) ?? row.usedTokens, row.budgetTokens));
       // D-22: a member row the coordinator has never seen starts from its persisted split.
       if (!memberUsed.has(row.agentId)) {
         memberUsed.set(row.agentId, row.usedTokens);
@@ -3561,14 +3533,9 @@ export function createTeamRunCoordinator(
     }
     teamBudget = result.team.budgetTokens;
     liveTeam = { ...liveTeam, budgetTokens: teamBudget };
-    lastTeamBucket = bucketOf(teamUsed, teamBudget);
-    // D-06 warning markers are owned by plan 08; this is the seam it fills in.
-    clearBudgetWarnings();
-  }
-
-  /** Plan 08 replaces this with the per-(team, level) notification markers. */
-  function clearBudgetWarnings(): void {
-    /* no-op until plan 08 lands the D-06 markers */
+    // D-06: a top-up or an absolute settings save resets this team's markers only, so the
+    // next crossing notifies again (T-38-33).
+    resetBudgetWarnings(teamId);
   }
 
   /** Phase 38 D-19: the Settings save already persisted; this only mirrors it. */
@@ -3589,26 +3556,23 @@ export function createTeamRunCoordinator(
   }
 
   function getState(): TeamRunSnapshot {
-    const paused = [...agents.values()].filter((row) => row.status === 'paused');
-    // Only an agent whose own gate is closed needs an agent-scoped top-up; a pause that
-    // comes from the team gate alone is fixed by the team top-up.
-    const agentParked = paused.find((row) => gateFor(row.agentId).isClosed()) ?? null;
     return {
       phase: derivePhase(),
       agents: [...agents.values()],
       pendingPlan,
       pendingApproval,
-      pausedAgentId: agentParked?.agentId ?? null,
-      pausedAgentName: agentParked
-        ? roster.employees.find((row) => row.id === agentParked.agentId)?.name ??
-          (roster.lead && agentParked.agentId === roster.lead.id
-            ? roster.lead.name
-            // IN-08d: never a raw UUID in UI copy — a neutral label until the roster loads.
-            : 'Nhân viên')
-        : null,
+      // D-01: nothing parks for budget any more, so these stay null. The fields survive
+      // because the legacy parked phase value is still legal for old backups.
+      pausedAgentId: null,
+      pausedAgentName: null,
       lastPlan,
       lastPlanDecision,
       budgetWarnThresholdPct,
+      // D-03/D-06: the two independent levels; the per-member badge is plan 09.
+      budgetWarnings: {
+        member: anyMemberAtThreshold(),
+        team: isAtThreshold(teamUsed, teamBudget, budgetWarnThresholdPct),
+      },
       // Phase 38 D-07/D-22: reported split (0 while pending) plus the pre-call measurement.
       memberUsage: [...usageAccounting.entries()].map(([agentId, acc]) => ({
         agentId,
