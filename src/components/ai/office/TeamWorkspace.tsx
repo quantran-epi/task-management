@@ -799,6 +799,8 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
             links={linkRows}
             unreadCount={unreadCount}
             snapshot={snapshot}
+            budgetWarnThresholdPct={snapshot.budgetWarnThresholdPct}
+            liveUsage={snapshot.memberUsage}
             onTopUp={() => {
               // A sidebar top-up is always team-scoped; never inherit a banner's agent scope.
               setTopUpScope({ kind: 'team' });

@@ -361,6 +361,77 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     expect(screen.getByTestId('team-mode-toggles')).toBeInTheDocument();
   });
 
+  /** D-23: the sidebar shows granted/used/remaining with input and output separate. */
+  async function seedSplitUsage(estimated: boolean) {
+    const rows = await listTeamMembers(activeTeam.id, db);
+    const employeeRow = rows.find((row) => row.role === 'employee')!;
+    await db.aiTeamMembers.update(employeeRow.id, {
+      budgetTokens: 1000,
+      usedTokens: 750,
+      inputTokens: 600,
+      outputTokens: 150,
+      ...(estimated ? { usageEstimated: true } : {}),
+    });
+    return employeeRow;
+  }
+
+  it('shows one turn split as granted/used/remaining per member and group (AIO-BUDGET-08, D-23)', async () => {
+    const employeeRow = await seedSplitUsage(false);
+
+    renderView();
+    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    const sidebar = await screen.findByTestId('team-sidebar');
+
+    const memberLine = await screen.findByTestId(`member-usage-${employeeRow.agentId}`);
+    expect(memberLine).toHaveTextContent('750');
+    expect(memberLine).toHaveTextContent('600');
+    expect(memberLine).toHaveTextContent('150');
+    expect(memberLine).toHaveTextContent('250');
+    expect(memberLine).toHaveTextContent('1,000');
+
+    const panel = screen.getByTestId('team-budget-panel');
+    expect(panel).toHaveTextContent('750');
+    expect(panel).toHaveTextContent('600');
+    expect(panel).toHaveTextContent('150');
+    expect(panel).toHaveTextContent('250');
+
+    expect(sidebar.textContent ?? '').not.toContain('NaN');
+    expect(sidebar.textContent ?? '').not.toContain('Infinity');
+    expect(sidebar.textContent ?? '').not.toContain('undefined');
+  });
+
+  it('marks an estimated usage with a tilde and an accessible name (D-24)', async () => {
+    const employeeRow = await seedSplitUsage(true);
+
+    renderView();
+    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    await screen.findByTestId('team-sidebar');
+
+    const memberLine = await screen.findByTestId(`member-usage-${employeeRow.agentId}`);
+    expect(memberLine).toHaveTextContent('~750');
+    expect(memberLine.querySelector('[aria-label="ước lượng"]')).not.toBeNull();
+    expect(memberLine.querySelector('[title="ước lượng"]')).not.toBeNull();
+  });
+
+  it('keeps the member and group badges independent (D-03/D-06)', async () => {
+    const rows = await listTeamMembers(activeTeam.id, db);
+    const employeeRow = rows.find((row) => row.role === 'employee')!;
+    // Member over its own 1000 share; group total 4000 stays well under.
+    await db.aiTeamMembers.update(employeeRow.id, {
+      budgetTokens: 1000,
+      usedTokens: 900,
+      inputTokens: 700,
+      outputTokens: 200,
+    });
+
+    renderView();
+    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    await screen.findByTestId('team-sidebar');
+
+    expect(await screen.findByTestId('budget-badge-member')).toBeInTheDocument();
+    expect(screen.queryByTestId('budget-badge-team')).not.toBeInTheDocument();
+  });
+
   it('keeps the settings split table rows summing to the team total', async () => {
     const { TeamSettingsDrawer, evenSplitRows } = await import(
       '../../src/components/ai/office/TeamSettingsDrawer'
