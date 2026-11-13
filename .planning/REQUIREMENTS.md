@@ -68,7 +68,7 @@
 - [x] **AIO-BUDGET-04**: Token increments are atomic — 20 concurrent increments sum correctly with no lost update. (R-15)
 - [x] **AIO-BUDGET-05**: Starting a group splits the total budget evenly across the leader and every agent, with the remainder handled deterministically. (C-12, R-15)
 - [x] **AIO-BUDGET-06**: A threshold warning fires when a member approaches its share; the threshold value is configurable, not hard-coded. (C-12, R-03, R-04)
-- [ ] **AIO-BUDGET-07**: Topping up one agent raises that agent's share *and* the group total in a single transaction. (C-12)
+- [x] **AIO-BUDGET-07**: Topping up one agent raises that agent's share *and* the group total in a single transaction. (C-12)
 - [x] **AIO-BUDGET-08**: The budget display shows granted, used, and remaining for the group and per member, with input and output shown separately. (R-19)
 - [x] **AIO-BUDGET-09**: ~~Reaching the threshold pauses between tool rounds and resumes when the user tops up — the pause is visible, not a hang.~~ **Superseded by 38 D-01/D-02:** no pause is produced between tool rounds and there is no resume-on-top-up flow. Threshold crossing warns visibly (two levels: member share and group total) and the run continues; the user stops manually. The invariant that survives is "a threshold crossing is always visible, never a silent hang." (C-11, R-06, D-01, D-02, D-06)
 
