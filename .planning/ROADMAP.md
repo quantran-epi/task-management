@@ -241,7 +241,7 @@ Plans:
 7. Topping up one agent raises that agent's share and the group total in one transaction.
 8. The display shows granted, used, and remaining per group and per member, with input and output separate.
 
-**Plans:** 5/12 plans executed
+**Plans:** 6/12 plans executed
 
 Plans:
 **Wave 1** *(no dependencies)*
@@ -257,7 +257,7 @@ Plans:
 
 **Wave 3**
 
-- [ ] 38-05-PLAN.md — threshold math, resolved-vs-override snapshot fields, shared snapshot helper
+- [x] 38-05-PLAN.md — threshold math, resolved-vs-override snapshot fields, shared snapshot helper
 - [ ] 38-12-PLAN.md — SQLite/parity confirmation: no structural change + membership test
 
 **Wave 4**

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
 status: executing
-stopped_at: Completed 38-11-PLAN.md
-last_updated: "2026-11-13T14:22:18.625Z"
-last_activity: 2026-11-13 -- Phase 38 plan 06 complete (backup envelope v14)
+stopped_at: Completed 38-05-PLAN.md
+last_updated: "2026-11-13T21:28:00.000Z"
+last_activity: 2026-11-13 -- Phase 38 plan 05 complete (threshold math + split usage)
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 48
-  completed_plans: 37
-  percent: 43
+  completed_plans: 38
+  percent: 44
 current_phase: 38
 current_phase_name: Hard token budget + accurate measurement
 ---
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 38 (hard-token-budget-accurate-measurement) — EXECUTING
-Plan: 6 of 12
+Plan: 7 of 12
 Status: Ready to execute
-Last activity: 2026-11-13 -- Phase 38 plan 06 complete (backup envelope v14)
+Last activity: 2026-11-13 -- Phase 38 plan 05 complete (threshold math + split usage)
 
 ## Session Continuity
 
-Last session: 2026-11-13T14:22:18.619Z
-Stopped at: Completed 38-11-PLAN.md
+Last session: 2026-11-13T21:28:00.000Z
+Stopped at: Completed 38-05-PLAN.md
 Resume file: None
 
 Progress: [███████░░░] 75%
@@ -159,6 +159,10 @@ Progress: [███████░░░] 75%
 - [Phase 38]: backup envelope v14 and the nine-file fixture sweep ship in one changeset; validateBackup.ts stays unchanged because the record schemas already own the numeric guards
 - [Phase 38]: Out-of-band threshold reads fall back to 80 rather than clamping: a corrupt row is treated as unset, not silently rewritten to a boundary the user never chose
 - [Phase 38]: ai_budget_warn_threshold_pct passes isSafeBackupSetting by construction; a test pins it so a future suffix rule cannot silently drop it
+- [Phase 38]: The legacy BudgetGate stays byte-identical until plan 08; budgetGate.ts's docstring states this tree is not gate-free yet
+- [Phase 38]: Override and effective threshold are two snapshot fields; the override key is omitted when inheriting (exactOptionalPropertyTypes), never set to undefined
+- [Phase 38]: nextThresholdOverride(undefined) is the only clear mechanism — no separate clear method exists
+- [Phase 38]: tests/helpers/teamRunSnapshot.ts owns the snapshot stub; five drifted literals collapsed into it
 
 ## Performance Metrics
 
