@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v1.4
 milestone_name: Unified AI Office (Phase Details)
-current_phase: 37
-current_phase_name: Runtime reliability + concurrency
+current_phase: 38
+current_phase_name: Hard token budget + accurate measurement
 status: executing
 stopped_at: Phase 38 context gathered
-last_updated: "2026-11-13T08:34:20.146Z"
+last_updated: "2026-11-13T14:02:04.481Z"
 last_activity: 2026-11-13
 last_activity_desc: "Quick 261113-ita complete: notification focus, unread viewport, and NO_LEAD warning fixed; focused tests and TypeScript pass, runtime UAT pending."
-state_head: dd67297c7bcb3228e3df9c5db66ee805d932b767
+state_head: 9e15b1876a41097691e3efda2af9427eed85a602
 progress:
   total_phases: 7
   completed_phases: 4
-  total_plans: 32
+  total_plans: 44
   completed_plans: 32
   percent: 57
 ---
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 
 ## Current Position
 
-Phase: 37.1 (live-steering-leader-amends-assignments-and-steers-running-a) — EXECUTING
+Phase: 38 (Hard token budget + accurate measurement) — READY TO EXECUTE
 Plan: 6 of 6
 Status: Ready to execute
 Last activity: 2026-11-13 -- Quick 261113-ko9: restore last-read chat position, viewport-based read receipts, collapsible assignment plan; include confirmed hidden leader budget-pause fix. Runtime UAT pending; OS notifications deferred.
