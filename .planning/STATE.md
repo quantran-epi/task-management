@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
 status: executing
-stopped_at: Completed 38-07-PLAN.md
-last_updated: "2026-11-13T22:12:00.000Z"
-last_activity: 2026-11-13 -- Phase 38 plan 07 complete (real usage split, terminal flush + reconcile)
+stopped_at: Completed 38-08-PLAN.md
+last_updated: "2026-11-13T15:25:10.412Z"
+last_activity: 2026-11-13 -- Phase 38 plan 08 complete (warning-only budget, one notification per team per level)
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 48
-  completed_plans: 41
-  percent: 45
+  completed_plans: 42
+  percent: 43
 current_phase: 38
 current_phase_name: Hard token budget + accurate measurement
 ---
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 38 (hard-token-budget-accurate-measurement) — EXECUTING
-Plan: 10 of 12
+Plan: 11 of 12
 Status: Ready to execute
-Last activity: 2026-11-13 -- Phase 38 plan 07 complete (real usage split, terminal flush + reconcile)
+Last activity: 2026-11-13 -- Phase 38 plan 08 complete (warning-only budget, one notification per team per level)
 
 ## Session Continuity
 
-Last session: 2026-11-13T22:12:00.000Z
-Stopped at: Completed 38-07-PLAN.md
+Last session: 2026-11-13T15:24:59.357Z
+Stopped at: Completed 38-08-PLAN.md
 Resume file: None
 
-Progress: [████████░░] 83%
+Progress: [█████████░] 88%
 
 ## Milestone v1.4 Map
 
@@ -174,6 +174,9 @@ Progress: [████████░░] 83%
 - [Phase 38]: flushAccounting marks the key flushed BEFORE awaiting the increment; that guard, not a zeroed record, is the duplicate-charge defence
 - [Phase 38]: The employee turn's finally flushes and reconciles too, covering mention-started turns that own no attempt row
 - [Phase 38]: tokenEstimate loads js-tiktoken through widened string specifiers with @vite-ignore so an absent package reaches the runtime catch; plan 10 switches them to literal lazy subpaths
+- [Phase ?]: Budget warning identity is (teamId, level): the member level dispatches once per team, never once per teammate
+- [Phase ?]: budgetWarnings.member is the aggregate flag; the per-member badge stays plan 09's surface
+- [Phase ?]: pausedAgentId/pausedAgentName stay on the snapshot as always-null legacy fields because the parked phase value is still legal in old backups
 
 ## Performance Metrics
 
@@ -201,3 +204,4 @@ Progress: [████████░░] 83%
 | Phase 38 P12 | 4min | 2 tasks | 3 files |
 | Phase 38 P04 | 7min | 3 tasks | 7 files |
 | Phase 38 P07 | 22min | 3 tasks | 9 files |
+| Phase 38 P08 | 14min | 3 tasks | 8 files |
