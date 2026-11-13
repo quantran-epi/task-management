@@ -577,6 +577,69 @@ export async function topUpMemberBudget(
   return result.members.find((member) => member.id === memberId) ?? row;
 }
 
+/**
+ * Phase 38 D-04/D-05: the three-state override. `undefined` (or an absent key) leaves the
+ * stored value alone, `null` deletes the key so the team inherits the global default, a number
+ * clamps and stores. Spelled out so a caller forwarding `number | null | undefined` state
+ * type-checks under `exactOptionalPropertyTypes` without a cast.
+ */
+export interface TeamBudgetSettingsInput {
+  budgetTokens: number;
+  budgets: Record<string, number>;
+  budgetWarnThresholdPct?: number | null | undefined;
+}
+
+/**
+ * Phase 38 D-19: the ONE absolute budget writer for the Settings drawer.
+ *
+ * ABSOLUTE, not additive: the team total is set verbatim and each listed member's
+ * `budgetTokens` is set verbatim. Routing a positive member delta through {@link applyTopUp}
+ * instead would add it to the total a second time — the 3000→5000 bug.
+ *
+ * Only granted budget moves: every other member field (`usedTokens`, `inputTokens`,
+ * `outputTokens`, `usageEstimated`) is carried through untouched. Member budgets summing to
+ * less than the team total is legal and preserved — the user may deliberately under-allocate.
+ *
+ * An id in `budgets` with no roster row is ignored; this never invents a member.
+ */
+export async function applyTeamBudgetSettings(
+  teamId: string,
+  input: TeamBudgetSettingsInput,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<BudgetWriteResult> {
+  const budgetTokens = Math.max(0, Math.round(input.budgetTokens));
+
+  return db.transaction('rw', [db.aiTeams, db.aiTeamMembers], async () => {
+    const team = await db.aiTeams.get(teamId);
+    if (!team) throw new Error(`Không tìm thấy nhóm: ${teamId}`);
+    const roster = await db.aiTeamMembers.where('teamId').equals(teamId).toArray();
+
+    const updatedRoster = roster.map((row) => {
+      const next = input.budgets[row.id];
+      if (next === undefined) return row;
+      // Spread keeps the usage columns; only the granted budget is replaced.
+      return { ...row, budgetTokens: Math.max(0, Math.round(next)) };
+    });
+    for (const row of updatedRoster) await db.aiTeamMembers.put(row);
+
+    const updatedTeam: AiTeam = {
+      ...team,
+      budgetTokens,
+      updatedAt: new Date().toISOString(),
+    };
+    // D-04/D-05: never `??` — that collapses `null` (clear) and `undefined` (leave alone).
+    if (input.budgetWarnThresholdPct === null) {
+      delete updatedTeam.budgetWarnThresholdPct;
+    } else if (input.budgetWarnThresholdPct !== undefined) {
+      updatedTeam.budgetWarnThresholdPct = clampBudgetWarnThresholdPct(
+        input.budgetWarnThresholdPct
+      );
+    }
+    await db.aiTeams.put(updatedTeam);
+    return { team: updatedTeam, members: updatedRoster };
+  });
+}
+
 /** CR-02: a budget *decrease* is a write, not a top-up — it must not open the gate. */
 export async function setMemberBudget(
   memberId: string,

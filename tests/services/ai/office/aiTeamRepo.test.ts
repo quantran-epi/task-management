@@ -13,6 +13,7 @@ import {
   removeTeamMember,
   applyEvenSplit,
   applyTopUp,
+  applyTeamBudgetSettings,
   topUpMemberBudget,
   addUsedTokens,
   incrementMemberUsage,
@@ -64,6 +65,14 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
         budgetTokens: 1000,
         employeeIds: employeeIds.slice(0, 2),
       },
+      db
+    );
+  }
+
+  /** Lead + 2 employees, split evenly from `total` (D-14). */
+  async function makeTeamWithTotal(name: string, total: number) {
+    return createTeam(
+      { name, leadId, status: 'idle', budgetTokens: total, employeeIds: employeeIds.slice(0, 2) },
       db
     );
   }
@@ -300,6 +309,218 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
 
     expect((await getTeam(team.id, db))?.budgetTokens).toBe(beforeTeam.budgetTokens);
     expect(await listTeamMembers(team.id, db)).toEqual(beforeMembers);
+  });
+
+  it('distributes a team top-up across the roster and sums exactly (AIO-BUDGET-05, D-16)', async () => {
+    const team = await makeTeamWithTotal('TeamTopUp', 3000);
+    const before = await listTeamMembers(team.id, db);
+    expect(before.map((row) => row.budgetTokens).sort()).toEqual([1000, 1000, 1000]);
+
+    const result = await applyTopUp(team.id, { kind: 'team' }, 1000, db);
+
+    const after = await listTeamMembers(team.id, db);
+    const leadBefore = before.find((row) => row.role === 'lead')!;
+    const leadAfter = after.find((row) => row.role === 'lead')!;
+    expect(leadAfter.budgetTokens - leadBefore.budgetTokens).toBe(334);
+    for (const member of before.filter((row) => row.role === 'employee')) {
+      const grown = after.find((row) => row.id === member.id)!;
+      expect(grown.budgetTokens - member.budgetTokens).toBe(333);
+    }
+    const deltas = after.map(
+      (row) => row.budgetTokens - before.find((prev) => prev.id === row.id)!.budgetTokens
+    );
+    expect(deltas.reduce((sum, delta) => sum + delta, 0)).toBe(1000);
+    expect(result.team.budgetTokens).toBe(4000);
+    expect((await getTeam(team.id, db))?.budgetTokens).toBe(4000);
+  });
+
+  it('reaches a member added after the split (AIO-BUDGET-05, D-15)', async () => {
+    const team = await makeTeamWithTotal('LateRoster', 3000);
+    const added = await addTeamMember(
+      { teamId: team.id, agentId: employeeIds[2]!, role: 'employee', budgetTokens: 0 },
+      db
+    );
+    expect(added.budgetTokens).toBe(0);
+
+    await applyTopUp(team.id, { kind: 'team' }, 400, db);
+
+    const after = await listTeamMembers(team.id, db);
+    expect(after).toHaveLength(4);
+    expect(after.find((row) => row.id === added.id)?.budgetTokens).toBe(100);
+    expect(after.filter((row) => row.id !== added.id).map((row) => row.budgetTokens)).toEqual([
+      1100, 1100, 1100,
+    ]);
+  });
+
+  it('treats a zero and a negative team top-up as no-ops (AIO-BUDGET-05, D-19)', async () => {
+    const team = await makeTeamWithTotal('ZeroTopUp', 3000);
+    const beforeTeam = (await getTeam(team.id, db))!;
+    const beforeMembers = await listTeamMembers(team.id, db);
+
+    await expect(applyTopUp(team.id, { kind: 'team' }, 0, db)).resolves.toBeDefined();
+    await expect(applyTopUp(team.id, { kind: 'team' }, -50, db)).resolves.toBeDefined();
+
+    expect((await getTeam(team.id, db))?.budgetTokens).toBe(beforeTeam.budgetTokens);
+    expect(await listTeamMembers(team.id, db)).toEqual(beforeMembers);
+  });
+
+  it('gives the whole team top-up to a leader-only roster (AIO-BUDGET-05)', async () => {
+    const team = await createTeam(
+      { name: 'LeaderAlone', leadId, status: 'idle', budgetTokens: 1000 },
+      db
+    );
+    const before = (await listTeamMembers(team.id, db))[0]!;
+
+    await applyTopUp(team.id, { kind: 'team' }, 750, db);
+
+    const after = (await listTeamMembers(team.id, db))[0]!;
+    expect(after.budgetTokens).toBe(before.budgetTokens + 750);
+    expect((await getTeam(team.id, db))?.budgetTokens).toBe(1750);
+  });
+
+  describe('applyTeamBudgetSettings (AIO-BUDGET-05, D-04, D-19)', () => {
+    it('sets the total absolutely instead of adding the member deltas twice', async () => {
+      const team = await makeTeamWithTotal('AbsoluteSave', 3000);
+      const members = await listTeamMembers(team.id, db);
+      const lead = members.find((row) => row.role === 'lead')!;
+      const [e1, e2] = members.filter((row) => row.role === 'employee');
+
+      const result = await applyTeamBudgetSettings(
+        team.id,
+        {
+          budgetTokens: 4000,
+          budgets: { [lead.id]: 1334, [e1!.id]: 1333, [e2!.id]: 1333 },
+        },
+        db
+      );
+
+      expect(result.team.budgetTokens).toBe(4000);
+      expect((await getTeam(team.id, db))?.budgetTokens).toBe(4000);
+      const after = await listTeamMembers(team.id, db);
+      expect(after.find((row) => row.id === lead.id)?.budgetTokens).toBe(1334);
+      expect(after.find((row) => row.id === e1!.id)?.budgetTokens).toBe(1333);
+      expect(after.find((row) => row.id === e2!.id)?.budgetTokens).toBe(1333);
+    });
+
+    it('leaves usage columns untouched', async () => {
+      const team = await makeTeamWithTotal('UsageKeep', 3000);
+      const member = (await listTeamMembers(team.id, db)).find((row) => row.role === 'employee')!;
+      await incrementMemberUsage(
+        member.id,
+        { inputTokens: 300, outputTokens: 100, estimated: true },
+        db
+      );
+
+      await applyTeamBudgetSettings(
+        team.id,
+        { budgetTokens: 5000, budgets: { [member.id]: 2000 } },
+        db
+      );
+
+      const stored = (await db.aiTeamMembers.get(member.id))!;
+      expect(stored.budgetTokens).toBe(2000);
+      expect(stored.usedTokens).toBe(400);
+      expect(stored.inputTokens).toBe(300);
+      expect(stored.outputTokens).toBe(100);
+      expect(stored.usageEstimated).toBe(true);
+    });
+
+    it('rejects an absent team and writes no member row', async () => {
+      const team = await makeTeamWithTotal('AbsentTeam', 3000);
+      const member = (await listTeamMembers(team.id, db))[0]!;
+      const before = await listTeamMembers(team.id, db);
+
+      await expect(
+        applyTeamBudgetSettings('missing-team', { budgetTokens: 4000, budgets: { [member.id]: 1 } }, db)
+      ).rejects.toThrow('Không tìm thấy nhóm');
+
+      expect(await listTeamMembers(team.id, db)).toEqual(before);
+    });
+
+    it('preserves a deliberate under-allocation', async () => {
+      const team = await makeTeamWithTotal('UnderAllocated', 3000);
+      const members = await listTeamMembers(team.id, db);
+
+      await applyTeamBudgetSettings(
+        team.id,
+        {
+          budgetTokens: 4000,
+          budgets: { [members[0]!.id]: 1000, [members[1]!.id]: 1000, [members[2]!.id]: 1000 },
+        },
+        db
+      );
+
+      const after = await listTeamMembers(team.id, db);
+      expect((await getTeam(team.id, db))?.budgetTokens).toBe(4000);
+      expect(after.reduce((sum, row) => sum + row.budgetTokens, 0)).toBe(3000);
+    });
+
+    it('never invents a member row for an unknown budget key', async () => {
+      const team = await makeTeamWithTotal('UnknownKey', 3000);
+      const before = await listTeamMembers(team.id, db);
+
+      await applyTeamBudgetSettings(
+        team.id,
+        { budgetTokens: 4000, budgets: { 'no-such-member': 900 } },
+        db
+      );
+
+      expect(await listTeamMembers(team.id, db)).toHaveLength(before.length);
+    });
+
+    it('leaves a stored override untouched when the key is absent (D-04)', async () => {
+      const team = await makeTeamWithTotal('OverrideKeep', 3000);
+      await updateTeam(team.id, { budgetWarnThresholdPct: 65 }, db);
+
+      await applyTeamBudgetSettings(team.id, { budgetTokens: 4000, budgets: {} }, db);
+
+      expect((await getTeam(team.id, db))?.budgetWarnThresholdPct).toBe(65);
+    });
+
+    it('clears the override with null so the team inherits (D-04)', async () => {
+      const team = await makeTeamWithTotal('OverrideClear', 3000);
+      await updateTeam(team.id, { budgetWarnThresholdPct: 65 }, db);
+
+      await applyTeamBudgetSettings(
+        team.id,
+        { budgetTokens: 4000, budgets: {}, budgetWarnThresholdPct: null },
+        db
+      );
+
+      const stored = (await getTeam(team.id, db))!;
+      expect('budgetWarnThresholdPct' in stored).toBe(false);
+    });
+
+    it('keeps the override when an unrelated save passes undefined (D-04)', async () => {
+      const team = await makeTeamWithTotal('OverrideUndefined', 3000);
+      await updateTeam(team.id, { budgetWarnThresholdPct: 65 }, db);
+
+      await applyTeamBudgetSettings(
+        team.id,
+        { budgetTokens: 4500, budgets: {}, budgetWarnThresholdPct: undefined },
+        db
+      );
+
+      expect((await getTeam(team.id, db))?.budgetWarnThresholdPct).toBe(65);
+    });
+
+    it('clamps a stored override into 1..100 (D-04)', async () => {
+      const team = await makeTeamWithTotal('OverrideClamp', 3000);
+
+      await applyTeamBudgetSettings(
+        team.id,
+        { budgetTokens: 4000, budgets: {}, budgetWarnThresholdPct: 0 },
+        db
+      );
+      expect((await getTeam(team.id, db))?.budgetWarnThresholdPct).toBe(1);
+
+      await applyTeamBudgetSettings(
+        team.id,
+        { budgetTokens: 4000, budgets: {}, budgetWarnThresholdPct: 120 },
+        db
+      );
+      expect((await getTeam(team.id, db))?.budgetWarnThresholdPct).toBe(100);
+    });
   });
 
   it('adds used tokens to a single row only', async () => {
