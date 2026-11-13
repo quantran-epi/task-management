@@ -101,7 +101,7 @@ No item was dropped; every moved item is named in the receiving plan's objective
 | 4 | 04 | needs 01, 03, 05 |
 | 5 | 07 | needs 03, 04, 05 |
 | 6 | 08, 10 | 08 needs 05 + 07; 10 needs 07 |
-| 7 | 09 | needs 04, 07, 08 |
+| 7 | 09 | needs 04, 05, 07, 08, 11 |
 
 No same-wave plan pair shares a `files_modified`/`files_deleted` path. Plan 04 moved from wave 3 to wave 4 because it now writes `teamRunCoordinator.ts` and `TeamWorkspace.tsx`, which plan 05 also edits in wave 3.
 
