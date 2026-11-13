@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
 status: executing
-stopped_at: Completed 38-05-PLAN.md
-last_updated: "2026-11-13T21:28:00.000Z"
-last_activity: 2026-11-13 -- Phase 38 plan 05 complete (threshold math + split usage)
+stopped_at: Completed 38-12-PLAN.md
+last_updated: "2026-11-13T21:31:00.000Z"
+last_activity: 2026-11-13 -- Phase 38 plan 12 complete (SQLite/parity confirmation)
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 48
-  completed_plans: 38
+  completed_plans: 39
   percent: 44
 current_phase: 38
 current_phase_name: Hard token budget + accurate measurement
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 38 (hard-token-budget-accurate-measurement) — EXECUTING
-Plan: 7 of 12
+Plan: 8 of 12
 Status: Ready to execute
-Last activity: 2026-11-13 -- Phase 38 plan 05 complete (threshold math + split usage)
+Last activity: 2026-11-13 -- Phase 38 plan 12 complete (SQLite/parity confirmation)
 
 ## Session Continuity
 
-Last session: 2026-11-13T21:28:00.000Z
-Stopped at: Completed 38-05-PLAN.md
+Last session: 2026-11-13T21:31:00.000Z
+Stopped at: Completed 38-12-PLAN.md
 Resume file: None
 
-Progress: [███████░░░] 75%
+Progress: [████████░░] 81%
 
 ## Milestone v1.4 Map
 
@@ -123,6 +123,8 @@ Progress: [███████░░░] 75%
 - [Phase 31.2]: D-52: Mandatory execution order — schema/types/Zod/repo first, then legacy deletion, then daily surfaces, then CR/System views, then SDLC, then AI proposal, then tests
 - [Phase 31.2]: D-53: Step 3 reads featureBranch from cr.targets and baseBranch from system; no branch-name guessing from crCode
 - [Quick 261109-eme]: Refactor AI Office & Staff to Left Stripe tool windows (ai_office on top, ai_staff above remote_explorer); open dedicated staff_detail and team_workspace editor tabs; hide Ghost Dev entry points
+- [Phase 38]: D-23 parity is membership per table per list, never length equality — at HEAD the lists differ (35 Dexie / 27 TS+local / 27 Rust) for reasons outside phase 38, so a length gate would be false and un-greenable
+- [Phase 38]: No Rust or SQLite structural change for the new columns — they ride inside opaque `payload_json` rows; `aiTeams`/`aiTeamMembers` were already in `ALLOWED_TABLES`
 - [Phase 37-runtime-reliability-concurrency]: Ledger lands at Dexie V22 (V20/V21 taken by post-36 repairs); transitionAssignment is the only runStatus writer and returns null on a lost race; attemptNo allocated inside the insert transaction so retries append 2,3 never 2,2; concurrencyLimit default 3, range 1-12, clamped at the trust boundary.
 - [Phase 37]: Scheduler acquire(signal) requires the signal; cancel(handle) is release-equivalent only — a queued assignment is cancelled by aborting its own AbortController (no handle exists before admission)
 - [Phase 37]: Coordinator phase writes all route through setPhase(), which drops the write and its notify() once disposed, so runBatch/topUp tails cannot resurrect a dead run
