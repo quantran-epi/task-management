@@ -59,11 +59,8 @@ export interface AiOrchestratorLoopOptions {
   onTextChunk?: (delta: string) => void;
   onReasoningChunk?: (delta: string) => void;
   onStatusChange?: (status: string | null) => void;
-  onUsage?: (usage: {
-    promptTokens?: number | undefined;
-    completionTokens?: number | undefined;
-    totalTokens?: number | undefined;
-  }) => void;
+  /** Phase 38 D-09: the full provider usage, split and cache fields included. */
+  onUsage?: (usage: ChatTokenUsage) => void;
   onToolCall?: (call: { id: string; name: string; args: Record<string, any> }) => void;
   onToolResult?: (callId: string, result: string, durationMs: number) => void;
   onMutationCheck?: (

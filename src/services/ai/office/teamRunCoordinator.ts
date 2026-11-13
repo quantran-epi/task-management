@@ -44,9 +44,9 @@ import {
   bucketOf,
   createBudgetGate,
   nextThresholdOverride,
-  normalizeUsageTotal,
   resolveThresholdPct,
   shouldNotifyPause,
+  splitUsage,
   type BudgetGate,
 } from './budgetGate';
 import { getGlobalBudgetWarnThresholdPct } from '../budgetWarnSettings';
@@ -72,8 +72,8 @@ import {
   supersedeTeamMessage,
 } from '../../../db/repositories/teamTranscriptRepo';
 import {
-  addUsedTokens,
   applyTopUp,
+  incrementMemberUsage,
   listTeamMembers,
 } from '../../../db/repositories/aiTeamRepo';
 import {
@@ -141,9 +141,44 @@ export interface TeamRunSnapshot {
   budgetWarnThresholdPct: number;
   /** The team's own value; the key is omitted when the team inherits the global default. */
   budgetWarnThresholdPctOverride?: number | undefined;
+  /**
+   * Phase 38 D-07/D-22: per-request usage. Plan 08 reads `provisionalInputTokens` for the
+   * warning; plan 09 renders an estimated number with a `~` marker.
+   */
+  memberUsage: MemberUsageSnapshot[];
 }
 
 export type TopUpScope = { kind: 'agent'; agentId: string } | { kind: 'team' };
+
+/**
+ * Phase 38 D-07/D-22: one request's usage, as the snapshot exposes it. `inputTokens` is the
+ * reported or terminal-estimated split (0 while the request is still `pending`);
+ * `provisionalInputTokens` is the pre-call payload measurement, a warning input that is
+ * never charged.
+ */
+export interface MemberUsageSnapshot {
+  agentId: string;
+  inputTokens: number;
+  outputTokens: number;
+  estimated: boolean;
+  provisionalInputTokens: number;
+}
+
+/** Phase 38 D-07/D-10/D-22: ONE accounting record per agent per request. */
+interface UsageAccountingRecord {
+  key: string;
+  assignmentId?: string | undefined;
+  source: 'pending' | 'provider' | 'estimated';
+  /** Cumulative provider totals, so a cumulative report is diffed per side. */
+  providerTotal: number;
+  providerInput: number;
+  providerOutput: number;
+  /** What the terminal flush will charge. */
+  inputTokens: number;
+  outputTokens: number;
+  /** D-07: the pre-call payload measurement — a warning input, never a charge. */
+  provisionalInputTokens: number;
+}
 
 /**
  * D-02/D-03/D-07: the roster a turn runs with, read once at the turn's start.
@@ -532,6 +567,8 @@ export function createTeamRunCoordinator(
    * way a stop can find what to cancel.
    */
   const assignmentIdsByAgent = new Map<string, string>();
+  /** Reverse of the above: `finalizeAttempt` is handed an assignment id and needs its agent. */
+  const agentByAssignmentId = new Map<string, string>();
   const agents = new Map<string, AgentRunState>();
   const reports = new Map<string, string>();
   const listeners = new Set<() => void>();
@@ -552,11 +589,23 @@ export function createTeamRunCoordinator(
 
   const memberIds = new Map<string, string>();
   const memberBudgets = new Map<string, number>();
+  const memberUsedInput = new Map<string, number>();
+  const memberUsedOutput = new Map<string, number>();
   const memberUsed = new Map<string, number>();
   const lastBuckets = new Map<string, number>();
   let membersLoaded = false;
 
-  const usageTotals = new Map<string, number>();
+  /**
+   * Phase 38 D-07/D-10/D-22: ONE accounting record per agent per request. It exists from
+   * dispatch (before `registry.start`) and is the only place a turn's usage accumulates —
+   * nothing is written to Dexie until the terminal seam flushes it.
+   */
+  const usageAccounting = new Map<string, UsageAccountingRecord>();
+  /** D-24: the flushed-key guard, so a stop/settle race cannot charge one request twice. */
+  const flushedAccounting = new Set<string>();
+  /** Serializes ledger writes: two attempts settling in one tick must both land. */
+  let usageWriteChain: Promise<void> = Promise.resolve();
+
   let teamUsed = 0;
   let teamBudget = team.budgetTokens;
   let lastTeamBucket = 0;
@@ -848,6 +897,14 @@ export function createTeamRunCoordinator(
     diagnosticDetail?: string
   ): Promise<AiTeamAssignment | null> {
     const threadId = options.threadId;
+    // Phase 38 D-22/R2-B3: the terminal seam runs BEFORE the transaction. The flush's own
+    // `rw` scope must complete first (Dexie cannot nest them), and the attempt patch below
+    // must never snapshot a pre-estimation value.
+    const accountingAgentId = agentByAssignmentId.get(assignmentId);
+    const flushed =
+      accountingAgentId !== undefined
+        ? await flushAccounting(accountingAgentId)
+        : { inputTokens: 0, outputTokens: 0, estimated: false };
     // Only the caller that actually committed the terminal write notifies; a losing
     // concurrent caller must not emit a second `message_saved` for the same commit.
     let committed = false;
@@ -917,6 +974,8 @@ export function createTeamRunCoordinator(
 
         // D-09: the one status writer, composed INSIDE this transaction so its get/put join
         // the outer `rw` lock. `reportMessageId` must be carried or the re-read drops it.
+        // Phase 38 D-11: the attempt row carries its OWN usage, stamped from the flushed
+        // triple — a retry's second row records its own numbers instead of overwriting.
         const transitioned = await transitionAssignment(
           assignmentId,
           from,
@@ -926,6 +985,9 @@ export function createTeamRunCoordinator(
             stopReason,
             reportMessageId: reportId,
             incomplete: to !== 'done',
+            inputTokens: flushed.inputTokens,
+            outputTokens: flushed.outputTokens,
+            ...(flushed.estimated ? { usageEstimated: true } : {}),
             ...(diagnosticDetail !== undefined ? { diagnosticDetail } : {}),
           },
           db
@@ -936,6 +998,13 @@ export function createTeamRunCoordinator(
     );
 
     if (committed) {
+      // Phase 38 D-22: the live counters converge to the ledger once the attempt is over.
+      // After the commit, never inside it — Dexie cannot nest `rw` scopes.
+      try {
+        await reconcileUsage();
+      } catch {
+        /* a reconcile must never fail the terminal write */
+      }
       // After the commit, never inside it: one owner, and the row and the notification
       // carry the same `threadId` value.
       notifyAIChatSync({ type: 'message_saved', threadId });
@@ -972,6 +1041,9 @@ export function createTeamRunCoordinator(
       const active = activeAssignmentByAgent.get(finalized.agentId);
       if (active?.assignmentId === finalized.id) {
         activeAssignmentByAgent.delete(finalized.agentId);
+      }
+      if (agentByAssignmentId.get(finalized.id) === finalized.agentId) {
+        agentByAssignmentId.delete(finalized.id);
       }
     }
     return finalized;
@@ -1244,6 +1316,8 @@ export function createTeamRunCoordinator(
     for (const row of rows) {
       memberBudgets.set(row.agentId, row.budgetTokens);
       memberUsed.set(row.agentId, row.usedTokens);
+      memberUsedInput.set(row.agentId, row.inputTokens ?? 0);
+      memberUsedOutput.set(row.agentId, row.outputTokens ?? 0);
       lastBuckets.set(row.agentId, bucketOf(row.usedTokens, row.budgetTokens));
     }
     // CR-01: the persisted team row is the budget authority once a turn supplies it.
@@ -1293,50 +1367,138 @@ export function createTeamRunCoordinator(
    * D-24: `accountingKey` identifies the TURN that reported, so two lead turns in one batch
    * each get their own baseline. Everything user-facing (member totals, buckets, gates) stays
    * keyed by the real `agentId`.
+   *
+   * Phase 38 D-22: memory only. The ledger is written once, at the terminal seam — a
+   * per-report write would both diverge from the live counter and double-charge the flush.
    */
   function handleUsage(agentId: string, usage: ChatTokenUsage, accountingKey: string): void {
-    const total = normalizeUsageTotal(usage);
-    const previousTotal = usageTotals.get(accountingKey) ?? 0;
-    const delta = total - previousTotal;
-    if (delta <= 0) return;
-    usageTotals.set(accountingKey, total);
-    teamUsed += delta;
+    const acc = usageAccounting.get(agentId);
+    // T-38-28: a report for a superseded turn or attempt must never charge the current one —
+    // and a late report for an already-flushed request must never charge it a second time.
+    if (!acc || acc.key !== accountingKey || flushedAccounting.has(acc.key)) return;
+    const split = splitUsage(usage);
+    // D-10: an empty report leaves the request `pending`, so the terminal seam estimates it.
+    if (split.inputTokens + split.outputTokens <= 0) return;
+    const cumulative = split.inputTokens + split.outputTokens;
+    if (cumulative - acc.providerTotal <= 0) return;
+    // Per-side deltas, so a cumulative report is diffed on each half, not just in aggregate.
+    const inputDelta = Math.max(0, split.inputTokens - acc.providerInput);
+    const outputDelta = Math.max(0, split.outputTokens - acc.providerOutput);
+    acc.providerTotal = cumulative;
+    acc.providerInput = split.inputTokens;
+    acc.providerOutput = split.outputTokens;
+    acc.inputTokens += inputDelta;
+    acc.outputTokens += outputDelta;
+    acc.source = 'provider';
+    // D-07: the reported number REPLACES the pre-call guess instead of stacking on it.
+    acc.provisionalInputTokens = 0;
+    // The provisional guess never entered the live maps, so the reported delta is applied whole.
+    applyLiveUsage(agentId, inputDelta, outputDelta);
+  }
 
-    const used = (memberUsed.get(agentId) ?? 0) + delta;
+  /** The live counters plus the derived total and the bucket/gate evaluation. */
+  function applyLiveUsage(agentId: string, inputDelta: number, outputDelta: number): void {
+    if (inputDelta === 0 && outputDelta === 0) return;
+    memberUsedInput.set(agentId, (memberUsedInput.get(agentId) ?? 0) + inputDelta);
+    memberUsedOutput.set(agentId, (memberUsedOutput.get(agentId) ?? 0) + outputDelta);
+    const used = (memberUsed.get(agentId) ?? 0) + inputDelta + outputDelta;
     memberUsed.set(agentId, used);
+    teamUsed += inputDelta + outputDelta;
+
     const current = bucketOf(used, memberBudgets.get(agentId) ?? 0);
     const previous = lastBuckets.get(agentId) ?? 0;
     lastBuckets.set(agentId, current);
     // D-20: pause, never abort. The turn parks at its next tool-round boundary.
     // WR-04: a late usage chunk after settle must not flip a ready coordinator back to
     // awaiting-budget with nothing parked.
-    const anyLive = () =>
-      [...agents.values()].some((row) => !TERMINAL_STATUSES.includes(row.status));
-
     if (shouldNotifyPause(previous, current)) {
       gateFor(agentId).close();
       const state = agents.get(agentId);
       if (state && !TERMINAL_STATUSES.includes(state.status)) {
         updateAgent(agentId, { status: 'paused' });
       }
-      if (anyLive()) {
-      }
     }
-
     const teamCurrent = bucketOf(teamUsed, teamBudget);
-    if (shouldNotifyPause(lastTeamBucket, teamCurrent)) {
-      teamGate.close();
-      if (anyLive()) {
-      }
-    }
+    if (shouldNotifyPause(lastTeamBucket, teamCurrent)) teamGate.close();
     lastTeamBucket = teamCurrent;
+  }
 
-    const memberId = memberIds.get(agentId);
-    if (memberId) {
-      void addUsedTokens(memberId, delta, db).catch(() => {
-        /* usage accounting must never break a turn */
-      });
+  /**
+   * Phase 38 D-07/D-10: a request lifecycle starts at DISPATCH, before `registry.start`.
+   * It exists whether or not any `onUsage` ever fires, which is what makes a callback-less
+   * request chargeable instead of free.
+   */
+  function beginRequestAccounting(agentId: string, key: string, assignmentId?: string): void {
+    usageAccounting.set(agentId, {
+      key,
+      ...(assignmentId !== undefined ? { assignmentId } : {}),
+      source: 'pending',
+      providerTotal: 0,
+      providerInput: 0,
+      providerOutput: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      provisionalInputTokens: 0,
+    });
+  }
+
+  /**
+   * Phase 38 D-22: THE terminal seam. One ledger increment per accounting key, serialized on
+   * one promise chain so two attempts settling in the same tick both land. The key is marked
+   * flushed BEFORE the await, so a stop/settle race cannot charge twice (T-38-28).
+   *
+   * Returns the flushed triple so `finalizeAttempt` can stamp the attempt row with the same
+   * numbers it charged — never a re-read that could see a later turn's record.
+   */
+  async function flushAccounting(
+    agentId: string
+  ): Promise<{ inputTokens: number; outputTokens: number; estimated: boolean }> {
+    const acc = usageAccounting.get(agentId);
+    if (!acc || flushedAccounting.has(acc.key)) {
+      return { inputTokens: 0, outputTokens: 0, estimated: false };
     }
+    flushedAccounting.add(acc.key);
+    const delta = {
+      inputTokens: acc.inputTokens,
+      outputTokens: acc.outputTokens,
+      estimated: acc.source === 'estimated',
+    };
+    // D-10: an estimate is never skipped, even at 0/0 — the row must be marked estimated
+    // rather than silently recorded as free. A reported 0/0 is a no-op.
+    const nothingToCharge = delta.inputTokens === 0 && delta.outputTokens === 0;
+    if (nothingToCharge && !delta.estimated) return delta;
+    const memberId = memberIds.get(agentId);
+    if (!memberId) return delta;
+    // A failed ledger write must never break the turn (D-22), so the chain swallows it.
+    usageWriteChain = usageWriteChain.then(() =>
+      incrementMemberUsage(memberId, delta, db).then(
+        () => undefined,
+        () => undefined
+      )
+    );
+    await usageWriteChain;
+    acc.inputTokens = 0;
+    acc.outputTokens = 0;
+    // Plan 09's `~` marker reads this; the UI sees the reconciled figure once, here.
+    notify();
+    return delta;
+  }
+
+  /**
+   * Phase 38 D-22 reconcile: after a terminal flush the live counters are re-read from Dexie,
+   * so the number the header showed mid-turn converges to the ledger once the attempt is over.
+   */
+  async function reconcileUsage(): Promise<void> {
+    await usageWriteChain;
+    const rows = await listTeamMembers(teamId, db);
+    for (const row of rows) {
+      memberUsed.set(row.agentId, row.usedTokens);
+      memberUsedInput.set(row.agentId, row.inputTokens ?? 0);
+      memberUsedOutput.set(row.agentId, row.outputTokens ?? 0);
+      lastBuckets.set(row.agentId, bucketOf(row.usedTokens, row.budgetTokens));
+    }
+    teamUsed = rows.reduce((sum, row) => sum + row.usedTokens, 0);
+    lastTeamBucket = bucketOf(teamUsed, teamBudget);
   }
 
   function registerTeamTurn(): void {
@@ -1494,7 +1656,9 @@ export function createTeamRunCoordinator(
       employeeTurnSeq += 1;
       const accountingKey = `${employee.id}:${employeeTurnSeq}`;
       usageBaselineKey.set(employee.id, accountingKey);
-      usageTotals.delete(accountingKey);
+      // Phase 38 D-07/D-22: the request lifecycle starts HERE, before dispatch, so a turn
+      // that never reports usage is still chargeable at its terminal seam.
+      beginRequestAccounting(employee.id, accountingKey, attempt?.assignmentId);
       // D-13: the batch's employees are only known here, so this is where they claim live use.
       claimLiveUse(employee.id, employee.skillId);
       // 37.1 R14: what this turn is answering. A dispatch answers its instruction row; a
@@ -1618,6 +1782,14 @@ export function createTeamRunCoordinator(
       agentDeferreds.delete(employee.id);
       // 37.1 R14: the reply target belongs to THIS turn; a later turn must not inherit it.
       replyTargetByAgent.delete(employee.id);
+      // Phase 38 D-22: the terminal seam for a turn with NO attempt row (a mention-started
+      // turn). Idempotent for attempt turns — `finalizeAttempt` already flushed this key.
+      try {
+        await flushAccounting(employee.id);
+        await reconcileUsage();
+      } catch {
+        /* usage accounting must never break the turn */
+      }
     }
   }
 
@@ -1677,7 +1849,9 @@ export function createTeamRunCoordinator(
       leadTurnSeq += 1;
       const leadAccountingKey = `${lead.id}:${leadTurnSeq}`;
       usageBaselineKey.set(lead.id, leadAccountingKey);
-      usageTotals.delete(leadAccountingKey);
+      // Phase 38 D-07/D-22: same lifecycle marker as the employee path. A leader turn has no
+      // attempt row, but its usage still has to be charged and reconciled.
+      beginRequestAccounting(lead.id, leadAccountingKey);
       // D-13: leads have no skill, so the claim carries an empty skill list.
       claimLiveUse(lead.id, undefined);
       // 37.1 R14: the synthesis answers the batch; a chat turn answers the user's message.
@@ -1704,13 +1878,30 @@ export function createTeamRunCoordinator(
         return;
       }
       settleAgent(lead.id, OUTCOME_STATUS[outcome.phase]);
+      // Phase 38 D-22: a leader turn never calls `finalizeAttempt`, so this is its terminal
+      // seam — flush, then reconcile, before the `finally`'s `notify()`.
+      await flushAccounting(lead.id);
+      await reconcileUsage();
     } catch (err) {
       // WR-01: same leak as the employee path — release before rethrowing. The lead is not
       // an assignment, so there is no ledger row to finalize here.
       releaseLiveUse(lead.id);
       settleAgent(lead.id, 'error');
+      // D-10/D-12: a failed or aborted leader turn is still charged, never free.
+      try {
+        await flushAccounting(lead.id);
+        await reconcileUsage();
+      } catch {
+        /* usage accounting must never mask the turn's own error */
+      }
       throw err;
     } finally {
+      // Idempotent safety net: the flushed-key guard makes a second call a no-op.
+      try {
+        await flushAccounting(lead.id);
+      } catch {
+        /* usage accounting must never break the turn */
+      }
       // 37.1 rework: the ONE place the lead turn's own flag is cleared, on every branch —
       // normal return, parked return, throw. A derived phase needs no other reset.
       leadTurnKind = null;
@@ -2000,6 +2191,7 @@ export function createTeamRunCoordinator(
       // WR-04: the map moves before the replacement can be settled by the retired dispatch's
       // catch — its identity guard then rejects the old attempt's settle.
       assignmentIdsByAgent.set(row.agentId, next.id);
+      agentByAssignmentId.set(next.id, row.agentId);
       updateAgent(row.agentId, { status: 'queued', streamingText: '', incomplete: false });
       // The replacement must actually run; `onBatchSettled`'s ledger poll is what makes the
       // batch wait for it (T-37.1-23). Pre-validation proved the controller exists.
@@ -2535,6 +2727,7 @@ export function createTeamRunCoordinator(
         // D-10/D-11: registered at CREATION time (queued), so a stop can find the assignment
         // before any runtime exists. Cleared by the dispatch task's `finally`.
         assignmentIdsByAgent.set(employee.id, attemptRow.id);
+        agentByAssignmentId.set(attemptRow.id, employee.id);
         attemptIdsByAgent.set(employee.id, attemptRow.id);
         // Queued means nothing has started: no runtime, no live-use claim, no turn registration.
         updateAgent(employee.id, { status: 'queued', streamingText: '', steps: [] });
@@ -2943,6 +3136,7 @@ export function createTeamRunCoordinator(
       claimedAgentId = source.agentId;
       retryingAgents.add(source.agentId);
       assignmentIdsByAgent.set(source.agentId, attemptRow.id);
+      agentByAssignmentId.set(attemptRow.id, source.agentId);
       updateAgent(source.agentId, { status: 'queued', streamingText: '', incomplete: false });
 
       const attempt: AttemptRef = {
@@ -3282,6 +3476,12 @@ export function createTeamRunCoordinator(
       memberIds.set(row.agentId, row.id);
       memberBudgets.set(row.agentId, row.budgetTokens);
       lastBuckets.set(row.agentId, bucketOf(memberUsed.get(row.agentId) ?? row.usedTokens, row.budgetTokens));
+      // D-22: a member row the coordinator has never seen starts from its persisted split.
+      if (!memberUsed.has(row.agentId)) {
+        memberUsed.set(row.agentId, row.usedTokens);
+        memberUsedInput.set(row.agentId, row.inputTokens ?? 0);
+        memberUsedOutput.set(row.agentId, row.outputTokens ?? 0);
+      }
     }
     teamBudget = result.team.budgetTokens;
     liveTeam = { ...liveTeam, budgetTokens: teamBudget };
@@ -3333,6 +3533,14 @@ export function createTeamRunCoordinator(
       lastPlan,
       lastPlanDecision,
       budgetWarnThresholdPct,
+      // Phase 38 D-07/D-22: reported split (0 while pending) plus the pre-call measurement.
+      memberUsage: [...usageAccounting.entries()].map(([agentId, acc]) => ({
+        agentId,
+        inputTokens: acc.inputTokens,
+        outputTokens: acc.outputTokens,
+        estimated: acc.source === 'estimated',
+        provisionalInputTokens: acc.provisionalInputTokens,
+      })),
       // `exactOptionalPropertyTypes`: omit the key entirely when the team inherits.
       ...(teamThresholdOverride === undefined
         ? {}

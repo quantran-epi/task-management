@@ -32,6 +32,24 @@ export function sanitizeEndpoint(endpoint: string): string {
   return trimmed || 'http://localhost:20128';
 }
 
+/**
+ * Phase 38 D-09: one usage mapper for every provider shape. Cache tokens are charged as
+ * input, so they must survive the mapping; `cached_tokens` and `cache_read_input_tokens` are
+ * two names for one quantity, and an absent field stays absent rather than becoming 0.
+ */
+function mapUsage(raw: any): ChatTokenUsage {
+  const cacheRead =
+    raw.prompt_tokens_details?.cached_tokens ?? raw.cache_read_input_tokens;
+  const cacheCreation = raw.cache_creation_input_tokens;
+  return {
+    promptTokens: raw.prompt_tokens ?? raw.promptTokens,
+    completionTokens: raw.completion_tokens ?? raw.completionTokens,
+    totalTokens: raw.total_tokens ?? raw.totalTokens,
+    ...(typeof cacheRead === 'number' ? { cacheReadTokens: cacheRead } : {}),
+    ...(typeof cacheCreation === 'number' ? { cacheCreationTokens: cacheCreation } : {}),
+  };
+}
+
 export function stripThinkingBlocks(raw: string): string {
   if (!raw) return '';
   return raw
@@ -329,11 +347,7 @@ export async function* streamChatEvents(
           if (parsed?.usage) {
             yield {
               type: 'usage',
-              usage: {
-                promptTokens: parsed.usage.prompt_tokens ?? parsed.usage.promptTokens,
-                completionTokens: parsed.usage.completion_tokens ?? parsed.usage.completionTokens,
-                totalTokens: parsed.usage.total_tokens ?? parsed.usage.totalTokens,
-              },
+              usage: mapUsage(parsed.usage),
             };
           }
 
@@ -422,11 +436,7 @@ export async function* streamChatEvents(
         if (parsed?.usage) {
           yield {
             type: 'usage',
-            usage: {
-              promptTokens: parsed.usage.prompt_tokens ?? parsed.usage.promptTokens,
-              completionTokens: parsed.usage.completion_tokens ?? parsed.usage.completionTokens,
-              totalTokens: parsed.usage.total_tokens ?? parsed.usage.totalTokens,
-            },
+            usage: mapUsage(parsed.usage),
           };
         }
       } catch (err: any) {
@@ -633,11 +643,7 @@ export async function completeJson(req: CompleteJsonRequest): Promise<unknown> {
 
   if (json?.usage && req.onUsage) {
     try {
-      req.onUsage({
-        promptTokens: json.usage.prompt_tokens ?? json.usage.promptTokens,
-        completionTokens: json.usage.completion_tokens ?? json.usage.completionTokens,
-        totalTokens: json.usage.total_tokens ?? json.usage.totalTokens,
-      });
+      req.onUsage(mapUsage(json.usage));
     } catch {
       // Ignore usage callback error
     }
@@ -777,11 +783,7 @@ export async function completeChatText(req: CompleteTextRequest): Promise<string
 
   if (json?.usage && req.onUsage) {
     try {
-      req.onUsage({
-        promptTokens: json.usage.prompt_tokens ?? json.usage.promptTokens,
-        completionTokens: json.usage.completion_tokens ?? json.usage.completionTokens,
-        totalTokens: json.usage.total_tokens ?? json.usage.totalTokens,
-      });
+      req.onUsage(mapUsage(json.usage));
     } catch {
       // Ignore usage callback error
     }

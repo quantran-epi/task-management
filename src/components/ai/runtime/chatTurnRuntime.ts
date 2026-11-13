@@ -349,10 +349,15 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
           }
         },
         onUsage: (usage) => {
+          // Phase 38 D-09: cache tokens are charged as input, so a multi-round turn must
+          // sum them too — keeping only the last round's value would under-charge.
           tokenUsage = {
             promptTokens: (tokenUsage.promptTokens || 0) + (usage.promptTokens || 0),
             completionTokens: (tokenUsage.completionTokens || 0) + (usage.completionTokens || 0),
             totalTokens: (tokenUsage.totalTokens || 0) + (usage.totalTokens || 0),
+            cacheReadTokens: (tokenUsage.cacheReadTokens || 0) + (usage.cacheReadTokens || 0),
+            cacheCreationTokens:
+              (tokenUsage.cacheCreationTokens || 0) + (usage.cacheCreationTokens || 0),
           };
           deps.onUsage?.(tokenUsage);
         },

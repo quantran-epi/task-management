@@ -5254,4 +5254,99 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
     });
 
   });
+
+  describe('Phase 38 plan 07 — real usage reaches the ledger split (AIO-BUDGET-02, AIO-BUDGET-03)', () => {
+    const memberRowFor = async (current: Harness, agentId: string) =>
+      (await current.db.aiTeamMembers.where('teamId').equals(current.team.id).toArray()).find(
+        (row) => row.agentId === agentId
+      )!;
+
+    it('lands a provider report as two numbers, cache charged as input (AIO-BUDGET-02, D-09)', async () => {
+      harness = await createHarness({
+        teamPatch: { budgetTokens: 100000 },
+        scripts: {
+          [EMP_A_MODEL]: async (options) => {
+            options.onUsage?.({
+              promptTokens: 900,
+              completionTokens: 100,
+              totalTokens: 1000,
+              cacheReadTokens: 50,
+            });
+            return loopResult('A xong');
+          },
+        },
+      });
+      const current = harness;
+      const employee = current.employees[0]!;
+
+      await current.coordinator.send('@[An](agent:' + employee.id + ') việc A');
+
+      const row = await memberRowFor(current, employee.id);
+      expect(row.inputTokens).toBe(950);
+      expect(row.outputTokens).toBe(100);
+      expect(row.usedTokens).toBe(1050);
+      expect(row.usageEstimated).toBeUndefined();
+    });
+
+    it('diffs a cumulative report per side instead of double counting (AIO-BUDGET-02)', async () => {
+      harness = await createHarness({
+        teamPatch: { budgetTokens: 100000 },
+        scripts: {
+          [EMP_A_MODEL]: async (options) => {
+            // The runtime forwards CUMULATIVE totals: round 1 = 300/100 (400), round 2 adds
+            // 600 input so the cumulative report is 900/100 (1000).
+            options.onUsage?.({ promptTokens: 300, completionTokens: 100 });
+            options.onUsage?.({ promptTokens: 600, completionTokens: 0 });
+            return loopResult('A xong');
+          },
+        },
+      });
+      const current = harness;
+      const employee = current.employees[0]!;
+
+      await current.coordinator.send('@[An](agent:' + employee.id + ') việc A');
+
+      const row = await memberRowFor(current, employee.id);
+      expect(row.inputTokens! + row.outputTokens!).toBe(1000);
+    });
+
+    it('writes nothing to Dexie while the turn is still running (D-22)', async () => {
+      const gate = deferred();
+      let midTurnRow: { inputTokens?: number | undefined; outputTokens?: number | undefined } | null =
+        null;
+      let harnessRef: Harness | null = null;
+      harness = await createHarness({
+        teamPatch: { budgetTokens: 100000 },
+        scripts: {
+          [EMP_A_MODEL]: async (options) => {
+            options.onUsage?.({ promptTokens: 900, completionTokens: 100 });
+            const rows = await harnessRef!.db.aiTeamMembers
+              .where('teamId')
+              .equals(harnessRef!.team.id)
+              .toArray();
+            midTurnRow = rows.find((row) => row.agentId === harnessRef!.employees[0]!.id)!;
+            await gate.promise;
+            return loopResult('A xong');
+          },
+        },
+      });
+      harnessRef = harness;
+      const current = harness;
+      const employee = current.employees[0]!;
+
+      const sent = current.coordinator.send('@[An](agent:' + employee.id + ') việc A');
+      await waitFor(() => midTurnRow !== null);
+      // D-22: the live snapshot already shows the report; the ledger has not been touched.
+      expect(midTurnRow!.inputTokens ?? 0).toBe(0);
+      expect(midTurnRow!.outputTokens ?? 0).toBe(0);
+      expect(
+        current.coordinator.getState().memberUsage.find((row) => row.agentId === employee.id)
+          ?.inputTokens
+      ).toBe(900);
+
+      gate.release();
+      await sent;
+      expect((await memberRowFor(current, employee.id)).inputTokens).toBe(900);
+    });
+  });
 });
