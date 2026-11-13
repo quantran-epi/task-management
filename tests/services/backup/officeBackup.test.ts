@@ -450,6 +450,34 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
     expect(secondCounts.versions).toBe(2);
   });
 
+  it('keeps split usage and the threshold identical across two restore hops (D-23, repetition)', async () => {
+    await seedOffice(sourceDb);
+    const firstEnvelope = await exportBackupPayload(sourceDb);
+
+    const secondDb = new TaskPlannerDatabase(`OfficeBackupHop2_${crypto.randomUUID()}`);
+    const thirdDb = new TaskPlannerDatabase(`OfficeBackupHop3_${crypto.randomUUID()}`);
+    await Promise.all([secondDb.open(), thirdDb.open()]);
+    try {
+      await restoreBackupPayload(firstEnvelope, secondDb);
+      const secondEnvelope = await exportBackupPayload(secondDb);
+      await restoreBackupPayload(secondEnvelope, thirdDb);
+
+      for (const db of [secondDb, thirdDb]) {
+        const member = await db.aiTeamMembers.get(MEMBER_LEAD_ID);
+        expect(member?.inputTokens).toBe(1200);
+        expect(member?.outputTokens).toBe(300);
+        expect(member?.usageEstimated).toBe(true);
+        expect((await db.aiTeams.get(TEAM_ID))?.budgetWarnThresholdPct).toBe(65);
+        expect(await db.aiTeamMembers.count()).toBe(2);
+        expect(await db.aiTeams.count()).toBe(1);
+        expect(await db.aiTeamAssignments.count()).toBe(2);
+        expect(await db.aiTeamBatches.count()).toBe(1);
+      }
+    } finally {
+      await Promise.all([secondDb.delete(), thirdDb.delete()]);
+    }
+  });
+
   it('never exports a runtime buffer, secret or forbidden key, and keeps recorded token usage (D-19)', async () => {
     await seedOffice(sourceDb);
     await sourceDb.chatMessages.update(MESSAGE_ID, {
