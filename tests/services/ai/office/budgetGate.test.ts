@@ -6,7 +6,9 @@ import {
   splitUsage,
   resolveThresholdPct,
   isAtThreshold,
+  nextThresholdOverride,
 } from '../../../../src/services/ai/office/budgetGate';
+import { clampBudgetWarnThresholdPct } from '../../../../src/types/aiOffice';
 
 describe('budgetGate (D-20, D-21, T-34-19)', () => {
   it('starts open and resolves wait immediately', async () => {
@@ -224,5 +226,69 @@ describe('splitUsage / threshold math (AIO-BUDGET-02, AIO-BUDGET-06, D-05, D-09)
     // rounding (33%) must never decide the crossing; the raw comparison is the contract
     // (plan 09 colours on this same comparison and only rounds for display).
     expect(isAtThreshold(1, 3, 33)).toBe(true);
+  });
+});
+
+describe('threshold override transitions (D-04, D-05, B7)', () => {
+  /**
+   * A tiny local state machine mirroring the coordinator setter: `override` in,
+   * `resolveThresholdPct` out. Pure/state-level only — it cannot prove the drawer→Dexie
+   * path, because it never crosses a repo boundary. Plan 09 task 2 owns the traversal test.
+   */
+  function machine(globalPct: number) {
+    let override: number | undefined;
+    return {
+      set(pct: number | undefined) {
+        override = nextThresholdOverride(override, pct);
+      },
+      get override() {
+        return override;
+      },
+      get effective() {
+        return resolveThresholdPct({ budgetWarnThresholdPct: override }, globalPct);
+      },
+    };
+  }
+
+  it('inherits the global value when the override is absent, never materializing 80', () => {
+    const m = machine(65);
+    expect(m.effective).toBe(65);
+    expect(m.override).toBeUndefined();
+  });
+
+  it('applies an override, then clears back to the global value', () => {
+    const m = machine(65);
+    m.set(50);
+    expect(m.effective).toBe(50);
+    expect(m.override).toBe(50);
+
+    m.set(undefined);
+    expect(m.effective).toBe(65);
+    expect(m.override).toBeUndefined();
+  });
+
+  it('clamps out-of-band setter inputs inside 1..100', () => {
+    const m = machine(65);
+    m.set(0);
+    expect(m.override).toBe(1);
+    expect(clampBudgetWarnThresholdPct(0)).toBe(1);
+
+    m.set(1000);
+    expect(m.override).toBe(100);
+    expect(clampBudgetWarnThresholdPct(1000)).toBe(100);
+  });
+
+  it('leaves the override absent when an unrelated save carries no threshold', () => {
+    // The pure arithmetic half of the plan-09 drawer test: the save payload carries
+    // `budgetWarnThresholdPct: undefined` when the user never touched the field.
+    const m = machine(65);
+    const savePayload: { budgetWarnThresholdPct?: number | undefined } = {
+      budgetWarnThresholdPct: undefined,
+    };
+    if (savePayload.budgetWarnThresholdPct !== undefined) {
+      m.set(clampBudgetWarnThresholdPct(savePayload.budgetWarnThresholdPct));
+    }
+    expect(m.override).toBeUndefined();
+    expect(m.effective).toBe(65);
   });
 });
