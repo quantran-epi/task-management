@@ -548,19 +548,23 @@ The policy must be written down where the code lives, not only in a doc. Recomme
 | A4 | Warning-only behaviour requires deleting `budget-pause` from the stop-reason union | Schema changes | Keeping it is harmless (never written); removing it changes the backup enum, so prefer keeping |
 | A5 | A V25 additive store spec needs no `.upgrade()` hook (new columns live inside opaque rows) | Runtime State Inventory | Dexie indexes only what the store spec names; new unindexed fields need no migration, but old rows read as `undefined` and every reader must coalesce |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Does 9router expose cache token counts?**
+> Dispositioned 2026-11-13 after the round-1 plan check. Each carries its resolution below; no
+> question is left to block execution. The resolutions are adopted as plan defaults — where a
+> live probe during execution contradicts one, the probe wins and the deviation is recorded.
+
+1. **(RESOLVED — adopted as plan 07 default)** **Does 9router expose cache token counts?**
    - What we know: `nineRouterClient.ts` maps only `prompt_tokens`/`completion_tokens`/`total_tokens` at four sites (`:329-337`, `:422-430`, `:634-640`, `:778-785`); `ChatTokenUsage` (`types/models.ts:270-274`) has no cache fields; `utils/agentMetrics.ts:24-30` already reads `cache_read_input_tokens`/`cache_creation_input_tokens` for a *different* (Ghost Dev) stream.
    - What's unclear: whether the 9router proxy passes those fields through for chat completions.
    - Recommendation: extend `ChatTokenUsage` with `cacheReadTokens?`/`cacheCreationTokens?`, map both naming conventions in `nineRouterClient`, and default to 0. Record the mapping as a one-line probe during execution; do not block the plan on it.
 
-2. **Estimate source for an aborted stream**
+2. **(RESOLVED — adopted as plan 07 default)** **Estimate source for an aborted stream**
    - What we know: `agents.get(agentId).streamingText` accumulates visible deltas (`:1141-1145`); `outcome.content` is absent on abort.
    - What's unclear: whether `streamingText` includes reasoning deltas (it does not — `onDelta` is fed only by `onTextChunk`).
    - Recommendation: estimate output from `streamingText`; document that reasoning tokens are unmeasured on abort (provider usage, when present, wins per D-12).
 
-3. **Where the in-app warning lives when the workspace is closed**
+3. **(RESOLVED — adopted as plan 08 default)** **Where the in-app warning lives when the workspace is closed**
    - What we know: the workspace banner only renders when mounted (`TeamWorkspace.tsx:758-774`); OS notification is global.
    - Recommendation: OS notification from the coordinator (global) + workspace banner/badge (local). Do not build a second in-app channel for an offline single-user app.
 
