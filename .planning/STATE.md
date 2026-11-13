@@ -5,15 +5,15 @@ milestone_name: Unified AI Office (Phase Details)
 current_phase: 37
 current_phase_name: Runtime reliability + concurrency
 status: executing
-stopped_at: Completed 37.1-06-PLAN.md
-last_updated: "2026-11-13T08:05:20.592Z"
+stopped_at: Phase 38 context gathered
+last_updated: "2026-11-13T08:34:20.146Z"
 last_activity: 2026-11-13
 last_activity_desc: "Quick 261113-ita complete: notification focus, unread viewport, and NO_LEAD warning fixed; focused tests and TypeScript pass, runtime UAT pending."
-state_head: fa96058b8b3d4c3aedcf3034cdbde302cc0b1fa5
+state_head: dd67297c7bcb3228e3df9c5db66ee805d932b767
 progress:
   total_phases: 7
   completed_phases: 4
-  total_plans: 31
+  total_plans: 32
   completed_plans: 32
   percent: 57
 ---
@@ -34,9 +34,9 @@ Last activity: 2026-11-13 -- Quick 261113-ko9: restore last-read chat position, 
 
 ## Session Continuity
 
-Last session: 2026-11-12T04:47:49.204Z
-Stopped at: Completed 37.1-06-PLAN.md
-Resume file: None
+Last session: 2026-11-13T08:34:19.644Z
+Stopped at: Phase 38 context gathered
+Resume file: .planning/phases/38-hard-token-budget-accurate-measurement/38-CONTEXT.md
 
 Progress: [██████░░░░] 57%
 
