@@ -5700,5 +5700,52 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(after.inputTokens).toBe(250);
       expect(after.outputTokens).toBe(25);
     });
+
+    it('leaves numeric usage on every settled attempt row, reported or estimated (AIO-BUDGET-03)', async () => {
+      let harnessRef: Harness | null = null;
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, budgetTokens: 100000 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              {
+                assignments: [
+                  { agentId: harnessRef!.employees[0]!.id, task: 'Việc A' },
+                  { agentId: harnessRef!.employees[1]!.id, task: 'Việc B' },
+                ],
+              },
+              harnessRef!.db,
+              options.signal
+            );
+            return loopResult('Đã giao.');
+          },
+          [EMP_A_MODEL]: async (options) => {
+            options.onUsage?.({ promptTokens: 300, completionTokens: 40 });
+            return loopResult('A xong');
+          },
+          // B never reports: its row must still carry numbers, flagged estimated.
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+        },
+      });
+      harnessRef = harness;
+      const current = harness;
+
+      await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
+
+      const rows = await current.db.aiTeamAssignments.toArray();
+      expect(rows).toHaveLength(2);
+      for (const row of rows) {
+        expect(typeof row.inputTokens).toBe('number');
+        expect(typeof row.outputTokens).toBe('number');
+      }
+      const reported = rows.find((row) => row.agentId === current.employees[0]!.id)!;
+      const estimated = rows.find((row) => row.agentId === current.employees[1]!.id)!;
+      expect(reported).toMatchObject({ inputTokens: 300, outputTokens: 40 });
+      expect(reported.usageEstimated).toBeUndefined();
+      expect(estimated.usageEstimated).toBe(true);
+      expect(estimated.inputTokens).toBeGreaterThan(0);
+    });
   });
 });
