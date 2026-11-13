@@ -14,6 +14,7 @@ import {
 } from '../../../../src/services/ai/office/teamEventLog';
 import { USER_PARTICIPANT_ID } from '../../../../src/types/teamChat';
 import type { AiTeam } from '../../../../src/types/aiOffice';
+import { makeTeamRunSnapshot } from '../../../helpers/teamRunSnapshot';
 
 /**
  * 37.1 R10/R11/R13: the user is a participant, so the receipts work in both directions.
@@ -52,16 +53,7 @@ vi.mock('../../../../src/services/ai/office/teamRunCoordinator', async (importOr
       runBatch: vi.fn(async () => ''),
       retryAssignment: vi.fn(async () => undefined),
       subscribe: () => () => {},
-      getState: () => ({
-        phase: 'ready',
-        agents: [],
-        pendingPlan: null,
-        pendingApproval: null,
-        pausedAgentId: null,
-        pausedAgentName: null,
-        lastPlan: null,
-        lastPlanDecision: null,
-      }),
+      getState: () => makeTeamRunSnapshot({ phase: 'ready' }),
     })),
   };
 });

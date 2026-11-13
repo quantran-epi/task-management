@@ -8,6 +8,7 @@ import {
   saveTeamMessage,
 } from '../../../../src/db/repositories/teamTranscriptRepo';
 import type { AiTeam } from '../../../../src/types/aiOffice';
+import { makeTeamRunSnapshot } from '../../../helpers/teamRunSnapshot';
 
 // Regression: typing must not re-render existing transcript rows.
 const bubbleRenders = vi.fn();
@@ -44,16 +45,7 @@ vi.mock('../../../../src/services/ai/office/teamRunCoordinator', async (importOr
       runBatch: vi.fn(async () => ''),
       retryAssignment: vi.fn(async () => undefined),
       subscribe: () => () => {},
-      getState: () => ({
-        phase: 'ready',
-        agents: [],
-        pendingPlan: null,
-        pendingApproval: null,
-        pausedAgentId: null,
-        pausedAgentName: null,
-        lastPlan: null,
-        lastPlanDecision: null,
-      }),
+      getState: () => makeTeamRunSnapshot({ phase: 'ready' }),
     })),
   };
 });

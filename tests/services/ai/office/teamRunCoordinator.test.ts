@@ -13,6 +13,7 @@ import {
   type TurnRoster,
 } from '../../../../src/services/ai/office/teamRunCoordinator';
 import { TEAM_TOOL_DEFINITIONS } from '../../../../src/services/ai/office/teamTools';
+import { makeTeamRunSnapshot } from '../../../helpers/teamRunSnapshot';
 import {
   createEmployee,
   createLead,
@@ -333,16 +334,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       const initial = coordinator.getState();
       // 37.1 rework: `phase` is derived, and "not busy" is `ready` — `idle` was only ever
       // "never used yet", which no caller needs.
-      expect(initial).toEqual({
-        phase: 'ready',
-        agents: [],
-        pendingPlan: null,
-        pendingApproval: null,
-          pausedAgentId: null,
-        pausedAgentName: null,
-        lastPlan: null,
-        lastPlanDecision: null,
-      });
+      expect(initial).toEqual(makeTeamRunSnapshot({ phase: 'ready' }));
 
       let calls = 0;
       const unsubscribe = coordinator.subscribe(() => {

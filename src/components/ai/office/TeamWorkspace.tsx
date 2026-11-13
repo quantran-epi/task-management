@@ -10,6 +10,7 @@ import type {
   AiTeam,
   AiTeamMember,
 } from '../../../types/aiOffice';
+import { DEFAULT_BUDGET_WARN_THRESHOLD_PCT } from '../../../types/aiOffice';
 import {
   addTeamLink,
   addTeamMember,
@@ -83,6 +84,7 @@ const EMPTY_SNAPSHOT: TeamRunSnapshot = {
   pausedAgentName: null,
   lastPlan: null,
   lastPlanDecision: null,
+  budgetWarnThresholdPct: DEFAULT_BUDGET_WARN_THRESHOLD_PCT,
 };
 
 const NO_MODEL_COPY =

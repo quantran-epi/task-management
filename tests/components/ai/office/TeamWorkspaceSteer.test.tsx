@@ -4,6 +4,7 @@ import { TaskPlannerDatabase } from '../../../../src/db';
 import { createEmployee, createLead } from '../../../../src/db/repositories/aiOfficeRepo';
 import { createTeam } from '../../../../src/db/repositories/aiTeamRepo';
 import type { AiTeam, TeamRunPhase } from '../../../../src/types/aiOffice';
+import { makeTeamRunSnapshot } from '../../../helpers/teamRunSnapshot';
 
 /**
  * 37.1 D-01/D-02: the composer is always usable. A submit during a live run is a steer, not
@@ -61,17 +62,7 @@ function createStub(initialPhase: TeamRunPhase = 'ready'): StubCoordinator {
         listeners.delete(fn);
       };
     },
-    getState: () => ({
-      phase,
-      agents: [],
-      pendingPlan: null,
-      pendingApproval: null,
-      pendingSteerMessageIds: [],
-      pausedAgentId: null,
-      pausedAgentName: null,
-      lastPlan: null,
-      lastPlanDecision: null,
-    }),
+    getState: () => makeTeamRunSnapshot({ phase }),
     setPhase: (next: TeamRunPhase) => {
       phase = next;
       for (const listener of listeners) listener();

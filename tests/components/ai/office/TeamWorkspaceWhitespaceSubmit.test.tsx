@@ -5,6 +5,7 @@ import { createEmployee, createLead } from '../../../../src/db/repositories/aiOf
 import { createTeam } from '../../../../src/db/repositories/aiTeamRepo';
 import { ensureTeamThread } from '../../../../src/db/repositories/teamTranscriptRepo';
 import type { AiTeam } from '../../../../src/types/aiOffice';
+import { makeTeamRunSnapshot } from '../../../helpers/teamRunSnapshot';
 
 /**
  * 37-06 backstop, at the guard itself. `TeamWorkspaceSteer.test.tsx` proves the property
@@ -48,16 +49,7 @@ vi.mock('../../../../src/services/ai/office/teamRunCoordinator', async (importOr
       runBatch: vi.fn(async () => ''),
       retryAssignment: vi.fn(async () => undefined),
       subscribe: () => () => {},
-      getState: () => ({
-        phase: 'ready',
-        agents: [],
-        pendingPlan: null,
-        pendingApproval: null,
-        pausedAgentId: null,
-        pausedAgentName: null,
-        lastPlan: null,
-        lastPlanDecision: null,
-      }),
+      getState: () => makeTeamRunSnapshot({ phase: 'ready' }),
     })),
   };
 });

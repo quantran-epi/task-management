@@ -2,9 +2,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   createBudgetGate,
-  bucketOf,
-  shouldNotifyPause,
   normalizeUsageTotal,
+  splitUsage,
+  resolveThresholdPct,
+  isAtThreshold,
 } from '../../../../src/services/ai/office/budgetGate';
 
 describe('budgetGate (D-20, D-21, T-34-19)', () => {
@@ -131,27 +132,81 @@ describe('budgetGate (D-20, D-21, T-34-19)', () => {
     expect(gate.isClosed()).toBe(false);
   });
 
-  it('buckets usage into tenths and treats a zero budget as nothing consumed', () => {
-    expect(bucketOf(799, 1000)).toBe(7);
-    expect(bucketOf(800, 1000)).toBe(8);
-    // D-05: a group may exist with no budget yet — that must not close the gate.
-    expect(bucketOf(0, 0)).toBe(0);
-    expect(bucketOf(50, 0)).toBe(0);
-    expect(Number.isFinite(bucketOf(1, 0))).toBe(true);
-  });
-
-  it('notifies only on the first crossing of the 80% bucket', () => {
-    expect(shouldNotifyPause(7, 8)).toBe(true);
-    expect(shouldNotifyPause(8, 8)).toBe(false);
-    expect(shouldNotifyPause(9, 10)).toBe(false);
-    // A top-up lowers the bucket, so the next crossing notifies again.
-    expect(shouldNotifyPause(3, 8)).toBe(true);
-    expect(shouldNotifyPause(3, 7)).toBe(false);
-  });
-
   it('normalizes usage totals when the provider omits totalTokens', () => {
     expect(normalizeUsageTotal({ promptTokens: 10, completionTokens: 5 })).toBe(15);
     expect(normalizeUsageTotal({ promptTokens: 10, completionTokens: 5, totalTokens: 99 })).toBe(99);
     expect(normalizeUsageTotal({})).toBe(0);
+  });
+});
+
+describe('splitUsage / threshold math (AIO-BUDGET-02, AIO-BUDGET-06, D-05, D-09)', () => {
+  it('retains the input/output split instead of collapsing it to a total', () => {
+    expect(splitUsage({ promptTokens: 10, completionTokens: 5 })).toEqual({
+      inputTokens: 10,
+      outputTokens: 5,
+      estimated: false,
+      splitInferred: false,
+    });
+  });
+
+  it('charges cache read and cache creation tokens as input (D-09)', () => {
+    expect(
+      splitUsage({ promptTokens: 10, cacheReadTokens: 40, cacheCreationTokens: 5 })
+    ).toEqual({
+      inputTokens: 55,
+      outputTokens: 0,
+      estimated: false,
+      splitInferred: false,
+    });
+  });
+
+  it('charges a total-only report wholly to input and flags the inferred split', () => {
+    expect(splitUsage({ totalTokens: 42 })).toEqual({
+      inputTokens: 42,
+      outputTokens: 0,
+      estimated: false,
+      splitInferred: true,
+    });
+  });
+
+  it('returns all zeros for an empty report — the estimator decides when to estimate', () => {
+    expect(splitUsage({})).toEqual({
+      inputTokens: 0,
+      outputTokens: 0,
+      estimated: false,
+      splitInferred: false,
+    });
+  });
+
+  it('never returns a negative component whatever the provider sends', () => {
+    const split = splitUsage({ promptTokens: -5, completionTokens: -1 });
+    expect(split.inputTokens).toBeGreaterThanOrEqual(0);
+    expect(split.outputTokens).toBeGreaterThanOrEqual(0);
+  });
+
+  it('resolves the override over the global value, and inherits when absent', () => {
+    expect(resolveThresholdPct({}, undefined)).toBe(80);
+    expect(resolveThresholdPct({ budgetWarnThresholdPct: 65 }, 90)).toBe(65);
+    expect(resolveThresholdPct({}, 55)).toBe(55);
+    // An absent override inherits the global value rather than defaulting to 80.
+    expect(resolveThresholdPct({}, 65)).toBe(65);
+    expect(resolveThresholdPct({ budgetWarnThresholdPct: undefined }, 65)).toBe(65);
+  });
+
+  it('clamps every out-of-band percentage into 1..100', () => {
+    expect(resolveThresholdPct({ budgetWarnThresholdPct: 0 }, undefined)).toBe(80);
+    expect(resolveThresholdPct({}, Number.NaN)).toBe(80);
+    expect(resolveThresholdPct({ budgetWarnThresholdPct: 100 }, undefined)).toBe(100);
+  });
+
+  it('is inclusive at the threshold boundary', () => {
+    expect(isAtThreshold(799, 1000, 80)).toBe(false);
+    expect(isAtThreshold(800, 1000, 80)).toBe(true);
+  });
+
+  it('never treats an unconfigured budget as reached', () => {
+    expect(isAtThreshold(0, 0, 80)).toBe(false);
+    expect(isAtThreshold(1, 0, 80)).toBe(false);
+    expect(isAtThreshold(Number.NaN, 1000, 80)).toBe(false);
   });
 });

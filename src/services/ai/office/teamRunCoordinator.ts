@@ -14,6 +14,7 @@ import type {
 } from '../../../types/aiOffice';
 import {
   ASSIGNMENT_HISTORY_CAP,
+  DEFAULT_BUDGET_WARN_THRESHOLD_PCT,
   DEFAULT_TEAM_CONCURRENCY,
   RECENT_WINDOW_TURNS,
 } from '../../../types/aiOffice';
@@ -42,10 +43,13 @@ import { beginTurn, endTurn } from './liveUseRegistry';
 import {
   bucketOf,
   createBudgetGate,
+  nextThresholdOverride,
   normalizeUsageTotal,
+  resolveThresholdPct,
   shouldNotifyPause,
   type BudgetGate,
 } from './budgetGate';
+import { getGlobalBudgetWarnThresholdPct } from '../budgetWarnSettings';
 import {
   buildEmployeeTurnRequest,
   buildLeadTurnRequest,
@@ -131,6 +135,14 @@ export interface TeamRunSnapshot {
    */
   lastPlan: AssignmentPlan | null;
   lastPlanDecision: 'approved' | 'rejected' | null;
+  /**
+   * D-04/D-05: the resolved percentage every badge and colour agrees on. Distinct from the
+   * override below: one number for both would make "inherit the global default"
+   * unrepresentable (T-38-30).
+   */
+  budgetWarnThresholdPct: number;
+  /** The team's own value; the key is omitted when the team inherits the global default. */
+  budgetWarnThresholdPctOverride?: number | undefined;
 }
 
 export type TopUpScope = { kind: 'agent'; agentId: string } | { kind: 'team' };
@@ -230,6 +242,12 @@ export interface TeamRunCoordinator {
   ): void;
   /** AIO-BUDGET-01: adopt a team-total edit so the next top-up accumulates onto it. */
   setTeamBudget(total: number): void;
+  /**
+   * D-04/D-05: the ONE threshold setter. `undefined` means "inherit the global default" and
+   * is the only clear mechanism — the drawer's reset control and any unrelated save route
+   * through this same call.
+   */
+  setTeamThresholdPct(pct: number | undefined): void;
   /** D-07 diagnostic seam: live scheduler slots, so a leak is observable without a provider. */
   getRunningCount(): number;
   /**
@@ -540,6 +558,28 @@ export function createTeamRunCoordinator(
   let teamBudget = team.budgetTokens;
   let lastTeamBucket = 0;
 
+  /**
+   * D-04: the override (what the team stores) and the effective value (what every surface
+   * reads) are separate state. The global default is read once at construction and again on
+   * every setter call, so the resolved number is never recomputed per report.
+   */
+  let teamThresholdOverride: number | undefined = team.budgetWarnThresholdPct;
+  let globalThresholdPct = DEFAULT_BUDGET_WARN_THRESHOLD_PCT;
+  let budgetWarnThresholdPct = resolveThresholdPct(
+    { budgetWarnThresholdPct: teamThresholdOverride },
+    globalThresholdPct
+  );
+
+  function recomputeThresholdPct(): void {
+    budgetWarnThresholdPct = resolveThresholdPct(
+      { budgetWarnThresholdPct: teamThresholdOverride },
+      globalThresholdPct
+    );
+    if (teamThresholdOverride !== undefined) {
+      liveTeam = { ...liveTeam, budgetWarnThresholdPct: teamThresholdOverride };
+    }
+  }
+
   const currentRequests = new Map<string, ChatTurnRequest>();
   const agentDeferreds = new Map<string, Deferred>();
   /** D-13: agents whose live-use claim is currently held (pairing guard for release). */
@@ -578,6 +618,18 @@ export function createTeamRunCoordinator(
       }
     }
   };
+
+  // D-04: the global default arrives asynchronously; the effective value updates without
+  // blocking construction. A failure keeps the documented default rather than throwing.
+  void getGlobalBudgetWarnThresholdPct(db)
+    .then((value) => {
+      globalThresholdPct = value;
+      recomputeThresholdPct();
+      notify();
+    })
+    .catch(() => {
+      /* the default 80 already stands */
+    });
 
   /**
    * 37.1 rework: the phase is DERIVED from live state — never stored. There is no setter to
@@ -3028,6 +3080,17 @@ export function createTeamRunCoordinator(
     notify();
   }
 
+  /**
+   * D-04: the ONE threshold setter. `undefined` clears the override back to "inherit the
+   * global default" — the reset control and any unrelated save both land here, so no
+   * separate clear method exists whose absence would make the reset path unreachable.
+   */
+  function setTeamThresholdPct(pct: number | undefined): void {
+    teamThresholdOverride = nextThresholdOverride(teamThresholdOverride, pct);
+    recomputeThresholdPct();
+    notify();
+  }
+
   function resolveApproval(approved: boolean): void {
     // WR-05: `get` would instantiate a runtime when the lead turn already settled.
     if (roster.lead) registry.peek(roster.lead.id)?.resolveApproval(approved);
@@ -3247,6 +3310,11 @@ export function createTeamRunCoordinator(
         : null,
       lastPlan,
       lastPlanDecision,
+      budgetWarnThresholdPct,
+      // `exactOptionalPropertyTypes`: omit the key entirely when the team inherits.
+      ...(teamThresholdOverride === undefined
+        ? {}
+        : { budgetWarnThresholdPctOverride: teamThresholdOverride }),
     };
   }
 
@@ -3263,6 +3331,7 @@ export function createTeamRunCoordinator(
     dispose,
     setTeamSettings,
     setTeamBudget,
+    setTeamThresholdPct,
     getRunningCount,
     drainInbox,
     subscribe,
