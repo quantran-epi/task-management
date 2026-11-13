@@ -49,6 +49,7 @@ import {
   splitUsage,
   type BudgetGate,
 } from './budgetGate';
+import { estimateTokens } from './tokenEstimate';
 import { getGlobalBudgetWarnThresholdPct } from '../budgetWarnSettings';
 import {
   buildEmployeeTurnRequest,
@@ -1396,14 +1397,26 @@ export function createTeamRunCoordinator(
     applyLiveUsage(agentId, inputDelta, outputDelta);
   }
 
-  /** The live counters plus the derived total and the bucket/gate evaluation. */
-  function applyLiveUsage(agentId: string, inputDelta: number, outputDelta: number): void {
+  /**
+   * The live counters plus the derived total and the bucket/gate evaluation.
+   *
+   * `evaluateGates` is false for an ESTIMATED charge: D-07 says an estimate is never consulted
+   * for a decision, and closing the legacy gate is a decision. The numbers still move (plan 09
+   * renders them); plan 08 deletes the gate entirely.
+   */
+  function applyLiveUsage(
+    agentId: string,
+    inputDelta: number,
+    outputDelta: number,
+    evaluateGates = true
+  ): void {
     if (inputDelta === 0 && outputDelta === 0) return;
     memberUsedInput.set(agentId, (memberUsedInput.get(agentId) ?? 0) + inputDelta);
     memberUsedOutput.set(agentId, (memberUsedOutput.get(agentId) ?? 0) + outputDelta);
     const used = (memberUsed.get(agentId) ?? 0) + inputDelta + outputDelta;
     memberUsed.set(agentId, used);
     teamUsed += inputDelta + outputDelta;
+    if (!evaluateGates) return;
 
     const current = bucketOf(used, memberBudgets.get(agentId) ?? 0);
     const previous = lastBuckets.get(agentId) ?? 0;
@@ -1421,6 +1434,43 @@ export function createTeamRunCoordinator(
     const teamCurrent = bucketOf(teamUsed, teamBudget);
     if (shouldNotifyPause(lastTeamBucket, teamCurrent)) teamGate.close();
     lastTeamBucket = teamCurrent;
+  }
+
+  /**
+   * Phase 38 D-07: the exact text handed to the model. Used at BOTH boundaries — the pre-call
+   * measurement and the terminal estimate — so the measured text and the charged text cannot
+   * drift. Never the user's `text` alone: system messages, history and serialized tool
+   * schemas are re-sent every round and are the bulk of the prompt.
+   */
+  function payloadText(request: ChatTurnRequest): string {
+    return [
+      ...request.systemMessages.map((message) => message.content),
+      ...request.history.map((message) => message.content),
+      request.text,
+      JSON.stringify(request.tools ?? []),
+    ].join('\n');
+  }
+
+  /**
+   * D-07: measure the outgoing payload BEFORE the model call. Warning-only: a throw or a slow
+   * encoder leaves the count at 0 and the turn is dispatched regardless — the estimate is
+   * never consulted for a decision, and it is never added to the ledger.
+   *
+   * The number lives on the accounting record (and so on `getState().memberUsage`), NOT in the
+   * live charge maps: the legacy gate still reads `memberUsed`, and a guess must not park a
+   * turn that the provider's real number would not have parked.
+   */
+  async function measureProvisionalInput(agentId: string, request: ChatTurnRequest): Promise<void> {
+    const acc = usageAccounting.get(agentId);
+    if (!acc) return;
+    try {
+      const tokens = await estimateTokens(payloadText(request));
+      // A turn may have been superseded while the encoder ran; never stamp a stale record.
+      if (usageAccounting.get(agentId) !== acc) return;
+      acc.provisionalInputTokens = tokens;
+    } catch {
+      /* warning input only, never blocks the turn */
+    }
   }
 
   /**
@@ -1458,6 +1508,28 @@ export function createTeamRunCoordinator(
       return { inputTokens: 0, outputTokens: 0, estimated: false };
     }
     flushedAccounting.add(acc.key);
+    // D-10/D-12: a request that reported nothing is ESTIMATED here, exactly once — from the
+    // payload it actually sent and the text it actually received. Never free, never silent.
+    if (acc.source === 'pending') {
+      try {
+        const request = currentRequests.get(agentId);
+        const outputText = agents.get(agentId)?.streamingText ?? '';
+        const inputTokens = await estimateTokens(request ? payloadText(request) : '');
+        const outputTokens = await estimateTokens(outputText);
+        acc.source = 'estimated';
+        acc.inputTokens = inputTokens;
+        acc.outputTokens = outputTokens;
+        // The estimate REPLACES the pre-call guess instead of stacking on it.
+        acc.provisionalInputTokens = 0;
+        applyLiveUsage(agentId, inputTokens, outputTokens, false);
+      } catch {
+        // D-10: a failed estimate falls back to whatever the provider reported (usually
+        // nothing) and still completes the flush — the turn must not be blocked by it.
+        acc.source = 'provider';
+        acc.inputTokens = 0;
+        acc.outputTokens = 0;
+      }
+    }
     const delta = {
       inputTokens: acc.inputTokens,
       outputTokens: acc.outputTokens,
@@ -1477,8 +1549,9 @@ export function createTeamRunCoordinator(
       )
     );
     await usageWriteChain;
-    acc.inputTokens = 0;
-    acc.outputTokens = 0;
+    // The record keeps its numbers after the flush: `getState().memberUsage` must still show
+    // what was charged, and the flushed-key guard (not a zeroed record) is what prevents a
+    // second charge. The next dispatch overwrites the whole record.
     // Plan 09's `~` marker reads this; the UI sees the reconciled figure once, here.
     notify();
     return delta;
@@ -1659,6 +1732,8 @@ export function createTeamRunCoordinator(
       // Phase 38 D-07/D-22: the request lifecycle starts HERE, before dispatch, so a turn
       // that never reports usage is still chargeable at its terminal seam.
       beginRequestAccounting(employee.id, accountingKey, attempt?.assignmentId);
+      // D-07: measured before dispatch, so the warning sees a number from the first round.
+      await measureProvisionalInput(employee.id, request);
       // D-13: the batch's employees are only known here, so this is where they claim live use.
       claimLiveUse(employee.id, employee.skillId);
       // 37.1 R14: what this turn is answering. A dispatch answers its instruction row; a
@@ -1852,6 +1927,7 @@ export function createTeamRunCoordinator(
       // Phase 38 D-07/D-22: same lifecycle marker as the employee path. A leader turn has no
       // attempt row, but its usage still has to be charged and reconciled.
       beginRequestAccounting(lead.id, leadAccountingKey);
+      await measureProvisionalInput(lead.id, request);
       // D-13: leads have no skill, so the claim carries an empty skill list.
       claimLiveUse(lead.id, undefined);
       // 37.1 R14: the synthesis answers the batch; a chat turn answers the user's message.

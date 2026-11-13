@@ -46,6 +46,10 @@ import type { AiEmployee, AiLead, AiSkill, AiTeam } from '../../../../src/types/
 import type { AiOrchestratorLoopOptions } from '../../../../src/services/ai/aiOrchestratorLoop';
 import type { AiToolDefinition } from '../../../../src/services/ai/aiTools';
 import type { ChatTurnRuntimeDeps } from '../../../../src/components/ai/runtime/chatTurnRuntime';
+import {
+  resetTokenEstimatorForTests,
+  setEncoderLoaderForTests,
+} from '../../../../src/services/ai/office/tokenEstimate';
 
 type LoopScript = (options: AiOrchestratorLoopOptions) => Promise<unknown>;
 
@@ -259,6 +263,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
   afterEach(async () => {
     aiTurnManager.abortAll();
     for (const turn of aiTurnManager.getAllTurns()) aiTurnManager.finishTurn(turn.id);
+    resetTokenEstimatorForTests();
     if (harness) await harness.db.delete();
     harness = null;
   });
@@ -5347,6 +5352,353 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       gate.release();
       await sent;
       expect((await memberRowFor(current, employee.id)).inputTokens).toBe(900);
+    });
+
+    it('charges a callback-less turn as an estimate, marked estimated (AIO-BUDGET-02, D-10)', async () => {
+      harness = await createHarness({
+        teamPatch: { budgetTokens: 100000 },
+        scripts: { [EMP_A_MODEL]: async () => loopResult('A xong') },
+      });
+      const current = harness;
+      const employee = current.employees[0]!;
+
+      await current.coordinator.send('@[An](agent:' + employee.id + ') việc A');
+
+      const row = await memberRowFor(current, employee.id);
+      expect(row.usageEstimated).toBe(true);
+      expect(row.inputTokens).toBeGreaterThan(0);
+    });
+
+    it('keeps the reported number when a later round reports nothing (D-08)', async () => {
+      harness = await createHarness({
+        teamPatch: { budgetTokens: 100000 },
+        scripts: {
+          [EMP_A_MODEL]: async (options) => {
+            options.onUsage?.({ promptTokens: 200, completionTokens: 50 });
+            return loopResult('A xong');
+          },
+        },
+      });
+      const current = harness;
+      const employee = current.employees[0]!;
+
+      await current.coordinator.send('@[An](agent:' + employee.id + ') việc A');
+
+      const row = await memberRowFor(current, employee.id);
+      expect(row.usageEstimated).toBeUndefined();
+      expect(row.inputTokens).toBe(200);
+      expect(row.outputTokens).toBe(50);
+    });
+
+    it('charges an aborted stream for the text it received (D-12)', async () => {
+      harness = await createHarness({
+        teamPatch: { budgetTokens: 100000 },
+        scripts: {
+          [EMP_A_MODEL]: async (options) => {
+            options.onTextChunk?.('partial answer');
+            throw new DOMException('Aborted', 'AbortError');
+          },
+        },
+      });
+      const current = harness;
+      const employee = current.employees[0]!;
+
+      await current.coordinator.send('@[An](agent:' + employee.id + ') việc A');
+
+      const row = await memberRowFor(current, employee.id);
+      expect(row.usageEstimated).toBe(true);
+      expect(row.outputTokens).toBeGreaterThan(0);
+    });
+
+    it('ignores a stale report for a superseded accounting key (D-11, source selection)', async () => {
+      let staleReport: (() => void) | null = null;
+      harness = await createHarness({
+        teamPatch: { budgetTokens: 100000 },
+        scripts: {
+          [EMP_A_MODEL]: async (options) => {
+            staleReport = () => options.onUsage?.({ promptTokens: 5000, completionTokens: 5000 });
+            options.onUsage?.({ promptTokens: 100, completionTokens: 10 });
+            return loopResult('A xong');
+          },
+        },
+      });
+      const current = harness;
+      const employee = current.employees[0]!;
+
+      await current.coordinator.send('@[An](agent:' + employee.id + ') việc A');
+      staleReport!();
+      await sleep(20);
+
+      const row = await memberRowFor(current, employee.id);
+      expect(row.inputTokens).toBe(100);
+      expect(row.outputTokens).toBe(10);
+    });
+
+    it('stamps the attempt row with the estimate settled before the patch (R2-B3)', async () => {
+      let harnessRef: Harness | null = null;
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, budgetTokens: 100000 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: [{ agentId: harnessRef!.employees[0]!.id, task: 'Việc 1' }] },
+              harnessRef!.db,
+              options.signal
+            );
+            return loopResult('Đã giao.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+        },
+      });
+      harnessRef = harness;
+      const current = harness;
+
+      await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
+
+      const rows = await current.db.aiTeamAssignments.toArray();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.runStatus).toBe('done');
+      expect(rows[0]!.inputTokens).toBeGreaterThan(0);
+      expect(rows[0]!.usageEstimated).toBe(true);
+    });
+
+    it('measures the payload before dispatch and never charges it (D-07)', async () => {
+      let seen: { provisional: number; persisted: number } | null = null;
+      let harnessRef: Harness | null = null;
+      harness = await createHarness({
+        teamPatch: { budgetTokens: 100000 },
+        scripts: {
+          [EMP_A_MODEL]: async () => {
+            const usage = harnessRef!.coordinator
+              .getState()
+              .memberUsage.find((row) => row.agentId === harnessRef!.employees[0]!.id);
+            const rows = await harnessRef!.db.aiTeamMembers
+              .where('teamId')
+              .equals(harnessRef!.team.id)
+              .toArray();
+            seen = {
+              provisional: usage?.provisionalInputTokens ?? 0,
+              persisted:
+                rows.find((row) => row.agentId === harnessRef!.employees[0]!.id)?.usedTokens ?? 0,
+            };
+            return loopResult('A xong');
+          },
+        },
+      });
+      harnessRef = harness;
+      const current = harness;
+      const employee = current.employees[0]!;
+
+      await current.coordinator.send('@[An](agent:' + employee.id + ') việc A');
+
+      // D-07: measured before the model call, and NOT in the ledger while the turn runs.
+      expect(seen!.provisional).toBeGreaterThan(0);
+      expect(seen!.persisted).toBe(0);
+    });
+
+    it('lets a reported number replace the provisional guess instead of stacking (D-07)', async () => {
+      harness = await createHarness({
+        teamPatch: { budgetTokens: 100000 },
+        scripts: {
+          [EMP_A_MODEL]: async (options) => {
+            options.onUsage?.({ promptTokens: 900, completionTokens: 100 });
+            return loopResult('A xong');
+          },
+        },
+      });
+      const current = harness;
+      const employee = current.employees[0]!;
+
+      await current.coordinator.send('@[An](agent:' + employee.id + ') việc A');
+
+      const row = await memberRowFor(current, employee.id);
+      expect(row.inputTokens).toBe(900);
+      expect(
+        current.coordinator.getState().memberUsage.find((entry) => entry.agentId === employee.id)
+          ?.provisionalInputTokens
+      ).toBe(0);
+    });
+
+    it('dispatches the turn even when the encoder throws (D-07, never blocks)', async () => {
+      setEncoderLoaderForTests(async () => {
+        throw new Error('no tokenizer');
+      });
+      let ran = false;
+      harness = await createHarness({
+        teamPatch: { budgetTokens: 100000 },
+        scripts: {
+          [EMP_A_MODEL]: async () => {
+            ran = true;
+            return loopResult('A xong');
+          },
+        },
+      });
+      const current = harness;
+      const employee = current.employees[0]!;
+
+      await current.coordinator.send('@[An](agent:' + employee.id + ') việc A');
+
+      expect(ran).toBe(true);
+      expect(
+        current.coordinator.getState().agents.find((row) => row.agentId === employee.id)?.status
+      ).toBe('done');
+      expect(
+        current.coordinator.getState().memberUsage.find((entry) => entry.agentId === employee.id)
+          ?.provisionalInputTokens
+      ).toBe(0);
+    });
+
+    it('gives each attempt of a retry its own usage row and charges each once (AIO-BUDGET-03, D-11)', async () => {
+      let bAttempts = 0;
+      let harnessRef: Harness | null = null;
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, budgetTokens: 100000 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: [{ agentId: harnessRef!.employees[1]!.id, task: 'Việc B' }] },
+              harnessRef!.db,
+              options.signal
+            );
+            return loopResult('Đã giao.');
+          },
+          [EMP_B_MODEL]: async (options) => {
+            bAttempts += 1;
+            if (bAttempts === 1) {
+              options.onUsage?.({ promptTokens: 300, completionTokens: 50 });
+              throw new Error('B hỏng lần một');
+            }
+            options.onUsage?.({ promptTokens: 200, completionTokens: 20 });
+            return loopResult('B xong lần hai.');
+          },
+        },
+      });
+      harnessRef = harness;
+      const current = harness;
+      const agentId = current.employees[1]!.id;
+
+      await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
+
+      const first = (await current.db.aiTeamAssignments.toArray()).find(
+        (row) => row.agentId === agentId
+      )!;
+      expect(first.runStatus).toBe('error');
+      expect(first.inputTokens).toBe(300);
+      expect(first.outputTokens).toBe(50);
+
+      await current.coordinator.retryAssignment(first.id);
+
+      const rows = (await current.db.aiTeamAssignments.toArray()).filter(
+        (row) => row.agentId === agentId
+      );
+      expect(rows).toHaveLength(2);
+      const second = rows.find((row) => row.attemptNo === 2)!;
+      // D-11: attempt 2 records its OWN numbers; attempt 1 is untouched.
+      expect(second.inputTokens).toBe(200);
+      expect(second.outputTokens).toBe(20);
+      expect((await current.db.aiTeamAssignments.get(first.id))!.inputTokens).toBe(300);
+
+      const member = await memberRowFor(current, agentId);
+      expect(member.inputTokens).toBe(500);
+      expect(member.outputTokens).toBe(70);
+    });
+
+    it('reconciles live counters to the ledger once an employee turn settles (D-22)', async () => {
+      harness = await createHarness({
+        teamPatch: { budgetTokens: 100000 },
+        scripts: {
+          [EMP_A_MODEL]: async (options) => {
+            options.onUsage?.({ promptTokens: 400, completionTokens: 60 });
+            return loopResult('A xong');
+          },
+        },
+      });
+      const current = harness;
+      const employee = current.employees[0]!;
+      const snapshots: Array<{ input: number; output: number }> = [];
+      current.coordinator.subscribe(() => {
+        const usage = current.coordinator
+          .getState()
+          .memberUsage.find((row) => row.agentId === employee.id);
+        if (usage) snapshots.push({ input: usage.inputTokens, output: usage.outputTokens });
+      });
+
+      await current.coordinator.send('@[An](agent:' + employee.id + ') việc A');
+      await sleep(20);
+
+      const member = await memberRowFor(current, employee.id);
+      expect(member.inputTokens).toBe(400);
+      expect(member.outputTokens).toBe(60);
+      // D-22: the last snapshot a subscriber saw carries the persisted numbers.
+      expect(snapshots.at(-1)).toEqual({ input: 400, output: 60 });
+    });
+
+    it('reconciles a leader-only turn and writes no attempt row (D-22)', async () => {
+      harness = await createHarness({
+        teamPatch: { budgetTokens: 100000 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            options.onUsage?.({ promptTokens: 120, completionTokens: 30 });
+            return loopResult('Xong.');
+          },
+        },
+      });
+      const current = harness;
+      current.roster.memberAgentIds.push(current.lead.id);
+
+      await current.coordinator.send('Xin chào');
+      await sleep(20);
+
+      const member = await memberRowFor(current, current.lead.id);
+      expect(member.inputTokens).toBe(120);
+      expect(member.outputTokens).toBe(30);
+      const usage = current.coordinator
+        .getState()
+        .memberUsage.find((row) => row.agentId === current.lead.id);
+      expect(usage?.inputTokens).toBe(120);
+      expect(await current.db.aiTeamAssignments.count()).toBe(0);
+    });
+
+    it('charges a request once even when the terminal seam runs twice (duplicate guard)', async () => {
+      let harnessRef: Harness | null = null;
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, budgetTokens: 100000 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: [{ agentId: harnessRef!.employees[0]!.id, task: 'Việc A' }] },
+              harnessRef!.db,
+              options.signal
+            );
+            return loopResult('Đã giao.');
+          },
+          [EMP_A_MODEL]: async (options) => {
+            options.onUsage?.({ promptTokens: 250, completionTokens: 25 });
+            return loopResult('A xong');
+          },
+        },
+      });
+      harnessRef = harness;
+      const current = harness;
+
+      await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
+
+      const row = (await current.db.aiTeamAssignments.toArray())[0]!;
+      const before = await memberRowFor(current, row.agentId);
+      // A second terminal call for an already-settled attempt: the flushed-key guard makes
+      // the flush a no-op, so the ledger must not move.
+      await current.coordinator.finalizeAttempt(row.id, 'done', 'done', 'none');
+      const after = await memberRowFor(current, row.agentId);
+
+      expect(before.inputTokens).toBe(250);
+      expect(after.inputTokens).toBe(250);
+      expect(after.outputTokens).toBe(25);
     });
   });
 });
