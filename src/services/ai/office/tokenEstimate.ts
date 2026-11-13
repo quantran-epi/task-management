@@ -2,21 +2,15 @@
  * Phase 38 D-07/D-10: local token estimation, used only for WARNING and for charging a
  * request the provider reported nothing about (D-10 — a request is never free).
  *
- * ponytail: ceiling is chars÷4 — wrong by ±30% on non-English text and on models with a
- * different tokenizer. Upgrade path is plan 10: it installs `js-tiktoken` behind a blocking
- * checkpoint, then switches the two specifiers below to literal lazy subpaths so Vite
- * bundles the encoder chunks. The public shape (`estimateTokens`, `getEncoderKind`) does not
- * change, so nothing downstream moves.
+ * ponytail: ceiling is "estimates are model-family approximations" — `o200k_base` is the
+ * gpt-4o family encoding, so a different family's count drifts. Upgrade path: swap the
+ * encoding constant below if the default model stops being gpt-4o.
  *
- * The two specifiers are deliberately widened `string` variables loaded through a dynamic
- * import with `@vite-ignore`: TypeScript resolves literal specifiers even inside a try/catch,
- * and Vite's import analysis rejects an absent package before the runtime fallback can run.
- * The strings are internal constants — no user-controlled module name ever reaches `import`.
+ * Both imports are dynamic and use the package's `lite` + single-rank subpaths (never the
+ * package root, whose entry point is ~5 MB), so Vite emits the encoder as its own lazily
+ * loaded chunk and the startup bundle does not grow. A load failure degrades to chars÷4.
  */
 export type EncoderKind = 'tiktoken' | 'chars-div-4';
-
-const LITE_SPECIFIER: string = 'js-tiktoken/lite';
-const RANKS_SPECIFIER: string = 'js-tiktoken/ranks/o200k_base';
 
 /** Minimal shape of the encoder this module consumes; narrowed locally, never trusted. */
 interface LocalEncoder {
@@ -30,11 +24,11 @@ let encoderPromise: Promise<LocalEncoder | null> | null = null;
 let loaderOverride: EncoderLoader | null = null;
 
 const defaultLoader: EncoderLoader = async () => {
-  const lite = (await import(/* @vite-ignore */ LITE_SPECIFIER)) as {
-    Tiktoken: new (ranks: unknown) => LocalEncoder;
-  };
-  const ranks = (await import(/* @vite-ignore */ RANKS_SPECIFIER)) as { default: unknown };
-  return new lite.Tiktoken(ranks.default);
+  const [{ Tiktoken }, ranks] = await Promise.all([
+    import('js-tiktoken/lite'),
+    import('js-tiktoken/ranks/o200k_base'),
+  ]);
+  return new Tiktoken(ranks.default);
 };
 
 function loadEncoder(): Promise<LocalEncoder | null> {
@@ -68,7 +62,7 @@ export async function estimateTokens(text: string): Promise<number> {
   return Math.ceil(text.length / 4);
 }
 
-/** Which estimator is live — `chars-div-4` until plan 10 installs the tokenizer. */
+/** Which estimator is live — `chars-div-4` only when the tokenizer failed to load. */
 export function getEncoderKind(): EncoderKind {
   return encoderKind;
 }
