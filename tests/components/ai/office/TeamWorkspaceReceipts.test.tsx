@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, waitFor, fireEvent, configure } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, configure, act } from '@testing-library/react';
 configure({ asyncUtilTimeout: 5000 });
 import { TaskPlannerDatabase } from '../../../../src/db';
 import { createEmployee, createLead } from '../../../../src/db/repositories/aiOfficeRepo';
@@ -77,7 +77,16 @@ describe('TeamWorkspace receipts (37.1 R10, R11, R13)', () => {
   let leadRow: Awaited<ReturnType<typeof createLead>>;
   let employeeRow: Awaited<ReturnType<typeof createEmployee>>;
 
+  const observers: Array<{ callback: IntersectionObserverCallback; targets: Set<Element> }> = [];
   beforeEach(async () => {
+    observers.length = 0;
+    vi.stubGlobal('IntersectionObserver', class {
+      targets = new Set<Element>();
+      constructor(callback: IntersectionObserverCallback) { observers.push({ callback, targets: this.targets }); }
+      observe(target: Element) { this.targets.add(target); }
+      unobserve(target: Element) { this.targets.delete(target); }
+      disconnect() { this.targets.clear(); }
+    });
     vi.spyOn(document, 'hasFocus').mockReturnValue(true);
     notificationPermission.check.mockResolvedValue(true);
     notificationPermission.request.mockReset().mockResolvedValue(true);
@@ -125,6 +134,7 @@ describe('TeamWorkspace receipts (37.1 R10, R11, R13)', () => {
   afterEach(async () => {
     await db.delete();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   const renderWorkspace = () =>
@@ -171,8 +181,16 @@ describe('TeamWorkspace receipts (37.1 R10, R11, R13)', () => {
     return row;
   };
 
-  const markRead = async () => {
-    fireEvent.click(await screen.findByRole('button', { name: 'Đánh dấu đã đọc' }));
+  const markRead = async (messageId?: string) => {
+    await waitFor(() => expect(observers.some((observer) => observer.targets.size > 0)).toBe(true));
+    act(() => {
+      for (const observer of observers) {
+        const entries = [...observer.targets]
+          .filter((row) => !messageId || (row as HTMLElement).dataset.chatMessageId === messageId)
+          .map((target) => ({ target, isIntersecting: true, intersectionRect: { height: 100 } } as IntersectionObserverEntry));
+        if (entries.length) observer.callback(entries, {} as IntersectionObserver);
+      }
+    });
   };
 
   it('requests notification permission only after explicit click and reports denial', async () => {
@@ -205,6 +223,7 @@ describe('TeamWorkspace receipts (37.1 R10, R11, R13)', () => {
       .mockReturnValue('hidden' as DocumentVisibilityState);
     await seedLeadMessage('Tin đến khi tab đang ẩn.');
     renderWorkspace();
+    await markRead();
 
     // Give the effect every chance to run, then prove it did not.
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -274,8 +293,7 @@ describe('TeamWorkspace receipts (37.1 R10, R11, R13)', () => {
       await seedLeadMessage('Tin tiếp theo.');
       await screen.findByText('Tin tiếp theo.');
       expect(await db.teamReadCursors.get(`${team.id}:${USER_PARTICIPANT_ID}`)).toBeUndefined();
-      expect(scroll.mock.calls.some(([options]) => options?.block === 'start')).toBe(true);
-      expect(scroll.mock.calls.some(([options]) => options?.block !== 'start')).toBe(false);
+      expect(scroll).not.toHaveBeenCalled();
       await markRead();
       await waitFor(async () => {
         expect((await db.teamReadCursors.get(`${team.id}:${USER_PARTICIPANT_ID}`))?.lastSeq).toBe(2);
@@ -285,23 +303,34 @@ describe('TeamWorkspace receipts (37.1 R10, R11, R13)', () => {
     }
   });
 
-  it('acknowledges unread only after focused user scroll reaches bottom', async () => {
-    await seedLeadMessage('Tin cần cuộn để đọc.');
+  it('marks only as far as the visible message without requiring bottom', async () => {
+    const first = await seedLeadMessage('Tin thứ nhất.');
+    await seedLeadMessage('Tin chưa cuộn tới.');
     renderWorkspace();
-    const marker = await screen.findByTestId('team-new-divider');
-    const viewport = marker.closest('[tabindex="0"]') as HTMLElement;
-    Object.defineProperties(viewport, {
-      scrollHeight: { configurable: true, value: 1200 },
-      clientHeight: { configurable: true, value: 400 },
-    });
-    viewport.scrollTop = 800;
-    fireEvent.scroll(viewport);
-    expect(await db.teamReadCursors.get(`${team.id}:${USER_PARTICIPANT_ID}`)).toBeUndefined();
-    fireEvent.wheel(viewport);
-    fireEvent.scroll(viewport);
+    await screen.findByTestId('team-new-divider');
+    await markRead(first.id);
     await waitFor(async () => {
       expect((await db.teamReadCursors.get(`${team.id}:${USER_PARTICIPANT_ID}`))?.lastSeq).toBe(1);
     });
+    expect(screen.getByTestId('team-unread-badge')).toHaveTextContent('1 tin mới');
+  });
+
+  it('restores last read position without jumping to the oldest or newest message', async () => {
+    const first = await seedLeadMessage('Tin đã đọc.');
+    await advanceCursor(team.id, USER_PARTICIPANT_ID, 1, db);
+    await seedLeadMessage('Tin chưa đọc.');
+    const previous = HTMLElement.prototype.scrollIntoView;
+    const scroll = vi.fn();
+    HTMLElement.prototype.scrollIntoView = scroll;
+    try {
+      renderWorkspace();
+      const anchor = await screen.findByTestId('team-last-read-anchor');
+      await waitFor(() => expect(scroll).toHaveBeenCalledWith({ block: 'start', behavior: 'auto' }));
+      expect(anchor.parentElement).toHaveAttribute('data-chat-message-id', first.id);
+      expect((await db.teamReadCursors.get(`${team.id}:${USER_PARTICIPANT_ID}`))?.lastSeq).toBe(1);
+    } finally {
+      HTMLElement.prototype.scrollIntoView = previous;
+    }
   });
 
   it('R13: reading everything clears the badge', async () => {

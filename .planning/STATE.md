@@ -6,10 +6,10 @@ current_phase: 37
 current_phase_name: Runtime reliability + concurrency
 status: executing
 stopped_at: Completed 37.1-06-PLAN.md
-last_updated: "2026-11-13T06:52:31.206Z"
+last_updated: "2026-11-13T08:05:20.592Z"
 last_activity: 2026-11-13
 last_activity_desc: "Quick 261113-ita complete: notification focus, unread viewport, and NO_LEAD warning fixed; focused tests and TypeScript pass, runtime UAT pending."
-state_head: e8ce7e4fd30ee447ec52aeee41bed6c0bf454bac
+state_head: fa96058b8b3d4c3aedcf3034cdbde302cc0b1fa5
 progress:
   total_phases: 7
   completed_phases: 4
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 Phase: 37.1 (live-steering-leader-amends-assignments-and-steers-running-a) — EXECUTING
 Plan: 6 of 6
 Status: Ready to execute
-Last activity: 2026-11-13 -- Quick 261113-ita complete: notification focus, unread viewport, and NO_LEAD warning fixed; focused tests and TypeScript pass, runtime UAT pending.
+Last activity: 2026-11-13 -- Quick 261113-ko9: restore last-read chat position, viewport-based read receipts, collapsible assignment plan; include confirmed hidden leader budget-pause fix. Runtime UAT pending; OS notifications deferred.
 
 ## Session Continuity
 
@@ -57,6 +57,7 @@ Progress: [██████░░░░] 57%
 | 261111-c35 | Fix WR-05 + WR-10 data-safety warnings from phase 36 review | 2026-11-11 | 505e780d | [261111-c35-fix-wr-05-wr-10-data-safety-warnings-fro](./quick/261111-c35-fix-wr-05-wr-10-data-safety-warnings-fro/) |
 | 261111-d2p | Close remaining phase-36 review findings: WR-07/08/09/11/12 and IN-01..IN-04/06/07/08, record WR-13 in ROADMAP phase 38 | 2026-11-11 | 89186433 | [261111-d2p-close-phase-36-review-findings-part-two](./quick/261111-d2p-close-phase-36-review-findings-part-two/) |
 | 261113-ita | Fix team notification focus, unread viewport and missing-leader warning | 2026-11-13 | e8ce7e4f | [261113-ita-fix-confirmed-team-chat-focus-unread-and](./quick/261113-ita-fix-confirmed-team-chat-focus-unread-and/) |
+| 261113-ko9 | Restore last-read chat position, viewport read receipts, collapse plans and expose leader budget wait | 2026-11-13 | fa96058b | [261113-ko9-open-team-chat-at-latest-messages-and-co](./quick/261113-ko9-open-team-chat-at-latest-messages-and-co/) |
 
 ## Accumulated Context
 

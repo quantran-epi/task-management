@@ -857,6 +857,54 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
   });
 
   describe('Task 3 — budget pause, usage accounting, tool resolution guard', () => {
+    it.each([599, 600, 601])('exposes a retained leader budget park on the next chat after %i tokens', async (usedTokens) => {
+      let turns = 0;
+      const secondBoundary = deferred();
+      harness = await createHarness({
+        useSeam: true,
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            turns += 1;
+            const boundary = options.beforeToolRound!(1, options.signal);
+            if (turns === 2) secondBoundary.release();
+            await boundary;
+            // Final response usage closes only the member gate; no next round in this turn.
+            if (turns === 1) options.onUsage?.({ totalTokens: usedTokens });
+            return loopResult('Xong.');
+          },
+        },
+      });
+      const { coordinator, db, team, lead } = harness;
+      // Production loadRoster includes leader's membership, not only employees.
+      harness.roster.memberAgentIds.push(lead.id);
+      await coordinator.send('Lượt đầu');
+      expect(coordinator.getState().phase).toBe('ready');
+      const firstCursor = await getCursor(team.id, lead.id, db);
+      const sent = coordinator.send('Tin nhắn tiếp theo');
+      await secondBoundary.promise;
+      try {
+        if (usedTokens >= 600) {
+          expect(coordinator.getState().phase).toBe('awaiting-budget');
+          expect(coordinator.getState().pausedAgentId).toBe(lead.id);
+          expect((await getCursor(team.id, lead.id, db)).lastSeq).toBe(firstCursor.lastSeq);
+        } else {
+          await sent;
+          expect(coordinator.getState().phase).toBe('ready');
+        }
+      } finally {
+        // Release baseline's hidden park too, so a failed assertion leaves no pending turn.
+        await coordinator.topUp({ kind: 'agent', agentId: lead.id }, 2000);
+        await sent;
+      }
+      expect(coordinator.getState().phase).toBe('ready');
+      expect(coordinator.getState().agents.find((row) => row.agentId === lead.id)?.status).toBe('done');
+      const lastUser = await db.teamMessages.where('teamId').equals(team.id)
+        .filter((row) => row.content === 'Tin nhắn tiếp theo').first();
+      expect(lastUser).toBeDefined();
+      expect((await getCursor(team.id, lead.id, db)).lastSeq).toBeGreaterThanOrEqual(lastUser!.seq);
+      expect(turns).toBe(2);
+    });
+
     it('pauses one agent at 80% and leaves the sibling running', async () => {
       const sibling = deferred();
       harness = await createHarness({

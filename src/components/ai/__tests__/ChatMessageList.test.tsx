@@ -1,7 +1,28 @@
 // @vitest-environment jsdom
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, afterEach } from 'vitest';
+import type { ChatMessage } from '../../../types/models';
 import { ChatMessageList } from '../ChatMessageList';
+
+describe('ChatMessageList initial read position', () => {
+  afterEach(() => vi.restoreAllMocks());
+  const messages: ChatMessage[] = [{
+    id: 'read', threadId: 'thread', role: 'user', content: 'Tin đã đọc', createdAt: '2026-11-13T00:00:00Z',
+  }];
+  it('waits for saved cursor then opens at bottom when everything was read', () => {
+    const scroll = vi.fn();
+    const original = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = scroll;
+    try {
+      const { rerender } = render(<ChatMessageList messages={[]} readPositionReady={false} lastReadMessageId={null} onMessageRead={vi.fn()} />);
+      expect(scroll).not.toHaveBeenCalled();
+      rerender(<ChatMessageList messages={messages} readPositionReady lastReadMessageId="read" onMessageRead={vi.fn()} />);
+      expect(scroll).toHaveBeenCalledWith({ behavior: 'auto' });
+    } finally {
+      HTMLElement.prototype.scrollIntoView = original;
+    }
+  });
+});
 
 describe('ChatMessageList pendingConfirmation rendering', () => {
   it('renders markdown summary properly in confirmation card and opens popout modal', () => {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import { Avatar, Button, Tag, theme } from 'antd';
 import { TeamOutlined } from '@ant-design/icons';
 import { agentColorFor, agentTextColorFor } from './AgentAttributionRow';
@@ -34,13 +34,17 @@ export const AssignmentPlanCard: React.FC<AssignmentPlanCardProps> = ({
   onReject,
 }) => {
   const { token } = theme.useToken();
+  const [collapsed, setCollapsed] = useState(decision !== undefined);
+  const contentId = useId();
+  useEffect(() => { setCollapsed(decision !== undefined); }, [plan, decision]);
 
   return (
     <div
       data-testid="assignment-plan-card"
       style={{
-        margin: '8px 0 16px',
-        padding: 16,
+        margin: '8px 0',
+        padding: 12,
+        flexShrink: 0,
         borderRadius: 8,
         border: `1px solid ${token.colorBorderSecondary}`,
         background: token.colorBgContainer,
@@ -54,11 +58,15 @@ export const AssignmentPlanCard: React.FC<AssignmentPlanCardProps> = ({
         <TeamOutlined style={{ color: token.colorPrimary }} />
         <span>Kế hoạch phân việc</span>
         <span style={{ marginLeft: 'auto' }}>
-          <Tag>Lô {plan.batchIndex}</Tag>
+          <Tag>Lô {plan.batchIndex} · {plan.assignments.length} việc</Tag>
         </span>
+        <Button type="text" size="small" aria-expanded={!collapsed} aria-controls={contentId}
+          onClick={() => setCollapsed((value) => !value)}>
+          {collapsed ? 'Mở rộng kế hoạch' : 'Thu gọn kế hoạch'}
+        </Button>
       </div>
 
-      <div>
+      <div id={contentId} hidden={collapsed} style={{ maxHeight: 240, overflowY: 'auto' }}>
         {plan.assignments.map((item, idx) => {
           const color = agentColorFor(item.agentId);
           return (

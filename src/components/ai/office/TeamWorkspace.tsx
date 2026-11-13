@@ -417,10 +417,11 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
    * cursor covers its `seq`; the cursor's `updatedAt` is the "read at" time. This is the
    * single source for the seen indicator — no per-message read field exists.
    */
-  const teamLog = useLiveQuery(
+  const loadedLog = useLiveQuery(
     () => db.teamMessages.where('teamId').equals(team.id).toArray(),
     [db, team.id]
-  ) ?? [];
+  );
+  const teamLog = loadedLog ?? [];
   const loadedCursors = useLiveQuery(
     () => db.teamReadCursors.where('teamId').equals(team.id).toArray(),
     [db, team.id]
@@ -447,6 +448,21 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
       )?.id,
     [teamLog, userCursorSeq, loadedCursors]
   );
+
+  const lastReadMessageId = useMemo(
+    () => teamLog.filter((row) => row.seq <= userCursorSeq)
+      .reduce<(typeof teamLog)[number] | undefined>(
+        (last, row) => !last || row.seq > last.seq ? row : last, undefined
+      )?.id ?? null,
+    [teamLog, userCursorSeq]
+  );
+  const handleMessageRead = useCallback((messageId: string) => {
+    if (document.visibilityState !== 'visible' || !document.hasFocus()) return;
+    const message = teamLog.find((row) => row.id === messageId);
+    if (!message || message.seq <= userCursorSeq) return;
+    void advanceCursor(team.id, USER_PARTICIPANT_ID, message.seq, db)
+      .catch(() => setActionError(ACTION_ERROR_COPY));
+  }, [teamLog, userCursorSeq, team.id, db]);
 
   /**
    * 37.1: who each message is addressed to, so a leader→agent message shows the agent's name.
@@ -492,14 +508,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     return map;
   }, [teamLog, teamCursors, roster]);
 
-  /**
-   * 37.1 R11: the user is a participant, so the user has a cursor too. Without it the
-   * leader→user direction has no seen data at all — not hidden in the UI, simply absent.
-   *
-   * Two conditions, both necessary for the receipt to be true: the tab is visible (a
-   * background tab has not been read) and the transcript is scrolled to the newest message
-   * (a message below the fold has not been read either). Anything looser makes ✓✓ a lie.
-   */
+  // User cursor advances only for messages observed inside the focused transcript viewport.
   // 37.1 R13: tell the shell this team is the one on screen, so its messages do not also
   // raise an OS notification. Cleared on unmount — a closed workspace is not focused.
   useEffect(() => {
@@ -507,33 +516,6 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     return () => setActiveTeamView(null);
   }, [team.id]);
 
-  const headSeq = teamLog.reduce((max, row) => (row.seq > max ? row.seq : max), 0);
-  const [atBottom, setAtBottom] = useState(false);
-  const [tabVisible, setTabVisible] = useState(
-    () => document.visibilityState !== 'hidden' && document.hasFocus()
-  );
-  useEffect(() => {
-    const onAttention = () => {
-      const visible = document.visibilityState !== 'hidden' && document.hasFocus();
-      setTabVisible(visible);
-      if (!visible) setAtBottom(false);
-    };
-    const onBlur = () => { setTabVisible(false); setAtBottom(false); };
-    document.addEventListener('visibilitychange', onAttention);
-    window.addEventListener('focus', onAttention);
-    window.addEventListener('blur', onBlur);
-    return () => {
-      document.removeEventListener('visibilitychange', onAttention);
-      window.removeEventListener('focus', onAttention);
-      window.removeEventListener('blur', onBlur);
-    };
-  }, []);
-  useEffect(() => {
-    if (headSeq === 0 || !tabVisible || !atBottom || !document.hasFocus()) return;
-    void advanceCursor(team.id, USER_PARTICIPANT_ID, headSeq, db)
-      .catch(() => setActionError(ACTION_ERROR_COPY));
-  }, [team.id, headSeq, db, tabVisible, atBottom]);
-  useEffect(() => { setAtBottom(false); }, [team.id]);
   useEffect(() => {
     if (team.leadId !== undefined) {
       setSendError((error) => error?.code === 'NO_LEAD' ? null : error);
@@ -565,7 +547,9 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
       seenStates,
       addressedTo,
       ...(firstUnreadMessageId !== undefined ? { firstUnreadMessageId } : {}),
-      onAtBottomChange: setAtBottom,
+      lastReadMessageId,
+      readPositionReady: loadedLog !== undefined && loadedCursors !== undefined,
+      onMessageRead: handleMessageRead,
       ...(coordinator
         ? {
             onStopAgent: (agentId: string) => coordinator.stopAgent(agentId),
@@ -582,7 +566,8 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
           }
         : {}),
     }),
-    [agentDirectory, agentStatuses, seenStates, addressedTo, firstUnreadMessageId, coordinator]
+    [agentDirectory, agentStatuses, seenStates, addressedTo, firstUnreadMessageId, lastReadMessageId,
+      loadedLog, loadedCursors, handleMessageRead, coordinator]
   );
 
   /**

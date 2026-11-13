@@ -1334,6 +1334,11 @@ export function createTeamRunCoordinator(
       _round: number,
       signal: AbortSignal
     ): Promise<ChatCompletionMessage[] | void> => {
+      // Final usage can leave a member gate closed after its previous turn settled.
+      // A new turn resets the row to running; expose its park before waiting.
+      if (gateFor(agentId).isClosed() || teamGate.isClosed()) {
+        updateAgent(agentId, { status: 'paused' });
+      }
       await gateFor(agentId).wait(signal);
       await teamGate.wait(signal);
       signal.throwIfAborted();

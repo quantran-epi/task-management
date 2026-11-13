@@ -56,6 +56,10 @@ export interface ChatMessageListProps {
   seenStates?: Map<string, MessageSeenEntry[]> | undefined;
   /** 37.1 R13: the first message the user has not read — a "Tin mới" divider sits above it. */
   firstUnreadMessageId?: string | undefined;
+  /** Initial saved read position; null means no message has been read. */
+  lastReadMessageId?: string | null | undefined;
+  readPositionReady?: boolean | undefined;
+  onMessageRead?: ((messageId: string) => void) | undefined;
   /**
    * 37.1 R11/R13: whether the viewport is pinned to the newest message. Reading happens at
    * the bottom, so the host advances the user's cursor only while this is true.
@@ -94,6 +98,9 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
   onRetryAgent,
   seenStates,
   firstUnreadMessageId,
+  lastReadMessageId,
+  readPositionReady = true,
+  onMessageRead,
   onAtBottomChange,
   addressedTo,
 }) => {
@@ -113,9 +120,9 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
    */
   const programmaticScrollRef = useRef(false);
   const userScrollRef = useRef(false);
-  const followingRef = useRef(onAtBottomChange === undefined);
-  const unreadAnchorRef = useRef<string | undefined>(undefined);
-  const unreadRef = useRef<HTMLDivElement>(null);
+  const followingRef = useRef(onMessageRead === undefined && onAtBottomChange === undefined);
+  const initiallyPositionedRef = useRef(false);
+  const lastReadRef = useRef<HTMLDivElement>(null);
 
   const reportAtBottom = () => {
     const node = containerRef.current;
@@ -145,19 +152,24 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
     }
   }, [scrollTrigger]);
 
-  // Auto-scroll on new message added, confirmation prompt displayed, or clarify prompt shown
+  // Restore saved reading position once, without consuming unread messages.
   useEffect(() => {
-    if (firstUnreadMessageId) {
-      if (unreadAnchorRef.current === undefined && unreadRef.current) {
-        unreadRef.current.scrollIntoView?.({ block: 'start', behavior: 'auto' });
-        followingRef.current = false;
-        unreadAnchorRef.current = firstUnreadMessageId;
+    if (!readPositionReady) return;
+    if (!initiallyPositionedRef.current && messages.length > 0) {
+      if (lastReadMessageId && !lastReadRef.current) return;
+      initiallyPositionedRef.current = true;
+      followingRef.current = !firstUnreadMessageId && lastReadMessageId !== null;
+      if (lastReadMessageId && firstUnreadMessageId) {
+        programmaticScrollRef.current = true;
+        lastReadRef.current?.scrollIntoView?.({ block: 'start', behavior: 'auto' });
+        requestAnimationFrame(() => { programmaticScrollRef.current = false; });
+      } else if (lastReadMessageId !== null) {
+        scrollToBottom(true);
       }
       return;
     }
-    unreadAnchorRef.current = undefined;
-    if (followingRef.current) scrollToBottom(false);
-  }, [messages.length, firstUnreadMessageId, pendingConfirmation, transientClarifyMessage]);
+    if (!firstUnreadMessageId && followingRef.current) scrollToBottom(false);
+  }, [messages.length, firstUnreadMessageId, lastReadMessageId, readPositionReady, pendingConfirmation, transientClarifyMessage]);
 
   useEffect(() => {
     const unpin = () => {
@@ -175,6 +187,33 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
       scrollToBottom(true);
     }
   }, [streamingText, isStreaming, error, pendingConfirmation, transientClarifyMessage, firstUnreadMessageId]);
+
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!root || !onMessageRead || !readPositionReady || typeof IntersectionObserver === 'undefined') return;
+    const visible = new Set<Element>();
+    const reportVisible = () => {
+      if (document.visibilityState !== 'visible' || !document.hasFocus()) return;
+      const lastVisible = Array.from(root.querySelectorAll<HTMLElement>('[data-chat-message-id]'))
+        .findLast((row) => visible.has(row));
+      if (lastVisible) onMessageRead(lastVisible.dataset.chatMessageId!);
+    };
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting && entry.intersectionRect.height > 0) visible.add(entry.target);
+        else visible.delete(entry.target);
+      }
+      reportVisible();
+    }, { root, threshold: 0 });
+    root.querySelectorAll('[data-chat-message-id]').forEach((row) => observer.observe(row));
+    window.addEventListener('focus', reportVisible);
+    document.addEventListener('visibilitychange', reportVisible);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('focus', reportVisible);
+      document.removeEventListener('visibilitychange', reportVisible);
+    };
+  }, [messages, onMessageRead, readPositionReady]);
 
   return (
     <div
@@ -254,23 +293,16 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
           ? messages.find((row) => row.id === msg.replyToId)
           : undefined;
         return (
-          <React.Fragment key={msg.id}>
+          <div key={msg.id} data-chat-message-id={msg.id} style={{ flexShrink: 0 }}>
+            {msg.id === lastReadMessageId && <div ref={lastReadRef} data-testid="team-last-read-anchor" />}
             {msg.id === firstUnreadMessageId && (
-              <div ref={unreadRef}>
+              <div>
                 <Divider
                   data-testid="team-new-divider"
                   style={{ margin: '8px 0', fontSize: 12, color: token.colorError }}
                 >
                   Tin mới
                 </Divider>
-                <Button size="small" onClick={() => {
-                  if (document.visibilityState === 'visible' && document.hasFocus()) {
-                    userScrollRef.current = true;
-                    followingRef.current = true;
-                    scrollToBottom(true);
-                    onAtBottomChange?.(true);
-                  }
-                }}>Đánh dấu đã đọc</Button>
               </div>
             )}
             <ChatMessageBubble
@@ -303,7 +335,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
                   }
                 : {})}
             />
-          </React.Fragment>
+          </div>
         );
       })}
 

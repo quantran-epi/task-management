@@ -392,6 +392,7 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
       {headerSlot}
 
       <ChatMessageList
+        key={scope.scopeKey}
         messages={messages}
         streamingText={turn.status === 'tool-limit' ? '' : turn.streamingText}
         isStreaming={isTurnActive}
