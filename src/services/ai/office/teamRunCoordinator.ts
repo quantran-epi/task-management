@@ -121,8 +121,8 @@ export interface TeamRunSnapshot {
   pendingPlan: AssignmentPlan | null;
   pendingApproval: ChatTurnApprovalInfo | null;
   /**
-   * D-21: kept for old backups and the banner's legacy shape. Nothing parks for budget any
-   * more (D-01), so both fields are always null; the phase value stays legal.
+   * D-21 legacy shape: nothing parks for budget any more (D-01), so both fields are always
+   * null. They survive because the legacy parked phase value stays legal for old backups.
    */
   pausedAgentId: string | null;
   pausedAgentName: string | null;
@@ -2911,8 +2911,9 @@ export function createTeamRunCoordinator(
   ): Promise<void> {
     const batchController = batchControllers.get(batchId);
     try {
-      // Terminal-only settle: a paused agent's deferred is still pending, so the lead cannot
-      // synthesize past it (D-30, Pitfall 7).
+      // Terminal-only settle: an unfinished agent's deferred is still pending, so the lead
+      // cannot synthesize past it (D-30, Pitfall 7). D-01: budget no longer parks, so the
+      // only way an agent is unfinished here is a live or stopped turn.
       await Promise.all([...agentDeferreds.values()].map((deferred) => deferred.promise));
       // Ledger poll (Pitfall 5): a cancelled queued row may never have had a deferred.
       // WR-09: bounded — a row that can never settle must not hang the team turn forever

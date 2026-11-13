@@ -1213,6 +1213,43 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(state?.incomplete).toBe(true);
     });
 
+    it('(D-01, no-gate) stays running and never pauses an agent across three over-budget rounds', async () => {
+      const boundaries: Array<{ phase: string; statuses: string[] }> = [];
+      let harnessRef: Harness | null = null;
+      harness = await createHarness({
+        scripts: {
+          [EMP_A_MODEL]: async (options) => {
+            // Far past 100% of the member share AND the group total, three rounds running.
+            options.onUsage?.({ totalTokens: 9000 });
+            for (let round = 1; round <= 3; round += 1) {
+              await options.beforeToolRound?.(round, options.signal);
+              const state = harnessRef!.coordinator.getState();
+              boundaries.push({
+                phase: state.phase,
+                statuses: state.agents.map((row) => row.status),
+              });
+            }
+            return loopResult('A xong');
+          },
+        },
+      });
+      harnessRef = harness;
+      const { coordinator, employees } = harness;
+
+      await coordinator.send('@[An](agent:' + employees[0]!.id + ') việc A');
+      await waitForReady(coordinator);
+
+      expect(boundaries).toHaveLength(3);
+      for (const boundary of boundaries) {
+        expect(boundary.phase).not.toBe('awaiting-budget');
+        expect(['batch-running', 'lead-thinking', 'lead-synthesizing', 'ready']).toContain(
+          boundary.phase
+        );
+        expect(boundary.statuses).not.toContain('paused');
+      }
+      expect(coordinator.getState().budgetWarnings).toEqual({ member: true, team: true });
+    });
+
     it('resolves every advertised team tool name to a handler', () => {
       for (const definition of TEAM_TOOL_DEFINITIONS) {
         expect(resolveTeamToolName(definition.function.name)).not.toBe('unknown');
