@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
 status: executing
-stopped_at: Completed 38-01-PLAN.md
-last_updated: "2026-11-13T14:12:25.439Z"
+stopped_at: Completed 38-02-PLAN.md
+last_updated: "2026-11-13T14:14:23.914Z"
 last_activity: 2026-11-13 -- Phase 38 execution started
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 48
-  completed_plans: 33
-  percent: 69
+  completed_plans: 34
+  percent: 71
 current_phase: 38
 current_phase_name: Hard token budget + accurate measurement
 ---
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 38 (hard-token-budget-accurate-measurement) — EXECUTING
-Plan: 2 of 12
-Status: Executing Phase 38
+Plan: 3 of 12
+Status: Ready to execute
 Last activity: 2026-11-13 -- Phase 38 execution started
 
 ## Session Continuity
 
-Last session: 2026-11-13T14:12:25.433Z
-Stopped at: Completed 38-01-PLAN.md
+Last session: 2026-11-13T14:14:15.607Z
+Stopped at: Completed 38-02-PLAN.md
 Resume file: None
 
-Progress: [███████░░░] 69%
+Progress: [███████░░░] 71%
 
 ## Milestone v1.4 Map
 
@@ -152,6 +152,8 @@ Progress: [███████░░░] 69%
 - [Phase 37.1]: AgentLiveStep is runtime-only; the delivered-steer set is derived from a batchId-scoped read because steerMessageIds is unindexed
 - [Phase 38]: Migration tests assert against LATEST_SCHEMA_VERSION instead of a literal so a schema bump cannot re-break them
 - [Phase 38]: V25 is purely additive with no .upgrade() hook; split usage columns are optional on the type and seeded 0 on every write path
+- [Phase ?]: AIO-BUDGET-01/09 keep their unchecked box; the override note records the decision and the checkmark lands when the implementation plans close
+- [Phase ?]: ROADMAP.md criteria 1 and 6 were already warning-only at HEAD, so plan 38-02 was a verify-and-noop for that file
 
 ## Performance Metrics
 
@@ -171,3 +173,4 @@ Progress: [███████░░░] 69%
 | Phase 37.1 P05 | 12 | 2 tasks | 4 files |
 | Phase 37.1 P06 | 35m | 3 tasks | 12 files |
 | Phase 38 P01 | 4min | 3 tasks | 9 files |
+| Phase 38 P02 | 2min | 2 tasks | 1 files |

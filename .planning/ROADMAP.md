@@ -241,13 +241,13 @@ Plans:
 7. Topping up one agent raises that agent's share and the group total in one transaction.
 8. The display shows granted, used, and remaining per group and per member, with input and output separate.
 
-**Plans:** 1/12 plans executed
+**Plans:** 2/12 plans executed
 
 Plans:
 **Wave 1** *(no dependencies)*
 
 - [x] 38-01-PLAN.md — V25 schema/type/zod foundation + repair the two red migration tests
-- [ ] 38-02-PLAN.md — record the D-01/D-02 override in REQUIREMENTS.md and ROADMAP.md
+- [x] 38-02-PLAN.md — record the D-01/D-02 override in REQUIREMENTS.md and ROADMAP.md
 
 **Wave 2**
 
