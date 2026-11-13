@@ -37,6 +37,11 @@ export const UNSAFE_OR_EPHEMERAL_SETTING_KEYS = new Set<string>([
   'ssh_configurations',
 ]);
 
+/**
+ * Phase 38: `ai_budget_warn_threshold_pct` passes by construction — the suffix rules below only
+ * reject secret-like keys (`_token`, `_key`, `_passphrase`, `_secret`, `_pat`), and the threshold
+ * is a plain percentage. No denylist/allowlist edit was needed for the new setting.
+ */
 export function isSafeBackupSetting(key: string): boolean {
   if (UNSAFE_OR_EPHEMERAL_SETTING_KEYS.has(key)) return false;
   const lower = key.toLowerCase();
@@ -235,6 +240,9 @@ export async function exportBackupPayload(
     targetDb.aiEmployees.toArray(),
     targetDb.aiLeads.toArray(),
     targetDb.aiSkills.toArray(),
+    // Phase 38: the whole row is read, so the new columns (`budgetWarnThresholdPct` on a team,
+    // split `inputTokens`/`outputTokens`/`usageEstimated` on a member) ride along with no export
+    // change. `projectSafeAssignment` strips `diagnosticDetail` and nothing else — keep it that way.
     targetDb.aiTeams.toArray(),
     targetDb.aiTeamMembers.toArray(),
     targetDb.aiTeamLinks.toArray(),

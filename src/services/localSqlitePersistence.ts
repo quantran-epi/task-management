@@ -103,6 +103,11 @@ function getRowId(tableName: SqliteTableName, value: unknown): string {
   return '';
 }
 
+/**
+ * Phase 38: the whole row is serialized as opaque JSON, so a new column (split token usage, the
+ * budget warn threshold) needs no SQLite schema change and no edit to the Rust `ALLOWED_TABLES`
+ * allowlist — only a new *table* would.
+ */
 function serializePayload(tableName: SqliteTableName, value: unknown): string {
   if (tableName === 'noteAttachments' && value && typeof value === 'object') {
     const { data: _ignored, ...rest } = value as Record<string, unknown>;

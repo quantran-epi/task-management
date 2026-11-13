@@ -301,6 +301,8 @@ async function replaceTables(
     await add(targetDb.aiLeads, tables.aiLeads);
     await add(targetDb.aiSkills, tables.aiSkills);
     await add(targetDb.aiTeams, tables.aiTeams);
+    // Phase 38: the new columns (`budgetWarnThresholdPct`, split usage) ride along inside these
+    // whole rows; the record schemas already validated them upstream in `validateBackupPayload`.
     await add(targetDb.aiTeamMembers, tables.aiTeamMembers);
     await add(targetDb.aiTeamLinks, tables.aiTeamLinks);
     // D-22: `status` is written verbatim — a restored `pending` row is stored data, not an approval.
