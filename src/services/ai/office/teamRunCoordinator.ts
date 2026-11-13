@@ -73,10 +73,8 @@ import {
 } from '../../../db/repositories/teamTranscriptRepo';
 import {
   addUsedTokens,
-  getTeam,
+  applyTopUp,
   listTeamMembers,
-  topUpMemberBudget,
-  updateTeam,
 } from '../../../db/repositories/aiTeamRepo';
 import {
   closeBatch,
@@ -226,6 +224,11 @@ export interface TeamRunCoordinator {
   stopAgent(agentId: string): void;
   abortAll(): void;
   topUp(scope: TopUpScope, amount: number): Promise<void>;
+  /**
+   * Phase 38 D-19: mirror a persisted Settings save into live state. The repo already wrote
+   * both tables in one transaction, so this method performs NO Dexie write.
+   */
+  applyBudgetSettings(result: { team: AiTeam; members: AiTeamMember[] }): void;
   /**
    * D-18: ends a live run in bounded time and leaves the coordinator inert. Resolves once
    * the parks are released and every runtime is aborted — the in-flight `send()` may still
@@ -3240,17 +3243,13 @@ export function createTeamRunCoordinator(
   }
 
   async function topUp(scope: TopUpScope, amount: number): Promise<void> {
-    await ensureMembers();
+    // Phase 38 D-17/D-18: the repo reads the roster fresh inside its transaction, so a member
+    // added mid-turn is reachable. `ensureMembers()`'s `membersLoaded` early return is exactly
+    // what made it unreachable (WR-13) — it must not be on this path.
+    const result = await applyTopUp(teamId, scope, amount, db);
+    mirrorBudgetResult(result);
+
     if (scope.kind === 'agent') {
-      const memberId = memberIds.get(scope.agentId);
-      if (memberId) {
-        const row = await topUpMemberBudget(memberId, amount, db);
-        memberBudgets.set(scope.agentId, row.budgetTokens);
-      }
-      lastBuckets.set(
-        scope.agentId,
-        bucketOf(memberUsed.get(scope.agentId) ?? 0, memberBudgets.get(scope.agentId) ?? 0)
-      );
       gateFor(scope.agentId).open();
       // A turn parked on the team gate too is still parked; only flip it back when both
       // scopes are open, otherwise the snapshot would claim a running turn that is waiting.
@@ -3259,13 +3258,6 @@ export function createTeamRunCoordinator(
         if (state?.status === 'paused') updateAgent(scope.agentId, { status: 'running' });
       }
     } else {
-      // WR-03: read the persisted total inside the call — another writer (a second tab,
-      // a restore, applyEvenSplit) may have moved it since construction.
-      const current = await getTeam(teamId, db);
-      const base = current?.budgetTokens ?? teamBudget;
-      const updated = await updateTeam(teamId, { budgetTokens: base + amount }, db);
-      teamBudget = updated.budgetTokens;
-      lastTeamBucket = bucketOf(teamUsed, teamBudget);
       teamGate.open();
       for (const [agentId, state] of agents) {
         if (state.status === 'paused' && !gateFor(agentId).isClosed()) {
@@ -3274,8 +3266,38 @@ export function createTeamRunCoordinator(
       }
     }
     // WR-04: only claim a paused phase when something is actually parked.
-    // D-18: this tail runs after two awaits, so a top-up that resolves after `dispose()`
-    // must not resurrect `batch-running` on a coordinator that is already gone.
+    // D-18: this tail runs after an await, so a top-up that resolves after `dispose()` must
+    // not resurrect `batch-running` on a coordinator that is already gone.
+    notify();
+  }
+
+  /**
+   * Phase 38 D-19: mirror a persisted budget write (top-up or absolute settings save) into
+   * live state. Writes NOTHING to Dexie — the repo already did, in one transaction. Every
+   * returned row is adopted, including members this coordinator had never seen, so a member
+   * added mid-turn becomes addressable without a new coordinator.
+   */
+  function mirrorBudgetResult(result: { team: AiTeam; members: AiTeamMember[] }): void {
+    for (const row of result.members) {
+      memberIds.set(row.agentId, row.id);
+      memberBudgets.set(row.agentId, row.budgetTokens);
+      lastBuckets.set(row.agentId, bucketOf(memberUsed.get(row.agentId) ?? row.usedTokens, row.budgetTokens));
+    }
+    teamBudget = result.team.budgetTokens;
+    liveTeam = { ...liveTeam, budgetTokens: teamBudget };
+    lastTeamBucket = bucketOf(teamUsed, teamBudget);
+    // D-06 warning markers are owned by plan 08; this is the seam it fills in.
+    clearBudgetWarnings();
+  }
+
+  /** Plan 08 replaces this with the per-(team, level) notification markers. */
+  function clearBudgetWarnings(): void {
+    /* no-op until plan 08 lands the D-06 markers */
+  }
+
+  /** Phase 38 D-19: the Settings save already persisted; this only mirrors it. */
+  function applyBudgetSettings(result: { team: AiTeam; members: AiTeamMember[] }): void {
+    mirrorBudgetResult(result);
     notify();
   }
 
@@ -3328,6 +3350,7 @@ export function createTeamRunCoordinator(
     stopAgent,
     abortAll,
     topUp,
+    applyBudgetSettings,
     dispose,
     setTeamSettings,
     setTeamBudget,

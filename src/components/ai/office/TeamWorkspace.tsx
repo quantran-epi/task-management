@@ -14,6 +14,7 @@ import { DEFAULT_BUDGET_WARN_THRESHOLD_PCT } from '../../../types/aiOffice';
 import {
   addTeamLink,
   addTeamMember,
+  applyTeamBudgetSettings,
   assignLeader,
   getTeam,
   listTeamLinks,
@@ -21,8 +22,6 @@ import {
   lockLeader,
   removeTeamLink,
   removeTeamMember,
-  setMemberBudget,
-  topUpMemberBudget,
   updateTeam,
 } from '../../../db/repositories/aiTeamRepo';
 import {
@@ -690,35 +689,30 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     autoSplitEnabled: boolean;
     autoApproveMutations: boolean;
     concurrencyLimit: number;
+    /** D-04: absent = leave the stored override alone, `null` = inherit, number = store. */
+    budgetWarnThresholdPct?: number | null | undefined;
   }) => {
-    await updateTeam(
+    // D-19: ONE absolute two-table write. Composing `updateTeam(total)` with a per-member
+    // additive loop is what turned 3000 → 4000 into 5000.
+    const result = await applyTeamBudgetSettings(
       team.id,
       {
         budgetTokens: input.budgetTokens,
-        autoSplitEnabled: input.autoSplitEnabled,
-        autoApproveMutations: input.autoApproveMutations,
-        concurrencyLimit: input.concurrencyLimit,
+        budgets: input.budgets,
+        budgetWarnThresholdPct: input.budgetWarnThresholdPct,
       },
       db
     );
     // D-04: the limit applies to the run in flight, not only the next construction.
-    coordinator?.setTeamSettings({ concurrencyLimit: input.concurrencyLimit });
-    // AIO-BUDGET-01: adopt the edited total before any member top-up, so a later team
-    // top-up accumulates onto the saved number instead of the construction snapshot.
-    coordinator?.setTeamBudget(input.budgetTokens);
-    for (const [memberId, budgetTokens] of Object.entries(input.budgets)) {
-      const row = liveMembers.find((member) => member.id === memberId);
-      if (!row || row.budgetTokens === budgetTokens) continue;
-      const delta = budgetTokens - row.budgetTokens;
-      // CR-02: a decrease is a plain budget write — routing it through topUp would add a
-      // negative amount and open the gate on a budget that just went down.
-      if (delta > 0) {
-        await coordinator?.topUp({ kind: 'agent', agentId: row.agentId }, delta);
-        if (!coordinator) await topUpMemberBudget(memberId, delta, db);
-      } else if (delta < 0) {
-        await setMemberBudget(memberId, budgetTokens, db);
-      }
-    }
+    coordinator?.setTeamSettings({
+      autoSplitEnabled: input.autoSplitEnabled,
+      autoApproveMutations: input.autoApproveMutations,
+      concurrencyLimit: input.concurrencyLimit,
+    });
+    // D-19: the coordinator only mirrors the persisted result — it never re-derives a delta.
+    coordinator?.applyBudgetSettings(result);
+    // Plan 05's setter is `number | undefined`; `null` and `undefined` both mean "inherit".
+    coordinator?.setTeamThresholdPct(input.budgetWarnThresholdPct ?? undefined);
     setSettingsOpen(false);
   };
 

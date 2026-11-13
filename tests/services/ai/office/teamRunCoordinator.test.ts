@@ -25,7 +25,7 @@ import {
   isSkillInUse,
   reset,
 } from '../../../../src/services/ai/office/liveUseRegistry';
-import { createTeam, updateTeam } from '../../../../src/db/repositories/aiTeamRepo';
+import { addTeamMember, createTeam, getTeam, updateTeam } from '../../../../src/db/repositories/aiTeamRepo';
 import { getCursor } from '../../../../src/services/ai/office/teamEventLog';
 import { USER_PARTICIPANT_ID } from '../../../../src/types/teamChat';
 import {
@@ -1028,6 +1028,92 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
       const stored = await db.aiTeams.get(team.id);
       expect(stored?.budgetTokens).toBe(12000);
+    });
+
+    it('raises the member row and the team row together on an agent top-up (AIO-BUDGET-07)', async () => {
+      harness = await createHarness({ scripts: {} });
+      const { coordinator, db, team, employees } = harness;
+      const target = employees[0]!;
+      const beforeTeam = (await getTeam(team.id, db))!;
+      const beforeRows = await db.aiTeamMembers.where('teamId').equals(team.id).toArray();
+      const beforeMember = beforeRows.find((row) => row.agentId === target.id)!;
+      const phaseBefore = coordinator.getState().phase;
+
+      await coordinator.topUp({ kind: 'agent', agentId: target.id }, 500);
+
+      const afterMember = (await db.aiTeamMembers.get(beforeMember.id))!;
+      expect(afterMember.budgetTokens).toBe(beforeMember.budgetTokens + 500);
+      expect((await getTeam(team.id, db))?.budgetTokens).toBe(beforeTeam.budgetTokens + 500);
+      // A top-up on an idle coordinator must not invent a parked phase.
+      expect(coordinator.getState().phase).toBe(phaseBefore);
+    });
+
+    it('reaches a member added after the turn snapshot started (WR-13, D-18)', async () => {
+      harness = await createHarness({
+        useSeam: true,
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            options.onUsage?.({ totalTokens: 10 });
+            await options.beforeToolRound?.(1, options.signal);
+            return loopResult('Xong.');
+          },
+        },
+      });
+      const current = harness;
+      const extra = await createEmployee(
+        {
+          name: 'Dũng',
+          role: 'Chuyên viên',
+          capability: 'Hỗ trợ',
+          persona: 'Bạn là Dũng.',
+          model: EMP_D_MODEL,
+        },
+        current.db
+      );
+      current.roster.memberAgentIds.push(current.lead.id);
+
+      const sent = current.coordinator.send('Xin chào');
+      // Mid-turn: the roster snapshot is already taken, so `ensureMembers()` would early-return.
+      await addTeamMember(
+        { teamId: current.team.id, agentId: extra.id, role: 'employee', budgetTokens: 0 },
+        current.db
+      );
+      await sent;
+      await waitForReady(current.coordinator);
+
+      const beforeRows = await current.db.aiTeamMembers
+        .where('teamId')
+        .equals(current.team.id)
+        .toArray();
+      const lateRow = beforeRows.find((row) => row.agentId === extra.id)!;
+      expect(lateRow.budgetTokens).toBe(0);
+
+      await current.coordinator.topUp({ kind: 'team' }, 300);
+
+      const afterRows = await current.db.aiTeamMembers
+        .where('teamId')
+        .equals(current.team.id)
+        .toArray();
+      expect(afterRows).toHaveLength(beforeRows.length);
+      expect(afterRows.find((row) => row.agentId === extra.id)?.budgetTokens).toBeGreaterThan(0);
+      const deltas = afterRows.map(
+        (row) => row.budgetTokens - beforeRows.find((prev) => prev.id === row.id)!.budgetTokens
+      );
+      expect(deltas.reduce((sum, delta) => sum + delta, 0)).toBe(300);
+    });
+
+    it('surfaces a refused top-up and writes nothing (AIO-BUDGET-07, D-19)', async () => {
+      harness = await createHarness({ scripts: {} });
+      const { coordinator, db, team } = harness;
+      const beforeTeam = (await getTeam(team.id, db))!;
+      const beforeRows = await db.aiTeamMembers.where('teamId').equals(team.id).toArray();
+
+      await expect(
+        coordinator.topUp({ kind: 'agent', agentId: 'not-a-member' }, 500)
+      ).rejects.toThrow('Không tìm thấy thành viên trong nhóm');
+
+      expect((await getTeam(team.id, db))?.budgetTokens).toBe(beforeTeam.budgetTokens);
+      expect(await db.aiTeamMembers.where('teamId').equals(team.id).toArray()).toEqual(beforeRows);
     });
 
     it('keeps the decided plan in the snapshot so the status line is observable', async () => {

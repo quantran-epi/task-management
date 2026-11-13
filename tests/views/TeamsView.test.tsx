@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../src/db';
 import { createEmployee, createLead, createSkill, updateLead } from '../../src/db/repositories/aiOfficeRepo';
 import { createTeam, getTeam, listTeamMembers, listTeams, updateTeam } from '../../src/db/repositories/aiTeamRepo';
-import { activateTeam } from '../../src/db/repositories/aiTeamRepo';
+import { activateTeam, applyTeamBudgetSettings } from '../../src/db/repositories/aiTeamRepo';
 import { message } from 'antd';
 
 // WR-12: let each test make one write reject; every other case uses the real repo.
@@ -15,6 +15,9 @@ vi.mock('../../src/db/repositories/aiTeamRepo', async (importOriginal) => {
     updateTeam: vi.fn(actual.updateTeam),
     activateTeam: vi.fn(actual.activateTeam),
     pauseTeam: vi.fn(actual.pauseTeam),
+    // Phase 38 D-19: the settings save is one absolute two-table write, so this is the
+    // call that must reject for the WR-12 assertion.
+    applyTeamBudgetSettings: vi.fn(actual.applyTeamBudgetSettings),
   };
 });
 import { TeamsView } from '../../src/views/TeamsView';
@@ -705,7 +708,7 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     fireEvent.click(await screen.findByTestId('team-header-settings'));
     await screen.findByTestId('team-settings-drawer');
 
-    vi.mocked(updateTeam).mockRejectedValueOnce(new Error('Không tìm thấy nhóm: 1234'));
+    vi.mocked(applyTeamBudgetSettings).mockRejectedValueOnce(new Error('Không tìm thấy nhóm: 1234'));
 
     fireEvent.click(screen.getByTestId('team-settings-save'));
 

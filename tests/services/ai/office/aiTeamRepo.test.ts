@@ -302,9 +302,9 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
     await expect(
       applyTopUp(team.id, { kind: 'agent', agentId: outsider }, 500, db)
     ).rejects.toThrow('Không tìm thấy thành viên trong nhóm');
-    const error = await applyTopUp(team.id, { kind: 'agent', agentId: outsider }, 500, db).catch(
-      (err: unknown) => err as Error
-    );
+    const error = (await applyTopUp(team.id, { kind: 'agent', agentId: outsider }, 500, db).catch(
+      (err: unknown) => err
+    )) as Error;
     expect(error.message).not.toContain(outsider);
 
     expect((await getTeam(team.id, db))?.budgetTokens).toBe(beforeTeam.budgetTokens);
