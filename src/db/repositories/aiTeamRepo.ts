@@ -482,7 +482,84 @@ export async function applyEvenSplit(
   return db.transaction('rw', [db.aiTeamMembers], () => writeEvenSplit(teamId, totalTokens, db));
 }
 
-/** D-32: single-row write. Never read the whole team and rewrite it. */
+/** Phase 38 D-16/D-17: the two additive scopes. An absolute write is a different verb. */
+export type TopUpScopeInput = { kind: 'agent'; agentId: string } | { kind: 'team' };
+
+export interface BudgetWriteResult {
+  team: AiTeam;
+  members: AiTeamMember[];
+}
+
+/** Never interpolate the id: the string reaches the UI, where a raw UUID is noise. */
+const MISSING_MEMBER_FOR_TOPUP =
+  'Không tìm thấy thành viên trong nhóm. Hãy thêm nhân viên trước khi cấp thêm token.';
+
+/**
+ * Phase 38 D-16/D-17/D-18/D-19: the ONE additive budget writer.
+ *
+ * Agent scope raises that member's share and the team total by the same amount; team scope
+ * splits the increase evenly across the roster read FRESH inside the transaction (D-18, so a
+ * member added mid-turn is reachable). Both rows move in one `rw` transaction over
+ * `[aiTeams, aiTeamMembers]` — a throw anywhere leaves both tables byte-identical.
+ *
+ * ADDITIVE only: this raises the total by `amount`. An absolute Settings save must use
+ * {@link applyTeamBudgetSettings}, or the member increase would be added to the total twice.
+ */
+export async function applyTopUp(
+  teamId: string,
+  scope: TopUpScopeInput,
+  amount: number,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<BudgetWriteResult> {
+  return db.transaction('rw', [db.aiTeams, db.aiTeamMembers], async () => {
+    const team = await db.aiTeams.get(teamId);
+    if (!team) throw new Error(`Không tìm thấy nhóm: ${teamId}`);
+    // D-18/WR-13: the roster is read here, never from a caller's cache.
+    const roster = await db.aiTeamMembers.where('teamId').equals(teamId).toArray();
+    // T-38-10: a negative or fractional amount never reaches a stored row.
+    const added = Math.max(0, Math.round(amount));
+
+    if (scope.kind === 'agent' && !roster.some((row) => row.agentId === scope.agentId)) {
+      throw new Error(MISSING_MEMBER_FOR_TOPUP);
+    }
+    if (added === 0) return { team, members: roster };
+
+    let updatedRoster: AiTeamMember[];
+    if (scope.kind === 'agent') {
+      updatedRoster = roster.map((row) =>
+        row.agentId === scope.agentId
+          ? { ...row, budgetTokens: row.budgetTokens + added }
+          : row
+      );
+    } else {
+      // D-14/D-16: the split rule lives once, in `budgetSplit.ts`. Each share is ADDED to the
+      // existing budget — never written alone, which would reset the member's granted budget.
+      const shares = new Map(
+        splitEvenly(added, roster).map((row) => [row.id, row.budgetTokens] as const)
+      );
+      updatedRoster = roster.map((row) => ({
+        ...row,
+        budgetTokens: row.budgetTokens + (shares.get(row.id) ?? 0),
+      }));
+    }
+
+    for (const row of updatedRoster) await db.aiTeamMembers.put(row);
+
+    const updatedTeam: AiTeam = {
+      ...team,
+      budgetTokens: team.budgetTokens + added,
+      updatedAt: new Date().toISOString(),
+    };
+    await db.aiTeams.put(updatedTeam);
+    return { team: updatedTeam, members: updatedRoster };
+  });
+}
+
+/**
+ * @deprecated Phase 38 — use {@link applyTopUp}. Kept as a forwarding shim so the remaining
+ * no-coordinator caller keeps compiling; it holds no arithmetic of its own, so the member
+ * share and the team total can no longer drift apart.
+ */
 export async function topUpMemberBudget(
   memberId: string,
   added: number,
@@ -491,11 +568,13 @@ export async function topUpMemberBudget(
   const row = await db.aiTeamMembers.get(memberId);
   if (!row) throw new Error(`Không tìm thấy thành viên: ${memberId}`);
 
-  // CR-02: a budget is never negative. A decrease larger than the current value clamps
-  // at zero instead of writing a corrupt row that `bucketOf` reads as fully consumed.
-  const budgetTokens = Math.max(0, row.budgetTokens + added);
-  await db.aiTeamMembers.update(memberId, { budgetTokens });
-  return { ...row, budgetTokens };
+  const result = await applyTopUp(
+    row.teamId,
+    { kind: 'agent', agentId: row.agentId },
+    added,
+    db
+  );
+  return result.members.find((member) => member.id === memberId) ?? row;
 }
 
 /** CR-02: a budget *decrease* is a write, not a top-up — it must not open the gate. */

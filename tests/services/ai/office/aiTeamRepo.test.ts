@@ -12,6 +12,7 @@ import {
   addTeamMember,
   removeTeamMember,
   applyEvenSplit,
+  applyTopUp,
   topUpMemberBudget,
   addUsedTokens,
   incrementMemberUsage,
@@ -261,6 +262,44 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
     const updated = await topUpMemberBudget(member!.id, 500, db);
     expect(updated.usedTokens).toBe(100);
     expect(updated.budgetTokens).toBe(member!.budgetTokens + 500);
+    // Phase 38 D-17: the deprecated shim delegates, so the team total moves with it.
+    expect((await getTeam(team.id, db))?.budgetTokens).toBe(team.budgetTokens + 500);
+  });
+
+  it('raises the member share and the group total together (AIO-BUDGET-07, D-17)', async () => {
+    const team = await makeTeam('AgentTopUp');
+    const before = await listTeamMembers(team.id, db);
+    const lead = before.find((row) => row.role === 'lead')!;
+    const others = before.filter((row) => row.role === 'employee');
+
+    const result = await applyTopUp(team.id, { kind: 'agent', agentId: lead.agentId }, 500, db);
+
+    const after = await listTeamMembers(team.id, db);
+    expect(after.find((row) => row.id === lead.id)?.budgetTokens).toBe(lead.budgetTokens + 500);
+    for (const member of others) {
+      expect(after.find((row) => row.id === member.id)?.budgetTokens).toBe(member.budgetTokens);
+    }
+    expect(result.team.budgetTokens).toBe(team.budgetTokens + 500);
+    expect((await getTeam(team.id, db))?.budgetTokens).toBe(team.budgetTokens + 500);
+  });
+
+  it('writes nothing to either table when the agent is not a member (D-19)', async () => {
+    const team = await makeTeam('Rollback');
+    const beforeTeam = (await getTeam(team.id, db))!;
+    const beforeMembers = await listTeamMembers(team.id, db);
+    // A real employee, but not on this roster — the message must not leak its id.
+    const outsider = employeeIds[2]!;
+
+    await expect(
+      applyTopUp(team.id, { kind: 'agent', agentId: outsider }, 500, db)
+    ).rejects.toThrow('Không tìm thấy thành viên trong nhóm');
+    const error = await applyTopUp(team.id, { kind: 'agent', agentId: outsider }, 500, db).catch(
+      (err: unknown) => err as Error
+    );
+    expect(error.message).not.toContain(outsider);
+
+    expect((await getTeam(team.id, db))?.budgetTokens).toBe(beforeTeam.budgetTokens);
+    expect(await listTeamMembers(team.id, db)).toEqual(beforeMembers);
   });
 
   it('adds used tokens to a single row only', async () => {
