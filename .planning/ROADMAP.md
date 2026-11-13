@@ -232,18 +232,30 @@ Plans:
 **Depends on:** Phase 37
 **Success Criteria** (what must be TRUE):
 
-1. A turn whose prompt already exceeds the remaining budget is refused, not run.
+1. A turn whose prompt already exceeds the remaining budget still runs; crossing the threshold is warned in-app plus one OS notification per level, and is never refused or parked — overrides the original wording per D-01/D-02.
 2. A response with no usage still increments the ledger under a stated policy.
 3. A retry charges both attempts.
 4. 20 concurrent increments sum correctly with no lost update.
 5. Starting a group splits the budget evenly with a deterministic remainder.
-6. The threshold warning fires at a configurable value; reaching it pauses visibly between tool rounds and resumes on top-up.
+6. The threshold warning fires at a configurable value (global default in Settings plus an optional per-team override); reaching it raises a member-level badge and a stronger group-level badge plus one OS notification per level, and never pauses the run — overrides the original wording per D-01/D-02/D-06.
 7. Topping up one agent raises that agent's share and the group total in one transaction.
 8. The display shows granted, used, and remaining per group and per member, with input and output separate.
 
-**Research flag:** needs `--research-phase` — R-03/R-04/R-06/R-15/R-19 are all open.
+**Plans:** 10 plans
 
-**Follow-up from phase 36 review:** WR-13 — `topUp` cannot top up a member added since the last turn snapshot (`src/services/ai/office/teamRunCoordinator.ts:993-997` calls `ensureMembers`, whose early return is at `:488-493`). Recorded here, not fixed: the fix belongs with this phase's roster/budget redesign.
+Plans:
+- [ ] 38-01-PLAN.md — V25 schema/type/zod foundation + repair the two red migration tests
+- [ ] 38-02-PLAN.md — record the D-01/D-02 override in REQUIREMENTS.md and ROADMAP.md
+- [ ] 38-03-PLAN.md — atomic usage increment + one shared even-split module
+- [ ] 38-04-PLAN.md — two-table top-up transaction with a fresh roster (WR-13)
+- [ ] 38-05-PLAN.md — threshold math, global setting + Settings card, usage split
+- [ ] 38-06-PLAN.md — backup envelope v14 + validation/SQLite parity
+- [ ] 38-07-PLAN.md — provider usage plumbing, per-attempt rows, estimation, reconcile
+- [ ] 38-08-PLAN.md — remove the gate, two-level warnings + OS notifications, banner rewrite
+- [ ] 38-09-PLAN.md — split budget display, estimate marker, resolved threshold in the UI
+- [ ] 38-10-PLAN.md — install js-tiktoken@1.0.21 behind a human checkpoint
+
+**WR-13** (from the phase 36 review) is answered by plan 38-04: `topUp` reads the roster fresh inside the transaction instead of the `ensureMembers` cache.
 
 ### Phase 39: Skill versioning + enrichment approval
 
