@@ -14,6 +14,7 @@ import {
   applyEvenSplit,
   topUpMemberBudget,
   addUsedTokens,
+  incrementMemberUsage,
   addTeamLink,
   removeTeamLink,
   listTeamLinks,
@@ -271,6 +272,61 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
 
     expect((await db.aiTeamMembers.get(target.id))?.usedTokens).toBe(42);
     expect((await db.aiTeamMembers.get(sibling.id))?.usedTokens).toBe(0);
+  });
+
+  // Phase 38 tracer: the old get-then-update body could not produce `start + 200`, so this
+  // test is fail-first by construction. Real Dexie only — never mock the database here.
+  it('sums 20 concurrent increments on one member row (AIO-BUDGET-04, D-13)', async () => {
+    const team = await makeTeam('Concurrent');
+    const member = (await listTeamMembers(team.id, db))[0]!;
+    const start = member.usedTokens;
+
+    await Promise.all(
+      Array.from({ length: 20 }, () =>
+        incrementMemberUsage(
+          member.id,
+          { inputTokens: 7, outputTokens: 3, estimated: false },
+          db
+        )
+      )
+    );
+
+    const stored = await db.aiTeamMembers.get(member.id);
+    expect(stored?.usedTokens).toBe(start + 200);
+    expect(stored?.inputTokens).toBe(140);
+    expect(stored?.outputTokens).toBe(60);
+  });
+
+  it('sums 20 concurrent increments across two member rows (AIO-BUDGET-04, D-13)', async () => {
+    const team = await makeTeam('ConcurrentTwo');
+    const [a, b] = await listTeamMembers(team.id, db);
+
+    await Promise.all([
+      ...Array.from({ length: 20 }, () =>
+        incrementMemberUsage(a!.id, { inputTokens: 7, outputTokens: 3, estimated: false }, db)
+      ),
+      ...Array.from({ length: 20 }, () =>
+        incrementMemberUsage(b!.id, { inputTokens: 1, outputTokens: 1, estimated: false }, db)
+      ),
+    ]);
+
+    expect((await db.aiTeamMembers.get(a!.id))?.usedTokens).toBe(200);
+    expect((await db.aiTeamMembers.get(b!.id))?.usedTokens).toBe(40);
+  });
+
+  it('lands two increments settling in the same tick on one row (AIO-BUDGET-04)', async () => {
+    const team = await makeTeam('SameTick');
+    const member = (await listTeamMembers(team.id, db))[0]!;
+
+    await Promise.all([
+      incrementMemberUsage(member.id, { inputTokens: 11, outputTokens: 5, estimated: false }, db),
+      incrementMemberUsage(member.id, { inputTokens: 3, outputTokens: 2, estimated: false }, db),
+    ]);
+
+    const stored = await db.aiTeamMembers.get(member.id);
+    expect(stored?.usedTokens).toBe(21);
+    expect(stored?.inputTokens).toBe(14);
+    expect(stored?.outputTokens).toBe(7);
   });
 
   it('pauses and reactivates the same team row with an advanced updatedAt', async () => {

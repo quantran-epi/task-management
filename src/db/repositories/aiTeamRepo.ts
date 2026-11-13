@@ -520,18 +520,65 @@ export async function setMemberBudget(
   return { ...row, budgetTokens: next };
 }
 
-/** D-32: single-row write so three concurrent completions cannot lose usage. */
+/** Phase 38 D-09/D-23: one usage charge, split into its input and output halves. */
+export interface MemberUsageDelta {
+  inputTokens: number;
+  outputTokens: number;
+  /** D-10: the provider gave no `usage`, so these numbers are a local tokenizer estimate. */
+  estimated: boolean;
+}
+
+/**
+ * Phase 38 D-13: the usage ledger is a delta sink, and each call is atomic on its own.
+ *
+ * The read-modify-write runs inside one `rw` transaction, so 20 concurrent calls land as
+ * exactly `start + 20 × delta`. Calling twice for the same attempt adds twice — deduplication
+ * is the caller's accounting-key job (D-24 Phase 37.1 baseline), never this function's.
+ *
+ * `usedTokens` stays in sync as the legacy scalar every existing reader sums; plan 09 switches
+ * those readers to the split columns.
+ */
+export async function incrementMemberUsage(
+  memberId: string,
+  delta: MemberUsageDelta,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<AiTeamMember> {
+  return db.transaction('rw', db.aiTeamMembers, async () => {
+    const row = await db.aiTeamMembers.get(memberId);
+    if (!row) throw new Error(`Không tìm thấy thành viên: ${memberId}`);
+
+    const next: AiTeamMember = {
+      ...row,
+      usedTokens: (row.usedTokens ?? 0) + delta.inputTokens + delta.outputTokens,
+      inputTokens: (row.inputTokens ?? 0) + delta.inputTokens,
+      outputTokens: (row.outputTokens ?? 0) + delta.outputTokens,
+    };
+    // D-10: an untouched pre-V25 row keeps the key absent; once estimated, it stays estimated.
+    if (row.usageEstimated === true || delta.estimated) {
+      next.usageEstimated = true;
+    } else {
+      delete next.usageEstimated;
+    }
+
+    await db.aiTeamMembers.put(next);
+    return next;
+  });
+}
+
+/**
+ * @deprecated Phase 38 — use {@link incrementMemberUsage}. Kept until plan 07 rewires
+ * `teamRunCoordinator`, which still charges a single scalar.
+ */
 export async function addUsedTokens(
   memberId: string,
   delta: number,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<AiTeamMember> {
-  const row = await db.aiTeamMembers.get(memberId);
-  if (!row) throw new Error(`Không tìm thấy thành viên: ${memberId}`);
-
-  const usedTokens = row.usedTokens + delta;
-  await db.aiTeamMembers.update(memberId, { usedTokens });
-  return { ...row, usedTokens };
+  return incrementMemberUsage(
+    memberId,
+    { inputTokens: delta, outputTokens: 0, estimated: false },
+    db
+  );
 }
 
 export async function listTeamLinks(
