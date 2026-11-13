@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
 status: executing
-stopped_at: Completed 38-08-PLAN.md
-last_updated: "2026-11-13T15:25:10.412Z"
-last_activity: 2026-11-13 -- Phase 38 plan 08 complete (warning-only budget, one notification per team per level)
+stopped_at: Completed 38-10-PLAN.md
+last_updated: "2026-11-13T15:28:30.000Z"
+last_activity: 2026-11-13 -- Phase 38 plan 10 complete (js-tiktoken pinned, real o200k_base BPE counting)
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 48
-  completed_plans: 42
-  percent: 43
+  completed_plans: 43
+  percent: 44
 current_phase: 38
 current_phase_name: Hard token budget + accurate measurement
 ---
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 38 (hard-token-budget-accurate-measurement) — EXECUTING
-Plan: 11 of 12
+Plan: 12 of 12
 Status: Ready to execute
-Last activity: 2026-11-13 -- Phase 38 plan 08 complete (warning-only budget, one notification per team per level)
+Last activity: 2026-11-13 -- Phase 38 plan 10 complete (js-tiktoken pinned, real o200k_base BPE counting)
 
 ## Session Continuity
 
-Last session: 2026-11-13T15:24:59.357Z
-Stopped at: Completed 38-08-PLAN.md
+Last session: 2026-11-13T15:28:30.000Z
+Stopped at: Completed 38-10-PLAN.md
 Resume file: None
 
-Progress: [█████████░] 88%
+Progress: [█████████░] 90%
 
 ## Milestone v1.4 Map
 
@@ -174,6 +174,9 @@ Progress: [█████████░] 88%
 - [Phase 38]: flushAccounting marks the key flushed BEFORE awaiting the increment; that guard, not a zeroed record, is the duplicate-charge defence
 - [Phase 38]: The employee turn's finally flushes and reconciles too, covering mention-started turns that own no attempt row
 - [Phase 38]: tokenEstimate loads js-tiktoken through widened string specifiers with @vite-ignore so an absent package reaches the runtime catch; plan 10 switches them to literal lazy subpaths
+- [Phase 38]: js-tiktoken is pinned at exactly 1.0.21 and imported only through the lite + ranks/o200k_base subpaths (never the 5 MB root), so the tokenizer lands in its own lazy chunk
+- [Phase 38]: The Vietnamese token-count test asserts a positive integer, stability and inequality with chars÷4 — never a direction, because o200k_base can land either side of the heuristic
+- [Phase 38]: Two failure seams, not one: a rejecting loader proves the absent-package path, a throwing encode proves the present-but-failing path; both degrade to chars÷4
 - [Phase ?]: Budget warning identity is (teamId, level): the member level dispatches once per team, never once per teammate
 - [Phase ?]: budgetWarnings.member is the aggregate flag; the per-member badge stays plan 09's surface
 - [Phase ?]: pausedAgentId/pausedAgentName stay on the snapshot as always-null legacy fields because the parked phase value is still legal in old backups
@@ -198,6 +201,7 @@ Progress: [█████████░] 88%
 | Phase 38 P01 | 4min | 3 tasks | 9 files |
 | Phase 38 P02 | 2min | 2 tasks | 1 files |
 | Phase 38 P03 | 3min | 3 tasks | 4 files |
+| Phase 38 P10 | 5min | 2 tasks | 4 files |
 | Phase 38 P06 | 4min | 3 tasks | 10 files |
 | Phase 38 P11 | 2min | 2 tasks | 4 files |
 | Phase 38 P05 | 12min | 3 tasks | 10 files |

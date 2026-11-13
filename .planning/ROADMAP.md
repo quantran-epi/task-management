@@ -241,7 +241,7 @@ Plans:
 7. Topping up one agent raises that agent's share and the group total in one transaction.
 8. The display shows granted, used, and remaining per group and per member, with input and output separate.
 
-**Plans:** 10/12 plans executed
+**Plans:** 11/12 plans executed
 
 Plans:
 **Wave 1** *(no dependencies)*
@@ -271,7 +271,7 @@ Plans:
 **Wave 6**
 
 - [x] 38-08-PLAN.md — remove the gate, two-level team-scoped warnings + OS notifications
-- [ ] 38-10-PLAN.md — install js-tiktoken@1.0.21 behind a human checkpoint
+- [x] 38-10-PLAN.md — install js-tiktoken@1.0.21 behind a human checkpoint
 
 **Wave 7**
 
