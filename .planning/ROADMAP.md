@@ -241,21 +241,38 @@ Plans:
 7. Topping up one agent raises that agent's share and the group total in one transaction.
 8. The display shows granted, used, and remaining per group and per member, with input and output separate.
 
-**Plans:** 10 plans
+**Plans:** 12 plans in 7 waves
 
 Plans:
+**Wave 1** *(no dependencies)*
 - [ ] 38-01-PLAN.md — V25 schema/type/zod foundation + repair the two red migration tests
 - [ ] 38-02-PLAN.md — record the D-01/D-02 override in REQUIREMENTS.md and ROADMAP.md
+
+**Wave 2**
 - [ ] 38-03-PLAN.md — atomic usage increment + one shared even-split module
-- [ ] 38-04-PLAN.md — two-table top-up transaction with a fresh roster (WR-13)
-- [ ] 38-05-PLAN.md — threshold math, global setting + Settings card, usage split
-- [ ] 38-06-PLAN.md — backup envelope v14 + validation/SQLite parity
-- [ ] 38-07-PLAN.md — provider usage plumbing, per-attempt rows, estimation, reconcile
-- [ ] 38-08-PLAN.md — remove the gate, two-level warnings + OS notifications, banner rewrite
-- [ ] 38-09-PLAN.md — split budget display, estimate marker, resolved threshold in the UI
+- [ ] 38-06-PLAN.md — backup envelope v14 + record schemas + fixture sweep (SQLite parity split to 38-12)
+- [ ] 38-11-PLAN.md — global budget-warning threshold setting + Settings card
+
+**Wave 3**
+- [ ] 38-05-PLAN.md — threshold math, resolved-vs-override snapshot fields, shared snapshot helper
+- [ ] 38-12-PLAN.md — SQLite/parity confirmation: no structural change + membership test
+
+**Wave 4**
+- [ ] 38-04-PLAN.md — additive two-table top-up + absolute two-table Settings save (WR-13, 3000→4000)
+
+**Wave 5**
+- [ ] 38-07-PLAN.md — typed usage chain, per-request accounting, pre-call tokenizer warning, terminal flush + reconcile
+
+**Wave 6**
+- [ ] 38-08-PLAN.md — remove the gate, two-level team-scoped warnings + OS notifications
 - [ ] 38-10-PLAN.md — install js-tiktoken@1.0.21 behind a human checkpoint
 
+**Wave 7**
+- [ ] 38-09-PLAN.md — split budget display, estimate marker, resolved threshold in the UI
+
 **WR-13** (from the phase 36 review) is answered by plan 38-04: `topUp` reads the roster fresh inside the transaction instead of the `ensureMembers` cache.
+
+**Plan-check round 3 changes:** 38-04 gained the absolute `applyTeamBudgetSettings` verb (3000→4000 no longer becomes 5000); 38-05 split its Settings card into 38-11; 38-06 split its SQLite/parity work into 38-12; 38-07 gained the pre-call tokenizer warning and memory-only accounting; 38-08 re-keyed notifications to `(team, level)` with team-scoped resets.
 
 ### Phase 39: Skill versioning + enrichment approval
 
