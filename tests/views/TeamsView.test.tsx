@@ -427,7 +427,8 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     expect((await getTeam(activeTeam.id, db))?.budgetWarnThresholdPct).toBeUndefined();
   });
 
-  it('keeps the member and group badges independent (D-03/D-06)', async () => {    const rows = await listTeamMembers(activeTeam.id, db);
+  it('keeps the member and group badges independent (D-03/D-06)', async () => {
+    const rows = await listTeamMembers(activeTeam.id, db);
     const employeeRow = rows.find((row) => row.role === 'employee')!;
     // Member over its own 1000 share; group total 4000 stays well under.
     await db.aiTeamMembers.update(employeeRow.id, {
@@ -443,6 +444,74 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
 
     expect(await screen.findByTestId('budget-badge-member')).toBeInTheDocument();
     expect(screen.queryByTestId('budget-badge-team')).not.toBeInTheDocument();
+  });
+
+  it('converges the live sidebar numbers to the ledger after the turn ends (D-22, AIO-BUDGET-08)', async () => {
+    await db.settings.put({ key: 'ninerouter_api_key', value: 'sk-test' });
+    await db.settings.put({ key: 'ninerouter_endpoint', value: 'https://example.invalid/v1' });
+
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const createRuntimeDeps = () => ({
+      runLoop: (async (loopOptions: any) => {
+        loopOptions.onUsage?.({ promptTokens: 600, completionTokens: 150, totalTokens: 750 });
+        // Hold the turn open so the live capture happens before the terminal flush.
+        await gate;
+        return {
+          fullResponse: 'Xong.',
+          cleanResponse: 'Xong.',
+          messages: [],
+          tokenUsage: {},
+          generatedFiles: [],
+          truncated: false,
+          loopLimitReached: false,
+        };
+      }) as any,
+    });
+
+    render(<TeamsView db={db} createRuntimeDeps={createRuntimeDeps} />);
+    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    const composer = await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(composer, { target: { value: 'Lượt có đo token' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    const leadRow = (await listTeamMembers(activeTeam.id, db)).find((row) => row.role === 'lead')!;
+    const liveLine = await screen.findByTestId(`member-usage-${leadRow.agentId}`);
+    await waitFor(() => expect(liveLine).toHaveTextContent('750'));
+    const liveText = screen.getByTestId('team-sidebar').textContent ?? '';
+    expect(liveText).not.toContain('NaN');
+    expect(liveText).not.toContain('undefined');
+    expect(liveText).not.toContain('Infinity');
+
+    release!();
+    await waitFor(() => expect(screen.getAllByText('Xong.').length).toBeGreaterThan(0));
+
+    // D-22: once the turn is over the rendered numbers equal the ledger rows.
+    const settled = await waitFor(async () => {
+      const rows = await listTeamMembers(activeTeam.id, db);
+      const row = rows.find((entry) => entry.role === 'lead')!;
+      expect(row.usedTokens).toBe(750);
+      expect(row.inputTokens).toBe(600);
+      expect(row.outputTokens).toBe(150);
+      return row;
+    });
+
+    const settledLine = screen.getByTestId(`member-usage-${leadRow.agentId}`);
+    expect(settledLine).toHaveTextContent(settled.usedTokens.toLocaleString());
+    expect(settledLine).toHaveTextContent(settled.inputTokens!.toLocaleString());
+    expect(settledLine).toHaveTextContent(settled.outputTokens!.toLocaleString());
+    expect(settledLine).toHaveTextContent(
+      Math.max(0, settled.budgetTokens - settled.usedTokens).toLocaleString()
+    );
+
+    const settledText = screen.getByTestId('team-sidebar').textContent ?? '';
+    expect(settledText).not.toContain('NaN');
+    expect(settledText).not.toContain('undefined');
+    expect(settledText).not.toContain('Infinity');
+    // The coordinator's own reconcile is covered by teamRunCoordinator.test.ts; this test
+    // proves the rendering layer does not diverge from the rows it is handed.
   });
 
   it('keeps the settings split table rows summing to the team total', async () => {

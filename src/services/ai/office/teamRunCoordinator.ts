@@ -1388,6 +1388,9 @@ export function createTeamRunCoordinator(
     memberUsed.set(agentId, (memberUsed.get(agentId) ?? 0) + inputDelta + outputDelta);
     teamUsed += inputDelta + outputDelta;
     evaluateBudgetWarnings();
+    // D-22: the live half. Without this the sidebar only sees a number at the terminal flush,
+    // which is the ledger half — the header would sit at 0 for the whole turn.
+    notify();
   }
 
   /** D-07: a member's live total, plus the pre-call guess until a report supersedes it. */
