@@ -241,7 +241,7 @@ Plans:
 7. Topping up one agent raises that agent's share and the group total in one transaction.
 8. The display shows granted, used, and remaining per group and per member, with input and output separate.
 
-**Plans:** 11/12 plans executed
+**Plans:** 12/12 plans complete
 
 Plans:
 **Wave 1** *(no dependencies)*
@@ -275,7 +275,7 @@ Plans:
 
 **Wave 7**
 
-- [ ] 38-09-PLAN.md — split budget display, estimate marker, resolved threshold in the UI (global source wired into the team list; clear-override traversal test)
+- [x] 38-09-PLAN.md — split budget display, estimate marker, resolved threshold in the UI (global source wired into the team list; clear-override traversal test)
 
 **WR-13** (from the phase 36 review) is answered by plan 38-04: `topUp` reads the roster fresh inside the transaction instead of the `ensureMembers` cache.
 

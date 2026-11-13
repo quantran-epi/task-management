@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
-status: executing
-stopped_at: Completed 38-10-PLAN.md
-last_updated: "2026-11-13T15:28:30.000Z"
+status: verifying
+stopped_at: Completed 38-09-PLAN.md
+last_updated: "2026-11-13T15:49:43.338Z"
 last_activity: 2026-11-13 -- Phase 38 plan 10 complete (js-tiktoken pinned, real o200k_base BPE counting)
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 48
-  completed_plans: 43
-  percent: 44
+  completed_plans: 44
+  percent: 43
 current_phase: 38
 current_phase_name: Hard token budget + accurate measurement
 ---
@@ -27,13 +27,13 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 
 Phase: 38 (hard-token-budget-accurate-measurement) — EXECUTING
 Plan: 12 of 12
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-11-13 -- Phase 38 plan 10 complete (js-tiktoken pinned, real o200k_base BPE counting)
 
 ## Session Continuity
 
-Last session: 2026-11-13T15:28:30.000Z
-Stopped at: Completed 38-10-PLAN.md
+Last session: 2026-11-13T15:49:43.332Z
+Stopped at: Completed 38-09-PLAN.md
 Resume file: None
 
 Progress: [█████████░] 90%
@@ -180,6 +180,9 @@ Progress: [█████████░] 90%
 - [Phase ?]: Budget warning identity is (teamId, level): the member level dispatches once per team, never once per teammate
 - [Phase ?]: budgetWarnings.member is the aggregate flag; the per-member badge stays plan 09's surface
 - [Phase ?]: pausedAgentId/pausedAgentName stay on the snapshot as always-null legacy fields because the parked phase value is still legal in old backups
+- [Phase ?]: Split budget rendering sums every member row so the header agrees with the ledger the coordinator reconciles against
+- [Phase ?]: A provisional pre-call measurement renders with the ~ estimate marker because it is not a provider number
+- [Phase ?]: AgentPausedBanner deleted: awaiting-budget has no producer and its copy claimed a parked turn plus a literal 80%
 
 ## Performance Metrics
 
@@ -209,3 +212,4 @@ Progress: [█████████░] 90%
 | Phase 38 P04 | 7min | 3 tasks | 7 files |
 | Phase 38 P07 | 22min | 3 tasks | 9 files |
 | Phase 38 P08 | 14min | 3 tasks | 8 files |
+| Phase 38 P09 | 26min | 3 tasks | 12 files |
