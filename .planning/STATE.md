@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
 status: executing
-stopped_at: Completed 38-12-PLAN.md
-last_updated: "2026-11-13T21:31:00.000Z"
-last_activity: 2026-11-13 -- Phase 38 plan 12 complete (SQLite/parity confirmation)
+stopped_at: Completed 38-04-PLAN.md
+last_updated: "2026-11-13T21:40:00.000Z"
+last_activity: 2026-11-13 -- Phase 38 plan 04 complete (additive top-up + absolute settings save)
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 48
-  completed_plans: 39
-  percent: 44
+  completed_plans: 40
+  percent: 45
 current_phase: 38
 current_phase_name: Hard token budget + accurate measurement
 ---
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 38 (hard-token-budget-accurate-measurement) — EXECUTING
-Plan: 8 of 12
+Plan: 9 of 12
 Status: Ready to execute
-Last activity: 2026-11-13 -- Phase 38 plan 12 complete (SQLite/parity confirmation)
+Last activity: 2026-11-13 -- Phase 38 plan 04 complete (additive top-up + absolute settings save)
 
 ## Session Continuity
 
-Last session: 2026-11-13T21:31:00.000Z
-Stopped at: Completed 38-12-PLAN.md
+Last session: 2026-11-13T21:40:00.000Z
+Stopped at: Completed 38-04-PLAN.md
 Resume file: None
 
-Progress: [████████░░] 81%
+Progress: [████████░░] 82%
 
 ## Milestone v1.4 Map
 
@@ -165,6 +165,10 @@ Progress: [████████░░] 81%
 - [Phase 38]: Override and effective threshold are two snapshot fields; the override key is omitted when inheriting (exactOptionalPropertyTypes), never set to undefined
 - [Phase 38]: nextThresholdOverride(undefined) is the only clear mechanism — no separate clear method exists
 - [Phase 38]: tests/helpers/teamRunSnapshot.ts owns the snapshot stub; five drifted literals collapsed into it
+- [Phase 38]: applyTopUp (additive) and applyTeamBudgetSettings (absolute) are separate repo verbs, each one rw transaction over [aiTeams, aiTeamMembers]; mixing them is the double-increment bug
+- [Phase 38]: The roster is read inside the top-up transaction, never from the coordinator cache — WR-13's membersLoaded early return is off the path
+- [Phase 38]: The coordinator mirrors a persisted budget result (applyBudgetSettings) and never re-derives a delta; null and undefined both mean inherit at that boundary
+- [Phase 38]: applyTeamBudgetSettings clamps rather than zod-validates the threshold on purpose: zod refuses 0 at the trust boundary, the settings path clamps 0 to 1 as a runtime belt
 
 ## Performance Metrics
 
@@ -188,3 +192,6 @@ Progress: [████████░░] 81%
 | Phase 38 P03 | 3min | 3 tasks | 4 files |
 | Phase 38 P06 | 4min | 3 tasks | 10 files |
 | Phase 38 P11 | 2min | 2 tasks | 4 files |
+| Phase 38 P05 | 12min | 3 tasks | 10 files |
+| Phase 38 P12 | 4min | 2 tasks | 3 files |
+| Phase 38 P04 | 7min | 3 tasks | 7 files |

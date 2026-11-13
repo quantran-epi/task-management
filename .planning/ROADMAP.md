@@ -241,7 +241,7 @@ Plans:
 7. Topping up one agent raises that agent's share and the group total in one transaction.
 8. The display shows granted, used, and remaining per group and per member, with input and output separate.
 
-**Plans:** 7/12 plans executed
+**Plans:** 8/12 plans executed
 
 Plans:
 **Wave 1** *(no dependencies)*
@@ -262,7 +262,7 @@ Plans:
 
 **Wave 4**
 
-- [ ] 38-04-PLAN.md — additive two-table top-up + absolute two-table Settings save (WR-13, 3000→4000)
+- [x] 38-04-PLAN.md — additive two-table top-up + absolute two-table Settings save (WR-13, 3000→4000)
 
 **Wave 5**
 
