@@ -241,7 +241,7 @@ Plans:
 7. Topping up one agent raises that agent's share and the group total in one transaction.
 8. The display shows granted, used, and remaining per group and per member, with input and output separate.
 
-**Plans:** 2/12 plans executed
+**Plans:** 3/12 plans executed
 
 Plans:
 **Wave 1** *(no dependencies)*
@@ -251,7 +251,7 @@ Plans:
 
 **Wave 2**
 
-- [ ] 38-03-PLAN.md — atomic usage increment + one shared even-split module
+- [x] 38-03-PLAN.md — atomic usage increment + one shared even-split module
 - [ ] 38-06-PLAN.md — backup envelope v14 + record schemas + fixture sweep (SQLite parity split to 38-12)
 - [ ] 38-11-PLAN.md — global budget-warning threshold setting + Settings card
 

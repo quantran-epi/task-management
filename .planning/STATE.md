@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
 status: executing
-stopped_at: Completed 38-02-PLAN.md
-last_updated: "2026-11-13T14:14:23.914Z"
+stopped_at: Completed 38-03-PLAN.md
+last_updated: "2026-11-13T14:17:09.387Z"
 last_activity: 2026-11-13 -- Phase 38 execution started
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 48
-  completed_plans: 34
-  percent: 71
+  completed_plans: 35
+  percent: 43
 current_phase: 38
 current_phase_name: Hard token budget + accurate measurement
 ---
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 38 (hard-token-budget-accurate-measurement) — EXECUTING
-Plan: 3 of 12
+Plan: 4 of 12
 Status: Ready to execute
 Last activity: 2026-11-13 -- Phase 38 execution started
 
 ## Session Continuity
 
-Last session: 2026-11-13T14:14:15.607Z
-Stopped at: Completed 38-02-PLAN.md
+Last session: 2026-11-13T14:17:07.720Z
+Stopped at: Completed 38-03-PLAN.md
 Resume file: None
 
 Progress: [███████░░░] 71%
@@ -154,6 +154,8 @@ Progress: [███████░░░] 71%
 - [Phase 38]: V25 is purely additive with no .upgrade() hook; split usage columns are optional on the type and seeded 0 on every write path
 - [Phase ?]: AIO-BUDGET-01/09 keep their unchecked box; the override note records the decision and the checkmark lands when the implementation plans close
 - [Phase ?]: ROADMAP.md criteria 1 and 6 were already warning-only at HEAD, so plan 38-02 was a verify-and-noop for that file
+- [Phase 38]: incrementMemberUsage is the atomic delta sink; usedTokens stays the legacy scalar until plan 09
+- [Phase 38]: splitEvenly in budgetSplit.ts is the single home of the even-split rule; evenSplitRows is a thin adapter
 
 ## Performance Metrics
 
@@ -174,3 +176,4 @@ Progress: [███████░░░] 71%
 | Phase 37.1 P06 | 35m | 3 tasks | 12 files |
 | Phase 38 P01 | 4min | 3 tasks | 9 files |
 | Phase 38 P02 | 2min | 2 tasks | 1 files |
+| Phase 38 P03 | 3min | 3 tasks | 4 files |
