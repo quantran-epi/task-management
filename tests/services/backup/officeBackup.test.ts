@@ -85,6 +85,7 @@ const team: AiTeam = {
   budgetTokens: 200000,
   autoSplitEnabled: true,
   autoApproveMutations: false,
+  budgetWarnThresholdPct: 65,
   createdAt: NOW,
   updatedAt: NOW,
 };
@@ -96,6 +97,9 @@ const leadMember: AiTeamMember = {
   role: 'lead',
   budgetTokens: 80000,
   usedTokens: 1200,
+  inputTokens: 1200,
+  outputTokens: 300,
+  usageEstimated: true,
 };
 
 const employeeMember: AiTeamMember = {
@@ -258,12 +262,12 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
     await Promise.all([sourceDb.delete(), restoredDb.delete()]);
   });
 
-  it('exports the AI Office tables at schemaVersion 13', async () => {
+  it('exports the AI Office tables at the current schema version', async () => {
     await seedOffice(sourceDb);
 
     const envelope = await exportBackupPayload(sourceDb);
 
-    expect(envelope.schemaVersion).toBe(13);
+    expect(envelope.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(envelope.tables.aiEmployees).toEqual([employee]);
     expect(envelope.tables.aiLeads).toEqual([lead]);
     expect(envelope.tables.aiSkills).toEqual([skill]);
@@ -291,7 +295,7 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
 
     const envelope = await exportBackupPayload(sourceDb);
 
-    expect(envelope.schemaVersion).toBe(13);
+    expect(envelope.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(envelope.counts.aiTeamAssignments).toBe(2);
     // The local row carries the field; the artifact must not.
     expect((await sourceDb.aiTeamAssignments.get(ASSIGNMENT_2_ID))?.diagnosticDetail).toBeDefined();
@@ -311,6 +315,21 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
     // D-24: states with no runtime yet still round-trip.
     expect(restoredRetry?.runStatus).toBe('blocked');
     expect((await restoredDb.aiTeamAssignments.get(ASSIGNMENT_1_ID))?.runStatus).toBe('needs-input');
+  });
+
+  it('round-trips split usage and the per-team warn threshold (AIO-BUDGET-02, D-23)', async () => {
+    await seedOffice(sourceDb);
+
+    const envelope = await exportBackupPayload(sourceDb);
+    expect(validateBackupPayload(envelope)).toMatchObject({ valid: true, errors: [] });
+
+    await restoreBackupPayload(envelope, restoredDb);
+
+    const restoredMember = await restoredDb.aiTeamMembers.get(MEMBER_LEAD_ID);
+    expect(restoredMember?.inputTokens).toBe(1200);
+    expect(restoredMember?.outputTokens).toBe(300);
+    expect(restoredMember?.usageEstimated).toBe(true);
+    expect((await restoredDb.aiTeams.get(TEAM_ID))?.budgetWarnThresholdPct).toBe(65);
   });
 
   it('round-trips every AI Office row and the four message attribution fields', async () => {

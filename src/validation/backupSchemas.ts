@@ -651,6 +651,11 @@ export const BackupAiTeamRecordSchema = z.strictObject({
   autoApproveMutations: z.boolean().optional(),
   /** Phase 37 D-03/D-02: per-team run concurrency. Absent means the default; range 1-12. */
   concurrencyLimit: z.number().int().min(1).max(12).optional(),
+  /**
+   * Phase 38 D-04/D-05: per-team override of the single warn threshold percentage.
+   * Absent means the global default; the 1-100 band mirrors `warnThresholdPctSchema`.
+   */
+  budgetWarnThresholdPct: z.number().int().min(1).max(100).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -662,6 +667,11 @@ export const BackupAiTeamMemberRecordSchema = z.strictObject({
   role: z.enum(['lead', 'employee']),
   budgetTokens: aiTokensSchema,
   usedTokens: aiTokensSchema,
+  /** Phase 38 D-23: split usage. Optional so a pre-38 export still restores. */
+  inputTokens: aiTokensSchema.optional(),
+  outputTokens: aiTokensSchema.optional(),
+  /** D-10/D-24: true when the counters came from the local tokenizer, not the provider. */
+  usageEstimated: z.boolean().optional(),
 });
 
 export const BackupAiTeamLinkRecordSchema = z.strictObject({
@@ -777,6 +787,13 @@ export const BackupAiTeamAssignmentRecordSchema = z.strictObject({
       totalTokens: z.number().optional(),
     })
     .optional(),
+  /**
+   * Phase 38 D-23: the post-38 split-usage columns on the attempt row. `tokenUsage` above is
+   * retained only so a pre-38 backup restores; these three are what phase 38 writes.
+   */
+  inputTokens: aiTokensSchema.optional(),
+  outputTokens: aiTokensSchema.optional(),
+  usageEstimated: z.boolean().optional(),
   toolCallCount: z.number().int().nonnegative().optional(),
   /** D-24 handoff: upstream assignments that must finish first. */
   dependsOn: z.array(uuidSchema).optional(),
@@ -809,8 +826,12 @@ export const BackupTeamReadCursorRecordSchema = z.strictObject({
   updatedAt: z.string(),
 });
 
-/** D-49: the current backup envelope contract. Version 13 adds `aiTeamBatches`, `aiTeamAssignments` and `AiTeam.concurrencyLimit`; older versions are rejected. */
-export const BACKUP_SCHEMA_VERSION = 13 as const;
+/**
+ * D-49: the current backup envelope contract. Version 14 adds the phase-38 split-usage
+ * columns (`AiTeamMember`/`AiTeamAssignment` `inputTokens`, `outputTokens`, `usageEstimated`)
+ * and `AiTeam.budgetWarnThresholdPct`; older versions are rejected.
+ */
+export const BACKUP_SCHEMA_VERSION = 14 as const;
 
 export const BackupEnvelopeSchema = z.object({
   app: z.literal('personal-task-planner'),
