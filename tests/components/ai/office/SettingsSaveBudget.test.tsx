@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../../../src/db';
 import { createEmployee, createLead } from '../../../../src/db/repositories/aiOfficeRepo';
 import { createTeam } from '../../../../src/db/repositories/aiTeamRepo';
+import { addTeamMember } from '../../../../src/db/repositories/aiTeamRepo';
 import type { AiEmployee, AiLead, AiTeam } from '../../../../src/types/aiOffice';
 import { makeTeamRunSnapshot } from '../../../helpers/teamRunSnapshot';
 
@@ -155,6 +156,10 @@ describe('TeamWorkspace settings save (Phase 38 D-19, AIO-BUDGET-07)', () => {
    * rows once per open, so opening before the roster lands would save an empty `budgets`.
    */
   const openDrawer = async () => {
+    // The composer only renders once the coordinator exists, and every coordinator-side
+    // assertion below depends on it. Waiting here removes the bootstrap race. With no
+    // coordinator (the no-coordinator case) there is nothing to wait for.
+    if (currentStub) await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
     fireEvent.click(await screen.findByTestId('team-open-settings'));
     await screen.findByTestId(`team-member-row-${(await db.aiTeamMembers.toArray())[0]!.id}`);
     return screen.findByLabelText('Tổng ngân sách nhóm');
@@ -226,6 +231,7 @@ describe('TeamWorkspace settings save (Phase 38 D-19, AIO-BUDGET-07)', () => {
     team = (await db.aiTeams.get(team.id))!;
 
     renderWorkspace();
+    await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
     fireEvent.click(await screen.findByTestId('team-open-settings'));
     await screen.findByTestId('team-threshold-input');
     fireEvent.click(screen.getByTestId('team-threshold-clear'));
@@ -236,8 +242,9 @@ describe('TeamWorkspace settings save (Phase 38 D-19, AIO-BUDGET-07)', () => {
       budgetWarnThresholdPct?: number | null | undefined;
     };
     expect(payload.budgetWarnThresholdPct).toBeNull();
-    await waitFor(() =>
-      expect(currentStub?.setTeamThresholdPct).toHaveBeenCalledWith(undefined)
+    await waitFor(
+      () => expect(currentStub?.setTeamThresholdPct).toHaveBeenCalledWith(undefined),
+      { timeout: 5000 }
     );
 
     await waitFor(async () => {
@@ -262,7 +269,58 @@ describe('TeamWorkspace settings save (Phase 38 D-19, AIO-BUDGET-07)', () => {
     await waitFor(async () => expect((await db.aiTeams.get(team.id))?.budgetWarnThresholdPct).toBe(65));
     // CR-04: the live mirror follows the STORED override. Passing the untouched `undefined`
     // input here reverted the live threshold to the global default while Dexie kept 65.
-    await waitFor(() => expect(currentStub?.setTeamThresholdPct).toHaveBeenCalledWith(65));
+    await waitFor(() => expect(currentStub?.setTeamThresholdPct).toHaveBeenCalledWith(65), {
+      timeout: 5000,
+    });
     expect(currentStub?.setTeamThresholdPct).not.toHaveBeenCalledWith(undefined);
+  });
+
+  // WR-11: `rows` is seeded once per open, so a member added while the drawer is open had no
+  // row and was absent from the save payload — it stayed at 0 forever.
+  it('includes a member added while the drawer is open in the save payload (WR-11)', async () => {
+    renderWorkspace();
+    const input = await openDrawer();
+
+    const late = await createEmployee(
+      { name: 'Muộn', role: 'Phân tích', capability: 'c', persona: 'p', model: 'm3' },
+      db
+    );
+    const lateMember = await addTeamMember(
+      { teamId: team.id, agentId: late.id, role: 'employee', budgetTokens: 250 },
+      db
+    );
+    // The drawer's roster is a live query; wait for it to see the new row before saving.
+    await screen.findByTestId(`team-member-row-${lateMember.id}`);
+
+    fireEvent.change(input, { target: { value: '4000' } });
+    fireEvent.click(await screen.findByTestId('team-settings-save'));
+
+    await waitFor(async () => {
+      const row = await db.aiTeamMembers.get(lateMember.id);
+      expect(row?.budgetTokens).toBe(250);
+    });
+    const payload = repoSpies.applyTeamBudgetSettings.mock.calls[0]![1] as {
+      budgets: Record<string, number>;
+    };
+    expect(payload.budgets[lateMember.id]).toBe(250);
+  });
+
+  // WR-13: the top-up confirm was fire-and-forget, so a refusal was an unhandled rejection
+  // with the modal already closed.
+  it('surfaces a refused top-up in the action-error channel (WR-13)', async () => {
+    currentStub!.topUp = vi.fn(async () => {
+      throw new Error('Không tìm thấy thành viên trong nhóm.');
+    });
+    renderWorkspace();
+
+    await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.click(await screen.findByTestId('team-topup-button'));
+    const amountInput = await screen.findByRole('spinbutton');
+    fireEvent.change(amountInput, { target: { value: '1000' } });
+    fireEvent.click(await screen.findByTestId('budget-topup-confirm'));
+
+    expect(
+      await screen.findByTestId('team-action-error', undefined, { timeout: 5000 })
+    ).toBeInTheDocument();
   });
 });

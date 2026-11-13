@@ -5982,5 +5982,206 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(estimated.usageEstimated).toBe(true);
       expect(estimated.inputTokens).toBeGreaterThan(0);
     });
+
+    // WR-05: the live budget/usage maps were merged, never rebuilt, so a member removed
+    // since the last hydrate kept a stale pair and warned forever.
+    it('drops a removed member from the live budget maps (WR-05)', async () => {
+      // 1000 split over 4 members = a 250 share, so 1000 charged is well past 80%.
+      harness = await createHarness({
+        useSeam: true,
+        teamPatch: { budgetTokens: 1000 },
+        scripts: {
+          [EMP_A_MODEL]: async (options) => {
+            options.onUsage?.({ promptTokens: 900, completionTokens: 100 });
+            return loopResult('A xong');
+          },
+        },
+      });
+      const current = harness;
+      const employee = current.employees[0]!;
+
+      await current.coordinator.send('@[An](agent:' + employee.id + ') việc A');
+      await waitForReady(current.coordinator);
+      expect(current.coordinator.getState().budgetWarnings.member).toBe(true);
+
+      // The member leaves the roster and the DB between turns.
+      current.roster.memberAgentIds = current.roster.memberAgentIds.filter(
+        (id) => id !== employee.id
+      );
+      current.roster.employees = current.roster.employees.filter((row) => row.id !== employee.id);
+      await current.db.aiTeamMembers.where('teamId').equals(current.team.id).delete();
+      await current.db.aiTeamMembers.bulkAdd(
+        current.employees
+          .filter((row) => row.id !== employee.id)
+          .map((row) => ({
+            id: crypto.randomUUID(),
+            teamId: current.team.id,
+            agentId: row.id,
+            role: 'employee' as const,
+            budgetTokens: 1000,
+            usedTokens: 0,
+            inputTokens: 0,
+            outputTokens: 0,
+          }))
+      );
+
+      await current.coordinator.send('Lượt sau');
+      await waitForReady(current.coordinator);
+
+      expect(current.coordinator.getState().budgetWarnings.member).toBe(false);
+    });
+
+    // WR-06: with no roster row the flush charged nothing but still stamped the attempt row.
+    it('stamps zeros on an attempt whose agent has no member row (WR-06)', async () => {
+      harness = await createHarness({
+        useSeam: true,
+        teamPatch: { autoSplitEnabled: true, budgetTokens: 100000 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: [{ agentId: harness!.employees[0]!.id, task: 'Việc A' }] },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Đã giao.');
+          },
+          [EMP_A_MODEL]: async (options) => {
+            options.onUsage?.({ promptTokens: 500, completionTokens: 50 });
+            return loopResult('A xong');
+          },
+        },
+      });
+      const current = harness;
+      // The agent runs, but the turn's roster snapshot does not name it as a member — so
+      // `memberIds` has no row to charge.
+      current.roster.memberAgentIds = current.employees.slice(1).map((row) => row.id);
+
+      await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
+
+      const rows = await current.db.aiTeamAssignments.toArray();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.inputTokens ?? 0).toBe(0);
+      expect(rows[0]!.outputTokens ?? 0).toBe(0);
+    });
+
+    // WR-07: reconcile overwrote an in-flight agent's live counters from the ledger, so its
+    // numbers dropped until its next report.
+    it('never lowers an in-flight agent when a sibling reconciles (WR-07)', async () => {
+      const gate = deferred();
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, budgetTokens: 100000 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              {
+                assignments: current.employees.map((row, index) => ({
+                  agentId: row.id,
+                  task: `Việc ${index + 1}`,
+                })),
+              },
+              current.db,
+              options.signal
+            );
+            return loopResult('Đã giao.');
+          },
+          [EMP_A_MODEL]: async (options) => {
+            options.onUsage?.({ promptTokens: 100, completionTokens: 10 });
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async (options) => {
+            options.onUsage?.({ promptTokens: 200, completionTokens: 20 });
+            await gate.promise;
+            return loopResult('B xong');
+          },
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+      const bId = current.employees[1]!.id;
+
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(
+        () =>
+          current.coordinator.getState().memberUsage.find((row) => row.agentId === bId)
+            ?.inputTokens === 200
+      );
+      // A has settled and reconciled by now; B is still in flight.
+      await sleep(30);
+      const bUsage = current.coordinator
+        .getState()
+        .memberUsage.find((row) => row.agentId === bId);
+      expect(bUsage?.inputTokens).toBe(200);
+      expect(bUsage?.outputTokens).toBe(20);
+
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+    });
+
+    // WR-08: a terminal seam for one attempt must not flush another attempt's record.
+    it('does not flush a later attempt from an earlier attempt’s terminal seam (WR-08)', async () => {
+      const gate = deferred();
+      let bAttempts = 0;
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, budgetTokens: 100000 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            if (isSynthesisTurn(options)) return loopResult('Đã tổng hợp.');
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: [{ agentId: harness!.employees[1]!.id, task: 'Việc B' }] },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Đã giao.');
+          },
+          [EMP_B_MODEL]: async (options) => {
+            bAttempts += 1;
+            if (bAttempts === 1) {
+              options.onUsage?.({ promptTokens: 300, completionTokens: 50 });
+              throw new Error('B hỏng lần một');
+            }
+            options.onUsage?.({ promptTokens: 200, completionTokens: 20 });
+            await gate.promise;
+            return loopResult('B xong lần hai.');
+          },
+        },
+      });
+      const current = harness;
+      const agentId = current.employees[1]!.id;
+
+      await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
+      const first = (await current.db.aiTeamAssignments.toArray()).find(
+        (row) => row.agentId === agentId
+      )!;
+
+      const retried = current.coordinator.retryAssignment(first.id);
+      await waitFor(
+        () =>
+          current.coordinator.getState().memberUsage.find((row) => row.agentId === agentId)
+            ?.inputTokens === 200
+      );
+
+      // The earlier attempt's seam runs while the retry's record is live.
+      await current.coordinator.finalizeAttempt(first.id, 'queued', 'stopped', 'user-per-agent');
+
+      gate.release();
+      await retried;
+
+      const rows = (await current.db.aiTeamAssignments.toArray()).filter(
+        (row) => row.agentId === agentId
+      );
+      const second = rows.find((row) => row.attemptNo === 2)!;
+      // The retry's own numbers survived; its seam was not pre-empted.
+      expect(second.inputTokens).toBe(200);
+      expect(second.outputTokens).toBe(20);
+      const member = await memberRowFor(current, agentId);
+      expect(member.inputTokens).toBe(500);
+      expect(member.outputTokens).toBe(70);
+    });
   });
 });
