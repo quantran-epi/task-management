@@ -14,15 +14,14 @@ const LEGACY_MESSAGE = 'Backup phiên bản cũ không còn được hỗ trợ'
  * D-49: the current-version envelope is the only accepted shape. Pre-31.2 payloads are
  * rejected at the envelope stage — they are never normalized or mapped onto the CR model.
  */
-describe('Backup envelope v13 and legacy rejection (D-49)', () => {
+describe('Backup envelope at the current schema version and legacy rejection (D-49)', () => {
   describe('exportBackupPayload', () => {
-    it('emits the version-13 envelope', async () => {
+    it('emits the current-version envelope', async () => {
       const testDb = new TaskPlannerDatabase('TestExportV2DB_' + Math.random().toString(36).slice(2));
       await testDb.open();
 
       const envelope = await exportBackupPayload(testDb);
-      expect(CURRENT_SCHEMA_VERSION).toBe(13);
-      expect(envelope.schemaVersion).toBe(13);
+      expect(envelope.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
       expect(envelope.app).toBe(APP_MARKER);
 
       await testDb.delete();

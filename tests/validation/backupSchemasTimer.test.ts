@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Dexie from 'dexie';
 import { TaskPlannerDatabase } from '../../src/db/index';
-import { exportBackupPayload } from '../../src/services/backup/exportBackup';
+import { exportBackupPayload, CURRENT_SCHEMA_VERSION } from '../../src/services/backup/exportBackup';
 import { validateBackupPayload } from '../../src/services/backup/validateBackup';
 import { restoreBackupPayload, rollbackToSnapshot } from '../../src/services/backup/restoreBackup';
 import { formatElapsedTicker } from '../../src/utils/time';
@@ -63,10 +63,10 @@ describe('Backup Schemas & Restore with Timer Work Sessions (TIMER-01, TIMER-02)
     await Dexie.delete(dbName);
   });
 
-  it('exports backup payload with the version-11 envelope and includes workSessions', async () => {
+  it('exports backup payload with the current-version envelope and includes workSessions', async () => {
     const payload = await exportBackupPayload(db);
 
-    expect(payload.schemaVersion).toBe(13);
+    expect(payload.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(payload.tables.workSessions).toBeDefined();
     expect(payload.tables.workSessions).toHaveLength(1);
     expect(payload.counts.workSessions).toBe(1);

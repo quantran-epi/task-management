@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as backupSchemas from '../../src/validation/backupSchemas';
 import { TaskPlannerDatabase } from '../../src/db';
-import { exportBackupPayload } from '../../src/services/backup/exportBackup';
+import { exportBackupPayload, CURRENT_SCHEMA_VERSION, isSafeBackupSetting } from '../../src/services/backup/exportBackup';
 
 /**
  * Wave 0 contract for plan 31.2-09 (ENT-NORM-01, D-49).
@@ -67,12 +67,12 @@ describe('backupSchemas — version-11 CR-centric envelope (ENT-NORM-01)', () =>
     expect(typeof mod.BackupEnvelopeSchema?.parse).toBe('function');
     const parsed = mod.BackupEnvelopeSchema.parse({
       app: 'personal-task-planner',
-      schemaVersion: 13,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
       exportedAt: NOW,
       tables: { tasks: [], systems: [], changeRequests: [] },
       counts: { tasks: 0, systems: 0, changeRequests: 0 },
     });
-    expect(parsed.schemaVersion).toBe(13);
+    expect(parsed.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
   });
 
   it('rejects a version-10 envelope', () => {
@@ -145,7 +145,7 @@ describe('exportBackupPayload — version 11 without project/milestone tables', 
 
   it('reports schemaVersion 11 and exports systems and changeRequests', async () => {
     const envelope = await exportBackupPayload(testDb);
-    expect(envelope.schemaVersion).toBe(13);
+    expect(envelope.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(Object.keys(envelope.tables)).toContain('systems');
     expect(Object.keys(envelope.tables)).toContain('changeRequests');
   });
@@ -182,5 +182,129 @@ describe('BackupAiSkillVersionRecordSchema evidence cap (WR-09)', () => {
         evidence: 'x'.repeat(2001),
       })
     ).toThrow(/2000/);
+  });
+});
+
+describe('phase-38 split usage and threshold at the backup boundary (T-38-17, T-38-18)', () => {
+  const teamRecord = () => ({
+    id: CR_ID,
+    name: 'Squad',
+    status: 'active' as const,
+    budgetTokens: 1000,
+    createdAt: NOW,
+    updatedAt: NOW,
+  });
+
+  const memberRecord = () => ({
+    id: TASK_ID,
+    teamId: CR_ID,
+    agentId: NOTE_ID,
+    role: 'employee' as const,
+    budgetTokens: 500,
+    usedTokens: 10,
+  });
+
+  const assignmentRecord = () => ({
+    id: TASK_ID,
+    batchId: CR_ID,
+    agentId: NOTE_ID,
+    agentName: 'Bảo',
+    model: 'claude-sonnet-4',
+    task: 'Review',
+    runStatus: 'done' as const,
+    stopReason: 'none' as const,
+    attemptNo: 1,
+    incomplete: false,
+    queuedAt: NOW,
+  });
+
+  it('accepts split usage on a member row and leaves an absent key legal', () => {
+    expect(
+      backupSchemas.BackupAiTeamMemberRecordSchema.safeParse({
+        ...memberRecord(),
+        inputTokens: 1200,
+        outputTokens: 300,
+        usageEstimated: true,
+      }).success
+    ).toBe(true);
+    expect(backupSchemas.BackupAiTeamMemberRecordSchema.safeParse(memberRecord()).success).toBe(
+      true
+    );
+  });
+
+  it('refuses a negative inputTokens, a fractional outputTokens and a non-boolean flag', () => {
+    expect(
+      backupSchemas.BackupAiTeamMemberRecordSchema.safeParse({
+        ...memberRecord(),
+        inputTokens: -1,
+      }).success
+    ).toBe(false);
+    expect(
+      backupSchemas.BackupAiTeamMemberRecordSchema.safeParse({
+        ...memberRecord(),
+        outputTokens: 1.5,
+      }).success
+    ).toBe(false);
+    expect(
+      backupSchemas.BackupAiTeamMemberRecordSchema.safeParse({
+        ...memberRecord(),
+        usageEstimated: 'yes',
+      }).success
+    ).toBe(false);
+  });
+
+  it('accepts split usage on an assignment row with the same numeric rule', () => {
+    expect(
+      backupSchemas.BackupAiTeamAssignmentRecordSchema.safeParse({
+        ...assignmentRecord(),
+        inputTokens: 0,
+        outputTokens: 0,
+        usageEstimated: false,
+      }).success
+    ).toBe(true);
+    expect(
+      backupSchemas.BackupAiTeamAssignmentRecordSchema.safeParse({
+        ...assignmentRecord(),
+        inputTokens: -1,
+      }).success
+    ).toBe(false);
+    expect(
+      backupSchemas.BackupAiTeamAssignmentRecordSchema.safeParse({
+        ...assignmentRecord(),
+        outputTokens: 1.5,
+      }).success
+    ).toBe(false);
+  });
+
+  it('bounds budgetWarnThresholdPct to an integer 1..100 and keeps an absent key legal', () => {
+    expect(
+      backupSchemas.BackupAiTeamRecordSchema.safeParse({
+        ...teamRecord(),
+        budgetWarnThresholdPct: 65,
+      }).success
+    ).toBe(true);
+    expect(backupSchemas.BackupAiTeamRecordSchema.safeParse(teamRecord()).success).toBe(true);
+    for (const bad of [0, 101, 2.5, '65']) {
+      expect(
+        backupSchemas.BackupAiTeamRecordSchema.safeParse({
+          ...teamRecord(),
+          budgetWarnThresholdPct: bad,
+        }).success
+      ).toBe(false);
+    }
+  });
+
+  it('still refuses an undeclared key on a row carrying a new field', () => {
+    expect(
+      backupSchemas.BackupAiTeamMemberRecordSchema.safeParse({
+        ...memberRecord(),
+        inputTokens: 10,
+        promptTokens: 10,
+      }).success
+    ).toBe(false);
+  });
+
+  it('lets the global threshold setting through the backup whitelist (D-04)', () => {
+    expect(isSafeBackupSetting('ai_budget_warn_threshold_pct')).toBe(true);
   });
 });

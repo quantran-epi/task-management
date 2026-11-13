@@ -8,6 +8,7 @@ import {
 import * as githubApi from '../../../src/services/github/githubApi';
 import { encryptPayload } from '../../../src/services/crypto/webCrypto';
 import { utf8ToBase64 } from '../../../src/services/crypto/base64';
+import { CURRENT_SCHEMA_VERSION } from '../../../src/services/backup/exportBackup';
 import type { GitHubConfig } from '../../../src/services/github/types';
 import type { BackupEnvelope } from '../../../src/types/backup';
 
@@ -30,10 +31,10 @@ describe('githubPullRestore service', () => {
   const token = 'ghp_valid_mock_token';
   const passphrase = 'correct-backup-passphrase-456';
 
-  // D-49: only a v11 CR-centric envelope is accepted; a projects table is a legacy backup.
+  // D-49: only a current-version CR-centric envelope is accepted; a projects table is a legacy backup.
   const validPayload: BackupEnvelope = {
     app: 'personal-task-planner',
-    schemaVersion: 13,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
     exportedAt: '2026-09-27T10:00:00.000Z',
     tables: {
       changeRequests: [

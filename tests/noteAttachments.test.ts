@@ -7,7 +7,7 @@ import {
   deleteNoteAttachment,
   getNoteWithAttachments,
 } from '../src/db/repositories/noteRepo';
-import { exportBackupPayload } from '../src/services/backup/exportBackup';
+import { exportBackupPayload, CURRENT_SCHEMA_VERSION } from '../src/services/backup/exportBackup';
 import { restoreBackupPayload } from '../src/services/backup/restoreBackup';
 import { validateBackupPayload } from '../src/services/backup/validateBackup';
 
@@ -132,7 +132,7 @@ describe('Note Attachments & Backup Serialization', () => {
 
       // Export
       const backup = await exportBackupPayload();
-      expect(backup.schemaVersion).toBe(13);
+      expect(backup.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
       expect(backup.tables.notes).toHaveLength(1);
       expect((backup.tables as any).noteAttachments).toHaveLength(1);
 

@@ -2,7 +2,7 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TaskPlannerDatabase } from '../../src/db';
-import { exportBackupPayload } from '../../src/services/backup/exportBackup';
+import { exportBackupPayload, CURRENT_SCHEMA_VERSION } from '../../src/services/backup/exportBackup';
 import { restoreBackupPayload } from '../../src/services/backup/restoreBackup';
 import { validateBackupPayload } from '../../src/services/backup/validateBackup';
 import type { BackupEnvelope } from '../../src/types/backup';
@@ -75,7 +75,7 @@ function basePayload() {
   const tables = baseTables();
   return {
     app: 'personal-task-planner' as const,
-    schemaVersion: 13,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
     exportedAt: now,
     tables,
     counts: {

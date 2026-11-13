@@ -6,6 +6,7 @@ import { GitHubAuthProvider, useGitHubAuth } from '../../src/context/GitHubAuthC
 import { SettingsView } from '../../src/views/SettingsView';
 import * as githubSyncService from '../../src/services/github/githubSyncService';
 import * as ariaLive from '../../src/components/common/AriaLiveRegion';
+import { CURRENT_SCHEMA_VERSION } from '../../src/services/backup/exportBackup';
 import type { BackupEnvelope } from '../../src/types/backup';
 
 vi.mock('../../src/services/github/githubSyncService', async (importOriginal) => {
@@ -109,7 +110,7 @@ describe('SettingsView Integration & Offline Independence (SYNC-07, SYNC-05)', (
 
     const sampleRemotePayload: BackupEnvelope = {
       app: 'personal-task-planner',
-      schemaVersion: 13,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
       exportedAt: '2026-09-27T10:00:00.000Z',
       tables: {
         changeRequests: [

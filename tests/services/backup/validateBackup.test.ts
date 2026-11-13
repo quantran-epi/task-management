@@ -81,13 +81,13 @@ describe('validateBackupPayload', () => {
     },
   };
 
-  it('validates a correct version-13 backup envelope successfully', () => {
+  it('validates a correct current-version backup envelope successfully', () => {
     const result = validateBackupPayload(validPayload);
     expect(result.valid).toBe(true);
     expect(result.errors).toHaveLength(0);
     expect(result.envelope).toBeDefined();
     expect(result.envelope?.app).toBe(APP_MARKER);
-    expect(result.envelope?.schemaVersion).toBe(13);
+    expect(result.envelope?.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
   });
 
   it('rejects non-object or null payloads', () => {
