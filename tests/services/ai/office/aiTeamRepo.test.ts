@@ -25,6 +25,7 @@ import { generateId } from '../../../../src/utils/uuid';
 import { clampTeamConcurrency, DEFAULT_TEAM_CONCURRENCY } from '../../../../src/types/aiOffice';
 import { LATEST_SCHEMA_VERSION } from '../../../../src/db/schema';
 import { createEmployee, createLead } from '../../../../src/db/repositories/aiOfficeRepo';
+import { splitEvenly } from '../../../../src/services/ai/office/budgetSplit';
 
 function leadInput(name: string) {
   return { name, role: 'Lead', capability: 'c', persona: 'p', model: 'm' };
@@ -329,6 +330,46 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
     expect(stored?.outputTokens).toBe(7);
   });
 
+  it('rejects an increment on a deleted member without moving a sibling row (AIO-BUDGET-04)', async () => {
+    const team = await makeTeam('Deleted');
+    const members = await listTeamMembers(team.id, db);
+    const gone = members.find((m) => m.role === 'employee')!;
+    const sibling = members.find((m) => m.id !== gone.id)!;
+
+    await removeTeamMember(gone.id, db);
+
+    await expect(
+      incrementMemberUsage(gone.id, { inputTokens: 7, outputTokens: 3, estimated: false }, db)
+    ).rejects.toThrow('Không tìm thấy thành viên');
+    expect((await db.aiTeamMembers.get(sibling.id))?.usedTokens).toBe(0);
+  });
+
+  it('increments a pre-V25 row to a number, never NaN (AIO-BUDGET-04, D-10)', async () => {
+    const team = await makeTeam('LegacyRow');
+    const member = (await listTeamMembers(team.id, db))[0]!;
+    // An old row has no split columns at all.
+    await db.aiTeamMembers.put({
+      id: member.id,
+      teamId: member.teamId,
+      agentId: member.agentId,
+      role: member.role,
+      budgetTokens: member.budgetTokens,
+      usedTokens: 0,
+    });
+
+    const updated = await incrementMemberUsage(
+      member.id,
+      { inputTokens: 5, outputTokens: 0, estimated: false },
+      db
+    );
+
+    expect(updated.usedTokens).toBe(5);
+    expect(Number.isNaN(updated.usedTokens)).toBe(false);
+    expect(updated.inputTokens).toBe(5);
+    expect(updated.outputTokens).toBe(0);
+    expect(updated.usageEstimated).toBeUndefined();
+  });
+
   it('pauses and reactivates the same team row with an advanced updatedAt', async () => {
     const team = await makeTeam('Pause', 'active');
     const paused = await pauseTeam(team.id, db);
@@ -565,6 +606,84 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
       expect(fresh.agentId).toBe(otherLeadId);
       expect(fresh.inputTokens).toBe(0);
       expect(fresh.outputTokens).toBe(0);
+    });
+  });
+
+  describe('budgetSplit edge cases (AIO-BUDGET-05, D-14, D-15)', () => {
+    it('puts the whole total on a leader-alone roster, remainder 0', () => {
+      const [row] = splitEvenly(1000, [{ role: 'lead' as const }]);
+      expect(row!.budgetTokens).toBe(1000);
+      expect(1000 - Math.floor(1000 / 1) * 1).toBe(0);
+    });
+
+    it('returns an empty array for a zero-member roster without dividing', () => {
+      expect(splitEvenly(1000, [])).toEqual([]);
+    });
+
+    it('gives every row 0 when the total is 0', () => {
+      const rows = splitEvenly(0, [
+        { role: 'lead' as const },
+        { role: 'employee' as const },
+        { role: 'employee' as const },
+      ]);
+      expect(rows.map((r) => r.budgetTokens)).toEqual([0, 0, 0]);
+      expect(rows.reduce((sum, r) => sum + r.budgetTokens, 0)).toBe(0);
+    });
+
+    it('lands the remainder on the lead row even when it sits mid-array', () => {
+      const rows = splitEvenly(1001, [
+        { role: 'employee' as const, id: 'a' },
+        { role: 'lead' as const, id: 'b' },
+        { role: 'employee' as const, id: 'c' },
+      ]);
+      expect(rows.map((r) => r.budgetTokens)).toEqual([333, 335, 333]);
+      expect(rows.reduce((sum, r) => sum + r.budgetTokens, 0)).toBe(1001);
+    });
+
+    it('leaves the remainder undistributed when the roster has no lead', () => {
+      const rows = splitEvenly(1000, [
+        { role: 'employee' as const },
+        { role: 'employee' as const },
+        { role: 'employee' as const },
+      ]);
+      expect(rows.map((r) => r.budgetTokens)).toEqual([333, 333, 333]);
+      expect(rows.reduce((sum, r) => sum + r.budgetTokens, 0)).toBe(999);
+    });
+
+    it('never splits implicitly on add — a later member keeps 0 until the split is re-run (D-15)', async () => {
+      const team = await makeTeam('LateMember');
+      await applyEvenSplit(team.id, 1000, db);
+      const extra = await createEmployee(
+        { name: 'Late', role: 'Dev', capability: 'c', persona: 'p', model: 'm' },
+        db
+      );
+      const added = await addTeamMember(
+        { teamId: team.id, agentId: extra.id, role: 'employee', budgetTokens: 0 },
+        db
+      );
+      expect(added.budgetTokens).toBe(0);
+
+      const resplit = await applyEvenSplit(team.id, 1000, db);
+      expect(resplit).toHaveLength(4);
+      expect(resplit.reduce((sum, m) => sum + m.budgetTokens, 0)).toBe(1000);
+      expect((await db.aiTeamMembers.get(added.id))?.budgetTokens).toBe(250);
+    });
+
+    it('normalizes the total to a non-negative integer once, before dividing', () => {
+      const two = splitEvenly(1.5, [{ role: 'lead' as const }, { role: 'employee' as const }]);
+      expect(two.map((r) => r.budgetTokens)).toEqual([1, 1]);
+      expect(two.reduce((sum, r) => sum + r.budgetTokens, 0)).toBe(2);
+
+      const three = [
+        { role: 'lead' as const },
+        { role: 'employee' as const },
+        { role: 'employee' as const },
+      ];
+      expect(splitEvenly(-5, three).map((r) => r.budgetTokens)).toEqual([0, 0, 0]);
+      expect(splitEvenly(Number.NaN, three).map((r) => r.budgetTokens)).toEqual([0, 0, 0]);
+      expect(
+        splitEvenly(1000, three).every((r) => Number.isInteger(r.budgetTokens))
+      ).toBe(true);
     });
   });
 
