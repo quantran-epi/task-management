@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 38 (hard-token-budget-accurate-measurement) — EXECUTING
-Plan: 4 of 12
+Plan: 5 of 12
 Status: Ready to execute
-Last activity: 2026-11-13 -- Phase 38 execution started
+Last activity: 2026-11-13 -- Phase 38 plan 06 complete (backup envelope v14)
 
 ## Session Continuity
 
-Last session: 2026-11-13T14:17:07.720Z
-Stopped at: Completed 38-03-PLAN.md
+Last session: 2026-11-13T14:20:12.000Z
+Stopped at: Completed 38-06-PLAN.md
 Resume file: None
 
-Progress: [███████░░░] 71%
+Progress: [███████░░░] 75%
 
 ## Milestone v1.4 Map
 
@@ -156,6 +156,7 @@ Progress: [███████░░░] 71%
 - [Phase ?]: ROADMAP.md criteria 1 and 6 were already warning-only at HEAD, so plan 38-02 was a verify-and-noop for that file
 - [Phase 38]: incrementMemberUsage is the atomic delta sink; usedTokens stays the legacy scalar until plan 09
 - [Phase 38]: splitEvenly in budgetSplit.ts is the single home of the even-split rule; evenSplitRows is a thin adapter
+- [Phase 38]: backup envelope v14 and the nine-file fixture sweep ship in one changeset; validateBackup.ts stays unchanged because the record schemas already own the numeric guards
 
 ## Performance Metrics
 
@@ -177,3 +178,4 @@ Progress: [███████░░░] 71%
 | Phase 38 P01 | 4min | 3 tasks | 9 files |
 | Phase 38 P02 | 2min | 2 tasks | 1 files |
 | Phase 38 P03 | 3min | 3 tasks | 4 files |
+| Phase 38 P06 | 4min | 3 tasks | 10 files |
