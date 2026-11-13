@@ -43,6 +43,7 @@ describe('useTeamChatNotifications (37.1 R13)', () => {
 
   beforeEach(async () => {
     sendDesktopNotification.mockClear();
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
     setActiveTeamView(null);
     db = new TaskPlannerDatabase('test-team-notify-' + Math.random().toString(36).slice(2));
     await db.open();
@@ -98,6 +99,20 @@ describe('useTeamChatNotifications (37.1 R13)', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 60));
     expect(sendDesktopNotification).not.toHaveBeenCalled();
+  });
+
+  it('notifies for the visible active team after desktop blur', async () => {
+    setActiveTeamView(team.id);
+    const focus = vi.mocked(document.hasFocus);
+    render(<Harness db={db} />);
+    focus.mockReturnValue(false);
+    window.dispatchEvent(new Event('blur'));
+    await seedFromLead('Tin khi cửa sổ mất focus.');
+    await waitFor(() => expect(sendDesktopNotification).toHaveBeenCalledTimes(1));
+    focus.mockReturnValue(true);
+    window.dispatchEvent(new Event('focus'));
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(sendDesktopNotification).toHaveBeenCalledTimes(1);
   });
 
   it('notifies for a different team even while one team is open', async () => {

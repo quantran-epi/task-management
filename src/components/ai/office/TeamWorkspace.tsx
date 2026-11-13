@@ -43,6 +43,7 @@ import {
 import { getOrCreateRun } from '../../../services/ai/office/teamRunManager';
 import { advanceCursor } from '../../../services/ai/office/teamEventLog';
 import { setActiveTeamView } from '../../../services/ai/office/activeTeamView';
+import { isNotificationPermissionGranted, requestNotificationPermission } from '../../../utils/desktopNotification';
 import { USER_PARTICIPANT_ID, type MessageSeenEntry } from '../../../types/teamChat';
 import type { ChatTurnRuntimeDeps } from '../runtime/chatTurnRuntime';
 import { AiChatWidget } from '../AiChatWidget';
@@ -155,6 +156,33 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   const [debugLogs, setDebugLogs] = useState<TeamDebugLog[]>([]);
   const [debugModalOpen, setDebugModalOpen] = useState<boolean>(false);
   const [sendError, setSendError] = useState<{ code: string; message: string } | null>(null);
+  const [notificationPermission, setNotificationPermission] = useState<boolean | null>(null);
+  const [requestingNotification, setRequestingNotification] = useState(false);
+  const [notificationRequestFailed, setNotificationRequestFailed] = useState(false);
+  useEffect(() => {
+    let active = true;
+    const refresh = () => {
+      void isNotificationPermissionGranted()
+        .then((granted) => { if (active) setNotificationPermission(granted); })
+        .catch(() => { if (active) setNotificationPermission(false); });
+    };
+    refresh();
+    window.addEventListener('focus', refresh);
+    return () => { active = false; window.removeEventListener('focus', refresh); };
+  }, []);
+  const enableNotifications = async () => {
+    setRequestingNotification(true);
+    try {
+      const granted = await requestNotificationPermission();
+      setNotificationPermission(granted);
+      setNotificationRequestFailed(!granted);
+      window.dispatchEvent(new Event('team-notification-permission-change'));
+    } catch {
+      setNotificationRequestFailed(true);
+    } finally {
+      setRequestingNotification(false);
+    }
+  };
   // WR-12: every fire-and-forget repo call in this component reports here instead of
   // escaping as an unhandled rejection.
   const [actionError, setActionError] = useState<string | null>(null);
@@ -393,10 +421,11 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     () => db.teamMessages.where('teamId').equals(team.id).toArray(),
     [db, team.id]
   ) ?? [];
-  const teamCursors = useLiveQuery(
+  const loadedCursors = useLiveQuery(
     () => db.teamReadCursors.where('teamId').equals(team.id).toArray(),
     [db, team.id]
-  ) ?? [];
+  );
+  const teamCursors = loadedCursors ?? [];
   /**
    * 37.1 R13: how many messages the user has not read. `headSeq` minus the user's cursor.
    * Read from the same log as the receipts, so the badge and the ✓✓ can never disagree.
@@ -411,9 +440,12 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   );
 
   const firstUnreadMessageId = useMemo(
-    () =>
-      teamLog.find((row) => row.seq > userCursorSeq && row.from !== USER_PARTICIPANT_ID)?.id,
-    [teamLog, userCursorSeq]
+    () => loadedCursors === undefined ? undefined : teamLog
+      .filter((row) => row.seq > userCursorSeq && row.from !== USER_PARTICIPANT_ID)
+      .reduce<(typeof teamLog)[number] | undefined>(
+        (first, row) => !first || row.seq < first.seq ? row : first, undefined
+      )?.id,
+    [teamLog, userCursorSeq, loadedCursors]
   );
 
   /**
@@ -476,28 +508,37 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   }, [team.id]);
 
   const headSeq = teamLog.reduce((max, row) => (row.seq > max ? row.seq : max), 0);
-  const [atBottom, setAtBottom] = useState(true);
+  const [atBottom, setAtBottom] = useState(false);
   const [tabVisible, setTabVisible] = useState(
-    () => typeof document === 'undefined' || document.visibilityState !== 'hidden'
+    () => document.visibilityState !== 'hidden' && document.hasFocus()
   );
   useEffect(() => {
-    if (typeof document === 'undefined') return;
-    const onVisibility = () => {
-      const visible = document.visibilityState !== 'hidden';
+    const onAttention = () => {
+      const visible = document.visibilityState !== 'hidden' && document.hasFocus();
       setTabVisible(visible);
-      // 37.1 R13: leaving the tab un-pins the viewport. Without this, coming back would
-      // immediately mark everything read (the viewport was still "at bottom"), so the badge
-      // and the "Tin mới" divider would flash and vanish before the user could see them.
-      // Now the user has to scroll to the newest message — which is what "read" means.
       if (!visible) setAtBottom(false);
     };
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => document.removeEventListener('visibilitychange', onVisibility);
+    const onBlur = () => { setTabVisible(false); setAtBottom(false); };
+    document.addEventListener('visibilitychange', onAttention);
+    window.addEventListener('focus', onAttention);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      document.removeEventListener('visibilitychange', onAttention);
+      window.removeEventListener('focus', onAttention);
+      window.removeEventListener('blur', onBlur);
+    };
   }, []);
   useEffect(() => {
-    if (headSeq === 0 || !tabVisible || !atBottom) return;
-    void advanceCursor(team.id, USER_PARTICIPANT_ID, headSeq, db);
+    if (headSeq === 0 || !tabVisible || !atBottom || !document.hasFocus()) return;
+    void advanceCursor(team.id, USER_PARTICIPANT_ID, headSeq, db)
+      .catch(() => setActionError(ACTION_ERROR_COPY));
   }, [team.id, headSeq, db, tabVisible, atBottom]);
+  useEffect(() => { setAtBottom(false); }, [team.id]);
+  useEffect(() => {
+    if (team.leadId !== undefined) {
+      setSendError((error) => error?.code === 'NO_LEAD' ? null : error);
+    }
+  }, [team.leadId]);
 
   const agentStatuses = useMemo(() => {
     const map = new Map<string, 'queued' | 'running' | 'paused' | 'stopped' | 'error' | 'done'>();
@@ -880,6 +921,26 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                   />
                 </div>
               )}
+              {notificationPermission === false && (
+                <Alert
+                  type="info"
+                  showIcon
+                  message="Thông báo hệ điều hành chưa được bật"
+                  description={notificationRequestFailed
+                    ? 'Chưa cấp được quyền thông báo. Kiểm tra quyền thông báo của ứng dụng trong cài đặt hệ điều hành.'
+                    : 'Bật quyền để nhận thông báo tin nhóm khi đang dùng ứng dụng khác.'}
+                  action={<Button size="small" loading={requestingNotification} onClick={() => void enableNotifications()}>Bật thông báo</Button>}
+                />
+              )}
+              {sendError?.code === 'NO_LEAD' && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  message="Nhóm chưa có trưởng nhóm"
+                  description={sendError.message}
+                  action={<Button size="small" onClick={() => setSettingsOpen(true)}>Cài đặt nhóm</Button>}
+                />
+              )}
               {actionError && (
                 <div style={{ padding: '8px 16px 0' }} data-testid="team-action-error">
                   <Alert
@@ -923,7 +984,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                   onStop={() => coordinator?.abortAll()}
                   onResolveApproval={(approved) => coordinator?.resolveApproval(approved)}
                   onRetry={handleRetry}
-                  error={sendError}
+                  error={sendError?.code === 'NO_LEAD' ? null : sendError}
                   toolbox={{
                     selectedModel: lead?.model ?? '',
                     availableModels: [],

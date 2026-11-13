@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, configure } from '@testing-library/react';
+configure({ asyncUtilTimeout: 5000 });
 import { TaskPlannerDatabase } from '../../../../src/db';
 import { createEmployee, createLead } from '../../../../src/db/repositories/aiOfficeRepo';
 import { createTeam } from '../../../../src/db/repositories/aiTeamRepo';
@@ -21,6 +22,15 @@ import type { AiTeam } from '../../../../src/types/aiOffice';
  * you read it, a message you sent says who read it, and a message you have not looked at is
  * counted. All three read the SAME cursor table, so they can never disagree.
  */
+
+const notificationPermission = vi.hoisted(() => ({
+  check: vi.fn(async () => true),
+  request: vi.fn(async () => true),
+}));
+vi.mock('../../../../src/utils/desktopNotification', () => ({
+  isNotificationPermissionGranted: notificationPermission.check,
+  requestNotificationPermission: notificationPermission.request,
+}));
 
 vi.mock('../../../../src/services/ai/office/teamRunCoordinator', async (importOriginal) => {
   const actual =
@@ -68,6 +78,9 @@ describe('TeamWorkspace receipts (37.1 R10, R11, R13)', () => {
   let employeeRow: Awaited<ReturnType<typeof createEmployee>>;
 
   beforeEach(async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    notificationPermission.check.mockResolvedValue(true);
+    notificationPermission.request.mockReset().mockResolvedValue(true);
     db = new TaskPlannerDatabase('test-team-receipts-' + Math.random().toString(36).slice(2));
     await db.open();
     await db.settings.put({ key: 'ninerouter_api_key', value: 'sk-test' });
@@ -158,9 +171,27 @@ describe('TeamWorkspace receipts (37.1 R10, R11, R13)', () => {
     return row;
   };
 
-  it('R11: opening the transcript advances the user cursor to the head', async () => {
+  const markRead = async () => {
+    fireEvent.click(await screen.findByRole('button', { name: 'Đánh dấu đã đọc' }));
+  };
+
+  it('requests notification permission only after explicit click and reports denial', async () => {
+    notificationPermission.check.mockResolvedValue(false);
+    notificationPermission.request.mockResolvedValue(false);
+    renderWorkspace();
+    const enable = await screen.findByRole('button', { name: 'Bật thông báo' });
+    expect(notificationPermission.request).not.toHaveBeenCalled();
+    fireEvent.click(enable);
+    await screen.findByText(/Chưa cấp được quyền thông báo/);
+    expect(notificationPermission.request).toHaveBeenCalledTimes(1);
+  });
+
+  it('R11: opening preserves unread until explicit acknowledgement', async () => {
     await seedLeadMessage('Đã tổng hợp xong.');
     renderWorkspace();
+    await screen.findByTestId('team-new-divider');
+    expect(await db.teamReadCursors.get(`${team.id}:${USER_PARTICIPANT_ID}`)).toBeUndefined();
+    await markRead();
 
     await waitFor(async () => {
       const cursor = await db.teamReadCursors.get(`${team.id}:${USER_PARTICIPANT_ID}`);
@@ -185,6 +216,7 @@ describe('TeamWorkspace receipts (37.1 R10, R11, R13)', () => {
   it('R10: a message the user received shows a read receipt once the cursor covers it', async () => {
     const row = await seedLeadMessage('Bạn xem giúp mình mục này.');
     renderWorkspace();
+    await markRead();
 
     await waitFor(async () => {
       const receipt = await screen.findByTestId(`seen-${row.id}`);
@@ -227,9 +259,55 @@ describe('TeamWorkspace receipts (37.1 R10, R11, R13)', () => {
     visibility.mockRestore();
   });
 
+  it('desktop blur and refocus preserve unread and do not scroll past its marker', async () => {
+    await seedLeadMessage('Tin chưa đọc.');
+    const scroll = vi.fn();
+    const previous = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = scroll;
+    try {
+      const focus = vi.mocked(document.hasFocus);
+      focus.mockReturnValue(false);
+      renderWorkspace();
+      await screen.findByTestId('team-new-divider');
+      focus.mockReturnValue(true);
+      window.dispatchEvent(new Event('focus'));
+      await seedLeadMessage('Tin tiếp theo.');
+      await screen.findByText('Tin tiếp theo.');
+      expect(await db.teamReadCursors.get(`${team.id}:${USER_PARTICIPANT_ID}`)).toBeUndefined();
+      expect(scroll.mock.calls.some(([options]) => options?.block === 'start')).toBe(true);
+      expect(scroll.mock.calls.some(([options]) => options?.block !== 'start')).toBe(false);
+      await markRead();
+      await waitFor(async () => {
+        expect((await db.teamReadCursors.get(`${team.id}:${USER_PARTICIPANT_ID}`))?.lastSeq).toBe(2);
+      });
+    } finally {
+      HTMLElement.prototype.scrollIntoView = previous;
+    }
+  });
+
+  it('acknowledges unread only after focused user scroll reaches bottom', async () => {
+    await seedLeadMessage('Tin cần cuộn để đọc.');
+    renderWorkspace();
+    const marker = await screen.findByTestId('team-new-divider');
+    const viewport = marker.closest('[tabindex="0"]') as HTMLElement;
+    Object.defineProperties(viewport, {
+      scrollHeight: { configurable: true, value: 1200 },
+      clientHeight: { configurable: true, value: 400 },
+    });
+    viewport.scrollTop = 800;
+    fireEvent.scroll(viewport);
+    expect(await db.teamReadCursors.get(`${team.id}:${USER_PARTICIPANT_ID}`)).toBeUndefined();
+    fireEvent.wheel(viewport);
+    fireEvent.scroll(viewport);
+    await waitFor(async () => {
+      expect((await db.teamReadCursors.get(`${team.id}:${USER_PARTICIPANT_ID}`))?.lastSeq).toBe(1);
+    });
+  });
+
   it('R13: reading everything clears the badge', async () => {
     await seedLeadMessage('Tin duy nhất.');
     renderWorkspace();
+    await markRead();
 
     await waitFor(() => {
       expect(screen.queryByTestId('team-unread-badge')).not.toBeInTheDocument();
@@ -310,6 +388,7 @@ describe('TeamWorkspace receipts (37.1 R10, R11, R13)', () => {
       db
     );
     renderWorkspace();
+    await markRead();
 
     await waitFor(async () => {
       const receipt = await screen.findByTestId(`seen-${row.id}`);

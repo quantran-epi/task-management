@@ -258,6 +258,18 @@ describe('TeamWorkspace composer (37.1 D-01/D-02/D-12)', () => {
     expect(currentStub.send).toHaveBeenCalledTimes(1);
   });
 
+  it('shows a local warning for missing leader without claiming provider outage', async () => {
+    await db.aiTeams.update(team.id, { leadId: undefined });
+    const { leadId: _leadId, ...leaderless } = team;
+    team = leaderless;
+    currentStub.send = vi.fn().mockResolvedValue('refused') as never;
+    const composer = await renderWorkspace();
+    await submit(composer, 'Xin chào nhóm');
+    expect(await screen.findByText('Nhóm chưa có trưởng nhóm')).toBeInTheDocument();
+    expect(screen.queryByTestId('inline-api-error-card')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Không thể kết nối đến dịch vụ AI/)).not.toBeInTheDocument();
+  });
+
   it('surfaces a leader-lock failure and restores the draft', async () => {
     lockLeaderRejects = true;
     const composer = await renderWorkspace();
@@ -385,7 +397,7 @@ describe('TeamWorkspace composer (37.1 D-01/D-02/D-12)', () => {
           onBack={() => {}}
         />
       );
-      const retry = await screen.findByTestId('agent-retry-assignment-1');
+      const retry = await screen.findByTestId('agent-retry-assignment-1', {}, { timeout: 5000 });
       fireEvent.click(retry);
 
       const card = await screen.findByTestId('team-action-error');

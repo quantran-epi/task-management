@@ -112,12 +112,17 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
    * flash and vanish the instant a hidden tab was focused again.
    */
   const programmaticScrollRef = useRef(false);
+  const userScrollRef = useRef(false);
+  const followingRef = useRef(onAtBottomChange === undefined);
+  const unreadAnchorRef = useRef<string | undefined>(undefined);
+  const unreadRef = useRef<HTMLDivElement>(null);
 
   const reportAtBottom = () => {
     const node = containerRef.current;
-    if (!node || !onAtBottomChange) return;
-    if (programmaticScrollRef.current) return;
-    onAtBottomChange(node.scrollHeight - node.scrollTop - node.clientHeight < 48);
+    if (!node || programmaticScrollRef.current) return;
+    const atBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
+    followingRef.current = atBottom;
+    if (userScrollRef.current && document.hasFocus()) onAtBottomChange?.(atBottom);
   };
 
   const scrollToBottom = (instant = false) => {
@@ -142,26 +147,48 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
 
   // Auto-scroll on new message added, confirmation prompt displayed, or clarify prompt shown
   useEffect(() => {
-    scrollToBottom(false);
-  }, [messages.length, pendingConfirmation, transientClarifyMessage]);
+    if (firstUnreadMessageId) {
+      if (unreadAnchorRef.current === undefined && unreadRef.current) {
+        unreadRef.current.scrollIntoView?.({ block: 'start', behavior: 'auto' });
+        followingRef.current = false;
+        unreadAnchorRef.current = firstUnreadMessageId;
+      }
+      return;
+    }
+    unreadAnchorRef.current = undefined;
+    if (followingRef.current) scrollToBottom(false);
+  }, [messages.length, firstUnreadMessageId, pendingConfirmation, transientClarifyMessage]);
 
-  // Report the initial position once the transcript has laid out.
   useEffect(() => {
-    reportAtBottom();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages.length, onAtBottomChange]);
+    const unpin = () => {
+      followingRef.current = false;
+      userScrollRef.current = false;
+    };
+    window.addEventListener('blur', unpin);
+    return () => window.removeEventListener('blur', unpin);
+  }, []);
 
   // Keep pinned to bottom during streaming or errors
   useEffect(() => {
-    if (isStreaming || streamingText || error || pendingConfirmation || transientClarifyMessage) {
+    if (!firstUnreadMessageId && followingRef.current &&
+      (isStreaming || streamingText || error || pendingConfirmation || transientClarifyMessage)) {
       scrollToBottom(true);
     }
-  }, [streamingText, isStreaming, error, pendingConfirmation, transientClarifyMessage]);
+  }, [streamingText, isStreaming, error, pendingConfirmation, transientClarifyMessage, firstUnreadMessageId]);
 
   return (
     <div
       ref={containerRef}
       onScroll={reportAtBottom}
+      onWheel={() => { userScrollRef.current = true; }}
+      onPointerDown={() => { userScrollRef.current = true; }}
+      onTouchStart={() => { userScrollRef.current = true; }}
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'End', 'Home', ' '].includes(event.key)) {
+          userScrollRef.current = true;
+        }
+      }}
       style={{
         flex: 1,
         overflowY: 'auto',
@@ -229,12 +256,22 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
         return (
           <React.Fragment key={msg.id}>
             {msg.id === firstUnreadMessageId && (
-              <Divider
-                data-testid="team-new-divider"
-                style={{ margin: '8px 0', fontSize: 12, color: token.colorError }}
-              >
-                Tin mới
-              </Divider>
+              <div ref={unreadRef}>
+                <Divider
+                  data-testid="team-new-divider"
+                  style={{ margin: '8px 0', fontSize: 12, color: token.colorError }}
+                >
+                  Tin mới
+                </Divider>
+                <Button size="small" onClick={() => {
+                  if (document.visibilityState === 'visible' && document.hasFocus()) {
+                    userScrollRef.current = true;
+                    followingRef.current = true;
+                    scrollToBottom(true);
+                    onAtBottomChange?.(true);
+                  }
+                }}>Đánh dấu đã đọc</Button>
+              </div>
             )}
             <ChatMessageBubble
               message={msg}

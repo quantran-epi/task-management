@@ -49,9 +49,19 @@ None.
   found: No leader seen receipt as well as no visible provider activity; prior test passed without app changes.
   implication: Investigate pre-request path and stale lifecycle state, not only provider transport.
 
+## DOM crash investigation — 2026-11-13
+
+- Independent read-only investigation completed; no crash fix applied.
+- Generic React production/jsdom repro: removing a React-owned DOM node externally can cause the next insertion to throw NotFoundError and clear the root. This reproduces an error class, NOT the actual TaskMate crash or its source.
+- Candidate requiring runtime confirmation: MermaidViewer.tsx global selector cleanup / mermaid temporary DOM. Other candidates include tooltip/popover portal lifecycle. No candidate proven causal.
+- Crashing bundle index-Cm7iMH9A.js no longer available in inspected dist folders, so minified stack could not be mapped reliably.
+- Missing runtime evidence: component stack / named component error if available, or reproducible development-build crash. Production console may not contain a component name.
+- Error boundary proposed only as containment/diagnostics, not a root-cause fix. No such change applied.
+- stopped/tool-limit remains distinct from DOM crash; causal link unproven.
+
 ## Resolution
 
-root_cause:
-fix:
-verification:
-files_changed: []
+root_cause: Typing re-renders transcript; budget gate single resolver strands concurrent waiters. Live leader stall and DOM crash causes unproven.
+fix: Memoized transcript list with stable host props; budget gate releases all independent waiters. Pushed as e8ce7e4f.
+verification: Focused run 51/52 passed; assignment-retry case passed isolated rerun. Live Tauri verification pending.
+files_changed: [src/components/ai/ChatMessageList.tsx, src/components/ai/office/TeamWorkspace.tsx, src/services/ai/office/budgetGate.ts, tests/services/ai/office/budgetGate.test.ts, tests/components/ai/office/TeamWorkspaceTypingCost.test.tsx]

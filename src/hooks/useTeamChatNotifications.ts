@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import { USER_PARTICIPANT_ID } from '../types/teamChat';
@@ -20,6 +20,20 @@ import { getActiveTeamView } from '../services/ai/office/activeTeamView';
 export function useTeamChatNotifications(db: TaskPlannerDatabase = defaultDb): void {
   /** Ids already notified, so a re-render or a republish cannot notify twice. */
   const notifiedRef = useRef<Set<string>>(new Set());
+  const [attentionVersion, setAttentionVersion] = useState(0);
+  useEffect(() => {
+    const refresh = () => setAttentionVersion((version) => version + 1);
+    window.addEventListener('focus', refresh);
+    window.addEventListener('blur', refresh);
+    window.addEventListener('team-notification-permission-change', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('blur', refresh);
+      window.removeEventListener('team-notification-permission-change', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, []);
 
   const pending = useLiveQuery(async () => {
     const teams = await db.aiTeams.toArray();
@@ -48,27 +62,35 @@ export function useTeamChatNotifications(db: TaskPlannerDatabase = defaultDb): v
     if (!pending || pending.length === 0) return;
     // Focused on this team's transcript → the message is already on screen. Notify for the
     // OTHER teams, and for every team when the window is hidden or blurred.
-    const focusedTeam = typeof document !== 'undefined' && document.visibilityState === 'visible'
-      ? getActiveTeamView()
-      : null;
+    const currentFocusedTeam = () =>
+      document.visibilityState === 'visible' && document.hasFocus() ? getActiveTeamView() : null;
+    const focusedTeam = currentFocusedTeam();
     const toNotify = pending.filter((row) => row.teamId !== focusedTeam);
     if (toNotify.length === 0) return;
 
+    let cancelled = false;
     void (async () => {
-      if (!(await isNotificationPermissionGranted())) return;
+      if (!(await isNotificationPermissionGranted()) || cancelled) return;
       const names = new Map<string, string>();
       for (const lead of await db.aiLeads.toArray()) names.set(lead.id, lead.name);
       for (const employee of await db.aiEmployees.toArray()) names.set(employee.id, employee.name);
 
       for (const row of toNotify) {
-        if (notifiedRef.current.has(row.id)) continue;
+        if (cancelled) return;
+        if (row.teamId === currentFocusedTeam() || notifiedRef.current.has(row.id)) continue;
         notifiedRef.current.add(row.id);
-        void sendDesktopNotification({
-          title: `${names.get(row.from) ?? 'Nhóm'} · ${row.teamName}`,
-          body: row.content.slice(0, 160),
-          tag: row.id,
-        });
+        try {
+          const sent = await sendDesktopNotification({
+            title: `${names.get(row.from) ?? 'Nhóm'} · ${row.teamName}`,
+            body: row.content.slice(0, 160),
+            tag: row.id,
+          });
+          if (!sent) notifiedRef.current.delete(row.id);
+        } catch {
+          notifiedRef.current.delete(row.id);
+        }
       }
-    })();
-  }, [pending, db]);
+    })().catch(() => { /* Notification failure must not interrupt local chat. */ });
+    return () => { cancelled = true; };
+  }, [pending, db, attentionVersion]);
 }
