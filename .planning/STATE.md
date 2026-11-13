@@ -1,21 +1,19 @@
 ---
-gsd_state_version: "1.0"
+gsd_state_version: 1.0
 milestone: v1.4
-milestone_name: Unified AI Office (Phase Details)
-current_phase: 38
-current_phase_name: Hard token budget + accurate measurement
+milestone_name: Unified AI Office
 status: executing
-stopped_at: Phase 38 context gathered
-last_updated: "2026-11-13T14:02:04.481Z"
-last_activity: 2026-11-13
-last_activity_desc: "Quick 261113-ita complete: notification focus, unread viewport, and NO_LEAD warning fixed; focused tests and TypeScript pass, runtime UAT pending."
-state_head: 9e15b1876a41097691e3efda2af9427eed85a602
+stopped_at: Completed 38-01-PLAN.md
+last_updated: "2026-11-13T14:12:25.439Z"
+last_activity: 2026-11-13 -- Phase 38 execution started
 progress:
   total_phases: 7
-  completed_phases: 4
-  total_plans: 44
-  completed_plans: 32
-  percent: 57
+  completed_phases: 3
+  total_plans: 48
+  completed_plans: 33
+  percent: 69
+current_phase: 38
+current_phase_name: Hard token budget + accurate measurement
 ---
 
 # Project State: TaskMate — Milestone v1.4
@@ -23,22 +21,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-09)
 
 **Core value:** Hợp nhất SDLC Studio và AI Office thành Unified AI Office dạng chat-first, free-style với token budget cứng và làm giàu skill.
-**Current focus:** Phase 37.1 — live-steering-leader-amends-assignments-and-steers-running-a
+**Current focus:** Phase 38 — hard-token-budget-accurate-measurement
 
 ## Current Position
 
-Phase: 38 (Hard token budget + accurate measurement) — READY TO EXECUTE
-Plan: 6 of 6
-Status: Ready to execute
-Last activity: 2026-11-13 -- Quick 261113-ko9: restore last-read chat position, viewport-based read receipts, collapsible assignment plan; include confirmed hidden leader budget-pause fix. Runtime UAT pending; OS notifications deferred.
+Phase: 38 (hard-token-budget-accurate-measurement) — EXECUTING
+Plan: 2 of 12
+Status: Executing Phase 38
+Last activity: 2026-11-13 -- Phase 38 execution started
 
 ## Session Continuity
 
-Last session: 2026-11-13T08:34:19.644Z
-Stopped at: Phase 38 context gathered
-Resume file: .planning/phases/38-hard-token-budget-accurate-measurement/38-CONTEXT.md
+Last session: 2026-11-13T14:12:25.433Z
+Stopped at: Completed 38-01-PLAN.md
+Resume file: None
 
-Progress: [██████░░░░] 57%
+Progress: [███████░░░] 69%
 
 ## Milestone v1.4 Map
 
@@ -152,6 +150,8 @@ Progress: [██████░░░░] 57%
 - [Phase ?]: Amend-cancel sets userStopped before aborting so leader-amend wins the from:queued guard; a rewrite appends an attempt and re-dispatches it
 - [Phase 37.1]: Team chat UI: a queued-only pending set still renders the indicator trigger so Stop stays reachable
 - [Phase 37.1]: AgentLiveStep is runtime-only; the delivered-steer set is derived from a batchId-scoped read because steerMessageIds is unindexed
+- [Phase 38]: Migration tests assert against LATEST_SCHEMA_VERSION instead of a literal so a schema bump cannot re-break them
+- [Phase 38]: V25 is purely additive with no .upgrade() hook; split usage columns are optional on the type and seeded 0 on every write path
 
 ## Performance Metrics
 
@@ -170,3 +170,4 @@ Progress: [██████░░░░] 57%
 | Phase 37.1 P03 | ~6m | 3 tasks | 7 files |
 | Phase 37.1 P05 | 12 | 2 tasks | 4 files |
 | Phase 37.1 P06 | 35m | 3 tasks | 12 files |
+| Phase 38 P01 | 4min | 3 tasks | 9 files |

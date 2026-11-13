@@ -67,9 +67,9 @@
 - [ ] **AIO-BUDGET-03**: Retries are charged per attempt; a retried turn is not free. (R-15)
 - [ ] **AIO-BUDGET-04**: Token increments are atomic — 20 concurrent increments sum correctly with no lost update. (R-15)
 - [ ] **AIO-BUDGET-05**: Starting a group splits the total budget evenly across the leader and every agent, with the remainder handled deterministically. (C-12, R-15)
-- [ ] **AIO-BUDGET-06**: A threshold warning fires when a member approaches its share; the threshold value is configurable, not hard-coded. (C-12, R-03, R-04)
+- [x] **AIO-BUDGET-06**: A threshold warning fires when a member approaches its share; the threshold value is configurable, not hard-coded. (C-12, R-03, R-04)
 - [ ] **AIO-BUDGET-07**: Topping up one agent raises that agent's share *and* the group total in a single transaction. (C-12)
-- [ ] **AIO-BUDGET-08**: The budget display shows granted, used, and remaining for the group and per member, with input and output shown separately. (R-19)
+- [x] **AIO-BUDGET-08**: The budget display shows granted, used, and remaining for the group and per member, with input and output shown separately. (R-19)
 - [ ] **AIO-BUDGET-09**: Reaching the threshold pauses between tool rounds and resumes when the user tops up — the pause is visible, not a hang. (C-11, R-06)
 
 ### Skill Management & Enrichment (AIO-SKILL)

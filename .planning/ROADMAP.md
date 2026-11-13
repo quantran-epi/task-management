@@ -241,33 +241,40 @@ Plans:
 7. Topping up one agent raises that agent's share and the group total in one transaction.
 8. The display shows granted, used, and remaining per group and per member, with input and output separate.
 
-**Plans:** 12 plans in 7 waves
+**Plans:** 1/12 plans executed
 
 Plans:
 **Wave 1** *(no dependencies)*
-- [ ] 38-01-PLAN.md — V25 schema/type/zod foundation + repair the two red migration tests
+
+- [x] 38-01-PLAN.md — V25 schema/type/zod foundation + repair the two red migration tests
 - [ ] 38-02-PLAN.md — record the D-01/D-02 override in REQUIREMENTS.md and ROADMAP.md
 
 **Wave 2**
+
 - [ ] 38-03-PLAN.md — atomic usage increment + one shared even-split module
 - [ ] 38-06-PLAN.md — backup envelope v14 + record schemas + fixture sweep (SQLite parity split to 38-12)
 - [ ] 38-11-PLAN.md — global budget-warning threshold setting + Settings card
 
 **Wave 3**
+
 - [ ] 38-05-PLAN.md — threshold math, resolved-vs-override snapshot fields, shared snapshot helper
 - [ ] 38-12-PLAN.md — SQLite/parity confirmation: no structural change + membership test
 
 **Wave 4**
+
 - [ ] 38-04-PLAN.md — additive two-table top-up + absolute two-table Settings save (WR-13, 3000→4000)
 
 **Wave 5**
+
 - [ ] 38-07-PLAN.md — typed usage chain, per-request accounting, pre-call tokenizer warning, terminal flush + reconcile
 
 **Wave 6**
+
 - [ ] 38-08-PLAN.md — remove the gate, two-level team-scoped warnings + OS notifications
 - [ ] 38-10-PLAN.md — install js-tiktoken@1.0.21 behind a human checkpoint
 
 **Wave 7**
+
 - [ ] 38-09-PLAN.md — split budget display, estimate marker, resolved threshold in the UI (global source wired into the team list; clear-override traversal test)
 
 **WR-13** (from the phase 36 review) is answered by plan 38-04: `topUp` reads the roster fresh inside the transaction instead of the `ensureMembers` cache.
