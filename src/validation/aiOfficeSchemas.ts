@@ -39,6 +39,12 @@ const budgetSchema = z.number().int().nonnegative('Budget must be zero or greate
  */
 const concurrencyLimitSchema = z.number().int().min(1).max(12).optional();
 
+/**
+ * Phase 38 D-04/D-05: budget warning threshold, 1–100 percent. Range enforced here at the
+ * trust boundary; `clampBudgetWarnThresholdPct` is the runtime belt.
+ */
+const warnThresholdPctSchema = z.number().int().min(1).max(100).optional();
+
 const AiTeamStatusSchema = z.enum(['active', 'idle']);
 const AiTeamMemberRoleSchema = z.enum(['lead', 'employee']);
 const AiTeamLinkItemTypeSchema = z.enum(['cr', 'task', 'system', 'note', 'document']);
@@ -100,6 +106,8 @@ export const AiTeamInputSchema = z.object({
   autoApproveMutations: z.boolean().optional(),
   /** Phase 37 D-02: only the *range* matches `ghostDevConfig.ts:54` (its default is 6). */
   concurrencyLimit: concurrencyLimitSchema,
+  /** Phase 38 D-04/D-05: absent means the global default. */
+  budgetWarnThresholdPct: warnThresholdPctSchema,
 });
 
 export const AiTeamUpdateSchema = z.object({
@@ -111,6 +119,8 @@ export const AiTeamUpdateSchema = z.object({
   autoApproveMutations: z.boolean().optional(),
   /** Phase 37 D-02: range matches `ghostDevConfig.ts:54`; 3 is this phase's default. */
   concurrencyLimit: concurrencyLimitSchema,
+  /** Phase 38 D-04/D-05: `undefined` clears the per-team override. */
+  budgetWarnThresholdPct: warnThresholdPctSchema,
 });
 
 export const AiTeamMemberInputSchema = z.object({

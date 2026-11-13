@@ -436,6 +436,82 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
     expect(db.verno).toBe(LATEST_SCHEMA_VERSION);
   });
 
+  describe('budgetWarnThresholdPct (Phase 38, D-04, D-05)', () => {
+    it('stores the boundaries 1 and 100 verbatim and rejects 0, 101 and 2.5', async () => {
+      const team = await makeTeam('Threshold');
+
+      expect((await updateTeam(team.id, { budgetWarnThresholdPct: 1 }, db)).budgetWarnThresholdPct).toBe(1);
+      expect(
+        (await updateTeam(team.id, { budgetWarnThresholdPct: 100 }, db)).budgetWarnThresholdPct
+      ).toBe(100);
+      expect((await getTeam(team.id, db))?.budgetWarnThresholdPct).toBe(100);
+
+      for (const value of [0, 101, 2.5]) {
+        await expect(updateTeam(team.id, { budgetWarnThresholdPct: value }, db)).rejects.toThrow();
+      }
+      expect((await getTeam(team.id, db))?.budgetWarnThresholdPct).toBe(100);
+    });
+
+    it('clears the override when budgetWarnThresholdPct is passed as undefined', async () => {
+      const team = await makeTeam('ThresholdClear');
+      await updateTeam(team.id, { budgetWarnThresholdPct: 55 }, db);
+
+      const cleared = await updateTeam(team.id, { budgetWarnThresholdPct: undefined }, db);
+
+      expect('budgetWarnThresholdPct' in cleared).toBe(false);
+      expect('budgetWarnThresholdPct' in ((await getTeam(team.id, db)) ?? {})).toBe(false);
+    });
+  });
+
+  describe('split usage columns (Phase 38, D-23)', () => {
+    it('seeds inputTokens and outputTokens at 0 on every member-creation path', async () => {
+      const team = await makeTeam('Seed');
+      const extra = await createEmployee(
+        { name: 'E9', role: 'Dev', capability: 'c', persona: 'p', model: 'm' },
+        db
+      );
+      await addTeamMember(
+        { teamId: team.id, agentId: extra.id, role: 'employee', budgetTokens: 0 },
+        db
+      );
+
+      const members = await listTeamMembers(team.id, db);
+      expect(members).toHaveLength(4);
+      expect(members.every((m) => m.inputTokens === 0 && m.outputTokens === 0)).toBe(true);
+    });
+  });
+
+  describe('lead re-assignment keeps usage (Phase 38, CR-02)', () => {
+    it('keeps a same-agent lead row and its usage across an updateTeam patch', async () => {
+      const team = await makeTeam('Carry');
+      const leadRow = (await listTeamMembers(team.id, db)).find((m) => m.role === 'lead')!;
+      await db.aiTeamMembers.update(leadRow.id, {
+        inputTokens: 120,
+        outputTokens: 30,
+        usageEstimated: true,
+      });
+
+      // Same agent: the row is untouched, so usage survives.
+      await updateTeam(team.id, { leadId }, db);
+      const kept = await db.aiTeamMembers.get(leadRow.id);
+      expect(kept?.inputTokens).toBe(120);
+      expect(kept?.outputTokens).toBe(30);
+      expect(kept?.usageEstimated).toBe(true);
+
+      // `assignLeader` to the current lead is a no-op, so the same row keeps its usage.
+      await assignLeader(team.id, leadId, db);
+      expect((await db.aiTeamMembers.get(leadRow.id))?.inputTokens).toBe(120);
+
+      // A different agent gets a fresh row seeded at 0 — usage belongs to the agent, not the seat.
+      const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
+      await assignLeader(team.id, otherLeadId, db);
+      const fresh = (await listTeamMembers(team.id, db)).find((m) => m.role === 'lead')!;
+      expect(fresh.agentId).toBe(otherLeadId);
+      expect(fresh.inputTokens).toBe(0);
+      expect(fresh.outputTokens).toBe(0);
+    });
+  });
+
   describe('concurrencyLimit (Phase 37, D-02, D-03)', () => {    it('stores the boundaries 1 and 12 verbatim', async () => {
       const team = await makeTeam('Concurrency');
 

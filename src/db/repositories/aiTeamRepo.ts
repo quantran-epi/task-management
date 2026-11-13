@@ -1,6 +1,6 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../index';
 import type { AiTeam, AiTeamLink, AiTeamMember } from '../../types/aiOffice';
-import { clampTeamConcurrency } from '../../types/aiOffice';
+import { clampBudgetWarnThresholdPct, clampTeamConcurrency } from '../../types/aiOffice';
 import { generateId } from '../../utils/uuid';
 import {
   AiTeamInputSchema,
@@ -125,6 +125,9 @@ export async function createTeam(
   if (validated.concurrencyLimit !== undefined) {
     team.concurrencyLimit = clampTeamConcurrency(validated.concurrencyLimit);
   }
+  if (validated.budgetWarnThresholdPct !== undefined) {
+    team.budgetWarnThresholdPct = clampBudgetWarnThresholdPct(validated.budgetWarnThresholdPct);
+  }
 
   await db.transaction('rw', [db.aiTeams, db.aiTeamMembers, db.aiLeads, db.aiEmployees], async () => {
     await assertAgentsExist(team.leadId, employeeIds, db);
@@ -140,6 +143,8 @@ export async function createTeam(
               role: 'lead' as const,
               budgetTokens: 0,
               usedTokens: 0,
+              inputTokens: 0,
+              outputTokens: 0,
             },
           ]
         : []),
@@ -150,6 +155,8 @@ export async function createTeam(
         role: 'employee',
         budgetTokens: 0,
         usedTokens: 0,
+        inputTokens: 0,
+        outputTokens: 0,
       })),
     ];
     await db.aiTeamMembers.bulkAdd(rows);
@@ -216,6 +223,16 @@ export async function updateTeam(
         delete updated.concurrencyLimit;
       }
     }
+    // Phase 38 D-04/D-05: same add/remove idiom, so clearing stays expressible.
+    if ('budgetWarnThresholdPct' in patch) {
+      if (validated.budgetWarnThresholdPct !== undefined) {
+        updated.budgetWarnThresholdPct = clampBudgetWarnThresholdPct(
+          validated.budgetWarnThresholdPct
+        );
+      } else {
+        delete updated.budgetWarnThresholdPct;
+      }
+    }
 
     // Pitfall 5: the lead member row must move with `leadId` — never two sources that disagree.
     if (validated.leadId !== undefined && validated.leadId !== existing.leadId) {
@@ -241,8 +258,16 @@ async function writeLeadRow(
   // CR-02: a re-assignment to the same agent must not wipe its budget or recorded usage.
   const carried =
     previous && previous.agentId === leadId
-      ? { budgetTokens: previous.budgetTokens, usedTokens: previous.usedTokens }
-      : { budgetTokens: 0, usedTokens: 0 };
+      ? {
+          budgetTokens: previous.budgetTokens,
+          usedTokens: previous.usedTokens,
+          inputTokens: previous.inputTokens ?? 0,
+          outputTokens: previous.outputTokens ?? 0,
+          ...(previous.usageEstimated !== undefined
+            ? { usageEstimated: previous.usageEstimated }
+            : {}),
+        }
+      : { budgetTokens: 0, usedTokens: 0, inputTokens: 0, outputTokens: 0 };
   await db.aiTeamMembers.add({
     id: generateId(),
     teamId,
@@ -435,6 +460,8 @@ export async function addTeamMember(
       role: validated.role,
       budgetTokens: validated.budgetTokens,
       usedTokens: validated.usedTokens,
+      inputTokens: 0,
+      outputTokens: 0,
     };
     await db.aiTeamMembers.add(member);
     return member;
