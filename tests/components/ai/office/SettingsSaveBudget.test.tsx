@@ -260,5 +260,9 @@ describe('TeamWorkspace settings save (Phase 38 D-19, AIO-BUDGET-07)', () => {
     };
     expect(payload.budgetWarnThresholdPct).toBeUndefined();
     await waitFor(async () => expect((await db.aiTeams.get(team.id))?.budgetWarnThresholdPct).toBe(65));
+    // CR-04: the live mirror follows the STORED override. Passing the untouched `undefined`
+    // input here reverted the live threshold to the global default while Dexie kept 65.
+    await waitFor(() => expect(currentStub?.setTeamThresholdPct).toHaveBeenCalledWith(65));
+    expect(currentStub?.setTeamThresholdPct).not.toHaveBeenCalledWith(undefined);
   });
 });

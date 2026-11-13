@@ -55,6 +55,8 @@ const RESTORE_TABLES = (db: TaskPlannerDatabase) => [
   db.aiTeamAssignments,
   db.teamMessages,
   db.teamReadCursors,
+  // WR-15: cleared with the log (never exported), so it must be in the transaction scope.
+  db.teamParticipants,
   db.settings,
   db.backupMetadata,
 ];
@@ -188,8 +190,11 @@ function countsFor(tables: BackupTableData): BackupTableCounts {
 async function captureSnapshot(targetDb: TaskPlannerDatabase, timestamp: string): Promise<SnapshotData> {
   // activeTimers is part of the snapshot: replaceTables clears the table for both import and
   // rollback, so omitting it here would destroy the in-progress timer with no way back.
-  const [tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, activeTimers, notes, rawAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettingsRaw, telegramWhitelist, systems, changeRequests, aiEmployees, aiLeads, aiSkills, aiTeams, aiTeamMembers, aiTeamLinks, aiSkillVersions, aiTeamBatches, rawAiTeamAssignments, settings] = await Promise.all([
-    targetDb.tasks.toArray(), targetDb.capacityRules.toArray(), targetDb.capacityOverrides.toArray(), targetDb.plannedAllocations.toArray(), targetDb.workSessions.toArray(), targetDb.activeTimers.toArray(), targetDb.notes.toArray(), targetDb.noteAttachments.toArray(), targetDb.chatThreads.toArray(), targetDb.chatMessages.toArray(), targetDb.chatTabs.toArray(), targetDb.documentSets.toArray(), targetDb.publishedDocuments.toArray(), targetDb.publishAttempts.toArray(), targetDb.dlpAudits.toArray(), targetDb.knowledgeLinks.toArray(), targetDb.telegramSettings.toArray(), targetDb.telegramWhitelist.toArray(), targetDb.systems.toArray(), targetDb.changeRequests.toArray(), targetDb.aiEmployees.toArray(), targetDb.aiLeads.toArray(), targetDb.aiSkills.toArray(), targetDb.aiTeams.toArray(), targetDb.aiTeamMembers.toArray(), targetDb.aiTeamLinks.toArray(), targetDb.aiSkillVersions.toArray(), targetDb.aiTeamBatches.toArray(), targetDb.aiTeamAssignments.toArray(), targetDb.settings.toArray()
+  // CR-02: same rule for the team log — replaceTables clears `teamMessages`/`teamReadCursors`
+  // with the AI Office group, so a snapshot without them would delete the transcript on a
+  // rollback with no copy to restore.
+  const [tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, activeTimers, notes, rawAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettingsRaw, telegramWhitelist, systems, changeRequests, aiEmployees, aiLeads, aiSkills, aiTeams, aiTeamMembers, aiTeamLinks, aiSkillVersions, aiTeamBatches, rawAiTeamAssignments, teamMessages, teamReadCursors, settings] = await Promise.all([
+    targetDb.tasks.toArray(), targetDb.capacityRules.toArray(), targetDb.capacityOverrides.toArray(), targetDb.plannedAllocations.toArray(), targetDb.workSessions.toArray(), targetDb.activeTimers.toArray(), targetDb.notes.toArray(), targetDb.noteAttachments.toArray(), targetDb.chatThreads.toArray(), targetDb.chatMessages.toArray(), targetDb.chatTabs.toArray(), targetDb.documentSets.toArray(), targetDb.publishedDocuments.toArray(), targetDb.publishAttempts.toArray(), targetDb.dlpAudits.toArray(), targetDb.knowledgeLinks.toArray(), targetDb.telegramSettings.toArray(), targetDb.telegramWhitelist.toArray(), targetDb.systems.toArray(), targetDb.changeRequests.toArray(), targetDb.aiEmployees.toArray(), targetDb.aiLeads.toArray(), targetDb.aiSkills.toArray(), targetDb.aiTeams.toArray(), targetDb.aiTeamMembers.toArray(), targetDb.aiTeamLinks.toArray(), targetDb.aiSkillVersions.toArray(), targetDb.aiTeamBatches.toArray(), targetDb.aiTeamAssignments.toArray(), targetDb.teamMessages.toArray(), targetDb.teamReadCursors.toArray(), targetDb.settings.toArray()
   ]);
   // T-37-14: the snapshot is downloadable as an envelope, so the same projection applies here.
   const aiTeamAssignments = rawAiTeamAssignments.map(({ diagnosticDetail: _detail, ...row }) => row);
@@ -207,7 +212,7 @@ async function captureSnapshot(targetDb: TaskPlannerDatabase, timestamp: string)
     ...(attachment.caption ? { caption: attachment.caption } : {}),
     createdAt: attachment.createdAt,
   })));
-  const tables: BackupTableData = { tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, activeTimers, notes, noteAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettings, telegramWhitelist, systems, changeRequests, aiEmployees, aiLeads, aiSkills, aiTeams, aiTeamMembers, aiTeamLinks, aiSkillVersions, aiTeamBatches, aiTeamAssignments, settings: safeSettings };
+  const tables: BackupTableData = { tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, activeTimers, notes, noteAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettings, telegramWhitelist, systems, changeRequests, aiEmployees, aiLeads, aiSkills, aiTeams, aiTeamMembers, aiTeamLinks, aiSkillVersions, aiTeamBatches, aiTeamAssignments, teamMessages, teamReadCursors, settings: safeSettings };
   return { timestamp, tables, counts: countsFor(tables) };
 }
 
@@ -261,10 +266,15 @@ async function replaceTables(
           targetDb.aiTeams.clear(), targetDb.aiTeamMembers.clear(), targetDb.aiTeamLinks.clear(),
           targetDb.aiSkillVersions.clear(),
           targetDb.aiTeamBatches.clear(), targetDb.aiTeamAssignments.clear(),
-          // 37.1 WR-07: the log is part of the same group — a payload that predates it must
-          // not wipe it, and one that carries it must replace it wholesale.
-          targetDb.teamMessages.clear(), targetDb.teamReadCursors.clear(),
         ]
+      : [];
+    // CR-03: the log is cleared only when the payload actually carries it. `exportBackup`
+    // omits an empty log, so clearing unconditionally would let a valid export from a
+    // machine with no transcript wipe the local one while restoring nothing.
+    // WR-15: `teamParticipants` is never exported, so it is cleared alongside the log —
+    // otherwise rows for agents that no longer exist survive the restore as orphans.
+    const clearTeamLog = tables.teamMessages !== undefined || tables.teamReadCursors !== undefined
+      ? [targetDb.teamMessages.clear(), targetDb.teamReadCursors.clear(), targetDb.teamParticipants.clear()]
       : [];
     // Settings are replaced key-by-key, never cleared wholesale: secrets (tokens, passphrases)
     // are not part of any payload and must survive an import and its rollback.
@@ -272,7 +282,7 @@ async function replaceTables(
       ...(tables.settings ?? []).map((setting) => setting.key),
     ]);
     await Promise.all([
-      targetDb.tasks.clear(), targetDb.capacityRules.clear(), targetDb.capacityOverrides.clear(), targetDb.plannedAllocations.clear(), targetDb.workSessions.clear(), targetDb.activeTimers.clear(), targetDb.notes.clear(), targetDb.noteAttachments.clear(), targetDb.chatThreads.clear(), targetDb.chatMessages.clear(), targetDb.chatTabs.clear(), targetDb.telegramSettings.clear(), targetDb.telegramWhitelist.clear(), targetDb.systems.clear(), targetDb.changeRequests.clear(), ...clearKnowledge, ...clearAiOffice, targetDb.settings.bulkDelete([...incomingSettingKeys]), targetDb.backupMetadata.clear(),
+      targetDb.tasks.clear(), targetDb.capacityRules.clear(), targetDb.capacityOverrides.clear(), targetDb.plannedAllocations.clear(), targetDb.workSessions.clear(), targetDb.activeTimers.clear(), targetDb.notes.clear(), targetDb.noteAttachments.clear(), targetDb.chatThreads.clear(), targetDb.chatMessages.clear(), targetDb.chatTabs.clear(), targetDb.telegramSettings.clear(), targetDb.telegramWhitelist.clear(), targetDb.systems.clear(), targetDb.changeRequests.clear(), ...clearKnowledge, ...clearAiOffice, ...clearTeamLog, targetDb.settings.bulkDelete([...incomingSettingKeys]), targetDb.backupMetadata.clear(),
     ]);
 
     const add = async <T>(table: { bulkAdd: (rows: T[]) => Promise<unknown> }, rows: T[] | undefined) => {

@@ -236,36 +236,46 @@ export async function updateTeam(
   });
 }
 
-/** Replaces the single `role='lead'` member row for a team, carrying any existing budget. */
+/**
+ * CR-05: replaces the single `role='lead'` member row for a team.
+ *
+ * Usage belongs to the AGENT, not the seat, so:
+ * - the incoming agent's own roster row is promoted in place (its budget and recorded usage
+ *   come with it) instead of a second row being created at 0;
+ * - the outgoing lead's row is demoted to `employee` when it carries recorded usage, so the
+ *   charge never disappears from the roster sums the team total is built from. A row with no
+ *   usage is deleted, as before.
+ */
 async function writeLeadRow(
   teamId: string,
   leadId: string,
-  db: TaskPlannerDatabase,
-  previous?: AiTeamMember | undefined
+  db: TaskPlannerDatabase
 ): Promise<void> {
   const siblings = await db.aiTeamMembers.where('teamId').equals(teamId).toArray();
+  const incoming = siblings.find((row) => row.agentId === leadId);
+
   for (const row of siblings) {
-    if (row.role === 'lead') await db.aiTeamMembers.delete(row.id);
+    if (row.role !== 'lead' || row.id === incoming?.id) continue;
+    const hasUsage =
+      row.usedTokens > 0 || (row.inputTokens ?? 0) > 0 || (row.outputTokens ?? 0) > 0;
+    if (hasUsage) await db.aiTeamMembers.update(row.id, { role: 'employee' });
+    else await db.aiTeamMembers.delete(row.id);
   }
-  // CR-02: a re-assignment to the same agent must not wipe its budget or recorded usage.
-  const carried =
-    previous && previous.agentId === leadId
-      ? {
-          budgetTokens: previous.budgetTokens,
-          usedTokens: previous.usedTokens,
-          inputTokens: previous.inputTokens ?? 0,
-          outputTokens: previous.outputTokens ?? 0,
-          ...(previous.usageEstimated !== undefined
-            ? { usageEstimated: previous.usageEstimated }
-            : {}),
-        }
-      : { budgetTokens: 0, usedTokens: 0, inputTokens: 0, outputTokens: 0 };
+
+  if (incoming) {
+    await db.aiTeamMembers.update(incoming.id, { role: 'lead' });
+    return;
+  }
+
   await db.aiTeamMembers.add({
     id: generateId(),
     teamId,
     agentId: leadId,
     role: 'lead',
-    ...carried,
+    budgetTokens: 0,
+    usedTokens: 0,
+    inputTokens: 0,
+    outputTokens: 0,
   });
 }
 
@@ -290,10 +300,7 @@ export async function assignLeader(
     // silently reset its budget and usage.
     if (existing.leadId === leadId) return existing;
 
-    const previousLeadRow = (
-      await db.aiTeamMembers.where('teamId').equals(teamId).toArray()
-    ).find((row) => row.role === 'lead');
-    await writeLeadRow(teamId, leadId, db, previousLeadRow);
+    await writeLeadRow(teamId, leadId, db);
 
     const updated: AiTeam = { ...existing, leadId, updatedAt: new Date().toISOString() };
     await db.aiTeams.put(updated);
@@ -490,6 +497,15 @@ export interface BudgetWriteResult {
   members: AiTeamMember[];
 }
 
+/**
+ * WR-01: `Math.max(0, Math.round(NaN))` is `NaN`, and a `NaN` written into `budgetTokens`
+ * makes the app's own next export unrestorable (`aiTokensSchema` refuses it). Non-finite
+ * input becomes 0 — the same value an absent budget already means.
+ */
+function nonNegativeInt(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
+}
+
 /** Never interpolate the id: the string reaches the UI, where a raw UUID is noise. */
 const MISSING_MEMBER_FOR_TOPUP =
   'Không tìm thấy thành viên trong nhóm. Hãy thêm nhân viên trước khi cấp thêm token.';
@@ -517,7 +533,7 @@ export async function applyTopUp(
     // D-18/WR-13: the roster is read here, never from a caller's cache.
     const roster = await db.aiTeamMembers.where('teamId').equals(teamId).toArray();
     // T-38-10: a negative or fractional amount never reaches a stored row.
-    const added = Math.max(0, Math.round(amount));
+    const added = nonNegativeInt(amount);
 
     if (scope.kind === 'agent' && !roster.some((row) => row.agentId === scope.agentId)) {
       throw new Error(MISSING_MEMBER_FOR_TOPUP);
@@ -607,7 +623,7 @@ export async function applyTeamBudgetSettings(
   input: TeamBudgetSettingsInput,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<BudgetWriteResult> {
-  const budgetTokens = Math.max(0, Math.round(input.budgetTokens));
+  const budgetTokens = nonNegativeInt(input.budgetTokens);
 
   return db.transaction('rw', [db.aiTeams, db.aiTeamMembers], async () => {
     const team = await db.aiTeams.get(teamId);
@@ -618,7 +634,7 @@ export async function applyTeamBudgetSettings(
       const next = input.budgets[row.id];
       if (next === undefined) return row;
       // Spread keeps the usage columns; only the granted budget is replaced.
-      return { ...row, budgetTokens: Math.max(0, Math.round(next)) };
+      return { ...row, budgetTokens: nonNegativeInt(next) };
     });
     for (const row of updatedRoster) await db.aiTeamMembers.put(row);
 
@@ -649,7 +665,7 @@ export async function setMemberBudget(
   const row = await db.aiTeamMembers.get(memberId);
   if (!row) throw new Error(`Không tìm thấy thành viên: ${memberId}`);
 
-  const next = Math.max(0, budgetTokens);
+  const next = nonNegativeInt(budgetTokens);
   await db.aiTeamMembers.update(memberId, { budgetTokens: next });
   return { ...row, budgetTokens: next };
 }

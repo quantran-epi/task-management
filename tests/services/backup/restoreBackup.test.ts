@@ -172,6 +172,82 @@ describe('restoreBackupPayload & rollbackToSnapshot', () => {
     expect(crs[0]?.name).toBe('Restored CR');
   });
 
+  it('keeps the local team log when the payload carries none (CR-03)', async () => {
+    // `exportBackup` omits an empty log, so this is exactly what a valid export from a
+    // machine with no transcript looks like.
+    await testDb.teamMessages.add({
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      teamId: LOCAL_CR_ID,
+      seq: 1,
+      from: 'user',
+      to: ['lead'],
+      content: 'local only',
+      kind: 'chat',
+      createdAt: '2026-09-27T12:00:00.000Z',
+    });
+    await testDb.teamReadCursors.add({
+      id: `${LOCAL_CR_ID}:lead`,
+      teamId: LOCAL_CR_ID,
+      participantId: 'lead',
+      lastSeq: 1,
+      updatedAt: '2026-09-27T12:00:00.000Z',
+    });
+
+    await restoreBackupPayload(sampleBackup, testDb);
+
+    expect(await testDb.teamMessages.count()).toBe(1);
+    expect(await testDb.teamReadCursors.count()).toBe(1);
+  });
+
+  it('keeps the team log in the snapshot so a rollback restores it (CR-02)', async () => {
+    await testDb.teamMessages.add({
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      teamId: LOCAL_CR_ID,
+      seq: 1,
+      from: 'user',
+      to: ['lead'],
+      content: 'pre-import',
+      kind: 'chat',
+      createdAt: '2026-09-27T12:00:00.000Z',
+    });
+    await testDb.teamReadCursors.add({
+      id: `${LOCAL_CR_ID}:lead`,
+      teamId: LOCAL_CR_ID,
+      participantId: 'lead',
+      lastSeq: 1,
+      updatedAt: '2026-09-27T12:00:00.000Z',
+    });
+
+    await restoreBackupPayload(sampleBackup, testDb);
+    const snapshot = (await testDb.settings.get('last_pre_import_snapshot'))?.value as SnapshotData;
+    expect(snapshot.tables.teamMessages).toHaveLength(1);
+    expect(snapshot.tables.teamReadCursors).toHaveLength(1);
+
+    await rollbackToSnapshot(testDb);
+    expect(await testDb.teamMessages.count()).toBe(1);
+    expect(await testDb.teamReadCursors.count()).toBe(1);
+  });
+
+  it('clears stale teamParticipants when the payload replaces the log (WR-15)', async () => {
+    await testDb.teamParticipants.add({
+      id: 'stale-participant',
+      teamId: LOCAL_CR_ID,
+      kind: 'employee',
+      name: 'Gone',
+      createdAt: '2026-09-27T12:00:00.000Z',
+    });
+
+    await restoreBackupPayload(
+      {
+        ...sampleBackup,
+        tables: { ...sampleBackup.tables, teamMessages: [], teamReadCursors: [] },
+      },
+      testDb
+    );
+
+    expect(await testDb.teamParticipants.count()).toBe(0);
+  });
+
   it('round-trips an exported envelope from a fresh DB through validateBackup', async () => {
     const exported = await exportBackupModule.exportBackupPayload(testDb);
     const validation = validateBackupPayload(exported);

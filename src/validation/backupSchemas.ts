@@ -827,11 +827,16 @@ export const BackupTeamReadCursorRecordSchema = z.strictObject({
 });
 
 /**
- * D-49: the current backup envelope contract. Version 14 adds the phase-38 split-usage
- * columns (`AiTeamMember`/`AiTeamAssignment` `inputTokens`, `outputTokens`, `usageEstimated`)
- * and `AiTeam.budgetWarnThresholdPct`; older versions are rejected.
+ * D-49: the current backup envelope contract.
+ *
+ * CR-01: phase 38 added only OPTIONAL columns (`AiTeam.budgetWarnThresholdPct`, the
+ * `AiTeamMember`/`AiTeamAssignment` split-usage trio), so a v13 payload validates against
+ * these schemas unchanged. Bumping the literal would send every pre-38 backup down
+ * `validateBackup`'s `schemaVersion < CURRENT` branch and make it unrestorable for nothing.
+ * A bump is only warranted when a field becomes required or its meaning changes — and then
+ * it needs a `13 → N` normalization step, not an outright reject.
  */
-export const BACKUP_SCHEMA_VERSION = 14 as const;
+export const BACKUP_SCHEMA_VERSION = 13 as const;
 
 export const BackupEnvelopeSchema = z.object({
   app: z.literal('personal-task-planner'),

@@ -364,6 +364,22 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
     expect(await listTeamMembers(team.id, db)).toEqual(beforeMembers);
   });
 
+  it('never persists NaN from a non-finite amount (WR-01)', async () => {
+    const team = await makeTeamWithTotal('NaNTokens', 3000);
+    const lead = (await listTeamMembers(team.id, db)).find((m) => m.role === 'lead')!;
+
+    await applyTopUp(team.id, { kind: 'agent', agentId: lead.agentId }, Number.NaN, db);
+    await applyTeamBudgetSettings(
+      team.id,
+      { budgetTokens: Number.NaN, budgets: { [lead.id]: Number.POSITIVE_INFINITY } },
+      db
+    );
+
+    const after = await listTeamMembers(team.id, db);
+    expect(after.every((row) => Number.isFinite(row.budgetTokens))).toBe(true);
+    expect(Number.isFinite((await getTeam(team.id, db))!.budgetTokens)).toBe(true);
+  });
+
   it('gives the whole team top-up to a leader-only roster (AIO-BUDGET-05)', async () => {
     const team = await createTeam(
       { name: 'LeaderAlone', leadId, status: 'idle', budgetTokens: 1000 },
@@ -866,6 +882,52 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
       expect(fresh.agentId).toBe(otherLeadId);
       expect(fresh.inputTokens).toBe(0);
       expect(fresh.outputTokens).toBe(0);
+    });
+
+    it('carries the incoming agent row and keeps the outgoing lead usage (CR-05)', async () => {
+      const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
+      const team = await makeTeam('CarryIncoming');
+      const leadRow = (await listTeamMembers(team.id, db)).find((m) => m.role === 'lead')!;
+      await db.aiTeamMembers.update(leadRow.id, {
+        usedTokens: 500,
+        inputTokens: 400,
+        outputTokens: 100,
+      });
+
+      // Lead A -> B: A's row is demoted (it carries usage), B gets a fresh row.
+      await assignLeader(team.id, otherLeadId, db);
+      const bRow = (await listTeamMembers(team.id, db)).find((m) => m.role === 'lead')!;
+      expect(bRow.agentId).toBe(otherLeadId);
+      await db.aiTeamMembers.update(bRow.id, { budgetTokens: 700, usedTokens: 50 });
+
+      // B -> A: A's demoted row is promoted back, carrying its own budget and usage.
+      await assignLeader(team.id, leadId, db);
+
+      const after = await listTeamMembers(team.id, db);
+      const promoted = after.find((m) => m.role === 'lead')!;
+      expect(promoted.agentId).toBe(leadId);
+      expect(promoted.usedTokens).toBe(500);
+      expect(promoted.inputTokens).toBe(400);
+      expect(promoted.outputTokens).toBe(100);
+      expect(after.filter((m) => m.role === 'lead')).toHaveLength(1);
+
+      // B's recorded usage is not silently deleted — it stays on the roster.
+      const demoted = after.find((m) => m.agentId === otherLeadId)!;
+      expect(demoted.role).toBe('employee');
+      expect(demoted.budgetTokens).toBe(700);
+      expect(demoted.usedTokens).toBe(50);
+    });
+
+    it('drops an outgoing lead row that carries no usage (CR-05)', async () => {
+      const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
+      const team = await makeTeam('CarryClean');
+
+      await assignLeader(team.id, otherLeadId, db);
+
+      const after = await listTeamMembers(team.id, db);
+      expect(after).toHaveLength(3);
+      expect(after.filter((m) => m.role === 'lead')).toHaveLength(1);
+      expect(after.some((m) => m.agentId === leadId)).toBe(false);
     });
   });
 

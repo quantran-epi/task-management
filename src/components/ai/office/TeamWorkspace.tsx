@@ -710,8 +710,10 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     });
     // D-19: the coordinator only mirrors the persisted result — it never re-derives a delta.
     coordinator?.applyBudgetSettings(result);
-    // Plan 05's setter is `number | undefined`; `null` and `undefined` both mean "inherit".
-    coordinator?.setTeamThresholdPct(input.budgetWarnThresholdPct ?? undefined);
+    // CR-04: mirror the STORED override, not the input. An untouched save sends `undefined`,
+    // which must leave the live threshold alone — feeding it to the setter would revert to
+    // the global default while Dexie still holds the team's override.
+    coordinator?.setTeamThresholdPct(result.team.budgetWarnThresholdPct);
     setSettingsOpen(false);
   };
 
