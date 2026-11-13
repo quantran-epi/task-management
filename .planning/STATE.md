@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
 status: executing
-stopped_at: Completed 38-04-PLAN.md
-last_updated: "2026-11-13T21:40:00.000Z"
-last_activity: 2026-11-13 -- Phase 38 plan 04 complete (additive top-up + absolute settings save)
+stopped_at: Completed 38-07-PLAN.md
+last_updated: "2026-11-13T22:12:00.000Z"
+last_activity: 2026-11-13 -- Phase 38 plan 07 complete (real usage split, terminal flush + reconcile)
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 48
-  completed_plans: 40
+  completed_plans: 41
   percent: 45
 current_phase: 38
 current_phase_name: Hard token budget + accurate measurement
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 38 (hard-token-budget-accurate-measurement) — EXECUTING
-Plan: 9 of 12
+Plan: 10 of 12
 Status: Ready to execute
-Last activity: 2026-11-13 -- Phase 38 plan 04 complete (additive top-up + absolute settings save)
+Last activity: 2026-11-13 -- Phase 38 plan 07 complete (real usage split, terminal flush + reconcile)
 
 ## Session Continuity
 
-Last session: 2026-11-13T21:40:00.000Z
-Stopped at: Completed 38-04-PLAN.md
+Last session: 2026-11-13T22:12:00.000Z
+Stopped at: Completed 38-07-PLAN.md
 Resume file: None
 
-Progress: [████████░░] 82%
+Progress: [████████░░] 83%
 
 ## Milestone v1.4 Map
 
@@ -169,6 +169,11 @@ Progress: [████████░░] 82%
 - [Phase 38]: The roster is read inside the top-up transaction, never from the coordinator cache — WR-13's membersLoaded early return is off the path
 - [Phase 38]: The coordinator mirrors a persisted budget result (applyBudgetSettings) and never re-derives a delta; null and undefined both mean inherit at that boundary
 - [Phase 38]: applyTeamBudgetSettings clamps rather than zod-validates the threshold on purpose: zod refuses 0 at the trust boundary, the settings path clamps 0 to 1 as a runtime belt
+- [Phase 38]: The pre-call token estimate lives on the accounting record only, never in the live charge maps, so a guess cannot park a turn the reported number would not have parked
+- [Phase 38]: An estimated charge updates live counters but skips gate evaluation — D-07 says an estimate is never a decision, and plan 08 deletes the gate
+- [Phase 38]: flushAccounting marks the key flushed BEFORE awaiting the increment; that guard, not a zeroed record, is the duplicate-charge defence
+- [Phase 38]: The employee turn's finally flushes and reconciles too, covering mention-started turns that own no attempt row
+- [Phase 38]: tokenEstimate loads js-tiktoken through widened string specifiers with @vite-ignore so an absent package reaches the runtime catch; plan 10 switches them to literal lazy subpaths
 
 ## Performance Metrics
 
@@ -195,3 +200,4 @@ Progress: [████████░░] 82%
 | Phase 38 P05 | 12min | 3 tasks | 10 files |
 | Phase 38 P12 | 4min | 2 tasks | 3 files |
 | Phase 38 P04 | 7min | 3 tasks | 7 files |
+| Phase 38 P07 | 22min | 3 tasks | 9 files |

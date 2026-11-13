@@ -241,7 +241,7 @@ Plans:
 7. Topping up one agent raises that agent's share and the group total in one transaction.
 8. The display shows granted, used, and remaining per group and per member, with input and output separate.
 
-**Plans:** 8/12 plans executed
+**Plans:** 9/12 plans executed
 
 Plans:
 **Wave 1** *(no dependencies)*
@@ -266,7 +266,7 @@ Plans:
 
 **Wave 5**
 
-- [ ] 38-07-PLAN.md — typed usage chain, per-request accounting, pre-call tokenizer warning, terminal flush + reconcile
+- [x] 38-07-PLAN.md — typed usage chain, per-request accounting, pre-call tokenizer warning, terminal flush + reconcile
 
 **Wave 6**
 
