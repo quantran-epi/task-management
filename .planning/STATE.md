@@ -11,7 +11,7 @@ progress:
   completed_phases: 3
   total_plans: 48
   completed_plans: 44
-  percent: 43
+  percent: 92
 current_phase: 38
 current_phase_name: Hard token budget + accurate measurement
 ---
@@ -36,7 +36,7 @@ Last session: 2026-11-13T15:49:43.332Z
 Stopped at: Completed 38-09-PLAN.md
 Resume file: None
 
-Progress: [█████████░] 90%
+Progress: [█████████░] 92%
 
 ## Milestone v1.4 Map
 
@@ -44,7 +44,7 @@ Progress: [█████████░] 90%
 - [x] Phase 36: Data model, multi-chat identity, backup/migration
 - [ ] Phase 37: Runtime reliability + concurrency
 - [ ] Phase 37.1: Live steering — leader amends assignments, steers running agents (INSERTED)
-- [ ] Phase 38: Hard token budget + accurate measurement
+- [x] Phase 38: Hard token budget + accurate measurement
 - [ ] Phase 39: Skill versioning + enrichment approval
 - [ ] Phase 40: Explorer UX, CRUD correctness, observed walkthrough
 
