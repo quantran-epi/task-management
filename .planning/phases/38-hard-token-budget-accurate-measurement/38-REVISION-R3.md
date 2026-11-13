@@ -3,7 +3,7 @@
 **Trigger:** `38-PLAN-CHECK-R2.md` (8 blockers, 4 warnings, 1 info).
 **Base:** `8623b09c` + `178565cf` (round-2 revision), plus the two plan files added while drafting round 3 (`38-11`, `38-12`).
 **Scope:** planning artifacts only. No application source was modified.
-**Result:** 12 plans, 7 waves, 31 tasks. All four round-2 sources (R2-B1..B8, R2-W1..W4, R2-I1) dispositioned below.
+**Result:** 12 plans, 7 waves, 32 tasks. (Corrected in round 4 — this file previously said 31; the per-task table and the `<task>` count are both 32.) All four round-2 sources (R2-B1..B8, R2-W1..W4, R2-I1) dispositioned below.
 
 ---
 
@@ -87,7 +87,7 @@ No item was dropped; every moved item is named in the receiving plan's objective
 - `38-10`: the Vietnamese truth no longer asserts `> length/4`. It asserts the only honest observables — a positive integer, stable across calls, and different from the chars÷4 value — and states explicitly that no direction is claimed. The action and acceptance criteria say the same.
 
 ### R2-I1 — plan 10 wave 7 vs dependency 07 wave 4
-**Disposition:** FIXED. Plan 10 is now wave 5, the minimum the dependency graph allows, and its objective records the reasoning. Nothing else gates it; the version-bump, parity and UI plans do not wait on a tokenizer install.
+**Disposition:** FIXED. Plan 10 is now wave 6, the minimum the dependency graph allows (38-07 is wave 5). Its objective records the reasoning. Nothing else gates it; the version-bump, parity and UI plans do not wait on a tokenizer install. (Corrected in round 4: this paragraph said wave 5 while the frontmatter said 6.)
 
 ---
 
@@ -113,7 +113,7 @@ No same-wave plan pair shares a `files_modified`/`files_deleted` path. Plan 04 m
 |-------|--------|
 | `gsd_run query frontmatter.validate <plan> --schema plan` (×12) | 12/12 `valid: true`, `missing: []` |
 | `gsd_run query verify.plan-structure <plan>` (×12) | 12/12 exit 0, `valid: true` |
-| Task count | 31 across 12 plans |
+| Task count | 32 across 12 plans (corrected in round 4; was stated as 31) |
 | `gsd_run query check.decision-coverage-plan <phase> <CONTEXT>` | `passed: true`, 25/25 decisions covered |
 | Dependency acyclicity / wave monotonicity | verified by hand from frontmatter above |
 | Same-wave file overlap | none |
@@ -133,8 +133,8 @@ No same-wave plan pair shares a `files_modified`/`files_deleted` path. Plan 04 m
 - `38-06-PLAN.md` — (round 2 rewrite retained) scope note; SQLite work lives in `38-12`.
 - `38-07-PLAN.md` — pre-call measurement block, `provisionalInputTokens` on the accounting record and snapshot, supersede rule, four new tests, verify commands de-filtered; wave 4 → 5.
 - `38-08-PLAN.md` — rewritten: `(teamId, level)` marker, team-scoped resets, `budgetWarning.ts`, gate deletion, snapshot widening via the shared helper, pre-call warning feed; wave 6.
-- `38-09-PLAN.md` — provisional input in the display math; drawer override state `number | undefined` with an explicit clear control; threshold routed through the single save call; wave 6 → 7.
-- `38-10-PLAN.md` — Vietnamese assertion direction removed; wave 7 → 5 with the reasoning recorded; verify commands de-filtered.
+- `38-09-PLAN.md` — provisional input in the display math; drawer override state seeded from the stored override with an explicit clear control (three-state `number | null | undefined` after round 4); threshold routed through the single save call; wave 6 → 7.
+- `38-10-PLAN.md` — Vietnamese assertion direction removed; wave 7 → 6 with the reasoning recorded; verify commands de-filtered.
 - `38-03-PLAN.md` — integer normalization in `splitEvenly`; truth/action/test contract aligned.
 - `38-11-PLAN.md` — (new this round) global threshold setting + Settings card.
 - `38-12-PLAN.md` — (new this round) SQLite/parity confirmation.
@@ -146,3 +146,73 @@ No same-wave plan pair shares a `files_modified`/`files_deleted` path. Plan 04 m
 ## Next
 
 Rerun the plan checker on this revision. No plan is marked Ready before that.
+
+---
+
+# Revision Round 4
+
+**Trigger:** `38-PLAN-CHECK-R3.md` (2 blockers, 2 warnings, 4 info).
+**Scope:** planning artifacts only. No application source was modified.
+**Result:** 12 plans, 7 waves, 32 tasks. No plan added, removed, split, or re-waved except where R3-W1 required a new dependency edge.
+
+## Dispositions
+
+### R3-B1 — clear-override path unreachable; setter type mismatch — FIXED
+
+Three-state contract carried end to end, one vocabulary per layer:
+
+| Layer | Type | `undefined` | `null` |
+|---|---|---|---|
+| Drawer state (`TeamSettingsDrawer`) | `number \| null \| undefined` | untouched (seeded from row) | user cleared |
+| Drawer `onSave` payload / `handleSaveSettings` input | `number \| null \| undefined` | leave row untouched | delete key |
+| `applyTeamBudgetSettings` input (repo, plan 04) | `budgetWarnThresholdPct?: number \| null \| undefined` | leave untouched | `delete row.budgetWarnThresholdPct` |
+| `coordinator.setTeamThresholdPct` (plan 05) | `number \| undefined` | inherit global | — |
+
+- `data-testid="team-threshold-clear"` now sets `null`, not `undefined` (`38-09-PLAN.md`). `undefined` survives only as "the user never touched the field", which is what makes the unrelated-save case work.
+- `handleSaveSettings` bridges the vocabularies with `coordinator?.setTeamThresholdPct(thresholdPct ?? undefined)` (`38-04-PLAN.md`), so `null` never reaches a `number | undefined` parameter — the `TS2345` under `strict` + `exactOptionalPropertyTypes` is gone by construction, not by cast.
+- `applyTeamBudgetSettings`'s input type now spells `| undefined` explicitly, and its branch order is prescribed as `=== null` first, `!== undefined` second — never `??`, which would collapse the clear into the untouched branch.
+- The plan-05 pure test stays (it pins the resolution rule) but now carries an explicit scope note saying it cannot prove the drawer→Dexie path; the traversal test moved to `38-09` task 2 as `(D-04, drawer clear)` + `(D-04, drawer untouched)`, asserting the exact value that reaches `applyTeamBudgetSettings` and the key's absence in the re-read row.
+
+### R3-B2 — required `thresholdPct` prop breaks the plan's own `tsc` gate — FIXED
+
+`tests/ai/ActiveAiTurnIndicator.test.tsx` added to `38-09` task 2's `files_modified` and to the plan's `files_modified`. `baseProps` gains `thresholdPct: 80`; the `Ngưỡng cảnh báo (80%)` literal assertion becomes prop-driven (render at 80, `rerender` at 65, assert `(65%)` present and `(80%)` absent). Task 2's automated verify now runs that file, so the `npx tsc --noEmit -p tsconfig.json` gate in the plan's `<verification>` is green at end state.
+
+### R3-W1 — `TeamsView` had no live global threshold source — FIXED
+
+`38-09` task 2 now wires `TeamsView` to `getGlobalBudgetWarnThresholdPct(db)` via `useLiveQuery` and passes `resolveThresholdPct(team, globalThresholdPct)` to every `TeamCard`. `TeamCard`'s `DEFAULT_BUDGET_WARN_THRESHOLD_PCT` remains a prop default for hypothetical callers only — after this task no production caller omits the prop, so a global change reaches the card without a reload. `38-09`'s `depends_on` gained `38-05` (the `resolveThresholdPct` home) and `38-11` (the global reader). Wave stays 7 (05 is wave 3, 11 is wave 2 — both below 7), so waves are unchanged and no same-wave overlap is introduced.
+
+### R3-W2 — validation drift — FIXED
+
+- `38-VALIDATION.md` wave-6 set now includes `tests/services/ai/office/tokenEstimate.test.ts` (required by `38-10` task 2).
+- Wave-2 set expanded to the full union of `38-06` task 2's nine-file command plus `38-11` task 1 (`aiTeamRepo`, `officeBackup`, `backupSchemas`, `v2Compatibility`, `validateBackup`, `backupSchemasTimer`, `githubPullRestore`, `tabCheckpointBackup`, `noteAttachments`, `SettingsView`, `budgetWarnSettings`); wave-7 set gained the new `ActiveAiTurnIndicator` file.
+- A wave-set rule is now stated in the file: a wave's set is the union of every `<automated>` command in that wave's tasks.
+- Sign-off count corrected 31 → 32 (the `<task>` count and the per-task table already agreed at 32; only the prose was wrong). `38-REVISION-R3.md` corrected in three places.
+
+### Info fixes
+
+| ID | Fix |
+|---|---|
+| I1 | `38-10-PLAN.md` objective now says wave 6 (matching its frontmatter) and names 38-07 wave 5; `38-REVISION-R3.md:90,103` corrected from wave 5 |
+| I2 | `38-05-PLAN.md` key link `39-11` → `38-11` |
+| I3 | `38-03-PLAN.md` duplicate `7.` in task 3 renumbered 1–9 across the two list runs |
+| I4 | `38-04-PLAN.md` `(D-04, override-set)` now states the two-writer difference explicitly: zod rejects `0` at the trust boundary, `applyTeamBudgetSettings` clamps `0` → `1` as a runtime belt; both pinned in their own files; do not align them |
+
+## Verification performed (round 4)
+
+| Check | Result |
+|-------|--------|
+| `frontmatter.validate --schema plan` (×12) | 12/12 `valid: true` |
+| `verify.plan-structure` (×12) | 12/12 exit 0, `valid: true` |
+| Task count | 32 (`<task>` count matches the validation table) |
+| Wave monotonicity | 01,02=1 · 03,06,11=2 · 05,12=3 · 04=4 · 07=5 · 08,10=6 · 09=7; every `depends_on` wave < own wave |
+| Same-wave `files_modified` overlap | none |
+| Warning-only preserved (D-01/D-02) | unchanged; no refusal/park path added |
+| `awaiting-budget` enum | untouched |
+| js-tiktoken checkpoint | `38-10` task 1 still `checkpoint:human-verify gate="blocking-human"`, `autonomous: false` |
+| Tauri only / no PWA work | unchanged |
+
+**Not proven here:** the round-3 estimate numbers were not re-run; no plan changed task count, so the advisory budget picture is unchanged.
+
+## Next
+
+Rerun the plan checker on this revision.

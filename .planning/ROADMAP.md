@@ -268,11 +268,13 @@ Plans:
 - [ ] 38-10-PLAN.md — install js-tiktoken@1.0.21 behind a human checkpoint
 
 **Wave 7**
-- [ ] 38-09-PLAN.md — split budget display, estimate marker, resolved threshold in the UI
+- [ ] 38-09-PLAN.md — split budget display, estimate marker, resolved threshold in the UI (global source wired into the team list; clear-override traversal test)
 
 **WR-13** (from the phase 36 review) is answered by plan 38-04: `topUp` reads the roster fresh inside the transaction instead of the `ensureMembers` cache.
 
 **Plan-check round 3 changes:** 38-04 gained the absolute `applyTeamBudgetSettings` verb (3000→4000 no longer becomes 5000); 38-05 split its Settings card into 38-11; 38-06 split its SQLite/parity work into 38-12; 38-07 gained the pre-call tokenizer warning and memory-only accounting; 38-08 re-keyed notifications to `(team, level)` with team-scoped resets.
+
+**Plan-check round 4 changes (R3 findings):** the per-team threshold override is now three-state end to end — drawer `number | null | undefined` where `null` = delete, carried into `applyTeamBudgetSettings` as `null` and normalized to `undefined` only at `coordinator.setTeamThresholdPct` — so "dùng mặc định toàn cục" actually deletes the stored override (R3-B1); 38-09 also owns `tests/ai/ActiveAiTurnIndicator.test.tsx` (`baseProps` gains `thresholdPct`, label assertion becomes prop-driven) so its `tsc` gate is green (R3-B2); `TeamsView` reads `getGlobalBudgetWarnThresholdPct` and resolves per team, so no card falls back to 80 after a global change (R3-W1); `38-VALIDATION.md` wave sets are now the union of their tasks' commands and the sign-off counts 32 tasks (R3-W2). Task count and wave assignment are unchanged.
 
 ### Phase 39: Skill versioning + enrichment approval
 

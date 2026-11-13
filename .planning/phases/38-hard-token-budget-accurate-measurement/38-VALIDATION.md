@@ -5,7 +5,7 @@ status: draft
 nyquist_compliant: false
 wave_0_complete: false
 created: "2026-11-13"
-revised: "2026-11-13 (revision round 3 — R2-W3)"
+revised: "2026-11-13 (revision round 4 — R3-W2)"
 ---
 
 # Phase 38 — Validation Strategy
@@ -35,12 +35,14 @@ revised: "2026-11-13 (revision round 3 — R2-W3)"
 - **After every task commit:** the focused command in that task's row (below)
 - **After every plan wave:** the union of that wave's rows
   - Wave 1: `tests/db/tableListParity.test.ts tests/db/schemaV22Migration.test.ts tests/services/ai/office/aiTeamRepo.test.ts`
-  - Wave 2: `tests/services/ai/office/aiTeamRepo.test.ts tests/services/backup/officeBackup.test.ts tests/validation/backupSchemas.test.ts tests/services/ai/budgetWarnSettings.test.ts`
+  - Wave 2: `tests/services/ai/office/aiTeamRepo.test.ts tests/services/backup/officeBackup.test.ts tests/validation/backupSchemas.test.ts tests/services/backup/v2Compatibility.test.ts tests/services/backup/validateBackup.test.ts tests/validation/backupSchemasTimer.test.ts tests/services/github/githubPullRestore.test.ts tests/backup/tabCheckpointBackup.test.ts tests/noteAttachments.test.ts tests/views/SettingsView.test.tsx tests/services/ai/budgetWarnSettings.test.ts`
   - Wave 3: `tests/services/ai/office/budgetGate.test.ts tests/db/tableListParity.test.ts`
   - Wave 4: `tests/services/ai/office/aiTeamRepo.test.ts tests/services/ai/office/teamRunCoordinator.test.ts tests/components/ai/office/SettingsSaveBudget.test.tsx`
   - Wave 5: `tests/services/ai/office/teamRunCoordinator.test.ts tests/services/ai/office/tokenEstimate.test.ts`
-  - Wave 6: `tests/services/ai/office/teamRunCoordinator.test.ts tests/services/ai/office/budgetWarning.test.ts tests/services/ai/office/budgetGate.test.ts`
-  - Wave 7: `tests/views/TeamsView.test.tsx tests/ai/office/AgentOfficeComponents.test.tsx`
+  - Wave 6: `tests/services/ai/office/teamRunCoordinator.test.ts tests/services/ai/office/budgetWarning.test.ts tests/services/ai/office/budgetGate.test.ts tests/services/ai/office/tokenEstimate.test.ts`
+  - Wave 7: `tests/views/TeamsView.test.tsx tests/ai/office/AgentOfficeComponents.test.tsx tests/ai/ActiveAiTurnIndicator.test.tsx`
+  - Non-test commands in a wave: Wave 1 carries 38-02's two doc probes (`grep` over REQUIREMENTS/ROADMAP); Wave 2 carries 38-11 T2's type gate (`npx tsc --noEmit -p tsconfig.json`); Wave 3 carries 38-12 T1's type gate; Wave 6 carries 38-10 T1's `grep` checkpoint probe. These add no test file to the set.
+- **Wave set rule:** a wave's set is the union of every test file named by any `<automated>` command in that wave's tasks — no wave may omit a file one of its own tasks runs.
 - **Before `/gsd-verify-work`:** every row below green under the evidence rule
 - **Max feedback latency:** 30 seconds
 
@@ -74,7 +76,7 @@ revised: "2026-11-13 (revision round 3 — R2-W3)"
 | 38-08 T2 | 08 | 6 | AIO-BUDGET-01, AIO-BUDGET-06 | T-38-22 | Gate implementation deleted; threshold math survives with an importer | unit | `npx vitest run tests/services/ai/office/budgetGate.test.ts tests/services/ai/office/budgetWarning.test.ts` | ⬜ pending |
 | 38-08 T3 | 08 | 6 | AIO-BUDGET-01 | T-38-22 | No latent park path; phase stays running across three over-budget rounds | unit | `npx vitest run tests/services/ai/office/teamRunCoordinator.test.ts` | ⬜ pending |
 | 38-09 T1 | 09 | 7 | AIO-BUDGET-08 | T-38-23, T-38-25 | Split numbers rendered; estimate marked; no NaN | component | `npx vitest run tests/views/TeamsView.test.tsx -t "AIO-BUDGET-08"` | ⬜ pending |
-| 38-09 T2 | 09 | 7 | AIO-BUDGET-08 | T-38-24 | Threshold-driven colour; override field stays absent unless set | component | `npx vitest run tests/views/TeamsView.test.tsx tests/ai/office/AgentOfficeComponents.test.tsx` | ⬜ pending |
+| 38-09 T2 | 09 | 7 | AIO-BUDGET-08 | T-38-24 | Threshold-driven colour from the live global; override field stays absent unless set; clear reaches Dexie as `null`; top-up label is prop-driven | component + traversal | `npx vitest run tests/views/TeamsView.test.tsx tests/ai/office/AgentOfficeComponents.test.tsx tests/ai/ActiveAiTurnIndicator.test.tsx` | ⬜ pending |
 | 38-09 T3 | 09 | 7 | AIO-BUDGET-08 | T-38-23 | Rendered numbers equal the ledger after settle | integration | `npx vitest run tests/views/TeamsView.test.tsx` | ⬜ pending |
 | 38-10 T1 | 10 | 6 | AIO-BUDGET-02 | T-38-SC, T-38-26 | Human confirms the pin before any install | checkpoint probe | `grep -n '"js-tiktoken"' package.json` (must match after task 2) | ⬜ pending |
 | 38-10 T2 | 10 | 6 | AIO-BUDGET-02 | T-38-26, T-38-27 | Pinned exact; lazy subpath imports; fallback still reachable | unit + build probe | `npx vitest run tests/services/ai/office/tokenEstimate.test.ts` | ⬜ pending |
@@ -113,7 +115,7 @@ revised: "2026-11-13 (revision round 3 — R2-W3)"
 
 ## Validation Sign-Off
 
-- [ ] All 31 tasks (12 plans) have a focused `<automated>` verify or a named Wave 0 dependency
+- [ ] All 32 tasks (12 plans) have a focused `<automated>` verify or a named Wave 0 dependency
 - [ ] No verify filter matches zero titles (every `-t` fragment is a title the plan prescribes)
 - [ ] Every row's command run shows passing tests and zero skipped
 - [ ] Sampling continuity: no 3 consecutive tasks without automated verify
