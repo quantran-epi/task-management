@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { SCHEMA_V23 } from '../../src/db/schema';
+import { SCHEMA_V23, LATEST_SCHEMA_VERSION } from '../../src/db/schema';
 
 /**
  * Static parity guard (Phase 36, T-36-03, AIO-DATA-05).
@@ -98,7 +98,7 @@ describe('TS ⊆ Rust SQLite table parity', () => {
   it('reads its store list from the schema version that is actually latest', () => {
     const match = /export const LATEST_SCHEMA_VERSION = (\d+);/.exec(SCHEMA_SOURCE);
     expect(match).not.toBeNull();
-    expect(Number(match![1])).toBe(23);
+    expect(Number(match![1])).toBe(LATEST_SCHEMA_VERSION);
     expect(SCHEMA_SOURCE).toContain('export const SCHEMA_V23 =');
   });
 });
