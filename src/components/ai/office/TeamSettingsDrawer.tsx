@@ -7,6 +7,7 @@ import {
   MIN_TEAM_CONCURRENCY,
 } from '../../../types/aiOffice';
 import { agentColorFor, agentTextColorFor } from './AgentAttributionRow';
+import { splitEvenly } from '../../../services/ai/office/budgetSplit';
 import { LinkedItemsList, type LinkedItemRow } from './LinkedItemsList';
 
 export interface TeamSettingsDrawerProps {
@@ -44,18 +45,12 @@ function initialOf(name: string): string {
   return Array.from(name.trim())[0]?.toUpperCase() ?? '?';
 }
 
-/** UI-SPEC §8a. Even split with the remainder on the lead row, per-row override allowed. */
+/** UI-SPEC §8a. Thin adapter over `splitEvenly` — the arithmetic lives in `budgetSplit.ts`. */
 export function evenSplitRows(
   total: number,
   rows: Array<Omit<SplitRow, 'budgetTokens' | 'usedTokens'> & { usedTokens: number }>
 ): SplitRow[] {
-  const count = rows.length;
-  const perRow = count > 0 ? Math.floor(total / count) : 0;
-  const remainder = total - perRow * count;
-  return rows.map((row) => ({
-    ...row,
-    budgetTokens: row.role === 'lead' ? perRow + remainder : perRow,
-  }));
+  return splitEvenly(total, rows);
 }
 
 export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({

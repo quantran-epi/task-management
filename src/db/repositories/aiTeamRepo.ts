@@ -2,6 +2,7 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../index';
 import type { AiTeam, AiTeamLink, AiTeamMember } from '../../types/aiOffice';
 import { clampBudgetWarnThresholdPct, clampTeamConcurrency } from '../../types/aiOffice';
 import { generateId } from '../../utils/uuid';
+import { splitEvenly } from '../../services/ai/office/budgetSplit';
 import {
   AiTeamInputSchema,
   AiTeamUpdateSchema,
@@ -65,11 +66,7 @@ async function assertCanActivate(teamId: string, db: TaskPlannerDatabase): Promi
   if (!target) throw new Error(`Không tìm thấy nhóm: ${teamId}`);
 }
 
-/** UI-SPEC §8a: floor per row, remainder on the lead row so the sum is exact. */
-function splitBudget(total: number, memberCount: number): number {
-  return memberCount > 0 ? Math.floor(total / memberCount) : 0;
-}
-
+/** D-14: the split rule lives once, in `budgetSplit.ts`; both the repo and the drawer import it. */
 async function writeEvenSplit(
   teamId: string,
   totalTokens: number,
@@ -78,14 +75,9 @@ async function writeEvenSplit(
   const members = await db.aiTeamMembers.where('teamId').equals(teamId).toArray();
   if (members.length === 0) return [];
 
-  const perRow = splitBudget(totalTokens, members.length);
-  const remainder = totalTokens - perRow * members.length;
-
-  const updated: AiTeamMember[] = [];
-  for (const member of members) {
-    const budgetTokens = member.role === 'lead' ? perRow + remainder : perRow;
-    await db.aiTeamMembers.update(member.id, { budgetTokens });
-    updated.push({ ...member, budgetTokens });
+  const updated = splitEvenly(totalTokens, members);
+  for (const member of updated) {
+    await db.aiTeamMembers.update(member.id, { budgetTokens: member.budgetTokens });
   }
   return updated;
 }
