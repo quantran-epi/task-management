@@ -22,12 +22,14 @@ export interface BudgetGate {
 
 export function createBudgetGate(): BudgetGate {
   let closed = false;
-  let resolver: (() => void) | null = null;
+  // A single resolver slot dropped the earlier waiter when two turns parked on the same
+  // closed gate, stranding it forever. Release every waiter instead.
+  let resolvers = new Set<() => void>();
 
   const release = () => {
-    const pending = resolver;
-    resolver = null;
-    pending?.();
+    const pending = resolvers;
+    resolvers = new Set();
+    for (const resolve of pending) resolve();
   };
 
   return {
@@ -46,16 +48,22 @@ export function createBudgetGate(): BudgetGate {
       if (signal?.aborted) return Promise.reject(new DOMException('Aborted', 'AbortError'));
 
       return new Promise<void>((resolve, reject) => {
+        let settled = false;
         const onAbort = () => {
-          resolver = null;
+          if (settled) return;
+          settled = true;
+          resolvers.delete(releaseOne);
           reject(new DOMException('Aborted', 'AbortError'));
         };
         // `once` keeps a long-lived turn signal from accumulating listeners across rounds.
         signal?.addEventListener('abort', onAbort, { once: true });
-        resolver = () => {
+        const releaseOne = () => {
+          if (settled) return;
+          settled = true;
           signal?.removeEventListener('abort', onAbort);
           resolve();
         };
+        resolvers.add(releaseOne);
       });
     },
   };

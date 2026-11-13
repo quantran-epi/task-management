@@ -65,7 +65,9 @@ export interface ChatMessageListProps {
   addressedTo?: Map<string, Array<{ id: string; name: string }>> | undefined;
 }
 
-export const ChatMessageList: React.FC<ChatMessageListProps> = ({
+// The composer draft lives above this list, so without a memo every keystroke re-rendered
+// every row. Its props are identity-stable at both call sites.
+export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
   messages,
   streamingText,
   isStreaming = false,
@@ -439,4 +441,4 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
       <div ref={bottomRef} style={{ height: 1 }} />
     </div>
   );
-};
+});

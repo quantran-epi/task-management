@@ -100,6 +100,12 @@ const RETRY_ERROR_COPY = 'Chưa thể chạy lại lần này. Hãy chờ lượ
 /** IN-05: fixed copy — a repo error message can embed ids, which must not reach the UI. */
 const LEADER_LOCK_FAILED_COPY = 'Không khoá được leader cho nhóm. Vui lòng thử lại.';
 
+/** Hoisted so the transcript list keeps prop identity across a composer keystroke. */
+const TEAM_EMPTY_STATE = {
+  heading: 'Bắt đầu làm việc với nhóm',
+  body: 'Nhập yêu cầu bên dưới để lead phân rã và chia việc. Gõ @ để nói trực tiếp với một nhân viên.',
+};
+
 const TERMINAL = new Set(['done', 'stopped', 'error']);
 
 function initialOf(name: string): string {
@@ -510,6 +516,34 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     [roster, team.leadId]
   );
 
+  /** Memoized so a composer keystroke does not change the transcript list's props. */
+  const messageListExtensions = useMemo(
+    () => ({
+      agentDirectory,
+      agentStatuses,
+      seenStates,
+      addressedTo,
+      ...(firstUnreadMessageId !== undefined ? { firstUnreadMessageId } : {}),
+      onAtBottomChange: setAtBottom,
+      ...(coordinator
+        ? {
+            onStopAgent: (agentId: string) => coordinator.stopAgent(agentId),
+            // 37-08 D-13: same extension path as onStopAgent — no new widget API.
+            // WR-02: a refusal (busy phase, disposed run) must land somewhere the user can
+            // see; forwarding `err.message` is not allowed here, so the fixed copy goes to
+            // the one action-error channel.
+            onRetryAgent: (assignmentId: string) => {
+              setActionError(null);
+              void coordinator
+                .retryAssignment(assignmentId)
+                .catch(() => setActionError(RETRY_ERROR_COPY));
+            },
+          }
+        : {}),
+    }),
+    [agentDirectory, agentStatuses, seenStates, addressedTo, firstUnreadMessageId, coordinator]
+  );
+
   /**
    * D-09: the first run locks the leader. Both the decision and the write read the PERSISTED
    * team row at send time — a leader assigned through the settings drawer after mount is
@@ -593,6 +627,13 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     },
     [runTurn]
   );
+
+  /** Stable identity: an inline arrow re-rendered the whole transcript on every keystroke. */
+  const handleRetry = useCallback(() => {
+    // 37.1: the retry is a dispatch like any other — it goes through `runTurn`, so its text
+    // lands in the draft on a `'blocked'` outcome.
+    if (lastUserTextRef.current) void runTurn(lastUserTextRef.current);
+  }, [runTurn]);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
@@ -881,11 +922,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                   onSubmit={handleSubmit}
                   onStop={() => coordinator?.abortAll()}
                   onResolveApproval={(approved) => coordinator?.resolveApproval(approved)}
-                  onRetry={() => {
-                    // 37.1: the retry is a dispatch like any other — it goes through
-                    // `runTurn`, so its text lands in the draft on a `'blocked'` outcome.
-                    if (lastUserTextRef.current) void runTurn(lastUserTextRef.current);
-                  }}
+                  onRetry={handleRetry}
                   error={sendError}
                   toolbox={{
                     selectedModel: lead?.model ?? '',
@@ -911,35 +948,8 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                   draft={draft}
                   onDraftChange={setDraft}
                   placeholder="Nhắn cho lead hoặc @ một nhân viên..."
-                  emptyState={{
-                    heading: 'Bắt đầu làm việc với nhóm',
-                    body: 'Nhập yêu cầu bên dưới để lead phân rã và chia việc. Gõ @ để nói trực tiếp với một nhân viên.',
-                  }}
-                  messageListExtensions={{
-                    agentDirectory,
-                    agentStatuses,
-                    seenStates,
-                    addressedTo,
-                    ...(firstUnreadMessageId !== undefined
-                      ? { firstUnreadMessageId }
-                      : {}),
-                    onAtBottomChange: setAtBottom,
-                    ...(coordinator ? { onStopAgent: (agentId: string) => coordinator.stopAgent(agentId) } : {}),
-                    // 37-08 D-13: same extension path as onStopAgent — no new widget API.
-                    // WR-02: a refusal (busy phase, disposed run) must land somewhere the
-                    // user can see; forwarding `err.message` is not allowed here, so the
-                    // fixed copy goes to the one action-error channel.
-                    ...(coordinator
-                      ? {
-                          onRetryAgent: (assignmentId: string) => {
-                            setActionError(null);
-                            void coordinator
-                              .retryAssignment(assignmentId)
-                              .catch(() => setActionError(RETRY_ERROR_COPY));
-                          },
-                        }
-                      : {}),
-                  }}
+                  emptyState={TEAM_EMPTY_STATE}
+                  messageListExtensions={messageListExtensions}
                   transcriptExtensions={transcriptExtensions}
                   agentMentionOptions={agentMentionOptions}
                 />

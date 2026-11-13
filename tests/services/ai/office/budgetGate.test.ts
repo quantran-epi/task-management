@@ -52,6 +52,66 @@ describe('budgetGate (D-20, D-21, T-34-19)', () => {
     await expect(gate.wait(controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
   });
 
+  it('releases every waiter when two turns park on the same closed gate', async () => {
+    // Regression: a single resolver slot dropped the first waiter, stranding that turn
+    // forever with no provider call.
+    const gate = createBudgetGate();
+    gate.close();
+
+    let firstSettled = false;
+    let secondSettled = false;
+
+    const first = gate.wait().then(() => {
+      firstSettled = true;
+    });
+    const second = gate.wait().then(() => {
+      secondSettled = true;
+    });
+
+    gate.open();
+    await Promise.all([first, second]);
+
+    expect(firstSettled).toBe(true);
+    expect(secondSettled).toBe(true);
+  });
+
+  it('does not strand the other waiter when one of them aborts', async () => {
+    const gate = createBudgetGate();
+    gate.close();
+    const controller = new AbortController();
+
+    const aborted = gate.wait(controller.signal);
+    let otherSettled = false;
+    const other = gate.wait().then(() => {
+      otherSettled = true;
+    });
+
+    controller.abort();
+    await expect(aborted).rejects.toMatchObject({ name: 'AbortError' });
+    expect(otherSettled).toBe(false);
+
+    gate.open();
+    await other;
+    expect(otherSettled).toBe(true);
+  });
+
+  it('removes every abort listener once the gate opens', async () => {
+    const gate = createBudgetGate();
+    const controllers = [new AbortController(), new AbortController()];
+    const spies = controllers.map((controller) =>
+      vi.spyOn(controller.signal, 'removeEventListener')
+    );
+
+    gate.close();
+    const parked = controllers.map((controller) => gate.wait(controller.signal));
+    gate.open();
+    await Promise.all(parked);
+
+    for (const spy of spies) {
+      expect(spy).toHaveBeenCalledWith('abort', expect.any(Function));
+    }
+  });
+
   it('removes the abort listener when the gate opens', async () => {
     const gate = createBudgetGate();
     const controller = new AbortController();
