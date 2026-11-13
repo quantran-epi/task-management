@@ -35,6 +35,7 @@ import {
   getNineRouterApiKey,
   getNineRouterConfig,
 } from '../../../services/ai/nineRouterTokenService';
+import { getGlobalBudgetWarnThresholdPct } from '../../../services/ai/budgetWarnSettings';
 import {
   createTeamRunCoordinator,
   type TeamRunCoordinator,
@@ -194,6 +195,8 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
 
   const links = useLiveQuery(() => listTeamLinks(team.id, db), [db, team.id]) ?? [];
   const liveMembers = useLiveQuery(() => listTeamMembers(team.id, db), [db, team.id]) ?? members;
+  // D-04: the drawer shows the inherited value without materializing it.
+  const globalThresholdPct = useLiveQuery(() => getGlobalBudgetWarnThresholdPct(db), [db]);
   // D-09: the leader Select's option source. `lead` stays the current-selection display.
   const leads = useLiveQuery(() => listLeads(db), [db]) ?? [];
 
@@ -1026,6 +1029,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         onRemoveMember={async (memberId) => {
           await removeTeamMember(memberId, db);
         }}
+        {...(globalThresholdPct !== undefined ? { globalThresholdPct } : {})}
         onSave={(input) => {
           runAction(() => handleSaveSettings(input));
         }}
@@ -1062,6 +1066,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
             ? liveMembers.find((row) => row.agentId === topUpScope.agentId)?.budgetTokens ?? 0
             : team.budgetTokens
         }
+        thresholdPct={snapshot.budgetWarnThresholdPct}
         onCancel={() => setTopUpOpen(false)}
         onConfirm={(amount) => {
           setTopUpOpen(false);

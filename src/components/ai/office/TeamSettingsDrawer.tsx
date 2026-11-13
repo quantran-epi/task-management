@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Avatar, Button, Drawer, InputNumber, Popconfirm, Select, Switch, Table, Tag, theme } from 'antd';
 import type { AiEmployee, AiLead, AiTeam, AiTeamMember } from '../../../types/aiOffice';
 import {
+  DEFAULT_BUDGET_WARN_THRESHOLD_PCT,
   DEFAULT_TEAM_CONCURRENCY,
   MAX_TEAM_CONCURRENCY,
   MIN_TEAM_CONCURRENCY,
@@ -29,7 +30,11 @@ export interface TeamSettingsDrawerProps {
     autoSplitEnabled: boolean;
     autoApproveMutations: boolean;
     concurrencyLimit: number;
+    /** D-04: absent = leave the stored override alone, `null` = inherit, number = store. */
+    budgetWarnThresholdPct?: number | null | undefined;
   }) => void;
+  /** D-04: the global default, shown as the inherited value. Never written from here. */
+  globalThresholdPct?: number | undefined;
 }
 
 interface SplitRow {
@@ -66,6 +71,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
   onAddMember,
   onRemoveMember,
   onSave,
+  globalThresholdPct,
 }) => {
   const { token } = theme.useToken();
   const [total, setTotal] = useState<number>(team.budgetTokens);
@@ -75,6 +81,14 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
   const [concurrency, setConcurrency] = useState<number>(
     team.concurrencyLimit ?? DEFAULT_TEAM_CONCURRENCY
   );
+  // D-04: three states. `undefined` = untouched, `null` = clear (inherit), number = override.
+  // The state is seeded from the STORED override for display only; `thresholdTouched` is what
+  // decides whether the save carries it. Seeding the global default instead is exactly how an
+  // unrelated save would turn an inherited 65 into an explicit 80.
+  const [thresholdPct, setThresholdPct] = useState<number | null | undefined>(
+    team.budgetWarnThresholdPct
+  );
+  const [thresholdTouched, setThresholdTouched] = useState(false);
   const [rosterError, setRosterError] = useState<string | null>(null);
 
   const memberAgentIds = useMemo(
@@ -127,6 +141,8 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
     setAutoSplit(team.autoSplitEnabled === true);
     setAutoApprove(team.autoApproveMutations === true);
     setConcurrency(team.concurrencyLimit ?? DEFAULT_TEAM_CONCURRENCY);
+    setThresholdPct(team.budgetWarnThresholdPct);
+    setThresholdTouched(false);
     setRows(
       members
         .map((member) => {
@@ -167,6 +183,9 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
       autoSplitEnabled: autoSplit,
       autoApproveMutations: autoApprove,
       concurrencyLimit: concurrency,
+      // D-04: untouched leaves the stored value alone; a clear sends `null`; a typed value
+      // sends the number. `undefined` is the only "do nothing" spelling.
+      budgetWarnThresholdPct: thresholdTouched ? thresholdPct : undefined,
     });
   };
 
@@ -357,6 +376,42 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
           />
           <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>
             {`Chia đều ${total} token cho ${rows.length} thành viên — sửa từng dòng nếu cần.`}
+          </div>
+        </div>
+
+        <div data-testid="team-threshold-block">
+          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Ngưỡng cảnh báo</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <InputNumber
+              min={1}
+              max={100}
+              precision={0}
+              style={{ width: 100 }}
+              value={thresholdPct ?? globalThresholdPct ?? DEFAULT_BUDGET_WARN_THRESHOLD_PCT}
+              onChange={(value) => {
+                setThresholdTouched(true);
+                setThresholdPct(typeof value === 'number' ? value : null);
+              }}
+              aria-label="Ngưỡng cảnh báo ngân sách"
+              data-testid="team-threshold-input"
+            />
+            <span style={{ fontSize: 12 }}>%</span>
+            <Button
+              size="small"
+              type="text"
+              onClick={() => {
+                setThresholdTouched(true);
+                setThresholdPct(null);
+              }}
+              data-testid="team-threshold-clear"
+            >
+              Dùng mặc định toàn cục
+            </Button>
+          </div>
+          <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>
+            {thresholdPct === null || thresholdPct === undefined
+              ? `Đang kế thừa mặc định toàn cục (${globalThresholdPct ?? DEFAULT_BUDGET_WARN_THRESHOLD_PCT}%).`
+              : `Đang dùng ngưỡng riêng của nhóm (${thresholdPct}%).`}
           </div>
         </div>
 

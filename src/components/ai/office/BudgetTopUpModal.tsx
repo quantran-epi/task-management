@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Descriptions, InputNumber, Modal, theme } from 'antd';
-import { BUDGET_PAUSE_THRESHOLD } from '../../../types/aiOffice';
 
 export type BudgetTopUpScope =
   | { kind: 'agent'; name: string }
@@ -11,6 +10,8 @@ export interface BudgetTopUpModalProps {
   scope: BudgetTopUpScope;
   used: number;
   budget: number;
+  /** D-04/D-05: the resolved percentage — never a literal. */
+  thresholdPct: number;
   onCancel: () => void;
   onConfirm: (amount: number) => void;
 }
@@ -24,6 +25,7 @@ export const BudgetTopUpModal: React.FC<BudgetTopUpModalProps> = ({
   scope,
   used,
   budget,
+  thresholdPct,
   onCancel,
   onConfirm,
 }) => {
@@ -67,8 +69,8 @@ export const BudgetTopUpModal: React.FC<BudgetTopUpModalProps> = ({
           <Descriptions.Item label="Ngân sách hiện tại">
             {budget.toLocaleString()} token
           </Descriptions.Item>
-          <Descriptions.Item label="Ngưỡng cảnh báo (80%)">
-            {Math.round(budget * BUDGET_PAUSE_THRESHOLD).toLocaleString()} token
+          <Descriptions.Item label={`Ngưỡng cảnh báo (${thresholdPct}%)`}>
+            {Math.round((budget * thresholdPct) / 100).toLocaleString()} token
           </Descriptions.Item>
         </Descriptions>
 

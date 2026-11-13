@@ -219,4 +219,46 @@ describe('TeamWorkspace settings save (Phase 38 D-19, AIO-BUDGET-07)', () => {
     expect('budgetWarnThresholdPct' in stored).toBe(false);
     expect(currentStub?.setTeamThresholdPct).toHaveBeenCalledWith(undefined);
   });
+
+  it('clears a per-team override in ONE repo call and reaches Dexie (D-04, drawer clear)', async () => {
+    await db.settings.put({ key: 'budgetWarnThresholdPct', value: 80 });
+    await db.aiTeams.update(team.id, { budgetWarnThresholdPct: 65 });
+    team = (await db.aiTeams.get(team.id))!;
+
+    renderWorkspace();
+    fireEvent.click(await screen.findByTestId('team-open-settings'));
+    await screen.findByTestId('team-threshold-input');
+    fireEvent.click(screen.getByTestId('team-threshold-clear'));
+    fireEvent.click(await screen.findByTestId('team-settings-save'));
+
+    await waitFor(() => expect(repoSpies.applyTeamBudgetSettings).toHaveBeenCalledTimes(1));
+    const payload = repoSpies.applyTeamBudgetSettings.mock.calls[0]![1] as {
+      budgetWarnThresholdPct?: number | null | undefined;
+    };
+    expect(payload.budgetWarnThresholdPct).toBeNull();
+    await waitFor(() =>
+      expect(currentStub?.setTeamThresholdPct).toHaveBeenCalledWith(undefined)
+    );
+
+    await waitFor(async () => {
+      const row = (await db.aiTeams.get(team.id))!;
+      expect('budgetWarnThresholdPct' in row).toBe(false);
+    });
+  });
+
+  it('leaves a stored override untouched when only the total changes (D-04, drawer untouched)', async () => {
+    await db.settings.put({ key: 'budgetWarnThresholdPct', value: 80 });
+    await db.aiTeams.update(team.id, { budgetWarnThresholdPct: 65 });
+    team = (await db.aiTeams.get(team.id))!;
+
+    renderWorkspace();
+    await saveTotal(2000);
+
+    await waitFor(() => expect(repoSpies.applyTeamBudgetSettings).toHaveBeenCalledTimes(1));
+    const payload = repoSpies.applyTeamBudgetSettings.mock.calls[0]![1] as {
+      budgetWarnThresholdPct?: number | null | undefined;
+    };
+    expect(payload.budgetWarnThresholdPct).toBeUndefined();
+    await waitFor(async () => expect((await db.aiTeams.get(team.id))?.budgetWarnThresholdPct).toBe(65));
+  });
 });

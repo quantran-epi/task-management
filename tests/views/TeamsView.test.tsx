@@ -148,7 +148,7 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     const card = await screen.findByTestId(`team-card-${activeTeam.id}`);
     expect(card).toHaveTextContent('Nhóm Thanh Toán');
     expect(card).toHaveTextContent('Bình Trần');
-    expect(card).toHaveTextContent('0/4000 token');
+    expect(card).toHaveTextContent('0/4,000 token');
     expect(card.querySelectorAll('.ant-avatar').length).toBeGreaterThanOrEqual(3);
   });
 
@@ -413,8 +413,21 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     expect(memberLine.querySelector('[title="ước lượng"]')).not.toBeNull();
   });
 
-  it('keeps the member and group badges independent (D-03/D-06)', async () => {
-    const rows = await listTeamMembers(activeTeam.id, db);
+  it('shows the inherited global threshold in the drawer without storing it (R3-W1)', async () => {
+    await db.settings.put({ key: 'ai_budget_warn_threshold_pct', value: 65 });
+
+    renderView();
+    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    fireEvent.click(await screen.findByTestId('team-header-settings'));
+
+    const input = (await screen.findByTestId('team-threshold-input')) as HTMLInputElement;
+    await waitFor(() => expect(input.value).toBe('65'));
+    expect(screen.getByText(/Đang kế thừa mặc định toàn cục \(65%\)/)).toBeInTheDocument();
+    // Reading the global must never materialize it on the team row.
+    expect((await getTeam(activeTeam.id, db))?.budgetWarnThresholdPct).toBeUndefined();
+  });
+
+  it('keeps the member and group badges independent (D-03/D-06)', async () => {    const rows = await listTeamMembers(activeTeam.id, db);
     const employeeRow = rows.find((row) => row.role === 'employee')!;
     // Member over its own 1000 share; group total 4000 stays well under.
     await db.aiTeamMembers.update(employeeRow.id, {

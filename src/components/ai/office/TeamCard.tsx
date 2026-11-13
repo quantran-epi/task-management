@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Avatar, Button, Progress, Tag, theme } from 'antd';
 import type { AiLead, AiTeam } from '../../../types/aiOffice';
+import { DEFAULT_BUDGET_WARN_THRESHOLD_PCT } from '../../../types/aiOffice';
+import { isAtThreshold, resolveThresholdPct } from '../../../services/ai/office/budgetGate';
 import { agentColorFor, agentTextColorFor } from './AgentAttributionRow';
 
 /** Roster row rendered inside the avatar stack — names only, no domain payload. */
@@ -14,6 +16,8 @@ export interface TeamCardProps {
   lead: AiLead | undefined;
   members: TeamCardMember[];
   usedTokens: number;
+  /** D-04/D-05: the resolved threshold; the production caller always supplies it. */
+  budgetWarnThresholdPct?: number | undefined;
   onOpen: () => void;
   onActivate: () => void;
   onPause: () => void;
@@ -33,6 +37,7 @@ export const TeamCard: React.FC<TeamCardProps> = ({
   lead,
   members,
   usedTokens,
+  budgetWarnThresholdPct,
   onOpen,
   onActivate,
   onPause,
@@ -43,6 +48,8 @@ export const TeamCard: React.FC<TeamCardProps> = ({
 
   const isActive = team.status === 'active';
   const total = team.budgetTokens;
+  const pct = resolveThresholdPct(team, budgetWarnThresholdPct ?? DEFAULT_BUDGET_WARN_THRESHOLD_PCT);
+  const atThreshold = isAtThreshold(usedTokens, total, pct);
   const ratio = total > 0 ? Math.min(usedTokens / total, 1) : 0;
   const visibleRoster = members.slice(0, ROSTER_CAP);
   const overflow = members.length - visibleRoster.length;
@@ -126,10 +133,10 @@ export const TeamCard: React.FC<TeamCardProps> = ({
           size="small"
           showInfo={false}
           percent={ratio * 100}
-          strokeColor={ratio >= 0.8 ? token.colorWarning : token.colorSuccess}
+          strokeColor={atThreshold ? token.colorWarning : token.colorSuccess}
         />
         <div style={{ fontSize: 12, color: token.colorTextSecondary }}>
-          {`${usedTokens}/${total} token`}
+          {`${usedTokens.toLocaleString()}/${total.toLocaleString()} token`}
         </div>
       </div>
 

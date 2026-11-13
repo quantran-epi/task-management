@@ -11,6 +11,9 @@ import { TeamCard, type TeamCardMember } from '../components/ai/office/TeamCard'
 import { TeamEditorDrawer } from '../components/ai/office/TeamEditorDrawer';
 import { TeamWorkspace } from '../components/ai/office/TeamWorkspace';
 import type { AiTeam } from '../types/aiOffice';
+import { DEFAULT_BUDGET_WARN_THRESHOLD_PCT } from '../types/aiOffice';
+import { getGlobalBudgetWarnThresholdPct } from '../services/ai/budgetWarnSettings';
+import { resolveThresholdPct } from '../services/ai/office/budgetGate';
 
 export interface TeamsViewProps {
   db?: TaskPlannerDatabase | undefined;
@@ -37,6 +40,11 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ db = defaultDb, createRunt
   const employees = useLiveQuery(() => listEmployees(db), [db]) ?? [];
   const skills = useLiveQuery(() => listSkills(db), [db]) ?? [];
   const allMembers = useLiveQuery(() => db.aiTeamMembers.toArray(), [db]) ?? [];
+  // D-04/R3-W1: one live global read for the whole card list, so a Settings change
+  // recolours every card without a reload. Each card resolves its own override on top.
+  const globalThresholdPct =
+    useLiveQuery(() => getGlobalBudgetWarnThresholdPct(db), [db]) ??
+    DEFAULT_BUDGET_WARN_THRESHOLD_PCT;
 
   const activeCount = teams.filter((team) => team.status === 'active').length;
 
@@ -164,6 +172,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ db = defaultDb, createRunt
               lead={leadFor(team)}
               members={rosterByTeam.get(team.id) ?? []}
               usedTokens={usedByTeam.get(team.id) ?? 0}
+              budgetWarnThresholdPct={resolveThresholdPct(team, globalThresholdPct)}
               onOpen={() => openTeam(team)}
               onOpenSettings={() => openTeam(team, true)}
               onActivate={() => {

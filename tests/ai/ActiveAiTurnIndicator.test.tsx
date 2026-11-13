@@ -120,18 +120,27 @@ describe('BudgetTopUpModal', () => {
     scope: { kind: 'agent' as const, name: 'An' },
     used: 8000,
     budget: 10000,
+    thresholdPct: 80,
     onCancel: vi.fn(),
     onConfirm: vi.fn(),
   };
 
-  it('renders the usage rows and the 80% threshold', () => {
-    render(<BudgetTopUpModal {...baseProps} />);
+  it('renders the usage rows and the threshold label from the prop', () => {
+    const { rerender } = render(<BudgetTopUpModal {...baseProps} />);
     const modal = screen.getByTestId('budget-topup-modal');
     expect(modal).toBeInTheDocument();
     expect(modal.textContent).toContain('Đã dùng');
     expect(modal.textContent).toContain('Ngân sách hiện tại');
     expect(modal.textContent).toContain('Ngưỡng cảnh báo (80%)');
+    expect(modal.textContent).toContain('8,000 token');
     expect(modal.textContent).not.toContain('Đang xử lý');
+
+    // D-04: the label is prop-driven, not coincidentally 80.
+    rerender(<BudgetTopUpModal {...baseProps} thresholdPct={65} />);
+    const after = screen.getByTestId('budget-topup-modal');
+    expect(after.textContent).toContain('Ngưỡng cảnh báo (65%)');
+    expect(after.textContent).not.toContain('(80%)');
+    expect(after.textContent).toContain('6,500 token');
   });
 
   it('disables the confirm below 1000 and enables it at 1000', () => {
