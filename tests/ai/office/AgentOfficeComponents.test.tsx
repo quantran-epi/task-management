@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { AssignmentPlanCard } from '../../../src/components/ai/office/AssignmentPlanCard';
-import { AgentPausedBanner } from '../../../src/components/ai/office/AgentPausedBanner';
 
 const plan = {
   batchIndex: 1,
@@ -58,32 +57,5 @@ describe('AssignmentPlanCard', () => {
     expect(screen.getByRole('status').textContent).toContain(
       'Đã từ chối — không nhân viên nào được giao việc.'
     );
-  });
-});
-
-describe('AgentPausedBanner', () => {
-  it('renders the agent-scope copy and never says Đang xử lý', () => {
-    const { container } = render(<AgentPausedBanner agentName="An" onTopUp={vi.fn()} />);
-    const banner = screen.getByTestId('agent-paused-banner');
-    expect(banner).toBeInTheDocument();
-    expect(banner.getAttribute('role')).toBe('status');
-    expect(banner.textContent).toContain('«An» tạm dừng — cần cấp thêm token');
-    expect(banner.textContent).toContain('Đã dùng 80% ngân sách của nhân viên này.');
-    expect(container.textContent).not.toContain('Đang xử lý');
-    expect(container.querySelector('.anticon-sync')).toBeNull();
-  });
-
-  it('renders the team-scope copy when only a team name is given', () => {
-    render(<AgentPausedBanner teamName="Nhóm Alpha" onTopUp={vi.fn()} />);
-    const banner = screen.getByTestId('agent-paused-banner');
-    expect(banner.textContent).toContain('Nhóm tạm dừng — cần cấp thêm token');
-    expect(banner.textContent).toContain('Đã dùng 80% ngân sách nhóm.');
-  });
-
-  it('calls onTopUp from the Cấp thêm token action', () => {
-    const onTopUp = vi.fn();
-    render(<AgentPausedBanner agentName="An" onTopUp={onTopUp} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Cấp thêm token' }));
-    expect(onTopUp).toHaveBeenCalledTimes(1);
   });
 });

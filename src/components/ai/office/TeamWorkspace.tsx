@@ -50,7 +50,6 @@ import type { ChatTurnRuntimeDeps } from '../runtime/chatTurnRuntime';
 import { AiChatWidget } from '../AiChatWidget';
 import { agentColorFor } from './AgentAttributionRow';
 import { AssignmentPlanCard } from './AssignmentPlanCard';
-import { AgentPausedBanner } from './AgentPausedBanner';
 import { TeamActivityIndicator } from './TeamActivityIndicator';
 import { BudgetTopUpModal } from './BudgetTopUpModal';
 import { TeamSidebar } from './TeamSidebar';
@@ -149,11 +148,6 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   const [settingsOpen, setSettingsOpen] = useState(initialSettingsOpen);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [topUpOpen, setTopUpOpen] = useState(false);
-  // D-21: which budget the top-up dialog targets. Defaults to the team; the paused
-  // banner switches it to the parked agent so the right gate opens.
-  const [topUpScope, setTopUpScope] = useState<{ kind: 'team' } | { kind: 'agent'; agentId: string }>({
-    kind: 'team',
-  });
   const [planDecision, setPlanDecision] = useState<'approved' | 'rejected' | undefined>(undefined);
   const [analysisMode, setAnalysisMode] = useState<boolean>(true);
   const [mcpEnabled, setMcpEnabled] = useState<boolean>(false);
@@ -756,21 +750,6 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
           }}
         />
       )}
-      {snapshot.phase === 'awaiting-budget' && (
-        <AgentPausedBanner
-          teamName={team.name}
-          {...(snapshot.pausedAgentName ? { agentName: snapshot.pausedAgentName } : {})}
-          onTopUp={() => {
-            // D-21: target the parked agent's own budget when one agent's gate is closed.
-            setTopUpScope(
-              snapshot.pausedAgentId
-                ? { kind: 'agent', agentId: snapshot.pausedAgentId }
-                : { kind: 'team' }
-            );
-            setTopUpOpen(true);
-          }}
-        />
-      )}
     </>
   );
 
@@ -805,8 +784,6 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
             budgetWarnThresholdPct={snapshot.budgetWarnThresholdPct}
             liveUsage={snapshot.memberUsage}
             onTopUp={() => {
-              // A sidebar top-up is always team-scoped; never inherit a banner's agent scope.
-              setTopUpScope({ kind: 'team' });
               setTopUpOpen(true);
             }}
             onOpenSettings={() => setSettingsOpen(true)}
@@ -1046,36 +1023,14 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
 
       <BudgetTopUpModal
         open={topUpOpen}
-        scope={
-          topUpScope.kind === 'agent'
-            ? {
-                kind: 'agent',
-                name:
-                  roster.find((agent) => agent.id === topUpScope.agentId)?.name ??
-                  topUpScope.agentId,
-              }
-            : { kind: 'team', name: team.name }
-        }
-        used={
-          topUpScope.kind === 'agent'
-            ? liveMembers.find((row) => row.agentId === topUpScope.agentId)?.usedTokens ?? 0
-            : liveMembers.reduce((sum, row) => sum + row.usedTokens, 0)
-        }
-        budget={
-          topUpScope.kind === 'agent'
-            ? liveMembers.find((row) => row.agentId === topUpScope.agentId)?.budgetTokens ?? 0
-            : team.budgetTokens
-        }
+        scope={{ kind: 'team', name: team.name }}
+        used={liveMembers.reduce((sum, row) => sum + row.usedTokens, 0)}
+        budget={team.budgetTokens}
         thresholdPct={snapshot.budgetWarnThresholdPct}
         onCancel={() => setTopUpOpen(false)}
         onConfirm={(amount) => {
           setTopUpOpen(false);
-          void coordinator?.topUp(
-            topUpScope.kind === 'agent'
-              ? { kind: 'agent', agentId: topUpScope.agentId }
-              : { kind: 'team' },
-            amount
-          );
+          void coordinator?.topUp({ kind: 'team' }, amount);
         }}
       />
 
