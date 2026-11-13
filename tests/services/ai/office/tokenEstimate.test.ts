@@ -52,6 +52,21 @@ describe('tokenEstimate (Phase 38 D-07/D-10)', () => {
     expect(getEncoderKind()).toBe('chars-div-4');
   });
 
+  it('retries once with special tokens allowed before giving up on the encoder (WR-14)', async () => {
+    const calls: Array<string | undefined> = [];
+    setEncoderLoaderForTests(async () => ({
+      encode(text: string, allowedSpecial?: string[] | 'all') {
+        calls.push(allowedSpecial as string | undefined);
+        if (allowedSpecial !== 'all') throw new Error('special token <|endoftext|>');
+        return new Array(text.length).fill(0);
+      },
+    }));
+
+    // 12 chars → the retry's count (12), not chars÷4 (3).
+    expect(await estimateTokens('123456789012')).toBe(12);
+    expect(calls).toEqual([undefined, 'all']);
+  });
+
   it('falls back to chars÷4 when the encoder itself throws', async () => {
     setEncoderLoaderForTests(async () => ({
       encode() {

@@ -7,6 +7,7 @@ import {
   completeJson,
   probeStructuredOutputCapability,
   clearCapabilityProbeCache,
+  mapUsage,
 } from '../../src/services/ai/nineRouterClient';
 import type { StreamChatChunk } from '../../src/services/ai/types';
 
@@ -31,6 +32,34 @@ describe('nineRouterClient', () => {
     const errorMsg = 'Failed to fetch from https://api.9router.com with sk-abc123456789xyz';
     const redacted = redactApiKey(errorMsg, 'sk-abc123456789xyz');
     expect(redacted).toBe('Failed to fetch from https://api.9router.com with ***');
+  });
+
+  // WR-02: OpenAI's prompt_tokens already includes the cached portion, Anthropic's
+  // input_tokens does not. `splitUsage` adds prompt + cache, so the OpenAI shape must be
+  // normalized here or the cached tokens are charged twice.
+  it('subtracts cached_tokens from prompt_tokens for the OpenAI shape (WR-02)', () => {
+    const usage = mapUsage({
+      prompt_tokens: 1000,
+      completion_tokens: 200,
+      total_tokens: 1200,
+      prompt_tokens_details: { cached_tokens: 400 },
+    });
+    expect(usage.promptTokens).toBe(600);
+    expect(usage.cacheReadTokens).toBe(400);
+    expect((usage.promptTokens ?? 0) + (usage.cacheReadTokens ?? 0)).toBe(1000);
+  });
+
+  it('leaves promptTokens as-is for the Anthropic shape (WR-02)', () => {
+    const usage = mapUsage({
+      prompt_tokens: 600,
+      completion_tokens: 200,
+      cache_read_input_tokens: 400,
+      cache_creation_input_tokens: 50,
+    });
+    // Anthropic's input count already excludes cache reads, so no subtraction happens.
+    expect(usage.promptTokens).toBe(600);
+    expect(usage.cacheReadTokens).toBe(400);
+    expect(usage.cacheCreationTokens).toBe(50);
   });
 
   it('testNineRouterConnection returns models list on 200 OK', async () => {

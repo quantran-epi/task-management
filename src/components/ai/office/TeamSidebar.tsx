@@ -54,9 +54,13 @@ const SECTION_LABEL: React.CSSProperties = {
 };
 
 interface MemberFigures {
+  /** What the member row shows: the reported number, else the best available guess. */
   usedIn: number;
   usedOut: number;
   used: number;
+  /** WR-04: charged-only halves — no provisional guess — for the team aggregate. */
+  chargedIn: number;
+  chargedOut: number;
   remaining: number;
   estimated: boolean;
   atThreshold: boolean;
@@ -89,14 +93,24 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
   const figuresFor = (member: AiTeamMember): MemberFigures => {
     const live = liveByAgent.get(member.agentId);
     const reportedIn = live?.inputTokens ?? 0;
+    const reportedOut = live?.outputTokens ?? 0;
     const provisionalIn = live?.provisionalInputTokens ?? 0;
     const usedIn = reportedIn > 0 ? reportedIn : Math.max(member.inputTokens ?? 0, provisionalIn);
-    const usedOut = live?.outputTokens ?? member.outputTokens ?? 0;
+    // WR-03: the `> 0` idiom, same as `usedIn`. A live record exists from dispatch with
+    // `outputTokens: 0`, so `??` would hide the persisted output mid-turn.
+    const usedOut = reportedOut > 0 ? reportedOut : (member.outputTokens ?? 0);
+    // WR-04: the team aggregate is charged-only, matching the coordinator's `teamUsed`.
+    // The provisional guess is a warning input, never a charge, so it must not lift the
+    // group total to a threshold the coordinator would not warn about.
+    const chargedIn = reportedIn > 0 ? reportedIn : (member.inputTokens ?? 0);
+    const chargedOut = usedOut;
     const used = usedIn + usedOut;
     return {
       usedIn,
       usedOut,
       used,
+      chargedIn,
+      chargedOut,
       remaining: Math.max(0, member.budgetTokens - used),
       // D-24: a provisional measurement is an estimate too — it is not a provider number.
       estimated:
@@ -109,10 +123,15 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
 
   const figuresByMemberId = new Map(members.map((member) => [member.id, figuresFor(member)]));
   // Summed over EVERY member row, not only the renderable ones, so the group total agrees
-  // with the ledger the coordinator reconciles against (T-38-23).
-  const teamUsedIn = members.reduce((sum, row) => sum + (figuresByMemberId.get(row.id)?.usedIn ?? 0), 0);
-  const teamUsedOut = members.reduce((sum, row) => sum + (figuresByMemberId.get(row.id)?.usedOut ?? 0), 0);
+  // with the ledger the coordinator reconciles against (T-38-23). WR-04: charged halves only.
+  const teamUsedIn = members.reduce((sum, row) => sum + (figuresByMemberId.get(row.id)?.chargedIn ?? 0), 0);
+  const teamUsedOut = members.reduce((sum, row) => sum + (figuresByMemberId.get(row.id)?.chargedOut ?? 0), 0);
   const teamUsed = teamUsedIn + teamUsedOut;
+  // WR-04: the pre-call guess renders as its own `~` figure, never inside the total.
+  const teamProvisionalIn = members.reduce(
+    (sum, row) => sum + (liveByAgent.get(row.agentId)?.provisionalInputTokens ?? 0),
+    0
+  );
   const teamTotal = team.budgetTokens;
   const teamRemaining = Math.max(0, teamTotal - teamUsed);
   const teamPercent = teamTotal > 0 ? Math.round((teamUsed / teamTotal) * 100) : 0;
@@ -253,6 +272,11 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
         </div>
         <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 8 }}>
           {`(${fmt(teamUsedIn)} vào / ${fmt(teamUsedOut)} ra) · còn ${fmt(teamRemaining)}`}
+          {teamProvisionalIn > 0 && (
+            <span data-testid="team-provisional" title="ước lượng" aria-label="ước lượng">
+              {` · ~${fmt(teamProvisionalIn)} vào (ước lượng)`}
+            </span>
+          )}
         </div>
         <Button size="small" onClick={onTopUp} data-testid="team-topup-button">
           Cấp thêm token

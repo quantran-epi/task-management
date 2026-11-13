@@ -232,7 +232,7 @@ describe('restoreBackupPayload & rollbackToSnapshot', () => {
     await testDb.teamParticipants.add({
       id: 'stale-participant',
       teamId: LOCAL_CR_ID,
-      kind: 'employee',
+      kind: 'agent',
       name: 'Gone',
       createdAt: '2026-09-27T12:00:00.000Z',
     });

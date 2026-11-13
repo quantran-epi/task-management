@@ -306,6 +306,11 @@ export async function runAiOrchestratorLoop(
             promptTokens: (accumulatedTokenUsage.promptTokens || 0) + (chunk.usage.promptTokens || 0),
             completionTokens: (accumulatedTokenUsage.completionTokens || 0) + (chunk.usage.completionTokens || 0),
             totalTokens: (accumulatedTokenUsage.totalTokens || 0) + (chunk.usage.totalTokens || 0),
+            // WR-09: cache tokens are charged as input (D-09), so they must accumulate too —
+            // dropping them here made the persisted message usage cache-less.
+            cacheReadTokens: (accumulatedTokenUsage.cacheReadTokens || 0) + (chunk.usage.cacheReadTokens || 0),
+            cacheCreationTokens:
+              (accumulatedTokenUsage.cacheCreationTokens || 0) + (chunk.usage.cacheCreationTokens || 0),
           };
           onUsage?.(chunk.usage);
         }
@@ -337,6 +342,10 @@ export async function runAiOrchestratorLoop(
               promptTokens: (accumulatedTokenUsage.promptTokens || 0) + (chunk.usage.promptTokens || 0),
               completionTokens: (accumulatedTokenUsage.completionTokens || 0) + (chunk.usage.completionTokens || 0),
               totalTokens: (accumulatedTokenUsage.totalTokens || 0) + (chunk.usage.totalTokens || 0),
+              // WR-09: cache tokens are charged as input (D-09) — accumulate them here too.
+              cacheReadTokens: (accumulatedTokenUsage.cacheReadTokens || 0) + (chunk.usage.cacheReadTokens || 0),
+              cacheCreationTokens:
+                (accumulatedTokenUsage.cacheCreationTokens || 0) + (chunk.usage.cacheCreationTokens || 0),
             };
             onUsage?.(chunk.usage);
           }
@@ -509,6 +518,10 @@ export async function runAiOrchestratorLoop(
           promptTokens: (accumulatedTokenUsage.promptTokens || 0) + (chunk.usage.promptTokens || 0),
           completionTokens: (accumulatedTokenUsage.completionTokens || 0) + (chunk.usage.completionTokens || 0),
           totalTokens: (accumulatedTokenUsage.totalTokens || 0) + (chunk.usage.totalTokens || 0),
+          // WR-09: cache tokens are charged as input (D-09) — accumulate them here too.
+          cacheReadTokens: (accumulatedTokenUsage.cacheReadTokens || 0) + (chunk.usage.cacheReadTokens || 0),
+          cacheCreationTokens:
+            (accumulatedTokenUsage.cacheCreationTokens || 0) + (chunk.usage.cacheCreationTokens || 0),
         };
         onUsage?.(chunk.usage);
       }

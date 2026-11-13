@@ -727,6 +727,30 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
     expect(completed).toHaveLength(1);
     expect(deltas.join('')).toContain('Câu trả lời');
   });
+
+  // WR-09: the loop's cache-less total must not overwrite the cache-inclusive per-round sum.
+  it('keeps cache tokens when the loop result omits them (WR-09)', async () => {
+    const runtime = runtimeWith(async (options) => {
+      options.onUsage?.({
+        promptTokens: 10,
+        completionTokens: 5,
+        totalTokens: 15,
+        cacheReadTokens: 40,
+        cacheCreationTokens: 2,
+      });
+      options.onTextChunk?.('Câu trả lời');
+      return {
+        fullResponse: 'Câu trả lời',
+        tokenUsage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+      };
+    });
+
+    await runtime.start(makeRequest({ threadId }));
+
+    const assistants = await assistantRows();
+    expect(assistants[0]?.tokenUsage?.cacheReadTokens).toBe(40);
+    expect(assistants[0]?.tokenUsage?.cacheCreationTokens).toBe(2);
+  });
 });
 
 describe('chatTurnRuntime team seams (D-07, D-12, D-13, D-19, D-21)', () => {

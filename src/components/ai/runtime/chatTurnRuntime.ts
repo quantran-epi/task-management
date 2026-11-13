@@ -351,13 +351,17 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
         onUsage: (usage) => {
           // Phase 38 D-09: cache tokens are charged as input, so a multi-round turn must
           // sum them too — keeping only the last round's value would under-charge.
+          // The cache keys stay ABSENT when no round reported one, so a cache-less turn's
+          // persisted usage keeps its exact shape.
+          const cacheRead = (tokenUsage.cacheReadTokens || 0) + (usage.cacheReadTokens || 0);
+          const cacheCreation =
+            (tokenUsage.cacheCreationTokens || 0) + (usage.cacheCreationTokens || 0);
           tokenUsage = {
             promptTokens: (tokenUsage.promptTokens || 0) + (usage.promptTokens || 0),
             completionTokens: (tokenUsage.completionTokens || 0) + (usage.completionTokens || 0),
             totalTokens: (tokenUsage.totalTokens || 0) + (usage.totalTokens || 0),
-            cacheReadTokens: (tokenUsage.cacheReadTokens || 0) + (usage.cacheReadTokens || 0),
-            cacheCreationTokens:
-              (tokenUsage.cacheCreationTokens || 0) + (usage.cacheCreationTokens || 0),
+            ...(cacheRead > 0 ? { cacheReadTokens: cacheRead } : {}),
+            ...(cacheCreation > 0 ? { cacheCreationTokens: cacheCreation } : {}),
           };
           deps.onUsage?.(tokenUsage);
         },
@@ -449,7 +453,22 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
       });
 
       fullResponse = result.fullResponse || fullResponse;
-      tokenUsage = result.tokenUsage || tokenUsage;
+      // WR-09: the loop's own total wins, but it must not strip the cache fields the
+      // per-round accumulation above collected — a cache-less result would otherwise
+      // overwrite a cache-inclusive sum and under-charge the persisted message usage.
+      tokenUsage = result.tokenUsage
+        ? {
+            ...result.tokenUsage,
+            ...(result.tokenUsage.cacheReadTokens === undefined &&
+            tokenUsage.cacheReadTokens !== undefined
+              ? { cacheReadTokens: tokenUsage.cacheReadTokens }
+              : {}),
+            ...(result.tokenUsage.cacheCreationTokens === undefined &&
+            tokenUsage.cacheCreationTokens !== undefined
+              ? { cacheCreationTokens: tokenUsage.cacheCreationTokens }
+              : {}),
+          }
+        : tokenUsage;
 
       if (!isCurrent(turnId, turnController)) {
         publish('aborted');

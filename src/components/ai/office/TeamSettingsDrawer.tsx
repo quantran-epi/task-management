@@ -177,6 +177,12 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
   const handleSave = () => {
     const budgets: Record<string, number> = {};
     for (const row of rows) budgets[row.memberId] = row.budgetTokens;
+    // WR-11: `rows` is seeded once per open, so a member added while the drawer is open has
+    // no row and would be absent from the save. Merge every unseen member with its PERSISTED
+    // budget, so the save is complete and never silently drops a roster row.
+    for (const member of members) {
+      if (budgets[member.id] === undefined) budgets[member.id] = member.budgetTokens;
+    }
     onSave({
       budgetTokens: total,
       budgets,

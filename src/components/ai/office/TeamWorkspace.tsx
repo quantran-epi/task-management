@@ -1032,7 +1032,11 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         onCancel={() => setTopUpOpen(false)}
         onConfirm={(amount) => {
           setTopUpOpen(false);
-          void coordinator?.topUp({ kind: 'team' }, amount);
+          // WR-13: route through `runAction` so a refusal (e.g. a member removed mid-turn)
+          // surfaces in the one action-error channel instead of an unhandled rejection.
+          runAction(async () => {
+            await coordinator?.topUp({ kind: 'team' }, amount);
+          });
         }}
       />
 

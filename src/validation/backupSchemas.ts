@@ -297,11 +297,15 @@ export const BackupChatMessageRecordSchema = z
     createdAt: z.string(),
     isContextBoundary: z.boolean().optional(),
     durationMs: z.number().optional(),
+    // WR-10: cache tokens are charged as input (D-09), so a plain `z.object` here would
+    // silently STRIP them on restore. Declared optional so a pre-38 row still validates.
     tokenUsage: z
       .object({
         promptTokens: z.number().optional(),
         completionTokens: z.number().optional(),
         totalTokens: z.number().optional(),
+        cacheReadTokens: z.number().optional(),
+        cacheCreationTokens: z.number().optional(),
       })
       .optional(),
     generatedFiles: z
@@ -785,6 +789,9 @@ export const BackupAiTeamAssignmentRecordSchema = z.strictObject({
       promptTokens: z.number().optional(),
       completionTokens: z.number().optional(),
       totalTokens: z.number().optional(),
+      // WR-10: same strip hazard as the chat-message sub-schema above.
+      cacheReadTokens: z.number().optional(),
+      cacheCreationTokens: z.number().optional(),
     })
     .optional(),
   /**

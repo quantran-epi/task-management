@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { AssignmentPlanCard } from '../../../src/components/ai/office/AssignmentPlanCard';
+import { TeamSidebar } from '../../../src/components/ai/office/TeamSidebar';
+import type { AiLead, AiTeam, AiTeamMember } from '../../../src/types/aiOffice';
 
 const plan = {
   batchIndex: 1,
@@ -57,5 +59,81 @@ describe('AssignmentPlanCard', () => {
     expect(screen.getByRole('status').textContent).toContain(
       'Đã từ chối — không nhân viên nào được giao việc.'
     );
+  });
+});
+
+describe('TeamSidebar live usage (WR-03, WR-04)', () => {
+  const team: AiTeam = {
+    id: 'team-1',
+    name: 'Nhóm',
+    leadId: 'lead-1',
+    status: 'active',
+    budgetTokens: 1000,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+  const lead: AiLead = {
+    id: 'lead-1',
+    name: 'An',
+    role: 'Lead',
+    capability: '',
+    persona: '',
+    model: 'm',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+  const member: AiTeamMember = {
+    id: 'member-1',
+    teamId: team.id,
+    agentId: lead.id,
+    role: 'lead',
+    budgetTokens: 1000,
+    usedTokens: 400,
+    inputTokens: 300,
+    outputTokens: 100,
+  };
+
+  function renderSidebar(liveUsage: Parameters<typeof TeamSidebar>[0]['liveUsage']) {
+    return render(
+      <TeamSidebar
+        team={team}
+        lead={lead}
+        members={[member]}
+        employees={[]}
+        links={[]}
+        snapshot={{ phase: 'batch-running', agents: [{ agentId: lead.id, status: 'running' }] }}
+        budgetWarnThresholdPct={80}
+        liveUsage={liveUsage}
+        onTopUp={vi.fn()}
+        onOpenSettings={vi.fn()}
+        onToggleAutoSplit={vi.fn()}
+        onToggleAutoApprove={vi.fn()}
+        onAddLink={vi.fn()}
+        onRemoveLink={vi.fn()}
+      />
+    );
+  }
+
+  // WR-03: a live record exists from dispatch with outputTokens: 0, so `??` hid the
+  // persisted output for the whole turn.
+  it('keeps persisted output visible while a request is pending (WR-03)', () => {
+    renderSidebar([
+      { agentId: lead.id, inputTokens: 0, outputTokens: 0, estimated: false, provisionalInputTokens: 0 },
+    ]);
+    expect(screen.getByTestId(`member-usage-${lead.id}`)).toHaveTextContent('100');
+  });
+
+  // WR-04: the provisional guess is a warning input, never a charge — it renders as its own
+  // `~` figure and must not lift the group total.
+  it('keeps the provisional guess out of the team aggregate (WR-04)', () => {
+    renderSidebar([
+      { agentId: lead.id, inputTokens: 0, outputTokens: 0, estimated: false, provisionalInputTokens: 900 },
+    ]);
+    const panel = screen.getByTestId('team-budget-panel');
+    // 400 charged / 1000 granted = 40%, not 1300/1000.
+    expect(panel).toHaveTextContent('400 / 1,000 token · 40%');
+    expect(screen.getByTestId('team-provisional')).toHaveTextContent('~900');
+    // No team badge: the coordinator would not warn at 40%.
+    expect(screen.queryByTestId('budget-badge-team')).not.toBeInTheDocument();
   });
 });

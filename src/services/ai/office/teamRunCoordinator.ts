@@ -891,7 +891,9 @@ export function createTeamRunCoordinator(
     const accountingAgentId = agentByAssignmentId.get(assignmentId);
     const flushed =
       accountingAgentId !== undefined
-        ? await flushAccounting(accountingAgentId)
+        ? // WR-08: scoped to THIS assignment. Stopping attempt A while a retry's record is
+          // live must not flush (and mark flushed) the retry's partial numbers.
+          await flushAccounting(accountingAgentId, assignmentId)
         : { inputTokens: 0, outputTokens: 0, estimated: false };
     // Only the caller that actually committed the terminal write notifies; a losing
     // concurrent caller must not emit a second `message_saved` for the same commit.
@@ -1301,7 +1303,16 @@ export function createTeamRunCoordinator(
    */
   async function hydrateBudgets(): Promise<AiTeamMember[]> {
     const rows = await listTeamMembers(teamId, db);
+    // WR-05: REBUILD, never merge. A member removed since the last hydrate would otherwise
+    // keep a stale budget/usage pair and raise a phantom member warning forever.
+    const live = new Set(rows.map((row) => row.agentId));
+    for (const agentId of [...memberIds.keys()]) if (!live.has(agentId)) memberIds.delete(agentId);
+    for (const agentId of [...memberBudgets.keys()]) if (!live.has(agentId)) memberBudgets.delete(agentId);
+    for (const agentId of [...memberUsed.keys()]) if (!live.has(agentId)) memberUsed.delete(agentId);
+    for (const agentId of [...memberUsedInput.keys()]) if (!live.has(agentId)) memberUsedInput.delete(agentId);
+    for (const agentId of [...memberUsedOutput.keys()]) if (!live.has(agentId)) memberUsedOutput.delete(agentId);
     for (const row of rows) {
+      memberIds.set(row.agentId, row.id);
       memberBudgets.set(row.agentId, row.budgetTokens);
       memberUsed.set(row.agentId, row.usedTokens);
       memberUsedInput.set(row.agentId, row.inputTokens ?? 0);
@@ -1518,15 +1529,31 @@ export function createTeamRunCoordinator(
    * flushed BEFORE the await, so a stop/settle race cannot charge twice (T-38-28).
    *
    * Returns the flushed triple so `finalizeAttempt` can stamp the attempt row with the same
-   * numbers it charged — never a re-read that could see a later turn's record.
+   * numbers it charged — never a re-read that could see a later turn's record. WR-06: a flush
+   * that charged nothing returns zeros, so the attempt row never claims uncharged tokens.
+   * WR-08: `expectedAssignmentId` scopes the flush to the attempt that owns the terminal seam.
    */
   async function flushAccounting(
-    agentId: string
+    agentId: string,
+    expectedAssignmentId?: string
   ): Promise<{ inputTokens: number; outputTokens: number; estimated: boolean }> {
+    const zeros = { inputTokens: 0, outputTokens: 0, estimated: false };
     const acc = usageAccounting.get(agentId);
-    if (!acc || flushedAccounting.has(acc.key)) {
-      return { inputTokens: 0, outputTokens: 0, estimated: false };
+    if (!acc || flushedAccounting.has(acc.key)) return zeros;
+    // WR-08: the record on the agent may belong to a LATER assignment (a retry). Flushing it
+    // from the wrong attempt's terminal seam would mark the retry's key flushed and drop its
+    // later reports, so a mismatch bails without charging or marking anything.
+    if (expectedAssignmentId !== undefined && acc.assignmentId !== expectedAssignmentId) {
+      return zeros;
     }
+    // WR-06: with no roster row there is nothing to charge, so report ZEROS and leave the
+    // key UNFLUSHED — a later flush (once the roster resolves this member) can still charge
+    // it. Returning the uncharged numbers while marking the key flushed both lied on the
+    // attempt row and made the charge unreachable.
+    const memberId = memberIds.get(agentId);
+    if (!memberId) return zeros;
+    // The key is marked flushed BEFORE the first await, so a stop/settle race cannot charge
+    // twice (T-38-28).
     flushedAccounting.add(acc.key);
     // D-10/D-12: a request that reported nothing is ESTIMATED here, exactly once — from the
     // payload it actually sent and the text it actually received. Never free, never silent.
@@ -1559,8 +1586,6 @@ export function createTeamRunCoordinator(
     // rather than silently recorded as free. A reported 0/0 is a no-op.
     const nothingToCharge = delta.inputTokens === 0 && delta.outputTokens === 0;
     if (nothingToCharge && !delta.estimated) return delta;
-    const memberId = memberIds.get(agentId);
-    if (!memberId) return delta;
     // A failed ledger write must never break the turn (D-22), so the chain swallows it.
     usageWriteChain = usageWriteChain.then(() =>
       incrementMemberUsage(memberId, delta, db).then(
@@ -1585,11 +1610,21 @@ export function createTeamRunCoordinator(
     await usageWriteChain;
     const rows = await listTeamMembers(teamId, db);
     for (const row of rows) {
+      // WR-07: an agent with an unflushed record has deltas the ledger does not have yet.
+      // Overwriting its live counters from Dexie would make its numbers drop mid-flight,
+      // so it is left alone until its own terminal flush.
+      const acc = usageAccounting.get(row.agentId);
+      if (acc !== undefined && !flushedAccounting.has(acc.key)) continue;
       memberUsed.set(row.agentId, row.usedTokens);
       memberUsedInput.set(row.agentId, row.inputTokens ?? 0);
       memberUsedOutput.set(row.agentId, row.outputTokens ?? 0);
     }
-    teamUsed = rows.reduce((sum, row) => sum + row.usedTokens, 0);
+    // Summed from the live map, not the rows: an in-flight agent's unflushed deltas are in
+    // the map only, and dropping them here would make the team total dip mid-turn.
+    teamUsed = rows.reduce(
+      (sum, row) => sum + (memberUsed.get(row.agentId) ?? row.usedTokens),
+      0
+    );
   }
 
   function registerTeamTurn(): void {
@@ -3525,6 +3560,14 @@ export function createTeamRunCoordinator(
    * added mid-turn becomes addressable without a new coordinator.
    */
   function mirrorBudgetResult(result: { team: AiTeam; members: AiTeamMember[] }): void {
+    // WR-05: the returned roster is the full set, so a member removed since the last mirror
+    // must lose its live pair — a stale budget would raise a phantom member warning.
+    const live = new Set(result.members.map((row) => row.agentId));
+    for (const agentId of [...memberIds.keys()]) if (!live.has(agentId)) memberIds.delete(agentId);
+    for (const agentId of [...memberBudgets.keys()]) if (!live.has(agentId)) memberBudgets.delete(agentId);
+    for (const agentId of [...memberUsed.keys()]) if (!live.has(agentId)) memberUsed.delete(agentId);
+    for (const agentId of [...memberUsedInput.keys()]) if (!live.has(agentId)) memberUsedInput.delete(agentId);
+    for (const agentId of [...memberUsedOutput.keys()]) if (!live.has(agentId)) memberUsedOutput.delete(agentId);
     for (const row of result.members) {
       memberIds.set(row.agentId, row.id);
       memberBudgets.set(row.agentId, row.budgetTokens);

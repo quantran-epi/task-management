@@ -41,6 +41,9 @@ export interface TokenUsageStats {
   promptTokens?: number | undefined;
   completionTokens?: number | undefined;
   totalTokens?: number | undefined;
+  /** Phase 38 D-09/WR-09: charged as input, so the loop must carry them through. */
+  cacheReadTokens?: number | undefined;
+  cacheCreationTokens?: number | undefined;
 }
 
 export type StreamChatChunk =

@@ -36,19 +36,33 @@ export function sanitizeEndpoint(endpoint: string): string {
  * Phase 38 D-09: one usage mapper for every provider shape. Cache tokens are charged as
  * input, so they must survive the mapping; `cached_tokens` and `cache_read_input_tokens` are
  * two names for one quantity, and an absent field stays absent rather than becoming 0.
+ *
+ * WR-02: the two shapes disagree about whether the cached portion is already inside the
+ * prompt count. OpenAI's `prompt_tokens` INCLUDES `prompt_tokens_details.cached_tokens`;
+ * Anthropic's `input_tokens` EXCLUDES `cache_read_input_tokens`. Everything downstream
+ * (`splitUsage`) adds prompt + cache + creation, so the OpenAI shape must be normalized to
+ * the Anthropic convention here — otherwise the cached portion is charged twice.
  */
 function mapUsage(raw: any): ChatTokenUsage {
   const cacheRead =
     raw.prompt_tokens_details?.cached_tokens ?? raw.cache_read_input_tokens;
   const cacheCreation = raw.cache_creation_input_tokens;
+  const rawPrompt = raw.prompt_tokens ?? raw.promptTokens;
+  const openAiCached = raw.prompt_tokens_details?.cached_tokens;
+  const promptTokens =
+    typeof rawPrompt === 'number' && typeof openAiCached === 'number'
+      ? Math.max(0, rawPrompt - openAiCached)
+      : rawPrompt;
   return {
-    promptTokens: raw.prompt_tokens ?? raw.promptTokens,
+    promptTokens,
     completionTokens: raw.completion_tokens ?? raw.completionTokens,
     totalTokens: raw.total_tokens ?? raw.totalTokens,
     ...(typeof cacheRead === 'number' ? { cacheReadTokens: cacheRead } : {}),
     ...(typeof cacheCreation === 'number' ? { cacheCreationTokens: cacheCreation } : {}),
   };
 }
+
+export { mapUsage };
 
 export function stripThinkingBlocks(raw: string): string {
   if (!raw) return '';

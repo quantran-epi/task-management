@@ -14,7 +14,7 @@ export type EncoderKind = 'tiktoken' | 'chars-div-4';
 
 /** Minimal shape of the encoder this module consumes; narrowed locally, never trusted. */
 interface LocalEncoder {
-  encode(text: string): number[];
+  encode(text: string, allowedSpecial?: Array<string> | 'all'): number[];
 }
 
 type EncoderLoader = () => Promise<LocalEncoder>;
@@ -56,7 +56,14 @@ export async function estimateTokens(text: string): Promise<number> {
     try {
       return encoder.encode(text).length;
     } catch {
-      /* fall through to the heuristic */
+      // WR-14: `js-tiktoken` throws on a special token unless it is allowed. One bad token
+      // in a large payload must not throw away a working encoder, so retry once treating
+      // special tokens as ordinary text — then fall back to the heuristic.
+      try {
+        return encoder.encode(text, 'all').length;
+      } catch {
+        /* fall through to the heuristic */
+      }
     }
   }
   return Math.ceil(text.length / 4);

@@ -507,6 +507,29 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
     expect(restored?.tokenUsage).toEqual({ promptTokens: 120, completionTokens: 80, totalTokens: 200 });
   });
 
+  // WR-10: a plain `z.object` sub-schema strips unknown keys, so the cache fields were
+  // silently removed on restore even though the message carried them.
+  it('round-trips cache tokens in a message tokenUsage (WR-10)', async () => {
+    await seedOffice(sourceDb);
+    await sourceDb.chatMessages.update(MESSAGE_ID, {
+      tokenUsage: {
+        promptTokens: 120,
+        completionTokens: 80,
+        totalTokens: 200,
+        cacheReadTokens: 40,
+        cacheCreationTokens: 10,
+      },
+    });
+
+    const envelope = await exportBackupPayload(sourceDb);
+    expect(validateBackupPayload(envelope)).toMatchObject({ valid: true, errors: [] });
+    await restoreBackupPayload(envelope, restoredDb);
+
+    const restored = await restoredDb.chatMessages.get(MESSAGE_ID);
+    expect(restored?.tokenUsage?.cacheReadTokens).toBe(40);
+    expect(restored?.tokenUsage?.cacheCreationTokens).toBe(10);
+  });
+
   it('validates a payload without AI Office keys and leaves local rows untouched', async () => {
     await seedOffice(restoredDb);
 

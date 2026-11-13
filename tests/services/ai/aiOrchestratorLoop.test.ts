@@ -59,6 +59,35 @@ describe('runAiOrchestratorLoop', () => {
     expect(mockStreamChatCompletion).not.toHaveBeenCalled();
   });
 
+  // WR-09: cache tokens are charged as input (D-09), so the accumulated total must carry
+  // them — dropping them made the persisted message usage cache-less.
+  it('accumulates cache tokens across rounds into the returned tokenUsage (WR-09)', async () => {
+    mockStreamChatEvents.mockImplementation(async function* () {
+      yield { type: 'text', delta: 'ok' };
+      yield {
+        type: 'usage',
+        usage: {
+          promptTokens: 10,
+          completionTokens: 5,
+          totalTokens: 15,
+          cacheReadTokens: 40,
+          cacheCreationTokens: 2,
+        },
+      };
+    });
+
+    const result = await runAiOrchestratorLoop({
+      endpoint: 'https://api.example.com',
+      apiKey: 'test-key',
+      model: 'test-model',
+      messages: [{ role: 'user', content: 'Chào bạn' }],
+      db: testDb,
+    });
+
+    expect(result.tokenUsage.cacheReadTokens).toBe(40);
+    expect(result.tokenUsage.cacheCreationTokens).toBe(2);
+  });
+
   it.each([undefined, 2, 0, -1, NaN, Infinity, 2.9, 0.5])(
     'bounds tool rounds before pending dispatch (override %s)', async (maxLoops) => {
       expect(DEFAULT_MAX_TOOL_ROUNDS).toBe(50);

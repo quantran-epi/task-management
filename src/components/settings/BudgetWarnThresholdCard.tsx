@@ -32,9 +32,15 @@ export const BudgetWarnThresholdCard: React.FC<BudgetWarnThresholdCardProps> = (
 
   useEffect(() => {
     let active = true;
-    getGlobalBudgetWarnThresholdPct(db).then((stored) => {
-      if (active) setValue(stored);
-    });
+    getGlobalBudgetWarnThresholdPct(db).then(
+      (stored) => {
+        if (active) setValue(stored);
+      },
+      // WR-12: a failed read must not become an unhandled rejection with no user feedback.
+      () => {
+        if (active) message.error('Không đọc được ngưỡng cảnh báo đã lưu');
+      }
+    );
     return () => {
       active = false;
     };
@@ -46,6 +52,9 @@ export const BudgetWarnThresholdCard: React.FC<BudgetWarnThresholdCardProps> = (
       await setGlobalBudgetWarnThresholdPct(value, db);
       setValue(await getGlobalBudgetWarnThresholdPct(db));
       message.success('Đã lưu ngưỡng cảnh báo ngân sách');
+    } catch {
+      // WR-12: the write failed — say so instead of leaving the user with a silent no-op.
+      message.error('Không lưu được ngưỡng cảnh báo ngân sách');
     } finally {
       setSaving(false);
     }
