@@ -32,6 +32,15 @@ check_gone 'drainSteerInbox'
 check_gone 'steerStates'
 check_gone 'setPhase'
 
+# Phase 38 D-01/D-02: the budget is warning-only. No gate, no park, no pause may return.
+# G-1: the deletion was verified by audit grep only; this is its permanent regression guard.
+echo "--- phase 38 budget gate removal"
+check_gone 'createBudgetGate'
+check_gone 'shouldNotifyPause'
+check_gone 'bucketOf'
+check_gone 'normalizeUsageTotal'
+check_gone 'parkForBudget'
+
 # Deliberate keepers (see §5 "Ngoại lệ có chủ đích") — these MUST still exist.
 check_present() {
   local n
