@@ -5,14 +5,9 @@ import {
 import type { ChatTokenUsage } from '../../../types/models';
 
 /**
- * Budget threshold math (D-01/D-02, D-04/D-05, D-09) plus the deprecated parking gate.
- *
- * The budget surface is warning-only: `splitUsage`, `resolveThresholdPct` and
- * `isAtThreshold` compute numbers and never refuse a call, never park a turn and never
- * throw. The legacy `BudgetGate` below is the old parking gate; it is still called from
- * `beforeToolRoundFor` and is deleted — implementation, call sites and tests — by plan 08.
- * This intermediate tree is NOT gate-free yet, and the legacy gate stays byte-identical
- * until then.
+ * Budget threshold math (D-01/D-02, D-04/D-05, D-09). Warning-only: nothing here refuses a
+ * call, parks a turn or throws. The legacy parking gate is gone — plan 08 deleted it, and
+ * `beforeToolRoundFor` has no budget await at all.
  *
  * Usage policy (RESEARCH §Usage policy), written down here because this is where the code
  * that enforces it lives:
@@ -32,99 +27,7 @@ import type { ChatTokenUsage } from '../../../types/models';
  * 7. Retries and failures are charged per attempt (D-11); a failed attempt is not free.
  * 8. Deltas, not totals, reach the ledger — the coordinator converts the runtime's
  *    cumulative per-turn total into a delta against a per-turn baseline.
- *
- * The legacy gate (deprecated): the coordinator awaits `wait(signal)` at every tool-round
- * boundary. While the team's budget is under the pause threshold the gate is open and the
- * await resolves instantly; when the 80% crossing is detected the coordinator closes it,
- * and the turn parks here instead of continuing to spend. `open()` (the user's "continue" /
- * top-up) releases it.
- *
- * The park copies the approval park in `chatTurnRuntime.ts:371-403`: the resolver slot is
- * installed before anything is published, so a synchronous subscriber cannot lose the
- * release. It also copies the abort path at `:189-196` — a parked turn must never hang
- * after Stop (Pitfall 8, T-34-19).
  */
-export interface BudgetGate {
-  close(): void;
-  open(): void;
-  isClosed(): boolean;
-  wait(signal?: AbortSignal): Promise<void>;
-}
-
-export function createBudgetGate(): BudgetGate {
-  let closed = false;
-  // A single resolver slot dropped the earlier waiter when two turns parked on the same
-  // closed gate, stranding it forever. Release every waiter instead.
-  let resolvers = new Set<() => void>();
-
-  const release = () => {
-    const pending = resolvers;
-    resolvers = new Set();
-    for (const resolve of pending) resolve();
-  };
-
-  return {
-    close() {
-      closed = true;
-    },
-    open() {
-      closed = false;
-      release();
-    },
-    isClosed() {
-      return closed;
-    },
-    wait(signal?: AbortSignal) {
-      if (!closed) return Promise.resolve();
-      if (signal?.aborted) return Promise.reject(new DOMException('Aborted', 'AbortError'));
-
-      return new Promise<void>((resolve, reject) => {
-        let settled = false;
-        const onAbort = () => {
-          if (settled) return;
-          settled = true;
-          resolvers.delete(releaseOne);
-          reject(new DOMException('Aborted', 'AbortError'));
-        };
-        // `once` keeps a long-lived turn signal from accumulating listeners across rounds.
-        signal?.addEventListener('abort', onAbort, { once: true });
-        const releaseOne = () => {
-          if (settled) return;
-          settled = true;
-          signal?.removeEventListener('abort', onAbort);
-          resolve();
-        };
-        resolvers.add(releaseOne);
-      });
-    },
-  };
-}
-
-/**
- * D-20: tenths of the budget consumed. A zero (or negative) budget means "no budget
- * configured yet" — D-05 lets a group be created with a name alone — so it counts as
- * nothing consumed. Treating it as fully consumed closed the gate before the first turn
- * and parked every turn forever with no banner.
- */
-export function bucketOf(used: number, budget: number): number {
-  if (!Number.isFinite(budget) || budget <= 0) return 0;
-  if (!Number.isFinite(used) || used <= 0) return 0;
-  return Math.floor((used / budget) * 10);
-}
-
-/**
- * The whole crossing rule with zero stored state: notify when this observation is at or
- * past the 80% bucket and the previous one was below it. After a top-up the budget grows,
- * the bucket drops below 8, and the next crossing notifies again.
- */
-export function shouldNotifyPause(previousBucket: number, currentBucket: number): boolean {
-  return currentBucket >= 8 && previousBucket < 8;
-}
-
-/** Some providers omit `total_tokens`; sum the parts when it is absent. */
-export function normalizeUsageTotal(usage: ChatTokenUsage): number {
-  return usage.totalTokens ?? (usage.promptTokens ?? 0) + (usage.completionTokens ?? 0);
-}
 
 export interface UsageSplit {
   inputTokens: number;
