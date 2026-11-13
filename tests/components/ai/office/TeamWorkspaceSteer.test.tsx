@@ -27,6 +27,8 @@ interface StubCoordinator {
   dispose: ReturnType<typeof vi.fn>;
   setTeamSettings: ReturnType<typeof vi.fn>;
   setTeamBudget: ReturnType<typeof vi.fn>;
+  setTeamThresholdPct: ReturnType<typeof vi.fn>;
+  setGlobalThresholdPct: ReturnType<typeof vi.fn>;
   getRunningCount: () => number;
   finalizeAttempt: ReturnType<typeof vi.fn>;
   runBatch: ReturnType<typeof vi.fn>;
@@ -51,6 +53,8 @@ function createStub(initialPhase: TeamRunPhase = 'ready'): StubCoordinator {
     dispose: vi.fn(async () => undefined),
     setTeamSettings: vi.fn(),
     setTeamBudget: vi.fn(),
+    setTeamThresholdPct: vi.fn(),
+    setGlobalThresholdPct: vi.fn(),
     getRunningCount: () => 0,
     finalizeAttempt: vi.fn(async () => null),
     runBatch: vi.fn(async () => ''),

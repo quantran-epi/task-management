@@ -48,6 +48,8 @@ vi.mock('../../../../src/services/ai/office/teamRunCoordinator', async (importOr
       dispose: vi.fn(async () => undefined),
       setTeamSettings: vi.fn(),
       setTeamBudget: vi.fn(),
+      setTeamThresholdPct: vi.fn(),
+      setGlobalThresholdPct: vi.fn(),
       getRunningCount: () => 0,
       finalizeAttempt: vi.fn(async () => null),
       runBatch: vi.fn(async () => ''),

@@ -962,6 +962,29 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       );
     });
 
+    it('(D-04) a live global threshold change re-resolves the effective value', async () => {
+      harness = await createHarness({ scripts: {} });
+      const { coordinator, team } = harness;
+
+      // Default is 80; a team with no override inherits it.
+      expect(coordinator.getState().budgetWarnThresholdPct).toBe(80);
+      expect(coordinator.getState().budgetWarnThresholdPctOverride).toBeUndefined();
+
+      coordinator.setGlobalThresholdPct(50);
+      expect(coordinator.getState().budgetWarnThresholdPct).toBe(50);
+      expect(coordinator.getState().budgetWarnThresholdPctOverride).toBeUndefined();
+
+      // A per-team override still wins over the global default.
+      coordinator.setTeamThresholdPct(65);
+      coordinator.setGlobalThresholdPct(30);
+      expect(coordinator.getState().budgetWarnThresholdPct).toBe(65);
+
+      // Clearing the override falls back to the CURRENT global, not the construction-time one.
+      coordinator.setTeamThresholdPct(undefined);
+      expect(coordinator.getState().budgetWarnThresholdPct).toBe(30);
+      expect(team.budgetWarnThresholdPct).toBeUndefined();
+    });
+
     it('(D-06, B6) sends one notification per level however many members and rounds cross', async () => {
       let harnessRef: Harness | null = null;
       const scripts: Record<string, LoopScript> = {

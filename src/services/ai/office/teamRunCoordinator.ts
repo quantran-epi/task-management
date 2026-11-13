@@ -291,6 +291,12 @@ export interface TeamRunCoordinator {
    * through this same call.
    */
   setTeamThresholdPct(pct: number | undefined): void;
+  /**
+   * D-04: the global default is read at construction, but a Settings change must reach a
+   * coordinator that is already alive (the manager caches it across navigation). The
+   * workspace pushes the live value here so every surface resolves the same number.
+   */
+  setGlobalThresholdPct(pct: number): void;
   /** D-07 diagnostic seam: live scheduler slots, so a leak is observable without a provider. */
   getRunningCount(): number;
   /**
@@ -629,6 +635,10 @@ export function createTeamRunCoordinator(
     );
     if (teamThresholdOverride !== undefined) {
       liveTeam = { ...liveTeam, budgetWarnThresholdPct: teamThresholdOverride };
+    } else if ('budgetWarnThresholdPct' in liveTeam) {
+      // IN-05: a cleared override must not keep travelling with the batch snapshot.
+      const { budgetWarnThresholdPct: _cleared, ...rest } = liveTeam;
+      liveTeam = rest;
     }
   }
 
@@ -3392,6 +3402,14 @@ export function createTeamRunCoordinator(
     notify();
   }
 
+  /** D-04: a live Settings change reaches an already-constructed coordinator. */
+  function setGlobalThresholdPct(pct: number): void {
+    if (pct === globalThresholdPct) return;
+    globalThresholdPct = pct;
+    recomputeThresholdPct();
+    notify();
+  }
+
   function resolveApproval(approved: boolean): void {
     // WR-05: `get` would instantiate a runtime when the lead turn already settled.
     if (roster.lead) registry.peek(roster.lead.id)?.resolveApproval(approved);
@@ -3650,6 +3668,7 @@ export function createTeamRunCoordinator(
     setTeamSettings,
     setTeamBudget,
     setTeamThresholdPct,
+    setGlobalThresholdPct,
     getRunningCount,
     drainInbox,
     subscribe,

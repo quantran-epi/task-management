@@ -393,6 +393,13 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     });
   }, [coordinator, team.autoSplitEnabled, team.autoApproveMutations, team.concurrencyLimit]);
 
+  // D-04: a global threshold change in Settings must reach a coordinator that is already
+  // alive — the manager caches it across navigation, so construction-time read is not enough.
+  useEffect(() => {
+    if (globalThresholdPct === undefined) return;
+    coordinator?.setGlobalThresholdPct(globalThresholdPct);
+  }, [coordinator, globalThresholdPct]);
+
   // A fresh plan clears the previous decision so the card shows its buttons again.
   useEffect(() => {
     setPlanDecision(undefined);

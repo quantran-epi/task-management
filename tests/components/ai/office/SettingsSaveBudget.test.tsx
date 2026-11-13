@@ -26,6 +26,7 @@ interface StubCoordinator {
   setTeamSettings: ReturnType<typeof vi.fn>;
   setTeamBudget: ReturnType<typeof vi.fn>;
   setTeamThresholdPct: ReturnType<typeof vi.fn>;
+  setGlobalThresholdPct: ReturnType<typeof vi.fn>;
   applyBudgetSettings: ReturnType<typeof vi.fn>;
   getRunningCount: () => number;
   finalizeAttempt: ReturnType<typeof vi.fn>;
@@ -49,6 +50,7 @@ function createStub(): StubCoordinator {
     setTeamSettings: vi.fn(),
     setTeamBudget: vi.fn(),
     setTeamThresholdPct: vi.fn(),
+    setGlobalThresholdPct: vi.fn(),
     applyBudgetSettings: vi.fn(),
     getRunningCount: () => 0,
     finalizeAttempt: vi.fn(async () => null),
