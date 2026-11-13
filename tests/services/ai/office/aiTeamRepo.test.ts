@@ -22,6 +22,7 @@ import {
 } from '../../../../src/db/repositories/aiTeamRepo';
 import { generateId } from '../../../../src/utils/uuid';
 import { clampTeamConcurrency, DEFAULT_TEAM_CONCURRENCY } from '../../../../src/types/aiOffice';
+import { LATEST_SCHEMA_VERSION } from '../../../../src/db/schema';
 import { createEmployee, createLead } from '../../../../src/db/repositories/aiOfficeRepo';
 
 function leadInput(name: string) {
@@ -411,8 +412,31 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
     expect(await listTeamLinks(team.id, db)).toHaveLength(0);
   });
 
-  describe('concurrencyLimit (Phase 37, D-02, D-03)', () => {
-    it('stores the boundaries 1 and 12 verbatim', async () => {
+  // Phase 38 tracer: the schema version, the store spec and the types must agree end to end.
+  // Real Dexie only — never mock the database here.
+  it('round-trips split usage through a close and reopen at V25 (D-23)', async () => {
+    const team = await makeTeam('Tracer');
+    const employee = (await listTeamMembers(team.id, db)).find((m) => m.role === 'employee')!;
+
+    await db.aiTeamMembers.update(employee.id, {
+      inputTokens: 120,
+      outputTokens: 30,
+      usageEstimated: true,
+    });
+
+    db.close();
+    db = new TaskPlannerDatabase(dbName);
+    await db.open();
+
+    const reopened = await db.aiTeamMembers.get(employee.id);
+    expect(reopened?.inputTokens).toBe(120);
+    expect(reopened?.outputTokens).toBe(30);
+    expect(reopened?.usageEstimated).toBe(true);
+    expect(LATEST_SCHEMA_VERSION).toBe(25);
+    expect(db.verno).toBe(LATEST_SCHEMA_VERSION);
+  });
+
+  describe('concurrencyLimit (Phase 37, D-02, D-03)', () => {    it('stores the boundaries 1 and 12 verbatim', async () => {
       const team = await makeTeam('Concurrency');
 
       expect((await updateTeam(team.id, { concurrencyLimit: 1 }, db)).concurrencyLimit).toBe(1);

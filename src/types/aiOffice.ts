@@ -90,6 +90,8 @@ export interface AiTeam {
   autoApproveMutations?: boolean | undefined;
   /** Phase 37 D-03: per-team run concurrency; absent means `DEFAULT_TEAM_CONCURRENCY`. */
   concurrencyLimit?: number | undefined;
+  /** Phase 38 D-04/D-05: per-team override; absent means the global default. */
+  budgetWarnThresholdPct?: number | undefined;
   createdAt: string;
   updatedAt: string;
 }
@@ -101,7 +103,13 @@ export interface AiTeamMember {
   agentId: string;
   role: AiTeamMemberRole;
   budgetTokens: number;
+  /** Legacy scalar every reader already sums; kept alongside the split columns below. */
   usedTokens: number;
+  /** Phase 38 D-23: optional so a pre-V25 row still type-checks; readers coalesce to 0. */
+  inputTokens?: number | undefined;
+  outputTokens?: number | undefined;
+  /** Phase 38 D-09: `undefined` on an old row means "not estimated", never "estimated". */
+  usageEstimated?: boolean | undefined;
 }
 
 export interface AiTeamLink {
@@ -218,6 +226,10 @@ export interface AiTeamAssignment {
   instructionMessageId?: string | undefined;
   reportMessageId?: string | undefined;
   tokenUsage?: ChatTokenUsage | undefined;
+  /** Phase 38 D-11/D-23: attempt-level split usage, written by the run ledger. */
+  inputTokens?: number | undefined;
+  outputTokens?: number | undefined;
+  usageEstimated?: boolean | undefined;
   toolCallCount?: number | undefined;
   /** D-17: technical detail for debugging; never rendered and never exported. */
   diagnosticDetail?: string | undefined;
@@ -273,4 +285,23 @@ export const MAX_TEAM_CONCURRENCY = 12;
 export function clampTeamConcurrency(n: number): number {
   const finite = Number.isFinite(n) ? n : DEFAULT_TEAM_CONCURRENCY;
   return Math.max(MIN_TEAM_CONCURRENCY, Math.min(MAX_TEAM_CONCURRENCY, Math.round(finite)));
+}
+
+/**
+ * Phase 38 (D-04, D-05): the budget warning threshold, as a percentage of the member budget.
+ *
+ * The zod boundary rejects anything outside 1..100; this clamp is the runtime belt for values
+ * that bypass the form (backup import, direct repo calls).
+ */
+export const DEFAULT_BUDGET_WARN_THRESHOLD_PCT = 80;
+export const MIN_BUDGET_WARN_THRESHOLD_PCT = 1;
+export const MAX_BUDGET_WARN_THRESHOLD_PCT = 100;
+
+/** Total: every input yields an integer in [1, 100]; non-finite input falls back to the default. */
+export function clampBudgetWarnThresholdPct(n: number): number {
+  const finite = Number.isFinite(n) ? n : DEFAULT_BUDGET_WARN_THRESHOLD_PCT;
+  return Math.max(
+    MIN_BUDGET_WARN_THRESHOLD_PCT,
+    Math.min(MAX_BUDGET_WARN_THRESHOLD_PCT, Math.round(finite))
+  );
 }

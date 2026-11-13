@@ -24,6 +24,7 @@ import {
   SCHEMA_V22,
   SCHEMA_V23,
   SCHEMA_V24,
+  SCHEMA_V25,
 } from './schema';
 import type {
   Task,
@@ -642,6 +643,10 @@ export class TaskPlannerDatabase extends Dexie {
     // 37.1 rework: the unified team-chat model. Purely additive, nothing to backfill.
     this.version(23).stores(SCHEMA_V23);
     this.version(24).stores(SCHEMA_V24);
+
+    // Phase 38: split usage columns and the per-team warn threshold. Purely additive,
+    // nothing to backfill, so no `.upgrade()` hook.
+    this.version(25).stores(SCHEMA_V25);
 
     // Multi-tab concurrency handlers (DATA-04, D-09, D-10)
     this.on('blocked', () => {

@@ -271,6 +271,9 @@ export interface ChatTokenUsage {
   promptTokens?: number | undefined;
   completionTokens?: number | undefined;
   totalTokens?: number | undefined;
+  /** Phase 38 D-09: charged as normal input tokens when the provider reports them; absent means 0. */
+  cacheReadTokens?: number | undefined;
+  cacheCreationTokens?: number | undefined;
 }
 
 export interface ChatGeneratedFile {

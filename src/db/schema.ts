@@ -172,6 +172,13 @@ export const SCHEMA_V24 = {
   ...SCHEMA_V23,
 } as const;
 
+// Phase 38 (D-04, D-05, D-11, D-23): split usage columns on member and attempt rows plus a
+// per-team warn-threshold override. Every new column is unindexed and lives inside the opaque
+// row payload, so no index rebuild and no `.upgrade()` hook (C-16: no backfill).
+export const SCHEMA_V25 = {
+  ...SCHEMA_V24,
+} as const;
+
 // Bump with every new `this.version(n)` in db/index.ts. Migration tests assert
 // against this instead of a literal, so a schema bump never silently breaks them.
-export const LATEST_SCHEMA_VERSION = 24;
+export const LATEST_SCHEMA_VERSION = 25;
