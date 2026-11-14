@@ -1,11 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../../../src/db';
 import { createEmployee, createSkill } from '../../../../src/db/repositories/aiOfficeRepo';
 import { createTeam, listTeamMembers } from '../../../../src/db/repositories/aiTeamRepo';
+import * as aiSkillVersionRepo from '../../../../src/db/repositories/aiSkillVersionRepo';
 import {
   createSkillVersion,
   decideSkillVersion,
+  STALE_VERSION_MESSAGE,
 } from '../../../../src/db/repositories/aiSkillVersionRepo';
 import { PendingSkillProposals, skillSubtitle } from '../../../../src/components/ai/office/PendingSkillProposals';
 import type { AiEmployee, AiSkill, AiTeam, AiTeamMember } from '../../../../src/types/aiOffice';
@@ -179,6 +181,28 @@ describe('PendingSkillProposals (AIO-SKILL-03/04)', () => {
     expect(within(card).getByRole('button', { name: 'Chấp thuận' })).toBeDisabled();
     expect(within(card).getByRole('button', { name: 'Từ chối' })).not.toBeDisabled();
     expect(within(card).getByRole('alert')).toHaveTextContent('Kỹ năng đã có bản mới được duyệt');
+  });
+
+  // WR-03: the disabled button is the affordance; the repo refusal is the enforcement. The
+  // transcript must surface it and hand the reviewed base to the repo.
+  it('surfaces a repo refusal for a stale approval and passes the reviewed base (WR-03)', async () => {
+    const row = await seedPending();
+    const spy = vi
+      .spyOn(aiSkillVersionRepo, 'decideSkillVersion')
+      .mockRejectedValueOnce(new Error(STALE_VERSION_MESSAGE));
+
+    renderPanel();
+
+    const card = await screen.findByTestId(`skill-pending-card-${row.id}`);
+    fireEvent.click(within(card).getByRole('button', { name: 'Chấp thuận' }));
+
+    await waitFor(() =>
+      expect(
+        within(screen.getByTestId(`skill-pending-card-${row.id}`)).getByRole('alert')
+      ).toHaveTextContent('Kỹ năng đã có bản mới được duyệt sau khi đề xuất này được tạo.')
+    );
+    expect(spy).toHaveBeenCalledWith(row.id, 'approved', db, 0);
+    spy.mockRestore();
   });
 
   // WR-01: approving raises the live maximum to the row's own number, so the stale check

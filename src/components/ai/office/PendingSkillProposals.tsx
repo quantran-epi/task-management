@@ -5,6 +5,7 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
 import {
   decideSkillVersion,
   listPendingSkillVersions,
+  STALE_VERSION_MESSAGE,
 } from '../../../db/repositories/aiSkillVersionRepo';
 import {
   isRefusal,
@@ -151,9 +152,11 @@ export const PendingSkillProposals: React.FC<PendingSkillProposalsProps> = ({
       return next;
     });
     try {
-      await decideSkillVersion(row.id, status, db);
+      // WR-03: the repo refuses an approval whose reviewed base is no longer the live one —
+      // the disabled button above is the affordance, this is the enforcement.
+      await decideSkillVersion(row.id, status, db, row.baseVersion ?? 0);
       setDecision((prev) => new Map(prev).set(row.id, status));
-    } catch {
+    } catch (err) {
       // The row is still pending and will re-render from the live query — drop the snapshot
       // or the card would appear twice.
       setRecentlyDecided((prev) => {
@@ -161,7 +164,15 @@ export const PendingSkillProposals: React.FC<PendingSkillProposalsProps> = ({
         next.delete(row.id);
         return next;
       });
-      setError((prev) => new Map(prev).set(row.id, WRITE_FAILED_COPY));
+      setError(
+        (prev) =>
+          new Map(prev).set(
+            row.id,
+            err instanceof Error && err.message === STALE_VERSION_MESSAGE
+              ? STALE_VERSION_MESSAGE
+              : WRITE_FAILED_COPY
+          )
+      );
     } finally {
       setApplying((prev) => {
         const next = new Set(prev);

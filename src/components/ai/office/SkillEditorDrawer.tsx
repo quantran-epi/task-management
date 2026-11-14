@@ -11,6 +11,7 @@ import {
 import {
   decideSkillVersion,
   listSkillVersions,
+  STALE_VERSION_MESSAGE,
 } from '../../../db/repositories/aiSkillVersionRepo';
 import {
   isRefusal,
@@ -114,57 +115,64 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
       [open, skill?.id, db]
     ) ?? [];
 
-  const { pendingSectionRows, historyRows, highestApproved, pendingCount } = useMemo(() => {
-    const pending = versions.filter((row) => row.status === 'pending');
+  const { pendingSectionRows, unresolvedCount, historyRows, highestApproved, pendingCount } =
+    useMemo(() => {
+      const pending = versions.filter((row) => row.status === 'pending');
 
-    // Built before the section rows, which read from it. The builder is synchronous.
-    const patches = new Map<string, ArtifactPatchProposal>();
-    if (skill) {
-      for (const row of pending) {
-        const baseVersion = row.baseVersion ?? 0;
-        const base =
-          baseVersion > 0
-            ? versions.find(
-                (candidate) =>
-                  candidate.status === 'approved' && candidate.version === baseVersion
-              )
-            : skill;
-        // Neither side resolves: skip rather than render a card with an empty base.
-        if (!base) continue;
-        const result = prepareSkillVersionDiff({
-          skillId: skill.id,
-          base,
-          next: row,
-          baseVersion,
-        });
-        // The tool already refused at write time; this is defensive only.
-        if (!isRefusal(result)) patches.set(row.id, result);
+      // Built before the section rows, which read from it. The builder is synchronous.
+      const patches = new Map<string, ArtifactPatchProposal>();
+      if (skill) {
+        for (const row of pending) {
+          const baseVersion = row.baseVersion ?? 0;
+          const base =
+            baseVersion > 0
+              ? versions.find(
+                  (candidate) =>
+                    candidate.status === 'approved' && candidate.version === baseVersion
+                )
+              : skill;
+          // Neither side resolves: skip rather than render a card with an empty base.
+          if (!base) continue;
+          const result = prepareSkillVersionDiff({
+            skillId: skill.id,
+            base,
+            next: row,
+            baseVersion,
+          });
+          // The tool already refused at write time; this is defensive only.
+          if (!isRefusal(result)) patches.set(row.id, result);
+        }
       }
-    }
 
-    const rows: SkillProposalEntry[] = [
-      ...recentlyDecided.values(),
-      ...pending
-        .filter((row) => patches.has(row.id))
-        .map((row) => ({ row, patch: patches.get(row.id)! })),
-    ].sort((a, b) => b.row.createdAt.localeCompare(a.row.createdAt));
+      const rows: SkillProposalEntry[] = [
+        ...recentlyDecided.values(),
+        ...pending
+          .filter((row) => patches.has(row.id))
+          .map((row) => ({ row, patch: patches.get(row.id)! })),
+      ].sort((a, b) => b.row.createdAt.localeCompare(a.row.createdAt));
 
-    return {
-      pendingSectionRows: rows,
-      // A row decided in this session is already visible above — listing it again would
-      // double it, with its `v{n}` chip shown before the decision line was read.
-      historyRows: versions.filter(
-        (row) => row.status !== 'pending' && !recentlyDecided.has(row.id)
-      ),
-      highestApproved: versions
-        .filter((row) => row.status === 'approved')
-        .reduce((max, row) => Math.max(max, row.version ?? 0), 0),
-      // WR-02: the badge and the header count what is still awaiting a decision. `rows` also
-      // carries this session's decided cards (D-25 keeps them visible), so counting it would
-      // claim a pending proposal that no longer exists — `SkillCard` reads 0 at the same time.
-      pendingCount: pending.filter((row) => patches.has(row.id)).length,
-    };
-  }, [versions, skill, recentlyDecided]);
+      return {
+        pendingSectionRows: rows,
+        // A row decided in this session is already visible above — listing it again would
+        // double it, with its `v{n}` chip shown before the decision line was read.
+        historyRows: versions.filter(
+          (row) => row.status !== 'pending' && !recentlyDecided.has(row.id)
+        ),
+        highestApproved: versions
+          .filter((row) => row.status === 'approved')
+          .reduce((max, row) => Math.max(max, row.version ?? 0), 0),
+        // WR-02: the badge and the header count what is still awaiting a decision. `rows` also
+        // carries this session's decided cards (D-25 keeps them visible), so counting it would
+        // claim a pending proposal that no longer exists — `SkillCard` reads 0 at the same time.
+        // A row whose base cannot resolve is still pending, so it counts here too: the card
+        // reads it from the raw DB count and the drawer must not disagree.
+        pendingCount: pending.length,
+        // WR-02: a row whose base cannot resolve renders no card. It is counted into the
+        // chrome above and surfaced below, mirroring `PendingSkillProposals`' overflow line —
+        // silently dropping it left the user unable to approve or reject it, forever.
+        unresolvedCount: pending.length - patches.size,
+      };
+    }, [versions, skill, recentlyDecided]);
 
   const valid = useMemo(
     () => AiSkillInputSchema.safeParse({ name, description, body }).success,
@@ -182,9 +190,11 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
       return next;
     });
     try {
-      await decideSkillVersion(row.id, status, db);
+      // WR-03: hand the repo the base the user reviewed, so a stale approval is refused at
+      // the state owner rather than merely hidden behind a disabled button.
+      await decideSkillVersion(row.id, status, db, row.baseVersion ?? 0);
       setDecision((prev) => new Map(prev).set(row.id, status));
-    } catch {
+    } catch (err) {
       // The row is still pending and re-renders from the live query — drop the snapshot
       // or the card would appear twice.
       setRecentlyDecided((prev) => {
@@ -192,7 +202,15 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
         next.delete(row.id);
         return next;
       });
-      setError((prev) => new Map(prev).set(row.id, WRITE_FAILED_COPY));
+      setError(
+        (prev) =>
+          new Map(prev).set(
+            row.id,
+            err instanceof Error && err.message === STALE_VERSION_MESSAGE
+              ? STALE_VERSION_MESSAGE
+              : WRITE_FAILED_COPY
+          )
+      );
     } finally {
       setApplying((prev) => {
         const next = new Set(prev);
@@ -316,7 +334,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
           ]}
         />
 
-        {skill !== null && pendingSectionRows.length > 0 && (
+        {skill !== null && pendingSectionRows.length + unresolvedCount > 0 && (
           <div
             data-testid="skill-pending-section"
             style={{
@@ -353,6 +371,16 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
                 />
               </div>
             ))}
+            {/* WR-02: a pending row whose base cannot resolve has no card. Say so instead of
+                dropping it — the user still has to reject it or ask for a re-proposal. */}
+            {unresolvedCount > 0 && (
+              <div
+                data-testid="skill-pending-unresolved"
+                style={{ fontSize: 12, color: token.colorTextSecondary }}
+              >
+                {`Còn ${unresolvedCount} đề xuất không xem được bản diff — hãy từ chối hoặc đề xuất lại.`}
+              </div>
+            )}
           </div>
         )}
 

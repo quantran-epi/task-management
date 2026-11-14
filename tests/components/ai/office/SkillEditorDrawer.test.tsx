@@ -2,9 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../../../src/db';
 import { createSkill, updateSkill } from '../../../../src/db/repositories/aiOfficeRepo';
+import * as aiSkillVersionRepo from '../../../../src/db/repositories/aiSkillVersionRepo';
 import {
   createSkillVersion,
   decideSkillVersion,
+  STALE_VERSION_MESSAGE,
 } from '../../../../src/db/repositories/aiSkillVersionRepo';
 import { SkillEditorDrawer } from '../../../../src/components/ai/office/SkillEditorDrawer';
 import type { AiSkill } from '../../../../src/types/aiOffice';
@@ -220,6 +222,56 @@ describe('SkillEditorDrawer — pending queue and version history (AIO-SKILL-01/
     // The card itself stays (D-25), only the count drops.
     expect(screen.getByTestId(`skill-pending-card-${row.id}`)).toBeInTheDocument();
     expect(screen.getByTestId('skill-pending-section')).not.toHaveTextContent('Chờ duyệt (1)');
+  });
+
+  // WR-02: a restored backup can carry a pending whose `baseVersion` resolves to no approved
+  // row. It renders no card, so it must still be counted and surfaced — `SkillCard` reads the
+  // raw DB count and the two surfaces may not disagree.
+  it('counts and surfaces a pending proposal whose base cannot resolve (WR-02)', async () => {
+    await db.aiSkillVersions.add({
+      id: 'dangling-pending',
+      skillId: skill.id,
+      status: 'pending',
+      name: skill.name,
+      description: skill.description,
+      body: NEXT_BODY,
+      baseVersion: 9,
+      createdAt: new Date().toISOString(),
+    });
+
+    renderDrawer(skill);
+
+    expect(await screen.findByTestId('skill-editor-pending-badge')).toHaveTextContent(
+      '1 chờ duyệt'
+    );
+    const section = screen.getByTestId('skill-pending-section');
+    expect(section).toHaveTextContent('Chờ duyệt (1)');
+    expect(screen.queryByTestId('skill-pending-card-dangling-pending')).toBeNull();
+    expect(screen.getByTestId('skill-pending-unresolved')).toHaveTextContent(
+      'Còn 1 đề xuất không xem được bản diff — hãy từ chối hoặc đề xuất lại.'
+    );
+  });
+
+  // WR-03: the disabled Approve button reads a live query, so it is an affordance. The repo
+  // refuses the stale approval, and the card must say why instead of the generic retry copy.
+  it('surfaces the repo refusal when a stale approval is attempted (WR-03)', async () => {
+    const row = await seedPending();
+    const spy = vi
+      .spyOn(aiSkillVersionRepo, 'decideSkillVersion')
+      .mockRejectedValueOnce(new Error(STALE_VERSION_MESSAGE));
+
+    renderDrawer(skill);
+
+    const card = await screen.findByTestId(`skill-pending-card-${row.id}`);
+    fireEvent.click(within(card).getByRole('button', { name: 'Chấp thuận' }));
+
+    await waitFor(() =>
+      expect(within(screen.getByTestId(`skill-pending-card-${row.id}`)).getByRole('alert'))
+        .toHaveTextContent('Kỹ năng đã có bản mới được duyệt sau khi đề xuất này được tạo.')
+    );
+    // The reviewed base is handed to the repo — the guard is not UI-only.
+    expect(spy).toHaveBeenCalledWith(row.id, 'approved', db, 0);
+    spy.mockRestore();
   });
 
   it('the pending card subtitle names the skill without inventing a proposer', async () => {

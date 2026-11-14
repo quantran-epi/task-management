@@ -7,6 +7,7 @@ import {
   listPendingSkillVersions,
   createSkillVersion,
   decideSkillVersion,
+  STALE_VERSION_MESSAGE,
 } from '../../../../src/db/repositories/aiSkillVersionRepo';
 import { generateId } from '../../../../src/utils/uuid';
 import { createSkill } from '../../../../src/db/repositories/aiOfficeRepo';
@@ -277,6 +278,45 @@ describe('aiSkillVersionRepo (AIO-DATA-01, D-05)', () => {
     expect('evidence' in created).toBe(false);
     const stored = await db.aiSkillVersions.get(created.id);
     expect('evidence' in stored!).toBe(false);
+  });
+
+  it('refuses an approval whose reviewed base is no longer the live one (WR-03)', async () => {
+    const a = await createSkillVersion(draft(skillId, { body: '# A' }), db);
+    const b = await createSkillVersion(draft(skillId, { body: '# B' }), db);
+    // Both were proposed against base 0 — legal, and a restored backup can carry exactly this.
+    expect(a.baseVersion).toBe(0);
+    expect(b.baseVersion).toBe(0);
+
+    await decideSkillVersion(a.id, 'approved', db, 0);
+
+    // B's reviewed base (0) is now behind the live approved version (2).
+    await expect(decideSkillVersion(b.id, 'approved', db, 0)).rejects.toThrow(
+      STALE_VERSION_MESSAGE
+    );
+
+    // A's just-approved content survives; B is untouched and still pending.
+    expect((await db.aiSkills.get(skillId))?.body).toBe('# A');
+    const storedB = await db.aiSkillVersions.get(b.id);
+    expect(storedB?.status).toBe('pending');
+    expect('version' in storedB!).toBe(false);
+  });
+
+  it('refuses when the caller reviewed a different base than the row records (WR-03)', async () => {
+    const pending = await createSkillVersion(draft(skillId), db);
+
+    await expect(decideSkillVersion(pending.id, 'approved', db, 99)).rejects.toThrow(
+      STALE_VERSION_MESSAGE
+    );
+    expect((await db.aiSkillVersions.get(pending.id))?.status).toBe('pending');
+  });
+
+  it('still rejects a stale proposal — the guard only blocks approval (WR-03)', async () => {
+    const a = await createSkillVersion(draft(skillId, { body: '# A' }), db);
+    const b = await createSkillVersion(draft(skillId, { body: '# B' }), db);
+    await decideSkillVersion(a.id, 'approved', db, 0);
+
+    const rejected = await decideSkillVersion(b.id, 'rejected', db, 0);
+    expect(rejected.status).toBe('rejected');
   });
 
   it('refuses a dangling skillId and writes no version row (WR-05, D-15)', async () => {

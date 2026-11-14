@@ -40,6 +40,14 @@ const MISSING_VERSION_MESSAGE = 'Không tìm thấy phiên bản kỹ năng đã
 const ONLY_PENDING_ON_CREATE_MESSAGE =
   'Chỉ có thể tạo phiên bản kỹ năng ở trạng thái chờ duyệt.';
 
+/**
+ * WR-03: the stale guard's refusal. Exported so the UI can tell this apart from a transient
+ * write failure — the row stays pending either way, but only this one tells the user to
+ * re-propose instead of retrying.
+ */
+export const STALE_VERSION_MESSAGE =
+  'Kỹ năng đã có bản mới được duyệt sau khi đề xuất này được tạo. Hãy từ chối và yêu cầu đề xuất lại.';
+
 export async function listSkillVersions(
   skillId: string,
   db: TaskPlannerDatabase = defaultDb
@@ -141,7 +149,15 @@ export async function createSkillVersion(
 export async function decideSkillVersion(
   id: string,
   status: Extract<AiSkillVersionStatus, 'approved' | 'rejected'>,
-  db: TaskPlannerDatabase = defaultDb
+  db: TaskPlannerDatabase = defaultDb,
+  /**
+   * WR-03: the base the user actually reviewed. The UI's disabled Approve button reads a live
+   * query that updates asynchronously, so it is an affordance, not enforcement — two pendings
+   * on the same base (legal in a restored backup) or two clicks inside the refresh window
+   * would otherwise approve both and overwrite the newer content with the older. Passing the
+   * reviewed base makes the repo refuse the mismatch inside the same `rw` transaction.
+   */
+  expectedBaseVersion?: number
 ): Promise<AiSkillVersion> {
   // Pitfall 2: `db.aiSkills` must be in the scope or the write throws `NotFoundError` at
   // runtime and TypeScript will not catch it.
@@ -166,6 +182,16 @@ export async function decideSkillVersion(
     // CR-01: repair any legacy numbered non-approved row first, or the new number collides.
     await stripNonApprovedVersionNumbers(existing.skillId, db);
     const latestApproved = await getLatestApprovedVersionNumber(existing.skillId, db);
+
+    // WR-03: the base the user reviewed must still be the live one. Checked here, inside the
+    // same `rw` transaction that writes the number, so two approvals on one base cannot both
+    // land — the second would overwrite the first's content and leave it view-only history.
+    if (expectedBaseVersion !== undefined) {
+      const reviewedBase = existing.baseVersion ?? 0;
+      if (expectedBaseVersion !== reviewedBase || reviewedBase !== latestApproved) {
+        throw new Error(STALE_VERSION_MESSAGE);
+      }
+    }
 
     // D-07: `aiSkills` becomes the approved copy in the same transaction.
     const skill = await db.aiSkills.get(existing.skillId);
