@@ -761,7 +761,6 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         />
       )}
       <PendingSkillProposals
-        team={team}
         members={liveMembers}
         employees={employees}
         skills={skills}

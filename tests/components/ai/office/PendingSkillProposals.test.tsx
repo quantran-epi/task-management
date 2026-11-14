@@ -51,7 +51,6 @@ describe('PendingSkillProposals (AIO-SKILL-03/04)', () => {
   const renderPanel = (overrides: { skills?: AiSkill[]; employees?: AiEmployee[] } = {}) =>
     render(
       <PendingSkillProposals
-        team={team}
         members={members}
         employees={overrides.employees ?? [employee]}
         skills={overrides.skills ?? skills}
@@ -98,7 +97,8 @@ describe('PendingSkillProposals (AIO-SKILL-03/04)', () => {
     expect((await db.aiSkills.get(skill.id))?.body).toBe(`${BODY}\nBước 3: kiểm thử.`);
     const stored = await db.aiSkillVersions.get(row.id);
     expect(stored?.status).toBe('approved');
-    expect(stored?.version).toBe(1);
+    // CR-03: approval snapshots the pre-approval content as v1, so the proposal is v2.
+    expect(stored?.version).toBe(2);
   });
 
   it('rejecting leaves aiSkills untouched', async () => {
@@ -138,7 +138,7 @@ describe('PendingSkillProposals (AIO-SKILL-03/04)', () => {
     delete unassigned.skillId;
 
     rerender(
-      <PendingSkillProposals team={team} members={members} employees={[unassigned]} skills={skills} db={db} />
+      <PendingSkillProposals members={members} employees={[unassigned]} skills={skills} db={db} />
     );
     // T-39-21: the roster set is derived from the same employees array, so an unassigned
     // skill is not addressable by this team and its proposal leaves the transcript.

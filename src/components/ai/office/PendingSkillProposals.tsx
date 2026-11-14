@@ -15,7 +15,6 @@ import type {
   AiEmployee,
   AiSkill,
   AiSkillVersion,
-  AiTeam,
   AiTeamMember,
 } from '../../../types/aiOffice';
 import { PatchDiffApprovalCard } from '../widget/PatchDiffApprovalCard';
@@ -32,8 +31,6 @@ interface SkillProposalEntry {
 }
 
 export interface PendingSkillProposalsProps {
-  /** Part of the host contract; the roster filter reads `members` + `employees`. */
-  team: AiTeam;
   members: AiTeamMember[];
   employees: AiEmployee[];
   skills: AiSkill[];
@@ -123,10 +120,15 @@ export const PendingSkillProposals: React.FC<PendingSkillProposalsProps> = ({
   }, [remaining, approvedRows, skills]);
 
   const { visible, overflow } = useMemo(() => {
-    const decided = [...recentlyDecided.values()].sort((a, b) =>
-      b.row.createdAt.localeCompare(a.row.createdAt)
-    );
+    // WR-07: cap the decided list too. It is appended on every decision and never trimmed,
+    // so an unbounded list would push the pending side out permanently (`slots` stays 0).
+    const decided = [...recentlyDecided.values()]
+      .sort((a, b) => b.row.createdAt.localeCompare(a.row.createdAt))
+      .slice(0, MAX_VISIBLE);
     const eligible = remaining.filter((row) => patches.has(row.id));
+    // WR-08: a proposal whose base cannot be resolved renders no card, so count it into the
+    // overflow line — otherwise the badge claims a proposal the transcript never shows.
+    const unresolved = remaining.length - eligible.length;
     const slots = Math.max(0, MAX_VISIBLE - decided.length);
     const visiblePending = eligible.slice(0, slots).map((row) => ({
       row,
@@ -134,7 +136,7 @@ export const PendingSkillProposals: React.FC<PendingSkillProposalsProps> = ({
     }));
     return {
       visible: [...decided, ...visiblePending],
-      overflow: eligible.length - visiblePending.length,
+      overflow: eligible.length - visiblePending.length + unresolved,
     };
   }, [recentlyDecided, remaining, patches]);
 
@@ -169,7 +171,8 @@ export const PendingSkillProposals: React.FC<PendingSkillProposalsProps> = ({
     }
   };
 
-  if (visible.length === 0) return null;
+  // WR-08: an unresolved proposal has no card but still owes the user an overflow line.
+  if (visible.length === 0 && overflow === 0) return null;
 
   return (
     <div
