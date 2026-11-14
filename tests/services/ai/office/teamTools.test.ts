@@ -526,16 +526,22 @@ describe('teamTools — linked-item retrieval with full content (AIO-LINK-01, D-
     expect(items).toHaveLength(5);
     expect(items.every((item: Record<string, unknown>) => !('body' in item))).toBe(true);
 
-    const byType = new Map(items.map((item: any) => [item.itemType, item]));
-    expect(byType.get('system')).toMatchObject({ itemId: systemId, name: 'Hệ thống lõi', code: 'CORE' });
+    const byType = new Map<string, any>(items.map((item: any) => [item.itemType, item]));
+    expect(byType.get('system')).toMatchObject({ itemId: systemId, code: 'CORE' });
     expect(byType.get('cr')).toMatchObject({ itemId: crId, code: 'CR-2026-001' });
-    expect(byType.get('task')).toMatchObject({ itemId: taskId, name: 'Viết tài liệu đối soát' });
-    expect(byType.get('note')).toMatchObject({ itemId: noteId, name: 'Biên bản họp' });
-    // Empty title falls back to the first body line.
-    expect(byType.get('document')).toMatchObject({
-      itemId: documentId,
-      name: 'Tài liệu đầy đủ không có tiêu đề.',
-    });
+    // WR-05: a note title / task name is untrusted, so the name is wrapped as data — the
+    // lead prompt renders this same value, and `get_linked_context` wraps it too.
+    for (const [type, expected] of [
+      ['system', 'Hệ thống lõi'],
+      ['task', 'Viết tài liệu đối soát'],
+      ['note', 'Biên bản họp'],
+      // Empty title falls back to the first body line.
+      ['document', 'Tài liệu đầy đủ không có tiêu đề.'],
+    ] as const) {
+      const name = byType.get(type)?.name ?? '';
+      expect(name).toContain(expected);
+      expect(name).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
+    }
   });
 
   it('returns the note body strictly equal to the seeded body, never truncated', async () => {

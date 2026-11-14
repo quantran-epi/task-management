@@ -245,7 +245,11 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
     parts.push(
       [
         '[MỤC LIÊN KẾT]',
-        ...linkedItems.map((i) => `- ${i.itemId} (${i.itemType}): ${i.name}`),
+        // WR-05: a note title / task name is user- or model-authored — untrusted, exactly
+        // like the same value on the `get_linked_context` path.
+        ...linkedItems.map(
+          (i) => `- ${i.itemId} (${i.itemType}): ${wrapUntrusted('TÊN MỤC LIÊN KẾT', i.name)}`
+        ),
         'Gọi công cụ get_linked_context để đọc toàn văn nội dung của một mục.',
       ].join('\n')
     );

@@ -407,7 +407,9 @@ async function listLinkedItems(ctx: TeamToolContext): Promise<string> {
     items.push({
       itemId: link.itemId,
       itemType: link.itemType,
-      name: label?.name ?? link.itemId,
+      // WR-05: a note title or task name is untrusted — the lead prompt renders this value
+      // too, and `get_linked_context` already wraps the same text as a label.
+      name: wrapUntrusted('TÊN MỤC LIÊN KẾT', label?.name ?? link.itemId),
       ...(label?.code ? { code: label.code } : {}),
     });
   }
