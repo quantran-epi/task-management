@@ -1,0 +1,760 @@
+<title>Team Chat Redesign</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one workbench mock (sidebar + transcript + composer) beside a change log. */
+:root {
+  --bg: #eceef3;
+  --surface: #ffffff;
+  --surface-2: #f7f8fa;
+  --surface-3: #f0f2f5;
+  --border: #e6e8ee;
+  --border-strong: #d1d3d9;
+  --fg: #191b1f;
+  --fg-2: #5f6269;
+  --fg-3: #8c8f9c;
+  --accent: #5b4fe8;
+  --accent-soft: #eef0fe;
+  --accent-line: #b9b2ff;
+  --user-bg: #5b4fe8;
+  --user-fg: #ffffff;
+  --warn: #a56906;
+  --warn-soft: #fbf1de;
+  --danger: #c54e58;
+  --danger-soft: #fbecec;
+  --success: #338555;
+  --shadow: 0 1px 2px rgba(16, 18, 24, .06), 0 6px 20px rgba(16, 18, 24, .05);
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14161b;
+    --surface: #1c1f26;
+    --surface-2: #232730;
+    --surface-3: #282d37;
+    --border: #2c313b;
+    --border-strong: #3b414d;
+    --fg: #e9ebef;
+    --fg-2: #a2a8b4;
+    --fg-3: #767d8a;
+    --accent: #8f87ff;
+    --accent-soft: #23263f;
+    --accent-line: #4b4590;
+    --user-bg: #4a3fd0;
+    --user-fg: #f2f1ff;
+    --warn: #d9a441;
+    --warn-soft: #332a17;
+    --danger: #e07f88;
+    --danger-soft: #3a2226;
+    --success: #5cb87f;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 20px rgba(0, 0, 0, .3);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14161b;
+  --surface: #1c1f26;
+  --surface-2: #232730;
+  --surface-3: #282d37;
+  --border: #2c313b;
+  --border-strong: #3b414d;
+  --fg: #e9ebef;
+  --fg-2: #a2a8b4;
+  --fg-3: #767d8a;
+  --accent: #8f87ff;
+  --accent-soft: #23263f;
+  --accent-line: #4b4590;
+  --user-bg: #4a3fd0;
+  --user-fg: #f2f1ff;
+  --warn: #d9a441;
+  --warn-soft: #332a17;
+  --danger: #e07f88;
+  --danger-soft: #3a2226;
+  --success: #5cb87f;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 20px rgba(0, 0, 0, .3);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 1360px;
+  margin: 0 auto;
+  padding-block: 28px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+/* ---------- page head ---------- */
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  margin: 0 0 6px;
+}
+h1 {
+  font-size: clamp(22px, 3vw, 30px);
+  line-height: 1.2;
+  letter-spacing: -.02em;
+  margin: 0;
+  text-wrap: balance;
+}
+.sub {
+  margin: 6px 0 0;
+  color: var(--fg-2);
+  max-width: 62ch;
+  font-size: 13.5px;
+}
+.seg {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+.seg button {
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--fg-2);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+.seg button[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: 0 1px 2px rgba(16, 18, 24, .12);
+}
+.seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 1080px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---------- mock frame ---------- */
+.frame {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  height: 660px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.mock-side {
+  border-right: 1px solid var(--border);
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  background: var(--surface);
+}
+.side-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.member { display: flex; gap: 8px; align-items: flex-start; }
+.member + .member { margin-top: 10px; }
+.av {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #fff;
+  margin-top: 1px;
+}
+.av.sq { border-radius: 6px; }
+.av.dark { color: #1f2328; }
+.m-name { font-size: 12.5px; font-weight: 500; line-height: 1.3; }
+.m-role { font-size: 11px; color: var(--fg-3); line-height: 1.3; }
+.m-top { display: flex; align-items: baseline; gap: 5px; min-width: 0; }
+.m-top .m-role { white-space: nowrap; }
+.m-fig {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--fg-2);
+  margin-top: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.m-fig.hot { color: var(--danger); font-weight: 500; }
+.bar { height: 3px; border-radius: 2px; background: var(--surface-3); margin-top: 4px; overflow: hidden; }
+.bar > i { display: block; height: 100%; border-radius: 2px; background: var(--accent); }
+.bar > i.hot { background: var(--danger); }
+.bar > i.warm { background: var(--warn); }
+.side-block { border-top: 1px solid var(--border); padding-top: 12px; }
+.side-row {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 12px; color: var(--fg-2); padding: 3px 0;
+}
+.side-ghost {
+  font-size: 12px; color: var(--fg-3); background: none; border: 0;
+  padding: 4px 0; cursor: pointer; text-align: left; font-family: inherit;
+}
+.side-ghost:hover { color: var(--fg); }
+
+.mock-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+/* phone: the mock drops its sidebar and lets the transcript own the height */
+@media (max-width: 760px) {
+  .frame { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .mock-side { display: none; }
+}
+
+/* headers, before vs after */
+.mock-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+.mock-head .t-name { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+.mock-head .t-lead { font-size: 12px; color: var(--fg-2); }
+.mock-head .spacer { margin-left: auto; }
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 500;
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--surface-3); color: var(--fg-2);
+}
+.chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+.ghost-btn {
+  font: inherit; font-size: 12px; color: var(--fg-2);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 6px; padding: 3px 9px; cursor: pointer;
+}
+.ghost-btn:hover { color: var(--fg); border-color: var(--border-strong); }
+.icon-btn {
+  width: 24px; height: 24px; display: grid; place-items: center;
+  border: 0; background: transparent; color: var(--fg-3);
+  border-radius: 5px; cursor: pointer; font-size: 13px;
+}
+.icon-btn:hover { background: var(--surface-3); color: var(--fg); }
+
+.note-banner {
+  display: flex; align-items: center; gap: 8px;
+  margin: 10px 16px 0;
+  padding: 7px 10px;
+  font-size: 12px;
+  border-radius: 7px;
+  background: var(--accent-soft);
+  color: var(--fg-2);
+  border: 1px solid var(--accent-line);
+}
+.note-banner b { color: var(--fg); font-weight: 600; }
+.note-banner .x { margin-left: auto; color: var(--fg-3); cursor: pointer; }
+
+.transcript {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 16px 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- BEFORE ---------- */
+.b-row { display: flex; flex-direction: column; width: 100%; margin-bottom: 12px; }
+.b-row.user { align-items: flex-end; }
+.b-row.bot { align-items: flex-start; }
+.b-author { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.b-author .n { font-size: 12px; font-weight: 600; }
+.b-author .r { font-size: 12px; color: var(--fg-2); }
+.b-bubble {
+  max-width: 95%;
+  border-radius: 12px 12px 12px 2px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  padding: 12px 16px;
+  font-size: 14px;
+  line-height: 1.57;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
+}
+.b-row.user .b-bubble {
+  max-width: 85%;
+  background: var(--user-bg);
+  color: var(--user-fg);
+  border: 0;
+  border-radius: 12px 12px 2px 12px;
+  padding: 8px 12px;
+}
+.b-bubble p { margin: 0 0 8px; }
+.b-bubble p:last-child { margin-bottom: 0; }
+.b-bubble ol { margin: 0 0 8px; padding-left: 20px; }
+.b-bubble code {
+  font-family: var(--mono); font-size: 12.5px;
+  background: var(--surface-3); padding: 1px 4px; border-radius: 4px;
+}
+.b-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-top: 4px; font-size: 12px;
+  border: 1px solid var(--border-strong); border-radius: 4px;
+  padding: 0 7px; color: var(--fg-2); background: var(--surface-2);
+}
+.b-actions { display: flex; gap: 6px; margin-top: 6px; padding-left: 4px; flex-wrap: wrap; }
+.b-actions .ghost-btn { font-size: 12px; padding: 2px 8px; }
+.b-receipt { font-size: 11px; color: var(--fg-3); margin-top: 4px; }
+.b-receipt.read { color: var(--accent); }
+.b-meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 11px; color: var(--fg-3); }
+.b-row.user .b-meta { justify-content: flex-end; }
+
+/* ---------- AFTER ---------- */
+.a-day {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 11px; color: var(--fg-3);
+  margin: 4px 0 14px;
+}
+.a-day::before, .a-day::after { content: ""; height: 1px; background: var(--border); flex: 1; }
+
+.a-group { margin-bottom: 14px; display: flex; flex-direction: column; align-items: flex-start; }
+.a-group.user { align-items: flex-end; }
+.a-head { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+.a-head .n { font-size: 12.5px; font-weight: 600; }
+.a-head .r { font-size: 11.5px; color: var(--fg-3); }
+.a-head .kind {
+  font-size: 10px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--accent); background: var(--accent-soft);
+  border-radius: 4px; padding: 1px 5px;
+}
+.a-body { display: flex; flex-direction: column; gap: 4px; max-width: 82%; min-width: 0; }
+.a-group.user .a-body { max-width: 72%; align-items: flex-end; }
+.a-bubble {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 13px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.a-bubble.lead {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  border-left: 3px solid var(--accent);
+}
+.a-bubble.user {
+  background: var(--user-bg);
+  border: 0;
+  color: var(--user-fg);
+  border-radius: 12px 12px 2px 12px;
+}
+.a-bubble p { margin: 0 0 7px; }
+.a-bubble p:last-child { margin-bottom: 0; }
+.a-bubble ol { margin: 0 0 7px; padding-left: 18px; }
+.a-bubble li { margin-bottom: 2px; }
+.a-bubble code {
+  font-family: var(--mono); font-size: 12px;
+  background: var(--surface-3); padding: 1px 4px; border-radius: 4px;
+}
+.a-bubble.user code { background: rgba(255, 255, 255, .18); }
+.a-meta {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 10.5px; color: var(--fg-3);
+  padding: 0 2px;
+  font-variant-numeric: tabular-nums;
+}
+.a-meta .receipt { color: var(--accent); letter-spacing: -.05em; }
+.a-meta .st { color: var(--warn); }
+.a-meta .st.live { color: var(--accent); }
+.a-tools { display: flex; gap: 2px; opacity: 0; transition: opacity .12s; }
+.a-group:hover .a-tools, .a-group:focus-within .a-tools { opacity: 1; }
+.a-tools .icon-btn { width: 20px; height: 20px; font-size: 11px; }
+
+/* composer */
+.composer { flex: 0 0 auto; border-top: 1px solid var(--border); padding: 10px 14px 12px; }
+.composer .box {
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  padding: 8px 11px;
+  font-size: 13.5px;
+  color: var(--fg-3);
+  background: var(--surface);
+  display: flex; align-items: center; gap: 8px;
+}
+.composer .box .grow { flex: 1; min-width: 0; }
+.composer .box .send {
+  border: 0; background: var(--accent); color: #fff;
+  border-radius: 6px; padding: 4px 12px; font: inherit; font-size: 12.5px;
+  cursor: pointer; flex: 0 0 auto;
+}
+.hints { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; }
+.hint {
+  font-size: 11px; color: var(--fg-3);
+  border: 1px solid var(--border); border-radius: 999px;
+  padding: 1px 8px; background: var(--surface-2);
+}
+.hint b { font-family: var(--mono); color: var(--fg-2); font-weight: 500; }
+.composer-before { display: flex; gap: 8px; align-items: flex-end; padding: 10px 14px; border-top: 1px solid var(--border); }
+.composer-before .box {
+  flex: 1; min-width: 0;
+  border: 1px solid var(--border-strong); border-radius: 8px;
+  padding: 7px 11px; font-size: 13.5px; color: var(--fg-3);
+}
+.composer-before .send {
+  border: 0; background: var(--accent); color: #fff;
+  border-radius: 6px; padding: 6px 14px; font: inherit; font-size: 13px; cursor: pointer;
+}
+
+/* ---------- change log ---------- */
+.log {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.log h2 {
+  font-size: 12px; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--fg-3); font-weight: 600;
+  margin: 0; padding: 13px 16px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.log ol { list-style: none; margin: 0; padding: 6px 0 10px; }
+.log li {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 9px;
+  padding: 8px 16px;
+  align-items: start;
+}
+.log li + li { border-top: 1px solid var(--border); }
+.pri {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  text-align: center; border-radius: 4px; padding: 2px 0; margin-top: 2px;
+}
+.pri.p0 { background: var(--danger-soft); color: var(--danger); }
+.pri.p1 { background: var(--accent-soft); color: var(--accent); }
+.pri.p2 { background: var(--surface-3); color: var(--fg-2); }
+.log .what { font-size: 12.5px; font-weight: 500; line-height: 1.4; }
+.log .why { font-size: 11.5px; color: var(--fg-2); line-height: 1.45; margin-top: 2px; }
+.log .why code { font-family: var(--mono); font-size: 10.5px; color: var(--fg-3); }
+.foot {
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--fg-2);
+  display: flex; flex-wrap: wrap; gap: 8px 18px;
+}
+.foot span { display: inline-flex; gap: 6px; align-items: center; }
+.foot b { color: var(--fg); font-weight: 600; }
+[hidden] { display: none !important; }
+</style>
+
+<div class="wrap">
+  <header class="head">
+    <div>
+      <p class="eyebrow">TaskMate · AI Office</p>
+      <h1>Khung chat nhóm — bản dựng để duyệt</h1>
+      <p class="sub">Cùng một hội thoại, hai cách trình bày. Bấm để đổi giữa bản hiện tại và bản đề xuất.</p>
+    </div>
+    <div class="seg" role="group" aria-label="Chọn bản hiển thị">
+      <button type="button" id="btn-before" aria-pressed="false">Hiện tại</button>
+      <button type="button" id="btn-after" aria-pressed="true">Đề xuất</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <div class="frame" id="frame">
+      <aside class="mock-side" id="side"></aside>
+      <div class="mock-main" id="main"></div>
+    </div>
+
+    <aside class="log">
+      <h2>Thay đổi trong bản đề xuất</h2>
+      <ol id="log-list"></ol>
+    </aside>
+  </div>
+
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+const AGENTS = {
+  minh:  { name: 'Minh',  role: 'Trưởng nhóm',      color: '#5b4fe8', lead: true },
+  lan:   { name: 'Lan',   role: 'Backend Engineer', color: '#338555' },
+  huy:   { name: 'Huy',   role: 'Frontend Engineer', color: '#c54e58' },
+  trang: { name: 'Trang', role: 'QA Engineer',      color: '#a56906' },
+  bao:   { name: 'Bảo',   role: 'DevOps Engineer',  color: '#22d3ee', dark: true }
+};
+
+const MSGS = [
+  { from: 'user', time: '18:06',
+    html: 'Refactor luồng thanh toán: tách module retry, thêm idempotency key cho API charge, và viết test cho 3 case lỗi mạng.' },
+  { from: 'minh', time: '18:07', kind: 'Kế hoạch',
+    html: 'Tôi đã phân rã yêu cầu thành 3 việc và giao cho nhóm:<ol><li><b>Lan</b> — thêm idempotency key cho API <code>charge</code></li><li><b>Huy</b> — tách module retry thành package riêng</li><li><b>Trang</b> — viết test cho 3 case lỗi mạng</li></ol>Đã duyệt lô việc, các bạn bắt đầu.' },
+  { from: 'lan', time: '18:09',
+    html: 'Đã thêm <code>idempotencyKey</code> vào payload <code>POST /charge</code>, lưu theo <code>(merchantId, key)</code> trong 24h. Kèm migration <code>20261114_add_idempotency.sql</code>.' },
+  { from: 'lan', time: '18:10',
+    html: 'Bổ sung: key hết hạn được dọn bằng job chạy mỗi giờ, không để rác trong bảng.' },
+  { from: 'huy', time: '18:11',
+    html: 'Tách <code>retry.ts</code> thành package <code>@pay/retry</code>, có backoff luỹ thừa và jitter. Đã cập nhật 6 call site.' },
+  { from: 'trang', time: '18:12', status: 'running',
+    html: 'Đã viết 3 test: timeout, 502 từ provider, và mất kết nối giữa chừng. Cả 3 pass trên CI.' },
+  { from: 'user', time: '18:13',
+    html: '@Bảo kiểm tra giúp pipeline deploy sau khi merge nhé, nhớ chạy smoke test trên staging.' },
+  { from: 'bao', time: '18:15', status: 'stopped',
+    html: 'Pipeline đã cập nhật: thêm bước smoke test staging sau deploy, chặn promote nếu fail. Đang chờ merge để chạy lần đầu.' },
+  { from: 'minh', time: '18:16', kind: 'Tổng hợp',
+    html: 'Tổng hợp: 3/3 việc đã xong phần code, còn Trang đang chạy test cuối. Bảo chờ merge. Đề xuất review chéo Lan ↔ Huy trước khi merge.' }
+];
+
+const MEMBERS = [
+  { key: 'minh',  used: 41200, budget: 100000 },
+  { key: 'lan',   used: 63300, budget: 120000 },
+  { key: 'huy',   used: 49000, budget: 120000 },
+  { key: 'trang', used: 19500, budget: 80000 },
+  { key: 'bao',   used: 70000, budget: 60000 }
+];
+
+const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+const k = (n) => n >= 1000 ? (n / 1000).toFixed(n % 1000 === 0 ? 0 : 1).replace('.0', '') + 'k' : String(n);
+const initial = (n) => n.trim().charAt(0).toUpperCase();
+
+function avatar(key, size) {
+  const a = AGENTS[key];
+  return '<span class="av' + (a.lead ? ' sq' : '') + (a.dark ? ' dark' : '') +
+    '" style="background:' + a.color + '">' + initial(a.name) + '</span>';
+}
+
+/* ---------------- sidebar ---------------- */
+function sidebar(mode) {
+  const rows = MEMBERS.map((m) => {
+    const a = AGENTS[m.key];
+    const truePct = Math.round((m.used / m.budget) * 100);
+    const pct = Math.min(100, truePct);
+    const cls = truePct >= 100 ? 'hot' : truePct >= 70 ? 'warm' : '';
+    if (mode === 'before') {
+      return '<div class="member">' + avatar(m.key) +
+        '<div style="min-width:0;flex:1">' +
+          '<div class="m-top"><span class="m-name">' + a.name + '</span><span class="m-role">' + a.role + '</span></div>' +
+          '<div class="bar"><i class="' + cls + '" style="width:' + pct + '%"></i></div>' +
+          '<div class="m-fig' + (cls === 'hot' ? ' hot' : '') + '">' + m.used.toLocaleString('en-US') + ' / ' + m.budget.toLocaleString('en-US') + ' · ' + truePct + '%</div>' +
+        '</div></div>';
+    }
+    return '<div class="member">' + avatar(m.key) +
+      '<div style="min-width:0;flex:1">' +
+        '<div class="m-top"><span class="m-name">' + a.name + '</span><span class="m-role">' + a.role + '</span></div>' +
+        '<div class="bar"><i class="' + cls + '" style="width:' + pct + '%"></i></div>' +
+        '<div class="m-fig' + (cls === 'hot' ? ' hot' : '') + '">' + k(m.used) + ' / ' + k(m.budget) + '</div>' +
+      '</div></div>';
+  }).join('');
+
+  const warn = mode === 'before'
+    ? '<span class="chip" style="background:var(--warn-soft);color:var(--warn);font-size:10px">Có thành viên vượt ngưỡng</span>'
+    : '<span class="chip" style="background:var(--danger-soft);color:var(--danger);font-size:10px">1 vượt hạn mức</span>';
+
+  const tail = mode === 'before'
+    ? '<div class="side-block"><div class="side-label">Ngân sách nhóm</div>' +
+        '<div class="bar"><i style="width:61%"></i></div>' +
+        '<div class="m-fig">243,000 / 400,000 · 61%</div>' +
+        '<button class="ghost-btn" style="margin-top:8px">Cấp thêm token</button></div>' +
+      '<div class="side-block"><div class="side-label">Liên kết</div>' +
+        '<div style="font-size:12px;color:var(--fg-3)">Chưa liên kết mục nào.</div>' +
+        '<button class="ghost-btn" style="margin-top:8px">+ Liên kết mục</button></div>' +
+      '<div class="side-block"><div class="side-label">Chế độ</div>' +
+        '<div class="side-row"><span>Tự động chia việc</span><span class="chip">Bật</span></div>' +
+        '<div class="side-row"><span>Tự động duyệt thay đổi</span><span class="chip">Tắt</span></div>' +
+        '<button class="side-ghost" style="margin-top:6px">Cài đặt nhóm</button></div>'
+    : '<div class="side-block"><div class="side-label">Ngân sách nhóm <span style="margin-left:auto;font-family:var(--mono);font-weight:400;letter-spacing:0;text-transform:none;color:var(--fg-2)">61%</span></div>' +
+        '<div class="bar"><i style="width:61%"></i></div>' +
+        '<div class="m-fig">243k / 400k · còn 157k</div>' +
+        '<button class="ghost-btn" style="margin-top:8px">Cấp thêm token</button></div>' +
+      '<div class="side-block">' +
+        '<div class="side-row"><span>Liên kết</span><button class="side-ghost">+ Thêm</button></div>' +
+        '<div class="side-row"><span>Tự động chia việc</span><span class="chip" style="background:var(--accent-soft);color:var(--accent)">Bật</span></div>' +
+        '<div class="side-row"><span>Tự duyệt thay đổi</span><span class="chip">Tắt</span></div>' +
+        '<button class="side-ghost" style="margin-top:4px">Cài đặt nhóm →</button></div>';
+
+  return '<div class="side-label">Thành viên <span style="font-family:var(--mono);font-weight:400;letter-spacing:0;text-transform:none;margin-left:auto;color:var(--fg-2)">5</span></div>' +
+    warn + '<div style="margin-top:10px">' + rows + '</div>' + tail;
+}
+
+/* ---------------- before ---------------- */
+function renderBefore() {
+  const head = '<div class="mock-head">' +
+      '<span class="t-name">Nhóm Payment Gateway</span>' +
+      avatar('minh') + '<span class="t-lead">Minh</span>' +
+      '<span class="spacer"></span>' +
+      '<button class="ghost-btn">Debug Prompt (0)</button>' +
+      '<button class="ghost-btn">Cài đặt nhóm</button>' +
+    '</div>' +
+    '<div class="note-banner"><b>Thông báo hệ điều hành chưa được bật</b> Bật quyền để nhận thông báo tin nhóm.<span class="x">✕</span></div>';
+
+  const rows = MSGS.map((m) => {
+    const a = AGENTS[m.from];
+    if (m.from === 'user') {
+      return '<div class="b-row user">' +
+        '<div class="b-bubble">' + esc(m.html) + '</div>' +
+        '<div class="b-receipt">✓</div>' +
+        '<div class="b-meta"><span>' + m.time + '</span></div>' +
+      '</div>';
+    }
+    const tag = m.status === 'running' ? '<div class="b-tag">⟳ Đang làm việc</div>'
+      : m.status === 'stopped' ? '<div class="b-tag">■ Chưa hoàn tất</div>' : '';
+    return '<div class="b-row bot">' +
+      '<div class="b-author">' + avatar(m.from) + '<span class="n">' + a.name + '</span><span class="r">' + a.role + '</span>' +
+        (a.lead ? '<span style="font-size:11px;color:var(--accent)">♛</span>' : '') + '</div>' +
+      '<div class="b-bubble">' + m.html + '</div>' + tag +
+      '<div class="b-actions"><button class="ghost-btn">⤓ Xuất đoạn chat</button><button class="ghost-btn">▤ Lưu đoạn chat...</button></div>' +
+      '<div class="b-receipt">✓</div>' +
+      '<div class="b-meta"><span>' + m.time + ' PM</span><button class="icon-btn" aria-label="Sao chép">⧉</button></div>' +
+    '</div>';
+  }).join('');
+
+  const composer = '<div class="composer-before">' +
+      '<div class="box">Nhắn cho lead hoặc @ một nhân viên...</div>' +
+      '<button class="send">Gửi</button></div>';
+
+  return head + '<div class="transcript">' + rows + '</div>' + composer;
+}
+
+/* ---------------- after ---------------- */
+function renderAfter() {
+  const head = '<div class="mock-head">' +
+      '<span class="t-name">Nhóm Payment Gateway</span>' +
+      '<span class="t-lead">› Minh</span>' +
+      '<span class="spacer"></span>' +
+      '<span class="chip"><span class="dot"></span>Rảnh</span>' +
+      '<button class="icon-btn" aria-label="Tùy chọn khác">⋯</button>' +
+    '</div>' +
+    '<div class="note-banner" style="background:var(--warn-soft);border-color:var(--warn);color:var(--fg-2)">' +
+      '<b>Chưa bật thông báo hệ điều hành.</b> Bật để nhận tin khi đang ở cửa sổ khác.' +
+      '<button class="ghost-btn" style="margin-left:auto">Bật</button>' +
+    '</div>';
+
+  let out = '<div class="a-day">Hôm nay · 14/11/2026</div>';
+  let prev = null;
+
+  MSGS.forEach((m, i) => {
+    const a = AGENTS[m.from];
+    const grouped = prev === m.from && m.from !== 'user';
+    const last = MSGS[i + 1] === undefined || MSGS[i + 1].from !== m.from;
+
+    if (m.from === 'user') {
+      out += '<div class="a-group user">' +
+        '<div class="a-body"><div class="a-bubble user">' + m.html + '</div>' +
+        '<div class="a-meta"><span>' + m.time + '</span><span class="receipt" title="Minh đã đọc 18:07">✓✓</span>' +
+          '<span class="a-tools"><button class="icon-btn" aria-label="Sao chép">⧉</button></span></div></div>' +
+      '</div>';
+      prev = m.from;
+      return;
+    }
+
+    if (!grouped) {
+      out += '<div class="a-group">' +
+        '<div class="a-head">' + avatar(m.from) + '<span class="n">' + a.name + '</span><span class="r">' + a.role + '</span>' +
+          (m.kind ? '<span class="kind">' + m.kind + '</span>' : '') +
+        '</div><div class="a-body">';
+    }
+    out += '<div class="a-bubble' + (a.lead ? ' lead' : '') + '">' + m.html + '</div>';
+    if (last) {
+      const st = m.status === 'running' ? '<span class="st live">đang làm việc</span>'
+        : m.status === 'stopped' ? '<span class="st">chưa hoàn tất</span>' : '';
+      out += '<div class="a-meta"><span>' + m.time + '</span>' + st +
+        '<span class="a-tools"><button class="icon-btn" aria-label="Sao chép">⧉</button><button class="icon-btn" aria-label="Thêm">⋯</button></span></div>' +
+        '</div></div>';
+    }
+    prev = m.from;
+  });
+
+  const composer = '<div class="composer">' +
+      '<div class="box"><span class="grow">Nhắn cho lead hoặc @ một nhân viên…</span>' +
+        '<button class="icon-btn" aria-label="Mở rộng">⤢</button>' +
+        '<button class="icon-btn" aria-label="Đính kèm">⌘</button>' +
+        '<button class="send">Gửi</button></div>' +
+      '<div class="hints"><span class="hint"><b>@</b> gọi tên</span><span class="hint"><b>#</b> CR / hệ thống</span><span class="hint"><b>/</b> lệnh</span></div>' +
+    '</div>';
+
+  return head + '<div class="transcript">' + out + '</div>' + composer;
+}
+
+/* ---------------- change log ---------------- */
+const LOG = [
+  { p: 'p0', what: 'Hành động chỉ hiện khi rê chuột', why: 'Bỏ 2 nút "Xuất đoạn chat" / "Lưu đoạn chat..." khỏi mọi tin. Còn 2 icon nhỏ, hiện khi hover hoặc focus. <code>ChatMessageBubble.tsx:1449</code>' },
+  { p: 'p0', what: 'Meta gộp một dòng', why: 'Giờ · trạng thái · dấu đã đọc nằm chung một hàng 10.5px thay vì 3 hàng riêng.' },
+  { p: 'p0', what: 'Dấu đã đọc chỉ cho tin của bạn', why: 'Tin của agent không còn ✓ vô nghĩa. ✓✓ nghĩa là "có người đã đọc", hover hiện ai và lúc nào. <code>ChatMessageBubble.tsx:1305</code>' },
+  { p: 'p0', what: 'Gom tin liên tiếp cùng người', why: 'Avatar và tên chỉ hiện ở tin đầu nhóm; tin sau thụt lề thẳng hàng, cách nhau 4px thay vì 12px.' },
+  { p: 'p1', what: 'Giờ 24h + mốc ngày', why: '18:06 thay cho 06:06 PM. Thêm divider "Hôm nay · 14/11/2026" khi đổi ngày. <code>ChatMessageBubble.tsx:378</code>' },
+  { p: 'p1', what: 'Bong bóng hẹp hơn, phân vai bằng màu', why: 'Agent 82%, bạn 72%. Lead và tổng hợp có nền accent nhạt + viền trái 3px; báo cáo nhân viên để trắng.' },
+  { p: 'p1', what: 'Header một dòng', why: 'Tên nhóm › lead + chip trạng thái. Debug Prompt chuyển vào menu ⋯, bỏ nút Cài đặt trùng với sidebar. <code>TeamWorkspace.tsx:827</code>' },
+  { p: 'p1', what: 'Cảnh báo thành dải mỏng', why: 'Thông báo quyền và lỗi cấu hình không còn chiếm 120px đầu hội thoại.' },
+  { p: 'p2', what: 'Sidebar hai dòng mỗi người', why: 'Tên · vai trò, rồi 41k / 100k. Bỏ phần "vào / ra" khỏi UI, giữ trong tooltip. Thanh đổi màu theo ngưỡng. <code>TeamSidebar.tsx:190</code>' },
+  { p: 'p2', what: 'Gợi ý @ # / dưới ô soạn', why: 'Ba chip nhỏ thay vì placeholder dài.' }
+];
+
+const FOOT = [
+  ['Phạm vi', 'UI transcript + sidebar, không đổi schema'],
+  ['Ước lượng', '~200 dòng, 4 file'],
+  ['Giữ nguyên', 'coordinator, event log, read cursor, test']
+];
+
+function paint(mode) {
+  document.getElementById('side').innerHTML = sidebar(mode);
+  document.getElementById('main').innerHTML = mode === 'before' ? renderBefore() : renderAfter();
+  document.getElementById('frame').dataset.mode = mode;
+  const b = document.getElementById('btn-before');
+  const a = document.getElementById('btn-after');
+  b.setAttribute('aria-pressed', String(mode === 'before'));
+  a.setAttribute('aria-pressed', String(mode === 'after'));
+  try { localStorage.setItem('teamchat-mode', mode); } catch (e) {}
+}
+
+document.getElementById('log-list').innerHTML = LOG.map((row) =>
+  '<li><span class="pri ' + row.p + '">' + row.p.toUpperCase() + '</span>' +
+  '<div><div class="what">' + row.what + '</div><div class="why">' + row.why + '</div></div></li>'
+).join('');
+
+document.getElementById('foot').innerHTML = FOOT.map(([a, b]) =>
+  '<span><b>' + a + '</b> ' + b + '</span>'
+).join('');
+
+document.getElementById('btn-before').addEventListener('click', () => paint('before'));
+document.getElementById('btn-after').addEventListener('click', () => paint('after'));
+
+let start = 'after';
+try { const saved = localStorage.getItem('teamchat-mode'); if (saved === 'before' || saved === 'after') start = saved; } catch (e) {}
+paint(start);
+</script>
