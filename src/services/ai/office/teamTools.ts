@@ -308,32 +308,53 @@ async function readTeamTurn(args: Record<string, any>, ctx: TeamToolContext): Pr
   });
 }
 
-/** D-24: the only path by which a skill body ever reaches a model. */
-async function readSkill(ctx: TeamToolContext): Promise<string> {
-  if (!ctx.skillId) {
-    return JSON.stringify(refuse('SKILL_NOT_ASSIGNED', 'Nhân viên này chưa được gán kỹ năng nào.'));
-  }
-  // D-18: exact compound-index lookup, never `.between(...).last()` — that would serve the
-  // highest version ≤ the pin, which is different content.
+/**
+ * D-18: exact compound-index lookup, never `.between(...).last()` — that would serve the
+ * highest version ≤ the pin, which is different content.
+ *
+ * WR-02/IN-05: a present pin must resolve to an approved row. Falling back to the current row
+ * would serve content newer than the assignment's pin — the pin would silently stop meaning
+ * anything. Only an absent pin (mention-started turn) legitimately reads the current row.
+ * The refusal says what the agent can still do: it cannot change its own pin mid-run.
+ */
+const PIN_UNRESOLVED_MESSAGE =
+  'Không đọc được đúng phiên bản kỹ năng đã ghim cho lượt chạy này. Hãy dùng phần mô tả kỹ năng ở trên.';
+
+/** The subset both `aiSkills` and `aiSkillVersions` rows carry. */
+interface SkillContent {
+  name: string;
+  description: string;
+  body: string;
+}
+
+async function resolvePinnedSkill(
+  skillId: string,
+  ctx: TeamToolContext
+): Promise<{ skill: SkillContent } | { refusal: TeamToolRefusal }> {
   const pinned =
     ctx.skillVersion === undefined
       ? undefined
       : await ctx.db.aiSkillVersions
           .where('[skillId+version]')
-          .equals([ctx.skillId, ctx.skillVersion])
+          .equals([skillId, ctx.skillVersion])
           .first();
-  // WR-02: a present pin must resolve. Falling back to the current row would serve content
-  // newer than the assignment's pin — the pin would silently stop meaning anything. Only an
-  // absent pin (mention-started turn) legitimately reads the current row.
   if (ctx.skillVersion !== undefined && pinned?.status !== 'approved') {
-    return JSON.stringify(
-      refuse('SKILL_NOT_ASSIGNED', 'Không đọc được đúng phiên bản kỹ năng đã ghim.')
-    );
+    return { refusal: refuse('SKILL_NOT_ASSIGNED', PIN_UNRESOLVED_MESSAGE) };
   }
-  const skill = pinned ?? (await ctx.db.aiSkills.get(ctx.skillId));
-  if (!skill) {
+  const skill = pinned ?? (await ctx.db.aiSkills.get(skillId));
+  return skill
+    ? { skill }
+    : { refusal: refuse('SKILL_NOT_ASSIGNED', 'Nhân viên này chưa được gán kỹ năng nào.') };
+}
+
+/** D-24: the only path by which a skill body ever reaches a model. */
+async function readSkill(ctx: TeamToolContext): Promise<string> {
+  if (!ctx.skillId) {
     return JSON.stringify(refuse('SKILL_NOT_ASSIGNED', 'Nhân viên này chưa được gán kỹ năng nào.'));
   }
+  const resolved = await resolvePinnedSkill(ctx.skillId, ctx);
+  if ('refusal' in resolved) return JSON.stringify(resolved.refusal);
+  const { skill } = resolved;
   // CR-07: tool results bypass the prompt assembler, so the untrusted-data boundary
   // must be applied here, where the provenance is known. D-22: approved is not trusted.
   // CR-04/IN-07: the name is model-authored after approval — wrap it, never return it raw.
@@ -554,10 +575,18 @@ async function proposeSkillVersion(
   if (!ctx.skillId) {
     return JSON.stringify(refuse('SKILL_NOT_ASSIGNED', 'Nhân viên này chưa được gán kỹ năng nào.'));
   }
-  const skill = await ctx.db.aiSkills.get(ctx.skillId);
-  if (!skill) {
-    return JSON.stringify(refuse('SKILL_NOT_ASSIGNED', 'Nhân viên này chưa được gán kỹ năng nào.'));
-  }
+  // CR-01: the base is what the RUN is pinned to, not whatever is approved now. Reading the
+  // current row let a pinned agent propose a revert of a version approved mid-batch, and the
+  // resulting `baseVersion === currentApproved` made the proposal look fresh — approving it
+  // silently discarded the newer content. Same pin plumbing as `read_skill`; refuse rather
+  // than re-base, because a silent re-base is the bug.
+  const resolved = await resolvePinnedSkill(ctx.skillId, ctx);
+  if ('refusal' in resolved) return JSON.stringify(resolved.refusal);
+  const skill = resolved.skill;
+  // WR-06: read the base number once and pass it into the repo, so the stored `baseVersion`
+  // and the diff label cannot disagree if an approval lands between the two reads.
+  const baseVersion =
+    ctx.skillVersion ?? (await getLatestApprovedVersionNumber(ctx.skillId, ctx.db));
 
   const name = typeof args.name === 'string' ? args.name.trim() : '';
   const description = typeof args.description === 'string' ? args.description.trim() : '';
@@ -590,9 +619,6 @@ async function proposeSkillVersion(
     );
   }
 
-  // WR-06: read the base number once and pass it into the repo, so the stored `baseVersion`
-  // and the diff label cannot disagree if an approval lands between the two reads.
-  const baseVersion = await getLatestApprovedVersionNumber(ctx.skillId, ctx.db);
   const diff = prepareSkillVersionDiff({
     skillId: ctx.skillId,
     base: { name: skill.name, description: skill.description, body: skill.body },

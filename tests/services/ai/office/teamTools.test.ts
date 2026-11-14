@@ -992,4 +992,72 @@ describe('teamTools — propose_skill_version (AIO-SKILL-02, D-01..D-06)', () =>
     expect(withEvidence?.evidence).toBe('Lượt chạy phát hiện thiếu bước xác nhận.');
     expect(withoutEvidence?.body).toBe(PROPOSAL.body + '\nBước 3. Ghi nhận lại.');
   });
+
+  /** Seeds approved version rows plus the matching current `aiSkills` row. */
+  async function seedApprovedVersions(bodies: string[]): Promise<void> {
+    const now = new Date().toISOString();
+    for (const [index, body] of bodies.entries()) {
+      await db.aiSkillVersions.add({
+        id: generateId(),
+        skillId,
+        version: index + 1,
+        status: 'approved',
+        name: 'Kiểm thử hồi quy',
+        description: `Mô tả bản ${index + 1}`,
+        body,
+        createdAt: now,
+        decidedAt: now,
+      });
+    }
+    const latest = bodies[bodies.length - 1]!;
+    await db.aiSkills.put({
+      id: skillId,
+      name: 'Kiểm thử hồi quy',
+      description: `Mô tả bản ${bodies.length}`,
+      body: latest,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  // CR-01: criterion 5 must hold on the WRITE side too. A run pinned to v2 whose skill got v3
+  // approved mid-batch must diff against v2 — not against the current row, which would make
+  // the proposal look fresh (`baseVersion === currentApproved`) while reverting v3.
+  it('propose_skill_version diffs against the pinned version, not the current row (CR-01)', async () => {
+    await seedApprovedVersions(['# V1', '# V2', '# V3-IMPORTANT']);
+
+    const result = JSON.parse(
+      await executeTeamTool(
+        'propose_skill_version',
+        { name: 'Kiểm thử hồi quy', description: 'Mô tả bản 2', body: '# V2 sua\nThem buoc.' },
+        ctx({ skillVersion: 2 })
+      )
+    );
+
+    expect(result.diffText).toContain('-# V2');
+    expect(result.diffText).not.toContain('-# V3-IMPORTANT');
+    expect(result.diffText).not.toContain('V3-IMPORTANT');
+    expect(result.diffText).toContain('bản 2');
+
+    const [row] = await db.aiSkillVersions.where('status').equals('pending').toArray();
+    expect(row?.baseVersion).toBe(2);
+    // The stale check the card runs compares baseVersion against the live maximum: 2 < 3,
+    // so the Approve button is disabled instead of silently discarding v3.
+    expect(row!.baseVersion!).toBeLessThan(3);
+  });
+
+  it('propose_skill_version refuses an unresolved pin and writes no row (CR-01)', async () => {
+    await seedApprovedVersions(['# V1', '# V2']);
+
+    const result = JSON.parse(
+      await executeTeamTool(
+        'propose_skill_version',
+        { name: 'Kiểm thử hồi quy', description: 'd', body: '# Khác' },
+        ctx({ skillVersion: 99 })
+      )
+    );
+
+    expect(result).toMatchObject({ refused: true, code: 'SKILL_NOT_ASSIGNED' });
+    expect(await db.aiSkillVersions.where('status').equals('pending').count()).toBe(0);
+  });
 });
