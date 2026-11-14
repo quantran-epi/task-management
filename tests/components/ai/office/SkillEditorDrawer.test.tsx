@@ -201,6 +201,27 @@ describe('SkillEditorDrawer — pending queue and version history (AIO-SKILL-01/
     expect(decided).not.toHaveTextContent('đề xuất lại');
   });
 
+  // WR-02: D-25 keeps the decided card visible, but the badge and the header count only
+  // what is still pending — `SkillCard` reads 0 at the same moment.
+  it('the pending badge and header count only still-pending proposals (WR-02)', async () => {
+    const row = await seedPending();
+    renderDrawer(skill);
+
+    expect(await screen.findByTestId('skill-editor-pending-badge')).toHaveTextContent(
+      '1 chờ duyệt'
+    );
+
+    const card = screen.getByTestId(`skill-pending-card-${row.id}`);
+    fireEvent.click(within(card).getByRole('button', { name: 'Chấp thuận' }));
+
+    await waitFor(() =>
+      expect(screen.queryByTestId('skill-editor-pending-badge')).not.toBeInTheDocument()
+    );
+    // The card itself stays (D-25), only the count drops.
+    expect(screen.getByTestId(`skill-pending-card-${row.id}`)).toBeInTheDocument();
+    expect(screen.getByTestId('skill-pending-section')).not.toHaveTextContent('Chờ duyệt (1)');
+  });
+
   it('the pending card subtitle names the skill without inventing a proposer', async () => {
     const row = await seedPending();
     renderDrawer(skill);

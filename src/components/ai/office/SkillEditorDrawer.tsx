@@ -159,7 +159,10 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
       highestApproved: versions
         .filter((row) => row.status === 'approved')
         .reduce((max, row) => Math.max(max, row.version ?? 0), 0),
-      pendingCount: rows.length,
+      // WR-02: the badge and the header count what is still awaiting a decision. `rows` also
+      // carries this session's decided cards (D-25 keeps them visible), so counting it would
+      // claim a pending proposal that no longer exists — `SkillCard` reads 0 at the same time.
+      pendingCount: pending.filter((row) => patches.has(row.id)).length,
     };
   }, [versions, skill, recentlyDecided]);
 
@@ -313,7 +316,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
           ]}
         />
 
-        {skill !== null && pendingCount > 0 && (
+        {skill !== null && pendingSectionRows.length > 0 && (
           <div
             data-testid="skill-pending-section"
             style={{
@@ -324,7 +327,11 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
               gap: 8,
             }}
           >
-            <div style={{ fontSize: 14, fontWeight: 600 }}>{`Chờ duyệt (${pendingCount})`}</div>
+            {/* WR-02: the header counts only still-pending rows. The decided cards below
+                stay visible until the drawer closes (D-25), so the section outlives them. */}
+            {pendingCount > 0 && (
+              <div style={{ fontSize: 14, fontWeight: 600 }}>{`Chờ duyệt (${pendingCount})`}</div>
+            )}
             {pendingSectionRows.map(({ row, patch }) => (
               <div key={row.id} data-testid={`skill-pending-card-${row.id}`}>
                 <PatchDiffApprovalCard
