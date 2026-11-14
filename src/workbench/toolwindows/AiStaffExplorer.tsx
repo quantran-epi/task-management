@@ -441,9 +441,8 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
           <Alert
             type="warning"
             showIcon
-            closable
-            message={refusal}
-            onClose={() => setRefusal(null)}
+            title={refusal}
+            closable={{ onClose: () => setRefusal(null) }}
             data-testid="ai-staff-delete-error"
           />
         </div>
