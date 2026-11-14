@@ -33,10 +33,15 @@ const UNTRUSTED_CLOSE = 'KẾT THÚC DỮ LIỆU KHÔNG ĐÁNG TIN';
  * block, impersonating policy. Every delimiter-shaped run inside the body is redacted.
  *
  * CR-01: the phrase is ordinary Vietnamese ("untrusted data"), so a match needs the delimiter
- * SHAPE *and* a delimiter TAIL — an em-dash label, a closing `]`, or end of line. Round 3
- * anchored the head but left the bare `KẾT THÚC` prefix branch, so "kết thúc dữ liệu không
- * đáng tin cậy" (ordinary prose, `cậy` after `TIN`) was still deleted wholesale. The tail
- * lookahead is what makes prose unmatchable while every forged shape still redacts.
+ * SHAPE *and* a delimiter TAIL — a separator introducing a label, a closing `]`, or end of
+ * line. Round 3 anchored the head but left the bare `KẾT THÚC` prefix branch, so "kết thúc dữ
+ * liệu không đáng tin cậy" (ordinary prose, `cậy` after `TIN`) was still deleted wholesale.
+ * Round 4 narrowed the tail to an em dash only, which let every forged tag separated by `-`,
+ * `–`, `:`, `|` or `=` through. The tail set below is exactly the separators a label can use;
+ * prose is followed by a letter or a sentence period, neither of which is in it.
+ *
+ * Do NOT widen it to `[^\p{L}\p{N}\s]`: that matches the sentence-ending period, so ordinary
+ * prose ending `… KHÔNG ĐÁNG TIN.` would be redacted.
  *
  * WR-04: the tag is Vietnamese text, so the match must survive the shapes a model or macOS
  * actually produces — any horizontal whitespace run (double space, tab, NBSP) and NFD
@@ -44,14 +49,16 @@ const UNTRUSTED_CLOSE = 'KẾT THÚC DỮ LIỆU KHÔNG ĐÁNG TIN';
  * without ever crossing a line boundary.
  */
 const DELIMITER_SHAPE =
-  /(?:\[[^\S\n]*(?:KẾT[^\S\n]+THÚC[^\S\n]+)?|KẾT[^\S\n]+THÚC[^\S\n]+)DỮ[^\S\n]+LIỆU[^\S\n]+KHÔNG[^\S\n]+ĐÁNG[^\S\n]+TIN(?=[^\S\n]*(?:—|\]|$))[^\]\n]*\]?/gimu;
+  /(?:\[[^\S\n]*(?:KẾT[^\S\n]+THÚC[^\S\n]+)?|KẾT[^\S\n]+THÚC[^\S\n]+)DỮ[^\S\n]+LIỆU[^\S\n]+KHÔNG[^\S\n]+ĐÁNG[^\S\n]+TIN(?=[^\S\n]*(?:[—–\-:|=\]]|$))[^\]\n]*\]?/gimu;
 
 function neutralizeDelimiters(text: string): string {
-  // CR-04: `\p{Cf}` (ZWSP, soft hyphen, ZWJ) is invisible, and `[^\S\n]` excludes it — a tag
-  // split by one would pass through and land at the wrapper's own level. Fold to a space
-  // first; the regex can then see the whole tag.
+  // CR-04/WR-04: invisible characters are excluded by `[^\S\n]`, so a tag split by one would
+  // pass through and land at the wrapper's own level. `\p{Default_Ignorable_Code_Point}` is
+  // the complete set — `\p{Cf}` alone missed U+3164, U+FFA0, U+FE0F, U+034F and U+115F/1160,
+  // which are default-ignorable but not format characters. Fold to a space first; the regex
+  // can then see the whole tag.
   return text
-    .replace(/\p{Cf}/gu, ' ')
+    .replace(/\p{Default_Ignorable_Code_Point}/gu, ' ')
     .normalize('NFC')
     .replace(DELIMITER_SHAPE, '[redacted-tag]');
 }
