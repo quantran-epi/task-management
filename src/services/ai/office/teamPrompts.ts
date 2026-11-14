@@ -32,10 +32,11 @@ const UNTRUSTED_CLOSE = 'KẾT THÚC DỮ LIỆU KHÔNG ĐÁNG TIN';
  * otherwise place the closing tag inside itself and land everything after it outside the
  * block, impersonating policy. Every delimiter-shaped run inside the body is redacted.
  *
- * CR-01: the phrase is ordinary Vietnamese ("untrusted data"), so the match is anchored to
- * the delimiter SHAPE — a leading `[` or the `KẾT THÚC` prefix — and the tail may not cross
- * a line. Matching the bare words, or letting `\s` span newlines as round 2's WR-04 widening
- * did, deleted legitimate body text from every prompt this guards.
+ * CR-01: the phrase is ordinary Vietnamese ("untrusted data"), so a match needs the delimiter
+ * SHAPE *and* a delimiter TAIL — an em-dash label, a closing `]`, or end of line. Round 3
+ * anchored the head but left the bare `KẾT THÚC` prefix branch, so "kết thúc dữ liệu không
+ * đáng tin cậy" (ordinary prose, `cậy` after `TIN`) was still deleted wholesale. The tail
+ * lookahead is what makes prose unmatchable while every forged shape still redacts.
  *
  * WR-04: the tag is Vietnamese text, so the match must survive the shapes a model or macOS
  * actually produces — any horizontal whitespace run (double space, tab, NBSP) and NFD
@@ -43,10 +44,16 @@ const UNTRUSTED_CLOSE = 'KẾT THÚC DỮ LIỆU KHÔNG ĐÁNG TIN';
  * without ever crossing a line boundary.
  */
 const DELIMITER_SHAPE =
-  /(?:\[[^\S\n]*(?:KẾT[^\S\n]+THÚC[^\S\n]+)?|KẾT[^\S\n]+THÚC[^\S\n]+)DỮ[^\S\n]+LIỆU[^\S\n]+KHÔNG[^\S\n]+ĐÁNG[^\S\n]+TIN[^\]\n]*\]?/giu;
+  /(?:\[[^\S\n]*(?:KẾT[^\S\n]+THÚC[^\S\n]+)?|KẾT[^\S\n]+THÚC[^\S\n]+)DỮ[^\S\n]+LIỆU[^\S\n]+KHÔNG[^\S\n]+ĐÁNG[^\S\n]+TIN(?=[^\S\n]*(?:—|\]|$))[^\]\n]*\]?/gimu;
 
 function neutralizeDelimiters(text: string): string {
-  return text.normalize('NFC').replace(DELIMITER_SHAPE, '[redacted-tag]');
+  // CR-04: `\p{Cf}` (ZWSP, soft hyphen, ZWJ) is invisible, and `[^\S\n]` excludes it — a tag
+  // split by one would pass through and land at the wrapper's own level. Fold to a space
+  // first; the regex can then see the whole tag.
+  return text
+    .replace(/\p{Cf}/gu, ' ')
+    .normalize('NFC')
+    .replace(DELIMITER_SHAPE, '[redacted-tag]');
 }
 
 /**
