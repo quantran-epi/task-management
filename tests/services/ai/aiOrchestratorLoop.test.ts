@@ -509,6 +509,76 @@ describe('runAiOrchestratorLoop', () => {
     }
   });
 
+  // WR-02: the advertised payload IS the allowlist. `dispatchAiToolCall` routes on
+  // `AI_DATABASE_TOOLS` membership alone, so without this gate a provider that emits an
+  // unadvertised name (the lead's `get_item_details`, excluded precisely because it returns
+  // raw user text) still executed and returned it. The refusal is a tool result, so the
+  // protocol stays valid and the model can correct itself.
+  describe('advertised-tool allowlist (WR-02)', () => {
+    const advertised = [
+      { type: 'function', function: { name: 'query_tasks', parameters: {} } },
+      { type: 'function', function: { name: 'get_linked_context', parameters: {} } },
+    ];
+
+    const emitThenText = (name: string) => {
+      let callCount = 0;
+      mockStreamChatEvents.mockImplementation(async function* () {
+        callCount += 1;
+        if (callCount === 1) {
+          yield {
+            type: 'tool_calls',
+            calls: [{ id: 'call_x', type: 'function', function: { name, arguments: '{}' } }],
+          };
+        } else {
+          yield { type: 'text', delta: 'Xong.' };
+        }
+      });
+    };
+
+    it('refuses a tool the turn never advertised and never dispatches it', async () => {
+      emitThenText('get_item_details');
+      const executeToolFn = vi.fn().mockResolvedValue('{"item":{"description":"raw"}}');
+      const onToolResult = vi.fn();
+
+      const result = await runAiOrchestratorLoop({
+        endpoint: 'https://api.example.com', apiKey: 'test-key', model: 'test-model',
+        messages: [], db: testDb, tools: advertised, executeToolFn, onToolResult,
+      });
+
+      expect(executeToolFn).not.toHaveBeenCalled();
+      const toolMsg = result.messages.find((m) => m.role === 'tool');
+      expect(toolMsg?.content).toContain('không nằm trong danh sách được phép');
+      expect(toolMsg?.content).not.toContain('raw');
+      expect(onToolResult).toHaveBeenCalledWith('call_x', expect.stringContaining('không nằm trong danh sách được phép'), 0);
+    });
+
+    it('dispatches an advertised tool normally', async () => {
+      emitThenText('query_tasks');
+      const executeToolFn = vi.fn().mockResolvedValue('{"tasks":[]}');
+
+      const result = await runAiOrchestratorLoop({
+        endpoint: 'https://api.example.com', apiKey: 'test-key', model: 'test-model',
+        messages: [], db: testDb, tools: advertised, executeToolFn,
+      });
+
+      expect(executeToolFn).toHaveBeenCalledWith('query_tasks', {}, testDb, undefined);
+      const toolMsg = result.messages.find((m) => m.role === 'tool');
+      expect(toolMsg?.content).toBe('{"tasks":[]}');
+    });
+
+    it('leaves the no-payload path unchanged', async () => {
+      emitThenText('custom_lookup');
+      const executeToolFn = vi.fn().mockResolvedValue('{}');
+
+      await runAiOrchestratorLoop({
+        endpoint: 'https://api.example.com', apiKey: 'test-key', model: 'test-model',
+        messages: [], db: testDb, executeToolFn,
+      });
+
+      expect(executeToolFn).toHaveBeenCalledWith('custom_lookup', {}, testDb, undefined);
+    });
+  });
+
   describe('beforeToolRound round boundary (D-21)', () => {
     const toolThenText = () => {
       let callCount = 0;

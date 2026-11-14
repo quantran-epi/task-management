@@ -468,8 +468,10 @@ describe('aiTools', () => {
       const res = JSON.parse(resJson);
       expect(res.totalCount).toBe(2);
       const t1 = res.tasks.find((t: any) => t.id === 'task-1');
-      expect(t1.crName).toBe('Banking Platform');
-      expect(t1.systemName).toBe('Backend API');
+      // WR-02: the resolved names are user-authored free text, so they carry the same
+      // untrusted-data boundary `get_linked_context` applies.
+      expect(t1.crName).toContain('Banking Platform');
+      expect(t1.systemName).toContain('Backend API');
       expect(t1.totalLoggedMinutes).toBe(135); // 90 + 45
       expect(t1.isRecurring).toBe(true);
       expect(t1.recurrenceFrequency).toBe('weekly');
@@ -485,6 +487,40 @@ describe('aiTools', () => {
       expect(c1.taskCount).toBe(2);
       expect(c1.totalEstimateMinutes).toBe(180); // 60 + 120
       expect(c1.totalLoggedMinutes).toBe(135); // 135 on task-1
+    });
+  });
+
+  // WR-02: the three read tools that stay advertised to the lead return user-authored free
+  // text. Removing `get_item_details` from the allowlist only hid the disagreement — the same
+  // raw text still reached the lead through these. Each now applies the same boundary.
+  describe('WR-02: advertised read tools wrap their free text', () => {
+    it('wraps task description, notes, names and reminder note in query_tasks', async () => {
+      const res = JSON.parse(await executeAiTool('query_tasks', { crId: 'cr-1' }, mockDb));
+      const t1 = res.tasks.find((t: any) => t.id === 'task-1');
+      for (const [label, value] of [
+        ['description', t1.description],
+        ['notes', t1.notes],
+        ['crName', t1.crName],
+        ['systemName', t1.systemName],
+      ] as const) {
+        expect(value, label).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
+        expect(value, label).toContain('KẾT THÚC DỮ LIỆU KHÔNG ĐÁNG TIN');
+      }
+      expect(t1.description).toContain('Core unit test coverage');
+      expect(t1.notes).toContain('Some task notes');
+    });
+
+    it('wraps the CR description in query_change_requests', async () => {
+      const res = JSON.parse(await executeAiTool('query_change_requests', {}, mockDb));
+      const c1 = res.changeRequests.find((c: any) => c.id === 'cr-1');
+      expect(c1.description).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
+      expect(c1.description).toContain('Main banking core');
+    });
+
+    it('wraps the note body snippet in query_notes', async () => {
+      const res = JSON.parse(await executeAiTool('query_notes', { search: 'Swagger' }, mockDb));
+      expect(res.notes[0].bodySnippet).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
+      expect(res.notes[0].bodySnippet).toContain('Swagger endpoints for auth service');
     });
   });
 
@@ -720,8 +756,11 @@ describe('aiTools', () => {
       expect(exactRes.tasks[0].id).toBe('task-1');
       expect(exactRes.tasks[0].createdAt).toBe('2026-10-01T08:00:00.000Z');
       expect(exactRes.tasks[0].updatedAt).toBe('2026-10-02T08:00:00.000Z');
-      expect(exactRes.tasks[0].notes).toBe('Some task notes');
-      expect(exactRes.tasks[0].description).toBe('Core unit test coverage');
+      expect(exactRes.tasks[0].notes).toContain('Some task notes');
+      expect(exactRes.tasks[0].description).toContain('Core unit test coverage');
+      // WR-02: wrapped, not raw — the boundary is visible on the value itself.
+      expect(exactRes.tasks[0].notes).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
+      expect(exactRes.tasks[0].description).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
 
       // createdAfter
       const afterRes = JSON.parse(

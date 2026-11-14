@@ -3,6 +3,7 @@ import { APP_NAME } from '../../constants/app';
 import type { Task, ChangeRequest, System, Note, ActiveTimer, ReminderItem } from '../../types/models';
 import { NOTIFICATION_SETTINGS_KEY, DEFAULT_NOTIFICATION_SETTINGS } from '../../types/notifications';
 import { getTodayDateString } from '../../utils/date';
+import { wrapUntrusted } from './untrustedData';
 import { getEffectiveDailyCapacity } from '../../utils/capacity';
 import { inspectDateCapacity } from '../../utils/feasibility';
 import { filterSessionsByPeriod, aggregateWorkTypeBreakdown } from '../../utils/analytics';
@@ -2081,6 +2082,15 @@ export interface ExecuteAiToolOptions {
   crScopeId?: string;
 }
 
+/**
+ * WR-02: the read tools that stay advertised to the lead return user-authored free text, so
+ * they apply the same untrusted-data boundary `get_linked_context` applies. One helper, so a
+ * new free-text field cannot be added raw by accident.
+ */
+function wrapField(label: string, value: unknown): unknown {
+  return typeof value === 'string' ? wrapUntrusted(label, value) : value;
+}
+
 /** Tools whose first argument identifies a task; the task's `crId` must match the turn scope. */
 const TASK_SCOPED_TOOLS = new Set([
   'update_task',
@@ -2275,8 +2285,11 @@ export async function executeAiTool(
           return {
             id: t.id,
             name: t.name,
-            description: t.description ?? null,
-            notes: t.notes ?? null,
+            // WR-02: user-authored free text is the same provenance `get_linked_context`
+            // wraps. This tool stays in `LEAD_TOOL_ALLOWLIST`, so its result carries the
+            // boundary too — otherwise the two read paths disagree again.
+            description: wrapField(`MÔ TẢ TÁC VỤ ${t.id}`, t.description),
+            notes: wrapField(`GHI CHÚ TÁC VỤ ${t.id}`, t.notes),
             status: t.status,
             priority: t.priority,
             progress: t.progress,
@@ -2289,15 +2302,15 @@ export async function executeAiTool(
             workType: t.workType ?? null,
             crId: t.crId ?? null,
             crCode: c?.code ?? null,
-            crName: c?.name ?? null,
+            crName: wrapField(`TÊN CR ${t.id}`, c?.name),
             systemId: t.systemId ?? null,
-            systemName: s?.name ?? null,
+            systemName: wrapField(`TÊN HỆ THỐNG ${t.id}`, s?.name),
             checklistCount: t.checklist?.length ?? 0,
             checklistDoneCount: t.checklist?.filter((c) => c.done).length ?? 0,
             isRecurring: Boolean(t.isRecurring),
             recurrenceFrequency: t.recurrenceFrequency ?? null,
             reminderDate: t.reminderDate ?? null,
-            reminderNote: t.reminderNote ?? null,
+            reminderNote: wrapField(`GHI CHÚ NHẮC ${t.id}`, t.reminderNote),
             remindersCount: t.reminders?.length ?? 0,
             opsOwners: t.opsOwners ?? [],
             businessAnalysts: t.businessAnalysts ?? [],
@@ -2367,7 +2380,8 @@ export async function executeAiTool(
             type: c.type,
             status: c.status,
             deadline: c.deadline ?? null,
-            description: c.description ?? null,
+            // WR-02: the CR description is user-authored free text — same boundary as above.
+            description: wrapField(`MÔ TẢ CR ${c.id}`, c.description),
             targets: c.targets.map((t) => ({
               systemId: t.systemId,
               featureBranch: t.featureBranch ?? null,
@@ -3044,7 +3058,11 @@ export async function executeAiTool(
             type: n.type || 'quick_note',
             parentId: n.parentId ?? null,
             tags: n.tags || [],
-            bodySnippet: n.body.length > 200 ? `${n.body.slice(0, 200)}...` : n.body,
+            // WR-02: the note body is user-authored free text — same boundary as above.
+            bodySnippet: wrapField(
+              `NỘI DUNG GHI CHÚ ${n.id}`,
+              n.body.length > 200 ? `${n.body.slice(0, 200)}...` : n.body
+            ),
             isPinned: n.isPinned,
             attachmentsCount: attachmentCountMap.get(n.id) || 0,
             entityType: n.entityType ?? 'standalone',

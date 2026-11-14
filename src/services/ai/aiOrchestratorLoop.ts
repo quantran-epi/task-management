@@ -17,6 +17,12 @@ export interface DispatchAiToolCallOptions extends ExecuteMcpToolOptions {
   crScopeId?: string;
 }
 
+/** One definition of "this is a local DB tool", shared by dispatch and the WR-02 gate. */
+function isLocalDbTool(name: string): boolean {
+  const normalized = normalizeToolName(name);
+  return AI_DATABASE_TOOLS.some((t) => normalizeToolName(t.function.name) === normalized);
+}
+
 /** Default tool dispatch: local DB tools first, dynamic MCP tools otherwise. */
 export async function dispatchAiToolCall(
   name: string,
@@ -26,10 +32,7 @@ export async function dispatchAiToolCall(
   options?: DispatchAiToolCallOptions
 ): Promise<string> {
   const normalized = normalizeToolName(name);
-  const isLocalDbTool = AI_DATABASE_TOOLS.some(
-    (t) => normalizeToolName(t.function.name) === normalized
-  );
-  return isLocalDbTool
+  return isLocalDbTool(normalized)
     ? executeAiTool(
         name,
         args,
@@ -212,6 +215,23 @@ export async function runAiOrchestratorLoop(
   // away; measure them once to know how much of the window is unavoidable.
   const toolsChars = tools && tools.length > 0 ? JSON.stringify(tools).length : 0;
   const fixedOverheadTokens = Math.ceil(toolsChars / 4);
+  /**
+   * WR-02: the advertised payload IS the allowlist. Without this, a provider that emits a
+   * tool name nobody advertised still reached `dispatchAiToolCall`, which routes on
+   * `AI_DATABASE_TOOLS` membership alone — so the lead could run `get_item_details` (excluded
+   * from `LEAD_TOOL_ALLOWLIST` precisely because it returns raw user text) just by naming it.
+   * An empty/absent payload means "no tool set declared", which keeps the no-tools paths
+   * (synthesis pass, callers that pass their own `executeToolFn` without `tools`) unchanged.
+   */
+  const advertisedToolNames =
+    tools && tools.length > 0
+      ? new Set(
+          tools
+            .map((tool: any) => normalizeToolName(String(tool?.function?.name ?? '')))
+            .filter((name: string) => name.length > 0)
+        )
+      : null;
+
   const tokenBudget = contextWindowTokens
     ? Math.floor(contextWindowTokens * compactAtRatio)
     : 0;
@@ -412,6 +432,35 @@ export async function runAiOrchestratorLoop(
             continue;
           }
         }
+      }
+
+      // WR-02: a DB tool the turn never advertised is refused here, before any dispatch.
+      // `dispatchAiToolCall` routes on `AI_DATABASE_TOOLS` membership alone, so without this
+      // gate a provider that emits an unadvertised name (the lead's `get_item_details`,
+      // excluded precisely because it returns raw user text) still executed and returned it.
+      // The refusal is a tool result, so the provider protocol stays valid (every
+      // `tool_call` gets a `tool` message) and the model can correct itself.
+      //
+      // Scoped to DB tools on purpose: dynamic MCP tools carry their own gate inside
+      // `mcpClient` (disabled server, read-only mode) and its message is more specific than
+      // "not advertised". Runs after the mutation gate so a mutation refusal keeps its own
+      // message too.
+      if (
+        advertisedToolNames &&
+        isLocalDbTool(tc.function.name) &&
+        !advertisedToolNames.has(normalizeToolName(tc.function.name))
+      ) {
+        const refusal = JSON.stringify({
+          error: `Công cụ '${tc.function.name}' không nằm trong danh sách được phép của lượt này.`,
+        });
+        onToolResult?.(tc.id, refusal, 0);
+        currentMessages.push({
+          role: 'tool',
+          tool_call_id: tc.id,
+          name: tc.function.name,
+          content: refusal,
+        });
+        continue;
       }
 
       onStatusChange?.('Đang thực thi...');
