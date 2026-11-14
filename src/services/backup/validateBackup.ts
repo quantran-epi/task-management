@@ -55,6 +55,9 @@ import {
  * included. Those exports are still at `schemaVersion` 13, so they pass the envelope check and
  * must keep restoring. Dropping the number from non-approved rows here mirrors the v26 Dexie
  * upgrade; the invariant then holds for both an existing database and a restored backup.
+ *
+ * IN-04: `aiSkillVersionRepo.stripNonApprovedVersionNumbers` holds the same rule for stored
+ * rows. Keep the two in step: change both or neither.
  */
 function stripNonApprovedVersionNumbers(records: unknown): unknown {
   if (!Array.isArray(records)) return records;
