@@ -58,6 +58,7 @@ Progress: [█████████░] 92%
 | 261113-ko9 | Restore last-read chat position, viewport read receipts, collapse plans and expose leader budget wait | 2026-11-13 | fa96058b | [261113-ko9-open-team-chat-at-latest-messages-and-co](./quick/261113-ko9-open-team-chat-at-latest-messages-and-co/) |
 | 261114-pxi | Add knowledge research tools (retrieve_knowledge, get_document_details) to the AI Office allowlist | 2026-11-14 | ced06e08 | [261114-pxi-add-retrieve-knowledge-and-get-document-](./quick/261114-pxi-add-retrieve-knowledge-and-get-document-/) |
 | 261114-qjh | Redesign the team chat transcript: hover actions, one meta row, user-only receipts, day dividers, grouped messages, compact sidebar | 2026-11-14 | d7b5c68c | [261114-qjh-redesign-team-chat-transcript-ui](./quick/261114-qjh-redesign-team-chat-transcript-ui/) |
+| 261114-r2m | Fix team-chat bubble borders (all four sides, border-box, inset lead accent) and grouped-row alignment | 2026-11-14 | 80c961dc | — |
 
 ## Accumulated Context
 
