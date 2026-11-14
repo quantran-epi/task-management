@@ -587,10 +587,12 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
                 bản 1.
               </div>
             ) : (
-              // D-12: view-only. No restore, no edit, no action of any kind.
-              <Collapse
-                size="small"
-                items={historyRows.map((row) => ({
+              // A skill accumulates a row per save and per approval, so the list must scroll
+              // inside the drawer instead of growing it without bound.
+              <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                <Collapse
+                  size="small"
+                  items={historyRows.map((row) => ({
                   key: row.id,
                   label: (
                     <div
@@ -669,6 +671,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
                   ),
                 }))}
               />
+              </div>
             )}
           </div>
         )}

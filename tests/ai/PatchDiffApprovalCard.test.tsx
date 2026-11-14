@@ -133,6 +133,36 @@ describe('PatchDiffApprovalCard', () => {
     expect(body.innerHTML).toBe(evidence);
   });
 
+  // UAT item 1: a long diff must not push the decision buttons off screen. The diff scrolls
+  // inside a bounded box, and the evidence panel sits BELOW the buttons, collapsed by default —
+  // so neither can displace them. jsdom has no layout; this asserts the structure that keeps
+  // them reachable, and the visual check is the ceiling.
+  it('bounds the diff and keeps the decision buttons ahead of the evidence panel (UAT)', () => {
+    const longDiff = Array.from({ length: 200 }, (_, i) => `+dòng thêm ${i}`).join('\n');
+    render(
+      <PatchDiffApprovalCard
+        patch={{ ...proposal, diffText: longDiff }}
+        variant="skill"
+        evidence="Bằng chứng dài."
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />
+    );
+
+    // The diff body owns a bounded, scrollable box.
+    const diffBox = screen.getByText('+dòng thêm 0').parentElement;
+    expect(diffBox?.getAttribute('style')).toContain('max-height');
+    expect(diffBox?.getAttribute('style')).toContain('overflow-y');
+
+    // The buttons come before the evidence panel in document order, so a collapsed panel below
+    // them cannot push them down.
+    const approve = screen.getByRole('button', { name: 'Chấp thuận' });
+    const evidenceLabel = screen.getByText('Bằng chứng');
+    expect(
+      approve.compareDocumentPosition(evidenceLabel) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
   it('renders no evidence panel when evidence is empty or whitespace', () => {
     render(
       <PatchDiffApprovalCard

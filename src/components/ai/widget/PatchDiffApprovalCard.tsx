@@ -91,17 +91,6 @@ export const PatchDiffApprovalCard: React.FC<PatchDiffApprovalCardProps> = ({
               line.startsWith('-') && !line.startsWith('---') ? delBg : 'transparent' }}>{line}</span>
         ))}
       </div>
-      {evidence !== undefined && evidence.trim() !== '' && (
-        <Collapse size="small" items={[{
-          key: 'evidence',
-          label: 'Bằng chứng',
-          children: (
-            <div style={{ maxHeight: 160, overflowY: 'auto', whiteSpace: 'pre-wrap', fontSize: 13.5, lineHeight: 1.5, color: token.colorTextSecondary }}>
-              {evidence}
-            </div>
-          ),
-        }]} />
-      )}
       {decision ? <div role="status" style={{ fontSize: 12 }}>
         {decision === 'approved'
           ? <><CheckCircleOutlined style={{ color: token.colorSuccess }} /> {variant === 'skill'
@@ -119,6 +108,20 @@ export const PatchDiffApprovalCard: React.FC<PatchDiffApprovalCardProps> = ({
           </span>
         </Tooltip>
       </div>}
+      {/* UAT: the decision buttons come first in document order. The evidence panel is
+          supplementary, so keeping it above them pushed Chấp thuận/Từ chối down the page on
+          every proposal that carried evidence. */}
+      {evidence !== undefined && evidence.trim() !== '' && (
+        <Collapse size="small" items={[{
+          key: 'evidence',
+          label: 'Bằng chứng',
+          children: (
+            <div style={{ maxHeight: 160, overflowY: 'auto', whiteSpace: 'pre-wrap', fontSize: 13.5, lineHeight: 1.5, color: token.colorTextSecondary }}>
+              {evidence}
+            </div>
+          ),
+        }]} />
+      )}
     </section>
   );
 };

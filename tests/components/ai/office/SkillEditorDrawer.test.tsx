@@ -78,6 +78,30 @@ describe('SkillEditorDrawer — pending queue and version history (AIO-SKILL-01/
     ).toBeInTheDocument();
   });
 
+  // UAT item 2: a skill accumulates a row per save and per approval, so the history list must
+  // scroll inside the drawer rather than growing it without bound. jsdom has no layout, so this
+  // asserts the scroll container exists and holds every row — the visual check is the ceiling.
+  it('scrolls the version history instead of growing the drawer (UAT)', async () => {
+    for (let i = 0; i < 12; i += 1) {
+      await updateSkill(skill.id, { body: `${BODY}\nBước phụ ${i}.` }, db);
+    }
+    renderDrawer(skill);
+
+    const history = await screen.findByTestId('skill-version-history');
+    await waitFor(() => expect(history).toHaveTextContent('Lịch sử phiên bản (13)'));
+    expect(await db.aiSkillVersions.where('skillId').equals(skill.id).count()).toBe(13);
+
+    // The scrolling wrapper is the element that owns the bounded height.
+    const scroller = history.querySelector('div[style*="overflow-y"]');
+    expect(scroller, 'scroll container').not.toBeNull();
+    expect(scroller?.getAttribute('style')).toContain('max-height');
+
+    // Every version is reachable inside it, and no row is duplicated.
+    const rows = screen.getAllByTestId(/^skill-version-row-/);
+    expect(rows).toHaveLength(13);
+    expect(new Set(rows.map((r) => r.getAttribute('data-testid'))).size).toBe(13);
+  });
+
   // IN-02: the caption promises a version, and a no-op save writes none — so the button that
   // would break the promise is unreachable.
   it('disables Save until the form actually changed (IN-02)', async () => {
