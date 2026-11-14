@@ -846,19 +846,18 @@ const attemptRow = await createAssignment(
 
 **If this table is non-empty:** A1 and A2 are genuine user decisions surfaced by research; the planner should confirm them (or record the chosen default) rather than silently pick.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Retry pin semantics (A2).** D-19 says retries get the new version immediately; the code at `:3246` inherits the source pin.
+1. **Retry pin semantics (A2) — RESOLVED by `39-CONTEXT.md` D-19a.** D-19 says retries get the new version immediately; the code at `:3246` inherits the source pin.
    - What we know: the amend site (`:2304`) must inherit (same attempt, new task); the retry site is a *new* attempt.
-   - What's unclear: whether the user considers a retry a continuation or a fresh run.
-   - Recommendation: recompute at retry (matches D-19's literal wording), and state it in the plan so it is a decision rather than an accident.
+   - **Resolution (user, 2026-11-14):** retry recomputes to the newest approved version. Encode as D-19a — dispatch computes, amend inherits, retry recomputes. Plan 03 implements it.
 
-2. **Baseline diff rendering (Claude's Discretion in CONTEXT.md).** When `aiSkills.body` is the implicit baseline there is no row to diff against.
+2. **Baseline diff rendering (Claude's Discretion in CONTEXT.md) — RESOLVED by Plan 05.**
    - What we know: `createUnifiedLineDiff(aiSkills.body, proposedBody)` works with the current row as `base` — no row needed.
-   - Recommendation: use `aiSkills.body` (and `aiSkills.name`/`description`) as the base whenever `baseVersion === 0`; label the diff `a/skill:<id> (bản hiện tại)`.
+   - **Resolution:** use `aiSkills.body` (and `aiSkills.name`/`description`) as the base whenever `baseVersion === 0`; label the diff `a/skill:<id> (bản hiện tại)`. Locked in `39-UI-SPEC.md` §1 three-field diff and implemented by Plan 05.
 
-3. **`evidence` rendering.** `evidence` is optional, ≤ 2000 chars, and currently rendered nowhere.
-   - Recommendation: render it in the card below the diff as a collapsed `Collapse` panel (the drawer already uses `Collapse` at `:141-150`), labelled "Bằng chứng". Never wrap it into the prompt — it is display-only.
+3. **`evidence` rendering — RESOLVED by Plan 05.**
+   - **Resolution:** render it in the card below the diff as a collapsed `Collapse` panel labelled "Bằng chứng", 160px max height, plain text (never Markdown), display-only. Locked in `39-UI-SPEC.md` §1 item 7.
 
 ## Recommended Plan Decomposition (advisory)
 
