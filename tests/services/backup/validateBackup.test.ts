@@ -525,6 +525,44 @@ describe('validateBackupPayload', () => {
       expect(result.errors.some((e) => e.table === 'aiSkillVersions' && e.field === 'version')).toBe(true);
     });
 
+    // WR-05: the number and the status are one invariant, checked in both directions.
+    it('rejects an approved skill version with no number', () => {
+      const { version: _dropped, ...unnumbered } = version;
+      const result = validateBackupPayload(officePayload({ aiSkillVersions: [unnumbered] }));
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some(
+          (e) =>
+            e.table === 'aiSkillVersions' &&
+            e.field === 'version' &&
+            e.message.includes('must carry a version number')
+        )
+      ).toBe(true);
+    });
+
+    it('rejects a non-approved skill version that carries a number', () => {
+      const result = validateBackupPayload(
+        officePayload({ aiSkillVersions: [{ ...version, status: 'pending' }] })
+      );
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some(
+          (e) =>
+            e.table === 'aiSkillVersions' &&
+            e.field === 'version' &&
+            e.message.includes('Only an approved skill version')
+        )
+      ).toBe(true);
+    });
+
+    it('accepts an unnumbered pending skill version', () => {
+      const { version: _dropped, ...unnumbered } = version;
+      const result = validateBackupPayload(
+        officePayload({ aiSkillVersions: [{ ...unnumbered, status: 'pending' }] })
+      );
+      expect(result.valid).toBe(true);
+    });
+
     it('rejects a team thread whose scope key is not exactly team:<entityId>', () => {
       const result = validateBackupPayload(
         officePayload({ chatThreads: [{ ...teamThread, scopeKey: `team:${TEAM_ID}:chat:${THREAD_ID}` }] })

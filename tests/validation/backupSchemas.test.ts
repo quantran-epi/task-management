@@ -161,8 +161,9 @@ describe('BackupAiSkillVersionRecordSchema evidence cap (WR-09)', () => {
   const base = {
     id: TASK_ID,
     skillId: CR_ID,
+    // WR-05: a number is legal only on an approved row.
     version: 1,
-    status: 'pending' as const,
+    status: 'approved' as const,
     name: 'Viết đặc tả',
     description: 'Quy trình.',
     body: '# Body',

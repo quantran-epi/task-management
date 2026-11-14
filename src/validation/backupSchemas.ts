@@ -687,24 +687,46 @@ export const BackupAiTeamLinkRecordSchema = z.strictObject({
 });
 
 /** Phase 36 (D-16, D-22): a stored revision round-trips verbatim — `status` is never normalized. */
-export const BackupAiSkillVersionRecordSchema = z.strictObject({
-  id: uuidSchema,
-  skillId: uuidSchema,
+export const BackupAiSkillVersionRecordSchema = z
+  .strictObject({
+    id: uuidSchema,
+    skillId: uuidSchema,
+    /**
+     * Phase 39 D-14: a pending row omits the number entirely (it is assigned at approval).
+     * Optional so a pre-39 export still restores; `positive()` stays, so `0` is still refused.
+     */
+    version: z.number().int().positive().optional(),
+    /** Phase 39 D-15: `0` is a legal baseline, so `nonnegative()`. Optional for the same reason. */
+    baseVersion: z.number().int().nonnegative().optional(),
+    status: AiSkillVersionStatusSchema,
+    name: aiNameSchema,
+    description: aiSkillDescriptionSchema,
+    body: z.string().trim().min(1, 'Body is required'),
+    evidence: z.string().max(2000, 'Evidence must be at most 2000 characters').optional(),
+    createdAt: z.string(),
+    decidedAt: z.string().optional(),
+  })
   /**
-   * Phase 39 D-14: a pending row omits the number entirely (it is assigned at approval).
-   * Optional so a pre-39 export still restores; `positive()` stays, so `0` is still refused.
+   * WR-05: the number and the status are one invariant, so they are checked together. An
+   * approved row without a number would restart numbering at 1 and mint a second v1; a
+   * non-approved row with a number is the pre-39 shape that made `max(approved) + 1` collide.
    */
-  version: z.number().int().positive().optional(),
-  /** Phase 39 D-15: `0` is a legal baseline, so `nonnegative()`. Optional for the same reason. */
-  baseVersion: z.number().int().nonnegative().optional(),
-  status: AiSkillVersionStatusSchema,
-  name: aiNameSchema,
-  description: aiSkillDescriptionSchema,
-  body: z.string().trim().min(1, 'Body is required'),
-  evidence: z.string().max(2000, 'Evidence must be at most 2000 characters').optional(),
-  createdAt: z.string(),
-  decidedAt: z.string().optional(),
-});
+  .superRefine((row, ctx) => {
+    if (row.status === 'approved' && row.version === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['version'],
+        message: 'An approved skill version must carry a version number',
+      });
+    }
+    if (row.status !== 'approved' && row.version !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['version'],
+        message: 'Only an approved skill version may carry a version number',
+      });
+    }
+  });
 
 /**
  * Phase 37 (D-22, D-24, D-26): the run ledger.
