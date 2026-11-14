@@ -1,166 +1,139 @@
 ---
 phase: 39-skill-versioning-enrichment-approval
-fixed_at: 2026-11-14T05:07:00Z
+fixed_at: 2026-11-14T06:05:00Z
 review_path: .planning/phases/39-skill-versioning-enrichment-approval/39-REVIEW.md
-iteration: 1
-findings_in_scope: 21
-fixed: 21
+iteration: 2
+findings_in_scope: 13
+fixed: 13
 skipped: 0
 status: all_fixed
 ---
 
 # Phase 39: Code Review Fix Report
 
-**Fixed at:** 2026-11-14T05:07:00Z
+**Fixed at:** 2026-11-14T06:05:00Z
 **Source review:** `.planning/phases/39-skill-versioning-enrichment-approval/39-REVIEW.md`
-**Iteration:** 1
+**Iteration:** 2
 
 **Summary:**
-- Findings in scope: 21 (4 critical, 10 warning, 7 info)
-- Fixed: 21
+- Findings in scope: 13 (2 critical, 5 warning, 6 info)
+- Fixed: 13
 - Skipped: 0
 
-Verification: `npx tsc --noEmit` clean; 354 tests green across the 16 scoped suites
-(`aiSkillVersionRepo`, `aiOfficeRepo`, `teamTools`, `teamPrompts`, `teamRunCoordinator`,
-`officeBackup`, `validateBackup`, `backupSchemas`, `schemaV26Migration`, `schemaV19Migration`,
-`aiTeamRepo`, `tableListParity`, `chatTurnRuntime`, `PendingSkillProposals`, `SkillEditorDrawer`,
-`AiOfficeView`, `AiExplorers`).
+Round 1's 21 fixes are untouched; the round-2 report confirmed all of them as holding.
+`validateBackup.ts`'s pre-schema strip (commit `07e9a428`) is also untouched — the WR-05
+`superRefine` and the strip at the validation boundary stay as a pair.
 
 ## Fixed Issues
 
-### CR-01: Version numbering collides with pre-39 numbered rows
-
-**Files modified:** `src/db/schema.ts`, `src/db/index.ts`, `src/db/repositories/aiSkillVersionRepo.ts`, `src/db/repositories/aiOfficeRepo.ts`, `tests/db/schemaV26Migration.test.ts`, `tests/services/ai/office/aiTeamRepo.test.ts`, `tests/services/backup/officeBackup.test.ts`, `tests/services/ai/office/aiSkillVersionRepo.test.ts`
-**Commit:** `781b3647`, `ca53a99d`
-**Applied fix:** Added `SCHEMA_V26` and a `version(26)` upgrade hook that deletes `version` from every non-approved row (`LATEST_SCHEMA_VERSION` is now 26). The invariant is also enforced on write: `stripNonApprovedVersionNumbers` runs inside the same `rw` transaction that assigns the next number, in both `decideSkillVersion` and `updateSkill`, so a legacy numbered row cannot re-enter through a direct write or a pre-39 restore. New `tests/db/schemaV26Migration.test.ts` seeds a V25 database and proves the strip plus content preservation; a repo test proves numbering no longer collides.
-**Status:** fixed: requires human verification (semantic — migration + numbering invariant)
-
-### CR-02: Rejecting a legacy numbered pending keeps its version number
-
-**Files modified:** `src/db/repositories/aiSkillVersionRepo.ts`, `tests/services/ai/office/aiSkillVersionRepo.test.ts`
-**Commit:** `ca53a99d`
-**Applied fix:** The rejected branch destructures `version` out of the spread (`const { version: _dropped, ...rest } = existing`) so the key is dropped rather than preserved. Test seeds a legacy numbered pending and asserts the stored row has no `version` key.
-
-### CR-03: The first approval destroys the user-authored original body
-
-**Files modified:** `src/db/repositories/aiSkillVersionRepo.ts`, tests in `aiSkillVersionRepo.test.ts`, `aiOfficeRepo.test.ts`, `PendingSkillProposals.test.tsx`, `SkillEditorDrawer.test.tsx`, `teamRunCoordinator.test.ts`
-**Commit:** `ca53a99d`
-**Applied fix:** Took the smaller-diff variant from the review: when `getLatestApprovedVersionNumber` returns 0, `decideSkillVersion` snapshots the current `aiSkills` row as approved v1 (`baseVersion: 0`, `createdAt`/`decidedAt` from the skill row) and numbers the proposal v2. Chose this over making `createSkill` append a baseline because it keeps the "baseline 0 = no approved row" semantics the pin and backup schemas rely on. Every test that asserted the old numbering (v1 for the first approval) was updated to the new correct values; no coverage was deleted. The `schemaV19Migration` round-trip test was left asserting a pending row verbatim because it seeds the row directly and never runs the V26 hook backwards.
-**Status:** fixed: requires human verification (semantic — numbering semantics changed)
-
-### CR-04: `wrapUntrusted` does not neutralize the label
-
-**Files modified:** `src/services/ai/office/teamPrompts.ts`, `src/services/ai/office/teamTools.ts`, `tests/services/ai/office/teamPrompts.test.ts`, `tests/services/ai/office/teamTools.test.ts`
-**Commit:** `ff1b5379`
-**Applied fix:** `wrapUntrusted` now runs `neutralizeDelimiters` on the label and strips `[`, `]`, CR and LF, capped at 120 chars. The employee prompt no longer interpolates the raw name into a header — it wraps it as `wrapUntrusted('TÊN KỸ NĂNG', skill.name)` under a static `[KỸ NĂNG]` header. A regression test feeds the exact escape payload from the review and asserts the injected text stays on the header line with a single header occurrence.
-
-### WR-01: A no-op skill save appends a new approved version
-
-**Files modified:** `src/db/repositories/aiOfficeRepo.ts`, `tests/services/ai/office/aiOfficeRepo.test.ts`
-**Commit:** `ca53a99d`
-**Applied fix:** `updateSkill` compares the merged row against the existing one and returns early when name, description and body are all unchanged — no version row, no stale flip. Test asserts both `{}` and a patch restating current values leave the version count at 1.
-**Status:** fixed: requires human verification (semantic — early return path)
-
-### WR-02: `read_skill` falls back to the current row when a pin does not resolve
+### CR-01 (and IN-05): `propose_skill_version` ignored the attempt pin
 
 **Files modified:** `src/services/ai/office/teamTools.ts`, `tests/services/ai/office/teamTools.test.ts`
-**Commit:** `ff1b5379`
-**Applied fix:** A present pin that is missing or not approved now returns `refuse('SKILL_NOT_ASSIGNED', 'Không đọc được đúng phiên bản kỹ năng đã ghim.')`. Only an absent pin reads `aiSkills`. The test that asserted the fallback was inverted (renamed to `read_skill refuses when a present pin does not resolve (WR-02)`), and the tamper-guard test now asserts refusal instead of the current body.
-**Status:** fixed: requires human verification (semantic — refusal branch)
+**Commit:** `4f26fa4b`
+**Applied fix:** Extracted the existing pin lookup from `read_skill` into one
+`resolvePinnedSkill(skillId, ctx)` helper and used it on both paths. `proposeSkillVersion` now
+diffs against the pinned version row and numbers the proposal with `ctx.skillVersion`, so a
+run pinned to v2 whose skill got v3 approved mid-batch produces `baseVersion: 2` — the card's
+stale check (`2 < 3`) disables Approve instead of silently discarding v3. An unresolved pin is
+refused, never silently re-based. IN-05: the refusal message now names the real cause and
+points the agent at the description. Regression tests mirror the reviewer's probe (pin 2,
+approve 3, propose → diff contains `-# V2`, not `V3-IMPORTANT`; `baseVersion === 2`) plus an
+unresolved-pin refusal that writes no row.
 
-### WR-03: `SkillEditorDrawer.handleSave` has no `catch`
+### CR-02: The first manual save destroyed the create-time body
 
-**Files modified:** `src/components/ai/office/SkillEditorDrawer.tsx`
-**Commit:** `7ebf54e8`
-**Applied fix:** Added `saveError` state, a `catch` that sets the Vietnamese retry copy, reset on drawer open, and an `Alert type="error" role="alert"` (`data-testid="skill-editor-save-error"`) above the form.
+**Files modified:** `src/db/repositories/aiOfficeRepo.ts`, `src/components/ai/office/SkillEditorDrawer.tsx`, `tests/services/ai/office/aiOfficeRepo.test.ts`, `tests/components/ai/office/SkillEditorDrawer.test.tsx`
+**Commit:** `1e3e9b2e`
+**Applied fix:** `updateSkill` now uses the same baseline convention `decideSkillVersion`
+established: when no approved row exists, snapshot the existing `aiSkills` row as v1 (with its
+create-time `createdAt`/`updatedAt`), then number the save v2. One convention on both write
+paths, not two. Tests: the first-save assertions moved from `version === 1` to a v1-snapshot +
+v2 assertion, and a new test proves the create-time body survives (`[1,'# GOC'],[2,'# SUA']`)
+plus one proving a manual save continues from a v1 baseline an approval already created.
 
-### WR-04: Explorer delete paths are fire-and-forget
+### WR-01 (and IN-02): A just-approved card rendered the "newer version approved" warning
 
-**Files modified:** `src/workbench/toolwindows/AiStaffExplorer.tsx`
-**Commit:** `948bc1c6`
-**Applied fix:** Added one `runDelete` helper that wraps the repo call in `try/catch` and routes both success and failure to the existing refusal alert state. Both `handleDeleteSkill` and `confirmDelete`'s `onOk` go through it.
+**Files modified:** `src/components/ai/office/PendingSkillProposals.tsx`, `src/components/ai/office/SkillEditorDrawer.tsx`, `tests/components/ai/office/PendingSkillProposals.test.tsx`, `tests/components/ai/office/SkillEditorDrawer.test.tsx`
+**Commit:** `edd1e05c`
+**Applied fix:** `stale={!decision.get(row.id) && …}` on both surfaces — a decided card is not
+stale, the decision supersedes the check. IN-02: the drawer caption now reads "Lưu thay đổi sẽ
+tạo một phiên bản mới…", which matches the no-op early return. Tests assert the decided card
+has no `role="alert"` and no "đề xuất lại" text on both surfaces.
 
-### WR-05: Backup schema accepts `status: 'approved'` with no `version`
+### WR-02: The drawer badge and header counted already-decided cards
 
-**Files modified:** `src/validation/backupSchemas.ts`, `tests/services/backup/validateBackup.test.ts`, `tests/validation/backupSchemas.test.ts`
-**Commit:** `180f5386`
-**Applied fix:** Added the bidirectional `superRefine` to `BackupAiSkillVersionRecordSchema`. New tests cover approved-without-number, non-approved-with-number, and the legal unnumbered pending. The existing evidence-cap fixture was updated to `status: 'approved'` because it carried a number.
+**Files modified:** `src/components/ai/office/SkillEditorDrawer.tsx`, `tests/components/ai/office/SkillEditorDrawer.test.tsx`
+**Commit:** `67ca907e`
+**Applied fix:** `pendingCount` now counts `pending.filter((row) => patches.has(row.id)).length`.
+The decided cards stay in `pendingSectionRows` (D-25 keeps them visible), the header renders
+only when `pendingCount > 0`, and the section itself stays mounted while any card remains so
+the decided card does not vanish. Test asserts the badge disappears and the header no longer
+reads "Chờ duyệt (1)" after an approval, while the card stays.
 
-### WR-06: `propose_skill_version` computes `baseVersion` outside the transaction
+### WR-03: `AiOfficeView` skill delete was fire-and-forget
 
-**Files modified:** `src/services/ai/office/teamTools.ts`, `src/db/repositories/aiSkillVersionRepo.ts`
-**Commit:** `ff1b5379`
-**Applied fix:** `createSkillVersion` takes an optional `baseVersion`; the tool reads the number once, builds the diff from it, and passes it into the repo. The stored row and the diff label can no longer disagree. Callers that do not render a diff keep the previous behaviour (the repo reads it inside the transaction).
+**Files modified:** `src/views/AiOfficeView.tsx`, `tests/views/AiOfficeView.test.tsx`
+**Commit:** `d0a1b3ec`
+**Applied fix:** Added the same `runDelete(run)` helper `AiStaffExplorer` uses and routed all
+three deletes through it, so a rejected promise sets "Không xóa được. Thử lại." instead of
+escaping as an unhandled rejection. Test spies `deleteSkill` to reject and asserts the alert.
 
-### WR-07: `PendingSkillProposals` decided-card list is unbounded
+### WR-04 (and IN-01): `neutralizeDelimiters` missed whitespace and NFD variants
 
-**Files modified:** `src/components/ai/office/PendingSkillProposals.tsx`
-**Commit:** `4cf9f24f`
-**Applied fix:** The decided list is sorted and `.slice(0, MAX_VISIBLE)` so `slots` can never be permanently 0.
+**Files modified:** `src/services/ai/office/teamPrompts.ts`, `tests/services/ai/office/teamPrompts.test.ts`
+**Commit:** `9a1feac2`
+**Applied fix:** `.normalize('NFC')` first, then `\s+` between every word of the tag with the
+`u` flag. IN-01: the label sanitiser's character class now includes `\u2028`, `\u2029` and
+`\u0085`. Tests cover double space, tab, NBSP and NFD, and assert only the wrapper's own
+closing tag survives in each case.
 
-### WR-08: A proposal whose base cannot be resolved disappears silently
+### WR-05: `list_linked_items` returned the item name raw, and the lead prompt interpolated it raw
 
-**Files modified:** `src/components/ai/office/PendingSkillProposals.tsx`
-**Commit:** `4cf9f24f`
-**Applied fix:** `unresolved = remaining.length - eligible.length` is added into `overflow`, and the early return now requires `overflow === 0` too, so the overflow line renders even when no card does.
-**Status:** fixed: requires human verification (semantic — count reconciliation)
+**Files modified:** `src/services/ai/office/teamTools.ts`, `src/services/ai/office/teamPrompts.ts`, `tests/services/ai/office/teamTools.test.ts`, `tests/services/ai/office/teamPrompts.test.ts`
+**Commit:** `4fb12da3`
+**Applied fix:** `name: wrapUntrusted('TÊN MỤC LIÊN KẾT', label?.name ?? link.itemId)` in the
+tool result and the same wrap in `buildLeadTurnRequest`. The linked-item test now asserts the
+wrapper is present and the raw name still readable inside it; a new prompt test proves a forged
+closing tag inside a name is redacted.
 
-### WR-09: `chatTurnRuntime.test.ts` mocks `nineRouterClient` wholesale
+### IN-03: `schemaV19Migration.test.ts` still asserted a numbered pending round-trips
+
+**Files modified:** `tests/db/schemaV19Migration.test.ts`
+**Commit:** `cd24f201`
+**Applied fix:** Dropped `version: 1` from the seeded row and added
+`expect(...?.version).toBeUndefined()`, so the test no longer encodes the pre-39 shape.
+
+### IN-04: The strip rule exists twice
+
+**Files modified:** `src/db/repositories/aiSkillVersionRepo.ts`, `src/services/backup/validateBackup.ts`
+**Commit:** `40bab359`
+**Applied fix:** Bidirectional cross-reference comments naming the other copy and the rule
+("change both or neither"). No behavioural change, so no test.
+
+### IN-06: The IN-05 fix did not prove the handler ran
 
 **Files modified:** `tests/ai/chatTurnRuntime.test.ts`
-**Commit:** `87fed272`
-**Applied fix:** The mock now spreads `await importOriginal<typeof import(...)>()` and overrides only `streamChatEvents`, so `redactApiKey`, `streamChatCompletion` and `stripThinkingBlocks` stay real.
+**Commit:** `8c0d2807`
+**Applied fix:** Stubbed `executeDynamicMcpTool` (the path the loop actually dispatches
+`propose_skill_version` to) and asserted it was called with the tool name and args, that the
+result parses to the stub's payload, and that it contains no `error`. The old assertions
+passed on the unknown-MCP error string; this one cannot.
 
-### WR-10: History tag derives "Đã duyệt" from the number
+## Skipped Issues
 
-**Files modified:** `src/components/ai/office/SkillEditorDrawer.tsx`
-**Commit:** `7ebf54e8`
-**Applied fix:** Both the `v{n}` chip and the success tag are gated on `row.status === 'approved'`; the chip additionally requires a number. A legacy numbered rejected row now renders "Đề xuất bị từ chối" + "Đã từ chối".
+None — all in-scope findings were fixed.
 
-### IN-01: `getLatestSkillVersion` is dead in `src`
+## Verification
 
-**Files modified:** `src/db/repositories/aiSkillVersionRepo.ts`, `tests/services/ai/office/aiSkillVersionRepo.test.ts`
-**Commit:** `ca53a99d`
-**Applied fix:** Deleted the function and its only test. It was test-only and its doc comment overclaimed (it could return a rejected row).
-
-### IN-02: `decideSkillVersion` duplicates the numbering query
-
-**Files modified:** `src/db/repositories/aiSkillVersionRepo.ts`
-**Commit:** `ca53a99d`
-**Applied fix:** `decideSkillVersion` now calls `getLatestApprovedVersionNumber` — one numbering reader, one place to fix.
-
-### IN-03: `PendingSkillProposals` takes an unused `team` prop
-
-**Files modified:** `src/components/ai/office/PendingSkillProposals.tsx`, `src/components/ai/office/TeamWorkspace.tsx`, `tests/components/ai/office/PendingSkillProposals.test.tsx`
-**Commit:** `4cf9f24f`
-**Applied fix:** Dropped `team` from the interface, the destructure and both call sites.
-
-### IN-04: `SkillCard`'s "dead `AiOfficeView` call site" comment is wrong
-
-**Files modified:** `src/components/ai/office/SkillCard.tsx`, `src/views/AiOfficeView.tsx`, `src/workbench/toolwindows/AiStaffExplorer.tsx`, `tests/views/AiOfficeView.test.tsx`
-**Commit:** `948bc1c6`
-**Applied fix:** `AiOfficeView` now reads pending rows once and passes `pendingCount` to `SkillCard`; both misleading comments were corrected. New test asserts the badge renders on that surface.
-
-### IN-05: The new runtime test asserts an error string as proof of success
-
-**Files modified:** `tests/ai/chatTurnRuntime.test.ts`
-**Commit:** `87fed272`
-**Applied fix:** Replaced the `toContain('propose_skill_version')` assertion with assertions that the result carries neither `READ_ONLY_EMPLOYEE` nor a `refused` marker.
-
-### IN-06: Redundant `aiSkills` write in the coordinator pin test
-
-**Files modified:** `tests/services/ai/office/teamRunCoordinator.test.ts`
-**Commit:** `ca53a99d`
-**Applied fix:** Dropped the manual `aiSkills.put` so the test proves `decideSkillVersion`'s D-07 write actually fired. The pin assertion moved from 1 to 2 to match CR-03's baseline snapshot.
-
-### IN-07: `read_skill` returns `name` unwrapped
-
-**Files modified:** `src/services/ai/office/teamTools.ts`, `tests/services/ai/office/teamTools.test.ts`
-**Commit:** `ff1b5379`
-**Applied fix:** `name` is now `wrapUntrusted(...)` like description and body; the verbatim-body test asserts the wrapper instead of equality.
+- `npx tsc --noEmit`: clean.
+- Scoped vitest runs (never the full suite): `aiOfficeRepo`, `teamTools`, `teamPrompts`,
+  `aiSkillVersionRepo`, `teamRunCoordinator`, `schemaV19Migration`, `SkillEditorDrawer`,
+  `PendingSkillProposals`, `AiOfficeView`, `AiExplorers`, `chatTurnRuntime`, `officeBackup`,
+  `validateBackup`, `exportBackup` — 437 tests passed, 0 failed.
+- No round-1 fix was reverted or weakened.
 
 ---
 
-_Fixed: 2026-11-14T05:07:00Z_
+_Fixed: 2026-11-14T06:05:00Z_
 _Fixer: Claude (gsd-code-fixer)_
-_Iteration: 1_
+_Iteration: 2_
