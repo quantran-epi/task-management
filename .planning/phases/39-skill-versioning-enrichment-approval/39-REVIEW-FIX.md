@@ -1,100 +1,95 @@
 ---
 phase: 39-skill-versioning-enrichment-approval
-fixed_at: 2026-11-14T07:20:00Z
+fixed_at: 2026-11-14T07:35:00Z
 review_path: .planning/phases/39-skill-versioning-enrichment-approval/39-REVIEW.md
-iteration: 4
-findings_in_scope: 8
-fixed: 8
+iteration: 5
+findings_in_scope: 6
+fixed: 6
 skipped: 0
 status: all_fixed
 ---
 
 # Phase 39: Code Review Fix Report
 
-**Fixed at:** 2026-11-14T07:20:00Z
+**Fixed at:** 2026-11-14T07:35:00Z
 **Source review:** `.planning/phases/39-skill-versioning-enrichment-approval/39-REVIEW.md`
-**Iteration:** 4
+**Iteration:** 5
 
 **Summary:**
-- Findings in scope: 8 (4 critical, 2 warnings, 2 info)
-- Fixed: 8
+- Findings in scope: 6
+- Fixed: 6
 - Skipped: 0
 
 ## Fixed Issues
 
-### CR-01: `neutralizeDelimiters` still deletes legitimate body text — the `KẾT THÚC` prefix branch fires on ordinary prose
+### CR-01: Round 4's delimiter-tail requirement lets forged tags through
 
 **Files modified:** `src/services/ai/office/teamPrompts.ts`, `tests/services/ai/office/teamPrompts.test.ts`
-**Commit:** `514f9de0`
-**Status:** fixed: requires human verification
-**Applied fix:** The prefix branch now requires a delimiter TAIL — a lookahead for an optional horizontal-whitespace run followed by `—`, `]`, or end of line — before the tail body is consumed. Ordinary Vietnamese (`kết thúc dữ liệu không đáng tin cậy`, `KẾT THÚC DỮ LIỆU KHÔNG ĐÁNG TIN là dữ liệu`) has no such tail and is therefore unmatchable, while every forged shape (bracketed with a label, bare at end of line, bare on its own line, bare with a stray `]`, and the opening tag) still redacts. Probed against the real cases: prose at line start, prose mid-line, the plain prose sentence, and a realistic skill body that documents this very control all survive byte-identical.
+**Commit:** `d5509a00`
+**Applied fix:** Widened the tail alternation to `(?=[^\S\n]*(?:[—–\-:|=\]]|$))` — exactly the separators a label can use. Round 4 accepted only `—`, `]` or EOL, so forged tags separated by `-`, `–`, `:`, `|` or `=` survived, including the opening tag with a hyphen. Prose is followed by a letter or a sentence period, neither of which is in the set. The comment records why `[^\p{L}\p{N}\s]` is wrong (it eats the sentence period).
 
-Four regression tests added, driving every branch:
-- ordinary phrase at line start survives byte-identical;
-- ordinary phrase mid-line survives;
-- a skill body documenting the untrusted-data control survives byte-identical;
-- every forged delimiter shape still redacts.
+The CR-01 test is now **bidirectional and table-driven**, which is the thing that stops a sixth regression:
+- `still redacts every forged delimiter shape (CR-01)` — 13 rows: em dash, hyphen, en dash, colon, pipe, equals, bracketed-no-label, bare EOL, bare own-line, bare stray-bracket, and three opening-tag spellings. Each asserts `[redacted-tag]` is present and the body region carries no `KHÔNG ĐÁNG TIN<sep>` shape.
+- `leaves every prose shape byte-identical (CR-01)` — 6 rows: `… cậy`, `… là dữ liệu`, `… KHÔNG ĐÁNG TIN.`, mid-line, line-break split, and the documented-control body. Each asserts the body survives verbatim and no `[redacted-tag]` appears.
 
-The two round-3 regression tests (plain prose, phrase split across a newline) are untouched and still pass.
+Status: **fixed: requires human verification** (regex logic).
 
-### CR-04: A single invisible format character defeats `neutralizeDelimiters`
+### WR-04: Invisible characters outside `\p{Cf}` still split the tag
 
 **Files modified:** `src/services/ai/office/teamPrompts.ts`, `tests/services/ai/office/teamPrompts.test.ts`
-**Commit:** `514f9de0`
-**Status:** fixed: requires human verification
-**Applied fix:** `neutralizeDelimiters` folds every `\p{Cf}` character (ZWSP, soft hyphen, ZWJ, …) to a space before NFC normalisation and matching, so a tag split by an invisible character is now visible to the pattern and redacts. Test added covering all three variants the review proved; it also asserts the body's trailing text stays INSIDE the block (after the forged tag but before the wrapper's own closing tag), which is the property the bug violated.
+**Commit:** `d5509a00`
+**Applied fix:** Fold `\p{Default_Ignorable_Code_Point}` instead of `\p{Cf}`. Verified it matches U+3164, U+FFA0, U+FE0F, U+034F, U+115F, U+1160 as well as U+200B / U+00AD / U+200D / U+2060 / U+FEFF. The CR-04 test is now an 11-row table covering all of them, each asserting the forged tag is gone and the trailing injection text stays inside the block.
 
-### CR-02: Approving a proposal then saving the form silently reverts the approved body
+Status: **fixed**.
 
-**Files modified:** `src/components/ai/office/SkillEditorDrawer.tsx`, `src/db/repositories/aiOfficeRepo.ts`, `tests/components/ai/office/SkillEditorDrawer.test.tsx`, `tests/services/ai/office/aiOfficeRepo.test.ts`
-**Commit:** `9dc8fc18`
-**Status:** fixed: requires human verification
-**Applied fix:** Fixed at the state owner, in two layers.
-1. The form is seeded from a live `useLiveQuery` read of `aiSkills` (falling back to the prop only while the query has not resolved), keyed on `[open, liveSkill?.id, liveSkill?.updatedAt]`. An approval from any surface re-seeds the textareas, and `dirty` is compared against the live row, so an untouched form cannot be saved at all.
-2. `updateSkill` takes an optional `AiSkillSeed` (the name/description/body the draft was seeded from) and refuses inside the same `rw` transaction when the live row no longer matches, throwing `SKILL_MOVED_MESSAGE`. This covers the window before the live query lands, and the transcript-approval-while-drawer-open shape.
-
-The seed is content, not `updatedAt`: a probe showed two writes inside one millisecond share a timestamp and the guard silently passed. The drawer surfaces `SKILL_MOVED_MESSAGE` distinctly from the generic retry copy.
-
-Tests added: approve-in-drawer then edit-name-and-save keeps the approved body (mutation-checked — reverting the re-seed fails it); save with a moved underlying row surfaces the refusal and leaves the newer body intact; repo-level compare-and-swap refusal plus a save carrying the current content still landing (mutation-checked — removing the guard fails both).
-
-### CR-03: `get_linked_context` returns raw sticky-note bodies for task/CR/system links
-
-**Files modified:** `src/services/ai/office/teamTools.ts`, `tests/services/ai/office/teamTools.test.ts`
-**Commit:** `4becb37f`, `d7b67292`
-**Applied fix:** The delegated `get_item_details` result is parsed and every `stickyNotes[].body` is wrapped with `wrapUntrusted`, matching the note/document branch and the handler's own stated contract. Non-body fields are preserved. Tests added for the task branch (asserting the injection text is wrapped and intact) and for the CR and system branches.
-
-### WR-01: The drawer renders the same pending row twice for one refresh tick after Approve, with a duplicate React key
+### WR-01: `unresolvedRows` does not exclude `recentlyDecided`
 
 **Files modified:** `src/components/ai/office/SkillEditorDrawer.tsx`, `tests/components/ai/office/SkillEditorDrawer.test.tsx`
-**Commit:** `9dc8fc18`
-**Applied fix:** The live pending list now excludes ids already in `recentlyDecided`, exactly as `PendingSkillProposals` does. Test added with the write held open so the refresh window is observable; it asserts one card, no React duplicate-key warning, and one status line after the write lands. Mutation-checked — removing the filter fails it.
+**Commit:** `676b145e`
+**Applied fix:** `unresolvedRows: pending.filter((row) => !patches.has(row.id) && !recentlyDecided.has(row.id))`. Approving a base-0 proposal overwrites `aiSkills`, collapsing that row's own diff to `NO_CHANGES`; it lost its patch and rendered as a decided card *and* a stray unresolved row whose `Từ chối` reported a failure on a successful approval.
 
-### WR-02: Round 3's unresolved-pending line offers no action — the row can never be cleared
+New test `never shows a just-decided row in the unresolved list (WR-01)` holds the write open, moves `aiSkills` first (the approval's real first effect), and asserts the row never appears in `unresolvedRows` in either window.
+
+Status: **fixed: requires human verification** (state-list logic).
+
+### WR-02: `decideUnresolved`'s error is never rendered
 
 **Files modified:** `src/components/ai/office/SkillEditorDrawer.tsx`, `tests/components/ai/office/SkillEditorDrawer.test.tsx`
-**Commit:** `9dc8fc18`
-**Applied fix:** `unresolvedCount` became `unresolvedRows`, and each row renders its own line with a `Từ chối` button calling `decideUnresolved` → `decideSkillVersion(row.id, 'rejected', db, row.baseVersion ?? 0)`. Rejection is not blocked by the stale guard, so the queue can be cleared. The copy now says only what the user can do. The round-3 test asserting the old text line was updated to the new per-row testid and copy; a new test rejects the row and asserts the badge disappears, the row leaves the unresolved list, and it lands in history as rejected.
+**Commit:** `676b145e`
+**Applied fix:** The unresolved row now renders `error.get(row.id)` in a `role="alert"` span, mirroring the card. New test `surfaces a failed reject on an unresolved pending proposal (WR-02)` rejects once, asserts the alert carries `WRITE_FAILED_COPY`, and asserts the row stays `pending` (the safe state).
 
-### IN-01: `Drawer width` is deprecated in antd 6
+### WR-03: `item.description` / `item.notes` / `item.checklist[].text` reach the lead raw, and `get_item_details` is directly callable
 
-**Files modified:** `src/components/ai/office/SkillEditorDrawer.tsx`
-**Commit:** `9dc8fc18`
-**Applied fix:** `width={560}` → `size={560}`.
+**Files modified:** `src/services/ai/office/teamTools.ts`, `src/services/ai/chatTurnTools.ts`, `tests/services/ai/office/teamTools.test.ts`, `tests/ai/chatTurnTools.test.ts`
+**Commit:** `d59252d7`
+**Applied fix:** Two layers, per the review's "better" option.
+1. `getLinkedContext` wraps `item.description`, `item.notes` and every `checklist[].text` through `wrapUntrusted`, so the handler's stated contract holds for the whole delegated payload. `name` / `code` stay raw because `buildLeadTurnRequest` wraps the linked-item name once at the prompt boundary — wrapping here too would nest the block.
+2. `LEAD_TOOL_ALLOWLIST` no longer advertises `get_item_details` (`EMPLOYEE_READ_ONLY_ALLOWLIST.filter((name) => name !== 'get_item_details')`), so the lead cannot reach the same raw fields by calling the resolver directly. `get_linked_context` is the lead's item read.
 
-### IN-02: `refusalMessage` is exported but no longer used outside its module
+Tests: `wraps every free-text field on the delegated task branch (WR-03)` asserts all three fields are wrapped and that exactly three copies of the injection text exist in the payload (a raw leak would add a fourth). `the lead cannot reach raw item text through get_item_details (WR-03)` asserts the allowlist entry is gone and the composed lead payload omits it.
 
-**Files modified:** `src/components/ai/office/deleteRefusalMessage.ts`
-**Commit:** `9dc8fc18`
-**Applied fix:** Dropped the `export`; the function is module-private, with a comment naming the condition for exporting it again.
+### WR-05: The live re-seed silently discards a typed draft
+
+**Files modified:** `src/components/ai/office/SkillEditorDrawer.tsx`, `src/db/repositories/aiOfficeRepo.ts`, `tests/components/ai/office/SkillEditorDrawer.test.tsx`
+**Commit:** `676b145e`
+**Applied fix:** The seed effect now distinguishes "no input yet" (safe to re-seed) from "the user has typed" (never clobber). When a draft is dirty and the live row moves, the draft is kept, the old seed stays in place so a save is still refused at the state owner (CR-02), and a warning `Alert` with a `Tải lại nội dung mới` button appears. `handleSave` resets the seed/form refs to the saved content so the post-write re-seed is not misread as a draft.
+
+`SKILL_MOVED_MESSAGE` was reworded — it claimed "Nội dung mới đã được tải lại", which is no longer true. New copy: `Kỹ năng vừa được cập nhật ở nơi khác. Tải lại nội dung mới, kiểm tra rồi lưu lại.` The existing CR-02 test asserting that copy was updated, not deleted.
+
+New test `keeps a typed draft when another surface writes, and offers a reload (WR-05)` asserts the draft survives, Save stays enabled, and the reload button adopts the new content.
 
 ## Verification
 
-- Scoped suites: `teamPrompts`, `teamTools`, `aiOfficeRepo`, `aiSkillVersionRepo`, `SkillEditorDrawer`, `PendingSkillProposals`, `AiOfficeView`, `AiExplorers` — 188 tests, all passing.
-- `npx tsc --noEmit` clean.
-- No round-1/2/3 fix was reverted: `07e9a428` (pre-39 backup strip), the WR-03 stale guard, `resolvePinnedSkill`, and the round-3 prose-preservation tests are untouched and green.
+- `npx tsc --noEmit` — clean.
+- Scoped suites, all green: `teamPrompts` (32), `teamTools` (51), `chatTurnTools` (7), `SkillEditorDrawer` (21), `aiSkillVersionRepo`, `aiOfficeRepo`, `teamRunCoordinator`, `AiOfficeView`, `AiExplorers`, `aiTools` — 406 tests across the touched files.
+- **Mutation-checked** every new test: reverting each fix individually makes its test fail (CR-01 tail, WR-04 fold, WR-01 filter, WR-02 render, WR-03 wrap, WR-03 allowlist, WR-05 draft guard). No test is vacuous.
+
+## Round-1..4 fixes preserved
+
+`07e9a428` (pre-39 backup strip), the WR-03 stale guard, `resolvePinnedSkill`, the CR-02 seed guard, and the round-4 CR-03 sticky-note wrap are all intact — the WR-03 change extends the sticky-note wrap rather than replacing it, and the CR-02 seed guard is what the WR-05 draft path relies on.
 
 ---
 
-_Fixed: 2026-11-14T07:20:00Z_
+_Fixed: 2026-11-14T07:35:00Z_
 _Fixer: Claude (gsd-code-fixer)_
-_Iteration: 4_
+_Iteration: 5_
