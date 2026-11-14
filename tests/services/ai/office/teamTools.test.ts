@@ -553,6 +553,8 @@ describe('teamTools — linked-item retrieval with full content (AIO-LINK-01, D-
     // CR-07: wrapped as untrusted data, but the full body survives (never truncated).
     expect(result.body).toContain(NOTE_BODY);
     expect(result.body.length).toBeGreaterThan(400);
+    // IN-03: the name is raw here, exactly like `list_linked_items` — one shape per field.
+    expect(result.name).toBe('Biên bản họp');
   });
 
   it('returns the document body strictly equal to the seeded body', async () => {
