@@ -323,8 +323,9 @@ describe('SkillEditorDrawer — pending queue and version history (AIO-SKILL-01/
     expect((await db.aiSkills.get(skill.id))?.body).toBe(NEXT_BODY);
   });
 
-  // CR-02: the same shape without touching the drawer — a save built from a draft whose row
-  // moved underneath is refused at the state owner, not silently applied.
+  // CR-02/WR-05: the same shape without touching the drawer — a save built from a draft whose
+  // row moved underneath is refused at the state owner, not silently applied. The copy no
+  // longer promises a reload: WR-05 keeps the draft and offers the reload instead.
   it('surfaces the moved-row refusal when the underlying skill changed (CR-02)', async () => {
     renderDrawer(skill);
     fireEvent.change(await screen.findByLabelText('Tên'), { target: { value: 'Bản nháp' } });
@@ -336,11 +337,118 @@ describe('SkillEditorDrawer — pending queue and version history (AIO-SKILL-01/
 
     await waitFor(() =>
       expect(screen.getByTestId('skill-editor-save-error')).toHaveTextContent(
-        'Kỹ năng vừa được cập nhật ở nơi khác. Nội dung mới đã được tải lại — kiểm tra rồi lưu lại.'
+        'Kỹ năng vừa được cập nhật ở nơi khác. Tải lại nội dung mới, kiểm tra rồi lưu lại.'
       )
     );
     // The newer body is intact; the draft did not overwrite it.
     expect((await db.aiSkills.get(skill.id))?.body).toBe(NEXT_BODY);
+  });
+
+  // WR-02: a failed reject on an unresolved row used to write into the `error` map that this
+  // row never read — the click looked dead. Mirror the card and surface it.
+  it('surfaces a failed reject on an unresolved pending proposal (WR-02)', async () => {
+    await db.aiSkillVersions.add({
+      id: 'dangling-pending',
+      skillId: skill.id,
+      status: 'pending',
+      name: skill.name,
+      description: skill.description,
+      body: NEXT_BODY,
+      baseVersion: 9,
+      createdAt: new Date().toISOString(),
+    });
+    const spy = vi
+      .spyOn(aiSkillVersionRepo, 'decideSkillVersion')
+      .mockRejectedValueOnce(new Error('write failed'));
+
+    renderDrawer(skill);
+
+    const row = await screen.findByTestId('skill-pending-unresolved-dangling-pending');
+    fireEvent.click(within(row).getByRole('button', { name: 'Từ chối' }));
+
+    await waitFor(() =>
+      expect(
+        within(screen.getByTestId('skill-pending-unresolved-dangling-pending')).getByRole('alert')
+      ).toHaveTextContent(
+        'Không duyệt được đề xuất. Đề xuất vẫn còn trong danh sách chờ duyệt — thử lại.'
+      )
+    );
+    // The row stays pending — the safe state.
+    expect((await db.aiSkillVersions.get('dangling-pending'))?.status).toBe('pending');
+    spy.mockRestore();
+  });
+
+  // WR-01: approving a base-0 proposal overwrites `aiSkills`, so that same row's diff collapses
+  // to NO_CHANGES and it loses its patch. Without the `recentlyDecided` filter it rendered as a
+  // decided card AND as a stray unresolved row whose `Từ chối` reported a failure on a
+  // successful approval. The write is held open so the window is observable.
+  it('never shows a just-decided row in the unresolved list (WR-01)', async () => {
+    const row = await seedPending({ body: NEXT_BODY });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const real = aiSkillVersionRepo.decideSkillVersion;
+    const spy = vi
+      .spyOn(aiSkillVersionRepo, 'decideSkillVersion')
+      .mockImplementation(async (...args) => {
+        // The approval's first effect: `aiSkills` now holds the proposal body. Written
+        // directly so no extra version row shifts `latestApproved` and makes the row stale.
+        const current = await db.aiSkills.get(skill.id);
+        await db.aiSkills.put({
+          ...current!,
+          name: row.name,
+          description: row.description,
+          body: row.body,
+          updatedAt: new Date().toISOString(),
+        });
+        await gate;
+        return real(...args);
+      });
+
+    renderDrawer(skill);
+
+    const card = await screen.findByTestId(`skill-pending-card-${row.id}`);
+    fireEvent.click(within(card).getByRole('button', { name: 'Chấp thuận' }));
+
+    // `aiSkills` moved, the version row is still pending: the diff is empty, so the row would
+    // fall into `unresolvedRows` while the snapshot still renders its card.
+    await waitFor(() =>
+      expect(screen.getByTestId(`skill-pending-card-${row.id}`)).toBeInTheDocument()
+    );
+    expect(screen.queryByTestId(`skill-pending-unresolved-${row.id}`)).toBeNull();
+
+    release();
+    await waitFor(() =>
+      expect(
+        within(screen.getByTestId(`skill-pending-card-${row.id}`)).getByRole('status')
+      ).toHaveTextContent('Đã chấp thuận')
+    );
+    expect(screen.queryByTestId(`skill-pending-unresolved-${row.id}`)).toBeNull();
+    spy.mockRestore();
+  });
+
+  // WR-05: the seed effect is keyed on `updatedAt`, so an external write re-seeded the form and
+  // silently discarded a typed draft — and `dirty` flipped to false, disabling Save, so the
+  // user could think their edit was saved. Keep the draft and say so.
+  it('keeps a typed draft when another surface writes, and offers a reload (WR-05)', async () => {
+    renderDrawer(skill);
+    const bodyField = await screen.findByLabelText('Nội dung');
+    fireEvent.change(bodyField, { target: { value: 'BẢN NHÁP TÔI VỪA GÕ' } });
+
+    await updateSkill(skill.id, { body: NEXT_BODY }, db);
+
+    expect(
+      await screen.findByTestId('skill-editor-reload-notice')
+    ).toHaveTextContent('Bản nháp của bạn vẫn được giữ.');
+    // The draft survives, and Save stays enabled because it is still a real change.
+    expect(screen.getByLabelText('Nội dung')).toHaveValue('BẢN NHÁP TÔI VỪA GÕ');
+    expect(screen.getByTestId('skill-editor-save')).toBeEnabled();
+
+    // The user takes the new content explicitly.
+    fireEvent.click(screen.getByRole('button', { name: 'Tải lại nội dung mới' }));
+    await waitFor(() => expect(screen.getByLabelText('Nội dung')).toHaveValue(NEXT_BODY));
+    expect(screen.queryByTestId('skill-editor-reload-notice')).toBeNull();
   });
 
   // WR-01: `decide()` snapshots the row before awaiting the write, while the live query still

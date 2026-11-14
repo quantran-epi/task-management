@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Collapse, Drawer, Input, Tag, theme } from 'antd';
 import dayjs from 'dayjs';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -95,20 +95,66 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
       [skill?.id, db]
     ) ?? skill;
 
-  useEffect(() => {
-    if (!open) return;
-    setName(liveSkill?.name ?? '');
-    setDescription(liveSkill?.description ?? '');
-    setBody(liveSkill?.body ?? '');
+  /**
+   * WR-05: the seed effect is keyed on `updatedAt`, so any write from another surface re-seeds
+   * all three textareas. That is right for an untouched form (CR-02), but it used to replace a
+   * draft in progress without a word — and `dirty` flipped to false, disabling Save, so the
+   * user could reasonably conclude the edit was saved. These refs let the effect tell "no
+   * input yet" (safe to re-seed) from "the user has typed" (never clobber; offer a reload).
+   */
+  const formRef = useRef({ name: '', description: '', body: '' });
+  formRef.current = { name, description, body };
+  const seedRef = useRef<AiSkillSeed | undefined>(undefined);
+  /** `undefined` = never seeded, so create mode (id `null`) still seeds on first open. */
+  const seededSkillId = useRef<string | null | undefined>(undefined);
+  const [reloadNotice, setReloadNotice] = useState(false);
+
+  const seedForm = (target: AiSkill | null | undefined) => {
+    const next = target
+      ? { name: target.name, description: target.description, body: target.body }
+      : undefined;
+    setName(next?.name ?? '');
+    setDescription(next?.description ?? '');
+    setBody(next?.body ?? '');
     // CR-02: the content this draft was seeded from. The save hands it to the repo, so a write
     // built from an older revision is refused at the state owner instead of reverting a newer
     // approved body.
-    setSeed(
-      liveSkill
-        ? { name: liveSkill.name, description: liveSkill.description, body: liveSkill.body }
-        : undefined
-    );
+    setSeed(next);
+    seedRef.current = next;
+    formRef.current = { name: next?.name ?? '', description: next?.description ?? '', body: next?.body ?? '' };
+    setReloadNotice(false);
+  };
+
+  useEffect(() => {
+    if (!open) {
+      // A closed drawer holds no draft; the next open seeds from scratch.
+      formRef.current = { name: '', description: '', body: '' };
+      seedRef.current = undefined;
+      seededSkillId.current = undefined;
+      return;
+    }
+    const nextId = liveSkill?.id ?? null;
+    if (seededSkillId.current !== nextId) {
+      seededSkillId.current = nextId;
+      seedForm(liveSkill);
+      return;
+    }
+    const current = formRef.current;
+    const seeded = seedRef.current;
+    const typed =
+      seeded === undefined
+        ? current.name !== '' || current.description !== '' || current.body !== ''
+        : current.name !== seeded.name ||
+          current.description !== seeded.description ||
+          current.body !== seeded.body;
+    if (typed) {
+      // WR-05: keep the draft and say so. The old seed stays in place, so a save built from it
+      // is still refused at the state owner (CR-02) rather than reverting the newer content.
+      setReloadNotice(true);
+      return;
+    }
     // `updatedAt` moves on every write — a manual save, or an approval from any surface.
+    seedForm(liveSkill);
   }, [open, liveSkill?.id, liveSkill?.updatedAt]);
 
   /** A reopened drawer starts clean — no decision overlay from the previous session. */
@@ -200,7 +246,13 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
         // WR-02: a row whose base cannot resolve renders no diff card. It is counted into the
         // chrome above and rendered below with its own Reject control — silently dropping it
         // left the user unable to clear the queue, forever.
-        unresolvedRows: pending.filter((row) => !patches.has(row.id)),
+        // WR-01: the same `recentlyDecided` filter as the card list. Approving a base-0
+        // proposal overwrites `aiSkills`, so that row's own diff collapses to `NO_CHANGES`, it
+        // loses its patch, and it would render here AND as a decided card — a stray `Từ chối`
+        // that reports a failure on a successful approval.
+        unresolvedRows: pending.filter(
+          (row) => !patches.has(row.id) && !recentlyDecided.has(row.id)
+        ),
       };
     }, [versions, skill, liveSkill, recentlyDecided]);
 
@@ -309,6 +361,13 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
     try {
       if (skill) await updateSkill(skill.id, { name, description, body }, db, seed);
       else await createSkill({ name, description, body }, db);
+      // WR-05: the form now holds exactly what was written, so the re-seed that follows the
+      // write must not read it as a draft to preserve.
+      const saved = { name, description, body };
+      seedRef.current = saved;
+      formRef.current = saved;
+      setSeed(saved);
+      setReloadNotice(false);
       onSaved();
     } catch (err) {
       setSaveError(
@@ -372,6 +431,23 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
       >
         {saveError !== null && (
           <Alert type="error" showIcon role="alert" data-testid="skill-editor-save-error" title={saveError} />
+        )}
+
+        {/* WR-05: another surface changed this skill while the form held a draft. The draft is
+            kept (never silently replaced) and the user chooses when to take the new content. */}
+        {reloadNotice && (
+          <Alert
+            type="warning"
+            showIcon
+            role="alert"
+            data-testid="skill-editor-reload-notice"
+            title="Kỹ năng vừa được cập nhật ở nơi khác. Bản nháp của bạn vẫn được giữ."
+            action={
+              <Button size="small" onClick={() => seedForm(liveSkill)}>
+                Tải lại nội dung mới
+              </Button>
+            }
+          />
         )}
 
         <div>
@@ -463,11 +539,21 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
               <div
                 key={row.id}
                 data-testid={`skill-pending-unresolved-${row.id}`}
-                style={{ display: 'flex', gap: 8, alignItems: 'center' }}
+                style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}
               >
                 <span style={{ fontSize: 12, color: token.colorTextSecondary, flex: 1 }}>
                   Đề xuất này không xem được bản diff — hãy từ chối để dọn hàng chờ.
                 </span>
+                {/* WR-02: a failed reject used to be completely silent — the click looked dead.
+                    Mirror the card, which already renders its own error. */}
+                {error.get(row.id) !== undefined && (
+                  <span
+                    role="alert"
+                    style={{ fontSize: 12, color: token.colorError, flexBasis: '100%' }}
+                  >
+                    {error.get(row.id)}
+                  </span>
+                )}
                 <Button
                   size="small"
                   danger

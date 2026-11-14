@@ -270,7 +270,7 @@ export async function createSkill(
  * that cannot see the move is not a guard.
  */
 export const SKILL_MOVED_MESSAGE =
-  'Kỹ năng vừa được cập nhật ở nơi khác. Nội dung mới đã được tải lại — kiểm tra rồi lưu lại.';
+  'Kỹ năng vừa được cập nhật ở nơi khác. Tải lại nội dung mới, kiểm tra rồi lưu lại.';
 
 /** CR-02: the content a draft was seeded from — the compare-and-swap token. */
 export type AiSkillSeed = Pick<AiSkill, 'name' | 'description' | 'body'>;
