@@ -1125,8 +1125,17 @@ describe('teamTools — propose_skill_version (AIO-SKILL-02, D-01..D-06)', () =>
     // AIO-SKILL-06: the unified diff reproduces the approved body on its base side, so it is
     // untrusted data like any other retrieved body. This result is a `role: 'tool'` message and
     // never enters the prompt assembler, so nothing downstream would wrap it.
-    expect(result.diffText).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
-    expect(result.diffText).toContain('KẾT THÚC DỮ LIỆU KHÔNG ĐÁNG TIN');
+    // Assert ENCLOSURE, not mere presence: the diff must sit between two tags sharing a nonce.
+    const open = result.diffText.indexOf('[DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
+    const close = result.diffText.indexOf('[KẾT THÚC DỮ LIỆU KHÔNG ĐÁNG TIN');
+    expect(open, 'opening tag').toBeGreaterThanOrEqual(0);
+    expect(close, 'closing tag').toBeGreaterThan(open);
+    const openNonce = result.diffText.slice(open).match(/([0-9a-f]{8})\]/)?.[1];
+    expect(openNonce, 'nonce on the opening tag').toBeDefined();
+    expect(result.diffText.slice(close)).toContain(openNonce!);
+    // The diff body itself — including the removed base-side line — sits between them.
+    expect(result.diffText.indexOf(`a/skill:${skillId}/body`)).toBeGreaterThan(open);
+    expect(result.diffText.indexOf(`a/skill:${skillId}/body`)).toBeLessThan(close);
   });
 
   // AIO-SKILL-04: nothing on this path can mint an approved row.
