@@ -77,13 +77,20 @@ describe('SkillEditorDrawer — pending queue and version history (AIO-SKILL-01/
     fireEvent.change(await screen.findByLabelText('Tên'), { target: { value: 'Viết đặc tả v2' } });
     fireEvent.click(screen.getByTestId('skill-editor-save'));
 
+    // CR-02: v1 is the create-time snapshot, so the save itself is v2.
     await waitFor(() =>
-      expect(screen.getByTestId('skill-version-history')).toHaveTextContent('Lịch sử phiên bản (1)')
+      expect(screen.getByTestId('skill-version-history')).toHaveTextContent('Lịch sử phiên bản (2)')
     );
-    expect(await db.aiSkillVersions.where('skillId').equals(skill.id).count()).toBe(1);
+    expect(await db.aiSkillVersions.where('skillId').equals(skill.id).count()).toBe(2);
     const history = screen.getByTestId('skill-version-history');
     expect(history).toHaveTextContent('v1');
+    expect(history).toHaveTextContent('v2');
     expect(history).toHaveTextContent('Đã duyệt');
+    // CR-02: the create-time body stays retrievable as v1.
+    const baseline = (await db.aiSkillVersions.where('skillId').equals(skill.id).toArray()).find(
+      (row) => row.version === 1
+    );
+    expect(baseline?.body).toBe(BODY);
   });
 
   it('a pending proposal renders a card and approving it keeps the card with its decision line (D-25)', async () => {
@@ -131,7 +138,8 @@ describe('SkillEditorDrawer — pending queue and version history (AIO-SKILL-01/
     renderDrawer(skill);
 
     const history = await screen.findByTestId('skill-version-history');
-    await waitFor(() => expect(history).toHaveTextContent('Lịch sử phiên bản (2)'));
+    // CR-02: v1 (create-time) + v2 (the save) + the rejected proposal.
+    await waitFor(() => expect(history).toHaveTextContent('Lịch sử phiên bản (3)'));
     expect(within(history).queryByRole('button', { name: /khôi phục|restore/i })).toBeNull();
     expect(within(history).queryByRole('button', { name: /sửa|edit/i })).toBeNull();
   });

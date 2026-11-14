@@ -37,6 +37,10 @@ import {
   countAgentsUsingSkill,
 } from '../../../../src/db/repositories/aiOfficeRepo';
 import { generateId } from '../../../../src/utils/uuid';
+import {
+  createSkillVersion,
+  decideSkillVersion,
+} from '../../../../src/db/repositories/aiSkillVersionRepo';
 import { createTeam } from '../../../../src/db/repositories/aiTeamRepo';
 import {
   ensureTeamThread,
@@ -190,12 +194,19 @@ describe('aiOfficeRepo (AIO-EMP-01, AIO-EMP-02, AIO-SKILL-01)', () => {
       db
     );
 
-    const rows = await db.aiSkillVersions.where('skillId').equals(skill.id).toArray();
-    expect(rows).toHaveLength(1);
-    const [row] = rows;
+    const rows = (await db.aiSkillVersions.where('skillId').equals(skill.id).toArray()).sort(
+      (a, b) => (a.version ?? 0) - (b.version ?? 0)
+    );
+    // CR-02: the create-time body is snapshotted as v1, so the first save is v2.
+    expect(rows).toHaveLength(2);
+    const [baseline, row] = rows;
+    expect(baseline?.version).toBe(1);
+    expect(baseline?.baseVersion).toBe(0);
+    expect(baseline?.body).toBe('b');
+    expect(baseline?.name).toBe('S');
     expect(row?.status).toBe('approved');
-    expect(row?.version).toBe(1);
-    expect(row?.baseVersion).toBe(0);
+    expect(row?.version).toBe(2);
+    expect(row?.baseVersion).toBe(1);
     expect(row?.name).toBe('Tên mới');
     expect(row?.description).toBe('Mô tả mới');
     expect(row?.body).toBe('# Mới');
@@ -230,7 +241,8 @@ describe('aiOfficeRepo (AIO-EMP-01, AIO-EMP-02, AIO-SKILL-01)', () => {
       .filter((row) => row.status === 'approved')
       .map((row) => row.version)
       .sort((a, b) => (a ?? 0) - (b ?? 0));
-    expect(approved).toEqual([1, 2, 3]);
+    // CR-02: v1 is the create-time snapshot; the two saves and the last one follow it.
+    expect(approved).toEqual([1, 2, 3, 4]);
   });
 
   it('updateSkill leaves both tables unchanged when the skill row is missing (D-09)', async () => {
@@ -253,11 +265,56 @@ describe('aiOfficeRepo (AIO-EMP-01, AIO-EMP-02, AIO-SKILL-01)', () => {
     // A no-op save must not mint a number — that would flip every pending proposal stale.
     const unchanged = await updateSkill(skill.id, {}, db);
     expect(unchanged.body).toBe('b1');
-    expect(await db.aiSkillVersions.where('skillId').equals(skill.id).count()).toBe(1);
+    // CR-02: v1 (create-time snapshot) + v2 (the first save).
+    expect(await db.aiSkillVersions.where('skillId').equals(skill.id).count()).toBe(2);
 
     // A patch that restates the current values is a no-op too.
     await updateSkill(skill.id, { name: 'S', description: 'd', body: 'b1' }, db);
-    expect(await db.aiSkillVersions.where('skillId').equals(skill.id).count()).toBe(1);
+    expect(await db.aiSkillVersions.where('skillId').equals(skill.id).count()).toBe(2);
+  });
+
+  // CR-02: the create-time body must stay retrievable after the first manual save. Without
+  // the v1 snapshot the only copy of it is `aiSkills`, which the save overwrites.
+  it('updateSkill snapshots the create-time body as v1 before numbering the first save (CR-02)', async () => {
+    const skill = await createSkill({ name: 'Gốc', description: 'd gốc', body: '# GOC' }, db);
+
+    await updateSkill(skill.id, { body: '# SUA' }, db);
+
+    const rows = (await db.aiSkillVersions.where('skillId').equals(skill.id).toArray()).sort(
+      (a, b) => (a.version ?? 0) - (b.version ?? 0)
+    );
+    expect(rows.map((row) => [row.version, row.body, row.status])).toEqual([
+      [1, '# GOC', 'approved'],
+      [2, '# SUA', 'approved'],
+    ]);
+    // The v1 row carries the create-time metadata, not the save time.
+    expect(rows[0]?.name).toBe('Gốc');
+    expect(rows[0]?.description).toBe('d gốc');
+    expect(rows[0]?.createdAt).toBe(skill.createdAt);
+    expect(rows[0]?.decidedAt).toBe(skill.updatedAt);
+    expect(rows[1]?.baseVersion).toBe(1);
+  });
+
+  // CR-02 + CR-03 share one baseline convention: whichever write path runs first snapshots
+  // the create-time row as v1, and the second path continues from there.
+  it('updateSkill continues from the v1 baseline an approval already created (CR-02/CR-03)', async () => {
+    const skill = await createSkill({ name: 'S', description: 'd', body: '# GOC' }, db);
+    const pending = await createSkillVersion(
+      { skillId: skill.id, name: 'S', description: 'd', body: '# DUYET' },
+      db
+    );
+    await decideSkillVersion(pending.id, 'approved', db);
+
+    await updateSkill(skill.id, { body: '# SUA' }, db);
+
+    const approved = (await db.aiSkillVersions.where('skillId').equals(skill.id).toArray())
+      .filter((row) => row.status === 'approved')
+      .sort((a, b) => (a.version ?? 0) - (b.version ?? 0));
+    expect(approved.map((row) => [row.version, row.body])).toEqual([
+      [1, '# GOC'],
+      [2, '# DUYET'],
+      [3, '# SUA'],
+    ]);
   });
 
   it('refuses to delete a skill assigned to a profile and names the agent', async () => {

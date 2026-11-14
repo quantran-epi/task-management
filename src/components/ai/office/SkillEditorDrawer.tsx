@@ -363,7 +363,8 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
             </div>
             {historyRows.length === 0 ? (
               <div style={{ fontSize: 12, color: token.colorTextSecondary }}>
-                Chưa có phiên bản nào — lần lưu đầu tiên sẽ tạo phiên bản 1.
+                Chưa có phiên bản nào — lần lưu đầu tiên sẽ lưu nội dung hiện tại thành phiên
+                bản 1.
               </div>
             ) : (
               // D-12: view-only. No restore, no edit, no action of any kind.

@@ -291,7 +291,25 @@ export async function updateSkill(
     // D-14: number over approved rows only, so a pending proposal cannot shift a manual save.
     // CR-01: repair any legacy numbered non-approved row first, or the new number collides.
     await stripNonApprovedVersionNumbers(id, db);
-    const baseVersion = await getLatestApprovedVersionNumber(id, db);
+    let baseVersion = await getLatestApprovedVersionNumber(id, db);
+    // CR-02: the create-time body is the baseline. `createSkill` writes no version row (D-10),
+    // so without this snapshot the first manual save overwrites the only copy — the same
+    // defect CR-03 fixed on the approval path. Snapshot it as v1, then number the save v2.
+    if (baseVersion === 0) {
+      await db.aiSkillVersions.add({
+        id: generateId(),
+        skillId: id,
+        version: 1,
+        baseVersion: 0,
+        status: 'approved',
+        name: existing.name,
+        description: existing.description,
+        body: existing.body,
+        createdAt: existing.createdAt,
+        decidedAt: existing.updatedAt,
+      });
+      baseVersion = 1;
+    }
     const versionRow: AiSkillVersion = {
       id: generateId(),
       skillId: id,
