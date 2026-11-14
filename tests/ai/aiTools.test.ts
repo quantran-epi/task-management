@@ -1181,9 +1181,10 @@ describe('aiTools', () => {
       const res = JSON.parse(resJson);
       expect(res.totalHits).toBeGreaterThanOrEqual(1);
       expect(res.results[0].id).toBe('doc-1');
-      expect(res.results[0].title).toBe('Core Banking Architecture & Ledger');
-      expect(res.results[0].snippet).toBeDefined();
-      expect(res.results[0].snippet.length).toBeLessThanOrEqual(1500);
+      // Retrieved text is untrusted data — wrapped, and the content survives inside the block.
+      expect(res.results[0].title).toContain('Core Banking Architecture & Ledger');
+      expect(res.results[0].title).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN');
+      expect(res.results[0].snippet).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN');
 
       // Verify soft-deleted doc is never returned
       const deletedCheckJson = await executeAiTool(
@@ -1214,7 +1215,9 @@ describe('aiTools', () => {
       );
       const res = JSON.parse(resJson);
       expect(res.id).toBe('doc-1');
-      expect(res.title).toBe('Core Banking Architecture & Ledger');
+      expect(res.title).toContain('Core Banking Architecture & Ledger');
+      expect(res.title).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN');
+      expect(res.body).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN');
       expect(res.body).toContain('double-entry accounting');
       expect(res.attachments).toEqual([
         {

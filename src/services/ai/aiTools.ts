@@ -3331,9 +3331,9 @@ export async function executeAiTool(
           returnedCount: subset.length,
           recurringTasks: subset.map((t) => ({
             id: t.id,
-            name: t.name,
-            description: t.description ?? null,
-            notes: t.notes ?? null,
+            name: wrapField(`TÊN VIỆC ĐỊNH KỲ ${t.id}`, t.name),
+            description: wrapField(`MÔ TẢ VIỆC ĐỊNH KỲ ${t.id}`, t.description ?? null),
+            notes: wrapField(`GHI CHÚ VIỆC ĐỊNH KỲ ${t.id}`, t.notes ?? null),
             status: t.status,
             priority: t.priority,
             estimateMinutes: t.estimateMinutes,
@@ -4468,10 +4468,15 @@ export async function executeAiTool(
         const scoredResults = rankBM25(args.query, bm25Docs, { limit });
         const results = scoredResults.map((sr) => ({
           id: sr.doc.id,
-          title: sr.doc.title,
-          tags: sr.doc.tags,
+          title: wrapField(`TIÊU ĐỀ TÀI LIỆU ${sr.doc.id}`, sr.doc.title),
+          tags: Array.isArray(sr.doc.tags)
+            ? sr.doc.tags.map((tag) => wrapField(`THẺ TÀI LIỆU ${sr.doc.id}`, tag))
+            : sr.doc.tags,
           score: Math.round(sr.score * 100) / 100,
-          snippet: extractRelevantSnippet(sr.doc.body, args.query, 1500),
+          snippet: wrapField(
+            `TRÍCH ĐOẠN TÀI LIỆU ${sr.doc.id}`,
+            extractRelevantSnippet(sr.doc.body, args.query, 1500)
+          ),
           updatedAt: sr.doc.updatedAt,
         }));
 
@@ -4510,11 +4515,13 @@ export async function executeAiTool(
 
         return JSON.stringify({
           id: doc.id,
-          title: doc.title || 'Untitled Document',
+          title: wrapField(`TIÊU ĐỀ TÀI LIỆU ${doc.id}`, doc.title || 'Untitled Document'),
           type: doc.type || 'document',
-          tags: doc.tags || [],
+          tags: Array.isArray(doc.tags)
+            ? doc.tags.map((tag) => wrapField(`THẺ TÀI LIỆU ${doc.id}`, tag))
+            : (doc.tags || []),
           slug: doc.slug,
-          body: doc.body || '',
+          body: wrapField(`NỘI DUNG TÀI LIỆU ${doc.id}`, doc.body || ''),
           attachments,
           createdAt: doc.createdAt,
           updatedAt: doc.updatedAt,

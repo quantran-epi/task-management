@@ -91,15 +91,22 @@ describe('SkillEditorDrawer — pending queue and version history (AIO-SKILL-01/
     await waitFor(() => expect(history).toHaveTextContent('Lịch sử phiên bản (13)'));
     expect(await db.aiSkillVersions.where('skillId').equals(skill.id).count()).toBe(13);
 
-    // The scrolling wrapper is the element that owns the bounded height.
-    const scroller = history.querySelector('div[style*="overflow-y"]');
+    // The scrolling wrapper must actually bound and scroll — assert the values, not the names.
+    const scroller = history.querySelector('div[style*="overflow-y"]') as HTMLElement | null;
     expect(scroller, 'scroll container').not.toBeNull();
-    expect(scroller?.getAttribute('style')).toContain('max-height');
+    expect(scroller!.style.maxHeight).toMatch(/^\d+px$/);
+    expect(Number.parseInt(scroller!.style.maxHeight, 10)).toBeGreaterThan(0);
+    expect(['auto', 'scroll']).toContain(scroller!.style.overflowY);
 
-    // Every version is reachable inside it, and no row is duplicated.
-    const rows = screen.getAllByTestId(/^skill-version-row-/);
+    // Every version must be INSIDE that scroller and reachable — a row rendered outside it
+    // would not scroll with the list. Counting document-wide would miss that.
+    const rows = within(scroller!).getAllByTestId(/^skill-version-row-/);
     expect(rows).toHaveLength(13);
     expect(new Set(rows.map((r) => r.getAttribute('data-testid'))).size).toBe(13);
+    // Each row shows its number (or the rejected label) and a DD/MM/YYYY HH:mm timestamp.
+    expect(scroller).toHaveTextContent('v1');
+    expect(scroller).toHaveTextContent('v13');
+    expect(scroller!.textContent).toMatch(/\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}/);
   });
 
   // IN-02: the caption promises a version, and a no-op save writes none — so the button that

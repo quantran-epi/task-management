@@ -149,10 +149,12 @@ describe('PatchDiffApprovalCard', () => {
       />
     );
 
-    // The diff body owns a bounded, scrollable box.
-    const diffBox = screen.getByText('+dòng thêm 0').parentElement;
-    expect(diffBox?.getAttribute('style')).toContain('max-height');
-    expect(diffBox?.getAttribute('style')).toContain('overflow-y');
+    // The diff body owns a bounded, scrollable box. Assert the VALUES, not just the property
+    // names — `overflow-y: visible` would satisfy a name check and scroll nothing.
+    const diffBox = screen.getByText('+dòng thêm 0').parentElement as HTMLElement;
+    expect(diffBox.style.maxHeight).toMatch(/^\d+px$/);
+    expect(Number.parseInt(diffBox.style.maxHeight, 10)).toBeGreaterThan(0);
+    expect(['auto', 'scroll']).toContain(diffBox.style.overflowY);
 
     // The buttons come before the evidence panel in document order, so a collapsed panel below
     // them cannot push them down.
