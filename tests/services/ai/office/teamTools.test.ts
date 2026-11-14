@@ -279,7 +279,9 @@ describe('teamTools — transcript search and skill reader (AIO-MEM-02, AIO-MEM-
 
     const result = JSON.parse(await executeTeamTool('read_skill', {}, ctx({ skillId })));
 
-    expect(result.name).toBe('Kiểm thử hồi quy');
+    // CR-04/IN-07: the name is model-authored after approval, so it is wrapped too.
+    expect(result.name).toContain('Kiểm thử hồi quy');
+    expect(result.name).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
     // AIO-SKILL-06: the description is wrapped too, so it is contained, not equal.
     expect(result.description).toContain('Quy trình kiểm thử hồi quy');
     // CR-07: the body is wrapped as untrusted data but its text is intact.
@@ -312,7 +314,8 @@ describe('teamTools — transcript search and skill reader (AIO-MEM-02, AIO-MEM-
         id: generateId(),
         skillId,
         status: row.status,
-        version: row.version,
+        // D-14: only an approved row carries a number.
+        ...(row.status === 'approved' ? { version: row.version } : {}),
         name: 'Kỹ năng có phiên bản',
         description: `Mô tả bản ${row.version}`,
         body: row.body,
@@ -342,7 +345,7 @@ describe('teamTools — transcript search and skill reader (AIO-MEM-02, AIO-MEM-
     expect(second.body).toContain('# Bản 2');
   });
 
-  it('read_skill falls back to aiSkills when the pinned version row is missing (D-18)', async () => {
+  it('read_skill refuses when a present pin does not resolve (WR-02)', async () => {
     const skillId = await seedVersionedSkill([
       { version: 1, status: 'approved', body: '# Bản 1' },
     ]);
@@ -351,10 +354,13 @@ describe('teamTools — transcript search and skill reader (AIO-MEM-02, AIO-MEM-
       await executeTeamTool('read_skill', {}, ctx({ skillId, skillVersion: 99 }))
     );
 
-    expect(result.body).toContain('# Hiện tại');
+    // A pin that does not resolve must not silently serve a newer body — that unpins the run.
+    expect(result).toMatchObject({ refused: true, code: 'SKILL_NOT_ASSIGNED' });
+    expect(JSON.stringify(result)).not.toContain('# Hiện tại');
+    expect(JSON.stringify(result)).not.toContain('# Bản 1');
   });
 
-  it('read_skill ignores a pinned row that is not approved (D-18 tamper guard)', async () => {
+  it('read_skill refuses a pinned row that is not approved (D-18 tamper guard)', async () => {
     const skillId = await seedVersionedSkill([
       { version: 3, status: 'rejected', body: '# Bị từ chối' },
     ]);
@@ -363,8 +369,9 @@ describe('teamTools — transcript search and skill reader (AIO-MEM-02, AIO-MEM-
       await executeTeamTool('read_skill', {}, ctx({ skillId, skillVersion: 3 }))
     );
 
-    expect(result.body).toContain('# Hiện tại');
+    expect(result).toMatchObject({ refused: true, code: 'SKILL_NOT_ASSIGNED' });
     expect(JSON.stringify(result)).not.toContain('# Bị từ chối');
+    expect(JSON.stringify(result)).not.toContain('# Hiện tại');
   });
 
   it('read_skill wraps both description and body as untrusted data (AIO-SKILL-06)', async () => {

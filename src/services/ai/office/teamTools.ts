@@ -322,16 +322,23 @@ async function readSkill(ctx: TeamToolContext): Promise<string> {
           .where('[skillId+version]')
           .equals([ctx.skillId, ctx.skillVersion])
           .first();
-  // T-39-09: a hand-edited backup can pair any pin with a rejected row — approved only.
-  const approvedRow = pinned?.status === 'approved' ? pinned : undefined;
-  const skill = approvedRow ?? (await ctx.db.aiSkills.get(ctx.skillId));
+  // WR-02: a present pin must resolve. Falling back to the current row would serve content
+  // newer than the assignment's pin — the pin would silently stop meaning anything. Only an
+  // absent pin (mention-started turn) legitimately reads the current row.
+  if (ctx.skillVersion !== undefined && pinned?.status !== 'approved') {
+    return JSON.stringify(
+      refuse('SKILL_NOT_ASSIGNED', 'Không đọc được đúng phiên bản kỹ năng đã ghim.')
+    );
+  }
+  const skill = pinned ?? (await ctx.db.aiSkills.get(ctx.skillId));
   if (!skill) {
     return JSON.stringify(refuse('SKILL_NOT_ASSIGNED', 'Nhân viên này chưa được gán kỹ năng nào.'));
   }
   // CR-07: tool results bypass the prompt assembler, so the untrusted-data boundary
   // must be applied here, where the provenance is known. D-22: approved is not trusted.
+  // CR-04/IN-07: the name is model-authored after approval — wrap it, never return it raw.
   return JSON.stringify({
-    name: skill.name,
+    name: wrapUntrusted(`TÊN KỸ NĂNG ${skill.name}`, skill.name),
     description: wrapUntrusted(`MÔ TẢ KỸ NĂNG ${skill.name}`, skill.description),
     body: wrapUntrusted(`KỸ NĂNG ${skill.name}`, skill.body),
   });
@@ -583,11 +590,14 @@ async function proposeSkillVersion(
     );
   }
 
+  // WR-06: read the base number once and pass it into the repo, so the stored `baseVersion`
+  // and the diff label cannot disagree if an approval lands between the two reads.
+  const baseVersion = await getLatestApprovedVersionNumber(ctx.skillId, ctx.db);
   const diff = prepareSkillVersionDiff({
     skillId: ctx.skillId,
     base: { name: skill.name, description: skill.description, body: skill.body },
     next: { name, description, body },
-    baseVersion: await getLatestApprovedVersionNumber(ctx.skillId, ctx.db),
+    baseVersion,
   });
   // A refusal writes no row — an empty or oversized card must never exist.
   if (isRefusal(diff)) return JSON.stringify(diff);
@@ -595,7 +605,8 @@ async function proposeSkillVersion(
   // T-39-13: never pass `status`; the repo default is `pending` and it refuses anything else.
   const row = await createSkillVersion(
     { skillId: ctx.skillId, name, description, body, ...(evidence ? { evidence } : {}) },
-    ctx.db
+    ctx.db,
+    baseVersion
   );
 
   return JSON.stringify({
