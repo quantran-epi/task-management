@@ -464,16 +464,32 @@ async function getLinkedContext(args: Record<string, any>, ctx: TeamToolContext)
     const item = parsed.item;
     item.description = wrapField(`MÔ TẢ MỤC ${itemId}`, item.description);
     item.notes = wrapField(`GHI CHÚ MỤC ${itemId}`, item.notes);
+    item.reminderNote = wrapField(`GHI CHÚ NHẮC ${itemId}`, item.reminderNote);
     if (Array.isArray(item.checklist)) {
       item.checklist = item.checklist.map((entry: any) => ({
         ...entry,
         text: wrapField(`ĐẦU VIỆC ${itemId}`, entry?.text),
       }));
     }
+    if (Array.isArray(item.reminders)) {
+      item.reminders = item.reminders.map((reminder: any) => ({
+        ...reminder,
+        note: wrapField(`NHẮC NHỞ ${itemId}`, reminder?.note),
+      }));
+    }
+    if (Array.isArray(item.documentLinks)) {
+      item.documentLinks = item.documentLinks.map((link: unknown) =>
+        wrapField(`LIÊN KẾT TÀI LIỆU ${itemId}`, link)
+      );
+    }
   }
+  // WR-01: the linked CR's and system's names are user-authored free text too.
+  parsed.crName = wrapField(`TÊN CR ${itemId}`, parsed.crName);
+  parsed.systemName = wrapField(`TÊN HỆ THỐNG ${itemId}`, parsed.systemName);
   if (Array.isArray(parsed?.stickyNotes)) {
     parsed.stickyNotes = parsed.stickyNotes.map((note: any) => ({
       ...note,
+      title: wrapField(`TIÊU ĐỀ GHI CHÚ ${note.id ?? itemId}`, note.title),
       body: wrapUntrusted(`GHI CHÚ ${note.title ?? note.id}`, String(note.body ?? '')),
     }));
   }
