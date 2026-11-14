@@ -1,6 +1,7 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../index';
-import type { AiEmployee, AiLead, AiSkill } from '../../types/aiOffice';
+import type { AiEmployee, AiLead, AiSkill, AiSkillVersion } from '../../types/aiOffice';
 import { generateId } from '../../utils/uuid';
+import { getLatestApprovedVersionNumber } from './aiSkillVersionRepo';
 import {
   AiEmployeeInputSchema,
   AiEmployeeUpdateSchema,
@@ -250,23 +251,51 @@ export async function createSkill(
   return skill;
 }
 
+/**
+ * D-09: a manual save is a write path like any other — it appends an approved version row in
+ * the same `rw` transaction as the `aiSkills` put, so no caller can edit a skill without
+ * leaving history. Doing it here (not in the drawer) keeps every caller on one rule.
+ *
+ * The version row snapshots the MERGED row: `AiSkillUpdate` is all-optional, so copying the
+ * raw patch would write `undefined` into required string fields.
+ */
 export async function updateSkill(
   id: string,
   patch: AiSkillUpdate,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<AiSkill> {
   const validated = AiSkillUpdateSchema.parse(patch);
-  const existing = await db.aiSkills.get(id);
-  if (!existing) throw new Error(`Không tìm thấy kỹ năng: ${id}`);
 
-  const updated: AiSkill = { ...existing, updatedAt: new Date().toISOString() };
+  return db.transaction('rw', [db.aiSkills, db.aiSkillVersions], async () => {
+    const existing = await db.aiSkills.get(id);
+    if (!existing) throw new Error(`Không tìm thấy kỹ năng: ${id}`);
 
-  if (validated.name !== undefined) updated.name = validated.name;
-  if (validated.description !== undefined) updated.description = validated.description;
-  if (validated.body !== undefined) updated.body = validated.body;
+    const now = new Date().toISOString();
+    const updated: AiSkill = { ...existing, updatedAt: now };
 
-  await db.aiSkills.put(updated);
-  return updated;
+    if (validated.name !== undefined) updated.name = validated.name;
+    if (validated.description !== undefined) updated.description = validated.description;
+    if (validated.body !== undefined) updated.body = validated.body;
+
+    // D-14: number over approved rows only, so a pending proposal cannot shift a manual save.
+    const baseVersion = await getLatestApprovedVersionNumber(id, db);
+    const versionRow: AiSkillVersion = {
+      id: generateId(),
+      skillId: id,
+      version: baseVersion + 1,
+      baseVersion,
+      status: 'approved',
+      name: updated.name,
+      description: updated.description,
+      body: updated.body,
+      createdAt: now,
+      decidedAt: now,
+    };
+
+    await db.aiSkillVersions.add(versionRow);
+    await db.aiSkills.put(updated);
+    return updated;
+  });
 }
 
 /**
