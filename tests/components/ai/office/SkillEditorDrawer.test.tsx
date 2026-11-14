@@ -58,7 +58,7 @@ describe('SkillEditorDrawer — pending queue and version history (AIO-SKILL-01/
     expect(screen.queryByTestId('skill-pending-section')).not.toBeInTheDocument();
     expect(screen.queryByTestId('skill-version-history')).not.toBeInTheDocument();
     expect(
-      screen.queryByText('Lưu sẽ tạo một phiên bản mới trong lịch sử.')
+      screen.queryByText('Lưu thay đổi sẽ tạo một phiên bản mới trong lịch sử.')
     ).not.toBeInTheDocument();
   });
 
@@ -66,10 +66,14 @@ describe('SkillEditorDrawer — pending queue and version history (AIO-SKILL-01/
     renderDrawer(skill);
     expect(await screen.findByTestId('skill-version-history')).toBeInTheDocument();
     expect(
-      screen.getByText('Chưa có phiên bản nào — lần lưu đầu tiên sẽ tạo phiên bản 1.')
+      screen.getByText(
+        'Chưa có phiên bản nào — lần lưu đầu tiên sẽ lưu nội dung hiện tại thành phiên bản 1.'
+      )
     ).toBeInTheDocument();
     expect(screen.queryByTestId('skill-pending-section')).not.toBeInTheDocument();
-    expect(screen.getByText('Lưu sẽ tạo một phiên bản mới trong lịch sử.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Lưu thay đổi sẽ tạo một phiên bản mới trong lịch sử.')
+    ).toBeInTheDocument();
   });
 
   it('saving an edit produces an approved version row and a history entry (D-09)', async () => {
@@ -176,6 +180,25 @@ describe('SkillEditorDrawer — pending queue and version history (AIO-SKILL-01/
     expect(within(card).getByRole('alert')).toHaveTextContent(
       'Kỹ năng đã có bản mới được duyệt sau khi đề xuất này được tạo.'
     );
+  });
+
+  // WR-01: approving raises `highestApproved` to the row's own number, so the stale check
+  // would fire on the card the user just approved.
+  it('a just-approved card shows no stale warning (WR-01)', async () => {
+    const row = await seedPending();
+    renderDrawer(skill);
+
+    const card = await screen.findByTestId(`skill-pending-card-${row.id}`);
+    fireEvent.click(within(card).getByRole('button', { name: 'Chấp thuận' }));
+
+    await waitFor(() =>
+      expect(
+        within(screen.getByTestId(`skill-pending-card-${row.id}`)).getByRole('status')
+      ).toHaveTextContent('Đã chấp thuận')
+    );
+    const decided = screen.getByTestId(`skill-pending-card-${row.id}`);
+    expect(within(decided).queryByRole('alert')).toBeNull();
+    expect(decided).not.toHaveTextContent('đề xuất lại');
   });
 
   it('the pending card subtitle names the skill without inventing a proposer', async () => {

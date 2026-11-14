@@ -180,4 +180,23 @@ describe('PendingSkillProposals (AIO-SKILL-03/04)', () => {
     expect(within(card).getByRole('button', { name: 'Từ chối' })).not.toBeDisabled();
     expect(within(card).getByRole('alert')).toHaveTextContent('Kỹ năng đã có bản mới được duyệt');
   });
+
+  // WR-01: approving raises the live maximum to the row's own number, so the stale check
+  // would fire on the just-approved card and tell the user to re-propose what they approved.
+  it('a just-approved card shows no stale warning (WR-01)', async () => {
+    const row = await seedPending();
+    renderPanel();
+    const card = await screen.findByTestId(`skill-pending-card-${row.id}`);
+
+    fireEvent.click(within(card).getByRole('button', { name: 'Chấp thuận' }));
+
+    await waitFor(() =>
+      expect(
+        within(screen.getByTestId(`skill-pending-card-${row.id}`)).getByRole('status')
+      ).toHaveTextContent('Đã chấp thuận')
+    );
+    const decided = screen.getByTestId(`skill-pending-card-${row.id}`);
+    expect(within(decided).queryByRole('alert')).toBeNull();
+    expect(decided).not.toHaveTextContent('đề xuất lại');
+  });
 });

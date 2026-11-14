@@ -185,7 +185,9 @@ export const PendingSkillProposals: React.FC<PendingSkillProposalsProps> = ({
             patch={patch}
             variant="skill"
             subtitle={skillSubtitle(row.skillId, patch.sectionTitle, employees)}
-            stale={(row.baseVersion ?? 0) < (currentApproved.get(row.skillId) ?? 0)}
+            // WR-01: a decided card is not stale — the decision supersedes the check, and
+            // approving raises the maximum to this row's own number.
+            stale={!decision.get(row.id) && (row.baseVersion ?? 0) < (currentApproved.get(row.skillId) ?? 0)}
             staleReason="newer-version-approved"
             evidence={row.evidence}
             decision={decision.get(row.id)}

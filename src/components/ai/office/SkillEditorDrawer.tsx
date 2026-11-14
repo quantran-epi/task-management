@@ -298,7 +298,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
 
         {skill !== null && (
           <div style={{ fontSize: 12, color: token.colorTextSecondary }}>
-            Lưu sẽ tạo một phiên bản mới trong lịch sử.
+            Lưu thay đổi sẽ tạo một phiên bản mới trong lịch sử.
           </div>
         )}
 
@@ -333,7 +333,9 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
                   // The drawer has no roster prop, so it cannot name a proposer — the
                   // ` · đề xuất bởi …` segment is a transcript-only affordance.
                   subtitle={`Kỹ năng · ${skill.name}`}
-                  stale={(row.baseVersion ?? 0) < highestApproved}
+                  // WR-01: a decided card is not stale — approving raises `highestApproved`
+                  // to this row's own number, so the check would fire on every approval.
+                  stale={!decision.get(row.id) && (row.baseVersion ?? 0) < highestApproved}
                   staleReason="newer-version-approved"
                   evidence={row.evidence}
                   decision={decision.get(row.id)}
