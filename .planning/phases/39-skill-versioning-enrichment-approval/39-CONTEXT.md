@@ -48,6 +48,7 @@ Phase này **không** gồm: leader/agent CRUD (Phase 40 — AIO-LEAD-01..04); e
 - **D-18:** `read_skill` **tra đúng version row khớp số đã pin**, fallback `aiSkills.body` khi không có row (baseline ngầm hoặc `skillVersion = 0`). Cần truyền `skillVersion` vào `TeamToolContext`. Đây là **thực thi pin thật** — nếu chỉ ghi số mà vẫn đọc `aiSkills.body`, duyệt giữa batch sẽ đổi skill của agent đang chạy, vi phạm criterion 5 và đúng Pitfall 18.
 - **D-19:** **Chốt đầu lượt, không đổi giữa lượt.** Roster đọc tươi đầu mỗi lượt (Phase 36 D-07); attempt row pin số tại lúc tạo. Duyệt giữa batch **không** ảnh hưởng agent đang chạy. **Lượt sau, retry, và agent mới trong cùng nhóm nhận version mới ngay** — không cần tạo nhóm mới, không cần relaunch.
 - **D-20:** Prompt **không nêu số version**. Prompt chỉ có tên + mô tả như hiện tại. Số version là dấu vết kỹ thuật, không giúp model làm việc tốt hơn.
+- **D-19a (chốt khi plan, 2026-11-14):** **Retry = lần chạy mới → pin lại theo version approved mới nhất.** Code hiện tại tại `teamRunCoordinator.ts:3246` đang inherit pin của attempt nguồn — phải sửa thành tính lại. Phân biệt rõ: **amend** (`:2304`) inherit (cùng attempt, task mới); **retry** (`:3246`) tính lại; **dispatch** (`:2852`) tính lần đầu.
 
 ### Bảo mật prompt
 - **D-21:** Bọc **cả `description`** bằng `wrapUntrusted` trong `buildEmployeeTurnRequest` (`teamPrompts.ts:90-98`), không chỉ body. Lý do: sau khi duyệt, mô tả có thể do model viết → kênh prompt injection. Đúng tinh thần `AIO-SKILL-06` ("skill bodies, including approved ones, are wrapped as untrusted data").
@@ -72,11 +73,11 @@ Phase này **không** gồm: leader/agent CRUD (Phase 40 — AIO-LEAD-01..04); e
 
 ### Claude's Discretion
 - Tên chính xác của field `baseVersion` (phải qua `FORBIDDEN_BACKUP_KEYS`; tránh `error`, `runtime`, `prompt`, `stack`, `diagnostic`).
-- Cách biểu diễn `version = 0` cho pending: số `0` hay bỏ trống field (phải nhất quán giữa type, schema, index `[skillId+version]`).
+- ~~Cách biểu diễn `version = 0` cho pending~~ — **đã chốt bởi research (A1):** pending **bỏ trống** `version`. Lý do đã kiểm chứng bằng probe: `BackupAiSkillVersionRecordSchema.version` là `positive()` nên `version: 0` **fail import**; và `validateBackup` dedupe theo `${skillId}:${version}` nên hai pending cùng `0` **từ chối toàn bộ payload**. Bỏ trống thì compound index bỏ qua row, `where('skillId')` vẫn tìm được, `getLatestSkillVersion` đúng theo cấu trúc.
 - Vị trí chính xác của mục "Chờ duyệt" và danh sách version trong `SkillEditorDrawer`.
-- Cách hiển thị diff khi `aiSkills.body` là baseline ngầm (không có row để so).
-- Nội dung chính xác của `evidence` và cách hiển thị nó trong card duyệt.
-- Có cần thêm index Dexie mới hay dùng lại `[skillId+version]` đã có.
+- Cách hiển thị diff khi `aiSkills.body` là baseline ngầm (không có row để so) — **research đề xuất:** dùng `aiSkills.body` làm base, nhãn `a/skill:<id> (bản hiện tại)`.
+- Nội dung chính xác của `evidence` và cách hiển thị nó trong card duyệt — **research đề xuất:** panel `Collapse` "Bằng chứng" thu gọn dưới diff, chỉ hiển thị, không đưa vào prompt.
+- Có cần thêm index Dexie mới hay dùng lại `[skillId+version]` đã có — **research kết luận:** không cần index mới, không bump Dexie, không bump envelope.
 
 </decisions>
 
