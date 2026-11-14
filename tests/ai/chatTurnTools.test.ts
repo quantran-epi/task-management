@@ -44,6 +44,21 @@ describe('chatTurnTools allowlists (D-12, D-27)', () => {
     expect(LEAD_TOOL_ALLOWLIST).toContain('get_linked_context');
   });
 
+  // Knowledge research parity with the AI Chat panel: the AI Office leader and employees
+  // reach the hybrid knowledge server and the full local document read, not just BM25.
+  it('both knowledge research tools reach the employee and lead payloads', () => {
+    for (const allowlist of [EMPLOYEE_READ_ONLY_ALLOWLIST, LEAD_TOOL_ALLOWLIST]) {
+      expect(allowlist).toContain('retrieve_knowledge');
+      expect(allowlist).toContain('get_document_details');
+
+      const names = getToolsForTurn(true, [], allowlist).map((t) =>
+        normalizeToolName(t.function.name)
+      );
+      expect(names).toContain('retrieve_knowledge');
+      expect(names).toContain('get_document_details');
+    }
+  });
+
   it('lead payload contains no mutation tool', () => {
     expect(payloadHasMutationTool(getToolsForTurn(true, [], LEAD_TOOL_ALLOWLIST))).toBe(false);
   });
