@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Collapse, Drawer, Input, Tag, theme } from 'antd';
+import { Alert, Button, Collapse, Drawer, Input, Tag, theme } from 'antd';
 import dayjs from 'dayjs';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
@@ -63,6 +63,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
   const [description, setDescription] = useState('');
   const [body, setBody] = useState('');
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [agentCount, setAgentCount] = useState(0);
 
   /**
@@ -90,6 +91,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
     setDecision(new Map());
     setApplying(new Set());
     setError(new Map());
+    setSaveError(null);
   }, [open, skill?.id]);
 
   useEffect(() => {
@@ -198,12 +200,16 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
   };
 
   // D-09: the repo writes the version, so saving stays immediate — no approval step here.
+  // WR-03: a failed write must surface, not escape the click handler as an unhandled rejection.
   const handleSave = async () => {
     setSaving(true);
+    setSaveError(null);
     try {
       if (skill) await updateSkill(skill.id, { name, description, body }, db);
       else await createSkill({ name, description, body }, db);
       onSaved();
+    } catch {
+      setSaveError('Không lưu được kỹ năng. Thử lại.');
     } finally {
       setSaving(false);
     }
@@ -258,10 +264,15 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
         data-testid="skill-editor-drawer"
         style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
       >
+        {saveError !== null && (
+          <Alert type="error" showIcon role="alert" data-testid="skill-editor-save-error" title={saveError} />
+        )}
+
         <div>
           <div style={{ fontSize: 12, marginBottom: 4 }}>Tên</div>
           <Input value={name} maxLength={60} onChange={(e) => setName(e.target.value)} aria-label="Tên" />
         </div>
+
 
         <div>
           <div style={{ fontSize: 12, marginBottom: 4 }}>Mô tả (nhân viên chỉ thấy phần này)</div>
@@ -365,7 +376,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
                       data-testid={`skill-version-row-${row.id}`}
                       style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0 }}
                     >
-                      {row.version !== undefined ? (
+                      {row.status === 'approved' && row.version !== undefined ? (
                         <span
                           style={{
                             border: `1px solid ${token.colorBorderSecondary}`,
@@ -408,7 +419,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
                       >
                         {row.decidedAt ? dayjs(row.decidedAt).format('DD/MM/YYYY HH:mm') : ''}
                       </span>
-                      {row.version !== undefined ? (
+                      {row.status === 'approved' ? (
                         <Tag color="success" style={{ margin: 0 }}>
                           Đã duyệt
                         </Tag>
