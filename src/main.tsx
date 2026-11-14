@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import AppIntelliJ from './AppIntelliJ';
 import './styles/markdown.css';
+import './styles/team-chat.css';
 import '@xterm/xterm/css/xterm.css';
 
 export function shouldBootIntelliJ(search: string = window.location.search): boolean {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Avatar, Button, Progress, Switch, Tag, theme } from 'antd';
+import { Avatar, Button, Switch, Tag, theme } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import type { AiEmployee, AiLead, AiTeam, AiTeamMember, AgentRunStatus, TeamRunPhase } from '../../../types/aiOffice';
 import { isAtThreshold, resolveThresholdPct } from '../../../services/ai/office/budgetGate';
@@ -46,6 +46,14 @@ function initialOf(name: string): string {
 /** D-21: raw tokens with thousands separators. Non-finite never reaches the DOM. */
 function fmt(value: number): string {
   return (Number.isFinite(value) ? Math.round(value) : 0).toLocaleString();
+}
+
+/** Compact figure for the member row: 41,200 → 41k. The exact number stays in the tooltip. */
+function fmtCompact(value: number): string {
+  const n = Number.isFinite(value) ? Math.round(value) : 0;
+  if (Math.abs(n) < 1000) return String(n);
+  const thousands = n / 1000;
+  return `${thousands % 1 === 0 ? thousands : thousands.toFixed(1)}k`;
 }
 
 const SECTION_LABEL: React.CSSProperties = {
@@ -200,48 +208,71 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
             const granted = member.budgetTokens;
             // The BAR clamps at 100%; the LABEL reports the true figure (51k/50k is 102%).
             const pctUsed = granted > 0 ? (used / granted) * 100 : 0;
-            const pctLabel = Math.round(pctUsed);
+            // Color carries the state: an accent bar for everyone made a member at 117%
+            // look the same as one at 24%.
+            const meterColor =
+              pctUsed >= 100
+                ? token.colorError
+                : pctUsed >= pct
+                  ? token.colorWarning
+                  : token.colorPrimary;
             // UAT 38: the row is a bar plus one compact figure; the full split (in/out,
             // remaining) lives in the tooltip and the accessible name, not on every row.
             const usageLine = `đã dùng ${estimated ? '~' : ''}${fmt(used)} (${fmt(usedIn)} vào / ${fmt(usedOut)} ra) · còn ${fmt(remaining)}/${fmt(granted)}`;
             return (
               <div key={member.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Avatar
-                  size={24}
+                  size={22}
                   shape={isLead ? 'square' : 'circle'}
                   style={{ backgroundColor: color, color: agentTextColorFor(color), flexShrink: 0 }}
                 >
                   {initialOf(agent.name)}
                 </Avatar>
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                    <span style={{ fontSize: 13.5, fontWeight: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, minWidth: 0 }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {agent.name}
                     </span>
-                    <span style={{ fontSize: 11, color: token.colorTextTertiary, flexShrink: 0 }}>
+                    <span style={{ fontSize: 11, color: token.colorTextTertiary, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {agent.role}
                     </span>
                   </div>
-                  <Progress
-                    size="small"
-                    showInfo={false}
-                    percent={Math.min(100, pctUsed)}
-                    status={figures?.atThreshold ? 'exception' : 'normal'}
+                  <div
+                    className="tc-meter"
+                    role="progressbar"
                     aria-label={usageLine}
-                    style={{ margin: 0 }}
-                  />
+                    aria-valuenow={Math.round(pctUsed)}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    style={{
+                      height: 3,
+                      borderRadius: 2,
+                      background: token.colorFillSecondary,
+                      marginTop: 4,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <i
+                      style={{
+                        display: 'block',
+                        height: '100%',
+                        width: `${Math.min(100, pctUsed)}%`,
+                        borderRadius: 2,
+                        background: meterColor,
+                      }}
+                    />
+                  </div>
                   <div
                     data-testid={`member-usage-${member.agentId}`}
                     title={usageLine}
-                    style={{ fontSize: 11.5, color: token.colorTextSecondary }}
+                    style={{
+                      fontSize: 10.5,
+                      color: pctUsed >= 100 ? token.colorError : token.colorTextSecondary,
+                      marginTop: 3,
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
                   >
-                    {estimated ? (
-                      <span title="ước lượng" aria-label="ước lượng">
-                        {`~${fmt(used)} / ${fmt(granted)} · ${pctLabel}%`}
-                      </span>
-                    ) : (
-                      <span>{`${fmt(used)} / ${fmt(granted)} · ${pctLabel}%`}</span>
-                    )}
+                    {`${estimated ? '~' : ''}${fmtCompact(used)} / ${fmtCompact(granted)}`}
                   </div>
                 </div>
                 {status === 'running' && (
@@ -277,23 +308,39 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
             </Tag>
           )}
         </div>
-        <Progress
-          size="small"
-          showInfo={false}
-          percent={Math.min(100, teamPercent)}
-          status={teamAtThreshold ? 'exception' : 'normal'}
+        <div
+          className="tc-meter"
+          role="progressbar"
           aria-label={`${fmt(teamUsed)} / ${fmt(teamTotal)} token · ${teamPercent}%`}
-          style={{ margin: 0 }}
-        />
+          aria-valuenow={teamPercent}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          style={{
+            height: 3,
+            borderRadius: 2,
+            background: token.colorFillSecondary,
+            overflow: 'hidden',
+          }}
+        >
+          <i
+            style={{
+              display: 'block',
+              height: '100%',
+              width: `${Math.min(100, teamPercent)}%`,
+              borderRadius: 2,
+              background: teamAtThreshold ? token.colorError : token.colorPrimary,
+            }}
+          />
+        </div>
         <div
           data-testid="team-usage-line"
-          style={{ fontSize: 11.5, color: token.colorTextSecondary, marginBottom: 8 }}
+          style={{ fontSize: 11, color: token.colorTextSecondary, margin: '3px 0 8px', fontVariantNumeric: 'tabular-nums' }}
           title={`${fmt(teamUsedIn)} vào / ${fmt(teamUsedOut)} ra · còn ${fmt(teamRemaining)}`}
         >
-          {`${fmt(teamUsed)} / ${fmt(teamTotal)} · ${teamPercent}%`}
+          {`${fmtCompact(teamUsed)} / ${fmtCompact(teamTotal)} · ${teamPercent}%`}
           {teamProvisionalIn > 0 && (
             <span data-testid="team-provisional" title="ước lượng" aria-label="ước lượng">
-              {` · ~${fmt(teamProvisionalIn)} (ước lượng)`}
+              {` · ~${fmtCompact(teamProvisionalIn)} (ước lượng)`}
             </span>
           )}
         </div>
@@ -302,22 +349,25 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
         </Button>
       </div>
 
-      <div data-testid="team-linked-items">
-        <div style={{ ...SECTION_LABEL, color: token.colorTextSecondary }}>Liên kết</div>
+      {/* One block: links, modes and the settings entry used to be three labelled sections
+          with their own uppercase headers, which made a 5-person sidebar scroll. */}
+      <div
+        data-testid="team-linked-items"
+        style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: `1px solid ${token.colorBorderSecondary}`, paddingTop: 12 }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <span style={{ ...SECTION_LABEL, marginBottom: 0, color: token.colorTextSecondary }}>Liên kết</span>
+          <Button size="small" type="text" icon={<PlusOutlined />} onClick={onAddLink} data-testid="team-add-link" style={{ fontSize: 12 }}>
+            Thêm
+          </Button>
+        </div>
         <LinkedItemsList items={links} onRemove={onRemoveLink} />
-        <Button
-          size="small"
-          icon={<PlusOutlined />}
-          onClick={onAddLink}
-          style={{ marginTop: 8 }}
-          data-testid="team-add-link"
-        >
-          Liên kết mục
-        </Button>
       </div>
 
-      <div data-testid="team-mode-toggles" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={{ ...SECTION_LABEL, color: token.colorTextSecondary }}>Chế độ</div>
+      <div
+        data-testid="team-mode-toggles"
+        style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: `1px solid ${token.colorBorderSecondary}`, paddingTop: 12 }}
+      >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 12 }}>Tự động chia việc</span>
           <Switch
@@ -336,8 +386,8 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
             aria-label="Tự động duyệt thay đổi"
           />
         </div>
-        <Button size="small" type="text" onClick={onOpenSettings} data-testid="team-open-settings">
-          Cài đặt nhóm
+        <Button size="small" type="text" onClick={onOpenSettings} data-testid="team-open-settings" style={{ alignSelf: 'flex-start', paddingLeft: 0, fontSize: 12 }}>
+          Cài đặt nhóm →
         </Button>
       </div>
     </div>

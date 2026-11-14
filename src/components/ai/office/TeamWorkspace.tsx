@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Avatar, Button, Modal, Splitter, Tag, Typography, theme } from 'antd';
-import { BugOutlined } from '@ant-design/icons';
+import { Alert, Avatar, Button, Dropdown, Modal, Splitter, Tag, Typography, theme } from 'antd';
+import { BugOutlined, SettingOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { TaskPlannerDatabase } from '../../../db';
 import type {
@@ -542,8 +542,10 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     }
   }, [team.leadId]);
 
-  const agentStatuses = useMemo(() => {
-    const map = new Map<string, 'queued' | 'running' | 'paused' | 'stopped' | 'error' | 'done'>();
+  /** Header chip: a run is in flight whenever the coordinator is past `ready`/`idle`. */
+  const busy = snapshot.phase !== 'idle' && snapshot.phase !== 'ready';
+
+  const agentStatuses = useMemo(() => {    const map = new Map<string, 'queued' | 'running' | 'paused' | 'stopped' | 'error' | 'done'>();
     for (const row of snapshot.agents) map.set(row.agentId, row.status);
     return map;
   }, [snapshot.agents]);
@@ -830,21 +832,22 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
-                padding: '12px 16px',
+                padding: '10px 16px',
                 borderBottom: `1px solid ${token.colorBorderSecondary}`,
               }}
             >
-              <span style={{ fontSize: 20, fontWeight: 600 }}>{team.name}</span>
+              <span style={{ fontSize: 16, fontWeight: 600 }}>{team.name}</span>
               {lead ? (
                 <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 12, color: token.colorTextTertiary }}>›</span>
                   <Avatar
-                    size={20}
+                    size={18}
                     shape="square"
                     style={{ backgroundColor: agentColorFor(lead.id), color: '#ffffff' }}
                   >
                     {initialOf(lead.name)}
                   </Avatar>
-                  <span style={{ fontSize: 12 }}>{lead.name}</span>
+                  <span style={{ fontSize: 12, color: token.colorTextSecondary }}>{lead.name}</span>
                 </span>
               ) : (
                 <span
@@ -854,22 +857,62 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                   Chưa chọn lead
                 </span>
               )}
-              <Button
-                size="small"
-                icon={<BugOutlined />}
-                style={{ marginLeft: 'auto' }}
-                onClick={() => setDebugModalOpen(true)}
-                data-testid="team-header-debug"
+              {/* One status chip replaces the old always-on header buttons: the run state is
+                  the only thing worth knowing at a glance. */}
+              <span
+                data-testid="team-header-status"
+                style={{
+                  marginLeft: 'auto',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  fontSize: 11,
+                  color: token.colorTextSecondary,
+                  background: token.colorFillQuaternary,
+                  borderRadius: 999,
+                  padding: '2px 9px',
+                }}
               >
-                Debug Prompt ({debugLogs.length})
-              </Button>
-              <Button
-                size="small"
-                onClick={() => setSettingsOpen(true)}
-                data-testid="team-header-settings"
+                <span
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: 3,
+                    background: busy ? token.colorPrimary : token.colorSuccess,
+                  }}
+                />
+                {busy ? 'Đang chạy' : 'Rảnh'}
+              </span>
+              <Dropdown
+                trigger={['click']}
+                placement="bottomRight"
+                menu={{
+                  items: [
+                    {
+                      key: 'debug',
+                      icon: <BugOutlined />,
+                      label: `Debug Prompt (${debugLogs.length})`,
+                      onClick: () => setDebugModalOpen(true),
+                    },
+                    {
+                      key: 'settings',
+                      icon: <SettingOutlined />,
+                      label: 'Cài đặt nhóm',
+                      onClick: () => setSettingsOpen(true),
+                    },
+                  ],
+                }}
               >
-                Cài đặt nhóm
-              </Button>
+                <Button
+                  size="small"
+                  type="text"
+                  aria-label="Thao tác nhóm"
+                  data-testid="team-header-more"
+                  style={{ width: 24, height: 24, padding: 0, color: token.colorTextSecondary }}
+                >
+                  ⋯
+                </Button>
+              </Dropdown>
             </div>
 
             <div
@@ -883,38 +926,31 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
             >
               {interruptedVisible.length > 0 && !interruptedDismissed && (
                 <div style={{ padding: '8px 16px 0' }}>
+                  {/* Single line: the transcript is the page, not the notices. The agent
+                      list stays in the description so nothing is lost. */}
                   <Alert
                     type="warning"
                     showIcon
                     closable
                     onClose={() => setInterruptedDismissed(true)}
-                    message="Lượt trước bị gián đoạn"
-                    description={
-                      <>
-                        <div>
-                          {interruptedVisible
-                            .map((entry) => `${entry.agentName}: ${entry.task}`)
-                            .join(' · ')}
-                        </div>
-                        <div>
-                          Lượt này chưa hoàn tất và không được tự động chạy lại. Hãy gửi lại yêu cầu
-                          nếu vẫn cần kết quả.
-                        </div>
-                      </>
-                    }
+                    message="Lượt trước bị gián đoạn — gửi lại yêu cầu nếu vẫn cần kết quả."
+                    description={interruptedVisible
+                      .map((entry) => `${entry.agentName}: ${entry.task}`)
+                      .join(' · ')}
                   />
                 </div>
               )}
               {notificationPermission === false && (
-                <Alert
-                  type="info"
-                  showIcon
-                  message="Thông báo hệ điều hành chưa được bật"
-                  description={notificationRequestFailed
-                    ? 'Chưa cấp được quyền thông báo. Kiểm tra quyền thông báo của ứng dụng trong cài đặt hệ điều hành.'
-                    : 'Bật quyền để nhận thông báo tin nhóm khi đang dùng ứng dụng khác.'}
-                  action={<Button size="small" loading={requestingNotification} onClick={() => void enableNotifications()}>Bật thông báo</Button>}
-                />
+                <div style={{ padding: '8px 16px 0' }}>
+                  <Alert
+                    type="info"
+                    showIcon
+                    message={notificationRequestFailed
+                      ? 'Chưa cấp được quyền thông báo. Kiểm tra quyền của ứng dụng trong cài đặt hệ điều hành.'
+                      : 'Chưa bật thông báo hệ điều hành — bật để nhận tin nhóm khi ở cửa sổ khác.'}
+                    action={<Button size="small" loading={requestingNotification} onClick={() => void enableNotifications()}>Bật thông báo</Button>}
+                  />
+                </div>
               )}
               {sendError?.code === 'NO_LEAD' && (
                 <Alert

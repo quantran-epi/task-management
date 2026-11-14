@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
+import dayjs from 'dayjs';
 import { Divider, Button, Modal, Tooltip, theme } from 'antd';
 import { SyncOutlined, ExclamationCircleOutlined, ExpandAltOutlined } from '@ant-design/icons';
 import type { ChatMessage } from '../../types/models';
@@ -71,6 +72,9 @@ export interface ChatMessageListProps {
 
 // The composer draft lives above this list, so without a memo every keystroke re-rendered
 // every row. Its props are identity-stable at both call sites.
+const dayLabel = (iso: string): string =>
+  dayjs(iso).isSame(dayjs(), 'day') ? 'Hôm nay' : dayjs(iso).format('DD/MM/YYYY');
+
 export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
   messages,
   streamingText,
@@ -255,7 +259,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
         </div>
       )}
 
-      {messages.map((msg) => {
+      {messages.map((msg, index) => {
         if (msg.isContextBoundary) {
           const isCompacted = msg.content?.includes('Tóm tắt ngữ cảnh') || msg.content?.includes('Compact Context');
           return (
@@ -277,6 +281,22 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
           );
         }
 
+        // A day divider only when the calendar day actually changes. Without it a long
+        // transcript has no anchor beyond the per-message clock.
+        const previous = index > 0 ? messages[index - 1] : undefined;
+        const dayChanged =
+          !previous ||
+          !dayjs(previous.createdAt).isSame(dayjs(msg.createdAt), 'day');
+        // Consecutive rows from the same author read as one block: the name and avatar
+        // belong to the block, not to every line.
+        const grouped =
+          !dayChanged &&
+          previous !== undefined &&
+          previous.role === 'assistant' &&
+          msg.role === 'assistant' &&
+          previous.agentId !== undefined &&
+          previous.agentId === msg.agentId;
+
         // Pass message with grounding intact for structured rendering.
         // CR-06: a steer row deliberately carries NO `agentId` (D-15 — it must render as a
         // user row), so its caption's target must be resolved from `targetAgentId` here.
@@ -294,6 +314,23 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
           : undefined;
         return (
           <div key={msg.id} data-chat-message-id={msg.id} style={{ flexShrink: 0 }}>
+            {dayChanged && (
+              <div
+                data-testid="chat-day-divider"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  margin: '4px 0 12px',
+                  fontSize: 11,
+                  color: token.colorTextTertiary,
+                }}
+              >
+                <span style={{ flex: 1, height: 1, background: token.colorBorderSecondary }} />
+                {dayLabel(msg.createdAt)}
+                <span style={{ flex: 1, height: 1, background: token.colorBorderSecondary }} />
+              </div>
+            )}
             {msg.id === lastReadMessageId && <div ref={lastReadRef} data-testid="team-last-read-anchor" />}
             {msg.id === firstUnreadMessageId && (
               <div>
@@ -334,6 +371,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
                     },
                   }
                 : {})}
+              grouped={grouped}
             />
           </div>
         );

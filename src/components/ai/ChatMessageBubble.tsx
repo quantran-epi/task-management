@@ -116,6 +116,11 @@ export interface ChatMessageBubbleProps {
    * sender.
    */
   addressedTo?: Array<{ id: string; name: string }> | undefined;
+  /**
+   * Consecutive messages from the same author render as one block: the attribution header
+   * appears once, and the rows sit closer together. Set by `ChatMessageList`.
+   */
+  grouped?: boolean | undefined;
 }
 
 /**
@@ -367,6 +372,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   seenBy,
   replyTo,
   addressedTo,
+  grouped = false,
 }) => {
   const { token } = theme.useToken();
   const [copied, setCopied] = useState(false);
@@ -375,9 +381,8 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   const [diagnosticsForcedOpen, setDiagnosticsForcedOpen] = useState(false);
 
   const isUser = msg.role === 'user';
-  const formattedTime = msg.createdAt
-    ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : '';
+  // 24h on purpose: this UI is Vietnamese, so `06:06 PM` reads as a foreign format.
+  const formattedTime = msg.createdAt ? dayjs(msg.createdAt).format('HH:mm') : '';
 
   const handleMarkdownClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
@@ -1168,19 +1173,31 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
     </>
   );
 
+  // A lead or a synthesis row is the team's voice, not one worker's report — it gets the
+  // accent surface so a reader can tell "the leader is speaking" without reading the name.
+  const isLeadVoice =
+    !isUser && (agent?.isLead === true || msg.messageKind === 'synthesis');
+
   return (
     <div
       data-role={msg.role}
       data-message-id={msg.id}
+      className="tc-message"
       style={{
         display: 'flex',
         flexDirection: 'column',
         alignItems: isUser ? 'flex-end' : 'flex-start',
-        marginBottom: 12,
+        marginBottom: grouped ? 4 : 12,
         width: '100%',
+        // A grouped row lines up with the bubble above it, not with the avatar.
+        paddingLeft: grouped && !isUser ? 30 : 0,
+        // The hover-reveal rule lives in team-chat.css; the color it needs comes from here.
+        ['--tc-accent' as string]: token.colorPrimary,
       }}
     >
-      {agent && <AgentAttributionRow agent={agent} />}
+      {/* Attribution names the AUTHOR. On a user row `agent` is only ever the target, and
+          the `→ name` line below already says who is being addressed. */}
+      {agent && !isUser && !grouped && <AgentAttributionRow agent={agent} />}
       {addressedTo !== undefined && addressedTo.length > 0 && (
         <div
           data-testid={`addressed-to-${msg.id}`}
@@ -1196,16 +1213,25 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       )}
       <div
         style={{
-          maxWidth: isUser ? '85%' : '95%',
-          backgroundColor: isUser ? token.colorPrimary : token.colorFillAlter,
+          maxWidth: isUser ? '72%' : '82%',
+          backgroundColor: isUser
+            ? token.colorPrimary
+            : isLeadVoice
+              ? token.colorPrimaryBg
+              : token.colorBgContainer,
           color: isUser ? '#ffffff' : token.colorText,
           borderRadius: isUser ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
-          border: isUser ? 'none' : `1px solid ${token.colorBorderSecondary}`,
-          padding: isUser ? '8px 12px' : '12px 16px',
+          border: isUser
+            ? 'none'
+            : isLeadVoice
+              ? `1px solid ${token.colorPrimaryBorder}`
+              : `1px solid ${token.colorBorderSecondary}`,
+          borderLeft: isLeadVoice ? `3px solid ${token.colorPrimary}` : undefined,
+          padding: isUser ? '8px 12px' : '10px 14px',
           wordBreak: 'break-word',
           fontSize: 14,
           lineHeight: 1.57,
-          boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+          boxShadow: isUser ? 'none' : '0 1px 2px rgba(0,0,0,0.04)',
         }}
       >
         {replyTo && (
@@ -1302,42 +1328,9 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           />
         )}
 
-      {/* 37.1 rework: the read receipt. A real chat shows whether the other side has read
-          what you sent; this is the same fact, read from the participant cursors. Clicking
-          names who read it and when. */}
-      {!isStreaming && (
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: isUser ? 'flex-end' : 'flex-start',
-            marginTop: 4,
-          }}
-        >
-          <Tooltip
-            title={
-              seenBy && seenBy.length > 0
-                ? seenBy
-                    .map(
-                      (entry) =>
-                        `${entry.participantName} đã đọc lúc ${dayjs(entry.at).format('HH:mm DD/MM/YYYY')}`
-                    )
-                    .join(' · ')
-                : 'Chưa ai đọc tin này'
-            }
-          >
-            <Typography.Text
-              data-testid={`seen-${msg.id}`}
-              style={{
-                fontSize: 11,
-                color: seenBy && seenBy.length > 0 ? token.colorPrimary : token.colorTextTertiary,
-                cursor: 'default',
-              }}
-            >
-              {seenBy && seenBy.length > 0 ? '✓✓' : '✓'}
-            </Typography.Text>
-          </Tooltip>
-        </div>
-      )}
+      {/* The receipt moved into the meta row below. It renders only on YOUR messages:
+          "who has read this" is information for the sender. On an agent's own row it
+          reported that the agent had read its own message. */}
 
       {/* AI-Generated Files Cards */}
       {!isUser && !isStreaming && msg.generatedFiles && msg.generatedFiles.length > 0 && (
@@ -1446,8 +1439,9 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         </div>
       )}
 
-      {/* Action Chips for Assistant messages per D-18 */}
-      {!isUser && !isStreaming && (
+      {/* Host-opted actions (checklist / sticky note / Claude Code). The team chat passes
+          none of these, so it renders no row here at all. */}
+      {!isUser && !isStreaming && (canAddToChecklist || canSaveStickyNote || canRunClaudeCode) && (
         <div
           style={{
             display: 'flex',
@@ -1491,74 +1485,32 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               Chạy với Claude Code
             </Button>
           )}
-
-          <Dropdown
-            menu={{ items: directDownloadMenuItems }}
-            trigger={['click']}
-            placement="bottomLeft"
-            getPopupContainer={(node) => node.parentElement || document.body}
-            overlayStyle={{ zIndex: 1500 }}
-          >
-            <Button
-              size="small"
-              icon={<DownloadOutlined />}
-              style={{ fontSize: 12, height: 24, padding: '0 8px' }}
-              title="Tải toàn bộ văn bản hội thoại chat"
-            >
-              Xuất đoạn chat
-            </Button>
-          </Dropdown>
-
-          <Dropdown
-            menu={{ items: saveAsMenuItems }}
-            trigger={['click']}
-            placement="bottomLeft"
-            getPopupContainer={(node) => node.parentElement || document.body}
-            overlayStyle={{ zIndex: 1500 }}
-          >
-            <Button
-              size="small"
-              icon={<FolderOpenOutlined />}
-              style={{ fontSize: 12, height: 24, padding: '0 8px' }}
-              title="Lưu toàn bộ văn bản hội thoại chat (Save As)"
-            >
-              Lưu đoạn chat...
-            </Button>
-          </Dropdown>
         </div>
       )}
 
+      {/* ONE meta row: time, cost, receipt, actions. The row used to be three stacked
+          rows (status tag, receipt, time+copy) on every message. */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: 8,
           marginTop: 4,
+          minHeight: 20,
           paddingLeft: isUser ? 0 : 4,
           paddingRight: isUser ? 4 : 0,
+          fontSize: 11,
+          color: token.colorTextTertiary,
         }}
       >
-        {formattedTime && (
-          <Text type="secondary" style={{ fontSize: 11 }}>
-            {formattedTime}
-          </Text>
-        )}
+        {formattedTime && <span>{formattedTime}</span>}
         {!isUser && !isStreaming && msg.durationMs !== undefined && (
           <Tooltip
             title={`Thời gian chạy phản hồi: ${(msg.durationMs / 1000).toFixed(2)}s`}
             zIndex={1500}
             getPopupContainer={(node) => node.parentElement || document.body}
           >
-            <span
-              style={{
-                fontSize: 11,
-                color: token.colorTextQuaternary,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 2,
-                cursor: 'default',
-              }}
-            >
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, cursor: 'default' }}>
               ⏱ {(msg.durationMs / 1000).toFixed(1)}s
             </span>
           </Tooltip>
@@ -1569,21 +1521,35 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
             zIndex={1500}
             getPopupContainer={(node) => node.parentElement || document.body}
           >
-            <span
-              style={{
-                fontSize: 11,
-                color: token.colorTextQuaternary,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 2,
-                cursor: 'default',
-              }}
-            >
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, cursor: 'default' }}>
               🪙 {(msg.tokenUsage.totalTokens ?? ((msg.tokenUsage.promptTokens || 0) + (msg.tokenUsage.completionTokens || 0))).toLocaleString()} tokens
             </span>
           </Tooltip>
         )}
-        {!isUser && (
+        {/* 37.1: "who has read this" is information for the SENDER, so it renders only on
+            your own messages. On an agent row it reported that the agent had read its own
+            message — a check mark that could never be false. */}
+        {!isStreaming && isUser && seenBy && seenBy.length > 0 && (
+          <Tooltip
+            title={seenBy
+              .map(
+                (entry) =>
+                  `${entry.participantName} đã đọc lúc ${dayjs(entry.at).format('HH:mm DD/MM/YYYY')}`
+              )
+              .join(' · ')}
+            zIndex={1500}
+            getPopupContainer={(node) => node.parentElement || document.body}
+          >
+            <Typography.Text
+              data-testid={`seen-${msg.id}`}
+              style={{ fontSize: 11, color: token.colorPrimary, cursor: 'default' }}
+            >
+              ✓✓
+            </Typography.Text>
+          </Tooltip>
+        )}
+
+        <div className="tc-actions" style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Tooltip
             title={copied ? 'Đã sao chép' : 'Sao chép nội dung'}
             zIndex={1500}
@@ -1598,7 +1564,41 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               style={{ minHeight: 20, minWidth: 20, padding: 0 }}
             />
           </Tooltip>
-        )}
+          {!isUser && !isStreaming && (
+            <Dropdown
+              trigger={['click']}
+              placement="bottomRight"
+              getPopupContainer={(node) => node.parentElement || document.body}
+              overlayStyle={{ zIndex: 1500 }}
+              menu={{
+                items: [
+                  {
+                    key: 'export',
+                    icon: <DownloadOutlined />,
+                    label: 'Xuất đoạn chat',
+                    children: directDownloadMenuItems,
+                  },
+                  {
+                    key: 'save',
+                    icon: <FolderOpenOutlined />,
+                    label: 'Lưu đoạn chat...',
+                    children: saveAsMenuItems,
+                  },
+                ],
+              }}
+            >
+              <Button
+                type="text"
+                size="small"
+                aria-label="Thao tác khác"
+                title="Xuất hoặc lưu đoạn chat"
+                style={{ minHeight: 20, minWidth: 20, padding: 0, fontSize: 13 }}
+              >
+                ⋯
+              </Button>
+            </Dropdown>
+          )}
+        </div>
       </div>
     </div>
   );
