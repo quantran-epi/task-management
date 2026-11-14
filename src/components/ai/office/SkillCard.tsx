@@ -5,7 +5,7 @@ import type { AiSkill } from '../../../types/aiOffice';
 export interface SkillCardProps {
   skill: AiSkill;
   agentCount: number;
-  /** D-29: optional so the dead `AiOfficeView` call site keeps compiling (D-32). */
+  /** D-29: pending proposals for this skill. Both call sites pass it (IN-04). */
   pendingCount?: number | undefined;
   onEdit: () => void;
   onDelete: () => void;

@@ -78,6 +78,9 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
   const leads = useLiveQuery(() => listLeads(db), [db]) ?? [];
   const skills = useLiveQuery(() => listSkills(db), [db]) ?? [];
   const members = useLiveQuery(() => db.aiTeamMembers.toArray(), [db]) ?? [];
+  /** IN-04: this surface renders `SkillCard` too, so it must show the same pending badge. */
+  const pendingRows =
+    useLiveQuery(() => db.aiSkillVersions.where('status').equals('pending').toArray(), [db]) ?? [];
 
   const teamCountByAgent = useMemo(() => {
     const counts = new Map<string, number>();
@@ -95,6 +98,14 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
     }
     return counts;
   }, [employees]);
+
+  const pendingCountBySkill = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of pendingRows) {
+      counts.set(row.skillId, (counts.get(row.skillId) ?? 0) + 1);
+    }
+    return counts;
+  }, [pendingRows]);
 
   const query = search.trim().toLowerCase();
   const matches = (...values: Array<string | undefined>) =>
@@ -290,6 +301,7 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
                     key={skill.id}
                     skill={skill}
                     agentCount={agentCountBySkill.get(skill.id) ?? 0}
+                    pendingCount={pendingCountBySkill.get(skill.id) ?? 0}
                     onEdit={() => {
                       setEditingSkill(skill);
                       setDrawer('skill');

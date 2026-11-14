@@ -12,6 +12,7 @@ import {
   listSkills,
 } from '../../src/db/repositories/aiOfficeRepo';
 import { createTeam } from '../../src/db/repositories/aiTeamRepo';
+import { createSkillVersion } from '../../src/db/repositories/aiSkillVersionRepo';
 import { AiOfficeView } from '../../src/views/AiOfficeView';
 import { getEditorTabIcon } from '../../src/workbench/EditorArea';
 import {
@@ -389,6 +390,24 @@ describe('AiOfficeView — employee tab shell (AIO-UI-01)', () => {
     expect(alert).toHaveTextContent('An Nguyễn');
     expect(screen.getByTestId(`skill-card-${skill.id}`)).toBeInTheDocument();
     expect((await listSkills(db)).some((row) => row.id === skill.id)).toBe(true);
+  });
+
+  it('shows the pending-proposal badge on a skill card (IN-04)', async () => {
+    const skill = await createSkill(
+      { name: 'Viết đặc tả', description: 'Quy trình viết đặc tả.', body: '# Quy trình' },
+      db
+    );
+    await createSkillVersion(
+      { skillId: skill.id, name: skill.name, description: skill.description, body: '# Mới' },
+      db
+    );
+
+    renderView();
+    fireEvent.click(await screen.findByTestId('ai-office-segment-skills'));
+
+    expect(await screen.findByTestId(`skill-card-pending-${skill.id}`)).toHaveTextContent(
+      '1 chờ duyệt'
+    );
   });
 
   it('promises refusal, not cascade, in the delete confirmation copy', async () => {

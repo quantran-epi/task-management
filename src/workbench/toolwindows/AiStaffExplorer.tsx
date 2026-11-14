@@ -102,12 +102,22 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
 
   const applyRefusal = (result: AiOfficeDeleteResult) => setRefusal(refusalMessage(result));
 
+  /** WR-04: a rejected write must reach the alert, not the console as an unhandled rejection. */
+  const DELETE_FAILED_COPY = 'Không xóa được. Thử lại.';
+  const runDelete = async (run: () => Promise<AiOfficeDeleteResult>) => {
+    try {
+      applyRefusal(await run());
+    } catch {
+      setRefusal(DELETE_FAILED_COPY);
+    }
+  };
+
   /**
    * T-39-28: `SkillCard`'s own `Popconfirm` already asked. Routing this through
    * `confirmDelete` would stack a second `Modal.confirm` on top of it.
    */
   const handleDeleteSkill = async (skill: AiSkill) => {
-    applyRefusal(await deleteSkill(skill.id, db));
+    await runDelete(() => deleteSkill(skill.id, db));
   };
 
   /**
@@ -121,7 +131,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
       okText: 'Xóa',
       okType: 'danger',
       cancelText: 'Hủy',
-      onOk: async () => applyRefusal(await run()),
+      onOk: () => runDelete(run),
     });
   };
 
@@ -383,7 +393,8 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
           )}
         </div>
 
-        {/* Section: Kỹ năng — D-31/D-33: the only skill CRUD entry point in the app. */}
+        {/* Section: Kỹ năng — D-31/D-33: the skill CRUD entry point for the workbench.
+            IN-04: `AiOfficeView` is a second, reachable entry point — neither is "the only". */}
         <div data-testid="ai-staff-skills-section" style={{ marginTop: 12 }}>
           <div
             style={{
