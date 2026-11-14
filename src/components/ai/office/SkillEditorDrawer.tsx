@@ -179,6 +179,17 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
     [name, description, body]
   );
 
+  /**
+   * IN-02: a no-op save writes nothing (WR-01's early return in `updateSkill`), so the caption
+   * promising a new version must not be reachable — the button is disabled until something
+   * actually changed. Create mode always has something to write.
+   */
+  const dirty =
+    skill === null ||
+    name !== skill.name ||
+    description !== skill.description ||
+    body !== skill.body;
+
   const decide = async (entry: SkillProposalEntry, status: 'approved' | 'rejected') => {
     const { row, patch } = entry;
     // Snapshot before the write: the row leaves the pending filter and `aiSkills` changes.
@@ -270,7 +281,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
             <Button onClick={onCancel}>Hủy</Button>
             <Button
               type="primary"
-              disabled={!valid}
+              disabled={!valid || !dirty}
               loading={saving}
               onClick={handleSave}
               data-testid="skill-editor-save"
@@ -319,7 +330,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
 
         {skill !== null && (
           <div style={{ fontSize: 12, color: token.colorTextSecondary }}>
-            Lưu thay đổi sẽ tạo một phiên bản mới trong lịch sử.
+            Lưu thay đổi (nếu có) sẽ tạo một phiên bản mới trong lịch sử.
           </div>
         )}
 

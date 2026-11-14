@@ -13,7 +13,7 @@ import {
   type AiOfficeDeleteResult,
 } from '../db/repositories/aiOfficeRepo';
 import { PageHeader } from '../components/common/PageHeader';
-import { refusalMessage } from '../components/ai/office/deleteRefusalMessage';
+import { DELETE_FAILED_COPY, refusalMessage } from '../components/ai/office/deleteRefusalMessage';
 import { EmployeeCard, LeadCard } from '../components/ai/office/EmployeeCard';
 import { SkillCard } from '../components/ai/office/SkillCard';
 import {
@@ -134,12 +134,12 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
   const closeDrawer = () => setDrawer(null);
 
   // WR-03: a rejected delete must surface, not escape the click handler as an unhandled
-  // rejection that makes the click look dead. Same shape as `AiStaffExplorer`'s `runDelete`.
+  // rejection that makes the click look dead. IN-04: the copy lives in the shared module.
   const runDelete = async (run: () => Promise<AiOfficeDeleteResult>) => {
     try {
       setDeleteError(refusalMessage(await run()));
     } catch {
-      setDeleteError('Không xóa được. Thử lại.');
+      setDeleteError(DELETE_FAILED_COPY);
     }
   };
 
@@ -229,10 +229,11 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
             <Alert
               type="warning"
               showIcon
-              closable
               data-testid="ai-office-delete-error"
-              message={deleteError}
-              onClose={() => setDeleteError(null)}
+              // IN-01: antd 6 deprecates `message`/`onClose` in favour of `title` and
+              // `closable.onClose`.
+              title={deleteError}
+              closable={{ onClose: () => setDeleteError(null) }}
             />
           )}
 

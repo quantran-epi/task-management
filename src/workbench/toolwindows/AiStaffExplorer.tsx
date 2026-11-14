@@ -27,7 +27,7 @@ import {
 } from '../../components/ai/office/EmployeeEditorDrawer';
 import { SkillCard } from '../../components/ai/office/SkillCard';
 import { SkillEditorDrawer } from '../../components/ai/office/SkillEditorDrawer';
-import { refusalMessage } from '../../components/ai/office/deleteRefusalMessage';
+import { DELETE_FAILED_COPY, refusalMessage } from '../../components/ai/office/deleteRefusalMessage';
 import type { AiSkill } from '../../types/aiOffice';
 
 export interface AiStaffExplorerProps {
@@ -103,7 +103,6 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
   const applyRefusal = (result: AiOfficeDeleteResult) => setRefusal(refusalMessage(result));
 
   /** WR-04: a rejected write must reach the alert, not the console as an unhandled rejection. */
-  const DELETE_FAILED_COPY = 'Không xóa được. Thử lại.';
   const runDelete = async (run: () => Promise<AiOfficeDeleteResult>) => {
     try {
       applyRefusal(await run());

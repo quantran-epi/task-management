@@ -60,7 +60,7 @@ describe('SkillEditorDrawer — pending queue and version history (AIO-SKILL-01/
     expect(screen.queryByTestId('skill-pending-section')).not.toBeInTheDocument();
     expect(screen.queryByTestId('skill-version-history')).not.toBeInTheDocument();
     expect(
-      screen.queryByText('Lưu thay đổi sẽ tạo một phiên bản mới trong lịch sử.')
+      screen.queryByText('Lưu thay đổi (nếu có) sẽ tạo một phiên bản mới trong lịch sử.')
     ).not.toBeInTheDocument();
   });
 
@@ -74,8 +74,23 @@ describe('SkillEditorDrawer — pending queue and version history (AIO-SKILL-01/
     ).toBeInTheDocument();
     expect(screen.queryByTestId('skill-pending-section')).not.toBeInTheDocument();
     expect(
-      screen.getByText('Lưu thay đổi sẽ tạo một phiên bản mới trong lịch sử.')
+      screen.getByText('Lưu thay đổi (nếu có) sẽ tạo một phiên bản mới trong lịch sử.')
     ).toBeInTheDocument();
+  });
+
+  // IN-02: the caption promises a version, and a no-op save writes none — so the button that
+  // would break the promise is unreachable.
+  it('disables Save until the form actually changed (IN-02)', async () => {
+    renderDrawer(skill);
+    const save = await screen.findByTestId('skill-editor-save');
+    expect(save).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText('Tên'), { target: { value: 'Viết đặc tả v2' } });
+    expect(save).not.toBeDisabled();
+
+    // Typing back to the stored value is not a change either.
+    fireEvent.change(screen.getByLabelText('Tên'), { target: { value: skill.name } });
+    expect(save).toBeDisabled();
   });
 
   it('saving an edit produces an approved version row and a history entry (D-09)', async () => {

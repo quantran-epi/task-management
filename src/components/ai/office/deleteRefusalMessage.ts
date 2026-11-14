@@ -1,6 +1,11 @@
 import type { AiOfficeDeleteResult } from '../../../db/repositories/aiOfficeRepo';
 
 /**
+ * IN-04: one home for the failure copy — both delete surfaces render it.
+ */
+export const DELETE_FAILED_COPY = 'Không xóa được. Thử lại.';
+
+/**
  * D-10/D-11/D-12: the repo decides, the view only renders. Names only — never an id (T-36-15).
  * An empty `usedBy` means a running turn holds the profile (D-13), not a roster reference.
  *
