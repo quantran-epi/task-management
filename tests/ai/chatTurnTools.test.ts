@@ -27,6 +27,23 @@ describe('chatTurnTools allowlists (D-12, D-27)', () => {
     }
   });
 
+  // WR-03: `get_item_details` returns raw task description/notes/checklist text and raw
+  // sticky-note bodies. Advertising it to the lead let the one agent holding mutation tools
+  // bypass the untrusted-data boundary `get_linked_context` applies, and made the two read
+  // paths disagree. `get_linked_context` is the lead's item read.
+  it('the lead cannot reach raw item text through get_item_details (WR-03)', () => {
+    expect(LEAD_TOOL_ALLOWLIST).not.toContain('get_item_details');
+    expect(EMPLOYEE_READ_ONLY_ALLOWLIST).toContain('get_item_details');
+
+    const names = getToolsForTurn(true, [], LEAD_TOOL_ALLOWLIST).map((t) =>
+      normalizeToolName(t.function.name)
+    );
+    expect(names).not.toContain('get_item_details');
+    // `get_linked_context` is a team tool the coordinator appends, not an `AI_DATABASE_TOOLS`
+    // member — the allowlist entry is what lets it through.
+    expect(LEAD_TOOL_ALLOWLIST).toContain('get_linked_context');
+  });
+
   it('lead payload contains no mutation tool', () => {
     expect(payloadHasMutationTool(getToolsForTurn(true, [], LEAD_TOOL_ALLOWLIST))).toBe(false);
   });

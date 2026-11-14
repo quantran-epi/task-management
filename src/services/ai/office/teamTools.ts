@@ -450,11 +450,27 @@ async function getLinkedContext(args: Record<string, any>, ctx: TeamToolContext)
     });
   }
 
-  // CR-03: the delegated resolver embeds every sticky note's free-text `body`, so its result
-  // is not safe to return verbatim — the invariant above applies to it too. The recipient is
-  // the lead, the one agent holding mutation tools.
+  // CR-03/WR-03: the delegated resolver embeds every free-text field the user authored, so its
+  // result is not safe to return verbatim — the invariant above applies to all of them, not
+  // just sticky-note bodies. The recipient is the lead, the one agent holding mutation tools.
+  // `name` / `code` stay raw: `buildLeadTurnRequest` wraps the linked-item name once at the
+  // prompt boundary, and wrapping here too would nest the block inside itself.
   const raw = await executeAiTool('get_item_details', { type: link.itemType, id: itemId }, ctx.db);
   const parsed = JSON.parse(raw);
+  const wrapField = (label: string, value: unknown): unknown =>
+    typeof value === 'string' ? wrapUntrusted(label, value) : value;
+
+  if (parsed?.item && typeof parsed.item === 'object') {
+    const item = parsed.item;
+    item.description = wrapField(`MÔ TẢ MỤC ${itemId}`, item.description);
+    item.notes = wrapField(`GHI CHÚ MỤC ${itemId}`, item.notes);
+    if (Array.isArray(item.checklist)) {
+      item.checklist = item.checklist.map((entry: any) => ({
+        ...entry,
+        text: wrapField(`ĐẦU VIỆC ${itemId}`, entry?.text),
+      }));
+    }
+  }
   if (Array.isArray(parsed?.stickyNotes)) {
     parsed.stickyNotes = parsed.stickyNotes.map((note: any) => ({
       ...note,

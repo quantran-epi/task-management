@@ -31,9 +31,17 @@ export const EMPLOYEE_READ_ONLY_ALLOWLIST: readonly string[] = [
   'read_file',
 ];
 
-/** D-27: the lead's DB read set plus the linked-item tools and `delegate_batch`. */
+/**
+ * D-27: the lead's DB read set plus the linked-item tools and `delegate_batch`.
+ *
+ * WR-03: `get_item_details` is deliberately excluded. It returns raw task `description` /
+ * `notes` / `checklist[].text` and raw sticky-note bodies, so advertising it to the lead let
+ * the one agent holding mutation tools reach unwrapped user text directly and made the two
+ * read paths disagree. `get_linked_context` is the lead's item read — it applies the
+ * untrusted-data boundary once.
+ */
 export const LEAD_TOOL_ALLOWLIST: readonly string[] = [
-  ...EMPLOYEE_READ_ONLY_ALLOWLIST,
+  ...EMPLOYEE_READ_ONLY_ALLOWLIST.filter((name) => name !== 'get_item_details'),
   'list_linked_items',
   'get_linked_context',
   'delegate_batch',
