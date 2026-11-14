@@ -38,6 +38,10 @@ import {
   createAssignment,
   openBatch,
 } from '../../../../src/db/repositories/aiTeamRunRepo';
+import {
+  createSkillVersion,
+  decideSkillVersion,
+} from '../../../../src/db/repositories/aiSkillVersionRepo';
 import { aiTurnManager } from '../../../../src/services/ai/aiTurnManager';
 import { EMPLOYEE_READ_ONLY_ALLOWLIST } from '../../../../src/services/ai/chatTurnTools';
 import { payloadHasMutationTool } from '../../../../src/services/ai/chatTurnTools';
@@ -6240,6 +6244,145 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       const member = await memberRowFor(current, agentId);
       expect(member.inputTokens).toBe(500);
       expect(member.outputTokens).toBe(70);
+    });
+  });
+
+  describe('skill version pin (AIO-SKILL-05, D-17, D-18, D-19)', () => {
+    /** Only employee A has a skill, so the batch is one attempt and the assertions stay tight. */
+    const delegatingLead =
+      (harnessRef: () => Harness): LoopScript =>
+      async (options) => {
+        await options.executeToolFn!(
+          'delegate_batch',
+          { assignments: [{ agentId: harnessRef().employees[0]!.id, task: 'Việc 1' }] },
+          harnessRef().db,
+          options.signal
+        );
+        return loopResult('Đã giao việc.');
+      };
+
+    /** Proposes then approves a version, which also overwrites `aiSkills` (D-07). */
+    const approveVersion = async (current: Harness, body: string) => {
+      const pending = await createSkillVersion(
+        {
+          skillId: current.skill.id,
+          name: current.skill.name,
+          description: current.skill.description,
+          body,
+        },
+        current.db
+      );
+      return decideSkillVersion(pending.id, 'approved', current.db);
+    };
+
+    /**
+     * Seeds approved v1 whose body is `# Bản 1`, dispatches one batch, and parks the employee
+     * BEFORE it reads its skill — so the test controls exactly when the read happens.
+     */
+    async function startParkedBatch(state: { calls: number }) {
+      const parked = deferred();
+      const reads: string[] = [];
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: delegatingLead(() => harness!),
+          [EMP_A_MODEL]: async (options) => {
+            state.calls += 1;
+            if (state.calls === 1) await parked.promise;
+            reads.push(
+              await options.executeToolFn!('read_skill', {}, harness!.db, options.signal)
+            );
+            return loopResult('A xong');
+          },
+        },
+      });
+      const current = harness;
+      await approveVersion(current, '# Bản 1');
+      const skillRow = await current.db.aiSkills.get(current.skill.id);
+      await current.db.aiSkills.put({ ...skillRow!, body: '# Bản 1' });
+
+      void current.coordinator.send('Làm báo cáo');
+      await waitFor(() =>
+        current.coordinator
+          .getState()
+          .agents.some(
+            (row) => row.agentId === current.employees[0]!.id && row.status === 'running'
+          )
+      );
+      return { current, reads, parked };
+    }
+
+    it('pins the newest approved version on the dispatched attempt (D-17)', async () => {
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: delegatingLead(() => harness!),
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+        },
+      });
+      const withVersion = harness;
+      await approveVersion(withVersion, '# Bản 1');
+      await withVersion.coordinator.send('Làm báo cáo');
+      await waitForReady(withVersion.coordinator);
+
+      const batchId = (await withVersion.db.aiTeamBatches.toArray())[0]!.id;
+      const pinnedAttempt = (
+        await withVersion.db.aiTeamAssignments.where('batchId').equals(batchId).toArray()
+      )[0]!;
+      expect(pinnedAttempt.skillVersion).toBe(1);
+
+      // Baseline: no approved row means NO key at all — a literal 0 is unrestorable
+      // (`BackupAiTeamAssignmentRecordSchema.skillVersion` is `.positive()`).
+      await withVersion.db.delete();
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        scripts: {
+          [LEAD_MODEL]: delegatingLead(() => harness!),
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+        },
+      });
+      const baseline = harness;
+      await baseline.coordinator.send('Làm báo cáo');
+      await waitForReady(baseline.coordinator);
+
+      const baselineBatchId = (await baseline.db.aiTeamBatches.toArray())[0]!.id;
+      const attemptRow = (
+        await baseline.db.aiTeamAssignments.where('batchId').equals(baselineBatchId).toArray()
+      )[0]!;
+      expect('skillVersion' in attemptRow).toBe(false);
+    });
+
+    it("mid-batch approval does not change a running agent's read_skill (D-18, D-19)", async () => {
+      const { current, reads, parked } = await startParkedBatch({ calls: 0 });
+
+      // Approving v2 rewrites `aiSkills` too — the running attempt must ignore both.
+      await approveVersion(current, '# Bản 2');
+      parked.release();
+      await waitForReady(current.coordinator);
+
+      expect(reads).toHaveLength(1);
+      const body = JSON.parse(reads[0]!).body as string;
+      expect(body).toContain('# Bản 1');
+      expect(body).not.toContain('# Bản 2');
+    });
+
+    it('a new attempt after the approval reads the new version (D-19)', async () => {
+      const state = { calls: 0 };
+      const { current, reads, parked } = await startParkedBatch(state);
+
+      await approveVersion(current, '# Bản 2');
+      parked.release();
+      await waitForReady(current.coordinator);
+
+      // Same coordinator, same group — no relaunch, no new team.
+      await current.coordinator.send('Làm lại');
+      await waitForReady(current.coordinator);
+
+      expect(reads).toHaveLength(2);
+      expect(JSON.parse(reads[0]!).body).toContain('# Bản 1');
+      const second = JSON.parse(reads[1]!).body as string;
+      expect(second).toContain('# Bản 2');
+      expect(second).not.toContain('# Bản 1');
     });
   });
 });
