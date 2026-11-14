@@ -6,7 +6,9 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
 import {
   countAgentsUsingSkill,
   createSkill,
+  SKILL_MOVED_MESSAGE,
   updateSkill,
+  type AiSkillSeed,
 } from '../../../db/repositories/aiOfficeRepo';
 import {
   decideSkillVersion,
@@ -77,13 +79,37 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
   const [decision, setDecision] = useState<Map<string, 'approved' | 'rejected'>>(new Map());
   const [applying, setApplying] = useState<Set<string>>(new Set());
   const [error, setError] = useState<Map<string, string>>(new Map());
+  /** CR-02: the content the form was seeded from — the save's compare-and-swap token. */
+  const [seed, setSeed] = useState<AiSkillSeed | undefined>(undefined);
+
+  /**
+   * CR-02: the form is seeded from the LIVE row, never the frozen `skill` prop. The drawer is
+   * also the approval queue (D-26), and approving overwrites `aiSkills` — seeding from the
+   * prop left the textareas holding the pre-approval body, so the next save wrote that stale
+   * content back over the approved version. The prop is only a fallback while the live query
+   * has not resolved yet.
+   */
+  const liveSkill =
+    useLiveQuery<AiSkill | undefined>(
+      () => (skill ? db.aiSkills.get(skill.id) : Promise.resolve(undefined)),
+      [skill?.id, db]
+    ) ?? skill;
 
   useEffect(() => {
     if (!open) return;
-    setName(skill?.name ?? '');
-    setDescription(skill?.description ?? '');
-    setBody(skill?.body ?? '');
-  }, [open, skill]);
+    setName(liveSkill?.name ?? '');
+    setDescription(liveSkill?.description ?? '');
+    setBody(liveSkill?.body ?? '');
+    // CR-02: the content this draft was seeded from. The save hands it to the repo, so a write
+    // built from an older revision is refused at the state owner instead of reverting a newer
+    // approved body.
+    setSeed(
+      liveSkill
+        ? { name: liveSkill.name, description: liveSkill.description, body: liveSkill.body }
+        : undefined
+    );
+    // `updatedAt` moves on every write — a manual save, or an approval from any surface.
+  }, [open, liveSkill?.id, liveSkill?.updatedAt]);
 
   /** A reopened drawer starts clean — no decision overlay from the previous session. */
   useEffect(() => {
@@ -115,7 +141,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
       [open, skill?.id, db]
     ) ?? [];
 
-  const { pendingSectionRows, unresolvedCount, historyRows, highestApproved, pendingCount } =
+  const { pendingSectionRows, unresolvedRows, historyRows, highestApproved, pendingCount } =
     useMemo(() => {
       const pending = versions.filter((row) => row.status === 'pending');
 
@@ -130,7 +156,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
                   (candidate) =>
                     candidate.status === 'approved' && candidate.version === baseVersion
                 )
-              : skill;
+              : liveSkill;
           // Neither side resolves: skip rather than render a card with an empty base.
           if (!base) continue;
           const result = prepareSkillVersionDiff({
@@ -147,7 +173,11 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
       const rows: SkillProposalEntry[] = [
         ...recentlyDecided.values(),
         ...pending
-          .filter((row) => patches.has(row.id))
+          // WR-01: `decide()` snapshots the row before awaiting the write, while the live
+          // query still carries it until Dexie's change event lands. Without this filter the
+          // same row renders twice for one refresh tick, with a duplicate React key — and a
+          // second click on that duplicate reaches `decideSkillVersion` on a decided row.
+          .filter((row) => patches.has(row.id) && !recentlyDecided.has(row.id))
           .map((row) => ({ row, patch: patches.get(row.id)! })),
       ].sort((a, b) => b.row.createdAt.localeCompare(a.row.createdAt));
 
@@ -167,12 +197,12 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
         // A row whose base cannot resolve is still pending, so it counts here too: the card
         // reads it from the raw DB count and the drawer must not disagree.
         pendingCount: pending.length,
-        // WR-02: a row whose base cannot resolve renders no card. It is counted into the
-        // chrome above and surfaced below, mirroring `PendingSkillProposals`' overflow line —
-        // silently dropping it left the user unable to approve or reject it, forever.
-        unresolvedCount: pending.length - patches.size,
+        // WR-02: a row whose base cannot resolve renders no diff card. It is counted into the
+        // chrome above and rendered below with its own Reject control — silently dropping it
+        // left the user unable to clear the queue, forever.
+        unresolvedRows: pending.filter((row) => !patches.has(row.id)),
       };
-    }, [versions, skill, recentlyDecided]);
+    }, [versions, skill, liveSkill, recentlyDecided]);
 
   const valid = useMemo(
     () => AiSkillInputSchema.safeParse({ name, description, body }).success,
@@ -183,12 +213,16 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
    * IN-02: a no-op save writes nothing (WR-01's early return in `updateSkill`), so the caption
    * promising a new version must not be reachable — the button is disabled until something
    * actually changed. Create mode always has something to write.
+   *
+   * CR-02: compared against the LIVE row, not the frozen prop — after an approval the form is
+   * re-seeded from the approved copy, so an untouched form is not "dirty" and cannot write the
+   * pre-approval body back.
    */
   const dirty =
     skill === null ||
-    name !== skill.name ||
-    description !== skill.description ||
-    body !== skill.body;
+    name !== (liveSkill?.name ?? '') ||
+    description !== (liveSkill?.description ?? '') ||
+    body !== (liveSkill?.body ?? '');
 
   const decide = async (entry: SkillProposalEntry, status: 'approved' | 'rejected') => {
     const { row, patch } = entry;
@@ -231,17 +265,57 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
     }
   };
 
+  /**
+   * WR-02: a row with no diff card can still be rejected. Rejection is not blocked by the
+   * stale guard, so this is the only way to clear it from the queue. No snapshot is needed —
+   * the row leaves `pending` and lands in history, where a rejected row belongs.
+   */
+  const decideUnresolved = async (row: AiSkillVersion) => {
+    setApplying((prev) => new Set(prev).add(row.id));
+    setError((prev) => {
+      const next = new Map(prev);
+      next.delete(row.id);
+      return next;
+    });
+    try {
+      await decideSkillVersion(row.id, 'rejected', db, row.baseVersion ?? 0);
+      setDecision((prev) => new Map(prev).set(row.id, 'rejected'));
+    } catch (err) {
+      setError(
+        (prev) =>
+          new Map(prev).set(
+            row.id,
+            err instanceof Error && err.message === STALE_VERSION_MESSAGE
+              ? STALE_VERSION_MESSAGE
+              : WRITE_FAILED_COPY
+          )
+      );
+    } finally {
+      setApplying((prev) => {
+        const next = new Set(prev);
+        next.delete(row.id);
+        return next;
+      });
+    }
+  };
+
   // D-09: the repo writes the version, so saving stays immediate — no approval step here.
   // WR-03: a failed write must surface, not escape the click handler as an unhandled rejection.
+  // CR-02: the seed revision travels with the write, so a stale draft cannot overwrite a
+  // newer approved body. The live query re-seeds the form, so the retry is one click.
   const handleSave = async () => {
     setSaving(true);
     setSaveError(null);
     try {
-      if (skill) await updateSkill(skill.id, { name, description, body }, db);
+      if (skill) await updateSkill(skill.id, { name, description, body }, db, seed);
       else await createSkill({ name, description, body }, db);
       onSaved();
-    } catch {
-      setSaveError('Không lưu được kỹ năng. Thử lại.');
+    } catch (err) {
+      setSaveError(
+        err instanceof Error && err.message === SKILL_MOVED_MESSAGE
+          ? SKILL_MOVED_MESSAGE
+          : 'Không lưu được kỹ năng. Thử lại.'
+      );
     } finally {
       setSaving(false);
     }
@@ -266,7 +340,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
 
   return (
     <Drawer
-      width={560}
+      size={560}
       placement="right"
       open={open}
       onClose={onCancel}
@@ -345,7 +419,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
           ]}
         />
 
-        {skill !== null && pendingSectionRows.length + unresolvedCount > 0 && (
+        {skill !== null && pendingSectionRows.length + unresolvedRows.length > 0 && (
           <div
             data-testid="skill-pending-section"
             style={{
@@ -382,16 +456,28 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
                 />
               </div>
             ))}
-            {/* WR-02: a pending row whose base cannot resolve has no card. Say so instead of
-                dropping it — the user still has to reject it or ask for a re-proposal. */}
-            {unresolvedCount > 0 && (
+            {/* WR-02: a pending row whose base cannot resolve has no diff card. It still needs
+                a way out of the queue — rejection is not blocked by the stale guard, so give
+                it its own Reject control instead of a line the user cannot act on. */}
+            {unresolvedRows.map((row) => (
               <div
-                data-testid="skill-pending-unresolved"
-                style={{ fontSize: 12, color: token.colorTextSecondary }}
+                key={row.id}
+                data-testid={`skill-pending-unresolved-${row.id}`}
+                style={{ display: 'flex', gap: 8, alignItems: 'center' }}
               >
-                {`Còn ${unresolvedCount} đề xuất không xem được bản diff — hãy từ chối hoặc đề xuất lại.`}
+                <span style={{ fontSize: 12, color: token.colorTextSecondary, flex: 1 }}>
+                  Đề xuất này không xem được bản diff — hãy từ chối để dọn hàng chờ.
+                </span>
+                <Button
+                  size="small"
+                  danger
+                  loading={applying.has(row.id)}
+                  onClick={() => void decideUnresolved(row)}
+                >
+                  Từ chối
+                </Button>
               </div>
-            )}
+            ))}
           </div>
         )}
 

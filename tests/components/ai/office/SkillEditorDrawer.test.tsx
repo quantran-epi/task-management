@@ -240,8 +240,8 @@ describe('SkillEditorDrawer — pending queue and version history (AIO-SKILL-01/
   });
 
   // WR-02: a restored backup can carry a pending whose `baseVersion` resolves to no approved
-  // row. It renders no card, so it must still be counted and surfaced — `SkillCard` reads the
-  // raw DB count and the two surfaces may not disagree.
+  // row. It renders no diff card, so it must still be counted and surfaced — `SkillCard` reads
+  // the raw DB count and the two surfaces may not disagree.
   it('counts and surfaces a pending proposal whose base cannot resolve (WR-02)', async () => {
     await db.aiSkillVersions.add({
       id: 'dangling-pending',
@@ -262,9 +262,129 @@ describe('SkillEditorDrawer — pending queue and version history (AIO-SKILL-01/
     const section = screen.getByTestId('skill-pending-section');
     expect(section).toHaveTextContent('Chờ duyệt (1)');
     expect(screen.queryByTestId('skill-pending-card-dangling-pending')).toBeNull();
-    expect(screen.getByTestId('skill-pending-unresolved')).toHaveTextContent(
-      'Còn 1 đề xuất không xem được bản diff — hãy từ chối hoặc đề xuất lại.'
+    expect(screen.getByTestId('skill-pending-unresolved-dangling-pending')).toHaveTextContent(
+      'Đề xuất này không xem được bản diff — hãy từ chối để dọn hàng chờ.'
     );
+  });
+
+  // WR-02: the unresolved row used to be a text line with no action, so the badge and the
+  // header stayed forever. Rejection is not blocked by the stale guard, so it gets a control.
+  it('rejects an unresolved pending proposal so the queue can be cleared (WR-02)', async () => {
+    await db.aiSkillVersions.add({
+      id: 'dangling-pending',
+      skillId: skill.id,
+      status: 'pending',
+      name: skill.name,
+      description: skill.description,
+      body: NEXT_BODY,
+      baseVersion: 9,
+      createdAt: new Date().toISOString(),
+    });
+
+    renderDrawer(skill);
+
+    const row = await screen.findByTestId('skill-pending-unresolved-dangling-pending');
+    fireEvent.click(within(row).getByRole('button', { name: 'Từ chối' }));
+
+    await waitFor(() =>
+      expect(screen.queryByTestId('skill-editor-pending-badge')).not.toBeInTheDocument()
+    );
+    expect(screen.queryByTestId('skill-pending-unresolved-dangling-pending')).toBeNull();
+    expect((await db.aiSkillVersions.get('dangling-pending'))?.status).toBe('rejected');
+    // It lands in history, which is where a decided row belongs.
+    expect(screen.getByTestId('skill-version-history')).toHaveTextContent('Đề xuất bị từ chối');
+  });
+
+  // CR-02: the drawer is also the approval queue (D-26). Approving overwrites `aiSkills`; the
+  // form used to stay seeded from the frozen `skill` prop, so the next save wrote the
+  // pre-approval body back over the approved version.
+  it('never writes a body older than the version approved in the drawer (CR-02)', async () => {
+    const row = await seedPending({ body: NEXT_BODY });
+    renderDrawer(skill);
+
+    const card = await screen.findByTestId(`skill-pending-card-${row.id}`);
+    fireEvent.click(within(card).getByRole('button', { name: 'Chấp thuận' }));
+    await waitFor(() =>
+      expect(
+        within(screen.getByTestId(`skill-pending-card-${row.id}`)).getByRole('status')
+      ).toHaveTextContent('Đã chấp thuận')
+    );
+
+    // The form re-seeds from the approved copy, so an untouched form is not dirty.
+    expect(screen.getByLabelText('Nội dung')).toHaveValue(NEXT_BODY);
+
+    // Edit only the name and save — the approved body must survive.
+    fireEvent.change(screen.getByLabelText('Tên'), { target: { value: 'Viết đặc tả v2' } });
+    fireEvent.click(screen.getByTestId('skill-editor-save'));
+
+    await waitFor(async () =>
+      expect((await db.aiSkills.get(skill.id))?.name).toBe('Viết đặc tả v2')
+    );
+    expect((await db.aiSkills.get(skill.id))?.body).toBe(NEXT_BODY);
+  });
+
+  // CR-02: the same shape without touching the drawer — a save built from a draft whose row
+  // moved underneath is refused at the state owner, not silently applied.
+  it('surfaces the moved-row refusal when the underlying skill changed (CR-02)', async () => {
+    renderDrawer(skill);
+    fireEvent.change(await screen.findByLabelText('Tên'), { target: { value: 'Bản nháp' } });
+
+    // Another surface writes a newer body while the draft is open.
+    await updateSkill(skill.id, { body: NEXT_BODY }, db);
+
+    fireEvent.click(screen.getByTestId('skill-editor-save'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('skill-editor-save-error')).toHaveTextContent(
+        'Kỹ năng vừa được cập nhật ở nơi khác. Nội dung mới đã được tải lại — kiểm tra rồi lưu lại.'
+      )
+    );
+    // The newer body is intact; the draft did not overwrite it.
+    expect((await db.aiSkills.get(skill.id))?.body).toBe(NEXT_BODY);
+  });
+
+  // WR-01: `decide()` snapshots the row before awaiting the write, while the live query still
+  // carries it. Both lists contributed the same row for one refresh tick — a duplicate React
+  // key, and a second Approve click that reached an already-decided row. The write is held
+  // open here so the window is observable.
+  it('never renders the same pending row twice while the decision lands (WR-01)', async () => {
+    const row = await seedPending();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const real = aiSkillVersionRepo.decideSkillVersion;
+    const spy = vi
+      .spyOn(aiSkillVersionRepo, 'decideSkillVersion')
+      .mockImplementation(async (...args) => {
+        await gate;
+        return real(...args);
+      });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    renderDrawer(skill);
+
+    const card = await screen.findByTestId(`skill-pending-card-${row.id}`);
+    fireEvent.click(within(card).getByRole('button', { name: 'Chấp thuận' }));
+
+    // Write in flight: the snapshot is in `recentlyDecided` and the live query still has the
+    // row. It must render once.
+    await waitFor(() =>
+      expect(screen.getAllByTestId(`skill-pending-card-${row.id}`)).toHaveLength(1)
+    );
+    expect(
+      consoleError.mock.calls.some((args) => String(args[0]).includes('same key'))
+    ).toBe(false);
+
+    release();
+    await waitFor(() =>
+      expect(
+        within(screen.getByTestId(`skill-pending-card-${row.id}`)).getByRole('status')
+      ).toHaveTextContent('Đã chấp thuận')
+    );
+    expect(screen.getAllByTestId(`skill-pending-card-${row.id}`)).toHaveLength(1);
+    spy.mockRestore();
+    consoleError.mockRestore();
   });
 
   // WR-03: the disabled Approve button reads a live query, so it is an affordance. The repo

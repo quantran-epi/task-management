@@ -23,9 +23,10 @@ export async function deleteFailureMessage(
  * D-10/D-11/D-12: the repo decides, the view only renders. Names only — never an id (T-36-15).
  * An empty `usedBy` means a running turn holds the profile (D-13), not a roster reference.
  *
- * Shared by the AI Office view and the staff explorer so both surfaces refuse with the same copy.
+ * IN-02: module-private — `deleteFailureMessage` above is the only caller. Export it again when
+ * a second surface needs the copy.
  */
-export function refusalMessage(result: AiOfficeDeleteResult): string | null {
+function refusalMessage(result: AiOfficeDeleteResult): string | null {
   if (result.deleted) return null;
   // The union overlaps on `entity: 'employee'`, so narrow on the payload shape instead.
   if (result.entity === 'skill' || result.usedBy.some((row) => 'agentName' in row)) {

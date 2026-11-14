@@ -259,16 +259,44 @@ export async function createSkill(
  * The version row snapshots the MERGED row: `AiSkillUpdate` is all-optional, so copying the
  * raw patch would write `undefined` into required string fields.
  */
+/**
+ * CR-02: the drawer's form is a draft over a row that other surfaces can move — approving a
+ * proposal overwrites `aiSkills` from the queue or the transcript. A save built from a draft
+ * older than that write would silently revert the approved body, and D-12 makes history
+ * view-only, so there is no restore path. The caller hands over the content it seeded from;
+ * the write is refused inside the same `rw` transaction if the row no longer matches.
+ *
+ * Content, not `updatedAt`: two writes inside one millisecond share a timestamp, and a guard
+ * that cannot see the move is not a guard.
+ */
+export const SKILL_MOVED_MESSAGE =
+  'Kỹ năng vừa được cập nhật ở nơi khác. Nội dung mới đã được tải lại — kiểm tra rồi lưu lại.';
+
+/** CR-02: the content a draft was seeded from — the compare-and-swap token. */
+export type AiSkillSeed = Pick<AiSkill, 'name' | 'description' | 'body'>;
+
 export async function updateSkill(
   id: string,
   patch: AiSkillUpdate,
-  db: TaskPlannerDatabase = defaultDb
+  db: TaskPlannerDatabase = defaultDb,
+  /** CR-02: the content the draft was seeded from. Omit to skip the compare-and-swap. */
+  expected?: AiSkillSeed
 ): Promise<AiSkill> {
   const validated = AiSkillUpdateSchema.parse(patch);
 
   return db.transaction('rw', [db.aiSkills, db.aiSkillVersions], async () => {
     const existing = await db.aiSkills.get(id);
     if (!existing) throw new Error(`Không tìm thấy kỹ năng: ${id}`);
+
+    // CR-02: checked before the merge, so a refused save writes nothing at all.
+    if (
+      expected !== undefined &&
+      (existing.name !== expected.name ||
+        existing.description !== expected.description ||
+        existing.body !== expected.body)
+    ) {
+      throw new Error(SKILL_MOVED_MESSAGE);
+    }
 
     const now = new Date().toISOString();
     const updated: AiSkill = { ...existing, updatedAt: now };

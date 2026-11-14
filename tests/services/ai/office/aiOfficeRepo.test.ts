@@ -35,6 +35,7 @@ import {
   deleteSkill,
   countTeamsUsingEmployee,
   countAgentsUsingSkill,
+  SKILL_MOVED_MESSAGE,
 } from '../../../../src/db/repositories/aiOfficeRepo';
 import { generateId } from '../../../../src/utils/uuid';
 import {
@@ -250,6 +251,36 @@ describe('aiOfficeRepo (AIO-EMP-01, AIO-EMP-02, AIO-SKILL-01)', () => {
       /Không tìm thấy kỹ năng/
     );
     expect(await db.aiSkillVersions.count()).toBe(0);
+  });
+
+  // CR-02: the drawer's draft is seeded from a row other surfaces can move. A save built from
+  // an older revision must be refused at the state owner — otherwise it silently reverts the
+  // approved body, and D-12 makes history view-only, so there is no restore path.
+  it('updateSkill refuses a save built from a revision that has since moved (CR-02)', async () => {
+    const skill = await createSkill({ name: 'S', description: 'd', body: '# A' }, db);
+    const seeded = { name: skill.name, description: skill.description, body: skill.body };
+
+    // Another surface (an approval) writes a newer body.
+    await updateSkill(skill.id, { body: '# B' }, db);
+    const moved = await db.aiSkills.get(skill.id);
+    expect(moved?.body).toBe('# B');
+
+    await expect(
+      updateSkill(skill.id, { body: '# A' }, db, seeded)
+    ).rejects.toThrow(SKILL_MOVED_MESSAGE);
+
+    // Nothing was written: the approved body and the version count are untouched.
+    expect((await db.aiSkills.get(skill.id))?.body).toBe('# B');
+    expect(await db.aiSkillVersions.where('skillId').equals(skill.id).count()).toBe(2);
+
+    // A save carrying the current revision still lands.
+    await updateSkill(
+      skill.id,
+      { body: '# C' },
+      db,
+      { name: moved!.name, description: moved!.description, body: moved!.body }
+    );
+    expect((await db.aiSkills.get(skill.id))?.body).toBe('# C');
   });
 
   it('createSkill writes no version row (D-10)', async () => {
