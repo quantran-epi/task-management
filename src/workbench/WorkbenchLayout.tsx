@@ -17,7 +17,6 @@ import { useNotifications } from '../hooks/useNotifications';
 import { useAIChat } from '../context/AIChatContext';
 import { InlineAISelectionBar } from '../components/ai/InlineAISelectionBar';
 import { GlobalDiagramViewer } from '../components/common/GlobalDiagramViewer';
-import { TeamOutlined } from '@ant-design/icons';
 import type { TaskPlannerDatabase } from '../db';
 import {
   JetBrainsProjectIcon,
@@ -28,7 +27,8 @@ import {
   JetBrainsTerminalIcon,
   JetBrainsAIIcon,
   JetBrainsNotificationIcon,
-  JetBrainsAgentsIcon,
+  JetBrainsOfficeIcon,
+  JetBrainsStaffIcon,
 } from '../components/icons/JetBrainsIcons';
 import '../styles/workbench-tokens.css';
 
@@ -55,25 +55,25 @@ const DEFAULT_LEFT_ITEMS: ToolWindowItem[] = [
     shortcut: 'Alt+6',
   },
   {
-    id: 'ai_office',
-    name: 'AI Office',
-    icon: <TeamOutlined style={{ fontSize: 16 }} />,
-    shortcut: 'Alt+7',
+    id: 'remote_explorer',
+    name: 'Remote Git Explorer',
+    icon: <JetBrainsRemoteGitIcon size={16} />,
+    shortcut: 'Alt+4',
   },
 ];
 
 const DEFAULT_BOTTOM_LEFT_ITEMS: ToolWindowItem[] = [
   {
-    id: 'ai_staff',
-    name: 'AI Staff',
-    icon: <JetBrainsAgentsIcon size={16} />,
-    shortcut: 'Alt+8',
+    id: 'ai_office',
+    name: 'AI Office',
+    icon: <JetBrainsOfficeIcon size={16} />,
+    shortcut: 'Alt+7',
   },
   {
-    id: 'remote_explorer',
-    name: 'Remote Git Explorer',
-    icon: <JetBrainsRemoteGitIcon size={16} />,
-    shortcut: 'Alt+4',
+    id: 'ai_staff',
+    name: 'AI Staff',
+    icon: <JetBrainsStaffIcon size={16} />,
+    shortcut: 'Alt+8',
   },
   {
     id: 'terminal',

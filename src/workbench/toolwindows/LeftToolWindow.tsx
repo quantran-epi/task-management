@@ -1,5 +1,5 @@
 import { Tooltip } from 'antd';
-import { MinusOutlined, TeamOutlined } from '@ant-design/icons';
+import { MinusOutlined } from '@ant-design/icons';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { useLayoutStore } from '../store/layoutStore';
 import {
@@ -8,7 +8,8 @@ import {
   JetBrainsDiagramIcon,
   JetBrainsSystemsIcon,
   JetBrainsRemoteGitIcon,
-  JetBrainsAgentsIcon,
+  JetBrainsOfficeIcon,
+  JetBrainsStaffIcon,
 } from '../../components/icons/JetBrainsIcons';
 import { CRExplorer } from './CRExplorer';
 import { DocsExplorer } from './DocsExplorer';
@@ -60,9 +61,9 @@ export function LeftToolWindow({
   ) : isDocs ? (
     <JetBrainsDocsIcon size={15} />
   ) : isAiStaff ? (
-    <JetBrainsAgentsIcon size={15} />
+    <JetBrainsStaffIcon size={15} />
   ) : isAiOffice ? (
-    <TeamOutlined style={{ fontSize: 15 }} />
+    <JetBrainsOfficeIcon size={15} />
   ) : (
     <JetBrainsProjectIcon size={15} />
   );

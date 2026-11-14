@@ -447,4 +447,77 @@ export const JetBrainsTerminalIcon: React.FC<JetBrainsIconProps> = ({ size = 16,
   </svg>
 );
 
+// 13. AI Office (Team / Multiple People — TaskMate violet leader + cyan teammate with razor-sharp cutout)
+export const JetBrainsOfficeIcon: React.FC<JetBrainsIconProps> = ({ size = 16, style, className }) => (
+  <svg
+    viewBox="0 0 24 24"
+    width={size}
+    height={size}
+    className={className}
+    style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style }}
+  >
+    <defs>
+      <linearGradient id="jbOfficeLeadGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#5b4fe8" />
+        <stop offset="100%" stopColor="#a855f7" />
+      </linearGradient>
+      <linearGradient id="jbOfficePeerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#22d3ee" />
+        <stop offset="100%" stopColor="#0284c7" />
+      </linearGradient>
+      <mask id="jbOfficeCutoutMask">
+        <rect width="24" height="24" fill="#ffffff" />
+        {/* Uniform 1.2px transparent dilation around front leader */}
+        <circle cx="8.5" cy="8.5" r="3.6" fill="#000000" stroke="#000000" strokeWidth="2.4" />
+        <path
+          d="M 2 20.5 C 2 16.4 4.9 14 8.5 14 C 12.1 14 15 16.4 15 20.5 Z"
+          fill="#000000"
+          stroke="#000000"
+          strokeWidth="2.4"
+          strokeLinejoin="round"
+        />
+      </mask>
+    </defs>
+
+    {/* Teammate (right, behind) — clipped cleanly by front leader cutout */}
+    <g mask="url(#jbOfficeCutoutMask)">
+      <circle cx="16" cy="7.5" r="3.2" fill="url(#jbOfficePeerGrad)" />
+      <path
+        d="M 10 20.5 C 10 16.8 12.7 14.5 16 14.5 C 19.3 14.5 22 16.8 22 20.5 Z"
+        fill="url(#jbOfficePeerGrad)"
+      />
+    </g>
+
+    {/* Leader (front, left) */}
+    <circle cx="8.5" cy="8.5" r="3.6" fill="url(#jbOfficeLeadGrad)" />
+    <path
+      d="M 2 20.5 C 2 16.4 4.9 14 8.5 14 C 12.1 14 15 16.4 15 20.5 Z"
+      fill="url(#jbOfficeLeadGrad)"
+    />
+  </svg>
+);
+
+// 14. AI Staff (Single Person / Agent — TaskMate cyan to sky blue)
+export const JetBrainsStaffIcon: React.FC<JetBrainsIconProps> = ({ size = 16, style, className }) => (
+  <svg
+    viewBox="0 0 24 24"
+    width={size}
+    height={size}
+    className={className}
+    style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style }}
+  >
+    <defs>
+      <linearGradient id="jbStaffGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#22d3ee" />
+        <stop offset="100%" stopColor="#0284c7" />
+      </linearGradient>
+    </defs>
+    <circle cx="12" cy="7.5" r="4" fill="url(#jbStaffGrad)" />
+    <path
+      d="M 4 20.5 C 4 15.8 7.6 13 12 13 C 16.4 13 20 15.8 20 20.5 Z"
+      fill="url(#jbStaffGrad)"
+    />
+  </svg>
+);
+
 
