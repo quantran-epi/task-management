@@ -14,6 +14,16 @@ import { runAiOrchestratorLoop, type AiOrchestratorLoopOptions } from '../../src
 import type { ChatCompletionMessage } from '../../src/services/ai/types';
 
 const mockStreamChatEvents = vi.hoisted(() => vi.fn());
+// IN-06: `propose_skill_version` is not a local DB tool, so the loop dispatches it to the
+// dynamic-MCP path. Stub that path so the test can prove the call reached a handler instead
+// of passing on the "unknown MCP tool" error string.
+const mockExecuteDynamicMcpTool = vi.hoisted(() =>
+  vi.fn(async () => JSON.stringify({ versionId: 'version-1' }))
+);
+vi.mock('../../src/services/ai/mcpClient', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/services/ai/mcpClient')>()),
+  executeDynamicMcpTool: mockExecuteDynamicMcpTool,
+}));
 // WR-09: keep the real module and override only the stream. A wholesale replacement left
 // `redactApiKey` (imported by `aiTools`) undefined, so a tool-failure path would throw
 // `TypeError: redactApiKey is not a function` and look like a runtime bug.
@@ -848,6 +858,7 @@ describe('chatTurnRuntime team seams (D-07, D-12, D-13, D-19, D-21)', () => {
   // the runtime hook refuses unconditionally — the gate that decides is `isMutationTool`.
   it('lets propose_skill_version through a read-only turn without refusing or parking', async () => {
     mockStreamChatEvents.mockReset();
+    mockExecuteDynamicMcpTool.mockClear();
     let round = 0;
     mockStreamChatEvents.mockImplementation(async function* () {
       round += 1;
@@ -877,9 +888,17 @@ describe('chatTurnRuntime team seams (D-07, D-12, D-13, D-19, D-21)', () => {
 
     const result = toolEvents.find((event) => event.phase === 'result');
     expect(result?.name).toBe('propose_skill_version');
-    // IN-05: assert the absence of the refusal code, not the presence of the tool name — the
-    // loop's unknown-MCP fall-through also contains the name, so that would pass even if the
-    // tool were never wired to a handler.
+    // IN-06: prove the call actually reached a handler. Without this the loop's unknown-MCP
+    // fall-through also returned a string containing the tool name, so the assertions below
+    // passed on an error path.
+    expect(mockExecuteDynamicMcpTool).toHaveBeenCalledWith(
+      'propose_skill_version',
+      { name: 'A' },
+      expect.anything(),
+      expect.anything()
+    );
+    expect(JSON.parse(result?.result ?? '{}')).toEqual({ versionId: 'version-1' });
+    expect(result?.result ?? '').not.toContain('error');
     expect(result?.result ?? '').not.toContain('READ_ONLY_EMPLOYEE');
     expect(result?.result ?? '').not.toContain('refused');
     expect(statuses).not.toContain('awaiting-approval');
