@@ -83,8 +83,15 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
 }) => {
   const { token } = theme.useToken();
   const enabledMcpCount = mcpServers.filter((s) => s.enabled).length;
-  // MCP is considered active if tab-level mcpEnabled is true AND at least one server is enabled
-  const isMcpActive = mcpEnabled && enabledMcpCount > 0;
+  // The master switch reflects the TAB flag, not "a tool will actually be advertised":
+  // reporting the combined state made a switch the user had just turned on read "ĐANG TẮT"
+  // whenever no server was enabled yet.
+  const mcpOn = mcpEnabled;
+  const mcpStatusTitle = mcpOn
+    ? enabledMcpCount > 0
+      ? `MCP: ĐANG BẬT (${enabledMcpCount} máy chủ)`
+      : 'MCP: ĐANG BẬT (chưa có máy chủ nào được bật)'
+    : 'MCP: ĐANG TẮT (Bấm để bật và chọn máy chủ)';
 
   // Master toggle handler: toggles tab mcpEnabled and if turning on with 0 servers, turns on first server
   const handleMasterMcpToggle = (checked: boolean) => {
@@ -126,7 +133,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
           </Typography.Text>
           <Switch
             size="small"
-            checked={isMcpActive}
+            checked={mcpOn}
             onChange={handleMasterMcpToggle}
             aria-label="Bật/tắt toàn bộ MCP"
           />
@@ -357,16 +364,16 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
               placement="bottomRight"
               getPopupContainer={(node) => node.parentElement || document.body}
             >
-              <Tooltip title={isMcpActive ? `MCP: ĐANG BẬT (${enabledMcpCount} máy chủ)` : "MCP: ĐANG TẮT"}>
+              <Tooltip title={mcpStatusTitle}>
                 <Badge
                   count={enabledMcpCount}
                   size="small"
                   offset={[-2, 2]}
-                  style={{ backgroundColor: isMcpActive ? '#10b981' : token.colorTextQuaternary }}
+                  style={{ backgroundColor: mcpOn ? '#10b981' : token.colorTextQuaternary }}
                 >
                   <Button
                     size="small"
-                    type={isMcpActive ? 'primary' : 'default'}
+                    type={mcpOn ? 'primary' : 'default'}
                     icon={<ApiOutlined />}
                     aria-label="Quản lý máy chủ MCP"
                     data-testid="tab-mcp-manage-btn"
@@ -429,16 +436,16 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
               placement="bottomRight"
               getPopupContainer={(node) => node.parentElement || document.body}
             >
-              <Tooltip title={isMcpActive ? `MCP: ĐANG BẬT (${enabledMcpCount} máy chủ)` : "MCP: ĐANG TẮT (Bấm để bật và chọn máy chủ)"}>
+              <Tooltip title={mcpStatusTitle}>
                 <Badge
                   count={enabledMcpCount}
                   size="small"
                   offset={[-2, 2]}
-                  style={{ backgroundColor: isMcpActive ? '#10b981' : token.colorTextQuaternary }}
+                  style={{ backgroundColor: mcpOn ? '#10b981' : token.colorTextQuaternary }}
                 >
                   <Button
                     size="small"
-                    type={isMcpActive ? 'primary' : 'default'}
+                    type={mcpOn ? 'primary' : 'default'}
                     icon={<ApiOutlined />}
                     aria-label="Quản lý và bật/tắt MCP"
                     data-testid="tab-mcp-btn"

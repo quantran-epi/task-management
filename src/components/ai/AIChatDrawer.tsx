@@ -345,9 +345,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     try {
       const next = await toggleMcpServer(id, enabled, db);
       setMcpServers(next);
-      if (enabled && !currentTabMcpEnabled) {
-        await handleToggleMcpEnabled();
-      }
+      // The tab-level flag is NOT flipped here: `ChatTabToolbox` already does it when the
+      // user enables a server, and doing it twice cancelled itself out (a stale closure read
+      // the old value and flipped the freshly-enabled tab straight back off).
       message.success(
         enabled ? 'Đã bật máy chủ MCP' : 'Đã tắt máy chủ MCP'
       );
