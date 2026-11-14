@@ -653,6 +653,8 @@ export const BackupAiTeamRecordSchema = z.strictObject({
   budgetTokens: aiTokensSchema,
   autoSplitEnabled: z.boolean().optional(),
   autoApproveMutations: z.boolean().optional(),
+  /** Phase 39: read-only MCP tools for this team. Optional so a pre-39 export still restores. */
+  mcpEnabled: z.boolean().optional(),
   /** Phase 37 D-03/D-02: per-team run concurrency. Absent means the default; range 1-12. */
   concurrencyLimit: z.number().int().min(1).max(12).optional(),
   /**

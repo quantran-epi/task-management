@@ -23,10 +23,11 @@ export interface ChatTabToolboxProps {
   // Compact layout (e.g. for narrow sidebars)
   compact?: boolean;
 
-  // Model (tab-isolated)
-  selectedModel: string;
-  availableModels: string[];
-  onModelChange: (model: string) => void;
+  // Model (tab-isolated). Omit `onModelChange` when the host does not scope a model to
+  // this chat (the team orchestrator picks a model per agent) — the selector then hides.
+  selectedModel?: string;
+  availableModels?: string[];
+  onModelChange?: (model: string) => void;
   onRefreshModels?: () => Promise<void> | void;
   isRefreshingModels?: boolean;
 
@@ -60,8 +61,8 @@ export interface ChatTabToolboxProps {
 export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
   activeTabId,
   compact = false,
-  selectedModel,
-  availableModels,
+  selectedModel = '',
+  availableModels = [],
   onModelChange,
   onRefreshModels,
   isRefreshingModels = false,
@@ -300,44 +301,48 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
         boxSizing: 'border-box',
       }}
     >
-      {/* Left controls: Tab Model selection */}
+      {/* Left controls: Tab Model selection. Hidden when the host has no chat-scoped model. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 180, flexShrink: 0, flex: 1 }}>
-        <span style={{ fontSize: 11, color: token.colorTextSecondary, flexShrink: 0 }}>Mô hình:</span>
-        <Select
-          size="small"
-          value={selectedModel}
-          onChange={onModelChange}
-          showSearch
-          filterOption={(input, option) =>
-            ((option?.label as string) ?? '').toLowerCase().includes(input.toLowerCase())
-          }
-          style={{ minWidth: 110, maxWidth: 170, flex: 1 }}
-          popupMatchSelectWidth={false}
-          getPopupContainer={(node) => node.parentElement || document.body}
-          popupStyle={{ zIndex: 1300 }}
-          aria-label="Chọn mô hình AI cho tab này"
-          options={
-            availableModels.length > 0
-              ? availableModels.map((m) => ({ label: m, value: m }))
-              : selectedModel
-                ? [{ label: selectedModel, value: selectedModel }]
-                : []
-          }
-        />
-
-        {onRefreshModels && (
-          <Tooltip title="Làm mới danh sách mô hình">
-            <Button
-              type="text"
+        {onModelChange ? (
+          <>
+            <span style={{ fontSize: 11, color: token.colorTextSecondary, flexShrink: 0 }}>Mô hình:</span>
+            <Select
               size="small"
-              aria-label="Làm mới danh sách mô hình"
-              icon={<ReloadOutlined spin={isRefreshingModels} />}
-              onClick={onRefreshModels}
-              loading={isRefreshingModels}
-              style={{ width: 22, height: 22, padding: 0, flexShrink: 0 }}
+              value={selectedModel}
+              onChange={onModelChange}
+              showSearch
+              filterOption={(input, option) =>
+                ((option?.label as string) ?? '').toLowerCase().includes(input.toLowerCase())
+              }
+              style={{ minWidth: 110, maxWidth: 170, flex: 1 }}
+              popupMatchSelectWidth={false}
+              getPopupContainer={(node) => node.parentElement || document.body}
+              popupStyle={{ zIndex: 1300 }}
+              aria-label="Chọn mô hình AI cho tab này"
+              options={
+                availableModels.length > 0
+                  ? availableModels.map((m) => ({ label: m, value: m }))
+                  : selectedModel
+                    ? [{ label: selectedModel, value: selectedModel }]
+                    : []
+              }
             />
-          </Tooltip>
-        )}
+
+            {onRefreshModels && (
+              <Tooltip title="Làm mới danh sách mô hình">
+                <Button
+                  type="text"
+                  size="small"
+                  aria-label="Làm mới danh sách mô hình"
+                  icon={<ReloadOutlined spin={isRefreshingModels} />}
+                  onClick={onRefreshModels}
+                  loading={isRefreshingModels}
+                  style={{ width: 22, height: 22, padding: 0, flexShrink: 0 }}
+                />
+              </Tooltip>
+            )}
+          </>
+        ) : null}
       </div>
 
       {/* Right controls: Tab Toggles (Analysis mode, Auto-approve, MCP, Clear context) */}

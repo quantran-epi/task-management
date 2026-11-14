@@ -36,6 +36,7 @@ import {
   LEAD_TOOL_ALLOWLIST,
   getToolsForTurn,
 } from '../chatTurnTools';
+import { discoverAllMcpTools, isReadOnlyMcpTool } from '../mcpClient';
 import { aiTurnManager } from '../aiTurnManager';
 import { createTeamRunRegistry, type TeamRunRegistry } from './teamRunRegistry';
 import { createTeamRunScheduler, type SchedulerHandle } from './scheduler';
@@ -290,7 +291,9 @@ export interface TeamRunCoordinator {
   dispose(cause?: 'team-deleted' | 'app-exit'): Promise<void>;
   /** D-25: toggles apply to the live run, not only the next construction. */
   setTeamSettings(
-    patch: Partial<Pick<AiTeam, 'autoSplitEnabled' | 'autoApproveMutations' | 'concurrencyLimit'>>
+    patch: Partial<
+      Pick<AiTeam, 'autoSplitEnabled' | 'autoApproveMutations' | 'concurrencyLimit' | 'mcpEnabled'>
+    >
   ): void;
   /** AIO-BUDGET-01: adopt a team-total edit so the next top-up accumulates onto it. */
   setTeamBudget(total: number): void;
@@ -498,6 +501,8 @@ export function createTeamRunCoordinator(
   // D-25: the toggles are read at run time, so a change in the sidebar or settings
   // drawer applies without reconstructing the coordinator.
   let liveTeam: AiTeam = team;
+  /** Phase 39: read-only MCP tools for the CURRENT turn; refreshed at every turn start. */
+  let mcpTools: AiToolDefinition[] = options.mcpTools ?? [];
 
   /**
    * D-03/D-07: the roster a turn runs with. With a `loadRoster` seam it starts EMPTY, so no
@@ -1093,18 +1098,48 @@ export function createTeamRunCoordinator(
     // CR-04 / D-13: the lead is the only agent allowed to mutate, so its payload must
     // actually advertise the mutation tools — the runtime parks each one on the
     // approval card. Without them the prompt promises writes the payload forbids.
-    const reads = getToolsForTurn(true, options.mcpTools ?? [], LEAD_TOOL_ALLOWLIST);
+    const reads = getToolsForTurn(true, [], LEAD_TOOL_ALLOWLIST);
     const advertised = new Set(reads.map((tool) => normalizeToolName(tool.function.name)));
     const mutations = AI_DATABASE_TOOLS.filter(
       (tool) =>
         isMutationTool(tool.function.name) &&
         !advertised.has(normalizeToolName(tool.function.name))
     );
-    return [...reads, ...mutations, ...TEAM_TOOL_DEFINITIONS];
+    return [...reads, ...mutations, ...TEAM_TOOL_DEFINITIONS, ...mcpReadOnlyTools()];
   }
 
   function employeeTools(): AiToolDefinition[] {
-    return [...getToolsForTurn(true, [], EMPLOYEE_READ_ONLY_ALLOWLIST), ...EMPLOYEE_TEAM_TOOLS];
+    return [
+      ...getToolsForTurn(true, [], EMPLOYEE_READ_ONLY_ALLOWLIST),
+      ...EMPLOYEE_TEAM_TOOLS,
+      ...mcpReadOnlyTools(),
+    ];
+  }
+
+  /**
+   * Phase 39: MCP tools are appended OUTSIDE the allowlist filter — the allowlist names DB
+   * tools only, so routing them through `getToolsForTurn` would drop every MCP tool. Only
+   * read-only ones are advertised: the team runtime has no MCP approval path.
+   */
+  function mcpReadOnlyTools(): AiToolDefinition[] {
+    return mcpTools.filter((tool) => isReadOnlyMcpTool(normalizeToolName(tool.function.name)));
+  }
+
+  /**
+   * Phase 39: discovery is per turn, not per construction — the manager caches the
+   * coordinator across navigation, so a toggle flipped in the workspace must reach the next
+   * turn. A discovery failure leaves the turn with DB tools only, never an error.
+   */
+  async function refreshMcpTools(): Promise<void> {
+    if (liveTeam.mcpEnabled !== true) {
+      mcpTools = [];
+      return;
+    }
+    try {
+      mcpTools = await discoverAllMcpTools(db);
+    } catch {
+      mcpTools = [];
+    }
   }
 
   /**
@@ -2412,6 +2447,10 @@ export function createTeamRunCoordinator(
     }
     // The roster load is an await: a dispose during it must not let the turn start.
     if (disposed) return 'blocked';
+    // Phase 39: same per-turn freshness as the roster — a toggle set since the last turn
+    // must decide THIS turn's tool payload.
+    await refreshMcpTools();
+    if (disposed) return 'blocked';
     // D-06: a new turn is a reset — the next crossing notifies again. Team-scoped only.
     resetBudgetWarnings(teamId);
     lastUserRequest = text;
@@ -3428,7 +3467,9 @@ export function createTeamRunCoordinator(
    */
   function setTeamSettings(
     patch: Partial<
-      Pick<AiTeam, 'autoSplitEnabled' | 'autoApproveMutations' | 'concurrencyLimit'>
+      Pick<
+        AiTeam, 'autoSplitEnabled' | 'autoApproveMutations' | 'concurrencyLimit' | 'mcpEnabled'
+      >
     >
   ): void {
     liveTeam = { ...liveTeam, ...patch };

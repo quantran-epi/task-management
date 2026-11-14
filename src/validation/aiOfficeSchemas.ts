@@ -104,6 +104,8 @@ export const AiTeamInputSchema = z.object({
   budgetTokens: budgetSchema.default(0),
   autoSplitEnabled: z.boolean().optional(),
   autoApproveMutations: z.boolean().optional(),
+  /** Phase 39: advertise read-only MCP tools to this team's agents. */
+  mcpEnabled: z.boolean().optional(),
   /** Phase 37 D-02: only the *range* matches `ghostDevConfig.ts:54` (its default is 6). */
   concurrencyLimit: concurrencyLimitSchema,
   /** Phase 38 D-04/D-05: absent means the global default. */
@@ -117,6 +119,8 @@ export const AiTeamUpdateSchema = z.object({
   budgetTokens: budgetSchema.optional(),
   autoSplitEnabled: z.boolean().optional(),
   autoApproveMutations: z.boolean().optional(),
+  /** Phase 39: advertise read-only MCP tools to this team's agents. */
+  mcpEnabled: z.boolean().optional(),
   /** Phase 37 D-02: range matches `ghostDevConfig.ts:54`; 3 is this phase's default. */
   concurrencyLimit: concurrencyLimitSchema,
   /** Phase 38 D-04/D-05: `undefined` clears the per-team override. */

@@ -35,6 +35,8 @@ import {
   getNineRouterApiKey,
   getNineRouterConfig,
 } from '../../../services/ai/nineRouterTokenService';
+import { getMcpServers, toggleMcpServer, MCP_SERVERS_SETTINGS_KEY, type McpServerConfig } from '../../../services/ai/mcpClient';
+import { McpSettingsModal } from '../McpSettingsModal';
 import { getGlobalBudgetWarnThresholdPct } from '../../../services/ai/budgetWarnSettings';
 import {
   createTeamRunCoordinator,
@@ -150,8 +152,22 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [planDecision, setPlanDecision] = useState<'approved' | 'rejected' | undefined>(undefined);
-  const [analysisMode, setAnalysisMode] = useState<boolean>(true);
-  const [mcpEnabled, setMcpEnabled] = useState<boolean>(false);
+  const [mcpSettingsOpen, setMcpSettingsOpen] = useState(false);
+  // Phase 39: the toggle is a persisted team setting, so the MCP popover shows the real
+  // server list and the coordinator refreshes discovery at every turn start.
+  // Read-only on purpose: `getMcpServers` seeds the settings row, and a liveQuery querier
+  // must not open a write transaction. Seeding happens once in the effect below.
+  const mcpServers = useLiveQuery(
+    async () => {
+      const rec = await db.settings.get(MCP_SERVERS_SETTINGS_KEY);
+      return Array.isArray(rec?.value) ? (rec.value as McpServerConfig[]) : [];
+    },
+    [db]
+  ) ?? [];
+  useEffect(() => {
+    void getMcpServers(db).catch(() => {});
+  }, [db]);
+  const mcpEnabled = team.mcpEnabled === true;
   const [debugLogs, setDebugLogs] = useState<TeamDebugLog[]>([]);
   const [debugModalOpen, setDebugModalOpen] = useState<boolean>(false);
   const [sendError, setSendError] = useState<{ code: string; message: string } | null>(null);
@@ -388,11 +404,12 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     coordinator?.setTeamSettings({
       autoSplitEnabled: team.autoSplitEnabled === true,
       autoApproveMutations: team.autoApproveMutations === true,
+      mcpEnabled: team.mcpEnabled === true,
       ...(team.concurrencyLimit !== undefined
         ? { concurrencyLimit: team.concurrencyLimit }
         : {}),
     });
-  }, [coordinator, team.autoSplitEnabled, team.autoApproveMutations, team.concurrencyLimit]);
+  }, [coordinator, team.autoSplitEnabled, team.autoApproveMutations, team.mcpEnabled, team.concurrencyLimit]);
 
   // D-04: a global threshold change in Settings must reach a coordinator that is already
   // alive — the manager caches it across navigation, so construction-time read is not enough.
@@ -949,7 +966,9 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                     kind: 'chat',
                     threadId: threadId ?? '',
                     scopeKey: 'team:' + team.id,
-                    label: team.name,
+                    // Empty: the workspace header above already names the team, so the
+                    // widget's own title bar would render the same title twice.
+                    label: '',
                   }}
                   messages={messages}
                   turn={{
@@ -967,11 +986,8 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                   onRetry={handleRetry}
                   error={sendError?.code === 'NO_LEAD' ? null : sendError}
                   toolbox={{
-                    selectedModel: lead?.model ?? '',
-                    availableModels: [],
-                    onModelChange: () => {},
-                    analysisMode,
-                    onToggleAnalysisMode: () => setAnalysisMode((prev) => !prev),
+                    // The team orchestrator picks a model per agent, so this chat has no
+                    // chat-scoped model and no analysis toggle — both are fixed by design.
                     autoApproveMutations: team.autoApproveMutations === true,
                     onToggleAutoApproveMutations: () => {
                       runAction(() =>
@@ -983,7 +999,14 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                       );
                     },
                     mcpEnabled,
-                    onToggleMcpEnabled: () => setMcpEnabled((prev) => !prev),
+                    onToggleMcpEnabled: () => {
+                      runAction(() => updateTeam(team.id, { mcpEnabled: !mcpEnabled }, db));
+                    },
+                    mcpServers,
+                    onToggleMcpServer: (id, enabled) => {
+                      runAction(() => toggleMcpServer(id, enabled, db));
+                    },
+                    onOpenMcpSettings: () => setMcpSettingsOpen(true),
                   }}
                   quickPrompts={[]}
                   onClearThread={() => {}}
@@ -1052,6 +1075,12 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
             await coordinator?.topUp({ kind: 'team' }, amount);
           });
         }}
+      />
+
+      <McpSettingsModal
+        open={mcpSettingsOpen}
+        onClose={() => setMcpSettingsOpen(false)}
+        db={db}
       />
 
       <Modal

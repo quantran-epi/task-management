@@ -35,13 +35,15 @@ export interface AiChatQuickPrompt {
  * host can never hand the widget two different clear behaviours).
  */
 export interface AiChatToolboxProps {
-  selectedModel: string;
-  availableModels: string[];
-  onModelChange: (model: string) => void;
+  /** Omitted by hosts whose model is not chat-scoped (the team orchestrator picks per agent). */
+  selectedModel?: string | undefined;
+  availableModels?: string[] | undefined;
+  onModelChange?: ((model: string) => void) | undefined;
   onRefreshModels?: (() => Promise<void> | void) | undefined;
   isRefreshingModels?: boolean | undefined;
-  analysisMode: boolean;
-  onToggleAnalysisMode: (tabId: string) => void;
+  /** Omitted by hosts that always run in analysis mode (the team orchestrator). */
+  analysisMode?: boolean | undefined;
+  onToggleAnalysisMode?: ((tabId: string) => void) | undefined;
   autoApproveMutations: boolean;
   onToggleAutoApproveMutations: (tabId: string) => void;
   mcpEnabled: boolean;
@@ -321,6 +323,9 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
         background: token.colorBgContainer,
       }}
     >
+      {/* D-25: an empty label means the host already renders its own title bar (team workspace),
+          so this header would only duplicate it. Status tags go with it — the host shows them. */}
+      {scope.label !== '' && (
       <div
         style={{
           display: 'flex',
@@ -362,19 +367,22 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
           )}
         </div>
       </div>
+      )}
 
       <ChatTabToolbox
         activeTabId={scope.scopeKey}
         compact={resolvedCompact}
-        selectedModel={toolbox.selectedModel}
-        availableModels={toolbox.availableModels}
-        onModelChange={toolbox.onModelChange}
+        selectedModel={toolbox.selectedModel ?? ''}
+        availableModels={toolbox.availableModels ?? []}
+        {...(toolbox.onModelChange ? { onModelChange: toolbox.onModelChange } : {})}
         {...(toolbox.onRefreshModels ? { onRefreshModels: toolbox.onRefreshModels } : {})}
         {...(toolbox.isRefreshingModels !== undefined
           ? { isRefreshingModels: toolbox.isRefreshingModels }
           : {})}
-        analysisMode={toolbox.analysisMode}
-        onToggleAnalysisMode={toolbox.onToggleAnalysisMode}
+        {...(toolbox.analysisMode !== undefined ? { analysisMode: toolbox.analysisMode } : {})}
+        {...(toolbox.onToggleAnalysisMode
+          ? { onToggleAnalysisMode: toolbox.onToggleAnalysisMode }
+          : {})}
         autoApproveMutations={toolbox.autoApproveMutations}
         onToggleAutoApproveMutations={toolbox.onToggleAutoApproveMutations}
         mcpEnabled={toolbox.mcpEnabled}

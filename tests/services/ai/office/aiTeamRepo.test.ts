@@ -205,8 +205,19 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
     expect(renamed.leadId).toBe(leadId);
   });
 
-  it('updateTeam on an unlocked team still accepts a leadId patch and keeps sources in step', async () => {
-    const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
+  it('persists and clears the team MCP toggle (Phase 39)', async () => {
+    const team = await makeTeam('Mcp');
+    expect((await getTeam(team.id, db))?.mcpEnabled).toBeUndefined();
+
+    expect((await updateTeam(team.id, { mcpEnabled: true }, db)).mcpEnabled).toBe(true);
+    expect((await getTeam(team.id, db))?.mcpEnabled).toBe(true);
+
+    // `undefined` clears the column, same add/remove idiom as the other optional toggles.
+    expect((await updateTeam(team.id, { mcpEnabled: undefined }, db)).mcpEnabled).toBeUndefined();
+    expect((await getTeam(team.id, db))?.mcpEnabled).toBeUndefined();
+  });
+
+  it('updateTeam on an unlocked team still accepts a leadId patch and keeps sources in step', async () => {    const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
     const team = await makeTeam('Unlocked');
 
     const updated = await updateTeam(team.id, { leadId: otherLeadId }, db);
@@ -231,6 +242,19 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
     await removeTeamMember(employeeRow.id, db);
     expect(await db.aiTeamMembers.get(employeeRow.id)).toBeUndefined();
     expect(await db.aiTeamMembers.get(leadRow.id)).toBeDefined();
+  });
+
+  it('releases the removed member share from the team total (D-19)', async () => {
+    const team = await makeTeam('ReleaseShare');
+    const employeeRow = (await listTeamMembers(team.id, db)).find((m) => m.role === 'employee')!;
+    const before = (await getTeam(team.id, db))!.budgetTokens;
+
+    await removeTeamMember(employeeRow.id, db);
+
+    const after = (await getTeam(team.id, db))!.budgetTokens;
+    expect(after).toBe(before - employeeRow.budgetTokens);
+    const remaining = await listTeamMembers(team.id, db);
+    expect(remaining.reduce((sum, row) => sum + row.budgetTokens, 0)).toBe(after);
   });
 
   it('splits an evenly divisible budget across 4 members', async () => {
