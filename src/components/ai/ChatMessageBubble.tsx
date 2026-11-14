@@ -121,6 +121,11 @@ export interface ChatMessageBubbleProps {
    * appears once, and the rows sit closer together. Set by `ChatMessageList`.
    */
   grouped?: boolean | undefined;
+  /**
+   * The NEXT row continues this author's block. Spacing belongs to the row above, so this —
+   * not `grouped` — decides the bottom margin.
+   */
+  continuesNext?: boolean | undefined;
 }
 
 /**
@@ -373,6 +378,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   replyTo,
   addressedTo,
   grouped = false,
+  continuesNext = false,
 }) => {
   const { token } = theme.useToken();
   const [copied, setCopied] = useState(false);
@@ -1177,6 +1183,14 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   // accent surface so a reader can tell "the leader is speaking" without reading the name.
   const isLeadVoice =
     !isUser && (agent?.isLead === true || msg.messageKind === 'synthesis');
+  // The draft put a small uppercase chip beside the author so a plan and a synthesis are
+  // distinguishable at a glance. A plain report has no chip — labelling every row adds noise.
+  const kindLabel =
+    msg.messageKind === 'synthesis'
+      ? 'Tổng hợp'
+      : msg.messageKind === 'plan'
+        ? 'Kế hoạch'
+        : undefined;
 
   return (
     <div
@@ -1187,7 +1201,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         display: 'flex',
         flexDirection: 'column',
         alignItems: isUser ? 'flex-end' : 'flex-start',
-        marginBottom: grouped ? 4 : 12,
+        marginBottom: continuesNext ? 4 : 20,
         width: '100%',
         // The hover-reveal rule lives in team-chat.css; the color it needs comes from here.
         ['--tc-accent' as string]: token.colorPrimary,
@@ -1195,7 +1209,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
     >
       {/* Attribution names the AUTHOR. On a user row `agent` is only ever the target, and
           the `→ name` line below already says who is being addressed. */}
-      {agent && !isUser && !grouped && <AgentAttributionRow agent={agent} />}
+      {agent && !isUser && !grouped && <AgentAttributionRow agent={agent} kindLabel={kindLabel} />}
       {addressedTo !== undefined && addressedTo.length > 0 && (
         <div
           data-testid={`addressed-to-${msg.id}`}

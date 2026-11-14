@@ -33,9 +33,11 @@ function initialOf(name: string): string {
 
 export interface AgentAttributionRowProps {
   agent: AgentAttributionAgent;
+  /** What kind of turn produced this row — `Kế hoạch`, `Tổng hợp`. Absent on a plain report. */
+  kindLabel?: string | undefined;
 }
 
-export const AgentAttributionRow: React.FC<AgentAttributionRowProps> = ({ agent }) => {
+export const AgentAttributionRow: React.FC<AgentAttributionRowProps> = ({ agent, kindLabel }) => {
   const { token } = theme.useToken();
 
   return (
@@ -53,6 +55,23 @@ export const AgentAttributionRow: React.FC<AgentAttributionRowProps> = ({ agent 
       <span style={{ fontSize: 12, fontWeight: 600, color: token.colorText }}>{agent.name}</span>
       <span style={{ fontSize: 12, fontWeight: 400, color: token.colorTextSecondary }}>{agent.role}</span>
       {agent.isLead && <CrownOutlined style={{ fontSize: 11, color: token.colorPrimary }} />}
+      {kindLabel && (
+        <span
+          data-testid={`agent-kind-${agent.agentId}`}
+          style={{
+            fontSize: 10,
+            fontWeight: 600,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            color: token.colorPrimary,
+            background: token.colorPrimaryBg,
+            borderRadius: 4,
+            padding: '1px 5px',
+          }}
+        >
+          {kindLabel}
+        </span>
+      )}
     </div>
   );
 };

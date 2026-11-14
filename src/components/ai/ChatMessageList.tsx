@@ -296,6 +296,16 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
           msg.role === 'assistant' &&
           previous.agentId !== undefined &&
           previous.agentId === msg.agentId;
+        // The row ABOVE owns the gap, so this row's tighter spacing depends on whether the
+        // NEXT row continues the same block — not on `grouped`, which describes the row above.
+        const next = messages[index + 1];
+        const continuesNext =
+          next !== undefined &&
+          next.role === 'assistant' &&
+          msg.role === 'assistant' &&
+          msg.agentId !== undefined &&
+          next.agentId === msg.agentId &&
+          dayjs(next.createdAt).isSame(dayjs(msg.createdAt), 'day');
 
         // Pass message with grounding intact for structured rendering.
         // CR-06: a steer row deliberately carries NO `agentId` (D-15 — it must render as a
@@ -372,6 +382,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
                   }
                 : {})}
               grouped={grouped}
+              continuesNext={continuesNext}
             />
           </div>
         );
