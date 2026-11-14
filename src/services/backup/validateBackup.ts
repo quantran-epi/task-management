@@ -50,6 +50,23 @@ import {
  * Stage 3: Referential integrity checks (foreign keys: task, note, document set)
  */
 
+/**
+ * D-14: before Phase 39 every skill-version row carried a number, `pending`/`rejected`
+ * included. Those exports are still at `schemaVersion` 13, so they pass the envelope check and
+ * must keep restoring. Dropping the number from non-approved rows here mirrors the v26 Dexie
+ * upgrade; the invariant then holds for both an existing database and a restored backup.
+ */
+function stripNonApprovedVersionNumbers(records: unknown): unknown {
+  if (!Array.isArray(records)) return records;
+  return records.map((rec) => {
+    if (!rec || typeof rec !== 'object') return rec;
+    const row = rec as Record<string, unknown>;
+    if (row.status === 'approved' || row.version === undefined) return rec;
+    const { version: _dropped, ...rest } = row;
+    return rest;
+  });
+}
+
 export function validateBackupPayload(raw: unknown): BackupValidationResult {
   // D-49: reject a pre-31.2 payload at the envelope stage, before any table validation
   // and therefore before any write. Local data is untouched.
@@ -258,8 +275,15 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
   const aiTeamLinks = rawTables.aiTeamLinks !== undefined
     ? validateTable('aiTeamLinks', BackupAiTeamLinkRecordSchema, rawTables.aiTeamLinks)
     : undefined;
+  // D-14: pre-39 exports numbered every row. The envelope version did not change, so those
+  // backups must still restore — repair the shape here, exactly as the Dexie v26 upgrade does
+  // for an existing database. Without this the WR-05 invariant rejects the user's own backup.
   const aiSkillVersions = rawTables.aiSkillVersions !== undefined
-    ? validateTable('aiSkillVersions', BackupAiSkillVersionRecordSchema, rawTables.aiSkillVersions)
+    ? validateTable(
+        'aiSkillVersions',
+        BackupAiSkillVersionRecordSchema,
+        stripNonApprovedVersionNumbers(rawTables.aiSkillVersions)
+      )
     : undefined;
   const aiTeamBatches = rawTables.aiTeamBatches !== undefined
     ? validateTable('aiTeamBatches', BackupAiTeamBatchRecordSchema, rawTables.aiTeamBatches)

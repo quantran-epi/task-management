@@ -540,9 +540,22 @@ describe('validateBackupPayload', () => {
       ).toBe(true);
     });
 
-    it('rejects a non-approved skill version that carries a number', () => {
+    it('repairs a pre-39 numbered pending skill version instead of refusing the backup', () => {
+      // D-14: the envelope version did not change in Phase 39, so a backup exported before it
+      // still carries numbers on pending rows. Refusing it would strand the user's own backup;
+      // the number is stripped on validation, exactly as the v26 Dexie upgrade does.
       const result = validateBackupPayload(
         officePayload({ aiSkillVersions: [{ ...version, status: 'pending' }] })
+      );
+      expect(result.errors).toEqual([]);
+      expect(result.valid).toBe(true);
+      expect(result.envelope?.tables.aiSkillVersions?.[0]?.version).toBeUndefined();
+    });
+
+    it('rejects an approved skill version that carries no number', () => {
+      const { version: _dropped, ...unnumbered } = version;
+      const result = validateBackupPayload(
+        officePayload({ aiSkillVersions: [{ ...unnumbered, status: 'approved' }] })
       );
       expect(result.valid).toBe(false);
       expect(
@@ -550,7 +563,7 @@ describe('validateBackupPayload', () => {
           (e) =>
             e.table === 'aiSkillVersions' &&
             e.field === 'version' &&
-            e.message.includes('Only an approved skill version')
+            e.message.includes('must carry a version number')
         )
       ).toBe(true);
     });
