@@ -1122,6 +1122,11 @@ describe('teamTools — propose_skill_version (AIO-SKILL-02, D-01..D-06)', () =>
     expect(result.proposalId).toEqual(expect.any(String));
     expect(result.diffText).toContain(`a/skill:${skillId}/body`);
     expect(result.addedLines).toBeGreaterThan(0);
+    // AIO-SKILL-06: the unified diff reproduces the approved body on its base side, so it is
+    // untrusted data like any other retrieved body. This result is a `role: 'tool'` message and
+    // never enters the prompt assembler, so nothing downstream would wrap it.
+    expect(result.diffText).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
+    expect(result.diffText).toContain('KẾT THÚC DỮ LIỆU KHÔNG ĐÁNG TIN');
   });
 
   // AIO-SKILL-04: nothing on this path can mint an approved row.

@@ -697,7 +697,11 @@ async function proposeSkillVersion(
     versionId: row.id,
     addedLines: diff.addedLines,
     removedLines: diff.removedLines,
-    diffText: diff.diffText,
+    // AIO-SKILL-06: the unified diff carries the base side — context lines and removed lines —
+    // so it reproduces the approved body verbatim. This is a `role: 'tool'` message, so nothing
+    // downstream wraps it. Both UI surfaces recompute the diff from Dexie and never read this
+    // field, so wrapping it costs the model nothing it needs.
+    diffText: wrapUntrusted('BẢN KHÁC BIỆT ĐỀ XUẤT', diff.diffText),
   });
 }
 
