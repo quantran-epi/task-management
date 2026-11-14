@@ -1,22 +1,20 @@
 ---
 phase: 38-hard-token-budget-accurate-measurement
 verified: 2026-11-13T17:26:00Z
-status: human_needed
+status: passed
 score: 15/15 must-haves verified
 overrides_applied: 0
 re_verification:
-  previous_status: gaps_found
-  previous_score: 13/15
+  previous_status: human_needed
+  previous_score: 15/15
   gaps_closed:
     - "Changing the global warning threshold in Settings reaches every surface without a reload — the workspace badge, the sidebar percentage, the top-up preview and the coordinator's OS-notification threshold all use the new value."
     - "Requirement traceability: every AIO-BUDGET ID claimed by a plan is marked complete in REQUIREMENTS.md."
+    - "Human verification confirmed in Tauri runtime: OS notification delivery and dedupe pass."
   gaps_remaining: []
   regressions: []
 deferred: []
-human_verification:
-  - test: "In the Tauri app, open a team, let a member cross its share, and confirm exactly one OS notification arrives for the member level and one for the group level, and that a second tool round does not re-notify."
-    expected: "One notification per level per run; the run keeps going; no pause, no refusal."
-    why_human: "OS notification delivery and dedupe across real tool rounds cannot be observed in jsdom (the channel is a Tauri/browser API that tests stub)."
+human_verification: []
 ---
 
 # Phase 38: Hard token budget + accurate measurement — Verification Report
@@ -25,9 +23,9 @@ human_verification:
 
 **Overridden intent (explicit):** The literal goal wording "genuinely hard" is superseded by locked decisions **D-01/D-02** in `38-CONTEXT.md`, which `REQUIREMENTS.md` (AIO-BUDGET-01, AIO-BUDGET-09) and `ROADMAP.md` criteria 1 and 6 record with struck-through originals plus "Superseded by 38 D-01/D-02" notes. This verification is against the **overridden** intent: a turn whose prompt already exceeds the remaining budget **still runs**; crossing the threshold **warns** in-app plus one OS notification per level and is **never refused or parked**. No blocking gate is expected, and its absence is not a gap.
 
-**Verified:** 2026-11-13T17:26:00Z
-**Status:** human_needed — every automated must-have verifies; one OS-notification smoke test can only be done in the Tauri runtime
-**Re-verification:** Yes — after gap closure (`98cc669c`, `2db380f4`)
+**Verified:** 2026-11-14T01:30:00Z
+**Status:** passed — all 15 must-haves verified and human UAT passed
+**Re-verification:** Yes — after gap closure (`98cc669c`, `2db380f4`) and UAT
 
 ## Goal Achievement
 
