@@ -7,7 +7,9 @@ import {
   detectEol,
   isRefusal,
   locateSection,
+  PATCH_LINE_CAP,
   preparePatch,
+  prepareSkillVersionDiff,
   readPatchTarget,
 } from '../../../src/services/ai/patchProposal';
 
@@ -175,6 +177,82 @@ describe('generic patch proposal core', () => {
     const empty = MARKDOWN.replace('Original text.', '');
     await db.notes.update(NOTE_ID, { body: empty });
     expect(await preparePatch(db, { ...args, baseHash: await defaultSha256(empty.trim()) })).toMatchObject({ code: 'SECTION_EMPTY' });
+  });
+
+  it('builds one hunk per changed field, in name → description → body order (D-11)', () => {
+    const result = prepareSkillVersionDiff({
+      skillId: 'skill-39-04',
+      base: { name: 'Tên cũ', description: 'Mô tả cũ', body: '# Cũ\n\nDòng cũ.' },
+      next: { name: 'Tên mới', description: 'Mô tả mới', body: '# Mới\n\nDòng mới.' },
+      baseVersion: 0,
+    });
+    expect(isRefusal(result)).toBe(false);
+    if (isRefusal(result)) return;
+
+    const nameAt = result.diffText.indexOf('a/skill:skill-39-04/name');
+    const descriptionAt = result.diffText.indexOf('a/skill:skill-39-04/description');
+    const bodyAt = result.diffText.indexOf('a/skill:skill-39-04/body');
+    expect(nameAt).toBeGreaterThanOrEqual(0);
+    expect(descriptionAt).toBeGreaterThan(nameAt);
+    expect(bodyAt).toBeGreaterThan(descriptionAt);
+
+    // The sums are the per-field diffs added together, not a whole-document diff.
+    // name 1/1 + description 1/1 + body 2/2.
+    expect(result.addedLines).toBe(4);
+    expect(result.removedLines).toBe(4);
+    expect(result.target).toBe('skill');
+    expect(result.sectionTitle).toBe('Tên cũ');
+    expect(result.patchedMarkdown).toBe('# Mới\n\nDòng mới.');
+  });
+
+  it('omits the hunk for an unchanged field (D-11)', () => {
+    const base = { name: 'Tên', description: 'Mô tả', body: '# Cũ' };
+    const result = prepareSkillVersionDiff({
+      skillId: 'skill-39-04',
+      base,
+      next: { ...base, body: '# Mới' },
+      baseVersion: 0,
+    });
+    expect(isRefusal(result)).toBe(false);
+    if (isRefusal(result)) return;
+
+    expect(result.diffText).toContain('/body');
+    expect(result.diffText).not.toContain('/name');
+    expect(result.diffText).not.toContain('/description');
+  });
+
+  it('refuses NO_CHANGES when nothing differs', () => {
+    const same = { name: 'Tên', description: 'Mô tả', body: '# Thân' };
+    expect(
+      prepareSkillVersionDiff({ skillId: 'skill-39-04', base: same, next: { ...same }, baseVersion: 2 })
+    ).toMatchObject({ refused: true, code: 'NO_CHANGES' });
+  });
+
+  it('labels the base side with the version, or "bản hiện tại" at baseline', () => {
+    const base = { name: 'Tên', description: 'Mô tả', body: '# Cũ' };
+    const next = { ...base, body: '# Mới' };
+
+    const versioned = prepareSkillVersionDiff({ skillId: 's', base, next, baseVersion: 3 });
+    expect(isRefusal(versioned)).toBe(false);
+    if (isRefusal(versioned)) return;
+    expect(versioned.diffText).toContain('(bản 3)');
+    expect(versioned.diffText).toContain('(đề xuất)');
+
+    const baseline = prepareSkillVersionDiff({ skillId: 's', base, next, baseVersion: 0 });
+    expect(isRefusal(baseline)).toBe(false);
+    if (isRefusal(baseline)) return;
+    expect(baseline.diffText).toContain('(bản hiện tại)');
+  });
+
+  it('refuses PATCH_TOO_LARGE above the shared line cap', () => {
+    const base = { name: 'Tên', description: 'Mô tả', body: '# Cũ' };
+    const result = prepareSkillVersionDiff({
+      skillId: 's',
+      base,
+      next: { ...base, body: Array.from({ length: 200 }, (_, i) => `dòng ${i}`).join('\n') },
+      baseVersion: 0,
+    });
+    expect(result).toMatchObject({ refused: true, code: 'PATCH_TOO_LARGE', cap: PATCH_LINE_CAP });
   });
 
   it('caps combined additions and removals even when supplied content fits', async () => {

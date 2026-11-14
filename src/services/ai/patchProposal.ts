@@ -187,6 +187,91 @@ export function countLogicalLines(text: string): number {
   return lines.length > 0 && lines[lines.length - 1] === '' ? lines.length - 1 : lines.length;
 }
 
+export interface SkillVersionDiffInput {
+  skillId: string;
+  base: { name: string; description: string; body: string };
+  next: { name: string; description: string; body: string };
+  baseVersion: number;
+}
+
+/** D-11: fixed order — each field's hunk appears only when that field changed. */
+const SKILL_DIFF_FIELDS = ['name', 'description', 'body'] as const;
+
+/**
+ * D-03/D-11: a whole-skill proposal carries all three fields, so the review surface must
+ * cover all three — approving a change the user never saw is not acceptable.
+ *
+ * Sync on purpose: `createUnifiedLineDiff` is sync, so an `async` signature would force both
+ * render sites into a `useState` + `useEffect` dance for no benefit.
+ */
+export function prepareSkillVersionDiff(
+  input: SkillVersionDiffInput
+): ArtifactPatchProposal | ArtifactToolRefusal {
+  const changed = SKILL_DIFF_FIELDS.filter((field) => input.base[field] !== input.next[field]);
+  if (changed.length === 0) {
+    return refuse('NO_CHANGES', 'Nội dung đề xuất trùng với bản hiện tại nên không có gì để duyệt.');
+  }
+
+  const baseLabel = input.baseVersion > 0 ? `bản ${input.baseVersion}` : 'bản hiện tại';
+  const hunks: string[] = [];
+  let addedLines = 0;
+  let removedLines = 0;
+
+  for (const field of changed) {
+    const nextValue = input.next[field];
+    const suppliedLines = countLogicalLines(nextValue);
+    if (suppliedLines > PATCH_LINE_CAP) {
+      return refuse(
+        'PATCH_TOO_LARGE',
+        `Đề xuất quá lớn ở trường "${field}" (${suppliedLines} dòng, giới hạn ${PATCH_LINE_CAP}). Hãy rút gọn nội dung.`,
+        { cap: PATCH_LINE_CAP, addedLines: suppliedLines, removedLines: 0 }
+      );
+    }
+
+    const diff: UnifiedLineDiff | DiffBudgetRefusal = createUnifiedLineDiff(
+      input.base[field],
+      nextValue,
+      {
+        fromLabel: `a/skill:${input.skillId}/${field} (${baseLabel})`,
+        toLabel: `b/skill:${input.skillId}/${field} (đề xuất)`,
+      }
+    );
+    if ((diff as DiffBudgetRefusal).refused) {
+      const budget = diff as DiffBudgetRefusal;
+      return refuse('DIFF_BUDGET_EXCEEDED', budget.message, { cap: budget.cap });
+    }
+    const unified = diff as UnifiedLineDiff;
+    hunks.push(unified.diffText);
+    addedLines += unified.addedLines;
+    removedLines += unified.removedLines;
+  }
+
+  if (addedLines + removedLines > PATCH_LINE_CAP) {
+    return refuse(
+      'PATCH_TOO_LARGE',
+      `Đề xuất quá lớn (${addedLines + removedLines} dòng thay đổi, giới hạn ${PATCH_LINE_CAP}). Hãy rút gọn nội dung.`,
+      { addedLines, removedLines, cap: PATCH_LINE_CAP }
+    );
+  }
+
+  return {
+    proposalId: crypto.randomUUID(),
+    target: 'skill',
+    id: input.skillId,
+    version: input.baseVersion,
+    sectionId: 'skill',
+    sectionTitle: input.base.name,
+    // Unused on this path: the type requires a string, and a hash would imply drift
+    // detection this path does not perform.
+    baseHash: '',
+    baseMarkdown: input.base.body,
+    diffText: hunks.join('\n\n'),
+    addedLines,
+    removedLines,
+    patchedMarkdown: input.next.body,
+  };
+}
+
 /** Prepare a reviewable proposal only; never writes a document or approves a version. */
 export async function preparePatch(
   db: TaskPlannerDatabase,
