@@ -50,6 +50,7 @@ import type { ChatTurnRuntimeDeps } from '../runtime/chatTurnRuntime';
 import { AiChatWidget } from '../AiChatWidget';
 import { agentColorFor } from './AgentAttributionRow';
 import { AssignmentPlanCard } from './AssignmentPlanCard';
+import { PendingSkillProposals } from './PendingSkillProposals';
 import { TeamActivityIndicator } from './TeamActivityIndicator';
 import { BudgetTopUpModal } from './BudgetTopUpModal';
 import { TeamSidebar } from './TeamSidebar';
@@ -759,6 +760,13 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
           }}
         />
       )}
+      <PendingSkillProposals
+        team={team}
+        members={liveMembers}
+        employees={employees}
+        skills={skills}
+        db={db}
+      />
     </>
   );
 
