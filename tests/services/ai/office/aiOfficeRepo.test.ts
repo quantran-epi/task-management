@@ -181,6 +181,71 @@ describe('aiOfficeRepo (AIO-EMP-01, AIO-EMP-02, AIO-SKILL-01)', () => {
     expect(updated.description).toBe('Quy trình nghiên cứu');
   });
 
+  it('updateSkill tạo một phiên bản đã duyệt cùng transaction (D-09)', async () => {
+    const skill = await createSkill({ name: 'S', description: 'd', body: 'b' }, db);
+
+    await updateSkill(
+      skill.id,
+      { name: 'Tên mới', description: 'Mô tả mới', body: '# Mới' },
+      db
+    );
+
+    const rows = await db.aiSkillVersions.where('skillId').equals(skill.id).toArray();
+    expect(rows).toHaveLength(1);
+    const [row] = rows;
+    expect(row?.status).toBe('approved');
+    expect(row?.version).toBe(1);
+    expect(row?.baseVersion).toBe(0);
+    expect(row?.name).toBe('Tên mới');
+    expect(row?.description).toBe('Mô tả mới');
+    expect(row?.body).toBe('# Mới');
+    expect(row?.decidedAt).toBe(row?.createdAt);
+
+    const stored = await db.aiSkills.get(skill.id);
+    expect(stored?.name).toBe('Tên mới');
+    expect(stored?.description).toBe('Mô tả mới');
+    expect(stored?.body).toBe('# Mới');
+  });
+
+  it('updateSkill numbers the next manual save as max(approved) + 1 (D-09, D-14)', async () => {
+    const skill = await createSkill({ name: 'S', description: 'd', body: 'b' }, db);
+
+    await updateSkill(skill.id, { body: 'b1' }, db);
+    await updateSkill(skill.id, { body: 'b2' }, db);
+
+    // D-14: a pending row carries no number and must not shift the next manual save.
+    await db.aiSkillVersions.add({
+      id: generateId(),
+      skillId: skill.id,
+      status: 'pending',
+      name: 'S',
+      description: 'd',
+      body: 'b3',
+      createdAt: new Date().toISOString(),
+    });
+
+    await updateSkill(skill.id, { body: 'b4' }, db);
+
+    const approved = (await db.aiSkillVersions.where('skillId').equals(skill.id).toArray())
+      .filter((row) => row.status === 'approved')
+      .map((row) => row.version)
+      .sort((a, b) => (a ?? 0) - (b ?? 0));
+    expect(approved).toEqual([1, 2, 3]);
+  });
+
+  it('updateSkill leaves both tables unchanged when the skill row is missing (D-09)', async () => {
+    await expect(updateSkill(generateId(), { body: '# X' }, db)).rejects.toThrow(
+      /Không tìm thấy kỹ năng/
+    );
+    expect(await db.aiSkillVersions.count()).toBe(0);
+  });
+
+  it('createSkill writes no version row (D-10)', async () => {
+    const skill = await createSkill({ name: 'S', description: 'd', body: 'b' }, db);
+
+    expect(await db.aiSkillVersions.where('skillId').equals(skill.id).count()).toBe(0);
+  });
+
   it('refuses to delete a skill assigned to a profile and names the agent', async () => {
     const skill = await createSkill(
       { name: 'Research', description: 'Quy trình nghiên cứu', body: SKILL_BODY },
