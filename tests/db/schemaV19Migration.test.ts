@@ -126,10 +126,12 @@ describe('Dexie SCHEMA_V19 Migration (Phase 36)', () => {
   it('round-trips a skill version row across close and reopen at 19', async () => {
     const db = await openAtCurrentVersion();
 
+    // IN-03: a pending row carries no number (D-14). Seeding one here would document the
+    // pre-39 shape that `BackupAiSkillVersionRecordSchema.superRefine` refuses and that the
+    // v26 upgrade strips — the test would then encode the invariant Phase 39 removed.
     const row: AiSkillVersion = {
       id: VERSION_ID,
       skillId: SKILL_ID,
-      version: 1,
       status: 'pending',
       name: 'Code review',
       description: 'Reviews diffs for correctness',
@@ -147,6 +149,7 @@ describe('Dexie SCHEMA_V19 Migration (Phase 36)', () => {
     expect(reopened.verno).toBe(LATEST_SCHEMA_VERSION);
     expect(await reopened.aiSkillVersions.get(VERSION_ID)).toEqual(row);
     expect((await reopened.aiSkillVersions.get(VERSION_ID))?.status).toBe('pending');
+    expect((await reopened.aiSkillVersions.get(VERSION_ID))?.version).toBeUndefined();
   });
 
   it('does not resurrect any SDLC store after the upgrade', async () => {

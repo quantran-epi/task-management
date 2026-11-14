@@ -90,6 +90,9 @@ export async function listPendingSkillVersions(
  * direct write or a pre-39 backup. Stripping here — inside the same `rw` transaction that is
  * about to assign the next number — is what stops `max(approved) + 1` from colliding with a
  * non-approved row and making the app's own export fail its own duplicate check.
+ *
+ * IN-04: `validateBackup.ts` holds the same rule for a raw backup payload (before schema
+ * validation, so pre-39 exports still restore). Keep the two in step: change both or neither.
  */
 export async function stripNonApprovedVersionNumbers(
   skillId: string,
