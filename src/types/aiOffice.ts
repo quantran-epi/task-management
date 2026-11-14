@@ -126,8 +126,14 @@ export type AiSkillVersionStatus = 'pending' | 'approved' | 'rejected';
 export interface AiSkillVersion {
   id: string;
   skillId: string;
-  /** 1-based, monotonic per skill. */
-  version: number;
+  /**
+   * D-14: assigned only at approval (`max(approved) + 1`). A pending row omits the key
+   * entirely rather than carrying `0` — the backup schema is `positive()`, so `0` cannot
+   * round-trip.
+   */
+  version?: number | undefined;
+  /** D-15: highest approved version at proposal time; `0` is the implicit baseline. */
+  baseVersion?: number | undefined;
   status: AiSkillVersionStatus;
   name: string; // ≤ 60
   description: string; // ≤ 300
