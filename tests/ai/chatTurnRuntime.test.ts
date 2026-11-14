@@ -14,10 +14,12 @@ import { runAiOrchestratorLoop, type AiOrchestratorLoopOptions } from '../../src
 import type { ChatCompletionMessage } from '../../src/services/ai/types';
 
 const mockStreamChatEvents = vi.hoisted(() => vi.fn());
-vi.mock('../../src/services/ai/nineRouterClient', () => ({
+// WR-09: keep the real module and override only the stream. A wholesale replacement left
+// `redactApiKey` (imported by `aiTools`) undefined, so a tool-failure path would throw
+// `TypeError: redactApiKey is not a function` and look like a runtime bug.
+vi.mock('../../src/services/ai/nineRouterClient', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/services/ai/nineRouterClient')>()),
   streamChatEvents: mockStreamChatEvents,
-  streamChatCompletion: vi.fn(),
-  stripThinkingBlocks: (text: string) => text.replace(/<thinking[\s\S]*?<\/thinking>/g, '').trim(),
 }));
 
 const SCOPE_KEY = 'project:11111111-1111-4111-8111-111111111111';
@@ -875,10 +877,11 @@ describe('chatTurnRuntime team seams (D-07, D-12, D-13, D-19, D-21)', () => {
 
     const result = toolEvents.find((event) => event.phase === 'result');
     expect(result?.name).toBe('propose_skill_version');
-    // It reached dispatch — the loop's fall-through reports the unknown MCP tool, which is
-    // proof the gate never intercepted it. The refusal string must be absent.
-    expect(result?.result ?? '').toContain('propose_skill_version');
+    // IN-05: assert the absence of the refusal code, not the presence of the tool name — the
+    // loop's unknown-MCP fall-through also contains the name, so that would pass even if the
+    // tool were never wired to a handler.
     expect(result?.result ?? '').not.toContain('READ_ONLY_EMPLOYEE');
+    expect(result?.result ?? '').not.toContain('refused');
     expect(statuses).not.toContain('awaiting-approval');
     expect(approvals).toHaveLength(0);
     expect(outcome.phase).toBe('complete');
