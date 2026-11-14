@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TaskPlannerDatabase } from '../../../src/db';
+import { LATEST_SCHEMA_VERSION } from '../../../src/db/schema';
 import {
   APP_MARKER,
   CURRENT_SCHEMA_VERSION,
@@ -144,7 +145,8 @@ const attributedMessage: ChatMessage = {
 const pendingVersion: AiSkillVersion = {
   id: PENDING_VERSION_ID,
   skillId: SKILL_ID,
-  version: 2,
+  // Phase 39 D-14: a pending row carries no number; it is assigned at approval.
+  baseVersion: 1,
   status: 'pending',
   name: 'Code review',
   description: 'Reviews diffs for correctness',
@@ -268,6 +270,9 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
     const envelope = await exportBackupPayload(sourceDb);
 
     expect(envelope.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    // Phase 39: no envelope bump and no Dexie bump — both new fields are optional-absent.
+    expect(CURRENT_SCHEMA_VERSION).toBe(13);
+    expect(LATEST_SCHEMA_VERSION).toBe(25);
     expect(envelope.tables.aiEmployees).toEqual([employee]);
     expect(envelope.tables.aiLeads).toEqual([lead]);
     expect(envelope.tables.aiSkills).toEqual([skill]);
@@ -426,6 +431,48 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
     const restored = await restoredDb.aiSkillVersions.get(PENDING_VERSION_ID);
     expect(restored?.status).toBe('pending');
     expect(restored?.decidedAt).toBeUndefined();
+  });
+
+  it('round-trips a pending version row that has no version number (D-14, D-15)', async () => {
+    await seedOffice(sourceDb);
+    const envelope = await exportBackupPayload(sourceDb);
+
+    const exported = envelope.tables.aiSkillVersions!.find((row) => row.id === PENDING_VERSION_ID)!;
+    expect('version' in exported).toBe(false);
+    expect(exported.baseVersion).toBe(1);
+
+    expect(validateBackupPayload(envelope)).toMatchObject({ valid: true, errors: [] });
+    await restoreBackupPayload(envelope, restoredDb);
+
+    const restored = await restoredDb.aiSkillVersions.get(PENDING_VERSION_ID);
+    expect('version' in restored!).toBe(false);
+    expect(restored?.baseVersion).toBe(1);
+  });
+
+  it('accepts two pending versions for one skill without a duplicate-version error (D-14)', async () => {
+    await seedOffice(sourceDb);
+    await sourceDb.aiSkillVersions.add({
+      ...pendingVersion,
+      id: '19191919-1919-4919-8919-191919191919',
+      createdAt: '2026-11-08T13:00:00.000Z',
+    });
+
+    const envelope = await exportBackupPayload(sourceDb);
+    const result = validateBackupPayload(envelope);
+
+    expect(result.valid).toBe(true);
+    expect(result.errors.filter((error) => error.field === 'version')).toEqual([]);
+  });
+
+  it('accepts a payload whose skill versions carry no baseVersion (Pitfall 20)', async () => {
+    await seedOffice(sourceDb);
+    const envelope = await exportBackupPayload(sourceDb);
+
+    envelope.tables.aiSkillVersions = envelope.tables.aiSkillVersions!.map(
+      ({ baseVersion: _base, ...row }) => row
+    );
+
+    expect(validateBackupPayload(envelope)).toMatchObject({ valid: true, errors: [] });
   });
 
   it('restores the same envelope twice with identical counts (no accumulation)', async () => {

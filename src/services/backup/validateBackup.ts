@@ -561,6 +561,9 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     if (!aiSkillIds.has(version.skillId)) {
       errors.push({ table: 'aiSkillVersions', recordId: version.id, field: 'skillId', message: `AiSkillVersion references skillId "${version.skillId}" not found in aiSkills` });
     }
+    // Phase 39 D-14: unnumbered pendings are legal and must not key `S:undefined` — two
+    // proposals for one skill would otherwise refuse the whole payload.
+    if (version.version === undefined) continue;
     const key = `${version.skillId}:${version.version}`;
     if (seenVersions.has(key)) {
       errors.push({ table: 'aiSkillVersions', recordId: version.id, field: 'version', message: `Duplicate AiSkillVersion for skillId "${version.skillId}" version ${version.version}` });

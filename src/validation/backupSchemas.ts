@@ -690,7 +690,13 @@ export const BackupAiTeamLinkRecordSchema = z.strictObject({
 export const BackupAiSkillVersionRecordSchema = z.strictObject({
   id: uuidSchema,
   skillId: uuidSchema,
-  version: z.number().int().positive(),
+  /**
+   * Phase 39 D-14: a pending row omits the number entirely (it is assigned at approval).
+   * Optional so a pre-39 export still restores; `positive()` stays, so `0` is still refused.
+   */
+  version: z.number().int().positive().optional(),
+  /** Phase 39 D-15: `0` is a legal baseline, so `nonnegative()`. Optional for the same reason. */
+  baseVersion: z.number().int().nonnegative().optional(),
   status: AiSkillVersionStatusSchema,
   name: aiNameSchema,
   description: aiSkillDescriptionSchema,
