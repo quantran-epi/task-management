@@ -80,18 +80,20 @@ export function buildEmployeeTurnRequest(input: BuildEmployeeTurnRequestInput): 
     employee.persona,
     [
       '[CHÍNH SÁCH CHỈ ĐỌC]',
-      'Bạn chỉ được đọc dữ liệu. Mọi thao tác ghi đều bị từ chối tự động và không có thay đổi nào được thực hiện.',
+      'Bạn chỉ được đọc dữ liệu. Mọi thao tác ghi đều bị từ chối tự động, trừ một ngoại lệ duy nhất bên dưới.',
+      'Ngoại lệ: công cụ propose_skill_version được phép tạo một đề xuất kỹ năng ở trạng thái chờ duyệt. Đề xuất đó không thay đổi kỹ năng — chỉ người dùng duyệt mới tạo ra phiên bản mới.',
       'Nếu cần thay đổi dữ liệu, hãy nêu rõ trong báo cáo để trưởng nhóm thực hiện.',
       'Bạn có thể nhắn trực tiếp cho trưởng nhóm, nhân viên khác hoặc người dùng bằng công cụ send_message khi cần hỏi lại hoặc trao đổi.',
     ].join('\n'),
   ];
 
   // D-24 / AIO-SKILL-02: the description enters the prompt, the body never does.
+  // D-21: once a model can author the description, it is untrusted data like any other.
   if (skill) {
     parts.push(
       [
         `[KỸ NĂNG — ${skill.name}]`,
-        skill.description,
+        wrapUntrusted(`MÔ TẢ KỸ NĂNG ${skill.name}`, skill.description),
         'Khi cần quy trình chi tiết, gọi công cụ read_skill để đọc toàn văn.',
       ].join('\n')
     );
