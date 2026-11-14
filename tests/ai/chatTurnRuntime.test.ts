@@ -15,8 +15,9 @@ import type { ChatCompletionMessage } from '../../src/services/ai/types';
 
 const mockStreamChatEvents = vi.hoisted(() => vi.fn());
 // IN-06: `propose_skill_version` is not a local DB tool, so the loop dispatches it to the
-// dynamic-MCP path. Stub that path so the test can prove the call reached a handler instead
-// of passing on the "unknown MCP tool" error string.
+// dynamic-MCP path. Stub that path so the test proves the read-only gate let the call through
+// to dispatch instead of passing on the "unknown MCP tool" error string. IN-05: the stub is
+// the fall-through — it is not a team-tool handler, so do not read it as one.
 const mockExecuteDynamicMcpTool = vi.hoisted(() =>
   vi.fn(async () => JSON.stringify({ versionId: 'version-1' }))
 );
@@ -888,9 +889,9 @@ describe('chatTurnRuntime team seams (D-07, D-12, D-13, D-19, D-21)', () => {
 
     const result = toolEvents.find((event) => event.phase === 'result');
     expect(result?.name).toBe('propose_skill_version');
-    // IN-06: prove the call actually reached a handler. Without this the loop's unknown-MCP
-    // fall-through also returned a string containing the tool name, so the assertions below
-    // passed on an error path.
+    // IN-05: this proves the read-only gate does not refuse `propose_skill_version` and the
+    // call reaches the MCP dispatcher. `executeDynamicMcpTool` is the fall-through, so this
+    // is NOT coverage of `executeTeamTool` or of a team-tool handler.
     expect(mockExecuteDynamicMcpTool).toHaveBeenCalledWith(
       'propose_skill_version',
       { name: 'A' },
