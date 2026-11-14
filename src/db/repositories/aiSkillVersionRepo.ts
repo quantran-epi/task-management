@@ -54,25 +54,9 @@ export async function listSkillVersions(
 }
 
 /**
- * Reads through the `[skillId+version]` compound index — never `toArray()` the table.
- *
- * Dexie skips rows whose key part is absent, so an unnumbered pending is invisible here and
- * this returns the highest *numbered* row by construction — no status filter needed.
- */
-export async function getLatestSkillVersion(
-  skillId: string,
-  db: TaskPlannerDatabase = defaultDb
-): Promise<AiSkillVersion | undefined> {
-  return db.aiSkillVersions
-    .where('[skillId+version]')
-    .between([skillId, 0], [skillId, Number.MAX_SAFE_INTEGER])
-    .last();
-}
-
-/**
- * D-14: the single numbering reader — used by `createSkillVersion` (to record `baseVersion`)
- * and by the run pin. Filters to `approved`: reading `max(version)` over all rows would let a
- * leaked number create gaps.
+ * D-14: the single numbering reader — used by `createSkillVersion` (to record `baseVersion`),
+ * by `updateSkill` and by `decideSkillVersion`. Filters to `approved`: reading `max(version)`
+ * over all rows would let a leaked number create gaps.
  */
 export async function getLatestApprovedVersionNumber(
   skillId: string,
@@ -94,9 +78,35 @@ export async function listPendingSkillVersions(
   return rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
+/**
+ * WR-06: `baseVersion` is passed in by the caller that already built the diff, so the stored
+ * snapshot and the diff label cannot disagree. Omitted means "read it now" — the default for
+ * every caller that does not render a diff.
+ */
+/**
+ * D-14 write-side invariant: only an approved row may hold a number.
+ *
+ * The V26 upgrade repairs existing databases, but a row can still arrive numbered through a
+ * direct write or a pre-39 backup. Stripping here — inside the same `rw` transaction that is
+ * about to assign the next number — is what stops `max(approved) + 1` from colliding with a
+ * non-approved row and making the app's own export fail its own duplicate check.
+ */
+export async function stripNonApprovedVersionNumbers(
+  skillId: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<void> {
+  const rows = await db.aiSkillVersions.where('skillId').equals(skillId).toArray();
+  for (const row of rows) {
+    if (row.status === 'approved' || row.version === undefined) continue;
+    const { version: _dropped, ...rest } = row;
+    await db.aiSkillVersions.put(rest);
+  }
+}
+
 export async function createSkillVersion(
   input: AiSkillVersionDraft,
-  db: TaskPlannerDatabase = defaultDb
+  db: TaskPlannerDatabase = defaultDb,
+  baseVersion?: number
 ): Promise<AiSkillVersion> {
   const validated = AiSkillVersionInputSchema.parse(input);
   // AIO-SKILL-04: a caller that smuggles `status: 'approved'` must fail here — this is the
@@ -114,7 +124,8 @@ export async function createSkillVersion(
       name: validated.name,
       description: validated.description,
       body: validated.body,
-      baseVersion: await getLatestApprovedVersionNumber(validated.skillId, db),
+      baseVersion:
+        baseVersion ?? (await getLatestApprovedVersionNumber(validated.skillId, db)),
       createdAt: new Date().toISOString(),
     };
     if (validated.evidence !== undefined) row.evidence = validated.evidence;
@@ -140,29 +151,49 @@ export async function decideSkillVersion(
     const decidedAt = new Date().toISOString();
 
     if (status === 'rejected') {
-      // A rejected row gets no number — the spread must not invent one.
-      const rejected: AiSkillVersion = { ...existing, status, decidedAt };
+      // D-14: a rejected row carries no number. The spread would preserve a legacy number
+      // (pre-39 rows were all numbered), so drop the key explicitly.
+      const { version: _dropped, ...rest } = existing;
+      const rejected: AiSkillVersion = { ...rest, status, decidedAt };
       await db.aiSkillVersions.put(rejected);
       return rejected;
     }
 
-    // D-14: number over approved rows only.
-    const latestApproved = await db.aiSkillVersions
-      .where('[skillId+version]')
-      .between([existing.skillId, 0], [existing.skillId, Number.MAX_SAFE_INTEGER])
-      .filter((row) => row.status === 'approved')
-      .last();
-    const nextVersion = (latestApproved?.version ?? 0) + 1;
+    // D-14: number over approved rows only — one reader, so the rule has one definition.
+    // CR-01: repair any legacy numbered non-approved row first, or the new number collides.
+    await stripNonApprovedVersionNumbers(existing.skillId, db);
+    const latestApproved = await getLatestApprovedVersionNumber(existing.skillId, db);
+
+    // D-07: `aiSkills` becomes the approved copy in the same transaction.
+    const skill = await db.aiSkills.get(existing.skillId);
+    if (!skill) throw new Error(MISSING_SKILL_MESSAGE);
+
+    // Criterion 3: the previous version stays retrievable. A skill that was never saved has
+    // no version row at all, so the pre-approval content would be overwritten with no copy.
+    // Snapshot it as v1; the proposal then becomes v2.
+    let nextVersion = latestApproved + 1;
+    if (latestApproved === 0) {
+      await db.aiSkillVersions.add({
+        id: generateId(),
+        skillId: skill.id,
+        version: 1,
+        baseVersion: 0,
+        status: 'approved',
+        name: skill.name,
+        description: skill.description,
+        body: skill.body,
+        createdAt: skill.createdAt,
+        decidedAt: skill.updatedAt,
+      });
+      nextVersion = 2;
+    }
+
     const approved: AiSkillVersion = {
       ...existing,
       status,
       version: nextVersion,
       decidedAt,
     };
-
-    // D-07: `aiSkills` becomes the approved copy in the same transaction.
-    const skill = await db.aiSkills.get(existing.skillId);
-    if (!skill) throw new Error(MISSING_SKILL_MESSAGE);
 
     await db.aiSkillVersions.put(approved);
     await db.aiSkills.put({

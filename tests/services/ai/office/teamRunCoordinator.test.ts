@@ -6298,8 +6298,8 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       });
       const current = harness;
       await approveVersion(current, '# Bản 1');
-      const skillRow = await current.db.aiSkills.get(current.skill.id);
-      await current.db.aiSkills.put({ ...skillRow!, body: '# Bản 1' });
+      // IN-06: no redundant `aiSkills` write here — `decideSkillVersion` already wrote the body
+      // (D-07), and a manual put would hide whether that path actually fired.
 
       void current.coordinator.send('Làm báo cáo');
       await waitFor(() =>
@@ -6329,7 +6329,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       const pinnedAttempt = (
         await withVersion.db.aiTeamAssignments.where('batchId').equals(batchId).toArray()
       )[0]!;
-      expect(pinnedAttempt.skillVersion).toBe(1);
+      expect(pinnedAttempt.skillVersion).toBe(2);
 
       // Baseline: no approved row means NO key at all — a literal 0 is unrestorable
       // (`BackupAiTeamAssignmentRecordSchema.skillVersion` is `.positive()`).

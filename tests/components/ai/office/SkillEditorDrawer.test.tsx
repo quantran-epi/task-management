@@ -105,7 +105,8 @@ describe('SkillEditorDrawer — pending queue and version history (AIO-SKILL-01/
 
     const stored = await db.aiSkillVersions.get(row.id);
     expect(stored?.status).toBe('approved');
-    expect(stored?.version).toBe(1);
+    // CR-03: the pre-approval content is snapshotted as v1, so the proposal takes v2.
+    expect(stored?.version).toBe(2);
     expect((await db.aiSkills.get(skill.id))?.body).toBe(NEXT_BODY);
   });
 
@@ -149,9 +150,9 @@ describe('SkillEditorDrawer — pending queue and version history (AIO-SKILL-01/
     );
     expect(screen.getByTestId(`skill-pending-card-${row.id}`)).toBeInTheDocument();
     expect(screen.queryByTestId(`skill-version-row-${row.id}`)).toBeNull();
-    expect(screen.getByTestId('skill-version-history')).toHaveTextContent(
-      'Chưa có phiên bản nào — lần lưu đầu tiên sẽ tạo phiên bản 1.'
-    );
+    // CR-03: the approval snapshotted the pre-approval content as v1, so history is not empty.
+    expect(screen.getByTestId('skill-version-history')).toHaveTextContent('Lịch sử phiên bản (1)');
+    expect(screen.getByTestId('skill-version-history')).toHaveTextContent('v1');
   });
 
   it('a stale proposal in the durable queue disables Approve but keeps Reject enabled (D-16)', async () => {

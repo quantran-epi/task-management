@@ -246,6 +246,20 @@ describe('aiOfficeRepo (AIO-EMP-01, AIO-EMP-02, AIO-SKILL-01)', () => {
     expect(await db.aiSkillVersions.where('skillId').equals(skill.id).count()).toBe(0);
   });
 
+  it('updateSkill writes no version row when nothing changed (WR-01)', async () => {
+    const skill = await createSkill({ name: 'S', description: 'd', body: 'b' }, db);
+    await updateSkill(skill.id, { body: 'b1' }, db);
+
+    // A no-op save must not mint a number — that would flip every pending proposal stale.
+    const unchanged = await updateSkill(skill.id, {}, db);
+    expect(unchanged.body).toBe('b1');
+    expect(await db.aiSkillVersions.where('skillId').equals(skill.id).count()).toBe(1);
+
+    // A patch that restates the current values is a no-op too.
+    await updateSkill(skill.id, { name: 'S', description: 'd', body: 'b1' }, db);
+    expect(await db.aiSkillVersions.where('skillId').equals(skill.id).count()).toBe(1);
+  });
+
   it('refuses to delete a skill assigned to a profile and names the agent', async () => {
     const skill = await createSkill(
       { name: 'Research', description: 'Quy trình nghiên cứu', body: SKILL_BODY },
@@ -281,7 +295,7 @@ describe('aiOfficeRepo (AIO-EMP-01, AIO-EMP-02, AIO-SKILL-01)', () => {
     await db.aiSkillVersions.add({
       id: versionId,
       skillId: skill.id,
-      version: 1,
+      // D-14: a pending row carries no number.
       status: 'pending',
       name: 'S',
       description: 'd',
@@ -314,7 +328,7 @@ describe('aiOfficeRepo (AIO-EMP-01, AIO-EMP-02, AIO-SKILL-01)', () => {
       {
         id: generateId(),
         skillId: skill.id,
-        version: 2,
+        // D-14: a pending row carries no number.
         status: 'pending',
         name: 'S',
         description: 'd',

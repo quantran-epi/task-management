@@ -3,7 +3,6 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TaskPlannerDatabase } from '../../../../src/db/index';
 import {
   listSkillVersions,
-  getLatestSkillVersion,
   getLatestApprovedVersionNumber,
   listPendingSkillVersions,
   createSkillVersion,
@@ -65,28 +64,56 @@ describe('aiSkillVersionRepo (AIO-DATA-01, D-05)', () => {
     for (const row of [first, second, third]) expect('version' in row).toBe(false);
     expect(await getLatestApprovedVersionNumber(skillId, db)).toBe(0);
 
+    // CR-03: the first approval snapshots the pre-approval content as v1, so the proposal
+    // becomes v2 — the user-authored original stays retrievable.
     const approvedFirst = await decideSkillVersion(first.id, 'approved', db);
-    expect(approvedFirst.version).toBe(1);
+    expect(approvedFirst.version).toBe(2);
 
     const approvedThird = await decideSkillVersion(third.id, 'approved', db);
-    expect(approvedThird.version).toBe(2);
+    expect(approvedThird.version).toBe(3);
 
-    // Two approved plus one still pending; the unnumbered row sorts last.
+    // Baseline v1, two approved proposals, one still pending (unnumbered, sorts last).
     expect((await listSkillVersions(skillId, db)).map((row) => row.version)).toEqual([
+      3,
       2,
       1,
       undefined,
     ]);
   });
 
-  it('getLatestSkillVersion ignores unnumbered pending rows', async () => {
+  it('snapshots the pre-approval content as v1 so the original stays retrievable (CR-03)', async () => {
+    await db.aiSkills.put({
+      ...(await db.aiSkills.get(skillId))!,
+      name: 'Bản gốc',
+      description: 'Mô tả gốc',
+      body: '# GỐC',
+    });
+
+    const pending = await createSkillVersion(
+      draft(skillId, { name: 'Bản mới', description: 'Mô tả mới', body: '# MỚI' }),
+      db
+    );
+    const approved = await decideSkillVersion(pending.id, 'approved', db);
+
+    const rows = await db.aiSkillVersions.where('skillId').equals(skillId).toArray();
+    expect(rows).toHaveLength(2);
+    const baseline = rows.find((row) => row.version === 1)!;
+    expect(baseline.status).toBe('approved');
+    expect(baseline.body).toBe('# GỐC');
+    expect(baseline.name).toBe('Bản gốc');
+    expect(approved.version).toBe(2);
+    expect((await db.aiSkills.get(skillId))?.body).toBe('# MỚI');
+  });
+
+  it('does not snapshot a baseline twice when an approved version already exists', async () => {
     const first = await createSkillVersion(draft(skillId), db);
-    await createSkillVersion(draft(skillId), db);
+    await decideSkillVersion(first.id, 'approved', db);
 
-    expect(await getLatestSkillVersion(skillId, db)).toBeUndefined();
+    const second = await createSkillVersion(draft(skillId, { body: '# Lần 2' }), db);
+    const approved = await decideSkillVersion(second.id, 'approved', db);
 
-    const approved = await decideSkillVersion(first.id, 'approved', db);
-    expect((await getLatestSkillVersion(skillId, db))?.id).toBe(approved.id);
+    expect(approved.version).toBe(3);
+    expect(await db.aiSkillVersions.where('skillId').equals(skillId).count()).toBe(3);
   });
 
   it('never assigns the same version to two concurrent approvals', async () => {
@@ -98,8 +125,9 @@ describe('aiSkillVersionRepo (AIO-DATA-01, D-05)', () => {
       decideSkillVersion(b.id, 'approved', db),
     ]);
 
-    expect([approvedA.version, approvedB.version].sort()).toEqual([1, 2]);
-    expect(await db.aiSkillVersions.where('skillId').equals(skillId).count()).toBe(2);
+    // CR-03 adds one baseline v1 row per skill, so the two proposals take 2 and 3.
+    expect([approvedA.version, approvedB.version].sort()).toEqual([2, 3]);
+    expect(await db.aiSkillVersions.where('skillId').equals(skillId).count()).toBe(3);
   });
 
   it('records the latest approved number as baseVersion on a new pending (D-15)', async () => {
@@ -107,7 +135,7 @@ describe('aiSkillVersionRepo (AIO-DATA-01, D-05)', () => {
     await decideSkillVersion(first.id, 'approved', db);
 
     const second = await createSkillVersion(draft(skillId), db);
-    expect(second.baseVersion).toBe(1);
+    expect(second.baseVersion).toBe(2);
     expect('version' in second).toBe(false);
   });
 
@@ -153,6 +181,9 @@ describe('aiSkillVersionRepo (AIO-DATA-01, D-05)', () => {
 
   it('listPendingSkillVersions returns only pending rows, newest first', async () => {
     const older = await createSkillVersion(draft(skillId), db);
+    // `createdAt` is ISO-millisecond resolution — without a gap the two rows tie and the
+    // assertion below becomes a coin flip under parallel workers.
+    await new Promise((resolve) => setTimeout(resolve, 3));
     const newer = await createSkillVersion(draft(skillId), db);
     const approved = await createSkillVersion(draft(skillId), db);
     await decideSkillVersion(approved.id, 'approved', db);
@@ -168,6 +199,8 @@ describe('aiSkillVersionRepo (AIO-DATA-01, D-05)', () => {
     expect(rejected.status).toBe('rejected');
     // A rejected row gets no number.
     expect('version' in rejected).toBe(false);
+    // CR-03: a rejection writes no baseline row either — nothing was approved.
+    expect(await db.aiSkillVersions.count()).toBe(1);
 
     await expect(decideSkillVersion(pending.id, 'approved', db)).rejects.toThrow(
       /đã được quyết định/
@@ -190,7 +223,52 @@ describe('aiSkillVersionRepo (AIO-DATA-01, D-05)', () => {
     const stored = await db.aiSkillVersions.get(pending.id);
     expect(stored?.status).toBe('approved');
     expect(stored?.decidedAt).toBe(approved.decidedAt);
-    expect(stored?.version).toBe(1);
+    expect(stored?.version).toBe(2);
+  });
+
+  it('strips a legacy version number when a pre-39 pending is rejected (CR-02)', async () => {
+    const legacyId = generateId();
+    await db.aiSkillVersions.add({
+      id: legacyId,
+      skillId,
+      version: 7,
+      status: 'pending',
+      name: 'Viết đặc tả',
+      description: 'Quy trình viết đặc tả.',
+      body: BODY,
+      createdAt: new Date().toISOString(),
+    });
+
+    const rejected = await decideSkillVersion(legacyId, 'rejected', db);
+
+    expect(rejected.status).toBe('rejected');
+    expect('version' in rejected).toBe(false);
+    const stored = await db.aiSkillVersions.get(legacyId);
+    expect('version' in stored!).toBe(false);
+  });
+
+  it('strips a legacy numbered non-approved row before numbering a new approval (CR-01)', async () => {
+    // Pre-39 shape: a rejected row that already holds v1.
+    const legacyRejectedId = generateId();
+    await db.aiSkillVersions.add({
+      id: legacyRejectedId,
+      skillId,
+      version: 1,
+      status: 'rejected',
+      name: 'Viết đặc tả',
+      description: 'Quy trình viết đặc tả.',
+      body: BODY,
+      createdAt: new Date().toISOString(),
+    });
+
+    const pending = await createSkillVersion(draft(skillId), db);
+    await decideSkillVersion(pending.id, 'approved', db);
+
+    const rows = await db.aiSkillVersions.where('skillId').equals(skillId).toArray();
+    expect('version' in rows.find((row) => row.id === legacyRejectedId)!).toBe(false);
+    // Exactly one row per number — the app's own export stays importable.
+    const numbers = rows.map((row) => row.version).filter((value) => value !== undefined);
+    expect(new Set(numbers).size).toBe(numbers.length);
   });
 
   it('omits evidence entirely when the input has none', async () => {

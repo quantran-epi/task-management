@@ -1,7 +1,7 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../index';
 import type { AiEmployee, AiLead, AiSkill, AiSkillVersion } from '../../types/aiOffice';
 import { generateId } from '../../utils/uuid';
-import { getLatestApprovedVersionNumber } from './aiSkillVersionRepo';
+import { getLatestApprovedVersionNumber, stripNonApprovedVersionNumbers } from './aiSkillVersionRepo';
 import {
   AiEmployeeInputSchema,
   AiEmployeeUpdateSchema,
@@ -277,7 +277,20 @@ export async function updateSkill(
     if (validated.description !== undefined) updated.description = validated.description;
     if (validated.body !== undefined) updated.body = validated.body;
 
+    // WR-01: a no-op save must not mint a version. The new number would become
+    // `currentApproved`, flipping every pending proposal for this skill to `stale` — the user
+    // would lock themselves out of their own approval queue by clicking Save.
+    if (
+      updated.name === existing.name &&
+      updated.description === existing.description &&
+      updated.body === existing.body
+    ) {
+      return existing;
+    }
+
     // D-14: number over approved rows only, so a pending proposal cannot shift a manual save.
+    // CR-01: repair any legacy numbered non-approved row first, or the new number collides.
+    await stripNonApprovedVersionNumbers(id, db);
     const baseVersion = await getLatestApprovedVersionNumber(id, db);
     const versionRow: AiSkillVersion = {
       id: generateId(),
