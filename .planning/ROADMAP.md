@@ -290,7 +290,7 @@ Plans:
 **Depends on:** Phase 38
 **Success Criteria** (what must be TRUE):
 
-1. Leader, agent, and skill CRUD work with validation, empty states, and error handling — no crash on network or AI failure.
+1. Skill CRUD works with validation, empty states, and error handling — no crash on network or AI failure. Leader/agent CRUD is Phase 40 (AIO-LEAD-01..04).
 2. After a run an agent can propose a lesson; the proposal changes nothing until approved.
 3. The user reviews the proposal as a diff and approves or rejects; approval creates exactly one new approved version and the previous stays retrievable.
 4. No AI tool can write an approved version.
