@@ -805,7 +805,7 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
     expect(reopened?.inputTokens).toBe(120);
     expect(reopened?.outputTokens).toBe(30);
     expect(reopened?.usageEstimated).toBe(true);
-    expect(LATEST_SCHEMA_VERSION).toBe(25);
+    expect(LATEST_SCHEMA_VERSION).toBe(26);
     expect(db.verno).toBe(LATEST_SCHEMA_VERSION);
   });
 

@@ -179,6 +179,13 @@ export const SCHEMA_V25 = {
   ...SCHEMA_V24,
 } as const;
 
+// Phase 39 (D-14): `version` is assigned at approval only. The upgrade hook strips a number
+// from every non-approved row written by a pre-39 build; no index spec changes, so the store
+// shape is identical to V25.
+export const SCHEMA_V26 = {
+  ...SCHEMA_V25,
+} as const;
+
 // Bump with every new `this.version(n)` in db/index.ts. Migration tests assert
 // against this instead of a literal, so a schema bump never silently breaks them.
-export const LATEST_SCHEMA_VERSION = 25;
+export const LATEST_SCHEMA_VERSION = 26;

@@ -270,9 +270,9 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
     const envelope = await exportBackupPayload(sourceDb);
 
     expect(envelope.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
-    // Phase 39: no envelope bump and no Dexie bump — both new fields are optional-absent.
+    // Phase 39: no envelope bump; the Dexie bump is the V26 non-approved-number strip.
     expect(CURRENT_SCHEMA_VERSION).toBe(13);
-    expect(LATEST_SCHEMA_VERSION).toBe(25);
+    expect(LATEST_SCHEMA_VERSION).toBe(26);
     expect(envelope.tables.aiEmployees).toEqual([employee]);
     expect(envelope.tables.aiLeads).toEqual([lead]);
     expect(envelope.tables.aiSkills).toEqual([skill]);

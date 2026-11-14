@@ -25,6 +25,7 @@ import {
   SCHEMA_V23,
   SCHEMA_V24,
   SCHEMA_V25,
+  SCHEMA_V26,
 } from './schema';
 import type {
   Task,
@@ -647,6 +648,22 @@ export class TaskPlannerDatabase extends Dexie {
     // Phase 38: split usage columns and the per-team warn threshold. Purely additive,
     // nothing to backfill, so no `.upgrade()` hook.
     this.version(25).stores(SCHEMA_V25);
+
+    // Phase 39 (D-14): `version` is assigned at approval only. A pre-39 build numbered every
+    // row, including pendings and rejections, so `max(approved) + 1` can collide with a row
+    // that already holds that number — and the app's own export then fails its own duplicate
+    // check. Strip the key from every non-approved row; `delete` (not `undefined`) keeps the
+    // compound index from seeing the row.
+    this.version(26)
+      .stores(SCHEMA_V26)
+      .upgrade((tx) =>
+        tx
+          .table('aiSkillVersions')
+          .toCollection()
+          .modify((row: Record<string, unknown>) => {
+            if (row.status !== 'approved') delete row.version;
+          })
+      );
 
     // Multi-tab concurrency handlers (DATA-04, D-09, D-10)
     this.on('blocked', () => {
