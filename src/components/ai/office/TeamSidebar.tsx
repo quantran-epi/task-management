@@ -13,6 +13,9 @@ export interface TeamSidebarLiveUsage {
   outputTokens: number;
   estimated: boolean;
   provisionalInputTokens: number;
+  /** UAT 38: the member's cumulative split — persisted row plus unflushed deltas. */
+  usedInputTokens: number;
+  usedOutputTokens: number;
 }
 
 export interface TeamSidebarProps {
@@ -54,7 +57,7 @@ const SECTION_LABEL: React.CSSProperties = {
 };
 
 interface MemberFigures {
-  /** What the member row shows: the reported number, else the best available guess. */
+  /** The member's cumulative split — persisted row plus this run's unflushed deltas. */
   usedIn: number;
   usedOut: number;
   used: number;
@@ -89,35 +92,27 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
   const liveByAgent = new Map((liveUsage ?? []).map((row) => [row.agentId, row]));
   const pct = resolveThresholdPct(team, budgetWarnThresholdPct);
 
-  // D-07: a reported number supersedes the pre-call guess; the guess shows until then.
+  // UAT 38: the live record carries the member's CUMULATIVE split (`usedInputTokens`), not
+  // one request's report. Rendering `inputTokens` here made a member with 152k used read as
+  // the current turn's 15k — and made the group total dip back to 23% after a warning.
   const figuresFor = (member: AiTeamMember): MemberFigures => {
     const live = liveByAgent.get(member.agentId);
-    const reportedIn = live?.inputTokens ?? 0;
-    const reportedOut = live?.outputTokens ?? 0;
     const provisionalIn = live?.provisionalInputTokens ?? 0;
-    const usedIn = reportedIn > 0 ? reportedIn : Math.max(member.inputTokens ?? 0, provisionalIn);
-    // WR-03: the `> 0` idiom, same as `usedIn`. A live record exists from dispatch with
-    // `outputTokens: 0`, so `??` would hide the persisted output mid-turn.
-    const usedOut = reportedOut > 0 ? reportedOut : (member.outputTokens ?? 0);
-    // WR-04: the team aggregate is charged-only, matching the coordinator's `teamUsed`.
-    // The provisional guess is a warning input, never a charge, so it must not lift the
-    // group total to a threshold the coordinator would not warn about.
-    const chargedIn = reportedIn > 0 ? reportedIn : (member.inputTokens ?? 0);
-    const chargedOut = usedOut;
+    const usedIn = live ? live.usedInputTokens : (member.inputTokens ?? 0);
+    const usedOut = live ? live.usedOutputTokens : (member.outputTokens ?? 0);
     const used = usedIn + usedOut;
     return {
       usedIn,
       usedOut,
       used,
-      chargedIn,
-      chargedOut,
+      chargedIn: usedIn,
+      chargedOut: usedOut,
       remaining: Math.max(0, member.budgetTokens - used),
       // D-24: a provisional measurement is an estimate too — it is not a provider number.
       estimated:
-        live?.estimated === true ||
-        member.usageEstimated === true ||
-        (reportedIn === 0 && provisionalIn > 0),
-      atThreshold: isAtThreshold(used, member.budgetTokens, pct),
+        live?.estimated === true || member.usageEstimated === true || provisionalIn > 0,
+      // Matches the coordinator's `memberWarningTotal`: the pre-call guess is a warning input.
+      atThreshold: isAtThreshold(used + provisionalIn, member.budgetTokens, pct),
     };
   };
 

@@ -5921,6 +5921,41 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(await current.db.aiTeamAssignments.count()).toBe(0);
     });
 
+    // UAT 38: a member that already used 150k must not read as this turn's 15k report —
+    // the sidebar rendered the per-request split as the member total, so a team past its
+    // threshold snapped back to 23% the moment the leader finished.
+    it('exposes the cumulative used split, not one request report (UAT 38)', async () => {
+      harness = await createHarness({
+        teamPatch: { budgetTokens: 100000 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            options.onUsage?.({ promptTokens: 15_000, completionTokens: 0 });
+            return loopResult('Xong.');
+          },
+        },
+      });
+      const current = harness;
+      current.roster.memberAgentIds.push(current.lead.id);
+      const leadRow = await memberRowFor(current, current.lead.id);
+      await current.db.aiTeamMembers.update(leadRow.id, {
+        usedTokens: 137_076,
+        inputTokens: 137_076,
+        outputTokens: 0,
+      });
+
+      await current.coordinator.send('Xin chào');
+      await sleep(20);
+
+      const usage = current.coordinator
+        .getState()
+        .memberUsage.find((row) => row.agentId === current.lead.id);
+      // One request's report …
+      expect(usage?.inputTokens).toBe(15_000);
+      // … the member's cumulative total the sidebar must render.
+      expect(usage?.usedInputTokens).toBe(152_076);
+      expect(usage?.usedOutputTokens).toBe(0);
+    });
+
     it('charges a request once even when the terminal seam runs twice (duplicate guard)', async () => {
       let harnessRef: Harness | null = null;
       harness = await createHarness({

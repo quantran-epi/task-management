@@ -115,10 +115,18 @@ describe('TeamSidebar live usage (WR-03, WR-04)', () => {
   }
 
   // WR-03: a live record exists from dispatch with outputTokens: 0, so `??` hid the
-  // persisted output for the whole turn.
+  // persisted output for the whole turn. UAT 38: the cumulative halves are what render.
   it('keeps persisted output visible while a request is pending (WR-03)', () => {
     renderSidebar([
-      { agentId: lead.id, inputTokens: 0, outputTokens: 0, estimated: false, provisionalInputTokens: 0 },
+      {
+        agentId: lead.id,
+        inputTokens: 0,
+        outputTokens: 0,
+        estimated: false,
+        provisionalInputTokens: 0,
+        usedInputTokens: 300,
+        usedOutputTokens: 100,
+      },
     ]);
     expect(screen.getByTestId(`member-usage-${lead.id}`)).toHaveTextContent('100');
   });
@@ -127,7 +135,15 @@ describe('TeamSidebar live usage (WR-03, WR-04)', () => {
   // `~` figure and must not lift the group total.
   it('keeps the provisional guess out of the team aggregate (WR-04)', () => {
     renderSidebar([
-      { agentId: lead.id, inputTokens: 0, outputTokens: 0, estimated: false, provisionalInputTokens: 900 },
+      {
+        agentId: lead.id,
+        inputTokens: 0,
+        outputTokens: 0,
+        estimated: false,
+        provisionalInputTokens: 900,
+        usedInputTokens: 300,
+        usedOutputTokens: 100,
+      },
     ]);
     const panel = screen.getByTestId('team-budget-panel');
     // 400 charged / 1000 granted = 40%, not 1300/1000.
@@ -135,5 +151,24 @@ describe('TeamSidebar live usage (WR-03, WR-04)', () => {
     expect(screen.getByTestId('team-provisional')).toHaveTextContent('~900');
     // No team badge: the coordinator would not warn at 40%.
     expect(screen.queryByTestId('budget-badge-team')).not.toBeInTheDocument();
+  });
+
+  // UAT 38: a member that already used 152k must not read as this turn's 15k report.
+  it('renders the cumulative total, not the current turn report (UAT 38)', () => {
+    renderSidebar([
+      {
+        agentId: lead.id,
+        inputTokens: 15_000,
+        outputTokens: 0,
+        estimated: false,
+        provisionalInputTokens: 0,
+        usedInputTokens: 152_076,
+        usedOutputTokens: 0,
+      },
+    ]);
+    const line = screen.getByTestId(`member-usage-${lead.id}`);
+    expect(line).toHaveTextContent('152,076');
+    expect(line).not.toHaveTextContent('15,000');
+    expect(screen.getByTestId('budget-badge-member')).toBeInTheDocument();
   });
 });

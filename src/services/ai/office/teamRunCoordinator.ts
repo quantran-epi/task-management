@@ -163,10 +163,18 @@ export type TopUpScope = { kind: 'agent'; agentId: string } | { kind: 'team' };
  */
 export interface MemberUsageSnapshot {
   agentId: string;
+  /** This REQUEST's reported split (0 while pending). Never the member's total. */
   inputTokens: number;
   outputTokens: number;
   estimated: boolean;
   provisionalInputTokens: number;
+  /**
+   * UAT 38: the member's CUMULATIVE used split — persisted row plus this run's unflushed
+   * deltas. A surface that renders a member's usage must read these, never `inputTokens`:
+   * one turn's report is a delta, and showing it alone made a 152k member read as 15k.
+   */
+  usedInputTokens: number;
+  usedOutputTokens: number;
 }
 
 /** Phase 38 D-07/D-10/D-22: ONE accounting record per agent per request. */
@@ -1324,6 +1332,11 @@ export function createTeamRunCoordinator(
     for (const row of rows) {
       memberIds.set(row.agentId, row.id);
       memberBudgets.set(row.agentId, row.budgetTokens);
+      // WR-07, same rule as `reconcileUsage`: an agent with an unflushed record holds deltas
+      // the ledger does not have yet. Rebuilding from Dexie mid-flight would make its number
+      // dip (and drop the group total back under the threshold) until its own flush lands.
+      const acc = usageAccounting.get(row.agentId);
+      if (acc !== undefined && !flushedAccounting.has(acc.key)) continue;
       memberUsed.set(row.agentId, row.usedTokens);
       memberUsedInput.set(row.agentId, row.inputTokens ?? 0);
       memberUsedOutput.set(row.agentId, row.outputTokens ?? 0);
@@ -1333,8 +1346,12 @@ export function createTeamRunCoordinator(
     const persistedBudget = roster.teamRow?.budgetTokens;
     if (persistedBudget !== undefined) teamBudget = persistedBudget;
     // CR-05: the team total must hydrate from persisted usage too, otherwise a reactivated
-    // team starts over with a full budget.
-    teamUsed = rows.reduce((sum, row) => sum + row.usedTokens, 0);
+    // team starts over with a full budget. WR-07: summed from the live map, not the rows, so
+    // an in-flight agent's unflushed deltas are not dropped.
+    teamUsed = rows.reduce(
+      (sum, row) => sum + (memberUsed.get(row.agentId) ?? row.usedTokens),
+      0
+    );
     return rows;
   }
 
@@ -3645,6 +3662,10 @@ export function createTeamRunCoordinator(
         outputTokens: acc.outputTokens,
         estimated: acc.source === 'estimated',
         provisionalInputTokens: acc.provisionalInputTokens,
+        // UAT 38: the cumulative halves the sidebar renders. `usageAccounting` alone is one
+        // request; the live maps hold the member's total (persisted + unflushed deltas).
+        usedInputTokens: memberUsedInput.get(agentId) ?? 0,
+        usedOutputTokens: memberUsedOutput.get(agentId) ?? 0,
       })),
       // `exactOptionalPropertyTypes`: omit the key entirely when the team inherits.
       ...(teamThresholdOverride === undefined
