@@ -506,6 +506,14 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
       ['variation selector U+FE0F', '\uFE0F'],
       ['combining grapheme joiner U+034F', '\u034F'],
       ['hangul choseong filler U+115F', '\u115F'],
+      ['hangul jungseong filler U+1160', '\u1160'],
+      // WR-03 round 6: `\p{Default_Ignorable_Code_Point}` is NOT a superset of `\p{Cf}` — these
+      // five are `Cf` but not default-ignorable, so round 5's "complete set" swap dropped them.
+      ['syriac abbreviation mark U+070F', '\u070F'],
+      ['arabic number sign U+0600', '\u0600'],
+      ['interlinear annotation anchor U+FFF9', '\uFFF9'],
+      ['egyptian hieroglyph joiner U+13430', '\u{13430}'],
+      ['kaithi number sign U+110BD', '\u{110BD}'],
     ];
 
     for (const [label, char] of variants) {

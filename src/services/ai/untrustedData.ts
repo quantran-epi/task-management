@@ -47,7 +47,7 @@ function neutralizeDelimiters(text: string): string {
   // (U+3164, U+FFA0, U+FE0F, U+034F, U+115F/1160). Fold the UNION to a space first; the regex
   // can then see the whole tag.
   return text
-    .replace(/\p{Default_Ignorable_Code_Point}/gu, ' ')
+    .replace(/[\p{Cf}\p{Default_Ignorable_Code_Point}]/gu, ' ')
     .normalize('NFC')
     .replace(DELIMITER_SHAPE, '[redacted-tag]');
 }
