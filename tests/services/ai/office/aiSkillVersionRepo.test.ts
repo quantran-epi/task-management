@@ -4,6 +4,8 @@ import { TaskPlannerDatabase } from '../../../../src/db/index';
 import {
   listSkillVersions,
   getLatestSkillVersion,
+  getLatestApprovedVersionNumber,
+  listPendingSkillVersions,
   createSkillVersion,
   decideSkillVersion,
 } from '../../../../src/db/repositories/aiSkillVersionRepo';
@@ -41,67 +43,131 @@ describe('aiSkillVersionRepo (AIO-DATA-01, D-05)', () => {
     await db.delete();
   });
 
-  it('creates version 1 as pending when the input omits status', async () => {
+  it('creates a pending row with no version number (D-14)', async () => {
     const created = await createSkillVersion(draft(skillId), db);
 
-    expect(created).toEqual({
-      id: created.id,
-      skillId,
-      version: 1,
-      status: 'pending',
-      name: 'Viết đặc tả',
-      description: 'Quy trình viết đặc tả.',
-      body: BODY,
-      createdAt: created.createdAt,
-    });
+    // The key must be absent, not `undefined`: the compound index skips absent key parts.
+    expect('version' in created).toBe(false);
+    expect(created.status).toBe('pending');
+    expect(created.baseVersion).toBe(0);
+    expect(created.name).toBe('Viết đặc tả');
+    expect(created.description).toBe('Quy trình viết đặc tả.');
+    expect(created.body).toBe(BODY);
     expect(new Date(created.createdAt).toISOString()).toBe(created.createdAt);
+    expect(await db.aiSkillVersions.where('[skillId+version]').equals([skillId, 0]).count()).toBe(0);
   });
 
-  it('numbers versions monotonically per skill and restarts at 1 for another skill', async () => {
-    const otherSkillId = (await createSkill(skillInput('Kỹ năng khác'), db)).id;
-
+  it('assigns a number only when a version is approved (D-14)', async () => {
     const first = await createSkillVersion(draft(skillId), db);
     const second = await createSkillVersion(draft(skillId), db);
     const third = await createSkillVersion(draft(skillId), db);
-    const other = await createSkillVersion(draft(otherSkillId), db);
 
-    expect([first.version, second.version, third.version]).toEqual([1, 2, 3]);
-    expect(other.version).toBe(1);
-    expect((await listSkillVersions(skillId, db)).map((row) => row.version)).toEqual([3, 2, 1]);
+    for (const row of [first, second, third]) expect('version' in row).toBe(false);
+    expect(await getLatestApprovedVersionNumber(skillId, db)).toBe(0);
+
+    const approvedFirst = await decideSkillVersion(first.id, 'approved', db);
+    expect(approvedFirst.version).toBe(1);
+
+    const approvedThird = await decideSkillVersion(third.id, 'approved', db);
+    expect(approvedThird.version).toBe(2);
+
+    // Two approved plus one still pending; the unnumbered row sorts last.
+    expect((await listSkillVersions(skillId, db)).map((row) => row.version)).toEqual([
+      2,
+      1,
+      undefined,
+    ]);
   });
 
-  it('returns the highest version row as the latest', async () => {
+  it('getLatestSkillVersion ignores unnumbered pending rows', async () => {
+    const first = await createSkillVersion(draft(skillId), db);
     await createSkillVersion(draft(skillId), db);
-    const second = await createSkillVersion(draft(skillId), db);
-    const third = await createSkillVersion(draft(skillId), db);
 
-    expect(await getLatestSkillVersion(skillId, db)).toEqual(third);
-    expect((await getLatestSkillVersion(skillId, db))?.id).toBe(third.id);
-    expect(second.version).toBe(2);
+    expect(await getLatestSkillVersion(skillId, db)).toBeUndefined();
+
+    const approved = await decideSkillVersion(first.id, 'approved', db);
+    expect((await getLatestSkillVersion(skillId, db))?.id).toBe(approved.id);
   });
 
-  it('decides a version by writing status and decidedAt only (T-36-12)', async () => {
-    const pending = await createSkillVersion(draft(skillId), db);
+  it('never assigns the same version to two concurrent approvals', async () => {
+    const a = await createSkillVersion(draft(skillId), db);
+    const b = await createSkillVersion(draft(skillId), db);
+
+    const [approvedA, approvedB] = await Promise.all([
+      decideSkillVersion(a.id, 'approved', db),
+      decideSkillVersion(b.id, 'approved', db),
+    ]);
+
+    expect([approvedA.version, approvedB.version].sort()).toEqual([1, 2]);
+    expect(await db.aiSkillVersions.where('skillId').equals(skillId).count()).toBe(2);
+  });
+
+  it('records the latest approved number as baseVersion on a new pending (D-15)', async () => {
+    const first = await createSkillVersion(draft(skillId), db);
+    await decideSkillVersion(first.id, 'approved', db);
+
+    const second = await createSkillVersion(draft(skillId), db);
+    expect(second.baseVersion).toBe(1);
+    expect('version' in second).toBe(false);
+  });
+
+  it('overwrites aiSkills name, description and body in the approval transaction (D-07)', async () => {
+    const pending = await createSkillVersion(
+      draft(skillId, {
+        name: 'Viết đặc tả v2',
+        description: 'Quy trình mới.',
+        body: '# Skill v2\nBước 1: viết.',
+      }),
+      db
+    );
 
     const approved = await decideSkillVersion(pending.id, 'approved', db);
 
-    expect(approved).toEqual({
-      ...pending,
-      status: 'approved',
-      decidedAt: approved.decidedAt,
-    });
-    expect(approved.decidedAt).toBeTruthy();
-    expect(new Date(approved.decidedAt!).toISOString()).toBe(approved.decidedAt);
-    expect(approved.name).toBe(pending.name);
-    expect(approved.description).toBe(pending.description);
-    expect(approved.body).toBe(pending.body);
-    expect(approved.version).toBe(pending.version);
+    const skill = await db.aiSkills.get(skillId);
+    expect(skill?.name).toBe('Viết đặc tả v2');
+    expect(skill?.description).toBe('Quy trình mới.');
+    expect(skill?.body).toBe('# Skill v2\nBước 1: viết.');
+    expect(skill?.updatedAt).toBe(approved.decidedAt);
+  });
+
+  it('rolls back both tables when the approval cannot write aiSkills (Pitfall 2)', async () => {
+    const pending = await createSkillVersion(draft(skillId), db);
+    await db.aiSkills.delete(skillId);
+
+    await expect(decideSkillVersion(pending.id, 'approved', db)).rejects.toThrow(
+      /Không tìm thấy kỹ năng/
+    );
+
+    const stored = await db.aiSkillVersions.get(pending.id);
+    expect(stored?.status).toBe('pending');
+    expect('version' in stored!).toBe(false);
+  });
+
+  it('rejects a non-pending status on create (AIO-SKILL-04)', async () => {
+    await expect(
+      createSkillVersion(draft(skillId, { status: 'approved' }), db)
+    ).rejects.toThrow(/chờ duyệt/);
+
+    expect(await db.aiSkillVersions.count()).toBe(0);
+  });
+
+  it('listPendingSkillVersions returns only pending rows, newest first', async () => {
+    const older = await createSkillVersion(draft(skillId), db);
+    const newer = await createSkillVersion(draft(skillId), db);
+    const approved = await createSkillVersion(draft(skillId), db);
+    await decideSkillVersion(approved.id, 'approved', db);
+
+    const pending = await listPendingSkillVersions(db);
+    expect(pending.map((row) => row.id)).toEqual([newer.id, older.id]);
   });
 
   it('rejects a pending version and throws a UUID-free not-found error for a missing id', async () => {
     const pending = await createSkillVersion(draft(skillId), db);
 
-    expect((await decideSkillVersion(pending.id, 'rejected', db)).status).toBe('rejected');
+    const rejected = await decideSkillVersion(pending.id, 'rejected', db);
+    expect(rejected.status).toBe('rejected');
+    // A rejected row gets no number.
+    expect('version' in rejected).toBe(false);
 
     await expect(decideSkillVersion(pending.id, 'approved', db)).rejects.toThrow(
       /đã được quyết định/
@@ -124,6 +190,7 @@ describe('aiSkillVersionRepo (AIO-DATA-01, D-05)', () => {
     const stored = await db.aiSkillVersions.get(pending.id);
     expect(stored?.status).toBe('approved');
     expect(stored?.decidedAt).toBe(approved.decidedAt);
+    expect(stored?.version).toBe(1);
   });
 
   it('omits evidence entirely when the input has none', async () => {
@@ -141,16 +208,5 @@ describe('aiSkillVersionRepo (AIO-DATA-01, D-05)', () => {
       /Không tìm thấy kỹ năng/
     );
     expect(await db.aiSkillVersions.count()).toBe(0);
-  });
-
-  it('never assigns the same version to two concurrent creates', async () => {
-    const [a, b] = await Promise.all([
-      createSkillVersion(draft(skillId), db),
-      createSkillVersion(draft(skillId), db),
-    ]);
-
-    expect(a.version).not.toBe(b.version);
-    expect([a.version, b.version].sort()).toEqual([1, 2]);
-    expect(await db.aiSkillVersions.where('skillId').equals(skillId).count()).toBe(2);
   });
 });
