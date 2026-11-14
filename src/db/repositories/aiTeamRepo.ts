@@ -114,6 +114,7 @@ export async function createTeam(
   if (validated.autoApproveMutations !== undefined) {
     team.autoApproveMutations = validated.autoApproveMutations;
   }
+  if (validated.mcpEnabled !== undefined) team.mcpEnabled = validated.mcpEnabled;
   if (validated.concurrencyLimit !== undefined) {
     team.concurrencyLimit = clampTeamConcurrency(validated.concurrencyLimit);
   }
@@ -204,6 +205,13 @@ export async function updateTeam(
         updated.autoApproveMutations = validated.autoApproveMutations;
       } else {
         delete updated.autoApproveMutations;
+      }
+    }
+    if ('mcpEnabled' in patch) {
+      if (validated.mcpEnabled !== undefined) {
+        updated.mcpEnabled = validated.mcpEnabled;
+      } else {
+        delete updated.mcpEnabled;
       }
     }
     // Phase 37 D-03: same add/remove idiom, so clearing stays expressible. The range is
@@ -478,6 +486,15 @@ export async function removeTeamMember(
       throw new Error('Không thể gỡ leader khỏi nhóm. Hãy đổi leader trước khi khóa.');
     }
     await db.aiTeamMembers.delete(memberId);
+    // Releasing a seat releases its allocation: the team total is the sum of its grants.
+    // Same transaction as the delete, so the roster and the total can never disagree.
+    const team = await db.aiTeams.get(row.teamId);
+    if (team) {
+      await db.aiTeams.update(row.teamId, {
+        budgetTokens: Math.max(0, team.budgetTokens - row.budgetTokens),
+        updatedAt: new Date().toISOString(),
+      });
+    }
   });
 }
 

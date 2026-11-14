@@ -140,13 +140,13 @@ describe('TeamWorkspace settings save (Phase 38 D-19, AIO-BUDGET-07)', () => {
     vi.clearAllMocks();
   });
 
-  const renderWorkspace = () =>
+  const renderWorkspace = (extraEmployees: AiEmployee[] = []) =>
     render(
       <TeamWorkspace
         team={team}
         lead={lead}
         members={[]}
-        employees={[employee]}
+        employees={[employee, ...extraEmployees]}
         skills={[]}
         db={db}
         onBack={() => {}}
@@ -305,6 +305,64 @@ describe('TeamWorkspace settings save (Phase 38 D-19, AIO-BUDGET-07)', () => {
       budgets: Record<string, number>;
     };
     expect(payload.budgets[lateMember.id]).toBe(250);
+  });
+
+  // The reported bug: a member added while the drawer is open had no budget row, so the
+  // allocation table did not show it until the drawer was closed and reopened.
+  it('shows a member added while the drawer is open in the allocation table', async () => {
+    const late = await createEmployee(
+      { name: 'Muộn', role: 'Phân tích', capability: 'c', persona: 'p', model: 'm3' },
+      db
+    );
+    renderWorkspace([late]);
+    await openDrawer();
+
+    const lateMember = await addTeamMember(
+      { teamId: team.id, agentId: late.id, role: 'employee', budgetTokens: 250 },
+      db
+    );
+
+    const row = await screen.findByTestId(`team-member-row-${lateMember.id}`);
+    expect(row).toBeInTheDocument();
+    expect(await screen.findByLabelText('Ngân sách Muộn')).toBeInTheDocument();
+  });
+
+  // The reported bug: allocating to a member raised only that member's budget, not the total.
+  it('raises the team total when a member budget is raised (D-19)', async () => {
+    renderWorkspace();
+    await openDrawer();
+
+    const employeeRow = (await db.aiTeamMembers.toArray()).find((row) => row.role === 'employee')!;
+    const before = (await db.aiTeams.get(team.id))!.budgetTokens;
+
+    fireEvent.change(screen.getByLabelText(`Ngân sách ${employee.name}`), {
+      target: { value: String(employeeRow.budgetTokens + 700) },
+    });
+    fireEvent.click(await screen.findByTestId('team-settings-save'));
+
+    await waitFor(async () => {
+      expect((await db.aiTeams.get(team.id))?.budgetTokens).toBe(before + 700);
+    });
+    const stored = await db.aiTeamMembers.get(employeeRow.id);
+    expect(stored?.budgetTokens).toBe(employeeRow.budgetTokens + 700);
+  });
+
+  // The reported bug: removing a member left its share in the team total.
+  it('lowers the team total when a member is removed from the drawer', async () => {
+    renderWorkspace();
+    await openDrawer();
+
+    const employeeRow = (await db.aiTeamMembers.toArray()).find((row) => row.role === 'employee')!;
+    const before = (await db.aiTeams.get(team.id))!.budgetTokens;
+
+    fireEvent.click(screen.getByTestId(`team-member-remove-${employeeRow.id}`));
+    fireEvent.click(await screen.findByText('Gỡ'));
+
+    await waitFor(async () => {
+      expect((await db.aiTeams.get(team.id))?.budgetTokens).toBe(
+        before - employeeRow.budgetTokens
+      );
+    });
   });
 
   // WR-13: the top-up confirm was fire-and-forget, so a refusal was an unhandled rejection

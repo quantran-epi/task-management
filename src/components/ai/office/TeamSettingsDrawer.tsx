@@ -74,8 +74,16 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
   globalThresholdPct,
 }) => {
   const { token } = theme.useToken();
-  const [total, setTotal] = useState<number>(team.budgetTokens);
-  const [rows, setRows] = useState<SplitRow[]>([]);
+  // The displayed table is the LIVE roster overlaid with per-member edits, so a member added
+  // or removed while the drawer is open shows up without closing it. The team total is the
+  // sum of those rows plus whatever the team holds beyond them (a deliberate under-allocation),
+  // so allocating to a member raises the total and removing one lowers it.
+  //
+  // `unallocated === null` means "untouched": the total is simply the live `team.budgetTokens`,
+  // which keeps the drawer correct even if it opens before the roster query resolves. The
+  // baseline is captured on the FIRST edit, from the persisted numbers at that moment.
+  const [overrides, setOverrides] = useState<Record<string, number>>({});
+  const [unallocated, setUnallocated] = useState<number | null>(null);
   const [autoSplit, setAutoSplit] = useState(team.autoSplitEnabled === true);
   const [autoApprove, setAutoApprove] = useState(team.autoApproveMutations === true);
   const [concurrency, setConcurrency] = useState<number>(
@@ -107,43 +115,9 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
     }
   };
 
+  // Live roster, rebuilt whenever a member is added or removed while the drawer is open.
   const baseRows = useMemo(
     () =>
-      members
-        .map((member) => {
-          const isLead = member.role === 'lead';
-          const agent = isLead ? lead : employees.find((row) => row.id === member.agentId);
-          if (!agent) return null;
-          return {
-            memberId: member.id,
-            agentId: member.agentId,
-            name: agent.name,
-            role: member.role,
-            usedTokens: member.usedTokens,
-          };
-        })
-        .filter((row): row is Omit<SplitRow, 'budgetTokens'> => row !== null),
-    [members, lead, employees]
-  );
-
-  // WR-08: seed only when the drawer opens (or the team changes). `members` is a live
-  // query whose identity changes on every usage write, which would otherwise reset the
-  // user's in-progress edits mid-run.
-  const seededFor = useRef<string | null>(null);
-  useEffect(() => {
-    if (!open) {
-      seededFor.current = null;
-      return;
-    }
-    if (seededFor.current === team.id) return;
-    seededFor.current = team.id;
-    setTotal(team.budgetTokens);
-    setAutoSplit(team.autoSplitEnabled === true);
-    setAutoApprove(team.autoApproveMutations === true);
-    setConcurrency(team.concurrencyLimit ?? DEFAULT_TEAM_CONCURRENCY);
-    setThresholdPct(team.budgetWarnThresholdPct);
-    setThresholdTouched(false);
-    setRows(
       members
         .map((member) => {
           const isLead = member.role === 'lead';
@@ -158,30 +132,92 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
             usedTokens: member.usedTokens,
           };
         })
-        .filter((row): row is SplitRow => row !== null)
-    );
+        .filter((row): row is SplitRow => row !== null),
+    [members, lead, employees]
+  );
+
+  const rows = useMemo(
+    () =>
+      baseRows.map((row) =>
+        overrides[row.memberId] === undefined
+          ? row
+          : { ...row, budgetTokens: overrides[row.memberId]! }
+      ),
+    [baseRows, overrides]
+  );
+
+  // The team total is the sum of the grants plus whatever the team holds beyond them. Editing
+  // one row's budget therefore moves the total by the same amount, and a member added or
+  // removed moves it by that member's share — the two can never drift apart.
+  //
+  // Summed over every LIVE member, not over the rendered rows: a member whose agent profile is
+  // missing from `employees` has no display row, but its grant still belongs to the total.
+  const allocatedSum = members.reduce(
+    (sum, member) => sum + (overrides[member.id] ?? member.budgetTokens),
+    0
+  );
+  const total = unallocated === null ? team.budgetTokens : allocatedSum + unallocated;
+
+  // WR-08: seed only when the drawer opens (or the team changes). `members` is a live
+  // query whose identity changes on every usage write, which would otherwise reset the
+  // user's in-progress edits mid-run.
+  const seededFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open) {
+      seededFor.current = null;
+      return;
+    }
+    if (seededFor.current === team.id) return;
+    seededFor.current = team.id;
+    setOverrides({});
+    setUnallocated(null);
+    setAutoSplit(team.autoSplitEnabled === true);
+    setAutoApprove(team.autoApproveMutations === true);
+    setConcurrency(team.concurrencyLimit ?? DEFAULT_TEAM_CONCURRENCY);
+    setThresholdPct(team.budgetWarnThresholdPct);
+    setThresholdTouched(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seeded once per open
   }, [open, team.id]);
 
+  /** First edit freezes the under-allocation the persisted rows already imply. */
+  const baseline = () =>
+    Math.max(
+      0,
+      team.budgetTokens - members.reduce((sum, member) => sum + member.budgetTokens, 0)
+    );
+
   const applyTotal = (next: number) => {
-    setTotal(next);
-    setRows(evenSplitRows(next, baseRows));
+    const split = evenSplitRows(next, baseRows);
+    setOverrides(Object.fromEntries(split.map((row) => [row.memberId, row.budgetTokens])));
+    // A member with no display row keeps its grant, so it is subtracted here — the typed total
+    // is what the user sees, and it stays exact.
+    const shown = new Set(split.map((row) => row.memberId));
+    const hidden = members.reduce(
+      (sum, member) => sum + (shown.has(member.id) ? 0 : member.budgetTokens),
+      0
+    );
+    // Signed on purpose: typing a total below the current allocations must still show exactly
+    // that total (the rows then exceed it), rather than snapping back up to their sum.
+    setUnallocated(
+      next - split.reduce((sum, row) => sum + row.budgetTokens, 0) - hidden
+    );
   };
 
   const updateRow = (memberId: string, value: number) => {
-    setRows((prev) =>
-      prev.map((row) => (row.memberId === memberId ? { ...row, budgetTokens: value } : row))
-    );
+    setUnallocated((prev) => prev ?? baseline());
+    setOverrides((prev) => ({ ...prev, [memberId]: value }));
   };
 
   const handleSave = () => {
     const budgets: Record<string, number> = {};
+    // `rows` covers the live roster, so a member added while the drawer is open is included.
     for (const row of rows) budgets[row.memberId] = row.budgetTokens;
-    // WR-11: `rows` is seeded once per open, so a member added while the drawer is open has
-    // no row and would be absent from the save. Merge every unseen member with its PERSISTED
-    // budget, so the save is complete and never silently drops a roster row.
+    // A member whose agent profile is not in `employees` has no display row but still owns a
+    // grant; save it rather than silently dropping the roster row.
     for (const member of members) {
-      if (budgets[member.id] === undefined) budgets[member.id] = member.budgetTokens;
+      if (budgets[member.id] === undefined) {
+        budgets[member.id] = overrides[member.id] ?? member.budgetTokens;
+      }
     }
     onSave({
       budgetTokens: total,
