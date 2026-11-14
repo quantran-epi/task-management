@@ -299,6 +299,34 @@ Plans:
 
 **Research flag:** needs `--research-phase` — R-11/R-12 are open and the feature has zero existing code.
 
+**Plans:** 7 plans in 6 waves
+
+Plans:
+**Wave 1**
+
+- [ ] 39-01-PLAN.md — Version model + repo rewrite: optional `version`, `baseVersion`, numbering at approval, atomic `aiSkills` overwrite, backup parity
+- [ ] 39-02-PLAN.md — `updateSkill` writes an approved version row in the same transaction (D-09)
+
+**Wave 2**
+
+- [ ] 39-03-PLAN.md — Real pin: `skillVersion` on the attempt, threaded to `read_skill` (D-17/D-18/D-19/D-19a)
+
+**Wave 3**
+
+- [ ] 39-04-PLAN.md — `propose_skill_version` tool + three-field diff + prompt truth (D-01..D-06, D-21)
+
+**Wave 4**
+
+- [ ] 39-05-PLAN.md — Transcript approval card via `transcriptExtensions` (D-24, D-25)
+
+**Wave 5**
+
+- [ ] 39-06-PLAN.md — `SkillEditorDrawer` pending queue + version history; `SkillCard` pending badge (D-26)
+
+**Wave 6**
+
+- [ ] 39-07-PLAN.md — `AiStaffExplorer` "Kỹ năng" section + D-30 doc override
+
 ### Phase 40: Explorer UX, CRUD correctness, observed walkthrough
 
 **Goal:** One AI Office trigger, two explorer sections, correct CRUD, and a real walkthrough that replaces "Phase 34 complete" as the quality gate.
