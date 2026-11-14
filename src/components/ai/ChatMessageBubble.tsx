@@ -1189,8 +1189,6 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         alignItems: isUser ? 'flex-end' : 'flex-start',
         marginBottom: grouped ? 4 : 12,
         width: '100%',
-        // A grouped row lines up with the bubble above it, not with the avatar.
-        paddingLeft: grouped && !isUser ? 30 : 0,
         // The hover-reveal rule lives in team-chat.css; the color it needs comes from here.
         ['--tc-accent' as string]: token.colorPrimary,
       }}
@@ -1214,6 +1212,9 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       <div
         style={{
           maxWidth: isUser ? '72%' : '82%',
+          // The percentage must include padding and border, or two bubbles with the same
+          // `max-width` render at different widths and the right edge looks ragged.
+          boxSizing: 'border-box',
           backgroundColor: isUser
             ? token.colorPrimary
             : isLeadVoice
@@ -1221,17 +1222,28 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               : token.colorBgContainer,
           color: isUser ? '#ffffff' : token.colorText,
           borderRadius: isUser ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
-          border: isUser
-            ? 'none'
-            : isLeadVoice
-              ? `1px solid ${token.colorPrimaryBorder}`
-              : `1px solid ${token.colorBorderSecondary}`,
-          borderLeft: isLeadVoice ? `3px solid ${token.colorPrimary}` : undefined,
+          // Every side is declared explicitly. Writing `border` and then `borderLeft: undefined`
+          // made React remove the left side only, so a worker bubble rendered with three
+          // borders and a 2px-radius corner floating on an open edge.
+          ...(isUser
+            ? { border: 'none' }
+            : {
+                borderTop: `1px solid ${isLeadVoice ? token.colorPrimaryBorder : token.colorBorderSecondary}`,
+                borderRight: `1px solid ${isLeadVoice ? token.colorPrimaryBorder : token.colorBorderSecondary}`,
+                borderBottom: `1px solid ${isLeadVoice ? token.colorPrimaryBorder : token.colorBorderSecondary}`,
+                borderLeft: `1px solid ${isLeadVoice ? token.colorPrimaryBorder : token.colorBorderSecondary}`,
+              }),
           padding: isUser ? '8px 12px' : '10px 14px',
           wordBreak: 'break-word',
           fontSize: 14,
           lineHeight: 1.57,
-          boxShadow: isUser ? 'none' : '0 1px 2px rgba(0,0,0,0.04)',
+          // The lead accent is an inset shadow, not a thicker border: a 3px left border
+          // shifts the text off-centre and clips the 12px corner radius.
+          boxShadow: isUser
+            ? 'none'
+            : isLeadVoice
+              ? `inset 3px 0 0 ${token.colorPrimary}`
+              : '0 1px 2px rgba(0,0,0,0.04)',
         }}
       >
         {replyTo && (
