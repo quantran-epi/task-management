@@ -149,7 +149,6 @@ describe('TeamWorkspace settings save (Phase 38 D-19, AIO-BUDGET-07)', () => {
         employees={[employee, ...extraEmployees]}
         skills={[]}
         db={db}
-        onBack={() => {}}
       />
     );
 

@@ -150,7 +150,6 @@ describe('TeamWorkspace receipts (37.1 R10, R11, R13)', () => {
         employees={[employeeRow]}
         skills={[]}
         db={db}
-        onBack={() => {}}
       />
     );
 

@@ -5,11 +5,13 @@ import {
   PlusOutlined,
   TeamOutlined,
   DeleteOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { listEmployees, listLeads } from '../../db/repositories/aiOfficeRepo';
-import { deleteTeam, listTeams } from '../../db/repositories/aiTeamRepo';
+import { activateTeam, deleteTeam, listTeams, pauseTeam } from '../../db/repositories/aiTeamRepo';
 import { USER_PARTICIPANT_ID } from '../../types/teamChat';
 import { disposeRun } from '../../services/ai/office/teamRunManager';
 import { useLayoutStore } from '../store/layoutStore';
@@ -32,6 +34,8 @@ const STATUS_LABEL_MAP: Record<AiTeamStatus, string> = {
 
 /** WR-12 idiom: one fixed message for a failed teardown — repo errors can embed ids. */
 const ACTION_ERROR_COPY = 'Không xoá được nhóm. Vui lòng thử lại.';
+/** Same idiom for the status switch, which used to live on the retired teams list. */
+const STATUS_ERROR_COPY = 'Không đổi được trạng thái nhóm. Vui lòng thử lại.';
 
 export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = defaultDb }) => {
   const [search, setSearch] = useState('');
@@ -132,6 +136,16 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
     }
     const workspaceTab = openTabs.find((tab) => tab.id === `team_workspace:${team.id}`);
     if (workspaceTab) closeTab(workspaceTab.id);
+  };
+
+  /** The status switch that used to live on the retired teams list. */
+  const handleToggleStatus = async (team: AiTeam) => {
+    try {
+      if (team.status === 'active') await pauseTeam(team.id, db);
+      else await activateTeam(team.id, db);
+    } catch {
+      setActionError(STATUS_ERROR_COPY);
+    }
   };
 
   return (
@@ -307,6 +321,30 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
                 >
                   {statusLabel}
                 </Tag>
+
+                <span
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  role="presentation"
+                  style={{ marginLeft: 4, flexShrink: 0 }}
+                >
+                  <Tooltip title={team.status === 'active' ? 'Tạm dừng nhóm' : 'Kích hoạt nhóm'}>
+                    <Button
+                      size="small"
+                      type="text"
+                      icon={
+                        team.status === 'active' ? <PauseCircleOutlined /> : <PlayCircleOutlined />
+                      }
+                      aria-label={
+                        team.status === 'active'
+                          ? `Tạm dừng nhóm ${team.name}`
+                          : `Kích hoạt nhóm ${team.name}`
+                      }
+                      data-testid={`ai-office-team-status-${team.id}`}
+                      onClick={() => void handleToggleStatus(team)}
+                    />
+                  </Tooltip>
+                </span>
 
                 <span
                   onClick={(e) => e.stopPropagation()}

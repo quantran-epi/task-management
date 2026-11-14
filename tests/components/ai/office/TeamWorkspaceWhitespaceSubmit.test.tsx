@@ -107,7 +107,7 @@ describe('TeamWorkspace whitespace submit guard (37-06)', () => {
 
   it('never sends, queues or persists a whitespace-only submit', async () => {
     render(
-      <TeamWorkspace team={team} lead={undefined} members={[]} employees={[]} skills={[]} db={db} onBack={() => {}} />
+      <TeamWorkspace team={team} lead={undefined} members={[]} employees={[]} skills={[]} db={db} />
     );
 
     for (const index of [0, 1]) {

@@ -67,13 +67,6 @@ export interface TeamWorkspaceProps {
   employees: AiEmployee[];
   skills: AiSkill[];
   db: TaskPlannerDatabase;
-  /**
-   * Only for a host that swaps the workspace in place of its list (TeamsView). The workbench
-   * opens the workspace in its own closable tab, where a second "back" control is noise.
-   */
-  onBack?: (() => void) | undefined;
-  /** IN-08b: the card's settings button lands here so the drawer is already open. */
-  initialSettingsOpen?: boolean;
   createRuntimeDeps?: ((agentId: string) => Partial<ChatTurnRuntimeDeps>) | undefined;
 }
 
@@ -142,8 +135,6 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   employees,
   skills,
   db,
-  onBack,
-  initialSettingsOpen = false,
   createRuntimeDeps,
 }) => {
   const { token } = theme.useToken();
@@ -152,7 +143,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   const [snapshot, setSnapshot] = useState<TeamRunSnapshot>(EMPTY_SNAPSHOT);
   const [configError, setConfigError] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
-  const [settingsOpen, setSettingsOpen] = useState(initialSettingsOpen);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [planDecision, setPlanDecision] = useState<'approved' | 'rejected' | undefined>(undefined);
@@ -795,16 +786,6 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
       data-testid="team-workspace"
       style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}
     >
-      {/* Only a host that swaps this workspace in place of its list needs a way back; the
-          workbench opens it in its own closable tab, where this row was dead weight. */}
-      {onBack && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Button size="small" type="text" onClick={onBack} data-testid="team-workspace-back">
-            ← Danh sách nhóm
-          </Button>
-        </div>
-      )}
-
       <Splitter
         style={{
           height: '100%',

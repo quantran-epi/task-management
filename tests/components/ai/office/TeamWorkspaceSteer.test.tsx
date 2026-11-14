@@ -151,7 +151,7 @@ describe('TeamWorkspace composer (37.1 D-01/D-02/D-12)', () => {
   });
 
   const renderWorkspace = async () => {
-    render(<TeamWorkspace team={team} lead={undefined} members={[]} employees={[]} skills={[]} db={db} onBack={() => {}} />);
+    render(<TeamWorkspace team={team} lead={undefined} members={[]} employees={[]} skills={[]} db={db} />);
     return screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
   };
 
@@ -335,7 +335,6 @@ describe('TeamWorkspace composer (37.1 D-01/D-02/D-12)', () => {
         employees={[employee]}
         skills={[]}
         db={db}
-        onBack={() => {}}
       />
     );
 
@@ -389,7 +388,6 @@ describe('TeamWorkspace composer (37.1 D-01/D-02/D-12)', () => {
           employees={[]}
           skills={[]}
           db={db}
-          onBack={() => {}}
         />
       );
       const retry = await screen.findByTestId('agent-retry-assignment-1', {}, { timeout: 5000 });

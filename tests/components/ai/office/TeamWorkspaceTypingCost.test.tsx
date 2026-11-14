@@ -125,7 +125,6 @@ describe('TeamWorkspace composer typing cost (37.1 UAT gap 10)', () => {
         employees={[]}
         skills={[]}
         db={db}
-        onBack={() => {}}
       />
     );
 

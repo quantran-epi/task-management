@@ -74,7 +74,6 @@ export const TeamWorkspaceView: React.FC<TeamWorkspaceViewProps> = ({
         employees={employees}
         skills={skills}
         db={db}
-        onBack={() => closeTab(`team_workspace:${teamId}`)}
         {...(createRuntimeDeps ? { createRuntimeDeps } : {})}
       />
     </div>

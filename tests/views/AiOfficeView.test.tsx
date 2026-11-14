@@ -16,10 +16,7 @@ import { createTeam } from '../../src/db/repositories/aiTeamRepo';
 import { createSkillVersion } from '../../src/db/repositories/aiSkillVersionRepo';
 import { AiOfficeView } from '../../src/views/AiOfficeView';
 import { getEditorTabIcon } from '../../src/workbench/EditorArea';
-import {
-  useLayoutStore,
-  type EditorViewType,
-} from '../../src/workbench/store/layoutStore';
+import { useLayoutStore } from '../../src/workbench/store/layoutStore';
 
 // The model option source hits the network; stub it so the drawer has a non-empty list.
 vi.mock('../../src/services/ai/nineRouterTokenService', async (original) => ({
@@ -470,27 +467,21 @@ describe('AiOfficeView — employee tab shell (AIO-UI-01)', () => {
   });
 });
 
-describe("workbench 'teams' view registration (AIO-UI-01)", () => {
-  const TEAMS_TITLE = 'AI Office — Nhóm';
-
+describe("workbench team workspace registration (AIO-UI-01)", () => {
   function readSource(relative: string): string {
     return readFileSync(resolve(process.cwd(), 'src', relative), 'utf8');
   }
 
-  it("accepts 'teams' as an EditorViewType member", () => {
-    const viewType: EditorViewType = 'teams';
-    expect(viewType).toBe('teams');
-    expect(readSource('workbench/store/layoutStore.ts')).toContain("'teams'");
-  });
-
-  it("returns an icon element for 'teams'", () => {
-    const icon = getEditorTabIcon('teams');
+  it("registers 'team_workspace' as an EditorViewType member with an icon", () => {
+    expect(readSource('workbench/store/layoutStore.ts')).toContain("'team_workspace'");
+    const icon = getEditorTabIcon('team_workspace');
     expect(icon).toBeTruthy();
     expect(React.isValidElement(icon)).toBe(true);
   });
 
-  it('titles teams in both workbench title maps', () => {
-    expect(readSource('workbench/EditorArea.tsx')).toContain(`teams: '${TEAMS_TITLE}'`);
-    expect(readSource('workbench/WorkbenchLayout.tsx')).toContain(`teams: '${TEAMS_TITLE}'`);
+  it('does not register a separate teams list view', () => {
+    // The AI Office explorer is the only team list; a second one would be dead surface.
+    expect(readSource('workbench/store/layoutStore.ts')).not.toContain("| 'teams'");
+    expect(readSource('workbench/EditorArea.tsx')).not.toContain('TeamsView');
   });
 });

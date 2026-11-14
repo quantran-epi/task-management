@@ -301,7 +301,6 @@ describe('TeamWorkspace — no streaming bubble (D-19)', () => {
         employees={[]}
         skills={[]}
         db={db}
-        onBack={() => {}}
       />
     );
 

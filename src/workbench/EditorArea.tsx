@@ -49,7 +49,6 @@ import { AnalyticsView } from '../views/AnalyticsView';
 import { SettingsView } from '../views/SettingsView';
 import { DashboardView } from '../views/DashboardView';
 import { AiOfficeView } from '../views/AiOfficeView';
-import { TeamsView } from '../views/TeamsView';
 import { TelegramMonitorView } from '../views/TelegramMonitorView';
 import { ItemInsightView } from '../views/ItemInsightView';
 import { ChangeRequestDetailView } from '../views/ChangeRequestDetailView';
@@ -78,8 +77,6 @@ export function getEditorTabIcon(viewType: EditorViewType, size = 13): React.Rea
     case 'dashboard':
       return <JetBrainsDashboardIcon size={size} />;
     case 'agents':
-      return <JetBrainsAgentsIcon size={size} />;
-    case 'teams':
       return <JetBrainsAgentsIcon size={size} />;
     case 'telegram':
       return <JetBrainsTelegramIcon size={size} />;
@@ -595,8 +592,6 @@ export function EditorArea({ db }: EditorAreaProps) {
         return <DashboardView onNavigate={(route) => openTab({ id: route, title: route.toUpperCase(), viewType: route as any })} />;
       case 'agents':
         return <AiOfficeView {...dbProp} />;
-      case 'teams':
-        return <TeamsView {...dbProp} />;
       case 'telegram':
         return <TelegramMonitorView />;
       case 'mermaid':
@@ -635,7 +630,6 @@ export function EditorArea({ db }: EditorAreaProps) {
                 notes: 'Docs',
                 settings: 'Settings',
                 agents: 'Ghost Dev',
-                teams: 'AI Office — Nhóm',
                 telegram: 'Telegram',
               };
               const tabId = params?.doc

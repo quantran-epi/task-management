@@ -12,7 +12,6 @@ export type EditorViewType =
   | 'cr_detail'
   | 'dashboard'
   | 'agents'
-  | 'teams'
   | 'telegram'
   | 'insight'
   | 'mermaid'
@@ -105,8 +104,8 @@ export const DEFAULT_LAYOUT_STATE: LayoutStateValues = {
 export const LAYOUT_STORAGE_KEY = 'taskmate_workbench_layout_v3';
 export const MAX_OPEN_TABS = 20;
 
-/** Phase 35 (AIO-REMOVE-04): view types retired from `EditorViewType` but still possibly persisted. */
-const RETIRED_VIEW_TYPES = new Set<string>(['sdlc']);
+/** View types retired from `EditorViewType` but still possibly persisted. */
+const RETIRED_VIEW_TYPES = new Set<string>(['sdlc', 'teams']);
 
 export const useLayoutStore = create<LayoutState>()(
   persist(

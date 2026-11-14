@@ -20,7 +20,8 @@ vi.mock('../../src/db/repositories/aiTeamRepo', async (importOriginal) => {
     applyTeamBudgetSettings: vi.fn(actual.applyTeamBudgetSettings),
   };
 });
-import { TeamsView } from '../../src/views/TeamsView';
+import { TeamWorkspaceView } from '../../src/views/TeamWorkspaceView';
+import { AiOfficeExplorer } from '../../src/workbench/toolwindows/AiOfficeExplorer';
 import {
   ensureTeamThread,
   saveTeamMessage,
@@ -35,7 +36,7 @@ import type { AiEmployee, AiLead, AiTeam } from '../../src/types/aiOffice';
  * Rendered directly rather than through `EditorArea` so the suite does not depend on
  * the routing switch; the routing itself is asserted from the source in Task 3.
  */
-describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
+describe('TeamWorkspaceView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
   let db: TaskPlannerDatabase;
   let lead: AiLead;
   let employees: AiEmployee[];
@@ -123,45 +124,49 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     vi.restoreAllMocks();
   });
 
-  function renderView() {
-    return render(<TeamsView db={db} />);
+  /** The workbench surface: a closable tab that receives only the team id. */
+  function renderView(teamId: string = activeTeam.id) {
+    return render(<TeamWorkspaceView db={db} teamId={teamId} />);
   }
 
-  it('renders the view wrapper and one card per seeded team', async () => {
-    renderView();
+  /** The AI Office explorer is the only team list now; the workspace opens in a tab. */
+  function renderList() {
+    return render(<AiOfficeExplorer db={db} />);
+  }
 
-    expect(await screen.findByTestId('teams-view')).toBeInTheDocument();
-    expect(await screen.findByTestId(`team-card-${activeTeam.id}`)).toBeInTheDocument();
-    expect(screen.getByTestId(`team-card-${idleTeam.id}`)).toBeInTheDocument();
+  it('lists one explorer row per seeded team', async () => {
+    renderList();
+
+    expect(await screen.findByTestId(`ai-office-team-${activeTeam.id}`)).toBeInTheDocument();
+    expect(screen.getByTestId(`ai-office-team-${idleTeam.id}`)).toBeInTheDocument();
   });
 
-  it('shows the active counter tag without a denominator', async () => {
-    renderView();
+  it('shows the active count in the explorer header', async () => {
+    renderList();
 
-    expect(await screen.findByText('Đang hoạt động 1')).toBeInTheDocument();
-    expect(screen.queryByText(/Đang hoạt động 1\/3/)).not.toBeInTheDocument();
+    expect(await screen.findByText('Nhóm AI (2)')).toBeInTheDocument();
+    expect(screen.getByText('1 hoạt động')).toBeInTheDocument();
   });
 
-  it('shows the lead name, roster avatars and the budget caption on a card', async () => {
-    renderView();
+  it('shows the lead name and member count on an explorer row', async () => {
+    renderList();
 
-    const card = await screen.findByTestId(`team-card-${activeTeam.id}`);
-    expect(card).toHaveTextContent('Nhóm Thanh Toán');
-    expect(card).toHaveTextContent('Bình Trần');
-    expect(card).toHaveTextContent('0/4,000 token');
-    expect(card.querySelectorAll('.ant-avatar').length).toBeGreaterThanOrEqual(3);
+    const row = await screen.findByTestId(`ai-office-team-${activeTeam.id}`);
+    expect(row).toHaveTextContent('Nhóm Thanh Toán');
+    expect(row).toHaveTextContent('Lead: Bình Trần');
+    expect(row).toHaveTextContent('3 thành viên');
   });
 
-  it('activates an idle team and pauses an active one', async () => {
-    renderView();
+  it('activates an idle team and pauses an active one from the explorer', async () => {
+    renderList();
 
-    fireEvent.click(await screen.findByTestId(`team-activate-${idleTeam.id}`));
+    fireEvent.click(await screen.findByTestId(`ai-office-team-status-${idleTeam.id}`));
     await waitFor(async () => {
       const teams = await listTeams(db);
       expect(teams.find((team) => team.id === idleTeam.id)?.status).toBe('active');
     });
 
-    fireEvent.click(await screen.findByTestId(`team-pause-${idleTeam.id}`));
+    fireEvent.click(await screen.findByTestId(`ai-office-team-status-${idleTeam.id}`));
     await waitFor(async () => {
       const teams = await listTeams(db);
       expect(teams.find((team) => team.id === idleTeam.id)?.status).toBe('idle');
@@ -178,25 +183,25 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
       db
     );
 
-    renderView();
+    renderList();
 
-    const activate = await screen.findByTestId(`team-activate-${idleTeam.id}`);
+    const activate = await screen.findByTestId(`ai-office-team-status-${idleTeam.id}`);
     expect(activate).toBeEnabled();
     expect(screen.queryByText(/Đã có 3 nhóm đang hoạt động/)).not.toBeInTheDocument();
     expect(screen.queryByText(/tối đa ba nhân viên/)).not.toBeInTheDocument();
   });
 
   it('allows pausing the last active team — no minimum-active rule exists', async () => {
-    renderView();
+    renderList();
 
     // WR-10: pausing the last active team is a legal transition.
-    expect(await screen.findByTestId(`team-pause-${activeTeam.id}`)).toBeEnabled();
+    expect(await screen.findByTestId(`ai-office-team-status-${activeTeam.id}`)).toBeEnabled();
   });
 
   it('creates a group from a name alone — no lead, no members, zero budget', async () => {
-    renderView();
+    renderList();
 
-    fireEvent.click((await screen.findAllByRole('button', { name: /Tạo nhóm/ }))[0]!);
+    fireEvent.click(await screen.findByTestId('ai-office-add-team-btn'));
     expect(await screen.findByTestId('team-editor-drawer')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Tên nhóm'), { target: { value: 'Nhóm Rỗng' } });
@@ -229,9 +234,9 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
       db
     );
 
-    renderView();
+    renderList();
 
-    fireEvent.click((await screen.findAllByRole('button', { name: /Tạo nhóm/ }))[0]!);
+    fireEvent.click(await screen.findByTestId('ai-office-add-team-btn'));
     expect(await screen.findByTestId('team-editor-drawer')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Tên nhóm'), { target: { value: 'Nhóm Mới' } });
@@ -312,17 +317,13 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
   it('renders the workspace with the sidebar and the transcript region', async () => {
     renderView();
 
-    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
-
     expect(await screen.findByTestId('team-sidebar')).toBeInTheDocument();
     expect(await screen.findByTestId('team-transcript-region')).toBeInTheDocument();
     expect(screen.getByTestId('team-workspace')).toBeInTheDocument();
   });
 
-  it('creates exactly one team thread on open and reuses it after a pause', async () => {
-    renderView();
-
-    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+  it('creates exactly one team thread on open and reuses it after the tab is reopened', async () => {
+    const { unmount } = renderView();
     await screen.findByTestId('team-transcript-region');
 
     const first = await waitFor(async () => {
@@ -332,8 +333,9 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     });
     expect(first[0]!.entityId).toBe(activeTeam.id);
 
-    fireEvent.click(screen.getByTestId('team-workspace-back'));
-    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    // Closing and reopening the workbench tab is the real remount path.
+    unmount();
+    renderView();
     await screen.findByTestId('team-transcript-region');
 
     const second = await db.chatThreads.where('scopeType').equals('team').toArray();
@@ -343,8 +345,6 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
 
   it('makes the transcript region a single focus stop', async () => {
     renderView();
-
-    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
     const region = await screen.findByTestId('team-transcript-region');
     expect(region).toHaveAttribute('tabindex', '0');
     expect(region).toHaveAttribute('role', 'region');
@@ -352,8 +352,6 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
 
   it('renders the sidebar budget, links and mode sections', async () => {
     renderView();
-
-    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
     await screen.findByTestId('team-sidebar');
 
     expect(screen.getByTestId('team-budget-panel')).toBeInTheDocument();
@@ -379,7 +377,6 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     const employeeRow = await seedSplitUsage(false);
 
     renderView();
-    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
     const sidebar = await screen.findByTestId('team-sidebar');
 
     const memberLine = await screen.findByTestId(`member-usage-${employeeRow.agentId}`);
@@ -405,7 +402,6 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     const employeeRow = await seedSplitUsage(true);
 
     renderView();
-    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
     await screen.findByTestId('team-sidebar');
 
     const memberLine = await screen.findByTestId(`member-usage-${employeeRow.agentId}`);
@@ -418,7 +414,6 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     await db.settings.put({ key: 'ai_budget_warn_threshold_pct', value: 65 });
 
     renderView();
-    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
     fireEvent.click(await screen.findByTestId('team-header-settings'));
 
     const input = (await screen.findByTestId('team-threshold-input')) as HTMLInputElement;
@@ -440,7 +435,6 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     });
 
     renderView();
-    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
     await screen.findByTestId('team-sidebar');
 
     expect(await screen.findByTestId('budget-badge-member')).toBeInTheDocument();
@@ -472,8 +466,7 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
       }) as any,
     });
 
-    render(<TeamsView db={db} createRuntimeDeps={createRuntimeDeps} />);
-    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    render(<TeamWorkspaceView db={db} teamId={activeTeam.id} createRuntimeDeps={createRuntimeDeps} />);
     const composer = await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
     fireEvent.change(composer, { target: { value: 'Lượt có đo token' } });
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
@@ -586,9 +579,7 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
       }) as any,
     });
 
-    render(<TeamsView db={db} createRuntimeDeps={createRuntimeDeps} />);
-
-    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    render(<TeamWorkspaceView db={db} teamId={activeTeam.id} createRuntimeDeps={createRuntimeDeps} />);
     const composer = await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
 
     fireEvent.change(composer, { target: { value: 'Yêu cầu chung' } });
@@ -631,9 +622,7 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
       }) as any,
     });
 
-    render(<TeamsView db={db} createRuntimeDeps={createRuntimeDeps} />);
-
-    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    render(<TeamWorkspaceView db={db} teamId={activeTeam.id} createRuntimeDeps={createRuntimeDeps} />);
     const composer = await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
 
     fireEvent.change(composer, { target: { value: 'Lượt một' } });
@@ -660,8 +649,6 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
 
   it('lists roster members with role and removes an employee without touching the lead row', async () => {
     renderView();
-
-    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
     fireEvent.click(await screen.findByTestId('team-header-settings'));
 
     const members = await listTeamMembers(activeTeam.id, db);
@@ -683,8 +670,6 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
 
   it('adds an agent from the settings drawer, excluding agents already on the roster', async () => {
     renderView();
-
-    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
     fireEvent.click(await screen.findByTestId('team-header-settings'));
     await screen.findByTestId('team-roster-block');
 
@@ -713,7 +698,6 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     );
 
     renderView();
-    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
     fireEvent.click(await screen.findByTestId('team-header-settings'));
 
     const leaderSelect = await screen.findByRole('combobox', { name: 'Leader' });
@@ -738,8 +722,7 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
   it('renders an empty group workspace without crashing', async () => {
     const empty = await createTeam({ name: 'Nhóm Rỗng' }, db);
 
-    renderView();
-    fireEvent.click(await screen.findByTestId(`team-open-${empty.id}`));
+    renderView(empty.id);
 
     expect(await screen.findByTestId('team-workspace')).toBeInTheDocument();
     expect(screen.getByTestId('team-header-no-lead')).toHaveTextContent('Chưa chọn lead');
@@ -762,7 +745,6 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     );
 
     renderView();
-    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
 
     expect(await screen.findByText('Lượt trước bị gián đoạn')).toBeInTheDocument();
     expect(screen.getByText(/An Nguyễn: Viết đặc tả thanh toán/)).toBeInTheDocument();
@@ -798,7 +780,6 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     );
 
     renderView();
-    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
     await screen.findByTestId('team-transcript-region');
 
     expect(screen.queryByText('Lượt trước bị gián đoạn')).not.toBeInTheDocument();
@@ -842,9 +823,7 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
       }) as any,
     });
 
-    render(<TeamsView db={db} createRuntimeDeps={createRuntimeDeps} />);
-
-    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    render(<TeamWorkspaceView db={db} teamId={activeTeam.id} createRuntimeDeps={createRuntimeDeps} />);
     const composer = await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
     fireEvent.change(composer, { target: { value: 'Chia việc giúp tôi' } });
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
@@ -868,8 +847,6 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
 
   it('shows one error alert when saving group settings fails (WR-12)', async () => {
     renderView();
-
-    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
     fireEvent.click(await screen.findByTestId('team-header-settings'));
     await screen.findByTestId('team-settings-drawer');
 
@@ -883,22 +860,23 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     expect(screen.queryByText(/Không tìm thấy nhóm: 1234/)).not.toBeInTheDocument();
   });
 
-  it('shows a toast when activating a group fails (WR-12)', async () => {
-    renderView();
+  it('surfaces a failed status change in the explorer error channel (WR-12)', async () => {
+    renderList();
 
     vi.mocked(activateTeam).mockRejectedValueOnce(new Error('boom'));
 
-    fireEvent.click(await screen.findByTestId(`team-activate-${idleTeam.id}`));
+    fireEvent.click(await screen.findByTestId(`ai-office-team-status-${idleTeam.id}`));
 
-    await waitFor(() =>
-      expect(message.error).toHaveBeenCalledWith('Không đổi được trạng thái nhóm. Vui lòng thử lại.')
-    );
+    const alert = await screen.findByTestId('ai-office-team-delete-error');
+    expect(alert).toHaveTextContent('Không đổi được trạng thái nhóm. Vui lòng thử lại.');
+    // The raw repo message must never reach the UI.
+    expect(screen.queryByText(/boom/)).not.toBeInTheDocument();
   });
 
-  it('opens the settings drawer from the card settings button (IN-08b)', async () => {
+  it('opens the settings drawer from the workspace header (IN-08b)', async () => {
     renderView();
 
-    fireEvent.click(await screen.findByTestId(`team-settings-${activeTeam.id}`));
+    fireEvent.click(await screen.findByTestId('team-header-settings'));
 
     expect(await screen.findByTestId('team-settings-drawer')).toBeInTheDocument();
   });
@@ -919,9 +897,7 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
       })) as any,
     });
 
-    render(<TeamsView db={db} createRuntimeDeps={createRuntimeDeps} />);
-
-    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    render(<TeamWorkspaceView db={db} teamId={activeTeam.id} createRuntimeDeps={createRuntimeDeps} />);
     const composer = await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
 
     fireEvent.change(composer, { target: { value: 'Lượt một' } });
@@ -981,9 +957,7 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
       }) as any,
     });
 
-    render(<TeamsView db={db} createRuntimeDeps={createRuntimeDeps} />);
-
-    fireEvent.click(await screen.findByTestId(`team-open-${empty.id}`));
+    render(<TeamWorkspaceView db={db} teamId={empty.id} createRuntimeDeps={createRuntimeDeps} />);
     fireEvent.click(await screen.findByTestId('team-header-settings'));
 
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: 'Leader' }));
@@ -1008,8 +982,6 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
 
   it('renders the team composer placeholder', async () => {
     renderView();
-
-    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
     expect(
       await screen.findByPlaceholderText('Nhắn cho lead hoặc @ một nhân viên...')
     ).toBeInTheDocument();
@@ -1035,9 +1007,7 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
       }) as any,
     });
 
-    render(<TeamsView db={db} createRuntimeDeps={createRuntimeDeps} />);
-
-    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    render(<TeamWorkspaceView db={db} teamId={activeTeam.id} createRuntimeDeps={createRuntimeDeps} />);
     const composer = await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
 
     fireEvent.change(composer, { target: { value: 'Yêu cầu chung' } });
@@ -1055,8 +1025,6 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
 
   it('offers the team lead as the first @ option in the composer', async () => {
     renderView();
-
-    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
     const composer = (await screen.findByLabelText(
       'Nội dung tin nhắn trò chuyện AI'
     )) as HTMLTextAreaElement;
@@ -1073,31 +1041,7 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     expect(items[0]!.textContent).toContain('Bình Trần');
   });
 
-  it('opens a team workspace tab from the AI Office explorer', async () => {
-    // Phase 35 moved the AI Office launch point from TitleBar to the left tool-window
-    // stripe (Alt+7). The explorer is the surface that actually opens a team.
-    const { AiOfficeExplorer } = await import('../../src/workbench/toolwindows/AiOfficeExplorer');
-
-    render(<AiOfficeExplorer db={db} />);
-
-    fireEvent.click(await screen.findByTestId(`ai-office-team-${activeTeam.id}`));
-
-    const tab = useLayoutStore.getState().openTabs.find((t) => t.viewType === 'team_workspace');
-    expect(tab).toBeDefined();
-    expect(tab?.params).toMatchObject({ teamId: activeTeam.id });
-  });
-
-  it('renders an empty group in the AI Office explorer with a no-leader label', async () => {
-    const { AiOfficeExplorer } = await import('../../src/workbench/toolwindows/AiOfficeExplorer');
-    const empty = await createTeam({ name: 'Nhóm Rỗng' }, db);
-
-    render(<AiOfficeExplorer db={db} />);
-
-    const row = await screen.findByTestId(`ai-office-team-${empty.id}`);
-    expect(row).toHaveTextContent('Chưa chọn lead');
-  });
-
-  it('routes both the agents and teams views in renderViewContent', async () => {
+  it('routes the agents view and the team workspace tab in renderViewContent', async () => {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
     const source = readFileSync(
@@ -1105,7 +1049,7 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
       'utf8'
     );
     expect(source).toContain('<AiOfficeView {...dbProp} />');
-    expect(source).toContain('<TeamsView {...dbProp} />');
+    expect(source).toContain('<TeamWorkspaceView');
   });
 
   it('renders the lead approval card and routes the decision to the coordinator', async () => {
@@ -1129,9 +1073,7 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
       }) as any,
     });
 
-    render(<TeamsView db={db} createRuntimeDeps={createRuntimeDeps} />);
-
-    fireEvent.click(await screen.findByTestId(`team-open-${activeTeam.id}`));
+    render(<TeamWorkspaceView db={db} teamId={activeTeam.id} createRuntimeDeps={createRuntimeDeps} />);
     const composer = await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
     fireEvent.change(composer, { target: { value: 'Cập nhật việc A' } });
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
