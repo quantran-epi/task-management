@@ -1,16 +1,24 @@
 import React, { useState } from 'react';
-import { Button, Popconfirm, theme } from 'antd';
+import { Button, Popconfirm, Tag, theme } from 'antd';
 import type { AiSkill } from '../../../types/aiOffice';
 
 export interface SkillCardProps {
   skill: AiSkill;
   agentCount: number;
+  /** D-29: optional so the dead `AiOfficeView` call site keeps compiling (D-32). */
+  pendingCount?: number | undefined;
   onEdit: () => void;
   onDelete: () => void;
 }
 
 /** UI-SPEC §2 skill card — name, 2-line description clamp, usage caption. */
-export const SkillCard: React.FC<SkillCardProps> = ({ skill, agentCount, onEdit, onDelete }) => {
+export const SkillCard: React.FC<SkillCardProps> = ({
+  skill,
+  agentCount,
+  pendingCount,
+  onEdit,
+  onDelete,
+}) => {
   const { token } = theme.useToken();
   const [hovered, setHovered] = useState(false);
 
@@ -43,6 +51,16 @@ export const SkillCard: React.FC<SkillCardProps> = ({ skill, agentCount, onEdit,
       >
         {skill.description}
       </div>
+
+      {pendingCount !== undefined && pendingCount > 0 && (
+        <Tag
+          color="warning"
+          data-testid={`skill-card-pending-${skill.id}`}
+          style={{ fontSize: 12, margin: 0 }}
+        >
+          {`${pendingCount} chờ duyệt`}
+        </Tag>
+      )}
 
       <div style={{ fontSize: 12, color: token.colorTextSecondary }}>
         {`Đang dùng bởi ${agentCount} nhân viên`}
