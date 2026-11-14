@@ -224,15 +224,19 @@ describe('TeamWorkspace receipts (37.1 R10, R11, R13)', () => {
     spy.mockRestore();
   });
 
-  it('R10: a message the user received shows a read receipt once the cursor covers it', async () => {
+  it('R10: a message the user received advances the cursor and shows no receipt', async () => {
     const row = await seedLeadMessage('Bạn xem giúp mình mục này.');
     renderWorkspace();
     await markRead();
 
+    // The cursor is the durable fact, and it still advances.
     await waitFor(async () => {
-      const receipt = await screen.findByTestId(`seen-${row.id}`);
-      expect(receipt.textContent).toBe('✓✓');
+      const cursor = await db.teamReadCursors.get(`${team.id}:${USER_PARTICIPANT_ID}`);
+      expect(cursor?.lastSeq).toBe(1);
     });
+    // A receipt on someone else's message answers a question only the sender asks, so the
+    // agent row renders none even though the user has read it.
+    expect(screen.queryByTestId(`seen-${row.id}`)).not.toBeInTheDocument();
   });
 
   it('R13: a hidden tab shows the unread count and the "Tin mới" divider', async () => {
@@ -384,7 +388,7 @@ describe('TeamWorkspace receipts (37.1 R10, R11, R13)', () => {
     expect(label.textContent).toContain('An Nhân viên');
   });
 
-  it('an agent reply to the leader still shows the USER as a reader', async () => {
+  it('an agent reply to the leader renders no receipt (the user is the reader, not the sender)', async () => {
     const row = await saveTeamMessage(
       {
         threadId,
@@ -412,9 +416,10 @@ describe('TeamWorkspace receipts (37.1 R10, R11, R13)', () => {
     await markRead();
 
     await waitFor(async () => {
-      const receipt = await screen.findByTestId(`seen-${row.id}`);
-      expect(receipt.textContent).toBe('✓✓');
+      const cursor = await db.teamReadCursors.get(`${team.id}:${USER_PARTICIPANT_ID}`);
+      expect(cursor?.lastSeq).toBe(1);
     });
+    expect(screen.queryByTestId(`seen-${row.id}`)).not.toBeInTheDocument();
   });
 
   it('R14: a reply renders the message it answers', async () => {
