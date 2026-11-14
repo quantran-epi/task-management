@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../src/db';
-import { createEmployee, createLead } from '../../src/db/repositories/aiOfficeRepo';
+import { createEmployee, createLead, createSkill } from '../../src/db/repositories/aiOfficeRepo';
+import { createSkillVersion } from '../../src/db/repositories/aiSkillVersionRepo';
 import { createTeam } from '../../src/db/repositories/aiTeamRepo';
 import { AiStaffExplorer } from '../../src/workbench/toolwindows/AiStaffExplorer';
 import { AiOfficeExplorer } from '../../src/workbench/toolwindows/AiOfficeExplorer';
@@ -106,7 +107,7 @@ describe('AiStaffExplorer and AiOfficeExplorer tool windows', () => {
       expect(await screen.findByText('Lan Kỹ Sư')).toBeInTheDocument();
       expect(await screen.findByText('Hải Backend')).toBeInTheDocument();
 
-      const searchInput = screen.getByPlaceholderText('Tìm staff...');
+      const searchInput = screen.getByPlaceholderText('Tìm lead, nhân viên, kỹ năng...');
       fireEvent.change(searchInput, { target: { value: 'Golang' } });
 
       await waitFor(() => {
@@ -184,6 +185,173 @@ describe('AiStaffExplorer and AiOfficeExplorer tool windows', () => {
         expect(await db.aiEmployees.get(emp.id)).toBeUndefined();
       });
       expect(screen.queryByTestId('ai-staff-delete-error')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('AiStaffExplorer — Kỹ năng (AIO-SKILL-01, D-31, D-33)', () => {
+    const seedSkill = (overrides: Partial<{ name: string; description: string; body: string }> = {}) =>
+      createSkill(
+        {
+          name: overrides.name ?? 'Viết đặc tả',
+          description: overrides.description ?? 'Quy trình viết đặc tả nghiệp vụ.',
+          body: overrides.body ?? '# Quy trình\nBước 1: đọc yêu cầu.',
+        },
+        db
+      );
+
+    const seedEmployee = (overrides: Partial<{ name: string; skillId: string }> = {}) =>
+      createEmployee(
+        {
+          name: overrides.name ?? 'Lan Kỹ Sư',
+          role: 'Frontend Dev',
+          capability: 'Viết UI React sạch đẹp.',
+          persona: 'Bạn là Senior Frontend.',
+          model: 'claude-sonnet-4',
+          ...(overrides.skillId !== undefined ? { skillId: overrides.skillId } : {}),
+        },
+        db
+      );
+
+    /** The card button and the Popconfirm's OK button share the label "Xóa". */
+    const confirmPopconfirm = async () => {
+      const popconfirm = await waitFor(() => {
+        const node = document.querySelector('.ant-popconfirm');
+        expect(node).toBeInTheDocument();
+        return node as HTMLElement;
+      });
+      fireEvent.click(within(popconfirm).getByRole('button', { name: 'Xóa' }));
+    };
+
+    it('renders the Kỹ năng section with its empty state', async () => {
+      render(<AiStaffExplorer db={db} />);
+
+      expect(await screen.findByTestId('ai-staff-skills-section')).toBeInTheDocument();
+      expect(screen.getByTestId('ai-staff-skills-section')).toHaveTextContent('Kỹ năng (0)');
+      expect(screen.getByText('Chưa có kỹ năng nào')).toBeInTheDocument();
+      expect(screen.getByTestId('ai-staff-skill-create')).toHaveAttribute(
+        'aria-label',
+        'Thêm Kỹ năng'
+      );
+    });
+
+    it('creates a skill through the drawer and shows it in the section', async () => {
+      render(<AiStaffExplorer db={db} />);
+
+      fireEvent.click(await screen.findByTestId('ai-staff-skill-create'));
+
+      fireEvent.change(await screen.findByLabelText('Tên'), {
+        target: { value: 'Viết đặc tả' },
+      });
+      fireEvent.change(screen.getByLabelText('Mô tả (nhân viên chỉ thấy phần này)'), {
+        target: { value: 'Quy trình viết đặc tả nghiệp vụ.' },
+      });
+      fireEvent.change(screen.getByLabelText('Nội dung'), {
+        target: { value: '# Quy trình\nBước 1: đọc yêu cầu.' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Lưu kỹ năng' }));
+
+      await waitFor(async () => expect(await db.aiSkills.count()).toBe(1));
+      const stored = (await db.aiSkills.toArray())[0]!;
+      expect(await screen.findByTestId(`ai-staff-skill-${stored.id}`)).toBeInTheDocument();
+      expect(screen.getByTestId('ai-staff-skills-section')).toHaveTextContent('Kỹ năng (1)');
+    });
+
+    it('edits a skill and the card updates live', async () => {
+      const skill = await seedSkill();
+      render(<AiStaffExplorer db={db} />);
+
+      const wrapper = await screen.findByTestId(`ai-staff-skill-${skill.id}`);
+      // A card body click is inert — only `Sửa` opens the drawer (UI-SPEC §5).
+      fireEvent.click(wrapper);
+      expect(screen.queryByTestId('skill-editor-drawer')).not.toBeInTheDocument();
+
+      fireEvent.click(within(wrapper).getByRole('button', { name: 'Sửa' }));
+      fireEvent.change(await screen.findByLabelText('Tên'), {
+        target: { value: 'Viết đặc tả v2' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Lưu kỹ năng' }));
+
+      await waitFor(async () => expect((await db.aiSkills.get(skill.id))?.name).toBe('Viết đặc tả v2'));
+      expect(await screen.findByText('Viết đặc tả v2')).toBeInTheDocument();
+    });
+
+    it('deletes an unreferenced skill after the card Popconfirm', async () => {
+      const skill = await seedSkill();
+      render(<AiStaffExplorer db={db} />);
+
+      const wrapper = await screen.findByTestId(`ai-staff-skill-${skill.id}`);
+      fireEvent.click(within(wrapper).getByRole('button', { name: 'Xóa' }));
+      await confirmPopconfirm();
+
+      await waitFor(async () => expect(await db.aiSkills.get(skill.id)).toBeUndefined());
+      await waitFor(() =>
+        expect(screen.queryByTestId(`ai-staff-skill-${skill.id}`)).not.toBeInTheDocument()
+      );
+      expect(screen.queryByTestId('ai-staff-delete-error')).not.toBeInTheDocument();
+    });
+
+    it('refuses to delete a skill assigned to an agent and names the agent', async () => {
+      const skill = await seedSkill();
+      await seedEmployee({ name: 'Lan Kỹ Sư', skillId: skill.id });
+      render(<AiStaffExplorer db={db} />);
+
+      const wrapper = await screen.findByTestId(`ai-staff-skill-${skill.id}`);
+      fireEvent.click(within(wrapper).getByRole('button', { name: 'Xóa' }));
+      await confirmPopconfirm();
+
+      const alert = await screen.findByTestId('ai-staff-delete-error');
+      expect(alert.textContent).toContain('Lan Kỹ Sư');
+      expect(alert.textContent).not.toContain(skill.id);
+      expect(screen.getByTestId(`ai-staff-skill-${skill.id}`)).toBeInTheDocument();
+      expect(await db.aiSkills.get(skill.id)).toBeDefined();
+    });
+
+    it('filters all three sections with one query', async () => {
+      await createLead(
+        {
+          name: 'Trí Lead',
+          role: 'Tech Lead',
+          capability: 'Điều phối kiến trúc.',
+          persona: 'Bạn là Tech Lead.',
+          model: 'claude-opus-4',
+        },
+        db
+      );
+      await seedEmployee({ name: 'Lan Kỹ Sư' });
+      const skill = await seedSkill({ name: 'Viết đặc tả' });
+
+      render(<AiStaffExplorer db={db} />);
+      expect(await screen.findByText('Trí Lead')).toBeInTheDocument();
+      expect(await screen.findByText('Lan Kỹ Sư')).toBeInTheDocument();
+      expect(await screen.findByTestId(`ai-staff-skill-${skill.id}`)).toBeInTheDocument();
+
+      fireEvent.change(screen.getByPlaceholderText('Tìm lead, nhân viên, kỹ năng...'), {
+        target: { value: 'đặc tả' },
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByText('Trí Lead')).not.toBeInTheDocument();
+        expect(screen.queryByText('Lan Kỹ Sư')).not.toBeInTheDocument();
+        expect(screen.getByTestId(`ai-staff-skill-${skill.id}`)).toBeInTheDocument();
+      });
+    });
+
+    it('shows the pending-count badge on a skill card', async () => {
+      const skill = await seedSkill();
+      await createSkillVersion(
+        {
+          skillId: skill.id,
+          name: skill.name,
+          description: skill.description,
+          body: '# Quy trình\nBước 2: viết đặc tả.',
+        },
+        db
+      );
+
+      render(<AiStaffExplorer db={db} />);
+
+      const badge = await screen.findByTestId(`skill-card-pending-${skill.id}`);
+      expect(badge).toHaveTextContent('1 chờ duyệt');
     });
   });
 
