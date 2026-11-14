@@ -197,7 +197,13 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
             const usedOut = figures?.usedOut ?? 0;
             const remaining = figures?.remaining ?? Math.max(0, member.budgetTokens);
             const estimated = figures?.estimated === true;
-            const usageLine = `đã dùng ${estimated ? '~' : ''}${fmt(used)} (${fmt(usedIn)} vào / ${fmt(usedOut)} ra) · còn ${fmt(remaining)}/${fmt(member.budgetTokens)}`;
+            const granted = member.budgetTokens;
+            // The BAR clamps at 100%; the LABEL reports the true figure (51k/50k is 102%).
+            const pctUsed = granted > 0 ? (used / granted) * 100 : 0;
+            const pctLabel = Math.round(pctUsed);
+            // UAT 38: the row is a bar plus one compact figure; the full split (in/out,
+            // remaining) lives in the tooltip and the accessible name, not on every row.
+            const usageLine = `đã dùng ${estimated ? '~' : ''}${fmt(used)} (${fmt(usedIn)} vào / ${fmt(usedOut)} ra) · còn ${fmt(remaining)}/${fmt(granted)}`;
             return (
               <div key={member.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Avatar
@@ -208,18 +214,33 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
                   {initialOf(agent.name)}
                 </Avatar>
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 400 }}>{agent.name}</div>
-                  <div style={{ fontSize: 12, color: token.colorTextSecondary }}>{agent.role}</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {agent.name}
+                    </span>
+                    <span style={{ fontSize: 11, color: token.colorTextTertiary, flexShrink: 0 }}>
+                      {agent.role}
+                    </span>
+                  </div>
+                  <Progress
+                    size="small"
+                    showInfo={false}
+                    percent={Math.min(100, pctUsed)}
+                    status={figures?.atThreshold ? 'exception' : 'normal'}
+                    aria-label={usageLine}
+                    style={{ margin: 0 }}
+                  />
                   <div
                     data-testid={`member-usage-${member.agentId}`}
-                    style={{ fontSize: 12, color: token.colorTextSecondary }}
+                    title={usageLine}
+                    style={{ fontSize: 11.5, color: token.colorTextSecondary }}
                   >
                     {estimated ? (
                       <span title="ước lượng" aria-label="ước lượng">
-                        {usageLine}
+                        {`~${fmt(used)} / ${fmt(granted)} · ${pctLabel}%`}
                       </span>
                     ) : (
-                      <span>{usageLine}</span>
+                      <span>{`${fmt(used)} / ${fmt(granted)} · ${pctLabel}%`}</span>
                     )}
                   </div>
                 </div>
@@ -260,16 +281,19 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
           size="small"
           showInfo={false}
           percent={Math.min(100, teamPercent)}
-          strokeColor={teamAtThreshold ? token.colorWarning : token.colorSuccess}
+          status={teamAtThreshold ? 'exception' : 'normal'}
+          aria-label={`${fmt(teamUsed)} / ${fmt(teamTotal)} token · ${teamPercent}%`}
+          style={{ margin: 0 }}
         />
-        <div style={{ fontSize: 12, color: token.colorTextSecondary }}>
-          {`${fmt(teamUsed)} / ${fmt(teamTotal)} token · ${teamPercent}%`}
-        </div>
-        <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 8 }}>
-          {`(${fmt(teamUsedIn)} vào / ${fmt(teamUsedOut)} ra) · còn ${fmt(teamRemaining)}`}
+        <div
+          data-testid="team-usage-line"
+          style={{ fontSize: 11.5, color: token.colorTextSecondary, marginBottom: 8 }}
+          title={`${fmt(teamUsedIn)} vào / ${fmt(teamUsedOut)} ra · còn ${fmt(teamRemaining)}`}
+        >
+          {`${fmt(teamUsed)} / ${fmt(teamTotal)} · ${teamPercent}%`}
           {teamProvisionalIn > 0 && (
             <span data-testid="team-provisional" title="ước lượng" aria-label="ước lượng">
-              {` · ~${fmt(teamProvisionalIn)} vào (ước lượng)`}
+              {` · ~${fmt(teamProvisionalIn)} (ước lượng)`}
             </span>
           )}
         </div>

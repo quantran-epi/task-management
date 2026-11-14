@@ -324,6 +324,8 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
             style={{ width: 200 }}
             value={total}
             onChange={(value) => applyTotal(typeof value === 'number' ? value : 0)}
+            formatter={(value) => `${value ?? ''}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+            parser={(value) => Number((value ?? '').replace(/,/g, ''))}
             aria-label="Tổng ngân sách nhóm"
           />
           <Table<SplitRow>
@@ -367,6 +369,8 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
                     step={1000}
                     value={row.budgetTokens}
                     onChange={(value) => updateRow(row.memberId, typeof value === 'number' ? value : 0)}
+                    formatter={(value) => `${value ?? ''}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                    parser={(value) => Number((value ?? '').replace(/,/g, ''))}
                     aria-label={`Ngân sách ${row.name}`}
                   />
                 ),
@@ -375,13 +379,15 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
                 title: 'Đã dùng',
                 dataIndex: 'usedTokens',
                 render: (value: number) => (
-                  <span style={{ fontSize: 12, color: token.colorTextSecondary }}>{value}</span>
+                  <span style={{ fontSize: 12, color: token.colorTextSecondary }}>
+                    {value.toLocaleString()}
+                  </span>
                 ),
               },
             ]}
           />
           <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>
-            {`Chia đều ${total} token cho ${rows.length} thành viên — sửa từng dòng nếu cần.`}
+            {`Chia đều ${total.toLocaleString()} token cho ${rows.length} thành viên — sửa từng dòng nếu cần.`}
           </div>
         </div>
 

@@ -189,10 +189,12 @@ export const TeamEditorDrawer: React.FC<TeamEditorDrawerProps> = ({
             style={{ width: 200 }}
             value={budget}
             onChange={(value) => setBudget(typeof value === 'number' ? value : null)}
+            formatter={(value) => `${value ?? ''}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+            parser={(value) => Number((value ?? '').replace(/,/g, ''))}
             aria-label="Tổng ngân sách nhóm"
           />
           <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>
-            {`Chia đều ${total} token cho ${memberCount} thành viên — sửa từng dòng nếu cần.`}
+            {`Chia đều ${total.toLocaleString()} token cho ${memberCount} thành viên — sửa từng dòng nếu cần.`}
           </div>
         </div>
 

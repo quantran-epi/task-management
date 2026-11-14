@@ -383,17 +383,18 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
     const sidebar = await screen.findByTestId('team-sidebar');
 
     const memberLine = await screen.findByTestId(`member-usage-${employeeRow.agentId}`);
-    expect(memberLine).toHaveTextContent('750');
-    expect(memberLine).toHaveTextContent('600');
-    expect(memberLine).toHaveTextContent('150');
-    expect(memberLine).toHaveTextContent('250');
-    expect(memberLine).toHaveTextContent('1,000');
+    // UAT 38: the row shows used/granted + %; the split lives in the tooltip.
+    expect(memberLine).toHaveTextContent('750 / 1,000 · 75%');
+    expect(memberLine).toHaveAttribute('title', expect.stringContaining('600 vào / 150 ra'));
+    expect(memberLine).toHaveAttribute('title', expect.stringContaining('còn 250'));
 
     const panel = screen.getByTestId('team-budget-panel');
-    expect(panel).toHaveTextContent('750');
-    expect(panel).toHaveTextContent('600');
-    expect(panel).toHaveTextContent('150');
-    expect(panel).toHaveTextContent('250');
+    // The panel reports the GROUP total (4,000 granted), the member row its own share.
+    expect(panel).toHaveTextContent('750 / 4,000 · 19%');
+    expect(screen.getByTestId('team-usage-line')).toHaveAttribute(
+      'title',
+      expect.stringContaining('600 vào / 150 ra · còn 3,250')
+    );
 
     expect(sidebar.textContent ?? '').not.toContain('NaN');
     expect(sidebar.textContent ?? '').not.toContain('Infinity');
@@ -500,10 +501,21 @@ describe('TeamsView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
 
     const settledLine = screen.getByTestId(`member-usage-${leadRow.agentId}`);
     expect(settledLine).toHaveTextContent(settled.usedTokens.toLocaleString());
-    expect(settledLine).toHaveTextContent(settled.inputTokens!.toLocaleString());
-    expect(settledLine).toHaveTextContent(settled.outputTokens!.toLocaleString());
-    expect(settledLine).toHaveTextContent(
-      Math.max(0, settled.budgetTokens - settled.usedTokens).toLocaleString()
+    expect(settledLine).toHaveTextContent(settled.budgetTokens.toLocaleString());
+    // The split and remaining figure live in the tooltip now.
+    expect(settledLine).toHaveAttribute(
+      'title',
+      expect.stringContaining(settled.inputTokens!.toLocaleString())
+    );
+    expect(settledLine).toHaveAttribute(
+      'title',
+      expect.stringContaining(settled.outputTokens!.toLocaleString())
+    );
+    expect(settledLine).toHaveAttribute(
+      'title',
+      expect.stringContaining(
+        Math.max(0, settled.budgetTokens - settled.usedTokens).toLocaleString()
+      )
     );
 
     const settledText = screen.getByTestId('team-sidebar').textContent ?? '';

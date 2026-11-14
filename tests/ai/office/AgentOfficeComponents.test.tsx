@@ -128,7 +128,12 @@ describe('TeamSidebar live usage (WR-03, WR-04)', () => {
         usedOutputTokens: 100,
       },
     ]);
-    expect(screen.getByTestId(`member-usage-${lead.id}`)).toHaveTextContent('100');
+    expect(screen.getByTestId(`member-usage-${lead.id}`)).toHaveTextContent('400 / 1,000');
+    // The split lives in the tooltip now; the persisted output must still be there.
+    expect(screen.getByTestId(`member-usage-${lead.id}`)).toHaveAttribute(
+      'title',
+      expect.stringContaining('100 ra')
+    );
   });
 
   // WR-04: the provisional guess is a warning input, never a charge — it renders as its own
@@ -147,7 +152,7 @@ describe('TeamSidebar live usage (WR-03, WR-04)', () => {
     ]);
     const panel = screen.getByTestId('team-budget-panel');
     // 400 charged / 1000 granted = 40%, not 1300/1000.
-    expect(panel).toHaveTextContent('400 / 1,000 token · 40%');
+    expect(panel).toHaveTextContent('400 / 1,000 · 40%');
     expect(screen.getByTestId('team-provisional')).toHaveTextContent('~900');
     // No team badge: the coordinator would not warn at 40%.
     expect(screen.queryByTestId('budget-badge-team')).not.toBeInTheDocument();

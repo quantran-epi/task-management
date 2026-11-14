@@ -84,11 +84,14 @@ export const BudgetTopUpModal: React.FC<BudgetTopUpModalProps> = ({
             style={{ width: '100%' }}
             value={amount}
             onChange={(value) => setAmount(typeof value === 'number' ? value : null)}
+            formatter={(value) => `${value ?? ''}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+            parser={(value) => Number((value ?? '').replace(/,/g, ''))}
+            aria-label="Token cấp thêm"
           />
         </div>
 
         <div style={{ fontSize: 12, color: token.colorTextSecondary }}>
-          {`Ngân sách mới: ${budget + added} token — lượt chạy tiếp tục ngay sau khi xác nhận.`}
+          {`Ngân sách mới: ${(budget + added).toLocaleString()} token — lượt chạy tiếp tục ngay sau khi xác nhận.`}
         </div>
       </div>
     </Modal>
