@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Button, Tooltip, theme } from 'antd';
+import { Alert, Button, Collapse, Tooltip, theme } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, DiffOutlined } from '@ant-design/icons';
 import type { ArtifactPatchProposal } from '../../../services/ai/patchProposal';
 
@@ -9,9 +9,28 @@ export interface PatchDiffApprovalCardProps {
   applying?: boolean | undefined;
   error?: string | undefined;
   decision?: 'approved' | 'rejected' | undefined;
+  /** D-24: the skill proposal reuses this card; the default keeps the note surface byte-identical. */
+  variant?: 'patch' | 'skill' | undefined;
+  /** Replaces the `{target} · {id} · mục {sectionId}` line — the skill path must never print a UUID. */
+  subtitle?: string | undefined;
+  /** Model-authored, display-only. Rendered as plain text, never as markup. */
+  evidence?: string | undefined;
+  staleReason?: 'document-changed' | 'newer-version-approved' | undefined;
   onApprove: () => void;
   onReject: () => void;
 }
+
+const STALE_COPY = {
+  'document-changed':
+    'Tài liệu đã thay đổi sau khi đề xuất này. Bản diff bên dưới chỉ để tham khảo — yêu cầu AI đề xuất lại trong khung chat.',
+  'newer-version-approved':
+    'Kỹ năng đã có bản mới được duyệt sau khi đề xuất này được tạo. Bản diff bên dưới chỉ để tham khảo — yêu cầu nhân viên đề xuất lại trong khung chat.',
+} as const;
+
+const STALE_BLOCKED_COPY = {
+  'document-changed': 'Không thể áp dụng vì tài liệu đã thay đổi',
+  'newer-version-approved': 'Không thể duyệt vì kỹ năng đã có bản mới hơn',
+} as const;
 
 /** WR-03: antd 6 darkAlgorithm uses a #000 background with #fff text. */
 export function isDarkBase(colorBgBase?: string | undefined): boolean {
@@ -24,13 +43,17 @@ export function isDarkBase(colorBgBase?: string | undefined): boolean {
 }
 
 export const PatchDiffApprovalCard: React.FC<PatchDiffApprovalCardProps> = ({
-  patch, stale = false, applying = false, error, decision, onApprove, onReject,
+  patch, stale = false, applying = false, error, decision,
+  variant = 'patch', subtitle, evidence, staleReason = 'document-changed',
+  onApprove, onReject,
 }) => {
   const { token } = theme.useToken();
   const dark = isDarkBase(token.colorBgBase);
   const addBg = dark ? '#23452b' : '#e6ffed';
   const delBg = dark ? '#4d1f24' : '#ffeef0';
   const lines = patch.diffText.split(/(?<=\n)/);
+  const subtitleText = subtitle ?? `${patch.target === 'note' ? 'Ghi chú' : 'Kỹ năng'} · ${patch.id} · mục ${patch.sectionId}`;
+  const staleBlockedCopy = STALE_BLOCKED_COPY[staleReason];
   return (
     <section data-testid="patch-diff-approval" aria-label={`Đề xuất chỉnh sửa: ${patch.sectionTitle}`}
       style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0, maxWidth: '100%',
@@ -43,9 +66,9 @@ export const PatchDiffApprovalCard: React.FC<PatchDiffApprovalCardProps> = ({
           Đề xuất chỉnh sửa: {patch.sectionTitle}
         </span>
       </div>
-      <div title={`${patch.target === 'note' ? 'Ghi chú' : 'Kỹ năng'} · ${patch.id} · mục ${patch.sectionId}`}
+      <div title={subtitleText}
         style={{ fontSize: 12, color: token.colorTextSecondary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {patch.target === 'note' ? 'Ghi chú' : 'Kỹ năng'} · {patch.id} · mục {patch.sectionId}
+        {subtitleText}
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
         {/* non-color signals: explicit +/− prefixes and text counts */}
@@ -53,7 +76,7 @@ export const PatchDiffApprovalCard: React.FC<PatchDiffApprovalCardProps> = ({
         <span style={{ backgroundColor: delBg, padding: '2px 8px', borderRadius: 8, fontSize: 12, whiteSpace: 'nowrap' }}>−{patch.removedLines} dòng xóa</span>
       </div>
       {stale && <Alert type="warning" showIcon role="alert" style={{ fontSize: 12 }}
-        title="Tài liệu đã thay đổi sau khi đề xuất này. Bản diff bên dưới chỉ để tham khảo — yêu cầu AI đề xuất lại trong khung chat." />}
+        title={STALE_COPY[staleReason]} />}
       {error && <Alert type="error" showIcon role="alert" style={{ fontSize: 12 }} title={error} />}
       <div role="region" aria-label="Diff đề xuất chỉnh sửa" tabIndex={0}
         onFocus={(event) => { event.currentTarget.style.outline = `2px solid ${token.colorPrimary}`; }}
@@ -68,13 +91,29 @@ export const PatchDiffApprovalCard: React.FC<PatchDiffApprovalCardProps> = ({
               line.startsWith('-') && !line.startsWith('---') ? delBg : 'transparent' }}>{line}</span>
         ))}
       </div>
+      {evidence !== undefined && evidence.trim() !== '' && (
+        <Collapse size="small" items={[{
+          key: 'evidence',
+          label: 'Bằng chứng',
+          children: (
+            <div style={{ maxHeight: 160, overflowY: 'auto', whiteSpace: 'pre-wrap', fontSize: 13.5, lineHeight: 1.5, color: token.colorTextSecondary }}>
+              {evidence}
+            </div>
+          ),
+        }]} />
+      )}
       {decision ? <div role="status" style={{ fontSize: 12 }}>
-        {decision === 'approved' ? <><CheckCircleOutlined style={{ color: token.colorSuccess }} /> Đã chấp thuận — bản nháp bước này đã được cập nhật.</> :
-          <><CloseCircleOutlined style={{ color: token.colorTextSecondary }} /> Đã từ chối đề xuất — tài liệu không thay đổi.</>}
+        {decision === 'approved'
+          ? <><CheckCircleOutlined style={{ color: token.colorSuccess }} /> {variant === 'skill'
+            ? 'Đã chấp thuận — kỹ năng đã cập nhật sang bản mới.'
+            : 'Đã chấp thuận — bản nháp bước này đã được cập nhật.'}</>
+          : <><CloseCircleOutlined style={{ color: token.colorTextSecondary }} /> {variant === 'skill'
+            ? 'Đã từ chối đề xuất — kỹ năng không thay đổi.'
+            : 'Đã từ chối đề xuất — tài liệu không thay đổi.'}</>}
       </div> : <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
         <Button danger disabled={applying} onClick={onReject} style={{ minHeight: 32, fontSize: 12 }}>Từ chối</Button>
-        <Tooltip title={stale ? 'Không thể áp dụng vì tài liệu đã thay đổi' : undefined}>
-          <span tabIndex={stale ? 0 : undefined} aria-label={stale ? 'Không thể áp dụng vì tài liệu đã thay đổi' : undefined}>
+        <Tooltip title={stale ? staleBlockedCopy : undefined}>
+          <span tabIndex={stale ? 0 : undefined} aria-label={stale ? staleBlockedCopy : undefined}>
             <Button type="primary" disabled={stale || applying} onClick={onApprove}
               style={{ minHeight: 32, fontSize: 12 }}>Chấp thuận</Button>
           </span>

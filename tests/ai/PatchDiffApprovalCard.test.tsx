@@ -75,4 +75,88 @@ describe('PatchDiffApprovalCard', () => {
     expect(screen.queryByRole('button', { name: 'Chấp thuận' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Từ chối' })).not.toBeInTheDocument();
   });
+
+  it('renders the skill subtitle verbatim instead of the id line', () => {
+    render(
+      <PatchDiffApprovalCard
+        patch={proposal}
+        variant="skill"
+        subtitle="Kỹ năng · Viết đặc tả · đề xuất bởi Lan"
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Kỹ năng · Viết đặc tả · đề xuất bởi Lan')).toBeInTheDocument();
+    // The default line would print the UUID; the subtitle replaces it entirely.
+    expect(screen.queryByText(/Ghi chú · note-1 · mục 1\.1/)).not.toBeInTheDocument();
+  });
+
+  it('uses the skill stale copy and keeps reject enabled (D-16)', () => {
+    render(
+      <PatchDiffApprovalCard
+        patch={proposal}
+        stale
+        staleReason="newer-version-approved"
+        variant="skill"
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Kỹ năng đã có bản mới được duyệt sau khi đề xuất này được tạo.'
+    );
+    expect(screen.getByRole('button', { name: 'Chấp thuận' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Từ chối' })).not.toBeDisabled();
+    expect(
+      screen.getByLabelText('Không thể duyệt vì kỹ năng đã có bản mới hơn')
+    ).toBeInTheDocument();
+  });
+
+  it('renders the evidence panel collapsed and as plain text', () => {
+    const evidence = 'Turn 4 cho thấy thiếu bước kiểm thử.';
+    render(
+      <PatchDiffApprovalCard
+        patch={proposal}
+        variant="skill"
+        evidence={evidence}
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Bằng chứng')).toBeInTheDocument();
+    expect(screen.queryByText(evidence)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('Bằng chứng'));
+    const body = screen.getByText(evidence);
+    expect(body).toBeInTheDocument();
+    expect(body.querySelector('a')).toBeNull();
+    expect(body.querySelector('strong')).toBeNull();
+    expect(body.innerHTML).toBe(evidence);
+  });
+
+  it('renders no evidence panel when evidence is empty or whitespace', () => {
+    render(
+      <PatchDiffApprovalCard
+        patch={proposal}
+        variant="skill"
+        evidence="   "
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />
+    );
+    expect(screen.queryByText('Bằng chứng')).toBeNull();
+  });
+
+  it('keeps the note decision copy when variant is omitted', () => {
+    render(
+      <PatchDiffApprovalCard
+        patch={proposal}
+        decision="approved"
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Đã chấp thuận — bản nháp bước này đã được cập nhật.'
+    );
+  });
 });
