@@ -3,7 +3,7 @@ import { APP_NAME } from '../../constants/app';
 import type { Task, ChangeRequest, System, Note, ActiveTimer, ReminderItem } from '../../types/models';
 import { NOTIFICATION_SETTINGS_KEY, DEFAULT_NOTIFICATION_SETTINGS } from '../../types/notifications';
 import { getTodayDateString } from '../../utils/date';
-import { wrapUntrusted } from './untrustedData';
+import { wrapField } from './untrustedData';
 import { getEffectiveDailyCapacity } from '../../utils/capacity';
 import { inspectDateCapacity } from '../../utils/feasibility';
 import { filterSessionsByPeriod, aggregateWorkTypeBreakdown } from '../../utils/analytics';
@@ -2084,12 +2084,9 @@ export interface ExecuteAiToolOptions {
 
 /**
  * WR-02: the read tools that stay advertised to the lead return user-authored free text, so
- * they apply the same untrusted-data boundary `get_linked_context` applies. One helper, so a
- * new free-text field cannot be added raw by accident.
+ * they apply the same untrusted-data boundary `get_linked_context` applies. `wrapField` lives
+ * in `untrustedData` so every tool path shares one implementation.
  */
-function wrapField(label: string, value: unknown): unknown {
-  return typeof value === 'string' ? wrapUntrusted(label, value) : value;
-}
 
 /** Tools whose first argument identifies a task; the task's `crId` must match the turn scope. */
 const TASK_SCOPED_TOOLS = new Set([

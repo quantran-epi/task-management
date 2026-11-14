@@ -10,7 +10,7 @@ import {
   getLatestApprovedVersionNumber,
 } from '../../../db/repositories/aiSkillVersionRepo';
 import { AiSkillVersionInputSchema } from '../../../validation/aiOfficeSchemas';
-import { wrapUntrusted } from './teamPrompts';
+import { wrapField, wrapUntrusted } from '../untrustedData';
 import { USER_PARTICIPANT_ID } from '../../../types/teamChat';
 
 /**
@@ -453,18 +453,26 @@ async function getLinkedContext(args: Record<string, any>, ctx: TeamToolContext)
   // CR-03/WR-03: the delegated resolver embeds every free-text field the user authored, so its
   // result is not safe to return verbatim — the invariant above applies to all of them, not
   // just sticky-note bodies. The recipient is the lead, the one agent holding mutation tools.
-  // `name` / `code` stay raw: `buildLeadTurnRequest` wraps the linked-item name once at the
-  // prompt boundary, and wrapping here too would nest the block inside itself.
+  // WR-02: `name` / `code` are wrapped here too. This result is a `role: 'tool'` message and
+  // never enters `buildLeadTurnRequest`, so the "wrapped once at the prompt boundary" rationale
+  // does not apply on this path — leaving them raw leaves them raw.
   const raw = await executeAiTool('get_item_details', { type: link.itemType, id: itemId }, ctx.db);
   const parsed = JSON.parse(raw);
-  const wrapField = (label: string, value: unknown): unknown =>
-    typeof value === 'string' ? wrapUntrusted(label, value) : value;
 
   if (parsed?.item && typeof parsed.item === 'object') {
     const item = parsed.item;
+    item.name = wrapField(`TÊN MỤC ${itemId}`, item.name);
+    item.jiraKey = wrapField(`MÃ JIRA ${itemId}`, item.jiraKey);
     item.description = wrapField(`MÔ TẢ MỤC ${itemId}`, item.description);
     item.notes = wrapField(`GHI CHÚ MỤC ${itemId}`, item.notes);
     item.reminderNote = wrapField(`GHI CHÚ NHẮC ${itemId}`, item.reminderNote);
+    for (const listField of ['opsOwners', 'businessAnalysts', 'tags'] as const) {
+      if (Array.isArray(item[listField])) {
+        item[listField] = item[listField].map((entry: unknown) =>
+          wrapField(`MỤC ${itemId}`, entry)
+        );
+      }
+    }
     if (Array.isArray(item.checklist)) {
       item.checklist = item.checklist.map((entry: any) => ({
         ...entry,
@@ -485,6 +493,7 @@ async function getLinkedContext(args: Record<string, any>, ctx: TeamToolContext)
   }
   // WR-01: the linked CR's and system's names are user-authored free text too.
   parsed.crName = wrapField(`TÊN CR ${itemId}`, parsed.crName);
+  parsed.crCode = wrapField(`MÃ CR ${itemId}`, parsed.crCode);
   parsed.systemName = wrapField(`TÊN HỆ THỐNG ${itemId}`, parsed.systemName);
   if (Array.isArray(parsed?.stickyNotes)) {
     parsed.stickyNotes = parsed.stickyNotes.map((note: any) => ({

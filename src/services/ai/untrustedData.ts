@@ -15,28 +15,25 @@ const UNTRUSTED_CLOSE = 'KẾT THÚC DỮ LIỆU KHÔNG ĐÁNG TIN';
 
 /**
  * CR-01: the phrase is ordinary Vietnamese ("untrusted data"), so a match needs the delimiter
- * SHAPE *and* a way to tell it from prose. Rounds 3-6 all tried to enumerate the separators a
- * label may use; each round a separator nobody listed (`/`, `(`, `,`, `.`, a space, nothing at
- * all) walked through, and round 6 additionally broke the bracketed branch mid-line by
- * requiring `]` at end of line. **Enumerating what a forgery looks like is the defect.**
+ * SHAPE *and* a way to tell it from prose. Rounds 3-7 all tried to enumerate what a forgery
+ * looks like — separators, then labels, then trailing text — and each round deleted real body
+ * text or let a shape through. **Enumerating the forgery is the defect.**
  *
  * The two branches are separated by shape instead:
  *
  * - BRACKETED (`[…]`): self-delimiting and never prose — ordinary Vietnamese does not bracket
- *   the phrase. Redact it wherever it appears, with any separator, any label. No list to be
- *   incomplete, no position to be missed.
- * - BARE (`KẾT THÚC …` with no opening bracket): this is the branch that collides with prose,
- *   so it is matched by what prose does NOT do. Prose continues with a WORD (`… KHÔNG ĐÁNG TIN
- *   là dữ liệu`, `… không đáng tin cậy`) or ends the sentence (`… KHÔNG ĐÁNG TIN.`). A forgery
- *   continues with anything else — a symbol, or the end of the line. Two negative lookaheads
- *   encode exactly that, so no separator list exists here either.
+ *   the phrase. Redact it wherever it appears, with any separator, any label, any position on
+ *   the line. There is no list to be incomplete.
+ * - BARE (`KẾT THÚC …` with no opening bracket): matched ONLY as a standalone delimiter line —
+ *   the phrase, optional whitespace, an optional stray `]`, then end of line. Nothing else is
+ *   consumed. This is the entire safe set: a bare tag followed by any word, comma, dash or
+ *   other continuation is ordinary prose (`… không đáng tin, sau đó tổng hợp`), and consuming
+ *   that continuation is what deleted real content in rounds 2, 3 and 7.
  *
- * Ceiling: a bare tag followed by a space and a WORD is indistinguishable from prose, so it
- * survives. That is deliberate and safe — the wrapper's real closing tag is BRACKETED, so an
- * unbracketed line cannot impersonate it, and the bracketed branch above is complete. The
- * lookaheads test "is a letter" / "is a sentence-final period" rather than lowercase, because
- * the `i` flag makes `\p{Ll}` match capitals too. Do NOT "fix" this by widening the bare
- * branch: that is what deleted real body text in rounds 2 and 3.
+ * Ceiling: a bare tag followed by a label on the same line survives. That is deliberate and
+ * safe — the wrapper's real closing tag is BRACKETED, so an unbracketed line cannot close the
+ * block or impersonate it. Do NOT "fix" this by consuming the label: that is the regression
+ * this comment exists to prevent.
  *
  * WR-04: the tag is Vietnamese text, so the match must survive the shapes a model or macOS
  * actually produces — any horizontal whitespace run (double space, tab, NBSP) and NFD
@@ -44,19 +41,31 @@ const UNTRUSTED_CLOSE = 'KẾT THÚC DỮ LIỆU KHÔNG ĐÁNG TIN';
  * without ever crossing a line boundary.
  */
 const DELIMITER_SHAPE =
-  /\[[^\S\n]*(?:KẾT[^\S\n]+THÚC[^\S\n]+)?DỮ[^\S\n]+LIỆU[^\S\n]+KHÔNG[^\S\n]+ĐÁNG[^\S\n]+TIN[^\]\n]*\]|KẾT[^\S\n]+THÚC[^\S\n]+DỮ[^\S\n]+LIỆU[^\S\n]+KHÔNG[^\S\n]+ĐÁNG[^\S\n]+TIN(?![^\S\n]*\p{L})(?![^\S\n]*\.[^\S\n]*$)[^\]\n]*\]?/gimu;
+  /\[[^\S\n]*(?:KẾT[^\S\n]+THÚC[^\S\n]+)?DỮ[^\S\n]+LIỆU[^\S\n]+KHÔNG[^\S\n]+ĐÁNG[^\S\n]+TIN[^\]\n]*\]|KẾT[^\S\n]+THÚC[^\S\n]+DỮ[^\S\n]+LIỆU[^\S\n]+KHÔNG[^\S\n]+ĐÁNG[^\S\n]+TIN(?=[^\S\n]*\]?[^\S\n]*$)\]?/gimu;
 
 function neutralizeDelimiters(text: string): string {
   // CR-04/WR-04: invisible characters are excluded by `[^\S\n]`, so a tag split by one would
-  // pass through and land at the wrapper's own level. The two classes are NOT nested:
-  // `\p{Default_Ignorable_Code_Point}` misses 31 `\p{Cf}` code points (U+070F, U+0600, U+FFF9,
-  // U+13430, U+110BD among them) and `\p{Cf}` misses the default-ignorable non-format fillers
-  // (U+3164, U+FFA0, U+FE0F, U+034F, U+115F/1160). Fold the UNION to a space first; the regex
-  // can then see the whole tag.
+  // pass through and land at the wrapper's own level. Three classes are needed — none contains
+  // the others: `\p{Cf}` (U+070F, U+0600, U+FFF9, U+13430, U+110BD), the default-ignorable
+  // non-format fillers (U+3164, U+FFA0, U+FE0F, U+034F, U+115F/1160), and the C0/C1 controls
+  // plus U+FFFD, which are not whitespace and so are not covered by `[^\S\n]` either. Tab, LF,
+  // VT, FF and CR are deliberately excluded from the control range — folding them would destroy
+  // the body's own line structure.
   return text
-    .replace(/[\p{Cf}\p{Default_Ignorable_Code_Point}]/gu, ' ')
+    .replace(
+      /[\p{Cf}\p{Default_Ignorable_Code_Point}�\u0000-\u0008\u000E-\u001F\u007F-\u009F]/gu,
+      ' '
+    )
     .normalize('NFC')
     .replace(DELIMITER_SHAPE, '[redacted-tag]');
+}
+
+/**
+ * Wraps a single free-text field, leaving non-strings untouched. One helper for every tool
+ * result, so a new free-text field cannot be added raw by accident.
+ */
+export function wrapField(label: string, value: unknown): unknown {
+  return typeof value === 'string' ? wrapUntrusted(label, value) : value;
 }
 
 /**

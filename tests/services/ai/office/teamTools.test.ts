@@ -572,21 +572,27 @@ describe('teamTools — linked-item retrieval with full content (AIO-LINK-01, D-
     const task = JSON.parse(
       await executeTeamTool('get_linked_context', { itemId: taskId }, ctx())
     );
-    expect(task).toMatchObject({ type: 'task', crCode: 'CR-2026-001' });
-    // WR-01: the resolved names are user-authored free text, so they are wrapped as data.
+    // WR-02: every user-authored string is wrapped as data — including the code, the name and
+    // the resolved CR/System labels. This result is a `role: 'tool'` message and never enters
+    // `buildLeadTurnRequest`, so nothing downstream would wrap them.
+    expect(task).toMatchObject({ type: 'task' });
+    expect(task.crCode).toContain('CR-2026-001');
+    expect(task.crCode).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN');
     expect(task.systemName).toContain('Hệ thống lõi');
-    expect(task.item.name).toBe('Viết tài liệu đối soát');
+    expect(task.systemName).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN');
+    expect(task.item.name).toContain('Viết tài liệu đối soát');
+    expect(task.item.name).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN');
 
     const cr = JSON.parse(await executeTeamTool('get_linked_context', { itemId: crId }, ctx()));
     expect(cr).toMatchObject({ type: 'cr' });
-    expect(cr.item.code).toBe('CR-2026-001');
+    expect(cr.item.code).toContain('CR-2026-001');
     expect(cr.tasksSummary.total).toBe(1);
 
     const system = JSON.parse(
       await executeTeamTool('get_linked_context', { itemId: systemId }, ctx())
     );
     expect(system).toMatchObject({ type: 'system' });
-    expect(system.item.code).toBe('CORE');
+    expect(system.item.code).toContain('CORE');
   });
 
   // CR-03: the delegated resolver embeds every sticky note's free-text body. Returning it
@@ -698,8 +704,10 @@ describe('teamTools — linked-item retrieval with full content (AIO-LINK-01, D-
       expect(value, field).toContain('KẾT THÚC DỮ LIỆU KHÔNG ĐÁNG TIN');
       expect(value, field).toContain(marker(field));
     }
-    // `name` stays raw — `buildLeadTurnRequest` wraps it once at the prompt boundary.
-    expect(task.item.name).toBe('Viết tài liệu đối soát');
+    // WR-02: `name` is wrapped here too. This result is a `role: 'tool'` message and never
+    // enters `buildLeadTurnRequest`, so nothing downstream would wrap it.
+    expect(task.item.name).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
+    expect(task.item.name).toContain('Viết tài liệu đối soát');
   });
 
   // WR-01 round 6: the CR and system branches carry the same free-text fields.
