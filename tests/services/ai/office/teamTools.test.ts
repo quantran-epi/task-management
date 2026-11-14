@@ -278,7 +278,8 @@ describe('teamTools — transcript search and skill reader (AIO-MEM-02, AIO-MEM-
     const result = JSON.parse(await executeTeamTool('read_skill', {}, ctx({ skillId })));
 
     expect(result.name).toBe('Kiểm thử hồi quy');
-    expect(result.description).toBe('Quy trình kiểm thử hồi quy');
+    // AIO-SKILL-06: the description is wrapped too, so it is contained, not equal.
+    expect(result.description).toContain('Quy trình kiểm thử hồi quy');
     // CR-07: the body is wrapped as untrusted data but its text is intact.
     expect(result.body).toContain('# Quy trình\n\nBước 1. Chạy bộ kiểm thử.\nBước 2. Ghi nhận kết quả.');
     expect(result.body).toContain('DỮ LIỆU');
@@ -288,6 +289,97 @@ describe('teamTools — transcript search and skill reader (AIO-MEM-02, AIO-MEM-
     const result = JSON.parse(await executeTeamTool('read_skill', {}, ctx()));
 
     expect(result).toMatchObject({ refused: true, code: 'SKILL_NOT_ASSIGNED' });
+  });
+
+  /** D-18: seeds an `aiSkills` current row plus numbered version rows for the same skill. */
+  async function seedVersionedSkill(
+    versions: Array<{ version: number; status: 'approved' | 'rejected'; body: string }>
+  ): Promise<string> {
+    const skillId = generateId();
+    const now = new Date().toISOString();
+    await db.aiSkills.add({
+      id: skillId,
+      name: 'Kỹ năng có phiên bản',
+      description: 'Mô tả hiện tại',
+      body: '# Hiện tại',
+      createdAt: now,
+      updatedAt: now,
+    });
+    for (const row of versions) {
+      await db.aiSkillVersions.add({
+        id: generateId(),
+        skillId,
+        status: row.status,
+        version: row.version,
+        name: 'Kỹ năng có phiên bản',
+        description: `Mô tả bản ${row.version}`,
+        body: row.body,
+        createdAt: now,
+        ...(row.status === 'approved' ? { decidedAt: now } : {}),
+      });
+    }
+    return skillId;
+  }
+
+  it('read_skill serves the pinned version, not the current aiSkills body (D-18)', async () => {
+    const skillId = await seedVersionedSkill([
+      { version: 1, status: 'approved', body: '# Bản 1' },
+      { version: 2, status: 'approved', body: '# Bản 2' },
+    ]);
+
+    const first = JSON.parse(
+      await executeTeamTool('read_skill', {}, ctx({ skillId, skillVersion: 1 }))
+    );
+    expect(first.body).toContain('# Bản 1');
+    expect(first.body).not.toContain('# Bản 2');
+    expect(first.body).not.toContain('# Hiện tại');
+
+    const second = JSON.parse(
+      await executeTeamTool('read_skill', {}, ctx({ skillId, skillVersion: 2 }))
+    );
+    expect(second.body).toContain('# Bản 2');
+  });
+
+  it('read_skill falls back to aiSkills when the pinned version row is missing (D-18)', async () => {
+    const skillId = await seedVersionedSkill([
+      { version: 1, status: 'approved', body: '# Bản 1' },
+    ]);
+
+    const result = JSON.parse(
+      await executeTeamTool('read_skill', {}, ctx({ skillId, skillVersion: 99 }))
+    );
+
+    expect(result.body).toContain('# Hiện tại');
+  });
+
+  it('read_skill ignores a pinned row that is not approved (D-18 tamper guard)', async () => {
+    const skillId = await seedVersionedSkill([
+      { version: 3, status: 'rejected', body: '# Bị từ chối' },
+    ]);
+
+    const result = JSON.parse(
+      await executeTeamTool('read_skill', {}, ctx({ skillId, skillVersion: 3 }))
+    );
+
+    expect(result.body).toContain('# Hiện tại');
+    expect(JSON.stringify(result)).not.toContain('# Bị từ chối');
+  });
+
+  it('read_skill wraps both description and body as untrusted data (AIO-SKILL-06)', async () => {
+    const skillId = await seedVersionedSkill([
+      { version: 1, status: 'approved', body: '# Bản 1' },
+    ]);
+
+    const result = JSON.parse(
+      await executeTeamTool('read_skill', {}, ctx({ skillId, skillVersion: 1 }))
+    );
+
+    expect(result.description).toContain('DỮ LIỆU');
+    expect(result.description).toContain('Mô tả bản 1');
+    for (const field of [result.description, result.body]) {
+      expect(field).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
+      expect(field).toContain('KẾT THÚC DỮ LIỆU KHÔNG ĐÁNG TIN');
+    }
   });
 });
 

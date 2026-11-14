@@ -25,6 +25,11 @@ export interface TeamToolContext {
   agentId: string;
   /** The caller's assigned skill (D-25). Absent means the agent has none. */
   skillId?: string | undefined;
+  /**
+   * D-18: the approved version pinned on this attempt. Absent means the implicit baseline
+   * (no approved row exists yet), so `read_skill` reads the current `aiSkills` row.
+   */
+  skillVersion?: number | undefined;
 }
 
 export type TeamToolRefusalCode =
@@ -278,15 +283,26 @@ async function readSkill(ctx: TeamToolContext): Promise<string> {
   if (!ctx.skillId) {
     return JSON.stringify(refuse('SKILL_NOT_ASSIGNED', 'Nhân viên này chưa được gán kỹ năng nào.'));
   }
-  const skill = await ctx.db.aiSkills.get(ctx.skillId);
+  // D-18: exact compound-index lookup, never `.between(...).last()` — that would serve the
+  // highest version ≤ the pin, which is different content.
+  const pinned =
+    ctx.skillVersion === undefined
+      ? undefined
+      : await ctx.db.aiSkillVersions
+          .where('[skillId+version]')
+          .equals([ctx.skillId, ctx.skillVersion])
+          .first();
+  // T-39-09: a hand-edited backup can pair any pin with a rejected row — approved only.
+  const approvedRow = pinned?.status === 'approved' ? pinned : undefined;
+  const skill = approvedRow ?? (await ctx.db.aiSkills.get(ctx.skillId));
   if (!skill) {
     return JSON.stringify(refuse('SKILL_NOT_ASSIGNED', 'Nhân viên này chưa được gán kỹ năng nào.'));
   }
   // CR-07: tool results bypass the prompt assembler, so the untrusted-data boundary
-  // must be applied here, where the provenance is known.
+  // must be applied here, where the provenance is known. D-22: approved is not trusted.
   return JSON.stringify({
     name: skill.name,
-    description: skill.description,
+    description: wrapUntrusted(`MÔ TẢ KỸ NĂNG ${skill.name}`, skill.description),
     body: wrapUntrusted(`KỸ NĂNG ${skill.name}`, skill.body),
   });
 }
