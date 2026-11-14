@@ -15,8 +15,22 @@
  *
  * Ceiling: the nonce is a strong signal, not a proof. A model reads text and must compare the
  * codes itself; it is not a cryptographic check. It makes forgery impractical (32 random bits)
- * rather than impossible. The real fix is to stop interpolating untrusted text into a prompt at
- * all and pass it through a separate message channel — a larger refactor, tracked separately.
+ * rather than impossible.
+ *
+ * The obvious "real fix" — pass untrusted text through a separate message channel instead of
+ * interpolating it into a prompt — is NOT available here, and would be worse if attempted:
+ *
+ * - The provider (`nineRouterClient`) accepts only `content: string` per message. There is no
+ *   structured content-block channel to move text into.
+ * - The only "separate channel" would be `role: 'user'`, which models treat as a STRONGER
+ *   instruction than a system message. Moving untrusted text there lowers the guard.
+ * - The highest-risk content is already on the right channel: a skill BODY never enters the
+ *   system prompt (D-24). It reaches the model only through `read_skill`, as a `role: 'tool'`
+ *   result — the one channel the provider does separate.
+ *
+ * So this wrapper covers what remains in the system prompt (skill name/description, batch
+ * results, ledger rows, linked-item names) and every tool result that carries user text. That
+ * is the correct shape for this provider, not a compromise pending a refactor.
  *
  * Live here rather than in `office/teamPrompts` because the DB tool layer (`aiTools`) needs the
  * same boundary and must not import the prompt-assembly graph (which pulls Dexie at module
