@@ -11,6 +11,7 @@ import {
   listEmployees,
   listSkills,
 } from '../../src/db/repositories/aiOfficeRepo';
+import * as aiOfficeRepo from '../../src/db/repositories/aiOfficeRepo';
 import { createTeam } from '../../src/db/repositories/aiTeamRepo';
 import { createSkillVersion } from '../../src/db/repositories/aiSkillVersionRepo';
 import { AiOfficeView } from '../../src/views/AiOfficeView';
@@ -392,8 +393,27 @@ describe('AiOfficeView — employee tab shell (AIO-UI-01)', () => {
     expect((await listSkills(db)).some((row) => row.id === skill.id)).toBe(true);
   });
 
-  it('shows the pending-proposal badge on a skill card (IN-04)', async () => {
+  // WR-03: a rejected delete must surface as an alert, not escape as an unhandled rejection.
+  it('surfaces a failed skill delete instead of leaving the click dead (WR-03)', async () => {
     const skill = await createSkill(
+      { name: 'Viết đặc tả', description: 'Quy trình viết đặc tả.', body: '# Quy trình' },
+      db
+    );
+    // D-12 makes the repo refuse by returning a result; make it throw instead to cover the
+    // catch branch (a Dexie error, or the row already gone).
+    vi.spyOn(aiOfficeRepo, 'deleteSkill').mockRejectedValueOnce(new Error('boom'));
+
+    renderView();
+    fireEvent.click(await screen.findByTestId('ai-office-segment-skills'));
+
+    const card = await screen.findByTestId(`skill-card-${skill.id}`);
+    fireEvent.click(within(card).getByRole('button', { name: 'Xóa' }));
+    await confirmDelete();
+
+    const alert = await screen.findByTestId('ai-office-delete-error');
+    expect(alert).toHaveTextContent('Không xóa được. Thử lại.');  });
+
+  it('shows the pending-proposal badge on a skill card (IN-04)', async () => {    const skill = await createSkill(
       { name: 'Viết đặc tả', description: 'Quy trình viết đặc tả.', body: '# Quy trình' },
       db
     );

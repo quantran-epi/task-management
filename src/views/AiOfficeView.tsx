@@ -10,6 +10,7 @@ import {
   listEmployees,
   listLeads,
   listSkills,
+  type AiOfficeDeleteResult,
 } from '../db/repositories/aiOfficeRepo';
 import { PageHeader } from '../components/common/PageHeader';
 import { refusalMessage } from '../components/ai/office/deleteRefusalMessage';
@@ -132,14 +133,24 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
 
   const closeDrawer = () => setDrawer(null);
 
+  // WR-03: a rejected delete must surface, not escape the click handler as an unhandled
+  // rejection that makes the click look dead. Same shape as `AiStaffExplorer`'s `runDelete`.
+  const runDelete = async (run: () => Promise<AiOfficeDeleteResult>) => {
+    try {
+      setDeleteError(refusalMessage(await run()));
+    } catch {
+      setDeleteError('Không xóa được. Thử lại.');
+    }
+  };
+
   const handleDeleteEmployee = async (employee: AiEmployee) => {
-    setDeleteError(refusalMessage(await deleteEmployee(employee.id, db)));
+    await runDelete(() => deleteEmployee(employee.id, db));
   };
   const handleDeleteLead = async (lead: AiLead) => {
-    setDeleteError(refusalMessage(await deleteLead(lead.id, db)));
+    await runDelete(() => deleteLead(lead.id, db));
   };
   const handleDeleteSkill = async (skill: AiSkill) => {
-    setDeleteError(refusalMessage(await deleteSkill(skill.id, db)));
+    await runDelete(() => deleteSkill(skill.id, db));
   };
 
   const emptyBlock = (
