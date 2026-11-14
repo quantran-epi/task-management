@@ -1,10 +1,11 @@
 ---
 phase: 39
 slug: skill-versioning-enrichment-approval
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-11-14
+reviewed_at: 2026-11-14
 ---
 
 # Phase 39 — UI Design Contract: Skill versioning + enrichment approval
@@ -48,16 +49,16 @@ Inherited from `34-UI-SPEC.md` unchanged. Values used by this phase:
 
 Inherited exceptions that this phase reuses (must not be "fixed"): `6px` (`--island-gap`, icon micro-gaps), `10px` (antd `Space` wrap gap), `12px` (chat bubble padding), `22px` (icon-only control footprint), `28px` (tool-window list row height).
 
-**[NEW] Phase-specific spacing declarations:**
+**Layout dimensions and inherited paddings** (not spacing tokens — listed here so the executor does not invent values):
 
-| Value | Usage |
-|-------|-------|
-| `240px` | Max height of the diff scroll region inside `PatchDiffApprovalCard` (existing, unchanged) |
-| `160px` | Max height of the "Bằng chứng" evidence panel body |
-| `6px 8px` | Padding of an `AiStaffExplorer` section row (existing row idiom, unchanged) |
-| `4px 6px` | Padding of an `AiStaffExplorer` section header (existing, unchanged) |
+| Value | Usage | Status |
+|-------|-------|--------|
+| `240px` | Max height of the diff scroll region inside `PatchDiffApprovalCard` | existing (`PatchDiffApprovalCard.tsx:61`), unchanged |
+| `160px` | Max height of the "Bằng chứng" evidence panel body | **[NEW]** — the only new dimension this phase adds |
+| `6px 8px` | Padding of an `AiStaffExplorer` section row | existing (`AiStaffExplorer.tsx:121`), unchanged |
+| `4px 6px` | Padding of an `AiStaffExplorer` section header | existing (`AiStaffExplorer.tsx:172`), unchanged |
 
-Touch/click targets: every icon-only button stays at least `22 × 22` with a Vietnamese `aria-label`. The new "Thêm kỹ năng" button follows the two existing toolbar buttons exactly (`size="small" type="text"`).
+Touch/click targets: every icon-only button stays at least `22 × 22` with a Vietnamese `aria-label`. The new "Thêm Kỹ năng" button follows the two existing toolbar buttons exactly (`size="small" type="text"`).
 
 ---
 
@@ -72,14 +73,14 @@ Inherited from `34-UI-SPEC.md` unchanged — **4 sizes, 2 weights (400, 600)**, 
 | Body (transcript text, form text, descriptions, evidence) | 13.5px | 400 | 1.5 | UI |
 | Caption (dates, counts, status tags, section headers, help text) | 12px | 400 | 1.4 | UI |
 
-Inherited exceptions this phase reuses: `11px` micro metadata (existing `AiStaffExplorer` section headers and row subtitles — **do not change them**), `14px / 1.57` chat bubble body, `12px / 1.5` code family for diff panes and skill body.
+Inherited exceptions this phase reuses: `11px` micro metadata (existing `AiStaffExplorer` section headers and row subtitles — **do not change them**), `14px / 1.57` chat bubble body, `12px / 1.5` code family for skill body.
 
 **[NEW] Declarations for this phase — all inside the declared scale:**
 
 - The version label `v{n}` renders at **12px / 600** in a bordered chip, not a new size.
 - The pending-count badge on `SkillCard` renders at **12px / 400** inside an antd `Tag`.
 - The evidence body renders at **13.5px / 400**, `whiteSpace: 'pre-wrap'`, `colorTextSecondary`. It is **plain text, not Markdown** — model-authored content is never rendered as markup on this surface.
-- Diff text stays **12px / 20px line-height**, code family (existing card values, unchanged).
+- Diff text stays **12px / 20px line-height**, code family. **This supersedes `34-UI-SPEC.md:71`'s `12px / 1.5` (=18px)** — 20px is the live value in `PatchDiffApprovalCard.tsx:63` and this phase does not change it. Where the two documents disagree, the live component wins; do not "correct" it to 1.5.
 
 Weights: **400 and 600 only.** No 500, no 700.
 
@@ -100,17 +101,17 @@ Semantic colors (always via token, never raw hex):
 
 | Meaning | Token | Where in this phase |
 |---------|-------|---------------------|
-| Stale / based on an older version | `token.colorWarningBg` surface + `token.colorWarningBorder` border + `token.colorWarning` text | The whole approval card when `stale` (existing behaviour), the "Dựa trên bản cũ" tag, the pending-count badge |
+| Stale / based on an older version | `token.colorWarningBg` surface + `token.colorWarningBorder` border + `token.colorWarning` text | The whole approval card when `stale` (existing behaviour). **No separate tag** — the stale `Alert` is the only stale signal |
 | Approved | `token.colorSuccess` | `CheckCircleOutlined` in the decision line, "Đã duyệt" history tag |
 | Rejected | `token.colorTextSecondary` | `CloseCircleOutlined` in the decision line, "Đã từ chối" history tag |
-| Pending | `token.colorWarning` | "Chờ duyệt" history tag, pending-count badge |
+| Pending | `token.colorWarning` | Pending-count badge in `SkillCard`, `SkillEditorDrawer` title badge, and "Chờ duyệt ({n})" section heading. **Not** a history tag — history lists decided rows only |
 | Diff added / removed | `#e6ffed` / `#ffeef0` (light) · `#23452b` / `#4d1f24` (dark) | Existing card constants, unchanged — do not re-derive |
 
 **Accent reserved for (exhaustive — appended to the Phase 34 list, nothing else may use `colorPrimary` as a fill):**
 
 1. The `DiffOutlined` icon in the approval card header (existing).
 2. The `type="primary"` "Chấp thuận" button on the approval card — **now also used by the skill-proposal render site** (existing button, new host).
-3. The `BookOutlined` icon on the "Thêm kỹ năng" toolbar button and on each `AiStaffExplorer` skill row (icon stroke only, never a fill).
+3. The `BookOutlined` icon on the "Thêm Kỹ năng" toolbar button and on each `AiStaffExplorer` skill row (icon stroke only, never a fill).
 4. The keyboard focus ring on the diff scroll region and the pending row expand button (`2px solid token.colorPrimary`).
 
 Explicitly **not** accent: the "Từ chối" button (destructive), the stale card surface (warning), the version-history rows (neutral), the pending-count badge (warning).
@@ -119,7 +120,13 @@ Explicitly **not** accent: the "Từ chối" button (destructive), the stale car
 
 ## Component Inventory
 
-Each entry is a contract: what it is, where it lives, exact values, and the `data-testid` the executor must emit.
+**Focal points (declared, one per surface):**
+
+1. **Transcript extension** — the newest pending approval card is the anchor. It is the only element in the extension with a bordered surface, a colored header icon, and primary/destructive buttons. Everything else in the extension is secondary; the overflow line is tertiary.
+2. **`SkillEditorDrawer`** — the form's first field (`Tên`) is the anchor on open, because editing is the primary job. The pending section and history sit below it and must never out-shout it: no accent color, no primary button of their own beyond the shared card's.
+3. **`AiStaffExplorer` "Kỹ năng"** — the section header plus the first `SkillCard` is the anchor. Cards carry a border and a two-line description; the two row-based sections above are visually lighter by design, so the skill section reads as the newest and most substantial block without competing for accent color.
+
+Each entry below is a contract: what it is, where it lives, exact values, and the `data-testid` the executor must emit.
 
 ### 1. `PatchDiffApprovalCard` — skill-proposal variant
 
@@ -221,7 +228,8 @@ Each entry is a contract: what it is, where it lives, exact values, and the `dat
 4. **[NEW] Divider + section `Lịch sử phiên bản ({n})`** — rendered only when `skill !== null`. `paddingTop: 24`.
    - antd `Collapse size="small"` (same component as the existing preview), `items` = one per **decided** row (`approved` | `rejected`), newest first. Pending rows are **excluded** — they are already listed above; showing them twice is noise.
    - Item `label` — a flex row, `gap: 8`, `alignItems: 'center'`, `minWidth: 0`:
-     - `v{version}` — 12/600 in a bordered chip (`border: 1px solid token.colorBorderSecondary`, `borderRadius: 4`, `padding: '0 4px'`, `lineHeight: '16px'`).
+     - **Approved rows only:** `v{version}` — 12/600 in a bordered chip (`border: 1px solid token.colorBorderSecondary`, `borderRadius: 4`, `padding: '0 4px'`, `lineHeight: '16px'`).
+     - **Rejected rows have no version number** (D-14 numbers only on approval) — render the text `Đề xuất bị từ chối` in place of the chip, 12/600, `colorTextSecondary`, no border. Never render `v0`, `vundefined`, or an empty chip.
      - `{name}` — 13.5/400, single line, ellipsis, `flex: 1`.
      - `{DD/MM/YYYY HH:mm}` from `decidedAt` (dayjs) — 12px `colorTextSecondary`, `whiteSpace: 'nowrap'`.
      - Status `Tag` — `Đã duyệt` (`color="success"`) / `Đã từ chối` (default).
@@ -257,7 +265,7 @@ Each entry is a contract: what it is, where it lives, exact values, and the `dat
 **Toolbar (existing strip, `padding: '8px 10px'`, `gap: 6`):**
 
 - Search `Input size="small"` — `flex: 1`, `fontSize: 12`, `allowClear`. **Placeholder changes** from `Tìm staff...` to `Tìm lead, nhân viên, kỹ năng...` (the search now covers three entity types; the old copy would be a lie). The existing test asserting `getByPlaceholderText('Tìm staff...')` must be updated in the same change.
-- **[NEW] third icon button**, appended after the two existing ones: `<Button size="small" type="text" icon={<BookOutlined style={{color:'var(--accent, #5b4fe8)'}}/>} onClick={() => setCreateKind('skill')} aria-label="Thêm kỹ năng" />` wrapped in `<Tooltip title="Thêm kỹ năng">`. Same footprint and order as its siblings: Lead → Employee → Skill.
+- **[NEW] third icon button**, appended after the two existing ones: `<Button size="small" type="text" icon={<BookOutlined style={{color:'var(--accent, #5b4fe8)'}}/>} onClick={() => setCreateKind('skill')} aria-label="Thêm Kỹ năng" />` wrapped in `<Tooltip title="Thêm Kỹ năng">`. Same footprint and order as its siblings: Lead → Employee → Skill. Casing matches the siblings `Thêm Lead AI` / `Thêm Nhân viên AI` (all three capitalize the noun).
 
 **Section order:** AI Leads → Nhân viên AI → **Kỹ năng** (appended third, per D-31).
 
@@ -296,7 +304,7 @@ Each entry is a contract: what it is, where it lives, exact values, and the `dat
    └─ ok ─► pending row (no version number) ─► card appears in transcript + drawer
                 │
                 ├─ Chấp thuận ─► decideSkillVersion(id,'approved')
-                │     ├─ ok ─► card shows "Đã duyệt — …" (stays mounted, role=status)
+                │     ├─ ok ─► card shows "Đã chấp thuận — …" (stays mounted, role=status)
                 │     └─ throw ─► card shows the error Alert; row stays pending
                 │
                 ├─ Từ chối ─► decideSkillVersion(id,'rejected')
@@ -328,7 +336,7 @@ Each entry is a contract: what it is, where it lives, exact values, and the `dat
 
 ```
 [no skills] ─► "Chưa có kỹ năng nào"
-   └─ "Thêm kỹ năng" ─► SkillEditorDrawer (create) ─► Lưu ─► card appears
+   └─ "Thêm Kỹ năng" ─► SkillEditorDrawer (create) ─► Lưu ─► card appears
 [card] ─Sửa─► SkillEditorDrawer (edit) ─► Lưu ─► card + history row update
 [card] ─Xóa─► Popconfirm ─► deleteSkill
                  ├─ ok ─► card disappears (version rows cascade)
@@ -358,11 +366,11 @@ All user-facing copy is Vietnamese. Register matches the existing components: se
 | Stale tooltip + `aria-label` on the disabled Approve | `Không thể duyệt vì kỹ năng đã có bản mới hơn` |
 | Approve button | `Chấp thuận` |
 | Reject button | `Từ chối` |
-| Decision — approved | `Đã duyệt — kỹ năng đã cập nhật sang bản mới.` |
+| Decision — approved | `Đã chấp thuận — kỹ năng đã cập nhật sang bản mới.` |
 | Decision — rejected | `Đã từ chối đề xuất — kỹ năng không thay đổi.` |
 | Error — write failed | `Không duyệt được đề xuất. Đề xuất vẫn còn trong danh sách chờ duyệt — thử lại.` |
 
-> **Verb decision (declared, not an oversight):** the buttons keep `Chấp thuận` / `Từ chối` because `PatchDiffApprovalCard` is shared with the note-approval path and its existing tests assert those exact labels. The **queue** is named `Chờ duyệt`. Do not rename the shared button to `Duyệt` in this phase — that would change the note surface and two passing tests for no user-visible gain.
+> **Verb decision (declared, not an oversight):** the buttons keep `Chấp thuận` / `Từ chối` because `PatchDiffApprovalCard` is shared with the note-approval path and its existing tests assert those exact labels. The decision lines mirror the button verbs exactly — `Chấp thuận` → `Đã chấp thuận`, `Từ chối` → `Đã từ chối`. The **queue** is named `Chờ duyệt`. Do not rename the shared button to `Duyệt` in this phase — that would change the note surface and two passing tests for no user-visible gain. (The error line says `Không duyệt được` because it is a generic failure, not the result of a specific verb.)
 
 ### Transcript panel
 
@@ -390,7 +398,7 @@ All user-facing copy is Vietnamese. Register matches the existing components: se
 | Element | Copy |
 |---------|------|
 | Section header | `Kỹ năng ({n})` |
-| Toolbar tooltip + `aria-label` | `Thêm kỹ năng` |
+| Toolbar tooltip + `aria-label` | `Thêm Kỹ năng` |
 | Search placeholder | `Tìm lead, nhân viên, kỹ năng...` |
 | Empty | `Chưa có kỹ năng nào` |
 | Card pending badge | `{n} chờ duyệt` |
@@ -408,13 +416,13 @@ Confirmation pattern: destructive actions use antd `Popconfirm` (`okText` = the 
 - **Approve / Reject are keyboard reachable.** Both are antd `Button`s inside the card; the card is inside a scrollable transcript region that is already one focus stop. No `tabIndex={-1}`, no `pointer-events` tricks.
 - **The disabled Approve is announced, not just greyed.** Keep the existing `<span tabIndex={0} aria-label={…}>` wrapper around the disabled button; the `aria-label` must be the `variant === 'skill'` stale string. A screen reader user reaching the span hears why the action is unavailable.
 - **The stale warning is `role="alert"`** (existing) so it is announced when the card becomes stale mid-session.
-- **The decision result is `role="status"`** (existing) so "Đã duyệt — …" is announced without stealing focus.
+- **The decision result is `role="status"`** (existing) so "Đã chấp thuận — …" is announced without stealing focus.
 - **Focus is preserved after a decision.** The card stays mounted (see §1). If the card were unmounted, focus would fall to `<body>`; the contract forbids that.
 - **The pending row expand control** (version history `Collapse`) keeps antd's `aria-expanded` / `aria-controls`; the item label is the accessible name, so `v2 · Quy trình review · 12/11/2026 09:30 · Đã duyệt` is read as one string.
 - **The evidence panel** is a `Collapse` with a text label (`Bằng chứng`), not an icon-only toggle.
 - **The diff region** keeps `role="region"` + `aria-label` + `tabIndex={0}` + the `2px token.colorPrimary` focus ring (existing).
-- **Status is never color-only.** Every state carries a text tag or line: `Đã duyệt`, `Đã từ chối`, `Chờ duyệt`, `Dựa trên bản cũ` (via the stale alert), `{n} chờ duyệt`.
-- **The new toolbar button** has `aria-label="Thêm kỹ năng"` and a `Tooltip` with the same string.
+- **Status is never color-only.** Every state carries a text tag or line: `Đã duyệt`, `Đã từ chối`, `Chờ duyệt`, `{n} chờ duyệt`. The stale state carries the full `role="alert"` sentence, not a bare tag.
+- **The new toolbar button** has `aria-label="Thêm Kỹ năng"` and a `Tooltip` with the same string.
 - **Evidence is plain text**, so a model-authored payload cannot inject markup or a link into the approval surface.
 - Contrast: warning text on `colorWarningBg` and success text on white both pass WCAG AA at 12–13.5px in the light theme; do not substitute raw hex.
 
@@ -446,11 +454,11 @@ No shadcn, no Tailwind, no third-party UI registry, no new dependency. All compo
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS (3 FLAGs fixed: verb symmetry, button casing, rejected-row label)
+- [x] Dimension 2 Visuals: PASS (2 FLAGs fixed: focal points declared, phantom tags removed)
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS (1 FLAG fixed: diff line-height drift declared as superseding 34)
+- [x] Dimension 5 Spacing: PASS (1 FLAG fixed: `[NEW]` table retitled, inherited values relabelled)
+- [x] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Approval:** approved 2026-11-14
