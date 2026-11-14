@@ -85,6 +85,7 @@ import {
   transitionAssignment,
 } from '../../../db/repositories/aiTeamRunRepo';
 import { generateId } from '../../../utils/uuid';
+import { getLatestApprovedVersionNumber } from '../../../db/repositories/aiSkillVersionRepo';
 import {
   advanceCursor,
   appendForExistingMessage,
@@ -562,6 +563,12 @@ export function createTeamRunCoordinator(
     string,
     { batchId: string; assignmentId: string; attemptNo: number }
   >();
+  /**
+   * D-18/D-19: the approved skill version this agent's CURRENT attempt reads. Set at turn
+   * start from `AttemptRef.skillVersion`, cleared at finalize — a stale pin must never leak
+   * into a mention-started turn, which has no attempt and reads the current `aiSkills` row.
+   */
+  const pinnedSkillVersion = new Map<string, number>();
   /**
    * 37.1 R14: the message each live turn is answering. Set when the turn starts, cleared in
    * its `finally`, so a reply can never be attributed to a previous turn's question.
@@ -1049,6 +1056,9 @@ export function createTeamRunCoordinator(
       const active = activeAssignmentByAgent.get(finalized.agentId);
       if (active?.assignmentId === finalized.id) {
         activeAssignmentByAgent.delete(finalized.agentId);
+        // Same identity guard as the link above: a late finalize of attempt 1 must not clear
+        // attempt 2's pin.
+        pinnedSkillVersion.delete(finalized.agentId);
       }
       if (agentByAssignmentId.get(finalized.id) === finalized.agentId) {
         agentByAssignmentId.delete(finalized.id);
@@ -1060,12 +1070,16 @@ export function createTeamRunCoordinator(
   function toolContext(agentId: string): TeamToolContext {
     const employee = roster.employees.find((row) => row.id === agentId);
     const skillId = employee?.skillId;
+    // D-18: the pin comes from the attempt, never from `roster.skills` — the roster carries
+    // the CURRENT approved rows, which is exactly what a mid-batch approval changes.
+    const pinned = pinnedSkillVersion.get(agentId);
     return {
       db,
       teamId,
       threadId: options.threadId,
       agentId,
       ...(skillId ? { skillId } : {}),
+      ...(pinned !== undefined ? { skillVersion: pinned } : {}),
     };
   }
 
@@ -1715,6 +1729,8 @@ export function createTeamRunCoordinator(
     attemptNo: number;
     /** Reused from the source row on a retry, so one instruction pairs with every attempt. */
     instructionMessageId?: string | undefined;
+    /** D-18: the approved skill version this attempt reads. Absent = implicit baseline. */
+    skillVersion?: number | undefined;
   }
 
   /** D-22 content for the insert branch: sanitized, never provider text (D-17). */
@@ -1821,6 +1837,10 @@ export function createTeamRunCoordinator(
       });
       registerAgentTurn(employee.id, employee.name);
 
+      // D-18/T-39-12: a turn with no attempt (mention, `send_message`) has no pin and reads
+      // the current `aiSkills` row. Clearing first makes the map deterministic for this turn.
+      pinnedSkillVersion.delete(employee.id);
+
       if (attempt) {
         // D-09: the one status writer moves queued -> running immediately before the turn.
         // WR-03: `null` means the row is no longer `queued` — a leader amend retired it while
@@ -1846,6 +1866,11 @@ export function createTeamRunCoordinator(
           assignmentId: attempt.assignmentId,
           attemptNo: attempt.attemptNo,
         });
+        // D-18/D-19: the pin this attempt reads. Baseline attempts carry no number, and the
+        // clear above already handled that case.
+        if (attempt.skillVersion !== undefined) {
+          pinnedSkillVersion.set(employee.id, attempt.skillVersion);
+        }
       }
 
       const outcome = await registry.get(employee.id).start(request);
@@ -2339,6 +2364,9 @@ export function createTeamRunCoordinator(
           ...(row.instructionMessageId !== undefined
             ? { instructionMessageId: row.instructionMessageId }
             : {}),
+          // D-19: an amend rewrites the task, not the skill — the replacement inherits the
+          // retired attempt's pin unchanged.
+          ...(row.skillVersion !== undefined ? { skillVersion: row.skillVersion } : {}),
         },
         batchController!
       ).catch(() => {
@@ -2849,12 +2877,16 @@ export function createTeamRunCoordinator(
         if (!employee) continue;
         // D-22: one attempt row per run, `queued` until the turn actually starts.
         const skill = skillFor(employee);
+        // D-17: the only site that computes a pin. Baseline (no approved row) omits the key —
+        // a literal 0 would make the backup unrestorable (`z.number().int().positive()`).
+        const pinned = skill ? await getLatestApprovedVersionNumber(skill.id, db) : 0;
         const attemptRow = await createAssignment(
           {
             batchId: batch.id,
             agentId: employee.id,
             agentName: employee.name,
             ...(skill ? { skillId: skill.id } : {}),
+            ...(pinned > 0 ? { skillVersion: pinned } : {}),
             model: employee.model || options.model,
             task: assignment.task,
           },
@@ -2917,6 +2949,7 @@ export function createTeamRunCoordinator(
             assignmentId: attemptRow.id,
             attemptNo: attemptRow.attemptNo,
             instructionMessageId: instructionRow.id,
+            ...(pinned > 0 ? { skillVersion: pinned } : {}),
           },
           batchController
         ).catch(() => {
@@ -3237,13 +3270,17 @@ export function createTeamRunCoordinator(
       const batch = await getBatch(source.batchId, db);
       if (!batch) throw new Error('Không tìm thấy lô chạy.');
 
+      // D-19a: a retry is a NEW run, so it repins to the newest approved version rather than
+      // inheriting the retired attempt's pin. Baseline (0) omits the key.
+      const pinned =
+        source.skillId !== undefined ? await getLatestApprovedVersionNumber(source.skillId, db) : 0;
       const attemptRow = await createAssignment(
         {
           batchId: source.batchId,
           agentId: source.agentId,
           agentName: source.agentName,
           ...(source.skillId !== undefined ? { skillId: source.skillId } : {}),
-          ...(source.skillVersion !== undefined ? { skillVersion: source.skillVersion } : {}),
+          ...(pinned > 0 ? { skillVersion: pinned } : {}),
           model: source.model,
           task: source.task,
           retryOfAssignmentId: source.id,
@@ -3283,6 +3320,7 @@ export function createTeamRunCoordinator(
         ...(source.instructionMessageId !== undefined
           ? { instructionMessageId: source.instructionMessageId }
           : {}),
+        ...(pinned > 0 ? { skillVersion: pinned } : {}),
       };
       const controller = new AbortController();
       assignmentControllers.set(attemptRow.id, controller);
