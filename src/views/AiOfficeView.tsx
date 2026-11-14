@@ -13,7 +13,7 @@ import {
   type AiOfficeDeleteResult,
 } from '../db/repositories/aiOfficeRepo';
 import { PageHeader } from '../components/common/PageHeader';
-import { DELETE_FAILED_COPY, refusalMessage } from '../components/ai/office/deleteRefusalMessage';
+import { deleteFailureMessage } from '../components/ai/office/deleteRefusalMessage';
 import { EmployeeCard, LeadCard } from '../components/ai/office/EmployeeCard';
 import { SkillCard } from '../components/ai/office/SkillCard';
 import {
@@ -134,13 +134,9 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
   const closeDrawer = () => setDrawer(null);
 
   // WR-03: a rejected delete must surface, not escape the click handler as an unhandled
-  // rejection that makes the click look dead. IN-04: the copy lives in the shared module.
+  // rejection that makes the click look dead. IN-04: the runner and its copy are shared.
   const runDelete = async (run: () => Promise<AiOfficeDeleteResult>) => {
-    try {
-      setDeleteError(refusalMessage(await run()));
-    } catch {
-      setDeleteError(DELETE_FAILED_COPY);
-    }
+    setDeleteError(await deleteFailureMessage(run));
   };
 
   const handleDeleteEmployee = async (employee: AiEmployee) => {

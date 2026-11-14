@@ -6,6 +6,20 @@ import type { AiOfficeDeleteResult } from '../../../db/repositories/aiOfficeRepo
 export const DELETE_FAILED_COPY = 'Không xóa được. Thử lại.';
 
 /**
+ * IN-04: the one delete runner. A refusal is a result (names what blocks it); a thrown write
+ * is a failure. Both surfaces used to carry an identical copy of this helper.
+ */
+export async function deleteFailureMessage(
+  run: () => Promise<AiOfficeDeleteResult>
+): Promise<string | null> {
+  try {
+    return refusalMessage(await run());
+  } catch {
+    return DELETE_FAILED_COPY;
+  }
+}
+
+/**
  * D-10/D-11/D-12: the repo decides, the view only renders. Names only — never an id (T-36-15).
  * An empty `usedBy` means a running turn holds the profile (D-13), not a roster reference.
  *
