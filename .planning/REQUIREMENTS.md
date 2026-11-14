@@ -74,12 +74,12 @@
 
 ### Skill Management & Enrichment (AIO-SKILL)
 
-- [ ] **AIO-SKILL-01**: ~~Leader, agent, and skill CRUD all work with validation, empty states, and error handling — no crash on network or AI failure.~~ **Overridden by 39 D-27/D-30:** Phase 39 delivers skill CRUD only. Leader/agent CRUD moves to Phase 40 (AIO-LEAD-01..04). The surviving invariant is "skill CRUD works with validation, empty states, and error handling — no crash on network or AI failure." (C-14)
-- [ ] **AIO-SKILL-02**: After a run, an agent can propose a lesson. The proposal is stored as a pending version; it changes nothing until the user approves it. (C-13)
-- [ ] **AIO-SKILL-03**: The user reviews a proposed version as a diff and approves or rejects it. Approval creates exactly one new approved version; the previous version remains retrievable. (C-13)
-- [ ] **AIO-SKILL-04**: No AI tool can write an approved skill version. Only the user's approval action can. (C-13)
-- [ ] **AIO-SKILL-05**: A mid-batch approval does not change the skill of an agent already running — the assignment pins its version. (C-13)
-- [ ] **AIO-SKILL-06**: Skill bodies, including approved ones, are wrapped as untrusted data in the prompt. (C-13)
+- [x] **AIO-SKILL-01**: ~~Leader, agent, and skill CRUD all work with validation, empty states, and error handling — no crash on network or AI failure.~~ **Overridden by 39 D-27/D-30:** Phase 39 delivers skill CRUD only. Leader/agent CRUD moves to Phase 40 (AIO-LEAD-01..04). The surviving invariant is "skill CRUD works with validation, empty states, and error handling — no crash on network or AI failure." (C-14)
+- [x] **AIO-SKILL-02**: After a run, an agent can propose a lesson. The proposal is stored as a pending version; it changes nothing until the user approves it. (C-13)
+- [x] **AIO-SKILL-03**: The user reviews a proposed version as a diff and approves or rejects it. Approval creates exactly one new approved version; the previous version remains retrievable. (C-13)
+- [x] **AIO-SKILL-04**: No AI tool can write an approved skill version. Only the user's approval action can. (C-13)
+- [x] **AIO-SKILL-05**: A mid-batch approval does not change the skill of an agent already running — the assignment pins its version. (C-13)
+- [x] **AIO-SKILL-06**: Skill bodies, including approved ones, are wrapped as untrusted data in the prompt. (C-13)
 
 ### Data & Backup (AIO-DATA)
 

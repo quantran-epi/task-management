@@ -6,7 +6,7 @@
 - Phase 36: Data model, multi-chat identity, backup/migration (v1.4) (COMPLETE — verified 2026-11-11)
 - Phase 37: Runtime reliability + concurrency (v1.4)
 - Phase 38: Hard token budget + accurate measurement (v1.4) (COMPLETE — verified 2026-11-14)
-- Phase 39: Skill versioning + enrichment approval (v1.4)
+- Phase 39: Skill versioning + enrichment approval (v1.4) (COMPLETE — verified 2026-11-14)
 - Phase 40: Explorer UX, CRUD correctness, observed walkthrough (v1.4)
 
 ## Previous Milestone: v1.3
