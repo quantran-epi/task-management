@@ -450,7 +450,18 @@ async function getLinkedContext(args: Record<string, any>, ctx: TeamToolContext)
     });
   }
 
-  return executeAiTool('get_item_details', { type: link.itemType, id: itemId }, ctx.db);
+  // CR-03: the delegated resolver embeds every sticky note's free-text `body`, so its result
+  // is not safe to return verbatim — the invariant above applies to it too. The recipient is
+  // the lead, the one agent holding mutation tools.
+  const raw = await executeAiTool('get_item_details', { type: link.itemType, id: itemId }, ctx.db);
+  const parsed = JSON.parse(raw);
+  if (Array.isArray(parsed?.stickyNotes)) {
+    parsed.stickyNotes = parsed.stickyNotes.map((note: any) => ({
+      ...note,
+      body: wrapUntrusted(`GHI CHÚ ${note.title ?? note.id}`, String(note.body ?? '')),
+    }));
+  }
+  return JSON.stringify(parsed);
 }
 
 /**
