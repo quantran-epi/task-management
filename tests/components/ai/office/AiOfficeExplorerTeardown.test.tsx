@@ -77,7 +77,6 @@ describe('AiOfficeExplorer teardown on delete (37-06, D-18)', () => {
     team = await createTeam(
       {
         name: 'Nhóm cần xoá',
-        status: 'active',
         budgetTokens: 1000,
         leadId: lead.id,
         employeeIds: [employee.id],

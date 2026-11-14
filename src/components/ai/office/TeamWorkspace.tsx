@@ -854,9 +854,6 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                   Chưa chọn lead
                 </span>
               )}
-              <Tag color={team.status === 'active' ? 'success' : 'default'}>
-                {team.status === 'active' ? 'Đang hoạt động' : 'Tạm dừng'}
-              </Tag>
               <Button
                 size="small"
                 icon={<BugOutlined />}

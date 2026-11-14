@@ -6,8 +6,6 @@ import {
   createTeam,
   updateTeam,
   deleteTeam,
-  activateTeam,
-  pauseTeam,
   listTeamMembers,
   addTeamMember,
   removeTeamMember,
@@ -56,12 +54,11 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
     await db.delete();
   });
 
-  async function makeTeam(name: string, status: 'active' | 'idle' = 'idle') {
+  async function makeTeam(name: string) {
     return createTeam(
       {
         name,
         leadId,
-        status,
         budgetTokens: 1000,
         employeeIds: employeeIds.slice(0, 2),
       },
@@ -72,7 +69,7 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
   /** Lead + 2 employees, split evenly from `total` (D-14). */
   async function makeTeamWithTotal(name: string, total: number) {
     return createTeam(
-      { name, leadId, status: 'idle', budgetTokens: total, employeeIds: employeeIds.slice(0, 2) },
+      { name, leadId, budgetTokens: total, employeeIds: employeeIds.slice(0, 2) },
       db
     );
   }
@@ -99,19 +96,17 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
     ]);
   });
 
-  it('creates more than three active groups (no cap, D-06)', async () => {
+  it('creates more than three groups (no cap, D-06)', async () => {
     const created = [];
-    for (let i = 0; i < 5; i += 1) created.push(await makeTeam(`Active ${i}`, 'active'));
+    for (let i = 0; i < 5; i += 1) created.push(await makeTeam(`Group ${i}`));
 
-    expect(await db.aiTeams.where('status').equals('active').count()).toBe(5);
-    const extra = await makeTeam('Sixth');
-    await expect(activateTeam(extra.id, db)).resolves.toMatchObject({ status: 'active' });
+    expect(await db.aiTeams.count()).toBe(5);
     expect(created).toHaveLength(5);
   });
 
   it('adds more than three employees to one group (no cap, D-06)', async () => {
     const team = await createTeam(
-      { name: 'Roster', leadId, status: 'idle', budgetTokens: 0, employeeIds },
+      { name: 'Roster', leadId, budgetTokens: 0, employeeIds },
       db
     );
     // WR-05: the repo now refuses a dangling agentId, so each addition is a real profile.
@@ -262,7 +257,6 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
       {
         name: 'Even',
         leadId,
-        status: 'idle',
         budgetTokens: 1000,
         employeeIds,
       },
@@ -406,7 +400,7 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
 
   it('gives the whole team top-up to a leader-only roster (AIO-BUDGET-05)', async () => {
     const team = await createTeam(
-      { name: 'LeaderAlone', leadId, status: 'idle', budgetTokens: 1000 },
+      { name: 'LeaderAlone', leadId, budgetTokens: 1000 },
       db
     );
     const before = (await listTeamMembers(team.id, db))[0]!;
@@ -668,20 +662,6 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
     expect(updated.inputTokens).toBe(5);
     expect(updated.outputTokens).toBe(0);
     expect(updated.usageEstimated).toBeUndefined();
-  });
-
-  it('pauses and reactivates the same team row with an advanced updatedAt', async () => {
-    const team = await makeTeam('Pause', 'active');
-    const paused = await pauseTeam(team.id, db);
-    expect(paused.status).toBe('idle');
-
-    await new Promise((r) => setTimeout(r, 3));
-    const reactivated = await activateTeam(team.id, db);
-
-    expect(reactivated.id).toBe(team.id);
-    expect(reactivated.status).toBe('active');
-    expect(reactivated.updatedAt > paused.updatedAt).toBe(true);
-    expect(await db.aiTeams.count()).toBe(1);
   });
 
   it('updates and deletes a team with its child rows', async () => {

@@ -89,7 +89,6 @@ describe('TeamWorkspace composer typing cost (37.1 UAT gap 10)', () => {
     team = await createTeam(
       {
         name: 'Nhóm thử',
-        status: 'active',
         budgetTokens: 1000,
         leadId: leadRow.id,
         employeeIds: [employee.id],

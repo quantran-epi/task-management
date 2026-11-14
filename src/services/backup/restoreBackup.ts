@@ -310,7 +310,15 @@ async function replaceTables(
     await add(targetDb.aiEmployees, tables.aiEmployees);
     await add(targetDb.aiLeads, tables.aiLeads);
     await add(targetDb.aiSkills, tables.aiSkills);
-    await add(targetDb.aiTeams, tables.aiTeams);
+    // The retired `status` column is accepted from older exports and dropped here, so a
+    // restored row matches the current `AiTeam` shape exactly.
+    await add(
+      targetDb.aiTeams,
+      (tables.aiTeams ?? []).map((row) => {
+        const { status: _retired, ...rest } = row as typeof row & { status?: unknown };
+        return rest;
+      })
+    );
     // Phase 38: the new columns (`budgetWarnThresholdPct`, split usage) ride along inside these
     // whole rows; the record schemas already validated them upstream in `validateBackupPayload`.
     await add(targetDb.aiTeamMembers, tables.aiTeamMembers);

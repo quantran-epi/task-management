@@ -39,7 +39,7 @@ describe('PendingSkillProposals (AIO-SKILL-03/04)', () => {
       db
     );
     team = await createTeam(
-      { name: 'Nhóm thử', status: 'active', budgetTokens: 1000, employeeIds: [employee.id] },
+      { name: 'Nhóm thử', budgetTokens: 1000, employeeIds: [employee.id] },
       db
     );
     members = await listTeamMembers(team.id, db);

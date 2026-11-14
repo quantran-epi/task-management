@@ -277,7 +277,6 @@ describe('TeamWorkspace — no streaming bubble (D-19)', () => {
     team = await createTeam(
       {
         name: 'Nhóm thử',
-        status: 'active',
         budgetTokens: 1000,
         leadId: lead.id,
         employeeIds: [employee.id],

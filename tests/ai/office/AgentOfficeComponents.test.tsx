@@ -67,7 +67,6 @@ describe('TeamSidebar live usage (WR-03, WR-04)', () => {
     id: 'team-1',
     name: 'Nhóm',
     leadId: 'lead-1',
-    status: 'active',
     budgetTokens: 1000,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',

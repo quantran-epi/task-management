@@ -43,7 +43,6 @@ describe('teamTranscriptRepo (AIO-MEM-01, D-10, D-11, D-17, D-29, D-31)', () => 
       id: teamId,
       name: 'Nhóm Nghiên Cứu',
       leadId: generateId(),
-      status: 'idle',
       budgetTokens: 0,
       createdAt: now,
       updatedAt: now,

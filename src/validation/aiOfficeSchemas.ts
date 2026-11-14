@@ -45,7 +45,6 @@ const concurrencyLimitSchema = z.number().int().min(1).max(12).optional();
  */
 const warnThresholdPctSchema = z.number().int().min(1).max(100).optional();
 
-const AiTeamStatusSchema = z.enum(['active', 'idle']);
 const AiTeamMemberRoleSchema = z.enum(['lead', 'employee']);
 const AiTeamLinkItemTypeSchema = z.enum(['cr', 'task', 'system', 'note', 'document']);
 
@@ -99,7 +98,6 @@ export const AiTeamInputSchema = z.object({
   name: nameSchema,
   /** D-05: optional so an empty group can be created from a name alone. */
   leadId: uuidSchema.optional(),
-  status: AiTeamStatusSchema.default('active'),
   /** D-05: a name-only group is legal, so the budget defaults to zero. */
   budgetTokens: budgetSchema.default(0),
   autoSplitEnabled: z.boolean().optional(),
@@ -115,7 +113,6 @@ export const AiTeamInputSchema = z.object({
 export const AiTeamUpdateSchema = z.object({
   name: nameSchema.optional(),
   leadId: uuidSchema.optional(),
-  status: AiTeamStatusSchema.optional(),
   budgetTokens: budgetSchema.optional(),
   autoSplitEnabled: z.boolean().optional(),
   autoApproveMutations: z.boolean().optional(),

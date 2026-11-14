@@ -14,8 +14,6 @@
 
 import type { ChatTokenUsage } from './models';
 
-export type AiTeamStatus = 'active' | 'idle';
-
 export type AiTeamMemberRole = 'lead' | 'employee';
 
 export type AiTeamLinkItemType = 'cr' | 'task' | 'system' | 'note' | 'document';
@@ -82,7 +80,6 @@ export interface AiTeam {
   leadId?: string | undefined;
   /** D-09: durable leader lock, set at the first run; survives relaunch and backup. */
   leaderLockedAt?: string | undefined;
-  status: AiTeamStatus;
   budgetTokens: number;
   /** D-06: "Tự động chia việc" bypass. */
   autoSplitEnabled?: boolean | undefined;

@@ -649,7 +649,11 @@ export const BackupAiTeamRecordSchema = z.strictObject({
   /** D-05: an empty group has no leader. D-09: the lock timestamp round-trips verbatim. */
   leadId: uuidSchema.optional(),
   leaderLockedAt: z.string().optional(),
-  status: z.enum(['active', 'idle']),
+  /**
+   * Retired: teams have no active/paused state any more. Accepted so a pre-change export
+   * still validates, and dropped on restore.
+   */
+  status: z.enum(['active', 'idle']).optional(),
   budgetTokens: aiTokensSchema,
   autoSplitEnabled: z.boolean().optional(),
   autoApproveMutations: z.boolean().optional(),

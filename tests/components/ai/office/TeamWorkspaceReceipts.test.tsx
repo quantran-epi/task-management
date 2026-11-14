@@ -115,7 +115,6 @@ describe('TeamWorkspace receipts (37.1 R10, R11, R13)', () => {
     team = await createTeam(
       {
         name: 'Nhóm thử',
-        status: 'active',
         budgetTokens: 1000,
         leadId: lead.id,
         employeeIds: [employee.id],

@@ -91,7 +91,6 @@ describe('TeamWorkspace whitespace submit guard (37-06)', () => {
     team = await createTeam(
       {
         name: 'Nhóm thử',
-        status: 'active',
         budgetTokens: 1000,
         leadId: lead.id,
         employeeIds: [employee.id],

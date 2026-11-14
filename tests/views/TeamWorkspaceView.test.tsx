@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../src/db';
 import { createEmployee, createLead, createSkill, updateLead } from '../../src/db/repositories/aiOfficeRepo';
 import { createTeam, getTeam, listTeamMembers, listTeams, updateTeam } from '../../src/db/repositories/aiTeamRepo';
-import { activateTeam, applyTeamBudgetSettings } from '../../src/db/repositories/aiTeamRepo';
+import { applyTeamBudgetSettings } from '../../src/db/repositories/aiTeamRepo';
 import { message } from 'antd';
 
 // WR-12: let each test make one write reject; every other case uses the real repo.
@@ -13,8 +13,6 @@ vi.mock('../../src/db/repositories/aiTeamRepo', async (importOriginal) => {
   return {
     ...actual,
     updateTeam: vi.fn(actual.updateTeam),
-    activateTeam: vi.fn(actual.activateTeam),
-    pauseTeam: vi.fn(actual.pauseTeam),
     // Phase 38 D-19: the settings save is one absolute two-table write, so this is the
     // call that must reject for the WR-12 assertion.
     applyTeamBudgetSettings: vi.fn(actual.applyTeamBudgetSettings),
@@ -101,7 +99,6 @@ describe('TeamWorkspaceView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', (
       {
         name: 'Nhóm Thanh Toán',
         leadId: lead.id,
-        status: 'active',
         budgetTokens: 4000,
         employeeIds: [employees[0]!.id, employees[1]!.id],
       },
@@ -111,7 +108,6 @@ describe('TeamWorkspaceView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', (
       {
         name: 'Nhóm Báo Cáo',
         leadId: lead.id,
-        status: 'idle',
         budgetTokens: 2000,
         employeeIds: [employees[2]!.id],
       },
@@ -141,11 +137,10 @@ describe('TeamWorkspaceView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', (
     expect(screen.getByTestId(`ai-office-team-${idleTeam.id}`)).toBeInTheDocument();
   });
 
-  it('shows the active count in the explorer header', async () => {
+  it('counts the groups in the explorer header', async () => {
     renderList();
 
     expect(await screen.findByText('Nhóm AI (2)')).toBeInTheDocument();
-    expect(screen.getByText('1 hoạt động')).toBeInTheDocument();
   });
 
   it('shows the lead name and member count on an explorer row', async () => {
@@ -157,45 +152,15 @@ describe('TeamWorkspaceView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', (
     expect(row).toHaveTextContent('3 thành viên');
   });
 
-  it('activates an idle team and pauses an active one from the explorer', async () => {
-    renderList();
-
-    fireEvent.click(await screen.findByTestId(`ai-office-team-status-${idleTeam.id}`));
-    await waitFor(async () => {
-      const teams = await listTeams(db);
-      expect(teams.find((team) => team.id === idleTeam.id)?.status).toBe('active');
-    });
-
-    fireEvent.click(await screen.findByTestId(`ai-office-team-status-${idleTeam.id}`));
-    await waitFor(async () => {
-      const teams = await listTeams(db);
-      expect(teams.find((team) => team.id === idleTeam.id)?.status).toBe('idle');
-    });
-  });
-
-  it('keeps activation enabled with four active teams and shows no cap copy', async () => {
-    await createTeam(
-      { name: 'Nhóm Ba', leadId: lead.id, status: 'active', budgetTokens: 1000 },
-      db
-    );
-    await createTeam(
-      { name: 'Nhóm Bốn', leadId: lead.id, status: 'active', budgetTokens: 1000 },
-      db
-    );
+  it('lists every group with no cap copy (D-06)', async () => {
+    await createTeam({ name: 'Nhóm Ba', leadId: lead.id, budgetTokens: 1000 }, db);
+    await createTeam({ name: 'Nhóm Bốn', leadId: lead.id, budgetTokens: 1000 }, db);
 
     renderList();
 
-    const activate = await screen.findByTestId(`ai-office-team-status-${idleTeam.id}`);
-    expect(activate).toBeEnabled();
+    expect(await screen.findByTestId(`ai-office-team-${idleTeam.id}`)).toBeInTheDocument();
     expect(screen.queryByText(/Đã có 3 nhóm đang hoạt động/)).not.toBeInTheDocument();
     expect(screen.queryByText(/tối đa ba nhân viên/)).not.toBeInTheDocument();
-  });
-
-  it('allows pausing the last active team — no minimum-active rule exists', async () => {
-    renderList();
-
-    // WR-10: pausing the last active team is a legal transition.
-    expect(await screen.findByTestId(`ai-office-team-status-${activeTeam.id}`)).toBeEnabled();
   });
 
   it('creates a group from a name alone — no lead, no members, zero budget', async () => {
@@ -858,19 +823,6 @@ describe('TeamWorkspaceView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', (
     expect(alert).toHaveTextContent('Không lưu được thay đổi. Vui lòng thử lại.');
     // The raw repo message (which embeds an id) must never reach the UI.
     expect(screen.queryByText(/Không tìm thấy nhóm: 1234/)).not.toBeInTheDocument();
-  });
-
-  it('surfaces a failed status change in the explorer error channel (WR-12)', async () => {
-    renderList();
-
-    vi.mocked(activateTeam).mockRejectedValueOnce(new Error('boom'));
-
-    fireEvent.click(await screen.findByTestId(`ai-office-team-status-${idleTeam.id}`));
-
-    const alert = await screen.findByTestId('ai-office-team-delete-error');
-    expect(alert).toHaveTextContent('Không đổi được trạng thái nhóm. Vui lòng thử lại.');
-    // The raw repo message must never reach the UI.
-    expect(screen.queryByText(/boom/)).not.toBeInTheDocument();
   });
 
   it('opens the settings drawer from the workspace header (IN-08b)', async () => {

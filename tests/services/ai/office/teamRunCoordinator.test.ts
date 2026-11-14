@@ -217,7 +217,6 @@ async function createHarness(options: HarnessOptions): Promise<Harness> {
     {
       name: 'Nhóm Thanh Toán',
       leadId: lead.id,
-      status: 'active',
       budgetTokens: options.teamPatch?.budgetTokens ?? 3000,
       ...(options.teamPatch?.autoSplitEnabled !== undefined
         ? { autoSplitEnabled: options.teamPatch.autoSplitEnabled }

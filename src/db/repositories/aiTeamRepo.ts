@@ -61,11 +61,6 @@ function byCreatedAt<T extends { createdAt: string }>(rows: T[]): T[] {
   );
 }
 
-async function assertCanActivate(teamId: string, db: TaskPlannerDatabase): Promise<void> {
-  const target = await db.aiTeams.get(teamId);
-  if (!target) throw new Error(`Không tìm thấy nhóm: ${teamId}`);
-}
-
 /** D-14: the split rule lives once, in `budgetSplit.ts`; both the repo and the drawer import it. */
 async function writeEvenSplit(
   teamId: string,
@@ -104,7 +99,6 @@ export async function createTeam(
   const team: AiTeam = {
     id: generateId(),
     name: validated.name,
-    status: validated.status,
     budgetTokens: validated.budgetTokens,
     createdAt: now,
     updatedAt: now,
@@ -191,7 +185,6 @@ export async function updateTeam(
 
     if (validated.name !== undefined) updated.name = validated.name;
     if (validated.leadId !== undefined) updated.leadId = validated.leadId;
-    if (validated.status !== undefined) updated.status = validated.status;
     if (validated.budgetTokens !== undefined) updated.budgetTokens = validated.budgetTokens;
     if ('autoSplitEnabled' in patch) {
       if (validated.autoSplitEnabled !== undefined) {
@@ -394,32 +387,6 @@ export async function deleteTeam(id: string, db: TaskPlannerDatabase = defaultDb
       await db.aiTeams.delete(id);
     }
   );
-}
-
-export async function activateTeam(
-  teamId: string,
-  db: TaskPlannerDatabase = defaultDb
-): Promise<AiTeam> {
-  // Single transaction: counting outside one lets two racing callers both see 2 active teams.
-  return db.transaction('rw', [db.aiTeams], async () => {
-    await assertCanActivate(teamId, db);
-    const now = new Date().toISOString();
-    await db.aiTeams.update(teamId, { status: 'active', updatedAt: now });
-    return (await db.aiTeams.get(teamId)) as AiTeam;
-  });
-}
-
-/** D-17: the thread id lives on the chat thread's scope key, so pausing never resets it. */
-export async function pauseTeam(
-  teamId: string,
-  db: TaskPlannerDatabase = defaultDb
-): Promise<AiTeam> {
-  const existing = await db.aiTeams.get(teamId);
-  if (!existing) throw new Error(`Không tìm thấy nhóm: ${teamId}`);
-
-  const now = new Date().toISOString();
-  await db.aiTeams.update(teamId, { status: 'idle', updatedAt: now });
-  return { ...existing, status: 'idle', updatedAt: now };
 }
 
 export async function listTeamMembers(

@@ -136,7 +136,6 @@ describe('TeamWorkspace composer (37.1 D-01/D-02/D-12)', () => {
     team = await createTeam(
       {
         name: 'Nhóm thử',
-        status: 'active',
         budgetTokens: 1000,
         leadId: lead.id,
         employeeIds: [employee.id],

@@ -126,7 +126,6 @@ describe('TeamWorkspace settings save (Phase 38 D-19, AIO-BUDGET-07)', () => {
     team = await createTeam(
       {
         name: 'Nhóm ngân sách',
-        status: 'idle',
         budgetTokens: 3000,
         leadId: lead.id,
         employeeIds: [employee.id],

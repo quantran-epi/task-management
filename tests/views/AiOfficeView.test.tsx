@@ -286,7 +286,7 @@ describe('AiOfficeView — employee tab shell (AIO-UI-01)', () => {
       db
     );
     await createTeam(
-      { name: 'Nhóm Alpha', leadId: lead.id, status: 'idle', budgetTokens: 10000, employeeIds: [employee.id] },
+      { name: 'Nhóm Alpha', leadId: lead.id, budgetTokens: 10000, employeeIds: [employee.id] },
       db
     );
 
@@ -327,7 +327,6 @@ describe('AiOfficeView — employee tab shell (AIO-UI-01)', () => {
       {
         name: 'Nhóm Alpha',
         leadId: lead.id,
-        status: 'idle',
         budgetTokens: 10000,
         employeeIds: [employee.id],
       },

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Avatar, Button, Drawer, Input, InputNumber, Select, Switch, theme } from 'antd';
+import { Alert, Avatar, Button, Drawer, Input, InputNumber, Select, theme } from 'antd';
 import type { AiEmployee, AiLead } from '../../../types/aiOffice';
 import { createTeam } from '../../../db/repositories/aiTeamRepo';
 import type { TaskPlannerDatabase } from '../../../db';
@@ -32,7 +32,6 @@ export const TeamEditorDrawer: React.FC<TeamEditorDrawerProps> = ({
   const [leadId, setLeadId] = useState<string | undefined>(undefined);
   const [employeeIds, setEmployeeIds] = useState<string[]>([]);
   const [budget, setBudget] = useState<number | null>(null);
-  const [activateNow, setActivateNow] = useState(false);
   const [leadSelectTouched, setLeadSelectTouched] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +42,6 @@ export const TeamEditorDrawer: React.FC<TeamEditorDrawerProps> = ({
     setLeadId(undefined);
     setEmployeeIds([]);
     setBudget(null);
-    setActivateNow(false);
     setLeadSelectTouched(false);
     setError(null);
   }, [open]);
@@ -67,7 +65,6 @@ export const TeamEditorDrawer: React.FC<TeamEditorDrawerProps> = ({
         {
           name: name.trim(),
           ...(leadId ? { leadId } : {}),
-          status: activateNow ? 'active' : 'idle',
           budgetTokens: total,
           employeeIds,
         },
@@ -198,14 +195,6 @@ export const TeamEditorDrawer: React.FC<TeamEditorDrawerProps> = ({
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 12 }}>Kích hoạt ngay</span>
-          <Switch
-            checked={activateNow}
-            onChange={setActivateNow}
-            aria-label="Kích hoạt ngay"
-          />
-        </div>
       </div>
     </Drawer>
   );

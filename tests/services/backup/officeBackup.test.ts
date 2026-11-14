@@ -82,7 +82,6 @@ const team: AiTeam = {
   id: TEAM_ID,
   name: 'Squad Alpha',
   leadId: LEAD_ID,
-  status: 'active',
   budgetTokens: 200000,
   autoSplitEnabled: true,
   autoApproveMutations: false,
@@ -405,7 +404,6 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
     const emptyTeam: AiTeam = {
       id: EMPTY_TEAM_ID,
       name: 'Nhóm rỗng',
-      status: 'idle',
       budgetTokens: 0,
       createdAt: NOW,
       updatedAt: NOW,

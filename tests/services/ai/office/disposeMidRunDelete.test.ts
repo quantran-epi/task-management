@@ -103,7 +103,6 @@ describe('delete a team mid-run through disposeRun + deleteTeam (SC5, D-18)', ()
     const team: AiTeam = await createTeam(
       {
         name: 'Nhóm cần xoá giữa lượt',
-        status: 'active',
         budgetTokens: 3000,
         autoSplitEnabled: true,
         concurrencyLimit: 1,
@@ -256,7 +255,6 @@ describe('delete a team while a steer is in flight (SC5)', () => {
     const team: AiTeam = await createTeam(
       {
         name: 'Nhóm xoá giữa chỉ đạo',
-        status: 'active',
         budgetTokens: 3000,
         autoSplitEnabled: true,
         concurrencyLimit: 3,

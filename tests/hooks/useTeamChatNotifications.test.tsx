@@ -57,7 +57,7 @@ describe('useTeamChatNotifications (37.1 R13)', () => {
       db
     );
     team = await createTeam(
-      { name: 'Nhóm thử', status: 'active', budgetTokens: 1000, leadId: lead.id, employeeIds: [employee.id] },
+      { name: 'Nhóm thử', budgetTokens: 1000, leadId: lead.id, employeeIds: [employee.id] },
       db
     );
     threadId = (await ensureTeamThread(team.id, db)).id;
@@ -117,7 +117,7 @@ describe('useTeamChatNotifications (37.1 R13)', () => {
 
   it('notifies for a different team even while one team is open', async () => {
     const other = await createTeam(
-      { name: 'Nhóm khác', status: 'active', budgetTokens: 1000, leadId },
+      { name: 'Nhóm khác', budgetTokens: 1000, leadId },
       db
     );
     const otherThread = (await ensureTeamThread(other.id, db)).id;

@@ -118,7 +118,7 @@ describe('aiOfficeRepo (AIO-EMP-01, AIO-EMP-02, AIO-SKILL-01)', () => {
   it('refuses to delete an employee still on a roster and names the group', async () => {
     const employee = await createEmployee(EMPLOYEE, db);
     const team = await createTeam(
-      { name: 'Nhóm A', leadId: undefined, status: 'active', budgetTokens: 0, employeeIds: [employee.id] },
+      { name: 'Nhóm A', leadId: undefined, budgetTokens: 0, employeeIds: [employee.id] },
       db
     );
     const memberRows = await db.aiTeamMembers.where('teamId').equals(team.id).toArray();
@@ -476,7 +476,7 @@ describe('aiOfficeRepo (AIO-EMP-01, AIO-EMP-02, AIO-SKILL-01)', () => {
     expect(updated.name).toBe('Lead');
 
     const team = await createTeam(
-      { name: 'Nhóm Lead', leadId: lead.id, status: 'active', budgetTokens: 0 },
+      { name: 'Nhóm Lead', leadId: lead.id, budgetTokens: 0 },
       db
     );
 
@@ -516,7 +516,7 @@ describe('aiOfficeRepo (AIO-EMP-01, AIO-EMP-02, AIO-SKILL-01)', () => {
     const employee = await createEmployee(EMPLOYEE, db);
     // D-05: a group with no leader is legal, so the lead has no live reference here.
     const team = await createTeam(
-      { name: 'Nhóm Cũ', status: 'idle', budgetTokens: 0, employeeIds: [employee.id] },
+      { name: 'Nhóm Cũ', budgetTokens: 0, employeeIds: [employee.id] },
       db
     );
     const thread = await ensureTeamThread(team.id, db);
