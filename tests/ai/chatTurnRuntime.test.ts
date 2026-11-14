@@ -8,9 +8,17 @@ import {
   type ChatTurnRequest,
   type ChatTurnRuntimeDeps,
   type ChatTurnStatus,
+  type ChatTurnToolEvent,
 } from '../../src/components/ai/runtime/chatTurnRuntime';
-import type { AiOrchestratorLoopOptions } from '../../src/services/ai/aiOrchestratorLoop';
+import { runAiOrchestratorLoop, type AiOrchestratorLoopOptions } from '../../src/services/ai/aiOrchestratorLoop';
 import type { ChatCompletionMessage } from '../../src/services/ai/types';
+
+const mockStreamChatEvents = vi.hoisted(() => vi.fn());
+vi.mock('../../src/services/ai/nineRouterClient', () => ({
+  streamChatEvents: mockStreamChatEvents,
+  streamChatCompletion: vi.fn(),
+  stripThinkingBlocks: (text: string) => text.replace(/<thinking[\s\S]*?<\/thinking>/g, '').trim(),
+}));
 
 const SCOPE_KEY = 'project:11111111-1111-4111-8111-111111111111';
 
@@ -831,6 +839,49 @@ describe('chatTurnRuntime team seams (D-07, D-12, D-13, D-19, D-21)', () => {
     expect(checked?.proceed).toBe(false);
     expect(preparePatch).not.toHaveBeenCalled();
     expect(statuses).not.toContain('awaiting-approval');
+  });
+
+  // 39-04 D-04/D-05: `propose_skill_version` is not mutation-classified, so a read-only
+  // employee turn must neither refuse it nor park it. Driven through the REAL loop, because
+  // the runtime hook refuses unconditionally — the gate that decides is `isMutationTool`.
+  it('lets propose_skill_version through a read-only turn without refusing or parking', async () => {
+    mockStreamChatEvents.mockReset();
+    let round = 0;
+    mockStreamChatEvents.mockImplementation(async function* () {
+      round += 1;
+      if (round === 1) {
+        yield {
+          type: 'tool_calls',
+          calls: [{
+            id: 'call-propose',
+            type: 'function',
+            function: { name: 'propose_skill_version', arguments: '{"name":"A"}' },
+          }],
+        };
+      } else {
+        yield { type: 'text', delta: 'Đã đề xuất.' };
+      }
+    });
+
+    const toolEvents: ChatTurnToolEvent[] = [];
+    const runtime = runtimeWith(
+      (options) => runAiOrchestratorLoop(options),
+      { onToolEvent: (event: ChatTurnToolEvent) => toolEvents.push(event) }
+    );
+
+    const outcome = await runtime.start(
+      makeRequest({ threadId, mutationPolicy: 'read-only', tools: [] })
+    );
+
+    const result = toolEvents.find((event) => event.phase === 'result');
+    expect(result?.name).toBe('propose_skill_version');
+    // It reached dispatch — the loop's fall-through reports the unknown MCP tool, which is
+    // proof the gate never intercepted it. The refusal string must be absent.
+    expect(result?.result ?? '').toContain('propose_skill_version');
+    expect(result?.result ?? '').not.toContain('READ_ONLY_EMPLOYEE');
+    expect(statuses).not.toContain('awaiting-approval');
+    expect(approvals).toHaveLength(0);
+    expect(outcome.phase).toBe('complete');
   });
 
   it('still parks a lead mutation under the default policy', async () => {

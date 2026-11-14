@@ -437,6 +437,9 @@ describe('aiTools', () => {
       expect(isMutationTool('get_daily_schedule')).toBe(false);
       expect(isMutationTool('get_system_status')).toBe(false);
       expect(isMutationTool('query_notifications')).toBe(false);
+      // 39-04 D-05: writing one inert pending row is not a mutation in the gate sense.
+      expect(isMutationTool('propose_skill_version')).toBe(false);
+      expect(isMutationTool('propose_skill_version_ide')).toBe(false);
     });
 
     it('generates readable Vietnamese description of mutations with cloaked names', () => {

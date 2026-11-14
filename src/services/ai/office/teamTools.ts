@@ -4,6 +4,12 @@ import { rankBM25, extractRelevantSnippet } from '../../../utils/bm25';
 import { buildTeamBm25Docs, getTeamTurn } from '../../../db/repositories/teamTranscriptRepo';
 import { listTeamLinks, listTeamMembers } from '../../../db/repositories/aiTeamRepo';
 import { executeAiTool, normalizeToolName, type AiToolDefinition } from '../aiTools';
+import { isRefusal, prepareSkillVersionDiff } from '../patchProposal';
+import {
+  createSkillVersion,
+  getLatestApprovedVersionNumber,
+} from '../../../db/repositories/aiSkillVersionRepo';
+import { AiSkillVersionInputSchema } from '../../../validation/aiOfficeSchemas';
 import { wrapUntrusted } from './teamPrompts';
 import { USER_PARTICIPANT_ID } from '../../../types/teamChat';
 
@@ -189,6 +195,30 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
           },
         },
         required: ['operations'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'propose_skill_version',
+      description:
+        'Đề xuất một phiên bản mới cho kỹ năng đang được gán cho bạn. Không thay đổi gì cho tới khi người dùng duyệt. Phải gửi toàn văn nội dung mới, không phải bản vá.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Tên mới của kỹ năng.' },
+          description: {
+            type: 'string',
+            description: 'Mô tả mới — đây là phần nhân viên khác thấy trước.',
+          },
+          body: { type: 'string', description: 'Toàn văn nội dung mới của kỹ năng.' },
+          evidence: {
+            type: 'string',
+            description: 'Bằng chứng ngắn từ lượt chạy này (không bắt buộc).',
+          },
+        },
+        required: ['name', 'description', 'body'],
       },
     },
   },
@@ -503,6 +533,80 @@ async function sendMessage(args: Record<string, any>, ctx: TeamToolContext): Pro
   return JSON.stringify({ to, content });
 }
 
+/**
+ * D-01/D-02/D-04: the one write an employee may make. It stores an inert `pending` row and
+ * returns the diff — never a status, never a version number, never an `aiSkills` write.
+ *
+ * D-02: the proposal is always for the caller's own assigned skill, so there is no separate
+ * leader guard — a leader has no `skillId` and is refused here.
+ */
+async function proposeSkillVersion(
+  args: Record<string, any>,
+  ctx: TeamToolContext
+): Promise<string> {
+  if (!ctx.skillId) {
+    return JSON.stringify(refuse('SKILL_NOT_ASSIGNED', 'Nhân viên này chưa được gán kỹ năng nào.'));
+  }
+  const skill = await ctx.db.aiSkills.get(ctx.skillId);
+  if (!skill) {
+    return JSON.stringify(refuse('SKILL_NOT_ASSIGNED', 'Nhân viên này chưa được gán kỹ năng nào.'));
+  }
+
+  const name = typeof args.name === 'string' ? args.name.trim() : '';
+  const description = typeof args.description === 'string' ? args.description.trim() : '';
+  const body = typeof args.body === 'string' ? args.body.trim() : '';
+  if (!name || !description || !body) {
+    return JSON.stringify(refuse('INVALID_ARGUMENT', 'Thiếu nội dung đề xuất.'));
+  }
+  // The repo schema would throw on an over-long field, and a throw is not the team-tool
+  // convention — validate here so the model gets a code it can self-correct on.
+  const evidence = typeof args.evidence === 'string' ? args.evidence.trim() : '';
+  if (evidence.length > 2000) {
+    return JSON.stringify(
+      refuse('INVALID_ARGUMENT', 'Bằng chứng quá dài (tối đa 2000 ký tự).')
+    );
+  }
+  const draft = {
+    skillId: ctx.skillId,
+    name,
+    description,
+    body,
+    ...(evidence ? { evidence } : {}),
+  };
+  const parsed = AiSkillVersionInputSchema.safeParse(draft);
+  if (!parsed.success) {
+    return JSON.stringify(
+      refuse(
+        'INVALID_ARGUMENT',
+        `Đề xuất không hợp lệ: ${parsed.error.issues.map((issue) => issue.message).join('; ')}.`
+      )
+    );
+  }
+
+  const diff = prepareSkillVersionDiff({
+    skillId: ctx.skillId,
+    base: { name: skill.name, description: skill.description, body: skill.body },
+    next: { name, description, body },
+    baseVersion: await getLatestApprovedVersionNumber(ctx.skillId, ctx.db),
+  });
+  // A refusal writes no row — an empty or oversized card must never exist.
+  if (isRefusal(diff)) return JSON.stringify(diff);
+
+  // T-39-13: never pass `status`; the repo default is `pending` and it refuses anything else.
+  const row = await createSkillVersion(
+    { skillId: ctx.skillId, name, description, body, ...(evidence ? { evidence } : {}) },
+    ctx.db
+  );
+
+  return JSON.stringify({
+    proposalId: diff.proposalId,
+    versionId: row.id,
+    addedLines: diff.addedLines,
+    removedLines: diff.removedLines,
+    diffText: diff.diffText,
+  });
+}
+
 export async function executeTeamTool(
   name: string,
   args: Record<string, any>,
@@ -524,6 +628,8 @@ export async function executeTeamTool(
       return delegateBatch(input, ctx);
     case 'amend_assignments':
       return amendAssignments(input);
+    case 'propose_skill_version':
+      return proposeSkillVersion(input, ctx);
     case 'send_message':
       return sendMessage(input, ctx);
     default:

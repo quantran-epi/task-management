@@ -332,6 +332,47 @@ describe('runAiOrchestratorLoop', () => {
     expect(toolMsg?.content).toContain('User declined');
   });
 
+  // 39-04 D-05: the gate is `isMutationTool`, so a non-mutation tool must never reach the
+  // hook — otherwise an employee turn would park (or refuse) its one permitted write.
+  it('never consults onMutationCheck for propose_skill_version', async () => {
+    let callCount = 0;
+    mockStreamChatEvents.mockImplementation(async function* () {
+      callCount++;
+      if (callCount === 1) {
+        yield {
+          type: 'tool_calls',
+          calls: [
+            {
+              id: 'call_propose',
+              type: 'function',
+              function: { name: 'propose_skill_version', arguments: '{}' },
+            },
+          ],
+        };
+      } else {
+        yield { type: 'text', delta: 'Đã đề xuất.' };
+      }
+    });
+
+    const executeToolFn = vi.fn().mockResolvedValue(JSON.stringify({ versionId: 'v-1' }));
+    const onMutationCheck = vi.fn().mockResolvedValue({ proceed: false });
+
+    const result = await runAiOrchestratorLoop({
+      endpoint: 'https://api.example.com',
+      apiKey: 'test-key',
+      model: 'test-model',
+      messages: [{ role: 'user', content: 'Đề xuất cải tiến kỹ năng' }],
+      db: testDb,
+      executeToolFn,
+      onMutationCheck,
+    });
+
+    expect(onMutationCheck).not.toHaveBeenCalled();
+    expect(executeToolFn).toHaveBeenCalledWith('propose_skill_version', {}, testDb, undefined);
+    const toolMsg = result.messages.find((m) => m.role === 'tool');
+    expect(toolMsg?.content).toContain('v-1');
+  });
+
   it('forwards the signal to tool execution and rejects an abort during the tool call', async () => {
     mockStreamChatEvents.mockImplementation(async function* () {
       yield {

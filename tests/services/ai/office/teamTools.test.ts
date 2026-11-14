@@ -74,9 +74,9 @@ describe('teamTools — transcript search and skill reader (AIO-MEM-02, AIO-MEM-
   }
 
   // 37.1 §1.1: `deliver_steer` is gone — a message reaches its recipient without a gate.
-  it('exposes the eight team tool definitions', () => {
+  it('exposes the nine team tool definitions', () => {
     const names = TEAM_TOOL_DEFINITIONS.map((tool) => tool.function.name);
-    expect(names).toHaveLength(8);
+    expect(names).toHaveLength(9);
     expect(names).toEqual(
       expect.arrayContaining([
         'search_team_history',
@@ -86,6 +86,8 @@ describe('teamTools — transcript search and skill reader (AIO-MEM-02, AIO-MEM-
         'get_linked_context',
         'delegate_batch',
         'amend_assignments',
+        // 39-04 D-01: the one write an employee may make.
+        'propose_skill_version',
         // 37.1 R6/R9: everyone may speak to everyone.
         'send_message',
       ])
@@ -832,5 +834,155 @@ describe('teamTools — amend_assignments validation (37.1 D-06/D-07/D-27)', () 
         { op: 'rewrite_task', assignmentId: 'a-2', task: 'Việc mới' },
       ],
     });
+  });
+});
+
+describe('teamTools — propose_skill_version (AIO-SKILL-02, D-01..D-06)', () => {
+  let db: TaskPlannerDatabase;
+  let teamId: string;
+  let threadId: string;
+  let agentId: string;
+  let skillId: string;
+
+  const ctx = (overrides: Partial<TeamToolContext> = {}): TeamToolContext => ({
+    db,
+    teamId,
+    threadId,
+    agentId,
+    skillId,
+    ...overrides,
+  });
+
+  const PROPOSAL = {
+    name: 'Kiểm thử hồi quy',
+    description: 'Quy trình kiểm thử hồi quy đã cải thiện',
+    body: '# Quy trình\n\nBước 1. Chạy bộ kiểm thử.\nBước 2. Ghi nhận kết quả đầy đủ.',
+  };
+
+  beforeEach(async () => {
+    db = new TaskPlannerDatabase('TestTeamToolsPropose_' + Math.random().toString(36).slice(2));
+    await db.open();
+
+    teamId = generateId();
+    agentId = generateId();
+    skillId = generateId();
+    const now = new Date().toISOString();
+    await db.aiTeams.add({
+      id: teamId,
+      name: 'Nhóm Đề Xuất',
+      leadId: generateId(),
+      status: 'idle',
+      budgetTokens: 0,
+      createdAt: now,
+      updatedAt: now,
+    });
+    threadId = (await ensureTeamThread(teamId, db)).id;
+    await db.aiSkills.add({
+      id: skillId,
+      name: 'Kiểm thử hồi quy',
+      description: 'Quy trình kiểm thử hồi quy',
+      body: '# Quy trình\n\nBước 1. Chạy bộ kiểm thử.',
+      createdAt: now,
+      updatedAt: now,
+    });
+  });
+
+  afterEach(async () => {
+    await db.delete();
+  });
+
+  async function approvedVersions() {
+    return (await db.aiSkillVersions.toArray()).filter((row) => row.status === 'approved');
+  }
+
+  // AIO-SKILL-02 / T-39-13: one inert pending row, no number, no approval.
+  it('writes exactly one pending row with no version key and returns a diff', async () => {
+    const result = JSON.parse(await executeTeamTool('propose_skill_version', PROPOSAL, ctx()));
+
+    const rows = await db.aiSkillVersions.toArray();
+    expect(rows).toHaveLength(1);
+    const [row] = rows;
+    expect(row!.status).toBe('pending');
+    expect('version' in row!).toBe(false);
+    expect(row!.baseVersion).toBe(0);
+    expect(row!.name).toBe(PROPOSAL.name);
+
+    expect(result.versionId).toBe(row!.id);
+    expect(result.proposalId).toEqual(expect.any(String));
+    expect(result.diffText).toContain(`a/skill:${skillId}/body`);
+    expect(result.addedLines).toBeGreaterThan(0);
+  });
+
+  // AIO-SKILL-04: nothing on this path can mint an approved row.
+  it('leaves the approved count unchanged and never touches aiSkills', async () => {
+    const before = await db.aiSkills.get(skillId);
+    expect(await approvedVersions()).toHaveLength(0);
+
+    await executeTeamTool('propose_skill_version', PROPOSAL, ctx());
+
+    expect(await approvedVersions()).toHaveLength(0);
+    expect(await db.aiSkills.get(skillId)).toEqual(before);
+  });
+
+  // D-02: the tool proposes only for the caller's own skill, so no leader guard is needed.
+  it('refuses SKILL_NOT_ASSIGNED and writes no row when the caller has no skill', async () => {
+    const result = JSON.parse(
+      await executeTeamTool('propose_skill_version', PROPOSAL, ctx({ skillId: undefined }))
+    );
+
+    expect(result).toMatchObject({ refused: true, code: 'SKILL_NOT_ASSIGNED' });
+    expect(await db.aiSkillVersions.count()).toBe(0);
+  });
+
+  it('refuses NO_CHANGES and writes no row when the proposal matches the current skill', async () => {
+    const current = await db.aiSkills.get(skillId);
+    const result = JSON.parse(
+      await executeTeamTool(
+        'propose_skill_version',
+        { name: current!.name, description: current!.description, body: current!.body },
+        ctx()
+      )
+    );
+
+    expect(result).toMatchObject({ refused: true, code: 'NO_CHANGES' });
+    expect(await db.aiSkillVersions.count()).toBe(0);
+  });
+
+  it('refuses an incomplete or over-long proposal without writing a row', async () => {
+    const missingBody = JSON.parse(
+      await executeTeamTool('propose_skill_version', { ...PROPOSAL, body: '   ' }, ctx())
+    );
+    expect(missingBody.code).toBe('INVALID_ARGUMENT');
+
+    const longEvidence = JSON.parse(
+      await executeTeamTool(
+        'propose_skill_version',
+        { ...PROPOSAL, evidence: 'x'.repeat(2001) },
+        ctx()
+      )
+    );
+    expect(longEvidence.code).toBe('INVALID_ARGUMENT');
+
+    expect(await db.aiSkillVersions.count()).toBe(0);
+  });
+
+  it('stores evidence when supplied and omits the key when not', async () => {
+    await executeTeamTool(
+      'propose_skill_version',
+      { ...PROPOSAL, evidence: 'Lượt chạy phát hiện thiếu bước xác nhận.' },
+      ctx()
+    );
+    await executeTeamTool(
+      'propose_skill_version',
+      { ...PROPOSAL, body: PROPOSAL.body + '\nBước 3. Ghi nhận lại.' },
+      ctx()
+    );
+
+    const rows = await db.aiSkillVersions.toArray();
+    expect(rows).toHaveLength(2);
+    const withEvidence = rows.find((row) => 'evidence' in row);
+    const withoutEvidence = rows.find((row) => !('evidence' in row));
+    expect(withEvidence?.evidence).toBe('Lượt chạy phát hiện thiếu bước xác nhận.');
+    expect(withoutEvidence?.body).toBe(PROPOSAL.body + '\nBước 3. Ghi nhận lại.');
   });
 });
