@@ -407,9 +407,10 @@ async function listLinkedItems(ctx: TeamToolContext): Promise<string> {
     items.push({
       itemId: link.itemId,
       itemType: link.itemType,
-      // WR-05: a note title or task name is untrusted — the lead prompt renders this value
-      // too, and `get_linked_context` already wraps the same text as a label.
-      name: wrapUntrusted('TÊN MỤC LIÊN KẾT', label?.name ?? link.itemId),
+      // WR-01: raw. `buildLeadTurnRequest` owns the prompt boundary and wraps this value
+      // once; wrapping here too nested the block inside itself and destroyed the inner
+      // header. A tool result is data by role — the same rule `get_linked_context` follows.
+      name: label?.name ?? link.itemId,
       ...(label?.code ? { code: label.code } : {}),
     });
   }
@@ -441,6 +442,8 @@ async function getLinkedContext(args: Record<string, any>, ctx: TeamToolContext)
     return JSON.stringify({
       itemId,
       itemType: link.itemType,
+      // IN-03: raw, exactly like `list_linked_items` — a tool result is data by role, and
+      // `buildLeadTurnRequest` wraps the name once at the prompt boundary.
       name: note.title ?? '',
       // CR-07: a linked note/document body is untrusted data.
       body: wrapUntrusted(`MỤC LIÊN KẾT ${note.title ?? itemId}`, note.body),
