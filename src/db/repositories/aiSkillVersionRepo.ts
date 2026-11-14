@@ -179,19 +179,21 @@ export async function decideSkillVersion(
     }
 
     // D-14: number over approved rows only — one reader, so the rule has one definition.
-    // CR-01: repair any legacy numbered non-approved row first, or the new number collides.
-    await stripNonApprovedVersionNumbers(existing.skillId, db);
     const latestApproved = await getLatestApprovedVersionNumber(existing.skillId, db);
 
     // WR-03: the base the user reviewed must still be the live one. Checked here, inside the
     // same `rw` transaction that writes the number, so two approvals on one base cannot both
     // land — the second would overwrite the first's content and leave it view-only history.
+    // Before the repair below, so a refused approval writes nothing at all.
     if (expectedBaseVersion !== undefined) {
       const reviewedBase = existing.baseVersion ?? 0;
       if (expectedBaseVersion !== reviewedBase || reviewedBase !== latestApproved) {
         throw new Error(STALE_VERSION_MESSAGE);
       }
     }
+
+    // CR-01: repair any legacy numbered non-approved row first, or the new number collides.
+    await stripNonApprovedVersionNumbers(existing.skillId, db);
 
     // D-07: `aiSkills` becomes the approved copy in the same transaction.
     const skill = await db.aiSkills.get(existing.skillId);
