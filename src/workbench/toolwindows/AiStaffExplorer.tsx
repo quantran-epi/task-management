@@ -7,14 +7,17 @@ import {
   CrownOutlined,
   EditOutlined,
   DeleteOutlined,
+  BookOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import {
   deleteEmployee,
   deleteLead,
+  deleteSkill,
   listEmployees,
   listLeads,
+  listSkills,
   type AiOfficeDeleteResult,
 } from '../../db/repositories/aiOfficeRepo';
 import { useLayoutStore } from '../store/layoutStore';
@@ -22,7 +25,10 @@ import {
   EmployeeEditorDrawer,
   LeadEditorDrawer,
 } from '../../components/ai/office/EmployeeEditorDrawer';
+import { SkillCard } from '../../components/ai/office/SkillCard';
+import { SkillEditorDrawer } from '../../components/ai/office/SkillEditorDrawer';
 import { refusalMessage } from '../../components/ai/office/deleteRefusalMessage';
+import type { AiSkill } from '../../types/aiOffice';
 
 export interface AiStaffExplorerProps {
   db?: TaskPlannerDatabase | undefined;
@@ -30,7 +36,13 @@ export interface AiStaffExplorerProps {
 
 export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb }) => {
   const [search, setSearch] = useState('');
-  const [createKind, setCreateKind] = useState<'employee' | 'lead' | null>(null);
+  /**
+   * D-31/D-33: the ONE open/closed source for all three drawers. A second `drawer` flag
+   * would drift and leave a create button opening nothing.
+   */
+  const [createKind, setCreateKind] = useState<'employee' | 'lead' | 'skill' | null>(null);
+  /** Create vs edit for the skill drawer. Never decides whether the drawer is open. */
+  const [editingSkill, setEditingSkill] = useState<AiSkill | null>(null);
   /** D-10/D-11/D-12: the refusal copy names the blocking groups/agents, never a UUID. */
   const [refusal, setRefusal] = useState<string | null>(null);
 
@@ -38,6 +50,10 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
 
   const employees = useLiveQuery(() => listEmployees(db), [db]) ?? [];
   const leads = useLiveQuery(() => listLeads(db), [db]) ?? [];
+  const skills = useLiveQuery(() => listSkills(db), [db]) ?? [];
+  /** T-39-30: one query reduced into a Map — never one query per card. */
+  const pendingRows =
+    useLiveQuery(() => db.aiSkillVersions.where('status').equals('pending').toArray(), [db]) ?? [];
 
   const query = search.trim().toLowerCase();
   const matches = (...values: Array<string | undefined>) =>
@@ -51,6 +67,28 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
     () => leads.filter((l) => matches(l.name, l.role, l.model)),
     [leads, query]
   );
+  const filteredSkills = useMemo(
+    () => skills.filter((s) => matches(s.name, s.description)),
+    [skills, query]
+  );
+
+  /** T-39-30: derived from the one `employees` read, not one count query per skill. */
+  const agentCountBySkill = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const emp of employees) {
+      if (!emp.skillId) continue;
+      counts.set(emp.skillId, (counts.get(emp.skillId) ?? 0) + 1);
+    }
+    return counts;
+  }, [employees]);
+
+  const pendingCountBySkill = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of pendingRows) {
+      counts.set(row.skillId, (counts.get(row.skillId) ?? 0) + 1);
+    }
+    return counts;
+  }, [pendingRows]);
 
   const handleOpenStaff = (id: string, name: string, roleType: 'employee' | 'lead') => {
     openTab({
@@ -63,6 +101,14 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
   };
 
   const applyRefusal = (result: AiOfficeDeleteResult) => setRefusal(refusalMessage(result));
+
+  /**
+   * T-39-28: `SkillCard`'s own `Popconfirm` already asked. Routing this through
+   * `confirmDelete` would stack a second `Modal.confirm` on top of it.
+   */
+  const handleDeleteSkill = async (skill: AiSkill) => {
+    applyRefusal(await deleteSkill(skill.id, db));
+  };
 
   /**
    * Confirms, then lets the repo decide. A refusal is not an error dialog: the row is still
@@ -128,7 +174,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
         <Input
           size="small"
           prefix={<SearchOutlined style={{ color: 'var(--fg-muted, #6c707e)' }} />}
-          placeholder="Tìm staff..."
+          placeholder="Tìm lead, nhân viên, kỹ năng..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           allowClear
@@ -150,6 +196,19 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
             icon={<PlusOutlined />}
             onClick={() => setCreateKind('employee')}
             aria-label="Thêm Nhân viên AI"
+          />
+        </Tooltip>
+        <Tooltip title="Thêm Kỹ năng">
+          <Button
+            size="small"
+            type="text"
+            icon={<BookOutlined style={{ color: 'var(--accent, #5b4fe8)' }} />}
+            onClick={() => {
+              setEditingSkill(null);
+              setCreateKind('skill');
+            }}
+            aria-label="Thêm Kỹ năng"
+            data-testid="ai-staff-skill-create"
           />
         </Tooltip>
       </div>
@@ -323,6 +382,48 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
             ))
           )}
         </div>
+
+        {/* Section: Kỹ năng — D-31/D-33: the only skill CRUD entry point in the app. */}
+        <div data-testid="ai-staff-skills-section" style={{ marginTop: 12 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '4px 6px',
+              fontSize: 11,
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              color: 'var(--fg-secondary, #5f6269)',
+              letterSpacing: '0.04em',
+            }}
+          >
+            <span>Kỹ năng ({filteredSkills.length})</span>
+          </div>
+
+          {filteredSkills.length === 0 ? (
+            <div style={{ padding: '6px 8px', fontSize: 12, color: 'var(--fg-muted, #8c8f9c)' }}>
+              Chưa có kỹ năng nào
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {filteredSkills.map((skill) => (
+                <div key={skill.id} data-testid={`ai-staff-skill-${skill.id}`}>
+                  <SkillCard
+                    skill={skill}
+                    agentCount={agentCountBySkill.get(skill.id) ?? 0}
+                    pendingCount={pendingCountBySkill.get(skill.id) ?? 0}
+                    onEdit={() => {
+                      setEditingSkill(skill);
+                      setCreateKind('skill');
+                    }}
+                    onDelete={() => void handleDeleteSkill(skill)}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {refusal && (
@@ -350,6 +451,19 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
         lead={null}
         onCancel={() => setCreateKind(null)}
         onSaved={() => setCreateKind(null)}
+        db={db}
+      />
+      <SkillEditorDrawer
+        open={createKind === 'skill'}
+        skill={editingSkill}
+        onCancel={() => {
+          setCreateKind(null);
+          setEditingSkill(null);
+        }}
+        onSaved={() => {
+          setCreateKind(null);
+          setEditingSkill(null);
+        }}
         db={db}
       />
     </div>
