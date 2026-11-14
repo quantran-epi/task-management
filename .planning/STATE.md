@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 Phase: 40
 Plan: Not started
 Status: Ready to discuss
-Last activity: 2026-11-14
+Last activity: 2026-11-14 - Completed quick task 261114-pxi: Add knowledge research tools to the AI Office allowlist
 
 ## Session Continuity
 
@@ -56,6 +56,7 @@ Progress: [█████████░] 92%
 | 261111-d2p | Close remaining phase-36 review findings: WR-07/08/09/11/12 and IN-01..IN-04/06/07/08, record WR-13 in ROADMAP phase 38 | 2026-11-11 | 89186433 | [261111-d2p-close-phase-36-review-findings-part-two](./quick/261111-d2p-close-phase-36-review-findings-part-two/) |
 | 261113-ita | Fix team notification focus, unread viewport and missing-leader warning | 2026-11-13 | e8ce7e4f | [261113-ita-fix-confirmed-team-chat-focus-unread-and](./quick/261113-ita-fix-confirmed-team-chat-focus-unread-and/) |
 | 261113-ko9 | Restore last-read chat position, viewport read receipts, collapse plans and expose leader budget wait | 2026-11-13 | fa96058b | [261113-ko9-open-team-chat-at-latest-messages-and-co](./quick/261113-ko9-open-team-chat-at-latest-messages-and-co/) |
+| 261114-pxi | Add knowledge research tools (retrieve_knowledge, get_document_details) to the AI Office allowlist | 2026-11-14 | ced06e08 | [261114-pxi-add-retrieve-knowledge-and-get-document-](./quick/261114-pxi-add-retrieve-knowledge-and-get-document-/) |
 
 ## Accumulated Context
 
