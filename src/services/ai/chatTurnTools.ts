@@ -11,6 +11,12 @@ import { isReadOnlyMcpTool } from './mcpClient';
  * (`search_team_history`, `read_team_turn`, `read_skill`) are appended by the
  * coordinator from `TEAM_TOOL_DEFINITIONS` — they are not `AI_DATABASE_TOOLS`
  * members. `delegate_batch` is lead-only (Pitfall 10: no nested batches).
+ *
+ * `retrieve_knowledge` (hybrid fulltext + vector + graph) and `get_document_details`
+ * (full local document read) mirror the AI Chat panel's knowledge research. Both are safe
+ * to advertise unconditionally: `retrieve_knowledge` returns a structured error string when
+ * the knowledge server is off rather than throwing, and `get_document_details` wraps
+ * `title` / `body` / `tags` through `wrapField`, so the untrusted-data boundary holds.
  */
 export const EMPLOYEE_READ_ONLY_ALLOWLIST: readonly string[] = [
   'query_tasks',
@@ -28,6 +34,8 @@ export const EMPLOYEE_READ_ONLY_ALLOWLIST: readonly string[] = [
   'query_recurring_tasks',
   'get_system_status',
   'search_knowledge_base',
+  'retrieve_knowledge',
+  'get_document_details',
   'read_file',
 ];
 
