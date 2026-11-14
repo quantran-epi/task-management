@@ -32,17 +32,21 @@ const UNTRUSTED_CLOSE = 'KẾT THÚC DỮ LIỆU KHÔNG ĐÁNG TIN';
  * otherwise place the closing tag inside itself and land everything after it outside the
  * block, impersonating policy. Every delimiter-shaped run inside the body is redacted.
  *
+ * CR-01: the phrase is ordinary Vietnamese ("untrusted data"), so the match is anchored to
+ * the delimiter SHAPE — a leading `[` or the `KẾT THÚC` prefix — and the tail may not cross
+ * a line. Matching the bare words, or letting `\s` span newlines as round 2's WR-04 widening
+ * did, deleted legitimate body text from every prompt this guards.
+ *
  * WR-04: the tag is Vietnamese text, so the match must survive the shapes a model or macOS
- * actually produces — any whitespace run (double space, tab, NBSP) and NFD normalisation.
- * Normalising first collapses the NFD case; `\s` covers the whitespace variants.
+ * actually produces — any horizontal whitespace run (double space, tab, NBSP) and NFD
+ * normalisation. Normalising first collapses the NFD case; `[^\S\n]` covers the rest
+ * without ever crossing a line boundary.
  */
+const DELIMITER_SHAPE =
+  /(?:\[[^\S\n]*(?:KẾT[^\S\n]+THÚC[^\S\n]+)?|KẾT[^\S\n]+THÚC[^\S\n]+)DỮ[^\S\n]+LIỆU[^\S\n]+KHÔNG[^\S\n]+ĐÁNG[^\S\n]+TIN[^\]\n]*\]?/giu;
+
 function neutralizeDelimiters(text: string): string {
-  return text
-    .normalize('NFC')
-    .replace(
-      /\[?\s*(?:KẾT\s+THÚC\s+)?DỮ\s+LIỆU\s+KHÔNG\s+ĐÁNG\s+TIN[^\]]*\]?/giu,
-      '[redacted-tag]'
-    );
+  return text.normalize('NFC').replace(DELIMITER_SHAPE, '[redacted-tag]');
 }
 
 /**

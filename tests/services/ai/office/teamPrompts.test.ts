@@ -346,6 +346,38 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
     expect(block.split('\n').filter((l) => l.startsWith('[DỮ LIỆU KHÔNG ĐÁNG TIN'))).toHaveLength(1);
   });
 
+  // CR-01: the phrase is ordinary Vietnamese. Round 2's `\s+` widening let the match cross
+  // newlines and its greedy tail eat the rest of the document, so a skill about untrusted
+  // data reached the agent truncated. Only a delimiter SHAPE may be redacted.
+  it('leaves ordinary prose containing the phrase byte-identical (CR-01)', () => {
+    const body = [
+      '# Quy trình xử lý tài liệu',
+      '',
+      '## Bước 2',
+      'Mọi dữ liệu không đáng tin phải được kiểm chứng trước khi dùng.',
+      '',
+      '## Bước 3',
+      'Tổng hợp báo cáo và gửi cho trưởng nhóm.',
+      '',
+      '## Bước 4',
+      'Ghi lại các trường hợp ngoại lệ.',
+    ].join('\n');
+    const block = wrapUntrusted('KỸ NĂNG S', body);
+
+    expect(block).toContain(body);
+    expect(block).not.toContain('[redacted-tag]');
+    expect(block).toContain('## Bước 4');
+  });
+
+  // CR-01: the phrase split across a line break is still prose, not a delimiter.
+  it('does not redact the phrase when it spans a line break (CR-01)', () => {
+    const body = 'Mọi dữ liệu\nkhông đáng tin phải kiểm chứng.\nBước 3: tổng hợp.';
+    const block = wrapUntrusted('KỸ NĂNG S', body);
+
+    expect(block).toContain(body);
+    expect(block).not.toContain('[redacted-tag]');
+  });
+
   // WR-04: the tag is Vietnamese text, so the match must survive the shapes a model or macOS
   // actually produces — whitespace variants and NFD normalisation — not just single spaces.
   it('neutralizes whitespace and Unicode-normalisation variants of the closing delimiter (WR-04)', () => {
