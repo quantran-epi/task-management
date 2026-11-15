@@ -3,7 +3,13 @@ import type { AiTeam, AiTeamLink, AiTeamMember } from '../../types/aiOffice';
 import { clampBudgetWarnThresholdPct, clampTeamConcurrency } from '../../types/aiOffice';
 import { generateId } from '../../utils/uuid';
 import { splitEvenly } from '../../services/ai/office/budgetSplit';
-import { createTeamDocsTree, deleteTeamDocsTree } from './teamDocsRepo';
+import {
+  createMemberFolder,
+  createTeamDocsTree,
+  deleteTeamDocsTree,
+  ensureTeamDocsReady,
+  isLiveFolder,
+} from './teamDocsRepo';
 import {
   AiTeamInputSchema,
   AiTeamUpdateSchema,
@@ -462,34 +468,64 @@ export async function addTeamMember(
     throw new Error('Dùng assignLeader để chọn leader.');
   }
 
-  return db.transaction('rw', [db.aiTeamMembers, db.aiEmployees], async () => {
-    // WR-05: a dangling agentId produces a backup the app's own validator rejects.
-    const agent = await db.aiEmployees.get(validated.agentId);
-    if (!agent) throw new Error(`Không tìm thấy nhân viên: ${validated.agentId}`);
+  // D-11: `db.aiTeams`/`db.notes`/`db.settings` join the transaction because the dead-tree path
+  // reaches `ensureTeamDocsReady`, whose own transaction spans all five of these tables.
+  return db.transaction(
+    'rw',
+    [db.aiTeamMembers, db.aiEmployees, db.aiTeams, db.notes, db.settings],
+    async () => {
+      // WR-05: a dangling agentId produces a backup the app's own validator rejects.
+      const agent = await db.aiEmployees.get(validated.agentId);
+      if (!agent) throw new Error(`Không tìm thấy nhân viên: ${validated.agentId}`);
 
-    const siblings = await db.aiTeamMembers
-      .where('teamId')
-      .equals(validated.teamId)
-      .toArray();
+      const siblings = await db.aiTeamMembers
+        .where('teamId')
+        .equals(validated.teamId)
+        .toArray();
 
-    // WR-04: a double click can race the Select's option list.
-    if (siblings.some((row) => row.agentId === validated.agentId)) {
-      throw new Error('Nhân viên đã có trong nhóm.');
+      // WR-04: a double click can race the Select's option list.
+      if (siblings.some((row) => row.agentId === validated.agentId)) {
+        throw new Error('Nhân viên đã có trong nhóm.');
+      }
+
+      const member: AiTeamMember = {
+        id: generateId(),
+        teamId: validated.teamId,
+        agentId: validated.agentId,
+        role: validated.role,
+        budgetTokens: validated.budgetTokens,
+        usedTokens: validated.usedTokens,
+        inputTokens: 0,
+        outputTokens: 0,
+      };
+      await db.aiTeamMembers.add(member);
+
+      // D-11: the member gets its own folder in this same transaction. The two paths must stay
+      // separate — running both would mint a ` (2)` duplicate for the same agent.
+      const team = await db.aiTeams.get(validated.teamId);
+      if (!team) throw new Error(`Không tìm thấy nhóm: ${validated.teamId}`);
+
+      const teamFolderId = team.docsFolderId;
+      if (teamFolderId !== undefined && (await isLiveFolder(teamFolderId, db))) {
+        // Path A — live tree: mint the folder here.
+        const folderId = await createMemberFolder(teamFolderId, agent.name, db);
+        await db.aiTeamMembers.update(member.id, { docsFolderId: folderId });
+        return { ...member, docsFolderId: folderId };
+      }
+
+      // Path B — dead or absent tree: the backfill recreates the whole tree and writes
+      // `docsFolderId` on every member row, including the one just added. Take the id FROM ITS
+      // MAP and mint nothing, or the agent ends up with two folders.
+      const ready = await ensureTeamDocsReady(validated.teamId, db);
+      const folderId = ready.memberFolderIds.get(validated.agentId);
+      if (folderId === undefined) {
+        // The row was not visible to the backfill's read — a bug worth surfacing, not a
+        // member written without a folder.
+        throw new Error(`Không tạo được thư mục tài liệu cho thành viên: ${validated.agentId}`);
+      }
+      return { ...member, docsFolderId: folderId };
     }
-
-    const member: AiTeamMember = {
-      id: generateId(),
-      teamId: validated.teamId,
-      agentId: validated.agentId,
-      role: validated.role,
-      budgetTokens: validated.budgetTokens,
-      usedTokens: validated.usedTokens,
-      inputTokens: 0,
-      outputTokens: 0,
-    };
-    await db.aiTeamMembers.add(member);
-    return member;
-  });
+  );
 }
 
 export async function removeTeamMember(
@@ -502,6 +538,9 @@ export async function removeTeamMember(
     if (row.role === 'lead') {
       throw new Error('Không thể gỡ leader khỏi nhóm. Hãy đổi leader trước khi khóa.');
     }
+    // D-11: the member's folder and the documents inside it STAY. The owner must still be able
+    // to read what that member wrote; the folder disappears only when the whole team is deleted.
+    // Do not "clean up" the tree here.
     await db.aiTeamMembers.delete(memberId);
     // Releasing a seat releases its allocation: the team total is the sum of its grants.
     // Same transaction as the delete, so the roster and the total can never disagree.
