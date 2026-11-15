@@ -174,6 +174,14 @@ export interface BuildLeadTurnRequestInput {
 export const LEAD_NO_WRITE_DOC_LINE =
   'Leader không dùng write_doc — đường ghi của leader là công cụ cơ sở dữ liệu, mỗi lần ghi dừng ở thẻ phê duyệt.';
 
+/**
+ * UAT-41 test 12: the leader delegated `create_note` to an employee, which the employee
+ * read-only gate refuses, so the turn cancelled. The member write channel is `write_doc`.
+ * Exported so the test asserts this exact sentence instead of a paraphrase.
+ */
+export const EMPLOYEE_WRITE_DOC_LINE =
+  'Mỗi nhân viên tự ghi tài liệu của mình bằng công cụ nhóm write_doc (list/create/update) trong folder riêng của họ, không qua thẻ phê duyệt; khi giao việc tài liệu, ghi rõ trong nội dung việc là nhân viên dùng write_doc; create_note là đường ghi của LEADER nên không được giao cho nhân viên.';
+
 export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTurn {
   const {
     lead,
@@ -231,6 +239,7 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
       'Đọc bản nháp của một nhân viên bằng query_notes với parentId = folder id của nhân viên đó, rồi tổng hợp.',
       'Sau khi người dùng duyệt, ghi bản CUỐI vào folder nhóm bằng create_note; mỗi lần ghi dừng ở thẻ phê duyệt và chính lần chấp nhận của người dùng mới đặt tài liệu vào đó.',
       'Bản nháp của nhân viên giữ nguyên tại chỗ — không xoá, không di chuyển, không sửa.',
+      EMPLOYEE_WRITE_DOC_LINE,
       LEAD_NO_WRITE_DOC_LINE
     );
     parts.push(lines.join('\n'));

@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
 import {
+  EMPLOYEE_WRITE_DOC_LINE,
   LEAD_NO_WRITE_DOC_LINE,
   buildEmployeeTurnRequest,
   buildLeadTurnRequest,
@@ -672,5 +673,20 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
     expect(system).toContain(LEAD_NO_WRITE_DOC_LINE);
     expect(system).not.toContain('Folder tài liệu của bạn');
     expect(system).toContain('create_note');
+  });
+
+  // UAT-41 test 12: the leader delegated create_note, which the employee gate refuses.
+  it('tells the lead that employees write with write_doc', () => {
+    const system = buildLead({
+      docsFolderId: 'team-folder',
+      memberFolders: [{ agentName: 'Lan', folderId: 'folder-a' }],
+    })
+      .systemMessages.map((m) => m.content)
+      .join('\n');
+
+    expect(system).toContain(EMPLOYEE_WRITE_DOC_LINE);
+    expect(system).toContain(LEAD_NO_WRITE_DOC_LINE);
+    expect(EMPLOYEE_WRITE_DOC_LINE).toContain('write_doc');
+    expect(EMPLOYEE_WRITE_DOC_LINE).toContain('create_note');
   });
 });
