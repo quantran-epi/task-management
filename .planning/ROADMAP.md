@@ -947,12 +947,12 @@ Plans:
 
 **Research flag:** standard patterns — skip research-phase.
 
-**Plans:** 6 plans in 5 waves
+**Plans:** 1/6 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 41-01-PLAN.md — Dexie V27, `docsFolderId` on `AiTeam`/`AiTeamMember` and both backup record schemas, three `LATEST_SCHEMA_VERSION` test pins, ROADMAP/REQUIREMENTS wording correction
+- [x] 41-01-PLAN.md — Dexie V27, `docsFolderId` on `AiTeam`/`AiTeamMember` and both backup record schemas, three `LATEST_SCHEMA_VERSION` test pins, ROADMAP/REQUIREMENTS wording correction
 
 **Wave 2** *(depends on 41-01)*
 

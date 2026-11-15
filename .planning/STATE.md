@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
-status: Ready to discuss
-stopped_at: Phase 41 context gathered
-last_updated: "2026-11-15T04:39:22.448Z"
-last_activity: "2026-11-14 - Completed quick task 261114-qjh: Redesign the team chat transcript"
+status: executing
+stopped_at: Completed 41-01-PLAN.md
+last_updated: "2026-11-15T04:43:13.842Z"
+last_activity: 2026-11-15 -- Phase 41 execution started
 progress:
   total_phases: 7
   completed_phases: 4
@@ -21,20 +21,20 @@ current_phase_name: Explorer UX, CRUD correctness, observed walkthrough
 See: .planning/PROJECT.md (updated 2026-11-09)
 
 **Core value:** Hợp nhất SDLC Studio và AI Office thành Unified AI Office dạng chat-first, free-style với token budget cứng và làm giàu skill.
-**Current focus:** Phase 40 — Explorer UX, CRUD correctness, observed walkthrough
+**Current focus:** Phase 41 — AI Office team docs zones
 
 ## Current Position
 
-Phase: 40
-Plan: Not started
-Status: Ready to discuss
-Last activity: 2026-11-14 - Completed quick task 261114-qjh: Redesign the team chat transcript
+Phase: 41 (AI Office team docs zones) — EXECUTING
+Plan: 2 of 6
+Status: Ready to execute
+Last activity: 2026-11-15 -- Phase 41 execution started
 
 ## Session Continuity
 
-Last session: 2026-11-15T03:38:39.493Z
-Stopped at: Phase 41 context gathered
-Resume file: .planning/phases/41-ai-office-team-docs-zones-per-team-docs-folder-tree-and-agen/41-CONTEXT.md
+Last session: 2026-11-15T04:43:13.835Z
+Stopped at: Completed 41-01-PLAN.md
+Resume file: None
 
 Progress: [█████████░] 92%
 
@@ -191,6 +191,8 @@ Progress: [█████████░] 92%
 - [Phase ?]: Split budget rendering sums every member row so the header agrees with the ledger the coordinator reconciles against
 - [Phase ?]: A provisional pre-call measurement renders with the ~ estimate marker because it is not a provider number
 - [Phase ?]: AgentPausedBanner deleted: awaiting-budget has no producer and its copy claimed a parked turn plus a literal 80%
+- [Phase 41]: D-13/D-15: docsFolderId is unindexed row payload; V27 spreads SCHEMA_V26 byte-identically and needs no upgrade hook
+- [Phase 41]: D-14: docsFolderId is uuidSchema.optional() in both AI team backup strictObjects; not added to FORBIDDEN_BACKUP_KEYS
 
 ## Performance Metrics
 
@@ -221,3 +223,4 @@ Progress: [█████████░] 92%
 | Phase 38 P07 | 22min | 3 tasks | 9 files |
 | Phase 38 P08 | 14min | 3 tasks | 8 files |
 | Phase 38 P09 | 26min | 3 tasks | 12 files |
+| Phase 41 P01 | 5m | 3 tasks | 9 files |
