@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TaskPlannerDatabase } from '../../../../src/db/index';
 import {
   getTeam,
@@ -26,6 +26,12 @@ import { clampTeamConcurrency, DEFAULT_TEAM_CONCURRENCY } from '../../../../src/
 import { LATEST_SCHEMA_VERSION } from '../../../../src/db/schema';
 import { createEmployee, createLead } from '../../../../src/db/repositories/aiOfficeRepo';
 import { splitEvenly } from '../../../../src/services/ai/office/budgetSplit';
+import {
+  AI_TEAMS_DOCS_ROOT_SETTING_KEY,
+  AI_TEAMS_DOCS_ROOT_TITLE,
+  deleteTeamDocsTree,
+} from '../../../../src/db/repositories/teamDocsRepo';
+import { createNote } from '../../../../src/db/repositories/noteRepo';
 
 function leadInput(name: string) {
   return { name, role: 'Lead', capability: 'c', persona: 'p', model: 'm' };
@@ -1063,6 +1069,269 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
       expect(clampTeamConcurrency(Number.POSITIVE_INFINITY)).toBe(DEFAULT_TEAM_CONCURRENCY);
       expect(clampTeamConcurrency(1)).toBe(1);
       expect(clampTeamConcurrency(12)).toBe(12);
+    });
+  });
+
+  describe('aiTeamRepo — team docs folder tree (AIO-DOCS-01, AIO-DOCS-06, D-09..D-11)', () => {
+    /** Raw rows, never `getNotesByFolder` — the test must prove the rows exist. */
+    async function childrenOf(parentId: string) {
+      return db.notes.where('parentId').equals(parentId).toArray();
+    }
+
+    async function childFolders(parentId: string) {
+      return (await childrenOf(parentId)).filter((note) => note.type === 'folder');
+    }
+
+    async function rootFolder() {
+      const setting = await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY);
+      const rootId = typeof setting?.value === 'string' ? setting.value : undefined;
+      return rootId === undefined ? undefined : db.notes.get(rootId);
+    }
+
+    /** D-12: strip the field the way a pre-41 row never had it — Dexie cannot store `undefined`. */
+    function stripDocsFolderId<T extends { docsFolderId?: string | undefined }>(row: T): T {
+      const copy = { ...row };
+      delete copy.docsFolderId;
+      return copy;
+    }
+
+    /** Simulate a pre-41 team: no tree, no `docsFolderId` on the team or its member rows. */
+    async function makePre41(teamId: string) {
+      const team = (await getTeam(teamId, db))!;
+      await deleteTeamDocsTree(team.docsFolderId, db);
+      await db.aiTeams.put(stripDocsFolderId(team));
+      for (const row of await db.aiTeamMembers.where('teamId').equals(teamId).toArray()) {
+        await db.aiTeamMembers.put(stripDocsFolderId(row));
+      }
+    }
+
+    it('creates 1 + 1 + N folders with the team folder under the shared root', async () => {
+      const team = await createTeam(
+        { name: 'Tree', leadId, budgetTokens: 0, employeeIds: employeeIds.slice(0, 2) },
+        db
+      );
+
+      // 1 root + 1 team folder + 3 member folders (the lead is a member row like any other).
+      expect(await db.notes.count()).toBe(5);
+      const folders = (await db.notes.toArray()).filter((note) => note.type === 'folder');
+      expect(folders).toHaveLength(5);
+
+      const root = await rootFolder();
+      expect(root?.title).toBe(AI_TEAMS_DOCS_ROOT_TITLE);
+      expect(team.docsFolderId).toBeDefined();
+
+      const teamFolder = (await db.notes.get(team.docsFolderId!))!;
+      expect(teamFolder.type).toBe('folder');
+      expect(teamFolder.title).toBe('Tree');
+      expect(teamFolder.parentId).toBe(root!.id);
+
+      const memberFolders = await childFolders(teamFolder.id);
+      expect(memberFolders).toHaveLength(3);
+      expect(memberFolders.map((note) => note.title).sort()).toEqual(['An', 'E1', 'E2']);
+    });
+
+    it('writes docsFolderId on the team and on every member row', async () => {
+      const team = await createTeam(
+        { name: 'Ids', leadId, budgetTokens: 0, employeeIds: employeeIds.slice(0, 2) },
+        db
+      );
+
+      expect((await getTeam(team.id, db))?.docsFolderId).toBe(team.docsFolderId);
+      const rows = await db.aiTeamMembers.where('teamId').equals(team.id).toArray();
+      expect(rows).toHaveLength(3);
+      for (const row of rows) {
+        const folder = row.docsFolderId === undefined ? undefined : await db.notes.get(row.docsFolderId);
+        expect(folder?.type).toBe('folder');
+        expect(folder?.parentId).toBe(team.docsFolderId);
+      }
+    });
+
+    it('rolls the team, the members, the folders and the root setting back on a throw', async () => {
+      const spy = vi.spyOn(db.notes, 'add').mockRejectedValueOnce(new Error('boom'));
+
+      await expect(
+        createTeam({ name: 'Rollback', leadId, budgetTokens: 0, employeeIds: [employeeIds[0]!] }, db)
+      ).rejects.toThrow(/boom/i);
+      spy.mockRestore();
+
+      expect(await db.aiTeams.count()).toBe(0);
+      expect(await db.aiTeamMembers.count()).toBe(0);
+      expect(await db.notes.count()).toBe(0);
+      expect(await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY)).toBeUndefined();
+    });
+
+    it('reuses one shared root across two teams', async () => {
+      const first = await createTeam({ name: 'One', leadId, budgetTokens: 0 }, db);
+      const second = await createTeam({ name: 'Two', leadId, budgetTokens: 0 }, db);
+
+      const roots = (await db.notes.toArray()).filter(
+        (note) => note.title === AI_TEAMS_DOCS_ROOT_TITLE
+      );
+      expect(roots).toHaveLength(1);
+      expect((await db.notes.get(first.docsFolderId!))?.parentId).toBe(roots[0]!.id);
+      expect((await db.notes.get(second.docsFolderId!))?.parentId).toBe(roots[0]!.id);
+    });
+
+    it('deleteTeam removes the whole tree and keeps the shared root and its setting', async () => {
+      const team = await createTeam(
+        { name: 'Doomed', leadId, budgetTokens: 0, employeeIds: [employeeIds[0]!] },
+        db
+      );
+      const teamFolderId = team.docsFolderId!;
+      const [memberFolder] = await childFolders(teamFolderId);
+      const inMember = await createNote(
+        { title: 'Draft', body: 'x', type: 'document', parentId: memberFolder!.id },
+        db
+      );
+      const inTeam = await createNote(
+        { title: 'Team doc', body: 'x', type: 'document', parentId: teamFolderId },
+        db
+      );
+      const root = await rootFolder();
+
+      await deleteTeam(team.id, db);
+
+      expect(await db.notes.get(teamFolderId)).toBeUndefined();
+      expect(await db.notes.get(memberFolder!.id)).toBeUndefined();
+      expect(await db.notes.get(inMember.id)).toBeUndefined();
+      expect(await db.notes.get(inTeam.id)).toBeUndefined();
+      expect(await db.notes.get(root!.id)).toBeDefined();
+      expect(await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY)).toBeDefined();
+    });
+
+    it('addTeamMember creates the new folder immediately', async () => {
+      const team = await createTeam(
+        { name: 'Grow', leadId, budgetTokens: 0, employeeIds: [employeeIds[0]!] },
+        db
+      );
+
+      const added = await addTeamMember(
+        { teamId: team.id, agentId: employeeIds[1]!, role: 'employee', budgetTokens: 0 },
+        db
+      );
+
+      const folders = await childFolders(team.docsFolderId!);
+      expect(folders.map((note) => note.title).sort()).toEqual(['An', 'E1', 'E2']);
+      const folder = await db.notes.get(added.docsFolderId!);
+      expect(folder?.title).toBe('E2');
+      expect(folder?.parentId).toBe(team.docsFolderId);
+    });
+
+    it('addTeamMember on a pre-41 team backfills and mints exactly one folder', async () => {
+      const team = await createTeam(
+        { name: 'Legacy', leadId, budgetTokens: 0, employeeIds: [employeeIds[0]!] },
+        db
+      );
+      await makePre41(team.id);
+      expect(await db.notes.count()).toBe(1); // only the shared root survives
+
+      const added = await addTeamMember(
+        { teamId: team.id, agentId: employeeIds[2]!, role: 'employee', budgetTokens: 0 },
+        db
+      );
+
+      const recreated = (await getTeam(team.id, db))!.docsFolderId!;
+      expect(recreated).toBeDefined();
+      const folders = await childFolders(recreated);
+      // Roster after the add: lead + E1 + E3.
+      expect(folders).toHaveLength(3);
+      expect(folders.filter((note) => note.title === 'E3')).toHaveLength(1);
+      expect(folders.some((note) => note.title?.includes('(2)'))).toBe(false);
+      expect(await db.notes.count()).toBe(1 + 1 + 3);
+      expect((await db.notes.get(added.docsFolderId!))?.parentId).toBe(recreated);
+      for (const row of await db.aiTeamMembers.where('teamId').equals(team.id).toArray()) {
+        expect(row.docsFolderId).toBeDefined();
+      }
+    });
+
+    it('removeTeamMember keeps the folder and the documents inside it', async () => {
+      const team = await createTeam(
+        { name: 'Shrink', leadId, budgetTokens: 0, employeeIds: employeeIds.slice(0, 2) },
+        db
+      );
+      const row = (await listTeamMembers(team.id, db)).find(
+        (member) => member.agentId === employeeIds[1]
+      )!;
+      const doc = await createNote(
+        { title: 'Kept', body: 'x', type: 'document', parentId: row.docsFolderId! },
+        db
+      );
+
+      await removeTeamMember(row.id, db);
+
+      expect(await db.aiTeamMembers.get(row.id)).toBeUndefined();
+      expect(await db.notes.get(row.docsFolderId!)).toBeDefined();
+      expect(await db.notes.get(doc.id)).toBeDefined();
+    });
+
+    it('assignLeader gives the new lead a folder and re-assignment mints no extra one', async () => {
+      const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
+      const team = await makeTeam('LeaderFolder');
+      const leadRow = (await listTeamMembers(team.id, db)).find((m) => m.role === 'lead')!;
+      // Recorded usage keeps the outgoing row (demoted, with its folder) instead of deleting it.
+      await db.aiTeamMembers.update(leadRow.id, { usedTokens: 500 });
+      const folderCountBefore = await db.notes.count();
+
+      await assignLeader(team.id, otherLeadId, db);
+
+      const after = await listTeamMembers(team.id, db);
+      const newLead = after.find((m) => m.role === 'lead')!;
+      expect(newLead.agentId).toBe(otherLeadId);
+      const teamFolderId = (await getTeam(team.id, db))!.docsFolderId!;
+      for (const member of after) {
+        const folder = member.docsFolderId === undefined
+          ? undefined
+          : await db.notes.get(member.docsFolderId);
+        expect(folder?.type).toBe('folder');
+        expect(folder?.parentId).toBe(teamFolderId);
+      }
+      expect(await db.notes.count()).toBe(folderCountBefore + 1);
+
+      const demotedBefore = after.find((m) => m.agentId === leadId)!;
+      await assignLeader(team.id, leadId, db);
+
+      const back = await listTeamMembers(team.id, db);
+      expect(back.find((m) => m.role === 'lead')!.agentId).toBe(leadId);
+      expect(back.find((m) => m.agentId === leadId)!.docsFolderId).toBe(demotedBefore.docsFolderId);
+      expect(await db.notes.count()).toBe(folderCountBefore + 1);
+    });
+
+    it('assignLeader on a pre-41 team backfills first without a duplicate folder', async () => {
+      const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
+      const team = await makeTeam('LegacyLead');
+      await makePre41(team.id);
+
+      await assignLeader(team.id, otherLeadId, db);
+
+      const recreated = (await getTeam(team.id, db))!.docsFolderId!;
+      expect(recreated).toBeDefined();
+      const folders = await childFolders(recreated);
+      expect(folders.some((note) => note.title?.includes('(2)'))).toBe(false);
+      const leadRow = (await listTeamMembers(team.id, db)).find((m) => m.role === 'lead')!;
+      expect(leadRow.agentId).toBe(otherLeadId);
+      expect((await db.notes.get(leadRow.docsFolderId!))?.parentId).toBe(recreated);
+    });
+
+    it('a leadId patch through updateTeam gives the new lead a live folder', async () => {
+      const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
+      const team = await makeTeam('UpdateLead');
+
+      const updated = await updateTeam(team.id, { leadId: otherLeadId }, db);
+
+      expect(updated.leadId).toBe(otherLeadId);
+      const teamFolderId = (await getTeam(team.id, db))!.docsFolderId!;
+      const leadRow = (await listTeamMembers(team.id, db)).find((m) => m.role === 'lead')!;
+      expect(leadRow.agentId).toBe(otherLeadId);
+      const folder = await db.notes.get(leadRow.docsFolderId!);
+      expect(folder?.type).toBe('folder');
+      expect(folder?.parentId).toBe(teamFolderId);
+
+      // 1 root + 1 team folder + 4 member folders: the outgoing lead's row is dropped (no
+      // usage) but its folder is retained by D-11, and the new lead gets exactly one folder.
+      expect(await db.notes.count()).toBe(1 + 1 + 4);
+      expect((await childFolders(teamFolderId)).some((note) => note.title?.includes('(2)'))).toBe(
+        false
+      );
     });
   });
 });
