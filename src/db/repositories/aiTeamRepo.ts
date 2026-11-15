@@ -223,7 +223,12 @@ export async function updateTeam(
 ): Promise<AiTeam> {
   const validated = AiTeamUpdateSchema.parse(patch);
 
-  return db.transaction('rw', [db.aiTeams, db.aiTeamMembers, db.aiLeads], async () => {
+  // D-09/D-10: the tree is created and destroyed inside this transaction, so the folder rows
+  // and the root setting roll back with the team row. `db.aiEmployees` is reached only by the
+  // nested backfill — the easiest store to forget, and a `SubTransactionError` if it is.
+  const tables = [db.aiTeams, db.aiTeamMembers, db.aiLeads, db.aiEmployees, db.notes, db.settings];
+
+  return db.transaction('rw', tables, async () => {
     const existing = await db.aiTeams.get(id);
     if (!existing) throw new Error(`Không tìm thấy nhóm: ${id}`);
     assertLeaderUnlocked(existing, validated.leadId);
@@ -277,8 +282,11 @@ export async function updateTeam(
     }
 
     // Pitfall 5: the lead member row must move with `leadId` — never two sources that disagree.
+    // The row is already validated by `assertAgentsExist`, so the fallback only keeps the type
+    // honest.
     if (validated.leadId !== undefined && validated.leadId !== existing.leadId) {
-      await writeLeadRow(id, validated.leadId, db);
+      const nextLead = await db.aiLeads.get(validated.leadId);
+      await writeLeadRow(id, validated.leadId, nextLead?.name ?? validated.leadId, db);
     }
 
     await db.aiTeams.put(updated);
@@ -299,8 +307,26 @@ export async function updateTeam(
 async function writeLeadRow(
   teamId: string,
   leadId: string,
+  leadName: string,
   db: TaskPlannerDatabase
 ): Promise<void> {
+  // D-12b: resolve the team folder here, not at the call sites, so both callers cannot drift.
+  const team = await db.aiTeams.get(teamId);
+  if (!team) throw new Error(`Không tìm thấy nhóm: ${teamId}`);
+
+  let teamFolderId = team.docsFolderId;
+  let backfillIds = new Map<string, string>();
+  if (teamFolderId === undefined || !(await isLiveFolder(teamFolderId, db))) {
+    const ready = await ensureTeamDocsReady(teamId, db);
+    teamFolderId = ready.team.docsFolderId;
+    backfillIds = ready.memberFolderIds;
+  }
+  if (teamFolderId === undefined) {
+    // A leader with no folder would make `write_doc` refuse for a reason the owner cannot see.
+    throw new Error(`Không tạo được thư mục tài liệu cho nhóm: ${teamId}`);
+  }
+
+  // Read AFTER the backfill, so the rows carry any `docsFolderId` it just wrote.
   const siblings = await db.aiTeamMembers.where('teamId').equals(teamId).toArray();
   const incoming = siblings.find((row) => row.agentId === leadId);
 
@@ -308,15 +334,26 @@ async function writeLeadRow(
     if (row.role !== 'lead' || row.id === incoming?.id) continue;
     const hasUsage =
       row.usedTokens > 0 || (row.inputTokens ?? 0) > 0 || (row.outputTokens ?? 0) > 0;
+    // D-11: a demoted row keeps its own `docsFolderId` — a demoted member is still a member and
+    // its folder is still where its documents live. No folder is created for the outgoing lead.
     if (hasUsage) await db.aiTeamMembers.update(row.id, { role: 'employee' });
     else await db.aiTeamMembers.delete(row.id);
   }
 
   if (incoming) {
-    await db.aiTeamMembers.update(incoming.id, { role: 'lead' });
+    // The backfill map first: on a dead tree it already minted this agent's folder and wrote it
+    // on the row, so calling `createMemberFolder` here would produce a ` (2)` duplicate.
+    const folderId =
+      backfillIds.get(leadId) ??
+      (incoming.docsFolderId !== undefined && (await isLiveFolder(incoming.docsFolderId, db))
+        ? incoming.docsFolderId
+        : await createMemberFolder(teamFolderId, leadName, db));
+    await db.aiTeamMembers.update(incoming.id, { role: 'lead', docsFolderId: folderId });
     return;
   }
 
+  // The row did not exist when the backfill ran, so `backfillIds` cannot name it.
+  const folderId = await createMemberFolder(teamFolderId, leadName, db);
   await db.aiTeamMembers.add({
     id: generateId(),
     teamId,
@@ -326,6 +363,7 @@ async function writeLeadRow(
     usedTokens: 0,
     inputTokens: 0,
     outputTokens: 0,
+    docsFolderId: folderId,
   });
 }
 
@@ -338,24 +376,31 @@ export async function assignLeader(
   leadId: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<AiTeam> {
-  return db.transaction('rw', [db.aiTeams, db.aiTeamMembers, db.aiLeads], async () => {
-    const existing = await db.aiTeams.get(teamId);
-    if (!existing) throw new Error(`Không tìm thấy nhóm: ${teamId}`);
-    assertLeaderUnlocked(existing, leadId);
+  // D-11/D-12b: `writeLeadRow` reaches `ensureTeamDocsReady`, whose transaction spans
+  // `[aiTeams, aiTeamMembers, aiEmployees, notes, settings]` — a sub-transaction's tables must
+  // be a subset of the parent's. `db.aiEmployees` is read only by the backfill.
+  return db.transaction(
+    'rw',
+    [db.aiTeams, db.aiTeamMembers, db.aiLeads, db.aiEmployees, db.notes, db.settings],
+    async () => {
+      const existing = await db.aiTeams.get(teamId);
+      if (!existing) throw new Error(`Không tìm thấy nhóm: ${teamId}`);
+      assertLeaderUnlocked(existing, leadId);
 
-    const lead = await db.aiLeads.get(leadId);
-    if (!lead) throw new Error(`Không tìm thấy lead: ${leadId}`);
+      const lead = await db.aiLeads.get(leadId);
+      if (!lead) throw new Error(`Không tìm thấy lead: ${leadId}`);
 
-    // CR-02: re-assigning the current leader is a no-op — recreating the row would
-    // silently reset its budget and usage.
-    if (existing.leadId === leadId) return existing;
+      // CR-02: re-assigning the current leader is a no-op — recreating the row would
+      // silently reset its budget and usage.
+      if (existing.leadId === leadId) return existing;
 
-    await writeLeadRow(teamId, leadId, db);
+      await writeLeadRow(teamId, leadId, lead.name, db);
 
-    const updated: AiTeam = { ...existing, leadId, updatedAt: new Date().toISOString() };
-    await db.aiTeams.put(updated);
-    return updated;
-  });
+      const updated: AiTeam = { ...existing, leadId, updatedAt: new Date().toISOString() };
+      await db.aiTeams.put(updated);
+      return updated;
+    }
+  );
 }
 
 /** D-09: the first run calls this once; a second call keeps the original timestamp. */
