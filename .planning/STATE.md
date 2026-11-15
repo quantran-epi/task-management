@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
 status: executing
-stopped_at: Completed 41-01-PLAN.md
-last_updated: "2026-11-15T04:43:13.842Z"
+stopped_at: Completed 41-02-PLAN.md
+last_updated: "2026-11-15T04:45:46.453Z"
 last_activity: 2026-11-15 -- Phase 41 execution started
 progress:
   total_phases: 7
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 41 (AI Office team docs zones) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-11-15 -- Phase 41 execution started
 
 ## Session Continuity
 
-Last session: 2026-11-15T04:43:13.835Z
-Stopped at: Completed 41-01-PLAN.md
+Last session: 2026-11-15T04:45:46.448Z
+Stopped at: Completed 41-02-PLAN.md
 Resume file: None
 
 Progress: [█████████░] 92%
@@ -193,6 +193,7 @@ Progress: [█████████░] 92%
 - [Phase ?]: AgentPausedBanner deleted: awaiting-budget has no producer and its copy claimed a parked turn plus a literal 80%
 - [Phase 41]: D-13/D-15: docsFolderId is unindexed row payload; V27 spreads SCHEMA_V26 byte-identically and needs no upgrade hook
 - [Phase 41]: D-14: docsFolderId is uuidSchema.optional() in both AI team backup strictObjects; not added to FORBIDDEN_BACKUP_KEYS
+- [Phase 41]: 41-02: teamDocsRepo owns the AI Teams root, per-team tree, member folders, hard tree delete and the idempotent backfill; the liveness guard runs inside the rw transaction over aiTeams/aiTeamMembers/aiEmployees/notes/settings
 
 ## Performance Metrics
 
@@ -224,3 +225,4 @@ Progress: [█████████░] 92%
 | Phase 38 P08 | 14min | 3 tasks | 8 files |
 | Phase 38 P09 | 26min | 3 tasks | 12 files |
 | Phase 41 P01 | 5m | 3 tasks | 9 files |
+| Phase 41 P02 | 20 min | 3 tasks | 2 files |

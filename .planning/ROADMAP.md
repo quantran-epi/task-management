@@ -947,7 +947,7 @@ Plans:
 
 **Research flag:** standard patterns — skip research-phase.
 
-**Plans:** 1/6 plans executed
+**Plans:** 2/6 plans executed
 
 Plans:
 **Wave 1**
@@ -956,7 +956,7 @@ Plans:
 
 **Wave 2** *(depends on 41-01)*
 
-- [ ] 41-02-PLAN.md — `teamDocsRepo`: shared `AI Teams` root, team tree, member folders, delete-tree, idempotent lazy backfill + repo tests
+- [x] 41-02-PLAN.md — `teamDocsRepo`: shared `AI Teams` root, team tree, member folders, delete-tree, idempotent lazy backfill + repo tests
 
 **Wave 3** *(depends on 41-01/41-02; independent of each other)*
 
