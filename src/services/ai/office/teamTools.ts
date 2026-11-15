@@ -15,6 +15,18 @@ import { USER_PARTICIPANT_ID } from '../../../types/teamChat';
 import { createNote, getNotesByFolder, updateNote } from '../../../db/repositories/noteRepo';
 import { NOTE_BODY_MAX_LENGTH, NOTE_TITLE_MAX_LENGTH } from '../../../validation/schemas';
 import { resolveMemberFolder } from '../../../db/repositories/teamDocsRepo';
+import { getSshConfigById, getSshSecret } from '../../../services/sshService';
+import {
+  checkDirtyStatus,
+  getDiffSummary,
+  getFileDiff,
+  getRecentCommits,
+  getRemoteBranches,
+} from '../../../services/gitRemoteService';
+import { getRemoteFileContent, getRemoteTree } from '../../../services/gitRemoteTreeService';
+import type { System } from '../../../types/models';
+import type { SshConfig } from '../../../types/ssh';
+import type { RemoteGitCommit } from '../../../types/gitRemote';
 
 /**
  * AI Office team tools (D-11, D-24, D-26, D-27, D-33).
@@ -983,6 +995,236 @@ async function writeDoc(args: Record<string, any>, ctx: TeamToolContext): Promis
   );
 }
 
+type GitRepoResolution =
+  | { system: System; config: SshConfig; repoPath: string; secret: string | undefined }
+  | TeamToolRefusal;
+
+/**
+ * Phase 42 D-07: the repository comes from the team's linked systems, never from an arg.
+ * `args.systemId` is only an INDEX into the linked set, so it can never name a repo outside
+ * the team. Codes are truthful: a linked system that merely lacks repo configuration is
+ * `NO_LINKED_REPO`, not `SYSTEM_NOT_LINKED`.
+ */
+async function resolveGitRepo(
+  args: Record<string, any>,
+  ctx: TeamToolContext
+): Promise<GitRepoResolution> {
+  const links = await listTeamLinks(ctx.teamId, ctx.db);
+  const linkedSystems: System[] = [];
+  for (const link of links) {
+    if (link.itemType !== 'system') continue;
+    const row = await ctx.db.systems.get(link.itemId);
+    if (row) linkedSystems.push(row);
+  }
+  const usable = linkedSystems.filter(
+    (s) =>
+      typeof s.sshConfigId === 'string' &&
+      s.sshConfigId !== '' &&
+      typeof s.remoteRepoPath === 'string' &&
+      s.remoteRepoPath !== ''
+  );
+
+  const requested = typeof args.systemId === 'string' ? args.systemId.trim() : '';
+  let system: System;
+  if (requested) {
+    const linked = linkedSystems.find((s) => s.id === requested);
+    if (!linked) {
+      return refuse(
+        'SYSTEM_NOT_LINKED',
+        `Hệ thống "${requested}" không được liên kết với nhóm này.`
+      );
+    }
+    const match = usable.find((s) => s.id === requested);
+    if (!match) {
+      return refuse(
+        'NO_LINKED_REPO',
+        `Hệ thống "${linked.name}" chưa cấu hình SSH profile hoặc đường dẫn repo.`
+      );
+    }
+    system = match;
+  } else if (usable.length === 0) {
+    return refuse('NO_LINKED_REPO', 'Nhóm chưa liên kết hệ thống nào có repo để đọc.');
+  } else if (usable.length > 1) {
+    const list = usable.map((s) => `${s.id} (${s.name})`).join(', ');
+    return refuse(
+      'INVALID_ARGUMENT',
+      `Nhóm liên kết nhiều hệ thống có repo — hãy truyền systemId. Các lựa chọn: ${list}.`
+    );
+  } else {
+    system = usable[0]!;
+  }
+
+  const config = await getSshConfigById(system.sshConfigId!, ctx.db);
+  if (!config) {
+    return refuse(
+      'NO_LINKED_REPO',
+      `Hệ thống "${system.name}" trỏ tới một SSH profile không còn tồn tại.`
+    );
+  }
+  const secret = (await getSshSecret(config.id)) ?? undefined;
+  return { system, config, repoPath: system.remoteRepoPath!, secret };
+}
+
+function wrapCommits(commits: RemoteGitCommit[], label: (field: string) => string) {
+  return commits.map((c) => ({
+    sha: c.sha,
+    shortSha: c.shortSha,
+    author: wrapField(label('TÁC GIẢ'), c.author),
+    date: c.date,
+    message: wrapUntrusted(label('THÔNG ĐIỆP COMMIT'), c.message),
+  }));
+}
+
+/**
+ * Phase 42 D-06/D-08/D-11: read-only remote git inspection. The handler never builds a
+ * command string — every value goes to a `gitRemoteService`/`gitRemoteTreeService` function
+ * that escapes it per argument. A git or SSH throw becomes a refusal, never a throw.
+ */
+async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise<string> {
+  const resolved = await resolveGitRepo(args, ctx);
+  if ('refused' in resolved) return JSON.stringify(resolved);
+  const { system, config, repoPath, secret } = resolved;
+
+  const action = typeof args.action === 'string' ? args.action : '';
+  // D-11: every wrap label carries BOTH the action and the repo path.
+  const gitLabel = (field: string) => `GIT ${action} ${repoPath} — ${field}`;
+  const base = { action, systemId: system.id, repoPath };
+
+  try {
+    switch (action) {
+      case 'branches': {
+        const branches = await getRemoteBranches(config, repoPath, secret);
+        return JSON.stringify({
+          ...base,
+          branches: branches.map((b) => ({
+            name: wrapField(gitLabel('TÊN NHÁNH'), b.name),
+            isRemote: b.isRemote,
+            isHead: b.isHead,
+          })),
+        });
+      }
+      case 'status': {
+        const status = await checkDirtyStatus(config, repoPath, secret);
+        return JSON.stringify({
+          ...base,
+          isClean: status.isClean,
+          uncommittedFiles: status.uncommittedFiles.map((f) => ({
+            path: wrapField(gitLabel('ĐƯỜNG DẪN'), f.path),
+            indexStatus: f.indexStatus,
+            workingTreeStatus: f.workingTreeStatus,
+          })),
+        });
+      }
+      case 'log': {
+        const limit = Math.min(Math.max(1, Number(args.limit) || 20), 50);
+        const branch =
+          (typeof args.branch === 'string' && args.branch) || system.defaultBaseBranch || 'HEAD';
+        const commits = await getRecentCommits(config, repoPath, branch, limit, secret);
+        return JSON.stringify({
+          ...base,
+          branch,
+          limit,
+          commits: wrapCommits(commits, gitLabel),
+        });
+      }
+      case 'diff_summary': {
+        const baseBranch = typeof args.base === 'string' ? args.base.trim() : '';
+        const targetBranch = typeof args.target === 'string' ? args.target.trim() : '';
+        if (!baseBranch || !targetBranch) {
+          return JSON.stringify(
+            refuse('INVALID_ARGUMENT', 'diff_summary cần cả base và target.')
+          );
+        }
+        const summary = await getDiffSummary(config, repoPath, baseBranch, targetBranch, secret);
+        return JSON.stringify({
+          ...base,
+          baseBranch: summary.baseBranch,
+          targetBranch: summary.targetBranch,
+          headSha: summary.headSha,
+          totalAdditions: summary.totalAdditions,
+          totalDeletions: summary.totalDeletions,
+          commits: wrapCommits(summary.commits, gitLabel),
+          files: summary.files.map((f) => ({
+            path: wrapField(gitLabel('ĐƯỜNG DẪN'), f.path),
+            status: f.status,
+            additions: f.additions,
+            deletions: f.deletions,
+          })),
+        });
+      }
+      case 'diff_file': {
+        const baseBranch = typeof args.base === 'string' ? args.base.trim() : '';
+        const targetBranch = typeof args.target === 'string' ? args.target.trim() : '';
+        const filePath = typeof args.filePath === 'string' ? args.filePath.trim() : '';
+        if (!baseBranch || !targetBranch || !filePath) {
+          return JSON.stringify(
+            refuse('INVALID_ARGUMENT', 'diff_file cần base, target và filePath.')
+          );
+        }
+        const text = await getFileDiff(
+          config,
+          repoPath,
+          baseBranch,
+          targetBranch,
+          filePath,
+          secret
+        );
+        return JSON.stringify({
+          ...base,
+          base: baseBranch,
+          target: targetBranch,
+          filePath: wrapField(gitLabel('ĐƯỜNG DẪN'), filePath),
+          diff: wrapUntrusted(gitLabel('DIFF'), text),
+        });
+      }
+      case 'read_file': {
+        const branch = typeof args.branch === 'string' ? args.branch.trim() : '';
+        const filePath = typeof args.filePath === 'string' ? args.filePath.trim() : '';
+        if (!branch || !filePath) {
+          return JSON.stringify(refuse('INVALID_ARGUMENT', 'read_file cần branch và filePath.'));
+        }
+        // Phase 31 D-12: entire content, no truncation.
+        const text = await getRemoteFileContent(config, repoPath, branch, filePath, secret);
+        return JSON.stringify({
+          ...base,
+          branch,
+          filePath: wrapField(gitLabel('ĐƯỜNG DẪN'), filePath),
+          content: wrapUntrusted(gitLabel('NỘI DUNG FILE'), text),
+        });
+      }
+      case 'tree': {
+        const branch = typeof args.branch === 'string' ? args.branch.trim() : '';
+        if (!branch) {
+          return JSON.stringify(refuse('INVALID_ARGUMENT', 'tree cần branch.'));
+        }
+        const dirPath = typeof args.dirPath === 'string' ? args.dirPath : undefined;
+        const nodes = await getRemoteTree(config, repoPath, branch, dirPath, secret);
+        return JSON.stringify({
+          ...base,
+          branch,
+          dirPath: dirPath ?? '',
+          nodes: nodes.map((n) => ({
+            key: wrapField(gitLabel('ĐƯỜNG DẪN'), n.key),
+            title: wrapField(gitLabel('TÊN MỤC'), n.title),
+            isLeaf: n.isLeaf,
+            ...(n.size !== undefined ? { size: n.size } : {}),
+            sha: n.sha,
+          })),
+        });
+      }
+      default:
+        return JSON.stringify(
+          refuse(
+            'INVALID_ARGUMENT',
+            'action phải là branches, status, log, diff_summary, diff_file, read_file hoặc tree.'
+          )
+        );
+    }
+  } catch (err: any) {
+    return JSON.stringify(refuse('INVALID_ARGUMENT', err?.message || String(err)));
+  }
+}
+
 export async function executeTeamTool(
   name: string,
   args: Record<string, any>,
@@ -1010,6 +1252,8 @@ export async function executeTeamTool(
       return sendMessage(input, ctx);
     case 'write_doc':
       return writeDoc(input, ctx);
+    case 'git_read':
+      return gitRead(input, ctx);
     default:
       return JSON.stringify({ error: `Unknown team tool: ${name}` });
   }
