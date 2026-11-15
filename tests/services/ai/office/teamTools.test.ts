@@ -1330,6 +1330,13 @@ describe('teamTools — write_doc folder-scoped document write (AIO-DOCS-02..04,
     expect(EMPLOYEE_ONLY_TEAM_TOOLS.has('write_doc')).toBe(true);
   });
 
+  // IN-02: a tool in BOTH sets would be offered to nobody — the lead payload subtracts the
+  // lead-only set and the employee payload subtracts the employee-only set.
+  it('keeps the lead-only and employee-only tool sets disjoint (IN-02)', () => {
+    const overlap = [...LEAD_ONLY_TEAM_TOOLS].filter((name) => EMPLOYEE_ONLY_TEAM_TOOLS.has(name));
+    expect(overlap).toEqual([]);
+  });
+
   // D-04 / T-41-10: a client-supplied parentId is ignored; the context folder wins.
   it('create ignores a client-supplied parentId and writes type document', async () => {
     const result = JSON.parse(
@@ -1581,5 +1588,108 @@ describe('teamTools — write_doc folder-scoped document write (AIO-DOCS-02..04,
     const stored = await db.notes.get(result.noteId);
     expect(stored!.title).toBe('Phân tích');
     expect(stored!.title!.startsWith('—')).toBe(false);
+  });
+
+  // CR-01: an omitted `body` means "leave the content alone", never "erase it".
+  it('update with only a title keeps the stored body (CR-01)', async () => {
+    const created = JSON.parse(
+      await executeTeamTool(
+        'write_doc',
+        { action: 'create', title: 'Phân tích', body: 'nội dung gốc' },
+        ctx({ folderId: folderA, agentName: 'An' })
+      )
+    );
+
+    const result = JSON.parse(
+      await executeTeamTool(
+        'write_doc',
+        { action: 'update', noteId: created.noteId, title: 'Bản sửa' },
+        ctx({ folderId: folderA, agentName: 'An' })
+      )
+    );
+
+    expect(result.refused).toBeUndefined();
+    const stored = await db.notes.get(created.noteId);
+    expect(stored!.title).toBe('Bản sửa');
+    expect(stored!.body).toBe('nội dung gốc');
+  });
+
+  // CR-01: an update that changes nothing is a refusal, not a silent no-op write.
+  it('update with neither title nor body refuses INVALID_ARGUMENT (CR-01)', async () => {
+    const created = JSON.parse(
+      await executeTeamTool(
+        'write_doc',
+        { action: 'create', title: 'Phân tích', body: 'nội dung gốc' },
+        ctx({ folderId: folderA, agentName: 'An' })
+      )
+    );
+    const before = await db.notes.get(created.noteId);
+
+    const result = JSON.parse(
+      await executeTeamTool(
+        'write_doc',
+        { action: 'update', noteId: created.noteId },
+        ctx({ folderId: folderA })
+      )
+    );
+
+    expect(result).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
+    const after = await db.notes.get(created.noteId);
+    expect(after!.body).toBe(before!.body);
+    expect(after!.updatedAt).toBe(before!.updatedAt);
+  });
+
+  // WR-02: an over-long title is a refusal code, not a thrown ZodError.
+  it('create refuses an over-long title instead of throwing (WR-02)', async () => {
+    const before = await db.notes.count();
+
+    const result = JSON.parse(
+      await executeTeamTool(
+        'write_doc',
+        { action: 'create', title: 'x'.repeat(120), body: 'x' },
+        ctx({ folderId: folderA, agentName: 'A'.repeat(60) })
+      )
+    );
+
+    expect(result).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
+    expect(result.message).toContain('quá dài');
+    expect(await db.notes.count()).toBe(before);
+  });
+
+  it('create refuses an over-long body instead of throwing (WR-02)', async () => {
+    const before = await db.notes.count();
+
+    const result = JSON.parse(
+      await executeTeamTool(
+        'write_doc',
+        { action: 'create', title: 'Phân tích', body: 'x'.repeat(50001) },
+        ctx({ folderId: folderA })
+      )
+    );
+
+    expect(result).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
+    expect(await db.notes.count()).toBe(before);
+  });
+
+  // WR-03: a folder inside the caller's folder is not a writable document.
+  it('update refuses a folder target inside the caller folder (WR-03)', async () => {
+    const subfolder = await createNote(
+      { type: 'folder', title: 'Thư mục con', body: 'bị chiếm', parentId: folderA },
+      db
+    );
+
+    const result = JSON.parse(
+      await executeTeamTool(
+        'write_doc',
+        { action: 'update', noteId: subfolder.id, title: 'Đổi tên', body: 'bị sửa' },
+        ctx({ folderId: folderA })
+      )
+    );
+
+    expect(result).toMatchObject({ refused: true, code: 'DOC_NOT_IN_YOUR_FOLDER' });
+    const after = await db.notes.get(subfolder.id);
+    expect(after!.title).toBe('Thư mục con');
+    expect(after!.body).toBe('bị chiếm');
+    expect(after!.type).toBe('folder');
   });
 });

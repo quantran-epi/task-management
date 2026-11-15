@@ -100,7 +100,12 @@ export async function createTeam(
   db: TaskPlannerDatabase = defaultDb
 ): Promise<AiTeam> {
   const validated = AiTeamInputSchema.parse(input);
-  const employeeIds = input.employeeIds ?? [];
+  // WR-04: a duplicate id would write two member rows for one agent, and `createTeamDocsTree`
+  // keys folders by `agentId` — the second folder (`X (2)`) would win while the first is left
+  // orphaned. The lead also never belongs in the employee list; its row is built from `leadId`.
+  const employeeIds = [...new Set(input.employeeIds ?? [])].filter(
+    (agentId) => agentId !== validated.leadId
+  );
 
   const now = new Date().toISOString();
   const team: AiTeam = {
@@ -140,7 +145,6 @@ export async function createTeam(
 
   await db.transaction('rw', transactionTables, async () => {
     await assertAgentsExist(team.leadId, employeeIds, db);
-    await db.aiTeams.add(team);
 
     const rows: AiTeamMember[] = [
       ...(team.leadId !== undefined
@@ -168,11 +172,11 @@ export async function createTeam(
         outputTokens: 0,
       })),
     ];
-    await db.aiTeamMembers.bulkAdd(rows);
-    await writeEvenSplit(team.id, team.budgetTokens, db);
 
     // D-09/D-11: one team folder plus one folder per member row — the lead is a member row
     // like any other. `createTeamDocsTree` opens no transaction, so it joins this one.
+    // Built BEFORE the rows are written, so each row carries its folder id from the start
+    // instead of being rewritten immediately after (IN-05).
     const leadAgent = team.leadId === undefined ? undefined : await db.aiLeads.get(team.leadId);
     const employeeAgents = await db.aiEmployees.bulkGet(
       rows.filter((row) => row.role === 'employee').map((row) => row.agentId)
@@ -190,13 +194,15 @@ export async function createTeam(
       db
     );
     docsFolderId = tree.folderId;
-    await db.aiTeams.update(team.id, { docsFolderId: tree.folderId });
-    for (const row of rows) {
-      const memberFolderId = tree.memberFolderIds.get(row.agentId);
-      if (memberFolderId !== undefined) {
-        await db.aiTeamMembers.update(row.id, { docsFolderId: memberFolderId });
-      }
-    }
+
+    await db.aiTeams.add({ ...team, docsFolderId: tree.folderId });
+    await db.aiTeamMembers.bulkAdd(
+      rows.map((row) => {
+        const memberFolderId = tree.memberFolderIds.get(row.agentId);
+        return memberFolderId === undefined ? row : { ...row, docsFolderId: memberFolderId };
+      })
+    );
+    await writeEvenSplit(team.id, team.budgetTokens, db);
   });
 
   return docsFolderId === undefined ? team : { ...team, docsFolderId };
@@ -294,6 +300,16 @@ export async function updateTeam(
     }
 
     await db.aiTeams.put(updated);
+
+    // WR-07: the docs tree is keyed by `docsFolderId`, so a rename never breaks it — but the
+    // owner would keep seeing a folder named after the team's previous name, and no surface
+    // reconciles it later. Rename it here, in the same transaction.
+    if (validated.name !== undefined && updated.docsFolderId !== undefined) {
+      await db.notes.update(updated.docsFolderId, {
+        title: validated.name,
+        updatedAt: new Date().toISOString(),
+      });
+    }
     return updated;
   });
 }
@@ -465,6 +481,11 @@ export async function deleteTeam(id: string, db: TaskPlannerDatabase = defaultDb
       db.teamReadCursors,
       db.teamParticipants,
       db.notes,
+      // CR-02: `deleteTeamDocsTree` deletes the tree's attachments with it, or the app's own
+      // next export fails `validateBackup`. WR-09: it also reads the shared-root setting before
+      // descending, so `db.settings` must be named too.
+      db.noteAttachments,
+      db.settings,
     ],
     async () => {
       // D-10: read the team row before anything is deleted — its `docsFolderId` is the only

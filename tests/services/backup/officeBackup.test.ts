@@ -45,6 +45,10 @@ const STEER_MESSAGE_ID = '15151515-1515-4515-8515-151515151515';
 const AMENDED_MESSAGE_ID = '17171717-1717-4717-8717-171717171717';
 const AMENDED_ASSIGNMENT_ID = '18181818-1818-4818-8818-181818181818';
 const LOCKED_AT = '2026-11-09T08:00:00.000Z';
+// WR-08: fixed v4 UUIDs so the round-trip proves a PRESENT `docsFolderId` survives both strict
+// record schemas — the absent case alone would pass even if the field were dropped.
+const TEAM_DOCS_FOLDER_ID = '19191919-1919-4919-8919-191919191919';
+const LEAD_DOCS_FOLDER_ID = '20202020-2020-4020-8020-202020202020';
 
 const skill: AiSkill = {
   id: SKILL_ID,
@@ -86,6 +90,7 @@ const team: AiTeam = {
   autoSplitEnabled: true,
   autoApproveMutations: false,
   budgetWarnThresholdPct: 65,
+  docsFolderId: TEAM_DOCS_FOLDER_ID,
   createdAt: NOW,
   updatedAt: NOW,
 };
@@ -100,6 +105,7 @@ const leadMember: AiTeamMember = {
   inputTokens: 1200,
   outputTokens: 300,
   usageEstimated: true,
+  docsFolderId: LEAD_DOCS_FOLDER_ID,
 };
 
 const employeeMember: AiTeamMember = {
@@ -362,6 +368,32 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
 
     expect(await restoredDb.aiSkillVersions.get(PENDING_VERSION_ID)).toEqual(pendingVersion);
     expect(await restoredDb.aiSkillVersions.get(APPROVED_VERSION_ID)).toEqual(approvedVersion);
+
+    // WR-08: a PRESENT `docsFolderId` must survive both strict record schemas.
+    expect((await restoredDb.aiTeams.get(TEAM_ID))?.docsFolderId).toBe(TEAM_DOCS_FOLDER_ID);
+    expect((await restoredDb.aiTeamMembers.get(MEMBER_LEAD_ID))?.docsFolderId).toBe(
+      LEAD_DOCS_FOLDER_ID
+    );
+  });
+
+  it('restores a pre-41 team row that carries no docsFolderId (WR-08)', async () => {
+    // A backup taken before Phase 41 has neither field; both schemas are strict, so a required
+    // field would reject the user's own older export.
+    const { docsFolderId: _teamFolder, ...preTeam } = team;
+    const { docsFolderId: _leadFolder, ...preLeadMember } = leadMember;
+    await sourceDb.aiSkills.add(skill);
+    await sourceDb.aiEmployees.add(employee);
+    await sourceDb.aiLeads.add(lead);
+    await sourceDb.aiTeams.add(preTeam);
+    await sourceDb.aiTeamMembers.bulkAdd([preLeadMember, employeeMember]);
+
+    const envelope = await exportBackupPayload(sourceDb);
+    expect(validateBackupPayload(envelope)).toMatchObject({ valid: true, errors: [] });
+
+    await restoreBackupPayload(envelope, restoredDb);
+
+    expect((await restoredDb.aiTeams.get(TEAM_ID))?.docsFolderId).toBeUndefined();
+    expect((await restoredDb.aiTeamMembers.get(MEMBER_LEAD_ID))?.docsFolderId).toBeUndefined();
   });
 
   it('round-trips targetAgentId so a restored instruction keeps its assignee (D-18, AIO-DATA-02)', async () => {

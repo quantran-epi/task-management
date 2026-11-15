@@ -522,6 +522,14 @@ describe('aiTools', () => {
       expect(res.notes[0].bodySnippet).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
       expect(res.notes[0].bodySnippet).toContain('Swagger endpoints for auth service');
     });
+
+    // WR-05: `write_doc` makes titles model-authored, and the lead is the one agent holding
+    // mutation tools — so a title is data here, exactly like the body.
+    it('wraps the note title in query_notes (WR-05)', async () => {
+      const res = JSON.parse(await executeAiTool('query_notes', { search: 'Swagger' }, mockDb));
+      expect(res.notes[0].title).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
+      expect(res.notes[0].title).toContain('API Spec Draft');
+    });
   });
 
   describe('query_systems (enriched)', () => {
@@ -660,7 +668,8 @@ describe('aiTools', () => {
       const resJson = await executeAiTool('query_notes', { search: 'Swagger' }, mockDb);
       const res = JSON.parse(resJson);
       expect(res.totalCount).toBe(1);
-      expect(res.notes[0].title).toBe('API Spec Draft');
+      // WR-05: the title is wrapped as untrusted data; assert the content, not the wrapper.
+      expect(res.notes[0].title).toContain('API Spec Draft');
       expect(res.notes[0].entityName).toBe('Write unit tests');
     });
 
@@ -668,7 +677,7 @@ describe('aiTools', () => {
       const resJson = await executeAiTool('query_notes', { entityType: 'standalone' }, mockDb);
       const res = JSON.parse(resJson);
       expect(res.totalCount).toBe(1);
-      expect(res.notes[0].title).toBe('Scratchpad Idea');
+      expect(res.notes[0].title).toContain('Scratchpad Idea');
     });
   });
 
@@ -878,8 +887,8 @@ describe('aiTools', () => {
       const sortRes = JSON.parse(
         await executeAiTool('query_notes', { sortBy: 'title', sortOrder: 'asc' }, mockDb)
       );
-      // Pinned note still prioritized, but check title sort
-      expect(sortRes.notes[0].title).toBe('API Spec Draft');
+      // Pinned note still prioritized, but check title sort (WR-05: title is wrapped).
+      expect(sortRes.notes[0].title).toContain('API Spec Draft');
     });
 
     it('supports query_recurring_tasks filtering by status/frequency and returning all fields', async () => {

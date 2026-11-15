@@ -611,6 +611,21 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
     expect(system).toContain('query_notes');
   });
 
+  // WR-06: `query_notes` has no `folderId` parameter — the filter is `parentId`. A prompt
+  // naming the wrong parameter makes the model guess, and a wrong guess returns the unfiltered
+  // list, which the lead may then read as that member's draft.
+  it('names the real query_notes filter parameter for the lead (WR-06)', () => {
+    const system = buildLead({
+      docsFolderId: 'team-folder',
+      memberFolders: [{ agentName: 'Lan', folderId: 'folder-a' }],
+    })
+      .systemMessages.map((m) => m.content)
+      .join('\n');
+
+    expect(system).toContain('parentId');
+    expect(system).not.toContain('lọc theo folder id');
+  });
+
   // T-41-21: a member name is user-authored and enters prompt text.
   it('wraps the member name in the lead folder block', () => {
     const system = buildLead({

@@ -43,7 +43,7 @@ async function seedV25Database(dbName: string): Promise<void> {
   await v25Db.close();
 }
 
-describe('Dexie SCHEMA_V26 Migration (Phase 39, CR-01)', () => {
+describe('Dexie schema migration (Phase 39 CR-01 + Phase 41 V27 payload bump)', () => {
   let dbName: string;
   let upgraded: TaskPlannerDatabase | undefined;
 
@@ -70,6 +70,8 @@ describe('Dexie SCHEMA_V26 Migration (Phase 39, CR-01)', () => {
     return upgraded;
   }
 
+  // V27 (Phase 41) is a payload-only bump: no index changes and no `.upgrade()` hook, so the
+  // only thing to assert is that a V25 database opens at the latest version with rows intact.
   it('opens at the latest version, which is 27', async () => {
     expect(LATEST_SCHEMA_VERSION).toBe(27);
     const db = await openAtCurrentVersion();

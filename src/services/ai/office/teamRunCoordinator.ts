@@ -1102,7 +1102,7 @@ export function createTeamRunCoordinator(
       agentId,
       ...(skillId ? { skillId } : {}),
       ...(pinned !== undefined ? { skillVersion: pinned } : {}),
-      ...(role ? { role } : {}),
+      role,
       ...(agentName ? { agentName } : {}),
       ...(folderId ? { folderId } : {}),
     };
@@ -1458,6 +1458,10 @@ export function createTeamRunCoordinator(
       memberFolderIds = result.memberFolderIds;
     } catch {
       memberFolderIds = new Map();
+      // IN-04: a previous turn's folder id must not survive a failed backfill — the lead prompt
+      // would present a folder that may no longer exist as the place to write the final.
+      const { docsFolderId: _stale, ...rest } = liveTeam;
+      liveTeam = rest;
     }
   }
 

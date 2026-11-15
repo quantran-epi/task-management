@@ -186,9 +186,9 @@ export const SCHEMA_V26 = {
   ...SCHEMA_V25,
 } as const;
 
-// Phase 41 (D-13, D-15): the two `docsFolderId` columns are unindexed row payload on the
-// existing `aiTeams` and `aiTeamMembers` stores, so no index spec changes and no `.upgrade()`
-// hook. The store shape is identical to V26.
+// Phase 41 (D-13): the two `docsFolderId` columns are unindexed row payload on the existing
+// `aiTeams` and `aiTeamMembers` stores, so no index spec changes and no `.upgrade()` hook.
+// The store shape is identical to V26.
 export const SCHEMA_V27 = {
   ...SCHEMA_V26,
 } as const;

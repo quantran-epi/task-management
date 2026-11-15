@@ -228,7 +228,7 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
       );
     }
     lines.push(
-      'Đọc bản nháp của một nhân viên bằng query_notes lọc theo folder id của nhân viên đó, rồi tổng hợp.',
+      'Đọc bản nháp của một nhân viên bằng query_notes với parentId = folder id của nhân viên đó, rồi tổng hợp.',
       'Sau khi người dùng duyệt, ghi bản CUỐI vào folder nhóm bằng create_note; mỗi lần ghi dừng ở thẻ phê duyệt và chính lần chấp nhận của người dùng mới đặt tài liệu vào đó.',
       'Bản nháp của nhân viên giữ nguyên tại chỗ — không xoá, không di chuyển, không sửa.',
       LEAD_NO_WRITE_DOC_LINE

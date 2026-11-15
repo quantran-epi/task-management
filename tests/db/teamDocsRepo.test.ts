@@ -234,4 +234,112 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
     expect(titles).toContain('Bình');
     expect(titles).toContain(danglingAgentId);
   });
+
+  // CR-02: attachments die with their note, or the app's own next export fails validateBackup.
+  it('deletes the tree attachments along with the notes (CR-02)', async () => {
+    const tree = await createTeamDocsTree('Nhóm A', [{ agentId: generateId(), name: 'An' }], db);
+    const memberFolderId = [...tree.memberFolderIds.values()][0] as string;
+    const doc = await createNote(
+      { title: 'Có ảnh', body: 'x', type: 'document', parentId: memberFolderId },
+      db
+    );
+    await createNote({ title: 'Không ảnh', body: 'y', type: 'document', parentId: memberFolderId }, db);
+    await db.noteAttachments.add({
+      id: generateId(),
+      noteId: doc.id,
+      fileName: 'anh.png',
+      mimeType: 'image/png',
+      sizeBytes: 10,
+      createdAt: NOW,
+      data: new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' }),
+    });
+
+    await deleteTeamDocsTree(tree.folderId, db);
+
+    expect(await db.noteAttachments.count()).toBe(0);
+    expect(await db.notes.count()).toBe(1); // only the shared root survives
+  });
+
+  // CR-03: the owner can create subfolders inside a member folder, so the tree is not bounded
+  // to three levels. A fixed-depth delete left deeper notes with a dangling parentId.
+  it('deletes descendants below a subfolder created inside a member folder (CR-03)', async () => {
+    const tree = await createTeamDocsTree('Nhóm A', [{ agentId: generateId(), name: 'An' }], db);
+    const memberFolderId = [...tree.memberFolderIds.values()][0] as string;
+    const sub = await createNote(
+      { title: 'Thư mục con', body: '', type: 'folder', parentId: memberFolderId },
+      db
+    );
+    const deepDoc = await createNote(
+      { title: 'Sâu', body: 'z', type: 'document', parentId: sub.id },
+      db
+    );
+
+    await deleteTeamDocsTree(tree.folderId, db);
+
+    expect(await db.notes.get(sub.id)).toBeUndefined();
+    expect(await db.notes.get(deepDoc.id)).toBeUndefined();
+    expect(await db.notes.count()).toBe(1); // only the shared root survives
+  });
+
+  // WR-01: a hand-deleted member folder is repaired on the next run, not handed out dead.
+  it('re-mints a dead member folder while keeping the live team folder (WR-01)', async () => {
+    const agentIds = [generateId(), generateId()];
+    const team = await seedTeam('Nhóm A', agentIds);
+    const first = await ensureTeamDocsReady(team.id, db);
+    const deadAgentId = agentIds[0] as string;
+    const deadFolderId = first.memberFolderIds.get(deadAgentId) as string;
+
+    // The owner deleted one member folder by hand; the team folder survives.
+    await db.notes.delete(deadFolderId);
+
+    const second = await ensureTeamDocsReady(team.id, db);
+
+    expect(second.team.docsFolderId).toBe(first.team.docsFolderId);
+    const repaired = second.memberFolderIds.get(deadAgentId);
+    expect(repaired).toBeDefined();
+    expect(repaired).not.toBe(deadFolderId);
+    expect(await isLiveFolder(repaired, db)).toBe(true);
+    // The other member's folder is untouched.
+    expect(second.memberFolderIds.get(agentIds[1] as string)).toBe(
+      first.memberFolderIds.get(agentIds[1] as string)
+    );
+    const rows = await db.aiTeamMembers.where('teamId').equals(team.id).toArray();
+    const deadRow = rows.find((row) => row.agentId === deadAgentId);
+    expect(deadRow?.docsFolderId).toBe(repaired);
+  });
+
+  // WR-01: a member row with no docsFolderId at all is repaired, never stuck at
+  // TEAM_DOCS_NOT_READY forever.
+  it('mints a folder for a member row that has no docsFolderId (WR-01)', async () => {
+    const agentIds = [generateId(), generateId()];
+    const team = await seedTeam('Nhóm A', agentIds);
+    const first = await ensureTeamDocsReady(team.id, db);
+    const targetAgentId = agentIds[0] as string;
+
+    const rows = await db.aiTeamMembers.where('teamId').equals(team.id).toArray();
+    const targetRow = rows.find((row) => row.agentId === targetAgentId)!;
+    await db.aiTeamMembers.update(targetRow.id, { docsFolderId: undefined });
+
+    const second = await ensureTeamDocsReady(team.id, db);
+
+    const minted = second.memberFolderIds.get(targetAgentId);
+    expect(minted).toBeDefined();
+    expect(await isLiveFolder(minted, db)).toBe(true);
+    expect(await folderRows()).toHaveLength(5);
+    expect(second.team.docsFolderId).toBe(first.team.docsFolderId);
+  });
+
+  // WR-09: a corrupted backup can point a team at the shared root; deleting it must not take
+  // every other team's tree with it.
+  it('refuses to delete the shared AI Teams root (WR-09)', async () => {
+    const tree = await createTeamDocsTree('Nhóm A', [{ agentId: generateId(), name: 'An' }], db);
+    const rootId = (await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY))?.value as string;
+    const before = await db.notes.count();
+
+    await deleteTeamDocsTree(rootId, db);
+
+    expect(await db.notes.count()).toBe(before);
+    expect(await db.notes.get(rootId)).toBeDefined();
+    expect(await db.notes.get(tree.folderId)).toBeDefined();
+  });
 });

@@ -759,6 +759,10 @@ async function proposeSkillVersion(
  * client-supplied `parentId` in the arguments is never read — and `type` is the literal
  * `'document'` so an agent can never mint a folder and widen its own write area.
  */
+/** Mirrors `NoteInputSchema`'s caps so an over-long field is a refusal code, not a throw. */
+const MAX_DOC_TITLE_LENGTH = 120;
+const MAX_DOC_BODY_LENGTH = 50000;
+
 async function writeDoc(args: Record<string, any>, ctx: TeamToolContext): Promise<string> {
   // D-06, guard half one: the leader's write path is the DB tool plus the approval card. This
   // runs BEFORE `action` is read, so no branch is reachable for a lead-role call. The payload
@@ -803,13 +807,30 @@ async function writeDoc(args: Record<string, any>, ctx: TeamToolContext): Promis
     if (!title) {
       return JSON.stringify(refuse('INVALID_ARGUMENT', 'Thiếu tiêu đề tài liệu.'));
     }
+    // WR-02: `NoteInputSchema` would throw on an over-long field, and a throw is not the
+    // team-tool convention — validate here so the model gets a code it can self-correct on.
+    // The prefix is part of the stored title, so it counts against the cap.
+    const prefix = ctx.agentName ? `${ctx.agentName} — ` : '';
+    if (prefix.length + title.length > MAX_DOC_TITLE_LENGTH) {
+      return JSON.stringify(
+        refuse(
+          'INVALID_ARGUMENT',
+          `Tiêu đề quá dài (tối đa ${MAX_DOC_TITLE_LENGTH - prefix.length} ký tự).`
+        )
+      );
+    }
+    if (body.length > MAX_DOC_BODY_LENGTH) {
+      return JSON.stringify(
+        refuse('INVALID_ARGUMENT', `Nội dung quá dài (tối đa ${MAX_DOC_BODY_LENGTH} ký tự).`)
+      );
+    }
     const note = await createNote(
       {
         type: 'document',
         parentId: folderId,
         // D-02b: the prefix is added by the tool, never by the prompt, so the model cannot
         // forget it. No `agentName` means the bare title — never a leading "— ".
-        title: ctx.agentName ? `${ctx.agentName} — ${title}` : title,
+        title: `${prefix}${title}`,
         body,
       },
       ctx.db
@@ -825,15 +846,43 @@ async function writeDoc(args: Record<string, any>, ctx: TeamToolContext): Promis
     const existing = await ctx.db.notes.get(noteId);
     // T-41-11: the comparison is against the context id, never an arg. No leader exception —
     // the leader uses the DB tool (D-04/D-06).
-    if (!existing || existing.deletedAt || existing.parentId !== folderId) {
+    // WR-03: a folder the owner created inside this folder also has `parentId === folderId`,
+    // so `type` must be checked too — `list` already filters folders out.
+    if (
+      !existing ||
+      existing.deletedAt ||
+      existing.parentId !== folderId ||
+      existing.type === 'folder'
+    ) {
       return JSON.stringify(
         refuse('DOC_NOT_IN_YOUR_FOLDER', 'Tài liệu này không nằm trong thư mục của bạn.')
       );
     }
     const title = typeof args.title === 'string' ? args.title.trim() : '';
-    const body = typeof args.body === 'string' ? args.body : '';
+    // CR-01: an omitted `body` means "leave the content alone", never "erase it". Defaulting to
+    // '' here made a rename-only call wipe the document the member wrote last turn.
+    const body = typeof args.body === 'string' ? args.body : undefined;
+    if (title === '' && body === undefined) {
+      return JSON.stringify(
+        refuse('INVALID_ARGUMENT', 'Cần tiêu đề hoặc nội dung mới để sửa tài liệu.')
+      );
+    }
+    if (title.length > MAX_DOC_TITLE_LENGTH) {
+      return JSON.stringify(
+        refuse('INVALID_ARGUMENT', `Tiêu đề quá dài (tối đa ${MAX_DOC_TITLE_LENGTH} ký tự).`)
+      );
+    }
+    if (body !== undefined && body.length > MAX_DOC_BODY_LENGTH) {
+      return JSON.stringify(
+        refuse('INVALID_ARGUMENT', `Nội dung quá dài (tối đa ${MAX_DOC_BODY_LENGTH} ký tự).`)
+      );
+    }
     // D-02b: `update` does NOT re-apply the agent-name prefix.
-    const updated = await updateNote(noteId, { ...(title ? { title } : {}), body }, ctx.db);
+    const updated = await updateNote(
+      noteId,
+      { ...(title ? { title } : {}), ...(body !== undefined ? { body } : {}) },
+      ctx.db
+    );
     return JSON.stringify({ noteId, title: updated?.title ?? '' });
   }
 

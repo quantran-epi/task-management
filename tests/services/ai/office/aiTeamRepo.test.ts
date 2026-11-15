@@ -1333,5 +1333,54 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
         false
       );
     });
+
+    // WR-04: a duplicate employeeId used to write two member rows and leave an orphan `X`
+    // folder behind while both rows pointed at `X (2)`.
+    it('createTeam dedupes employeeIds and drops the lead from the employee list (WR-04)', async () => {
+      const team = await createTeam(
+        {
+          name: 'Dupes',
+          leadId,
+          budgetTokens: 0,
+          employeeIds: [employeeIds[0]!, employeeIds[0]!, leadId],
+        },
+        db
+      );
+
+      const rows = await listTeamMembers(team.id, db);
+      expect(rows).toHaveLength(2); // one lead row, one employee row
+      expect(rows.filter((row) => row.agentId === leadId)).toHaveLength(1);
+      expect(rows.filter((row) => row.agentId === employeeIds[0])).toHaveLength(1);
+
+      const teamFolderId = team.docsFolderId!;
+      const folders = await childFolders(teamFolderId);
+      expect(folders).toHaveLength(2);
+      expect(folders.some((note) => note.title?.includes('(2)'))).toBe(false);
+      // 1 root + 1 team folder + 2 member folders — no orphan.
+      expect(await db.notes.count()).toBe(4);
+    });
+
+    // WR-07: the docs tree is keyed by id, so a rename never breaks it — but the owner would
+    // keep seeing the old name in Docs with no surface to reconcile it.
+    it('updateTeam renames the team folder in the same transaction (WR-07)', async () => {
+      const team = await makeTeam('OldName');
+      const teamFolderId = (await getTeam(team.id, db))!.docsFolderId!;
+
+      await updateTeam(team.id, { name: 'NewName' }, db);
+
+      expect((await db.notes.get(teamFolderId))?.title).toBe('NewName');
+      expect((await getTeam(team.id, db))?.docsFolderId).toBe(teamFolderId);
+    });
+
+    // WR-07 guard: a rename must not touch a folder that is not live.
+    it('updateTeam with a rename leaves a dead docsFolderId alone (WR-07)', async () => {
+      const team = await makeTeam('Stale');
+      const teamFolderId = (await getTeam(team.id, db))!.docsFolderId!;
+      await db.notes.delete(teamFolderId);
+
+      await updateTeam(team.id, { name: 'Renamed' }, db);
+
+      expect(await db.notes.get(teamFolderId)).toBeUndefined();
+    });
   });
 });

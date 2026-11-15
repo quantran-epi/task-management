@@ -3051,7 +3051,9 @@ export async function executeAiTool(
 
           return {
             id: n.id,
-            title: n.title ?? 'Untitled Note',
+            // WR-05: `write_doc` makes titles model-authored, and the lead is the one agent
+            // holding mutation tools — so a title is data here, exactly like the body below.
+            title: wrapField(`TIÊU ĐỀ GHI CHÚ ${n.id}`, n.title ?? 'Untitled Note'),
             type: n.type || 'quick_note',
             parentId: n.parentId ?? null,
             tags: n.tags || [],

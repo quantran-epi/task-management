@@ -107,13 +107,36 @@ export async function createTeamDocsTree(
 }
 
 /**
+ * CR-03: every descendant id of `rootId`, however deep.
+ *
+ * The tree is NOT bounded to three levels — the owner can create subfolders inside a member
+ * folder from the Docs UI (`DocFolderTree` → `onCreateFolder(name, parentFolder.id)`), so a
+ * fixed-depth delete leaves deeper notes with a dangling `parentId`, and `DocFolderTree`
+ * re-surfaces those as roots. The `seen` set also makes the walk cycle-safe.
+ */
+async function collectSubtreeIds(
+  rootId: string,
+  db: TaskPlannerDatabase
+): Promise<string[]> {
+  const seen = new Set<string>([rootId]);
+  let frontier = [rootId];
+  while (frontier.length > 0) {
+    const children = await db.notes.where('parentId').anyOf(frontier).toArray();
+    frontier = [];
+    for (const child of children) {
+      if (seen.has(child.id)) continue;
+      seen.add(child.id);
+      frontier.push(child.id);
+    }
+  }
+  return [...seen];
+}
+
+/**
  * D-10: hard-delete the team folder, its member folders and every note inside them.
  *
  * Hard delete, not `deletedAt`: the owner chose "deleting a team deletes the whole tree", and a
  * soft-deleted tree would still occupy the notes table and surface in Trash.
- *
- * No recursion: an agent cannot create a folder (D-04), so the tree is never deeper than three
- * levels — this is the exact place to change if nested folders are ever allowed.
  *
  * The shared `AI Teams` root and its setting are never touched; other teams may still use them.
  */
@@ -123,13 +146,22 @@ export async function deleteTeamDocsTree(
 ): Promise<void> {
   if (teamFolderId === undefined) return;
 
-  const children = await db.notes.where('parentId').equals(teamFolderId).toArray();
-  const childIds = children.map((child) => child.id);
+  // WR-09: `docsFolderId` is restored verbatim from a backup and validated only as a UUID, so a
+  // corrupted payload could point a team at the shared root. Deleting it would take every other
+  // team's tree with it.
+  const rootSetting = await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY);
+  if (rootSetting?.value === teamFolderId) return;
 
-  // Every note whose parent is the team folder or one of its child folders.
-  await db.notes.where('parentId').anyOf([teamFolderId, ...childIds]).delete();
-  if (childIds.length > 0) await db.notes.bulkDelete(childIds);
-  await db.notes.delete(teamFolderId);
+  const ids = await collectSubtreeIds(teamFolderId, db);
+
+  // CR-02: same convention as `deleteNote`/`bulkPermanentDeleteNotes` — attachments die with
+  // their note. Leaving them behind makes `validateBackup` reject the app's own next export
+  // (`NoteAttachment references noteId ... not found in notes`).
+  const attachments = await db.noteAttachments.where('noteId').anyOf(ids).toArray();
+  if (attachments.length > 0) {
+    await db.noteAttachments.bulkDelete(attachments.map((attachment) => attachment.id));
+  }
+  await db.notes.bulkDelete(ids);
 }
 
 /**
@@ -143,6 +175,11 @@ export async function deleteTeamDocsTree(
  * A `docsFolderId` naming a dead folder or a non-folder note is treated as absent: a new tree is
  * created and the old id overwritten. The old tree is NOT repaired or restored — the owner
  * deleted it by hand and its documents are already gone.
+ *
+ * WR-01: the same liveness rule applies PER MEMBER ROW, not just to the team row. A member
+ * folder the owner deleted by hand is re-minted here; otherwise `write_doc` would write under a
+ * dangling `parentId` and report success, and a row with no id at all would refuse
+ * `TEAM_DOCS_NOT_READY` forever with nothing to repair it.
  */
 export async function ensureTeamDocsReady(
   teamId: string,
@@ -160,7 +197,20 @@ export async function ensureTeamDocsReady(
       if (team.docsFolderId !== undefined && (await isLiveFolder(team.docsFolderId, db))) {
         const memberFolderIds = new Map<string, string>();
         for (const row of rows) {
-          if (row.docsFolderId !== undefined) memberFolderIds.set(row.agentId, row.docsFolderId);
+          if (row.docsFolderId !== undefined && (await isLiveFolder(row.docsFolderId, db))) {
+            memberFolderIds.set(row.agentId, row.docsFolderId);
+            continue;
+          }
+          // Missing or dead: mint one in place. The team folder is live, so this is a repair,
+          // not a rebuild.
+          const agent = await db.aiEmployees.get(row.agentId);
+          const folderId = await createMemberFolder(
+            team.docsFolderId,
+            agent?.name ?? row.agentId,
+            db
+          );
+          await db.aiTeamMembers.update(row.id, { docsFolderId: folderId });
+          memberFolderIds.set(row.agentId, folderId);
         }
         return { team, memberFolderIds };
       }
