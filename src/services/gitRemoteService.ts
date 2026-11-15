@@ -97,21 +97,8 @@ export async function checkDirtyStatus(
   };
 }
 
-export async function getCommitLog(
-  config: SshConfig,
-  repoPath: string,
-  base: string,
-  target: string,
-  secret?: string
-): Promise<RemoteGitCommit[]> {
-  const rangeArg = escapeShellArg(`${base}..${target}`);
-  const output = await runGitCommand(
-    config,
-    repoPath,
-    ['log', rangeArg, "--format='%x1e%H%x00%h%x00%an%x00%ad%x00%s'", '--date=iso'],
-    secret
-  );
-
+/** Shared `%x1e`-separated, `%x00`-fielded record parser for every `git log` caller. */
+function parseCommitLog(output: string): RemoteGitCommit[] {
   const commits: RemoteGitCommit[] = [];
   // Split on record separator %x1e (Record Separator)
   const rawRecords = output.split('\x1e');
@@ -140,6 +127,50 @@ export async function getCommitLog(
   }
 
   return commits;
+}
+
+export async function getCommitLog(
+  config: SshConfig,
+  repoPath: string,
+  base: string,
+  target: string,
+  secret?: string
+): Promise<RemoteGitCommit[]> {
+  const rangeArg = escapeShellArg(`${base}..${target}`);
+  const output = await runGitCommand(
+    config,
+    repoPath,
+    ['log', rangeArg, "--format='%x1e%H%x00%h%x00%an%x00%ad%x00%s'", '--date=iso'],
+    secret
+  );
+  return parseCommitLog(output);
+}
+
+/**
+ * Last `limit` commits of one branch. `getCommitLog` builds a `base..target` range, which
+ * cannot express this: `branch..branch` is empty and `branch~N` fails on a short branch.
+ */
+export async function getRecentCommits(
+  config: SshConfig,
+  repoPath: string,
+  branch: string,
+  limit: number,
+  secret?: string
+): Promise<RemoteGitCommit[]> {
+  const output = await runGitCommand(
+    config,
+    repoPath,
+    [
+      'log',
+      escapeShellArg(branch),
+      '-n',
+      String(limit),
+      "--format='%x1e%H%x00%h%x00%an%x00%ad%x00%s'",
+      '--date=iso',
+    ],
+    secret
+  );
+  return parseCommitLog(output);
 }
 
 export async function getDiffSummary(
