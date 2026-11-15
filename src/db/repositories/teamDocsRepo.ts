@@ -1,4 +1,5 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../index';
+import type { AiTeam } from '../../types/aiOffice';
 import { createNote } from './noteRepo';
 
 /**
@@ -76,4 +77,113 @@ export async function createMemberFolder(
     db
   );
   return folder.id;
+}
+
+/**
+ * D-09: team folder under the shared root, plus one folder per member in the order given.
+ *
+ * It does NOT write `AiTeam.docsFolderId` / `AiTeamMember.docsFolderId` — the caller owns those
+ * rows and writes them inside the same transaction. Opens no transaction of its own.
+ */
+export async function createTeamDocsTree(
+  teamName: string,
+  members: readonly { agentId: string; name: string }[],
+  db: TaskPlannerDatabase = defaultDb
+): Promise<{ folderId: string; memberFolderIds: Map<string, string> }> {
+  const rootId = await ensureDocsRoot(db);
+  const teamFolder = await createNote(
+    { title: teamName, body: '', type: 'folder', parentId: rootId },
+    db
+  );
+
+  const memberFolderIds = new Map<string, string>();
+  for (const member of members) {
+    memberFolderIds.set(
+      member.agentId,
+      await createMemberFolder(teamFolder.id, member.name, db)
+    );
+  }
+  return { folderId: teamFolder.id, memberFolderIds };
+}
+
+/**
+ * D-10: hard-delete the team folder, its member folders and every note inside them.
+ *
+ * Hard delete, not `deletedAt`: the owner chose "deleting a team deletes the whole tree", and a
+ * soft-deleted tree would still occupy the notes table and surface in Trash.
+ *
+ * No recursion: an agent cannot create a folder (D-04), so the tree is never deeper than three
+ * levels — this is the exact place to change if nested folders are ever allowed.
+ *
+ * The shared `AI Teams` root and its setting are never touched; other teams may still use them.
+ */
+export async function deleteTeamDocsTree(
+  teamFolderId: string | undefined,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<void> {
+  if (teamFolderId === undefined) return;
+
+  const children = await db.notes.where('parentId').equals(teamFolderId).toArray();
+  const childIds = children.map((child) => child.id);
+
+  // Every note whose parent is the team folder or one of its child folders.
+  await db.notes.where('parentId').anyOf([teamFolderId, ...childIds]).delete();
+  if (childIds.length > 0) await db.notes.bulkDelete(childIds);
+  await db.notes.delete(teamFolderId);
+}
+
+/**
+ * D-12/D-12b: idempotent lazy backfill, called by the coordinator before a turn starts.
+ *
+ * The `docsFolderId` re-read and the `isLiveFolder` check both happen INSIDE the `rw`
+ * transaction, so two concurrent runs serialise and the second observes the first's write
+ * (T-41-06). The store list must name every table the body reads — `aiEmployees` included, or
+ * Dexie throws `NotFoundError` and the backfill silently never persists.
+ *
+ * A `docsFolderId` naming a dead folder or a non-folder note is treated as absent: a new tree is
+ * created and the old id overwritten. The old tree is NOT repaired or restored — the owner
+ * deleted it by hand and its documents are already gone.
+ */
+export async function ensureTeamDocsReady(
+  teamId: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<{ team: AiTeam; memberFolderIds: Map<string, string> }> {
+  return db.transaction(
+    'rw',
+    [db.aiTeams, db.aiTeamMembers, db.aiEmployees, db.notes, db.settings],
+    async () => {
+      const team = await db.aiTeams.get(teamId);
+      if (!team) throw new Error(`Không tìm thấy nhóm: ${teamId}`);
+
+      const rows = await db.aiTeamMembers.where('teamId').equals(teamId).toArray();
+
+      if (team.docsFolderId !== undefined && (await isLiveFolder(team.docsFolderId, db))) {
+        const memberFolderIds = new Map<string, string>();
+        for (const row of rows) {
+          if (row.docsFolderId !== undefined) memberFolderIds.set(row.agentId, row.docsFolderId);
+        }
+        return { team, memberFolderIds };
+      }
+
+      const agents = await db.aiEmployees.bulkGet(rows.map((row) => row.agentId));
+      const members = rows.map((row, index) => ({
+        agentId: row.agentId,
+        // A dangling agentId still gets a folder, named after the id — never a throw.
+        name: agents[index]?.name ?? row.agentId,
+      }));
+
+      const { folderId, memberFolderIds } = await createTeamDocsTree(team.name, members, db);
+      const now = new Date().toISOString();
+
+      await db.aiTeams.update(teamId, { docsFolderId: folderId, updatedAt: now });
+      for (const row of rows) {
+        const memberFolderId = memberFolderIds.get(row.agentId);
+        if (memberFolderId !== undefined) {
+          await db.aiTeamMembers.update(row.id, { docsFolderId: memberFolderId });
+        }
+      }
+
+      return { team: { ...team, docsFolderId: folderId, updatedAt: now }, memberFolderIds };
+    }
+  );
 }
