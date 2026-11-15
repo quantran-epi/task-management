@@ -973,15 +973,18 @@ Plans:
 
 ### Phase 42: Read-only git inspection for the reviewer agent
 
-**Goal:** The reviewer can read a remote repository's git state over SSH, read-only.
-**Requirements**: AIO-READ-04, AIO-READ-05
+**Goal:** The reviewer can read a remote repository's git state over SSH and read the configured Oracle database, read-only.
+**Requirements**: AIO-READ-04, AIO-READ-05, AIO-READ-06
 **Depends on:** Phase 41
 **Success Criteria** (what must be TRUE):
 
 1. The reviewer can read `status`, `diff` (summary and per-file), `log`, and file contents of a remote repository over SSH, read-only — no command that writes, no arbitrary shell, no output redirection.
 2. Every new read path wraps its result as untrusted data at the same boundary the existing linked-item path uses, and a test asserts the wrap is present.
+3. The reviewer can run `oracle_query` and `oracle_describe` read-only; both tools are advertised to the team agents only while the Oracle AI Tool is enabled, and a disabled Oracle advertises neither.
 
 **Scope note:** Recursive linked-item read was removed from this phase on 2026-11-15. Sticky notes and `documentLinks` already reach agents in full via `get_item_details`; the only gap was reading linked-file contents, which `read_file` (already in `EMPLOYEE_READ_ONLY_ALLOWLIST`) covers in one extra round-trip. See `42-CONTEXT.md` §Deferred Ideas.
+
+**Scope note:** Oracle read was added on 2026-11-15 under the same read-only boundary as git read — no arbitrary shell, no write path.
 
 **Research flag:** standard patterns — skip research-phase.
 

@@ -108,6 +108,7 @@
 
 - [ ] **AIO-READ-04**: The reviewer reads `status`, `diff` (summary and per-file), `log`, and file contents of a remote repository over SSH, read-only — no writing command, no arbitrary shell, no output redirection.
 - [ ] **AIO-READ-05**: Every new read path wraps its result as untrusted data at the same boundary the existing linked-item path uses, and a test asserts the wrap is present.
+- [ ] **AIO-READ-06**: The reviewer can run read-only `oracle_query` and `oracle_describe`; both tools are advertised to team agents only while the Oracle AI Tool is enabled, and a disabled Oracle advertises neither.
 
 ---
 

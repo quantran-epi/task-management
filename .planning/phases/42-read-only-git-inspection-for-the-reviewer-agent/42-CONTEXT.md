@@ -15,6 +15,7 @@ Phase này gồm:
 - Team tool mới `git_read` (read-only), dùng lại `gitRemoteService`/`gitRemoteTreeService`/`sshFsToolService` đã có.
 - Prompt Reviewer nêu cách dùng `git_read`.
 - Test cho escape tham số, guard repo từ context, và wrap untrusted.
+- Gate công cụ Oracle: `oracle_query`/`oracle_describe` chỉ được quảng bá khi `getOracleToolConfig(db).enabled === true` (xem D-13).
 
 Phase này **không** gồm:
 
@@ -24,6 +25,8 @@ Phase này **không** gồm:
 - Skill body (Deferred của Phase 41 vẫn giữ).
 - `ssh_exec_command` cho AI — **tuyệt đối không**.
 - Recursive linked-item read (xem §Deferred Ideas).
+- Ghi xuống Oracle — không có write path.
+- Thay đổi UI cấu hình SQLcl.
 
 ## Implementation Decisions
 
@@ -56,6 +59,10 @@ Phase này **không** gồm:
 
 - **D-11:** Kết quả `git_read` wrap untrusted như mọi tool result khác, nhãn gồm repo path + action. Diff là dữ liệu do người khác viết — không bao giờ là instruction.
 
+### Oracle read
+
+- **D-13:** `oracle_query` và `oracle_describe` (read-only) được thêm vào **cả hai** payload của team agent (lead + employee), gate bằng code trên `getOracleToolConfig(db).enabled`. Ranh giới giống hệt git read: không ghi, không shell tuỳ ý. Gate là code, không phải câu chữ trong prompt — Oracle tắt thì không quảng bá công cụ nào, để tránh model gọi công cụ không liên quan. Đọc config mỗi payload (không cache module) để toggle giữa phiên có hiệu lực ngay lượt sau.
+
 ### Prompt
 
 - **D-12:** `buildEmployeeTurnRequest` thêm một dòng khi `employee.role` chứa "review" (không phân biệt hoa thường) hoặc khi skill description chứa "review": nêu `git_read` và thứ tự đọc (branches → log → diff_summary → diff_file → read_file). Wording thuộc Claude's Discretion. Không thêm field mới vào `AiEmployee`.
@@ -72,7 +79,7 @@ Phase này **không** gồm:
 **Downstream agents MUST read these before planning or implementing.**
 
 ### Quyết định và phạm vi
-- `.planning/ROADMAP.md` §Phase 42 — goal + 2 success criteria.
+- `.planning/ROADMAP.md` §Phase 42 — goal + 3 success criteria.
 - `.planning/REQUIREMENTS.md` — `AIO-READ-04`, `AIO-READ-05`.
 - `.planning/phases/41-.../41-CONTEXT.md` — D-01 (team tool là cửa ghi/đọc mở rộng, không đụng runtime policy), D-05 (`TeamToolContext` mở rộng).
 - `CLAUDE.md` — Tauri runtime; không thêm dependency.
