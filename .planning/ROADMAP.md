@@ -947,7 +947,7 @@ Plans:
 
 **Research flag:** standard patterns — skip research-phase.
 
-**Plans:** 4/6 plans executed
+**Plans:** 5/6 plans executed
 
 Plans:
 **Wave 1**
@@ -965,7 +965,7 @@ Plans:
 
 **Wave 4** *(depends on 41-03)*
 
-- [ ] 41-05-PLAN.md — Employee and lead prompt folder facts, two-exception read-only policy + prompt tests
+- [x] 41-05-PLAN.md — Employee and lead prompt folder facts, two-exception read-only policy + prompt tests
 
 **Wave 5** *(depends on 41-04/41-05)*
 

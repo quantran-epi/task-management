@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
 status: executing
-stopped_at: Completed 41-03-PLAN.md
-last_updated: "2026-11-15T04:55:08.953Z"
-last_activity: 2026-11-15 -- Completed 41-03-PLAN.md
+stopped_at: Completed 41-05-PLAN.md
+last_updated: "2026-11-15T04:57:33Z"
+last_activity: 2026-11-15 -- Completed 41-05-PLAN.md
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 55
-  completed_plans: 51
+  completed_plans: 52
   percent: 57
 current_phase: 40
 current_phase_name: Explorer UX, CRUD correctness, observed walkthrough
@@ -26,17 +26,17 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 41 (AI Office team docs zones) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Ready to execute
-Last activity: 2026-11-15 -- Completed 41-03-PLAN.md
+Last activity: 2026-11-15 -- Completed 41-05-PLAN.md
 
 ## Session Continuity
 
-Last session: 2026-11-15T04:55:06.480Z
-Stopped at: Completed 41-03-PLAN.md
+Last session: 2026-11-15T04:57:33Z
+Stopped at: Completed 41-05-PLAN.md
 Resume file: None
 
-Progress: [█████████░] 92%
+Progress: [██████████] 93%
 
 ## Milestone v1.4 Map
 
@@ -197,6 +197,9 @@ Progress: [█████████░] 92%
 - [Phase 41]: 41-03: write_doc is a team tool (never in MUTATION_TOOLS), so the employee read-only gate cannot block it; parentId comes from ctx.folderId only, type is the literal 'document', and a lead-role call refuses LEAD_USES_DB_TOOLS before action is read
 - [Phase 41]: 41-03: EMPLOYEE_ONLY_TEAM_TOOLS is the lead-payload subtraction set (wired in 41-06); it is not symmetric with LEAD_ONLY_TEAM_TOOLS — a tool in both would be offered to nobody
 - [Phase ?]: 41-04: five team lifecycle writes own the docs tree in their existing transactions; removeTeamMember keeps the folder and its documents (D-11); writeLeadRow resolves the team folder itself and re-reads the row before put so a nested backfill is never erased
+- [Phase 41]: 41-05: folder ids enter both prompts bare (UUIDs from the coordinator context) while member names pass through wrapField('TÊN NHÂN VIÊN') — T-41-21
+- [Phase 41]: 41-05: the employee policy states two exceptions (propose_skill_version, write_doc) and no refusal code appears in either prompt — the handler stays the guard (D-04)
+- [Phase 41]: 41-05: LEAD_NO_WRITE_DOC_LINE is exported so the test pins the exact sentence; the lead prompt names write_doc once, inside that negation, with no positive instruction (T-41-35)
 
 ## Performance Metrics
 
@@ -231,3 +234,4 @@ Progress: [█████████░] 92%
 | Phase 41 P02 | 20 min | 3 tasks | 2 files |
 | Phase 41 P03 | 10 min | 2 tasks | 2 files |
 | Phase 41 P04 | 12 | 4 tasks | 2 files |
+| Phase 41 P05 | 8 min | 3 tasks | 2 files |
