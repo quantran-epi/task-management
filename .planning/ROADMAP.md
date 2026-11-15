@@ -8,6 +8,8 @@
 - Phase 38: Hard token budget + accurate measurement (v1.4) (COMPLETE — verified 2026-11-14)
 - Phase 39: Skill versioning + enrichment approval (v1.4) (COMPLETE — verified 2026-11-14)
 - Phase 40: Explorer UX, CRUD correctness, observed walkthrough (v1.4)
+- Phase 41: AI Office team docs zones — per-team folder tree, agent-scoped doc write (v1.4, INSERTED)
+- Phase 42: Recursive linked-item read + read-only git inspection for the reviewer (v1.4, INSERTED)
 
 ## Previous Milestone: v1.3
 
@@ -928,6 +930,37 @@ Plans:
 **Wave 5** *(depends on 34-07/34-09)*
 
 - [x] 34-10-PLAN.md — Team page: list, create/settings drawers, workspace with shared transcript, sidebar, linked items, `renderViewContent` routing, TitleBar entry
+
+### Phase 41: AI Office team docs zones: per-team docs folder tree and agent-scoped document write
+
+**Goal:** Creating a team creates its docs folder tree in TaskMate Docs; every member writes documents only inside its own subfolder; the leader reads everything and writes the approved final document at the team root.
+**Requirements**: AIO-DOCS-01, AIO-DOCS-02, AIO-DOCS-03, AIO-DOCS-04, AIO-DOCS-05, AIO-DOCS-06
+**Depends on:** Phase 40
+**Success Criteria** (what must be TRUE):
+
+1. Creating a team creates exactly one team folder plus one subfolder per member (leader included) in `db.notes`, in the same transaction as the team row; a failure leaves neither the team nor any folder behind.
+2. Every member can call `create_note` and `update_note` and the write lands immediately as a visible document — no approval card, no hidden draft table.
+3. A member's write outside its own subfolder is refused by code, not by prompt: `parentId` on create and the target's `parentId` on update are both checked against the caller's own folder id.
+4. A member cannot create a folder, delete a note, or call any other mutation; those calls are refused with a structured refusal and nothing is written.
+5. The leader keeps full mutation tools and its writes still park on the approval card; the user's accept is what puts the final document at the team root.
+6. Deleting a team removes its folder tree, and pre-41 teams get their tree created lazily on first run without duplicating it on later runs.
+
+**Research flag:** standard patterns — skip research-phase.
+
+### Phase 42: Recursive linked-item read and read-only git inspection for the reviewer agent
+
+**Goal:** Linking one item to a team gives every member the full recursive content of that item — including the documents attached to it — and the reviewer can read a remote repository's git state read-only.
+**Requirements**: AIO-READ-01, AIO-READ-02, AIO-READ-03, AIO-READ-04, AIO-READ-05
+**Depends on:** Phase 41
+**Success Criteria** (what must be TRUE):
+
+1. Linking a CR alone is enough: an agent reads the CR's own fields, its sticky notes, and every document attached to it without the user linking those documents separately.
+2. Recursion is bounded and stated: depth, per-item size, and total item count are capped, and a cycle (note → note → back) terminates instead of hanging.
+3. Local file links referenced by a linked item are readable in Tauri; a missing or unreadable path degrades to a stated refusal, never a silent empty body.
+4. The reviewer can read `status`, `diff` (summary and per-file), `log`, and file contents of a remote repository over SSH, read-only — no command that writes, no arbitrary shell, no output redirection.
+5. Every new read path wraps its result as untrusted data at the same boundary the existing linked-item path uses, and a test asserts the wrap is present.
+
+**Research flag:** standard patterns — skip research-phase.
 
 ---
 

@@ -95,6 +95,23 @@
 - [ ] **AIO-VERIFY-02**: Each of the five live defects found in research is reproduced by a failing test before it is fixed. (C-15)
 - [ ] **AIO-VERIFY-03**: The milestone closes on a real UI walkthrough: create a group, staff it, assign free-style work, watch delegation, hit the budget warning, top up, approve a skill version, restore a backup. No item is confirmed by reading code. (C-15)
 
+### Team Docs Zones (AIO-DOCS) — Phase 41
+
+- [ ] **AIO-DOCS-01**: Creating a team creates one team folder and one subfolder per member in `db.notes`, in the same transaction as the team row. A mid-transaction failure leaves neither the team nor any folder behind.
+- [ ] **AIO-DOCS-02**: Every member can call `create_note` and `update_note`, and the write is visible in Docs immediately — no approval card, no separate draft table.
+- [ ] **AIO-DOCS-03**: A member write outside its own subfolder is refused by code: `parentId` on create and the existing note's `parentId` on update are both checked against the caller's folder id. Prompt wording is not the enforcement.
+- [ ] **AIO-DOCS-04**: A member cannot create a folder, delete a note, or call any other mutation; those calls return a structured refusal and write nothing.
+- [ ] **AIO-DOCS-05**: The leader keeps the full mutation toolset and its writes still park on the approval card; the user's accept is what places the final document at the team root.
+- [ ] **AIO-DOCS-06**: Deleting a team removes its folder tree. A team created before this phase gets its tree lazily on first run, and repeated runs do not duplicate it.
+
+### Recursive Read & Git Inspection (AIO-READ) — Phase 42
+
+- [ ] **AIO-READ-01**: Linking a CR alone is sufficient — an agent reads the CR's fields, its sticky notes, and every document attached to it without those documents being linked separately.
+- [ ] **AIO-READ-02**: Recursion is bounded and stated: depth, per-item size, and total item count are capped, and a cycle terminates instead of hanging.
+- [ ] **AIO-READ-03**: Local file links referenced by a linked item are readable in Tauri; a missing or unreadable path degrades to a stated refusal, never a silent empty body.
+- [ ] **AIO-READ-04**: The reviewer reads `status`, `diff` (summary and per-file), `log`, and file contents of a remote repository over SSH, read-only — no writing command, no arbitrary shell, no output redirection.
+- [ ] **AIO-READ-05**: Every new read path wraps its result as untrusted data at the same boundary the existing linked-item path uses, and a test asserts the wrap is present.
+
 ---
 
 ## Open Decisions (must be resolved in phase discuss, not assumed)

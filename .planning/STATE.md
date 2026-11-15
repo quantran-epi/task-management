@@ -7,7 +7,7 @@ stopped_at: Phase 39 complete — verified 2026-11-14
 last_updated: "2026-11-14T09:47:40.964Z"
 last_activity: 2026-11-14
 progress:
-  total_phases: 7
+  total_phases: 9
   completed_phases: 4
   total_plans: 55
   completed_plans: 51
@@ -47,6 +47,8 @@ Progress: [█████████░] 92%
 - [x] Phase 38: Hard token budget + accurate measurement
 - [x] Phase 39: Skill versioning + enrichment approval
 - [ ] Phase 40: Explorer UX, CRUD correctness, observed walkthrough
+- [ ] Phase 41: AI Office team docs zones — per-team folder tree, agent-scoped doc write (INSERTED)
+- [ ] Phase 42: Recursive linked-item read + read-only git inspection for the reviewer (INSERTED)
 
 ## Quick Tasks Completed
 
@@ -66,6 +68,8 @@ Progress: [█████████░] 92%
 ### Roadmap Evolution
 
 - Phase 37.1 inserted after Phase 37 (URGENT): Live steering — leader amends assignments and steers running agents mid-run. Scope deferred from 37-CONTEXT.md D-19: outbox+inbox agent, drain at `beforeToolRound`, `amend_assignments` tool, leader re-plan mid-batch, steer UI.
+- Phase 41 added (2026-11-15): AI Office team docs zones — per-team docs folder tree, agent-scoped document write. Owner decision: every member writes docs; visible immediately; leader writes the approved final at team root.
+- Phase 42 added (2026-11-15): Recursive linked-item read + read-only git inspection for the reviewer. Owner decision: linking a CR implies its attached documents; reviewer reads git read-only over SSH.
 
 - Phase 34 marked complete with zero tests covering the AI Office runtime and five live defects (hung batch run, unguarded double-submit, phantom active turn, `targetAgentId` stripped on restore, bare deletes breaking export). "Phase 34 complete" is not evidence of quality.
 - Research verdict: keep and harden the existing coordinator/budget gate; zero new npm dependencies.
