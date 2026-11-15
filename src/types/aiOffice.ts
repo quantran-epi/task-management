@@ -91,6 +91,8 @@ export interface AiTeam {
   concurrencyLimit?: number | undefined;
   /** Phase 38 D-04/D-05: per-team override; absent means the global default. */
   budgetWarnThresholdPct?: number | undefined;
+  /** Phase 41 D-13: this team's folder id in `db.notes`; absent on pre-41 rows. */
+  docsFolderId?: string | undefined;
   createdAt: string;
   updatedAt: string;
 }
@@ -109,6 +111,8 @@ export interface AiTeamMember {
   outputTokens?: number | undefined;
   /** Phase 38 D-09: `undefined` on an old row means "not estimated", never "estimated". */
   usageEstimated?: boolean | undefined;
+  /** Phase 41 D-13a: this member's own folder id in `db.notes`; absent on pre-41 rows. */
+  docsFolderId?: string | undefined;
 }
 
 export interface AiTeamLink {

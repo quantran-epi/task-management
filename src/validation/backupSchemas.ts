@@ -666,6 +666,8 @@ export const BackupAiTeamRecordSchema = z.strictObject({
    * Absent means the global default; the 1-100 band mirrors `warnThresholdPctSchema`.
    */
   budgetWarnThresholdPct: z.number().int().min(1).max(100).optional(),
+  /** Phase 41 D-14: the team docs folder id. Optional so a pre-41 export still restores. */
+  docsFolderId: uuidSchema.optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -682,6 +684,8 @@ export const BackupAiTeamMemberRecordSchema = z.strictObject({
   outputTokens: aiTokensSchema.optional(),
   /** D-10/D-24: true when the counters came from the local tokenizer, not the provider. */
   usageEstimated: z.boolean().optional(),
+  /** Phase 41 D-14: the member's own folder id. Optional so a pre-41 export still restores. */
+  docsFolderId: uuidSchema.optional(),
 });
 
 export const BackupAiTeamLinkRecordSchema = z.strictObject({
