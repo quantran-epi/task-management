@@ -947,6 +947,30 @@ Plans:
 
 **Research flag:** standard patterns — skip research-phase.
 
+**Plans:** 6 plans in 5 waves
+
+Plans:
+**Wave 1**
+
+- [ ] 41-01-PLAN.md — Dexie V27, `docsFolderId` on `AiTeam`/`AiTeamMember` and both backup record schemas, ROADMAP/REQUIREMENTS wording correction
+
+**Wave 2** *(depends on 41-01)*
+
+- [ ] 41-02-PLAN.md — `teamDocsRepo`: shared `AI Teams` root, team tree, member folders, delete-tree, idempotent lazy backfill + repo tests
+
+**Wave 3** *(depends on 41-01/41-02; independent of each other)*
+
+- [ ] 41-03-PLAN.md — `write_doc` team tool with the code-level folder guard, two refusal codes, handler tests
+- [ ] 41-04-PLAN.md — `createTeam`/`deleteTeam`/`addTeamMember` own the tree in their existing transactions + lifecycle tests
+
+**Wave 4** *(depends on 41-03)*
+
+- [ ] 41-05-PLAN.md — Employee and lead prompt folder facts, two-exception read-only policy + prompt tests
+
+**Wave 5** *(depends on 41-04/41-05)*
+
+- [ ] 41-06-PLAN.md — Coordinator turn-start backfill, folder-aware `toolContext`, prompt wiring, payload and mutation-classification proofs
+
 ### Phase 42: Recursive linked-item read and read-only git inspection for the reviewer agent
 
 **Goal:** Linking one item to a team gives every member the full recursive content of that item — including the documents attached to it — and the reviewer can read a remote repository's git state read-only.
