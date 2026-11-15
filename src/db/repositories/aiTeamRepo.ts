@@ -287,6 +287,10 @@ export async function updateTeam(
     if (validated.leadId !== undefined && validated.leadId !== existing.leadId) {
       const nextLead = await db.aiLeads.get(validated.leadId);
       await writeLeadRow(id, validated.leadId, nextLead?.name ?? validated.leadId, db);
+      // The nested backfill may have just written a fresh `docsFolderId` onto the row we read
+      // before it ran. Carry that id forward, or this `put` would erase the new tree's handle.
+      const fresh = await db.aiTeams.get(id);
+      if (fresh?.docsFolderId !== undefined) updated.docsFolderId = fresh.docsFolderId;
     }
 
     await db.aiTeams.put(updated);
@@ -397,6 +401,10 @@ export async function assignLeader(
       await writeLeadRow(teamId, leadId, lead.name, db);
 
       const updated: AiTeam = { ...existing, leadId, updatedAt: new Date().toISOString() };
+      // The nested backfill may have just written a fresh `docsFolderId` onto the row read
+      // above. Carry it forward, or this `put` would erase the new tree's only handle.
+      const fresh = await db.aiTeams.get(teamId);
+      if (fresh?.docsFolderId !== undefined) updated.docsFolderId = fresh.docsFolderId;
       await db.aiTeams.put(updated);
       return updated;
     }
