@@ -12,6 +12,7 @@ import {
 import { AiSkillVersionInputSchema } from '../../../validation/aiOfficeSchemas';
 import { wrapField, wrapUntrusted } from '../untrustedData';
 import { USER_PARTICIPANT_ID } from '../../../types/teamChat';
+import { createNote, getNotesByFolder, updateNote } from '../../../db/repositories/noteRepo';
 
 /**
  * AI Office team tools (D-11, D-24, D-26, D-27, D-33).
@@ -36,6 +37,17 @@ export interface TeamToolContext {
    * (no approved row exists yet), so `read_skill` reads the current `aiSkills` row.
    */
   skillVersion?: number | undefined;
+  /**
+   * Phase 41 D-06: the caller's role, so a handler can refuse a write path the role must not
+   * use. Absent means unknown, which is treated as an employee.
+   */
+  role?: 'lead' | 'employee' | undefined;
+  /**
+   * Phase 41 D-05: the caller's own docs folder. Absent means the tree is not ready.
+   */
+  folderId?: string | undefined;
+  /** Phase 41 D-02b: the caller's display name, used as the title prefix. */
+  agentName?: string | undefined;
 }
 
 export type TeamToolRefusalCode =
@@ -48,7 +60,12 @@ export type TeamToolRefusalCode =
   | 'NOT_QUEUED'
   | 'ASSIGNMENT_NOT_IN_BATCH'
   | 'RECIPIENT_NOT_IN_ROSTER'
-  | 'EMPTY_MESSAGE';
+  | 'EMPTY_MESSAGE'
+  // Phase 41: the three `write_doc` refusals. `LEAD_USES_DB_TOOLS` is its own code because
+  // `INVALID_ARGUMENT` would blame the model's arguments for a role rule (D-06).
+  | 'DOC_NOT_IN_YOUR_FOLDER'
+  | 'TEAM_DOCS_NOT_READY'
+  | 'LEAD_USES_DB_TOOLS';
 
 /** Mirrors `ArtifactToolRefusal`: a refusal is a returned value, never a thrown error. */
 export interface TeamToolRefusal {
@@ -242,6 +259,24 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'write_doc',
+      description:
+        'Ghi tài liệu vào thư mục tài liệu của chính bạn. Ba action: list (liệt kê tài liệu trong thư mục của bạn, trả noteId để sửa), create (tạo tài liệu mới trong thư mục của bạn), update (sửa tài liệu đã có trong thư mục của bạn). Không thể tạo thư mục, không thể ghi ra ngoài thư mục của bạn.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['list', 'create', 'update'] },
+          title: { type: 'string', description: 'Tiêu đề tài liệu. Bỏ trống khi action = list.' },
+          body: { type: 'string', description: 'Toàn văn nội dung tài liệu.' },
+          noteId: { type: 'string', description: 'Id tài liệu cần sửa, chỉ dùng khi action = update.' },
+        },
+        required: ['action'],
+      },
+    },
+  },
 ];
 
 /**
@@ -252,6 +287,14 @@ export const LEAD_ONLY_TEAM_TOOLS: ReadonlySet<string> = new Set([
   'delegate_batch',
   'amend_assignments',
 ]);
+
+/**
+ * Phase 41 D-06: tools only an employee may call. The mirror of `LEAD_ONLY_TEAM_TOOLS`, but NOT
+ * symmetric in effect — this set is subtracted from the LEAD payload (`leadTools()`), while
+ * `LEAD_ONLY_TEAM_TOOLS` is subtracted from the employee payload. A tool in both sets would be
+ * offered to nobody. The leader keeps the DB tool plus the approval card as its write path.
+ */
+export const EMPLOYEE_ONLY_TEAM_TOOLS: ReadonlySet<string> = new Set(['write_doc']);
 
 /** D-11: compact BM25 hits; the full body is only reachable through `read_team_turn`. */
 async function searchTeamHistory(
@@ -705,6 +748,100 @@ async function proposeSkillVersion(
   });
 }
 
+/**
+ * Phase 41 D-01..D-06: the one write an employee may make.
+ *
+ * D-01: a team tool, deliberately absent from `MUTATION_TOOLS`, so it never reaches
+ * `onMutationCheck` and the employee's read-only policy cannot block it. Same precedent as
+ * `propose_skill_version` (39 D-04/D-05/D-06).
+ *
+ * D-04: the folder guard is code, not prompt. `parentId` always comes from `ctx.folderId` — a
+ * client-supplied `parentId` in the arguments is never read — and `type` is the literal
+ * `'document'` so an agent can never mint a folder and widen its own write area.
+ */
+async function writeDoc(args: Record<string, any>, ctx: TeamToolContext): Promise<string> {
+  // D-06, guard half one: the leader's write path is the DB tool plus the approval card. This
+  // runs BEFORE `action` is read, so no branch is reachable for a lead-role call. The payload
+  // filter (`EMPLOYEE_ONLY_TEAM_TOOLS`, plan 41-06) keeps the tool out of the model's hands;
+  // this guard keeps a leaked or hand-crafted call from writing anything.
+  if (ctx.role === 'lead') {
+    return JSON.stringify(
+      refuse(
+        'LEAD_USES_DB_TOOLS',
+        'Leader ghi bằng công cụ cơ sở dữ liệu, mỗi lần ghi dừng ở thẻ phê duyệt.'
+      )
+    );
+  }
+  // D-05: the handler NEVER creates a folder — that belongs to the coordinator, in one place,
+  // inside a transaction.
+  if (!ctx.folderId) {
+    return JSON.stringify(
+      refuse('TEAM_DOCS_NOT_READY', 'Thư mục tài liệu của bạn chưa sẵn sàng.')
+    );
+  }
+  const folderId = ctx.folderId;
+  const action = typeof args.action === 'string' ? args.action : '';
+
+  if (action === 'list') {
+    const rows = await getNotesByFolder(folderId, ctx.db);
+    return JSON.stringify(
+      rows
+        // An agent lists documents, not folders.
+        .filter((note) => note.type !== 'folder')
+        .map((note) => ({
+          noteId: note.id,
+          // T-41-12: a title was written by a model in an earlier turn — it is data.
+          title: wrapField('TIÊU ĐỀ TÀI LIỆU', note.title ?? ''),
+          updatedAt: note.updatedAt,
+        }))
+    );
+  }
+
+  if (action === 'create') {
+    const title = typeof args.title === 'string' ? args.title.trim() : '';
+    const body = typeof args.body === 'string' ? args.body : '';
+    if (!title) {
+      return JSON.stringify(refuse('INVALID_ARGUMENT', 'Thiếu tiêu đề tài liệu.'));
+    }
+    const note = await createNote(
+      {
+        type: 'document',
+        parentId: folderId,
+        // D-02b: the prefix is added by the tool, never by the prompt, so the model cannot
+        // forget it. No `agentName` means the bare title — never a leading "— ".
+        title: ctx.agentName ? `${ctx.agentName} — ${title}` : title,
+        body,
+      },
+      ctx.db
+    );
+    return JSON.stringify({ noteId: note.id, title: note.title ?? '' });
+  }
+
+  if (action === 'update') {
+    const noteId = typeof args.noteId === 'string' ? args.noteId : '';
+    if (!noteId) {
+      return JSON.stringify(refuse('INVALID_ARGUMENT', 'Thiếu id tài liệu cần sửa.'));
+    }
+    const existing = await ctx.db.notes.get(noteId);
+    // T-41-11: the comparison is against the context id, never an arg. No leader exception —
+    // the leader uses the DB tool (D-04/D-06).
+    if (!existing || existing.deletedAt || existing.parentId !== folderId) {
+      return JSON.stringify(
+        refuse('DOC_NOT_IN_YOUR_FOLDER', 'Tài liệu này không nằm trong thư mục của bạn.')
+      );
+    }
+    const title = typeof args.title === 'string' ? args.title.trim() : '';
+    const body = typeof args.body === 'string' ? args.body : '';
+    // D-02b: `update` does NOT re-apply the agent-name prefix.
+    const updated = await updateNote(noteId, { ...(title ? { title } : {}), body }, ctx.db);
+    return JSON.stringify({ noteId, title: updated?.title ?? '' });
+  }
+
+  return JSON.stringify(
+    refuse('INVALID_ARGUMENT', 'action phải là list, create hoặc update.')
+  );
+}
+
 export async function executeTeamTool(
   name: string,
   args: Record<string, any>,
@@ -730,6 +867,8 @@ export async function executeTeamTool(
       return proposeSkillVersion(input, ctx);
     case 'send_message':
       return sendMessage(input, ctx);
+    case 'write_doc':
+      return writeDoc(input, ctx);
     default:
       return JSON.stringify({ error: `Unknown team tool: ${name}` });
   }
