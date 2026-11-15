@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
 import {
+  LEAD_NO_WRITE_DOC_LINE,
   buildEmployeeTurnRequest,
   buildLeadTurnRequest,
   wrapUntrusted,
@@ -126,6 +127,18 @@ function buildEmployee(overrides: Partial<Parameters<typeof buildEmployeeTurnReq
     instruction: 'Viết đặc tả cho màn hình đăng nhập.',
     originalRequest: 'Tôi cần một màn hình đăng nhập an toàn.',
     assignmentHistory: [],
+    recentTurns: [],
+    ...overrides,
+  });
+}
+
+function buildLead(overrides: Partial<Parameters<typeof buildLeadTurnRequest>[0]> = {}) {
+  return buildLeadTurnRequest({
+    lead,
+    team,
+    roster: [employee],
+    linkedItems: [],
+    originalRequest: 'Yêu cầu gốc',
     recentTurns: [],
     ...overrides,
   });
@@ -543,5 +556,106 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
 
     expect(JSON.stringify(forB.history)).toContain('CHỈ-ĐẠO-CHO-A-xyz');
     expect(JSON.stringify(forA.history)).toContain('CHỈ-ĐẠO-CHO-A-xyz');
+  });
+
+  // Phase 41 D-16: the folder id is a fixed fact for the turn — the prompt carries it, so the
+  // agent does not spend a tool round discovering it.
+  it('names the employee folder and write_doc in the prompt', () => {
+    const system = buildEmployee({ folderId: 'folder-a' })
+      .systemMessages.map((m) => m.content)
+      .join('\n');
+
+    expect(system).toContain('folder-a');
+    expect(system).toContain('write_doc');
+  });
+
+  // T-41-24: no folder id means the tree was not ready. The prompt must not claim a folder.
+  it('omits the employee folder line when folderId is absent', () => {
+    const system = buildEmployee().systemMessages.map((m) => m.content).join('\n');
+
+    expect(system).not.toContain('Folder tài liệu của bạn');
+  });
+
+  it('states that the read-only policy has two exceptions', () => {
+    const system = buildEmployee().systemMessages.map((m) => m.content).join('\n');
+
+    expect(system).toContain('propose_skill_version');
+    expect(system).toContain('write_doc');
+    expect(system).not.toContain('một ngoại lệ duy nhất');
+  });
+
+  // D-04: the guard is the handler. A prompt naming a refusal code would imply the model
+  // is expected to enforce it.
+  it('keeps the refusal codes out of the employee prompt', () => {
+    const system = buildEmployee({ folderId: 'folder-a' })
+      .systemMessages.map((m) => m.content)
+      .join('\n');
+
+    expect(system).not.toContain('DOC_NOT_IN_YOUR_FOLDER');
+    expect(system).not.toContain('TEAM_DOCS_NOT_READY');
+  });
+
+  // Phase 41 D-07: the leader needs the team folder (where the final goes) and each member's
+  // folder (where the drafts are).
+  it('gives the lead the team folder and the member folder map', () => {
+    const system = buildLead({
+      docsFolderId: 'team-folder',
+      memberFolders: [{ agentName: 'Lan', folderId: 'folder-a' }],
+    })
+      .systemMessages.map((m) => m.content)
+      .join('\n');
+
+    expect(system).toContain('THƯ MỤC TÀI LIỆU NHÓM');
+    expect(system).toContain('team-folder');
+    expect(system).toContain('folder-a');
+    expect(system).toContain('query_notes');
+  });
+
+  // T-41-21: a member name is user-authored and enters prompt text.
+  it('wraps the member name in the lead folder block', () => {
+    const system = buildLead({
+      docsFolderId: 'team-folder',
+      memberFolders: [{ agentName: 'Lan', folderId: 'folder-a' }],
+    })
+      .systemMessages.map((m) => m.content)
+      .join('\n');
+
+    expectWrapped(system, 'TÊN NHÂN VIÊN', 'Lan');
+  });
+
+  it('omits the lead folder block when no folder facts exist', () => {
+    const system = buildLead().systemMessages.map((m) => m.content).join('\n');
+
+    expect(system).not.toContain('THƯ MỤC TÀI LIỆU NHÓM');
+  });
+
+  // D-06: the approval card is the owner's signature — the new block adds folder facts, it
+  // does not replace the write-permission statement.
+  it('keeps the lead write-permission rule alongside the folder block', () => {
+    const system = buildLead({
+      docsFolderId: 'team-folder',
+      memberFolders: [{ agentName: 'Lan', folderId: 'folder-a' }],
+    })
+      .systemMessages.map((m) => m.content)
+      .join('\n');
+
+    expect(system).toContain('QUYỀN GHI');
+    expect(system).toContain('thẻ phê duyệt');
+  });
+
+  // T-41-35: the negation line CONTAINS the token, so `not.toContain('write_doc')` is
+  // impossible by construction. The real controls are the payload filter (41-06) and the
+  // handler guard (41-03); the prompt only states the rule.
+  it('negates write_doc for the lead and never instructs it', () => {
+    const system = buildLead({
+      docsFolderId: 'team-folder',
+      memberFolders: [{ agentName: 'Lan', folderId: 'folder-a' }],
+    })
+      .systemMessages.map((m) => m.content)
+      .join('\n');
+
+    expect(system).toContain(LEAD_NO_WRITE_DOC_LINE);
+    expect(system).not.toContain('Folder tài liệu của bạn');
+    expect(system).toContain('create_note');
   });
 });
