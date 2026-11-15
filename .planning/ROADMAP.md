@@ -988,7 +988,7 @@ Plans:
 
 **Research flag:** standard patterns — skip research-phase.
 
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans executed
 Plans:
 **Wave 1**
 
@@ -997,7 +997,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 42-03-PLAN.md — Injection, refusal, wrap and Oracle-gate proofs (test-only)
+- [x] 42-03-PLAN.md — Injection, refusal, wrap and Oracle-gate proofs (test-only)
 
 ---
 

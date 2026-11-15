@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
 status: executing
-stopped_at: Completed 42-02-PLAN.md
-last_updated: "2026-11-15T15:54:23.389Z"
-last_activity: 2026-11-15 -- Completed 42-01-PLAN.md
+stopped_at: Completed 42-03-PLAN.md
+last_updated: "2026-11-15T15:58:16.000Z"
+last_activity: 2026-11-15 -- Completed 42-03-PLAN.md
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 55
-  completed_plans: 51
+  completed_plans: 52
   percent: 57
 current_phase: 40
 current_phase_name: Explorer UX, CRUD correctness, observed walkthrough
@@ -27,13 +27,13 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 
 Phase: 42 (read-only-git-inspection-for-the-reviewer-agent) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
-Last activity: 2026-11-15 -- Completed 42-01-PLAN.md
+Status: Phase complete — awaiting verification
+Last activity: 2026-11-15 -- Completed 42-03-PLAN.md
 
 ## Session Continuity
 
-Last session: 2026-11-15T15:54:23.384Z
-Stopped at: Completed 42-02-PLAN.md
+Last session: 2026-11-15T15:58:16.000Z
+Stopped at: Completed 42-03-PLAN.md
 Resume file: None
 
 Progress: [██████████] 93%
@@ -131,6 +131,9 @@ Progress: [██████████] 93%
 - [Phase 31.2]: D-51: Left stripe id renamed projects -> cr_explorer with layout persist key bump
 - [Phase 31.2]: D-52: Mandatory execution order — schema/types/Zod/repo first, then legacy deletion, then daily surfaces, then CR/System views, then SDLC, then AI proposal, then tests
 - [Phase 31.2]: D-53: Step 3 reads featureBranch from cr.targets and baseBranch from system; no branch-name guessing from crCode
+- [Phase 42]: D-08 injection proof compares the WHOLE command string with `toBe`, never a containment check — `escapeShellArg` preserves the payload text inside the quotes, so `not.toContain(EVIL)` is vacuous by construction
+- [Phase 42]: `clearAllMocks` in `beforeEach` is what makes `mock.calls.at(-1)` case-scoped; it clears call history but NOT the `mockResolvedValueOnce` queue, so each case queues exactly the responses it consumes
+- [Phase 42]: AIO-READ-06 stays verify-only per D-13 — the gate at `teamRunCoordinator.ts:1174-1179` was already correct, so no code was written; coverage is advertisement-level only, execution enforcement lives in `oracleSqlclService.test.ts`
 - [Quick 261109-eme]: Refactor AI Office & Staff to Left Stripe tool windows (ai_office on top, ai_staff above remote_explorer); open dedicated staff_detail and team_workspace editor tabs; hide Ghost Dev entry points
 - [Phase 38]: D-23 parity is membership per table per list, never length equality — at HEAD the lists differ (35 Dexie / 27 TS+local / 27 Rust) for reasons outside phase 38, so a length gate would be false and un-greenable
 - [Phase 38]: No Rust or SQLite structural change for the new columns — they ride inside opaque `payload_json` rows; `aiTeams`/`aiTeamMembers` were already in `ALLOWED_TABLES`
@@ -247,3 +250,4 @@ Progress: [██████████] 93%
 | Phase 41 P06 | ~20 min | 3 tasks | 2 files |
 | Phase 42 P01 | 4 min | 3 tasks | 3 files |
 | Phase 42 P02 | 5m | 2 tasks | 2 files |
+| Phase 42 P03 | 3 min | 3 tasks | 1 files |
