@@ -47,23 +47,46 @@ export interface BuildEmployeeTurnRequestInput {
   assignmentHistory: readonly ChatMessage[];
   /** Bounded recent window from `listRecentTurns`. */
   recentTurns: readonly ChatMessage[];
+  /**
+   * Phase 41 D-16: the caller's own docs folder id. Absent means the tree was not ready,
+   * and `write_doc` will refuse — the prompt then says nothing about a folder.
+   */
+  folderId?: string | undefined;
 }
 
 export function buildEmployeeTurnRequest(input: BuildEmployeeTurnRequestInput): PromptTurn {
-  const { employee, skill, team, instruction, originalRequest, batchResults, assignmentHistory, recentTurns } =
-    input;
+  const {
+    employee,
+    skill,
+    team,
+    instruction,
+    originalRequest,
+    batchResults,
+    assignmentHistory,
+    recentTurns,
+    folderId,
+  } = input;
 
   const parts = [
     `Bạn là ${employee.name}, ${employee.role} trong nhóm "${team.name}".`,
     employee.persona,
     [
       '[CHÍNH SÁCH CHỈ ĐỌC]',
-      'Bạn chỉ được đọc dữ liệu. Mọi thao tác ghi đều bị từ chối tự động, trừ một ngoại lệ duy nhất bên dưới.',
-      'Ngoại lệ: công cụ propose_skill_version được phép tạo một đề xuất kỹ năng ở trạng thái chờ duyệt. Đề xuất đó không thay đổi kỹ năng — chỉ người dùng duyệt mới tạo ra phiên bản mới.',
-      'Nếu cần thay đổi dữ liệu, hãy nêu rõ trong báo cáo để trưởng nhóm thực hiện.',
+      'Bạn chỉ được đọc dữ liệu. Mọi thao tác ghi đều bị từ chối tự động, trừ hai ngoại lệ bên dưới.',
+      'Ngoại lệ 1: công cụ propose_skill_version được phép tạo một đề xuất kỹ năng ở trạng thái chờ duyệt. Đề xuất đó không thay đổi kỹ năng — chỉ người dùng duyệt mới tạo ra phiên bản mới.',
+      'Ngoại lệ 2: công cụ write_doc được phép ghi tài liệu vào chính thư mục tài liệu của bạn; tài liệu hiện ngay trong Docs, không có thẻ phê duyệt. Công cụ này không ghi được ra ngoài thư mục của bạn, không tạo được thư mục, và không xoá được gì.',
+      'Nếu cần thay đổi dữ liệu khác, hãy nêu rõ trong báo cáo để trưởng nhóm thực hiện.',
       'Bạn có thể nhắn trực tiếp cho trưởng nhóm, nhân viên khác hoặc người dùng bằng công cụ send_message khi cần hỏi lại hoặc trao đổi.',
     ].join('\n'),
   ];
+
+  // D-16: the folder id is a fixed fact for the turn. A UUID from the context, not model- or
+  // user-authored text, so it is not wrapped. No folder id means no claim (T-41-24).
+  if (folderId) {
+    parts.push(
+      `Folder tài liệu của bạn: ${folderId} — dùng write_doc (list/create/update) để ghi trong đó.`
+    );
+  }
 
   // D-24 / AIO-SKILL-02: the description enters the prompt, the body never does.
   // D-21: once a model can author the description, it is untrusted data like any other.
