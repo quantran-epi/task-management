@@ -224,6 +224,29 @@ async function seedOffice(db: TaskPlannerDatabase): Promise<void> {
   await db.aiSkills.add(skill);
   await db.aiEmployees.add(employee);
   await db.aiLeads.add(lead);
+  // WR-06: `docsFolderId` is now a validated reference, so the fixtures' ids must name real
+  // note rows — otherwise the app's own export fails its own validator.
+  await db.notes.bulkAdd([
+    {
+      id: TEAM_DOCS_FOLDER_ID,
+      title: 'Squad Alpha',
+      body: '',
+      type: 'folder',
+      isPinned: false,
+      createdAt: NOW,
+      updatedAt: NOW,
+    },
+    {
+      id: LEAD_DOCS_FOLDER_ID,
+      title: 'An',
+      body: '',
+      type: 'folder',
+      parentId: TEAM_DOCS_FOLDER_ID,
+      isPinned: false,
+      createdAt: NOW,
+      updatedAt: NOW,
+    },
+  ]);
   await db.aiTeams.add(team);
   await db.aiTeamMembers.bulkAdd([leadMember, employeeMember]);
   await db.aiTeamLinks.add(teamLink);

@@ -129,17 +129,61 @@ export async function updateNote(
   return updated;
 }
 
+/**
+ * CR-04: every row that references a note must be deleted or detached before the note goes,
+ * or `validateBackup` rejects the app's own next export. One helper, because the two permanent
+ * delete paths (`deleteNote`, `bulkPermanentDeleteNotes`) and the team tree delete
+ * (`deleteTeamDocsTree`) share exactly this list — a fourth copy would drift.
+ *
+ * Runs inside the caller's transaction; it opens none of its own.
+ */
+export async function detachNoteReferences(
+  ids: readonly string[],
+  db: TaskPlannerDatabase = defaultDb
+): Promise<void> {
+  if (ids.length === 0) return;
+  const doomed = new Set(ids);
+
+  const attachments = await db.noteAttachments.where('noteId').anyOf(ids).toArray();
+  if (attachments.length > 0) {
+    await db.noteAttachments.bulkDelete(attachments.map((attachment) => attachment.id));
+  }
+
+  // A document set is a snapshot: drop the dead ids, never the whole set.
+  const sets = await db.documentSets.toArray();
+  for (const set of sets) {
+    if (!set.documentIds.some((documentId) => doomed.has(documentId))) continue;
+    await db.documentSets.update(set.id, {
+      documentIds: set.documentIds.filter((documentId) => !doomed.has(documentId)),
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  // A document-scoped thread has no meaning without its document — same rule as a team thread.
+  const threads = await db.chatThreads.where('scopeType').equals('document').toArray();
+  const doomedThreads = threads.filter(
+    (thread) => thread.entityId !== undefined && doomed.has(thread.entityId)
+  );
+  if (doomedThreads.length > 0) {
+    const threadIds = doomedThreads.map((thread) => thread.id);
+    await db.chatMessages.where('threadId').anyOf(threadIds).delete();
+    await db.chatTabs.where('threadId').anyOf(threadIds).delete();
+    await db.chatThreads.bulkDelete(threadIds);
+  }
+}
+
 export async function deleteNote(
   id: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<void> {
-  await db.transaction('rw', [db.notes, db.noteAttachments], async () => {
-    const attachments = await db.noteAttachments.where('noteId').equals(id).toArray();
-    if (attachments.length > 0) {
-      await db.noteAttachments.bulkDelete(attachments.map((a) => a.id));
+  await db.transaction(
+    'rw',
+    [db.notes, db.noteAttachments, db.documentSets, db.chatThreads, db.chatMessages, db.chatTabs],
+    async () => {
+      await detachNoteReferences([id], db);
+      await db.notes.delete(id);
     }
-    await db.notes.delete(id);
-  });
+  );
 }
 
 export async function permanentDeleteNote(
@@ -311,12 +355,13 @@ export async function bulkPermanentDeleteNotes(
   db: TaskPlannerDatabase = defaultDb
 ): Promise<void> {
   if (ids.length === 0) return;
-  await db.transaction('rw', [db.notes, db.noteAttachments], async () => {
-    const attachments = await db.noteAttachments.where('noteId').anyOf(ids).toArray();
-    if (attachments.length > 0) {
-      await db.noteAttachments.bulkDelete(attachments.map((a) => a.id));
+  await db.transaction(
+    'rw',
+    [db.notes, db.noteAttachments, db.documentSets, db.chatThreads, db.chatMessages, db.chatTabs],
+    async () => {
+      await detachNoteReferences(ids, db);
+      await db.notes.bulkDelete(ids);
     }
-    await db.notes.bulkDelete(ids);
-  });
+  );
 }
 

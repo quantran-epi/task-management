@@ -1692,4 +1692,37 @@ describe('teamTools — write_doc folder-scoped document write (AIO-DOCS-02..04,
     expect(after!.body).toBe('bị chiếm');
     expect(after!.type).toBe('folder');
   });
+
+  // WR-03: a diagram's body IS its source — a `!== 'folder'` blacklist let update destroy it.
+  it('update refuses a diagram inside the caller folder (WR-03)', async () => {
+    const diagram = await createNote(
+      { type: 'diagram', title: 'Sơ đồ', body: 'graph TD; A-->B', parentId: folderA },
+      db
+    );
+
+    const result = JSON.parse(
+      await executeTeamTool(
+        'write_doc',
+        { action: 'update', noteId: diagram.id, body: 'bị sửa' },
+        ctx({ folderId: folderA })
+      )
+    );
+
+    expect(result).toMatchObject({ refused: true, code: 'DOC_NOT_IN_YOUR_FOLDER' });
+    expect((await db.notes.get(diagram.id))?.body).toBe('graph TD; A-->B');
+  });
+
+  // WR-03/IN-04: `list` shows only writable types, and names the type it shows.
+  it('list excludes diagrams and reports the note type (WR-03, IN-04)', async () => {
+    await createNote({ type: 'diagram', title: 'Sơ đồ', body: 'x', parentId: folderA }, db);
+    const doc = await createNote({ type: 'document', title: 'Bản nháp', body: 'y', parentId: folderA }, db);
+
+    const rows = JSON.parse(
+      await executeTeamTool('write_doc', { action: 'list' }, ctx({ folderId: folderA }))
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].noteId).toBe(doc.id);
+    expect(rows[0].type).toBe('document');
+  });
 });

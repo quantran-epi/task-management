@@ -763,6 +763,17 @@ async function proposeSkillVersion(
 const MAX_DOC_TITLE_LENGTH = 120;
 const MAX_DOC_BODY_LENGTH = 50000;
 
+/**
+ * WR-03/IN-04: a whitelist, not a `!== 'folder'` blacklist. `NOTE_TYPES` also holds `diagram`,
+ * and a diagram's body is its source — overwriting it destroys the diagram. Listing the type
+ * lets the model see which notes it may touch.
+ */
+const WRITABLE_DOC_TYPES: ReadonlySet<string> = new Set(['document', 'quick_note']);
+
+function isWritableDoc(note: { type?: string | undefined }): boolean {
+  return note.type !== undefined && WRITABLE_DOC_TYPES.has(note.type);
+}
+
 async function writeDoc(args: Record<string, any>, ctx: TeamToolContext): Promise<string> {
   // D-06, guard half one: the leader's write path is the DB tool plus the approval card. This
   // runs BEFORE `action` is read, so no branch is reachable for a lead-role call. The payload
@@ -790,12 +801,13 @@ async function writeDoc(args: Record<string, any>, ctx: TeamToolContext): Promis
     const rows = await getNotesByFolder(folderId, ctx.db);
     return JSON.stringify(
       rows
-        // An agent lists documents, not folders.
-        .filter((note) => note.type !== 'folder')
+        // WR-03/IN-04: an agent lists the notes it may write — never a folder or a diagram.
+        .filter((note) => isWritableDoc(note))
         .map((note) => ({
           noteId: note.id,
           // T-41-12: a title was written by a model in an earlier turn — it is data.
           title: wrapField('TIÊU ĐỀ TÀI LIỆU', note.title ?? ''),
+          type: note.type,
           updatedAt: note.updatedAt,
         }))
     );
@@ -846,13 +858,13 @@ async function writeDoc(args: Record<string, any>, ctx: TeamToolContext): Promis
     const existing = await ctx.db.notes.get(noteId);
     // T-41-11: the comparison is against the context id, never an arg. No leader exception —
     // the leader uses the DB tool (D-04/D-06).
-    // WR-03: a folder the owner created inside this folder also has `parentId === folderId`,
-    // so `type` must be checked too — `list` already filters folders out.
+    // WR-03: a folder the owner created inside this folder also has `parentId === folderId`, and
+    // a diagram's body is its source — only a writable document type may be updated.
     if (
       !existing ||
       existing.deletedAt ||
       existing.parentId !== folderId ||
-      existing.type === 'folder'
+      !isWritableDoc(existing)
     ) {
       return JSON.stringify(
         refuse('DOC_NOT_IN_YOUR_FOLDER', 'Tài liệu này không nằm trong thư mục của bạn.')
@@ -883,7 +895,14 @@ async function writeDoc(args: Record<string, any>, ctx: TeamToolContext): Promis
       { ...(title ? { title } : {}), ...(body !== undefined ? { body } : {}) },
       ctx.db
     );
-    return JSON.stringify({ noteId, title: updated?.title ?? '' });
+    // IN-01: `updateNote` returns null when the row vanished between the get and the put.
+    // Reporting `title: ''` would read as success while nothing was written.
+    if (!updated) {
+      return JSON.stringify(
+        refuse('DOC_NOT_IN_YOUR_FOLDER', 'Tài liệu này không còn tồn tại trong thư mục của bạn.')
+      );
+    }
+    return JSON.stringify({ noteId, title: updated.title ?? '' });
   }
 
   return JSON.stringify(

@@ -3066,7 +3066,8 @@ export async function executeAiTool(
             attachmentsCount: attachmentCountMap.get(n.id) || 0,
             entityType: n.entityType ?? 'standalone',
             entityId: n.entityId ?? null,
-            entityName,
+            // WR-04: an entity name is user-authored free text — same boundary as the title.
+            entityName: wrapField(`TÊN MỤC LIÊN KẾT ${n.id}`, entityName),
             createdAt: n.createdAt,
             updatedAt: n.updatedAt,
           };

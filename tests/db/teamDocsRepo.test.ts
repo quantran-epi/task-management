@@ -11,7 +11,7 @@ import {
   ensureTeamDocsReady,
   isLiveFolder,
 } from '../../src/db/repositories/teamDocsRepo';
-import { createEmployee } from '../../src/db/repositories/aiOfficeRepo';
+import { createEmployee, createLead } from '../../src/db/repositories/aiOfficeRepo';
 import { createNote } from '../../src/db/repositories/noteRepo';
 import type { AiTeam, AiTeamMember } from '../../src/types/aiOffice';
 import { generateId } from '../../src/utils/uuid';
@@ -58,6 +58,41 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
       usedTokens: 0,
     }));
     await db.aiTeamMembers.bulkAdd(rows);
+    return team;
+  }
+
+  async function seedTeamWithLead(
+    name: string,
+    leadId: string,
+    employeeIds: string[]
+  ): Promise<AiTeam> {
+    const team: AiTeam = {
+      id: generateId(),
+      name,
+      leadId,
+      budgetTokens: 0,
+      createdAt: NOW,
+      updatedAt: NOW,
+    };
+    await db.aiTeams.add(team);
+    await db.aiTeamMembers.bulkAdd([
+      {
+        id: generateId(),
+        teamId: team.id,
+        agentId: leadId,
+        role: 'lead' as const,
+        budgetTokens: 0,
+        usedTokens: 0,
+      },
+      ...employeeIds.map<AiTeamMember>((agentId) => ({
+        id: generateId(),
+        teamId: team.id,
+        agentId,
+        role: 'employee' as const,
+        budgetTokens: 0,
+        usedTokens: 0,
+      })),
+    ]);
     return team;
   }
 
@@ -341,5 +376,111 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
     expect(await db.notes.count()).toBe(before);
     expect(await db.notes.get(rootId)).toBeDefined();
     expect(await db.notes.get(tree.folderId)).toBeDefined();
+  });
+
+  // CR-01: `docsFolderId` is an untrusted handle — a user document is not a team folder.
+  it('refuses to delete when docsFolderId names a user document (CR-01)', async () => {
+    const userDoc = await createNote({ title: 'Tài liệu người dùng', body: 'x', type: 'document' }, db);
+    const before = await db.notes.count();
+
+    await deleteTeamDocsTree(userDoc.id, db);
+
+    expect(await db.notes.count()).toBe(before);
+    expect(await db.notes.get(userDoc.id)).toBeDefined();
+  });
+
+  // CR-01: every team folder is a child of the same root, so the shape check alone cannot tell
+  // THIS team's folder from another's. A corrupted `docsFolderId` duplicating another team's id
+  // must not delete that team's tree.
+  it('refuses to delete a folder another team claims (CR-01)', async () => {
+    const mine = await seedTeam('Nhóm A', [generateId()]);
+    const other = await seedTeam('Nhóm B', [generateId()]);
+    const mineReady = await ensureTeamDocsReady(mine.id, db);
+    const otherReady = await ensureTeamDocsReady(other.id, db);
+    // Corruption: team A's docsFolderId now names team B's folder.
+    await db.aiTeams.update(mine.id, { docsFolderId: otherReady.team.docsFolderId });
+    const before = await db.notes.count();
+    const otherFolderId = otherReady.team.docsFolderId as string;
+    const mineFolderId = mineReady.team.docsFolderId as string;
+
+    await deleteTeamDocsTree(otherFolderId, db, mine.id);
+
+    expect(await db.notes.count()).toBe(before);
+    expect(await db.notes.get(otherFolderId)).toBeDefined();
+    expect(await db.notes.get(mineFolderId)).toBeDefined();
+  });
+
+  // CR-03: a member row pointing at the team root would write next to the leader's final.
+  it('re-mints a member folder that is not a child of the team folder (CR-03)', async () => {
+    const agentIds = [generateId(), generateId()];
+    const team = await seedTeam('Nhóm A', agentIds);
+    const first = await ensureTeamDocsReady(team.id, db);
+    const targetAgentId = agentIds[0] as string;
+
+    const rows = await db.aiTeamMembers.where('teamId').equals(team.id).toArray();
+    const targetRow = rows.find((row) => row.agentId === targetAgentId)!;
+    // Corrupted backup / owner folder-move: the member now points at the team root.
+    await db.aiTeamMembers.update(targetRow.id, { docsFolderId: first.team.docsFolderId });
+
+    const second = await ensureTeamDocsReady(team.id, db);
+
+    const repaired = second.memberFolderIds.get(targetAgentId);
+    expect(repaired).not.toBe(first.team.docsFolderId);
+    expect((await db.notes.get(repaired!))?.parentId).toBe(first.team.docsFolderId);
+    expect((await db.notes.get(repaired!))?.type).toBe('folder');
+  });
+
+  // CR-04: document sets and document-scoped threads reference notes; the tree delete must
+  // detach them or the app's own next export fails validateBackup.
+  it('detaches document-set entries and document-scoped threads (CR-04)', async () => {
+    const tree = await createTeamDocsTree('Nhóm A', [{ agentId: generateId(), name: 'An' }], db);
+    const memberFolderId = [...tree.memberFolderIds.values()][0] as string;
+    const doc = await createNote(
+      { title: 'Có tham chiếu', body: 'x', type: 'document', parentId: memberFolderId },
+      db
+    );
+    const keep = await createNote({ title: 'Giữ lại', body: 'y', type: 'document' }, db);
+    const setId = generateId();
+    await db.documentSets.add({
+      id: setId,
+      name: 'Bộ tài liệu',
+      documentIds: [doc.id, keep.id],
+      createdAt: NOW,
+      updatedAt: NOW,
+    } as never);
+    const threadId = generateId();
+    await db.chatThreads.add({
+      id: threadId,
+      scopeKey: `document:${doc.id}`,
+      scopeType: 'document',
+      entityId: doc.id,
+      title: 'Hỏi về tài liệu',
+      createdAt: NOW,
+      updatedAt: NOW,
+    } as never);
+
+    await deleteTeamDocsTree(tree.folderId, db);
+
+    // The set survives with the dead id dropped; the live id stays.
+    const set = await db.documentSets.get(setId);
+    expect(set?.documentIds).toEqual([keep.id]);
+    expect(await db.chatThreads.get(threadId)).toBeUndefined();
+  });
+
+  // WR-01: the lead lives in `aiLeads`, so a rebuilt tree must not name its folder after a UUID.
+  it('names the lead folder from aiLeads when the tree is rebuilt (WR-01)', async () => {
+    const lead = await createLead(
+      { name: 'Trưởng Nhóm', role: 'Lead', capability: 'c', persona: 'p', model: 'm' },
+      db
+    );
+    const team = await seedTeamWithLead('Nhóm A', lead.id, [generateId()]);
+    const first = await ensureTeamDocsReady(team.id, db);
+
+    // Rebuild: the owner deleted the whole tree.
+    await deleteTeamDocsTree(first.team.docsFolderId, db);
+    const second = await ensureTeamDocsReady(team.id, db);
+
+    const leadFolderId = second.memberFolderIds.get(lead.id);
+    expect((await db.notes.get(leadFolderId!))?.title).toBe('Trưởng Nhóm');
   });
 });

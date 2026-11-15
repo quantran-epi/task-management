@@ -4,10 +4,12 @@ import { clampBudgetWarnThresholdPct, clampTeamConcurrency } from '../../types/a
 import { generateId } from '../../utils/uuid';
 import { splitEvenly } from '../../services/ai/office/budgetSplit';
 import {
+  AI_TEAMS_DOCS_ROOT_SETTING_KEY,
   createMemberFolder,
   createTeamDocsTree,
   deleteTeamDocsTree,
   ensureTeamDocsReady,
+  findMemberFolderByTitle,
   isLiveFolder,
 } from './teamDocsRepo';
 import {
@@ -301,14 +303,25 @@ export async function updateTeam(
 
     await db.aiTeams.put(updated);
 
-    // WR-07: the docs tree is keyed by `docsFolderId`, so a rename never breaks it — but the
-    // owner would keep seeing a folder named after the team's previous name, and no surface
-    // reconciles it later. Rename it here, in the same transaction.
+    // WR-07/CR-02: the docs tree is keyed by `docsFolderId`, so a rename never breaks it — but
+    // the owner would keep seeing a folder named after the team's previous name. Rename it here,
+    // in the same transaction, and only when the id really names a live team folder:
+    // `docsFolderId` is an untrusted handle restored from a backup, so writing a title onto
+    // whatever it names could rename a user document or the shared root.
     if (validated.name !== undefined && updated.docsFolderId !== undefined) {
-      await db.notes.update(updated.docsFolderId, {
-        title: validated.name,
-        updatedAt: new Date().toISOString(),
-      });
+      const rootSetting = await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY);
+      const teamFolder = await db.notes.get(updated.docsFolderId);
+      if (
+        rootSetting?.value !== updated.docsFolderId &&
+        teamFolder &&
+        !teamFolder.deletedAt &&
+        teamFolder.type === 'folder'
+      ) {
+        await db.notes.update(updated.docsFolderId, {
+          title: validated.name,
+          updatedAt: new Date().toISOString(),
+        });
+      }
     }
     return updated;
   });
@@ -481,10 +494,12 @@ export async function deleteTeam(id: string, db: TaskPlannerDatabase = defaultDb
       db.teamReadCursors,
       db.teamParticipants,
       db.notes,
-      // CR-02: `deleteTeamDocsTree` deletes the tree's attachments with it, or the app's own
-      // next export fails `validateBackup`. WR-09: it also reads the shared-root setting before
-      // descending, so `db.settings` must be named too.
+      // CR-02/CR-04: `deleteTeamDocsTree` detaches every note reference (attachments,
+      // document-set entries, document-scoped threads) and reads the shared-root setting before
+      // descending, so both of those must be named here. `chatThreads`/`chatMessages`/`chatTabs`
+      // are already above for the team thread.
       db.noteAttachments,
+      db.documentSets,
       db.settings,
     ],
     async () => {
@@ -513,7 +528,7 @@ export async function deleteTeam(id: string, db: TaskPlannerDatabase = defaultDb
       await db.aiTeamLinks.where('teamId').equals(id).delete();
       // D-10: deleting a team deletes its whole docs tree — the team folder, its member
       // folders and every document inside them. Hard delete, in this same transaction.
-      await deleteTeamDocsTree(existing?.docsFolderId, db);
+      await deleteTeamDocsTree(existing?.docsFolderId, db, id);
       await db.aiTeams.delete(id);
     }
   );
@@ -543,10 +558,11 @@ export async function addTeamMember(
   }
 
   // D-11: `db.aiTeams`/`db.notes`/`db.settings` join the transaction because the dead-tree path
-  // reaches `ensureTeamDocsReady`, whose own transaction spans all five of these tables.
+  // reaches `ensureTeamDocsReady`, whose own transaction spans all of these tables — `aiLeads`
+  // included, since the backfill resolves the lead's display name from it (WR-01).
   return db.transaction(
     'rw',
-    [db.aiTeamMembers, db.aiEmployees, db.aiTeams, db.notes, db.settings],
+    [db.aiTeamMembers, db.aiEmployees, db.aiLeads, db.aiTeams, db.notes, db.settings],
     async () => {
       // WR-05: a dangling agentId produces a backup the app's own validator rejects.
       const agent = await db.aiEmployees.get(validated.agentId);
@@ -562,6 +578,19 @@ export async function addTeamMember(
         throw new Error('Nhân viên đã có trong nhóm.');
       }
 
+      const team = await db.aiTeams.get(validated.teamId);
+      if (!team) throw new Error(`Không tìm thấy nhóm: ${validated.teamId}`);
+
+      const teamFolderId = team.docsFolderId;
+      const liveTree = teamFolderId !== undefined && (await isLiveFolder(teamFolderId, db));
+
+      // WR-02: `removeTeamMember` deliberately keeps the member's folder, so re-adding the same
+      // agent must reuse it. Minting a second one strands everything the member wrote earlier
+      // under a folder the roster no longer points at.
+      const reusableFolderId = liveTree
+        ? await findMemberFolderByTitle(teamFolderId, agent.name, db)
+        : undefined;
+
       const member: AiTeamMember = {
         id: generateId(),
         teamId: validated.teamId,
@@ -571,16 +600,17 @@ export async function addTeamMember(
         usedTokens: validated.usedTokens,
         inputTokens: 0,
         outputTokens: 0,
+        ...(reusableFolderId !== undefined ? { docsFolderId: reusableFolderId } : {}),
       };
       await db.aiTeamMembers.add(member);
 
       // D-11: the member gets its own folder in this same transaction. The two paths must stay
       // separate — running both would mint a ` (2)` duplicate for the same agent.
-      const team = await db.aiTeams.get(validated.teamId);
-      if (!team) throw new Error(`Không tìm thấy nhóm: ${validated.teamId}`);
+      if (reusableFolderId !== undefined) {
+        return member;
+      }
 
-      const teamFolderId = team.docsFolderId;
-      if (teamFolderId !== undefined && (await isLiveFolder(teamFolderId, db))) {
+      if (liveTree) {
         // Path A — live tree: mint the folder here.
         const folderId = await createMemberFolder(teamFolderId, agent.name, db);
         await db.aiTeamMembers.update(member.id, { docsFolderId: folderId });

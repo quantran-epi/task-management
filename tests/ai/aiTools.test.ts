@@ -670,7 +670,8 @@ describe('aiTools', () => {
       expect(res.totalCount).toBe(1);
       // WR-05: the title is wrapped as untrusted data; assert the content, not the wrapper.
       expect(res.notes[0].title).toContain('API Spec Draft');
-      expect(res.notes[0].entityName).toBe('Write unit tests');
+      // WR-04: the entity name is wrapped too.
+      expect(res.notes[0].entityName).toContain('Write unit tests');
     });
 
     it('filters standalone notes', async () => {
@@ -1378,6 +1379,22 @@ describe('aiTools', () => {
       transaction: vi.fn().mockImplementation(async (_mode, _tables, callback) => {
         return await callback();
       }),
+      // CR-04: permanent note delete now detaches document-set entries and document-scoped
+      // threads, so the mock needs those tables.
+      documentSets: {
+        toArray: async () => [],
+        update: vi.fn().mockResolvedValue(1),
+      },
+      chatThreads: {
+        where: () => ({ equals: () => ({ toArray: async () => [] }) }),
+        bulkDelete: vi.fn().mockResolvedValue(undefined),
+      },
+      chatMessages: {
+        where: () => ({ anyOf: () => ({ delete: async () => 0 }) }),
+      },
+      chatTabs: {
+        where: () => ({ anyOf: () => ({ delete: async () => 0 }) }),
+      },
       settings: {
         ...mockDb.settings,
         put: vi.fn().mockResolvedValue(undefined),
@@ -1475,6 +1492,21 @@ describe('aiTools', () => {
                 createdAt: '2026-10-01T00:00:00.000Z',
               },
             ].filter((a) => (a as any)[field] === val),
+          }),
+          // CR-04: `detachNoteReferences` looks attachments up by a set of note ids.
+          anyOf: (vals: string[]) => ({
+            toArray: async () =>
+              [
+                {
+                  id: 'att-1',
+                  noteId: validNoteId,
+                  fileName: 'mock.png',
+                  mimeType: 'image/png',
+                  sizeBytes: 1024,
+                  caption: 'Mock screenshot',
+                  createdAt: '2026-10-01T00:00:00.000Z',
+                },
+              ].filter((a) => vals.includes(a.noteId)),
           }),
         }),
         add: vi.fn().mockResolvedValue('att-new'),

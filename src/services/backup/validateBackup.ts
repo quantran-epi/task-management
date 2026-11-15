@@ -558,6 +558,11 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     if (team.leaderLockedAt !== undefined && team.leadId === undefined) {
       errors.push({ table: 'aiTeams', recordId: team.id, field: 'leaderLockedAt', message: 'AiTeam is leader-locked but has no leadId' });
     }
+    // WR-06: `docsFolderId` is a live handle that drives a hard delete and a title write, so it
+    // gets the same referential check every other live reference gets.
+    if (team.docsFolderId !== undefined && !noteIds.has(team.docsFolderId)) {
+      errors.push({ table: 'aiTeams', recordId: team.id, field: 'docsFolderId', message: `AiTeam references docsFolderId "${team.docsFolderId}" not found in notes` });
+    }
   }
   for (const member of aiTeamMembers ?? []) {
     if (!aiTeamIds.has(member.teamId)) {
@@ -571,6 +576,10 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       }
     } else if (!aiEmployeeIds.has(member.agentId) && !aiLeadIds.has(member.agentId)) {
       errors.push({ table: 'aiTeamMembers', recordId: member.id, field: 'agentId', message: `AiTeamMember references agentId "${member.agentId}" not found in aiEmployees or aiLeads` });
+    }
+    // WR-06: same referential rule as the team's own `docsFolderId`.
+    if (member.docsFolderId !== undefined && !noteIds.has(member.docsFolderId)) {
+      errors.push({ table: 'aiTeamMembers', recordId: member.id, field: 'docsFolderId', message: `AiTeamMember references docsFolderId "${member.docsFolderId}" not found in notes` });
     }
   }
   for (const link of aiTeamLinks ?? []) {

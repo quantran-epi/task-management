@@ -1382,5 +1382,56 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
 
       expect(await db.notes.get(teamFolderId)).toBeUndefined();
     });
+
+    // CR-02: `docsFolderId` is an untrusted handle — a rename must not write a title onto a user
+    // document, and must not rename the shared root.
+    it('updateTeam rename does not touch a docsFolderId that names a document (CR-02)', async () => {
+      const team = await makeTeam('Stale');
+      const doc = await createNote({ title: 'Tài liệu người dùng', body: 'x', type: 'document' }, db);
+      await db.aiTeams.update(team.id, { docsFolderId: doc.id });
+
+      await updateTeam(team.id, { name: 'Renamed' }, db);
+
+      expect((await db.notes.get(doc.id))?.title).toBe('Tài liệu người dùng');
+    });
+
+    it('updateTeam rename does not touch the shared root (CR-02)', async () => {
+      const team = await makeTeam('Stale');
+      const rootId = (await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY))!.value as string;
+      await db.aiTeams.update(team.id, { docsFolderId: rootId });
+
+      await updateTeam(team.id, { name: 'Hijacked' }, db);
+
+      expect((await db.notes.get(rootId))?.title).toBe(AI_TEAMS_DOCS_ROOT_TITLE);
+    });
+
+    // WR-02: `removeTeamMember` keeps the folder, so re-adding the same agent must adopt it.
+    it('re-adding a removed member reuses its folder instead of minting a duplicate (WR-02)', async () => {
+      const team = await createTeam(
+        { name: 'ReAdd', leadId, budgetTokens: 0, employeeIds: [employeeIds[0]!] },
+        db
+      );
+      const row = (await listTeamMembers(team.id, db)).find(
+        (member) => member.agentId === employeeIds[0]
+      )!;
+      const originalFolderId = row.docsFolderId!;
+      const doc = await createNote(
+        { title: 'Đã viết trước đó', body: 'x', type: 'document', parentId: originalFolderId },
+        db
+      );
+
+      await removeTeamMember(row.id, db);
+      const readded = await addTeamMember(
+        { teamId: team.id, agentId: employeeIds[0]!, role: 'employee', budgetTokens: 0 },
+        db
+      );
+
+      expect(readded.docsFolderId).toBe(originalFolderId);
+      const teamFolderId = (await getTeam(team.id, db))!.docsFolderId!;
+      const folders = await childFolders(teamFolderId);
+      expect(folders.some((note) => note.title?.includes('(2)'))).toBe(false);
+      // The earlier document is still reachable from the member's folder.
+      expect((await db.notes.get(doc.id))?.parentId).toBe(originalFolderId);
+    });
   });
 });
