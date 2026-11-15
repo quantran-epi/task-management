@@ -77,9 +77,9 @@ describe('teamTools — transcript search and skill reader (AIO-MEM-02, AIO-MEM-
   }
 
   // 37.1 §1.1: `deliver_steer` is gone — a message reaches its recipient without a gate.
-  it('exposes the ten team tool definitions', () => {
+  it('exposes the eleven team tool definitions', () => {
     const names = TEAM_TOOL_DEFINITIONS.map((tool) => tool.function.name);
-    expect(names).toHaveLength(10);
+    expect(names).toHaveLength(11);
     expect(names).toEqual(
       expect.arrayContaining([
         'search_team_history',
@@ -95,6 +95,8 @@ describe('teamTools — transcript search and skill reader (AIO-MEM-02, AIO-MEM-
         'send_message',
         // 41-03 D-01: the employee's document write path.
         'write_doc',
+        // 42-01 D-06: read-only remote git inspection for the reviewer.
+        'git_read',
       ])
     );
     expect(names).not.toContain('deliver_steer');

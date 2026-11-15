@@ -24,7 +24,9 @@ import { resolveMemberFolder } from '../../../db/repositories/teamDocsRepo';
  * or agent id out of the model-supplied `args` — a model can only name a turn, item or
  * agent that must still be verified against the context's team.
  *
- * Every handler is fully offline: it reads IndexedDB and `src/utils/bm25.ts` only.
+ * Every handler except `git_read` is fully offline: it reads IndexedDB and
+ * `src/utils/bm25.ts` only. `git_read` performs read-only SSH git reads against a
+ * repository of a system linked to the team.
  */
 
 export interface TeamToolContext {
@@ -72,7 +74,11 @@ export type TeamToolRefusalCode =
   // `INVALID_ARGUMENT` would blame the model's arguments for a role rule (D-06).
   | 'DOC_NOT_IN_YOUR_FOLDER'
   | 'TEAM_DOCS_NOT_READY'
-  | 'LEAD_USES_DB_TOOLS';
+  | 'LEAD_USES_DB_TOOLS'
+  // Phase 42: `git_read` repo resolution. Truthful codes — a linked system that merely lacks
+  // repo configuration is NOT "not linked" (D-07).
+  | 'SYSTEM_NOT_LINKED'
+  | 'NO_LINKED_REPO';
 
 /** Mirrors `ArtifactToolRefusal`: a refusal is a returned value, never a thrown error. */
 export interface TeamToolRefusal {
@@ -279,6 +285,36 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
           title: { type: 'string', description: 'Tiêu đề tài liệu. Bỏ trống khi action = list.' },
           body: { type: 'string', description: 'Toàn văn nội dung tài liệu.' },
           noteId: { type: 'string', description: 'Id tài liệu cần sửa, chỉ dùng khi action = update.' },
+        },
+        required: ['action'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'git_read',
+      description:
+        'Đọc trạng thái git của repo remote qua SSH (chỉ đọc, không ghi). Bảy action: branches (liệt kê nhánh), status (tệp chưa commit), log (N commit gần nhất của một nhánh), diff_summary (tổng hợp diff giữa base và target), diff_file (diff một tệp), read_file (nội dung tệp tại một nhánh), tree (cây thư mục tại một nhánh). Repo lấy từ hệ thống đã liên kết với nhóm.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['branches', 'status', 'log', 'diff_summary', 'diff_file', 'read_file', 'tree'],
+            description: 'Hành động cần thực hiện.',
+          },
+          systemId: {
+            type: 'string',
+            description:
+              'Chỉ cần khi nhóm liên kết nhiều hơn một hệ thống có repo. Phải là hệ thống đã liên kết.',
+          },
+          limit: { type: 'number', description: 'log: số commit, 1..50, mặc định 20.' },
+          branch: { type: 'string', description: 'log, read_file, tree: nhánh cần đọc.' },
+          base: { type: 'string', description: 'diff_summary, diff_file: nhánh gốc.' },
+          target: { type: 'string', description: 'diff_summary, diff_file: nhánh đích.' },
+          filePath: { type: 'string', description: 'diff_file, read_file: đường dẫn tệp.' },
+          dirPath: { type: 'string', description: 'tree: thư mục con (bỏ trống để đọc gốc).' },
         },
         required: ['action'],
       },
