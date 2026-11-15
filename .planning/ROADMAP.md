@@ -947,7 +947,7 @@ Plans:
 
 **Research flag:** standard patterns — skip research-phase.
 
-**Plans:** 3/6 plans executed
+**Plans:** 4/6 plans executed
 
 Plans:
 **Wave 1**
@@ -961,7 +961,7 @@ Plans:
 **Wave 3** *(depends on 41-01/41-02; independent of each other)*
 
 - [x] 41-03-PLAN.md — `write_doc` team tool with the code-level folder and role guards, three refusal codes, `EMPLOYEE_ONLY_TEAM_TOOLS`, handler tests
-- [ ] 41-04-PLAN.md — `createTeam`/`deleteTeam`/`addTeamMember`/`assignLeader` own the tree in their existing transactions + lifecycle tests
+- [x] 41-04-PLAN.md — `createTeam`/`deleteTeam`/`addTeamMember`/`assignLeader` own the tree in their existing transactions + lifecycle tests
 
 **Wave 4** *(depends on 41-03)*
 
