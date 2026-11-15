@@ -1,6 +1,6 @@
 ---
 phase: 42-read-only-git-inspection-for-the-reviewer-agent
-reviewed: 2026-11-15T16:40:00Z
+reviewed: 2026-11-16T00:00:00Z
 depth: standard
 files_reviewed: 7
 files_reviewed_list:
@@ -12,198 +12,124 @@ files_reviewed_list:
   - tests/services/ai/office/teamToolsGitRead.test.ts
   - src/services/gitRemoteTreeService.ts
 findings:
-  critical: 0
-  warning: 6
+  critical: 1
+  warning: 2
   info: 3
-  total: 9
+  total: 6
 status: issues_found
 ---
 
-# Phase 42: Code Review Report (round 2)
+# Phase 42: Code Review Report (round 3 — final)
 
-**Reviewed:** 2026-11-15T16:40:00Z
+**Reviewed:** 2026-11-16T00:00:00Z
 **Depth:** standard
 **Files Reviewed:** 7
 **Status:** issues_found
 
 ## Summary
 
-Round-1 criticals were re-verified against the actual code and against git 2.50.1, not against the fix report.
+Round-2 claims were re-tested against the code and against real `git` 2.50.1 repositories, not against the fix report.
 
 **Genuinely resolved:**
 
-- **CR-01** — both layers are real. `revisionArg()` (`teamTools.ts:1094-1097`) refuses every `-`-leading revision before a command is built, and every revision-shaped argv element is preceded by `--end-of-options` (`gitRemoteService.ts:147,174,196,206,340`; `gitRemoteTreeService.ts:171,207`). Reproduced the original vector: `git log --end-of-options '--output=/tmp/pwn..HEAD'`, `git show --end-of-options '--output=/tmp/pwn3'` and `git diff … --end-of-options '--output=/tmp/pwn2..HEAD'` all exit 128 and create no file. Option ordering is correct in every call site (`-n`, `--format`, `--date`, `--no-ext-diff`, `--no-textconv` all precede the terminator; `--` follows it in `getFileDiff`).
-- **CR-02** — `confineRepoPath()` is applied in both `getRemoteFileContent` and the exported `getRemoteWorkingFileContent`, and the `cat` fallback is no longer reachable from `../../`. Edge cases checked: `''`, `.`, `..`, `a/../../b` all throw; `src/../README.md` normalises to `README.md`; backslashes are not separators on a POSIX remote, so `..\..\x` stays a literal (harmless) filename.
-- **CR-03** — `GIT_READ_FAILED` exists, the catch wraps stderr in `wrapUntrusted`, and the test asserts the code plus nonce-matched enclosure.
-- **WR-02/WR-03/WR-07/WR-08/WR-09/W-12** — verified in code and by running the suites (54 git-service tests, 113 teamTools/teamPrompts tests, plus the coordinator Oracle case, all pass; `tsc --noEmit` clean).
-- **WR-10** — actually covered at `tests/services/ai/office/teamRunCoordinator.test.ts:1610-1645`; the case passes.
+- **WR-01** — `isNotInRef` is anchored to the exact path and ref. Verified the four messages git actually emits: `fatal: path '<p>' does not exist in '<r>'`, `fatal: path '<p>' exists on disk, but not in '<r>'`, `fatal: invalid object name '<r>'.`, and the tree case. Paths containing a tab, a single quote, a newline, or non-ASCII text are echoed verbatim inside the quotes, so the anchored comparison still fires for them. A ref whose *name* contains the phrase (`x does not exist in`) no longer matches. The `ls-files --error-unmatch` gate correctly refuses the "tracked but deleted in ref" case — reproduced in a real repo (`gone.txt` deleted on `feature/x`, still on disk): the working copy is no longer substituted. The legitimate untracked fallback still works.
+- **WR-03** — `ls-tree -l -z` is emitted and `getRemoteTree` is the only consumer; it splits on NUL. Reproduced the C-quoting difference: without `-z`, `thư-mục/tệp.txt` arrives as `"t\341\273\207p.txt"`; with `-z` it arrives verbatim. `parseLsTreeLine` still works because the record keeps its `meta\tpath` shape.
+- **WR-04** — verified against real `-z` output. `5\t0\tnew.txt\0`, rename `1\t0\t\0old.txt\0new.txt\0`, tab-in-name `1\t0\ttab\tname.txt\0`, binary `-\t-\tassets/logo.png\0` all parse to the right path. The brace form (`{a => b}`) does not exist under `-z`, so nothing to preserve.
+- **WR-05** — `PathOutsideRepoError` is thrown by `confineRepoPath` (both call sites) and by the symlink refusal, and is mapped to `INVALID_ARGUMENT` at `teamTools.ts:1284`. No other throw site is misclassified: git/SSH failures still reach `GIT_READ_FAILED`.
+- **WR-06** — the new fixtures use real `-z` shapes and the assertions are strong enough to fail on garbage. Reverting `checkDirtyStatus` to a `\n` split yields one entry instead of two, so the `toHaveLength(2)` assertion fails; reverting `parseNameStatusZ`/`parseNumstatZ` changes the asserted `status`/`additions`/`deletions`. `parseNumstatZ`'s tab-in-path regression is covered by its own unit test in `gitRemoteService.test.ts`.
+- **IN-01** — `branch: ''` now falls back to `defaultBaseBranch`, and a supplied-but-rejected value (leading `-`, non-string) still refuses.
 
-**Still open:** the `isNotInRef` narrowing is incomplete in a way that reproduces round-1 WR-01's failure mode (wrong content labelled as branch content), the `cat` fallback still follows symlinks out of the repo, `ls-tree` returns C-quoted paths so Vietnamese filenames are unusable, `parseNumstatZ` truncates a path containing a tab, and two `WRAP_CASES` fixtures use a shape the `-z` parsers no longer accept so they pass on garbage.
+**Still open:** the WR-02 fix only checks the **leaf** for a symlink, so a symlinked *parent directory* still lets `cat` read outside the repository (BLOCKER). Separately, `git show` silently succeeds with empty output for a path containing glob metacharacters that does not exist literally, so `read_file` returns an empty file instead of an error and the untracked fallback never runs.
+
+Scoped suites pass (`teamToolsGitRead`, `gitRemoteTree`, `gitRemoteTreeService`, `gitRemoteService`, `teamPrompts` — 103 tests) and `tsc --noEmit` is clean. Passing tests do not cover either open finding.
+
+## Critical Issues
+
+### CR-01: `test -L` only checks the leaf — a symlinked parent directory still reads outside the repo
+
+**File:** `src/services/gitRemoteTreeService.ts:265-281`
+**Issue:** The WR-02 fix refuses a path whose *leaf* is a symlink, but `cat` resolves every component. A symlink on any parent directory is followed. `confineRepoPath` only confines the path *string*, so it cannot see this.
+
+Reproduced in a real repo with a **tracked** symlink directory (`linkdir -> /tmp/symtest/outside`, committed as `120000 blob`):
+
+```
+$ git show --end-of-options 'HEAD:linkdir/secret.txt'
+fatal: path 'linkdir/secret.txt' exists on disk, but not in 'HEAD'   # exit 128
+$ git ls-files --error-unmatch -- 'linkdir/secret.txt'
+error: pathspec ... did not match any file(s) known to git          # exit 1 → "untracked"
+$ test -L '/repo/linkdir/secret.txt' && echo MARKER || cat -- '/repo/linkdir/secret.txt'
+SECRET-OUTSIDE                                                       # exit 0
+```
+
+The chain is fully reachable through `git_read({action:'read_file', filePath:'linkdir/secret.txt'})`: the anchored `isNotInRef` matches, `ls-files` reports untracked, the leaf is not a symlink, and `cat` follows the parent. The same works for an untracked symlink directory. A model can discover symlinks from the `tree` action (they appear as `120000 blob`), so this is a reachable arbitrary-file-read outside the repository — the exact invariant CR-02 was raised to enforce.
+
+**Fix:** resolve the real path and verify containment instead of testing only the leaf:
+
+```ts
+const repoRoot = repoPath.replace(/\/+$/, '');
+const cmd =
+  `p=$(realpath -- ${escapeShellArg(targetFile)} 2>/dev/null) || exit 1; ` +
+  `case "$p" in ${escapeShellArg(repoRoot)}/*) cat -- "$p" ;; *) echo ${SYMLINK_MARKER} ;; esac`;
+```
+
+If `realpath` cannot be assumed on the remote, walk each component with `test -L` before `cat`, or refuse any path whose resolved form is not under `realpath <repoPath>`. Add a test with a symlinked *parent* directory, not only a symlinked leaf.
 
 ## Warnings
 
-### WR-01: `isNotInRef` cannot tell "untracked" from "deleted in this ref" — `read_file` still returns working-copy content labelled as branch content
+### WR-01: `git show` returns exit 0 with empty stdout for a glob-shaped path — `read_file` reports an empty file, and the untracked fallback never runs
 
-**File:** `src/services/gitRemoteTreeService.ts:151-154,208-218`
-**Issue:** The narrowed regex `/does not exist in|exists on disk, but not in/` matches a message git emits for a path that is **deleted in the requested ref** but still present in the working copy. Reproduced:
+**File:** `src/services/gitRemoteTreeService.ts:221-227`
+**Issue:** When the object spec contains pathspec metacharacters (`*`, `?`, `[...]`) and does not match a literal path, `git show` treats the argument as a pathspec, prints nothing, and exits 0. `runGitCommand` sees success and returns `''`.
+
+Reproduced:
 
 ```
-$ git show --end-of-options 'feature/x:gone.txt'
-fatal: path 'gone.txt' exists on disk, but not in 'feature/x'   # exit 128
-$ cat -- '/repo/gone.txt'
-SECRET-MAIN                                                     # working copy, on another branch
+$ git show --end-of-options 'main:*.txt'      # repo has only.txt
+$ echo $?                                      # 0, no output
+$ git show --end-of-options 'main:onl?.txt'    # 0, no output
+$ git cat-file -p 'main:onl?.txt'              # fatal: path ... does not exist (128)
 ```
 
-So `git_read({action:'read_file', branch:'feature/x', filePath:'gone.txt'})` returns the content from whatever branch is checked out and labels it `GIT read_file /srv/repo — NỘI DUNG FILE` with `branch: 'feature/x'`. The reviewer reviews the wrong version and cannot tell — the exact failure WR-01 was raised for.
+Consequences: `read_file` returns `content` wrapped around an empty string, indistinguishable from a genuinely empty file; `isNotInRef` never fires, so an untracked file whose name contains a glob character can never be read through the fallback. A literal path with a bracket (e.g. `app/pages/[id].tsx`) still resolves correctly, so this only bites paths that do not exist literally — a silent wrong answer rather than an error.
 
-The regex is also unanchored, so a bad ref whose *name* contains the phrase takes the same path: `git show --end-of-options 'x does not exist in:g.txt'` → `fatal: invalid object name 'x does not exist in'.` → matches → falls back. A model-chosen branch name can therefore force the fallback at will.
+**Fix:** force literal pathspec handling and treat an empty result as "not found". Either set `GIT_LITERAL_PATHSPECS=1` for the `show` invocation, or use `git cat-file -p --end-of-options '<ref>:<path>'` (verified: exits 128 with `fatal: path '<p>' does not exist in '<r>'`, which the anchored `isNotInRef` already matches). Add a case with a `*`/`?` path that does not exist.
 
-**Fix:** Anchor the match to the exact path and ref and confirm the path truly is untracked before falling back:
+### WR-02: `ls-files` failure is conflated with "untracked" — the fallback fails open
+
+**File:** `src/services/gitRemoteTreeService.ts:233-239`
+**Issue:** `.catch(() => '')` maps *every* `ls-files` failure to "not tracked", including failures that mean the question could not be answered (`fatal: not a git repository`, a bare repo, an invalid pathspec magic, a dropped SSH session). Verified: `git ls-files --error-unmatch -- ':(bad)x'` exits 128 with `fatal: Invalid pathspec magic`, which the current code reads as "untracked" and therefore falls back to the working copy.
+
+Only exit 1 (`error: pathspec ... did not match any file(s) known to git`) is the legitimate "untracked" signal. Conflating the two is what makes CR-01 reachable even when `ls-files` was never able to answer.
+
+**Fix:** distinguish the exit status rather than catching everything. Either expose `exitStatus` from `runGitCommand`, or call `execRemoteCommand` directly for this probe and fall back only when the status is 1:
 
 ```ts
-const msg = err instanceof Error ? err.message : String(err);
-const notInRef =
-  msg.includes(`path '${cleanPath}' does not exist in '${ref}'`) ||
-  msg.includes(`path '${cleanPath}' exists on disk, but not in '${ref}'`);
-if (!notInRef) throw err;
-// "exists on disk, but not in <ref>" also covers "deleted in <ref>"; confirm it is untracked:
-const tracked = await runGitCommand(config, repoPath, ['ls-files', '--error-unmatch', '--', escapeShellArg(cleanPath)], secret).catch(() => '');
-if (tracked.trim()) throw err;   // tracked elsewhere → the ref genuinely lacks it, do not substitute
+const probe = await execRemoteCommand(config, `git -C ${escapeShellArg(repoPath)} --no-pager ls-files --error-unmatch -- ${escapeShellArg(cleanPath)}`, secret);
+if (probe.exitStatus !== 1) throw err;   // tracked, or could not determine → do not substitute
 ```
-
-### WR-02: the `cat` fallback follows symlinks — path confinement is not file confinement
-
-**File:** `src/services/gitRemoteTreeService.ts:225-241`
-**Issue:** `confineRepoPath` guarantees the *path string* stays under the repo root, but `cat` resolves symlinks. An untracked symlink inside the repo is exactly the case the fallback is designed to serve (`git show` says "exists on disk, but not in 'HEAD'"), and `cat` then reads its target. Reproduced:
-
-```
-$ ln -s /etc/hosts leak          # untracked, inside the repo
-$ git show --end-of-options 'HEAD:leak'
-fatal: path 'leak' exists on disk, but not in 'HEAD'
-$ cat -- '/repo/leak' | head -2
-##  Host Database              # outside the repository
-```
-
-This is the same class of escape CR-02 closed, one indirection further out. It needs an untracked symlink to exist in the remote working tree, so it is not directly attacker-plantable by the model — but the tool advertises repository-confined reads and does not deliver that.
-
-**Fix:** Refuse to fall back when the path is a symlink, or resolve it first:
-
-```ts
-const res = await execRemoteCommand(
-  config,
-  `test -L ${escapeShellArg(targetFile)} && echo LINK || cat -- ${escapeShellArg(targetFile)}`,
-  secret
-);
-if (res.stdout === 'LINK\n') throw new Error(`Đường dẫn là symlink, từ chối đọc: ${cleanPath}`);
-```
-
-### WR-03: `parseLsTreeLine` never unquotes C-quoted paths — non-ASCII (Vietnamese) filenames are unusable
-
-**File:** `src/services/gitRemoteTreeService.ts:11-39,171`
-**Issue:** `git ls-tree` without `-z` quotes any path outside ASCII (`core.quotePath` default true). Reproduced:
-
-```
-$ git ls-tree -l --end-of-options HEAD
-040000 tree d97974b…       -	"th\306\260-m\341\273\245c"
-```
-
-`parseLsTreeLine` takes the raw text after the tab, so `title`/`key` become `"th\306\260-m\341\273\245c"`. That string is not a path: feeding it back as `dirPath` fails (`fatal: Not a valid object name HEAD:"th\304\257-m\341\273\245c"`), and the model is shown escaped octal instead of the real name. For a Vietnamese-language project this fires on the first directory with a diacritic.
-
-**Fix:** Add `-z` and split the output on NUL (same change already made for `status`/`diff`), or disable quoting:
-
-```ts
-const gitArgs = ['ls-tree', '-l', '-z', '--end-of-options', escapeShellArg(treeRef)];
-// …
-for (const line of stdout.split('\0')) { … }
-```
-
-(`-c core.quotePath=false` also works but leaves the quoting behaviour config-dependent.)
-
-### WR-04: `parseNumstatZ` truncates a path containing a tab
-
-**File:** `src/services/gitRemoteService.ts:296-324` (line 305)
-**Issue:** `-z` leaves the path verbatim, so a tab inside a filename is indistinguishable from a field separator. `entry.split('\t')` then yields four parts and `parts[2]` is only the text before the tab. Verified against real git output and the parser:
-
-```
-$ git diff --numstat -z -M HEAD~1..HEAD | od -c
-1 \t 0 \t t a b \t n a m e . t x t \0
-parser → { path: 'tab', additions: 1, deletions: 0 }
-```
-
-The join with `parseNameStatusZ` (which parses correctly) then misses, so the file is reported as `modified` with a path that does not exist.
-
-**Fix:** Split only on the first two tabs:
-
-```ts
-const firstTab = entry.indexOf('\t');
-const secondTab = entry.indexOf('\t', firstTab + 1);
-if (firstTab === -1 || secondTab === -1) continue;
-const additionsRaw = entry.slice(0, firstTab);
-const deletionsRaw = entry.slice(firstTab + 1, secondTab);
-let path = entry.slice(secondTab + 1);
-```
-
-### WR-05: a confinement rejection is reported as `GIT_READ_FAILED` — an infrastructure code for an argument mistake
-
-**File:** `src/services/ai/office/teamTools.ts:1270-1278`; `src/services/gitRemoteTreeService.ts:138,144`
-**Issue:** `confineRepoPath` throws a plain `Error`, so `git_read({action:'read_file', filePath:'../../../home/git/.ssh/id_rsa'})` and `{action:'tree', dirPath:'../..'}` both return `code: 'GIT_READ_FAILED'` (pinned by `teamToolsGitRead.test.ts:477,487`). That is CR-03's mistake in the other direction: the model is told the *infrastructure* failed when its own argument was rejected, so it retries the same escaping path or reports a broken SSH connection instead of correcting the path.
-
-**Fix:** Distinguish the two at the throw site and map them in the handler:
-
-```ts
-export class PathOutsideRepoError extends Error {}
-// confineRepoPath: throw new PathOutsideRepoError(...)
-// gitRead catch:
-if (err instanceof PathOutsideRepoError) {
-  return JSON.stringify(refuse('INVALID_ARGUMENT', wrapUntrusted(gitLabel('ĐƯỜNG DẪN'), err.message)));
-}
-```
-
-### WR-06: `WRAP_CASES` status and diff_summary fixtures use a shape the `-z` parsers no longer accept
-
-**File:** `tests/services/ai/office/teamToolsGitRead.test.ts:232,238`
-**Issue:** Both fixtures are newline/`\t` shaped, but `checkDirtyStatus` now splits on `\0` and `parseNameStatusZ`/`parseNumstatZ` require the `-z` shape. Running the real parsers over the fixtures:
-
-```
-status  ' M src/app.ts\n?? new.txt\n'  → [{ path: 'src/app.ts\n?? new.txt\n' }]
-numstat '3\t1\tsrc/app.ts\n'           → [{ path: 'src/app.ts\n' }]
-name-status 'M\tsrc/app.ts\n'          → []            (no rows at all)
-```
-
-The assertions still pass only because `expectEnclosed` does a substring `indexOf('src/app.ts')`. So the two cases that are supposed to prove the handler wraps its payload would pass just as happily if the parsers regressed to garbage — the coverage is illusory.
-
-**Fix:** Use the real shapes, as `gitRemoteService.test.ts:204-221` already does:
-
-```ts
-{ action: 'status', args: {}, outputs: [' M src/app.ts\0?? new.txt\0'] },
-{ action: 'diff_summary', args: { base: 'main', target: 'feature/x' },
-  outputs: ['<sha>\n', LOG_OUT, '3\t1\tsrc/app.ts\0', 'M\0src/app.ts\0'] },
-```
-
-and assert the parsed `files[0].path` / `uncommittedFiles[0].path` equals `src/app.ts` exactly, not by substring.
 
 ## Info
 
-### IN-01: empty or non-string `branch` now refuses instead of falling back to `defaultBaseBranch`
+### IN-01: the `branch: ''` fallback has no regression test
 
-**File:** `src/services/ai/office/teamTools.ts:1149`
-**Issue:** `revisionArg(args.branch ?? system.defaultBaseBranch ?? 'HEAD')` — `??` only falls back on `null`/`undefined`. `branch: ''` (or a non-string such as `5`) now yields `undefined` and an `INVALID_ARGUMENT` refusal, where the previous expression fell through to the system's default branch. Behaviour change introduced by the CR-01 fix, not a security issue.
-**Fix:** `const branch = revisionArg(args.branch) ?? revisionArg(system.defaultBaseBranch) ?? 'HEAD';` and keep the refusal only for a value that was supplied but rejected.
+**File:** `src/services/ai/office/teamTools.ts:1153-1165`
+**Issue:** The IN-01 fix is correct but untested. No case in `teamToolsGitRead.test.ts` passes `branch: ''`, so a future revert to `??` would not be caught.
+**Fix:** add a case asserting `log` with `branch: ''` runs and reports `branch: 'main'` (the seeded `defaultBaseBranch`), plus one asserting a non-string `branch` still refuses.
 
-### IN-02: no-op assertion in the tree-service test
+### IN-02: a symlink refusal is reported as `INVALID_ARGUMENT`, which is defined as the model's argument mistake
 
-**File:** `src/services/__tests__/gitRemoteTreeService.test.ts:65`
-**Issue:** `expect(sshService,)` — a trailing-comma `expect` on the module object, immediately followed by the real assertion. It asserts nothing and reads as a typo.
-**Fix:** Delete the line.
+**File:** `src/services/ai/office/teamTools.ts:1284-1288`
+**Issue:** `INVALID_ARGUMENT` is documented as "an argument the caller got wrong". A symlink path inside the repo is a legitimate path; the refusal is a policy decision. The message does name the symlink, so a retry loop is unlikely, but the code is semantically wrong and the same reasoning that gave `LEAD_USES_DB_TOOLS` its own code applies.
+**Fix:** either keep `INVALID_ARGUMENT` and adjust the comment to say "a path the tool will not read", or introduce a dedicated code (e.g. `PATH_NOT_READABLE`).
 
-### IN-03: round-1 Info items still open (unchanged, out of fix scope)
+### IN-03: `diff_file` does not confine `filePath`, unlike `read_file`
 
-**Files:** `src/services/gitRemoteService.ts:66` (`isHead` hardcoded `false`); `src/services/ai/office/teamTools.ts:1247` (`dirPath` untrimmed) and `:1120` (`repoPath` echoed raw); `src/services/gitRemoteService.ts:42,147,171` (inconsistent format-string quoting); `src/services/ai/office/teamPrompts.ts:225` (`tree` unnumbered in a 1–5 ordered list).
-**Issue:** Carried over from round 1, re-verified as still present. None affects correctness or security.
-**Fix:** As listed in round 1; the prompt-list numbering is the cheapest and most user-visible.
+**File:** `src/services/ai/office/teamTools.ts:1202-1221`
+**Issue:** `read_file` runs `confineRepoPath`; `diff_file` passes `filePath` straight to `getFileDiff`. Git rejects an escaping path (`fatal: ... is outside repository`, verified), so this is not a traversal hole, but pathspec magic is accepted (`:(top)*` returns the whole diff). The asymmetry means the next reader cannot tell whether the omission is deliberate.
+**Fix:** apply `confineRepoPath(filePath, 'Đường dẫn tệp')` in the `diff_file` branch for consistency and to reject pathspec magic.
 
 ---
 
-_Reviewed: 2026-11-15T16:40:00Z_
+_Reviewed: 2026-11-16T00:00:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
