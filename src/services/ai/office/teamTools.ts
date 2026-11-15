@@ -23,7 +23,11 @@ import {
   getRecentCommits,
   getRemoteBranches,
 } from '../../../services/gitRemoteService';
-import { getRemoteFileContent, getRemoteTree } from '../../../services/gitRemoteTreeService';
+import {
+  getRemoteFileContent,
+  getRemoteTree,
+  PathOutsideRepoError,
+} from '../../../services/gitRemoteTreeService';
 import type { System } from '../../../types/models';
 import type { SshConfig } from '../../../types/ssh';
 import type { RemoteGitCommit } from '../../../types/gitRemote';
@@ -1146,7 +1150,13 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
       case 'log': {
         // WR-06: `Math.floor` so `limit: 2.7` becomes 2 instead of reaching `git log -n 2.7`.
         const limit = Math.min(Math.max(1, Math.floor(Number(args.limit)) || 20), 50);
-        const branch = revisionArg(args.branch ?? system.defaultBaseBranch ?? 'HEAD');
+        // IN-01: `??` only falls back on null/undefined, so `branch: ''` used to refuse instead
+        // of using the system default. Fall back only when nothing usable was SUPPLIED; a value
+        // that was supplied but rejected (leading `-`) still refuses.
+        const suppliedBranch = typeof args.branch === 'string' ? args.branch.trim() : '';
+        const branch = suppliedBranch
+          ? revisionArg(suppliedBranch)
+          : (revisionArg(system.defaultBaseBranch) ?? 'HEAD');
         if (!branch) {
           return JSON.stringify(
             refuse('INVALID_ARGUMENT', 'log: branch phải là tên nhánh, không bắt đầu bằng "-".')
@@ -1268,6 +1278,13 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
         );
     }
   } catch (err: any) {
+    // WR-05: a rejected path is the model's argument mistake, not an infrastructure failure.
+    // Reporting it as GIT_READ_FAILED made the model retry the same escape or blame SSH.
+    if (err instanceof PathOutsideRepoError) {
+      return JSON.stringify(
+        refuse('INVALID_ARGUMENT', wrapUntrusted(gitLabel('ĐƯỜNG DẪN'), err.message))
+      );
+    }
     // CR-03: git/SSH stderr is remote-controlled text (paths, refs, `.gitattributes`-driven
     // messages) and this is a `role: 'tool'` result, so it is wrapped like every other
     // retrieved body (AIO-READ-05). The code is GIT_READ_FAILED, not INVALID_ARGUMENT: an SSH

@@ -229,13 +229,15 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
       args: {},
       outputs: ['main\0refs/heads/main\norigin/main\0refs/remotes/origin/main\n'],
     },
-    { action: 'status', args: {}, outputs: [' M src/app.ts\n?? new.txt\n'] },
+    // WR-06: the `-z` shapes the parsers actually consume. A newline/`\t` fixture passed only
+    // because the assertion was a substring match, so a parser regression would go unnoticed.
+    { action: 'status', args: {}, outputs: [' M src/app.ts\0?? new.txt\0'] },
     { action: 'log', args: {}, outputs: [LOG_OUT] },
     {
       action: 'diff_summary',
       args: { base: 'main', target: 'feature/x' },
       // rev-parse, log, --numstat, --name-status — in that order.
-      outputs: ['<sha>\n', LOG_OUT, '3\t1\tsrc/app.ts\n', 'M\tsrc/app.ts\n'],
+      outputs: ['<sha>\n', LOG_OUT, '3\t1\tsrc/app.ts\0', 'M\0src/app.ts\0'],
     },
     {
       action: 'diff_file',
@@ -250,7 +252,11 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     {
       action: 'tree',
       args: { branch: 'main' },
-      outputs: ['100644 blob abc1234    42\tsrc/app.ts\n040000 tree def5678    -\tsrc/lib\n'],
+      // WR-03: `ls-tree -z` — NUL-terminated records.
+      outputs: [
+        '100644 blob abc1234    42\tsrc/app.ts\u0000' +
+          '040000 tree def5678    -\tsrc/lib\u0000',
+      ],
     },
   ];
 
@@ -317,6 +323,26 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
         tree: 'src/app.ts',
       };
       expectEnclosed(raw, payloadByAction[testCase.action]!);
+
+      // WR-06: the parsed fields are asserted exactly (each wrapped field carries the raw value
+      // on its own line), so a parser that regressed to garbage fails here instead of sneaking
+      // through the substring enclosure check above.
+      if (testCase.action === 'status') {
+        expect(parsed.uncommittedFiles).toHaveLength(2);
+        expect(parsed.uncommittedFiles[0].path).toContain('\nsrc/app.ts\n');
+        expect(parsed.uncommittedFiles[1].path).toContain('\nnew.txt\n');
+      }
+      if (testCase.action === 'diff_summary') {
+        expect(parsed.files).toHaveLength(1);
+        expect(parsed.files[0].path).toContain('\nsrc/app.ts\n');
+        expect(parsed.files[0]).toMatchObject({ status: 'modified', additions: 3, deletions: 1 });
+      }
+      if (testCase.action === 'tree') {
+        const titles = parsed.nodes.map((n: { title: string }) => n.title);
+        expect(titles).toHaveLength(2);
+        expect(titles[0]).toContain('\nsrc/lib\n');
+        expect(titles[1]).toContain('\nsrc/app.ts\n');
+      }
     });
   }
 
@@ -466,7 +492,7 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     expect(execRemoteCommand).not.toHaveBeenCalled();
   });
 
-  it('refuses a read_file path that escapes the repository (CR-02)', async () => {
+  it('refuses a read_file path that escapes the repository (CR-02, WR-05)', async () => {
     const res = JSON.parse(
       await executeTeamTool(
         'git_read',
@@ -474,17 +500,18 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
         ctx()
       )
     );
-    expect(res).toMatchObject({ refused: true, code: 'GIT_READ_FAILED' });
+    // WR-05: the model's argument was rejected — an infrastructure code would make it retry.
+    expect(res).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
     // The `cat` fallback is the escape hatch; it must never be reached.
     const commands = vi.mocked(execRemoteCommand).mock.calls.map((call) => call[1]);
     expect(commands.some((cmd) => cmd.includes('cat --'))).toBe(false);
   });
 
-  it('refuses a tree dirPath that escapes the repository (CR-02)', async () => {
+  it('refuses a tree dirPath that escapes the repository (CR-02, WR-05)', async () => {
     const res = JSON.parse(
       await executeTeamTool('git_read', { action: 'tree', branch: 'main', dirPath: '../..' }, ctx())
     );
-    expect(res).toMatchObject({ refused: true, code: 'GIT_READ_FAILED' });
+    expect(res).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
     expect(execRemoteCommand).not.toHaveBeenCalled();
   });
 
@@ -515,6 +542,12 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
       stderr: "fatal: path 'untracked.ts' does not exist in 'main'",
       exitStatus: 128,
     });
+    // WR-01: the fallback confirms the path is untracked first; non-zero exit means it is.
+    vi.mocked(execRemoteCommand).mockResolvedValueOnce({
+      stdout: '',
+      stderr: 'error: pathspec did not match any file(s) known to git',
+      exitStatus: 1,
+    });
     vi.mocked(execRemoteCommand).mockResolvedValueOnce({
       stdout: 'export const untracked = 1;\n',
       stderr: '',
@@ -530,7 +563,33 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     );
     expect(res.content).toContain('export const untracked = 1;');
     expect(vi.mocked(execRemoteCommand).mock.calls.at(-1)![1]).toBe(
-      "cat -- '/srv/repo/untracked.ts'"
+      "test -L '/srv/repo/untracked.ts' && echo __GIT_READ_SYMLINK_REFUSED__ || " +
+        "cat -- '/srv/repo/untracked.ts'"
     );
+  });
+
+  it('does not fall back for a path tracked but deleted in the requested ref (WR-01)', async () => {
+    vi.mocked(execRemoteCommand).mockResolvedValueOnce({
+      stdout: '',
+      stderr: "fatal: path 'gone.txt' exists on disk, but not in 'feature/x'",
+      exitStatus: 128,
+    });
+    // Tracked elsewhere → the ref genuinely lacks it, so the working copy must not substitute.
+    vi.mocked(execRemoteCommand).mockResolvedValueOnce({
+      stdout: 'gone.txt\n',
+      stderr: '',
+      exitStatus: 0,
+    });
+
+    const res = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'read_file', branch: 'feature/x', filePath: 'gone.txt' },
+        ctx()
+      )
+    );
+    expect(res).toMatchObject({ refused: true, code: 'GIT_READ_FAILED' });
+    const commands = vi.mocked(execRemoteCommand).mock.calls.map((call) => call[1]);
+    expect(commands.some((cmd) => cmd.includes('cat --'))).toBe(false);
   });
 });
