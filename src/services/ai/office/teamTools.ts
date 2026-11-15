@@ -1151,12 +1151,13 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
         // WR-06: `Math.floor` so `limit: 2.7` becomes 2 instead of reaching `git log -n 2.7`.
         const limit = Math.min(Math.max(1, Math.floor(Number(args.limit)) || 20), 50);
         // IN-01: `??` only falls back on null/undefined, so `branch: ''` used to refuse instead
-        // of using the system default. Fall back only when nothing usable was SUPPLIED; a value
-        // that was supplied but rejected (leading `-`) still refuses.
-        const suppliedBranch = typeof args.branch === 'string' ? args.branch.trim() : '';
-        const branch = suppliedBranch
-          ? revisionArg(suppliedBranch)
-          : (revisionArg(system.defaultBaseBranch) ?? 'HEAD');
+        // of using the system default. Fall back only when nothing was supplied; a value that
+        // was supplied but rejected (leading `-`, non-string) still refuses.
+        const supplied = args.branch;
+        const branch =
+          supplied === undefined || supplied === null || supplied === ''
+            ? (revisionArg(system.defaultBaseBranch) ?? 'HEAD')
+            : revisionArg(supplied);
         if (!branch) {
           return JSON.stringify(
             refuse('INVALID_ARGUMENT', 'log: branch phải là tên nhánh, không bắt đầu bằng "-".')
