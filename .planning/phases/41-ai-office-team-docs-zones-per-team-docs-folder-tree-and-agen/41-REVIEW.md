@@ -1,8 +1,8 @@
 ---
 phase: 41-ai-office-team-docs-zones-per-team-docs-folder-tree-and-agen
-reviewed: 2026-11-15T13:00:00Z
+reviewed: 2026-11-15T06:55:00Z
 depth: standard
-files_reviewed: 17
+files_reviewed: 18
 files_reviewed_list:
   - src/db/schema.ts
   - src/db/index.ts
@@ -10,11 +10,12 @@ files_reviewed_list:
   - src/validation/backupSchemas.ts
   - src/db/repositories/teamDocsRepo.ts
   - src/db/repositories/aiTeamRepo.ts
+  - src/db/repositories/noteRepo.ts
   - src/services/ai/office/teamTools.ts
   - src/services/ai/office/teamPrompts.ts
   - src/services/ai/office/teamRunCoordinator.ts
   - src/services/ai/aiTools.ts
-  - tests/db/schemaV26Migration.test.ts
+  - src/services/backup/validateBackup.ts
   - tests/db/teamDocsRepo.test.ts
   - tests/services/ai/office/aiTeamRepo.test.ts
   - tests/services/ai/office/teamTools.test.ts
@@ -23,338 +24,347 @@ files_reviewed_list:
   - tests/services/backup/officeBackup.test.ts
 findings:
   critical: 4
-  warning: 6
+  warning: 4
   info: 4
-  total: 14
+  total: 12
 status: issues_found
 ---
 
-# Phase 41: Code Review Report
+# Phase 41: Code Review Report (Round 3)
 
-**Reviewed:** 2026-11-15
+**Reviewed:** 2026-11-15T06:55:00Z
 **Depth:** standard
-**Files Reviewed:** 17
+**Files Reviewed:** 18
 **Status:** issues_found
 
 ## Summary
 
-The core design still holds: `parentId` comes only from `ctx.folderId`, `type` is a literal `'document'`, the role guard runs before `action` is read, `write_doc` is absent from `MUTATION_TOOLS`, and the payload asymmetry is pinned on both sides. I re-checked every transaction store list by hand — `createTeam`, `updateTeam`, `assignLeader`, `addTeamMember`, `deleteTeam` and `ensureTeamDocsReady` each name every table their bodies read, so the `SubTransactionError`/`NotFoundError` class the previous review worried about is genuinely absent. `collectSubtreeIds` is correct (indexed `parentId`, `anyOf` guarded against an empty frontier, `seen` makes it cycle-safe), and the reordered `createTeam` (tree before row) is sound because the folder writes and the row write share one `rw` scope.
+Round-2's four critical fixes all hold mechanically, and the phase's core invariants are
+provable: the tree is created in the team's transaction, `write_doc` is employee-only and
+absent from `MUTATION_TOOLS`, `parentId` comes from `ctx.folderId` and never from args,
+`create_note`/`update_note`/`delete_note` stay outside `EMPLOYEE_READ_ONLY_ALLOWLIST`, and
+`detachNoteReferences`' store lists are complete for every caller (no `SubTransactionError`
+path exists — `deleteTeam`, `deleteNote` and `bulkPermanentDeleteNotes` each name all six
+tables the helper touches, and no existing `bulkPermanentDeleteNotes` caller wraps it in a
+transaction).
 
-What did not hold is the *trust boundary around `docsFolderId`*. The previous round hardened `deleteTeamDocsTree` against the shared root (WR-09) but left the same class of hole in three neighbouring places, and each one is a data-loss path I reproduced against a real `fake-indexeddb` database:
+What the fixes did **not** close is the same trust boundary they were written for. CR-01 and
+CR-02 hardened the two *destructive* consumers of `docsFolderId` (delete, rename) but the
+*read/write* consumer — `ensureTeamDocsReady` — still trusts the handle, so a restored or
+crafted handle pointing at the shared root or at another team's folder becomes a live member
+zone. In the other direction, CR-01's parent-shape proof is now too strict: any legitimate
+team folder that is not a direct child of the *current* root silently escapes deletion, which
+breaks success criterion 6 and leaves personal documents on disk after "delete team".
 
-- `deleteTeam` deletes whatever `docsFolderId` names — a user document, or another team's folder.
-- `updateTeam`'s new rename writes `title` onto whatever `docsFolderId` names.
-- `ensureTeamDocsReady` accepts any live folder as a member's zone, including the team root.
+Separately, WR-06's new referential check plus the lazy repair creates a new data-safety
+regression: a normal Docs-UI folder delete makes the app's own export fail its own validator,
+and push does not validate, so the only remote backup can become unimportable.
 
-The tree delete also still produces a backup the app's own validator rejects, because `documentSets.documentIds` and document-scoped `chatThreads` are not cleaned up — the exact CR-02 criterion the previous round used for attachments.
+Every finding below was reproduced against a real `TaskPlannerDatabase` (fake-indexeddb)
+before being written down; the reproduction is quoted in the finding.
 
-### Prior findings — verification
+Round-2 fix verification:
 
-All 12 fixes from `e6b660d6` are present and behave as claimed: CR-01 (body stays `undefined`, both-absent refuses `INVALID_ARGUMENT`), CR-02 (attachments bulk-deleted; `noteAttachments`/`settings` named in `deleteTeam`), CR-03 (`collectSubtreeIds` walks every depth, cycle-safe), WR-01 (per-member liveness + re-mint), WR-02 (both caps refuse rather than throw), WR-03 (`type === 'folder'` refused — but see WR-03 below for the blacklist gap), WR-04 (dedupe + lead dropped), WR-05 (title wrapped — but see WR-04 below for the leftover field), WR-06 (`parentId` named), WR-07 (rename in-transaction — but see CR-02 below for the missing target check), WR-08 (present + absent `docsFolderId` fixtures), WR-09 (shared-root guard). Scoped suites pass: `teamDocsRepo`, `teamTools`, `teamPrompts`, `aiTeamRepo`, `teamRunCoordinator` (120 + 78 + 170 tests), and `tsc --noEmit` is clean.
+| Fix | Holds? | Note |
+|---|---|---|
+| CR-01 delete ownership + root-shape guard | Partly | Correctly refuses user docs / other teams' folders / the root, but over-refuses legitimate deletes (CR-06, WR-03) |
+| CR-02 rename guard | Partly | Root and non-folder cases covered; the cross-team claim is not (WR-01) |
+| CR-03 `isChildFolderOf` member zones | Yes | Mis-parented member rows are re-minted; verified |
+| CR-04 `detachNoteReferences` single helper | Yes | Store lists complete for all three callers; no caller breaks |
+| WR-01 lead name from `aiLeads` | Yes | `aiLeads` named in both store lists |
+| WR-02 folder adoption | No | Adopts the wrong folder for duplicate display names (CR-07) |
+| WR-03 writable-doc whitelist | Yes | `document`/`quick_note` only, in both `list` and `update` |
+| WR-04 `entityName` wrapped | Yes | `wrapField` applied; test asserts containment |
+| WR-05 new tests | Yes | Live-document target and shared-root cases present |
+| WR-06 `docsFolderId` referential check | No | Correct check, but nothing repairs the dangling handle (CR-08) |
+| IN-01 vanished note refusal | Yes | `updateNote` null → refusal |
 
 ## Critical Issues
 
-### CR-01: `deleteTeam` hard-deletes whatever `docsFolderId` names, including a user document or another team's tree
+### CR-05: `ensureTeamDocsReady` trusts `docsFolderId` — a team can be handed the shared root or another team's folder
 
-**File:** `src/db/repositories/teamDocsRepo.ts:143-165` (guard at `:152-153`), called from `src/db/repositories/aiTeamRepo.ts:516`
+**File:** `src/db/repositories/teamDocsRepo.ts:251` (and `src/db/repositories/aiTeamRepo.ts:585`)
 
-**Issue:** `deleteTeamDocsTree` validates exactly one thing: that the id is not the shared `AI Teams` root. It never checks that the target is a *folder*, and never checks that it is a child of the shared root. `docsFolderId` is restored verbatim from a backup and validated only as a UUID (`src/validation/backupSchemas.ts:670`), so a corrupted or hand-edited payload — or a `db.aiTeams.update` from any future code path — makes "delete team" destroy unrelated user content.
-
-Reproduced (real Dexie, `fake-indexeddb`):
-
-```
-docsFolderId := a root-level user document ("Tai lieu cua nguoi dung")
-deleteTeam(team.id)
-→ db.notes.get(userDoc.id) === undefined      // the user's document is gone
-```
-
-The same call with `docsFolderId` pointing at another team's folder deletes that team's entire tree, because `collectSubtreeIds` walks from whatever root it is handed.
-
-**Fix:** make the guard a shape check, not a single-id comparison. Reuse the same predicate in `updateTeam` (CR-02) and the backup validator (WR-06):
+**Issue:** CR-01 established that `docsFolderId` is an untrusted handle and applied
+`isChildFolderOf(id, rootId)` + a claimant scan in `deleteTeamDocsTree`. The backfill that
+actually *uses* the handle still only calls `isLiveFolder`:
 
 ```ts
-// teamDocsRepo.ts — before descending
-const rootSetting = await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY);
-const rootId = typeof rootSetting?.value === 'string' ? rootSetting.value : undefined;
-if (rootId === undefined || teamFolderId === rootId) return;
-const teamFolder = await db.notes.get(teamFolderId);
-// Only a live folder that is a DIRECT child of the shared root is a team folder.
-if (!teamFolder || teamFolder.deletedAt || teamFolder.type !== 'folder') return;
-if (teamFolder.parentId !== rootId) return;
+if (team.docsFolderId !== undefined && (await isLiveFolder(team.docsFolderId, db))) {
 ```
 
-### CR-02: `updateTeam`'s rename overwrites the title of whatever `docsFolderId` names
+`validateBackup` (WR-06) only proves the id names *some* note. So a restored or hand-crafted
+payload with `docsFolderId` = the shared `AI Teams` root, or = another team's folder, is
+accepted, and the coordinator then mints member zones inside that tree. Reproduced:
 
-**File:** `src/db/repositories/aiTeamRepo.ts:307-312`
+- `docsFolderId` = another team's folder → the backfill keeps it and mints `Lead (2)` inside
+  team 1's tree: `T1 children now [ 'Lead (2)', 'Lead', 'An' ]`. Two teams now share one zone,
+  and `deleteTeamDocsTree`'s claimant scan then refuses *both* deletes (WR-03), so neither tree
+  is ever removable.
+- `docsFolderId` = the shared root → backfill keeps it and mints member folders directly under
+  the root: `T2 docsFolderId === root? true root children: [ 'An', 'Lead', 'T2', 'T1' ]`. The
+  leader prompt (`teamPrompts.ts:222`) then prints `Folder nhóm: <root id>`, so the approved
+  final document is written into the shared root beside every other team's folder — the exact
+  outcome CR-01 was written to prevent.
 
-**Issue:** The WR-07 fix added `db.notes.update(updated.docsFolderId, { title: validated.name })` with no liveness, type, or ownership check. WR-09 taught `deleteTeamDocsTree` that a corrupted `docsFolderId` can point anywhere; the rename path did not learn it.
+`addTeamMember`'s `liveTree` check (`aiTeamRepo.ts:585`) has the same gap.
 
-Reproduced:
-
-```
-docsFolderId := the shared "AI Teams" root   → updateTeam(id, {name:'Hijacked'}) → root title === 'Hijacked'
-docsFolderId := a root-level user document   → updateTeam(id, {name:'Renamed'}) → document title === 'Renamed'
-```
-
-The second case silently destroys a user-authored title. The existing test `tests/services/ai/office/aiTeamRepo.test.ts:1376` ("updateTeam with a rename leaves a dead docsFolderId alone") only asserts the *dead* folder stays dead, so it passes while the live-target corruption is unguarded.
-
-**Fix:** gate the rename on the same shape check as CR-01:
+**Fix:** one resolver, used by every consumer:
 
 ```ts
-if (validated.name !== undefined && updated.docsFolderId !== undefined) {
-  const folder = await db.notes.get(updated.docsFolderId);
-  if (folder && !folder.deletedAt && folder.type === 'folder') {
-    await db.notes.update(updated.docsFolderId, {
-      title: validated.name,
-      updatedAt: new Date().toISOString(),
-    });
-  }
+/** The only place a team folder is validated. Returns undefined for anything untrusted. */
+export async function resolveTeamFolder(
+  teamId: string,
+  docsFolderId: string | undefined,
+  db: TaskPlannerDatabase
+): Promise<string | undefined> {
+  const rootSetting = await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY);
+  const rootId = typeof rootSetting?.value === 'string' ? rootSetting.value : undefined;
+  if (!(await isChildFolderOf(docsFolderId, rootId, db))) return undefined;
+  const claimants = (await db.aiTeams.toArray()).filter((t) => t.docsFolderId === docsFolderId);
+  return claimants.some((t) => t.id !== teamId) ? undefined : docsFolderId;
 }
 ```
 
-### CR-03: a member's zone is any live folder — a member can be pointed at the team root and write there
-
-**File:** `src/db/repositories/teamDocsRepo.ts:24-31` (`isLiveFolder`), used at `:197-215`
-
-**Issue:** Success criterion 2/3 is "every member writes documents only inside its own subfolder". The runtime enforces that `write_doc` targets `ctx.folderId`, but `ctx.folderId` is `memberFolderIds.get(agentId)`, and `ensureTeamDocsReady` accepts any row whose `docsFolderId` names a live folder — it never checks the folder is a *child of the team folder*.
-
-Reproduced:
-
-```
-member row docsFolderId := team.docsFolderId   (corrupted backup, or the owner moved the
-                                                folder in Docs — NotesView.tsx:883 allows it)
-ensureTeamDocsReady(teamId)
-→ memberFolderIds.get(agentId) === team.docsFolderId
-```
-
-`write_doc` then writes the member's documents at the team root, next to the leader's approved final — the isolation the phase exists to provide is gone, and the leader's "read each member's draft from their folder" prompt block points at the root.
-
-**Fix:** add a parent check to the per-member branch (and to the rebuild path's returned map):
-
-```ts
-async function isMemberFolder(noteId: string | undefined, teamFolderId: string, db) {
-  if (noteId === undefined) return false;
-  const row = await db.notes.get(noteId);
-  return !!row && !row.deletedAt && row.type === 'folder' && row.parentId === teamFolderId;
-}
-```
-
-Use it at `teamDocsRepo.ts:200` in place of `isLiveFolder`, so a mis-parented folder is re-minted rather than trusted.
-
-### CR-04: the tree hard-delete leaves `documentSets` and document-scoped `chatThreads` dangling — the app's own next export fails validation
-
-**File:** `src/db/repositories/teamDocsRepo.ts:155-164`
-
-**Issue:** CR-02 last round established the rule: anything that deletes notes must delete or detach every row that references them, or `validateBackup` rejects the app's own export. The fix covered `noteAttachments` only. Two more reference classes exist and both are reachable from a team tree:
-
-- `documentSets.documentIds` — validated at `src/services/backup/validateBackup.ts:383-393`
-- `chatThreads` with `scopeType: 'document'` — validated at `src/services/backup/validateBackup.ts:435-442`
-
-Reproduced (delete the team, then export):
-
-```
-documentSets:  "DocumentSet references documentId \"…\" not found in notes"
-chatThreads:   "ChatThread references documentId \"…\" not found in notes"
-```
-
-Both are reachable without contrivance: a member's `write_doc` document can be added to a document set from the Docs UI (`DocumentSetForm` folder mode snapshots every document under a folder), and "Ask AI about this document" (`src/components/notes/DocEditorPane.tsx:493`) creates a `scopeType: 'document'` thread for it. `githubSyncService.ts:248` validates before accepting a pull, so a pushed backup becomes unrestorable.
-
-Note: `deleteNote` (`src/db/repositories/noteRepo.ts:132-143`) shares this gap, so the correct fix is a shared helper rather than a fourth copy of the same list.
-
-**Fix:** extend the cleanup in `deleteTeamDocsTree` (and `deleteNote`/`bulkPermanentDeleteNotes`) to detach the two reference classes, in the same transaction:
-
-```ts
-// document sets: drop the ids rather than the whole set
-const sets = await db.documentSets.toArray();
-for (const set of sets) {
-  if (!set.documentIds.some((id) => ids.includes(id))) continue;
-  await db.documentSets.update(set.id, {
-    documentIds: set.documentIds.filter((id) => !ids.includes(id)),
-    updatedAt: new Date().toISOString(),
-  });
-}
-// document-scoped chat threads die with their document, like team threads do
-const threads = await db.chatThreads.where('scopeType').equals('document').toArray();
-const doomed = threads.filter((t) => t.entityId !== undefined && ids.includes(t.entityId));
-if (doomed.length > 0) {
-  const threadIds = doomed.map((t) => t.id);
-  await db.chatMessages.where('threadId').anyOf(threadIds).delete();
-  await db.chatTabs.where('threadId').anyOf(threadIds).delete();
-  await db.chatThreads.bulkDelete(threadIds);
-}
-```
-
-`db.documentSets` must then be added to `deleteTeam`'s store list (`aiTeamRepo.ts:469-489`).
-
-## Warnings
-
-### WR-01: the lead's folder is named after its UUID whenever the tree is rebuilt or repaired
-
-**File:** `src/db/repositories/teamDocsRepo.ts:206` and `:218-223`
-
-**Issue:** Both backfill paths resolve names from `db.aiEmployees`, but the lead lives in `db.aiLeads`. `createTeam` gets this right (`aiTeamRepo.ts:180-189` reads `aiLeads` for the lead), so the two code paths disagree.
-
-Reproduced:
-
-```
-createTeam(...)                        → lead folder title === 'Truong Nhom'
-delete team folder, ensureTeamDocsReady → lead folder title === '8e2b0489-14dc-…'
-delete only the lead folder, repair    → lead folder title === 'd63dd5e6-ea93-…'
-```
-
-The owner then sees a UUID in the Docs tree, and the leader's prompt block (`teamPrompts.ts:220-236`) lists a member folder it cannot identify.
-
-**Fix:** resolve the lead separately in both paths:
-
-```ts
-const lead = team.leadId === undefined ? undefined : await db.aiLeads.get(team.leadId);
-const nameFor = (agentId: string, employeeName: string | undefined) =>
-  agentId === team.leadId ? (lead?.name ?? agentId) : (employeeName ?? agentId);
-```
-
-`db.aiLeads` is already in `ensureTeamDocsReady`'s caller store lists (`createTeam`, `updateTeam`, `assignLeader`) — but **not** in `addTeamMember`'s (`aiTeamRepo.ts:547-549`) nor in `ensureTeamDocsReady`'s own list (`teamDocsRepo.ts:190`). Both must name `db.aiLeads` or the repair throws `SubTransactionError`/`NotFoundError`.
-
-### WR-02: re-adding a removed member mints a second folder and strands their earlier documents
-
-**File:** `src/db/repositories/aiTeamRepo.ts:583-587`, `src/db/repositories/teamDocsRepo.ts:58-80`
-
-**Issue:** `removeTeamMember` deliberately keeps the member's folder (`aiTeamRepo.ts:614-617`), but `addTeamMember`'s live-tree path always calls `createMemberFolder`, which dedupes by *title* only. Re-adding the same agent therefore produces `Nhan Vien` + `Nhan Vien (2)`, and the member row points at the new one.
-
-Reproduced:
-
-```
-createTeam(employeeIds:[emp]) → folder 'Nhan Vien'
-removeTeamMember(row)         → folder stays
-addTeamMember({agentId: emp}) → folders: ['L', 'Nhan Vien', 'Nhan Vien (2)']
-```
-
-The old folder still holds everything the member wrote in earlier runs, and the leader's prompt now names only the new folder — those documents become invisible to the synthesis path.
-
-**Fix:** before minting, look for an existing live folder under the team folder whose title matches the agent's name (or, better, record the folder id on the removed row instead of deleting it and reuse it):
-
-```ts
-const existing = (await db.notes.where('parentId').equals(teamFolderId).toArray())
-  .find((n) => n.type === 'folder' && !n.deletedAt && n.title === agent.name);
-const folderId = existing?.id ?? (await createMemberFolder(teamFolderId, agent.name, db));
-```
-
-### WR-03: `write_doc` update refuses only `type === 'folder'`, so it overwrites a `diagram` note
-
-**File:** `src/services/ai/office/teamTools.ts:851-860`
-
-**Issue:** The type check is a blacklist. `NOTE_TYPES` is `['quick_note', 'document', 'folder', 'diagram']` (`src/validation/schemas.ts:414`), and `list` (`teamTools.ts:793-794`) filters only folders too, so a diagram inside the member's folder is both listed as a document and writable.
-
-Reproduced:
-
-```
-diagram note in the member's own folder, write_doc {action:'update', body:'bi sua'}
-→ { noteId: '…', title: 'So do' }        // not refused
-→ note.body === 'bi sua'                 // the diagram source is destroyed
-```
-
-**Fix:** whitelist instead of blacklist, in both `list` and `update`:
-
-```ts
-const WRITABLE_DOC_TYPES = new Set(['document', 'quick_note']);
-// update guard
-if (!existing || existing.deletedAt || existing.parentId !== folderId ||
-    !WRITABLE_DOC_TYPES.has(existing.type)) { … }
-// list filter
-.filter((note) => WRITABLE_DOC_TYPES.has(note.type))
-```
-
-### WR-04: `query_notes` still returns `entityName` raw — the WR-05 fix covered `title` but not its neighbour
-
-**File:** `src/services/ai/aiTools.ts:3069` (value built at `:3048-3050`)
-
-**Issue:** WR-05 wrapped `title` and `bodySnippet` because `write_doc` makes note titles model-authored and the lead is the one agent holding mutation tools. `entityName` is derived from `task.name` / `cr.name` / `system.name` — user-authored free text, exactly the same class as the body that sits next to it and *is* wrapped. The asymmetry is inside one object literal, so the next reader cannot tell which fields are trusted.
-
-**Fix:**
-
-```ts
-entityName: wrapField(`TÊN MỤC LIÊN KẾT ${n.id}`, entityName),
-```
-
-### WR-05: the rename test asserts the wrong thing and cannot catch CR-02
-
-**File:** `tests/services/ai/office/aiTeamRepo.test.ts:1376-1384`
-
-**Issue:** `'updateTeam with a rename leaves a dead docsFolderId alone (WR-07)'` deletes the folder first, then asserts it is still absent. That passes whether or not the rename is guarded, so it does not test the guard it names. There is no test for a *live non-folder* target, which is how CR-02 survived.
-
-**Fix:** add the two cases the guard must reject:
-
-```ts
-it('updateTeam rename does not touch a docsFolderId that names a document', async () => {
-  const team = await makeTeam('Stale');
-  const doc = await createNote({ title: 'User doc', body: 'x', type: 'document' }, db);
-  await db.aiTeams.update(team.id, { docsFolderId: doc.id });
-  await updateTeam(team.id, { name: 'Renamed' }, db);
-  expect((await db.notes.get(doc.id))?.title).toBe('User doc');
-});
-it('updateTeam rename does not touch the shared root', async () => {
-  const team = await makeTeam('Stale');
-  const rootId = (await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY))!.value as string;
-  await db.aiTeams.update(team.id, { docsFolderId: rootId });
-  await updateTeam(team.id, { name: 'Hijacked' }, db);
-  expect((await db.notes.get(rootId))?.title).toBe(AI_TEAMS_DOCS_ROOT_TITLE);
-});
-```
-
-### WR-06: `docsFolderId` has no referential validation, which is what lets CR-01/CR-02/CR-03 happen
-
-**File:** `src/validation/backupSchemas.ts:670` and `:688`; missing check in `src/services/backup/validateBackup.ts`
-
-**Issue:** Both fields are validated as `uuidSchema.optional()` and nothing else. Every other live reference in the payload is checked (`aiTeamLinks.teamId`, `noteAttachments.noteId`, `documentSets.documentIds`, `chatThreads.entityId`), so this pair is the only unvalidated handle — and it is the handle that drives a hard delete and a title write. The comment on `teamDocsRepo.ts:149-151` acknowledges the risk and then defends one case instead of validating the field.
-
-**Fix:** add the referential check next to the other note references in `validateBackup.ts`:
-
-```ts
-for (const team of aiTeams ?? []) {
-  if (team.docsFolderId !== undefined && !noteIds.has(team.docsFolderId)) {
-    errors.push({ table: 'aiTeams', recordId: team.id, field: 'docsFolderId',
-      message: `AiTeam references docsFolderId "${team.docsFolderId}" not found in notes` });
-  }
-}
-for (const member of aiTeamMembers ?? []) {
-  if (member.docsFolderId !== undefined && !noteIds.has(member.docsFolderId)) {
-    errors.push({ table: 'aiTeamMembers', recordId: member.id, field: 'docsFolderId',
-      message: `AiTeamMember references docsFolderId "${member.docsFolderId}" not found in notes` });
-  }
-}
-```
-
-This is defence in depth, not a substitute for CR-01/CR-02/CR-03 — the runtime guards are what protect a live database.
-
-## Info
-
-### IN-01: `write_doc` update reports success with an empty title if the note vanished mid-call
-
-**File:** `src/services/ai/office/teamTools.ts:881-886`
-
-`updateNote` returns `null` when the row disappeared between the `get` and the `put`; the handler then returns `{ noteId, title: '' }`, which reads as success. A narrow race, but the model has no way to tell it wrote nothing.
-
-**Fix:** `if (!updated) return JSON.stringify(refuse('DOC_NOT_IN_YOUR_FOLDER', '…'));`
-
-### IN-02: `createMemberFolder`'s collision fallback can still collide
-
-**File:** `src/db/repositories/teamDocsRepo.ts:70-73`
-
-Past 99 suffixed siblings the fallback is `${agentName} (${Date.now()})`. Titles are not unique in `db.notes`, so two calls in the same millisecond produce two identically named folders. Cosmetic only (ids are the identity), but the comment claims the timestamp "keeps a hostile roster from spinning" — it does not, it just renames the collision.
-
-### IN-03: `deleteTeamDocsTree` hard-deletes soft-deleted descendants with no Trash step
-
-**File:** `src/db/repositories/teamDocsRepo.ts:117-133`, `:164`
-
-`collectSubtreeIds` does not filter `deletedAt`, so notes the owner had already moved to Trash are permanently destroyed by a team delete, with no recovery path. This matches D-10 ("deleting a team deletes the whole tree"), so it is a documented decision — worth one line in the function comment so the next reader does not "fix" it into a soft delete.
-
-### IN-04: `write_doc` list includes diagrams, so the model sees types it must not write
-
-**File:** `src/services/ai/office/teamTools.ts:793-799`
-
-The list projection drops `type` entirely, so the model cannot distinguish a document from a diagram it is about to overwrite (see WR-03). Including `type` in the projection would let the model self-correct even before the whitelist lands.
+Call it from `ensureTeamDocsReady` (rebuild when it returns undefined), `addTeamMember`'s
+`liveTree`, `deleteTeamDocsTree` and `updateTeam`'s rename.
 
 ---
 
-_Reviewed: 2026-11-15_
+### CR-06: a team folder that is not a direct child of the *current* root is never deleted — the tree leaks
+
+**File:** `src/db/repositories/teamDocsRepo.ts:187-189`
+
+**Issue:** the guard is `if (!(await isChildFolderOf(teamFolderId, rootId, db))) return;`. That
+is true for a legitimate tree as soon as the root changes or disappears, and the root *does*
+change in normal use: the `AI Teams` folder is an ordinary `type: 'folder'` row with no
+`diagram` tag, so `DocFolderTree` lists it and `DocsExplorer` can delete it. `ensureDocsRoot`
+then mints a fresh root and rewrites the setting. Every pre-existing team folder is now
+parented to the old (deleted) root, so `deleteTeam` silently deletes nothing. Reproduced on a
+plain (uncorrupted) database:
+
+```
+# owner deleted the AI Teams root in Docs, then created a new team root
+root replaced? true
+LEAK-ORPHAN before 4 after 4 [ 'AI Teams', 'T1', 'An', 'Lead' ]
+```
+
+Same leak when the setting is missing (`LEAK no setting: before 3 after 3`) and when the team
+row is already gone (`existing?.docsFolderId` → `undefined`). `deleteTeam` still reports
+success, so the user believes the team's documents are gone; they are not, and no app surface
+can reach them (the folders are now top-level in Docs). This breaks success criterion 6.
+
+**Fix:** prove ownership by content instead of by parent shape — a folder is this team's iff
+it is a live folder that contains at least one member folder claimed by this team's member
+rows, or the team row's own handle when no other team claims it:
+
+```ts
+async function isOwnTeamFolder(teamId: string, folderId: string, db: TaskPlannerDatabase) {
+  const row = await db.notes.get(folderId);
+  if (!row || row.deletedAt || row.type !== 'folder') return false;
+  const claimants = (await db.aiTeams.toArray()).filter((t) => t.docsFolderId === folderId);
+  if (claimants.some((t) => t.id !== teamId)) return false;
+  // Ownership proof that survives a root swap: one of this team's member folders is inside it.
+  const memberFolderIds = (
+    await db.aiTeamMembers.where('teamId').equals(teamId).toArray()
+  ).map((m) => m.docsFolderId).filter((id): id is string => id !== undefined);
+  if (memberFolderIds.length === 0) return claimants.some((t) => t.id === teamId);
+  return (await db.notes.where('parentId').equals(folderId).toArray()).some(
+    (child) => child.type === 'folder' && memberFolderIds.includes(child.id)
+  );
+}
+```
+
+Keep the shared-root refusal as a hard early return (`folderId === rootId`), then use this
+proof. Also surface the refusal instead of returning silently (see WR-03).
+
+---
+
+### CR-07: WR-02 folder adoption hands one member's zone to another member with the same display name
+
+**File:** `src/db/repositories/aiTeamRepo.ts:590-604`, `src/db/repositories/teamDocsRepo.ts:104-114`
+
+**Issue:** `findMemberFolderByTitle` matches on `title === agentName` only. Display names are
+not unique (`AiEmployeeInputSchema` has no uniqueness rule, and employees and leads live in
+different tables), so the second agent to join adopts the first agent's folder. Reproduced:
+
+```
+A zone 10462575-… B zone 10462575-… shared? true
+B lists [{"noteId":"24b9bf4c-…","title":"An — Bao cao A",…}]
+B update {"noteId":"24b9bf4c-…"} | A doc body now: B overwrote A
+```
+
+Same with an employee named like the lead:
+
+```
+lead zone 1e97d821-… emp zone 1e97d821-… shared? true
+employee write into lead zone: {"noteId":"02d50c9e-…","title":"An — x"}
+```
+
+So `write_doc`'s `parentId === ctx.folderId` guard is satisfied while the caller is writing in
+another member's (or the leader's) zone. That defeats success criteria 2 and 3 in substance
+even though the code check passes.
+
+**Fix:** adopt only a folder no other row already claims:
+
+```ts
+const claimed = new Set(
+  (await db.aiTeamMembers.where('teamId').equals(validated.teamId).toArray())
+    .map((r) => r.docsFolderId)
+    .filter((id): id is string => id !== undefined)
+);
+const reusableFolderId =
+  liveTree && candidate !== undefined && !claimed.has(candidate) ? candidate : undefined;
+```
+
+and in `ensureTeamDocsReady`'s repair branch, mint a suffixed sibling when the folder it would
+reuse is claimed by another row. A durable fix is a per-member marker on the folder row (e.g. a
+`slug`/tag carrying the member row id), since titles are user-editable.
+
+---
+
+### CR-08: a normal Docs-UI folder delete makes the app's own export fail its own validator
+
+**File:** `src/services/backup/validateBackup.ts:563,581` + `src/db/repositories/noteRepo.ts:140-173`
+
+**Issue:** WR-06 added the referential check but nothing repairs the handle. Deleting a member
+folder (or the team folder) from Docs leaves `aiTeamMembers.docsFolderId` /
+`aiTeams.docsFolderId` dangling, and repair only happens on the team's *next* turn. Reproduced
+on an uncorrupted database:
+
+```
+VALID false
+ERR aiTeamMembers docsFolderId AiTeamMember references docsFolderId "d7b6263e-…" not found in notes
+```
+
+`executeGitHubBackupPush` (`githubSyncService.ts:101`) exports and encrypts **without**
+validating, so the invalid envelope is uploaded; every later pull
+(`githubSyncService.ts:248`) and `restoreBackupPayload` (`restoreBackup.ts:341`) rejects it.
+The user's only remote backup becomes unimportable until some team runs a turn — and a team
+with no further turns never repairs it. Before WR-06 this round-tripped fine, so this is a
+regression introduced by the fix.
+
+**Fix:** clear the handle where the note dies, and name the tables in the transaction:
+
+```ts
+// noteRepo.ts — inside detachNoteReferences, after the note ids are known
+const doomedTeams = (await db.aiTeams.toArray()).filter(
+  (t) => t.docsFolderId !== undefined && doomed.has(t.docsFolderId)
+);
+for (const t of doomedTeams) await db.aiTeams.update(t.id, { docsFolderId: undefined });
+for (const m of await db.aiTeamMembers.toArray()) {
+  if (m.docsFolderId !== undefined && doomed.has(m.docsFolderId)) {
+    await db.aiTeamMembers.update(m.id, { docsFolderId: undefined });
+  }
+}
+```
+
+then add `db.aiTeams`, `db.aiTeamMembers` to the store lists of `deleteNote` and
+`bulkPermanentDeleteNotes` (and to `deleteTeam`'s, which already names them). Alternatively,
+project a dead handle away in `exportBackupPayload` — but clearing at the write is the state
+owner and matches the project's "fix at the state owner" rule.
+
+## Warnings
+
+### WR-01: `updateTeam`'s rename guard is missing the claimant scan that `deleteTeamDocsTree` has
+
+**File:** `src/db/repositories/aiTeamRepo.ts:311-325`
+
+**Issue:** CR-02 gates the rename on "not the root" + live + folder, but not on "no other team
+claims it". A corrupted `docsFolderId` naming another team's folder renames that folder.
+Reproduced: `T1 folder title now: HIJACKED`. Same trust boundary as CR-01, half-fixed.
+
+**Fix:** route the rename through the `resolveTeamFolder` helper from CR-05.
+
+### WR-02: `write_doc` create does not check that `ctx.folderId` still exists
+
+**File:** `src/services/ai/office/teamTools.ts:816-851`
+
+**Issue:** `create` writes with `parentId: folderId` unconditionally. If the owner deletes the
+member folder after the turn started, the note is created with a dangling `parentId` and the
+tool reports success. Reproduced:
+
+```
+ORPHAN write: {"noteId":"4c95130a-…","title":"An — Bao cao"} | stored parentId 0faca0d9-… folder exists? false
+```
+
+`DocFolderTree` only surfaces documents whose `parentId` resolves to a known folder, so the
+document is invisible in Docs (search only). Success criterion 2 promises a *visible* document.
+
+**Fix:** before the write, `if (!(await isLiveFolder(folderId, ctx.db))) return
+JSON.stringify(refuse('TEAM_DOCS_NOT_READY', …))`. Same check at the top of the `list` and
+`update` branches (a `folderId` that is a document id would otherwise pass the
+`parentId === folderId` test).
+
+### WR-03: the CR-01 claimant scan refuses a legitimate delete and leaks the tree
+
+**File:** `src/db/repositories/teamDocsRepo.ts:195-200`
+
+**Issue:** when two team rows carry the same `docsFolderId` (a stale copy from a restore, or the
+CR-05 path above), *neither* team's delete removes anything, and both return silently.
+Reproduced:
+
+```
+SHARED folder: notes before 6 after T1 delete 6 after T2 delete 3
+```
+
+The second delete only works because the first team row is gone. The refusal itself is the
+right call (deleting another team's content is worse), but the silent no-op is not: `deleteTeam`
+reports success while the documents survive.
+
+**Fix:** keep the refusal, but make it observable — return a result from
+`deleteTeamDocsTree` and have `deleteTeam` log/report `DOCS_TREE_NOT_OWNED`, or delete the
+claimant-less tree after re-verifying ownership via the CR-06 content proof.
+
+### WR-04: `detachNoteReferences` leaves `publishedDocuments` and `knowledgeLinks.docId` dangling
+
+**File:** `src/db/repositories/noteRepo.ts:140-173`
+
+**Issue:** the helper detaches attachments, document-set entries and document-scoped threads,
+but not the two remaining note references. `publishedDocuments` rows keyed by
+`[setId, documentId]` survive, and `NotesView`'s status computation
+(`NotesView.tsx:420-431`) requires `metadata.length === set.documentIds.length`, so after the
+set entry is dropped the set permanently reads `Local changes` with no way back.
+`knowledgeLinks.docId` likewise names a gone note.
+
+**Fix:** in the same helper, `await db.publishedDocuments.where('documentId').anyOf(ids).delete()`
+(and the matching `knowledgeLinks` cleanup), adding both tables to the three callers' store
+lists.
+
+## Info
+
+### IN-01: `ensureDocsRoot` mints a second `AI Teams` root when the setting is lost but the old root row survives
+
+**File:** `src/db/repositories/teamDocsRepo.ts:56-67`
+
+Identity is the setting only, so a payload that loses `settings` but keeps `notes` produces two
+`AI Teams` folders and permanently orphans every existing tree (CR-06). Consider adopting an
+existing top-level folder titled `AI_TEAMS_DOCS_ROOT_TITLE` when the setting is absent.
+
+### IN-02: `deleteTeamDocsTree`'s `ownerTeamId` is optional, so the claim check is skippable
+
+**File:** `src/db/repositories/teamDocsRepo.ts:180`
+
+The only production caller passes it, but an optional security parameter is a footgun. Make it
+required (tests can pass the team id).
+
+### IN-03: `createMemberFolder`'s timestamp fallback can still collide
+
+**File:** `src/db/repositories/teamDocsRepo.ts:89`
+
+`${agentName} (${Date.now()})` collides when two calls land in the same millisecond with 99+
+siblings. `generateId().slice(0, 8)` is collision-free enough and no longer than the timestamp.
+
+### IN-04: `write_doc`'s title-cap message can print a misleading maximum
+
+**File:** `src/services/ai/office/teamTools.ts:830`
+
+`MAX_DOC_TITLE_LENGTH - prefix.length` is correct today (names are capped at 60 by
+`aiNameSchema`), but the message is computed from a value the caller does not control. Compute
+the cap once and assert it is positive.
+
+---
+
+_Reviewed: 2026-11-15T06:55:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_

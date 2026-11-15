@@ -130,10 +130,15 @@ export async function updateNote(
 }
 
 /**
- * CR-04: every row that references a note must be deleted or detached before the note goes,
- * or `validateBackup` rejects the app's own next export. One helper, because the two permanent
- * delete paths (`deleteNote`, `bulkPermanentDeleteNotes`) and the team tree delete
+ * CR-04/CR-08: every row that references a note must be deleted or detached before the note
+ * goes, or `validateBackup` rejects the app's own next export. One helper, because the two
+ * permanent delete paths (`deleteNote`, `bulkPermanentDeleteNotes`) and the team tree delete
  * (`deleteTeamDocsTree`) share exactly this list — a fourth copy would drift.
+ *
+ * CR-08: the team handles (`aiTeams.docsFolderId`, `aiTeamMembers.docsFolderId`) are cleared
+ * here too. They are validated references, and the lazy repair only runs on a team's next turn —
+ * a team that never runs again would leave the app's own export invalid, and push does not
+ * validate, so the only remote backup would become unimportable.
  *
  * Runs inside the caller's transaction; it opens none of its own.
  */
@@ -159,6 +164,21 @@ export async function detachNoteReferences(
     });
   }
 
+  // WR-04: a `publishedDocuments` row is keyed by `[setId, documentId]`; leaving it behind makes
+  // the set read `Local changes` forever, because the status rule counts metadata vs ids.
+  const published = await db.publishedDocuments.toArray();
+  const doomedPublished = published.filter((row) => doomed.has(row.documentId));
+  for (const row of doomedPublished) {
+    await db.publishedDocuments.delete([row.setId, row.documentId]);
+  }
+
+  // WR-04: a knowledge link naming a gone document is a dangling reference too.
+  const links = await db.knowledgeLinks.toArray();
+  const doomedLinks = links.filter((link) => link.docId !== undefined && doomed.has(link.docId));
+  if (doomedLinks.length > 0) {
+    await db.knowledgeLinks.bulkDelete(doomedLinks.map((link) => link.id));
+  }
+
   // A document-scoped thread has no meaning without its document — same rule as a team thread.
   const threads = await db.chatThreads.where('scopeType').equals('document').toArray();
   const doomedThreads = threads.filter(
@@ -170,7 +190,35 @@ export async function detachNoteReferences(
     await db.chatTabs.where('threadId').anyOf(threadIds).delete();
     await db.chatThreads.bulkDelete(threadIds);
   }
+
+  // CR-08: clear the team handles that named a dying folder. The next turn's backfill re-mints.
+  const teams = await db.aiTeams.toArray();
+  for (const team of teams) {
+    if (team.docsFolderId !== undefined && doomed.has(team.docsFolderId)) {
+      await db.aiTeams.update(team.id, { docsFolderId: undefined });
+    }
+  }
+  const members = await db.aiTeamMembers.toArray();
+  for (const member of members) {
+    if (member.docsFolderId !== undefined && doomed.has(member.docsFolderId)) {
+      await db.aiTeamMembers.update(member.id, { docsFolderId: undefined });
+    }
+  }
 }
+
+/** The stores `detachNoteReferences` reads or writes — every caller must name all of them. */
+export const NOTE_REFERENCE_STORES = [
+  'notes',
+  'noteAttachments',
+  'documentSets',
+  'publishedDocuments',
+  'knowledgeLinks',
+  'chatThreads',
+  'chatMessages',
+  'chatTabs',
+  'aiTeams',
+  'aiTeamMembers',
+] as const;
 
 export async function deleteNote(
   id: string,
@@ -178,7 +226,18 @@ export async function deleteNote(
 ): Promise<void> {
   await db.transaction(
     'rw',
-    [db.notes, db.noteAttachments, db.documentSets, db.chatThreads, db.chatMessages, db.chatTabs],
+    [
+      db.notes,
+      db.noteAttachments,
+      db.documentSets,
+      db.publishedDocuments,
+      db.knowledgeLinks,
+      db.chatThreads,
+      db.chatMessages,
+      db.chatTabs,
+      db.aiTeams,
+      db.aiTeamMembers,
+    ],
     async () => {
       await detachNoteReferences([id], db);
       await db.notes.delete(id);
@@ -357,7 +416,18 @@ export async function bulkPermanentDeleteNotes(
   if (ids.length === 0) return;
   await db.transaction(
     'rw',
-    [db.notes, db.noteAttachments, db.documentSets, db.chatThreads, db.chatMessages, db.chatTabs],
+    [
+      db.notes,
+      db.noteAttachments,
+      db.documentSets,
+      db.publishedDocuments,
+      db.knowledgeLinks,
+      db.chatThreads,
+      db.chatMessages,
+      db.chatTabs,
+      db.aiTeams,
+      db.aiTeamMembers,
+    ],
     async () => {
       await detachNoteReferences(ids, db);
       await db.notes.bulkDelete(ids);

@@ -1379,9 +1379,25 @@ describe('aiTools', () => {
       transaction: vi.fn().mockImplementation(async (_mode, _tables, callback) => {
         return await callback();
       }),
-      // CR-04: permanent note delete now detaches document-set entries and document-scoped
-      // threads, so the mock needs those tables.
+      // CR-04/CR-08: permanent note delete detaches document-set entries, published metadata,
+      // knowledge links, document-scoped threads and team folder handles.
       documentSets: {
+        toArray: async () => [],
+        update: vi.fn().mockResolvedValue(1),
+      },
+      publishedDocuments: {
+        toArray: async () => [],
+        delete: vi.fn().mockResolvedValue(undefined),
+      },
+      knowledgeLinks: {
+        toArray: async () => [],
+        bulkDelete: vi.fn().mockResolvedValue(undefined),
+      },
+      aiTeams: {
+        toArray: async () => [],
+        update: vi.fn().mockResolvedValue(1),
+      },
+      aiTeamMembers: {
         toArray: async () => [],
         update: vi.fn().mockResolvedValue(1),
       },

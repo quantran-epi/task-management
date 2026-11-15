@@ -12,7 +12,7 @@ import {
   isLiveFolder,
 } from '../../src/db/repositories/teamDocsRepo';
 import { createEmployee, createLead } from '../../src/db/repositories/aiOfficeRepo';
-import { createNote } from '../../src/db/repositories/noteRepo';
+import { createNote, deleteNote } from '../../src/db/repositories/noteRepo';
 import type { AiTeam, AiTeamMember } from '../../src/types/aiOffice';
 import { generateId } from '../../src/utils/uuid';
 
@@ -132,8 +132,7 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
   });
 
   it('creates 1 root + 1 team folder + 3 member folders under the right parents', async () => {
-    const tree = await createTeamDocsTree(
-      'Nhóm A',
+    const tree = await createTeamDocsTree(generateId(), 'Nhóm A',
       [
         { agentId: generateId(), name: 'An' },
         { agentId: generateId(), name: 'Bình' },
@@ -156,7 +155,7 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
   });
 
   it('suffixes duplicate member folder titles with (2) and (3)', async () => {
-    const tree = await createTeamDocsTree('Nhóm A', [{ agentId: generateId(), name: 'An' }], db);
+    const tree = await createTeamDocsTree(generateId(), 'Nhóm A', [{ agentId: generateId(), name: 'An' }], db);
 
     const second = await createMemberFolder(tree.folderId, 'An', db);
     const third = await createMemberFolder(tree.folderId, 'An', db);
@@ -166,21 +165,16 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
   });
 
   it('deletes the team folder, member folders and their documents, keeping the root and setting', async () => {
-    const tree = await createTeamDocsTree(
-      'Nhóm A',
-      [
-        { agentId: generateId(), name: 'An' },
-        { agentId: generateId(), name: 'Bình' },
-      ],
-      db
-    );
+    const team = await seedTeam('Nhóm A', [generateId(), generateId()]);
+    const ready = await ensureTeamDocsReady(team.id, db);
+    const tree = { folderId: ready.team.docsFolderId as string, memberFolderIds: ready.memberFolderIds };
     const rootId = (await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY))?.value as string;
     const memberFolderId = tree.memberFolderIds.get([...tree.memberFolderIds.keys()][0] as string)!;
 
     await createNote({ title: 'Trong thư mục thành viên', body: 'x', type: 'document', parentId: memberFolderId }, db);
     await createNote({ title: 'Trong thư mục nhóm', body: 'y', type: 'document', parentId: tree.folderId }, db);
 
-    await deleteTeamDocsTree(tree.folderId, db);
+    await deleteTeamDocsTree(tree.folderId, db, team.id);
 
     const remaining = await db.notes.toArray();
     expect(remaining).toHaveLength(1);
@@ -192,13 +186,14 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
   });
 
   it('is a no-op when the team folder id is undefined', async () => {
-    const tree = await createTeamDocsTree('Nhóm A', [{ agentId: generateId(), name: 'An' }], db);
+    const team = await seedTeam('Nhóm A', [generateId()]);
+    const ready = await ensureTeamDocsReady(team.id, db);
     const before = await db.notes.toArray();
 
-    await deleteTeamDocsTree(undefined, db);
+    await deleteTeamDocsTree(undefined, db, team.id);
 
     expect(await db.notes.toArray()).toHaveLength(before.length);
-    expect(await db.notes.get(tree.folderId)).toBeDefined();
+    expect(await db.notes.get(ready.team.docsFolderId as string)).toBeDefined();
   });
 
   it('backfills once: two runs yield the same ids and 5 folder rows', async () => {
@@ -225,7 +220,7 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
     const first = await ensureTeamDocsReady(team.id, db);
 
     // The owner deleted the whole tree by hand in DocsExplorer (D-12b).
-    await deleteTeamDocsTree(first.team.docsFolderId, db);
+    await deleteTeamDocsTree(first.team.docsFolderId, db, team.id);
 
     const second = await ensureTeamDocsReady(team.id, db);
 
@@ -272,7 +267,9 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
 
   // CR-02: attachments die with their note, or the app's own next export fails validateBackup.
   it('deletes the tree attachments along with the notes (CR-02)', async () => {
-    const tree = await createTeamDocsTree('Nhóm A', [{ agentId: generateId(), name: 'An' }], db);
+    const team = await seedTeam('Nhóm A', [generateId()]);
+    const ready = await ensureTeamDocsReady(team.id, db);
+    const tree = { folderId: ready.team.docsFolderId as string, memberFolderIds: ready.memberFolderIds };
     const memberFolderId = [...tree.memberFolderIds.values()][0] as string;
     const doc = await createNote(
       { title: 'Có ảnh', body: 'x', type: 'document', parentId: memberFolderId },
@@ -289,7 +286,7 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
       data: new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' }),
     });
 
-    await deleteTeamDocsTree(tree.folderId, db);
+    await deleteTeamDocsTree(tree.folderId, db, team.id);
 
     expect(await db.noteAttachments.count()).toBe(0);
     expect(await db.notes.count()).toBe(1); // only the shared root survives
@@ -298,7 +295,9 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
   // CR-03: the owner can create subfolders inside a member folder, so the tree is not bounded
   // to three levels. A fixed-depth delete left deeper notes with a dangling parentId.
   it('deletes descendants below a subfolder created inside a member folder (CR-03)', async () => {
-    const tree = await createTeamDocsTree('Nhóm A', [{ agentId: generateId(), name: 'An' }], db);
+    const team = await seedTeam('Nhóm A', [generateId()]);
+    const ready = await ensureTeamDocsReady(team.id, db);
+    const tree = { folderId: ready.team.docsFolderId as string, memberFolderIds: ready.memberFolderIds };
     const memberFolderId = [...tree.memberFolderIds.values()][0] as string;
     const sub = await createNote(
       { title: 'Thư mục con', body: '', type: 'folder', parentId: memberFolderId },
@@ -309,7 +308,7 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
       db
     );
 
-    await deleteTeamDocsTree(tree.folderId, db);
+    await deleteTeamDocsTree(tree.folderId, db, team.id);
 
     expect(await db.notes.get(sub.id)).toBeUndefined();
     expect(await db.notes.get(deepDoc.id)).toBeUndefined();
@@ -360,30 +359,37 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
     const minted = second.memberFolderIds.get(targetAgentId);
     expect(minted).toBeDefined();
     expect(await isLiveFolder(minted, db)).toBe(true);
-    expect(await folderRows()).toHaveLength(5);
+    // CR-07: the repair adopts the folder this agent already owns (matched by slug), so no
+    // duplicate is minted — 1 root + 1 team folder + 2 member folders.
+    expect(await folderRows()).toHaveLength(4);
+    expect(minted).toBe(first.memberFolderIds.get(targetAgentId));
     expect(second.team.docsFolderId).toBe(first.team.docsFolderId);
   });
 
   // WR-09: a corrupted backup can point a team at the shared root; deleting it must not take
   // every other team's tree with it.
   it('refuses to delete the shared AI Teams root (WR-09)', async () => {
-    const tree = await createTeamDocsTree('Nhóm A', [{ agentId: generateId(), name: 'An' }], db);
+    const team = await seedTeam('Nhóm A', [generateId()]);
+    const ready = await ensureTeamDocsReady(team.id, db);
+    const teamFolderId = ready.team.docsFolderId as string;
     const rootId = (await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY))?.value as string;
     const before = await db.notes.count();
 
-    await deleteTeamDocsTree(rootId, db);
+    await deleteTeamDocsTree(rootId, db, team.id);
 
     expect(await db.notes.count()).toBe(before);
     expect(await db.notes.get(rootId)).toBeDefined();
-    expect(await db.notes.get(tree.folderId)).toBeDefined();
+    expect(await db.notes.get(teamFolderId)).toBeDefined();
   });
 
   // CR-01: `docsFolderId` is an untrusted handle — a user document is not a team folder.
   it('refuses to delete when docsFolderId names a user document (CR-01)', async () => {
+    const team = await seedTeam('Nhóm A', [generateId()]);
+    await ensureTeamDocsReady(team.id, db);
     const userDoc = await createNote({ title: 'Tài liệu người dùng', body: 'x', type: 'document' }, db);
     const before = await db.notes.count();
 
-    await deleteTeamDocsTree(userDoc.id, db);
+    await deleteTeamDocsTree(userDoc.id, db, team.id);
 
     expect(await db.notes.count()).toBe(before);
     expect(await db.notes.get(userDoc.id)).toBeDefined();
@@ -433,7 +439,9 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
   // CR-04: document sets and document-scoped threads reference notes; the tree delete must
   // detach them or the app's own next export fails validateBackup.
   it('detaches document-set entries and document-scoped threads (CR-04)', async () => {
-    const tree = await createTeamDocsTree('Nhóm A', [{ agentId: generateId(), name: 'An' }], db);
+    const team = await seedTeam('Nhóm A', [generateId()]);
+    const ready = await ensureTeamDocsReady(team.id, db);
+    const tree = { folderId: ready.team.docsFolderId as string, memberFolderIds: ready.memberFolderIds };
     const memberFolderId = [...tree.memberFolderIds.values()][0] as string;
     const doc = await createNote(
       { title: 'Có tham chiếu', body: 'x', type: 'document', parentId: memberFolderId },
@@ -459,7 +467,7 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
       updatedAt: NOW,
     } as never);
 
-    await deleteTeamDocsTree(tree.folderId, db);
+    await deleteTeamDocsTree(tree.folderId, db, team.id);
 
     // The set survives with the dead id dropped; the live id stays.
     const set = await db.documentSets.get(setId);
@@ -477,10 +485,103 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
     const first = await ensureTeamDocsReady(team.id, db);
 
     // Rebuild: the owner deleted the whole tree.
-    await deleteTeamDocsTree(first.team.docsFolderId, db);
+    await deleteTeamDocsTree(first.team.docsFolderId, db, team.id);
     const second = await ensureTeamDocsReady(team.id, db);
 
     const leadFolderId = second.memberFolderIds.get(lead.id);
     expect((await db.notes.get(leadFolderId!))?.title).toBe('Trưởng Nhóm');
+  });
+
+  // CR-05: the backfill must not trust a handle naming the shared root or another team's folder.
+  it('rebuilds when docsFolderId names the shared root (CR-05)', async () => {
+    const team = await seedTeam('Nhóm A', [generateId()]);
+    const first = await ensureTeamDocsReady(team.id, db);
+    const rootId = (await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY))?.value as string;
+    await db.aiTeams.update(team.id, { docsFolderId: rootId });
+
+    const second = await ensureTeamDocsReady(team.id, db);
+
+    expect(second.team.docsFolderId).not.toBe(rootId);
+    const teamFolder = await db.notes.get(second.team.docsFolderId as string);
+    expect(teamFolder?.parentId).toBe(rootId);
+    expect(teamFolder?.title).toBe('Nhóm A');
+    // The root was not turned into a team zone: no member folder sits directly under it.
+    const rootChildren = await db.notes.where('parentId').equals(rootId as string).toArray();
+    expect(rootChildren.filter((n) => n.type === 'folder')).toHaveLength(2); // old tree + new
+    expect(first.team.docsFolderId).not.toBe(second.team.docsFolderId);
+  });
+
+  it('rebuilds when docsFolderId names another team folder (CR-05)', async () => {
+    const mine = await seedTeam('Nhóm A', [generateId()]);
+    const other = await seedTeam('Nhóm B', [generateId()]);
+    const otherReady = await ensureTeamDocsReady(other.id, db);
+    await db.aiTeams.update(mine.id, { docsFolderId: otherReady.team.docsFolderId });
+
+    const second = await ensureTeamDocsReady(mine.id, db);
+
+    expect(second.team.docsFolderId).not.toBe(otherReady.team.docsFolderId);
+    // The other team's tree was not polluted with a member folder from this team.
+    const otherChildren = await db.notes
+      .where('parentId')
+      .equals(otherReady.team.docsFolderId as string)
+      .toArray();
+    expect(otherChildren).toHaveLength(1);
+  });
+
+  // CR-06: the `AI Teams` root is an ordinary folder the owner can delete. A parent-shape rule
+  // would then silently delete nothing and leak the whole tree.
+  it('still deletes the tree after the shared root was replaced (CR-06)', async () => {
+    const team = await seedTeam('Nhóm A', [generateId(), generateId()]);
+    const first = await ensureTeamDocsReady(team.id, db);
+    const oldRootId = (await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY))?.value as string;
+
+    // Owner deletes the AI Teams root in Docs, then a new root is minted.
+    await db.notes.delete(oldRootId as string);
+    const newRootId = await ensureDocsRoot(db);
+    expect(newRootId).not.toBe(oldRootId);
+
+    await deleteTeamDocsTree(first.team.docsFolderId, db, team.id);
+
+    expect(await db.notes.get(first.team.docsFolderId as string)).toBeUndefined();
+    expect(await db.notes.get(newRootId)).toBeDefined();
+  });
+
+  // CR-07: two agents with the same display name must not share a zone.
+  it('gives two members with the same name separate folders (CR-07)', async () => {
+    const agentA = generateId();
+    const agentB = generateId();
+    const team = await seedTeam('Nhóm A', [agentA, agentB]);
+    // Both agent rows resolve to the same display name.
+    const name = 'An';
+    await db.aiEmployees.bulkAdd([
+      { id: agentA, name, role: 'Dev', capability: 'c', persona: 'p', model: 'm', createdAt: NOW, updatedAt: NOW },
+      { id: agentB, name, role: 'Dev', capability: 'c', persona: 'p', model: 'm', createdAt: NOW, updatedAt: NOW },
+    ] as never);
+
+    const ready = await ensureTeamDocsReady(team.id, db);
+
+    expect(ready.memberFolderIds.get(agentA)).not.toBe(ready.memberFolderIds.get(agentB));
+  });
+
+  // CR-08: deleting a member folder from Docs must not leave the app's own export invalid.
+  it('clears a dangling member docsFolderId when the folder is deleted (CR-08)', async () => {
+    const agentIds = [generateId()];
+    const team = await seedTeam('Nhóm A', agentIds);
+    const ready = await ensureTeamDocsReady(team.id, db);
+    const memberFolderId = ready.memberFolderIds.get(agentIds[0] as string) as string;
+
+    await deleteNote(memberFolderId, db);
+
+    const rows = await db.aiTeamMembers.where('teamId').equals(team.id).toArray();
+    expect(rows[0]?.docsFolderId).toBeUndefined();
+  });
+
+  it('clears a dangling team docsFolderId when the team folder is deleted (CR-08)', async () => {
+    const team = await seedTeam('Nhóm A', [generateId()]);
+    const ready = await ensureTeamDocsReady(team.id, db);
+
+    await deleteNote(ready.team.docsFolderId as string, db);
+
+    expect((await db.aiTeams.get(team.id))?.docsFolderId).toBeUndefined();
   });
 });

@@ -1098,7 +1098,7 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
     /** Simulate a pre-41 team: no tree, no `docsFolderId` on the team or its member rows. */
     async function makePre41(teamId: string) {
       const team = (await getTeam(teamId, db))!;
-      await deleteTeamDocsTree(team.docsFolderId, db);
+      await deleteTeamDocsTree(team.docsFolderId, db, teamId);
       await db.aiTeams.put(stripDocsFolderId(team));
       for (const row of await db.aiTeamMembers.where('teamId').equals(teamId).toArray()) {
         await db.aiTeamMembers.put(stripDocsFolderId(row));

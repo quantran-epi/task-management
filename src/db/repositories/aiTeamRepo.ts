@@ -4,13 +4,13 @@ import { clampBudgetWarnThresholdPct, clampTeamConcurrency } from '../../types/a
 import { generateId } from '../../utils/uuid';
 import { splitEvenly } from '../../services/ai/office/budgetSplit';
 import {
-  AI_TEAMS_DOCS_ROOT_SETTING_KEY,
   createMemberFolder,
   createTeamDocsTree,
   deleteTeamDocsTree,
   ensureTeamDocsReady,
-  findMemberFolderByTitle,
-  isLiveFolder,
+  findMemberFolderForAgent,
+  isChildFolderOf,
+  resolveTeamFolder,
 } from './teamDocsRepo';
 import {
   AiTeamInputSchema,
@@ -191,6 +191,7 @@ export async function createTeam(
     }
 
     const tree = await createTeamDocsTree(
+      team.id,
       team.name,
       rows.map((row) => ({ agentId: row.agentId, name: names.get(row.agentId) ?? row.agentId })),
       db
@@ -303,21 +304,14 @@ export async function updateTeam(
 
     await db.aiTeams.put(updated);
 
-    // WR-07/CR-02: the docs tree is keyed by `docsFolderId`, so a rename never breaks it — but
-    // the owner would keep seeing a folder named after the team's previous name. Rename it here,
-    // in the same transaction, and only when the id really names a live team folder:
-    // `docsFolderId` is an untrusted handle restored from a backup, so writing a title onto
-    // whatever it names could rename a user document or the shared root.
-    if (validated.name !== undefined && updated.docsFolderId !== undefined) {
-      const rootSetting = await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY);
-      const teamFolder = await db.notes.get(updated.docsFolderId);
-      if (
-        rootSetting?.value !== updated.docsFolderId &&
-        teamFolder &&
-        !teamFolder.deletedAt &&
-        teamFolder.type === 'folder'
-      ) {
-        await db.notes.update(updated.docsFolderId, {
+    // WR-07/CR-02/WR-01: the docs tree is keyed by `docsFolderId`, so a rename never breaks it —
+    // but the owner would keep seeing a folder named after the team's previous name. Rename it
+    // here, in the same transaction, and only when the resolver proves the id is THIS team's
+    // folder: `docsFolderId` is an untrusted handle restored from a backup.
+    if (validated.name !== undefined) {
+      const teamFolderId = await resolveTeamFolder(id, updated.docsFolderId, db);
+      if (teamFolderId !== undefined) {
+        await db.notes.update(teamFolderId, {
           title: validated.name,
           updatedAt: new Date().toISOString(),
         });
@@ -347,9 +341,11 @@ async function writeLeadRow(
   const team = await db.aiTeams.get(teamId);
   if (!team) throw new Error(`Không tìm thấy nhóm: ${teamId}`);
 
-  let teamFolderId = team.docsFolderId;
+  // CR-05: the handle is validated by the ONE resolver, so an untrusted id rebuilds instead of
+  // being handed to the new lead.
+  let teamFolderId = await resolveTeamFolder(teamId, team.docsFolderId, db);
   let backfillIds = new Map<string, string>();
-  if (teamFolderId === undefined || !(await isLiveFolder(teamFolderId, db))) {
+  if (teamFolderId === undefined) {
     const ready = await ensureTeamDocsReady(teamId, db);
     teamFolderId = ready.team.docsFolderId;
     backfillIds = ready.memberFolderIds;
@@ -378,9 +374,10 @@ async function writeLeadRow(
     // on the row, so calling `createMemberFolder` here would produce a ` (2)` duplicate.
     const folderId =
       backfillIds.get(leadId) ??
-      (incoming.docsFolderId !== undefined && (await isLiveFolder(incoming.docsFolderId, db))
+      (incoming.docsFolderId !== undefined &&
+      (await isChildFolderOf(incoming.docsFolderId, teamFolderId, db))
         ? incoming.docsFolderId
-        : await createMemberFolder(teamFolderId, leadName, db));
+        : await createMemberFolder(teamFolderId, leadName, db, { teamId, agentId: leadId }));
     await db.aiTeamMembers.update(incoming.id, { role: 'lead', docsFolderId: folderId });
     return;
   }
@@ -494,12 +491,13 @@ export async function deleteTeam(id: string, db: TaskPlannerDatabase = defaultDb
       db.teamReadCursors,
       db.teamParticipants,
       db.notes,
-      // CR-02/CR-04: `deleteTeamDocsTree` detaches every note reference (attachments,
-      // document-set entries, document-scoped threads) and reads the shared-root setting before
-      // descending, so both of those must be named here. `chatThreads`/`chatMessages`/`chatTabs`
-      // are already above for the team thread.
+      // CR-04/CR-08: `deleteTeamDocsTree` → `detachNoteReferences` touches all of these, and
+      // `resolveTeamFolder` reads the shared-root setting. A missing store here is a
+      // `SubTransactionError`, not a silent skip.
       db.noteAttachments,
       db.documentSets,
+      db.publishedDocuments,
+      db.knowledgeLinks,
       db.settings,
     ],
     async () => {
@@ -581,14 +579,16 @@ export async function addTeamMember(
       const team = await db.aiTeams.get(validated.teamId);
       if (!team) throw new Error(`Không tìm thấy nhóm: ${validated.teamId}`);
 
-      const teamFolderId = team.docsFolderId;
-      const liveTree = teamFolderId !== undefined && (await isLiveFolder(teamFolderId, db));
+      // CR-05: the handle goes through the ONE resolver, so a restored id naming the shared
+      // root or another team's folder rebuilds instead of being used.
+      const teamFolderId = await resolveTeamFolder(validated.teamId, team.docsFolderId, db);
+      const liveTree = teamFolderId !== undefined;
 
-      // WR-02: `removeTeamMember` deliberately keeps the member's folder, so re-adding the same
-      // agent must reuse it. Minting a second one strands everything the member wrote earlier
-      // under a folder the roster no longer points at.
+      // WR-02/CR-07: `removeTeamMember` deliberately keeps the member's folder, so re-adding the
+      // same agent must reuse it. Identity is the folder's slug (teamId + agentId), never the
+      // display name — two agents named "An" must not share a zone.
       const reusableFolderId = liveTree
-        ? await findMemberFolderByTitle(teamFolderId, agent.name, db)
+        ? await findMemberFolderForAgent(teamFolderId, validated.teamId, validated.agentId, db)
         : undefined;
 
       const member: AiTeamMember = {
@@ -611,8 +611,11 @@ export async function addTeamMember(
       }
 
       if (liveTree) {
-        // Path A — live tree: mint the folder here.
-        const folderId = await createMemberFolder(teamFolderId, agent.name, db);
+        // Path A — live tree: mint the folder here, stamped with this agent's identity.
+        const folderId = await createMemberFolder(teamFolderId, agent.name, db, {
+          teamId: validated.teamId,
+          agentId: validated.agentId,
+        });
         await db.aiTeamMembers.update(member.id, { docsFolderId: folderId });
         return { ...member, docsFolderId: folderId };
       }

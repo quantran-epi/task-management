@@ -797,6 +797,16 @@ async function writeDoc(args: Record<string, any>, ctx: TeamToolContext): Promis
   const folderId = ctx.folderId;
   const action = typeof args.action === 'string' ? args.action : '';
 
+  // WR-02: the owner can delete the member folder mid-turn. Writing anyway would create a note
+  // with a dangling `parentId` that `DocFolderTree` never shows — success reported for a
+  // document the user cannot see. The truthful outcome is `TEAM_DOCS_NOT_READY`.
+  const folder = await ctx.db.notes.get(folderId);
+  if (!folder || folder.deletedAt || folder.type !== 'folder') {
+    return JSON.stringify(
+      refuse('TEAM_DOCS_NOT_READY', 'Thư mục tài liệu của bạn chưa sẵn sàng.')
+    );
+  }
+
   if (action === 'list') {
     const rows = await getNotesByFolder(folderId, ctx.db);
     return JSON.stringify(
