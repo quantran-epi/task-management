@@ -1210,12 +1210,12 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
 
       await deleteTeam(team.id, db);
 
-      // D-10 is implemented as a SOFT delete: the tree leaves Docs and stays recoverable.
-      expect((await db.notes.get(teamFolderId))?.deletedAt).toBeDefined();
-      expect((await db.notes.get(memberFolder!.id))?.deletedAt).toBeDefined();
-      expect((await db.notes.get(inMember.id))?.deletedAt).toBeDefined();
-      expect((await db.notes.get(inTeam.id))?.deletedAt).toBeDefined();
-      expect((await db.notes.get(root!.id))?.deletedAt).toBeUndefined();
+      // D-10: the whole tree goes, in the same transaction as the team row.
+      expect(await db.notes.get(teamFolderId)).toBeUndefined();
+      expect(await db.notes.get(memberFolder!.id)).toBeUndefined();
+      expect(await db.notes.get(inMember.id)).toBeUndefined();
+      expect(await db.notes.get(inTeam.id)).toBeUndefined();
+      expect(await db.notes.get(root!.id)).toBeDefined();
       expect(await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY)).toBeDefined();
     });
 

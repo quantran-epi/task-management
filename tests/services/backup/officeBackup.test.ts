@@ -706,10 +706,11 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
   // CR-01/CR-02 (round 7): the `ai-` slug is the ONLY ownership proof for a team's docs tree, and
   // a hard delete acts on it. A payload that forges a slug on a user folder — or points a handle
   // at a folder that does not carry the matching slug — must be refused before any write.
-  // CR-01 (round 8): an orphan reserved slug is a DERIVABLE fact — `removeTeamMember`, a lead
-  // demotion, a folder move and a soft delete all legitimately drop the naming row. Refusing the
-  // whole payload would reject the app's own export, so the slug is stripped and the folder kept.
-  it('strips an orphan reserved slug instead of refusing the payload (CR-01)', async () => {
+  // Round 9: the validator checks SHAPE, not ownership. An earlier round required every reserved
+  // slug to be named by a team/member row, but four ordinary app behaviours legitimately drop that
+  // row (`removeTeamMember` keeps the folder by D-11, lead demotion, a folder move), so the app's
+  // own export failed its own validator. That rule is gone.
+  it('accepts an orphan reserved slug instead of refusing the app own export (round 9)', async () => {
     await seedOffice(sourceDb);
     const envelope = await exportBackupPayload(sourceDb);
 
@@ -721,10 +722,10 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
           ...(envelope.tables.notes ?? []),
           {
             id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
-            title: 'Thư mục người dùng',
+            title: 'Thư mục còn lại sau khi gỡ thành viên',
             body: '',
             type: 'folder',
-            slug: `ai-team:${TEAM_ID}`,
+            slug: `ai-member:${TEAM_ID}:${LEAD_ID}`,
             isPinned: false,
             createdAt: NOW,
             updatedAt: NOW,
@@ -736,21 +737,15 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
     const result = validateBackupPayload(orphaned);
 
     expect(result.valid).toBe(true);
-    const repaired = result.envelope?.tables.notes?.find(
-      (note) => note.id === 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
-    );
-    // The folder and its contents survive; only the ownership claim is dropped.
-    expect(repaired).toBeDefined();
-    expect(repaired?.slug).toBeUndefined();
-    // The real team folder keeps its slug — it is named by a row.
-    expect(
-      result.envelope?.tables.notes?.find((note) => note.id === TEAM_DOCS_FOLDER_ID)?.slug
-    ).toBe(`ai-team:${TEAM_ID}`);
+    expect(result.errors).toEqual([]);
   });
 
   // CR-01: a handle pointing at a user folder must not survive import, or the next turn would
   // adopt it and `deleteTeam` would destroy the user's data.
-  it('rejects a docsFolderId naming a folder without the team slug (CR-01)', async () => {
+  // Round 9: a handle must name a FOLDER — that is a shape rule and it holds for every payload.
+  // Whether the folder carries a particular slug is no longer checked, because the app itself
+  // legitimately produces handles whose folder lost its slug.
+  it('rejects a docsFolderId naming a document instead of a folder (round 9)', async () => {
     await seedOffice(sourceDb);
     const envelope = await exportBackupPayload(sourceDb);
 
@@ -759,7 +754,7 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
       tables: {
         ...envelope.tables,
         notes: (envelope.tables.notes ?? []).map((note) =>
-          note.id === TEAM_DOCS_FOLDER_ID ? { ...note, slug: undefined } : note
+          note.id === TEAM_DOCS_FOLDER_ID ? { ...note, type: 'document' } : note
         ),
       },
     };

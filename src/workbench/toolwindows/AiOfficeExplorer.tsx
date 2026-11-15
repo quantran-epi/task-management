@@ -10,6 +10,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { listEmployees, listLeads } from '../../db/repositories/aiOfficeRepo';
 import { deleteTeam, listTeams } from '../../db/repositories/aiTeamRepo';
+import { describeTeamDocsTree } from '../../db/repositories/teamDocsRepo';
 import { USER_PARTICIPANT_ID } from '../../types/teamChat';
 import { disposeRun } from '../../services/ai/office/teamRunManager';
 import { useLayoutStore } from '../store/layoutStore';
@@ -76,6 +77,19 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
     return map;
   }, [members]);
 
+  /**
+   * D-10: what each team's delete will destroy, so the confirmation can name it. Live, because
+   * the tree changes as agents write.
+   */
+  const treeSummary = useLiveQuery(async () => {
+    const map = new Map<string, { folderCount: number; documentCount: number }>();
+    for (const team of teams) {
+      if (team.docsFolderId === undefined) continue;
+      map.set(team.docsFolderId, await describeTeamDocsTree(team.docsFolderId, db));
+    }
+    return map;
+  }, [db, teams]) ?? new Map<string, { folderCount: number; documentCount: number }>();
+
   const query = search.trim().toLowerCase();
   const filteredTeams = useMemo(() => {
     if (!query) return teams;
@@ -105,10 +119,10 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
    * an unguarded rejection was an unhandled rejection with no `actionError`, after the run
    * had already been torn down.
    *
-   * WR-03: the teardown uses the reversible cause. `deleteTeam` can REFUSE (a tree it cannot
-   * prove), and the transaction then rolls back — so stamping `team-deleted` on the ledger
-   * first would claim a deletion that never happened. `app-exit` is the honest vocabulary for
-   * "the run is over, the team may still exist".
+   * WR-03: the teardown uses the reversible cause. `deleteTeam` can REFUSE, and the transaction
+   * then rolls back — so stamping `team-deleted` on the ledger first would claim a deletion that
+   * never happened. `app-exit` is the honest vocabulary for "the run is over, the team may still
+   * exist".
    */
   const handleDeleteTeam = async (team: AiTeam) => {
     try {
@@ -125,6 +139,22 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
     }
     const workspaceTab = openTabs.find((tab) => tab.id === `team_workspace:${team.id}`);
     if (workspaceTab) closeTab(workspaceTab.id);
+  };
+
+  /**
+   * D-10's safety mechanism: the owner sees what the delete will destroy. A corrupted
+   * `docsFolderId` cannot forge this text, which is why it — not a slug check — is what protects
+   * the owner's documents.
+   */
+  const deleteConfirmText = (team: AiTeam): string => {
+    const base = `Xóa nhóm «${team.name}»? Toàn bộ transcript, phân công và tab chat của nhóm sẽ bị xóa.`;
+    const tree = team.docsFolderId === undefined ? undefined : treeSummary.get(team.docsFolderId);
+    if (tree === undefined) return `${base} Dùng Sao lưu để khôi phục nếu đã xuất trước đó.`;
+    const parts: string[] = [];
+    if (tree.folderCount > 0) parts.push(`${tree.folderCount} thư mục`);
+    if (tree.documentCount > 0) parts.push(`${tree.documentCount} tài liệu`);
+    if (parts.length === 0) return `${base} Dùng Sao lưu để khôi phục nếu đã xuất trước đó.`;
+    return `${base} Thư mục tài liệu của nhóm (${parts.join(', ')}) cũng sẽ bị xóa vĩnh viễn.`;
   };
 
   return (
@@ -296,7 +326,7 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
                   style={{ marginLeft: 4, flexShrink: 0 }}
                 >
                   <Popconfirm
-                    title={`Xóa nhóm «${team.name}»? Toàn bộ transcript, phân công và tab chat của nhóm sẽ bị xóa. Dùng Sao lưu để khôi phục nếu đã xuất trước đó.`}
+                    title={deleteConfirmText(team)}
                     okText="Xóa"
                     cancelText="Hủy"
                     okButtonProps={{ danger: true }}

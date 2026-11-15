@@ -284,23 +284,22 @@ async function collectSubtreeIds(
 }
 
 /**
- * D-10: remove the team folder, its member folders and every note inside them.
+ * D-10: hard-delete the team folder, its member folders and every note inside them.
  *
- * D-10's decision is "deleting a team takes the whole tree". It is implemented as a SOFT delete,
- * deliberately: the identity proof for the tree is a slug that arrives from a backup payload, and
- * no payload check can make payload-supplied data authoritative for an irreversible operation. A
- * crafted or corrupted payload can therefore point a team handle at a folder the owner cares
- * about; with a hard delete that costs the owner their documents, and with a soft delete it costs
- * them a Trash restore. The tree still leaves Docs and the team either way.
+ * Hard delete, not `deletedAt` — that is D-10 as the owner decided it, and a soft-deleted tree is
+ * NOT recoverable in this product: `DocFolderTree` hides folders from the Trash list, and
+ * `restoreNote` keeps `parentId`, so a restored document matches neither the root list nor any
+ * live folder and simply vanishes. A soft delete here would be a slower way to lose the data.
+ *
+ * Safety comes from the CONFIRMATION, not from proving ownership: the popconfirm names the folder
+ * about to go (see `describeTeamDocsTree`), so a corrupted `docsFolderId` is visible to the owner
+ * before the click. That matches the threat model — a bad backup, not a hostile owner — and it is
+ * the only check that cannot be forged by the payload it is checking.
  *
  * The shared `AI Teams` root and its setting are never touched; other teams may still use them.
  *
- * CR-05: only app-minted folders are touched (see `collectOwnedSubtreeIds`), so a folder the
- * owner filed under a team folder is left alone.
- *
- * CR-02: a tree the owner moved to Trash is still this team's tree — `deletedAt` is not part of
- * identity. A handle that names a live folder it cannot prove is a REFUSAL, not a no-op, because
- * silently returning deleted the team row and left the tree behind with no handle left.
+ * CR-05: a handle that names a live folder but carries another team's slug is a REFUSAL, not a
+ * no-op. Silently returning deleted the team row and left the tree behind with no handle left.
  */
 export async function deleteTeamDocsTree(
   teamFolderId: string | undefined,
@@ -309,6 +308,8 @@ export async function deleteTeamDocsTree(
 ): Promise<void> {
   if (teamFolderId === undefined) return;
 
+  // The slug check is a cheap guard against an obviously wrong handle (another team's folder, the
+  // shared root, a user document). It is NOT the safety mechanism — the confirmation is.
   const resolved = await resolveTeamFolderIncludingDeleted(ownerTeamId, teamFolderId, db);
   if (resolved === undefined) {
     const row = await db.notes.get(teamFolderId);
@@ -327,10 +328,28 @@ export async function deleteTeamDocsTree(
   // the shared helper detaches every one of them, or the app's own next export fails
   // `validateBackup`. It also clears the team handles that named a dying folder.
   await detachNoteReferences(ids, db);
-  const now = new Date().toISOString();
-  for (const id of ids) {
-    await db.notes.update(id, { deletedAt: now, updatedAt: now });
+  await db.notes.bulkDelete(ids);
+}
+
+/**
+ * The confirmation text needs to say what is about to be destroyed. A team delete takes the whole
+ * docs tree, and the owner must see that — it is the only check a corrupted `docsFolderId` cannot
+ * forge.
+ */
+export async function describeTeamDocsTree(
+  teamFolderId: string | undefined,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<{ folderCount: number; documentCount: number }> {
+  if (teamFolderId === undefined) return { folderCount: 0, documentCount: 0 };
+  const rows = await db.notes.bulkGet(await collectSubtreeIds(teamFolderId, db));
+  let folderCount = 0;
+  let documentCount = 0;
+  for (const row of rows) {
+    if (row === undefined) continue;
+    if (row.type === 'folder') folderCount += 1;
+    else documentCount += 1;
   }
+  return { folderCount, documentCount };
 }
 
 /**
