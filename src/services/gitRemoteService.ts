@@ -302,14 +302,20 @@ export function parseNumstatZ(
   for (let i = 0; i < tokens.length; i++) {
     const entry = tokens[i];
     if (!entry) continue;
-    const parts = entry.split('\t');
-    if (parts.length < 3) continue;
+    // WR-04: `-z` leaves the path verbatim, so a tab INSIDE a filename is indistinguishable from
+    // a field separator. Split on the first two tabs only; the rest is the path.
+    const firstTab = entry.indexOf('\t');
+    const secondTab = firstTab === -1 ? -1 : entry.indexOf('\t', firstTab + 1);
+    if (firstTab === -1 || secondTab === -1) continue;
+
+    const additionsRaw = entry.slice(0, firstTab);
+    const deletionsRaw = entry.slice(firstTab + 1, secondTab);
 
     // Binary files show '-' for added/deleted lines.
-    const additions = parts[0] === '-' ? 0 : parseInt(parts[0] || '0', 10) || 0;
-    const deletions = parts[1] === '-' ? 0 : parseInt(parts[1] || '0', 10) || 0;
+    const additions = additionsRaw === '-' ? 0 : parseInt(additionsRaw || '0', 10) || 0;
+    const deletions = deletionsRaw === '-' ? 0 : parseInt(deletionsRaw || '0', 10) || 0;
 
-    let path = parts[2];
+    let path: string | undefined = entry.slice(secondTab + 1);
     if (!path) {
       // Rename: the paths are the next two tokens; the target is the second.
       path = tokens[i + 2];

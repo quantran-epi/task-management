@@ -9,6 +9,7 @@ import {
   getDiffSummary,
   getFileDiff,
   checkHeadDrift,
+  parseNumstatZ,
 } from '../gitRemoteService';
 import * as sshService from '../sshService';
 
@@ -290,6 +291,24 @@ describe('gitRemoteService - Task 1 Tracer Slice', () => {
         "git -C '/var/repo' --no-pager diff --name-status -z -M --no-ext-diff --no-textconv " +
           "--end-of-options 'main..feature/pay'"
       );
+    });
+  });
+
+  describe('parseNumstatZ', () => {
+    // WR-04: `-z` leaves the path verbatim, so a tab inside a filename is not a field separator.
+    it('keeps a path containing a tab intact', () => {
+      expect(parseNumstatZ('1\t0\ttab\tname.txt\0')).toEqual([
+        { path: 'tab\tname.txt', additions: 1, deletions: 0 },
+      ]);
+    });
+
+    it('still parses a rename and a binary file', () => {
+      expect(parseNumstatZ('0\t0\t\0old.txt\0new.txt\0')).toEqual([
+        { path: 'new.txt', additions: 0, deletions: 0 },
+      ]);
+      expect(parseNumstatZ('-\t-\tassets/logo.png\0')).toEqual([
+        { path: 'assets/logo.png', additions: 0, deletions: 0 },
+      ]);
     });
   });
 
