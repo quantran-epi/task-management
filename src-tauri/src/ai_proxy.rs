@@ -12,6 +12,15 @@ const GRAPHITI_MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
  * the JS-side 90 s watchdog on the non-Tauri path.
  */
 const AI_PROXY_TIMEOUT_SECS: u64 = 90;
+/**
+ * UAT-41 test 14: this is NOT `AI_PROXY_TIMEOUT_SECS`. That one bounds an LLM generation; this
+ * one bounds a JSON-RPC discovery/tool call that blocks the FIRST turn of a chat — the exact
+ * wedge test 14 reported. The JS web fallback bounds the same RPC at 10 s
+ * (`src/services/ai/mcpClient.ts`, `AbortSignal` 10000 ms), so 30 s is already generous for a
+ * slow graph query and still returns control to the turn. The Tauri invoke path carries no
+ * JS-side signal, so this Rust bound is the only one.
+ */
+const GRAPHITI_MCP_TIMEOUT_SECS: u64 = 30;
 const GRAPHITI_ALLOWED_TOOLS: [&str; 4] = [
     "list_advertised_groups",
     "search_nodes",
@@ -213,6 +222,8 @@ pub async fn graphiti_mcp_request(
 
     let client = reqwest::Client::builder()
         .user_agent("PlannerMateGraphitiMCP/1.0")
+        .connect_timeout(std::time::Duration::from_secs(15))
+        .timeout(std::time::Duration::from_secs(GRAPHITI_MCP_TIMEOUT_SECS))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
     let mut request = client
