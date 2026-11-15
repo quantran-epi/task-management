@@ -4,6 +4,7 @@ import {
   ANTI_FABRICATION_BLOCK,
   EMPLOYEE_WRITE_DOC_LINE,
   LEAD_NO_WRITE_DOC_LINE,
+  REVIEWER_GIT_READ_LINE,
   buildEmployeeTurnRequest,
   buildLeadTurnRequest,
   wrapUntrusted,
@@ -708,5 +709,30 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
     expect(system).toContain(ANTI_FABRICATION_BLOCK);
     // The AI Chat panel's absolute wording has no carve-out for a planner's forecasts.
     expect(ANTI_FABRICATION_BLOCK).not.toContain('NEVER GUESS');
+  });
+
+  // D-12: the payload advertises git_read to every employee (D-09); only the reviewer is told
+  // the read order. Detection is role-or-skill-description, case-insensitive.
+  it('names git_read and the read order for a reviewer detected by role (D-12)', () => {
+    const system = buildEmployee({ employee: { ...employee, role: 'Reviewer kỹ thuật' }, skill: undefined })
+      .systemMessages.map((m) => m.content)
+      .join('\n');
+
+    expect(system).toContain(REVIEWER_GIT_READ_LINE);
+  });
+
+  it('names git_read and the read order for a reviewer detected by skill description (D-12)', () => {
+    const system = buildEmployee({ skill: { ...skill, description: 'Quy trình review mã nguồn' } })
+      .systemMessages.map((m) => m.content)
+      .join('\n');
+
+    expect(system).toContain(REVIEWER_GIT_READ_LINE);
+  });
+
+  it('never mentions git_read for a non-reviewer employee (D-12)', () => {
+    const system = buildEmployee().systemMessages.map((m) => m.content).join('\n');
+
+    expect(system).not.toContain(REVIEWER_GIT_READ_LINE);
+    expect(system).not.toContain('git_read');
   });
 });
