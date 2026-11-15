@@ -271,7 +271,7 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
     function: {
       name: 'write_doc',
       description:
-        'Ghi tài liệu vào thư mục tài liệu của chính bạn. Ba action: list (liệt kê tài liệu trong thư mục của bạn, trả noteId để sửa), create (tạo tài liệu mới trong thư mục của bạn), update (sửa tài liệu đã có trong thư mục của bạn). Không thể tạo thư mục, không thể ghi ra ngoài thư mục của bạn.',
+        'Ghi tài liệu vào thư mục tài liệu của chính bạn. Ba action: list (liệt kê tài liệu trong thư mục của bạn, trả noteId để sửa), create (tạo tài liệu mới trong thư mục của bạn), update (sửa tài liệu đã có trong thư mục của bạn). Với update, truyền title để đổi tiêu đề, body để thay toàn văn nội dung, hoặc cả hai; bỏ trống một trường thì trường đó giữ nguyên. Không thể tạo thư mục, không thể ghi ra ngoài thư mục của bạn.',
       parameters: {
         type: 'object',
         properties: {
@@ -855,7 +855,12 @@ async function writeDoc(args: Record<string, any>, ctx: TeamToolContext): Promis
     // team-tool convention — validate here so the model gets a code it can self-correct on.
     // The prefix is part of the stored title, so it counts against the cap.
     const prefix = ctx.agentName ? `${ctx.agentName} — ` : '';
-    if (prefix.length + title.length > MAX_DOC_TITLE_LENGTH) {
+    // UAT-41: `list` returns the STORED title, which already carries the prefix. An agent that
+    // re-creates from a listed title used to store "Alex — Alex — …". Strip every leading copy
+    // so `create` is idempotent on the prefix, however many times the model pasted it.
+    let bare = title;
+    while (prefix && bare.startsWith(prefix)) bare = bare.slice(prefix.length);
+    if (prefix.length + bare.length > MAX_DOC_TITLE_LENGTH) {
       return JSON.stringify(
         refuse(
           'INVALID_ARGUMENT',
@@ -874,7 +879,7 @@ async function writeDoc(args: Record<string, any>, ctx: TeamToolContext): Promis
         parentId: folderId,
         // D-02b: the prefix is added by the tool, never by the prompt, so the model cannot
         // forget it. No `agentName` means the bare title — never a leading "— ".
-        title: `${prefix}${title}`,
+        title: `${prefix}${bare}`,
         body,
       },
       ctx.db

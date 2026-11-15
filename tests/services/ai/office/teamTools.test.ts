@@ -1403,6 +1403,21 @@ describe('teamTools — write_doc folder-scoped document write (AIO-DOCS-02..04,
     expect(result.title).toBe('An — Phân tích');
   });
 
+  // UAT-41: `list` returns the stored (already prefixed) title, so re-creating from a listed
+  // title must not stack a second prefix.
+  it('create does not stack the agent-name prefix on an already-prefixed title', async () => {
+    const result = JSON.parse(
+      await executeTeamTool(
+        'write_doc',
+        { action: 'create', title: 'An — An — Phân tích', body: 'nội dung' },
+        ctx({ folderId: folderA, agentName: 'An' })
+      )
+    );
+
+    const stored = await db.notes.get(result.noteId);
+    expect(stored!.title).toBe('An — Phân tích');
+  });
+
   // D-02b: `update` must not stack a second prefix.
   it('update does not re-apply the agent-name prefix', async () => {
     const created = JSON.parse(
