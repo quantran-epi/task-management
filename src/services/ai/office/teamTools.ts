@@ -90,7 +90,11 @@ export type TeamToolRefusalCode =
   // Phase 42: `git_read` repo resolution. Truthful codes — a linked system that merely lacks
   // repo configuration is NOT "not linked" (D-07).
   | 'SYSTEM_NOT_LINKED'
-  | 'NO_LINKED_REPO';
+  | 'NO_LINKED_REPO'
+  // CR-03: git/SSH failure is infrastructure, not a bad argument. Reporting it as
+  // `INVALID_ARGUMENT` told the model to retry variations forever instead of surfacing the
+  // failure — the same reasoning that gives `LEAD_USES_DB_TOOLS` its own code.
+  | 'GIT_READ_FAILED';
 
 /** Mirrors `ArtifactToolRefusal`: a refusal is a returned value, never a thrown error. */
 export interface TeamToolRefusal {
@@ -1029,23 +1033,29 @@ async function resolveGitRepo(
   if (requested) {
     const linked = linkedSystems.find((s) => s.id === requested);
     if (!linked) {
+      // WR-04: `requested` is model-supplied and a refusal is a `role: 'tool'` result, so it
+      // is wrapped like every other untrusted string on this path.
       return refuse(
         'SYSTEM_NOT_LINKED',
-        `Hệ thống "${requested}" không được liên kết với nhóm này.`
+        `Hệ thống ${wrapUntrusted('SYSTEM ID YÊU CẦU', requested)} không được liên kết với nhóm này.`
       );
     }
     const match = usable.find((s) => s.id === requested);
     if (!match) {
       return refuse(
         'NO_LINKED_REPO',
-        `Hệ thống "${linked.name}" chưa cấu hình SSH profile hoặc đường dẫn repo.`
+        `Hệ thống ${wrapUntrusted('TÊN HỆ THỐNG', linked.name)} chưa cấu hình SSH profile hoặc đường dẫn repo.`
       );
     }
     system = match;
   } else if (usable.length === 0) {
     return refuse('NO_LINKED_REPO', 'Nhóm chưa liên kết hệ thống nào có repo để đọc.');
   } else if (usable.length > 1) {
-    const list = usable.map((s) => `${s.id} (${s.name})`).join(', ');
+    // WR-04: names are user-authored free text; ids alone would not tell the model which to
+    // pick, so both are listed and the names are wrapped.
+    const list = usable
+      .map((s) => `${s.id} (${wrapUntrusted('TÊN HỆ THỐNG', s.name)})`)
+      .join(', ');
     return refuse(
       'INVALID_ARGUMENT',
       `Nhóm liên kết nhiều hệ thống có repo — hãy truyền systemId. Các lựa chọn: ${list}.`
@@ -1058,7 +1068,7 @@ async function resolveGitRepo(
   if (!config) {
     return refuse(
       'NO_LINKED_REPO',
-      `Hệ thống "${system.name}" trỏ tới một SSH profile không còn tồn tại.`
+      `Hệ thống ${wrapUntrusted('TÊN HỆ THỐNG', system.name)} trỏ tới một SSH profile không còn tồn tại.`
     );
   }
   const secret = (await getSshSecret(config.id)) ?? undefined;
@@ -1076,21 +1086,39 @@ function wrapCommits(commits: RemoteGitCommit[], label: (field: string) => strin
 }
 
 /**
+ * CR-01: a revision-shaped value is only ever a revision. `escapeShellArg` protects the shell,
+ * but git parses any argv element beginning with `-` as an option, and `git log`/`show`/`diff`
+ * accept `--output=<file>` — an arbitrary remote file write. Refuse rather than strip: a
+ * silently-mangled value would read as a different branch than the model asked for.
+ */
+function revisionArg(value: unknown): string | undefined {
+  const v = typeof value === 'string' ? value.trim() : '';
+  return v && !v.startsWith('-') ? v : undefined;
+}
+
+/**
  * Phase 42 D-06/D-08/D-11: read-only remote git inspection. The handler never builds a
  * command string — every value goes to a `gitRemoteService`/`gitRemoteTreeService` function
  * that escapes it per argument. A git or SSH throw becomes a refusal, never a throw.
  */
 async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise<string> {
-  const resolved = await resolveGitRepo(args, ctx);
-  if ('refused' in resolved) return JSON.stringify(resolved);
-  const { system, config, repoPath, secret } = resolved;
-
   const action = typeof args.action === 'string' ? args.action : '';
+  // WR-05: repo resolution is inside the try. `listTeamLinks`, `db.systems.get`,
+  // `getSshConfigById` and `getSshSecret` all await Dexie, and a closed/quota-failed DB used
+  // to reject out of `executeTeamTool`, breaking the "a refusal is a returned value, never a
+  // thrown error" contract that the coordinator's dispatch relies on.
+  let repoPath = '';
   // D-11: every wrap label carries BOTH the action and the repo path.
   const gitLabel = (field: string) => `GIT ${action} ${repoPath} — ${field}`;
-  const base = { action, systemId: system.id, repoPath };
-
   try {
+    const resolved = await resolveGitRepo(args, ctx);
+    if ('refused' in resolved) return JSON.stringify(resolved);
+    const { system, config, secret } = resolved;
+    repoPath = resolved.repoPath;
+
+    // IN-05 is Info-tier and out of this fix pass: `repoPath` stays unwrapped here.
+    const base = { action, systemId: system.id, repoPath };
+
     switch (action) {
       case 'branches': {
         const branches = await getRemoteBranches(config, repoPath, secret);
@@ -1116,9 +1144,14 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
         });
       }
       case 'log': {
-        const limit = Math.min(Math.max(1, Number(args.limit) || 20), 50);
-        const branch =
-          (typeof args.branch === 'string' && args.branch) || system.defaultBaseBranch || 'HEAD';
+        // WR-06: `Math.floor` so `limit: 2.7` becomes 2 instead of reaching `git log -n 2.7`.
+        const limit = Math.min(Math.max(1, Math.floor(Number(args.limit)) || 20), 50);
+        const branch = revisionArg(args.branch ?? system.defaultBaseBranch ?? 'HEAD');
+        if (!branch) {
+          return JSON.stringify(
+            refuse('INVALID_ARGUMENT', 'log: branch phải là tên nhánh, không bắt đầu bằng "-".')
+          );
+        }
         const commits = await getRecentCommits(config, repoPath, branch, limit, secret);
         return JSON.stringify({
           ...base,
@@ -1128,11 +1161,14 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
         });
       }
       case 'diff_summary': {
-        const baseBranch = typeof args.base === 'string' ? args.base.trim() : '';
-        const targetBranch = typeof args.target === 'string' ? args.target.trim() : '';
+        const baseBranch = revisionArg(args.base);
+        const targetBranch = revisionArg(args.target);
         if (!baseBranch || !targetBranch) {
           return JSON.stringify(
-            refuse('INVALID_ARGUMENT', 'diff_summary cần cả base và target.')
+            refuse(
+              'INVALID_ARGUMENT',
+              'diff_summary cần cả base và target, và không được bắt đầu bằng "-".'
+            )
           );
         }
         const summary = await getDiffSummary(config, repoPath, baseBranch, targetBranch, secret);
@@ -1153,12 +1189,15 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
         });
       }
       case 'diff_file': {
-        const baseBranch = typeof args.base === 'string' ? args.base.trim() : '';
-        const targetBranch = typeof args.target === 'string' ? args.target.trim() : '';
+        const baseBranch = revisionArg(args.base);
+        const targetBranch = revisionArg(args.target);
         const filePath = typeof args.filePath === 'string' ? args.filePath.trim() : '';
         if (!baseBranch || !targetBranch || !filePath) {
           return JSON.stringify(
-            refuse('INVALID_ARGUMENT', 'diff_file cần base, target và filePath.')
+            refuse(
+              'INVALID_ARGUMENT',
+              'diff_file cần base, target và filePath; base/target không được bắt đầu bằng "-".'
+            )
           );
         }
         const text = await getFileDiff(
@@ -1178,10 +1217,15 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
         });
       }
       case 'read_file': {
-        const branch = typeof args.branch === 'string' ? args.branch.trim() : '';
+        const branch = revisionArg(args.branch);
         const filePath = typeof args.filePath === 'string' ? args.filePath.trim() : '';
         if (!branch || !filePath) {
-          return JSON.stringify(refuse('INVALID_ARGUMENT', 'read_file cần branch và filePath.'));
+          return JSON.stringify(
+            refuse(
+              'INVALID_ARGUMENT',
+              'read_file cần branch và filePath; branch không được bắt đầu bằng "-".'
+            )
+          );
         }
         // Phase 31 D-12: entire content, no truncation.
         const text = await getRemoteFileContent(config, repoPath, branch, filePath, secret);
@@ -1193,10 +1237,13 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
         });
       }
       case 'tree': {
-        const branch = typeof args.branch === 'string' ? args.branch.trim() : '';
+        const branch = revisionArg(args.branch);
         if (!branch) {
-          return JSON.stringify(refuse('INVALID_ARGUMENT', 'tree cần branch.'));
+          return JSON.stringify(
+            refuse('INVALID_ARGUMENT', 'tree cần branch, và branch không được bắt đầu bằng "-".')
+          );
         }
+        // IN-02 is Info-tier and out of this fix pass: `dirPath` is passed through untrimmed.
         const dirPath = typeof args.dirPath === 'string' ? args.dirPath : undefined;
         const nodes = await getRemoteTree(config, repoPath, branch, dirPath, secret);
         return JSON.stringify({
@@ -1221,7 +1268,13 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
         );
     }
   } catch (err: any) {
-    return JSON.stringify(refuse('INVALID_ARGUMENT', err?.message || String(err)));
+    // CR-03: git/SSH stderr is remote-controlled text (paths, refs, `.gitattributes`-driven
+    // messages) and this is a `role: 'tool'` result, so it is wrapped like every other
+    // retrieved body (AIO-READ-05). The code is GIT_READ_FAILED, not INVALID_ARGUMENT: an SSH
+    // timeout is not the model's argument mistake.
+    return JSON.stringify(
+      refuse('GIT_READ_FAILED', wrapUntrusted(gitLabel('LỖI GIT'), err?.message || String(err)))
+    );
   }
 }
 

@@ -10,7 +10,6 @@ import { ensureTeamThread } from '../../../../src/db/repositories/teamTranscript
 import { isMutationTool } from '../../../../src/services/ai/aiTools';
 import { SSH_CONFIGS_SETTING_KEY } from '../../../../src/types/ssh';
 import { generateId } from '../../../../src/utils/uuid';
-import { escapeShellArg } from '../../../../src/services/gitRemoteService';
 import { execRemoteCommand } from '../../../../src/services/sshService';
 
 /**
@@ -41,9 +40,11 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
   });
 
   beforeEach(async () => {
-    // Resets recorded call history between cases: Block B reads `mock.calls.at(-1)`, so an
-    // unreset history would let a case assert against an earlier case's command.
-    vi.clearAllMocks();
+    // WR-09: `mockReset`, not `clearAllMocks`. `clearAllMocks` maps to `mockClear`, which keeps
+    // implementations and therefore keeps any `mockResolvedValueOnce` a case queued but did not
+    // consume — the leftover would be silently consumed by a later case and point the failure
+    // at the wrong assertion.
+    vi.mocked(execRemoteCommand).mockReset();
 
     db = new TaskPlannerDatabase('TestGitRead_' + Math.random().toString(36).slice(2));
     await db.open();
@@ -253,8 +254,41 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     },
   ];
 
+  /**
+   * WR-08: asserts the payload is actually ENCLOSED, not merely that both tag phrases appear
+   * somewhere. Every opening tag mints a nonce; the block only closes at a closing tag carrying
+   * that SAME nonce. A handler that emitted both tags empty and put the payload outside them
+   * would pass a `toContain` check and fail this one.
+   */
+  function expectEnclosed(raw: string, payload: string) {
+    const blocks: Array<{ open: number; close: number }> = [];
+    let cursor = 0;
+    for (;;) {
+      const open = raw.indexOf(OPEN, cursor);
+      if (open === -1) break;
+      const nonceMatch = /— ([0-9a-f-]{8})\]/.exec(raw.slice(open, open + 200));
+      expect(nonceMatch).not.toBeNull();
+      const nonce = nonceMatch![1]!;
+      const closeTag = `[${CLOSE}`;
+      let close = raw.indexOf(closeTag, open);
+      // Advance to the closing tag that actually carries this block's nonce.
+      while (close !== -1 && !raw.slice(close, close + 200).includes(nonce)) {
+        close = raw.indexOf(closeTag, close + 1);
+      }
+      expect(close).toBeGreaterThan(open);
+      blocks.push({ open, close });
+      cursor = close + 1;
+    }
+    expect(blocks.length).toBeGreaterThan(0);
+
+    const payloadIndex = raw.indexOf(payload);
+    expect(payloadIndex).toBeGreaterThanOrEqual(0);
+    const enclosing = blocks.filter((b) => payloadIndex > b.open && payloadIndex < b.close);
+    expect(enclosing).toHaveLength(1);
+  }
+
   for (const testCase of WRAP_CASES) {
-    it(`${testCase.action} wraps its payload and labels it GIT ${testCase.action} /srv/repo`, async () => {
+    it(`${testCase.action} encloses its payload and labels it GIT ${testCase.action} /srv/repo`, async () => {
       queue(...testCase.outputs);
 
       const raw = await executeTeamTool(
@@ -270,6 +304,19 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
       const parsed = JSON.parse(raw);
       expect(parsed.systemId).toBe(repoSystemId);
       expect(parsed.repoPath).toBe('/srv/repo');
+
+      // The payload of each action, asserted to sit INSIDE the nonce-matched block. Each entry
+      // names the FIRST wrapped field of that action, which is the block `expectEnclosed` reads.
+      const payloadByAction: Record<string, string> = {
+        branches: 'main',
+        status: 'src/app.ts',
+        log: 'sửa lỗi',
+        diff_summary: 'sửa lỗi',
+        diff_file: '+const x = 1;',
+        read_file: 'export const x = 1;',
+        tree: 'src/app.ts',
+      };
+      expectEnclosed(raw, payloadByAction[testCase.action]!);
     });
   }
 
@@ -293,7 +340,8 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     // Pinned to a literal, independent of `escapeShellArg`, so a handler that concatenates a
     // raw value produces a different string and fails.
     expect(cmd).toBe(
-      "git -C '/srv/repo' --no-pager diff 'main..feature/x' -- ''\\''; rm -rf /; echo '\\'''"
+      "git -C '/srv/repo' --no-pager diff --no-ext-diff --no-textconv --end-of-options " +
+        "'main..feature/x' -- ''\\''; rm -rf /; echo '\\'''"
     );
   });
 
@@ -307,8 +355,11 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     );
 
     const cmd = vi.mocked(execRemoteCommand).mock.calls.at(-1)![1];
+    // WR-07: pinned literal, independent of `escapeShellArg`. Building the expectation from the
+    // function under test would keep passing if it regressed to identity.
     expect(cmd).toBe(
-      `git -C ${escapeShellArg('/srv/repo')} --no-pager show ${escapeShellArg(EVIL + ':src/app.ts')}`
+      "git -C '/srv/repo' --no-pager show --no-ext-diff --no-textconv --end-of-options " +
+        "''\\''; rm -rf /; echo '\\'':src/app.ts'"
     );
   });
 
@@ -318,8 +369,10 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     await executeTeamTool('git_read', { action: 'log', branch: EVIL }, ctx());
 
     const cmd = vi.mocked(execRemoteCommand).mock.calls.at(-1)![1];
+    // WR-07: pinned literal. Options precede `--end-of-options`; the branch follows it.
     expect(cmd).toBe(
-      `git -C ${escapeShellArg('/srv/repo')} --no-pager log ${escapeShellArg(EVIL)} -n 20 --format='%x1e%H%x00%h%x00%an%x00%ad%x00%s' --date=iso`
+      "git -C '/srv/repo' --no-pager log -n 20 --format='%x1e%H%x00%h%x00%an%x00%ad%x00%s' " +
+        "--date=iso --end-of-options ''\\''; rm -rf /; echo '\\'''"
     );
   });
 
@@ -336,11 +389,12 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     expect(calls).toHaveLength(4);
     // Third call is `diff --numstat <range>`.
     expect(calls.at(-2)![1]).toBe(
-      `git -C ${escapeShellArg('/srv/repo')} --no-pager diff --numstat ${escapeShellArg(EVIL + '..main')}`
+      "git -C '/srv/repo' --no-pager diff --numstat -z -M --no-ext-diff --no-textconv " +
+        "--end-of-options ''\\''; rm -rf /; echo '\\''..main'"
     );
   });
 
-  it('turns a git failure into a refusal, never a throw', async () => {
+  it('turns a git failure into a GIT_READ_FAILED refusal with the stderr wrapped, never a throw', async () => {
     vi.mocked(execRemoteCommand).mockResolvedValueOnce({
       stdout: '',
       stderr: 'fatal: bad revision',
@@ -350,9 +404,133 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     // `resolves`, never the rejection matcher: a git throw must become a refusal value.
     const promise = executeTeamTool('git_read', { action: 'status' }, ctx());
     await expect(promise).resolves.toBeTypeOf('string');
-    expect(JSON.parse(await promise)).toMatchObject({
-      refused: true,
-      code: 'INVALID_ARGUMENT',
+    const raw = await promise;
+    const parsed = JSON.parse(raw);
+
+    // CR-03: infrastructure failure, not an argument mistake — `INVALID_ARGUMENT` sent the
+    // model into an endless retry loop instead of surfacing the failure.
+    expect(parsed).toMatchObject({ refused: true, code: 'GIT_READ_FAILED' });
+    // AIO-READ-05: remote stderr is repo-controlled text on a `role: 'tool'` channel.
+    expect(parsed.message).toContain(OPEN);
+    expect(parsed.message).toContain(CLOSE);
+    expectEnclosed(parsed.message, 'fatal: bad revision');
+  });
+
+  // ---------------------------------------------------------------------------------------
+  // Block C — confinement: the inputs a prompt-injected reviewer actually tries (CR-01/CR-02,
+  // WR-11). These are the security boundary of the phase; Block B only proves shell escaping.
+  // ---------------------------------------------------------------------------------------
+
+  it('refuses a log branch beginning with "-" and never runs git (CR-01)', async () => {
+    const res = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'log', branch: '--output=/home/git/.ssh/authorized_keys' },
+        ctx()
+      )
+    );
+    expect(res).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
+    // The write vector: git must never be handed the argument at all.
+    expect(execRemoteCommand).not.toHaveBeenCalled();
+  });
+
+  it('refuses a diff base beginning with "-" and never runs git (CR-01)', async () => {
+    const res = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'diff_summary', base: '--output=/tmp/x', target: 'main' },
+        ctx()
+      )
+    );
+    expect(res).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
+    expect(execRemoteCommand).not.toHaveBeenCalled();
+  });
+
+  it('refuses a read_file branch beginning with "-" and never runs git (CR-01)', async () => {
+    const res = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'read_file', branch: '--output=/tmp/x', filePath: 'README' },
+        ctx()
+      )
+    );
+    expect(res).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
+    expect(execRemoteCommand).not.toHaveBeenCalled();
+  });
+
+  it('refuses a tree branch beginning with "-" and never runs git (CR-01)', async () => {
+    const res = JSON.parse(
+      await executeTeamTool('git_read', { action: 'tree', branch: '--output=/tmp/x' }, ctx())
+    );
+    expect(res).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
+    expect(execRemoteCommand).not.toHaveBeenCalled();
+  });
+
+  it('refuses a read_file path that escapes the repository (CR-02)', async () => {
+    const res = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'read_file', branch: 'main', filePath: '../../../home/git/.ssh/id_rsa' },
+        ctx()
+      )
+    );
+    expect(res).toMatchObject({ refused: true, code: 'GIT_READ_FAILED' });
+    // The `cat` fallback is the escape hatch; it must never be reached.
+    const commands = vi.mocked(execRemoteCommand).mock.calls.map((call) => call[1]);
+    expect(commands.some((cmd) => cmd.includes('cat --'))).toBe(false);
+  });
+
+  it('refuses a tree dirPath that escapes the repository (CR-02)', async () => {
+    const res = JSON.parse(
+      await executeTeamTool('git_read', { action: 'tree', branch: 'main', dirPath: '../..' }, ctx())
+    );
+    expect(res).toMatchObject({ refused: true, code: 'GIT_READ_FAILED' });
+    expect(execRemoteCommand).not.toHaveBeenCalled();
+  });
+
+  it('does not fall back to the working copy when the ref itself is bad (WR-01)', async () => {
+    // `git show` fails because the branch does not exist — not because the path is untracked.
+    vi.mocked(execRemoteCommand).mockResolvedValueOnce({
+      stdout: '',
+      stderr: "fatal: invalid object name 'mian'.",
+      exitStatus: 128,
     });
+
+    const res = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'read_file', branch: 'mian', filePath: 'src/app.ts' },
+        ctx()
+      )
+    );
+    expect(res).toMatchObject({ refused: true, code: 'GIT_READ_FAILED' });
+    // Exactly one command: the failed `git show`. No `cat` of the working copy, which would
+    // have returned a different version labelled as branch `mian`.
+    expect(vi.mocked(execRemoteCommand).mock.calls).toHaveLength(1);
+  });
+
+  it('still falls back to the working copy for a path that is genuinely not in the ref', async () => {
+    vi.mocked(execRemoteCommand).mockResolvedValueOnce({
+      stdout: '',
+      stderr: "fatal: path 'untracked.ts' does not exist in 'main'",
+      exitStatus: 128,
+    });
+    vi.mocked(execRemoteCommand).mockResolvedValueOnce({
+      stdout: 'export const untracked = 1;\n',
+      stderr: '',
+      exitStatus: 0,
+    });
+
+    const res = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'read_file', branch: 'main', filePath: 'untracked.ts' },
+        ctx()
+      )
+    );
+    expect(res.content).toContain('export const untracked = 1;');
+    expect(vi.mocked(execRemoteCommand).mock.calls.at(-1)![1]).toBe(
+      "cat -- '/srv/repo/untracked.ts'"
+    );
   });
 });
