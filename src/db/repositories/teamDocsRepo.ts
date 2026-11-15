@@ -105,12 +105,17 @@ export function memberFolderSlug(teamId: string, agentId: string): string {
 
 /**
  * D-08b: lazy root. Reads the setting; creates the root and rewrites the setting when the
- * setting is missing or names anything other than a live folder carrying the root slug.
+ * setting is missing or names anything other than a folder carrying the root slug.
  *
  * WR-03: the setting is a plain `settings` row restored verbatim from backup, so a payload that
  * pointed it at a user folder would make every team tree a child of that folder — deleting the
  * user folder from Docs would then take every team's tree with it. The slug check is what makes
  * the setting a hint rather than an authority.
+ *
+ * W1 (round 9): a root the owner moved to Trash is REVIVED, not replaced. Minting a second one
+ * left two notes carrying `ai-root`, which `validateBackup` rejects — and since push does not
+ * validate, the app's own export became unrestorable. Reviving also keeps the team folders that
+ * are already parented to it.
  *
  * No transaction here — this runs inside `createTeam`'s and `ensureTeamDocsReady`'s ambient
  * transaction, and a nested one would split the rollback.
@@ -120,7 +125,13 @@ export async function ensureDocsRoot(db: TaskPlannerDatabase = defaultDb): Promi
   const stored = typeof setting?.value === 'string' ? setting.value : undefined;
   if (stored !== undefined) {
     const row = await db.notes.get(stored);
-    if (row && !row.deletedAt && row.type === 'folder' && row.slug === AI_TEAMS_DOCS_ROOT_SLUG) {
+    if (row && row.type === 'folder' && row.slug === AI_TEAMS_DOCS_ROOT_SLUG) {
+      if (row.deletedAt !== undefined) {
+        await db.notes.update(stored, {
+          deletedAt: undefined,
+          updatedAt: new Date().toISOString(),
+        });
+      }
       return stored;
     }
   }

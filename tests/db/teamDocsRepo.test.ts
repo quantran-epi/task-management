@@ -125,6 +125,23 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
     expect((await folderRows()).filter((n) => n.title === AI_TEAMS_DOCS_ROOT_TITLE)).toHaveLength(1);
   });
 
+  // W1 (round 9): the owner can soft-delete the shared root from Docs. Minting a second one left
+  // two `ai-root` notes, which the import validator rejects — and push does not validate, so the
+  // app's own export became unrestorable. Reviving keeps it a singleton.
+  it('revives a trashed root instead of minting a second one (W1)', async () => {
+    const rootId = await ensureDocsRoot(db);
+    await db.notes.update(rootId, { deletedAt: NOW });
+
+    const again = await ensureDocsRoot(db);
+
+    expect(again).toBe(rootId);
+    expect((await db.notes.get(rootId))?.deletedAt).toBeUndefined();
+    const roots = (await db.notes.toArray()).filter(
+      (note) => note.slug === AI_TEAMS_DOCS_ROOT_SLUG
+    );
+    expect(roots).toHaveLength(1);
+  });
+
   it('isLiveFolder rejects a missing id, a deleted folder and a non-folder note', async () => {
     const rootId = await ensureDocsRoot(db);
     const doc = await createNote({ title: 'Doc', body: '', type: 'document' }, db);

@@ -123,6 +123,10 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
    * then rolls back — so stamping `team-deleted` on the ledger first would claim a deletion that
    * never happened. `app-exit` is the honest vocabulary for "the run is over, the team may still
    * exist".
+   *
+   * W2: a refusal leaves the team alive, so the message must say that instead of the generic
+   * failure copy — otherwise the owner reads "nothing happened" as "it broke". The coordinator
+   * is recreated by `getOrCreateRun` the next time the workspace mounts, so the team is usable.
    */
   const handleDeleteTeam = async (team: AiTeam) => {
     try {
@@ -133,8 +137,13 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
     }
     try {
       await deleteTeam(team.id, db);
-    } catch {
-      setActionError(ACTION_ERROR_COPY);
+    } catch (err) {
+      const refused = err instanceof Error && err.message.includes('không xác định được thư mục');
+      setActionError(
+        refused
+          ? 'Không xoá được: thư mục tài liệu của nhóm không xác định được. Nhóm vẫn còn nguyên.'
+          : ACTION_ERROR_COPY
+      );
       return;
     }
     const workspaceTab = openTabs.find((tab) => tab.id === `team_workspace:${team.id}`);
