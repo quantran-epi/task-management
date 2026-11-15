@@ -12,7 +12,7 @@ import {
   type TeamRunCoordinator,
   type TurnRoster,
 } from '../../../../src/services/ai/office/teamRunCoordinator';
-import { TEAM_TOOL_DEFINITIONS } from '../../../../src/services/ai/office/teamTools';
+import { EMPLOYEE_ONLY_TEAM_TOOLS, TEAM_TOOL_DEFINITIONS } from '../../../../src/services/ai/office/teamTools';
 import { makeTeamRunSnapshot } from '../../../helpers/teamRunSnapshot';
 import {
   createEmployee,
@@ -50,6 +50,7 @@ import type { AiEmployee, AiLead, AiSkill, AiTeam } from '../../../../src/types/
 import type { AiOrchestratorLoopOptions } from '../../../../src/services/ai/aiOrchestratorLoop';
 import type { AiToolDefinition } from '../../../../src/services/ai/aiTools';
 import type { ChatTurnRuntimeDeps } from '../../../../src/components/ai/runtime/chatTurnRuntime';
+import { READ_ONLY_REFUSAL } from '../../../../src/components/ai/runtime/chatTurnRuntime';
 import {
   resetTokenEstimatorForTests,
   setEncoderLoaderForTests,
@@ -71,6 +72,36 @@ const sendDesktopNotification = vi.fn(
     return true;
   }
 );
+
+/**
+ * Phase 41 D-05/D-06: the tool context is built inside the coordinator and handed straight to
+ * `executeTeamTool`, so the only way to observe it is at that seam. The wrapper delegates, so
+ * every behaviour is unchanged — it just records which ctx each call received.
+ */
+const teamToolContexts = vi.hoisted(
+  () =>
+    [] as Array<{
+      agentId: string;
+      role?: 'lead' | 'employee' | undefined;
+      folderId?: string | undefined;
+    }>
+);
+
+vi.mock('../../../../src/services/ai/office/teamTools', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../../../src/services/ai/office/teamTools')>();
+  return {
+    ...actual,
+    executeTeamTool: async (
+      name: Parameters<typeof actual.executeTeamTool>[0],
+      args: Parameters<typeof actual.executeTeamTool>[1],
+      ctx: Parameters<typeof actual.executeTeamTool>[2]
+    ) => {
+      teamToolContexts.push({ agentId: ctx.agentId, role: ctx.role, folderId: ctx.folderId });
+      return actual.executeTeamTool(name, args, ctx);
+    },
+  };
+});
 vi.mock('../../../../src/utils/desktopNotification', () => ({
   sendDesktopNotification: (payload: { title: string; body?: string; tag?: string }) =>
     sendDesktopNotification(payload),
@@ -293,6 +324,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
     resetTokenEstimatorForTests();
     resetAllBudgetWarnings();
     notificationPayloads.length = 0;
+    teamToolContexts.length = 0;
     sendDesktopNotification.mockClear();
     if (harness) await harness.db.delete();
     harness = null;
@@ -406,7 +438,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       await waitFor(() => coordinator.getState().agents.every((row) => row.status === 'done'));
     });
 
-    it('composes the lead payload from LEAD_TOOL_ALLOWLIST plus every team tool', async () => {
+    it('composes the lead payload from LEAD_TOOL_ALLOWLIST plus every non-employee-only team tool', async () => {
       let captured: any[] = [];
       harness = await createHarness({
         scripts: {
@@ -420,7 +452,11 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       await harness.coordinator.send('Xin chào');
 
       const names = captured.map((tool) => normalizeToolName(tool.function.name));
-      for (const definition of TEAM_TOOL_DEFINITIONS) {
+      // Phase 41 D-06/T-41-33: `write_doc` is employee-only, so the lead payload must NOT
+      // advertise it. A future edit that widens the lead payload fails on this loop.
+      for (const definition of TEAM_TOOL_DEFINITIONS.filter(
+        (t) => !EMPLOYEE_ONLY_TEAM_TOOLS.has(normalizeToolName(t.function.name))
+      )) {
         expect(names).toContain(normalizeToolName(definition.function.name));
       }
       expect(names).toContain('delegate_batch');
@@ -6382,6 +6418,281 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       const second = JSON.parse(reads[1]!).body as string;
       expect(second).toContain('# Bản 2');
       expect(second).not.toContain('# Bản 1');
+    });
+  });
+
+  describe('teamRunCoordinator — team docs zones (AIO-DOCS-02..06, D-01..D-16)', () => {
+    let docsHarness: Harness | null = null;
+
+    afterEach(async () => {
+      aiTurnManager.abortAll();
+      for (const turn of aiTurnManager.getAllTurns()) aiTurnManager.finishTurn(turn.id);
+      resetTokenEstimatorForTests();
+      resetAllBudgetWarnings();
+      notificationPayloads.length = 0;
+      teamToolContexts.length = 0;
+      sendDesktopNotification.mockClear();
+      if (docsHarness) await docsHarness.db.delete();
+      docsHarness = null;
+    });
+
+    const liveFolders = async (db: TaskPlannerDatabase) =>
+      db.notes.filter((note) => note.type === 'folder' && !note.deletedAt).toArray();
+
+    const memberRows = async (db: TaskPlannerDatabase, teamId: string) =>
+      db.aiTeamMembers.where('teamId').equals(teamId).toArray();
+
+    const stripDocsFolderIds = async (h: Harness): Promise<void> => {
+      const teamRow = (await h.db.aiTeams.get(h.team.id))!;
+      const { docsFolderId: _teamFolder, ...teamRest } = teamRow;
+      await h.db.aiTeams.put(teamRest);
+      for (const row of await memberRows(h.db, h.team.id)) {
+        const { docsFolderId: _memberFolder, ...rest } = row;
+        await h.db.aiTeamMembers.put(rest);
+      }
+    };
+
+    it('creates one tree for the harness team: a root, a team folder and a folder per member', async () => {
+      docsHarness = await createHarness({ scripts: {} });
+      const { db, team } = docsHarness;
+
+      const storedTeam = (await db.aiTeams.get(team.id))!;
+      expect(storedTeam.docsFolderId).toBeTruthy();
+      const rows = await memberRows(db, team.id);
+      expect(rows).toHaveLength(4);
+      for (const row of rows) expect(row.docsFolderId).toBeTruthy();
+
+      // 1 shared root + 1 team folder + 4 member folders (the lead is a member row too).
+      expect(await liveFolders(db)).toHaveLength(6);
+      const teamFolder = (await db.notes.get(storedTeam.docsFolderId!))!;
+      expect(teamFolder.type).toBe('folder');
+      expect(teamFolder.title).toBe(team.name);
+    });
+
+    it('backfills a pre-41 team on the first send and creates no second tree on the next', async () => {
+      docsHarness = await createHarness({
+        scripts: { [LEAD_MODEL]: async () => loopResult('Xong.') },
+      });
+      const { db, team, coordinator } = docsHarness;
+
+      await db.notes.clear();
+      await stripDocsFolderIds(docsHarness);
+      expect((await db.aiTeams.get(team.id))?.docsFolderId).toBeUndefined();
+
+      await coordinator.send('Xin chào');
+      await waitForReady(coordinator);
+
+      const afterFirst = (await db.aiTeams.get(team.id))!;
+      expect(afterFirst.docsFolderId).toBeTruthy();
+      const firstCount = (await liveFolders(db)).length;
+      expect(firstCount).toBe(6);
+      for (const row of await memberRows(db, team.id)) expect(row.docsFolderId).toBeTruthy();
+
+      // CONTEXT test 7 at the coordinator level: the second turn finds a live tree and adds none.
+      await coordinator.send('Xin chào lần nữa');
+      await waitForReady(coordinator);
+
+      expect((await db.aiTeams.get(team.id))?.docsFolderId).toBe(afterFirst.docsFolderId);
+      expect(await liveFolders(db)).toHaveLength(firstCount);
+    });
+
+    it('recreates a dead docsFolderId on the next turn', async () => {
+      docsHarness = await createHarness({
+        scripts: { [LEAD_MODEL]: async () => loopResult('Xong.') },
+      });
+      const { db, team, coordinator } = docsHarness;
+
+      const before = (await db.aiTeams.get(team.id))!.docsFolderId!;
+      // The owner deleted the team folder by hand; the id still points at it.
+      await db.notes.delete(before);
+
+      await coordinator.send('Xin chào');
+      await waitForReady(coordinator);
+
+      const after = (await db.aiTeams.get(team.id))!.docsFolderId!;
+      expect(after).not.toBe(before);
+      const freshTeamFolder = await db.notes.get(after);
+      expect(freshTeamFolder?.type).toBe('folder');
+      // Every member row points at a live folder under the new team folder.
+      for (const row of await memberRows(db, team.id)) {
+        const folder = row.docsFolderId === undefined ? undefined : await db.notes.get(row.docsFolderId);
+        expect(folder?.type).toBe('folder');
+        expect(folder?.parentId).toBe(after);
+      }
+    });
+
+    it('does not block the turn when the docs tree cannot be built', async () => {
+      docsHarness = await createHarness({
+        scripts: { [LEAD_MODEL]: async () => loopResult('Xong.') },
+      });
+      const { db, team, coordinator } = docsHarness;
+
+      await db.notes.clear();
+      await stripDocsFolderIds(docsHarness);
+      const addSpy = vi.spyOn(db.notes, 'add').mockRejectedValueOnce(new Error('boom'));
+      try {
+        // The turn still starts: a docs failure degrades to an absent folder id, and
+        // `write_doc` then refuses TEAM_DOCS_NOT_READY — the truthful outcome (T-41-27).
+        await expect(coordinator.send('Xin chào')).resolves.toBe('started');
+      } finally {
+        addSpy.mockRestore();
+      }
+      await waitForReady(coordinator);
+      expect((await db.aiTeams.get(team.id))?.docsFolderId).toBeUndefined();
+    });
+
+    it('advertises write_doc to the employee payload and no mutation tool (D-01)', async () => {
+      let captured: any[] = [];
+      docsHarness = await createHarness({
+        scripts: {
+          [EMP_A_MODEL]: async (options) => {
+            captured = options.tools ?? [];
+            return loopResult('báo cáo');
+          },
+        },
+      });
+      const { coordinator, employees } = docsHarness;
+
+      await coordinator.send('@[An](agent:' + employees[0]!.id + ') viết tài liệu');
+      await waitForReady(coordinator);
+
+      const names = captured.map((tool) => normalizeToolName(tool.function.name));
+      expect(names).toContain('write_doc');
+      expect(payloadHasMutationTool(captured)).toBe(false);
+    });
+
+    it('withholds write_doc from the lead payload and keeps create_note (D-06, T-41-33)', async () => {
+      let leadToolsCaptured: any[] = [];
+      let employeeToolsCaptured: any[] = [];
+      docsHarness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            leadToolsCaptured = options.tools ?? [];
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async (options) => {
+            employeeToolsCaptured = options.tools ?? [];
+            return loopResult('báo cáo');
+          },
+        },
+      });
+      const { coordinator, employees } = docsHarness;
+
+      await coordinator.send('Xin chào');
+      await waitForReady(coordinator);
+      await coordinator.send('@[An](agent:' + employees[0]!.id + ') viết tài liệu');
+      await waitForReady(coordinator);
+
+      const leadNames = leadToolsCaptured.map((tool) => normalizeToolName(tool.function.name));
+      const employeeNames = employeeToolsCaptured.map((tool) => normalizeToolName(tool.function.name));
+      // The asymmetry pinned in one place: a future edit that filters both payloads fails here.
+      expect(leadNames).not.toContain('write_doc');
+      expect(leadNames).toContain('create_note');
+      expect(employeeNames).toContain('write_doc');
+    });
+
+    it('does not mutation-classify write_doc, so the read-only gate lets it through (D-01, D-03)', async () => {
+      // `chatTurnRuntime.ts:415` calls `isMutationTool` before `onMutationCheck`; a name absent
+      // from MUTATION_TOOLS never reaches the read-only refusal at `chatTurnRuntime.ts:397`.
+      expect(isMutationTool('write_doc')).toBe(false);
+      expect(isMutationTool('create_note')).toBe(true);
+    });
+
+    it('refuses create_note at runtime under a read-only turn while write_doc is never checked', async () => {
+      let mutationCheck: ((name: string, args: Record<string, any>) => Promise<any>) | undefined;
+      docsHarness = await createHarness({
+        scripts: {
+          [EMP_A_MODEL]: async (options) => {
+            mutationCheck = options.onMutationCheck as typeof mutationCheck;
+            return loopResult('báo cáo');
+          },
+        },
+      });
+      const { coordinator, employees } = docsHarness;
+
+      await coordinator.send('@[An](agent:' + employees[0]!.id + ') viết tài liệu');
+      await waitForReady(coordinator);
+
+      expect(mutationCheck).toBeDefined();
+      // CONTEXT test 5, the runtime half, made direct: the employee turn is read-only, so the
+      // gate refuses the leader's DB write path while `write_doc` is not mutation-classified.
+      const refused = await mutationCheck!('create_note', { title: 'x', body: 'y' });
+      expect(refused.proceed).toBe(false);
+      expect(refused.cancellationResult).toBe(READ_ONLY_REFUSAL);
+      expect(isMutationTool('write_doc')).toBe(false);
+    });
+
+    it('routes write_doc to teamTools, not the MCP fall-through', () => {
+      expect(resolveTeamToolName('write_doc')).toBe('teamTools');
+    });
+
+    it('gives the employee prompt its own folder id and the write_doc exception (D-16)', async () => {
+      let employeePrompt = '';
+      docsHarness = await createHarness({
+        scripts: {
+          [EMP_A_MODEL]: async (options) => {
+            employeePrompt = JSON.stringify(options.messages);
+            return loopResult('báo cáo');
+          },
+        },
+      });
+      const { db, team, coordinator, employees } = docsHarness;
+
+      await coordinator.send('@[An](agent:' + employees[0]!.id + ') viết tài liệu');
+      await waitForReady(coordinator);
+
+      const row = (await memberRows(db, team.id)).find((m) => m.agentId === employees[0]!.id)!;
+      expect(row.docsFolderId).toBeTruthy();
+      expect(employeePrompt).toContain(row.docsFolderId!);
+      expect(employeePrompt).toContain('write_doc');
+    });
+
+    it('gives the lead prompt the team folder and every member folder (D-07)', async () => {
+      let leadPrompt = '';
+      docsHarness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            leadPrompt = JSON.stringify(options.messages);
+            return loopResult('Xong.');
+          },
+        },
+      });
+      const { db, team, coordinator, employees } = docsHarness;
+
+      await coordinator.send('Xin chào');
+      await waitForReady(coordinator);
+
+      const teamFolderId = (await db.aiTeams.get(team.id))!.docsFolderId!;
+      expect(leadPrompt).toContain(teamFolderId);
+      const rows = await memberRows(db, team.id);
+      for (const employee of employees) {
+        const row = rows.find((m) => m.agentId === employee.id)!;
+        expect(row.docsFolderId).toBeTruthy();
+        expect(leadPrompt).toContain(row.docsFolderId!);
+      }
+    });
+
+    it("gives the lead's tool context its role and no folder id, though its member row has one", async () => {
+      docsHarness = await createHarness({
+        scripts: { [LEAD_MODEL]: async () => loopResult('Xong.') },
+      });
+      const { db, team, lead, coordinator } = docsHarness;
+
+      await coordinator.send('Xin chào');
+      await waitForReady(coordinator);
+
+      // The lead DOES own a live folder — plan 41-04 gives the leader a member row like any
+      // other — so the map contains its id. T-41-26: the coordinator still withholds it.
+      const leadRow = (await memberRows(db, team.id)).find((m) => m.agentId === lead.id)!;
+      expect(leadRow.docsFolderId).toBeTruthy();
+      expect((await db.notes.get(leadRow.docsFolderId!))?.type).toBe('folder');
+
+      const leadCtx = teamToolContexts.filter((ctx) => ctx.agentId === lead.id);
+      expect(leadCtx.length).toBeGreaterThan(0);
+      for (const ctx of leadCtx) {
+        expect(ctx.role).toBe('lead');
+        expect(ctx.folderId).toBeUndefined();
+      }
     });
   });
 });
