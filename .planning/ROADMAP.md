@@ -989,10 +989,14 @@ Plans:
 **Research flag:** standard patterns — skip research-phase.
 
 **Plans:** 3 plans in 2 waves
-
 Plans:
+**Wave 1**
+
 - [ ] 42-01-PLAN.md — `git_read` team tool: seven-action enum, linked-system repo resolution, untrusted wraps, `getRecentCommits`, and the tool-count bump
 - [ ] 42-02-PLAN.md — Reviewer prompt line naming `git_read` and the read order
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 42-03-PLAN.md — Injection, refusal, wrap and Oracle-gate proofs (test-only)
 
 ---
