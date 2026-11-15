@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 Phase: 41
 Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-11-15
+Last activity: 2026-11-15 - Completed quick task 261115-q4n: Fix 3 UAT-41 defects
 
 ## Session Continuity
 
@@ -62,6 +62,7 @@ Progress: [██████████] 93%
 | 261114-qjh | Redesign the team chat transcript: hover actions, one meta row, user-only receipts, day dividers, grouped messages, compact sidebar | 2026-11-14 | d7b5c68c | [261114-qjh-redesign-team-chat-transcript-ui](./quick/261114-qjh-redesign-team-chat-transcript-ui/) |
 | 261114-r2m | Fix team-chat bubble borders (all four sides, border-box, inset lead accent) and grouped-row alignment | 2026-11-14 | 80c961dc | — |
 | 261114-r2n | Space team-chat rows by author (4px same block, 20px across authors) and label plan/synthesis rows | 2026-11-14 | eb788b72 | — |
+| 261115-q4n | Fix 3 UAT-41 defects: lead prompt write_doc fact, send() ordering + MCP timeout, ensureDocsReady error visibility | 2026-11-15 | e8557959 | [261115-q4n-fix-3-uat-41-defects-lead-prompt-write-d](./quick/261115-q4n-fix-3-uat-41-defects-lead-prompt-write-d/) |
 
 ## Accumulated Context
 
