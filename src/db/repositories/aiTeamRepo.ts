@@ -3,6 +3,7 @@ import type { AiTeam, AiTeamLink, AiTeamMember } from '../../types/aiOffice';
 import { clampBudgetWarnThresholdPct, clampTeamConcurrency } from '../../types/aiOffice';
 import { generateId } from '../../utils/uuid';
 import { splitEvenly } from '../../services/ai/office/budgetSplit';
+import { createTeamDocsTree, deleteTeamDocsTree } from './teamDocsRepo';
 import {
   AiTeamInputSchema,
   AiTeamUpdateSchema,
@@ -116,7 +117,22 @@ export async function createTeam(
     team.budgetWarnThresholdPct = clampBudgetWarnThresholdPct(validated.budgetWarnThresholdPct);
   }
 
-  await db.transaction('rw', [db.aiTeams, db.aiTeamMembers, db.aiLeads, db.aiEmployees], async () => {
+  // D-09: `db.notes` and `db.settings` join the transaction — the folder tree and the shared
+  // root setting are written here and must roll back with the team row.
+  const transactionTables = [
+    db.aiTeams,
+    db.aiTeamMembers,
+    db.aiLeads,
+    db.aiEmployees,
+    db.notes,
+    db.settings,
+  ];
+
+  // D-09: the tree is created inside the transaction, but the returned row must carry the id
+  // without a re-read — captured here and merged into the result after commit.
+  let docsFolderId: string | undefined;
+
+  await db.transaction('rw', transactionTables, async () => {
     await assertAgentsExist(team.leadId, employeeIds, db);
     await db.aiTeams.add(team);
 
@@ -148,9 +164,36 @@ export async function createTeam(
     ];
     await db.aiTeamMembers.bulkAdd(rows);
     await writeEvenSplit(team.id, team.budgetTokens, db);
+
+    // D-09/D-11: one team folder plus one folder per member row — the lead is a member row
+    // like any other. `createTeamDocsTree` opens no transaction, so it joins this one.
+    const leadAgent = team.leadId === undefined ? undefined : await db.aiLeads.get(team.leadId);
+    const employeeAgents = await db.aiEmployees.bulkGet(
+      rows.filter((row) => row.role === 'employee').map((row) => row.agentId)
+    );
+    const names = new Map<string, string>();
+    if (leadAgent !== undefined) names.set(leadAgent.id, leadAgent.name);
+    for (const agent of employeeAgents) {
+      // A dangling agentId still gets a folder named after the id — never a throw.
+      if (agent !== undefined) names.set(agent.id, agent.name);
+    }
+
+    const tree = await createTeamDocsTree(
+      team.name,
+      rows.map((row) => ({ agentId: row.agentId, name: names.get(row.agentId) ?? row.agentId })),
+      db
+    );
+    docsFolderId = tree.folderId;
+    await db.aiTeams.update(team.id, { docsFolderId: tree.folderId });
+    for (const row of rows) {
+      const memberFolderId = tree.memberFolderIds.get(row.agentId);
+      if (memberFolderId !== undefined) {
+        await db.aiTeamMembers.update(row.id, { docsFolderId: memberFolderId });
+      }
+    }
   });
 
-  return team;
+  return docsFolderId === undefined ? team : { ...team, docsFolderId };
 }
 
 const LEADER_LOCKED_MESSAGE =
@@ -362,8 +405,12 @@ export async function deleteTeam(id: string, db: TaskPlannerDatabase = defaultDb
       db.teamMessages,
       db.teamReadCursors,
       db.teamParticipants,
+      db.notes,
     ],
     async () => {
+      // D-10: read the team row before anything is deleted — its `docsFolderId` is the only
+      // handle on the tree. The shared `AI Teams` root and its setting are never touched.
+      const existing = await db.aiTeams.get(id);
       const threads = await db.chatThreads.where('scopeKey').equals(`team:${id}`).toArray();
       for (const thread of threads) {
         await db.chatMessages.where('threadId').equals(thread.id).delete();
@@ -384,6 +431,9 @@ export async function deleteTeam(id: string, db: TaskPlannerDatabase = defaultDb
       await db.teamParticipants.where('teamId').equals(id).delete();
       await db.aiTeamMembers.where('teamId').equals(id).delete();
       await db.aiTeamLinks.where('teamId').equals(id).delete();
+      // D-10: deleting a team deletes its whole docs tree — the team folder, its member
+      // folders and every document inside them. Hard delete, in this same transaction.
+      await deleteTeamDocsTree(existing?.docsFolderId, db);
       await db.aiTeams.delete(id);
     }
   );
