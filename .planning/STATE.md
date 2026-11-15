@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
-status: executing
-stopped_at: Completed 41-05-PLAN.md
-last_updated: "2026-11-15T04:57:33Z"
+status: verifying
+stopped_at: Completed 41-06-PLAN.md
+last_updated: "2026-11-15T05:05:53.398Z"
 last_activity: 2026-11-15 -- Completed 41-05-PLAN.md
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 55
-  completed_plans: 52
+  completed_plans: 51
   percent: 57
 current_phase: 40
 current_phase_name: Explorer UX, CRUD correctness, observed walkthrough
@@ -27,13 +27,13 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 
 Phase: 41 (AI Office team docs zones) — EXECUTING
 Plan: 6 of 6
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-11-15 -- Completed 41-05-PLAN.md
 
 ## Session Continuity
 
-Last session: 2026-11-15T04:57:33Z
-Stopped at: Completed 41-05-PLAN.md
+Last session: 2026-11-15T05:05:53.393Z
+Stopped at: Completed 41-06-PLAN.md
 Resume file: None
 
 Progress: [██████████] 93%
@@ -200,6 +200,8 @@ Progress: [██████████] 93%
 - [Phase 41]: 41-05: folder ids enter both prompts bare (UUIDs from the coordinator context) while member names pass through wrapField('TÊN NHÂN VIÊN') — T-41-21
 - [Phase 41]: 41-05: the employee policy states two exceptions (propose_skill_version, write_doc) and no refusal code appears in either prompt — the handler stays the guard (D-04)
 - [Phase 41]: 41-05: LEAD_NO_WRITE_DOC_LINE is exported so the test pins the exact sentence; the lead prompt names write_doc once, inside that negation, with no positive instruction (T-41-35)
+- [Phase 41]: D-05: docs tree ensured at turn start in the coordinator, never lazily inside write_doc
+- [Phase 41]: T-41-26: the leader gets no folderId even though its member row owns a live folder
 
 ## Performance Metrics
 
@@ -235,3 +237,4 @@ Progress: [██████████] 93%
 | Phase 41 P03 | 10 min | 2 tasks | 2 files |
 | Phase 41 P04 | 12 | 4 tasks | 2 files |
 | Phase 41 P05 | 8 min | 3 tasks | 2 files |
+| Phase 41 P06 | ~20 min | 3 tasks | 2 files |

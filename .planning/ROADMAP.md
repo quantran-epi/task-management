@@ -947,7 +947,7 @@ Plans:
 
 **Research flag:** standard patterns — skip research-phase.
 
-**Plans:** 5/6 plans executed
+**Plans:** 6/6 plans complete
 
 Plans:
 **Wave 1**
@@ -969,7 +969,7 @@ Plans:
 
 **Wave 5** *(depends on 41-04/41-05)*
 
-- [ ] 41-06-PLAN.md — Coordinator turn-start backfill, role/folder-aware `toolContext`, lead-payload `write_doc` filter, prompt wiring, payload and mutation-classification proofs
+- [x] 41-06-PLAN.md — Coordinator turn-start backfill, role/folder-aware `toolContext`, lead-payload `write_doc` filter, prompt wiring, payload and mutation-classification proofs
 
 ### Phase 42: Recursive linked-item read and read-only git inspection for the reviewer agent
 
