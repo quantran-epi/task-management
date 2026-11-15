@@ -939,9 +939,9 @@ Plans:
 **Success Criteria** (what must be TRUE):
 
 1. Creating a team creates exactly one team folder plus one subfolder per member (leader included) in `db.notes`, in the same transaction as the team row; a failure leaves neither the team nor any folder behind.
-2. Every member can call `create_note` and `update_note` and the write lands immediately as a visible document — no approval card, no hidden draft table.
+2. Every member can call the team tool `write_doc` (actions list/create/update) and the write lands immediately as a visible document in the member's own folder — no approval card, no hidden draft table.
 3. A member's write outside its own subfolder is refused by code, not by prompt: `parentId` on create and the target's `parentId` on update are both checked against the caller's own folder id.
-4. A member cannot create a folder, delete a note, or call any other mutation; those calls are refused with a structured refusal and nothing is written.
+4. A member cannot create a folder, delete a note, or call any other mutation: the DB-tool mutations `create_note`/`update_note`/`delete_note` stay outside `EMPLOYEE_READ_ONLY_ALLOWLIST` and are refused by the runtime's read-only gate, while `write_doc` is the only write path and always writes `type: 'document'`.
 5. The leader keeps full mutation tools and its writes still park on the approval card; the user's accept is what puts the final document at the team root.
 6. Deleting a team removes its folder tree, and pre-41 teams get their tree created lazily on first run without duplicating it on later runs.
 
