@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TaskPlannerDatabase } from '../../src/db/index';
 import {
   AI_TEAMS_DOCS_ROOT_SETTING_KEY,
+  AI_TEAMS_DOCS_ROOT_SLUG,
   AI_TEAMS_DOCS_ROOT_TITLE,
   createMemberFolder,
   createTeamDocsTree,
@@ -176,7 +177,7 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
     await createNote({ title: 'Trong thư mục thành viên', body: 'x', type: 'document', parentId: memberFolderId }, db);
     await createNote({ title: 'Trong thư mục nhóm', body: 'y', type: 'document', parentId: tree.folderId }, db);
 
-    await deleteTeamDocsTree(tree.folderId, db, team.id);
+    await deleteTeamDocsTree(tree.folderId, team.id, db);
 
     const remaining = await db.notes.toArray();
     expect(remaining).toHaveLength(1);
@@ -192,7 +193,7 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
     const ready = await ensureTeamDocsReady(team.id, db);
     const before = await db.notes.toArray();
 
-    await deleteTeamDocsTree(undefined, db, team.id);
+    await deleteTeamDocsTree(undefined, team.id, db);
 
     expect(await db.notes.toArray()).toHaveLength(before.length);
     expect(await db.notes.get(ready.team.docsFolderId as string)).toBeDefined();
@@ -222,7 +223,7 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
     const first = await ensureTeamDocsReady(team.id, db);
 
     // The owner deleted the whole tree by hand in DocsExplorer (D-12b).
-    await deleteTeamDocsTree(first.team.docsFolderId, db, team.id);
+    await deleteTeamDocsTree(first.team.docsFolderId, team.id, db);
 
     const second = await ensureTeamDocsReady(team.id, db);
 
@@ -288,7 +289,7 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
       data: new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' }),
     });
 
-    await deleteTeamDocsTree(tree.folderId, db, team.id);
+    await deleteTeamDocsTree(tree.folderId, team.id, db);
 
     expect(await db.noteAttachments.count()).toBe(0);
     expect(await db.notes.count()).toBe(1); // only the shared root survives
@@ -310,7 +311,7 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
       db
     );
 
-    await deleteTeamDocsTree(tree.folderId, db, team.id);
+    await deleteTeamDocsTree(tree.folderId, team.id, db);
 
     expect(await db.notes.get(sub.id)).toBeUndefined();
     expect(await db.notes.get(deepDoc.id)).toBeUndefined();
@@ -369,7 +370,7 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
   });
 
   // WR-09: a corrupted backup can point a team at the shared root; deleting it must not take
-  // every other team's tree with it.
+  // every other team's tree with it. CR-05: a live folder that cannot be proven is a refusal.
   it('refuses to delete the shared AI Teams root (WR-09)', async () => {
     const team = await seedTeam('Nhóm A', [generateId()]);
     const ready = await ensureTeamDocsReady(team.id, db);
@@ -377,7 +378,7 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
     const rootId = (await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY))?.value as string;
     const before = await db.notes.count();
 
-    await deleteTeamDocsTree(rootId, db, team.id);
+    await expect(deleteTeamDocsTree(rootId, team.id, db)).rejects.toThrow(/không xác định/i);
 
     expect(await db.notes.count()).toBe(before);
     expect(await db.notes.get(rootId)).toBeDefined();
@@ -391,7 +392,7 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
     const userDoc = await createNote({ title: 'Tài liệu người dùng', body: 'x', type: 'document' }, db);
     const before = await db.notes.count();
 
-    await deleteTeamDocsTree(userDoc.id, db, team.id);
+    await expect(deleteTeamDocsTree(userDoc.id, team.id, db)).rejects.toThrow(/không xác định/i);
 
     expect(await db.notes.count()).toBe(before);
     expect(await db.notes.get(userDoc.id)).toBeDefined();
@@ -411,7 +412,7 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
     const otherFolderId = otherReady.team.docsFolderId as string;
     const mineFolderId = mineReady.team.docsFolderId as string;
 
-    await deleteTeamDocsTree(otherFolderId, db, mine.id);
+    await expect(deleteTeamDocsTree(otherFolderId, mine.id, db)).rejects.toThrow(/không xác định/i);
 
     expect(await db.notes.count()).toBe(before);
     expect(await db.notes.get(otherFolderId)).toBeDefined();
@@ -469,7 +470,7 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
       updatedAt: NOW,
     } as never);
 
-    await deleteTeamDocsTree(tree.folderId, db, team.id);
+    await deleteTeamDocsTree(tree.folderId, team.id, db);
 
     // The set survives with the dead id dropped; the live id stays.
     const set = await db.documentSets.get(setId);
@@ -487,7 +488,7 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
     const first = await ensureTeamDocsReady(team.id, db);
 
     // Rebuild: the owner deleted the whole tree.
-    await deleteTeamDocsTree(first.team.docsFolderId, db, team.id);
+    await deleteTeamDocsTree(first.team.docsFolderId, team.id, db);
     const second = await ensureTeamDocsReady(team.id, db);
 
     const leadFolderId = second.memberFolderIds.get(lead.id);
@@ -542,7 +543,7 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
     const newRootId = await ensureDocsRoot(db);
     expect(newRootId).not.toBe(oldRootId);
 
-    await deleteTeamDocsTree(first.team.docsFolderId, db, team.id);
+    await deleteTeamDocsTree(first.team.docsFolderId, team.id, db);
 
     expect(await db.notes.get(first.team.docsFolderId as string)).toBeUndefined();
     expect(await db.notes.get(newRootId)).toBeDefined();
@@ -599,7 +600,7 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
     );
     await db.aiTeams.update(team.id, { docsFolderId: userFolder.id });
 
-    await deleteTeamDocsTree(userFolder.id, db, team.id);
+    await expect(deleteTeamDocsTree(userFolder.id, team.id, db)).rejects.toThrow(/không xác định/i);
 
     expect(await db.notes.get(userFolder.id)).toBeDefined();
     expect(await db.notes.get(secret.id)).toBeDefined();
@@ -679,7 +680,7 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
     const rootId = (await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY))?.value as string;
     await db.notes.update(memberFolderId, { parentId: rootId });
 
-    await deleteTeamDocsTree(memberFolderId, db, team.id);
+    await expect(deleteTeamDocsTree(memberFolderId, team.id, db)).rejects.toThrow(/không xác định/i);
 
     expect(await db.notes.get(memberFolderId)).toBeDefined();
     expect(await db.notes.get(doc.id)).toBeDefined();
@@ -695,7 +696,7 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
       db
     );
 
-    await deleteTeamDocsTree(userFolder.id, db, team.id);
+    await expect(deleteTeamDocsTree(userFolder.id, team.id, db)).rejects.toThrow(/không xác định/i);
 
     expect(await db.notes.get(userFolder.id)).toBeDefined();
   });
@@ -715,7 +716,8 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
         type: 'folder',
         slug: memberFolderSlug(team.id, agentId),
       },
-      db
+      db,
+      { allowReservedSlug: true }
     );
 
     const second = await ensureTeamDocsReady(team.id, db);
@@ -777,9 +779,12 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
     );
   });
 
-  // CR-02 (round 6): `slug` is clearable through `update_note`, and a slug-only proof then leaked
-  // the whole tree — team row gone, folder and documents orphaned with no handle left.
-  it('still deletes the tree after the team folder slug was cleared (CR-02)', async () => {
+  // CR-02 (round 7): the round-6 answer was to corroborate a slugless folder from app-owned rows.
+  // That was an ADOPTION primitive — a payload pointing both the team handle and one member
+  // handle at a user folder got a real slug stamped onto the user's folder, after which
+  // `deleteTeam` destroyed it. Adoption is gone: a slugless handle is absent, and a live folder
+  // that cannot be proven is a REFUSAL, never a silent skip.
+  it('refuses to delete a tree whose team folder slug was cleared (CR-02)', async () => {
     const agentId = generateId();
     const team = await seedTeam('Nhóm A', [agentId]);
     const ready = await ensureTeamDocsReady(team.id, db);
@@ -791,16 +796,17 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
     );
     await db.notes.update(teamFolderId, { slug: undefined });
 
-    await deleteTeamDocsTree(teamFolderId, db, team.id);
+    await expect(deleteTeamDocsTree(teamFolderId, team.id, db)).rejects.toThrow(/không xác định/i);
 
-    expect(await db.notes.get(teamFolderId)).toBeUndefined();
-    expect(await db.notes.get(memberFolderId)).toBeUndefined();
-    expect(await db.notes.get(doc.id)).toBeUndefined();
+    // Nothing was destroyed — the owner is told, and a stale handle cannot take data with it.
+    expect(await db.notes.get(teamFolderId)).toBeDefined();
+    expect(await db.notes.get(memberFolderId)).toBeDefined();
+    expect(await db.notes.get(doc.id)).toBeDefined();
   });
 
-  // CR-02: the same corroboration keeps a user folder safe when the slug is missing and no
-  // app-owned row names it.
-  it('still refuses a slugless user folder no app-owned row names (CR-02)', async () => {
+  // CR-02: a slugless user folder is refused the same way — no app-owned row can make it a
+  // team's folder.
+  it('refuses a slugless user folder no app-owned row names (CR-02)', async () => {
     const team = await seedTeam('Nhóm A', [generateId()]);
     await ensureTeamDocsReady(team.id, db);
     const userFolder = await createNote(
@@ -812,30 +818,29 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
       db
     );
 
-    await deleteTeamDocsTree(userFolder.id, db, team.id);
+    await expect(deleteTeamDocsTree(userFolder.id, team.id, db)).rejects.toThrow(/không xác định/i);
 
     expect(await db.notes.get(userFolder.id)).toBeDefined();
     expect(await db.notes.get(secret.id)).toBeDefined();
   });
 
-  // CR-02: a cleared slug must not strand the tree beside a rebuilt copy either — the backfill
-  // adopts the corroborated folder and re-stamps it.
-  it('re-stamps a corroborated slugless team folder instead of rebuilding (CR-02)', async () => {
+  // CR-02/CR-04: `updateNote` cannot clear a reserved slug, so the state above is unreachable
+  // through the generic note path the lead's `update_note` tool uses.
+  it('refuses to clear or overwrite a reserved slug, or flip its type (CR-04)', async () => {
     const agentId = generateId();
     const team = await seedTeam('Nhóm A', [agentId]);
     const first = await ensureTeamDocsReady(team.id, db);
     const teamFolderId = first.team.docsFolderId as string;
-    const doc = await createNote(
-      { title: 'Giữ lại', body: 'x', type: 'document', parentId: teamFolderId },
-      db
+
+    await expect(updateNote(teamFolderId, { slug: '' }, db)).rejects.toThrow(/slug hoặc loại/i);
+    await expect(updateNote(teamFolderId, { slug: 'khac' }, db)).rejects.toThrow(/slug hoặc loại/i);
+    await expect(updateNote(teamFolderId, { type: 'document' }, db)).rejects.toThrow(
+      /slug hoặc loại/i
     );
-    await db.notes.update(teamFolderId, { slug: undefined });
 
+    // The tree is still resolvable, so a later turn and a later delete both work.
     const second = await ensureTeamDocsReady(team.id, db);
-
     expect(second.team.docsFolderId).toBe(teamFolderId);
-    expect((await db.notes.get(teamFolderId))?.slug).toBe(teamFolderSlug(team.id));
-    expect(await db.notes.get(doc.id)).toBeDefined();
   });
 
   // WR (round 6): the `ai-` namespace is the ownership proof, so `updateNote` must refuse to let
@@ -852,5 +857,22 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
     // The real team folder is still the only holder, so delete still resolves.
     expect((await db.notes.get(userFolder.id))?.slug).toBeUndefined();
     expect(ready.team.docsFolderId).toBeDefined();
+  });
+
+  // WR-03 (round 7): the root setting is restored verbatim, so a payload pointing it at a user
+  // folder made every team tree a child of that folder. The root's own slug is what makes the
+  // setting a hint rather than an authority.
+  it('recreates the root when the setting names a folder without the root slug (WR-03)', async () => {
+    const userFolder = await createNote(
+      { title: 'Thư mục người dùng', body: '', type: 'folder' },
+      db
+    );
+    await db.settings.put({ key: AI_TEAMS_DOCS_ROOT_SETTING_KEY, value: userFolder.id });
+
+    const rootId = await ensureDocsRoot(db);
+
+    expect(rootId).not.toBe(userFolder.id);
+    expect((await db.notes.get(rootId))?.slug).toBe(AI_TEAMS_DOCS_ROOT_SLUG);
+    expect((await db.notes.get(userFolder.id))?.slug).toBeUndefined();
   });
 });

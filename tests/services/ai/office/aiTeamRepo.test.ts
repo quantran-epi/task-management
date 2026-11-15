@@ -1100,7 +1100,7 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
     /** Simulate a pre-41 team: no tree, no `docsFolderId` on the team or its member rows. */
     async function makePre41(teamId: string) {
       const team = (await getTeam(teamId, db))!;
-      await deleteTeamDocsTree(team.docsFolderId, db, teamId);
+      await deleteTeamDocsTree(team.docsFolderId, teamId, db);
       await db.aiTeams.put(stripDocsFolderId(team));
       for (const row of await db.aiTeamMembers.where('teamId').equals(teamId).toArray()) {
         await db.aiTeamMembers.put(stripDocsFolderId(row));
@@ -1201,6 +1201,63 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
       expect(await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY)).toBeDefined();
     });
 
+    // CR-05 (round 7): a silent skip on an irreversible delete deleted the team row and left the
+    // tree behind with no handle. A refusal must roll the whole transaction back instead.
+    it('deleteTeam refuses and rolls back when the tree cannot be proven (CR-05)', async () => {
+      const team = await createTeam(
+        { name: 'Unprovable', leadId, budgetTokens: 0, employeeIds: [employeeIds[0]!] },
+        db
+      );
+      const teamFolderId = team.docsFolderId!;
+      const [memberFolder] = await childFolders(teamFolderId);
+      const doc = await createNote(
+        { title: 'Giữ', body: 'x', type: 'document', parentId: memberFolder!.id },
+        db
+      );
+      // The team folder's slug is gone, so a hard delete cannot prove it owns the tree.
+      await db.notes.update(teamFolderId, { slug: undefined });
+
+      await expect(deleteTeam(team.id, db)).rejects.toThrow(/không xác định/i);
+
+      // Nothing was deleted — the team, its rows and its documents all survive.
+      expect(await getTeam(team.id, db)).toBeDefined();
+      expect(await db.aiTeamMembers.where('teamId').equals(team.id).count()).toBeGreaterThan(0);
+      expect(await db.notes.get(teamFolderId)).toBeDefined();
+      expect(await db.notes.get(memberFolder!.id)).toBeDefined();
+      expect(await db.notes.get(doc.id)).toBeDefined();
+    });
+
+    // WR-01 (round 7): duplicate `agentId` rows resolved to the same slug match; the second row
+    // minted a fresh folder EVERY turn. The row's own unclaimed in-tree handle keeps it stable.
+    it('does not mint a new folder every turn for duplicate agent rows (WR-01)', async () => {
+      const team = await createTeam(
+        { name: 'Dupes', leadId, budgetTokens: 0, employeeIds: [employeeIds[0]!] },
+        db
+      );
+      // A duplicate row for the same agent, as a corrupted payload could carry.
+      const existing = (await listTeamMembers(team.id, db)).find(
+        (member) => member.agentId === employeeIds[0]
+      )!;
+      await db.aiTeamMembers.add({
+        id: generateId(),
+        teamId: team.id,
+        agentId: employeeIds[0]!,
+        role: 'employee',
+        budgetTokens: 0,
+        usedTokens: 0,
+      });
+
+      await ensureTeamDocsReady(team.id, db);
+      const afterFirst = await db.notes.count();
+      await ensureTeamDocsReady(team.id, db);
+      const afterSecond = await db.notes.count();
+      await ensureTeamDocsReady(team.id, db);
+
+      expect(afterSecond).toBe(afterFirst);
+      expect(await db.notes.count()).toBe(afterSecond);
+      expect(existing.docsFolderId).toBeDefined();
+    });
+
     it('addTeamMember creates the new folder immediately', async () => {
       const team = await createTeam(
         { name: 'Grow', leadId, budgetTokens: 0, employeeIds: [employeeIds[0]!] },
@@ -1281,7 +1338,8 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
           type: 'folder',
           slug: `ai-member:${team.id}:${employeeIds[1]!}`,
         },
-        db
+        db,
+        { allowReservedSlug: true }
       );
 
       const added = await addTeamMember(

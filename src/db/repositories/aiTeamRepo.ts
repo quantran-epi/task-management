@@ -9,7 +9,7 @@ import {
   deleteTeamDocsTree,
   ensureTeamDocsReady,
   resolveMemberFolder,
-  resolveTeamFolderForWrite,
+  resolveTeamFolder,
 } from './teamDocsRepo';
 import {
   AiTeamInputSchema,
@@ -308,7 +308,7 @@ export async function updateTeam(
     // here, in the same transaction, and only when the resolver proves the id is THIS team's
     // folder: `docsFolderId` is an untrusted handle restored from a backup.
     if (validated.name !== undefined) {
-      const teamFolderId = await resolveTeamFolderForWrite(id, updated.docsFolderId, db);
+      const teamFolderId = await resolveTeamFolder(id, updated.docsFolderId, db);
       if (teamFolderId !== undefined) {
         await db.notes.update(teamFolderId, {
           title: validated.name,
@@ -342,7 +342,7 @@ async function writeLeadRow(
 
   // CR-05: the handle is validated by the ONE resolver, so an untrusted id rebuilds instead of
   // being handed to the new lead.
-  let teamFolderId = await resolveTeamFolderForWrite(teamId, team.docsFolderId, db);
+  let teamFolderId = await resolveTeamFolder(teamId, team.docsFolderId, db);
   let backfillIds = new Map<string, string>();
   if (teamFolderId === undefined) {
     const ready = await ensureTeamDocsReady(teamId, db);
@@ -527,11 +527,17 @@ export async function deleteTeam(id: string, db: TaskPlannerDatabase = defaultDb
       await db.teamMessages.where('teamId').equals(id).delete();
       await db.teamReadCursors.where('teamId').equals(id).delete();
       await db.teamParticipants.where('teamId').equals(id).delete();
-      await db.aiTeamMembers.where('teamId').equals(id).delete();
       await db.aiTeamLinks.where('teamId').equals(id).delete();
       // D-10: deleting a team deletes its whole docs tree — the team folder, its member
       // folders and every document inside them. Hard delete, in this same transaction.
-      await deleteTeamDocsTree(existing?.docsFolderId, db, id);
+      //
+      // CR-03: the tree goes BEFORE the member rows. `deleteTeamDocsTree` resolves ownership and
+      // then calls `detachNoteReferences`, both of which read `aiTeamMembers`; deleting the rows
+      // first made the corroboration proof unreachable. CR-05: a refusal throws, which rolls the
+      // whole transaction back — the team row survives and the owner is told, instead of the
+      // team vanishing while its tree and documents stay behind with no handle.
+      await deleteTeamDocsTree(existing?.docsFolderId, id, db);
+      await db.aiTeamMembers.where('teamId').equals(id).delete();
       await db.aiTeams.delete(id);
     }
   );
@@ -586,7 +592,7 @@ export async function addTeamMember(
 
       // CR-05: the handle goes through the ONE resolver, so a restored id naming the shared
       // root or another team's folder rebuilds instead of being used.
-      const teamFolderId = await resolveTeamFolderForWrite(validated.teamId, team.docsFolderId, db);
+      const teamFolderId = await resolveTeamFolder(validated.teamId, team.docsFolderId, db);
       const liveTree = teamFolderId !== undefined;
 
       // WR-02/CR-07: `removeTeamMember` deliberately keeps the member's folder, so re-adding the

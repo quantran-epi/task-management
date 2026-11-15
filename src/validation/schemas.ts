@@ -413,6 +413,10 @@ export const WorkSessionInputSchema = z
 export const NOTE_ENTITY_TYPES = ['task', 'cr', 'system'] as const;
 export const NOTE_TYPES = ['quick_note', 'document', 'folder', 'diagram'] as const;
 
+/** IN-02: the caps live here so a tool that mirrors them cannot drift from the schema. */
+export const NOTE_TITLE_MAX_LENGTH = 120;
+export const NOTE_BODY_MAX_LENGTH = 50000;
+
 export const NoteSchema = z.object({
   id: uuidSchema,
   type: z.enum(NOTE_TYPES).default('quick_note'),
@@ -421,8 +425,8 @@ export const NoteSchema = z.object({
   slug: z.string().trim().max(120).optional(),
   entityType: z.enum(NOTE_ENTITY_TYPES).optional(),
   entityId: uuidSchema.optional(),
-  title: z.string().trim().max(120, 'Tiêu đề tối đa 120 ký tự').optional(),
-  body: z.string().max(50000, 'Nội dung ghi chú tối đa 50000 ký tự'),
+  title: z.string().trim().max(NOTE_TITLE_MAX_LENGTH, 'Tiêu đề tối đa 120 ký tự').optional(),
+  body: z.string().max(NOTE_BODY_MAX_LENGTH, 'Nội dung ghi chú tối đa 50000 ký tự'),
   isPinned: z.boolean(),
   deletedAt: z.string().datetime({ message: 'deletedAt must be a valid ISO 8601 string' }).optional(),
   createdAt: z.string().datetime({ message: 'createdAt must be a valid ISO 8601 string' }),
@@ -436,8 +440,8 @@ export const NoteInputSchema = z.object({
   slug: z.string().trim().max(120).optional(),
   entityType: z.enum(NOTE_ENTITY_TYPES).optional(),
   entityId: uuidSchema.optional(),
-  title: z.string().trim().max(120, 'Tiêu đề tối đa 120 ký tự').optional(),
-  body: z.string().max(50000, 'Nội dung tối đa 50000 ký tự').default(''),
+  title: z.string().trim().max(NOTE_TITLE_MAX_LENGTH, 'Tiêu đề tối đa 120 ký tự').optional(),
+  body: z.string().max(NOTE_BODY_MAX_LENGTH, 'Nội dung tối đa 50000 ký tự').default(''),
   isPinned: z.boolean().optional(),
 });
 
@@ -448,8 +452,8 @@ export const NoteUpdateSchema = z.object({
   slug: z.string().trim().max(120).optional().nullable(),
   entityType: z.enum(NOTE_ENTITY_TYPES).optional(),
   entityId: uuidSchema.optional(),
-  title: z.string().trim().max(120, 'Tiêu đề tối đa 120 ký tự').optional(),
-  body: z.string().max(50000, 'Nội dung tối đa 50000 ký tự').optional(),
+  title: z.string().trim().max(NOTE_TITLE_MAX_LENGTH, 'Tiêu đề tối đa 120 ký tự').optional(),
+  body: z.string().max(NOTE_BODY_MAX_LENGTH, 'Nội dung tối đa 50000 ký tự').optional(),
   isPinned: z.boolean().optional(),
   deletedAt: z.string().datetime({ message: 'deletedAt must be a valid ISO 8601 string' }).optional().nullable(),
 });

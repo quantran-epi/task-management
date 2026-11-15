@@ -6,6 +6,11 @@ import type {
 } from '../../types/backup';
 import { APP_MARKER, CURRENT_SCHEMA_VERSION } from './exportBackup';
 import {
+  AI_TEAMS_DOCS_ROOT_SLUG,
+  memberFolderSlug,
+  teamFolderSlug,
+} from '../../db/repositories/teamDocsRepo';
+import {
   BackupTaskRecordSchema,
   BackupCapacityRuleRecordSchema,
   BackupCapacityOverrideRecordSchema,
@@ -540,6 +545,66 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     membersByTeam.set(member.teamId, bucket);
   }
   const teamById = new Map((aiTeams ?? []).map((team) => [team.id, team]));
+
+  // CR-01/CR-02 (round 7): the `ai-` slug namespace is the ONLY ownership proof for a team's docs
+  // tree, and a hard delete acts on it. A payload can forge a slug on any folder, so the
+  // invariant must be checked HERE — the one boundary that accepts rows from outside the app.
+  // Inside the app `updateNote` refuses to change a reserved slug or type, so a payload that
+  // passes this check cannot gain a proof it did not have.
+  const notesById = new Map((notes ?? []).map((note) => [note.id, note]));
+  const reservedNotes = new Set<string>();
+  for (const note of notes ?? []) {
+    if (note.slug === undefined || !note.slug.trim().startsWith('ai-')) continue;
+    reservedNotes.add(note.id);
+    if (note.type !== 'folder') {
+      errors.push({ table: 'notes', recordId: note.id, field: 'slug', message: 'Reserved "ai-" slug is only valid on a folder' });
+      continue;
+    }
+    const teamMatch = /^ai-team:(.+)$/.exec(note.slug.trim());
+    const memberMatch = /^ai-member:([^:]+):(.+)$/.exec(note.slug.trim());
+    const owner = teamMatch
+      ? (aiTeams ?? []).find((team) => team.id === teamMatch[1] && team.docsFolderId === note.id)
+      : memberMatch
+        ? (aiTeamMembers ?? []).find(
+            (member) =>
+              member.teamId === memberMatch[1] &&
+              member.agentId === memberMatch[2] &&
+              member.docsFolderId === note.id
+          )
+        : undefined;
+    if (note.slug.trim() !== AI_TEAMS_DOCS_ROOT_SLUG && owner === undefined) {
+      errors.push({ table: 'notes', recordId: note.id, field: 'slug', message: `Reserved slug "${note.slug}" has no team row naming this folder` });
+    }
+  }
+  // The other direction: a handle that names a folder must name one carrying the matching slug.
+  // Without this, a payload could point a team at a user folder and the next turn would adopt it.
+  for (const team of aiTeams ?? []) {
+    if (team.docsFolderId === undefined) continue;
+    const row = notesById.get(team.docsFolderId);
+    if (row === undefined) continue; // already reported as a dangling reference above
+    if (row.slug !== teamFolderSlug(team.id)) {
+      errors.push({ table: 'aiTeams', recordId: team.id, field: 'docsFolderId', message: 'AiTeam docsFolderId does not name a folder carrying this team\'s slug' });
+    }
+  }
+  for (const member of aiTeamMembers ?? []) {
+    if (member.docsFolderId === undefined) continue;
+    const row = notesById.get(member.docsFolderId);
+    if (row === undefined) continue;
+    if (row.slug !== memberFolderSlug(member.teamId, member.agentId)) {
+      errors.push({ table: 'aiTeamMembers', recordId: member.id, field: 'docsFolderId', message: 'AiTeamMember docsFolderId does not name a folder carrying this member\'s slug' });
+    }
+  }
+  // WR-01 (round 7): duplicate `agentId` rows in one team are the state that made the backfill
+  // mint a fresh folder every turn. Same rule as `aiSkillVersions` above.
+  for (const [teamId, members] of membersByTeam) {
+    const seenAgents = new Set<string>();
+    for (const member of members ?? []) {
+      if (seenAgents.has(member.agentId)) {
+        errors.push({ table: 'aiTeamMembers', recordId: member.id, field: 'agentId', message: `Duplicate AiTeamMember for agentId "${member.agentId}" in team "${teamId}"` });
+      }
+      seenAgents.add(member.agentId);
+    }
+  }
 
   for (const team of aiTeams ?? []) {
     // D-05: an empty group has no leader; only a present leadId is a live reference.

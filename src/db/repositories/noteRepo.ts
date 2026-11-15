@@ -10,30 +10,45 @@ import {
 } from '../../validation/schemas';
 import { generateId } from '../../utils/uuid';
 
+/**
+ * The `ai-` namespace is the ownership proof for a team's docs tree, so only the app may write it.
+ * Lives here (not in `teamDocsRepo`) because `teamDocsRepo` imports this module — the reverse
+ * import would be a cycle.
+ */
+export const RESERVED_SLUG_PREFIX = 'ai-';
+
+/** True only for a slug in the reserved namespace. */
+export function isReservedSlug(slug: string | null | undefined): boolean {
+  return slug?.trim().startsWith(RESERVED_SLUG_PREFIX) ?? false;
+}
+
 export interface NoteWithAttachments {
   note: Note;
   attachments: NoteAttachment[];
 }
 
 /**
- * WR (round 6): `ai-team:`/`ai-member:` slugs are the ownership proof for a hard delete, so a
- * user-supplied one must never be accepted — otherwise any folder could claim to be a team's.
+ * The `ai-` namespace is the ownership proof for a team's docs tree, so only the app may write it.
+ * Enforced at every path that accepts a slug from outside — `createNote`/`batchCreateNotes`
+ * (unless the caller opts in), `updateNote`, and `validateBackup` on import.
  *
- * Ceiling: enforced on the two paths that accept a slug from outside (`updateNote`, and
- * `batchCreateNotes`), not on `createNote` — the team-tree mint sites stamp their own slugs
- * through it. A new caller that lets a user set a slug must call this too.
+ * Ceiling: a direct `db.notes.put` (SQLite hydration) bypasses this. That path is a local file
+ * the owner controls, and the app's own writes never produce a reserved slug there, so the
+ * invariant is restored by `ensureTeamDocsReady` on the next turn.
  */
-function assertSlugNamespaceFree(slug: string | null | undefined): void {
-  if (slug?.trim().startsWith('ai-')) {
+export function assertSlugNamespaceFree(slug: string | null | undefined): void {
+  if (isReservedSlug(slug)) {
     throw new Error('Slug bắt đầu bằng "ai-" được dành riêng cho thư mục của nhóm AI.');
   }
 }
 
 export async function createNote(
   input: NoteInput,
-  db: TaskPlannerDatabase = defaultDb
+  db: TaskPlannerDatabase = defaultDb,
+  opts?: { allowReservedSlug?: boolean }
 ): Promise<Note> {
   const validated = NoteInputSchema.parse(input);
+  if (!opts?.allowReservedSlug) assertSlugNamespaceFree(validated.slug);
   const now = new Date().toISOString();
 
   const note: Note = {
@@ -90,11 +105,23 @@ export async function updateNote(
   db: TaskPlannerDatabase = defaultDb
 ): Promise<Note | null> {
   const validated = NoteUpdateSchema.parse(updates);
-  // WR (round 6): `ai-team:`/`ai-member:` slugs are the ownership proof for a hard delete, so a
-  // user-supplied one must never be accepted — otherwise any folder could claim to be a team's.
-  assertSlugNamespaceFree(validated.slug);
   const existing = await db.notes.get(id);
   if (!existing) return null;
+
+  // CR-04: a reserved slug is the ownership proof for a team's docs tree, so the generic note
+  // path must not be able to break it. Clearing the slug stranded the tree; overwriting it or
+  // flipping `type` did the same one field over, and the lead's `update_note` tool reaches both.
+  // The tree's own writers (`ensureDocsRoot`, `createTeamDocsTree`) use `db.notes.update`
+  // directly, so this guard never blocks them.
+  if (isReservedSlug(existing.slug)) {
+    if (validated.slug !== undefined || validated.type !== undefined) {
+      throw new Error(
+        'Không thể đổi slug hoặc loại của thư mục tài liệu nhóm AI.'
+      );
+    }
+  } else {
+    assertSlugNamespaceFree(validated.slug);
+  }
 
   const now = new Date().toISOString();
   const updated: Note = {
@@ -427,7 +454,7 @@ export async function bulkPermanentDeleteNotes(
   db: TaskPlannerDatabase = defaultDb
 ): Promise<void> {
   if (ids.length === 0) return;
-  await db.transaction('rw', noteReferenceStores(db) as never, async () => {
+  await db.transaction('rw', noteReferenceStores(db), async () => {
     await detachNoteReferences(ids, db);
     await db.notes.bulkDelete(ids);
   });

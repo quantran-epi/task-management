@@ -1105,6 +1105,7 @@ export function createTeamRunCoordinator(
       role,
       ...(agentName ? { agentName } : {}),
       ...(folderId ? { folderId } : {}),
+      ...(liveTeam.docsFolderId ? { teamFolderId: liveTeam.docsFolderId } : {}),
     };
   }
 

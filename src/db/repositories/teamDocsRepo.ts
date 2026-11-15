@@ -32,10 +32,10 @@ export async function isLiveFolder(
 }
 
 /**
- * CR-01: the ONE place a team folder handle is validated, used by every consumer (backfill,
- * delete, rename, add-member, lead write).
+ * The ONE team-folder resolver, used by every consumer (backfill, delete, rename, add-member,
+ * lead write). Identity is the slug stamped at creation, and nothing else.
  *
- * Identity is the slug stamped at creation, and NOTHING else. Every weaker proof failed:
+ * Every weaker proof failed in an earlier round:
  *
  * - Parent shape ("direct child of the current root") over-refuses — the `AI Teams` root is an
  *   ordinary folder the owner can delete, and every existing team folder is then parented to a
@@ -45,13 +45,16 @@ export async function isLiveFolder(
  *   folder and every document inside.
  * - A parent-shape *fallback* for slugless trees re-opened the same hole: any live folder under
  *   the root (including a member folder dragged there) satisfied it.
+ * - Corroborating a slugless folder from member handles was an ADOPTION primitive, not a check:
+ *   a payload that pointed both the team handle and one member handle at a user folder made the
+ *   next turn stamp a real slug onto it, after which `deleteTeam` destroyed it.
  *
- * Phase 41 has not shipped, so there is no slugless production tree to support; the fallback is
- * gone. A handle that does not carry exactly this team's slug is treated as absent and rebuilt.
- *
- * Ceiling: `slug` is a Note field the owner can edit through the docs UI, so this is an
- * accident-proof marker, not a security boundary. That matches the threat model — a corrupted
- * backup, not a hostile owner.
+ * The slug is only trustworthy because the invariant is enforced at the two boundaries that can
+ * write it — `validateBackup` rejects a payload whose slugs and handles disagree, and `updateNote`
+ * refuses to change `slug`/`type` on a note carrying a reserved slug. Inside the app the
+ * invariant therefore holds, and a handle that does not carry exactly this team's slug is treated
+ * as absent and rebuilt. A stranded tree is the owner's to clean up, which is already the
+ * documented rule for a hand-deleted folder.
  */
 export async function resolveTeamFolder(
   teamId: string,
@@ -66,83 +69,13 @@ export async function resolveTeamFolder(
   return row.slug === teamFolderSlug(teamId) ? docsFolderId : undefined;
 }
 
-/**
- * CR-02: corroboration for a folder whose slug is MISSING. `slug` is clearable — the lead's own
- * `update_note` tool accepts `slug: ''` — and a slug-only proof then leaked the whole tree on
- * delete. The handle alone is not enough either (a corrupted backup pointing a team at a user
- * folder must not delete it), so APP-OWNED rows must corroborate: a member row of this team names
- * the folder, or the folder holds a subfolder a member row of this team names.
- *
- * Deliberately refuses any folder carrying ANY slug — a user folder with a forged `ai-team:` slug
- * is never adopted, and never deleted.
- */
-async function corroborateTeamFolder(
-  teamId: string,
-  docsFolderId: string,
-  db: TaskPlannerDatabase
-): Promise<string | undefined> {
-  const row = await db.notes.get(docsFolderId);
-  if (!row || row.deletedAt || row.type !== 'folder') return undefined;
-  if (row.slug !== undefined) return undefined;
-
-  const setting = await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY);
-  if (typeof setting?.value === 'string' && setting.value === docsFolderId) return undefined;
-
-  const members = await db.aiTeamMembers.where('teamId').equals(teamId).toArray();
-  if (members.some((member) => member.docsFolderId === docsFolderId)) return docsFolderId;
-
-  // Second proof, for a tree whose member handles were cleared: a subfolder carrying this team's
-  // member-zone slug can only have been minted inside this team's tree.
-  const prefix = `ai-member:${teamId}:`;
-  const children = await db.notes.where('parentId').equals(docsFolderId).toArray();
-  return children.some(
-    (child) => child.type === 'folder' && !child.deletedAt && child.slug?.startsWith(prefix)
-  )
-    ? docsFolderId
-    : undefined;
-}
-
-/**
- * The resolver every WRITE consumer uses. Slug first; a corroborated slugless folder is adopted
- * and stamped, so identity converges instead of the tree being rebuilt (and its documents
- * stranded) just because the marker was cleared.
- */
-export async function resolveTeamFolderForWrite(
-  teamId: string,
-  docsFolderId: string | undefined,
-  db: TaskPlannerDatabase = defaultDb
-): Promise<string | undefined> {
-  const bySlug = await resolveTeamFolder(teamId, docsFolderId, db);
-  if (bySlug !== undefined || docsFolderId === undefined) return bySlug;
-
-  const adopted = await corroborateTeamFolder(teamId, docsFolderId, db);
-  if (adopted !== undefined) {
-    await db.notes.update(adopted, {
-      slug: teamFolderSlug(teamId),
-      updatedAt: new Date().toISOString(),
-    });
-  }
-  return adopted;
-}
-
-/**
- * The resolver the delete path uses. Same proof, but it never writes: a hard delete must not
- * stamp a marker onto a folder it is about to destroy, and must not repair state it is removing.
- */
-export async function resolveTeamFolderForDelete(
-  teamId: string,
-  docsFolderId: string | undefined,
-  db: TaskPlannerDatabase = defaultDb
-): Promise<string | undefined> {
-  const bySlug = await resolveTeamFolder(teamId, docsFolderId, db);
-  if (bySlug !== undefined || docsFolderId === undefined) return bySlug;
-  return corroborateTeamFolder(teamId, docsFolderId, db);
-}
-
 /** CR-01/WR-01: a team folder's identity marker, stamped at creation. */
 export function teamFolderSlug(teamId: string): string {
   return `ai-team:${teamId}`;
 }
+
+/** The shared root's own marker, so a forged setting cannot point it at a user folder (WR-03). */
+export const AI_TEAMS_DOCS_ROOT_SLUG = 'ai-root';
 
 /**
  * CR-07: a member folder's identity is this slug, never its title. Display names are not unique
@@ -156,7 +89,12 @@ export function memberFolderSlug(teamId: string, agentId: string): string {
 
 /**
  * D-08b: lazy root. Reads the setting; creates the root and rewrites the setting when the
- * setting is missing or names a dead/non-folder note.
+ * setting is missing or names anything other than a live folder carrying the root slug.
+ *
+ * WR-03: the setting is a plain `settings` row restored verbatim from backup, so a payload that
+ * pointed it at a user folder would make every team tree a child of that folder — deleting the
+ * user folder from Docs would then take every team's tree with it. The slug check is what makes
+ * the setting a hint rather than an authority.
  *
  * No transaction here — this runs inside `createTeam`'s and `ensureTeamDocsReady`'s ambient
  * transaction, and a nested one would split the rollback.
@@ -164,11 +102,22 @@ export function memberFolderSlug(teamId: string, agentId: string): string {
 export async function ensureDocsRoot(db: TaskPlannerDatabase = defaultDb): Promise<string> {
   const setting = await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY);
   const stored = typeof setting?.value === 'string' ? setting.value : undefined;
-  if (stored !== undefined && (await isLiveFolder(stored, db))) return stored;
+  if (stored !== undefined) {
+    const row = await db.notes.get(stored);
+    if (row && !row.deletedAt && row.type === 'folder' && row.slug === AI_TEAMS_DOCS_ROOT_SLUG) {
+      return stored;
+    }
+  }
 
   const root = await createNote(
-    { title: AI_TEAMS_DOCS_ROOT_TITLE, body: '', type: 'folder' },
-    db
+    {
+      title: AI_TEAMS_DOCS_ROOT_TITLE,
+      body: '',
+      type: 'folder',
+      slug: AI_TEAMS_DOCS_ROOT_SLUG,
+    },
+    db,
+    { allowReservedSlug: true }
   );
   await db.settings.put({ key: AI_TEAMS_DOCS_ROOT_SETTING_KEY, value: root.id });
   return root.id;
@@ -212,7 +161,8 @@ export async function createMemberFolder(
         ? { slug: memberFolderSlug(identity.teamId, identity.agentId) }
         : {}),
     },
-    db
+    db,
+    { allowReservedSlug: true }
   );
   return folder.id;
 }
@@ -269,7 +219,8 @@ export async function createTeamDocsTree(
       parentId: rootId,
       slug: teamFolderSlug(teamId),
     },
-    db
+    db,
+    { allowReservedSlug: true }
   );
 
   const memberFolderIds = new Map<string, string>();
@@ -318,21 +269,32 @@ async function collectSubtreeIds(
  * soft-deleted tree would still occupy the notes table and surface in Trash.
  *
  * The shared `AI Teams` root and its setting are never touched; other teams may still use them.
+ *
+ * CR-05: a handle that names a live folder but cannot be proven is a REFUSAL, not a no-op.
+ * Silently returning deleted the team row and left the tree and its documents behind with no
+ * handle left — invisible to the owner, and unreachable afterwards.
+ *
+ * WR-02: resolution happens BEFORE any mutation. `detachNoteReferences` clears the very member
+ * handles the proof would read, so resolving after it would silently refuse.
  */
 export async function deleteTeamDocsTree(
   teamFolderId: string | undefined,
-  db: TaskPlannerDatabase,
-  ownerTeamId: string
+  ownerTeamId: string,
+  db: TaskPlannerDatabase = defaultDb
 ): Promise<void> {
   if (teamFolderId === undefined) return;
 
-  // CR-01/CR-06: the ONE resolver decides whether this handle is really this team's folder.
-  // It refuses the shared root, a user document, a user folder and another team's folder, and it
-  // does NOT depend on the folder still being a child of the *current* root — the owner can
-  // delete the `AI Teams` root from Docs, after which a parent-shape rule would silently delete
-  // nothing and leak the whole tree. CR-02: a cleared slug is corroborated by app-owned rows
-  // instead of leaking the tree.
-  if ((await resolveTeamFolderForDelete(ownerTeamId, teamFolderId, db)) === undefined) return;
+  const resolved = await resolveTeamFolder(ownerTeamId, teamFolderId, db);
+  if (resolved === undefined) {
+    const row = await db.notes.get(teamFolderId);
+    if (row && !row.deletedAt) {
+      throw new Error(
+        'Không xác định được thư mục tài liệu của nhóm. Huỷ nhóm đã dừng lại để không xoá nhầm.'
+      );
+    }
+    // The handle names a row that is already gone — nothing to delete.
+    return;
+  }
 
   const ids = await collectSubtreeIds(teamFolderId, db);
 
@@ -383,11 +345,9 @@ export async function ensureTeamDocsReady(
       const nameFor = (agentId: string, employeeName: string | undefined): string =>
         agentId === team.leadId ? (lead?.name ?? agentId) : (employeeName ?? agentId);
 
-      // CR-05: the handle is validated by the ONE resolver, not by `isLiveFolder` alone — a
-      // restored id naming the shared root or another team's folder must rebuild, not be used.
-      // CR-02: a cleared slug is adopted from app-owned rows and re-stamped, so the tree and its
-      // documents survive instead of being rebuilt beside a stranded copy.
-      const teamFolderId = await resolveTeamFolderForWrite(teamId, team.docsFolderId, db);
+      // CR-01: the ONE team-folder resolver. A handle that does not carry this team's slug is
+      // absent, and a fresh tree is built — adoption was an attack surface, not a safety net.
+      const teamFolderId = await resolveTeamFolder(teamId, team.docsFolderId, db);
 
       if (teamFolderId !== undefined) {
         const memberFolderIds = new Map<string, string>();
@@ -395,23 +355,41 @@ export async function ensureTeamDocsReady(
 
         for (const row of rows) {
           const agent = await db.aiEmployees.get(row.agentId);
+
+          // WR-01: duplicate `agentId` rows are one agent and therefore ONE zone. Reusing the
+          // folder already resolved for this agent keeps the second row stable instead of
+          // minting a fresh folder every turn (the slug match is the same for both rows, so a
+          // per-row fallback would still grow the tree). `validateBackup` now rejects the state
+          // on import; this keeps an existing local one from drifting.
+          const already = memberFolderIds.get(row.agentId);
+          if (already !== undefined) {
+            if (row.docsFolderId !== already) {
+              await db.aiTeamMembers.update(row.id, { docsFolderId: already });
+            }
+            continue;
+          }
+
           // CR-01/CR-03: identity is the (slug, parent) pair, resolved in ONE place. The handle
           // is only a cache — a stale duplicate, another agent's zone, or a folder the owner
           // dragged elsewhere all resolve to `undefined` and get a fresh zone. Nothing is
           // re-parented: moving rows is what closed a parent cycle (CR-04).
           const owned = await resolveMemberFolder(teamId, row.agentId, teamFolderId, db);
 
-          let folderId: string;
-          if (owned !== undefined && !assigned.has(owned)) {
-            folderId = owned;
-          } else {
-            folderId = await createMemberFolder(
-              teamFolderId,
-              nameFor(row.agentId, agent?.name),
-              db,
-              { teamId, agentId: row.agentId }
-            );
-          }
+          const ownHandle =
+            row.docsFolderId !== undefined &&
+            !assigned.has(row.docsFolderId) &&
+            (await db.notes.get(row.docsFolderId))?.parentId === teamFolderId
+              ? row.docsFolderId
+              : undefined;
+
+          const candidate = owned !== undefined && !assigned.has(owned) ? owned : ownHandle;
+          const folderId =
+            candidate ??
+            (await createMemberFolder(teamFolderId, nameFor(row.agentId, agent?.name), db, {
+              teamId,
+              agentId: row.agentId,
+            }));
+
           assigned.add(folderId);
           if (row.docsFolderId !== folderId) {
             await db.aiTeamMembers.update(row.id, { docsFolderId: folderId });

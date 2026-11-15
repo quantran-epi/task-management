@@ -13,6 +13,7 @@ import { buildLeadTurnRequest } from '../../../../src/services/ai/office/teamPro
 import { EMPLOYEE_READ_ONLY_ALLOWLIST } from '../../../../src/services/ai/chatTurnTools';
 import { AI_DATABASE_TOOLS } from '../../../../src/services/ai/aiTools';
 import { createNote } from '../../../../src/db/repositories/noteRepo';
+import { memberFolderSlug, teamFolderSlug } from '../../../../src/db/repositories/teamDocsRepo';
 import { generateId } from '../../../../src/utils/uuid';
 
 const LONG_BODY = [
@@ -1293,6 +1294,7 @@ describe('teamTools — write_doc folder-scoped document write (AIO-DOCS-02..04,
     teamId,
     threadId,
     agentId,
+    teamFolderId: teamFolder,
     ...overrides,
   });
 
@@ -1313,10 +1315,42 @@ describe('teamTools — write_doc folder-scoped document write (AIO-DOCS-02..04,
     });
     threadId = (await ensureTeamThread(teamId, db)).id;
 
+    // WR-05: `write_doc` re-resolves the caller's zone from (slug, parent), so the fixtures must
+    // carry the identity markers a real tree has.
     const root = await createNote({ type: 'folder', title: 'AI Teams', body: '' }, db);
-    teamFolder = (await createNote({ type: 'folder', title: 'Nhóm Tài Liệu', body: '', parentId: root.id }, db)).id;
-    folderA = (await createNote({ type: 'folder', title: 'An', body: '', parentId: teamFolder }, db)).id;
-    folderB = (await createNote({ type: 'folder', title: 'Bình', body: '', parentId: teamFolder }, db)).id;
+    teamFolder = (
+      await createNote(
+        { type: 'folder', title: 'Nhóm Tài Liệu', body: '', parentId: root.id, slug: teamFolderSlug(teamId) },
+        db,
+        { allowReservedSlug: true }
+      )
+    ).id;
+    folderA = (
+      await createNote(
+        {
+          type: 'folder',
+          title: 'An',
+          body: '',
+          parentId: teamFolder,
+          slug: memberFolderSlug(teamId, agentId),
+        },
+        db,
+        { allowReservedSlug: true }
+      )
+    ).id;
+    folderB = (
+      await createNote(
+        {
+          type: 'folder',
+          title: 'Bình',
+          body: '',
+          parentId: teamFolder,
+          slug: memberFolderSlug(teamId, generateId()),
+        },
+        db,
+        { allowReservedSlug: true }
+      )
+    ).id;
     docInB = (await createNote({ type: 'document', title: 'Bình — nháp', body: 'của Bình', parentId: folderB }, db)).id;
   });
 

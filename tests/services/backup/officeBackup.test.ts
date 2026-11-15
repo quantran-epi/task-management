@@ -232,6 +232,9 @@ async function seedOffice(db: TaskPlannerDatabase): Promise<void> {
       title: 'Squad Alpha',
       body: '',
       type: 'folder',
+      // CR-01/CR-02 (round 7): the `ai-` slug is the ownership proof, so the import validator
+      // checks that a handle names a folder carrying the matching slug.
+      slug: `ai-team:${TEAM_ID}`,
       isPinned: false,
       createdAt: NOW,
       updatedAt: NOW,
@@ -697,6 +700,92 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
     expect(result.valid).toBe(false);
     expect(
       result.errors.some((error) => error.table === 'aiTeamMembers' && error.field === 'teamId')
+    ).toBe(true);
+  });
+
+  // CR-01/CR-02 (round 7): the `ai-` slug is the ONLY ownership proof for a team's docs tree, and
+  // a hard delete acts on it. A payload that forges a slug on a user folder — or points a handle
+  // at a folder that does not carry the matching slug — must be refused before any write.
+  it('rejects a forged reserved slug on a folder no team row names (CR-02)', async () => {
+    await seedOffice(sourceDb);
+    const envelope = await exportBackupPayload(sourceDb);
+
+    const forged = {
+      ...envelope,
+      tables: {
+        ...envelope.tables,
+        notes: [
+          ...(envelope.tables.notes ?? []),
+          {
+            id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+            title: 'Thư mục người dùng',
+            body: '',
+            type: 'folder',
+            slug: `ai-team:${TEAM_ID}`,
+            isPinned: false,
+            createdAt: NOW,
+            updatedAt: NOW,
+          },
+        ],
+      },
+    };
+
+    const result = validateBackupPayload(forged);
+
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((error) => error.table === 'notes' && error.field === 'slug')
+    ).toBe(true);
+  });
+
+  // CR-01: a handle pointing at a user folder must not survive import, or the next turn would
+  // adopt it and `deleteTeam` would destroy the user's data.
+  it('rejects a docsFolderId naming a folder without the team slug (CR-01)', async () => {
+    await seedOffice(sourceDb);
+    const envelope = await exportBackupPayload(sourceDb);
+
+    const hijacked = {
+      ...envelope,
+      tables: {
+        ...envelope.tables,
+        notes: (envelope.tables.notes ?? []).map((note) =>
+          note.id === TEAM_DOCS_FOLDER_ID ? { ...note, slug: undefined } : note
+        ),
+      },
+    };
+
+    const result = validateBackupPayload(hijacked);
+
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((error) => error.table === 'aiTeams' && error.field === 'docsFolderId')
+    ).toBe(true);
+  });
+
+  // WR-01 (round 7): duplicate `agentId` rows are the state that made the backfill mint a fresh
+  // folder every turn.
+  it('rejects two member rows for one agent in one team (WR-01)', async () => {
+    await seedOffice(sourceDb);
+    const envelope = await exportBackupPayload(sourceDb);
+
+    const duplicated = {
+      ...envelope,
+      tables: {
+        ...envelope.tables,
+        aiTeamMembers: [
+          ...(envelope.tables.aiTeamMembers ?? []),
+          { ...employeeMember, id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' },
+        ],
+      },
+    };
+
+    const result = validateBackupPayload(duplicated);
+
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some(
+        (error) => error.table === 'aiTeamMembers' && error.field === 'agentId'
+      )
     ).toBe(true);
   });
 

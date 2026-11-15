@@ -4,7 +4,7 @@ import { TaskPlannerDatabase } from '../../src/db/index';
 import { SCHEMA_V25, LATEST_SCHEMA_VERSION } from '../../src/db/schema';
 
 /**
- * V25 → V26 upgrade proof (Phase 39, CR-01, D-14).
+ * V25 → V26 upgrade proof (Phase 39, CR-01, D-14), plus the V27 payload-only bump (Phase 41).
  *
  * A pre-39 build numbered every skill-version row, including pendings and rejections. The
  * V26 hook strips the key from non-approved rows so `max(approved) + 1` cannot collide with
@@ -48,7 +48,7 @@ describe('Dexie schema migration (Phase 39 CR-01 + Phase 41 V27 payload bump)', 
   let upgraded: TaskPlannerDatabase | undefined;
 
   beforeEach(() => {
-    dbName = 'TestSchemaV26MigrationDB_' + Math.random().toString(36).slice(2);
+    dbName = 'TestSchemaV27MigrationDB_' + Math.random().toString(36).slice(2);
   });
 
   afterEach(async () => {

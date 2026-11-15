@@ -13,6 +13,8 @@ import { AiSkillVersionInputSchema } from '../../../validation/aiOfficeSchemas';
 import { wrapField, wrapUntrusted } from '../untrustedData';
 import { USER_PARTICIPANT_ID } from '../../../types/teamChat';
 import { createNote, getNotesByFolder, updateNote } from '../../../db/repositories/noteRepo';
+import { NOTE_BODY_MAX_LENGTH, NOTE_TITLE_MAX_LENGTH } from '../../../validation/schemas';
+import { resolveMemberFolder } from '../../../db/repositories/teamDocsRepo';
 
 /**
  * AI Office team tools (D-11, D-24, D-26, D-27, D-33).
@@ -46,6 +48,11 @@ export interface TeamToolContext {
    * Phase 41 D-05: the caller's own docs folder. Absent means the tree is not ready.
    */
   folderId?: string | undefined;
+  /**
+   * WR-05: the team folder, so `write_doc` can re-resolve the caller's zone instead of trusting
+   * the id it was handed. Absent means the tree is not ready.
+   */
+  teamFolderId?: string | undefined;
   /** Phase 41 D-02b: the caller's display name, used as the title prefix. */
   agentName?: string | undefined;
 }
@@ -759,9 +766,9 @@ async function proposeSkillVersion(
  * client-supplied `parentId` in the arguments is never read — and `type` is the literal
  * `'document'` so an agent can never mint a folder and widen its own write area.
  */
-/** Mirrors `NoteInputSchema`'s caps so an over-long field is a refusal code, not a throw. */
-const MAX_DOC_TITLE_LENGTH = 120;
-const MAX_DOC_BODY_LENGTH = 50000;
+/** IN-02: imported, not mirrored — a schema change cannot silently desync the refusal caps. */
+const MAX_DOC_TITLE_LENGTH = NOTE_TITLE_MAX_LENGTH;
+const MAX_DOC_BODY_LENGTH = NOTE_BODY_MAX_LENGTH;
 
 /**
  * WR-03/IN-04: a whitelist, not a `!== 'folder'` blacklist. `NOTE_TYPES` also holds `diagram`,
@@ -800,6 +807,21 @@ async function writeDoc(args: Record<string, any>, ctx: TeamToolContext): Promis
   // WR-02: the owner can delete the member folder mid-turn. Writing anyway would create a note
   // with a dangling `parentId` that `DocFolderTree` never shows — success reported for a
   // document the user cannot see. The truthful outcome is `TEAM_DOCS_NOT_READY`.
+  //
+  // WR-05: shape is not ownership. Re-resolve the caller's zone from its identity (slug + team
+  // folder) so a stale or crossed `ctx.folderId` cannot write into another agent's area — this
+  // is the last line of defence, and the coordinator's map is not a proof.
+  if (ctx.teamFolderId === undefined) {
+    return JSON.stringify(
+      refuse('TEAM_DOCS_NOT_READY', 'Thư mục tài liệu của bạn chưa sẵn sàng.')
+    );
+  }
+  const owned = await resolveMemberFolder(ctx.teamId, ctx.agentId, ctx.teamFolderId, ctx.db);
+  if (owned === undefined || owned !== folderId) {
+    return JSON.stringify(
+      refuse('TEAM_DOCS_NOT_READY', 'Thư mục tài liệu của bạn chưa sẵn sàng.')
+    );
+  }
   const folder = await ctx.db.notes.get(folderId);
   if (!folder || folder.deletedAt || folder.type !== 'folder') {
     return JSON.stringify(
