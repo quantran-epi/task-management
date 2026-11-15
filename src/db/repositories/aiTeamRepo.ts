@@ -593,7 +593,7 @@ export async function addTeamMember(
       // same agent must reuse it. Identity is the folder's slug (teamId + agentId), never the
       // display name — two agents named "An" must not share a zone.
       const reusableFolderId = liveTree
-        ? await findMemberFolderForAgent(validated.teamId, validated.agentId, db)
+        ? await findMemberFolderForAgent(validated.teamId, validated.agentId, teamFolderId, db)
         : undefined;
 
       const member: AiTeamMember = {

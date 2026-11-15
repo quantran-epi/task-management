@@ -47,23 +47,26 @@ export async function isChildFolderOf(
 }
 
 /**
- * CR-05/CR-06/CR-01: the ONE place a team folder handle is validated, used by every consumer
- * (backfill, delete, rename, add-member, lead write).
+ * CR-01: the ONE place a team folder handle is validated, used by every consumer (backfill,
+ * delete, rename, add-member, lead write).
  *
- * Identity is a slug stamped on the folder row, never a parent shape and never the absence of a
- * rival claim:
+ * Identity is the slug stamped at creation, and NOTHING else. Every weaker proof failed:
  *
- * - A parent-shape rule ("direct child of the current root") over-refuses: the `AI Teams` root is
- *   an ordinary folder the owner can delete from Docs, after which `ensureDocsRoot` mints a new
- *   one and every existing team folder is parented to the old row — `deleteTeam` would then
- *   silently delete nothing and leak the tree (CR-06).
- * - "No other team claims it" under-refuses: a user folder the owner created is claimed by
- *   nobody, so a corrupted backup pointing a team at it would let `deleteTeam` hard-delete the
- *   user's folder and every document inside (CR-01).
+ * - Parent shape ("direct child of the current root") over-refuses — the `AI Teams` root is an
+ *   ordinary folder the owner can delete, and every existing team folder is then parented to a
+ *   dead row.
+ * - "No rival team claims it" under-refuses — a user folder the owner created is claimed by
+ *   nobody, so a corrupted backup pointing a team at it made `deleteTeam` hard-delete the user's
+ *   folder and every document inside.
+ * - A parent-shape *fallback* for slugless trees re-opened the same hole: any live folder under
+ *   the root (including a member folder dragged there) satisfied it.
  *
- * The slug is the only proof that survives both. Pre-41 trees carry no slug; for those the
- * parent-shape rule is the fallback, which a user folder cannot satisfy unless the owner
- * deliberately parented it under the AI Teams root.
+ * Phase 41 has not shipped, so there is no slugless production tree to support; the fallback is
+ * gone. A handle that does not carry exactly this team's slug is treated as absent and rebuilt.
+ *
+ * Ceiling: `slug` is a Note field the owner can edit through the docs UI, so this is an
+ * accident-proof marker, not a security boundary. That matches the threat model — a corrupted
+ * backup, not a hostile owner.
  */
 export async function resolveTeamFolder(
   teamId: string,
@@ -75,18 +78,7 @@ export async function resolveTeamFolder(
   const row = await db.notes.get(docsFolderId);
   if (!row || row.deletedAt || row.type !== 'folder') return undefined;
 
-  const rootSetting = await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY);
-  const rootId = typeof rootSetting?.value === 'string' ? rootSetting.value : undefined;
-  if (rootId !== undefined && rootId === docsFolderId) return undefined;
-
-  if (row.slug === teamFolderSlug(teamId)) return docsFolderId;
-
-  // A slug naming ANOTHER team is a rival claim, not a pre-41 tree — refuse it.
-  if (row.slug !== undefined && row.slug.startsWith('ai-team:')) return undefined;
-
-  // Pre-41 fallback: the tree predates slugs, so ownership is the root parent. A folder the
-  // owner created elsewhere is refused.
-  return rootId !== undefined && row.parentId === rootId ? docsFolderId : undefined;
+  return row.slug === teamFolderSlug(teamId) ? docsFolderId : undefined;
 }
 
 /** CR-01/WR-01: a team folder's identity marker, stamped at creation. */
@@ -174,21 +166,27 @@ export async function createMemberFolder(
  * folder rather than mint a ` (2)` sibling that strands everything written earlier. Identity is
  * the slug, so two agents with the same display name never share a zone.
  *
- * WR-04: the scan is the whole notes table, not just the team folder's children — the owner can
- * drag a member folder elsewhere in Docs, and abandoning it there would orphan its documents.
- * The caller re-parents a drifted folder back under the team folder.
+ * WR-09: duplicate slugs are possible (a rebuild can mint a second folder before the first is
+ * cleaned up, and `slug` is not unique), so the scan prefers a folder that is a direct child of
+ * this team folder and falls back to the first match. Deterministic either way.
  */
 export async function findMemberFolderForAgent(
   teamId: string,
   agentId: string,
+  teamFolderId?: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<string | undefined> {
   const slug = memberFolderSlug(teamId, agentId);
   // `slug` is not indexed, so a scan is the honest form.
-  const match = (await db.notes.toArray()).find(
+  const matches = (await db.notes.toArray()).filter(
     (note) => note.type === 'folder' && !note.deletedAt && note.slug === slug
   );
-  return match?.id;
+  if (matches.length === 0) return undefined;
+  if (teamFolderId !== undefined) {
+    const child = matches.find((note) => note.parentId === teamFolderId);
+    if (child !== undefined) return child.id;
+  }
+  return matches[0]?.id;
 }
 
 /**
@@ -331,31 +329,37 @@ export async function ensureTeamDocsReady(
 
       if (teamFolderId !== undefined) {
         const memberFolderIds = new Map<string, string>();
-        // CR-07/CR-02: folders already claimed by a sibling row, so a repair never hands one
-        // member's zone to another. Applied to EVERY branch — a restored backup can carry two
-        // rows naming one folder, and accepting both would let one member overwrite the other's
-        // documents.
-        const claimed = new Set<string>();
+        // CR-02: how many rows name each folder, so a folder two rows share is given to neither
+        // and both get a fresh one. Counting (rather than a growing `claimed` set) is what makes
+        // the outcome independent of row order: the first row cannot win a folder the second
+        // also names.
+        const handleCount = new Map<string, number>();
+        for (const row of rows) {
+          if (row.docsFolderId === undefined) continue;
+          handleCount.set(row.docsFolderId, (handleCount.get(row.docsFolderId) ?? 0) + 1);
+        }
+        const assigned = new Set<string>();
+
         for (const row of rows) {
           const agent = await db.aiEmployees.get(row.agentId);
-          // WR-04: identity first, so a folder the owner dragged elsewhere is found and
-          // re-parented instead of being abandoned with every document inside it.
-          const owned = await findMemberFolderForAgent(teamId, row.agentId, db);
-          const handle = (await isChildFolderOf(row.docsFolderId, teamFolderId, db))
-            ? (row.docsFolderId as string)
-            : undefined;
-          const candidate = owned ?? handle;
+          // CR-03: the slug is the identity. A folder found by slug that is not a direct child
+          // of the team folder is NOT re-parented — moving rows is what closed a parent cycle
+          // (CR-04) and what let a stale duplicate win. It is simply not this member's zone.
+          const owned = await findMemberFolderForAgent(teamId, row.agentId, teamFolderId, db);
+          const ownedIsChild =
+            owned !== undefined && (await isChildFolderOf(owned, teamFolderId, db));
+
+          // CR-02: a handle shared by two rows is ambiguous — refuse it for both.
+          const handleUsable =
+            row.docsFolderId !== undefined &&
+            handleCount.get(row.docsFolderId) === 1 &&
+            (await isChildFolderOf(row.docsFolderId, teamFolderId, db));
+
+          const candidate = ownedIsChild ? (owned as string) : handleUsable ? row.docsFolderId : undefined;
 
           let folderId: string;
-          if (candidate !== undefined && !claimed.has(candidate)) {
+          if (candidate !== undefined && !assigned.has(candidate)) {
             folderId = candidate;
-            // WR-04: a slug-owned folder that drifted out of the team folder is brought back.
-            if (handle === undefined) {
-              await db.notes.update(candidate, {
-                parentId: teamFolderId,
-                updatedAt: new Date().toISOString(),
-              });
-            }
           } else {
             folderId = await createMemberFolder(
               teamFolderId,
@@ -364,7 +368,7 @@ export async function ensureTeamDocsReady(
               { teamId, agentId: row.agentId }
             );
           }
-          claimed.add(folderId);
+          assigned.add(folderId);
           if (row.docsFolderId !== folderId) {
             await db.aiTeamMembers.update(row.id, { docsFolderId: folderId });
           }

@@ -10,6 +10,7 @@ import {
   ensureDocsRoot,
   ensureTeamDocsReady,
   isLiveFolder,
+  memberFolderSlug,
   teamFolderSlug,
 } from '../../src/db/repositories/teamDocsRepo';
 import { createEmployee, createLead } from '../../src/db/repositories/aiOfficeRepo';
@@ -627,9 +628,10 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
     expect(await isLiveFolder(b, db)).toBe(true);
   });
 
-  // WR-04: the owner can drag a member folder elsewhere in Docs; the backfill must bring it
-  // back instead of abandoning its documents and minting a sibling.
-  it('re-parents a member folder the owner moved out of the team folder (WR-04)', async () => {
+  // WR-04/CR-04: the owner can drag a member folder elsewhere in Docs. The backfill must NOT
+  // move rows to recover it — moving is what closed a parent cycle. It mints a fresh zone under
+  // the team folder and leaves the drifted folder (and its documents) where the owner put it.
+  it('mints a fresh zone instead of re-parenting a moved member folder (WR-04, CR-04)', async () => {
     const agentId = generateId();
     const team = await seedTeam('Nhóm A', [agentId]);
     const first = await ensureTeamDocsReady(team.id, db);
@@ -643,10 +645,13 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
 
     const second = await ensureTeamDocsReady(team.id, db);
 
-    expect(second.memberFolderIds.get(agentId)).toBe(memberFolderId);
-    expect((await db.notes.get(memberFolderId))?.parentId).toBe(
+    const fresh = second.memberFolderIds.get(agentId);
+    expect(fresh).not.toBe(memberFolderId);
+    expect((await db.notes.get(fresh as string))?.parentId).toBe(
       second.team.docsFolderId as string
     );
+    // The drifted folder is untouched, and no parent cycle was created.
+    expect((await db.notes.get(memberFolderId))?.parentId).toBeUndefined();
     expect((await db.notes.get(doc.id))?.parentId).toBe(memberFolderId);
   });
 
@@ -658,5 +663,89 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
 
     const teamFolder = await db.notes.get(ready.team.docsFolderId as string);
     expect(teamFolder?.slug).toBe(teamFolderSlug(team.id));
+  });
+
+  // CR-01 (round 5): a member folder dragged under the shared root satisfies the old parent
+  // fallback, so deleteTeam destroyed it and its documents.
+  it('refuses to delete a member folder dragged under the root (CR-01)', async () => {
+    const agentId = generateId();
+    const team = await seedTeam('Nhóm A', [agentId]);
+    const ready = await ensureTeamDocsReady(team.id, db);
+    const memberFolderId = ready.memberFolderIds.get(agentId) as string;
+    const doc = await createNote(
+      { title: 'Bản nháp', body: 'x', type: 'document', parentId: memberFolderId },
+      db
+    );
+    const rootId = (await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY))?.value as string;
+    await db.notes.update(memberFolderId, { parentId: rootId });
+
+    await deleteTeamDocsTree(memberFolderId, db, team.id);
+
+    expect(await db.notes.get(memberFolderId)).toBeDefined();
+    expect(await db.notes.get(doc.id)).toBeDefined();
+  });
+
+  // CR-01 (round 5): a user folder filed under the root satisfied the same fallback.
+  it('refuses to delete a user folder filed under the root (CR-01)', async () => {
+    const team = await seedTeam('Nhóm A', [generateId()]);
+    await ensureTeamDocsReady(team.id, db);
+    const rootId = (await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY))?.value as string;
+    const userFolder = await createNote(
+      { title: 'Ghi chú riêng', body: '', type: 'folder', parentId: rootId },
+      db
+    );
+
+    await deleteTeamDocsTree(userFolder.id, db, team.id);
+
+    expect(await db.notes.get(userFolder.id)).toBeDefined();
+  });
+
+  // CR-03 (round 5): a stale duplicate slug folder outside the team tree must not win over the
+  // live one inside it, and must not be re-parented.
+  it('prefers the in-tree folder when a duplicate slug exists (CR-03)', async () => {
+    const agentId = generateId();
+    const team = await seedTeam('Nhóm A', [agentId]);
+    const first = await ensureTeamDocsReady(team.id, db);
+    const inTreeFolderId = first.memberFolderIds.get(agentId) as string;
+    // A stale duplicate elsewhere (a rebuild that was interrupted before cleanup).
+    const stale = await createNote(
+      {
+        title: 'Cũ',
+        body: '',
+        type: 'folder',
+        slug: memberFolderSlug(team.id, agentId),
+      },
+      db
+    );
+
+    const second = await ensureTeamDocsReady(team.id, db);
+
+    expect(second.memberFolderIds.get(agentId)).toBe(inTreeFolderId);
+    // No row was moved: the stale folder is untouched.
+    expect((await db.notes.get(stale.id))?.parentId).toBeUndefined();
+  });
+
+  // CR-04 (round 5): the backfill must never close a parent cycle.
+  it('never creates a parent cycle when folders were moved (CR-04)', async () => {
+    const agentId = generateId();
+    const team = await seedTeam('Nhóm A', [agentId]);
+    const first = await ensureTeamDocsReady(team.id, db);
+    const teamFolderId = first.team.docsFolderId as string;
+    const memberFolderId = first.memberFolderIds.get(agentId) as string;
+
+    // Owner moves the member folder to the top level, then puts the team folder inside it.
+    await db.notes.update(memberFolderId, { parentId: undefined });
+    await db.notes.update(teamFolderId, { parentId: memberFolderId });
+
+    await ensureTeamDocsReady(team.id, db);
+
+    // Walk up from the team folder; it must terminate without revisiting a row.
+    const seen = new Set<string>();
+    let cursor: string | undefined = teamFolderId;
+    while (cursor !== undefined) {
+      expect(seen.has(cursor)).toBe(false);
+      seen.add(cursor);
+      cursor = (await db.notes.get(cursor))?.parentId;
+    }
   });
 });
