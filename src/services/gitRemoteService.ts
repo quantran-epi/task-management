@@ -12,6 +12,11 @@ import type {
  * Canonical POSIX single-quote escape. Security-critical: every user/AI-derived string
  * that reaches a remote shell goes through this. Kept in one place so a fix reaches all
  * callers (research, git, change-pack, claude CLI).
+ *
+ * Ceiling: this protects the SHELL only. Git still parses any argv element beginning with
+ * `-` as an option, so `git log '--output=/path'` truncates that file even though the value
+ * was escaped. Every revision-shaped argument therefore also goes through `--end-of-options`
+ * (CR-01), and the `git_read` handler refuses a leading `-` before it gets here.
  */
 export function escapeShellArg(arg: string): string {
   return `'${arg.replace(/'/g, "'\\''")}'`;
@@ -70,29 +75,26 @@ export async function checkDirtyStatus(
   repoPath: string,
   secret?: string
 ): Promise<RemoteGitStatus> {
-  const output = await runGitCommand(config, repoPath, ['status', '--porcelain=v1'], secret);
-  const lines = output.split('\n').filter((l) => l.length > 0);
+  // WR-03: `-z` emits unquoted, NUL-separated paths, so a path with spaces or a rename no
+  // longer arrives quoted (`"a b.txt"`) or arrow-joined (`a -> b`). A rename record is
+  // `XY <new>\0<old>\0`; the new path is the one that exists now.
+  const output = await runGitCommand(config, repoPath, ['status', '--porcelain=v1', '-z'], secret);
+  const tokens = output.split('\0').filter((t) => t.length > 0);
 
-  if (lines.length === 0) {
-    return {
-      isClean: true,
-      uncommittedFiles: [],
-    };
+  const uncommittedFiles: RemoteGitStatus['uncommittedFiles'] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const entry = tokens[i]!;
+    if (entry.length < 4) continue;
+    const indexStatus = entry.charAt(0);
+    const workingTreeStatus = entry.charAt(1);
+    const path = entry.slice(3);
+    // A rename/copy carries its source as the next token; skip it so it is not read as a path.
+    if (indexStatus === 'R' || indexStatus === 'C') i += 1;
+    uncommittedFiles.push({ path, indexStatus, workingTreeStatus });
   }
 
-  const uncommittedFiles = lines.map((line) => {
-    const indexStatus = line.charAt(0);
-    const workingTreeStatus = line.charAt(1);
-    const path = line.slice(3).trim();
-    return {
-      path,
-      indexStatus,
-      workingTreeStatus,
-    };
-  });
-
   return {
-    isClean: false,
+    isClean: uncommittedFiles.length === 0,
     uncommittedFiles,
   };
 }
@@ -140,7 +142,9 @@ export async function getCommitLog(
   const output = await runGitCommand(
     config,
     repoPath,
-    ['log', rangeArg, "--format='%x1e%H%x00%h%x00%an%x00%ad%x00%s'", '--date=iso'],
+    // CR-01: options first, revision after `--end-of-options`. Without the terminator a
+    // range beginning with `-` (e.g. `--output=/path..main`) is parsed as a git option.
+    ['log', "--format='%x1e%H%x00%h%x00%an%x00%ad%x00%s'", '--date=iso', '--end-of-options', rangeArg],
     secret
   );
   return parseCommitLog(output);
@@ -162,11 +166,13 @@ export async function getRecentCommits(
     repoPath,
     [
       'log',
-      escapeShellArg(branch),
       '-n',
       String(limit),
       "--format='%x1e%H%x00%h%x00%an%x00%ad%x00%s'",
       '--date=iso',
+      // CR-01: every option precedes the terminator; the branch is a revision, never an option.
+      '--end-of-options',
+      escapeShellArg(branch),
     ],
     secret
   );
@@ -182,11 +188,12 @@ export async function getDiffSummary(
 ): Promise<RemoteDiffSummary> {
   const rangeArg = escapeShellArg(`${base}..${target}`);
 
-  // Get target branch HEAD sha
+  // Get target branch HEAD sha. `--verify` is required: plain `rev-parse` echoes the literal
+  // `--end-of-options` back as a revision (CR-01).
   const headShaOut = await runGitCommand(
     config,
     repoPath,
-    ['rev-parse', escapeShellArg(target)],
+    ['rev-parse', '--verify', '--end-of-options', escapeShellArg(target)],
     secret
   );
   const headSha = headShaOut.trim();
@@ -194,67 +201,46 @@ export async function getDiffSummary(
   // Get commit list
   const commits = await getCommitLog(config, repoPath, base, target, secret);
 
-  // Get numstat output: <added>\t<deleted>\t<path>
+  // WR-12: `--no-ext-diff --no-textconv` so repo-local diff drivers never run on read.
+  // CR-01: `--end-of-options` before the range.
+  const diffFlags = ['--no-ext-diff', '--no-textconv', '--end-of-options', rangeArg];
+
+  // Get numstat output — `-z` so a rename arrives as two NUL-separated paths, not `a => b`.
   const numstatOut = await runGitCommand(
     config,
     repoPath,
-    ['diff', '--numstat', rangeArg],
+    ['diff', '--numstat', '-z', '-M', ...diffFlags],
     secret
   );
 
-  // Get name-status output: <status>\t<path>
+  // Get name-status output — same `-z` shape.
   const nameStatusOut = await runGitCommand(
     config,
     repoPath,
-    ['diff', '--name-status', rangeArg],
+    ['diff', '--name-status', '-z', '-M', ...diffFlags],
     secret
   );
 
   const statusMap = new Map<string, 'added' | 'modified' | 'deleted' | 'renamed'>();
-  for (const line of nameStatusOut.split('\n')) {
-    if (!line.trim()) continue;
-    const parts = line.split('\t');
-    const statusCode = parts[0]?.charAt(0).toUpperCase();
-    // For renames, target path is the second filename
-    const filePath = parts.length > 2 ? parts[2]?.trim() : parts[1]?.trim();
-    if (!filePath) continue;
-
-    let status: 'added' | 'modified' | 'deleted' | 'renamed' = 'modified';
-    if (statusCode === 'A') status = 'added';
-    else if (statusCode === 'D') status = 'deleted';
-    else if (statusCode === 'R') status = 'renamed';
-
-    statusMap.set(filePath, status);
+  for (const { path, status } of parseNameStatusZ(nameStatusOut)) {
+    statusMap.set(path, status);
   }
 
   const files: RemoteFileStat[] = [];
   let totalAdditions = 0;
   let totalDeletions = 0;
 
-  for (const line of numstatOut.split('\n')) {
-    if (!line.trim()) continue;
-    const parts = line.split('\t');
-    if (parts.length >= 3) {
-      const addedStr = parts[0]?.trim();
-      const deletedStr = parts[1]?.trim();
-      const filePath = parts[2]?.trim() ?? '';
-
-      // Binary files show '-' for added/deleted lines
-      const additions = addedStr === '-' ? 0 : parseInt(addedStr || '0', 10) || 0;
-      const deletions = deletedStr === '-' ? 0 : parseInt(deletedStr || '0', 10) || 0;
-
-      totalAdditions += additions;
-      totalDeletions += deletions;
-
-      const fileStatus = statusMap.get(filePath) ?? 'modified';
-
-      files.push({
-        path: filePath,
-        status: fileStatus,
-        additions,
-        deletions,
-      });
-    }
+  for (const { path, additions, deletions } of parseNumstatZ(numstatOut)) {
+    totalAdditions += additions;
+    totalDeletions += deletions;
+    files.push({
+      path,
+      // WR-02: both sides now key on the SAME target path, so a rename is reported as
+      // `renamed` instead of falling back to `modified` with an `a => b` path.
+      status: statusMap.get(path) ?? 'modified',
+      additions,
+      deletions,
+    });
   }
 
   return {
@@ -266,6 +252,75 @@ export async function getDiffSummary(
     totalAdditions,
     totalDeletions,
   };
+}
+
+type DiffFileStatus = 'added' | 'modified' | 'deleted' | 'renamed';
+
+/**
+ * Parses `git diff --name-status -z`: `<status>\0<path>\0`, and for a rename/copy
+ * `<R100|C100>\0<old>\0<new>\0`. Returns the TARGET path, which is what exists after the diff.
+ */
+export function parseNameStatusZ(output: string): Array<{ path: string; status: DiffFileStatus }> {
+  const tokens = output.split('\0');
+  const rows: Array<{ path: string; status: DiffFileStatus }> = [];
+
+  for (let i = 0; i < tokens.length; i++) {
+    const code = tokens[i];
+    if (!code) continue;
+    const letter = code.charAt(0).toUpperCase();
+    const isRename = letter === 'R' || letter === 'C';
+    // A rename/copy consumes two path tokens; everything else consumes one.
+    const path = isRename ? tokens[i + 2] : tokens[i + 1];
+    i += isRename ? 2 : 1;
+    if (!path) continue;
+
+    const status: DiffFileStatus =
+      letter === 'A'
+        ? 'added'
+        : letter === 'D'
+          ? 'deleted'
+          : letter === 'R'
+            ? 'renamed'
+            : 'modified';
+    rows.push({ path, status });
+  }
+
+  return rows;
+}
+
+/**
+ * Parses `git diff --numstat -z`: `<added>\t<deleted>\t<path>\0`, and for a rename
+ * `<added>\t<deleted>\t\0<old>\0<new>\0` — the empty third field is what distinguishes it.
+ * Returns the TARGET path so the join with `parseNameStatusZ` lands.
+ */
+export function parseNumstatZ(
+  output: string
+): Array<{ path: string; additions: number; deletions: number }> {
+  const tokens = output.split('\0');
+  const rows: Array<{ path: string; additions: number; deletions: number }> = [];
+
+  for (let i = 0; i < tokens.length; i++) {
+    const entry = tokens[i];
+    if (!entry) continue;
+    const parts = entry.split('\t');
+    if (parts.length < 3) continue;
+
+    // Binary files show '-' for added/deleted lines.
+    const additions = parts[0] === '-' ? 0 : parseInt(parts[0] || '0', 10) || 0;
+    const deletions = parts[1] === '-' ? 0 : parseInt(parts[1] || '0', 10) || 0;
+
+    let path = parts[2];
+    if (!path) {
+      // Rename: the paths are the next two tokens; the target is the second.
+      path = tokens[i + 2];
+      i += 2;
+    }
+    if (!path) continue;
+
+    rows.push({ path, additions, deletions });
+  }
+
+  return rows;
 }
 
 export async function getFileDiff(
@@ -280,7 +335,9 @@ export async function getFileDiff(
   return runGitCommand(
     config,
     repoPath,
-    ['diff', rangeArg, '--', escapeShellArg(filePath)],
+    // WR-12: no repo-local diff drivers. CR-01: `--end-of-options` before the range; the
+    // `--` path separator then keeps the file path a path.
+    ['diff', '--no-ext-diff', '--no-textconv', '--end-of-options', rangeArg, '--', escapeShellArg(filePath)],
     secret
   );
 }
@@ -295,7 +352,7 @@ export async function checkHeadDrift(
   const stdout = await runGitCommand(
     config,
     repoPath,
-    ['rev-parse', escapeShellArg(targetBranch)],
+    ['rev-parse', '--verify', '--end-of-options', escapeShellArg(targetBranch)],
     secret
   );
   const currentHeadSha = stdout.trim();

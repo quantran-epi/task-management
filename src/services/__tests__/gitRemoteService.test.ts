@@ -116,12 +116,9 @@ describe('gitRemoteService - Task 1 Tracer Slice', () => {
       expect(status.uncommittedFiles).toEqual([]);
     });
 
-    it('parses uncommitted files from porcelain output', async () => {
-      const mockPorcelain = [
-        ' M src/index.ts',
-        'M  package.json',
-        '?? new-file.txt',
-      ].join('\n');
+    it('parses uncommitted files from porcelain -z output', async () => {
+      // WR-03: `-z` is NUL-separated and never quotes, so a path with spaces arrives intact.
+      const mockPorcelain = [' M src/index.ts', 'M  package.json', '?? new-file.txt'].join('\0');
 
       vi.mocked(sshService.execRemoteCommand).mockResolvedValueOnce({
         stdout: mockPorcelain,
@@ -136,6 +133,27 @@ describe('gitRemoteService - Task 1 Tracer Slice', () => {
         { path: 'src/index.ts', indexStatus: ' ', workingTreeStatus: 'M' },
         { path: 'package.json', indexStatus: 'M', workingTreeStatus: ' ' },
         { path: 'new-file.txt', indexStatus: '?', workingTreeStatus: '?' },
+      ]);
+      expect(sshService.execRemoteCommand).toHaveBeenCalledWith(
+        dummyConfig,
+        "git -C '/var/repo' --no-pager status --porcelain=v1 -z",
+        undefined
+      );
+    });
+
+    it('keeps a path with spaces intact and reads the target of a rename (WR-03)', async () => {
+      // `R  new\0old\0` — the source token must not be reported as its own file.
+      const mockPorcelain = ['R  renamed space.txt', 'plain space.txt'].join('\0');
+
+      vi.mocked(sshService.execRemoteCommand).mockResolvedValueOnce({
+        stdout: mockPorcelain,
+        stderr: '',
+        exitStatus: 0,
+      });
+
+      const status = await checkDirtyStatus(dummyConfig, '/var/repo');
+      expect(status.uncommittedFiles).toEqual([
+        { path: 'renamed space.txt', indexStatus: 'R', workingTreeStatus: ' ' },
       ]);
     });
   });
@@ -182,24 +200,20 @@ describe('gitRemoteService - Task 1 Tracer Slice', () => {
         exitStatus: 0,
       });
 
-      // 3. diff --numstat
-      const mockNumstat = [
-        '10\t2\tsrc/payment.ts',
-        '25\t0\tsrc/config.ts',
-        '-\t-\tassets/logo.png',
-      ].join('\n');
+      // 3. diff --numstat — `-z` shape, NUL-separated.
+      const mockNumstat = ['10\t2\tsrc/payment.ts', '25\t0\tsrc/config.ts', '-\t-\tassets/logo.png'].join(
+        '\0'
+      );
       vi.mocked(sshService.execRemoteCommand).mockResolvedValueOnce({
         stdout: mockNumstat,
         stderr: '',
         exitStatus: 0,
       });
 
-      // 4. diff --name-status
-      const mockNameStatus = [
-        'M\tsrc/payment.ts',
-        'A\tsrc/config.ts',
-        'A\tassets/logo.png',
-      ].join('\n');
+      // 4. diff --name-status — `-z` shape: `<status>\0<path>\0`.
+      const mockNameStatus = ['M', 'src/payment.ts', 'A', 'src/config.ts', 'A', 'assets/logo.png'].join(
+        '\0'
+      );
       vi.mocked(sshService.execRemoteCommand).mockResolvedValueOnce({
         stdout: mockNameStatus,
         stderr: '',
@@ -221,6 +235,62 @@ describe('gitRemoteService - Task 1 Tracer Slice', () => {
         { path: 'assets/logo.png', status: 'added', additions: 0, deletions: 0 },
       ]);
     });
+
+    // WR-02: `--numstat` and `--name-status` disagree on rename shape unless both are `-z`.
+    // A rename must be reported as `renamed` with the TARGET path, not `modified` with `a => b`.
+    it('reports a rename as renamed with the target path (WR-02)', async () => {
+      vi.mocked(sshService.execRemoteCommand).mockResolvedValueOnce({
+        stdout: 'a1b2c3d4e5f60000000000000000000000000000\n',
+        stderr: '',
+        exitStatus: 0,
+      });
+      vi.mocked(sshService.execRemoteCommand).mockResolvedValueOnce({
+        stdout: '',
+        stderr: '',
+        exitStatus: 0,
+      });
+      // `--numstat -z` for a rename: `0\t0\t\0old\0new\0`.
+      vi.mocked(sshService.execRemoteCommand).mockResolvedValueOnce({
+        stdout: '0\t0\t\0big.txt\0big2.txt\0',
+        stderr: '',
+        exitStatus: 0,
+      });
+      // `--name-status -z` for the same rename: `R100\0old\0new\0`.
+      vi.mocked(sshService.execRemoteCommand).mockResolvedValueOnce({
+        stdout: 'R100\0big.txt\0big2.txt\0',
+        stderr: '',
+        exitStatus: 0,
+      });
+
+      const summary = await getDiffSummary(dummyConfig, '/var/repo', 'main', 'feat2');
+      expect(summary.files).toEqual([
+        { path: 'big2.txt', status: 'renamed', additions: 0, deletions: 0 },
+      ]);
+    });
+
+    // CR-01: the revision must follow `--end-of-options`, or a `-`-leading range is an option.
+    it('puts --end-of-options before every revision argument (CR-01)', async () => {
+      vi.mocked(sshService.execRemoteCommand).mockResolvedValue({
+        stdout: '',
+        stderr: '',
+        exitStatus: 0,
+      });
+
+      await getDiffSummary(dummyConfig, '/var/repo', 'main', 'feature/pay');
+
+      const commands = vi.mocked(sshService.execRemoteCommand).mock.calls.map((call) => call[1]);
+      expect(commands[0]).toBe(
+        "git -C '/var/repo' --no-pager rev-parse --verify --end-of-options 'feature/pay'"
+      );
+      expect(commands[2]).toBe(
+        "git -C '/var/repo' --no-pager diff --numstat -z -M --no-ext-diff --no-textconv " +
+          "--end-of-options 'main..feature/pay'"
+      );
+      expect(commands[3]).toBe(
+        "git -C '/var/repo' --no-pager diff --name-status -z -M --no-ext-diff --no-textconv " +
+          "--end-of-options 'main..feature/pay'"
+      );
+    });
   });
 
   describe('getFileDiff', () => {
@@ -235,7 +305,8 @@ describe('gitRemoteService - Task 1 Tracer Slice', () => {
       const diff = await getFileDiff(dummyConfig, '/var/repo', 'main', 'feature/pay', 'src/a.ts');
       expect(sshService.execRemoteCommand).toHaveBeenCalledWith(
         dummyConfig,
-        "git -C '/var/repo' --no-pager diff 'main..feature/pay' -- 'src/a.ts'",
+        "git -C '/var/repo' --no-pager diff --no-ext-diff --no-textconv " +
+          "--end-of-options 'main..feature/pay' -- 'src/a.ts'",
         undefined
       );
       expect(diff).toBe(mockDiff);
