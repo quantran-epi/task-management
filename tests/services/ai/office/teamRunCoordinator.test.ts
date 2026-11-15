@@ -110,6 +110,51 @@ vi.mock('../../../../src/utils/desktopNotification', () => ({
   isTauriEnvironment: () => false,
 }));
 
+/**
+ * UAT-41 test 14: the user's row must already be on disk when MCP discovery starts. The probe
+ * is armed by one test and stays false everywhere else, so the wrapper is a pure pass-through
+ * for every other test in this file.
+ */
+const mcpProbe = vi.hoisted(() => ({
+  active: false,
+  threadId: '',
+  userRowsSeen: [] as string[],
+}));
+
+vi.mock('../../../../src/services/ai/mcpClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../../src/services/ai/mcpClient')>();
+  return {
+    ...actual,
+    discoverAllMcpTools: async (db: Parameters<typeof actual.discoverAllMcpTools>[0]) => {
+      if (mcpProbe.active && db) {
+        const rows = await db.chatMessages.where('threadId').equals(mcpProbe.threadId).toArray();
+        for (const row of rows) {
+          if (row.role === 'user') mcpProbe.userRowsSeen.push(String(row.content));
+        }
+      }
+      return actual.discoverAllMcpTools(db);
+    },
+  };
+});
+
+/** UAT-41 test 7: `docsProbe.fail` forces the backfill to reject so the degrade is reachable. */
+const docsProbe = vi.hoisted(() => ({ fail: false }));
+
+vi.mock('../../../../src/db/repositories/teamDocsRepo', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../../../src/db/repositories/teamDocsRepo')>();
+  return {
+    ...actual,
+    ensureTeamDocsReady: async (
+      teamId: Parameters<typeof actual.ensureTeamDocsReady>[0],
+      db: Parameters<typeof actual.ensureTeamDocsReady>[1]
+    ) => {
+      if (docsProbe.fail) throw new Error('boom');
+      return actual.ensureTeamDocsReady(teamId, db);
+    },
+  };
+});
+
 type LoopScript = (options: AiOrchestratorLoopOptions) => Promise<unknown>;
 
 const loopResult = (fullResponse: string) => ({
@@ -6692,6 +6737,54 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       for (const ctx of leadCtx) {
         expect(ctx.role).toBe('lead');
         expect(ctx.folderId).toBeUndefined();
+      }
+    });
+
+    // UAT-41 test 14: a stalled MCP endpoint must never hide the user's own message, so the
+    // row lands before discovery starts.
+    it('persists the user row before MCP discovery can hang', async () => {
+      docsHarness = await createHarness({
+        scripts: { [LEAD_MODEL]: async () => loopResult('Xong.') },
+      });
+      const { db, coordinator, team, threadId } = docsHarness;
+
+      mcpProbe.active = true;
+      mcpProbe.threadId = threadId;
+      mcpProbe.userRowsSeen = [];
+      try {
+        // The flag must be on the ROW, not only in memory: `ensureDocsReady` adopts the row it
+        // re-reads, so a memory-only patch is wiped before `refreshMcpTools` looks at it.
+        await updateTeam(team.id, { mcpEnabled: true }, db);
+        coordinator.setTeamSettings({ mcpEnabled: true });
+        await coordinator.send('Xin chào');
+        await waitForReady(coordinator);
+        expect(mcpProbe.userRowsSeen).toContain('Xin chào');
+      } finally {
+        mcpProbe.active = false;
+        mcpProbe.threadId = '';
+      }
+    });
+
+    // UAT-41 test 7: the degrade still lets the turn finish, and the cause is now diagnosable.
+    it('logs the team id when the docs backfill fails and still finishes the turn', async () => {
+      docsHarness = await createHarness({
+        scripts: { [LEAD_MODEL]: async () => loopResult('Xong.') },
+      });
+      const { team, coordinator } = docsHarness;
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      docsProbe.fail = true;
+      try {
+        await coordinator.send('Xin chào');
+        await waitForReady(coordinator);
+        const hit = warnSpy.mock.calls.find(
+          (call) => typeof call[0] === 'string' && call[0].includes(team.id)
+        );
+        expect(hit).toBeDefined();
+        expect(hit![1]).toBeInstanceOf(Error);
+      } finally {
+        docsProbe.fail = false;
+        warnSpy.mockRestore();
       }
     });
   });

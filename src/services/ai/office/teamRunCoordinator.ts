@@ -1445,11 +1445,12 @@ export function createTeamRunCoordinator(
    * Phase 41 D-05/D-12/D-12b: guarantee the team's docs tree before the turn's tool context is
    * built, so `write_doc` always has a `folderId` to write into.
    *
-   * The bare `catch` is deliberate and is the ONLY reason it exists: a docs failure must never
+   * The `catch` is deliberate and is the ONLY reason it exists: a docs failure must never
    * block a chat turn. An absent folder id makes `write_doc` refuse with
    * `TEAM_DOCS_NOT_READY` — the truthful outcome — whereas a throw here would kill the turn.
-   * The trade: a programming error inside `ensureTeamDocsReady` also lands here silently, so
-   * that function's store list is pinned by its own tests (plans 41-02/41-04).
+   * UAT-41 test 7: the cause is now recorded (team id + error) so a missing tree is
+   * diagnosable; the turn still runs. A programming error inside `ensureTeamDocsReady` also
+   * lands here, so that function's store list is still pinned by its own tests (41-02/41-04).
    */
   async function ensureDocsReady(): Promise<void> {
     if (disposed) return;
@@ -1457,7 +1458,8 @@ export function createTeamRunCoordinator(
       const result = await ensureTeamDocsReady(teamId, db);
       liveTeam = result.team;
       memberFolderIds = result.memberFolderIds;
-    } catch {
+    } catch (err) {
+      console.warn('[teamRunCoordinator] ensureDocsReady failed for team ' + teamId + ':', err);
       memberFolderIds = new Map();
       // IN-04: a previous turn's folder id must not survive a failed backfill — the lead prompt
       // would present a folder that may no longer exist as the place to write the final.
@@ -2514,17 +2516,6 @@ export function createTeamRunCoordinator(
     }
     // The roster load is an await: a dispose during it must not let the turn start.
     if (disposed) return 'blocked';
-    // Phase 41 D-05/D-12: the docs tree must exist before any tool context is built for this
-    // turn. A failure here leaves the map empty and `write_doc` refuses — never a dead turn.
-    await ensureDocsReady();
-    if (disposed) return 'blocked';
-    // Phase 39: same per-turn freshness as the roster — a toggle set since the last turn
-    // must decide THIS turn's tool payload.
-    await refreshMcpTools();
-    if (disposed) return 'blocked';
-    // D-06: a new turn is a reset — the next crossing notifies again. Team-scoped only.
-    resetBudgetWarnings(teamId);
-    lastUserRequest = text;
 
     // 37.1 §1.1: ONE primitive. The message is appended first — always, whatever is running.
     // `to[]` is who must RESPOND; everyone reads it, so the leader can see a message the user
@@ -2534,17 +2525,21 @@ export function createTeamRunCoordinator(
     const recipients = targets.length > 0 ? targets.map((row) => row.id) : [];
     if (recipients.length === 0 && roster.lead) recipients.push(roster.lead.id);
 
+    // UAT-41 test 14: the user's own row lands BEFORE every per-turn preparation. A stalled
+    // MCP discovery (an unreachable endpoint with no client timeout) would otherwise leave the
+    // await pending forever with the user's message nowhere on disk — the transcript would look
+    // as if the text was never sent. Nothing below this line can hide it again.
     const row = await saveTeamMessage(
       { threadId: options.threadId, role: 'user', content: text },
       db
     );
+    notify();
     // WR-05: a team with no lead has nobody to answer a plain message. The old code saved the
     // row, appended nothing and returned `'started'` — a silent drop that looked like success.
     // The message stays in the transcript (the user's text is never lost) but it is NOT
     // appended to the log, because the log is the addressing record and there is no addressee.
     // The caller turns this into a visible refusal.
     if (recipients.length === 0) {
-      notify();
       return 'refused';
     }
     await appendForExistingMessage(
@@ -2560,6 +2555,22 @@ export function createTeamRunCoordinator(
       db
     );
     notify();
+    if (disposed) return 'steered';
+
+    // Phase 41 D-05/D-12: the docs tree must exist before any tool context is built for this
+    // turn. A failure here leaves the map empty and `write_doc` refuses — never a dead turn.
+    await ensureDocsReady();
+    // Phase 39: same per-turn freshness as the roster — a toggle set since the last turn
+    // must decide THIS turn's tool payload.
+    await refreshMcpTools();
+    // D-06: a new turn is a reset — the next crossing notifies again. Team-scoped only.
+    resetBudgetWarnings(teamId);
+    lastUserRequest = text;
+    // UAT-41 test 14: the three interleaved `'blocked'` checks that used to sit between the
+    // preps are gone. The row and its log entry are already persisted, so a dispose during a
+    // prep must answer `'steered'`: `'blocked'` would make the UI restore the draft and the
+    // user would send the same text twice. The trade is that the row can exist with no turn
+    // running — the text is never lost, and the UI must not restore the draft.
     if (disposed) return 'steered';
 
     // AIO-LEAD-03: a mention is a direct instruction. If the agent is live it reads the
