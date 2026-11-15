@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
 status: executing
-stopped_at: Completed 41-06-PLAN.md
-last_updated: "2026-11-15T15:48:27.145Z"
-last_activity: "2026-11-15 - Completed quick task 261115-q4n: Fix 3 UAT-41 defects"
+stopped_at: Completed 42-01-PLAN.md
+last_updated: "2026-11-15T15:52:21Z"
+last_activity: 2026-11-15 -- Completed 42-01-PLAN.md
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 55
-  completed_plans: 51
+  completed_plans: 52
   percent: 57
 current_phase: 40
 current_phase_name: Explorer UX, CRUD correctness, observed walkthrough
@@ -21,19 +21,19 @@ current_phase_name: Explorer UX, CRUD correctness, observed walkthrough
 See: .planning/PROJECT.md (updated 2026-11-09)
 
 **Core value:** Hợp nhất SDLC Studio và AI Office thành Unified AI Office dạng chat-first, free-style với token budget cứng và làm giàu skill.
-**Current focus:** Phase 41 — AI Office team docs zones
+**Current focus:** Phase 42 — read-only-git-inspection-for-the-reviewer-agent
 
 ## Current Position
 
-Phase: 41
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-11-15 - Completed quick task 261115-q4n: Fix 3 UAT-41 defects
+Phase: 42 (read-only-git-inspection-for-the-reviewer-agent) — EXECUTING
+Plan: 2 of 3
+Status: Executing Phase 42
+Last activity: 2026-11-15 -- Completed 42-01-PLAN.md
 
 ## Session Continuity
 
-Last session: 2026-11-15T05:05:53.393Z
-Stopped at: Completed 41-06-PLAN.md
+Last session: 2026-11-15T15:52:21Z
+Stopped at: Completed 42-01-PLAN.md
 Resume file: None
 
 Progress: [██████████] 93%
@@ -203,6 +203,11 @@ Progress: [██████████] 93%
 - [Phase 41]: 41-05: LEAD_NO_WRITE_DOC_LINE is exported so the test pins the exact sentence; the lead prompt names write_doc once, inside that negation, with no positive instruction (T-41-35)
 - [Phase 41]: D-05: docs tree ensured at turn start in the coordinator, never lazily inside write_doc
 - [Phase 41]: T-41-26: the leader gets no folderId even though its member row owns a live folder
+- [Phase 42]: D-06/D-09: `git_read` is one team tool with a fixed seven-value action enum (branches|status|log|diff_summary|diff_file|read_file|tree); absent from MUTATION_TOOLS and both role sets, so no approval card and no coordinator edit
+- [Phase 42]: D-07: the repo comes from the team's linked systems; `systemId` is only an index into that set — unlinked -> SYSTEM_NOT_LINKED, repo-less or empty -> NO_LINKED_REPO, ambiguous -> INVALID_ARGUMENT listing candidates
+- [Phase 42]: D-08: the handler never builds a command string; every value reaches a gitRemoteService/gitRemoteTreeService function that escapes per argument
+- [Phase 42]: D-11: every git_read wrap label is `GIT <action> <repoPath> — <field>`; a git or SSH throw becomes an INVALID_ARGUMENT refusal
+- [Phase 42]: `getRecentCommits` added because `getCommitLog` builds a base..target range and cannot express last-N of one branch; both share one `parseCommitLog`
 
 ## Performance Metrics
 
@@ -239,3 +244,4 @@ Progress: [██████████] 93%
 | Phase 41 P04 | 12 | 4 tasks | 2 files |
 | Phase 41 P05 | 8 min | 3 tasks | 2 files |
 | Phase 41 P06 | ~20 min | 3 tasks | 2 files |
+| Phase 42 P01 | 4 min | 3 tasks | 3 files |
