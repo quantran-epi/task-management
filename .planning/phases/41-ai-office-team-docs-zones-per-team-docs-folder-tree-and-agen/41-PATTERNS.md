@@ -127,16 +127,26 @@ export async function saveGlobalConventions(content: string, db = defaultDb): Pr
 ```ts
 export const AI_TEAMS_DOCS_ROOT_SETTING_KEY = 'ai_teams_docs_root';
 
+// Signatures below are the ones the plans implement — keep them in sync with 41-02.
 /** D-08b: read the setting; create + persist the `AI Teams` root when missing or dead. */
 export async function ensureDocsRoot(db): Promise<string>;
-/** D-09/D-12: create team folder + one member folder each; returns { folderId, memberFolderIds }. */
-export async function createTeamDocsTree(teamId, teamName, members: {agentId, name}[], db): Promise<...>;
+/** D-09: create team folder + one member folder each; returns { folderId, memberFolderIds }. */
+export async function createTeamDocsTree(
+  teamName: string,
+  members: readonly { agentId: string; name: string }[],
+  db
+): Promise<{ folderId: string; memberFolderIds: Map<string, string> }>;
 /** D-10: delete team folder + its direct children + their notes. Never the root, never the setting. */
-export async function deleteTeamDocsTree(teamFolderId, db): Promise<void>;
+export async function deleteTeamDocsTree(teamFolderId: string | undefined, db): Promise<void>;
 /** D-11: `{agent.name}`, suffix ` (2)`, ` (3)` on collision inside the team folder. */
-export async function createMemberFolder(teamFolderId, agentName, db): Promise<string>;
+export async function createMemberFolder(teamFolderId: string, agentName: string, db): Promise<string>;
 /** D-12b: true when the id still names a live folder row. */
-export async function isLiveFolder(noteId, db): Promise<boolean>;
+export async function isLiveFolder(noteId: string | undefined, db): Promise<boolean>;
+/** D-12/D-12b: idempotent backfill. Store list MUST cover every table the body reads. */
+export async function ensureTeamDocsReady(
+  teamId: string,
+  db
+): Promise<{ team: AiTeam; memberFolderIds: Map<string, string> }>;
 ```
 
 `isLiveFolder` body — the exact check D-12b names:
@@ -255,7 +265,7 @@ function refuse(code: TeamToolRefusalCode, message: string): TeamToolRefusal {
 },
 ```
 
-**Copy:** one `write_doc` entry appended to `TEAM_TOOL_DEFINITIONS` with `action` enum `['list','create','update']`, plus `title`, `body`, `noteId`. **Do not** add it to `LEAD_ONLY_TEAM_TOOLS` (:251) — it must reach employees (D-06 says the leader does not use it, but it stays in the payload; the leader simply is not prompted to call it, and `ctx.folderId` for a leader names the team folder, which is a legal write target). If the planner prefers a hard lead refusal, that is a code guard in the handler, not a payload filter.
+**Copy:** one `write_doc` entry appended to `TEAM_TOOL_DEFINITIONS` with `action` enum `['list','create','update']`, plus `title`, `body`, `noteId`. Keep it OUT of `LEAD_ONLY_TEAM_TOOLS` (:251) so employees keep it, and declare `EMPLOYEE_ONLY_TEAM_TOOLS = new Set(['write_doc'])` so `leadTools()` can subtract it. D-06 is enforced twice, both in code: the payload filter keeps the tool out of the leader's hands, and the handler refuses `ctx.role === 'lead'` with `LEAD_USES_DB_TOOLS`. The leader gets no `folderId`, so there is no legal `write_doc` target even if a call slipped through. A prompt instruction is not one of the guards.
 
 **Analog: handler shape** (`proposeSkillVersion`, lines 628-706) — the exact precedent for "team tool writes data, no approval card":
 
@@ -282,6 +292,12 @@ async function proposeSkillVersion(
 
 ```ts
 async function writeDoc(args: Record<string, any>, ctx: TeamToolContext): Promise<string> {
+  // D-06, first: the leader's write path is the DB tool plus the approval card.
+  if (ctx.role === 'lead') {
+    return JSON.stringify(
+      refuse('LEAD_USES_DB_TOOLS', 'Leader ghi bằng công cụ cơ sở dữ liệu, mỗi lần ghi dừng ở thẻ phê duyệt.')
+    );
+  }
   if (!ctx.folderId) {
     return JSON.stringify(refuse('TEAM_DOCS_NOT_READY', 'Thư mục tài liệu của bạn chưa sẵn sàng.'));
   }
@@ -295,7 +311,8 @@ async function writeDoc(args: Record<string, any>, ctx: TeamToolContext): Promis
   if (action === 'create') {
     // D-04: args.parentId is never read. type is always 'document'.
     const note = await createNote(
-      { type: 'document', parentId: ctx.folderId, title: `${ctx.agentName} — ${title}`, body },
+      // No dangling `— ` when the caller has no display name.
+      { type: 'document', parentId: ctx.folderId, title: ctx.agentName ? `${ctx.agentName} — ${title}` : title, body },
       ctx.db
     );
     return JSON.stringify({ noteId: note.id, title: note.title ?? '' });
@@ -312,7 +329,7 @@ async function writeDoc(args: Record<string, any>, ctx: TeamToolContext): Promis
 }
 ```
 
-`ctx.agentName` is **not** on `TeamToolContext` today — add it alongside `folderId` (D-02b needs the prefix; the coordinator already has the roster row). Alternative: resolve via `db.aiEmployees.get(ctx.agentId)` inside the handler; the context field is cheaper and matches the "ids/facts come from context" rule at the top of the file (:16-25).
+`ctx.agentName` and `ctx.role` are **not** on `TeamToolContext` today — add both alongside `folderId` (D-02b needs the prefix, D-06 needs the role; the coordinator already has the roster row). Alternative: resolve via `db.aiEmployees.get(ctx.agentId)` inside the handler; the context field is cheaper and matches the "ids/facts come from context" rule at the top of the file (:16-25).
 
 **Analog: dispatch switch** (lines 708-735):
 
@@ -354,7 +371,7 @@ function toolContext(agentId: string): TeamToolContext {
 }
 ```
 
-**Copy:** resolve `folderId` from the member-folder map built at turn start (see backfill below) and add `...(folderId ? { folderId } : {})`, plus `agentName`. The leader's `folderId` is `liveTeam.docsFolderId` (D-07: leader writes the final doc at the team root).
+**Copy:** resolve `folderId` from the member-folder map built at turn start (see backfill below) and add `...(folderId ? { folderId } : {})`, plus `agentName` and `role`. The leader gets `role: 'lead'` and NO `folderId` — its write path is the DB tool plus the approval card, and `write_doc` refuses it (D-06). The team folder reaches the leader as a prompt fact (`docsFolderId`), never as a tool context write target.
 
 **Analog: turn-start hook** — `send()` loads the roster once per turn (lines 2438-2458):
 
@@ -376,8 +393,8 @@ async function send(text: string): Promise<'started' | 'steered' | 'refused' | '
 
 ```ts
 // D-12/D-12b: the tree is guaranteed BEFORE the turn starts, so `toolContext` can read it.
-const docs = await ensureTeamDocsReady(db, liveTeam, roster, teamId);
-liveTeam = docs.team;              // carries the new docsFolderId
+const docs = await ensureTeamDocsReady(teamId, db);
+liveTeam = docs.team;                    // carries the new docsFolderId
 memberFolderIds = docs.memberFolderIds;  // Map<agentId, folderId>
 ```
 
@@ -469,8 +486,8 @@ const ctx = (overrides: Partial<TeamToolContext> = {}): TeamToolContext => ({
 
 ### Transaction table lists
 **Source:** `src/db/repositories/aiTeamRepo.ts:119`, `:351`, `:415`
-**Apply to:** `createTeam`, `deleteTeam`, `addTeamMember`, `ensureTeamDocsReady`
-Every multi-table write names all touched tables explicitly. Adding `db.notes`/`db.settings` to the list is the whole change — Dexie joins nested repo calls to the ambient transaction.
+**Apply to:** `createTeam`, `deleteTeam`, `addTeamMember`, `assignLeader`, `ensureTeamDocsReady`
+Every multi-table write names all touched tables explicitly — including every table the body only READS. Dexie 4 throws `NotFoundError` for a read outside the declared stores, so `ensureTeamDocsReady` must list `db.aiEmployees` (it resolves member names with `bulkGet`). Adding `db.notes`/`db.settings` to the list is the whole change — Dexie joins nested repo calls to the ambient transaction.
 
 ### Refusal as a returned value
 **Source:** `src/services/ai/office/teamTools.ts:41-62`
@@ -503,9 +520,9 @@ Spread the previous schema, bump `LATEST_SCHEMA_VERSION`, add no `.upgrade()`. B
 |---|---|---|---|
 | — | — | — | None. Every file has a direct in-repo precedent. |
 
-## Open Detail the Planner Must Resolve
+## Open Detail — resolved
 
-`AiTeamMember` has **no** `folderId` column, and D-13 adds only `AiTeam.docsFolderId`. So a member's folder id is **derived**, not stored. Recommended resolution, consistent with D-11's naming rule: look up `db.notes.where('parentId').equals(team.docsFolderId)` filtered to `type === 'folder'`, match on `title === agent.name` (or `agent.name + ' (2)'` when D-11's suffix was applied). This is the one place a title match is unavoidable; record it in the plan with the ceiling noted, and prefer storing the mapping in a `settings` key (`ai_team_docs_member_folders:<teamId>`) if the title match proves fragile during implementation. The alternative — adding `docsFolderId` to `AiTeamMember` — is a larger schema change than D-13 authorizes, so it needs an explicit owner decision.
+Superseded by CONTEXT D-13a (owner decision, 2026-11-15): `AiTeamMember` carries its own `docsFolderId?: string`, so a member's folder id is **stored on the row**, never derived. The title-match fallback this section used to recommend is dead — do not implement it, and do not add a `settings` key for the mapping. `toolContext` reads `member.docsFolderId`; absent means `TEAM_DOCS_NOT_READY` (D-05).
 
 ## Test Commands (scoped only — never the full suite)
 

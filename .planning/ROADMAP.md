@@ -952,7 +952,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 41-01-PLAN.md — Dexie V27, `docsFolderId` on `AiTeam`/`AiTeamMember` and both backup record schemas, ROADMAP/REQUIREMENTS wording correction
+- [ ] 41-01-PLAN.md — Dexie V27, `docsFolderId` on `AiTeam`/`AiTeamMember` and both backup record schemas, three `LATEST_SCHEMA_VERSION` test pins, ROADMAP/REQUIREMENTS wording correction
 
 **Wave 2** *(depends on 41-01)*
 
@@ -960,8 +960,8 @@ Plans:
 
 **Wave 3** *(depends on 41-01/41-02; independent of each other)*
 
-- [ ] 41-03-PLAN.md — `write_doc` team tool with the code-level folder guard, two refusal codes, handler tests
-- [ ] 41-04-PLAN.md — `createTeam`/`deleteTeam`/`addTeamMember` own the tree in their existing transactions + lifecycle tests
+- [ ] 41-03-PLAN.md — `write_doc` team tool with the code-level folder and role guards, three refusal codes, `EMPLOYEE_ONLY_TEAM_TOOLS`, handler tests
+- [ ] 41-04-PLAN.md — `createTeam`/`deleteTeam`/`addTeamMember`/`assignLeader` own the tree in their existing transactions + lifecycle tests
 
 **Wave 4** *(depends on 41-03)*
 
@@ -969,7 +969,7 @@ Plans:
 
 **Wave 5** *(depends on 41-04/41-05)*
 
-- [ ] 41-06-PLAN.md — Coordinator turn-start backfill, folder-aware `toolContext`, prompt wiring, payload and mutation-classification proofs
+- [ ] 41-06-PLAN.md — Coordinator turn-start backfill, role/folder-aware `toolContext`, lead-payload `write_doc` filter, prompt wiring, payload and mutation-classification proofs
 
 ### Phase 42: Recursive linked-item read and read-only git inspection for the reviewer agent
 
