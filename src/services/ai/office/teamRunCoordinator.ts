@@ -1861,6 +1861,8 @@ export function createTeamRunCoordinator(
         listRecentTurns(options.threadId, RECENT_WINDOW_TURNS, db),
       ]);
       const skill = skillFor(employee);
+      // Phase 41 D-16: the folder id is a fixed fact for the turn, so it goes into the prompt.
+      const folderId = memberFolderIds.get(employee.id);
       const prompt = buildEmployeeTurnRequest({
         employee,
         ...(skill ? { skill } : {}),
@@ -1870,6 +1872,7 @@ export function createTeamRunCoordinator(
         ...(batchResults && batchResults.length > 0 ? { batchResults } : {}),
         assignmentHistory,
         recentTurns,
+        ...(folderId ? { folderId } : {}),
       });
 
       const request: ChatTurnRequest = {
@@ -2062,6 +2065,13 @@ export function createTeamRunCoordinator(
         listRecentTurns(options.threadId, RECENT_WINDOW_TURNS, db),
         loadLinkedItems(),
       ]);
+      // Phase 41 D-07/D-16: the team folder is a READ fact for the leader (where the approved
+      // final goes), never a `write_doc` target. T-41-28: only live roster members with an
+      // entry in this turn's map are emitted, so a member removed mid-turn is never named.
+      const memberFolders = roster.employees.flatMap((row) => {
+        const folderId = memberFolderIds.get(row.id);
+        return folderId ? [{ agentName: row.name, folderId }] : [];
+      });
       const prompt = buildLeadTurnRequest({
         lead,
         team: roster.teamRow ?? team,
@@ -2070,6 +2080,8 @@ export function createTeamRunCoordinator(
         originalRequest: text,
         recentTurns,
         ...(batchResults && batchResults.length > 0 ? { batchResults } : {}),
+        ...(liveTeam.docsFolderId ? { docsFolderId: liveTeam.docsFolderId } : {}),
+        ...(memberFolders.length > 0 ? { memberFolders } : {}),
       });
 
       const request: ChatTurnRequest = {
