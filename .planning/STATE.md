@@ -48,7 +48,7 @@ Progress: [██████████] 93%
 - [x] Phase 39: Skill versioning + enrichment approval
 - [ ] Phase 40: Explorer UX, CRUD correctness, observed walkthrough
 - [ ] Phase 41: AI Office team docs zones — per-team folder tree, agent-scoped doc write (INSERTED)
-- [ ] Phase 42: Recursive linked-item read + read-only git inspection for the reviewer (INSERTED)
+- [ ] Phase 42: Read-only git inspection for the reviewer agent (INSERTED)
 
 ## Quick Tasks Completed
 
@@ -70,7 +70,7 @@ Progress: [██████████] 93%
 
 - Phase 37.1 inserted after Phase 37 (URGENT): Live steering — leader amends assignments and steers running agents mid-run. Scope deferred from 37-CONTEXT.md D-19: outbox+inbox agent, drain at `beforeToolRound`, `amend_assignments` tool, leader re-plan mid-batch, steer UI.
 - Phase 41 added (2026-11-15): AI Office team docs zones — per-team docs folder tree, agent-scoped document write. Owner decision: every member writes docs; visible immediately; leader writes the approved final at team root.
-- Phase 42 added (2026-11-15): Recursive linked-item read + read-only git inspection for the reviewer. Owner decision: linking a CR implies its attached documents; reviewer reads git read-only over SSH.
+- Phase 42 added (2026-11-15): Read-only git inspection for the reviewer agent. Owner decision: reviewer reads git read-only over SSH. Scope narrowed 2026-11-15 — the recursive linked-item read half was cut (sticky notes already arrive full-body via `get_item_details`; `read_file` already covers linked files; note attachments are image-only so the text branch was dead code). See `42-CONTEXT.md` §Deferred Ideas.
 
 - Phase 34 marked complete with zero tests covering the AI Office runtime and five live defects (hung batch run, unguarded double-submit, phantom active turn, `targetAgentId` stripped on restore, bare deletes breaking export). "Phase 34 complete" is not evidence of quality.
 - Research verdict: keep and harden the existing coordinator/budget gate; zero new npm dependencies.

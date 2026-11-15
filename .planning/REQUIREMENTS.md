@@ -104,11 +104,8 @@
 - [x] **AIO-DOCS-05**: The leader keeps the full mutation toolset and its writes still park on the approval card; the user's accept is what places the final document at the team root.
 - [x] **AIO-DOCS-06**: Deleting a team removes its folder tree. A team created before this phase gets its tree lazily on first run, and repeated runs do not duplicate it.
 
-### Recursive Read & Git Inspection (AIO-READ) — Phase 42
+### Read-Only Git Inspection (AIO-READ) — Phase 42
 
-- [ ] **AIO-READ-01**: Linking a CR alone is sufficient — an agent reads the CR's fields, its sticky notes, and every document attached to it without those documents being linked separately.
-- [ ] **AIO-READ-02**: Recursion is bounded and stated: depth, per-item size, and total item count are capped, and a cycle terminates instead of hanging.
-- [ ] **AIO-READ-03**: Local file links referenced by a linked item are readable in Tauri; a missing or unreadable path degrades to a stated refusal, never a silent empty body.
 - [ ] **AIO-READ-04**: The reviewer reads `status`, `diff` (summary and per-file), `log`, and file contents of a remote repository over SSH, read-only — no writing command, no arbitrary shell, no output redirection.
 - [ ] **AIO-READ-05**: Every new read path wraps its result as untrusted data at the same boundary the existing linked-item path uses, and a test asserts the wrap is present.
 

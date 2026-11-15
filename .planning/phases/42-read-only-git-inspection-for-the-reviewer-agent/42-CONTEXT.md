@@ -1,23 +1,20 @@
-# Phase 42: Recursive linked-item read + read-only git inspection — Context
+# Phase 42: Read-only git inspection — Context
 
 **Gathered:** 2026-11-15
 **Status:** Ready for planning
-**Owner decision:** Owner said: "nếu tao gắn 1 CR vào nhóm, trong CR đó có docs thì agent phải đọc được, không cần tao gắn tường minh docs vào nhóm nữa." And: "reviewer chỉ cần read là đủ, read tất cả các thứ có thể của git repo đó." This document records those two decisions as binding. Where a prior decision conflicts, this one wins.
+**Owner decision:** Owner said: "reviewer chỉ cần read là đủ, read tất cả các thứ có thể của git repo đó." This document records that decision as binding. Where a prior decision conflicts, this one wins.
+
+**Scope narrowed 2026-11-15:** The recursive linked-item read half was removed. Evidence: `get_item_details` already returns sticky notes in full body, and `documentLinks` already arrives as wrapped strings; `read_file` is already in `EMPLOYEE_READ_ONLY_ALLOWLIST`, so reading a linked file costs one extra tool round-trip and needs no new code. The removed decisions are preserved in §Deferred Ideas.
 
 ## Phase Boundary
 
-Hai việc, cùng một mục tiêu: agent đọc được nhiều hơn mà owner không phải gắn thêm liên kết.
-
-1. **Recursive read.** Gắn **một** item vào nhóm là đủ. Agent đọc được item đó, note dán trên nó, tài liệu đính kèm, và file local mà item trỏ tới — không cần owner gắn từng tài liệu.
-2. **Git read.** Reviewer đọc được trạng thái git của repo remote qua SSH: branch, status, diff (summary + từng file), log, nội dung file. **Chỉ đọc.** Không lệnh ghi, không shell tuỳ ý, không redirect output.
+Reviewer đọc được trạng thái git của repo remote qua SSH: branch, status, diff (summary + từng file), log, nội dung file. **Chỉ đọc.** Không lệnh ghi, không shell tuỳ ý, không redirect output.
 
 Phase này gồm:
 
-- Mở rộng `get_linked_context` để đọc đệ quy có giới hạn.
-- Đọc attachment text (bỏ qua binary), đọc `documentLinks` local trong Tauri.
 - Team tool mới `git_read` (read-only), dùng lại `gitRemoteService`/`gitRemoteTreeService`/`sshFsToolService` đã có.
 - Prompt Reviewer nêu cách dùng `git_read`.
-- Test cho wrap untrusted và cho cycle.
+- Test cho escape tham số, guard repo từ context, và wrap untrusted.
 
 Phase này **không** gồm:
 
@@ -26,30 +23,9 @@ Phase này **không** gồm:
 - Thêm bảng Dexie, thêm cột backup.
 - Skill body (Deferred của Phase 41 vẫn giữ).
 - `ssh_exec_command` cho AI — **tuyệt đối không**.
+- Recursive linked-item read (xem §Deferred Ideas).
 
 ## Implementation Decisions
-
-### Recursive read
-
-- **D-01:** Đệ quy **một cấp cố định**, không phải đệ quy sâu vô hạn. Từ một link:
-  - CR / task / system → `get_item_details` (đã có) → `stickyNotes` (note gắn `entityType`/`entityId`) → **mỗi note: full body**.
-  - Note / document → full body + **attachment text** + **`documentLinks` local file**.
-  - Không đi tiếp từ note sang note khác. Lý do: note → note là chỗ sinh vòng lặp, và owner không yêu cầu. Nếu sau này cần, đây là chỗ mở.
-  — **Reversibility:** reversible — thêm một vòng lặp có cap.
-
-- **D-02:** Giới hạn phải **nêu rõ trong kết quả trả về**, không im lặng cắt:
-  - Tối đa **20** note/tài liệu phụ mỗi lần gọi.
-  - Mỗi body tối đa **2000 dòng**; vượt → cắt và ghi `truncated: true` + tổng số dòng.
-  - Tổng payload tối đa **200 000 ký tự**; chạm trần → dừng thêm và ghi `moreAvailable: true`.
-  Lý do: agent phải biết mình đang thiếu gì. Cắt im lặng làm nó khẳng định sai.
-
-- **D-03:** Attachment: chỉ đọc khi `mimeType` là text-ish (`text/*`, `application/json`, `application/xml`, `application/yaml`, `text/markdown`). Binary → ghi `{ fileName, mimeType, sizeBytes, skipped: 'binary' }`. Không base64 vào prompt. `NoteAttachment.data` là `Blob` — đọc bằng `.text()`, cap theo D-02.
-  Nếu attachment có `filePath` (local disk) → đọc file đó qua đường `read_file` sẵn có (Tauri).
-
-- **D-04:** `documentLinks` local: chỉ đọc khi Tauri. Mỗi link: nếu là đường dẫn local và file tồn tại → đọc slice (cap D-02). Nếu không đọc được → `{ link, skipped: 'unreadable' }`, **không** trả body rỗng im lặng. Link là URL → bỏ qua, ghi `skipped: 'remote-url'`.
-  Đường dẫn phải qua `normalizeLocalPath` + `isLocalPath` (`utils/documentLinks.tsx`) — không tự parse.
-
-- **D-05:** Mọi nội dung đọc thêm đều wrap bằng `wrapUntrusted` với nhãn riêng từng mục (giữ nguyên quy ước hiện có: `wrapField` cho field, `wrapUntrusted` cho body). Test bắt buộc khẳng định nhãn xuất hiện.
 
 ### Git read
 
@@ -96,21 +72,20 @@ Phase này **không** gồm:
 **Downstream agents MUST read these before planning or implementing.**
 
 ### Quyết định và phạm vi
-- `.planning/ROADMAP.md` §Phase 42 — goal + 5 success criteria.
-- `.planning/REQUIREMENTS.md` — `AIO-READ-01..05`.
+- `.planning/ROADMAP.md` §Phase 42 — goal + 2 success criteria.
+- `.planning/REQUIREMENTS.md` — `AIO-READ-04`, `AIO-READ-05`.
 - `.planning/phases/41-.../41-CONTEXT.md` — D-01 (team tool là cửa ghi/đọc mở rộng, không đụng runtime policy), D-05 (`TeamToolContext` mở rộng).
 - `CLAUDE.md` — Tauri runtime; không thêm dependency.
 
 ### Source contracts — đọc trước khi sửa
-- `src/services/ai/office/teamTools.ts` — `getLinkedContext` (:428) là chỗ mở rộng chính; `TeamToolContext` (:21); `TeamToolRefusalCode` (:41); `executeTeamTool` switch (:708).
-- `src/services/ai/aiTools.ts` — `get_item_details` (:2438) trả `stickyNotes`; `read_file` (:3386); `ssh_read_file` (:2018).
+- `src/services/ai/office/teamTools.ts` — `TeamToolContext` (:21); `TeamToolRefusalCode` (:41); `TEAM_TOOL_DEFINITIONS` (:88); `executeTeamTool` switch (:708); `EMPLOYEE_ONLY_TEAM_TOOLS` (:304).
+- `src/services/ai/aiTools.ts` — `ssh_read_file` (:2018).
 - `src/services/gitRemoteService.ts` — `runGitCommand` (:20), `escapeShellArg` (:16), `getRemoteBranches` (:34), `checkDirtyStatus` (:68), `getCommitLog` (:100), `getDiffSummary` (:145), `getFileDiff` (:240).
 - `src/services/gitRemoteTreeService.ts` — `getRemoteTree` (:124), `getRemoteFileContent` (:156).
 - `src/services/ai/sshFsToolService.ts` — `resolveSshConfig` (:62), `resolveRemotePath` (:89), `executeSshReadFile` (:179).
-- `src/utils/documentLinks.tsx` — `isLocalPath`, `normalizeLocalPath`.
 - `src/services/ai/untrustedData.ts` — `wrapUntrusted`, `wrapField`.
 - `src/services/ai/office/teamPrompts.ts` — `buildEmployeeTurnRequest` (:52).
-- `src/types/models.ts` — `Note` (:192), `NoteAttachment` (:208), `System` (:46), `ChangeRequest` (:69).
+- `src/types/models.ts` — `System` (:46).
 - `src/types/gitRemote.ts` — `RemoteDiffSummary`, `RemoteGitTreeNode`, `RemoteGitBranch`.
 
 ### Đã có, không viết lại
@@ -120,8 +95,6 @@ Phase này **không** gồm:
 ## Existing Code Insights
 
 ### Reusable Assets
-- `get_item_details` đã trả `stickyNotes` + `documentLinks` + `checklist` — chỉ cần đọc thêm phần nó trả về.
-- `read_file` (Tauri) đã có offset/limit — dùng lại cho D-04.
 - `gitRemoteService` + `gitRemoteTreeService` đã có đủ 7 hành động của D-06, chỉ thiếu lớp tool.
 - `escapeShellArg` đã là chuẩn POSIX duy nhất trong repo.
 
@@ -132,7 +105,6 @@ Phase này **không** gồm:
 - Mọi tham số shell đều escape riêng lẻ.
 
 ### Integration Points
-- `getLinkedContext` — mở rộng tại đây, giữ nguyên nhánh note/document hiện có.
 - `TEAM_TOOL_DEFINITIONS` + `executeTeamTool` switch — thêm `git_read`.
 - `buildEmployeeTurnRequest` — thêm dòng prompt cho reviewer.
 
@@ -142,10 +114,23 @@ Phase này **không** gồm:
 
 ## Specific Ideas
 
-- Test bắt buộc: (1) gắn CR có 3 note → `get_linked_context` trả cả 3 body; (2) note có 30 attachment → cap 20 + `moreAvailable`; (3) binary attachment → `skipped: 'binary'`, không có body; (4) cycle note→note không treo (dù D-01 không đi tiếp, test chứng minh nó không đi); (5) `git_read` với `filePath` chứa `; rm -rf /` → escape đúng, lệnh không chạy; (6) `git_read` với `systemId` không link → refusal; (7) mọi kết quả có nhãn untrusted.
+- Test bắt buộc: (1) `git_read` với `filePath` chứa `; rm -rf /` → escape đúng, lệnh không chạy; (2) `git_read` với `systemId` không link → refusal `SYSTEM_NOT_LINKED`; (3) không có system nào có `remoteRepoPath` → refusal `NO_LINKED_REPO`; (4) mọi kết quả có nhãn untrusted; (5) `git_read` không nằm trong `MUTATION_TOOLS` và không park approval card.
 
 ## Deferred Ideas
 
+### Recursive linked-item read — removed from this phase 2026-11-15
+
+Bị cắt sau khi đọc code: phần lớn không tạo capability mới.
+
+- **D-01 (cũ) Đệ quy một cấp từ link:** sticky notes đã về full body qua `get_item_details` (`aiTools.ts:2458-2485`), `getLinkedContext` đã wrap chúng (`teamTools.ts:548-553`). Không có việc mới.
+- **D-02 (cũ) Cap + `truncated`/`moreAvailable`:** chỉ có value nếu có nội dung mới để cắt. Không còn.
+- **D-03 (cũ) Đọc attachment text:** **dead code**. App chỉ nhận ảnh — `NoteAttachmentsPanel.tsx:29` `ALLOWED_MIME_TYPES = ['image/png','image/jpeg','image/gif','image/webp']`, `noteRepo.ts:393` Zod schema cùng 4 type, `aiTools.ts:1278` enum cùng 4 type. Nhánh "text-ish" luôn rơi vào `skipped: 'binary'`. Thêm nữa `NoteAttachment.filePath` gần như không được set: UI upload không truyền (`NoteAttachmentsPanel.tsx:107`), `manage_note_attachments` set sai (lưu chuỗi path làm blob, `aiTools.ts:4013`), `restoreBackup.ts:229` set path tổng hợp không tồn tại trên đĩa.
+- **D-04 (cũ) Đọc `documentLinks` local:** chỉ tiết kiệm **một round-trip**. `documentLinks` đã về dạng chuỗi wrapped (`teamTools.ts:538-542`), và `read_file` đã nằm trong `EMPLOYEE_READ_ONLY_ALLOWLIST` (`chatTurnTools.ts:39`) nên agent tự mở được file.
+- **D-05 (cũ) Wrap untrusted:** vẫn áp dụng, nhưng cho `git_read` — đã thành AIO-READ-05.
+
+Mở lại khi: app nhận attachment text (PDF/DOCX/MD), hoặc `documentLinks` trở nên phổ biến tới mức round-trip thứ hai thành vấn đề thật.
+
+### Khác
 - Note → note recursion.
 - Cache git result trong lượt.
 - Ghi lên repo remote (không làm, không bàn).

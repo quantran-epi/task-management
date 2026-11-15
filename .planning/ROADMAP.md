@@ -9,7 +9,7 @@
 - Phase 39: Skill versioning + enrichment approval (v1.4) (COMPLETE — verified 2026-11-14)
 - Phase 40: Explorer UX, CRUD correctness, observed walkthrough (v1.4)
 - Phase 41: AI Office team docs zones — per-team folder tree, agent-scoped doc write (v1.4, INSERTED)
-- Phase 42: Recursive linked-item read + read-only git inspection for the reviewer (v1.4, INSERTED)
+- Phase 42: Read-only git inspection for the reviewer agent (v1.4, INSERTED)
 
 ## Previous Milestone: v1.3
 
@@ -971,18 +971,17 @@ Plans:
 
 - [x] 41-06-PLAN.md — Coordinator turn-start backfill, role/folder-aware `toolContext`, lead-payload `write_doc` filter, prompt wiring, payload and mutation-classification proofs
 
-### Phase 42: Recursive linked-item read and read-only git inspection for the reviewer agent
+### Phase 42: Read-only git inspection for the reviewer agent
 
-**Goal:** Linking one item to a team gives every member the full recursive content of that item — including the documents attached to it — and the reviewer can read a remote repository's git state read-only.
-**Requirements**: AIO-READ-01, AIO-READ-02, AIO-READ-03, AIO-READ-04, AIO-READ-05
+**Goal:** The reviewer can read a remote repository's git state over SSH, read-only.
+**Requirements**: AIO-READ-04, AIO-READ-05
 **Depends on:** Phase 41
 **Success Criteria** (what must be TRUE):
 
-1. Linking a CR alone is enough: an agent reads the CR's own fields, its sticky notes, and every document attached to it without the user linking those documents separately.
-2. Recursion is bounded and stated: depth, per-item size, and total item count are capped, and a cycle (note → note → back) terminates instead of hanging.
-3. Local file links referenced by a linked item are readable in Tauri; a missing or unreadable path degrades to a stated refusal, never a silent empty body.
-4. The reviewer can read `status`, `diff` (summary and per-file), `log`, and file contents of a remote repository over SSH, read-only — no command that writes, no arbitrary shell, no output redirection.
-5. Every new read path wraps its result as untrusted data at the same boundary the existing linked-item path uses, and a test asserts the wrap is present.
+1. The reviewer can read `status`, `diff` (summary and per-file), `log`, and file contents of a remote repository over SSH, read-only — no command that writes, no arbitrary shell, no output redirection.
+2. Every new read path wraps its result as untrusted data at the same boundary the existing linked-item path uses, and a test asserts the wrap is present.
+
+**Scope note:** Recursive linked-item read was removed from this phase on 2026-11-15. Sticky notes and `documentLinks` already reach agents in full via `get_item_details`; the only gap was reading linked-file contents, which `read_file` (already in `EMPLOYEE_READ_ONLY_ALLOWLIST`) covers in one extra round-trip. See `42-CONTEXT.md` §Deferred Ideas.
 
 **Research flag:** standard patterns — skip research-phase.
 
