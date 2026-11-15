@@ -231,6 +231,11 @@ export interface TeamRunCoordinatorOptions {
    */
   settlePollDeadlineMs?: number | undefined;
   /**
+   * Test seam: the MCP discovery bound. Production omits it — `MCP_DISCOVERY_TIMEOUT_MS` is
+   * the owner's 5 s choice, and a test that waited it out would take 5 s per case.
+   */
+  mcpDiscoveryTimeoutMs?: number | undefined;
+  /**
    * Production seam (D-03): resolve a fresh roster from persisted rows at every turn start.
    * When supplied, no construction-time `lead`/`employees`/`skills` value reaches a turn.
    */
@@ -342,6 +347,14 @@ const EMPLOYEE_TEAM_TOOLS = TEAM_TOOL_DEFINITIONS.filter(
 const AGENT_MENTION = /@\[([^\]]+)\]\(agent:([a-zA-Z0-9-]+)\)/g;
 
 const TERMINAL_STATUSES: readonly AgentRunStatus[] = ['done', 'stopped', 'error'];
+
+/**
+ * UAT-41 follow-up: how long a turn may wait for MCP discovery before it answers with the
+ * previous turn's tools. Without a bound an unreachable endpoint held the turn for the Rust
+ * connect timeout (15 s), so the user's message sat unanswered. 5 s is the owner's choice —
+ * long enough for a healthy server, short enough that a dead one is not felt as a hang.
+ */
+const MCP_DISCOVERY_TIMEOUT_MS = 5_000;
 
 /** 37.1 D-22: monotonic id source for `AgentLiveStep` — ids are unique, never meaningful. */
 let stepSeq = 0;
@@ -1159,16 +1172,31 @@ export function createTeamRunCoordinator(
    * Phase 39: discovery is per turn, not per construction — the manager caches the
    * coordinator across navigation, so a toggle flipped in the workspace must reach the next
    * turn. A discovery failure leaves the turn with DB tools only, never an error.
+   *
+   * UAT-41 follow-up: discovery is BOUNDED. An unreachable MCP endpoint used to hold the turn
+   * for the Rust connect timeout (15 s) before the leader read the user's message — the user
+   * saw a sent message sit unanswered. The bound keeps the previous turn's tools when it
+   * expires, so a dead endpoint costs at most 5 s once and nothing after that (the cache is
+   * reused, not cleared).
    */
   async function refreshMcpTools(): Promise<void> {
     if (liveTeam.mcpEnabled !== true) {
       mcpTools = [];
       return;
     }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(
+        () => reject(new Error('MCP discovery timed out')),
+        options.mcpDiscoveryTimeoutMs ?? MCP_DISCOVERY_TIMEOUT_MS
+      );
+    });
     try {
-      mcpTools = await discoverAllMcpTools(db);
+      mcpTools = await Promise.race([discoverAllMcpTools(db), timeout]);
     } catch {
-      mcpTools = [];
+      // Keep the cached list: a transient failure must not strip tools the last turn had.
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
     }
   }
 

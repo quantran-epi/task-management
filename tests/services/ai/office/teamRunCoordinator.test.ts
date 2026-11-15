@@ -119,6 +119,8 @@ const mcpProbe = vi.hoisted(() => ({
   active: false,
   threadId: '',
   userRowsSeen: [] as string[],
+  /** UAT-41 follow-up: make discovery hang so the turn's bound is what ends the wait. */
+  hang: false,
 }));
 
 vi.mock('../../../../src/services/ai/mcpClient', async (importOriginal) => {
@@ -132,6 +134,8 @@ vi.mock('../../../../src/services/ai/mcpClient', async (importOriginal) => {
           if (row.role === 'user') mcpProbe.userRowsSeen.push(String(row.content));
         }
       }
+      // A never-settling discovery: the turn must still answer within its own bound.
+      if (mcpProbe.hang) return new Promise<never>(() => {});
       return actual.discoverAllMcpTools(db);
     },
   };
@@ -224,6 +228,8 @@ interface HarnessOptions {
   synthesisScript?: LoopScript;
   /** WR-05 test seam: shorten the bounded settle poll so a stuck row is reachable. */
   settlePollDeadlineMs?: number;
+  /** UAT-41 follow-up seam: shorten the MCP discovery bound so a hang is reachable fast. */
+  mcpDiscoveryTimeoutMs?: number;
 }
 
 interface Harness {
@@ -343,6 +349,9 @@ async function createHarness(options: HarnessOptions): Promise<Harness> {
     createRuntimeDeps,
     ...(options.settlePollDeadlineMs !== undefined
       ? { settlePollDeadlineMs: options.settlePollDeadlineMs }
+      : {}),
+    ...(options.mcpDiscoveryTimeoutMs !== undefined
+      ? { mcpDiscoveryTimeoutMs: options.mcpDiscoveryTimeoutMs }
       : {}),
     // A fresh snapshot object per turn, so a later mutation of `roster` cannot reach a turn.
     ...(options.useSeam
@@ -6785,6 +6794,29 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       } finally {
         docsProbe.fail = false;
         warnSpy.mockRestore();
+      }
+    });
+
+    // UAT-41 follow-up: an unreachable MCP endpoint must not hold the turn. The bound is what
+    // ends the wait, and the turn still answers.
+    it('bounds MCP discovery so a dead endpoint cannot hold the turn', async () => {
+      docsHarness = await createHarness({
+        scripts: { [LEAD_MODEL]: async () => loopResult('Xong.') },
+        mcpDiscoveryTimeoutMs: 50,
+      });
+      const { db, coordinator, team } = docsHarness;
+
+      mcpProbe.hang = true;
+      try {
+        await updateTeam(team.id, { mcpEnabled: true }, db);
+        coordinator.setTeamSettings({ mcpEnabled: true });
+        const started = Date.now();
+        await coordinator.send('Xin chào');
+        await waitForReady(coordinator);
+        // The bound, not the (never-settling) discovery, is what let this return.
+        expect(Date.now() - started).toBeLessThan(2_000);
+      } finally {
+        mcpProbe.hang = false;
       }
     });
   });
