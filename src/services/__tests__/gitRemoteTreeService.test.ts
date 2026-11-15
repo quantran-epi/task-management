@@ -50,9 +50,10 @@ describe('gitRemoteTreeService uncommitted files & working copy fallback', () =>
   });
 
   it('getRemoteFileContent falls back to getRemoteWorkingFileContent when git show fails', async () => {
-    vi.spyOn(gitRemoteService, 'runGitCommand').mockRejectedValue(
-      new Error("fatal: path 'untracked.ts' does not exist in 'main'")
-    );
+    vi.spyOn(gitRemoteService, 'runGitCommand')
+      .mockRejectedValueOnce(new Error("fatal: path 'untracked.ts' does not exist in 'main'"))
+      // WR-01: the fallback first confirms the path is untracked; a non-zero exit means it is.
+      .mockRejectedValueOnce(new Error('error: pathspec did not match any file(s) known to git'));
 
     vi.spyOn(sshService, 'execRemoteCommand').mockResolvedValue({
       exitStatus: 0,
@@ -62,7 +63,6 @@ describe('gitRemoteTreeService uncommitted files & working copy fallback', () =>
 
     const content = await getRemoteFileContent(mockConfig, '/home/dev/repo', 'main', 'untracked.ts');
     expect(content).toBe('console.log("untracked fallback content");');
-    expect(sshService,).toBeDefined();
     expect(sshService.execRemoteCommand).toHaveBeenCalledWith(
       mockConfig,
       expect.stringContaining("cat -- '/home/dev/repo/untracked.ts'"),

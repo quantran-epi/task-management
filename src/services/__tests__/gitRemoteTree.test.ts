@@ -78,13 +78,16 @@ describe('gitRemoteTreeService', () => {
   });
 
   describe('getRemoteTree', () => {
-    it('calls git ls-tree with proper ref and parses output sorted', async () => {
+    it('calls git ls-tree with -z and parses NUL-separated output sorted', async () => {
+      // WR-03: `-z` output is NUL-terminated per record and never C-quoted, so a Vietnamese
+      // directory name arrives verbatim.
       const mockLsTreeOutput = [
         '100644 blob a1b2c3d4 1024\tREADME.md',
         '040000 tree f1e2d3c4    -\tsrc',
-        '040000 tree b2c3d4e5    -\tpublic',
+        '040000 tree b2c3d4e5    -\tthư-mục',
         '100644 blob c3d4e5f6  512\t.gitignore',
-      ].join('\n');
+        '',
+      ].join('\0');
 
       const runSpy = vi.spyOn(gitRemoteService, 'runGitCommand').mockResolvedValue(mockLsTreeOutput);
 
@@ -93,27 +96,27 @@ describe('gitRemoteTreeService', () => {
       expect(runSpy).toHaveBeenCalledWith(
         dummyConfig,
         '/home/user/repo',
-        ['ls-tree', '-l', '--end-of-options', "'main'"],
+        ['ls-tree', '-l', '-z', '--end-of-options', "'main'"],
         undefined
       );
 
-      expect(tree.map((n) => n.title)).toEqual(['public', 'src', '.gitignore', 'README.md']);
+      expect(tree.map((n) => n.title)).toEqual(['src', 'thư-mục', '.gitignore', 'README.md']);
       expect(tree[0]?.isLeaf).toBe(false);
       expect(tree[2]?.isLeaf).toBe(true);
       expect(tree[2]?.size).toBe(512);
     });
 
     it('handles subdirectory path in tree reference with clean slashes', async () => {
-      const runSpy = vi.spyOn(gitRemoteService, 'runGitCommand').mockResolvedValue(
-        '100644 blob 12345678 4096\tButton.tsx'
-      );
+      const runSpy = vi
+        .spyOn(gitRemoteService, 'runGitCommand')
+        .mockResolvedValue('100644 blob 12345678 4096\tButton.tsx\0');
 
       const tree = await getRemoteTree(dummyConfig, '/home/user/repo', 'feature/ui', '/src/components/');
 
       expect(runSpy).toHaveBeenCalledWith(
         dummyConfig,
         '/home/user/repo',
-        ['ls-tree', '-l', '--end-of-options', "'feature/ui:src/components'"],
+        ['ls-tree', '-l', '-z', '--end-of-options', "'feature/ui:src/components'"],
         undefined
       );
 
@@ -181,6 +184,61 @@ describe('gitRemoteTreeService', () => {
         getRemoteFileContent(dummyConfig, '/home/user/repo', 'mian', 'src/index.ts')
       ).rejects.toThrow('invalid object name');
       expect(execSpy).not.toHaveBeenCalled();
+    });
+
+    // WR-01: "exists on disk, but not in <ref>" also covers a path TRACKED but deleted in <ref>.
+    // The working copy then holds another branch's version, so it must not be substituted.
+    it('does not fall back for a path tracked but deleted in the requested ref', async () => {
+      const runSpy = vi
+        .spyOn(gitRemoteService, 'runGitCommand')
+        .mockRejectedValueOnce(
+          new Error("fatal: path 'gone.txt' exists on disk, but not in 'feature/x'")
+        )
+        .mockResolvedValueOnce('gone.txt\n'); // ls-files --error-unmatch: tracked
+      const execSpy = vi.spyOn(sshService, 'execRemoteCommand');
+
+      await expect(
+        getRemoteFileContent(dummyConfig, '/home/user/repo', 'feature/x', 'gone.txt')
+      ).rejects.toThrow('exists on disk, but not in');
+      expect(runSpy).toHaveBeenLastCalledWith(
+        dummyConfig,
+        '/home/user/repo',
+        ['ls-files', '--error-unmatch', '--', "'gone.txt'"],
+        undefined
+      );
+      expect(execSpy).not.toHaveBeenCalled();
+    });
+
+    // WR-01: the phrase match is anchored to the exact path and ref, so a ref whose NAME
+    // contains the phrase cannot force the fallback.
+    it('does not fall back when the phrase appears only in a bad ref name', async () => {
+      vi.spyOn(gitRemoteService, 'runGitCommand').mockRejectedValue(
+        new Error("fatal: invalid object name 'x does not exist in'.")
+      );
+      const execSpy = vi.spyOn(sshService, 'execRemoteCommand');
+
+      await expect(
+        getRemoteFileContent(dummyConfig, '/home/user/repo', 'x does not exist in', 'g.txt')
+      ).rejects.toThrow('invalid object name');
+      expect(execSpy).not.toHaveBeenCalled();
+    });
+
+    // WR-02: an untracked symlink inside the repo would let `cat` read its target outside it.
+    it('refuses to fall back when the path is a symlink', async () => {
+      vi.spyOn(gitRemoteService, 'runGitCommand')
+        .mockRejectedValueOnce(
+          new Error("fatal: path 'leak' exists on disk, but not in 'HEAD'")
+        )
+        .mockRejectedValueOnce(new Error('error: pathspec did not match')); // untracked
+      vi.spyOn(sshService, 'execRemoteCommand').mockResolvedValue({
+        exitStatus: 0,
+        stdout: '__GIT_READ_SYMLINK_REFUSED__\n',
+        stderr: '',
+      });
+
+      await expect(
+        getRemoteFileContent(dummyConfig, '/home/user/repo', 'HEAD', 'leak')
+      ).rejects.toThrow('symlink');
     });
   });
 });
