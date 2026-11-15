@@ -11,11 +11,13 @@ Tạo một nhóm = tạo một cây thư mục trong TaskMate Docs. Mỗi thàn
 Phase này gồm:
 
 - Field `docsFolderId` trên `AiTeam` + Dexie V27 + backup schema + 5 danh sách bảng phối hợp.
-- `createTeam` tạo cây thư mục trong **cùng transaction** với row team.
-- Một team tool mới `write_doc` cho mọi thành viên (create + update), với guard thư mục do **code** kiểm, không phải prompt.
+- Folder cha `AI Teams` (một lần, dùng chung) + folder nhóm + folder con mỗi member.
+- `createTeam` tạo cây trong **cùng transaction** với row team.
+- `addTeamMember` tạo folder con ngay; `removeTeamMember` giữ folder.
+- Một team tool mới `write_doc` cho mọi thành viên (`list` / `create` / `update`), với guard thư mục do **code** kiểm, không phải prompt.
 - Leader giữ nguyên toàn bộ mutation tool hiện có + thẻ phê duyệt hiện có.
-- `deleteTeam` xoá cây thư mục.
-- Backfill lazy cho nhóm tạo trước phase này.
+- `deleteTeam` xoá toàn bộ cây của nhóm (không xoá folder `AI Teams`).
+- Backfill lazy cho nhóm tạo trước phase này, và tạo lại cây khi folder bị xoá tay.
 
 Phase này **không** gồm:
 
@@ -36,8 +38,14 @@ Phase này **không** gồm:
   Team tool là đường thứ ba đã có tiền lệ: `propose_skill_version` (Phase 39 D-04/D-05/D-06) ghi row `pending` ngay, **cố ý không nằm trong `MUTATION_TOOLS`**, nên nó không đi qua `onMutationCheck` và không bị read-only chặn. `write_doc` theo đúng khuôn đó: dispatch ở `teamRunCoordinator.ts:1177` (`TEAM_TOOL_NAMES.has(...)` → `executeTeamTool`), trước cả `AI_DATABASE_TOOLS`. Không sửa runtime, không thêm policy, không đụng D-12.
   — **Reversibility:** reversible — xoá một entry khỏi `TEAM_TOOL_DEFINITIONS` + một case trong switch.
 
-- **D-02:** `write_doc` có **hai mode trong một tool**: `mode: 'create'` và `mode: 'update'`. Không tách hai tool. Lý do: cùng một guard, cùng một chỗ test, cùng một refusal set. `update` nhận `noteId`; `create` nhận `title` + `body`.
+- **D-02:** `write_doc` có **ba action trong một tool**: `list`, `create`, `update`. Không tách nhiều tool. Lý do: cùng một guard, cùng một chỗ test, cùng một refusal set.
+  - `list` → không tham số. Trả `[{ noteId, title, updatedAt }]` của **folder của chính caller**. Đây là cách agent biết `noteId` để sửa lần sau.
+  - `create` → `title` + `body`. Trả `{ noteId, title }`.
+  - `update` → `noteId` + `body`, `title` tuỳ chọn. Trả `{ noteId, title }`.
   — **Reversibility:** reversible.
+
+- **D-02b:** `create` **tự thêm tiền tố tên agent** vào title: `{agentName} — {title}`. `update` **không** thêm lại. Lý do: owner đọc Docs thấy ngay ai viết gì, không phải mở từng file. Tiền tố do tool thêm, không phải prompt — model không thể quên.
+  Leader **không** bị áp tiền tố (leader ghi bằng DB tool, D-06).
 
 - **D-03:** **Không** đụng `EMPLOYEE_READ_ONLY_ALLOWLIST`. Agent vẫn không có `create_note`, `update_note`, `delete_note`, hay bất kỳ mutation DB nào. `write_doc` là cửa ghi duy nhất của agent, và nó chỉ ghi được trong thư mục của chính agent đó.
 
@@ -46,33 +54,49 @@ Phase này **không** gồm:
 - **D-04:** Guard nằm trong **handler**, kiểm bằng code, không bằng prompt. Cụ thể:
   - `create`: `parentId` **bị bỏ qua hoàn toàn** nếu client gửi lên. Handler luôn dùng `ctx.folderId` (thư mục của chính caller, lấy từ context do coordinator dựng — **không** lấy từ `args`). Đây là cùng nguyên tắc "cross-team read guard" đã ghi ở đầu `teamTools.ts`: id luôn đến từ context, không bao giờ từ args.
   - `update`: đọc row hiện tại; nếu `note.parentId !== ctx.folderId` → refusal `DOC_NOT_IN_YOUR_FOLDER`. Không có ngoại lệ cho leader (leader dùng DB tool, xem D-06).
+  - `list`: chỉ trả note có `parentId === ctx.folderId`.
   - `type` luôn là `'document'`. Agent **không** tạo được `'folder'` — đó là cách duy nhất để nó không tự mở rộng vùng ghi.
 
-- **D-05:** `TeamToolContext` thêm `folderId?: string | undefined`. Coordinator dựng nó trong `toolContext(agentId)` từ `AiTeam.docsFolderId` + member row. Thiếu `folderId` (nhóm cũ chưa backfill, hoặc team chưa có cây) → `write_doc` trả refusal `TEAM_DOCS_NOT_READY`, không tự tạo thư mục giữa lượt chạy. Lý do: tạo thư mục trong lúc chạy là write ngoài transaction của team và sẽ nhân bản khi hai agent chạy song song.
+- **D-05:** `TeamToolContext` thêm `folderId?: string | undefined`. Coordinator dựng nó trong `toolContext(agentId)` từ `AiTeam.docsFolderId` + member row.
+  **Thứ tự bắt buộc:** cây được đảm bảo **trước khi lượt chạy bắt đầu** (D-12/D-12b: backfill + tạo lại khi folder mất), nên `folderId` phải có sẵn lúc `toolContext` được gọi. Nếu vẫn thiếu (ví dụ member chưa có folder vì lỗi dữ liệu) → `write_doc` trả refusal `TEAM_DOCS_NOT_READY`. Handler **không bao giờ** tự tạo folder — tạo folder là việc của coordinator, một chỗ duy nhất, trong transaction.
 
 ### Leader
 
 - **D-06:** Leader **không** dùng `write_doc`. Leader đã có `create_note`/`update_note` trong payload (`leadTools()` ở `teamRunCoordinator.ts:1097`), và mỗi call park trên thẻ phê duyệt. Giữ nguyên. Đây chính là gate "owner duyệt bản cuối" — owner bấm accept = chữ ký. Không thêm đường ghi thứ hai cho leader.
 
-- **D-07:** Leader ghi bản cuối vào **thư mục gốc của nhóm** (`docsFolderId`), không vào thư mục con. Prompt của leader (một dòng trong `buildLeadTurnRequest`) nêu: đọc draft của agent bằng `get_linked_context`/`query_notes`, tổng hợp, rồi ghi bản cuối vào thư mục gốc sau khi owner duyệt. Wording chính xác thuộc Claude's Discretion.
+- **D-07:** Leader ghi bản cuối vào **folder nhóm** (`docsFolderId`), không vào folder con. Prompt của leader (một dòng trong `buildLeadTurnRequest`) nêu: đọc draft của agent bằng `write_doc`-less read (`query_notes` theo `parentId`), tổng hợp, rồi ghi bản cuối vào folder nhóm sau khi owner duyệt. Wording chính xác thuộc Claude's Discretion.
+
+- **D-07b:** Bản cuối là **note mới** ở folder nhóm. Draft của agent **giữ nguyên** trong folder riêng của nó — owner so sánh được bản nháp với bản cuối. Không xoá, không di chuyển, không sửa draft.
 
 ### Cây thư mục
 
-- **D-08:** Cây gồm: 1 folder gốc tên `{team.name}` + 1 folder con cho mỗi member, tên = `{agent.name}`. Tất cả `type: 'folder'`, `parentId` trỏ đúng cấp. Không tạo folder con cho member thêm sau này trong phase này — xem D-11.
-  Ghi `docsFolderId` (id folder gốc) lên `AiTeam`. Không cần bảng mới: `Note.parentId` đã đủ để dựng cây.
+- **D-08:** Cây gồm **ba cấp**:
+  1. Một folder cha duy nhất tên `AI Teams` ở gốc Docs, `type: 'folder'`, `parentId` undefined. Tạo một lần, dùng chung cho mọi nhóm. Định danh bằng **setting key** `ai_teams_docs_root` trong `db.settings` (cùng khuôn `GLOBAL_CONVENTIONS_SETTING_KEY` ở `conventionService.ts:5`), **không** dò theo tên (đổi tên folder không được làm mất liên kết).
+  2. Folder nhóm: `{team.name}`, `parentId` = folder `AI Teams`. Id ghi vào `AiTeam.docsFolderId`.
+  3. Folder con cho mỗi member: `{agent.name}`, `parentId` = folder nhóm.
+  Lý do ba cấp thay vì hai: owner chọn "Dưới folder 'AI Teams'" — gom nhóm AI tách khỏi tài liệu cá nhân, và xoá/đổi tên folder cha không phá từng nhóm.
+  Không cần bảng mới: `Note.parentId` đã đủ để dựng cây.
 
-- **D-09:** Tạo cây **trong cùng transaction** với row team. `createTeam` (`aiTeamRepo.ts:91`) đã có `db.transaction('rw', [...])`; thêm `db.notes` vào danh sách bảng. Throw giữa chừng → không team, không folder. Không có "team mồ côi" và không có "folder mồ côi".
+- **D-08b:** Folder `AI Teams` tạo **lazy**, không tạo lúc app khởi động. Lần đầu một team cần cây: đọc setting `ai_teams_docs_root`; nếu trỏ tới note còn sống → dùng; nếu thiếu hoặc note đã bị xoá → tạo mới và ghi lại setting. Chạy trong cùng transaction với cây của team.
 
-- **D-10:** `deleteTeam` (`aiTeamRepo.ts:344`) xoá cây trong cùng transaction hiện có: thu thập toàn bộ `Note.id` có `parentId === docsFolderId` (một cấp, không đệ quy — cấu trúc do D-08 chốt là phẳng 2 cấp) rồi xoá con trước, gốc sau. Thêm `db.notes` vào danh sách bảng của transaction.
-  **Không** đệ quy: agent có thể tạo note trong folder của mình, nhưng không tạo được folder (D-04), nên cây không bao giờ sâu hơn 2 cấp. Nếu tương lai cho phép folder con, đây là chỗ phải sửa — ghi rõ trong plan.
+- **D-09:** Tạo cây **trong cùng transaction** với row team. `createTeam` (`aiTeamRepo.ts:91`) đã có `db.transaction('rw', [...])`; thêm `db.notes` và `db.settings` vào danh sách bảng. Throw giữa chừng → không team, không folder, không setting. Không có "team mồ côi" và không có "folder mồ côi".
 
-- **D-11:** Member thêm vào nhóm sau khi tạo → **không** tự có folder trong phase này. `write_doc` trả `TEAM_DOCS_NOT_READY` cho member đó. Lý do: tạo folder khi thêm member là một write thứ hai vào `db.notes` từ `TeamSettingsDrawer`, và owner chưa yêu cầu. Ghi thành Deferred.
+- **D-10:** `deleteTeam` (`aiTeamRepo.ts:344`) xoá **toàn bộ cây** trong cùng transaction hiện có: thu thập folder con (một cấp) + mọi note có `parentId` thuộc {folder nhóm, các folder con} rồi xoá hết, folder nhóm sau cùng. Thêm `db.notes` vào danh sách bảng của transaction.
+  **Không** xoá folder `AI Teams` và **không** xoá setting `ai_teams_docs_root` khi xoá team — folder cha dùng chung, và team khác có thể còn dùng.
+  **Không** đệ quy: agent không tạo được folder (D-04), nên cây không bao giờ sâu hơn 3 cấp. Nếu tương lai cho phép folder con, đây là chỗ phải sửa — ghi rõ trong plan.
+  Owner đã chốt: xoá nhóm = xoá sạch cả cây, kể cả tài liệu ở folder gốc nhóm.
+
+- **D-11:** Member thêm vào nhóm sau khi tạo → **tự có folder con ngay khi thêm**. `addTeamMember` (`aiTeamRepo.ts:403`) tạo folder trong cùng transaction (thêm `db.notes` vào danh sách bảng của nó). Tên folder = `{agent.name}`; nếu đã có folder cùng tên trong folder nhóm thì thêm hậu tố ` (2)`, ` (3)`.
+  `removeTeamMember` (`aiTeamRepo.ts:445`) **không** xoá folder của member — tài liệu họ đã viết vẫn còn để owner đọc; folder chỉ mất khi xoá cả nhóm. Ghi rõ trong plan để không ai "dọn" nhầm.
 
 ### Backfill
 
 - **D-12:** Nhóm tạo trước Phase 41 không có `docsFolderId`. Lần chạy đầu tiên của coordinator: nếu `docsFolderId` rỗng → tạo cây **một lần** trong một transaction, ghi `docsFolderId`, rồi tiếp tục lượt. Lần chạy sau thấy có id → không làm gì.
   Idempotency: kiểm `docsFolderId` **bên trong** transaction (đọc lại row), không kiểm ngoài. Hai lượt chạy đồng thời trên cùng nhóm không được tạo hai cây.
   **Không** migration Dexie cho dữ liệu cũ (C-16: dữ liệu cũ là test).
+
+- **D-12b:** `docsFolderId` trỏ tới folder **đã bị xoá** (owner xoá tay trong DocsExplorer) → coi như chưa có: coordinator tạo lại cây ở lượt chạy kế tiếp và ghi `docsFolderId` mới. Kiểm bằng `db.notes.get(docsFolderId)` + `deletedAt`/`type === 'folder'`. Không chặn xoá ở DocsExplorer — owner đã chốt "tự tạo lại ở lượt sau".
+  Hệ quả phải ghi trong plan: tài liệu trong cây cũ đã bị xoá cùng folder, nên agent không mất gì nó còn cần; nhưng owner mất draft nếu xoá tay. Đây là hành vi được chọn, không phải bug.
 
 ### Schema và backup
 
@@ -81,12 +105,17 @@ Phase này **không** gồm:
 - **D-14:** Backup: `BackupAiTeamRecordSchema` (`backupSchemas.ts`) thêm `docsFolderId` optional. Đây là **UUID**, không phải free text → không đụng `FORBIDDEN_BACKUP_KEYS`. Export/restore không cần sửa thêm vì `notes` đã round-trip sẵn.
 - **D-15:** Năm danh sách bảng phối hợp (`src/db/index.ts` Table declarations, `schema.ts`, `SQLITE_DOMAIN_TABLES` ở `localSqlitePersistence.ts`, `ALLOWED_TABLES` ở `src-tauri/src/sqlite_persistence.rs`, `tableListParity.test.ts`) — **không đổi**, vì không thêm bảng. Chỉ `LATEST_SCHEMA_VERSION` đổi. Test parity phải vẫn xanh.
 
+### Prompt
+
+- **D-16:** Agent biết folder của mình qua **prompt**, không qua tool. `buildEmployeeTurnRequest` thêm một dòng: `Folder tài liệu của bạn: {folderId} — dùng write_doc (list/create/update) để ghi trong đó.` Leader có thêm hai dòng: `Folder nhóm: {docsFolderId}` và danh sách `{agentName} → {folderId}` để biết đọc draft ở đâu.
+  Lý do: tiết kiệm một lượt tool, và folder id là dữ kiện cố định trong lượt — không có gì để agent "khám phá".
+
 ### Claude's Discretion
 
-- Tên chính xác của tool (`write_doc` vs `write_team_doc`) và tên field `mode`.
+- Tên chính xác của tool (`write_doc` vs `write_team_doc`) và tên field action.
 - Wording prompt của leader về việc đọc draft và ghi bản cuối.
-- Có thêm `get_team_docs` (liệt kê cây) hay để agent dùng `query_notes` sẵn có — **khuyến nghị: không thêm**, `query_notes` đã đọc được theo `parentId`.
-- Cách hiển thị cây trong DocsExplorer — **khuyến nghị: không đụng UI**, cây hiện ra tự nhiên vì nó là note folder bình thường.
+- Có thêm `get_team_docs` (liệt kê cây) hay để agent dùng `query_notes` sẵn có — **khuyến nghị: không thêm**, `write_doc action='list'` đã đủ cho agent, `query_notes` đã đủ cho leader.
+- Cách hiển thị cây trong DocsExplorer — **khuyến nghị: không đụng UI**, cây hiện ra tự nhiên vì nó là note folder bình thường. Chỉ cần kiểm: folder `AI Teams` không bị lọc khỏi `root_docs` view (`DocsExplorer.tsx:97` coi mọi filter không thuộc danh sách đặc biệt là folder id, nên folder gốc hiện đúng).
 
 ## Canonical References
 
@@ -144,11 +173,11 @@ Phase này **không** gồm:
 
 ## Specific Ideas
 
-- Test tối thiểu phải có: (1) `createTeam` tạo đúng số folder và rollback sạch khi throw; (2) `write_doc` create bỏ qua `parentId` client gửi; (3) `write_doc` update note ngoài folder → refusal; (4) agent gọi `create_note` DB tool vẫn bị `READ_ONLY_REFUSAL` (chứng minh D-03 không hở); (5) `deleteTeam` xoá cây; (6) backfill chạy hai lần không nhân bản.
+- Test tối thiểu phải có: (1) `createTeam` tạo đúng số folder (AI Teams + team + N member) và rollback sạch khi throw; (2) `write_doc` create bỏ qua `parentId` client gửi và tự thêm tiền tố tên agent; (3) `write_doc` update note ngoài folder → refusal; (4) `write_doc list` chỉ trả note trong folder của caller; (5) agent gọi `create_note` DB tool vẫn bị `READ_ONLY_REFUSAL` (chứng minh D-03 không hở); (6) `deleteTeam` xoá cả cây nhưng **không** xoá folder `AI Teams`; (7) backfill chạy hai lần không nhân bản; (8) `docsFolderId` trỏ folder đã xoá → tạo lại; (9) `addTeamMember` tạo folder con ngay; (10) `removeTeamMember` **không** xoá folder.
 
 ## Deferred Ideas
 
-- Folder con cho member thêm sau (D-11).
+- Cây sâu hơn 3 cấp / agent tự tạo folder.
+- UI riêng cho docs của nhóm (cây hiện trong DocsExplorer là đủ).
 - Skill body của BA/SA/Reviewer — viết **sau** khi Phase 41 + 42 xong, vì skill mô tả hành vi dựa trên tool surface thật.
-- Cây sâu hơn 2 cấp.
-- UI riêng cho docs của nhóm.
+- Xoá folder của member khi gỡ member khỏi nhóm (owner chọn giữ lại).
