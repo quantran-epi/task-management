@@ -8,7 +8,7 @@ import {
   type AiTeamAssignment,
 } from '../../../types/aiOffice';
 import { sanitizeHistoryTurns } from '../contextCompaction';
-import { wrapUntrusted } from '../untrustedData';
+import { wrapField, wrapUntrusted } from '../untrustedData';
 
 /**
  * Prompt assembly per agent (D-04, D-05, D-10, D-24, D-29).
@@ -161,7 +161,18 @@ export interface BuildLeadTurnRequestInput {
   batchResults?: readonly BatchResult[] | undefined;
   /** 37.1 D-04: the live assignment list, so the leader can report where every agent is. */
   ledger?: readonly AiTeamAssignment[] | undefined;
+  /** Phase 41 D-07: the team folder where the approved final document goes. */
+  docsFolderId?: string | undefined;
+  /** Phase 41 D-07: each member's own folder, so the leader knows where to read drafts. */
+  memberFolders?: readonly { agentName: string; folderId: string }[] | undefined;
 }
+
+/**
+ * Phase 41 D-06/T-41-35: the leader's write path is the DB tools, each parked on an approval
+ * card. Exported so the test asserts this exact sentence instead of a paraphrase.
+ */
+export const LEAD_NO_WRITE_DOC_LINE =
+  'Leader không dùng write_doc — đường ghi của leader là công cụ cơ sở dữ liệu, mỗi lần ghi dừng ở thẻ phê duyệt.';
 
 export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTurn {
   const {
@@ -173,6 +184,8 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
     recentTurns,
     batchResults,
     ledger,
+    docsFolderId,
+    memberFolders,
   } = input;
 
   const parts = [
@@ -201,6 +214,27 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
       'Khi gọi delegate_batch, trường agentId PHẢI là giá trị agentId ở trên — không dùng tên.',
     ].join('\n'),
   ];
+
+  // Phase 41 D-07/D-16: the folder facts are fixed for the turn, so they belong in the prompt
+  // rather than in a tool round. No facts means no header — a team without a tree gets nothing.
+  if (docsFolderId || (memberFolders && memberFolders.length > 0)) {
+    const lines = ['[THƯ MỤC TÀI LIỆU NHÓM]'];
+    if (docsFolderId) lines.push(`Folder nhóm: ${docsFolderId}`);
+    if (memberFolders && memberFolders.length > 0) {
+      // T-41-21: a member name is user-authored, so it enters as data — like the linked-item
+      // name below. Folder ids are UUIDs from the context and stay bare.
+      lines.push(
+        ...memberFolders.map((m) => `${wrapField('TÊN NHÂN VIÊN', m.agentName)} → ${m.folderId}`)
+      );
+    }
+    lines.push(
+      'Đọc bản nháp của một nhân viên bằng query_notes lọc theo folder id của nhân viên đó, rồi tổng hợp.',
+      'Sau khi người dùng duyệt, ghi bản CUỐI vào folder nhóm bằng create_note; mỗi lần ghi dừng ở thẻ phê duyệt và chính lần chấp nhận của người dùng mới đặt tài liệu vào đó.',
+      'Bản nháp của nhân viên giữ nguyên tại chỗ — không xoá, không di chuyển, không sửa.',
+      LEAD_NO_WRITE_DOC_LINE
+    );
+    parts.push(lines.join('\n'));
+  }
 
   // 37.1 D-04/D-06: the live ledger is how the leader reports honestly and knows which rows
   // it may amend. `task` originated from a model, so it enters as untrusted data.
