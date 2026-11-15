@@ -30,13 +30,20 @@ import {
 } from '../../../components/ai/runtime/chatTurnRuntime';
 import { dispatchAiToolCall } from '../aiOrchestratorLoop';
 import type { ChatCompletionMessage } from '../types';
-import { AI_DATABASE_TOOLS, isMutationTool, normalizeToolName, type AiToolDefinition } from '../aiTools';
+import {
+  AI_DATABASE_TOOLS,
+  ORACLE_READ_TOOLS,
+  isMutationTool,
+  normalizeToolName,
+  type AiToolDefinition,
+} from '../aiTools';
 import {
   EMPLOYEE_READ_ONLY_ALLOWLIST,
   LEAD_TOOL_ALLOWLIST,
   getToolsForTurn,
 } from '../chatTurnTools';
 import { discoverAllMcpTools, isReadOnlyMcpTool } from '../mcpClient';
+import { getOracleToolConfig } from '../oracleSqlclService';
 import { aiTurnManager } from '../aiTurnManager';
 import { createTeamRunRegistry, type TeamRunRegistry } from './teamRunRegistry';
 import { createTeamRunScheduler, type SchedulerHandle } from './scheduler';
@@ -1128,7 +1135,7 @@ export function createTeamRunCoordinator(
       : undefined;
   }
 
-  function leadTools(): AiToolDefinition[] {
+  async function leadTools(): Promise<AiToolDefinition[]> {
     // CR-04 / D-13: the lead is the only agent allowed to mutate, so its payload must
     // actually advertise the mutation tools — the runtime parks each one on the
     // approval card. Without them the prompt promises writes the payload forbids.
@@ -1148,15 +1155,27 @@ export function createTeamRunCoordinator(
         (tool) => !EMPLOYEE_ONLY_TEAM_TOOLS.has(normalizeToolName(tool.function.name))
       ),
       ...mcpReadOnlyTools(),
+      ...(await oracleReadTools()),
     ];
   }
 
-  function employeeTools(): AiToolDefinition[] {
+  async function employeeTools(): Promise<AiToolDefinition[]> {
     return [
       ...getToolsForTurn(true, [], EMPLOYEE_READ_ONLY_ALLOWLIST),
       ...EMPLOYEE_TEAM_TOOLS,
       ...mcpReadOnlyTools(),
+      ...(await oracleReadTools()),
     ];
+  }
+
+  /**
+   * Oracle read is advertised only while the AI Tool is enabled — a disabled Oracle in the
+   * payload is the "model calls unrelated tools" problem. Read per payload, not cached, so a
+   * mid-session toggle reaches the next turn. `getOracleToolConfig` already returns the
+   * disabled default on error, so no try/catch here.
+   */
+  async function oracleReadTools(): Promise<AiToolDefinition[]> {
+    return (await getOracleToolConfig(db)).enabled === true ? ORACLE_READ_TOOLS : [];
   }
 
   /**
@@ -1919,7 +1938,7 @@ export function createTeamRunCoordinator(
         model: employee.model || options.model,
         analysisMode: true,
         autoApprove: false,
-        tools: employeeTools(),
+        tools: await employeeTools(),
         mutationPolicy: 'read-only',
         persistUserMessage: false,
         agentKind: 'employee',
@@ -2128,7 +2147,7 @@ export function createTeamRunCoordinator(
         model: lead.model || options.model,
         analysisMode: true,
         autoApprove: liveTeam.autoApproveMutations === true,
-        tools: leadTools(),
+        tools: await leadTools(),
         mutationPolicy: 'approve',
         persistUserMessage: false,
         agentKind: 'lead',

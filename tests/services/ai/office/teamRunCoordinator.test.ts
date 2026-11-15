@@ -59,6 +59,10 @@ import {
   dispatchBudgetWarning,
   resetAllBudgetWarnings,
 } from '../../../../src/services/ai/office/budgetWarning';
+import {
+  DEFAULT_ORACLE_CONFIG,
+  saveOracleToolConfig,
+} from '../../../../src/services/ai/oracleSqlclService';
 
 /**
  * Phase 38 D-06/T-38-20: the OS notification channel is the only observable for a warning.
@@ -1599,6 +1603,45 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
       expect(payloadHasMutationTool(leadTools)).toBe(true);
       expect(payloadHasMutationTool(employeeTools)).toBe(false);
+    });
+
+    // Oracle read reaches both team agents, but only while the AI Tool is on — a disabled
+    // Oracle in the payload is the "model calls unrelated tools" problem.
+    it('advertises the Oracle read pair to both agents only when the Oracle tool is enabled', async () => {
+      const leadNames: string[][] = [];
+      const employeeNames: string[][] = [];
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            leadNames.push((options.tools ?? []).map((t) => normalizeToolName(t.function.name)));
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async (options) => {
+            employeeNames.push(
+              (options.tools ?? []).map((t) => normalizeToolName(t.function.name))
+            );
+            return loopResult('A xong');
+          },
+        },
+      });
+      const { coordinator, employees, db } = harness;
+
+      await coordinator.send('Xin chào');
+      await coordinator.send('@[An](agent:' + employees[0]!.id + ') việc A');
+
+      for (const names of [leadNames.at(-1)!, employeeNames.at(-1)!]) {
+        expect(names).not.toContain('oracle_query');
+        expect(names).not.toContain('oracle_describe');
+      }
+
+      await saveOracleToolConfig({ ...DEFAULT_ORACLE_CONFIG, enabled: true }, db);
+      await coordinator.send('Xin chào lần nữa');
+      await coordinator.send('@[An](agent:' + employees[0]!.id + ') việc A lần nữa');
+
+      for (const names of [leadNames.at(-1)!, employeeNames.at(-1)!]) {
+        expect(names).toContain('oracle_query');
+        expect(names).toContain('oracle_describe');
+      }
     });
 
     it('hydrates the team total from persisted usage so a reactivated team is not reset (CR-05)', async () => {

@@ -5,7 +5,7 @@ import {
   getToolsForTurn,
   payloadHasMutationTool,
 } from '../../src/services/ai/chatTurnTools';
-import { AI_DATABASE_TOOLS, isMutationTool, normalizeToolName } from '../../src/services/ai/aiTools';
+import { AI_DATABASE_TOOLS, ORACLE_READ_TOOLS, isMutationTool, normalizeToolName } from '../../src/services/ai/aiTools';
 
 describe('chatTurnTools allowlists (D-12, D-27)', () => {
   it('employee payload contains no mutation tool', () => {
@@ -72,5 +72,15 @@ describe('chatTurnTools allowlists (D-12, D-27)', () => {
     expect(names).toContain('query_tasks');
     expect(names).toContain('update_task');
     expect(names).not.toContain('delegate_batch');
+  });
+
+  // The Oracle pair is a read path: the team payloads may carry it, so it must never be
+  // classified as a mutation or the employee gate would drop it.
+  it('ORACLE_READ_TOOLS is exactly the two read tools and neither is a mutation', () => {
+    const names = ORACLE_READ_TOOLS.map((t) => normalizeToolName(t.function.name));
+    expect(names.sort()).toEqual(['oracle_describe', 'oracle_query']);
+    for (const name of names) {
+      expect(isMutationTool(name)).toBe(false);
+    }
   });
 });

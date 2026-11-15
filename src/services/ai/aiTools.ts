@@ -4775,6 +4775,15 @@ const MUTATION_TOOLS = new Set([
 ]);
 
 /**
+ * The Oracle read pair, filtered from `AI_DATABASE_TOOLS` so the definitions are not
+ * duplicated. Neither is a mutation: `executeOracleQuery`/`executeOracleDescribe` enforce
+ * read-only and return a structured error when the tool is disabled.
+ */
+export const ORACLE_READ_TOOLS: AiToolDefinition[] = AI_DATABASE_TOOLS.filter((tool) =>
+  ['oracle_query', 'oracle_describe'].includes(normalizeToolName(tool.function.name))
+);
+
+/**
  * Normalizes tool names by stripping provider or proxy cloaking wrappers
  * (such as 9router Antigravity / Claude suffix `_ide`, `_cc`, `_tool` or `proxy_` prefix).
  */
