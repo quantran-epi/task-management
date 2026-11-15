@@ -988,12 +988,12 @@ Plans:
 
 **Research flag:** standard patterns — skip research-phase.
 
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 Plans:
 **Wave 1**
 
 - [x] 42-01-PLAN.md — `git_read` team tool: seven-action enum, linked-system repo resolution, untrusted wraps, `getRecentCommits`, and the tool-count bump
-- [ ] 42-02-PLAN.md — Reviewer prompt line naming `git_read` and the read order
+- [x] 42-02-PLAN.md — Reviewer prompt line naming `git_read` and the read order
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
