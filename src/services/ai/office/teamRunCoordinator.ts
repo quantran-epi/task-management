@@ -57,11 +57,13 @@ import {
   type LinkedItemIndexEntry,
 } from './teamPrompts';
 import {
+  EMPLOYEE_ONLY_TEAM_TOOLS,
   LEAD_ONLY_TEAM_TOOLS,
   TEAM_TOOL_DEFINITIONS,
   executeTeamTool,
   type TeamToolContext,
 } from './teamTools';
+import { ensureTeamDocsReady } from '../../../db/repositories/teamDocsRepo';
 import {
   findCurrentSynthesisMessageId,
   insertReportMessage,
@@ -501,6 +503,12 @@ export function createTeamRunCoordinator(
   // D-25: the toggles are read at run time, so a change in the sidebar or settings
   // drawer applies without reconstructing the coordinator.
   let liveTeam: AiTeam = team;
+  /**
+   * Phase 41 D-05: agentId → docs folder id for the CURRENT turn, rebuilt by
+   * `ensureDocsReady` at every turn start. The leader is deliberately NOT looked up here
+   * (`toolContext` returns no `folderId` for it) even though its member row has a folder.
+   */
+  let memberFolderIds = new Map<string, string>();
   /** Phase 39: read-only MCP tools for the CURRENT turn; refreshed at every turn start. */
   let mcpTools: AiToolDefinition[] = options.mcpTools ?? [];
 
@@ -1078,6 +1086,15 @@ export function createTeamRunCoordinator(
     // D-18: the pin comes from the attempt, never from `roster.skills` — the roster carries
     // the CURRENT approved rows, which is exactly what a mid-batch approval changes.
     const pinned = pinnedSkillVersion.get(agentId);
+    // Phase 41 D-06/T-41-26: the leader gets NO `folderId` — not the team folder and not its
+    // own member folder either, even though plan 41-04 gives the lead a member row whose id IS
+    // in `memberFolderIds`. Withholding it keeps the second belt real: `write_doc` is absent
+    // from the lead payload, the handler refuses `role === 'lead'`, and the absent folder
+    // would refuse `TEAM_DOCS_NOT_READY` third.
+    const isLead = roster.lead?.id === agentId;
+    const role: 'lead' | 'employee' = isLead ? 'lead' : 'employee';
+    const agentName = isLead ? roster.lead?.name : employee?.name;
+    const folderId = isLead ? undefined : memberFolderIds.get(agentId);
     return {
       db,
       teamId,
@@ -1085,6 +1102,9 @@ export function createTeamRunCoordinator(
       agentId,
       ...(skillId ? { skillId } : {}),
       ...(pinned !== undefined ? { skillVersion: pinned } : {}),
+      ...(role ? { role } : {}),
+      ...(agentName ? { agentName } : {}),
+      ...(folderId ? { folderId } : {}),
     };
   }
 
@@ -1105,7 +1125,16 @@ export function createTeamRunCoordinator(
         isMutationTool(tool.function.name) &&
         !advertised.has(normalizeToolName(tool.function.name))
     );
-    return [...reads, ...mutations, ...TEAM_TOOL_DEFINITIONS, ...mcpReadOnlyTools()];
+    return [
+      ...reads,
+      ...mutations,
+      // Phase 41 D-06/T-41-33: the lead payload must not advertise the employee-only write
+      // path. The handler's role guard is the code half; this is the payload half.
+      ...TEAM_TOOL_DEFINITIONS.filter(
+        (tool) => !EMPLOYEE_ONLY_TEAM_TOOLS.has(normalizeToolName(tool.function.name))
+      ),
+      ...mcpReadOnlyTools(),
+    ];
   }
 
   function employeeTools(): AiToolDefinition[] {
@@ -1409,6 +1438,27 @@ export function createTeamRunCoordinator(
     const rows = await hydrateBudgets();
     for (const row of rows) memberIds.set(row.agentId, row.id);
     membersLoaded = true;
+  }
+
+  /**
+   * Phase 41 D-05/D-12/D-12b: guarantee the team's docs tree before the turn's tool context is
+   * built, so `write_doc` always has a `folderId` to write into.
+   *
+   * The bare `catch` is deliberate and is the ONLY reason it exists: a docs failure must never
+   * block a chat turn. An absent folder id makes `write_doc` refuse with
+   * `TEAM_DOCS_NOT_READY` — the truthful outcome — whereas a throw here would kill the turn.
+   * The trade: a programming error inside `ensureTeamDocsReady` also lands here silently, so
+   * that function's store list is pinned by its own tests (plans 41-02/41-04).
+   */
+  async function ensureDocsReady(): Promise<void> {
+    if (disposed) return;
+    try {
+      const result = await ensureTeamDocsReady(teamId, db);
+      liveTeam = result.team;
+      memberFolderIds = result.memberFolderIds;
+    } catch {
+      memberFolderIds = new Map();
+    }
   }
 
   /**
@@ -2447,6 +2497,10 @@ export function createTeamRunCoordinator(
     }
     // The roster load is an await: a dispose during it must not let the turn start.
     if (disposed) return 'blocked';
+    // Phase 41 D-05/D-12: the docs tree must exist before any tool context is built for this
+    // turn. A failure here leaves the map empty and `write_doc` refuses — never a dead turn.
+    await ensureDocsReady();
+    if (disposed) return 'blocked';
     // Phase 39: same per-turn freshness as the roster — a toggle set since the last turn
     // must decide THIS turn's tool payload.
     await refreshMcpTools();
@@ -3295,6 +3349,9 @@ export function createTeamRunCoordinator(
     // so every later submit queued and the release effect never fired.
     try {
       const source = await getAssignment(assignmentId, db);
+      // Phase 41 D-05: a retry is a turn too, and it can be the first thing that runs after the
+      // owner deleted the tree — so the folder ids are refreshed before any tool context.
+      await ensureDocsReady();
       if (!source) throw new Error('Không tìm thấy lần chạy cần chạy lại.');
       if (source.runStatus !== 'stopped' && source.runStatus !== 'error') {
         throw new Error('Chỉ chạy lại được lần chạy đã dừng hoặc bị lỗi.');
