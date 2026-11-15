@@ -383,7 +383,12 @@ async function writeLeadRow(
   }
 
   // The row did not exist when the backfill ran, so `backfillIds` cannot name it.
-  const folderId = await createMemberFolder(teamFolderId, leadName, db);
+  // CR-03: every mint site stamps the slug, or a later repair cannot find this lead's folder and
+  // mints a ` (2)` sibling that strands everything the lead wrote earlier.
+  const folderId = await createMemberFolder(teamFolderId, leadName, db, {
+    teamId,
+    agentId: leadId,
+  });
   await db.aiTeamMembers.add({
     id: generateId(),
     teamId,
@@ -588,7 +593,7 @@ export async function addTeamMember(
       // same agent must reuse it. Identity is the folder's slug (teamId + agentId), never the
       // display name — two agents named "An" must not share a zone.
       const reusableFolderId = liveTree
-        ? await findMemberFolderForAgent(teamFolderId, validated.teamId, validated.agentId, db)
+        ? await findMemberFolderForAgent(validated.teamId, validated.agentId, db)
         : undefined;
 
       const member: AiTeamMember = {

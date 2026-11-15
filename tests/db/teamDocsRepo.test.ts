@@ -10,6 +10,7 @@ import {
   ensureDocsRoot,
   ensureTeamDocsReady,
   isLiveFolder,
+  teamFolderSlug,
 } from '../../src/db/repositories/teamDocsRepo';
 import { createEmployee, createLead } from '../../src/db/repositories/aiOfficeRepo';
 import { createNote, deleteNote } from '../../src/db/repositories/noteRepo';
@@ -583,5 +584,79 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
     await deleteNote(ready.team.docsFolderId as string, db);
 
     expect((await db.aiTeams.get(team.id))?.docsFolderId).toBeUndefined();
+  });
+
+  // CR-01: a user folder the owner created in Docs is claimed by no team, so the old
+  // "no rival claim" proof accepted it and `deleteTeam` destroyed the user's data.
+  it('refuses to delete a user folder the owner created (CR-01)', async () => {
+    const team = await seedTeam('Nhóm A', [generateId()]);
+    await ensureTeamDocsReady(team.id, db);
+    const userFolder = await createNote({ title: 'Thư mục riêng', body: '', type: 'folder' }, db);
+    const secret = await createNote(
+      { title: 'Bí mật', body: 'x', type: 'document', parentId: userFolder.id },
+      db
+    );
+    await db.aiTeams.update(team.id, { docsFolderId: userFolder.id });
+
+    await deleteTeamDocsTree(userFolder.id, db, team.id);
+
+    expect(await db.notes.get(userFolder.id)).toBeDefined();
+    expect(await db.notes.get(secret.id)).toBeDefined();
+  });
+
+  // CR-02: a restored backup can carry two member rows naming one folder; accepting both let
+  // one member overwrite the other's documents.
+  it('gives two member rows sharing one folder id distinct folders (CR-02)', async () => {
+    const agentIds = [generateId(), generateId()];
+    const team = await seedTeam('Nhóm A', agentIds);
+    const first = await ensureTeamDocsReady(team.id, db);
+    const sharedFolderId = first.memberFolderIds.get(agentIds[0] as string) as string;
+
+    // Corruption: both rows now name the same folder.
+    const rows = await db.aiTeamMembers.where('teamId').equals(team.id).toArray();
+    for (const row of rows) {
+      await db.aiTeamMembers.update(row.id, { docsFolderId: sharedFolderId });
+    }
+
+    const second = await ensureTeamDocsReady(team.id, db);
+
+    const a = second.memberFolderIds.get(agentIds[0] as string);
+    const b = second.memberFolderIds.get(agentIds[1] as string);
+    expect(a).not.toBe(b);
+    expect(await isLiveFolder(a, db)).toBe(true);
+    expect(await isLiveFolder(b, db)).toBe(true);
+  });
+
+  // WR-04: the owner can drag a member folder elsewhere in Docs; the backfill must bring it
+  // back instead of abandoning its documents and minting a sibling.
+  it('re-parents a member folder the owner moved out of the team folder (WR-04)', async () => {
+    const agentId = generateId();
+    const team = await seedTeam('Nhóm A', [agentId]);
+    const first = await ensureTeamDocsReady(team.id, db);
+    const memberFolderId = first.memberFolderIds.get(agentId) as string;
+    const doc = await createNote(
+      { title: 'Đã viết', body: 'x', type: 'document', parentId: memberFolderId },
+      db
+    );
+    // Owner drags it to the top level.
+    await db.notes.update(memberFolderId, { parentId: undefined });
+
+    const second = await ensureTeamDocsReady(team.id, db);
+
+    expect(second.memberFolderIds.get(agentId)).toBe(memberFolderId);
+    expect((await db.notes.get(memberFolderId))?.parentId).toBe(
+      second.team.docsFolderId as string
+    );
+    expect((await db.notes.get(doc.id))?.parentId).toBe(memberFolderId);
+  });
+
+  // CR-01/WR-01: the team folder carries an identity marker, so ownership never depends on a
+  // global scan or on a root that can be replaced.
+  it('stamps the team folder with its identity slug (CR-01)', async () => {
+    const team = await seedTeam('Nhóm A', [generateId()]);
+    const ready = await ensureTeamDocsReady(team.id, db);
+
+    const teamFolder = await db.notes.get(ready.team.docsFolderId as string);
+    expect(teamFolder?.slug).toBe(teamFolderSlug(team.id));
   });
 });

@@ -206,8 +206,12 @@ export async function detachNoteReferences(
   }
 }
 
-/** The stores `detachNoteReferences` reads or writes — every caller must name all of them. */
-export const NOTE_REFERENCE_STORES = [
+/**
+ * WR-02: the stores `detachNoteReferences` reads or writes, in one list. Callers derive their
+ * transaction scope from it, so a store added to the helper can never be forgotten by a caller
+ * and surface as a `SubTransactionError` at runtime.
+ */
+export const NOTE_REFERENCE_STORE_NAMES = [
   'notes',
   'noteAttachments',
   'documentSets',
@@ -220,29 +224,19 @@ export const NOTE_REFERENCE_STORES = [
   'aiTeamMembers',
 ] as const;
 
+/** The same list as Dexie table handles, for `db.transaction('rw', ...)`. */
+export function noteReferenceStores(db: TaskPlannerDatabase): unknown[] {
+  return NOTE_REFERENCE_STORE_NAMES.map((name) => db.table(name));
+}
+
 export async function deleteNote(
   id: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<void> {
-  await db.transaction(
-    'rw',
-    [
-      db.notes,
-      db.noteAttachments,
-      db.documentSets,
-      db.publishedDocuments,
-      db.knowledgeLinks,
-      db.chatThreads,
-      db.chatMessages,
-      db.chatTabs,
-      db.aiTeams,
-      db.aiTeamMembers,
-    ],
-    async () => {
-      await detachNoteReferences([id], db);
-      await db.notes.delete(id);
-    }
-  );
+  await db.transaction('rw', noteReferenceStores(db) as never, async () => {
+    await detachNoteReferences([id], db);
+    await db.notes.delete(id);
+  });
 }
 
 export async function permanentDeleteNote(
@@ -414,24 +408,9 @@ export async function bulkPermanentDeleteNotes(
   db: TaskPlannerDatabase = defaultDb
 ): Promise<void> {
   if (ids.length === 0) return;
-  await db.transaction(
-    'rw',
-    [
-      db.notes,
-      db.noteAttachments,
-      db.documentSets,
-      db.publishedDocuments,
-      db.knowledgeLinks,
-      db.chatThreads,
-      db.chatMessages,
-      db.chatTabs,
-      db.aiTeams,
-      db.aiTeamMembers,
-    ],
-    async () => {
-      await detachNoteReferences(ids, db);
-      await db.notes.bulkDelete(ids);
-    }
-  );
+  await db.transaction('rw', noteReferenceStores(db) as never, async () => {
+    await detachNoteReferences(ids, db);
+    await db.notes.bulkDelete(ids);
+  });
 }
 

@@ -47,17 +47,23 @@ export async function isChildFolderOf(
 }
 
 /**
- * CR-05/CR-06: the ONE place a team folder handle is validated, used by every consumer
- * (backfill, delete, rename, add-member).
+ * CR-05/CR-06/CR-01: the ONE place a team folder handle is validated, used by every consumer
+ * (backfill, delete, rename, add-member, lead write).
  *
- * The proof is ownership, not parent shape. A parent-shape rule ("direct child of the current
- * root") over-refuses: the `AI Teams` root is an ordinary folder the owner can delete from Docs,
- * after which `ensureDocsRoot` mints a new one and every existing team folder is parented to the
- * old row — `deleteTeam` would then silently delete nothing and leak the tree (CR-06).
+ * Identity is a slug stamped on the folder row, never a parent shape and never the absence of a
+ * rival claim:
  *
- * So a handle is accepted iff it names a live folder, is not the shared root, and no OTHER team
- * row claims it. That is exactly the corruption CR-01/CR-02 guard against, without depending on
- * a root that can legitimately change.
+ * - A parent-shape rule ("direct child of the current root") over-refuses: the `AI Teams` root is
+ *   an ordinary folder the owner can delete from Docs, after which `ensureDocsRoot` mints a new
+ *   one and every existing team folder is parented to the old row — `deleteTeam` would then
+ *   silently delete nothing and leak the tree (CR-06).
+ * - "No other team claims it" under-refuses: a user folder the owner created is claimed by
+ *   nobody, so a corrupted backup pointing a team at it would let `deleteTeam` hard-delete the
+ *   user's folder and every document inside (CR-01).
+ *
+ * The slug is the only proof that survives both. Pre-41 trees carry no slug; for those the
+ * parent-shape rule is the fallback, which a user folder cannot satisfy unless the owner
+ * deliberately parented it under the AI Teams root.
  */
 export async function resolveTeamFolder(
   teamId: string,
@@ -65,18 +71,27 @@ export async function resolveTeamFolder(
   db: TaskPlannerDatabase = defaultDb
 ): Promise<string | undefined> {
   if (docsFolderId === undefined) return undefined;
-  if (!(await isLiveFolder(docsFolderId, db))) return undefined;
+
+  const row = await db.notes.get(docsFolderId);
+  if (!row || row.deletedAt || row.type !== 'folder') return undefined;
 
   const rootSetting = await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY);
-  if (typeof rootSetting?.value === 'string' && rootSetting.value === docsFolderId) {
-    return undefined;
-  }
+  const rootId = typeof rootSetting?.value === 'string' ? rootSetting.value : undefined;
+  if (rootId !== undefined && rootId === docsFolderId) return undefined;
 
-  // D-13: `docsFolderId` is unindexed payload, so this is a scan, not a `where` query.
-  const claimants = (await db.aiTeams.toArray()).filter(
-    (team) => team.docsFolderId === docsFolderId
-  );
-  return claimants.some((team) => team.id !== teamId) ? undefined : docsFolderId;
+  if (row.slug === teamFolderSlug(teamId)) return docsFolderId;
+
+  // A slug naming ANOTHER team is a rival claim, not a pre-41 tree — refuse it.
+  if (row.slug !== undefined && row.slug.startsWith('ai-team:')) return undefined;
+
+  // Pre-41 fallback: the tree predates slugs, so ownership is the root parent. A folder the
+  // owner created elsewhere is refused.
+  return rootId !== undefined && row.parentId === rootId ? docsFolderId : undefined;
+}
+
+/** CR-01/WR-01: a team folder's identity marker, stamped at creation. */
+export function teamFolderSlug(teamId: string): string {
+  return `ai-team:${teamId}`;
 }
 
 /**
@@ -153,22 +168,25 @@ export async function createMemberFolder(
 }
 
 /**
- * WR-02/CR-07: the live folder this agent already owns inside the team folder, if any.
+ * WR-02/CR-07/WR-04: the live folder this agent already owns, if any.
  *
  * `removeTeamMember` keeps the folder on purpose, so re-adding the same agent must adopt that
  * folder rather than mint a ` (2)` sibling that strands everything written earlier. Identity is
  * the slug, so two agents with the same display name never share a zone.
+ *
+ * WR-04: the scan is the whole notes table, not just the team folder's children — the owner can
+ * drag a member folder elsewhere in Docs, and abandoning it there would orphan its documents.
+ * The caller re-parents a drifted folder back under the team folder.
  */
 export async function findMemberFolderForAgent(
-  teamFolderId: string,
   teamId: string,
   agentId: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<string | undefined> {
   const slug = memberFolderSlug(teamId, agentId);
-  const children = await db.notes.where('parentId').equals(teamFolderId).toArray();
-  const match = children.find(
-    (child) => child.type === 'folder' && !child.deletedAt && child.slug === slug
+  // `slug` is not indexed, so a scan is the honest form.
+  const match = (await db.notes.toArray()).find(
+    (note) => note.type === 'folder' && !note.deletedAt && note.slug === slug
   );
   return match?.id;
 }
@@ -187,7 +205,13 @@ export async function createTeamDocsTree(
 ): Promise<{ folderId: string; memberFolderIds: Map<string, string> }> {
   const rootId = await ensureDocsRoot(db);
   const teamFolder = await createNote(
-    { title: teamName, body: '', type: 'folder', parentId: rootId },
+    {
+      title: teamName,
+      body: '',
+      type: 'folder',
+      parentId: rootId,
+      slug: teamFolderSlug(teamId),
+    },
     db
   );
 
@@ -240,23 +264,17 @@ async function collectSubtreeIds(
  */
 export async function deleteTeamDocsTree(
   teamFolderId: string | undefined,
-  db: TaskPlannerDatabase = defaultDb,
-  ownerTeamId?: string
+  db: TaskPlannerDatabase,
+  ownerTeamId: string
 ): Promise<void> {
   if (teamFolderId === undefined) return;
 
   // CR-01/CR-06: the ONE resolver decides whether this handle is really this team's folder.
-  // It refuses the shared root, a user document and another team's folder, and it does NOT
-  // depend on the folder still being a child of the *current* root — the owner can delete the
-  // `AI Teams` root from Docs, after which a parent-shape rule would silently delete nothing
-  // and leak the whole tree.
-  if (ownerTeamId !== undefined) {
-    const resolved = await resolveTeamFolder(ownerTeamId, teamFolderId, db);
-    if (resolved === undefined) return;
-  } else {
-    // IN-02: no owner means no ownership proof — refuse rather than delete an unowned tree.
-    return;
-  }
+  // It refuses the shared root, a user document, a user folder and another team's folder, and it
+  // does NOT depend on the folder still being a child of the *current* root — the owner can
+  // delete the `AI Teams` root from Docs, after which a parent-shape rule would silently delete
+  // nothing and leak the whole tree.
+  if ((await resolveTeamFolder(ownerTeamId, teamFolderId, db)) === undefined) return;
 
   const ids = await collectSubtreeIds(teamFolderId, db);
 
@@ -313,33 +331,43 @@ export async function ensureTeamDocsReady(
 
       if (teamFolderId !== undefined) {
         const memberFolderIds = new Map<string, string>();
-        // CR-07: folders already claimed by a sibling row, so a repair never hands one member's
-        // zone to another.
-        const claimed = new Set(
-          rows
-            .map((row) => row.docsFolderId)
-            .filter((id): id is string => id !== undefined)
-        );
+        // CR-07/CR-02: folders already claimed by a sibling row, so a repair never hands one
+        // member's zone to another. Applied to EVERY branch — a restored backup can carry two
+        // rows naming one folder, and accepting both would let one member overwrite the other's
+        // documents.
+        const claimed = new Set<string>();
         for (const row of rows) {
-          // CR-03: a live folder that is NOT a child of the team folder is not this member's
-          // zone — treat it as absent and re-mint.
-          if (await isChildFolderOf(row.docsFolderId, teamFolderId, db)) {
-            memberFolderIds.set(row.agentId, row.docsFolderId as string);
-            continue;
-          }
-          // Missing, dead, or mis-parented: adopt the folder this agent already owns (WR-02),
-          // else mint one in place. The team folder is live, so this is a repair, not a rebuild.
           const agent = await db.aiEmployees.get(row.agentId);
-          const adopted = await findMemberFolderForAgent(teamFolderId, teamId, row.agentId, db);
-          const folderId =
-            adopted !== undefined && !claimed.has(adopted)
-              ? adopted
-              : await createMemberFolder(teamFolderId, nameFor(row.agentId, agent?.name), db, {
-                  teamId,
-                  agentId: row.agentId,
-                });
+          // WR-04: identity first, so a folder the owner dragged elsewhere is found and
+          // re-parented instead of being abandoned with every document inside it.
+          const owned = await findMemberFolderForAgent(teamId, row.agentId, db);
+          const handle = (await isChildFolderOf(row.docsFolderId, teamFolderId, db))
+            ? (row.docsFolderId as string)
+            : undefined;
+          const candidate = owned ?? handle;
+
+          let folderId: string;
+          if (candidate !== undefined && !claimed.has(candidate)) {
+            folderId = candidate;
+            // WR-04: a slug-owned folder that drifted out of the team folder is brought back.
+            if (handle === undefined) {
+              await db.notes.update(candidate, {
+                parentId: teamFolderId,
+                updatedAt: new Date().toISOString(),
+              });
+            }
+          } else {
+            folderId = await createMemberFolder(
+              teamFolderId,
+              nameFor(row.agentId, agent?.name),
+              db,
+              { teamId, agentId: row.agentId }
+            );
+          }
           claimed.add(folderId);
-          await db.aiTeamMembers.update(row.id, { docsFolderId: folderId });
+          if (row.docsFolderId !== folderId) {
+            await db.aiTeamMembers.update(row.id, { docsFolderId: folderId });
+          }
           memberFolderIds.set(row.agentId, folderId);
         }
         return { team, memberFolderIds };

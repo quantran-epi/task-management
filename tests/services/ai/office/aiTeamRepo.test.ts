@@ -30,6 +30,8 @@ import {
   AI_TEAMS_DOCS_ROOT_SETTING_KEY,
   AI_TEAMS_DOCS_ROOT_TITLE,
   deleteTeamDocsTree,
+  ensureTeamDocsReady,
+  memberFolderSlug,
 } from '../../../../src/db/repositories/teamDocsRepo';
 import { createNote } from '../../../../src/db/repositories/noteRepo';
 
@@ -1262,6 +1264,35 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
       expect(await db.aiTeamMembers.get(row.id)).toBeUndefined();
       expect(await db.notes.get(row.docsFolderId!)).toBeDefined();
       expect(await db.notes.get(doc.id)).toBeDefined();
+    });
+
+    // CR-03: every mint site stamps the slug, so a later repair can find this lead's folder.
+    it('assignLeader stamps the new lead folder with its identity slug (CR-03)', async () => {
+      const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
+      const team = await makeTeam('LeadSlug');
+
+      await assignLeader(team.id, otherLeadId, db);
+
+      const leadRow = (await listTeamMembers(team.id, db)).find((m) => m.role === 'lead')!;
+      const folder = await db.notes.get(leadRow.docsFolderId!);
+      expect(folder?.slug).toBe(memberFolderSlug(team.id, otherLeadId));
+    });
+
+    // CR-03: a lead minted with no slug used to be unfindable by the repair path, which then
+    // stranded the lead's earlier documents under a ` (2)` sibling.
+    it('a repair after the lead folder is cleared re-adopts the same folder (CR-03)', async () => {
+      const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
+      const team = await makeTeam('LeadAdopt');
+      await assignLeader(team.id, otherLeadId, db);
+      const leadRow = (await listTeamMembers(team.id, db)).find((m) => m.role === 'lead')!;
+      const originalFolderId = leadRow.docsFolderId!;
+
+      // CR-08's path: the folder handle was cleared by a note delete.
+      await db.aiTeamMembers.update(leadRow.id, { docsFolderId: undefined });
+
+      const ready = await ensureTeamDocsReady(team.id, db);
+
+      expect(ready.memberFolderIds.get(otherLeadId)).toBe(originalFolderId);
     });
 
     it('assignLeader gives the new lead a folder and re-assignment mints no extra one', async () => {

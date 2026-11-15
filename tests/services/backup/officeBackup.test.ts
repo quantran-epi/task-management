@@ -242,6 +242,9 @@ async function seedOffice(db: TaskPlannerDatabase): Promise<void> {
       body: '',
       type: 'folder',
       parentId: TEAM_DOCS_FOLDER_ID,
+      // WR-03: the member-folder identity marker must survive a backup round-trip; a future
+      // note projection that dropped it would make every restored team re-mint its folders.
+      slug: `ai-member:${TEAM_ID}:${LEAD_ID}`,
       isPinned: false,
       createdAt: NOW,
       updatedAt: NOW,
@@ -396,6 +399,10 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
     expect((await restoredDb.aiTeams.get(TEAM_ID))?.docsFolderId).toBe(TEAM_DOCS_FOLDER_ID);
     expect((await restoredDb.aiTeamMembers.get(MEMBER_LEAD_ID))?.docsFolderId).toBe(
       LEAD_DOCS_FOLDER_ID
+    );
+    // WR-03: the member-folder slug is the identity CR-07 depends on — it must round-trip.
+    expect((await restoredDb.notes.get(LEAD_DOCS_FOLDER_ID))?.slug).toBe(
+      `ai-member:${TEAM_ID}:${LEAD_ID}`
     );
   });
 

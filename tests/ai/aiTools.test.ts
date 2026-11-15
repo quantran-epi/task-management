@@ -1376,6 +1376,9 @@ describe('aiTools', () => {
 
     const testMutationDb: any = {
       ...mockDb,
+      // CR-04/CR-08/WR-02: `noteReferenceStores` derives the transaction scope from
+      // `NOTE_REFERENCE_STORE_NAMES` via `db.table(name)`.
+      table: (name: string) => (mockDb as any)[name] ?? { name },
       transaction: vi.fn().mockImplementation(async (_mode, _tables, callback) => {
         return await callback();
       }),
