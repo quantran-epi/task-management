@@ -118,6 +118,42 @@ export function mergeUncommittedFilesIntoTree(
 
 
 /**
+ * CR-02: resolves a repo-relative path and refuses anything that escapes the repository.
+ *
+ * `filePath.replace(/^\/+/, '')` alone let `../../` through, and the `cat` fallback then read
+ * any file the SSH user could read. Normalising first collapses `a/../..` to `..`, so the
+ * escape check cannot be walked around with a path that only looks contained.
+ *
+ * No `node:path` import: this module is bundled for the browser/Tauri renderer, where
+ * `path.posix` is not available. The subset needed here is small and total.
+ */
+export function confineRepoPath(filePath: string, label = 'Đường dẫn'): string {
+  const stripped = filePath.replace(/^\/+/, '');
+  const segments: string[] = [];
+  for (const segment of stripped.split('/')) {
+    if (segment === '' || segment === '.') continue;
+    if (segment === '..') {
+      // Popping past the root is the escape; refuse rather than clamp, so the caller learns
+      // the path was rejected instead of silently reading a different file.
+      if (segments.length === 0) throw new Error(`${label} ngoài repo: ${filePath}`);
+      segments.pop();
+      continue;
+    }
+    segments.push(segment);
+  }
+  if (segments.length === 0) throw new Error(`${label} ngoài repo: ${filePath}`);
+  return segments.join('/');
+}
+
+/** A `git show` failure that means "this path is not in the ref" — the one case a
+ * working-tree fallback can legitimately answer. Anything else (bad ref, SSH down) must
+ * propagate, or the reviewer reads the working copy believing it is the branch (WR-01). */
+function isNotInRef(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /does not exist in|exists on disk, but not in/.test(message);
+}
+
+/**
  * Fetches tree nodes for a given ref and directory inside the remote git repository.
  * Invariant: Read-only command. NEVER calls git checkout or modifies working copy.
  */
@@ -128,10 +164,11 @@ export async function getRemoteTree(
   dirPath?: string,
   secret?: string
 ): Promise<RemoteGitTreeNode[]> {
-  const cleanDir = dirPath ? dirPath.replace(/^\/+|\/+$/g, '') : '';
+  const cleanDir = dirPath ? confineRepoPath(dirPath, 'Đường dẫn thư mục') : '';
   const treeRef = cleanDir ? `${ref}:${cleanDir}` : ref;
 
-  const gitArgs = ['ls-tree', '-l', escapeShellArg(treeRef)];
+  // CR-01: `--end-of-options` so a ref beginning with `-` is a revision, never an option.
+  const gitArgs = ['ls-tree', '-l', '--end-of-options', escapeShellArg(treeRef)];
   const stdout = await runGitCommand(config, repoPath, gitArgs, secret);
 
   const lines = stdout.split('\n');
@@ -151,7 +188,10 @@ export async function getRemoteTree(
 /**
  * Fetches exact file blob content at a ref using git show <ref>:<filePath>.
  * Invariant: Read-only command. NEVER calls git checkout or modifies working copy.
- * Falls back to reading directly from remote working copy if git show fails (e.g. untracked file).
+ * Falls back to reading directly from remote working copy ONLY when the path genuinely is
+ * not in the ref (e.g. an untracked file). A bad ref, an SSH failure or an escaping path
+ * propagates so the caller reports the real cause instead of silently returning the working
+ * copy labelled as branch content (CR-02, WR-01).
  */
 export async function getRemoteFileContent(
   config: SshConfig,
@@ -160,13 +200,15 @@ export async function getRemoteFileContent(
   filePath: string,
   secret?: string
 ): Promise<string> {
-  const cleanPath = filePath.replace(/^\/+/, '');
+  const cleanPath = confineRepoPath(filePath, 'Đường dẫn tệp');
   const objectSpec = `${ref}:${cleanPath}`;
-  const gitArgs = ['show', escapeShellArg(objectSpec)];
+  // CR-01: `--end-of-options` so a ref beginning with `-` cannot become `--output=<file>`.
+  // WR-12: no repo-local diff drivers on a read.
+  const gitArgs = ['show', '--no-ext-diff', '--no-textconv', '--end-of-options', escapeShellArg(objectSpec)];
   try {
     return await runGitCommand(config, repoPath, gitArgs, secret);
   } catch (err: any) {
-    // If git show fails (e.g. untracked or newly added file not in ref), fall back to working tree
+    if (!isNotInRef(err)) throw err;
     try {
       return await getRemoteWorkingFileContent(config, repoPath, cleanPath, secret);
     } catch {
@@ -186,7 +228,8 @@ export async function getRemoteWorkingFileContent(
   filePath: string,
   secret?: string
 ): Promise<string> {
-  const cleanPath = filePath.replace(/^\/+/, '');
+  // CR-02: exported, so it confines on its own rather than trusting the caller's path.
+  const cleanPath = confineRepoPath(filePath, 'Đường dẫn tệp');
   const targetFile = `${repoPath.replace(/\/+$/, '')}/${cleanPath}`;
 
   const cmd = `cat -- ${escapeShellArg(targetFile)}`;

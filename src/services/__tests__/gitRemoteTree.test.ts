@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { SshConfig } from '../../types/ssh';
 import * as gitRemoteService from '../gitRemoteService';
+import * as sshService from '../sshService';
 import {
   parseLsTreeLine,
   sortTreeNodes,
@@ -92,7 +93,7 @@ describe('gitRemoteTreeService', () => {
       expect(runSpy).toHaveBeenCalledWith(
         dummyConfig,
         '/home/user/repo',
-        ['ls-tree', '-l', "'main'"],
+        ['ls-tree', '-l', '--end-of-options', "'main'"],
         undefined
       );
 
@@ -112,7 +113,7 @@ describe('gitRemoteTreeService', () => {
       expect(runSpy).toHaveBeenCalledWith(
         dummyConfig,
         '/home/user/repo',
-        ['ls-tree', '-l', "'feature/ui:src/components'"],
+        ['ls-tree', '-l', '--end-of-options', "'feature/ui:src/components'"],
         undefined
       );
 
@@ -137,10 +138,49 @@ describe('gitRemoteTreeService', () => {
       expect(runSpy).toHaveBeenCalledWith(
         dummyConfig,
         '/home/user/repo',
-        ['show', "'main:src/index.ts'"],
+        ['show', '--no-ext-diff', '--no-textconv', '--end-of-options', "'main:src/index.ts'"],
         'secret-pass'
       );
       expect(content).toBe('console.log("hello world");');
+    });
+
+    // CR-02: the path is confined before any command is built, so `..` cannot reach the
+    // `cat` fallback and read a file outside the repo.
+    it('refuses a filePath that escapes the repository', async () => {
+      const runSpy = vi.spyOn(gitRemoteService, 'runGitCommand');
+
+      await expect(
+        getRemoteFileContent(dummyConfig, '/home/user/repo', 'main', '../../../etc/passwd')
+      ).rejects.toThrow('ngoài repo');
+      expect(runSpy).not.toHaveBeenCalled();
+    });
+
+    it('normalises an interior traversal that stays inside the repo', async () => {
+      const runSpy = vi
+        .spyOn(gitRemoteService, 'runGitCommand')
+        .mockResolvedValue('content');
+
+      await getRemoteFileContent(dummyConfig, '/home/user/repo', 'main', 'src/../README.md');
+
+      expect(runSpy).toHaveBeenCalledWith(
+        dummyConfig,
+        '/home/user/repo',
+        ['show', '--no-ext-diff', '--no-textconv', '--end-of-options', "'main:README.md'"],
+        undefined
+      );
+    });
+
+    // WR-01: a bad ref must propagate, not silently return the working copy.
+    it('does not fall back to the working copy when the ref is invalid', async () => {
+      vi.spyOn(gitRemoteService, 'runGitCommand').mockRejectedValue(
+        new Error("fatal: invalid object name 'mian'.")
+      );
+      const execSpy = vi.spyOn(sshService, 'execRemoteCommand');
+
+      await expect(
+        getRemoteFileContent(dummyConfig, '/home/user/repo', 'mian', 'src/index.ts')
+      ).rejects.toThrow('invalid object name');
+      expect(execSpy).not.toHaveBeenCalled();
     });
   });
 });
