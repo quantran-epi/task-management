@@ -54,6 +54,21 @@ export interface BuildEmployeeTurnRequestInput {
   folderId?: string | undefined;
 }
 
+/**
+ * Team agents never pass through the AI Chat panel's `groundedTurn`/intent router, so
+ * `speculation_requested` never reaches them — the carve-out for proposals and forecasts has
+ * to be prompt-level and self-judged. Exported so both builders share one string (same reason
+ * as `LEAD_NO_WRITE_DOC_LINE`) and the test asserts the exact text.
+ */
+export const ANTI_FABRICATION_BLOCK = [
+  '[QUY TẮC CHỐNG BỊA DỮ LIỆU]',
+  '1. Chỉ khẳng định dữ liệu khi đã đọc được từ công cụ hoặc thấy trong ngữ cảnh; không tự suy ra id, con số, trạng thái, tên hay nội dung chưa đọc.',
+  '2. Khi một mục không có, nói rõ là chưa ghi nhận; không đoán, không làm tròn, không coi giá trị thiếu là 0.',
+  '3. Mỗi dữ kiện khẳng định phải nêu nguồn đã đọc thật: itemId, turnId, id tài liệu, hoặc tên công cụ đã trả kết quả đó. Không có nguồn thì không khẳng định.',
+  '4. Ngoại lệ có kiểm soát: chỉ khi người dùng yêu cầu rõ ràng mới được nêu đề xuất, giả thuyết hay dự đoán; mỗi câu như vậy BẮT BUỘC bắt đầu bằng [ĐỀ XUẤT] hoặc [DỰ ĐOÁN] và không được trộn vào một khẳng định dữ kiện.',
+  '5. Không tuyên bố đã chạy công cụ, đã đọc tệp hay đã xong việc nếu không có kết quả công cụ tương ứng.',
+].join('\n');
+
 export function buildEmployeeTurnRequest(input: BuildEmployeeTurnRequestInput): PromptTurn {
   const {
     employee,
@@ -78,6 +93,7 @@ export function buildEmployeeTurnRequest(input: BuildEmployeeTurnRequestInput): 
       'Nếu cần thay đổi dữ liệu khác, hãy nêu rõ trong báo cáo để trưởng nhóm thực hiện.',
       'Bạn có thể nhắn trực tiếp cho trưởng nhóm, nhân viên khác hoặc người dùng bằng công cụ send_message khi cần hỏi lại hoặc trao đổi.',
     ].join('\n'),
+    ANTI_FABRICATION_BLOCK,
   ];
 
   // D-16: the folder id is a fixed fact for the turn. A UUID from the context, not model- or
@@ -216,6 +232,7 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
       '11. Khi người dùng nhắc tới một nhân viên đã xong việc, nói thẳng là đã xong và đề nghị chạy lại hoặc giao việc mới — không tự chạy lại.',
       '12. Khi cần trao đổi trực tiếp thay vì giao việc (hỏi lại, nhắc nhở, cảnh báo), dùng công cụ send_message thay vì delegate_batch.',
     ].join('\n'),
+    ANTI_FABRICATION_BLOCK,
     [
       '[DANH SÁCH NHÂN VIÊN]',
       ...roster.map((e) => `- ${e.name} — ${e.role}: ${e.capability} (agentId: ${e.id})`),

@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
 import {
+  ANTI_FABRICATION_BLOCK,
   EMPLOYEE_WRITE_DOC_LINE,
   LEAD_NO_WRITE_DOC_LINE,
   buildEmployeeTurnRequest,
@@ -688,5 +689,24 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
     expect(system).toContain(LEAD_NO_WRITE_DOC_LINE);
     expect(EMPLOYEE_WRITE_DOC_LINE).toContain('write_doc');
     expect(EMPLOYEE_WRITE_DOC_LINE).toContain('create_note');
+  });
+
+  // Team agents never reach the AI Chat intent router, so the anti-fabrication rule is a
+  // prompt-level carve-out: state only what was read, and mark proposals/forecasts.
+  it('puts the shared anti-fabrication block in the employee prompt', () => {
+    const system = buildEmployee().systemMessages.map((m) => m.content).join('\n');
+
+    expect(system).toContain(ANTI_FABRICATION_BLOCK);
+    expect(ANTI_FABRICATION_BLOCK).toContain('[ĐỀ XUẤT]');
+    expect(ANTI_FABRICATION_BLOCK).toContain('[DỰ ĐOÁN]');
+    expect(ANTI_FABRICATION_BLOCK).toContain('itemId');
+  });
+
+  it('puts the same anti-fabrication block in the lead prompt', () => {
+    const system = buildLead().systemMessages.map((m) => m.content).join('\n');
+
+    expect(system).toContain(ANTI_FABRICATION_BLOCK);
+    // The AI Chat panel's absolute wording has no carve-out for a planner's forecasts.
+    expect(ANTI_FABRICATION_BLOCK).not.toContain('NEVER GUESS');
   });
 });
