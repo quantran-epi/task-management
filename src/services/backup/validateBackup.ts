@@ -6,6 +6,7 @@ import type {
 } from '../../types/backup';
 import { APP_MARKER, CURRENT_SCHEMA_VERSION } from './exportBackup';
 import {
+  AI_TEAMS_DOCS_ROOT_SETTING_KEY,
   AI_TEAMS_DOCS_ROOT_SLUG,
   memberFolderSlug,
   teamFolderSlug,
@@ -72,6 +73,24 @@ function stripNonApprovedVersionNumbers(records: unknown): unknown {
     if (row.status === 'approved' || row.version === undefined) return rec;
     const { version: _dropped, ...rest } = row;
     return rest;
+  });
+}
+
+/**
+ * CR-01 (round 8): an orphan reserved slug is a DERIVABLE fact — the naming row was legitimately
+ * dropped by `removeTeamMember`, a lead demotion, a folder move or a soft delete — so it is
+ * repaired rather than refused, exactly like `stripNonApprovedVersionNumbers`. The folder and its
+ * documents are kept; only the ownership claim goes, and the next turn re-mints a real tree.
+ */
+function stripOrphanReservedSlugs<T extends { id: string; slug?: string | undefined }>(
+  notes: T[],
+  orphanIds: ReadonlySet<string>
+): T[] {
+  if (orphanIds.size === 0) return notes;
+  return notes.map((note) => {
+    if (!orphanIds.has(note.id)) return note;
+    const { slug: _dropped, ...rest } = note;
+    return rest as T;
   });
 }
 
@@ -546,38 +565,88 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
   }
   const teamById = new Map((aiTeams ?? []).map((team) => [team.id, team]));
 
-  // CR-01/CR-02 (round 7): the `ai-` slug namespace is the ONLY ownership proof for a team's docs
-  // tree, and a hard delete acts on it. A payload can forge a slug on any folder, so the
-  // invariant must be checked HERE — the one boundary that accepts rows from outside the app.
-  // Inside the app `updateNote` refuses to change a reserved slug or type, so a payload that
-  // passes this check cannot gain a proof it did not have.
+  // CR-01/CR-02 (round 7): the `ai-` slug namespace is the ownership proof for a team's docs tree.
+  // CR-01 (round 8): the invariant has two halves. The WRITE half is enforced in `updateNote`; the
+  // ABANDON half cannot be — `removeTeamMember`, lead demotion, a folder move and a soft delete all
+  // legitimately drop the naming row while leaving the folder. Refusing the whole payload for that
+  // would reject the app's own export, and GitHub push does not validate, so the only remote backup
+  // would become silently unrestorable.
+  //
+  // An orphan reserved slug is a DERIVABLE fact, not a corrupt payload, so it is repaired the way
+  // `stripNonApprovedVersionNumbers` repairs a stray version number: the slug is dropped, the
+  // folder and its documents are kept.
   const notesById = new Map((notes ?? []).map((note) => [note.id, note]));
-  const reservedNotes = new Set<string>();
+  // WR-05: built once, not scanned per note.
+  const teamByFolderId = new Map(
+    (aiTeams ?? []).flatMap((team) =>
+      team.docsFolderId === undefined ? [] : [[team.docsFolderId, team] as const]
+    )
+  );
+  const memberByFolderId = new Map(
+    (aiTeamMembers ?? []).flatMap((member) =>
+      member.docsFolderId === undefined ? [] : [[member.docsFolderId, member] as const]
+    )
+  );
+  const rootSlugNotes = (notes ?? []).filter(
+    (note) => note.slug?.trim() === AI_TEAMS_DOCS_ROOT_SLUG
+  );
+  // WR-01: the root slug is a singleton — two of them make `ensureDocsRoot` arbitrary.
+  if (rootSlugNotes.length > 1) {
+    errors.push({
+      table: 'notes',
+      recordId: rootSlugNotes[1]!.id,
+      field: 'slug',
+      message: 'Only one folder may carry the "ai-root" slug',
+    });
+  }
+  const orphanReservedIds = new Set<string>();
   for (const note of notes ?? []) {
     if (note.slug === undefined || !note.slug.trim().startsWith('ai-')) continue;
-    reservedNotes.add(note.id);
     if (note.type !== 'folder') {
       errors.push({ table: 'notes', recordId: note.id, field: 'slug', message: 'Reserved "ai-" slug is only valid on a folder' });
       continue;
     }
+    if (note.slug.trim() === AI_TEAMS_DOCS_ROOT_SLUG) continue;
     const teamMatch = /^ai-team:(.+)$/.exec(note.slug.trim());
     const memberMatch = /^ai-member:([^:]+):(.+)$/.exec(note.slug.trim());
     const owner = teamMatch
-      ? (aiTeams ?? []).find((team) => team.id === teamMatch[1] && team.docsFolderId === note.id)
+      ? teamByFolderId.get(note.id)?.id === teamMatch[1]
+        ? teamByFolderId.get(note.id)
+        : undefined
       : memberMatch
-        ? (aiTeamMembers ?? []).find(
-            (member) =>
+        ? (() => {
+            const member = memberByFolderId.get(note.id);
+            return member !== undefined &&
               member.teamId === memberMatch[1] &&
-              member.agentId === memberMatch[2] &&
-              member.docsFolderId === note.id
-          )
+              member.agentId === memberMatch[2]
+              ? member
+              : undefined;
+          })()
         : undefined;
-    if (note.slug.trim() !== AI_TEAMS_DOCS_ROOT_SLUG && owner === undefined) {
-      errors.push({ table: 'notes', recordId: note.id, field: 'slug', message: `Reserved slug "${note.slug}" has no team row naming this folder` });
+    if (owner === undefined) orphanReservedIds.add(note.id);
+  }
+  // WR-01: the root setting must name the folder carrying the root slug, or `ensureDocsRoot`
+  // adopts whatever it names — including a user folder.
+  const rootSetting = (settings ?? []).find(
+    (setting) => setting.key === AI_TEAMS_DOCS_ROOT_SETTING_KEY
+  );
+  if (rootSetting !== undefined) {
+    const named = notesById.get(String(rootSetting.value));
+    if (named === undefined || named.slug?.trim() !== AI_TEAMS_DOCS_ROOT_SLUG) {
+      errors.push({
+        table: 'settings',
+        recordId: AI_TEAMS_DOCS_ROOT_SETTING_KEY,
+        field: 'value',
+        message: 'ai_teams_docs_root must name the folder carrying the "ai-root" slug',
+      });
     }
   }
   // The other direction: a handle that names a folder must name one carrying the matching slug.
   // Without this, a payload could point a team at a user folder and the next turn would adopt it.
+  //
+  // Ceiling: this cannot make a payload-supplied slug authoritative. A payload that MOVES the slug
+  // onto a user folder satisfies both directions, which is why the team delete is a soft delete —
+  // a mis-resolved folder costs a Trash restore, not the owner's documents.
   for (const team of aiTeams ?? []) {
     if (team.docsFolderId === undefined) continue;
     const row = notesById.get(team.docsFolderId);
@@ -592,6 +661,14 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     if (row === undefined) continue;
     if (row.slug !== memberFolderSlug(member.teamId, member.agentId)) {
       errors.push({ table: 'aiTeamMembers', recordId: member.id, field: 'docsFolderId', message: 'AiTeamMember docsFolderId does not name a folder carrying this member\'s slug' });
+      continue;
+    }
+    // WR-02: the validator must agree with `resolveMemberFolder`, which requires the folder to be
+    // a direct child of the team folder. A slug-only check imports clean and then fails the
+    // resolver on the next turn, orphaning the folder's slug.
+    const teamFolderId = teamById.get(member.teamId)?.docsFolderId;
+    if (teamFolderId !== undefined && row.parentId !== teamFolderId) {
+      errors.push({ table: 'aiTeamMembers', recordId: member.id, field: 'docsFolderId', message: 'AiTeamMember docsFolderId must be a direct child of the team folder' });
     }
   }
   // WR-01 (round 7): duplicate `agentId` rows in one team are the state that made the backfill
@@ -718,7 +795,7 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       capacityOverrides: capacityOverrides as BackupEnvelope['tables']['capacityOverrides'],
       plannedAllocations: plannedAllocations as BackupEnvelope['tables']['plannedAllocations'],
       ...(workSessions !== undefined ? { workSessions } : {}),
-      ...(notes !== undefined ? { notes } : {}),
+      ...(notes !== undefined ? { notes: stripOrphanReservedSlugs(notes, orphanReservedIds) } : {}),
       ...(noteAttachments !== undefined ? { noteAttachments } : {}),
       ...(chatThreads !== undefined ? { chatThreads } : {}),
       ...(chatMessages !== undefined ? { chatMessages } : {}),

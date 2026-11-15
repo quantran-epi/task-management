@@ -40,7 +40,7 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
   });
 
   async function folderRows() {
-    return (await db.notes.toArray()).filter((note) => note.type === 'folder');
+    return (await db.notes.toArray()).filter((note) => note.type === 'folder' && !note.deletedAt);
   }
 
   async function seedTeam(name: string, agentIds: string[]): Promise<AiTeam> {
@@ -179,10 +179,12 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
 
     await deleteTeamDocsTree(tree.folderId, team.id, db);
 
-    const remaining = await db.notes.toArray();
+    // D-10 is implemented as a SOFT delete, so the tree leaves Docs but stays recoverable.
+    const remaining = (await db.notes.toArray()).filter((note) => !note.deletedAt);
     expect(remaining).toHaveLength(1);
     expect(remaining[0]?.id).toBe(rootId);
     expect(remaining[0]?.title).toBe(AI_TEAMS_DOCS_ROOT_TITLE);
+    expect((await db.notes.get(tree.folderId))?.deletedAt).toBeDefined();
 
     const setting = await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY);
     expect(setting?.value).toBe(rootId);
@@ -292,7 +294,8 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
     await deleteTeamDocsTree(tree.folderId, team.id, db);
 
     expect(await db.noteAttachments.count()).toBe(0);
-    expect(await db.notes.count()).toBe(1); // only the shared root survives
+    expect(await db.notes.count()).toBe(5); // root + the trashed tree, recoverable
+    expect((await db.notes.get(doc.id))?.deletedAt).toBeDefined();
   });
 
   // CR-03: the owner can create subfolders inside a member folder, so the tree is not bounded
@@ -313,9 +316,9 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
 
     await deleteTeamDocsTree(tree.folderId, team.id, db);
 
-    expect(await db.notes.get(sub.id)).toBeUndefined();
-    expect(await db.notes.get(deepDoc.id)).toBeUndefined();
-    expect(await db.notes.count()).toBe(1); // only the shared root survives
+    expect((await db.notes.get(sub.id))?.deletedAt).toBeDefined();
+    expect((await db.notes.get(deepDoc.id))?.deletedAt).toBeDefined();
+    expect(await db.notes.count()).toBe(5); // root + the trashed tree, recoverable
   });
 
   // WR-01: a hand-deleted member folder is repaired on the next run, not handed out dead.
@@ -545,8 +548,8 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
 
     await deleteTeamDocsTree(first.team.docsFolderId, team.id, db);
 
-    expect(await db.notes.get(first.team.docsFolderId as string)).toBeUndefined();
-    expect(await db.notes.get(newRootId)).toBeDefined();
+    expect((await db.notes.get(first.team.docsFolderId as string))?.deletedAt).toBeDefined();
+    expect((await db.notes.get(newRootId))?.deletedAt).toBeUndefined();
   });
 
   // CR-07: two agents with the same display name must not share a zone.
@@ -874,5 +877,74 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
     expect(rootId).not.toBe(userFolder.id);
     expect((await db.notes.get(rootId))?.slug).toBe(AI_TEAMS_DOCS_ROOT_SLUG);
     expect((await db.notes.get(userFolder.id))?.slug).toBeUndefined();
+  });
+
+  // CR-02 (round 8): a tree the owner moved to Trash is still this team's tree — `deletedAt` is
+  // not part of identity. Round 7 returned silently here, leaving the whole tree unreachable.
+  it('deletes a trashed team tree instead of leaking it (CR-02)', async () => {
+    const agentId = generateId();
+    const team = await seedTeam('Nhóm A', [agentId]);
+    const ready = await ensureTeamDocsReady(team.id, db);
+    const teamFolderId = ready.team.docsFolderId as string;
+    const memberFolderId = ready.memberFolderIds.get(agentId) as string;
+    const doc = await createNote(
+      { title: 'Tài liệu', body: 'x', type: 'document', parentId: memberFolderId },
+      db
+    );
+    // The owner trashed the team folder by hand.
+    await db.notes.update(teamFolderId, { deletedAt: NOW });
+
+    await deleteTeamDocsTree(teamFolderId, team.id, db);
+
+    expect((await db.notes.get(teamFolderId))?.deletedAt).toBeDefined();
+    expect((await db.notes.get(memberFolderId))?.deletedAt).toBeDefined();
+    expect((await db.notes.get(doc.id))?.deletedAt).toBeDefined();
+    // The handles were cleared, so the app's own export stays valid.
+    expect((await db.aiTeams.get(team.id))?.docsFolderId).toBeUndefined();
+  });
+
+  // CR-05 (round 8): the owner can file their own folder under a team folder. The two are
+  // indistinguishable in the data and D-10 says the delete takes the whole tree, so the guarantee
+  // is not "we can tell whose folder it is" — it is that the delete is RECOVERABLE. A wrong guess
+  // costs a Trash restore, never the documents.
+  it('trashes a user folder filed inside the team tree, leaving it recoverable (CR-05)', async () => {
+    const agentId = generateId();
+    const team = await seedTeam('Nhóm A', [agentId]);
+    const ready = await ensureTeamDocsReady(team.id, db);
+    const memberFolderId = ready.memberFolderIds.get(agentId) as string;
+    const userFolder = await createNote(
+      { title: 'Ghi chú riêng', body: '', type: 'folder', parentId: memberFolderId },
+      db
+    );
+    const secret = await createNote(
+      { title: 'Bí mật', body: 'x', type: 'document', parentId: userFolder.id },
+      db
+    );
+
+    await deleteTeamDocsTree(ready.team.docsFolderId as string, team.id, db);
+
+    // Nothing was destroyed — every row is in Trash and can be restored.
+    expect((await db.notes.get(userFolder.id))?.deletedAt).toBeDefined();
+    expect((await db.notes.get(secret.id))?.deletedAt).toBeDefined();
+    expect((await db.notes.get(memberFolderId))?.deletedAt).toBeDefined();
+    expect(await db.notes.count()).toBe(5); // root + team folder + member folder + the owner's two rows
+  });
+
+  // CR-03 (round 8): `write_doc` re-resolves the caller's zone, so the backfill must never hand
+  // out a folder that resolver rejects — the agent would be told to write somewhere it always
+  // refuses.
+  it('re-mints a soft-deleted member folder instead of handing it back (CR-03)', async () => {
+    const agentId = generateId();
+    const team = await seedTeam('Nhóm A', [agentId]);
+    const first = await ensureTeamDocsReady(team.id, db);
+    const trashedFolderId = first.memberFolderIds.get(agentId) as string;
+    await db.notes.update(trashedFolderId, { deletedAt: NOW });
+
+    const second = await ensureTeamDocsReady(team.id, db);
+
+    const fresh = second.memberFolderIds.get(agentId);
+    expect(fresh).not.toBe(trashedFolderId);
+    expect((await db.notes.get(fresh as string))?.deletedAt).toBeUndefined();
+    expect((await db.notes.get(fresh as string))?.slug).toBe(memberFolderSlug(team.id, agentId));
   });
 });

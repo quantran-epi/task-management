@@ -33,8 +33,11 @@ export interface NoteWithAttachments {
  * (unless the caller opts in), `updateNote`, and `validateBackup` on import.
  *
  * Ceiling: a direct `db.notes.put` (SQLite hydration) bypasses this. That path is a local file
- * the owner controls, and the app's own writes never produce a reserved slug there, so the
- * invariant is restored by `ensureTeamDocsReady` on the next turn.
+ * the owner controls, and the app's own writes never produce a reserved slug there. A slugless
+ * folder it produces is NOT repaired by `ensureTeamDocsReady` — `resolveMemberFolder` rejects it
+ * and a fresh zone is minted, so the folder keeps its documents but is no longer the member's
+ * write target. The team delete is a soft delete for the same reason: a wrong guess about which
+ * folder is whose costs a Trash restore, never the documents.
  */
 export function assertSlugNamespaceFree(slug: string | null | undefined): void {
   if (isReservedSlug(slug)) {

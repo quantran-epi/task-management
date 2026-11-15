@@ -706,11 +706,14 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
   // CR-01/CR-02 (round 7): the `ai-` slug is the ONLY ownership proof for a team's docs tree, and
   // a hard delete acts on it. A payload that forges a slug on a user folder — or points a handle
   // at a folder that does not carry the matching slug — must be refused before any write.
-  it('rejects a forged reserved slug on a folder no team row names (CR-02)', async () => {
+  // CR-01 (round 8): an orphan reserved slug is a DERIVABLE fact — `removeTeamMember`, a lead
+  // demotion, a folder move and a soft delete all legitimately drop the naming row. Refusing the
+  // whole payload would reject the app's own export, so the slug is stripped and the folder kept.
+  it('strips an orphan reserved slug instead of refusing the payload (CR-01)', async () => {
     await seedOffice(sourceDb);
     const envelope = await exportBackupPayload(sourceDb);
 
-    const forged = {
+    const orphaned = {
       ...envelope,
       tables: {
         ...envelope.tables,
@@ -730,12 +733,19 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
       },
     };
 
-    const result = validateBackupPayload(forged);
+    const result = validateBackupPayload(orphaned);
 
-    expect(result.valid).toBe(false);
+    expect(result.valid).toBe(true);
+    const repaired = result.envelope?.tables.notes?.find(
+      (note) => note.id === 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+    );
+    // The folder and its contents survive; only the ownership claim is dropped.
+    expect(repaired).toBeDefined();
+    expect(repaired?.slug).toBeUndefined();
+    // The real team folder keeps its slug — it is named by a row.
     expect(
-      result.errors.some((error) => error.table === 'notes' && error.field === 'slug')
-    ).toBe(true);
+      result.envelope?.tables.notes?.find((note) => note.id === TEAM_DOCS_FOLDER_ID)?.slug
+    ).toBe(`ai-team:${TEAM_ID}`);
   });
 
   // CR-01: a handle pointing at a user folder must not survive import, or the next turn would

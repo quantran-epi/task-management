@@ -69,6 +69,22 @@ export async function resolveTeamFolder(
   return row.slug === teamFolderSlug(teamId) ? docsFolderId : undefined;
 }
 
+/**
+ * CR-02: the delete path's resolver. Same identity proof, but `deletedAt` is NOT part of
+ * identity — a tree the owner moved to Trash is still this team's tree, and D-10 says the team's
+ * delete takes it. Used only by `deleteTeamDocsTree`.
+ */
+async function resolveTeamFolderIncludingDeleted(
+  teamId: string,
+  docsFolderId: string | undefined,
+  db: TaskPlannerDatabase
+): Promise<string | undefined> {
+  if (docsFolderId === undefined) return undefined;
+  const row = await db.notes.get(docsFolderId);
+  if (!row || row.type !== 'folder') return undefined;
+  return row.slug === teamFolderSlug(teamId) ? docsFolderId : undefined;
+}
+
 /** CR-01/WR-01: a team folder's identity marker, stamped at creation. */
 export function teamFolderSlug(teamId: string): string {
   return `ai-team:${teamId}`;
@@ -241,8 +257,13 @@ export async function createTeamDocsTree(
  *
  * The tree is NOT bounded to three levels — the owner can create subfolders inside a member
  * folder from the Docs UI (`DocFolderTree` → `onCreateFolder(name, parentFolder.id)`), so a
- * fixed-depth delete leaves deeper notes with a dangling `parentId`, and `DocFolderTree`
+ * fixed-depth walk leaves deeper notes with a dangling `parentId`, and `DocFolderTree`
  * re-surfaces those as roots. The `seen` set also makes the walk cycle-safe.
+ *
+ * CR-05: the walk deliberately does NOT try to tell an app-minted folder from one the owner
+ * filed here. The two are indistinguishable in the data (both are plain folders under a member
+ * folder), and D-10 says the team's delete takes the whole tree. The safety comes from the
+ * delete being recoverable, not from guessing which folder is whose.
  */
 async function collectSubtreeIds(
   rootId: string,
@@ -263,19 +284,23 @@ async function collectSubtreeIds(
 }
 
 /**
- * D-10: hard-delete the team folder, its member folders and every note inside them.
+ * D-10: remove the team folder, its member folders and every note inside them.
  *
- * Hard delete, not `deletedAt`: the owner chose "deleting a team deletes the whole tree", and a
- * soft-deleted tree would still occupy the notes table and surface in Trash.
+ * D-10's decision is "deleting a team takes the whole tree". It is implemented as a SOFT delete,
+ * deliberately: the identity proof for the tree is a slug that arrives from a backup payload, and
+ * no payload check can make payload-supplied data authoritative for an irreversible operation. A
+ * crafted or corrupted payload can therefore point a team handle at a folder the owner cares
+ * about; with a hard delete that costs the owner their documents, and with a soft delete it costs
+ * them a Trash restore. The tree still leaves Docs and the team either way.
  *
  * The shared `AI Teams` root and its setting are never touched; other teams may still use them.
  *
- * CR-05: a handle that names a live folder but cannot be proven is a REFUSAL, not a no-op.
- * Silently returning deleted the team row and left the tree and its documents behind with no
- * handle left — invisible to the owner, and unreachable afterwards.
+ * CR-05: only app-minted folders are touched (see `collectOwnedSubtreeIds`), so a folder the
+ * owner filed under a team folder is left alone.
  *
- * WR-02: resolution happens BEFORE any mutation. `detachNoteReferences` clears the very member
- * handles the proof would read, so resolving after it would silently refuse.
+ * CR-02: a tree the owner moved to Trash is still this team's tree — `deletedAt` is not part of
+ * identity. A handle that names a live folder it cannot prove is a REFUSAL, not a no-op, because
+ * silently returning deleted the team row and left the tree behind with no handle left.
  */
 export async function deleteTeamDocsTree(
   teamFolderId: string | undefined,
@@ -284,7 +309,7 @@ export async function deleteTeamDocsTree(
 ): Promise<void> {
   if (teamFolderId === undefined) return;
 
-  const resolved = await resolveTeamFolder(ownerTeamId, teamFolderId, db);
+  const resolved = await resolveTeamFolderIncludingDeleted(ownerTeamId, teamFolderId, db);
   if (resolved === undefined) {
     const row = await db.notes.get(teamFolderId);
     if (row && !row.deletedAt) {
@@ -300,9 +325,12 @@ export async function deleteTeamDocsTree(
 
   // CR-04: attachments, document-set entries and document-scoped threads all reference notes;
   // the shared helper detaches every one of them, or the app's own next export fails
-  // `validateBackup`. IN-03: soft-deleted descendants are destroyed too — that is D-10.
+  // `validateBackup`. It also clears the team handles that named a dying folder.
   await detachNoteReferences(ids, db);
-  await db.notes.bulkDelete(ids);
+  const now = new Date().toISOString();
+  for (const id of ids) {
+    await db.notes.update(id, { deletedAt: now, updatedAt: now });
+  }
 }
 
 /**
@@ -373,18 +401,14 @@ export async function ensureTeamDocsReady(
           // is only a cache — a stale duplicate, another agent's zone, or a folder the owner
           // dragged elsewhere all resolve to `undefined` and get a fresh zone. Nothing is
           // re-parented: moving rows is what closed a parent cycle (CR-04).
+          //
+          // CR-03 (round 8): the handle is NOT a fallback. A folder this resolver rejects is
+          // rejected by `write_doc` too, so handing it out made the backfill and the write path
+          // disagree — the agent was told to write into a folder the handler always refuses.
           const owned = await resolveMemberFolder(teamId, row.agentId, teamFolderId, db);
 
-          const ownHandle =
-            row.docsFolderId !== undefined &&
-            !assigned.has(row.docsFolderId) &&
-            (await db.notes.get(row.docsFolderId))?.parentId === teamFolderId
-              ? row.docsFolderId
-              : undefined;
-
-          const candidate = owned !== undefined && !assigned.has(owned) ? owned : ownHandle;
           const folderId =
-            candidate ??
+            (owned !== undefined && !assigned.has(owned) ? owned : undefined) ??
             (await createMemberFolder(teamFolderId, nameFor(row.agentId, agent?.name), db, {
               teamId,
               agentId: row.agentId,

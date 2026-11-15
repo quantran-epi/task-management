@@ -29,7 +29,6 @@ import { splitEvenly } from '../../../../src/services/ai/office/budgetSplit';
 import {
   AI_TEAMS_DOCS_ROOT_SETTING_KEY,
   AI_TEAMS_DOCS_ROOT_TITLE,
-  deleteTeamDocsTree,
   ensureTeamDocsReady,
   memberFolderSlug,
 } from '../../../../src/db/repositories/teamDocsRepo';
@@ -1100,7 +1099,25 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
     /** Simulate a pre-41 team: no tree, no `docsFolderId` on the team or its member rows. */
     async function makePre41(teamId: string) {
       const team = (await getTeam(teamId, db))!;
-      await deleteTeamDocsTree(team.docsFolderId, teamId, db);
+      // A pre-41 build had no tree at all, so the rows are removed outright — the new
+      // `deleteTeamDocsTree` soft-deletes, which would leave a recoverable tree behind.
+      if (team.docsFolderId !== undefined) {
+        const rows = await db.notes.toArray();
+        const doomed = new Set<string>([team.docsFolderId]);
+        let frontier = [team.docsFolderId];
+        while (frontier.length > 0) {
+          const next = rows.filter(
+            (note) => note.parentId !== undefined && frontier.includes(note.parentId)
+          );
+          frontier = [];
+          for (const child of next) {
+            if (doomed.has(child.id)) continue;
+            doomed.add(child.id);
+            frontier.push(child.id);
+          }
+        }
+        await db.notes.bulkDelete([...doomed]);
+      }
       await db.aiTeams.put(stripDocsFolderId(team));
       for (const row of await db.aiTeamMembers.where('teamId').equals(teamId).toArray()) {
         await db.aiTeamMembers.put(stripDocsFolderId(row));
@@ -1193,11 +1210,12 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
 
       await deleteTeam(team.id, db);
 
-      expect(await db.notes.get(teamFolderId)).toBeUndefined();
-      expect(await db.notes.get(memberFolder!.id)).toBeUndefined();
-      expect(await db.notes.get(inMember.id)).toBeUndefined();
-      expect(await db.notes.get(inTeam.id)).toBeUndefined();
-      expect(await db.notes.get(root!.id)).toBeDefined();
+      // D-10 is implemented as a SOFT delete: the tree leaves Docs and stays recoverable.
+      expect((await db.notes.get(teamFolderId))?.deletedAt).toBeDefined();
+      expect((await db.notes.get(memberFolder!.id))?.deletedAt).toBeDefined();
+      expect((await db.notes.get(inMember.id))?.deletedAt).toBeDefined();
+      expect((await db.notes.get(inTeam.id))?.deletedAt).toBeDefined();
+      expect((await db.notes.get(root!.id))?.deletedAt).toBeUndefined();
       expect(await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY)).toBeDefined();
     });
 

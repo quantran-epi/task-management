@@ -104,10 +104,15 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
    * IN-06: the delete itself is guarded too — the `onConfirm` arrow discards the promise, so
    * an unguarded rejection was an unhandled rejection with no `actionError`, after the run
    * had already been torn down.
+   *
+   * WR-03: the teardown uses the reversible cause. `deleteTeam` can REFUSE (a tree it cannot
+   * prove), and the transaction then rolls back — so stamping `team-deleted` on the ledger
+   * first would claim a deletion that never happened. `app-exit` is the honest vocabulary for
+   * "the run is over, the team may still exist".
    */
   const handleDeleteTeam = async (team: AiTeam) => {
     try {
-      await disposeRun(db, team.id);
+      await disposeRun(db, team.id, 'app-exit');
     } catch {
       setActionError(ACTION_ERROR_COPY);
       return;
