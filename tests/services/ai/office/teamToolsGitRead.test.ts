@@ -10,6 +10,8 @@ import { ensureTeamThread } from '../../../../src/db/repositories/teamTranscript
 import { isMutationTool } from '../../../../src/services/ai/aiTools';
 import { SSH_CONFIGS_SETTING_KEY } from '../../../../src/types/ssh';
 import { generateId } from '../../../../src/utils/uuid';
+import { escapeShellArg } from '../../../../src/services/gitRemoteService';
+import { execRemoteCommand } from '../../../../src/services/sshService';
 
 /**
  * Phase 42 D-08: `execRemoteCommand` is the seam where a command string becomes observable.
@@ -195,5 +197,162 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
       await executeTeamTool('git_read', { action: 'not_an_action' }, ctx())
     );
     expect(res).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
+  });
+
+  // ---------------------------------------------------------------------------------------
+  // Block A — every action wraps its result (AIO-READ-05, D-11)
+  // ---------------------------------------------------------------------------------------
+
+  const OPEN = 'DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU';
+  const CLOSE = 'KẾT THÚC DỮ LIỆU KHÔNG ĐÁNG TIN';
+
+  /** Queues exactly the responses the case consumes — no more, no fewer. */
+  function queue(...stdouts: string[]) {
+    for (const stdout of stdouts) {
+      vi.mocked(execRemoteCommand).mockResolvedValueOnce({ stdout, stderr: '', exitStatus: 0 });
+    }
+  }
+
+  // The `%x1e`/`%x00` record layout `parseCommitLog` expects.
+  const LOG_OUT =
+    '\x1e<sha>\0<short>\0Lan\0 2026-11-01 10:00:00 +0700\0sửa lỗi' +
+    '\x1e<sha2>\0<s2>\0Bình\0 2026-10-30 09:00:00 +0700\0thêm test';
+
+  const WRAP_CASES: Array<{
+    action: string;
+    args: Record<string, unknown>;
+    outputs: string[];
+  }> = [
+    {
+      action: 'branches',
+      args: {},
+      outputs: ['main\0refs/heads/main\norigin/main\0refs/remotes/origin/main\n'],
+    },
+    { action: 'status', args: {}, outputs: [' M src/app.ts\n?? new.txt\n'] },
+    { action: 'log', args: {}, outputs: [LOG_OUT] },
+    {
+      action: 'diff_summary',
+      args: { base: 'main', target: 'feature/x' },
+      // rev-parse, log, --numstat, --name-status — in that order.
+      outputs: ['<sha>\n', LOG_OUT, '3\t1\tsrc/app.ts\n', 'M\tsrc/app.ts\n'],
+    },
+    {
+      action: 'diff_file',
+      args: { base: 'main', target: 'feature/x', filePath: 'src/app.ts' },
+      outputs: ['diff --git a/src/app.ts b/src/app.ts\n+const x = 1;\n'],
+    },
+    {
+      action: 'read_file',
+      args: { branch: 'main', filePath: 'src/app.ts' },
+      outputs: ['export const x = 1;\n'],
+    },
+    {
+      action: 'tree',
+      args: { branch: 'main' },
+      outputs: ['100644 blob abc1234    42\tsrc/app.ts\n040000 tree def5678    -\tsrc/lib\n'],
+    },
+  ];
+
+  for (const testCase of WRAP_CASES) {
+    it(`${testCase.action} wraps its payload and labels it GIT ${testCase.action} /srv/repo`, async () => {
+      queue(...testCase.outputs);
+
+      const raw = await executeTeamTool(
+        'git_read',
+        { action: testCase.action, ...testCase.args },
+        ctx()
+      );
+
+      expect(raw).toContain(OPEN);
+      expect(raw).toContain(CLOSE);
+      expect(raw).toContain(`GIT ${testCase.action} /srv/repo`);
+
+      const parsed = JSON.parse(raw);
+      expect(parsed.systemId).toBe(repoSystemId);
+      expect(parsed.repoPath).toBe('/srv/repo');
+    });
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // Block B — shell payloads are escaped, never interpolated (AIO-READ-04, T-42-01)
+  // ---------------------------------------------------------------------------------------
+
+  // The exact adversarial string from src/services/__tests__/gitRemoteService.test.ts:45.
+  const EVIL = "'; rm -rf /; echo '";
+
+  it('escapes a filePath payload in diff_file — whole command string, no containment check', async () => {
+    queue('diff --git a/x b/x\n');
+
+    await executeTeamTool(
+      'git_read',
+      { action: 'diff_file', base: 'main', target: 'feature/x', filePath: EVIL },
+      ctx()
+    );
+
+    const cmd = vi.mocked(execRemoteCommand).mock.calls.at(-1)![1];
+    // Pinned to a literal, independent of `escapeShellArg`, so a handler that concatenates a
+    // raw value produces a different string and fails.
+    expect(cmd).toBe(
+      "git -C '/srv/repo' --no-pager diff 'main..feature/x' -- ''\\''; rm -rf /; echo '\\'''"
+    );
+  });
+
+  it('escapes a branch payload in read_file — the object spec is built from escaped parts', async () => {
+    queue('export const x = 1;\n');
+
+    await executeTeamTool(
+      'git_read',
+      { action: 'read_file', branch: EVIL, filePath: 'src/app.ts' },
+      ctx()
+    );
+
+    const cmd = vi.mocked(execRemoteCommand).mock.calls.at(-1)![1];
+    expect(cmd).toBe(
+      `git -C ${escapeShellArg('/srv/repo')} --no-pager show ${escapeShellArg(EVIL + ':src/app.ts')}`
+    );
+  });
+
+  it('escapes a branch payload in log', async () => {
+    queue(LOG_OUT);
+
+    await executeTeamTool('git_read', { action: 'log', branch: EVIL }, ctx());
+
+    const cmd = vi.mocked(execRemoteCommand).mock.calls.at(-1)![1];
+    expect(cmd).toBe(
+      `git -C ${escapeShellArg('/srv/repo')} --no-pager log ${escapeShellArg(EVIL)} -n 20 --format='%x1e%H%x00%h%x00%an%x00%ad%x00%s' --date=iso`
+    );
+  });
+
+  it('escapes a base payload in diff_summary — the range is one escaped argument', async () => {
+    queue('<sha>\n', LOG_OUT, '3\t1\tsrc/app.ts\n', 'M\tsrc/app.ts\n');
+
+    await executeTeamTool(
+      'git_read',
+      { action: 'diff_summary', base: EVIL, target: 'main' },
+      ctx()
+    );
+
+    const calls = vi.mocked(execRemoteCommand).mock.calls;
+    expect(calls).toHaveLength(4);
+    // Third call is `diff --numstat <range>`.
+    expect(calls.at(-2)![1]).toBe(
+      `git -C ${escapeShellArg('/srv/repo')} --no-pager diff --numstat ${escapeShellArg(EVIL + '..main')}`
+    );
+  });
+
+  it('turns a git failure into a refusal, never a throw', async () => {
+    vi.mocked(execRemoteCommand).mockResolvedValueOnce({
+      stdout: '',
+      stderr: 'fatal: bad revision',
+      exitStatus: 128,
+    });
+
+    // `resolves`, never the rejection matcher: a git throw must become a refusal value.
+    const promise = executeTeamTool('git_read', { action: 'status' }, ctx());
+    await expect(promise).resolves.toBeTypeOf('string');
+    expect(JSON.parse(await promise)).toMatchObject({
+      refused: true,
+      code: 'INVALID_ARGUMENT',
+    });
   });
 });
