@@ -102,7 +102,8 @@ Phase này **không** gồm:
 
 - **D-13:** Dexie **V27**, thêm field `docsFolderId?: string` vào `AiTeam`. Đây là field trên row đã có, **không** thêm bảng → `SCHEMA_V27` chỉ spread `SCHEMA_V26`, không có index mới, không có `.upgrade()`.
   `LATEST_SCHEMA_VERSION` → 27.
-- **D-14:** Backup: `BackupAiTeamRecordSchema` (`backupSchemas.ts`) thêm `docsFolderId` optional. Đây là **UUID**, không phải free text → không đụng `FORBIDDEN_BACKUP_KEYS`. Export/restore không cần sửa thêm vì `notes` đã round-trip sẵn.
+- **D-13a:** (bổ sung 2026-11-15, owner chốt sau pattern mapping) `AiTeamMember` **cũng** có `docsFolderId?: string`. Lý do: D-05 nói `toolContext` dựng `folderId` từ member row, nhưng `AiTeamMember` không có cột nào chứa nó; dò theo tên folder (D-11) sẽ gãy khi owner đổi tên tay trong DocsExplorer. Thêm field trên row đã có — **không** thêm bảng, **không** thêm index, nên D-15 (năm danh sách bảng) vẫn không đổi. `toolContext` đọc thẳng `member.docsFolderId`; thiếu → `TEAM_DOCS_NOT_READY` (D-05).
+- **D-14:** Backup: `BackupAiTeamRecordSchema` (`backupSchemas.ts`) thêm `docsFolderId` optional, và `BackupAiTeamMemberRecordSchema` thêm `docsFolderId` optional. Đây là **UUID**, không phải free text → không đụng `FORBIDDEN_BACKUP_KEYS`. Export/restore không cần sửa thêm vì `notes` đã round-trip sẵn.
 - **D-15:** Năm danh sách bảng phối hợp (`src/db/index.ts` Table declarations, `schema.ts`, `SQLITE_DOMAIN_TABLES` ở `localSqlitePersistence.ts`, `ALLOWED_TABLES` ở `src-tauri/src/sqlite_persistence.rs`, `tableListParity.test.ts`) — **không đổi**, vì không thêm bảng. Chỉ `LATEST_SCHEMA_VERSION` đổi. Test parity phải vẫn xanh.
 
 ### Prompt
@@ -181,3 +182,7 @@ Phase này **không** gồm:
 - UI riêng cho docs của nhóm (cây hiện trong DocsExplorer là đủ).
 - Skill body của BA/SA/Reviewer — viết **sau** khi Phase 41 + 42 xong, vì skill mô tả hành vi dựa trên tool surface thật.
 - Xoá folder của member khi gỡ member khỏi nhóm (owner chọn giữ lại).
+
+## Wording Corrections Required This Phase
+
+ROADMAP §Phase 41 success criteria 2 and 4, and REQUIREMENTS `AIO-DOCS-02`/`AIO-DOCS-04`, say a member calls `create_note`/`update_note`. That wording is **wrong** and is superseded by D-01: the runtime's read-only gate (`chatTurnRuntime.ts:397`) refuses every employee mutation before the approval card, so a DB-tool write can never land. The member's write path is the team tool `write_doc`. The plan must correct that wording in `.planning/ROADMAP.md` and `.planning/REQUIREMENTS.md` in the same phase (this document wins per its Owner decision header).
