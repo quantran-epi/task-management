@@ -1266,6 +1266,34 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
       expect(await db.notes.get(doc.id)).toBeDefined();
     });
 
+    // CR-03 (round 6): `addTeamMember` reused a folder found by slug without checking it is a
+    // direct child of the team folder, so a stale duplicate elsewhere was adopted.
+    it('addTeamMember never adopts a stale duplicate slug outside the team tree (CR-03)', async () => {
+      const team = await createTeam(
+        { name: 'Stale', leadId, budgetTokens: 0, employeeIds: [employeeIds[0]!] },
+        db
+      );
+      // A stale zone for E2 outside the team folder, minted by an interrupted rebuild.
+      const stale = await createNote(
+        {
+          title: 'Cũ',
+          body: '',
+          type: 'folder',
+          slug: `ai-member:${team.id}:${employeeIds[1]!}`,
+        },
+        db
+      );
+
+      const added = await addTeamMember(
+        { teamId: team.id, agentId: employeeIds[1]!, role: 'employee', budgetTokens: 0 },
+        db
+      );
+
+      expect(added.docsFolderId).not.toBe(stale.id);
+      expect((await db.notes.get(added.docsFolderId!))?.parentId).toBe(team.docsFolderId);
+      expect((await db.notes.get(stale.id))?.parentId).toBeUndefined();
+    });
+
     // CR-03: every mint site stamps the slug, so a later repair can find this lead's folder.
     it('assignLeader stamps the new lead folder with its identity slug (CR-03)', async () => {
       const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
@@ -1276,6 +1304,40 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
       const leadRow = (await listTeamMembers(team.id, db)).find((m) => m.role === 'lead')!;
       const folder = await db.notes.get(leadRow.docsFolderId!);
       expect(folder?.slug).toBe(memberFolderSlug(team.id, otherLeadId));
+    });
+
+    // CR-04 (round 6): a promoted lead whose row named another agent's child folder was handed
+    // that folder on parent shape alone, so two agents shared one zone.
+    it('assignLeader never promotes a lead onto another agent zone (CR-04)', async () => {
+      const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
+      const team = await makeTeam('LeadSteal');
+      const teamFolderId = (await getTeam(team.id, db))!.docsFolderId!;
+      const employeeRow = (await listTeamMembers(team.id, db)).find(
+        (m) => m.agentId === employeeIds[0]
+      )!;
+      // The incoming lead's own row exists and names the employee's zone.
+      await db.aiTeamMembers.add({
+        id: generateId(),
+        teamId: team.id,
+        agentId: otherLeadId,
+        role: 'employee',
+        budgetTokens: 0,
+        usedTokens: 0,
+        docsFolderId: employeeRow.docsFolderId,
+      });
+
+      await assignLeader(team.id, otherLeadId, db);
+
+      const leadRow = (await listTeamMembers(team.id, db)).find((m) => m.role === 'lead')!;
+      expect(leadRow.docsFolderId).not.toBe(employeeRow.docsFolderId);
+      expect((await db.notes.get(leadRow.docsFolderId!))?.parentId).toBe(teamFolderId);
+      expect((await db.notes.get(leadRow.docsFolderId!))?.slug).toBe(
+        memberFolderSlug(team.id, otherLeadId)
+      );
+      // The employee's zone is untouched.
+      expect((await db.notes.get(employeeRow.docsFolderId!))?.slug).toBe(
+        memberFolderSlug(team.id, employeeIds[0]!)
+      );
     });
 
     // CR-03: a lead minted with no slug used to be unfindable by the repair path, which then

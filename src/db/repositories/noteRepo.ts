@@ -1,4 +1,5 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../index';
+import type { Table } from 'dexie';
 import type { Note, NoteAttachment, NoteEntityType } from '../../types/models';
 import {
   NoteInputSchema,
@@ -12,6 +13,20 @@ import { generateId } from '../../utils/uuid';
 export interface NoteWithAttachments {
   note: Note;
   attachments: NoteAttachment[];
+}
+
+/**
+ * WR (round 6): `ai-team:`/`ai-member:` slugs are the ownership proof for a hard delete, so a
+ * user-supplied one must never be accepted — otherwise any folder could claim to be a team's.
+ *
+ * Ceiling: enforced on the two paths that accept a slug from outside (`updateNote`, and
+ * `batchCreateNotes`), not on `createNote` — the team-tree mint sites stamp their own slugs
+ * through it. A new caller that lets a user set a slug must call this too.
+ */
+function assertSlugNamespaceFree(slug: string | null | undefined): void {
+  if (slug?.trim().startsWith('ai-')) {
+    throw new Error('Slug bắt đầu bằng "ai-" được dành riêng cho thư mục của nhóm AI.');
+  }
 }
 
 export async function createNote(
@@ -48,6 +63,7 @@ export async function batchCreateNotes(
   const now = new Date().toISOString();
   const notes: Note[] = inputs.map((input) => {
     const validated = NoteInputSchema.parse(input);
+    assertSlugNamespaceFree(validated.slug);
     return {
       id: generateId(),
       type: validated.type,
@@ -74,6 +90,9 @@ export async function updateNote(
   db: TaskPlannerDatabase = defaultDb
 ): Promise<Note | null> {
   const validated = NoteUpdateSchema.parse(updates);
+  // WR (round 6): `ai-team:`/`ai-member:` slugs are the ownership proof for a hard delete, so a
+  // user-supplied one must never be accepted — otherwise any folder could claim to be a team's.
+  assertSlugNamespaceFree(validated.slug);
   const existing = await db.notes.get(id);
   if (!existing) return null;
 
@@ -225,7 +244,7 @@ export const NOTE_REFERENCE_STORE_NAMES = [
 ] as const;
 
 /** The same list as Dexie table handles, for `db.transaction('rw', ...)`. */
-export function noteReferenceStores(db: TaskPlannerDatabase): unknown[] {
+export function noteReferenceStores(db: TaskPlannerDatabase): Table[] {
   return NOTE_REFERENCE_STORE_NAMES.map((name) => db.table(name));
 }
 
@@ -233,7 +252,7 @@ export async function deleteNote(
   id: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<void> {
-  await db.transaction('rw', noteReferenceStores(db) as never, async () => {
+  await db.transaction('rw', noteReferenceStores(db), async () => {
     await detachNoteReferences([id], db);
     await db.notes.delete(id);
   });

@@ -8,9 +8,8 @@ import {
   createTeamDocsTree,
   deleteTeamDocsTree,
   ensureTeamDocsReady,
-  findMemberFolderForAgent,
-  isChildFolderOf,
-  resolveTeamFolder,
+  resolveMemberFolder,
+  resolveTeamFolderForWrite,
 } from './teamDocsRepo';
 import {
   AiTeamInputSchema,
@@ -309,7 +308,7 @@ export async function updateTeam(
     // here, in the same transaction, and only when the resolver proves the id is THIS team's
     // folder: `docsFolderId` is an untrusted handle restored from a backup.
     if (validated.name !== undefined) {
-      const teamFolderId = await resolveTeamFolder(id, updated.docsFolderId, db);
+      const teamFolderId = await resolveTeamFolderForWrite(id, updated.docsFolderId, db);
       if (teamFolderId !== undefined) {
         await db.notes.update(teamFolderId, {
           title: validated.name,
@@ -343,7 +342,7 @@ async function writeLeadRow(
 
   // CR-05: the handle is validated by the ONE resolver, so an untrusted id rebuilds instead of
   // being handed to the new lead.
-  let teamFolderId = await resolveTeamFolder(teamId, team.docsFolderId, db);
+  let teamFolderId = await resolveTeamFolderForWrite(teamId, team.docsFolderId, db);
   let backfillIds = new Map<string, string>();
   if (teamFolderId === undefined) {
     const ready = await ensureTeamDocsReady(teamId, db);
@@ -372,12 +371,13 @@ async function writeLeadRow(
   if (incoming) {
     // The backfill map first: on a dead tree it already minted this agent's folder and wrote it
     // on the row, so calling `createMemberFolder` here would produce a ` (2)` duplicate.
+    // CR-04: the row's own handle is NOT proof — the ONE member resolver is, so a lead promoted
+    // onto another agent's child folder gets its own zone instead of sharing that one.
+    const owned = await resolveMemberFolder(teamId, leadId, teamFolderId, db);
     const folderId =
       backfillIds.get(leadId) ??
-      (incoming.docsFolderId !== undefined &&
-      (await isChildFolderOf(incoming.docsFolderId, teamFolderId, db))
-        ? incoming.docsFolderId
-        : await createMemberFolder(teamFolderId, leadName, db, { teamId, agentId: leadId }));
+      owned ??
+      (await createMemberFolder(teamFolderId, leadName, db, { teamId, agentId: leadId }));
     await db.aiTeamMembers.update(incoming.id, { role: 'lead', docsFolderId: folderId });
     return;
   }
@@ -586,14 +586,15 @@ export async function addTeamMember(
 
       // CR-05: the handle goes through the ONE resolver, so a restored id naming the shared
       // root or another team's folder rebuilds instead of being used.
-      const teamFolderId = await resolveTeamFolder(validated.teamId, team.docsFolderId, db);
+      const teamFolderId = await resolveTeamFolderForWrite(validated.teamId, team.docsFolderId, db);
       const liveTree = teamFolderId !== undefined;
 
       // WR-02/CR-07: `removeTeamMember` deliberately keeps the member's folder, so re-adding the
-      // same agent must reuse it. Identity is the folder's slug (teamId + agentId), never the
-      // display name — two agents named "An" must not share a zone.
+      // same agent must reuse it. CR-03: the ONE member resolver proves it — slug AND direct
+      // child of the team folder — so a stale duplicate elsewhere or another agent's zone is
+      // never adopted.
       const reusableFolderId = liveTree
-        ? await findMemberFolderForAgent(validated.teamId, validated.agentId, teamFolderId, db)
+        ? await resolveMemberFolder(validated.teamId, validated.agentId, teamFolderId, db)
         : undefined;
 
       const member: AiTeamMember = {

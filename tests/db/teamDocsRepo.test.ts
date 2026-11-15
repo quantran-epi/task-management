@@ -14,7 +14,7 @@ import {
   teamFolderSlug,
 } from '../../src/db/repositories/teamDocsRepo';
 import { createEmployee, createLead } from '../../src/db/repositories/aiOfficeRepo';
-import { createNote, deleteNote } from '../../src/db/repositories/noteRepo';
+import { createNote, deleteNote, updateNote } from '../../src/db/repositories/noteRepo';
 import type { AiTeam, AiTeamMember } from '../../src/types/aiOffice';
 import { generateId } from '../../src/utils/uuid';
 
@@ -747,5 +747,110 @@ describe('teamDocsRepo (Phase 41, D-08, D-10, D-11, D-12, D-12b)', () => {
       seen.add(cursor);
       cursor = (await db.notes.get(cursor))?.parentId;
     }
+  });
+
+  // CR-01 (round 6): a row naming another agent's live child folder used to be accepted on parent
+  // shape alone, so the first row processed stole the second agent's zone and its documents.
+  it('never adopts another agent zone, even when a row names it (CR-01)', async () => {
+    const [a, b] = [generateId(), generateId()];
+    const team = await seedTeam('Nhóm A', [a, b]);
+    const first = await ensureTeamDocsReady(team.id, db);
+    const aFolder = first.memberFolderIds.get(a) as string;
+    const doc = await createNote(
+      { title: 'Của A', body: 'x', type: 'document', parentId: aFolder },
+      db
+    );
+    // Corruption: B's row now names A's folder.
+    const bRow = (await db.aiTeamMembers.where('teamId').equals(team.id).toArray()).find(
+      (row) => row.agentId === b
+    );
+    await db.aiTeamMembers.update(bRow?.id as string, { docsFolderId: aFolder });
+
+    const second = await ensureTeamDocsReady(team.id, db);
+
+    expect(second.memberFolderIds.get(a)).toBe(aFolder);
+    expect(second.memberFolderIds.get(b)).not.toBe(aFolder);
+    // A's documents stayed in A's zone.
+    expect((await db.notes.get(doc.id))?.parentId).toBe(aFolder);
+    expect((await db.notes.get(second.memberFolderIds.get(b) as string))?.slug).toBe(
+      memberFolderSlug(team.id, b)
+    );
+  });
+
+  // CR-02 (round 6): `slug` is clearable through `update_note`, and a slug-only proof then leaked
+  // the whole tree — team row gone, folder and documents orphaned with no handle left.
+  it('still deletes the tree after the team folder slug was cleared (CR-02)', async () => {
+    const agentId = generateId();
+    const team = await seedTeam('Nhóm A', [agentId]);
+    const ready = await ensureTeamDocsReady(team.id, db);
+    const teamFolderId = ready.team.docsFolderId as string;
+    const memberFolderId = ready.memberFolderIds.get(agentId) as string;
+    const doc = await createNote(
+      { title: 'Tài liệu', body: 'x', type: 'document', parentId: memberFolderId },
+      db
+    );
+    await db.notes.update(teamFolderId, { slug: undefined });
+
+    await deleteTeamDocsTree(teamFolderId, db, team.id);
+
+    expect(await db.notes.get(teamFolderId)).toBeUndefined();
+    expect(await db.notes.get(memberFolderId)).toBeUndefined();
+    expect(await db.notes.get(doc.id)).toBeUndefined();
+  });
+
+  // CR-02: the same corroboration keeps a user folder safe when the slug is missing and no
+  // app-owned row names it.
+  it('still refuses a slugless user folder no app-owned row names (CR-02)', async () => {
+    const team = await seedTeam('Nhóm A', [generateId()]);
+    await ensureTeamDocsReady(team.id, db);
+    const userFolder = await createNote(
+      { title: 'Thư mục riêng', body: '', type: 'folder' },
+      db
+    );
+    const secret = await createNote(
+      { title: 'Bí mật', body: 'x', type: 'document', parentId: userFolder.id },
+      db
+    );
+
+    await deleteTeamDocsTree(userFolder.id, db, team.id);
+
+    expect(await db.notes.get(userFolder.id)).toBeDefined();
+    expect(await db.notes.get(secret.id)).toBeDefined();
+  });
+
+  // CR-02: a cleared slug must not strand the tree beside a rebuilt copy either — the backfill
+  // adopts the corroborated folder and re-stamps it.
+  it('re-stamps a corroborated slugless team folder instead of rebuilding (CR-02)', async () => {
+    const agentId = generateId();
+    const team = await seedTeam('Nhóm A', [agentId]);
+    const first = await ensureTeamDocsReady(team.id, db);
+    const teamFolderId = first.team.docsFolderId as string;
+    const doc = await createNote(
+      { title: 'Giữ lại', body: 'x', type: 'document', parentId: teamFolderId },
+      db
+    );
+    await db.notes.update(teamFolderId, { slug: undefined });
+
+    const second = await ensureTeamDocsReady(team.id, db);
+
+    expect(second.team.docsFolderId).toBe(teamFolderId);
+    expect((await db.notes.get(teamFolderId))?.slug).toBe(teamFolderSlug(team.id));
+    expect(await db.notes.get(doc.id)).toBeDefined();
+  });
+
+  // WR (round 6): the `ai-` namespace is the ownership proof, so `updateNote` must refuse to let
+  // a user-supplied slug claim it — otherwise any folder could pass itself off as a team's.
+  it('refuses a user-supplied ai- slug (WR)', async () => {
+    const team = await seedTeam('Nhóm A', [generateId()]);
+    const ready = await ensureTeamDocsReady(team.id, db);
+    const userFolder = await createNote({ title: 'Riêng', body: '', type: 'folder' }, db);
+
+    await expect(
+      updateNote(userFolder.id, { slug: teamFolderSlug(team.id) }, db)
+    ).rejects.toThrow(/dành riêng/i);
+
+    // The real team folder is still the only holder, so delete still resolves.
+    expect((await db.notes.get(userFolder.id))?.slug).toBeUndefined();
+    expect(ready.team.docsFolderId).toBeDefined();
   });
 });
