@@ -17,7 +17,7 @@
 | `src/services/ai/office/teamTools.ts` (mod) | service | request-response | `proposeSkillVersion` (:628) | exact |
 | `src/services/ai/office/teamRunCoordinator.ts` (mod) | service | event-driven | `toolContext` (:1075) + `send()` roster load (:2438) | exact |
 | `src/services/ai/office/teamPrompts.ts` (mod) | utility | transform | `buildEmployeeTurnRequest` (:52) | exact |
-| `tests/db/teamDocsRepo.test.ts` (NEW) | test | CRUD | `tests/db/repositories/__tests__/noteRepo.test.ts` | exact |
+| `tests/db/teamDocsRepo.test.ts` (NEW) | test | CRUD | `tests/db/aiTeamRunRepo.test.ts` | exact |
 | `tests/services/ai/office/teamTools.test.ts` (extend) | test | request-response | its own `ctx()` factory (:33) | exact |
 | `tests/services/ai/office/aiTeamRepo.test.ts` (extend) | test | CRUD | its own fixtures (:33-50) | exact |
 
@@ -243,7 +243,7 @@ function refuse(code: TeamToolRefusalCode, message: string): TeamToolRefusal {
 }
 ```
 
-**Copy:** add `'DOC_NOT_IN_YOUR_FOLDER' | 'TEAM_DOCS_NOT_READY'` to the union. Handlers return `JSON.stringify(refuse(...))` — never throw.
+**Copy:** add `'DOC_NOT_IN_YOUR_FOLDER' | 'TEAM_DOCS_NOT_READY' | 'LEAD_USES_DB_TOOLS'` to the union. Handlers return `JSON.stringify(refuse(...))` — never throw. The third code is the leader's role refusal (D-06) — it says "this write path is not yours", which no existing code says.
 
 **Analog: tool definition shape** (`propose_skill_version`, lines 201-224):
 
@@ -447,21 +447,24 @@ parts.push(
 
 ### `tests/db/teamDocsRepo.test.ts` (NEW — test, CRUD)
 
-**Analog:** `src/db/repositories/__tests__/noteRepo.test.ts` (lines 1-24)
+**Analog:** `tests/db/aiTeamRunRepo.test.ts` (lines 1-27)
 
 ```ts
+// @vitest-environment node
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import 'fake-indexeddb/auto';
-import { TaskPlannerDatabase } from '../../index';
-import { createNote, ..., getNotesByFolder } from '../noteRepo';
+import { TaskPlannerDatabase } from '../../src/db/index';
+import { openBatch, ... } from '../../src/db/repositories/aiTeamRunRepo';
 
-describe('noteRepo - Folder Hierarchy, ...', () => {
+describe('aiTeamRunRepo (Phase 37, D-09, D-22, D-23, D-25)', () => {
   let db: TaskPlannerDatabase;
-  beforeEach(() => { db = new TaskPlannerDatabase(`TestDB_${Math.random()}`); });
+  beforeEach(async () => {
+    db = new TaskPlannerDatabase('TestAiTeamRunRepo_' + Math.random().toString(36).slice(2));
+    await db.open();
+  });
   afterEach(async () => { await db.delete(); });
 ```
 
-Note: `tests/setup.ts` installs the IndexedDB shim globally — the `fake-indexeddb/auto` import is legacy in that file; the newer office tests (`tests/services/ai/office/teamTools.test.ts:1-2`) use only `// @vitest-environment node` + `new TaskPlannerDatabase(name)`. Follow the newer form.
+Note: `tests/setup.ts` installs the IndexedDB shim globally, so no `fake-indexeddb/auto` import is needed — `tests/db/aiTeamRunRepo.test.ts` is the in-repo proof of that shape (it imports neither the shim nor a global `db`). Use `// @vitest-environment node` plus a per-test `new TaskPlannerDatabase(name)` and an `afterEach` `db.delete()`.
 
 **Rollback test pattern** (`tests/services/ai/office/aiTeamRepo.test.ts:132`, `:164`): `await expect(fn(...)).rejects.toThrow(/.../i);` then assert the absence of rows.
 
