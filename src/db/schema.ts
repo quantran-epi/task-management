@@ -186,6 +186,13 @@ export const SCHEMA_V26 = {
   ...SCHEMA_V25,
 } as const;
 
+// Phase 41 (D-13, D-15): the two `docsFolderId` columns are unindexed row payload on the
+// existing `aiTeams` and `aiTeamMembers` stores, so no index spec changes and no `.upgrade()`
+// hook. The store shape is identical to V26.
+export const SCHEMA_V27 = {
+  ...SCHEMA_V26,
+} as const;
+
 // Bump with every new `this.version(n)` in db/index.ts. Migration tests assert
 // against this instead of a literal, so a schema bump never silently breaks them.
-export const LATEST_SCHEMA_VERSION = 26;
+export const LATEST_SCHEMA_VERSION = 27;

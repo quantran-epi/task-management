@@ -26,6 +26,7 @@ import {
   SCHEMA_V24,
   SCHEMA_V25,
   SCHEMA_V26,
+  SCHEMA_V27,
 } from './schema';
 import type {
   Task,
@@ -664,6 +665,10 @@ export class TaskPlannerDatabase extends Dexie {
             if (row.status !== 'approved') delete row.version;
           })
       );
+
+    // Phase 41 (D-12, D-13): `docsFolderId` on teams and members is unindexed row payload,
+    // so no index spec changes and no `.upgrade()` hook — old rows are test data (C-16).
+    this.version(27).stores(SCHEMA_V27);
 
     // Multi-tab concurrency handlers (DATA-04, D-09, D-10)
     this.on('blocked', () => {

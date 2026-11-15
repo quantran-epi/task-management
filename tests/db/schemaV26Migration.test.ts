@@ -70,8 +70,8 @@ describe('Dexie SCHEMA_V26 Migration (Phase 39, CR-01)', () => {
     return upgraded;
   }
 
-  it('opens at the latest version, which is 26', async () => {
-    expect(LATEST_SCHEMA_VERSION).toBe(26);
+  it('opens at the latest version, which is 27', async () => {
+    expect(LATEST_SCHEMA_VERSION).toBe(27);
     const db = await openAtCurrentVersion();
     expect(db.verno).toBe(LATEST_SCHEMA_VERSION);
   });
