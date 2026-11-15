@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 41 (AI Office team docs zones) — EXECUTING
-Plan: 3 of 6
+Plan: 4 of 6
 Status: Ready to execute
-Last activity: 2026-11-15 -- Phase 41 execution started
+Last activity: 2026-11-15 -- Completed 41-03-PLAN.md
 
 ## Session Continuity
 
-Last session: 2026-11-15T04:45:46.448Z
-Stopped at: Completed 41-02-PLAN.md
+Last session: 2026-11-15T04:49:12Z
+Stopped at: Completed 41-03-PLAN.md
 Resume file: None
 
 Progress: [█████████░] 92%
@@ -194,6 +194,8 @@ Progress: [█████████░] 92%
 - [Phase 41]: D-13/D-15: docsFolderId is unindexed row payload; V27 spreads SCHEMA_V26 byte-identically and needs no upgrade hook
 - [Phase 41]: D-14: docsFolderId is uuidSchema.optional() in both AI team backup strictObjects; not added to FORBIDDEN_BACKUP_KEYS
 - [Phase 41]: 41-02: teamDocsRepo owns the AI Teams root, per-team tree, member folders, hard tree delete and the idempotent backfill; the liveness guard runs inside the rw transaction over aiTeams/aiTeamMembers/aiEmployees/notes/settings
+- [Phase 41]: 41-03: write_doc is a team tool (never in MUTATION_TOOLS), so the employee read-only gate cannot block it; parentId comes from ctx.folderId only, type is the literal 'document', and a lead-role call refuses LEAD_USES_DB_TOOLS before action is read
+- [Phase 41]: 41-03: EMPLOYEE_ONLY_TEAM_TOOLS is the lead-payload subtraction set (wired in 41-06); it is not symmetric with LEAD_ONLY_TEAM_TOOLS — a tool in both would be offered to nobody
 
 ## Performance Metrics
 
@@ -226,3 +228,4 @@ Progress: [█████████░] 92%
 | Phase 38 P09 | 26min | 3 tasks | 12 files |
 | Phase 41 P01 | 5m | 3 tasks | 9 files |
 | Phase 41 P02 | 20 min | 3 tasks | 2 files |
+| Phase 41 P03 | 10 min | 2 tasks | 2 files |

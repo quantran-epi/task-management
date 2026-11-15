@@ -98,9 +98,9 @@
 ### Team Docs Zones (AIO-DOCS) — Phase 41
 
 - [x] **AIO-DOCS-01**: Creating a team creates one team folder and one subfolder per member in `db.notes`, in the same transaction as the team row. A mid-transaction failure leaves neither the team nor any folder behind.
-- [ ] **AIO-DOCS-02**: Every member can call the team tool `write_doc` (actions list/create/update), and the write is visible in Docs immediately in the member's own folder — no approval card, no separate draft table.
-- [ ] **AIO-DOCS-03**: A member write outside its own subfolder is refused by code: `parentId` on create and the existing note's `parentId` on update are both checked against the caller's folder id. Prompt wording is not the enforcement.
-- [ ] **AIO-DOCS-04**: A member cannot create a folder, delete a note, or call any other mutation: the DB-tool mutations `create_note`/`update_note`/`delete_note` stay outside `EMPLOYEE_READ_ONLY_ALLOWLIST` and are refused by the runtime's read-only gate, while `write_doc` is the only write path and writes nothing on refusal.
+- [x] **AIO-DOCS-02**: Every member can call the team tool `write_doc` (actions list/create/update), and the write is visible in Docs immediately in the member's own folder — no approval card, no separate draft table.
+- [x] **AIO-DOCS-03**: A member write outside its own subfolder is refused by code: `parentId` on create and the existing note's `parentId` on update are both checked against the caller's folder id. Prompt wording is not the enforcement.
+- [x] **AIO-DOCS-04**: A member cannot create a folder, delete a note, or call any other mutation: the DB-tool mutations `create_note`/`update_note`/`delete_note` stay outside `EMPLOYEE_READ_ONLY_ALLOWLIST` and are refused by the runtime's read-only gate, while `write_doc` is the only write path and writes nothing on refusal.
 - [ ] **AIO-DOCS-05**: The leader keeps the full mutation toolset and its writes still park on the approval card; the user's accept is what places the final document at the team root.
 - [x] **AIO-DOCS-06**: Deleting a team removes its folder tree. A team created before this phase gets its tree lazily on first run, and repeated runs do not duplicate it.
 
