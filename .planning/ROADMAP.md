@@ -991,9 +991,9 @@ Plans:
 **Plans:** 3 plans in 2 waves
 
 Plans:
-- [ ] 42-01-PLAN.md — `git_read` team tool: seven-action enum, linked-system repo resolution, untrusted wraps, plus `getRecentCommits`
+- [ ] 42-01-PLAN.md — `git_read` team tool: seven-action enum, linked-system repo resolution, untrusted wraps, `getRecentCommits`, and the tool-count bump
 - [ ] 42-02-PLAN.md — Reviewer prompt line naming `git_read` and the read order
-- [ ] 42-03-PLAN.md — Injection, refusal, wrap and Oracle-gate proofs
+- [ ] 42-03-PLAN.md — Injection, refusal, wrap and Oracle-gate proofs (test-only)
 
 ---
 
