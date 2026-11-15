@@ -1,131 +1,116 @@
 ---
 phase: 42-read-only-git-inspection-for-the-reviewer-agent
-fixed_at: 2026-11-15T23:30:00Z
+fixed_at: 2026-11-15T23:55:00Z
 review_path: .planning/phases/42-read-only-git-inspection-for-the-reviewer-agent/42-REVIEW.md
-iteration: 1
-findings_in_scope: 15
-fixed: 14
-skipped: 1
-status: partial
+iteration: 2
+findings_in_scope: 6
+fixed: 6
+skipped: 0
+status: all_fixed
 ---
 
 # Phase 42: Code Review Fix Report
 
-**Fixed at:** 2026-11-15T23:30:00Z
+**Fixed at:** 2026-11-15T23:55:00Z
 **Source review:** `.planning/phases/42-read-only-git-inspection-for-the-reviewer-agent/42-REVIEW.md`
-**Iteration:** 1
+**Iteration:** 2
 
 **Summary:**
-- Findings in scope: 15 (3 critical, 12 warning)
-- Fixed: 14
-- Skipped: 1 (WR-10 — already covered)
+- Findings in scope: 6 (0 critical, 6 warning) — plus IN-01 and IN-02, fixed because they live in the same files and the change was small
+- Fixed: 6
+- Skipped: 0
+
+**Verification:** `npx tsc --noEmit` exits 0. Scoped suites pass (7 files, 60+ tests): `src/services/__tests__/gitRemoteService.test.ts`, `src/services/__tests__/gitRemoteTree.test.ts`, `src/services/__tests__/gitRemoteTreeService.test.ts`, `tests/services/ai/office/teamToolsGitRead.test.ts`, `tests/services/ai/office/teamTools.test.ts`, `tests/services/ai/office/teamPrompts.test.ts`, `tests/services/ai/office/teamRunCoordinator.test.ts`. Full suite not run (project rule: over an hour).
 
 ## Fixed Issues
 
-### CR-01: Model-supplied revision args parsed as git options
+### WR-01: `isNotInRef` cannot tell "untracked" from "deleted in this ref"
 
-**Files modified:** `src/services/gitRemoteService.ts`, `src/services/gitRemoteTreeService.ts`, `src/services/ai/office/teamTools.ts`, `tests/services/ai/office/teamToolsGitRead.test.ts`, `src/services/__tests__/gitRemoteService.test.ts`, `src/services/__tests__/gitRemoteTree.test.ts`
-**Commit:** `bc0b3829`, `64f8281e`, `d90e6748`
-**Applied fix:** Both layers, as directed. Handler: new `revisionArg()` refuses any revision-shaped value starting with `-` before a command is built (refusal, not strip). Service: `--end-of-options` added before every revision argument in `log`, `rev-parse`, `show`, `ls-tree` and `diff`. One correction to the review's suggested patch: `rev-parse` needs `--verify` too — plain `rev-parse --end-of-options main` echoes the literal `--end-of-options` back as a revision, which would have corrupted `headSha`. Verified against git 2.50.1: `--end-of-options` blocks `--output` for `log`, `show`, `diff`.
+**Files modified:** `src/services/gitRemoteTreeService.ts`, `src/services/__tests__/gitRemoteTree.test.ts`, `src/services/__tests__/gitRemoteTreeService.test.ts`, `tests/services/ai/office/teamToolsGitRead.test.ts`
+**Commit:** `5af672da`
+**Applied fix:** Two changes, both needed.
+1. `isNotInRef(err, cleanPath, ref)` now matches the anchored strings `path '<cleanPath>' does not exist in '<ref>'` and `path '<cleanPath>' exists on disk, but not in '<ref>'` instead of the unanchored phrase regex, so a ref whose *name* contains the phrase can no longer force the fallback.
+2. Before falling back, `getRemoteFileContent` runs `git ls-files --error-unmatch -- <path>`; if the path is tracked anywhere, the original `git show` error is re-thrown. The working copy is only consulted for a genuinely untracked path.
 
-**Status:** fixed: requires human verification (logic change in command construction).
+Tests added: tracked-but-deleted-in-ref refuses (asserts the `ls-files` argv and that no `cat` runs); a bad ref name containing the phrase refuses.
 
-### CR-02: `read_file` fallback escaped the repository via `../`
+**Status:** fixed: requires human verification (fallback gating logic).
 
-**Files modified:** `src/services/gitRemoteTreeService.ts`, `tests/services/ai/office/teamToolsGitRead.test.ts`, `src/services/__tests__/gitRemoteTree.test.ts`
-**Commit:** `64f8281e`, `d90e6748`
-**Applied fix:** New exported `confineRepoPath()` normalises then refuses a path that pops past the repo root, applied in both `getRemoteFileContent` and `getRemoteWorkingFileContent` (the latter is exported and cannot trust its caller). No `node:path` import — this module is bundled for the browser/Tauri renderer where `path.posix` is unavailable, so the needed subset is inlined. Also gated the fallback on `isNotInRef()` (see WR-01).
+### WR-02: the `cat` fallback followed symlinks out of the repo
+
+**Files modified:** `src/services/gitRemoteTreeService.ts`, `src/services/__tests__/gitRemoteTree.test.ts`, `src/services/__tests__/gitRemoteTreeService.test.ts`, `tests/services/ai/office/teamToolsGitRead.test.ts`
+**Commit:** `5af672da`
+**Applied fix:** The fallback command is now `test -L '<path>' && echo __GIT_READ_SYMLINK_REFUSED__ || cat -- '<path>'` — one round trip, no extra SSH call. A symlink throws `PathOutsideRepoError`, which `getRemoteFileContent` re-throws rather than swallowing as a generic fallback failure (otherwise the original `git show` error would have masked the refusal).
+
+Ceiling: a regular file whose entire content is the marker string is also refused. Failing closed on a name that cannot occur in practice beats a second SSH round trip; upgrade path is a separate `test -L` call if that ever matters.
+
+Test added: an untracked symlink is refused with a `symlink` message.
 
 **Status:** fixed: requires human verification.
 
-### CR-03: Raw remote stderr unwrapped and mislabelled `INVALID_ARGUMENT`
+### WR-03: `ls-tree` C-quoted non-ASCII paths
 
-**Files modified:** `src/services/ai/office/teamTools.ts`, `tests/services/ai/office/teamToolsGitRead.test.ts`
-**Commit:** `d90e6748`
-**Applied fix:** Added `GIT_READ_FAILED` to `TeamToolRefusalCode`; the catch-all now returns that code with `wrapUntrusted(gitLabel('LỖI GIT'), ...)`. The test that pinned the misclassification now asserts the new code plus nonce-matched enclosure of the stderr.
+**Files modified:** `src/services/gitRemoteTreeService.ts`, `src/services/__tests__/gitRemoteTree.test.ts`, `tests/services/ai/office/teamToolsGitRead.test.ts`
+**Commit:** `5af672da`
+**Applied fix:** `getRemoteTree` now passes `-z` and splits the output on NUL, same as `status`/`diff`. `parseLsTreeLine` is unchanged — it still reads up to the first tab, which is correct for an unquoted record.
 
-### WR-01: `read_file` silently returned working-tree content labelled as branch content
+Tests updated to the `-z` shape and to a Vietnamese directory name (`thư-mục`), asserting it arrives verbatim rather than octal-escaped.
 
-**Files modified:** `src/services/gitRemoteTreeService.ts`, `tests/services/ai/office/teamToolsGitRead.test.ts`, `src/services/__tests__/gitRemoteTree.test.ts`
-**Commit:** `64f8281e`, `d90e6748`
-**Applied fix:** `isNotInRef()` matches only `does not exist in` / `exists on disk, but not in`. Anything else (bad ref, SSH down) propagates so CR-03's refusal fires. Tests cover both directions: bad ref issues exactly one command and refuses; a genuinely untracked path still falls back to `cat`.
+**Status:** fixed.
 
-### WR-02: Rename detection broken in `getDiffSummary`
+### WR-04: `parseNumstatZ` truncated a path containing a tab
 
 **Files modified:** `src/services/gitRemoteService.ts`, `src/services/__tests__/gitRemoteService.test.ts`
-**Commit:** `bc0b3829`
-**Applied fix:** Both `diff` calls now use `-z -M`, with dedicated `parseNameStatusZ()` / `parseNumstatZ()` parsers. Both key on the TARGET path, so the join lands and a rename reports `renamed`. Test asserts `{ path: 'big2.txt', status: 'renamed' }` from real `-z` shapes probed against git 2.50.1.
+**Commit:** `15f976cd`
+**Applied fix:** Replaced `entry.split('\t')` with `indexOf` lookups for the first two tabs; additions and deletions come from the slices before them, and everything after the second tab is the path. The rename branch (empty third field) and the binary `-`/`-` case are preserved.
 
-### WR-03: `checkDirtyStatus` corrupted paths with spaces and renames
+Tests added: `1\t0\ttab\tname.txt\0` parses to path `tab\tname.txt`; rename and binary shapes still parse.
 
-**Files modified:** `src/services/gitRemoteService.ts`, `src/services/__tests__/gitRemoteService.test.ts`
-**Commit:** `bc0b3829`
-**Applied fix:** `status --porcelain=v1 -z`, split on `\0`. A rename/copy consumes its source token so it is not reported as its own file. Tests cover a path with spaces and a rename.
+**Status:** fixed.
 
-### WR-04: Refusal messages embedded user/model text unwrapped
+### WR-05: a confinement rejection was reported as `GIT_READ_FAILED`
+
+**Files modified:** `src/services/gitRemoteTreeService.ts`, `src/services/ai/office/teamTools.ts`, `tests/services/ai/office/teamToolsGitRead.test.ts`
+**Commit:** `5af672da`, `8c569b21`
+**Applied fix:** New exported `PathOutsideRepoError extends Error`; `confineRepoPath` throws it. The `git_read` catch maps it to `refuse('INVALID_ARGUMENT', wrapUntrusted(gitLabel('ĐƯỜNG DẪN'), err.message))` before the generic `GIT_READ_FAILED` branch. The message stays wrapped — it echoes the model-supplied path, which is untrusted text on a `role: 'tool'` channel.
+
+Tests updated: escaping `filePath` and escaping `dirPath` now assert `INVALID_ARGUMENT`.
+
+**Status:** fixed: requires human verification (error-class plumbing).
+
+### WR-06: `WRAP_CASES` status and diff_summary fixtures used pre-`-z` shapes
+
+**Files modified:** `tests/services/ai/office/teamToolsGitRead.test.ts`
+**Commit:** `8c569b21`
+**Applied fix:** Fixtures now use the shapes the parsers consume: `' M src/app.ts\0?? new.txt\0'`, `'3\t1\tsrc/app.ts\0'`, `'M\0src/app.ts\0'`, and a NUL-terminated `ls-tree -z` record pair for the tree case. The per-case assertions now check the parsed values exactly: `uncommittedFiles` has 2 rows with the right paths, `files[0]` is `{ status: 'modified', additions: 3, deletions: 1 }` with path `src/app.ts`, and the tree yields exactly 2 nodes titled `src/lib` and `src/app.ts`.
+
+Note on the assertion shape: each wrapped field is a nonce-tagged multi-line block, so the parsed value is asserted with `toContain('\nsrc/app.ts\n')` — the raw value on its own line, which a parser regression to `src/app.ts\n?? new.txt\n` or to a truncated path cannot satisfy. The row COUNT (`toHaveLength`) is what catches the name-status regression that previously produced zero rows.
+
+**Status:** fixed.
+
+## Also Fixed (Info)
+
+### IN-01: empty `branch` no longer fell back to `defaultBaseBranch`
 
 **Files modified:** `src/services/ai/office/teamTools.ts`
-**Commit:** `d90e6748`
-**Applied fix:** `SYSTEM_NOT_LINKED` wraps the requested id; `NO_LINKED_REPO` (both sites) and the multi-repo `INVALID_ARGUMENT` list wrap system names via `wrapUntrusted`.
+**Commit:** `8c569b21`, `a82bb2dd`
+**Applied fix:** `log` treats `undefined`, `null` and `''` as "not supplied" and uses `revisionArg(system.defaultBaseBranch) ?? 'HEAD'`; any other supplied value still goes through `revisionArg` and refuses if it starts with `-`.
 
-### WR-05: `resolveGitRepo` ran outside the try
+### IN-02: no-op `expect(sshService,)` in the tree-service test
 
-**Files modified:** `src/services/ai/office/teamTools.ts`
-**Commit:** `d90e6748`
-**Applied fix:** Repo resolution moved inside the `try`. `repoPath` is hoisted as `''` and assigned after resolution, so the `gitLabel` closure used by the catch still compiles and labels correctly.
+**Files modified:** `src/services/__tests__/gitRemoteTreeService.test.ts`
+**Commit:** `5af672da`
+**Applied fix:** Deleted the line. That test's `runGitCommand` mock was also updated to reject twice (the `git show` call, then the `ls-files` confirmation) so it exercises the real WR-01 path.
 
-### WR-06: Non-integer `limit` produced a confusing git failure
+## Not Fixed (out of scope)
 
-**Files modified:** `src/services/ai/office/teamTools.ts`
-**Commit:** `d90e6748`
-**Applied fix:** `Math.floor(Number(args.limit))` before the clamp.
+### IN-03: round-1 Info items
 
-### WR-07: Three of four escape assertions derived expectation from `escapeShellArg`
-
-**Files modified:** `tests/services/ai/office/teamToolsGitRead.test.ts`
-**Commit:** `d90e6748`
-**Applied fix:** All four now pin literals; the `escapeShellArg` import was removed from the test file so it cannot creep back.
-
-### WR-08: Wrap assertions checked tag presence, not enclosure
-
-**Files modified:** `tests/services/ai/office/teamToolsGitRead.test.ts`
-**Commit:** `d90e6748`
-**Applied fix:** New `expectEnclosed()` walks every opening tag, reads its nonce, advances to the closing tag carrying that same nonce, and asserts the payload index lies inside exactly one such block.
-
-### WR-09: `vi.clearAllMocks()` did not clear once-impl queues
-
-**Files modified:** `tests/services/ai/office/teamToolsGitRead.test.ts`
-**Commit:** `d90e6748`
-**Applied fix:** `vi.mocked(execRemoteCommand).mockReset()` in `beforeEach`.
-
-### WR-11: No test covered the actual security boundary
-
-**Files modified:** `tests/services/ai/office/teamToolsGitRead.test.ts`
-**Commit:** `d90e6748`
-**Applied fix:** New Block C: refusal cases for `log`/`diff_summary`/`read_file`/`tree` with a `-`-leading revision (asserting `execRemoteCommand` was never called), `filePath: '../../../home/git/.ssh/id_rsa'` and `dirPath: '../..'` (asserting no `cat --` command is reached), plus the WR-01 both-directions cases. Service-layer boundary tests added in `gitRemoteService.test.ts` and `gitRemoteTree.test.ts`.
-
-### WR-12: `diff`/`show` ran without `--no-ext-diff` / `--no-textconv`
-
-**Files modified:** `src/services/gitRemoteService.ts`, `src/services/gitRemoteTreeService.ts`
-**Commit:** `bc0b3829`, `64f8281e`
-**Applied fix:** Added to `diff` (both `--numstat`, `--name-status` and the file diff) and `show`. Not added to `ls-tree`, which has no diff-driver path.
-
-## Skipped Issues
-
-### WR-10: AIO-READ-06 (Oracle read pair gated on AI Tool config) has no test
-
-**File:** `src/services/ai/office/teamRunCoordinator.ts:1177-1179`
-**Reason:** already covered — the review's `grep -rn "oracleReadTools" tests/` missed it because the test asserts tool NAMES, not the helper. `tests/services/ai/office/teamRunCoordinator.test.ts:1610-1645` ("advertises the Oracle read pair to both agents only when the Oracle tool is enabled") asserts absence for both lead and employee with the config disabled, flips `saveOracleToolConfig({ enabled: true })`, then asserts presence. Verified passing in this run.
-**Original issue:** Requirement gate with zero coverage.
-
-## Notes
-
-- Out of scope by `fix_scope: critical_warning`: IN-01 through IN-05 were not addressed. IN-05 in particular was drafted and reverted — wrapping `repoPath` would have changed the payload shape the existing tests assert, and it is Info-tier.
-- Commit granularity: three commits by layer rather than one per finding. The source and test hunks for a single finding are interleaved with the hunks of its neighbours (a test pins the exact command string a source hunk produces), so no per-finding split both compiles and passes its own tests. Each commit is green on its scoped tests.
-- Scoped test runs: `teamToolsGitRead` 26 pass, `teamTools` + `teamPrompts` 139 pass, `gitRemoteService` 15 pass, `gitRemoteTree` + `gitRemoteTreeService` 13 pass, workbench viewers 8 pass. `tsc --noEmit` exits 0.
+**Files:** `src/services/gitRemoteService.ts:66` (`isHead` hardcoded `false`), `src/services/ai/office/teamTools.ts` (`dirPath` untrimmed, `repoPath` echoed raw), `src/services/gitRemoteService.ts` (inconsistent format-string quoting), `src/services/ai/office/teamPrompts.ts:225` (`tree` unnumbered in a 1–5 list)
+**Reason:** Info-tier, outside `fix_scope: critical_warning`, and none affects correctness or security. Left as recorded in round 1.
 
 ---
 
-_Fixed: 2026-11-15T23:30:00Z_
+_Fixed: 2026-11-15T23:55:00Z_
 _Fixer: Claude (gsd-code-fixer)_
-_Iteration: 1_
+_Iteration: 2_
