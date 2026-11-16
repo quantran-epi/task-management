@@ -1,5 +1,5 @@
 import type { SshConfig } from '../types/ssh';
-import type { RemoteGitTreeNode } from '../types/gitRemote';
+import type { RemoteGitTreeNode, RemoteFilePage } from '../types/gitRemote';
 import { runGitCommand, escapeShellArg } from './gitRemoteService';
 import { execRemoteCommand } from './sshService';
 
@@ -258,20 +258,7 @@ export async function getRemoteWorkingFileContent(
 ): Promise<string> {
   // CR-02: exported, so it confines on its own rather than trusting the caller's path.
   const cleanPath = confineRepoPath(filePath, 'Đường dẫn tệp');
-  const targetFile = `${repoPath.replace(/\/+$/, '')}/${cleanPath}`;
-
-  // Canonicalize BOTH paths: parent/leaf symlinks, relative roots and symlinked roots.
-  // Appending '/' preserves trailing newlines through shell command substitution; remove
-  // that sentinel and realpath's output newline before checking a literal directory boundary.
-  // Missing/failed realpath must stop before cat. Exit 77 is policy refusal, not file content.
-  // ponytail: assumes a stable remote filesystem; hostile concurrent swaps need native openat.
-  const cmd =
-    `root=$(realpath -e -- ${escapeShellArg(repoPath)} && printf /) || exit 1; ` +
-    `root=\${root%?}; root=\${root%?}; ` +
-    `target=$(realpath -e -- ${escapeShellArg(targetFile)} && printf /) || exit 1; ` +
-    `target=\${target%?}; target=\${target%?}; ` +
-    `case "$target" in "\${root%/}/"*) cat -- "$target" ;; *) exit 77 ;; esac`;
-  const res = await execRemoteCommand(config, cmd, secret);
+  const res = await execRemoteCommand(config, workingCopyCatSnippet(repoPath, cleanPath), secret);
   if (res.exitStatus === 77) {
     throw new PathOutsideRepoError(`Đường dẫn symlink ngoài repo, từ chối đọc: ${cleanPath}`);
   }
@@ -279,4 +266,167 @@ export async function getRemoteWorkingFileContent(
     throw new Error(res.stderr || `Failed to read ${cleanPath}`);
   }
   return res.stdout || '';
+}
+
+/**
+ * Canonicalize BOTH paths: parent/leaf symlinks, relative roots and symlinked roots.
+ * Appending '/' preserves trailing newlines through shell command substitution; remove
+ * that sentinel and realpath's output newline before checking a literal directory boundary.
+ * Missing/failed realpath must stop before cat. Exit 77 is policy refusal, not file content.
+ * ponytail: assumes a stable remote filesystem; hostile concurrent swaps need native openat.
+ */
+function workingCopyCatSnippet(repoPath: string, cleanPath: string): string {
+  const targetFile = `${repoPath.replace(/\/+$/, '')}/${cleanPath}`;
+  return (
+    `root=$(realpath -e -- ${escapeShellArg(repoPath)} && printf /) || exit 1; ` +
+    `root=\${root%?}; root=\${root%?}; ` +
+    `target=$(realpath -e -- ${escapeShellArg(targetFile)} && printf /) || exit 1; ` +
+    `target=\${target%?}; target=\${target%?}; ` +
+    `case "$target" in "\${root%/}/"*) cat -- "$target" ;; *) exit 77 ;; esac`
+  );
+}
+
+const PAGE_TOTAL_PREFIX = '###TOTAL ';
+
+/**
+ * One remote pass yields the page AND the line total. The source's exit status is reported
+ * out-of-band on stderr (`###EXIT <n>`) because the pipeline's own status is awk's.
+ *
+ * A subshell, not `{ ...; }`: dash does not run an EXIT trap for the last command of a brace
+ * group inside a pipeline, and the working-copy snippet's `exit 77` must still be reported.
+ */
+function pageCommand(source: string, offset: number, limit: number): string {
+  return (
+    `( trap 'printf "###EXIT %s\\n" "$?" >&2' EXIT; ${source} ) | ` +
+    `awk -v s=${offset} -v e=${offset + limit - 1} ` +
+    `'NR>=s&&NR<=e{print NR": "$0} END{print "${PAGE_TOTAL_PREFIX}"NR}'`
+  );
+}
+
+/** First 1024 bytes of the same source; exit 0 means a NUL byte is present. */
+function binaryProbeCommand(source: string): string {
+  return `{ ${source}; } | head -c 1024 | od -An -tx1 | tr -s ' ' '\\n' | grep -qx 00`;
+}
+
+function parsePage(
+  stdout: string,
+  filePath: string,
+  offset: number,
+  limit: number
+): RemoteFilePage {
+  const lines: string[] = [];
+  let totalLines = 0;
+  for (const line of stdout.split('\n')) {
+    if (line.startsWith(PAGE_TOTAL_PREFIX)) {
+      totalLines = parseInt(line.slice(PAGE_TOTAL_PREFIX.length), 10) || 0;
+    } else if (line !== '') {
+      lines.push(line);
+    }
+  }
+  return {
+    filePath,
+    offset,
+    limit,
+    linesRead: lines.length,
+    totalLines,
+    hasMore: offset + lines.length - 1 < totalLines,
+    isBinary: false,
+    lines,
+  };
+}
+
+/**
+ * One page of a ref blob, with a line-numbered body and the file's total line count.
+ * `getRemoteFileContent` stays whole-file: `RemoteFileViewer` needs it for the editor, and it
+ * is not an AI tool result. Same confinement and untracked fallback as that function.
+ */
+export async function readRemoteFilePage(
+  config: SshConfig,
+  repoPath: string,
+  ref: string,
+  filePath: string,
+  offset: number,
+  limit: number,
+  secret?: string
+): Promise<RemoteFilePage> {
+  const cleanPath = confineRepoPath(filePath, 'Đường dẫn tệp');
+  const pageOffset = Math.max(1, Math.floor(Number(offset)) || 1);
+  const pageLimit = Math.min(Math.max(1, Math.floor(Number(limit)) || 200), 2000);
+  const objectSpec = `${ref}:${cleanPath}`;
+  const refSource =
+    `git -C ${escapeShellArg(repoPath)} -c core.fsmonitor=false --no-pager ` +
+    `cat-file -p --end-of-options ${escapeShellArg(objectSpec)}`;
+
+  try {
+    return await readPageFromSource(
+      config,
+      refSource,
+      filePath,
+      pageOffset,
+      pageLimit,
+      secret
+    );
+  } catch (err: any) {
+    if (!isNotInRef(err, cleanPath, ref)) throw err;
+    // WR-01: fall back only for a path git does not track at all, i.e. a genuine untracked file.
+    const probe = await execRemoteCommand(
+      config,
+      `git -C ${escapeShellArg(repoPath)} -c core.fsmonitor=false --no-pager --literal-pathspecs ` +
+        `ls-files --error-unmatch -- ${escapeShellArg(cleanPath)}`,
+      secret
+    );
+    if (probe.exitStatus === 0) throw err;
+    // Only exit 1 means untracked; infrastructure and SSH failures must stay failures.
+    if (probe.exitStatus !== 1) {
+      throw new Error(probe.stderr.trim() || `Lệnh git thất bại với exit code ${probe.exitStatus}`);
+    }
+    return await readPageFromSource(
+      config,
+      workingCopyCatSnippet(repoPath, cleanPath),
+      filePath,
+      pageOffset,
+      pageLimit,
+      secret
+    );
+  }
+}
+
+async function readPageFromSource(
+  config: SshConfig,
+  source: string,
+  filePath: string,
+  offset: number,
+  limit: number,
+  secret?: string
+): Promise<RemoteFilePage> {
+  // A later page of a file already known binary never reaches here, so probe on page 1 only.
+  if (offset === 1) {
+    const probe = await execRemoteCommand(config, binaryProbeCommand(source), secret);
+    if (probe.exitStatus === 0) {
+      return {
+        filePath,
+        offset,
+        limit,
+        linesRead: 0,
+        totalLines: 0,
+        hasMore: false,
+        isBinary: true,
+        lines: [],
+      };
+    }
+  }
+
+  const res = await execRemoteCommand(config, pageCommand(source, offset, limit), secret);
+  const marker = /###EXIT (\d+)\n?$/.exec(res.stderr);
+  const sourceExit = marker ? Number(marker[1]) : 0;
+  const stderr = res.stderr.replace(/###EXIT \d+\n?$/, '').trim();
+
+  if (sourceExit === 77) {
+    throw new PathOutsideRepoError(`Đường dẫn symlink ngoài repo, từ chối đọc: ${filePath}`);
+  }
+  if (sourceExit !== 0) {
+    // The message is what `isNotInRef` matches on, so it must survive verbatim.
+    throw new Error(stderr || `Lệnh git thất bại với exit code ${sourceExit}`);
+  }
+  return parsePage(res.stdout, filePath, offset, limit);
 }
