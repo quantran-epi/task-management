@@ -240,6 +240,9 @@ Progress: [██████░░░░] 57%
 - [Phase 43]: Team turns read the context window once at coordinator construction from getNineRouterConfig — no new state, prop, or settings row
 - [Phase 43]: explore_repo runs Claude Code headless on the remote: the preflight (command -v claude) is cached per SSH profile and refuses REMOTE_CLAUDE_UNAVAILABLE before any stream opens; the wall clock is enforced on the JS side because timeout(1) is absent on stock macOS
 - [Phase 43]: parseExploreResult tries the whole stdout payload before the last line — the CLI may pretty-print the JSON object, and a last-line-only parse would turn a good run into unparseable-output
+- [Phase 43]: explore_repo runs `claude -p --restricted` — verified against the real CLI that `--allowedTools` alone let a repo `.claude/settings.json` grant Bash, let `Read /etc/passwd` succeed, and let a repo `.mcp.json` execute a shell server on connect; `--restricted` closes all three and Read/Grep/Glob still work
+- [Phase 43]: the explore prompt goes after `--` and the model id refuses a leading `-` — `escapeShellArg` protects the shell, not the CLI's argv parser
+- [Phase 43]: explore_repo takes the turn's abort signal (through TeamToolContext) so a cancelled turn kills the remote process instead of leaving it reading for the 5-minute wall clock
 
 ## Performance Metrics
 
