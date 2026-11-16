@@ -8,9 +8,9 @@ import {
   LOGICAL_GROUP_TYPE,
   SYSTEM_TYPE_FALLBACK_COLOR,
   SYSTEM_TYPE_VALUE_MAX_LENGTH,
-  SYSTEM_TYPE_VALUE_PATTERN,
   isValidSystemTypeValue,
   setSystemTypeOptions,
+  toSystemTypeValue,
   useSystemTypeOptions,
   type SystemTypeOption,
 } from '../../services/system/systemTypeSettings';
@@ -65,13 +65,13 @@ export const SystemTypeOptionsCard: React.FC<SystemTypeOptionsCardProps> = ({ db
 
   const commitDraft = async () => {
     if (!draft) return;
-    const value = draft.value.trim();
-    const label = draft.label.trim() || value;
+    const value = toSystemTypeValue(draft.value, options);
+    const label = draft.label.trim() || draft.value.trim() || value;
     const color = draft.color.trim() || SYSTEM_TYPE_FALLBACK_COLOR;
 
     if (!isValidSystemTypeValue(value)) {
       message.error(
-        `Loại hệ thống phải là CHỮ_HOA_SỐ_VIẾT_HOA, tối đa ${SYSTEM_TYPE_VALUE_MAX_LENGTH} ký tự (ví dụ: SERVICE)`
+        `Loại hệ thống phải có chữ cái hoặc số, tối đa ${SYSTEM_TYPE_VALUE_MAX_LENGTH} ký tự (ví dụ: SERVICE)`
       );
       return;
     }
@@ -227,7 +227,8 @@ export const SystemTypeOptionsCard: React.FC<SystemTypeOptionsCardProps> = ({ db
     >
       <Paragraph type="secondary">
         Danh sách này là nguồn duy nhất cho nhãn và màu loại hệ thống trên toàn ứng dụng. Giá trị
-        phải là CHỮ_HOA_SỐ_VIẾT_HOA (ví dụ: <Text code>PAYMENT_GATEWAY</Text>).
+        được chuẩn hóa từ chữ bạn gõ (ví dụ: <Text code>Payment Gateway</Text> →{' '}
+        <Text code>PAYMENT_GATEWAY</Text>).
       </Paragraph>
 
       <Table<SystemTypeOption>
@@ -246,7 +247,7 @@ export const SystemTypeOptionsCard: React.FC<SystemTypeOptionsCardProps> = ({ db
               value={draft.value}
               maxLength={SYSTEM_TYPE_VALUE_MAX_LENGTH}
               disabled={!draftIsNew}
-              onChange={(e) => setDraft({ ...draft, value: e.target.value.toUpperCase() })}
+              onChange={(e) => setDraft({ ...draft, value: e.target.value })}
               placeholder="PAYMENT_GATEWAY"
               style={{ width: 200 }}
               data-testid="system-type-option-value"
@@ -281,7 +282,7 @@ export const SystemTypeOptionsCard: React.FC<SystemTypeOptionsCardProps> = ({ db
           >
             Hủy
           </Button>
-          {!SYSTEM_TYPE_VALUE_PATTERN.test(draft.value.trim()) && draft.value.trim() !== '' && (
+          {draft.value.trim() !== '' && !toSystemTypeValue(draft.value, options) && (
             <Tag color="warning">Giá trị chưa đúng định dạng</Tag>
           )}
         </Space>

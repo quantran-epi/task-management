@@ -38,6 +38,37 @@ export function isValidSystemTypeValue(value: string): boolean {
   );
 }
 
+/**
+ * Turn free-typed text into a canonical type value: an existing value/label is reused as-is,
+ * anything else is slugified (diacritics stripped, non-alphanumerics → `_`, uppercased).
+ * Returns `''` when nothing workable is left, so the form rule reports it.
+ */
+export function toSystemTypeValue(
+  input: string,
+  options: readonly SystemTypeOption[]
+): string {
+  const raw = typeof input === 'string' ? input.trim() : '';
+  if (!raw) return '';
+
+  const lower = raw.toLowerCase();
+  const known =
+    options.find((opt) => opt.value.toLowerCase() === lower) ??
+    options.find((opt) => opt.label.trim().toLowerCase() === lower);
+  if (known) return known.value;
+
+  const slug = raw
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .replace(/[^A-Za-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toUpperCase()
+    .slice(0, SYSTEM_TYPE_VALUE_MAX_LENGTH)
+    .replace(/_+$/g, '');
+
+  return isValidSystemTypeValue(slug) ? slug : '';
+}
+
 /** Re-normalize on every read (T-e64-02): a crafted or stale stored value cannot leak through. */
 export function normalizeSystemTypeOptions(raw: unknown): SystemTypeOption[] {
   if (!Array.isArray(raw)) return [...DEFAULT_SYSTEM_TYPE_OPTIONS];
@@ -85,12 +116,16 @@ export async function setSystemTypeOptions(
 /** Append a user-typed value so validation accepts it and every surface picks it up. */
 export async function ensureSystemTypeOption(
   value: string,
-  db: TaskPlannerDatabase = defaultDb
+  db: TaskPlannerDatabase = defaultDb,
+  label?: string
 ): Promise<void> {
   const options = await getSystemTypeOptions(db);
   if (options.some((opt) => opt.value === value)) return;
   await setSystemTypeOptions(
-    [...options, { value, label: value, color: SYSTEM_TYPE_FALLBACK_COLOR }],
+    [
+      ...options,
+      { value, label: label?.trim() || value, color: SYSTEM_TYPE_FALLBACK_COLOR },
+    ],
     db
   );
 }

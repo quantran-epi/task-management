@@ -7,9 +7,10 @@ import { getParentSystems } from '../../db/repositories/systemRepo';
 import { getSshConfigs } from '../../services/sshService';
 import { RemoteDirectoryBrowserModal } from '../common/RemoteDirectoryBrowserModal';
 import {
+  LOGICAL_GROUP_TYPE,
   SYSTEM_TYPE_VALUE_MAX_LENGTH,
-  SYSTEM_TYPE_VALUE_PATTERN,
   ensureSystemTypeOption,
+  toSystemTypeValue,
   useSystemTypeOptions,
 } from '../../services/system/systemTypeSettings';
 import type { System, SystemType } from '../../types/models';
@@ -56,7 +57,8 @@ export const SystemModal: React.FC<SystemModalProps> = ({
   const sshConfigs = useLiveQuery(() => getSshConfigs(db), [db]) ?? [];
   const typeOptions = useSystemTypeOptions(db);
 
-  const isLogicalGroup = selectedType === 'LOGICAL_GROUP';
+  const isLogicalGroup =
+    toSystemTypeValue(String(selectedType ?? ''), typeOptions) === LOGICAL_GROUP_TYPE;
 
   useEffect(() => {
     if (open) {
@@ -85,10 +87,10 @@ export const SystemModal: React.FC<SystemModalProps> = ({
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
-      const normalizedType = String(values.type ?? '').trim().toUpperCase();
+      const normalizedType = toSystemTypeValue(String(values.type ?? ''), typeOptions);
       // Persist a freshly typed type before saving so validation and every surface accept it.
       if (!typeOptions.some((opt) => opt.value === normalizedType)) {
-        await ensureSystemTypeOption(normalizedType, db);
+        await ensureSystemTypeOption(normalizedType, db, String(values.type ?? ''));
       }
       // Sanitize inputs
       const payload: any = {
@@ -98,7 +100,7 @@ export const SystemModal: React.FC<SystemModalProps> = ({
         description: values.description?.trim() || undefined,
       };
 
-      if (normalizedType !== 'LOGICAL_GROUP') {
+      if (normalizedType !== LOGICAL_GROUP_TYPE) {
         payload.parentId = values.parentId || null;
         payload.sshConfigId = values.sshConfigId || undefined;
         payload.remoteRepoPath = values.remoteRepoPath?.trim() || undefined;
@@ -142,13 +144,17 @@ export const SystemModal: React.FC<SystemModalProps> = ({
         <Form.Item
           name="type"
           label="Loại hệ thống"
-          normalize={(val) => (val ? String(val).trim().toUpperCase() : val)}
           rules={[
             { required: true, message: 'Vui lòng chọn loại hệ thống' },
             {
-              pattern: SYSTEM_TYPE_VALUE_PATTERN,
-              message:
-                'Loại hệ thống phải là CHỮ_HOA_SỐ_VIẾT_HOA (ví dụ: SERVICE)',
+              validator: async (_, typed: string) => {
+                const raw = String(typed ?? '').trim();
+                if (!raw) return;
+                if (toSystemTypeValue(raw, typeOptions)) return;
+                throw new Error(
+                  'Loại hệ thống phải có chữ cái hoặc số (ví dụ: Service, Payment Gateway)'
+                );
+              },
             },
             {
               max: SYSTEM_TYPE_VALUE_MAX_LENGTH,
@@ -159,13 +165,16 @@ export const SystemModal: React.FC<SystemModalProps> = ({
           <AutoComplete
             options={typeOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
             placeholder="Chọn hoặc nhập loại hệ thống mới"
-            filterOption={(input, option) =>
-              String(option?.value ?? '')
-                .toLowerCase()
-                .includes(String(input ?? '').toLowerCase())
-            }
-            onChange={(val) => {
-              if (val === 'LOGICAL_GROUP') {
+            filterOption={(input, option) => {
+              const q = String(input ?? '').toLowerCase();
+              const opt = typeOptions.find((o) => o.value === option?.value);
+              return (
+                String(option?.value ?? '').toLowerCase().includes(q) ||
+                (opt?.label ?? '').toLowerCase().includes(q)
+              );
+            }}
+            onChange={(typed) => {
+              if (toSystemTypeValue(String(typed ?? ''), typeOptions) === LOGICAL_GROUP_TYPE) {
                 form.setFieldValue('parentId', undefined);
               }
             }}

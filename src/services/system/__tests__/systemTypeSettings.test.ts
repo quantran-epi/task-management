@@ -9,8 +9,8 @@ import {
   isValidSystemTypeValue,
   normalizeSystemTypeOptions,
   setSystemTypeOptions,
-} from '../systemTypeSettings';
-import { SystemInputSchema } from '../../../validation/schemas';
+  toSystemTypeValue,
+} from '../systemTypeSettings';import { SystemInputSchema } from '../../../validation/schemas';
 import { BackupSystemRecordSchema } from '../../../validation/backupSchemas';
 
 describe('systemTypeSettings', () => {
@@ -80,6 +80,25 @@ describe('systemTypeSettings', () => {
       label: 'PAYMENT_GATEWAY',
       color: '#8c8c8c',
     });
+  });
+
+  it('toSystemTypeValue reuses a known value or label, otherwise slugifies free text', () => {
+    const options = [...DEFAULT_SYSTEM_TYPE_OPTIONS];
+    // Known value / label — case-insensitive, keeps the canonical value.
+    expect(toSystemTypeValue('SERVICE', options)).toBe('SERVICE');
+    expect(toSystemTypeValue('service', options)).toBe('SERVICE');
+    expect(toSystemTypeValue('DB Schema', options)).toBe('SCHEMA');
+    expect(toSystemTypeValue('Parent System', options)).toBe('LOGICAL_GROUP');
+    // Free text: lowercase, spaces and diacritics are normalized instead of rejected.
+    expect(toSystemTypeValue('payment gateway', options)).toBe('PAYMENT_GATEWAY');
+    expect(toSystemTypeValue('  Payment   Gateway  ', options)).toBe('PAYMENT_GATEWAY');
+    expect(toSystemTypeValue('Dịch vụ nội bộ', options)).toBe('DICH_VU_NOI_BO');
+    expect(toSystemTypeValue('Đơn hàng', options)).toBe('DON_HANG');
+    expect(toSystemTypeValue('api-gateway/v2', options)).toBe('API_GATEWAY_V2');
+    // Nothing workable left → empty, so the form rule can report it.
+    expect(toSystemTypeValue('', options)).toBe('');
+    expect(toSystemTypeValue('   ', options)).toBe('');
+    expect(toSystemTypeValue('!!!', options)).toBe('');
   });
 
   it('SystemInputSchema accepts a custom type and rejects malformed ones', () => {
