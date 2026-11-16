@@ -501,6 +501,45 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
   {
     type: 'function',
     function: {
+      name: 'query_diagrams',
+      description:
+        'List Mermaid diagrams (Notes of type diagram). Filters by tag, title substring, or linked entity. The mermaid source (body) is OMITTED unless includeBody is true — listing a diagram does not let you read it.',
+      parameters: {
+        type: 'object',
+        properties: {
+          tags: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional array of tags; matches diagrams having at least one of them.',
+          },
+          title: {
+            type: 'string',
+            description: 'Optional case-insensitive substring of the diagram title.',
+          },
+          entityType: {
+            type: 'string',
+            enum: ['task', 'cr', 'system'],
+            description: 'Optional linked entity type filter.',
+          },
+          entityId: {
+            type: 'string',
+            description: 'Optional linked entity UUID filter.',
+          },
+          includeBody: {
+            type: 'boolean',
+            description: 'Include the mermaid source in each row (default false).',
+          },
+          limit: {
+            type: 'number',
+            description: 'Max number of diagrams to return (default 20, max 50).',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'query_trash_notes',
       description: 'List notes and documents currently in trash (soft-deleted), including deletion dates and titles.',
       parameters: {
@@ -3165,6 +3204,57 @@ export async function executeAiTool(
           totalCount,
           returnedCount: subset.length,
           notes: subset,
+        });
+      }
+
+      case 'query_diagrams': {
+        if (!db.notes) return JSON.stringify({ error: 'Notes table unavailable' });
+        let diagrams = (await db.notes.toArray()).filter(
+          (n) => !n.deletedAt && n.type === 'diagram'
+        );
+
+        if (Array.isArray(args.tags) && args.tags.length > 0) {
+          const filterTags = new Set(args.tags.map((t: string) => String(t).toLowerCase().trim()));
+          diagrams = diagrams.filter((n) =>
+            n.tags?.some((t) => filterTags.has(t.toLowerCase().trim()))
+          );
+        }
+        if (args.title) {
+          const q = String(args.title).toLowerCase();
+          diagrams = diagrams.filter((n) => (n.title || '').toLowerCase().includes(q));
+        }
+        if (args.entityType) {
+          diagrams = diagrams.filter((n) => n.entityType === args.entityType);
+        }
+        if (args.entityId) {
+          diagrams = diagrams.filter((n) => n.entityId === args.entityId);
+        }
+
+        diagrams.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+
+        const totalCount = diagrams.length;
+        const limit = Math.min(Math.max(1, Number(args.limit) || 20), 50);
+        const subset = diagrams.slice(0, limit).map((n) => {
+          const row: Record<string, any> = {
+            id: n.id,
+            // T-e63-01: title and body are user-authored free text — same boundary as query_notes.
+            title: wrapField(
+              'TIÊU ĐỀ BIỂU ĐỒ ' + n.id,
+              n.title ?? 'Biểu đồ chưa đặt tên'
+            ),
+            tags: n.tags || [],
+            updatedAt: n.updatedAt,
+          };
+          if (args.includeBody === true) {
+            row.body = wrapField('MÃ MERMAID BIỂU ĐỒ ' + n.id, n.body);
+          }
+          return row;
+        });
+
+        return JSON.stringify({
+          totalCount,
+          returnedCount: subset.length,
+          diagrams: subset,
         });
       }
 
