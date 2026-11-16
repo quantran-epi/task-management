@@ -112,8 +112,8 @@
 
 ### Repo Reading That Scales (AIO-READ) — Phase 43
 
-- [ ] **AIO-READ-07**: `git_read` exposes a `grep` action that searches a ref's tracked content by pattern and returns `path:line:text` hits with a bounded hit count, so an agent locates a symbol without reading any file in full.
-- [ ] **AIO-READ-08**: `git_read`'s `read_file` returns line-numbered, paged content with `totalLines`, `hasMore`, and the next `offset` to call; a file larger than one page never enters the turn's context whole.
+- [x] **AIO-READ-07**: `git_read` exposes a `grep` action that searches a ref's tracked content by pattern and returns `path:line:text` hits with a bounded hit count, so an agent locates a symbol without reading any file in full.
+- [x] **AIO-READ-08**: `git_read`'s `read_file` returns line-numbered, paged content with `totalLines`, `hasMore`, and the next `offset` to call; a file larger than one page never enters the turn's context whole.
 - [ ] **AIO-READ-09**: A team tool runs Claude Code headless on the remote host over SSH with an explicit read-only tool allowlist and a bounded turn count, and returns a structured report capped at a fixed size; a remote without the `claude` binary produces a truthful refusal code, never a mid-turn failure.
 - [ ] **AIO-READ-10**: A team turn passes its provider context window into the runtime so in-loop compaction runs; a test asserts the window reaches `runAiOrchestratorLoop`.
 

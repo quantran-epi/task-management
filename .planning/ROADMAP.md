@@ -1022,7 +1022,7 @@ Plans:
 
 **Wave 1** *(no dependency)*
 
-- [ ] 43-01-PLAN.md — `grepRemoteRef` + `readRemoteFilePage` primitives, proven against a real local git repo
+- [x] 43-01-PLAN.md — `grepRemoteRef` + `readRemoteFilePage` primitives, proven against a real local git repo
 
 **Wave 2** *(depends on 43-01)*
 

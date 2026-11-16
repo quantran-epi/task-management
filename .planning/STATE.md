@@ -1,21 +1,19 @@
 ---
-gsd_state_version: "1.0"
+gsd_state_version: 1.0
 milestone: v1.4
-milestone_name: Unified AI Office (Phase Details)
-current_phase: 40
-current_phase_name: Explorer UX, CRUD correctness, observed walkthrough
-status: executing
-stopped_at: Phase 42 review clean — awaiting phase verification
-last_updated: "2026-11-16T04:52:44.529Z"
-last_activity: 2026-11-16
-last_activity_desc: "continuation fix pass: parent-symlink escape, literal glob read, probe exit status, fsmonitor hook, filename trim, diff pathspec glob"
-state_head: c085840781a02cd7a04136756f140a968dacc4b1
+milestone_name: Unified AI Office
+status: All review findings closed (0 critical, 0 warning, 0 info open)
+stopped_at: Completed 43-01-PLAN.md
+last_updated: "2026-11-16T15:37:37.176Z"
+last_activity: "2026-11-16 - Completed quick task 261116-fyi: Restore Docs parity in IntelliJ workbench: document sets drawer (publish + graph build), ZIP import, folder ZIP export"
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 55
-  completed_plans: 52
+  completed_plans: 51
   percent: 57
+current_phase: 40
+current_phase_name: Explorer UX, CRUD correctness, observed walkthrough
 ---
 
 # Project State: TaskMate — Milestone v1.4
@@ -39,6 +37,7 @@ re-verified against real git behaviour:
 
 - CR-01 parent/leaf symlink escape — `realpath -e` on both repo root and target with a
   literal directory-boundary check before `cat`.
+
 - WR-01 missing literal glob returned empty success — `git cat-file -p --end-of-options`.
 - WR-02 probe conflated infrastructure failure with "untracked" — only exit 1 falls back.
 - CR-04 repository `core.fsmonitor` hook ran on read commands — disabled explicitly.
@@ -50,8 +49,8 @@ Verification: 392 focused tests pass (9 files), `tsc --noEmit` clean. Full suite
 
 ## Session Continuity
 
-Last session: 2026-11-15T15:58:16.000Z
-Stopped at: Completed 42-03-PLAN.md
+Last session: 2026-11-16T15:37:37.169Z
+Stopped at: Completed 43-01-PLAN.md
 Resume file: None
 
 Progress: [██████░░░░] 57%
@@ -234,6 +233,8 @@ Progress: [██████░░░░] 57%
 - [Phase 42]: D-11: every git_read wrap label is `GIT <action> <repoPath> — <field>`; a git or SSH throw becomes an INVALID_ARGUMENT refusal
 - [Phase 42]: `getRecentCommits` added because `getCommitLog` builds a base..target range and cannot express last-N of one branch; both share one `parseCommitLog`
 - [Phase 42]: D-12: reviewer detected by employee.role or skill.description containing 'review' (case-insensitive); no new AiEmployee field; the line names the tool and read order only, never a refusal code or repo path
+- [Phase ?]: grep record parse: split stdout on newline first, then NUL per record — -z separates fields, newline ends the record
+- [Phase ?]: readRemoteFilePage reuses confineRepoPath/isNotInRef and realpath containment; getRemoteFileContent stays whole-file for the editor
 
 ## Performance Metrics
 
@@ -273,3 +274,4 @@ Progress: [██████░░░░] 57%
 | Phase 42 P01 | 4 min | 3 tasks | 3 files |
 | Phase 42 P02 | 5m | 2 tasks | 2 files |
 | Phase 42 P03 | 3 min | 3 tasks | 1 files |
+| Phase 43 P01 | 25m | 3 tasks | 4 files |
