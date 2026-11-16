@@ -109,16 +109,16 @@ Done!
   });
 
   describe('openDiagramInStudio', () => {
-    it('opens editor tab with viewType: mermaid in layoutStore', () => {
+    it('opens a notes tab pointing at the diagram note', () => {
       const noteId = 'test-note-123';
       openDiagramInStudio(noteId);
 
       const state = useLayoutStore.getState();
-      const tab = state.openTabs.find((t) => t.id === `mermaid-${noteId}`);
+      const tab = state.openTabs.find((t) => t.id === `doc-${noteId}`);
       expect(tab).toBeDefined();
-      expect(tab?.viewType).toBe('mermaid');
-      expect(tab?.params).toEqual({ noteId });
-      expect(state.activeTabId).toBe(`mermaid-${noteId}`);
+      expect(tab?.viewType).toBe('notes');
+      expect(tab?.params).toEqual({ doc: noteId });
+      expect(state.activeTabId).toBe(`doc-${noteId}`);
     });
   });
 

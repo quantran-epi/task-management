@@ -78,10 +78,10 @@ export async function saveDiagramToStudio(
  */
 export function openDiagramInStudio(noteId: string): void {
   useLayoutStore.getState().openTab({
-    id: `mermaid-${noteId}`,
+    id: `doc-${noteId}`,
     title: 'Diagram',
-    viewType: 'mermaid',
-    params: { noteId },
+    viewType: 'notes',
+    params: { doc: noteId },
     closable: true,
   });
 }

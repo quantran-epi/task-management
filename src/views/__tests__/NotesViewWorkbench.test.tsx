@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../db';
+import { createNote } from '../../db/repositories/noteRepo';
 import { NotesView } from '../NotesView';
 import { useLayoutStore } from '../../workbench/store/layoutStore';
 
@@ -60,5 +61,16 @@ describe('NotesView workbench compact toolbar', () => {
 
     expect(await screen.findByText('Ghi chú & Tài liệu')).toBeInTheDocument();
     expect(screen.queryByTestId('docs-compact-toolbar')).toBeNull();
+  });
+
+  it('renders the Mermaid editor for a diagram note selected in the notes tab', async () => {
+    const diagram = await createNote(
+      { title: 'Sơ đồ AI tạo', body: 'flowchart TD\n  A --> B', type: 'diagram', tags: ['diagram'] },
+      db
+    );
+
+    render(<NotesView db={db} hideFolderTree initialDocId={diagram.id} />);
+
+    expect(await screen.findByDisplayValue('Sơ đồ AI tạo')).toBeInTheDocument();
   });
 });

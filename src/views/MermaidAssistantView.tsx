@@ -289,13 +289,24 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
           db
         );
         setSaveStatus('saved');
-        if (activeTabId && activeTabId.includes(currentNoteId)) {
+        // Only rewrite the tab title when this view owns a dedicated mermaid tab;
+        // embedded in a Docs tab (viewType 'notes') the tab must keep its type.
+        const activeTab = useLayoutStore.getState().openTabs.find((t) => t.id === activeTabId);
+        if (activeTab?.viewType === 'mermaid' && activeTabId?.includes(currentNoteId)) {
           openTab({
             id: activeTabId,
             title: title.trim() || 'Biểu đồ Mermaid',
             viewType: 'mermaid',
             closable: true,
             params: { noteId: currentNoteId, code },
+          });
+        } else if (activeTabId && activeTab?.viewType === 'notes' && activeTab.params?.doc === currentNoteId) {
+          openTab({
+            id: activeTabId,
+            title: title.trim() || 'Biểu đồ Mermaid',
+            viewType: 'notes',
+            closable: true,
+            params: { doc: currentNoteId },
           });
         }
       } catch {
@@ -325,11 +336,11 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
       message.success('Đã lưu thành Diagram Note');
       if (activeTabId) {
         openTab({
-          id: `mermaid-${newNote.id}`,
+          id: `doc-${newNote.id}`,
           title: newNote.title || 'Biểu đồ Mermaid mới',
-          viewType: 'mermaid',
+          viewType: 'notes',
           closable: true,
-          params: { noteId: newNote.id, code },
+          params: { doc: newNote.id },
         });
       }
     } catch {
@@ -600,7 +611,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
               icon={<SaveOutlined />}
               onClick={handleSaveAsDiagramNote}
             >
-              Lưu vào Diagram Explorer
+              Lưu thành biểu đồ
             </Button>
           )}
         </div>

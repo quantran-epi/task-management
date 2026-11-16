@@ -70,11 +70,11 @@ export const EntityDiagramsSection: React.FC<EntityDiagramsSectionProps> = ({
 
   const handleOpenStudio = (diagram: Note) => {
     openTab({
-      id: `mermaid-${diagram.id}`,
+      id: `doc-${diagram.id}`,
       title: diagram.title || 'Biểu đồ',
-      viewType: 'mermaid',
+      viewType: 'notes',
       closable: true,
-      params: { noteId: diagram.id, code: diagram.body },
+      params: { doc: diagram.id },
     });
   };
 
@@ -188,7 +188,7 @@ export const EntityDiagramsSection: React.FC<EntityDiagramsSectionProps> = ({
                 <Popconfirm
                   key="unlink"
                   title="Huỷ gắn kết biểu đồ này?"
-                  description="Biểu đồ vẫn tồn tại trong Diagram Explorer nhưng không còn gắn với mục này."
+                  description="Biểu đồ vẫn tồn tại trong Docs Explorer nhưng không còn gắn với mục này."
                   okText="Huỷ liên kết"
                   cancelText="Bỏ qua"
                   onConfirm={() => handleUnlink(diag.id)}

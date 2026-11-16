@@ -54,6 +54,7 @@ import type { CachedActiveSnapshotManifest, ChangePreview } from '../services/kn
 
 import { DocFolderTree } from '../components/notes/DocFolderTree';
 import { DocEditorPane } from '../components/notes/DocEditorPane';
+import { MermaidAssistantView } from './MermaidAssistantView';
 import { ZipImportPreviewModal } from '../components/notes/ZipImportPreviewModal';
 import { downloadFolderAsZip } from '../utils/exportFolderZip';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
@@ -324,14 +325,12 @@ export const NotesView: React.FC<NotesViewProps> = ({
   const allNotes = useLiveQuery(
     async () => {
       const records = await db.notes.toArray();
-      return records
-        .filter((n) => n.type !== 'diagram' && !(n.type === 'folder' && n.tags?.includes('diagram')))
-        .sort((a, b) => {
-          if (a.isPinned !== b.isPinned) {
-            return a.isPinned ? -1 : 1;
-          }
-          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-        });
+      return records.sort((a, b) => {
+        if (a.isPinned !== b.isPinned) {
+          return a.isPinned ? -1 : 1;
+        }
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      });
     },
     [db]
   );
@@ -356,15 +355,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
     () => (allNotes ?? []).map((note) => ({ ...note, body: '' })),
     [allNotes]
   );
-  const loadSearchNotes = React.useCallback(
-    async () => {
-      const records = await db.notes.toArray();
-      return records.filter(
-        (n) => n.type !== 'diagram' && !(n.type === 'folder' && n.tags?.includes('diagram'))
-      );
-    },
-    [db]
-  );
+  const loadSearchNotes = React.useCallback(async () => db.notes.toArray(), [db]);
 
   // Selected document instance for editor pane
   const activeDocument = useMemo(() => {
@@ -375,7 +366,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
 
   const publishStatuses = useLiveQuery(async () => {
     const documentIds = (allNotes ?? [])
-      .filter((note) => note.type !== 'folder' && !note.deletedAt)
+      .filter((note) => note.type !== 'folder' && note.type !== 'diagram' && !note.deletedAt)
       .map((note) => note.id);
     return getDocumentPublishStatuses(documentIds, db);
   }, [db, allNotes]) as Record<string, DocumentPublishStatus> | undefined;
@@ -386,7 +377,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
   const noteHashes = useLiveQuery(async () => {
     const entries = await Promise.all(
       (allNotes ?? [])
-        .filter((note) => note.type !== 'folder' && !note.deletedAt)
+        .filter((note) => note.type !== 'folder' && note.type !== 'diagram' && !note.deletedAt)
         .map(async (note) => [note.id, await computeSha256(normalizeMarkdownForHash(note.body))] as const)
     );
     return Object.fromEntries(entries) as Record<string, string>;
@@ -770,7 +761,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
     const targetNotes = (allNotes || []).filter((n) => {
       if (n.deletedAt) return false;
       if (specialKey === 'root_docs') {
-        return !n.parentId && n.type === 'document';
+        return !n.parentId && n.type !== 'folder' && n.type !== 'quick_note';
       }
       if (specialKey === 'quick_notes') {
         return n.type === 'quick_note';
@@ -1145,6 +1136,9 @@ export const NotesView: React.FC<NotesViewProps> = ({
         {/* Column 2: Document Editor Pane or Empty State */}
         <div style={{ flex: 1, minWidth: 0, height: '100%', display: 'flex', flexDirection: 'column' }}>
           {activeDocument ? (
+            activeDocument.type === 'diagram' ? (
+              <MermaidAssistantView key={activeDocument.id} noteId={activeDocument.id} db={db} />
+            ) : (
             <DocEditorPane
               key={activeDocument.id}
               doc={activeDocument}
@@ -1165,6 +1159,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
               db={db}
               publishStatus={publishStatuses?.[activeDocument.id]}
             />
+            )
           ) : (
             <div
               style={{
@@ -1209,7 +1204,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
         open={documentSetDrawerOpen}
         database={db}
         sets={documentSets ?? []}
-        notes={allNotes ?? []}
+        notes={(allNotes ?? []).filter((note) => note.type !== 'folder' && note.type !== 'diagram')}
         attempts={publishAttempts ?? []}
         statesBySet={setStatus.statesBySet}
         activeAttemptIdsBySet={setStatus.activeAttemptIdsBySet}

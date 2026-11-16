@@ -24,6 +24,13 @@ export interface DocsExplorerProps {
   db?: TaskPlannerDatabase | undefined;
 }
 
+const DEFAULT_NEW_DIAGRAM_TEMPLATE = `flowchart TD
+  Start([Bắt đầu]) --> Step1[Bước 1: Tiếp nhận yêu cầu]
+  Step1 --> Decision{Hợp lệ không?}
+  Decision -- Có --> Process[Xử lý tác vụ]
+  Decision -- Không --> Reject[Từ chối & Báo lỗi]
+  Process --> Finish([Hoàn thành])`;
+
 export function DocsExplorer({ db = defaultDb }: DocsExplorerProps) {
   const openTab = useLayoutStore((s) => s.openTab);
   const activeTabId = useLayoutStore((s) => s.activeTabId);
@@ -34,16 +41,7 @@ export function DocsExplorer({ db = defaultDb }: DocsExplorerProps) {
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [publishStatuses, setPublishStatuses] = useState<Record<string, DocumentPublishStatus>>({});
 
-  const allNotes = useLiveQuery(
-    async () => {
-      const records = await db.notes.toArray();
-      return records.filter(
-        (n) => n.type !== 'diagram' && !(n.type === 'folder' && n.tags?.includes('diagram'))
-      );
-    },
-    [db],
-    []
-  );
+  const allNotes = useLiveQuery(async () => db.notes.toArray(), [db], []);
 
   const selectedDocId = useMemo(() => {
     if (activeTab?.viewType === 'notes' && activeTab.params?.doc) {
@@ -54,7 +52,7 @@ export function DocsExplorer({ db = defaultDb }: DocsExplorerProps) {
 
   useEffect(() => {
     let cancelled = false;
-    const docIds = (allNotes || []).map((n) => n.id);
+    const docIds = (allNotes || []).filter((n) => n.type !== 'diagram').map((n) => n.id);
     if (docIds.length === 0) {
       setPublishStatuses({});
       return;
@@ -69,12 +67,7 @@ export function DocsExplorer({ db = defaultDb }: DocsExplorerProps) {
     };
   }, [db, allNotes]);
 
-  const loadSearchNotes = useCallback(async () => {
-    const records = await db.notes.toArray();
-    return records.filter(
-      (n) => n.type !== 'diagram' && !(n.type === 'folder' && n.tags?.includes('diagram'))
-    );
-  }, [db]);
+  const loadSearchNotes = useCallback(async () => db.notes.toArray(), [db]);
 
   const handleSelectDoc = useCallback(
     (doc: Note) => {
@@ -136,6 +129,34 @@ export function DocsExplorer({ db = defaultDb }: DocsExplorerProps) {
       }
     },
     [activeFilter, activeTag, db, openTab]
+  );
+
+  const handleCreateDiagram = useCallback(
+    async (targetFolderId?: string) => {
+      try {
+        const newDiagram = await createNote(
+          {
+            title: 'Biểu đồ mới',
+            body: DEFAULT_NEW_DIAGRAM_TEMPLATE,
+            type: 'diagram',
+            parentId: targetFolderId,
+            tags: ['diagram'],
+          },
+          db
+        );
+        openTab({
+          id: `doc-${newDiagram.id}`,
+          title: newDiagram.title || 'Biểu đồ mới',
+          viewType: 'notes',
+          closable: true,
+          params: { doc: newDiagram.id },
+        });
+        message.success('Đã tạo biểu đồ mới');
+      } catch {
+        message.error('Không thể tạo biểu đồ');
+      }
+    },
+    [db, openTab]
   );
 
   const handleCreateFolder = useCallback(
@@ -278,7 +299,7 @@ export function DocsExplorer({ db = defaultDb }: DocsExplorerProps) {
       const targetNotes = (allNotes || []).filter((n) => {
         if (n.deletedAt) return false;
         if (specialKey === 'root_docs') {
-          return !n.parentId && n.type === 'document';
+          return !n.parentId && n.type !== 'folder' && n.type !== 'quick_note';
         }
         if (specialKey === 'quick_notes') {
           return n.type === 'quick_note';
@@ -378,6 +399,7 @@ export function DocsExplorer({ db = defaultDb }: DocsExplorerProps) {
         onSelectFilter={setActiveFilter}
         onSelectDoc={handleSelectDoc}
         onCreateDoc={handleCreateDoc}
+        onCreateDiagram={handleCreateDiagram}
         onCreateFolder={handleCreateFolder}
         onRenameFolder={handleRenameFolder}
         onDeleteFolder={handleDeleteFolder}

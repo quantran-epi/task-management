@@ -23,6 +23,7 @@ import {
   ThunderboltOutlined,
   BranchesOutlined,
   DownloadOutlined,
+  ApartmentOutlined,
 } from '@ant-design/icons';
 import type { Note } from '../../types/models';
 import type { DocumentPublishStatus } from '../../db/repositories/documentSetRepo';
@@ -54,6 +55,7 @@ export interface DocFolderTreeProps {
   onSelectFilter: (filterKeyOrFolderId: string) => void;
   onSelectDoc?: ((doc: Note) => void) | undefined;
   onCreateDoc: (targetFolderId?: string) => Promise<void> | void;
+  onCreateDiagram?: ((targetFolderId?: string) => Promise<void> | void) | undefined;
   onCreateFolder?: (folderName: string, parentId?: string) => Promise<void> | void;
   onRenameFolder?: (folderId: string, newName: string) => Promise<void> | void;
   onMoveFolder?: (folder: Note) => void;
@@ -85,6 +87,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
   onSelectFilter,
   onSelectDoc,
   onCreateDoc,
+  onCreateDiagram,
   onCreateFolder,
   onRenameFolder,
   onMoveFolder,
@@ -142,10 +145,13 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
   const trashNotes = useMemo(() => notes.filter((n) => Boolean(n.deletedAt)), [notes]);
 
   // Counts for special folders
-  const pinnedDocs = useMemo(() => activeNotes.filter((n) => n.isPinned && n.type !== 'folder' && n.type !== 'diagram'), [activeNotes]);
+  const pinnedDocs = useMemo(() => activeNotes.filter((n) => n.isPinned && n.type !== 'folder'), [activeNotes]);
   const quickNotes = useMemo(() => activeNotes.filter((n) => n.type === 'quick_note'), [activeNotes]);
-  const rootDirectDocs = useMemo(() => activeNotes.filter((n) => !n.parentId && n.type === 'document'), [activeNotes]);
-  const deletedDocs = useMemo(() => trashNotes.filter((n) => n.type !== 'folder' && n.type !== 'diagram'), [trashNotes]);
+  const rootDirectDocs = useMemo(
+    () => activeNotes.filter((n) => !n.parentId && n.type !== 'folder' && n.type !== 'quick_note'),
+    [activeNotes]
+  );
+  const deletedDocs = useMemo(() => trashNotes.filter((n) => n.type !== 'folder'), [trashNotes]);
 
   // Active folder / scope info
   const activeScopeInfo = useMemo(() => {
@@ -204,7 +210,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
         return !doc.deletedAt && Boolean(doc.parentId && activeScopeInfo.descendantFolderIds.has(doc.parentId));
       }
       if (activeFilter === 'root_docs') {
-        return !doc.parentId && doc.type === 'document' && !doc.deletedAt;
+        return !doc.parentId && doc.type !== 'folder' && doc.type !== 'quick_note' && !doc.deletedAt;
       }
       if (activeFilter === 'quick_notes') {
         return doc.type === 'quick_note' && !doc.deletedAt;
@@ -213,7 +219,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
         return Boolean(doc.isPinned) && doc.type !== 'folder' && !doc.deletedAt;
       }
       if (activeFilter === 'trash') {
-        return Boolean(doc.deletedAt) && doc.type !== 'folder' && doc.type !== 'diagram';
+        return Boolean(doc.deletedAt) && doc.type !== 'folder';
       }
       return false;
     });
@@ -236,11 +242,11 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
 
   // User Folder Tree
   const folderTree = useMemo(() => {
-    const folders = activeNotes.filter((n) => n.type === 'folder' && !n.tags?.includes('diagram'));
+    const folders = activeNotes.filter((n) => n.type === 'folder');
     const folderMap = new Map<string, FolderTreeNode>();
 
     for (const f of folders) {
-      const directDocs = activeNotes.filter((n) => n.parentId === f.id && n.type !== 'folder' && n.type !== 'diagram');
+      const directDocs = activeNotes.filter((n) => n.parentId === f.id && n.type !== 'folder');
       folderMap.set(f.id, {
         id: f.id,
         folder: f,
@@ -293,7 +299,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
         if (doc.deletedAt) {
           setExpandedFolderIds((prev) => new Set(prev).add('trash'));
         }
-        if (!doc.parentId && doc.type === 'document') {
+        if (!doc.parentId && doc.type !== 'folder' && doc.type !== 'quick_note') {
           setExpandedFolderIds((prev) => new Set(prev).add('root_docs'));
         }
         if (doc.parentId) {
@@ -385,6 +391,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
   const renderDocItem = (doc: Note, depth: number = 0) => {
     const isSelected = selectedDocId === doc.id;
     const isQuickNote = doc.type === 'quick_note';
+    const isDiagram = doc.type === 'diagram';
 
     const docMenu: MenuProps['items'] = [
       ...(onTogglePin
@@ -464,8 +471,8 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
           className="doc-tree-item"
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
-            <span style={{ fontSize: 13, flexShrink: 0, color: isSelected ? '#4f46e5' : '#6b7280' }}>
-              {isQuickNote ? <FormOutlined /> : <FileTextOutlined />}
+            <span style={{ fontSize: 13, flexShrink: 0, color: isSelected ? '#4f46e5' : isDiagram ? '#10b981' : '#6b7280' }}>
+              {isDiagram ? <ApartmentOutlined /> : isQuickNote ? <FormOutlined /> : <FileTextOutlined />}
             </span>
             <span
               style={{
@@ -475,9 +482,9 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
                 textDecoration: doc.deletedAt ? 'line-through' : 'none',
                 opacity: doc.deletedAt ? 0.6 : 1,
               }}
-              title={doc.title || (isQuickNote ? 'Ghi chú nhanh' : 'Không tiêu đề')}
+              title={doc.title || (isDiagram ? 'Biểu đồ' : isQuickNote ? 'Ghi chú nhanh' : 'Không tiêu đề')}
             >
-              {doc.title || (isQuickNote ? 'Ghi chú nhanh' : 'Không tiêu đề')}
+              {doc.title || (isDiagram ? 'Biểu đồ' : isQuickNote ? 'Ghi chú nhanh' : 'Không tiêu đề')}
             </span>
             {doc.isPinned && !isQuickNote && (
               <PushpinFilled style={{ fontSize: 10, color: '#f59e0b', flexShrink: 0 }} />
@@ -1048,6 +1055,23 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
         >
           {activeFilter === 'quick_notes' ? 'Tạo ghi chú nhanh' : 'Tạo tài liệu'}
         </Button>
+        {onCreateDiagram && (
+          <Tooltip title="Tạo biểu đồ Mermaid mới">
+            <Button
+              style={{ flexShrink: 0 }}
+              icon={<ApartmentOutlined />}
+              aria-label="Tạo biểu đồ mới"
+              onClick={() => {
+                const targetFolder =
+                  typeof activeFilter === 'string' &&
+                  !['pinned', 'quick_notes', 'trash', 'root_docs'].includes(activeFilter)
+                    ? activeFilter
+                    : undefined;
+                onCreateDiagram(targetFolder);
+              }}
+            />
+          </Tooltip>
+        )}
         <Tooltip title="Tạo thư mục mới ở cấp gốc">
           <Button
             style={{ flexShrink: 0 }}
