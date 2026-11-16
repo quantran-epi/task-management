@@ -18,6 +18,7 @@ import {
 import { RECOMMENDED_DOC_TEMPLATE } from '../../views/NotesView';
 import { downloadFolderAsZip } from '../../utils/exportFolderZip';
 import { DocFolderTree } from '../../components/notes/DocFolderTree';
+import { DocsLibraryActions } from '../../components/notes/DocsLibraryActions';
 import { useLayoutStore } from '../store/layoutStore';
 
 export interface DocsExplorerProps {
@@ -391,6 +392,14 @@ export function DocsExplorer({ db = defaultDb }: DocsExplorerProps) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <div style={{ padding: 8, flexShrink: 0 }}>
+        <DocsLibraryActions
+          db={db}
+          notes={allNotes ?? []}
+          currentFolderId={allNotes.find((note) => note.id === activeFilter && note.type === 'folder' && !note.deletedAt)?.id}
+          onSelectFolder={setActiveFilter}
+        />
+      </div>
       <DocFolderTree
         notes={allNotes ?? []}
         loadSearchNotes={loadSearchNotes}
