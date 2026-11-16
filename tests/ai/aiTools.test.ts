@@ -317,7 +317,7 @@ describe('aiTools', () => {
   };
 
   it('declares comprehensive query and mutation AI_DATABASE_TOOLS', () => {
-    expect(AI_DATABASE_TOOLS.length).toBe(73);
+    expect(AI_DATABASE_TOOLS.length).toBe(76);
     const names = AI_DATABASE_TOOLS.map((t) => t.function.name);
     // Includes standard read tools
     expect(names).toContain('read_file');
@@ -366,6 +366,9 @@ describe('aiTools', () => {
     expect(names).toContain('create_change_request');
     expect(names).toContain('update_change_request');
     expect(names).toContain('delete_change_request');
+    expect(names).toContain('create_system');
+    expect(names).toContain('update_system');
+    expect(names).toContain('delete_system');
     expect(names).toContain('plan_allocation');
     expect(names).toContain('batch_plan_allocations');
     expect(names).toContain('clear_allocations');
@@ -406,6 +409,9 @@ describe('aiTools', () => {
       expect(isMutationTool('create_task')).toBe(true);
       expect(isMutationTool('create_task_ide')).toBe(true);
       expect(isMutationTool('delete_change_request_ide')).toBe(true);
+      expect(isMutationTool('create_system')).toBe(true);
+      expect(isMutationTool('update_system')).toBe(true);
+      expect(isMutationTool('delete_system_ide')).toBe(true);
       expect(isMutationTool('start_timer_ide')).toBe(true);
       expect(isMutationTool('plan_allocation')).toBe(true);
       expect(isMutationTool('manage_reminders')).toBe(true);

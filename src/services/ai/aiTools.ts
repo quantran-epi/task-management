@@ -15,7 +15,13 @@ import {
   getAllChangeRequests,
   deleteChangeRequest,
 } from '../../db/repositories/changeRequestRepo';
-import { getAllSystems } from '../../db/repositories/systemRepo';
+import {
+  getAllSystems,
+  createSystem,
+  updateSystem,
+  deleteSystem,
+} from '../../db/repositories/systemRepo';
+import { SYSTEM_TYPES } from '../../validation/schemas';
 import { upsertAllocation, deleteAllocation } from '../../db/repositories/allocationRepo';
 import {
   createWorkSession,
@@ -930,6 +936,88 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
         type: 'object',
         properties: {
           id: { type: 'string', description: 'UUID of the change request to delete.' },
+        },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_system',
+      description: `Create a new system or subsystem in ${APP_NAME}. A LOGICAL_GROUP accepts no SSH/repo fields and must not have a parent; a subsystem's parent must be a LOGICAL_GROUP. The code must be unique.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'System name (required).' },
+          code: { type: 'string', description: 'Unique human system code (required), e.g. CORE_BANKING.' },
+          parentId: {
+            type: 'string',
+            description: 'Logical parent system UUID; omit or null for a standalone subsystem.',
+          },
+          type: {
+            type: 'string',
+            enum: [...SYSTEM_TYPES],
+            description: 'System type (defaults to SERVICE).',
+          },
+          description: { type: 'string', description: 'System description.' },
+          sshConfigId: { type: 'string', description: 'SSH config UUID (subsystems only).' },
+          remoteRepoPath: {
+            type: 'string',
+            description: 'Absolute path to the remote git repository (subsystems only).',
+          },
+          defaultBaseBranch: {
+            type: 'string',
+            description: 'Default base branch, e.g. main (subsystems only).',
+          },
+        },
+        required: ['name', 'code'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_system',
+      description:
+        'Update system details. Pass null to clear parentId, sshConfigId, remoteRepoPath or defaultBaseBranch. Promoting a subsystem to LOGICAL_GROUP drops its parent and repo binding; a code must stay unique.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'UUID of the system to update.' },
+          name: { type: 'string', description: 'Updated system name.' },
+          code: { type: 'string', description: 'Updated unique system code.' },
+          parentId: {
+            type: 'string',
+            description: 'Logical parent system UUID; null clears the parent.',
+          },
+          type: {
+            type: 'string',
+            enum: [...SYSTEM_TYPES],
+            description: 'Updated system type.',
+          },
+          description: { type: 'string', description: 'Updated description.' },
+          sshConfigId: { type: 'string', description: 'SSH config UUID; null clears it.' },
+          remoteRepoPath: {
+            type: 'string',
+            description: 'Absolute remote git repository path; null clears it.',
+          },
+          defaultBaseBranch: { type: 'string', description: 'Default base branch; null clears it.' },
+        },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_system',
+      description:
+        'Permanently delete a system. Refuses while child subsystems exist. Removes the system from every Change Request target and clears systemId on tasks that referenced it.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'UUID of the system to delete.' },
         },
         required: ['id'],
       },
@@ -3647,6 +3735,61 @@ export async function executeAiTool(
         });
       }
 
+      case 'create_system': {
+        if (!args.code || !args.name) {
+          return JSON.stringify({ error: 'System name and code are required' });
+        }
+        const input: any = { name: args.name, code: args.code };
+        if (args.parentId !== undefined) input.parentId = args.parentId;
+        if (args.type !== undefined) input.type = args.type;
+        if (args.description !== undefined) input.description = args.description;
+        if (args.sshConfigId !== undefined) input.sshConfigId = args.sshConfigId;
+        if (args.remoteRepoPath !== undefined) input.remoteRepoPath = args.remoteRepoPath;
+        if (args.defaultBaseBranch !== undefined) input.defaultBaseBranch = args.defaultBaseBranch;
+
+        const system = await createSystem(input, db);
+        return JSON.stringify({
+          success: true,
+          message: `Đã tạo hệ thống "${system.code}" thành công.`,
+          system: {
+            id: system.id,
+            code: system.code,
+            name: system.name,
+            type: system.type,
+            parentId: system.parentId,
+          },
+        });
+      }
+
+      case 'update_system': {
+        if (!args.id) return JSON.stringify({ error: 'System ID is required' });
+        const patch: any = {};
+        if (args.name !== undefined) patch.name = args.name;
+        if (args.code !== undefined) patch.code = args.code;
+        if (args.type !== undefined) patch.type = args.type;
+        if (args.description !== undefined) patch.description = args.description;
+        if (args.parentId !== undefined) patch.parentId = args.parentId;
+        if (args.sshConfigId !== undefined) patch.sshConfigId = args.sshConfigId;
+        if (args.remoteRepoPath !== undefined) patch.remoteRepoPath = args.remoteRepoPath;
+        if (args.defaultBaseBranch !== undefined) patch.defaultBaseBranch = args.defaultBaseBranch;
+
+        const updated = await updateSystem(args.id, patch, db);
+        return JSON.stringify({
+          success: true,
+          message: `Đã cập nhật hệ thống (${updated.code}) thành công.`,
+          updatedFields: Object.keys(patch),
+        });
+      }
+
+      case 'delete_system': {
+        if (!args.id) return JSON.stringify({ error: 'System ID is required' });
+        await deleteSystem(args.id, db);
+        return JSON.stringify({
+          success: true,
+          message: `Đã xóa hệ thống (${args.id}) và gỡ khỏi các CR/tác vụ liên quan.`,
+        });
+      }
+
       case 'plan_allocation': {
         if (!args.taskId || !args.date || typeof args.allocatedMinutes !== 'number') {
           return JSON.stringify({ error: 'taskId, date, and allocatedMinutes are required' });
@@ -4738,6 +4881,9 @@ const MUTATION_TOOLS = new Set([
   'create_change_request',
   'update_change_request',
   'delete_change_request',
+  'create_system',
+  'update_system',
+  'delete_system',
   'plan_allocation',
   'delete_allocation',
   'log_work_session',
