@@ -45,6 +45,7 @@ import {
   deleteNoteAttachment,
   getNoteWithAttachments,
 } from '../../db/repositories/noteRepo';
+import { stripAnsiSequences, extractMermaidBlocks } from '../diagramSaveBridge';
 import {
   linkEntitiesToDoc,
   unlinkEntityFromDoc,
@@ -1298,6 +1299,51 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
             description: 'Optional entity type to link or re-bind note to.',
           },
           entityId: { type: 'string', description: 'UUID of entity to link or re-bind note to.' },
+          isPinned: { type: 'boolean', description: 'Updated pinned state.' },
+        },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_diagram',
+      description:
+        'Save a Mermaid diagram as a Note of type diagram. body is the mermaid source (e.g. "flowchart TD ..."), code fences optional. The tag "diagram" is always added.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Diagram title.' },
+          body: { type: 'string', description: 'Mermaid source (required). Code fences optional.' },
+          tags: { type: 'array', items: { type: 'string' }, description: 'Optional tags array.' },
+          parentId: { type: 'string', description: 'Optional parent diagram folder UUID.' },
+          entityType: {
+            type: 'string',
+            enum: ['task', 'cr', 'system'],
+            description: 'Optional entity type to link the diagram to.',
+          },
+          entityId: { type: 'string', description: 'UUID of entity to link the diagram to.' },
+          isPinned: { type: 'boolean', description: 'Whether the diagram should be pinned.' },
+        },
+        required: ['body'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_diagram',
+      description:
+        'Replace the mermaid source or metadata of an existing diagram. Refuses notes that are not diagrams (use update_note for those).',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'UUID of the diagram note to update.' },
+          title: { type: 'string', description: 'Updated title.' },
+          body: { type: 'string', description: 'Updated mermaid source.' },
+          tags: { type: 'array', items: { type: 'string' }, description: 'Updated tags array.' },
+          parentId: { type: 'string', description: 'Updated parent folder UUID.' },
           isPinned: { type: 'boolean', description: 'Updated pinned state.' },
         },
         required: ['id'],
@@ -4148,6 +4194,66 @@ export async function executeAiTool(
         });
       }
 
+      case 'create_diagram': {
+        if (typeof args.body !== 'string' || !args.body.trim()) {
+          return JSON.stringify({ error: 'body (mermaid source) is required' });
+        }
+        const extracted = extractMermaidBlocks(args.body);
+        const mermaid = (extracted[0] ?? stripAnsiSequences(args.body)).trim();
+        if (!mermaid) return JSON.stringify({ error: 'body (mermaid source) is required' });
+
+        const tags = Array.from(
+          new Set(['diagram', ...(Array.isArray(args.tags) ? args.tags.map(String) : [])])
+        );
+
+        const note = await createNote(
+          {
+            title: typeof args.title === 'string' ? args.title.trim() : '',
+            body: mermaid,
+            type: 'diagram',
+            parentId: args.parentId,
+            tags,
+            entityType: args.entityType,
+            entityId: args.entityId,
+            isPinned: Boolean(args.isPinned),
+          },
+          db
+        );
+        return JSON.stringify({
+          success: true,
+          message: 'Đã tạo biểu đồ Mermaid thành công.',
+          noteId: note.id,
+          title: note.title,
+        });
+      }
+
+      case 'update_diagram': {
+        if (!args.id) return JSON.stringify({ error: 'Diagram ID is required' });
+        const existing = db.notes ? await db.notes.get(args.id) : null;
+        if (!existing) return JSON.stringify({ error: `Note not found: ${args.id}` });
+        // T-e63-02: updateNote would happily overwrite a document body with mermaid source.
+        if (existing.type !== 'diagram' || existing.deletedAt) {
+          return JSON.stringify({ error: 'Note is not a diagram' });
+        }
+
+        const patch: any = {};
+        if (args.title !== undefined) patch.title = args.title;
+        if (args.body !== undefined) {
+          const extracted = extractMermaidBlocks(String(args.body));
+          patch.body = (extracted[0] ?? stripAnsiSequences(String(args.body))).trim();
+        }
+        if (args.tags !== undefined) patch.tags = args.tags;
+        if (args.parentId !== undefined) patch.parentId = args.parentId || undefined;
+        if (args.isPinned !== undefined) patch.isPinned = Boolean(args.isPinned);
+
+        await updateNote(args.id, patch, db);
+        return JSON.stringify({
+          success: true,
+          message: 'Đã cập nhật biểu đồ Mermaid (' + args.id + ').',
+        });
+      }
+
+
       case 'delete_note': {
         if (!args.id) return JSON.stringify({ error: 'Note ID is required' });
         if (args.permanent) {
@@ -4988,6 +5094,8 @@ const MUTATION_TOOLS = new Set([
   'remove_capacity_override',
   'create_note',
   'update_note',
+  'create_diagram',
+  'update_diagram',
   'delete_note',
   'restore_note',
   'batch_create_notes',
@@ -5199,6 +5307,10 @@ export function describeToolMutation(toolName: string, args: Record<string, any>
       return `Tạo ${args.type === 'folder' ? 'thư mục' : 'ghi chú/tài liệu'}: "${args.title || 'Mục mới'}"`;
     case 'update_note':
       return `Cập nhật ghi chú/tài liệu (${args.id}): ${changes || ''}`;
+    case 'create_diagram':
+      return `Tạo biểu đồ Mermaid: "${args.title || 'Biểu đồ mới'}"`;
+    case 'update_diagram':
+      return `Cập nhật biểu đồ Mermaid (${args.id})`;
     case 'delete_note':
       return `Xóa ${args.permanent ? 'vĩnh viễn' : 'vào thùng rác'} ghi chú (${args.id})`;
     case 'restore_note':
