@@ -34,4 +34,4 @@ status: complete
 
 ## Ghi chú
 
-`.planning/AI-STAFF-SDLC-TEAM.md` sửa 2 chữ trong skill description của Rooney (310 → 302 ký tự) để vừa cap 300 của `skillDescriptionSchema`.
+`.planning/AI-STAFF-SDLC-TEAM.md` sửa 2 chỗ trong skill description của Rooney (310 → 298 ký tự) để vừa cap 300 của `skillDescriptionSchema`.
