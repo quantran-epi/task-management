@@ -884,6 +884,51 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(synthesisPrompts[0]).not.toContain('Chưa hoàn tất');
     });
 
+    // The transcript window is 10 rows, so the leader forgets a finished batch almost
+    // immediately. The structured history is what keeps it from re-delegating done work.
+    it('carries finished batches into the next lead turn, and never the running one', async () => {
+      const leadPrompts: string[] = [];
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true },
+        synthesisScript: async (options) => {
+          leadPrompts.push(JSON.stringify(options.messages));
+          return loopResult('Đã tổng hợp.');
+        },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            leadPrompts.push(JSON.stringify(options.messages));
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: [{ agentId: harness!.employees[0]!.id, task: 'VIỆC-LÔ-MỘT' }] },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+        },
+      });
+
+      await harness.coordinator.send('Làm việc lô một');
+      await waitForReady(harness.coordinator);
+      await waitForReady(harness.coordinator);
+
+      // The dispatch turn ran before any batch ended, so it has no history to report.
+      expect(leadPrompts[0]).not.toContain('[LỊCH SỬ LÔ GẦN ĐÂY]');
+
+      // A second user turn sees the finished batch.
+      leadPrompts.length = 0;
+      await harness.coordinator.send('Còn gì nữa không');
+      await waitForReady(harness.coordinator);
+
+      const second = leadPrompts.join('\n');
+      expect(second).toContain('[LỊCH SỬ LÔ GẦN ĐÂY]');
+      expect(second).toContain('VIỆC-LÔ-MỘT');
+      expect(second).toContain('Làm việc lô một');
+      // `autoSplitEnabled: true` in this harness, so the plan was auto-approved.
+      expect(second).toContain('duyệt: auto');
+    });
+
     it('returns a refused batch to the lead and starts no agent', async () => {
       let toolResult: string | null = null;
       const scripts: Record<string, LoopScript> = {

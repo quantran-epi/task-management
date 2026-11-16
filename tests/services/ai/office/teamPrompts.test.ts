@@ -193,6 +193,27 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
     expect(request.history.at(-1)).toEqual({ role: 'assistant', content: 'trả lời gần đây' });
   });
 
+  // The two sources overlap: `ownRows` reaches back 50 instruction/report rows and the recent
+  // window is the last 10 rows of the whole thread. Concatenating them sent this agent's
+  // newest pair twice — wasted tokens, and it read as if the work had been done twice.
+  it('does not repeat a row that appears in both the assignment history and the recent window', () => {
+    const instruction = instructionRow('i-1', 'chỉ dẫn một lần');
+    const report = reportRow('r-1', 'báo cáo một lần');
+
+    const request = buildEmployee({
+      assignmentHistory: [report, instruction],
+      recentTurns: [instruction, report],
+    });
+
+    expect(request.history.filter((h) => h.content === 'chỉ dẫn một lần')).toHaveLength(1);
+    expect(request.history.filter((h) => h.content === 'báo cáo một lần')).toHaveLength(1);
+    // Order is preserved: instruction (user) then its report (assistant).
+    expect(request.history).toEqual([
+      { role: 'user', content: 'chỉ dẫn một lần' },
+      { role: 'assistant', content: 'báo cáo một lần' },
+    ]);
+  });
+
   it('never includes another agent row outside the recent window', () => {
     const request = buildEmployee({
       // Newest-first, as `listAssignmentHistory` returns it.
@@ -325,6 +346,57 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
     expect(system).toContain("kind: 'unfinished'");
     expect(system).toContain('những việc chưa hoàn tất');
     expect(system).toContain('không được trình bày lô là đã xong');
+  });
+
+  // The transcript window is 10 rows — about 1.5 two-agent batches — so the leader's memory of
+  // what it already delegated has to come from the ledger, not from the conversation.
+  it('gives the lead the finished-batch history and points at the history tools', () => {
+    const system = buildLeadTurnRequest({
+      lead,
+      team,
+      roster: [employee],
+      linkedItems: [],
+      originalRequest: 'Yêu cầu gốc',
+      recentTurns: [],
+      batchHistory: [
+        {
+          batchIndex: 2,
+          userRequest: 'LÀM-REQ-xyz',
+          planDecision: 'approved',
+          startedAt: '2026-11-16T00:00:00.000Z',
+          endedAt: '2026-11-16T00:10:00.000Z',
+          assignments: [{ agentName: 'Lan', task: 'VIỆC-ĐÃ-GIAO-xyz', runStatus: 'done' }],
+        },
+      ],
+    })
+      .systemMessages.map((m) => m.content)
+      .join('\n');
+
+    expect(system).toContain('[LỊCH SỬ LÔ GẦN ĐÂY]');
+    expect(system).toContain('Lô 2');
+    expect(system).toContain('duyệt: approved');
+    expect(system).toContain('VIỆC-ĐÃ-GIAO-xyz');
+    // Both the request and the task are user/model authored — they enter as data.
+    expectWrapped(system, 'YÊU CẦU CỦA LÔ', 'LÀM-REQ-xyz');
+    expectWrapped(system, 'VIỆC ĐÃ GIAO', 'VIỆC-ĐÃ-GIAO-xyz');
+    // The leader is told where the rest of the history lives.
+    expect(system).toContain('search_team_history');
+    expect(system).toContain('read_team_turn');
+  });
+
+  it('omits the batch-history block when there is no finished batch', () => {
+    const system = buildLeadTurnRequest({
+      lead,
+      team,
+      roster: [employee],
+      linkedItems: [],
+      originalRequest: 'Yêu cầu gốc',
+      recentTurns: [],
+    })
+      .systemMessages.map((m) => m.content)
+      .join('\n');
+
+    expect(system).not.toContain('[LỊCH SỬ LÔ GẦN ĐÂY]');
   });
 
   it('keeps the untrusted wrapper intact when a re-synthesis carries batch results', () => {

@@ -6,12 +6,19 @@ import {
   insertReportMessage,
   saveTeamMessage,
   listRecentTurns,
+  listRecentBatches,
   listAssignmentHistory,
   listInterruptedAssignments,
   getTeamTurn,
   buildTeamBm25Docs,
   notifyAIChatSync,
+  supersedeTeamMessage,
 } from '../../../../src/db/repositories/teamTranscriptRepo';
+import {
+  closeBatch,
+  createAssignment,
+  openBatch,
+} from '../../../../src/db/repositories/aiTeamRunRepo';
 import * as syncChannel from '../../../../src/services/ai/aiSyncChannel';
 import { vi } from 'vitest';
 import { ASSIGNMENT_HISTORY_CAP } from '../../../../src/types/aiOffice';
@@ -110,6 +117,124 @@ describe('teamTranscriptRepo (AIO-MEM-01, D-10, D-11, D-17, D-29, D-31)', () => 
     expect(recent.map((m) => m.content)).toEqual(
       Array.from({ length: 10 }, (_, i) => `Lượt ${i + 2}`)
     );
+  });
+
+  // The context window is the CURRENT conversation. A superseded row (a re-synthesis, a
+  // retried report) is still in the transcript for `search_team_history`, but feeding it to
+  // the model makes the leader read its own replaced answer as if it were still true.
+  it('drops superseded rows from the recent window', async () => {
+    const old = await saveTeamMessage({ threadId, role: 'assistant', content: 'Bản cũ' }, db);
+    await new Promise((r) => setTimeout(r, 2));
+    const fresh = await saveTeamMessage({ threadId, role: 'assistant', content: 'Bản mới' }, db);
+    await supersedeTeamMessage(old.id, fresh.id, db);
+
+    const recent = await listRecentTurns(threadId, 10, db);
+    expect(recent.map((m) => m.content)).toEqual(['Bản mới']);
+  });
+
+  it('listRecentBatches returns closed batches newest-first with their assignments', async () => {
+    const batchOne = await openBatch(
+      {
+        teamId,
+        threadId,
+        batchIndex: 1,
+        userRequest: 'Yêu cầu lô 1',
+        leadId: generateId(),
+        planSnapshot: { original: [] },
+        planDecision: 'approved',
+      },
+      db
+    );
+    await createAssignment(
+      { batchId: batchOne.id, agentId: 'a1', agentName: 'Evra', model: 'm', task: 'Viết REQ' },
+      db
+    );
+    await closeBatch(batchOne.id, { abortedBy: 'none' }, db);
+
+    const batchTwo = await openBatch(
+      {
+        teamId,
+        threadId,
+        batchIndex: 2,
+        userRequest: 'Yêu cầu lô 2',
+        leadId: generateId(),
+        planSnapshot: { original: [] },
+        planDecision: 'rejected',
+      },
+      db
+    );
+    await createAssignment(
+      { batchId: batchTwo.id, agentId: 'a2', agentName: 'Vidic', model: 'm', task: 'Ra PL03' },
+      db
+    );
+    await closeBatch(batchTwo.id, { abortedBy: 'none' }, db);
+
+    const history = await listRecentBatches(threadId, 5, db);
+    expect(history.map((b) => b.batchIndex)).toEqual([2, 1]);
+    expect(history[0]!.userRequest).toBe('Yêu cầu lô 2');
+    expect(history[0]!.planDecision).toBe('rejected');
+    expect(history[0]!.assignments).toEqual([
+      { agentName: 'Vidic', task: 'Ra PL03', runStatus: 'queued' },
+    ]);
+    expect(history[1]!.assignments[0]!.agentName).toBe('Evra');
+  });
+
+  // An open batch is already in [HIỆN TRẠNG LÔ ĐANG CHẠY]. Listing it twice would make the
+  // leader believe two batches were running.
+  it('listRecentBatches excludes the batch that has not ended', async () => {
+    const closed = await openBatch(
+      {
+        teamId,
+        threadId,
+        batchIndex: 1,
+        userRequest: 'Xong rồi',
+        leadId: generateId(),
+        planSnapshot: { original: [] },
+        planDecision: 'approved',
+      },
+      db
+    );
+    await closeBatch(closed.id, { abortedBy: 'none' }, db);
+    await openBatch(
+      {
+        teamId,
+        threadId,
+        batchIndex: 2,
+        userRequest: 'Đang chạy',
+        leadId: generateId(),
+        planSnapshot: { original: [] },
+        planDecision: 'approved',
+      },
+      db
+    );
+
+    const history = await listRecentBatches(threadId, 5, db);
+    expect(history).toHaveLength(1);
+    expect(history[0]!.userRequest).toBe('Xong rồi');
+  });
+
+  it('listRecentBatches honours the limit', async () => {
+    for (let i = 1; i <= 3; i += 1) {
+      const batch = await openBatch(
+        {
+          teamId,
+          threadId,
+          batchIndex: i,
+          userRequest: `Lô ${i}`,
+          leadId: generateId(),
+          planSnapshot: { original: [] },
+          planDecision: 'auto',
+        },
+        db
+      );
+      await closeBatch(batch.id, { abortedBy: 'none' }, db);
+    }
+
+    expect((await listRecentBatches(threadId, 2, db)).map((b) => b.batchIndex)).toEqual([3, 2]);
+  });
+
+  it('listRecentBatches returns nothing for a thread with no batches', async () => {
+    expect(await listRecentBatches(threadId, 5, db)).toEqual([]);
   });
 
   it('caps the assignment history per agent and returns it newest-first', async () => {

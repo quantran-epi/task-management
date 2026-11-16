@@ -2,9 +2,11 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../index';
 import type { ChatMessage, ChatRole, ChatThread, ChatTokenUsage } from '../../types/models';
 import {
   ASSIGNMENT_HISTORY_CAP,
+  BATCH_HISTORY_LIMIT,
   RECENT_WINDOW_TURNS,
   type AiTeamAssignmentRunStatus,
   type AiTeamAssignmentStopReason,
+  type AiTeamBatchPlanDecision,
 } from '../../types/aiOffice';
 import type { BM25Document } from '../../utils/bm25';
 import { generateId } from '../../utils/uuid';
@@ -239,14 +241,22 @@ export async function findCurrentSynthesisMessageId(
   return undefined;
 }
 
-/** D-10: the bounded recent window fed to `sanitizeHistoryTurns`. */
+/**
+ * D-10: the bounded recent window fed to `sanitizeHistoryTurns`.
+ *
+ * Superseded rows are dropped: `supersedeTeamMessage` already records that a newer row
+ * replaced this one (a re-synthesis, a retried report), and the context window is the
+ * CURRENT conversation, not the full history. A leader re-synthesizing would otherwise read
+ * its own previous answer as if it were still true. Full history stays reachable through
+ * `search_team_history` / `read_team_turn`.
+ */
 export async function listRecentTurns(
   threadId: string,
   n: number = RECENT_WINDOW_TURNS,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<ChatMessage[]> {
   const rows = await readThreadMessages(threadId, db);
-  return rows.slice(-n);
+  return rows.filter((row) => row.supersededByMessageId === undefined).slice(-n);
 }
 
 /** D-29: bounded answer to "every instruction ever given", newest first. */
@@ -349,4 +359,74 @@ export async function buildTeamBm25Docs(
     body: row.content,
     updatedAt: row.createdAt,
   }));
+}
+
+/** One finished batch, flattened for the leader's prompt. */
+export interface BatchHistoryEntry {
+  batchIndex: number;
+  userRequest: string;
+  planDecision: AiTeamBatchPlanDecision;
+  startedAt: string;
+  endedAt?: string | undefined;
+  assignments: Array<{
+    agentName: string;
+    task: string;
+    runStatus: AiTeamAssignmentRunStatus;
+  }>;
+}
+
+/**
+ * The leader's structured memory of finished batches, newest first.
+ *
+ * The transcript window is 10 rows, which a two-agent batch consumes in one go, so the
+ * leader used to forget what it had already delegated. This is the same fact in a form that
+ * does not grow with conversation length: which request opened the batch, whether the plan
+ * was approved, and what each agent was asked and how it ended.
+ *
+ * Only CLOSED batches: an open batch is already in `[HIỆN TRẠNG LÔ ĐANG CHẠY]`, and listing
+ * it twice would make the leader think two batches were running.
+ */
+export async function listRecentBatches(
+  threadId: string,
+  limit: number = BATCH_HISTORY_LIMIT,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<BatchHistoryEntry[]> {
+  const batches = await db.aiTeamBatches.where('threadId').equals(threadId).toArray();
+  const closed = batches
+    .filter((batch) => batch.endedAt !== undefined)
+    .sort((a, b) => b.batchIndex - a.batchIndex)
+    .slice(0, Math.max(0, limit));
+  if (closed.length === 0) return [];
+
+  // One query for every batch's assignments — a per-batch read would be N+1.
+  const assignments = await db.aiTeamAssignments
+    .where('batchId')
+    .anyOf(closed.map((batch) => batch.id))
+    .toArray();
+  const byBatch = new Map<string, typeof assignments>();
+  for (const row of assignments) {
+    const bucket = byBatch.get(row.batchId);
+    if (bucket) bucket.push(row);
+    else byBatch.set(row.batchId, [row]);
+  }
+
+  return closed.map((batch) => {
+    const rows = (byBatch.get(batch.id) ?? []).slice().sort((a, b) => {
+      // Plan order: the queue order the user saw on the card.
+      if (a.queuedAt !== b.queuedAt) return a.queuedAt < b.queuedAt ? -1 : 1;
+      return a.id.localeCompare(b.id);
+    });
+    return {
+      batchIndex: batch.batchIndex,
+      userRequest: batch.userRequest,
+      planDecision: batch.planDecision,
+      startedAt: batch.startedAt,
+      ...(batch.endedAt !== undefined ? { endedAt: batch.endedAt } : {}),
+      assignments: rows.map((row) => ({
+        agentName: row.agentName,
+        task: row.task,
+        runStatus: row.runStatus,
+      })),
+    };
+  });
 }

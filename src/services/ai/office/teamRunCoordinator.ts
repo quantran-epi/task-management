@@ -14,6 +14,7 @@ import type {
 } from '../../../types/aiOffice';
 import {
   ASSIGNMENT_HISTORY_CAP,
+  BATCH_HISTORY_LIMIT,
   DEFAULT_BUDGET_WARN_THRESHOLD_PCT,
   DEFAULT_TEAM_CONCURRENCY,
   RECENT_WINDOW_TURNS,
@@ -75,6 +76,7 @@ import {
   findCurrentSynthesisMessageId,
   insertReportMessage,
   listAssignmentHistory,
+  listRecentBatches,
   listRecentTurns,
   notifyAIChatSync,
   saveTeamMessage,
@@ -2158,9 +2160,10 @@ export function createTeamRunCoordinator(
     const lead = roster.lead;
     if (!lead) return;
     try {
-      const [recentTurns, linkedItems] = await Promise.all([
+      const [recentTurns, linkedItems, batchHistory] = await Promise.all([
         listRecentTurns(options.threadId, RECENT_WINDOW_TURNS, db),
         loadLinkedItems(),
+        listRecentBatches(options.threadId, BATCH_HISTORY_LIMIT, db),
       ]);
       // Phase 41 D-07/D-16: the team folder is a READ fact for the leader (where the approved
       // final goes), never a `write_doc` target. T-41-28: only live roster members with an
@@ -2179,6 +2182,7 @@ export function createTeamRunCoordinator(
         ...(batchResults && batchResults.length > 0 ? { batchResults } : {}),
         ...(liveTeam.docsFolderId ? { docsFolderId: liveTeam.docsFolderId } : {}),
         ...(memberFolders.length > 0 ? { memberFolders } : {}),
+        ...(batchHistory.length > 0 ? { batchHistory } : {}),
       });
 
       const request: ChatTurnRequest = {

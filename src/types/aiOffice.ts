@@ -290,6 +290,12 @@ export interface AgentIdentity {
 
 export const RECENT_WINDOW_TURNS = 10; // D-10
 export const ASSIGNMENT_HISTORY_CAP = 50; // D-29
+/**
+ * How many finished batches the leader's prompt carries as structured history. The transcript
+ * window is 10 rows — about 1.5 two-agent batches — so without this the leader forgets what it
+ * already delegated after the second batch. Five batches is a few dozen lines of prompt.
+ */
+export const BATCH_HISTORY_LIMIT = 5;
 
 /**
  * Phase 37 (D-02): per-team run concurrency.

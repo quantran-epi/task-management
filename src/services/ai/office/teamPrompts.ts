@@ -9,6 +9,7 @@ import {
 } from '../../../types/aiOffice';
 import { sanitizeHistoryTurns } from '../contextCompaction';
 import { wrapField, wrapUntrusted } from '../untrustedData';
+import type { BatchHistoryEntry } from '../../../db/repositories/teamTranscriptRepo';
 
 /**
  * Prompt assembly per agent (D-04, D-05, D-10, D-24, D-29).
@@ -179,7 +180,7 @@ export function buildEmployeeTurnRequest(input: BuildEmployeeTurnRequestInput): 
   }
 
   parts.push(
-    'Công việc cũ hơn không nằm trong ngữ cảnh này có thể tra cứu bằng công cụ search_team_history.'
+    'Công việc cũ hơn không nằm trong ngữ cảnh này: search_team_history để tìm, read_team_turn để đọc toàn văn.'
   );
 
   const ownRows = assignmentHistory
@@ -201,9 +202,23 @@ export function buildEmployeeTurnRequest(input: BuildEmployeeTurnRequestInput): 
   // must act; it never hides what was said from the other members.
   const visibleTurns = recentTurns;
 
+  // The two sources OVERLAP: `ownRows` reaches back 50 instruction/report rows, and the
+  // recent window is the last 10 rows of the whole thread — so this agent's newest pair is
+  // in both. Concatenating them sent it twice, spending tokens on a repeat and reading as if
+  // the work had been done twice. Keep the first occurrence (the longer history) and the
+  // original order: sorting would reorder same-millisecond rows.
+  const seen = new Set<string>();
+  const merged = [...ownRows, ...visibleTurns].filter((row) => {
+    if (seen.has(row.id)) return false;
+    seen.add(row.id);
+    return true;
+  });
+
   return {
     systemMessages: [{ role: 'system', content: parts.join('\n\n') }],
-    history: [...sanitizeHistoryTurns(ownRows), ...sanitizeHistoryTurns(visibleTurns)],
+    // Sanitize ONCE over the merged list: a user/assistant pair that straddles the boundary
+    // between the two sources would be split by two separate passes and lose its question.
+    history: sanitizeHistoryTurns(merged),
     text: instruction,
   };
 }
@@ -230,6 +245,11 @@ export interface BuildLeadTurnRequestInput {
   docsFolderId?: string | undefined;
   /** Phase 41 D-07: each member's own folder, so the leader knows where to read drafts. */
   memberFolders?: readonly { agentName: string; folderId: string }[] | undefined;
+  /**
+   * Finished batches, newest first. The transcript window is 10 rows, so this is what keeps
+   * the leader from re-delegating work it already handed out. Absent means no block.
+   */
+  batchHistory?: readonly BatchHistoryEntry[] | undefined;
 }
 
 /**
@@ -277,6 +297,7 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
     ledger,
     docsFolderId,
     memberFolders,
+    batchHistory,
   } = input;
 
   const parts = [
@@ -299,6 +320,7 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
       '10. Tin nhắn người dùng gửi thẳng cho một nhân viên sẽ tới nhân viên đó ngay — bạn không chặn. Bạn vẫn thấy mọi tin trong nhóm: nếu thấy vấn đề, nói rõ cảnh báo trong câu trả lời của bạn.',
       '11. Khi người dùng nhắc tới một nhân viên đã xong việc, nói thẳng là đã xong và đề nghị chạy lại hoặc giao việc mới — không tự chạy lại.',
       '12. Khi cần trao đổi trực tiếp thay vì giao việc (hỏi lại, nhắc nhở, cảnh báo), dùng công cụ send_message thay vì delegate_batch.',
+      '13. Cần chi tiết cũ hơn phần ngữ cảnh này: search_team_history để tìm, read_team_turn để đọc toàn văn. Không đoán lại việc đã làm.',
     ].join('\n'),
     ANTI_FABRICATION_BLOCK,
     [
@@ -343,6 +365,31 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
             `\n  việc: ${wrapUntrusted('VIỆC ĐANG GIAO', row.task)}`
         ),
         'Chỉ huỷ/sửa được dòng `queued`. Dòng `running` chỉ nhận tin nhắn mới.',
+      ].join('\n')
+    );
+  }
+
+  // The leader's structured memory of finished batches. The transcript window is 10 rows —
+  // about 1.5 two-agent batches — so without this the leader forgets what it already
+  // delegated and re-assigns work that is done. Every field here is authored by the user or a
+  // model, so each enters as untrusted data.
+  if (batchHistory && batchHistory.length > 0) {
+    parts.push(
+      [
+        '[LỊCH SỬ LÔ GẦN ĐÂY]',
+        ...batchHistory.map((batch) =>
+          [
+            `- Lô ${batch.batchIndex} · bắt đầu ${batch.startedAt} · duyệt: ${batch.planDecision}`,
+            `  yêu cầu: ${wrapField('YÊU CẦU CỦA LÔ', batch.userRequest)}`,
+            ...batch.assignments.flatMap((a) => [
+              `  - nhân viên: ${wrapField('TÊN NHÂN VIÊN', a.agentName)}`,
+              `    trạng thái: ${a.runStatus}`,
+              `    việc: ${wrapField('VIỆC ĐÃ GIAO', a.task)}`,
+            ]),
+          ].join('\n')
+        ),
+        'Đây là các lô ĐÃ KẾT THÚC. Lô đang chạy nằm ở mục [HIỆN TRẠNG LÔ ĐANG CHẠY], không ở đây.',
+        'Cần chi tiết hội thoại cũ hơn: search_team_history để tìm, read_team_turn để đọc toàn văn.',
       ].join('\n')
     );
   }
