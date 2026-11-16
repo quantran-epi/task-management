@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
 status: All review findings closed (0 critical, 0 warning, 0 info open)
-stopped_at: Completed 43-02-PLAN.md
-last_updated: "2026-11-16T15:45:38.526Z"
+stopped_at: Completed 43-03-PLAN.md
+last_updated: "2026-11-16T15:48:26.002Z"
 last_activity: "2026-11-16 - Completed quick task 261116-fyi: Restore Docs parity in IntelliJ workbench: document sets drawer (publish + graph build), ZIP import, folder ZIP export"
 progress:
   total_phases: 7
@@ -49,8 +49,8 @@ Verification: 392 focused tests pass (9 files), `tsc --noEmit` clean. Full suite
 
 ## Session Continuity
 
-Last session: 2026-11-16T15:45:36.350Z
-Stopped at: Completed 43-02-PLAN.md
+Last session: 2026-11-16T15:48:25.996Z
+Stopped at: Completed 43-03-PLAN.md
 Resume file: None
 
 Progress: [██████░░░░] 57%
@@ -237,6 +237,7 @@ Progress: [██████░░░░] 57%
 - [Phase ?]: readRemoteFilePage reuses confineRepoPath/isNotInRef and realpath containment; getRemoteFileContent stays whole-file for the editor
 - [Phase ?]: git_read grep reuses the log branch-resolution shape: only an absent/empty branch falls back to the system default; a supplied-but-rejected one refuses
 - [Phase ?]: git_read read_file pages via readRemoteFilePage and returns nextOffset only when hasMore; zero grep hits is a successful empty result, never a refusal
+- [Phase 43]: Team turns read the context window once at coordinator construction from getNineRouterConfig — no new state, prop, or settings row
 
 ## Performance Metrics
 
@@ -278,3 +279,4 @@ Progress: [██████░░░░] 57%
 | Phase 42 P03 | 3 min | 3 tasks | 1 files |
 | Phase 43 P01 | 25m | 3 tasks | 4 files |
 | Phase 43 P02 | 35 min | 3 tasks | 4 files |
+| Phase 43 P03 | ~15 min | 2 tasks | 3 files |
