@@ -241,12 +241,16 @@ export async function runRemoteExplore(
     timer = setTimeout(() => {
       // The remote is wedged: kill it, keep whatever arrived, and never hang the turn.
       void cancel?.().catch(() => undefined);
-      finish({
-        report: stdout.trim(),
-        truncated: false,
-        outcome: 'error',
-        detail: 'timeout',
-      });
+      // Same cap as the parsed path: a wedged remote that streamed 48k must not hand the
+      // calling model 4× the report budget just because it never printed valid JSON.
+      finish(
+        capReport({
+          report: stdout.trim(),
+          truncated: false,
+          outcome: 'error',
+          detail: 'timeout',
+        })
+      );
     }, EXPLORE_DEFAULT_TIMEOUT_MS);
 
     void (async () => {

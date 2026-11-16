@@ -193,6 +193,32 @@ describe('runRemoteExplore (43-04 D-03)', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it('caps a timeout report at the same budget as a parsed one', async () => {
+    vi.useFakeTimers();
+
+    const stream = vi.fn(
+      async (
+        _config: SshConfig,
+        _command: string,
+        _sessionId: string,
+        onData: (e: SshStreamEvent) => void
+      ) => {
+        // Never exits and never prints JSON: the raw stream is all the caller will get.
+        onData({ sessionId: 's', stream: 'stdout', line: 'y'.repeat(EXPLORE_REPORT_MAX_CHARS * 3) });
+        return async () => {};
+      }
+    );
+
+    const pending = runRemoteExplore(CONFIG, undefined, request(), { stream });
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(300_000);
+
+    const outcome = await pending;
+    expect(outcome.detail).toBe('timeout');
+    expect(outcome.report).toHaveLength(EXPLORE_REPORT_MAX_CHARS);
+    expect(outcome.truncated).toBe(true);
+  });
+
   it('turns a non-zero exit with no stdout into an error carrying stderr', async () => {
     const stream = vi.fn(
       async (
