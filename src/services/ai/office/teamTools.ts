@@ -1394,7 +1394,7 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
           ...base,
           ref,
           pattern: wrapUntrusted(gitLabel('MẪU TÌM'), pattern),
-          path: path ? wrapField(gitLabel('ĐƯỜNG DẪN'), path) : '',
+          path: cleanPath ? wrapField(gitLabel('ĐƯỜNG DẪN'), cleanPath) : '',
           hits: result.hits.map((h) => ({
             path: wrapField(gitLabel('ĐƯỜNG DẪN'), h.path),
             line: h.line,
