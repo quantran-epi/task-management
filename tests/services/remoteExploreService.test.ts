@@ -50,14 +50,22 @@ describe('buildExploreCommand (43-04 D-03)', () => {
     // `escapeShellArg` output for EVIL, pinned literally and independent of the function.
     const q = `'"'\\''; $(rm -rf /); echo '\\'''`;
     expect(cmd).toBe(
-      `cd ${q} && claude -p ${q} --output-format json --allowedTools Read,Grep,Glob ` +
+      `cd ${q} && claude -p --output-format json --allowedTools Read,Grep,Glob ` +
         `--model ${q} --max-turns 20 --no-session-persistence --append-system-prompt ` +
         `'Bạn đang đọc một repository trên chính máy này để trả lời một câu hỏi về mã nguồn.\n` +
         `Chỉ kết luận từ những tệp bạn thực sự đã đọc; không suy đoán về tệp chưa mở.\n` +
         `Mỗi phát hiện phải kèm vị trí dạng đường/dẫn/tệp:dòng.\n` +
         `Cuối báo cáo liệt kê: (1) các tệp đã đọc, (2) những gì chưa kiểm chứng được.\n` +
-        `Toàn bộ câu trả lời dưới 1500 từ. Xuất văn bản thuần, không dùng bảng markdown.'`
+        `Toàn bộ câu trả lời dưới 1500 từ. Xuất văn bản thuần, không dùng bảng markdown.' ` +
+        `-- ${q}`
     );
+  });
+
+  it('puts the prompt after -- so a question beginning with "-" is not an option', () => {
+    const cmd = buildExploreCommand(request({ question: '--output-format text' }));
+
+    // `claude -p '--output-format text'` fails with "unknown option"; `--` ends flag parsing.
+    expect(cmd.endsWith(`-- '--output-format text'`)).toBe(true);
   });
 
   it('clamps maxTurns to the cap and floors below 1', () => {

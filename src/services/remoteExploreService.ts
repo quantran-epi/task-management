@@ -63,12 +63,15 @@ export function clampExploreMaxTurns(value: unknown): number {
  * One shell string, every model-supplied value escaped. `--allowedTools` is a technical
  * requirement, not a security posture: a headless `-p` run that reaches for a tool outside the
  * set blocks on a permission prompt nobody can answer.
+ *
+ * The prompt goes after `--`: `escapeShellArg` protects the shell, not argv parsing, and a
+ * question beginning with `-` is otherwise read by the CLI as an option (`claude -p '--x'`
+ * fails with "unknown option"). `--` is last because everything after it is positional.
  */
 export function buildExploreCommand(request: ExploreRequest): string {
   return [
     `cd ${escapeShellArg(request.repoPath)} &&`,
     'claude -p',
-    escapeShellArg(request.question),
     '--output-format json',
     '--allowedTools Read,Grep,Glob',
     '--model',
@@ -78,6 +81,8 @@ export function buildExploreCommand(request: ExploreRequest): string {
     '--no-session-persistence',
     '--append-system-prompt',
     escapeShellArg(REPORT_CONTRACT),
+    '--',
+    escapeShellArg(request.question),
   ].join(' ');
 }
 
