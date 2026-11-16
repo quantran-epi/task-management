@@ -21,7 +21,6 @@ import type { TaskPlannerDatabase } from '../db';
 import {
   JetBrainsProjectIcon,
   JetBrainsDocsIcon,
-  JetBrainsDiagramIcon,
   JetBrainsSystemsIcon,
   JetBrainsRemoteGitIcon,
   JetBrainsTerminalIcon,
@@ -47,7 +46,6 @@ import '../styles/workbench-tokens.css';
 const DEFAULT_LEFT_ITEMS: ToolWindowItem[] = [
   { id: 'cr_explorer', name: 'CR Explorer', icon: <JetBrainsProjectIcon size={16} />, shortcut: 'Alt+1' },
   { id: 'docs', name: 'Docs Explorer', icon: <JetBrainsDocsIcon size={16} />, shortcut: 'Alt+2' },
-  { id: 'diagrams', name: 'Diagram Explorer', icon: <JetBrainsDiagramIcon size={16} />, shortcut: 'Alt+5' },
   {
     id: 'systems',
     name: 'Systems Explorer',

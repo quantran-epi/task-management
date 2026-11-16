@@ -67,6 +67,16 @@ describe('useLayoutStore', () => {
     expect(useLayoutStore.getState().activeTabId).toBe(DEFAULT_LAYOUT_STATE.activeTabId);
   });
 
+  it('maps a persisted retired "diagrams" tool window to docs', async () => {
+    localStorage.setItem(
+      LAYOUT_STORAGE_KEY,
+      JSON.stringify({ state: { leftActiveId: 'diagrams' }, version: 0 })
+    );
+    await useLayoutStore.persist.rehydrate();
+
+    expect(useLayoutStore.getState().leftActiveId).toBe('docs');
+  });
+
   it('keeps a valid activeTabId unchanged on hydration', async () => {
     localStorage.setItem(
       LAYOUT_STORAGE_KEY,

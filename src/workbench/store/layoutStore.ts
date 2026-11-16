@@ -355,7 +355,14 @@ export const useLayoutStore = create<LayoutState>()(
           tabs.some((tab) => tab.id === incoming.activeTabId) && incoming.activeTabId
             ? incoming.activeTabId
             : (tabs[0]?.id ?? DEFAULT_LAYOUT_STATE.activeTabId);
-        return { ...current, ...incoming, openTabs: tabs, activeTabId };
+        // 'diagrams' retired: Diagram Explorer merged into Docs Explorer. Old persisted value maps to docs.
+        const leftActiveId =
+          incoming.leftActiveId === 'diagrams'
+            ? 'docs'
+            : typeof incoming.leftActiveId === 'string'
+            ? incoming.leftActiveId
+            : current.leftActiveId;
+        return { ...current, ...incoming, leftActiveId, openTabs: tabs, activeTabId };
       },
       partialize: (state) => ({
         leftActiveId:

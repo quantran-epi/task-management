@@ -5,7 +5,6 @@ import { useLayoutStore } from '../store/layoutStore';
 import {
   JetBrainsProjectIcon,
   JetBrainsDocsIcon,
-  JetBrainsDiagramIcon,
   JetBrainsSystemsIcon,
   JetBrainsRemoteGitIcon,
   JetBrainsOfficeIcon,
@@ -13,7 +12,6 @@ import {
 } from '../../components/icons/JetBrainsIcons';
 import { CRExplorer } from './CRExplorer';
 import { DocsExplorer } from './DocsExplorer';
-import { DiagramExplorer } from './DiagramExplorer';
 import { RemoteGitExplorer } from './RemoteGitExplorer';
 import { SystemsExplorer } from './SystemsExplorer';
 import { AiStaffExplorer } from './AiStaffExplorer';
@@ -33,7 +31,6 @@ export function LeftToolWindow({
 
   const isSystems = leftActiveId === 'systems';
   const isDocs = leftActiveId === 'docs';
-  const isDiagrams = leftActiveId === 'diagrams';
   const isRemoteExplorer = leftActiveId === 'remote_explorer';
   const isAiStaff = leftActiveId === 'ai_staff';
   const isAiOffice = leftActiveId === 'ai_office';
@@ -42,8 +39,6 @@ export function LeftToolWindow({
     ? 'Systems Explorer'
     : isRemoteExplorer
     ? 'Remote Git Explorer'
-    : isDiagrams
-    ? 'Diagram Explorer'
     : isDocs
     ? 'Docs Explorer'
     : isAiStaff
@@ -56,8 +51,6 @@ export function LeftToolWindow({
     <JetBrainsSystemsIcon size={15} />
   ) : isRemoteExplorer ? (
     <JetBrainsRemoteGitIcon size={15} />
-  ) : isDiagrams ? (
-    <JetBrainsDiagramIcon size={15} />
   ) : isDocs ? (
     <JetBrainsDocsIcon size={15} />
   ) : isAiStaff ? (
@@ -134,8 +127,6 @@ export function LeftToolWindow({
           <SystemsExplorer db={db} />
         ) : isRemoteExplorer ? (
           <RemoteGitExplorer db={db} />
-        ) : isDiagrams ? (
-          <DiagramExplorer db={db} />
         ) : isDocs ? (
           <DocsExplorer db={db} />
         ) : isAiStaff ? (

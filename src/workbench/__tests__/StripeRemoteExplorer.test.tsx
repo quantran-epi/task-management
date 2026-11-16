@@ -16,10 +16,6 @@ vi.mock('../toolwindows/DocsExplorer', () => ({
   DocsExplorer: () => <div data-testid="mock-docs-explorer">Docs Explorer Body</div>,
 }));
 
-vi.mock('../toolwindows/DiagramExplorer', () => ({
-  DiagramExplorer: () => <div data-testid="mock-diagram-explorer">Diagram Explorer Body</div>,
-}));
-
 vi.mock('dexie-react-hooks', () => {
   const EMPTY: never[] = [];
   return { useLiveQuery: () => EMPTY };
@@ -33,22 +29,24 @@ describe('Stripe Remote Git Explorer Integration', () => {
     });
   });
 
-  it('renders remote_explorer icon in Left Stripe below diagrams', () => {
+  it('renders remote_explorer icon in Left Stripe below docs', () => {
     render(<WorkbenchLayout />);
 
     const buttons = screen.getAllByRole('button');
     const remoteExplorerBtn = screen.getByRole('button', { name: /Remote Git Explorer/i });
     expect(remoteExplorerBtn).toBeDefined();
 
-    // Verify ordering: CR Explorer -> Docs Explorer -> Diagram Explorer -> Remote Git Explorer -> Terminal
+    // Verify ordering: CR Explorer -> Docs Explorer -> Systems Explorer -> Remote Git Explorer
     const buttonLabels = buttons.map((b) => b.getAttribute('aria-label') || '');
-    const diagramIndex = buttonLabels.findIndex((label) => label.includes('Diagram Explorer'));
+    const docsIndex = buttonLabels.findIndex((label) => label.includes('Docs Explorer'));
     const remoteIndex = buttonLabels.findIndex((label) => label.includes('Remote Git Explorer'));
     const terminalIndex = buttonLabels.findIndex((label) => label.includes('Terminal'));
 
-    expect(diagramIndex).toBeGreaterThan(-1);
-    expect(remoteIndex).toBeGreaterThan(diagramIndex);
+    expect(docsIndex).toBeGreaterThan(-1);
+    expect(remoteIndex).toBeGreaterThan(docsIndex);
     expect(terminalIndex).toBeGreaterThan(remoteIndex);
+    // Diagram Explorer merged into Docs Explorer (Phase: unify notes tree)
+    expect(screen.queryByRole('button', { name: /Diagram Explorer/i })).toBeNull();
   });
 
   it('toggles leftActiveId to remote_explorer when clicked and renders Left Tool Window header', () => {
