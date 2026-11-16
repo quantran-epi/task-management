@@ -606,6 +606,26 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     expect(execRemoteCommand).not.toHaveBeenCalled();
   });
 
+  it('refuses a malformed grep pattern as INVALID_ARGUMENT, not infrastructure', async () => {
+    // grep is ONE remote call: git's stderr plus the out-of-band exit marker.
+    queue({
+      stdout: '',
+      stderr: "fatal: -e option, 'a[': brackets ([ ]) not balanced\n###EXIT 128",
+      exitStatus: 0,
+    });
+
+    const res = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'grep', branch: 'main', pattern: 'a[' },
+        ctx()
+      )
+    );
+
+    // GIT_READ_FAILED would make the model retry the same bad pattern forever.
+    expect(res).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
+  });
+
   it('refuses a grep path that escapes the repository (CR-02, WR-05)', async () => {
     const res = JSON.parse(
       await executeTeamTool(

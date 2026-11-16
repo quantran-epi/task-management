@@ -23,6 +23,7 @@ import {
   getRecentCommits,
   getRemoteBranches,
   grepRemoteRef,
+  InvalidGrepPatternError,
 } from '../../../services/gitRemoteService';
 import {
   confineRepoPath,
@@ -1417,12 +1418,12 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
         );
     }
   } catch (err: any) {
-    // INVALID_ARGUMENT includes paths this tool will not read (traversal or symlink policy),
-    // not only malformed input. GIT_READ_FAILED would incorrectly blame infrastructure.
-    if (err instanceof PathOutsideRepoError) {
-      return JSON.stringify(
-        refuse('INVALID_ARGUMENT', wrapUntrusted(gitLabel('ĐƯỜNG DẪN'), err.message))
-      );
+    // INVALID_ARGUMENT includes paths this tool will not read (traversal or symlink policy)
+    // and a malformed grep pattern, not only malformed input. GIT_READ_FAILED would
+    // incorrectly blame infrastructure.
+    if (err instanceof PathOutsideRepoError || err instanceof InvalidGrepPatternError) {
+      const label = err instanceof InvalidGrepPatternError ? 'MẪU TÌM' : 'ĐƯỜNG DẪN';
+      return JSON.stringify(refuse('INVALID_ARGUMENT', wrapUntrusted(gitLabel(label), err.message)));
     }
     // CR-03: git/SSH stderr is remote-controlled text (paths, refs, `.gitattributes`-driven
     // messages) and this is a `role: 'tool'` result, so it is wrapped like every other

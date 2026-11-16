@@ -361,6 +361,9 @@ export interface GrepRemoteRefOptions {
   literal?: boolean | undefined;
 }
 
+/** A `git grep` failure that means the PATTERN is malformed — the model's argument mistake. */
+export class InvalidGrepPatternError extends Error {}
+
 /** Shell-side byte cap; a broad pattern must not stream megabytes into the turn. */
 const GREP_BYTE_CAP = 262144;
 
@@ -401,6 +404,10 @@ export async function grepRemoteRef(
 
   // 0 = matches, 1 = no matches, 141 = SIGPIPE because `head -c` closed the pipe at the cap.
   if (gitExit !== 0 && gitExit !== 1 && gitExit !== 141) {
+    // A malformed regex is the caller's argument, not infrastructure: `git grep` says so with
+    // "fatal: -e option, '<pattern>': …". The model self-corrects on INVALID_ARGUMENT and
+    // retries forever on GIT_READ_FAILED.
+    if (stderr.includes('-e option,')) throw new InvalidGrepPatternError(stderr);
     throw new Error(stderr || `git grep thất bại với exit code ${gitExit}`);
   }
 

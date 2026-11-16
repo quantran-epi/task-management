@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { grepRemoteRef } from '../../../src/services/gitRemoteService';
+import { grepRemoteRef, InvalidGrepPatternError } from '../../../src/services/gitRemoteService';
 import { readRemoteFilePage } from '../../../src/services/gitRemoteTreeService';
 import * as sshService from '../../../src/services/sshService';
 import type { SshConfig } from '../../../src/types/ssh';
@@ -121,6 +121,13 @@ describe('remote read pipelines against a real git repository', () => {
     // path must not split it into a bogus hit.
     expect(hits.map((h) => h.path)).toContain('we\nird.txt');
     expect(hits.every((h) => h.text.includes('NEEDLE'))).toBe(true);
+  });
+
+  it('reports a malformed regex as the caller\'s argument mistake', async () => {
+    // git: "fatal: -e option, 'a[': brackets ([ ]) not balanced", exit 128.
+    await expect(
+      grepRemoteRef(mockConfig, repo, 'HEAD', { pattern: 'a[' })
+    ).rejects.toBeInstanceOf(InvalidGrepPatternError);
   });
 
   it('restricts the search to a path', async () => {
