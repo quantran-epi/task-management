@@ -404,24 +404,33 @@ export async function grepRemoteRef(
     throw new Error(stderr || `git grep thất bại với exit code ${gitExit}`);
   }
 
-  const tokens = res.stdout === '' ? [] : res.stdout.split('\0');
-  // A well-formed stream ends at a record boundary, so split leaves one trailing ''.
-  if (tokens.length > 0 && tokens[tokens.length - 1] === '') tokens.pop();
   const hits: RemoteGrepHit[] = [];
   let truncated = gitExit === 141 || res.stdout.length >= GREP_BYTE_CAP;
-  // Leftover tokens that are not a full path/line/content triple are the cut record.
-  if (tokens.length % 3 !== 0) truncated = true;
 
-  for (let i = 0; i + 2 < tokens.length; i += 3) {
-    const text = tokens[i + 2]!;
-    // The cap can cut mid-record; a record without its terminating newline is incomplete.
-    if (!text.endsWith('\n')) {
+  // `-z` NUL-separates the FIELDS of one record; the newline ends the record. So the stream is
+  // `<ref>:<path>\0<line>\0<content>\n<ref>:<path>\0<line>\0<content>\n…` — splitting on `\0`
+  // first would glue the next record's path onto this record's content. Verified against git.
+  const refPrefix = `${ref}:`;
+  const records = res.stdout === '' ? [] : res.stdout.split('\n');
+  // A complete stream ends with a newline, so the last element is ''; anything else is a cut.
+  if (records.length > 0 && records[records.length - 1] === '') records.pop();
+  else if (records.length > 0) truncated = true;
+
+  for (const record of records) {
+    const fields = record.split('\0');
+    if (fields.length !== 3) {
+      // The byte cap cut mid-record; the partial record is dropped.
       truncated = true;
-      break;
+      continue;
     }
-    const line = parseInt(tokens[i + 1]!, 10);
+    const line = parseInt(fields[1]!, 10);
     if (!Number.isFinite(line)) continue;
-    hits.push({ path: tokens[i]!, line, text: text.slice(0, -1) });
+    const rawPath = fields[0]!;
+    hits.push({
+      path: rawPath.startsWith(refPrefix) ? rawPath.slice(refPrefix.length) : rawPath,
+      line,
+      text: fields[2]!,
+    });
   }
 
   if (hits.length > limit) {
