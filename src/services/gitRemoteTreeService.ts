@@ -432,5 +432,8 @@ async function readPageFromSource(
     // The message is what `isNotInRef` matches on, so it must survive verbatim.
     throw new Error(stderr || `Lệnh git thất bại với exit code ${sourceExit}`);
   }
+  // The probe covers page 1 only. That is a real ceiling: a file whose first 1024 bytes are
+  // text but which has a NUL later is not flagged on a later page. It cannot leak raw bytes
+  // though — awk ends the string at the NUL, so the page holds a truncated line, never binary.
   return parsePage(res.stdout, filePath, offset, limit);
 }
