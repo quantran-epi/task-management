@@ -158,7 +158,8 @@ export function resetRemoteClaudeProbeCache(): void {
 
 /**
  * Configuration fact, not a bad argument: a remote without the CLI must refuse before a stream is
- * opened. Cached per `sshConfig.id` so a turn with several explore calls probes once.
+ * opened. Only a POSITIVE answer is cached, per `sshConfig.id`: the refusal tells the user to
+ * install the CLI, and a cached negative would keep refusing after they did, until a reload.
  */
 export async function probeRemoteClaude(
   config: SshConfig,
@@ -166,14 +167,14 @@ export async function probeRemoteClaude(
   deps?: { exec?: typeof execRemoteCommand }
 ): Promise<boolean> {
   const cached = probeCache.get(config.id);
-  if (cached !== undefined) return cached;
+  if (cached === true) return true;
 
   const exec = deps?.exec ?? execRemoteCommand;
   const res = await exec(config, 'command -v claude >/dev/null 2>&1', secret);
   const available = res.exitStatus === 0;
   // A transport failure throws above and is deliberately NOT cached — it says nothing about
   // whether the CLI is installed.
-  probeCache.set(config.id, available);
+  if (available) probeCache.set(config.id, true);
   return available;
 }
 

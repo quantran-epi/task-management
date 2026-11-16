@@ -6,6 +6,8 @@ import {
   EXPLORE_REPORT_MAX_CHARS,
   buildExploreCommand,
   parseExploreResult,
+  probeRemoteClaude,
+  resetRemoteClaudeProbeCache,
   runRemoteExplore,
   type ExploreRequest,
 } from '../../src/services/remoteExploreService';
@@ -241,6 +243,23 @@ describe('runRemoteExplore (43-04 D-03)', () => {
 
     expect(cancel).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('caches a positive probe but re-probes a negative one', async () => {
+    resetRemoteClaudeProbeCache();
+    const exec = vi.fn(async () => ({ stdout: '', stderr: '', exitStatus: 1 }));
+
+    expect(await probeRemoteClaude(CONFIG, undefined, { exec })).toBe(false);
+    // The refusal tells the user to install the CLI; a cached negative would keep refusing
+    // after they did, until a reload.
+    expect(await probeRemoteClaude(CONFIG, undefined, { exec })).toBe(false);
+    expect(exec).toHaveBeenCalledTimes(2);
+
+    exec.mockResolvedValue({ stdout: '', stderr: '', exitStatus: 0 });
+    expect(await probeRemoteClaude(CONFIG, undefined, { exec })).toBe(true);
+    expect(await probeRemoteClaude(CONFIG, undefined, { exec })).toBe(true);
+    expect(exec).toHaveBeenCalledTimes(3);
+    resetRemoteClaudeProbeCache();
   });
 
   it('turns a non-zero exit with no stdout into an error carrying stderr', async () => {
