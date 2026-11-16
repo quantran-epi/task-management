@@ -22,6 +22,7 @@ import {
   getFileDiff,
   getRecentCommits,
   getRemoteBranches,
+  grepRemoteRef,
 } from '../../../services/gitRemoteService';
 import {
   getRemoteFileContent,
@@ -315,13 +316,22 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
     function: {
       name: 'git_read',
       description:
-        'Đọc trạng thái git của repo remote qua SSH (chỉ đọc, không ghi). Bảy action: branches (liệt kê nhánh), status (tệp chưa commit), log (N commit gần nhất của một nhánh), diff_summary (tổng hợp diff giữa base và target), diff_file (diff một tệp), read_file (nội dung tệp tại một nhánh), tree (cây thư mục tại một nhánh). Repo lấy từ hệ thống đã liên kết với nhóm.',
+        'Đọc trạng thái git của repo remote qua SSH (chỉ đọc, không ghi). Tám action: branches (liệt kê nhánh), status (tệp chưa commit), log (N commit gần nhất của một nhánh), diff_summary (tổng hợp diff giữa base và target), diff_file (diff một tệp), read_file (một TRANG nội dung tệp tại một nhánh — dùng offset/limit, không trả cả file), tree (cây thư mục tại một nhánh), grep (tìm chuỗi hoặc biểu thức trong nội dung đã track của một nhánh). Repo lấy từ hệ thống đã liên kết với nhóm.',
       parameters: {
         type: 'object',
         properties: {
           action: {
             type: 'string',
-            enum: ['branches', 'status', 'log', 'diff_summary', 'diff_file', 'read_file', 'tree'],
+            enum: [
+              'branches',
+              'status',
+              'log',
+              'diff_summary',
+              'diff_file',
+              'read_file',
+              'tree',
+              'grep',
+            ],
             description: 'Hành động cần thực hiện.',
           },
           systemId: {
@@ -329,12 +339,24 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
             description:
               'Chỉ cần khi nhóm liên kết nhiều hơn một hệ thống có repo. Phải là hệ thống đã liên kết.',
           },
-          limit: { type: 'number', description: 'log: số commit, 1..50, mặc định 20.' },
-          branch: { type: 'string', description: 'log, read_file, tree: nhánh cần đọc.' },
+          limit: {
+            type: 'number',
+            description:
+              'log: số commit 1..50; grep: số kết quả 1..200; read_file: số dòng 1..2000.',
+          },
+          offset: { type: 'number', description: 'read_file: dòng bắt đầu, 1-based, mặc định 1.' },
+          branch: { type: 'string', description: 'log, read_file, tree, grep: nhánh cần đọc.' },
           base: { type: 'string', description: 'diff_summary, diff_file: nhánh gốc.' },
           target: { type: 'string', description: 'diff_summary, diff_file: nhánh đích.' },
           filePath: { type: 'string', description: 'diff_file, read_file: đường dẫn tệp.' },
           dirPath: { type: 'string', description: 'tree: thư mục con (bỏ trống để đọc gốc).' },
+          pattern: { type: 'string', description: 'grep: chuỗi hoặc biểu thức cần tìm.' },
+          path: { type: 'string', description: 'grep: đường dẫn tệp hoặc thư mục cần giới hạn.' },
+          caseSensitive: {
+            type: 'boolean',
+            description: 'grep: phân biệt hoa thường, mặc định true.',
+          },
+          literal: { type: 'boolean', description: 'grep: khớp nguyên văn thay vì biểu thức, mặc định false.' },
         },
         required: ['action'],
       },
@@ -1270,11 +1292,58 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
           })),
         });
       }
+      case 'grep': {
+        const pattern = typeof args.pattern === 'string' ? args.pattern : '';
+        if (!pattern) {
+          return JSON.stringify(
+            refuse('INVALID_ARGUMENT', 'grep cần pattern — chuỗi hoặc biểu thức cần tìm.')
+          );
+        }
+        // IN-01 precedent: only an absent/empty branch falls back; a supplied-but-rejected one
+        // (leading `-`, non-string) still refuses rather than silently reading another ref.
+        const supplied = args.branch;
+        const ref =
+          supplied === undefined || supplied === null || supplied === ''
+            ? (revisionArg(system.defaultBaseBranch) ?? 'HEAD')
+            : revisionArg(supplied);
+        if (!ref) {
+          return JSON.stringify(
+            refuse('INVALID_ARGUMENT', 'grep: branch phải là tên nhánh, không bắt đầu bằng "-".')
+          );
+        }
+        const path = typeof args.path === 'string' && args.path.trim() ? args.path.trim() : undefined;
+        const result = await grepRemoteRef(
+          config,
+          repoPath,
+          ref,
+          {
+            pattern,
+            ...(path ? { path } : {}),
+            caseSensitive: args.caseSensitive !== false,
+            literal: args.literal === true,
+            limit: args.limit,
+          },
+          secret
+        );
+        // Zero hits is a successful empty result, never a refusal: `git grep` exit 1 is normal.
+        return JSON.stringify({
+          ...base,
+          ref,
+          pattern: wrapUntrusted(gitLabel('MẪU TÌM'), pattern),
+          path: path ? wrapField(gitLabel('ĐƯỜNG DẪN'), path) : '',
+          hits: result.hits.map((h) => ({
+            path: wrapField(gitLabel('ĐƯỜNG DẪN'), h.path),
+            line: h.line,
+            text: wrapUntrusted(gitLabel('DÒNG KHỚP'), h.text),
+          })),
+          truncated: result.truncated,
+        });
+      }
       default:
         return JSON.stringify(
           refuse(
             'INVALID_ARGUMENT',
-            'action phải là branches, status, log, diff_summary, diff_file, read_file hoặc tree.'
+            'action phải là branches, status, log, diff_summary, diff_file, read_file, tree hoặc grep.'
           )
         );
     }

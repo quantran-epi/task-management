@@ -136,7 +136,7 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     await db.delete();
   });
 
-  it('advertises git_read with a fixed seven-action enum and no command-string parameter', () => {
+  it('advertises git_read with a fixed eight-action enum and no command-string parameter', () => {
     const def = TEAM_TOOL_DEFINITIONS.find((tool) => tool.function.name === 'git_read');
     expect(def).toBeDefined();
 
@@ -149,6 +149,7 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
       'diff_file',
       'read_file',
       'tree',
+      'grep',
     ]);
     expect(params.required).toEqual(['action']);
     // No extra key that could carry a command string, `-c`, `--output` or `--ext-diff`.
@@ -156,9 +157,14 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
       'action',
       'base',
       'branch',
+      'caseSensitive',
       'dirPath',
       'filePath',
       'limit',
+      'literal',
+      'offset',
+      'path',
+      'pattern',
       'systemId',
       'target',
     ]);
