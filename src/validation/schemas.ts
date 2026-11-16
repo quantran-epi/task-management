@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { isValidCalendarDate } from '../utils/date';
 import { isValidUuid } from '../utils/uuid';
+import {
+  SYSTEM_TYPE_VALUE_MAX_LENGTH,
+  SYSTEM_TYPE_VALUE_PATTERN,
+} from '../services/system/systemTypeSettings';
 import type {
   TaskStatus,
   TaskPriority,
@@ -127,15 +131,17 @@ const linkSchema = z
   );
 
 // Phase 31.1: System & ChangeRequest Schemas (ENT-SYS-01, ENT-CR-01)
-export const SYSTEM_TYPES: [SystemType, ...SystemType[]] = [
-  'LOGICAL_GROUP',
-  'SERVICE',
-  'SCHEMA',
-  'UI',
-  'WORKER',
-];
-
-export const SystemTypeSchema = z.enum(SYSTEM_TYPES);
+// Phase 261116-e64: types are user-extensible — bounded regex, not a fixed enum.
+// The runtime label/color list lives in the `system_type_options` settings row.
+export const SystemTypeSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(SYSTEM_TYPE_VALUE_MAX_LENGTH)
+  .regex(
+    SYSTEM_TYPE_VALUE_PATTERN,
+    'Loại hệ thống phải là CHỮ_HOA_SỐ_VIẾT_HOA (ví dụ: SERVICE)'
+  );
 
 export const CR_TYPES: [CrType, ...CrType[]] = [
   'NEW_FEATURE',

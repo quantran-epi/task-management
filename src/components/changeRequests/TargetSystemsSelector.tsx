@@ -79,7 +79,7 @@ export const TargetSystemsSelector: React.FC<TargetSystemsSelectorProps> = ({
             ({child.code})
           </span>
           <Tag
-            color={TYPE_TAG_COLORS[child.type]}
+            color={TYPE_TAG_COLORS[child.type] ?? '#8c8c8c'}
             style={{ marginLeft: 6, fontSize: 10, padding: '0 4px', lineHeight: '16px' }}
           >
             {TYPE_LABELS[child.type]}

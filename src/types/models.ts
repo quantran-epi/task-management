@@ -36,7 +36,10 @@ export interface ReminderItem {
 }
 
 // Phase 31.1: Enterprise Systems Catalog & Change Request Models (ENT-SYS-01, ENT-CR-01)
-export type SystemType = 'LOGICAL_GROUP' | 'SERVICE' | 'SCHEMA' | 'UI' | 'WORKER';
+// Phase 261116-e64: the value set is user-extensible at runtime — the single source of
+// truth for labels/colors is the `system_type_options` settings row, read through
+// `src/services/system/systemTypeSettings.ts`. `LOGICAL_GROUP` remains the parent marker.
+export type SystemType = string;
 
 /**
  * D-24 invariant: `sshConfigId` / `remoteRepoPath` / `defaultBaseBranch` are only

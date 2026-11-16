@@ -9,7 +9,7 @@ import {
 import {
   TASK_STATUSES,
   TASK_PRIORITIES,
-  SYSTEM_TYPES,
+  SystemTypeSchema,
   CR_TYPES,
   CR_STATUSES,
   tagListSchema,
@@ -557,7 +557,7 @@ export const BackupSystemRecordSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
   code: z.string().trim().min(1, 'Code is required').max(64, 'Code must be 64 characters or less'),
   parentId: z.string().nullable(),
-  type: z.enum(SYSTEM_TYPES),
+  type: SystemTypeSchema,
   description: z.string().optional(),
   sshConfigId: uuidSchema.optional(),
   remoteRepoPath: z.string().optional(),

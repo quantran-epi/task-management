@@ -21,7 +21,6 @@ import {
   updateSystem,
   deleteSystem,
 } from '../../db/repositories/systemRepo';
-import { SYSTEM_TYPES } from '../../validation/schemas';
 import { upsertAllocation, deleteAllocation } from '../../db/repositories/allocationRepo';
 import {
   createWorkSession,
@@ -997,8 +996,9 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           },
           type: {
             type: 'string',
-            enum: [...SYSTEM_TYPES],
-            description: 'System type (defaults to SERVICE).',
+            pattern: '^[A-Z][A-Z0-9_]*$',
+            description:
+              'System type (defaults to SERVICE). Valid values come from the user-configurable system type list in Settings; LOGICAL_GROUP marks a parent system.',
           },
           description: { type: 'string', description: 'System description.' },
           sshConfigId: { type: 'string', description: 'SSH config UUID (subsystems only).' },
@@ -1033,8 +1033,9 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           },
           type: {
             type: 'string',
-            enum: [...SYSTEM_TYPES],
-            description: 'Updated system type.',
+            pattern: '^[A-Z][A-Z0-9_]*$',
+            description:
+              'Updated system type. Valid values come from the user-configurable system type list in Settings.',
           },
           description: { type: 'string', description: 'Updated description.' },
           sshConfigId: { type: 'string', description: 'SSH config UUID; null clears it.' },
