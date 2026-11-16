@@ -32,6 +32,12 @@ import {
 import type { System } from '../../../types/models';
 import type { SshConfig } from '../../../types/ssh';
 import type { RemoteGitCommit } from '../../../types/gitRemote';
+import {
+  clampExploreMaxTurns,
+  probeRemoteClaude,
+  runRemoteExplore,
+} from '../../../services/remoteExploreService';
+import { MODEL_ID_REGEX } from '../../../services/agents/ghostDevConfig';
 
 /**
  * AI Office team tools (D-11, D-24, D-26, D-27, D-33).
@@ -99,7 +105,10 @@ export type TeamToolRefusalCode =
   // CR-03: git/SSH failure is infrastructure, not a bad argument. Reporting it as
   // `INVALID_ARGUMENT` told the model to retry variations forever instead of surfacing the
   // failure — the same reasoning that gives `LEAD_USES_DB_TOOLS` its own code.
-  | 'GIT_READ_FAILED';
+  | 'GIT_READ_FAILED'
+  // Phase 43 D-03: the remote lacks the Claude Code CLI. That is a configuration fact, not a bad
+  // argument — the model must switch tier (`git_read`) rather than retry its question.
+  | 'REMOTE_CLAUDE_UNAVAILABLE';
 
 /** Mirrors `ArtifactToolRefusal`: a refusal is a returned value, never a thrown error. */
 export interface TeamToolRefusal {
@@ -359,6 +368,34 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
           literal: { type: 'boolean', description: 'grep: khớp nguyên văn thay vì biểu thức, mặc định false.' },
         },
         required: ['action'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'explore_repo',
+      description:
+        'Giao một câu hỏi RỘNG cho Claude Code chạy trên chính máy remote (chỉ đọc) và nhận lại báo cáo tóm tắt kèm đường dẫn:dòng. Dùng khi muốn hiểu cả một vùng code mà nếu tự đọc sẽ tốn nhiều lần read_file. KHÔNG dùng cho một chỗ cụ thể — grep rồi read_file rẻ hơn.',
+      parameters: {
+        type: 'object',
+        properties: {
+          question: {
+            type: 'string',
+            description: 'Câu hỏi cần trả lời, ví dụ "luồng xử lý đơn hàng đi qua những module nào".',
+          },
+          systemId: {
+            type: 'string',
+            description:
+              'Chỉ cần khi nhóm liên kết nhiều hơn một hệ thống có repo. Phải là hệ thống đã liên kết.',
+          },
+          model: { type: 'string', description: 'Model chạy trên remote, mặc định haiku.' },
+          maxTurns: {
+            type: 'number',
+            description: 'Số lượt tối đa của phiên chạy remote, mặc định 20, tối đa 40.',
+          },
+        },
+        required: ['question'],
       },
     },
   },
@@ -1111,6 +1148,11 @@ function wrapCommits(commits: RemoteGitCommit[], label: (field: string) => strin
   }));
 }
 
+/** Phase 42 D-11: one label format for every git-shaped tool result. */
+function gitLabelFor(action: string, repoPath: string, field: string): string {
+  return `GIT ${action} ${repoPath} — ${field}`;
+}
+
 /**
  * CR-01: a revision-shaped value is only ever a revision. `escapeShellArg` protects the shell,
  * but git parses any argv element beginning with `-` as an option, and `git log`/`show`/`diff`
@@ -1135,7 +1177,7 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
   // thrown error" contract that the coordinator's dispatch relies on.
   let repoPath = '';
   // D-11: every wrap label carries BOTH the action and the repo path.
-  const gitLabel = (field: string) => `GIT ${action} ${repoPath} — ${field}`;
+  const gitLabel = (field: string) => gitLabelFor(action, repoPath, field);
   try {
     const resolved = await resolveGitRepo(args, ctx);
     if ('refused' in resolved) return JSON.stringify(resolved);
@@ -1383,6 +1425,75 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
   }
 }
 
+/**
+ * Phase 43 D-03: the second read tier. A model on the remote host reads the repo with its own
+ * context window and returns a capped report, so a broad question costs one nested call instead
+ * of many `read_file` results in the caller's context.
+ *
+ * A refusal is a returned value, never a throw — same contract as `gitRead`.
+ */
+async function exploreRepo(args: Record<string, any>, ctx: TeamToolContext): Promise<string> {
+  const question = typeof args.question === 'string' ? args.question.trim() : '';
+  if (!question) {
+    return JSON.stringify(
+      refuse('INVALID_ARGUMENT', 'explore_repo cần question — câu hỏi cần trả lời.')
+    );
+  }
+
+  let repoPath = '';
+  try {
+    const resolved = await resolveGitRepo(args, ctx);
+    if ('refused' in resolved) return JSON.stringify(resolved);
+    const { system, config, secret } = resolved;
+    repoPath = resolved.repoPath;
+
+    if (!(await probeRemoteClaude(config, secret))) {
+      return JSON.stringify(
+        refuse(
+          'REMOTE_CLAUDE_UNAVAILABLE',
+          'Máy chủ remote chưa cài Claude Code CLI (không tìm thấy lệnh "claude"). Dùng git_read để đọc trực tiếp.'
+        )
+      );
+    }
+
+    // A model id is echoed into a command, so an unrecognised value falls back to the default
+    // rather than being passed through.
+    const suppliedModel = typeof args.model === 'string' ? args.model.trim() : '';
+    const model = suppliedModel && MODEL_ID_REGEX.test(suppliedModel) ? suppliedModel : 'haiku';
+    const maxTurns = clampExploreMaxTurns(args.maxTurns);
+
+    const result = await runRemoteExplore(config, secret, {
+      repoPath,
+      question,
+      model,
+      maxTurns,
+    });
+
+    return JSON.stringify({
+      action: 'explore_repo',
+      systemId: system.id,
+      repoPath,
+      model,
+      outcome: result.outcome,
+      truncated: result.truncated,
+      report: wrapUntrusted(gitLabelFor('explore_repo', repoPath, 'BÁO CÁO'), result.report),
+      ...(result.detail
+        ? { detail: wrapUntrusted(gitLabelFor('explore_repo', repoPath, 'CHI TIẾT'), result.detail) }
+        : {}),
+    });
+  } catch (err: any) {
+    return JSON.stringify(
+      refuse(
+        'GIT_READ_FAILED',
+        wrapUntrusted(
+          gitLabelFor('explore_repo', repoPath, 'LỖI REMOTE'),
+          err?.message || String(err)
+        )
+      )
+    );
+  }
+}
+
 export async function executeTeamTool(
   name: string,
   args: Record<string, any>,
@@ -1412,6 +1523,8 @@ export async function executeTeamTool(
       return writeDoc(input, ctx);
     case 'git_read':
       return gitRead(input, ctx);
+    case 'explore_repo':
+      return exploreRepo(input, ctx);
     default:
       return JSON.stringify({ error: `Unknown team tool: ${name}` });
   }

@@ -10,16 +10,22 @@ import { ensureTeamThread } from '../../../../src/db/repositories/teamTranscript
 import { isMutationTool } from '../../../../src/services/ai/aiTools';
 import { SSH_CONFIGS_SETTING_KEY } from '../../../../src/types/ssh';
 import { generateId } from '../../../../src/utils/uuid';
-import { execRemoteCommand } from '../../../../src/services/sshService';
+import { execRemoteCommand, execRemoteCommandStream } from '../../../../src/services/sshService';
+import { resetRemoteClaudeProbeCache } from '../../../../src/services/remoteExploreService';
 
 /**
  * Phase 42 D-08: `execRemoteCommand` is the seam where a command string becomes observable.
  * Only that one export is replaced — `getSshConfigById` stays real so it reads the seeded
- * `db.settings` row, and `getSshSecret` returns null outside Tauri.
+ * `db.settings` row, and `getSshSecret` returns null outside Tauri. Phase 43 adds the stream seam
+ * for `explore_repo`.
  */
 vi.mock('../../../../src/services/sshService', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../../src/services/sshService')>();
-  return { ...actual, execRemoteCommand: vi.fn() };
+  return {
+    ...actual,
+    execRemoteCommand: vi.fn(),
+    execRemoteCommandStream: vi.fn(),
+  };
 });
 
 describe('teamTools git_read — definition, repo resolution, mutation class (AIO-READ-04, D-06, D-07, D-09)', () => {
@@ -45,6 +51,9 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     // consume — the leftover would be silently consumed by a later case and point the failure
     // at the wrong assertion.
     vi.mocked(execRemoteCommand).mockReset();
+    vi.mocked(execRemoteCommandStream).mockReset();
+    // The probe cache is per SSH profile and would otherwise leak between cases.
+    resetRemoteClaudeProbeCache();
 
     db = new TaskPlannerDatabase('TestGitRead_' + Math.random().toString(36).slice(2));
     await db.open();
@@ -752,5 +761,100 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     );
     expect(res).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
     expect(execRemoteCommand).not.toHaveBeenCalled();
+  });
+
+  // ---------------------------------------------------------------------------------------
+  // Block E — explore_repo (43-04 D-03). The second read tier: a remote model reads the repo
+  // and returns a capped report. A remote without the CLI must refuse BEFORE any stream opens.
+  // ---------------------------------------------------------------------------------------
+
+  it('explore_repo refuses REMOTE_CLAUDE_UNAVAILABLE and never streams when the CLI is absent', async () => {
+    queue({ stdout: '', stderr: '', exitStatus: 1 });
+
+    const res = JSON.parse(
+      await executeTeamTool('explore_repo', { question: 'luồng đơn hàng ở đâu' }, ctx())
+    );
+
+    expect(res).toMatchObject({ refused: true, code: 'REMOTE_CLAUDE_UNAVAILABLE' });
+    expect(execRemoteCommandStream).not.toHaveBeenCalled();
+    // The probe is the only remote call: no repo read was attempted either.
+    expect(vi.mocked(execRemoteCommand).mock.calls).toHaveLength(1);
+    expect(vi.mocked(execRemoteCommand).mock.calls[0]![1]).toContain('command -v claude');
+  });
+
+  it('explore_repo returns a wrapped, capped report when the remote run succeeds', async () => {
+    // Probe exit 0 = the CLI is installed.
+    queue({ stdout: '/usr/local/bin/claude\n', stderr: '', exitStatus: 0 });
+
+    let seenCommand = '';
+    vi.mocked(execRemoteCommandStream).mockImplementation(
+      async (_config, command, _sessionId, onData, onExit) => {
+        seenCommand = command;
+        onData({
+          sessionId: 's',
+          stream: 'stdout',
+          line: '{"is_error":false,"result":"Điểm vào: src/orders/index.ts:12"}',
+        });
+        onExit({ sessionId: 's', exitStatus: 0, error: null });
+        return async () => {};
+      }
+    );
+
+    const raw = await executeTeamTool(
+      'explore_repo',
+      { question: 'luồng đơn hàng đi qua những module nào' },
+      ctx()
+    );
+    const parsed = JSON.parse(raw);
+
+    expect(parsed).toMatchObject({
+      action: 'explore_repo',
+      systemId: repoSystemId,
+      repoPath: '/srv/repo',
+      model: 'haiku',
+      outcome: 'success',
+      truncated: false,
+    });
+    expect(parsed.report).toContain(OPEN);
+    expect(parsed.report).toContain(CLOSE);
+    expect(parsed.report).toContain('GIT explore_repo /srv/repo');
+    expectEnclosed(parsed.report, 'src/orders/index.ts:12');
+
+    // The command runs in the resolved repo and carries the CLI contract.
+    expect(seenCommand).toContain("cd '/srv/repo' && claude -p");
+    expect(seenCommand).toContain('--allowedTools Read,Grep,Glob');
+    expect(seenCommand).toContain('--max-turns 20');
+  });
+
+  it('explore_repo refuses INVALID_ARGUMENT for a missing question without touching the remote', async () => {
+    const res = JSON.parse(await executeTeamTool('explore_repo', {}, ctx()));
+
+    expect(res).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
+    expect(execRemoteCommand).not.toHaveBeenCalled();
+    expect(execRemoteCommandStream).not.toHaveBeenCalled();
+  });
+
+  it('explore_repo falls back to the default model instead of echoing an unusable id', async () => {
+    queue({ stdout: '/usr/local/bin/claude\n', stderr: '', exitStatus: 0 });
+    let seenCommand = '';
+    vi.mocked(execRemoteCommandStream).mockImplementation(
+      async (_config, command, _sessionId, onData, onExit) => {
+        seenCommand = command;
+        onData({ sessionId: 's', stream: 'stdout', line: '{"is_error":false,"result":"ok"}' });
+        onExit({ sessionId: 's', exitStatus: 0, error: null });
+        return async () => {};
+      }
+    );
+
+    const parsed = JSON.parse(
+      await executeTeamTool(
+        'explore_repo',
+        { question: 'x', model: 'bad model; rm -rf /' },
+        ctx()
+      )
+    );
+
+    expect(parsed.model).toBe('haiku');
+    expect(seenCommand).not.toContain('rm -rf');
   });
 });
