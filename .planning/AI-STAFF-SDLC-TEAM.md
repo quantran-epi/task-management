@@ -722,7 +722,7 @@ SOP review code và PL03/PL07 final
 **Skill description**
 
 ```
-Checklist review code SHB và quy trình viết bản cuối: nhóm lỗi bắt buộc kiểm, tiêu chí phân loại blocker/major/minor, mẫu ghi phát hiện, checklist PL07 sáu nhóm theo biên bản SHB, mục lục PL03 final, quy tắc đồng bộ tài liệu với code thực tế. Đọc khi bắt đầu một việc được giao; không cần đọc khi chỉ trao đổi.
+Checklist review code SHB và quy trình viết bản cuối: nhóm lỗi bắt buộc kiểm, tiêu chí phân loại blocker/major/minor, mẫu ghi phát hiện, checklist PL07 sáu nhóm theo biên bản SHB, mục lục PL03 final, quy tắc đồng bộ tài liệu với code. Đọc khi bắt đầu việc được giao; không cần đọc khi chỉ trao đổi.
 ```
 
 **Skill body**

@@ -8,6 +8,7 @@ import {
   EditOutlined,
   DeleteOutlined,
   BookOutlined,
+  UploadOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -27,6 +28,7 @@ import {
 } from '../../components/ai/office/EmployeeEditorDrawer';
 import { SkillCard } from '../../components/ai/office/SkillCard';
 import { SkillEditorDrawer } from '../../components/ai/office/SkillEditorDrawer';
+import { AiStaffImportModal } from '../../components/ai/office/AiStaffImportModal';
 import { deleteFailureMessage } from '../../components/ai/office/deleteRefusalMessage';
 import type { AiSkill } from '../../types/aiOffice';
 
@@ -45,6 +47,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
   const [editingSkill, setEditingSkill] = useState<AiSkill | null>(null);
   /** D-10/D-11/D-12: the refusal copy names the blocking groups/agents, never a UUID. */
   const [refusal, setRefusal] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const openTab = useLayoutStore((s) => s.openTab);
 
@@ -183,6 +186,16 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
           allowClear
           style={{ flex: 1, fontSize: 12 }}
         />
+        <Tooltip title="Nhập JSON">
+          <Button
+            size="small"
+            type="text"
+            icon={<UploadOutlined />}
+            onClick={() => setImportOpen(true)}
+            aria-label="Nhập JSON"
+            data-testid="ai-staff-import-open"
+          />
+        </Tooltip>
         <Tooltip title="Thêm Lead AI">
           <Button
             size="small"
@@ -469,6 +482,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
         }}
         db={db}
       />
+      <AiStaffImportModal open={importOpen} onClose={() => setImportOpen(false)} db={db} />
     </div>
   );
 };

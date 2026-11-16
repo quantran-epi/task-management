@@ -9,12 +9,14 @@ import {
   AiLeadUpdateSchema,
   AiSkillInputSchema,
   AiSkillUpdateSchema,
+  AiStaffImportSchema,
   type AiEmployeeInput,
   type AiEmployeeUpdate,
   type AiLeadInput,
   type AiLeadUpdate,
   type AiSkillInput,
   type AiSkillUpdate,
+  type AiStaffImportInput,
 } from '../../validation/aiOfficeSchemas';
 
 import { isAgentInUse, isSkillInUse } from '../../services/ai/office/liveUseRegistry';
@@ -390,4 +392,146 @@ export async function countAgentsUsingSkill(
   db: TaskPlannerDatabase = defaultDb
 ): Promise<number> {
   return db.aiEmployees.where('skillId').equals(skillId).count();
+}
+
+/** What a bulk import did. `skipped` counts rows dropped because the name already exists. */
+export interface AiStaffImportResult {
+  created: { skills: number; employees: number; leads: number };
+  skipped: { skills: number; employees: number; leads: number };
+  /** Non-fatal notes: substituted model, unknown `skillName`, duplicate names inside the file. */
+  warnings: string[];
+}
+
+/**
+ * Bulk import of skills + employees + leads from one JSON payload.
+ *
+ * Add-only: a row whose name already exists is skipped, never updated or deleted. Skills are
+ * written first so `skillName` can resolve to an id, and the whole import is one `rw`
+ * transaction — a malformed row late in the file cannot leave half a team behind.
+ *
+ * `fallbackModel` is the model to use when a row omits `model` (the caller reads it from
+ * `fetchAvailableModels`). Without it, a row that omits `model` is skipped with a warning
+ * rather than written with an empty model, which every prompt path would then send upstream.
+ */
+export async function importAiStaff(
+  payload: AiStaffImportInput,
+  db: TaskPlannerDatabase = defaultDb,
+  fallbackModel?: string
+): Promise<AiStaffImportResult> {
+  const parsed = AiStaffImportSchema.parse(payload);
+  const result: AiStaffImportResult = {
+    created: { skills: 0, employees: 0, leads: 0 },
+    skipped: { skills: 0, employees: 0, leads: 0 },
+    warnings: [],
+  };
+
+  return db.transaction('rw', [db.aiSkills, db.aiEmployees, db.aiLeads], async () => {
+    const now = new Date().toISOString();
+
+    // Existing names, lower-cased: the roster shows names, so "evra" and "Evra" are the same
+    // row to the user and a second one would be indistinguishable in the picker.
+    const skillNames = new Set(
+      (await db.aiSkills.toArray()).map((row) => row.name.trim().toLowerCase())
+    );
+    const employeeNames = new Set(
+      (await db.aiEmployees.toArray()).map((row) => row.name.trim().toLowerCase())
+    );
+    const leadNames = new Set(
+      (await db.aiLeads.toArray()).map((row) => row.name.trim().toLowerCase())
+    );
+    const skillIdByName = new Map(
+      (await db.aiSkills.toArray()).map((row) => [row.name.trim().toLowerCase(), row.id])
+    );
+
+    for (const skill of parsed.skills) {
+      const key = skill.name.trim().toLowerCase();
+      if (skillNames.has(key)) {
+        result.skipped.skills += 1;
+        continue;
+      }
+      const row: AiSkill = {
+        id: generateId(),
+        name: skill.name,
+        description: skill.description,
+        body: skill.body,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await db.aiSkills.add(row);
+      skillNames.add(key);
+      skillIdByName.set(key, row.id);
+      result.created.skills += 1;
+    }
+
+    const resolveModel = (name: string, model: string | undefined): string | undefined => {
+      if (model) return model;
+      if (fallbackModel) {
+        result.warnings.push(`«${name}» không có model, dùng model khả dụng: ${fallbackModel}.`);
+        return fallbackModel;
+      }
+      result.warnings.push(`Bỏ qua «${name}»: không có model và chưa cấu hình model khả dụng.`);
+      return undefined;
+    };
+
+    for (const employee of parsed.employees) {
+      const key = employee.name.trim().toLowerCase();
+      if (employeeNames.has(key)) {
+        result.skipped.employees += 1;
+        continue;
+      }
+      const model = resolveModel(employee.name, employee.model);
+      if (!model) {
+        result.skipped.employees += 1;
+        continue;
+      }
+      const row: AiEmployee = {
+        id: generateId(),
+        name: employee.name,
+        role: employee.role,
+        capability: employee.capability,
+        persona: employee.persona,
+        model,
+        createdAt: now,
+        updatedAt: now,
+      };
+      if (employee.skillName) {
+        const skillId = skillIdByName.get(employee.skillName.trim().toLowerCase());
+        if (skillId) row.skillId = skillId;
+        else
+          result.warnings.push(
+            `«${employee.name}» tham chiếu kỹ năng «${employee.skillName}» không có trong file lẫn hệ thống — nhân viên được tạo không gắn kỹ năng.`
+          );
+      }
+      await db.aiEmployees.add(row);
+      employeeNames.add(key);
+      result.created.employees += 1;
+    }
+
+    for (const lead of parsed.leads) {
+      const key = lead.name.trim().toLowerCase();
+      if (leadNames.has(key)) {
+        result.skipped.leads += 1;
+        continue;
+      }
+      const model = resolveModel(lead.name, lead.model);
+      if (!model) {
+        result.skipped.leads += 1;
+        continue;
+      }
+      await db.aiLeads.add({
+        id: generateId(),
+        name: lead.name,
+        role: lead.role,
+        capability: lead.capability,
+        persona: lead.persona,
+        model,
+        createdAt: now,
+        updatedAt: now,
+      });
+      leadNames.add(key);
+      result.created.leads += 1;
+    }
+
+    return result;
+  });
 }

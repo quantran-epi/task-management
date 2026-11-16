@@ -88,6 +88,35 @@ export const AiSkillInputSchema = z.object({
   body: z.string().trim().min(1, 'Body is required'),
 });
 
+/**
+ * Bulk import: one shape, arrays optional — a single row is just a one-element array.
+ * `model` is optional because the importer substitutes an available model; `skillName`
+ * references a skill by NAME (existing row or one in the same file), never a UUID, so a
+ * hand-written JSON file stays portable between machines.
+ */
+export const AiStaffImportSchema = z.object({
+  skills: z
+    .array(
+      z.object({
+        name: nameSchema,
+        description: skillDescriptionSchema,
+        body: z.string().trim().min(1, 'Body is required'),
+      })
+    )
+    .default([]),
+  employees: z
+    .array(
+      AiEmployeeInputSchema.omit({ skillId: true }).extend({
+        model: modelSchema.optional(),
+        skillName: nameSchema.optional(),
+      })
+    )
+    .default([]),
+  leads: z
+    .array(AiLeadInputSchema.extend({ model: modelSchema.optional() }))
+    .default([]),
+});
+
 export const AiSkillUpdateSchema = z.object({
   name: nameSchema.optional(),
   description: skillDescriptionSchema.optional(),
@@ -156,6 +185,9 @@ export type AiLeadInput = z.infer<typeof AiLeadInputSchema>;
 export type AiLeadUpdate = z.infer<typeof AiLeadUpdateSchema>;
 export type AiSkillInput = z.infer<typeof AiSkillInputSchema>;
 export type AiSkillUpdate = z.infer<typeof AiSkillUpdateSchema>;
+export type AiStaffImport = z.infer<typeof AiStaffImportSchema>;
+/** `z.input`: the arrays carry `.default([])`, so a file may omit any of the three keys. */
+export type AiStaffImportInput = z.input<typeof AiStaffImportSchema>;
 /** D-05: the *input* type — `status`/`budgetTokens` have defaults, so a name-only group is legal. */
 export type AiTeamInput = z.input<typeof AiTeamInputSchema>;
 export type AiTeamUpdate = z.infer<typeof AiTeamUpdateSchema>;

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Alert, Button, Empty, Input, Segmented, Space, theme } from 'antd';
-import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { PlusOutlined, ReloadOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import {
@@ -21,6 +21,7 @@ import {
   LeadEditorDrawer,
 } from '../components/ai/office/EmployeeEditorDrawer';
 import { SkillEditorDrawer } from '../components/ai/office/SkillEditorDrawer';
+import { AiStaffImportModal } from '../components/ai/office/AiStaffImportModal';
 import type { AiEmployee, AiLead, AiSkill } from '../types/aiOffice';
 
 export interface AiOfficeViewProps {
@@ -74,6 +75,7 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
   const [editingEmployee, setEditingEmployee] = useState<AiEmployee | null>(null);
   const [editingLead, setEditingLead] = useState<AiLead | null>(null);
   const [editingSkill, setEditingSkill] = useState<AiSkill | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const employees = useLiveQuery(() => listEmployees(db), [db]) ?? [];
   const leads = useLiveQuery(() => listLeads(db), [db]) ?? [];
@@ -198,9 +200,14 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
         title="Văn phòng AI"
         subtitle="Nhân viên AI, lead và kỹ năng dùng chung cho mọi nhóm"
         extra={
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            {copy.cta}
-          </Button>
+          <Space>
+            <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>
+              Nhập JSON
+            </Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+              {copy.cta}
+            </Button>
+          </Space>
         }
       />
 
@@ -341,6 +348,7 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
         onSaved={closeDrawer}
         db={db}
       />
+      <AiStaffImportModal open={importOpen} onClose={() => setImportOpen(false)} db={db} />
     </div>
   );
 };
