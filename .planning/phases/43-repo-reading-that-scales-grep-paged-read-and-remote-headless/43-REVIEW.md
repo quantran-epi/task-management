@@ -17,7 +17,11 @@ findings:
   warning: 4
   info: 6
   total: 10
-status: issues_found
+resolved:
+  warning: 4
+  info: 3
+  open_info: 3
+status: resolved
 ---
 
 # Phase 43: Code Review Report
@@ -25,7 +29,7 @@ status: issues_found
 **Reviewed:** 2026-11-16T16:36:53Z
 **Depth:** standard
 **Files Reviewed:** 8
-**Status:** issues_found
+**Status:** resolved — all 4 warnings and 3 of 6 info findings fixed in `bd2dc5cd`, `700f7ff1`, `d2c281d6`
 **Reviewed at:** `f742114d` (working tree clean)
 
 ## Summary
@@ -282,3 +286,29 @@ trust. All hold:
 _Reviewed: 2026-11-16T16:36:53Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+
+---
+
+## Resolution
+
+All four Warnings and three of the six Info findings were fixed after this report was written.
+The three remaining Info findings are deliberate, recorded decisions.
+
+| Finding | Resolution | Commit |
+|---|---|---|
+| WR-01 | `head -c` takes one byte past the budget, so a payload of `cap + 1` proves truncation even when the cut lands on a record boundary; the comparison is byte-based via `TextEncoder` (no `Buffer` — this module is bundled for the Tauri renderer) | `bd2dc5cd` |
+| WR-02 | `next` → `exit`: the page stays a contiguous prefix, `END` still prints `###TOTAL`, and `nextOffset` picks up the rest. Exit 141 is accepted on the pager, since awk stopping at the budget SIGPIPEs the source | `bd2dc5cd` |
+| WR-03 | Both parsers fail closed on a missing `###EXIT` marker instead of defaulting to 0 | `bd2dc5cd` |
+| WR-04 | `parsePage` strips the partial character a byte-based `substr` leaves; the constant is renamed `PAGE_LINE_MAX_BYTES` | `bd2dc5cd` |
+| IN-01 | `read_file` and `diff_file` echo the confined path, as `grep` already did | `700f7ff1` |
+| IN-02 | The service owns the clamp; the handler passes the raw numbers and echoes the service's values | `700f7ff1` |
+| IN-03 | `cd --` | `700f7ff1` |
+| IN-05 | The tier block is its own constant, pushed for every employee; the read ORDER stays reviewer-only | `d2c281d6` |
+| IN-04 | Not fixed — agreed ceiling, recorded in the source comment | — |
+| IN-06 | Not fixed — `repoPath` is SSH-profile configuration, not remote content | — |
+
+Regression tests were added for every fixed Warning: multibyte truncation, a cut landing exactly on
+a record boundary, a missing exit marker on both parsers, a page that must not skip a line, and a
+mid-character cut.
+
+**Final state:** `tsc --noEmit` clean; 249/249 phase-43 tests pass; 181/181 coordinator tests pass.
