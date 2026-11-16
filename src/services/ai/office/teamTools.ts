@@ -25,6 +25,7 @@ import {
   grepRemoteRef,
 } from '../../../services/gitRemoteService';
 import {
+  confineRepoPath,
   getRemoteTree,
   PathOutsideRepoError,
   readRemoteFilePage,
@@ -1372,13 +1373,16 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
           );
         }
         const path = typeof args.path === 'string' && args.path.trim() ? args.path.trim() : undefined;
+        // Same confinement as `tree`: a path outside the repo is the model's argument mistake,
+        // and letting git say so would report it as GIT_READ_FAILED (infrastructure).
+        const cleanPath = path ? confineRepoPath(path, 'Đường dẫn') : undefined;
         const result = await grepRemoteRef(
           config,
           repoPath,
           ref,
           {
             pattern,
-            ...(path ? { path } : {}),
+            ...(cleanPath ? { path: cleanPath } : {}),
             caseSensitive: args.caseSensitive !== false,
             literal: args.literal === true,
             limit: args.limit,

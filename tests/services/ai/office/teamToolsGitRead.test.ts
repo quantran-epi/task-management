@@ -606,6 +606,20 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     expect(execRemoteCommand).not.toHaveBeenCalled();
   });
 
+  it('refuses a grep path that escapes the repository (CR-02, WR-05)', async () => {
+    const res = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'grep', branch: 'main', pattern: 'secret', path: '../../../etc' },
+        ctx()
+      )
+    );
+    // Same confinement as `tree`/`read_file`: the model's argument was rejected, so the code
+    // is INVALID_ARGUMENT and no remote command runs.
+    expect(res).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
+    expect(execRemoteCommand).not.toHaveBeenCalled();
+  });
+
   it('does not fall back to the working copy when the ref itself is bad (WR-01)', async () => {
     // `git cat-file` fails because the branch does not exist — not because the path is untracked.
     queueFailingSource("fatal: invalid object name 'mian'.");
