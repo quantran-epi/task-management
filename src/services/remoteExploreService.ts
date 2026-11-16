@@ -87,12 +87,20 @@ export function buildExploreCommand(request: ExploreRequest): string {
 }
 
 function capReport(outcome: ExploreOutcome): ExploreOutcome {
-  if (outcome.report.length <= EXPLORE_REPORT_MAX_CHARS) return outcome;
-  return {
-    ...outcome,
-    report: outcome.report.slice(0, EXPLORE_REPORT_MAX_CHARS),
-    truncated: true,
-  };
+  const capped =
+    outcome.report.length <= EXPLORE_REPORT_MAX_CHARS
+      ? outcome
+      : {
+          ...outcome,
+          report: outcome.report.slice(0, EXPLORE_REPORT_MAX_CHARS),
+          truncated: true,
+        };
+  // `detail` carries remote stderr, which the same buffer bounds — but at 4× the report cap.
+  // It reaches the caller's context too, so it gets the same budget.
+  if (capped.detail !== undefined && capped.detail.length > EXPLORE_REPORT_MAX_CHARS) {
+    return { ...capped, detail: capped.detail.slice(0, EXPLORE_REPORT_MAX_CHARS), truncated: true };
+  }
+  return capped;
 }
 
 function joinErrors(errors: unknown): string {
@@ -234,12 +242,14 @@ export async function runRemoteExplore(
     const onExit = (event: { exitStatus: number; error: string | null }) => {
       if (settled) return;
       if (event.exitStatus !== 0 && stdout.trim() === '') {
-        finish({
-          report: '',
-          truncated: false,
-          outcome: 'error',
-          detail: stderr.trim() || event.error || `exit ${event.exitStatus}`,
-        });
+        finish(
+          capReport({
+            report: '',
+            truncated: false,
+            outcome: 'error',
+            detail: stderr.trim() || event.error || `exit ${event.exitStatus}`,
+          })
+        );
         return;
       }
       finish(parseExploreResult(stdout));
@@ -269,12 +279,14 @@ export async function runRemoteExplore(
         // would have killed is now live and nothing else would ever cancel it.
         if (timedOut) await handle().catch(() => undefined);
       } catch (err: any) {
-        finish({
-          report: '',
-          truncated: false,
-          outcome: 'error',
-          detail: err?.message || String(err),
-        });
+        finish(
+          capReport({
+            report: '',
+            truncated: false,
+            outcome: 'error',
+            detail: err?.message || String(err),
+          })
+        );
       }
     })();
   });

@@ -270,6 +270,27 @@ describe('runRemoteExplore (43-04 D-03)', () => {
     resetRemoteClaudeProbeCache();
   });
 
+  it('caps an oversized stderr detail on a failed run', async () => {
+    const stream = vi.fn(
+      async (
+        _config: SshConfig,
+        _command: string,
+        _sessionId: string,
+        onData: (e: SshStreamEvent) => void,
+        onExit: (e: SshStreamExitEvent) => void
+      ) => {
+        onData({ sessionId: 's', stream: 'stderr', line: 'e'.repeat(EXPLORE_REPORT_MAX_CHARS * 2) });
+        onExit({ sessionId: 's', exitStatus: 1, error: null });
+        return async () => {};
+      }
+    );
+
+    const outcome = await runRemoteExplore(CONFIG, undefined, request(), { stream });
+    // `detail` reaches the caller's context too, so the same budget applies to it.
+    expect(outcome.detail).toHaveLength(EXPLORE_REPORT_MAX_CHARS);
+    expect(outcome.truncated).toBe(true);
+  });
+
   it('turns a non-zero exit with no stdout into an error carrying stderr', async () => {
     const stream = vi.fn(
       async (
