@@ -154,7 +154,7 @@ export function parseExploreResult(stdout: string): ExploreOutcome {
   return capReport({ report, truncated: false, outcome: 'success' });
 }
 
-const probeCache = new Map<string, boolean>();
+const probeCache = new Set<string>();
 
 /** Tests only: the cache is per SSH profile and would otherwise leak between cases. */
 export function resetRemoteClaudeProbeCache(): void {
@@ -171,15 +171,15 @@ export async function probeRemoteClaude(
   secret?: string,
   deps?: { exec?: typeof execRemoteCommand }
 ): Promise<boolean> {
-  const cached = probeCache.get(config.id);
-  if (cached === true) return true;
+  const cached = probeCache.has(config.id);
+  if (cached) return true;
 
   const exec = deps?.exec ?? execRemoteCommand;
   const res = await exec(config, 'command -v claude >/dev/null 2>&1', secret);
   const available = res.exitStatus === 0;
   // A transport failure throws above and is deliberately NOT cached — it says nothing about
   // whether the CLI is installed.
-  if (available) probeCache.set(config.id, true);
+  if (available) probeCache.add(config.id);
   return available;
 }
 
