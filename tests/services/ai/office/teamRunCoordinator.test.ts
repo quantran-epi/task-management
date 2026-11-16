@@ -234,6 +234,8 @@ interface HarnessOptions {
   settlePollDeadlineMs?: number;
   /** UAT-41 follow-up seam: shorten the MCP discovery bound so a hang is reachable fast. */
   mcpDiscoveryTimeoutMs?: number;
+  /** Phase 43 D-04: the provider window the coordinator forwards into every turn request. */
+  contextWindowTokens?: number;
 }
 
 interface Harness {
@@ -356,6 +358,9 @@ async function createHarness(options: HarnessOptions): Promise<Harness> {
       : {}),
     ...(options.mcpDiscoveryTimeoutMs !== undefined
       ? { mcpDiscoveryTimeoutMs: options.mcpDiscoveryTimeoutMs }
+      : {}),
+    ...(options.contextWindowTokens !== undefined
+      ? { contextWindowTokens: options.contextWindowTokens }
       : {}),
     // A fresh snapshot object per turn, so a later mutation of `roster` cannot reach a turn.
     ...(options.useSeam
@@ -7071,6 +7076,70 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
         expect(Date.now() - started).toBeLessThan(2_000);
       } finally {
         mcpProbe.hang = false;
+      }
+    });
+  });
+
+  // Phase 43 D-04: `runAiOrchestratorLoop` computes `tokenBudget = 0` without the window, and
+  // the in-loop compactor only runs when `tokenBudget > 0`. A team turn that never set the field
+  // therefore overflowed the provider context and lost every tool result it had collected.
+  describe('context window reaches the loop (Phase 43 D-04)', () => {
+    const recordLoop = (seen: AiOrchestratorLoopOptions[]) =>
+      ((options: AiOrchestratorLoopOptions) => {
+        seen.push(options);
+        return Promise.resolve(loopResult('Xong.'));
+      }) as unknown as ChatTurnRuntimeDeps['runLoop'];
+
+    it('forwards the configured window into both the employee and the lead turn', async () => {
+      const seen: AiOrchestratorLoopOptions[] = [];
+      harness = await createHarness({ contextWindowTokens: 128000, scripts: {} });
+      const { db, team, lead, employees, skill, threadId } = harness;
+      const coordinator = createTeamRunCoordinator({
+        db,
+        team,
+        lead,
+        employees,
+        skills: [skill],
+        threadId,
+        model: LEAD_MODEL,
+        endpoint: 'https://example.invalid/v1',
+        apiKey: 'sk-test',
+        contextWindowTokens: 128000,
+        createRuntimeDeps: () => ({ runLoop: recordLoop(seen) }),
+      });
+
+      await coordinator.send('@[An](agent:' + employees[0]!.id + ') kiểm tra');
+      await coordinator.send('Xin chào');
+
+      const employeeLoop = seen.find((options) => options.model === EMP_A_MODEL);
+      const leadLoop = seen.find((options) => options.model === LEAD_MODEL);
+      expect(employeeLoop?.contextWindowTokens).toBe(128000);
+      expect(leadLoop?.contextWindowTokens).toBe(128000);
+    });
+
+    it('omits the field entirely when no window is configured', async () => {
+      const seen: AiOrchestratorLoopOptions[] = [];
+      harness = await createHarness({ scripts: {} });
+      const { db, team, lead, employees, skill, threadId } = harness;
+      const coordinator = createTeamRunCoordinator({
+        db,
+        team,
+        lead,
+        employees,
+        skills: [skill],
+        threadId,
+        model: LEAD_MODEL,
+        endpoint: 'https://example.invalid/v1',
+        apiKey: 'sk-test',
+        createRuntimeDeps: () => ({ runLoop: recordLoop(seen) }),
+      });
+
+      await coordinator.send('@[An](agent:' + employees[0]!.id + ') kiểm tra');
+      await coordinator.send('Xin chào');
+
+      expect(seen.length).toBeGreaterThanOrEqual(2);
+      for (const options of seen) {
+        expect('contextWindowTokens' in options).toBe(false);
       }
     });
   });

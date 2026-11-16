@@ -231,6 +231,12 @@ export interface TeamRunCoordinatorOptions {
   model: string;
   endpoint: string;
   apiKey: string;
+  /**
+   * Phase 43 D-04: the provider's context window. Without it `runAiOrchestratorLoop` computes
+   * `tokenBudget = 0` and in-loop compaction never runs, so a read-heavy team turn overflows
+   * and the runtime discards every tool result it collected.
+   */
+  contextWindowTokens?: number | undefined;
   mcpTools?: AiToolDefinition[] | undefined;
   /** Test seam: production omits it and the coordinator uses the default chat-turn deps. */
   createRuntimeDeps?: ((agentId: string) => Partial<ChatTurnRuntimeDeps>) | undefined;
@@ -1971,6 +1977,10 @@ export function createTeamRunCoordinator(
         apiKey: options.apiKey,
         model: employee.model || options.model,
         analysisMode: true,
+        // D-04: without the window the loop's tokenBudget is 0 and compaction never runs.
+        ...(typeof options.contextWindowTokens === 'number' && options.contextWindowTokens > 0
+          ? { contextWindowTokens: options.contextWindowTokens }
+          : {}),
         autoApprove: false,
         tools: await employeeTools(),
         mutationPolicy: 'read-only',
@@ -2193,6 +2203,11 @@ export function createTeamRunCoordinator(
         apiKey: options.apiKey,
         model: lead.model || options.model,
         analysisMode: true,
+        // D-04: same conditional spread as the employee path — `exactOptionalPropertyTypes`
+        // rejects an explicit `undefined` here.
+        ...(typeof options.contextWindowTokens === 'number' && options.contextWindowTokens > 0
+          ? { contextWindowTokens: options.contextWindowTokens }
+          : {}),
         autoApprove: liveTeam.autoApproveMutations === true,
         tools: await leadTools(),
         mutationPolicy: 'approve',
