@@ -417,11 +417,14 @@ export async function grepRemoteRef(
   // path can never impersonate.
   const refPrefix = `${ref}:`;
   const chunks = res.stdout === '' ? [] : res.stdout.split('\n');
-  // A complete stream ends with a newline. Anything else means the byte cap cut the last
-  // record mid-content, and a partial body is worse than no hit: drop it.
+  // Every complete record ends with a newline, so a non-empty last chunk is a record the byte
+  // cap cut mid-content. A partial body is worse than no hit: drop it.
   if (chunks.length > 0) {
     if (chunks[chunks.length - 1] === '') chunks.pop();
-    else truncated = true;
+    else {
+      chunks.pop();
+      truncated = true;
+    }
   }
   let pending = '';
   for (const chunk of chunks) {
