@@ -10,6 +10,7 @@
 - Phase 40: Explorer UX, CRUD correctness, observed walkthrough (v1.4)
 - Phase 41: AI Office team docs zones — per-team folder tree, agent-scoped doc write (v1.4, INSERTED)
 - Phase 42: Read-only git inspection for the reviewer agent (v1.4, INSERTED)
+- Phase 43: Repo reading that scales — grep, paged read, remote headless exploration (v1.4, INSERTED)
 
 ## Previous Milestone: v1.3
 
@@ -998,6 +999,39 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 42-03-PLAN.md — Injection, refusal, wrap and Oracle-gate proofs (test-only)
+
+### Phase 43: Repo reading that scales — grep, paged read, remote headless exploration
+
+**Goal:** A team agent reads a remote repository as cheaply and as completely as Claude Code reads a local one: it can locate code by pattern before reading it, it can page through a file instead of swallowing it whole, and it can hand a broad "understand this subsystem" question to a headless Claude Code running on the remote host and get back a bounded, structured report instead of raw file dumps in its own context.
+**Requirements**: AIO-READ-07, AIO-READ-08, AIO-READ-09, AIO-READ-10
+**Depends on:** Phase 42
+**Success Criteria** (what must be TRUE):
+
+1. `git_read` exposes a `grep` action that searches a ref's tracked content by pattern and returns `path:line:text` hits with a bounded hit count, so an agent can locate a symbol without reading any file in full.
+2. `git_read`'s `read_file` returns line-numbered, paged content with `totalLines`, `hasMore`, and the next `offset` to call — the same contract the local `read_file` tool already honours — and a file larger than one page no longer enters the turn's context whole.
+3. A new team tool runs Claude Code headless on the remote host over SSH, with an explicit read-only tool allowlist and a bounded turn count, and returns a structured report (files read, findings with `file:line` citations, unverified items) capped at a fixed size; when the remote has no `claude` binary the tool refuses with a truthful code instead of failing mid-turn.
+4. A team turn passes its provider context window into the runtime, so in-loop compaction can run; a turn that would previously have died on context overflow now compacts and completes, and a test asserts the window reaches `runAiOrchestratorLoop`.
+
+**Scope note:** This phase exists because Phase 42 shipped `git_read` reading entire files with no pagination and no search, and because team turns never passed `contextWindowTokens`, which disabled in-loop compaction entirely. Both are proven in the source, not inferred.
+
+**Research flag:** standard patterns — skip research-phase.
+
+**Plans:** 4 plans in 3 waves
+
+Plans:
+
+**Wave 1** *(no dependency)*
+
+- [ ] 43-01-PLAN.md — `grepRemoteRef` + `readRemoteFilePage` primitives, proven against a real local git repo
+
+**Wave 2** *(depends on 43-01)*
+
+- [ ] 43-02-PLAN.md — `git_read` gains a `grep` action and a paged `read_file`; reviewer prompt states search-before-read
+
+**Wave 3** *(43-03 and 43-04 both depend on 43-01; they touch disjoint files)*
+
+- [ ] 43-03-PLAN.md — team turns pass `contextWindowTokens` so in-loop compaction runs
+- [ ] 43-04-PLAN.md — `explore_repo` team tool: Claude Code headless on the remote, bounded structured report
 
 ---
 

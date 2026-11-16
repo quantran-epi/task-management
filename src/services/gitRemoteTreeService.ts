@@ -273,14 +273,18 @@ export async function getRemoteWorkingFileContent(
  * Appending '/' preserves trailing newlines through shell command substitution; remove
  * that sentinel and realpath's output newline before checking a literal directory boundary.
  * Missing/failed realpath must stop before cat. Exit 77 is policy refusal, not file content.
+ *
+ * No `-e`: that flag is GNU-only and BSD/macOS rejects it ("illegal option -- e"), which made
+ * every read fail closed on a macOS remote. Plain `realpath --` is POSIX-portable and already
+ * strict — it refuses a path whose components do not exist on both implementations.
  * ponytail: assumes a stable remote filesystem; hostile concurrent swaps need native openat.
  */
 function workingCopyCatSnippet(repoPath: string, cleanPath: string): string {
   const targetFile = `${repoPath.replace(/\/+$/, '')}/${cleanPath}`;
   return (
-    `root=$(realpath -e -- ${escapeShellArg(repoPath)} && printf /) || exit 1; ` +
+    `root=$(realpath -- ${escapeShellArg(repoPath)} && printf /) || exit 1; ` +
     `root=\${root%?}; root=\${root%?}; ` +
-    `target=$(realpath -e -- ${escapeShellArg(targetFile)} && printf /) || exit 1; ` +
+    `target=$(realpath -- ${escapeShellArg(targetFile)} && printf /) || exit 1; ` +
     `target=\${target%?}; target=\${target%?}; ` +
     `case "$target" in "\${root%/}/"*) cat -- "$target" ;; *) exit 77 ;; esac`
   );
