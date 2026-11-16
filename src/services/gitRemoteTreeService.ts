@@ -293,17 +293,34 @@ function workingCopyCatSnippet(repoPath: string, cleanPath: string): string {
 const PAGE_TOTAL_PREFIX = '###TOTAL ';
 
 /**
+ * A page is bounded by LINES, but a minified file can put half a megabyte on one line, so the
+ * byte size is bounded too. Without this a single `read_file` call could still put more into the
+ * turn's context than the whole-file read it replaced.
+ */
+const PAGE_BYTE_CAP = 262144;
+/** One line longer than this is cut; a minified bundle is one line of megabytes. */
+const PAGE_LINE_MAX_CHARS = 4000;
+
+/**
  * One remote pass yields the page AND the line total. The source's exit status is reported
  * out-of-band on stderr (`###EXIT <n>`) because the pipeline's own status is awk's.
  *
  * A subshell, not `{ ...; }`: dash does not run an EXIT trap for the last command of a brace
  * group inside a pipeline, and the working-copy snippet's `exit 77` must still be reported.
+ *
+ * The byte budget is enforced in awk, not by `head -c`: cutting the stream at the shell would
+ * also cut the `###TOTAL` line, and the caller needs the total to know whether to page on.
+ * `hasMore` then follows from the line numbers alone — a page that stopped early emitted fewer
+ * lines than the file has, so the caller pages on without a separate flag.
  */
 function pageCommand(source: string, offset: number, limit: number): string {
   return (
     `( trap 'printf "###EXIT %s\\n" "$?" >&2' EXIT; ${source} ) | ` +
-    `awk -v s=${offset} -v e=${offset + limit - 1} ` +
-    `'NR>=s&&NR<=e{print NR": "$0} END{print "${PAGE_TOTAL_PREFIX}"NR}'`
+    `awk -v s=${offset} -v e=${offset + limit - 1} -v cap=${PAGE_BYTE_CAP} ` +
+    `-v maxc=${PAGE_LINE_MAX_CHARS} ` +
+    `'NR>=s&&NR<=e{ l=$0; if (length(l)>maxc) l=substr(l,1,maxc) " ..."; ` +
+    `n=length(l)+12; if (used+n>cap) next; used+=n; print NR": " l } ` +
+    `END{ print "${PAGE_TOTAL_PREFIX}"NR }'`
   );
 }
 
@@ -329,6 +346,7 @@ function parsePage(
     totalLines = parseInt(last.slice(PAGE_TOTAL_PREFIX.length), 10) || 0;
     lines.pop();
   }
+  // The byte budget stopped the page early: the caller must page on, not assume completeness.
   return {
     filePath,
     offset,

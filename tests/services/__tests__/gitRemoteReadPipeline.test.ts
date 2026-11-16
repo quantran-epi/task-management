@@ -158,6 +158,19 @@ describe('remote read pipelines against a real git repository', () => {
     expect(page.isBinary).toBe(false);
   });
 
+  it('bounds a page by bytes, not just by line count', async () => {
+    // A minified bundle is one line of megabytes: 200 "lines" would still be the whole file.
+    writeFileSync(join(repo, 'min.js'), 'x'.repeat(500_000) + '\n');
+    git('add', '-A');
+    git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'min');
+
+    const page = await readRemoteFilePage(mockConfig, repo, 'HEAD', 'min.js', 1, 200);
+
+    expect(page.linesRead).toBe(1);
+    expect(page.lines[0]!.length).toBeLessThan(5000);
+    expect(page.hasMore).toBe(false);
+  });
+
   it('keeps blank lines so a page of blank lines still advances', async () => {
     writeFileSync(join(repo, 'blank.txt'), '\n\n\n\n\n');
     git('add', '-A');
