@@ -1016,7 +1016,7 @@ Plans:
 
 **Research flag:** standard patterns — skip research-phase.
 
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 
@@ -1031,7 +1031,7 @@ Plans:
 **Wave 3** *(43-03 and 43-04 both depend on 43-01; they touch disjoint files)*
 
 - [x] 43-03-PLAN.md — team turns pass `contextWindowTokens` so in-loop compaction runs
-- [ ] 43-04-PLAN.md — `explore_repo` team tool: Claude Code headless on the remote, bounded structured report
+- [x] 43-04-PLAN.md — `explore_repo` team tool: Claude Code headless on the remote, bounded structured report
 
 ---
 
