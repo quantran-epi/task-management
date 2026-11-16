@@ -20,18 +20,16 @@ const mockConfig: SshConfig = {
   updatedAt: '',
 };
 
-// BSD realpath (macOS) has no `-e`; GNU coreutils and the Linux remote host do. The shim keeps
-// the harness portable so the production command string is exercised unchanged.
-const REALPATH_SHIM =
-  `realpath() { while [ "$1" = "-e" ] || [ "$1" = "--" ]; do shift; done; ` +
-  `[ -e "$1" ] || return 1; command readlink -f -- "$1"; }; `;
+// No `realpath` shim: the production snippet uses plain POSIX `realpath --`, so the harness
+// runs the real binary. A shim here would hide exactly the portability defect this suite is
+// meant to catch (commit 49a0dbd4).
 
 describe('remote read pipelines against a real git repository', () => {
   let sandbox: string;
   let repo: string;
 
   function shell(command: string) {
-    const result = spawnSync('/bin/sh', ['-c', REALPATH_SHIM + command], {
+    const result = spawnSync('/bin/sh', ['-c', command], {
       cwd: sandbox,
       encoding: 'utf8',
       env: { ...process.env, LC_ALL: 'C' },
