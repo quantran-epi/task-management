@@ -291,6 +291,47 @@ describe('runRemoteExplore (43-04 D-03)', () => {
     expect(outcome.truncated).toBe(true);
   });
 
+  it('cancels the remote process and resolves when the turn is aborted', async () => {
+    const cancel = vi.fn(async () => {});
+    const stream = vi.fn(
+      async (
+        _config: SshConfig,
+        _command: string,
+        _sessionId: string,
+        onData: (e: SshStreamEvent) => void
+      ) => {
+        onData({ sessionId: 's', stream: 'stdout', line: 'một phần' });
+        return cancel;
+      }
+    );
+    const controller = new AbortController();
+
+    const pending = runRemoteExplore(CONFIG, undefined, request(), {
+      stream,
+      signal: controller.signal,
+    });
+    // Let the stream handle resolve before aborting.
+    await Promise.resolve();
+    controller.abort();
+    const outcome = await pending;
+    expect(outcome.detail).toBe('aborted');
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('never opens a stream when the turn is already aborted', async () => {
+    const stream = vi.fn();
+    const controller = new AbortController();
+    controller.abort();
+
+    const outcome = await runRemoteExplore(CONFIG, undefined, request(), {
+      stream,
+      signal: controller.signal,
+    });
+
+    expect(outcome.detail).toBe('aborted');
+    expect(stream).not.toHaveBeenCalled();
+  });
+
   it('turns a non-zero exit with no stdout into an error carrying stderr', async () => {
     const stream = vi.fn(
       async (

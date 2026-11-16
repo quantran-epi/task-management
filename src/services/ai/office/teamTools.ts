@@ -81,6 +81,11 @@ export interface TeamToolContext {
   teamFolderId?: string | undefined;
   /** Phase 41 D-02b: the caller's display name, used as the title prefix. */
   agentName?: string | undefined;
+  /**
+   * The turn's abort signal. `explore_repo` runs for minutes on the remote, so a cancelled turn
+   * must be able to kill it instead of leaving it reading until the wall clock fires.
+   */
+  signal?: AbortSignal | undefined;
 }
 
 export type TeamToolRefusalCode =
@@ -1475,7 +1480,7 @@ async function exploreRepo(args: Record<string, any>, ctx: TeamToolContext): Pro
       question,
       model,
       maxTurns,
-    });
+    }, ctx.signal ? { signal: ctx.signal } : {});
 
     return JSON.stringify({
       action: 'explore_repo',

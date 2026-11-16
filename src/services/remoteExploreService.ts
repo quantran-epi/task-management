@@ -194,6 +194,11 @@ export async function probeRemoteClaude(
 export interface RunRemoteExploreDeps {
   stream?: typeof execRemoteCommandStream;
   now?: () => number;
+  /**
+   * The turn's abort signal. A cancelled turn must not leave a remote process reading for the
+   * full wall clock, so abort cancels the stream exactly like the timeout does.
+   */
+  signal?: AbortSignal | undefined;
 }
 
 /**
@@ -214,17 +219,33 @@ export async function runRemoteExplore(
   let stderr = '';
   let overflowed = false;
   let settled = false;
-  let timedOut = false;
+  /** Set when the settle was a cancel (timeout or abort) with no stream handle yet. */
+  let cancelOnArrival = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let cancel: (() => Promise<void>) | undefined;
+  const signal = deps.signal;
 
   return new Promise<ExploreOutcome>((resolve) => {
     const finish = (outcome: ExploreOutcome) => {
       if (settled) return;
       settled = true;
       if (timer !== undefined) clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
       resolve(overflowed ? { ...outcome, truncated: true } : outcome);
     };
+
+    const onAbort = () => {
+      cancelOnArrival = true;
+      void cancel?.().catch(() => undefined);
+      finish({ report: '', truncated: false, outcome: 'error', detail: 'aborted' });
+    };
+
+    if (signal?.aborted) {
+      // Already cancelled before the stream opened: never start the remote process.
+      finish({ report: '', truncated: false, outcome: 'error', detail: 'aborted' });
+      return;
+    }
+    signal?.addEventListener('abort', onAbort, { once: true });
 
     const onData = (event: { stream: 'stdout' | 'stderr'; line: string }) => {
       if (settled) return;
@@ -257,7 +278,7 @@ export async function runRemoteExplore(
 
     timer = setTimeout(() => {
       // The remote is wedged: kill it, keep whatever arrived, and never hang the turn.
-      timedOut = true;
+      cancelOnArrival = true;
       void cancel?.().catch(() => undefined);
       // Same cap as the parsed path: a wedged remote that streamed 48k must not hand the
       // calling model 4× the report budget just because it never printed valid JSON.
@@ -275,9 +296,9 @@ export async function runRemoteExplore(
       try {
         const handle = await stream(config, command, sessionId, onData, onExit, secret);
         cancel = handle;
-        // The wall clock can fire while the SSH connect is still in flight; the process it
-        // would have killed is now live and nothing else would ever cancel it.
-        if (timedOut) await handle().catch(() => undefined);
+        // The wall clock (or an abort) can fire while the SSH connect is still in flight; the
+        // process it would have killed is now live and nothing else would ever cancel it.
+        if (cancelOnArrival) await handle().catch(() => undefined);
       } catch (err: any) {
         finish(
           capReport({

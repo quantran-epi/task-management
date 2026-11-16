@@ -1132,7 +1132,7 @@ export function createTeamRunCoordinator(
     return finalized;
   }
 
-  function toolContext(agentId: string): TeamToolContext {
+  function toolContext(agentId: string, signal?: AbortSignal): TeamToolContext {
     const employee = roster.employees.find((row) => row.id === agentId);
     const skillId = employee?.skillId;
     // D-18: the pin comes from the attempt, never from `roster.skills` — the roster carries
@@ -1158,6 +1158,7 @@ export function createTeamRunCoordinator(
       ...(agentName ? { agentName } : {}),
       ...(folderId ? { folderId } : {}),
       ...(liveTeam.docsFolderId ? { teamFolderId: liveTeam.docsFolderId } : {}),
+      ...(signal ? { signal } : {}),
     };
   }
 
@@ -1263,7 +1264,7 @@ export function createTeamRunCoordinator(
       signal?: AbortSignal
     ): Promise<string> => {
       const normalized = normalizeToolName(name);
-      const ctx = toolContext(agentId);
+      const ctx = toolContext(agentId, signal);
 
       if (normalized === 'delegate_batch') {
         if (!roster.lead || agentId !== roster.lead.id) return EMPLOYEE_DELEGATE_REFUSAL;
