@@ -1,13 +1,15 @@
 ---
 phase: 43-repo-reading-that-scales-grep-paged-read-and-remote-headless
 verified: 2026-11-17T00:05:00Z
-status: gaps_found
-score: 3/4 success criteria verified
+status: passed
+score: 4/4 success criteria verified
 overrides_applied: 0
 re_verification:
-  previous_status: null
-  previous_score: null
-  gaps_closed: []
+  previous_status: gaps_found
+  previous_score: 3/4 success criteria verified
+  gaps_closed:
+    - "G1 totalLines understated under the page byte cap"
+    - "G2 read_file echoed the raw path instead of the confined one"
   gaps_remaining: []
   regressions: []
 gaps:
@@ -181,3 +183,25 @@ No later phase exists in the milestone, so nothing is deferred.
 
 _Verified: 2026-11-17T00:05:00Z_
 _Verifier: Claude (gsd-verifier)_
+
+---
+
+## Gap closure (2026-11-17, commit `327f88b0`)
+
+Both gaps were real and are fixed.
+
+**G1 — `totalLines` understated under the byte cap.** WR-02's fix used `exit`, which stops awk
+READING as well as emitting, so `END` printed the cut line as `###TOTAL`. The loop now stops
+emitting with a `done` flag and `next`, so `NR` at `END` is still the file's real line count while
+the emitted set stays a contiguous prefix. Verified against real git/awk with the verifier's own
+reproduction: the 250-line / 2000-byte-line file now returns `###TOTAL 250` while the page still
+stops at line 130. The existing byte-cap test now asserts `totalLines`.
+
+**G2 — `read_file` echoed the raw path.** `readRemoteFilePage` computed `cleanPath` and then passed
+the raw `filePath` into `readPageFromSource` on both branches, so `page.filePath` was the model's
+string. It now carries `cleanPath` through both sources. A regression test reads
+`./src/../src/a.ts` and asserts `page.filePath === 'src/a.ts'`.
+
+**Final state:** `tsc --noEmit` clean; 250/250 phase-43 tests pass; 181/181 coordinator tests pass.
+The two human checks recorded above still stand: `explore_repo` against a real SSH remote, and
+paging a large file to the end on a real remote.
