@@ -298,8 +298,13 @@ const PAGE_TOTAL_PREFIX = '###TOTAL ';
  * turn's context than the whole-file read it replaced.
  */
 const PAGE_BYTE_CAP = 262144;
-/** One line longer than this is cut; a minified bundle is one line of megabytes. */
-const PAGE_LINE_MAX_CHARS = 4000;
+/**
+ * One line longer than this is cut. BYTES, not characters: the awk in use (`awk version
+ * 20200816`, the macOS default) has `length()` in bytes under every locale tested, so a
+ * Vietnamese line is cut at ~1333 characters. The name says bytes so the next reader does not
+ * assume otherwise; `parsePage` strips the partial character the cut can leave behind.
+ */
+const PAGE_LINE_MAX_BYTES = 4000;
 
 /**
  * One remote pass yields the page AND the line total. The source's exit status is reported
@@ -310,16 +315,18 @@ const PAGE_LINE_MAX_CHARS = 4000;
  *
  * The byte budget is enforced in awk, not by `head -c`: cutting the stream at the shell would
  * also cut the `###TOTAL` line, and the caller needs the total to know whether to page on.
- * `hasMore` then follows from the line numbers alone — a page that stopped early emitted fewer
- * lines than the file has, so the caller pages on without a separate flag.
+ * `exit`, never `next`: skipping one oversized line and emitting the ones after it leaves a page
+ * with a hole, and `nextOffset` (which counts emitted lines) then never requests the skipped
+ * line again. `exit` still runs `END`, so `###TOTAL` survives and the page stays a contiguous
+ * prefix — the caller pages on from the line after the last one emitted.
  */
 function pageCommand(source: string, offset: number, limit: number): string {
   return (
     `( trap 'printf "###EXIT %s\\n" "$?" >&2' EXIT; ${source} ) | ` +
     `awk -v s=${offset} -v e=${offset + limit - 1} -v cap=${PAGE_BYTE_CAP} ` +
-    `-v maxc=${PAGE_LINE_MAX_CHARS} ` +
+    `-v maxc=${PAGE_LINE_MAX_BYTES} ` +
     `'NR>=s&&NR<=e{ l=$0; if (length(l)>maxc) l=substr(l,1,maxc) " ..."; ` +
-    `n=length(l)+12; if (used+n>cap) next; used+=n; print NR": " l } ` +
+    `n=length(l)+12; if (used+n>cap) exit; used+=n; print NR": " l } ` +
     `END{ print "${PAGE_TOTAL_PREFIX}"NR }'`
   );
 }
@@ -346,7 +353,6 @@ function parsePage(
     totalLines = parseInt(last.slice(PAGE_TOTAL_PREFIX.length), 10) || 0;
     lines.pop();
   }
-  // The byte budget stopped the page early: the caller must page on, not assume completeness.
   return {
     filePath,
     offset,
@@ -355,7 +361,9 @@ function parsePage(
     totalLines,
     hasMore: offset + lines.length - 1 < totalLines,
     isBinary: false,
-    lines,
+    // The awk cut is a BYTE offset, so it can land inside a multi-byte character and leave a
+    // lone replacement char before the ellipsis. Drop it: the model must not receive mojibake.
+    lines: lines.map((line) => line.replace(/�+ \.\.\.$/, ' ...')),
   };
 }
 
@@ -441,14 +449,24 @@ async function readPageFromSource(
   }
 
   const res = await execRemoteCommand(config, pageCommand(source, offset, limit), secret);
+  // The marker is the only evidence the remote command completed. Without it `###TOTAL` was
+  // never printed either, so `totalLines` would be 0 and `hasMore` false — a short page
+  // presented as the whole file. Fail closed instead.
   const marker = /###EXIT (\d+)\n?$/.exec(res.stderr);
-  const sourceExit = marker ? Number(marker[1]) : 0;
+  if (!marker) {
+    throw new Error(
+      res.stderr.trim() || 'Không nhận được mã thoát từ lệnh remote (kết nối có thể đã đứt).'
+    );
+  }
+  const sourceExit = Number(marker[1]);
   const stderr = res.stderr.replace(/###EXIT \d+\n?$/, '').trim();
 
   if (sourceExit === 77) {
     throw new PathOutsideRepoError(`Đường dẫn symlink ngoài repo, từ chối đọc: ${filePath}`);
   }
-  if (sourceExit !== 0) {
+  // 141 is SIGPIPE: awk stopped reading at the byte budget, which is the intended early stop,
+  // not a failure. The page it emitted is still a valid contiguous prefix.
+  if (sourceExit !== 0 && sourceExit !== 141) {
     // The message is what `isNotInRef` matches on, so it must survive verbatim.
     throw new Error(stderr || `Lệnh git thất bại với exit code ${sourceExit}`);
   }

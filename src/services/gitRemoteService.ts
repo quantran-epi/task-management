@@ -395,11 +395,25 @@ export async function grepRemoteRef(
   ];
   if (options.path) parts.push('--', escapeShellArg(options.path));
 
-  const command = `{ ${parts.join(' ')}; printf '###EXIT %s\\n' "$?" >&2; } | head -c ${GREP_BYTE_CAP}`;
+  // `head -c` takes ONE byte past the budget. That is what makes truncation decidable: a
+  // payload of exactly `cap + 1` bytes proves the stream was longer, whether the cut landed on
+  // a record boundary or mid-record. The earlier `>= cap` test on `String.length` compared
+  // UTF-16 units against a byte constant, so a multibyte page measured under the cap and the
+  // dropped hits were reported as a complete result.
+  const command =
+    `{ ${parts.join(' ')}; printf '###EXIT %s\\n' "$?" >&2; } | head -c ${GREP_BYTE_CAP + 1}`;
   const res = await execRemoteCommand(config, command, secret);
 
+  // The marker is the only evidence the remote command ran to completion, so its absence is a
+  // failure, not exit 0: a dropped SSH channel left a partial stream that would otherwise be
+  // presented as a complete result.
   const marker = /###EXIT (\d+)\n?$/.exec(res.stderr);
-  const gitExit = marker ? Number(marker[1]) : 0;
+  if (!marker) {
+    throw new Error(
+      res.stderr.trim() || 'Không nhận được mã thoát từ lệnh remote (kết nối có thể đã đứt).'
+    );
+  }
+  const gitExit = Number(marker[1]);
   const stderr = res.stderr.replace(/###EXIT \d+\n?$/, '').trim();
 
   // 0 = matches, 1 = no matches, 141 = SIGPIPE because `head -c` closed the pipe at the cap.
@@ -412,7 +426,11 @@ export async function grepRemoteRef(
   }
 
   const hits: RemoteGrepHit[] = [];
-  let truncated = gitExit === 141 || res.stdout.length >= GREP_BYTE_CAP;
+  // Bytes, not UTF-16 units, and the extra byte `head -c` was allowed to take is the proof.
+  // `TextEncoder`, not `Buffer`: this module is bundled for the Tauri renderer, where Node's
+  // Buffer is not available.
+  let truncated =
+    gitExit === 141 || new TextEncoder().encode(res.stdout).length > GREP_BYTE_CAP;
 
   // `-z` NUL-separates the FIELDS of one record; the newline ends the record. So the stream is
   // `<ref>:<path>\0<line>\0<content>\n<ref>:<path>\0<line>\0<content>\n…` — splitting on `\0`

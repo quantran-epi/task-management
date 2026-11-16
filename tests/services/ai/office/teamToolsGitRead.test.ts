@@ -243,7 +243,9 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
       { stdout: '', stderr: '', exitStatus: 1 },
       {
         stdout: `${lines.join('\n')}${lines.length ? '\n' : ''}###TOTAL ${totalLines}\n`,
-        stderr: '',
+        // The pager reports its source's status out-of-band; a missing marker is now a
+        // failure, so every page fixture must carry one.
+        stderr: '###EXIT 0',
         exitStatus: 0,
       }
     );
@@ -293,7 +295,11 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
       // Page 1: binary probe (exit 1 = text), then the pager pass with the `###TOTAL` line.
       outputs: [
         { stdout: '', stderr: '', exitStatus: 1 },
-        { stdout: '1: export const x = 1;\n###TOTAL 1\n', stderr: '', exitStatus: 0 },
+        {
+          stdout: '1: export const x = 1;\n###TOTAL 1\n',
+          stderr: '###EXIT 0',
+          exitStatus: 0,
+        },
       ],
     },
     {
@@ -309,7 +315,13 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
       action: 'grep',
       args: { pattern: 'export' },
       // `-z` NUL-separates the FIELDS of one record; the newline ends the record.
-      outputs: ['main:src/app.ts\u00001\u0000export const x = 1;\n'],
+      outputs: [
+        {
+          stdout: 'main:src/app.ts\u00001\u0000export const x = 1;\n',
+          stderr: '###EXIT 0',
+          exitStatus: 0,
+        },
+      ],
     },
   ];
 
@@ -523,7 +535,7 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
       if (command.includes('###TOTAL')) {
         return {
           stdout: `1: ${exact ? 'EXACT-FILE' : 'OTHER-FILE'}\n###TOTAL 1\n`,
-          stderr: '', exitStatus: 0,
+          stderr: '###EXIT 0', exitStatus: 0,
         };
       }
       return { stdout: exact ? 'EXACT-FILE' : 'OTHER-FILE', stderr: '', exitStatus: 0 };
@@ -667,7 +679,7 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
       { stdout: '', stderr: 'error: pathspec did not match any file(s) known to git', exitStatus: 1 },
       // Working-copy source: its own page-1 probe, then the pager pass.
       { stdout: '', stderr: '', exitStatus: 1 },
-      { stdout: '1: export const untracked = 1;\n###TOTAL 1\n', stderr: '', exitStatus: 0 }
+      { stdout: '1: export const untracked = 1;\n###TOTAL 1\n', stderr: '###EXIT 0', exitStatus: 0 }
     );
 
     const res = JSON.parse(
@@ -734,7 +746,7 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
 
   it('read_file on the last page omits nextOffset', async () => {
     // Page 1 probes for binary content; a later page does not, so this is one remote call.
-    queue({ stdout: '9: nine\n10: ten\n###TOTAL 10\n', stderr: '', exitStatus: 0 });
+    queue({ stdout: '9: nine\n10: ten\n###TOTAL 10\n', stderr: '###EXIT 0', exitStatus: 0 });
 
     const res = JSON.parse(
       await executeTeamTool(

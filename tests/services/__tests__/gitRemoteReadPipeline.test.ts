@@ -130,6 +130,55 @@ describe('remote read pipelines against a real git repository', () => {
     ).rejects.toBeInstanceOf(InvalidGrepPatternError);
   });
 
+  it('reports truncation for a multibyte stream cut at the byte cap', async () => {
+    // The cap is BYTES; `String.length` is UTF-16 units, so a Vietnamese page measures ~152k
+    // chars for 262144 bytes and the old `>= cap` test never fired.
+    const line = 'đường_dẫn_tiếng_việt_'.repeat(20);
+    for (let n = 0; n < 4000; n++) writeFileSync(join(repo, `u${n}.txt`), `${line}\n`);
+    git('add', '-A');
+    git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'multi');
+
+    const { hits, truncated } = await grepRemoteRef(mockConfig, repo, 'HEAD', {
+      pattern: 'đường',
+      limit: 200,
+    });
+
+    expect(truncated).toBe(true);
+    expect(hits.length).toBeGreaterThan(0);
+  });
+
+  it('reports truncation when the byte cap lands exactly on a record boundary', async () => {
+    // 133 records of exactly 2048 bytes: `head -c` cuts cleanly after 128, nothing is dropped
+    // mid-record, so only an explicit signal can say the result is incomplete.
+    for (let n = 0; n < 133; n++) {
+      writeFileSync(join(repo, `r${String(n).padStart(3, '0')}.txt`), `${'x'.repeat(2040)}NEEDLE\n`);
+    }
+    git('add', '-A');
+    git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'boundary');
+
+    const { hits, truncated } = await grepRemoteRef(mockConfig, repo, 'HEAD', {
+      pattern: 'NEEDLE',
+      limit: 200,
+    });
+
+    expect(hits.length).toBeLessThan(133);
+    expect(truncated).toBe(true);
+  });
+
+  it('fails closed when the remote never reports an exit status', async () => {
+    // A dropped SSH channel leaves a partial stream. Defaulting to exit 0 would present it as
+    // a complete result.
+    vi.mocked(sshService.execRemoteCommand).mockResolvedValueOnce({
+      stdout: 'HEAD:a.txt\u00001\u0000hi\n',
+      stderr: '',
+      exitStatus: 0,
+    });
+
+    await expect(
+      grepRemoteRef(mockConfig, repo, 'HEAD', { pattern: 'hi' })
+    ).rejects.toThrow(/mã thoát/);
+  });
+
   it('restricts the search to a path', async () => {
     const { hits } = await grepRemoteRef(mockConfig, repo, 'HEAD', {
       pattern: 'NEEDLE',
@@ -169,6 +218,57 @@ describe('remote read pipelines against a real git repository', () => {
     expect(page.linesRead).toBe(1);
     expect(page.lines[0]!.length).toBeLessThan(5000);
     expect(page.hasMore).toBe(false);
+  });
+
+  it('stops the page at the byte cap instead of skipping a line', async () => {
+    // A skipped line is unreachable forever: nextOffset counts emitted lines, so the page must
+    // stay a contiguous prefix.
+    const lines: string[] = [];
+    // Every line is large enough that 250 of them exceed the 256 KB page budget.
+    for (let n = 1; n <= 250; n++) lines.push(`${n}:`.padEnd(2000, 'Z'));
+    writeFileSync(join(repo, 'mixed.txt'), lines.join('\n') + '\n');
+    git('add', '-A');
+    git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'mixed');
+
+    const page = await readRemoteFilePage(mockConfig, repo, 'HEAD', 'mixed.txt', 1, 250);
+
+    const lastNumber = Number(page.lines[page.lines.length - 1]!.split(':')[0]);
+    // A hole would show up as a jump in the numbering.
+    expect(page.lines.map((l) => Number(l.split(':')[0]))).toEqual(
+      Array.from({ length: lastNumber }, (_, i) => i + 1)
+    );
+    expect(page.hasMore).toBe(true);
+  });
+
+  it('fails closed when the pager never reports an exit status', async () => {
+    // Without the marker `###TOTAL` never ran either, so totalLines would be 0 and hasMore
+    // false — a short page labelled as the whole file.
+    vi.mocked(sshService.execRemoteCommand).mockResolvedValueOnce({
+      stdout: '',
+      stderr: '',
+      exitStatus: 1,
+    });
+    vi.mocked(sshService.execRemoteCommand).mockResolvedValueOnce({
+      stdout: '1: alpha\n###TOTAL 3\n',
+      stderr: '',
+      exitStatus: 0,
+    });
+
+    await expect(
+      readRemoteFilePage(mockConfig, repo, 'HEAD', 'src/a.ts', 1, 2)
+    ).rejects.toThrow(/mã thoát/);
+  });
+
+  it('does not hand the model a character cut in half', async () => {
+    // awk's `length`/`substr` are byte-based, so a Vietnamese line is cut mid-character.
+    writeFileSync(join(repo, 'vi.txt'), `${'ế'.repeat(2000)}\n`);
+    git('add', '-A');
+    git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'vi');
+
+    const page = await readRemoteFilePage(mockConfig, repo, 'HEAD', 'vi.txt', 1, 10);
+
+    expect(page.lines[0]).not.toContain('�');
+    expect(page.lines[0]!.endsWith(' ...')).toBe(true);
   });
 
   it('keeps blank lines so a page of blank lines still advances', async () => {
