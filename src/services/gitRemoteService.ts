@@ -6,6 +6,7 @@ import type {
   RemoteFileStat,
   RemoteGitStatus,
   RemoteDiffSummary,
+  RemoteGrepHit,
 } from '../types/gitRemote';
 
 /**
@@ -347,6 +348,87 @@ export async function getFileDiff(
     ['--literal-pathspecs', 'diff', '--no-ext-diff', '--no-textconv', '--end-of-options', rangeArg, '--', escapeShellArg(filePath)],
     secret
   );
+}
+
+export interface GrepRemoteRefOptions {
+  pattern: string;
+  /** Single repo-relative path or directory. Absent = whole tree. */
+  path?: string | undefined;
+  caseSensitive?: boolean | undefined;
+  /** Default 50, clamped 1..200. */
+  limit?: number | undefined;
+  /** Literal string match (`-F`) instead of a basic regex. Default false. */
+  literal?: boolean | undefined;
+}
+
+/** Shell-side byte cap; a broad pattern must not stream megabytes into the turn. */
+const GREP_BYTE_CAP = 262144;
+
+/**
+ * `git grep` over a ref. Not `runGitCommand`: git grep exits **1** for "no matches", which is a
+ * valid empty result, and the `head -c` cap makes the pipeline's own exit status useless. So the
+ * git exit code is reported out-of-band on stderr (`###EXIT <n>`) and stdout stays a pure
+ * `path\0line\0content\n` record stream.
+ */
+export async function grepRemoteRef(
+  config: SshConfig,
+  repoPath: string,
+  ref: string,
+  options: GrepRemoteRefOptions,
+  secret?: string
+): Promise<{ hits: RemoteGrepHit[]; truncated: boolean }> {
+  const limit = Math.min(Math.max(1, Math.floor(Number(options.limit)) || 50), 200);
+  const flags = ['-z', '-n', '-I', '--no-color'];
+  if (options.literal) flags.push('-F');
+  flags.push(options.caseSensitive === false ? '-i' : '--no-ignore-case');
+
+  const parts = [
+    `git -C ${escapeShellArg(repoPath)} -c core.fsmonitor=false --no-pager grep ${flags.join(' ')}`,
+    // `-e` so a pattern beginning with `-` is a pattern, never an option.
+    `-e ${escapeShellArg(options.pattern)}`,
+    // `--end-of-options` so a ref beginning with `-` is a revision, never an option.
+    '--end-of-options',
+    escapeShellArg(ref),
+  ];
+  if (options.path) parts.push('--', escapeShellArg(options.path));
+
+  const command = `{ ${parts.join(' ')}; printf '###EXIT %s\\n' "$?" >&2; } | head -c ${GREP_BYTE_CAP}`;
+  const res = await execRemoteCommand(config, command, secret);
+
+  const marker = /###EXIT (\d+)\n?$/.exec(res.stderr);
+  const gitExit = marker ? Number(marker[1]) : 0;
+  const stderr = res.stderr.replace(/###EXIT \d+\n?$/, '').trim();
+
+  // 0 = matches, 1 = no matches, 141 = SIGPIPE because `head -c` closed the pipe at the cap.
+  if (gitExit !== 0 && gitExit !== 1 && gitExit !== 141) {
+    throw new Error(stderr || `git grep thất bại với exit code ${gitExit}`);
+  }
+
+  const tokens = res.stdout === '' ? [] : res.stdout.split('\0');
+  // A well-formed stream ends at a record boundary, so split leaves one trailing ''.
+  if (tokens.length > 0 && tokens[tokens.length - 1] === '') tokens.pop();
+  const hits: RemoteGrepHit[] = [];
+  let truncated = gitExit === 141 || res.stdout.length >= GREP_BYTE_CAP;
+  // Leftover tokens that are not a full path/line/content triple are the cut record.
+  if (tokens.length % 3 !== 0) truncated = true;
+
+  for (let i = 0; i + 2 < tokens.length; i += 3) {
+    const text = tokens[i + 2]!;
+    // The cap can cut mid-record; a record without its terminating newline is incomplete.
+    if (!text.endsWith('\n')) {
+      truncated = true;
+      break;
+    }
+    const line = parseInt(tokens[i + 1]!, 10);
+    if (!Number.isFinite(line)) continue;
+    hits.push({ path: tokens[i]!, line, text: text.slice(0, -1) });
+  }
+
+  if (hits.length > limit) {
+    hits.length = limit;
+    truncated = true;
+  }
+  return { hits, truncated };
 }
 
 export async function checkHeadDrift(

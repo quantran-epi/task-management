@@ -57,6 +57,24 @@ export interface BranchSnapshot {
   approvedAt: string;
 }
 
+export interface RemoteGrepHit {
+  path: string;
+  line: number;
+  text: string;
+}
+
+export interface RemoteFilePage {
+  filePath: string;
+  offset: number;
+  limit: number;
+  linesRead: number;
+  totalLines: number;
+  hasMore: boolean;
+  isBinary: boolean;
+  /** `cat -n` style: `<n>: <text>`, one entry per line. Empty when `isBinary`. */
+  lines: string[];
+}
+
 export interface RemoteGitTreeNode {
   key: string;
   title: string;
