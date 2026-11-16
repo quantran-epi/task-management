@@ -572,7 +572,7 @@ export function EditorArea({ db }: EditorAreaProps) {
   const renderViewContent = (tab: EditorTab) => {
     switch (tab.viewType) {
       case 'tasks':
-        return <TasksView {...dbProp} initialCrId={tab.params?.changeRequestId} />;
+        return <TasksView {...dbProp} initialCrId={tab.params?.changeRequestId} quickAddRequest={tab.params?.quickAddRequest} />;
       case 'notes':
         return <NotesView {...dbProp} initialDocId={tab.params?.doc} hideFolderTree={true} />;
       case 'planner':

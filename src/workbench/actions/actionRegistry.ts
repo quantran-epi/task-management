@@ -1,5 +1,6 @@
 import { useLayoutStore } from '../store/layoutStore';
 import { useSyncExternalStore } from 'react';
+import { message } from 'antd';
 
 export interface ActionDefinition {
   id: string;
@@ -12,8 +13,10 @@ export interface ActionDefinition {
 
 const actionsRegistry = new Map<string, ActionDefinition>();
 const listeners = new Set<() => void>();
+let actionSnapshot: ActionDefinition[] = [];
 
 function notifyListeners() {
+  actionSnapshot = Array.from(actionsRegistry.values());
   for (const listener of listeners) {
     listener();
   }
@@ -37,14 +40,26 @@ export function getAction(id: string): ActionDefinition | undefined {
 }
 
 export function getAllActions(): ActionDefinition[] {
-  return Array.from(actionsRegistry.values());
+  return actionSnapshot;
 }
 
 export function executeAction(id: string): void {
   const action = actionsRegistry.get(id);
-  if (action && typeof action.perform === 'function') {
-    action.perform();
+  if (!action) {
+    message.warning('Action không còn khả dụng.');
+    return;
   }
+  try {
+    action.perform();
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : 'Không thể thực hiện action.');
+  }
+}
+
+function dispatchHandledAction(eventName: string, unavailableMessage: string): void {
+  // Mounted views acknowledge handled commands with preventDefault; no listener means unavailable.
+  const unhandled = window.dispatchEvent(new CustomEvent(eventName, { cancelable: true }));
+  if (unhandled) message.info(unavailableMessage);
 }
 
 export function clearCustomActions(): void {
@@ -119,6 +134,27 @@ export function initStandardActions(): void {
       },
     },
     {
+      id: 'view.toggle-remote-explorer',
+      title: 'Tool Windows: Toggle Remote Git Explorer',
+      category: 'View',
+      shortcut: 'Alt+5',
+      perform: () => useLayoutStore.getState().toggleToolWindow('left', 'remote_explorer'),
+    },
+    {
+      id: 'view.toggle-ai-office',
+      title: 'Tool Windows: Toggle AI Office',
+      category: 'View',
+      shortcut: 'Alt+7',
+      perform: () => useLayoutStore.getState().toggleToolWindow('left', 'ai_office'),
+    },
+    {
+      id: 'view.toggle-ai-staff',
+      title: 'Tool Windows: Toggle AI Staff',
+      category: 'View',
+      shortcut: 'Alt+8',
+      perform: () => useLayoutStore.getState().toggleToolWindow('left', 'ai_staff'),
+    },
+    {
       id: 'view.toggle-terminal',
       title: 'Tool Windows: Toggle Terminal',
       category: 'View',
@@ -133,8 +169,7 @@ export function initStandardActions(): void {
       category: 'Navigate',
       shortcut: 'Double Shift',
       perform: () => {
-        const event = new CustomEvent('taskmate:open-search-everywhere');
-        window.dispatchEvent(event);
+        dispatchHandledAction('taskmate:open-search-everywhere', 'Search Everywhere chưa sẵn sàng.');
       },
     },
     {
@@ -143,8 +178,15 @@ export function initStandardActions(): void {
       category: 'Task',
       shortcut: 'Alt+Insert',
       perform: () => {
-        const event = new CustomEvent('taskmate:create-task');
-        window.dispatchEvent(event);
+        const state = useLayoutStore.getState();
+        const activeTab = state.openTabs.find((tab) => tab.id === state.activeTabId);
+        state.openTab({
+          id: activeTab?.viewType === 'tasks' ? activeTab.id : 'tasks',
+          title: activeTab?.viewType === 'tasks' ? activeTab.title : 'Tasks',
+          viewType: 'tasks',
+          closable: true,
+          params: { quickAddRequest: crypto.randomUUID() },
+        });
       },
     },
     {
@@ -153,8 +195,7 @@ export function initStandardActions(): void {
       category: 'Timer',
       shortcut: 'Alt+T',
       perform: () => {
-        const event = new CustomEvent('taskmate:toggle-timer');
-        window.dispatchEvent(event);
+        dispatchHandledAction('taskmate:toggle-timer', 'Mở Tasks và chọn một tác vụ để bật/tắt bộ đếm giờ.');
       },
     },
     {
@@ -163,7 +204,9 @@ export function initStandardActions(): void {
       category: 'View',
       shortcut: 'Alt+M',
       perform: () => {
-        window.dispatchEvent(new CustomEvent('taskmate:open-mermaid-studio'));
+        useLayoutStore.getState().openTab({
+          id: 'mermaid', title: 'Diagram Studio', viewType: 'mermaid', closable: true,
+        });
       },
     },
     {
@@ -172,7 +215,12 @@ export function initStandardActions(): void {
       category: 'Tab',
       shortcut: 'Alt+R',
       perform: () => {
-        useLayoutStore.getState().reloadTab();
+        const state = useLayoutStore.getState();
+        if (!state.openTabs.some((tab) => tab.id === state.activeTabId)) {
+          message.info('Không có tab hiện tại để tải lại.');
+          return;
+        }
+        state.reloadTab();
       },
     },
     {
@@ -180,7 +228,12 @@ export function initStandardActions(): void {
       title: 'Reload All Tabs',
       category: 'Tab',
       perform: () => {
-        useLayoutStore.getState().reloadAllTabs();
+        const state = useLayoutStore.getState();
+        if (!state.openTabs.length) {
+          message.info('Không có tab nào để tải lại.');
+          return;
+        }
+        state.reloadAllTabs();
       },
     },
   ];

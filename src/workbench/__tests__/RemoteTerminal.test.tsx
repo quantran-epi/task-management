@@ -89,6 +89,7 @@ describe('RemoteTerminalPanel Component', () => {
       expect(sshPtyService.startPtySession).toHaveBeenCalledWith(
         expect.objectContaining({
           config: mockConfig,
+          workingDir: '/var/www/my-project',
           cols: 80,
           rows: 24,
         })
@@ -97,12 +98,17 @@ describe('RemoteTerminalPanel Component', () => {
 
     expect(state.lastTerminalInstance).not.toBeNull();
     expect(state.lastTerminalInstance.open).toHaveBeenCalled();
+    expect(sshPtyService.writePtyInput).not.toHaveBeenCalled();
+    expect(vi.mocked(sshPtyService.subscribePtyData).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(sshPtyService.startPtySession).mock.invocationCallOrder[0]!);
+    expect(vi.mocked(sshPtyService.subscribePtyExit).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(sshPtyService.startPtySession).mock.invocationCallOrder[0]!);
   });
 
   it('renders disconnected message when no ssh config is passed', async () => {
     render(<RemoteTerminalPanel />);
 
-    expect(screen.getByText('Disconnected')).toBeInTheDocument();
+    expect(await screen.findByText('Disconnected')).toBeInTheDocument();
 
     await waitFor(() => {
       expect(state.lastTerminalInstance).not.toBeNull();

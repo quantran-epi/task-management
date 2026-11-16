@@ -144,6 +144,9 @@ export const SystemModal: React.FC<SystemModalProps> = ({
         <Form.Item
           name="type"
           label="Loại hệ thống"
+          getValueProps={(value) => ({
+            value: typeOptions.find((opt) => opt.value === value)?.label ?? value,
+          })}
           rules={[
             { required: true, message: 'Vui lòng chọn loại hệ thống' },
             {
@@ -273,27 +276,24 @@ export const SystemModal: React.FC<SystemModalProps> = ({
               />
             </Form.Item>
 
-            <Form.Item
-              name="remoteRepoPath"
-              label="Đường dẫn Repository trên máy chủ (Absolute path)"
-              rules={[
-                {
-                  validator: async (_, value) => {
-                    if (!value) return Promise.resolve();
-                    const trimmed = String(value).trim();
-                    if (!trimmed.startsWith('/')) {
-                      return Promise.reject(
-                        new Error('Đường dẫn repository trên máy chủ phải là đường dẫn tuyệt đối (bắt đầu bằng /)')
-                      );
-                    }
-                    return Promise.resolve();
-                  },
-                },
-              ]}
-              style={{ marginBottom: 10 }}
-            >
+            <Form.Item label="Đường dẫn Repository trên máy chủ (Absolute path)" htmlFor="remoteRepoPath" style={{ marginBottom: 10 }}>
               <Space.Compact style={{ width: '100%' }}>
-                <Input placeholder="VD: /data/services/smartcard-api" />
+                <Form.Item
+                  name="remoteRepoPath"
+                  noStyle
+                  rules={[
+                    {
+                      validator: async (_, value) => {
+                        if (!value) return;
+                        if (!String(value).trim().startsWith('/')) {
+                          throw new Error('Đường dẫn repository trên máy chủ phải là đường dẫn tuyệt đối (bắt đầu bằng /)');
+                        }
+                      },
+                    },
+                  ]}
+                >
+                  <Input placeholder="VD: /data/services/smartcard-api" />
+                </Form.Item>
                 <Button
                   icon={<FolderOpenOutlined />}
                   title="Duyệt thư mục trên máy chủ SSH"

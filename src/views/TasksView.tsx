@@ -28,9 +28,10 @@ export interface TasksViewProps {
   db?: TaskPlannerDatabase;
   onNavigate?: (route: AppRoute) => void;
   initialCrId?: string | null | undefined;
+  quickAddRequest?: string | undefined;
 }
 
-export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, onNavigate, initialCrId }) => {
+export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, onNavigate, initialCrId, quickAddRequest }) => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -41,6 +42,15 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, onNavigate
   const [selectedCrIdForFeasibility, setSelectedCrIdForFeasibility] = useState<string | undefined>(undefined);
   const searchInputRef = useRef<InputRef>(null);
   const quickAddInputRef = useRef<InputRef>(null);
+
+  React.useEffect(() => {
+    if (!quickAddRequest) return;
+    if (quickAddInputRef.current?.input?.disabled) {
+      message.info('Chọn CR trước khi thêm tác vụ.');
+    } else {
+      quickAddInputRef.current?.focus();
+    }
+  }, [quickAddRequest]);
 
   // Live queries from IndexedDB
   const tasks = useLiveQuery(() => db.tasks.toArray(), [db]) ?? [];
@@ -177,7 +187,10 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, onNavigate
   };
 
   const handleToggleTimer = async () => {
-    if (!activeSelectedTask) return;
+    if (!activeSelectedTask) {
+      message.info('Chọn một tác vụ để bật/tắt bộ đếm giờ.');
+      return;
+    }
     const timer = getTimerForTask(activeSelectedTask.id);
     const isRunning = timer?.status === 'running';
     try {
@@ -192,6 +205,15 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, onNavigate
       message.error('Không thể điều khiển bộ đếm giờ');
     }
   };
+
+  React.useEffect(() => {
+    const handleTimerAction = (event: Event) => {
+      event.preventDefault();
+      void handleToggleTimer();
+    };
+    window.addEventListener('taskmate:toggle-timer', handleTimerAction);
+    return () => window.removeEventListener('taskmate:toggle-timer', handleTimerAction);
+  }, [activeSelectedTask, getTimerForTask, startTimer, pauseTimer]);
 
   const handleEditTask = () => {
     if (!activeSelectedTask) return;

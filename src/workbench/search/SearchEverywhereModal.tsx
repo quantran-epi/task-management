@@ -12,7 +12,7 @@ import {
 import { ApartmentOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import { getAllActions, executeAction } from '../actions/actionRegistry';
+import { useActionRegistry, executeAction } from '../actions/actionRegistry';
 import { useLayoutStore } from '../store/layoutStore';
 import { VirtualizedList } from '../virtual/VirtualizedList';
 
@@ -42,6 +42,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
   const inputRef = useRef<HTMLInputElement>(null);
 
   const openTab = useLayoutStore((s) => s.openTab);
+  const allActions = useActionRegistry();
 
   // Live queries for tasks, CRs, notes
   const tasks = useLiveQuery(
@@ -93,7 +94,6 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
 
     // 1. Actions
     if (activeTab === 'all' || activeTab === 'actions' || isActionQuery) {
-      const allActions = getAllActions();
       for (const act of allActions) {
         if (!searchKeyword || act.title.toLowerCase().includes(searchKeyword) || act.category.toLowerCase().includes(searchKeyword)) {
           items.push({
@@ -103,8 +103,8 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
             subtitle: act.category,
             shortcut: act.shortcut,
             onSelect: () => {
-              executeAction(act.id);
               onClose();
+              executeAction(act.id);
             },
           });
         }
@@ -216,7 +216,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
     }
 
     return items;
-  }, [query, activeTab, tasks, changeRequests, notes, systems, openTab, onClose]);
+  }, [query, activeTab, tasks, changeRequests, notes, systems, openTab, onClose, allActions]);
 
   // Reset selection index when query or tab changes
   useEffect(() => {

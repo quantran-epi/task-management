@@ -57,7 +57,7 @@ const DEFAULT_LEFT_ITEMS: ToolWindowItem[] = [
     id: 'remote_explorer',
     name: 'Remote Git Explorer',
     icon: <JetBrainsRemoteGitIcon size={16} />,
-    shortcut: 'Alt+4',
+    shortcut: 'Alt+5',
   },
 ];
 
@@ -121,7 +121,10 @@ export function WorkbenchLayout({
 
   // Listen to custom events from actionRegistry
   useEffect(() => {
-    const handleOpenSearch = () => setSearchModalOpen(true);
+    const handleOpenSearch = (event: Event) => {
+      event.preventDefault();
+      setSearchModalOpen(true);
+    };
     window.addEventListener('taskmate:open-search-everywhere', handleOpenSearch);
     return () => {
       window.removeEventListener('taskmate:open-search-everywhere', handleOpenSearch);

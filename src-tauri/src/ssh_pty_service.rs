@@ -21,6 +21,18 @@ pub struct SshPtyRegistry {
     pub sessions: Mutex<HashMap<String, SshPtySession>>,
 }
 
+fn shell_start_command(working_dir: Option<&str>) -> Result<Option<String>, String> {
+    let Some(path) = working_dir.filter(|path| !path.is_empty()) else {
+        return Ok(None);
+    };
+    if !path.starts_with('/') || path.contains('\0') {
+        return Err("Đường dẫn terminal phải là đường dẫn tuyệt đối hợp lệ".into());
+    }
+    let quoted = format!("'{}'", path.replace('\'', "'\\''"));
+    // Set cwd before starting the interactive shell; startup scripts can discard early PTY input.
+    Ok(Some(format!("cd -- {} && exec \"${{SHELL:-/bin/sh}}\" -l", quoted)))
+}
+
 #[tauri::command]
 pub fn ssh_pty_start(
     app: AppHandle,
@@ -28,10 +40,11 @@ pub fn ssh_pty_start(
     config: SshConfig,
     secret: Option<String>,
     session_id: String,
-    _working_dir: Option<String>,
+    working_dir: Option<String>,
     cols: u32,
     rows: u32,
 ) -> Result<String, String> {
+    let start_command = shell_start_command(working_dir.as_deref())?;
     // If a session with this session_id already exists, cleanly close it before replacing
     {
         let mut sessions = registry.sessions.lock().map_err(|e| e.to_string())?;
@@ -61,10 +74,13 @@ pub fn ssh_pty_start(
     // Merge stdout and stderr so interactive ANSI prompts and error messages appear in terminal stream
     let _ = channel.handle_extended_data(ssh2::ExtendedData::Merge);
 
-    // Start remote interactive shell
-    channel
-        .shell()
-        .map_err(|e| format!("Lỗi khởi động remote shell: {}", e))?;
+    // SSH exec establishes cwd without racing shell startup or injecting terminal keystrokes.
+    if let Some(command) = start_command {
+        channel.exec(&command)
+    } else {
+        channel.shell()
+    }
+    .map_err(|e| format!("Lỗi khởi động remote shell: {}", e))?;
 
     // Set session to non-blocking mode after shell is established for zero-latency interactive I/O
     session.set_blocking(false);
@@ -254,6 +270,44 @@ pub fn ssh_pty_close(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::shell_start_command;
+
+    #[cfg(unix)]
+    #[test]
+    fn started_shell_uses_literal_working_directory() {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+        let path = std::env::temp_dir().join(format!("taskmate-pty-{}-it's $(false)", std::process::id()));
+        std::fs::create_dir_all(&path).unwrap();
+        let command = shell_start_command(path.to_str()).unwrap().unwrap();
+        let mut child = Command::new("/bin/sh")
+            .args(["-c", &command])
+            .env("SHELL", "/bin/sh")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn().unwrap();
+        child.stdin.take().unwrap().write_all(b"pwd\n").unwrap();
+        let output = child.wait_with_output().unwrap();
+        std::fs::remove_dir(&path).unwrap();
+        assert!(output.status.success());
+        assert_eq!(String::from_utf8(output.stdout).unwrap().trim(), path.to_str().unwrap());
+    }
+
+    #[test]
+    fn working_directory_is_quoted_before_shell_starts() {
+        assert_eq!(shell_start_command(None).unwrap(), None);
+        assert_eq!(shell_start_command(Some("")).unwrap(), None);
+        assert!(shell_start_command(Some("relative/path")).is_err());
+        assert!(shell_start_command(Some("/bad\0path")).is_err());
+        assert_eq!(
+            shell_start_command(Some("/repo/it's $(touch nope)")).unwrap(),
+            Some("cd -- '/repo/it'\\''s $(touch nope)' && exec \"${SHELL:-/bin/sh}\" -l".into())
+        );
+    }
 }
 
 pub fn cleanup_on_exit(registry: &SshPtyRegistry) {

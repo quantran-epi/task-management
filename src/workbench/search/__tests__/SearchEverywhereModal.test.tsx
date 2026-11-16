@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SearchEverywhereModal } from '../SearchEverywhereModal';
 import { useLayoutStore } from '../../store/layoutStore';
@@ -81,6 +81,28 @@ describe('SearchEverywhereModal', () => {
     fireEvent.change(input, { target: { value: '> New Task' } });
 
     expect(screen.getByText('New Task')).toBeDefined();
+  });
+
+  it('updates results when actions register or unregister while search is open', () => {
+    render(<SearchEverywhereModal open={true} onClose={vi.fn()} db={mockDb} />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '> Live Action' } });
+    let unregister!: () => void;
+    act(() => {
+      unregister = registerAction({ id: 'test.live', title: 'Live Action', category: 'Test', perform: vi.fn() });
+    });
+    expect(screen.getByText('Live Action')).toBeDefined();
+    act(() => unregister());
+    expect(screen.queryByText('Live Action')).toBeNull();
+  });
+
+  it('closes search before dispatching actions that can reopen it', () => {
+    const calls: string[] = [];
+    registerAction({ id: 'test.order', title: 'Check Order', category: 'Test', perform: () => { calls.push('perform'); } });
+    render(<SearchEverywhereModal open={true} onClose={() => { calls.push('close'); }} db={mockDb} />);
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: '> Check Order' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(calls).toEqual(['close', 'perform']);
   });
 
   it('executes action on Enter key', () => {

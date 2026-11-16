@@ -53,6 +53,26 @@ export function useGlobalKeymap(): void {
           executeAction('view.toggle-notifications');
           return;
         }
+        if (e.key === '5') {
+          e.preventDefault();
+          executeAction('view.toggle-remote-explorer');
+          return;
+        }
+        if (e.key === '7') {
+          e.preventDefault();
+          executeAction('view.toggle-ai-office');
+          return;
+        }
+        if (e.key === '8') {
+          e.preventDefault();
+          executeAction('view.toggle-ai-staff');
+          return;
+        }
+        if (e.key === 'm' || e.key === 'M') {
+          e.preventDefault();
+          executeAction('view.open-mermaid-studio');
+          return;
+        }
         if (e.key === '6') {
           e.preventDefault();
           executeAction('view.toggle-systems');

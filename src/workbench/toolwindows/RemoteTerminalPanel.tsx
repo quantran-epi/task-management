@@ -30,11 +30,6 @@ export interface RemoteTerminalPanelProps {
   onSessionReady?: ((sessionId: string) => void) | undefined;
 }
 
-/** POSIX single-quote a path so an unexpected character cannot break out of `cd`. */
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
 export function RemoteTerminalPanel({
   sessionId: propSessionId,
   config,
@@ -158,7 +153,20 @@ export function RemoteTerminalPanel({
 
     setConnecting(true);
 
+    // Listen before starting SSH: backend can emit the prompt or startup errors immediately.
+    let unlistenData: (() => void) | undefined;
+    let unlistenExit: (() => void) | undefined;
     try {
+      unlistenData = await subscribePtyData(sessionId, (data) => {
+        term.write(data);
+        bufferLogRef.current = (bufferLogRef.current + data).slice(-50000);
+      });
+      unlistenExit = await subscribePtyExit(sessionId, () => {
+        if (sessionIdRef.current === sessionId) {
+          term.write('\r\n\x1B[33m[SSH PTY]\x1B[0m Connection closed by remote host.\r\n');
+          setConnected(false);
+        }
+      });
       const activeConf = configRef.current;
       if (activeConf) {
         term.write(`\r\n\x1B[34m[SSH PTY]\x1B[0m Connecting to ${activeConf.username}@${activeConf.host}...`);
@@ -166,12 +174,15 @@ export function RemoteTerminalPanel({
         await startPtySession({
           sessionId,
           config: activeConf,
+          ...(repoPathRef.current ? { workingDir: repoPathRef.current } : {}),
           cols: term.cols || 80,
           rows: term.rows || 24,
         });
 
         // Check if session ID was superseded while connecting
         if (sessionIdRef.current !== sessionId) {
+          unlistenData?.();
+          unlistenExit?.();
           closePtySession(sessionId).catch(() => {});
           return;
         }
@@ -179,12 +190,6 @@ export function RemoteTerminalPanel({
         term.write(`\r\n\x1B[32m[SSH PTY]\x1B[0m Connected.\r\n\r\n`);
         setConnected(true);
         onSessionReady?.(sessionId);
-
-        // 1-click Terminal (D-35): land the shell in the subsystem's repo.
-        const initialRepoPath = repoPathRef.current;
-        if (initialRepoPath) {
-          await writePtyInput(sessionId, `cd ${shellQuote(initialRepoPath)}\r`);
-        }
       } else {
         term.write(
           `\r\n\x1B[33m[TaskMate Terminal]\x1B[0m No remote SSH host selected.\r\n` +
@@ -206,26 +211,6 @@ export function RemoteTerminalPanel({
     // Pipe user input to backend PTY stdin
     const onDataSub = term.onData((data) => {
       writePtyInput(sessionId, data);
-    });
-
-    // Subscribe to stdout/stderr stream from backend
-    let unlistenData: (() => void) | undefined;
-    subscribePtyData(sessionId, (data) => {
-      term.write(data);
-      bufferLogRef.current = (bufferLogRef.current + data).slice(-50000); // retain last 50KB for diagram extraction
-    }).then((unsub) => {
-      unlistenData = unsub;
-    });
-
-    // Subscribe to exit event
-    let unlistenExit: (() => void) | undefined;
-    subscribePtyExit(sessionId, () => {
-      if (sessionIdRef.current === sessionId) {
-        term.write('\r\n\x1B[33m[SSH PTY]\x1B[0m Connection closed by remote host.\r\n');
-        setConnected(false);
-      }
-    }).then((unsub) => {
-      unlistenExit = unsub;
     });
 
     // Resize observer with dimension checking
