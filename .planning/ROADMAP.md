@@ -1016,7 +1016,7 @@ Plans:
 
 **Research flag:** standard patterns — skip research-phase.
 
-**Plans:** 4 plans in 3 waves
+**Plans:** 2/4 plans executed
 
 Plans:
 
@@ -1026,7 +1026,7 @@ Plans:
 
 **Wave 2** *(depends on 43-01)*
 
-- [ ] 43-02-PLAN.md — `git_read` gains a `grep` action and a paged `read_file`; reviewer prompt states search-before-read
+- [x] 43-02-PLAN.md — `git_read` gains a `grep` action and a paged `read_file`; reviewer prompt states search-before-read
 
 **Wave 3** *(43-03 and 43-04 both depend on 43-01; they touch disjoint files)*
 
