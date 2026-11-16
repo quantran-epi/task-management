@@ -31,6 +31,7 @@ import { StoragePersistenceCard } from '../components/settings/StoragePersistenc
 import { LocalSqlitePersistenceCard } from '../components/settings/LocalSqlitePersistenceCard';
 import { NotificationSettingsCard } from '../components/settings/NotificationSettingsCard';
 import { SshConfigCard } from '../components/settings/SshConfigCard';
+import { SystemTypeOptionsCard } from '../components/settings/SystemTypeOptionsCard';
 import { OracleAiToolConfigCard } from '../components/settings/OracleAiToolConfigCard';
 import { SshFsAiToolConfigCard } from '../components/settings/SshFsAiToolConfigCard';
 import { PostRestoreBanner } from '../components/settings/PostRestoreBanner';
@@ -253,6 +254,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       children: (
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
           <SshConfigCard db={db} />
+          <SystemTypeOptionsCard db={db} />
         </Space>
       ),
     },

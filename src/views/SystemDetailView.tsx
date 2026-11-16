@@ -42,6 +42,7 @@ import { getSshConfigs } from '../services/sshService';
 import { escapeShellArg, getRemoteBranches, runGitCommand } from '../services/gitRemoteService';
 import { useLayoutStore } from '../workbench/store/layoutStore';
 import { useSystemActions } from '../workbench/hooks/useSystemActions';
+import { useSystemTypeLookup } from '../services/system/systemTypeSettings';
 import { SystemModal } from '../components/systems/SystemModal';
 import { ChangeRequestModal } from '../components/changeRequests/ChangeRequestModal';
 import type { SshConfig } from '../types/ssh';
@@ -51,14 +52,6 @@ export interface SystemDetailViewProps {
   systemId: string;
   db?: TaskPlannerDatabase | undefined;
 }
-
-const SYSTEM_TYPE_TAG: Record<SystemType, { label: string; color: string }> = {
-  LOGICAL_GROUP: { label: 'Parent System (Logical Group)', color: 'purple' },
-  SERVICE: { label: 'Service / Microservice', color: 'blue' },
-  SCHEMA: { label: 'Database Schema', color: 'cyan' },
-  UI: { label: 'Frontend UI', color: 'green' },
-  WORKER: { label: 'Background Worker', color: 'orange' },
-};
 
 const CR_TYPE_COLOR: Record<CrType, string> = {
   NEW_FEATURE: '#1677ff',
@@ -167,6 +160,7 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
 
   const openTab = useLayoutStore((s) => s.openTab);
   const { openGit, openTerminal, disabledReason } = useSystemActions();
+  const typeLookup = useSystemTypeLookup(db);
 
   // Queries
   const system = useLiveQuery(() => (systemId ? getSystem(systemId, db) : undefined), [systemId, db]);
@@ -298,8 +292,8 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
       key: 'type',
       label: 'Loại hệ thống',
       children: (
-        <Tag color={SYSTEM_TYPE_TAG[system.type]?.color || 'default'}>
-          {SYSTEM_TYPE_TAG[system.type]?.label || system.type}
+        <Tag color={typeLookup(system.type).color || 'default'}>
+          {typeLookup(system.type).label}
         </Tag>
       ),
     },
@@ -397,9 +391,7 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
               key: 'type',
               width: 160,
               render: (type: SystemType) => (
-                <Tag color={SYSTEM_TYPE_TAG[type]?.color || 'default'}>
-                  {SYSTEM_TYPE_TAG[type]?.label || type}
-                </Tag>
+                <Tag color={typeLookup(type).color || 'default'}>{typeLookup(type).label}</Tag>
               ),
             },
             {
@@ -688,8 +680,8 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
             <Tag color="cyan" style={{ fontFamily: 'monospace', fontSize: 13, padding: '2px 8px', margin: 0 }}>
               {system.code}
             </Tag>
-            <Tag color={SYSTEM_TYPE_TAG[system.type]?.color || 'default'} style={{ margin: 0 }}>
-              {SYSTEM_TYPE_TAG[system.type]?.label || system.type}
+            <Tag color={typeLookup(system.type).color || 'default'} style={{ margin: 0 }}>
+              {typeLookup(system.type).label}
             </Tag>
           </div>
           {system.description && (

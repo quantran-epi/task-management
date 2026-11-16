@@ -3,8 +3,9 @@ import { TreeSelect, Tag } from 'antd';
 import { FolderOutlined, BranchesOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import type { System, SystemType } from '../../types/models';
+import type { System } from '../../types/models';
 import { isLogicalParent, isSubsystem } from '../../db/repositories/systemRepo';
+import { useSystemTypeLookup } from '../../services/system/systemTypeSettings';
 
 export interface TargetSystemsSelectorProps {
   value?: string[];
@@ -28,22 +29,6 @@ interface TreeNode {
   children?: TreeNode[];
 }
 
-const TYPE_TAG_COLORS: Record<SystemType, string> = {
-  LOGICAL_GROUP: '#722ed1',
-  SERVICE: '#13c2c2',
-  SCHEMA: '#fa8c16',
-  UI: '#1677ff',
-  WORKER: '#52c41a',
-};
-
-const TYPE_LABELS: Record<SystemType, string> = {
-  LOGICAL_GROUP: 'Parent System',
-  SERVICE: 'Service',
-  SCHEMA: 'DB Schema',
-  UI: 'Frontend UI',
-  WORKER: 'Worker Job',
-};
-
 export const TargetSystemsSelector: React.FC<TargetSystemsSelectorProps> = ({
   value = [],
   onChange,
@@ -55,6 +40,7 @@ export const TargetSystemsSelector: React.FC<TargetSystemsSelectorProps> = ({
   systems,
 }) => {
   const liveSystems = useLiveQuery(() => db.systems.toArray(), [db]) ?? [];
+  const typeLookup = useSystemTypeLookup(db);
   const allSystems = systems ?? liveSystems;
 
   const treeData = useMemo(() => {
@@ -79,10 +65,10 @@ export const TargetSystemsSelector: React.FC<TargetSystemsSelectorProps> = ({
             ({child.code})
           </span>
           <Tag
-            color={TYPE_TAG_COLORS[child.type] ?? '#8c8c8c'}
+            color={typeLookup(child.type).color}
             style={{ marginLeft: 6, fontSize: 10, padding: '0 4px', lineHeight: '16px' }}
           >
-            {TYPE_LABELS[child.type]}
+            {typeLookup(child.type).label}
           </Tag>
           {preselected.has(child.id) && (
             <Tag color="blue" style={{ marginLeft: 6, fontSize: 10, padding: '0 4px', lineHeight: '16px' }}>
@@ -126,7 +112,7 @@ export const TargetSystemsSelector: React.FC<TargetSystemsSelectorProps> = ({
     }
 
     return result;
-  }, [allSystems, preselectedIds]);
+  }, [allSystems, preselectedIds, typeLookup]);
 
   return (
     <div data-testid="target-systems-selector">
