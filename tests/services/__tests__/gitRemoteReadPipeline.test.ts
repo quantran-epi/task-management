@@ -110,6 +110,19 @@ describe('remote read pipelines against a real git repository', () => {
     expect(truncated).toBe(true);
   });
 
+  it('keeps a hit whose path contains a newline in one record', async () => {
+    writeFileSync(join(repo, 'we\nird.txt'), 'alpha NEEDLE\n');
+    git('add', '-A');
+    git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'weird');
+
+    const { hits } = await grepRemoteRef(mockConfig, repo, 'HEAD', { pattern: 'NEEDLE' });
+
+    // A newline ends a record only when the line field is numeric; the newline inside this
+    // path must not split it into a bogus hit.
+    expect(hits.map((h) => h.path)).toContain('we\nird.txt');
+    expect(hits.every((h) => h.text.includes('NEEDLE'))).toBe(true);
+  });
+
   it('restricts the search to a path', async () => {
     const { hits } = await grepRemoteRef(mockConfig, repo, 'HEAD', {
       pattern: 'NEEDLE',

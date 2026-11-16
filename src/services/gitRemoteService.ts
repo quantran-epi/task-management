@@ -410,29 +410,41 @@ export async function grepRemoteRef(
   // `-z` NUL-separates the FIELDS of one record; the newline ends the record. So the stream is
   // `<ref>:<path>\0<line>\0<content>\n<ref>:<path>\0<line>\0<content>\n…` — splitting on `\0`
   // first would glue the next record's path onto this record's content. Verified against git.
+  //
+  // A newline alone cannot end a record either: a path may legally contain one, and the
+  // stream then reads `HEAD:we\nird.txt\01\0needle`. So a record is complete only when BOTH
+  // NUL separators have arrived AND the line field is numeric — that field is the one thing a
+  // path can never impersonate.
   const refPrefix = `${ref}:`;
-  const records = res.stdout === '' ? [] : res.stdout.split('\n');
-  // A complete stream ends with a newline, so the last element is ''; anything else is a cut.
-  if (records.length > 0 && records[records.length - 1] === '') records.pop();
-  else if (records.length > 0) truncated = true;
-
-  for (const record of records) {
-    const fields = record.split('\0');
-    if (fields.length !== 3) {
-      // The byte cap cut mid-record; the partial record is dropped.
+  const chunks = res.stdout === '' ? [] : res.stdout.split('\n');
+  // A complete stream ends with a newline. Anything else means the byte cap cut the last
+  // record mid-content, and a partial body is worse than no hit: drop it.
+  if (chunks.length > 0) {
+    if (chunks[chunks.length - 1] === '') chunks.pop();
+    else truncated = true;
+  }
+  let pending = '';
+  for (const chunk of chunks) {
+    pending = pending === '' ? chunk : `${pending}\n${chunk}`;
+    const fields = pending.split('\0');
+    if (fields.length > 3) {
+      // Only a NUL inside the matched line can do this; resync rather than emit garbage.
+      pending = '';
       truncated = true;
       continue;
     }
+    if (fields.length !== 3 || !/^\d+$/.test(fields[1]!)) continue;
     const line = parseInt(fields[1]!, 10);
-    if (!Number.isFinite(line)) continue;
     const rawPath = fields[0]!;
     hits.push({
       path: rawPath.startsWith(refPrefix) ? rawPath.slice(refPrefix.length) : rawPath,
       line,
       text: fields[2]!,
     });
+    pending = '';
   }
-
+  // A record still open at the end was cut by the byte cap; the partial record is dropped.
+  if (pending !== '') truncated = true;
   if (hits.length > limit) {
     hits.length = limit;
     truncated = true;
