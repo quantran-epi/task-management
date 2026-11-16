@@ -1,19 +1,21 @@
 ---
-gsd_state_version: 1.0
+gsd_state_version: "1.0"
 milestone: v1.4
-milestone_name: Unified AI Office
+milestone_name: Unified AI Office (Phase Details)
+current_phase: 40
+current_phase_name: Explorer UX, CRUD correctness, observed walkthrough
 status: executing
 stopped_at: Phase 42 review clean — awaiting phase verification
-last_updated: "2026-11-16T02:20:00.000Z"
-last_activity: "2026-11-16 -- Phase 42: review clean (0 critical/warning/info), 392 focused tests pass, tsc clean"
+last_updated: "2026-11-16T04:52:44.529Z"
+last_activity: 2026-11-16
+last_activity_desc: "continuation fix pass: parent-symlink escape, literal glob read, probe exit status, fsmonitor hook, filename trim, diff pathspec glob"
+state_head: c085840781a02cd7a04136756f140a968dacc4b1
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 55
   completed_plans: 52
   percent: 57
-current_phase: 40
-current_phase_name: Explorer UX, CRUD correctness, observed walkthrough
 ---
 
 # Project State: TaskMate — Milestone v1.4
@@ -28,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 Phase: 42 (read-only-git-inspection-for-the-reviewer-agent) — review clean, awaiting verification
 Plan: 3 of 3 complete
 Status: All review findings closed (0 critical, 0 warning, 0 info open)
-Last activity: 2026-11-16 -- continuation fix pass: parent-symlink escape, literal glob read, probe exit status, fsmonitor hook, filename trim, diff pathspec glob
+Last activity: 2026-11-16 - Completed quick task 261116-fyi: Restore Docs parity in IntelliJ workbench: document sets drawer (publish + graph build), ZIP import, folder ZIP export
 
 ## Phase 42 Review Outcome
 
@@ -52,7 +54,7 @@ Last session: 2026-11-15T15:58:16.000Z
 Stopped at: Completed 42-03-PLAN.md
 Resume file: None
 
-Progress: [██████████] 93%
+Progress: [██████░░░░] 57%
 
 ## Milestone v1.4 Map
 
@@ -82,6 +84,7 @@ Progress: [██████████] 93%
 | 261116-e62 | AI mutation tools for Systems: create_system, update_system, delete_system | 2026-11-16 | 469deb2b | .planning/quick/261116-e62-ai-mutation-tools-for-systems-add-create-system-update-syste |
 | 261116-e63 | AI tools for Mermaid diagrams: query_diagrams, create_diagram, update_diagram | 2026-11-16 | 4fff0a59 | .planning/quick/261116-e63-ai-tools-for-mermaid-diagrams-add-query-diagrams-read-create |
 | 261116-e64 | Configurable system type list backed by settings | 2026-11-16 | bfad78fb | .planning/quick/261116-e64-configurable-system-type-list-systemtype-is-a-hardcoded-unio |
+| 261116-fyi | Restore Docs parity in IntelliJ workbench: document sets drawer (publish + graph build), ZIP import, folder ZIP export | 2026-11-16 | c0858407 | [261116-fyi-bring-docs-explorer-features-missing-fro](./quick/261116-fyi-bring-docs-explorer-features-missing-fro/) |
 
 ## Accumulated Context
 
