@@ -64,10 +64,16 @@ export function clampExploreMaxTurns(value: unknown): number {
  * requirement, not a security posture: a headless `-p` run that reaches for a tool outside the
  * set blocks on a permission prompt nobody can answer.
  *
- * `--setting-sources ''` is load-bearing: the CLI also reads the REPO's `.claude/settings.json`,
- * and a `permissions.allow: ["Bash"]` there grants Bash to a run whose allow-list never named
- * it. Verified: without this flag the remote model ran `touch pwned.txt`; with it, the same
- * prompt is refused. `--disallowedTools` is the second belt for the mutating tools.
+ * `--restricted` is load-bearing, and each of its three effects was verified against the real
+ * CLI on this machine:
+ *
+ * 1. It ignores user, project and local settings files. Without it the REPO's own
+ *    `.claude/settings.json` with `permissions.allow: ["Bash"]` granted Bash to a run whose
+ *    allow-list never named it — `touch pwned.txt` executed. (`--setting-sources ''` closes
+ *    that one too, but not the next two.)
+ * 2. It confines the file tools to the working directory. Without it, `Read /etc/passwd`
+ *    succeeded, so a prompt-injected question could read the SSH user's keys.
+ * 3. It removes the code-running tools unless `--tools` names them.
  *
  * The prompt goes after `--`: `escapeShellArg` protects the shell, not argv parsing, and a
  * question beginning with `-` is otherwise read by the CLI as an option (`claude -p '--x'`
@@ -78,10 +84,8 @@ export function buildExploreCommand(request: ExploreRequest): string {
     `cd ${escapeShellArg(request.repoPath)} &&`,
     'claude -p',
     '--output-format json',
+    '--restricted',
     '--allowedTools Read,Grep,Glob',
-    '--disallowedTools Bash,Edit,Write,NotebookEdit',
-    '--setting-sources',
-    "''",
     '--model',
     escapeShellArg(request.model),
     '--max-turns',

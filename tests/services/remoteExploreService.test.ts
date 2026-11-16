@@ -50,9 +50,9 @@ describe('buildExploreCommand (43-04 D-03)', () => {
     // `escapeShellArg` output for EVIL, pinned literally and independent of the function.
     const q = `'"'\\''; $(rm -rf /); echo '\\'''`;
     expect(cmd).toBe(
-      `cd ${q} && claude -p --output-format json --allowedTools Read,Grep,Glob ` +
-        `--disallowedTools Bash,Edit,Write,NotebookEdit --setting-sources '' ` +
-        `--model ${q} --max-turns 20 --no-session-persistence --append-system-prompt ` +
+      `cd ${q} && claude -p --output-format json --restricted ` +
+        `--allowedTools Read,Grep,Glob --model ${q} --max-turns 20 --no-session-persistence ` +
+        `--append-system-prompt ` +
         `'Bạn đang đọc một repository trên chính máy này để trả lời một câu hỏi về mã nguồn.\n` +
         `Chỉ kết luận từ những tệp bạn thực sự đã đọc; không suy đoán về tệp chưa mở.\n` +
         `Mỗi phát hiện phải kèm vị trí dạng đường/dẫn/tệp:dòng.\n` +
@@ -62,15 +62,14 @@ describe('buildExploreCommand (43-04 D-03)', () => {
     );
   });
 
-  it('ignores the repo settings so its own allow-list cannot grant Bash', () => {
+  it('runs restricted so repo settings cannot grant Bash and reads stay in the repo', () => {
     const cmd = buildExploreCommand(request());
 
-    // Verified against the real CLI: a repo `.claude/settings.json` with
-    // `permissions.allow: ["Bash"]` made the run execute `touch pwned.txt` even though
-    // `--allowedTools` never named Bash. `--setting-sources ''` closes that, and
-    // `--disallowedTools` is the second belt.
-    expect(cmd).toContain(`--setting-sources ''`);
-    expect(cmd).toContain('--disallowedTools Bash,Edit,Write,NotebookEdit');
+    // Verified against the real CLI. Without `--restricted`: a repo `.claude/settings.json`
+    // with `permissions.allow: ["Bash"]` executed `touch pwned.txt`, and `Read /etc/passwd`
+    // returned the file. With it, both are refused and Read/Grep/Glob still work.
+    expect(cmd).toContain('--restricted');
+    expect(cmd).not.toContain('--disallowedTools');
   });
 
   it('puts the prompt after -- so a question beginning with "-" is not an option', () => {
