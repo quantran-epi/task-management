@@ -308,6 +308,9 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         model: config.defaultModel,
         endpoint: config.endpoint,
         apiKey,
+        // D-04: the window makes `tokenBudget > 0`, so in-loop compaction can run on a
+        // read-heavy turn. `getNineRouterConfig` always returns a positive default.
+        contextWindowTokens: config.contextWindowTokens,
         // D-03/D-07: every turn reads a fresh roster from Dexie. The team row is read
         // inside the turn and the lead is matched against ITS `leadId`, so neither the
         // construction-time `lead` prop nor a captured `team.leadId` decides a turn.
