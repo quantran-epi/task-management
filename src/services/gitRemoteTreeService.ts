@@ -315,18 +315,21 @@ const PAGE_LINE_MAX_BYTES = 4000;
  *
  * The byte budget is enforced in awk, not by `head -c`: cutting the stream at the shell would
  * also cut the `###TOTAL` line, and the caller needs the total to know whether to page on.
- * `exit`, never `next`: skipping one oversized line and emitting the ones after it leaves a page
- * with a hole, and `nextOffset` (which counts emitted lines) then never requests the skipped
- * line again. `exit` still runs `END`, so `###TOTAL` survives and the page stays a contiguous
- * prefix — the caller pages on from the line after the last one emitted.
+ *
+ * Once the budget is spent the loop stops EMITTING but keeps READING (`done` + `next`), so
+ * `NR` at `END` is still the file's real line count. `exit` would stop the read and report the
+ * cut line as the total — a page that pages on correctly but tells the model the file is
+ * shorter than it is. And `next` alone (without `done`) would punch a hole: the emitted set
+ * must stay a contiguous prefix, or `nextOffset`, which counts emitted lines, never asks for
+ * the skipped line again.
  */
 function pageCommand(source: string, offset: number, limit: number): string {
   return (
     `( trap 'printf "###EXIT %s\\n" "$?" >&2' EXIT; ${source} ) | ` +
     `awk -v s=${offset} -v e=${offset + limit - 1} -v cap=${PAGE_BYTE_CAP} ` +
     `-v maxc=${PAGE_LINE_MAX_BYTES} ` +
-    `'NR>=s&&NR<=e{ l=$0; if (length(l)>maxc) l=substr(l,1,maxc) " ..."; ` +
-    `n=length(l)+12; if (used+n>cap) exit; used+=n; print NR": " l } ` +
+    `'NR>=s&&NR<=e{ if(done) next; l=$0; if (length(l)>maxc) l=substr(l,1,maxc) " ..."; ` +
+    `n=length(l)+12; if (used+n>cap) { done=1; next } used+=n; print NR": " l } ` +
     `END{ print "${PAGE_TOTAL_PREFIX}"NR }'`
   );
 }
@@ -393,7 +396,7 @@ export async function readRemoteFilePage(
     return await readPageFromSource(
       config,
       refSource,
-      filePath,
+      cleanPath,
       pageOffset,
       pageLimit,
       secret
@@ -415,7 +418,7 @@ export async function readRemoteFilePage(
     return await readPageFromSource(
       config,
       workingCopyCatSnippet(repoPath, cleanPath),
-      filePath,
+      cleanPath,
       pageOffset,
       pageLimit,
       secret

@@ -238,6 +238,9 @@ describe('remote read pipelines against a real git repository', () => {
       Array.from({ length: lastNumber }, (_, i) => i + 1)
     );
     expect(page.hasMore).toBe(true);
+    // The page stopped early, but the file's real size must still be reported: `exit` in awk
+    // reported the cut line as the total, so the model was told a 250-line file had 130.
+    expect(page.totalLines).toBe(250);
   });
 
   it('fails closed when the pager never reports an exit status', async () => {
@@ -269,6 +272,20 @@ describe('remote read pipelines against a real git repository', () => {
 
     expect(page.lines[0]).not.toContain('�');
     expect(page.lines[0]!.endsWith(' ...')).toBe(true);
+  });
+
+  it('reports the confined path, not the raw one', async () => {
+    const page = await readRemoteFilePage(
+      mockConfig,
+      repo,
+      'HEAD',
+      './src/../src/a.ts',
+      1,
+      2
+    );
+
+    // The content comes from the confined path, so the result must name that path.
+    expect(page.filePath).toBe('src/a.ts');
   });
 
   it('keeps blank lines so a page of blank lines still advances', async () => {
