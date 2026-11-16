@@ -4913,6 +4913,84 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(current.coordinator.getState().lastPlan).toBeNull();
     });
 
+    // The duplicate the rule exists to prevent is ONE PERSON receiving the same request
+    // twice. Answering the user and asking a different agent in the same turn is one reply
+    // plus one question — refusing it made the leader unable to say "đang chờ xác nhận".
+    it('allows send_message to the user plus delegate_batch to a different agent', async () => {
+      let delegateResult = '';
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'send_message',
+              { to: [USER_PARTICIPANT_ID], content: 'Đang chờ Evra xác nhận nghiệp vụ.' },
+              harness!.db,
+              options.signal
+            );
+            delegateResult = await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: [{ agentId: harness!.employees[0]!.id, task: 'Viết REQ-01' }] },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Đã giao việc.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('REQ-01 xong'),
+        },
+      });
+      const current = harness;
+
+      await current.coordinator.send('Làm REQ-01 đi');
+      await waitForReady(current.coordinator);
+
+      expect(JSON.parse(delegateResult).refused).toBeUndefined();
+      const log = await teamLog(current);
+      expect(log.some((row) => row.to.includes(USER_PARTICIPANT_ID))).toBe(true);
+      expect(
+        log.some(
+          (row) =>
+            row.kind === 'instruction' && row.to.includes(current.employees[0]!.id)
+        )
+      ).toBe(true);
+    });
+
+    it('allows delegate_batch to one agent plus send_message to another', async () => {
+      let messageResult = '';
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: [{ agentId: harness!.employees[0]!.id, task: 'Viết REQ-01' }] },
+              harness!.db,
+              options.signal
+            );
+            messageResult = await options.executeToolFn!(
+              'send_message',
+              { to: [harness!.employees[1]!.id], content: 'Chuẩn bị test plan nhé' },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Đã giao.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('REQ-01 xong'),
+          [EMP_B_MODEL]: async () => loopResult('Đã chuẩn bị.'),
+        },
+      });
+      const current = harness;
+
+      await current.coordinator.send('Chuẩn bị test plan');
+      await waitForReady(current.coordinator);
+
+      expect(JSON.parse(messageResult).refused).toBeUndefined();
+      const log = await teamLog(current);
+      expect(
+        log.some((row) => row.kind === 'chat' && row.to.includes(current.employees[1]!.id))
+      ).toBe(true);
+    });
+
     it('a mention-started agent answer is logged, so it has a read receipt', async () => {
       harness = await createHarness({
         scripts: {
@@ -4933,10 +5011,12 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
         (row) => row.from === target.id && row.content.includes('Integer')
       );
       // No assignment exists on this path, so the report branch never ran. Without this row
-      // no cursor can cover the answer and the user sees no receipt on it.
+      // no cursor can cover the answer and the user sees no receipt on it. The USER asked,
+      // so the user is the addressee — logging it as a report to the leader made the
+      // transcript say the agent answered someone else.
       expect(answer).toBeDefined();
-      expect(answer!.to).toEqual([current.lead.id]);
-      expect(answer!.kind).toBe('report');
+      expect(answer!.to).toEqual([USER_PARTICIPANT_ID]);
+      expect(answer!.kind).toBe('chat');
     });
 
     it('R9: an agent still cannot call delegate_batch', async () => {

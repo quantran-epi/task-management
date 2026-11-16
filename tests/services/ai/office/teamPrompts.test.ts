@@ -2,6 +2,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   ANTI_FABRICATION_BLOCK,
+  ASSIGNMENT_MODE_BLOCK,
+  CHAT_MODE_BLOCK,
   EMPLOYEE_WRITE_DOC_LINE,
   LEAD_NO_WRITE_DOC_LINE,
   REVIEWER_GIT_READ_LINE,
@@ -596,6 +598,49 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
 
     expect(system).not.toContain('DOC_NOT_IN_YOUR_FOLDER');
     expect(system).not.toContain('TEAM_DOCS_NOT_READY');
+  });
+
+  // The persona and the skill body are written as absolute orders ("write_doc vào folder
+  // riêng"), which is right for a dispatched assignment and wrong for a one-line question.
+  // The mode is a default, never a gate: a chat turn whose content is clearly work still
+  // produces the document.
+  it('emits the assignment mode block and not the chat one', () => {
+    const system = buildEmployee({ mode: 'assignment' })
+      .systemMessages.map((m) => m.content)
+      .join('\n');
+
+    expect(system).toContain(ASSIGNMENT_MODE_BLOCK);
+    expect(system).not.toContain(CHAT_MODE_BLOCK);
+  });
+
+  it('emits the chat mode block and not the assignment one', () => {
+    const system = buildEmployee({ mode: 'chat' })
+      .systemMessages.map((m) => m.content)
+      .join('\n');
+
+    expect(system).toContain(CHAT_MODE_BLOCK);
+    expect(system).not.toContain(ASSIGNMENT_MODE_BLOCK);
+    // The escape hatch matters: the mode must not forbid doing the work.
+    expect(system).toContain('không cấm làm việc');
+  });
+
+  it('emits no mode block when the caller did not say (existing callers unchanged)', () => {
+    const system = buildEmployee().systemMessages.map((m) => m.content).join('\n');
+
+    expect(system).not.toContain(ASSIGNMENT_MODE_BLOCK);
+    expect(system).not.toContain(CHAT_MODE_BLOCK);
+  });
+
+  it('makes the folder line conditional on the chat mode', () => {
+    const chat = buildEmployee({ mode: 'chat', folderId: 'folder-a' })
+      .systemMessages.map((m) => m.content)
+      .join('\n');
+    const assignment = buildEmployee({ mode: 'assignment', folderId: 'folder-a' })
+      .systemMessages.map((m) => m.content)
+      .join('\n');
+
+    expect(chat).toContain('chỉ dùng write_doc');
+    expect(assignment).toContain('dùng write_doc (list/create/update) để ghi trong đó');
   });
 
   // Phase 41 D-07: the leader needs the team folder (where the final goes) and each member's

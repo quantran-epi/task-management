@@ -52,7 +52,36 @@ export interface BuildEmployeeTurnRequestInput {
    * and `write_doc` will refuse — the prompt then says nothing about a folder.
    */
   folderId?: string | undefined;
+  /**
+   * What this turn is. `assignment` = the leader dispatched it (there is an attempt row);
+   * `chat` = the user tagged this agent directly, or a peer messaged it. Absent means the
+   * caller did not say, so no mode block is emitted — the persona's own rules apply.
+   *
+   * A default, never a gate: a chat turn whose content is clearly a piece of work still
+   * produces the document. The mode only decides what happens when the turn is just talk.
+   */
+  mode?: EmployeeTurnMode | undefined;
 }
+
+export type EmployeeTurnMode = 'assignment' | 'chat';
+
+/** Exported so the tests assert this exact text instead of a paraphrase. */
+export const ASSIGNMENT_MODE_BLOCK = [
+  '[CHẾ ĐỘ GIAO VIỆC]',
+  'Đây là một việc được giao. Làm đầy đủ theo kỹ năng: đọc nguồn, ghi tài liệu vào folder của bạn, kết thúc bằng báo cáo ĐÃ CHỐT / CÒN HỞ / BƯỚC TIẾP.',
+].join('\n');
+
+/**
+ * The flexibility half. The persona and the skill body are written as absolute orders
+ * ("write_doc vào folder riêng"), which is right for a dispatched assignment and wrong for a
+ * one-line question — the agent would open a document to answer "bảng này để làm gì".
+ */
+export const CHAT_MODE_BLOCK = [
+  '[CHẾ ĐỘ TRAO ĐỔI]',
+  'Đây là trao đổi trực tiếp, không phải việc được giao. Trả lời ngay trong chat, đúng câu hỏi, không mở mục lục tài liệu, không ép mẫu báo cáo, không tự ghi tài liệu.',
+  'Nếu nội dung là một việc rõ ràng (viết REQ, ra PL03, review code, lên test plan), làm đầy đủ theo kỹ năng và ghi tài liệu như bình thường — chế độ chỉ nói về mặc định, không cấm làm việc.',
+  'Không chắc đây là hỏi hay giao việc: hỏi lại một câu, đừng đoán rồi viết cả tài liệu.',
+].join('\n');
 
 /**
  * Team agents never pass through the AI Chat panel's `groundedTurn`/intent router, so
@@ -80,11 +109,19 @@ export function buildEmployeeTurnRequest(input: BuildEmployeeTurnRequestInput): 
     assignmentHistory,
     recentTurns,
     folderId,
+    mode,
   } = input;
 
   const parts = [
     `Bạn là ${employee.name}, ${employee.role} trong nhóm "${team.name}".`,
     employee.persona,
+    // Before the policy block: the persona above is written as absolute orders, so the mode
+    // has to be read first or the agent applies the document rule to a one-line question.
+    ...(mode === 'assignment'
+      ? [ASSIGNMENT_MODE_BLOCK]
+      : mode === 'chat'
+        ? [CHAT_MODE_BLOCK]
+        : []),
     [
       '[CHÍNH SÁCH CHỈ ĐỌC]',
       'Bạn chỉ được đọc dữ liệu. Mọi thao tác ghi đều bị từ chối tự động, trừ hai ngoại lệ bên dưới.',
@@ -100,7 +137,9 @@ export function buildEmployeeTurnRequest(input: BuildEmployeeTurnRequestInput): 
   // user-authored text, so it is not wrapped. No folder id means no claim (T-41-24).
   if (folderId) {
     parts.push(
-      `Folder tài liệu của bạn: ${folderId} — dùng write_doc (list/create/update) để ghi trong đó.`
+      mode === 'chat'
+        ? `Folder tài liệu của bạn: ${folderId} — chỉ dùng write_doc (list/create/update) khi người dùng yêu cầu ghi tài liệu.`
+        : `Folder tài liệu của bạn: ${folderId} — dùng write_doc (list/create/update) để ghi trong đó.`
     );
   }
 
@@ -245,10 +284,11 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
     lead.persona,
     [
       '[QUY TẮC ĐIỀU HÀNH NHÓM]',
-      '1. Mỗi yêu cầu của người dùng chọn ĐÚNG MỘT trong hai đường, không bao giờ cả hai:',
+      '1. Với mỗi yêu cầu, chọn đúng đường cho phần việc đó:',
       '   (a) VIỆC — cần tạo ra sản phẩm/dữ liệu → delegate_batch. Không tự làm thay công việc chuyên môn của nhân viên.',
       '   (b) CÂU HỎI — cần biết một thông tin → send_message tới đúng nhân viên, rồi trả lời người dùng bằng kết quả nhận được. Không mở lô việc.',
-      '2. TUYỆT ĐỐI KHÔNG vừa delegate_batch vừa send_message cho cùng một yêu cầu: người nhận sẽ nhận hai lần và người dùng thấy hai bản trả lời.',
+      '2. Mỗi NGƯỜI NHẬN chỉ nhận một lần cho một yêu cầu: không vừa giao việc vừa nhắn cho cùng một nhân viên, người đó sẽ nhận hai lần.',
+      '2a. Trong cùng một lượt bạn ĐƯỢC trả lời người dùng và hỏi một nhân viên khác — đó là một câu trả lời kèm một câu hỏi, không phải hai lần giao. Cũng được giao việc cho Vidic rồi báo tiến độ cho người dùng.',
       '3. Chờ toàn bộ lô trả về rồi mới tổng hợp; không tuyên bố kết quả trước khi có báo cáo từ nhân viên.',
       '4. Không khẳng định suy luận nội bộ của nhân viên; chỉ dùng nội dung họ báo cáo.',
       '5. Chỉ bạn được phép thay đổi dữ liệu; thao tác ghi sẽ dừng ở thẻ phê duyệt của người dùng.',

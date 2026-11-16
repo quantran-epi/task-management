@@ -475,7 +475,7 @@ const ROUTE_ALREADY_CHOSEN_REFUSAL = JSON.stringify({
   refused: true,
   code: 'ROUTE_ALREADY_CHOSEN',
   message:
-    'Lượt này đã chọn một đường (giao việc hoặc gửi tin). Không dùng cả hai cho cùng một yêu cầu — hãy trả lời người dùng bằng kết quả đã có.',
+    'Người này đã nhận yêu cầu trong lượt này rồi (giao việc hoặc gửi tin). Không gửi hai lần cho cùng một người — hãy dùng kết quả đã có, hoặc chọn người khác.',
 });
 
 /** 37.1 D-27: `amend_assignments` is leader-only — same shape as the delegate refusal. */
@@ -566,8 +566,14 @@ export function createTeamRunCoordinator(
    * 37.1: which routing the CURRENT lead turn already chose. A turn may either delegate or
    * message, never both — doing both delivers the same request twice and shows the user two
    * answers. Enforced here, not only in the prompt: a model can ignore a rule.
+   *
+   * Scoped to RECIPIENTS, not to the whole turn: the duplicate the rule exists to prevent is
+   * one person receiving the same request twice. Answering the user and asking a different
+   * agent in the same turn is one reply plus one question, and refusing it made the leader
+   * unable to say "đang chờ Evra xác nhận" while it waited.
    */
-  let leadTurnRoute: 'delegated' | 'messaged' | null = null;
+  const messagedRecipients = new Set<string>();
+  const delegatedAgentIds = new Set<string>();
   /**
    * 37.1 rework: the settle handler's own claim. The batch row is closed BEFORE the synthesis
    * turn starts, so without this flag `derivePhase` would report `ready` in that window and a
@@ -614,6 +620,13 @@ export function createTeamRunCoordinator(
    * its `finally`, so a reply can never be attributed to a previous turn's question.
    */
   const replyTargetByAgent = new Map<string, string>();
+  /**
+   * Who this turn's answer goes to. A dispatched turn answers the leader (its report); a turn
+   * the user started by tagging the agent answers the USER. Without this the mention path
+   * logged every answer as agent → leader, so the user asked a question and the transcript
+   * said the agent reported it to someone else.
+   */
+  const replyRecipientByAgent = new Map<string, string>();
   /** D-10/D-11/D-18: the cancellation channel for a still-queued assignment. */
   const assignmentControllers = new Map<string, AbortController>();
   /**
@@ -1334,21 +1347,24 @@ export function createTeamRunCoordinator(
           // 37.1: a turn started by a mention or by `send_message` has NO assignment, so the
           // branch below never ran and this answer was never logged. Without a log row no
           // cursor covers it, so the user never saw a read receipt on the agent's reply —
-          // the one direction UAT caught. Every assistant answer is a message to the lead.
+          // the one direction UAT caught.
           if (
             !active &&
             input.role === 'assistant' &&
             input.messageKind === 'report' &&
-            roster.lead
+            replyRecipientByAgent.get(agentId) !== undefined
           ) {
             await appendForExistingMessage(
               {
                 id: row.id,
                 teamId,
                 from: agentId,
-                to: [roster.lead.id],
+                // The user asked, so the user gets the answer. A peer asked, so the peer
+                // does. Only a dispatched turn answers the leader, and that is the branch
+                // below — this one never has an attempt.
+                to: [replyRecipientByAgent.get(agentId)!],
                 content: row.content,
-                kind: 'report',
+                kind: 'chat',
                 ...(replyTargetByAgent.get(agentId) !== undefined
                   ? { replyToId: replyTargetByAgent.get(agentId)! }
                   : {}),
@@ -1928,6 +1944,10 @@ export function createTeamRunCoordinator(
       const skill = skillFor(employee);
       // Phase 41 D-16: the folder id is a fixed fact for the turn, so it goes into the prompt.
       const folderId = memberFolderIds.get(employee.id);
+      // A turn with an attempt was dispatched by the leader; one without was started by a
+      // mention or by a peer's `send_message`. The prompt says which, so the persona's
+      // "write a document" orders do not fire on a one-line question.
+      const mode = attempt ? 'assignment' : 'chat';
       const prompt = buildEmployeeTurnRequest({
         employee,
         ...(skill ? { skill } : {}),
@@ -1938,6 +1958,7 @@ export function createTeamRunCoordinator(
         assignmentHistory,
         recentTurns,
         ...(folderId ? { folderId } : {}),
+        mode,
       });
 
       const request: ChatTurnRequest = {
@@ -1989,6 +2010,16 @@ export function createTeamRunCoordinator(
         steps: [],
       });
       registerAgentTurn(employee.id, employee.name);
+      // Who the answer addresses. Read from the trigger row's sender: the user for a mention,
+      // the peer for `send_message`, the leader for a dispatch. One read, no extra parameter
+      // on four call sites, and it cannot disagree with the row the answer quotes.
+      // AFTER the status write: a lead parked in `send_message` is what the UI shows first,
+      // and this read must not delay the agent's own `running` transition.
+      const triggerFrom =
+        replyTarget !== undefined ? (await db.teamMessages.get(replyTarget))?.from : undefined;
+      const replyRecipient = triggerFrom ?? roster.lead?.id;
+      if (replyRecipient !== undefined) replyRecipientByAgent.set(employee.id, replyRecipient);
+      else replyRecipientByAgent.delete(employee.id);
 
       // D-18/T-39-12: a turn with no attempt (mention, `send_message`) has no pin and reads
       // the current `aiSkills` row. Clearing first makes the map deterministic for this turn.
@@ -2099,6 +2130,7 @@ export function createTeamRunCoordinator(
       agentDeferreds.delete(employee.id);
       // 37.1 R14: the reply target belongs to THIS turn; a later turn must not inherit it.
       replyTargetByAgent.delete(employee.id);
+      replyRecipientByAgent.delete(employee.id);
       // Phase 38 D-22: the terminal seam for a turn with NO attempt row (a mention-started
       // turn). Idempotent for attempt turns — `finalizeAttempt` already flushed this key.
       try {
@@ -2195,7 +2227,9 @@ export function createTeamRunCoordinator(
       // kind of lead turn it is. The `finally` below clears it, and because it is a plain
       // flag owned by the turn it cannot outlive the turn the way a stored phase could.
       leadTurnKind = announcedPhase === 'lead-synthesizing' ? 'synthesizing' : 'thinking';
-      leadTurnRoute = null;
+      // 37.1: the routing sets belong to THIS turn; a later turn must not inherit them.
+      messagedRecipients.clear();
+      delegatedAgentIds.clear();
 
       const outcome = await registry.get(lead.id).start(request);
       settleAgent(lead.id, OUTCOME_STATUS[outcome.phase]);
@@ -2226,7 +2260,8 @@ export function createTeamRunCoordinator(
       // 37.1 rework: the ONE place the lead turn's own flag is cleared, on every branch —
       // normal return, parked return, throw. A derived phase needs no other reset.
       leadTurnKind = null;
-      leadTurnRoute = null;
+      messagedRecipients.clear();
+      delegatedAgentIds.clear();
       leadWaitingOnAgentIds.clear();
       agentDeferreds.delete(lead.id);
       replyTargetByAgent.delete(lead.id);
@@ -2702,11 +2737,6 @@ export function createTeamRunCoordinator(
     rawArgs: Record<string, any>
   ): Promise<string> {
     if (disposed) return DISPOSED_REFUSAL;
-    // 37.1: symmetric guard — an agent may always speak, but a LEAD turn that already opened
-    // a batch must not also message the same people.
-    if (fromId === roster.lead?.id && leadTurnRoute === 'delegated') {
-      return ROUTE_ALREADY_CHOSEN_REFUSAL;
-    }
     const validation = await executeTeamTool('send_message', rawArgs, toolContext(fromId));
     let parsed: any;
     try {
@@ -2718,6 +2748,12 @@ export function createTeamRunCoordinator(
     const to: string[] = Array.isArray(parsed?.to) ? parsed.to : [];
     const content = String(parsed?.content ?? '');
     if (to.length === 0 || !content) return validation;
+    // 37.1: the duplicate this prevents is one person receiving the same request twice, so
+    // the check is per recipient. A lead that already delegated to THIS agent must not also
+    // message it; messaging a different agent, or the user, is a separate conversation.
+    if (fromId === roster.lead?.id && to.some((id) => delegatedAgentIds.has(id))) {
+      return ROUTE_ALREADY_CHOSEN_REFUSAL;
+    }
 
     // R14: the message answers whatever this turn was answering, so a chain of exchanges
     // stays readable. A participant with no open turn starts a thread.
@@ -2754,7 +2790,7 @@ export function createTeamRunCoordinator(
       },
       db
     );
-    if (fromId === roster.lead?.id) leadTurnRoute = 'messaged';
+    if (fromId === roster.lead?.id) to.forEach((id) => messagedRecipients.add(id));
     notify();
 
     const outcomes: Array<{ to: string; outcome: string }> = [];
@@ -2948,10 +2984,6 @@ export function createTeamRunCoordinator(
     // D-05: no lead means no delegation authority — refuse rather than throw.
     const lead = roster.lead;
     if (!lead) return EMPLOYEE_DELEGATE_REFUSAL;
-    // 37.1: one routing per turn. A lead that already messaged an agent must not also open a
-    // batch for the same request — the recipient would get it twice.
-    if (leadTurnRoute === 'messaged') return ROUTE_ALREADY_CHOSEN_REFUSAL;
-    leadTurnRoute = 'delegated';
     const validation = await executeTeamTool(
       'delegate_batch',
       { assignments: rawAssignments },
@@ -2974,6 +3006,11 @@ export function createTeamRunCoordinator(
     )
       ? parsed.assignments
       : [];
+    // 37.1: per-recipient, same rule as `send_message`. A lead that already messaged THIS
+    // agent must not also open a batch for it. Delegating to someone else is a new request.
+    if (assignments.some((a) => messagedRecipients.has(a.agentId))) {
+      return ROUTE_ALREADY_CHOSEN_REFUSAL;
+    }
 
     // D-24: the plan the user actually saw is the snapshot, captured before any card.
     const planSnapshot = {
@@ -3046,7 +3083,10 @@ export function createTeamRunCoordinator(
       batchIndex += 1;
     }
 
+    // Only a plan that actually opened a batch counts as delegated. A rejected plan delivered
+    // nothing, so the lead may still message those agents (or try a different plan).
     signal?.throwIfAborted();
+    assignments.forEach((a) => delegatedAgentIds.add(a.agentId));
 
     // D-24/D-08: the row opens only once the decision resolved, so its snapshot is the list
     // the user saw. `openBatchId` is what `abortAll`/`dispose` close.
