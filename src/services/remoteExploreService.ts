@@ -200,6 +200,7 @@ export async function runRemoteExplore(
   let stderr = '';
   let overflowed = false;
   let settled = false;
+  let timedOut = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let cancel: (() => Promise<void>) | undefined;
 
@@ -240,6 +241,7 @@ export async function runRemoteExplore(
 
     timer = setTimeout(() => {
       // The remote is wedged: kill it, keep whatever arrived, and never hang the turn.
+      timedOut = true;
       void cancel?.().catch(() => undefined);
       // Same cap as the parsed path: a wedged remote that streamed 48k must not hand the
       // calling model 4× the report budget just because it never printed valid JSON.
@@ -255,7 +257,11 @@ export async function runRemoteExplore(
 
     void (async () => {
       try {
-        cancel = await stream(config, command, sessionId, onData, onExit, secret);
+        const handle = await stream(config, command, sessionId, onData, onExit, secret);
+        cancel = handle;
+        // The wall clock can fire while the SSH connect is still in flight; the process it
+        // would have killed is now live and nothing else would ever cancel it.
+        if (timedOut) await handle().catch(() => undefined);
       } catch (err: any) {
         finish({
           report: '',

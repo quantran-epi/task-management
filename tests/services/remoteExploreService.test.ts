@@ -219,6 +219,30 @@ describe('runRemoteExplore (43-04 D-03)', () => {
     expect(outcome.truncated).toBe(true);
   });
 
+  it('cancels a process whose stream handle resolves after the timeout', async () => {
+    vi.useFakeTimers();
+
+    const cancel = vi.fn(async () => {});
+    let releaseHandle: ((handle: () => Promise<void>) => void) | undefined;
+    const stream = vi.fn(
+      () =>
+        new Promise<() => Promise<void>>((resolve) => {
+          releaseHandle = resolve;
+        })
+    );
+
+    const pending = runRemoteExplore(CONFIG, undefined, request(), { stream });
+    // SSH connect still in flight when the wall clock fires.
+    await vi.advanceTimersByTimeAsync(300_000);
+    expect((await pending).detail).toBe('timeout');
+
+    releaseHandle!(cancel);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('turns a non-zero exit with no stdout into an error carrying stderr', async () => {
     const stream = vi.fn(
       async (
