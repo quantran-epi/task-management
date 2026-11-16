@@ -318,14 +318,16 @@ function parsePage(
   offset: number,
   limit: number
 ): RemoteFilePage {
-  const lines: string[] = [];
+  const lines = stdout.split('\n');
+  // The trailing element is a split artefact, not a line.
+  if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+  // awk's END block prints the total last, so the marker is the last line by construction.
+  // Body lines are always prefixed with `NR": "`, so a file line can never be mistaken for it.
   let totalLines = 0;
-  for (const line of stdout.split('\n')) {
-    if (line.startsWith(PAGE_TOTAL_PREFIX)) {
-      totalLines = parseInt(line.slice(PAGE_TOTAL_PREFIX.length), 10) || 0;
-    } else if (line !== '') {
-      lines.push(line);
-    }
+  const last = lines[lines.length - 1];
+  if (last !== undefined && last.startsWith(PAGE_TOTAL_PREFIX)) {
+    totalLines = parseInt(last.slice(PAGE_TOTAL_PREFIX.length), 10) || 0;
+    lines.pop();
   }
   return {
     filePath,

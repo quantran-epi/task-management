@@ -151,6 +151,18 @@ describe('remote read pipelines against a real git repository', () => {
     expect(page.isBinary).toBe(false);
   });
 
+  it('keeps blank lines so a page of blank lines still advances', async () => {
+    writeFileSync(join(repo, 'blank.txt'), '\n\n\n\n\n');
+    git('add', '-A');
+    git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'blank');
+
+    const page = await readRemoteFilePage(mockConfig, repo, 'HEAD', 'blank.txt', 1, 2);
+
+    // Dropping empty lines reported linesRead 0 with hasMore true, so nextOffset never moved.
+    expect(page.linesRead).toBe(2);
+    expect(page.hasMore).toBe(true);
+  });
+
   it('reports hasMore false on the last page', async () => {
     const page = await readRemoteFilePage(mockConfig, repo, 'HEAD', 'src/a.ts', 299, 10);
 
