@@ -8,6 +8,7 @@ import { getSshConfigs } from '../services/sshService';
 import { PageHeader } from '../components/common/PageHeader';
 import { SystemTable } from '../components/systems/SystemTable';
 import { SystemModal } from '../components/systems/SystemModal';
+import { useSystemTypeOptions } from '../services/system/systemTypeSettings';
 import type { System } from '../types/models';
 
 export interface SystemCatalogViewProps {
@@ -25,6 +26,20 @@ export const SystemCatalogView: React.FC<SystemCatalogViewProps> = ({ db = defau
   // Live queries
   const systems = useLiveQuery(() => getAllSystems(db), [db]) ?? [];
   const sshConfigs = useLiveQuery(() => getSshConfigs(db), [db]) ?? [];
+  const typeOptions = useSystemTypeOptions(db);
+
+  // A system left over from a deleted type must stay filterable.
+  const filterOptions = useMemo(() => {
+    const known = new Set(typeOptions.map((opt) => opt.value));
+    const extra = Array.from(
+      new Set(systems.map((s) => s.type).filter((type) => !known.has(type)))
+    );
+    return [
+      { value: 'ALL', label: 'Tất cả loại hệ thống' },
+      ...typeOptions.map((opt) => ({ value: opt.value, label: opt.label })),
+      ...extra.map((type) => ({ value: type, label: type })),
+    ];
+  }, [typeOptions, systems]);
 
   // Filter systems
   const filteredSystems = useMemo(() => {
@@ -131,14 +146,7 @@ export const SystemCatalogView: React.FC<SystemCatalogViewProps> = ({ db = defau
             value={typeFilter}
             onChange={setTypeFilter}
             style={{ width: 180 }}
-            options={[
-              { value: 'ALL', label: 'Tất cả loại hệ thống' },
-              { value: 'LOGICAL_GROUP', label: 'Parent System' },
-              { value: 'SERVICE', label: 'Service / Microservice' },
-              { value: 'SCHEMA', label: 'Database Schema' },
-              { value: 'UI', label: 'Frontend UI' },
-              { value: 'WORKER', label: 'Worker / Batch Job' },
-            ]}
+            options={filterOptions}
           />
         </Space>
 
@@ -186,6 +194,7 @@ export const SystemCatalogView: React.FC<SystemCatalogViewProps> = ({ db = defau
         <SystemTable
           systems={filteredSystems}
           sshConfigs={sshConfigs}
+          typeOptions={typeOptions}
           onAddSubsystem={handleAddSubsystem}
           onEditSystem={handleEditSystem}
           onDeleteSystem={handleDeleteSystem}

@@ -242,8 +242,9 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
         properties: {
           type: {
             type: 'string',
-            enum: ['LOGICAL_GROUP', 'SERVICE', 'SCHEMA', 'UI', 'WORKER'],
-            description: 'Optional system type filter.',
+            pattern: '^[A-Z][A-Z0-9_]*$',
+            description:
+              'Optional system type filter. Valid values come from the user-configurable system type list in Settings.',
           },
           search: {
             type: 'string',

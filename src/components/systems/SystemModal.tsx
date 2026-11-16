@@ -1,11 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Form, Input, Select, Button, Space, message } from 'antd';
+import { Modal, Form, Input, Select, AutoComplete, Button, Space, message } from 'antd';
 import { ApartmentOutlined, CloudServerOutlined, FolderOpenOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { getParentSystems } from '../../db/repositories/systemRepo';
 import { getSshConfigs } from '../../services/sshService';
 import { RemoteDirectoryBrowserModal } from '../common/RemoteDirectoryBrowserModal';
+import {
+  SYSTEM_TYPE_VALUE_MAX_LENGTH,
+  SYSTEM_TYPE_VALUE_PATTERN,
+  ensureSystemTypeOption,
+  useSystemTypeOptions,
+} from '../../services/system/systemTypeSettings';
 import type { System, SystemType } from '../../types/models';
 
 export interface SystemModalProps {
@@ -16,14 +22,6 @@ export interface SystemModalProps {
   onSave: (values: any) => Promise<void>;
   db?: TaskPlannerDatabase | undefined;
 }
-
-const SYSTEM_TYPE_OPTIONS = [
-  { value: 'LOGICAL_GROUP', label: 'Parent System (Logical Group / Nhóm hệ thống logic)' },
-  { value: 'SERVICE', label: 'Service / Microservice (Dịch vụ backend)' },
-  { value: 'SCHEMA', label: 'Database Schema (Lược đồ CSDL)' },
-  { value: 'UI', label: 'Frontend UI / Web Application (Giao diện)' },
-  { value: 'WORKER', label: 'Background Worker / Batch Job (Tiến trình nền)' },
-];
 
 /**
  * Anchor an invariant error on the field the user can act on. `parentId` / `sshConfigId` are
@@ -56,6 +54,7 @@ export const SystemModal: React.FC<SystemModalProps> = ({
   // Queries for parent systems & ssh configs
   const parentSystems = useLiveQuery(() => getParentSystems(db), [db]) ?? [];
   const sshConfigs = useLiveQuery(() => getSshConfigs(db), [db]) ?? [];
+  const typeOptions = useSystemTypeOptions(db);
 
   const isLogicalGroup = selectedType === 'LOGICAL_GROUP';
 
@@ -86,15 +85,20 @@ export const SystemModal: React.FC<SystemModalProps> = ({
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
+      const normalizedType = String(values.type ?? '').trim().toUpperCase();
+      // Persist a freshly typed type before saving so validation and every surface accept it.
+      if (!typeOptions.some((opt) => opt.value === normalizedType)) {
+        await ensureSystemTypeOption(normalizedType, db);
+      }
       // Sanitize inputs
       const payload: any = {
         name: values.name.trim(),
         code: values.code.trim().toUpperCase(),
-        type: values.type as SystemType,
+        type: normalizedType as SystemType,
         description: values.description?.trim() || undefined,
       };
 
-      if (values.type !== 'LOGICAL_GROUP') {
+      if (normalizedType !== 'LOGICAL_GROUP') {
         payload.parentId = values.parentId || null;
         payload.sshConfigId = values.sshConfigId || undefined;
         payload.remoteRepoPath = values.remoteRepoPath?.trim() || undefined;
@@ -138,11 +142,28 @@ export const SystemModal: React.FC<SystemModalProps> = ({
         <Form.Item
           name="type"
           label="Loại hệ thống"
-          rules={[{ required: true, message: 'Vui lòng chọn loại hệ thống' }]}
+          normalize={(val) => (val ? String(val).trim().toUpperCase() : val)}
+          rules={[
+            { required: true, message: 'Vui lòng chọn loại hệ thống' },
+            {
+              pattern: SYSTEM_TYPE_VALUE_PATTERN,
+              message:
+                'Loại hệ thống phải là CHỮ_HOA_SỐ_VIẾT_HOA (ví dụ: SERVICE)',
+            },
+            {
+              max: SYSTEM_TYPE_VALUE_MAX_LENGTH,
+              message: `Loại hệ thống tối đa ${SYSTEM_TYPE_VALUE_MAX_LENGTH} ký tự`,
+            },
+          ]}
         >
-          <Select
-            options={SYSTEM_TYPE_OPTIONS}
-            placeholder="Chọn loại hệ thống"
+          <AutoComplete
+            options={typeOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
+            placeholder="Chọn hoặc nhập loại hệ thống mới"
+            filterOption={(input, option) =>
+              String(option?.value ?? '')
+                .toLowerCase()
+                .includes(String(input ?? '').toLowerCase())
+            }
             onChange={(val) => {
               if (val === 'LOGICAL_GROUP') {
                 form.setFieldValue('parentId', undefined);

@@ -17,6 +17,11 @@ import type { ColumnsType } from 'antd/es/table';
 import type { System, SystemType } from '../../types/models';
 import type { SshConfig } from '../../types/ssh';
 import { isLogicalParent } from '../../db/repositories/systemRepo';
+import {
+  DEFAULT_SYSTEM_TYPE_OPTIONS,
+  SYSTEM_TYPE_FALLBACK_COLOR,
+  type SystemTypeOption,
+} from '../../services/system/systemTypeSettings';
 
 const { Text } = Typography;
 
@@ -29,46 +34,26 @@ export interface SystemTableProps {
   systems: System[];
   sshConfigs?: SshConfig[] | undefined;
   loading?: boolean | undefined;
+  typeOptions?: SystemTypeOption[] | undefined;
   onAddSubsystem: (parentId: string) => void;
   onEditSystem: (system: System) => void;
   onDeleteSystem: (system: System) => void;
 }
 
-export const SYSTEM_TYPE_CONFIG: Record<
-  SystemType,
-  { label: string; color: string; icon: React.ReactNode }
-> = {
-  LOGICAL_GROUP: {
-    label: 'Parent System',
-    color: '#722ed1',
-    icon: <FolderOutlined style={{ marginRight: 4 }} />,
-  },
-  SERVICE: {
-    label: 'Service',
-    color: '#13c2c2',
-    icon: <CodeOutlined style={{ marginRight: 4 }} />,
-  },
-  SCHEMA: {
-    label: 'DB Schema',
-    color: '#1890ff',
-    icon: <DatabaseOutlined style={{ marginRight: 4 }} />,
-  },
-  UI: {
-    label: 'Frontend UI',
-    color: '#eb2f96',
-    icon: <DesktopOutlined style={{ marginRight: 4 }} />,
-  },
-  WORKER: {
-    label: 'Worker',
-    color: '#fa8c16',
-    icon: <ThunderboltOutlined style={{ marginRight: 4 }} />,
-  },
+/** Icons are not user-editable; unknown types render with no icon. */
+const TYPE_ICONS: Record<string, React.ReactNode> = {
+  LOGICAL_GROUP: <FolderOutlined style={{ marginRight: 4 }} />,
+  SERVICE: <CodeOutlined style={{ marginRight: 4 }} />,
+  SCHEMA: <DatabaseOutlined style={{ marginRight: 4 }} />,
+  UI: <DesktopOutlined style={{ marginRight: 4 }} />,
+  WORKER: <ThunderboltOutlined style={{ marginRight: 4 }} />,
 };
 
 export const SystemTable: React.FC<SystemTableProps> = ({
   systems,
   sshConfigs = [],
   loading = false,
+  typeOptions = [...DEFAULT_SYSTEM_TYPE_OPTIONS],
   onAddSubsystem,
   onEditSystem,
   onDeleteSystem,
@@ -158,15 +143,14 @@ export const SystemTable: React.FC<SystemTableProps> = ({
       key: 'type',
       width: 140,
       render: (type: SystemType) => {
-        const config = SYSTEM_TYPE_CONFIG[type] || {
-          label: type,
-          color: '#8c8c8c',
-          icon: null,
-        };
+        const option = typeOptions.find((opt) => opt.value === type);
         return (
-          <Tag color={config.color} style={{ display: 'inline-flex', alignItems: 'center' }}>
-            {config.icon}
-            <span>{config.label}</span>
+          <Tag
+            color={option?.color ?? SYSTEM_TYPE_FALLBACK_COLOR}
+            style={{ display: 'inline-flex', alignItems: 'center' }}
+          >
+            {TYPE_ICONS[type]}
+            <span>{option?.label ?? type}</span>
           </Tag>
         );
       },
