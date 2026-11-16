@@ -16,6 +16,7 @@ import {
   type DocumentPublishStatus,
 } from '../../db/repositories/documentSetRepo';
 import { RECOMMENDED_DOC_TEMPLATE } from '../../views/NotesView';
+import { downloadFolderAsZip } from '../../utils/exportFolderZip';
 import { DocFolderTree } from '../../components/notes/DocFolderTree';
 import { useLayoutStore } from '../store/layoutStore';
 
@@ -362,6 +363,11 @@ export function DocsExplorer({ db = defaultDb }: DocsExplorerProps) {
     [db]
   );
 
+  const handleDownloadFolder = useCallback(
+    (folder: Note) => downloadFolderAsZip(folder, allNotes ?? []),
+    [allNotes]
+  );
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <DocFolderTree
@@ -379,6 +385,7 @@ export function DocsExplorer({ db = defaultDb }: DocsExplorerProps) {
         onEmptyTrash={handleEmptyTrash}
         onClearSpecialFolder={handleClearSpecialFolder}
         onUnpinAll={handleUnpinAll}
+        onDownloadFolder={handleDownloadFolder}
         activeTag={activeTag}
         onSelectTag={setActiveTag}
         publishStatuses={publishStatuses}

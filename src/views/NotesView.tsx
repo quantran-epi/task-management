@@ -18,6 +18,7 @@ import {
   CopyOutlined,
   DatabaseOutlined,
   FileTextOutlined,
+  UploadOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -54,7 +55,7 @@ import type { CachedActiveSnapshotManifest, ChangePreview } from '../services/kn
 import { DocFolderTree } from '../components/notes/DocFolderTree';
 import { DocEditorPane } from '../components/notes/DocEditorPane';
 import { ZipImportPreviewModal } from '../components/notes/ZipImportPreviewModal';
-import { exportFolderAsZip } from '../utils/exportFolderZip';
+import { downloadFolderAsZip } from '../utils/exportFolderZip';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
 import { useLayoutStore } from '../workbench/store/layoutStore';
 import { ResizeSplitter } from '../components/common/ResizeSplitter';
@@ -992,15 +993,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
   };
 
   const handleDownloadFolder = async (folder: Note) => {
-    try {
-      message.loading({ content: `Đang nén thư mục "${folder.title || 'Thư mục'}"...`, key: 'download-folder' });
-      const fullNotes = allNotes || (await db.notes.toArray());
-      await exportFolderAsZip(folder, fullNotes);
-      message.success({ content: `Tải xuống thành công thư mục "${folder.title || 'Thư mục'}"`, key: 'download-folder' });
-    } catch (err: any) {
-      console.error('Download folder error:', err);
-      message.error({ content: `Không thể tải thư mục: ${err?.message || 'Lỗi không xác định'}`, key: 'download-folder' });
-    }
+    await downloadFolderAsZip(folder, allNotes || (await db.notes.toArray()));
   };
 
   const handleOpenPopout = () => {
@@ -1053,6 +1046,39 @@ export const NotesView: React.FC<NotesViewProps> = ({
             </Space>
           }
         />
+      )}
+
+      {/* Compact toolbar when embedded in workbench editor (tree lives in the Docs tool window) */}
+      {hideFolderTree && (
+        <div
+          data-testid="docs-compact-toolbar"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '4px 12px',
+            minHeight: 36,
+            borderBottom: '1px solid #f0f0f0',
+            backgroundColor: '#ffffff',
+            flexShrink: 0,
+          }}
+        >
+          <Space size={8}>
+            <Button
+              size="small"
+              icon={<DatabaseOutlined />}
+              onClick={() => setDocumentSetDrawerOpen(true)}
+            >
+              Bộ tài liệu
+            </Button>
+            <Button size="small" icon={<UploadOutlined />} onClick={handleOpenZipImport}>
+              Nhập Zip
+            </Button>
+            <Button size="small" icon={<RobotOutlined />} onClick={() => setAiPromptModalOpen(true)}>
+              Prompt AI
+            </Button>
+          </Space>
+        </div>
       )}
 
       {/* 2. Main Workspace */}

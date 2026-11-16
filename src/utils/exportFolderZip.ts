@@ -1,4 +1,5 @@
 import JSZip from 'jszip';
+import { message } from 'antd';
 import type { Note } from '../types/models';
 
 /**
@@ -101,4 +102,26 @@ export async function exportFolderAsZip(
   anchor.click();
   document.body.removeChild(anchor);
   URL.revokeObjectURL(downloadUrl);
+}
+
+/**
+ * Exports a folder as a ZIP with user-facing loading/success/error feedback.
+ * Shared by the non-workbench DocFolderTree and the workbench DocsExplorer.
+ */
+export async function downloadFolderAsZip(
+  folder: Note,
+  allNotes: readonly Note[]
+): Promise<void> {
+  const label = folder.title || 'Thư mục';
+  try {
+    message.loading({ content: `Đang nén thư mục "${label}"...`, key: 'download-folder' });
+    await exportFolderAsZip(folder, allNotes);
+    message.success({ content: `Tải xuống thành công thư mục "${label}"`, key: 'download-folder' });
+  } catch (err: any) {
+    console.error('Download folder error:', err);
+    message.error({
+      content: `Không thể tải thư mục: ${err?.message || 'Lỗi không xác định'}`,
+      key: 'download-folder',
+    });
+  }
 }
