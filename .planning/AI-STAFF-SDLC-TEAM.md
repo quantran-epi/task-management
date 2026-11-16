@@ -133,7 +133,7 @@ Chuyên viên phân tích nghiệp vụ
 **Capability**
 
 ```
-Phân tích và chuẩn hóa nghiệp vụ SHB. Giao cho tôi: đọc PL01/PL02 thô trong CR notes, đối chiếu dữ liệu Oracle và tài liệu đã có, bóc yêu cầu ẩn và chỗ mâu thuẫn, viết tài liệu requirement chuẩn hóa có mã REQ đo được, liệt kê câu hỏi mở. Không viết lại PL01/PL02, không làm kiến trúc, không review code, không viết test case.
+Phân tích và chuẩn hóa nghiệp vụ SHB. Giao cho tôi: đọc PL01/PL02 thô trong CR notes, đối chiếu Oracle và tài liệu có sẵn, bóc yêu cầu ẩn và chỗ mâu thuẫn, viết tài liệu requirement chuẩn hóa có mã REQ đo được, liệt kê câu hỏi mở. Không viết lại PL01/PL02, không kiến trúc, không review code/test.
 ```
 
 **Persona**
@@ -185,7 +185,7 @@ SOP chuẩn hóa requirement từ PL01/PL02
 **Skill description**
 
 ```
-Quy trình đào sâu PL01/PL02 thô của SHB và viết tài liệu requirement chuẩn hóa: mục lục bắt buộc, quy ước mã REQ, mẫu câu requirement đo được, bảng actor/luồng/exception, danh mục yêu cầu ẩn phải quét, checklist điều kiện chốt. Đọc toàn văn khi bắt đầu phân tích nghiệp vụ hoặc viết tài liệu requirement.
+Quy trình đào sâu PL01/PL02 thô của SHB và viết tài liệu requirement chuẩn hóa: mục lục bắt buộc, quy ước mã REQ, mẫu câu requirement đo được, bảng actor/luồng/exception, danh mục yêu cầu ẩn phải quét, checklist điều kiện chốt. Đọc toàn văn trước khi phân tích nghiệp vụ.
 ```
 
 **Skill body**
@@ -421,7 +421,7 @@ SOP ra PL03 draft (solution)
 **Skill description**
 
 ```
-Quy trình ra PL03 draft cho SHB: mục lục bắt buộc theo PL03B thật, bảng so sánh phương án, cách mô tả data model và API contract, mục rủi ro và migration, thứ tự bước implement, quy ước Markdown để convert sang Word, checklist đủ điều kiện chuyển sang coding. Đọc toàn văn trước khi nghiên cứu giải pháp hoặc viết PL03.
+Quy trình ra PL03 draft cho SHB: mục lục bắt buộc theo PL03B thật, bảng so sánh phương án, cách mô tả data model và API contract, mục rủi ro và migration, thứ tự bước implement, checklist đủ điều kiện chuyển sang coding. Đọc toàn văn trước khi nghiên cứu giải pháp hoặc viết PL03.
 ```
 
 **Skill body**
@@ -688,7 +688,7 @@ SOP review code và PL03/PL07 final
 **Skill description**
 
 ```
-Checklist review code SHB và quy trình viết bản cuối: nhóm lỗi bắt buộc kiểm, tiêu chí phân loại blocker/major/minor, mẫu ghi phát hiện, checklist PL07 sáu nhóm theo biên bản code review SHB, mục lục PL03 final, quy ước Markdown để convert sang Word, quy tắc đồng bộ tài liệu với code thực tế. Đọc toàn văn trước khi review hoặc viết bản final.
+Checklist review code SHB và quy trình viết bản cuối: nhóm lỗi bắt buộc kiểm, tiêu chí phân loại blocker/major/minor, mẫu ghi phát hiện, checklist PL07 sáu nhóm theo biên bản SHB, mục lục PL03 final, quy tắc đồng bộ tài liệu với code thực tế. Đọc toàn văn trước khi review hoặc viết bản final.
 ```
 
 **Skill body**
@@ -1012,7 +1012,7 @@ SOP kiểm thử manual và automation
 **Skill description**
 
 ```
-Quy trình kiểm thử SHB: mẫu test plan, format test case và quy ước mã case bám mã REQ, ma trận phủ requirement, danh mục kịch bản bắt buộc phủ, tiêu chí chọn case automation, cấu trúc script và quy ước dữ liệu test, định nghĩa phạm vi regression. Đọc toàn văn trước khi lên phương án test hoặc viết automation.
+Quy trình kiểm thử SHB: mẫu test plan, format test case và quy ước mã case bám mã REQ, ma trận phủ requirement, danh mục kịch bản bắt buộc phủ, tiêu chí chọn case automation, quy ước dữ liệu test, định nghĩa phạm vi regression. Đọc toàn văn trước khi lên phương án test hoặc viết automation.
 ```
 
 **Skill body**
