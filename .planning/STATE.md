@@ -79,6 +79,9 @@ Progress: [██████████] 93%
 | 261114-r2m | Fix team-chat bubble borders (all four sides, border-box, inset lead accent) and grouped-row alignment | 2026-11-14 | 80c961dc | — |
 | 261114-r2n | Space team-chat rows by author (4px same block, 20px across authors) and label plan/synthesis rows | 2026-11-14 | eb788b72 | — |
 | 261115-q4n | Fix 3 UAT-41 defects: lead prompt write_doc fact, send() ordering + MCP timeout, ensureDocsReady error visibility | 2026-11-15 | e8557959 | [261115-q4n-fix-3-uat-41-defects-lead-prompt-write-d](./quick/261115-q4n-fix-3-uat-41-defects-lead-prompt-write-d/) |
+| 261116-e62 | AI mutation tools for Systems: create_system, update_system, delete_system | 2026-11-16 | 469deb2b | .planning/quick/261116-e62-ai-mutation-tools-for-systems-add-create-system-update-syste |
+| 261116-e63 | AI tools for Mermaid diagrams: query_diagrams, create_diagram, update_diagram | 2026-11-16 | 4fff0a59 | .planning/quick/261116-e63-ai-tools-for-mermaid-diagrams-add-query-diagrams-read-create |
+| 261116-e64 | Configurable system type list backed by settings | 2026-11-16 | bfad78fb | .planning/quick/261116-e64-configurable-system-type-list-systemtype-is-a-hardcoded-unio |
 
 ## Accumulated Context
 

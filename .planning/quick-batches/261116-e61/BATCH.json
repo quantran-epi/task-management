@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "batch_id": "261116-e61",
+  "created_at": "2026-11-16T03:12:02.010Z",
+  "options": {},
+  "base_revision": "72e0ed535d0502482c0a5d916e7c01b854f3014d",
+  "items": [
+    {
+      "quick_id": "261116-e62",
+      "client_id": null,
+      "description": "AI mutation tools for Systems: add create_system, update_system, delete_system to src/services/ai/aiTools.ts (AI_DATABASE_TOOLS definitions + executeAiTool cases + MUTATION_TOOLS + describeToolMutation/describeToolMutationWithContext + getFriendlyToolLabel in aiOrchestratorLoop). Use createSystem/updateSystem/deleteSystem from src/db/repositories/systemRepo.ts. Tools must return JSON string errors instead of throwing. Preserve invariants: LOGICAL_GROUP has no SSH/repo, subsystem parent must be LOGICAL_GROUP, code unique.",
+      "status": "complete",
+      "depends_on": [],
+      "planned_files": [
+        "src/services/ai/aiTools.ts",
+        "src/services/ai/aiOrchestratorLoop.ts",
+        "tests/ai/aiTools.test.ts",
+        "tests/ai/aiToolsSystemMutations.test.ts"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 0,
+      "commit": "469deb2b",
+      "failure_reason": null
+    },
+    {
+      "quick_id": "261116-e63",
+      "client_id": null,
+      "description": "AI tools for Mermaid diagrams: add query_diagrams (read), create_diagram, update_diagram in aiTools. Diagram is a Note with type 'diagram' whose body is mermaid source. Use createNote/updateNote. query_diagrams filters by tag/title/entity and returns id/title/tags/updatedAt WITHOUT full body by default, with an includeBody parameter. create_diagram and update_diagram go into MUTATION_TOOLS; query_diagrams does not.",
+      "status": "complete",
+      "depends_on": [],
+      "planned_files": [
+        "src/services/ai/aiTools.ts",
+        "tests/ai/diagramTools.test.ts"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 1,
+      "commit": "4fff0a59",
+      "failure_reason": null
+    },
+    {
+      "quick_id": "261116-e64",
+      "client_id": null,
+      "description": "Configurable system type list: SystemType is a hardcoded union in src/types/models.ts, z.enum in src/validation/schemas.ts, options hardcoded in SystemModal.tsx, SystemTable.tsx SYSTEM_TYPE_CONFIG, SystemDetailView.tsx SYSTEM_TYPE_TAG, TargetSystemsSelector.tsx TYPE_TAG_COLORS/TYPE_LABELS, SystemCatalogView.tsx filter, backupSchemas.ts, and query_systems enum. Make types user-extensible at runtime: store {value,label,color} list in the settings table under its own key with defaults fallback, read through useLiveQuery so UI updates. Keep the LOGICAL_GROUP-is-parent invariant. SystemModal uses AutoComplete allowing a new type value which gets persisted. Add add/edit/delete management UI in SettingsView. Validation accepts /^[A-Z][A-Z0-9_]*$/ instead of a fixed enum; backup import accepts types beyond defaults.",
+      "status": "complete",
+      "depends_on": [
+        "261116-e62"
+      ],
+      "planned_files": [
+        "src/types/models.ts",
+        "src/validation/schemas.ts",
+        "src/validation/backupSchemas.ts",
+        "src/services/system/systemTypeSettings.ts",
+        "src/services/system/__tests__/systemTypeSettings.test.ts",
+        "src/components/systems/SystemModal.tsx",
+        "src/components/systems/SystemTable.tsx",
+        "src/views/SystemCatalogView.tsx",
+        "src/services/ai/aiTools.ts",
+        "src/views/SystemDetailView.tsx",
+        "src/components/changeRequests/TargetSystemsSelector.tsx",
+        "src/components/settings/SystemTypeOptionsCard.tsx",
+        "src/views/SettingsView.tsx"
+      ],
+      "directory": null,
+      "worktree": null,
+      "dispatched_worktree": null,
+      "dispatched_branch": null,
+      "dispatched_base": null,
+      "wave": 2,
+      "commit": "bfad78fb",
+      "failure_reason": null
+    }
+  ]
+}
