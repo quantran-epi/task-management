@@ -51,6 +51,7 @@ describe('buildExploreCommand (43-04 D-03)', () => {
     const q = `'"'\\''; $(rm -rf /); echo '\\'''`;
     expect(cmd).toBe(
       `cd ${q} && claude -p --output-format json --allowedTools Read,Grep,Glob ` +
+        `--disallowedTools Bash,Edit,Write,NotebookEdit --setting-sources '' ` +
         `--model ${q} --max-turns 20 --no-session-persistence --append-system-prompt ` +
         `'Bạn đang đọc một repository trên chính máy này để trả lời một câu hỏi về mã nguồn.\n` +
         `Chỉ kết luận từ những tệp bạn thực sự đã đọc; không suy đoán về tệp chưa mở.\n` +
@@ -59,6 +60,17 @@ describe('buildExploreCommand (43-04 D-03)', () => {
         `Toàn bộ câu trả lời dưới 1500 từ. Xuất văn bản thuần, không dùng bảng markdown.' ` +
         `-- ${q}`
     );
+  });
+
+  it('ignores the repo settings so its own allow-list cannot grant Bash', () => {
+    const cmd = buildExploreCommand(request());
+
+    // Verified against the real CLI: a repo `.claude/settings.json` with
+    // `permissions.allow: ["Bash"]` made the run execute `touch pwned.txt` even though
+    // `--allowedTools` never named Bash. `--setting-sources ''` closes that, and
+    // `--disallowedTools` is the second belt.
+    expect(cmd).toContain(`--setting-sources ''`);
+    expect(cmd).toContain('--disallowedTools Bash,Edit,Write,NotebookEdit');
   });
 
   it('puts the prompt after -- so a question beginning with "-" is not an option', () => {
