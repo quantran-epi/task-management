@@ -118,9 +118,9 @@ export function mergeUncommittedFilesIntoTree(
 
 
 /**
- * WR-05: an argument the caller got wrong, not an infrastructure failure. The `git_read`
- * handler maps this to `INVALID_ARGUMENT` so the model corrects the path instead of retrying
- * the same escape or reporting a broken SSH connection.
+ * A path this tool will not read, including traversal and symlink policy refusals.
+ * The `git_read` handler maps this to `INVALID_ARGUMENT`, not infrastructure failure,
+ * so the caller chooses another path instead of reporting a broken SSH connection.
  */
 export class PathOutsideRepoError extends Error {}
 
@@ -153,7 +153,7 @@ export function confineRepoPath(filePath: string, label = 'Đường dẫn'): st
 }
 
 /**
- * A `git show` failure that means "this path is not in the ref" — the one case a
+ * A `git cat-file` failure that means "this path is not in the ref" — the one case a
  * working-tree fallback can legitimately answer. Anything else (bad ref, SSH down) must
  * propagate, or the reviewer reads the working copy believing it is the branch (WR-01).
  *
@@ -204,7 +204,7 @@ export async function getRemoteTree(
 }
 
 /**
- * Fetches exact file blob content at a ref using git show <ref>:<filePath>.
+ * Fetches exact file blob content at a ref using git cat-file -p <ref>:<filePath>.
  * Invariant: Read-only command. NEVER calls git checkout or modifies working copy.
  * Falls back to reading directly from remote working copy ONLY when the path genuinely is
  * not in the ref (e.g. an untracked file). A bad ref, an SSH failure or an escaping path
@@ -221,8 +221,9 @@ export async function getRemoteFileContent(
   const cleanPath = confineRepoPath(filePath, 'Đường dẫn tệp');
   const objectSpec = `${ref}:${cleanPath}`;
   // CR-01: `--end-of-options` so a ref beginning with `-` cannot become `--output=<file>`.
-  // WR-12: no repo-local diff drivers on a read.
-  const gitArgs = ['show', '--no-ext-diff', '--no-textconv', '--end-of-options', escapeShellArg(objectSpec)];
+  // Literal object lookup: `show` can silently succeed with no output for a missing glob.
+  // cat-file does not invoke repo-local diff drivers or textconv.
+  const gitArgs = ['cat-file', '-p', '--end-of-options', escapeShellArg(objectSpec)];
   try {
     return await runGitCommand(config, repoPath, gitArgs, secret);
   } catch (err: any) {
@@ -230,21 +231,18 @@ export async function getRemoteFileContent(
     // WR-01: "exists on disk, but not in <ref>" also matches a path that is TRACKED but deleted
     // in <ref> — and the working copy then holds whatever another branch has. Fall back only
     // for a path git does not track at all, i.e. a genuine untracked file.
-    const tracked = await runGitCommand(
+    const probe = await execRemoteCommand(
       config,
-      repoPath,
-      ['ls-files', '--error-unmatch', '--', escapeShellArg(cleanPath)],
+      `git -C ${escapeShellArg(repoPath)} -c core.fsmonitor=false --no-pager --literal-pathspecs ` +
+        `ls-files --error-unmatch -- ${escapeShellArg(cleanPath)}`,
       secret
-    ).catch(() => '');
-    if (tracked.trim()) throw err;
-    try {
-      return await getRemoteWorkingFileContent(config, repoPath, cleanPath, secret);
-    } catch (fallbackErr) {
-      // WR-02: a refused symlink is a deliberate answer, not a fallback failure — report it.
-      if (fallbackErr instanceof PathOutsideRepoError) throw fallbackErr;
-      // Re-throw original git error if fallback also fails
-      throw err;
+    );
+    if (probe.exitStatus === 0) throw err;
+    // Only exit 1 means untracked; infrastructure and SSH failures must stay failures.
+    if (probe.exitStatus !== 1) {
+      throw new Error(probe.stderr.trim() || `Lệnh git thất bại với exit code ${probe.exitStatus}`);
     }
+    return await getRemoteWorkingFileContent(config, repoPath, cleanPath, secret);
   }
 }
 
@@ -262,21 +260,23 @@ export async function getRemoteWorkingFileContent(
   const cleanPath = confineRepoPath(filePath, 'Đường dẫn tệp');
   const targetFile = `${repoPath.replace(/\/+$/, '')}/${cleanPath}`;
 
-  // WR-02: `confineRepoPath` confines the path STRING, but `cat` resolves symlinks — an untracked
-  // symlink inside the repo is exactly what this fallback serves, and it would read the target.
-  // Refuse a symlink rather than follow it out of the repository. One round trip: `test -L`
-  // prints the marker, otherwise `cat` runs. A file whose whole content is the marker is
-  // refused too — failing closed on a vanishingly unlikely name beats a second SSH call.
-  const SYMLINK_MARKER = '__GIT_READ_SYMLINK_REFUSED__';
+  // Canonicalize BOTH paths: parent/leaf symlinks, relative roots and symlinked roots.
+  // Appending '/' preserves trailing newlines through shell command substitution; remove
+  // that sentinel and realpath's output newline before checking a literal directory boundary.
+  // Missing/failed realpath must stop before cat. Exit 77 is policy refusal, not file content.
+  // ponytail: assumes a stable remote filesystem; hostile concurrent swaps need native openat.
   const cmd =
-    `test -L ${escapeShellArg(targetFile)} && echo ${SYMLINK_MARKER} || ` +
-    `cat -- ${escapeShellArg(targetFile)}`;
+    `root=$(realpath -e -- ${escapeShellArg(repoPath)} && printf /) || exit 1; ` +
+    `root=\${root%?}; root=\${root%?}; ` +
+    `target=$(realpath -e -- ${escapeShellArg(targetFile)} && printf /) || exit 1; ` +
+    `target=\${target%?}; target=\${target%?}; ` +
+    `case "$target" in "\${root%/}/"*) cat -- "$target" ;; *) exit 77 ;; esac`;
   const res = await execRemoteCommand(config, cmd, secret);
+  if (res.exitStatus === 77) {
+    throw new PathOutsideRepoError(`Đường dẫn symlink ngoài repo, từ chối đọc: ${cleanPath}`);
+  }
   if (res.exitStatus !== 0) {
     throw new Error(res.stderr || `Failed to read ${cleanPath}`);
-  }
-  if (res.stdout.trimEnd() === SYMLINK_MARKER) {
-    throw new PathOutsideRepoError(`Đường dẫn là symlink, từ chối đọc: ${cleanPath}`);
   }
   return res.stdout || '';
 }

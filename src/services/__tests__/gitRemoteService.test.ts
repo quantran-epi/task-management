@@ -58,7 +58,7 @@ describe('gitRemoteService - Task 1 Tracer Slice', () => {
       const res = await runGitCommand(dummyConfig, '/var/repo', ['--version']);
       expect(sshService.execRemoteCommand).toHaveBeenCalledWith(
         dummyConfig,
-        "git -C '/var/repo' --no-pager --version",
+        "git -C '/var/repo' -c core.fsmonitor=false --no-pager --version",
         undefined
       );
       expect(res).toBe('git version 2.43.0\n');
@@ -137,7 +137,7 @@ describe('gitRemoteService - Task 1 Tracer Slice', () => {
       ]);
       expect(sshService.execRemoteCommand).toHaveBeenCalledWith(
         dummyConfig,
-        "git -C '/var/repo' --no-pager status --porcelain=v1 -z",
+        "git -C '/var/repo' -c core.fsmonitor=false --no-pager status --porcelain=v1 -z",
         undefined
       );
     });
@@ -281,14 +281,14 @@ describe('gitRemoteService - Task 1 Tracer Slice', () => {
 
       const commands = vi.mocked(sshService.execRemoteCommand).mock.calls.map((call) => call[1]);
       expect(commands[0]).toBe(
-        "git -C '/var/repo' --no-pager rev-parse --verify --end-of-options 'feature/pay'"
+        "git -C '/var/repo' -c core.fsmonitor=false --no-pager rev-parse --verify --end-of-options 'feature/pay'"
       );
       expect(commands[2]).toBe(
-        "git -C '/var/repo' --no-pager diff --numstat -z -M --no-ext-diff --no-textconv " +
+        "git -C '/var/repo' -c core.fsmonitor=false --no-pager diff --numstat -z -M --no-ext-diff --no-textconv " +
           "--end-of-options 'main..feature/pay'"
       );
       expect(commands[3]).toBe(
-        "git -C '/var/repo' --no-pager diff --name-status -z -M --no-ext-diff --no-textconv " +
+        "git -C '/var/repo' -c core.fsmonitor=false --no-pager diff --name-status -z -M --no-ext-diff --no-textconv " +
           "--end-of-options 'main..feature/pay'"
       );
     });
@@ -324,7 +324,7 @@ describe('gitRemoteService - Task 1 Tracer Slice', () => {
       const diff = await getFileDiff(dummyConfig, '/var/repo', 'main', 'feature/pay', 'src/a.ts');
       expect(sshService.execRemoteCommand).toHaveBeenCalledWith(
         dummyConfig,
-        "git -C '/var/repo' --no-pager diff --no-ext-diff --no-textconv " +
+        "git -C '/var/repo' -c core.fsmonitor=false --no-pager --literal-pathspecs diff --no-ext-diff --no-textconv " +
           "--end-of-options 'main..feature/pay' -- 'src/a.ts'",
         undefined
       );

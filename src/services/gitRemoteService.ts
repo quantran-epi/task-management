@@ -28,7 +28,8 @@ export async function runGitCommand(
   gitArgs: string[],
   secret?: string
 ): Promise<string> {
-  const command = `git -C ${escapeShellArg(repoPath)} --no-pager ${gitArgs.join(' ')}`;
+  // Read commands must never execute a repository-configured fsmonitor hook.
+  const command = `git -C ${escapeShellArg(repoPath)} -c core.fsmonitor=false --no-pager ${gitArgs.join(' ')}`;
   const res = await execRemoteCommand(config, command, secret);
   if (res.exitStatus !== 0) {
     throw new Error(res.stderr.trim() || `Lệnh git thất bại với exit code ${res.exitStatus}`);
@@ -342,8 +343,8 @@ export async function getFileDiff(
     config,
     repoPath,
     // WR-12: no repo-local diff drivers. CR-01: `--end-of-options` before the range; the
-    // `--` path separator then keeps the file path a path.
-    ['diff', '--no-ext-diff', '--no-textconv', '--end-of-options', rangeArg, '--', escapeShellArg(filePath)],
+    // `--literal-pathspecs` also prevents glob/magic expansion of a single filename.
+    ['--literal-pathspecs', 'diff', '--no-ext-diff', '--no-textconv', '--end-of-options', rangeArg, '--', escapeShellArg(filePath)],
     secret
   );
 }

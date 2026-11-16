@@ -1202,7 +1202,7 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
       case 'diff_file': {
         const baseBranch = revisionArg(args.base);
         const targetBranch = revisionArg(args.target);
-        const filePath = typeof args.filePath === 'string' ? args.filePath.trim() : '';
+        const filePath = typeof args.filePath === 'string' ? args.filePath : '';
         if (!baseBranch || !targetBranch || !filePath) {
           return JSON.stringify(
             refuse(
@@ -1229,7 +1229,7 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
       }
       case 'read_file': {
         const branch = revisionArg(args.branch);
-        const filePath = typeof args.filePath === 'string' ? args.filePath.trim() : '';
+        const filePath = typeof args.filePath === 'string' ? args.filePath : '';
         if (!branch || !filePath) {
           return JSON.stringify(
             refuse(
@@ -1279,8 +1279,8 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
         );
     }
   } catch (err: any) {
-    // WR-05: a rejected path is the model's argument mistake, not an infrastructure failure.
-    // Reporting it as GIT_READ_FAILED made the model retry the same escape or blame SSH.
+    // INVALID_ARGUMENT includes paths this tool will not read (traversal or symlink policy),
+    // not only malformed input. GIT_READ_FAILED would incorrectly blame infrastructure.
     if (err instanceof PathOutsideRepoError) {
       return JSON.stringify(
         refuse('INVALID_ARGUMENT', wrapUntrusted(gitLabel('ĐƯỜNG DẪN'), err.message))

@@ -366,7 +366,7 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     // Pinned to a literal, independent of `escapeShellArg`, so a handler that concatenates a
     // raw value produces a different string and fails.
     expect(cmd).toBe(
-      "git -C '/srv/repo' --no-pager diff --no-ext-diff --no-textconv --end-of-options " +
+      "git -C '/srv/repo' -c core.fsmonitor=false --no-pager --literal-pathspecs diff --no-ext-diff --no-textconv --end-of-options " +
         "'main..feature/x' -- ''\\''; rm -rf /; echo '\\'''"
     );
   });
@@ -384,7 +384,7 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     // WR-07: pinned literal, independent of `escapeShellArg`. Building the expectation from the
     // function under test would keep passing if it regressed to identity.
     expect(cmd).toBe(
-      "git -C '/srv/repo' --no-pager show --no-ext-diff --no-textconv --end-of-options " +
+      "git -C '/srv/repo' -c core.fsmonitor=false --no-pager cat-file -p --end-of-options " +
         "''\\''; rm -rf /; echo '\\'':src/app.ts'"
     );
   });
@@ -397,7 +397,7 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     const cmd = vi.mocked(execRemoteCommand).mock.calls.at(-1)![1];
     // WR-07: pinned literal. Options precede `--end-of-options`; the branch follows it.
     expect(cmd).toBe(
-      "git -C '/srv/repo' --no-pager log -n 20 --format='%x1e%H%x00%h%x00%an%x00%ad%x00%s' " +
+      "git -C '/srv/repo' -c core.fsmonitor=false --no-pager log -n 20 --format='%x1e%H%x00%h%x00%an%x00%ad%x00%s' " +
         "--date=iso --end-of-options ''\\''; rm -rf /; echo '\\'''"
     );
   });
@@ -415,7 +415,7 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     expect(calls).toHaveLength(4);
     // Third call is `diff --numstat <range>`.
     expect(calls.at(-2)![1]).toBe(
-      "git -C '/srv/repo' --no-pager diff --numstat -z -M --no-ext-diff --no-textconv " +
+      "git -C '/srv/repo' -c core.fsmonitor=false --no-pager diff --numstat -z -M --no-ext-diff --no-textconv " +
         "--end-of-options ''\\''; rm -rf /; echo '\\''..main'"
     );
   });
@@ -446,6 +446,35 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
   // Block C — confinement: the inputs a prompt-injected reviewer actually tries (CR-01/CR-02,
   // WR-11). These are the security boundary of the phase; Block B only proves shell escaping.
   // ---------------------------------------------------------------------------------------
+
+  it('uses the default branch for an explicitly empty log branch', async () => {
+    queue(LOG_OUT);
+    const res = JSON.parse(await executeTeamTool('git_read', { action: 'log', branch: '' }, ctx()));
+    expect(res.branch).toBe('main');
+    expect(vi.mocked(execRemoteCommand).mock.calls[0]![1]).toContain("--end-of-options 'main'");
+  });
+
+  it('refuses a non-string log branch without running git', async () => {
+    const res = JSON.parse(await executeTeamTool('git_read', { action: 'log', branch: 42 }, ctx()));
+    expect(res).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
+    expect(execRemoteCommand).not.toHaveBeenCalled();
+  });
+
+  it.each(['read_file', 'diff_file'])('%s preserves filename whitespace instead of selecting a different file', async (action) => {
+    vi.mocked(execRemoteCommand).mockImplementation(async (_config, command) => ({
+      stdout: command.endsWith("'main: spaced.txt '") || command.endsWith("-- ' spaced.txt '")
+        ? 'EXACT-FILE' : 'OTHER-FILE',
+      stderr: '', exitStatus: 0,
+    }));
+    for (const filePath of [' spaced.txt ', 'spaced.txt']) {
+      const res = JSON.parse(await executeTeamTool('git_read', {
+        action, branch: 'main', base: 'main', target: 'feature/x', filePath,
+      }, ctx()));
+      expect(res[action === 'read_file' ? 'content' : 'diff'])
+        .toContain(filePath === ' spaced.txt ' ? 'EXACT-FILE' : 'OTHER-FILE');
+      expect(res.filePath).toContain(`\n${filePath}\n`);
+    }
+  });
 
   it('refuses a log branch beginning with "-" and never runs git (CR-01)', async () => {
     const res = JSON.parse(
@@ -562,10 +591,10 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
       )
     );
     expect(res.content).toContain('export const untracked = 1;');
-    expect(vi.mocked(execRemoteCommand).mock.calls.at(-1)![1]).toBe(
-      "test -L '/srv/repo/untracked.ts' && echo __GIT_READ_SYMLINK_REFUSED__ || " +
-        "cat -- '/srv/repo/untracked.ts'"
-    );
+    const command = vi.mocked(execRemoteCommand).mock.calls.at(-1)![1];
+    expect(command).toContain("root=$(realpath -e -- '/srv/repo' && printf /) || exit 1;");
+    expect(command).toContain("target=$(realpath -e -- '/srv/repo/untracked.ts' && printf /) || exit 1;");
+    expect(command).toContain('case "$target" in "${root%/}/"*) cat -- "$target" ;; *) exit 77 ;; esac');
   });
 
   it('does not fall back for a path tracked but deleted in the requested ref (WR-01)', async () => {

@@ -127,7 +127,7 @@ describe('gitRemoteTreeService', () => {
   });
 
   describe('getRemoteFileContent', () => {
-    it('executes git show <ref>:<filePath> with escaped arguments', async () => {
+    it('executes literal git cat-file <ref>:<filePath> with escaped arguments', async () => {
       const runSpy = vi.spyOn(gitRemoteService, 'runGitCommand').mockResolvedValue('console.log("hello world");');
 
       const content = await getRemoteFileContent(
@@ -141,7 +141,7 @@ describe('gitRemoteTreeService', () => {
       expect(runSpy).toHaveBeenCalledWith(
         dummyConfig,
         '/home/user/repo',
-        ['show', '--no-ext-diff', '--no-textconv', '--end-of-options', "'main:src/index.ts'"],
+        ['cat-file', '-p', '--end-of-options', "'main:src/index.ts'"],
         'secret-pass'
       );
       expect(content).toBe('console.log("hello world");');
@@ -168,7 +168,7 @@ describe('gitRemoteTreeService', () => {
       expect(runSpy).toHaveBeenCalledWith(
         dummyConfig,
         '/home/user/repo',
-        ['show', '--no-ext-diff', '--no-textconv', '--end-of-options', "'main:README.md'"],
+        ['cat-file', '-p', '--end-of-options', "'main:README.md'"],
         undefined
       );
     });
@@ -189,24 +189,21 @@ describe('gitRemoteTreeService', () => {
     // WR-01: "exists on disk, but not in <ref>" also covers a path TRACKED but deleted in <ref>.
     // The working copy then holds another branch's version, so it must not be substituted.
     it('does not fall back for a path tracked but deleted in the requested ref', async () => {
-      const runSpy = vi
-        .spyOn(gitRemoteService, 'runGitCommand')
-        .mockRejectedValueOnce(
-          new Error("fatal: path 'gone.txt' exists on disk, but not in 'feature/x'")
-        )
-        .mockResolvedValueOnce('gone.txt\n'); // ls-files --error-unmatch: tracked
-      const execSpy = vi.spyOn(sshService, 'execRemoteCommand');
+      vi.spyOn(gitRemoteService, 'runGitCommand').mockRejectedValueOnce(
+        new Error("fatal: path 'gone.txt' exists on disk, but not in 'feature/x'")
+      );
+      const execSpy = vi.spyOn(sshService, 'execRemoteCommand').mockResolvedValueOnce({
+        exitStatus: 0, stdout: 'gone.txt\n', stderr: '',
+      });
 
       await expect(
         getRemoteFileContent(dummyConfig, '/home/user/repo', 'feature/x', 'gone.txt')
       ).rejects.toThrow('exists on disk, but not in');
-      expect(runSpy).toHaveBeenLastCalledWith(
+      expect(execSpy).toHaveBeenCalledExactlyOnceWith(
         dummyConfig,
-        '/home/user/repo',
-        ['ls-files', '--error-unmatch', '--', "'gone.txt'"],
+        "git -C '/home/user/repo' -c core.fsmonitor=false --no-pager --literal-pathspecs ls-files --error-unmatch -- 'gone.txt'",
         undefined
       );
-      expect(execSpy).not.toHaveBeenCalled();
     });
 
     // WR-01: the phrase match is anchored to the exact path and ref, so a ref whose NAME
@@ -228,13 +225,10 @@ describe('gitRemoteTreeService', () => {
       vi.spyOn(gitRemoteService, 'runGitCommand')
         .mockRejectedValueOnce(
           new Error("fatal: path 'leak' exists on disk, but not in 'HEAD'")
-        )
-        .mockRejectedValueOnce(new Error('error: pathspec did not match')); // untracked
-      vi.spyOn(sshService, 'execRemoteCommand').mockResolvedValue({
-        exitStatus: 0,
-        stdout: '__GIT_READ_SYMLINK_REFUSED__\n',
-        stderr: '',
-      });
+        );
+      vi.spyOn(sshService, 'execRemoteCommand')
+        .mockResolvedValueOnce({ exitStatus: 1, stdout: '', stderr: 'untracked' })
+        .mockResolvedValueOnce({ exitStatus: 77, stdout: '', stderr: '' });
 
       await expect(
         getRemoteFileContent(dummyConfig, '/home/user/repo', 'HEAD', 'leak')
