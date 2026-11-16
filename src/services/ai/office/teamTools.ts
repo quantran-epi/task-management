@@ -1461,9 +1461,13 @@ async function exploreRepo(args: Record<string, any>, ctx: TeamToolContext): Pro
     }
 
     // A model id is echoed into a command, so an unrecognised value falls back to the default
-    // rather than being passed through.
+    // rather than being passed through. A leading `-` is refused too: `MODEL_ID_REGEX` allows
+    // one, and `--model --output-format` is an option-shaped value, not a model.
     const suppliedModel = typeof args.model === 'string' ? args.model.trim() : '';
-    const model = suppliedModel && MODEL_ID_REGEX.test(suppliedModel) ? suppliedModel : 'haiku';
+    const model =
+      suppliedModel && !suppliedModel.startsWith('-') && MODEL_ID_REGEX.test(suppliedModel)
+        ? suppliedModel
+        : 'haiku';
     const maxTurns = clampExploreMaxTurns(args.maxTurns);
 
     const result = await runRemoteExplore(config, secret, {

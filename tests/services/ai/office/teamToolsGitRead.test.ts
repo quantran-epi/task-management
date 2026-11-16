@@ -871,4 +871,26 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     expect(parsed.model).toBe('haiku');
     expect(seenCommand).not.toContain('rm -rf');
   });
+
+  it('explore_repo falls back when the model id is option-shaped', async () => {
+    queue({ stdout: '/usr/local/bin/claude\n', stderr: '', exitStatus: 0 });
+    let seenCommand = '';
+    vi.mocked(execRemoteCommandStream).mockImplementation(
+      async (_config, command, _sessionId, onData, onExit) => {
+        seenCommand = command;
+        onData({ sessionId: 's', stream: 'stdout', line: '{"is_error":false,"result":"ok"}' });
+        onExit({ sessionId: 's', exitStatus: 0, error: null });
+        return async () => {};
+      }
+    );
+
+    const parsed = JSON.parse(
+      await executeTeamTool('explore_repo', { question: 'x', model: '--output-format' }, ctx())
+    );
+
+    // MODEL_ID_REGEX allows a leading `-`, so the guard is explicit: `--model --output-format`
+    // is an option-shaped value, not a model.
+    expect(parsed.model).toBe('haiku');
+    expect(seenCommand).toContain(`--model 'haiku'`);
+  });
 });
