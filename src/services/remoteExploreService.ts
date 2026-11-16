@@ -208,7 +208,6 @@ export async function probeRemoteClaude(
 
 export interface RunRemoteExploreDeps {
   stream?: typeof execRemoteCommandStream;
-  now?: () => number;
   /**
    * The turn's abort signal. A cancelled turn must not leave a remote process reading for the
    * full wall clock, so abort cancels the stream exactly like the timeout does.
