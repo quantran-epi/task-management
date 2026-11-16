@@ -48,7 +48,7 @@ A broad "understand this subsystem" question can now be handed to Claude Code ru
 
 **`src/services/remoteExploreService.ts`** (new)
 
-- `buildExploreCommand` — one shell string; `repoPath`, `question`, `model` and the report contract all go through `escapeShellArg` from `gitRemoteService` (no second escaper). Carries `--output-format json --allowedTools Read,Grep,Glob --model <m> --max-turns <n> --no-session-persistence --append-system-prompt <contract>`. No `timeout ` in the command.
+- `buildExploreCommand` — one shell string; `repoPath`, `question`, `model` and the report contract all go through `escapeShellArg` from `gitRemoteService` (no second escaper). Carries `--output-format json --restricted --allowedTools Read,Grep,Glob --model <m> --max-turns <n> --no-session-persistence --append-system-prompt <contract>`, with the prompt last after `--`. No `timeout ` in the command.
 - `REPORT_CONTRACT` (Vietnamese, module-private) — answer only from files actually read, cite `path:line`, list files read and what could not be verified, under 1500 words, plain text.
 - `parseExploreResult` — success (`structured_output` when a string, else `result`), `error_max_turns` → `max-turns`, other `is_error` → `error` with `detail` from `errors` or `subtype`, non-JSON → raw text with `detail: 'unparseable-output'`. The 12 000-char cap is applied on every path.
 - `probeRemoteClaude` — `command -v claude >/dev/null 2>&1` through `execRemoteCommand`, cached per `config.id`; `resetRemoteClaudeProbeCache()` for tests. A transport throw is not cached.
@@ -101,6 +101,27 @@ A broad "understand this subsystem" question can now be handed to Claude Code ru
 - `npx vitest run tests/services/remoteExploreService.test.ts tests/services/ai/office/teamTools.test.ts tests/services/ai/office/teamToolsGitRead.test.ts tests/services/ai/office/teamPrompts.test.ts` → **176/176 pass** (12 + 70 + 42 + 52).
 - `grep -c "name: 'explore_repo'"` → 1; `grep -c REMOTE_CLAUDE_UNAVAILABLE` → 2; `resolveGitRepo(` → 3 (definition + two handlers).
 - No Rust file changed.
+
+## Review fixes (post-plan, commits 59ad2985..4c056227)
+
+Written after the plan was marked complete, from the code-review pass. Each was verified
+against the real `claude` CLI on this machine where the CLI's own behaviour was in question.
+
+| Defect | Fix | Commit |
+|--------|-----|--------|
+| Timeout path bypassed `capReport` — a wedged remote could hand the caller 48 000 chars | route it through `capReport` | `59ad2985` |
+| `cancel` was still `undefined` when the wall clock fired during SSH connect, so the process that came up later was never killed | cancel on handle arrival when the settle was a timeout | `34326bb5` |
+| `probeRemoteClaude` cached a NEGATIVE answer for the session, so `explore_repo` kept refusing after the CLI was installed | cache positives only (a `Set`) | `13ebdac2`, `14f386fb` |
+| The prompt sat before the flags, so a question beginning with `-` was parsed as a CLI option | prompt moved after `--` | `113841a5` |
+| `MODEL_ID_REGEX` allows a leading `-`, so `--model --output-format` reached the CLI as an option | refuse a leading `-` and fall back to `haiku` | `8c363e92` |
+| `detail` (remote stderr) was uncapped at 4× the report budget | `capReport` bounds `detail` too | `23f6d13e` |
+| No abort path: cancelling the turn left the remote reading for the full 5 minutes | `signal` flows through `TeamToolContext`; an already-aborted signal never opens a stream | `39f4bf5e` |
+| `--allowedTools` did not stop the REPO's `.claude/settings.json` from granting Bash (`touch pwned.txt` ran), did not stop `Read /etc/passwd`, and did not stop the repo's `.mcp.json` from executing a shell server on connect | `--restricted` — all three verified closed, Read/Grep/Glob still work | `d4103696`, `4c056227` |
+
+**Ceiling, deliberately not fixed:** the binary probe runs on page 1 only, so a file whose first
+1024 bytes are text but which carries a NUL later is not flagged on a later page. It cannot leak
+raw bytes — `awk` ends the string at the NUL — so the page holds a truncated line, never binary.
+Recorded as a comment in `gitRemoteTreeService.ts`.
 
 ## Self-Check: PASSED
 

@@ -114,6 +114,19 @@ resolves every symlink in the path, which is exactly what the containment guard 
 - **Verified:** 26/26 tree-service tests pass, including the two "fails closed" cases
   (`realpath` unavailable → `Failed to read`; dangling symlink target → rejection).
 
+## Review fixes (post-plan, commits 9bc995e2..2ec0045a)
+
+| Defect | Fix | Commit |
+|--------|-----|--------|
+| A grep record whose PATH contains a newline was split into a bogus hit with a truncated path | a record is complete only when both NUL fields arrived AND the line field is numeric | `9bc995e2` |
+| A record the byte cap cut was flagged `truncated` and still emitted, with a partial body | drop it; the flag alone is the signal | `2ec0045a` |
+| `parsePage` dropped every empty line, so a page of blank lines reported `linesRead: 0` with `hasMore: true` — `nextOffset` never advanced and the caller looped | drop only the trailing split artefact; read the total marker from its guaranteed last position | `3af87975` |
+
+**Ceiling, deliberately not fixed:** the binary probe runs on page 1 only, so a file whose first
+1024 bytes are text but which carries a NUL later is not flagged on a later page. It cannot leak
+raw bytes — `awk` ends the string at the NUL — so the page holds a truncated line, never binary.
+Recorded as a comment in `gitRemoteTreeService.ts` (`09a1789f`).
+
 ## Verification
 
 - `npx tsc --noEmit -p tsconfig.json` → exit 0.
