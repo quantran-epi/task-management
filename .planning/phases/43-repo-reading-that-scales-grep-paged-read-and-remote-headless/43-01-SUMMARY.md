@@ -95,15 +95,30 @@ Runs one shell pipeline:
 
 `git grep` orders hits by path, not by file creation order. The plan's expected order (`src/a.ts` first) was wrong; the test now asserts the real order `['docs/notes.md', 'docs/notes.md', 'src/a.ts']` with lines `[1, 3, 42]`.
 
-## Pre-existing failures (out of scope)
+## Pre-existing failure, fixed during review
 
-`src/services/__tests__/gitRemoteTreeService.test.ts` has **12 failing tests on this machine, identical before and after this plan's changes**. Cause: macOS BSD `/bin/realpath` has no `-e` flag (`realpath: illegal option -- e`), so the working-copy containment check fails closed. The production code targets a Linux remote host, where GNU `realpath -e` exists. The new pipeline test sidesteps this with a portable `realpath` shim in its shell harness rather than changing production code. Logged here, not fixed — unrelated to this plan.
+`src/services/__tests__/gitRemoteTreeService.test.ts` had **12 failing tests on this machine,
+identical before and after this plan's changes** (confirmed by running the suite in a worktree
+at the pre-phase commit `a28fb6cb`). Cause: `workingCopyCatSnippet` used `realpath -e`, which is
+GNU-only; BSD/macOS `/bin/realpath` rejects it with `realpath: illegal option -- e`, so every
+working-copy read failed closed.
+
+The executor logged this as "out of scope, production targets a Linux remote". That reasoning is
+wrong: a macOS remote is a real target, and a guard that fails closed on it is a defect, not a
+configuration difference. Fixed by dropping `-e` — plain `realpath --` is POSIX-portable and
+already strict on both implementations (it refuses a path whose components do not exist and
+resolves every symlink in the path, which is exactly what the containment guard needs).
+
+- **Files modified:** `src/services/gitRemoteTreeService.ts`
+- **Commit:** `49a0dbd4`
+- **Verified:** 26/26 tree-service tests pass, including the two "fails closed" cases
+  (`realpath` unavailable → `Failed to read`; dangling symlink target → rejection).
 
 ## Verification
 
 - `npx tsc --noEmit -p tsconfig.json` → exit 0.
 - `npx vitest run tests/services/__tests__/gitRemoteReadPipeline.test.ts` → **9/9 pass**.
-- `npx vitest run tests/services/__tests__/gitRemoteReadPipeline.test.ts src/services/__tests__/gitRemoteTreeService.test.ts src/services/__tests__/gitRemoteService.test.ts` → 40 passed, 12 failed (all 12 pre-existing, listed above).
+- `npx vitest run tests/services/__tests__/gitRemoteReadPipeline.test.ts src/services/__tests__/gitRemoteTreeService.test.ts src/services/__tests__/gitRemoteService.test.ts` → **52/52 pass** (after the `realpath` fix).
 - No file outside `files_modified` changed.
 
 ## Self-Check: PASSED
