@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
 status: executing
-stopped_at: Phase 42 blocked — code review round 3 cap reached with 1 critical open
-last_updated: "2026-11-16T00:40:00.000Z"
-last_activity: "2026-11-16 -- Phase 42: 3 review-fix rounds complete, 1 critical open (parent-symlink escape)"
+stopped_at: Phase 42 review clean — awaiting phase verification
+last_updated: "2026-11-16T02:20:00.000Z"
+last_activity: "2026-11-16 -- Phase 42: review clean (0 critical/warning/info), 392 focused tests pass, tsc clean"
 progress:
   total_phases: 7
   completed_phases: 4
@@ -25,35 +25,26 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 
 ## Current Position
 
-Phase: 42 (read-only-git-inspection-for-the-reviewer-agent) — BLOCKED
+Phase: 42 (read-only-git-inspection-for-the-reviewer-agent) — review clean, awaiting verification
 Plan: 3 of 3 complete
-Status: Blocked — code review round 3 cap reached, 1 critical open
-Last activity: 2026-11-16 -- 3 review-fix rounds done; CR-01 parent-symlink escape still open
+Status: All review findings closed (0 critical, 0 warning, 0 info open)
+Last activity: 2026-11-16 -- continuation fix pass: parent-symlink escape, literal glob read, probe exit status, fsmonitor hook, filename trim, diff pathspec glob
 
-## Blocking Issue — Phase 42
+## Phase 42 Review Outcome
 
-Code review hit the 3-round cap with one open critical. All three round-3 findings
-were independently reproduced on git 2.50.1 before recording them.
+All findings from rounds 1–3 and the continuation re-check are fixed and independently
+re-verified against real git behaviour:
 
-**CR-01 (open, `src/services/gitRemoteTreeService.ts:265-281`)** — the WR-02 symlink
-guard only tests the leaf. `test -L '<repo>/linkdir/secret.txt'` is false when
-`linkdir` is a symlink, so `cat` follows the parent out of the repo. A model can
-locate such a directory through the `tree` action (`120000 blob`). Reproduced:
-`cat` returned `SECRET-OUTSIDE`. Fix direction: `realpath` the target and assert
-containment under the repo root, rather than testing the leaf.
+- CR-01 parent/leaf symlink escape — `realpath -e` on both repo root and target with a
+  literal directory-boundary check before `cat`.
+- WR-01 missing literal glob returned empty success — `git cat-file -p --end-of-options`.
+- WR-02 probe conflated infrastructure failure with "untracked" — only exit 1 falls back.
+- CR-04 repository `core.fsmonitor` hook ran on read commands — disabled explicitly.
+- WR-03 handler trimmed legitimate filename whitespace — `filePath` kept verbatim.
+- WR-04 `diff_file` expanded a filename as a pathspec glob — `--literal-pathspecs`.
 
-**WR-01 (open)** — `git show '<ref>:*.txt'` exits 0 with empty stdout when the
-pathspec glob does not match literally, so `read_file` returns an empty file and
-the untracked fallback never runs. `git cat-file -p` exits 128 for the same input
-(verified) — that is the correct primitive.
-
-**WR-02 (open)** — `.catch(() => '')` on the `ls-files --error-unmatch` gate treats
-every failure as "untracked". Only exit 1 means untracked; exit 128 (bad pathspec
-magic) must propagate.
-
-Resolved across the three rounds: CR-01 option injection (`--output`), CR-02 path
-traversal, CR-03 unwrapped stderr, and 18 warnings. `tsc --noEmit` clean, 347
-scoped tests passing.
+Verification: 392 focused tests pass (9 files), `tsc --noEmit` clean. Full suite not run
+(project rule: over an hour). Phase verification has not been run yet.
 
 ## Session Continuity
 

@@ -1,8 +1,8 @@
 ---
 phase: 42-read-only-git-inspection-for-the-reviewer-agent
-fixed_at: 2026-11-15T23:55:00Z
+fixed_at: 2026-11-16T02:10:00Z
 review_path: .planning/phases/42-read-only-git-inspection-for-the-reviewer-agent/42-REVIEW.md
-iteration: 2
+iteration: 3
 findings_in_scope: 6
 fixed: 6
 skipped: 0
@@ -22,7 +22,55 @@ status: all_fixed
 
 **Verification:** `npx tsc --noEmit` exits 0. Scoped suites pass (7 files, 60+ tests): `src/services/__tests__/gitRemoteService.test.ts`, `src/services/__tests__/gitRemoteTree.test.ts`, `src/services/__tests__/gitRemoteTreeService.test.ts`, `tests/services/ai/office/teamToolsGitRead.test.ts`, `tests/services/ai/office/teamTools.test.ts`, `tests/services/ai/office/teamPrompts.test.ts`, `tests/services/ai/office/teamRunCoordinator.test.ts`. Full suite not run (project rule: over an hour).
 
-## Fixed Issues
+## Round 3 fix pass (continuation)
+
+Fixed after the round-3 review. All changes are uncommitted in the working tree.
+
+### CR-01 (round 3): a symlinked parent directory read outside the repository
+
+**Files modified:** `src/services/gitRemoteTreeService.ts`, `src/services/__tests__/gitRemoteTreeService.test.ts`, `src/services/__tests__/gitRemoteTree.test.ts`, `tests/services/ai/office/teamToolsGitRead.test.ts`
+**Applied fix:** the working-copy fallback canonicalizes both the repository root and the target with `realpath -e`, then requires a literal `${root%/}/` boundary before `cat`. A failed or unavailable `realpath` stops before `cat`; a path outside the root exits 77 and becomes `PathOutsideRepoError`. The old leaf-only `test -L` marker is gone, including its false refusal of a file whose content happened to equal the marker.
+**Verification:** regression reproduces the old leak (`SECRET-OUTSIDE`) with a real shell, then refuses tracked and untracked parent symlinks, leaf symlinks, sibling-prefix roots, dangling targets and a missing `realpath`; accepts in-repo symlink targets and a symlinked repository root.
+**Ceiling:** a hostile concurrent filesystem swap still needs native `openat`/`O_NOFOLLOW`; noted in code as `ponytail:`.
+
+### WR-01 (round 3): a missing literal glob path returned an empty file
+
+**Files modified:** `src/services/gitRemoteTreeService.ts`
+**Applied fix:** `git show` replaced with `git cat-file -p --end-of-options`. A missing literal path now exits 128 instead of success-with-empty-stdout; the untracked fallback is reachable for glob-named files; committed empty blobs still return `''`.
+
+### WR-02 (round 3): every `ls-files` failure was treated as "untracked"
+
+**Files modified:** `src/services/gitRemoteTreeService.ts`
+**Applied fix:** the probe runs `execRemoteCommand` with `--literal-pathspecs ls-files --error-unmatch` and inspects the status. Exit 0 re-throws the original git error, exit 1 falls back to the working copy, and anything else (including SSH rejection) propagates.
+
+### CR-04: repository `core.fsmonitor` hooks ran on read commands
+
+**Files modified:** `src/services/gitRemoteService.ts`, `src/services/gitRemoteTreeService.ts`
+**Applied fix:** `runGitCommand` and the direct `ls-files` probe pass `-c core.fsmonitor=false`.
+**Verification:** real executable hook, positive control, then proof it never runs for `status` or the untracked probe.
+
+### WR-03: handler trimmed legitimate filename whitespace
+
+**Files modified:** `src/services/ai/office/teamTools.ts`
+**Applied fix:** `diff_file` and `read_file` keep `filePath` verbatim; type and emptiness are still validated.
+**Verification:** `" spaced.txt "` and `"spaced.txt"` select different content through `executeTeamTool` for both actions.
+
+### WR-04: `diff_file` expanded the filename as a pathspec glob
+
+**Files modified:** `src/services/gitRemoteService.ts`
+**Applied fix:** `--literal-pathspecs` on `getFileDiff`.
+**Verification:** `app/[id].tsx` diffs alone, `app/i.tsx` is absent, and `:(top)*` returns nothing.
+
+### IN-01 / IN-02 (round 3 info)
+
+**Files modified:** `tests/services/ai/office/teamToolsGitRead.test.ts`, `src/services/ai/office/teamTools.ts`, `src/services/gitRemoteTreeService.ts`
+**Applied fix:** regression cases for `branch: ''` and a non-string branch; comments now state that `INVALID_ARGUMENT` covers a path the tool will not read.
+
+### Round 3 verification totals
+
+Focused suites (6 files) pass: 201 tests. `tsc --noEmit` exits 0 after restoring the pinned `js-tiktoken@1.0.21` package (integrity matches `package-lock.json`). Full suite not run.
+
+## Earlier fixed issues (rounds 1–2)
 
 ### WR-01: `isNotInRef` cannot tell "untracked" from "deleted in this ref"
 
