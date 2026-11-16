@@ -29,6 +29,8 @@ const LEAD_DISPATCH_VERB = 'đang giao việc';
 
 const WORKING = 'đang làm việc';
 const WAITING_BUDGET = 'đang chờ ngân sách';
+/** A lead parked on a delegatee is idle, not analyzing — never reuse a phase verb here. */
+const WAITING_REPORT = 'đang chờ báo cáo';
 
 export interface TeamActivityIndicatorProps {
   phase: TeamRunPhase;
@@ -106,23 +108,33 @@ export const TeamActivityIndicator: React.FC<TeamActivityIndicatorProps> = ({
   // agent is not, so it stays out of the working line (but stays in the popover, where it
   // can be stopped).
   const active = agents.filter((row) => row.status === 'running' || row.status === 'paused');
+  const waiting = agents.filter((row) => row.status === 'waiting');
   const pending = agents.filter(
-    (row) => row.status === 'queued' || row.status === 'running' || row.status === 'paused'
+    (row) =>
+      row.status === 'queued' ||
+      row.status === 'running' ||
+      row.status === 'paused' ||
+      row.status === 'waiting'
   );
   if (pending.length === 0) return null;
 
+  // A waiting agent (the parked lead) keeps its own verb before any working one: nothing is
+  // being analyzed while it waits, and reusing a phase verb is the bug this line fixes.
+  const shown = [...waiting, ...active];
   const line =
-    active.length > 0
-      ? active
+    shown.length > 0
+      ? shown
           .map((row) => {
             const verb =
-              row.status === 'paused'
-                ? WAITING_BUDGET
-                : row.agentId === leadId
-                  ? phase === 'batch-running'
-                    ? LEAD_DISPATCH_VERB
-                    : PHASE_ACTIVITY_VERB[phase] ?? WORKING
-                  : WORKING;
+              row.status === 'waiting'
+                ? WAITING_REPORT
+                : row.status === 'paused'
+                  ? WAITING_BUDGET
+                  : row.agentId === leadId
+                    ? phase === 'batch-running'
+                      ? LEAD_DISPATCH_VERB
+                      : PHASE_ACTIVITY_VERB[phase] ?? WORKING
+                    : WORKING;
             return `${nameOf(row.agentId)} ${verb}`;
           })
           .join(' · ')

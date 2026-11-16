@@ -32,6 +32,26 @@ describe('AgentStatusRow — queued (D-10)', () => {
   });
 });
 
+describe('AgentStatusRow — waiting lead (delegation rewrite)', () => {
+  it('renders the waiting tag and keeps the stop affordance', () => {
+    const onStop = vi.fn();
+    render(<AgentStatusRow agent={agent} status="waiting" onStop={onStop} />);
+
+    expect(screen.getByText('Đang chờ báo cáo')).toBeInTheDocument();
+    expect(screen.queryByText('Đang làm việc')).toBeNull();
+    fireEvent.click(screen.getByTestId('agent-stop-agent-1'));
+    expect(onStop).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders no retry button for a waiting attempt', () => {
+    const { container } = render(
+      <AgentStatusRow agent={agent} status="waiting" assignmentId="assignment-A" onRetry={vi.fn()} />
+    );
+
+    expect(container.querySelector('[data-testid^="agent-retry-"]')).toBeNull();
+  });
+});
+
 describe('AgentStatusRow — retry affordance (37-08 D-13)', () => {
   // WR-02: `retryAssignment` refuses every non-terminal status, so the button must not exist.
   it.each(['queued', 'running', 'paused'] as const)(

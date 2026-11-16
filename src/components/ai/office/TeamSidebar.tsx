@@ -281,6 +281,17 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
                     style={{ width: 6, height: 6, borderRadius: 3, background: token.colorPrimary }}
                   />
                 )}
+                {status === 'waiting' && (
+                  <span
+                    aria-label="Đang chờ báo cáo"
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: 3,
+                      background: token.colorTextQuaternary,
+                    }}
+                  />
+                )}
                 {status === 'paused' && (
                   <span
                     aria-label="Tạm dừng"

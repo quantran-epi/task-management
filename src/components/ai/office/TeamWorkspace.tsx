@@ -545,7 +545,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   /** Header chip: a run is in flight whenever the coordinator is past `ready`/`idle`. */
   const busy = snapshot.phase !== 'idle' && snapshot.phase !== 'ready';
 
-  const agentStatuses = useMemo(() => {    const map = new Map<string, 'queued' | 'running' | 'paused' | 'stopped' | 'error' | 'done'>();
+  const agentStatuses = useMemo(() => {    const map = new Map<string, 'queued' | 'running' | 'paused' | 'waiting' | 'stopped' | 'error' | 'done'>();
     for (const row of snapshot.agents) map.set(row.agentId, row.status);
     return map;
   }, [snapshot.agents]);

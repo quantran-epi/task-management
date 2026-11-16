@@ -4726,6 +4726,92 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(seenByAgent[0]).toContain('Kiểm tra giúp mình luồng đối soát');
     });
 
+    it('R6: a lead parked on a delegatee reports waiting, never lead-thinking', async () => {
+      const employeeGate = deferred();
+      const leadGate = deferred();
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'send_message',
+              { to: [harness!.employees[0]!.id], content: 'Kiểm tra giúp mình' },
+              harness!.db,
+              options.signal
+            );
+            await leadGate.promise;
+            return loopResult('Đã có câu trả lời.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await employeeGate.promise;
+            return loopResult('Đã kiểm tra xong.');
+          },
+        },
+      });
+      const current = harness;
+      const leadRow = () =>
+        current.coordinator.getState().agents.find((row) => row.agentId === current.lead.id);
+
+      const sent = current.coordinator.send('Kiểm tra luồng đối soát');
+      // The lead's runtime is open, but it is parked inside `send_message`; the delegated
+      // agent is what is actually working.
+      await waitFor(() => leadRow()?.status === 'waiting');
+      expect(current.coordinator.getState().phase).toBe('batch-running');
+      expect(aiTurnManager.getTurn(`team:${current.team.id}`)?.streamingStatusLabel).toBe(
+        'Đang chờ báo cáo'
+      );
+      expect(
+        current.coordinator.getState().agents.find(
+          (row) => row.agentId === current.employees[0]!.id
+        )?.status
+      ).toBe('running');
+      // The concurrent-lead guard still holds while it waits: a plain message steers.
+      await expect(current.coordinator.send('Chen ngang')).resolves.toBe('steered');
+      expect(leadRow()?.status).toBe('waiting');
+
+      // The agent's report ends the wait; the lead is genuinely processing again.
+      employeeGate.release();
+      await waitFor(() => leadRow()?.status === 'running');
+      expect(aiTurnManager.getTurn(`team:${current.team.id}`)?.streamingStatusLabel).toBeNull();
+      leadGate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+    });
+
+    it('R6: a stopped lead is never resurrected to running when its wait ends', async () => {
+      const employeeGate = deferred();
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'send_message',
+              { to: [harness!.employees[0]!.id], content: 'Kiểm tra giúp mình' },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Đã có câu trả lời.');
+          },
+          [EMP_A_MODEL]: async () => {
+            await employeeGate.promise;
+            return loopResult('Đã kiểm tra xong.');
+          },
+        },
+      });
+      const current = harness;
+      const leadRow = () =>
+        current.coordinator.getState().agents.find((row) => row.agentId === current.lead.id);
+
+      const sent = current.coordinator.send('Kiểm tra luồng đối soát');
+      await waitFor(() => leadRow()?.status === 'waiting');
+
+      current.coordinator.stopAgent(current.lead.id);
+      expect(leadRow()?.status).toBe('stopped');
+
+      employeeGate.release();
+      await sent;
+      expect(leadRow()?.status).toBe('stopped');
+      await waitForReady(current.coordinator);
+    });
+
     it('R9: an agent sends a message to the leader and the leader answers', async () => {
       const leadSaw: string[] = [];
       harness = await createHarness({

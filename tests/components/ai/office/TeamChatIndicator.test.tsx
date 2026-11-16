@@ -78,6 +78,27 @@ describe('TeamActivityIndicator — inline line (D-20/D-21)', () => {
     );
   });
 
+  // A lead parked on a delegatee is not analyzing; the phase verb must never leak onto it.
+  it('gives a waiting lead its own idle verb, not the phase verb', () => {
+    renderIndicator('batch-running', [agentState({ agentId: LEAD_ID, status: 'waiting' })]);
+
+    const line = screen.getByTestId('team-activity-indicator').textContent;
+    expect(line).toBe('Bình đang chờ báo cáo');
+    expect(line).not.toContain('đang phân tích');
+    expect(line).not.toContain('đang giao việc');
+  });
+
+  it('joins a waiting lead with a working agent', () => {
+    renderIndicator('batch-running', [
+      agentState({ agentId: LEAD_ID, status: 'waiting' }),
+      agentState({ agentId: AN_ID }),
+    ]);
+
+    expect(screen.getByTestId('team-activity-indicator').textContent).toBe(
+      'Bình đang chờ báo cáo · An đang làm việc'
+    );
+  });
+
   it('joins two running employees with a middle dot', () => {
     renderIndicator('batch-running', [
       agentState({ agentId: AN_ID }),

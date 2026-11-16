@@ -40,6 +40,7 @@ describe('useTeamChatNotifications (37.1 R13)', () => {
   let team: AiTeam;
   let threadId: string;
   let leadId: string;
+  let employeeId: string;
 
   beforeEach(async () => {
     sendDesktopNotification.mockClear();
@@ -56,6 +57,7 @@ describe('useTeamChatNotifications (37.1 R13)', () => {
       { name: 'An Nhân viên', role: 'Phân tích', capability: 'x', persona: 'y', model: 'm' },
       db
     );
+    employeeId = employee.id;
     team = await createTeam(
       { name: 'Nhóm thử', budgetTokens: 1000, leadId: lead.id, employeeIds: [employee.id] },
       db
@@ -90,6 +92,34 @@ describe('useTeamChatNotifications (37.1 R13)', () => {
     expect(payload.title).toContain('Bình Lead');
     expect(payload.title).toContain('Nhóm thử');
     expect(payload.body).toContain('Đã tổng hợp xong.');
+  });
+
+  it('notifies for an agent reply when the user is on another screen', async () => {
+    render(<Harness db={db} />);
+    const row = await saveTeamMessage(
+      { threadId, role: 'assistant', content: 'Đã xử lý xong.', agentId: employeeId, agentName: 'An Nhân viên' },
+      db
+    );
+    await appendForExistingMessage(
+      { id: row.id, teamId: team.id, from: employeeId, to: [leadId], content: row.content, kind: 'report', createdAt: row.createdAt },
+      db
+    );
+
+    await waitFor(() => expect(sendDesktopNotification).toHaveBeenCalledTimes(1));
+    expect(sendDesktopNotification).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'An Nhân viên · Nhóm thử',
+      body: 'Đã xử lý xong.',
+    }));
+  });
+
+  it('notifies when the team window is hidden', async () => {
+    setActiveTeamView(team.id);
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    render(<Harness db={db} />);
+    document.dispatchEvent(new Event('visibilitychange'));
+    await seedFromLead('Tin khi thu nhỏ ứng dụng.');
+
+    await waitFor(() => expect(sendDesktopNotification).toHaveBeenCalledTimes(1));
   });
 
   it('stays silent while that team is the one on screen', async () => {

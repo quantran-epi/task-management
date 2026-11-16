@@ -556,6 +556,13 @@ export function createTeamRunCoordinator(
    */
   let leadTurnKind: 'thinking' | 'synthesizing' | null = null;
   /**
+   * Agents the CURRENT lead turn is parked on: `send_message` awaits an idle recipient's
+   * whole turn, so the lead's runtime is open but not doing anything. The lead keeps its
+   * `waiting` status (and the phase stops claiming `lead-thinking`) only while this is
+   * non-empty; both are runtime-only and cleared with the wait.
+   */
+  const leadWaitingOnAgentIds = new Set<string>();
+  /**
    * 37.1: which routing the CURRENT lead turn already chose. A turn may either delegate or
    * message, never both — doing both delivers the same request twice and shows the user two
    * answers. Enforced here, not only in the prompt: a model can ignore a rule.
@@ -759,6 +766,10 @@ export function createTeamRunCoordinator(
   const derivePhase = (): TeamRunPhase => {
     if (pendingApproval !== null) return 'awaiting-mutation-approval';
     if (pendingPlan !== null) return 'awaiting-plan';
+    // A lead parked inside `send_message` is waiting on its delegatee, not analyzing. The
+    // delegated work is what is running, so report that; `lead-thinking` resumes only once
+    // the lead's own runtime actually continues.
+    if (leadWaitingOnAgentIds.size > 0) return 'batch-running';
     if (leadTurnKind === 'synthesizing') return 'lead-synthesizing';
     if (leadTurnKind === 'thinking') return 'lead-thinking';
     if (synthesisPending) return 'lead-synthesizing';
@@ -2216,6 +2227,7 @@ export function createTeamRunCoordinator(
       // normal return, parked return, throw. A derived phase needs no other reset.
       leadTurnKind = null;
       leadTurnRoute = null;
+      leadWaitingOnAgentIds.clear();
       agentDeferreds.delete(lead.id);
       replyTargetByAgent.delete(lead.id);
       notify();
@@ -2746,6 +2758,7 @@ export function createTeamRunCoordinator(
     notify();
 
     const outcomes: Array<{ to: string; outcome: string }> = [];
+    const leadId = roster.lead?.id;
     for (const recipientId of to) {
       if (recipientId === USER_PARTICIPANT_ID) {
         outcomes.push({ to: recipientId, outcome: 'delivered' });
@@ -2764,11 +2777,16 @@ export function createTeamRunCoordinator(
           outcomes.push({ to: recipientId, outcome: 'queued' });
           continue;
         }
+        // The lead's turn stays open across this await, but it is not doing any work: mark
+        // it `waiting` so no surface claims it is analyzing while the agent runs.
+        const leadWaits = leadId !== undefined && fromId === leadId;
         registerTeamTurn();
+        if (leadWaits) beginLeadWait(leadId, recipientId);
         try {
           await startEmployeeTurn(employee, content, content, undefined, undefined, saved.id);
           outcomes.push({ to: recipientId, outcome: 'started' });
         } finally {
+          if (leadWaits) endLeadWait(leadId, recipientId);
           aiTurnManager.finishTurn(teamTurnId);
         }
         continue;
@@ -2787,6 +2805,33 @@ export function createTeamRunCoordinator(
       outcomes.push({ to: recipientId, outcome: 'unknown' });
     }
     return JSON.stringify({ sent: saved.id, outcomes });
+  }
+
+  /** The team turn's waiting label; the SAME string the assistant status row shows. */
+  const LEAD_WAITING_LABEL = 'Đang chờ báo cáo';
+  /**
+   * The lead is parked on a delegatee's turn. Only a LIVE lead turn can be parked, so a
+   * stopped/errored lead keeps its terminal status and is never resurrected to `running`.
+   */
+  function beginLeadWait(leadId: string, agentId: string): void {
+    leadWaitingOnAgentIds.add(agentId);
+    if (agents.get(leadId)?.status === 'running') updateAgent(leadId, { status: 'waiting' });
+    // The global capsule would otherwise keep the generic "Đang phản hồi..." label while
+    // the leader is doing nothing; its own label says what is actually happening.
+    if (aiTurnManager.getTurn(teamTurnId) !== undefined) {
+      aiTurnManager.updateTurn(teamTurnId, { streamingStatusLabel: LEAD_WAITING_LABEL });
+    }
+    notify();
+  }
+
+  function endLeadWait(leadId: string, agentId: string): void {
+    leadWaitingOnAgentIds.delete(agentId);
+    if (agents.get(leadId)?.status === 'waiting') updateAgent(leadId, { status: 'running' });
+    const turn = aiTurnManager.getTurn(teamTurnId);
+    if (turn?.streamingStatusLabel === LEAD_WAITING_LABEL) {
+      aiTurnManager.updateTurn(teamTurnId, { streamingStatusLabel: null });
+    }
+    notify();
   }
 
   /**

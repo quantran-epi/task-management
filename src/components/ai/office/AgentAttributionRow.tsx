@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Avatar, Button, Tag, theme } from 'antd';
-import { CrownOutlined, PauseCircleOutlined, StopOutlined, SyncOutlined } from '@ant-design/icons';
+import { CrownOutlined, HourglassOutlined, PauseCircleOutlined, StopOutlined, SyncOutlined } from '@ant-design/icons';
 import type { AgentRunStatus, AiTeamAssignmentRunStatus } from '../../../types/aiOffice';
 
 /** UI-SPEC §Avatar & Identity Treatment — fixed six-entry palette. */
@@ -128,6 +128,9 @@ export const AgentStatusRow: React.FC<AgentStatusRowProps> = ({
             Tạm dừng — cần cấp thêm token
           </Tag>
         );
+      // A lead parked on a delegatee is not working on anything itself.
+      case 'waiting':
+        return <Tag icon={<HourglassOutlined />}>Đang chờ báo cáo</Tag>;
       // 37-08 D-13: stopped and error share one honest, retryable framing.
       case 'stopped':
         return <Tag icon={<StopOutlined />}>Chưa hoàn tất</Tag>;
@@ -138,7 +141,8 @@ export const AgentStatusRow: React.FC<AgentStatusRowProps> = ({
     }
   })();
 
-  const showStop = status === 'running' || status === 'paused' || status === 'queued';
+  const showStop =
+    status === 'running' || status === 'paused' || status === 'queued' || status === 'waiting';
   // WR-02: `retryAssignment` refuses anything but stopped/error (and a busy phase or a
   // disposed run). Offering the button on every other status produced a click that always
   // refused — with the only call site discarding the rejection.

@@ -36,7 +36,19 @@ export type TeamRunPhase =
   | 'awaiting-mutation-approval'
   | 'lead-synthesizing';
 
-export type AgentRunStatus = 'queued' | 'running' | 'paused' | 'stopped' | 'error' | 'done';
+/**
+ * `waiting` is RUNTIME-ONLY: a leader whose turn is parked inside `send_message`, waiting
+ * for the agent it delegated to. It is never persisted, never terminal, and it is what keeps
+ * the UI from claiming the leader is "đang phân tích" while it is simply waiting.
+ */
+export type AgentRunStatus =
+  | 'queued'
+  | 'running'
+  | 'paused'
+  | 'waiting'
+  | 'stopped'
+  | 'error'
+  | 'done';
 
 export type AiMessageKind = 'instruction' | 'report' | 'synthesis' | 'plan';
 

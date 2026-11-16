@@ -14,6 +14,7 @@ import { useGlobalKeymap } from './hooks/useGlobalKeymap';
 import { useDoubleShift } from './hooks/useDoubleShift';
 import { SearchEverywhereModal } from './search/SearchEverywhereModal';
 import { useNotifications } from '../hooks/useNotifications';
+import { useTeamChatNotifications } from '../hooks/useTeamChatNotifications';
 import { useAIChat } from '../context/AIChatContext';
 import { InlineAISelectionBar } from '../components/ai/InlineAISelectionBar';
 import { GlobalDiagramViewer } from '../components/common/GlobalDiagramViewer';
@@ -94,6 +95,7 @@ export function WorkbenchLayout({
 }: WorkbenchLayoutProps) {
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const notifications = useNotifications(db);
+  useTeamChatNotifications(db);
 
   const rightItems = useMemo<ToolWindowItem[]>(() => {
     return [

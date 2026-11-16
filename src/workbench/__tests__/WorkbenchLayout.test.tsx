@@ -2,6 +2,12 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { WorkbenchLayout } from '../WorkbenchLayout';
 import { useLayoutStore } from '../store/layoutStore';
+import { db } from '../../db';
+import { useTeamChatNotifications } from '../../hooks/useTeamChatNotifications';
+
+vi.mock('../../hooks/useTeamChatNotifications', () => ({
+  useTeamChatNotifications: vi.fn(),
+}));
 
 // Mock views and child components to isolate WorkbenchLayout
 vi.mock('../../views/TasksView', () => ({
@@ -18,6 +24,7 @@ vi.mock('../toolwindows/RightToolWindow', () => ({
 
 describe('WorkbenchLayout Integration', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     localStorage.clear();
     act(() => {
       useLayoutStore.getState().resetLayout();
@@ -27,10 +34,28 @@ describe('WorkbenchLayout Integration', () => {
   it('mounts default LeftToolWindow and EditorArea', () => {
     render(<WorkbenchLayout />);
 
+    expect(useTeamChatNotifications).toHaveBeenCalledWith(undefined);
     // Left is active by default ('cr_explorer')
     expect(screen.getByTestId('mock-left-toolwindow')).toBeDefined();
     // Center Editor Area with Tasks view
     expect(screen.getByTestId('mock-tasks-view')).toBeDefined();
+  });
+
+  it('keeps team notifications mounted while switching to another view', () => {
+    render(<WorkbenchLayout db={db} />);
+    expect(useTeamChatNotifications).toHaveBeenLastCalledWith(db);
+
+    act(() => {
+      useLayoutStore.getState().openTab({
+        id: 'planner',
+        title: 'Capacity Planner',
+        viewType: 'planner',
+        closable: true,
+      });
+    });
+
+    expect(useLayoutStore.getState().activeTabId).toBe('planner');
+    expect(useTeamChatNotifications).toHaveBeenLastCalledWith(db);
   });
 
   it('mounts RightToolWindow when rightActiveId is set to ai_chat', () => {
