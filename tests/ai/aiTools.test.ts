@@ -9,6 +9,7 @@ import {
   normalizeToolName,
 } from '../../src/services/ai/aiTools';
 import { getTodayDateString } from '../../src/utils/date';
+import { getFriendlyToolLabel } from '../../src/services/ai/aiOrchestratorLoop';
 
 describe('aiTools', () => {
   const mockTasks = [
@@ -465,6 +466,53 @@ describe('aiTools', () => {
       });
       expect(allocDesc).toContain('90 phút');
       expect(allocDesc).toContain('2026-10-04');
+    });
+
+    it('names the system in the create/update/delete approval sentences', async () => {
+      const createDesc = describeToolMutation('create_system', {
+        name: 'Core',
+        code: 'CORE',
+        type: 'LOGICAL_GROUP',
+      });
+      expect(createDesc).toContain('Core');
+      expect(createDesc).toContain('CORE');
+      expect(createDesc).toContain('LOGICAL_GROUP');
+
+      const updateDesc = describeToolMutation('update_system', {
+        id: 'sys-1',
+        name: 'New name',
+      });
+      expect(updateDesc).toContain('sys-1');
+      expect(updateDesc).toContain('Tên');
+
+      const updateCtx = await describeToolMutationWithContext(
+        'update_system',
+        { id: 'sys-1', name: 'New name' },
+        mockDb as any
+      );
+      expect(updateCtx).toContain('Backend API');
+
+      const unknownCtx = await describeToolMutationWithContext(
+        'update_system',
+        { id: 'missing-id', name: 'New name' },
+        mockDb as any
+      );
+      expect(unknownCtx).toContain('missing-id');
+
+      const deleteCtx = await describeToolMutationWithContext(
+        'delete_system',
+        { id: 'sys-1' },
+        mockDb as any
+      );
+      expect(deleteCtx).toContain('Backend API');
+
+      const labels = [
+        getFriendlyToolLabel('create_system'),
+        getFriendlyToolLabel('update_system'),
+        getFriendlyToolLabel('delete_system'),
+      ];
+      expect(new Set(labels).size).toBe(3);
+      labels.forEach((label) => expect(label).toMatch(/hệ thống/));
     });
   });
 

@@ -5075,6 +5075,12 @@ export function describeToolMutation(toolName: string, args: Record<string, any>
       return `Cập nhật Change Request (${args.id}): ${changes || 'không có thay đổi'}`;
     case 'delete_change_request':
       return `Xóa Change Request (${args.id}) và tất cả tác vụ con liên quan`;
+    case 'create_system':
+      return `Tạo hệ thống mới: "${args.name || 'Chưa đặt tên'}"${args.code ? ` [Mã: ${args.code}]` : ''}${args.type ? ` [Loại: ${args.type}]` : ''}`;
+    case 'update_system':
+      return `Cập nhật hệ thống (${args.id}): ${changes || 'không có thay đổi'}`;
+    case 'delete_system':
+      return `Xóa vĩnh viễn hệ thống (${args.id}) và gỡ khỏi các CR/tác vụ liên quan`;
     case 'plan_allocation':
       return `Lên lịch làm việc: ${args.allocatedMinutes} phút vào ngày ${args.date} cho tác vụ (${args.taskId})`;
     case 'delete_allocation':
@@ -5208,6 +5214,19 @@ export async function describeToolMutationWithContext(
         if (!task) return fallback;
         const changes = formatFieldChanges(args);
         return `Cập nhật checklist cho tác vụ "${task.name}": ${changes || `hành động ${args.action}`}`;
+      }
+
+      case 'update_system': {
+        const system = db.systems ? await db.systems.get(args.id) : null;
+        if (!system) return fallback;
+        const changes = formatFieldChanges(args);
+        return `Cập nhật hệ thống "${system.name}": ${changes || 'không có thay đổi'}`;
+      }
+
+      case 'delete_system': {
+        const system = db.systems ? await db.systems.get(args.id) : null;
+        if (!system) return fallback;
+        return `Xóa vĩnh viễn hệ thống "${system.name}" và gỡ khỏi các CR/tác vụ liên quan`;
       }
 
       case 'update_change_request': {

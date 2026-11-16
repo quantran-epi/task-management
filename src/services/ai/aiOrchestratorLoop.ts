@@ -111,7 +111,7 @@ export interface AiOrchestratorLoopResult {
   finishReason?: string;
 }
 
-function getFriendlyToolLabel(toolName: string): string {
+export function getFriendlyToolLabel(toolName: string): string {
   const normalized = normalizeToolName(toolName);
   switch (normalized) {
     case 'query_tasks': return 'Tra cứu tác vụ';
@@ -137,6 +137,9 @@ function getFriendlyToolLabel(toolName: string): string {
     case 'delete_task': return 'Xóa tác vụ';
     case 'plan_allocation': return 'Lên lịch phân bổ';
     case 'log_work_session': return 'Ghi nhận thời gian';
+    case 'create_system': return 'Tạo hệ thống';
+    case 'update_system': return 'Cập nhật hệ thống';
+    case 'delete_system': return 'Xóa hệ thống';
     default: return normalized || toolName;
   }
 }
