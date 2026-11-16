@@ -213,11 +213,39 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
   const OPEN = 'DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU';
   const CLOSE = 'KẾT THÚC DỮ LIỆU KHÔNG ĐÁNG TIN';
 
+  /** A full mocked remote result; a bare string means a clean exit-0 stdout. */
+  type MockRes = { stdout: string; stderr: string; exitStatus: number };
+
   /** Queues exactly the responses the case consumes — no more, no fewer. */
-  function queue(...stdouts: string[]) {
-    for (const stdout of stdouts) {
-      vi.mocked(execRemoteCommand).mockResolvedValueOnce({ stdout, stderr: '', exitStatus: 0 });
+  function queue(...responses: Array<string | MockRes>) {
+    for (const res of responses) {
+      vi.mocked(execRemoteCommand).mockResolvedValueOnce(
+        typeof res === 'string' ? { stdout: res, stderr: '', exitStatus: 0 } : res
+      );
     }
+  }
+
+  /**
+   * `read_file` page 1 costs two remote calls: the NUL probe (exit 0 = binary, 1 = text) and
+   * then the pager pass that yields both the page and the `###TOTAL` line.
+   */
+  function queuePage(lines: string[], totalLines: number) {
+    queue(
+      { stdout: '', stderr: '', exitStatus: 1 },
+      {
+        stdout: `${lines.join('\n')}${lines.length ? '\n' : ''}###TOTAL ${totalLines}\n`,
+        stderr: '',
+        exitStatus: 0,
+      }
+    );
+  }
+
+  /** The page-1 probe plus a pager pass whose source failed with `exitStatus`. */
+  function queueFailingSource(stderr: string, exitStatus = 128) {
+    queue(
+      { stdout: '', stderr, exitStatus: 1 },
+      { stdout: '###TOTAL 0\n', stderr: `${stderr}\n###EXIT ${exitStatus}`, exitStatus: 0 }
+    );
   }
 
   // The `%x1e`/`%x00` record layout `parseCommitLog` expects.
@@ -228,7 +256,7 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
   const WRAP_CASES: Array<{
     action: string;
     args: Record<string, unknown>;
-    outputs: string[];
+    outputs: Array<string | MockRes>;
   }> = [
     {
       action: 'branches',
@@ -253,7 +281,11 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     {
       action: 'read_file',
       args: { branch: 'main', filePath: 'src/app.ts' },
-      outputs: ['export const x = 1;\n'],
+      // Page 1: binary probe (exit 1 = text), then the pager pass with the `###TOTAL` line.
+      outputs: [
+        { stdout: '', stderr: '', exitStatus: 1 },
+        { stdout: '1: export const x = 1;\n###TOTAL 1\n', stderr: '', exitStatus: 0 },
+      ],
     },
     {
       action: 'tree',
@@ -263,6 +295,12 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
         '100644 blob abc1234    42\tsrc/app.ts\u0000' +
           '040000 tree def5678    -\tsrc/lib\u0000',
       ],
+    },
+    {
+      action: 'grep',
+      args: { pattern: 'export' },
+      // `-z` NUL-separates the FIELDS of one record; the newline ends the record.
+      outputs: ['main:src/app.ts\u00001\u0000export const x = 1;\n'],
     },
   ];
 
@@ -327,6 +365,7 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
         diff_file: '+const x = 1;',
         read_file: 'export const x = 1;',
         tree: 'src/app.ts',
+        grep: 'export const x = 1;',
       };
       expectEnclosed(raw, payloadByAction[testCase.action]!);
 
@@ -378,7 +417,7 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
   });
 
   it('escapes a branch payload in read_file — the object spec is built from escaped parts', async () => {
-    queue('export const x = 1;\n');
+    queuePage(['1: export const x = 1;'], 1);
 
     await executeTeamTool(
       'git_read',
@@ -386,10 +425,11 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
       ctx()
     );
 
-    const cmd = vi.mocked(execRemoteCommand).mock.calls.at(-1)![1];
+    // The object spec appears in the binary probe, which is the first remote call of page 1.
+    const cmd = vi.mocked(execRemoteCommand).mock.calls[0]![1];
     // WR-07: pinned literal, independent of `escapeShellArg`. Building the expectation from the
     // function under test would keep passing if it regressed to identity.
-    expect(cmd).toBe(
+    expect(cmd).toContain(
       "git -C '/srv/repo' -c core.fsmonitor=false --no-pager cat-file -p --end-of-options " +
         "''\\''; rm -rf /; echo '\\'':src/app.ts'"
     );
@@ -467,11 +507,18 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
   });
 
   it.each(['read_file', 'diff_file'])('%s preserves filename whitespace instead of selecting a different file', async (action) => {
-    vi.mocked(execRemoteCommand).mockImplementation(async (_config, command) => ({
-      stdout: command.endsWith("'main: spaced.txt '") || command.endsWith("-- ' spaced.txt '")
-        ? 'EXACT-FILE' : 'OTHER-FILE',
-      stderr: '', exitStatus: 0,
-    }));
+    vi.mocked(execRemoteCommand).mockImplementation(async (_config, command) => {
+      // `read_file` page 1: the binary probe, then the pager pass.
+      if (command.includes('od -An -tx1')) return { stdout: '', stderr: '', exitStatus: 1 };
+      const exact = command.includes("'main: spaced.txt '") || command.endsWith("-- ' spaced.txt '");
+      if (command.includes('###TOTAL')) {
+        return {
+          stdout: `1: ${exact ? 'EXACT-FILE' : 'OTHER-FILE'}\n###TOTAL 1\n`,
+          stderr: '', exitStatus: 0,
+        };
+      }
+      return { stdout: exact ? 'EXACT-FILE' : 'OTHER-FILE', stderr: '', exitStatus: 0 };
+    });
     for (const filePath of [' spaced.txt ', 'spaced.txt']) {
       const res = JSON.parse(await executeTeamTool('git_read', {
         action, branch: 'main', base: 'main', target: 'feature/x', filePath,
@@ -551,12 +598,8 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
   });
 
   it('does not fall back to the working copy when the ref itself is bad (WR-01)', async () => {
-    // `git show` fails because the branch does not exist — not because the path is untracked.
-    vi.mocked(execRemoteCommand).mockResolvedValueOnce({
-      stdout: '',
-      stderr: "fatal: invalid object name 'mian'.",
-      exitStatus: 128,
-    });
+    // `git cat-file` fails because the branch does not exist — not because the path is untracked.
+    queueFailingSource("fatal: invalid object name 'mian'.");
 
     const res = JSON.parse(
       await executeTeamTool(
@@ -566,28 +609,23 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
       )
     );
     expect(res).toMatchObject({ refused: true, code: 'GIT_READ_FAILED' });
-    // Exactly one command: the failed `git show`. No `cat` of the working copy, which would
-    // have returned a different version labelled as branch `mian`.
-    expect(vi.mocked(execRemoteCommand).mock.calls).toHaveLength(1);
+    // Exactly two commands: the page-1 probe and the failed pager pass. No `cat` of the working
+    // copy, which would have returned a different version labelled as branch `mian`.
+    const commands = vi.mocked(execRemoteCommand).mock.calls.map((call) => call[1]);
+    expect(commands).toHaveLength(2);
+    expect(commands.some((cmd) => cmd.includes('cat --'))).toBe(false);
   });
 
   it('still falls back to the working copy for a path that is genuinely not in the ref', async () => {
-    vi.mocked(execRemoteCommand).mockResolvedValueOnce({
-      stdout: '',
-      stderr: "fatal: path 'untracked.ts' does not exist in 'main'",
-      exitStatus: 128,
-    });
+    // Ref branch: page-1 probe (text), then the pager pass reporting the missing path.
+    queueFailingSource("fatal: path 'untracked.ts' does not exist in 'main'");
     // WR-01: the fallback confirms the path is untracked first; non-zero exit means it is.
-    vi.mocked(execRemoteCommand).mockResolvedValueOnce({
-      stdout: '',
-      stderr: 'error: pathspec did not match any file(s) known to git',
-      exitStatus: 1,
-    });
-    vi.mocked(execRemoteCommand).mockResolvedValueOnce({
-      stdout: 'export const untracked = 1;\n',
-      stderr: '',
-      exitStatus: 0,
-    });
+    queue(
+      { stdout: '', stderr: 'error: pathspec did not match any file(s) known to git', exitStatus: 1 },
+      // Working-copy source: its own page-1 probe, then the pager pass.
+      { stdout: '', stderr: '', exitStatus: 1 },
+      { stdout: '1: export const untracked = 1;\n###TOTAL 1\n', stderr: '', exitStatus: 0 }
+    );
 
     const res = JSON.parse(
       await executeTeamTool(
@@ -597,24 +635,17 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
       )
     );
     expect(res.content).toContain('export const untracked = 1;');
-    const command = vi.mocked(execRemoteCommand).mock.calls.at(-1)![1];
-    expect(command).toContain("root=$(realpath -e -- '/srv/repo' && printf /) || exit 1;");
-    expect(command).toContain("target=$(realpath -e -- '/srv/repo/untracked.ts' && printf /) || exit 1;");
-    expect(command).toContain('case "$target" in "${root%/}/"*) cat -- "$target" ;; *) exit 77 ;; esac');
+    const commands = vi.mocked(execRemoteCommand).mock.calls.map((call) => call[1]);
+    const catSnippet = commands.find((cmd) => cmd.includes('cat --'))!;
+    expect(catSnippet).toContain("root=$(realpath -- '/srv/repo' && printf /) || exit 1;");
+    expect(catSnippet).toContain("target=$(realpath -- '/srv/repo/untracked.ts' && printf /) || exit 1;");
+    expect(catSnippet).toContain('case "$target" in "${root%/}/"*) cat -- "$target" ;; *) exit 77 ;; esac');
   });
 
   it('does not fall back for a path tracked but deleted in the requested ref (WR-01)', async () => {
-    vi.mocked(execRemoteCommand).mockResolvedValueOnce({
-      stdout: '',
-      stderr: "fatal: path 'gone.txt' exists on disk, but not in 'feature/x'",
-      exitStatus: 128,
-    });
+    queueFailingSource("fatal: path 'gone.txt' exists on disk, but not in 'feature/x'");
     // Tracked elsewhere → the ref genuinely lacks it, so the working copy must not substitute.
-    vi.mocked(execRemoteCommand).mockResolvedValueOnce({
-      stdout: 'gone.txt\n',
-      stderr: '',
-      exitStatus: 0,
-    });
+    queue('gone.txt\n');
 
     const res = JSON.parse(
       await executeTeamTool(
@@ -626,5 +657,100 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     expect(res).toMatchObject({ refused: true, code: 'GIT_READ_FAILED' });
     const commands = vi.mocked(execRemoteCommand).mock.calls.map((call) => call[1]);
     expect(commands.some((cmd) => cmd.includes('cat --'))).toBe(false);
+  });
+
+  // ---------------------------------------------------------------------------------------
+  // Block D — paging and search (D-01, D-02). `read_file` returns ONE page and says how much
+  // is left; `grep` locates code without reading files, and no hits is a success.
+  // ---------------------------------------------------------------------------------------
+
+  it('read_file returns one page with a truthful total and a nextOffset', async () => {
+    queuePage(['1: line one', '2: line two'], 10);
+
+    const res = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'read_file', branch: 'main', filePath: 'src/app.ts', limit: 2 },
+        ctx()
+      )
+    );
+
+    expect(res).toMatchObject({
+      offset: 1,
+      limit: 2,
+      linesRead: 2,
+      totalLines: 10,
+      hasMore: true,
+      isBinary: false,
+      nextOffset: 3,
+    });
+    expect(res.content).toContain('1: line one');
+    // Only the requested page — the whole blob must never come back in one call.
+    expect(res.content).not.toContain('3:');
+  });
+
+  it('read_file on the last page omits nextOffset', async () => {
+    // Page 1 probes for binary content; a later page does not, so this is one remote call.
+    queue({ stdout: '9: nine\n10: ten\n###TOTAL 10\n', stderr: '', exitStatus: 0 });
+
+    const res = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'read_file', branch: 'main', filePath: 'src/app.ts', offset: 9, limit: 2 },
+        ctx()
+      )
+    );
+
+    expect(res).toMatchObject({ offset: 9, linesRead: 2, totalLines: 10, hasMore: false });
+    expect(res).not.toHaveProperty('nextOffset');
+    expect(vi.mocked(execRemoteCommand).mock.calls).toHaveLength(1);
+  });
+
+  it('read_file returns empty content for a binary page instead of dumping bytes', async () => {
+    // The page-1 probe exits 0 when a NUL byte is present — no pager pass follows.
+    queue({ stdout: '', stderr: '', exitStatus: 0 });
+
+    const res = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'read_file', branch: 'main', filePath: 'logo.png' },
+        ctx()
+      )
+    );
+
+    expect(res).toMatchObject({ isBinary: true, content: '', linesRead: 0, hasMore: false });
+    expect(vi.mocked(execRemoteCommand).mock.calls).toHaveLength(1);
+  });
+
+  it('grep with no matches returns an empty hit list, not a refusal', async () => {
+    // `git grep` exits 1 when nothing matches. That is a successful empty result.
+    queue({ stdout: '', stderr: '###EXIT 1\n', exitStatus: 0 });
+
+    const res = JSON.parse(
+      await executeTeamTool('git_read', { action: 'grep', pattern: 'nothingMatchesMe' }, ctx())
+    );
+
+    expect(res.refused).toBeUndefined();
+    expect(res.hits).toEqual([]);
+    expect(res.truncated).toBe(false);
+    expect(vi.mocked(execRemoteCommand).mock.calls[0]![1]).toContain('--end-of-options');
+  });
+
+  it('grep refuses a missing pattern without running git', async () => {
+    const res = JSON.parse(await executeTeamTool('git_read', { action: 'grep' }, ctx()));
+    expect(res).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
+    expect(execRemoteCommand).not.toHaveBeenCalled();
+  });
+
+  it('grep refuses a branch beginning with "-" and never runs git (CR-01)', async () => {
+    const res = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'grep', pattern: 'x', branch: '--output=/tmp/x' },
+        ctx()
+      )
+    );
+    expect(res).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
+    expect(execRemoteCommand).not.toHaveBeenCalled();
   });
 });

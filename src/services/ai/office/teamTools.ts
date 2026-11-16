@@ -25,9 +25,9 @@ import {
   grepRemoteRef,
 } from '../../../services/gitRemoteService';
 import {
-  getRemoteFileContent,
   getRemoteTree,
   PathOutsideRepoError,
+  readRemoteFilePage,
 } from '../../../services/gitRemoteTreeService';
 import type { System } from '../../../types/models';
 import type { SshConfig } from '../../../types/ssh';
@@ -1260,13 +1260,31 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
             )
           );
         }
-        // Phase 31 D-12: entire content, no truncation.
-        const text = await getRemoteFileContent(config, repoPath, branch, filePath, secret);
+        const offset = Math.max(1, Math.floor(Number(args.offset)) || 1);
+        const limit = Math.min(Math.max(1, Math.floor(Number(args.limit)) || 200), 2000);
+        const page = await readRemoteFilePage(
+          config,
+          repoPath,
+          branch,
+          filePath,
+          offset,
+          limit,
+          secret
+        );
         return JSON.stringify({
           ...base,
           branch,
           filePath: wrapField(gitLabel('ĐƯỜNG DẪN'), filePath),
-          content: wrapUntrusted(gitLabel('NỘI DUNG FILE'), text),
+          offset: page.offset,
+          limit: page.limit,
+          linesRead: page.linesRead,
+          totalLines: page.totalLines,
+          hasMore: page.hasMore,
+          isBinary: page.isBinary,
+          content: page.isBinary
+            ? ''
+            : wrapUntrusted(gitLabel('NỘI DUNG FILE'), page.lines.join('\n')),
+          ...(page.hasMore ? { nextOffset: page.offset + page.linesRead } : {}),
         });
       }
       case 'tree': {
