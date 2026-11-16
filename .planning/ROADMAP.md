@@ -10,7 +10,7 @@
 - Phase 40: Explorer UX, CRUD correctness, observed walkthrough (v1.4)
 - Phase 41: AI Office team docs zones — per-team folder tree, agent-scoped doc write (v1.4, INSERTED)
 - Phase 42: Read-only git inspection for the reviewer agent (v1.4, INSERTED)
-- Phase 43: Repo reading that scales — grep, paged read, remote headless exploration (v1.4, INSERTED)
+- Phase 43: Repo reading that scales — grep, paged read, remote headless exploration (COMPLETE — verified 2026-11-17)
 
 ## Previous Milestone: v1.3
 
@@ -872,6 +872,7 @@ Plans:
 7. Toàn bộ các view hiện hữu của TaskMate (Tasks, Notes, Planner, Dashboard, Projects, Analytics, Settings, SDLC) mở và điều hướng trơn tru qua Center Tabs.
 
 **Plans:** 4/4 plans complete
+**Status:** COMPLETE — verified 2026-11-17 (4/4 success criteria)
 
 **Wave 1**
 
@@ -1017,6 +1018,7 @@ Plans:
 **Research flag:** standard patterns — skip research-phase.
 
 **Plans:** 4/4 plans complete
+**Status:** COMPLETE — verified 2026-11-17 (4/4 success criteria)
 
 Plans:
 
@@ -1276,6 +1278,7 @@ Plans:
 5. SDLC Studio and AI Chat Drawer automatically resolve SSH connections, repo paths, and conventions from the selected CR's target systems without redundant global configuration.
 
 **Plans:** 4/4 plans complete
+**Status:** COMPLETE — verified 2026-11-17 (4/4 success criteria)
 **UI hint**: yes
 
 Plans:
