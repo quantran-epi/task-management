@@ -1282,19 +1282,21 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
             )
           );
         }
+        // Echo the confined path, so the result names the file that was actually read.
+        const cleanPath = confineRepoPath(filePath, 'Đường dẫn tệp');
         const text = await getFileDiff(
           config,
           repoPath,
           baseBranch,
           targetBranch,
-          filePath,
+          cleanPath,
           secret
         );
         return JSON.stringify({
           ...base,
           base: baseBranch,
           target: targetBranch,
-          filePath: wrapField(gitLabel('ĐƯỜNG DẪN'), filePath),
+          filePath: wrapField(gitLabel('ĐƯỜNG DẪN'), cleanPath),
           diff: wrapUntrusted(gitLabel('DIFF'), text),
         });
       }
@@ -1309,21 +1311,21 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
             )
           );
         }
-        const offset = Math.max(1, Math.floor(Number(args.offset)) || 1);
-        const limit = Math.min(Math.max(1, Math.floor(Number(args.limit)) || 200), 2000);
+        // The service owns the clamp; echoing its values keeps the result honest about which
+        // page was actually read. The confined path is echoed for the same reason.
         const page = await readRemoteFilePage(
           config,
           repoPath,
           branch,
           filePath,
-          offset,
-          limit,
+          Number(args.offset),
+          Number(args.limit),
           secret
         );
         return JSON.stringify({
           ...base,
           branch,
-          filePath: wrapField(gitLabel('ĐƯỜNG DẪN'), filePath),
+          filePath: wrapField(gitLabel('ĐƯỜNG DẪN'), page.filePath),
           offset: page.offset,
           limit: page.limit,
           linesRead: page.linesRead,

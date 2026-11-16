@@ -867,7 +867,7 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     expectEnclosed(parsed.report, 'src/orders/index.ts:12');
 
     // The command runs in the resolved repo and carries the CLI contract.
-    expect(seenCommand).toContain("cd '/srv/repo' && claude -p");
+    expect(seenCommand).toContain("cd -- '/srv/repo' && claude -p");
     expect(seenCommand).toContain('--allowedTools Read,Grep,Glob');
     expect(seenCommand).toContain('--max-turns 20');
   });

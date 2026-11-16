@@ -84,7 +84,8 @@ export function clampExploreMaxTurns(value: unknown): number {
  */
 export function buildExploreCommand(request: ExploreRequest): string {
   return [
-    `cd ${escapeShellArg(request.repoPath)} &&`,
+    // `--` so a repo path beginning with `-` is a directory, not a `cd` option.
+    `cd -- ${escapeShellArg(request.repoPath)} &&`,
     'claude -p',
     '--output-format json',
     '--restricted',

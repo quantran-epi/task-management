@@ -50,7 +50,7 @@ describe('buildExploreCommand (43-04 D-03)', () => {
     // `escapeShellArg` output for EVIL, pinned literally and independent of the function.
     const q = `'"'\\''; $(rm -rf /); echo '\\'''`;
     expect(cmd).toBe(
-      `cd ${q} && claude -p --output-format json --restricted ` +
+      `cd -- ${q} && claude -p --output-format json --restricted ` +
         `--allowedTools Read,Grep,Glob --model ${q} --max-turns 20 --no-session-persistence ` +
         `--append-system-prompt ` +
         `'Bạn đang đọc một repository trên chính máy này để trả lời một câu hỏi về mã nguồn.\n` +
