@@ -93,7 +93,26 @@ export function clampExploreTimeoutSeconds(value: unknown): number {
  * The prompt goes after `--`: `escapeShellArg` protects the shell, not argv parsing, and a
  * question beginning with `-` is otherwise read by the CLI as an option (`claude -p '--x'`
  * fails with "unknown option"). `--` is last because everything after it is positional.
+ *
+ * Auth (2026-11-17): `--restricted` ignores user/project/local settings files, so on a host whose
+ * working interactive `claude` gets its credentials from the `env` block of
+ * `~/.claude/settings.json` (token + base URL, no OAuth credential file), a restricted headless
+ * run has NO auth source and returns "Not logged in · Please run /login". That is the exact
+ * failure seen in UAT even though typing `claude` on the same machine works. `--restricted` still
+ * honours `--settings`, so we forward ONLY that `env` block (never the whole file — it commonly
+ * carries `permissions.defaultMode: bypassPermissions`, which restricted mode rejects). The
+ * extraction runs in the REMOTE shell next to `claude`, uses the remote's own config, and falls
+ * back to `{}` so a host with a different auth layout still returns a normal CLI result we can
+ * map to a truthful refusal. This is INSIDE the remote command string, not escaped by
+ * `escapeShellArg`, because it is shell syntax (command substitution) that must execute remotely.
  */
+export const REMOTE_CLAUDE_AUTH_SETTINGS =
+  `"$(node -e 'try{const p=require("path"),f=require("fs"),o=require("os");` +
+  `const d=process.env.CLAUDE_CONFIG_DIR||p.join(o.homedir(),".claude");` +
+  `const e=JSON.parse(f.readFileSync(p.join(d,"settings.json"),"utf8")).env||{};` +
+  `if(Object.keys(e).length)process.stdout.write(JSON.stringify({env:e}))}catch(_){` +
+  `process.stdout.write("{}")}' 2>/dev/null || echo '{}')"`;
+
 export function buildExploreCommand(request: ExploreRequest): string {
   return [
     // `--` so a repo path beginning with `-` is a directory, not a `cd` option.
@@ -101,6 +120,8 @@ export function buildExploreCommand(request: ExploreRequest): string {
     'claude -p',
     '--output-format json',
     '--restricted',
+    // `--settings` survives restricted mode and restores the credentials it otherwise ignores.
+    `--settings ${REMOTE_CLAUDE_AUTH_SETTINGS}`,
     '--allowedTools Read,Grep,Glob',
     '--model',
     escapeShellArg(request.model),
@@ -178,6 +199,24 @@ export function parseExploreResult(stdout: string): ExploreOutcome {
 
   if (obj.is_error === true) {
     const detail = joinErrors(obj.errors) || (typeof obj.subtype === 'string' ? obj.subtype : '');
+    // The raw CLI text is "Not logged in · Please run /login", but on a machine where typing
+    // `claude` already works that instruction is false and sends the owner in circles. The real
+    // cause is that the restricted headless run could not see the credentials the interactive
+    // CLI uses. Name it so the owner checks the right thing (remote settings env block).
+    const raw = `${result} ${detail}`;
+    if (/not logged in|please run \/login/i.test(raw)) {
+      return capReport({
+        report: result,
+        truncated: false,
+        outcome: 'error',
+        detail:
+          'REMOTE_CLAUDE_NOT_AUTHENTICATED: headless `claude -p --restricted` on the remote ' +
+          'could not see the credentials used by interactive `claude`. Check that the remote ' +
+          'user settings (~/.claude/settings.json, or $CLAUDE_CONFIG_DIR/settings.json) has a ' +
+          'valid `env` block with ANTHROPIC_AUTH_TOKEN / ANTHROPIC_BASE_URL (and model aliases). ' +
+          'No /login is needed if interactive claude already works on that host.',
+      });
+    }
     return capReport({
       report: result,
       truncated: false,

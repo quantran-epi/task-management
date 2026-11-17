@@ -8,6 +8,7 @@ import {
   EXPLORE_MIN_TIMEOUT_SECONDS,
   EXPLORE_REPORT_MAX_CHARS,
   buildExploreCommand,
+  REMOTE_CLAUDE_AUTH_SETTINGS,
   clampExploreTimeoutSeconds,
   parseExploreResult,
   probeRemoteClaude,
@@ -55,6 +56,7 @@ describe('buildExploreCommand (43-04 D-03)', () => {
     const q = `'"'\\''; $(rm -rf /); echo '\\'''`;
     expect(cmd).toBe(
       `cd -- ${q} && claude -p --output-format json --restricted ` +
+        `--settings ${REMOTE_CLAUDE_AUTH_SETTINGS} ` +
         `--allowedTools Read,Grep,Glob --model ${q} --max-turns 20 --no-session-persistence ` +
         `--append-system-prompt ` +
         `'Bạn đang đọc một repository trên chính máy này để trả lời một câu hỏi về mã nguồn.\n` +
@@ -74,6 +76,23 @@ describe('buildExploreCommand (43-04 D-03)', () => {
     // returned the file. With it, both are refused and Read/Grep/Glob still work.
     expect(cmd).toContain('--restricted');
     expect(cmd).not.toContain('--disallowedTools');
+  });
+
+  it('forwards the remote user settings env block into restricted mode via --settings', () => {
+    const cmd = buildExploreCommand(request());
+
+    // --restricted ignores user settings, so the credentials in ~/.claude/settings.json's `env`
+    // block would otherwise be invisible and the run would say "Not logged in" on a host where
+    // interactive claude works. --settings is the one source restricted mode still honours.
+    expect(cmd).toContain(`--settings ${REMOTE_CLAUDE_AUTH_SETTINGS}`);
+    // Extraction is a remote shell command substitution that reads the settings file and emits
+    // only { env: ... }. It never forwards the whole file (which can carry bypassPermissions).
+    expect(REMOTE_CLAUDE_AUTH_SETTINGS).toContain('settings.json');
+    expect(REMOTE_CLAUDE_AUTH_SETTINGS).toContain('process.env.CLAUDE_CONFIG_DIR');
+    expect(REMOTE_CLAUDE_AUTH_SETTINGS).toContain('JSON.stringify({env:e})');
+    expect(REMOTE_CLAUDE_AUTH_SETTINGS).toContain(`echo '{}'`);
+    // The substitution is shell syntax, not a single-quoted literal argument.
+    expect(REMOTE_CLAUDE_AUTH_SETTINGS.startsWith('"$(node -e ')).toBe(true);
   });
 
   it('puts the prompt after -- so a question beginning with "-" is not an option', () => {
@@ -171,6 +190,22 @@ describe('parseExploreResult (43-04 D-03)', () => {
     const out = parseExploreResult(JSON.stringify({ is_error: true, subtype: 'error_during_execution' }));
     expect(out.outcome).toBe('error');
     expect(out.detail).toBe('error_during_execution');
+  });
+
+  it('maps the raw "Not logged in" text to a truthful, actionable refusal', () => {
+    const out = parseExploreResult(
+      JSON.stringify({
+        is_error: true,
+        subtype: 'success',
+        result: 'Not logged in · Please run /login',
+      })
+    );
+    expect(out.outcome).toBe('error');
+    // Do not tell an owner whose interactive claude already works to run /login.
+    expect(out.detail).toContain('REMOTE_CLAUDE_NOT_AUTHENTICATED');
+    expect(out.detail).toContain('settings.json');
+    expect(out.detail).toContain('ANTHROPIC_AUTH_TOKEN');
+    expect(out.detail).toMatch(/no \/login is needed/i);
   });
 
   it('caps an oversized report and marks it truncated', () => {
