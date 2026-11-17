@@ -143,3 +143,14 @@ updated: "2026-11-17"
   checked: real `explore_repo` run after the SSH handshake retry fix
   found: outcome `success`, report `cbe1466b`, elapsed ~59s, `truncated: false`, 4 docs read with path:line citations.
   implication: The bounded SSH transport retry fix is confirmed in the real runtime. Both the auth fix (644dd579) and the handshake retry fix are verified end-to-end. Session status raised from `awaiting_human_verify` to `verified`; fix closed.
+
+## Separate UAT run — 'aborted' on real-Java source survey (NOT a handshake regression)
+
+- timestamp: 2026-11-17
+  source: owner report (real Tauri app), a NEW and separate explore_repo attempt after the success above
+  checked: explore_repo retry with a real Java source-survey prompt on branch `docs/project-initialization`, systemId `a32efe16-456f-4914-bb8c-2ecd284889ec`, model `haiku`, maxTurns 20, timeoutSeconds 300
+  found: outcome `error`, empty report, detail `aborted`, report `31fc8015`, detail id `f98eec3c`.
+  classification (code-backed): `detail: 'aborted'` is emitted ONLY by the turn's AbortSignal — `onAbort` at remoteExploreService.ts:381-385 or the already-aborted guard at 387-391. The watchdog timeout path produces `detail: 'timeout'` (line 434), so `timeoutSeconds: 300` is NOT the cause. This is not a handshake/KEX error and not an auth error.
+  signal chain: chatTurnRuntime.ts:331 passes `turnController.signal` -> teamTools makeExecuteToolFn (teamRunCoordinator.ts:1351-1359) -> toolContext -> explore_repo handler (teamTools.ts:1501-1506) -> runRemoteExplore. Legitimate abort sources in the coordinator: user stop (`stopAgent` 3863, `abortAll` 3904) and batch settle deadline (3413, which records reason `tool-limit`). Empty report is consistent with an abort before any stream data arrived.
+  verdict: Most consistent with a turn-level cancellation (user stop / turn teardown / batch settle deadline), NOT a code bug in the transport layer. Unintentional-abort-without-user-action is NOT established by this evidence alone — no evidence the AbortSignal fired spuriously; every source that aborts it is an intentional cancellation. Kept as a SEPARATE UAT run; the earlier handshake-retry success verdict (report cbe1466b) and status `verified` are NOT reversed.
+  open question for owner (if needed): was a stop button pressed, did the batch deadline (120s settle poll, distinct from the 300s remote timeout) fire, or did the turn end early? That would confirm which intentional abort source applied.
