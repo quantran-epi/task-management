@@ -137,3 +137,68 @@ These are the only remaining gates when the live stack is unavailable; mock-base
 - [x] Supreme goal is preserved end to end: zero-local-docs query-only retrieve works via published sets on live AI surfaces (28-05).
 
 **Approval:** planning sign-off complete 2026-11-17. Live-stack walkthrough remains a human gate at execution time (see Manual-Only Verifications); this is recorded, not waived.
+
+---
+
+## Execution-Time Walkthrough Record (28-05, 2026-11-17)
+
+**Status: LIVE WALKTHROUGH NOT OBSERVED — manual gate remains OPEN (blocking-human, never auto-approved).**
+
+This section records the execution-time outcome of the 28-05 checkpoint. It does
+not waive the human gate described in Manual-Only Verifications. No human approval
+is inferred from mock-based evidence.
+
+### Automated end-to-end contract (executed, green)
+
+Both focused end-to-end commands ran in the isolated worktree and passed:
+
+| Command | Result |
+|---------|--------|
+| `npm --prefix knowledge-server test -- tests/queryOnlyEndToEnd.test.ts` | 1 file, 5 tests passed |
+| `npx vitest run tests/ai/queryOnlyEndToEnd.test.ts` | 1 file, 5 tests passed |
+| Client non-regression: retrievalProtocolParity, knowledgeRetrievalTool, evidencePack, SourcesPanel, CitationChipAndQuickPreview | 5 files, 96 tests passed |
+| Server non-regression: publishedSetDiscovery, snapshotLexicalRetrieval, federatedRetrieval, retrievalProtocol, retrievalRoutes | 5 files, 90 tests passed |
+| `npx tsc --noEmit` | exit 0 |
+| Deleted-ref gate (`NO_DELETED_REFS` over all five `28-*-PLAN.md`) | passed |
+
+The automated contract proves at the observable boundary: zero-local-docs
+`{query, limit}` over two published sets returns set/snapshot-attributed evidence
+with one coverage row per set; explicit `setIds:[known]` searches only that set;
+all-unknown `setIds` returns HTTP 200 DEGRADED with a full UNAVAILABLE ledger; zero
+published sets returns HTTP 200 NO_PUBLISHED_SETS; an orphan hop path never reaches
+a validated 200. On the client surface: grounded and tool paths emit a thin wire
+body and return attributed evidence with no catalog lookup; NO_PUBLISHED_SETS
+renders one byte-identical canonical notice across AI Chat (grounded + tool-driven)
+and Telegram (grounded + tool-driven); NO_EVIDENCE and unreachable stay distinct
+with no canonical notice. `git diff` over the plan base confirms only the two new
+test files changed — no production file was modified.
+
+### Live stack availability check (executed)
+
+- `docker ps` → Docker WSL integration is not active in this distro ("command 'docker' could not be found in this WSL 2 distro").
+- `http://127.0.0.1:3001/health` → connection refused (curl 000).
+- `http://127.0.0.1:7474` (Neo4j browser) → connection refused (curl 000).
+
+No knowledge daemon, Neo4j or published document set is running, so checkpoint
+items (1)-(4) could not be observed by this executor: attributed evidence on a
+live grounded question in AI Chat and a live `retrieve_knowledge` query via
+Telegram; the exact canonical notice on all live surfaces with no published sets;
+the DEGRADED/unavailable message for unknown `setIds`; and local Docs/autosave/
+offline non-regression.
+
+### Remaining manual gate (blocking-human — NOT waived)
+
+With the local stack up (`docker compose up -d`, Knowledge Server at
+`http://127.0.0.1:3001`, per CLAUDE.md), a human must:
+
+1. Use a profile with no local document sets; publish one document set from a
+   device that has documents.
+2. Ask a grounded question in AI Chat and send a `retrieve_knowledge` query via
+   Telegram; confirm attributed evidence with setId/snapshotId details appears.
+3. With no published sets, confirm the exact canonical notice appears identically
+   on both surfaces; with an explicit unknown `setIds` list, confirm the
+   DEGRADED/unavailable message (not an empty answer).
+4. Confirm local Docs/autosave/offline behavior is unaffected.
+
+Record the observed result here to close this gate. The plan's automated contract
+is green; the live observed walkthrough remains the only open item.
