@@ -51,6 +51,12 @@ import { USER_PARTICIPANT_ID, type MessageSeenEntry } from '../../../types/teamC
 import type { ChatTurnRuntimeDeps } from '../runtime/chatTurnRuntime';
 import { AiChatWidget } from '../AiChatWidget';
 import { agentColorFor } from './AgentAttributionRow';
+import {
+  ACTIVITY_RAIL_ID,
+  AgentActivityPanel,
+  type TeamDebugLog,
+} from './AgentActivityPanel';
+export type { TeamDebugLog } from './AgentActivityPanel';
 import { AssignmentPlanCard } from './AssignmentPlanCard';
 import { PendingSkillProposals } from './PendingSkillProposals';
 import { TeamActivityIndicator } from './TeamActivityIndicator';
@@ -117,17 +123,6 @@ function initialOf(name: string): string {
 }
 
 /** UI-SPEC §5b workspace: splitter, sidebar, transcript region and the shared widget. */
-interface TeamDebugLog {
-  timestamp: string;
-  agentId: string;
-  agentName: string;
-  agentKind: string;
-  model: string;
-  text: string;
-  systemMessages: string[];
-  toolNames: string[];
-}
-
 export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   team,
   lead,
@@ -165,6 +160,8 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   const mcpEnabled = team.mcpEnabled === true;
   const [debugLogs, setDebugLogs] = useState<TeamDebugLog[]>([]);
   const [debugModalOpen, setDebugModalOpen] = useState<boolean>(false);
+  // D-10: runtime-only rail visibility, default open on the only supported runtime (Tauri desktop).
+  const [activityOpen, setActivityOpen] = useState<boolean>(true);
   const [sendError, setSendError] = useState<{ code: string; message: string } | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<boolean | null>(null);
   const [requestingNotification, setRequestingNotification] = useState(false);
@@ -886,6 +883,17 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                 />
                 {busy ? 'Đang chạy' : 'Rảnh'}
               </span>
+              <Button
+                size="small"
+                aria-label="Mở activity"
+                aria-expanded={activityOpen}
+                aria-controls={ACTIVITY_RAIL_ID}
+                data-testid="team-activity-affordance"
+                onClick={() => setActivityOpen(true)}
+                style={{ marginLeft: 4 }}
+              >
+                Activity
+              </Button>
               <Dropdown
                 trigger={['click']}
                 placement="bottomRight"
@@ -1047,6 +1055,19 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
             </div>
           </div>
         </Splitter.Panel>
+
+        {activityOpen ? (
+          <Splitter.Panel defaultSize="28%" min="280px" max="50%">
+            <AgentActivityPanel
+              agents={snapshot.agents}
+              roster={roster.map((member) => ({ id: member.id, name: member.name, ...(member.id === team.leadId ? { isLead: true } : {}) }))}
+              debugLogs={debugLogs}
+              onClearLogs={() => setDebugLogs([])}
+              onClose={() => setActivityOpen(false)}
+              open={activityOpen}
+            />
+          </Splitter.Panel>
+        ) : null}
       </Splitter>
 
       <TeamSettingsDrawer
