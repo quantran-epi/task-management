@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button, Empty, Popconfirm, Progress, Tag, Tooltip, Typography, theme } from 'antd';
 import {
   CheckCircleOutlined,
@@ -263,12 +263,21 @@ const TimelineEventRow: React.FC<{ row: TimelineRow }> = ({ row }) => {
 
 const ProgressCard: React.FC<{ row: TimelineRow }> = ({ row }) => {
   const { token } = theme.useToken();
+  // UI-REVIEW WR-01: a blocked remote explore produces no stream deltas, so without its own
+  // ticker this card's elapsed clock would freeze at 00:00 until some unrelated re-render.
+  // Drive a second-by-second local re-render; the deadline itself stays derived from args.
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick((n) => n + 1), 1_000);
+    return () => clearInterval(timer);
+  }, []);
   const args = parseArgsObject(row.step.detail);
   const rawTimeout = Number(args.timeoutSeconds);
   const timeoutSeconds = Number.isFinite(rawTimeout)
     ? Math.min(900, Math.max(60, Math.floor(rawTimeout)))
     : 300;
   const startedMs = Date.parse(row.step.startedAt ?? row.step.at);
+  void tick; // tick exists solely to trigger this recomputation each second.
   const elapsedMs = Number.isFinite(startedMs) ? Math.max(0, Date.now() - startedMs) : 0;
   const deadlineMs = timeoutSeconds * 1_000;
   const percent = Math.min(100, (elapsedMs / deadlineMs) * 100);

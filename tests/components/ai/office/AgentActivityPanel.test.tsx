@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import {
   AgentActivityPanel,
   type ActivityRosterEntry,
@@ -155,6 +155,34 @@ describe('AgentActivityPanel — explore progress (44-03 Task 2)', () => {
     render(<AgentActivityPanel agents={agents} roster={ROSTER} debugLogs={[]} onClearLogs={noop} />);
     // 9999 clamps to 900 -> 15:00
     expect(screen.getByTestId('activity-progress-clock').textContent).toMatch(/ \/ 15:00$/);
+  });
+
+  it('advances the elapsed clock on its own ticker even without a re-render (UI-REVIEW WR-01)', () => {
+    vi.useFakeTimers();
+    const realNow = Date.now();
+    vi.setSystemTime(realNow);
+    const agents: AgentRunState[] = [{
+      agentId: 'agent-1', status: 'running', streamingText: '',
+      steps: [stepRow({
+        id: 'explore-tick', toolName: 'explore_repo', phase: 'call', status: 'running',
+        startedAt: new Date(realNow).toISOString(),
+        detail: JSON.stringify({ question: 'q', timeoutSeconds: 300 }),
+        label: 'đang gọi tool explore_repo',
+      })],
+    }];
+    try {
+      render(<AgentActivityPanel agents={agents} roster={ROSTER} debugLogs={[]} onClearLogs={noop} />);
+      const clock = screen.getByTestId('activity-progress-clock');
+      expect(clock.textContent).toMatch(/^00:00 \/ 05:00$/);
+
+      // No prop change / re-render: advance the fake clock only. The card must still tick.
+      act(() => {
+        vi.advanceTimersByTime(62_000);
+      });
+      expect(clock.textContent).toMatch(/^01:02 \/ 05:00$/);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
