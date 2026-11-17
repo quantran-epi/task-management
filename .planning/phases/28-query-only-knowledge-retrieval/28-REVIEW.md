@@ -47,7 +47,10 @@ findings:
   info: 0
   total: 3
   necessity: 1
-status: issues_found
+open_findings: 0
+re_reviewed: 2026-11-17T09:17:40Z
+re_review_status: pass
+status: clean
 fix_status: all_fixed
 fixed_at: 2026-11-17T16:10:00Z
 fix_iteration: 1
@@ -62,7 +65,7 @@ fix_commits:
 **Reviewed:** 2026-11-17T08:49:08Z
 **Depth:** standard
 **Files Reviewed:** 37
-**Status:** issues_found
+**Status:** clean (all 3 warnings fixed and re-verified; 0 open findings)
 **Fix Status:** all_fixed (2026-11-17T16:10:00Z, iteration 1)
 
 ## Fix Disposition
@@ -84,11 +87,57 @@ modalities with reason `NO_RETRIEVAL_GENERATION`, and all existing DEGRADED path
 federated regression tests. A live end-to-end walkthrough (per 28-VALIDATION.md) was
 not re-run in this fix pass.
 
+## Re-Review Verification (post-fix)
+
+Re-reviewed at `standard` depth in the isolated worktree against commits
+`7581f6ea` (WR-01), `a297ed31` (WR-02), `c64ecda6` (WR-03). Result: **PASS — all
+three fixes verified, no new critical or warning introduced.**
+
+- **WR-01 — PASS.** `snapshotLexicalRetrieval.ts:122-157` splits the empty envelope:
+  the genuine no-match path (`items.length === 0` at `:190-192`) emits `fulltext`
+  `status: 'ok'`, `itemCount: 0`, `reason: 'NO_MATCHING_CHUNKS'`, and
+  `diagnostics.degraded: false`; the ABORTED path stays fully unavailable/degraded.
+  `federatedRetrievalService.ts:623-634` exempts only secondary modalities that are
+  `unavailable` with reason `NO_RETRIEVAL_GENERATION`; `fulltext` is never excused,
+  and error/timeout/stale/truncated still degrade. Genuine failures remain DEGRADED:
+  partial set rejection (`federatedRetrieval.test.ts:194-221`), all-failed
+  (`:791-805`), coverage-warning and budget-stop paths (`:301, :346, :541, :832`)
+  all still assert DEGRADED, and `noSuccessfulSet`/`hasSetRejection` still force
+  DEGRADED at `federatedRetrievalService.ts:649-651`. Refine routing is preserved:
+  `groundedTurn.ts:973-993` routes `NO_EVIDENCE`/`UNSUPPORTED` to `refine`, and the
+  real published-only no-match E2E case (`queryOnlyEndToEnd.test.ts:256-283`)
+  asserts `NO_EVIDENCE`, `degraded: false`, and a full `SEARCHED_NO_EVIDENCE`
+  coverage row. The fixture (`buildE2EApp`, `:88-109`) uses the real route +
+  resolver + `createPerSetRetriever` with no graph retrieval service, so it is the
+  true published-only/lexical path.
+- **WR-02 — PASS.** `telegramHeadlessWorker.ts:560-574` keeps
+  `KNOWLEDGE_SERVER_EMPTY_NOTICE` byte-identical (single canonical constant at
+  `knowledgeOutcome.ts:13-14`) and appends the local fallback under the
+  `*(Chỉ dữ liệu nội bộ)*` label via the existing `formatGroundedAnswerForTelegram`.
+  Both call sites (mixed path `:1265-1296`, step-6 path `:1350-1379`) send the
+  combined `terminalReply` through `markdownToTelegramHtml` before any early return.
+  Tests assert the notice appears exactly once and first, the local-only label and
+  evidence are present, and the sent HTML contains `<i>(Chỉ dữ liệu nội bộ)</i>`.
+- **WR-03 — PASS.** Repo-wide grep finds zero occurrences of `getSetReadiness` or
+  `SetReadiness` in any `.ts`/`.tsx` source or test. Removed from the deps
+  interface, resolver call sites, route type and fallback wiring
+  (`retrieval.ts:69-73, :199-200`), and fixtures; no phantom dependency remains.
+- **No AI-engine regression.** The fix range touches no AI-engine service
+  (`groundedTurn`, `evidencePack`, `knowledgeRetrievalTool`, `knowledgeOutcome`,
+  `groundedAnswerSchemas`) — only the Telegram formatter, knowledge-server
+  services/routes, and their tests.
+- **No new dependency.** No `package*.json` or lock file changed in the fix range.
+- **No phase 44 contact.** No file or diff content in the fix range references
+  phase 44 or later-phase planning artifacts.
+- **Verification run:** knowledge-server focused tests — 5 files / 61 passed;
+  Telegram focused tests — 1 file / 53 passed; knowledge-server and root
+  `tsc --noEmit` — both clean. Full suite not run (per project convention).
+
 ## Summary
 
 Reviewed the full Phase 28 query-only knowledge retrieval surface (server discovery/lexical fallback/federation/protocol, client tool/grounded-turn/outcome/evidence pack, React surfaces, Telegram worker, and all phase tests) at standard depth on `gsd/phase-28-isolated`. The security-sensitive shape of the change is sound: strict wire schemas, exact-match explicit `setIds`, bounded fan-out/deadline, snapshot-pinned citation closure, and a single canonical empty-server constant are all present and parity-tested. The pre-existing `AIChatDrawerGroundedWiring.test.tsx` failure is treated as documented deferred context, not a phase-28 regression.
 
-Three actionable findings surfaced, all in behavior that is fully reachable in the primary production scenario (query-only against published-only sets with no Neo4j). Two are correctness defects where the implemented outcome/message handling diverges from the user-locked D-14/D-15 decisions; one is a necessity defect (a dependency that is never wired in production and whose result is always discarded). No security vulnerabilities or data-loss risks were found. No critical issues.
+Three actionable findings surfaced, all in behavior that is fully reachable in the primary production scenario (query-only against published-only sets with no Neo4j). Two are correctness defects where the implemented outcome/message handling diverges from the user-locked D-14/D-15 decisions; one is a necessity defect (a dependency that is never wired in production and whose result is always discarded). No security vulnerabilities or data-loss risks were found. No critical issues. All three fixes have since been verified in the post-fix re-review above; zero open findings remain.
 
 ## Narrative Findings (AI reviewer)
 
@@ -144,5 +193,6 @@ Also verify the step-6 handler does not return before this combined reply is sen
 ---
 
 _Reviewed: 2026-11-17T08:49:08Z_
+_Re-reviewed: 2026-11-17T09:17:40Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
