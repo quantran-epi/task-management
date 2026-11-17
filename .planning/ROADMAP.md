@@ -348,6 +348,19 @@ Plans:
 
 **Research flag:** standard patterns — skip research-phase.
 
+### Phase 44: Agent Activity Panel, Configurable Explore Timeout and Prompt Log
+
+**Goal:** A desktop user can inspect a live, bounded timeline of every team tool call and result and read the team's prompt history in a right-side Agent Activity Panel beside the transcript, and can tune each `explore_repo` call's deadline (60..900s) — with the old Debug Prompt modal and menu removed and the whole phase observed green in a real Tauri walkthrough.
+**Requirements**: TBD
+**Depends on:** Phase 43
+**Plans:** 4 plans
+
+Plans:
+- [ ] 44-01-PLAN.md — make explore_repo timeoutSeconds clamp 60..900/default 300 flow to the existing watchdog
+- [ ] 44-02-PLAN.md — add additive step fields and id-based call+result upsert with capped previews and payload status
+- [ ] 44-03-PLAN.md — build the right-side Agent Activity Panel and migrate Debug Prompt into the Prompt log tab
+- [ ] 44-04-PLAN.md — run combined tests/typecheck, code+UI reviews, observed Tauri walkthrough, and one phase push
+
 ## Milestone: v1.2 Knowledge System Implementation
 
 ### Phase 18: Multi-Modal Hybrid Retrieval Engine
