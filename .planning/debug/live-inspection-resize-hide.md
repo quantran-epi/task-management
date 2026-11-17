@@ -1,5 +1,5 @@
 ---
-status: verifying
+status: awaiting_human_verify
 trigger: "Bug UAT phase 44: In TeamWorkspace, the Live inspection right rail resize handle works when the left Stripe/Splitter sidebar is open. Reproduce: open a chat team, confirm right rail resize works, close the left sidebar, then click the Live inspection resize handle. Actual: live inspection panel hides immediately and cannot be reopened. Expected: handle resizes/opens the right rail regardless of left sidebar state; rail must remain reopenable."
 created: "2026-11-17"
 updated: "2026-11-17"
@@ -118,7 +118,13 @@ verification:
   guardrail_verdict: accepted
   verification_caveat: "Rail resize fix verified by antd source semantics + static invariant test, not a real browser drag (jsdom has no layout/ResizeObserver); needs real-Tauri UAT. BUG2 residual verified in jsdom via tool-event upsert path (same path the Timeline reads); final multi-tool-turn real-Tauri UAT still needed via human-verify checkpoint."
 files_changed:
-  - src/components/ai/office/TeamWorkspace.tsx
-  - src/services/ai/office/teamRunCoordinator.ts
-  - tests/services/ai/office/teamRunCoordinator.test.ts
-  - tests/components/ai/office/TeamWorkspaceActivityRail.test.tsx
+  - src/components/ai/office/TeamWorkspace.tsx  (BUG1, commit c3fe64d2)
+  - src/services/ai/office/teamRunCoordinator.ts  (BUG1+first BUG2 fix c3fe64d2; BUG2 residual re-fix cfcf6dfc)
+  - tests/services/ai/office/teamRunCoordinator.test.ts  (BUG2 residual re-fix cfcf6dfc)
+  - tests/components/ai/office/TeamWorkspaceActivityRail.test.tsx  (BUG1, commit c3fe64d2)
+
+commits:
+  - c3fe64d2: BUG1 rail min=280 + first BUG2 synthesis-turn guard
+  - cfcf6dfc: BUG2 residual — remove per-lead-turn steps reset (current fix)
+
+awaiting_human_verify: "Owner to confirm in real Tauri that after a lead turn records delegate_batch, a SUBSEQUENT lead tool turn (search_team_history / read_team_turn) keeps BOTH rows in Live inspection Timeline; and that switching thread/team or restarting starts a clean timeline. This is the genuine NEW human input (residual BUG2 regression from owner's prior UAT), not a re-ask of the already-answered rail/synthesis checkpoint."
