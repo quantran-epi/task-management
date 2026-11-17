@@ -1,19 +1,21 @@
 ---
-gsd_state_version: 1.0
+gsd_state_version: "1.0"
 milestone: v1.4
-milestone_name: Unified AI Office
-status: Phase 43 complete — 0 critical, 0 warning open; 3 info findings recorded as deliberate decisions
-stopped_at: Completed Phase 43 — review clean, verification passed
-last_updated: "2026-11-17T00:20:00.000Z"
-last_activity: "2026-11-17 - Completed Phase 43: repo reading that scales — grep, paged read, remote headless exploration"
-progress:
-  total_phases: 7
-  completed_phases: 5
-  total_plans: 55
-  completed_plans: 55
-  percent: 71
+milestone_name: Unified AI Office (Phase Details)
 current_phase: 40
 current_phase_name: Explorer UX, CRUD correctness, observed walkthrough
+status: Phase 43 complete — 0 critical, 0 warning open; 3 info findings recorded as deliberate decisions
+stopped_at: Phase 44 context gathered
+last_updated: "2026-11-17T04:45:02.904Z"
+last_activity: "2026-11-17 - Completed Phase 43: repo reading that scales — grep, paged read, remote headless exploration"
+last_activity_desc: "Completed quick task 261116-fyi: Restore Docs parity in IntelliJ workbench: document sets drawer (publish + graph build), ZIP import, folder ZIP export"
+state_head: 7206453583e2c6a6b740d90b1f592f1829050a42
+progress:
+  total_phases: 8
+  completed_phases: 5
+  total_plans: 51
+  completed_plans: 55
+  percent: 63
 ---
 
 # Project State: TaskMate — Milestone v1.4
@@ -49,11 +51,11 @@ Verification: 392 focused tests pass (9 files), `tsc --noEmit` clean. Full suite
 
 ## Session Continuity
 
-Last session: 2026-11-16T15:52:08.840Z
-Stopped at: Completed 43-04-PLAN.md
-Resume file: None
+Last session: 2026-11-17T04:45:00.538Z
+Stopped at: Phase 44 context gathered
+Resume file: .planning/phases/44-agent-activity-panel-configurable-explore-timeout-and-prompt/44-CONTEXT.md
 
-Progress: [███████░░░] 71%
+Progress: [██████░░░░] 63%
 
 ## Milestone v1.4 Map
 
@@ -93,6 +95,7 @@ Progress: [███████░░░] 71%
 - Phase 37.1 inserted after Phase 37 (URGENT): Live steering — leader amends assignments and steers running agents mid-run. Scope deferred from 37-CONTEXT.md D-19: outbox+inbox agent, drain at `beforeToolRound`, `amend_assignments` tool, leader re-plan mid-batch, steer UI.
 - Phase 41 added (2026-11-15): AI Office team docs zones — per-team docs folder tree, agent-scoped document write. Owner decision: every member writes docs; visible immediately; leader writes the approved final at team root.
 - Phase 42 added (2026-11-15): Read-only git inspection for the reviewer agent. Owner decision: reviewer reads git read-only over SSH. Scope narrowed 2026-11-15 — the recursive linked-item read half was cut (sticky notes already arrive full-body via `get_item_details`; `read_file` already covers linked files; note attachments are image-only so the text branch was dead code). See `42-CONTEXT.md` §Deferred Ideas.
+- Phase 44 added (2026-11-17): Agent Activity Panel, Configurable Explore Timeout and Prompt Log. Owner decision: all three pieces ship in one phase, reviewed to zero critical/warning; push once to `feature/intellij-workbench` after verification. UI reference: `.planning/agent-activity-panel-draft.html`.
 
 - Phase 34 marked complete with zero tests covering the AI Office runtime and five live defects (hung batch run, unguarded double-submit, phantom active turn, `targetAgentId` stripped on restore, bare deletes breaking export). "Phase 34 complete" is not evidence of quality.
 - Research verdict: keep and harden the existing coordinator/budget gate; zero new npm dependencies.
