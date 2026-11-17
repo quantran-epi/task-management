@@ -397,7 +397,6 @@ function buildQueryOnlyApp(withPublishedSet: boolean) {
     federatedDeps: { retrievePerSet: retriever.retrievePerSet },
     queryOnlyDeps: {
       listPublishedSets: () => snapshotStore.listActiveSnapshots(),
-      getSetReadiness: async () => 'PUBLISHED_ONLY',
     },
   }).app;
 }
@@ -483,7 +482,6 @@ describe('Phase 28 query-only retrieve route', () => {
           { setId: QUERY_ONLY_SET, snapshotId: QUERY_ONLY_SNAPSHOT },
           { setId: '55555555-5555-4555-8555-555555555555', snapshotId: '66666666-6666-4666-8666-666666666666' },
         ],
-        getSetReadiness: async () => 'PUBLISHED_ONLY',
       },
     }).app;
     const res = await postRetrieve(failingApp, { query: 'rui ro' });

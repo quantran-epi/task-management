@@ -18,7 +18,6 @@ import type {
   RetrievalResponse,
 } from '../src/types/retrievalProtocol.js';
 import type { FederatedRetrievalDependencies } from '../src/services/federatedRetrievalService.js';
-import type { SetReadiness } from '../src/services/publishedSetDiscovery.js';
 
 const ORIGIN = 'https://planner.example';
 const TOKEN = 'server-test-token-very-secret';
@@ -88,7 +87,6 @@ type PerSetFn = FederatedRetrievalDependencies['retrievePerSet'];
 
 function buildE2EApp(options: {
   published?: PublishedFixture[];
-  readiness?: Record<string, SetReadiness>;
   perSetOverride?: (base: PerSetRetriever) => PerSetFn;
 }) {
   const snapshotStore = new SnapshotStore();
@@ -106,7 +104,6 @@ function buildE2EApp(options: {
     federatedDeps: { retrievePerSet },
     queryOnlyDeps: {
       listPublishedSets: () => snapshotStore.listActiveSnapshots(),
-      getSetReadiness: async (setId) => options.readiness?.[setId] ?? 'PUBLISHED_ONLY',
     },
   }).app;
 }
@@ -178,10 +175,6 @@ describe('Phase 28-05 server end-to-end: thin wire in, attributed federated answ
   it('zero-local-docs {query, limit} over two published sets (published-only + graph-ready) returns attributed items and one coverage row per set', async () => {
     const app = buildE2EApp({
       published: [PUBLISHED_ONLY, GRAPH_READY],
-      readiness: {
-        [SET_PUBLISHED_ONLY]: 'PUBLISHED_ONLY',
-        [SET_GRAPH_READY]: 'GRAPH_READY',
-      },
     });
 
     const res = await postRetrieve(app, { query: 'rui ro tin dung', limit: 20 });
@@ -210,10 +203,6 @@ describe('Phase 28-05 server end-to-end: thin wire in, attributed federated answ
   it('zero-local-docs explicit setIds:[known] searches only that set; the other published set is absent from discovery', async () => {
     const app = buildE2EApp({
       published: [PUBLISHED_ONLY, GRAPH_READY],
-      readiness: {
-        [SET_PUBLISHED_ONLY]: 'PUBLISHED_ONLY',
-        [SET_GRAPH_READY]: 'GRAPH_READY',
-      },
     });
 
     const res = await postRetrieve(app, { query: 'rui ro tin dung', limit: 20, setIds: [SET_PUBLISHED_ONLY] });
@@ -299,7 +288,6 @@ describe('Phase 28-05 server end-to-end: thin wire in, attributed federated answ
   it('zero-local-docs: an orphan hop path in a mocked per-set response never reaches a validated 200 response', async () => {
     const app = buildE2EApp({
       published: [GRAPH_READY],
-      readiness: { [SET_GRAPH_READY]: 'GRAPH_READY' },
       perSetOverride: () => async () => graphResponseWithOrphanPath(SNAP_GRAPH_READY),
     });
 

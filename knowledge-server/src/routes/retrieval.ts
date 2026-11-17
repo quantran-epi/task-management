@@ -69,7 +69,6 @@ function classifyRetrievalError(error: unknown): {
 
 export interface QueryOnlyRouteDependencies {
   listPublishedSets(): PublishedSetEntry[];
-  getSetReadiness?(setId: string): Promise<'GRAPH_READY' | 'PUBLISHED_ONLY' | 'FAILED'>;
 }
 
 function noPublishedSetsResponse() {
@@ -200,11 +199,7 @@ export function registerRetrievalRoutes(
     try {
       const listPublishedSets =
         queryOnlyDeps?.listPublishedSets ?? (() => [] as PublishedSetEntry[]);
-      const scope = await resolveQueryOnlyScope(body.data, {
-        listPublishedSets,
-        getSetReadiness:
-          queryOnlyDeps?.getSetReadiness ?? (async () => 'PUBLISHED_ONLY' as const),
-      });
+      const scope = await resolveQueryOnlyScope(body.data, { listPublishedSets });
 
       let response;
       if (scope.resolved === null && scope.outcome === 'NO_PUBLISHED_SETS') {

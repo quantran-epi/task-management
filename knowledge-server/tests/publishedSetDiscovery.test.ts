@@ -1,6 +1,6 @@
 /// <reference types="node" />
-import { describe, expect, it, vi } from 'vitest';
-import { resolveQueryOnlyScope, type PublishedSetEntry, type SetReadiness } from '../src/services/publishedSetDiscovery.js';
+import { describe, expect, it } from 'vitest';
+import { resolveQueryOnlyScope, type PublishedSetEntry } from '../src/services/publishedSetDiscovery.js';
 import type { FederatedRetrievalRequest } from '../src/types/retrievalProtocol.js';
 
 const SET_A = '00000000-0000-4000-8000-000000000001';
@@ -24,9 +24,8 @@ const wire = (overrides: Partial<FederatedRetrievalRequest> = {}): FederatedRetr
   ...overrides,
 });
 
-function deps(entries: PublishedSetEntry[], readiness: SetReadiness = 'PUBLISHED_ONLY') {
-  const getSetReadiness = vi.fn().mockResolvedValue(readiness);
-  return { listPublishedSets: () => entries, getSetReadiness };
+function deps(entries: PublishedSetEntry[]) {
+  return { listPublishedSets: () => entries };
 }
 
 describe('publishedSetDiscovery (Phase 28 Task 3)', () => {
@@ -82,7 +81,7 @@ describe('publishedSetDiscovery (Phase 28 Task 3)', () => {
   });
 
   it('keeps a PUBLISHED_ONLY set assigned rather than dropping it from the fleet', async () => {
-    const result = await resolveQueryOnlyScope(wire({ setIds: [SET_B] }), deps(published, 'PUBLISHED_ONLY'));
+    const result = await resolveQueryOnlyScope(wire({ setIds: [SET_B] }), deps(published));
     expect(result.resolved?.setTierAssignments).toEqual([
       { setId: SET_B, tier: 'REQUIRED', roleGroup: 'baseline' },
     ]);

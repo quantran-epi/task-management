@@ -12,8 +12,6 @@ import {
   type ResolvedFederatedRetrievalRequest,
 } from '../types/retrievalProtocol.js';
 
-export type SetReadiness = 'GRAPH_READY' | 'PUBLISHED_ONLY' | 'FAILED';
-
 export interface PublishedSetEntry {
   setId: string;
   snapshotId: string;
@@ -21,7 +19,6 @@ export interface PublishedSetEntry {
 
 export interface QueryOnlyScopeDeps {
   listPublishedSets(): PublishedSetEntry[];
-  getSetReadiness(setId: string): Promise<SetReadiness>;
 }
 
 export interface ResolvedQueryOnlyScope {
@@ -101,11 +98,10 @@ export async function resolveQueryOnlyScope(
         coverage.push(unavailable(setId));
         continue;
       }
-      // Readiness seeds attribution but never removes a published set from the
-      // fleet: a PUBLISHED_ONLY set is assigned and searched lexically (D-02).
-      // Its coverage row is produced by the federated ledger (28-03), so no
-      // speculative state is emitted here.
-      await deps.getSetReadiness(setId);
+      // Every published set is assigned and searched with the modalities it
+      // actually has (D-02); graph-capability disclosure is owned by the
+      // per-set modality status in the retrieval response, not by a readiness
+      // signal. Its coverage row is produced by the federated ledger (28-03).
       publishedSnapshotIdBySet[setId] = entry.snapshotId;
       assignments.push(assignment(setId));
     }
@@ -133,9 +129,8 @@ export async function resolveQueryOnlyScope(
 
   const assignments: Array<{ setId: string; tier: 'REQUIRED'; roleGroup: 'baseline' }> = [];
   for (const entry of selected) {
-    // Readiness seeds truthful attribution; PUBLISHED_ONLY stays in the fleet
-    // and is searched lexically (D-02).
-    await deps.getSetReadiness(entry.setId);
+    // All published sets stay in the fleet and are searched with the modalities
+    // they actually have (D-02); capability disclosure comes from the response.
     assignments.push(assignment(entry.setId));
   }
 
