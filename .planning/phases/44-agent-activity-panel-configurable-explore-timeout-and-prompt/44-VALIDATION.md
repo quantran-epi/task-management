@@ -44,8 +44,8 @@ created: "2026-11-17"
 | 44-01-03 | 01 | 1 | TO-01 (D-03 wiring) | — | handler passes derived `timeoutMs` to `runRemoteExplore` | unit | `npx vitest run tests/services/ai/office/teamToolsGitRead.test.ts -t explore_repo` | ✅ extend | ⬜ pending |
 | 44-02-01 | 02 | 1 | PANEL-01 (D-04/D-05) | T-44-01 (untrusted text) | call+result upsert by id; result no longer discarded; popover fields retained | unit | `npx vitest run tests/services/ai/office/teamRunCoordinator.test.ts -t "tool event"` | ✅ extend | ⬜ pending |
 | 44-02-02 | 02 | 1 | PANEL-01 (D-06/D-07/D-08) | T-44-01 | args/result preview capped 8000; 200-row cap; status from payload | unit | `npx vitest run tests/services/ai/office/teamRunCoordinator.test.ts -t "tool event"` | ✅ extend | ⬜ pending |
-| 44-03-01 | 03 | 2 | UI-01 (D-09..D-12) | T-44-01/T-44-02 | rail renders tabs/filter/progress/rows; details collapsed; long previews no overflow; a11y attrs | component | `npx vitest run tests/components/ai/office/AgentActivityPanel.test.tsx` | ❌ W0 | ⬜ pending |
-| 44-03-02 | 03 | 2 | LOG-01 (D-14) | T-44-01 | Prompt log tab renders preserved log fields | component | `npx vitest run tests/components/ai/office/AgentActivityPanel.test.tsx -t "Prompt log"` | ❌ W0 | ⬜ pending |
+| 44-03-01 | 03 | 2 | UI-01 (D-09..D-12) | T-44-04/T-44-05 | rail renders tabs/filter/progress/rows; details collapsed; long previews no overflow; a11y attrs | component | `npx vitest run tests/components/ai/office/AgentActivityPanel.test.tsx` | ❌ W0 | ⬜ pending |
+| 44-03-02 | 03 | 2 | LOG-01 (D-14) | T-44-04 | Prompt log tab renders preserved log fields | component | `npx vitest run tests/components/ai/office/AgentActivityPanel.test.tsx -t "Prompt log"` | ❌ W0 | ⬜ pending |
 | 44-03-03 | 03 | 2 | LOG-01 (D-15/D-16) | — | debug dropdown item and debug Modal gone; AIDebugModal untouched | component | `npx vitest run tests/components/ai/office/TeamWorkspaceDebugMenu.test.tsx` | ❌ W0 | ⬜ pending |
 | 44-04-01 | 04 | 3 | VERIFY-01 (C-15/D-17) | — | real UI walkthrough of panel, active explore progress, prompt tab | manual | `/gsd-verify-work 44` | n/a | ⬜ pending |
 
