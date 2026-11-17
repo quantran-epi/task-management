@@ -249,8 +249,11 @@ const TimelineEventRow: React.FC<{ row: TimelineRow }> = ({ row }) => {
           </div>
         ) : status === 'running' ? (
           <Typography.Text type="secondary" style={{ fontSize: 11 }}>{NO_RESULT_COPY}</Typography.Text>
-        ) : status === 'error' ? (
-          <Typography.Text type="danger" style={{ fontSize: 11 }}>{ERROR_COPY}</Typography.Text>
+        ) : null}
+        {status === 'error' ? (
+          <Typography.Text type="danger" style={{ fontSize: 11, display: 'block', marginTop: 4 }} data-testid="activity-error-copy">
+            {ERROR_COPY}
+          </Typography.Text>
         ) : null}
       </div>
     </div>

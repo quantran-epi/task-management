@@ -58,3 +58,166 @@ describe('AgentActivityPanel — one live tool call end-to-end (44-03 Task 1)', 
     expect(container.innerHTML).not.toContain('dangerouslySetInnerHTML');
   });
 });
+
+function stepRow(overrides: Partial<import('../../../../src/types/aiOffice').AgentLiveStep>): import('../../../../src/types/aiOffice').AgentLiveStep {
+  return {
+    id: 'row',
+    label: 'đang gọi tool',
+    at: '2026-11-17T09:42:48+07:00',
+    toolName: 'git_read',
+    phase: 'result',
+    startedAt: '2026-11-17T09:42:48+07:00',
+    status: 'done',
+    ...overrides,
+  };
+}
+
+describe('AgentActivityPanel — tabs and a11y (44-03 Task 2)', () => {
+  it('renders both tabs with role/aria-selected/aria-controls and switches panels', () => {
+    render(<AgentActivityPanel agents={[]} roster={ROSTER} debugLogs={[]} onClearLogs={noop} />);
+
+    expect(screen.getByRole('tablist', { name: 'Panel sections' })).toBeInTheDocument();
+    const timelineTab = screen.getByRole('tab', { name: 'Timeline' });
+    const promptsTab = screen.getByRole('tab', { name: 'Prompt log' });
+    expect(timelineTab).toHaveAttribute('aria-selected', 'true');
+    expect(timelineTab).toHaveAttribute('aria-controls', 'activity-panel-timeline');
+    expect(promptsTab).toHaveAttribute('aria-selected', 'false');
+    expect(promptsTab).toHaveAttribute('aria-controls', 'activity-panel-prompts');
+
+    expect(screen.getByTestId('activity-tabpanel-timeline').hidden).toBe(false);
+    fireEvent.click(promptsTab);
+    expect(promptsTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('activity-tabpanel-prompts').hidden).toBe(false);
+    expect(screen.getByTestId('activity-tabpanel-timeline').hidden).toBe(true);
+  });
+
+  it('groups filter pills under a labelled group and narrows rows by agent', () => {
+    const agents: AgentRunState[] = [{
+      agentId: 'agent-1', status: 'running', streamingText: '',
+      steps: [stepRow({ id: 'r-reviewer', toolName: 'git_read' })],
+    }, {
+      agentId: 'lead-1', status: 'running', streamingText: '',
+      steps: [stepRow({ id: 'r-lead', toolName: 'delegate_batch' })],
+    }];
+    render(<AgentActivityPanel agents={agents} roster={ROSTER} debugLogs={[]} onClearLogs={noop} />);
+
+    expect(screen.getByRole('group', { name: 'Lọc theo agent' })).toBeInTheDocument();
+    expect(screen.getByTestId('activity-event-r-reviewer')).toBeInTheDocument();
+    expect(screen.getByTestId('activity-event-r-lead')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('activity-filter-agent-1'));
+    expect(screen.getByTestId('activity-filter-agent-1')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('activity-event-r-reviewer')).toBeInTheDocument();
+    expect(screen.queryByTestId('activity-event-r-lead')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('activity-filter-all'));
+    expect(screen.getByTestId('activity-event-r-lead')).toBeInTheDocument();
+  });
+});
+
+describe('AgentActivityPanel — explore progress (44-03 Task 2)', () => {
+  it('shows an elapsed/deadline progress card for a running explore_repo, derived from serialized args', () => {
+    const agents: AgentRunState[] = [{
+      agentId: 'agent-1', status: 'running', streamingText: '',
+      steps: [stepRow({
+        id: 'explore-1',
+        toolName: 'explore_repo',
+        phase: 'call',
+        status: 'running',
+        startedAt: new Date(Date.now() - 83_000).toISOString(),
+        detail: JSON.stringify({ question: 'luồng xử lý thanh toán đi qua module nào', timeoutSeconds: 300 }),
+        label: 'đang gọi tool explore_repo',
+      })],
+    }];
+    render(<AgentActivityPanel agents={agents} roster={ROSTER} debugLogs={[]} onClearLogs={noop} />);
+
+    const card = screen.getByTestId('activity-progress-card');
+    expect(card).toBeInTheDocument();
+    expect(card.textContent).toContain('explore_repo');
+    // deadline derived from timeoutSeconds=300 -> 05:00; elapsed ~01:23
+    expect(screen.getByTestId('activity-progress-clock').textContent).toMatch(/^\d{2}:\d{2} \/ 05:00$/);
+    expect(card.textContent).toMatch(/luồng xử lý thanh toán/);
+    expect(card.textContent).toContain('Hết giờ → báo cáo một phần + detail: timeout; agent tự tiếp tục.');
+    expect(card.querySelector('.ant-progress')).not.toBeNull();
+    // App-level call only: no nested remote CLI steps leak into the card.
+    expect(card.textContent).not.toMatch(/Read \/etc|nested|claude -p/);
+  });
+
+  it('clamps an out-of-range serialized timeoutSeconds to the 60..900 window', () => {
+    const agents: AgentRunState[] = [{
+      agentId: 'agent-1', status: 'running', streamingText: '',
+      steps: [stepRow({
+        id: 'explore-2', toolName: 'explore_repo', phase: 'call', status: 'running',
+        detail: JSON.stringify({ question: 'q', timeoutSeconds: 9999 }),
+      })],
+    }];
+    render(<AgentActivityPanel agents={agents} roster={ROSTER} debugLogs={[]} onClearLogs={noop} />);
+    // 9999 clamps to 900 -> 15:00
+    expect(screen.getByTestId('activity-progress-clock').textContent).toMatch(/ \/ 15:00$/);
+  });
+});
+
+describe('AgentActivityPanel — overflow backstop and states (44-03 Task 2)', () => {
+  it('caps an 8000+ char preview and wraps it in its own scrolling container', () => {
+    const huge = 'x'.repeat(9_000);
+    const agents: AgentRunState[] = [{
+      agentId: 'agent-1', status: 'running', streamingText: '',
+      steps: [stepRow({ id: 'huge', detail: huge })],
+    }];
+    const { container } = render(
+      <AgentActivityPanel agents={agents} roster={ROSTER} debugLogs={[]} onClearLogs={noop} />
+    );
+    fireEvent.click(screen.getByTestId('activity-event-toggle-huge'));
+    const pre = container.querySelector('pre.activity-preview') as HTMLElement;
+    expect(pre).not.toBeNull();
+    expect(pre.textContent).toContain('… (đã rút gọn)');
+    expect(pre.textContent!.length).toBeLessThanOrEqual(8_000 + 40);
+    expect(pre.style.whiteSpace).toBe('pre-wrap');
+    expect(pre.style.wordBreak).toBe('break-word');
+    expect(pre.style.overflowY).toBe('auto');
+    // every flex child pins minWidth:0 so the rail cannot widen the document
+    const rail = screen.getByTestId('agent-activity-panel');
+    expect(rail.style.minWidth).toBe('0px');
+  });
+
+  it('renders the empty Timeline and empty Prompt log copy', () => {
+    render(<AgentActivityPanel agents={[]} roster={ROSTER} debugLogs={[]} onClearLogs={noop} />);
+    expect(screen.getByText('Chưa có tool call nào')).toBeInTheDocument();
+    expect(screen.getByText(/Các lời gọi công cụ của agent/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Prompt log' }));
+    expect(screen.getByText('Chưa có lượt gửi AI nào trong phiên này.')).toBeInTheDocument();
+  });
+
+  it('shows status icon + text for done, running and error rows', () => {
+    const agents: AgentRunState[] = [{
+      agentId: 'agent-1', status: 'running', streamingText: '',
+      steps: [
+        stepRow({ id: 's-done', status: 'done', toolName: 'git_read' }),
+        stepRow({ id: 's-running', status: 'running', phase: 'call', toolName: 'read_file' }),
+        stepRow({ id: 's-error', status: 'error', toolName: 'diff_file', resultPreview: '{"refused":true,"code":"INVALID_ARGUMENT"}' }),
+      ],
+    }];
+    render(<AgentActivityPanel agents={agents} roster={ROSTER} debugLogs={[]} onClearLogs={noop} />);
+
+    expect(screen.getByTestId('activity-event-s-done').textContent).toContain('xong');
+    expect(screen.getByTestId('activity-event-s-running').textContent).toContain('đang chạy');
+    expect(screen.getByTestId('activity-event-s-error').textContent).toContain('lỗi');
+    // status legend present
+    expect(screen.getByText('✓ xong')).toBeInTheDocument();
+    expect(screen.getByText('› đang chạy')).toBeInTheDocument();
+    expect(screen.getByText('! lỗi')).toBeInTheDocument();
+    // error copy is documented and rendered inside the row detail
+    fireEvent.click(screen.getByTestId('activity-event-toggle-s-error'));
+    expect(screen.getByTestId('activity-error-copy').textContent).toContain('Không đọc được kết quả tool');
+  });
+
+  it('renders a running row placeholder when no result is present', () => {
+    const agents: AgentRunState[] = [{
+      agentId: 'agent-1', status: 'running', streamingText: '',
+      steps: [stepRow({ id: 's-run', status: 'running', phase: 'call' })],
+    }];
+    render(<AgentActivityPanel agents={agents} roster={ROSTER} debugLogs={[]} onClearLogs={noop} />);
+    fireEvent.click(screen.getByTestId('activity-event-toggle-s-run'));
+    expect(screen.getByText('Chưa có kết quả…')).toBeInTheDocument();
+  });
+});
