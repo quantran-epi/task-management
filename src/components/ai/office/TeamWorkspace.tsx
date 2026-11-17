@@ -1050,7 +1050,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         </Splitter.Panel>
 
         {activityOpen ? (
-          <Splitter.Panel defaultSize="28%" min="280px" max="50%">
+          <Splitter.Panel defaultSize="28%" min={280} max="50%">
             <AgentActivityPanel
               agents={snapshot.agents}
               roster={roster.map((member) => ({ id: member.id, name: member.name, ...(member.id === team.leadId ? { isLead: true } : {}) }))}

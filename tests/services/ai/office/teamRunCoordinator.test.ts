@@ -7295,6 +7295,49 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(steps.length).toBeLessThanOrEqual(200);
     });
 
+    it('keeps the lead delegate_batch row across the synthesis turn (UAT live-inspection)', async () => {
+      // One team turn = dispatch lead turn (records delegate_batch) -> employee turns
+      // (record their own tools) -> synthesis lead turn. The synthesis turn MUST NOT wipe
+      // the lead's tool-call row from the dispatch turn that preceded it.
+      let harnessRef: Harness | null = null;
+      const scripts: Record<string, LoopScript> = {
+        [LEAD_MODEL]: async (options) => {
+          if (isSynthesisTurn(options)) return loopResult('Đã tổng hợp.');
+          options.onToolCall?.({
+            id: 'delegate-call',
+            name: 'delegate_batch',
+            args: { assignments: [{ agentId: harnessRef!.employees[0]!.id, task: 'Việc A' }] },
+          });
+          await options.executeToolFn!(
+            'delegate_batch',
+            { assignments: [{ agentId: harnessRef!.employees[0]!.id, task: 'Việc A' }] },
+            harnessRef!.db,
+            options.signal
+          );
+          options.onToolResult?.('delegate-call', JSON.stringify({ dispatched: 1 }), 12);
+          return loopResult('Đã giao việc.');
+        },
+        [EMP_A_MODEL]: async (options) => {
+          options.onToolCall?.({ id: 'explore-call', name: 'explore_repo', args: { question: 'q' } });
+          options.onToolResult?.('explore-call', JSON.stringify({ outcome: 'success' }), 12);
+          return loopResult('A xong');
+        },
+      };
+      harness = await createHarness({ scripts, teamPatch: { autoSplitEnabled: true } });
+      harnessRef = harness;
+      const { coordinator, lead, employees } = harness;
+
+      await coordinator.send('Làm việc');
+      await waitForReady(coordinator);
+      await waitForReady(coordinator);
+
+      const state = coordinator.getState();
+      const leadSteps = state.agents.find((row) => row.agentId === lead.id)?.steps ?? [];
+      const employeeSteps = state.agents.find((row) => row.agentId === employees[0]!.id)?.steps ?? [];
+      expect(leadSteps.some((row) => row.id === 'delegate-call')).toBe(true);
+      expect(employeeSteps.some((row) => row.id === 'explore-call')).toBe(true);
+    });
+
     it('keeps label, ISO at and capped detail for the compact popover after call+result', async () => {
       // The compact TeamActivityIndicator stays byte-unchanged: it reads these same legacy
       // fields off each upserted row. Dropping any of them must break this test (Pitfall 3).
