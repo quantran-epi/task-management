@@ -703,6 +703,12 @@ export const ResolvedFederatedRetrievalRequestSchema = z.strictObject({
   includeInferred: z.boolean().default(false),
   recentTurns: z.array(ConversationTurnSchema).max(3).default([]),
   contextHints: RetrievalContextHintsSchema.optional(),
+  /**
+   * Internal only — never on the wire. Written solely by resolveQueryOnlyScope
+   * from its own server-authoritative enumeration; the coverage ledger reads
+   * published snapshots from here, never from a response or item (T-28-15).
+   */
+  publishedSnapshotIdBySet: z.record(z.string().uuid(), SnapshotIdSchema).optional(),
 });
 
 export type ResolvedFederatedRetrievalRequest = z.infer<
@@ -799,6 +805,36 @@ export const FederatedRetrievalResponseSchema = z
         snapshotsBySet.set(entry.setId, entry.snapshotId);
       }
     });
+
+    // T-28-08: a federated path's hop citations must reference a returned
+    // chunk from that path's own set. This closure rule is server-only: the
+    // client mirror compares key sets and enum order but deliberately does not
+    // reimplement hop closure because packEvidence is the client backstop.
+    const chunkIdsBySet = new Map<string, Set<string>>();
+    for (const item of response.items) {
+      if (item.item.type !== 'chunk') continue;
+      let ids = chunkIdsBySet.get(item.setId);
+      if (!ids) {
+        ids = new Set<string>();
+        chunkIdsBySet.set(item.setId, ids);
+      }
+      ids.add(item.item.id);
+    }
+    response.paths.forEach((entry, pathIndex) => {
+      const chunkIds = chunkIdsBySet.get(entry.setId) ?? new Set<string>();
+      entry.path.hopCitationIds.forEach((hopIds, hopIndex) => {
+        hopIds.forEach((citationId, citationIndex) => {
+          if (!chunkIds.has(citationId)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ['paths', pathIndex, 'path', 'hopCitationIds', hopIndex, citationIndex],
+              message: 'Path citation must reference a returned chunk item from the same set',
+            });
+          }
+        });
+      });
+    });
+
     if (response.outcome === 'DEGRADED' && !response.diagnostics.degraded) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

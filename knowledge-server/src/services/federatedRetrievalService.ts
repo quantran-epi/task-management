@@ -9,6 +9,8 @@ import {
   FailedSeed,
   StageDiagnostic,
   ModalityStatusValue,
+  FederatedSetCoverage,
+  FederatedSetCoverageState,
 } from '../types/retrievalProtocol.js';
 
 /**
@@ -120,20 +122,29 @@ async function runWithTimeout<T>(
 }
 
 /**
- * Helper to limit concurrent executions using a worker pool.
+ * Deadline-aware worker pool (T-28-07). Before each queued task starts we
+ * check the wall clock; once the deadline has passed, remaining tasks are
+ * skipped without invoking `fn` at all. Skipped indices are reported so the
+ * caller can record NOT_SEARCHED_BUDGET coverage rather than a false success.
  */
 async function mapConcurrent<T, R>(
   items: readonly T[],
   limit: number,
-  fn: (item: T) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
+  fn: (item: T) => Promise<R>,
+  deadlineAt: number,
+  now: () => number
+): Promise<Array<{ result?: R; skipped: boolean }>> {
+  const results: Array<{ result?: R; skipped: boolean }> = new Array(items.length);
   let index = 0;
 
   async function worker() {
     while (index < items.length) {
       const cur = index++;
-      results[cur] = await fn(items[cur]!);
+      if (now() >= deadlineAt) {
+        results[cur] = { skipped: true };
+        continue;
+      }
+      results[cur] = { result: await fn(items[cur]!), skipped: false };
     }
   }
 
@@ -160,6 +171,8 @@ type FederatedSetResult = {
   response?: RetrievalResponse;
   failureReason?: 'TIMEOUT' | 'STALE' | 'ERROR';
   latencyMs?: number;
+  /** True when the deadline passed before this queued set could start (never retrieved). */
+  skippedBudget?: boolean;
 };
 
 type PackedFederatedEvidence = {
@@ -169,6 +182,8 @@ type PackedFederatedEvidence = {
   retainedEntityIds: Set<string>;
   retainedEdgeIds: Set<string>;
   retainedPathIds: Set<string>;
+  /** Sets whose evidence survived into the packed payload (D-09 truthful CONTRIBUTED). */
+  contributedSetIds: Set<string>;
   totalCharsIncluded: number;
   truncated: 'items' | 'evidence' | null;
 };
@@ -198,6 +213,7 @@ function packFederatedEvidence(
   const retainedPathIds = new Set<string>();
   const retainedGraphIdentities = new Set<string>();
   const retainedNonGraphKeys = new Set<string>();
+  const contributedSetIds = new Set<string>();
 
   let totalCharsIncluded = 0;
   let truncated: 'items' | 'evidence' | null = null;
@@ -250,11 +266,14 @@ function packFederatedEvidence(
         retainedNonGraphKeys.add(key);
       }
       const itemChars = computeEvidenceChars(it);
-      if (totalCharsIncluded + itemChars > budgets.maxEvidenceChars && items.length > 0) {
+      // T-28-07: the cap applies to the FIRST item too, so a single oversized
+      // chunk cannot bypass maxEvidenceChars.
+      if (totalCharsIncluded + itemChars > budgets.maxEvidenceChars) {
         truncated = 'evidence';
         break;
       }
       totalCharsIncluded += itemChars;
+      contributedSetIds.add(assignment.setId);
       items.push({
         setId: assignment.setId,
         snapshotId: response.snapshotId,
@@ -271,6 +290,7 @@ function packFederatedEvidence(
     retainedEntityIds,
     retainedEdgeIds,
     retainedPathIds,
+    contributedSetIds,
     totalCharsIncluded,
     truncated,
   };
@@ -283,6 +303,7 @@ export async function runFederatedRetrieval(
 ): Promise<FederatedRetrievalResponse> {
   const now = deps.now ?? Date.now;
   const startTime = now();
+  const deadlineAt = startTime + request.budgets.elapsedMs;
   const budgets = request.budgets;
 
   const coverageWarnings: Array<{
@@ -360,8 +381,7 @@ export async function runFederatedRetrieval(
     }
 
     // Sets in one tier run concurrently, so each can use the remaining global deadline.
-    const elapsedSoFar = now() - startTime;
-    const perSetTimeoutMs = Math.max(10, budgets.elapsedMs - elapsedSoFar);
+    const perSetTimeoutMs = Math.max(10, deadlineAt - now());
 
     const tierRunResults = await mapConcurrent(
       assignmentsToRun,
@@ -406,10 +426,19 @@ export async function runFederatedRetrieval(
             latencyMs: outcome.latencyMs,
           };
         }
-      }
+      },
+      deadlineAt,
+      now
     );
 
-    for (const res of tierRunResults) {
+    tierRunResults.forEach((run, runIndex) => {
+      if (run.skipped) {
+        // Deadline passed before this queued set started — never call retrievePerSet.
+        perSetResults.push({ assignment: assignmentsToRun[runIndex]!, skippedBudget: true });
+        hasSetRejection = true;
+        return;
+      }
+      const res = run.result!;
       perSetResults.push(res);
       if (res.failureReason) {
         hasSetRejection = true;
@@ -419,7 +448,7 @@ export async function runFederatedRetrieval(
           message: `Set ${res.assignment.setId} failed with ${res.failureReason}`,
         });
       }
-    }
+    });
 
     finalPack = packFederatedEvidence(perSetResults, budgets);
 
@@ -444,6 +473,41 @@ export async function runFederatedRetrieval(
       message: `Retrieval stopped by budget limit: ${budgetStopCode}`,
     });
   }
+
+  // D-09/T-28-09: exactly one ledger row per resolved assignment, in
+  // assignment order, with resolver-sourced published snapshots. A set that
+  // never ran (budget/tier stop) or was skipped at the deadline is reported as
+  // NOT_SEARCHED_BUDGET — never as searched-with-no-evidence.
+  const resultBySetId = new Map(perSetResults.map((r) => [r.assignment.setId, r]));
+  const publishedBySet = request.publishedSnapshotIdBySet ?? {};
+  const coverage: FederatedSetCoverage[] = request.setTierAssignments
+    .slice(0, 50)
+    .map((assignment): FederatedSetCoverage => {
+      const res = resultBySetId.get(assignment.setId);
+      const publishedSnapshotId = publishedBySet[assignment.setId] ?? null;
+      const retrievalSnapshotId = res?.response?.snapshotId ?? null;
+      let state: FederatedSetCoverageState;
+      if (!res || res.skippedBudget) {
+        state = 'NOT_SEARCHED_BUDGET';
+      } else if (res.failureReason === 'TIMEOUT') {
+        state = 'TIMED_OUT';
+      } else if (res.failureReason === 'ERROR' || res.failureReason === 'STALE') {
+        state = 'FAILED';
+      } else if (res.response && finalPack.contributedSetIds.has(assignment.setId)) {
+        state = 'CONTRIBUTED';
+      } else {
+        state = 'SEARCHED_NO_EVIDENCE';
+      }
+      const staleIndex = publishedSnapshotId !== null && retrievalSnapshotId !== null && publishedSnapshotId !== retrievalSnapshotId;
+      if (staleIndex) {
+        coverageWarnings.push({
+          code: 'STALE',
+          setId: assignment.setId,
+          message: `Set ${assignment.setId} published snapshot differs from retrieval snapshot`,
+        });
+      }
+      return { setId: assignment.setId, state, publishedSnapshotId, retrievalSnapshotId, staleIndex };
+    });
 
   // Aggregate modality statuses across all successful responses
   const modalityStatus: CompleteModalityStatus = {
@@ -487,6 +551,29 @@ export async function runFederatedRetrieval(
         if (severityOf(ms.graph.status) > severityOf(modalityStatus.graph.status)) {
           modalityStatus.graph.status = ms.graph.status;
         }
+      }
+    }
+  }
+
+  // D-04/T-28: when sets ran but none contributed (all failed / all timed out
+  // / all empty), never leave modalities at a false `ok` nor report plain
+  // NO_EVIDENCE. Severity-merge observed failures into every modality; default
+  // to `unavailable` with NO_SUCCESSFUL_SET.
+  const ranSets = perSetResults.filter((r) => !r.skippedBudget);
+  const noSuccessfulSet = perSetResults.length > 0 && successfulSets.length === 0;
+  if (noSuccessfulSet) {
+    const observedSeverity = ranSets.reduce((worst, r) => {
+      if (r.failureReason === 'TIMEOUT') return Math.max(worst, severityOf('timeout'));
+      if (r.failureReason === 'ERROR' || r.failureReason === 'STALE') return Math.max(worst, severityOf('error'));
+      return worst;
+    }, severityOf('ok'));
+    let forcedStatus: ModalityStatusValue = 'unavailable';
+    if (observedSeverity >= severityOf('error')) forcedStatus = 'error';
+    else if (observedSeverity >= severityOf('timeout')) forcedStatus = 'timeout';
+    for (const modality of ['fulltext', 'vector', 'graph'] as const) {
+      if (severityOf(forcedStatus) > severityOf(modalityStatus[modality].status)) {
+        modalityStatus[modality].status = forcedStatus;
+        modalityStatus[modality].reason = forcedStatus === 'unavailable' ? 'NO_SUCCESSFUL_SET' : forcedStatus;
       }
     }
   }
@@ -541,7 +628,8 @@ export async function runFederatedRetrieval(
     });
 
   let outcome: RetrievalOutcome = 'READY';
-  if (hasSetRejection || coverageWarnings.length > 0 || hasNonOkModality) {
+  if (noSuccessfulSet || hasSetRejection || coverageWarnings.length > 0 || hasNonOkModality) {
+    // No successful set retrieval is never READY and never plain NO_EVIDENCE.
     outcome = 'DEGRADED';
   } else if (everySetSeedOnly) {
     outcome = 'SEED_ONLY';
@@ -558,6 +646,7 @@ export async function runFederatedRetrieval(
     diagnostics: {
       degraded: outcome === 'DEGRADED',
       coverageWarnings,
+      coverage,
       ...(stageDiagnostics.length > 0 ? { stageDiagnostics } : {}),
       ...(failedSeeds.length > 0 ? { failedSeeds } : {}),
     },

@@ -222,16 +222,22 @@ export function registerRetrievalRoutes(
           requestSignal ? { signal: requestSignal } : undefined
         );
         // Preserve the resolver's server-authoritative UNAVAILABLE rows (e.g.
-        // an unknown id in a mixed explicit restriction). 28-03 replaces this
-        // with the full per-set ledger from the fan-out.
+        // an unknown id in a mixed explicit restriction) and its budget-overflow
+        // NOT_SEARCHED_BUDGET rows. The fan-out ledger now owns every assigned
+        // set exactly once, so add only resolver rows for sets the fan-out did
+        // not see — never duplicate an assigned set.
         if (scope.coverage.length > 0) {
-          response = {
-            ...response,
-            diagnostics: {
-              ...response.diagnostics,
-              coverage: [...scope.coverage, ...response.diagnostics.coverage],
-            },
-          };
+          const seen = new Set(response.diagnostics.coverage.map((row) => row.setId));
+          const extra = scope.coverage.filter((row) => !seen.has(row.setId)).slice(0, 50 - response.diagnostics.coverage.length);
+          if (extra.length > 0) {
+            response = {
+              ...response,
+              diagnostics: {
+                ...response.diagnostics,
+                coverage: [...response.diagnostics.coverage, ...extra],
+              },
+            };
+          }
         }
       }
       const validated = FederatedRetrievalResponseSchema.parse(response);

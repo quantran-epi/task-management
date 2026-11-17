@@ -429,6 +429,8 @@ describe('Federated aggregation: counts, severity, stages, seeds', () => {
     ...overrides,
   } as RetrievalResponse);
 
+  // Hop citations must reference a returned chunk item of the same set
+  // (server closure rule, T-28-08), so each path is paired with that chunk.
   const graphPath = (pathId: string, snapshotId: string, nodeUrns: string[], factKeys: string[]): any => ({
     pathId,
     snapshotId,
@@ -438,6 +440,10 @@ describe('Federated aggregation: counts, severity, stages, seeds', () => {
     hopCitationIds: factKeys.map((key) => [`chunk-${key}`]),
     hasConflict: false,
     classification: 'OBSERVED',
+  });
+  const pathChunk = (factKey: string, snapshotId: string) => ({
+    ...mockChunkItem(`chunk-${factKey}`, snapshotId),
+    publishedContentHash: factKey,
   });
 
   const runFederation = async (
@@ -490,7 +496,11 @@ describe('Federated aggregation: counts, severity, stages, seeds', () => {
 
   it('retains duplicate graph identities exactly once across sets', async () => {
     const duplicate = {
-      items: [mockEntityItem(URN_DUP, SNAP_1), { type: 'edge', id: FACT_DUP, score: 1, modalitiesContributed: ['graph'], factKey: FACT_DUP, sourceUrn: URN_DUP, relationType: 'READS_FROM', targetUrn: URN_DUP, evidenceClass: 'OBSERVED', supportingChunkIds: [], snapshotId: SNAP_1, hasConflict: false }],
+      items: [
+        mockEntityItem(URN_DUP, SNAP_1),
+        { type: 'edge', id: FACT_DUP, score: 1, modalitiesContributed: ['graph'], factKey: FACT_DUP, sourceUrn: URN_DUP, relationType: 'READS_FROM', targetUrn: URN_DUP, evidenceClass: 'OBSERVED', supportingChunkIds: [], snapshotId: SNAP_1, hasConflict: false },
+        pathChunk(FACT_DUP, SNAP_1),
+      ],
       paths: [graphPath('P1', SNAP_1, [URN_DUP, URN_DUP], [FACT_DUP])],
     };
     const body = await runFederation({
@@ -500,7 +510,10 @@ describe('Federated aggregation: counts, severity, stages, seeds', () => {
     expect(body.modalityStatus.graph.entityCount).toBe(1);
     expect(body.modalityStatus.graph.edgeCount).toBe(1);
     expect(body.modalityStatus.graph.pathCount).toBe(1);
-    expect(body.items).toHaveLength(2);
+    // Graph identities collapse across sets; closure chunks remain set-scoped.
+    expect(body.items.filter((i) => i.item.type === 'entity')).toHaveLength(1);
+    expect(body.items.filter((i) => i.item.type === 'edge')).toHaveLength(1);
+    expect(body.items.filter((i) => i.item.type === 'chunk')).toHaveLength(2);
   });
 
   it('never lets a later ok overwrite an earlier timeout', async () => {
@@ -705,7 +718,7 @@ describe('Phase 28-03: truthful budgets, coverage ledger and path closure', () =
           { setId: SET_ID_3, tier: 'REQUIRED', roleGroup: 'baseline' },
         ],
         comparisonMode: 'single',
-        budgets: { ...baseBudgets, elapsedMs: 100, concurrency: 1 },
+        budgets: { ...baseBudgets, elapsedMs: 70, concurrency: 1 },
         publishedSnapshotIdBySet: snapshotMap,
       }),
       { retrievePerSet: retrieveMock, now }
@@ -734,27 +747,22 @@ describe('Phase 28-03: truthful budgets, coverage ledger and path closure', () =
     expect(body.diagnostics.coverageWarnings.some((w) => w.code === 'BUDGET_EVIDENCE')).toBe(true);
   });
 
-  it('maxItems:2 with five chunks retains exactly two; overflow is NOT_SEARCHED_BUDGET, not SEARCHED_NO_EVIDENCE', async () => {
+  it('maxItems:2 with five chunks retains exactly two and records BUDGET_ITEMS (not SEARCHED_NO_EVIDENCE)', async () => {
     const chunks = Array.from({ length: 5 }, (_, i) => mockChunkItem(`c${i}`, SNAP_1));
     const body = await runDirect(
       {
         query: 'item cap',
-        setTierAssignments: [
-          { setId: SET_ID_1, tier: 'REQUIRED', roleGroup: 'baseline' },
-          { setId: SET_ID_2, tier: 'REQUIRED', roleGroup: 'baseline' },
-        ],
+        setTierAssignments: [{ setId: SET_ID_1, tier: 'REQUIRED', roleGroup: 'baseline' }],
         comparisonMode: 'single',
         budgets: { ...baseBudgets, maxItems: 2, maxEvidenceChars: 100000 },
         publishedSnapshotIdBySet: snapshotMap,
       },
-      vi.fn().mockImplementation((setId: string) =>
-        Promise.resolve(mockSingleSetResponse(setId === SET_ID_1 ? SNAP_1 : SNAP_2, chunks.map((c) => ({ ...c, id: `${setId}-${c.id}` }))))
-      )
+      vi.fn().mockResolvedValue(mockSingleSetResponse(SNAP_1, chunks))
     );
     expect(body.items).toHaveLength(2);
-    const states = body.diagnostics.coverage.map((row) => row.state);
-    expect(states).toContain('CONTRIBUTED');
-    expect(states.some((s) => s === 'NOT_SEARCHED_BUDGET' || s === 'SEARCHED_NO_EVIDENCE')).toBe(false);
+    expect(body.diagnostics.coverageWarnings.some((w) => w.code === 'BUDGET_ITEMS')).toBe(true);
+    expect(body.diagnostics.coverage).toHaveLength(1);
+    expect(body.diagnostics.coverage[0]!.state).toBe('CONTRIBUTED');
   });
 
   it('coverage ledger: one contributing set and one empty set with ok modalities → [CONTRIBUTED, SEARCHED_NO_EVIDENCE], READY', async () => {

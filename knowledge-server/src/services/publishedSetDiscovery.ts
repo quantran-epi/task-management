@@ -56,7 +56,8 @@ function assignment(setId: string) {
 
 function resolvedRequest(
   wire: FederatedRetrievalRequest,
-  assignments: Array<{ setId: string; tier: 'REQUIRED'; roleGroup: 'baseline' }>
+  assignments: Array<{ setId: string; tier: 'REQUIRED'; roleGroup: 'baseline' }>,
+  publishedSnapshotIdBySet: Record<string, string>
 ): ResolvedFederatedRetrievalRequest {
   return {
     query: wire.query,
@@ -67,6 +68,11 @@ function resolvedRequest(
     includeInferred: wire.includeInferred,
     recentTurns: wire.recentTurns,
     ...(wire.contextHints ? { contextHints: wire.contextHints } : {}),
+    // T-28-15: server-authoritative, enumeration-sourced only. Never derived
+    // from a retrieval response, a store read at fan-out time or an item.
+    ...(Object.keys(publishedSnapshotIdBySet).length > 0
+      ? { publishedSnapshotIdBySet }
+      : {}),
   };
 }
 
@@ -86,6 +92,7 @@ export async function resolveQueryOnlyScope(
     const coverage: FederatedSetCoverage[] = [];
     const assignments: Array<{ setId: string; tier: 'REQUIRED'; roleGroup: 'baseline' }> = [];
 
+    const publishedSnapshotIdBySet: Record<string, string> = {};
     for (const setId of wire.setIds) {
       const entry = bySetId.get(setId);
       if (!entry) {
@@ -99,13 +106,14 @@ export async function resolveQueryOnlyScope(
       // Its coverage row is produced by the federated ledger (28-03), so no
       // speculative state is emitted here.
       await deps.getSetReadiness(setId);
+      publishedSnapshotIdBySet[setId] = entry.snapshotId;
       assignments.push(assignment(setId));
     }
 
     if (assignments.length === 0) {
       return { resolved: null, outcome: 'DEGRADED', coverage };
     }
-    return { resolved: resolvedRequest(wire, assignments), outcome: null, coverage };
+    return { resolved: resolvedRequest(wire, assignments, publishedSnapshotIdBySet), outcome: null, coverage };
   }
 
   const ordered = [...published].sort((a, b) => a.setId.localeCompare(b.setId));
@@ -131,5 +139,12 @@ export async function resolveQueryOnlyScope(
     assignments.push(assignment(entry.setId));
   }
 
-  return { resolved: resolvedRequest(wire, assignments), outcome: null, coverage };
+  // One entry per enumerated set (including later-capped sets), straight from
+  // the enumeration the resolver already performed (T-28-15).
+  const publishedSnapshotIdBySet: Record<string, string> = {};
+  for (const entry of ordered) {
+    publishedSnapshotIdBySet[entry.setId] = entry.snapshotId;
+  }
+
+  return { resolved: resolvedRequest(wire, assignments, publishedSnapshotIdBySet), outcome: null, coverage };
 }
