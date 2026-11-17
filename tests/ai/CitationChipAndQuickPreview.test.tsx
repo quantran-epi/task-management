@@ -634,7 +634,7 @@ describe('QuickPreviewDrawer', () => {
     });
     expect(screen.getByText('Nội dung bản chụp từ máy chủ tri thức')).toBeInTheDocument();
     expect(screen.getByTestId('local-document-absent-notice')).toHaveTextContent(/chưa có|không có|absent/i);
-    expect(screen.getByText(/10000000-0000-4000-8000-000000000001/)).toBeInTheDocument();
+    expect(screen.getByTestId('cited-set-ids').textContent).toContain('10000000-0000-4000-8000-000000000001');
     expect(screen.getByRole('button', { name: /Mở trong Docs/i })).toBeDisabled();
   });
 

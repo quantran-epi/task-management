@@ -169,6 +169,8 @@ function toPersistedCitations(
     relevanceReason: source.relevanceReason,
     evidenceKind: source.evidenceKind,
     mcpMetadata: source.mcpMetadata,
+    // Preserve set/snapshot attribution through persistence (D-08).
+    setMemberships: [...(source.setMemberships ?? [])],
   }));
 }
 
@@ -431,6 +433,7 @@ export async function runGroundedTurn(
           scope: null,
           modalityDiagnostics: null,
           coverageWarnings: combinedWarnings,
+          coverage: [],
           fallbackReason,
           routerVersion: null,
           promptVersion: input.config.promptVersion,
@@ -459,6 +462,7 @@ export async function runGroundedTurn(
           scope: null,
           modalityDiagnostics: null,
           coverageWarnings: combinedWarnings,
+          coverage: [],
           fallbackReason,
           routerVersion: null,
           promptVersion: input.config.promptVersion,
@@ -481,6 +485,7 @@ export async function runGroundedTurn(
       scope: null,
       modalityDiagnostics: null,
       coverageWarnings: combinedWarnings,
+      coverage: [],
       fallbackReason,
       routerVersion: null,
       promptVersion: input.config.promptVersion,
@@ -618,6 +623,7 @@ export async function runGroundedTurn(
           },
           modalityDiagnostics: defaultModalityDiagnostics(),
           coverageWarnings: ['Phản hồi máy chủ tri thức không hợp lệ'],
+          coverage: [],
           fallbackReason: 'NONE',
           routerVersion: input.config.routerVersion,
           promptVersion: input.config.promptVersion,
@@ -651,6 +657,7 @@ export async function runGroundedTurn(
             },
             modalityDiagnostics: defaultModalityDiagnostics(),
             coverageWarnings: ['Token máy chủ tri thức không hợp lệ (401/403)'],
+            coverage: [],
             fallbackReason: 'NONE',
             routerVersion: input.config.routerVersion,
             promptVersion: input.config.promptVersion,
@@ -679,6 +686,7 @@ export async function runGroundedTurn(
             },
             modalityDiagnostics: defaultModalityDiagnostics(),
             coverageWarnings: [`Lỗi cấu hình yêu cầu (${error.status})`],
+            coverage: [],
             fallbackReason: 'NONE',
             routerVersion: input.config.routerVersion,
             promptVersion: input.config.promptVersion,
@@ -813,6 +821,7 @@ export async function runGroundedTurn(
         scope: seedScopePayload,
         modalityDiagnostics: serverResponse.modalityStatus,
         coverageWarnings: seedCoverageWarnings,
+        coverage: [],
         fallbackReason: 'NONE',
         routerVersion: input.config.routerVersion,
         promptVersion: input.config.promptVersion,
@@ -855,6 +864,7 @@ export async function runGroundedTurn(
         scope: seedScopePayload,
         modalityDiagnostics: serverResponse.modalityStatus,
         coverageWarnings: seedCoverageWarnings,
+        coverage: [],
         fallbackReason: 'NONE',
         routerVersion: input.config.routerVersion,
         promptVersion: input.config.promptVersion,
@@ -888,6 +898,7 @@ export async function runGroundedTurn(
           scope: seedScopePayload,
           modalityDiagnostics: serverResponse.modalityStatus,
           coverageWarnings: [...seedCoverageWarnings, 'Mô hình AI hiện không khả dụng'],
+          coverage: [],
           fallbackReason: 'NONE',
           routerVersion: input.config.routerVersion,
           promptVersion: input.config.promptVersion,
@@ -912,6 +923,7 @@ export async function runGroundedTurn(
           scope: seedScopePayload,
           modalityDiagnostics: serverResponse.modalityStatus,
           coverageWarnings: [...seedCoverageWarnings, 'Không thể tạo phản hồi hợp lệ'],
+          coverage: [],
           fallbackReason: 'NONE',
           routerVersion: input.config.routerVersion,
           promptVersion: input.config.promptVersion,
@@ -968,6 +980,10 @@ export async function runGroundedTurn(
     },
   };
 
+  // Federated coverage ledger mirrored from the server pack (D-09). Empty when
+  // no server coverage was returned; local-fallback groundings set [] explicitly.
+  const coveragePayload = (serverPack.coverage ?? []).slice(0, 50);
+
   const coverageWarnings = [
     ...serverResponse.diagnostics.coverageWarnings.map((w) => w.message),
     ...sourceWarnings,
@@ -992,6 +1008,7 @@ export async function runGroundedTurn(
       scope: scopePayload,
       modalityDiagnostics: serverResponse.modalityStatus,
       coverageWarnings,
+      coverage: coveragePayload,
       fallbackReason: 'NONE',
       routerVersion: input.config.routerVersion,
       promptVersion: input.config.promptVersion,
@@ -1048,6 +1065,7 @@ export async function runGroundedTurn(
       scope: scopePayload,
       modalityDiagnostics: serverResponse.modalityStatus,
       coverageWarnings,
+      coverage: coveragePayload,
       fallbackReason: 'NONE',
       routerVersion: input.config.routerVersion,
       promptVersion: input.config.promptVersion,
@@ -1078,6 +1096,7 @@ export async function runGroundedTurn(
           scope: scopePayload,
           modalityDiagnostics: serverResponse.modalityStatus,
           coverageWarnings: [...coverageWarnings, 'Không thể tạo phản hồi hợp lệ'],
+          coverage: coveragePayload,
           fallbackReason: 'NONE',
           routerVersion: input.config.routerVersion,
           promptVersion: input.config.promptVersion,
@@ -1102,6 +1121,7 @@ export async function runGroundedTurn(
           scope: scopePayload,
           modalityDiagnostics: serverResponse.modalityStatus,
           coverageWarnings: [...coverageWarnings, 'Mô hình AI hiện không khả dụng'],
+          coverage: coveragePayload,
           fallbackReason: 'NONE',
           routerVersion: input.config.routerVersion,
           promptVersion: input.config.promptVersion,
@@ -1189,6 +1209,7 @@ export async function synthesizeFromStoredEvidence(
     promptEvidence,
     contextTruncated: false,
     coverageWarnings: storedGrounding.coverageWarnings,
+    coverage: storedGrounding.coverage ?? [],
   };
 
   const endpoint = options?.endpoint ?? '';

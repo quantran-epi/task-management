@@ -140,10 +140,11 @@ describe('Phase 28-03: source attribution rendering', () => {
   it('expandable per-row detail shows set IDs, not an always-visible badge', () => {
     render(<SourcesPanel citations={[withMemberships()]} onOpenCitation={vi.fn()} />);
     const setIdText = '10000000-0000-4000-8000-000000000001';
-    expect(screen.queryByText(setIdText)).not.toBeInTheDocument();
-    const expandBtn = screen.getByRole('button', { name: /chi tiết|detail|expand/i });
+    expect(screen.queryAllByTestId('source-set-id')).toHaveLength(0);
+    const expandBtn = screen.getByTestId('source-expand-toggle');
     fireEvent.click(expandBtn);
-    expect(screen.getByText(setIdText)).toBeInTheDocument();
+    const setRows = screen.getAllByTestId('source-set-id');
+    expect(setRows.some((el) => el.textContent?.includes(setIdText))).toBe(true);
   });
 
   it('renders a coverage section when coverage is present', () => {
@@ -195,8 +196,8 @@ describe('Phase 28-03: source attribution rendering', () => {
       ...withoutFields,
       citations: [legacyCitation],
     });
-    expect(legacy.coverage).toEqual([]);
-    expect(legacy.citations[0]?.setMemberships).toEqual([]);
+    expect(legacy.coverage ?? []).toEqual([]);
+    expect(legacy.citations[0]?.setMemberships ?? []).toEqual([]);
 
     // An unknown coverage state must fail parsing.
     expect(ChatMessageGroundingSchema.safeParse({

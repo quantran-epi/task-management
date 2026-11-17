@@ -10,6 +10,7 @@ import {
   SnapshotIdSchema,
   StageDiagnosticSchema,
   UrnSchema,
+  FederatedSetCoverageSchema,
 } from '../knowledge/retrievalProtocol';
 
 const CitationIdSchema = z.string().regex(/^(S|L|M)[1-9][0-9]*$/);
@@ -161,6 +162,17 @@ export const PersistedCitationSchema = z
         serverName: z.string(),
         toolName: z.string(),
       })
+      .optional(),
+    // Set/snapshot attribution (D-08). Optional so every historical
+    // persisted grounding keeps parsing with no migration; readers default
+    // a missing value to [] at the point of use.
+    setMemberships: z
+      .array(
+        z.strictObject({
+          setId: z.string(),
+          setName: z.string(),
+        })
+      )
       .optional(),
   })
   .superRefine((citation, ctx) => {
@@ -347,6 +359,8 @@ export const ChatMessageGroundingSchema = z
     graphCounts: GraphRetainedCountsSchema.optional(),
     stageDiagnostics: z.array(StageDiagnosticSchema).max(20).optional(),
     failedSeeds: z.array(FailedSeedSchema).max(5).optional(),
+    // Federated coverage ledger (D-09), optional for backward compatibility.
+    coverage: z.array(FederatedSetCoverageSchema).max(50).optional(),
     createdAt: z.iso.datetime(),
   })
   .superRefine((grounding, ctx) => {
