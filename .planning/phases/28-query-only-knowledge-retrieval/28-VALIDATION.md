@@ -2,6 +2,8 @@
 phase: "28"
 slug: "query-only-knowledge-retrieval"
 status: completed
+execution_walkthrough: not_performed_stack_unavailable
+closure_basis: user_accepted_automated_contract_2026-11-17
 nyquist_compliant: true
 wave_0_complete: true
 created: "2026-11-05"
@@ -136,17 +138,19 @@ These are the only remaining gates when the live stack is unavailable; mock-base
 - [x] No deleted SDLC/wizard path is referenced by any phase-28 artifact; SDLC-RET IDs are documented as historical tooling IDs mapped to live user outcomes.
 - [x] Supreme goal is preserved end to end: zero-local-docs query-only retrieve works via published sets on live AI surfaces (28-05).
 
-**Approval:** planning sign-off complete 2026-11-17. Live-stack walkthrough remains a human gate at execution time (see Manual-Only Verifications); this is recorded, not waived.
+**Approval:** planning sign-off complete 2026-11-17. Execution-time outcome: live-stack walkthrough was NOT performed (stack unavailable); user accepted the mock-based automated contract as the closing basis for plan 28-05 on 2026-11-17 (see "Human decision" below). No claim of an observed live walkthrough is made.
 
 ---
 
 ## Execution-Time Walkthrough Record (28-05, 2026-11-17)
 
-**Status: LIVE WALKTHROUGH NOT OBSERVED — manual gate remains OPEN (blocking-human, never auto-approved).**
+**Status: LIVE WALKTHROUGH NOT PERFORMED — user accepted the mock-based automated contract as the closing basis for plan 28-05.**
 
-This section records the execution-time outcome of the 28-05 checkpoint. It does
-not waive the human gate described in Manual-Only Verifications. No human approval
-is inferred from mock-based evidence.
+This section records the execution-time outcome of the 28-05 checkpoint. The live
+Docker/Neo4j/Knowledge Server walkthrough was **NOT performed** — the stack was
+unavailable in this environment — and is **not claimed to have passed**. The
+human decision below closes plan 28-05 on the automated evidence only; the manual
+walkthrough remains documented as not done, not as observed or waived-by-success.
 
 ### Automated end-to-end contract (executed, green)
 
@@ -186,10 +190,28 @@ Telegram; the exact canonical notice on all live surfaces with no published sets
 the DEGRADED/unavailable message for unknown `setIds`; and local Docs/autosave/
 offline non-regression.
 
-### Remaining manual gate (blocking-human — NOT waived)
+### Human decision — close 28-05 on automated evidence (2026-11-17)
 
-With the local stack up (`docker compose up -d`, Knowledge Server at
-`http://127.0.0.1:3001`, per CLAUDE.md), a human must:
+The user made the explicit decision to **accept the mock-based automated contract
+evidence as the closing basis for plan 28-05**. This decision was conveyed to the
+executor by the coordinator. It is a human acceptance of the evidence actually
+produced — not a claim that the live walkthrough occurred.
+
+Truthfulness record:
+- The live Docker/Neo4j/Knowledge Server walkthrough was **NOT performed**. The
+  stack was unavailable (Docker WSL integration inactive; :3001 and :7474 refused),
+  so checkpoint items (1)-(4) were never observed.
+- It is **not claimed that the walkthrough passed**; there is no observed result
+  to report for it.
+- Plan 28-05 is closed on the strength of the automated end-to-end contract alone
+  (10 focused cases across the two new files, plus non-regression and tsc), which
+  the user accepted.
+
+### If a live walkthrough is wanted later (not a plan-28-05 gate)
+
+This is retained as reference only; it is not an open blocker for 28-05. With the
+local stack up (`docker compose up -d`, Knowledge Server at `127.0.0.1:3001`, per
+CLAUDE.md), a human could still:
 
 1. Use a profile with no local document sets; publish one document set from a
    device that has documents.
@@ -199,6 +221,3 @@ With the local stack up (`docker compose up -d`, Knowledge Server at
    on both surfaces; with an explicit unknown `setIds` list, confirm the
    DEGRADED/unavailable message (not an empty answer).
 4. Confirm local Docs/autosave/offline behavior is unaffected.
-
-Record the observed result here to close this gate. The plan's automated contract
-is green; the live observed walkthrough remains the only open item.
