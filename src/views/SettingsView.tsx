@@ -166,11 +166,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             />
           )}
 
+          <Typography.Text strong>Sao lưu & khôi phục</Typography.Text>
           <BackupExportCard db={db} />
           <BackupImportCard db={db} onRestoreSuccess={handleRestoreSuccess} />
           <SnapshotRollbackCard db={db} />
+          <Typography.Text strong>Đồng bộ GitHub</Typography.Text>
           <GitHubConfigCard db={db} />
           <GitHubSyncCard db={db} onPullSuccess={handleRemotePullSuccess} />
+          <Typography.Text strong>Lưu trữ & môi trường</Typography.Text>
           <LocalSqlitePersistenceCard db={db} />
           <PwaStatusCard />
           <StoragePersistenceCard />
@@ -232,12 +235,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       ),
       children: (
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Typography.Text strong>Quy ước & công cụ AI</Typography.Text>
           <GlobalConventionsCard db={db} />
           <McpConfigCard db={db} />
           <OracleAiToolConfigCard db={db} />
           <SshFsAiToolConfigCard db={db} />
+          <Typography.Text strong>Trợ lý & Ghost Dev</Typography.Text>
           <GhostDevConfigCard />
           <NineRouterConfigCard db={db} />
+          <Typography.Text strong>Ngân sách & Knowledge</Typography.Text>
           <BudgetWarnThresholdCard db={db} />
           <KnowledgeServerConfigCard />
         </Space>
@@ -253,7 +259,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       ),
       children: (
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Typography.Text strong>Kết nối SSH</Typography.Text>
           <SshConfigCard db={db} />
+          <Typography.Text strong>Phân loại hệ thống</Typography.Text>
           <SystemTypeOptionsCard db={db} />
         </Space>
       ),

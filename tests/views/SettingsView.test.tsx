@@ -7,6 +7,7 @@ import { SettingsView } from '../../src/views/SettingsView';
 import * as githubSyncService from '../../src/services/github/githubSyncService';
 import * as ariaLive from '../../src/components/common/AriaLiveRegion';
 import { CURRENT_SCHEMA_VERSION } from '../../src/services/backup/exportBackup';
+import { KnowledgeConfigProvider } from '../../src/services/knowledge/knowledgeConfig';
 import type { BackupEnvelope } from '../../src/types/backup';
 
 vi.mock('../../src/services/github/githubSyncService', async (importOriginal) => {
@@ -224,5 +225,97 @@ describe('SettingsView Integration & Offline Independence (SYNC-07, SYNC-05)', (
     expect(screen.getByTestId('notification-settings-card')).toBeInTheDocument();
     expect(screen.getByText('Cài đặt thông báo & cảnh báo')).toBeInTheDocument();
   }, 15000);
+
+  it('keeps all six tabs and the capacity default after section grouping', async () => {
+    render(
+      <GitHubAuthProvider>
+        <SettingsView db={db} />
+      </GitHubAuthProvider>
+    );
+
+    expect(screen.getAllByRole('tab')).toHaveLength(6);
+    expect(screen.getByRole('tab', { name: /Công suất làm việc/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Sao lưu & Dữ liệu/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Tích hợp Jira/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Thông báo/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Trợ lý AI & Ghost Dev/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Remote SSH/i })).toBeInTheDocument();
+
+    // defaultActiveTab is still 'capacity' — data cards are NOT mounted by default.
+    expect(screen.getByText('Mẫu công suất cơ bản hàng tuần')).toBeInTheDocument();
+    expect(screen.getByText('Ngoại lệ theo ngày cụ thể')).toBeInTheDocument();
+    expect(screen.queryByText('Cấu hình kho lưu trữ GitHub')).not.toBeInTheDocument();
+  }, 15000);
+
+  it('keeps every data-tab card, section header and callback after grouping', async () => {
+    render(
+      <GitHubAuthProvider>
+        <SettingsView db={db} defaultActiveTab="data" />
+      </GitHubAuthProvider>
+    );
+
+    const expectedTitles = [
+      'Sao lưu dữ liệu',
+      'Nhập & Khôi phục dữ liệu',
+      'Bản sao an toàn trước khi nhập (Pre-Import Snapshot)',
+      'Cấu hình kho lưu trữ GitHub',
+      'Đồng bộ sao lưu GitHub',
+      'Lưu cục bộ SQLite cho desktop',
+      'Trạng thái PWA & Ngoại tuyến',
+      'Dung lượng lưu trữ & Tính bền vững',
+      'Khu vực nguy hiểm (Danger Zone)',
+      'Sao lưu & khôi phục',
+      'Đồng bộ GitHub',
+      'Lưu trữ & môi trường',
+    ];
+    for (const title of expectedTitles) {
+      expect(screen.getByText(title)).toBeInTheDocument();
+    }
+
+    // Prop/callback wiring unchanged: token-free state and enabled export still visible.
+    expect(screen.getByText('Chưa có token')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Xuất bản sao lưu \(JSON\)/i })).toBeEnabled();
+  }, 20000);
+
+  it('keeps every ai-tab card and section header mounted after grouping', async () => {
+    render(
+      <KnowledgeConfigProvider db={db}>
+        <GitHubAuthProvider>
+          <SettingsView db={db} defaultActiveTab="ai" />
+        </GitHubAuthProvider>
+      </KnowledgeConfigProvider>
+    );
+
+    const expectedTitles = [
+      'Quy ước tổ chức (Global Conventions)',
+      'Cấu hình Máy chủ MCP (Model Context Protocol)',
+      'Cấu hình Oracle SQLcl (AI Tool Loop)',
+      'Cấu hình SSH File System (AI Tool Loop)',
+      'Ghost Dev Agent Configuration',
+      'Cấu hình Trợ lý AI (9router API)',
+      'Ngưỡng cảnh báo ngân sách token',
+      'Quy ước & công cụ AI',
+      'Trợ lý & Ghost Dev',
+      'Ngân sách & Knowledge',
+    ];
+    for (const title of expectedTitles) {
+      expect(screen.getByText(title)).toBeInTheDocument();
+    }
+    expect(screen.getAllByText('Knowledge Server').length).toBeGreaterThan(0);
+  }, 20000);
+
+  it('keeps ssh-tab cards and section headers mounted after grouping', async () => {
+    render(
+      <GitHubAuthProvider>
+        <SettingsView db={db} defaultActiveTab="ssh" />
+      </GitHubAuthProvider>
+    );
+
+    expect(screen.getByText('Cấu hình Remote SSH / Workspace')).toBeInTheDocument();
+    expect(screen.getAllByText('Loại hệ thống').length).toBeGreaterThan(0);
+    expect(screen.getByTestId('system-type-option-add')).toBeInTheDocument();
+    expect(screen.getByText('Kết nối SSH')).toBeInTheDocument();
+    expect(screen.getByText('Phân loại hệ thống')).toBeInTheDocument();
+  }, 20000);
 });
 
