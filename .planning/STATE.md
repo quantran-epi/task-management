@@ -38,6 +38,7 @@ Last activity: 2026-11-16 - Completed quick task 261116-fyi: Restore Docs parity
 - Replan removed all deleted Phase 35-06 SDLC/wizard file references, wired the all-unknown explicit-`setIds` DEGRADED outcome (C2), fixed 28-04 wave/dependency (W1), reduced 28-02 to 10 files (W2), completed `28-VALIDATION.md` sign-off (W3), and added absolute non-regression for `groundedTurn` / `knowledgeRetrievalTool` / `aiOrchestratorLoop` / Telegram with focused regression tests.
 - SDLC-RET-01..05 remain historical tooling IDs (REQUIREMENTS.md no longer lists them) mapped to live query-only retrieval outcomes; no SDLC code is resurrected.
 - Work here is isolated; phase 44 planning advances independently on `feature/intellij-workbench` and is not touched by this replan.
+- Phase 28 execution completed 2026-11-17 on `gsd/phase-28-isolated`: 5/5 plans, verifier passed 6/6 must-haves with zero gaps, security SECURED 21/21, code review clean after WR-01/02/03 fixes. Live Docker/Neo4j walkthrough was not run; user accepted mock-based automated contract evidence as recorded in `28-VALIDATION.md`.
 
 ## Phase 42 Review Outcome
 

@@ -1145,23 +1145,23 @@ Plans:
 
 **Wave 1** *(no dependencies; edits knowledge-server retrieval service)*
 
-- [ ] 28-01-PLAN.md — Query-only federated retrieval: thin wire, authoritative published-set discovery, lexical modality, and the all-unknown-`setIds` DEGRADED path
+- [x] 28-01-PLAN.md — Query-only federated retrieval: thin wire, authoritative published-set discovery, lexical modality, and the all-unknown-`setIds` DEGRADED path
 
 **Wave 2** *(depends on 28-01; edits client retrieval service and tool)*
 
-- [ ] 28-02-PLAN.md — Client query-only wire contract, `fetchSetCatalog` removal on live surfaces, tool attribution, and non-regression of local/MCP/clarify flows
+- [x] 28-02-PLAN.md — Client query-only wire contract, `fetchSetCatalog` removal on live surfaces, tool attribution, and non-regression of local/MCP/clarify flows
 
 **Wave 3** *(depends on 28-01 and 28-02; trust guarantees + source inspection)*
 
-- [ ] 28-03-PLAN.md — Real budgets, coverage ledger, path closure, snapshot-aware packing, local-absent inspection, with local/MCP regression
+- [x] 28-03-PLAN.md — Real budgets, coverage ledger, path closure, snapshot-aware packing, local-absent inspection, with local/MCP regression
 
 **Wave 4** *(depends on 28-02 and 28-03; shared groundedTurn/schemas/drawer/Telegram files)*
 
-- [ ] 28-04-PLAN.md — One canonical empty-server notice rendered on AI Chat and Telegram (grounded + tool-driven), with absolute non-regression
+- [x] 28-04-PLAN.md — One canonical empty-server notice rendered on AI Chat and Telegram (grounded + tool-driven), with absolute non-regression
 
 **Wave 5** *(depends on 28-04; end-to-end contract + observed walkthrough)*
 
-- [ ] 28-05-PLAN.md — Zero-local-docs query-only retrieve proven end to end on live surfaces, truthful empty/all-unknown at the boundary, and completed validation sign-off
+- [x] 28-05-PLAN.md — Zero-local-docs query-only retrieve proven end to end on live surfaces, truthful empty/all-unknown at the boundary, and completed validation sign-off
 
 ### Phase 29: SSH Remote Repository Branch & Diff Review
 
