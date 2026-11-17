@@ -268,6 +268,18 @@ export interface AgentLiveStep {
   at: string;
   /** Serialized tool arguments from `ChatTurnToolEvent.args`; absent for status steps. */
   detail?: string | undefined;
+  /**
+   * Phase 44 D-04: additive tool-telemetry fields. Runtime-only, like the rest of the step.
+   * Each optional field uses explicit `| undefined` per `exactOptionalPropertyTypes` and is
+   * conditionally spread at the write site, so an absent value is omitted rather than set.
+   */
+  toolName?: string | undefined;
+  phase?: 'call' | 'result' | undefined;
+  startedAt?: string | undefined;
+  endedAt?: string | undefined;
+  durationMs?: number | undefined;
+  status?: 'running' | 'done' | 'error' | undefined;
+  resultPreview?: string | undefined;
 }
 
 export interface AgentRunState {

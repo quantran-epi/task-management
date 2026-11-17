@@ -1,5 +1,6 @@
 import type { TaskPlannerDatabase } from '../../../db';
 import type {
+  AgentLiveStep,
   AgentRunState,
   AgentRunStatus,
   AiEmployee,
@@ -28,6 +29,7 @@ import {
   type ChatTurnPhase,
   type ChatTurnRequest,
   type ChatTurnRuntimeDeps,
+  type ChatTurnToolEvent,
 } from '../../../components/ai/runtime/chatTurnRuntime';
 import { dispatchAiToolCall } from '../aiOrchestratorLoop';
 import type { ChatCompletionMessage } from '../types';
@@ -903,6 +905,96 @@ export function createTeamRunCoordinator(
   }
 
   /**
+   * Phase 44 D-06: tool args and result previews are untrusted text. Cap them BEFORE they
+   * enter runtime state (never at render) so a single oversized tool output cannot grow the
+   * snapshot without bound. The cap is preview-only — the model still receives the full result.
+   */
+  const TOOL_PREVIEW_CAP = 8000;
+
+  /**
+   * Phase 44 D-08: derive a tool row's status from its RESULT PAYLOAD, never from the tool
+   * name. `executeTeamTool` returns `Promise<string>`, so `event.result` is a JSON string;
+   * parse defensively in a try/catch and treat an unparseable value as plain-text success
+   * (Pitfall 1 / A2). Refusals, explicit errors and error outcomes are the only error cases.
+   */
+  function deriveToolStatus(result?: string): 'running' | 'done' | 'error' {
+    if (result === undefined) return 'done';
+    try {
+      const payload: unknown = JSON.parse(result);
+      if (payload === null || typeof payload !== 'object') return 'done';
+      const record = payload as Record<string, unknown>;
+      if (
+        record['refused'] === true ||
+        record['error'] ||
+        record['outcome'] === 'error'
+      ) {
+        return 'error';
+      }
+      return 'done';
+    } catch {
+      return 'done';
+    }
+  }
+
+  /**
+   * Phase 44 D-05/D-06/D-07: one row per tool event id. A `call` creates the row (timing +
+   * capped args + running status); a `result` merges into the SAME row in place (duration,
+   * endedAt, payload-derived status, capped preview). Following the `mergeToolEvents`
+   * precedent but keyed by id, both phases are guarded: a result with no prior row still
+   * produces a minimal, non-blank row, and a duplicate result updates rather than appends
+   * (Pitfall 2). `updateAgent` is the sole writer and `MAX_LIVE_STEPS` the sole ceiling.
+   */
+  function upsertToolStep(agentId: string, event: ChatTurnToolEvent): void {
+    const state = agents.get(agentId);
+    if (!state) return;
+    const steps = state.steps ?? [];
+    const index = steps.findIndex((row) => row.id === event.id);
+    const previous: AgentLiveStep | undefined = index >= 0 ? steps[index] : undefined;
+    const now = new Date().toISOString();
+
+    let nextRow: AgentLiveStep;
+    if (event.phase === 'call') {
+      const cappedArgs = event.args?.slice(0, TOOL_PREVIEW_CAP);
+      nextRow = {
+        id: event.id,
+        label: event.name === 'read_skill' ? 'đã đọc skill' : 'đang gọi tool ' + event.name,
+        at: now,
+        ...(cappedArgs !== undefined ? { detail: cappedArgs } : {}),
+        toolName: event.name,
+        phase: 'call',
+        startedAt: now,
+        status: 'running',
+      };
+    } else {
+      const cappedResult = event.result?.slice(0, TOOL_PREVIEW_CAP);
+      // Merge into the prior row when present; otherwise build a minimal non-blank row so a
+      // result that arrives without its call is never dropped and never spreads `undefined`.
+      nextRow = {
+        id: event.id,
+        label: previous?.label ?? 'đang gọi tool ' + (event.name || event.id),
+        at: previous?.at ?? now,
+        ...(previous?.detail !== undefined ? { detail: previous.detail } : {}),
+        ...(previous?.toolName !== undefined
+          ? { toolName: previous.toolName }
+          : event.name
+            ? { toolName: event.name }
+            : {}),
+        phase: 'result',
+        ...(previous?.startedAt !== undefined ? { startedAt: previous.startedAt } : {}),
+        endedAt: now,
+        ...(event.durationMs !== undefined ? { durationMs: event.durationMs } : {}),
+        status: deriveToolStatus(event.result),
+        ...(cappedResult !== undefined ? { resultPreview: cappedResult } : {}),
+      };
+    }
+
+    const next = [...steps];
+    if (index >= 0) next[index] = nextRow;
+    else next.push(nextRow);
+    updateAgent(agentId, { steps: next.slice(-MAX_LIVE_STEPS) });
+  }
+
+  /**
    * WR-04: `attemptId` makes the settle identity-aware. A rewritten assignment's old parked
    * dispatch can wake AFTER the replacement is registered; settling then would overwrite the
    * replacement's `queued`/`running` state and release ITS deferred, so the batch would
@@ -1453,15 +1545,10 @@ export function createTeamRunCoordinator(
                 : null;
         if (label) pushStep(agentId, label);
       },
-      // A tool result is noise at this altitude; only the call is a step. 37.1 UAT: the
-      // serialized args are kept so the popover can expand a step into its detail.
+      // Phase 44 D-05: both phases are one id-keyed row. The compact popover keeps working
+      // because the upsert still writes label/at/detail; results are no longer discarded.
       onToolEvent: (event) => {
-        if (event.phase !== 'call') return;
-        pushStep(
-          agentId,
-          event.name === 'read_skill' ? 'đã đọc skill' : 'đang gọi tool ' + event.name,
-          event.args
-        );
+        upsertToolStep(agentId, event);
       },
       onCompleted: ({ content }) => settleAgent(agentId, 'done', content),
       onError: () => settleAgent(agentId, 'error', SANITIZED_TURN_ERROR),

@@ -7143,4 +7143,68 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       }
     });
   });
+
+  /**
+   * Phase 44 (PANEL-01): drive real tool events through the only production seam — a scripted
+   * loop calls `options.onToolCall`/`onToolResult`, which `chatTurnRuntime` forwards to the
+   * coordinator's `onToolEvent`. No second data path is invented.
+   */
+  describe('tool event upsert', () => {
+    /** A lead turn that emits call+result for each event, then answers. */
+    const emitToolEvents =
+      (events: Array<{ id: string; name: string; args?: string; result?: string; durationMs?: number }>): LoopScript =>
+      async (options) => {
+        for (const event of events) {
+          let parsed: Record<string, any> = {};
+          if (event.args !== undefined) {
+            try {
+              parsed = JSON.parse(event.args);
+            } catch {
+              parsed = {};
+            }
+          }
+          options.onToolCall?.({ id: event.id, name: event.name, args: parsed });
+          options.onToolResult?.(
+            event.id,
+            event.result ?? JSON.stringify({ outcome: 'success' }),
+            event.durationMs ?? 12
+          );
+        }
+        return loopResult('Xong.');
+      };
+
+    /** Run one lead turn emitting the given events, then read the lead row's steps. */
+    const stepsAfterEvents = async (
+      events: Array<{ id: string; name: string; args?: string; result?: string; durationMs?: number }>
+    ) => {
+      harness = await createHarness({ scripts: { [LEAD_MODEL]: emitToolEvents(events) } });
+      const { coordinator, lead } = harness;
+      await coordinator.send('Chạy tool');
+      await waitForReady(coordinator);
+      return coordinator.getState().agents.find((row) => row.agentId === lead.id)?.steps ?? [];
+    };
+
+    it('pairs a call and its result into ONE id-keyed row with timing and preview', async () => {
+      const steps = await stepsAfterEvents([
+        {
+          id: 'call-1',
+          name: 'explore_repo',
+          args: JSON.stringify({ question: 'x' }),
+          result: JSON.stringify({ outcome: 'success', report: 'done' }),
+          durationMs: 42,
+        },
+      ]);
+
+      const rows = steps.filter((row) => row.id === 'call-1');
+      expect(rows).toHaveLength(1);
+      const row = rows[0]!;
+      expect(row.phase).toBe('result');
+      expect(row.toolName).toBe('explore_repo');
+      expect(row.status).toBe('done');
+      expect(typeof row.startedAt).toBe('string');
+      expect(typeof row.endedAt).toBe('string');
+      expect(row.durationMs).toBe(42);
+      expect(row.resultPreview).toContain('done');
+    });
+  });
 });
