@@ -37,6 +37,7 @@ import type { KnowledgeLink, TaskMateEntityType, ChatTokenUsage } from '../../ty
 import type { runMcpRetrieval, McpRetrievalResult } from './mcpRetrievalRunner';
 import { normalizeMcpEvidence, type McpEvidenceRecord } from './mcpEvidence';
 import { sha256Hex } from '../../../knowledge-server/src/indexing/chunkHashPolicy';
+import { KNOWLEDGE_SERVER_EMPTY_NOTICE } from './knowledgeOutcome';
 
 export interface GroundedTurnInput {
   query: string;
@@ -90,6 +91,11 @@ export type GroundedTurnResult =
       tokenUsage?: ChatTokenUsage | undefined;
     }
   | { kind: 'local_fallback_results'; grounding: ChatMessageGrounding }
+  | {
+      kind: 'server_empty';
+      notice: string;
+      localFallback?: ChatMessageGrounding;
+    }
   | { kind: 'evidence_only'; grounding: ChatMessageGrounding }
   | {
       kind: 'error';
@@ -361,7 +367,7 @@ export async function runGroundedTurn(
 
   // Helper for step 6: Local BM25 path
   const executeLocalPath = async (
-    fallbackReason: 'SERVER_DISABLED' | 'NETWORK_ERROR' | 'TIMEOUT',
+    fallbackReason: 'SERVER_DISABLED' | 'SERVER_ABSENT' | 'NETWORK_ERROR' | 'TIMEOUT',
     extraCoverageWarnings: readonly string[] = []
   ): Promise<GroundedTurnResult> => {
     // D-14: when the server is empty/unreachable but local documents exist, derive
@@ -716,6 +722,29 @@ export async function runGroundedTurn(
   }
 
   // 5. Branch on retrieval outcome
+  // D-12/D-13/D-15: no published sets is a distinct, app-owned outcome. It must
+  // never reach synthesis (the model must not own the canonical copy). When the
+  // local catalog has documents, D-14 keeps the notice first and attaches the
+  // existing local path as a separately labelled fallback with authority 'local'.
+  if (serverResponse.outcome === 'NO_PUBLISHED_SETS') {
+    const hasLocalDocs = input.catalog.length > 0 || routedSetIds.length > 0;
+    let localFallback: ChatMessageGrounding | undefined;
+    if (hasLocalDocs) {
+      const localPathResult = await executeLocalPath('SERVER_ABSENT');
+      if (
+        localPathResult.kind === 'grounded_answer' ||
+        localPathResult.kind === 'local_fallback_results'
+      ) {
+        localFallback = localPathResult.grounding;
+      }
+    }
+    return {
+      kind: 'server_empty',
+      notice: KNOWLEDGE_SERVER_EMPTY_NOTICE,
+      ...(localFallback ? { localFallback } : {}),
+    };
+  }
+
   const isAllTextSearchTimedOut =
     serverResponse.modalityStatus.fulltext.status === 'timeout' &&
     serverResponse.modalityStatus.vector.status === 'timeout';

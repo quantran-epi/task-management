@@ -321,6 +321,7 @@ const GroundingOutcomeSchema = z.enum([
   'ERROR_AUTH',
   'ERROR_CONFIG',
   'ERROR_INVALID_RESPONSE',
+  'NO_PUBLISHED_SETS',
 ]);
 
 const FallbackReasonSchema = z.enum([
