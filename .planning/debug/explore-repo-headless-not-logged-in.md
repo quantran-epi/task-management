@@ -1,5 +1,5 @@
 ---
-status: awaiting_human_verify
+status: verified
 trigger: "explore_repo on the local/remote host reports outcome: error with 'Not logged in · Please run /login' although the owner can open Claude Code on this same machine by typing `claude` and use it without any interactive login step. Need determine why the headless CLI path (`claude -p ...`) used by explore_repo cannot see/use the working CLI auth context and fix or map it truthfully."
 created: "2026-11-17"
 updated: "2026-11-17"
@@ -135,3 +135,11 @@ updated: "2026-11-17"
 - hypothesis: wrong SSH port/host (UI defaults 22, server on 2222) causes the KEX failure
   evidence: A KEX failure requires a completed TCP connect + SSH banner exchange. Server log shows the client connected to 127.0.0.1:2222 and reached deep KEX. A wrong port would fail at TCP connect or banner, not mid-KEX.
   timestamp: 2026-11-17
+
+## Owner UAT confirmation (final closure)
+
+- timestamp: 2026-11-17
+  source: owner report (real Tauri app, post-handshake-retry fix)
+  checked: real `explore_repo` run after the SSH handshake retry fix
+  found: outcome `success`, report `cbe1466b`, elapsed ~59s, `truncated: false`, 4 docs read with path:line citations.
+  implication: The bounded SSH transport retry fix is confirmed in the real runtime. Both the auth fix (644dd579) and the handshake retry fix are verified end-to-end. Session status raised from `awaiting_human_verify` to `verified`; fix closed.
