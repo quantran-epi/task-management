@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="11" failures="8" errors="0" time="0.050044147">
+    <testsuite name="tests/ai/knowledgeRetrievalTool.test.ts" timestamp="2026-11-17T06:59:14.332Z" hostname="QUANTD" tests="11" failures="8" errors="0" skipped="0" time="0.050044147">
+        <testcase classname="tests/ai/knowledgeRetrievalTool.test.ts" name="executeKnowledgeRetrievalTool &gt; requires a query string" time="0.004707245">
+        </testcase>
+        <testcase classname="tests/ai/knowledgeRetrievalTool.test.ts" name="executeKnowledgeRetrievalTool &gt; reports unconfigured knowledge server instead of calling it" time="0.002955091">
+        </testcase>
+        <testcase classname="tests/ai/knowledgeRetrievalTool.test.ts" name="executeKnowledgeRetrievalTool &gt; sends a thin query-only wire body and never consults the local catalog" time="0.009400191">
+            <failure message="expected &quot;vi.fn()&quot; to be called 1 times, but got 0 times" type="AssertionError">
+AssertionError: expected &quot;vi.fn()&quot; to be called 1 times, but got 0 times
+ ❯ tests/ai/knowledgeRetrievalTool.test.ts:104:37
+            </failure>
+        </testcase>
+        <testcase classname="tests/ai/knowledgeRetrievalTool.test.ts" name="executeKnowledgeRetrievalTool &gt; returns empty-catalog results with set/snapshot attribution and status, no error string" time="0.004333234">
+            <failure message="expected &apos;Chưa có bộ tài liệu nào để tra cứu.&apos; to be undefined" type="AssertionError">
+AssertionError: expected &apos;Chưa có bộ tài liệu nào để tra cứu.&apos; to be undefined
+
+- Expected:
+undefined
+
++ Received:
+&quot;Chưa có bộ tài liệu nào để tra cứu.&quot;
+
+ ❯ tests/ai/knowledgeRetrievalTool.test.ts:118:23
+            </failure>
+        </testcase>
+        <testcase classname="tests/ai/knowledgeRetrievalTool.test.ts" name="executeKnowledgeRetrievalTool &gt; forwards explicit setIds exactly, with no catalog lookup" time="0.00904418">
+            <failure message="expected undefined to deeply equal [ …(2) ]" type="AssertionError">
+AssertionError: expected undefined to deeply equal [ …(2) ]
+
+- Expected:
+[
+  &quot;20000000-0000-4000-8000-000000000002&quot;,
+  &quot;10000000-0000-4000-8000-000000000001&quot;,
+]
+
++ Received:
+undefined
+
+ ❯ tests/ai/knowledgeRetrievalTool.test.ts:146:62
+            </failure>
+        </testcase>
+        <testcase classname="tests/ai/knowledgeRetrievalTool.test.ts" name="executeKnowledgeRetrievalTool &gt; keeps the 10..50 limit clamp" time="0.001467746">
+            <failure message="Cannot read properties of undefined (reading &apos;0&apos;)" type="TypeError">
+TypeError: Cannot read properties of undefined (reading &apos;0&apos;)
+ ❯ tests/ai/knowledgeRetrievalTool.test.ts:151:49
+            </failure>
+        </testcase>
+        <testcase classname="tests/ai/knowledgeRetrievalTool.test.ts" name="executeKnowledgeRetrievalTool &gt; forwards the abort signal to retrieveFederated" time="0.001273439">
+            <failure message="Cannot read properties of undefined (reading &apos;1&apos;)" type="TypeError">
+TypeError: Cannot read properties of undefined (reading &apos;1&apos;)
+ ❯ tests/ai/knowledgeRetrievalTool.test.ts:161:49
+            </failure>
+        </testcase>
+        <testcase classname="tests/ai/knowledgeRetrievalTool.test.ts" name="executeKnowledgeRetrievalTool &gt; rejects with AbortError when the signal is already aborted" time="0.003766717">
+        </testcase>
+        <testcase classname="tests/ai/knowledgeRetrievalTool.test.ts" name="executeKnowledgeRetrievalTool &gt; rethrows AbortError raised during retrieval instead of returning an error payload" time="0.005313864">
+            <failure message="promise resolved &quot;&apos;{&quot;error&quot;:&quot;Chưa có bộ tài liệu nào để …&apos;&quot; instead of rejecting" type="AssertionError">
+AssertionError: promise resolved &quot;&apos;{&quot;error&quot;:&quot;Chưa có bộ tài liệu nào để …&apos;&quot; instead of rejecting
+
+- Expected:
+Error {
+  &quot;message&quot;: &quot;rejected promise&quot;,
+}
+
++ Received:
+&quot;{\&quot;error\&quot;:\&quot;Chưa có bộ tài liệu nào để tra cứu.\&quot;}&quot;
+
+ ❯ tests/ai/knowledgeRetrievalTool.test.ts:177:6
+            </failure>
+        </testcase>
+        <testcase classname="tests/ai/knowledgeRetrievalTool.test.ts" name="executeKnowledgeRetrievalTool &gt; keeps non-abort failures as a JSON error payload" time="0.002273671">
+            <failure message="expected &apos;Chưa có bộ tài liệu nào để tra cứu.&apos; to match /server down/" type="AssertionError">
+AssertionError: expected &apos;Chưa có bộ tài liệu nào để tra cứu.&apos; to match /server down/
+
+- Expected:
+/server down/
+
++ Received:
+&quot;Chưa có bộ tài liệu nào để tra cứu.&quot;
+
+ ❯ tests/ai/knowledgeRetrievalTool.test.ts:185:23
+            </failure>
+        </testcase>
+        <testcase classname="tests/ai/knowledgeRetrievalTool.test.ts" name="executeKnowledgeRetrievalTool &gt; returns a machine-readable status for NO_PUBLISHED_SETS without canonical prose" time="0.001386643">
+            <failure message="Cannot read properties of undefined (reading &apos;code&apos;)" type="TypeError">
+TypeError: Cannot read properties of undefined (reading &apos;code&apos;)
+ ❯ tests/ai/knowledgeRetrievalTool.test.ts:196:23
+            </failure>
+        </testcase>
+    </testsuite>
+</testsuites>
