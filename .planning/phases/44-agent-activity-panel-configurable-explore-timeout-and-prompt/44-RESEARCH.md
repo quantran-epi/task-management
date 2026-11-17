@@ -460,22 +460,27 @@ Remove `Modal`, `BugOutlined`, `debugModalOpen`, the dropdown item and the whole
 
 Note: environment is Node v26.13.0 / npm 11.20.0 here, while CLAUDE.md stack targets Node 24 LTS. Both satisfy Vitest 5 / tsc 7 engines; flagged for awareness, not a blocker.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+All three questions were resolved during planning without changing any locked decision. The resolutions are recorded in the phase plans (44-01/44-02/44-03).
 
 1. **Exact Vietnamese microcopy**
    - What we know: UI-SPEC §Copywriting Contract fixes the key strings (e.g. "Mở activity", "Chưa có tool call nào", "Hoạt động agent", status labels "xong/đang chạy/lỗi").
    - What's unclear: minor row-level copy (placeholder text for a running row's result) is left to discretion.
    - Recommendation: copy UI-SPEC verbatim for the pinned strings; use any clear phrasing for unpinned placeholders, and let tests assert only the recognizable tokens ("Timeline", "Prompt log", status, duration) per D-63 discretion.
+   - RESOLVED: copy UI-SPEC verbatim for pinned strings; tests assert only recognizable tokens (44-03). No decision changed.
 
 2. **Whether the compact indicator popover stays**
    - What we know: it is not required to be removed; UI-SPEC prefers leaving it unchanged if not a second data path.
    - What's unclear: owner discretion (CONTEXT Discretion bullet 4) is unresolved.
    - Recommendation: leave `TeamActivityIndicator.tsx` unchanged and preserve `label`/`at`/`detail` in the upsert so it remains a thin reader of the same state — no second source of truth.
+   - RESOLVED: leave `TeamActivityIndicator.tsx` unchanged; the id-based upsert preserves `label`/`at`/`detail` so it stays a single-source thin reader (44-02). No decision changed.
 
 3. **Progress card elapsed/deadline source for `explore_repo`**
    - What we know: call event carries `startedAt` and the call args include `timeoutSeconds` (in capped `detail`/args); D-11 requires elapsed ÷ timeout bar.
    - What's unclear: whether to parse `timeoutSeconds` from the serialized args string or add a dedicated optional field to `AgentLiveStep` for the deadline.
    - Recommendation: add an additive optional field (e.g. `timeoutSeconds?`) to the step on the `explore_repo` call — but note this field name is NOT in the D-04 enumerated add-list, so either extend D-04 in phase docs or derive from args to avoid an unlisted value. Prefer deriving from args to stay within locked fields; flag as a discuss-point if the planner wants a dedicated field.
+   - RESOLVED: derive `timeoutSeconds` from the serialized args string in the panel; do NOT add an unlisted `AgentLiveStep` field, staying within the locked D-04 field list (44-03). No decision changed.
 
 ## Environment Availability
 
