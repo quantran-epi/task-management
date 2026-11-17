@@ -1,5 +1,5 @@
 ---
-status: investigating
+status: awaiting_human_verify
 trigger: "explore_repo on the local/remote host reports outcome: error with 'Not logged in · Please run /login' although the owner can open Claude Code on this same machine by typing `claude` and use it without any interactive login step. Need determine why the headless CLI path (`claude -p ...`) used by explore_repo cannot see/use the working CLI auth context and fix or map it truthfully."
 created: "2026-11-17"
 updated: "2026-11-17"
