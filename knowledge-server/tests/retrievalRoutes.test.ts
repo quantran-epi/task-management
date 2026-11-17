@@ -468,4 +468,37 @@ describe('Phase 28 query-only retrieve route', () => {
     expect(coverageRow?.state).toBe('UNAVAILABLE');
     expect(coverageRow?.publishedSnapshotId).toBeNull();
   });
+
+  it('returns DEGRADED with non-ok modalities and a FAILED ledger when every resolved set fails', async () => {
+    const failingApp = buildKnowledgeServer({
+      token: TOKEN,
+      allowedOrigins: [ORIGIN],
+      federatedDeps: {
+        retrievePerSet: async () => {
+          throw new Error('set retrieval failed');
+        },
+      },
+      queryOnlyDeps: {
+        listPublishedSets: () => [
+          { setId: QUERY_ONLY_SET, snapshotId: QUERY_ONLY_SNAPSHOT },
+          { setId: '55555555-5555-4555-8555-555555555555', snapshotId: '66666666-6666-4666-8666-666666666666' },
+        ],
+        getSetReadiness: async () => 'PUBLISHED_ONLY',
+      },
+    }).app;
+    const res = await postRetrieve(failingApp, { query: 'rui ro' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as FederatedRetrievalResponse;
+    expect(body.outcome).toBe('DEGRADED');
+    expect(body.diagnostics.degraded).toBe(true);
+    expect(body.modalityStatus.fulltext.status).not.toBe('ok');
+    expect(body.modalityStatus.vector.status).not.toBe('ok');
+    expect(body.modalityStatus.graph.status).not.toBe('ok');
+    expect(body.diagnostics.coverage).toHaveLength(2);
+    for (const row of body.diagnostics.coverage) {
+      expect(row.state).toBe('FAILED');
+      expect(row.publishedSnapshotId).not.toBeNull();
+      expect(row.retrievalSnapshotId).toBeNull();
+    }
+  });
 });

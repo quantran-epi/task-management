@@ -88,4 +88,28 @@ describe('publishedSetDiscovery (Phase 28 Task 3)', () => {
     ]);
     expect(result.outcome).toBeNull();
   });
+
+  it('attaches publishedSnapshotIdBySet from enumeration for every default-discovered set', async () => {
+    const result = await resolveQueryOnlyScope(wire(), deps(published));
+    expect(result.resolved?.publishedSnapshotIdBySet).toEqual({
+      [SET_A]: SNAP_A,
+      [SET_B]: SNAP_B,
+      [SET_C]: SNAP_C,
+    });
+  });
+
+  it('maps only published matches for an explicit restriction, never unknown ids', async () => {
+    const unknown = '99999999-9999-4999-8999-999999999999';
+    const result = await resolveQueryOnlyScope(wire({ setIds: [unknown, SET_A, SET_B] }), deps(published));
+    expect(result.resolved?.publishedSnapshotIdBySet).toEqual({
+      [SET_A]: SNAP_A,
+      [SET_B]: SNAP_B,
+    });
+  });
+
+  it('returns a null (absent) map for an all-unknown restriction with no resolved request', async () => {
+    const unknown = '99999999-9999-4999-8999-999999999999';
+    const result = await resolveQueryOnlyScope(wire({ setIds: [unknown] }), deps(published));
+    expect(result.resolved).toBeNull();
+  });
 });

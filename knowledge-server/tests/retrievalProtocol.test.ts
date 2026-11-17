@@ -18,6 +18,8 @@ import {
   StageDiagnosticSchema,
   FederatedRetrievalRequestSchema,
   FederatedRetrievalResponseSchema,
+  ResolvedFederatedRetrievalRequestSchema,
+  DEFAULT_QUERY_ONLY_BUDGETS,
 } from '../src/types/retrievalProtocol.js';
 import {
   DeterministicEmbeddingStub,
@@ -867,6 +869,146 @@ describe('Phase 28 query-only wire contract', () => {
       diagnostics: { degraded: false, coverageWarnings: [] },
     });
     expect(parsed.diagnostics.coverage).toEqual([]);
+  });
+});
+
+describe('Phase 28-03: federated path closure and internal snapshot map', () => {
+  const SET_A = '00000000-0000-4000-8000-0000000000aa';
+  const SET_B = '00000000-0000-4000-8000-0000000000bb';
+  const SNAP = 'gsnap_abcdef12';
+  const HASH = 'a'.repeat(64);
+
+  const chunk = (id: string, setId: string) => ({
+    setId,
+    snapshotId: SNAP,
+    roleGroup: 'baseline' as const,
+    item: {
+      type: 'chunk' as const,
+      id,
+      score: 0.9,
+      modalitiesContributed: ['fulltext' as const],
+      sourceDocumentId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+      sourceDocumentTitle: `Doc ${id}`,
+      sectionAnchor: 'intro',
+      lineStart: 1,
+      lineEnd: 5,
+      rawSnippet: `Snippet ${id}`,
+      publishedContentHash: HASH,
+      snapshotId: SNAP,
+      hasConflict: false,
+    },
+  });
+
+  const baseResponse = (overrides: Record<string, unknown>) => ({
+    outcome: 'READY' as const,
+    items: [],
+    paths: [],
+    conflictGroups: [],
+    modalityStatus: {
+      fulltext: { status: 'ok' as const, latencyMs: 1, itemCount: 0 },
+      vector: { status: 'ok' as const, latencyMs: 1, itemCount: 0 },
+      graph: { status: 'ok' as const, latencyMs: 1, itemCount: 0 },
+    },
+    diagnostics: { degraded: false, coverageWarnings: [] },
+    ...overrides,
+  });
+
+  it('accepts a path whose hop citation references a returned chunk of the same set', () => {
+    const parsed = FederatedRetrievalResponseSchema.safeParse(
+      baseResponse({
+        items: [chunk('chunk-1', SET_A)],
+        paths: [
+          {
+            setId: SET_A,
+            snapshotId: SNAP,
+            roleGroup: 'baseline',
+            path: {
+              pathId: 'P1',
+              snapshotId: SNAP,
+              nodeUrns: ['urn:plannermate:test:Entity:A', 'urn:plannermate:test:Entity:B'],
+              edgeFactKeys: [HASH],
+              hopClassifications: ['OBSERVED'],
+              hopCitationIds: [['chunk-1']],
+              hasConflict: false,
+              classification: 'OBSERVED',
+            },
+          },
+        ],
+      })
+    );
+    expect(parsed.success).toBe(true);
+  });
+
+  it('rejects an orphan federated path whose hop citation is not a returned chunk', () => {
+    const parsed = FederatedRetrievalResponseSchema.safeParse(
+      baseResponse({
+        items: [chunk('chunk-1', SET_A)],
+        paths: [
+          {
+            setId: SET_A,
+            snapshotId: SNAP,
+            roleGroup: 'baseline',
+            path: {
+              pathId: 'P1',
+              snapshotId: SNAP,
+              nodeUrns: ['urn:plannermate:test:Entity:A', 'urn:plannermate:test:Entity:B'],
+              edgeFactKeys: [HASH],
+              hopClassifications: ['OBSERVED'],
+              hopCitationIds: [['missing-chunk']],
+              hasConflict: false,
+              classification: 'OBSERVED',
+            },
+          },
+        ],
+      })
+    );
+    expect(parsed.success).toBe(false);
+  });
+
+  it('rejects a path hop citation that belongs to a different set', () => {
+    const parsed = FederatedRetrievalResponseSchema.safeParse(
+      baseResponse({
+        items: [chunk('chunk-1', SET_A), chunk('chunk-2', SET_B)],
+        paths: [
+          {
+            setId: SET_A,
+            snapshotId: SNAP,
+            roleGroup: 'baseline',
+            path: {
+              pathId: 'P1',
+              snapshotId: SNAP,
+              nodeUrns: ['urn:plannermate:test:Entity:A', 'urn:plannermate:test:Entity:B'],
+              edgeFactKeys: [HASH],
+              hopClassifications: ['OBSERVED'],
+              hopCitationIds: [['chunk-2']],
+              hasConflict: false,
+              classification: 'OBSERVED',
+            },
+          },
+        ],
+      })
+    );
+    expect(parsed.success).toBe(false);
+  });
+
+  it('accepts the internal publishedSnapshotIdBySet map and rejects a non-uuid key', () => {
+    const accepted = ResolvedFederatedRetrievalRequestSchema.safeParse({
+      query: 'q',
+      setTierAssignments: [{ setId: SET_A, tier: 'REQUIRED', roleGroup: 'baseline' }],
+      comparisonMode: 'single',
+      budgets: { ...DEFAULT_QUERY_ONLY_BUDGETS },
+      publishedSnapshotIdBySet: { [SET_A]: SNAP },
+    });
+    expect(accepted.success).toBe(true);
+
+    const rejected = ResolvedFederatedRetrievalRequestSchema.safeParse({
+      query: 'q',
+      setTierAssignments: [{ setId: SET_A, tier: 'REQUIRED', roleGroup: 'baseline' }],
+      comparisonMode: 'single',
+      budgets: { ...DEFAULT_QUERY_ONLY_BUDGETS },
+      publishedSnapshotIdBySet: { 'not-a-uuid': SNAP },
+    });
+    expect(rejected.success).toBe(false);
   });
 });
 
