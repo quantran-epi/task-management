@@ -356,9 +356,14 @@ Plans:
 **Plans:** 4 plans
 
 Plans:
+**Wave 1**
 - [ ] 44-01-PLAN.md — make explore_repo timeoutSeconds clamp 60..900/default 300 flow to the existing watchdog
 - [ ] 44-02-PLAN.md — add additive step fields and id-based call+result upsert with capped previews and payload status
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 44-03-PLAN.md — build the right-side Agent Activity Panel and migrate Debug Prompt into the Prompt log tab
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 44-04-PLAN.md — run combined tests/typecheck, code+UI reviews, observed Tauri walkthrough, and one phase push
 
 ## Milestone: v1.2 Knowledge System Implementation
