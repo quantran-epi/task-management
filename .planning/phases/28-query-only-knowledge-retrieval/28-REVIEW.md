@@ -48,6 +48,13 @@ findings:
   total: 3
   necessity: 1
 status: issues_found
+fix_status: all_fixed
+fixed_at: 2026-11-17T16:10:00Z
+fix_iteration: 1
+fix_commits:
+  - 7581f6ea
+  - a297ed31
+  - c64ecda6
 ---
 
 # Phase 28: Code Review Report
@@ -56,6 +63,26 @@ status: issues_found
 **Depth:** standard
 **Files Reviewed:** 37
 **Status:** issues_found
+**Fix Status:** all_fixed (2026-11-17T16:10:00Z, iteration 1)
+
+## Fix Disposition
+
+All three warnings were addressed in the isolated worktree `gsd/phase-28-isolated`.
+The original findings below are retained for traceability.
+
+| ID | Disposition | Commit | Evidence |
+|----|-------------|--------|----------|
+| WR-01 | fixed | `7581f6ea` | Lexical no-match now emits fulltext `ok`/`itemCount: 0`/`NO_MATCHING_CHUNKS` and `degraded: false`; the aggregator no longer treats disclosed structural vector/graph `NO_RETRIEVAL_GENERATION` as a failure. Focused tests `queryOnlyEndToEnd`, `snapshotLexicalRetrieval`, `federatedRetrieval`, `retrievalRoutes`, `publishedSetDiscovery`: 61 passed. New E2E case asserts a real published-only no-match is `NO_EVIDENCE` (not `DEGRADED`) with full `SEARCHED_NO_EVIDENCE` coverage. |
+| WR-02 | fixed | `a297ed31` | `formatGroundedNonAnswer` keeps the canonical notice byte-identical and appends `localFallback` under a `*(Chỉ dữ liệu nội bộ)*` label via the existing formatter; step-6 handler sends the combined reply. Focused `telegramHeadlessWorker` tests: 53 passed (formatter + end-to-end both assert notice and labeled local evidence). |
+| WR-03 | fixed | `c64ecda6` | `getSetReadiness` removed from `QueryOnlyScopeDeps`, `QueryOnlyRouteDependencies`, both resolver call sites, the route fallback, and the unused `SetReadiness` type; tests/fixtures updated. `main.ts` already supplied only `listPublishedSets` so needed no change. Knowledge-server `tsc --noEmit`: clean; 5 focused test files: 61 passed. |
+
+Verification: focused tests only (no full suite). Both `knowledge-server` and root
+`tsc --noEmit` pass. Residual risk: WR-01 changes federated outcome calculation for
+the disclosed-absence shape; the `hasNonOkModality` exemption is limited to secondary
+modalities with reason `NO_RETRIEVAL_GENERATION`, and all existing DEGRADED paths
+(failed/timed-out sets, coverage warnings, fulltext failures) remain covered by the
+federated regression tests. A live end-to-end walkthrough (per 28-VALIDATION.md) was
+not re-run in this fix pass.
 
 ## Summary
 
