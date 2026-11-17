@@ -47,6 +47,10 @@ import { getTodayDateString } from '../../utils/date';
 import dayjs from 'dayjs';
 import { createDefaultGroundedTurnDeps } from '../ai/groundedTurnDeps';
 import { runGroundedTurn, type GroundedTurnResult } from '../ai/groundedTurn';
+import {
+  KNOWLEDGE_SERVER_EMPTY_NOTICE,
+  detectKnowledgeToolOutcome,
+} from '../ai/knowledgeOutcome';
 import { fetchSetCatalog } from '../../db/repositories/documentSetRepo';
 import type { ChatMessageGrounding } from '../ai/groundedAnswerSchemas';
 import {
@@ -554,6 +558,11 @@ export async function runTelegramGroundedTurn(
  * should continue normal grounded/ungrounded handling.
  */
 export function formatGroundedNonAnswer(result: GroundedTurnResult): string | null {
+  if (result.kind === 'server_empty') {
+    // D-13: the application owns the exact copy; never let the model paraphrase it.
+    return result.notice || KNOWLEDGE_SERVER_EMPTY_NOTICE;
+  }
+
   if (result.kind === 'clarify_intent') {
     return (
       result.clarifyQuestion?.trim() ||
@@ -1495,6 +1504,9 @@ export async function processTelegramInboundMessage(
 
   let rawAiResponse = '';
   let tokenCount = 0;
+  // D-13: the app prepends the canonical server-empty notice once per turn when
+  // a tool result carries NO_PUBLISHED_SETS, so the model never owns the copy.
+  let serverEmptyNotice = '';
 
   try {
     const loopResult = await runAiOrchestratorLoop({
@@ -1508,6 +1520,14 @@ export async function processTelegramInboundMessage(
       // headless worker, so the loop terminates only by model completion or cap.
       maxLoops: 30,
       db,
+      onToolResult: (_callId, result, _durationMs) => {
+        if (serverEmptyNotice) return;
+        // The orchestrator's seam is keyed by callId, not tool name; only the
+        // retrieve_knowledge result carries this exact structured outcome.
+        if (detectKnowledgeToolOutcome('retrieve_knowledge', result) === 'NO_PUBLISHED_SETS') {
+          serverEmptyNotice = KNOWLEDGE_SERVER_EMPTY_NOTICE;
+        }
+      },
       synthesisPrompt:
         'Dựa trên tất cả các kết quả công cụ và thông tin đã thu thập ở trên, hãy tổng hợp câu trả lời đầy đủ, chi tiết, chính xác và rõ ràng cho yêu cầu ban đầu.\n' +
         'Yêu cầu định dạng:\n' +
@@ -1543,6 +1563,12 @@ export async function processTelegramInboundMessage(
 
   // Post-processing: clean citation tags
   let processedResponse = cleanCitationTags(rawAiResponse);
+
+  // D-13: app-owned notice leads the reply, exactly once. The model's own text
+  // follows but cannot replace or paraphrase this canonical copy.
+  if (serverEmptyNotice) {
+    processedResponse = `${serverEmptyNotice}\n\n${processedResponse}`;
+  }
 
   // Step 9: Convert to Telegram HTML and Split/Send replies
   const formattedHtml = markdownToTelegramHtml(processedResponse);

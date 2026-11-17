@@ -835,7 +835,11 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
       await waitFor(() => {
         expect(screen.getByText(KNOWLEDGE_SERVER_EMPTY_NOTICE)).toBeInTheDocument();
       });
-      expect(screen.getByText(/chỉ từ tài liệu nội bộ/)).toBeInTheDocument();
+      // The fallback keeps local authority and is rendered separately with a
+      // local-only label; it is never presented as server evidence.
+      await waitFor(() => {
+        expect(screen.getByText(/Chỉ tìm từ khoá trên Markdown đã lập chỉ mục cục bộ/)).toBeInTheDocument();
+      });
     });
 
     it('unrelated tool events still render as before (non-regression)', async () => {
