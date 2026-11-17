@@ -1,11 +1,14 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { grepRemoteRef, InvalidGrepPatternError } from '../../../src/services/gitRemoteService';
-import { readRemoteFilePage } from '../../../src/services/gitRemoteTreeService';
+import {
+  readRemoteFilePage,
+  PathOutsideRepoError,
+} from '../../../src/services/gitRemoteTreeService';
 import * as sshService from '../../../src/services/sshService';
 import type { SshConfig } from '../../../src/types/ssh';
 
@@ -324,5 +327,54 @@ describe('remote read pipelines against a real git repository', () => {
     expect(page.totalLines).toBe(3);
     expect(page.lines).toEqual(['1: alpha', '2: beta']);
     expect(page.hasMore).toBe(true);
+  });
+
+  // Regression seed for git-read-all-files-in-repo: read_file must return current working-tree
+  // bytes for ANY in-repo path, including a tracked file with uncommitted edits. The old code
+  // read the committed blob first and only used the working copy for untracked paths, so a
+  // modified tracked file silently returned stale content. Oracle: specified (owner contract).
+  it('reads current working-tree content for a tracked file with uncommitted edits', async () => {
+    // src/a.ts was committed with 300 lines; overwrite it with different working-copy content.
+    writeFileSync(join(repo, 'src/a.ts'), 'WORKTREE line one\nWORKTREE line two\n');
+
+    const page = await readRemoteFilePage(mockConfig, repo, 'HEAD', 'src/a.ts', 1, 10);
+
+    // Must reflect the working copy, NOT the committed blob ("const line1 = 1;").
+    expect(page.lines).toEqual(['1: WORKTREE line one', '2: WORKTREE line two']);
+    expect(page.totalLines).toBe(2);
+    expect(page.hasMore).toBe(false);
+  });
+
+  // Boundary neighbor: an UNMODIFIED tracked file must still read correctly (same working-tree
+  // source). Guards against a fix that only works when the file differs from the ref.
+  it('reads an unmodified tracked file from the working tree', async () => {
+    const page = await readRemoteFilePage(mockConfig, repo, 'HEAD', 'src/b.ts', 1, 10);
+
+    expect(page.lines).toEqual(['1: one', '2: two', '3: three', '4: four', '5: five']);
+    expect(page.totalLines).toBe(5);
+  });
+
+  // Boundary neighbor: an in-repo file that is tracked but STAGED (index differs from HEAD) must
+  // also return its current on-disk content, not the committed blob.
+  it('reads current content for a tracked file with staged changes', async () => {
+    writeFileSync(join(repo, 'docs/notes.md'), 'STAGED note A\nSTAGED note B\n');
+    git('add', 'docs/notes.md');
+
+    const page = await readRemoteFilePage(mockConfig, repo, 'HEAD', 'docs/notes.md', 1, 10);
+
+    expect(page.lines).toEqual(['1: STAGED note A', '2: STAGED note B']);
+    expect(page.totalLines).toBe(2);
+  });
+
+  // Confinement invariant must survive the source switch: a symlink pointing outside the repo
+  // is still refused rather than followed.
+  it('still refuses a symlink that escapes the repo after the source switch', async () => {
+    const outside = join(sandbox, 'outside-secret.txt');
+    writeFileSync(outside, 'SECRET\n');
+    symlinkSync(outside, join(repo, 'link.txt'));
+
+    await expect(
+      readRemoteFilePage(mockConfig, repo, 'HEAD', 'link.txt', 1, 10)
+    ).rejects.toBeInstanceOf(PathOutsideRepoError);
   });
 });

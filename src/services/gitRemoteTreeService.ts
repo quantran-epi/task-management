@@ -371,14 +371,22 @@ function parsePage(
 }
 
 /**
- * One page of a ref blob, with a line-numbered body and the file's total line count.
- * `getRemoteFileContent` stays whole-file: `RemoteFileViewer` needs it for the editor, and it
- * is not an AI tool result. Same confinement and untracked fallback as that function.
+ * One page of a file in the remote working tree, with a line-numbered body and the file's total
+ * line count. Owner decision (2026-11-17): `git_read read_file` serves the CURRENT WORKING TREE,
+ * not the committed blob at a ref. The working tree is the only source that represents committed
+ * content, tracked-but-modified content, and untracked files uniformly; reading the ref first
+ * made a tracked file with uncommitted edits silently return stale committed bytes.
+ *
+ * `ref` stays in the signature for tool-contract compatibility but no longer selects the source.
+ * Confinement (`confineRepoPath` + the realpath guard in `workingCopyCatSnippet`), byte/line
+ * paging, the binary probe, and the paged total are unchanged — `readPageFromSource` is
+ * source-agnostic. `getRemoteFileContent` stays whole-file and ref-first: `RemoteFileViewer`
+ * needs it for the editor, and it is not an AI tool result.
  */
 export async function readRemoteFilePage(
   config: SshConfig,
   repoPath: string,
-  ref: string,
+  _ref: string,
   filePath: string,
   offset: number,
   limit: number,
@@ -387,43 +395,15 @@ export async function readRemoteFilePage(
   const cleanPath = confineRepoPath(filePath, 'Đường dẫn tệp');
   const pageOffset = Math.max(1, Math.floor(Number(offset)) || 1);
   const pageLimit = Math.min(Math.max(1, Math.floor(Number(limit)) || 200), 2000);
-  const objectSpec = `${ref}:${cleanPath}`;
-  const refSource =
-    `git -C ${escapeShellArg(repoPath)} -c core.fsmonitor=false --no-pager ` +
-    `cat-file -p --end-of-options ${escapeShellArg(objectSpec)}`;
 
-  try {
-    return await readPageFromSource(
-      config,
-      refSource,
-      cleanPath,
-      pageOffset,
-      pageLimit,
-      secret
-    );
-  } catch (err: any) {
-    if (!isNotInRef(err, cleanPath, ref)) throw err;
-    // WR-01: fall back only for a path git does not track at all, i.e. a genuine untracked file.
-    const probe = await execRemoteCommand(
-      config,
-      `git -C ${escapeShellArg(repoPath)} -c core.fsmonitor=false --no-pager --literal-pathspecs ` +
-        `ls-files --error-unmatch -- ${escapeShellArg(cleanPath)}`,
-      secret
-    );
-    if (probe.exitStatus === 0) throw err;
-    // Only exit 1 means untracked; infrastructure and SSH failures must stay failures.
-    if (probe.exitStatus !== 1) {
-      throw new Error(probe.stderr.trim() || `Lệnh git thất bại với exit code ${probe.exitStatus}`);
-    }
-    return await readPageFromSource(
-      config,
-      workingCopyCatSnippet(repoPath, cleanPath),
-      cleanPath,
-      pageOffset,
-      pageLimit,
-      secret
-    );
-  }
+  return await readPageFromSource(
+    config,
+    workingCopyCatSnippet(repoPath, cleanPath),
+    cleanPath,
+    pageOffset,
+    pageLimit,
+    secret
+  );
 }
 
 async function readPageFromSource(
