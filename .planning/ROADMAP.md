@@ -1127,36 +1127,41 @@ Plans:
 
 ### Phase 28: Query-Only Knowledge Retrieval
 
-**Goal:** Retrieval works from a device that has no local documents: the client sends `{query, limit}` and the server chooses joined published sets, while trust guarantees and cross-surface messaging stay intact.
-**Requirements**: SDLC-RET-01, SDLC-RET-02, SDLC-RET-03, SDLC-RET-04, SDLC-RET-05
-**Depends on:** Phase 25.3 (independent of Phases 26–27; server work can start immediately)
+**Goal:** Retrieval works from a device that has no local documents: the client sends `{query, limit}` and the server federates across published sets, while trust guarantees, cross-surface messaging and every existing AI-engine flow stay intact. (Re-scoped 2026-11-17: this phase must not be reduced to server-only work — the zero-local-docs retrieve path is proven end to end on the live AI surfaces.)
+**Requirements**: SDLC-RET-01, SDLC-RET-02, SDLC-RET-03, SDLC-RET-04, SDLC-RET-05 — historical IDs retained by ROADMAP/init for GSD tooling; REQUIREMENTS.md no longer lists them. They map to current live outcomes: (01) query-only retrieve with zero local docs, (02) server federation with set/snapshot attribution, (03) trust guarantees, (04) one canonical empty notice on live surfaces, (05) optional explicit `setIds`.
+**Depends on:** Phase 25.3 (historical; independent of later phases)
 **Success Criteria** (what must be TRUE):
 
 1. `retrieve_knowledge` succeeds with `query` and `limit` only on a profile with no local document sets; the default path no longer calls `fetchSetCatalog`.
 2. The server federates a query-only request across every published set and returns which sets and snapshots answered alongside evidence, entities, paths, and warnings.
-3. Bounded budgets, single-snapshot path closure, citation IDs, and truthful degraded/unavailable outcomes still hold for query-only requests.
-4. When no published set exists, the response is a clear actionable message, not a generic exception, and AI Chat, SDLC step chat, and Telegram surface it identically.
+3. Bounded budgets, single-snapshot path closure, citation IDs, and truthful degraded/unavailable outcomes still hold for query-only requests, including an all-unknown explicit `setIds` list that yields DEGRADED with a full UNAVAILABLE coverage ledger instead of an empty result.
+4. When no published set exists, the response is a clear actionable message, not a generic exception, and every live surface renders it identically: ordinary AI Chat (grounded and tool-driven) and Telegram (grounded and tool-driven). (Original wording named SDLC step chat, deleted in Phase 35-06; the shared outcome module and existing tool-event seams are the live equivalent.)
 5. An explicit set restriction still works for callers that know their sets, is optional, and is never the default.
+6. No existing AI-engine flow regresses: `groundedTurn`, `knowledgeRetrievalTool`, `aiOrchestratorLoop` and Telegram keep their flags, fallbacks, error taxonomy and copy, with focused regression tests; `aiOrchestratorLoop.ts` stays byte-identical.
 
-**Plans:** 4 plans in 4 waves
+**Plans:** 5 plans in 5 waves
 
 Plans:
 
 **Wave 1** *(no dependencies; edits knowledge-server retrieval service)*
 
-- [ ] 28-01-PLAN.md — Query-only federated retrieval across all published sets with set/snapshot attribution
+- [ ] 28-01-PLAN.md — Query-only federated retrieval: thin wire, authoritative published-set discovery, lexical modality, and the all-unknown-`setIds` DEGRADED path
 
 **Wave 2** *(depends on 28-01; edits client retrieval service and tool)*
 
-- [ ] 28-02-PLAN.md — Client query-only request path, `fetchSetCatalog` removal, and optional explicit set restriction
+- [ ] 28-02-PLAN.md — Client query-only wire contract, `fetchSetCatalog` removal on live surfaces, tool attribution, and non-regression of local/MCP/clarify flows
 
-**Wave 3** *(depends on 28-01)*
+**Wave 3** *(depends on 28-01 and 28-02; trust guarantees + source inspection)*
 
-- [ ] 28-03-PLAN.md — Trust-guarantee regression: budgets, single-snapshot closure, citations, degraded/unavailable truthfulness
+- [ ] 28-03-PLAN.md — Real budgets, coverage ledger, path closure, snapshot-aware packing, local-absent inspection, with local/MCP regression
 
-**Wave 4** *(depends on 28-02)*
+**Wave 4** *(depends on 28-02 and 28-03; shared groundedTurn/schemas/drawer/Telegram files)*
 
-- [ ] 28-04-PLAN.md — Empty-set actionable outcome normalized across AI Chat, SDLC chat, and Telegram
+- [ ] 28-04-PLAN.md — One canonical empty-server notice rendered on AI Chat and Telegram (grounded + tool-driven), with absolute non-regression
+
+**Wave 5** *(depends on 28-04; end-to-end contract + observed walkthrough)*
+
+- [ ] 28-05-PLAN.md — Zero-local-docs query-only retrieve proven end to end on live surfaces, truthful empty/all-unknown at the boundary, and completed validation sign-off
 
 ### Phase 29: SSH Remote Repository Branch & Diff Review
 

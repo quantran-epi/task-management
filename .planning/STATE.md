@@ -32,6 +32,13 @@ Plan: 4 of 4 complete
 Status: All review findings closed (0 critical, 0 warning, 0 info open)
 Last activity: 2026-11-16 - Completed quick task 261116-fyi: Restore Docs parity in IntelliJ workbench: document sets drawer (publish + graph build), ZIP import, folder ZIP export
 
+## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
+
+- Phase 28 re-scoped from 4 to 5 plans in this isolated worktree (`gsd/phase-28-isolated`) after plan-checker findings and the user's supreme goal: zero-local-docs query-only `retrieve_knowledge` must work end to end on the live AI surfaces (AI Chat and Telegram), not be reduced to server-only work.
+- Replan removed all deleted Phase 35-06 SDLC/wizard file references, wired the all-unknown explicit-`setIds` DEGRADED outcome (C2), fixed 28-04 wave/dependency (W1), reduced 28-02 to 10 files (W2), completed `28-VALIDATION.md` sign-off (W3), and added absolute non-regression for `groundedTurn` / `knowledgeRetrievalTool` / `aiOrchestratorLoop` / Telegram with focused regression tests.
+- SDLC-RET-01..05 remain historical tooling IDs (REQUIREMENTS.md no longer lists them) mapped to live query-only retrieval outcomes; no SDLC code is resurrected.
+- Work here is isolated; phase 44 planning advances independently on `feature/intellij-workbench` and is not touched by this replan.
+
 ## Phase 42 Review Outcome
 
 All findings from rounds 1–3 and the continuation re-check are fixed and independently
