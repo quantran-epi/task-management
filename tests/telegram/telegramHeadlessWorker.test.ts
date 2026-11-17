@@ -2600,6 +2600,114 @@ describe('Telegram Headless Worker', () => {
       expect((rendered as string).length).toBe(KNOWLEDGE_SERVER_EMPTY_NOTICE.length);
     });
 
+    it('renders a server_empty localFallback as notice + local-only-labelled evidence (byte-identical notice)', () => {
+      const localFallback = {
+        schemaVersion: 1,
+        authority: 'local',
+        outcome: 'READY',
+        answer: { conclusion: 'Kết quả từ tài liệu nội bộ: quy trình OTP.', claims: [] },
+        citations: [],
+        paths: [],
+        conflicts: [],
+        scope: { setIds: [], routedScope: {}, },
+        coverageWarnings: [],
+        fallbackReason: 'NONE',
+        routerVersion: 'router-v1',
+        promptVersion: 'grounded-v1',
+        modelId: 'gpt-4o',
+        createdAt: new Date().toISOString(),
+      } as any;
+      const result: GroundedTurnResult = {
+        kind: 'server_empty',
+        notice: KNOWLEDGE_SERVER_EMPTY_NOTICE,
+        localFallback,
+      };
+
+      const rendered = formatGroundedNonAnswer(result);
+      expect(rendered).not.toBeNull();
+      const text = rendered as string;
+      // Canonical notice kept first and byte-identical, appearing exactly once.
+      expect(text.startsWith(KNOWLEDGE_SERVER_EMPTY_NOTICE)).toBe(true);
+      expect(text.split(KNOWLEDGE_SERVER_EMPTY_NOTICE).length - 1).toBe(1);
+      // Local evidence is present and explicitly labelled as local-only, never
+      // merged into or attributed to the server notice (D-14 cross-surface parity).
+      expect(text).toContain('*(Chỉ dữ liệu nội bộ)*');
+      expect(text).toContain('Kết quả từ tài liệu nội bộ: quy trình OTP.');
+    });
+
+    it('sends both the canonical notice and labelled local evidence for a server_empty turn with localFallback', async () => {
+      await setNineRouterApiKey('test-key', testDb);
+      mockStreamChatEvents.mockClear();
+
+      await upsertWhitelistUser(
+        {
+          chatId: 'empty_server_local_user',
+          name: 'Empty Server Local User',
+          status: 'active',
+          dataScope: 'full',
+        },
+        testDb
+      );
+
+      mockRouteIntent.mockResolvedValueOnce({
+        intent: 'query_knowledge',
+        confidence: 0.95,
+        entities: [],
+        language: 'vi',
+        needs_clarification: false,
+        clarify_question: null,
+        speculation_requested: false,
+      });
+      mockRunGroundedTurn.mockResolvedValueOnce({
+        kind: 'server_empty',
+        notice: KNOWLEDGE_SERVER_EMPTY_NOTICE,
+        localFallback: {
+          schemaVersion: 1,
+          authority: 'local',
+          outcome: 'READY',
+          answer: { conclusion: 'Kết quả nội bộ OTP.', claims: [] },
+          citations: [],
+          paths: [],
+          conflicts: [],
+          scope: { setIds: [], routedScope: {} },
+          coverageWarnings: [],
+          fallbackReason: 'NONE',
+          routerVersion: 'router-v1',
+          promptVersion: 'grounded-v1',
+          modelId: 'gpt-4o',
+          createdAt: new Date().toISOString(),
+        },
+      });
+
+      const replies: string[] = [];
+      const mockSendReply = vi.fn(async (_token: string, _chatId: string, text: string) => {
+        replies.push(text);
+      });
+
+      await processTelegramInboundMessage(
+        {
+          update_id: 712,
+          message_id: 2103,
+          chat_id: 'empty_server_local_user',
+          from_name: 'Empty Server Local User',
+          text: 'Kiến thức về quy trình OTP',
+          date: 1730003002,
+        },
+        'test_token',
+        testDb,
+        mockSendReply,
+        vi.fn(async () => {})
+      );
+
+      expect(mockSendReply).toHaveBeenCalled();
+      const outbound = replies.join('\n');
+      expect(outbound).toContain(KNOWLEDGE_SERVER_EMPTY_NOTICE);
+      // The markdown local-only label is rendered to Telegram HTML before send.
+      expect(outbound).toContain('<i>(Chỉ dữ liệu nội bộ)</i>');
+      expect(outbound).toContain('Kết quả nội bộ OTP.');
+      expect(mockStreamChatEvents).not.toHaveBeenCalled();
+    });
+
     it('sends the canonical notice to the user for a grounded server_empty turn', async () => {
       await setNineRouterApiKey('test-key', testDb);
       mockStreamChatEvents.mockClear();

@@ -560,7 +560,17 @@ export async function runTelegramGroundedTurn(
 export function formatGroundedNonAnswer(result: GroundedTurnResult): string | null {
   if (result.kind === 'server_empty') {
     // D-13: the application owns the exact copy; never let the model paraphrase it.
-    return result.notice || KNOWLEDGE_SERVER_EMPTY_NOTICE;
+    const notice = result.notice || KNOWLEDGE_SERVER_EMPTY_NOTICE;
+    // D-14 (cross-surface parity with AI Chat): when the local catalog has
+    // documents, keep the canonical notice first and attach the local evidence
+    // as a separately labelled fallback. Never imply the server returned it.
+    if (result.localFallback) {
+      const localText = formatGroundedAnswerForTelegram(result.localFallback).trim();
+      if (localText) {
+        return `${notice}\n\n*(Chỉ dữ liệu nội bộ)*\n\n${localText}`;
+      }
+    }
+    return notice;
   }
 
   if (result.kind === 'clarify_intent') {
