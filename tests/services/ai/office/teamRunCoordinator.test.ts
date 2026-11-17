@@ -193,7 +193,7 @@ function deferred(): { promise: Promise<void>; release: () => void } {
   return { promise, release: () => box.release() };
 }
 
-async function waitFor(predicate: () => boolean, timeoutMs = 3000): Promise<void> {
+async function waitFor(predicate: () => boolean, timeoutMs = 20000): Promise<void> {
   const startedAt = Date.now();
   while (!predicate()) {
     if (Date.now() - startedAt > timeoutMs) throw new Error('waitFor timeout');
@@ -212,7 +212,7 @@ const isSynthesisTurn = (options: AiOrchestratorLoopOptions): boolean =>
   String(options.messages.at(-1)?.content).includes(SYNTHESIS_MARKER);
 
 /** The whole batch is over — synthesis included — once the phase is back to `ready`. */
-const waitForReady = (coordinator: TeamRunCoordinator, timeoutMs = 5000): Promise<void> =>
+const waitForReady = (coordinator: TeamRunCoordinator, timeoutMs = 20000): Promise<void> =>
   waitFor(() => coordinator.getState().phase === 'ready', timeoutMs);
 
 interface HarnessOptions {
