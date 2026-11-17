@@ -14,6 +14,10 @@ import {
   type NotificationSettings,
   type AlertCategory,
 } from '../types/notifications';
+import {
+  deeplinkForAlert,
+  NotificationDeepLink,
+} from '../utils/notificationDeepLink';
 
 export const SESSION_NOTIFICATION_SHOWN_KEY = 'desktop_notification_shown';
 
@@ -131,6 +135,7 @@ export function useDesktopNotification({
           title: APP_NAME,
           body: summaryText,
           requireInteraction: settingsData.settings.requireInteractionEnabled,
+          deeplink: NotificationDeepLink.dashboard,
         });
 
         try {
@@ -170,6 +175,7 @@ export function useDesktopNotification({
         body,
         tag: item.id,
         requireInteraction: settingsData.settings.requireInteractionEnabled,
+        deeplink: deeplinkForAlert(item),
       });
 
       notifiedAlertIdsRef.current.add(item.id);

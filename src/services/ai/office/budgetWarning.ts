@@ -1,4 +1,5 @@
 import { sendDesktopNotification } from '../../../utils/desktopNotification';
+import { NotificationDeepLink } from '../../../utils/notificationDeepLink';
 
 /**
  * Phase 38 D-02/D-03/D-06: the two independent warning levels, one OS notification each.
@@ -71,6 +72,7 @@ export async function dispatchBudgetWarning(warning: BudgetWarning): Promise<boo
           : warning.teamName,
       body: bodyFor(warning),
       tag: key,
+      deeplink: NotificationDeepLink.agents,
     });
     if (!sent) notified.delete(key);
     return sent;

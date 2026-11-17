@@ -2,6 +2,7 @@ mod agent_diff_ops;
 mod agent_manager;
 mod agent_skill_ops;
 mod ai_proxy;
+mod desktop_notification;
 mod jira_proxy;
 mod keyring_store;
 mod sqlite_persistence;
@@ -24,6 +25,7 @@ pub fn run() {
         .manage(ssh_service::SshStreamRegistry::default())
         .invoke_handler(tauri::generate_handler![
             open_devtools,
+            desktop_notification::send_clickable_notification,
             sqlite_persistence::select_sqlite_path,
             sqlite_persistence::sqlite_file_status,
             sqlite_persistence::sqlite_init,

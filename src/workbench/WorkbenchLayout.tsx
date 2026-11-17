@@ -15,6 +15,7 @@ import { useDoubleShift } from './hooks/useDoubleShift';
 import { SearchEverywhereModal } from './search/SearchEverywhereModal';
 import { useNotifications } from '../hooks/useNotifications';
 import { useTeamChatNotifications } from '../hooks/useTeamChatNotifications';
+import { NOTIFICATION_DEEPLINK_EVENT } from '../utils/notificationDeepLink';
 import { useAIChat } from '../context/AIChatContext';
 import { InlineAISelectionBar } from '../components/ai/InlineAISelectionBar';
 import { GlobalDiagramViewer } from '../components/common/GlobalDiagramViewer';
@@ -145,6 +146,57 @@ export function WorkbenchLayout({
   const openTabs = useLayoutStore((s) => s.openTabs);
 
   const { isOpen: isAIChatOpen } = useAIChat();
+
+  // OS notification click (deeplink): open the matching editor tab in the workbench.
+  useEffect(() => {
+    const handleDeeplink = (event: Event) => {
+      const detail = (event as CustomEvent<{ route?: string }>).detail;
+      const route = detail?.route;
+      if (typeof route !== 'string') return;
+      // Parse `#/route?key=value` into a view type + params.
+      const [pathPart, queryPart] = route.replace(/^#\/?/, '').split('?');
+      const viewKey = pathPart ?? '';
+      const params = new URLSearchParams(queryPart ?? '');
+      const titles: Record<string, string> = {
+        dashboard: 'Dashboard',
+        planner: 'Capacity Planner',
+        analytics: 'Analytics',
+        tasks: 'Tasks',
+        notes: 'Docs',
+        agents: 'Ghost Dev Agents',
+        telegram: 'Telegram Bot',
+        settings: 'Settings',
+        insight: 'Item Insight',
+      };
+      if (viewKey === 'insight') {
+        const itemType = params.get('type') || 'task';
+        const itemId = params.get('id') || '';
+        openTab({
+          id: `insight-${itemType}-${itemId}`,
+          title: `${itemType.toUpperCase()}: ${itemId.slice(0, 8)}`,
+          viewType: 'insight',
+          closable: true,
+          params: { itemType, itemId, type: itemType, id: itemId },
+        });
+        return;
+      }
+      const title = titles[viewKey];
+      if (!title) return;
+      const date = params.get('date');
+      const tab = params.get('tab');
+      const tabId = viewKey === 'planner' && date ? `planner-${date}` : viewKey;
+      openTab({
+        id: tabId,
+        title,
+        viewType: viewKey as any,
+        closable: true,
+        ...(viewKey === 'planner' && date ? { params: { date } } : {}),
+        ...(viewKey === 'settings' && tab ? { params: { tab } } : {}),
+      });
+    };
+    window.addEventListener(NOTIFICATION_DEEPLINK_EVENT, handleDeeplink);
+    return () => window.removeEventListener(NOTIFICATION_DEEPLINK_EVENT, handleDeeplink);
+  }, [openTab]);
 
   useEffect(() => {
     const handleOpenMermaidStudio = (e: Event) => {

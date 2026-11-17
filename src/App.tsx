@@ -23,6 +23,7 @@ import { TelegramMonitorView } from './views/TelegramMonitorView';
 import { MermaidAssistantView } from './views/MermaidAssistantView';
 import { TimerProvider } from './context/TimerContext';
 import { KnowledgeConfigProvider } from './services/knowledge/knowledgeConfig';
+import { startNotificationDeepLinkListener } from './utils/notificationDeepLink';
 
 const { defaultAlgorithm, darkAlgorithm } = theme;
 
@@ -65,6 +66,8 @@ export const App: React.FC = () => {
     checkAndRequestStoragePersistence().catch((err) => {
       console.warn('Storage persistence auto-request failed on boot:', err);
     });
+    // Clicking an OS notification focuses the window and navigates to its target page.
+    return startNotificationDeepLinkListener();
   }, []);
 
   const renderContent = () => {

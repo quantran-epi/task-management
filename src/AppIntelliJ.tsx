@@ -15,6 +15,7 @@ import { useHashRoute } from './hooks/useHashRoute';
 import { TimerPopoutView } from './views/TimerPopoutView';
 import { NotesPopoutView } from './views/NotesPopoutView';
 import { AIPopoutView } from './views/AIPopoutView';
+import { startNotificationDeepLinkListener } from './utils/notificationDeepLink';
 
 export const AppIntelliJ: React.FC = () => {
   const { route } = useHashRoute();
@@ -28,6 +29,8 @@ export const AppIntelliJ: React.FC = () => {
     checkAndRequestStoragePersistence().catch((err) => {
       console.warn('Storage persistence auto-request failed on boot:', err);
     });
+    // Clicking an OS notification focuses the window and navigates to its target page.
+    return startNotificationDeepLinkListener();
   }, []);
 
   if (route === 'timer-popout') {

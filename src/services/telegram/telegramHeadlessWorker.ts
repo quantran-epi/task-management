@@ -27,6 +27,7 @@ import {
 } from '../ai/aiTools';
 import { runAiOrchestratorLoop } from '../ai/aiOrchestratorLoop';
 import { sendDesktopNotification } from '../../utils/desktopNotification';
+import { NotificationDeepLink } from '../../utils/notificationDeepLink';
 import type {
   TelegramInboundEvent,
   TelegramConflictEvent,
@@ -912,6 +913,7 @@ export async function processTelegramInboundMessage(
           title: 'Telegram Bot: Người dùng mới yêu cầu cấp quyền',
           body: `${from_name} (Chat ID: ${chat_id}): "${text}"`,
           tag: `telegram-pending-${chat_id}`,
+          deeplink: NotificationDeepLink.telegram,
         });
       } catch (notifErr) {
         console.warn('Failed to send desktop notification for new pending user:', notifErr);

@@ -4,6 +4,7 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import { USER_PARTICIPANT_ID } from '../types/teamChat';
 import { cursorId } from '../types/teamChat';
 import { sendDesktopNotification, isNotificationPermissionGranted } from '../utils/desktopNotification';
+import { NotificationDeepLink } from '../utils/notificationDeepLink';
 import { getActiveTeamView } from '../services/ai/office/activeTeamView';
 
 /**
@@ -84,6 +85,7 @@ export function useTeamChatNotifications(db: TaskPlannerDatabase = defaultDb): v
             title: `${names.get(row.from) ?? 'Nhóm'} · ${row.teamName}`,
             body: row.content.slice(0, 160),
             tag: row.id,
+            deeplink: NotificationDeepLink.agents,
           });
           if (!sent) notifiedRef.current.delete(row.id);
         } catch {

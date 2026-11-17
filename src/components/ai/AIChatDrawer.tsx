@@ -72,6 +72,7 @@ import {
   isNotificationPermissionGranted,
   requestNotificationPermission,
 } from '../../utils/desktopNotification';
+import { NotificationDeepLink } from '../../utils/notificationDeepLink';
 import { useOptionalKnowledgeConfig } from '../../services/knowledge/knowledgeConfig';
 import { fetchSetCatalog } from '../../db/repositories/documentSetRepo';
 import {
@@ -1159,6 +1160,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       title: `${APP_NAME} AI`,
       body: snippet + (content.trim().length > 120 ? '...' : ''),
       tag: 'ai-turn-finished',
+      deeplink: NotificationDeepLink.dashboard,
     });
   };
 
