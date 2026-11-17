@@ -85,6 +85,20 @@ describe('snapshotLexicalRetrieval (Phase 28 Task 2)', () => {
     expect(result.items).toEqual([]);
   });
 
+  it('models a no-match as a successful empty lexical search, not an unavailable modality', () => {
+    const snap = snapshot([document([chunk()])]);
+    const result = retrieveFromPublishedSnapshot(snap, { query: 'zzzzzqqqxxyy notfound', limit: 20 });
+    expect(result.outcome).toBe('NO_EVIDENCE');
+    expect(result.reason).toBe('NO_MATCHING_CHUNKS');
+    expect(result.diagnostics.degraded).toBe(false);
+    expect(result.modalityStatus.fulltext).toMatchObject({
+      status: 'ok', itemCount: 0, reason: 'NO_MATCHING_CHUNKS',
+    });
+    // Vector/graph stay truthfully disclosed as absent (D-02), but no search failed.
+    expect(result.modalityStatus.vector.status).toBe('unavailable');
+    expect(result.modalityStatus.graph.status).toBe('unavailable');
+  });
+
   it('returns NO_EVIDENCE for an empty snapshot', () => {
     const result = retrieveFromPublishedSnapshot(snapshot([]), { query: 'rui ro', limit: 20 });
     expect(result.outcome).toBe('NO_EVIDENCE');

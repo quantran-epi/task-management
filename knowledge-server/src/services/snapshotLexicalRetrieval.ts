@@ -110,7 +110,21 @@ function rankChunks(snapshot: ProjectionSnapshot, query: string): Candidate[] {
     .sort((a, b) => b.score - a.score || a.chunk.occurrenceId.localeCompare(b.chunk.occurrenceId));
 }
 
-function unavailableEnvelope(snapshot: ProjectionSnapshot, reason: string): RetrievalResponse {
+/**
+ * Empty lexical envelope. Two distinct shapes:
+ * - `structural: true` — the fulltext modality ran successfully but matched no
+ *   chunks. Vector/graph are truthfully disclosed as absent (no retrieval
+ *   generation, D-02), but this is NOT a degraded search: the federated outcome
+ *   must stay NO_EVIDENCE so the client routes to D-15 query-refinement guidance.
+ * - `structural: false` — no search ran at all (e.g. aborted); all modalities
+ *   are unavailable and the envelope is genuinely degraded.
+ */
+function emptyEnvelope(
+  snapshot: ProjectionSnapshot,
+  reason: string,
+  options: { structural?: boolean } = {}
+): RetrievalResponse {
+  const structural = options.structural === true;
   return RetrievalResponseSchema.parse({
     outcome: 'NO_EVIDENCE',
     snapshotId: snapshot.snapshotId,
@@ -127,11 +141,15 @@ function unavailableEnvelope(snapshot: ProjectionSnapshot, reason: string): Retr
     totalCandidates: 0,
     modalitiesUsed: [],
     modalityStatus: {
-      fulltext: { status: 'unavailable', latencyMs: 0, itemCount: 0, reason: 'NO_RETRIEVAL_GENERATION' },
+      fulltext: structural
+        ? { status: 'ok', latencyMs: 0, itemCount: 0, reason: 'NO_MATCHING_CHUNKS' }
+        : { status: 'unavailable', latencyMs: 0, itemCount: 0, reason: 'NO_RETRIEVAL_GENERATION' },
       vector: { status: 'unavailable', latencyMs: 0, itemCount: 0, reason: 'NO_RETRIEVAL_GENERATION' },
       graph: { status: 'unavailable', latencyMs: 0, itemCount: 0, reason: 'NO_RETRIEVAL_GENERATION' },
     },
-    diagnostics: { degraded: true, degradedReasons: [reason] },
+    diagnostics: structural
+      ? { degraded: false }
+      : { degraded: true, degradedReasons: [reason] },
     planTrace: { fastPath: true, degradedFallback: false },
     reason,
     suggestedRefinements: ['Try broader query terms or publish more documents to this set.'],
@@ -148,7 +166,7 @@ export function retrieveFromPublishedSnapshot(
   options?: SnapshotLexicalOptions
 ): RetrievalResponse {
   if (options?.signal?.aborted) {
-    return unavailableEnvelope(snapshot, 'ABORTED');
+    return emptyEnvelope(snapshot, 'ABORTED');
   }
 
   const ranked = rankChunks(snapshot, request.query);
@@ -170,7 +188,8 @@ export function retrieveFromPublishedSnapshot(
   }));
 
   if (items.length === 0) {
-    return unavailableEnvelope(snapshot, 'NO_MATCHING_CHUNKS');
+    // A successful lexical search with zero hits is not an unavailable modality.
+    return emptyEnvelope(snapshot, 'NO_MATCHING_CHUNKS', { structural: true });
   }
 
   return RetrievalResponseSchema.parse({

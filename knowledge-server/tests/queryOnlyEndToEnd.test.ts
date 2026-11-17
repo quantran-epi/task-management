@@ -253,6 +253,36 @@ describe('Phase 28-05 server end-to-end: thin wire in, attributed federated answ
     expect(res.body).not.toContain('NO_EVIDENCE');
   });
 
+  it('a real published-only lexical no-match is NO_EVIDENCE (not DEGRADED) with full SEARCHED_NO_EVIDENCE coverage', async () => {
+    // WR-01 regression: the real snapshot-lexical no-match path reports an ok-empty
+    // fulltext modality. The federated aggregator must not escalate the structural
+    // vector/graph absence to DEGRADED, so D-15 routes the client to refine.
+    const app = buildE2EApp({ published: [PUBLISHED_ONLY] });
+
+    // These tokens match no chunk in the published snapshot (title/body are about
+    // "rui ro tin dung"), exercising the genuine empty-lexical path end-to-end.
+    const res = await postRetrieve(app, { query: 'zzzzzqqqxxyy notfound', limit: 20 });
+    expect(res.statusCode).toBe(200);
+
+    const body = res.json() as FederatedRetrievalResponse;
+    expect(body.outcome).toBe('NO_EVIDENCE');
+    expect(body.diagnostics.degraded).toBe(false);
+    expect(body.items).toEqual([]);
+    // Full coverage for the one searched published set, correctly attributed.
+    expect(body.diagnostics.coverage).toHaveLength(1);
+    expect(body.diagnostics.coverage[0]).toMatchObject({
+      setId: SET_PUBLISHED_ONLY,
+      state: 'SEARCHED_NO_EVIDENCE',
+      publishedSnapshotId: SNAP_PUBLISHED_ONLY,
+      retrievalSnapshotId: SNAP_PUBLISHED_ONLY,
+      staleIndex: false,
+    });
+    // The searched modality is ok but empty; vector/graph remain truthfully
+    // disclosed as unavailable, which must not escalate the outcome to DEGRADED.
+    expect(body.modalityStatus.fulltext.status).toBe('ok');
+    expect(body.modalityStatus.fulltext.itemCount).toBe(0);
+  });
+
   it('NO_PUBLISHED_SETS at HTTP 200 with an empty ledger when zero sets are published', async () => {
     const app = buildE2EApp({ published: [] });
 

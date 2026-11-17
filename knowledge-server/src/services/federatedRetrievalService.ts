@@ -538,18 +538,21 @@ export async function runFederatedRetrieval(
         modalityStatus.fulltext.itemCount += ms.fulltext.itemCount;
         if (severityOf(ms.fulltext.status) > severityOf(modalityStatus.fulltext.status)) {
           modalityStatus.fulltext.status = ms.fulltext.status;
+          if (ms.fulltext.reason) modalityStatus.fulltext.reason = ms.fulltext.reason;
         }
 
         modalityStatus.vector.latencyMs = Math.max(modalityStatus.vector.latencyMs, ms.vector.latencyMs);
         modalityStatus.vector.itemCount += ms.vector.itemCount;
         if (severityOf(ms.vector.status) > severityOf(modalityStatus.vector.status)) {
           modalityStatus.vector.status = ms.vector.status;
+          if (ms.vector.reason) modalityStatus.vector.reason = ms.vector.reason;
         }
 
         modalityStatus.graph.latencyMs = Math.max(modalityStatus.graph.latencyMs, ms.graph.latencyMs);
         modalityStatus.graph.itemCount += ms.graph.itemCount;
         if (severityOf(ms.graph.status) > severityOf(modalityStatus.graph.status)) {
           modalityStatus.graph.status = ms.graph.status;
+          if (ms.graph.reason) modalityStatus.graph.reason = ms.graph.reason;
         }
       }
     }
@@ -611,9 +614,24 @@ export async function runFederatedRetrieval(
   // Outcome calculation (D-23, D-24):
   // DEGRADED when any coverage warning or non-ok modality status exists;
   // SEED_ONLY when every contributing set is entity-only; NO_EVIDENCE when empty.
-  const hasNonOkModality = (['fulltext', 'vector', 'graph'] as const).some(
-    (modality) => modalityStatus[modality].status !== 'ok'
-  );
+  // D-02/D-15: in the published-snapshot lexical path, vector and graph are
+  // truthfully disclosed as unavailable (NO_RETRIEVAL_GENERATION). That is a
+  // capability statement, not a failed search — treating it as a failure forced
+  // genuine no-match searches into DEGRADED and skipped query-refinement guidance.
+  // Only secondary modalities may be excused this way: fulltext is the search
+  // itself and must be ok, and error/timeout/stale/truncated always degrade.
+  const hasNonOkModality = (['fulltext', 'vector', 'graph'] as const).some((modality) => {
+    const detail = modalityStatus[modality];
+    if (detail.status === 'ok') return false;
+    if (
+      modality !== 'fulltext' &&
+      detail.status === 'unavailable' &&
+      detail.reason === 'NO_RETRIEVAL_GENERATION'
+    ) {
+      return false;
+    }
+    return true;
+  });
 
   const contributingSets = perSetResults.filter((r) => Boolean(r.response));
   const everySetSeedOnly =
