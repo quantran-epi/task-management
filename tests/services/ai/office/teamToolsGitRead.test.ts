@@ -45,6 +45,43 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     ...overrides,
   });
 
+  /**
+   * Creates a separate team whose ONLY link is a CR targeting `targetSystemIds`. The systems
+   * themselves are seeded in `beforeEach`; this helper only wires the CR -> team link seam.
+   * Returns the new teamId so a case can address it via `ctx({ teamId })`.
+   */
+  async function seedCrLinkedTeam(targetSystemIds: string[]): Promise<string> {
+    const now = new Date().toISOString();
+    const crId = generateId();
+    const newTeamId = generateId();
+    await db.changeRequests.add({
+      id: crId,
+      name: 'CR liên kết',
+      code: `CR-${crId.slice(0, 6)}`,
+      status: 'Open',
+      type: 'ENHANCEMENT',
+      targets: targetSystemIds.map((systemId) => ({ systemId })),
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.aiTeams.add({
+      id: newTeamId,
+      name: 'Nhóm CR',
+      leadId: generateId(),
+      budgetTokens: 0,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.aiTeamLinks.add({
+      id: generateId(),
+      teamId: newTeamId,
+      itemType: 'cr',
+      itemId: crId,
+      createdAt: now,
+    });
+    return newTeamId;
+  }
+
   beforeEach(async () => {
     // WR-09: `mockReset`, not `clearAllMocks`. `clearAllMocks` maps to `mockClear`, which keeps
     // implementations and therefore keeps any `mockResolvedValueOnce` a case queued but did not
@@ -213,6 +250,229 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
       await executeTeamTool('git_read', { action: 'not_an_action' }, ctx())
     );
     expect(res).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
+  });
+
+  // ---------------------------------------------------------------------------------------
+  // CR-target repos — a linked CR's targets are git-readable repos for the team
+  // ---------------------------------------------------------------------------------------
+
+  it('resolves git_read from a CR target when the team has no direct system link', async () => {
+    const crTeamId = await seedCrLinkedTeam([repoSystemId]);
+    queue('main\0refs/heads/main\n');
+
+    const parsed = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'branches', systemId: repoSystemId },
+        ctx({ teamId: crTeamId })
+      )
+    );
+
+    expect(parsed.systemId).toBe(repoSystemId);
+    expect(parsed.repoPath).toBe('/srv/repo');
+    expect(vi.mocked(execRemoteCommand).mock.calls.at(-1)![1]).toContain("git -C '/srv/repo'");
+  });
+
+  it('uses a lone CR-target repo as the single-usable fallback without systemId', async () => {
+    const crTeamId = await seedCrLinkedTeam([repoSystemId]);
+    queue('main\0refs/heads/main\n');
+
+    const parsed = JSON.parse(
+      await executeTeamTool('git_read', { action: 'branches' }, ctx({ teamId: crTeamId }))
+    );
+
+    expect(parsed.systemId).toBe(repoSystemId);
+    expect(parsed.repoPath).toBe('/srv/repo');
+    expect(vi.mocked(execRemoteCommand).mock.calls.at(-1)![1]).toContain("git -C '/srv/repo'");
+  });
+
+  it('deduplicates a system seen both directly and as a CR target (no false ambiguity)', async () => {
+    // The main team already links `repoSystemId` directly in beforeEach. Add a CR target for the
+    // same id; without dedupe the usable set would hold two entries and refuse INVALID_ARGUMENT.
+    await db.changeRequests.add({
+      id: generateId(),
+      name: 'CR trùng lặp',
+      code: 'CR-DUP',
+      status: 'Open',
+      type: 'ENHANCEMENT',
+      targets: [{ systemId: repoSystemId }],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    await db.aiTeamLinks.add({
+      id: generateId(),
+      teamId,
+      itemType: 'cr',
+      itemId: (
+        await db.changeRequests.toCollection().last()
+      )!.id,
+      createdAt: new Date().toISOString(),
+    });
+    queue('main\0refs/heads/main\n');
+
+    const parsed = JSON.parse(
+      await executeTeamTool('git_read', { action: 'branches' }, ctx())
+    );
+
+    expect(parsed.systemId).toBe(repoSystemId);
+    expect(parsed.repoPath).toBe('/srv/repo');
+  });
+
+  it('deduplicates a system that is a target of two linked CRs', async () => {
+    const now = new Date().toISOString();
+    const newTeamId = generateId();
+    await db.aiTeams.add({
+      id: newTeamId,
+      name: 'Nhóm hai CR',
+      leadId: generateId(),
+      budgetTokens: 0,
+      createdAt: now,
+      updatedAt: now,
+    });
+    for (const code of ['CR-A', 'CR-B']) {
+      const crId = generateId();
+      await db.changeRequests.add({
+        id: crId,
+        name: code,
+        code,
+        status: 'Open',
+        type: 'ENHANCEMENT',
+        targets: [{ systemId: repoSystemId }],
+        createdAt: now,
+        updatedAt: now,
+      });
+      await db.aiTeamLinks.add({
+        id: generateId(),
+        teamId: newTeamId,
+        itemType: 'cr',
+        itemId: crId,
+        createdAt: now,
+      });
+    }
+    queue('main\0refs/heads/main\n');
+
+    const parsed = JSON.parse(
+      await executeTeamTool('git_read', { action: 'branches' }, ctx({ teamId: newTeamId }))
+    );
+
+    expect(parsed.systemId).toBe(repoSystemId);
+    expect(parsed.repoPath).toBe('/srv/repo');
+  });
+
+  it('a multi-target CR still requires systemId: naming one resolves, the other refuses', async () => {
+    const crTeamId = await seedCrLinkedTeam([bareSystemId, repoSystemId]);
+
+    queue('main\0refs/heads/main\n');
+    const named = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'branches', systemId: repoSystemId },
+        ctx({ teamId: crTeamId })
+      )
+    );
+    expect(named.systemId).toBe(repoSystemId);
+    expect(named.repoPath).toBe('/srv/repo');
+
+    const bare = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'branches', systemId: bareSystemId },
+        ctx({ teamId: crTeamId })
+      )
+    );
+    expect(bare).toMatchObject({ refused: true, code: 'NO_LINKED_REPO' });
+  });
+
+  it('a multi-target CR without systemId refuses INVALID_ARGUMENT', async () => {
+    const crTeamId = await seedCrLinkedTeam([repoSystemId]);
+    // Add a second, distinct repo-configured system as another target so usable.length === 2.
+    const secondId = generateId();
+    const now = new Date().toISOString();
+    await db.systems.add({
+      id: secondId,
+      name: 'Hệ thống khác',
+      code: 'OTHER',
+      parentId: null,
+      type: 'SERVICE',
+      sshConfigId: (await db.systems.get(repoSystemId))!.sshConfigId!,
+      remoteRepoPath: '/srv/other',
+      createdAt: now,
+      updatedAt: now,
+    });
+    const cr = (await db.changeRequests.toCollection().last())!;
+    await db.changeRequests.update(cr.id, {
+      targets: [...cr.targets, { systemId: secondId }],
+    });
+
+    const res = JSON.parse(
+      await executeTeamTool('git_read', { action: 'branches' }, ctx({ teamId: crTeamId }))
+    );
+    expect(res).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
+    expect(execRemoteCommand).not.toHaveBeenCalled();
+  });
+
+  it('a CR target lacking repo config refuses NO_LINKED_REPO, not SYSTEM_NOT_LINKED', async () => {
+    const crTeamId = await seedCrLinkedTeam([bareSystemId]);
+    const res = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'branches', systemId: bareSystemId },
+        ctx({ teamId: crTeamId })
+      )
+    );
+    expect(res).toMatchObject({ refused: true, code: 'NO_LINKED_REPO' });
+  });
+
+  it('an id that is neither a direct link nor any linked CR target refuses SYSTEM_NOT_LINKED', async () => {
+    const crTeamId = await seedCrLinkedTeam([repoSystemId]);
+    const res = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'branches', systemId: 'unknown-id' },
+        ctx({ teamId: crTeamId })
+      )
+    );
+    expect(res).toMatchObject({ refused: true, code: 'SYSTEM_NOT_LINKED' });
+  });
+
+  it('a CR target from a different team does not leak into an empty team', async () => {
+    await seedCrLinkedTeam([repoSystemId]);
+    const res = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'branches', systemId: repoSystemId },
+        ctx({ teamId: emptyTeamId })
+      )
+    );
+    expect(res).toMatchObject({ refused: true, code: 'SYSTEM_NOT_LINKED' });
+  });
+
+  it('explore_repo resolves a CR target through the shared resolver when the CLI probe succeeds', async () => {
+    const crTeamId = await seedCrLinkedTeam([repoSystemId]);
+    queue({ stdout: '/usr/local/bin/claude\n', stderr: '', exitStatus: 0 });
+
+    vi.mocked(execRemoteCommandStream).mockImplementation(
+      async (_config, _command, _sessionId, onData, onExit) => {
+        onData({
+          sessionId: 's',
+          stream: 'stdout',
+          line: '{"is_error":false,"result":"Điểm vào: src/orders/index.ts:12"}',
+        });
+        onExit({ sessionId: 's', exitStatus: 0, error: null });
+        return async () => {};
+      }
+    );
+
+    const raw = await executeTeamTool(
+      'explore_repo',
+      { question: 'luồng đơn hàng' },
+      ctx({ teamId: crTeamId })
+    );
+    const parsed = JSON.parse(raw);
+    expect(parsed.systemId).toBe(repoSystemId);
+    expect(parsed.repoPath).toBe('/srv/repo');
+    expect(parsed.report).toContain(OPEN);
+    expect(parsed.report).toContain(CLOSE);
   });
 
   // ---------------------------------------------------------------------------------------

@@ -543,6 +543,21 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
     expectWrapped(system, 'TÊN MỤC LIÊN KẾT', 'Đăng nhập [KẾT THÚC DỮ LIỆU KHÔNG ĐÁNG TIN]');
   });
 
+  it('tells the lead that git systemId may come from a linked CR targets', () => {
+    const system = buildLeadTurnRequest({
+      lead,
+      team,
+      roster: [employee],
+      linkedItems: [{ itemId: 'cr-1', itemType: 'cr', name: 'CR liên kết' }],
+      originalRequest: 'Yêu cầu gốc',
+      recentTurns: [],
+    })
+      .systemMessages.map((m) => m.content)
+      .join('\n');
+
+    expect(system).toContain('targets của một CR liên kết');
+  });
+
   it('renders the live ledger with the queued/running distinction', () => {
     const system = buildLeadTurnRequest({
       lead,

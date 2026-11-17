@@ -426,6 +426,7 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
           (i) => `- ${i.itemId} (${i.itemType}): ${wrapUntrusted('TÊN MỤC LIÊN KẾT', i.name)}`
         ),
         'Gọi công cụ get_linked_context để đọc toàn văn nội dung của một mục.',
+        'systemId cho git_read / explore_repo cũng có thể lấy từ targets của một CR liên kết — gọi get_linked_context trên CR để xem các systemId đó, không chỉ từ mục có itemType=system.',
       ].join('\n')
     );
   }

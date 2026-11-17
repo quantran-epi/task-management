@@ -1075,21 +1075,34 @@ type GitRepoResolution =
 
 /**
  * Phase 42 D-07: the repository comes from the team's linked systems, never from an arg.
- * `args.systemId` is only an INDEX into the linked set, so it can never name a repo outside
- * the team. Codes are truthful: a linked system that merely lacks repo configuration is
- * `NO_LINKED_REPO`, not `SYSTEM_NOT_LINKED`.
+ * The candidate set is built from BOTH direct `itemType=system` links AND the `targets` of
+ * `itemType=cr` links, deduplicated by system id. `args.systemId` is only an INDEX into that
+ * linked set, so it can never name a repo outside the team. Codes are truthful: a linked
+ * system that merely lacks repo configuration is `NO_LINKED_REPO`, not `SYSTEM_NOT_LINKED`.
  */
 async function resolveGitRepo(
   args: Record<string, any>,
   ctx: TeamToolContext
 ): Promise<GitRepoResolution> {
   const links = await listTeamLinks(ctx.teamId, ctx.db);
-  const linkedSystems: System[] = [];
+  // Dedupe by system id so a system reached both directly and via one or more linked CR targets
+  // counts once — otherwise the existing `usable.length > 1` branch would refuse as ambiguous.
+  // Map insertion order preserves the deterministic ordering of the old direct-links loop.
+  const byId = new Map<string, System>();
   for (const link of links) {
-    if (link.itemType !== 'system') continue;
-    const row = await ctx.db.systems.get(link.itemId);
-    if (row) linkedSystems.push(row);
+    if (link.itemType === 'system') {
+      const row = await ctx.db.systems.get(link.itemId);
+      if (row) byId.set(row.id, row);
+    } else if (link.itemType === 'cr') {
+      const cr = await ctx.db.changeRequests.get(link.itemId);
+      if (!cr) continue; // mirrors a missing system row
+      for (const target of cr.targets) {
+        const row = await ctx.db.systems.get(target.systemId);
+        if (row) byId.set(row.id, row);
+      }
+    }
   }
+  const linkedSystems = [...byId.values()];
   const usable = linkedSystems.filter(
     (s) =>
       typeof s.sshConfigId === 'string' &&
