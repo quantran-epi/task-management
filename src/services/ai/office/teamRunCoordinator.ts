@@ -73,6 +73,13 @@ import {
   executeTeamTool,
   type TeamToolContext,
 } from './teamTools';
+import {
+  buildToolTelemetryEvent,
+  emitToolTelemetry,
+  parseToolTelemetry,
+  type ToolCallAbortSource,
+  type ToolCallTelemetryEvent,
+} from './teamRunTelemetry';
 import { ensureTeamDocsReady } from '../../../db/repositories/teamDocsRepo';
 import {
   findCurrentSynthesisMessageId,
@@ -743,6 +750,41 @@ export function createTeamRunCoordinator(
    * 'app-exit'` — the exit fact lives where the union can express it.
    */
   let disposeCause: 'team-deleted' | null = null;
+  /**
+   * Observational only (quick 261117-ss8): the in-flight tool call per agent. The tool loop is
+   * serial, so one entry per agent is enough to pair call/result and to pin an abort source.
+   * NOTHING reads this map to make a decision — no abort, retry, status or UI is derived from it.
+   */
+  interface InFlightToolCall {
+    toolCallId: string;
+    toolName: string;
+    startedAt: string;
+    teamId: string;
+    agentId: string;
+    agentKind: 'lead' | 'employee';
+  }
+  const inFlightToolCalls = new Map<string, InFlightToolCall>();
+  const agentKindFor = (agentId: string): 'lead' | 'employee' =>
+    roster.lead?.id === agentId ? 'lead' : 'employee';
+  /** Stamp an abort source beside an existing abort site; emits nothing when no call is live. */
+  function stampAbortSource(agentIds: Iterable<string>, source: ToolCallAbortSource): void {
+    for (const agentId of agentIds) {
+      const inFlight = inFlightToolCalls.get(agentId);
+      if (!inFlight) continue;
+      emitToolTelemetry(
+        buildToolTelemetryEvent({
+          teamId: inFlight.teamId,
+          agentId: inFlight.agentId,
+          agentKind: inFlight.agentKind,
+          toolCallId: inFlight.toolCallId,
+          toolName: inFlight.toolName,
+          phase: 'abort',
+          outcome: 'aborted',
+          abortSource: source,
+        })
+      );
+    }
+  }
   /** T-37-22: agents with a retry in flight, so a double click cannot append a third row. */
   const retryingAgents = new Set<string>();
   /** Same guard keyed by assignment id, set BEFORE any await so a double click cannot race. */
@@ -1548,10 +1590,63 @@ export function createTeamRunCoordinator(
       // Phase 44 D-05: both phases are one id-keyed row. The compact popover keeps working
       // because the upsert still writes label/at/detail; results are no longer discarded.
       onToolEvent: (event) => {
+        // Existing behavior first, byte-identical; telemetry is added alongside it.
         upsertToolStep(agentId, event);
+        if (event.phase === 'call') {
+          const startedAt = new Date().toISOString();
+          inFlightToolCalls.set(agentId, {
+            toolCallId: event.id,
+            toolName: event.name,
+            startedAt,
+            teamId,
+            agentId,
+            agentKind: agentKindFor(agentId),
+          });
+          emitToolTelemetry(
+            buildToolTelemetryEvent({
+              teamId,
+              agentId,
+              agentKind: agentKindFor(agentId),
+              toolCallId: event.id,
+              toolName: event.name,
+              phase: 'call',
+              outcome: 'running',
+              timestamp: startedAt,
+            })
+          );
+        } else {
+          const inFlight = inFlightToolCalls.get(agentId);
+          const durationMs =
+            inFlight !== undefined ? Date.now() - Date.parse(inFlight.startedAt) : undefined;
+          const parsed = parseToolTelemetry(event.result);
+          const resolved: ToolCallTelemetryEvent = buildToolTelemetryEvent({
+            teamId,
+            agentId,
+            agentKind: inFlight?.agentKind ?? agentKindFor(agentId),
+            toolCallId: event.id,
+            toolName: inFlight?.toolName ?? event.name,
+            phase: 'result',
+            outcome: parsed.outcome,
+            ...(durationMs !== undefined && Number.isFinite(durationMs)
+              ? { durationMs }
+              : {}),
+            ...(parsed.errorCode !== undefined ? { errorCode: parsed.errorCode } : {}),
+            ...(parsed.errorDetail !== undefined ? { errorDetail: parsed.errorDetail } : {}),
+          });
+          emitToolTelemetry(resolved);
+          inFlightToolCalls.delete(agentId);
+        }
       },
-      onCompleted: ({ content }) => settleAgent(agentId, 'done', content),
-      onError: () => settleAgent(agentId, 'error', SANITIZED_TURN_ERROR),
+      onCompleted: ({ content }) => {
+        stampAbortSource([agentId], 'turn-end');
+        inFlightToolCalls.delete(agentId);
+        settleAgent(agentId, 'done', content);
+      },
+      onError: () => {
+        stampAbortSource([agentId], 'turn-end');
+        inFlightToolCalls.delete(agentId);
+        settleAgent(agentId, 'error', SANITIZED_TURN_ERROR);
+      },
       onUsage: (usage) => handleUsage(agentId, usage, usageBaselineKey.get(agentId) ?? agentId),
       onAwaitingApproval: (info) => {
         pendingApproval = info;
@@ -2561,6 +2656,7 @@ export function createTeamRunCoordinator(
         // whichever transaction commits first wins the `from: 'queued'` guard. `stopAgent`
         // sets the marker first for exactly this reason.
         userStopped.set(row.agentId, 'leader-amend');
+        stampAbortSource([row.agentId], 'leader-amend');
         try {
           // WR-04: abort BEFORE the finalize, so a parked dispatch cannot start a turn the
           // abort could no longer stop. The whole-list re-read above proves every row was
@@ -2590,6 +2686,7 @@ export function createTeamRunCoordinator(
       // marker goes in BEFORE the abort, so whichever writer wins the `from: 'queued'` guard
       // records the leader's reason rather than `user-abort`.
       userStopped.set(row.agentId, 'leader-amend');
+      stampAbortSource([row.agentId], 'leader-amend');
       retiredAssignmentIds.add(row.id);
       assignmentControllers.get(row.id)?.abort();
       // Re-read after the abort: if the row still left `queued`, it is running and must not
@@ -3420,6 +3517,7 @@ export function createTeamRunCoordinator(
             // Both writers (this one and the row's own dispatch catch) must record the same
             // reason, or the row ends with one path's reason and the other path's status.
             userStopped.set(row.agentId, 'tool-limit');
+            stampAbortSource([row.agentId], 'tool-limit');
             try {
               await finalizeAttempt(
                 row.id,
@@ -3851,6 +3949,7 @@ export function createTeamRunCoordinator(
       planResolver = null;
     }
     userStopped.set(agentId, 'user-per-agent');
+    stampAbortSource([agentId], 'user-per-agent');
     // D-10/D-11: creation-time link, because a QUEUED assignment has no runtime entry and
     // no `activeAssignmentByAgent` row yet. Without it the queue would be unstoppable.
     const assignmentId = assignmentIdsByAgent.get(agentId);
@@ -3896,6 +3995,7 @@ export function createTeamRunCoordinator(
     // D-11: a global abort ends EVERY agent as a user abort, so the turn's own settle path
     // (which may win the race for a running agent) must map to stopped/user-abort too.
     for (const agentId of agents.keys()) userStopped.set(agentId, 'user-abort');
+    stampAbortSource(agents.keys(), 'user-abort');
     // D-11: the queue is torn down first. Aborting each controller rejects its parked
     // acquire; the queued rows get their terminal write here, in case the dispatch task's
     // own catch loses the race. A running row fails the `from: 'queued'` guard and is
@@ -3951,6 +4051,7 @@ export function createTeamRunCoordinator(
       disposeCause = 'team-deleted';
       for (const agentId of agents.keys()) userStopped.set(agentId, 'team-deleted');
     }
+    stampAbortSource(agents.keys(), cause === 'app-exit' ? 'app-exit' : 'team-deleted');
 
     // Release every park: the plan card. Budget no longer parks anything (D-01).
     planResolver?.(false);

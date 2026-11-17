@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs';
 import Dexie from 'dexie';
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { TaskPlannerDatabase } from '../../../../src/db/index';
 import {
   abortAllAssignmentControllers,
@@ -106,6 +106,28 @@ vi.mock('../../../../src/services/ai/office/teamTools', async (importOriginal) =
     },
   };
 });
+/**
+ * Quick 261117-ss8: observation-only capture of the additive telemetry seam. The real module is
+ * preserved (so parse/build remain exercised); only `emitToolTelemetry` is wrapped to record
+ * calls. Every existing abort/timeout/retry path is untouched by the wrapper.
+ */
+const telemetryEmits = vi.hoisted(
+  () => [] as Array<Record<string, unknown>>
+);
+vi.mock('../../../../src/services/ai/office/teamRunTelemetry', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../../../src/services/ai/office/teamRunTelemetry')>();
+  return {
+    ...actual,
+    emitToolTelemetry: (event: Record<string, unknown>) => {
+      telemetryEmits.push(event);
+      return actual.emitToolTelemetry(
+        event as unknown as Parameters<typeof actual.emitToolTelemetry>[0]
+      );
+    },
+  };
+});
+
 vi.mock('../../../../src/utils/desktopNotification', () => ({
   sendDesktopNotification: (payload: { title: string; body?: string; tag?: string }) =>
     sendDesktopNotification(payload),
@@ -7413,6 +7435,309 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(row.label).toBe('đang gọi tool explore_repo');
       expect(row.at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
       expect(row.detail).toBe(JSON.stringify({ question: 'q' }));
+    });
+  });
+
+  /**
+   * Quick 261117-ss8: additive telemetry observations. These tests pin that every call/result
+   * pair emits ONE structured telemetry line, every intentional abort stamps its source, and
+   * NOTHING about abort/timeout/retry/result/ledger behavior changes relative to the baseline.
+   */
+  describe('additive tool-call telemetry (quick 261117-ss8)', () => {
+    const assignmentsFor = (employees: AiEmployee[]) =>
+      employees.map((row, index) => ({ agentId: row.id, task: `Việc ${index + 1}` }));
+
+    beforeEach(() => {
+      telemetryEmits.length = 0;
+    });
+
+    it('emits one call + one result per tool event with name, kind and duration for lead and employee turns', async () => {
+      const scripts: Record<string, LoopScript> = {
+        [LEAD_MODEL]: async (options) => {
+          if (isSynthesisTurn(options)) return loopResult('Đã tổng hợp.');
+          options.onToolCall?.({ id: 'lead-call', name: 'delegate_batch', args: {} });
+          await options.executeToolFn!(
+            'delegate_batch',
+            { assignments: [{ agentId: harnessRef!.employees[0]!.id, task: 'Việc A' }] },
+            harnessRef!.db,
+            options.signal
+          );
+          options.onToolResult?.('lead-call', JSON.stringify({ dispatched: 1 }), 12);
+          return loopResult('Đã giao.');
+        },
+        [EMP_A_MODEL]: async (options) => {
+          options.onToolCall?.({ id: 'emp-call', name: 'explore_repo', args: { q: 'x' } });
+          options.onToolResult?.(
+            'emp-call',
+            JSON.stringify({ outcome: 'error', detail: 'aborted' }),
+            30
+          );
+          return loopResult('A xong');
+        },
+      };
+      let harnessRef: Harness;
+      harness = await createHarness({ scripts, teamPatch: { autoSplitEnabled: true } });
+      harnessRef = harness;
+      const { coordinator, lead, employees } = harness;
+
+      await coordinator.send('Làm việc');
+      await waitForReady(coordinator);
+      await waitForReady(coordinator);
+
+      const leadCalls = telemetryEmits.filter(
+        (row) => row.agentKind === 'lead' && row.toolCallId === 'lead-call'
+      );
+      const empCalls = telemetryEmits.filter(
+        (row) => row.agentKind === 'employee' && row.toolCallId === 'emp-call'
+      );
+      expect(leadCalls.map((row) => row.phase)).toEqual(['call', 'result']);
+      expect(empCalls.map((row) => row.phase)).toEqual(['call', 'result']);
+      expect(leadCalls[0]).toMatchObject({
+        teamId: harness.team.id,
+        agentId: lead.id,
+        toolName: 'delegate_batch',
+        outcome: 'running',
+      });
+      expect(typeof leadCalls[0]!.ts).toBe('string');
+      expect(empCalls[0]).toMatchObject({
+        agentId: employees[0]!.id,
+        toolName: 'explore_repo',
+        outcome: 'running',
+      });
+      expect(empCalls[1]).toMatchObject({ outcome: 'error', errorDetail: 'aborted' });
+      expect(typeof (empCalls[1]!.durationMs as number)).toBe('number');
+
+      // Baseline behavior is unchanged: the tool step statuses are identical to before.
+      const state = coordinator.getState();
+      const leadSteps = state.agents.find((row) => row.agentId === lead.id)?.steps ?? [];
+      const empSteps = state.agents.find((row) => row.agentId === employees[0]!.id)?.steps ?? [];
+      expect(leadSteps.find((row) => row.id === 'lead-call')?.status).toBe('done');
+      expect(empSteps.find((row) => row.id === 'emp-call')?.status).toBe('error');
+    });
+
+    it('stamps user-per-agent on a mid-tool stop and keeps the same report/stopReason', async () => {
+      const gate = deferred();
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async (options) => {
+            options.onToolCall?.({ id: 'stopped-call', name: 'explore_repo', args: {} });
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getRunningCount() === 1);
+      await waitFor(() =>
+        telemetryEmits.some((row) => row.toolCallId === 'stopped-call' && row.phase === 'call')
+      );
+
+      current.coordinator.stopAgent(current.employees[0]!.id);
+      gate.release();
+      await sent;
+      await waitForReady(current.coordinator);
+
+      const stamp = telemetryEmits.find(
+        (row) => row.phase === 'abort' && row.toolCallId === 'stopped-call'
+      );
+      expect(stamp).toMatchObject({
+        outcome: 'aborted',
+        abortSource: 'user-per-agent',
+        agentId: current.employees[0]!.id,
+        toolName: 'explore_repo',
+      });
+      expect(typeof stamp!.ts).toBe('string');
+
+      // Report content and ledger stopReason are identical to the un-instrumented baseline.
+      const stopped = (await current.db.aiTeamAssignments.toArray()).find(
+        (row) => row.agentId === current.employees[0]!.id
+      )!;
+      expect(stopped).toMatchObject({ runStatus: 'stopped', stopReason: 'user-per-agent' });
+      const report = (await current.db.chatMessages.toArray()).find(
+        (row) => row.assignmentId === stopped.id && row.messageKind === 'report'
+      );
+      expect(report?.content).toBe(STOPPED_REPORT_COPY);
+    });
+
+    it('stamps user-abort on abortAll and app-exit on dispose without changing stop reasons', async () => {
+      const gate = deferred();
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness!.employees) },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async (options) => {
+            options.onToolCall?.({ id: 'abort-all-call', name: 'git_read', args: {} });
+            await gate.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      const current = harness;
+      const sent = current.coordinator.send('Làm báo cáo');
+      await waitFor(() => current.coordinator.getRunningCount() === 1);
+      await waitFor(() =>
+        telemetryEmits.some((row) => row.toolCallId === 'abort-all-call' && row.phase === 'call')
+      );
+
+      current.coordinator.abortAll();
+      gate.release();
+      await sent;
+      await waitFor(() => current.coordinator.getRunningCount() === 0);
+      expect(
+        telemetryEmits.some(
+          (row) => row.phase === 'abort' && row.abortSource === 'user-abort'
+        )
+      ).toBe(true);
+      const rows = await current.db.aiTeamAssignments.toArray();
+      expect(rows.every((row) => row.stopReason === 'user-abort')).toBe(true);
+      const batches = await current.db.aiTeamBatches.toArray();
+      expect(batches[0]!.abortedBy).toBe('user');
+
+      // A separate harness: dispose('app-exit') stamps app-exit but keeps user-abort attempts.
+      telemetryEmits.length = 0;
+      const gate2 = deferred();
+      const harness2 = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: assignmentsFor(harness2Ref!.employees) },
+              harness2Ref!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+          [EMP_A_MODEL]: async (options) => {
+            options.onToolCall?.({ id: 'exit-call', name: 'explore_repo', args: {} });
+            await gate2.promise;
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+          [EMP_C_MODEL]: async () => loopResult('C xong'),
+        },
+      });
+      let harness2Ref = harness2;
+      const sent2 = harness2.coordinator.send('Làm báo cáo');
+      await waitFor(() => harness2.coordinator.getRunningCount() === 1);
+      await waitFor(() =>
+        telemetryEmits.some((row) => row.toolCallId === 'exit-call' && row.phase === 'call')
+      );
+      await harness2.coordinator.dispose('app-exit');
+      gate2.release();
+      await sent2;
+      expect(
+        telemetryEmits.some((row) => row.phase === 'abort' && row.abortSource === 'app-exit')
+      ).toBe(true);
+      const exitRows = await harness2.db.aiTeamAssignments.toArray();
+      // Baseline invariant (existing app-exit test): every attempt is terminal `stopped`;
+      // the exit fact lives on the batch row, never as an assignment stop reason.
+      expect(exitRows.every((row) => row.runStatus === 'stopped')).toBe(true);
+      const exitBatches = await harness2.db.aiTeamBatches.toArray();
+      expect(exitBatches[0]!.abortedBy).toBe('app-exit');
+      await harness2.db.delete();
+    });
+
+    it('stamps tool-limit and turn-end sources with no behavioral delta', async () => {
+      const synthesisPrompts: string[] = [];
+      harness = await createHarness({
+        teamPatch: { autoSplitEnabled: true, concurrencyLimit: 1 },
+        settlePollDeadlineMs: 50,
+        synthesisScript: async (options) => {
+          synthesisPrompts.push(String(options.messages.at(-1)?.content ?? ''));
+          return loopResult('Đã tổng hợp.');
+        },
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            if (isSynthesisTurn(options)) return loopResult('Đã tổng hợp.');
+            await options.executeToolFn!(
+              'delegate_batch',
+              { assignments: [{ agentId: harness!.employees[0]!.id, task: 'Việc 1' }] },
+              harness!.db,
+              options.signal
+            );
+            // An orphan queued row nobody dispatches — the deadline must finalize it.
+            const batch = (await harness!.db.aiTeamBatches.toArray())[0]!;
+            await createAssignment(
+              {
+                batchId: batch.id,
+                agentId: harness!.employees[1]!.id,
+                agentName: harness!.employees[1]!.name,
+                model: EMP_B_MODEL,
+                task: 'Việc mồ côi',
+              },
+              harness!.db
+            );
+            return loopResult('Đã giao việc.');
+          },
+          [EMP_A_MODEL]: async () => loopResult('A xong'),
+          [EMP_B_MODEL]: async () => loopResult('B xong'),
+        },
+      });
+      const current = harness;
+      await current.coordinator.send('Làm báo cáo');
+      await waitForReady(current.coordinator);
+
+      const stuck = (await current.db.aiTeamAssignments.toArray()).find(
+        (row) => row.task === 'Việc mồ côi'
+      )!;
+      expect(stuck).toMatchObject({ runStatus: 'stopped', stopReason: 'tool-limit' });
+      expect(synthesisPrompts).toHaveLength(1);
+      // No in-flight call on the orphan row, so tool-limit correctly emits nothing for it.
+      expect(
+        telemetryEmits.some((row) => row.abortSource === 'tool-limit')
+      ).toBe(false);
+
+      // A call-only turn ends without a result: onCompleted stamps turn-end observably.
+      telemetryEmits.length = 0;
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            options.onToolCall?.({ id: 'call-only', name: 'git_read', args: {} });
+            return loopResult('Xong.');
+          },
+        },
+      });
+      await harness.coordinator.send('Chạy tool');
+      await waitForReady(harness.coordinator);
+      expect(
+        telemetryEmits.find(
+          (row) => row.phase === 'abort' && row.toolCallId === 'call-only'
+        )
+      ).toMatchObject({
+        abortSource: 'turn-end',
+        outcome: 'aborted',
+        agentId: harness.lead.id,
+      });
+      // The tool step is still call/running — the turn-end stamp is observation only.
+      const step = harness.coordinator
+        .getState()
+        .agents.find((row) => row.agentId === harness!.lead.id)
+        ?.steps?.find((row) => row.id === 'call-only');
+      expect(step).toMatchObject({ phase: 'call', status: 'running' });
     });
   });
 });
