@@ -124,6 +124,12 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
    */
   const programmaticScrollRef = useRef(false);
   const userScrollRef = useRef(false);
+  // A send bumps `scrollTrigger` BEFORE the user's row is persisted (liveQuery delivers it a
+  // render later). Scrolling only on the trigger lands above that new row. Hold the intent and
+  // consume it once the row actually arrives. This is the ONLY path for hosts that pass
+  // `onMessageRead` (team chat): those start `followingRef=false`, so the passive new-message
+  // scroll below is disabled.
+  const pendingSendScrollRef = useRef(false);
   const followingRef = useRef(onMessageRead === undefined && onAtBottomChange === undefined);
   const initiallyPositionedRef = useRef(false);
   const lastReadRef = useRef<HTMLDivElement>(null);
@@ -149,15 +155,23 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
     }
   };
 
-  // Immediate scroll to bottom when user hits Send
+  // User hit Send: remember the intent now; the row it produces arrives on a later render.
   useEffect(() => {
     if (scrollTrigger) {
+      pendingSendScrollRef.current = true;
       scrollToBottom(true);
     }
   }, [scrollTrigger]);
 
   // Restore saved reading position once, without consuming unread messages.
   useEffect(() => {
+    // A send's row has now rendered. Pin to bottom before any read-position/unread logic can
+    // move the viewport, then clear the one-shot intent.
+    if (pendingSendScrollRef.current && messages.length > 0) {
+      pendingSendScrollRef.current = false;
+      scrollToBottom(true);
+      return;
+    }
     if (!readPositionReady) return;
     if (!initiallyPositionedRef.current && messages.length > 0) {
       if (lastReadMessageId && !lastReadRef.current) return;

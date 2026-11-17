@@ -893,4 +893,31 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
     // The read ORDER stays reviewer-only; the tier rule does not.
     expect(nonReviewer).not.toContain(REVIEWER_GIT_READ_LINE);
   });
+
+  /**
+   * Oracle: specified. Every team member — lead and employee alike — must receive the
+   * organisation's global convention in the system prompt. Previously no team prompt builder
+   * loaded or embedded it, so the convention existed in db.settings but reached nobody.
+   * Boundary neighbours: segment present (both builders) and segment absent (no empty block).
+   */
+  it('embeds the global conventions segment in both employee and lead prompts', () => {
+    const segment = '[GLOBAL CONVENTIONS - QUY ƯỚC CHUNG TỔ CHỨC]\nQuy tắc: luôn viết unit test với Vitest.';
+    const employeeSystem = buildEmployee({ conventionsSegment: segment })
+      .systemMessages.map((m) => m.content).join('\n');
+    const leadSystem = buildLead({ conventionsSegment: segment })
+      .systemMessages.map((m) => m.content).join('\n');
+
+    expect(employeeSystem).toContain(segment);
+    expect(leadSystem).toContain(segment);
+  });
+
+  it('emits no convention block when no global convention is configured', () => {
+    const employeeSystem = buildEmployee().systemMessages.map((m) => m.content).join('\n');
+    const leadSystem = buildLead().systemMessages.map((m) => m.content).join('\n');
+
+    expect(employeeSystem).not.toContain('[GLOBAL CONVENTIONS');
+    expect(employeeSystem).not.toContain('[QUY ƯỚC TỔ CHỨC');
+    expect(leadSystem).not.toContain('[GLOBAL CONVENTIONS');
+    expect(leadSystem).not.toContain('[QUY ƯỚC TỔ CHỨC');
+  });
 });

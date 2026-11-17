@@ -44,6 +44,12 @@ export interface BuildEmployeeTurnRequestInput {
   instruction: string;
   originalRequest: string;
   batchResults?: readonly BatchResult[] | undefined;
+  /**
+   * Org-wide conventions segment, built by the coordinator from `getGlobalConventions()` via
+   * `buildConventionsSegment()` (already framed as untrusted data with the conflict policy).
+   * teamPrompts stays pure: it never reads the DB itself.
+   */
+  conventionsSegment?: string | undefined;
   /** Newest-first from `listAssignmentHistory`. */
   assignmentHistory: readonly ChatMessage[];
   /** Bounded recent window from `listRecentTurns`. */
@@ -107,6 +113,7 @@ export function buildEmployeeTurnRequest(input: BuildEmployeeTurnRequestInput): 
     instruction,
     originalRequest,
     batchResults,
+    conventionsSegment,
     assignmentHistory,
     recentTurns,
     folderId,
@@ -132,6 +139,10 @@ export function buildEmployeeTurnRequest(input: BuildEmployeeTurnRequestInput): 
       'Bạn có thể nhắn trực tiếp cho trưởng nhóm, nhân viên khác hoặc người dùng bằng công cụ send_message khi cần hỏi lại hoặc trao đổi.',
     ].join('\n'),
     ANTI_FABRICATION_BLOCK,
+    // Org-wide conventions reach every team member. The coordinator builds this segment from
+    // the single source of truth (db.settings 'global_conventions'), so it is framed exactly
+    // like the single-chat prompt — untrusted-data delimiters + conflict policy included.
+    ...(conventionsSegment ? [conventionsSegment] : []),
   ];
 
   // D-16: the folder id is a fixed fact for the turn. A UUID from the context, not model- or
@@ -238,6 +249,8 @@ export interface BuildLeadTurnRequestInput {
   roster: readonly AiEmployee[];
   linkedItems: readonly LinkedItemIndexEntry[];
   originalRequest: string;
+  /** Org-wide conventions segment, pre-framed by the coordinator; see BuildEmployeeTurnRequestInput. */
+  conventionsSegment?: string | undefined;
   recentTurns: readonly ChatMessage[];
   /** D-12: the batch's current reports, resolved from the ledger on a re-synthesis pass. */
   batchResults?: readonly BatchResult[] | undefined;
@@ -307,6 +320,7 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
     originalRequest,
     recentTurns,
     batchResults,
+    conventionsSegment,
     ledger,
     docsFolderId,
     memberFolders,
@@ -336,6 +350,8 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
       '13. Cần chi tiết cũ hơn phần ngữ cảnh này: search_team_history để tìm, read_team_turn để đọc toàn văn. Không đoán lại việc đã làm.',
     ].join('\n'),
     ANTI_FABRICATION_BLOCK,
+    // Same single-source-of-truth convention segment the employees receive (see above).
+    ...(conventionsSegment ? [conventionsSegment] : []),
     [
       '[DANH SÁCH NHÂN VIÊN]',
       ...roster.map((e) => `- ${e.name} — ${e.role}: ${e.capability} (agentId: ${e.id})`),

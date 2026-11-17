@@ -138,6 +138,9 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   const [snapshot, setSnapshot] = useState<TeamRunSnapshot>(EMPTY_SNAPSHOT);
   const [configError, setConfigError] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  // Bumped on every valid send so ChatMessageList pins the transcript to bottom after the
+  // persisted user row arrives. Team chat passes onMessageRead, so its passive scroll is off.
+  const [scrollTrigger, setScrollTrigger] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [topUpOpen, setTopUpOpen] = useState(false);
@@ -567,6 +570,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
       agentStatuses,
       seenStates,
       addressedTo,
+      scrollTrigger,
       ...(firstUnreadMessageId !== undefined ? { firstUnreadMessageId } : {}),
       lastReadMessageId,
       readPositionReady: loadedLog !== undefined && loadedCursors !== undefined,
@@ -587,7 +591,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
           }
         : {}),
     }),
-    [agentDirectory, agentStatuses, seenStates, addressedTo, firstUnreadMessageId, lastReadMessageId,
+    [agentDirectory, agentStatuses, seenStates, addressedTo, scrollTrigger, firstUnreadMessageId, lastReadMessageId,
       loadedLog, loadedCursors, handleMessageRead, coordinator]
   );
 
@@ -670,6 +674,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
       if (!text.trim()) return;
       lastUserTextRef.current = text;
       setDraft('');
+      setScrollTrigger((prev) => prev + 1);
       void runTurn(text);
     },
     [runTurn]

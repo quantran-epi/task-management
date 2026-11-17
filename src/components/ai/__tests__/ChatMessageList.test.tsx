@@ -24,6 +24,52 @@ describe('ChatMessageList initial read position', () => {
   });
 });
 
+describe('ChatMessageList scroll-to-bottom on send (team chat read-tracking host)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  /**
+   * Oracle: specified. The transcript must be pinned to bottom AFTER the user's sent row is
+   * rendered. Team chat passes `onMessageRead`, so `followingRef` starts false and the passive
+   * new-message scroll is disabled — the explicit send scroll is the only one available.
+   * Boundary neighbours: scrollTrigger 0 (no send) and a second messages update (one row vs two).
+   */
+  it('scrolls after the persisted message row renders, not only when the trigger bumps', () => {
+    const scroll = vi.fn();
+    const original = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = scroll;
+    try {
+      const first: ChatMessage[] = [{
+        id: 'm1', threadId: 't', role: 'user', content: 'first', createdAt: '2026-11-17T00:00:00Z',
+      }];
+      const afterSend: ChatMessage[] = [
+        ...first,
+        { id: 'm2', threadId: 't', role: 'user', content: 'sent', createdAt: '2026-11-17T00:00:01Z' },
+      ];
+      const renderList = (messages: ChatMessage[], scrollTrigger: number) => (
+        <ChatMessageList
+          messages={messages}
+          readPositionReady
+          lastReadMessageId={null}
+          onMessageRead={vi.fn()}
+          scrollTrigger={scrollTrigger}
+        />
+      );
+      const { rerender } = render(renderList(first, 0));
+      scroll.mockClear();
+
+      // Send fires: the trigger bumps before the row is persisted/visible.
+      rerender(renderList(first, 1));
+      // The row arrives from the live query; this is when bottom-scrolling must happen.
+      scroll.mockClear();
+      rerender(renderList(afterSend, 1));
+
+      expect(scroll).toHaveBeenCalledWith({ behavior: 'auto' });
+    } finally {
+      HTMLElement.prototype.scrollIntoView = original;
+    }
+  });
+});
+
 describe('ChatMessageList pendingConfirmation rendering', () => {
   it('renders markdown summary properly in confirmation card and opens popout modal', () => {
     const onConfirmAction = vi.fn();

@@ -60,6 +60,8 @@ import {
 import { dispatchBudgetWarning, resetBudgetWarnings } from './budgetWarning';
 import { estimateTokens } from './tokenEstimate';
 import { getGlobalBudgetWarnThresholdPct } from '../budgetWarnSettings';
+import { getGlobalConventions } from '../../conventionService';
+import { buildConventionsSegment } from '../conventionsSegment';
 import {
   buildEmployeeTurnRequest,
   buildLeadTurnRequest,
@@ -2128,10 +2130,14 @@ export function createTeamRunCoordinator(
     }
 
     try {
-      const [assignmentHistory, recentTurns] = await Promise.all([
+      const [assignmentHistory, recentTurns, globalConventions] = await Promise.all([
         listAssignmentHistory(options.threadId, employee.id, ASSIGNMENT_HISTORY_CAP, db),
         listRecentTurns(options.threadId, RECENT_WINDOW_TURNS, db),
+        // Fresh per turn so a convention edit in Settings reaches the very next message.
+        // Resilient: an unreadable settings row must never block a team turn.
+        getGlobalConventions(db).catch(() => ''),
       ]);
+      const conventionsSegment = buildConventionsSegment({ global: globalConventions });
       const skill = skillFor(employee);
       // Phase 41 D-16: the folder id is a fixed fact for the turn, so it goes into the prompt.
       const folderId = memberFolderIds.get(employee.id);
@@ -2146,6 +2152,7 @@ export function createTeamRunCoordinator(
         instruction,
         originalRequest,
         ...(batchResults && batchResults.length > 0 ? { batchResults } : {}),
+        ...(conventionsSegment ? { conventionsSegment } : {}),
         assignmentHistory,
         recentTurns,
         ...(folderId ? { folderId } : {}),
@@ -2353,11 +2360,14 @@ export function createTeamRunCoordinator(
     const lead = roster.lead;
     if (!lead) return;
     try {
-      const [recentTurns, linkedItems, batchHistory] = await Promise.all([
+      const [recentTurns, linkedItems, batchHistory, globalConventions] = await Promise.all([
         listRecentTurns(options.threadId, RECENT_WINDOW_TURNS, db),
         loadLinkedItems(),
         listRecentBatches(options.threadId, BATCH_HISTORY_LIMIT, db),
+        // Same single source of truth as every employee; resilient per turn.
+        getGlobalConventions(db).catch(() => ''),
       ]);
+      const conventionsSegment = buildConventionsSegment({ global: globalConventions });
       // Phase 41 D-07/D-16: the team folder is a READ fact for the leader (where the approved
       // final goes), never a `write_doc` target. T-41-28: only live roster members with an
       // entry in this turn's map are emitted, so a member removed mid-turn is never named.
@@ -2373,6 +2383,7 @@ export function createTeamRunCoordinator(
         originalRequest: text,
         recentTurns,
         ...(batchResults && batchResults.length > 0 ? { batchResults } : {}),
+        ...(conventionsSegment ? { conventionsSegment } : {}),
         ...(liveTeam.docsFolderId ? { docsFolderId: liveTeam.docsFolderId } : {}),
         ...(memberFolders.length > 0 ? { memberFolders } : {}),
         ...(batchHistory.length > 0 ? { batchHistory } : {}),
