@@ -254,7 +254,10 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
             filterOption={(input, option) =>
               ((option?.label as string) ?? '').toLowerCase().includes(input.toLowerCase())
             }
-            options={(changeRequests ?? []).map((cr) => ({ value: cr.id, label: cr.code || cr.name }))}
+            options={(changeRequests ?? []).map((cr) => ({
+              value: cr.id,
+              label: cr.code ? `${cr.code} - ${cr.name}` : cr.name,
+            }))}
             aria-label="Lọc theo CR"
           />
         </div>
