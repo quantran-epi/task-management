@@ -75,7 +75,7 @@ describe('groundedTurn state machine', () => {
       vector: { status: 'ok', latencyMs: 10, itemCount: 1 },
       graph: { status: 'ok', latencyMs: 8, itemCount: 0 },
     },
-    diagnostics: { degraded: false, coverageWarnings: [] },
+    diagnostics: { degraded: false, coverageWarnings: [], coverage: [] },
   };
 
   const dummyServerPack: EvidencePack = {
@@ -265,6 +265,7 @@ describe('groundedTurn state machine', () => {
       diagnostics: {
         degraded: true,
         coverageWarnings: [{ code: 'TIMEOUT', setId: null, message: 'Graph timeout' }],
+        coverage: [],
       },
     });
 
@@ -471,34 +472,78 @@ describe('groundedTurn state machine', () => {
     expect(mockDeps.synthesizeGroundedAnswer).not.toHaveBeenCalled();
   });
 
-  // 16. Scope empty (D-37) -> setTierAssignments empty -> {kind: 'clarify_intent'}; runLocalBm25 NOT called
-  it('16. Scope empty -> clarify_intent without runLocalBm25 or retrieveFederated (D-37)', async () => {
-    mockInput.capabilities.serverEnabled = false;
+  // 16. Server enabled + catalog empty -> query-only retrieval still runs (no clarify).
+  it('16. Server enabled + empty scope -> query-only retrieveFederated without clarify_intent', async () => {
     vi.mocked(mockDeps.routeScope).mockResolvedValueOnce({
       setTierAssignments: [],
       comparisonMode: null,
       routerSource: 'alias',
     });
+    mockInput.catalog = [];
 
     const res = await runGroundedTurn(mockInput, mockDeps);
-    expect(res.kind).toBe('clarify_intent');
+    expect(res.kind).toBe('grounded_answer');
+    expect(mockDeps.retrieveFederated).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: mockInput.query,
+        limit: 20,
+        includeInferred: true,
+      }),
+      mockInput.signal
+    );
     expect(mockDeps.runLocalBm25).not.toHaveBeenCalled();
-    expect(mockDeps.synthesizeGroundedAnswer).not.toHaveBeenCalled();
   });
 
-  // 16b. Server-path scope empty -> retrieveFederated NEVER called with invalid empty assignments
-  it('16b. Server enabled + scope empty -> clarify_intent without retrieveFederated', async () => {
-    mockInput.capabilities.serverEnabled = true;
+  // 16b. The thin wire body carries no retired fields and no setIds by default.
+  it('16b. Query-only wire body omits setTierAssignments, budgets, comparisonMode and setIds by default', async () => {
     vi.mocked(mockDeps.routeScope).mockResolvedValueOnce({
       setTierAssignments: [],
       comparisonMode: null,
       routerSource: 'alias',
     });
 
+    await runGroundedTurn(mockInput, mockDeps);
+    const wireBody = vi.mocked(mockDeps.retrieveFederated).mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(wireBody).not.toHaveProperty('setTierAssignments');
+    expect(wireBody).not.toHaveProperty('budgets');
+    expect(wireBody).not.toHaveProperty('comparisonMode');
+    expect(wireBody).not.toHaveProperty('setIds');
+  });
+
+  it('16d. Explicit setIds forwarded verbatim in supplied order', async () => {
+    const setIds = [
+      '20000000-0000-0000-0000-000000000002',
+      '10000000-0000-0000-0000-000000000001',
+    ];
+    (mockInput as GroundedTurnInput & { explicitSetIds?: readonly string[] }).explicitSetIds = setIds;
+
+    await runGroundedTurn(mockInput, mockDeps);
+    expect(vi.mocked(mockDeps.retrieveFederated).mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ setIds })
+    );
+  });
+
+  it('16e. Server disabled + no local sets + no MCP still clarifies with unchanged question text', async () => {
+    mockInput.capabilities.serverEnabled = false;
+    mockInput.catalog = [];
+    vi.mocked(mockDeps.routeScope).mockResolvedValueOnce({
+      setTierAssignments: [],
+      comparisonMode: null,
+      routerSource: 'alias',
+    });
+    vi.mocked(mockDeps.runLocalBm25).mockResolvedValueOnce({
+      ranges: [],
+      strongEvidence: false,
+      totalScanned: 0,
+    });
+
     const res = await runGroundedTurn(mockInput, mockDeps);
-    expect(res.kind).toBe('clarify_intent');
+    expect(res).toEqual({
+      kind: 'clarify_intent',
+      clarifyQuestion:
+        'Không xác định được phạm vi tài liệu để tra cứu. Vui lòng chỉ rõ bộ tài liệu hoặc phạm vi cần tìm.',
+    });
     expect(mockDeps.retrieveFederated).not.toHaveBeenCalled();
-    expect(mockDeps.synthesizeGroundedAnswer).not.toHaveBeenCalled();
   });
 
   // 16c. Non-transport retrieve failure (e.g. ZodError, unexpected error) degrades to local path instead of throwing
@@ -748,21 +793,21 @@ describe('groundedTurn state machine', () => {
     );
   });
 
-  it('25. Uses accuracy-first federated retrieval budgets below the synthesis reduce trigger', async () => {
+  it('25. Server query-only request leaves budgets to the server and caps recent turns at 3', async () => {
+    mockInput.recentTurns = [
+      { role: 'user', content: 'turn 1' },
+      { role: 'assistant', content: 'turn 2' },
+      { role: 'user', content: 'turn 3' },
+      { role: 'user', content: 'turn 4' },
+    ];
+
     await runGroundedTurn(mockInput, mockDeps);
 
-    expect(mockDeps.retrieveFederated).toHaveBeenCalledWith(
-      expect.objectContaining({
-        budgets: expect.objectContaining({
-          elapsedMs: 300000,
-          maxItems: 200,
-          maxEvidenceChars: 56000,
-          maxSets: 10,
-          concurrency: 4,
-        }),
-      }),
-      mockInput.signal
-    );
+    const wireBody = vi.mocked(mockDeps.retrieveFederated).mock.calls[0]?.[0] as {
+      recentTurns: readonly { text: string }[];
+    };
+    expect(wireBody).not.toHaveProperty('budgets');
+    expect(wireBody.recentTurns.map((turn) => turn.text)).toEqual(['turn 2', 'turn 3', 'turn 4']);
   });
 
   // Phase 24 SC-8: optional-daemon fallback proof (disabled / unreachable / seed-only).
@@ -806,7 +851,7 @@ describe('groundedTurn state machine', () => {
             pathCount: 0,
           },
         },
-        diagnostics: { degraded: false, coverageWarnings: [] },
+        diagnostics: { degraded: false, coverageWarnings: [], coverage: [] },
       };
     }
 
@@ -1054,7 +1099,7 @@ describe('groundedTurn state machine', () => {
       } as any;
     }
 
-    it('MCP only: empty scope runs MCP without any Docs retrieve request', async () => {
+    it('MCP only: empty scope still queries the server and merges independent MCP evidence', async () => {
       mockDeps.runMcpRetrieval = vi.fn().mockResolvedValue(mcpResultFrom(mcpItems));
       vi.mocked(mockDeps.routeIntent).mockResolvedValueOnce(intentWithMcp(true, ['graphiti-banking']));
       vi.mocked(mockDeps.routeScope).mockResolvedValueOnce({
@@ -1066,7 +1111,7 @@ describe('groundedTurn state machine', () => {
       const res = await runGroundedTurn(mockInput, mockDeps);
 
       expect(res.kind).toBe('grounded_answer');
-      expect(mockDeps.retrieveFederated).not.toHaveBeenCalled();
+      expect(mockDeps.retrieveFederated).toHaveBeenCalled();
       expect(mockDeps.runMcpRetrieval).toHaveBeenCalledWith(
         expect.objectContaining({ serverIds: ['graphiti-banking'] })
       );
@@ -1179,7 +1224,9 @@ describe('groundedTurn state machine', () => {
       expect(mockDeps.synthesizeGroundedAnswer).toHaveBeenCalled();
     });
 
-    it('Neither source: empty scope and no configured MCP clarifies without retrieval', async () => {
+    it('Neither source: server disabled, no local sets and no MCP clarifies without retrieval', async () => {
+      mockInput.capabilities.serverEnabled = false;
+      mockInput.catalog = [];
       mockDeps.runMcpRetrieval = vi.fn();
       vi.mocked(mockDeps.routeIntent).mockResolvedValueOnce(intentWithMcp(false, []));
       vi.mocked(mockDeps.routeScope).mockResolvedValueOnce({
@@ -1216,6 +1263,7 @@ describe('groundedTurn state machine', () => {
             message: 'Set timed out',
           },
         ],
+        coverage: [],
       },
     });
 
@@ -1243,6 +1291,7 @@ describe('groundedTurn state machine', () => {
       diagnostics: {
         degraded: true,
         coverageWarnings: [],
+        coverage: [],
       },
     });
 
@@ -1301,6 +1350,7 @@ describe('groundedTurn state machine', () => {
         diagnostics: {
           degraded: false,
           coverageWarnings: [],
+          coverage: [],
           stageDiagnostics: [
             {
               stage: 'neo4j_traversal',
@@ -1474,7 +1524,7 @@ describe('groundedTurn state machine', () => {
           vector: { status: 'timeout', latencyMs: 2500, itemCount: 0 },
           graph: { status: 'error', latencyMs: 0, itemCount: 0 },
         },
-        diagnostics: { degraded: true, coverageWarnings: [] },
+        diagnostics: { degraded: true, coverageWarnings: [], coverage: [] },
       });
 
       const nonProductive = await runGroundedTurn(mockInput, mockDeps);

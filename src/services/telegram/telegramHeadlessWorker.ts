@@ -519,7 +519,9 @@ export async function runTelegramGroundedTurn(
     modelConfigured: Boolean(apiKey && aiConfig.endpoint && aiConfig.defaultModel),
   };
 
-  const catalog = await fetchSetCatalog(db);
+  // Best-effort scope input only; a fresh device with no local sets still queries
+  // the server through runGroundedTurn without an early return.
+  const catalog = await fetchSetCatalog(db).catch(() => []);
   const deps = createDefaultGroundedTurnDeps({
     knowledgeBaseUrl: knowledgeConfig.baseUrl,
     knowledgeToken: knowledgeConfig.token,

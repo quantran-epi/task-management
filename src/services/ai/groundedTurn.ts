@@ -54,6 +54,8 @@ export interface GroundedTurnInput {
     routerVersion: string;
   };
   catalog: readonly SetCatalogEntry[];
+  /** Caller-supplied exact set restriction. Never derived from the local catalog. */
+  explicitSetIds?: readonly string[];
   recentSessionId: string;
   scopedEntity?: {
     type: TaskMateEntityType;
@@ -248,7 +250,7 @@ function emptyRetrievalResponse(
     paths: [],
     conflictGroups: [],
     modalityStatus: defaultModalityDiagnostics(),
-    diagnostics: { degraded: outcome === 'DEGRADED', coverageWarnings: [] },
+    diagnostics: { degraded: outcome === 'DEGRADED', coverageWarnings: [], coverage: [] },
   };
 }
 
@@ -309,16 +311,21 @@ export async function runGroundedTurn(
       signal: input.signal,
     }
   );
+  // Persisted scope attribution is kept for existing scope chips and error rows,
+  // but is never used to build the server request (D-01).
+  // Persisted scope attribution only; never used to build the server wire request.
+  const routedSetIds = resolvedScope.setTierAssignments.map((s) => s.setId);
 
-  // Retrieval routing contract: document scope and MCP are independent evidence sources.
-  // Clarify only when neither can serve the turn; never send setTierAssignments: [].
-  const hasDocsScope = resolvedScope.setTierAssignments.length > 0;
+  // Document scope and MCP are independent evidence sources. With the server enabled,
+  // an empty local scope is NOT a clarify condition: the server discovers published sets
+  // from the query alone. Clarify only when no source can serve the turn at all.
   const requireMcp = Boolean((intentDecision as any).require_mcp);
   const targetMcpServers: readonly string[] = (intentDecision as any).target_mcp_servers ?? [];
   const hasConfiguredMcp =
     requireMcp && Boolean(deps.runMcpRetrieval) && targetMcpServers.length > 0;
+  const hasLocalCatalog = input.catalog.length > 0;
 
-  if (!hasDocsScope && !hasConfiguredMcp) {
+  if (!input.capabilities.serverEnabled && !hasConfiguredMcp && !hasLocalCatalog) {
     return {
       kind: 'clarify_intent',
       clarifyQuestion:
@@ -355,12 +362,16 @@ export async function runGroundedTurn(
     fallbackReason: 'SERVER_DISABLED' | 'NETWORK_ERROR' | 'TIMEOUT',
     extraCoverageWarnings: readonly string[] = []
   ): Promise<GroundedTurnResult> => {
-    // Note: empty resolvedScope.setTierAssignments is already guarded above (D-37)
+    // D-14: when the server is empty/unreachable but local documents exist, derive
+    // set IDs from the local catalog so labeled local evidence still appears.
+    const localSetIds = routedSetIds.length > 0
+      ? routedSetIds
+      : input.catalog.map((entry) => entry.setId);
 
     const localResult = await deps.runLocalBm25(
       {
         query: input.query,
-        resolvedSetIds: resolvedScope.setTierAssignments.map((s) => s.setId),
+        resolvedSetIds: localSetIds,
         ...(contextHints?.docIds ? { prioritizedDocIds: contextHints.docIds } : {}),
       },
       deps.localBm25Deps
@@ -479,8 +490,9 @@ export async function runGroundedTurn(
     return { kind: 'local_fallback_results', grounding };
   };
 
-  // 3. Branch on source availability. Docs and MCP are independent evidence sources.
-  const docsEnabled = input.capabilities.serverEnabled && hasDocsScope;
+  // 3. Branch on source availability. The server owns published-set discovery;
+  // an empty local scope never disables a configured server (D-01, D-05).
+  const docsEnabled = input.capabilities.serverEnabled;
   if (!docsEnabled && !hasConfiguredMcp) {
     return executeLocalPath('SERVER_DISABLED');
   }
@@ -495,24 +507,11 @@ export async function runGroundedTurn(
     ? deps.retrieveFederated(
         {
           query: input.query,
-          setTierAssignments: resolvedScope.setTierAssignments.map((s) => ({
-            setId: s.setId,
-            tier: s.tier,
-            roleGroup: s.roleGroup,
-          })),
-          comparisonMode: resolvedScope.comparisonMode,
-          budgets: {
-            concurrency: 4,
-            elapsedMs: 300000,
-            maxSets: 10,
-            maxItems: 200,
-            // Federated chars count raw snippet + title, so they upper-bound the
-            // synthesis prompt text; 56000 < REDUCE_TRIGGER_CHARS (60000) keeps
-            // single-pass synthesis, with headroom for snippet-vs-excerpt drift.
-            maxEvidenceChars: 56000,
-          },
           limit: 20,
           includeInferred: true,
+          ...(input.explicitSetIds && input.explicitSetIds.length > 0
+            ? { setIds: [...input.explicitSetIds] }
+            : {}),
           recentTurns: (input.recentTurns && input.recentTurns.length > 0
             ? input.recentTurns.slice(-3).map((t) => ({
                 role: t.role,
@@ -609,7 +608,7 @@ export async function runGroundedTurn(
           paths: [],
           conflicts: [],
           scope: {
-            setIds: resolvedScope.setTierAssignments.map((s) => s.setId),
+            setIds: routedSetIds,
             routedScope: {
               domain: null,
               environment: null,
@@ -642,7 +641,7 @@ export async function runGroundedTurn(
             paths: [],
             conflicts: [],
             scope: {
-              setIds: resolvedScope.setTierAssignments.map((s) => s.setId),
+              setIds: routedSetIds,
               routedScope: {
                 domain: null,
                 environment: null,
@@ -670,7 +669,7 @@ export async function runGroundedTurn(
             paths: [],
             conflicts: [],
             scope: {
-              setIds: resolvedScope.setTierAssignments.map((s) => s.setId),
+              setIds: routedSetIds,
               routedScope: {
                 domain: null,
                 environment: null,
@@ -793,7 +792,7 @@ export async function runGroundedTurn(
       ...(seedFailedSeeds ? { failedSeeds: seedFailedSeeds } : {}),
     };
     const seedScopePayload = {
-      setIds: resolvedScope.setTierAssignments.map((s) => s.setId),
+      setIds: routedSetIds,
       routedScope: {
         domain: null,
         environment: null,
@@ -960,7 +959,7 @@ export async function runGroundedTurn(
   const persistedConflicts = toPersistedConflicts(serverPack.conflicts, serverPack.citations);
 
   const scopePayload = {
-    setIds: resolvedScope.setTierAssignments.map((s) => s.setId),
+    setIds: routedSetIds,
     routedScope: {
       domain: null,
       environment: null,

@@ -1359,7 +1359,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       // Analysis Mode bypasses grounded routing and goes straight to the tool loop.
       if (!turnAnalysisMode) {
         try {
-        const catalog = await fetchSetCatalog(db);
+        // Best-effort scope input only: an empty or failing local catalog must
+        // never gate or precede query-only server retrieval.
+        const catalog = await fetchSetCatalog(db).catch(() => []);
         const groundedDeps = createDefaultGroundedTurnDeps({
           knowledgeBaseUrl: knowledgeConfig.baseUrl,
           knowledgeToken: knowledgeConfig.token,
