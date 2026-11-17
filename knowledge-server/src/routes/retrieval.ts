@@ -138,7 +138,7 @@ export function registerRetrievalRoutes(
       const response = await retrievalService.retrieve(
         params.data.setId,
         body.data,
-        requestSignal ? { signal: requestSignal } : undefined
+        ...(requestSignal ? [{ signal: requestSignal }] : [])
       );
       const validated = RetrievalResponseSchema.parse(response);
       phaseLogger.log({
