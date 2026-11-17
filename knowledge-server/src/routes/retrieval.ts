@@ -5,12 +5,14 @@ import {
   RetrievalResponseSchema,
   FederatedRetrievalRequestSchema,
   FederatedRetrievalResponseSchema,
+  type FederatedSetCoverage,
 } from '../types/retrievalProtocol.js';
 import type { RetrievalService } from '../services/retrievalService.js';
 import {
   runFederatedRetrieval,
   type FederatedRetrievalDependencies,
 } from '../services/federatedRetrievalService.js';
+import { resolveQueryOnlyScope, type PublishedSetEntry } from '../services/publishedSetDiscovery.js';
 import { createRetrievalLogger } from '../retrieval/retrievalLogger.js';
 
 const uuid = z.string().uuid();
@@ -65,13 +67,60 @@ function classifyRetrievalError(error: unknown): {
   return { errorCode: 'INTERNAL_ERROR' };
 }
 
+export interface QueryOnlyRouteDependencies {
+  listPublishedSets(): PublishedSetEntry[];
+  getSetReadiness?(setId: string): Promise<'GRAPH_READY' | 'PUBLISHED_ONLY' | 'FAILED'>;
+}
+
+function noPublishedSetsResponse() {
+  return FederatedRetrievalResponseSchema.parse({
+    outcome: 'NO_PUBLISHED_SETS',
+    items: [],
+    paths: [],
+    conflictGroups: [],
+    modalityStatus: {
+      fulltext: { status: 'unavailable', latencyMs: 0, itemCount: 0, reason: 'NO_PUBLISHED_SETS' },
+      vector: { status: 'unavailable', latencyMs: 0, itemCount: 0, reason: 'NO_PUBLISHED_SETS' },
+      graph: { status: 'unavailable', latencyMs: 0, itemCount: 0, reason: 'NO_PUBLISHED_SETS' },
+    },
+    diagnostics: { degraded: false, coverageWarnings: [], coverage: [] },
+  });
+}
+
+function degradedCoverageResponse(coverage: FederatedSetCoverage[]) {
+  const unavailableStatus = {
+    status: 'unavailable' as const,
+    reason: 'NO_SEARCHABLE_SETS',
+    itemCount: 0,
+    latencyMs: 0,
+  };
+  return FederatedRetrievalResponseSchema.parse({
+    outcome: 'DEGRADED',
+    items: [],
+    paths: [],
+    conflictGroups: [],
+    modalityStatus: {
+      fulltext: unavailableStatus,
+      vector: unavailableStatus,
+      graph: unavailableStatus,
+    },
+    diagnostics: { degraded: true, coverageWarnings: [], coverage },
+  });
+}
+
 export function registerRetrievalRoutes(
   app: FastifyInstance,
-  retrievalService: Pick<RetrievalService, 'retrieve'>,
-  federatedDeps?: FederatedRetrievalDependencies
+  retrievalService: Pick<RetrievalService, 'retrieve'> | undefined,
+  federatedDeps?: FederatedRetrievalDependencies,
+  queryOnlyDeps?: QueryOnlyRouteDependencies
 ) {
   // POST /api/v1/sets/:setId/retrieve
   app.post('/api/v1/sets/:setId/retrieve', async (request, reply) => {
+    if (!retrievalService) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: 'Route not available.' },
+      });
+    }
     const params = SetParamsSchema.safeParse(request.params);
     const body = RetrievalRequestSchema.safeParse(request.body);
     if (!params.success || !body.success) {
@@ -132,7 +181,7 @@ export function registerRetrievalRoutes(
     }
   });
 
-  // POST /api/v1/retrieve
+  // POST /api/v1/retrieve — query-only request, server-authoritative discovery.
   app.post('/api/v1/retrieve', async (request, reply) => {
     const body = FederatedRetrievalRequestSchema.safeParse(request.body);
     if (!body.success) {
@@ -140,19 +189,56 @@ export function registerRetrievalRoutes(
     }
 
     const deps: FederatedRetrievalDependencies = federatedDeps ?? {
-      retrievePerSet: (setId, req, signal) =>
-        retrievalService.retrieve(setId, req, signal ? { signal } : undefined),
+      retrievePerSet: (setId, req, signal) => {
+        if (!retrievalService) throw new Error('RETRIEVAL_SERVICE_UNAVAILABLE');
+        return retrievalService.retrieve(setId, req, signal ? { signal } : undefined);
+      },
     };
 
     const requestSignal = (request.raw as any)?.signal as AbortSignal | undefined;
 
     try {
-      const response = await runFederatedRetrieval(
-        body.data,
-        deps,
-        requestSignal ? { signal: requestSignal } : undefined
-      );
+      const listPublishedSets =
+        queryOnlyDeps?.listPublishedSets ?? (() => [] as PublishedSetEntry[]);
+      const scope = await resolveQueryOnlyScope(body.data, {
+        listPublishedSets,
+        getSetReadiness:
+          queryOnlyDeps?.getSetReadiness ?? (async () => 'PUBLISHED_ONLY' as const),
+      });
+
+      let response;
+      if (scope.resolved === null && scope.outcome === 'NO_PUBLISHED_SETS') {
+        response = noPublishedSetsResponse();
+      } else if (scope.resolved === null && scope.outcome === 'DEGRADED') {
+        // All requested ids were unknown: keep the full UNAVAILABLE ledger and
+        // never collapse it into NO_EVIDENCE or NO_PUBLISHED_SETS (T-28-16).
+        response = degradedCoverageResponse(scope.coverage);
+      } else if (scope.resolved === null) {
+        throw new Error('UNRESOLVED_SCOPE');
+      } else {
+        response = await runFederatedRetrieval(
+          scope.resolved,
+          deps,
+          requestSignal ? { signal: requestSignal } : undefined
+        );
+        // Preserve the resolver's server-authoritative UNAVAILABLE rows (e.g.
+        // an unknown id in a mixed explicit restriction). 28-03 replaces this
+        // with the full per-set ledger from the fan-out.
+        if (scope.coverage.length > 0) {
+          response = {
+            ...response,
+            diagnostics: {
+              ...response.diagnostics,
+              coverage: [...scope.coverage, ...response.diagnostics.coverage],
+            },
+          };
+        }
+      }
       const validated = FederatedRetrievalResponseSchema.parse(response);
+      request.log.info(
+        { code: 'RETRIEVE_OK', setCount: scope.resolved?.setTierAssignments.length ?? 0, outcome: validated.outcome },
+        'Federated retrieval completed'
+      );
       return reply.code(200).send(validated);
     } catch {
       request.log.error({ code: 'INTERNAL_ERROR' }, 'Federated retrieval failed');

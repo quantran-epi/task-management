@@ -16,6 +16,7 @@ import {
   readRetrievalTimeouts,
   type RetrievalTimeouts,
 } from './services/retrievalService.js';
+import { createPerSetRetriever } from './services/perSetRetrievalRouter.js';
 import { NineRouterQueryPlanner } from './retrieval/nineRouterQueryPlanner.js';
 import { buildDeterministicFallbackPlan } from './retrieval/queryPlanning.js';
 import type {
@@ -498,6 +499,17 @@ export async function startKnowledgeServer(
     );
   }
 
+  // Query-only retrieval is available regardless of Neo4j: the per-set router
+  // falls back to the snapshot-lexical modality when no graph generation exists.
+  const perSetRetriever = createPerSetRetriever({
+    snapshotStore,
+    ...(retrievalService ? { retrievalService } : {}),
+  });
+  const federatedDeps = { retrievePerSet: perSetRetriever.retrievePerSet };
+  const queryOnlyDeps = {
+    listPublishedSets: () => snapshotStore.listActiveSnapshots(),
+  };
+
   const server = buildKnowledgeServer({
     token: options.token,
     allowedOrigins: options.allowedOrigins,
@@ -510,6 +522,8 @@ export async function startKnowledgeServer(
     graphRepository,
     graphBuildService,
     retrievalService,
+    federatedDeps,
+    queryOnlyDeps,
     readinessCheck: async () => {
       if (!graphRepository || !retrievalService) {
         return { neo4j: false, vectorIndex: false, model: false };

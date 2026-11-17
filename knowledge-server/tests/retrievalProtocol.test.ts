@@ -16,6 +16,8 @@ import {
   MODALITY_STATUS_VALUES,
   REASON_CODES,
   StageDiagnosticSchema,
+  FederatedRetrievalRequestSchema,
+  FederatedRetrievalResponseSchema,
 } from '../src/types/retrievalProtocol.js';
 import {
   DeterministicEmbeddingStub,
@@ -826,6 +828,45 @@ describe('RetrievalProtocol Schema Suite (Task 18-W0-01)', () => {
       expect(traversal.edges).toEqual([]);
       expect(traversal.truncated).toBe(false);
     });
+  });
+});
+
+describe('Phase 28 query-only wire contract', () => {
+  it('parses {query} with limit 20 and rejects legacy orchestration fields', () => {
+    const parsed = FederatedRetrievalRequestSchema.parse({ query: 'x' });
+    expect(parsed.limit).toBe(20);
+    expect(parsed.includeInferred).toBe(false);
+    expect(parsed.recentTurns).toEqual([]);
+    expect(() =>
+      FederatedRetrievalRequestSchema.parse({
+        query: 'x',
+        setTierAssignments: [{ setId: '00000000-0000-4000-8000-000000000001', tier: 'REQUIRED', roleGroup: 'baseline' }],
+      })
+    ).toThrow();
+  });
+
+  it('rejects out-of-range limit, empty setIds and unknown top-level keys', () => {
+    expect(() => FederatedRetrievalRequestSchema.parse({ query: 'x', limit: 9 })).toThrow();
+    expect(() => FederatedRetrievalRequestSchema.parse({ query: 'x', limit: 51 })).toThrow();
+    expect(() => FederatedRetrievalRequestSchema.parse({ query: 'x', setIds: [] })).toThrow();
+    expect(() => FederatedRetrievalRequestSchema.parse({ query: 'x', rogueField: true })).toThrow();
+  });
+
+  it('accepts NO_PUBLISHED_SETS and a DEGRADED response with an empty coverage ledger', () => {
+    expect(RETRIEVAL_OUTCOMES).toContain('NO_PUBLISHED_SETS');
+    const parsed = FederatedRetrievalResponseSchema.parse({
+      outcome: 'NO_PUBLISHED_SETS',
+      items: [],
+      paths: [],
+      conflictGroups: [],
+      modalityStatus: {
+        fulltext: { status: 'unavailable', latencyMs: 0, itemCount: 0 },
+        vector: { status: 'unavailable', latencyMs: 0, itemCount: 0 },
+        graph: { status: 'unavailable', latencyMs: 0, itemCount: 0 },
+      },
+      diagnostics: { degraded: false, coverageWarnings: [] },
+    });
+    expect(parsed.diagnostics.coverage).toEqual([]);
   });
 });
 

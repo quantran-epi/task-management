@@ -2,7 +2,10 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { buildKnowledgeServer } from '../src/server.js';
-import type { RetrievalResponse } from '../src/types/retrievalProtocol.js';
+import { SnapshotStore } from '../src/indexing/snapshotStore.js';
+import { createPerSetRetriever } from '../src/services/perSetRetrievalRouter.js';
+import type { ProjectionSnapshot } from '../src/indexing/incrementalProjector.js';
+import type { FederatedRetrievalResponse, RetrievalResponse } from '../src/types/retrievalProtocol.js';
 import { URN_TABLE_FCL_CYCLE_COUNTER } from './fixtures/pilotGoldEntities.js';
 
 const ORIGIN = 'https://planner.example';
@@ -346,5 +349,123 @@ describe('Fastify retrieval routes (Task 1: 18-ROUTE-01, D-23, T-18-01, T-18-02)
     });
 
     expect(res.statusCode).toBe(404);
+  });
+});
+
+const QUERY_ONLY_SET = '77777777-7777-4777-8777-777777777777';
+const QUERY_ONLY_SNAPSHOT = '88888888-8888-4888-8888-888888888888';
+const QUERY_ONLY_DOC = '99999999-9999-4999-8999-999999999999';
+
+function publishedSnapshot(): ProjectionSnapshot {
+  return {
+    snapshotId: QUERY_ONLY_SNAPSHOT,
+    setId: QUERY_ONLY_SET,
+    chunkingPolicyVersion: 'v1',
+    documents: [
+      {
+        documentId: QUERY_ONLY_DOC,
+        title: 'Rủi ro tín dụng',
+        contentHash: 'e'.repeat(64),
+        chunks: [
+          {
+            occurrenceId: 'occ-query-only',
+            representationId: 'rep-query-only',
+            contentHash: 'f'.repeat(64),
+            chunkIndex: 0,
+            headingPath: ['Rủi ro'],
+            startLine: 1,
+            endLine: 4,
+            startOffset: 0,
+            endOffset: 45,
+            rawContent: 'Quản trị rủi ro tín dụng định kỳ theo chính sách.',
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function buildQueryOnlyApp(withPublishedSet: boolean) {
+  const snapshotStore = new SnapshotStore();
+  if (withPublishedSet) {
+    snapshotStore.registerActiveSnapshot(QUERY_ONLY_SET, publishedSnapshot());
+  }
+  const retriever = createPerSetRetriever({ snapshotStore });
+  return buildKnowledgeServer({
+    token: TOKEN,
+    allowedOrigins: [ORIGIN],
+    federatedDeps: { retrievePerSet: retriever.retrievePerSet },
+    queryOnlyDeps: {
+      listPublishedSets: () => snapshotStore.listActiveSnapshots(),
+      getSetReadiness: async () => 'PUBLISHED_ONLY',
+    },
+  }).app;
+}
+
+function postRetrieve(app: ReturnType<typeof buildKnowledgeServer>['app'], payload: unknown) {
+  return app.inject({
+    method: 'POST',
+    url: '/api/v1/retrieve',
+    headers: { origin: ORIGIN, authorization: `Bearer ${TOKEN}` },
+    payload,
+  });
+}
+
+describe('Phase 28 query-only retrieve route', () => {
+  it('accepts only {query, limit} and returns attributed evidence from the published snapshot', async () => {
+    const app = buildQueryOnlyApp(true);
+    const res = await postRetrieve(app, { query: 'rui ro tin dung', limit: 20 });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as FederatedRetrievalResponse;
+    expect(body.outcome).toBeDefined();
+    expect(body.items.length).toBeGreaterThan(0);
+    expect(body.items[0]?.setId).toBe(QUERY_ONLY_SET);
+    expect(body.items[0]?.snapshotId).toBe(QUERY_ONLY_SNAPSHOT);
+  });
+
+  it('returns NO_PUBLISHED_SETS at HTTP 200 for an empty server', async () => {
+    const app = buildQueryOnlyApp(false);
+    const res = await postRetrieve(app, { query: 'rui ro' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as FederatedRetrievalResponse;
+    expect(body.outcome).toBe('NO_PUBLISHED_SETS');
+    expect(body.items).toEqual([]);
+    expect(body.diagnostics.coverage).toEqual([]);
+  });
+
+  it('returns DEGRADED with a full UNAVAILABLE ledger for all-unknown explicit setIds', async () => {
+    const unknown1 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
+    const unknown2 = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2';
+    const app = buildQueryOnlyApp(true);
+    const res = await postRetrieve(app, { query: 'rui ro', setIds: [unknown1, unknown2] });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as FederatedRetrievalResponse;
+    expect(body.outcome).toBe('DEGRADED');
+    expect(body.diagnostics.degraded).toBe(true);
+    expect(body.diagnostics.coverage).toHaveLength(2);
+    for (const row of body.diagnostics.coverage) {
+      expect(row.state).toBe('UNAVAILABLE');
+      expect(row.publishedSnapshotId).toBeNull();
+      expect(row.retrievalSnapshotId).toBeNull();
+    }
+    expect(body.items).toEqual([]);
+    expect(res.body).not.toContain('NO_PUBLISHED_SETS');
+    expect(res.body).not.toContain('NO_EVIDENCE');
+    expect(body.modalityStatus.fulltext.status).not.toBe('ok');
+    expect(body.modalityStatus.vector.status).not.toBe('ok');
+    expect(body.modalityStatus.graph.status).not.toBe('ok');
+  });
+
+  it('searches a known set and keeps an unknown id UNAVAILABLE in a mixed restriction', async () => {
+    const unknown = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    const app = buildQueryOnlyApp(true);
+    const res = await postRetrieve(app, { query: 'rui ro', setIds: [QUERY_ONLY_SET, unknown] });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as FederatedRetrievalResponse;
+    expect(body.items.length).toBeGreaterThan(0);
+    expect(body.items[0]?.setId).toBe(QUERY_ONLY_SET);
+    const coverageRow = body.diagnostics.coverage.find((row) => row.setId === unknown);
+    expect(coverageRow?.state).toBe('UNAVAILABLE');
+    expect(coverageRow?.publishedSnapshotId).toBeNull();
   });
 });

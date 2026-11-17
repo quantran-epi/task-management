@@ -1,5 +1,5 @@
 import {
-  FederatedRetrievalRequest,
+  ResolvedFederatedRetrievalRequest,
   FederatedRetrievalResponse,
   FederatedRetrievalResponseSchema,
   RetrievalResponse,
@@ -156,7 +156,7 @@ function computeEvidenceChars(item: any): number {
 }
 
 type FederatedSetResult = {
-  assignment: FederatedRetrievalRequest['setTierAssignments'][number];
+  assignment: ResolvedFederatedRetrievalRequest['setTierAssignments'][number];
   response?: RetrievalResponse;
   failureReason?: 'TIMEOUT' | 'STALE' | 'ERROR';
   latencyMs?: number;
@@ -277,7 +277,7 @@ function packFederatedEvidence(
 }
 
 export async function runFederatedRetrieval(
-  request: FederatedRetrievalRequest,
+  request: ResolvedFederatedRetrievalRequest,
   deps: FederatedRetrievalDependencies,
   options?: FederatedRetrievalOptions
 ): Promise<FederatedRetrievalResponse> {
