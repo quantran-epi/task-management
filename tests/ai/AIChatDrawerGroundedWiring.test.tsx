@@ -11,6 +11,7 @@ import type {
   GroundedTurnResult,
 } from '../../src/services/ai/groundedTurn';
 import type { ChatMessageGrounding } from '../../src/services/ai/groundedAnswerSchemas';
+import { KNOWLEDGE_SERVER_EMPTY_NOTICE } from '../../src/services/ai/knowledgeOutcome';
 import {
   createOrGetThread,
   getMessagesByThreadId,
@@ -779,6 +780,80 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
     expect(discoverMcpSpy).not.toHaveBeenCalled();
     expect(streamCompletionSpy).not.toHaveBeenCalled();
     expect(screen.queryByText(/Đang chuyển sang trợ lý TaskMate/)).toBeNull();
+  });
+
+  describe('Phase 28-04: canonical server-empty notice on AI Chat', () => {
+    it('grounded server_empty renders a system row with exactly the canonical notice', async () => {
+      const runMock = vi.fn().mockResolvedValue({
+        kind: 'server_empty',
+        notice: KNOWLEDGE_SERVER_EMPTY_NOTICE,
+      } as GroundedTurnResult);
+      setGroundedTurnTestHooks({ runGroundedTurn: runMock });
+
+      render(<AIChatDrawer open={true} onClose={() => {}} db={testDb} />);
+      submitMessage('Kiến thức về OTP');
+
+      await waitFor(() => {
+        expect(runMock).toHaveBeenCalledTimes(1);
+      });
+      await waitFor(() => {
+        expect(screen.getByText(KNOWLEDGE_SERVER_EMPTY_NOTICE)).toBeInTheDocument();
+      });
+    });
+
+    it('grounded server_empty with localFallback renders the notice then a separate local-labelled row', async () => {
+      const localFallback: ChatMessageGrounding = {
+        schemaVersion: 1,
+        authority: 'local',
+        outcome: 'LOCAL_FALLBACK_RESULTS',
+        answer: null,
+        citations: [],
+        paths: null,
+        conflicts: null,
+        scope: null,
+        modalityDiagnostics: null,
+        coverageWarnings: [],
+        fallbackReason: 'SERVER_ABSENT',
+        routerVersion: null,
+        promptVersion: 'grounded-v1',
+        modelId: null,
+        createdAt: '2026-10-11T10:00:00.000Z',
+      };
+      const runMock = vi.fn().mockResolvedValue({
+        kind: 'server_empty',
+        notice: KNOWLEDGE_SERVER_EMPTY_NOTICE,
+        localFallback,
+      } as GroundedTurnResult);
+      setGroundedTurnTestHooks({ runGroundedTurn: runMock });
+
+      render(<AIChatDrawer open={true} onClose={() => {}} db={testDb} />);
+      submitMessage('Kiến thức về OTP');
+
+      await waitFor(() => {
+        expect(runMock).toHaveBeenCalledTimes(1);
+      });
+      await waitFor(() => {
+        expect(screen.getByText(KNOWLEDGE_SERVER_EMPTY_NOTICE)).toBeInTheDocument();
+      });
+      expect(screen.getByText(/chỉ từ tài liệu nội bộ/)).toBeInTheDocument();
+    });
+
+    it('unrelated tool events still render as before (non-regression)', async () => {
+      const runMock = vi.fn().mockResolvedValue({
+        kind: 'grounded_answer',
+        grounding: validGroundedAnswer,
+      } as GroundedTurnResult);
+      setGroundedTurnTestHooks({ runGroundedTurn: runMock });
+
+      render(<AIChatDrawer open={true} onClose={() => {}} db={testDb} />);
+      submitMessage('CYTP1002 là gì?');
+
+      await waitFor(() => {
+        expect(screen.getByText(/Khách hàng xác thực OTP qua SMS/)).toBeInTheDocument();
+      });
+      // No canonical notice for a normal grounded answer.
+      expect(screen.queryByText(KNOWLEDGE_SERVER_EMPTY_NOTICE)).toBeNull();
+    });
   });
 });
 

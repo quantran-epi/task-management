@@ -7,7 +7,10 @@ import {
   cleanCitationTags,
   broadcastTelegramMessage,
   clearTelegramProcessedUpdateIdsForTesting,
+  formatGroundedNonAnswer,
 } from '../../src/services/telegram/telegramHeadlessWorker';
+import { KNOWLEDGE_SERVER_EMPTY_NOTICE } from '../../src/services/ai/knowledgeOutcome';
+import type { GroundedTurnResult } from '../../src/services/ai/groundedTurn';
 import {
   upsertWhitelistUser,
   getRecentTelegramLogs,
@@ -44,6 +47,15 @@ vi.mock('../../src/services/ai/groundedTurn', () => ({
   runGroundedTurn: (...args: any[]) => mockRunGroundedTurn(...args),
 }));
 
+const mockExecuteKnowledgeRetrievalTool = vi.fn();
+vi.mock('../../src/services/ai/knowledgeRetrievalTool', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/services/ai/knowledgeRetrievalTool')>();
+  return {
+    ...actual,
+    executeKnowledgeRetrievalTool: (...args: any[]) => mockExecuteKnowledgeRetrievalTool(...args),
+  };
+});
+
 const mockSendDesktopNotification = vi.fn();
 vi.mock('../../src/utils/desktopNotification', () => ({
   sendDesktopNotification: (...args: any[]) => mockSendDesktopNotification(...args),
@@ -73,6 +85,7 @@ describe('Telegram Headless Worker', () => {
       kind: 'operational',
       routedQuery: '',
     });
+    mockExecuteKnowledgeRetrievalTool.mockReset();
   });
 
   afterEach(async () => {
@@ -2570,6 +2583,150 @@ describe('Telegram Headless Worker', () => {
       // User still received the reply despite admin notification throwing
       expect(userReplies.length).toBe(1);
       expect(userReplies[0]).toContain('Đã đặt lại phiên trò chuyện');
+    });
+  });
+
+  describe('Phase 28-04: canonical server-empty notice on Telegram', () => {
+    it('formats a server_empty grounded result as exactly the canonical notice (cross-surface byte identity)', () => {
+      const result: GroundedTurnResult = {
+        kind: 'server_empty',
+        notice: KNOWLEDGE_SERVER_EMPTY_NOTICE,
+      };
+      const rendered = formatGroundedNonAnswer(result);
+      expect(rendered).toBe(KNOWLEDGE_SERVER_EMPTY_NOTICE);
+      // Cross-surface assertion: the rendered string is byte-identical to the
+      // one exported constant (the AI Chat surface imports the same constant).
+      expect(rendered).toEqual(expect.any(String));
+      expect((rendered as string).length).toBe(KNOWLEDGE_SERVER_EMPTY_NOTICE.length);
+    });
+
+    it('sends the canonical notice to the user for a grounded server_empty turn', async () => {
+      await setNineRouterApiKey('test-key', testDb);
+      mockStreamChatEvents.mockClear();
+
+      await upsertWhitelistUser(
+        {
+          chatId: 'empty_server_user',
+          name: 'Empty Server User',
+          status: 'active',
+          dataScope: 'full',
+        },
+        testDb
+      );
+
+      mockRouteIntent.mockResolvedValueOnce({
+        intent: 'query_knowledge',
+        confidence: 0.95,
+        entities: [],
+        language: 'vi',
+        needs_clarification: false,
+        clarify_question: null,
+        speculation_requested: false,
+      });
+      mockRunGroundedTurn.mockResolvedValueOnce({
+        kind: 'server_empty',
+        notice: KNOWLEDGE_SERVER_EMPTY_NOTICE,
+      });
+
+      const replies: string[] = [];
+      const mockSendReply = vi.fn(async (_token: string, _chatId: string, text: string) => {
+        replies.push(text);
+      });
+
+      await processTelegramInboundMessage(
+        {
+          update_id: 710,
+          message_id: 2101,
+          chat_id: 'empty_server_user',
+          from_name: 'Empty Server User',
+          text: 'Kiến thức về quy trình OTP',
+          date: 1730003000,
+        },
+        'test_token',
+        testDb,
+        mockSendReply,
+        vi.fn(async () => {})
+      );
+
+      expect(mockSendReply).toHaveBeenCalled();
+      expect(replies.join('\n')).toContain(KNOWLEDGE_SERVER_EMPTY_NOTICE);
+      expect(mockStreamChatEvents).not.toHaveBeenCalled();
+    });
+
+    it('prepends the canonical notice once when a retrieve_knowledge tool result is NO_PUBLISHED_SETS', async () => {
+      await setNineRouterApiKey('test-key', testDb);
+      mockStreamChatEvents.mockClear();
+
+      await upsertWhitelistUser(
+        {
+          chatId: 'empty_tool_user',
+          name: 'Empty Tool User',
+          status: 'active',
+          dataScope: 'full',
+        },
+        testDb
+      );
+
+      mockRouteIntent.mockResolvedValueOnce({
+        intent: 'query_taskmate',
+        confidence: 0.95,
+        entities: [],
+        language: 'vi',
+        needs_clarification: false,
+        clarify_question: null,
+        speculation_requested: false,
+      });
+
+      const emptyResult = JSON.stringify({ outcome: 'NO_PUBLISHED_SETS', excerpts: [] });
+      mockExecuteKnowledgeRetrievalTool.mockResolvedValueOnce(emptyResult);
+      mockStreamChatEvents.mockImplementationOnce((async function* () {
+        yield {
+          type: 'tool_calls',
+          calls: [
+            {
+              id: 'call_empty_kb',
+              type: 'function',
+              function: {
+                name: 'retrieve_knowledge',
+                arguments: JSON.stringify({ query: 'OTP' }),
+              },
+            },
+          ],
+        } as any;
+        // The tool runner returns the canned JSON via the seeded config below;
+        // the detected outcome must be surfaced by the host, never the model.
+      }) as any);
+      mockStreamChatEvents.mockImplementationOnce((async function* () {
+        yield { type: 'text', delta: 'đã truy vấn' };
+        yield { type: 'usage', usage: { total_tokens: 5 } };
+      }) as any);
+
+      const replies: string[] = [];
+      const mockSendReply = vi.fn(async (_token: string, _chatId: string, text: string) => {
+        replies.push(text);
+      });
+
+      await processTelegramInboundMessage(
+        {
+          update_id: 711,
+          message_id: 2102,
+          chat_id: 'empty_tool_user',
+          from_name: 'Empty Tool User',
+          text: 'tìm kiến thức OTP',
+          date: 1730003001,
+        },
+        'test_token',
+        testDb,
+        mockSendReply,
+        vi.fn(async () => {})
+      );
+
+      // The outbound text must contain the canonical notice, owned by the app.
+      const outbound = replies.join('\n');
+      expect(outbound).toContain(KNOWLEDGE_SERVER_EMPTY_NOTICE);
+      // Exactly once per turn.
+      expect(outbound.split(KNOWLEDGE_SERVER_EMPTY_NOTICE).length - 1).toBe(1);
+      void emptyResult;
     });
   });
 });
