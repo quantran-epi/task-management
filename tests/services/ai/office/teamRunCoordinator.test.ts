@@ -7206,5 +7206,93 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(row.durationMs).toBe(42);
       expect(row.resultPreview).toContain('done');
     });
+
+    it('derives error status from refused, error and outcome-error payloads', async () => {
+      const steps = await stepsAfterEvents([
+        {
+          id: 'refused',
+          name: 'write_doc',
+          result: JSON.stringify({ refused: true, code: 'INVALID_ARGUMENT' }),
+        },
+        { id: 'errored', name: 'git_read', result: JSON.stringify({ error: 'boom' }) },
+        {
+          id: 'outcome-error',
+          name: 'explore_repo',
+          result: JSON.stringify({ outcome: 'error', detail: 'timeout' }),
+        },
+        { id: 'plain', name: 'read_skill', result: 'plain text success' },
+      ]);
+
+      const byId = new Map(steps.map((row) => [row.id, row]));
+      expect(byId.get('refused')?.status).toBe('error');
+      expect(byId.get('errored')?.status).toBe('error');
+      expect(byId.get('outcome-error')?.status).toBe('error');
+      // A non-JSON result is plain-text success, never a throw (Pitfall 1).
+      expect(byId.get('plain')?.status).toBe('done');
+    });
+
+    it('leaves a call-only row running and handles a result with no prior call', async () => {
+      // `emitToolEvents` always emits a result, so use a raw script for the call-only case.
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            options.onToolCall?.({ id: 'only-call', name: 'git_read', args: {} });
+            return loopResult('Xong.');
+          },
+        },
+      });
+      const { coordinator, lead } = harness;
+      await coordinator.send('Chạy tool');
+      await waitForReady(coordinator);
+      const callOnly = coordinator
+        .getState()
+        .agents.find((row) => row.agentId === lead.id)
+        ?.steps?.find((row) => row.id === 'only-call');
+      expect(callOnly?.phase).toBe('call');
+      expect(callOnly?.status).toBe('running');
+
+      // A result with no prior row must produce a non-blank row, not throw or spread undefined.
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            options.onToolResult?.('orphan', JSON.stringify({ outcome: 'success' }), 5);
+            return loopResult('Xong.');
+          },
+        },
+      });
+      await harness.coordinator.send('Chạy tool');
+      await waitForReady(harness.coordinator);
+      const orphan = harness.coordinator
+        .getState()
+        .agents.find((row) => row.agentId === harness!.lead.id)
+        ?.steps?.find((row) => row.id === 'orphan');
+      expect(orphan?.phase).toBe('result');
+      expect(orphan?.toolName).toBeTruthy();
+      expect(orphan?.label).toBeTruthy();
+    });
+
+    it('caps args and result previews at 8000 chars before storing', async () => {
+      const steps = await stepsAfterEvents([
+        {
+          id: 'capped',
+          name: 'git_read',
+          args: JSON.stringify({ blob: 'a'.repeat(9000) }),
+          result: JSON.stringify({ report: 'b'.repeat(9000) }),
+        },
+      ]);
+      const row = steps.find((entry) => entry.id === 'capped')!;
+      expect(row.detail).toHaveLength(8000);
+      expect(row.resultPreview).toHaveLength(8000);
+    });
+
+    it('caps the timeline at MAX_LIVE_STEPS (200) rows', async () => {
+      const events = Array.from({ length: 210 }, (_, index) => ({
+        id: `bulk-${index}`,
+        name: 'git_read',
+        result: JSON.stringify({ outcome: 'success' }),
+      }));
+      const steps = await stepsAfterEvents(events);
+      expect(steps.length).toBeLessThanOrEqual(200);
+    });
   });
 });
