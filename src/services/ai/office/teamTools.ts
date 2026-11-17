@@ -320,7 +320,13 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
         type: 'object',
         properties: {
           action: { type: 'string', enum: ['list', 'create', 'update'] },
-          title: { type: 'string', description: 'Tiêu đề tài liệu. Bỏ trống khi action = list.' },
+          title: {
+            type: 'string',
+            description:
+              `Tiêu đề tài liệu. Tối đa ${NOTE_TITLE_MAX_LENGTH} ký tự, TRỪ ĐI độ dài tiền tố tên agent ` +
+              `(prefix "Tên — " được công cụ tự thêm khi create, nên giới hạn thực tế = ${NOTE_TITLE_MAX_LENGTH} - số ký tự prefix). ` +
+              'Rút gọn tiêu đề nếu vượt quá. Không tự thêm prefix — công cụ tự thêm. Bỏ trống khi action = list.',
+          },
           body: { type: 'string', description: 'Toàn văn nội dung tài liệu.' },
           noteId: { type: 'string', description: 'Id tài liệu cần sửa, chỉ dùng khi action = update.' },
         },
@@ -991,7 +997,8 @@ async function writeDoc(args: Record<string, any>, ctx: TeamToolContext): Promis
       return JSON.stringify(
         refuse(
           'INVALID_ARGUMENT',
-          `Tiêu đề quá dài (tối đa ${MAX_DOC_TITLE_LENGTH - prefix.length} ký tự).`
+          `Tiêu đề quá dài (tối đa ${MAX_DOC_TITLE_LENGTH - prefix.length} ký tự sau khi trừ prefix tên agent). ` +
+            `Hãy rút gọn tiêu đề rồi gọi lại create; nếu bạn đã dán lại prefix "Tên — " từ kết quả list thì bỏ bớt phần lặp.`
         )
       );
     }

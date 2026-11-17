@@ -15,6 +15,7 @@ import { AI_DATABASE_TOOLS } from '../../../../src/services/ai/aiTools';
 import { createNote } from '../../../../src/db/repositories/noteRepo';
 import { memberFolderSlug, teamFolderSlug } from '../../../../src/db/repositories/teamDocsRepo';
 import { generateId } from '../../../../src/utils/uuid';
+import { NOTE_TITLE_MAX_LENGTH } from '../../../../src/validation/schemas';
 
 const LONG_BODY = [
   '# Báo cáo thanh toán',
@@ -119,6 +120,23 @@ describe('teamTools — transcript search and skill reader (AIO-MEM-02, AIO-MEM-
     expect(def!.function.description).toContain('300');
     // Still optional: the knob is a parameter, not a required argument.
     expect(def!.function.parameters.required).not.toContain('timeoutSeconds');
+  });
+
+  // write-doc-title-too-long: the model must SEE the dynamic cap before it calls create. The cap
+  // is NOTE_TITLE_MAX_LENGTH minus the agent-name prefix, so a fixed "120" would be a lie once a
+  // prefix exists. Specified oracle: the schema string must carry the real cap and the rule.
+  it('advertises the dynamic title cap on write_doc.title so the model can size it up front', () => {
+    const def = TEAM_TOOL_DEFINITIONS.find((tool) => tool.function.name === 'write_doc');
+    expect(def).toBeDefined();
+
+    const prop = def!.function.parameters.properties.title;
+    expect(prop).toBeDefined();
+    expect(prop.type).toBe('string');
+
+    // The advertised number must be the REAL cap the handler enforces, not the raw constant.
+    expect(String(prop.description)).toContain(String(NOTE_TITLE_MAX_LENGTH));
+    // The cap is dynamic: it must tell the model the agent-name prefix counts against it.
+    expect(String(prop.description)).toMatch(/prefix|tiền tố|tên agent/i);
   });
 
   // 37.1 R9: `send_message` must be in the EMPLOYEE payload — the leader-only set is what
@@ -1724,6 +1742,76 @@ describe('teamTools — write_doc folder-scoped document write (AIO-DOCS-02..04,
     expect(result).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
     expect(result.message).toContain('quá dài');
     expect(await db.notes.count()).toBe(before);
+  });
+
+  // write-doc-title-too-long: a bare number gave the model no recovery path, so it abandoned the
+  // write. Specified oracle: the refusal must tell the model HOW to self-correct (shorten by the
+  // overage and/or drop a repeated agent-name prefix) so it can retry.
+  it('create over-long-title refusal tells the model how to shorten and retry', async () => {
+    const prefix = 'An — ';
+    const bare = 'x'.repeat(120); // way over the 115-char effective cap with this prefix
+
+    const result = JSON.parse(
+      await executeTeamTool(
+        'write_doc',
+        { action: 'create', title: bare, body: 'x' },
+        ctx({ folderId: folderA, agentName: 'An' })
+      )
+    );
+
+    expect(result).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
+    // Still reports the effective cap (120 - prefix length).
+    expect(result.message).toContain(String(NOTE_TITLE_MAX_LENGTH - prefix.length));
+    // NEW: actionable recovery guidance — the model must be told to shorten the title.
+    expect(result.message).toMatch(/rút gọn|ngắn lại|shorten|trim|cắt bớt/i);
+  });
+
+  // Boundary neighbors around the fixed cap (120 - prefix). The reported defect sat just over the
+  // line (109 vs 104); verify at cap, cap+1 (refuse with guidance), and a duplicated prefix that
+  // becomes VALID once stripped (the UAT self-correction path the model must be able to take).
+  it('create accepts a bare title exactly at the effective cap and refuses cap+1 with guidance', async () => {
+    const prefix = 'An — ';
+    const cap = NOTE_TITLE_MAX_LENGTH - prefix.length; // 115
+
+    const atCap = JSON.parse(
+      await executeTeamTool(
+        'write_doc',
+        { action: 'create', title: 'x'.repeat(cap), body: 'x' },
+        ctx({ folderId: folderA, agentName: 'An' })
+      )
+    );
+    expect(atCap.refused).not.toBe(true);
+    expect((await db.notes.get(atCap.noteId))!.title).toBe(prefix + 'x'.repeat(cap));
+
+    const overCap = JSON.parse(
+      await executeTeamTool(
+        'write_doc',
+        { action: 'create', title: 'x'.repeat(cap + 1), body: 'x' },
+        ctx({ folderId: folderA, agentName: 'An' })
+      )
+    );
+    expect(overCap).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
+    expect(overCap.message).toContain(String(cap));
+    expect(overCap.message).toMatch(/rút gọn|ngắn lại|shorten|trim|cắt bớt/i);
+  });
+
+  it('create accepts an over-cap title that becomes valid after stripping a repeated prefix', async () => {
+    const prefix = 'An — ';
+    // Bare title near cap; with a duplicated prefix pasted in it exceeds the cap, but the
+    // handler strips repeated prefixes before validating — the model's recovery path works.
+    const bare = 'y'.repeat(NOTE_TITLE_MAX_LENGTH - prefix.length);
+    const withDuplicate = prefix + prefix + bare;
+
+    const result = JSON.parse(
+      await executeTeamTool(
+        'write_doc',
+        { action: 'create', title: withDuplicate, body: 'x' },
+        ctx({ folderId: folderA, agentName: 'An' })
+      )
+    );
+
+    expect(result.refused).not.toBe(true);
+    expect((await db.notes.get(result.noteId))!.title).toBe(prefix + bare);
   });
 
   it('create refuses an over-long body instead of throwing (WR-02)', async () => {
