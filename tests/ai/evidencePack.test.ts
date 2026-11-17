@@ -1146,3 +1146,130 @@ describe('evidencePack', () => {
   });
 });
 
+describe('Phase 28-03: snapshot-aware packing', () => {
+  const SNAP_V1 = 'gsnap_11111111';
+  const SNAP_V2 = 'gsnap_22222222';
+
+  const serverResponseWith = (
+    items: FederatedRetrievalResponse['items'],
+    extra: Partial<FederatedRetrievalResponse> = {}
+  ): FederatedRetrievalResponse => ({
+    outcome: 'READY',
+    items,
+    paths: [],
+    conflictGroups: [],
+    modalityStatus: {
+      fulltext: { status: 'ok', latencyMs: 1, itemCount: items.length },
+      vector: { status: 'ok', latencyMs: 1, itemCount: items.length },
+      graph: { status: 'ok', latencyMs: 1, itemCount: 0 },
+    },
+    diagnostics: { degraded: false, coverageWarnings: [], coverage: [] },
+    ...extra,
+  });
+
+  it('identical range/hash in two sets at different snapshots → two citations with distinct snapshotIds', () => {
+    const chunkA = makeMockChunk('c1', DOC_1, 'Doc', 1, 10, 'same excerpt', HASH_A);
+    const chunkB = makeMockChunk('c2', DOC_1, 'Doc', 1, 10, 'same excerpt', HASH_A);
+    const pack = packEvidence({
+      authority: 'server',
+      serverResponse: serverResponseWith([
+        { setId: SET_1, snapshotId: SNAP_V1, roleGroup: 'baseline', item: chunkA },
+        { setId: SET_2, snapshotId: SNAP_V2, roleGroup: 'scope_diff', item: chunkB },
+      ]),
+    });
+    const cits = Object.values(pack.citations);
+    expect(cits).toHaveLength(2);
+    expect(new Set(cits.map((c) => c.snapshotId)).size).toBe(2);
+  });
+
+  it('identical range/hash/snapshot in two sets → one citation with two setMemberships', () => {
+    const chunkA = makeMockChunk('c1', DOC_1, 'Doc', 1, 10, 'same excerpt', HASH_A);
+    const chunkB = makeMockChunk('c2', DOC_1, 'Doc', 1, 10, 'same excerpt', HASH_A);
+    const pack = packEvidence({
+      authority: 'server',
+      serverResponse: serverResponseWith([
+        { setId: SET_1, snapshotId: SNAP_V1, roleGroup: 'baseline', item: chunkA },
+        { setId: SET_2, snapshotId: SNAP_V1, roleGroup: 'scope_diff', item: chunkB },
+      ]),
+    });
+    expect(Object.keys(pack.citations)).toHaveLength(1);
+    expect(pack.citations['S1']?.setMemberships.map((m) => m.setId)).toEqual([SET_1, SET_2]);
+  });
+
+  it('a conflict group across two sets/snapshots keeps both citations with their provenance', () => {
+    const chunkA = makeMockChunk('c1', DOC_1, 'Doc A', 1, 10, 'branch A', HASH_A, { conflictGroupId: 'cg_x' });
+    const chunkB = makeMockChunk('c2', DOC_2, 'Doc B', 1, 10, 'branch B', HASH_B, { conflictGroupId: 'cg_x' });
+    const pack = packEvidence({
+      authority: 'server',
+      serverResponse: serverResponseWith(
+        [
+          { setId: SET_1, snapshotId: SNAP_V1, roleGroup: 'baseline', item: chunkA },
+          { setId: SET_2, snapshotId: SNAP_V2, roleGroup: 'scope_diff', item: chunkB },
+        ],
+        { conflictGroups: [
+          { setId: SET_1, snapshotId: SNAP_V1, roleGroup: 'baseline', conflictGroup: { conflictGroupId: 'cg_x', dimension: 'Version', scopeProof: null } },
+          { setId: SET_2, snapshotId: SNAP_V2, roleGroup: 'scope_diff', conflictGroup: { conflictGroupId: 'cg_x', dimension: 'Version', scopeProof: null } },
+        ] }
+      ),
+    });
+    const provenance = (pack as any).conflictProvenance?.['cg_x'];
+    expect(provenance).toBeDefined();
+    const pairs = provenance.map((p: any) => `${p.setId}|${p.snapshotId}`);
+    expect(new Set(pairs).size).toBe(2);
+    expect(Object.keys(pack.citations)).toHaveLength(2);
+  });
+
+  it('drops an orphan federated path whose hop citation is not a returned chunk', () => {
+    const chunk = makeMockChunk('c1', DOC_1, 'Doc', 1, 10, 'excerpt', HASH_A);
+    const pack = packEvidence({
+      authority: 'server',
+      serverResponse: serverResponseWith(
+        [{ setId: SET_1, snapshotId: SNAP_V1, roleGroup: 'baseline', item: chunk }],
+        { paths: [{
+          setId: SET_1, snapshotId: SNAP_V1, roleGroup: 'baseline',
+          path: {
+            pathId: 'P1', snapshotId: SNAP_V1,
+            nodeUrns: ['urn:plannermate:core:process:a', 'urn:plannermate:core:process:b'],
+            edgeFactKeys: ['1'.repeat(64)], hopClassifications: ['OBSERVED'],
+            hopCitationIds: [['orphan']], hasConflict: false, classification: 'OBSERVED',
+          },
+        }] }
+      ),
+    });
+    expect(pack.paths).toEqual({});
+  });
+
+  it('mirrors response.diagnostics.coverage into pack.coverage, bounded to 50', () => {
+    const coverage = Array.from({ length: 60 }, (_, i) => ({
+      setId: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+      state: 'SEARCHED_NO_EVIDENCE' as const,
+      publishedSnapshotId: null,
+      retrievalSnapshotId: null,
+      staleIndex: false,
+    }));
+    const pack = packEvidence({
+      authority: 'server',
+      serverResponse: serverResponseWith([], {
+        diagnostics: { degraded: false, coverageWarnings: [], coverage },
+      }),
+    });
+    expect(pack.coverage).toHaveLength(50);
+    expect(pack.coverage?.[0]).toEqual(coverage[0]);
+  });
+
+  it('non-regression: local and MCP packs have empty coverage and unchanged citations', () => {
+    const localResult: LocalGroundedResult = {
+      ranges: [{
+        documentId: DOC_1, documentTitle: 'Local Doc', sectionAnchor: null,
+        lineStart: 1, lineEnd: 5, startOffset: 0, endOffset: 50,
+        rawSnippet: 'local snippet', contentHash: HASH_A, score: 1,
+        matchedTerms: ['x'], setMemberships: [{ setId: SET_1, setName: 'Set 1' }],
+      }],
+      strongEvidence: true, totalScanned: 1,
+    };
+    const localPack = packEvidence({ authority: 'local', localResult });
+    expect(localPack.coverage).toEqual([]);
+    expect(Object.keys(localPack.citations)).toEqual(['L1']);
+  });
+});
+
