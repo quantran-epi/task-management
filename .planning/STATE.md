@@ -6,10 +6,10 @@ current_phase: 44
 current_phase_name: Agent Activity Panel, Configurable Explore Timeout and Prompt Log
 status: executing
 stopped_at: Phase 44 UI-SPEC approved
-last_updated: "2026-11-17T05:25:44.609Z"
+last_updated: "2026-11-17T14:10:43.775Z"
 last_activity: 2026-11-17
 last_activity_desc: Phase 44 execution resumed (wave continue)
-state_head: 57b69490078871edeae772b27c47f1c1fc365c7e
+state_head: 76d5b87de273a40e7e0706f6abf1aa78a389958e
 progress:
   total_phases: 8
   completed_phases: 5
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 Phase: 44 (Agent Activity Panel, Configurable Explore Timeout and Prompt Log) — EXECUTING
 Plan: 1 of 4
 Status: Executing Phase 44
-Last activity: 2026-11-17 — Phase 44 execution resumed (wave continue)
+Last activity: 2026-11-17 - Completed quick task 261117-ss8: Thêm instrumentation/báo cáo lỗi đầy đủ cho mọi run agent/leader
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -95,6 +95,7 @@ Progress: [██████░░░░] 63%
 | 261116-e63 | AI tools for Mermaid diagrams: query_diagrams, create_diagram, update_diagram | 2026-11-16 | 4fff0a59 | .planning/quick/261116-e63-ai-tools-for-mermaid-diagrams-add-query-diagrams-read-create |
 | 261116-e64 | Configurable system type list backed by settings | 2026-11-16 | bfad78fb | .planning/quick/261116-e64-configurable-system-type-list-systemtype-is-a-hardcoded-unio |
 | 261116-fyi | Restore Docs parity in IntelliJ workbench: document sets drawer (publish + graph build), ZIP import, folder ZIP export | 2026-11-16 | c0858407 | [261116-fyi-bring-docs-explorer-features-missing-fro](./quick/261116-fyi-bring-docs-explorer-features-missing-fro/) |
+| 261117-ss8 | Thêm instrumentation/báo cáo lỗi đầy đủ cho mọi run agent/leader: mỗi tool call (explore_repo, write_doc, v.v.) phải ghi log có timestamp, source abort (user stop / batch deadline / dispose / turn end), tool name, duration, error code/detail, outcome; áp dụng cho mọi thể loại run agent/leader. Ghi nhận UAT abort 31fc8015. | 2026-11-17 | 76d5b87d | [261117-ss8-th-m-instrumentation-b-o-c-o-l-i-y-cho-m](./quick/261117-ss8-th-m-instrumentation-b-o-c-o-l-i-y-cho-m/) |
 
 ## Accumulated Context
 
