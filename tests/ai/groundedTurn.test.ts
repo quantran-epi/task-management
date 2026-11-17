@@ -9,7 +9,12 @@ import {
 } from '../../src/services/ai/groundedTurn';
 import { KnowledgeClientError } from '../../src/services/knowledge/knowledgeClient';
 import { GroundedSynthesisError } from '../../src/services/ai/groundedSynthesis';
-import type { ChatMessageGrounding, GroundedAnswer } from '../../src/services/ai/groundedAnswerSchemas';
+import {
+  ChatMessageGroundingSchema,
+  type ChatMessageGrounding,
+  type GroundedAnswer,
+} from '../../src/services/ai/groundedAnswerSchemas';
+import { KNOWLEDGE_SERVER_EMPTY_NOTICE } from '../../src/services/ai/knowledgeOutcome';
 import type { FederatedRetrievalResponse } from '../../src/services/knowledge/retrievalProtocol';
 import type { LocalGroundedResult } from '../../src/services/search/localGroundedRetrieval';
 import { validateGroundedAnswerClosure, type EvidencePack } from '../../src/services/ai/evidencePack';
@@ -1680,5 +1685,127 @@ describe('groundedTurn state machine', () => {
       expect(mcpCitation?.snapshotId).toBe('mcp_live');
       expect(mcpCitation?.publishedContentHash).toBeNull();
     }
+  });
+
+  describe('Phase 28-04: server-empty grounded outcome with ordered local fallback', () => {
+    function emptyServerResponse(): FederatedRetrievalResponse {
+      return {
+        ...dummyServerResponse,
+        items: [],
+        outcome: 'NO_PUBLISHED_SETS',
+      } as unknown as FederatedRetrievalResponse;
+    }
+
+    it('NO_PUBLISHED_SETS with no local docs -> server_empty with canonical notice, no fallback, no synthesis', async () => {
+      vi.mocked(mockDeps.retrieveFederated).mockResolvedValueOnce(emptyServerResponse());
+      mockInput.catalog = [];
+      vi.mocked(mockDeps.routeScope).mockResolvedValueOnce({
+        setTierAssignments: [],
+        comparisonMode: null,
+        routerSource: 'alias',
+      });
+
+      const res = await runGroundedTurn(mockInput, mockDeps);
+      expect(res.kind).toBe('server_empty');
+      if (res.kind === 'server_empty') {
+        expect(res.notice).toBe(KNOWLEDGE_SERVER_EMPTY_NOTICE);
+        expect(res.localFallback).toBeUndefined();
+      }
+      expect(mockDeps.synthesizeGroundedAnswer).not.toHaveBeenCalled();
+      expect(mockDeps.runLocalBm25).not.toHaveBeenCalled();
+    });
+
+    it('NO_PUBLISHED_SETS with local docs -> notice precedes a local-authority fallback grounding', async () => {
+      vi.mocked(mockDeps.retrieveFederated).mockResolvedValueOnce(emptyServerResponse());
+      // Local catalog present and BM25 returns strong evidence.
+      vi.mocked(mockDeps.runLocalBm25).mockResolvedValueOnce({
+        ranges: [
+          {
+            documentId: '00000000-0000-0000-0000-000000000001',
+            documentTitle: 'CYTP1002 Spec Local',
+            sectionAnchor: null,
+            lineStart: 1,
+            lineEnd: 5,
+            startOffset: 0,
+            endOffset: 50,
+            rawSnippet: 'Local snippet',
+            contentHash: 'a'.repeat(64),
+            score: 12,
+            matchedTerms: ['otp'],
+            setMemberships: [],
+          },
+        ],
+        strongEvidence: false,
+        totalScanned: 1,
+      });
+
+      const res = await runGroundedTurn(mockInput, mockDeps);
+      expect(res.kind).toBe('server_empty');
+      if (res.kind === 'server_empty') {
+        expect(res.notice).toBe(KNOWLEDGE_SERVER_EMPTY_NOTICE);
+        expect(res.localFallback).toBeDefined();
+        expect(res.localFallback?.authority).toBe('local');
+        // The notice is the leading user-facing text; fallback is a separate payload.
+        expect(KNOWLEDGE_SERVER_EMPTY_NOTICE.length).toBeGreaterThan(0);
+      }
+      expect(mockDeps.runLocalBm25).toHaveBeenCalled();
+    });
+
+    it('NO_EVIDENCE with non-empty coverage stays refine with no notice string', async () => {
+      vi.mocked(mockDeps.retrieveFederated).mockResolvedValueOnce({
+        ...dummyServerResponse,
+        items: [],
+        outcome: 'NO_EVIDENCE',
+        suggestedRefinements: ['Mở rộng tìm kiếm'],
+        diagnostics: {
+          ...dummyServerResponse.diagnostics,
+          coverage: [
+            {
+              setId: '10000000-0000-0000-0000-000000000001',
+              state: 'SEARCHED_NO_EVIDENCE',
+              publishedSnapshotId: 'gsnap_11111111',
+              retrievalSnapshotId: 'gsnap_11111111',
+              staleIndex: false,
+            },
+          ],
+        },
+      } as unknown as FederatedRetrievalResponse);
+
+      const res = await runGroundedTurn(mockInput, mockDeps);
+      expect(res.kind).toBe('refine');
+      expect(JSON.stringify(res)).not.toContain(KNOWLEDGE_SERVER_EMPTY_NOTICE);
+    });
+
+    it('NETWORK_ERROR throw -> existing local-fallback path, no canonical notice', async () => {
+      vi.mocked(mockDeps.retrieveFederated).mockRejectedValueOnce(
+        new KnowledgeClientError('NETWORK_ERROR', 'Connection failed')
+      );
+
+      const res = await runGroundedTurn(mockInput, mockDeps);
+      expect(res.kind).toBe('grounded_answer');
+      expect(JSON.stringify(res)).not.toContain(KNOWLEDGE_SERVER_EMPTY_NOTICE);
+    });
+
+    it('ChatMessageGroundingSchema parses a grounding with NO_PUBLISHED_SETS outcome', () => {
+      const grounding = {
+        schemaVersion: 1,
+        authority: 'local',
+        outcome: 'NO_PUBLISHED_SETS',
+        answer: null,
+        citations: [],
+        paths: null,
+        conflicts: null,
+        scope: null,
+        modalityDiagnostics: null,
+        coverageWarnings: [],
+        fallbackReason: 'SERVER_ABSENT',
+        routerVersion: null,
+        promptVersion: '2026.10.1',
+        modelId: null,
+        createdAt: '2026-10-11T12:00:00.000Z',
+      };
+      const parsed = ChatMessageGroundingSchema.parse(grounding);
+      expect(parsed.outcome).toBe('NO_PUBLISHED_SETS');
+    });
   });
 });
