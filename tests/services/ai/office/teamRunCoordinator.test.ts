@@ -7338,6 +7338,66 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(employeeSteps.some((row) => row.id === 'explore-call')).toBe(true);
     });
 
+    it('keeps cumulative tool-call history across a later lead-thinking turn (UAT live-inspection)', async () => {
+      // Regression for the residual BUG2: the first lead turn records `delegate_batch`;
+      // a later lead turn in the SAME run (e.g. the leader calling search_team_history /
+      // read_team_turn and then answering again) must not erase the earlier id-keyed row.
+      // The timeline is cumulative for the whole coordinator session (UI-SPEC "Timeline
+      // event rows"), bounded only by MAX_LIVE_STEPS — NOT reset per lead turn.
+      let leadToolCallCount = 0;
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            if (isSynthesisTurn(options)) return loopResult('Đã tổng hợp.');
+            // Two distinct lead-thinking turns, each emitting one tool call.
+            const callId = leadToolCallCount++ === 0 ? 'delegate-call' : 'history-call';
+            const toolName = callId === 'delegate-call' ? 'delegate_batch' : 'search_team_history';
+            options.onToolCall?.({ id: callId, name: toolName, args: {} });
+            options.onToolResult?.(callId, JSON.stringify({ outcome: 'success' }), 12);
+            return loopResult('Xong.');
+          },
+        },
+      });
+      const { coordinator, lead } = harness;
+
+      // Turn 1: records delegate_batch (no delegation executed — the row comes from the
+      // tool-event upsert path, which is what the Timeline reads).
+      await coordinator.send('Việc thứ nhất');
+      await waitForReady(coordinator);
+      const afterFirst = coordinator.getState().agents.find((r) => r.agentId === lead.id)?.steps ?? [];
+      expect(afterFirst.some((row) => row.id === 'delegate-call')).toBe(true);
+
+      // Turn 2: a later lead-thinking tool turn in the same run.
+      await coordinator.send('Việc thứ hai');
+      await waitForReady(coordinator);
+      const afterSecond = coordinator.getState().agents.find((r) => r.agentId === lead.id)?.steps ?? [];
+      expect(afterSecond.some((row) => row.id === 'delegate-call')).toBe(true);
+      expect(afterSecond.some((row) => row.id === 'history-call')).toBe(true);
+    });
+
+    it('starts a genuinely new session with an empty timeline (UAT live-inspection boundary)', async () => {
+      // The timeline is cumulative per coordinator session, NOT forever. A new thread /
+      // team switch / teardown disposes the coordinator (getOrCreateRun) and a fresh one has
+      // empty agent state — so the reset boundary is the coordinator lifetime, not a flag we
+      // forgot to set on a lead turn. This guards against someone later persisting steps to
+      // Dexie and accidentally carrying them across sessions.
+      harness = await createHarness({
+        scripts: { [LEAD_MODEL]: async () => loopResult('Xong.') },
+      });
+      const before = harness.coordinator.getState().agents.find((r) => r.agentId === harness!.lead.id)
+        ?.steps;
+      expect(before ?? []).toHaveLength(0);
+
+      await harness.coordinator.send('Chạy tool');
+      await waitForReady(harness.coordinator);
+      const after = harness.coordinator.getState().agents.find((r) => r.agentId === harness!.lead.id)
+        ?.steps;
+      // A plain turn may emit a label-only compact-popover step, but no TOOL-CALL rows
+      // (AgentActivityPanel.toTimelineRow hides rows with no toolName/phase).
+      const toolRows = (after ?? []).filter((row) => row.toolName !== undefined || row.phase !== undefined);
+      expect(toolRows).toHaveLength(0);
+    });
+
     it('keeps label, ISO at and capped detail for the compact popover after call+result', async () => {
       // The compact TeamActivityIndicator stays byte-unchanged: it reads these same legacy
       // fields off each upserted row. Dropping any of them must break this test (Pitfall 3).

@@ -2327,11 +2327,14 @@ export function createTeamRunCoordinator(
         status: 'running',
         streamingText: '',
         startedAt: new Date().toISOString(),
-        // Phase 44: the Timeline is cumulative tool-call history for the whole team turn.
-        // The synthesis turn is the SECOND lead turn of one batch (after dispatch, where
-        // `delegate_batch` is recorded). Clearing steps here wiped the lead's tool-call row
-        // from the dispatch turn. A genuine new lead turn (thinking) still starts fresh.
-        ...(announcedPhase === 'lead-synthesizing' ? {} : { steps: [] }),
+        // Phase 44: the Timeline is cumulative id-keyed tool-call history for the whole
+        // coordinator session (one team + thread). The lead can run MANY turns in one run —
+        // dispatch, synthesis, and follow-up tool turns (search_team_history, read_team_turn,
+        // ...) — and every tool call must stay in the timeline. Resetting `steps` on any lead
+        // turn wiped earlier rows (e.g. `delegate_batch` from the dispatch turn). There is no
+        // per-turn reset here on purpose: a genuine new run/thread/team switch/teardown
+        // disposes this coordinator (see getOrCreateRun), and a fresh one starts with empty
+        // agent state. `upsertToolStep` + MAX_LIVE_STEPS keep the history cumulative and bounded.
       });
       registerAgentTurn(lead.id, lead.name);
       // 37.1 rework: `phase` is DERIVED (see `derivePhase`), so a turn only records which
