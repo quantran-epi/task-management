@@ -9,6 +9,9 @@ import {
   EXPLORE_REPORT_MAX_CHARS,
   buildExploreCommand,
   REMOTE_CLAUDE_AUTH_SETTINGS,
+  SSH_TRANSPORT_RETRY_ATTEMPTS,
+  SSH_TRANSPORT_RETRY_BACKOFF_MS,
+  isTransientSshTransportError,
   clampExploreTimeoutSeconds,
   parseExploreResult,
   probeRemoteClaude,
@@ -17,6 +20,11 @@ import {
   type ExploreRequest,
 } from '../../src/services/remoteExploreService';
 import type { SshConfig, SshStreamEvent, SshStreamExitEvent } from '../../src/types/ssh';
+import type { execRemoteCommand } from '../../src/services/sshService';
+
+/** A typed exec mock factory (vitest 5's vi.fn generic is the function signature). */
+type ExecFn = typeof execRemoteCommand;
+const execMock = () => vi.fn<ExecFn>();
 
 const CONFIG: SshConfig = {
   id: 'cfg-1',
@@ -510,6 +518,131 @@ describe('runRemoteExplore (43-04 D-03)', () => {
 
     expect(outcome.detail).toBe('aborted');
     expect(stream).not.toHaveBeenCalled();
+  });
+
+  describe('transient SSH transport retry (handshake KEX abort)', () => {
+    const HANDSHAKE_ERR = new Error(
+      'SSH handshake thất bại: [Session(-8)] Unable to exchange encryption keys'
+    );
+    const noSleep = async () => {};
+
+    it('classifies the real libssh2 KEX abort and its transport siblings as transient', () => {
+      expect(isTransientSshTransportError(HANDSHAKE_ERR)).toBe(true);
+      expect(isTransientSshTransportError(new Error('[Session(-8)] Unable to exchange encryption keys'))).toBe(true);
+      expect(isTransientSshTransportError(new Error('Khởi tạo SSH session thất bại: boom'))).toBe(true);
+      expect(isTransientSshTransportError(new Error('Kết nối TCP tới host:22 thất bại (timeout 10s)'))).toBe(true);
+      expect(isTransientSshTransportError(new Error('Không thể mở channel session: x'))).toBe(true);
+    });
+
+    it('does NOT classify deterministic auth/CLI/command errors as transient', () => {
+      expect(isTransientSshTransportError(new Error('Xác thực mật khẩu thất bại'))).toBe(false);
+      expect(isTransientSshTransportError(new Error('Xác thực khóa riêng tư thất bại'))).toBe(false);
+      expect(isTransientSshTransportError(new Error('Not logged in · Please run /login'))).toBe(false);
+      expect(isTransientSshTransportError(new Error('claude: command not found'))).toBe(false);
+      expect(isTransientSshTransportError(new Error('some remote command error'))).toBe(false);
+      // Integrity failures must not be retried even though they carry a Session(-N) code.
+      expect(isTransientSshTransportError(new Error('[Session(-4)] Invalid MAC'))).toBe(false);
+      expect(isTransientSshTransportError('')).toBe(false);
+    });
+
+    it('probeRemoteClaude recovers when the first handshake aborts', async () => {
+      resetRemoteClaudeProbeCache();
+      const exec = execMock()
+        .mockRejectedValueOnce(HANDSHAKE_ERR)
+        .mockResolvedValueOnce({ stdout: '', stderr: '', exitStatus: 0 });
+
+      expect(await probeRemoteClaude(CONFIG, undefined, { exec, sleep: noSleep })).toBe(true);
+      expect(exec).toHaveBeenCalledTimes(SSH_TRANSPORT_RETRY_ATTEMPTS);
+    });
+
+    it('probeRemoteClaude stops after the bounded attempts on a persistent handshake fault', async () => {
+      resetRemoteClaudeProbeCache();
+      const exec = execMock()
+        .mockRejectedValue(HANDSHAKE_ERR);
+
+      await expect(probeRemoteClaude(CONFIG, undefined, { exec, sleep: noSleep })).rejects.toThrow(
+        /Unable to exchange encryption keys/
+      );
+      expect(exec).toHaveBeenCalledTimes(SSH_TRANSPORT_RETRY_ATTEMPTS);
+      resetRemoteClaudeProbeCache();
+    });
+
+    it('probeRemoteClaude never retries a deterministic auth failure', async () => {
+      resetRemoteClaudeProbeCache();
+      const exec = execMock()
+        .mockRejectedValue(new Error('Xác thực mật khẩu thất bại'));
+
+      await expect(probeRemoteClaude(CONFIG, undefined, { exec, sleep: noSleep })).rejects.toThrow(
+        /thất bại/
+      );
+      expect(exec).toHaveBeenCalledTimes(1);
+      resetRemoteClaudeProbeCache();
+    });
+
+    it('runRemoteExplore retries a first-attempt handshake abort and returns the real report', async () => {
+      let attempt = 0;
+      const stream = vi.fn(
+        async (
+          _config: SshConfig,
+          _command: string,
+          _sessionId: string,
+          onData: (e: SshStreamEvent) => void,
+          onExit: (e: SshStreamExitEvent) => void
+        ) => {
+          attempt++;
+          if (attempt === 1) throw HANDSHAKE_ERR;
+          onData({ sessionId: 's', stream: 'stdout', line: '{"is_error":false,"result":"xong"}' });
+          onExit({ sessionId: 's', exitStatus: 0, error: null });
+          return async () => {};
+        }
+      );
+
+      const outcome = await runRemoteExplore(CONFIG, undefined, request(), { stream, sleep: noSleep });
+
+      expect(outcome).toEqual({ report: 'xong', truncated: false, outcome: 'success' });
+      expect(stream).toHaveBeenCalledTimes(SSH_TRANSPORT_RETRY_ATTEMPTS);
+      // Retried stream uses the same session id so listeners/cancel stay consistent.
+      const ids = stream.mock.calls.map((c) => c[2]);
+      expect(ids[0]).toBe(ids[1]);
+    });
+
+    it('runRemoteExplore surfaces the last handshake error after bounded retries', async () => {
+      const stream = vi.fn(async () => {
+        throw HANDSHAKE_ERR;
+      });
+
+      const outcome = await runRemoteExplore(CONFIG, undefined, request(), { stream, sleep: noSleep });
+
+      expect(outcome.outcome).toBe('error');
+      expect(outcome.detail).toMatch(/Unable to exchange encryption keys/);
+      expect(stream).toHaveBeenCalledTimes(SSH_TRANSPORT_RETRY_ATTEMPTS);
+    });
+
+    it('runRemoteExplore does not retry a deterministic remote error', async () => {
+      const stream = vi.fn(async () => {
+        throw new Error('Xác thực mật khẩu thất bại');
+      });
+
+      const outcome = await runRemoteExplore(CONFIG, undefined, request(), { stream, sleep: noSleep });
+
+      expect(outcome.outcome).toBe('error');
+      expect(outcome.detail).toMatch(/thất bại/);
+      expect(stream).toHaveBeenCalledTimes(1);
+    });
+
+    it('backs off once between the two bounded attempts', async () => {
+      resetRemoteClaudeProbeCache();
+      const sleep = vi.fn(async () => {});
+      const exec = execMock()
+        .mockRejectedValueOnce(HANDSHAKE_ERR)
+        .mockResolvedValueOnce({ stdout: '', stderr: '', exitStatus: 0 });
+
+      await probeRemoteClaude(CONFIG, undefined, { exec, sleep });
+
+      expect(sleep).toHaveBeenCalledTimes(1);
+      expect(sleep).toHaveBeenCalledWith(SSH_TRANSPORT_RETRY_BACKOFF_MS);
+      resetRemoteClaudeProbeCache();
+    });
   });
 
   it('turns a non-zero exit with no stdout into an error carrying stderr', async () => {

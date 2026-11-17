@@ -26,6 +26,18 @@ export const EXPLORE_MAX_TURNS_CAP = 40;
 /** A runaway remote cannot exhaust memory: the line buffer stops at 4× the report cap. */
 const STREAM_BUFFER_MAX_CHARS = EXPLORE_REPORT_MAX_CHARS * 4;
 
+/**
+ * SSH transport is occasionally flaky at key exchange. On 2026-11-17, 1 of ~110 libssh2
+ * handshakes to the same local host aborted mid-KEX: the server sent SSH2_MSG_NEWKEYS and the
+ * client dropped the socket 26ms later before its own NEWKEYS, surfacing as
+ * `SSH handshake thất bại: [Session(-8)] Unable to exchange encryption keys`. The negotiated
+ * algorithms were identical to every successful connection, so this is a transient transport
+ * fault, not a config/algorithm mismatch. A bounded retry is the correct mitigation: a single
+ * flaky handshake must not fail a whole explore_repo turn.
+ */
+export const SSH_TRANSPORT_RETRY_ATTEMPTS = 2; // 1 initial + 1 retry
+export const SSH_TRANSPORT_RETRY_BACKOFF_MS = 250;
+
 export interface ExploreRequest {
   repoPath: string;
   question: string;
@@ -229,6 +241,61 @@ export function parseExploreResult(stdout: string): ExploreOutcome {
   return capReport({ report, truncated: false, outcome: 'success' });
 }
 
+/**
+ * True only for errors that a fresh TCP+SSH handshake can plausibly recover from. Auth failures,
+ * "command not found", and remote command errors are deterministic and must NOT be retried —
+ * retrying them wastes a turn and can amplify server-side per-source penalties.
+ *
+ * The transport throws the raw Tauri invoke message as `err.message`, e.g.
+ * `SSH handshake thất bại: [Session(-8)] Unable to exchange encryption keys`,
+ * `Khởi tạo SSH session thất bại: ...`, or `Kết nối TCP tới host:port thất bại (timeout 10s)`.
+ * Match on those exact source strings (Vietnamese + libssh2 wording), not a broad "error" test.
+ */
+export function isTransientSshTransportError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : typeof err === 'string' ? err : '';
+  if (!msg) return false;
+  // An integrity failure is not a flaky transport — never paper over it with a retry.
+  if (/invalid mac|message authentication|integrity/i.test(msg)) return false;
+  return (
+    /SSH handshake thất bại/i.test(msg) ||
+    /Unable to exchange encryption keys/i.test(msg) ||
+    /\[Session\(-\d+\)\]/i.test(msg) ||
+    /Khởi tạo SSH session thất bại/i.test(msg) ||
+    /Kết nối TCP tới .* thất bại/i.test(msg) ||
+    /Không thể mở channel session/i.test(msg)
+  );
+}
+
+/** Sleep helper; injectable via `sleep` so tests need no real timers. */
+function delay(ms: number, sleep?: (ms: number) => Promise<void>): Promise<void> {
+  return sleep ? sleep(ms) : new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Run a transport operation, retrying only confirmed transient SSH-handshake faults with a small
+ * backoff. The operation must be safe to repeat: `probeRemoteClaude`'s `command -v` is read-only,
+ * and `runRemoteExplore` starts the remote process only after the stream connects. Permanent
+ * errors propagate unchanged so callers keep their existing truthful refusal behaviour.
+ */
+async function withSshTransportRetry<T>(
+  op: () => Promise<T>,
+  deps: { sleep?: (ms: number) => Promise<void> } = {}
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < SSH_TRANSPORT_RETRY_ATTEMPTS; attempt++) {
+    try {
+      return await op();
+    } catch (err) {
+      lastError = err;
+      if (!isTransientSshTransportError(err) || attempt === SSH_TRANSPORT_RETRY_ATTEMPTS - 1) {
+        throw err;
+      }
+      await delay(SSH_TRANSPORT_RETRY_BACKOFF_MS, deps.sleep);
+    }
+  }
+  throw lastError;
+}
+
 const probeCache = new Set<string>();
 
 /** Tests only: the cache is per SSH profile and would otherwise leak between cases. */
@@ -244,13 +311,16 @@ export function resetRemoteClaudeProbeCache(): void {
 export async function probeRemoteClaude(
   config: SshConfig,
   secret?: string,
-  deps?: { exec?: typeof execRemoteCommand }
+  deps?: { exec?: typeof execRemoteCommand; sleep?: (ms: number) => Promise<void> }
 ): Promise<boolean> {
   const cached = probeCache.has(config.id);
   if (cached) return true;
 
   const exec = deps?.exec ?? execRemoteCommand;
-  const res = await exec(config, 'command -v claude >/dev/null 2>&1', secret);
+  const res = await withSshTransportRetry(
+    () => exec(config, 'command -v claude >/dev/null 2>&1', secret),
+    deps
+  );
   const available = res.exitStatus === 0;
   // A transport failure throws above and is deliberately NOT cached — it says nothing about
   // whether the CLI is installed.
@@ -270,6 +340,8 @@ export interface RunRemoteExploreDeps {
    * clamped `timeoutSeconds`. Optional so existing callers keep the 300s default contract.
    */
   timeoutMs?: number | undefined;
+  /** Injectable for tests; production uses the real timer. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 /**
@@ -366,7 +438,10 @@ export async function runRemoteExplore(
 
     void (async () => {
       try {
-        const handle = await stream(config, command, sessionId, onData, onExit, secret);
+        const handle = await withSshTransportRetry(
+          () => stream(config, command, sessionId, onData, onExit, secret),
+          deps
+        );
         cancel = handle;
         // The wall clock (or an abort) can fire while the SSH connect is still in flight; the
         // process it would have killed is now live and nothing else would ever cancel it.
