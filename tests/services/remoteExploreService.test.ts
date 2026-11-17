@@ -2,9 +2,13 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   EXPLORE_DEFAULT_MAX_TURNS,
+  EXPLORE_DEFAULT_TIMEOUT_MS,
+  EXPLORE_MAX_TIMEOUT_SECONDS,
   EXPLORE_MAX_TURNS_CAP,
+  EXPLORE_MIN_TIMEOUT_SECONDS,
   EXPLORE_REPORT_MAX_CHARS,
   buildExploreCommand,
+  clampExploreTimeoutSeconds,
   parseExploreResult,
   probeRemoteClaude,
   resetRemoteClaudeProbeCache,
@@ -97,6 +101,36 @@ describe('buildExploreCommand (43-04 D-03)', () => {
     expect(cmd).toContain('--output-format json');
     // `timeout(1)` is absent on stock macOS — the bound lives on the JS side.
     expect(cmd).not.toContain('timeout ');
+  });
+});
+
+describe('clampExploreTimeoutSeconds (44-01 D-01)', () => {
+  it('exports the advertised bounds and unchanged default', () => {
+    expect(EXPLORE_MIN_TIMEOUT_SECONDS).toBe(60);
+    expect(EXPLORE_MAX_TIMEOUT_SECONDS).toBe(900);
+    expect(EXPLORE_DEFAULT_TIMEOUT_MS).toBe(300_000);
+  });
+
+  it('passes in-range values through and clamps out-of-range values to the nearest boundary', () => {
+    expect(clampExploreTimeoutSeconds(60)).toBe(60);
+    expect(clampExploreTimeoutSeconds(900)).toBe(900);
+    expect(clampExploreTimeoutSeconds(59)).toBe(60);
+    expect(clampExploreTimeoutSeconds(901)).toBe(900);
+    // 0 is out of range on the low side, not "absent" — it clamps to the floor.
+    expect(clampExploreTimeoutSeconds(0)).toBe(60);
+  });
+
+  it('falls back to 300 for absent, non-finite and unparseable input', () => {
+    expect(clampExploreTimeoutSeconds(undefined)).toBe(300);
+    expect(clampExploreTimeoutSeconds(Number.NaN)).toBe(300);
+    expect(clampExploreTimeoutSeconds(Number.POSITIVE_INFINITY)).toBe(300);
+    expect(clampExploreTimeoutSeconds('không phải số')).toBe(300);
+  });
+
+  it('floors fractional values before clamping', () => {
+    expect(clampExploreTimeoutSeconds(120.9)).toBe(120);
+    // Floored first, then clamped: 59.9 -> 59 -> 60.
+    expect(clampExploreTimeoutSeconds(59.9)).toBe(60);
   });
 });
 

@@ -384,7 +384,7 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
     function: {
       name: 'explore_repo',
       description:
-        'Giao một câu hỏi RỘNG cho Claude Code chạy trên chính máy remote (chỉ đọc) và nhận lại báo cáo tóm tắt kèm đường dẫn:dòng. Dùng khi muốn hiểu cả một vùng code mà nếu tự đọc sẽ tốn nhiều lần read_file. KHÔNG dùng cho một chỗ cụ thể — grep rồi read_file rẻ hơn.',
+        'Giao một câu hỏi RỘNG cho Claude Code chạy trên chính máy remote (chỉ đọc) và nhận lại báo cáo tóm tắt kèm đường dẫn:dòng. Dùng khi muốn hiểu cả một vùng code mà nếu tự đọc sẽ tốn nhiều lần read_file. KHÔNG dùng cho một chỗ cụ thể — grep rồi read_file rẻ hơn. timeoutSeconds (60..900, mặc định 300) là giới hạn thời gian cho mỗi lần chạy.',
       parameters: {
         type: 'object',
         properties: {
@@ -401,6 +401,10 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
           maxTurns: {
             type: 'number',
             description: 'Số lượt tối đa của phiên chạy remote, mặc định 20, tối đa 40.',
+          },
+          timeoutSeconds: {
+            type: 'number',
+            description: 'Giới hạn thời gian chạy remote tính bằng giây, chấp nhận 60..900, mặc định 300.',
           },
         },
         required: ['question'],

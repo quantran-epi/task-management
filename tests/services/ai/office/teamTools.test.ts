@@ -104,6 +104,23 @@ describe('teamTools — transcript search and skill reader (AIO-MEM-02, AIO-MEM-
     expect(names).not.toContain('deliver_steer');
   });
 
+  // 44-01 D-03: the deadline knob is a parameter on explore_repo, never a new tool.
+  it('advertises timeoutSeconds on explore_repo with its range and default', () => {
+    const def = TEAM_TOOL_DEFINITIONS.find((tool) => tool.function.name === 'explore_repo');
+    expect(def).toBeDefined();
+
+    const prop = def!.function.parameters.properties.timeoutSeconds;
+    expect(prop).toBeDefined();
+    expect(prop.type).toBe('number');
+
+    // The description tells the model the accepted range and default.
+    expect(def!.function.description).toContain('60');
+    expect(def!.function.description).toContain('900');
+    expect(def!.function.description).toContain('300');
+    // Still optional: the knob is a parameter, not a required argument.
+    expect(def!.function.parameters.required).not.toContain('timeoutSeconds');
+  });
+
   // 37.1 R9: `send_message` must be in the EMPLOYEE payload — the leader-only set is what
   // an agent may not call, and a chat primitive is not a mutation.
   it('R9: send_message is available to an employee, delegate_batch is not', () => {
