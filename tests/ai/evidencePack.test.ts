@@ -106,7 +106,7 @@ describe('evidencePack', () => {
         vector: { status: 'ok', latencyMs: 20, itemCount: 3 },
         graph: { status: 'ok', latencyMs: 15, itemCount: 1 },
       },
-      diagnostics: { degraded: false, coverageWarnings: [] },
+      diagnostics: { degraded: false, coverageWarnings: [], coverage: [] },
     };
 
     const pack = packEvidence({ authority: 'server', serverResponse: mockResponse });
@@ -134,7 +134,7 @@ describe('evidencePack', () => {
         vector: { status: 'ok', latencyMs: 20, itemCount: 2 },
         graph: { status: 'ok', latencyMs: 15, itemCount: 0 },
       },
-      diagnostics: { degraded: false, coverageWarnings: [] },
+      diagnostics: { degraded: false, coverageWarnings: [], coverage: [] },
     };
 
     const pack = packEvidence({ authority: 'server', serverResponse: mockResponse });
@@ -165,7 +165,7 @@ describe('evidencePack', () => {
         vector: { status: 'ok', latencyMs: 20, itemCount: 4 },
         graph: { status: 'ok', latencyMs: 15, itemCount: 0 },
       },
-      diagnostics: { degraded: false, coverageWarnings: [] },
+      diagnostics: { degraded: false, coverageWarnings: [], coverage: [] },
     };
     const pack = packEvidence({ authority: 'server', serverResponse: mockResponse });
     expect(pack.promptEvidence.map((item) => item.text)).toEqual([
@@ -188,7 +188,7 @@ describe('evidencePack', () => {
         vector: { status: 'ok', latencyMs: 20, itemCount: 5 },
         graph: { status: 'ok', latencyMs: 15, itemCount: 0 },
       },
-      diagnostics: { degraded: false, coverageWarnings: [] },
+      diagnostics: { degraded: false, coverageWarnings: [], coverage: [] },
     };
     const pack = packEvidence({ authority: 'server', serverResponse: mockResponse });
     expect(pack.promptEvidence).toHaveLength(5);
@@ -226,7 +226,7 @@ describe('evidencePack', () => {
         vector: { status: 'ok', latencyMs: 20, itemCount: 1 },
         graph: { status: 'ok', latencyMs: 15, itemCount: 0 },
       },
-      diagnostics: { degraded: false, coverageWarnings: [] },
+      diagnostics: { degraded: false, coverageWarnings: [], coverage: [] },
     };
 
     const pack = packEvidence({ authority: 'server', serverResponse: mockResponse });
@@ -581,6 +581,7 @@ describe('evidencePack', () => {
             message: 'Set 2 retrieval timed out; partial results only',
           },
         ],
+        coverage: [],
       },
     };
 
@@ -732,7 +733,7 @@ describe('evidencePack', () => {
         vector: { status: 'ok', latencyMs: 20, itemCount: 2 },
         graph: { status: 'ok', latencyMs: 15, itemCount: 0 },
       },
-      diagnostics: { degraded: false, coverageWarnings: [] },
+      diagnostics: { degraded: false, coverageWarnings: [], coverage: [] },
     };
 
     const pack = packEvidence({ authority: 'server', serverResponse: mockResponse });
@@ -758,7 +759,7 @@ describe('evidencePack', () => {
         vector: { status: 'ok', latencyMs: 20, itemCount: 2 },
         graph: { status: 'ok', latencyMs: 15, itemCount: 0 },
       },
-      diagnostics: { degraded: true, coverageWarnings: [] },
+      diagnostics: { degraded: true, coverageWarnings: [], coverage: [] },
     };
 
     const pack = packEvidence({ authority: 'server', serverResponse: mockFlatResponse });
@@ -791,7 +792,7 @@ describe('evidencePack', () => {
         vector: { status: 'ok', latencyMs: 5, itemCount: 1 },
         graph: { status: 'unavailable', latencyMs: 0, itemCount: 0 },
       },
-      diagnostics: { degraded: true, coverageWarnings: [] },
+      diagnostics: { degraded: true, coverageWarnings: [], coverage: [] },
     };
     const mcpRecords: McpEvidenceRecord[] = [{
       recordId: 'a'.repeat(64),
@@ -825,7 +826,7 @@ describe('evidencePack', () => {
         vector: { status: 'ok', latencyMs: 5, itemCount: 1 },
         graph: { status: 'ok', latencyMs: 5, itemCount: 1 },
       },
-      diagnostics: { degraded: false, coverageWarnings: [] },
+      diagnostics: { degraded: false, coverageWarnings: [], coverage: [] },
     };
     const mcpRecords: McpEvidenceRecord[] = [{
       recordId: 'c'.repeat(64),
@@ -942,7 +943,7 @@ describe('evidencePack', () => {
           vector: { status: 'ok', latencyMs: 5, itemCount: 0 },
           graph: { status: 'ok', latencyMs: 8, itemCount: items.length, ...graph },
         },
-        diagnostics: { degraded: false, coverageWarnings: [] },
+        diagnostics: { degraded: false, coverageWarnings: [], coverage: [] },
       };
     }
 
