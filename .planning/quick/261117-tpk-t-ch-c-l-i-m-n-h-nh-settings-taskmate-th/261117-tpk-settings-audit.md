@@ -132,3 +132,4 @@ User cần dùng cú pháp `user/"pass@word"@host:port/service` khi password Ora
 Đã verify SQLcl parse đúng cú pháp này; `\@` KHÔNG hoạt động. **CHỈ ghi chú tại đây** —
 KHÔNG sửa `src/components/settings/OracleAiToolConfigCard.tsx` (nằm trong vùng cấm của plan)
 và không sửa code ngoài phạm vi `src/views/SettingsView.tsx` / test đã khai báo.
+Đã kiểm tra: diff only UI arrangement, zero config/behavior change (9/9 focused tests pass, tsc exit 0)
