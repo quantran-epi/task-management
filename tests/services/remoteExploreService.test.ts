@@ -313,6 +313,67 @@ describe('runRemoteExplore (43-04 D-03)', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it('a custom timeoutMs still cancels the remote and keeps the bounded timeout report', async () => {
+    vi.useFakeTimers();
+
+    const cancel = vi.fn(async () => {});
+    const stream = vi.fn(
+      async (
+        _config: SshConfig,
+        _command: string,
+        _sessionId: string,
+        onData: (e: SshStreamEvent) => void
+      ) => {
+        // Never exits: the watchdog must end the run.
+        onData({ sessionId: 's', stream: 'stdout', line: 'chưa xong' });
+        return cancel;
+      }
+    );
+
+    const pending = runRemoteExplore(CONFIG, undefined, request(), {
+      stream,
+      timeoutMs: 60_000,
+    });
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    const outcome = await pending;
+    // Cancel is load-bearing: the derived deadline must not drop it (D-02).
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(outcome.outcome).toBe('error');
+    expect(outcome.detail).toBe('timeout');
+    expect(outcome.report).toBe('chưa xong');
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('a custom timeoutMs leaves no pending timer when the stream exits early', async () => {
+    vi.useFakeTimers();
+
+    const cancel = vi.fn(async () => {});
+    const stream = vi.fn(
+      async (
+        _config: SshConfig,
+        _command: string,
+        _sessionId: string,
+        onData: (e: SshStreamEvent) => void,
+        onExit: (e: SshStreamExitEvent) => void
+      ) => {
+        onData({ sessionId: 's', stream: 'stdout', line: '{"is_error":false,"result":"xong"}' });
+        onExit({ sessionId: 's', exitStatus: 0, error: null });
+        return cancel;
+      }
+    );
+
+    const outcome = await runRemoteExplore(CONFIG, undefined, request(), {
+      stream,
+      timeoutMs: 60_000,
+    });
+
+    expect(outcome.outcome).toBe('success');
+    // A stream that finishes before the deadline must clear the watchdog (D-02).
+    expect(vi.getTimerCount()).toBe(0);
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
   it('cancels a process whose stream handle resolves after the timeout', async () => {
     vi.useFakeTimers();
 

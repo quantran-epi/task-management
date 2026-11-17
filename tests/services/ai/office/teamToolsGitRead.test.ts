@@ -1205,7 +1205,9 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     expect(seenCommand).toContain(`--model 'haiku'`);
   });
 
-  it('explore_repo passes the clamped timeoutSeconds to runRemoteExplore as timeoutMs', async () => {
+  // 44-01: the derived deadline is pinned on the mocked deps argument across representative
+  // inputs — default, upper bound, and an invalid value that floors to the lower bound.
+  async function runExploreAndReadTimeoutMs(args: Record<string, unknown>): Promise<number | undefined> {
     queue({ stdout: '/usr/local/bin/claude\n', stderr: '', exitStatus: 0 });
     vi.mocked(execRemoteCommandStream).mockImplementation(
       async (_config, _command, _sessionId, onData, onExit) => {
@@ -1215,13 +1217,16 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
       }
     );
 
-    await executeTeamTool(
-      'explore_repo',
-      { question: 'x', timeoutSeconds: 60 },
-      ctx()
-    );
+    await executeTeamTool('explore_repo', { question: 'x', ...args }, ctx());
+    return vi.mocked(runRemoteExplore).mock.calls.at(-1)?.[3]?.timeoutMs;
+  }
 
-    const deps = vi.mocked(runRemoteExplore).mock.calls.at(-1)?.[3];
-    expect(deps?.timeoutMs).toBe(60_000);
+  it('explore_repo passes the derived timeoutMs for default, upper-bound and invalid inputs', async () => {
+    // Absent -> 300s default.
+    expect(await runExploreAndReadTimeoutMs({})).toBe(300_000);
+    // 900s upper bound -> 900000ms.
+    expect(await runExploreAndReadTimeoutMs({ timeoutSeconds: 900 })).toBe(900_000);
+    // 0 is out of range and floors to 60s -> 60000ms (not the default).
+    expect(await runExploreAndReadTimeoutMs({ timeoutSeconds: 0 })).toBe(60_000);
   });
 });
