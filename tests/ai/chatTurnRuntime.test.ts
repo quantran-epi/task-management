@@ -110,12 +110,11 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
     await db.delete();
   });
 
-  it.each([undefined, 3, 0, NaN, Infinity, 3.9, 0.5])(
+  it.each([3, 3.9, 1])(
     'keeps tool-limit runtime-only, retains audit, and retries (override %s)', async (maxToolRounds) => {
       const events: unknown[] = [];
       let calls = 0;
-      const rounds = maxToolRounds !== undefined && Number.isFinite(maxToolRounds) && maxToolRounds > 0
-        ? Math.max(1, Math.floor(maxToolRounds)) : 50;
+      const rounds = Math.max(1, Math.floor(maxToolRounds));
       const runtime = runtimeWith(async (options) => {
         expect(options.maxLoops).toBe(rounds);
         calls++;
@@ -126,8 +125,7 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
         return { fullResponse: 'partial secret-provider-detail', tokenUsage: {}, loopLimitReached: true };
       }, { onToolEvent: (event) => events.push(event) });
       expect(runtime.getToolLimitRounds()).toBeNull();
-      const first = await runtime.start(makeRequest({ threadId,
-        ...(maxToolRounds !== undefined ? { maxToolRounds } : {}) }));
+      const first = await runtime.start(makeRequest({ threadId, maxToolRounds }));
       expect(first.phase).toBe('tool-limit');
       expect(first.error?.code).toBe('tool_limit');
       expect(first.error?.message).toContain(`sau ${rounds} vòng`);
@@ -149,6 +147,21 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
       expect(await assistantRows()).toHaveLength(1);
     },
   );
+
+  it('passes no round ceiling to the loop when the request sets none', async () => {
+    // The production hosts never set `maxToolRounds`, so the loop must receive no `maxLoops`
+    // at all — a default ceiling here is what stopped a long repo-reading turn mid-evidence.
+    let seen: AiOrchestratorLoopOptions | undefined;
+    const runtime = runtimeWith(async (options) => {
+      seen = options;
+      return { fullResponse: 'Done', tokenUsage: {} };
+    });
+    const outcome = await runtime.start(makeRequest({ threadId }));
+    expect(outcome.phase).toBe('complete');
+    expect(seen).toBeDefined();
+    expect('maxLoops' in (seen as AiOrchestratorLoopOptions)).toBe(false);
+    expect(runtime.getToolLimitRounds()).toBeNull();
+  });
 
   it('publishes preparing before the injected saveMessage resolves', async () => {
     let resolveUserRow: ((message: ChatMessage) => void) | undefined;

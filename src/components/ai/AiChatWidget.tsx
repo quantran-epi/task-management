@@ -3,7 +3,7 @@ import { Alert, Button, Tag, Typography, theme } from 'antd';
 import { SyncOutlined, CheckCircleOutlined, StopOutlined } from '@ant-design/icons';
 import type { ChatMessage } from '../../types/models';
 import type { AgentRunStatus } from '../../types/aiOffice';
-import { formatToolLimitMessage, type ChatTurnStatus, type ChatTurnToolEvent } from './runtime/chatTurnRuntime';
+import { formatToolLimitMessage, TOOL_LIMIT_UNCAPPED_MESSAGE, type ChatTurnStatus, type ChatTurnToolEvent } from './runtime/chatTurnRuntime';
 import type { McpServerConfig } from '../../services/ai/mcpClient';
 import { renderSafeMarkdown } from '../../utils/markdown';
 import { ChatTabToolbox } from './ChatTabToolbox';
@@ -466,12 +466,14 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
         </div>
       )}
 
-      {turn.status === 'tool-limit' && turn.toolLimitRounds != null && (
+      {turn.status === 'tool-limit' && (
         <div style={{ padding: '0 16px' }}>
           <Alert
             type="warning"
             showIcon
-            title={formatToolLimitMessage(turn.toolLimitRounds)}
+            title={turn.toolLimitRounds != null
+              ? formatToolLimitMessage(turn.toolLimitRounds)
+              : TOOL_LIMIT_UNCAPPED_MESSAGE}
             action={<Button size="small" onClick={onRetry}>Thử lại</Button>}
           />
         </div>

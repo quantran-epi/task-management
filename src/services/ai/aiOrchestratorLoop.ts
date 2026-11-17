@@ -45,8 +45,6 @@ export async function dispatchAiToolCall(
     : executeDynamicMcpTool(normalized, args, db, options);
 }
 
-export const DEFAULT_MAX_TOOL_ROUNDS = 50;
-
 export interface AiOrchestratorLoopOptions {
   endpoint: string;
   apiKey: string;
@@ -55,6 +53,11 @@ export interface AiOrchestratorLoopOptions {
   tools?: any[];
   temperature?: number;
   maxTokens?: number;
+  /**
+   * Opt-in ceiling on tool rounds. Omit it and the loop runs until the model stops
+   * calling tools or the turn is aborted — a read-heavy turn (a repo walk, a multi-file
+   * review) is not cut off mid-evidence. Only a caller that wants a bound passes one.
+   */
   maxLoops?: number;
   db: TaskPlannerDatabase;
   signal?: AbortSignal;
@@ -164,7 +167,7 @@ export async function runAiOrchestratorLoop(
     tools,
     temperature = 0.1,
     maxTokens,
-    maxLoops: requestedMaxLoops = DEFAULT_MAX_TOOL_ROUNDS,
+    maxLoops: requestedMaxLoops,
     db,
     signal,
     synthesisPrompt = DEFAULT_SYNTHESIS_PROMPT,
@@ -184,9 +187,15 @@ export async function runAiOrchestratorLoop(
     beforeToolRound,
   } = options;
 
-  const maxLoops = Number.isFinite(requestedMaxLoops) && requestedMaxLoops > 0
-    ? Math.max(1, Math.floor(requestedMaxLoops))
-    : DEFAULT_MAX_TOOL_ROUNDS;
+  // No ceiling unless the caller asked for one. `Infinity` keeps `loopCount < maxLoops` true
+  // for every round, so the loop ends only when the model stops calling tools, the provider
+  // reports `finish_reason: 'length'`, or the turn is aborted — never on a round count.
+  const maxLoops =
+    typeof requestedMaxLoops === 'number' &&
+    Number.isFinite(requestedMaxLoops) &&
+    requestedMaxLoops > 0
+      ? Math.max(1, Math.floor(requestedMaxLoops))
+      : Number.POSITIVE_INFINITY;
   let loopLimitReached = false;
 
   const prune = (msgs: ChatCompletionMessage[]) =>

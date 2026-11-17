@@ -3,7 +3,6 @@ import type { ChatGeneratedFile, ChatMessage, ChatTokenUsage } from '../../../ty
 import {
   runAiOrchestratorLoop,
   dispatchAiToolCall,
-  DEFAULT_MAX_TOOL_ROUNDS,
   type AiOrchestratorLoopResult,
 } from '../../../services/ai/aiOrchestratorLoop';
 import { saveMessage } from '../../../db/repositories/chatRepo';
@@ -67,6 +66,11 @@ export interface ChatTurnRequest {
   history: Array<{ role: 'user' | 'assistant'; content: string }>;
   tools: unknown[];
   maxTokens?: number;
+  /**
+   * Opt-in round ceiling. Omitted by every production host: a turn then runs until the model
+   * stops calling tools or the user stops it, so a long evidence-gathering turn is not cut
+   * off. Only a caller that genuinely wants a bound sets one.
+   */
   maxToolRounds?: number;
   /** Provider context window, when the host resolves one (auto-compaction threshold). */
   contextWindowTokens?: number;
@@ -152,6 +156,14 @@ export const SANITIZED_TURN_ERROR =
 export const formatToolLimitMessage = (rounds: number): string =>
   `Đã dừng thu thập bằng chứng sau ${rounds} vòng. Câu trả lời có thể chưa đầy đủ — xem danh sách công cụ bên trên hoặc thử lại với câu hỏi hẹp hơn.`;
 
+/**
+ * Only reachable if an injected loop reports `loopLimitReached` without the runtime having
+ * passed a ceiling — production hosts pass none, so this is a defensive terminal state, not
+ * a normal outcome. It deliberately names no round count it cannot vouch for.
+ */
+export const TOOL_LIMIT_UNCAPPED_MESSAGE =
+  'Đã dừng thu thập bằng chứng. Câu trả lời có thể chưa đầy đủ — xem danh sách công cụ bên trên.';
+
 const DECLINED_CANCELLATION = JSON.stringify({
   cancelled: true,
   message: 'Người dùng đã từ chối thao tác này. Không có dữ liệu nào bị thay đổi.',
@@ -232,10 +244,16 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
 
     running = true;
     toolLimitRounds = null;
-    const requestedRounds = request.maxToolRounds ?? DEFAULT_MAX_TOOL_ROUNDS;
-    const maxToolRounds = Number.isFinite(requestedRounds) && requestedRounds > 0
-      ? Math.max(1, Math.floor(requestedRounds))
-      : DEFAULT_MAX_TOOL_ROUNDS;
+    // `undefined` means "no ceiling": the loop then ends only on the model's own stop or an
+    // abort. A host that passes a value still gets the bounded behaviour, and the reported
+    // round count is that same value — never a default nobody asked for.
+    const requestedRounds = request.maxToolRounds;
+    const maxToolRounds =
+      typeof requestedRounds === 'number' &&
+      Number.isFinite(requestedRounds) &&
+      requestedRounds > 0
+        ? Math.max(1, Math.floor(requestedRounds))
+        : undefined;
     declined = false;
     approvalResolver = null;
     lastRequest = request;
@@ -305,7 +323,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
           { role: 'user', content: request.text },
         ],
         tools: request.tools as any[],
-        maxLoops: maxToolRounds,
+        ...(maxToolRounds !== undefined ? { maxLoops: maxToolRounds } : {}),
         ...(typeof request.maxTokens === 'number' && Number.isFinite(request.maxTokens) && request.maxTokens > 0
           ? { maxTokens: request.maxTokens }
           : {}),
@@ -486,11 +504,20 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
       }
 
       if (result.loopLimitReached) {
-        toolLimitRounds = maxToolRounds;
+        // A ceiling is the only way the loop can report this now, so `maxToolRounds` is
+        // normally set; the uncapped branch keeps an injected loop honest instead of
+        // silently reporting success.
+        toolLimitRounds = maxToolRounds ?? null;
         publish('tool-limit');
         return {
           phase: 'tool-limit', requestId: turnId, userMessageId,
-          error: { code: 'tool_limit', message: formatToolLimitMessage(maxToolRounds) },
+          error: {
+            code: 'tool_limit',
+            message:
+              maxToolRounds !== undefined
+                ? formatToolLimitMessage(maxToolRounds)
+                : TOOL_LIMIT_UNCAPPED_MESSAGE,
+          },
         };
       }
 

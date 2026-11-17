@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TaskPlannerDatabase } from '../../../src/db';
-import { DEFAULT_MAX_TOOL_ROUNDS, runAiOrchestratorLoop } from '../../../src/services/ai/aiOrchestratorLoop';
+import { runAiOrchestratorLoop } from '../../../src/services/ai/aiOrchestratorLoop';
 import type { ChatCompletionMessage } from '../../../src/services/ai/types';
 
 const mockStreamChatEvents = vi.fn();
@@ -88,9 +88,8 @@ describe('runAiOrchestratorLoop', () => {
     expect(result.tokenUsage.cacheCreationTokens).toBe(2);
   });
 
-  it.each([undefined, 2, 0, -1, NaN, Infinity, 2.9, 0.5])(
-    'bounds tool rounds before pending dispatch (override %s)', async (maxLoops) => {
-      expect(DEFAULT_MAX_TOOL_ROUNDS).toBe(50);
+  it.each([2, 2.9, 1])(
+    'bounds tool rounds when the caller asks for a ceiling (override %s)', async (maxLoops) => {
       mockStreamChatEvents.mockImplementation(async function* () {
         yield { type: 'text', delta: 'partial' };
         yield { type: 'tool_calls', calls: [{ id: crypto.randomUUID(), type: 'function',
@@ -99,12 +98,11 @@ describe('runAiOrchestratorLoop', () => {
       const executeToolFn = vi.fn().mockResolvedValue('{}');
       const onToolCall = vi.fn();
       const onToolResult = vi.fn();
-      const rounds = maxLoops !== undefined && Number.isFinite(maxLoops) && maxLoops > 0
-        ? Math.max(1, Math.floor(maxLoops)) : 50;
+      const rounds = Math.max(1, Math.floor(maxLoops));
       const result = await runAiOrchestratorLoop({
         endpoint: 'https://api.example.com', apiKey: 'test-key', model: 'test-model',
         messages: [], db: testDb, executeToolFn, onToolCall, onToolResult,
-        ...(maxLoops !== undefined ? { maxLoops } : {}),
+        maxLoops,
       });
       expect(result.loopLimitReached).toBe(true);
       expect(result.truncated).toBe(false);
@@ -112,6 +110,35 @@ describe('runAiOrchestratorLoop', () => {
       expect(executeToolFn).toHaveBeenCalledTimes(rounds - 1);
       expect(onToolCall).toHaveBeenCalledTimes(rounds - 1);
       expect(onToolResult).toHaveBeenCalledTimes(rounds - 1);
+    },
+  );
+
+  it.each([undefined, 0, -1, NaN, Infinity])(
+    'has no round ceiling when the caller passes %s',
+    async (maxLoops) => {
+      // 60 rounds is past the old 50-round default: the loop must keep going until the model
+      // answers, so a long evidence-gathering turn is never cut off mid-read.
+      let round = 0;
+      mockStreamChatEvents.mockImplementation(async function* () {
+        round += 1;
+        if (round <= 60) {
+          yield { type: 'tool_calls', calls: [{ id: `call-${round}`, type: 'function',
+            function: { name: 'custom_lookup', arguments: '{}' } }] };
+          return;
+        }
+        yield { type: 'text', delta: 'complete answer' };
+      });
+      const executeToolFn = vi.fn().mockResolvedValue('{}');
+      const result = await runAiOrchestratorLoop({
+        endpoint: 'https://api.example.com', apiKey: 'test-key', model: 'test-model',
+        messages: [], db: testDb, executeToolFn,
+        ...(maxLoops !== undefined ? { maxLoops } : {}),
+      });
+      expect(result.loopLimitReached).toBe(false);
+      expect(result.cleanResponse).toBe('complete answer');
+      // 60 tool rounds plus the model's answering round, and possibly the synthesis pass.
+      expect(mockStreamChatEvents.mock.calls.length).toBeGreaterThanOrEqual(61);
+      expect(executeToolFn).toHaveBeenCalledTimes(60);
     },
   );
 
