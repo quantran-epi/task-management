@@ -7294,5 +7294,22 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       const steps = await stepsAfterEvents(events);
       expect(steps.length).toBeLessThanOrEqual(200);
     });
+
+    it('keeps label, ISO at and capped detail for the compact popover after call+result', async () => {
+      // The compact TeamActivityIndicator stays byte-unchanged: it reads these same legacy
+      // fields off each upserted row. Dropping any of them must break this test (Pitfall 3).
+      const steps = await stepsAfterEvents([
+        {
+          id: 'compat',
+          name: 'explore_repo',
+          args: JSON.stringify({ question: 'q' }),
+          result: JSON.stringify({ outcome: 'success' }),
+        },
+      ]);
+      const row = steps.find((entry) => entry.id === 'compat')!;
+      expect(row.label).toBe('đang gọi tool explore_repo');
+      expect(row.at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      expect(row.detail).toBe(JSON.stringify({ question: 'q' }));
+    });
   });
 });
