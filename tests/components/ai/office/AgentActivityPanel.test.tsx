@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import {
   AgentActivityPanel,
   type ActivityRosterEntry,
+  type TeamDebugLog,
 } from '../../../../src/components/ai/office/AgentActivityPanel';
 import type { AgentRunState } from '../../../../src/types/aiOffice';
 
@@ -219,5 +220,55 @@ describe('AgentActivityPanel — overflow backstop and states (44-03 Task 2)', (
     render(<AgentActivityPanel agents={agents} roster={ROSTER} debugLogs={[]} onClearLogs={noop} />);
     fireEvent.click(screen.getByTestId('activity-event-toggle-s-run'));
     expect(screen.getByText('Chưa có kết quả…')).toBeInTheDocument();
+  });
+});
+
+describe('AgentActivityPanel — Prompt log migration (44-03 Task 3)', () => {
+  const log: TeamDebugLog = {
+    timestamp: '09:43:11',
+    agentId: 'agent-1',
+    agentName: 'Reviewer',
+    agentKind: 'employee',
+    model: 'claude-haiku',
+    text: 'Rà soát repo theo CR-204…',
+    systemMessages: ['Bạn là reviewer, chỉ đọc repo.'],
+    toolNames: ['git_read', 'explore_repo'],
+  };
+
+  it('renders every preserved field of a prompt-history entry', () => {
+    render(<AgentActivityPanel agents={[]} roster={ROSTER} debugLogs={[log]} onClearLogs={noop} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Prompt log' }));
+
+    const entry = screen.getByTestId('activity-prompt-entry-0');
+    expect(entry).toBeInTheDocument();
+    expect(screen.getByTestId('activity-prompt-kind').textContent).toContain('EMPLOYEE: Reviewer');
+    expect(entry.textContent).toContain('09:43:11');
+    expect(entry.textContent).toContain('claude-haiku');
+    expect(entry.textContent).toContain('git_read, explore_repo');
+    expect(screen.getByTestId('activity-prompt-text').textContent).toContain('Rà soát repo theo CR-204');
+    expect(screen.getByTestId('activity-prompt-system').textContent).toContain('chỉ đọc repo');
+    expect(screen.getByTestId('activity-prompt-copy')).toBeInTheDocument();
+  });
+
+  it('opens the Popconfirm with the exact copy and calls onClearLogs on confirm', () => {
+    const onClearLogs = vi.fn();
+    render(<AgentActivityPanel agents={[]} roster={ROSTER} debugLogs={[log]} onClearLogs={onClearLogs} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Prompt log' }));
+
+    fireEvent.click(screen.getByTestId('activity-clear-logs'));
+    expect(screen.getByText('Xóa toàn bộ nhật ký prompt trong phiên này? Không thể hoàn tác.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Xác nhận' })).toBeInTheDocument();
+    expect(onClearLogs).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
+    expect(onClearLogs).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the preserved empty-state copy when there are no logs', () => {
+    render(<AgentActivityPanel agents={[]} roster={ROSTER} debugLogs={[]} onClearLogs={noop} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Prompt log' }));
+    expect(screen.getByTestId('activity-prompts-empty').textContent).toBe(
+      'Chưa có lượt gửi AI nào trong phiên này.'
+    );
   });
 });

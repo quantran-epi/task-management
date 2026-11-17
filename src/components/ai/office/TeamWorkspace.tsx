@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Avatar, Button, Dropdown, Modal, Splitter, Tag, Typography, theme } from 'antd';
-import { BugOutlined, SettingOutlined } from '@ant-design/icons';
+import { Alert, Avatar, Button, Dropdown, Splitter, theme } from 'antd';
+import { SettingOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { TaskPlannerDatabase } from '../../../db';
 import type {
@@ -159,7 +159,6 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   }, [db]);
   const mcpEnabled = team.mcpEnabled === true;
   const [debugLogs, setDebugLogs] = useState<TeamDebugLog[]>([]);
-  const [debugModalOpen, setDebugModalOpen] = useState<boolean>(false);
   // D-10: runtime-only rail visibility, default open on the only supported runtime (Tauri desktop).
   const [activityOpen, setActivityOpen] = useState<boolean>(true);
   const [sendError, setSendError] = useState<{ code: string; message: string } | null>(null);
@@ -900,12 +899,6 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                 menu={{
                   items: [
                     {
-                      key: 'debug',
-                      icon: <BugOutlined />,
-                      label: `Debug Prompt (${debugLogs.length})`,
-                      onClick: () => setDebugModalOpen(true),
-                    },
-                    {
                       key: 'settings',
                       icon: <SettingOutlined />,
                       label: 'Cài đặt nhóm',
@@ -1128,72 +1121,6 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         onClose={() => setMcpSettingsOpen(false)}
         db={db}
       />
-
-      <Modal
-        title="Debug: Lịch sử Prompt gửi tới AI trong nhóm"
-        open={debugModalOpen}
-        onCancel={() => setDebugModalOpen(false)}
-        footer={[
-          <Button key="clear" danger onClick={() => setDebugLogs([])}>
-            Xóa nhật ký debug
-          </Button>,
-          <Button key="close" type="primary" onClick={() => setDebugModalOpen(false)}>
-            Đóng
-          </Button>,
-        ]}
-        width={800}
-      >
-        {debugLogs.length === 0 ? (
-          <Typography.Text type="secondary">Chưa có lượt gửi AI nào trong phiên này.</Typography.Text>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: '60vh', overflowY: 'auto' }}>
-            {debugLogs.map((log, index) => (
-              <div
-                key={index}
-                style={{
-                  padding: 10,
-                  border: `1px solid ${token.colorBorderSecondary}`,
-                  borderRadius: 6,
-                  background: token.colorFillAlter,
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <Tag color="blue">{log.agentKind.toUpperCase()}: {log.agentName}</Tag>
-                  <Typography.Text type="secondary" style={{ fontSize: 11 }}>{log.timestamp}</Typography.Text>
-                </div>
-                <div style={{ fontSize: 12, marginBottom: 4 }}>
-                  <strong>Model:</strong> {log.model} | <strong>Tools:</strong> {log.toolNames.join(', ') || 'none'}
-                </div>
-                <div style={{ fontSize: 12, marginBottom: 4 }}>
-                  <strong>User / Instruction Input:</strong>
-                  <pre style={{ whiteSpace: 'pre-wrap', background: token.colorBgContainer, padding: 6, borderRadius: 4, margin: '4px 0' }}>
-                    {log.text}
-                  </pre>
-                </div>
-                <div style={{ fontSize: 12 }}>
-                  <strong>System Prompt:</strong>
-                  {log.systemMessages.map((sm, smIdx) => (
-                    <pre
-                      key={smIdx}
-                      style={{
-                        whiteSpace: 'pre-wrap',
-                        background: token.colorBgContainer,
-                        padding: 6,
-                        borderRadius: 4,
-                        maxHeight: 180,
-                        overflowY: 'auto',
-                        margin: '4px 0',
-                      }}
-                    >
-                      {sm}
-                    </pre>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Modal>
     </div>
   );
 };

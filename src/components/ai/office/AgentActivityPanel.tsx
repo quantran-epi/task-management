@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Button, Empty, Progress, Tooltip, Typography, theme } from 'antd';
+import { Button, Empty, Popconfirm, Progress, Tag, Tooltip, Typography, theme } from 'antd';
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   CloseOutlined,
+  CopyOutlined,
   SyncOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -308,6 +309,105 @@ const ProgressCard: React.FC<{ row: TimelineRow }> = ({ row }) => {
   );
 };
 
+/** D-14: one preserved prompt-history entry. Every field renders as escaped text. */
+const PromptLogEntry: React.FC<{ log: TeamDebugLog; index: number }> = ({ log, index }) => {
+  const { token } = theme.useToken();
+  const [copied, setCopied] = useState(false);
+  const text = capPreview(log.text);
+  const copy = () => {
+    // Best-effort inspection affordance; clipboard may be unavailable in a test DOM.
+    try {
+      void navigator.clipboard?.writeText(log.text).then(() => setCopied(true)).catch(() => undefined);
+    } catch {
+      // No clipboard: the escaped <pre> below remains the inspection surface.
+    }
+  };
+  return (
+    <div
+      data-testid={`activity-prompt-entry-${index}`}
+      style={{
+        padding: 8,
+        border: `1px solid ${token.colorBorderSecondary}`,
+        borderRadius: 8,
+        background: token.colorFillAlter,
+        marginBottom: 8,
+        minWidth: 0,
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, minWidth: 0 }}>
+        <Tag color="blue" data-testid="activity-prompt-kind">
+          {`${log.agentKind.toUpperCase()}: ${log.agentName}`}
+        </Tag>
+        <Typography.Text type="secondary" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+          {log.timestamp}
+        </Typography.Text>
+      </div>
+      <div style={{ fontSize: 12, marginBottom: 4, minWidth: 0 }}>
+        <strong>Model:</strong> {log.model} | <strong>Tools:</strong> {log.toolNames.join(', ') || 'none'}
+      </div>
+      <div style={{ marginBottom: 4, minWidth: 0 }}>
+        <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+          <strong>User / Instruction Input:</strong>
+        </Typography.Text>
+        <pre data-testid="activity-prompt-text" className="activity-preview" style={previewStyle}>
+          {text.text}
+        </pre>
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+          <strong>System Prompt:</strong>
+        </Typography.Text>
+        {log.systemMessages.length === 0 ? null : log.systemMessages.map((sm, smIdx) => (
+          <pre
+            key={smIdx}
+            data-testid="activity-prompt-system"
+            className="activity-preview"
+            style={previewStyle}
+          >
+            {sm}
+          </pre>
+        ))}
+      </div>
+      <Button
+        size="small"
+        type="link"
+        icon={<CopyOutlined />}
+        data-testid="activity-prompt-copy"
+        onClick={copy}
+        style={{ paddingLeft: 0 }}
+      >
+        {copied ? 'Đã sao chép' : 'Sao chép'}
+      </Button>
+    </div>
+  );
+};
+
+/** D-14/D-15/D-16: the migrated Debug Prompt presentation, now a tab in the rail. */
+const PromptLogTab: React.FC<{ logs: TeamDebugLog[]; onClearLogs: () => void }> = ({ logs, onClearLogs }) => (
+  <div style={{ minWidth: 0 }}>
+    {logs.length === 0 ? (
+      <Typography.Text type="secondary" data-testid="activity-prompts-empty">
+        {EMPTY_PROMPTS}
+      </Typography.Text>
+    ) : (
+      <div data-testid="activity-prompt-list" style={{ minWidth: 0 }}>
+        {logs.map((log, index) => <PromptLogEntry key={`${log.timestamp}-${index}`} log={log} index={index} />)}
+      </div>
+    )}
+    <Popconfirm
+      title="Xóa nhật ký debug"
+      description="Xóa toàn bộ nhật ký prompt trong phiên này? Không thể hoàn tác."
+      okText="Xác nhận"
+      cancelText="Hủy"
+      onConfirm={onClearLogs}
+    >
+      <Button size="small" danger data-testid="activity-clear-logs" style={{ marginTop: 12 }}>
+        Xóa nhật ký debug
+      </Button>
+    </Popconfirm>
+  </div>
+);
+
 /**
  * D-09/D-10/D-11/D-12: the collapsible right rail. Presentational only — the workspace owns
  * the run snapshot, the roster, the prompt capture and the shared open state.
@@ -485,13 +585,7 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = ({
         data-testid="activity-tabpanel-prompts"
         style={{ flex: 1, minHeight: 0, minWidth: 0, overflowY: 'auto', padding: 12 }}
       >
-        <Typography.Text type="secondary">{EMPTY_PROMPTS}</Typography.Text>
-        <span data-testid="activity-prompt-count" hidden>{debugLogs.length}</span>
-        <div style={{ marginTop: 12 }}>
-          <Button size="small" danger onClick={onClearLogs} data-testid="activity-clear-logs">
-            Xóa nhật ký debug
-          </Button>
-        </div>
+        <PromptLogTab logs={debugLogs} onClearLogs={onClearLogs} />
       </div>
     </aside>
   );
