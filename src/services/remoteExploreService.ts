@@ -18,6 +18,8 @@ import type { SshConfig } from '../types/ssh';
 
 export const EXPLORE_REPORT_MAX_CHARS = 12_000;
 export const EXPLORE_DEFAULT_TIMEOUT_MS = 300_000;
+export const EXPLORE_MIN_TIMEOUT_SECONDS = 60;
+export const EXPLORE_MAX_TIMEOUT_SECONDS = 900;
 export const EXPLORE_DEFAULT_MAX_TURNS = 20;
 export const EXPLORE_MAX_TURNS_CAP = 40;
 
@@ -57,6 +59,16 @@ export function clampExploreMaxTurns(value: unknown): number {
   const n = Math.floor(Number(value));
   if (!Number.isFinite(n)) return EXPLORE_DEFAULT_MAX_TURNS;
   return Math.min(Math.max(1, n), EXPLORE_MAX_TURNS_CAP);
+}
+
+/**
+ * Phase 44 D-01: clamps a caller-supplied deadline into the advertised 60..900s range. Invalid,
+ * fractional and out-of-range input never refuses the call — it clamps or falls back to 300s.
+ */
+export function clampExploreTimeoutSeconds(value: unknown): number {
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n)) return EXPLORE_DEFAULT_TIMEOUT_MS / 1000;
+  return Math.min(Math.max(EXPLORE_MIN_TIMEOUT_SECONDS, n), EXPLORE_MAX_TIMEOUT_SECONDS);
 }
 
 /**
@@ -214,6 +226,11 @@ export interface RunRemoteExploreDeps {
    * full wall clock, so abort cancels the stream exactly like the timeout does.
    */
   signal?: AbortSignal | undefined;
+  /**
+   * Phase 44 D-02: the per-call watchdog deadline in milliseconds, derived by the caller from a
+   * clamped `timeoutSeconds`. Optional so existing callers keep the 300s default contract.
+   */
+  timeoutMs?: number | undefined;
 }
 
 /**
@@ -227,6 +244,7 @@ export async function runRemoteExplore(
   deps: RunRemoteExploreDeps = {}
 ): Promise<ExploreOutcome> {
   const stream = deps.stream ?? execRemoteCommandStream;
+  const timeoutMs = deps.timeoutMs ?? EXPLORE_DEFAULT_TIMEOUT_MS;
   const command = buildExploreCommand(request);
   const sessionId = crypto.randomUUID();
 
@@ -305,7 +323,7 @@ export async function runRemoteExplore(
           detail: 'timeout',
         })
       );
-    }, EXPLORE_DEFAULT_TIMEOUT_MS);
+    }, timeoutMs);
 
     void (async () => {
       try {

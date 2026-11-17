@@ -36,6 +36,7 @@ import type { SshConfig } from '../../../types/ssh';
 import type { RemoteGitCommit } from '../../../types/gitRemote';
 import {
   clampExploreMaxTurns,
+  clampExploreTimeoutSeconds,
   probeRemoteClaude,
   runRemoteExplore,
 } from '../../../services/remoteExploreService';
@@ -1490,13 +1491,14 @@ async function exploreRepo(args: Record<string, any>, ctx: TeamToolContext): Pro
         ? suppliedModel
         : 'haiku';
     const maxTurns = clampExploreMaxTurns(args.maxTurns);
+    const timeoutMs = clampExploreTimeoutSeconds(args.timeoutSeconds) * 1000;
 
-    const result = await runRemoteExplore(config, secret, {
-      repoPath,
-      question,
-      model,
-      maxTurns,
-    }, ctx.signal ? { signal: ctx.signal } : {});
+    const result = await runRemoteExplore(
+      config,
+      secret,
+      { repoPath, question, model, maxTurns },
+      { timeoutMs, ...(ctx.signal ? { signal: ctx.signal } : {}) }
+    );
 
     return JSON.stringify({
       action: 'explore_repo',

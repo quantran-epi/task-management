@@ -240,6 +240,45 @@ describe('runRemoteExplore (43-04 D-03)', () => {
     expect(outcome.truncated).toBe(true);
   });
 
+  it('uses the deps timeoutMs deadline to cancel and report timeout at that instant', async () => {
+    vi.useFakeTimers();
+
+    const cancel = vi.fn(async () => {});
+    const stream = vi.fn(
+      async (
+        _config: SshConfig,
+        _command: string,
+        _sessionId: string,
+        onData: (e: SshStreamEvent) => void
+      ) => {
+        onData({ sessionId: 's', stream: 'stdout', line: 'một phần' });
+        return cancel;
+      }
+    );
+
+    const pending = runRemoteExplore(CONFIG, undefined, request(), {
+      stream,
+      timeoutMs: 60_000,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    // Just under the derived deadline: still pending.
+    await vi.advanceTimersByTimeAsync(59_999);
+    let settled = false;
+    void pending.then(() => {
+      settled = true;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(settled).toBe(false);
+    // Exactly at the deadline the watchdog fires.
+    await vi.advanceTimersByTimeAsync(1);
+
+    const outcome = await pending;
+    expect(outcome.outcome).toBe('error');
+    expect(outcome.detail).toBe('timeout');
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('cancels a process whose stream handle resolves after the timeout', async () => {
     vi.useFakeTimers();
 

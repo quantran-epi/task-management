@@ -11,7 +11,10 @@ import { isMutationTool } from '../../../../src/services/ai/aiTools';
 import { SSH_CONFIGS_SETTING_KEY } from '../../../../src/types/ssh';
 import { generateId } from '../../../../src/utils/uuid';
 import { execRemoteCommand, execRemoteCommandStream } from '../../../../src/services/sshService';
-import { resetRemoteClaudeProbeCache } from '../../../../src/services/remoteExploreService';
+import {
+  resetRemoteClaudeProbeCache,
+  runRemoteExplore,
+} from '../../../../src/services/remoteExploreService';
 
 /**
  * Phase 42 D-08: `execRemoteCommand` is the seam where a command string becomes observable.
@@ -25,6 +28,20 @@ vi.mock('../../../../src/services/sshService', async (importOriginal) => {
     ...actual,
     execRemoteCommand: vi.fn(),
     execRemoteCommandStream: vi.fn(),
+  };
+});
+
+/**
+ * Phase 44: `runRemoteExplore` is wrapped (not replaced) so its real watchdog behavior still
+ * drives every explore_repo case, while its deps argument becomes observable for the timeoutMs
+ * wiring assertions. All other exports stay real via the spread.
+ */
+vi.mock('../../../../src/services/remoteExploreService', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../../../src/services/remoteExploreService')>();
+  return {
+    ...actual,
+    runRemoteExplore: vi.fn(actual.runRemoteExplore),
   };
 });
 
@@ -89,6 +106,8 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     // at the wrong assertion.
     vi.mocked(execRemoteCommand).mockReset();
     vi.mocked(execRemoteCommandStream).mockReset();
+    // Clear call history only — the real implementation is preserved so the watchdog still runs.
+    vi.mocked(runRemoteExplore).mockClear();
     // The probe cache is per SSH profile and would otherwise leak between cases.
     resetRemoteClaudeProbeCache();
 
@@ -1184,5 +1203,25 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     // is an option-shaped value, not a model.
     expect(parsed.model).toBe('haiku');
     expect(seenCommand).toContain(`--model 'haiku'`);
+  });
+
+  it('explore_repo passes the clamped timeoutSeconds to runRemoteExplore as timeoutMs', async () => {
+    queue({ stdout: '/usr/local/bin/claude\n', stderr: '', exitStatus: 0 });
+    vi.mocked(execRemoteCommandStream).mockImplementation(
+      async (_config, _command, _sessionId, onData, onExit) => {
+        onData({ sessionId: 's', stream: 'stdout', line: '{"is_error":false,"result":"ok"}' });
+        onExit({ sessionId: 's', exitStatus: 0, error: null });
+        return async () => {};
+      }
+    );
+
+    await executeTeamTool(
+      'explore_repo',
+      { question: 'x', timeoutSeconds: 60 },
+      ctx()
+    );
+
+    const deps = vi.mocked(runRemoteExplore).mock.calls.at(-1)?.[3];
+    expect(deps?.timeoutMs).toBe(60_000);
   });
 });
