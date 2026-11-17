@@ -109,6 +109,10 @@ describe('executeKnowledgeRetrievalTool', () => {
       includeInferred: true,
       recentTurns: [],
     });
+    const body = mocks.retrieveFederated.mock.calls[0]![0];
+    expect(body).not.toHaveProperty('budgets');
+    expect(body).not.toHaveProperty('comparisonMode');
+    expect(body).not.toHaveProperty('setTierAssignments');
     expect(res.outcome).toBe('READY');
   });
 
