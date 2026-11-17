@@ -1157,6 +1157,42 @@ describe('Telegram Headless Worker', () => {
     expect(replies[0]).toContain('Nguồn tài liệu:</b> Đặc tả kỹ thuật CYTP1002');
   });
 
+  it('fresh Telegram device with empty catalog still calls runGroundedTurn', async () => {
+    await setNineRouterApiKey('test-key', testDb);
+    await upsertWhitelistUser(
+      { chatId: 'fresh_device', name: 'Fresh Device', status: 'active', dataScope: 'full' },
+      testDb
+    );
+    mockRouteIntent.mockResolvedValueOnce({
+      intent: 'query_knowledge',
+      confidence: 0.98,
+      entities: [],
+      language: 'vi',
+      needs_clarification: false,
+      clarify_question: null,
+      speculation_requested: false,
+    });
+    mockRunGroundedTurn.mockResolvedValueOnce({ kind: 'operational', routedQuery: '' });
+
+    await processTelegramInboundMessage(
+      {
+        update_id: 116,
+        message_id: 906,
+        chat_id: 'fresh_device',
+        from_name: 'Fresh Device',
+        text: 'Quy trình CYTP1002 hoạt động như thế nào?',
+        date: 1234605,
+      },
+      'test_token',
+      testDb,
+      vi.fn(async () => {}),
+      vi.fn(async () => {})
+    );
+
+    expect(mockRunGroundedTurn).toHaveBeenCalledTimes(1);
+    expect(mockRunGroundedTurn.mock.calls[0]?.[0].catalog).toEqual([]);
+  });
+
   it('handles local_fallback_results from runGroundedTurn with friendly no-evidence message', async () => {
     await setNineRouterApiKey('test-key', testDb);
     mockStreamChatEvents.mockClear();
