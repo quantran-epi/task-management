@@ -1,0 +1,256 @@
+
+ RUN  v5.0.2 /home/quantd/workspace/personal/new/task-management-intellij/.claude/worktrees/phase-28-isolated
+
+ × tests/knowledge/retrievalProtocolParity.test.ts > retrieval protocol server/client parity > mirrors retrieval outcomes in the same declaration order 12ms
+   → expected [ Array(6) ] to deeply equal [ Array(7) ]
+ ✓ tests/knowledge/retrievalProtocolParity.test.ts > retrieval protocol server/client parity > mirrors reason codes in the same declaration order 3ms
+ ✓ tests/knowledge/retrievalProtocolParity.test.ts > retrieval protocol server/client parity > mirrors stage names in the same declaration order 0ms
+ ✓ tests/knowledge/retrievalProtocolParity.test.ts > retrieval protocol server/client parity > mirrors the model depth input cap 0ms
+ ✓ tests/knowledge/retrievalProtocolParity.test.ts > retrieval protocol server/client parity > mirrors stage diagnostic and failed seed key sets 1ms
+ ✓ tests/knowledge/retrievalProtocolParity.test.ts > retrieval protocol server/client parity > mirrors modality status detail and retrieval diagnostics key sets 1ms
+ × tests/knowledge/retrievalProtocolParity.test.ts > retrieval protocol server/client parity > mirrors federated diagnostics key sets 2ms
+   → expected [ Array(4) ] to deeply equal [ Array(5) ]
+ × tests/knowledge/retrievalProtocolParity.test.ts > retrieval protocol server/client parity > appends NO_PUBLISHED_SETS to the mirrored outcomes in server order 2ms
+   → expected [ Array(6) ] to deeply equal [ Array(7) ]
+ × tests/knowledge/retrievalProtocolParity.test.ts > retrieval protocol server/client parity > mirrors the thin federated request key set with no budgets or setTierAssignments 2ms
+   → expected [ 'budgets', 'comparisonMode', …(6) ] to deeply equal [ 'contextHints', …(5) ]
+ × tests/knowledge/retrievalProtocolParity.test.ts > retrieval protocol server/client parity > accepts a query-only federated request with the default limit 5ms
+   → [
+  {
+    "expected": "array",
+    "code": "invalid_type",
+    "path": [
+      "setTierAssignments"
+    ],
+    "message": "Invalid input: expected array, received undefined"
+  },
+  {
+    "code": "invalid_value",
+    "values": [
+      "single",
+      "baseline_vs_scope"
+    ],
+    "path": [
+      "comparisonMode"
+    ],
+    "message": "Invalid option: expected one of \"single\"|\"baseline_vs_scope\""
+  },
+  {
+    "expected": "object",
+    "code": "invalid_type",
+    "path": [
+      "budgets"
+    ],
+    "message": "Invalid input: expected object, received undefined"
+  }
+]
+ ✓ tests/knowledge/retrievalProtocolParity.test.ts > retrieval protocol server/client parity > rejects the retired setTierAssignments wire field 1ms
+ × tests/knowledge/retrievalProtocolParity.test.ts > retrieval protocol server/client parity > mirrors the federated set coverage schema and rejects unknown coverage states 0ms
+   → Cannot read properties of undefined (reading 'shape')
+ × tests/knowledge/retrievalProtocolParity.test.ts > retrieval protocol server/client parity > keeps the coverage ledger in the mirrored federated diagnostics 1ms
+   → expected [ Array(4) ] to include 'coverage'
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/knowledge/retrievalProtocolParity.test.ts > retrieval protocol server/client parity > mirrors retrieval outcomes in the same declaration order
+AssertionError: expected [ Array(6) ] to deeply equal [ Array(7) ]
+
+- Expected
++ Received
+
+@@ -3,7 +3,6 @@
+    "NEEDS_CLARIFICATION",
+    "NO_EVIDENCE",
+    "UNSUPPORTED",
+    "DEGRADED",
+    "SEED_ONLY",
+-   "NO_PUBLISHED_SETS",
+  ]
+
+ ❯ tests/knowledge/retrievalProtocolParity.test.ts:12:39
+     10| describe('retrieval protocol server/client parity', () => {
+     11|   it('mirrors retrieval outcomes in the same declaration order', () =>…
+     12|     expect(client.RETRIEVAL_OUTCOMES).toEqual(server.RETRIEVAL_OUTCOME…
+       |                                       ^
+     13|     expect(client.RETRIEVAL_OUTCOMES).toContain('SEED_ONLY');
+     14|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  tests/knowledge/retrievalProtocolParity.test.ts > retrieval protocol server/client parity > mirrors federated diagnostics key sets
+AssertionError: expected [ Array(4) ] to deeply equal [ Array(5) ]
+
+- Expected
++ Received
+
+  [
+-   "coverage",
+    "coverageWarnings",
+    "degraded",
+    "failedSeeds",
+    "stageDiagnostics",
+  ]
+
+ ❯ tests/knowledge/retrievalProtocolParity.test.ts:64:97
+     62|
+     63|   it('mirrors federated diagnostics key sets', () => {
+     64|     expect(Object.keys(client.FederatedRetrievalResponseSchema.shape.d…
+       |                                                                                                 ^
+     65|       Object.keys(server.FederatedRetrievalResponseSchema.shape.diagno…
+     66|     );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  tests/knowledge/retrievalProtocolParity.test.ts > retrieval protocol server/client parity > appends NO_PUBLISHED_SETS to the mirrored outcomes in server order
+AssertionError: expected [ Array(6) ] to deeply equal [ Array(7) ]
+
+- Expected
++ Received
+
+@@ -3,7 +3,6 @@
+    "NEEDS_CLARIFICATION",
+    "NO_EVIDENCE",
+    "UNSUPPORTED",
+    "DEGRADED",
+    "SEED_ONLY",
+-   "NO_PUBLISHED_SETS",
+  ]
+
+ ❯ tests/knowledge/retrievalProtocolParity.test.ts:70:39
+     68|
+     69|   it('appends NO_PUBLISHED_SETS to the mirrored outcomes in server ord…
+     70|     expect(client.RETRIEVAL_OUTCOMES).toEqual(server.RETRIEVAL_OUTCOME…
+       |                                       ^
+     71|     expect(client.RETRIEVAL_OUTCOMES.at(-1)).toBe('NO_PUBLISHED_SETS');
+     72|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  tests/knowledge/retrievalProtocolParity.test.ts > retrieval protocol server/client parity > mirrors the thin federated request key set with no budgets or setTierAssignments
+AssertionError: expected [ 'budgets', 'comparisonMode', …(6) ] to deeply equal [ 'contextHints', …(5) ]
+
+- Expected
++ Received
+
+  [
++   "budgets",
++   "comparisonMode",
+    "contextHints",
+    "includeInferred",
+    "limit",
+    "query",
+    "recentTurns",
+-   "setIds",
++   "setTierAssignments",
+  ]
+
+ ❯ tests/knowledge/retrievalProtocolParity.test.ts:75:78
+     73|
+     74|   it('mirrors the thin federated request key set with no budgets or se…
+     75|     expect(Object.keys(client.FederatedRetrievalRequestSchema.shape).s…
+       |                                                                              ^
+     76|       Object.keys(server.FederatedRetrievalRequestSchema.shape).sort()
+     77|     );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  tests/knowledge/retrievalProtocolParity.test.ts > retrieval protocol server/client parity > accepts a query-only federated request with the default limit
+ZodError: [
+  {
+    "expected": "array",
+    "code": "invalid_type",
+    "path": [
+      "setTierAssignments"
+    ],
+    "message": "Invalid input: expected array, received undefined"
+  },
+  {
+    "code": "invalid_value",
+    "values": [
+      "single",
+      "baseline_vs_scope"
+    ],
+    "path": [
+      "comparisonMode"
+    ],
+    "message": "Invalid option: expected one of \"single\"|\"baseline_vs_scope\""
+  },
+  {
+    "expected": "object",
+    "code": "invalid_type",
+    "path": [
+      "budgets"
+    ],
+    "message": "Invalid input: expected object, received undefined"
+  }
+]
+ ❯ tests/knowledge/retrievalProtocolParity.test.ts:81:59
+     79|
+     80|   it('accepts a query-only federated request with the default limit', …
+     81|     const parsed = client.FederatedRetrievalRequestSchema.parse({ quer…
+       |                                                           ^
+     82|     expect(parsed.limit).toBe(20);
+     83|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { _zod: { def: [ { expected: 'array', code: 'invalid_type', path: [ 'setTierAssignments' ], message: 'Invalid input: expected array, received undefined' }, { code: 'invalid_value', values: [ 'single', 'baseline_vs_scope' ], path: [ 'comparisonMode' ], message: 'Invalid option: expected one of "single"|"baseline_vs_scope"' }, { expected: 'object', code: 'invalid_type', path: [ 'budgets' ], message: 'Invalid input: expected object, received undefined' } ], constr: 'Function<ZodError>', traits: { constructor: 'Function<Set>', has: 'Function<has>', add: 'Function<add>', delete: 'Function<delete>', difference: 'Function<difference>', clear: 'Function<clear>', entries: 'Function<entries>', forEach: 'Function<forEach>', intersection: 'Function<intersection>', isSubsetOf: 'Function<isSubsetOf>', isSupersetOf: 'Function<isSupersetOf>', isDisjointFrom: 'Function<isDisjointFrom>', size: 2, symmetricDifference: 'Function<symmetricDifference>', union: 'Function<union>', values: 'Function<values>', keys: 'Function<values>' }, message: '[
+  {
+    "expected": "array",
+    "code": "invalid_type",
+    "path": [
+      "setTierAssignments"
+    ],
+    "message": "Invalid input: expected array, received undefined"
+  },
+  {
+    "code": "invalid_value",
+    "values": [
+      "single",
+      "baseline_vs_scope"
+    ],
+    "path": [
+      "comparisonMode"
+    ],
+    "message": "Invalid option: expected one of \"single\"|\"baseline_vs_scope\""
+  },
+  {
+    "expected": "object",
+    "code": "invalid_type",
+    "path": [
+      "budgets"
+    ],
+    "message": "Invalid input: expected object, received undefined"
+  }
+]' }, issues: [ { expected: 'array', code: 'invalid_type', path: [ 'setTierAssignments' ], message: 'Invalid input: expected array, received undefined' }, { code: 'invalid_value', values: [ 'single', 'baseline_vs_scope' ], path: [ 'comparisonMode' ], message: 'Invalid option: expected one of "single"|"baseline_vs_scope"' }, { expected: 'object', code: 'invalid_type', path: [ 'budgets' ], message: 'Invalid input: expected object, received undefined' } ], format: 'Function<anonymous>', flatten: 'Function<anonymous>', addIssue: 'Function<anonymous>', addIssues: 'Function<anonymous>', isEmpty: false }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  tests/knowledge/retrievalProtocolParity.test.ts > retrieval protocol server/client parity > mirrors the federated set coverage schema and rejects unknown coverage states
+TypeError: Cannot read properties of undefined (reading 'shape')
+ ❯ tests/knowledge/retrievalProtocolParity.test.ts:90:58
+     88|
+     89|   it('mirrors the federated set coverage schema and rejects unknown co…
+     90|     expect(Object.keys(client.FederatedSetCoverageSchema.shape).sort()…
+       |                                                          ^
+     91|       Object.keys(server.FederatedSetCoverageSchema.shape).sort()
+     92|     );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  tests/knowledge/retrievalProtocolParity.test.ts > retrieval protocol server/client parity > keeps the coverage ledger in the mirrored federated diagnostics
+AssertionError: expected [ Array(4) ] to include 'coverage'
+ ❯ tests/knowledge/retrievalProtocolParity.test.ts:105:90
+    103|
+    104|   it('keeps the coverage ledger in the mirrored federated diagnostics'…
+    105|     expect(Object.keys(client.FederatedRetrievalResponseSchema.shape.d…
+       |                                                                                          ^
+    106|   });
+    107| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  7 failed | 6 passed (13)
+   Start at  13:39:59
+   Duration  1.94s (environment 68%, import 12%, setup 10%, transform 8%, tests 2%, worker 1%)
+

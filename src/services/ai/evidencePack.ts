@@ -1,5 +1,6 @@
 import type {
   FederatedRetrievalResponse,
+  FederatedSetCoverage,
   ChunkItem,
   ConflictGroup,
 } from '../knowledge/retrievalProtocol';
@@ -75,11 +76,15 @@ export interface EvidencePack {
   readonly citations: Readonly<Record<string, SourceRecord>>;
   readonly paths: Readonly<Record<string, ValidatedPath>>;
   readonly conflicts: readonly ConflictGroup[];
+  /** Set/snapshot origin of each conflict group; never flattened to one winner (D-11). */
+  readonly conflictProvenance?: Readonly<Record<string, readonly { readonly setId: string; readonly snapshotId: string }[]>> | undefined;
   readonly entities?: readonly PackedEntity[] | undefined;
   readonly graphCounts?: GraphCounts | undefined;
   readonly promptEvidence: readonly PromptEvidenceItem[];
   readonly contextTruncated: boolean;
   readonly coverageWarnings: readonly string[];
+  /** Federated coverage ledger mirrored from the server response; empty for local/MCP packs. */
+  readonly coverage?: readonly FederatedSetCoverage[] | undefined;
 }
 
 export interface PackEvidenceInput {
@@ -216,7 +221,11 @@ export function packEvidence(input: PackEvidenceInput): EvidencePack {
       };
 
       if (chunk && chunk.type === 'chunk') {
-        const dedupKey = `${chunk.sourceDocumentId}:${chunk.lineStart}:${chunk.lineEnd}:${chunk.publishedContentHash}`;
+        const snapshotId = (fedItem as any).snapshotId ?? chunk.snapshotId ?? (resp as any).snapshotId ?? null;
+        // D-11/T-28: snapshot is part of citation identity. Two sets returning
+        // the same range/hash at DIFFERENT snapshots must stay distinct; at the
+        // SAME snapshot they still collapse and merge setMemberships (D-39).
+        const dedupKey = `${chunk.sourceDocumentId}:${chunk.lineStart}:${chunk.lineEnd}:${chunk.publishedContentHash}:${snapshotId ?? 'none'}`;
         const excerpt = chunk.rawSnippet ?? '';
 
         const isId =
@@ -225,7 +234,6 @@ export function packEvidence(input: PackEvidenceInput): EvidencePack {
             chunk.modalitiesContributed.includes('fulltext') &&
             chunk.score > 100);
 
-        const snapshotId = (fedItem as any).snapshotId ?? chunk.snapshotId ?? (resp as any).snapshotId ?? null;
         const setId = (fedItem as any).setId ?? chunk.setId ?? 'default_set';
 
         rawCandidates.push({
@@ -394,12 +402,19 @@ export function packEvidence(input: PackEvidenceInput): EvidencePack {
     }
   }
 
-  // Conflicts
+  // Conflicts — keep every branch's set/snapshot provenance (D-11), never
+  // flatten or pick a winner.
   const conflicts: ConflictGroup[] = [];
+  const conflictProvenance: Record<string, Array<{ setId: string; snapshotId: string }>> = {};
   const conflictCitationIds = new Set<string>();
   if (isServer && input.serverResponse?.conflictGroups) {
     for (const fedConflict of input.serverResponse.conflictGroups) {
       conflicts.push(fedConflict.conflictGroup);
+      const groupId = fedConflict.conflictGroup.conflictGroupId;
+      (conflictProvenance[groupId] ??= []).push({
+        setId: fedConflict.setId,
+        snapshotId: fedConflict.snapshotId,
+      });
     }
   }
 
@@ -473,11 +488,17 @@ export function packEvidence(input: PackEvidenceInput): EvidencePack {
     citations,
     paths,
     conflicts,
+    conflictProvenance,
     entities,
     graphCounts,
     promptEvidence: finalPromptEvidence,
     contextTruncated,
     coverageWarnings,
+    // Coverage mirrors the server ledger (bounded to 50) only for server
+    // packs; local / MCP packs have no federated coverage.
+    coverage: isServer && input.serverResponse
+      ? (input.serverResponse.diagnostics?.coverage ?? []).slice(0, 50)
+      : [],
   };
 }
 

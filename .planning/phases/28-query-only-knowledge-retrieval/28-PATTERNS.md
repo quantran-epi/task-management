@@ -367,7 +367,7 @@ Only the schema changes; dispatch and error mapping stay. Do not add a second me
 
 ### `src/services/ai/knowledgeOutcome.ts` (NEW — utility, transform)
 
-**Analog:** `src/services/wizard/workflowGuards.ts`.
+**Analog:** the code→canonical-message map pattern (a frozen `Record<code, {notice, guide}>` plus a narrow `resolve(code)` function). The original analog `src/services/wizard/workflowGuards.ts` was deleted in Phase 35-06; reimplement the small pattern locally in the new module with no dependency on a deleted file.
 
 **Canonical-code → message map pattern** (lines 30-49):
 ```typescript
@@ -652,3 +652,4 @@ Add a deadline check before each queued worker starts; abort pending work; emit 
 **Files scanned:** ~40 (tracked-source verified with `git ls-files`).
 **Excluded from scope:** `.gsd/capabilities/**` mirrors, `node_modules`, `knowledge-server/node_modules` (absent), PWA/daemon config.
 **Pattern extraction date:** 2026-11-05.
+**Re-scope note (2026-11-17):** Rows citing `src/components/sdlc/chat/StepChatPanel.tsx` and `src/services/wizard/workflowGuards.ts` described files deleted in Phase 35-06. The replan keeps the pattern rationale but maps the code→message-map analog to a self-contained `knowledgeOutcome.ts` module and the tool-event analog to the live `AIChatDrawer.tsx` `onToolEvent` / Telegram `onToolResult` seams. No deleted path is referenced by any plan.

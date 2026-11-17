@@ -84,6 +84,10 @@ import type {
   PersistedCitation,
   PersistedEntityRef,
 } from '../../services/ai/groundedAnswerSchemas';
+import {
+  KNOWLEDGE_SERVER_EMPTY_NOTICE,
+  detectKnowledgeToolOutcome,
+} from '../../services/ai/knowledgeOutcome';
 import { ScopeChipsBar, hasMeaningfulRoutedScope } from './grounded/ScopeChipsBar';
 import type { GroundedAnswerCardCallbacks } from './ChatMessageBubble';
 import { ChatTabBar, type ChatTabItem } from './ChatTabBar';
@@ -521,6 +525,27 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
             });
           } else {
             aiDebugService.recordToolResult(debugTurnId, event.id, event.result ?? '', event.durationMs);
+          }
+          // D-13: surface the canonical notice for a tool-driven server-empty
+          // result, once per turn. Existing event handling above is unchanged.
+          if (
+            event.phase === 'result' &&
+            !serverEmptySurfacedTabsRef.current.has(tabId) &&
+            detectKnowledgeToolOutcome(event.name, event.result ?? '') === 'NO_PUBLISHED_SETS'
+          ) {
+            const noticeThreadId = tabRuntimesRef.current.get(tabId)?.threadId;
+            if (!noticeThreadId) return;
+            serverEmptySurfacedTabsRef.current.add(tabId);
+            void saveMessage(
+              {
+                threadId: noticeThreadId,
+                role: 'system',
+                content: KNOWLEDGE_SERVER_EMPTY_NOTICE,
+              },
+              db
+            ).catch(() => {
+              // The notice is best-effort on the tool path; never break the turn.
+            });
           }
         },
         onAwaitingApproval: ({ toolName, summary }) => {
@@ -1174,6 +1199,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   // prelude bails instead of transmitting a cancelled prompt.
   const preludeTokenRef = useRef(new Map<string, number>());
   const preludeSeqRef = useRef(0);
+  // D-13: at most one canonical server-empty notice row per tab turn, including
+  // the shared-widget tool-event path (Analysis Mode).
+  const serverEmptySurfacedTabsRef = useRef(new Set<string>());
 
   const handleSendTurn = async (
     text: string,
@@ -1217,6 +1245,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     const turnTab = visibleTab ?? (await ensureTurnTab());
     const turnTabId = turnTab.id;
     turnTabIdRef.current = turnTabId;
+    serverEmptySurfacedTabsRef.current.delete(turnTabId);
 
     // Per-tab guard (D-06/D-10): one tab's in-flight turn never blocks or aborts another tab.
     // A prelude in flight counts as in-flight: the runtime is still idle, so without this a second
@@ -1359,7 +1388,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       // Analysis Mode bypasses grounded routing and goes straight to the tool loop.
       if (!turnAnalysisMode) {
         try {
-        const catalog = await fetchSetCatalog(db);
+        // Best-effort scope input only: an empty or failing local catalog must
+        // never gate or precede query-only server retrieval.
+        const catalog = await fetchSetCatalog(db).catch(() => []);
         const groundedDeps = createDefaultGroundedTurnDeps({
           knowledgeBaseUrl: knowledgeConfig.baseUrl,
           knowledgeToken: knowledgeConfig.token,
@@ -1479,6 +1510,33 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
             },
             db
           );
+          return;
+        }
+
+        // D-12/D-13: the app renders the canonical empty-server notice itself.
+        // It is a system transcript row, so no model-authored prose owns it.
+        if (groundedResult.kind === 'server_empty') {
+          await saveMessage(
+            {
+              threadId,
+              role: 'system',
+              content: groundedResult.notice || KNOWLEDGE_SERVER_EMPTY_NOTICE,
+            },
+            db
+          );
+          // D-14: local evidence, when present, follows the notice in its own
+          // row with authority 'local' — never merged with server evidence.
+          if (groundedResult.localFallback) {
+            await saveMessage(
+              {
+                threadId,
+                role: 'assistant',
+                content: '',
+                grounding: groundedResult.localFallback,
+              },
+              db
+            );
+          }
           return;
         }
 

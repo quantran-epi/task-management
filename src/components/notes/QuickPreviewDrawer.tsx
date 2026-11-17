@@ -73,6 +73,8 @@ export interface QuickPreviewDrawerProps {
   relevanceReason?: string | undefined;
   citationAuthority?: 'server' | 'local' | undefined;
   snapshotAvailable?: boolean | undefined;
+  /** Set IDs from the persisted citation, shown when the local note is absent (D-10). */
+  setIds?: readonly string[] | undefined;
 }
 
 /**
@@ -141,6 +143,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
   relevanceReason,
   citationAuthority,
   snapshotAvailable = true,
+  setIds,
 }) => {
   const [doc, setDoc] = useState<Note | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -347,6 +350,50 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
     backlinks.changeRequests.length > 0 ||
     backlinks.referencingNotes.length > 0;
 
+  // D-10: a citation must be inspectable even when the local document is absent.
+  // Render a self-contained excerpt panel ahead of the `!doc` empty state. This
+  // panel is text-only (no dangerouslySetInnerHTML) and never auto-imports.
+  const hasCitationData = Boolean(citedExcerpt || citedSnapshotId || (setIds && setIds.length > 0));
+  const localAbsentExcerptPanel = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div
+        data-testid="local-document-absent-notice"
+        style={{
+          padding: '8px 12px',
+          borderRadius: 6,
+          background: '#fafafa',
+          color: '#595959',
+          fontSize: 12,
+          fontWeight: 600,
+        }}
+      >
+        Tài liệu gốc chưa có trên thiết bị này — nội dung dưới đây trích từ bản chụp đã trả về.
+      </div>
+      <div
+        data-testid="cited-excerpt-panel"
+        style={{ borderRadius: 8, border: '1px solid #d9d9d9', backgroundColor: '#fafafa', overflow: 'hidden' }}
+      >
+        <div style={{ padding: '6px 12px', background: '#f0f0f0', borderBottom: '1px solid #d9d9d9', fontSize: 12, fontWeight: 600 }}>
+          Trích dẫn từ bản chụp
+          {citedSnapshotId && (
+            <Text type="secondary" style={{ marginLeft: 8, fontSize: 11, fontFamily: 'monospace' }}>
+              {citedSnapshotId.slice(0, 7)}…
+            </Text>
+          )}
+        </div>
+        <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
+          {_sectionAnchor && <div><Text strong>Mục:</Text> {_sectionAnchor}</div>}
+          {citedExcerpt && <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{citedExcerpt}</div>}
+          {(setIds?.length ?? 0) > 0 && (
+            <div data-testid="cited-set-ids">
+              <Text strong>Bộ tài liệu:</Text> {setIds!.join(', ')}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <Modal
       title={
@@ -394,7 +441,16 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
           <Spin tip="Đang tải tài liệu..." />
         </div>
       ) : !doc ? (
-        <Empty description="Không tìm thấy tài liệu hoặc đã bị xóa" />
+        hasCitationData ? (
+          <>
+            {localAbsentExcerptPanel}
+            <div style={{ marginTop: 12 }}>
+              <Empty description="Không tìm thấy tài liệu hoặc đã bị xóa" />
+            </div>
+          </>
+        ) : (
+          <Empty description="Không tìm thấy tài liệu hoặc đã bị xóa" />
+        )
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* 1. Snapshot-mismatch banner when currentHash !== citedContentHash (D-10) */}

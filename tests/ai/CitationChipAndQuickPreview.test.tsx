@@ -612,6 +612,50 @@ describe('QuickPreviewDrawer', () => {
     const row1 = screen.getByTestId('document-line-row-1');
     expect(row1.className).not.toContain('gsd-citation-highlight-line');
   });
+
+  it('19. no local document -> shows remote excerpt, section, snapshot and set IDs with local-absent notice', async () => {
+    const missingDocId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    render(
+      <QuickPreviewDrawer
+        open={true}
+        docId={missingDocId}
+        onClose={vi.fn()}
+        db={db}
+        citationAuthority="server"
+        citedExcerpt="Nội dung bản chụp từ máy chủ tri thức"
+        sectionAnchor="Phần 2"
+        citedSnapshotId="gsnap_abcdef12"
+        setIds={['10000000-0000-4000-8000-000000000001']}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('cited-excerpt-panel')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Nội dung bản chụp từ máy chủ tri thức')).toBeInTheDocument();
+    expect(screen.getByTestId('local-document-absent-notice')).toHaveTextContent(/chưa có|không có|absent/i);
+    expect(screen.getByTestId('cited-set-ids').textContent).toContain('10000000-0000-4000-8000-000000000001');
+    expect(screen.getByRole('button', { name: /Mở trong Docs/i })).toBeDisabled();
+  });
+
+  it('20. local-note present -> unchanged rendering, no local-absent notice', async () => {
+    render(
+      <QuickPreviewDrawer
+        open={true}
+        docId="doc-preview-1"
+        onClose={vi.fn()}
+        db={db}
+        citedExcerpt="Deploy pods with kubectl"
+        citationAuthority="server"
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('cited-excerpt-panel')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('local-document-absent-notice')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Mở trong Docs/i })).not.toBeDisabled();
+  });
 });
 
 describe('ScopeChipsBar meaningful scope check', () => {

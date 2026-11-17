@@ -721,6 +721,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
     const sourcesSlot = g.citations && g.citations.length > 0 ? (
       <SourcesPanel
         citations={g.citations}
+        coverage={g.coverage}
         onOpenCitation={(c) => groundedCallbacks?.onCitationActivate?.(c)}
       />
     ) : undefined;
@@ -797,6 +798,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         </div>
         <SourcesPanel
           citations={g.citations}
+          coverage={g.coverage}
           onOpenCitation={(c) => groundedCallbacks?.onCitationActivate?.(c)}
         />
       </div>

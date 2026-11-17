@@ -4,6 +4,8 @@
 **Domain:** Federated knowledge retrieval over published Markdown snapshots; client/server protocol evolution; evidence attribution and source inspection; cross-surface empty/unavailable outcomes
 **Confidence:** MEDIUM-HIGH for codebase facts, MEDIUM for design recommendations, LOW for live-runtime readiness claims (no running Neo4j/Docker)
 
+> **Re-scope note (2026-11-17):** SDLC/wizard files cited below as research observations (`sdlcWizardRuntime.ts`, `wizardService.ts`, `StepChatPanel.tsx`, `groundingBuilder.ts`, `workflowGuards.ts`) were deleted in Phase 35-06. The research record is retained for rationale only; the replan does not reference or resurrect them. SDLC-RET IDs are historical tooling IDs meaning query-only retrieval on live surfaces (AI Chat, Analysis Mode, Telegram). Explicit `setIds` restriction now belongs to the shared AI tool path, not SDLC artifact generation. No claim below about deleted code is treated as current-tree fact.
+
 <user_constraints>
 ## User Constraints (from CONTEXT.md)
 
@@ -627,7 +629,7 @@ This is a local-set-derived restriction. D-06 says SDLC chat default searches al
 
 ## Open Questions (RESOLVED)
 
-> **Resolved by plans 28-01..28-04:** (1) budgets fixed in 28-01 as `DEFAULT_QUERY_ONLY_BUDGETS`; (2) outcome adds one `NO_PUBLISHED_SETS` code plus a coverage ledger (28-01/28-02); (3) source details show published vs retrieval snapshot with `STALE_INDEX` (28-03); (4) lexical ranking logic duplicated into `knowledge-server/src` (28-01); (5) SDLC artifact generation keeps its project-scoped restriction while SDLC chat goes query-only (28-02); (6) the canonical notice is an app-rendered outcome/banner, never model text, with the local fallback as a separate labeled row (28-04). Each entry below is retained as the rationale record.
+> **Resolved by the replan (28-01..28-05):** (1) budgets fixed in 28-01 as `DEFAULT_QUERY_ONLY_BUDGETS`; (2) outcomes add `NO_PUBLISHED_SETS` and a truthful DEGRADED/UNAVAILABLE ledger, including the all-unknown explicit-`setIds` case wired in 28-01 and re-proven end to end in 28-05; (3) source details show published vs retrieval snapshot with staleness (28-03); (4) lexical ranking is duplicated into `knowledge-server/src` (28-01); (5) explicit `setIds` stays an optional caller restriction on the shared AI tool path (28-02), never a default and never widened; (6) the canonical notice is an app-rendered outcome/banner, never model text, rendered on every live surface with local fallback as a separate labeled row (28-04); (7) zero-local-docs retrieve is proven end to end and the phase closes with a truthful validation sign-off (28-05). The SDLC-era rationale in (5) is superseded — those files no longer exist. Each entry below is retained as the rationale record.
 
 1. **Exact default budget values**
    - What we know: Existing grounded path uses `elapsedMs: 300000`, `maxSets: 10`, `maxItems: 200`, `maxEvidenceChars: 56000` `[VERIFIED: src/services/ai/groundedTurn.ts:503-512]`; tool path uses `elapsedMs: 60000`, `maxSets: 10`, `maxItems: 50`, `maxEvidenceChars: 80000` `[VERIFIED: src/services/ai/knowledgeRetrievalTool.ts:69-75]`.
@@ -707,7 +709,7 @@ Baseline observed this session:
 | SDLC-RET-01 | Query-only request accepted; tool sends no catalog; fresh-device grounded path does not clarify | Unit + route | `npx vitest run tests/ai/knowledgeRetrievalTool.test.ts tests/ai/groundedTurn.test.ts`; `npm --prefix knowledge-server test -- tests/retrievalRoutes.test.ts tests/retrievalProtocol.test.ts` | ✅ existing; ❌ new cases in Wave 0 |
 | SDLC-RET-02 | Server enumerates all published sets; returns per-set/snapshot attribution | Unit | `npm --prefix knowledge-server test -- tests/publishedSetDiscovery.test.ts tests/federatedRetrieval.test.ts` | ❌ Wave 0 |
 | SDLC-RET-03 | Finite deadline, first-item cap, one-snapshot closure, citation integrity, truthful degraded/unavailable | Unit + component | `npm --prefix knowledge-server test -- tests/federatedRetrieval.test.ts tests/retrievalProtocol.test.ts`; `npx vitest run tests/ai/evidencePack.test.ts` | ✅ partial; ❌ new cases |
-| SDLC-RET-04 | Canonical notice rendered identically in Drawer, SDLC, Telegram, and tool paths | Unit + component | `npx vitest run tests/ai/AIChatDrawerGroundedWiring.test.tsx tests/ai/AiChatWidget.test.tsx tests/unit/sdlc/StepChatPanelToolPolicy.test.tsx tests/telegram/telegramHeadlessWorker.test.ts` | ✅ existing harness; ❌ new cases |
+| SDLC-RET-04 | Canonical notice rendered identically on live surfaces (AI Chat + Telegram, grounded + tool paths) | Unit + component | `npx vitest run tests/ai/AIChatDrawerGroundedWiring.test.tsx tests/ai/AiChatWidget.test.tsx tests/telegram/telegramHeadlessWorker.test.ts` | ✅ existing harness; ❌ new cases |
 | SDLC-RET-05 | Explicit restriction exact; unknown/unpublished does not broaden | Unit + route | `npm --prefix knowledge-server test -- tests/retrievalRoutes.test.ts tests/federatedRetrieval.test.ts`; `npx vitest run tests/ai/knowledgeRetrievalTool.test.ts` | ❌ new cases |
 
 ### Sampling Rate

@@ -1,7 +1,6 @@
 import type { TaskPlannerDatabase } from '../../db';
 import { createKnowledgeClient } from '../knowledge/knowledgeClient';
 import { packEvidence } from './evidencePack';
-import { fetchSetCatalog } from '../../db/repositories/documentSetRepo';
 
 export interface KnowledgeRetrievalArgs {
   query?: string;
@@ -46,12 +45,6 @@ export async function executeKnowledgeRetrievalTool(
   // FederatedRetrievalRequestSchema requires 10 <= limit <= 50.
   const limit = Math.min(Math.max(10, Number(args.limit) || 20), 50);
   const requestedSetIds = Array.isArray(args.setIds) ? args.setIds.filter(Boolean) : [];
-  const catalog = requestedSetIds.length > 0 ? [] : await fetchSetCatalog(db);
-  const setIdList =
-    requestedSetIds.length > 0 ? requestedSetIds : catalog.map((entry) => entry.setId);
-  if (setIdList.length === 0) {
-    return JSON.stringify({ error: 'Chưa có bộ tài liệu nào để tra cứu.' });
-  }
 
   try {
     const client = createKnowledgeClient({
@@ -59,35 +52,34 @@ export async function executeKnowledgeRetrievalTool(
       token: config.token,
       db,
     });
-    const response = await client.retrieveFederated({
-      query,
-      setTierAssignments: setIdList.map((setId) => ({
-        setId,
-        tier: 'REQUIRED' as const,
-        roleGroup: 'baseline' as const,
-      })),
-      comparisonMode: 'single' as const,
-      budgets: {
-        concurrency: 4,
-        elapsedMs: 60_000,
-        maxSets: 10,
-        maxItems: 50,
-        maxEvidenceChars: 80_000,
+    const response = await client.retrieveFederated(
+      {
+        query,
+        limit,
+        includeInferred: true,
+        recentTurns: [],
+        ...(requestedSetIds.length > 0 ? { setIds: requestedSetIds } : {}),
       },
-      limit,
-      includeInferred: true,
-      recentTurns: [],
-    }, signal);
+      signal
+    );
 
     const pack = packEvidence({ authority: 'server', serverResponse: response });
-    return JSON.stringify({
-      outcome: response.outcome,
-      excerpts: pack.promptEvidence.map((item) => ({
+    const coverage = response.diagnostics.coverage ?? [];
+    const excerpts = pack.promptEvidence.map((item) => {
+      const citation = pack.citations[item.id] ?? pack.citations[item.id.replace(/^[SLM]/, '')];
+      return {
         id: item.id,
         title: item.documentTitle,
         section: item.sectionAnchor ?? null,
         text: item.text,
-      })),
+        setId: citation?.setMemberships[0]?.setId ?? null,
+        snapshotId: citation?.snapshotId ?? null,
+      };
+    });
+    const searchedSetCount = new Set(excerpts.map((e) => e.setId).filter(Boolean)).size;
+    return JSON.stringify({
+      outcome: response.outcome,
+      excerpts,
       entities: (pack.entities ?? []).map((entity) => ({
         urn: entity.urn,
         name: entity.canonicalName,
@@ -99,6 +91,19 @@ export async function executeKnowledgeRetrievalTool(
         classification: path.classification,
       })),
       warnings: [...new Set(pack.coverageWarnings)],
+      sets: coverage.map((entry) => ({
+        setId: entry.setId,
+        state: entry.state,
+        publishedSnapshotId: entry.publishedSnapshotId,
+        retrievalSnapshotId: entry.retrievalSnapshotId,
+        staleIndex: entry.staleIndex,
+      })),
+      status: {
+        code: response.outcome,
+        publishedSetCount: coverage.length,
+        searchedSetCount,
+        contributedSetCount: coverage.filter((entry) => entry.state === 'CONTRIBUTED').length,
+      },
     });
   } catch (err: any) {
     if (err?.name === 'AbortError' || signal?.aborted) {

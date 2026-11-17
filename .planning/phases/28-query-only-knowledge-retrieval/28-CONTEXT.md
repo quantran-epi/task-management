@@ -1,12 +1,13 @@
 # Phase 28: Query-Only Knowledge Retrieval - Context
 
 **Gathered:** 2026-11-05
-**Status:** Ready for planning
+**Re-scoped:** 2026-11-17 — SDLC surface references removed after Phase 35-06 deleted every SDLC/wizard file. All user-locked intents are preserved on the live surfaces (ordinary AI Chat, Analysis Mode tool path, Telegram); no SDLC code is resurrected.
+**Status:** Replanned for execution
 
 <domain>
 ## Phase Boundary
 
-Make knowledge retrieval work on a fresh device with no local documents. A client sends `{query, limit}`; the server discovers published sets and federates retrieval across them within bounded budgets. Return set/snapshot attribution alongside existing evidence, entities, paths and warnings. Preserve single-snapshot path closure, citation identities, truthful degraded/unavailable states and optional explicit set restrictions. Normalize the server-empty outcome across ordinary AI Chat, Analysis Mode, SDLC step chat and Telegram.
+Make knowledge retrieval work on a fresh device with no local documents. A client sends `{query, limit}`; the server discovers published sets and federates retrieval across them within bounded budgets. Return set/snapshot attribution alongside existing evidence, entities, paths and warnings. Preserve single-snapshot path closure, citation identities, truthful degraded/unavailable states and optional explicit set restrictions. Normalize the server-empty outcome across every live surface: ordinary AI Chat, Analysis Mode tool path and Telegram. (The original wording included SDLC step chat, deleted in Phase 35-06; the shared outcome module and existing tool-event seams are the live cross-surface equivalent.)
 
 Tauri remains the app runtime for this work. The optional knowledge daemon must not become a dependency for local document editing, persistence or local search. No repository execution, external research, conventions, new set-picker UI, automatic document import, PWA work or backward-compatibility subsystem is added here.
 
@@ -16,14 +17,14 @@ Tauri remains the app runtime for this work. The optional knowledge daemon must 
 ## Implementation Decisions
 
 ### Published set discovery and incomplete coverage
-- **D-01:** Default retrieval considers all published server sets, not the local catalog and not a relevance-selected subset that silently excludes sets. On a fresh device, ordinary AI Chat, Analysis Mode, SDLC step chat and Telegram search the server immediately for knowledge requests. An empty local catalog must not trigger a request to select a set or clarify document scope.
+- **D-01:** Default retrieval considers all published server sets, not the local catalog and not a relevance-selected subset that silently excludes sets. On a fresh device, ordinary AI Chat, Analysis Mode and Telegram search the server immediately for knowledge requests. An empty local catalog must not trigger a request to select a set or clarify document scope. (Original wording named SDLC step chat, deleted in Phase 35-06; intent now applies to all live surfaces.)
 - **D-02:** A successfully published set whose graph is building, unavailable or failed remains eligible for whatever retrieval modalities are available. Use available fulltext/vector evidence and disclose missing graph capability; do not discard the whole set just because graph is not ready. Research must verify the actual modality prerequisites and report unavailable modalities truthfully rather than inventing readiness.
 - **D-03:** Budgets remain finite. If published sets exceed the budget, return bounded partial evidence and an explicit incomplete-coverage warning. Do not claim every set was searched or that evidence is complete. An unsearched set is not a set with no matches.
 - **D-04:** If some sets timeout/fail while others return evidence, continue with available evidence and disclose the failed/timed-out coverage. Never infer that missing information does not exist when retrieval coverage is incomplete. If nothing is usable, report the corresponding unavailable/degraded state, not successful empty coverage.
 
 ### Request scope and personal-app simplicity
 - **D-05:** Query-only is the default. An explicit restriction stays optional for callers that already know their sets. Preserve that restriction exactly: unavailable/unpublished/unknown requested sets must not silently broaden retrieval to unrelated sets; report actionable unavailability.
-- **D-06:** Project/CR document links provide context, not an implicit set filter. SDLC also searches all published server sets by default. Only a caller's explicit restriction narrows scope.
+- **D-06:** Document links provide context, not an implicit set filter. All live surfaces search all published server sets by default. Only a caller's explicit `setIds` restriction narrows scope. (Original wording named SDLC; the explicit-restriction caller is now the shared AI tool path.)
 - **D-07:** This is a personal app with no old clients to support. Upgrade app and daemon together; do not build backward-compatibility branches, old-protocol fallback, version negotiation or an extra compatibility endpoint. This supersedes the user's earlier tentative compatibility selection. Explicit set requests remain supported because SDLC-RET-05 requires them, not for old-client compatibility.
 
 ### Set/snapshot attribution and source inspection
@@ -38,7 +39,7 @@ Tauri remains the app runtime for this work. The optional knowledge daemon must 
   > Knowledge Server chưa có bộ tài liệu nào được publish. Hãy publish ít nhất một bộ tài liệu từ thiết bị có tài liệu, rồi thử lại.
 
   The device asking the question does not need local documents. The remedy is publishing from a device that has them, not importing documents onto every client.
-- **D-13:** The application renders that canonical notice directly across AI Chat, SDLC step chat and Telegram, including tool-driven paths; do not rely on the model to paraphrase it. The tool/model also receives a structured code/status so it cannot interpret the outcome as evidence. Rendering/chrome may differ by surface, but the notice text must be identical.
+- **D-13:** The application renders that canonical notice directly across every live surface (ordinary AI Chat, Analysis Mode tool path and Telegram), including tool-driven paths; do not rely on the model to paraphrase it. The tool/model also receives a structured code/status so it cannot interpret the outcome as evidence. Rendering/chrome may differ by surface, but the notice text must be identical. (Original wording named SDLC step chat, deleted in Phase 35-06; a shared pure outcome module plus existing tool-event seams provide the live cross-surface equivalent.)
 - **D-14:** If the server is empty and local documents are available, retain the canonical server-empty notice, then use the existing local fallback with an explicit local-only evidence label. Do not imply the server returned those results. If no local evidence exists, leave the actionable notice; never invent an answer.
 - **D-15:** Keep three cases distinct: no published sets (guide publishing), published sets searched but no evidence (guide query refinement), and server unreachable/unavailable (report unavailability and use labeled local fallback where available). None may become a generic exception or be mislabeled as another case.
 
@@ -60,9 +61,7 @@ Tauri remains the app runtime for this work. The optional knowledge daemon must 
 - `.planning/REQUIREMENTS.md` § Knowledge Retrieval — SDLC-RET-01 through SDLC-RET-05.
 - `.planning/PROJECT.md` § Current Milestone, Constraints and Key Decisions — query-only coupling, optional daemon, canonical Markdown and evidence integrity.
 - `CLAUDE.md` — Tauri-only current runtime work, offline isolation, trust boundaries and focused-test workflow.
-- `.planning/phases/26-sdlc-prompt-grounding-tool-use-policy/26-CONTEXT.md` — bounded evidence, per-step tool policy, insufficient-evidence behavior and existing tool loop.
-- `.planning/phases/27-studio-artifact-tools-diff-approval/27-CONTEXT.md` — structured actionable refusals and current shared-widget/host boundaries.
-- `.planning/phases/25.3-sdlc-workflow-hardening-common-ai-chat-widget/25.3-CONTEXT.md` — D-04 expandable tool feedback, D-08 source conflicts, D-21 safe failures and D-25 runtime ownership.
+- Bounded-evidence, expandable tool-feedback, source-conflict, safe-failure and runtime-ownership patterns are now carried by `CLAUDE.md` constraints and the live `src/components/ai/` and `src/services/ai/` code; the Phase 26/27/25.3 SDLC context files described a deleted surface and are not referenced by this replan.
 
 ### Server retrieval and published state
 - `knowledge-server/src/routes/retrieval.ts` — existing per-set and federated routes and request/response validation.
@@ -83,11 +82,10 @@ Tauri remains the app runtime for this work. The optional knowledge daemon must 
 - `src/services/ai/groundedTurn.ts` — scope resolution and empty-local-scope gate, server/local/MCP routing and grounded outcomes.
 - `src/services/ai/groundedTurnDeps.ts` — production knowledge client and local fallback dependencies.
 - `src/services/ai/semanticScopeRouter.ts` — existing client catalog-derived set assignments; must not gate default server requests.
-- `src/components/ai/AIChatDrawer.tsx` — ordinary grounded chat currently loads `fetchSetCatalog`; Analysis Mode uses the tool loop.
-- `src/components/sdlc/chat/StepChatPanel.tsx` — SDLC host adapter and shared tool-result presentation.
-- `src/services/telegram/telegramHeadlessWorker.ts` — grounded Telegram catalog dependency and non-answer formatting.
-- `src/services/wizard/sdlcWizardRuntime.ts` — existing explicit SDLC set-based request construction; audit against D-05/D-06.
+- `src/components/ai/AIChatDrawer.tsx` — ordinary grounded chat currently loads `fetchSetCatalog`; Analysis Mode uses the tool loop through `src/components/ai/AiChatWidget.tsx` (tool events via `onToolEvent`).
+- `src/services/telegram/telegramHeadlessWorker.ts` — grounded Telegram catalog dependency and non-answer formatting; tool-driven path uses the existing `runAiOrchestratorLoop` `onToolResult` seam.
 - `src/db/repositories/documentSetRepo.ts` — local `fetchSetCatalog`; remove default retrieval coupling, not unrelated catalog functionality blindly.
+- Deleted in Phase 35-06 and NOT referenced by this replan: `src/components/sdlc/chat/StepChatPanel.tsx`, `src/services/wizard/sdlcWizardRuntime.ts`, `src/services/ai/wizardService.ts`, `src/services/sdlc/groundingBuilder.ts`, `src/services/wizard/workflowGuards.ts` and their tests.
 
 </canonical_refs>
 
@@ -109,8 +107,9 @@ Tauri remains the app runtime for this work. The optional knowledge daemon must 
 
 ### Integration Points
 - Authoritative server discovery → resolved bounded federation → response validation/attribution → client validation → evidence pack/tool JSON → existing source details.
-- Drawer and Telegram grounded routing must stop requiring `fetchSetCatalog` before default remote retrieval. SDLC explicit callers require deliberate scope handling, not automatic linkage-based filtering.
-- Canonical structured empty-server handling belongs in shared client outcome/formatting logic, consumed consistently by grounded and tool-driven paths rather than three separately authored messages.
+- Drawer and Telegram grounded routing must stop requiring `fetchSetCatalog` before default remote retrieval. Explicit `setIds` callers require deliberate scope handling, not automatic linkage-based filtering.
+- Canonical structured empty-server handling belongs in shared client outcome/formatting logic, consumed consistently by every live surface's grounded and tool-driven paths rather than separately authored messages per surface.
+- Absolute non-regression: existing `groundedTurn` routing/MCP/local-fallback flows, `knowledgeRetrievalTool`, `aiOrchestratorLoop` and Telegram behavior — including their flags, error taxonomy and copy — must remain unchanged; the only new behavior is the no-local-docs query-only path and truthful empty/unavailable outcomes. Focused regression tests for existing flows accompany every behavior change.
 - Add focused checks for fresh-device query-only requests, explicit restriction, missing graph, budgets/timeouts, snapshot/citation integrity, attribution and identical cross-surface notice. Do not run the full Vitest suite.
 
 </code_context>

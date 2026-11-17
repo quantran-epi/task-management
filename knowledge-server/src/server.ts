@@ -6,7 +6,11 @@ import { AttemptService } from './services/attemptService.js';
 import { registerAttemptRoutes } from './routes/attempts.js';
 import { registerSnapshotRoutes } from './routes/snapshots.js';
 import { registerGraphRoutes, GraphBuildService } from './routes/graph.js';
-import { registerRetrievalRoutes } from './routes/retrieval.js';
+import {
+  registerRetrievalRoutes,
+  type QueryOnlyRouteDependencies,
+} from './routes/retrieval.js';
+import type { FederatedRetrievalDependencies } from './services/federatedRetrievalService.js';
 import { registerOntologyRoutes } from './routes/ontology.js';
 import { OntologyRegistryService } from './services/ontologyRegistryService.js';
 import { GraphRepository } from './graph/graphRepository.js';
@@ -29,6 +33,8 @@ export interface KnowledgeServerOptions {
   graphBuildService?: GraphBuildService | undefined;
   ontologyRegistry?: OntologyRegistryService | undefined;
   retrievalService?: Pick<RetrievalService, 'retrieve'> | undefined;
+  federatedDeps?: FederatedRetrievalDependencies | undefined;
+  queryOnlyDeps?: QueryOnlyRouteDependencies | undefined;
   readinessCheck?: (() => Promise<{ neo4j: boolean; vectorIndex: boolean; model: boolean }>) | undefined;
   onClose?: (() => Promise<void> | void) | undefined;
 }
@@ -146,8 +152,13 @@ export function buildKnowledgeServer(options: KnowledgeServerOptions): Knowledge
   registerSnapshotRoutes(app, attemptService, graphBuildService);
   registerGraphRoutes(app, graphBuildService);
   registerOntologyRoutes(app, ontologyRegistry);
-  if (options.retrievalService) {
-    registerRetrievalRoutes(app, options.retrievalService);
+  if (options.retrievalService || options.federatedDeps) {
+    registerRetrievalRoutes(
+      app,
+      options.retrievalService,
+      options.federatedDeps,
+      options.queryOnlyDeps
+    );
   }
 
   if (options.onClose) {

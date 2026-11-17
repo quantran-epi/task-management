@@ -147,6 +147,13 @@ export class SnapshotStore {
     return snapshot ? clone(snapshot) : null;
   }
 
+  /** Server-authoritative published-set enumeration in deterministic setId order. */
+  listActiveSnapshots(): Array<{ setId: string; snapshotId: string }> {
+    return [...this.#activeBySet.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([setId, snapshot]) => ({ setId, snapshotId: snapshot.snapshotId }));
+  }
+
   registerActiveSnapshot(setId: string, snapshot: ProjectionSnapshot): void {
     const active = clone(snapshot);
     this.#activeBySet.set(setId, active);

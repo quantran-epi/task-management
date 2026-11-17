@@ -1,0 +1,156 @@
+TAP version 13
+1..1
+not ok 1 - tests/knowledge/retrievalProtocolParity.test.ts # time=30.28ms {
+    1..1
+    not ok 1 - retrieval protocol server/client parity # time=29.09ms {
+        1..13
+        not ok 1 - mirrors retrieval outcomes in the same declaration order # time=10.83ms
+            ---
+            error:
+                name: "AssertionError"
+                message: "expected [ Array(6) ] to deeply equal [ Array(7) ]"
+            at: "/home/quantd/workspace/personal/new/task-management-intellij/.claude/worktrees/phase-28-isolated/tests/knowledge/retrievalProtocolParity.test.ts:12:39"
+            actual: "[
+  \"READY\",
+  \"NEEDS_CLARIFICATION\",
+  \"NO_EVIDENCE\",
+  \"UNSUPPORTED\",
+  \"DEGRADED\",
+  \"SEED_ONLY\",
+]"
+            expected: "[
+  \"READY\",
+  \"NEEDS_CLARIFICATION\",
+  \"NO_EVIDENCE\",
+  \"UNSUPPORTED\",
+  \"DEGRADED\",
+  \"SEED_ONLY\",
+  \"NO_PUBLISHED_SETS\",
+]"
+            ...
+        ok 2 - mirrors reason codes in the same declaration order # time=1.81ms
+        ok 3 - mirrors stage names in the same declaration order # time=0.35ms
+        ok 4 - mirrors the model depth input cap # time=0.34ms
+        ok 5 - mirrors stage diagnostic and failed seed key sets # time=0.59ms
+        ok 6 - mirrors modality status detail and retrieval diagnostics key sets # time=0.53ms
+        not ok 7 - mirrors federated diagnostics key sets # time=1.29ms
+            ---
+            error:
+                name: "AssertionError"
+                message: "expected [ Array(4) ] to deeply equal [ Array(5) ]"
+            at: "/home/quantd/workspace/personal/new/task-management-intellij/.claude/worktrees/phase-28-isolated/tests/knowledge/retrievalProtocolParity.test.ts:64:97"
+            actual: "[
+  \"coverageWarnings\",
+  \"degraded\",
+  \"failedSeeds\",
+  \"stageDiagnostics\",
+]"
+            expected: "[
+  \"coverage\",
+  \"coverageWarnings\",
+  \"degraded\",
+  \"failedSeeds\",
+  \"stageDiagnostics\",
+]"
+            ...
+        not ok 8 - appends NO_PUBLISHED_SETS to the mirrored outcomes in server order # time=1.24ms
+            ---
+            error:
+                name: "AssertionError"
+                message: "expected [ Array(6) ] to deeply equal [ Array(7) ]"
+            at: "/home/quantd/workspace/personal/new/task-management-intellij/.claude/worktrees/phase-28-isolated/tests/knowledge/retrievalProtocolParity.test.ts:70:39"
+            actual: "[
+  \"READY\",
+  \"NEEDS_CLARIFICATION\",
+  \"NO_EVIDENCE\",
+  \"UNSUPPORTED\",
+  \"DEGRADED\",
+  \"SEED_ONLY\",
+]"
+            expected: "[
+  \"READY\",
+  \"NEEDS_CLARIFICATION\",
+  \"NO_EVIDENCE\",
+  \"UNSUPPORTED\",
+  \"DEGRADED\",
+  \"SEED_ONLY\",
+  \"NO_PUBLISHED_SETS\",
+]"
+            ...
+        not ok 9 - mirrors the thin federated request key set with no budgets or setTierAssignments # time=1.91ms
+            ---
+            error:
+                name: "AssertionError"
+                message: "expected [ 'budgets', 'comparisonMode', …(6) ] to deeply equal [ 'contextHints', …(5) ]"
+            at: "/home/quantd/workspace/personal/new/task-management-intellij/.claude/worktrees/phase-28-isolated/tests/knowledge/retrievalProtocolParity.test.ts:75:78"
+            actual: "[
+  \"budgets\",
+  \"comparisonMode\",
+  \"contextHints\",
+  \"includeInferred\",
+  \"limit\",
+  \"query\",
+  \"recentTurns\",
+  \"setTierAssignments\",
+]"
+            expected: "[
+  \"contextHints\",
+  \"includeInferred\",
+  \"limit\",
+  \"query\",
+  \"recentTurns\",
+  \"setIds\",
+]"
+            ...
+        not ok 10 - accepts a query-only federated request with the default limit # time=5.89ms
+            ---
+            error:
+                name: "ZodError"
+                message: "[
+  {
+    \"expected\": \"array\",
+    \"code\": \"invalid_type\",
+    \"path\": [
+      \"setTierAssignments\"
+    ],
+    \"message\": \"Invalid input: expected array, received undefined\"
+  },
+  {
+    \"code\": \"invalid_value\",
+    \"values\": [
+      \"single\",
+      \"baseline_vs_scope\"
+    ],
+    \"path\": [
+      \"comparisonMode\"
+    ],
+    \"message\": \"Invalid option: expected one of \\"single\\"|\\"baseline_vs_scope\\"\"
+  },
+  {
+    \"expected\": \"object\",
+    \"code\": \"invalid_type\",
+    \"path\": [
+      \"budgets\"
+    ],
+    \"message\": \"Invalid input: expected object, received undefined\"
+  }
+]"
+            at: "/home/quantd/workspace/personal/new/task-management-intellij/.claude/worktrees/phase-28-isolated/tests/knowledge/retrievalProtocolParity.test.ts:81:59"
+            ...
+        ok 11 - rejects the retired setTierAssignments wire field # time=1.14ms
+        not ok 12 - mirrors the federated set coverage schema and rejects unknown coverage states # time=0.62ms
+            ---
+            error:
+                name: "TypeError"
+                message: "Cannot read properties of undefined (reading 'shape')"
+            at: "/home/quantd/workspace/personal/new/task-management-intellij/.claude/worktrees/phase-28-isolated/tests/knowledge/retrievalProtocolParity.test.ts:90:58"
+            ...
+        not ok 13 - keeps the coverage ledger in the mirrored federated diagnostics # time=1.59ms
+            ---
+            error:
+                name: "AssertionError"
+                message: "expected [ Array(4) ] to include 'coverage'"
+            at: "/home/quantd/workspace/personal/new/task-management-intellij/.claude/worktrees/phase-28-isolated/tests/knowledge/retrievalProtocolParity.test.ts:105:90"
+            ...
+    }
+}
