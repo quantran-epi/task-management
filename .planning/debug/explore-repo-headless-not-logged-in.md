@@ -15,6 +15,12 @@ updated: "2026-11-17"
 - Timeline: discovered after phase 44 push `ec6bfbd2`; owner reports the same machine's interactive `claude` has been configured and normally just works by typing `claude`, with no login prompt.
 - Reproduction: run a team turn where an agent calls `explore_repo` with a valid linked system/SSH profile pointing at the local workspace; inspect the tool result.
 
+## Additional UAT symptom (new transport failure after auth fix)
+
+- After pushing auth fix `644dd579`, owner reports `explore_repo` still fails with raw error: `SSH handshake thất bại: [Session(-8)] Unable to exchange encryption keys` (report code `4627a40d`).
+- This is now an SSH/transport failure, distinct from the previous `Not logged in` auth failure. Resume investigation with this symptom: inspect `probeRemoteClaude`, `runRemoteExplore`, and the Tauri SSH stream command path (`execRemoteCommandStream`, `ssh_exec_stream`) under the configured profile; determine whether this is a transient reusable-session failure, stale profile/key mismatch, algorithm negotiation issue, or stream-channel setup problem. Add a truthful refusal or retry/fallback only when backed by evidence.
+- Keep the auth fix intact unless evidence shows it caused the handshake regression.
+
 ## Current Focus
 
 - bug_class: Bohrbug (deterministic environment/config difference between interactive shell and SSH non-interactive exec)
