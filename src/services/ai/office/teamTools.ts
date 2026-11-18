@@ -50,8 +50,9 @@ import { MODEL_ID_REGEX } from '../../../services/agents/ghostDevConfig';
  * agent that must still be verified against the context's team.
  *
  * Every handler except `git_read` is fully offline: it reads IndexedDB and
- * `src/utils/bm25.ts` only. `git_read` performs read-only SSH git reads against a
- * repository of a system linked to the team.
+ * `src/utils/bm25.ts` only. `git_read` performs read-only SSH git reads. A repo link is ONE
+ * context source among many (explicit args, team systems, SSH defaults, conversation hints);
+ * the resolver accepts any valid clue and only refuses when the repo is genuinely ambiguous.
  */
 
 export interface TeamToolContext {
@@ -92,6 +93,12 @@ export interface TeamToolContext {
    * id with the tool registry so explicit Cancel can address the exact task by id only.
    */
   loopCallId?: string | undefined;
+  /**
+   * W1: repo/folder/project names already extracted from the leader/agent turn or prompt.
+   * These are CONTEXT hints, not permissions — the resolver still requires a unique match.
+   * When absent, the resolver falls back to team systems and SSH-config default paths.
+   */
+  repoHints?: string[] | undefined;
 }
 
 export type TeamToolRefusalCode =
@@ -343,7 +350,7 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
     function: {
       name: 'git_read',
       description:
-        'Đọc trạng thái git của repo remote qua SSH (chỉ đọc, không ghi). Tám action: branches (liệt kê nhánh), status (tệp chưa commit), log (N commit gần nhất của một nhánh), diff_summary (tổng hợp diff giữa base và target), diff_file (diff một tệp), read_file (một TRANG nội dung tệp tại một nhánh — dùng offset/limit, không trả cả file), tree (cây thư mục tại một nhánh), grep (tìm chuỗi hoặc biểu thức trong nội dung đã track của một nhánh). Không bắt buộc liên kết repo: truyền repoPath/folder/repo/workingDir/path/remotePath (tên folder hoặc path tương đối đều được), hoặc hệ thống đã liên kết qua systemId; nếu không rõ, công cụ sẽ gợi ý các repo có sẵn để bạn chọn.',
+        'Đọc trạng thái git của repo remote qua SSH (chỉ đọc, không ghi). Tám action: branches (liệt kê nhánh), status (tệp chưa commit), log (N commit gần nhất của một nhánh), diff_summary (tổng hợp diff giữa base và target), diff_file (diff một tệp), read_file (một TRANG nội dung tệp tại một nhánh — dùng offset/limit, không trả cả file), tree (cây thư mục tại một nhánh), grep (tìm chuỗi hoặc biểu thức trong nội dung đã track của một nhánh). Không bắt buộc liên kết repo: truyền repoPath/folder/repo/workingDir/remotePath (tên folder hoặc path tương đối đều được), hoặc hệ thống đã liên kết qua systemId; nếu không rõ, công cụ sẽ gợi ý các repo có sẵn để bạn chọn. `path` CHỈ là bộ lọc pathspec cho grep/read_file, KHÔNG dùng để chọn repo.',
       parameters: {
         type: 'object',
         properties: {
@@ -1113,16 +1120,29 @@ type GitRepoResolution =
 const NO_REPO_HINT =
   'Hãy cung cấp tên/path repo (đường dẫn đầy đủ hoặc tương đối) hoặc liên kết repo trong Settings/Team.';
 
+type RepoResolutionCandidate = {
+  path: string;
+  configId: string;
+  system: System | undefined;
+  /** True when the candidate comes from this team's link/CR context (one context source). */
+  teamScoped: boolean;
+};
+
 /**
  * Resolve a repo for `git_read`. A repo link is ONE context source, NOT a prerequisite: an
- * explicit remote path/folder supplied by the user or the agent (plus a valid SSH config) must
+ * explicit remote path/folder supplied by the user or the agent (plus a usable SSH config) must
  * let the tool run even when the team has no link. Resolution order:
- *   (a) explicit `repoPath` / `path` / `folder` (+ optional `sshConfigId`) from args/context,
- *   (b) the team's systems (linked directly or via CR targets),
- *   (c) every other system row as group/project context when an explicit path matches it.
- * Only when NONE of these yields a remote path + SSH config do we refuse with a usable hint.
- * Codes stay truthful: a linked system lacking repo config is `NO_LINKED_REPO`, not
- * `SYSTEM_NOT_LINKED`.
+ *   (a) explicit repo selectors (`repoPath`/`folder`/`repo`/`workingDir`/`remotePath`/`repoDir`,
+ *       with optional `sshConfigId`). `path` is NEVER a selector — it is a grep/read_file pathspec.
+ *   (b) `ctx.repoHints`: repo/folder/project names extracted from the leader/agent turn,
+ *   (c) this team's linked systems (direct or via CR targets) when no hint names a repo.
+ * Every hint match is collected; `>1` match refuses with the options instead of silently
+ * picking the first one. A branch is a REVISION, never a repo hint. Codes stay truthful: a
+ * linked system lacking repo config is `NO_LINKED_REPO`, not `SYSTEM_NOT_LINKED`.
+ *
+ * LIMITATION: the coordinator does not yet extract free-text repo names from prompts into
+ * `ctx.repoHints`; until that extraction exists, (b) is populated by callers that already have
+ * such names. The resolver itself accepts the field and never invents a source.
  */
 async function resolveGitRepo(
   args: Record<string, any>,
@@ -1132,82 +1152,9 @@ async function resolveGitRepo(
 
   const allSystems = await ctx.db.systems.toArray();
   const allConfigs = await getSshConfigs(ctx.db);
-  // A known repo path is usable even when the team has no link: it is project context in the
-  // catalog (or the SSH default), not a permission check. `link` only supplies the SSH config.
-  const pathCandidates = [
-    ...allSystems
-      .filter((s) => s.remoteRepoPath && s.sshConfigId)
-      .map((s) => ({ path: s.remoteRepoPath!, configId: s.sshConfigId!, system: s })),
-    ...allConfigs
-      .filter((c) => c.defaultRemotePath)
-      .map((c) => ({
-        path: c.defaultRemotePath!,
-        configId: c.id,
-        system: undefined as System | undefined,
-      })),
-  ];
-  // Last path segment = a folder/repo name, so "check git của folder CORE" needs no full path.
-  const pathTail = (path: string) => path.replace(/\/+$/, '').split('/').filter(Boolean).pop() ?? '';
-  const matchHint = (hint: string) =>
-    pathCandidates.find((c) => c.path.replace(/\/+$/, '') === hint.replace(/\/+$/, '')) ??
-    // A path INSIDE a known repo resolves up to the repo root, so a subfolder still works.
-    pathCandidates.find((c) => hint.startsWith(`${c.path.replace(/\/+$/, '')}/`)) ??
-    pathCandidates.find((c) => pathTail(c.path) === hint || c.system?.name === hint);
-
-  const explicitConfigId = typeof args.sshConfigId === 'string' ? args.sshConfigId.trim() : '';
-  // `path` is a grep file filter by default; treat it as a repo only when a config was
-  // supplied with it (an explicit user override), never in a plain grep call.
-  const pathKeys = ['repoPath', 'folder', 'repo', 'workingDir', 'remotePath', 'repoDir'];
-  if (explicitConfigId) pathKeys.push('path');
-  const explicitHint =
-    pathKeys.map((k) => (typeof args[k] === 'string' ? args[k].trim() : ''))
-      .find((p) => p !== '') ?? '';
-  if (explicitHint) {
-    const match = matchHint(explicitHint);
-    const configId = explicitConfigId || match?.configId || '';
-    if (!configId) return noRepo('Không tìm thấy SSH config cho đường dẫn repo đã cung cấp.');
-    const config = await getSshConfigById(configId, ctx.db);
-    if (!config) return noRepo('SSH config được cung cấp không tồn tại.');
-    const secret = (await getSshSecret(config.id)) ?? undefined;
-    const repoPath = match?.path ?? explicitHint;
-    // A bare folder name with only `default_remote_path` and no system row still resolves.
-    const system = match?.system ?? allSystems.find((s) => s.remoteRepoPath === repoPath);
-    return {
-      system: system ?? {
-        id: '', name: repoPath, code: '', parentId: null, type: 'SERVICE',
-        sshConfigId: configId, remoteRepoPath: repoPath,
-        createdAt: '', updatedAt: '',
-      },
-      config,
-      repoPath,
-      secret,
-    };
-  }
-
-  // (b) Context when the model supplied NO explicit hint: a branch in the args, or a repo name
-  // mentioned in the leader/agent turn, may still name exactly one repo. No link required.
-  const contextHint = typeof args.branch === 'string' && args.branch.trim() ? args.branch.trim() : '';
-  const contextMatch = contextHint ? matchHint(contextHint) : undefined;
-  if (contextMatch) {
-    const config = await getSshConfigById(contextMatch.configId, ctx.db);
-    if (config) {
-      return {
-        system: contextMatch.system ?? {
-          id: '', name: contextMatch.path, code: '', parentId: null, type: 'SERVICE',
-          sshConfigId: config.id, remoteRepoPath: contextMatch.path,
-          createdAt: '', updatedAt: '',
-        },
-        config,
-        repoPath: contextMatch.path,
-        secret: (await getSshSecret(config.id)) ?? undefined,
-      };
-    }
-  }
-
   const links = await listTeamLinks(ctx.teamId, ctx.db);
-  // Dedupe by system id so a system reached both directly and via one or more linked CR targets
-  // counts once — otherwise the existing `usable.length > 1` branch would refuse as ambiguous.
-  // Map insertion order preserves the deterministic ordering of the old direct-links loop.
+  // Team-scoped systems are the FIRST context source, but not a hard filter: the catalog and SSH
+  // defaults stay eligible as hints so a repo known only by folder name still resolves.
   const byId = new Map<string, System>();
   for (const link of links) {
     if (link.itemType === 'system') {
@@ -1223,6 +1170,166 @@ async function resolveGitRepo(
     }
   }
   const linkedSystems = [...byId.values()];
+
+  const candidates: RepoResolutionCandidate[] = [];
+  const candidateKeys = new Set<string>();
+  const addCandidate = (c: RepoResolutionCandidate) => {
+    const key = `${c.configId}|${c.path}|${c.teamScoped ? 'team' : 'catalog'}`;
+    if (candidateKeys.has(key)) return;
+    candidateKeys.add(key);
+    candidates.push(c);
+  };
+  for (const s of linkedSystems) {
+    if (s.remoteRepoPath && s.sshConfigId) {
+      addCandidate({ path: s.remoteRepoPath, configId: s.sshConfigId, system: s, teamScoped: true });
+    }
+  }
+  for (const s of allSystems) {
+    if (byId.has(s.id) || !s.remoteRepoPath || !s.sshConfigId) continue;
+    addCandidate({ path: s.remoteRepoPath, configId: s.sshConfigId, system: s, teamScoped: false });
+  }
+  for (const c of allConfigs) {
+    if (c.defaultRemotePath) {
+      addCandidate({ path: c.defaultRemotePath, configId: c.id, system: undefined, teamScoped: false });
+    }
+  }
+
+  // Last path segment = a folder/repo name, so "check git của folder CORE" needs no full path.
+  const pathTail = (path: string) => path.replace(/\/+$/, '').split('/').filter(Boolean).pop() ?? '';
+  const optionsFor = (matches: RepoResolutionCandidate[]) =>
+    matches
+      .map((c) => {
+        const name = c.system
+          ? wrapUntrusted('TÊN HỆ THỐNG', c.system.name)
+          : '(SSH default)';
+        const scope = c.teamScoped ? 'team' : 'catalog';
+        return `${c.configId} [${scope}] — ${name} — ${wrapUntrusted('ĐƯỜNG DẪN REPO', c.path)}`;
+      })
+      .join('; ');
+  const ambiguous = (hint: string, matches: RepoResolutionCandidate[]) =>
+    refuse(
+      'INVALID_ARGUMENT',
+      `Nhiều repo khớp với ${wrapUntrusted('MANH MỐI REPO', hint)} — hãy truyền sshConfigId hoặc systemId để chọn. Các lựa chọn: ${optionsFor(matches)}.`
+    );
+
+  // ALL matches, never `.find()`: two systems with the same tail must refuse, not silently pick.
+  const matchesFor = (hint: string): RepoResolutionCandidate[] => {
+    const h = hint.replace(/\/+$/, '');
+    return candidates.filter((c) => {
+      const p = c.path.replace(/\/+$/, '');
+      return (
+        p === h ||
+        // A path INSIDE a known repo resolves up to the repo root, so a subfolder still works.
+        h.startsWith(`${p}/`) ||
+        pathTail(p) === h ||
+        c.system?.name === h ||
+        c.system?.code === h
+      );
+    });
+  };
+  type MatchResult = { candidate: RepoResolutionCandidate | undefined } | TeamToolRefusal;
+  const pickMatch = (hint: string, configIdHint: string): MatchResult => {
+    let matches = matchesFor(hint);
+    if (configIdHint && matches.length > 1) {
+      const narrowed = matches.filter((c) => c.configId === configIdHint);
+      if (narrowed.length) matches = narrowed;
+    }
+    if (matches.length > 1) return ambiguous(hint, matches);
+    return { candidate: matches[0] };
+  };
+  const finish = async (c: RepoResolutionCandidate): Promise<GitRepoResolution> => {
+    const config = await getSshConfigById(c.configId, ctx.db);
+    if (!config) return noRepo(`SSH config ${c.configId} không còn tồn tại.`);
+    return {
+      system: c.system ?? {
+        id: '', name: c.path, code: '', parentId: null, type: 'SERVICE',
+        sshConfigId: config.id, remoteRepoPath: c.path,
+        createdAt: '', updatedAt: '',
+      },
+      config,
+      repoPath: c.path,
+      secret: (await getSshSecret(config.id)) ?? undefined,
+    };
+  };
+
+  const explicitConfigId = typeof args.sshConfigId === 'string' ? args.sshConfigId.trim() : '';
+  // W2: `path` is a grep/read_file pathspec, NEVER a repo selector — even with an SSH config.
+  const pathKeys = ['repoPath', 'folder', 'repo', 'workingDir', 'remotePath', 'repoDir'];
+  const explicitHint =
+    pathKeys.map((k) => (typeof args[k] === 'string' ? args[k].trim() : ''))
+      .find((p) => p !== '') ?? '';
+  if (explicitHint) {
+    const picked = pickMatch(explicitHint, explicitConfigId);
+    if ('refused' in picked) return picked;
+    let configId = explicitConfigId || picked.candidate?.configId || '';
+    if (!configId) {
+      // W3: a full path with no catalog match but a usable SSH config is enough to run. Exactly
+      // one config -> auto-select; several -> let the caller pick instead of guessing.
+      const looksAbsolute = /^(\/|~|[A-Za-z]:\\)/.test(explicitHint);
+      if (looksAbsolute && allConfigs.length > 0) {
+        if (allConfigs.length > 1) {
+          return refuse(
+            'INVALID_ARGUMENT',
+            `Nhiều SSH config có thể dùng cho ${wrapUntrusted('ĐƯỜNG DẪN REPO', explicitHint)} — hãy truyền sshConfigId. Các lựa chọn: ${allConfigs.map((c) => c.id).join(', ')}.`
+          );
+        }
+        configId = allConfigs[0]!.id;
+      } else {
+        return noRepo('Không tìm thấy SSH config cho đường dẫn repo đã cung cấp.');
+      }
+    }
+    const config = await getSshConfigById(configId, ctx.db);
+    if (!config) return noRepo('SSH config được cung cấp không tồn tại.');
+    const matched = picked.candidate;
+    const useMatch = matched && (!explicitConfigId || matched.configId === explicitConfigId);
+    const repoPath = useMatch ? matched.path : explicitHint;
+    // A bare folder name with only `default_remote_path` and no system row still resolves.
+    const system = useMatch
+      ? matched.system
+      : allSystems.find((s) => s.remoteRepoPath === repoPath);
+    return {
+      system: system ?? {
+        id: '', name: repoPath, code: '', parentId: null, type: 'SERVICE',
+        sshConfigId: configId, remoteRepoPath: repoPath,
+        createdAt: '', updatedAt: '',
+      },
+      config,
+      repoPath,
+      secret: (await getSshSecret(config.id)) ?? undefined,
+    };
+  }
+
+  // W2: an SSH config alone can name a repo through its default remote path. This is what makes
+  // `{action: 'grep', sshConfigId: 'cfg', path: 'src'}` work — `path` stays a pathspec while the
+  // config supplies the repo root. No default path -> fall through to the other context sources.
+  if (explicitConfigId) {
+    const config = await getSshConfigById(explicitConfigId, ctx.db);
+    if (!config) return noRepo('SSH config được cung cấp không tồn tại.');
+    if (config.defaultRemotePath) {
+      const match = candidates.find(
+        (c) => c.configId === config.id && c.path === config.defaultRemotePath
+      );
+      return finish(
+        match ?? {
+          path: config.defaultRemotePath,
+          configId: config.id,
+          system: undefined,
+          teamScoped: false,
+        }
+      );
+    }
+  }
+
+  // (b) Context hints extracted from the leader/agent turn. A branch is NOT one of them — it is
+  // a revision consumed by log/read_file/tree/grep. Ambiguous hints refuse rather than pick one.
+  for (const hint of (ctx.repoHints ?? []).map((h) => h.trim()).filter(Boolean)) {
+    const picked = pickMatch(hint, '');
+    if ('refused' in picked) return picked;
+    if (picked.candidate) return finish(picked.candidate);
+  }
+
+  // (c) No hint: this team's linked, repo-bearing systems are the selection pool. `byId` was
+  // deduped at the top so a system reached directly and via a CR target counts once.
   const usable = linkedSystems.filter(
     (s) =>
       typeof s.sshConfigId === 'string' &&

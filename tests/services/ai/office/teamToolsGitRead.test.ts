@@ -317,6 +317,152 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     expect(vi.mocked(execRemoteCommand).mock.calls.at(-1)![3]).toBe('call-by-name');
   });
 
+  // ---------------------------------------------------------------------------------------
+  // Review 74a26d9f — W1..W4: resolver accepts any valid clue, but never guesses
+  // ---------------------------------------------------------------------------------------
+
+  /** Adds a second repo-bearing system (with its own SSH config) to the catalog. */
+  async function addRepoSystem(name: string, code: string, repoPath: string): Promise<string> {
+    const now = new Date().toISOString();
+    const configId = generateId();
+    const settings = await db.settings.get(SSH_CONFIGS_SETTING_KEY);
+    await db.settings.put({
+      key: SSH_CONFIGS_SETTING_KEY,
+      value: [
+        ...((settings?.value as Array<Record<string, unknown>>) ?? []),
+        {
+          id: configId,
+          name: `${name} config`,
+          host: '10.0.0.6',
+          port: 22,
+          username: 'git',
+          authType: 'password',
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+    });
+    const systemId = generateId();
+    await db.systems.add({
+      id: systemId,
+      name,
+      code,
+      parentId: null,
+      type: 'SERVICE',
+      sshConfigId: configId,
+      remoteRepoPath: repoPath,
+      createdAt: now,
+      updatedAt: now,
+    });
+    return systemId;
+  }
+
+  it('W2: grep path is a pathspec only — repo resolves from sshConfigId, call id preserved', async () => {
+    // A call with sshConfigId + grep pathspec must not treat `path` as a repo selector. Give the
+    // config a default remote path so `sshConfigId` alone can name the repo (like a no-link call).
+    const configId = (await db.systems.get(repoSystemId))!.sshConfigId!;
+    const settings = await db.settings.get(SSH_CONFIGS_SETTING_KEY);
+    await db.settings.put({
+      key: SSH_CONFIGS_SETTING_KEY,
+      value: ((settings?.value as Array<Record<string, unknown>>) ?? []).map((c) =>
+        c.id === configId ? { ...c, defaultRemotePath: '/srv/repo' } : c
+      ),
+    });
+    queue({
+      stdout: 'main:src/app.ts\u00001\u0000export const hit = 1;\n',
+      stderr: '###EXIT 0',
+      exitStatus: 0,
+    });
+    const res = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'grep', sshConfigId: configId, path: 'src', pattern: 'export' },
+        ctx({ teamId: emptyTeamId, loopCallId: 'call-grep-pathspec' })
+      )
+    );
+    expect(res.refused).toBeUndefined();
+    expect(res.repoPath).toBe('/srv/repo');
+    expect(res.path).toContain('src');
+    expect(res.hits).toHaveLength(1);
+    const call = vi.mocked(execRemoteCommand).mock.calls.at(-1)!;
+    expect(call[1]).toContain("git -C '/srv/repo'");
+    // The pathspec is confined and passed to git grep, never used as `git -C` root.
+    expect(call[1]).toContain("'src'");
+    expect(call[3]).toBe('call-grep-pathspec');
+  });
+
+  it('W3: an unknown absolute path with exactly one SSH config runs without a link', async () => {
+    // Empty team, one SSH config, no system row for /srv/newrepo — the tool must still run.
+    queue('## main\n');
+    const res = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'status', repoPath: '/srv/newrepo' },
+        ctx({ teamId: emptyTeamId, loopCallId: 'call-fullpath' })
+      )
+    );
+    expect(res.refused).toBeUndefined();
+    expect(res.repoPath).toBe('/srv/newrepo');
+    expect(vi.mocked(execRemoteCommand).mock.calls.at(-1)![1]).toContain("git -C '/srv/newrepo'");
+    expect(vi.mocked(execRemoteCommand).mock.calls.at(-1)![3]).toBe('call-fullpath');
+  });
+
+  it('W3: an unknown absolute path with several SSH configs refuses with the id list', async () => {
+    await addRepoSystem('Other', 'OTHER', '/srv/other');
+    const res = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'status', repoPath: '/srv/newrepo' },
+        ctx({ teamId: emptyTeamId })
+      )
+    );
+    expect(res).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
+    expect(res.message).toContain('sshConfigId');
+    const ids = (await (async () => {
+      const settings = await db.settings.get(SSH_CONFIGS_SETTING_KEY);
+      return ((settings?.value as Array<{ id: string }>) ?? []).map((c) => c.id);
+    })());
+    for (const id of ids) expect(res.message).toContain(id);
+    expect(execRemoteCommand).not.toHaveBeenCalled();
+  });
+
+  it('W4: two systems with the same path tail refuse INVALID_ARGUMENT instead of first-match', async () => {
+    await addRepoSystem('Core mirror', 'CORE-MIRROR', '/backup/repo');
+    // 'repo' is the tail of both /srv/repo and /backup/repo — a silent `.find()` would pick one.
+    const res = JSON.parse(
+      await executeTeamTool('git_read', { action: 'status', repo: 'repo' }, ctx())
+    );
+    expect(res).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
+    expect(res.message).toContain('/srv/repo');
+    expect(res.message).toContain('/backup/repo');
+    expect(execRemoteCommand).not.toHaveBeenCalled();
+  });
+
+  it('W1: branch is a revision, never a repo hint; repoHints from context resolve uniquely', async () => {
+    // A branch named like a repo tail must NOT select a repo on its own (the old W1 bug).
+    const emptyRes = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'status', branch: 'repo' },
+        ctx({ teamId: emptyTeamId })
+      )
+    );
+    expect(emptyRes).toMatchObject({ refused: true, code: 'NO_LINKED_REPO' });
+
+    // An explicit conversation hint resolves the repo without a link.
+    queue('## main\n');
+    const hinted = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'status' },
+        ctx({ teamId: emptyTeamId, repoHints: ['CORE'], loopCallId: 'call-repohint' })
+      )
+    );
+    expect(hinted.refused).toBeUndefined();
+    expect(hinted.repoPath).toBe('/srv/repo');
+    expect(vi.mocked(execRemoteCommand).mock.calls.at(-1)![3]).toBe('call-repohint');
+  });
+
   it('refuses INVALID_ARGUMENT for an action outside the enum', async () => {
     const res = JSON.parse(
       await executeTeamTool('git_read', { action: 'not_an_action' }, ctx())
