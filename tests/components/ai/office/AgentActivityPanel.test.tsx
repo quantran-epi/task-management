@@ -326,6 +326,24 @@ describe('AgentActivityPanel — overflow backstop and states (44-03 Task 2)', (
     expect(screen.getByTestId('activity-error-copy').textContent).toContain('Không đọc được kết quả tool');
   });
 
+  it('shows the tool refusal message + hint instead of generic error copy', () => {
+    const refusal = JSON.stringify({
+      refused: true,
+      code: 'NO_LINKED_REPO',
+      message: 'Không xác định được repo. Hãy cung cấp remote repo path / SSH config hoặc liên kết repo trong Settings/Team.',
+    });
+    const agents: AgentRunState[] = [{
+      agentId: 'agent-1', status: 'running', streamingText: '',
+      steps: [stepRow({ id: 's-refused', status: 'error', toolName: 'git_read', resultPreview: refusal })],
+    }];
+    render(<AgentActivityPanel agents={agents} roster={ROSTER} debugLogs={[]} onClearLogs={noop} />);
+    fireEvent.click(screen.getByTestId('activity-event-toggle-s-refused'));
+    const copy = screen.getByTestId('activity-error-copy').textContent ?? '';
+    expect(copy).toContain('Hãy cung cấp remote repo path / SSH config');
+    expect(copy).toContain('Settings/Team');
+    expect(copy).not.toContain('Không đọc được kết quả tool');
+  });
+
   it('renders a running row placeholder when no result is present', () => {
     const agents: AgentRunState[] = [{
       agentId: 'agent-1', status: 'running', streamingText: '',

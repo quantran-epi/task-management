@@ -218,6 +218,8 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     ]);
     expect(params.required).toEqual(['action']);
     // No extra key that could carry a command string, `-c`, `--output` or `--ext-diff`.
+    // Repo context keys (repoPath/folder/repo/workingDir/remotePath/sshConfigId/repoDir) are
+    // path/config selectors, never shell fragments — they let git_read work without a link.
     expect(Object.keys(params.properties).sort()).toEqual([
       'action',
       'base',
@@ -225,13 +227,19 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
       'caseSensitive',
       'dirPath',
       'filePath',
+      'folder',
       'limit',
       'literal',
       'offset',
       'path',
       'pattern',
+      'remotePath',
+      'repo',
+      'repoPath',
+      'sshConfigId',
       'systemId',
       'target',
+      'workingDir',
     ]);
   });
 
@@ -262,6 +270,51 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
       await executeTeamTool('git_read', { action: 'status', systemId: bareSystemId }, ctx())
     );
     expect(res).toMatchObject({ refused: true, code: 'NO_LINKED_REPO' });
+  });
+
+  it('NO_LINKED_REPO message tells the user how to supply a repo path or link one', async () => {
+    const res = JSON.parse(
+      await executeTeamTool('git_read', { action: 'status' }, ctx({ teamId: emptyTeamId }))
+    );
+    expect(res).toMatchObject({ refused: true, code: 'NO_LINKED_REPO' });
+    expect(res.message).toContain('tên/path repo');
+    expect(res.message).toContain('Settings/Team');
+  });
+
+  it('git_read with an explicit folder works without any repo link', async () => {
+    // The team has NO link — a folder named by the user/agent is a valid context source.
+    // The system row still supplies the SSH config; the tool must not refuse.
+    vi.mocked(execRemoteCommand).mockResolvedValueOnce({
+      stdout: '## main\n', stderr: '', exitStatus: 0, finishReason: 'complete',
+    } as any);
+    const res = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'status', folder: '/srv/repo' },
+        ctx({ teamId: emptyTeamId, loopCallId: 'call-explicit-no-link' })
+      )
+    );
+    expect(res.refused).toBeUndefined();
+    expect(res.repoPath).toBe('/srv/repo');
+    const call = vi.mocked(execRemoteCommand).mock.calls.at(-1)!;
+    expect(call[1]).toContain("git -C '/srv/repo'");
+    expect(call[3]).toBe('call-explicit-no-link');
+  });
+
+  it('git_read with a repo folder NAME resolves the matching system without a link', async () => {
+    vi.mocked(execRemoteCommand).mockResolvedValueOnce({
+      stdout: '', stderr: '', exitStatus: 0, finishReason: 'complete',
+    } as any);
+    const res = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'status', repo: 'repo' },
+        ctx({ teamId: emptyTeamId, loopCallId: 'call-by-name' })
+      )
+    );
+    expect(res.refused).toBeUndefined();
+    expect(res.repoPath).toBe('/srv/repo');
+    expect(vi.mocked(execRemoteCommand).mock.calls.at(-1)![3]).toBe('call-by-name');
   });
 
   it('refuses INVALID_ARGUMENT for an action outside the enum', async () => {

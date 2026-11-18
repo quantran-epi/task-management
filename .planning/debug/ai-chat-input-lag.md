@@ -21,6 +21,14 @@ updated: 2026-11-18
 - caveat technical debt riêng: `ssh_test_connection`, `ssh_list_dir`, `ssh_read_file_all/slice`, `ssh_write_file`, `ssh_create_dir`, `ssh_delete_entry`, `ssh_rename` vẫn là sync commands. Đây là đường SSH FS config quản lý tệp ngắn hạn, KHÔNG nằm trong đường tool AI nặng (AI dùng `ssh_exec_command`/`ssh_exec_stream`), nên không đưa vào patch này theo chỉ dẫn "không mở rộng technical debt riêng". Nếu sau này user gặp lag khi browse/explore file UI thì cân nhắc convert riêng.
 - 4 tiêu chí user giữ nguyên: (1) gõ mượt kể cả sau N tool call; (2) tool nặng chạy bất kể tab, chỉ dừng khi Cancel đúng callId hoặc tắt app, KHÔNG timeout/idle; (3) UI TUYỆT ĐỐI KHÔNG BLOCK khi tool chạy — fix chính lần này; (4) registry owns liveness, store owns output, tab owns draft, React view — không vá víu.
 
+## NO_LINKED_REPO follow-up (2026-11-18 — repo link là context, KHÔNG phải điều kiện tiên quyết)
+
+- user clarification: "linked repo chỉ là 1 trong những cách để agent biết nhóm có đề cập đến repo đó, không được phép chặn agent dùng tool nếu không có repo link" — agent bị chặn `git_read` dù user đã nêu rõ folder cần check git, đành fallback sang SSH read tool.
+- root cause: `resolveGitRepo` (`teamTools.ts`) trả `NO_LINKED_REPO` ngay khi team không có link, bỏ qua path/folder do user/agent cung cấp.
+- fix: ưu tiên (a) explicit `repoPath`/`folder`/`repo`/`workingDir`/`remotePath` (+ optional `sshConfigId`) và context repo đã biết (system catalog / SSH `defaultRemotePath`), rồi (b) team links; chỉ refuse `NO_LINKED_REPO` khi thiếu mọi nguồn. Message refusal hướng dẫn rõ cung cấp path/SSH config hoặc link repo trong Settings/Team. `git_read` schema + description cập nhật để model biết có thể truyền path. UI `AgentActivityPanel` parse refusal JSON từ `resultPreview` → hiện `message` thay ERROR_COPY chung (fallback khi không parse được). Không ẩn/disable `git_read`.
+- guard: test git_read explicit path/folder KHÔNG link repo vẫn gọi `execRemoteCommand` đúng callId; NO_LINKED_REPO chỉ khi thiếu mọi nguồn + message hint; UI hiển thị message refusal; existing git_read suite + panel suite phải pass.
+- pre-existing red (out of scope): `tests/services/ai/office/teamTools.test.ts > advertises timeoutSeconds on explore_repo...` đã đỏ ở HEAD (verify `git show HEAD:...teamTools.ts | grep timeoutSeconds` → rỗng), không phải do patch này. Không sửa trong commit này.
+
 ## Current Focus (2026-11-18 — independent code review follow-up — RESOLVED)
 
 - resolution: 8/8 finding CRITICAL/WARNING/INFO đã xử lý xong; 4 commit atomic `1c24f9a5`, `5217f834`, `7552d15b`, `31119db9`. Chi tiết ở cuối file. Chờ human verify runtime Tauri + SSH thật.

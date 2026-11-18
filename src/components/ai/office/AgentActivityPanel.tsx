@@ -73,6 +73,35 @@ const EMPTY_PROMPTS = 'Chưa có lượt gửi AI nào trong phiên này.';
 const ERROR_COPY =
   'Không đọc được kết quả tool. Nội dung hiển thị dạng văn bản; thử mở lại panel hoặc chạy lại lượt này.';
 const NO_RESULT_COPY = 'Chưa có kết quả…';
+
+interface ToolRefusalPreview {
+  code: string;
+  message: string;
+}
+
+/**
+ * A refusal is a returned tool value (`{"refused":true,"code":...,"message":...}`), not a
+ * transport error. Show the tool's own message + hint so the user can act on it (e.g. provide
+ * a repo path) instead of the generic "could not read tool result" copy. Never trust preview
+ * text as HTML — it renders as plain text below.
+ */
+function parseToolRefusal(text: string | undefined): ToolRefusalPreview | null {
+  if (!text) return null;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (
+      typeof parsed === 'object' && parsed !== null &&
+      'refused' in parsed && parsed.refused === true &&
+      'code' in parsed && typeof parsed.code === 'string' &&
+      'message' in parsed && typeof parsed.message === 'string'
+    ) {
+      return { code: parsed.code, message: parsed.message };
+    }
+  } catch {
+    // Not JSON — fall back to the generic copy below.
+  }
+  return null;
+}
 const RUNNING_NOTE = 'Đang chạy · chỉ dừng khi bạn bấm Hủy hoặc tắt ứng dụng.';
 const TRUNCATION_MARKER = '… (đã rút gọn)';
 
@@ -282,7 +311,7 @@ const TimelineEventRow: React.FC<{ row: TimelineRow; onCancel?: ((id: string) =>
         ) : null}
         {status === 'error' ? (
           <Typography.Text type="danger" style={{ fontSize: 11, display: 'block', marginTop: 4 }} data-testid="activity-error-copy">
-            {ERROR_COPY}
+            {parseToolRefusal(step.resultPreview)?.message ?? ERROR_COPY}
           </Typography.Text>
         ) : null}
         {status === 'running' && onCancel ? (

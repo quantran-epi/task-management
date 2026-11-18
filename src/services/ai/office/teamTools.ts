@@ -15,7 +15,7 @@ import { USER_PARTICIPANT_ID } from '../../../types/teamChat';
 import { createNote, getNotesByFolder, updateNote } from '../../../db/repositories/noteRepo';
 import { NOTE_BODY_MAX_LENGTH, NOTE_TITLE_MAX_LENGTH } from '../../../validation/schemas';
 import { resolveMemberFolder } from '../../../db/repositories/teamDocsRepo';
-import { getSshConfigById, getSshSecret } from '../../../services/sshService';
+import { getSshConfigs, getSshConfigById, getSshSecret } from '../../../services/sshService';
 import {
   checkDirtyStatus,
   getDiffSummary,
@@ -343,7 +343,7 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
     function: {
       name: 'git_read',
       description:
-        'Đọc trạng thái git của repo remote qua SSH (chỉ đọc, không ghi). Tám action: branches (liệt kê nhánh), status (tệp chưa commit), log (N commit gần nhất của một nhánh), diff_summary (tổng hợp diff giữa base và target), diff_file (diff một tệp), read_file (một TRANG nội dung tệp tại một nhánh — dùng offset/limit, không trả cả file), tree (cây thư mục tại một nhánh), grep (tìm chuỗi hoặc biểu thức trong nội dung đã track của một nhánh). Repo lấy từ hệ thống đã liên kết với nhóm.',
+        'Đọc trạng thái git của repo remote qua SSH (chỉ đọc, không ghi). Tám action: branches (liệt kê nhánh), status (tệp chưa commit), log (N commit gần nhất của một nhánh), diff_summary (tổng hợp diff giữa base và target), diff_file (diff một tệp), read_file (một TRANG nội dung tệp tại một nhánh — dùng offset/limit, không trả cả file), tree (cây thư mục tại một nhánh), grep (tìm chuỗi hoặc biểu thức trong nội dung đã track của một nhánh). Không bắt buộc liên kết repo: truyền repoPath/folder/repo/workingDir/path/remotePath (tên folder hoặc path tương đối đều được), hoặc hệ thống đã liên kết qua systemId; nếu không rõ, công cụ sẽ gợi ý các repo có sẵn để bạn chọn.',
       parameters: {
         type: 'object',
         properties: {
@@ -360,6 +360,31 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
               'grep',
             ],
             description: 'Hành động cần thực hiện.',
+          },
+          repoPath: {
+            type: 'string',
+            description:
+              'Đường dẫn repo remote do người dùng/agent nêu rõ. Không cần repo link; ưu tiên hơn systemId.',
+          },
+          folder: {
+            type: 'string',
+            description: 'Tên folder/path repo remote (đồng nghĩa repoPath).',
+          },
+          repo: {
+            type: 'string',
+            description: 'Tên repo/project được nhắc trong hội thoại (đồng nghĩa repoPath).',
+          },
+          workingDir: {
+            type: 'string',
+            description: 'Thư mục làm việc chứa repo trên remote (đồng nghĩa repoPath).',
+          },
+          remotePath: {
+            type: 'string',
+            description: 'Đường dẫn repo trên remote, có thể là tên folder/path tương đối.',
+          },
+          sshConfigId: {
+            type: 'string',
+            description: 'SSH profile dùng với repoPath/folder; nếu bỏ trống sẽ tìm system khớp path.',
           },
           systemId: {
             type: 'string',
@@ -1085,17 +1110,100 @@ type GitRepoResolution =
   | { system: System; config: SshConfig; repoPath: string; secret: string | undefined }
   | TeamToolRefusal;
 
+const NO_REPO_HINT =
+  'Hãy cung cấp tên/path repo (đường dẫn đầy đủ hoặc tương đối) hoặc liên kết repo trong Settings/Team.';
+
 /**
- * Phase 42 D-07: the repository comes from the team's linked systems, never from an arg.
- * The candidate set is built from BOTH direct `itemType=system` links AND the `targets` of
- * `itemType=cr` links, deduplicated by system id. `args.systemId` is only an INDEX into that
- * linked set, so it can never name a repo outside the team. Codes are truthful: a linked
- * system that merely lacks repo configuration is `NO_LINKED_REPO`, not `SYSTEM_NOT_LINKED`.
+ * Resolve a repo for `git_read`. A repo link is ONE context source, NOT a prerequisite: an
+ * explicit remote path/folder supplied by the user or the agent (plus a valid SSH config) must
+ * let the tool run even when the team has no link. Resolution order:
+ *   (a) explicit `repoPath` / `path` / `folder` (+ optional `sshConfigId`) from args/context,
+ *   (b) the team's systems (linked directly or via CR targets),
+ *   (c) every other system row as group/project context when an explicit path matches it.
+ * Only when NONE of these yields a remote path + SSH config do we refuse with a usable hint.
+ * Codes stay truthful: a linked system lacking repo config is `NO_LINKED_REPO`, not
+ * `SYSTEM_NOT_LINKED`.
  */
 async function resolveGitRepo(
   args: Record<string, any>,
   ctx: TeamToolContext
 ): Promise<GitRepoResolution> {
+  const noRepo = (message: string) => refuse('NO_LINKED_REPO', `${message} ${NO_REPO_HINT}`);
+
+  const allSystems = await ctx.db.systems.toArray();
+  const allConfigs = await getSshConfigs(ctx.db);
+  // A known repo path is usable even when the team has no link: it is project context in the
+  // catalog (or the SSH default), not a permission check. `link` only supplies the SSH config.
+  const pathCandidates = [
+    ...allSystems
+      .filter((s) => s.remoteRepoPath && s.sshConfigId)
+      .map((s) => ({ path: s.remoteRepoPath!, configId: s.sshConfigId!, system: s })),
+    ...allConfigs
+      .filter((c) => c.defaultRemotePath)
+      .map((c) => ({
+        path: c.defaultRemotePath!,
+        configId: c.id,
+        system: undefined as System | undefined,
+      })),
+  ];
+  // Last path segment = a folder/repo name, so "check git của folder CORE" needs no full path.
+  const pathTail = (path: string) => path.replace(/\/+$/, '').split('/').filter(Boolean).pop() ?? '';
+  const matchHint = (hint: string) =>
+    pathCandidates.find((c) => c.path.replace(/\/+$/, '') === hint.replace(/\/+$/, '')) ??
+    // A path INSIDE a known repo resolves up to the repo root, so a subfolder still works.
+    pathCandidates.find((c) => hint.startsWith(`${c.path.replace(/\/+$/, '')}/`)) ??
+    pathCandidates.find((c) => pathTail(c.path) === hint || c.system?.name === hint);
+
+  const explicitConfigId = typeof args.sshConfigId === 'string' ? args.sshConfigId.trim() : '';
+  // `path` is a grep file filter by default; treat it as a repo only when a config was
+  // supplied with it (an explicit user override), never in a plain grep call.
+  const pathKeys = ['repoPath', 'folder', 'repo', 'workingDir', 'remotePath', 'repoDir'];
+  if (explicitConfigId) pathKeys.push('path');
+  const explicitHint =
+    pathKeys.map((k) => (typeof args[k] === 'string' ? args[k].trim() : ''))
+      .find((p) => p !== '') ?? '';
+  if (explicitHint) {
+    const match = matchHint(explicitHint);
+    const configId = explicitConfigId || match?.configId || '';
+    if (!configId) return noRepo('Không tìm thấy SSH config cho đường dẫn repo đã cung cấp.');
+    const config = await getSshConfigById(configId, ctx.db);
+    if (!config) return noRepo('SSH config được cung cấp không tồn tại.');
+    const secret = (await getSshSecret(config.id)) ?? undefined;
+    const repoPath = match?.path ?? explicitHint;
+    // A bare folder name with only `default_remote_path` and no system row still resolves.
+    const system = match?.system ?? allSystems.find((s) => s.remoteRepoPath === repoPath);
+    return {
+      system: system ?? {
+        id: '', name: repoPath, code: '', parentId: null, type: 'SERVICE',
+        sshConfigId: configId, remoteRepoPath: repoPath,
+        createdAt: '', updatedAt: '',
+      },
+      config,
+      repoPath,
+      secret,
+    };
+  }
+
+  // (b) Context when the model supplied NO explicit hint: a branch in the args, or a repo name
+  // mentioned in the leader/agent turn, may still name exactly one repo. No link required.
+  const contextHint = typeof args.branch === 'string' && args.branch.trim() ? args.branch.trim() : '';
+  const contextMatch = contextHint ? matchHint(contextHint) : undefined;
+  if (contextMatch) {
+    const config = await getSshConfigById(contextMatch.configId, ctx.db);
+    if (config) {
+      return {
+        system: contextMatch.system ?? {
+          id: '', name: contextMatch.path, code: '', parentId: null, type: 'SERVICE',
+          sshConfigId: config.id, remoteRepoPath: contextMatch.path,
+          createdAt: '', updatedAt: '',
+        },
+        config,
+        repoPath: contextMatch.path,
+        secret: (await getSshSecret(config.id)) ?? undefined,
+      };
+    }
+  }
+
   const links = await listTeamLinks(ctx.teamId, ctx.db);
   // Dedupe by system id so a system reached both directly and via one or more linked CR targets
   // counts once — otherwise the existing `usable.length > 1` branch would refuse as ambiguous.
@@ -1137,14 +1245,13 @@ async function resolveGitRepo(
     }
     const match = usable.find((s) => s.id === requested);
     if (!match) {
-      return refuse(
-        'NO_LINKED_REPO',
+      return noRepo(
         `Hệ thống ${wrapUntrusted('TÊN HỆ THỐNG', linked.name)} chưa cấu hình SSH profile hoặc đường dẫn repo.`
       );
     }
     system = match;
   } else if (usable.length === 0) {
-    return refuse('NO_LINKED_REPO', 'Nhóm chưa liên kết hệ thống nào có repo để đọc.');
+    return noRepo('Không xác định được repo từ ngữ cảnh nhóm hoặc hệ thống đã liên kết.');
   } else if (usable.length > 1) {
     // WR-04: names are user-authored free text; ids alone would not tell the model which to
     // pick, so both are listed and the names are wrapped.
@@ -1161,8 +1268,7 @@ async function resolveGitRepo(
 
   const config = await getSshConfigById(system.sshConfigId!, ctx.db);
   if (!config) {
-    return refuse(
-      'NO_LINKED_REPO',
+    return noRepo(
       `Hệ thống ${wrapUntrusted('TÊN HỆ THỐNG', system.name)} trỏ tới một SSH profile không còn tồn tại.`
     );
   }
