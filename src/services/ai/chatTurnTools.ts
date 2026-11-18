@@ -5,6 +5,10 @@ import {
   normalizeToolName,
 } from './aiTools';
 import { isReadOnlyMcpTool } from './mcpClient';
+import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
+import { TEAM_TOOL_DEFINITIONS } from './office/teamTools';
+import { discoverAllMcpTools } from './mcpClient';
+import { getGraphitiMcpToolDefinitions } from './graphitiMcpClient';
 
 /**
  * D-12: the DB read tools an employee may call. Team-scoped tools
@@ -87,4 +91,197 @@ export function getToolsForTurn(
       (!allowed || allowed.has(normalizeToolName(tool.function.name))) &&
       (!(effectiveAnalysisMode || allowed) || isReadOnlyMcpTool(normalizeToolName(tool.function.name)))),
   ];
+}
+
+// ---------------------------------------------------------------------------
+// Read-only tool catalog (Settings > AI tab). Additive: nothing above this line
+// is modified. The catalog never feeds a dispatch path — it is inventory only.
+// ---------------------------------------------------------------------------
+
+export type ToolCatalogSource = 'builtin' | 'team' | 'mcp' | 'graphiti';
+
+export interface ToolCatalogUsage {
+  /** Human-readable flow labels (Vietnamese), e.g. "Chat thường". */
+  labels: string[];
+  /** Verified file:line dispatch sites for the flow. */
+  references: string[];
+}
+
+export interface ToolCatalogEntry {
+  tool: AiToolDefinition;
+  source: ToolCatalogSource;
+  isMutationTool: boolean;
+  usage: ToolCatalogUsage;
+}
+
+/**
+ * Curated "where it is used" map. Every reference below was verified against a
+ * real dispatch site; this is deliberately static (no repo-wide call-site scan).
+ *
+ * Verified sites:
+ *  - AIChatDrawer.tsx:1802            -> getToolsForTurn (ordinary chat)
+ *  - teamRunCoordinator.ts:1311       -> leadTools reads via LEAD_TOOL_ALLOWLIST
+ *  - teamRunCoordinator.ts:1323       -> leadTools team definitions
+ *  - teamRunCoordinator.ts:1333       -> employeeTools reads via EMPLOYEE_READ_ONLY_ALLOWLIST
+ *  - teamRunCoordinator.ts:1334       -> employeeTools EMPLOYEE_TEAM_TOOLS
+ *  - teamRunCoordinator.ts:1356       -> mcpReadOnlyTools filter
+ *  - telegramHeadlessWorker.ts:1468   -> read-only AI_DATABASE_TOOLS for Telegram
+ *  - telegramHeadlessWorker.ts:1485   -> discoverAllMcpTools for Telegram
+ *  - telegramMutationSession.ts:263   -> Telegram mutation tools
+ *  - mcpClient.ts:402                 -> discoverAllMcpTools
+ *  - mcpClient.ts:356                 -> fetchServerTools
+ *  - graphitiMcpClient.ts:240         -> getGraphitiMcpToolDefinitions (Tauri only)
+ */
+const CURATED_BUILTIN_USAGE: ToolCatalogUsage = {
+  labels: ['Chat thường', 'Agent nhóm', 'Telegram headless'],
+  references: [
+    'AIChatDrawer.tsx:1802',
+    'teamRunCoordinator.ts:1311',
+    'teamRunCoordinator.ts:1333',
+    'telegramHeadlessWorker.ts:1468',
+  ],
+};
+
+const MUTATION_EXTRA_USAGE: ToolCatalogUsage = {
+  labels: ['Telegram mutation session'],
+  references: ['telegramMutationSession.ts:263'],
+};
+
+const CURATED_TEAM_USAGE: ToolCatalogUsage = {
+  labels: ['Agent nhóm (lead/employee)'],
+  references: ['teamRunCoordinator.ts:1323', 'teamRunCoordinator.ts:1334'],
+};
+
+const CURATED_MCP_USAGE: ToolCatalogUsage = {
+  labels: ['Chat thường (MCP động)', 'Agent nhóm (MCP read-only)', 'Telegram headless'],
+  references: [
+    'discoverAllMcpTools -> mcpClient.ts:402',
+    'chatTurnTools.ts:86',
+    'teamRunCoordinator.ts:1356',
+    'telegramHeadlessWorker.ts:1485',
+  ],
+};
+
+const CURATED_GRAPHITI_USAGE: ToolCatalogUsage = {
+  labels: ['Chat thường / Graphiti (Tauri local)'],
+  references: ['graphitiMcpClient.ts:240', 'mcpClient.ts:356'],
+};
+
+/** Specific overrides layered on top of the builtin defaults. */
+const BUILTIN_USAGE_OVERRIDES: Record<string, ToolCatalogUsage> = {
+  query_tasks: {
+    labels: ['Chat thường', 'Agent nhóm', 'Telegram headless'],
+    references: [
+      'AIChatDrawer.tsx:1802',
+      'teamRunCoordinator.ts:1311',
+      'teamRunCoordinator.ts:1333',
+      'telegramHeadlessWorker.ts:1468',
+    ],
+  },
+  ssh_read_file: {
+    labels: ['Chat thường', 'Agent nhóm', 'Telegram headless'],
+    references: [
+      'AIChatDrawer.tsx:1802',
+      'teamRunCoordinator.ts:1311',
+      'teamRunCoordinator.ts:1333',
+      'telegramHeadlessWorker.ts:1468',
+    ],
+  },
+};
+
+function mergeUsage(...parts: (ToolCatalogUsage | undefined)[]): ToolCatalogUsage {
+  const labels: string[] = [];
+  const references: string[] = [];
+  for (const part of parts) {
+    if (!part) continue;
+    for (const label of part.labels) if (!labels.includes(label)) labels.push(label);
+    for (const reference of part.references) {
+      if (!references.includes(reference)) references.push(reference);
+    }
+  }
+  return { labels, references };
+}
+
+/**
+ * Pure/additive inventory of every AI tool TaskMate can advertise. Builtin and
+ * team tools are always present; MCP and Graphiti discovery are independent and
+ * degrade to [] on failure. Nothing here touches getToolsForTurn, any allowlist
+ * or any dispatch path.
+ */
+export async function getAllAvailableToolDefinitions(
+  db: TaskPlannerDatabase = defaultDb
+): Promise<ToolCatalogEntry[]> {
+  const builtinEntries: ToolCatalogEntry[] = AI_DATABASE_TOOLS.map((tool) => {
+    const name = normalizeToolName(tool.function.name);
+    const mutation = isMutationTool(name);
+    return {
+      tool,
+      source: 'builtin',
+      isMutationTool: mutation,
+      usage: mergeUsage(
+        BUILTIN_USAGE_OVERRIDES[name],
+        CURATED_BUILTIN_USAGE,
+        mutation ? MUTATION_EXTRA_USAGE : undefined
+      ),
+    };
+  });
+
+  const teamEntries: ToolCatalogEntry[] = TEAM_TOOL_DEFINITIONS.map((tool) => {
+    const name = normalizeToolName(tool.function.name);
+    return {
+      tool,
+      source: 'team',
+      isMutationTool: isMutationTool(name),
+      usage: mergeUsage(CURATED_TEAM_USAGE, isMutationTool(name) ? MUTATION_EXTRA_USAGE : undefined),
+    };
+  });
+
+  let mcpTools: AiToolDefinition[] = [];
+  try {
+    mcpTools = await discoverAllMcpTools(db);
+  } catch (error) {
+    console.warn('[chatTurnTools] MCP discovery failed for tool catalog:', error);
+  }
+
+  let graphitiTools: AiToolDefinition[] = [];
+  try {
+    graphitiTools = await getGraphitiMcpToolDefinitions(db);
+  } catch (error) {
+    console.warn('[chatTurnTools] Graphiti discovery failed for tool catalog:', error);
+  }
+
+  const dynamicEntries: ToolCatalogEntry[] = [
+    ...mcpTools.map(
+      (tool): ToolCatalogEntry => ({
+        tool,
+        source: 'mcp',
+        isMutationTool: isMutationTool(normalizeToolName(tool.function.name)),
+        usage: mergeUsage(undefined, CURATED_MCP_USAGE),
+      })
+    ),
+    ...graphitiTools.map(
+      (tool): ToolCatalogEntry => ({
+        tool,
+        source: 'graphiti',
+        isMutationTool: isMutationTool(normalizeToolName(tool.function.name)),
+        usage: mergeUsage(undefined, CURATED_GRAPHITI_USAGE),
+      })
+    ),
+  ];
+
+  // First source wins (builtin -> team -> mcp -> graphiti); later duplicates only
+  // contribute their usage references so the "where used" column stays complete.
+  const result: ToolCatalogEntry[] = [];
+  const byName = new Map<string, ToolCatalogEntry>();
+  for (const entry of [...builtinEntries, ...teamEntries, ...dynamicEntries]) {
+    const key = normalizeToolName(entry.tool.function.name);
+    const existing = byName.get(key);
+    if (existing) {
+      existing.usage = mergeUsage(existing.usage, entry.usage);
+      continue;
+    }
+    byName.set(key, entry);
+    result.push(entry);
+  }
+  return result;
 }
