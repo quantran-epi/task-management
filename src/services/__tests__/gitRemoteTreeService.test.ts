@@ -77,6 +77,7 @@ describe('gitRemoteTreeService uncommitted files & working copy fallback', () =>
     expect(sshService.execRemoteCommand).toHaveBeenCalledWith(
       mockConfig,
       expect.stringContaining('cat -- "$target"'),
+      undefined,
       undefined
     );
   });

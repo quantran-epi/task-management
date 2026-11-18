@@ -59,6 +59,7 @@ describe('gitRemoteService - Task 1 Tracer Slice', () => {
       expect(sshService.execRemoteCommand).toHaveBeenCalledWith(
         dummyConfig,
         "git -C '/var/repo' -c core.fsmonitor=false --no-pager --version",
+        undefined,
         undefined
       );
       expect(res).toBe('git version 2.43.0\n');
@@ -138,6 +139,7 @@ describe('gitRemoteService - Task 1 Tracer Slice', () => {
       expect(sshService.execRemoteCommand).toHaveBeenCalledWith(
         dummyConfig,
         "git -C '/var/repo' -c core.fsmonitor=false --no-pager status --porcelain=v1 -z",
+        undefined,
         undefined
       );
     });
@@ -326,6 +328,7 @@ describe('gitRemoteService - Task 1 Tracer Slice', () => {
         dummyConfig,
         "git -C '/var/repo' -c core.fsmonitor=false --no-pager --literal-pathspecs diff --no-ext-diff --no-textconv " +
           "--end-of-options 'main..feature/pay' -- 'src/a.ts'",
+        undefined,
         undefined
       );
       expect(diff).toBe(mockDiff);
