@@ -1344,7 +1344,9 @@ export function createTeamRunCoordinator(
    * disabled default on error, so no try/catch here.
    */
   async function oracleReadTools(): Promise<AiToolDefinition[]> {
-    return (await getOracleToolConfig(db)).enabled === true ? ORACLE_READ_TOOLS : [];
+    const cfg = await getOracleToolConfig(db);
+    // Quick cz2: enable/disable is per-team (Task 5 gating); here only connection readiness.
+    return cfg.sshConfigId && cfg.connectionString ? ORACLE_READ_TOOLS : [];
   }
 
   /**

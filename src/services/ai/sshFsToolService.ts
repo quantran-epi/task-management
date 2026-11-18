@@ -64,9 +64,9 @@ async function resolveSshConfig(
   db: TaskPlannerDatabase,
 ): Promise<{ fsConfig: SshFsToolConfig; sshConfig: SshConfig }> {
   const fsConfig = await getSshFsToolConfig(db);
-  if (!fsConfig || !fsConfig.enabled) {
+  if (!fsConfig) {
     throw new Error(
-      'Công cụ SSH File System chưa được bật. Vui lòng bật và chọn cấu hình SSH trong Settings hoặc thanh công cụ AI Chat.',
+      'Chưa cấu hình công cụ SSH File System. Vui lòng chọn cấu hình SSH trong Settings hoặc thanh công cụ AI Chat.',
     );
   }
   if (!fsConfig.sshConfigId) {

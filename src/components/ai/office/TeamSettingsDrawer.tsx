@@ -30,6 +30,9 @@ export interface TeamSettingsDrawerProps {
     autoSplitEnabled: boolean;
     autoApproveMutations: boolean;
     concurrencyLimit: number;
+    /** Quick cz2: per-team enablement of SSH FS / Oracle tool payloads. */
+    sshFsToolsEnabled: boolean;
+    oracleToolsEnabled: boolean;
     /** D-04: absent = leave the stored override alone, `null` = inherit, number = store. */
     budgetWarnThresholdPct?: number | null | undefined;
   }) => void;
@@ -86,6 +89,8 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
   const [unallocated, setUnallocated] = useState<number | null>(null);
   const [autoSplit, setAutoSplit] = useState(team.autoSplitEnabled === true);
   const [autoApprove, setAutoApprove] = useState(team.autoApproveMutations === true);
+  const [sshFsToolsEnabled, setSshFsToolsEnabled] = useState(team.sshFsToolsEnabled === true);
+  const [oracleToolsEnabled, setOracleToolsEnabled] = useState(team.oracleToolsEnabled === true);
   const [concurrency, setConcurrency] = useState<number>(
     team.concurrencyLimit ?? DEFAULT_TEAM_CONCURRENCY
   );
@@ -173,6 +178,8 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
     setUnallocated(null);
     setAutoSplit(team.autoSplitEnabled === true);
     setAutoApprove(team.autoApproveMutations === true);
+    setSshFsToolsEnabled(team.sshFsToolsEnabled === true);
+    setOracleToolsEnabled(team.oracleToolsEnabled === true);
     setConcurrency(team.concurrencyLimit ?? DEFAULT_TEAM_CONCURRENCY);
     setThresholdPct(team.budgetWarnThresholdPct);
     setThresholdTouched(false);
@@ -225,6 +232,8 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
       autoSplitEnabled: autoSplit,
       autoApproveMutations: autoApprove,
       concurrencyLimit: concurrency,
+      sshFsToolsEnabled,
+      oracleToolsEnabled,
       // D-04: untouched leaves the stored value alone; a clear sends `null`; a typed value
       // sends the number. `undefined` is the only "do nothing" spelling.
       budgetWarnThresholdPct: thresholdTouched ? thresholdPct : undefined,
@@ -513,6 +522,33 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
               onChange={setAutoApprove}
               aria-label="Tự động duyệt thay đổi"
             />
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontSize: 12, fontWeight: 600 }}>Công cụ AI theo nhóm</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 12 }}>SSH File System</span>
+            <Switch
+              size="small"
+              checked={sshFsToolsEnabled}
+              onChange={setSshFsToolsEnabled}
+              aria-label="Bật SSH File System cho nhóm này"
+              data-testid="team-ssh-fs-tools-enabled"
+            />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 12 }}>Oracle SQLcl</span>
+            <Switch
+              size="small"
+              checked={oracleToolsEnabled}
+              onChange={setOracleToolsEnabled}
+              aria-label="Bật Oracle SQLcl cho nhóm này"
+              data-testid="team-oracle-tools-enabled"
+            />
+          </div>
+          <div style={{ fontSize: 12, color: token.colorTextSecondary }}>
+            Cấu hình kết nối được quản lý chung trong Settings; bật/tắt ở đây áp dụng cho nhóm chat này.
           </div>
         </div>
       </div>

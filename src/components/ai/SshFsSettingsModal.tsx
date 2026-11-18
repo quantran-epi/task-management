@@ -5,7 +5,6 @@ import {
   Input,
   InputNumber,
   Select,
-  Switch,
   Button,
   Space,
   Typography,
@@ -108,7 +107,7 @@ export const SshFsSettingsModal: React.FC<SshFsSettingsModalProps> = ({
       setTestResult(null);
 
       const current = await getSshFsToolConfig(db);
-      await saveSshFsToolConfig({ ...(current || {}), ...values, enabled: true }, db);
+      await saveSshFsToolConfig({ ...(current || {}), ...values }, db);
 
       const res = await testSshFsConnection(db);
       setTestResult({
@@ -175,15 +174,6 @@ export const SshFsSettingsModal: React.FC<SshFsSettingsModalProps> = ({
       </Paragraph>
 
       <Form form={form} layout="vertical" initialValues={DEFAULT_SSH_FS_CONFIG}>
-        <Form.Item
-          name="enabled"
-          label="Kích hoạt công cụ SSH File System cho AI"
-          valuePropName="checked"
-          tooltip="Khi bật, AI có thể gọi các tool duyệt và đọc file từ xa qua SSH."
-        >
-          <Switch checkedChildren="BẬT" unCheckedChildren="TẮT" />
-        </Form.Item>
-
         <Form.Item
           name="sshConfigId"
           label="Máy chủ SSH Remote cố định"

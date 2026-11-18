@@ -295,6 +295,25 @@ describe('phase-38 split usage and threshold at the backup boundary (T-38-17, T-
     }
   });
 
+  it('accepts the per-team SSH FS / Oracle toggles and stays backward compatible (quick cz2)', () => {
+    expect(backupSchemas.BackupAiTeamRecordSchema.safeParse(teamRecord()).success).toBe(true);
+    expect(
+      backupSchemas.BackupAiTeamRecordSchema.safeParse({
+        ...teamRecord(),
+        sshFsToolsEnabled: true,
+        oracleToolsEnabled: false,
+      }).success
+    ).toBe(true);
+    for (const bad of ['true', 1, null]) {
+      expect(
+        backupSchemas.BackupAiTeamRecordSchema.safeParse({
+          ...teamRecord(),
+          sshFsToolsEnabled: bad,
+        }).success
+      ).toBe(false);
+    }
+  });
+
   it('still refuses an undeclared key on a row carrying a new field', () => {
     expect(
       backupSchemas.BackupAiTeamMemberRecordSchema.safeParse({

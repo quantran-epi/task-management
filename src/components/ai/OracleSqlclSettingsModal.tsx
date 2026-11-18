@@ -5,7 +5,6 @@ import {
   Input,
   InputNumber,
   Select,
-  Switch,
   Button,
   Space,
   Typography,
@@ -166,15 +165,6 @@ export const OracleSqlclSettingsModal: React.FC<OracleSqlclSettingsModalProps> =
       </Paragraph>
 
       <Form form={form} layout="vertical" initialValues={DEFAULT_ORACLE_CONFIG}>
-        <Form.Item
-          name="enabled"
-          label="Kích hoạt công cụ Oracle cho AI"
-          valuePropName="checked"
-          tooltip="Khi bật, AI có thể tra cứu schema và truy vấn dữ liệu Oracle."
-        >
-          <Switch checkedChildren="BẬT" unCheckedChildren="TẮT" />
-        </Form.Item>
-
         <Form.Item
           name="sshConfigId"
           label="Máy chủ SSH Remote cố định"

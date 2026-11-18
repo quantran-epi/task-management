@@ -339,7 +339,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const reloadOracleConfig = useCallback(async () => {
     try {
       const cfg = await getOracleToolConfig(db);
-      setOracleToolEnabled(cfg.enabled);
+      // Quick cz2: no global enable flag; the toolbox indicator reflects config readiness.
+      setOracleToolEnabled(Boolean(cfg.sshConfigId && cfg.connectionString));
     } catch (err) {
       logAiChatError('Failed to load Oracle tool config', err);
     }
@@ -348,7 +349,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const reloadSshFsConfig = useCallback(async () => {
     try {
       const cfg = await getSshFsToolConfig(db);
-      setSshFsToolEnabled(cfg?.enabled ?? false);
+      // Quick cz2: no global enable flag; the toolbox indicator reflects config readiness.
+      setSshFsToolEnabled(Boolean(cfg?.sshConfigId));
     } catch (err) {
       logAiChatError('Failed to load SSH File System tool config', err);
     }

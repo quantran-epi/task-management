@@ -5,7 +5,6 @@ import {
   Input,
   InputNumber,
   Select,
-  Switch,
   Button,
   Space,
   Typography,
@@ -135,15 +134,6 @@ export const OracleAiToolConfigCard: React.FC<OracleAiToolConfigCardProps> = ({
       </Paragraph>
 
       <Form form={form} layout="vertical" initialValues={DEFAULT_ORACLE_CONFIG}>
-        <Form.Item
-          name="enabled"
-          label="Kích hoạt công cụ Oracle cho AI"
-          valuePropName="checked"
-          tooltip="Khi bật, AI Chat có thể gọi oracle_query và oracle_describe trong quá trình suy luận."
-        >
-          <Switch checkedChildren="BẬT" unCheckedChildren="TẮT" />
-        </Form.Item>
-
         <Form.Item
           name="sshConfigId"
           label="Máy chủ SSH Remote (Cố định cho AI Tool)"

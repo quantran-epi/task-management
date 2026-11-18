@@ -122,6 +122,8 @@ export async function createTeam(
     team.autoApproveMutations = validated.autoApproveMutations;
   }
   if (validated.mcpEnabled !== undefined) team.mcpEnabled = validated.mcpEnabled;
+  if (validated.sshFsToolsEnabled !== undefined) team.sshFsToolsEnabled = validated.sshFsToolsEnabled;
+  if (validated.oracleToolsEnabled !== undefined) team.oracleToolsEnabled = validated.oracleToolsEnabled;
   if (validated.concurrencyLimit !== undefined) {
     team.concurrencyLimit = clampTeamConcurrency(validated.concurrencyLimit);
   }
@@ -267,6 +269,22 @@ export async function updateTeam(
         updated.mcpEnabled = validated.mcpEnabled;
       } else {
         delete updated.mcpEnabled;
+      }
+    }
+    // Quick cz2: same add/remove idiom as mcpEnabled so `undefined` clears the key
+    // (exactOptionalPropertyTypes forbids persisting an explicit `undefined`).
+    if ('sshFsToolsEnabled' in patch) {
+      if (validated.sshFsToolsEnabled !== undefined) {
+        updated.sshFsToolsEnabled = validated.sshFsToolsEnabled;
+      } else {
+        delete updated.sshFsToolsEnabled;
+      }
+    }
+    if ('oracleToolsEnabled' in patch) {
+      if (validated.oracleToolsEnabled !== undefined) {
+        updated.oracleToolsEnabled = validated.oracleToolsEnabled;
+      } else {
+        delete updated.oracleToolsEnabled;
       }
     }
     // Phase 37 D-03: same add/remove idiom, so clearing stays expressible. The range is

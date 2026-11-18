@@ -99,6 +99,10 @@ export interface AiTeam {
   autoApproveMutations?: boolean | undefined;
   /** Phase 39: advertise read-only MCP tools to this team's agents. Absent means off. */
   mcpEnabled?: boolean | undefined;
+  /** Quick cz2: advertise SSH FS tools to this team's agents. Absent means off. */
+  sshFsToolsEnabled?: boolean | undefined;
+  /** Quick cz2: advertise Oracle SQLcl tools to this team's agents. Absent means off. */
+  oracleToolsEnabled?: boolean | undefined;
   /** Phase 37 D-03: per-team run concurrency; absent means `DEFAULT_TEAM_CONCURRENCY`. */
   concurrencyLimit?: number | undefined;
   /** Phase 38 D-04/D-05: per-team override; absent means the global default. */

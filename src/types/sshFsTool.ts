@@ -1,5 +1,4 @@
 export interface SshFsToolConfig {
-  enabled: boolean;
   /** Fixed SSH configuration ID to execute file operations on */
   sshConfigId: string;
   /** Optional base path to scope or default searches/reads to (e.g. '/var/log' or '/home/app') */

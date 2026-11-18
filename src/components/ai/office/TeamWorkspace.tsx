@@ -714,6 +714,8 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     autoSplitEnabled: boolean;
     autoApproveMutations: boolean;
     concurrencyLimit: number;
+    sshFsToolsEnabled: boolean;
+    oracleToolsEnabled: boolean;
     /** D-04: absent = leave the stored override alone, `null` = inherit, number = store. */
     budgetWarnThresholdPct?: number | null | undefined;
   }) => {
@@ -725,6 +727,16 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         budgetTokens: input.budgetTokens,
         budgets: input.budgets,
         budgetWarnThresholdPct: input.budgetWarnThresholdPct,
+      },
+      db
+    );
+    // Quick cz2: per-team tool enablement lives on the team row; persist alongside the
+    // budget save so one drawer save captures every toggle.
+    await updateTeam(
+      team.id,
+      {
+        sshFsToolsEnabled: input.sshFsToolsEnabled,
+        oracleToolsEnabled: input.oracleToolsEnabled,
       },
       db
     );

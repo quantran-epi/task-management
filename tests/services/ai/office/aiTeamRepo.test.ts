@@ -219,6 +219,36 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
     expect((await getTeam(team.id, db))?.mcpEnabled).toBeUndefined();
   });
 
+  it('persists and clears the per-team SSH FS / Oracle tool toggles (quick cz2)', async () => {
+    const team = await makeTeam('ToolFlags');
+    expect((await getTeam(team.id, db))?.sshFsToolsEnabled).toBeUndefined();
+    expect((await getTeam(team.id, db))?.oracleToolsEnabled).toBeUndefined();
+
+    const updated = await updateTeam(
+      team.id,
+      { sshFsToolsEnabled: true, oracleToolsEnabled: false },
+      db
+    );
+    expect(updated.sshFsToolsEnabled).toBe(true);
+    expect(updated.oracleToolsEnabled).toBe(false);
+
+    const stored = await getTeam(team.id, db);
+    expect(stored?.sshFsToolsEnabled).toBe(true);
+    expect(stored?.oracleToolsEnabled).toBe(false);
+
+    // `undefined` deletes the key (exactOptionalPropertyTypes forbids storing undefined).
+    const cleared = await updateTeam(
+      team.id,
+      { sshFsToolsEnabled: undefined, oracleToolsEnabled: undefined },
+      db
+    );
+    expect(cleared.sshFsToolsEnabled).toBeUndefined();
+    expect(cleared.oracleToolsEnabled).toBeUndefined();
+    const reread = await getTeam(team.id, db);
+    expect(Object.prototype.hasOwnProperty.call(reread, 'sshFsToolsEnabled')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(reread, 'oracleToolsEnabled')).toBe(false);
+  });
+
   it('updateTeam on an unlocked team still accepts a leadId patch and keeps sources in step', async () => {    const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
     const team = await makeTeam('Unlocked');
 

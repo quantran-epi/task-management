@@ -1706,7 +1706,7 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
         expect(names).not.toContain('oracle_describe');
       }
 
-      await saveOracleToolConfig({ ...DEFAULT_ORACLE_CONFIG, enabled: true }, db);
+      await saveOracleToolConfig({ ...DEFAULT_ORACLE_CONFIG, sshConfigId: 'ssh-1', connectionString: 'user/pass@host:1521/srv' }, db);
       await coordinator.send('Xin chào lần nữa');
       await coordinator.send('@[An](agent:' + employees[0]!.id + ') việc A lần nữa');
 

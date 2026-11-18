@@ -9,7 +9,6 @@ import {
 } from '../../types/oracleSqlcl';
 
 export const DEFAULT_ORACLE_CONFIG: OracleToolConfig = {
-  enabled: false,
   sshConfigId: '',
   connectionString: '',
   sqlclPath: 'sql',
@@ -250,11 +249,13 @@ export async function executeOracleQuery(
   const startTime = Date.now();
   const config = await getOracleToolConfig(db);
 
-  if (!config.enabled) {
+  // Quick cz2: enable/disable lives on the aiTeams row, not the shared connection config.
+  // Execution here only checks that the connection is configured; payload gating is in chatTurnTools.
+  if (!config.sshConfigId || !config.connectionString) {
     return JSON.stringify({
       success: false,
       error:
-        'Oracle AI Tool đang bị tắt. Vui lòng bật và kiểm tra cấu hình trong Cài đặt hoặc Hộp công cụ AI Chat.',
+        'Oracle AI Tool chưa được cấu hình. Vui lòng chọn máy chủ SSH và chuỗi kết nối trong Cài đặt hoặc Hộp công cụ AI Chat.',
     } satisfies Partial<OracleToolExecutionResult>);
   }
 
@@ -383,10 +384,11 @@ export async function executeOracleDescribe(
   const startTime = Date.now();
   const config = await getOracleToolConfig(db);
 
-  if (!config.enabled) {
+  // Quick cz2: enable/disable lives on the aiTeams row, not the shared connection config.
+  if (!config.sshConfigId || !config.connectionString) {
     return JSON.stringify({
       success: false,
-      error: 'Oracle AI Tool đang bị tắt. Vui lòng bật trong Cài đặt hoặc Hộp công cụ AI Chat.',
+      error: 'Oracle AI Tool chưa được cấu hình. Vui lòng chọn máy chủ SSH và chuỗi kết nối trong Cài đặt hoặc Hộp công cụ AI Chat.',
     });
   }
 

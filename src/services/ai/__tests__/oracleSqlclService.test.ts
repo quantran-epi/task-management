@@ -121,21 +121,20 @@ describe('oracleSqlclService - Execution & SSH mocking', () => {
     vi.clearAllMocks();
   });
 
-  it('returns helpful error if tool is disabled', async () => {
+  it('returns a helpful error when the connection is not configured', async () => {
     fakeDb.settings.get.mockResolvedValueOnce({
-      value: { enabled: false },
+      value: { sshConfigId: '', connectionString: '' },
     });
 
     const resStr = await executeOracleQuery({ query: 'SELECT 1 FROM DUAL' }, fakeDb);
     const res = JSON.parse(resStr);
     expect(res.success).toBe(false);
-    expect(res.error).toContain('bị tắt');
+    expect(res.error).toContain('chưa được cấu hình');
   });
 
   it('executes read-only query over mocked SSH', async () => {
     fakeDb.settings.get.mockResolvedValueOnce({
       value: {
-        enabled: true,
         sshConfigId: 'ssh-1',
         connectionString: 'user/pass@host:1521/srv',
         maxRows: 100,
@@ -164,7 +163,6 @@ describe('oracleSqlclService - Execution & SSH mocking', () => {
   it('executes describe_table over mocked SSH', async () => {
     fakeDb.settings.get.mockResolvedValueOnce({
       value: {
-        enabled: true,
         sshConfigId: 'ssh-1',
         connectionString: 'user/pass@host:1521/srv',
       },
@@ -206,7 +204,6 @@ describe('oracleSqlclService - Execution & SSH mocking', () => {
 
     const testRes = await testOracleConnection(
       {
-        enabled: true,
         sshConfigId: 'ssh-1',
         connectionString: 'user/pass@host:1521/srv',
       },
@@ -220,7 +217,6 @@ describe('oracleSqlclService - Execution & SSH mocking', () => {
   it('saves Oracle tool config into db.settings', async () => {
     await saveOracleToolConfig(
       {
-        enabled: true,
         sshConfigId: 'ssh-1',
         connectionString: 'user/pass@host:1521/srv',
       },
@@ -229,7 +225,7 @@ describe('oracleSqlclService - Execution & SSH mocking', () => {
 
     expect(fakeDb.settings.put).toHaveBeenCalledWith({
       key: 'oracle_ai_tool_config',
-      value: expect.objectContaining({ enabled: true, sshConfigId: 'ssh-1' }),
+      value: expect.objectContaining({ sshConfigId: 'ssh-1' }),
     });
   });
 });

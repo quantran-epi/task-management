@@ -5,7 +5,6 @@ import {
   Input,
   InputNumber,
   Select,
-  Switch,
   Button,
   Space,
   Typography,
@@ -38,7 +37,6 @@ export interface SshFsAiToolConfigCardProps {
 }
 
 export const DEFAULT_SSH_FS_CONFIG: SshFsToolConfig = {
-  enabled: false,
   sshConfigId: '',
   defaultBasePath: '/',
   maxLinesPerRead: 100,
@@ -109,7 +107,7 @@ export const SshFsAiToolConfigCard: React.FC<SshFsAiToolConfigCardProps> = ({
 
       // Save temporarily before testing so test uses latest values
       const current = await getSshFsToolConfig(db);
-      await saveSshFsToolConfig({ ...(current || {}), ...values, enabled: true }, db);
+      await saveSshFsToolConfig({ ...(current || {}), ...values }, db);
 
       const res = await testSshFsConnection(db);
       setTestResult({
@@ -152,15 +150,6 @@ export const SshFsAiToolConfigCard: React.FC<SshFsAiToolConfigCardProps> = ({
       </Paragraph>
 
       <Form form={form} layout="vertical" initialValues={DEFAULT_SSH_FS_CONFIG}>
-        <Form.Item
-          name="enabled"
-          label="Kích hoạt công cụ SSH File System cho AI"
-          valuePropName="checked"
-          tooltip="Khi bật, AI Chat có thể gọi ssh_list_dir, ssh_read_file_page và ssh_grep_files trong quá trình suy luận."
-        >
-          <Switch checkedChildren="BẬT" unCheckedChildren="TẮT" />
-        </Form.Item>
-
         <Form.Item
           name="sshConfigId"
           label="Máy chủ SSH Remote (Cố định cho AI Tool)"

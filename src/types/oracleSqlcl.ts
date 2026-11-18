@@ -1,5 +1,4 @@
 export interface OracleToolConfig {
-  enabled: boolean;
   /** Fixed SSH configuration ID to execute sqlcl on the remote jump host */
   sshConfigId: string;
   /** Oracle connection identifier, e.g. 'user/password@host:port/service' or 'user/pass@TNS_ALIAS' */
