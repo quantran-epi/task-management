@@ -228,4 +228,63 @@ describe('oracleSqlclService - Execution & SSH mocking', () => {
       value: expect.objectContaining({ sshConfigId: 'ssh-1' }),
     });
   });
+
+  // Regression: the model tool-call id must reach the SSH transport so Rust can cancel by
+  // id alone. A dropped id makes cancellation impossible and was the root cause of the
+  // "process survives tab switch / cannot stop one task" failure class.
+  it('passes the model tool-call id down to the SSH transport', async () => {
+    fakeDb.settings.get.mockResolvedValueOnce({
+      value: {
+        sshConfigId: 'ssh-1',
+        connectionString: 'user/pass@host:1521/srv',
+      },
+    });
+    vi.spyOn(sshService, 'getSshConfigs').mockResolvedValueOnce([
+      { id: 'ssh-1', name: 'Bastion' } as any,
+    ]);
+    vi.spyOn(sshService, 'getSshSecret').mockResolvedValueOnce('secret-pass');
+    const execSpy = vi.spyOn(sshService, 'execRemoteCommand').mockResolvedValueOnce({
+      stdout: '[{"OK": 1}]',
+      stderr: '',
+      exitStatus: 0,
+    });
+
+    await executeOracleQuery({ query: 'SELECT 1 FROM DUAL' }, fakeDb, 'call-abc-123');
+
+    expect(execSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.any(String),
+      'secret-pass',
+      'call-abc-123'
+    );
+  });
+
+  // Regression: no time-based rejection anywhere in the tool path. Advancing the clock by
+  // an hour while the transport stays pending must NOT settle the call with a timeout —
+  // only an explicit cancel (or app exit) may end a task.
+  it('never rejects a pending query after an hour of fake time (no timeout)', async () => {
+    vi.useFakeTimers();
+    try {
+      fakeDb.settings.get.mockResolvedValueOnce({
+        value: { sshConfigId: 'ssh-1', connectionString: 'user/pass@host:1521/srv' },
+      });
+      vi.spyOn(sshService, 'getSshConfigs').mockResolvedValueOnce([
+        { id: 'ssh-1', name: 'Bastion' } as any,
+      ]);
+      vi.spyOn(sshService, 'getSshSecret').mockResolvedValueOnce('secret-pass');
+      let settled = false;
+      vi.spyOn(sshService, 'execRemoteCommand').mockImplementationOnce(
+        () => new Promise(() => {}) // pending forever, like a long-running SQLcl query
+      );
+
+      const pending = executeOracleQuery({ query: 'SELECT 1 FROM DUAL' }, fakeDb, 'call-long').then(
+        (v) => { settled = true; return v; }
+      );
+      await vi.advanceTimersByTimeAsync(3_600_000);
+      expect(settled).toBe(false);
+      void pending;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -6,6 +6,8 @@ import {
   getSshConfigById,
   saveSshConfig,
   deleteSshConfig,
+  execRemoteCommand,
+  cancelToolCall,
 } from '../../src/services/sshService';
 import { type SshConfig } from '../../src/types/ssh';
 
@@ -18,6 +20,11 @@ vi.mock('../../src/services/keyringService', () => ({
 
 vi.mock('../../src/utils/timerPopout', () => ({
   isTauriApp: vi.fn().mockReturnValue(true),
+}));
+
+// Real @tauri-apps/api/core invoke is a no-op outside Tauri; mock it to observe payloads.
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(),
 }));
 
 describe('sshService', () => {
@@ -146,5 +153,49 @@ describe('sshService', () => {
     await deleteSshConfig('ssh-1', db);
     expect(await getSshConfigs(db)).toHaveLength(0);
     expect(deleteKeyringCredential).toHaveBeenCalledWith('ssh_secret_ssh-1');
+  });
+});
+
+describe('sshService - cancellable exec transport', () => {
+  const config: SshConfig = {
+    id: 'ssh-1', name: 'Bastion', host: '127.0.0.1', port: 22,
+    username: 'ubuntu', authType: 'password', createdAt: '', updatedAt: '',
+  };
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it('passes exactly one callId to ssh_exec_command and no timeout field', async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    vi.mocked(invoke).mockResolvedValueOnce({
+      stdout: 'ok', stderr: '', exitStatus: 0, finishReason: 'complete',
+    });
+
+    await execRemoteCommand(config, 'echo $$ && sql', 'secret-pass', 'call-A');
+
+    expect(invoke).toHaveBeenCalledWith('ssh_exec_command', expect.objectContaining({
+      callId: 'call-A',
+    }));
+    const payload = vi.mocked(invoke).mock.calls.at(-1)?.[1] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('timeoutSeconds');
+    expect(payload).not.toHaveProperty('idleTimeoutSeconds');
+  });
+
+  it('cancels only the given call id and is idempotent (no config/secret re-sent)', async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    vi.mocked(invoke)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false);
+
+    expect(await cancelToolCall('call-A')).toBe(true);
+    expect(await cancelToolCall('call-A')).toBe(false); // second call: not live → no-op
+    expect(await cancelToolCall('never-started')).toBe(false);
+
+    expect(invoke).toHaveBeenNthCalledWith(1, 'cancel_tool_call', { callId: 'call-A' });
+    expect(invoke).toHaveBeenNthCalledWith(2, 'cancel_tool_call', { callId: 'call-A' });
+    expect(invoke).toHaveBeenNthCalledWith(3, 'cancel_tool_call', { callId: 'never-started' });
+    for (const [, payload] of vi.mocked(invoke).mock.calls) {
+      expect(Object.keys(payload as object)).toEqual(['callId']);
+    }
   });
 });

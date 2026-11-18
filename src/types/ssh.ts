@@ -35,6 +35,8 @@ export interface CommandOutput {
   stdout: string;
   stderr: string;
   exitStatus: number;
+  /** `complete` | `cancelled` | `error` — why the task ended. No timeout reason exists. */
+  finishReason?: 'complete' | 'cancelled' | 'error';
 }
 
 export interface SshStreamEvent {

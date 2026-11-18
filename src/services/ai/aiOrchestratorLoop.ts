@@ -15,6 +15,8 @@ import { executeDynamicMcpTool, type ExecuteMcpToolOptions } from './mcpClient';
 export interface DispatchAiToolCallOptions extends ExecuteMcpToolOptions {
   /** WR-19: CR the turn is bound to; entity ids outside it are rejected. */
   crScopeId?: string;
+  /** Model tool-call id, forwarded to heavy tools for id-only cancellation. */
+  callId?: string;
 }
 
 /** One definition of "this is a local DB tool", shared by dispatch and the WR-02 gate. */
@@ -40,6 +42,7 @@ export async function dispatchAiToolCall(
         signal,
         {
           ...(options?.crScopeId ? { crScopeId: options.crScopeId } : {}),
+          ...(options?.callId ? { callId: options.callId } : {}),
         }
       )
     : executeDynamicMcpTool(normalized, args, db, options);
@@ -79,7 +82,8 @@ export interface AiOrchestratorLoopOptions {
     args: Record<string, any>,
     db: TaskPlannerDatabase,
     signal?: AbortSignal,
-    options?: DispatchAiToolCallOptions
+    options?: DispatchAiToolCallOptions,
+    callId?: string
   ) => Promise<string>;
   /** Recent tool outputs kept intact when pruning; older ones truncate. */
   keepRecentToolOutputs?: number;
@@ -480,8 +484,8 @@ export async function runAiOrchestratorLoop(
       let toolResult: string;
       try {
         toolResult = executeToolFn
-          ? await executeToolFn(tc.function.name, args, db, signal)
-          : await dispatchAiToolCall(tc.function.name, args, db, signal);
+          ? await executeToolFn(tc.function.name, args, db, signal, undefined, tc.id)
+          : await dispatchAiToolCall(tc.function.name, args, db, signal, { callId: tc.id });
       } catch (toolErr: any) {
         if (toolErr?.name === 'AbortError' || signal?.aborted) throw toolErr;
         toolResult = JSON.stringify({

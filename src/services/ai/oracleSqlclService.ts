@@ -165,7 +165,8 @@ export function extractOracleError(stdout: string, stderr: string): string | nul
 async function runSqlclScriptOverSsh(
   config: OracleToolConfig,
   sqlScript: string,
-  db: TaskPlannerDatabase = defaultDb
+  db: TaskPlannerDatabase = defaultDb,
+  callId?: string
 ): Promise<{ stdout: string; stderr: string; exitStatus: number }> {
   if (!config.sshConfigId) {
     throw new Error('Chưa chọn cấu hình SSH remote trong cấu hình Oracle AI Tool.');
@@ -188,7 +189,10 @@ async function runSqlclScriptOverSsh(
   // -s: silent mode, -L: attempt login only once (prevents locking accounts)
   const remoteCommand = `${envPrefix}${sqlclBin} -s -L '${config.connectionString}' << 'EOF_ORACLE_SQLCL'\n${sqlScript}\nEXIT;\nEOF_ORACLE_SQLCL`;
 
-  return await execRemoteCommand(targetSsh, remoteCommand, secret ?? undefined);
+  // Every heavy tool passes the model tool-call id to Rust so cancel only needs that id.
+  // Settings/test callers without a model call get a nonce id for symmetry.
+  const taskId = callId ?? `oracle-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return await execRemoteCommand(targetSsh, remoteCommand, secret ?? undefined, taskId);
 }
 
 /**
@@ -243,7 +247,8 @@ EXIT;
  */
 export async function executeOracleQuery(
   args: OracleQueryArgs,
-  db: TaskPlannerDatabase = defaultDb
+  db: TaskPlannerDatabase = defaultDb,
+  callId?: string
 ): Promise<string> {
   const startTime = Date.now();
   const config = await getOracleToolConfig(db);
@@ -284,7 +289,7 @@ SELECT PLAN_TABLE_OUTPUT FROM TABLE(DBMS_XPLAN.DISPLAY());
 EXIT;
       `.trim();
 
-      const res = await runSqlclScriptOverSsh(config, script, db);
+      const res = await runSqlclScriptOverSsh(config, script, db, callId);
       const executionTimeMs = Date.now() - startTime;
       const oracleError = extractOracleError(res.stdout, res.stderr);
 
@@ -320,7 +325,7 @@ ${limitedSql};
 EXIT;
     `.trim();
 
-    const res = await runSqlclScriptOverSsh(config, script, db);
+    const res = await runSqlclScriptOverSsh(config, script, db, callId);
     const executionTimeMs = Date.now() - startTime;
     const oracleError = extractOracleError(res.stdout, res.stderr);
 
@@ -378,7 +383,8 @@ EXIT;
  */
 export async function executeOracleDescribe(
   args: OracleDescribeArgs,
-  db: TaskPlannerDatabase = defaultDb
+  db: TaskPlannerDatabase = defaultDb,
+  callId?: string
 ): Promise<string> {
   const startTime = Date.now();
   const config = await getOracleToolConfig(db);
@@ -419,7 +425,7 @@ FETCH FIRST 100 ROWS ONLY;
 EXIT;
       `.trim();
 
-      const res = await runSqlclScriptOverSsh(config, script, db);
+      const res = await runSqlclScriptOverSsh(config, script, db, callId);
       const executionTimeMs = Date.now() - startTime;
       const oracleError = extractOracleError(res.stdout, res.stderr);
       if (oracleError) {
@@ -472,7 +478,7 @@ ORDER BY c.COLUMN_ID;
 EXIT;
       `.trim();
 
-      const res = await runSqlclScriptOverSsh(config, script, db);
+      const res = await runSqlclScriptOverSsh(config, script, db, callId);
       const executionTimeMs = Date.now() - startTime;
       const oracleError = extractOracleError(res.stdout, res.stderr);
       if (oracleError) {
@@ -506,7 +512,7 @@ SELECT DBMS_METADATA.GET_DDL('TABLE', '${tableName}', ${schemaExpr}) FROM DUAL;
 EXIT;
       `.trim();
 
-      const res = await runSqlclScriptOverSsh(config, script, db);
+      const res = await runSqlclScriptOverSsh(config, script, db, callId);
       const executionTimeMs = Date.now() - startTime;
       const oracleError = extractOracleError(res.stdout, res.stderr);
       if (oracleError) {

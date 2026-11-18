@@ -339,15 +339,16 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
           : {}),
         compactAtRatio: request.analysisMode ? 0.9 : 0.75,
         ...(request.contextWindowTokens ? { contextWindowTokens: request.contextWindowTokens } : {}),
-        executeToolFn: (name, args, toolDb, signal) => {
+        executeToolFn: (name, args, toolDb, signal, _options, loopCallId) => {
           // Post-approve execution returns the exact prepared proposal, never a recompute
           // against an editor that may have moved on (T-27-02).
-          const callId = currentCallId;
+          const callId = loopCallId ?? currentCallId;
           const prepared = callId ? preparedPatches.get(callId) : undefined;
           if (prepared) return Promise.resolve(JSON.stringify(prepared));
           return dispatchAiToolCall(name, args, toolDb, signal, {
             allowMutation: request.autoApprove,
             ...(request.crScopeId ? { crScopeId: request.crScopeId } : {}),
+            ...(callId ? { callId } : {}),
           });
         },
         onTextChunk: (delta) => {

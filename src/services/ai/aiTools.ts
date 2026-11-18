@@ -2228,6 +2228,11 @@ export interface ExecuteAiToolOptions {
    * scoped turn cannot read or mutate another CR's data.
    */
   crScopeId?: string;
+  /**
+   * Model tool-call id. Threaded to heavy remote tools so Rust can cancel by id alone.
+   * Lightweight local tools ignore it.
+   */
+  callId?: string;
 }
 
 /**
@@ -2293,11 +2298,11 @@ export async function executeAiTool(
       }
 
       case 'oracle_query': {
-        return await executeOracleQuery(args as any, db);
+        return await executeOracleQuery(args as any, db, options?.callId);
       }
 
       case 'oracle_describe': {
-        return await executeOracleDescribe(args as any, db);
+        return await executeOracleDescribe(args as any, db, options?.callId);
       }
 
       case 'get_artifact': {

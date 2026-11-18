@@ -251,6 +251,7 @@ export async function execRemoteCommand(
   config: SshConfig,
   command: string,
   secret?: string,
+  callId?: string,
 ): Promise<CommandOutput> {
   if (!isTauriApp()) {
     throw new Error('Tính năng SSH chỉ hoạt động trên môi trường Desktop Tauri.');
@@ -261,7 +262,20 @@ export async function execRemoteCommand(
     config,
     secret: effectiveSecret ?? null,
     command,
+    // Stable id from the model tool call. Rust registers it and `cancel_tool_call` only
+    // needs this id — no config/secret is sent again on cancel. Local callers without a
+    // model call get a generated id so every exec remains trackable.
+    callId: callId ?? `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   });
+}
+
+/** Cancel a running tool task by id. Idempotent on the Rust side. */
+export async function cancelToolCall(callId: string): Promise<boolean> {
+  if (!isTauriApp()) {
+    throw new Error('Tính năng SSH chỉ hoạt động trên môi trường Desktop Tauri.');
+  }
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<boolean>('cancel_tool_call', { callId });
 }
 
 /**
