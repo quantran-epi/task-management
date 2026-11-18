@@ -44,9 +44,8 @@ export function createTabTurnRegistry(
       return entries.get(tabId)?.runtime;
     },
     discard(tabId) {
-      const existing = entries.get(tabId);
-      if (!existing) return;
-      existing.runtime.abort();
+      // Drop the view handle only. The Rust tool task keeps running; explicit Stop uses
+      // abortTab(), never this cleanup path.
       entries.delete(tabId);
     },
     abortTab(tabId) {
