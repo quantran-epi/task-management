@@ -49,6 +49,13 @@ pub struct CommandOutput {
     pub stdout: String,
     pub stderr: String,
     pub exit_status: i32,
+    /// `complete` | `cancelled` | `error` — why the task ended. No timeout reason exists.
+    #[serde(default = "default_finish_reason")]
+    pub finish_reason: String,
+}
+
+fn default_finish_reason() -> String {
+    "complete".to_string()
 }
 
 /// Tracks remote PIDs of streaming commands so they can be terminated (T-32-02).
@@ -378,40 +385,32 @@ pub fn ssh_rename(
     Ok(())
 }
 
+/// Every heavy tool uses this one primitive. The `call_id` comes from the model tool call and
+/// is the ONLY key needed to cancel: the registry retains the SSH config/secret and PID.
+/// Output streams as coalesced `tool-task-update` events; the detached reader never blocks
+/// the Tauri command thread with `read_to_end`.
 #[tauri::command]
 pub fn ssh_exec_command(
+    app: tauri::AppHandle,
     config: SshConfig,
     secret: Option<String>,
     command: String,
+    call_id: String,
 ) -> Result<CommandOutput, String> {
-    let session = connect_and_auth(&config, secret.as_deref())?;
-    let mut channel = session
-        .channel_session()
-        .map_err(|e| format!("Không thể mở channel session: {}", e))?;
-
-    channel
-        .exec(&command)
-        .map_err(|e| format!("Thực thi lệnh thất bại: {}", e))?;
-
-    let mut stdout_buf = Vec::new();
-    let mut stderr_buf = Vec::new();
-
-    channel
-        .read_to_end(&mut stdout_buf)
-        .map_err(|e| format!("Lỗi đọc stdout: {}", e))?;
-
-    channel
-        .stderr()
-        .read_to_end(&mut stderr_buf)
-        .map_err(|e| format!("Lỗi đọc stderr: {}", e))?;
-
-    let _ = channel.wait_close();
-    let exit_status = channel.exit_status().unwrap_or(0);
-
+    let registry = app.state::<crate::tool_cancel::ToolTaskRegistry>();
+    let out = crate::tool_cancel::run_cancellable_remote_command(
+        &registry,
+        app,
+        &config,
+        secret.as_deref(),
+        call_id,
+        command,
+    )?;
     Ok(CommandOutput {
-        stdout: String::from_utf8_lossy(&stdout_buf).to_string(),
-        stderr: String::from_utf8_lossy(&stderr_buf).to_string(),
-        exit_status,
+        stdout: out.stdout,
+        stderr: out.stderr,
+        exit_status: out.exit_status,
+        finish_reason: out.finish_reason,
     })
 }
 

@@ -9,6 +9,7 @@ mod sqlite_persistence;
 mod ssh_pty_service;
 mod ssh_service;
 mod telegram_gateway;
+mod tool_cancel;
 use tauri::Manager;
 
 #[tauri::command]
@@ -23,6 +24,7 @@ pub fn run() {
         .manage(telegram_gateway::TelegramGatewayState::new())
         .manage(ssh_pty_service::SshPtyRegistry::default())
         .manage(ssh_service::SshStreamRegistry::default())
+        .manage(tool_cancel::ToolTaskRegistry::default())
         .invoke_handler(tauri::generate_handler![
             open_devtools,
             desktop_notification::send_clickable_notification,
@@ -77,6 +79,7 @@ pub fn run() {
             ssh_service::ssh_exec_command,
             ssh_service::ssh_exec_stream,
             ssh_service::ssh_kill_process,
+            tool_cancel::cancel_tool_call,
             ssh_pty_service::ssh_pty_start,
             ssh_pty_service::ssh_pty_write,
             ssh_pty_service::ssh_pty_resize,
@@ -93,6 +96,9 @@ pub fn run() {
                 }
                 if let Some(stream_registry) = app_handle.try_state::<ssh_service::SshStreamRegistry>() {
                     ssh_service::cleanup_on_exit(&stream_registry);
+                }
+                if let Some(task_registry) = app_handle.try_state::<tool_cancel::ToolTaskRegistry>() {
+                    tool_cancel::cleanup_on_exit(&task_registry);
                 }
             }
         });
