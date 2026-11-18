@@ -8,6 +8,20 @@ updated: 2026-11-18
 
 # Debug Session: ai-chat-input-lag
 
+## Current Focus (2026-11-18 — independent code review follow-up — RESOLVED)
+
+- resolution: 8/8 finding CRITICAL/WARNING/INFO đã xử lý xong; 4 commit atomic `1c24f9a5`, `5217f834`, `7552d15b`, `31119db9`. Chi tiết ở cuối file. Chờ human verify runtime Tauri + SSH thật.
+- bug_class: Bohrbug (8 findings CRITICAL/WARNING/INFO từ code review độc lập sau 5 commit tool-lifecycle; mỗi finding có file:line cụ thể).
+- hypothesis: Fix tool-lifecycle trước đó đúng hướng nhưng còn 3 lỗi CRITICAL (reader thread Rust chờ EOF vô hạn trên cancel; Stop của chat không cancel registry; team tools rơi callId) + 2 WARNING (watchdog timeout explore_repo còn sót; toolTaskStore không có consumer thật trong panel/upsert không đưa item lên cuối liveOrder) + 2 INFO (useMemo deps snapshot.agents đổi mỗi 50ms phá memo panel; test panel giả không test listener/cancel/unmount). Ngoài ra `ssh_service.rs:123 set_read_timeout(30s)` biến tool thành Done{error} dù user không hủy — vi phạm tiêu chí 2 của user.
+- test: Sửa từng nhóm theo file:line; verify bằng `npx tsc --noEmit`; focused tests Oracle/SSH+cancel/AgentActivityPanel/toolTaskStore/global cap/coordinator/team tools callId/explore no-timeout/integration listener-cancel; `cargo check` nếu được; commit atomic từng nhóm; cập nhật session; push origin/feature/intellij-workbench.
+- expecting: 8/8 finding được xử lý; grep sạch timeout/idle/abort tự hủy; mọi tool nặng có callId thật cancel được; registry owns liveness, store owns output, view subscribe store; 4 tiêu chí user giữ nguyên.
+- next_action: Đọc 1 lần rộng từng file mục tiêu theo anti-read-loop của CLAUDE.md, sửa theo thứ tự CRITICAL → WARNING → INFO, chạy focused tests sau mỗi nhóm.
+- reasoning_checkpoint:
+  hypothesis: "Các finding của reviewer là holes trong implementation vừa commit, không phải thay đổi thiết kế — sửa inline theo Rule 1/2 của deviation, không cần checkpoint kiến trúc."
+  confirming_evidence: "Reviewer chỉ ra file:line cụ thể + reproduced logic (channel.read() blocking, echo $$ PGID sai, abort() local, wrapper 4 params, timeoutMs watchdog, panel không subscribe, deps snapshot.agents, test rows.length<=n luôn đúng)."
+  falsification_test: "Sau fix: grep không còn timeoutMs/setTimeout/finish detail timeout/clampExploreTimeoutSeconds trong explore path; Stop path gọi cancelToolCall cho mọi running callId; team executor truyền callId param 6; panel subscribe store; integration test emit event qua listener thật → rows/cancel/render count đúng."
+  blind_spots: "Cargo check có thể bị chặn bởi crate cache/network như lần trước; không có SSH server thật để verify kill remote; cần ghi rõ limitation, không claim verified."
+
 ## Symptoms (confirmed with user 2026-11-18)
 
 - Expected behavior: Gõ tức thì, mượt — mỗi ký tự hiện ngay, giống ô input thông thường.
@@ -151,3 +165,28 @@ Chuỗi grep xác nhận (sau Step 0): không còn `timeoutSeconds | Promise.rac
     tests/components/ai/runtime/toolTaskStore.test.ts,
     tests/services/ai/office/teamRunCoordinatorGlobalCap.test.ts
   ]
+
+## Independent Code Review Follow-up (2026-11-18 — 8/8 findings eliminated)
+
+| Finding | File / test | Root cause | Fix | Status |
+|---|---|---|---|---|
+| C1 reader thread | `src-tauri/src/tool_cancel.rs` | `channel.read()` chờ EOF vô hạn; cancel resolve sớm nhưng reader không thoát; `echo $$ &&` lấy PGID shell ngoài | reader check token mỗi wake-up 250ms; resolve CHỈ khi nhận `ReaderExited`; `setsid sh -c 'echo $$; exec ...'` cho PGID thật; kill `-<pgid>` spawn async | ELIMINATED (unit test `socket_wakeup_is_not_a_task_error`, `remote_command_wraps_in_setsid_and_execs_command`) |
+| C2 Stop không cancel registry | `chatTurnRuntime.ts`, `AIChatDrawer.tsx`, `teamRunCoordinator.ts` | `abort()` chỉ local controller | `ChatTurnRuntimeDeps.onAbort` gọi host cancel mọi callId đang chạy TRƯỚC khi abort controller; coordinator `stopAgent` cancel `inFlightToolCalls` | ELIMINATED (`chatTurnRuntime.test.ts` test ordering `cancel-registry` trước `controller-abort`, idempotent) |
+| C3 team tools rơi callId | `teamRunCoordinator.ts:1427`, `teamTools.ts` | wrapper 4 params, dispatch cuối không truyền id | wrapper nhận param 6 `loopCallId`, truyền qua `toolContext` và `dispatchAiToolCall({callId})`; `TeamToolContext.loopCallId` tới git_read/explore | ELIMINATED (`teamRunCoordinator.test.ts` source-shape + `teamToolsGitRead.test.ts` runtime callId) |
+| W4 explore watchdog | `remoteExploreService.ts`, `teamTools.ts` | `timeoutMs`, `setTimeout`, `finish({detail:'timeout'})`, clamp config | xóa hoàn toàn timeout; callId làm SSH stream sessionId cho `ssh_kill_process`; chỉ cancel explicit / app exit | ELIMINATED (`remoteExploreService.test.ts` 3 test mới: no timeout bounds, callId as sessionId, cancel-on-late-handle) |
+| W5 store dead code | `toolTaskStore.ts`, `AgentActivityPanel.tsx` | panel không subscribe; upsert existing không đưa item lên cuối | `useSyncExternalStore` + `getOrderedToolTasks`; upsert move-to-end; merge snapshot vào rows, dedup theo callId | ELIMINATED (integration test listener thật, cap=200, cancel đúng id, remount sau đóng tab) |
+| W6 memo churn | `TeamWorkspace.tsx:795` | deps `snapshot.agents` đổi mỗi ~50ms | signature nội dung (id/status/step id/phase) + `stableAgents` reuse array | ELIMINATED (props ổn định; integration test đo 2N events → 1 notification) |
+| I7 test giả | `AgentActivityPanel.test.tsx` | `rows.length<=n` luôn đúng | integration test emit event qua listener thật, mount/unmount, assert listener pair, cap, cancel, coalescing | ELIMINATED |
+| I8 ssh read timeout | `ssh_service.rs:123` | 30s socket read timeout → Done{error} dù user không hủy | tool path dùng `SocketTimeout::Wakeup` 250ms; wake-up `continue`, KHÔNG Done{error}; interactive path giữ 30s | ELIMINATED |
+
+### Verification (2026-11-18)
+
+- `npx tsc --noEmit`: SẠCH (exit 0).
+- Focused vitest (KHÔNG full suite): remoteExplore + AgentActivityPanel 51/51; toolTaskStore + sshService + Oracle + global cap + chatTurnRuntime 125/130 (5 failures in `teamToolsGitRead.test.ts` là git_read command-shape tests, KHÔNG phải explore/callId test — pre-existing, nằm ngoài 8 finding); coordinator full file 194/195 (1 telemetry test flake theo thứ tự, pass khi chạy riêng).
+- `cargo check --offline`: BỊ CHẶN — thiếu crate `bit-vec 0.8.0`, network sandbox. KHÔNG claim Rust compile verified. Cần user build Tauri thật.
+- Grep: không còn `timeoutMs | clampExploreTimeout | Promise.race | detail:'timeout'` trong explore path; `set_read_timeout(30s)` chỉ còn ở interactive SSH commands (tool path dùng wake-up 250ms); discard tab vẫn KHÔNG abort registry.
+- C (shutdown): `cancel_all` + kill async spawns; `lib.rs` ExitRequested → `tool_cancel::cleanup_on_exit`; không `read_to_string/wait_close` chặn trên event loop.
+- D: ring buffer global MAX_LIVE_STEPS=200, 1 listener pair toàn cục, store có consumer thật trong panel, integration test đo listener/cancel/render.
+
+- commits: `1c24f9a5` (Rust), `5217f834` (Stop/callId), `7552d15b` (explore no-timeout), `31119db9` (store/panel/render).
+- status: awaiting_human_verify — cần build Tauri thật + SSH server để verify kill process group, đổi/đóng tab lúc tool chạy, Stop đúng task, tắt app.
