@@ -50,7 +50,7 @@ pub fn send_clickable_notification(
     // Linux, channel `recv` on Windows) and must not stall the Tauri event loop. It returns on
     // dismiss/expiry too, so a thread cannot linger forever.
     std::thread::spawn(move || {
-        let _ = handle.wait_for_response(|response| {
+        let _ = handle.wait_for_response(|response: &NotificationResponse| {
             if matches!(
                 response,
                 NotificationResponse::Default | NotificationResponse::Action(_)
