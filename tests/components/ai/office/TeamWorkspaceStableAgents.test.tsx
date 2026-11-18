@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React, { useMemo } from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { agentSnapshotSignature } from '../../../../src/components/ai/office/TeamWorkspace';
 import type { AgentRunState } from '../../../../src/types/aiOffice';
 
