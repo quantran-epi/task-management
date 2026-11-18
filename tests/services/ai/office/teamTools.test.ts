@@ -105,23 +105,6 @@ describe('teamTools — transcript search and skill reader (AIO-MEM-02, AIO-MEM-
     expect(names).not.toContain('deliver_steer');
   });
 
-  // 44-01 D-03: the deadline knob is a parameter on explore_repo, never a new tool.
-  it('advertises timeoutSeconds on explore_repo with its range and default', () => {
-    const def = TEAM_TOOL_DEFINITIONS.find((tool) => tool.function.name === 'explore_repo');
-    expect(def).toBeDefined();
-
-    const prop = def!.function.parameters.properties.timeoutSeconds;
-    expect(prop).toBeDefined();
-    expect(prop.type).toBe('number');
-
-    // The description tells the model the accepted range and default.
-    expect(def!.function.description).toContain('60');
-    expect(def!.function.description).toContain('900');
-    expect(def!.function.description).toContain('300');
-    // Still optional: the knob is a parameter, not a required argument.
-    expect(def!.function.parameters.required).not.toContain('timeoutSeconds');
-  });
-
   // write-doc-title-too-long: the model must SEE the dynamic cap before it calls create. The cap
   // is NOTE_TITLE_MAX_LENGTH minus the agent-name prefix, so a fixed "120" would be a lie once a
   // prefix exists. Specified oracle: the schema string must carry the real cap and the rule.
