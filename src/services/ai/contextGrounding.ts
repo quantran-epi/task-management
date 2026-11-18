@@ -1,11 +1,9 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Task, ChangeRequest, System, Note, NoteAttachment } from '../../types/models';
 import { isLocalPath, normalizeLocalPath } from '../../utils/documentLinks';
-import { isTauriApp } from '../../utils/timerPopout';
 import { readNoteMarkdown } from '../../utils/noteBody';
 
 export const MAX_CONTEXT_CHAR_LIMIT = 12000;
-export const MAX_FILE_LINES_LIMIT = 2000;
 
 // Common text/source file extensions permitted for head extraction
 const TEXT_EXTENSIONS = new Set([
@@ -21,24 +19,6 @@ export function isTextFile(filePath: string): boolean {
   if (lastDot === -1) return false;
   const ext = clean.slice(lastDot + 1).toLowerCase();
   return TEXT_EXTENSIONS.has(ext);
-}
-
-/**
- * Invoke Tauri IPC command to read head of a local file
- */
-async function defaultFileReader(filePath: string, maxLines: number = MAX_FILE_LINES_LIMIT): Promise<string | null> {
-  if (!isTauriApp()) return null;
-  try {
-    const api = await import('@tauri-apps/api/core');
-    const cleanPath = normalizeLocalPath(filePath);
-    return await api.invoke<string>('read_local_file_text_head', {
-      filePath: cleanPath,
-      maxLines,
-    });
-  } catch (err) {
-    console.warn(`[contextGrounding] Failed to read local file head: ${filePath}`, err);
-    return null;
-  }
 }
 
 /**
@@ -175,7 +155,6 @@ export interface BuildItemContextPromptOptions {
   entityType: 'task' | 'cr' | 'system';
   item: Task | ChangeRequest | System;
   db?: TaskPlannerDatabase | undefined;
-  fileReader?: ((filePath: string, maxLines?: number) => Promise<string | null>) | undefined;
   charLimit?: number | undefined;
 }
 
@@ -188,7 +167,6 @@ export async function buildItemContextPrompt(options: BuildItemContextPromptOpti
     entityType,
     item,
     db = defaultDb,
-    fileReader = defaultFileReader,
     charLimit = MAX_CONTEXT_CHAR_LIMIT,
   } = options;
 
@@ -323,21 +301,14 @@ export async function buildItemContextPrompt(options: BuildItemContextPromptOpti
 
       if (isLocalPath(trimmed)) {
         const cleanPath = normalizeLocalPath(trimmed);
-        if (isTextFile(cleanPath)) {
-          // Attempt reading head
-          let content: string | null = null;
-          try {
-            content = await fileReader(cleanPath, MAX_FILE_LINES_LIMIT);
-          } catch {}
-
-          if (content !== null && content !== undefined) {
-            sections.push(`#### Local File: ${cleanPath}\n\`\`\`\n${content}\n\`\`\``);
-          } else {
-            sections.push(`- Local File: ${cleanPath} (Desktop file reference)`);
-          }
-        } else {
-          sections.push(`- Local File: ${cleanPath} [Binary / non-text file]`);
-        }
+        // Local file content is never read. Only metadata/path is kept (T-quick-01):
+        // the OS dialog returns a path, and the user pastes content or uses an SSH FS
+        // tool for a remote path. Binary detection stays for the human-readable label.
+        sections.push(
+          isTextFile(cleanPath)
+            ? `- Local File: ${cleanPath} (Desktop file reference)`
+            : `- Local File: ${cleanPath} [Binary / non-text file]`
+        );
       } else {
         // Web URL metadata only (D-12)
         try {

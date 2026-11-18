@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   serializeTaskContext,
   serializeChangeRequestContext,
@@ -203,7 +203,7 @@ describe('contextGrounding', () => {
       expect(prompt).toContain('External URL: https://example.com/api-docs');
     });
 
-    it('ingests local text file content up to 2,000 lines when Tauri invoke is available per D-11', async () => {
+    it('keeps only path metadata for local files (checkpoint 261118-cz2, no content reads)', async () => {
       const mockDb: any = {
         notes: {
           where: () => ({
@@ -223,22 +223,14 @@ describe('contextGrounding', () => {
         },
       };
 
-      const mockFileRead = vi.fn().mockImplementation(async (filePath: string) => {
-        if (filePath.endsWith('auth.ts')) {
-          return 'export function refreshToken() {\n  return "token";\n}';
-        }
-        return null;
-      });
-
       const prompt = await buildItemContextPrompt({
         entityType: 'task',
         item: mockTask,
         db: mockDb,
-        fileReader: mockFileRead,
       });
 
-      expect(prompt).toContain('/local/workspace/auth.ts');
-      expect(prompt).toContain('export function refreshToken()');
+      expect(prompt).toContain('- Local File: /local/workspace/auth.ts (Desktop file reference)');
+      expect(prompt).not.toContain('export function refreshToken()');
       expect(prompt).toContain('/local/workspace/logo.png'); // binary file - metadata only
       expect(prompt).toContain('[Binary / non-text file]');
     });

@@ -152,6 +152,21 @@ export const AI_CHAT_WIDTH_KEY = 'planner:ai_chat_width';
 export const AI_AUTO_APPROVE_MUTATIONS_KEY = 'planner:ai_auto_approve_mutations';
 export const AI_ANALYSIS_MODE_KEY = 'planner:ai_analysis_mode';
 export const AI_TAB_ANALYSIS_MODES_KEY = 'planner:ai_tab_analysis_modes';
+
+/**
+ * Checkpoint 261118-cz2 decision `browser-filereader`: TaskMate never reads local file
+ * CONTENT itself (no Rust/Tauri read command). The OS dialog / attachment UI only records the
+ * file name/path. To use the content, the user must explicitly pick the file again through the
+ * browser file input in the composer, which reads it client-side via FileReader under a hard size
+ * cap and sanitizes it before it enters the prompt. Pinned as a constant so tests can assert the
+ * prompt contract without rendering the whole drawer.
+ */
+export const REFERENCED_FILES_HINT =
+  'TaskMate does not read local file content itself. Only the file name/path above is known to the AI. ' +
+  'To use a file’s content, the user must explicitly choose the same file again through the browser file input in the composer; ' +
+  'TaskMate then reads it client-side and sanitizes it before adding it to this chat. ' +
+  'Do not claim to have read, or ask for, local file content that was not provided in the conversation. ' +
+  'For remote paths, use the SSH FS tools.';
 const DRAWER_QUICK_PROMPTS = [
   { id: 'plan-today', label: 'Lập kế hoạch hôm nay', prompt: 'Lập kế hoạch công việc hôm nay' },
   { id: 'status', label: 'Báo cáo tiến độ', prompt: 'Báo cáo tiến độ hiện tại' },
@@ -1781,7 +1796,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       }
       if (allFiles.length > 0) {
         const filesList = allFiles.map((filePath) => `- \`${filePath}\``).join('\n');
-        const filesPrompt = `<referenced_files>\n[User Attached & Referenced Local Files]:\nThe following local files are attached to this chat session:\n${filesList}\nTo inspect their contents or specific lines, you have access to the \`read_file\` tool. Call \`read_file(filePath: "...", offset: 1, limit: 500)\` as needed to fulfill the request.\n</referenced_files>`;
+        const filesPrompt = `<referenced_files>\n[User Attached & Referenced Local Files]:\nThe following local files are attached to this chat session (name/path only):\n${filesList}\n${REFERENCED_FILES_HINT}\n</referenced_files>`;
         systemInstruction = systemInstruction ? `${systemInstruction}\n\n${filesPrompt}` : filesPrompt;
       }
 
@@ -1850,13 +1865,13 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         turnAnalysisMode
           ? `\n\n[ANALYSIS MODE ACTIVE]:
 PREFER READ-ONLY:
-This turn prioritizes retrieval, reading local files, reasoning, comparison, and artifact generation with \`generate_file\`, \`generate_pptx\`, or \`generate_image\`.
+This turn prioritizes retrieval, reasoning, comparison, and artifact generation with \`generate_file\`, \`generate_pptx\`, or \`generate_image\`.
 Rules:
 1. Prefer read-only tools. A mutation (task, change request, timer, note, capacity, document link, MCP-backed data) is allowed when the user asks for it; unless auto-approve is on, it is shown to the user for approval before it is applied — never claim a change was made before the approval card is accepted.
 2. Use the \`retrieve_knowledge\` tool repeatedly to gather evidence. Keep each query short and focused (<= 200 characters): an entity name, an identifier, or a narrow topic phrase. Split broad questions into multiple focused queries instead of one long query.
 3. If a retrieval returns only entity names with no excerpts, retry using the entity name itself as the query.
-4. Read attached local files with \`read_file\` FIRST (offset/limit pagination) before answering about them.
-5. Ground every factual claim in retrieved excerpts or file content. Clearly mark your own reasoning, assumptions, and proposals as such.
+4. Attached files provide a name/path only. TaskMate never reads local file content itself; use only content the user explicitly supplied via the browser file input (or an SSH FS tool for a remote path), never assume local content.
+5. Ground every factual claim in retrieved excerpts or user-supplied file content. Clearly mark your own reasoning, assumptions, and proposals as such.
 6. End the answer with a short "Nguồn" (Sources) list naming the documents/files you used.`
           : ''
       }${conventionsSegment ? `\n\n${conventionsSegment}` : ''}`;

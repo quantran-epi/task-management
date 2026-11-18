@@ -40,7 +40,6 @@ export const EMPLOYEE_READ_ONLY_ALLOWLIST: readonly string[] = [
   'search_knowledge_base',
   'retrieve_knowledge',
   'get_document_details',
-  'read_file',
 ];
 
 /**

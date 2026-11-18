@@ -194,52 +194,6 @@ pub fn select_local_file() -> Result<Option<String>, String> {
         .map(|path| path.to_string_lossy().to_string()))
 }
 
-#[tauri::command]
-pub fn read_local_file_text_head(file_path: String, max_lines: usize) -> Result<String, String> {
-    let trimmed = file_path.trim();
-    if trimmed.is_empty() {
-        return Err("Path cannot be empty".to_string());
-    }
-
-    let mut clean_path = trimmed;
-    if clean_path.to_lowercase().starts_with("file://") {
-        clean_path = &clean_path[7..];
-        #[cfg(target_os = "windows")]
-        if clean_path.starts_with('/') && clean_path.len() > 3 && clean_path.chars().nth(2) == Some(':') {
-            clean_path = &clean_path[1..];
-        }
-    }
-
-    let path = std::path::Path::new(clean_path);
-    if !path.exists() {
-        return Err(format!("File does not exist: {}", clean_path));
-    }
-    if !path.is_file() {
-        return Err(format!("Path is not a regular file: {}", clean_path));
-    }
-
-    // Security mitigation T-13.2-05: Block sensitive paths
-    let path_str = clean_path.replace('\\', "/");
-    let lower_path = path_str.to_lowercase();
-    if lower_path.contains("/.ssh/") || lower_path.contains("/.gnupg/") || lower_path.contains("/.env") {
-        return Err("Access to sensitive system or credential files is blocked".to_string());
-    }
-
-    use std::io::{BufRead, BufReader};
-    let file = std::fs::File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
-    let reader = BufReader::new(file);
-
-    let limit = if max_lines == 0 { 2000 } else { max_lines.min(2000) };
-    let mut lines = Vec::new();
-
-    for line_result in reader.lines().take(limit) {
-        let line = line_result.map_err(|e| format!("Failed to read file as text: {}", e))?;
-        lines.push(line);
-    }
-
-    Ok(lines.join("\n"))
-}
-
 fn resolve_claude_working_dir(path: &str) -> Result<std::path::PathBuf, String> {
     let clean_path = clean_file_uri_path(path)?;
     let p = std::path::Path::new(&clean_path);
@@ -373,18 +327,6 @@ pub struct PathSuggestion {
     pub is_dir: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct FileSliceResult {
-    pub file_path: String,
-    pub lines_read: usize,
-    pub total_lines_est: usize,
-    pub offset: usize,
-    pub truncated: bool,
-    pub content: String,
-    pub is_binary: bool,
-}
-
 fn expand_tilde_path(path_str: &str) -> String {
     if path_str == "~" || path_str.starts_with("~/") || path_str.starts_with("~\\") {
         if let Ok(home) = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")) {
@@ -455,115 +397,6 @@ pub fn complete_local_path(input: String) -> Result<Vec<PathSuggestion>, String>
     Ok(suggestions)
 }
 
-#[tauri::command]
-pub fn read_local_file_slice(
-    file_path: String,
-    offset: Option<usize>,
-    limit: Option<usize>,
-) -> Result<FileSliceResult, String> {
-    let trimmed = file_path.trim();
-    if trimmed.is_empty() {
-        return Err("Path cannot be empty".to_string());
-    }
-
-    let mut clean_path = trimmed;
-    if clean_path.to_lowercase().starts_with("file://") {
-        clean_path = &clean_path[7..];
-        #[cfg(target_os = "windows")]
-        if clean_path.starts_with('/') && clean_path.len() > 3 && clean_path.chars().nth(2) == Some(':') {
-            clean_path = &clean_path[1..];
-        }
-    }
-
-    let expanded = expand_tilde_path(clean_path);
-    let path = std::path::Path::new(&expanded);
-
-    if !path.exists() {
-        return Err(format!("File does not exist: {}", expanded));
-    }
-    if !path.is_file() {
-        return Err(format!("Path is not a regular file: {}", expanded));
-    }
-
-    // Security check: Block sensitive credential paths
-    let path_str = expanded.replace('\\', "/");
-    let lower_path = path_str.to_lowercase();
-    if lower_path.contains("/.ssh/") || lower_path.contains("/.gnupg/") || lower_path.contains("/.env") {
-        return Err("Access to sensitive system or credential files is blocked".to_string());
-    }
-
-    let metadata = std::fs::metadata(path).map_err(|e| format!("Failed to read metadata: {}", e))?;
-    let file_len = metadata.len();
-    if file_len > 20 * 1024 * 1024 {
-        return Err(format!("File too large (>20MB): {}", expanded));
-    }
-
-    use std::io::{BufRead, BufReader, Read};
-    let mut file = std::fs::File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
-
-    // Check if binary by reading first 1024 bytes
-    let mut probe_buf = [0u8; 1024];
-    let bytes_read = file.read(&mut probe_buf).unwrap_or(0);
-    let is_binary = probe_buf[..bytes_read].contains(&0u8);
-
-    if is_binary {
-        return Ok(FileSliceResult {
-            file_path: expanded,
-            lines_read: 0,
-            total_lines_est: 0,
-            offset: 1,
-            truncated: false,
-            content: "[Binary file - cannot display content as text]".to_string(),
-            is_binary: true,
-        });
-    }
-
-    // Reopen for line streaming
-    drop(file);
-    let file = std::fs::File::open(path).map_err(|e| format!("Failed to reopen file: {}", e))?;
-    let reader = BufReader::new(file);
-
-    let start_offset = offset.unwrap_or(1).max(1);
-    let max_lines = limit.unwrap_or(500).min(2000);
-
-    let mut lines_output = Vec::new();
-    let mut current_line_num = 0usize;
-    let mut lines_read_count = 0usize;
-    let mut truncated = false;
-
-    for line_res in reader.lines() {
-        current_line_num += 1;
-        let line = match line_res {
-            Ok(l) => l,
-            Err(_) => {
-                truncated = true;
-                break;
-            }
-        };
-
-        if current_line_num < start_offset {
-            continue;
-        }
-
-        if lines_read_count >= max_lines {
-            truncated = true;
-            break;
-        }
-
-        lines_output.push(format!("{:6}\t{}", current_line_num, line));
-        lines_read_count += 1;
-    }
-
-    Ok(FileSliceResult {
-        file_path: expanded,
-        lines_read: lines_read_count,
-        total_lines_est: current_line_num,
-        offset: start_offset,
-        truncated,
-        content: lines_output.join("\n"),
-        is_binary: false,
-    })
-}
 #[cfg(test)]
 mod launch_claude_local_path_tests {
     use super::*;

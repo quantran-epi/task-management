@@ -20,6 +20,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Task, ChangeRequest, System, Note } from '../../types/models';
 import { isTauriApp } from '../../utils/timerPopout';
+import { readBrowserFileText } from '../../services/ai/browserFileReader';
 import { agentColorFor, agentTextColorFor } from './office/AgentAttributionRow';
 
 export interface ChatInputBarProps {
@@ -229,17 +230,36 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           }, 50);
         }
       } else {
+        // Browser path: attach metadata AND, only after the user explicitly confirms, read the
+        // file content client-side via FileReader (no Rust/Tauri read command — checkpoint cz2).
         const input = document.createElement('input');
         input.type = 'file';
-        input.onchange = (e: any) => {
-          const file = e.target?.files?.[0];
-          if (file) {
-            if (onAttachFile) {
-              onAttachFile(file.name);
-            } else {
-              const ref = `[${file.name}](file:${file.name}) `;
-              update(effectiveValue ? `${effectiveValue.trimEnd()} ${ref}` : ref);
-            }
+        input.onchange = async (e: any) => {
+          const file = e.target?.files?.[0] as File | undefined;
+          if (!file) return;
+
+          if (onAttachFile) {
+            onAttachFile(file.name);
+          } else {
+            const ref = `[${file.name}](file:${file.name}) `;
+            update(effectiveValue ? `${effectiveValue.trimEnd()} ${ref}` : ref);
+          }
+
+          const confirmed =
+            typeof window === 'undefined' ||
+            typeof window.confirm !== 'function' ||
+            window.confirm(
+              `Đọc nội dung "${file.name}" để đưa vào ngữ cảnh AI? TaskMate chỉ đọc khi bạn xác nhận.`,
+            );
+          if (!confirmed) return;
+
+          try {
+            const result = await readBrowserFileText(file);
+            const block =
+              `<file_content name="${result.fileName}">\n${result.content}\n</file_content> `;
+            update((effectiveValue || '').trimEnd() ? `${(effectiveValue || '').trimEnd()}\n${block}` : block);
+          } catch (err: any) {
+            console.warn('[ChatInputBar] Browser file read failed:', err?.message || err);
           }
         };
         input.click();

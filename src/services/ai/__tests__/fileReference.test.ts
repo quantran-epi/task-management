@@ -41,30 +41,19 @@ describe('AI File Reference & Grounding', () => {
     });
   });
 
-  describe('read_file AI Tool Definition & Execution', () => {
-    it('defines read_file in AI_DATABASE_TOOLS with offset and limit parameters', () => {
+  describe('local read_file tool removed (checkpoint 261118-cz2)', () => {
+    it('does not advertise read_file in AI_DATABASE_TOOLS', () => {
       const readFileTool = AI_DATABASE_TOOLS.find((t) => t.function.name === 'read_file');
-      expect(readFileTool).toBeDefined();
-      expect(readFileTool?.function.parameters.required).toContain('filePath');
-      expect(readFileTool?.function.parameters.properties.offset).toBeDefined();
-      expect(readFileTool?.function.parameters.properties.limit).toBeDefined();
+      expect(readFileTool).toBeUndefined();
     });
 
-    it('returns error when filePath is omitted', async () => {
-      const mockDb = {} as TaskPlannerDatabase;
-      const res = await executeAiTool('read_file', {}, mockDb);
-      const parsed = JSON.parse(res);
-
-      expect(parsed.error).toContain('filePath parameter is required');
-    });
-
-    it('returns non-Tauri browser sandbox explanation when not in Tauri', async () => {
+    it('refuses read_file execution as an unknown tool', async () => {
       const mockDb = {} as TaskPlannerDatabase;
       const res = await executeAiTool('read_file', { filePath: '/Users/test/file.txt' }, mockDb);
       const parsed = JSON.parse(res);
 
-      expect(parsed.error).toContain('Tauri desktop app');
-      expect(parsed.filePath).toBe('/Users/test/file.txt');
+      expect(parsed.error).toMatch(/unknown tool/i);
+      expect(res).not.toContain('refreshToken');
     });
   });
 
