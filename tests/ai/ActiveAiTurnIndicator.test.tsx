@@ -1,8 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { ActiveAiTurnIndicator } from '../../src/components/ai/ActiveAiTurnIndicator';
 import { BudgetTopUpModal } from '../../src/components/ai/office/BudgetTopUpModal';
 import { aiTurnManager } from '../../src/services/ai/aiTurnManager';
+import { useLayoutStore } from '../../src/workbench/store/layoutStore';
+
+// The tab label must come from the authoritative team row, not the turn's agent-derived title.
+vi.mock('../../src/db/repositories/aiTeamRepo', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/db/repositories/aiTeamRepo')>();
+  return {
+    ...actual,
+    getTeam: vi.fn(async (id: string) => ({ id, name: 'Nhóm Alpha' } as any)),
+  };
+});
 
 describe('ActiveAiTurnIndicator', () => {
   beforeEach(() => {
@@ -111,6 +121,69 @@ describe('ActiveAiTurnIndicator', () => {
 
     expect(screen.queryByTestId('team-run-capsule')).toBeNull();
     expect(screen.getByTestId('ai-turn-spinner')).toBeInTheDocument();
+  });
+
+  /**
+   * Regression: clicking an individual AGENT's progress turn used to name the
+   * team_workspace tab after the agent (`turn.title`), not after the chat group.
+   * Both the compact footer indicator and the default (chat-panel) indicator
+   * share this handler, so both mount modes are asserted.
+   */
+  it.each([
+    ['footer compact', true],
+    ['chat panel default', false],
+  ])('opens the chat group tab named after the team from the %s indicator', async (_label, compact) => {
+    useLayoutStore.getState().resetLayout();
+    act(() => {
+      aiTurnManager.registerTurn({
+        id: 'team:team-1:agent:agent-1',
+        scopeKey: 'team-1',
+        title: 'An', // agent name — must NOT become the tab label
+        status: 'streaming',
+        streamingStatusLabel: 'Đang làm việc',
+        abort: vi.fn(),
+      });
+    });
+
+    render(<ActiveAiTurnIndicator compact={compact} />);
+    fireEvent.click(screen.getByTestId('active-ai-turn-capsule'));
+
+    await waitFor(() => {
+      const tab = useLayoutStore.getState().openTabs.find((t) => t.id === 'team_workspace:team-1');
+      expect(tab).toBeDefined();
+      expect(tab!.title).toBe('Nhóm Alpha'); // authoritative team name
+      expect(tab!.title).not.toBe('An');
+    });
+    expect(useLayoutStore.getState().activeTabId).toBe('team_workspace:team-1');
+  });
+
+  it('corrects a stale agent-named tab to the team name when clicked', async () => {
+    useLayoutStore.getState().resetLayout();
+    act(() => {
+      useLayoutStore.getState().openTab({
+        id: 'team_workspace:team-1',
+        title: 'An',
+        viewType: 'team_workspace',
+        closable: true,
+        params: { teamId: 'team-1' },
+      });
+      aiTurnManager.registerTurn({
+        id: 'team:team-1:agent:agent-1',
+        scopeKey: 'team-1',
+        title: 'An',
+        status: 'streaming',
+        streamingStatusLabel: 'Đang làm việc',
+        abort: vi.fn(),
+      });
+    });
+
+    render(<ActiveAiTurnIndicator compact />);
+    fireEvent.click(screen.getByTestId('active-ai-turn-capsule'));
+
+    await waitFor(() => {
+      const tab = useLayoutStore.getState().openTabs.find((t) => t.id === 'team_workspace:team-1');
+      expect(tab!.title).toBe('Nhóm Alpha');
+    });
   });
 });
 

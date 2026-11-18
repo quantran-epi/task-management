@@ -5,6 +5,7 @@ import { aiTurnManager, useActiveAiTurns, type ActiveAiTurn } from '../../servic
 import { formatElapsedTicker } from '../../utils/time';
 import { useAIChat } from '../../context/AIChatContext';
 import { useLayoutStore } from '../../workbench/store/layoutStore';
+import { getTeam } from '../../db/repositories/aiTeamRepo';
 
 export interface ActiveAiTurnIndicatorProps {
   compact?: boolean;
@@ -33,20 +34,32 @@ export const ActiveAiTurnIndicator: React.FC<ActiveAiTurnIndicatorProps> = ({ co
     if (isTeam) {
       const teamId = (turn?.scopeKey ?? turn?.id ?? '').replace(/^team:/, '').split(':')[0];
       if (teamId) {
-        const { openTab, setActiveTabId, openTabs } = useLayoutStore.getState();
-        const tabId = `team_workspace:${teamId}`;
-        const existing = openTabs.find((t) => t.id === tabId);
-        if (existing) {
-          setActiveTabId(tabId);
-        } else {
+        const focusTeamTab = (groupName: string) => {
+          const { openTab } = useLayoutStore.getState();
+          const tabId = `team_workspace:${teamId}`;
+          // Always go through openTab so an existing tab whose title was set from an
+          // individual agent turn is corrected to the chat group's name. openTab also
+          // focuses the tab (sets activeTabId), covering both create and focus paths.
           openTab({
             id: tabId,
-            title: turn?.title || 'Nhóm AI',
+            title: groupName,
             viewType: 'team_workspace',
             closable: true,
             params: { teamId },
           });
-        }
+        };
+
+        // The chat group's name is authoritative on the AiTeam row. A turn's `title`
+        // may be an individual agent's name (agent turns) and must never label the tab.
+        const existingTabTitle = useLayoutStore
+          .getState()
+          .openTabs.find((t) => t.id === `team_workspace:${teamId}`)?.title;
+        const fallbackTitle = existingTabTitle && existingTabTitle !== turn?.title
+          ? existingTabTitle
+          : 'Nhóm AI';
+        void getTeam(teamId)
+          .then((team) => focusTeamTab(team?.name || fallbackTitle))
+          .catch(() => focusTeamTab(fallbackTitle));
         return;
       }
     }
