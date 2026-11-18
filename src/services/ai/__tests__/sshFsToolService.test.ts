@@ -20,7 +20,6 @@ describe('sshFsToolService', () => {
     vi.clearAllMocks();
 
     mockFsConfig = {
-      enabled: true,
       sshConfigId: 'ssh-1',
       defaultBasePath: '/var/log',
       maxLinesPerRead: 100,
@@ -85,11 +84,10 @@ describe('sshFsToolService', () => {
   });
 
   describe('executeSshListDir', () => {
-    it('returns error when tool is disabled', async () => {
-      mockFsConfig.enabled = false;
-      const res = JSON.parse(await executeSshListDir({ path: '/var/log' }, mockDb));
-      expect(res.success).toBe(false);
-      expect(res.error).toContain('chưa được bật');
+    it('has no global enable flag (per-team gating replaced it)', async () => {
+      // Quick cz2: `enabled` was removed from SshFsToolConfig; enablement is a per-team row flag
+      // and payload gating lives in chatTurnTools. Execution only checks config/Tauri readiness.
+      expect('enabled' in mockFsConfig).toBe(false);
     });
 
     it('returns error when sshConfigId is not found', async () => {
