@@ -92,6 +92,40 @@ pub struct SshStreamExitEvent {
 }
 
 pub fn connect_and_auth(config: &SshConfig, secret: Option<&str>) -> Result<ssh2::Session, String> {
+    connect_and_auth_inner(config, secret, SocketTimeout::Interactive)
+}
+
+/// Variant for long-running tool tasks: NO socket read timeout. A 30s socket error used to
+/// become `Done{error}` even though the user never cancelled — forbidden by the lifecycle
+/// contract. Only an explicit `cancel_tool_call` may end a tool task.
+pub fn connect_and_auth_without_socket_timeout(
+    config: &SshConfig,
+    secret: Option<&str>,
+) -> Result<ssh2::Session, String> {
+    connect_and_auth_inner(config, secret, SocketTimeout::None)
+}
+
+/// Tool-task reader path: a SHORT socket read timeout is only a wake-up so the reader can
+/// observe the cancel token. It is NOT a deadline — a timeout error is ignored and the loop
+/// continues. No `Done{error}` may ever come from this wake-up.
+pub fn connect_and_auth_tool_task(
+    config: &SshConfig,
+    secret: Option<&str>,
+) -> Result<ssh2::Session, String> {
+    connect_and_auth_inner(config, secret, SocketTimeout::Wakeup)
+}
+
+enum SocketTimeout {
+    None,
+    Interactive,
+    Wakeup,
+}
+
+fn connect_and_auth_inner(
+    config: &SshConfig,
+    secret: Option<&str>,
+    socket_timeout: SocketTimeout,
+) -> Result<ssh2::Session, String> {
     let host = config.host.trim();
     if host.is_empty() {
         return Err("SSH Host không được để trống".to_string());
@@ -120,8 +154,17 @@ pub fn connect_and_auth(config: &SshConfig, secret: Option<&str>) -> Result<ssh2
     }
 
     let tcp = tcp_opt.ok_or_else(|| format!("Kết nối TCP tới {}:{} thất bại (timeout 10s)", host, config.port))?;
-    let _ = tcp.set_read_timeout(Some(Duration::from_secs(30)));
-    let _ = tcp.set_write_timeout(Some(Duration::from_secs(30)));
+    match socket_timeout {
+        SocketTimeout::None => {}
+        SocketTimeout::Interactive => {
+            let _ = tcp.set_read_timeout(Some(Duration::from_secs(30)));
+            let _ = tcp.set_write_timeout(Some(Duration::from_secs(30)));
+        }
+        SocketTimeout::Wakeup => {
+            // Wake-up only: the reader treats a timeout as "check token, loop again".
+            let _ = tcp.set_read_timeout(Some(Duration::from_millis(250)));
+        }
+    }
 
     let mut session = ssh2::Session::new().map_err(|e| format!("Khởi tạo SSH session thất bại: {}", e))?;
     session.set_tcp_stream(tcp);
@@ -398,6 +441,7 @@ pub fn ssh_exec_command(
     call_id: String,
 ) -> Result<CommandOutput, String> {
     let registry = app.state::<crate::tool_cancel::ToolTaskRegistry>();
+    // Tool task path: no socket read timeout — only explicit cancel/app exit may stop it.
     let out = crate::tool_cancel::run_cancellable_remote_command(
         &registry,
         app,
@@ -427,12 +471,15 @@ pub fn ssh_exec_stream(
     session_id: String,
     command: String,
 ) -> Result<(), String> {
-    let session = connect_and_auth(&config, secret.as_deref())?;
+    // Streamed tools also run indefinitely: no socket read timeout may end them.
+    let session = connect_and_auth_without_socket_timeout(&config, secret.as_deref())?;
     let mut channel = session
         .channel_session()
         .map_err(|e| format!("Không thể mở channel session: {}", e))?;
 
-    let remote_command = format!("echo $$ && {}", command);
+    // `setsid` makes the reported pid a real process-group leader, so the id-only
+    // `ssh_kill_process` can terminate the whole job with `kill -<pgid>`.
+    let remote_command = format!("setsid sh -c 'echo $$; exec {}'", command);
     channel
         .exec(&remote_command)
         .map_err(|e| format!("Thực thi lệnh stream thất bại: {}", e))?;
@@ -555,20 +602,20 @@ pub fn ssh_kill_process(
         return Ok(());
     };
 
-    let session = connect_and_auth(&config, secret.as_deref())?;
-    let mut channel = session
-        .channel_session()
-        .map_err(|e| format!("Không thể mở channel session: {}", e))?;
-    // Negative PID targets the process group, so children the agent spawned die with it.
-    // The command is started via `setsid` (see `buildResearchCommand`), which makes the
-    // PID its own PGID.
-    channel
-        .exec(&format!("kill -TERM -{} 2>/dev/null || kill -TERM {}", pid, pid))
-        .map_err(|e| format!("Không thể gửi SIGTERM tới PID {}: {}", pid, e))?;
-
-    let mut sink = String::new();
-    let _ = channel.read_to_string(&mut sink);
-    let _ = channel.wait_close();
+    // Fire-and-forget kill: Cancel/app-exit must not block the event loop on SSH.
+    let config_clone = config.clone();
+    let secret_clone = secret.clone();
+    thread::Builder::new()
+        .name(format!("ssh-kill-{}", pid))
+        .spawn(move || {
+            let Ok(session) = connect_and_auth_without_socket_timeout(&config_clone, secret_clone.as_deref()) else { return };
+            let Ok(mut channel) = session.channel_session() else { return };
+            // Negative pid targets the process group (setsid made this pid its leader).
+            let _ = channel.exec(&format!("kill -TERM -{} 2>/dev/null || true", pid));
+            let mut sink = Vec::new();
+            let _ = channel.read_to_end(&mut sink);
+        })
+        .map_err(|e| format!("Không thể tạo thread hủy process: {}", e))?;
 
     if let Ok(mut procs) = registry.active_processes.lock() {
         procs.remove(&session_id);
