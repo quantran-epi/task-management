@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 11
+open_count: 12
 waived_count: 0
 fixed_count: 0
-total_count: 11
-last_updated: 2026-11-17T08:05:54.170Z
+total_count: 12
+last_updated: 2026-11-18T02:03:33.414Z
 ---
 
 # Broken Windows Ledger
@@ -26,6 +26,7 @@ last_updated: 2026-11-17T08:05:54.170Z
 | 9 | 37 | skipped-test | tests/services/ai/office/teamRunCoordinator.test.ts | 768 | pauses one agent at 80% flakes ~3/4 runs (expected undefined to be 'running'); reproduces on base 86de027c without this plan's changes | open |  | 2026-11-11T21:35:45.233Z |  |
 | 10 | 37 | unrun-verify |  |  | 37-08 task 2: six-observation Tauri walkthrough not performed (headless executor, no observable GUI window) | open |  | 2026-11-11T21:39:49.442Z |  |
 | 11 | 28 | unrun-verify | tests/ai/AIChatDrawerGroundedWiring.test.tsx |  | 6 pre-existing drawer wiring tests fail at stock HEAD in isolated worktree (React/dnd-kit useMemo null / DatabaseClosedError); documented in deferred-items.md, not caused by 28-04 | open |  | 2026-11-17T08:05:54.170Z |  |
+| 12 | quick-261118-c0y | unrun-verify | tests/views/SettingsView.test.tsx |  | Pre-existing intermittent DatabaseClosedError unhandled rejection from McpConfigCard on DB close; reproduces at pristine HEAD independent of this plan. Out of scope. | open |  | 2026-11-18T02:03:33.414Z |  |
 
 ````json
 [
@@ -169,6 +170,19 @@ last_updated: 2026-11-17T08:05:54.170Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-11-17T08:05:54.170Z",
+    "resolved_at": null,
+    "milestone": "v1.4"
+  },
+  {
+    "id": 12,
+    "kind": "unrun-verify",
+    "phase": "quick-261118-c0y",
+    "file": "tests/views/SettingsView.test.tsx",
+    "line": null,
+    "description": "Pre-existing intermittent DatabaseClosedError unhandled rejection from McpConfigCard on DB close; reproduces at pristine HEAD independent of this plan. Out of scope.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-11-18T02:03:33.414Z",
     "resolved_at": null,
     "milestone": "v1.4"
   }
