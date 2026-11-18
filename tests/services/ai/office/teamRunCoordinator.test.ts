@@ -644,6 +644,99 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(gitCtx.at(-1)!.repoHints).toEqual(expect.arrayContaining(['CORE']));
     });
 
+    it('keeps each concurrent turn\'s repoHints isolated per agent', async () => {
+      // Regression for the review warning on 9fe20adf: `repoHints` used to be one shared
+      // variable overwritten by whichever turn computed hints last. Two overlapping employee
+      // turns (A mentions CORE, B mentions PAY) must each keep their OWN hint in every team-tool
+      // context, even though B computes and runs its hints while A is parked.
+      const now = new Date().toISOString();
+      const aBlocked = deferred();
+      let aReleased = false;
+      let aStarted = false;
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async () => loopResult('lead'),
+          [EMP_A_MODEL]: async (options) => {
+            // Park A BEFORE its tool call: with the old shared `repoHints`, B's later computation
+            // overwrote the variable, so A's git_read (issued after this gate) saw PAY, not CORE.
+            aStarted = true;
+            if (!aReleased) await aBlocked.promise;
+            await options.executeToolFn!(
+              'git_read',
+              { action: 'status' },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('A xong');
+          },
+          [EMP_B_MODEL]: async (options) => {
+            await options.executeToolFn!(
+              'git_read',
+              { action: 'status' },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('B xong');
+          },
+        },
+      });
+      await harness.db.systems.bulkAdd([
+        {
+          id: 'sys-catalog-core',
+          name: 'Hệ thống lõi',
+          code: 'CORE',
+          parentId: null,
+          type: 'SERVICE',
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: 'sys-catalog-pay',
+          name: 'Thanh toán',
+          code: 'PAY',
+          parentId: null,
+          type: 'SERVICE',
+          createdAt: now,
+          updatedAt: now,
+        },
+      ]);
+      const { coordinator, employees } = harness;
+      const aId = employees[0]!.id;
+      const bId = employees[1]!.id;
+
+      // Start A (parked inside git_read). Then run B to completion while A is still parked.
+      const aSend = coordinator.send('@[An](agent:' + aId + ') kiểm tra CORE giúp');
+      await waitFor(() => aStarted);
+      await coordinator.send('@[Bình](agent:' + bId + ') kiểm tra PAY giúp');
+      await waitFor(() =>
+        teamToolContexts.some((entry) => entry.agentId === bId && entry.repoHints?.includes('PAY'))
+      );
+
+      // Release A only after B's turn has stored and read its own hint.
+      aReleased = true;
+      aBlocked.release();
+      await aSend;
+      await waitForReady(coordinator);
+
+      const aCtx = teamToolContexts.filter((entry) => entry.agentId === aId);
+      const bCtx = teamToolContexts.filter((entry) => entry.agentId === bId);
+      expect(aCtx.length).toBeGreaterThan(0);
+      expect(bCtx.length).toBeGreaterThan(0);
+      // Each turn's contexts keep that turn's OWN hint. With the old shared `repoHints`, B's
+      // later computation overwrote A's value and A's parked tool callback saw PAY instead of
+      // CORE. A may also legitimately see PAY and B may see CORE via `recentTurns` (conversation
+      // history is a valid hint source) — the regression is the MISSING own-hint, checked here.
+      for (const entry of aCtx) {
+        expect(entry.repoHints).toEqual(expect.arrayContaining(['CORE']));
+      }
+      for (const entry of bCtx) {
+        expect(entry.repoHints).toEqual(expect.arrayContaining(['PAY']));
+      }
+      // Crucially, the two agents' snapshots differ: A was computed first and stayed isolated
+      // across B's turn, so A's set is not equal to B's later overwritten value.
+      expect(aCtx.at(-1)!.repoHints).not.toEqual(bCtx.at(-1)!.repoHints);
+    });
+
     it('has no React import', () => {
       const source = readFileSync(
         new URL('../../../../src/services/ai/office/teamRunCoordinator.ts', import.meta.url),

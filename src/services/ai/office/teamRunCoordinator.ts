@@ -751,12 +751,23 @@ export function createTeamRunCoordinator(
   const currentRequests = new Map<string, ChatTurnRequest>();
   const agentDeferreds = new Map<string, Deferred>();
   /**
-   * W1 follow-up: repo names/codes/path tails matched from the original request + the last few
-   * turns. Every `toolContext()` carries these so catalog-backed repo names mentioned only in
-   * conversation let `git_read` resolve without an explicit arg or a team link. Matching only
-   * emits ALREADY-KNOWN catalog terms; ambiguity is left to the resolver's `pickMatch()`.
+   * W1 follow-up: repo names/codes/path tails matched from the turn's request + its recent
+   * turns. Every `toolContext()` carries these (as an explicit argument) so catalog-backed repo
+   * names mentioned only in conversation let `git_read` resolve without an explicit arg or a
+   * team link. Matching only emits ALREADY-KNOWN catalog terms; ambiguity is left to the
+   * resolver's `pickMatch()`.
+   *
+   * Keyed by agentId because the scheduler runs several employees concurrently: a single shared
+   * variable let a later turn overwrite an earlier turn's hints before its tool callbacks fired.
+   * One runtime runs at most one turn at a time (`TURN_IN_PROGRESS`), so an agent's entry is that
+   * turn's immutable snapshot. The value is always forwarded into `toolContext` as a parameter —
+   * no tool callback reads this map directly.
    */
-  let repoHints: string[] = [];
+  const repoHintsByTurn = new Map<string, readonly string[]>();
+  const hintsForTurn = (agentId: string): readonly string[] => repoHintsByTurn.get(agentId) ?? [];
+  const setHintsForTurn = (agentId: string, hints: readonly string[]): void => {
+    repoHintsByTurn.set(agentId, hints);
+  };
   /** D-13: agents whose live-use claim is currently held (pairing guard for release). */
   const liveAgents = new Set<string>();
   /**
@@ -1298,6 +1309,7 @@ export function createTeamRunCoordinator(
 
   function toolContext(
     agentId: string,
+    repoHints: readonly string[],
     signal?: AbortSignal,
     loopCallId?: string
   ): TeamToolContext {
@@ -1328,7 +1340,7 @@ export function createTeamRunCoordinator(
       ...(liveTeam.docsFolderId ? { teamFolderId: liveTeam.docsFolderId } : {}),
       ...(signal ? { signal } : {}),
       ...(loopCallId ? { loopCallId } : {}),
-      ...(repoHints.length > 0 ? { repoHints } : {}),
+      ...(repoHints.length > 0 ? { repoHints: [...repoHints] } : {}),
     };
   }
 
@@ -1439,7 +1451,7 @@ export function createTeamRunCoordinator(
    * Three-tier dispatch. Tier 1 is the only place `delegate_batch` is ever executed; tier 2
    * keeps every other advertised team tool out of the dynamic-MCP fall-through.
    */
-  function makeExecuteToolFn(agentId: string) {
+  function makeExecuteToolFn(agentId: string, repoHints: readonly string[]) {
     return async (
       name: string,
       args: Record<string, any>,
@@ -1449,7 +1461,9 @@ export function createTeamRunCoordinator(
       loopCallId?: string
     ): Promise<string> => {
       const normalized = normalizeToolName(name);
-      const ctx = toolContext(agentId, signal, loopCallId);
+      // `repoHints` is this turn's immutable snapshot, captured when the loop started. No tool
+      // callback reads shared state, so a concurrent turn can never overwrite these hints.
+      const ctx = toolContext(agentId, repoHints, signal, loopCallId);
 
       if (normalized === 'delegate_batch') {
         if (!roster.lead || agentId !== roster.lead.id) return EMPLOYEE_DELEGATE_REFUSAL;
@@ -1500,11 +1514,16 @@ export function createTeamRunCoordinator(
         }
       },
       // The runtime builds its own `executeToolFn`; the only seam that reaches it is the loop.
-      runLoop: ((loopOptions) =>
-        innerRunLoop({
+      // `runLoop` is invoked once per turn, so capture this turn's hint snapshot here and close
+      // over it. A concurrent turn owns a different agentId entry (or a different runtime) and
+      // cannot rewrite the hints this turn's tool callbacks will see.
+      runLoop: ((loopOptions) => {
+        const turnHints = hintsForTurn(agentId);
+        return innerRunLoop({
           ...loopOptions,
-          executeToolFn: makeExecuteToolFn(agentId),
-        })) as ChatTurnRuntimeDeps['runLoop'],
+          executeToolFn: makeExecuteToolFn(agentId, turnHints),
+        });
+      }) as ChatTurnRuntimeDeps['runLoop'],
       /**
        * D-22: TAG the row the runtime wrote — it is the report row for the active attempt.
        * `runStatus: 'running'` is the correct INITIAL value for the live render;
@@ -2110,7 +2129,11 @@ export function createTeamRunCoordinator(
   async function loadLinkedItems(): Promise<LinkedItemIndexEntry[]> {
     if (!roster.lead) return [];
     try {
-      const raw = await executeTeamTool('list_linked_items', {}, toolContext(roster.lead.id));
+      const raw = await executeTeamTool(
+        'list_linked_items',
+        {},
+        toolContext(roster.lead.id, hintsForTurn(roster.lead.id))
+      );
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) return [];
       return parsed.map((item: any) => ({
@@ -2194,13 +2217,17 @@ export function createTeamRunCoordinator(
         // Fresh per turn so a convention edit in Settings reaches the very next message.
         // Resilient: an unreadable settings row must never block a team turn.
         getGlobalConventions(db).catch(() => ''),
-        db.systems.toArray(),
+        db.systems.toArray().catch(() => []),
       ]);
       // W1 follow-up: hints are fresh per turn so a repo first mentioned mid-conversation is
-      // usable by that same turn's git_read. A bad catalog read must not block the turn.
-      repoHints = extractRepoHintsFromText(
-        [originalRequest, ...recentTurns.map((row) => row.content)].join('\n'),
-        catalogSystems
+      // usable by that same turn's git_read. Keyed by agent so a concurrent turn cannot overwrite
+      // them; the loop captures this snapshot when it starts.
+      setHintsForTurn(
+        employee.id,
+        extractRepoHintsFromText(
+          [originalRequest, ...recentTurns.map((row) => row.content)].join('\n'),
+          catalogSystems
+        )
       );
       const conventionsSegment = buildConventionsSegment({ global: globalConventions });
       const skill = skillFor(employee);
@@ -2431,11 +2458,14 @@ export function createTeamRunCoordinator(
         listRecentBatches(options.threadId, BATCH_HISTORY_LIMIT, db),
         // Same single source of truth as every employee; resilient per turn.
         getGlobalConventions(db).catch(() => ''),
-        db.systems.toArray(),
+        db.systems.toArray().catch(() => []),
       ]);
-      repoHints = extractRepoHintsFromText(
-        [text, ...recentTurns.map((row) => row.content)].join('\n'),
-        catalogSystems
+      setHintsForTurn(
+        lead.id,
+        extractRepoHintsFromText(
+          [text, ...recentTurns.map((row) => row.content)].join('\n'),
+          catalogSystems
+        )
       );
       const conventionsSegment = buildConventionsSegment({ global: globalConventions });
       // Phase 41 D-07/D-16: the team folder is a READ fact for the leader (where the approved
@@ -2645,7 +2675,7 @@ export function createTeamRunCoordinator(
     const validation = await executeTeamTool(
       'amend_assignments',
       rawArgs,
-      toolContext(roster.lead!.id)
+      toolContext(roster.lead!.id, hintsForTurn(roster.lead!.id))
     );
     let parsed: any;
     try {
@@ -3029,7 +3059,11 @@ export function createTeamRunCoordinator(
     rawArgs: Record<string, any>
   ): Promise<string> {
     if (disposed) return DISPOSED_REFUSAL;
-    const validation = await executeTeamTool('send_message', rawArgs, toolContext(fromId));
+    const validation = await executeTeamTool(
+      'send_message',
+      rawArgs,
+      toolContext(fromId, hintsForTurn(fromId))
+    );
     let parsed: any;
     try {
       parsed = JSON.parse(validation);
@@ -3279,7 +3313,7 @@ export function createTeamRunCoordinator(
     const validation = await executeTeamTool(
       'delegate_batch',
       { assignments: rawAssignments },
-      toolContext(lead.id)
+      toolContext(lead.id, hintsForTurn(lead.id))
     );
     // CR-02: `executeTeamTool` is an await — a dispose that landed during it must not open
     // a batch or start agents against a deleted team.
