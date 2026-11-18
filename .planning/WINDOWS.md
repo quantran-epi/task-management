@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 12
+open_count: 14
 waived_count: 0
 fixed_count: 0
-total_count: 12
-last_updated: 2026-11-18T02:03:33.414Z
+total_count: 14
+last_updated: 2026-11-18T03:20:23.156Z
 ---
 
 # Broken Windows Ledger
@@ -27,6 +27,8 @@ last_updated: 2026-11-18T02:03:33.414Z
 | 10 | 37 | unrun-verify |  |  | 37-08 task 2: six-observation Tauri walkthrough not performed (headless executor, no observable GUI window) | open |  | 2026-11-11T21:39:49.442Z |  |
 | 11 | 28 | unrun-verify | tests/ai/AIChatDrawerGroundedWiring.test.tsx |  | 6 pre-existing drawer wiring tests fail at stock HEAD in isolated worktree (React/dnd-kit useMemo null / DatabaseClosedError); documented in deferred-items.md, not caused by 28-04 | open |  | 2026-11-17T08:05:54.170Z |  |
 | 12 | quick-261118-c0y | unrun-verify | tests/views/SettingsView.test.tsx |  | Pre-existing intermittent DatabaseClosedError unhandled rejection from McpConfigCard on DB close; reproduces at pristine HEAD independent of this plan. Out of scope. | open |  | 2026-11-18T02:03:33.414Z |  |
+| 13 | quick-261118-cz2 | unrun-verify | src-tauri/Cargo.toml |  | cargo check blocked by sandbox proxy (bit-vec v0.8.0 download); Rust compile unverified in this environment | open |  | 2026-11-18T03:20:22.976Z |  |
+| 14 | quick-261118-cz2 | deviation | tests/services/ai/office/teamRunCoordinator.test.ts |  | 4 timing-sensitive scheduler/R6 tests fail on baseline HEAD (pre-existing, out of scope) | open |  | 2026-11-18T03:20:23.156Z |  |
 
 ````json
 [
@@ -183,6 +185,32 @@ last_updated: 2026-11-18T02:03:33.414Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-11-18T02:03:33.414Z",
+    "resolved_at": null,
+    "milestone": "v1.4"
+  },
+  {
+    "id": 13,
+    "kind": "unrun-verify",
+    "phase": "quick-261118-cz2",
+    "file": "src-tauri/Cargo.toml",
+    "line": null,
+    "description": "cargo check blocked by sandbox proxy (bit-vec v0.8.0 download); Rust compile unverified in this environment",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-11-18T03:20:22.976Z",
+    "resolved_at": null,
+    "milestone": "v1.4"
+  },
+  {
+    "id": 14,
+    "kind": "deviation",
+    "phase": "quick-261118-cz2",
+    "file": "tests/services/ai/office/teamRunCoordinator.test.ts",
+    "line": null,
+    "description": "4 timing-sensitive scheduler/R6 tests fail on baseline HEAD (pre-existing, out of scope)",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-11-18T03:20:23.156Z",
     "resolved_at": null,
     "milestone": "v1.4"
   }

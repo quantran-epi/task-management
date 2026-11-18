@@ -98,6 +98,7 @@ Progress: [██████░░░░] 63%
 | 261117-ss8 | Thêm instrumentation/báo cáo lỗi đầy đủ cho mọi run agent/leader: mỗi tool call (explore_repo, write_doc, v.v.) phải ghi log có timestamp, source abort (user stop / batch deadline / dispose / turn end), tool name, duration, error code/detail, outcome; áp dụng cho mọi thể loại run agent/leader. Ghi nhận UAT abort 31fc8015. | 2026-11-17 | 76d5b87d | [261117-ss8-th-m-instrumentation-b-o-c-o-l-i-y-cho-m](./quick/261117-ss8-th-m-instrumentation-b-o-c-o-l-i-y-cho-m/) |
 | 261117-tpk | Tổ chức lại màn hình Settings TaskMate thành các nhóm chức năng rõ ràng (UI arrangement only, zero config/behavior change) | 2026-11-17 | 3378d2f6 | [261117-tpk-t-ch-c-l-i-m-n-h-nh-settings-taskmate-th](./quick/261117-tpk-t-ch-c-l-i-m-n-h-nh-settings-taskmate-th/) |
 | 261118-c0y | Settings > AI card liệt kê mọi AI tool kèm description, definition JSON schema và nơi dùng (built-in, team, MCP, Graphiti) | 2026-11-18 | 755f6b9f | [261118-c0y-add-a-settings-ai-card-that-lists-all-av](./quick/261118-c0y-add-a-settings-ai-card-that-lists-all-av/) |
+| 261118-cz2 | Bỏ local filesystem read khỏi AI flow; rename SSH tools; enable SSH/Oracle tool per team chat; gate payload theo enablement | 2026-11-18 | 742f3981 | [261118-cz2-remove-local-filesystem-reads-from-ai-to](./quick/261118-cz2-remove-local-filesystem-reads-from-ai-to/) |
 
 ## Accumulated Context
 
