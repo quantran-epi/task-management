@@ -26,7 +26,7 @@ use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter};
 
-use crate::ssh_service::connect_and_auth_tool_task;
+use crate::ssh_service::{connect_and_auth_tool_task, connect_and_auth_without_socket_timeout};
 use crate::ssh_service::SshConfig;
 
 /// How often the command thread wakes up only to check the cancel token. This is NOT a
@@ -205,6 +205,9 @@ fn kill_remote_process_group(config: &SshConfig, secret: Option<&str>, pgid: u32
 enum Chunk {
     Out(Vec<u8>),
     Err(Vec<u8>),
+    /// The reader discovered the remote PGID. The command thread owns the registry reference
+    /// and handles kill-on-cancel here; no borrowed registry is ever moved into a thread.
+    Pgid(u32),
     /// Reader exited. The command thread resolves ONLY after this message arrives.
     ReaderExited {
         exit_status: i32,
@@ -329,8 +332,6 @@ pub fn run_cancellable_remote_command(
         },
     );
 
-    let reader_call_id = call_id.clone();
-    let reader_registry = registry;
     let reader_cancelled = Arc::clone(&cancelled);
     thread::Builder::new()
         .name(format!("tool-reader-{}", call_id))
@@ -359,14 +360,9 @@ pub fn run_cancellable_remote_command(
                                 Some(idx) => {
                                     prefix.push_str(&String::from_utf8_lossy(&payload[..idx + 1]));
                                     if let Some(pgid) = read_pgid_line(&prefix) {
-                                        reader_registry.set_pgid(&reader_call_id, pgid);
-                                        // Cancel may have arrived before the PGID was known.
-                                        // Kill now so the blocking read unblocks.
-                                        if reader_cancelled.load(Ordering::SeqCst) {
-                                            if let Ok(Some(task)) = reader_registry.take_for_kill(&reader_call_id) {
-                                                let _ = task.kill_pgid(pgid);
-                                            }
-                                        }
+                                        // The command thread records the PGID in the registry
+                                        // and kills it if cancel arrived before discovery.
+                                        let _ = tx.send(Chunk::Pgid(pgid));
                                     }
                                     pgid_scanned = true;
                                     payload = &payload[idx + 1..];
@@ -456,6 +452,16 @@ pub fn run_cancellable_remote_command(
             Ok(Chunk::Err(bytes)) => {
                 stderr_coalescer.push(&bytes);
                 stderr.extend_from_slice(&bytes);
+            }
+            Ok(Chunk::Pgid(pgid)) => {
+                registry.set_pgid(&call_id, pgid);
+                // Cancel may have arrived before the PGID was known. Kill now so the
+                // reader's blocking read unblocks and the invoke can resolve.
+                if cancelled.load(Ordering::SeqCst) {
+                    if let Ok(Some(task)) = registry.take_for_kill(&call_id) {
+                        let _ = task.kill_pgid(pgid);
+                    }
+                }
             }
             // ONLY exit path: the reader thread has actually exited, so the invoke never
             // resolves while a read is still pending. A cancel flips the token, the kill
