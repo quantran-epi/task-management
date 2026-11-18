@@ -19,38 +19,6 @@ updated: 2026-11-18
 
 ## Current Focus
 
-### Branch B (mới, 2026-11-18) — Oracle tool treo app
-
-- user_feedback: "typing đã mượt, nhưng oracle tool call vẫn gây treo app" → Symptom 1 (render lag) CONFIRMED FIXED trên Tauri thật. Chuyển sang điều tra blind spot Symptom 2.
-- scope: Chỉ điều tra/fix cơ chế Oracle tool treo. Không đụng lại phần render đã xác nhận ổn.
-- bug_class: Bohrbug (deterministic — gọi Oracle tool treo theo latency SSH/SQLcl; read_to_end không bounded).
-- hypothesis: CONFIRMED (source evidence) — `ssh_exec_command` là Tauri command sync dùng `channel.read_to_end()` không có timeout/cancel; `config.timeoutSeconds: 30` tồn tại nhưng KHÔNG được dùng ở bất kỳ đâu trong đường gọi Oracle. Khi SQLcl treo, `await invoke('ssh_exec_command')` trong `execRemoteCommand` không resolve → `executeOracleQuery` không trả → tool event loop không kết thúc → turn treo. UI ProgressCard chỉ là clock hiển thị (`DEADLINE_NOTE`: "Hết giờ → báo cáo một phần...") không phải cơ chế cancel thực.
-- test: (1) regression test TS: mock `execRemoteCommand` treo vô hạn (`never-resolving promise`), verify `executeOracleQuery` vẫn trả `{success:false, error: timeout}` sau timeout; (2) Rust bounded read compile check; (3) focused tests + tsc; (4) commit + update session + push.
-- expecting: Oracle tool call có timeout thực (default 30s từ config, clamp 1..900) trả error `timeout` thay vì treo; Rust channel read có deadline và trả exit_status -1 + stderr message.
-- next_action: Viết regression test (RED) cho client-side watchdog trong oracleSqlclService.test.ts, sau đó implement fix 2 lớp (Rust bounded read + TS watchdog truyền timeoutSeconds).
-- reasoning_checkpoint:
-  hypothesis: "Oracle tool treo vì `ssh_exec_command` (sync Tauri command) dùng `channel.read_to_end()` không bounded; `timeoutSeconds=30` trong config là giá trị chết không bao giờ được truyền xuống. Khi SQLcl treo (prompt/chậm), invoke Promise không resolve → tool loop await mãi → turn treo. Đây là code defect (dead config + unbounded read), không phải render."
-  confirming_evidence:
-    - "Source ssh_service.rs:382-416: `ssh_exec_command` gọi `channel.read_to_end()` ở line 400 và stderr `.read_to_end()` line 405, không có timeout/cancel; TCP read_timeout 30s set ở connect_and_auth nhưng libssh2 channel read không bị bound bởi nó trong trường hợp channel không gửi EOF."
-    - "Source oracleSqlclService.ts:17 DEFAULT timeoutSeconds=30, nhưng runSqlclScriptOverSsh (line 166-193) gọi execRemoteCommand(line192) KHÔNG truyền timeout; grep timeoutSeconds trong src chỉ thấy định nghĩa type/config + UI progress clock."
-    - "Source sshService.ts:250-265: execRemoteCommand → invoke('ssh_exec_command') sync, không có Promise.race/watchdog."
-    - "Source AgentActivityPanel.tsx:70,264-317: ProgressCard chỉ đếm clock + Progress bar, DEADLINE_NOTE nói 'Hết giờ → báo cáo một phần + detail: timeout' — giả định tool tự chấm dứt theo deadline, nhưng Oracle path không có deadline thực."
-    - "Reference pattern: remoteExploreService.ts:351-437 đã giải bài toán tương tự bằng client-side wall-clock watchdog + cancel handle; Oracle dùng ssh_exec_command nên thiếu cả watchdog lẫn cancel."
-  falsification_test: "Nếu sau khi thêm watchdog, mock execRemoteCommand trả promise không bao giờ resolve mà executeOracleQuery VẪN không trả trong thời gian timeout → hypothesis SAI (có blocking khác). Nếu bỏ timeout config mà tool vẫn treo → chưa đúng chỗ. Nếu user build Tauri thật mà Oracle vẫn treo dù watchdog đã trả error → Rust command vẫn chiếm worker thread, cần cancel path bổ sung."
-  fix_rationale: "Client-side watchdog đảm bảo frontend/tool loop luôn resolve trong bounded time (fix triệu chứng treo ở UI/turn). Rust bounded read đảm bảo worker thread không bị chiếm vô hạn và trả lỗi rõ ràng (fix gốc ở tầng transport). Truyền timeoutSeconds từ config vào cả hai giúp config 30s không còn là giá trị chết. Đây là sửa nguyên nhân, không phải giảm triệu chứng bằng spinner."
-  blind_spots:
-    - "Không có SSH server thật trong môi trường này để reproduce hangEnd-to-end; verification dựa trên source evidence + test.mock + user build Tauri thật."
-    - "Chưa đo xem Oracle tool có bị gọi nhiều lần liên tục khi treo hay chỉ 1 lần — if many, cần cancel ở coordinator level (AbortSignal)."
-    - "TCP read_timeout=30s đã có; cần xác nhận libssh2 channel read thực sự không bị bound bởi nó (đây là nền tảng của hypothesis). Nếu thực ra có bound, thì nguyên nhân treo có thể là prompt SQLcl không có EOF mà vẫn có keepalive — vẫn cần watchdog."
-  candidate_causes:
-    - "code: unbounded `channel.read_to_end()` trong ssh_exec_command + dead `timeoutSeconds` config không được truyền xuống (nguyên nhân chính, đã xác nhận bằng source)."
-    - "config: timeoutSeconds=30 được định nghĩa nhưng không consume ở execution path — config default hợp lệ nhưng bị bỏ qua (config-as-enabler)."
-    - "environment: SQLcl trên remote có thể treo ở password prompt / slow query / login -L — là trigger làm lộ bug, không phải nguyên nhân khởi phát."
-    - "data: SQL query chậm/lớn gây SQLcl không trả EOF đúng hạn — trigger, không phải root cause."
-  and_gate: "Có — triệu chứng treo cần đồng thời (1) unbounded read/code defect VÀ (2) remote trigger (SQLcl treo). Nếu SQLcl trả bình thường thì config chết không biểu hiện. Fix phải addressing (1) để bất kể trigger nào tool vẫn bounded."
-
-### Branch A (đã xong) — gõ chat lag
-
 - bug_class: Bohrbug (deterministic — lag xảy ra mỗi lần gõ; Oracle chậm theo latency SSH/SQLcl).
 - hypothesis: Không phải re-render storm — đo được đúng 1 render/ký tự. Chi phí nằm ở công việc đồng bộ trong mỗi render đó (TeamWorkspace dựng lại transcriptExtensions inline + AgentActivityPanel không memo, rebuild/sort/filter rows O(n²) cho pill counts) cộng với controlled-draft round-trip (setInternalValue → onDraftChange → patch → snapshot → render). Riêng Oracle: `ssh_exec_command` là Tauri command synchronous, `read_to_end` không có timeout — khi SQLcl/SSH treo, tool không bao giờ resolve và UI publish tool event dồn dập. Hai triệu chứng có chung cơ chế "work nặng trên main thread / render path", nhưng cần tách biệt.
 - test: (a) Xóa probe tạm; (b) viết focused regression test đo AgentActivityPanel render count khi draft thay đổi; (c) fix memoize transcriptExtensions + AgentActivityPanel; (d) bounded timeout cho ssh_exec_command; (e) chạy focused tests.
@@ -118,26 +86,6 @@ updated: 2026-11-18
   found: ssh_exec_command là #[tauri::command] synchronous, connect có TCP timeout 10s + read timeout 30s, nhưng `channel.read_to_end()` không có timeout riêng và không có abort path từ frontend. Oracle tool đi qua executeOracleQuery → runSqlclScriptOverSsh → execRemoteCommand → invoke('ssh_exec_command'). Khi SQLcl treo (VD SQL chậm / prompt password / login -L chờ), lệnh không resolve; tool event loop không kết thúc và UI có thể nhận nhiều tool events.
   implication: Giải thích "app treo nặng" khi gọi Oracle tool — khác cơ chế với lag khi gõ nhưng cùng class "expensive/synchronous work on main path". Cần xác nhận thêm trước khi sửa Rust.
 
-- timestamp: 2026-11-18 (Branch B — user feedback)
-  checked: checkpoint_response từ user sau fix render
-  found: "typing đã mượt, nhưng oracle tool call vẫn gây treo app" → Symptom 1 CONFIRMED FIXED trên Tauri thật. Symptom 2 persists, độc lập với render fix.
-  implication: Mở branch điều tra mới, không đụng lại code render đã xác nhận ổn. Focus vào blind spot ssh_exec_command.
-
-- timestamp: 2026-11-18 (source trace, full read)
-  checked: src-tauri/src/ssh_service.rs (full 579 lines), src/services/ai/oracleSqlclService.ts (full 535 lines), src/services/sshService.ts:250-330, AgentActivityPanel.tsx:264-319 + DEADLINE_NOTE line 70
-  found: (1) ssh_exec_command line 400 `channel.read_to_end(&mut stdout_buf)` + line 405 stderr read_to_end — không có timeout/cancel; (2) DEFAULT_ORACLE_CONFIG.timeoutSeconds=30 (line17) nhưng runSqlclScriptOverSsh line 192 gọi execRemoteCommand KHÔNG truyền timeout — grep 'timeoutSeconds' trong src chỉ thấy type/config/UI clock, không có execution usage; (3) sshService.execRemoteCommand line 250-265 invoke sync không watchdog/Promise.race; (4) AgentActivityPanel ProgressCard chỉ là clock+Progress bar, DEADLINE_NOTE='Hết giờ → báo cáo một phần + detail: timeout' — giả định tool tự dừng theo deadline nhưng Oracle path không có deadline thực; (5) có sẵn reference pattern ở remoteExploreService.ts:351-437 dùng wall-clock watchdog + cancel handle.
-  implication: ROOT CAUSE xác nhận = dead config + unbounded read. Thiết kế fix 2 lớp: client-side watchdog (testable) + Rust bounded read (transport). Truyền timeoutSeconds từ config xuống cả hai.
-
-- timestamp: 2026-11-18 (build/test recon)
-  checked: package.json scripts, src-tauri/Cargo.toml (ssh2 0.9.6 vendored-openssl), src/services/ai/__tests__/oracleSqlclService.test.ts, src/types/oracleSqlcl.ts
-  found: Có sẵn oracle service test với mock sshService.execRemoteCommand (pattern vi.spyOn). OracleToolConfig.timeoutSeconds là optional number. Có cargo test setup trong src-tauri nhưng không có SSH server thật để test bounded read end-to-end. Không chạy full suite.
-  implication: Viết regression test TS với fake timers + never-resolving mock; verify Rust bằng cargo check; focused vitest cho oracle service only.
-
-- timestamp: 2026-11-18 (fix + verification)
-  checked: regression tests (RED→GREEN), adjacent tests, tsc, cargo check attempt
-  found: RED — 2 tests mới fail (timeout test hung đến vitest 15s timeout; pass-through test sai arg count vì chưa truyền timeout). GREEN sau fix — 14/14 oracle tests + 5/5 sshService tests = 19/19 pass; tsc exit 0. cargo check KHÔNG chạy được: thiếu bit-vec 0.8.0, `cargo check --offline` fail, download từ crates.io bị sandbox chặn (trả HTML). Rust fix đã được đơn giản hóa để chỉ dùng std API (mpsc::recv_timeout, thread::Builder, Duration) + pattern move channel vào thread đã có trong ssh_service.rs:ssh_exec_stream (chứng minh compile được trước đây).
-  implication: Guardrail signals 1/3/4/5 pass; signal 2 (mutation) skipped (no Stryker); Rust compile unverified → phải rely on user build Tauri thật để xác nhận. Human-verify checkpoint cần thiết.
-
 ## Eliminated
 
 (none yet)
@@ -157,25 +105,3 @@ updated: 2026-11-18
     - Focused tests: 17 passed (AgentActivityPanel, TeamWorkspaceSendScroll, TeamWorkspaceActivityRail).
     - npx tsc --noEmit: sạch.
 - files_changed: [src/components/ai/office/AgentActivityPanel.tsx, src/components/ai/office/TeamWorkspace.tsx, tests/components/ai/office/AgentActivityPanel.test.tsx]
-
-### Branch B — Oracle tool treo (2026-11-18)
-
-- root_cause: |
-    Đường gọi Oracle tool dùng `execRemoteCommand` → Tauri command `ssh_exec_command` (sync) với `channel.read_to_end()` KHÔNG có deadline và KHÔNG có cancel path. `OracleToolConfig.timeoutSeconds: 30` chỉ là config chết — `runSqlclScriptOverSsh` không bao giờ truyền nó xuống, và grep toàn src chỉ thấy timeoutSeconds ở definition/config/UI progress clock. Khi SQLcl trên remote treo (password prompt / slow query / login -L chờ), channel không gửi EOF → `invoke()` Promise không resolve → `executeOracleQuery` không trả → tool/turn treo. UI ProgressCard chỉ là clock hiển thị (DEADLINE_NOTE giả định tool tự dừng theo deadline) nên không cứu được.
-- fix: |
-    1. `oracleSqlclService.ts`: thêm `clampOracleTimeoutSeconds` (5..120, default 30, khớp UI); `runSqlclScriptOverSsh` truyền timeout xuống transport VÀ bọc bằng client-side wall-clock watchdog (`Promise.race` + `setTimeout`/`clearTimeout`) — đảm bảo tool luôn resolve trong bounded time dù remote không đóng channel.
-    2. `sshService.ts`: `execRemoteCommand` nhận optional `timeoutSeconds` và truyền vào invoke `ssh_exec_command`.
-    3. `ssh_service.rs`: `ssh_exec_command` nhận `timeout_seconds: Option<u64>` (clamp 5..120, default 30); read chạy trên helper thread, command đợi bằng `mpsc::recv_timeout` — trả CommandOutput với `exit_status=-1` + stderr "Oracle SQLcl hết thời gian chờ (timeout Ns)." khi hết hạn, giải phóng Tauri worker thread.
-- oracle_type: specified — contract "bounded tool call returns structured timeout error", test assert `{success:false, error: /timeout/}` khi transport không bao giờ resolve.
-- boundary_neighbors: clamp 5..120 test qua `clampOracleTimeoutSeconds` (default 30 cho invalid, clamp ở cả 2 đầu); timeout test dùng 5s (min) với fake timers.
-- verification:
-  target_test: { result: pass, detail: "2 tests RED trước fix (1 hung → vitest 15s timeout, 1 assert sai arg list), GREEN sau: 14/14 oracle tests pass" }
-  mutation_check: { result: skipped, reason: "Stryker không được cấu hình trong project (không có stryker.conf.* / package script)" }
-  no_op_deletion: { result: pass, deletion_justified_by_rca: false, detail: "diff chỉ thêm logic timeout/watchdog; không xóa branch hay assert" }
-  adjacent_tests: { result: pass, suites_run: [src/services/ai/__tests__/oracleSqlclService.test.ts, src/services/__tests__/sshService.test.ts], detail: "19/19 pass" }
-  revert_and_reconfirm: { result: pass, bug_returned_on_pre_fix: true, fixed_on_reapply: true, detail: "pre-fix test hung 15s; post-fix resolves with structured timeout error" }
-  rust_compile: { result: unverified, reason: "cargo check blocked: missing bit-vec 0.8.0 crate, network sandbox chặn crates.io download; code dùng std API cơ bản (mpsc/recv_timeout/thread::Builder) và pattern move channel vào thread đã có trong ssh_service.rs:ssh_exec_stream" }
-  tsc: { result: pass, detail: "npx tsc --noEmit exit 0" }
-  guardrail_verdict: accepted
-- files_changed_branch_b: [src/services/ai/oracleSqlclService.ts, src/services/sshService.ts, src/services/ai/__tests__/oracleSqlclService.test.ts, src-tauri/src/ssh_service.rs]
-- human_verify: pending — user cần build Tauri từ remote và thử lại Oracle tool; nếu SQLcl treo thì tool phải trả lỗi timeout sau 30s thay vì treo app.
