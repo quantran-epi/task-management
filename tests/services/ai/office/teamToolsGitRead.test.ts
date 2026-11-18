@@ -1206,6 +1206,36 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     expect(seenCommand).toContain(`--model 'haiku'`);
   });
 
+  // Review B: git_read used to call execRemoteCommand without the 4th `callId` argument,
+  // so Rust registered `local-*` and the Drawer's cancel by model call id returned false.
+  // Every action — including fallback probes — must carry the exact model id.
+  for (const testCase of WRAP_CASES) {
+    it(`${testCase.action} forwards loopCallId to the final execRemoteCommand call`, async () => {
+      queue(...testCase.outputs);
+      await executeTeamTool(
+        'git_read',
+        { action: testCase.action, ...testCase.args },
+        ctx({ loopCallId: 'call-model-77' })
+      );
+      const calls = vi.mocked(execRemoteCommand).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      expect(calls.at(-1)![3]).toBe('call-model-77');
+    });
+  }
+
+  it('every remote call of read_file fallback path carries loopCallId (review B)', async () => {
+    // Simulate the path that used to run extra fallback commands with a dropped id.
+    queuePage(['1: export const untracked = 1;'], 1);
+    await executeTeamTool(
+      'git_read',
+      { action: 'read_file', branch: 'main', filePath: 'untracked.ts' },
+      ctx({ loopCallId: 'call-model-77' })
+    );
+    for (const call of vi.mocked(execRemoteCommand).mock.calls) {
+      expect(call[3]).toBe('call-model-77');
+    }
+  });
+
   it('explore_repo forwards the model call id and never passes a timeout', async () => {
     queue({ stdout: '/usr/local/bin/claude\n', stderr: '', exitStatus: 0 });
     vi.mocked(execRemoteCommandStream).mockImplementation(
