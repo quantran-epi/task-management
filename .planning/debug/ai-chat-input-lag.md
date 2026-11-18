@@ -1,6 +1,6 @@
 ---
 slug: ai-chat-input-lag
-status: investigating
+status: awaiting_human_verify
 trigger: "Tính năng AI chat team, gõ vào ô chat lại bị chậm và lag rồi"
 created: 2026-11-18
 updated: 2026-11-18
