@@ -1128,6 +1128,45 @@ type RepoResolutionCandidate = {
   teamScoped: boolean;
 };
 
+/** Last path segment = folder/repo name, shared by the resolver and the hint extractor. */
+export function repoPathTail(path: string): string {
+  return path.replace(/\/+$/, '').split('/').filter(Boolean).pop() ?? '';
+}
+
+/**
+ * Turn free-text into candidate hints by matching ONLY names/codes/tails already present in the
+ * catalog. No new nomenclature is invented and no team link is used as a filter: a repo merely
+ * mentioned in the conversation is enough. Matching is whole-term (unicode-aware boundaries) so
+ * a short code cannot light up inside an unrelated word. Ambiguity is NOT resolved here — when
+ * two systems share a name/tail the single hint is emitted once and `pickMatch()` refuses with
+ * the option list, instead of the extractor silently choosing one.
+ */
+export function extractRepoHintsFromText(text: string, systems: readonly System[]): string[] {
+  if (!text.trim()) return [];
+  const hints: string[] = [];
+  const seen = new Set<string>();
+  const add = (term: string) => {
+    const trimmed = term.trim();
+    // 3+ chars keeps generic codes like "A" from matching every sentence.
+    if (trimmed.length < 3) return;
+    const key = trimmed.toLocaleLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}([^\\p{L}\\p{N}]|$)`, 'iu');
+    if (re.test(text)) hints.push(trimmed);
+  };
+  for (const system of systems) {
+    add(system.name);
+    add(system.code);
+    if (system.remoteRepoPath) {
+      add(system.remoteRepoPath);
+      add(repoPathTail(system.remoteRepoPath));
+    }
+  }
+  return hints;
+}
+
 /**
  * Resolve a repo for `git_read`. A repo link is ONE context source, NOT a prerequisite: an
  * explicit remote path/folder supplied by the user or the agent (plus a usable SSH config) must
@@ -1140,9 +1179,8 @@ type RepoResolutionCandidate = {
  * picking the first one. A branch is a REVISION, never a repo hint. Codes stay truthful: a
  * linked system lacking repo config is `NO_LINKED_REPO`, not `SYSTEM_NOT_LINKED`.
  *
- * LIMITATION: the coordinator does not yet extract free-text repo names from prompts into
- * `ctx.repoHints`; until that extraction exists, (b) is populated by callers that already have
- * such names. The resolver itself accepts the field and never invents a source.
+ * The coordinator populates (b) by matching the whole catalog against the original request and
+ * recent turns via `extractRepoHintsFromText`; the resolver itself never invents a source.
  */
 async function resolveGitRepo(
   args: Record<string, any>,
@@ -1194,8 +1232,6 @@ async function resolveGitRepo(
     }
   }
 
-  // Last path segment = a folder/repo name, so "check git của folder CORE" needs no full path.
-  const pathTail = (path: string) => path.replace(/\/+$/, '').split('/').filter(Boolean).pop() ?? '';
   const optionsFor = (matches: RepoResolutionCandidate[]) =>
     matches
       .map((c) => {
@@ -1221,7 +1257,7 @@ async function resolveGitRepo(
         p === h ||
         // A path INSIDE a known repo resolves up to the repo root, so a subfolder still works.
         h.startsWith(`${p}/`) ||
-        pathTail(p) === h ||
+        repoPathTail(p) === h ||
         c.system?.name === h ||
         c.system?.code === h
       );
@@ -1299,10 +1335,12 @@ async function resolveGitRepo(
     };
   }
 
+  const requestedSystemId = typeof args.systemId === 'string' ? args.systemId.trim() : '';
   // W2: an SSH config alone can name a repo through its default remote path. This is what makes
   // `{action: 'grep', sshConfigId: 'cfg', path: 'src'}` work — `path` stays a pathspec while the
-  // config supplies the repo root. No default path -> fall through to the other context sources.
-  if (explicitConfigId) {
+  // config supplies the repo root. An explicitly supplied `systemId` wins: without this guard the
+  // config default returned early and silently ignored the caller's system choice.
+  if (explicitConfigId && !requestedSystemId) {
     const config = await getSshConfigById(explicitConfigId, ctx.db);
     if (!config) return noRepo('SSH config được cung cấp không tồn tại.');
     if (config.defaultRemotePath) {
@@ -1338,19 +1376,18 @@ async function resolveGitRepo(
       s.remoteRepoPath !== ''
   );
 
-  const requested = typeof args.systemId === 'string' ? args.systemId.trim() : '';
   let system: System;
-  if (requested) {
-    const linked = linkedSystems.find((s) => s.id === requested);
+  if (requestedSystemId) {
+    const linked = linkedSystems.find((s) => s.id === requestedSystemId);
     if (!linked) {
       // WR-04: `requested` is model-supplied and a refusal is a `role: 'tool'` result, so it
       // is wrapped like every other untrusted string on this path.
       return refuse(
         'SYSTEM_NOT_LINKED',
-        `Hệ thống ${wrapUntrusted('SYSTEM ID YÊU CẦU', requested)} không được liên kết với nhóm này.`
+        `Hệ thống ${wrapUntrusted('SYSTEM ID YÊU CẦU', requestedSystemId)} không được liên kết với nhóm này.`
       );
     }
-    const match = usable.find((s) => s.id === requested);
+    const match = usable.find((s) => s.id === requestedSystemId);
     if (!match) {
       return noRepo(
         `Hệ thống ${wrapUntrusted('TÊN HỆ THỐNG', linked.name)} chưa cấu hình SSH profile hoặc đường dẫn repo.`

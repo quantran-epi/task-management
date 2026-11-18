@@ -88,6 +88,7 @@ const teamToolContexts = vi.hoisted(
       agentId: string;
       role?: 'lead' | 'employee' | undefined;
       folderId?: string | undefined;
+      repoHints?: string[] | undefined;
     }>
 );
 
@@ -101,7 +102,12 @@ vi.mock('../../../../src/services/ai/office/teamTools', async (importOriginal) =
       args: Parameters<typeof actual.executeTeamTool>[1],
       ctx: Parameters<typeof actual.executeTeamTool>[2]
     ) => {
-      teamToolContexts.push({ agentId: ctx.agentId, role: ctx.role, folderId: ctx.folderId });
+      teamToolContexts.push({
+        agentId: ctx.agentId,
+        role: ctx.role,
+        folderId: ctx.folderId,
+        repoHints: ctx.repoHints,
+      });
       return actual.executeTeamTool(name, args, ctx);
     },
   };
@@ -603,6 +609,39 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       await coordinator.send('@[Bình](agent:' + employees[1]!.id + ') kiểm tra');
 
       expect(models).toEqual([LEAD_MODEL, EMP_B_MODEL]);
+    });
+
+    it('wires catalog repoHints from the original request into team tool contexts (W1 follow-up)', async () => {
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            // No repo arg: the resolver must use only the ctx hint matched from the user text.
+            await options.executeToolFn!(
+              'git_read',
+              { action: 'status' },
+              harness!.db,
+              options.signal
+            );
+            return loopResult('Xong.');
+          },
+        },
+      });
+      const now = new Date().toISOString();
+      await harness.db.systems.add({
+        id: 'sys-catalog-core',
+        name: 'Hệ thống lõi',
+        code: 'CORE',
+        parentId: null,
+        type: 'SERVICE',
+        createdAt: now,
+        updatedAt: now,
+      });
+      await harness.coordinator.send('Kiểm tra git của CORE giúp tôi');
+      await waitForReady(harness.coordinator);
+
+      const gitCtx = teamToolContexts.filter((entry) => entry.agentId === harness!.lead.id);
+      expect(gitCtx.length).toBeGreaterThan(0);
+      expect(gitCtx.at(-1)!.repoHints).toEqual(expect.arrayContaining(['CORE']));
     });
 
     it('has no React import', () => {

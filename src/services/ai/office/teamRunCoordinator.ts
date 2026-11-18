@@ -75,6 +75,7 @@ import {
   LEAD_ONLY_TEAM_TOOLS,
   TEAM_TOOL_DEFINITIONS,
   executeTeamTool,
+  extractRepoHintsFromText,
   type TeamToolContext,
 } from './teamTools';
 import {
@@ -749,6 +750,13 @@ export function createTeamRunCoordinator(
 
   const currentRequests = new Map<string, ChatTurnRequest>();
   const agentDeferreds = new Map<string, Deferred>();
+  /**
+   * W1 follow-up: repo names/codes/path tails matched from the original request + the last few
+   * turns. Every `toolContext()` carries these so catalog-backed repo names mentioned only in
+   * conversation let `git_read` resolve without an explicit arg or a team link. Matching only
+   * emits ALREADY-KNOWN catalog terms; ambiguity is left to the resolver's `pickMatch()`.
+   */
+  let repoHints: string[] = [];
   /** D-13: agents whose live-use claim is currently held (pairing guard for release). */
   const liveAgents = new Set<string>();
   /**
@@ -1320,6 +1328,7 @@ export function createTeamRunCoordinator(
       ...(liveTeam.docsFolderId ? { teamFolderId: liveTeam.docsFolderId } : {}),
       ...(signal ? { signal } : {}),
       ...(loopCallId ? { loopCallId } : {}),
+      ...(repoHints.length > 0 ? { repoHints } : {}),
     };
   }
 
@@ -2179,13 +2188,20 @@ export function createTeamRunCoordinator(
     }
 
     try {
-      const [assignmentHistory, recentTurns, globalConventions] = await Promise.all([
+      const [assignmentHistory, recentTurns, globalConventions, catalogSystems] = await Promise.all([
         listAssignmentHistory(options.threadId, employee.id, ASSIGNMENT_HISTORY_CAP, db),
         listRecentTurns(options.threadId, RECENT_WINDOW_TURNS, db),
         // Fresh per turn so a convention edit in Settings reaches the very next message.
         // Resilient: an unreadable settings row must never block a team turn.
         getGlobalConventions(db).catch(() => ''),
+        db.systems.toArray(),
       ]);
+      // W1 follow-up: hints are fresh per turn so a repo first mentioned mid-conversation is
+      // usable by that same turn's git_read. A bad catalog read must not block the turn.
+      repoHints = extractRepoHintsFromText(
+        [originalRequest, ...recentTurns.map((row) => row.content)].join('\n'),
+        catalogSystems
+      );
       const conventionsSegment = buildConventionsSegment({ global: globalConventions });
       const skill = skillFor(employee);
       // Phase 41 D-16: the folder id is a fixed fact for the turn, so it goes into the prompt.
@@ -2409,13 +2425,18 @@ export function createTeamRunCoordinator(
     const lead = roster.lead;
     if (!lead) return;
     try {
-      const [recentTurns, linkedItems, batchHistory, globalConventions] = await Promise.all([
+      const [recentTurns, linkedItems, batchHistory, globalConventions, catalogSystems] = await Promise.all([
         listRecentTurns(options.threadId, RECENT_WINDOW_TURNS, db),
         loadLinkedItems(),
         listRecentBatches(options.threadId, BATCH_HISTORY_LIMIT, db),
         // Same single source of truth as every employee; resilient per turn.
         getGlobalConventions(db).catch(() => ''),
+        db.systems.toArray(),
       ]);
+      repoHints = extractRepoHintsFromText(
+        [text, ...recentTurns.map((row) => row.content)].join('\n'),
+        catalogSystems
+      );
       const conventionsSegment = buildConventionsSegment({ global: globalConventions });
       // Phase 41 D-07/D-16: the team folder is a READ fact for the leader (where the approved
       // final goes), never a `write_doc` target. T-41-28: only live roster members with an

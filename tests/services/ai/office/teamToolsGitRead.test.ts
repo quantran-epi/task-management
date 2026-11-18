@@ -463,6 +463,99 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     expect(vi.mocked(execRemoteCommand).mock.calls.at(-1)![3]).toBe('call-repohint');
   });
 
+  it('extractRepoHintsFromText matches only known catalog terms, no substring false positives', async () => {
+    const { extractRepoHintsFromText } = await import(
+      '../../../../src/services/ai/office/teamTools'
+    );
+    const all = await db.systems.toArray();
+    // Mentioned code + tail + full path; "COREX" must NOT match code "CORE".
+    const hints = extractRepoHintsFromText(
+      'Hãy check git của CORE rồi /srv/repo, bỏ qua COREX và repo không liên quan',
+      all
+    );
+    expect(hints).toEqual(expect.arrayContaining(['CORE', '/srv/repo', 'repo']));
+    expect(hints).not.toContain('COREX');
+    // No mention -> no hint. Branch-like short tokens never become hints.
+    expect(extractRepoHintsFromText('check main', all)).toEqual([]);
+  });
+
+  it('repoHints from a recent-turn mention resolve an unlinked repo and keep the call id', async () => {
+    queue('## main\n');
+    const res = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'status' },
+        ctx({
+          teamId: emptyTeamId,
+          repoHints: ['Hệ thống lõi'],
+          loopCallId: 'call-conversation-hint',
+        })
+      )
+    );
+    expect(res.refused).toBeUndefined();
+    expect(res.repoPath).toBe('/srv/repo');
+    expect(vi.mocked(execRemoteCommand).mock.calls.at(-1)![3]).toBe('call-conversation-hint');
+  });
+
+  it('ambiguous repoHints (two systems with the same tail) refuse INVALID_ARGUMENT with options', async () => {
+    const now = new Date().toISOString();
+    const duplicateId = generateId();
+    await db.systems.add({
+      id: duplicateId,
+      name: 'Hệ thống lõi bản sao',
+      code: 'CORE2',
+      parentId: null,
+      type: 'SERVICE',
+      sshConfigId: (await db.systems.get(repoSystemId))!.sshConfigId!,
+      remoteRepoPath: '/backup/repo',
+      createdAt: now,
+      updatedAt: now,
+    });
+    const res = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'status' },
+        ctx({ teamId: emptyTeamId, repoHints: ['repo'] })
+      )
+    );
+    expect(res).toMatchObject({ refused: true, code: 'INVALID_ARGUMENT' });
+    expect(res.message).toContain('/srv/repo');
+    expect(res.message).toContain('/backup/repo');
+    expect(execRemoteCommand).not.toHaveBeenCalled();
+  });
+
+  it('explicit systemId wins over sshConfigId default remote path', async () => {
+    const now = new Date().toISOString();
+    const sshConfigId = (await db.systems.get(repoSystemId))!.sshConfigId!;
+    await db.settings.put({
+      key: SSH_CONFIGS_SETTING_KEY,
+      value: [
+        {
+          id: sshConfigId,
+          name: 'Dev',
+          host: '10.0.0.5',
+          port: 22,
+          username: 'git',
+          authType: 'password',
+          createdAt: now,
+          updatedAt: now,
+          defaultRemotePath: '/srv/default',
+        },
+      ],
+    });
+    queue('## main\n');
+    const res = JSON.parse(
+      await executeTeamTool(
+        'git_read',
+        { action: 'status', sshConfigId, systemId: repoSystemId },
+        ctx({ loopCallId: 'call-system-wins' })
+      )
+    );
+    expect(res.refused).toBeUndefined();
+    expect(res.repoPath).toBe('/srv/repo');
+    expect(vi.mocked(execRemoteCommand).mock.calls.at(-1)![3]).toBe('call-system-wins');
+  });
+
   it('refuses INVALID_ARGUMENT for an action outside the enum', async () => {
     const res = JSON.parse(
       await executeTeamTool('git_read', { action: 'not_an_action' }, ctx())
