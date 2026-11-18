@@ -378,11 +378,64 @@ pub fn ssh_rename(
     Ok(())
 }
 
+/// Bounded read of an exec channel. `read_to_end()` has no deadline: a wedged remote command
+/// (SQLcl password prompt, slow query, `login -L` waiting) never sends EOF and the synchronous
+/// Tauri command never returns, hanging the AI tool turn. The read runs on a detached helper
+/// thread and this command waits with `recv_timeout`; on expiry it returns an error status
+/// instead of blocking the caller forever. The helper thread may linger until the remote closes
+/// the channel, but it no longer holds the Tauri command (or the AI turn) hostage.
+fn read_command_output_bounded(
+    mut channel: ssh2::Channel,
+    timeout: Duration,
+) -> Result<CommandOutput, String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    thread::Builder::new()
+        .name("ssh-exec-read".to_string())
+        .spawn(move || {
+            let mut stdout_buf = Vec::new();
+            let mut stderr_buf = Vec::new();
+            let result: Result<CommandOutput, String> = (|| {
+                channel
+                    .read_to_end(&mut stdout_buf)
+                    .map_err(|e| format!("Lỗi đọc stdout: {}", e))?;
+                channel
+                    .stderr()
+                    .read_to_end(&mut stderr_buf)
+                    .map_err(|e| format!("Lỗi đọc stderr: {}", e))?;
+                let _ = channel.wait_close();
+                let exit_status = channel.exit_status().unwrap_or(0);
+                Ok(CommandOutput {
+                    stdout: String::from_utf8_lossy(&stdout_buf).to_string(),
+                    stderr: String::from_utf8_lossy(&stderr_buf).to_string(),
+                    exit_status,
+                })
+            })();
+            let _ = tx.send(result);
+        })
+        .map_err(|e| format!("Không thể tạo thread đọc lệnh: {}", e))?;
+
+    match rx.recv_timeout(timeout) {
+        Ok(result) => result,
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Ok(CommandOutput {
+            stdout: String::new(),
+            stderr: format!(
+                "Oracle SQLcl hết thời gian chờ (timeout {}s).",
+                timeout.as_secs()
+            ),
+            exit_status: -1,
+        }),
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+            Err("Thread đọc lệnh SSH đã thoát mà không trả kết quả".to_string())
+        }
+    }
+}
+
 #[tauri::command]
 pub fn ssh_exec_command(
     config: SshConfig,
     secret: Option<String>,
     command: String,
+    timeout_seconds: Option<u64>,
 ) -> Result<CommandOutput, String> {
     let session = connect_and_auth(&config, secret.as_deref())?;
     let mut channel = session
@@ -393,26 +446,9 @@ pub fn ssh_exec_command(
         .exec(&command)
         .map_err(|e| format!("Thực thi lệnh thất bại: {}", e))?;
 
-    let mut stdout_buf = Vec::new();
-    let mut stderr_buf = Vec::new();
-
-    channel
-        .read_to_end(&mut stdout_buf)
-        .map_err(|e| format!("Lỗi đọc stdout: {}", e))?;
-
-    channel
-        .stderr()
-        .read_to_end(&mut stderr_buf)
-        .map_err(|e| format!("Lỗi đọc stderr: {}", e))?;
-
-    let _ = channel.wait_close();
-    let exit_status = channel.exit_status().unwrap_or(0);
-
-    Ok(CommandOutput {
-        stdout: String::from_utf8_lossy(&stdout_buf).to_string(),
-        stderr: String::from_utf8_lossy(&stderr_buf).to_string(),
-        exit_status,
-    })
+    // Clamp to the same 5..120s contract as the frontend settings UI; default 30s.
+    let secs = timeout_seconds.unwrap_or(30).clamp(5, 120);
+    read_command_output_bounded(channel, Duration::from_secs(secs))
 }
 
 /// Run a remote command without a PTY and stream stdout/stderr line by line.

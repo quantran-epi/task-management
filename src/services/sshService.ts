@@ -251,6 +251,7 @@ export async function execRemoteCommand(
   config: SshConfig,
   command: string,
   secret?: string,
+  timeoutSeconds?: number,
 ): Promise<CommandOutput> {
   if (!isTauriApp()) {
     throw new Error('Tính năng SSH chỉ hoạt động trên môi trường Desktop Tauri.');
@@ -261,6 +262,9 @@ export async function execRemoteCommand(
     config,
     secret: effectiveSecret ?? null,
     command,
+    // Optional: older Rust builds ignore unknown params; a bounded build uses it to bound
+    // channel.read_to_end so a wedged remote command cannot occupy a worker thread forever.
+    timeoutSeconds: timeoutSeconds ?? null,
   });
 }
 
