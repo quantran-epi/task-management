@@ -881,8 +881,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         tabRuntimes.get(tabId)?.status === 'processing';
 
       const doDelete = async () => {
-        // Close-aborts-before-delete: a running turn never survives its tab.
-        turnRegistryRef.current?.discard(tabId);
+        // Lifecycle rule: closing a tab drops ONLY its view state. The Rust task keeps
+        // running; the user can stop it from the global activity panel by tool call id.
         tabRuntimes.discard(tabId);
         setTransientClarifyMessage(tabId, null);
         try {
@@ -896,9 +896,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       if (isRunning) {
         Modal.confirm({
           title: 'Xác nhận đóng tab',
-          content: `Đóng tab “${targetTab.title}”? Yêu cầu đang chạy trong tab này sẽ bị dừng và không được lưu.`,
+          content: `Đóng tab “${targetTab.title}”? Tool đang chạy vẫn tiếp tục ở nền — mở lại tab hoặc dùng bảng Hoạt động để xem và hủy theo từng tác vụ.`,
           okText: 'Đóng tab',
-          okButtonProps: { danger: true },
           cancelText: 'Giữ lại',
           onOk: doDelete,
         });
@@ -1105,8 +1104,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const activeToolEvents = activeRuntime?.toolEvents ?? [];
   const activeRoutedScope = routedScopeByTab[activeRuntimeTabId] ?? null;
 
-  // Background turns continue running when the drawer unmounts or view switches.
-  // Abort only occurs on explicit user Stop action or tab deletion.
+  // Background turns continue running when the drawer unmounts, view switches or a tab
+  // is closed. Only the explicit Stop action (or app exit) may end a Rust tool task.
   useEffect(() => {
     return () => {
       // Intentionally do NOT abort tab runtimes on unmount.

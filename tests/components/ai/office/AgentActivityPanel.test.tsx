@@ -180,16 +180,16 @@ describe('AgentActivityPanel — explore progress (44-03 Task 2)', () => {
     const card = screen.getByTestId('activity-progress-card');
     expect(card).toBeInTheDocument();
     expect(card.textContent).toContain('explore_repo');
-    // deadline derived from timeoutSeconds=300 -> 05:00; elapsed ~01:23
-    expect(screen.getByTestId('activity-progress-clock').textContent).toMatch(/^\d{2}:\d{2} \/ 05:00$/);
+    // Stopwatch only: no deadline, no fake progress bar.
+    expect(screen.getByTestId('activity-progress-clock').textContent).toMatch(/^Đang chạy · đã chạy \d{2}:\d{2}$/);
     expect(card.textContent).toMatch(/luồng xử lý thanh toán/);
-    expect(card.textContent).toContain('Hết giờ → báo cáo một phần + detail: timeout; agent tự tiếp tục.');
-    expect(card.querySelector('.ant-progress')).not.toBeNull();
+    expect(card.textContent).not.toContain('Hết giờ');
+    expect(card.querySelector('.ant-progress')).toBeNull();
     // App-level call only: no nested remote CLI steps leak into the card.
     expect(card.textContent).not.toMatch(/Read \/etc|nested|claude -p/);
   });
 
-  it('clamps an out-of-range serialized timeoutSeconds to the 60..900 window', () => {
+  it('never displays a deadline even when args carry a legacy timeoutSeconds', () => {
     const agents: AgentRunState[] = [{
       agentId: 'agent-1', status: 'running', streamingText: '',
       steps: [stepRow({
@@ -198,8 +198,43 @@ describe('AgentActivityPanel — explore progress (44-03 Task 2)', () => {
       })],
     }];
     render(<AgentActivityPanel agents={agents} roster={ROSTER} debugLogs={[]} onClearLogs={noop} />);
-    // 9999 clamps to 900 -> 15:00
-    expect(screen.getByTestId('activity-progress-clock').textContent).toMatch(/ \/ 15:00$/);
+    // No "/ mm:ss" suffix: the task has no deadline under any name.
+    expect(screen.getByTestId('activity-progress-clock').textContent).not.toContain('/');
+  });
+
+  it('exposes a Cancel button that forwards only the tool call id (progress card)', () => {
+    const onCancel = vi.fn();
+    const agents: AgentRunState[] = [{
+      agentId: 'agent-1', status: 'running', streamingText: '',
+      steps: [stepRow({
+        id: 'call-xyz', toolName: 'explore_repo', phase: 'call', status: 'running',
+        detail: JSON.stringify({ question: 'q' }),
+        label: 'đang gọi tool explore_repo',
+      })],
+    }];
+    render(
+      <AgentActivityPanel agents={agents} roster={ROSTER} debugLogs={[]} onClearLogs={noop} onCancelToolCall={onCancel} />
+    );
+    fireEvent.click(screen.getByTestId('activity-cancel-call-xyz'));
+    expect(onCancel).toHaveBeenCalledWith('call-xyz');
+  });
+
+  it('exposes a Cancel button on any running tool row', () => {
+    const onCancel = vi.fn();
+    const agents: AgentRunState[] = [{
+      agentId: 'agent-1', status: 'running', streamingText: '',
+      steps: [stepRow({
+        id: 'row-1', toolName: 'oracle_query', phase: 'call', status: 'running',
+        detail: JSON.stringify({ query: 'SELECT 1 FROM DUAL' }),
+        label: 'đang gọi tool oracle_query',
+      })],
+    }];
+    render(
+      <AgentActivityPanel agents={agents} roster={ROSTER} debugLogs={[]} onClearLogs={noop} onCancelToolCall={onCancel} />
+    );
+    fireEvent.click(screen.getByTestId('activity-event-toggle-row-1'));
+    fireEvent.click(screen.getByTestId('activity-row-cancel-row-1'));
+    expect(onCancel).toHaveBeenCalledWith('row-1');
   });
 
   it('advances the elapsed clock on its own ticker even without a re-render (UI-REVIEW WR-01)', () => {
@@ -211,20 +246,20 @@ describe('AgentActivityPanel — explore progress (44-03 Task 2)', () => {
       steps: [stepRow({
         id: 'explore-tick', toolName: 'explore_repo', phase: 'call', status: 'running',
         startedAt: new Date(realNow).toISOString(),
-        detail: JSON.stringify({ question: 'q', timeoutSeconds: 300 }),
+        detail: JSON.stringify({ question: 'q' }),
         label: 'đang gọi tool explore_repo',
       })],
     }];
     try {
       render(<AgentActivityPanel agents={agents} roster={ROSTER} debugLogs={[]} onClearLogs={noop} />);
       const clock = screen.getByTestId('activity-progress-clock');
-      expect(clock.textContent).toMatch(/^00:00 \/ 05:00$/);
+      expect(clock.textContent).toMatch(/^Đang chạy · đã chạy 00:00$/);
 
-      // No prop change / re-render: advance the fake clock only. The card must still tick.
+      // No prop change / re-render: advance the fake clock only. The stopwatch must still tick.
       act(() => {
         vi.advanceTimersByTime(62_000);
       });
-      expect(clock.textContent).toMatch(/^01:02 \/ 05:00$/);
+      expect(clock.textContent).toMatch(/^Đang chạy · đã chạy 01:02$/);
     } finally {
       vi.useRealTimers();
     }

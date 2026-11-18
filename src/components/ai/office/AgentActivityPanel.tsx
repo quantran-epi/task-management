@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Empty, Popconfirm, Progress, Tag, Tooltip, Typography, theme } from 'antd';
+import { Button, Empty, Popconfirm, Tag, Tooltip, Typography, theme } from 'antd';
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
@@ -43,6 +43,8 @@ export interface AgentActivityPanelProps {
   roster: ActivityRosterEntry[];
   debugLogs: TeamDebugLog[];
   onClearLogs: () => void;
+  /** Cancel the running Rust task by its model tool-call id (no config/secret re-sent). */
+  onCancelToolCall?: ((toolCallId: string) => void) | undefined;
   /** Header close control; the workspace owns the shared open state (D-10). */
   onClose?: (() => void) | undefined;
   /** Mirrors the workspace rail state so both controls keep aria-expanded in sync. */
@@ -67,7 +69,7 @@ const EMPTY_PROMPTS = 'Chưa có lượt gửi AI nào trong phiên này.';
 const ERROR_COPY =
   'Không đọc được kết quả tool. Nội dung hiển thị dạng văn bản; thử mở lại panel hoặc chạy lại lượt này.';
 const NO_RESULT_COPY = 'Chưa có kết quả…';
-const DEADLINE_NOTE = 'Hết giờ → báo cáo một phần + detail: timeout; agent tự tiếp tục.';
+const RUNNING_NOTE = 'Đang chạy · chỉ dừng khi bạn bấm Hủy hoặc tắt ứng dụng.';
 const TRUNCATION_MARKER = '… (đã rút gọn)';
 
 /** Untrusted previews are wrapped and scrolled in their own box so the rail never widens the page (D-12). */
@@ -143,7 +145,7 @@ function toTimelineRow(step: AgentLiveStep, agentId: string, nameOf: (id: string
   };
 }
 
-const TimelineEventRow: React.FC<{ row: TimelineRow }> = ({ row }) => {
+const TimelineEventRow: React.FC<{ row: TimelineRow; onCancel?: ((id: string) => void) | undefined }> = ({ row, onCancel }) => {
   const { token } = theme.useToken();
   const [expanded, setExpanded] = useState(false);
   const { step, status, toolName, agentName } = row;
@@ -256,31 +258,35 @@ const TimelineEventRow: React.FC<{ row: TimelineRow }> = ({ row }) => {
             {ERROR_COPY}
           </Typography.Text>
         ) : null}
+        {status === 'running' && onCancel ? (
+          <Button
+            size="small"
+            danger
+            data-testid={`activity-row-cancel-${step.id}`}
+            style={{ marginTop: 8 }}
+            onClick={() => onCancel(step.id)}
+          >
+            Hủy tool này
+          </Button>
+        ) : null}
       </div>
     </div>
   );
 };
 
-const ProgressCard: React.FC<{ row: TimelineRow }> = ({ row }) => {
+const ProgressCard: React.FC<{ row: TimelineRow; onCancel?: ((id: string) => void) | undefined }> = ({ row, onCancel }) => {
   const { token } = theme.useToken();
-  // UI-REVIEW WR-01: a blocked remote explore produces no stream deltas, so without its own
-  // ticker this card's elapsed clock would freeze at 00:00 until some unrelated re-render.
-  // Drive a second-by-second local re-render; the deadline itself stays derived from args.
+  // The card is a stopwatch, NOT a deadline: a running task has no time limit. The ticker
+  // only advances the elapsed display; it never ends the task.
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => setTick((n) => n + 1), 1_000);
     return () => clearInterval(timer);
   }, []);
   const args = parseArgsObject(row.step.detail);
-  const rawTimeout = Number(args.timeoutSeconds);
-  const timeoutSeconds = Number.isFinite(rawTimeout)
-    ? Math.min(900, Math.max(60, Math.floor(rawTimeout)))
-    : 300;
   const startedMs = Date.parse(row.step.startedAt ?? row.step.at);
-  void tick; // tick exists solely to trigger this recomputation each second.
+  void tick;
   const elapsedMs = Number.isFinite(startedMs) ? Math.max(0, Date.now() - startedMs) : 0;
-  const deadlineMs = timeoutSeconds * 1_000;
-  const percent = Math.min(100, (elapsedMs / deadlineMs) * 100);
   const question = typeof args.question === 'string' ? args.question : '';
   const snippet = question.length > 90 ? `${question.slice(0, 90)}…` : question;
 
@@ -299,21 +305,25 @@ const ProgressCard: React.FC<{ row: TimelineRow }> = ({ row }) => {
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, minWidth: 0 }}>
         <strong style={{ fontSize: 12, minWidth: 0 }}>{row.toolName}</strong>
         <span data-testid="activity-progress-clock" style={{ fontSize: 11, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
-          {`${formatClock(elapsedMs)} / ${formatClock(deadlineMs)}`}
+          {`Đang chạy · đã chạy ${formatClock(elapsedMs)}`}
         </span>
       </div>
       <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block', minWidth: 0 }}>
         {`${row.agentName}${snippet ? ` · “${snippet}”` : ''}`}
       </Typography.Text>
-      <Progress
-        percent={Math.round(percent)}
-        showInfo={false}
-        strokeColor={token.colorPrimary}
-        aria-label={`Đã dùng ${Math.round(percent)}% thời gian cho phép`}
-      />
-      <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block', minWidth: 0 }}>
-        {DEADLINE_NOTE}
-      </Typography.Text>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 4 }}>
+        <Typography.Text type="secondary" style={{ fontSize: 11, minWidth: 0 }}>
+          {RUNNING_NOTE}
+        </Typography.Text>
+        <Button
+          size="small"
+          danger
+          data-testid={`activity-cancel-${row.step.id}`}
+          onClick={() => onCancel?.(row.step.id)}
+        >
+          Hủy
+        </Button>
+      </div>
     </div>
   );
 };
@@ -426,6 +436,7 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = React.memo(
   roster,
   debugLogs,
   onClearLogs,
+  onCancelToolCall,
   onClose,
   open = true,
 }) => {
@@ -566,7 +577,7 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = React.memo(
         data-testid="activity-tabpanel-timeline"
         style={{ flex: 1, minHeight: 0, minWidth: 0, overflowY: 'auto', padding: 12 }}
       >
-        {runningExplore ? <ProgressCard row={runningExplore} /> : null}
+        {runningExplore ? <ProgressCard row={runningExplore} onCancel={onCancelToolCall} /> : null}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 8, fontSize: 11, color: token.colorTextTertiary }}>
           <span>✓ xong</span>
           <span>› đang chạy</span>
@@ -585,7 +596,7 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = React.memo(
           />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
-            {visibleRows.map((row) => <TimelineEventRow key={row.step.id} row={row} />)}
+            {visibleRows.map((row) => <TimelineEventRow key={row.step.id} row={row} onCancel={onCancelToolCall} />)}
           </div>
         )}
       </div>

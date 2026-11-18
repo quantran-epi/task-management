@@ -44,6 +44,7 @@ import {
   type TeamRunSnapshot,
 } from '../../../services/ai/office/teamRunCoordinator';
 import { getOrCreateRun } from '../../../services/ai/office/teamRunManager';
+import { cancelToolCall } from '../../../services/sshService';
 import { advanceCursor } from '../../../services/ai/office/teamEventLog';
 import { setActiveTeamView } from '../../../services/ai/office/activeTeamView';
 import { isNotificationPermissionGranted, requestNotificationPermission } from '../../../utils/desktopNotification';
@@ -575,6 +576,13 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   );
   const clearDebugLogs = useCallback(() => setDebugLogs([]), []);
   const closeActivity = useCallback(() => setActivityOpen(false), []);
+  // Stable callback: AgentActivityPanel is memoized; a new function per render would
+  // rebuild the activity rail on every keystroke. Cancel is by call id only.
+  const handleCancelToolCall = useCallback((toolCallId: string) => {
+    void cancelToolCall(toolCallId).catch((err) => {
+      console.error('[TeamWorkspace] cancel_tool_call failed', err);
+    });
+  }, []);
 
   /** Memoized so a composer keystroke does not change the transcript list's props. */
   const messageListExtensions = useMemo(
@@ -1093,6 +1101,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
               roster={activityRoster}
               debugLogs={debugLogs}
               onClearLogs={clearDebugLogs}
+              onCancelToolCall={handleCancelToolCall}
               onClose={closeActivity}
               open={activityOpen}
             />

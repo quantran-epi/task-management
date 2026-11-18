@@ -33,7 +33,9 @@ export function createTabTurnRegistry(
     get(tabId, threadId) {
       const existing = entries.get(tabId);
       if (existing && existing.threadId === threadId) return existing.runtime;
-      if (existing) existing.runtime.abort();
+      // A thread switch must NOT abort the previous runtime: the Rust tool task keeps
+      // running and only an explicit Stop by call id may end it. Drop the stale handle
+      // (view state) and mint a fresh runtime for the new thread.
       const runtime = createChatTurnRuntime(createDeps(tabId, threadId));
       entries.set(tabId, { threadId, runtime });
       return runtime;
