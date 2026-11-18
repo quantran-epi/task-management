@@ -174,7 +174,7 @@ export async function executeSshListDir(
 }
 
 /**
- * Execute ssh_read_file tool call
+ * Execute ssh_read_file_page tool call
  */
 export async function executeSshReadFile(
   args: SshReadFileArgs,

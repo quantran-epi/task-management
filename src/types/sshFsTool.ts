@@ -4,7 +4,7 @@ export interface SshFsToolConfig {
   sshConfigId: string;
   /** Optional base path to scope or default searches/reads to (e.g. '/var/log' or '/home/app') */
   defaultBasePath?: string;
-  /** Max lines returned in a single ssh_read_file call (default: 200, max: 500) */
+  /** Max lines returned in a single ssh_read_file_page call (default: 200, max: 500) */
   maxLinesPerRead?: number;
   /** Max entries returned by ssh_list_dir (default: 100, max: 200) */
   maxListEntries?: number;

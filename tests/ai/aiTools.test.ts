@@ -2,6 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   executeAiTool,
   AI_DATABASE_TOOLS,
+  SSH_READ_TOOLS,
+  ORACLE_READ_TOOLS,
   isMutationTool,
   describeToolMutation,
   describeToolMutationWithContext,
@@ -319,9 +321,14 @@ describe('aiTools', () => {
 
   it('declares comprehensive query and mutation AI_DATABASE_TOOLS', () => {
     expect(AI_DATABASE_TOOLS.length).toBe(78);
+
+    const sshNames = SSH_READ_TOOLS.map((t) => t.function.name);
+    expect(sshNames).toEqual(['ssh_list_dir', 'ssh_read_file_page', 'ssh_grep_files']);
+    expect(sshNames.some((n) => ORACLE_READ_TOOLS.some((o) => o.function.name === n))).toBe(false);
     const names = AI_DATABASE_TOOLS.map((t) => t.function.name);
     // Local file read tool removed per checkpoint 261118-cz2 (no local FS reads).
     expect(names).not.toContain('read_file');
+    expect(names).toContain('ssh_read_file_page');
     expect(names).toContain('retrieve_knowledge');
     expect(names).toContain('generate_file');
     expect(names).toContain('generate_pptx');

@@ -2163,9 +2163,9 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
   {
     type: 'function',
     function: {
-      name: 'ssh_read_file',
+      name: 'ssh_read_file_page',
       description:
-        'Read a slice of lines from a remote text/code/log file over SSH. Refuses binary files. Returns numbered lines, total lines count, and pagination indicator to preserve AI context window.',
+        'Read a page of lines from a remote text/code/log file over SSH. Refuses binary files. Returns numbered lines, total lines count, and pagination indicator to preserve AI context window.',
       parameters: {
         type: 'object',
         properties: {
@@ -2284,7 +2284,7 @@ export async function executeAiTool(
         return await executeSshListDir(args as any, db);
       }
 
-      case 'ssh_read_file': {
+      case 'ssh_read_file_page': {
         return await executeSshReadFile(args as any, db);
       }
 
@@ -5053,6 +5053,15 @@ const MUTATION_TOOLS = new Set([
  */
 export const ORACLE_READ_TOOLS: AiToolDefinition[] = AI_DATABASE_TOOLS.filter((tool) =>
   ['oracle_query', 'oracle_describe'].includes(normalizeToolName(tool.function.name))
+);
+
+/**
+ * The SSH FS read trio, filtered from `AI_DATABASE_TOOLS` so the definitions are not
+ * duplicated. Used by the shared enablement gate in chatTurnTools so SSH tools are only
+ * advertised when enabled and a connection is configured.
+ */
+export const SSH_READ_TOOLS: AiToolDefinition[] = AI_DATABASE_TOOLS.filter((tool) =>
+  ['ssh_list_dir', 'ssh_read_file_page', 'ssh_grep_files'].includes(normalizeToolName(tool.function.name))
 );
 
 /**

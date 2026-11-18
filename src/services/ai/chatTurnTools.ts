@@ -177,7 +177,7 @@ const BUILTIN_USAGE_OVERRIDES: Record<string, ToolCatalogUsage> = {
       'telegramHeadlessWorker.ts:1468',
     ],
   },
-  ssh_read_file: {
+  ssh_read_file_page: {
     labels: ['Chat thường', 'Agent nhóm', 'Telegram headless'],
     references: [
       'AIChatDrawer.tsx:1802',

@@ -145,7 +145,7 @@ export async function readRemoteFile(
   }
   const effectiveSecret = await resolveSecret(config, secret);
   const { invoke } = await import('@tauri-apps/api/core');
-  return invoke<string>('ssh_read_file', {
+  return invoke<string>('ssh_read_file_all', {
     config,
     secret: effectiveSecret ?? null,
     remotePath,

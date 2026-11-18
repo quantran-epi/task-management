@@ -68,7 +68,7 @@ pub fn run() {
             telegram_gateway::send_telegram_action,
             ssh_service::ssh_test_connection,
             ssh_service::ssh_list_dir,
-            ssh_service::ssh_read_file,
+            ssh_service::ssh_read_file_all,
             ssh_service::ssh_read_file_slice,
             ssh_service::ssh_write_file,
             ssh_service::ssh_create_dir,

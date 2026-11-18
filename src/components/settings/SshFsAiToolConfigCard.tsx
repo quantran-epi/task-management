@@ -147,7 +147,7 @@ export const SshFsAiToolConfigCard: React.FC<SshFsAiToolConfigCardProps> = ({
     >
       <Paragraph type="secondary" style={{ fontSize: 13 }}>
         Cung cấp các công cụ đọc file và thư mục từ xa chỉ đọc (<code>ssh_list_dir</code>,{' '}
-        <code>ssh_read_file</code>, <code>ssh_grep_files</code>) cho AI Chat. AI chỉ được phép đọc nội
+        <code>ssh_read_file_page</code>, <code>ssh_grep_files</code>) cho AI Chat. AI chỉ được phép đọc nội
         dung phân đoạn và tìm kiếm văn bản trên máy chủ SSH đã cấu hình, tuyệt đối bảo vệ Context Window.
       </Paragraph>
 
@@ -156,7 +156,7 @@ export const SshFsAiToolConfigCard: React.FC<SshFsAiToolConfigCardProps> = ({
           name="enabled"
           label="Kích hoạt công cụ SSH File System cho AI"
           valuePropName="checked"
-          tooltip="Khi bật, AI Chat có thể gọi ssh_list_dir, ssh_read_file và ssh_grep_files trong quá trình suy luận."
+          tooltip="Khi bật, AI Chat có thể gọi ssh_list_dir, ssh_read_file_page và ssh_grep_files trong quá trình suy luận."
         >
           <Switch checkedChildren="BẬT" unCheckedChildren="TẮT" />
         </Form.Item>

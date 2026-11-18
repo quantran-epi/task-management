@@ -241,7 +241,7 @@ pub fn ssh_list_dir(
 }
 
 #[tauri::command]
-pub fn ssh_read_file(
+pub fn ssh_read_file_all(
     config: SshConfig,
     secret: Option<String>,
     remote_path: String,
