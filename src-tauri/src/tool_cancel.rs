@@ -15,6 +15,7 @@
 //! - The frontend stores the last snapshot in a module-level store so drawer/tab unmounts
 //!   cannot kill a task.
 
+use base64::Engine;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::io::Read;
@@ -128,6 +129,12 @@ impl ToolTaskRegistry {
     /// Mark every live task cancelled and SIGTERM each remote process group. Called on app
     /// exit after the event loop stops accepting new work. Kills are spawned asynchronously
     /// so shutdown never blocks the event loop on SSH.
+    ///
+    /// The map is deliberately NOT cleared here. A task cancelled before its PGID line
+    /// arrives has no group to kill yet; the reader kills on discovery, and the command
+    /// thread's cancel-poll loops too. Both look the task up by id, so removing it here
+    /// would leave the remote process running. `run_cancellable_remote_command` removes
+    /// each task exactly once when its reader has exited.
     pub fn cancel_all(&self) {
         let tasks: Vec<LiveTask> = self
             .tasks
@@ -136,9 +143,6 @@ impl ToolTaskRegistry {
             .unwrap_or_default();
         for task in tasks {
             let _ = task.cancel();
-        }
-        if let Ok(mut tasks) = self.tasks.lock() {
-            tasks.clear();
         }
     }
 }
@@ -257,8 +261,20 @@ impl OutputCoalescer {
 /// Launch the command under a NEW session so `setsid sh` is the process-group leader. It
 /// prints its own PGID as the first line; `exec` then replaces that shell with the real
 /// command, preserving the same PID/PGID. `kill -<pgid>` therefore targets the exact job.
-fn build_remote_command(command: &str) -> String {
-    format!("setsid sh -c 'echo $$; exec {command}'", command = command)
+///
+/// The command is carried as base64 through the SSH exec string, NOT interpolated inside
+/// `sh -c '<raw>'`: Oracle's `<<'EOF_ORACLE_SQLCL'` heredoc and git's `escapeShellArg()`
+/// single-quoted arguments would otherwise close the wrapper quote and execute a different
+/// command. The outer wrapper's single quotes contain ONLY the base64 alphabet (plus the
+/// fixed `echo $$; exec sh -c "$(...)"` code). The decoded payload becomes the single
+/// argument of the inner `sh -c`; shell command substitution is not re-expanded, so single
+/// quotes, heredocs and literal `$()` inside the original command survive byte-for-byte.
+pub fn build_remote_command(command: &str) -> String {
+    let encoded = base64::engine::general_purpose::STANDARD.encode(command.as_bytes());
+    format!(
+        "setsid sh -c 'echo $$; exec sh -c \"$(printf %s {encoded} | base64 -d)\"'",
+        encoded = encoded
+    )
 }
 
 /// Read a PGID from one output chunk. The first numeric line is the leader; banner lines are
@@ -268,13 +284,13 @@ fn read_pgid_line(text: &str) -> Option<u32> {
 }
 
 /// The short socket timeout on the tool session is a wake-up, never a termination reason.
-/// Any error that merely means "no bytes yet" must loop again, not produce `Done{error}`.
+/// Match by `ErrorKind` only: a loose substring match on "socket error" also swallowed real
+/// transport failures (broken pipe, reset connection), spinning forever with no output.
 fn is_wakeup_timeout(err: &std::io::Error) -> bool {
-    let text = err.to_string().to_lowercase();
-    text.contains("timed out")
-        || text.contains("would block")
-        || text.contains("resource temporarily unavailable")
-        || text.contains("socket error")
+    matches!(
+        err.kind(),
+        std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock | std::io::ErrorKind::Interrupted
+    )
 }
 
 /// Run a remote command with explicit cancellation only. The SSH read runs on a detached
@@ -552,7 +568,7 @@ mod tests {
     }
 
     #[test]
-    fn cancel_all_marks_every_live_token() {
+    fn cancel_all_marks_every_live_token_without_dropping_tasks() {
         let registry = ToolTaskRegistry::default();
         let a = Arc::new(AtomicBool::new(false));
         let b = Arc::new(AtomicBool::new(false));
@@ -561,16 +577,80 @@ mod tests {
         registry.cancel_all();
         assert!(a.load(Ordering::SeqCst));
         assert!(b.load(Ordering::SeqCst));
+        // D: the map must retain cancelled tasks until their reader discovers the PGID;
+        // otherwise the kill-on-discovery lookup returns None and the remote job survives.
+        assert_eq!(registry.cancel("a").unwrap(), true);
+        assert!(registry.take_for_kill("b").unwrap().is_some());
+        registry.remove("a");
+        registry.remove("b");
         assert_eq!(registry.cancel("a").unwrap(), false);
     }
 
     #[test]
-    fn remote_command_wraps_in_setsid_and_execs_command() {
+    fn cancel_before_pgid_discovery_retains_task_for_kill_on_discovery() {
+        let registry = ToolTaskRegistry::default();
+        let token = Arc::new(AtomicBool::new(false));
+        registry.register("early".into(), live_task(Arc::clone(&token)));
+        // Cancelled while pgid is still None — exactly the app-exit race in finding D.
+        registry.cancel("early").unwrap();
+        assert!(token.load(Ordering::SeqCst));
+        let retained = registry.take_for_kill("early").unwrap().expect("task retained");
+        assert!(retained.pgid.is_none());
+        // Reader discovers the PGID and kills it; config/secret are still available.
+        registry.set_pgid("early", 4242);
+        let discovered = registry.take_for_kill("early").unwrap().expect("task still retained");
+        assert_eq!(discovered.pgid, Some(4242));
+        assert_eq!(discovered.config.id, "s");
+        registry.remove("early");
+        assert!(registry.take_for_kill("early").unwrap().is_none());
+    }
+
+    /// Decode the payload the wrapper feeds to the inner `sh -c` so tests assert the exact
+    /// original command, not just that the wrapper contains a base64-looking blob.
+    fn decode_wrapped_command(wrapper: &str) -> String {
+        let start = wrapper.find("printf %s ").expect("printf marker") + "printf %s ".len();
+        let end = wrapper[start..].find(" | base64 -d").expect("decode marker") + start;
+        let encoded = &wrapper[start..end];
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .expect("valid base64 payload");
+        String::from_utf8(bytes).expect("utf-8 command")
+    }
+
+    #[test]
+    fn remote_command_wraps_in_setsid_and_preserves_original_command() {
         let command = build_remote_command("sqlcl -S");
         assert!(command.contains("setsid sh -c"));
         assert!(command.contains("echo $$"));
-        assert!(command.contains("exec sqlcl -S"));
-        assert!(!command.contains("echo $$ &&"));
+        assert!(command.contains("exec sh -c"));
+        assert_eq!(decode_wrapped_command(&command), "sqlcl -S");
+        // No raw command text inside the outer single-quoted wrapper: a quote/heredoc in
+        // the payload can never close it.
+        assert!(!command.contains("sqlcl"));
+    }
+
+    #[test]
+    fn remote_command_preserves_single_quotes_heredocs_and_command_substitution() {
+        let original = concat!(
+            "sqlcl -S user/'pass' <<'EOF_ORACLE_SQLCL'\n",
+            "select '$(literal)' from dual;\n",
+            "EOF_ORACLE_SQLCL\n",
+            "git -C '/srv/repo' diff --end-of-options 'main..feature/x' -- 'a b.txt'\n",
+            "printf '%s' \"$(date +%s)\"\n"
+        );
+        let wrapper = build_remote_command(original);
+        assert_eq!(decode_wrapped_command(&wrapper), original);
+        // The outer wrapper has exactly one single-quoted region; its contents contain no
+        // single quote, so nested quotes in the payload cannot break out.
+        let outer = wrapper
+            .split_once("setsid sh -c '")
+            .unwrap()
+            .1
+            .split_once("'")
+            .unwrap()
+            .0;
+        assert!(!outer.contains('\''));
+        assert!(outer.contains("echo $$; exec sh -c"));
     }
 
     #[test]
@@ -581,10 +661,15 @@ mod tests {
     }
 
     #[test]
-    fn socket_wakeup_is_not_a_task_error() {
+    fn socket_wakeup_is_not_a_task_error_but_real_socket_errors_are() {
         use std::io::{Error, ErrorKind};
         assert!(is_wakeup_timeout(&Error::new(ErrorKind::WouldBlock, "Resource temporarily unavailable")));
         assert!(is_wakeup_timeout(&Error::new(ErrorKind::TimedOut, "connection timed out")));
+        assert!(is_wakeup_timeout(&Error::new(ErrorKind::Interrupted, "interrupted")));
+        // E: the old substring match swallowed "socket error" even when the kind said the
+        // transport was gone, causing an infinite retry loop with no output.
+        assert!(!is_wakeup_timeout(&Error::new(ErrorKind::Other, "socket error 9: bad file descriptor")));
         assert!(!is_wakeup_timeout(&Error::new(ErrorKind::BrokenPipe, "broken pipe")));
+        assert!(!is_wakeup_timeout(&Error::new(ErrorKind::ConnectionReset, "connection reset by peer")));
     }
 }

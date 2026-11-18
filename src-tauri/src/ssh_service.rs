@@ -460,9 +460,9 @@ pub fn ssh_exec_command(
 
 /// Run a remote command without a PTY and stream stdout/stderr line by line.
 ///
-/// The command string is handed to `channel.exec` unwrapped: the remote login shell
-/// parses it directly, so the single-quoted arguments the frontend emits survive intact.
-/// An extra `sh -c` layer would add a second quoting level and break them (T-32-01).
+/// The command is wrapped once by `build_remote_command` (base64 payload inside a
+/// fixed single-quoted `setsid sh -c` launcher), never interpolated raw into a second
+/// shell string. Single-quoted arguments and heredocs from the frontend survive intact.
 #[tauri::command]
 pub fn ssh_exec_stream(
     app: AppHandle,
@@ -479,7 +479,7 @@ pub fn ssh_exec_stream(
 
     // `setsid` makes the reported pid a real process-group leader, so the id-only
     // `ssh_kill_process` can terminate the whole job with `kill -<pgid>`.
-    let remote_command = format!("setsid sh -c 'echo $$; exec {}'", command);
+    let remote_command = crate::tool_cancel::build_remote_command(&command);
     channel
         .exec(&remote_command)
         .map_err(|e| format!("Thực thi lệnh stream thất bại: {}", e))?;
