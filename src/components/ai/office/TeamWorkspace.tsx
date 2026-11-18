@@ -4,6 +4,7 @@ import { SettingOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { TaskPlannerDatabase } from '../../../db';
 import type {
+  AgentRunState,
   AiEmployee,
   AiLead,
   AiSkill,
@@ -124,6 +125,33 @@ const TERMINAL = new Set(['done', 'stopped', 'error']);
 
 function initialOf(name: string): string {
   return Array.from(name.trim())[0]?.toUpperCase() ?? '?';
+}
+
+/**
+ * Content signature for the memoized `agents` array. Exported so the regression is testable:
+ * a step result that keeps the same id/status but adds `resultPreview` MUST change this
+ * signature, otherwise `useMemo` returns the stale array and every React.memo consumer
+ * (Activity panel, transcript widgets) silently keeps the old preview.
+ */
+export function agentSnapshotSignature(agents: readonly AgentRunState[]): string {
+  return JSON.stringify(
+    agents.map((agent) => ({
+      ...agent,
+      steps: agent.steps?.map((s) => ({
+        id: s.id,
+        label: s.label,
+        at: s.at,
+        detail: s.detail,
+        toolName: s.toolName,
+        phase: s.phase,
+        startedAt: s.startedAt,
+        endedAt: s.endedAt,
+        durationMs: s.durationMs,
+        status: s.status,
+        resultPreview: s.resultPreview,
+      })),
+    }))
+  );
 }
 
 /** UI-SPEC §5b workspace: splitter, sidebar, transcript region and the shared widget. */
@@ -793,9 +821,11 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   // The coordinator emits a fresh `agents` array on every tool event (~50ms). Reuse the
   // previous array when its observable content is unchanged, otherwise React.memo on
   // AgentActivityPanel and the transcript subtree are defeated without any visual change.
-  const agentsSignature = snapshot.agents
-    .map((agent) => `${agent.agentId}:${agent.status}:${(agent.steps ?? []).map((s) => `${s.id}:${s.status ?? ''}:${s.phase ?? ''}`).join(',')}`)
-    .join('|');
+  // C: every rendered field MUST be in the signature. A tool result that keeps the same
+  // step id/status but adds `resultPreview`, `durationMs`, `endedAt`, `detail` or new
+  // `streamingText` otherwise reuses the stale array and the panel never re-renders.
+  // One JSON.stringify per agent keeps this O(n) — no per-render deep comparison.
+  const agentsSignature = agentSnapshotSignature(snapshot.agents);
   const stableAgents = useMemo(() => snapshot.agents, [agentsSignature]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Stable identity: an inline element here changed on every composer keystroke and forced the
