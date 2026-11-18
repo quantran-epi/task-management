@@ -716,7 +716,7 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     );
   });
 
-  it('escapes a branch payload in read_file — the object spec is built from escaped parts', async () => {
+  it('read_file never interpolates a branch payload into the working-tree command', async () => {
     queuePage(['1: export const x = 1;'], 1);
 
     await executeTeamTool(
@@ -725,14 +725,14 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
       ctx()
     );
 
-    // The object spec appears in the binary probe, which is the first remote call of page 1.
-    const cmd = vi.mocked(execRemoteCommand).mock.calls[0]![1];
-    // WR-07: pinned literal, independent of `escapeShellArg`. Building the expectation from the
-    // function under test would keep passing if it regressed to identity.
-    expect(cmd).toContain(
-      "git -C '/srv/repo' -c core.fsmonitor=false --no-pager cat-file -p --end-of-options " +
-        "''\\''; rm -rf /; echo '\\'':src/app.ts'"
-    );
+    // read_file serves the CURRENT WORKING TREE (owner decision 2026-11-17): no `cat-file`
+    // and no `<ref>:<path>` object spec is built, so an adversarial branch cannot reach the
+    // shell at all. The only path in the command is the confined file path.
+    const commands = vi.mocked(execRemoteCommand).mock.calls.map((call) => call[1]);
+    expect(commands).toHaveLength(2);
+    expect(commands.join('\n')).not.toContain('rm -rf /');
+    expect(commands[0]).toContain("realpath -- '/srv/repo/src/app.ts'");
+    expect(commands[0]).toContain('cat -- "$target"');
   });
 
   it('escapes a branch payload in log', async () => {
@@ -807,10 +807,16 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
   });
 
   it.each(['read_file', 'diff_file'])('%s preserves filename whitespace instead of selecting a different file', async (action) => {
+    let currentPath = '';
     vi.mocked(execRemoteCommand).mockImplementation(async (_config, command) => {
       // `read_file` page 1: the binary probe, then the pager pass.
       if (command.includes('od -An -tx1')) return { stdout: '', stderr: '', exitStatus: 1 };
-      const exact = command.includes("'main: spaced.txt '") || command.endsWith("-- ' spaced.txt '");
+      // The working-tree reader canonicalizes via realpath; diff_file passes a git
+      // pathspec. Both must carry the exact bytes of the requested path, whitespace
+      // included, or the shell selects a different file.
+      const exact =
+        command.includes(`realpath -- '/srv/repo/${currentPath}'`) ||
+        command.includes(`-- '${currentPath}'`);
       if (command.includes('###TOTAL')) {
         return {
           stdout: `1: ${exact ? 'EXACT-FILE' : 'OTHER-FILE'}\n###TOTAL 1\n`,
@@ -820,11 +826,11 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
       return { stdout: exact ? 'EXACT-FILE' : 'OTHER-FILE', stderr: '', exitStatus: 0 };
     });
     for (const filePath of [' spaced.txt ', 'spaced.txt']) {
+      currentPath = filePath;
       const res = JSON.parse(await executeTeamTool('git_read', {
         action, branch: 'main', base: 'main', target: 'feature/x', filePath,
       }, ctx()));
-      expect(res[action === 'read_file' ? 'content' : 'diff'])
-        .toContain(filePath === ' spaced.txt ' ? 'EXACT-FILE' : 'OTHER-FILE');
+      expect(res[action === 'read_file' ? 'content' : 'diff']).toContain('EXACT-FILE');
       expect(res.filePath).toContain(`\n${filePath}\n`);
     }
   });
@@ -931,8 +937,9 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     expect(execRemoteCommand).not.toHaveBeenCalled();
   });
 
-  it('does not fall back to the working copy when the ref itself is bad (WR-01)', async () => {
-    // `git cat-file` fails because the branch does not exist — not because the path is untracked.
+  it('a bad branch never triggers a ref lookup: read_file reads only the working tree', async () => {
+    // The source (working-tree canonicalize+cat) fails, not a `git cat-file` ref lookup.
+    // read_file deliberately ignores `branch`, so a typo cannot select another version.
     queueFailingSource("fatal: invalid object name 'mian'.");
 
     const res = JSON.parse(
@@ -943,23 +950,15 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
       )
     );
     expect(res).toMatchObject({ refused: true, code: 'GIT_READ_FAILED' });
-    // Exactly two commands: the page-1 probe and the failed pager pass. No `cat` of the working
-    // copy, which would have returned a different version labelled as branch `mian`.
     const commands = vi.mocked(execRemoteCommand).mock.calls.map((call) => call[1]);
     expect(commands).toHaveLength(2);
-    expect(commands.some((cmd) => cmd.includes('cat --'))).toBe(false);
+    expect(commands.join('\n')).not.toContain('cat-file');
+    expect(commands.join('\n')).not.toContain('mian');
   });
 
-  it('still falls back to the working copy for a path that is genuinely not in the ref', async () => {
-    // Ref branch: page-1 probe (text), then the pager pass reporting the missing path.
-    queueFailingSource("fatal: path 'untracked.ts' does not exist in 'main'");
-    // WR-01: the fallback confirms the path is untracked first; non-zero exit means it is.
-    queue(
-      { stdout: '', stderr: 'error: pathspec did not match any file(s) known to git', exitStatus: 1 },
-      // Working-copy source: its own page-1 probe, then the pager pass.
-      { stdout: '', stderr: '', exitStatus: 1 },
-      { stdout: '1: export const untracked = 1;\n###TOTAL 1\n', stderr: '###EXIT 0', exitStatus: 0 }
-    );
+  it('reads an untracked working-tree file directly, with no ref fallback pass', async () => {
+    // One source: the working tree. Page 1 costs exactly two calls (NUL probe + pager).
+    queuePage(['1: export const untracked = 1;'], 1);
 
     const res = JSON.parse(
       await executeTeamTool(
@@ -970,16 +969,17 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
     );
     expect(res.content).toContain('export const untracked = 1;');
     const commands = vi.mocked(execRemoteCommand).mock.calls.map((call) => call[1]);
+    expect(commands).toHaveLength(2);
     const catSnippet = commands.find((cmd) => cmd.includes('cat --'))!;
     expect(catSnippet).toContain("root=$(realpath -- '/srv/repo' && printf /) || exit 1;");
     expect(catSnippet).toContain("target=$(realpath -- '/srv/repo/untracked.ts' && printf /) || exit 1;");
     expect(catSnippet).toContain('case "$target" in "${root%/}/"*) cat -- "$target" ;; *) exit 77 ;; esac');
   });
 
-  it('does not fall back for a path tracked but deleted in the requested ref (WR-01)', async () => {
-    queueFailingSource("fatal: path 'gone.txt' exists on disk, but not in 'feature/x'");
-    // Tracked elsewhere → the ref genuinely lacks it, so the working copy must not substitute.
-    queue('gone.txt\n');
+  it('a ref that deleted a path cannot override the working-tree content', async () => {
+    // The owner decision makes the working tree the single source: no `git cat-file`, no
+    // "exists on disk, but not in ref" branch, so stale committed bytes never leak in.
+    queuePage(['1: current working-tree content'], 1);
 
     const res = JSON.parse(
       await executeTeamTool(
@@ -988,9 +988,10 @@ describe('teamTools git_read — definition, repo resolution, mutation class (AI
         ctx()
       )
     );
-    expect(res).toMatchObject({ refused: true, code: 'GIT_READ_FAILED' });
+    expect(res.content).toContain('current working-tree content');
     const commands = vi.mocked(execRemoteCommand).mock.calls.map((call) => call[1]);
-    expect(commands.some((cmd) => cmd.includes('cat --'))).toBe(false);
+    expect(commands.join('\n')).not.toContain('cat-file');
+    expect(commands.some((cmd) => cmd.includes('cat --'))).toBe(true);
   });
 
   // ---------------------------------------------------------------------------------------
