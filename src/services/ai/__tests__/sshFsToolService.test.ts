@@ -176,6 +176,25 @@ describe('sshFsToolService', () => {
       expect(execSpy).toHaveBeenCalledWith(
         mockSshConfig,
         expect.stringContaining("grep -n -I -s -- 'ERROR' '/var/log/app.log' | head -n 11"),
+        undefined,
+        undefined,
+      );
+    });
+
+    it('forwards the model call id so Cancel can stop the remote grep (review B)', async () => {
+      const execSpy = vi.spyOn(sshService, 'execRemoteCommand').mockResolvedValue({
+        stdout: '', stderr: '', exitStatus: 1,
+      });
+
+      await executeSshGrepFiles({
+        path: 'app.log', pattern: 'ERROR', recursive: true, caseSensitive: true, limit: 10,
+      }, mockDb, 'call-model-77');
+
+      expect(execSpy).toHaveBeenCalledWith(
+        mockSshConfig,
+        expect.stringContaining('grep'),
+        undefined,
+        'call-model-77',
       );
     });
 
@@ -198,6 +217,8 @@ describe('sshFsToolService', () => {
       expect(execSpy).toHaveBeenCalledWith(
         mockSshConfig,
         expect.stringContaining("grep -n -I -s -r -i -- 'exception' '/var/log'"),
+        undefined,
+        undefined,
       );
     });
   });
