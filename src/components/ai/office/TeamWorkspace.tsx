@@ -790,6 +790,14 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     }
   };
 
+  // The coordinator emits a fresh `agents` array on every tool event (~50ms). Reuse the
+  // previous array when its observable content is unchanged, otherwise React.memo on
+  // AgentActivityPanel and the transcript subtree are defeated without any visual change.
+  const agentsSignature = snapshot.agents
+    .map((agent) => `${agent.agentId}:${agent.status}:${(agent.steps ?? []).map((s) => `${s.id}:${s.status ?? ''}:${s.phase ?? ''}`).join(',')}`)
+    .join('|');
+  const stableAgents = useMemo(() => snapshot.agents, [agentsSignature]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Stable identity: an inline element here changed on every composer keystroke and forced the
   // whole widget subtree (indicator, plan card, proposals) to re-render (ai-chat-input-lag).
   const transcriptExtensions = useMemo(
@@ -797,7 +805,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
       <>
         <TeamActivityIndicator
           phase={snapshot.phase}
-          agents={snapshot.agents}
+          agents={stableAgents}
           agentDirectory={agentDirectory}
           leadId={team.leadId}
           {...(coordinator ? { onStopAgent: (agentId: string) => coordinator.stopAgent(agentId) } : {})}
@@ -826,7 +834,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         />
       </>
     ),
-    [snapshot.phase, snapshot.agents, snapshot.pendingPlan, snapshot.lastPlan,
+    [snapshot.phase, stableAgents, snapshot.pendingPlan, snapshot.lastPlan,
       snapshot.lastPlanDecision, planDecision, coordinator, agentDirectory, team.leadId,
       liveMembers, employees, skills, db]
   );
@@ -1101,7 +1109,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         {activityOpen ? (
           <Splitter.Panel defaultSize="28%" min={280} max="50%">
             <AgentActivityPanel
-              agents={snapshot.agents}
+              agents={stableAgents}
               roster={activityRoster}
               debugLogs={debugLogs}
               onClearLogs={clearDebugLogs}

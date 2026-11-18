@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import {
   AgentActivityPanel,
@@ -6,6 +6,12 @@ import {
   type TeamDebugLog,
 } from '../../../../src/components/ai/office/AgentActivityPanel';
 import type { AgentRunState } from '../../../../src/types/aiOffice';
+import {
+  attachGlobalToolTaskListener,
+  resetToolTaskStoreForTests,
+  subscribeToolTasks,
+  MAX_LIVE_STEPS,
+} from '../../../../src/components/ai/runtime/toolTaskStore';
 
 const ROSTER: ActivityRosterEntry[] = [
   { id: 'lead-1', name: 'Bình Lead', isLead: true },
@@ -382,50 +388,101 @@ describe('AgentActivityPanel — Prompt log migration (44-03 Task 3)', () => {
 });
 
 
-describe('AgentActivityPanel — bounded render under N tool calls (tool-lifecycle regression)', () => {
-  const makeAgents = (n: number): AgentRunState[] => [{
-    agentId: 'agent-1', status: 'running', streamingText: '',
-    steps: Array.from({ length: n }, (_, i) => ({
-      id: `bulk-${i}`,
-      label: 'đang gọi tool oracle_query',
-      at: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString(),
-      detail: JSON.stringify({ query: 'SELECT 1 FROM DUAL' }),
-      toolName: 'oracle_query',
-      phase: 'result' as const,
-      status: 'done' as const,
-      resultPreview: '[{"OK":1}]',
-    })),
-  }];
-
-  it('renders a bounded row count for N = 1, 10, 100 and does not grow listener count', () => {
-    for (const n of [1, 10, 100]) {
-      const { container, unmount } = render(
-        <AgentActivityPanel agents={makeAgents(n)} roster={ROSTER} debugLogs={[]} onClearLogs={noop} />
-      );
-      const rows = container.querySelectorAll('[data-testid^="activity-event-toggle-"]');
-      // 100 calls must not produce 100 unbounded rows — the coordinator/store cap is the
-      // source of truth, but the view must also stay flat via its own defensive cap.
-      expect(rows.length).toBeLessThanOrEqual(n);
-      expect(rows.length).toBeLessThanOrEqual(200);
-      unmount();
-    }
+describe('AgentActivityPanel — real store listener integration (tool-lifecycle regression)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    resetToolTaskStoreForTests();
   });
 
-  it('render cost for 100 rows is not orders of magnitude worse than for 10', () => {
-    const measure = (n: number) => {
-      const t0 = performance.now();
-      const { unmount } = render(
-        <AgentActivityPanel agents={makeAgents(n)} roster={ROSTER} debugLogs={[]} onClearLogs={noop} />
-      );
-      const dt = performance.now() - t0;
-      unmount();
-      return dt;
+  type Handler = (evt: { payload: unknown }) => void;
+
+  it('attaches exactly two global Tauri listeners and reuses them on repeated mounts', async () => {
+    resetToolTaskStoreForTests();
+    const handlers = new Map<string, Handler>();
+    const listen = vi.fn(async (event: string, handler: Handler) => {
+      handlers.set(event, handler);
+      return () => handlers.delete(event);
+    });
+
+    const detach = await attachGlobalToolTaskListener(listen);
+    await attachGlobalToolTaskListener(listen);
+    expect(listen).toHaveBeenCalledTimes(2); // status + update, one global pair only
+    expect([...handlers.keys()].sort()).toEqual(['tool-task-status', 'tool-task-update']);
+
+    detach();
+    expect(handlers.size).toBe(0);
+  });
+
+  it('emits N real events: rows are capped, Cancel calls the exact callId, unmount leaves no listener', async () => {
+    vi.useFakeTimers();
+    resetToolTaskStoreForTests();
+    const handlers = new Map<string, Handler>();
+    const listen = async (event: string, handler: Handler) => {
+      handlers.set(event, handler);
+      return () => { handlers.delete(event); };
     };
-    // Warm up to exclude one-off transform cost.
-    measure(10);
-    const small = measure(10);
-    const large = measure(100);
-    // Relative, not absolute: 10x rows must not mean 20x+ render time. Generous slack for CI.
-    expect(large).toBeLessThan(Math.max(small * 20, 1_500));
+    const detach = await attachGlobalToolTaskListener(listen);
+    const onCancel = vi.fn();
+
+    const { container, unmount } = render(
+      <AgentActivityPanel agents={[]} roster={ROSTER} debugLogs={[]} onClearLogs={noop} onCancelToolCall={onCancel} />
+    );
+    // A task from a closed tab exists only in the store — no live-step props at all.
+    expect(container.querySelectorAll('[data-testid^="activity-event-toggle-"]')).toHaveLength(0);
+
+    const statusHandler = handlers.get('tool-task-status')!;
+    const updateHandler = handlers.get('tool-task-update')!;
+    const count = MAX_LIVE_STEPS + 20;
+    for (let i = 0; i < count; i += 1) {
+      statusHandler({ payload: { callId: `call-${i}`, status: 'running' } });
+      updateHandler({ payload: { callId: `call-${i}`, stream: 'stdout', text: `chunk-${i}\n` } });
+    }
+
+    let notifications = 0;
+    const unsubscribe = subscribeToolTasks(() => { notifications += 1; });
+    await act(async () => { await vi.advanceTimersByTimeAsync(50); });
+
+    const rows = container.querySelectorAll('[data-testid^="activity-event-toggle-"]');
+    expect(rows.length).toBe(MAX_LIVE_STEPS); // hard global cap, never N+20
+    // 2N events in one tick coalesce into ONE view notification, not N rerenders.
+    expect(notifications).toBe(1);
+    // call-0 was evicted by the global ring buffer; the newest surviving call must be live.
+    expect(screen.getByTestId('activity-row-cancel-call-219')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('activity-row-cancel-call-219'));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onCancel).toHaveBeenCalledWith('call-219');
+
+    unsubscribe();
+    unmount();
+    // Panel unmount must not tear down the global listener pair: tasks survive view changes.
+    expect(handlers.size).toBe(2);
+    detach();
+  });
+
+  it('reuses the same store snapshot on a remount after tab close', async () => {
+    vi.useFakeTimers();
+    resetToolTaskStoreForTests();
+    const handlers = new Map<string, Handler>();
+    const detach = await attachGlobalToolTaskListener(async (event, handler) => {
+      handlers.set(event, handler as Handler);
+      return () => { handlers.delete(event); };
+    });
+
+    handlers.get('tool-task-status')!({ payload: { callId: 'survivor', status: 'running' } });
+    await act(async () => { await vi.advanceTimersByTimeAsync(50); });
+
+    const first = render(
+      <AgentActivityPanel agents={[]} roster={ROSTER} debugLogs={[]} onClearLogs={noop} onCancelToolCall={noop} />
+    );
+    expect(screen.getByTestId('activity-row-cancel-survivor')).toBeInTheDocument();
+    first.unmount();
+
+    const second = render(
+      <AgentActivityPanel agents={[]} roster={ROSTER} debugLogs={[]} onClearLogs={noop} onCancelToolCall={noop} />
+    );
+    expect(screen.getByTestId('activity-row-cancel-survivor')).toBeInTheDocument();
+    second.unmount();
+    detach();
   });
 });

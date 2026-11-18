@@ -28,6 +28,22 @@ const snapshots = new Map<string, ToolTaskSnapshot>();
 const listeners = new Set<Listener>();
 // Global ring buffer of call ids, capped so the activity rail can never grow without bound.
 const liveOrder: string[] = [];
+/** Cached array snapshot: stable identity between updates for useSyncExternalStore. */
+let orderedSnapshot: readonly ToolTaskSnapshot[] = [];
+
+function rebuildOrderedSnapshot(): void {
+  const next: ToolTaskSnapshot[] = [];
+  for (const callId of liveOrder) {
+    const snapshot = snapshots.get(callId);
+    if (snapshot) next.push(snapshot);
+  }
+  orderedSnapshot = next;
+}
+
+/** Stable-identity list for React views. Do not mutate the returned array. */
+export function getOrderedToolTasks(): readonly ToolTaskSnapshot[] {
+  return orderedSnapshot;
+}
 
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let attached = false;
@@ -65,12 +81,24 @@ export function upsertToolTask(patch: Partial<ToolTaskSnapshot> & { callId: stri
   };
   if (!current) {
     liveOrder.push(patch.callId);
-    while (liveOrder.length > MAX_LIVE_STEPS) {
-      const dropped = liveOrder.shift();
-      if (dropped) snapshots.delete(dropped);
+  } else {
+    // An existing call being updated is the most recent activity: move it to the end so a
+    // running task can never be evicted by a burst of older statuses.
+    const idx = liveOrder.indexOf(patch.callId);
+    if (idx >= 0) {
+      liveOrder.splice(idx, 1);
+      liveOrder.push(patch.callId);
+    } else {
+      liveOrder.push(patch.callId);
     }
   }
+  while (liveOrder.length > MAX_LIVE_STEPS) {
+    const dropped = liveOrder.shift();
+    if (dropped) snapshots.delete(dropped);
+  }
   snapshots.set(patch.callId, next);
+  // Keep the cached snapshot identity fresh immediately; notify is still throttled.
+  rebuildOrderedSnapshot();
   scheduleFlush();
 }
 
@@ -160,6 +188,7 @@ export async function attachGlobalToolTaskListener(
     listeners.clear();
     snapshots.clear();
     liveOrder.length = 0;
+    rebuildOrderedSnapshot();
     attached = false;
     detachFn = null;
   };

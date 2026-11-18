@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useSyncExternalStore, useState } from 'react';
 import { Button, Empty, Popconfirm, Tag, Tooltip, Typography, theme } from 'antd';
 import {
   CheckCircleOutlined,
@@ -9,6 +9,10 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import type { AgentLiveStep, AgentRunState } from '../../../types/aiOffice';
+import {
+  getOrderedToolTasks,
+  subscribeToolTasks,
+} from '../runtime/toolTaskStore';
 
 /** Stable id shared with the workspace Activity affordance's `aria-controls`. */
 export const ACTIVITY_RAIL_ID = 'agent-activity-rail';
@@ -142,6 +146,29 @@ function toTimelineRow(step: AgentLiveStep, agentId: string, nameOf: (id: string
     toolName: step.toolName ?? step.label,
     status: statusFromStep(step),
     sortMs: Number.isFinite(timestampMs) ? timestampMs : 0,
+  };
+}
+
+/**
+ * A store snapshot becomes a UI row so a tool task stays visible and cancellable even after
+ * its chat tab was closed. Existing live-step rows win by call id; the store only fills gaps.
+ */
+function toStoreRow(snapshot: { callId: string; status: string; updatedAt: number }): TimelineRow {
+  const step: AgentLiveStep = {
+    id: snapshot.callId,
+    label: snapshot.callId,
+    at: new Date(snapshot.updatedAt).toISOString(),
+    toolName: snapshot.callId,
+    phase: 'call',
+    status: snapshot.status === 'running' ? 'running' : snapshot.status === 'error' ? 'error' : 'done',
+  };
+  return {
+    step,
+    agentId: 'tool-task',
+    agentName: 'Tool task',
+    toolName: snapshot.callId,
+    status: step.status!,
+    sortMs: snapshot.updatedAt,
   };
 }
 
@@ -443,15 +470,25 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = React.memo(
   const { token } = theme.useToken();
   const [tab, setTab] = useState<TabKey>('timeline');
   const [filter, setFilter] = useState<string>('all');
+  // Real consumer of the module-level store: snapshot survives tab/view unmounts, so the
+  // Cancel button stays available for a task whose originating tab is already gone.
+  const storeTasks = useSyncExternalStore(subscribeToolTasks, getOrderedToolTasks, getOrderedToolTasks);
 
   const nameOf = (id: string) => roster.find((member) => member.id === id)?.name ?? id;
 
   const rows: TimelineRow[] = [];
+  const seen = new Set<string>();
   for (const agent of agents) {
     for (const step of agent.steps ?? []) {
       const row = toTimelineRow(step, agent.agentId, nameOf);
-      if (row) rows.push(row);
+      if (row) {
+        rows.push(row);
+        seen.add(row.step.id);
+      }
     }
+  }
+  for (const task of storeTasks) {
+    if (!seen.has(task.callId)) rows.push(toStoreRow(task));
   }
   rows.sort((a, b) => b.sortMs - a.sortMs);
 
