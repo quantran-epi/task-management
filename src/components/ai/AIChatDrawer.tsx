@@ -103,6 +103,7 @@ import type {
   ChatTurnRuntimeDeps,
   ChatTurnStatus,
 } from './runtime/chatTurnRuntime';
+import { capToolEvents } from './runtime/toolTaskStore';
 import { AiChatWidget } from './AiChatWidget';
 import { InterruptedBanner } from './InterruptedBanner';
 import { subscribeAIChatSync } from '../../services/ai/aiSyncChannel';
@@ -525,7 +526,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         },
         onToolEvent: (event) => {
           const existing = tabRuntimesRef.current.get(tabId)?.toolProgress;
-          const nextEvents = [...(tabRuntimesRef.current.get(tabId)?.toolEvents ?? []), event];
+          // Bounded, id-keyed append: results replace their call row and the list is capped
+          // globally, so N tool calls never grow the activity rail without limit.
+          const nextEvents = capToolEvents(tabRuntimesRef.current.get(tabId)?.toolEvents ?? [], event);
           patch({
             toolProgress: existing === event.name ? null : event.name,
             toolEvents: nextEvents,

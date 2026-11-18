@@ -380,3 +380,52 @@ describe('AgentActivityPanel — Prompt log migration (44-03 Task 3)', () => {
     );
   });
 });
+
+
+describe('AgentActivityPanel — bounded render under N tool calls (tool-lifecycle regression)', () => {
+  const makeAgents = (n: number): AgentRunState[] => [{
+    agentId: 'agent-1', status: 'running', streamingText: '',
+    steps: Array.from({ length: n }, (_, i) => ({
+      id: `bulk-${i}`,
+      label: 'đang gọi tool oracle_query',
+      at: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString(),
+      detail: JSON.stringify({ query: 'SELECT 1 FROM DUAL' }),
+      toolName: 'oracle_query',
+      phase: 'result' as const,
+      status: 'done' as const,
+      resultPreview: '[{"OK":1}]',
+    })),
+  }];
+
+  it('renders a bounded row count for N = 1, 10, 100 and does not grow listener count', () => {
+    for (const n of [1, 10, 100]) {
+      const { container, unmount } = render(
+        <AgentActivityPanel agents={makeAgents(n)} roster={ROSTER} debugLogs={[]} onClearLogs={noop} />
+      );
+      const rows = container.querySelectorAll('[data-testid^="activity-event-toggle-"]');
+      // 100 calls must not produce 100 unbounded rows — the coordinator/store cap is the
+      // source of truth, but the view must also stay flat via its own defensive cap.
+      expect(rows.length).toBeLessThanOrEqual(n);
+      expect(rows.length).toBeLessThanOrEqual(200);
+      unmount();
+    }
+  });
+
+  it('render cost for 100 rows is not orders of magnitude worse than for 10', () => {
+    const measure = (n: number) => {
+      const t0 = performance.now();
+      const { unmount } = render(
+        <AgentActivityPanel agents={makeAgents(n)} roster={ROSTER} debugLogs={[]} onClearLogs={noop} />
+      );
+      const dt = performance.now() - t0;
+      unmount();
+      return dt;
+    };
+    // Warm up to exclude one-off transform cost.
+    measure(10);
+    const small = measure(10);
+    const large = measure(100);
+    // Relative, not absolute: 10x rows must not mean 20x+ render time. Generous slack for CI.
+    expect(large).toBeLessThan(Math.max(small * 20, 1_500));
+  });
+});

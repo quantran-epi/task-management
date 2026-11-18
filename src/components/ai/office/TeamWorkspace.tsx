@@ -45,6 +45,9 @@ import {
 } from '../../../services/ai/office/teamRunCoordinator';
 import { getOrCreateRun } from '../../../services/ai/office/teamRunManager';
 import { cancelToolCall } from '../../../services/sshService';
+
+/** Bounded prompt-debug log shown in the activity rail (never grows without limit). */
+const MAX_DEBUG_LOGS = 100;
 import { advanceCursor } from '../../../services/ai/office/teamEventLog';
 import { setActiveTeamView } from '../../../services/ai/office/activeTeamView';
 import { isNotificationPermissionGranted, requestNotificationPermission } from '../../../utils/desktopNotification';
@@ -350,6 +353,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
               const text = typeof lastUserMsg === 'string' ? lastUserMsg : JSON.stringify(lastUserMsg);
               const toolNames = (opts.tools || []).map((t: any) => t.function?.name ?? t.name ?? 'tool');
 
+              // Bounded prompt log: an endless team run must not grow the rail's state.
               setDebugLogs((prev) => [
                 ...prev,
                 {
@@ -362,7 +366,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                   systemMessages,
                   toolNames,
                 },
-              ]);
+              ].slice(-MAX_DEBUG_LOGS));
               if (clientDeps.runLoop) {
                 return clientDeps.runLoop(opts);
               }

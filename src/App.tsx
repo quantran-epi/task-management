@@ -24,6 +24,8 @@ import { MermaidAssistantView } from './views/MermaidAssistantView';
 import { TimerProvider } from './context/TimerContext';
 import { KnowledgeConfigProvider } from './services/knowledge/knowledgeConfig';
 import { startNotificationDeepLinkListener } from './utils/notificationDeepLink';
+import { attachGlobalToolTaskListener } from './components/ai/runtime/toolTaskStore';
+import { isTauriApp } from './utils/timerPopout';
 
 const { defaultAlgorithm, darkAlgorithm } = theme;
 
@@ -67,7 +69,26 @@ export const App: React.FC = () => {
       console.warn('Storage persistence auto-request failed on boot:', err);
     });
     // Clicking an OS notification focuses the window and navigates to its target page.
-    return startNotificationDeepLinkListener();
+    const stopDeepLinks = startNotificationDeepLinkListener();
+
+    // ONE global tool-task listener for the whole app lifetime — it must not live in a
+    // chat tab, otherwise closing the tab would stop observing still-running tasks.
+    let stopToolTasks: (() => void) | undefined;
+    let cancelled = false;
+    if (isTauriApp()) {
+      void import('@tauri-apps/api/event').then(async ({ listen }) => {
+        if (cancelled) return;
+        const detach = await attachGlobalToolTaskListener(listen);
+        if (cancelled) detach();
+        else stopToolTasks = detach;
+      });
+    }
+    return () => {
+      cancelled = true;
+      stopDeepLinks();
+      // Detach only on real app teardown; drawer/tab unmounts never reach App's cleanup.
+      stopToolTasks?.();
+    };
   }, []);
 
   const renderContent = () => {

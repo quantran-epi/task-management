@@ -16,7 +16,10 @@ export interface TabRuntimeRegistry {
 const globalRuntimes = new Map<string, TabRuntime>();
 const globalListeners = new Set<() => void>();
 
-function notifyListeners() {
+let notifyTimer: ReturnType<typeof setTimeout> | null = null;
+const NOTIFY_COALESCE_MS = 50;
+
+function notifyNow() {
   globalListeners.forEach((listener) => {
     try {
       listener();
@@ -24,6 +27,19 @@ function notifyListeners() {
       console.error('[useTabRuntimes] Listener error:', err);
     }
   });
+}
+
+/**
+ * Coalesce subscriber notifications to ~50ms. The global Map is still updated immediately;
+ * only React's re-render is batched. This keeps typing smooth when many tool events land
+ * in one frame (ai-chat-input-lag).
+ */
+function notifyListeners() {
+  if (notifyTimer !== null) return;
+  notifyTimer = setTimeout(() => {
+    notifyTimer = null;
+    notifyNow();
+  }, NOTIFY_COALESCE_MS);
 }
 
 export function useTabRuntimes(): TabRuntimeRegistry {

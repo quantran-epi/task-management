@@ -390,7 +390,23 @@ let stepSeq = 0;
  * T-37.1-06-05: the snapshot must stay bounded. This ceiling is a DoS guard, not a UX
  * choice — the popover scrolls, so a real run's steps all fit within it.
  */
-const MAX_LIVE_STEPS = 200;
+export const MAX_LIVE_STEPS = 200;
+
+/**
+ * Global (not per-agent) step cap: N agents × 200 would still grow without bound. After a
+ * write, trim the oldest steps across agents until the whole snapshot fits the ceiling.
+ */
+export function capStepsGlobally(agents: Map<string, { steps?: AgentLiveStep[] | undefined }>): void {
+  const rows: Array<{ owner: { steps?: AgentLiveStep[] | undefined }; step: AgentLiveStep }> = [];
+  for (const state of agents.values()) {
+    for (const step of state.steps ?? []) rows.push({ owner: state, step });
+  }
+  if (rows.length <= MAX_LIVE_STEPS) return;
+  const keep = new Set(rows.slice(-MAX_LIVE_STEPS).map((r) => r.step));
+  for (const state of agents.values()) {
+    if (state.steps) state.steps = state.steps.filter((s) => keep.has(s));
+  }
+}
 
 /** D-22: a ledger row in one of these is settled — it must never take a second report row. */
 const TERMINAL_RUN_STATUSES: ReadonlySet<AiTeamAssignmentRunStatus> = new Set([
@@ -947,6 +963,7 @@ export function createTeamRunCoordinator(
       },
     ];
     updateAgent(agentId, { steps: next.slice(-MAX_LIVE_STEPS) });
+    capStepsGlobally(agents);
   }
 
   /**
@@ -1037,6 +1054,7 @@ export function createTeamRunCoordinator(
     if (index >= 0) next[index] = nextRow;
     else next.push(nextRow);
     updateAgent(agentId, { steps: next.slice(-MAX_LIVE_STEPS) });
+    capStepsGlobally(agents);
   }
 
   /**
