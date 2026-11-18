@@ -26,6 +26,7 @@ import { KnowledgeServerConfigCard } from '../components/settings/KnowledgeServe
 import { GhostDevConfigCard } from '../components/settings/GhostDevConfigCard';
 import { GlobalConventionsCard } from '../components/settings/GlobalConventionsCard';
 import { McpConfigCard } from '../components/settings/McpConfigCard';
+import { AiToolCatalogCard } from '../components/settings/AiToolCatalogCard';
 import { PwaStatusCard } from '../components/settings/PwaStatusCard';
 import { StoragePersistenceCard } from '../components/settings/StoragePersistenceCard';
 import { LocalSqlitePersistenceCard } from '../components/settings/LocalSqlitePersistenceCard';
@@ -238,6 +239,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <Typography.Text strong>Quy ước & công cụ AI</Typography.Text>
           <GlobalConventionsCard db={db} />
           <McpConfigCard db={db} />
+          <AiToolCatalogCard db={db} />
           <OracleAiToolConfigCard db={db} />
           <SshFsAiToolConfigCard db={db} />
           <Typography.Text strong>Trợ lý & Ghost Dev</Typography.Text>
