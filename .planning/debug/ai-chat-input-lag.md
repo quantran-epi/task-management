@@ -190,3 +190,28 @@ Chuỗi grep xác nhận (sau Step 0): không còn `timeoutSeconds | Promise.rac
 
 - commits: `1c24f9a5` (Rust), `5217f834` (Stop/callId), `7552d15b` (explore no-timeout), `31119db9` (store/panel/render).
 - status: awaiting_human_verify — cần build Tauri thật + SSH server để verify kill process group, đổi/đóng tab lúc tool chạy, Stop đúng task, tắt app.
+
+## Review Round 3 — 4 findings mới + 5 pre-existing red tests (2026-11-18 — FIXED)
+
+Tiêu chí user giữ nguyên: (1) mượt sau N tool call; (2) tool nặng chạy bất kể tab, chỉ dừng khi Hủy đúng callId hoặc tắt app — KHÔNG timeout/idle; (3) UI không block; (4) kiến trúc chuẩn.
+
+| Finding | File | Root cause | Fix | Status |
+|---|---|---|---|---|
+| A CRITICAL | `src-tauri/src/tool_cancel.rs:260`, `src-tauri/src/ssh_service.rs:482` | `setsid sh -c '<raw>'` không escape `'` → Oracle heredoc `<<'EOF'` và git `escapeShellArg()` bị gãy quote (regression từ `1c24f9a5`); test cũ chỉ dùng `sqlcl -S` nên false positive | base64-encode command; wrapper cố định `setsid sh -c 'echo $$; exec sh -c "$(printf %s B64 \| base64 -d)"'`; payload không nằm trong single-quote → mọi `'`, heredoc, `$()` giữ nguyên byte; echo $$ vẫn cho PGID thật. Thêm base64 0.21.7 (đã có trong Cargo.lock). Unit test decode payload + test shell thực | ELIMINATED (`a9d7b586`) |
+| B CRITICAL | `teamTools.ts:1204`, `gitRemoteService.ts`, `gitRemoteTreeService.ts`, `sshService.ts` | gitRead gọi execRemoteCommand thiếu callId → Rust đăng ký `local-*`; Drawer cancel `tc.id` trả false. SSH FS `ssh_grep_files` cùng bug | luồn `ctx.loopCallId` qua TẤT CẢ 8 action git_read + mọi fallback/probe; services nhận thêm `callId?`; `executeAiTool` truyền `options.callId` tới `executeSshGrepFiles`. Test assert `calls.at(-1)[3] === 'call-model-77'` cho mọi action + SSH FS | ELIMINATED (`677d4e81`, `202d94d7`, `2f2aaea8`) |
+| C WARNING | `TeamWorkspace.tsx:796` | signature chỉ `id:status:phase`; step cùng id nhận `resultPreview`/`durationMs`/`endedAt`/`detail`, agent nhận `streamingText` mới → useMemo trả array cũ, panel không render | export `agentSnapshotSignature` đưa MỌI field được render vào JSON.stringify (O(n)); useMemo phụ thuộc signature. Regression test emit snapshot mới cùng id/status nhưng preview khác → panel render preview mới | ELIMINATED (`b5ba22d3`, `24d76141`) |
+| D WARNING | `tool_cancel.rs:131` | `cancel_all` clear map ngay → task cancel trước khi PGID tới: reader `take_for_kill()` → None, sót process | bỏ `tasks.clear()`; map giữ task tới `registry.remove()` cuối `run_cancellable_remote_command`. Test cancel-before-PGID + retain | ELIMINATED (`a9d7b586`) |
+| E INFO | `tool_cancel.rs:272` | match substring `"socket error"` quá rộng → continue vô hạn khi socket lỗi thật | match `ErrorKind::{TimedOut, WouldBlock, Interrupted}`; test khẳng định Other/BrokenPipe/ConnectionReset KHÔNG phải wake-up | ELIMINATED (`a9d7b586`) |
+
+### 5 test pre-existing đỏ (baseline `c5321b66` = fix tree `e0990cff`)
+
+`teamToolsGitRead.test.ts` vẫn giả định `read_file` đọc ref-first qua `cat-file` + fallback working copy. Owner decision 2026-11-17 đã đổi sang working-tree-only (commit `02bce45ae`...). Điều chỉnh assertion theo behavior HIỆN TẠI của code, KHÔNG hạ tiêu chuẩn: branch payload không bao giờ vào shell, whitespace filename vẫn được kiểm tra byte-for-byte qua realpath, untracked file đọc thẳng, bad ref/deleted-in-ref không override working tree. Kết quả: **65/65 pass** (56 gốc + 9 test callId mới).
+
+### Verification vòng 3
+
+- `npx tsc --noEmit`: SẠCH (exit 0).
+- Focused vitest (KHÔNG full suite): 186/186 pass (8 files: git_read, SSH FS, stableAgents, chatTurnRuntime, AgentActivityPanel, toolTaskStore, remoteExplore, coordinatorGlobalCap) + 69/69 pass (gitRemoteService/Tree, readPipeline, ActivityRail).
+- Rust unit tests: thêm test cho A/D/E; `cargo check --offline` BỊ CHẶN `bit-vec 0.8.0` chưa cache; `cargo check` có network cũng chặn tải `cookie 0.18.2`. KHÔNG claim Rust compile verified. Đã verify shell wrapper bằng `sh -c` thật: payload với single quote, `$(...)`, heredoc decode và chạy đúng command gốc. Cần user build Tauri thật.
+- Grep timeout cấm: sạch trong explore/tool path; `set_read_timeout(30s)` chỉ ở interactive SSH; tool path dùng 250ms wake-up + ErrorKind.
+- Tự review: 4 finding mới = 0; 5 test đỏ = 0; CRITICAL/WARNING còn lại = 0.
+- commits vòng 3: `a9d7b586`, `677d4e81`, `b5ba22d3`, `3762d1b2`, `202d94d7`, `2f2aaea8`, `24d76141`, `a18f150b`.
