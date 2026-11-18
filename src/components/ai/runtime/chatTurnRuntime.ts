@@ -116,6 +116,12 @@ export interface ChatTurnRuntimeDeps {
   onAwaitingApproval?: (info: ChatTurnApprovalInfo) => void;
   onCompleted?: (message: { content: string; tokenUsage: ChatTokenUsage }) => void;
   onError?: (error: ChatTurnErrorInfo) => void;
+  /**
+   * Explicit Stop hook: the host cancels every RUNNING tool task for this tab by call id
+   * through the Rust registry BEFORE the local controller is aborted. Registry owns liveness;
+   * abort() alone only stops the UI turn and must never cancel a tool by itself.
+   */
+  onAbort?: (() => void) | undefined;
   /** Tool-produced files, forwarded to the host so it can keep rendering them. */
   onFileGenerated?: (file: ChatGeneratedFile) => void;
   /** Cumulative per-turn usage, so a coordinator never re-sums round deltas. */
@@ -201,6 +207,8 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
   let lastRequest: ChatTurnRequest | null = null;
   let lastUserMessageId: string | null = null;
   let pendingSave: Promise<ChatMessage> | null = null;
+  /** Guard so explicit Stop cancels registry tools exactly once per turn. */
+  let stopToolsRequested = false;
 
   const publish = (next: ChatTurnStatus) => {
     if (status === next) return;
@@ -223,6 +231,13 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
 
   const abort = () => {
     if (!running) return;
+    // Registry-first: every live tool task for this tab is cancelled by its real call id
+    // before the local loop is aborted. Guard against re-entry so repeated Stop clicks do
+    // not re-cancel tasks already settled.
+    if (!stopToolsRequested) {
+      stopToolsRequested = true;
+      deps.onAbort?.();
+    }
     controller?.abort();
     // A turn parked on an approval must not stay parked after abort.
     resolveApproval(false);
@@ -256,6 +271,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
         : undefined;
     declined = false;
     approvalResolver = null;
+    stopToolsRequested = false;
     lastRequest = request;
     const turnId = crypto.randomUUID();
     const turnController = new AbortController();
@@ -568,6 +584,12 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
       return { phase: 'complete', requestId: turnId, userMessageId, content: clean };
     } catch (err) {
       if (isAbortError(err) || turnController.signal.aborted) {
+        // An external AbortController abort can reach this path without `abort()` being
+        // called; the registry must still be told to cancel this tab's live tools.
+        if (!stopToolsRequested) {
+          stopToolsRequested = true;
+          deps.onAbort?.();
+        }
         publish('aborted');
         return { phase: 'aborted', requestId: turnId, userMessageId };
       }

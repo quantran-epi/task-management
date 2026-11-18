@@ -612,6 +612,18 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       );
       expect(source).not.toMatch(/from ['"]react['"]/);
     });
+
+    it('threads the model call id through every team-tool dispatch path', () => {
+      const source = readFileSync(
+        new URL('../../../../src/services/ai/office/teamRunCoordinator.ts', import.meta.url),
+        'utf8'
+      );
+      // 6th arg of executeToolFn is tc.id from the orchestrator loop; the wrapper must accept
+      // it and pass it to BOTH toolContext (team tools) and dispatchAiToolCall (local tools).
+      expect(source).toMatch(/loopCallId\?: string\n    \): Promise<string>/);
+      expect(source).toMatch(/toolContext\(agentId, signal, loopCallId\)/);
+      expect(source).toMatch(/\.\.\.\(loopCallId \? \{ callId: loopCallId \} : \{\}\)/);
+    });
   });
 
   describe('Task 2 — delegate_batch interception, plan park, concurrent batch', () => {

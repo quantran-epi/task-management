@@ -785,6 +785,31 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
     expect(assistants[0]?.tokenUsage?.cacheReadTokens).toBe(40);
     expect(assistants[0]?.tokenUsage?.cacheCreationTokens).toBe(2);
   });
+
+  it('explicit Stop cancels registry tools via onAbort BEFORE aborting the local loop', async () => {
+    const order: string[] = [];
+    const runtime = runtimeWith(async (options) => {
+      options.onTextChunk?.('partial ');
+      return await new Promise((_resolve, reject) => {
+        options.signal?.addEventListener('abort', () => {
+          order.push('controller-abort');
+          const err = new Error('aborted');
+          err.name = 'AbortError';
+          reject(err);
+        });
+      }) as never;
+    }, {
+      onAbort: () => { order.push('cancel-registry'); },
+    });
+
+    const turn = runtime.start(makeRequest({ threadId }));
+    await waitForStatus(() => statuses.includes('streaming'));
+    runtime.abort();
+    runtime.abort(); // repeated Stop must be idempotent on the registry
+    await turn;
+
+    expect(order).toEqual(['cancel-registry', 'controller-abort']);
+  });
 });
 
 describe('chatTurnRuntime team seams (D-07, D-12, D-13, D-19, D-21)', () => {

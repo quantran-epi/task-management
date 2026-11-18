@@ -36,7 +36,6 @@ import type { SshConfig } from '../../../types/ssh';
 import type { RemoteGitCommit } from '../../../types/gitRemote';
 import {
   clampExploreMaxTurns,
-  clampExploreTimeoutSeconds,
   probeRemoteClaude,
   runRemoteExplore,
 } from '../../../services/remoteExploreService';
@@ -88,6 +87,11 @@ export interface TeamToolContext {
    * must be able to kill it instead of leaving it reading until the wall clock fires.
    */
   signal?: AbortSignal | undefined;
+  /**
+   * The model's real tool-call id. Every heavy tool (git_read / explore_repo) registers this
+   * id with the tool registry so explicit Cancel can address the exact task by id only.
+   */
+  loopCallId?: string | undefined;
 }
 
 export type TeamToolRefusalCode =
@@ -390,7 +394,7 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
     function: {
       name: 'explore_repo',
       description:
-        'Giao một câu hỏi RỘNG cho Claude Code chạy trên chính máy remote (chỉ đọc) và nhận lại báo cáo tóm tắt kèm đường dẫn:dòng. Dùng khi muốn hiểu cả một vùng code mà nếu tự đọc sẽ tốn nhiều lần read_file. KHÔNG dùng cho một chỗ cụ thể — grep rồi read_file rẻ hơn. timeoutSeconds (60..900, mặc định 300) là giới hạn thời gian cho mỗi lần chạy.',
+        'Giao một câu hỏi RỘNG cho Claude Code chạy trên chính máy remote (chỉ đọc) và nhận lại báo cáo tóm tắt kèm đường dẫn:dòng. Dùng khi muốn hiểu cả một vùng code mà nếu tự đọc sẽ tốn nhiều lần read_file. KHÔNG dùng cho một chỗ cụ thể — grep rồi read_file rẻ hơn. Chạy đến khi xong; chỉ dừng khi bấm Hủy đúng tool call này.',
       parameters: {
         type: 'object',
         properties: {
@@ -407,10 +411,6 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
           maxTurns: {
             type: 'number',
             description: 'Số lượt tối đa của phiên chạy remote, mặc định 20, tối đa 40.',
-          },
-          timeoutSeconds: {
-            type: 'number',
-            description: 'Giới hạn thời gian chạy remote tính bằng giây, chấp nhận 60..900, mặc định 300.',
           },
         },
         required: ['question'],
@@ -1502,13 +1502,15 @@ async function exploreRepo(args: Record<string, any>, ctx: TeamToolContext): Pro
         ? suppliedModel
         : 'haiku';
     const maxTurns = clampExploreMaxTurns(args.maxTurns);
-    const timeoutMs = clampExploreTimeoutSeconds(args.timeoutSeconds) * 1000;
 
     const result = await runRemoteExplore(
       config,
       secret,
       { repoPath, question, model, maxTurns },
-      { timeoutMs, ...(ctx.signal ? { signal: ctx.signal } : {}) }
+      {
+        ...(ctx.signal ? { signal: ctx.signal } : {}),
+        ...(ctx.loopCallId ? { callId: ctx.loopCallId } : {}),
+      }
     );
 
     return JSON.stringify({

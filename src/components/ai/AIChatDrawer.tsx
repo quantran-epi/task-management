@@ -119,11 +119,18 @@ import type { ChatTab } from '../../types/models';
 import type { TabRuntimePatch, TabRuntimeStatus } from './runtime/tabTypes';
 import { stageLabelFor } from './runtime/useChatTurn';
 import { aiTurnManager, ACTIVE_AI_STATUSES } from '../../services/ai/aiTurnManager';
+import { cancelToolCall } from '../../services/sshService';
 
 // Module-level registry so background AI turns survive drawer unmounts and view navigation
 let globalTabTurnRegistry: TabTurnRegistry | null = null;
 let globalDbInstance: TaskPlannerDatabase | null = null;
 const globalHostAbortMap = new Map<string, AbortController>();
+/**
+ * Running tool call ids per tab. Registry owns liveness; this map is only an index so the
+ * explicit Stop path can address every live tool by its real model call id. Entries are
+ * removed on `result`/`abort` and on Stop, so repeated clicks are idempotent.
+ */
+const globalRunningToolIds = new Map<string, Set<string>>();
 
 /** Runtime turn status → drawer tab badge status. */
 export const TURN_STATUS_TO_TAB: Record<ChatTurnStatus, TabRuntimeStatus> = {
@@ -458,6 +465,14 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     hostAbortRef.current.get(tabId)?.abort();
     hostAbortRef.current.delete(tabId);
   };
+  const cancelRunningToolsForTab = (tabId: string) => {
+    const ids = globalRunningToolIds.get(tabId);
+    if (!ids?.size) return;
+    globalRunningToolIds.delete(tabId);
+    for (const callId of ids) {
+      void cancelToolCall(callId).catch(() => {});
+    }
+  };
 
   // Host-owned single call site: the runtime receives this loop as an injected dep.
   // Keeping the literal here is deliberate — `tests/phase25_1SafetyGates.test.ts` pins it.
@@ -524,7 +539,19 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           if (debugTurnId) aiDebugService.appendStreamChunk(debugTurnId, delta);
           aiTurnManager.updateTurn(tabId, { streamingText: next });
         },
+        onAbort: () => cancelRunningToolsForTab(tabId),
         onToolEvent: (event) => {
+          // Real model call ids are the only key the registry accepts. `call` adds, `result`
+          // removes; no timeout/watchdog is involved.
+          const running = globalRunningToolIds.get(tabId) ?? new Set<string>();
+          if (event.phase === 'call') {
+            running.add(event.id);
+            globalRunningToolIds.set(tabId, running);
+          } else {
+            running.delete(event.id);
+            if (running.size) globalRunningToolIds.set(tabId, running);
+            else globalRunningToolIds.delete(tabId);
+          }
           const existing = tabRuntimesRef.current.get(tabId)?.toolProgress;
           // Bounded, id-keyed append: results replace their call row and the list is capped
           // globally, so N tool calls never grow the activity rail without limit.
@@ -1133,6 +1160,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       preludeTokenRef.current.delete(activeRuntimeTabId);
       markPrelude(activeRuntimeTabId, false);
     }
+    // Explicit Stop is the ONLY user path that ends tool tasks: cancel by real call id via
+    // the registry, then abort the local turn. Idempotent if the runtime already did it.
+    cancelRunningToolsForTab(activeRuntimeTabId);
     abortHostTurn(activeRuntimeTabId);
     turnRegistryRef.current?.abortTab(activeRuntimeTabId);
     aiTurnManager.abortTurn(activeRuntimeTabId);

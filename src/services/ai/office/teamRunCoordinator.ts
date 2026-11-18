@@ -62,6 +62,7 @@ import { dispatchBudgetWarning, resetBudgetWarnings } from './budgetWarning';
 import { estimateTokens } from './tokenEstimate';
 import { getGlobalBudgetWarnThresholdPct } from '../budgetWarnSettings';
 import { getGlobalConventions } from '../../conventionService';
+import { cancelToolCall } from '../../sshService';
 import { buildConventionsSegment } from '../conventionsSegment';
 import {
   buildEmployeeTurnRequest,
@@ -1287,7 +1288,11 @@ export function createTeamRunCoordinator(
     return finalized;
   }
 
-  function toolContext(agentId: string, signal?: AbortSignal): TeamToolContext {
+  function toolContext(
+    agentId: string,
+    signal?: AbortSignal,
+    loopCallId?: string
+  ): TeamToolContext {
     const employee = roster.employees.find((row) => row.id === agentId);
     const skillId = employee?.skillId;
     // D-18: the pin comes from the attempt, never from `roster.skills` — the roster carries
@@ -1314,6 +1319,7 @@ export function createTeamRunCoordinator(
       ...(folderId ? { folderId } : {}),
       ...(liveTeam.docsFolderId ? { teamFolderId: liveTeam.docsFolderId } : {}),
       ...(signal ? { signal } : {}),
+      ...(loopCallId ? { loopCallId } : {}),
     };
   }
 
@@ -1429,10 +1435,12 @@ export function createTeamRunCoordinator(
       name: string,
       args: Record<string, any>,
       toolDb: TaskPlannerDatabase,
-      signal?: AbortSignal
+      signal?: AbortSignal,
+      _loopContext?: unknown,
+      loopCallId?: string
     ): Promise<string> => {
       const normalized = normalizeToolName(name);
-      const ctx = toolContext(agentId, signal);
+      const ctx = toolContext(agentId, signal, loopCallId);
 
       if (normalized === 'delegate_batch') {
         if (!roster.lead || agentId !== roster.lead.id) return EMPLOYEE_DELEGATE_REFUSAL;
@@ -1459,6 +1467,7 @@ export function createTeamRunCoordinator(
       const request = currentRequests.get(agentId);
       return dispatchAiToolCall(name, args, toolDb, signal, {
         allowMutation: request?.autoApprove ?? false,
+        ...(loopCallId ? { callId: loopCallId } : {}),
       });
     };
   }
@@ -1473,6 +1482,14 @@ export function createTeamRunCoordinator(
       ...base,
       ...overrides,
       db,
+      // Explicit Stop of an agent is the only path (besides app exit) that may end its tool
+      // tasks. Cancel by real call ids through the registry BEFORE the local turn is aborted.
+      onAbort: () => {
+        const inFlight = inFlightToolCalls.get(agentId);
+        if (inFlight) {
+          void cancelToolCall(inFlight.toolCallId).catch(() => {});
+        }
+      },
       // The runtime builds its own `executeToolFn`; the only seam that reaches it is the loop.
       runLoop: ((loopOptions) =>
         innerRunLoop({
