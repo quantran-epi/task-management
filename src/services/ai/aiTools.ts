@@ -2294,7 +2294,7 @@ export async function executeAiTool(
       }
 
       case 'ssh_grep_files': {
-        return await executeSshGrepFiles(args as any, db);
+        return await executeSshGrepFiles(args as any, db, options?.callId);
       }
 
       case 'oracle_query': {

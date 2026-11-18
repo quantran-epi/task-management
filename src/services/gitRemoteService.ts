@@ -27,11 +27,12 @@ export async function runGitCommand(
   config: SshConfig,
   repoPath: string,
   gitArgs: string[],
-  secret?: string
+  secret?: string,
+  callId?: string
 ): Promise<string> {
   // Read commands must never execute a repository-configured fsmonitor hook.
   const command = `git -C ${escapeShellArg(repoPath)} -c core.fsmonitor=false --no-pager ${gitArgs.join(' ')}`;
-  const res = await execRemoteCommand(config, command, secret);
+  const res = await execRemoteCommand(config, command, secret, callId);
   if (res.exitStatus !== 0) {
     throw new Error(res.stderr.trim() || `Lệnh git thất bại với exit code ${res.exitStatus}`);
   }
@@ -41,13 +42,15 @@ export async function runGitCommand(
 export async function getRemoteBranches(
   config: SshConfig,
   repoPath: string,
-  secret?: string
+  secret?: string,
+  callId?: string
 ): Promise<RemoteGitBranch[]> {
   const output = await runGitCommand(
     config,
     repoPath,
     ['for-each-ref', escapeShellArg('--format=%(refname:short)%00%(refname)'), 'refs/heads/', 'refs/remotes/origin/'],
-    secret
+    secret,
+    callId
   );
 
   const branches: RemoteGitBranch[] = [];
@@ -75,12 +78,13 @@ export async function getRemoteBranches(
 export async function checkDirtyStatus(
   config: SshConfig,
   repoPath: string,
-  secret?: string
+  secret?: string,
+  callId?: string
 ): Promise<RemoteGitStatus> {
   // WR-03: `-z` emits unquoted, NUL-separated paths, so a path with spaces or a rename no
   // longer arrives quoted (`"a b.txt"`) or arrow-joined (`a -> b`). A rename record is
   // `XY <new>\0<old>\0`; the new path is the one that exists now.
-  const output = await runGitCommand(config, repoPath, ['status', '--porcelain=v1', '-z'], secret);
+  const output = await runGitCommand(config, repoPath, ['status', '--porcelain=v1', '-z'], secret, callId);
   const tokens = output.split('\0').filter((t) => t.length > 0);
 
   const uncommittedFiles: RemoteGitStatus['uncommittedFiles'] = [];
@@ -138,7 +142,8 @@ export async function getCommitLog(
   repoPath: string,
   base: string,
   target: string,
-  secret?: string
+  secret?: string,
+  callId?: string
 ): Promise<RemoteGitCommit[]> {
   const rangeArg = escapeShellArg(`${base}..${target}`);
   const output = await runGitCommand(
@@ -147,7 +152,8 @@ export async function getCommitLog(
     // CR-01: options first, revision after `--end-of-options`. Without the terminator a
     // range beginning with `-` (e.g. `--output=/path..main`) is parsed as a git option.
     ['log', "--format='%x1e%H%x00%h%x00%an%x00%ad%x00%s'", '--date=iso', '--end-of-options', rangeArg],
-    secret
+    secret,
+    callId
   );
   return parseCommitLog(output);
 }
@@ -161,7 +167,8 @@ export async function getRecentCommits(
   repoPath: string,
   branch: string,
   limit: number,
-  secret?: string
+  secret?: string,
+  callId?: string
 ): Promise<RemoteGitCommit[]> {
   const output = await runGitCommand(
     config,
@@ -176,7 +183,8 @@ export async function getRecentCommits(
       '--end-of-options',
       escapeShellArg(branch),
     ],
-    secret
+    secret,
+    callId
   );
   return parseCommitLog(output);
 }
@@ -186,7 +194,8 @@ export async function getDiffSummary(
   repoPath: string,
   base: string,
   target: string,
-  secret?: string
+  secret?: string,
+  callId?: string
 ): Promise<RemoteDiffSummary> {
   const rangeArg = escapeShellArg(`${base}..${target}`);
 
@@ -196,12 +205,13 @@ export async function getDiffSummary(
     config,
     repoPath,
     ['rev-parse', '--verify', '--end-of-options', escapeShellArg(target)],
-    secret
+    secret,
+    callId
   );
   const headSha = headShaOut.trim();
 
   // Get commit list
-  const commits = await getCommitLog(config, repoPath, base, target, secret);
+  const commits = await getCommitLog(config, repoPath, base, target, secret, callId);
 
   // WR-12: `--no-ext-diff --no-textconv` so repo-local diff drivers never run on read.
   // CR-01: `--end-of-options` before the range.
@@ -212,7 +222,8 @@ export async function getDiffSummary(
     config,
     repoPath,
     ['diff', '--numstat', '-z', '-M', ...diffFlags],
-    secret
+    secret,
+    callId
   );
 
   // Get name-status output — same `-z` shape.
@@ -220,7 +231,8 @@ export async function getDiffSummary(
     config,
     repoPath,
     ['diff', '--name-status', '-z', '-M', ...diffFlags],
-    secret
+    secret,
+    callId
   );
 
   const statusMap = new Map<string, 'added' | 'modified' | 'deleted' | 'renamed'>();
@@ -337,7 +349,8 @@ export async function getFileDiff(
   base: string,
   target: string,
   filePath: string,
-  secret?: string
+  secret?: string,
+  callId?: string
 ): Promise<string> {
   const rangeArg = escapeShellArg(`${base}..${target}`);
   return runGitCommand(
@@ -346,7 +359,8 @@ export async function getFileDiff(
     // WR-12: no repo-local diff drivers. CR-01: `--end-of-options` before the range; the
     // `--literal-pathspecs` also prevents glob/magic expansion of a single filename.
     ['--literal-pathspecs', 'diff', '--no-ext-diff', '--no-textconv', '--end-of-options', rangeArg, '--', escapeShellArg(filePath)],
-    secret
+    secret,
+    callId
   );
 }
 
@@ -378,7 +392,8 @@ export async function grepRemoteRef(
   repoPath: string,
   ref: string,
   options: GrepRemoteRefOptions,
-  secret?: string
+  secret?: string,
+  callId?: string
 ): Promise<{ hits: RemoteGrepHit[]; truncated: boolean }> {
   const limit = Math.min(Math.max(1, Math.floor(Number(options.limit)) || 50), 200);
   const flags = ['-z', '-n', '-I', '--no-color'];
@@ -402,7 +417,7 @@ export async function grepRemoteRef(
   // dropped hits were reported as a complete result.
   const command =
     `{ ${parts.join(' ')}; printf '###EXIT %s\\n' "$?" >&2; } | head -c ${GREP_BYTE_CAP + 1}`;
-  const res = await execRemoteCommand(config, command, secret);
+  const res = await execRemoteCommand(config, command, secret, callId);
 
   // The marker is the only evidence the remote command ran to completion, so its absence is a
   // failure, not exit 0: a dropped SSH channel left a partial stream that would otherwise be
@@ -485,13 +500,15 @@ export async function checkHeadDrift(
   repoPath: string,
   targetBranch: string,
   expectedHeadSha: string,
-  secret?: string
+  secret?: string,
+  callId?: string
 ): Promise<{ drifted: boolean; currentHeadSha: string }> {
   const stdout = await runGitCommand(
     config,
     repoPath,
     ['rev-parse', '--verify', '--end-of-options', escapeShellArg(targetBranch)],
-    secret
+    secret,
+    callId
   );
   const currentHeadSha = stdout.trim();
   return {

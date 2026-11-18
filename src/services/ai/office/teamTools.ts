@@ -1203,6 +1203,10 @@ function revisionArg(value: unknown): string | undefined {
  */
 async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise<string> {
   const action = typeof args.action === 'string' ? args.action : '';
+  // CRITICAL B: the model's call id must reach EVERY remote command of EVERY action,
+  // including the fallback probes. Without it Rust registers a `local-*` id and the
+  // Drawer's `cancel_tool_call(tc.id)` returns false — a heavy git task cannot be stopped.
+  const callId = ctx.loopCallId;
   // WR-05: repo resolution is inside the try. `listTeamLinks`, `db.systems.get`,
   // `getSshConfigById` and `getSshSecret` all await Dexie, and a closed/quota-failed DB used
   // to reject out of `executeTeamTool`, breaking the "a refusal is a returned value, never a
@@ -1221,7 +1225,7 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
 
     switch (action) {
       case 'branches': {
-        const branches = await getRemoteBranches(config, repoPath, secret);
+        const branches = await getRemoteBranches(config, repoPath, secret, callId);
         return JSON.stringify({
           ...base,
           branches: branches.map((b) => ({
@@ -1232,7 +1236,7 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
         });
       }
       case 'status': {
-        const status = await checkDirtyStatus(config, repoPath, secret);
+        const status = await checkDirtyStatus(config, repoPath, secret, callId);
         return JSON.stringify({
           ...base,
           isClean: status.isClean,
@@ -1259,7 +1263,7 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
             refuse('INVALID_ARGUMENT', 'log: branch phải là tên nhánh, không bắt đầu bằng "-".')
           );
         }
-        const commits = await getRecentCommits(config, repoPath, branch, limit, secret);
+        const commits = await getRecentCommits(config, repoPath, branch, limit, secret, callId);
         return JSON.stringify({
           ...base,
           branch,
@@ -1278,7 +1282,7 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
             )
           );
         }
-        const summary = await getDiffSummary(config, repoPath, baseBranch, targetBranch, secret);
+        const summary = await getDiffSummary(config, repoPath, baseBranch, targetBranch, secret, callId);
         return JSON.stringify({
           ...base,
           baseBranch: summary.baseBranch,
@@ -1315,7 +1319,8 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
           baseBranch,
           targetBranch,
           cleanPath,
-          secret
+          secret,
+          callId
         );
         return JSON.stringify({
           ...base,
@@ -1345,7 +1350,8 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
           filePath,
           Number(args.offset),
           Number(args.limit),
-          secret
+          secret,
+          callId
         );
         return JSON.stringify({
           ...base,
@@ -1372,7 +1378,7 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
         }
         // IN-02 is Info-tier and out of this fix pass: `dirPath` is passed through untrimmed.
         const dirPath = typeof args.dirPath === 'string' ? args.dirPath : undefined;
-        const nodes = await getRemoteTree(config, repoPath, branch, dirPath, secret);
+        const nodes = await getRemoteTree(config, repoPath, branch, dirPath, secret, callId);
         return JSON.stringify({
           ...base,
           branch,
@@ -1420,7 +1426,8 @@ async function gitRead(args: Record<string, any>, ctx: TeamToolContext): Promise
             literal: args.literal === true,
             limit: args.limit,
           },
-          secret
+          secret,
+          callId
         );
         // Zero hits is a successful empty result, never a refusal: `git grep` exit 1 is normal.
         return JSON.stringify({

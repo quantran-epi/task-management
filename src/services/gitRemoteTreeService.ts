@@ -178,7 +178,8 @@ export async function getRemoteTree(
   repoPath: string,
   ref: string,
   dirPath?: string,
-  secret?: string
+  secret?: string,
+  callId?: string
 ): Promise<RemoteGitTreeNode[]> {
   const cleanDir = dirPath ? confineRepoPath(dirPath, 'Đường dẫn thư mục') : '';
   const treeRef = cleanDir ? `${ref}:${cleanDir}` : ref;
@@ -188,7 +189,7 @@ export async function getRemoteTree(
   // ASCII (`"th\306\260-m\341\273\245c"`), and that string is not a usable path — feeding it
   // back as `dirPath` fails, and the model sees escaped octal instead of the real name.
   const gitArgs = ['ls-tree', '-l', '-z', '--end-of-options', escapeShellArg(treeRef)];
-  const stdout = await runGitCommand(config, repoPath, gitArgs, secret);
+  const stdout = await runGitCommand(config, repoPath, gitArgs, secret, callId);
 
   const nodes: RemoteGitTreeNode[] = [];
 
@@ -216,7 +217,8 @@ export async function getRemoteFileContent(
   repoPath: string,
   ref: string,
   filePath: string,
-  secret?: string
+  secret?: string,
+  callId?: string
 ): Promise<string> {
   const cleanPath = confineRepoPath(filePath, 'Đường dẫn tệp');
   const objectSpec = `${ref}:${cleanPath}`;
@@ -225,7 +227,7 @@ export async function getRemoteFileContent(
   // cat-file does not invoke repo-local diff drivers or textconv.
   const gitArgs = ['cat-file', '-p', '--end-of-options', escapeShellArg(objectSpec)];
   try {
-    return await runGitCommand(config, repoPath, gitArgs, secret);
+    return await runGitCommand(config, repoPath, gitArgs, secret, callId);
   } catch (err: any) {
     if (!isNotInRef(err, cleanPath, ref)) throw err;
     // WR-01: "exists on disk, but not in <ref>" also matches a path that is TRACKED but deleted
@@ -235,14 +237,15 @@ export async function getRemoteFileContent(
       config,
       `git -C ${escapeShellArg(repoPath)} -c core.fsmonitor=false --no-pager --literal-pathspecs ` +
         `ls-files --error-unmatch -- ${escapeShellArg(cleanPath)}`,
-      secret
+      secret,
+      callId
     );
     if (probe.exitStatus === 0) throw err;
     // Only exit 1 means untracked; infrastructure and SSH failures must stay failures.
     if (probe.exitStatus !== 1) {
       throw new Error(probe.stderr.trim() || `Lệnh git thất bại với exit code ${probe.exitStatus}`);
     }
-    return await getRemoteWorkingFileContent(config, repoPath, cleanPath, secret);
+    return await getRemoteWorkingFileContent(config, repoPath, cleanPath, secret, callId);
   }
 }
 
@@ -254,11 +257,12 @@ export async function getRemoteWorkingFileContent(
   config: SshConfig,
   repoPath: string,
   filePath: string,
-  secret?: string
+  secret?: string,
+  callId?: string
 ): Promise<string> {
   // CR-02: exported, so it confines on its own rather than trusting the caller's path.
   const cleanPath = confineRepoPath(filePath, 'Đường dẫn tệp');
-  const res = await execRemoteCommand(config, workingCopyCatSnippet(repoPath, cleanPath), secret);
+  const res = await execRemoteCommand(config, workingCopyCatSnippet(repoPath, cleanPath), secret, callId);
   if (res.exitStatus === 77) {
     throw new PathOutsideRepoError(`Đường dẫn symlink ngoài repo, từ chối đọc: ${cleanPath}`);
   }
@@ -390,7 +394,8 @@ export async function readRemoteFilePage(
   filePath: string,
   offset: number,
   limit: number,
-  secret?: string
+  secret?: string,
+  callId?: string
 ): Promise<RemoteFilePage> {
   const cleanPath = confineRepoPath(filePath, 'Đường dẫn tệp');
   const pageOffset = Math.max(1, Math.floor(Number(offset)) || 1);
@@ -402,7 +407,8 @@ export async function readRemoteFilePage(
     cleanPath,
     pageOffset,
     pageLimit,
-    secret
+    secret,
+    callId
   );
 }
 
@@ -412,11 +418,12 @@ async function readPageFromSource(
   filePath: string,
   offset: number,
   limit: number,
-  secret?: string
+  secret?: string,
+  callId?: string
 ): Promise<RemoteFilePage> {
   // A later page of a file already known binary never reaches here, so probe on page 1 only.
   if (offset === 1) {
-    const probe = await execRemoteCommand(config, binaryProbeCommand(source), secret);
+    const probe = await execRemoteCommand(config, binaryProbeCommand(source), secret, callId);
     if (probe.exitStatus === 0) {
       return {
         filePath,
@@ -431,7 +438,7 @@ async function readPageFromSource(
     }
   }
 
-  const res = await execRemoteCommand(config, pageCommand(source, offset, limit), secret);
+  const res = await execRemoteCommand(config, pageCommand(source, offset, limit), secret, callId);
   // The marker is the only evidence the remote command completed. Without it `###TOTAL` was
   // never printed either, so `totalLines` would be 0 and `hasMore` false — a short page
   // presented as the whole file. Fail closed instead.

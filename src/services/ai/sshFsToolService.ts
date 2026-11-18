@@ -241,6 +241,7 @@ export async function executeSshReadFile(
 export async function executeSshGrepFiles(
   args: SshGrepFilesArgs,
   db: TaskPlannerDatabase = defaultDb,
+  callId?: string,
 ): Promise<string> {
   const start = performance.now();
   try {
@@ -273,7 +274,7 @@ export async function executeSshGrepFiles(
     // Command piped to head to strictly prevent overwhelming buffer/network
     const command = `grep ${flags.join(' ')} -- ${quotedPattern} ${quotedPath} | head -n ${limit + 1}`;
 
-    const output = await execRemoteCommand(sshConfig, command);
+    const output = await execRemoteCommand(sshConfig, command, undefined, callId);
 
     if (output.exitStatus !== 0 && output.exitStatus !== 1) {
       throw new Error(
