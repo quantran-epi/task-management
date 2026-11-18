@@ -17,17 +17,6 @@ export const DEFAULT_ORACLE_CONFIG: OracleToolConfig = {
   timeoutSeconds: 30,
 };
 
-/** UI contract: Settings modal + config card clamp timeoutSeconds to 5..120. */
-export const ORACLE_MIN_TIMEOUT_SECONDS = 5;
-export const ORACLE_MAX_TIMEOUT_SECONDS = 120;
-
-/** Clamp a caller-supplied timeout into the advertised 5..120s range; invalid → 30s default. */
-export function clampOracleTimeoutSeconds(value: unknown): number {
-  const n = Math.floor(Number(value));
-  if (!Number.isFinite(n)) return DEFAULT_ORACLE_CONFIG.timeoutSeconds!;
-  return Math.min(Math.max(ORACLE_MIN_TIMEOUT_SECONDS, n), ORACLE_MAX_TIMEOUT_SECONDS);
-}
-
 /**
  * Loads the active Oracle SQLcl AI Tool configuration from database settings.
  */
@@ -200,27 +189,7 @@ async function runSqlclScriptOverSsh(
   // -s: silent mode, -L: attempt login only once (prevents locking accounts)
   const remoteCommand = `${envPrefix}${sqlclBin} -s -L '${config.connectionString}' << 'EOF_ORACLE_SQLCL'\n${sqlScript}\nEXIT;\nEOF_ORACLE_SQLCL`;
 
-  const timeoutSeconds = clampOracleTimeoutSeconds(config.timeoutSeconds);
-  const timeoutMs = timeoutSeconds * 1000;
-
-  // Client-side wall-clock watchdog. ssh_exec_command is a synchronous Tauri command whose
-  // channel.read_to_end() has no EOF deadline: when SQLcl wedges, the invoke() promise never
-  // settles and the whole AI turn hangs. Bound it here so the tool always resolves. The Rust
-  // command also receives timeoutSeconds so a bounded build releases its worker thread; this
-  // watchdog is the guarantee for builds where the remote never closes the channel.
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      execRemoteCommand(targetSsh, remoteCommand, secret ?? undefined, timeoutSeconds),
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => {
-          reject(new Error(`Oracle SQLcl hết thời gian chờ (timeout ${timeoutSeconds}s).`));
-        }, timeoutMs);
-      }),
-    ]);
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
-  }
+  return await execRemoteCommand(targetSsh, remoteCommand, secret ?? undefined);
 }
 
 /**
