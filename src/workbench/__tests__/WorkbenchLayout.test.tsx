@@ -111,6 +111,38 @@ describe('WorkbenchLayout Integration', () => {
     expect(tab?.params?.targetMessageId).toBeFalsy();
   });
 
+  it('clears a stale deeplink highlight when the team tab is reopened normally', () => {
+    render(<WorkbenchLayout />);
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(NOTIFICATION_DEEPLINK_EVENT, {
+          detail: { route: '#/team?teamId=team-77&messageId=msg-5' },
+        })
+      );
+    });
+    expect(
+      useLayoutStore.getState().openTabs.find((t) => t.id === 'team_workspace:team-77')?.params
+        ?.targetMessageId
+    ).toBe('msg-5');
+
+    // Reopen from AI Office explorer / active-turn indicator passes only teamId. The
+    // notification highlight is one-shot and must not stick to the reused tab.
+    act(() => {
+      useLayoutStore.getState().openTab({
+        id: 'team_workspace:team-77',
+        title: 'Nhóm AI',
+        viewType: 'team_workspace',
+        closable: true,
+        params: { teamId: 'team-77' },
+      });
+    });
+    const tab = useLayoutStore
+      .getState()
+      .openTabs.find((t) => t.id === 'team_workspace:team-77');
+    expect(tab?.params?.targetMessageId).toBeUndefined();
+  });
+
   it('ignores the retired ghost-dev agents deeplink (no Ghost Dev Agents tab opens)', () => {
     render(<WorkbenchLayout />);
     act(() => {

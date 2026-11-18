@@ -20,18 +20,16 @@ import { DEFAULT_TASK_FILTER_STATE } from '../utils/filter';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import type { TaskPlannerDatabase } from '../db';
 import type { Task, ChangeRequest, System } from '../types/models';
-import type { AppRoute } from '../types/navigation';
 
 const { Text } = Typography;
 
 export interface TasksViewProps {
   db?: TaskPlannerDatabase;
-  onNavigate?: (route: AppRoute) => void;
   initialCrId?: string | null | undefined;
   quickAddRequest?: string | undefined;
 }
 
-export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, onNavigate, initialCrId, quickAddRequest }) => {
+export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrId, quickAddRequest }) => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -333,7 +331,6 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, onNavigate
         onSelectCr={handleSelectCr}
         isFiltered={isFiltered}
         db={db}
-        onNavigate={onNavigate}
         globalSort={globalSort}
         onGlobalSortChange={setGlobalSort}
       />
@@ -354,7 +351,6 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, onNavigate
         open={drawerOpen}
         onClose={handleCloseDrawer}
         db={db}
-        onNavigate={onNavigate}
       />
 
       {/* Task Selector Modal for Feasibility */}

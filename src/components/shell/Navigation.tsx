@@ -12,8 +12,6 @@ import {
   ApartmentOutlined,
 } from '@ant-design/icons';
 import type { AppRoute } from '../../types/navigation';
-import { useGhostDevSessions } from '../../hooks/useGhostDevSessions';
-import { useGhostDevNotifications } from '../../hooks/useGhostDevNotifications';
 import { useTelegramPendingUsers } from '../../hooks/useTelegramPendingUsers';
 
 export interface NavigationProps {
@@ -24,10 +22,8 @@ export interface NavigationProps {
 type MenuItem = Required<MenuProps>['items'][number];
 
 export const Navigation: React.FC<NavigationProps> = ({ currentRoute, onNavigate }) => {
-  // Keep the notifications hook mounted in the shell: the ghost-dev list page/tab is retired,
-  // but its OS notifications (session completion/error, shell-permission approval) are not.
-  const { sessions } = useGhostDevSessions();
-  useGhostDevNotifications(sessions);
+  // Ghost-dev OS notifications are mounted globally in App so both shells receive them;
+  // the retired agents page/sidebar item no longer owns that lifecycle.
   const { pendingCount } = useTelegramPendingUsers();
 
   const items: MenuItem[] = [

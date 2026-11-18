@@ -8,6 +8,8 @@ import { AppShell } from './components/shell/AppShell';
 import { EmptyState } from './components/common/EmptyState';
 import { useHashRoute } from './hooks/useHashRoute';
 import { useThemeMode } from './hooks/useThemeMode';
+import { useGhostDevSessions } from './hooks/useGhostDevSessions';
+import { useGhostDevNotifications } from './hooks/useGhostDevNotifications';
 import { TasksView } from './views/TasksView';
 import { PlannerView } from './views/PlannerView';
 import { AnalyticsView } from './views/AnalyticsView';
@@ -60,6 +62,10 @@ const getAppTheme = (isDark: boolean) => ({
 export const App: React.FC = () => {
   const { route, params, navigate } = useHashRoute('dashboard');
   const isDark = useThemeMode();
+  // Ghost-dev sessions outlive the retired agents page. Mount their OS notifications at the
+  // app root so both the default shell and the IntelliJ/Tauri workbench receive them.
+  const { sessions: ghostDevSessions } = useGhostDevSessions();
+  useGhostDevNotifications(ghostDevSessions);
 
   useEffect(() => {
     initializeDatabaseDefaults().catch((err) => {
@@ -96,7 +102,7 @@ export const App: React.FC = () => {
       case 'dashboard':
         return <DashboardView onNavigate={navigate} />;
       case 'tasks':
-        return <TasksView onNavigate={navigate} />;
+        return <TasksView />;
       case 'planner':
         return <PlannerView targetDate={params.date} />;
       case 'analytics':

@@ -57,7 +57,6 @@ import {
   DEFAULT_TASK_SORT,
   type TaskSortKey,
 } from '../../utils/filter';
-import type { AppRoute } from '../../types/navigation';
 import { RunGhostDevModal } from '../agents/RunGhostDevModal';
 import { QuickReminderModal } from '../common/QuickReminderModal';
 
@@ -75,7 +74,6 @@ export interface TaskTableProps {
   jiraDomain?: string;
   globalSort?: TaskSortKey;
   onGlobalSortChange?: (key: TaskSortKey) => void;
-  onNavigate?: ((route: AppRoute) => void) | undefined;
 }
 
 /** CR type colours fixed by UI-SPEC §7 / D-32. */

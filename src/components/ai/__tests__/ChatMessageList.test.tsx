@@ -128,6 +128,41 @@ describe('ChatMessageList notification target highlight', () => {
     }
   });
 
+  it('does not re-scroll to the target when a new message arrives after the one-shot jump', () => {
+    const scroll = vi.fn();
+    const original = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = scroll;
+    try {
+      const messages: ChatMessage[] = [
+        { id: 'm1', threadId: 't', role: 'user', content: 'first', createdAt: '2026-11-18T00:00:00Z' },
+        { id: 'm2', threadId: 't', role: 'assistant', content: 'target', createdAt: '2026-11-18T00:00:01Z' },
+      ];
+      const { rerender } = render(
+        <ChatMessageList messages={messages} readPositionReady lastReadMessageId="m1" targetMessageId="m2" />
+      );
+      expect(scroll).toHaveBeenCalledTimes(1);
+      expect(scroll).toHaveBeenCalledWith({ block: 'center', behavior: 'auto' });
+
+      scroll.mockClear();
+      rerender(
+        <ChatMessageList
+          messages={[
+            ...messages,
+            { id: 'm3', threadId: 't', role: 'assistant', content: 'later', createdAt: '2026-11-18T00:00:02Z' },
+          ]}
+          readPositionReady
+          lastReadMessageId="m2"
+          targetMessageId="m2"
+        />
+      );
+      // The target stays highlighted, but the viewport is no longer owned by the deeplink.
+      expect(scroll).not.toHaveBeenCalledWith({ block: 'center', behavior: 'auto' });
+      expect(screen.getByTestId('chat-target-message')).toBeTruthy();
+    } finally {
+      HTMLElement.prototype.scrollIntoView = original;
+    }
+  });
+
   it('marks no target when targetMessageId is absent', () => {
     const messages: ChatMessage[] = [
       { id: 'm1', threadId: 't', role: 'user', content: 'first', createdAt: '2026-11-18T00:00:00Z' },

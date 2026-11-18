@@ -51,7 +51,6 @@ import { LinkedKnowledgeSection } from './LinkedKnowledgeSection';
 import { QuickPreviewDrawer } from '../notes/QuickPreviewDrawer';
 import { RunGhostDevModal } from '../agents/RunGhostDevModal';
 import type { TaskPlannerDatabase } from '../../db';
-import type { AppRoute } from '../../types/navigation';
 
 export interface TaskDrawerProps {
   taskId: string | null;
@@ -60,7 +59,6 @@ export interface TaskDrawerProps {
   onSave?: (task: Task) => void;
   triggerRef?: HTMLElement | null;
   db?: TaskPlannerDatabase;
-  onNavigate?: ((route: AppRoute) => void) | undefined;
 }
 
 interface TaskDrawerFormValues {

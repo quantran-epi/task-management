@@ -115,6 +115,10 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isPopoutOpen, setIsPopoutOpen] = useState(false);
+  // Stable identity for the currently rendered rows: changes when rows are added/removed, not
+  // on every status/streaming render. Used to retry a deeplink scroll when the target was not
+  // loaded in the first render.
+  const renderedMessageIds = messages.map((m) => m.id).join('\n');
 
   const renderedSummaryHtml = useMemo(() => {
     return pendingConfirmation?.summary ? renderSafeMarkdown(pendingConfirmation.summary) : '';
@@ -137,21 +141,36 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
   const initiallyPositionedRef = useRef(false);
   const lastReadRef = useRef<HTMLDivElement>(null);
   const targetMessageRef = useRef<HTMLDivElement>(null);
+  // A notification deeplink is a one-shot viewport action: it scrolls to the target once the
+  // row is available, then normal reading/send/follow behavior resumes. The highlight remains.
+  const pendingTargetScrollRef = useRef(false);
+  // React runs effects in declaration order on the same commit: after the target effect scrolls
+  // and clears its pending flag, the restore effect below must still be suppressed for THIS
+  // pass, otherwise it immediately scrolls back to the saved read position in the same frame.
+  const suppressRestoreOnceRef = useRef(false);
+
+  useEffect(() => {
+    if (targetMessageId) pendingTargetScrollRef.current = true;
+    else pendingTargetScrollRef.current = false;
+  }, [targetMessageId]);
 
   /**
-   * OS-notification deeplink: once the target row is rendered, scroll it into view and keep
-   * it highlighted. The read-position restore effect below deliberately yields the viewport
-   * when `targetMessageId` is set, so this scroll is authoritative.
+   * OS-notification deeplink: scroll the target into view once it renders. Deliberately does NOT
+   * depend on `messages.length` — incoming messages must never yank the viewport back to the
+   * target. A late-arriving target row is handled by the effect below, which shares the same
+   * one-shot guard with read-position/send scrolling.
    */
   useEffect(() => {
     if (!targetMessageId || !readPositionReady) return;
     const row = targetMessageRef.current;
-    if (!row) return;
+    if (!row || !pendingTargetScrollRef.current) return;
+    pendingTargetScrollRef.current = false;
+    suppressRestoreOnceRef.current = true;
     programmaticScrollRef.current = true;
     row.scrollIntoView({ block: 'center', behavior: 'auto' });
     const timer = requestAnimationFrame(() => { programmaticScrollRef.current = false; });
     return () => cancelAnimationFrame(timer);
-  }, [targetMessageId, readPositionReady, messages.length]);
+  }, [targetMessageId, readPositionReady, renderedMessageIds]);
 
   const reportAtBottom = () => {
     const node = containerRef.current;
@@ -184,8 +203,13 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
 
   // Restore saved reading position once, without consuming unread messages.
   useEffect(() => {
-    // A notification deeplink owns the viewport: never yank it to the read position or bottom.
-    if (targetMessageId) return;
+    // A notification deeplink owns the viewport ONLY until its target row has been scrolled to.
+    // After that one-shot action, normal send/read/follow behavior must work again.
+    if (pendingTargetScrollRef.current) return;
+    if (suppressRestoreOnceRef.current) {
+      suppressRestoreOnceRef.current = false;
+      return;
+    }
     // A send's row has now rendered. Pin to bottom before any read-position/unread logic can
     // move the viewport, then clear the one-shot intent.
     if (pendingSendScrollRef.current && messages.length > 0) {
@@ -208,7 +232,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
       return;
     }
     if (!firstUnreadMessageId && followingRef.current) scrollToBottom(false);
-  }, [messages.length, firstUnreadMessageId, lastReadMessageId, readPositionReady, pendingConfirmation, transientClarifyMessage, targetMessageId]);
+  }, [renderedMessageIds, firstUnreadMessageId, lastReadMessageId, readPositionReady, pendingConfirmation, transientClarifyMessage]);
 
   useEffect(() => {
     const unpin = () => {

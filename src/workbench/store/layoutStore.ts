@@ -169,15 +169,17 @@ export const useLayoutStore = create<LayoutState>()(
           if (existing) {
             return {
               activeTabId: tab.id,
-              openTabs: state.openTabs.map((t) =>
-                t.id === tab.id
-                  ? {
-                      ...t,
-                      title: tab.title || t.title,
-                      params: { ...t.params, ...tab.params },
-                    }
-                  : t
-              ),
+              openTabs: state.openTabs.map((t) => {
+                if (t.id !== tab.id) return t;
+                // targetMessageId is a one-shot notification deeplink. A plain reopen of the
+                // team tab (explorer, active-turn indicator) omits it and MUST clear the
+                // previous highlight; only a new deeplink may set it again.
+                const mergedParams = { ...t.params, ...tab.params };
+                if ('targetMessageId' in mergedParams && !('targetMessageId' in (tab.params ?? {}))) {
+                  delete mergedParams.targetMessageId;
+                }
+                return { ...t, title: tab.title || t.title, params: mergedParams };
+              }),
             };
           }
           // T-25.4-03: Cap maximum open tabs (20) to prevent DOM bloat and memory leaks
