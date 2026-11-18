@@ -87,6 +87,19 @@ pub struct ToolTaskRegistry {
 }
 
 impl ToolTaskRegistry {
+    /// Reserve liveness BEFORE any SSH work starts. The async Tauri command calls this on the
+    /// main thread, so a Cancel clicked during connect/exec still finds the call_id and flips
+    /// its token. Without this, `cancel_tool_call` returns false for the whole connect phase.
+    /// The returned token is moved into `spawn_blocking`; no borrowed state crosses threads.
+    pub fn reserve(&self, call_id: String, config: SshConfig, secret: Option<String>) -> Arc<AtomicBool> {
+        let cancelled = Arc::new(AtomicBool::new(false));
+        self.register(
+            call_id,
+            LiveTask { cancelled: Arc::clone(&cancelled), pgid: None, config, secret },
+        );
+        cancelled
+    }
+
     pub fn register(&self, call_id: String, task: LiveTask) {
         if let Ok(mut tasks) = self.tasks.lock() {
             tasks.insert(call_id, task);
@@ -306,31 +319,61 @@ pub fn run_cancellable_remote_command(
     secret: Option<&str>,
     call_id: String,
     command: String,
+    cancelled: Arc<AtomicBool>,
 ) -> Result<ToolExecOutput, String> {
+    // The token was reserved by the async command BEFORE spawn_blocking. A cancel that
+    // arrived during queueing/connect must skip SSH entirely — never open a connection for
+    // a call the user already cancelled. `remove` below is the single cleanup on every path.
+    let cancelled_output = || ToolExecOutput {
+        stdout: String::new(),
+        stderr: String::new(),
+        exit_status: -1,
+        finish_reason: "cancelled".to_string(),
+    };
+    let finish = |result: ToolExecOutput| {
+        registry.remove(&call_id);
+        let status = if result.finish_reason == "cancelled" { "cancelled" } else if result.finish_reason == "error" { "error" } else { "done" };
+        let _ = app.emit(
+            "tool-task-status",
+            ToolTaskStatusEvent {
+                call_id: call_id.clone(),
+                status: status.to_string(),
+                finish_reason: Some(result.finish_reason.clone()),
+            },
+        );
+        Ok(result)
+    };
+
+    if cancelled.load(Ordering::SeqCst) {
+        return finish(cancelled_output());
+    }
+
     // Wake-up-only socket timeout: lets the reader check the cancel token every 250ms, but
     // a timeout NEVER ends the task. Only explicit cancel/app exit may end it.
-    let session = connect_and_auth_tool_task(config, secret)?;
-    let mut channel = session
-        .channel_session()
-        .map_err(|e| format!("Không thể mở channel session: {}", e))?;
+    let session = match connect_and_auth_tool_task(config, secret) {
+        Ok(session) => session,
+        Err(e) => {
+            registry.remove(&call_id);
+            return Err(e);
+        }
+    };
+    let mut channel = match session.channel_session() {
+        Ok(channel) => channel,
+        Err(e) => {
+            registry.remove(&call_id);
+            return Err(format!("Không thể mở channel session: {}", e));
+        }
+    };
 
     let remote_command = build_remote_command(&command);
-    channel
-        .exec(&remote_command)
-        .map_err(|e| format!("Thực thi lệnh thất bại: {}", e))?;
+    if let Err(e) = channel.exec(&remote_command) {
+        registry.remove(&call_id);
+        return Err(format!("Thực thi lệnh thất bại: {}", e));
+    }
+    // A cancel arriving during connect/exec is handled by the reader below: it sees the
+    // token immediately, exits, and still reports the PGID (if any) for kill-on-discovery.
 
     let (tx, rx) = mpsc::channel::<Chunk>();
-    let cancelled = Arc::new(AtomicBool::new(false));
-
-    registry.register(
-        call_id.clone(),
-        LiveTask {
-            cancelled: Arc::clone(&cancelled),
-            pgid: None,
-            config: config.clone(),
-            secret: secret.map(str::to_string),
-        },
-    );
 
     let reader_cancelled = Arc::clone(&cancelled);
     thread::Builder::new()
@@ -427,7 +470,10 @@ pub fn run_cancellable_remote_command(
                 error: read_error,
             });
         })
-        .map_err(|e| format!("Không thể tạo thread đọc lệnh: {}", e))?;
+        .map_err(|e| {
+            registry.remove(&call_id);
+            format!("Không thể tạo thread đọc lệnh: {}", e)
+        })?;
 
     let _ = app.emit(
         "tool-task-status",
@@ -516,17 +562,7 @@ pub fn run_cancellable_remote_command(
         }
     };
 
-    registry.remove(&call_id);
-    let status = if result.finish_reason == "cancelled" { "cancelled" } else if result.finish_reason == "error" { "error" } else { "done" };
-    let _ = app.emit(
-        "tool-task-status",
-        ToolTaskStatusEvent {
-            call_id: call_id.clone(),
-            status: status.to_string(),
-            finish_reason: Some(result.finish_reason.clone()),
-        },
-    );
-    Ok(result)
+    finish(result)
 }
 
 /// Tauri command: cancel a tool call by its UI id. Returns `false` if not live (idempotent).
@@ -558,6 +594,55 @@ mod tests {
     fn cancelling_unknown_call_is_a_noop() {
         let registry = ToolTaskRegistry::default();
         assert_eq!(registry.cancel("missing").unwrap(), false);
+    }
+
+    #[test]
+    fn reserve_before_connect_allows_cancel_of_not_yet_running_task() {
+        // Regression guard for the cancel-before-register race: the async command reserves
+        // the token before spawn_blocking, so Cancel during connect/exec finds the call_id.
+        let registry = ToolTaskRegistry::default();
+        let token = registry.reserve("early".into(), test_config(), None);
+        assert!(!token.load(Ordering::SeqCst));
+        // Cancel before any PGID exists (and before SSH connect in the real command).
+        assert!(registry.cancel("early").unwrap());
+        assert!(token.load(Ordering::SeqCst));
+        // Cancelled token is observable from the command thread before it starts work.
+        // Task stays in the registry (no PGID yet) so kill-on-discovery still works.
+        assert!(registry.take_for_kill("early").unwrap().is_some());
+        // Idempotent: repeated clicks do not error or remove the entry prematurely.
+        assert!(registry.cancel("early").unwrap());
+        assert!(registry.take_for_kill("early").unwrap().is_some());
+        registry.remove("early");
+        assert!(!registry.cancel("early").unwrap());
+    }
+
+    /// Extract one invocation's body up to its closing brace (top-level fn style).
+    fn command_body<'a>(source: &'a str, marker: &str) -> &'a str {
+        let start = source.find(marker).unwrap_or_else(|| panic!("missing {}", marker));
+        let body = &source[start..];
+        &body[..body.find("\n}\n").expect("command end")]
+    }
+
+    #[test]
+    fn ssh_exec_command_is_async_and_offloads_blocking_work() {
+        // Source guard: a "fix" that only clones AppHandle but leaves the command sync
+        // reintroduces UI blocking on the Tauri main thread. Both markers are mandatory.
+        let source = include_str!("ssh_service.rs");
+        let body = command_body(source, "pub async fn ssh_exec_command(");
+        assert!(body.contains("spawn_blocking"), "ssh_exec_command must use spawn_blocking");
+        assert!(
+            body.contains("registry.reserve"),
+            "ssh_exec_command must reserve the cancel token before spawn_blocking"
+        );
+    }
+
+    #[test]
+    fn ssh_exec_stream_is_async_and_offloads_blocking_connect() {
+        // RemoteExplore uses this path too; a sync command would still block the main
+        // thread on connect/channel.exec even though the reader runs on its own thread.
+        let source = include_str!("ssh_service.rs");
+        let body = command_body(source, "pub async fn ssh_exec_stream(");
+        assert!(body.contains("spawn_blocking"), "ssh_exec_stream must use spawn_blocking");
     }
 
     #[test]

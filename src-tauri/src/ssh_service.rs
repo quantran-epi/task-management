@@ -433,23 +433,36 @@ pub fn ssh_rename(
 /// Output streams as coalesced `tool-task-update` events; the detached reader never blocks
 /// the Tauri command thread with `read_to_end`.
 #[tauri::command]
-pub fn ssh_exec_command(
+pub async fn ssh_exec_command(
     app: tauri::AppHandle,
     config: SshConfig,
     secret: Option<String>,
     command: String,
     call_id: String,
 ) -> Result<CommandOutput, String> {
+    // Reserve liveness on the main thread BEFORE any blocking work. A Cancel clicked while
+    // this task queues or connects must find the call_id and flip its token. `State<'_, T>`
+    // borrows from Invoke and cannot enter a 'static closure, so use the owned AppHandle.
     let registry = app.state::<crate::tool_cancel::ToolTaskRegistry>();
+    let cancelled = registry.reserve(call_id.clone(), config.clone(), secret.clone());
+    let handle = app.clone();
     // Tool task path: no socket read timeout — only explicit cancel/app exit may stop it.
-    let out = crate::tool_cancel::run_cancellable_remote_command(
-        &registry,
-        app.clone(),
-        &config,
-        secret.as_deref(),
-        call_id,
-        command,
-    )?;
+    // spawn_blocking keeps connect/exec/recv_timeout OFF the Tauri main thread: the UI never
+    // freezes while a heavy tool runs (ai-chat-input-lag, user criterion 3).
+    let out = tauri::async_runtime::spawn_blocking(move || {
+        let registry = handle.state::<crate::tool_cancel::ToolTaskRegistry>();
+        crate::tool_cancel::run_cancellable_remote_command(
+            &registry,
+            handle.clone(),
+            &config,
+            secret.as_deref(),
+            call_id,
+            command,
+            cancelled,
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())??;
     Ok(CommandOutput {
         stdout: out.stdout,
         stderr: out.stderr,
@@ -464,7 +477,25 @@ pub fn ssh_exec_command(
 /// fixed single-quoted `setsid sh -c` launcher), never interpolated raw into a second
 /// shell string. Single-quoted arguments and heredocs from the frontend survive intact.
 #[tauri::command]
-pub fn ssh_exec_stream(
+pub async fn ssh_exec_stream(
+    app: AppHandle,
+    config: SshConfig,
+    secret: Option<String>,
+    session_id: String,
+    command: String,
+) -> Result<(), String> {
+    // Same primitive as ssh_exec_command: connect + channel.exec are blocking SSH work and
+    // must never run on the Tauri main thread while an AI stream tool is active. Payload,
+    // events and reader-thread lifecycle stay byte-for-byte unchanged; only the invoke
+    // wrapper moves to a blocking pool.
+    tauri::async_runtime::spawn_blocking(move || {
+        ssh_exec_stream_blocking(app, config, secret, session_id, command)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn ssh_exec_stream_blocking(
     app: AppHandle,
     config: SshConfig,
     secret: Option<String>,

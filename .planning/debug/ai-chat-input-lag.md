@@ -8,6 +8,19 @@ updated: 2026-11-18
 
 # Debug Session: ai-chat-input-lag
 
+## Current Focus (2026-11-18 — ROOT CAUSE CONFIRMED + FIX: sync Tauri command blocked main thread)
+
+- user evidence: "cứ lúc nào oracle tool đang run là UI treo", "khi oracle tool xong là app nhanh trở lại"; bổ sung "khi ssh tool đang chạy cũng có vẻ lag tương tự". Deterministic, khớp 100%.
+- root cause: `ssh_exec_command` là `#[tauri::command] pub fn` (SYNC) — Tauri v2 chạy inline trên main thread; connect/exec + `rx.recv_timeout(50ms)` chiếm command thread suốt vòng đời tool. Reader thread không giúp vì command thread vẫn bị chiếm. `ssh_exec_command` là đường chung của MỌI tool nặng (Oracle/git/SSH FS/explore) qua `execRemoteCommand` → giải thích cả hai báo cáo. `ssh_exec_stream` cũng sync (đường remoteExplore) → connect/channel.exec vẫn block main thread dù reader đã tách thread.
+- fix (đã áp dụng):
+  1. `ssh_exec_command` → `pub async fn`, reserve cancel token TRƯỚC `spawn_blocking`, mọi blocking work (connect/exec/recv loop) chạy trong blocking pool; payload/event giữ nguyên, frontend `invoke('ssh_exec_command')` không đổi.
+  2. `ToolTaskRegistry::reserve(call_id, config, secret) -> Arc<AtomicBool>` đăng ký liveness ngay từ main thread. `run_cancellable_remote_command` nhận token đã reserve, check `cancelled` trước connect (skip SSH nếu đã hủy), không tự register lại; mọi path (error connect/exec, spawn reader fail, cancel sớm, complete) `remove` đúng 1 lần; `cancel_tool_call` vẫn không block.
+  3. `ssh_exec_stream` → `pub async fn` + `spawn_blocking(ssh_exec_stream_blocking)`; output/event không đổi.
+  4. Regression guards (Rust unit tests): reserve → cancel trước PGID → token flip, task retained, cancel idempotent; source-guard `pub async fn ssh_exec_command` + `spawn_blocking` + `registry.reserve`; source-guard `pub async fn ssh_exec_stream` + `spawn_blocking`.
+- verification: `npx tsc --noEmit` sạch; focused tests sshService (7), gitRemote+gitRemoteTree (39/2 files), remoteExplore/chatTurnRuntime/oracle/panel/toolTaskStore (xem kết quả dưới); `cargo check/test` BỊ CHẶN bởi crate download network (`cookie`, `keyring`, `bit-vec`) → KHÔNG claim Rust verified.
+- caveat technical debt riêng: `ssh_test_connection`, `ssh_list_dir`, `ssh_read_file_all/slice`, `ssh_write_file`, `ssh_create_dir`, `ssh_delete_entry`, `ssh_rename` vẫn là sync commands. Đây là đường SSH FS config quản lý tệp ngắn hạn, KHÔNG nằm trong đường tool AI nặng (AI dùng `ssh_exec_command`/`ssh_exec_stream`), nên không đưa vào patch này theo chỉ dẫn "không mở rộng technical debt riêng". Nếu sau này user gặp lag khi browse/explore file UI thì cân nhắc convert riêng.
+- 4 tiêu chí user giữ nguyên: (1) gõ mượt kể cả sau N tool call; (2) tool nặng chạy bất kể tab, chỉ dừng khi Cancel đúng callId hoặc tắt app, KHÔNG timeout/idle; (3) UI TUYỆT ĐỐI KHÔNG BLOCK khi tool chạy — fix chính lần này; (4) registry owns liveness, store owns output, tab owns draft, React view — không vá víu.
+
 ## Current Focus (2026-11-18 — independent code review follow-up — RESOLVED)
 
 - resolution: 8/8 finding CRITICAL/WARNING/INFO đã xử lý xong; 4 commit atomic `1c24f9a5`, `5217f834`, `7552d15b`, `31119db9`. Chi tiết ở cuối file. Chờ human verify runtime Tauri + SSH thật.
