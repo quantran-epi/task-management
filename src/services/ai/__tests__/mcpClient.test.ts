@@ -7,6 +7,7 @@ import {
   upsertMcpServer,
   deleteMcpServer,
   toggleMcpServer,
+  setAllMcpServersEnabled,
   getEnabledMcpInstructions,
   resetMcpClientForTests,
   DEFAULT_MCP_SERVERS,
@@ -93,6 +94,34 @@ describe('mcpClient service', () => {
     expect(toggled[0]?.enabled).toBe(false);
     const reloaded = await getMcpServers(db);
     expect(reloaded[0]?.enabled).toBe(false);
+  });
+
+  it('atomically toggles ALL servers on and off in one write', async () => {
+    // Three servers, mixed initial state. The master switch must flip every row, not just one.
+    const servers: McpServerConfig[] = [
+      { id: 's1', name: 'One', url: 'http://localhost:3001/mcp', enabled: true, instruction: 'one' },
+      { id: 's2', name: 'Two', url: 'http://localhost:3002/mcp', enabled: false, instruction: 'two' },
+      { id: 's3', name: 'Three', url: 'http://localhost:3003/mcp', enabled: true, instruction: 'three' },
+    ];
+    await saveMcpServers(servers, db);
+
+    const off = await setAllMcpServersEnabled(false, db);
+    expect(off.every((s) => !s.enabled)).toBe(true);
+    expect((await getMcpServers(db)).every((s) => !s.enabled)).toBe(true);
+
+    const on = await setAllMcpServersEnabled(true, db);
+    expect(on.every((s) => s.enabled)).toBe(true);
+    const reloaded = await getMcpServers(db);
+    expect(reloaded.every((s) => s.enabled)).toBe(true);
+  });
+
+  it('toggle-all with a single seeded MCP still flips that server', async () => {
+    await getMcpServers(db); // seeds graphiti-banking (enabled)
+    const off = await setAllMcpServersEnabled(false, db);
+    expect(off).toHaveLength(1);
+    expect(off[0]?.id).toBe('graphiti-banking');
+    expect(off[0]?.enabled).toBe(false);
+    expect((await getMcpServers(db))[0]?.enabled).toBe(false);
   });
 
   it('concatenates enabled MCP instructions and ignores disabled ones', async () => {

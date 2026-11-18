@@ -129,7 +129,6 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
   onSave,
   triggerRef,
   db,
-  onNavigate,
 }) => {
   useRegisterActiveForm('task-drawer', open);
 
@@ -999,7 +998,6 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
         task={currentTask}
         visible={ghostDevModalOpen}
         onCancel={() => setGhostDevModalOpen(false)}
-        onNavigate={onNavigate}
       />
     </Drawer>
   );

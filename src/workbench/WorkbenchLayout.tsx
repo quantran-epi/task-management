@@ -19,6 +19,7 @@ import { NOTIFICATION_DEEPLINK_EVENT } from '../utils/notificationDeepLink';
 import { useAIChat } from '../context/AIChatContext';
 import { InlineAISelectionBar } from '../components/ai/InlineAISelectionBar';
 import { GlobalDiagramViewer } from '../components/common/GlobalDiagramViewer';
+import { ShellPermissionModal } from '../components/agents/ShellPermissionModal';
 import type { TaskPlannerDatabase } from '../db';
 import {
   JetBrainsProjectIcon,
@@ -163,11 +164,26 @@ export function WorkbenchLayout({
         analytics: 'Analytics',
         tasks: 'Tasks',
         notes: 'Docs',
-        agents: 'Ghost Dev Agents',
         telegram: 'Telegram Bot',
         settings: 'Settings',
         insight: 'Item Insight',
       };
+      if (viewKey === 'team') {
+        const teamId = params.get('teamId') || '';
+        const messageId = params.get('messageId') || undefined;
+        if (!teamId) return;
+        openTab({
+          id: `team_workspace:${teamId}`,
+          title: 'Nhóm AI',
+          viewType: 'team_workspace',
+          closable: true,
+          // openTab merges params on same-id reuse — set the key explicitly (null when absent)
+          // so a later notification without a message id clears a stale highlight from an
+          // earlier click on the same team. null is dropped by the downstream `? {...} : {}`.
+          params: { teamId, targetMessageId: messageId ?? null },
+        });
+        return;
+      }
       if (viewKey === 'insight') {
         const itemType = params.get('type') || 'task';
         const itemId = params.get('id') || '';
@@ -249,7 +265,6 @@ export function WorkbenchLayout({
         tasks: 'Tasks',
         notes: 'Docs',
         projects: 'Projects',
-        agents: 'Ghost Dev Agents',
         telegram: 'Telegram Bot',
         mermaid: 'Diagram Studio',
         systems: 'System Catalog',
@@ -432,6 +447,9 @@ export function WorkbenchLayout({
         {/* Global Inline AI Selection Bar for document text selection */}
         <InlineAISelectionBar {...(db ? { db } : {})} />
         <GlobalDiagramViewer />
+        {/* Shell-command permission approvals survive the retirement of the ghost-dev list
+            page: the modal listens globally, so mounting it at the shell root is sufficient. */}
+        <ShellPermissionModal />
       </div>
     </AntdThemeAdapter>
   );

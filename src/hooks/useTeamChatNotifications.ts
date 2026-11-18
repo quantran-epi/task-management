@@ -85,7 +85,7 @@ export function useTeamChatNotifications(db: TaskPlannerDatabase = defaultDb): v
             title: `${names.get(row.from) ?? 'Nhóm'} · ${row.teamName}`,
             body: row.content.slice(0, 160),
             tag: row.id,
-            deeplink: NotificationDeepLink.agents,
+            deeplink: NotificationDeepLink.team(row.teamId, row.id),
           });
           if (!sent) notifiedRef.current.delete(row.id);
         } catch {

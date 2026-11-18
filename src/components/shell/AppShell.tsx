@@ -46,6 +46,7 @@ import { DailyReviewModal } from '../dailyReview/DailyReviewModal';
 import { AIChatDrawer, DEFAULT_AI_CHAT_WIDTH, type ActiveScope } from '../ai/AIChatDrawer';
 import { InlineAISelectionBar } from '../ai/InlineAISelectionBar';
 import { GlobalDiagramViewer } from '../common/GlobalDiagramViewer';
+import { ShellPermissionModal } from '../agents/ShellPermissionModal';
 import { useGitHubAuth } from '../../context/GitHubAuthContext';
 import { executeGitHubBackupPush } from '../../services/github/githubSyncService';
 import { useGlobalShortcuts } from '../../hooks/useGlobalShortcuts';
@@ -835,6 +836,9 @@ const AppShellInner: React.FC<AppShellProps> = ({
 
       <InlineAISelectionBar db={db} />
       <GlobalDiagramViewer />
+      {/* Permission approvals for Ghost Dev shell commands are global: the retired
+          ghost-dev list page used to host this modal, so the shell owns it now. */}
+      <ShellPermissionModal />
 
       <UpgradeModal />
       <AriaLiveRegion />

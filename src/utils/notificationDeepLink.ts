@@ -19,9 +19,12 @@ export const BROWSER_NOTIFICATION_CLICK_EVENT = 'notification-deeplink';
 export const NotificationDeepLink = {
   dashboard: '#/dashboard',
   tasks: '#/tasks',
-  agents: '#/agents',
   telegram: '#/telegram',
   settings: '#/settings?tab=notifications',
+  /** Team chat workspace. `messageId` (when present) scrolls to and highlights that message. */
+  team: (teamId: string, messageId?: string | undefined) =>
+    `#/team?teamId=${encodeURIComponent(teamId)}` +
+    (messageId ? `&messageId=${encodeURIComponent(messageId)}` : ''),
   task: (id: string) => `#/insight?type=task&id=${encodeURIComponent(id)}`,
   cr: (id: string) => `#/insight?type=cr&id=${encodeURIComponent(id)}`,
   system: (id: string) => `#/insight?type=system&id=${encodeURIComponent(id)}`,

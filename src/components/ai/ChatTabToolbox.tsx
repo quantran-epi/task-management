@@ -44,6 +44,8 @@ export interface ChatTabToolboxProps {
   onToggleMcpEnabled?: (tabId: string) => void;
   mcpServers?: McpServerConfig[];
   onToggleMcpServer?: (id: string, enabled: boolean) => void;
+  /** Atomic master toggle — flips every server in one write. Preferred over per-server fan-out. */
+  onToggleAllMcpServers?: (enabled: boolean) => void;
   onOpenMcpSettings?: () => void;
 
   // Oracle SQLcl (remote connection for AI tool loop)
@@ -74,6 +76,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
   onToggleMcpEnabled,
   mcpServers = [],
   onToggleMcpServer,
+  onToggleAllMcpServers,
   onOpenMcpSettings,
   onOpenOracleSettings,
   oracleToolEnabled = false,
@@ -93,24 +96,23 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
       : 'MCP: ĐANG BẬT (chưa có máy chủ nào được bật)'
     : 'MCP: ĐANG TẮT (Bấm để bật và chọn máy chủ)';
 
-  // Master toggle handler: toggles tab mcpEnabled and if turning on with 0 servers, turns on first server
+  // Master toggle handler: toggles the tab flag AND flips every server in ONE atomic write.
+  // The previous per-server fan-out fired unawaited read-modify-write calls at the same
+  // settings row; concurrent writes read the same pre-toggle state, so only the last server's
+  // flag survived (with a single MCP it looked like "only graphiti toggles").
   const handleMasterMcpToggle = (checked: boolean) => {
-    if (onToggleMcpEnabled) {
-      if (checked !== mcpEnabled) {
-        onToggleMcpEnabled(activeTabId);
-      }
+    if (onToggleMcpEnabled && checked !== mcpEnabled) {
+      onToggleMcpEnabled(activeTabId);
     }
-    // If turning on and no server is enabled, enable all available servers
-    if (checked && enabledMcpCount === 0 && mcpServers.length > 0 && onToggleMcpServer) {
+    if (onToggleAllMcpServers) {
+      onToggleAllMcpServers(checked);
+      return;
+    }
+    // Fallback for hosts that only expose per-server toggles. The race remains for such hosts;
+    // both production hosts pass `onToggleAllMcpServers`, so this is a compatibility path only.
+    if (onToggleMcpServer) {
       for (const server of mcpServers) {
-        onToggleMcpServer(server.id, true);
-      }
-    } else if (!checked && onToggleMcpServer) {
-      // If user explicitly turns off master switch in popover, disable all servers
-      for (const server of mcpServers) {
-        if (server.enabled) {
-          onToggleMcpServer(server.id, false);
-        }
+        if (server.enabled !== checked) onToggleMcpServer(server.id, checked);
       }
     }
   };

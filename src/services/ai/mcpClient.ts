@@ -190,6 +190,26 @@ export async function toggleMcpServer(
   return next;
 }
 
+/**
+ * Atomically enable/disable EVERY MCP server in one read-modify-write of the settings row.
+ * The master switch must use this rather than fanning out `toggleMcpServer` calls: each of
+ * those re-reads the row, so concurrent calls all read the same pre-toggle state and the last
+ * write wins, leaving only one server toggled.
+ */
+export async function setAllMcpServersEnabled(
+  enabled: boolean,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<McpServerConfig[]> {
+  const servers = await getMcpServers(db);
+  const next = servers.map((s) => ({ ...s, enabled }));
+  await saveMcpServers(next, db);
+  if (!enabled) {
+    sessionIds.clear();
+    serverGroupCaches.clear();
+  }
+  return next;
+}
+
 export async function getEnabledMcpInstructions(
   db: TaskPlannerDatabase = defaultDb
 ): Promise<string> {

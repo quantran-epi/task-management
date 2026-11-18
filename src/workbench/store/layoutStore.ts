@@ -11,7 +11,6 @@ export type EditorViewType =
   | 'settings'
   | 'cr_detail'
   | 'dashboard'
-  | 'agents'
   | 'telegram'
   | 'insight'
   | 'mermaid'
@@ -105,7 +104,9 @@ export const LAYOUT_STORAGE_KEY = 'taskmate_workbench_layout_v3';
 export const MAX_OPEN_TABS = 20;
 
 /** View types retired from `EditorViewType` but still possibly persisted. */
-const RETIRED_VIEW_TYPES = new Set<string>(['sdlc', 'teams']);
+// 'agents' was the retired ghost-dev list page/tab (its staff list survives in the
+// ai_office/ai_staff tool windows; shell-permission approvals now mount at the shell root).
+const RETIRED_VIEW_TYPES = new Set<string>(['sdlc', 'teams', 'agents']);
 
 export const useLayoutStore = create<LayoutState>()(
   persist(

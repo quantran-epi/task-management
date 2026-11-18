@@ -72,7 +72,7 @@ export async function dispatchBudgetWarning(warning: BudgetWarning): Promise<boo
           : warning.teamName,
       body: bodyFor(warning),
       tag: key,
-      deeplink: NotificationDeepLink.agents,
+      deeplink: NotificationDeepLink.team(warning.teamId),
     });
     if (!sent) notified.delete(key);
     return sent;

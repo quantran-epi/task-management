@@ -68,6 +68,8 @@ export interface ChatMessageListProps {
   onAtBottomChange?: ((atBottom: boolean) => void) | undefined;
   /** 37.1: recipients per message id, read from the log's `to[]`. */
   addressedTo?: Map<string, Array<{ id: string; name: string }>> | undefined;
+  /** OS-notification deeplink target: scroll to this message and highlight it on mount. */
+  targetMessageId?: string | undefined;
 }
 
 // The composer draft lives above this list, so without a memo every keystroke re-rendered
@@ -107,6 +109,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
   onMessageRead,
   onAtBottomChange,
   addressedTo,
+  targetMessageId,
 }) => {
   const { token } = theme.useToken();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -133,6 +136,22 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
   const followingRef = useRef(onMessageRead === undefined && onAtBottomChange === undefined);
   const initiallyPositionedRef = useRef(false);
   const lastReadRef = useRef<HTMLDivElement>(null);
+  const targetMessageRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * OS-notification deeplink: once the target row is rendered, scroll it into view and keep
+   * it highlighted. The read-position restore effect below deliberately yields the viewport
+   * when `targetMessageId` is set, so this scroll is authoritative.
+   */
+  useEffect(() => {
+    if (!targetMessageId || !readPositionReady) return;
+    const row = targetMessageRef.current;
+    if (!row) return;
+    programmaticScrollRef.current = true;
+    row.scrollIntoView({ block: 'center', behavior: 'auto' });
+    const timer = requestAnimationFrame(() => { programmaticScrollRef.current = false; });
+    return () => cancelAnimationFrame(timer);
+  }, [targetMessageId, readPositionReady, messages.length]);
 
   const reportAtBottom = () => {
     const node = containerRef.current;
@@ -165,6 +184,8 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
 
   // Restore saved reading position once, without consuming unread messages.
   useEffect(() => {
+    // A notification deeplink owns the viewport: never yank it to the read position or bottom.
+    if (targetMessageId) return;
     // A send's row has now rendered. Pin to bottom before any read-position/unread logic can
     // move the viewport, then clear the one-shot intent.
     if (pendingSendScrollRef.current && messages.length > 0) {
@@ -187,7 +208,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
       return;
     }
     if (!firstUnreadMessageId && followingRef.current) scrollToBottom(false);
-  }, [messages.length, firstUnreadMessageId, lastReadMessageId, readPositionReady, pendingConfirmation, transientClarifyMessage]);
+  }, [messages.length, firstUnreadMessageId, lastReadMessageId, readPositionReady, pendingConfirmation, transientClarifyMessage, targetMessageId]);
 
   useEffect(() => {
     const unpin = () => {
@@ -336,8 +357,26 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
         const quoted = msg.replyToId
           ? messages.find((row) => row.id === msg.replyToId)
           : undefined;
+        const isTarget = targetMessageId === msg.id;
         return (
-          <div key={msg.id} data-chat-message-id={msg.id} style={{ flexShrink: 0 }}>
+          <div
+            key={msg.id}
+            data-chat-message-id={msg.id}
+            data-testid={isTarget ? 'chat-target-message' : undefined}
+            ref={isTarget ? targetMessageRef : undefined}
+            style={{
+              flexShrink: 0,
+              ...(isTarget
+                ? {
+                    background: token.colorPrimaryBg,
+                    outline: `2px solid ${token.colorPrimaryBorder}`,
+                    borderRadius: 6,
+                    margin: '0 -8px',
+                    padding: '0 8px',
+                  }
+                : {}),
+            }}
+          >
             {dayChanged && (
               <div
                 data-testid="chat-day-divider"

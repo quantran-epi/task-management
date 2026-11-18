@@ -41,6 +41,7 @@ import {
   discoverAllMcpTools,
   getEnabledMcpInstructions,
   toggleMcpServer,
+  setAllMcpServersEnabled,
   type McpServerConfig,
 } from '../../services/ai/mcpClient';
 import { launchClaudeTerminal } from '../../services/ai/claudeCliService';
@@ -371,6 +372,16 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       void reloadSshFsConfig();
     }
   }, [open, reloadOracleConfig, reloadSshFsConfig]);
+
+  const handleToggleAllMcpServers = async (enabled: boolean) => {
+    try {
+      const next = await setAllMcpServersEnabled(enabled, db);
+      setMcpServers(next);
+      message.success(enabled ? 'Đã bật toàn bộ máy chủ MCP' : 'Đã tắt toàn bộ máy chủ MCP');
+    } catch (err: any) {
+      message.error(`Không thể đổi trạng thái MCP: ${err?.message || err}`);
+    }
+  };
 
   const handleToggleMcpServer = async (id: string, enabled: boolean) => {
     try {
@@ -2494,6 +2505,9 @@ Rules:
             mcpServers,
             onToggleMcpServer: (id, enabled) => {
               void handleToggleMcpServer(id, enabled);
+            },
+            onToggleAllMcpServers: (enabled) => {
+              void handleToggleAllMcpServers(enabled);
             },
             onOpenMcpSettings: () => setIsMcpModalOpen(true),
             onOpenOracleSettings: () => setIsOracleModalOpen(true),

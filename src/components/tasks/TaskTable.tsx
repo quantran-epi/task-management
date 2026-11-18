@@ -162,7 +162,6 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   jiraDomain,
   globalSort,
   onGlobalSortChange,
-  onNavigate,
 }) => {
   const { token } = theme.useToken();
   const today = getTodayDateString();
@@ -1127,7 +1126,6 @@ export const TaskTable: React.FC<TaskTableProps> = ({
         task={ghostDevTask}
         visible={Boolean(ghostDevTask)}
         onCancel={() => setGhostDevTask(null)}
-        onNavigate={onNavigate}
       />
     </div>
   );

@@ -36,7 +36,7 @@ import {
   getNineRouterApiKey,
   getNineRouterConfig,
 } from '../../../services/ai/nineRouterTokenService';
-import { getMcpServers, toggleMcpServer, MCP_SERVERS_SETTINGS_KEY, type McpServerConfig } from '../../../services/ai/mcpClient';
+import { getMcpServers, toggleMcpServer, setAllMcpServersEnabled, MCP_SERVERS_SETTINGS_KEY, type McpServerConfig } from '../../../services/ai/mcpClient';
 import { McpSettingsModal } from '../McpSettingsModal';
 import { getGlobalBudgetWarnThresholdPct } from '../../../services/ai/budgetWarnSettings';
 import {
@@ -78,6 +78,8 @@ export interface TeamWorkspaceProps {
   employees: AiEmployee[];
   skills: AiSkill[];
   db: TaskPlannerDatabase;
+  /** OS-notification deeplink target: scroll to and highlight this message. */
+  targetMessageId?: string | undefined;
   createRuntimeDeps?: ((agentId: string) => Partial<ChatTurnRuntimeDeps>) | undefined;
 }
 
@@ -162,6 +164,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   employees,
   skills,
   db,
+  targetMessageId,
   createRuntimeDeps,
 }) => {
   const { token } = theme.useToken();
@@ -627,6 +630,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
       ...(firstUnreadMessageId !== undefined ? { firstUnreadMessageId } : {}),
       lastReadMessageId,
       readPositionReady: loadedLog !== undefined && loadedCursors !== undefined,
+      ...(targetMessageId ? { targetMessageId } : {}),
       onMessageRead: handleMessageRead,
       ...(coordinator
         ? {
@@ -645,7 +649,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         : {}),
     }),
     [agentDirectory, agentStatuses, seenStates, addressedTo, scrollTrigger, firstUnreadMessageId, lastReadMessageId,
-      loadedLog, loadedCursors, handleMessageRead, coordinator]
+      loadedLog, loadedCursors, targetMessageId, handleMessageRead, coordinator]
   );
 
   /**
@@ -790,6 +794,12 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
       {
         sshFsToolsEnabled: input.sshFsToolsEnabled,
         oracleToolsEnabled: input.oracleToolsEnabled,
+        // Persist the mode settings too. The coordinator mirror below is transient; without
+        // writing them to the team row the reopened drawer showed the stale value and the
+        // DB→coordinator sync effect reverted the live run on the next render.
+        autoSplitEnabled: input.autoSplitEnabled,
+        autoApproveMutations: input.autoApproveMutations,
+        concurrencyLimit: input.concurrencyLimit,
       },
       db
     );
@@ -1118,6 +1128,9 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                     mcpServers,
                     onToggleMcpServer: (id, enabled) => {
                       runAction(() => toggleMcpServer(id, enabled, db));
+                    },
+                    onToggleAllMcpServers: (enabled) => {
+                      runAction(() => setAllMcpServersEnabled(enabled, db));
                     },
                     onOpenMcpSettings: () => setMcpSettingsOpen(true),
                   }}

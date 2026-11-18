@@ -5,7 +5,7 @@ import type { AlertNotificationItem, NotificationTabKey } from '../../types/noti
 import { NotificationItemRow } from '../../components/notifications/NotificationItemRow';
 import { useNotifications } from '../../hooks/useNotifications';
 import { dismissAlertToday } from '../../db/repositories/notificationRepo';
-import { getTodayDateString } from '../../utils/date';
+import { getTodayDateString, isValidCalendarDate } from '../../utils/date';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { useLayoutStore, type LayoutActions } from '../store/layoutStore';
 
@@ -70,6 +70,23 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({ db = defau
   };
 
   const handleItemClick = (item: AlertNotificationItem) => {
+    // Capacity alerts carry a `date`, not an entityId — route them to the planner on that
+    // day. The old fallback opened the generic Tasks tab (or an insight-tab for a task id
+    // that never existed), which was the wrong destination for every overload alert.
+    if (item.entityType === 'capacity') {
+      if (item.date && isValidCalendarDate(item.date)) {
+        openTab({
+          id: `planner-${item.date}`,
+          title: 'Capacity Planner',
+          viewType: 'planner',
+          closable: true,
+          params: { date: item.date },
+        });
+      } else {
+        openTab({ id: 'planner', title: 'Capacity Planner', viewType: 'planner', closable: true });
+      }
+      return;
+    }
     if (item.entityId) {
       let type: 'task' | 'cr' | 'system';
       switch (item.entityType) {
@@ -80,7 +97,6 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({ db = defau
           type = 'system';
           break;
         case 'task':
-        case 'capacity':
         default:
           type = 'task';
           break;

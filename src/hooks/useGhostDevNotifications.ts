@@ -53,7 +53,9 @@ export function useGhostDevNotifications(sessions: AgentSession[]): void {
                 body: `Lệnh: ${event.payload.command.slice(0, 100)}`,
                 tag: `ghost-dev-perm-${event.payload.requestId}`,
                 requireInteraction: true,
-                deeplink: NotificationDeepLink.agents,
+                // The ghost-dev list page/tab is retired. The approval modal itself is global
+                // (mounted at the shell root), so point the banner at the task that triggered it.
+                deeplink: NotificationDeepLink.task(event.payload.taskId),
               });
             }
           }

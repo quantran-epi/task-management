@@ -19,7 +19,12 @@ describe('useHashRoute utilities', () => {
       expect(parseHash('#/analytics')).toEqual({ route: 'analytics', params: {} });
       expect(parseHash('#/settings')).toEqual({ route: 'settings', params: {} });
       expect(parseHash('#/dashboard')).toEqual({ route: 'dashboard', params: {} });
-      expect(parseHash('#/agents')).toEqual({ route: 'agents', params: {} });
+      expect(parseHash('#/team?teamId=t1&messageId=m2')).toEqual({
+        route: 'team',
+        params: { teamId: 't1', messageId: 'm2' },
+      });
+      // The ghost-dev agents list route is retired: it falls back to the default shell view.
+      expect(parseHash('#/agents')).toEqual({ route: 'dashboard', params: {} });
     });
 
     it('parses routes with query parameters', () => {
@@ -72,7 +77,7 @@ describe('useHashRoute utilities', () => {
     it('serializes routes without params', () => {
       expect(buildHash('dashboard')).toBe('#/dashboard');
       expect(buildHash('planner')).toBe('#/planner');
-      expect(buildHash('agents')).toBe('#/agents');
+      expect(buildHash('team', { teamId: 't1' })).toBe('#/team?teamId=t1');
       expect(buildHash('tasks', {})).toBe('#/tasks');
     });
 

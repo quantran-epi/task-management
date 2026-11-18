@@ -101,4 +101,20 @@ describe('NotificationDeepLink constants', () => {
   it('URL-encodes ids in insight routes', () => {
     expect(NotificationDeepLink.task('a b/c')).toBe('#/insight?type=task&id=a%20b%2Fc');
   });
+
+  it('routes a team notification to the team workspace with the target message', () => {
+    expect(NotificationDeepLink.team('team-1', 'msg-2')).toBe(
+      '#/team?teamId=team-1&messageId=msg-2'
+    );
+  });
+
+  it('routes a team notification without a message id to the team workspace', () => {
+    expect(NotificationDeepLink.team('team-1')).toBe('#/team?teamId=team-1');
+  });
+
+  it('URL-encodes team and message ids', () => {
+    expect(NotificationDeepLink.team('a b', 'c/d')).toBe(
+      '#/team?teamId=a%20b&messageId=c%2Fd'
+    );
+  });
 });

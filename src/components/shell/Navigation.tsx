@@ -7,7 +7,6 @@ import {
   BarChartOutlined,
   FileTextOutlined,
   SettingOutlined,
-  RobotOutlined,
   SendOutlined,
   CodeOutlined,
   ApartmentOutlined,
@@ -25,13 +24,11 @@ export interface NavigationProps {
 type MenuItem = Required<MenuProps>['items'][number];
 
 export const Navigation: React.FC<NavigationProps> = ({ currentRoute, onNavigate }) => {
+  // Keep the notifications hook mounted in the shell: the ghost-dev list page/tab is retired,
+  // but its OS notifications (session completion/error, shell-permission approval) are not.
   const { sessions } = useGhostDevSessions();
   useGhostDevNotifications(sessions);
   const { pendingCount } = useTelegramPendingUsers();
-
-  const runningCount = sessions.filter(
-    (s) => s.status === 'running' || s.status === 'awaiting_approval'
-  ).length;
 
   const items: MenuItem[] = [
     {
@@ -48,22 +45,6 @@ export const Navigation: React.FC<NavigationProps> = ({ currentRoute, onNavigate
       key: 'planner',
       icon: <CalendarOutlined style={{ fontSize: 16 }} />,
       label: 'Lập kế hoạch',
-    },
-    {
-      key: 'agents',
-      icon: <RobotOutlined style={{ fontSize: 16 }} />,
-      label: (
-        <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-          <span>Agent Control</span>
-          {runningCount > 0 && (
-            <Badge
-              count={runningCount}
-              size="small"
-              style={{ backgroundColor: '#4f46e5' }}
-            />
-          )}
-        </span>
-      ),
     },
     {
       key: 'analytics',

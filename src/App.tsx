@@ -18,7 +18,7 @@ import { NotesPopoutView } from './views/NotesPopoutView';
 import { TimerPopoutView } from './views/TimerPopoutView';
 import { AIPopoutView } from './views/AIPopoutView';
 import { ItemInsightView } from './views/ItemInsightView';
-import { AgentControlView } from './views/AgentControlView';
+import { TeamWorkspaceView } from './views/TeamWorkspaceView';
 import { TelegramMonitorView } from './views/TelegramMonitorView';
 import { MermaidAssistantView } from './views/MermaidAssistantView';
 import { TimerProvider } from './context/TimerContext';
@@ -110,8 +110,13 @@ export const App: React.FC = () => {
           : undefined;
         return <SettingsView onNavigate={navigate} defaultActiveTab={selectedTab} />;
       }
-      case 'agents':
-        return <AgentControlView />;
+      case 'team':
+        return (
+          <TeamWorkspaceView
+            teamId={params.teamId || ''}
+            targetMessageId={params.messageId || undefined}
+          />
+        );
       case 'telegram':
         return <TelegramMonitorView />;
       case 'mermaid':

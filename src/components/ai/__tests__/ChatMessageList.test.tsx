@@ -70,6 +70,73 @@ describe('ChatMessageList scroll-to-bottom on send (team chat read-tracking host
   });
 });
 
+describe('ChatMessageList notification target highlight', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  /**
+   * Oracle: specified. A notification deeplink with a targetMessageId must scroll that row into
+   * view and mark it with a test id so it can be visually highlighted. Boundary neighbours: no
+   * target (nothing highlighted) and a target not present in the current window.
+   */
+  it('scrolls to and marks the target message', () => {
+    const scroll = vi.fn();
+    const original = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = scroll;
+    try {
+      const messages: ChatMessage[] = [
+        { id: 'm1', threadId: 't', role: 'user', content: 'first', createdAt: '2026-11-18T00:00:00Z' },
+        { id: 'm2', threadId: 't', role: 'assistant', content: 'target', createdAt: '2026-11-18T00:00:01Z' },
+      ];
+      render(
+        <ChatMessageList
+          messages={messages}
+          readPositionReady
+          lastReadMessageId={null}
+          targetMessageId="m2"
+        />
+      );
+      expect(screen.getByTestId('chat-target-message')).toBeTruthy();
+      expect(screen.getByTestId('chat-target-message').getAttribute('data-chat-message-id')).toBe('m2');
+      expect(scroll).toHaveBeenCalledWith({ block: 'center', behavior: 'auto' });
+    } finally {
+      HTMLElement.prototype.scrollIntoView = original;
+    }
+  });
+
+  it('does not scroll to the read position when a notification target is set', () => {
+    const scroll = vi.fn();
+    const original = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = scroll;
+    try {
+      const messages: ChatMessage[] = [
+        { id: 'm1', threadId: 't', role: 'user', content: 'first', createdAt: '2026-11-18T00:00:00Z' },
+        { id: 'm2', threadId: 't', role: 'user', content: 'target', createdAt: '2026-11-18T00:00:01Z' },
+      ];
+      render(
+        <ChatMessageList
+          messages={messages}
+          readPositionReady
+          lastReadMessageId="m1"
+          targetMessageId="m2"
+        />
+      );
+      // Only the center-scroll for the target; never the bottom/read-anchor scroll.
+      expect(scroll).toHaveBeenCalledWith({ block: 'center', behavior: 'auto' });
+      expect(scroll).not.toHaveBeenCalledWith({ behavior: 'auto' });
+    } finally {
+      HTMLElement.prototype.scrollIntoView = original;
+    }
+  });
+
+  it('marks no target when targetMessageId is absent', () => {
+    const messages: ChatMessage[] = [
+      { id: 'm1', threadId: 't', role: 'user', content: 'first', createdAt: '2026-11-18T00:00:00Z' },
+    ];
+    render(<ChatMessageList messages={messages} readPositionReady lastReadMessageId={null} />);
+    expect(screen.queryByTestId('chat-target-message')).toBeNull();
+  });
+});
+
 describe('ChatMessageList pendingConfirmation rendering', () => {
   it('renders markdown summary properly in confirmation card and opens popout modal', () => {
     const onConfirmAction = vi.fn();

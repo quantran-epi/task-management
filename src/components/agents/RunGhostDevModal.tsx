@@ -24,7 +24,6 @@ import {
   CloudServerOutlined,
 } from '@ant-design/icons';
 import type { Task } from '../../types/models';
-import type { AppRoute } from '../../types/navigation';
 import { isTauriApp } from '../../utils/timerPopout';
 import { isLocalPath, normalizeLocalPath, browseLocalFolder } from '../../utils/documentLinks';
 import { generateGhostDevMasterPrompt } from '../../utils/ghostDevPrompt';
@@ -50,7 +49,6 @@ export interface RunGhostDevModalProps {
   visible: boolean;
   onCancel: () => void;
   onSuccess?: () => void;
-  onNavigate?: ((route: AppRoute) => void) | undefined;
 }
 
 export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
@@ -58,7 +56,6 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
   visible,
   onCancel,
   onSuccess,
-  onNavigate,
 }) => {
   const [form] = Form.useForm();
   const [submitting, setSubmitting] = useState(false);
@@ -219,24 +216,12 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
         initialPrompt,
       });
 
-      // Feedback per D-03: notification/toast with "Xem trong Agent Control" button
+      // Feedback per D-03: the ghost-dev list page/tab is retired, so the launch toast no
+      // longer offers a "view in Agent Control" navigation — it simply confirms the launch.
       notification.success({
         message: 'Đã khởi chạy Ghost Dev!',
         description: `Master Agent đang khởi tạo phiên làm việc cho "${task.name}".`,
         duration: 5,
-        btn: onNavigate ? (
-          <Button
-            type="primary"
-            size="small"
-            icon={<RobotOutlined />}
-            onClick={() => {
-              notification.destroy();
-              onNavigate('agents');
-            }}
-          >
-            Xem trong Agent Control
-          </Button>
-        ) : undefined,
       });
 
       onSuccess?.();

@@ -58,8 +58,8 @@ const SEGMENT_COPY: Record<
 };
 
 /**
- * UI-SPEC §1 employee tab. `'agents'` is a shell: the Ghost Dev surface stays mounted
- * behind the second segment, so the phase adds a surface rather than replacing one (T-34-50).
+ * UI-SPEC §1 employee/lead/skill roster. Reachable from the workbench `ai_office` tool window
+ * (the former `'agents'` editor tab that hosted this view is retired).
  */
 /**
  * D-10/D-11/D-12: the repo decides, the view only renders. Names only — never an id (T-36-15).

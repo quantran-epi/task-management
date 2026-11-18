@@ -50,6 +50,7 @@ export interface AiChatToolboxProps {
   onToggleMcpEnabled: (tabId: string) => void;
   mcpServers?: McpServerConfig[] | undefined;
   onToggleMcpServer?: ((id: string, enabled: boolean) => void) | undefined;
+  onToggleAllMcpServers?: ((enabled: boolean) => void) | undefined;
   onOpenMcpSettings?: (() => void) | undefined;
   onOpenOracleSettings?: (() => void) | undefined;
   oracleToolEnabled?: boolean | undefined;
@@ -389,6 +390,9 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
         onToggleMcpEnabled={toolbox.onToggleMcpEnabled}
         {...(toolbox.mcpServers ? { mcpServers: toolbox.mcpServers } : {})}
         {...(toolbox.onToggleMcpServer ? { onToggleMcpServer: toolbox.onToggleMcpServer } : {})}
+        {...(toolbox.onToggleAllMcpServers
+          ? { onToggleAllMcpServers: toolbox.onToggleAllMcpServers }
+          : {})}
         {...(toolbox.onOpenMcpSettings ? { onOpenMcpSettings: toolbox.onOpenMcpSettings } : {})}
         {...(toolbox.onOpenOracleSettings ? { onOpenOracleSettings: toolbox.onOpenOracleSettings } : {})}
         {...(toolbox.oracleToolEnabled !== undefined ? { oracleToolEnabled: toolbox.oracleToolEnabled } : {})}

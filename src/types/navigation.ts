@@ -9,7 +9,7 @@ export type AppRoute =
   | 'notes-popout'
   | 'ai-popout'
   | 'insight'
-  | 'agents'
+  | 'team'
   | 'telegram'
   | 'mermaid';
 

@@ -34,7 +34,6 @@ import {
   JetBrainsPlannerIcon,
   JetBrainsAnalyticsIcon,
   JetBrainsDashboardIcon,
-  JetBrainsAgentsIcon,
   JetBrainsTelegramIcon,
   JetBrainsProjectIcon,
   JetBrainsDiagramIcon,
@@ -48,7 +47,6 @@ import { PlannerView } from '../views/PlannerView';
 import { AnalyticsView } from '../views/AnalyticsView';
 import { SettingsView } from '../views/SettingsView';
 import { DashboardView } from '../views/DashboardView';
-import { AiOfficeView } from '../views/AiOfficeView';
 import { TelegramMonitorView } from '../views/TelegramMonitorView';
 import { ItemInsightView } from '../views/ItemInsightView';
 import { ChangeRequestDetailView } from '../views/ChangeRequestDetailView';
@@ -76,8 +74,6 @@ export function getEditorTabIcon(viewType: EditorViewType, size = 13): React.Rea
       return <JetBrainsAnalyticsIcon size={size} />;
     case 'dashboard':
       return <JetBrainsDashboardIcon size={size} />;
-    case 'agents':
-      return <JetBrainsAgentsIcon size={size} />;
     case 'telegram':
       return <JetBrainsTelegramIcon size={size} />;
     case 'cr_detail':
@@ -590,8 +586,6 @@ export function EditorArea({ db }: EditorAreaProps) {
         );
       case 'dashboard':
         return <DashboardView onNavigate={(route) => openTab({ id: route, title: route.toUpperCase(), viewType: route as any })} />;
-      case 'agents':
-        return <AiOfficeView {...dbProp} />;
       case 'telegram':
         return <TelegramMonitorView />;
       case 'mermaid':
@@ -629,7 +623,6 @@ export function EditorArea({ db }: EditorAreaProps) {
                 analytics: 'Analytics',
                 notes: 'Docs',
                 settings: 'Settings',
-                agents: 'Ghost Dev',
                 telegram: 'Telegram',
               };
               const tabId = params?.doc
@@ -659,6 +652,7 @@ export function EditorArea({ db }: EditorAreaProps) {
         return (
           <TeamWorkspaceView
             teamId={String(tab.params?.teamId ?? '')}
+            {...(tab.params?.targetMessageId ? { targetMessageId: String(tab.params.targetMessageId) } : {})}
             {...dbProp}
           />
         );

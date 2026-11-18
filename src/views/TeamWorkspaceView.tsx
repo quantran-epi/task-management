@@ -13,12 +13,15 @@ import type { ChatTurnRuntimeDeps } from '../components/ai/runtime/chatTurnRunti
 export interface TeamWorkspaceViewProps {
   db?: TaskPlannerDatabase | undefined;
   teamId: string;
+  /** OS-notification deeplink target: scroll to and highlight this message on mount. */
+  targetMessageId?: string | undefined;
   createRuntimeDeps?: ((agentId: string) => Partial<ChatTurnRuntimeDeps>) | undefined;
 }
 
 export const TeamWorkspaceView: React.FC<TeamWorkspaceViewProps> = ({
   db = defaultDb,
   teamId,
+  targetMessageId,
   createRuntimeDeps,
 }) => {
   const closeTab = useLayoutStore((state) => state.closeTab);
@@ -74,6 +77,7 @@ export const TeamWorkspaceView: React.FC<TeamWorkspaceViewProps> = ({
         employees={employees}
         skills={skills}
         db={db}
+        {...(targetMessageId ? { targetMessageId } : {})}
         {...(createRuntimeDeps ? { createRuntimeDeps } : {})}
       />
     </div>

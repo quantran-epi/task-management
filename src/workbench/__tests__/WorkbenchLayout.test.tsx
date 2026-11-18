@@ -4,6 +4,7 @@ import { WorkbenchLayout } from '../WorkbenchLayout';
 import { useLayoutStore } from '../store/layoutStore';
 import { db } from '../../db';
 import { useTeamChatNotifications } from '../../hooks/useTeamChatNotifications';
+import { NOTIFICATION_DEEPLINK_EVENT } from '../../utils/notificationDeepLink';
 
 vi.mock('../../hooks/useTeamChatNotifications', () => ({
   useTeamChatNotifications: vi.fn(),
@@ -56,6 +57,70 @@ describe('WorkbenchLayout Integration', () => {
 
     expect(useLayoutStore.getState().activeTabId).toBe('planner');
     expect(useTeamChatNotifications).toHaveBeenLastCalledWith(db);
+  });
+
+  it('opens the team workspace tab (not Ghost Dev Agents) for a team notification deeplink', () => {
+    render(<WorkbenchLayout />);
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(NOTIFICATION_DEEPLINK_EVENT, {
+          detail: { route: '#/team?teamId=team-42&messageId=msg-99' },
+        })
+      );
+    });
+
+    const tab = useLayoutStore
+      .getState()
+      .openTabs.find((t) => t.id === 'team_workspace:team-42');
+    expect(tab).toBeDefined();
+    expect(tab?.viewType).toBe('team_workspace');
+    expect(tab?.params?.teamId).toBe('team-42');
+    expect(tab?.params?.targetMessageId).toBe('msg-99');
+    expect(useLayoutStore.getState().activeTabId).toBe('team_workspace:team-42');
+  });
+
+  it('clears a stale target message when a later notification has no message id', () => {
+    render(<WorkbenchLayout />);
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(NOTIFICATION_DEEPLINK_EVENT, {
+          detail: { route: '#/team?teamId=team-42&messageId=msg-99' },
+        })
+      );
+    });
+    expect(
+      useLayoutStore.getState().openTabs.find((t) => t.id === 'team_workspace:team-42')?.params
+        ?.targetMessageId
+    ).toBe('msg-99');
+
+    // A budget-warning notification carries only teamId. The reused tab must drop the old
+    // highlight instead of keeping msg-99 marked forever (openTab merges params on reuse).
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(NOTIFICATION_DEEPLINK_EVENT, {
+          detail: { route: '#/team?teamId=team-42' },
+        })
+      );
+    });
+    const tab = useLayoutStore
+      .getState()
+      .openTabs.find((t) => t.id === 'team_workspace:team-42');
+    expect(tab?.params?.teamId).toBe('team-42');
+    expect(tab?.params?.targetMessageId).toBeFalsy();
+  });
+
+  it('ignores the retired ghost-dev agents deeplink (no Ghost Dev Agents tab opens)', () => {
+    render(<WorkbenchLayout />);
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(NOTIFICATION_DEEPLINK_EVENT, { detail: { route: '#/agents' } })
+      );
+    });
+    const titles = useLayoutStore.getState().openTabs.map((t) => t.title);
+    expect(titles.some((title) => /ghost dev agents/i.test(title))).toBe(false);
+    expect(useLayoutStore.getState().openTabs.some((t) => t.viewType === 'agents' as any)).toBe(false);
   });
 
   it('mounts RightToolWindow when rightActiveId is set to ai_chat', () => {
