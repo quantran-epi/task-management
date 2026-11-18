@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { Task, Project, Milestone } from '../../src/types/models';
+import type { ChangeRequest, System, Task } from '../../src/types/models';
 import {
   filterTasks,
   sortTasks,
@@ -12,6 +12,7 @@ import {
 const sampleTasks: Task[] = [
   {
     id: 't1',
+    crId: 'c1',
     name: 'Prepare quarterly review',
     description: 'Compile department metrics and slides',
     notes: 'Need data from finance by Friday',
@@ -25,6 +26,7 @@ const sampleTasks: Task[] = [
   },
   {
     id: 't-pending',
+    crId: 'c1',
     name: 'Await business input',
     status: 'Pending',
     progress: 0,
@@ -35,8 +37,8 @@ const sampleTasks: Task[] = [
   },
   {
     id: 't2',
-    projectId: 'p1',
-    milestoneId: 'm1',
+    crId: 'c1',
+    systemId: 's1',
     name: 'Fix critical auth vulnerability',
     description: 'Patch token verification leak',
     notes: 'Check refresh tokens too',
@@ -50,7 +52,7 @@ const sampleTasks: Task[] = [
   },
   {
     id: 't3',
-    projectId: 'p1',
+    crId: 'c1',
     name: 'Update documentation website',
     description: 'Add API reference pages',
     notes: 'Markdown tables look broken',
@@ -64,7 +66,7 @@ const sampleTasks: Task[] = [
   },
   {
     id: 't4',
-    projectId: 'p2',
+    crId: 'c2',
     name: 'Database index optimization',
     description: 'Compound index on allocations',
     status: 'In Review',
@@ -77,6 +79,7 @@ const sampleTasks: Task[] = [
   },
   {
     id: 't5',
+    crId: 'c1',
     name: 'Old archived task',
     status: 'Done',
     progress: 100,
@@ -88,6 +91,7 @@ const sampleTasks: Task[] = [
   },
   {
     id: 't6',
+    crId: 'c1',
     name: 'Abandoned task',
     status: 'Cancelled',
     progress: 10,
@@ -98,6 +102,7 @@ const sampleTasks: Task[] = [
   },
   {
     id: 't7',
+    crId: 'c1',
     name: 'No deadline task',
     status: 'Open',
     progress: 0,
@@ -138,34 +143,41 @@ describe('filterTasks', () => {
     expect(matchJira.map((t) => t.id)).toEqual(['t-jira']);
   });
 
-  it('filters by hierarchy scope (All, Projects, Standalone) and selected projectId per D-04', () => {
-    // Standalone only
+  it('filters by hierarchy scope (All, CR, Standalone) and selected crId per D-04', () => {
+    // Standalone only: no subsystem attached
     const standalone = filterTasks(
       sampleTasks,
       { ...DEFAULT_TASK_FILTER_STATE, hierarchyScope: 'standalone' },
       today
     );
-    expect(standalone.every((t) => t.projectId === undefined)).toBe(true);
+    expect(standalone.every((t) => t.systemId === undefined)).toBe(true);
     expect(standalone.map((t) => t.id)).toContain('t1');
     expect(standalone.map((t) => t.id)).toContain('t7');
     expect(standalone.map((t) => t.id)).not.toContain('t2');
 
-    // Projects only
-    const projects = filterTasks(
+    // CR scope with no CR selected applies no CR narrowing (closed tasks still excluded by default)
+    const allCrs = filterTasks(
       sampleTasks,
-      { ...DEFAULT_TASK_FILTER_STATE, hierarchyScope: 'projects' },
+      { ...DEFAULT_TASK_FILTER_STATE, hierarchyScope: 'cr' },
       today
     );
-    expect(projects.every((t) => t.projectId !== undefined)).toBe(true);
-    expect(projects.map((t) => t.id)).toEqual(['t2', 't3', 't4']);
+    expect(allCrs.map((t) => t.id)).toEqual(['t1', 't-pending', 't2', 't3', 't4', 't7']);
 
-    // Specific project p1
-    const p1Tasks = filterTasks(
+    // Specific CR c1 excludes c2's task
+    const c1Tasks = filterTasks(
       sampleTasks,
-      { ...DEFAULT_TASK_FILTER_STATE, hierarchyScope: 'projects', projectId: 'p1' },
+      { ...DEFAULT_TASK_FILTER_STATE, hierarchyScope: 'cr', crId: 'c1' },
       today
     );
-    expect(p1Tasks.map((t) => t.id)).toEqual(['t2', 't3']);
+    expect(c1Tasks.map((t) => t.id)).toEqual(['t1', 't-pending', 't2', 't3', 't7']);
+
+    // crId also narrows the 'all' scope
+    const c2Tasks = filterTasks(
+      sampleTasks,
+      { ...DEFAULT_TASK_FILTER_STATE, crId: 'c2' },
+      today
+    );
+    expect(c2Tasks.map((t) => t.id)).toEqual(['t4']);
   });
 
   it('filters by active status set and excludes Done/Cancelled unless includeClosed toggled per D-20', () => {
@@ -265,7 +277,7 @@ describe('Phase 10: countActiveAdvancedFilters (SRCH-03, D-04)', () => {
     expect(
       countActiveAdvancedFilters({
         ...DEFAULT_TASK_FILTER_STATE,
-        milestoneId: 'm1',
+        systemId: 's1',
       })
     ).toBe(1);
 
@@ -335,7 +347,7 @@ describe('Phase 10: countActiveAdvancedFilters (SRCH-03, D-04)', () => {
     expect(
       countActiveAdvancedFilters({
         ...DEFAULT_TASK_FILTER_STATE,
-        milestoneId: 'm1',
+        systemId: 's1',
         workTypes: ['code'],
         opsOwners: ['John'],
         businessAnalysts: ['Alice'],
@@ -362,39 +374,42 @@ describe('Phase 10: countActiveAdvancedFilters (SRCH-03, D-04)', () => {
 });
 
 describe('Phase 10: Multi-Criteria filterTasks & FilterContext (SRCH-01, SRCH-02, SRCH-03)', () => {
-  const project1: Project = {
-    id: 'p1',
+  const cr1: ChangeRequest = {
+    id: 'c1',
+    code: 'CR-2026-001',
     name: 'Core Banking',
     status: 'In Progress',
-    opsOwners: ['Ops-Project-Lead'],
-    businessAnalysts: ['BA-Project-Lead'],
+    type: 'NEW_FEATURE',
+    targets: [{ systemId: 's1' }],
+    opsOwners: ['Ops-CR-Lead'],
+    businessAnalysts: ['BA-CR-Lead'],
     createdAt: '2026-09-01T00:00:00Z',
     updatedAt: '2026-09-01T00:00:00Z',
   };
 
-  const milestone1: Milestone = {
-    id: 'm1',
-    projectId: 'p1',
-    name: 'Sprint 1',
-    status: 'In Progress',
-    opsOwners: ['Ops-Milestone-Specialist'],
+  const system1: System = {
+    id: 's1',
+    code: 'CORE_BANKING',
+    name: 'Core Banking Service',
+    parentId: null,
+    type: 'SERVICE',
     createdAt: '2026-09-01T00:00:00Z',
     updatedAt: '2026-09-01T00:00:00Z',
   };
 
-  const projectMap = new Map<string, Project>([['p1', project1]]);
-  const milestoneMap = new Map<string, Milestone>([['m1', milestone1]]);
+  const crMap = new Map<string, ChangeRequest>([['c1', cr1]]);
+  const systemMap = new Map<string, System>([['s1', system1]]);
 
   const tasksWithDomain: Task[] = [
     {
       id: 'task-code',
+      crId: 'c1',
+      systemId: 's1',
       name: 'Implement OAuth',
       status: 'In Progress',
       priority: 'High',
       progress: 40,
       estimateMinutes: 120,
-      projectId: 'p1',
-      milestoneId: 'm1',
       workType: 'code',
       opsOwners: ['Direct-Ops-User'],
       businessAnalysts: ['Direct-BA-User'],
@@ -404,42 +419,43 @@ describe('Phase 10: Multi-Criteria filterTasks & FilterContext (SRCH-01, SRCH-02
     },
     {
       id: 'task-doc',
+      crId: 'c1',
+      systemId: 's1',
       name: 'Write user manual',
       status: 'Open',
       priority: 'Medium',
       progress: 0,
       estimateMinutes: 60,
-      projectId: 'p1',
-      milestoneId: 'm1',
       workType: 'document',
-      // No direct tags -> should inherit ops from milestone ('Ops-Milestone-Specialist') and ba from project ('BA-Project-Lead')
+      // No direct tags -> inherits from the CR ('Ops-CR-Lead', 'BA-CR-Lead')
       deadline: '2026-09-28',
       createdAt: '2026-09-01T00:00:00Z',
       updatedAt: '2026-09-01T00:00:00Z',
     },
     {
       id: 'task-meeting',
+      crId: 'c1',
       name: 'Sync with security team',
       status: 'Open',
       priority: 'Low',
       progress: 0,
       estimateMinutes: 30,
-      projectId: 'p1',
-      // No milestone -> direct child of project
+      // No subsystem -> 'standalone' scope
       workType: 'meeting',
-      // Should inherit ops and ba from project ('Ops-Project-Lead', 'BA-Project-Lead')
+      // Inherits ops and ba from the CR
       deadline: '2026-10-05',
       createdAt: '2026-09-01T00:00:00Z',
       updatedAt: '2026-09-01T00:00:00Z',
     },
     {
       id: 'task-standalone',
+      crId: 'c2',
       name: 'Personal research',
       status: 'Open',
       priority: 'Low',
       progress: 0,
       estimateMinutes: 45,
-      // Standalone, no workType, no tags
+      // Different CR with no tags, no workType
       deadline: '2026-09-30',
       createdAt: '2026-09-01T00:00:00Z',
       updatedAt: '2026-09-01T00:00:00Z',
@@ -546,13 +562,13 @@ describe('Phase 10: Multi-Criteria filterTasks & FilterContext (SRCH-01, SRCH-02
     expect(res.map((t) => t.id)).toEqual(['task-code', 'task-meeting']);
   });
 
-  it('filters by milestoneId (SRCH-03)', () => {
+  it('filters by systemId (SRCH-03)', () => {
     const context: FilterContext = { todayStr: '2026-09-26' };
     const res = filterTasks(
       tasksWithDomain,
       {
         ...DEFAULT_TASK_FILTER_STATE,
-        milestoneId: 'm1',
+        systemId: 's1',
       },
       context
     );
@@ -563,8 +579,8 @@ describe('Phase 10: Multi-Criteria filterTasks & FilterContext (SRCH-01, SRCH-02
   it('filters by opsOwners matching direct and inherited tags (SRCH-03, D-03)', () => {
     const context: FilterContext = {
       todayStr: '2026-09-26',
-      projectMap,
-      milestoneMap,
+      crMap,
+      systemMap,
     };
 
     // 1. Direct tag match
@@ -578,43 +594,31 @@ describe('Phase 10: Multi-Criteria filterTasks & FilterContext (SRCH-01, SRCH-02
     );
     expect(directRes.map((t) => t.id)).toEqual(['task-code']);
 
-    // 2. Inherited from milestone
-    const msRes = filterTasks(
+    // 2. Inherited from the CR
+    const crRes = filterTasks(
       tasksWithDomain,
       {
         ...DEFAULT_TASK_FILTER_STATE,
-        opsOwners: ['Ops-Milestone-Specialist'],
+        opsOwners: ['Ops-CR-Lead'],
       },
       context
     );
-    expect(msRes.map((t) => t.id)).toEqual(['task-doc']);
-
-    // 3. Inherited from project
-    const projRes = filterTasks(
-      tasksWithDomain,
-      {
-        ...DEFAULT_TASK_FILTER_STATE,
-        opsOwners: ['Ops-Project-Lead'],
-      },
-      context
-    );
-    expect(projRes.map((t) => t.id)).toEqual(['task-meeting']);
+    expect(crRes.map((t) => t.id)).toEqual(['task-doc', 'task-meeting']);
   });
 
   it('filters by businessAnalysts matching direct and inherited tags (SRCH-03, D-03)', () => {
     const context: FilterContext = {
       todayStr: '2026-09-26',
-      projectMap,
-      milestoneMap,
+      crMap,
+      systemMap,
     };
 
-    // Inherited from project on task-doc (milestone had no BAs, so falls back to project)
-    // and task-meeting (direct child of project)
+    // Inherited from the CR on task-doc and task-meeting
     const baRes = filterTasks(
       tasksWithDomain,
       {
         ...DEFAULT_TASK_FILTER_STATE,
-        businessAnalysts: ['ba-project-lead'],
+        businessAnalysts: ['ba-cr-lead'],
       },
       context
     );
@@ -624,8 +628,8 @@ describe('Phase 10: Multi-Criteria filterTasks & FilterContext (SRCH-01, SRCH-02
   it('combines multiple criteria simultaneously with AND logic (SRCH-03)', () => {
     const context: FilterContext = {
       todayStr: '2026-09-26',
-      projectMap,
-      milestoneMap,
+      crMap,
+      systemMap,
       executionTaskIds: new Set(['task-code', 'task-doc']),
     };
 
@@ -633,7 +637,7 @@ describe('Phase 10: Multi-Criteria filterTasks & FilterContext (SRCH-01, SRCH-02
       tasksWithDomain,
       {
         ...DEFAULT_TASK_FILTER_STATE,
-        milestoneId: 'm1',
+        systemId: 's1',
         workTypes: ['code'],
         executionDateRange: ['2026-09-01', '2026-09-30'],
         opsOwners: ['Direct-Ops-User'],

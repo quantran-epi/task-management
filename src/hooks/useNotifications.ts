@@ -24,7 +24,7 @@ const DEFAULT_CATEGORY_COUNTS: Record<AlertCategory, number> = {
 /**
  * Reactive Dexie live query hook aggregating multi-domain alerts (NOTIF-02, D-01, D-05).
  * Automatically recalculates active alerts and category counts whenever tasks,
- * projects, milestones, capacity rules, overrides, allocations, or dismissed
+ * change requests, capacity rules, overrides, allocations, or dismissed
  * settings change in IndexedDB, or as the wall clock advances to trigger scheduled reminders.
  */
 export function useNotifications(
@@ -62,8 +62,7 @@ export function useNotifications(
     async () => {
       const [
         tasks,
-        projects,
-        milestones,
+        changeRequests,
         rules,
         overrides,
         allocations,
@@ -72,8 +71,7 @@ export function useNotifications(
         notificationSettingsRecord,
       ] = await Promise.all([
         targetDb.tasks.toArray(),
-        targetDb.projects.toArray(),
-        targetDb.milestones.toArray(),
+        targetDb.changeRequests.toArray(),
         targetDb.capacityRules.toArray(),
         targetDb.capacityOverrides
           .where('date')
@@ -116,8 +114,7 @@ export function useNotifications(
 
       const items = evaluateNotifications({
         tasks,
-        projects,
-        milestones,
+        changeRequests,
         rules,
         overrides,
         allocations,

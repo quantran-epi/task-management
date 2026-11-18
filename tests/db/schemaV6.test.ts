@@ -4,6 +4,11 @@ import Dexie from 'dexie';
 import { SCHEMA_V5 } from '../../src/db/schema';
 import { TaskPlannerDatabase } from '../../src/db/index';
 
+/**
+ * V5 → current upgrade. V6 converted `reminderDate`/`reminderNote` into the `reminders`
+ * array; the live schema is V16, so the assertions read the CR axis and the live tasks
+ * store, where `reminders` is the surviving contract.
+ */
 describe('Dexie Schema v6 Migration (D-01, D-02, NOTIF-06)', () => {
   const dbName = 'TestMigrationV6DB_' + Math.random().toString(36).slice(2);
 
@@ -11,14 +16,12 @@ describe('Dexie Schema v6 Migration (D-01, D-02, NOTIF-06)', () => {
     await Dexie.delete(dbName);
   });
 
-  it('migrates v5 database records non-destructively to v6 by converting legacy reminderDate/Note to reminders array', async () => {
-    // Step 1: Create and populate a v5 database
+  it('converts legacy reminderDate/Note into a reminders array on the CR axis', async () => {
     const v5Db = new Dexie(dbName);
     v5Db.version(5).stores(SCHEMA_V5);
     await v5Db.open();
 
     const sampleProjectId = '11111111-1111-4111-8111-111111111111';
-    const sampleMilestoneId = '22222222-2222-4222-8222-222222222222';
     const sampleTaskId = '33333333-3333-4333-8333-333333333333';
     const sampleNoReminderTaskId = '44444444-4444-4444-8444-444444444444';
 
@@ -32,21 +35,10 @@ describe('Dexie Schema v6 Migration (D-01, D-02, NOTIF-06)', () => {
       updatedAt: '2026-09-01T00:00:00.000Z',
     });
 
-    await v5Db.table('milestones').add({
-      id: sampleMilestoneId,
-      projectId: sampleProjectId,
-      name: 'Existing V5 Milestone',
-      status: 'Open',
-      reminderDate: '2026-10-02',
-      reminderNote: 'Milestone checkpoint',
-      createdAt: '2026-09-01T00:00:00.000Z',
-      updatedAt: '2026-09-01T00:00:00.000Z',
-    });
 
     await v5Db.table('tasks').add({
       id: sampleTaskId,
       projectId: sampleProjectId,
-      milestoneId: sampleMilestoneId,
       name: 'Existing V5 Task with Reminder',
       status: 'Open',
       progress: 0,
@@ -63,7 +55,6 @@ describe('Dexie Schema v6 Migration (D-01, D-02, NOTIF-06)', () => {
     await v5Db.table('tasks').add({
       id: sampleNoReminderTaskId,
       projectId: sampleProjectId,
-      milestoneId: sampleMilestoneId,
       name: 'Existing V5 Task without Reminder',
       status: 'Open',
       progress: 0,
@@ -76,46 +67,35 @@ describe('Dexie Schema v6 Migration (D-01, D-02, NOTIF-06)', () => {
 
     v5Db.close();
 
-    // Step 2: Open with TaskPlannerDatabase which applies version 6 upgrade
-    const v6Db = new TaskPlannerDatabase(dbName);
-    await v6Db.open();
+    const upgradedDb = new TaskPlannerDatabase(dbName);
+    await upgradedDb.open();
 
-    expect(v6Db.verno).toBeGreaterThanOrEqual(6);
+    expect(upgradedDb.verno).toBeGreaterThanOrEqual(6);
 
-    // Verify existing project data preserved & migrated
-    const project = await v6Db.projects.get(sampleProjectId);
-    expect(project).toBeDefined();
-    expect(project?.name).toBe('Existing V5 Project');
-    expect(project?.reminderDate).toBe('2026-10-01');
-    expect(project?.reminderNote).toBe('Project review reminder');
-    expect(project?.reminders).toHaveLength(1);
-    expect(project?.reminders?.[0]?.date).toBe('2026-10-01');
-    expect(project?.reminders?.[0]?.note).toBe('Project review reminder');
-    expect(project?.reminders?.[0]?.id).toBeDefined();
+    // The legacy project survives as a CR with its reminder converted.
+    const cr = await upgradedDb.changeRequests.get(sampleProjectId);
+    expect(cr).toBeDefined();
+    expect(cr?.name).toBe('Existing V5 Project');
+    expect(cr?.reminders).toHaveLength(1);
+    expect(cr?.reminders?.[0]?.date).toBe('2026-10-01');
+    expect(cr?.reminders?.[0]?.note).toBe('Project review reminder');
 
-    // Verify milestone data migrated
-    const milestone = await v6Db.milestones.get(sampleMilestoneId);
-    expect(milestone).toBeDefined();
-    expect(milestone?.reminders).toHaveLength(1);
-    expect(milestone?.reminders?.[0]?.date).toBe('2026-10-02');
-    expect(milestone?.reminders?.[0]?.note).toBe('Milestone checkpoint');
-
-    // Verify task with reminder migrated
-    const task = await v6Db.tasks.get(sampleTaskId);
+    const task = await upgradedDb.tasks.get(sampleTaskId);
     expect(task).toBeDefined();
+    expect(task?.crId).toBe(sampleProjectId);
     expect(task?.reminders).toHaveLength(1);
     expect(task?.reminders?.[0]?.date).toBe('2026-10-03');
     expect(task?.reminders?.[0]?.note).toBe('Task deadline warning');
 
-    // Verify task without reminder initialized to empty array
-    const taskNoReminder = await v6Db.tasks.get(sampleNoReminderTaskId);
+    const taskNoReminder = await upgradedDb.tasks.get(sampleNoReminderTaskId);
     expect(taskNoReminder).toBeDefined();
     expect(taskNoReminder?.reminders).toEqual([]);
 
-    // Step 3: Add multiple reminders (up to 5) to a task and verify persistence
+    // Multiple reminders (up to 5) persist on the live tasks store.
     const multiReminderTaskId = '55555555-5555-4555-8555-555555555555';
-    await v6Db.tasks.add({
+    await upgradedDb.tasks.add({
       id: multiReminderTaskId,
+      crId: sampleProjectId,
       name: 'Task with 3 Reminders',
       status: 'Open',
       progress: 0,
@@ -130,13 +110,12 @@ describe('Dexie Schema v6 Migration (D-01, D-02, NOTIF-06)', () => {
       updatedAt: '2026-09-29T12:00:00.000Z',
     });
 
-    const savedTask = await v6Db.tasks.get(multiReminderTaskId);
-    expect(savedTask).toBeDefined();
+    const savedTask = await upgradedDb.tasks.get(multiReminderTaskId);
     expect(savedTask?.reminders).toHaveLength(3);
     expect(savedTask?.reminders?.[0]?.time).toBe('09:00');
     expect(savedTask?.reminders?.[1]?.time).toBe('14:30');
     expect(savedTask?.reminders?.[2]?.time).toBeUndefined();
 
-    v6Db.close();
+    upgradedDb.close();
   });
 });

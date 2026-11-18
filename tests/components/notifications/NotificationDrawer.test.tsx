@@ -4,7 +4,7 @@ import { NotificationDrawer } from '../../../src/components/notifications/Notifi
 import type { AlertNotificationItem } from '../../../src/types/notifications';
 import type { Task } from '../../../src/types/models';
 
-const mockTask: Task = {
+const mockTask: Task = { crId: '11111111-1111-4111-8111-111111111111',
   id: 'task-1',
   name: 'Nhiệm vụ kiểm thử',
   status: 'Open',

@@ -4,7 +4,7 @@ import {
   SearchOutlined,
   CheckSquareOutlined,
   ProjectOutlined,
-  FlagOutlined,
+  ApartmentOutlined,
   FileTextOutlined,
   PlusOutlined,
   CalendarOutlined,
@@ -17,8 +17,9 @@ import {
 import { useAIChat } from '../../context/AIChatContext';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
+import { useLayoutStore } from '../../workbench/store/layoutStore';
 import type { NavigateFunction } from '../../types/navigation';
-import type { Task, Project, Milestone, Note } from '../../types/models';
+import type { Task, ChangeRequest, System, Note } from '../../types/models';
 
 const { Text } = Typography;
 
@@ -27,8 +28,8 @@ export interface CommandPaletteModalProps {
   onClose: () => void;
   onNavigate: NavigateFunction;
   onOpenTask?: (taskId: string) => void;
-  onOpenProject?: (project: Project) => void;
-  onOpenMilestone?: (milestone: Milestone) => void;
+  onOpenCr?: (changeRequest: ChangeRequest) => void;
+  onOpenSystem?: (system: System) => void;
   onOpenNote?: (note: Note) => void;
   onCreateTask?: (taskName?: string) => void;
   db?: TaskPlannerDatabase;
@@ -36,7 +37,7 @@ export interface CommandPaletteModalProps {
 
 export interface PaletteItem {
   id: string;
-  category: 'view' | 'action' | 'task' | 'project' | 'milestone' | 'note';
+  category: 'view' | 'action' | 'task' | 'cr' | 'system' | 'note';
   title: string;
   subtitle?: string;
   icon: React.ReactNode;
@@ -46,7 +47,7 @@ export interface PaletteItem {
 export const CHEATSHEET_ENTRIES = [
   { prefix: '>', name: 'Màn hình', desc: 'Chỉ tìm các trang / màn hình chức năng', example: '> tasks, > planner' },
   { prefix: '@', name: 'Tác vụ', desc: 'Chỉ tìm kiếm danh sách công việc', example: '@ họp sprint, @ refactor' },
-  { prefix: '#', name: 'Dự án', desc: 'Chỉ tìm kiếm danh sách dự án & cột mốc', example: '# website, # mobile app' },
+  { prefix: '#', name: 'CR & Hệ thống', desc: 'Chỉ tìm kiếm danh sách Change Request & hệ thống', example: '# tokenization, # core banking' },
   { prefix: '!', name: 'Ghi chú', desc: 'Chỉ tìm kiếm ghi chú và nội dung đính kèm', example: '! auth, ! api' },
   { prefix: '+', name: 'Tạo việc', desc: 'Tạo ngay một tác vụ mới với tên đã nhập', example: '+ Soạn hợp đồng quý 4' },
   { prefix: '?', name: 'Trợ lý AI', desc: 'Mở Trợ lý AI hoặc hỏi nhanh câu hỏi', example: '? làm sao tối ưu tuần này' },
@@ -57,8 +58,8 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   onClose,
   onNavigate,
   onOpenTask,
-  onOpenProject,
-  onOpenMilestone,
+  onOpenCr,
+  onOpenSystem,
   onOpenNote,
   onCreateTask,
   db = defaultDb,
@@ -68,6 +69,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   const [showCheatsheet, setShowCheatsheet] = useState(false);
   const inputRef = useRef<any>(null);
   const { openChat } = useAIChat();
+  const openTab = useLayoutStore((s) => s.openTab);
 
   useEffect(() => {
     if (open) {
@@ -78,10 +80,10 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     }
   }, [open]);
 
-  // Live queries for tasks, projects, notes, milestones
+  // Live queries for tasks, CRs, systems, notes
   const tasks = useLiveQuery<Task[]>(() => db.tasks.toArray(), [db]) ?? [];
-  const projects = useLiveQuery<Project[]>(() => db.projects.toArray(), [db]) ?? [];
-  const milestones = useLiveQuery<Milestone[]>(() => db.milestones.toArray(), [db]) ?? [];
+  const changeRequests = useLiveQuery<ChangeRequest[]>(() => db.changeRequests.toArray(), [db]) ?? [];
+  const systems = useLiveQuery<System[]>(() => db.systems.toArray(), [db]) ?? [];
   const notes = useLiveQuery<Note[]>(() => db.notes.toArray(), [db]) ?? [];
 
   // Static Views and Actions
@@ -110,13 +112,18 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         },
       },
       {
-        id: 'view-projects',
+        id: 'view-cr-explorer',
         category: 'view',
-        title: 'Dự án & Mốc (Projects)',
-        subtitle: 'Quản lý dự án, mốc và phân loại',
+        title: 'Change Request & Hệ thống',
+        subtitle: 'Danh mục hệ thống và các CR đang chạy',
         icon: <ProjectOutlined style={{ color: '#fa8c16' }} />,
         action: () => {
-          onNavigate('projects');
+          openTab({
+            id: 'systems',
+            title: 'Danh mục hệ thống',
+            viewType: 'systems',
+            closable: true,
+          });
           onClose();
         },
       },
@@ -197,13 +204,13 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     // Check prefixes
     const isViewOnly = q.startsWith('>') || q.startsWith('/');
     const isTaskOnly = q.startsWith('@');
-    const isProjectOnly = q.startsWith('#');
+    const isCrOnly = q.startsWith('#');
     const isNoteOnly = q.startsWith('!');
     const isCreateOnly = q.startsWith('+');
     const isAiOnly = (q.startsWith('?') && q.length > 1) || q.startsWith('ai ');
 
     let cleanQuery = q;
-    if (isViewOnly || isTaskOnly || isProjectOnly || isNoteOnly || isCreateOnly) {
+    if (isViewOnly || isTaskOnly || isCrOnly || isNoteOnly || isCreateOnly) {
       cleanQuery = q.slice(1).trim();
     } else if (isAiOnly) {
       cleanQuery = q.startsWith('?') ? q.slice(1).trim() : q.slice(3).trim();
@@ -259,32 +266,49 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       },
     }));
 
-    const projectItems: PaletteItem[] = projects.map((p) => ({
-      id: `project-${p.id}`,
-      category: 'project',
-      title: p.name,
-      subtitle: `Dự án • ${p.status}`,
+    const crItems: PaletteItem[] = changeRequests.map((cr) => ({
+      id: `cr-${cr.id}`,
+      category: 'cr',
+      title: cr.code || cr.name,
+      subtitle: `Change Request • ${cr.name}`,
       icon: <ProjectOutlined style={{ color: '#fa8c16' }} />,
       action: () => {
         onClose();
-        onNavigate('insight', { type: 'project', id: p.id });
+        if (onOpenCr) {
+          onOpenCr(cr);
+          return;
+        }
+        openTab({
+          id: `cr-${cr.id}`,
+          title: cr.code || cr.name,
+          viewType: 'cr_detail',
+          closable: true,
+          params: { changeRequestId: cr.id },
+        });
       },
     }));
 
-    const milestoneItems: PaletteItem[] = milestones.map((m) => {
-      const parentProj = projects.find((p) => p.id === m.projectId);
-      return {
-        id: `milestone-${m.id}`,
-        category: 'milestone',
-        title: m.name,
-        subtitle: `Cột mốc • ${m.status}${parentProj ? ` • [${parentProj.name}]` : ''}`,
-        icon: <FlagOutlined style={{ color: '#faad14' }} />,
-        action: () => {
-          onClose();
-          onNavigate('insight', { type: 'milestone', id: m.id });
-        },
-      };
-    });
+    const systemItems: PaletteItem[] = systems.map((sys) => ({
+      id: `system-${sys.id}`,
+      category: 'system',
+      title: sys.code || sys.name,
+      subtitle: `Hệ thống • ${sys.name}`,
+      icon: <ApartmentOutlined style={{ color: '#722ed1' }} />,
+      action: () => {
+        onClose();
+        if (onOpenSystem) {
+          onOpenSystem(sys);
+          return;
+        }
+        openTab({
+          id: `system-${sys.id}`,
+          title: sys.name,
+          viewType: 'system_detail',
+          closable: true,
+          params: { systemId: sys.id },
+        });
+      },
+    }));
 
     const noteItems: PaletteItem[] = notes.map((n) => ({
       id: `note-${n.id}`,
@@ -313,8 +337,8 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       return taskItems.filter((i) => i.title.toLowerCase().includes(cleanQuery) || i.subtitle?.toLowerCase().includes(cleanQuery));
     }
 
-    if (isProjectOnly) {
-      const combined = [...projectItems, ...milestoneItems];
+    if (isCrOnly) {
+      const combined = [...crItems, ...systemItems];
       if (!cleanQuery) return combined.slice(0, 10);
       return combined.filter((i) => i.title.toLowerCase().includes(cleanQuery) || i.subtitle?.toLowerCase().includes(cleanQuery));
     }
@@ -325,10 +349,10 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     }
 
     // Default global search
-    const all = [...staticItems, ...taskItems, ...projectItems, ...milestoneItems, ...noteItems];
+    const all = [...staticItems, ...taskItems, ...crItems, ...systemItems, ...noteItems];
 
     if (!cleanQuery) {
-      return [...staticItems, ...taskItems.slice(0, 5), ...projectItems.slice(0, 3)];
+      return [...staticItems, ...taskItems.slice(0, 5), ...crItems.slice(0, 3)];
     }
 
     const matched = all.filter(
@@ -353,7 +377,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     }
 
     return matched;
-  }, [query, staticItems, tasks, projects, milestones, notes, onClose, onOpenTask, onOpenProject, onOpenMilestone, onOpenNote, onNavigate, onCreateTask]);
+  }, [query, staticItems, tasks, changeRequests, systems, notes, onClose, onOpenTask, onOpenCr, onOpenSystem, onOpenNote, onNavigate, onCreateTask, openTab]);
 
   // Keep selected index within bounds
   useEffect(() => {
@@ -393,10 +417,10 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         return <Tag color="green">Thao tác</Tag>;
       case 'task':
         return <Tag color="cyan">Tác vụ</Tag>;
-      case 'project':
-        return <Tag color="orange">Dự án</Tag>;
-      case 'milestone':
-        return <Tag color="gold">Cột mốc</Tag>;
+      case 'cr':
+        return <Tag color="orange">Change Request</Tag>;
+      case 'system':
+        return <Tag color="purple">Hệ thống</Tag>;
       case 'note':
         return <Tag color="magenta">Ghi chú</Tag>;
       default:
@@ -426,7 +450,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
             ref={inputRef}
             size="large"
             prefix={<SearchOutlined style={{ color: '#8c8c8c', fontSize: 18 }} />}
-            placeholder="Tìm công việc, dự án, màn hình, lệnh... (gõ '?' để xem cú pháp)"
+            placeholder="Tìm công việc, CR, hệ thống, màn hình, lệnh... (gõ '?' để xem cú pháp)"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);

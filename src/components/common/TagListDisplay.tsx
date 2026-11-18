@@ -24,8 +24,8 @@ export const TagListDisplay: React.FC<TagListDisplayProps> = ({
     );
   }
 
-  const isInherited = source === 'milestone' || source === 'project';
-  const originTypeLabel = source === 'milestone' ? 'Milestone' : 'Dự án';
+  const isInherited = source === 'cr';
+  const originTypeLabel = 'CR';
   const tooltipTitle = isInherited
     ? `Kế thừa từ ${originTypeLabel}: ${originName || ''}`
     : undefined;

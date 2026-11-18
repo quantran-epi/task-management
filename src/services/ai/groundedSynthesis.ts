@@ -129,14 +129,15 @@ export function buildSystemPrompt(
     'You must return a valid JSON object matching GroundedAnswerSchemaV2 (schemaVersion: 2).',
     'Never guess or introduce external training facts not present in EVIDENCE.',
     'INPUT STRUCTURE:',
-    '- QUERY: User\'s question.',
-    '- CONVERSATION_HISTORY: Prior turns between user and assistant for context resolution.',
+    '- QUERY: The active, immediate question you MUST answer in this turn.',
+    '- CONVERSATION_HISTORY: Prior turns between user and assistant providing dialogue context and antecedent resolution.',
     '- SPECULATION_REQUESTED: true | false.',
     '- EVIDENCE:',
     '  - Citations: [ { id: "S1", title: "...", excerpt: "..." }, { id: "M1", title: "[MCP] ...", excerpt: "..." }, ... ]',
     '    (Prefix guide: [S*] = Server Knowledge Doc, [L*] = Local Note, [M*] = Live MCP Tool Observation)',
     '  - Paths: [ { id: "P1", summary: "...", steps: [...] }, ... ]',
     'RULES:',
+    '0. "target_query_priority": Always synthesize your answer to address the question in "QUERY". "CONVERSATION_HISTORY" provides conversational continuity and context resolution (e.g. pronouns like "nó", "đó", references to previous entities, decisions, or steps); you must NEVER answer a prior question from "CONVERSATION_HISTORY" instead of "QUERY". If "QUERY" asks about a topic already discussed, provide a fresh, complete answer for "QUERY" backed by the current EVIDENCE.',
     '1. "language": ' + languageInstruction,
     '2. "conclusion": High-level executive synthesis answering the query directly in natural, beautiful, human-friendly Markdown formatting (using bullet points, bold key terms, tables, code blocks, or Mermaid diagrams where appropriate). When the user asks for a diagram or flowchart of processes or relationships, you can include a ```mermaid code block inside "conclusion". MANDATORY INLINE CITATIONS: Every single fact, step, bullet point, or package name in "conclusion" MUST have an inline citation tag like [S1], [L1], or [M1] immediately after it. Cite [M*] when claiming facts observed in real-time from external databases, memory graphs, or Live MCP tools. Statements in "conclusion" without citation brackets are FORBIDDEN when EVIDENCE is available.',
     '4. "confidenceReason": One sentence explaining the confidence assignment based on evidence coverage.',
@@ -422,10 +423,11 @@ export function normalizeRawGroundedOutput(
   return obj;
 }
 
-const MAP_BATCH_RECORDS = 25;
-const REDUCE_TRIGGER_CHARS = 60_000;
-const REDUCE_TRIGGER_RECORDS = 400;
+const MAP_BATCH_RECORDS = 60;
+const REDUCE_TRIGGER_CHARS = 120_000;
+const REDUCE_TRIGGER_RECORDS = 300;
 const MAX_RECORD_RETRIES = 1;
+const MAX_DIGEST_BATCHES = 3;
 
 const DigestSchema = z.object({
   claims: z.array(
@@ -464,8 +466,16 @@ async function digestEvidence(
   const uncovered: Array<(typeof items)[number]> = [];
   const warnings = [...pack.coverageWarnings];
 
+  let batchIndex = 0;
   for (let start = 0; start < items.length; start += MAP_BATCH_RECORDS) {
     const batch = items.slice(start, start + MAP_BATCH_RECORDS);
+    if (batchIndex >= MAX_DIGEST_BATCHES) {
+      // Exceeded max digest batches: pass remaining items through verbatim to prevent router timeout
+      uncovered.push(...batch);
+      continue;
+    }
+    batchIndex++;
+
     const claims: DigestClaim[] = [];
 
     for (let attempt = 0; attempt <= MAX_RECORD_RETRIES; attempt++) {
@@ -473,41 +483,51 @@ async function digestEvidence(
       const pending = batch.filter((item) => !claimed.has(identityOf(item)));
       if (pending.length === 0) break;
 
-      const response = await completeJson({
-        endpoint: input.endpoint,
-        apiKey: input.apiKey,
-        model: input.model,
-        temperature: 0,
-        messages: [
-          {
-            role: 'system',
-            content: [
-              'Extract every distinct factual claim from the EVIDENCE entries.',
-              'Return JSON: {"claims":[{"text":"...","quote":"verbatim support","recordIds":["..."]}]}.',
-              'Rules: cover EVERY entry id at least once; quote verbatim;',
-              'never merge two contradictory claims; never add facts absent from the entries;',
-              `respond in ${targetLanguage === 'vi' ? 'Vietnamese' : 'English'} for "text" and keep "quote" byte-identical.`,
-            ].join('\n'),
-          },
-          {
-            role: 'user',
-            content: JSON.stringify({
-              entries: pending.map((item) => ({
-                id: identityOf(item),
-                citationId: item.id,
-                title: item.documentTitle,
-                text: item.text,
-              })),
-            }),
-          },
-        ],
-        response_format: { type: 'json_object' } as never,
-        signal: input.signal,
-      });
-      const parsed = DigestSchema.safeParse(
-        typeof response === 'string' ? safeJsonParse(response) : response
-      );
-      if (parsed.success) claims.push(...parsed.data.claims);
+      try {
+        const batchTimeout = AbortSignal.timeout(45_000);
+        const batchSignal = (AbortSignal as any).any
+          ? (AbortSignal as any).any([input.signal, batchTimeout])
+          : input.signal;
+
+        const response = await completeJson({
+          endpoint: input.endpoint,
+          apiKey: input.apiKey,
+          model: input.model,
+          temperature: 0,
+          messages: [
+            {
+              role: 'system',
+              content: [
+                'Extract every distinct factual claim from the EVIDENCE entries.',
+                'Return JSON: {"claims":[{"text":"...","quote":"verbatim support","recordIds":["..."]}]}.',
+                'Rules: cover EVERY entry id at least once; quote verbatim;',
+                'never merge two contradictory claims; never add facts absent from the entries;',
+                `respond in ${targetLanguage === 'vi' ? 'Vietnamese' : 'English'} for "text" and keep "quote" byte-identical.`,
+              ].join('\n'),
+            },
+            {
+              role: 'user',
+              content: JSON.stringify({
+                entries: pending.map((item) => ({
+                  id: identityOf(item),
+                  citationId: item.id,
+                  title: item.documentTitle,
+                  text: item.text,
+                })),
+              }),
+            },
+          ],
+          response_format: { type: 'json_object' } as never,
+          signal: batchSignal,
+        });
+        const parsed = DigestSchema.safeParse(
+          typeof response === 'string' ? safeJsonParse(response) : response
+        );
+        if (parsed.success) claims.push(...parsed.data.claims);
+      } catch (digestErr) {
+        // Individual digest batch error gracefully degrades: items will be passed verbatim in uncovered
+        break;
+      }
     }
 
     const covered = new Set(claims.flatMap((claim) => claim.recordIds));

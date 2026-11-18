@@ -96,6 +96,9 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
       inlineAbortRef.current.abort();
       inlineAbortRef.current = null;
     }
+    try {
+      window.getSelection()?.removeAllRanges();
+    } catch {}
     setVisible(false);
     setIsAskingInline(false);
     setInlineQuery('');
@@ -247,8 +250,8 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
     if (!currentPayload) return;
     const prompt = formatSelectionMentionPrompt(currentPayload);
 
-    // Switch scope appropriately if attached to task or project
-    let scopeType: 'task' | 'project' | 'global' = 'global';
+    // Switch scope appropriately if attached to a task, CR or system
+    let scopeType: 'task' | 'cr' | 'system' | 'global' = 'global';
     let scopeId: string | undefined = undefined;
     let scopeTitle: string | undefined = undefined;
 
@@ -256,18 +259,26 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
       scopeType = 'task';
       scopeId = currentPayload.targetId;
       scopeTitle = currentPayload.targetTitle;
-    } else if (currentPayload.targetType === 'project') {
-      scopeType = 'project';
+    } else if (currentPayload.targetType === 'cr') {
+      scopeType = 'cr';
+      scopeId = currentPayload.targetId;
+      scopeTitle = currentPayload.targetTitle;
+    } else if (currentPayload.targetType === 'system') {
+      scopeType = 'system';
       scopeId = currentPayload.targetId;
       scopeTitle = currentPayload.targetTitle;
     } else if (currentPayload.parentTask) {
       scopeType = 'task';
       scopeId = currentPayload.parentTask.id;
       scopeTitle = currentPayload.parentTask.name;
-    } else if (currentPayload.parentProject) {
-      scopeType = 'project';
-      scopeId = currentPayload.parentProject.id;
-      scopeTitle = currentPayload.parentProject.name;
+    } else if (currentPayload.parentCr) {
+      scopeType = 'cr';
+      scopeId = currentPayload.parentCr.id;
+      scopeTitle = currentPayload.parentCr.name;
+    } else if (currentPayload.system) {
+      scopeType = 'system';
+      scopeId = currentPayload.system.id;
+      scopeTitle = currentPayload.system.name;
     }
 
     openChatWithDraft(
@@ -414,6 +425,8 @@ ${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC TH�
   return (
     <div
       ref={containerRef}
+      onMouseDown={(e) => e.stopPropagation()}
+      onMouseUp={(e) => e.stopPropagation()}
       style={{
         position: 'absolute',
         left: position.x,
@@ -467,7 +480,11 @@ ${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC TH�
       {!isAskingInline ? (
         /* Floating Toolbar Quick Actions */
         <Space size={2} wrap>
-          <Tooltip title="Mention đoạn trích vào khung chat để chỉnh sửa trước khi gửi">
+          <Tooltip
+            zIndex={2500}
+            getPopupContainer={(node) => containerRef.current || node.parentElement || document.body}
+            title="Mention đoạn trích vào khung chat để chỉnh sửa trước khi gửi"
+          >
             <Button
               type="text"
               size="small"
@@ -478,7 +495,11 @@ ${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC TH�
             </Button>
           </Tooltip>
 
-          <Tooltip title="Giải thích ý nghĩa đoạn trích">
+          <Tooltip
+            zIndex={2500}
+            getPopupContainer={(node) => containerRef.current || node.parentElement || document.body}
+            title="Giải thích ý nghĩa đoạn trích"
+          >
             <Button
               type="text"
               size="small"
@@ -494,7 +515,11 @@ ${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC TH�
             </Button>
           </Tooltip>
 
-          <Tooltip title="Tóm tắt ý chính">
+          <Tooltip
+            zIndex={2500}
+            getPopupContainer={(node) => containerRef.current || node.parentElement || document.body}
+            title="Tóm tắt ý chính"
+          >
             <Button
               type="text"
               size="small"
@@ -510,7 +535,11 @@ ${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC TH�
             </Button>
           </Tooltip>
 
-          <Tooltip title="Viết lại hoặc sửa câu từ">
+          <Tooltip
+            zIndex={2500}
+            getPopupContainer={(node) => containerRef.current || node.parentElement || document.body}
+            title="Viết lại hoặc sửa câu từ"
+          >
             <Button
               type="text"
               size="small"
@@ -526,7 +555,11 @@ ${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC TH�
             </Button>
           </Tooltip>
 
-          <Tooltip title="Hỏi câu hỏi tùy chỉnh">
+          <Tooltip
+            zIndex={2500}
+            getPopupContainer={(node) => containerRef.current || node.parentElement || document.body}
+            title="Hỏi câu hỏi tùy chỉnh"
+          >
             <Button
               type="text"
               size="small"

@@ -35,17 +35,22 @@ describe('AppShell Component (UX-01)', () => {
     expect(header?.getAttribute('style')).not.toContain('background: #fff');
   });
 
-  it('renders navigation items and triggers navigation callback', () => {
+  it('renders the surviving navigation items and no project entry', () => {
     render(
       <AppShell currentRoute="tasks" onNavigate={onNavigate}>
         <div>Content</div>
       </AppShell>
     );
 
-    const projectsLink = screen.getByText('Dự án');
-    expect(projectsLink).toBeInTheDocument();
-    fireEvent.click(projectsLink);
-    expect(onNavigate).toHaveBeenCalledWith('projects');
+    // Plan 05 removed the `projects` route and its nav item outright.
+    expect(screen.queryByRole('menuitem', { name: /dự án/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/dự án & cột mốc/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Tác vụ'));
+    expect(onNavigate).toHaveBeenCalledWith('tasks');
+
+    fireEvent.click(screen.getByText('Lập kế hoạch'));
+    expect(onNavigate).toHaveBeenCalledWith('planner');
   });
 
   it('does not render dangerous reset database button in header', () => {
@@ -74,21 +79,21 @@ describe('App Integration & Hash Route & Live Query (UX-01, DATA-02)', () => {
     render(<App />);
 
     expect(await screen.findByPlaceholderText(/Tìm kiếm tác vụ/i)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/Thêm tác vụ nhanh/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('Thêm nhanh tên tác vụ và ước tính')).toBeInTheDocument();
   });
 
-  it('updates view when hash route changes to projects', async () => {
+  it('falls back to the dashboard when the hash names the removed projects route', async () => {
     render(<App />);
 
     expect(await screen.findByPlaceholderText(/Tìm kiếm tác vụ/i)).toBeInTheDocument();
 
-    // Trigger hashchange to projects
+    // `projects` is no longer an AppRoute, so the router falls back to the default route.
     window.location.hash = '#/projects';
     window.dispatchEvent(new HashChangeEvent('hashchange'));
 
     await waitFor(() => {
-      expect(screen.getByText('Dự án & Cột mốc')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Dự án mới/i })).toBeInTheDocument();
+      expect(screen.queryByPlaceholderText(/Tìm kiếm tác vụ/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/dự án & cột mốc/i)).not.toBeInTheDocument();
     });
   });
 

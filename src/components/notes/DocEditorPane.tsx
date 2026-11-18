@@ -31,12 +31,12 @@ import {
   FileWordOutlined,
   FileMarkdownOutlined,
 } from '@ant-design/icons';
-import type { Note, Task, Project } from '../../types/models';
+import type { Note, Task, ChangeRequest } from '../../types/models';
 import type { DocumentPublishStatus } from '../../db/repositories/documentSetRepo';
 import { renderSafeMarkdown } from '../../utils/markdown';
 import { extractMarkdownMetadata, detectReferencedEntities, isPlaceholderTitle, type DetectedEntity } from '../../utils/smartIngestion';
 import { SmartIngestionBanner } from './SmartIngestionBanner';
-import { DocOutlineToC } from './DocOutlineToC';
+import { DocOutlineToC, type HeadingItem } from './DocOutlineToC';
 import { BacklinksSection } from './BacklinksSection';
 import { getBacklinksForDoc, linkEntitiesToDoc, type BacklinksResult } from '../../db/repositories/documentLinkRepo';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -65,7 +65,7 @@ export interface DocEditorPaneProps {
   onRestoreDoc?: (doc: Note) => void;
   onSelectDoc?: (docId: string) => void;
   onOpenTask?: (taskId: string) => void;
-  onOpenProject?: (projectId: string) => void;
+  onOpenCr?: (crId: string) => void;
   db?: TaskPlannerDatabase;
   publishStatus?: DocumentPublishStatus | undefined;
   compactPublishBadge?: boolean | undefined;
@@ -78,7 +78,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
   onRestoreDoc,
   onSelectDoc,
   onOpenTask,
-  onOpenProject,
+  onOpenCr,
   db = defaultDb,
   publishStatus,
   compactPublishBadge,
@@ -90,9 +90,9 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
   const [tags, setTags] = useState<string[]>([]);
   const [saveStatus, setSaveStatus] = useState<string>('');
   const [detectedEntities, setDetectedEntities] = useState<DetectedEntity[]>([]);
-  const [backlinks, setBacklinks] = useState<BacklinksResult>({ tasks: [], projects: [], referencingNotes: [] });
+  const [backlinks, setBacklinks] = useState<BacklinksResult>({ tasks: [], changeRequests: [], referencingNotes: [] });
   const [parentTask, setParentTask] = useState<Task | null>(null);
-  const [parentProject, setParentProject] = useState<Project | null>(null);
+  const [parentCr, setParentCr] = useState<ChangeRequest | null>(null);
   const [isNormalizeModalOpen, setIsNormalizeModalOpen] = useState(false);
   const [showToC, setShowToC] = useState<boolean>(() => {
     try {
@@ -149,7 +149,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
   interface CandidateItem {
     id: string;
     title: string;
-    type: 'doc' | 'task' | 'project';
+    type: 'doc' | 'task' | 'cr';
   }
   const [isAutoCompleteOpen, setIsAutoCompleteOpen] = useState(false);
   const [autoCompleteQuery, setAutoCompleteQuery] = useState('');
@@ -167,6 +167,8 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
   const isTitleManuallyEditedRef = useRef(false);
 
   const textareaRef = useRef<TextAreaRef | null>(null);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
+  const activePaneRef = useRef<'editor' | 'preview' | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const aiChat = useAIChat();
@@ -178,7 +180,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
       setBody('');
       setTags([]);
       setDetectedEntities([]);
-      setBacklinks({ tasks: [], projects: [], referencingNotes: [] });
+      setBacklinks({ tasks: [], changeRequests: [], referencingNotes: [] });
       setSaveStatus('');
       isTitleManuallyEditedRef.current = false;
       return;
@@ -197,16 +199,16 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
       .then((res) => setBacklinks(res))
       .catch((err) => console.warn('Failed to load backlinks:', err));
 
-    // Load direct parent task or project if linked
+    // Load direct parent task or CR if linked
     if (doc.entityType === 'task' && doc.entityId) {
       db.tasks.get(doc.entityId).then((t) => setParentTask(t || null)).catch(() => setParentTask(null));
     } else {
       setParentTask(null);
     }
-    if (doc.entityType === 'project' && doc.entityId) {
-      db.projects.get(doc.entityId).then((p) => setParentProject(p || null)).catch(() => setParentProject(null));
+    if (doc.entityType === 'cr' && doc.entityId) {
+      db.changeRequests.get(doc.entityId).then((cr) => setParentCr(cr || null)).catch(() => setParentCr(null));
     } else {
-      setParentProject(null);
+      setParentCr(null);
     }
   }, [doc?.id, db]);
 
@@ -241,10 +243,10 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
     async (query: string) => {
       const q = query.trim().toLowerCase();
       try {
-        const [rawNotes, rawTasks, rawProjects] = await Promise.all([
+        const [rawNotes, rawTasks, rawChangeRequests] = await Promise.all([
           db.notes.toArray(),
           db.tasks.toArray(),
-          db.projects.toArray(),
+          db.changeRequests.toArray(),
         ]);
 
         const noteCandidates: CandidateItem[] = rawNotes
@@ -263,15 +265,15 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
             type: 'task' as const,
           }));
 
-        const projectCandidates: CandidateItem[] = rawProjects
-          .filter((p) => (p.name || '').toLowerCase().includes(q))
-          .map((p) => ({
-            id: p.id,
-            title: p.name || 'Không có tiêu đề',
-            type: 'project' as const,
+        const crCandidates: CandidateItem[] = rawChangeRequests
+          .filter((cr) => (cr.name || '').toLowerCase().includes(q) || (cr.code || '').toLowerCase().includes(q))
+          .map((cr) => ({
+            id: cr.id,
+            title: cr.code || cr.name || 'Không có tiêu đề',
+            type: 'cr' as const,
           }));
 
-        const combined = [...noteCandidates, ...taskCandidates, ...projectCandidates].slice(0, 8);
+        const combined = [...noteCandidates, ...taskCandidates, ...crCandidates].slice(0, 8);
         setCandidates(combined);
         setSelectedIndex(0);
         setIsAutoCompleteOpen(combined.length > 0);
@@ -370,7 +372,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
       }
     }, 0);
 
-    // Persist bidirectional link to the referenced entity (task, project, doc)
+    // Persist bidirectional link to the referenced entity (task, CR, doc)
     if (doc) {
       try {
         await linkEntitiesToDoc(
@@ -442,12 +444,12 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
 
     // 2. Entity detection from database
     try {
-      const [tasks, projects, milestones] = await Promise.all([
+      const [tasks, changeRequests, systems] = await Promise.all([
         db.tasks.toArray(),
-        db.projects.toArray(),
-        db.milestones.toArray(),
+        db.changeRequests.toArray(),
+        db.systems.toArray(),
       ]);
-      const entities = detectReferencedEntities(pastedText, tasks, projects, milestones);
+      const entities = detectReferencedEntities(pastedText, tasks, changeRequests, systems);
       if (entities.length > 0) {
         setDetectedEntities(entities);
       }
@@ -492,6 +494,95 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
         { type: 'document', id: doc.id, title: doc.title || 'Tài liệu' },
         expandedPrompt
       );
+    }
+  };
+
+  // Synchronized scroll handlers between Editor and Preview using activePaneRef
+  const handleEditorScroll = useCallback(() => {
+    if (viewMode !== 'split' || activePaneRef.current !== 'editor') return;
+    const editor = textareaRef.current?.resizableTextArea?.textArea;
+    const preview = previewContainerRef.current;
+    if (!editor || !preview) return;
+
+    const editorScrollable = editor.scrollHeight - editor.clientHeight;
+    if (editorScrollable <= 0) return;
+
+    const ratio = editor.scrollTop / editorScrollable;
+    const previewScrollable = preview.scrollHeight - preview.clientHeight;
+    preview.scrollTop = ratio * previewScrollable;
+  }, [viewMode]);
+
+  const handlePreviewScroll = useCallback(() => {
+    if (viewMode !== 'split' || activePaneRef.current !== 'preview') return;
+    const editor = textareaRef.current?.resizableTextArea?.textArea;
+    const preview = previewContainerRef.current;
+    if (!editor || !preview) return;
+
+    const previewScrollable = preview.scrollHeight - preview.clientHeight;
+    if (previewScrollable <= 0) return;
+
+    const ratio = preview.scrollTop / previewScrollable;
+    const editorScrollable = editor.scrollHeight - editor.clientHeight;
+    editor.scrollTop = ratio * editorScrollable;
+  }, [viewMode]);
+
+  const handleHeadingClick = (heading: HeadingItem) => {
+    activePaneRef.current = null;
+
+    // 1. Scroll preview container if visible
+    const preview = previewContainerRef.current;
+    if (preview) {
+      let targetHeadingEl: HTMLElement | null = null;
+      if (typeof heading.lineIndex === 'number') {
+        targetHeadingEl = preview.querySelector(`[data-line-start="${heading.lineIndex + 1}"]`);
+      }
+      if (!targetHeadingEl) {
+        const headingsInPreview = Array.from(preview.querySelectorAll('h1, h2, h3, h4, h5, h6')) as HTMLElement[];
+        targetHeadingEl =
+          headingsInPreview.find(
+            (el) => el.textContent?.trim().toLowerCase() === heading.text.trim().toLowerCase()
+          ) ||
+          headingsInPreview.find(
+            (el) => el.textContent?.trim().includes(heading.text.trim())
+          ) ||
+          null;
+      }
+
+      if (targetHeadingEl) {
+        const previewRect = preview.getBoundingClientRect();
+        const headingRect = targetHeadingEl.getBoundingClientRect();
+        const targetScrollTop = preview.scrollTop + (headingRect.top - previewRect.top) - 16;
+
+        preview.scrollTo({
+          top: Math.max(0, targetScrollTop),
+          behavior: 'smooth',
+        });
+      }
+    }
+
+    // 2. Scroll and position editor textarea if visible
+    const nativeTextarea = textareaRef.current?.resizableTextArea?.textArea;
+    if (nativeTextarea && typeof heading.lineIndex === 'number') {
+      const lines = body.split(/\r?\n/);
+      let charPos = 0;
+      for (let i = 0; i < heading.lineIndex && i < lines.length; i++) {
+        charPos += (lines[i]?.length ?? 0) + 1;
+      }
+
+      nativeTextarea.focus();
+      nativeTextarea.setSelectionRange(charPos, charPos + (lines[heading.lineIndex]?.length ?? 0));
+
+      const totalLines = Math.max(1, lines.length);
+      const editorScrollable = nativeTextarea.scrollHeight - nativeTextarea.clientHeight;
+      const targetScrollTop =
+        editorScrollable > 0
+          ? (heading.lineIndex / totalLines) * nativeTextarea.scrollHeight
+          : 0;
+
+      nativeTextarea.scrollTo({
+        top: Math.max(0, targetScrollTop - 40),
+        behavior: 'smooth',
+      });
     }
   };
 
@@ -808,14 +899,14 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
               {parentTask.jiraKey ? ` (${parentTask.jiraKey})` : ''}
             </Tag>
           )}
-          {parentProject && (
+          {parentCr && (
             <Tag
               color="purple"
               icon={<FolderOutlined />}
-              style={{ cursor: onOpenProject ? 'pointer' : 'default', padding: '2px 8px', fontSize: 12 }}
-              onClick={() => onOpenProject?.(parentProject.id)}
+              style={{ cursor: onOpenCr ? 'pointer' : 'default', padding: '2px 8px', fontSize: 12 }}
+              onClick={() => onOpenCr?.(parentCr.id)}
             >
-              Thuộc dự án: <strong>{parentProject.name}</strong>
+              Thuộc CR: <strong>{parentCr.code || parentCr.name}</strong>
             </Tag>
           )}
           {tags.map((t) => (
@@ -841,6 +932,9 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
         {/* Editor Area */}
         {(viewMode === 'edit' || viewMode === 'split') && (
           <div
+            onPointerEnter={() => {
+              activePaneRef.current = 'editor';
+            }}
             style={{
               flex: viewMode === 'split' ? 1 : 1,
               minWidth: 0,
@@ -856,8 +950,12 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
               ref={textareaRef}
               value={body}
               readOnly={Boolean(doc.deletedAt)}
+              onFocus={() => {
+                activePaneRef.current = 'editor';
+              }}
               onChange={(e) => handleBodyChange(e.target.value, e.target.selectionStart)}
               onKeyDown={handleKeyDown}
+              onScroll={handleEditorScroll}
               onKeyUp={(e) => {
                 const navKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Tab', 'Escape'];
                 if (isAutoCompleteOpen && navKeys.includes(e.key)) {
@@ -931,9 +1029,9 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
                     icon = <CheckSquareOutlined style={{ color: '#2563eb' }} />;
                     typeLabel = 'Tác vụ';
                     tagColor = 'blue';
-                  } else if (cand.type === 'project') {
+                  } else if (cand.type === 'cr') {
                     icon = <FolderOutlined style={{ color: '#d97706' }} />;
-                    typeLabel = 'Dự án';
+                    typeLabel = 'Change Request';
                     tagColor = 'orange';
                   }
 
@@ -993,6 +1091,11 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
         {/* Preview Area */}
         {(viewMode === 'preview' || viewMode === 'split') && (
           <div
+            ref={previewContainerRef}
+            onScroll={handlePreviewScroll}
+            onPointerEnter={() => {
+              activePaneRef.current = 'preview';
+            }}
             style={{
               flex: viewMode === 'split' ? 1 : 1,
               minWidth: 0,
@@ -1027,19 +1130,19 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
                   }
                 } else if (entityType === 'doc' && onSelectDoc) {
                   onSelectDoc(entityId);
-                } else if (entityType === 'project' && onOpenProject) {
-                  onOpenProject(entityId);
+                } else if (entityType === 'cr' && onOpenCr) {
+                  onOpenCr(entityId);
                 }
               }}
-              dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(body || '_Chưa có nội dung_') }}
+              dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(body || '_Chưa có nội dung_', { sourceLines: true }) }}
             />
             {/* Backlinks Section */}
             <BacklinksSection
               tasks={backlinks.tasks}
-              projects={backlinks.projects}
+              changeRequests={backlinks.changeRequests}
               referencingNotes={backlinks.referencingNotes}
               onOpenTask={onOpenTask || ((id) => setLocalDrawerTaskId(id))}
-              onOpenProject={onOpenProject}
+              onOpenCr={onOpenCr}
               onOpenNote={onSelectDoc}
             />
           </div>
@@ -1073,7 +1176,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
               padding: '4px 8px',
             }}
           >
-            <DocOutlineToC markdown={body} />
+            <DocOutlineToC markdown={body} onHeadingClick={handleHeadingClick} />
           </div>
         )}
       </div>

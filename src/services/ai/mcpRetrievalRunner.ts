@@ -57,7 +57,9 @@ const MCP_RETRIEVAL_TIMEOUT_MS = 300_000; // 5-minute safety watchdog
 const MAX_RETRIEVAL_TURNS_SAFETY_VALVE = 12;
 const MAX_SERVER_INSTRUCTION_CHARS = 4000;
 /** Safety valve only: pagination stops here and completeness becomes 'partial'. */
-const MAX_PAGES_PER_CALL = 20;
+const MAX_PAGES_PER_CALL = 3;
+/** Maximum MCP records passed to grounded evidence packing to optimize token budget. */
+export const MAX_MCP_RECORDS = 60;
 
 const ToolSelectionPlanSchema = z.looseObject({
   done: z.boolean(),
@@ -134,14 +136,21 @@ export async function runMcpRetrieval(
   let consecutiveZeroNoveltyTurns = 0;
 
   const finish = (): McpRetrievalResult => {
-    const { records, stats } = normalizeMcpEvidence(
+    const { records: normalizedRecords, stats } = normalizeMcpEvidence(
       items,
       items.map((item) => item.page ?? 0)
     );
+    let finalRecords = normalizedRecords;
+    if (finalRecords.length > MAX_MCP_RECORDS) {
+      finalRecords = finalRecords.slice(0, MAX_MCP_RECORDS);
+      warnings.push(
+        `Đã giới hạn ${MAX_MCP_RECORDS} bản ghi MCP phù hợp nhất (trên tổng số ${normalizedRecords.length}) để tối ưu chi phí token và tốc độ phản hồi`
+      );
+    }
     return {
       items,
       warnings,
-      records,
+      records: finalRecords,
       normalization: stats,
       completeness:
         pagesCapped || stopReason === 'turn_cap' || stopReason === 'watchdog'

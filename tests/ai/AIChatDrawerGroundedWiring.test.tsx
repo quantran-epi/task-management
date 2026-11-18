@@ -11,6 +11,7 @@ import type {
   GroundedTurnResult,
 } from '../../src/services/ai/groundedTurn';
 import type { ChatMessageGrounding } from '../../src/services/ai/groundedAnswerSchemas';
+import { KNOWLEDGE_SERVER_EMPTY_NOTICE } from '../../src/services/ai/knowledgeOutcome';
 import {
   createOrGetThread,
   getMessagesByThreadId,
@@ -129,7 +130,7 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
     });
   });
 
-  it('2. Drawer close mid-turn -> abort fires; stale response discarded', async () => {
+  it('2. D-09: drawer close mid-turn does NOT abort; unmount still aborts', async () => {
     let capturedSignal: AbortSignal | null = null;
     let resolveTurn: ((res: any) => void) | null = null;
     const runMock = vi.fn().mockImplementation((inp: GroundedTurnInput) => {
@@ -141,7 +142,7 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
 
     setGroundedTurnTestHooks({ runGroundedTurn: runMock });
 
-    const { rerender } = render(<AIChatDrawer open={true} onClose={() => {}} db={testDb} />);
+    const { rerender, unmount } = render(<AIChatDrawer open={true} onClose={() => {}} db={testDb} />);
 
     submitMessage('CYTP1002 là gì?');
 
@@ -149,8 +150,13 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
       expect(runMock).toHaveBeenCalled();
     });
 
-    // Close drawer mid-turn
+    // Closing the drawer while the app runs must leave the turn alive (D-09).
     rerender(<AIChatDrawer open={false} onClose={() => {}} db={testDb} />);
+
+    expect((capturedSignal as AbortSignal | null)?.aborted).toBe(false);
+
+    // Unmounting the drawer is still an abort trigger.
+    unmount();
 
     expect((capturedSignal as AbortSignal | null)?.aborted).toBe(true);
     if (typeof resolveTurn === 'function') {
@@ -194,7 +200,7 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
 
     await waitFor(() => {
       expect(firstSignal).not.toBeNull();
-    });
+    }, { timeout: 3000 });
 
     // Change scope
     rerender(
@@ -202,7 +208,7 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
         open={true}
         onClose={() => {}}
         db={testDb}
-        activeScope={{ type: 'project', id: 'proj-1' }}
+        activeScope={{ type: 'cr', id: 'proj-1' }}
       />
     );
 
@@ -213,6 +219,50 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
         grounding: validGroundedAnswer,
       });
     }
+  });
+
+  it('3b. a scope change discards a pipeline that resolves instead of throwing', async () => {
+    let resolveFirst: ((res: any) => void) | null = null;
+    let callCount = 0;
+    const runMock = vi.fn().mockImplementation(() => {
+      callCount += 1;
+      if (callCount === 1) {
+        return new Promise((resolve) => {
+          resolveFirst = resolve;
+        });
+      }
+      return Promise.resolve({ kind: 'operational' } as GroundedTurnResult);
+    });
+    setGroundedTurnTestHooks({ runGroundedTurn: runMock });
+
+    const { rerender } = render(
+      <AIChatDrawer
+        open={true}
+        onClose={() => {}}
+        db={testDb}
+        activeScope={{ type: 'task', id: 'task-1' }}
+      />
+    );
+    submitMessage('CYTP1002 là gì?');
+    await waitFor(() => expect(runMock).toHaveBeenCalledTimes(1));
+
+    rerender(
+      <AIChatDrawer
+        open={true}
+        onClose={() => {}}
+        db={testDb}
+        activeScope={{ type: 'cr', id: 'proj-1' }}
+      />
+    );
+    // Aborting a signal does not stop a pipeline that resolves anyway; the token must.
+    (resolveFirst as ((res: any) => void) | null)?.({
+      kind: 'grounded_answer',
+      grounding: validGroundedAnswer,
+    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 150));
+
+    const rows = await testDb.chatMessages.toArray();
+    expect(rows.filter((row) => row.role === 'assistant' && row.grounding)).toHaveLength(0);
   });
 
   it('4. Candidate chip click re-sends with resolved URN', async () => {
@@ -720,14 +770,94 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
     });
 
     await waitFor(() => {
+      // The persistence-failure branch now shares the generic retrieval error copy
+      // (commit 02b01712 replaced the grounding-specific message).
       expect(
-        screen.getByText(/Không thể lưu câu trả lời hoặc dữ liệu tri thức không hợp lệ/)
+        screen.getByText(/Đã xảy ra lỗi khi truy xuất hoặc kết nối 9router/)
       ).toBeInTheDocument();
     });
 
     expect(discoverMcpSpy).not.toHaveBeenCalled();
     expect(streamCompletionSpy).not.toHaveBeenCalled();
     expect(screen.queryByText(/Đang chuyển sang trợ lý TaskMate/)).toBeNull();
+  });
+
+  describe('Phase 28-04: canonical server-empty notice on AI Chat', () => {
+    it('grounded server_empty renders a system row with exactly the canonical notice', async () => {
+      const runMock = vi.fn().mockResolvedValue({
+        kind: 'server_empty',
+        notice: KNOWLEDGE_SERVER_EMPTY_NOTICE,
+      } as GroundedTurnResult);
+      setGroundedTurnTestHooks({ runGroundedTurn: runMock });
+
+      render(<AIChatDrawer open={true} onClose={() => {}} db={testDb} />);
+      submitMessage('Kiến thức về OTP');
+
+      await waitFor(() => {
+        expect(runMock).toHaveBeenCalledTimes(1);
+      });
+      await waitFor(() => {
+        expect(screen.getByText(KNOWLEDGE_SERVER_EMPTY_NOTICE)).toBeInTheDocument();
+      });
+    });
+
+    it('grounded server_empty with localFallback renders the notice then a separate local-labelled row', async () => {
+      const localFallback: ChatMessageGrounding = {
+        schemaVersion: 1,
+        authority: 'local',
+        outcome: 'LOCAL_FALLBACK_RESULTS',
+        answer: null,
+        citations: [],
+        paths: null,
+        conflicts: null,
+        scope: null,
+        modalityDiagnostics: null,
+        coverageWarnings: [],
+        fallbackReason: 'SERVER_ABSENT',
+        routerVersion: null,
+        promptVersion: 'grounded-v1',
+        modelId: null,
+        createdAt: '2026-10-11T10:00:00.000Z',
+      };
+      const runMock = vi.fn().mockResolvedValue({
+        kind: 'server_empty',
+        notice: KNOWLEDGE_SERVER_EMPTY_NOTICE,
+        localFallback,
+      } as GroundedTurnResult);
+      setGroundedTurnTestHooks({ runGroundedTurn: runMock });
+
+      render(<AIChatDrawer open={true} onClose={() => {}} db={testDb} />);
+      submitMessage('Kiến thức về OTP');
+
+      await waitFor(() => {
+        expect(runMock).toHaveBeenCalledTimes(1);
+      });
+      await waitFor(() => {
+        expect(screen.getByText(KNOWLEDGE_SERVER_EMPTY_NOTICE)).toBeInTheDocument();
+      });
+      // The fallback keeps local authority and is rendered separately with a
+      // local-only label; it is never presented as server evidence.
+      await waitFor(() => {
+        expect(screen.getByText(/Chỉ tìm từ khoá trên Markdown đã lập chỉ mục cục bộ/)).toBeInTheDocument();
+      });
+    });
+
+    it('unrelated tool events still render as before (non-regression)', async () => {
+      const runMock = vi.fn().mockResolvedValue({
+        kind: 'grounded_answer',
+        grounding: validGroundedAnswer,
+      } as GroundedTurnResult);
+      setGroundedTurnTestHooks({ runGroundedTurn: runMock });
+
+      render(<AIChatDrawer open={true} onClose={() => {}} db={testDb} />);
+      submitMessage('CYTP1002 là gì?');
+
+      await waitFor(() => {
+        expect(screen.getByText(/Khách hàng xác thực OTP qua SMS/)).toBeInTheDocument();
+      });
+      // No canonical notice for a normal grounded answer.
+      expect(screen.queryByText(KNOWLEDGE_SERVER_EMPTY_NOTICE)).toBeNull();
+    });
   });
 });
 
@@ -951,5 +1081,37 @@ describe('AIChatDrawer find-related wiring (Phase 24)', () => {
     expect(runMock.mock.calls[0]?.[0]?.query).toBe(
       'MAIN1.EVT_EVENT được dùng ở đâu?'
     );
+  });
+
+  it('a turn stopped mid-grounding commits no evidence row and paints no error', async () => {
+    let resolveGrounding: ((res: GroundedTurnResult) => void) | null = null;
+    const runMock = vi.fn().mockImplementation(
+      () =>
+        new Promise<GroundedTurnResult>((resolve) => {
+          resolveGrounding = resolve;
+        })
+    );
+    setGroundedTurnTestHooks({ runGroundedTurn: runMock });
+
+    render(<AIChatDrawer open={true} onClose={() => {}} db={testDb} />);
+    const input = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(input, { target: { value: 'CYTP1002 là gì?' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+    await waitFor(() => expect(runMock).toHaveBeenCalledTimes(1));
+
+    // The grounded pipeline keeps awaiting after Stop; its result must be discarded.
+    fireEvent.click(screen.getByLabelText('Dừng sinh phản hồi'));
+    (resolveGrounding as ((res: GroundedTurnResult) => void) | null)?.({
+      kind: 'grounded_answer',
+      grounding: readyGrounding,
+    } as GroundedTurnResult);
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 150));
+
+    expect(screen.queryByTestId('inline-api-error-card')).toBeNull();
+    expect(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI')).not.toBeDisabled();
+    const thread = await testDb.chatThreads.toArray();
+    const rows = thread[0] ? await getMessagesByThreadId(thread[0].id, testDb) : [];
+    expect(rows.filter((row) => row.role === 'assistant')).toHaveLength(0);
   });
 });

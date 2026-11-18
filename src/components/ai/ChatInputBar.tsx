@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Mentions, Button, Tooltip, Tag, theme, Modal, Input } from 'antd';
+import { Mentions, Avatar, Button, Tooltip, Tag, theme, Modal, Input } from 'antd';
 import type { MentionsRef } from 'antd';
 import {
   SendOutlined,
   StopOutlined,
   CheckSquareOutlined,
-  ProjectOutlined,
+  BranchesOutlined,
+  ApartmentOutlined,
   ClearOutlined,
   CalendarOutlined,
   DashboardOutlined,
@@ -17,8 +18,9 @@ import {
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import type { Task, Project, Note } from '../../types/models';
+import type { Task, ChangeRequest, System, Note } from '../../types/models';
 import { isTauriApp } from '../../utils/timerPopout';
+import { agentColorFor, agentTextColorFor } from './office/AgentAttributionRow';
 
 export interface ChatInputBarProps {
   onSubmit: (text: string) => void;
@@ -35,7 +37,12 @@ export interface ChatInputBarProps {
   onRemoveFile?: ((filePath: string) => void) | undefined;
   externalValue?: string | undefined;
   onExternalValueConsumed?: (() => void) | undefined;
+  /** Controlled value owned by the tab runtime. Omit for uncontrolled mode. */
+  value?: string | undefined;
+  onValueChange?: ((next: string) => void) | undefined;
   leadingContent?: React.ReactNode;
+  /** Phase 34 D-08: lead-first `@agent` suggestions; absent leaves the bar unchanged. */
+  agentOptions?: Array<{ id: string; name: string; role: string; isLead: boolean }> | undefined;
 }
 
 const COMMANDS = [
@@ -117,38 +124,61 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   onRemoveFile,
   externalValue,
   onExternalValueConsumed,
+  value,
+  onValueChange,
   leadingContent,
+  agentOptions,
 }) => {
   const { token } = theme.useToken();
-  const [value, setValue] = useState('');
+  const [internalValue, setInternalValue] = useState('');
+  const effectiveValue = value ?? internalValue;
+  const update = (next: string) => {
+    // Mirror locally so uncontrolled/remounted callers keep working; the runtime owns the canonical draft.
+    setInternalValue(next);
+    onValueChange?.(next);
+  };
   const [isFullscreenModalOpen, setIsFullscreenModalOpen] = useState(false);
+  // Transient modal scratchpad, not a second draft store: switching tabs unmounts this component
+  // (key={activeTabId}) and discards text typed here but never applied.
   const [fullscreenDraft, setFullscreenDraft] = useState('');
 
   useEffect(() => {
     if (typeof externalValue === 'string') {
-      setValue(externalValue);
+      update(externalValue);
       onExternalValueConsumed?.();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalValue, onExternalValueConsumed]);
+
+  // The controlled value is authoritative; keep the local mirror in step after remounts.
+  useEffect(() => {
+    if (typeof value === 'string' && value !== internalValue) setInternalValue(value);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
   const [searchInfo, setSearchInfo] = useState<{ text: string; prefix: string }>({
     text: '',
     prefix: '',
   });
 
+  const taskMentionSearchActive = searchInfo.prefix === '@' && !searchInfo.text.toLowerCase().startsWith('doc');
+  const crMentionSearchActive = searchInfo.prefix === '#';
+  const documentMentionSearchActive = searchInfo.prefix === '@' && searchInfo.text.toLowerCase().startsWith('doc');
+
   const mentionsRef = useRef<MentionsRef>(null);
   const isSubmittingRef = useRef(false);
   const submitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const tasks = useLiveQuery<Task[]>(() => db.tasks?.toArray() ?? [], [db]) ?? [];
-  const projects = useLiveQuery<Project[]>(() => db.projects?.toArray() ?? [], [db]) ?? [];
+  const tasks = useLiveQuery<Task[]>(() => taskMentionSearchActive ? (db.tasks?.toArray() ?? []) : [], [db, taskMentionSearchActive]) ?? [];
+  const changeRequests = useLiveQuery<ChangeRequest[]>(() => crMentionSearchActive ? (db.changeRequests?.toArray() ?? []) : [], [db, crMentionSearchActive]) ?? [];
+  const systems = useLiveQuery<System[]>(() => crMentionSearchActive ? (db.systems?.toArray() ?? []) : [], [db, crMentionSearchActive]) ?? [];
   const documents = useLiveQuery<Note[]>(
     async () => {
-      if (!db.notes) return [];
+      if (!documentMentionSearchActive || !db.notes) return [];
       return await db.notes
         .filter((n: Note) => !n.deletedAt && (n.type === 'document' || !n.type))
         .toArray();
     },
-    [db]
+    [db, documentMentionSearchActive]
   ) ?? [];
 
   useEffect(() => {
@@ -169,7 +199,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   }, [autoFocus, disabled, isStreaming]);
 
   const clearInput = (el?: HTMLTextAreaElement | null) => {
-    setValue('');
+    update('');
     if (el && 'value' in el) {
       el.value = '';
     }
@@ -192,7 +222,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           } else {
             const fileName = selected.split(/[/\\]/).pop() || selected;
             const ref = `[${fileName}](file:${selected}) `;
-            setValue((prev) => (prev ? `${prev.trimEnd()} ${ref}` : ref));
+            update(effectiveValue ? `${effectiveValue.trimEnd()} ${ref}` : ref);
           }
           setTimeout(() => {
             mentionsRef.current?.focus();
@@ -208,7 +238,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
               onAttachFile(file.name);
             } else {
               const ref = `[${file.name}](file:${file.name}) `;
-              setValue((prev) => (prev ? `${prev.trimEnd()} ${ref}` : ref));
+              update(effectiveValue ? `${effectiveValue.trimEnd()} ${ref}` : ref);
             }
           }
         };
@@ -220,7 +250,8 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   };
 
   const handleSend = (targetEl?: HTMLTextAreaElement) => {
-    const rawVal = value || targetEl?.value || '';
+    if (disabled || isStreaming) return;
+    const rawVal = effectiveValue || targetEl?.value || '';
     const trimmed = rawVal.trim();
     if (!trimmed) return;
 
@@ -245,12 +276,12 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   };
 
   const handleOpenFullscreen = () => {
-    setFullscreenDraft(value);
+    setFullscreenDraft(effectiveValue);
     setIsFullscreenModalOpen(true);
   };
 
   const handleApplyFullscreen = () => {
-    setValue(fullscreenDraft);
+    update(fullscreenDraft);
     setIsFullscreenModalOpen(false);
     setTimeout(() => {
       mentionsRef.current?.focus();
@@ -258,6 +289,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   };
 
   const handleSendFromFullscreen = () => {
+    if (disabled || isStreaming) return;
     const trimmed = fullscreenDraft.trim();
     if (!trimmed) return;
     clearInput();
@@ -282,8 +314,9 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
       e.stopPropagation();
+      if (disabled || isStreaming) return;
       const el = e.currentTarget;
-      const rawText = value.trim() || el?.value?.trim() || '';
+      const rawText = effectiveValue.trim() || el?.value?.trim() || '';
       if (!rawText) return;
 
       isSubmittingRef.current = true;
@@ -313,16 +346,18 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
 
   const handleSelect = (option: any) => {
     if (option.key === 'cmd-file') {
-      setValue((prev) => prev.replace(/\/file\s*$/, '').trimEnd());
+      update(effectiveValue.replace(/\/file\s*$/, '').trimEnd());
       handlePickFile();
       return;
     }
 
     if (option.key === 'cmd-doc' || option.key === 'mention-doc-entry') {
-      setValue((prev) => {
-        const clean = prev.replace(/\/doc\s*$/, '').trimEnd();
-        return clean ? `${clean} @doc:` : '@doc:';
-      });
+      update(
+        (() => {
+          const clean = effectiveValue.replace(/\/doc\s*$/, '').trimEnd();
+          return clean ? `${clean} @doc:` : '@doc:';
+        })()
+      );
       setSearchInfo({ text: 'doc:', prefix: '@' });
       setTimeout(() => {
         const textarea =
@@ -342,8 +377,8 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
     const textarea =
       mentionsRef.current?.textarea ||
       (mentionsRef.current as any)?.nativeElement?.querySelector?.('textarea');
-    const cursorPos = textarea ? textarea.selectionStart : value.length;
-    const textBeforeCursor = value.slice(0, cursorPos);
+    const cursorPos = textarea ? textarea.selectionStart : effectiveValue.length;
+    const textBeforeCursor = effectiveValue.slice(0, cursorPos);
     const lastSpace = Math.max(textBeforeCursor.lastIndexOf(' '), textBeforeCursor.lastIndexOf('\n'));
     const currentToken = lastSpace === -1 ? textBeforeCursor : textBeforeCursor.slice(lastSpace + 1);
 
@@ -351,7 +386,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
       return ['@', '#'];
     }
     return ['@', '#', '/'];
-  }, [value]);
+  }, [effectiveValue]);
 
   const handleSearch = (text: string, prefix: string) => {
     setSearchInfo({ text, prefix });
@@ -433,6 +468,44 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
 
         return docOptions;
       }
+
+      const agentSection = (agentOptions ?? [])
+        .filter((agent) => {
+          if (!q) return true;
+          return (
+            agent.name.toLowerCase().includes(q) || agent.role.toLowerCase().includes(q)
+          );
+        })
+        .sort((a, b) => {
+          if (a.isLead !== b.isLead) return a.isLead ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        })
+        .slice(0, 5)
+        .map((agent) => {
+          const color = agentColorFor(agent.id);
+          return {
+            key: `agent-${agent.id}`,
+            value: `@[${agent.name}](agent:${agent.id})`,
+            label: (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0' }}>
+                <Avatar
+                  size={20}
+                  shape={agent.isLead ? 'square' : 'circle'}
+                  style={{ backgroundColor: color, color: agentTextColorFor(color), flexShrink: 0 }}
+                >
+                  {Array.from(agent.name.trim())[0]?.toUpperCase() ?? '?'}
+                </Avatar>
+                <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {agent.name}
+                </span>
+                <span style={{ fontSize: 11, color: '#8c8c8c' }}>{agent.role}</span>
+                {agent.isLead && (
+                  <Tag style={{ margin: 0, fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>Lead</Tag>
+                )}
+              </div>
+            ),
+          };
+        });
 
       const taskOptions = tasks
         .filter((t) => {
@@ -526,17 +599,17 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
         ),
       };
 
-      return [...taskOptions, docHintOption];
+      return [...agentSection, ...taskOptions, docHintOption];
     }
 
     if (prefix === '#') {
-      return projects
-        .filter((p) => {
-          if (p.status === 'Cancelled') return false;
+      const crOptions = changeRequests
+        .filter((c) => {
+          if (c.status === 'Cancelled') return false;
           if (!q) return true;
           return (
-            p.name.toLowerCase().includes(q) ||
-            (p.jiraEpicKey && p.jiraEpicKey.toLowerCase().includes(q))
+            c.code.toLowerCase().includes(q) ||
+            c.name.toLowerCase().includes(q)
           );
         })
         .sort((a, b) => {
@@ -546,9 +619,9 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           return (b.updatedAt || '').localeCompare(a.updatedAt || '');
         })
         .slice(0, 10)
-        .map((p) => ({
-          key: `project-${p.id}`,
-          value: `[${p.name}](project:${p.id})`,
+        .map((c) => ({
+          key: `cr-${c.id}`,
+          value: `[${c.code}](cr:${c.id})`,
           label: (
             <div
               style={{
@@ -560,7 +633,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                <ProjectOutlined style={{ color: '#722ed1', flexShrink: 0 }} />
+                <BranchesOutlined style={{ color: '#722ed1', flexShrink: 0 }} />
                 <span
                   style={{
                     fontWeight: 500,
@@ -569,21 +642,8 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {p.name}
+                  {c.code} · {c.name}
                 </span>
-                {p.jiraEpicKey && (
-                  <Tag
-                    color="purple"
-                    style={{
-                      margin: 0,
-                      fontSize: 10,
-                      lineHeight: '16px',
-                      padding: '0 4px',
-                    }}
-                  >
-                    {p.jiraEpicKey}
-                  </Tag>
-                )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                 <Tag
@@ -594,12 +654,64 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
                     padding: '0 4px',
                   }}
                 >
-                  {p.status}
+                  {c.status}
                 </Tag>
               </div>
             </div>
           ),
         }));
+
+      const systemOptions = systems
+        .filter((sys) => {
+          if (!q) return true;
+          return (
+            sys.code.toLowerCase().includes(q) ||
+            sys.name.toLowerCase().includes(q)
+          );
+        })
+        .sort((a, b) => a.code.localeCompare(b.code))
+        .slice(0, 10)
+        .map((sys) => ({
+          key: `system-${sys.id}`,
+          value: `[${sys.code}](system:${sys.id})`,
+          label: (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 8,
+                padding: '2px 0',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                <ApartmentOutlined style={{ color: '#13c2c2', flexShrink: 0 }} />
+                <span
+                  style={{
+                    fontWeight: 500,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {sys.code} · {sys.name}
+                </span>
+              </div>
+              <Tag
+                style={{
+                  margin: 0,
+                  fontSize: 10,
+                  lineHeight: '16px',
+                  padding: '0 4px',
+                }}
+              >
+                {sys.type}
+              </Tag>
+            </div>
+          ),
+        }));
+
+      return [...crOptions, ...systemOptions];
     }
 
     if (prefix === '/') {
@@ -630,7 +742,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
     }
 
     return [];
-  }, [searchInfo, tasks, projects]);
+  }, [searchInfo, tasks, changeRequests, systems, documents, agentOptions, token.colorBorderSecondary]);
 
   return (
     <div
@@ -693,13 +805,13 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
         )}
         <Mentions
           ref={mentionsRef}
-          value={value}
+          value={effectiveValue}
           onChange={(newVal) => {
             if (isSubmittingRef.current) {
               clearInput();
               return;
             }
-            setValue(newVal);
+            update(newVal);
           }}
           onInput={(e: React.FormEvent<HTMLTextAreaElement>) => {
             if (isSubmittingRef.current) {
@@ -787,7 +899,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
               type="primary"
               icon={<SendOutlined />}
               onClick={() => handleSend()}
-              disabled={disabled || !value.trim()}
+              disabled={disabled || !effectiveValue.trim()}
               aria-label="Gửi tin nhắn"
               style={{ height: 32 }}
             >
@@ -832,7 +944,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
                 type="primary"
                 icon={<SendOutlined />}
                 onClick={handleSendFromFullscreen}
-                disabled={!fullscreenDraft.trim()}
+                disabled={disabled || isStreaming || !fullscreenDraft.trim()}
               >
                 Gửi ngay
               </Button>

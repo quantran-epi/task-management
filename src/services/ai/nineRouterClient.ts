@@ -32,6 +32,38 @@ export function sanitizeEndpoint(endpoint: string): string {
   return trimmed || 'http://localhost:20128';
 }
 
+/**
+ * Phase 38 D-09: one usage mapper for every provider shape. Cache tokens are charged as
+ * input, so they must survive the mapping; `cached_tokens` and `cache_read_input_tokens` are
+ * two names for one quantity, and an absent field stays absent rather than becoming 0.
+ *
+ * WR-02: the two shapes disagree about whether the cached portion is already inside the
+ * prompt count. OpenAI's `prompt_tokens` INCLUDES `prompt_tokens_details.cached_tokens`;
+ * Anthropic's `input_tokens` EXCLUDES `cache_read_input_tokens`. Everything downstream
+ * (`splitUsage`) adds prompt + cache + creation, so the OpenAI shape must be normalized to
+ * the Anthropic convention here — otherwise the cached portion is charged twice.
+ */
+function mapUsage(raw: any): ChatTokenUsage {
+  const cacheRead =
+    raw.prompt_tokens_details?.cached_tokens ?? raw.cache_read_input_tokens;
+  const cacheCreation = raw.cache_creation_input_tokens;
+  const rawPrompt = raw.prompt_tokens ?? raw.promptTokens;
+  const openAiCached = raw.prompt_tokens_details?.cached_tokens;
+  const promptTokens =
+    typeof rawPrompt === 'number' && typeof openAiCached === 'number'
+      ? Math.max(0, rawPrompt - openAiCached)
+      : rawPrompt;
+  return {
+    promptTokens,
+    completionTokens: raw.completion_tokens ?? raw.completionTokens,
+    totalTokens: raw.total_tokens ?? raw.totalTokens,
+    ...(typeof cacheRead === 'number' ? { cacheReadTokens: cacheRead } : {}),
+    ...(typeof cacheCreation === 'number' ? { cacheCreationTokens: cacheCreation } : {}),
+  };
+}
+
+export { mapUsage };
+
 export function stripThinkingBlocks(raw: string): string {
   if (!raw) return '';
   return raw
@@ -270,8 +302,9 @@ export async function* streamChatEvents(
       const { done, value } = readResult;
       if (done) break;
 
-      lineBuffer += decoder.decode(value, { stream: true });
-      fullRawBody += lineBuffer;
+      const decoded = decoder.decode(value, { stream: true });
+      lineBuffer += decoded;
+      fullRawBody += decoded;
       const lines = lineBuffer.split(/\r?\n/);
       // Keep trailing incomplete fragment in the buffer
       lineBuffer = lines.pop() ?? '';
@@ -328,11 +361,7 @@ export async function* streamChatEvents(
           if (parsed?.usage) {
             yield {
               type: 'usage',
-              usage: {
-                promptTokens: parsed.usage.prompt_tokens ?? parsed.usage.promptTokens,
-                completionTokens: parsed.usage.completion_tokens ?? parsed.usage.completionTokens,
-                totalTokens: parsed.usage.total_tokens ?? parsed.usage.totalTokens,
-              },
+              usage: mapUsage(parsed.usage),
             };
           }
 
@@ -354,6 +383,18 @@ export async function* streamChatEvents(
                 if (tc.function?.name) existing.function.name += tc.function.name;
                 if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
               }
+            }
+          }
+
+          for (const completedChoice of parsed.choices ?? []) {
+            if (completedChoice.finish_reason === 'content_filter') {
+              throw new Error(
+                'Nội dung bị chặn bởi bộ lọc an toàn của nhà cung cấp AI (content_filter)'
+              );
+            }
+            if (typeof completedChoice.finish_reason === 'string') {
+              yield { type: 'finish', finish_reason: completedChoice.finish_reason };
+              yieldedAny = true;
             }
           }
         }
@@ -379,6 +420,12 @@ export async function* streamChatEvents(
           throw new Error(redactApiKey(errMsg, options.apiKey));
         }
 
+        if (parsed.choices?.some((choice: { finish_reason?: string }) => choice.finish_reason === 'content_filter')) {
+          throw new Error(
+            'Nội dung bị chặn bởi bộ lọc an toàn của nhà cung cấp AI (content_filter)'
+          );
+        }
+
         const message = parsed.choices?.[0]?.message;
         if (typeof message?.reasoning_content === 'string' && message.reasoning_content.length > 0) {
           yield { type: 'reasoning', delta: message.reasoning_content };
@@ -393,14 +440,17 @@ export async function* streamChatEvents(
           yieldedAny = true;
         }
 
+        for (const choice of parsed.choices ?? []) {
+          if (typeof choice.finish_reason === 'string') {
+            yield { type: 'finish', finish_reason: choice.finish_reason };
+            yieldedAny = true;
+          }
+        }
+
         if (parsed?.usage) {
           yield {
             type: 'usage',
-            usage: {
-              promptTokens: parsed.usage.prompt_tokens ?? parsed.usage.promptTokens,
-              completionTokens: parsed.usage.completion_tokens ?? parsed.usage.completionTokens,
-              totalTokens: parsed.usage.total_tokens ?? parsed.usage.totalTokens,
-            },
+            usage: mapUsage(parsed.usage),
           };
         }
       } catch (err: any) {
@@ -607,11 +657,7 @@ export async function completeJson(req: CompleteJsonRequest): Promise<unknown> {
 
   if (json?.usage && req.onUsage) {
     try {
-      req.onUsage({
-        promptTokens: json.usage.prompt_tokens ?? json.usage.promptTokens,
-        completionTokens: json.usage.completion_tokens ?? json.usage.completionTokens,
-        totalTokens: json.usage.total_tokens ?? json.usage.totalTokens,
-      });
+      req.onUsage(mapUsage(json.usage));
     } catch {
       // Ignore usage callback error
     }
@@ -626,6 +672,138 @@ export async function completeJson(req: CompleteJsonRequest): Promise<unknown> {
       response.status
     );
   }
+}
+
+export interface CompleteTextRequest {
+  endpoint: string;
+  apiKey?: string | undefined;
+  model: string;
+  temperature?: number | undefined;
+  maxTokens?: number | undefined;
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+  signal?: AbortSignal | undefined;
+  onUsage?: ((usage: ChatTokenUsage) => void) | undefined;
+}
+
+/**
+ * Non-streaming chat completion returning raw text content directly without JSON parsing.
+ */
+export async function completeChatText(req: CompleteTextRequest): Promise<string> {
+  const baseEndpoint = sanitizeEndpoint(req.endpoint);
+  const targetUrl = `${baseEndpoint}/v1/chat/completions`;
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+  if (req.apiKey && req.apiKey.trim()) {
+    headers.Authorization = `Bearer ${req.apiKey.trim()}`;
+  }
+
+  const timeoutSignal = AbortSignal.timeout(90_000);
+  const combinedSignal = (AbortSignal as any).any
+    ? (AbortSignal as any).any([req.signal || new AbortController().signal, timeoutSignal])
+    : req.signal || timeoutSignal;
+
+  const requestBody = {
+    model: req.model,
+    temperature: req.temperature ?? 0,
+    max_tokens: req.maxTokens ?? 3000,
+    stream: false,
+    messages: req.messages,
+  };
+
+  let response: Response;
+  try {
+    if (isTauriApp()) {
+      const proxyResponse = await tauriInvoke<TauriProxyResponse>('ai_proxy_request', {
+        method: 'POST',
+        url: targetUrl,
+        headers,
+        body: JSON.stringify(requestBody),
+      });
+
+      if (combinedSignal.aborted) {
+        const reason = combinedSignal.reason;
+        const timedOut =
+          timeoutSignal.aborted ||
+          (reason instanceof DOMException && reason.name === 'TimeoutError');
+        throw new NineRouterClientError(
+          timedOut ? 'TIMEOUT' : 'ABORTED',
+          timedOut ? 'Request timed out' : 'Request was aborted'
+        );
+      }
+
+      response = new Response(proxyResponse.body, {
+        status: proxyResponse.status,
+        headers: proxyResponse.headers,
+      });
+    } else {
+      response = await fetch(targetUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody),
+        signal: combinedSignal,
+      });
+    }
+  } catch (error: unknown) {
+    if (error instanceof NineRouterClientError) throw error;
+    const message = redactApiKey(
+      error instanceof Error ? error.message : 'Network request failed',
+      req.apiKey
+    ).slice(0, 240);
+    throw new NineRouterClientError('NETWORK_ERROR', message);
+  }
+
+  let json: any;
+  try {
+    json = await response.json();
+  } catch {
+    throw new NineRouterClientError(
+      'INVALID_RESPONSE',
+      'Model provider returned invalid HTTP response',
+      response.status
+    );
+  }
+
+  if (!response.ok) {
+    const rawError = typeof json?.error?.message === 'string'
+      ? json.error.message
+      : JSON.stringify(json);
+    const safeMsg = redactApiKey(
+      rawError || response.statusText || 'Model API error',
+      req.apiKey
+    );
+    throw new NineRouterClientError('REMOTE_ERROR', safeMsg, response.status);
+  }
+
+  const choice = json?.choices?.[0];
+  if (!choice || choice.message?.refusal) {
+    const refusalMsg = redactApiKey(
+      choice?.message?.refusal || 'Model refused or returned empty choice',
+      req.apiKey
+    );
+    throw new NineRouterClientError('INVALID_RESPONSE', refusalMsg, response.status);
+  }
+
+  const content = choice.message?.content;
+  if (typeof content !== 'string' || !content.trim()) {
+    throw new NineRouterClientError(
+      'INVALID_RESPONSE',
+      'Model returned empty content',
+      response.status
+    );
+  }
+
+  if (json?.usage && req.onUsage) {
+    try {
+      req.onUsage(mapUsage(json.usage));
+    } catch {
+      // Ignore usage callback error
+    }
+  }
+
+  return content;
 }
 
 interface CapabilityCacheEntry {

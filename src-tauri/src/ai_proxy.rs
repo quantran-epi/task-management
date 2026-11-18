@@ -6,6 +6,21 @@ use std::net::Ipv4Addr;
 const GRAPHITI_MCP_URL: &str = "http://10.4.97.70:30456/mcp";
 const GRAPHITI_MAX_REQUEST_BYTES: usize = 256 * 1024;
 const GRAPHITI_MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
+/**
+ * 37.1 UAT gap 1/9: the whole response is buffered before it reaches JS, so this bound is
+ * the only thing that stops a stalled provider from hanging the caller forever. It matches
+ * the JS-side 90 s watchdog on the non-Tauri path.
+ */
+const AI_PROXY_TIMEOUT_SECS: u64 = 90;
+/**
+ * UAT-41 test 14: this is NOT `AI_PROXY_TIMEOUT_SECS`. That one bounds an LLM generation; this
+ * one bounds a JSON-RPC discovery/tool call that blocks the FIRST turn of a chat — the exact
+ * wedge test 14 reported. The JS web fallback bounds the same RPC at 10 s
+ * (`src/services/ai/mcpClient.ts`, `AbortSignal` 10000 ms), so 30 s is already generous for a
+ * slow graph query and still returns control to the turn. The Tauri invoke path carries no
+ * JS-side signal, so this Rust bound is the only one.
+ */
+const GRAPHITI_MCP_TIMEOUT_SECS: u64 = 30;
 const GRAPHITI_ALLOWED_TOOLS: [&str; 4] = [
     "list_advertised_groups",
     "search_nodes",
@@ -85,8 +100,14 @@ pub async fn ai_proxy_request(
         return Err("Blocked AI proxy target".to_string());
     }
 
+    // 37.1 UAT gap 1/9: this command buffers the WHOLE response, so without a bound a
+    // stalled provider leaves the caller's `await` pending forever. The JS side's 90 s
+    // `AbortSignal.timeout` only exists on the non-Tauri path, and this command never
+    // received the turn's signal — so a hung request wedged the runtime permanently.
     let client = reqwest::Client::builder()
         .user_agent("PlannerMateAIProxy/1.0")
+        .connect_timeout(std::time::Duration::from_secs(15))
+        .timeout(std::time::Duration::from_secs(AI_PROXY_TIMEOUT_SECS))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
@@ -201,6 +222,8 @@ pub async fn graphiti_mcp_request(
 
     let client = reqwest::Client::builder()
         .user_agent("PlannerMateGraphitiMCP/1.0")
+        .connect_timeout(std::time::Duration::from_secs(15))
+        .timeout(std::time::Duration::from_secs(GRAPHITI_MCP_TIMEOUT_SECS))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
     let mut request = client

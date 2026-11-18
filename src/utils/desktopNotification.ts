@@ -1,8 +1,11 @@
 import {
   isPermissionGranted as isTauriPermissionGranted,
   requestPermission as requestTauriPermission,
-  sendNotification as sendTauriNotification,
 } from '@tauri-apps/plugin-notification';
+import {
+  BROWSER_NOTIFICATION_CLICK_EVENT,
+  NotificationDeepLink,
+} from './notificationDeepLink';
 
 export interface DesktopNotificationPayload {
   title: string;
@@ -11,6 +14,8 @@ export interface DesktopNotificationPayload {
   tag?: string;
   requireInteraction?: boolean;
   data?: unknown;
+  /** Hash route to open when the OS notification is clicked (e.g. `#/tasks`). */
+  deeplink?: string;
 }
 
 /**
@@ -97,25 +102,18 @@ export async function sendDesktopNotification(
         return false;
       }
 
-      const options: {
-        title: string;
-        body?: string;
-        extra?: Record<string, unknown>;
-      } = {
+      // The stock plugin's desktop path discards the notification handle, so a user click can
+      // never be observed. Use the custom command, which waits for the click, focuses the main
+      // window, and emits `notification-clicked` with the deeplink route.
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('send_clickable_notification', {
         title: payload.title,
-      };
-
-      if (payload.body !== undefined) {
-        options.body = payload.body;
-      }
-      if (payload.data !== undefined && typeof payload.data === 'object' && payload.data !== null) {
-        options.extra = payload.data as Record<string, unknown>;
-      }
-
-      sendTauriNotification(options);
+        body: payload.body ?? null,
+        deeplink: payload.deeplink ?? NotificationDeepLink.dashboard,
+      });
       return true;
     } catch (tauriErr) {
-      console.warn('Tauri sendNotification failed:', tauriErr);
+      console.warn('Tauri send_clickable_notification failed:', tauriErr);
       return false;
     }
   }
@@ -175,6 +173,12 @@ export async function sendDesktopNotification(
         } catch {
           // ignore focus error
         }
+        // Route to the notification's target page via the shared deeplink handler.
+        window.dispatchEvent(
+          new CustomEvent(BROWSER_NOTIFICATION_CLICK_EVENT, {
+            detail: { route: payload.deeplink ?? NotificationDeepLink.dashboard },
+          })
+        );
         try {
           notif.close();
         } catch {

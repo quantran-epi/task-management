@@ -10,8 +10,7 @@ import {
 } from '../src/db/repositories/noteRepo';
 import {
   deleteTaskWithAllocations,
-  deleteMilestoneWithCascade,
-  deleteProjectWithCascade,
+  deleteChangeRequestWithCascade,
 } from '../src/db/repositories/cascadeRepo';
 import { renderSafeMarkdown } from '../src/utils/markdown';
 
@@ -20,8 +19,8 @@ describe('Note Repository & Safe Markdown & Cascade Detach', () => {
     await db.notes.clear();
     await db.noteAttachments.clear();
     await db.tasks.clear();
-    await db.milestones.clear();
-    await db.projects.clear();
+    await db.changeRequests.clear();
+    await db.systems.clear();
   });
 
   describe('renderSafeMarkdown', () => {
@@ -118,6 +117,7 @@ describe('Note Repository & Safe Markdown & Cascade Detach', () => {
       const taskId = '00000000-0000-4000-8000-000000000002';
       await db.tasks.add({
         id: taskId,
+        crId: '00000000-0000-4000-8000-000000000001',
         name: 'Task with attached note',
         status: 'Open',
         priority: 'Medium',
@@ -150,51 +150,26 @@ describe('Note Repository & Safe Markdown & Cascade Detach', () => {
       expect(noteInDb?.body).toBe('Attached to task');
     });
 
-    it('detaches notes to standalone when milestone is deleted', async () => {
-      const milestoneId = '00000000-0000-4000-8000-000000000003';
-      const projectId = '00000000-0000-4000-8000-000000000004';
-      await db.milestones.add({
-        id: milestoneId,
-        projectId,
-        name: 'Milestone 1',
+    it('detaches notes to standalone when change request is deleted', async () => {
+      const crId = '00000000-0000-4000-8000-000000000005';
+      await db.changeRequests.add({
+        id: crId,
+        name: 'CR 1',
+        code: 'CR-2026-005',
         status: 'Open',
-        reminders: [],
+        type: 'ENHANCEMENT',
+        targets: [],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
 
       const note = await createNote({
-        entityType: 'milestone',
-        entityId: milestoneId,
-        body: 'Attached to milestone',
+        entityType: 'cr',
+        entityId: crId,
+        body: 'Attached to CR',
       });
 
-      await deleteMilestoneWithCascade(milestoneId, 'cascade');
-
-      const noteInDb = await db.notes.get(note.id);
-      expect(noteInDb).toBeDefined();
-      expect(noteInDb?.entityType).toBeUndefined();
-      expect(noteInDb?.entityId).toBeUndefined();
-    });
-
-    it('detaches notes to standalone when project is deleted', async () => {
-      const projectId = '00000000-0000-4000-8000-000000000005';
-      await db.projects.add({
-        id: projectId,
-        name: 'Project 1',
-        status: 'Open',
-        reminders: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-
-      const note = await createNote({
-        entityType: 'project',
-        entityId: projectId,
-        body: 'Attached to project',
-      });
-
-      await deleteProjectWithCascade(projectId, 'cascade');
+      await deleteChangeRequestWithCascade(crId);
 
       const noteInDb = await db.notes.get(note.id);
       expect(noteInDb).toBeDefined();

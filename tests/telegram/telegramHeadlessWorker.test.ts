@@ -7,7 +7,10 @@ import {
   cleanCitationTags,
   broadcastTelegramMessage,
   clearTelegramProcessedUpdateIdsForTesting,
+  formatGroundedNonAnswer,
 } from '../../src/services/telegram/telegramHeadlessWorker';
+import { KNOWLEDGE_SERVER_EMPTY_NOTICE } from '../../src/services/ai/knowledgeOutcome';
+import type { GroundedTurnResult } from '../../src/services/ai/groundedTurn';
 import {
   upsertWhitelistUser,
   getRecentTelegramLogs,
@@ -44,6 +47,15 @@ vi.mock('../../src/services/ai/groundedTurn', () => ({
   runGroundedTurn: (...args: any[]) => mockRunGroundedTurn(...args),
 }));
 
+const mockExecuteKnowledgeRetrievalTool = vi.fn();
+vi.mock('../../src/services/ai/knowledgeRetrievalTool', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/services/ai/knowledgeRetrievalTool')>();
+  return {
+    ...actual,
+    executeKnowledgeRetrievalTool: (...args: any[]) => mockExecuteKnowledgeRetrievalTool(...args),
+  };
+});
+
 const mockSendDesktopNotification = vi.fn();
 vi.mock('../../src/utils/desktopNotification', () => ({
   sendDesktopNotification: (...args: any[]) => mockSendDesktopNotification(...args),
@@ -73,6 +85,7 @@ describe('Telegram Headless Worker', () => {
       kind: 'operational',
       routedQuery: '',
     });
+    mockExecuteKnowledgeRetrievalTool.mockReset();
   });
 
   afterEach(async () => {
@@ -169,7 +182,7 @@ describe('Telegram Headless Worker', () => {
     expect(pure.matchedSourceTitles).toEqual([]);
 
     // Seed task and note
-    await testDb.tasks.add({
+    await testDb.tasks.add({ crId: '11111111-1111-4111-8111-111111111111',
       id: 'task-1',
       name: 'Implement Telegram Bot',
       status: 'Open',
@@ -1157,6 +1170,42 @@ describe('Telegram Headless Worker', () => {
     expect(replies[0]).toContain('Nguồn tài liệu:</b> Đặc tả kỹ thuật CYTP1002');
   });
 
+  it('fresh Telegram device with empty catalog still calls runGroundedTurn', async () => {
+    await setNineRouterApiKey('test-key', testDb);
+    await upsertWhitelistUser(
+      { chatId: 'fresh_device', name: 'Fresh Device', status: 'active', dataScope: 'full' },
+      testDb
+    );
+    mockRouteIntent.mockResolvedValueOnce({
+      intent: 'query_knowledge',
+      confidence: 0.98,
+      entities: [],
+      language: 'vi',
+      needs_clarification: false,
+      clarify_question: null,
+      speculation_requested: false,
+    });
+    mockRunGroundedTurn.mockResolvedValueOnce({ kind: 'operational', routedQuery: '' });
+
+    await processTelegramInboundMessage(
+      {
+        update_id: 116,
+        message_id: 906,
+        chat_id: 'fresh_device',
+        from_name: 'Fresh Device',
+        text: 'Quy trình CYTP1002 hoạt động như thế nào?',
+        date: 1234605,
+      },
+      'test_token',
+      testDb,
+      vi.fn(async () => {}),
+      vi.fn(async () => {})
+    );
+
+    expect(mockRunGroundedTurn).toHaveBeenCalledTimes(1);
+    expect(mockRunGroundedTurn.mock.calls[0]?.[0].catalog).toEqual([]);
+  });
+
   it('handles local_fallback_results from runGroundedTurn with friendly no-evidence message', async () => {
     await setNineRouterApiKey('test-key', testDb);
     mockStreamChatEvents.mockClear();
@@ -1595,17 +1644,20 @@ describe('Telegram Headless Worker', () => {
   });
 
   describe('Telegram Read Tool Execution Loop & Synthesis', () => {
-    it('executes read tool query_tasks and synthesizes complete answer for project detail query', async () => {
+    it('executes read tool query_tasks and synthesizes complete answer for CR detail query', async () => {
       await setNineRouterApiKey('test-key', testDb);
       mockStreamChatEvents.mockClear();
 
-      // Seed project and tasks
-      const projectId = 'proj-core-banking-1';
-      await testDb.projects.add({
-        id: projectId,
+      // Seed a CR and its tasks (the only hierarchy above a task after 31.2).
+      const crId = '11111111-1111-4111-8111-111111111111';
+      await testDb.changeRequests.add({
+        id: crId,
+        code: 'CR-CORE-01',
         name: 'Core Banking Modernization',
         description: 'Upgrade core banking microservices',
         status: 'In Progress',
+        type: 'ENHANCEMENT',
+        targets: [],
         createdAt: '2026-10-01T00:00:00.000Z',
         updatedAt: '2026-10-15T00:00:00.000Z',
       });
@@ -1616,7 +1668,7 @@ describe('Telegram Headless Worker', () => {
         priority: 'High',
         progress: 60,
         estimateMinutes: 180,
-        projectId,
+        crId,
         createdAt: '2026-10-02T00:00:00.000Z',
         updatedAt: '2026-10-18T00:00:00.000Z',
       });
@@ -1627,7 +1679,7 @@ describe('Telegram Headless Worker', () => {
         priority: 'Urgent',
         progress: 10,
         estimateMinutes: 240,
-        projectId,
+        crId,
         createdAt: '2026-10-03T00:00:00.000Z',
         updatedAt: '2026-10-19T00:00:00.000Z',
       });
@@ -1708,7 +1760,7 @@ describe('Telegram Headless Worker', () => {
       expect(firstCallArgs.payload.tools.some((t: any) => t.function.name === 'get_item_details')).toBe(true);
       // Verify mutation tools were excluded
       expect(firstCallArgs.payload.tools.some((t: any) => t.function.name === 'create_task')).toBe(false);
-      expect(firstCallArgs.payload.tools.some((t: any) => t.function.name === 'delete_project')).toBe(false);
+      expect(firstCallArgs.payload.tools.some((t: any) => t.function.name === 'delete_change_request')).toBe(false);
 
       // Verify second call (synthesis) was triggered with tool output in messages
       const secondCallArgs = (mockStreamChatEvents.mock.calls as any)[1]?.[0];
@@ -2377,6 +2429,412 @@ describe('Telegram Headless Worker', () => {
       for (const chunk of chunks) {
         expect(chunk.length).toBeLessThanOrEqual(120);
       }
+    });
+  });
+
+  describe('Admin Notification on Inbound User Chat', () => {
+    it('notifies all active admins when a non-admin active user sends a message', async () => {
+      await upsertWhitelistUser(
+        { chatId: 'admin_1', name: 'Admin One', status: 'active', dataScope: 'full', isAdmin: true },
+        testDb
+      );
+      await upsertWhitelistUser(
+        { chatId: 'admin_2', name: 'Admin Two', status: 'active', dataScope: 'full', isAdmin: true },
+        testDb
+      );
+      await upsertWhitelistUser(
+        { chatId: 'user_active', name: 'Nguyen Van A', status: 'active', dataScope: 'full' },
+        testDb
+      );
+
+      const adminNotifications: Array<{ chatId: string; text: string }> = [];
+      const mockSendDirect = vi.fn(async (_tok: string, chatId: string, text: string) => {
+        adminNotifications.push({ chatId, text });
+      });
+
+      await processTelegramInboundMessage(
+        {
+          update_id: 601,
+          message_id: 2001,
+          chat_id: 'user_active',
+          from_name: 'Nguyen Van A',
+          text: '/help',
+          date: 1730000000,
+        },
+        'bot_token_xyz',
+        testDb,
+        vi.fn(async () => {}),
+        vi.fn(async () => {}),
+        mockSendDirect
+      );
+
+      // Both active admins should receive the notification
+      expect(mockSendDirect).toHaveBeenCalledTimes(2);
+      expect(adminNotifications.map((n) => n.chatId)).toEqual(['admin_1', 'admin_2']);
+
+      const alert = adminNotifications[0]!.text;
+      expect(alert).toContain('Tin nhắn mới từ người dùng');
+      expect(alert).toContain('Nguyen Van A');
+      expect(alert).toContain('user_active');
+      expect(alert).toContain('Đang hoạt động (Active)');
+      expect(alert).toContain('/help');
+      expect(alert).toContain('2024-10-27');
+    });
+
+    it('notifies admin with first-time badge when a non-whitelisted user chats for the first time', async () => {
+      await upsertWhitelistUser(
+        { chatId: 'admin_main', name: 'Main Admin', status: 'active', dataScope: 'full', isAdmin: true },
+        testDb
+      );
+
+      const adminNotifications: Array<{ chatId: string; text: string }> = [];
+      const mockSendDirect = vi.fn(async (_tok: string, chatId: string, text: string) => {
+        adminNotifications.push({ chatId, text });
+      });
+
+      await processTelegramInboundMessage(
+        {
+          update_id: 602,
+          message_id: 2002,
+          chat_id: 'new_guest_1',
+          from_name: 'Guest User',
+          text: 'Xin chào, mở quyền cho tôi với',
+          date: 1730000500,
+        },
+        'bot_token_xyz',
+        testDb,
+        vi.fn(async () => {}),
+        vi.fn(async () => {}),
+        mockSendDirect
+      );
+
+      expect(mockSendDirect).toHaveBeenCalledTimes(1);
+      expect(adminNotifications[0]?.chatId).toBe('admin_main');
+
+      const alert = adminNotifications[0]!.text;
+      expect(alert).toContain('Người dùng mới gửi tin nhắn lần đầu');
+      expect(alert).toContain('Guest User');
+      expect(alert).toContain('new_guest_1');
+      expect(alert).toContain('Người dùng mới - Chờ duyệt (Pending)');
+      expect(alert).toContain('Xin chào, mở quyền cho tôi với');
+    });
+
+    it('does NOT notify admin when the message sender is an admin themselves', async () => {
+      await upsertWhitelistUser(
+        { chatId: 'admin_self', name: 'Self Admin', status: 'active', dataScope: 'full', isAdmin: true },
+        testDb
+      );
+
+      const mockSendDirect = vi.fn(async () => {});
+
+      await processTelegramInboundMessage(
+        {
+          update_id: 603,
+          message_id: 2003,
+          chat_id: 'admin_self',
+          from_name: 'Self Admin',
+          text: '/help',
+          date: 1730001000,
+        },
+        'bot_token_xyz',
+        testDb,
+        vi.fn(async () => {}),
+        vi.fn(async () => {}),
+        mockSendDirect
+      );
+
+      expect(mockSendDirect).not.toHaveBeenCalled();
+    });
+
+    it('isolates notification failure so user message handling still succeeds', async () => {
+      await upsertWhitelistUser(
+        { chatId: 'admin_err', name: 'Admin Err', status: 'active', dataScope: 'full', isAdmin: true },
+        testDb
+      );
+      await upsertWhitelistUser(
+        { chatId: 'user_regular', name: 'User Regular', status: 'active', dataScope: 'full' },
+        testDb
+      );
+
+      const mockSendDirect = vi.fn(async () => {
+        throw new Error('Telegram network outage');
+      });
+      const userReplies: string[] = [];
+      const mockSendReply = vi.fn(async (_tok: string, _cid: string, text: string) => {
+        userReplies.push(text);
+      });
+
+      await processTelegramInboundMessage(
+        {
+          update_id: 604,
+          message_id: 2004,
+          chat_id: 'user_regular',
+          from_name: 'User Regular',
+          text: '/reset',
+          date: 1730002000,
+        },
+        'bot_token_xyz',
+        testDb,
+        mockSendReply,
+        vi.fn(async () => {}),
+        mockSendDirect
+      );
+
+      // User still received the reply despite admin notification throwing
+      expect(userReplies.length).toBe(1);
+      expect(userReplies[0]).toContain('Đã đặt lại phiên trò chuyện');
+    });
+  });
+
+  describe('Phase 28-04: canonical server-empty notice on Telegram', () => {
+    it('formats a server_empty grounded result as exactly the canonical notice (cross-surface byte identity)', () => {
+      const result: GroundedTurnResult = {
+        kind: 'server_empty',
+        notice: KNOWLEDGE_SERVER_EMPTY_NOTICE,
+      };
+      const rendered = formatGroundedNonAnswer(result);
+      expect(rendered).toBe(KNOWLEDGE_SERVER_EMPTY_NOTICE);
+      // Cross-surface assertion: the rendered string is byte-identical to the
+      // one exported constant (the AI Chat surface imports the same constant).
+      expect(rendered).toEqual(expect.any(String));
+      expect((rendered as string).length).toBe(KNOWLEDGE_SERVER_EMPTY_NOTICE.length);
+    });
+
+    it('renders a server_empty localFallback as notice + local-only-labelled evidence (byte-identical notice)', () => {
+      const localFallback = {
+        schemaVersion: 1,
+        authority: 'local',
+        outcome: 'READY',
+        answer: { conclusion: 'Kết quả từ tài liệu nội bộ: quy trình OTP.', claims: [] },
+        citations: [],
+        paths: [],
+        conflicts: [],
+        scope: { setIds: [], routedScope: {}, },
+        coverageWarnings: [],
+        fallbackReason: 'NONE',
+        routerVersion: 'router-v1',
+        promptVersion: 'grounded-v1',
+        modelId: 'gpt-4o',
+        createdAt: new Date().toISOString(),
+      } as any;
+      const result: GroundedTurnResult = {
+        kind: 'server_empty',
+        notice: KNOWLEDGE_SERVER_EMPTY_NOTICE,
+        localFallback,
+      };
+
+      const rendered = formatGroundedNonAnswer(result);
+      expect(rendered).not.toBeNull();
+      const text = rendered as string;
+      // Canonical notice kept first and byte-identical, appearing exactly once.
+      expect(text.startsWith(KNOWLEDGE_SERVER_EMPTY_NOTICE)).toBe(true);
+      expect(text.split(KNOWLEDGE_SERVER_EMPTY_NOTICE).length - 1).toBe(1);
+      // Local evidence is present and explicitly labelled as local-only, never
+      // merged into or attributed to the server notice (D-14 cross-surface parity).
+      expect(text).toContain('*(Chỉ dữ liệu nội bộ)*');
+      expect(text).toContain('Kết quả từ tài liệu nội bộ: quy trình OTP.');
+    });
+
+    it('sends both the canonical notice and labelled local evidence for a server_empty turn with localFallback', async () => {
+      await setNineRouterApiKey('test-key', testDb);
+      mockStreamChatEvents.mockClear();
+
+      await upsertWhitelistUser(
+        {
+          chatId: 'empty_server_local_user',
+          name: 'Empty Server Local User',
+          status: 'active',
+          dataScope: 'full',
+        },
+        testDb
+      );
+
+      mockRouteIntent.mockResolvedValueOnce({
+        intent: 'query_knowledge',
+        confidence: 0.95,
+        entities: [],
+        language: 'vi',
+        needs_clarification: false,
+        clarify_question: null,
+        speculation_requested: false,
+      });
+      mockRunGroundedTurn.mockResolvedValueOnce({
+        kind: 'server_empty',
+        notice: KNOWLEDGE_SERVER_EMPTY_NOTICE,
+        localFallback: {
+          schemaVersion: 1,
+          authority: 'local',
+          outcome: 'READY',
+          answer: { conclusion: 'Kết quả nội bộ OTP.', claims: [] },
+          citations: [],
+          paths: [],
+          conflicts: [],
+          scope: { setIds: [], routedScope: {} },
+          coverageWarnings: [],
+          fallbackReason: 'NONE',
+          routerVersion: 'router-v1',
+          promptVersion: 'grounded-v1',
+          modelId: 'gpt-4o',
+          createdAt: new Date().toISOString(),
+        },
+      });
+
+      const replies: string[] = [];
+      const mockSendReply = vi.fn(async (_token: string, _chatId: string, text: string) => {
+        replies.push(text);
+      });
+
+      await processTelegramInboundMessage(
+        {
+          update_id: 712,
+          message_id: 2103,
+          chat_id: 'empty_server_local_user',
+          from_name: 'Empty Server Local User',
+          text: 'Kiến thức về quy trình OTP',
+          date: 1730003002,
+        },
+        'test_token',
+        testDb,
+        mockSendReply,
+        vi.fn(async () => {})
+      );
+
+      expect(mockSendReply).toHaveBeenCalled();
+      const outbound = replies.join('\n');
+      expect(outbound).toContain(KNOWLEDGE_SERVER_EMPTY_NOTICE);
+      // The markdown local-only label is rendered to Telegram HTML before send.
+      expect(outbound).toContain('<i>(Chỉ dữ liệu nội bộ)</i>');
+      expect(outbound).toContain('Kết quả nội bộ OTP.');
+      expect(mockStreamChatEvents).not.toHaveBeenCalled();
+    });
+
+    it('sends the canonical notice to the user for a grounded server_empty turn', async () => {
+      await setNineRouterApiKey('test-key', testDb);
+      mockStreamChatEvents.mockClear();
+
+      await upsertWhitelistUser(
+        {
+          chatId: 'empty_server_user',
+          name: 'Empty Server User',
+          status: 'active',
+          dataScope: 'full',
+        },
+        testDb
+      );
+
+      mockRouteIntent.mockResolvedValueOnce({
+        intent: 'query_knowledge',
+        confidence: 0.95,
+        entities: [],
+        language: 'vi',
+        needs_clarification: false,
+        clarify_question: null,
+        speculation_requested: false,
+      });
+      mockRunGroundedTurn.mockResolvedValueOnce({
+        kind: 'server_empty',
+        notice: KNOWLEDGE_SERVER_EMPTY_NOTICE,
+      });
+
+      const replies: string[] = [];
+      const mockSendReply = vi.fn(async (_token: string, _chatId: string, text: string) => {
+        replies.push(text);
+      });
+
+      await processTelegramInboundMessage(
+        {
+          update_id: 710,
+          message_id: 2101,
+          chat_id: 'empty_server_user',
+          from_name: 'Empty Server User',
+          text: 'Kiến thức về quy trình OTP',
+          date: 1730003000,
+        },
+        'test_token',
+        testDb,
+        mockSendReply,
+        vi.fn(async () => {})
+      );
+
+      expect(mockSendReply).toHaveBeenCalled();
+      expect(replies.join('\n')).toContain(KNOWLEDGE_SERVER_EMPTY_NOTICE);
+      expect(mockStreamChatEvents).not.toHaveBeenCalled();
+    });
+
+    it('prepends the canonical notice once when a retrieve_knowledge tool result is NO_PUBLISHED_SETS', async () => {
+      await setNineRouterApiKey('test-key', testDb);
+      mockStreamChatEvents.mockClear();
+
+      await upsertWhitelistUser(
+        {
+          chatId: 'empty_tool_user',
+          name: 'Empty Tool User',
+          status: 'active',
+          dataScope: 'full',
+        },
+        testDb
+      );
+
+      mockRouteIntent.mockResolvedValueOnce({
+        intent: 'query_taskmate',
+        confidence: 0.95,
+        entities: [],
+        language: 'vi',
+        needs_clarification: false,
+        clarify_question: null,
+        speculation_requested: false,
+      });
+
+      const emptyResult = JSON.stringify({ outcome: 'NO_PUBLISHED_SETS', excerpts: [] });
+      mockExecuteKnowledgeRetrievalTool.mockResolvedValueOnce(emptyResult);
+      mockStreamChatEvents.mockImplementationOnce((async function* () {
+        yield {
+          type: 'tool_calls',
+          calls: [
+            {
+              id: 'call_empty_kb',
+              type: 'function',
+              function: {
+                name: 'retrieve_knowledge',
+                arguments: JSON.stringify({ query: 'OTP' }),
+              },
+            },
+          ],
+        } as any;
+        // The tool runner returns the canned JSON via the seeded config below;
+        // the detected outcome must be surfaced by the host, never the model.
+      }) as any);
+      mockStreamChatEvents.mockImplementationOnce((async function* () {
+        yield { type: 'text', delta: 'đã truy vấn' };
+        yield { type: 'usage', usage: { total_tokens: 5 } };
+      }) as any);
+
+      const replies: string[] = [];
+      const mockSendReply = vi.fn(async (_token: string, _chatId: string, text: string) => {
+        replies.push(text);
+      });
+
+      await processTelegramInboundMessage(
+        {
+          update_id: 711,
+          message_id: 2102,
+          chat_id: 'empty_tool_user',
+          from_name: 'Empty Tool User',
+          text: 'tìm kiến thức OTP',
+          date: 1730003001,
+        },
+        'test_token',
+        testDb,
+        mockSendReply,
+        vi.fn(async () => {})
+      );
+
+      // The outbound text must contain the canonical notice, owned by the app.
+      const outbound = replies.join('\n');
+      expect(outbound).toContain(KNOWLEDGE_SERVER_EMPTY_NOTICE);
+      // Exactly once per turn.
+      expect(outbound.split(KNOWLEDGE_SERVER_EMPTY_NOTICE).length - 1).toBe(1);
+      void emptyResult;
     });
   });
 });

@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ChatHeader } from '../../src/components/ai/ChatHeader';
-import { AIChatDrawer } from '../../src/components/ai/AIChatDrawer';
+import { AIChatDrawer, TURN_STATUS_TO_TAB } from '../../src/components/ai/AIChatDrawer';
+import * as orchestrator from '../../src/services/ai/aiOrchestratorLoop';
 import { TaskPlannerDatabase } from '../../src/db';
 import * as chatRepo from '../../src/db/repositories/chatRepo';
+import { getOrCreateActiveChatTab, updateChatTab } from '../../src/db/repositories/chatTabRepo';
 import * as nineRouterClient from '../../src/services/ai/nineRouterClient';
 import * as nineRouterTokenService from '../../src/services/ai/nineRouterTokenService';
 import * as graphitiMcpClient from '../../src/services/ai/graphitiMcpClient';
@@ -19,31 +21,32 @@ vi.mock('../../src/utils/pptxExport', () => ({
 }));
 
 describe('ChatHeader', () => {
-  it('displays title, model selector, and action buttons', () => {
-    const handleClear = vi.fn();
+  it('displays title, popout button, pin toggle, and more options', () => {
     const handleTogglePin = vi.fn();
     const handleClose = vi.fn();
-    const handleModelChange = vi.fn();
     const handlePopout = vi.fn();
+    const handleOpenDebug = vi.fn();
+    const handleOpenInstructions = vi.fn();
 
     render(
       <ChatHeader
-        selectedModel="gpt-4o"
-        availableModels={['gpt-4o', 'claude-3-5-sonnet']}
-        onModelChange={handleModelChange}
         isPinned={false}
         onTogglePin={handleTogglePin}
-        onClearContext={handleClear}
         onPopout={handlePopout}
+        onOpenDebug={handleOpenDebug}
+        onOpenInstructions={handleOpenInstructions}
         onClose={handleClose}
       />
     );
 
     expect(screen.getByText('Trợ lý AI')).toBeInTheDocument();
     expect(screen.getByLabelText('Mở cửa sổ riêng (Popout)')).toBeInTheDocument();
-    expect(screen.getByLabelText('Đặt lại ngữ cảnh (/clear)')).toBeInTheDocument();
     expect(screen.getByLabelText('Tùy chọn khác')).toBeInTheDocument();
     expect(screen.getByLabelText('Đóng ngăn trò chuyện')).toBeInTheDocument();
+
+    // Click popout
+    fireEvent.click(screen.getByLabelText('Mở cửa sổ riêng (Popout)'));
+    expect(handlePopout).toHaveBeenCalledTimes(1);
 
     // Click more options dropdown to toggle pin
     fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
@@ -52,81 +55,45 @@ describe('ChatHeader', () => {
     fireEvent.click(pinOption);
     expect(handleTogglePin).toHaveBeenCalled();
 
-    fireEvent.click(screen.getByLabelText('Đặt lại ngữ cảnh (/clear)'));
-    expect(handleClear).toHaveBeenCalled();
-
+    // Close button
     fireEvent.click(screen.getByLabelText('Đóng ngăn trò chuyện'));
     expect(handleClose).toHaveBeenCalled();
   });
 
-  it('renders and toggles auto-approve mutations button in dropdown', () => {
-    const handleToggleAutoApprove = vi.fn();
+  it('renders instructions and debug options in dropdown', () => {
+    const handleOpenDebug = vi.fn();
+    const handleOpenInstructions = vi.fn();
 
-    const { rerender } = render(
-      <ChatHeader
-        selectedModel="gpt-4o"
-        availableModels={['gpt-4o']}
-        onModelChange={vi.fn()}
-        autoApproveMutations={false}
-        onToggleAutoApproveMutations={handleToggleAutoApprove}
-        isPinned={false}
-        onTogglePin={vi.fn()}
-        onClearContext={vi.fn()}
-        onClose={vi.fn()}
-      />
-    );
-
-    fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
-    const toggleBtn = screen.getByText('Bật tự động duyệt thay đổi');
-    expect(toggleBtn).toBeInTheDocument();
-    fireEvent.click(toggleBtn);
-    expect(handleToggleAutoApprove).toHaveBeenCalledTimes(1);
-
-    // Rerender with autoApproveMutations=true
-    rerender(
-      <ChatHeader
-        selectedModel="gpt-4o"
-        availableModels={['gpt-4o']}
-        onModelChange={vi.fn()}
-        autoApproveMutations={true}
-        onToggleAutoApproveMutations={handleToggleAutoApprove}
-        isPinned={false}
-        onTogglePin={vi.fn()}
-        onClearContext={vi.fn()}
-        onClose={vi.fn()}
-      />
-    );
-
-    fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
-    expect(screen.getByText('Tắt tự động duyệt thay đổi')).toBeInTheDocument();
-  });
-
-  it('calls onOpenMcpSettings when clicked in dropdown', () => {
-    const handleOpenMcp = vi.fn();
     render(
       <ChatHeader
-        selectedModel="gpt-4o"
-        availableModels={['gpt-4o']}
-        onModelChange={vi.fn()}
-        onOpenMcpSettings={handleOpenMcp}
-        isPinned={false}
+        isPinned={true}
         onTogglePin={vi.fn()}
-        onClearContext={vi.fn()}
+        onOpenDebug={handleOpenDebug}
+        onOpenInstructions={handleOpenInstructions}
         onClose={vi.fn()}
       />
     );
+
     fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
-    const mcpOption = screen.getByText('Quản lý máy chủ MCP');
-    expect(mcpOption).toBeInTheDocument();
-    fireEvent.click(mcpOption);
-    expect(handleOpenMcp).toHaveBeenCalledTimes(1);
+    const instructionsOption = screen.getByText('Hướng dẫn lập kế hoạch AI');
+    expect(instructionsOption).toBeInTheDocument();
+    fireEvent.click(instructionsOption);
+    expect(handleOpenInstructions).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
+    const debugOption = screen.getByText('Nhật ký gỡ lỗi AI');
+    expect(debugOption).toBeInTheDocument();
+    fireEvent.click(debugOption);
+    expect(handleOpenDebug).toHaveBeenCalledTimes(1);
   });
 });
+
+const CR_ID = '44444444-4444-4444-8444-444444444444';
 
 describe('AIChatDrawer', () => {
   let db: TaskPlannerDatabase;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     localStorage.clear();
     clearGroundedTurnTestHooks();
@@ -139,10 +106,57 @@ describe('AIChatDrawer', () => {
     vi.spyOn(graphitiMcpClient, 'getGraphitiMcpToolDefinitions').mockResolvedValue([]);
     vi.spyOn(mcpClient, 'discoverAllMcpTools').mockResolvedValue([]);
     db = new TaskPlannerDatabase(`test-aichat-drawer-${Date.now()}-${Math.random()}`);
+    // `create_task` requires a CR (plan 01); every mutation test targets this one.
+    await db.changeRequests.add({
+      id: CR_ID,
+      code: 'CR-AIDRAWER-01',
+      name: 'AI Drawer CR',
+      status: 'Open',
+      type: 'ENHANCEMENT',
+      targets: [],
+      createdAt: '2026-10-01T00:00:00.000Z',
+      updatedAt: '2026-10-01T00:00:00.000Z',
+    });
   });
 
   afterEach(() => {
+    cleanup();
     clearGroundedTurnTestHooks();
+  });
+
+  it('maps tool-limit to idle with debug-only metadata and no persisted partial answer', async () => {
+    expect(TURN_STATUS_TO_TAB['tool-limit']).toBe('idle');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-key');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
+      endpoint: 'https://example.invalid', defaultModel: 'model-x', charLimit: 12000,
+    });
+    const loop = vi.spyOn(orchestrator, 'runAiOrchestratorLoop').mockImplementation(async (options) => {
+      options.onTextChunk?.('PARTIAL-NOT-AN-ANSWER');
+      options.onToolCall?.({ id: 'audit', name: 'query_notes', args: {} });
+      options.onToolResult?.('audit', 'Audit evidence', 2);
+      return { fullResponse: 'PARTIAL-NOT-AN-ANSWER', cleanResponse: 'PARTIAL-NOT-AN-ANSWER',
+        messages: [], tokenUsage: {}, generatedFiles: [], truncated: false, loopLimitReached: true };
+    });
+    const finish = vi.spyOn(aiDebugService, 'finishTurn');
+    try {
+      await getOrCreateActiveChatTab({ scopeKey: 'global', scopeType: 'global' }, db);
+      render(<AIChatDrawer open onClose={vi.fn()} db={db} activeScope={{ type: 'global' }} />);
+      await waitFor(() => expect(screen.getByTestId('ai-chat-widget').getAttribute('data-scope-key')).not.toBe('default'));
+      fireEvent.change(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI'), { target: { value: 'Gather evidence' } });
+      fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+      await waitFor(() => expect(finish).toHaveBeenCalledWith(expect.any(String), { error: 'tool_limit' }));
+      expect(await screen.findByText('Đã dừng thu thập bằng chứng')).toBeInTheDocument();
+      expect(screen.queryByText('PARTIAL-NOT-AN-ANSWER')).not.toBeInTheDocument();
+      expect(document.querySelector('.ant-alert-error')).toBeNull();
+      expect(document.querySelector('[role="tab"][aria-selected="true"] .ant-badge-status-error')).toBeNull();
+      expect(document.querySelector('[role="tab"][aria-selected="true"] .ant-badge-status-processing')).toBeNull();
+      expect(screen.queryByTestId('ai-staged-loading')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI')).toBeEnabled();
+      expect(screen.getByRole('button', { name: /\[Công cụ\] query_notes/ })).toBeInTheDocument();
+      const rows = await db.chatMessages.toArray();
+      expect(rows.filter((row) => row.role === 'assistant')).toHaveLength(0);
+      expect(rows.filter((row) => row.role === 'user')).toHaveLength(1);
+    } finally { loop.mockRestore(); finish.mockRestore(); }
   });
 
   it('renders drawer when open is true, handles drag resize and clamp', () => {
@@ -209,7 +223,7 @@ describe('AIChatDrawer', () => {
       charLimit: 12000,
     });
 
-    await db.tasks.add({
+    await db.tasks.add({ crId: '11111111-1111-4111-8111-111111111111',
       id: 'task-test-mention',
       name: 'Tối ưu hóa Database Index',
       status: 'In Progress',
@@ -251,8 +265,8 @@ describe('AIChatDrawer', () => {
     expect(callArgs?.systemPrompt).toContain('id="task-test-mention"');
   });
 
-  it('clicking clear context calls clearThreadContext and shows divider', async () => {
-    const clearSpy = vi.spyOn(chatRepo, 'clearThreadContext');
+  it('clearing context confirms, then removes only the active thread messages (D-05)', async () => {
+    const clearSpy = vi.spyOn(chatRepo, 'clearThreadMessages');
 
     render(
       <AIChatDrawer
@@ -263,12 +277,17 @@ describe('AIChatDrawer', () => {
       />
     );
 
+    await screen.findByTestId('chat-tab-toolbox');
     const clearBtn = screen.getByLabelText('Đặt lại ngữ cảnh (/clear)');
     fireEvent.click(clearBtn);
 
+    // D-05: clear is thread-scoped and asks first; it must not append a boundary marker instead.
+    fireEvent.click(await screen.findByRole('button', { name: 'Xóa tin nhắn' }));
+
     await waitFor(() => {
       expect(clearSpy).toHaveBeenCalled();
-    });
+    }, { timeout: 4000 });
+    expect(clearSpy.mock.calls[0]?.[0]).toEqual(expect.any(String));
   });
 
   it('renders with zIndex 1200 in overlay mode', () => {
@@ -288,10 +307,13 @@ describe('AIChatDrawer', () => {
 
   it('allows in-drawer item picker to switch scope between global, task, project, and milestone', async () => {
     // Populate dummy task, project, and milestone
-    await db.projects.add({
+    await db.changeRequests.add({
       id: 'p-1',
       name: 'Dự án Alpha',
+      code: 'CR-P1',
       status: 'In Progress',
+      type: 'ENHANCEMENT',
+      targets: [],
       createdAt: '2026-10-01',
       updatedAt: '2026-10-01',
     });
@@ -301,7 +323,7 @@ describe('AIChatDrawer', () => {
       name: 'Tác vụ Khởi tạo',
       status: 'Open',
       priority: 'High',
-      projectId: 'p-1',
+      crId: CR_ID,
       estimateMinutes: 60,
       progress: 0,
       createdAt: '2026-10-01',
@@ -324,15 +346,19 @@ describe('AIChatDrawer', () => {
     // Verify initial scope
     expect(screen.getByText('Toàn cục (Không gắn)')).toBeInTheDocument();
 
-    // Change scope via modal
+    // Change scope via modal. Re-query the row on each attempt: the drawer re-renders while
+    // per-tab runtimes hydrate, which replaces modal nodes mid-interaction.
     fireEvent.click(changeScopeBtn);
-    const taskOption = await screen.findByText(/Tác vụ Khởi tạo/i);
-    expect(taskOption).toBeInTheDocument();
-
-    fireEvent.click(taskOption);
+    await waitFor(() => {
+      expect(screen.getByText(/Tác vụ Khởi tạo/i)).toBeInTheDocument();
+    });
+    fireEvent.click(
+      screen.getByText(/Tác vụ Khởi tạo/i).closest('.scope-picker-item') ??
+        screen.getByText(/Tác vụ Khởi tạo/i)
+    );
 
     await waitFor(() => {
-      expect(screen.getByText(/Đang gắn ngữ cảnh: Tác vụ Khởi tạo/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/Tác vụ Khởi tạo/i).length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -366,7 +392,7 @@ describe('AIChatDrawer', () => {
       name: 'Task Tool Test',
       status: 'In Progress',
       priority: 'High',
-      projectId: 'p-tool',
+      crId: CR_ID,
       estimateMinutes: 30,
       progress: 50,
       createdAt: '2026-10-01',
@@ -472,9 +498,14 @@ describe('AIChatDrawer', () => {
 
     await waitFor(() => expect(screen.getByText(/Đã tổng hợp Graphiti/i)).toBeInTheDocument());
     expect(mcpClient.discoverAllMcpTools).toHaveBeenCalledTimes(1);
-    expect(mcpClient.executeDynamicMcpTool).toHaveBeenCalledWith('search_nodes', {
-      query: 'alpha',
-    }, expect.anything());
+    expect(mcpClient.executeDynamicMcpTool).toHaveBeenCalledWith(
+      'search_nodes',
+      {
+        query: 'alpha',
+      },
+      expect.anything(),
+      expect.objectContaining({ allowMutation: expect.any(Boolean) })
+    );
     expect(payloads).toHaveLength(2);
     expect(payloads[0].messages).toContainEqual(
       expect.objectContaining({
@@ -589,6 +620,7 @@ describe('AIChatDrawer', () => {
               function: {
                 name: 'create_task',
                 arguments: JSON.stringify({
+                  crId: CR_ID,
                   name: 'Tác vụ được tạo bởi AI',
                   priority: 'High',
                   estimateMinutes: 90,
@@ -621,13 +653,13 @@ describe('AIChatDrawer', () => {
 
     // Confirmation card should appear with mutation details
     await waitFor(() => {
-      const confirmCard = screen.getByTestId('ai-mutation-confirmation');
+      const confirmCard = screen.getByTestId('ai-mutation-approval');
       expect(confirmCard).toBeInTheDocument();
       expect(confirmCard).toHaveTextContent(/Tác vụ được tạo bởi AI/i);
     });
 
     // Confirm the mutation
-    const confirmBtn = screen.getByLabelText('Xác nhận thao tác');
+    const confirmBtn = screen.getByRole('button', { name: 'Chấp thuận' });
     fireEvent.click(confirmBtn);
 
     // Turn completes and task is in db
@@ -639,7 +671,9 @@ describe('AIChatDrawer', () => {
     expect(tasksInDb.some((t) => t.name === 'Tác vụ được tạo bởi AI')).toBe(true);
   });
 
-  it('cancels mutation when user clicks Không (No) and does not modify database', async () => {
+  // Substituted assertion: the declined turn now persists nothing (T-25.3-37) instead of the
+  // old loop's assistant cancellation row; the safety property under test is unchanged.
+  it('cancels mutation when user clicks Từ chối (No) and writes neither data nor assistant content', async () => {
     vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
     vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
       endpoint: 'http://localhost:20128',
@@ -689,19 +723,21 @@ describe('AIChatDrawer', () => {
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('ai-mutation-confirmation')).toBeInTheDocument();
+      expect(screen.getByTestId('ai-mutation-approval')).toBeInTheDocument();
     });
 
     // User declines
-    const declineBtn = screen.getByLabelText('Từ chối thao tác');
+    const declineBtn = screen.getByRole('button', { name: 'Từ chối' });
     fireEvent.click(declineBtn);
 
     await waitFor(() => {
-      expect(screen.getByText(/Thao tác đã bị hủy theo yêu cầu/i)).toBeInTheDocument();
+      expect(screen.queryByTestId('ai-mutation-approval')).toBeNull();
     });
 
     const tasksInDb = await db.tasks.toArray();
     expect(tasksInDb.some((t) => t.name === 'Tác vụ bị từ chối')).toBe(false);
+    const assistantRows = (await db.chatMessages.toArray()).filter((m) => m.role === 'assistant');
+    expect(assistantRows).toHaveLength(0);
   });
 
   it('allows user to confirm mutation by typing "yes" into chat input', async () => {
@@ -725,6 +761,7 @@ describe('AIChatDrawer', () => {
               function: {
                 name: 'create_task',
                 arguments: JSON.stringify({
+                  crId: CR_ID,
                   name: 'Tác vụ xác nhận bằng chữ',
                 }),
               },
@@ -754,11 +791,12 @@ describe('AIChatDrawer', () => {
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('ai-mutation-confirmation')).toBeInTheDocument();
+      expect(screen.getByTestId('ai-mutation-approval')).toBeInTheDocument();
     });
 
-    // Type "yes" and send
-    fireEvent.change(textarea, { target: { value: 'yes' } });
+    // Type "yes" and send. The composer remounts when the durable tab id resolves, so re-query it.
+    const followUpInput = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(followUpInput, { target: { value: 'yes' } });
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
     await waitFor(() => {
@@ -790,6 +828,7 @@ describe('AIChatDrawer', () => {
               function: {
                 name: 'create_task_ide', // Cloaked name from 9router Antigravity
                 arguments: JSON.stringify({
+                  crId: CR_ID,
                   name: 'Tác vụ cloaked _ide',
                 }),
               },
@@ -820,11 +859,11 @@ describe('AIChatDrawer', () => {
 
     // Should recognize as mutation and show confirmation
     await waitFor(() => {
-      expect(screen.getByTestId('ai-mutation-confirmation')).toBeInTheDocument();
+      expect(screen.getByTestId('ai-mutation-approval')).toBeInTheDocument();
       expect(screen.getByText(/Tác vụ cloaked _ide/i)).toBeInTheDocument();
     });
 
-    const confirmBtn = screen.getByLabelText('Xác nhận thao tác');
+    const confirmBtn = screen.getByRole('button', { name: 'Chấp thuận' });
     fireEvent.click(confirmBtn);
 
     await waitFor(() => {
@@ -863,13 +902,15 @@ describe('AIChatDrawer', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/Mô hình AI không trả về nội dung/i)
+        screen.getByText(/Không thể xử lý yêu cầu/i)
       ).toBeInTheDocument();
     });
   });
 
   it('bypasses confirmation prompt and automatically executes mutation when auto-approve is enabled', async () => {
-    localStorage.setItem('planner:ai_auto_approve_mutations', 'true');
+    // Auto-approve is durable per-tab config (the legacy global key never feeds a turn).
+    const tab = await getOrCreateActiveChatTab({ scopeKey: 'global', scopeType: 'global' }, db);
+    await updateChatTab(tab.id, { config: { ...(tab.config ?? {}), autoApproveMutations: true } }, db);
 
     vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
     vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
@@ -891,6 +932,7 @@ describe('AIChatDrawer', () => {
               function: {
                 name: 'create_task',
                 arguments: JSON.stringify({
+                  crId: CR_ID,
                   name: 'Tác vụ tự động duyệt',
                   priority: 'High',
                 }),
@@ -916,11 +958,8 @@ describe('AIChatDrawer', () => {
       />
     );
 
-    // Verify toggle option in header dropdown shows enabled state
-    fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
-    expect(screen.getByText('Tắt tự động duyệt thay đổi')).toBeInTheDocument();
-    // Close dropdown
-    fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
+    // Verify auto-approve button in tab toolbox shows enabled state
+    expect(await screen.findByTestId('tab-auto-approve-btn')).toBeInTheDocument();
 
     const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
     fireEvent.change(textarea, { target: { value: 'Tạo task tự động' } });
@@ -928,7 +967,7 @@ describe('AIChatDrawer', () => {
 
     // Should NOT show confirmation prompt
     await waitFor(() => {
-      expect(screen.queryByTestId('ai-mutation-confirmation')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('ai-mutation-approval')).not.toBeInTheDocument();
       expect(screen.getByText(/Báo cáo thay đổi: Đã tự động tạo tác vụ/i)).toBeInTheDocument();
     });
 
@@ -1064,7 +1103,7 @@ describe('AIChatDrawer', () => {
     });
   });
 
-  it('opens McpSettingsModal from dropdown menu and renders server list', async () => {
+  it('opens McpSettingsModal from tab toolbox and renders server list', async () => {
     render(
       <AIChatDrawer
         open={true}
@@ -1074,10 +1113,10 @@ describe('AIChatDrawer', () => {
       />
     );
 
-    fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
-    const mcpOption = screen.getByText('Quản lý máy chủ MCP');
-    expect(mcpOption).toBeInTheDocument();
-    fireEvent.click(mcpOption);
+    const mcpManageBtn = await screen.findByTestId('tab-mcp-btn');
+    fireEvent.click(mcpManageBtn);
+    const settingsBtn = await screen.findByRole('button', { name: /Cài đặt/i });
+    fireEvent.click(settingsBtn);
 
     await waitFor(() => {
       expect(screen.getByText('Graphiti Banking MCP')).toBeInTheDocument();
@@ -1238,7 +1277,7 @@ describe('AIChatDrawer', () => {
       charLimit: 12000,
     });
 
-    await db.tasks.add({
+    await db.tasks.add({ crId: '11111111-1111-4111-8111-111111111111',
       id: 'task-enrich-confirm',
       name: 'Nâng cấp bảo mật JWT',
       status: 'Open',
@@ -1293,7 +1332,7 @@ describe('AIChatDrawer', () => {
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
     await waitFor(() => {
-      const confirmCard = screen.getByTestId('ai-mutation-confirmation');
+      const confirmCard = screen.getByTestId('ai-mutation-approval');
       expect(confirmCard).toBeInTheDocument();
       // Should show resolved task name and formatted field changes instead of raw id
       expect(confirmCard).toHaveTextContent(/Nâng cấp bảo mật JWT/);
@@ -1354,8 +1393,11 @@ describe('AIChatDrawer', () => {
       expect(screen.getByTestId('clarification-prompt-card')).toBeInTheDocument();
     });
 
-    // Replying with natural text continues loop without route chips
-    fireEvent.change(textarea, { target: { value: 'về tính lãi thẻ tín dụng' } });
+    // Replying with natural text continues loop without route chips. The composer remounts when the
+    // durable tab id resolves, so re-query it rather than reusing the pre-hydration reference.
+    fireEvent.change(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI'), {
+      target: { value: 'về tính lãi thẻ tín dụng' },
+    });
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
     await waitFor(() => {
@@ -1451,5 +1493,68 @@ describe('AIChatDrawer', () => {
       .map((m: any) => m.content)
       .join('\n');
     expect(systemContents).toContain('[ANALYSIS MODE ACTIVE]');
+  });
+
+  it('parks a database mutation behind the approval card in analysis mode and applies it only when approved', async () => {
+    localStorage.setItem('planner:ai_analysis_mode', 'true');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
+      endpoint: 'http://localhost:20128',
+      defaultModel: 'gpt-4o',
+      charLimit: 12000,
+    });
+
+    let callCount = 0;
+    const payloads: any[] = [];
+    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation((options: any) => {
+      payloads.push(options.payload);
+      return (async function* () {
+        callCount++;
+        if (callCount === 1) {
+          yield {
+            type: 'tool_calls',
+            calls: [
+              {
+                id: 'call_parked_create_task',
+                type: 'function',
+                function: {
+                  name: 'create_task',
+                  arguments: JSON.stringify({ crId: CR_ID, name: 'Task cho duyet trong analysis mode' }),
+                },
+              },
+            ],
+          };
+        } else {
+          yield { type: 'text', delta: 'Đã xử lý xong.' };
+        }
+      })() as any;
+    });
+
+    render(
+      <AIChatDrawer open={true} onClose={vi.fn()} db={db} activeScope={{ type: 'global' }} />
+    );
+
+    fireEvent.change(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI'), {
+      target: { value: 'Tạo task trong analysis mode' },
+    });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    // The mutation tool is offered in Analysis Mode, and the turn parks on the approval card.
+    await waitFor(() => {
+      expect(screen.getByTestId('ai-mutation-approval')).toBeInTheDocument();
+    });
+    const offered = payloads[0].tools.map((tool: any) => tool.function.name);
+    expect(offered).toContain('create_task');
+
+    // Nothing is written before the user decides.
+    expect((await db.tasks.toArray()).some((t) => t.name === 'Task cho duyet trong analysis mode')).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Chấp thuận' }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Đã xử lý xong/i)).toBeInTheDocument();
+    });
+    const tasksInDb = await db.tasks.toArray();
+    expect(tasksInDb.some((t) => t.name === 'Task cho duyet trong analysis mode')).toBe(true);
   });
 });

@@ -1,4 +1,4 @@
-import type { Task, Project, Milestone } from '../types/models';
+import type { ChangeRequest, System, Task } from '../types/models';
 
 export interface ExtractedMarkdownMetadata {
   title?: string | undefined;
@@ -8,7 +8,7 @@ export interface ExtractedMarkdownMetadata {
 
 export interface DetectedEntity {
   id: string;
-  type: 'task' | 'project' | 'milestone';
+  type: 'task' | 'cr' | 'system';
   title: string;
   matchReason: string;
   matchedText: string;
@@ -92,7 +92,7 @@ function escapeRegex(str: string): string {
 
 /**
  * Checks whether a phrase occurs in text as a distinct word or boundary-delimited phrase,
- * preventing false substring matches (e.g. project "MPA" matching inside "company" or "impact").
+ * preventing false substring matches (e.g. CR "MPA" matching inside "company" or "impact").
  */
 export function matchesWholePhrase(text: string, phrase: string): boolean {
   const trimmed = phrase.trim();
@@ -106,17 +106,17 @@ export function matchesWholePhrase(text: string, phrase: string): boolean {
 }
 
 /**
- * Detects referenced tasks, projects, and milestones from markdown content per D-06:
+ * Detects referenced tasks, CRs, and subsystems from markdown content per D-06:
  * - Jira issue keys (`[A-Z][A-Z0-9]+-[0-9]+`) matching task.jiraKey or name
  * - Known Task titles (whole-phrase matched)
- * - Known Project titles (whole-phrase matched)
- * - Known Milestone titles (whole-phrase matched)
+ * - Known CR titles and codes (whole-phrase matched)
+ * - Known Subsystem names and codes (whole-phrase matched)
  */
 export function detectReferencedEntities(
   markdown: string,
   tasks: Task[] = [],
-  projects: Project[] = [],
-  milestones: Milestone[] = []
+  changeRequests: ChangeRequest[] = [],
+  systems: System[] = []
 ): DetectedEntity[] {
   if (!markdown || !markdown.trim()) return [];
 
@@ -150,37 +150,37 @@ export function detectReferencedEntities(
     }
   }
 
-  // 2. Scan for Project names (whole phrase)
-  for (const proj of projects) {
-    const projName = proj.name.trim();
-    if (projName.length >= 3 && matchesWholePhrase(markdown, projName)) {
-      if (!seenEntityIds.has(proj.id)) {
-        seenEntityIds.add(proj.id);
-        detected.push({
-          id: proj.id,
-          type: 'project',
-          title: proj.name,
-          matchReason: 'Khớp tên dự án',
-          matchedText: proj.name,
-        });
-      }
+  // 2. Scan for CR names and codes (whole phrase)
+  for (const cr of changeRequests) {
+    const crName = cr.name.trim();
+    const nameMatch = crName.length >= 3 && matchesWholePhrase(markdown, crName);
+    const codeMatch = Boolean(cr.code) && matchesWholePhrase(markdown, cr.code);
+    if ((nameMatch || codeMatch) && !seenEntityIds.has(cr.id)) {
+      seenEntityIds.add(cr.id);
+      detected.push({
+        id: cr.id,
+        type: 'cr',
+        title: cr.name,
+        matchReason: nameMatch ? 'Khớp tên CR' : `Khớp mã CR ${cr.code}`,
+        matchedText: nameMatch ? cr.name : cr.code,
+      });
     }
   }
 
-  // 3. Scan for Milestone names (whole phrase)
-  for (const ms of milestones) {
-    const msName = ms.name.trim();
-    if (msName.length >= 3 && matchesWholePhrase(markdown, msName)) {
-      if (!seenEntityIds.has(ms.id)) {
-        seenEntityIds.add(ms.id);
-        detected.push({
-          id: ms.id,
-          type: 'milestone',
-          title: ms.name,
-          matchReason: 'Khớp tên cột mốc',
-          matchedText: ms.name,
-        });
-      }
+  // 3. Scan for Subsystem names and codes (whole phrase)
+  for (const sys of systems) {
+    const sysName = sys.name.trim();
+    const nameMatch = sysName.length >= 3 && matchesWholePhrase(markdown, sysName);
+    const codeMatch = Boolean(sys.code) && matchesWholePhrase(markdown, sys.code);
+    if ((nameMatch || codeMatch) && !seenEntityIds.has(sys.id)) {
+      seenEntityIds.add(sys.id);
+      detected.push({
+        id: sys.id,
+        type: 'system',
+        title: sys.name,
+        matchReason: nameMatch ? 'Khớp tên subsystem' : `Khớp mã subsystem ${sys.code}`,
+        matchedText: nameMatch ? sys.name : sys.code,
+      });
     }
   }
 

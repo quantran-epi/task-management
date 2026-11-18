@@ -1,10 +1,14 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
+import dayjs from 'dayjs';
 import { Divider, Button, Modal, Tooltip, theme } from 'antd';
 import { SyncOutlined, ExclamationCircleOutlined, ExpandAltOutlined } from '@ant-design/icons';
 import type { ChatMessage } from '../../types/models';
 import { APP_NAME } from '../../constants/app';
 import { renderSafeMarkdown } from '../../utils/markdown';
-import { ChatMessageBubble, type GroundedAnswerCardCallbacks, type WizardMessageCallbacks } from './ChatMessageBubble';
+import { ChatMessageBubble, type GroundedAnswerCardCallbacks } from './ChatMessageBubble';
+import type { AgentAttributionAgent } from './office/AgentAttributionRow';
+import type { AgentRunStatus } from '../../types/aiOffice';
+import type { MessageSeenEntry } from '../../types/teamChat';
 import { InlineApiErrorCard } from './InlineApiErrorCard';
 import { IntentRoutingPrompt } from './grounded/IntentRoutingPrompt';
 
@@ -39,12 +43,39 @@ export interface ChatMessageListProps {
   pendingConfirmation?: PendingConfirmationInfo | null;
   onConfirmAction?: (confirmed: boolean) => void;
   groundedCallbacks?: GroundedAnswerCardCallbacks | undefined;
-  wizardCallbacks?: WizardMessageCallbacks | undefined;
   transientClarifyMessage?: TransientClarifyState | null | undefined;
   onCancelClarify?: (() => void) | undefined;
+  /** Host-supplied empty state. Falls back to the app default when omitted. */
+  emptyState?: { heading: string; body: string } | undefined;
+  /** Phase 34 D-07: agent identity lookup for attributed messages. */
+  agentDirectory?: Map<string, AgentAttributionAgent> | undefined;
+  agentStatuses?: Map<string, AgentRunStatus> | undefined;
+  onStopAgent?: ((agentId: string) => void) | undefined;
+  /** 37-08 D-13: retry one assignment attempt, read from the persisted message row. */
+  onRetryAgent?: ((assignmentId: string) => void) | undefined;
+  /** 37.1 rework: read receipts, keyed by message id. Absent = nobody has read it. */
+  seenStates?: Map<string, MessageSeenEntry[]> | undefined;
+  /** 37.1 R13: the first message the user has not read — a "Tin mới" divider sits above it. */
+  firstUnreadMessageId?: string | undefined;
+  /** Initial saved read position; null means no message has been read. */
+  lastReadMessageId?: string | null | undefined;
+  readPositionReady?: boolean | undefined;
+  onMessageRead?: ((messageId: string) => void) | undefined;
+  /**
+   * 37.1 R11/R13: whether the viewport is pinned to the newest message. Reading happens at
+   * the bottom, so the host advances the user's cursor only while this is true.
+   */
+  onAtBottomChange?: ((atBottom: boolean) => void) | undefined;
+  /** 37.1: recipients per message id, read from the log's `to[]`. */
+  addressedTo?: Map<string, Array<{ id: string; name: string }>> | undefined;
 }
 
-export const ChatMessageList: React.FC<ChatMessageListProps> = ({
+// The composer draft lives above this list, so without a memo every keystroke re-rendered
+// every row. Its props are identity-stable at both call sites.
+const dayLabel = (iso: string): string =>
+  dayjs(iso).isSame(dayjs(), 'day') ? 'Hôm nay' : dayjs(iso).format('DD/MM/YYYY');
+
+export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
   messages,
   streamingText,
   isStreaming = false,
@@ -62,9 +93,20 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   pendingConfirmation,
   onConfirmAction,
   groundedCallbacks,
-  wizardCallbacks,
   transientClarifyMessage,
   onCancelClarify,
+  emptyState,
+  agentDirectory,
+  agentStatuses,
+  onStopAgent,
+  onRetryAgent,
+  seenStates,
+  firstUnreadMessageId,
+  lastReadMessageId,
+  readPositionReady = true,
+  onMessageRead,
+  onAtBottomChange,
+  addressedTo,
 }) => {
   const { token } = theme.useToken();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -75,7 +117,36 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
     return pendingConfirmation?.summary ? renderSafeMarkdown(pendingConfirmation.summary) : '';
   }, [pendingConfirmation?.summary]);
 
+  /**
+   * 37.1 R11/R13: only a scroll the USER performed counts as reading. The transcript
+   * auto-scrolls on every new message, and treating that as "read" made the unread badge
+   * flash and vanish the instant a hidden tab was focused again.
+   */
+  const programmaticScrollRef = useRef(false);
+  const userScrollRef = useRef(false);
+  // A send bumps `scrollTrigger` BEFORE the user's row is persisted (liveQuery delivers it a
+  // render later). Scrolling only on the trigger lands above that new row. Hold the intent and
+  // consume it once the row actually arrives. This is the ONLY path for hosts that pass
+  // `onMessageRead` (team chat): those start `followingRef=false`, so the passive new-message
+  // scroll below is disabled.
+  const pendingSendScrollRef = useRef(false);
+  const followingRef = useRef(onMessageRead === undefined && onAtBottomChange === undefined);
+  const initiallyPositionedRef = useRef(false);
+  const lastReadRef = useRef<HTMLDivElement>(null);
+
+  const reportAtBottom = () => {
+    const node = containerRef.current;
+    if (!node || programmaticScrollRef.current) return;
+    const atBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
+    followingRef.current = atBottom;
+    if (userScrollRef.current && document.hasFocus()) onAtBottomChange?.(atBottom);
+  };
+
   const scrollToBottom = (instant = false) => {
+    programmaticScrollRef.current = true;
+    requestAnimationFrame(() => {
+      programmaticScrollRef.current = false;
+    });
     if (containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
@@ -84,28 +155,97 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
     }
   };
 
-  // Immediate scroll to bottom when user hits Send
+  // User hit Send: remember the intent now; the row it produces arrives on a later render.
   useEffect(() => {
     if (scrollTrigger) {
+      pendingSendScrollRef.current = true;
       scrollToBottom(true);
     }
   }, [scrollTrigger]);
 
-  // Auto-scroll on new message added, confirmation prompt displayed, or clarify prompt shown
+  // Restore saved reading position once, without consuming unread messages.
   useEffect(() => {
-    scrollToBottom(false);
-  }, [messages.length, pendingConfirmation, transientClarifyMessage]);
+    // A send's row has now rendered. Pin to bottom before any read-position/unread logic can
+    // move the viewport, then clear the one-shot intent.
+    if (pendingSendScrollRef.current && messages.length > 0) {
+      pendingSendScrollRef.current = false;
+      scrollToBottom(true);
+      return;
+    }
+    if (!readPositionReady) return;
+    if (!initiallyPositionedRef.current && messages.length > 0) {
+      if (lastReadMessageId && !lastReadRef.current) return;
+      initiallyPositionedRef.current = true;
+      followingRef.current = !firstUnreadMessageId && lastReadMessageId !== null;
+      if (lastReadMessageId && firstUnreadMessageId) {
+        programmaticScrollRef.current = true;
+        lastReadRef.current?.scrollIntoView?.({ block: 'start', behavior: 'auto' });
+        requestAnimationFrame(() => { programmaticScrollRef.current = false; });
+      } else if (lastReadMessageId !== null) {
+        scrollToBottom(true);
+      }
+      return;
+    }
+    if (!firstUnreadMessageId && followingRef.current) scrollToBottom(false);
+  }, [messages.length, firstUnreadMessageId, lastReadMessageId, readPositionReady, pendingConfirmation, transientClarifyMessage]);
+
+  useEffect(() => {
+    const unpin = () => {
+      followingRef.current = false;
+      userScrollRef.current = false;
+    };
+    window.addEventListener('blur', unpin);
+    return () => window.removeEventListener('blur', unpin);
+  }, []);
 
   // Keep pinned to bottom during streaming or errors
   useEffect(() => {
-    if (isStreaming || streamingText || error || pendingConfirmation || transientClarifyMessage) {
+    if (!firstUnreadMessageId && followingRef.current &&
+      (isStreaming || streamingText || error || pendingConfirmation || transientClarifyMessage)) {
       scrollToBottom(true);
     }
-  }, [streamingText, isStreaming, error, pendingConfirmation, transientClarifyMessage]);
+  }, [streamingText, isStreaming, error, pendingConfirmation, transientClarifyMessage, firstUnreadMessageId]);
+
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!root || !onMessageRead || !readPositionReady || typeof IntersectionObserver === 'undefined') return;
+    const visible = new Set<Element>();
+    const reportVisible = () => {
+      if (document.visibilityState !== 'visible' || !document.hasFocus()) return;
+      const lastVisible = Array.from(root.querySelectorAll<HTMLElement>('[data-chat-message-id]'))
+        .findLast((row) => visible.has(row));
+      if (lastVisible) onMessageRead(lastVisible.dataset.chatMessageId!);
+    };
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting && entry.intersectionRect.height > 0) visible.add(entry.target);
+        else visible.delete(entry.target);
+      }
+      reportVisible();
+    }, { root, threshold: 0 });
+    root.querySelectorAll('[data-chat-message-id]').forEach((row) => observer.observe(row));
+    window.addEventListener('focus', reportVisible);
+    document.addEventListener('visibilitychange', reportVisible);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('focus', reportVisible);
+      document.removeEventListener('visibilitychange', reportVisible);
+    };
+  }, [messages, onMessageRead, readPositionReady]);
 
   return (
     <div
       ref={containerRef}
+      onScroll={reportAtBottom}
+      onWheel={() => { userScrollRef.current = true; }}
+      onPointerDown={() => { userScrollRef.current = true; }}
+      onTouchStart={() => { userScrollRef.current = true; }}
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'End', 'Home', ' '].includes(event.key)) {
+          userScrollRef.current = true;
+        }
+      }}
       style={{
         flex: 1,
         overflowY: 'auto',
@@ -124,15 +264,16 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
           }}
         >
           <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: token.colorText }}>
-            Trợ lý AI {APP_NAME}
+            {emptyState?.heading ?? `Trợ lý AI ${APP_NAME}`}
           </div>
           <div style={{ fontSize: 13, lineHeight: 1.6, maxWidth: 360, margin: '0 auto' }}>
-            Đặt câu hỏi về tác vụ hiện tại, phân tích tiến độ, gợi ý checklist hoặc tra cứu tài liệu đính kèm. Nhập câu hỏi bên dưới để bắt đầu.
+            {emptyState?.body ??
+              'Đặt câu hỏi về tác vụ hiện tại, phân tích tiến độ, gợi ý checklist hoặc tra cứu tài liệu đính kèm. Nhập câu hỏi bên dưới để bắt đầu.'}
           </div>
         </div>
       )}
 
-      {messages.map((msg) => {
+      {messages.map((msg, index) => {
         if (msg.isContextBoundary) {
           const isCompacted = msg.content?.includes('Tóm tắt ngữ cảnh') || msg.content?.includes('Compact Context');
           return (
@@ -154,9 +295,77 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
           );
         }
 
-        // Pass message with grounding intact for structured rendering
+        // A day divider only when the calendar day actually changes. Without it a long
+        // transcript has no anchor beyond the per-message clock.
+        const previous = index > 0 ? messages[index - 1] : undefined;
+        const dayChanged =
+          !previous ||
+          !dayjs(previous.createdAt).isSame(dayjs(msg.createdAt), 'day');
+        // Consecutive rows from the same author read as one block: the name and avatar
+        // belong to the block, not to every line.
+        const grouped =
+          !dayChanged &&
+          previous !== undefined &&
+          previous.role === 'assistant' &&
+          msg.role === 'assistant' &&
+          previous.agentId !== undefined &&
+          previous.agentId === msg.agentId;
+        // The row ABOVE owns the gap, so this row's tighter spacing depends on whether the
+        // NEXT row continues the same block — not on `grouped`, which describes the row above.
+        const next = messages[index + 1];
+        const continuesNext =
+          next !== undefined &&
+          next.role === 'assistant' &&
+          msg.role === 'assistant' &&
+          msg.agentId !== undefined &&
+          next.agentId === msg.agentId &&
+          dayjs(next.createdAt).isSame(dayjs(msg.createdAt), 'day');
+
+        // Pass message with grounding intact for structured rendering.
+        // CR-06: a steer row deliberately carries NO `agentId` (D-15 — it must render as a
+        // user row), so its caption's target must be resolved from `targetAgentId` here.
+        // Without this the label fell back to a raw UUID in production (IN-08d).
+        const agent = msg.agentId
+          ? agentDirectory?.get(msg.agentId)
+          : msg.targetAgentId
+            ? agentDirectory?.get(msg.targetAgentId)
+            : undefined;
+        const agentStatus = msg.agentId ? agentStatuses?.get(msg.agentId) : undefined;
+        // 37.1 R14: resolve the quoted row from the same list being rendered. A message whose
+        // parent is outside the window still shows what it answers — the text is on the row.
+        const quoted = msg.replyToId
+          ? messages.find((row) => row.id === msg.replyToId)
+          : undefined;
         return (
-          <React.Fragment key={msg.id}>
+          <div key={msg.id} data-chat-message-id={msg.id} style={{ flexShrink: 0 }}>
+            {dayChanged && (
+              <div
+                data-testid="chat-day-divider"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  margin: '4px 0 12px',
+                  fontSize: 11,
+                  color: token.colorTextTertiary,
+                }}
+              >
+                <span style={{ flex: 1, height: 1, background: token.colorBorderSecondary }} />
+                {dayLabel(msg.createdAt)}
+                <span style={{ flex: 1, height: 1, background: token.colorBorderSecondary }} />
+              </div>
+            )}
+            {msg.id === lastReadMessageId && <div ref={lastReadRef} data-testid="team-last-read-anchor" />}
+            {msg.id === firstUnreadMessageId && (
+              <div>
+                <Divider
+                  data-testid="team-new-divider"
+                  style={{ margin: '8px 0', fontSize: 12, color: token.colorError }}
+                >
+                  Tin mới
+                </Divider>
+              </div>
+            )}
             <ChatMessageBubble
               message={msg}
               canAddToChecklist={canAddToChecklist}
@@ -166,28 +375,35 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
               onSaveStickyNote={onSaveStickyNote}
               onRunClaudeCode={onRunClaudeCode}
               groundedCallbacks={groundedCallbacks}
-              wizardCallbacks={wizardCallbacks}
+              agent={agent}
+              agentStatus={agentStatus}
+              onStopAgent={
+                msg.agentId && onStopAgent ? () => onStopAgent(msg.agentId!) : undefined
+              }
+              {...(onRetryAgent ? { onRetryAgent } : {})}
+              seenBy={seenStates?.get(msg.id)}
+              {...(addressedTo?.get(msg.id) !== undefined
+                ? { addressedTo: addressedTo.get(msg.id) }
+                : {})}
+              {...(quoted
+                ? {
+                    replyTo: {
+                      id: quoted.id,
+                      authorName:
+                        quoted.agentName ?? (quoted.role === 'user' ? 'Bạn' : 'Trợ lý'),
+                      content: quoted.content,
+                    },
+                  }
+                : {})}
+              grouped={grouped}
+              continuesNext={continuesNext}
             />
-            {transientClarifyMessage &&
-              msg.role === 'user' &&
-              msg.content === transientClarifyMessage.originalQuery && (
-                <div style={{ marginTop: -4, marginBottom: 12, display: 'flex', width: '100%' }}>
-                  <IntentRoutingPrompt
-                    question={transientClarifyMessage.clarifyQuestion}
-                    originalQuery={transientClarifyMessage.originalQuery}
-                    onCancel={onCancelClarify}
-                  />
-                </div>
-              )}
-          </React.Fragment>
+          </div>
         );
       })}
 
-      {/* Fallback IntentRoutingPrompt if user query message not found in list */}
-      {transientClarifyMessage &&
-        !messages.some(
-          (m) => m.role === 'user' && m.content === transientClarifyMessage.originalQuery
-        ) && (
+      {/* Clarify state is owned by the tab that produced it, so it renders once, after the transcript. */}
+      {transientClarifyMessage && (
           <div style={{ marginBottom: 12, display: 'flex', width: '100%' }}>
             <IntentRoutingPrompt
               question={transientClarifyMessage.clarifyQuestion}
@@ -357,4 +573,4 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
       <div ref={bottomRef} style={{ height: 1 }} />
     </div>
   );
-};
+});

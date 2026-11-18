@@ -195,6 +195,7 @@ export async function getAllocationsForDate(
     const task = taskMap.get(alloc.taskId);
     const fallbackTask: Task = {
       id: alloc.taskId,
+      crId: '',
       name: 'Deleted / Unknown Task',
       status: 'Cancelled',
       progress: 0,
@@ -247,6 +248,7 @@ export async function getWeeklyAllocationsWithTasks(
     const task = taskMap.get(alloc.taskId);
     const fallbackTask: Task = {
       id: alloc.taskId,
+      crId: '',
       name: 'Deleted / Unknown Task',
       status: 'Cancelled',
       progress: 0,

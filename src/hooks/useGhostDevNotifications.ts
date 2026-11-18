@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { isTauriApp } from '../utils/timerPopout';
 import { sendDesktopNotification } from '../utils/desktopNotification';
+import { NotificationDeepLink } from '../utils/notificationDeepLink';
 import type { AgentSession, ShellPermissionRequest } from '../types/agent';
 
 /**
@@ -20,12 +21,14 @@ export function useGhostDevNotifications(sessions: AgentSession[]): void {
             title: 'Ghost Dev hoàn thành',
             body: `Tác vụ "${s.taskTitle}" đã hoàn thành mã nguồn. Nhấp để xem diff.`,
             tag: `ghost-dev-done-${s.taskId}`,
+            deeplink: NotificationDeepLink.task(s.taskId),
           });
         } else if (s.status === 'error') {
           void sendDesktopNotification({
             title: 'Ghost Dev gặp sự cố',
             body: `Tiến trình Ghost Dev cho tác vụ "${s.taskTitle}" đã dừng do lỗi.`,
             tag: `ghost-dev-error-${s.taskId}`,
+            deeplink: NotificationDeepLink.task(s.taskId),
           });
         }
       }
@@ -50,6 +53,7 @@ export function useGhostDevNotifications(sessions: AgentSession[]): void {
                 body: `Lệnh: ${event.payload.command.slice(0, 100)}`,
                 tag: `ghost-dev-perm-${event.payload.requestId}`,
                 requireInteraction: true,
+                deeplink: NotificationDeepLink.agents,
               });
             }
           }

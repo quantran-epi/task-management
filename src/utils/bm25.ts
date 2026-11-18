@@ -86,6 +86,16 @@ export function rankBM25(
   const avgdl = totalLength / docs.length;
   const N = docs.length;
 
+  // Corpus-wide document frequency is identical for every scored document.
+  const documentFrequencies = new Map<string, number>();
+  for (const qTerm of queryTokens) {
+    let df = 0;
+    for (const doc of docs) {
+      if (docTokensMap.get(doc.id)?.includes(qTerm)) df++;
+    }
+    documentFrequencies.set(qTerm, df);
+  }
+
   const results: BM25ScoredResult[] = [];
 
   for (const doc of docs) {
@@ -101,15 +111,7 @@ export function rankBM25(
     }
 
     for (const qTerm of queryTokens) {
-      // Document frequency: number of docs containing qTerm
-      let df = 0;
-      for (const d of docs) {
-        const dTokens = docTokensMap.get(d.id);
-        if (dTokens && dTokens.includes(qTerm)) {
-          df++;
-        }
-      }
-
+      const df = documentFrequencies.get(qTerm) ?? 0;
       if (df === 0) continue;
 
       // Robertson-Spärck Jones IDF with smoothing

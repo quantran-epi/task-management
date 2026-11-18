@@ -39,6 +39,7 @@ export interface LocalGroundedRetrievalInput {
   readonly maxResults?: number;
   readonly maxSnippetChars?: number;
   readonly prioritizedDocIds?: readonly string[];
+  readonly signal?: AbortSignal;
 }
 
 export interface LocalGroundedRetrievalDeps {
@@ -178,7 +179,8 @@ export async function runLocalGroundedRetrieval(
   input: LocalGroundedRetrievalInput,
   deps: LocalGroundedRetrievalDeps
 ): Promise<LocalGroundedResult> {
-  const { query, resolvedSetIds, maxResults = 5, maxSnippetChars = 1200 } = input;
+  const { query, resolvedSetIds, maxResults = 5, maxSnippetChars = 1200, signal } = input;
+  signal?.throwIfAborted();
 
   // D-37: Scoped BM25 restricts corpus to current local document members of resolved sets only.
   // Never falls back to global scan when resolvedSetIds is empty.
@@ -191,6 +193,7 @@ export async function runLocalGroundedRetrieval(
   }
 
   const members = await deps.loadSetMembers(resolvedSetIds);
+  signal?.throwIfAborted();
   if (members.length === 0) {
     return {
       ranges: [],
@@ -224,7 +227,10 @@ export async function runLocalGroundedRetrieval(
   const rawBodies = new Map<string, string>();
 
   for (const documentId of docMembershipsMap.keys()) {
+    // A read already in flight may finish; obsolete steps must not read/rank the rest of the corpus.
+    signal?.throwIfAborted();
     const note = await deps.loadNoteBody(documentId);
+    signal?.throwIfAborted();
     if (!note || note.body === undefined || note.body === null) {
       continue;
     }
@@ -278,6 +284,7 @@ export async function runLocalGroundedRetrieval(
     ).map(([setId, setName]) => ({ setId, setName }));
 
     const contentHash = await computeSha256(normalizeMarkdownForHash(body));
+    signal?.throwIfAborted();
 
     ranges.push({
       documentId: match.doc.id,

@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { CommandPaletteModal } from '../../../src/components/palette/CommandPaletteModal';
 import { TaskPlannerDatabase } from '../../../src/db';
 import 'fake-indexeddb/auto';
-import type { Task, Project, Milestone, Note } from '../../../src/types/models';
+import type { Task, ChangeRequest, System, Note } from '../../../src/types/models';
 
 describe('CommandPaletteModal', () => {
   let db: TaskPlannerDatabase;
@@ -26,7 +26,7 @@ describe('CommandPaletteModal', () => {
       />
     );
 
-    expect(screen.getByPlaceholderText(/Tìm công việc, dự án, màn hình, lệnh/)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Tìm công việc, CR, hệ thống, màn hình, lệnh/)).toBeInTheDocument();
     expect(screen.getByText('Tổng quan (Dashboard)')).toBeInTheDocument();
     expect(screen.getByText('Công việc (Tasks)')).toBeInTheDocument();
     expect(screen.getByText('Lập kế hoạch tuần (Planner)')).toBeInTheDocument();
@@ -66,7 +66,7 @@ describe('CommandPaletteModal', () => {
       />
     );
 
-    const input = screen.getByPlaceholderText(/Tìm công việc, dự án, màn hình, lệnh/);
+    const input = screen.getByPlaceholderText(/Tìm công việc, CR, hệ thống, màn hình, lệnh/);
     fireEvent.change(input, { target: { value: 'Fix payment bug' } });
 
     expect(screen.getByText('Tạo công việc: "Fix payment bug"')).toBeInTheDocument();
@@ -89,7 +89,7 @@ describe('CommandPaletteModal', () => {
       />
     );
 
-    const input = screen.getByPlaceholderText(/Tìm công việc, dự án, màn hình, lệnh/);
+    const input = screen.getByPlaceholderText(/Tìm công việc, CR, hệ thống, màn hình, lệnh/);
 
     // Press ArrowDown to select second item (Tasks)
     fireEvent.keyDown(input, { key: 'ArrowDown', code: 'ArrowDown' });
@@ -118,7 +118,7 @@ describe('CommandPaletteModal', () => {
     expect(screen.getByText(/Hướng dẫn cú pháp Command Palette/)).toBeInTheDocument();
     expect(screen.getByText('Màn hình')).toBeInTheDocument();
     expect(screen.getByText('Tác vụ')).toBeInTheDocument();
-    expect(screen.getByText('Dự án')).toBeInTheDocument();
+    expect(screen.getByText('CR & Hệ thống')).toBeInTheDocument();
     expect(screen.getByText('Tạo việc')).toBeInTheDocument();
   });
 
@@ -128,6 +128,7 @@ describe('CommandPaletteModal', () => {
 
     const task: Task = {
       id: 'a0000000-0000-4000-8000-000000000001',
+      crId: 'b0000000-0000-4000-8000-000000000001',
       name: 'Kiểm tra bảo mật API',
       status: 'Open',
       priority: 'High',
@@ -188,7 +189,7 @@ describe('CommandPaletteModal', () => {
       />
     );
 
-    const input = screen.getByPlaceholderText(/Tìm công việc, dự án, màn hình, lệnh/);
+    const input = screen.getByPlaceholderText(/Tìm công việc, CR, hệ thống, màn hình, lệnh/);
     fireEvent.change(input, { target: { value: '! Chiến lược' } });
 
     await waitFor(() => {
@@ -200,76 +201,80 @@ describe('CommandPaletteModal', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('calls onOpenProject when selecting a project', async () => {
+  it('calls onOpenCr when selecting a change request', async () => {
     const onNavigate = vi.fn();
     const onClose = vi.fn();
-    const onOpenProject = vi.fn();
+    const onOpenCr = vi.fn();
 
-    const project: Project = {
-      id: 'proj-99',
+    const cr: ChangeRequest = {
+      id: '25000000-0000-4000-8000-000000000099',
       name: 'Nền tảng thanh toán mới',
+      code: 'CR-2026-099',
       status: 'In Progress',
+      type: 'NEW_FEATURE',
+      targets: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    await db.projects.add(project);
+    await db.changeRequests.add(cr);
 
     render(
       <CommandPaletteModal
         open={true}
         onClose={onClose}
         onNavigate={onNavigate}
-        onOpenProject={onOpenProject}
+        onOpenCr={onOpenCr}
         db={db}
       />
     );
 
-    const input = screen.getByPlaceholderText(/Tìm công việc, dự án, màn hình, lệnh/);
+    const input = screen.getByPlaceholderText(/Tìm công việc, CR, hệ thống, màn hình, lệnh/);
     fireEvent.change(input, { target: { value: '# thanh toán' } });
 
     await waitFor(() => {
-      expect(screen.getByText('Nền tảng thanh toán mới')).toBeInTheDocument();
+      expect(screen.getByText('CR-2026-099')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Nền tảng thanh toán mới'));
-    expect(onNavigate).toHaveBeenCalledWith('insight', { type: 'project', id: 'proj-99' });
+    fireEvent.click(screen.getByText('CR-2026-099'));
+    expect(onOpenCr).toHaveBeenCalledWith(expect.objectContaining({ id: cr.id }));
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('filters milestones under # prefix and opens milestone or parent project', async () => {
+  it('filters systems under # prefix and opens system detail', async () => {
     const onNavigate = vi.fn();
     const onClose = vi.fn();
-    const onOpenMilestone = vi.fn();
+    const onOpenSystem = vi.fn();
 
-    const milestone: Milestone = {
-      id: 'ms-99',
-      projectId: 'proj-99',
-      name: 'Mốc Beta Release',
-      status: 'Open',
+    const system: System = {
+      id: '26000000-0000-4000-8000-000000000099',
+      name: 'Beta Release Service',
+      code: 'BETA_SVC',
+      parentId: null,
+      type: 'SERVICE',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    await db.milestones.add(milestone);
+    await db.systems.add(system);
 
     render(
       <CommandPaletteModal
         open={true}
         onClose={onClose}
         onNavigate={onNavigate}
-        onOpenMilestone={onOpenMilestone}
+        onOpenSystem={onOpenSystem}
         db={db}
       />
     );
 
-    const input = screen.getByPlaceholderText(/Tìm công việc, dự án, màn hình, lệnh/);
+    const input = screen.getByPlaceholderText(/Tìm công việc, CR, hệ thống, màn hình, lệnh/);
     fireEvent.change(input, { target: { value: '# Beta' } });
 
     await waitFor(() => {
-      expect(screen.getByText('Mốc Beta Release')).toBeInTheDocument();
+      expect(screen.getByText('BETA_SVC')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Mốc Beta Release'));
-    expect(onNavigate).toHaveBeenCalledWith('insight', { type: 'milestone', id: 'ms-99' });
+    fireEvent.click(screen.getByText('BETA_SVC'));
+    expect(onOpenSystem).toHaveBeenCalledWith(expect.objectContaining({ id: system.id }));
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -286,7 +291,7 @@ describe('CommandPaletteModal', () => {
       />
     );
 
-    const input = screen.getByPlaceholderText(/Tìm công việc, dự án, màn hình, lệnh/);
+    const input = screen.getByPlaceholderText(/Tìm công việc, CR, hệ thống, màn hình, lệnh/);
     fireEvent.change(input, { target: { value: '? phân tích tiến độ' } });
 
     await waitFor(() => {

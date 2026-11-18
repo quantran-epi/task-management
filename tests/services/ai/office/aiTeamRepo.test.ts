@@ -1,0 +1,1606 @@
+// @vitest-environment node
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { TaskPlannerDatabase } from '../../../../src/db/index';
+import {
+  getTeam,
+  createTeam,
+  updateTeam,
+  deleteTeam,
+  listTeamMembers,
+  addTeamMember,
+  removeTeamMember,
+  applyEvenSplit,
+  applyTopUp,
+  applyTeamBudgetSettings,
+  topUpMemberBudget,
+  addUsedTokens,
+  incrementMemberUsage,
+  addTeamLink,
+  removeTeamLink,
+  listTeamLinks,
+  assignLeader,
+  lockLeader,
+} from '../../../../src/db/repositories/aiTeamRepo';
+import { generateId } from '../../../../src/utils/uuid';
+import { clampTeamConcurrency, DEFAULT_TEAM_CONCURRENCY } from '../../../../src/types/aiOffice';
+import { LATEST_SCHEMA_VERSION } from '../../../../src/db/schema';
+import { createEmployee, createLead } from '../../../../src/db/repositories/aiOfficeRepo';
+import { splitEvenly } from '../../../../src/services/ai/office/budgetSplit';
+import {
+  AI_TEAMS_DOCS_ROOT_SETTING_KEY,
+  AI_TEAMS_DOCS_ROOT_TITLE,
+  ensureTeamDocsReady,
+  memberFolderSlug,
+} from '../../../../src/db/repositories/teamDocsRepo';
+import { createNote } from '../../../../src/db/repositories/noteRepo';
+
+function leadInput(name: string) {
+  return { name, role: 'Lead', capability: 'c', persona: 'p', model: 'm' };
+}
+
+describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)', () => {
+  let db: TaskPlannerDatabase;
+  let dbName: string;
+  let leadId: string;
+  let employeeIds: string[];
+
+  beforeEach(async () => {
+    dbName = 'TestAiTeamRepo_' + Math.random().toString(36).slice(2);
+    db = new TaskPlannerDatabase(dbName);
+    await db.open();
+    // WR-05: the repo now refuses dangling ids, so every fixture id names a real row.
+    leadId = (await createLead(leadInput('An'), db)).id;
+    employeeIds = [
+      (await createEmployee({ name: 'E1', role: 'Dev', capability: 'c', persona: 'p', model: 'm' }, db)).id,
+      (await createEmployee({ name: 'E2', role: 'Dev', capability: 'c', persona: 'p', model: 'm' }, db)).id,
+      (await createEmployee({ name: 'E3', role: 'Dev', capability: 'c', persona: 'p', model: 'm' }, db)).id,
+    ];
+  });
+
+  afterEach(async () => {
+    await db.delete();
+  });
+
+  async function makeTeam(name: string) {
+    return createTeam(
+      {
+        name,
+        leadId,
+        budgetTokens: 1000,
+        employeeIds: employeeIds.slice(0, 2),
+      },
+      db
+    );
+  }
+
+  /** Lead + 2 employees, split evenly from `total` (D-14). */
+  async function makeTeamWithTotal(name: string, total: number) {
+    return createTeam(
+      { name, leadId, budgetTokens: total, employeeIds: employeeIds.slice(0, 2) },
+      db
+    );
+  }
+
+  async function leadRows(teamId: string): Promise<string[]> {
+    const rows = await db.aiTeamMembers.where('teamId').equals(teamId).toArray();
+    return rows.filter((row) => row.role === 'lead').map((row) => row.agentId);
+  }
+
+  it('seeds one member row per selected employee plus the lead with an even split', async () => {
+    const team = await makeTeam('Alpha');
+    const members = await listTeamMembers(team.id, db);
+
+    expect(members).toHaveLength(3);
+    expect(members.filter((m) => m.role === 'lead')).toHaveLength(1);
+    expect(members.filter((m) => m.role === 'employee')).toHaveLength(2);
+    expect(members.every((m) => m.usedTokens === 0)).toBe(true);
+
+    const total = members.reduce((sum, m) => sum + m.budgetTokens, 0);
+    expect(total).toBe(1000);
+    expect(members.find((m) => m.role === 'lead')?.budgetTokens).toBe(334);
+    expect(members.filter((m) => m.role === 'employee').map((m) => m.budgetTokens)).toEqual([
+      333, 333,
+    ]);
+  });
+
+  it('creates more than three groups (no cap, D-06)', async () => {
+    const created = [];
+    for (let i = 0; i < 5; i += 1) created.push(await makeTeam(`Group ${i}`));
+
+    expect(await db.aiTeams.count()).toBe(5);
+    expect(created).toHaveLength(5);
+  });
+
+  it('adds more than three employees to one group (no cap, D-06)', async () => {
+    const team = await createTeam(
+      { name: 'Roster', leadId, budgetTokens: 0, employeeIds },
+      db
+    );
+    // WR-05: the repo now refuses a dangling agentId, so each addition is a real profile.
+    const makeEmployee = (name: string) =>
+      createEmployee(
+        { name, role: 'Dev', capability: 'c', persona: 'p', model: 'claude-haiku-4' },
+        db
+      );
+    const extra = [await makeEmployee('E4'), await makeEmployee('E5')];
+    for (const employee of extra) {
+      await addTeamMember(
+        { teamId: team.id, agentId: employee.id, role: 'employee', budgetTokens: 0 },
+        db
+      );
+    }
+
+    const employees = (await listTeamMembers(team.id, db)).filter((m) => m.role === 'employee');
+    expect(employees).toHaveLength(5);
+
+    // WR-04: a lead row must go through assignLeader, never this path.
+    await expect(
+      addTeamMember({ teamId: team.id, agentId: leadId, role: 'lead', budgetTokens: 0 }, db)
+    ).rejects.toThrow(/assignLeader/i);
+
+    // 3 seeded employees + 2 added + the lead row; the refused lead add changed nothing.
+    expect(await listTeamMembers(team.id, db)).toHaveLength(6);
+  });
+
+  it('creates an empty group with no leader and zero member rows (D-05)', async () => {
+    const team = await createTeam({ name: 'Nhóm rỗng' }, db);
+
+    expect(team.leadId).toBeUndefined();
+    expect(await listTeamMembers(team.id, db)).toHaveLength(0);
+  });
+
+  it('assigns and re-assigns a leader in one transaction, keeping one lead row (D-09)', async () => {
+    const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
+    const team = await createTeam({ name: 'Assign' }, db);
+
+    await assignLeader(team.id, leadId, db);
+    expect((await getTeam(team.id, db))?.leadId).toBe(leadId);
+    expect(await leadRows(team.id)).toEqual([leadId]);
+
+    await assignLeader(team.id, otherLeadId, db);
+    expect((await getTeam(team.id, db))?.leadId).toBe(otherLeadId);
+    expect(await leadRows(team.id)).toEqual([otherLeadId]);
+  });
+
+  it('assignLeader refuses a locked team and writes nothing (D-09)', async () => {
+    const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
+    const team = await makeTeam('Locked');
+    const locked = await lockLeader(team.id, db);
+    const membersBefore = await listTeamMembers(team.id, db);
+
+    await expect(assignLeader(team.id, otherLeadId, db)).rejects.toThrow(/khóa leader/i);
+
+    expect((await getTeam(team.id, db))?.leadId).toBe(leadId);
+    expect((await getTeam(team.id, db))?.leaderLockedAt).toBe(locked.leaderLockedAt);
+    expect(await listTeamMembers(team.id, db)).toEqual(membersBefore);
+  });
+
+  it('locks the leader idempotently and refuses a leaderless group (D-09)', async () => {
+    const team = await makeTeam('Idempotent');
+    const first = await lockLeader(team.id, db);
+    expect(first.leaderLockedAt).toBeDefined();
+
+    await new Promise((r) => setTimeout(r, 3));
+    const second = await lockLeader(team.id, db);
+    expect(second.leaderLockedAt).toBe(first.leaderLockedAt);
+
+    const empty = await createTeam({ name: 'Không leader' }, db);
+    await expect(lockLeader(empty.id, db)).rejects.toThrow(/chưa có leader/i);
+    expect((await getTeam(empty.id, db))?.leaderLockedAt).toBeUndefined();
+  });
+
+  it('updateTeam cannot change a locked leader, but other patches still work (D-09)', async () => {
+    const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
+    const team = await makeTeam('Guarded');
+    const locked = await lockLeader(team.id, db);
+    const membersBefore = await listTeamMembers(team.id, db);
+
+    await expect(updateTeam(team.id, { leadId: otherLeadId }, db)).rejects.toThrow(/khóa leader/i);
+
+    const after = await getTeam(team.id, db);
+    expect(after?.leadId).toBe(leadId);
+    expect(after?.leaderLockedAt).toBe(locked.leaderLockedAt);
+    expect(await listTeamMembers(team.id, db)).toEqual(membersBefore);
+
+    const renamed = await updateTeam(team.id, { name: 'Đổi tên' }, db);
+    expect(renamed.name).toBe('Đổi tên');
+    expect(renamed.leadId).toBe(leadId);
+  });
+
+  it('persists and clears the team MCP toggle (Phase 39)', async () => {
+    const team = await makeTeam('Mcp');
+    expect((await getTeam(team.id, db))?.mcpEnabled).toBeUndefined();
+
+    expect((await updateTeam(team.id, { mcpEnabled: true }, db)).mcpEnabled).toBe(true);
+    expect((await getTeam(team.id, db))?.mcpEnabled).toBe(true);
+
+    // `undefined` clears the column, same add/remove idiom as the other optional toggles.
+    expect((await updateTeam(team.id, { mcpEnabled: undefined }, db)).mcpEnabled).toBeUndefined();
+    expect((await getTeam(team.id, db))?.mcpEnabled).toBeUndefined();
+  });
+
+  it('updateTeam on an unlocked team still accepts a leadId patch and keeps sources in step', async () => {    const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
+    const team = await makeTeam('Unlocked');
+
+    const updated = await updateTeam(team.id, { leadId: otherLeadId }, db);
+    expect(updated.leadId).toBe(otherLeadId);
+    expect(await leadRows(team.id)).toEqual([otherLeadId]);
+
+    await assignLeader(team.id, leadId, db);
+    expect(await leadRows(team.id)).toEqual([leadId]);
+    expect((await getTeam(team.id, db))?.leadId).toBe(leadId);
+  });
+
+  it('removeTeamMember refuses the lead row and deletes an employee row', async () => {
+    const team = await makeTeam('RemoveMember');
+    const members = await listTeamMembers(team.id, db);
+    const leadRow = members.find((m) => m.role === 'lead')!;
+    const employeeRow = members.find((m) => m.role === 'employee')!;
+
+    await expect(removeTeamMember(leadRow.id, db)).rejects.toThrow(/leader/i);
+    expect(await db.aiTeamMembers.get(leadRow.id)).toBeDefined();
+    expect((await getTeam(team.id, db))?.leadId).toBe(leadId);
+
+    await removeTeamMember(employeeRow.id, db);
+    expect(await db.aiTeamMembers.get(employeeRow.id)).toBeUndefined();
+    expect(await db.aiTeamMembers.get(leadRow.id)).toBeDefined();
+  });
+
+  it('releases the removed member share from the team total (D-19)', async () => {
+    const team = await makeTeam('ReleaseShare');
+    const employeeRow = (await listTeamMembers(team.id, db)).find((m) => m.role === 'employee')!;
+    const before = (await getTeam(team.id, db))!.budgetTokens;
+
+    await removeTeamMember(employeeRow.id, db);
+
+    const after = (await getTeam(team.id, db))!.budgetTokens;
+    expect(after).toBe(before - employeeRow.budgetTokens);
+    const remaining = await listTeamMembers(team.id, db);
+    expect(remaining.reduce((sum, row) => sum + row.budgetTokens, 0)).toBe(after);
+  });
+
+  it('splits an evenly divisible budget across 4 members', async () => {
+    const team = await createTeam(
+      {
+        name: 'Even',
+        leadId,
+        budgetTokens: 1000,
+        employeeIds,
+      },
+      db
+    );
+
+    await applyEvenSplit(team.id, 1000, db);
+    const budgets = (await listTeamMembers(team.id, db)).map((m) => m.budgetTokens);
+    expect(budgets.sort()).toEqual([250, 250, 250, 250]);
+  });
+
+  it('puts the remainder on the lead row so the split sums exactly', async () => {
+    const team = await makeTeam('Odd');
+    await applyEvenSplit(team.id, 1000, db);
+
+    const members = await listTeamMembers(team.id, db);
+    const lead = members.find((m) => m.role === 'lead');
+    const employees = members.filter((m) => m.role === 'employee');
+
+    expect(lead?.budgetTokens).toBe(334);
+    expect(employees.map((m) => m.budgetTokens).sort()).toEqual([333, 333]);
+    expect(members.reduce((sum, m) => sum + m.budgetTokens, 0)).toBe(1000);
+  });
+
+  it('tops up a budget without touching usedTokens', async () => {
+    const team = await makeTeam('TopUp');
+    const [member] = await listTeamMembers(team.id, db);
+    await addUsedTokens(member!.id, 100, db);
+
+    const updated = await topUpMemberBudget(member!.id, 500, db);
+    expect(updated.usedTokens).toBe(100);
+    expect(updated.budgetTokens).toBe(member!.budgetTokens + 500);
+    // Phase 38 D-17: the deprecated shim delegates, so the team total moves with it.
+    expect((await getTeam(team.id, db))?.budgetTokens).toBe(team.budgetTokens + 500);
+  });
+
+  it('raises the member share and the group total together (AIO-BUDGET-07, D-17)', async () => {
+    const team = await makeTeam('AgentTopUp');
+    const before = await listTeamMembers(team.id, db);
+    const lead = before.find((row) => row.role === 'lead')!;
+    const others = before.filter((row) => row.role === 'employee');
+
+    const result = await applyTopUp(team.id, { kind: 'agent', agentId: lead.agentId }, 500, db);
+
+    const after = await listTeamMembers(team.id, db);
+    expect(after.find((row) => row.id === lead.id)?.budgetTokens).toBe(lead.budgetTokens + 500);
+    for (const member of others) {
+      expect(after.find((row) => row.id === member.id)?.budgetTokens).toBe(member.budgetTokens);
+    }
+    expect(result.team.budgetTokens).toBe(team.budgetTokens + 500);
+    expect((await getTeam(team.id, db))?.budgetTokens).toBe(team.budgetTokens + 500);
+  });
+
+  it('writes nothing to either table when the agent is not a member (D-19)', async () => {
+    const team = await makeTeam('Rollback');
+    const beforeTeam = (await getTeam(team.id, db))!;
+    const beforeMembers = await listTeamMembers(team.id, db);
+    // A real employee, but not on this roster — the message must not leak its id.
+    const outsider = employeeIds[2]!;
+
+    await expect(
+      applyTopUp(team.id, { kind: 'agent', agentId: outsider }, 500, db)
+    ).rejects.toThrow('Không tìm thấy thành viên trong nhóm');
+    const error = (await applyTopUp(team.id, { kind: 'agent', agentId: outsider }, 500, db).catch(
+      (err: unknown) => err
+    )) as Error;
+    expect(error.message).not.toContain(outsider);
+
+    expect((await getTeam(team.id, db))?.budgetTokens).toBe(beforeTeam.budgetTokens);
+    expect(await listTeamMembers(team.id, db)).toEqual(beforeMembers);
+  });
+
+  it('distributes a team top-up across the roster and sums exactly (AIO-BUDGET-05, D-16)', async () => {
+    const team = await makeTeamWithTotal('TeamTopUp', 3000);
+    const before = await listTeamMembers(team.id, db);
+    expect(before.map((row) => row.budgetTokens).sort()).toEqual([1000, 1000, 1000]);
+
+    const result = await applyTopUp(team.id, { kind: 'team' }, 1000, db);
+
+    const after = await listTeamMembers(team.id, db);
+    const leadBefore = before.find((row) => row.role === 'lead')!;
+    const leadAfter = after.find((row) => row.role === 'lead')!;
+    expect(leadAfter.budgetTokens - leadBefore.budgetTokens).toBe(334);
+    for (const member of before.filter((row) => row.role === 'employee')) {
+      const grown = after.find((row) => row.id === member.id)!;
+      expect(grown.budgetTokens - member.budgetTokens).toBe(333);
+    }
+    const deltas = after.map(
+      (row) => row.budgetTokens - before.find((prev) => prev.id === row.id)!.budgetTokens
+    );
+    expect(deltas.reduce((sum, delta) => sum + delta, 0)).toBe(1000);
+    expect(result.team.budgetTokens).toBe(4000);
+    expect((await getTeam(team.id, db))?.budgetTokens).toBe(4000);
+  });
+
+  it('reaches a member added after the split (AIO-BUDGET-05, D-15)', async () => {
+    const team = await makeTeamWithTotal('LateRoster', 3000);
+    const added = await addTeamMember(
+      { teamId: team.id, agentId: employeeIds[2]!, role: 'employee', budgetTokens: 0 },
+      db
+    );
+    expect(added.budgetTokens).toBe(0);
+
+    await applyTopUp(team.id, { kind: 'team' }, 400, db);
+
+    const after = await listTeamMembers(team.id, db);
+    expect(after).toHaveLength(4);
+    expect(after.find((row) => row.id === added.id)?.budgetTokens).toBe(100);
+    expect(after.filter((row) => row.id !== added.id).map((row) => row.budgetTokens)).toEqual([
+      1100, 1100, 1100,
+    ]);
+  });
+
+  it('treats a zero and a negative team top-up as no-ops (AIO-BUDGET-05, D-19)', async () => {
+    const team = await makeTeamWithTotal('ZeroTopUp', 3000);
+    const beforeTeam = (await getTeam(team.id, db))!;
+    const beforeMembers = await listTeamMembers(team.id, db);
+
+    await expect(applyTopUp(team.id, { kind: 'team' }, 0, db)).resolves.toBeDefined();
+    await expect(applyTopUp(team.id, { kind: 'team' }, -50, db)).resolves.toBeDefined();
+
+    expect((await getTeam(team.id, db))?.budgetTokens).toBe(beforeTeam.budgetTokens);
+    expect(await listTeamMembers(team.id, db)).toEqual(beforeMembers);
+  });
+
+  it('never persists NaN from a non-finite amount (WR-01)', async () => {
+    const team = await makeTeamWithTotal('NaNTokens', 3000);
+    const lead = (await listTeamMembers(team.id, db)).find((m) => m.role === 'lead')!;
+
+    await applyTopUp(team.id, { kind: 'agent', agentId: lead.agentId }, Number.NaN, db);
+    await applyTeamBudgetSettings(
+      team.id,
+      { budgetTokens: Number.NaN, budgets: { [lead.id]: Number.POSITIVE_INFINITY } },
+      db
+    );
+
+    const after = await listTeamMembers(team.id, db);
+    expect(after.every((row) => Number.isFinite(row.budgetTokens))).toBe(true);
+    expect(Number.isFinite((await getTeam(team.id, db))!.budgetTokens)).toBe(true);
+  });
+
+  it('gives the whole team top-up to a leader-only roster (AIO-BUDGET-05)', async () => {
+    const team = await createTeam(
+      { name: 'LeaderAlone', leadId, budgetTokens: 1000 },
+      db
+    );
+    const before = (await listTeamMembers(team.id, db))[0]!;
+
+    await applyTopUp(team.id, { kind: 'team' }, 750, db);
+
+    const after = (await listTeamMembers(team.id, db))[0]!;
+    expect(after.budgetTokens).toBe(before.budgetTokens + 750);
+    expect((await getTeam(team.id, db))?.budgetTokens).toBe(1750);
+  });
+
+  describe('applyTeamBudgetSettings (AIO-BUDGET-05, D-04, D-19)', () => {
+    it('sets the total absolutely instead of adding the member deltas twice', async () => {
+      const team = await makeTeamWithTotal('AbsoluteSave', 3000);
+      const members = await listTeamMembers(team.id, db);
+      const lead = members.find((row) => row.role === 'lead')!;
+      const [e1, e2] = members.filter((row) => row.role === 'employee');
+
+      const result = await applyTeamBudgetSettings(
+        team.id,
+        {
+          budgetTokens: 4000,
+          budgets: { [lead.id]: 1334, [e1!.id]: 1333, [e2!.id]: 1333 },
+        },
+        db
+      );
+
+      expect(result.team.budgetTokens).toBe(4000);
+      expect((await getTeam(team.id, db))?.budgetTokens).toBe(4000);
+      const after = await listTeamMembers(team.id, db);
+      expect(after.find((row) => row.id === lead.id)?.budgetTokens).toBe(1334);
+      expect(after.find((row) => row.id === e1!.id)?.budgetTokens).toBe(1333);
+      expect(after.find((row) => row.id === e2!.id)?.budgetTokens).toBe(1333);
+    });
+
+    it('leaves usage columns untouched', async () => {
+      const team = await makeTeamWithTotal('UsageKeep', 3000);
+      const member = (await listTeamMembers(team.id, db)).find((row) => row.role === 'employee')!;
+      await incrementMemberUsage(
+        member.id,
+        { inputTokens: 300, outputTokens: 100, estimated: true },
+        db
+      );
+
+      await applyTeamBudgetSettings(
+        team.id,
+        { budgetTokens: 5000, budgets: { [member.id]: 2000 } },
+        db
+      );
+
+      const stored = (await db.aiTeamMembers.get(member.id))!;
+      expect(stored.budgetTokens).toBe(2000);
+      expect(stored.usedTokens).toBe(400);
+      expect(stored.inputTokens).toBe(300);
+      expect(stored.outputTokens).toBe(100);
+      expect(stored.usageEstimated).toBe(true);
+    });
+
+    it('rejects an absent team and writes no member row', async () => {
+      const team = await makeTeamWithTotal('AbsentTeam', 3000);
+      const member = (await listTeamMembers(team.id, db))[0]!;
+      const before = await listTeamMembers(team.id, db);
+
+      await expect(
+        applyTeamBudgetSettings('missing-team', { budgetTokens: 4000, budgets: { [member.id]: 1 } }, db)
+      ).rejects.toThrow('Không tìm thấy nhóm');
+
+      expect(await listTeamMembers(team.id, db)).toEqual(before);
+    });
+
+    it('preserves a deliberate under-allocation', async () => {
+      const team = await makeTeamWithTotal('UnderAllocated', 3000);
+      const members = await listTeamMembers(team.id, db);
+
+      await applyTeamBudgetSettings(
+        team.id,
+        {
+          budgetTokens: 4000,
+          budgets: { [members[0]!.id]: 1000, [members[1]!.id]: 1000, [members[2]!.id]: 1000 },
+        },
+        db
+      );
+
+      const after = await listTeamMembers(team.id, db);
+      expect((await getTeam(team.id, db))?.budgetTokens).toBe(4000);
+      expect(after.reduce((sum, row) => sum + row.budgetTokens, 0)).toBe(3000);
+    });
+
+    it('never invents a member row for an unknown budget key', async () => {
+      const team = await makeTeamWithTotal('UnknownKey', 3000);
+      const before = await listTeamMembers(team.id, db);
+
+      await applyTeamBudgetSettings(
+        team.id,
+        { budgetTokens: 4000, budgets: { 'no-such-member': 900 } },
+        db
+      );
+
+      expect(await listTeamMembers(team.id, db)).toHaveLength(before.length);
+    });
+
+    it('leaves a stored override untouched when the key is absent (D-04)', async () => {
+      const team = await makeTeamWithTotal('OverrideKeep', 3000);
+      await updateTeam(team.id, { budgetWarnThresholdPct: 65 }, db);
+
+      await applyTeamBudgetSettings(team.id, { budgetTokens: 4000, budgets: {} }, db);
+
+      expect((await getTeam(team.id, db))?.budgetWarnThresholdPct).toBe(65);
+    });
+
+    it('clears the override with null so the team inherits (D-04)', async () => {
+      const team = await makeTeamWithTotal('OverrideClear', 3000);
+      await updateTeam(team.id, { budgetWarnThresholdPct: 65 }, db);
+
+      await applyTeamBudgetSettings(
+        team.id,
+        { budgetTokens: 4000, budgets: {}, budgetWarnThresholdPct: null },
+        db
+      );
+
+      const stored = (await getTeam(team.id, db))!;
+      expect('budgetWarnThresholdPct' in stored).toBe(false);
+    });
+
+    it('keeps the override when an unrelated save passes undefined (D-04)', async () => {
+      const team = await makeTeamWithTotal('OverrideUndefined', 3000);
+      await updateTeam(team.id, { budgetWarnThresholdPct: 65 }, db);
+
+      await applyTeamBudgetSettings(
+        team.id,
+        { budgetTokens: 4500, budgets: {}, budgetWarnThresholdPct: undefined },
+        db
+      );
+
+      expect((await getTeam(team.id, db))?.budgetWarnThresholdPct).toBe(65);
+    });
+
+    it('clamps a stored override into 1..100 (D-04)', async () => {
+      const team = await makeTeamWithTotal('OverrideClamp', 3000);
+
+      await applyTeamBudgetSettings(
+        team.id,
+        { budgetTokens: 4000, budgets: {}, budgetWarnThresholdPct: 0 },
+        db
+      );
+      expect((await getTeam(team.id, db))?.budgetWarnThresholdPct).toBe(1);
+
+      await applyTeamBudgetSettings(
+        team.id,
+        { budgetTokens: 4000, budgets: {}, budgetWarnThresholdPct: 120 },
+        db
+      );
+      expect((await getTeam(team.id, db))?.budgetWarnThresholdPct).toBe(100);
+    });
+  });
+
+  it('adds used tokens to a single row only', async () => {
+    const team = await makeTeam('Usage');
+    const members = await listTeamMembers(team.id, db);
+    const target = members[0]!;
+    const sibling = members[1]!;
+
+    await addUsedTokens(target.id, 42, db);
+
+    expect((await db.aiTeamMembers.get(target.id))?.usedTokens).toBe(42);
+    expect((await db.aiTeamMembers.get(sibling.id))?.usedTokens).toBe(0);
+  });
+
+  // Phase 38 tracer: the old get-then-update body could not produce `start + 200`, so this
+  // test is fail-first by construction. Real Dexie only — never mock the database here.
+  it('sums 20 concurrent increments on one member row (AIO-BUDGET-04, D-13)', async () => {
+    const team = await makeTeam('Concurrent');
+    const member = (await listTeamMembers(team.id, db))[0]!;
+    const start = member.usedTokens;
+
+    await Promise.all(
+      Array.from({ length: 20 }, () =>
+        incrementMemberUsage(
+          member.id,
+          { inputTokens: 7, outputTokens: 3, estimated: false },
+          db
+        )
+      )
+    );
+
+    const stored = await db.aiTeamMembers.get(member.id);
+    expect(stored?.usedTokens).toBe(start + 200);
+    expect(stored?.inputTokens).toBe(140);
+    expect(stored?.outputTokens).toBe(60);
+  });
+
+  it('sums 20 concurrent increments across two member rows (AIO-BUDGET-04, D-13)', async () => {
+    const team = await makeTeam('ConcurrentTwo');
+    const [a, b] = await listTeamMembers(team.id, db);
+
+    await Promise.all([
+      ...Array.from({ length: 20 }, () =>
+        incrementMemberUsage(a!.id, { inputTokens: 7, outputTokens: 3, estimated: false }, db)
+      ),
+      ...Array.from({ length: 20 }, () =>
+        incrementMemberUsage(b!.id, { inputTokens: 1, outputTokens: 1, estimated: false }, db)
+      ),
+    ]);
+
+    expect((await db.aiTeamMembers.get(a!.id))?.usedTokens).toBe(200);
+    expect((await db.aiTeamMembers.get(b!.id))?.usedTokens).toBe(40);
+  });
+
+  it('lands two increments settling in the same tick on one row (AIO-BUDGET-04)', async () => {
+    const team = await makeTeam('SameTick');
+    const member = (await listTeamMembers(team.id, db))[0]!;
+
+    await Promise.all([
+      incrementMemberUsage(member.id, { inputTokens: 11, outputTokens: 5, estimated: false }, db),
+      incrementMemberUsage(member.id, { inputTokens: 3, outputTokens: 2, estimated: false }, db),
+    ]);
+
+    const stored = await db.aiTeamMembers.get(member.id);
+    expect(stored?.usedTokens).toBe(21);
+    expect(stored?.inputTokens).toBe(14);
+    expect(stored?.outputTokens).toBe(7);
+  });
+
+  it('rejects an increment on a deleted member without moving a sibling row (AIO-BUDGET-04)', async () => {
+    const team = await makeTeam('Deleted');
+    const members = await listTeamMembers(team.id, db);
+    const gone = members.find((m) => m.role === 'employee')!;
+    const sibling = members.find((m) => m.id !== gone.id)!;
+
+    await removeTeamMember(gone.id, db);
+
+    await expect(
+      incrementMemberUsage(gone.id, { inputTokens: 7, outputTokens: 3, estimated: false }, db)
+    ).rejects.toThrow('Không tìm thấy thành viên');
+    expect((await db.aiTeamMembers.get(sibling.id))?.usedTokens).toBe(0);
+  });
+
+  it('increments a pre-V25 row to a number, never NaN (AIO-BUDGET-04, D-10)', async () => {
+    const team = await makeTeam('LegacyRow');
+    const member = (await listTeamMembers(team.id, db))[0]!;
+    // An old row has no split columns at all.
+    await db.aiTeamMembers.put({
+      id: member.id,
+      teamId: member.teamId,
+      agentId: member.agentId,
+      role: member.role,
+      budgetTokens: member.budgetTokens,
+      usedTokens: 0,
+    });
+
+    const updated = await incrementMemberUsage(
+      member.id,
+      { inputTokens: 5, outputTokens: 0, estimated: false },
+      db
+    );
+
+    expect(updated.usedTokens).toBe(5);
+    expect(Number.isNaN(updated.usedTokens)).toBe(false);
+    expect(updated.inputTokens).toBe(5);
+    expect(updated.outputTokens).toBe(0);
+    expect(updated.usageEstimated).toBeUndefined();
+  });
+
+  it('updates and deletes a team with its child rows', async () => {
+    const team = await makeTeam('Edit');
+    const updated = await updateTeam(team.id, { name: 'Edited' }, db);
+    expect(updated.name).toBe('Edited');
+
+    await addTeamLink({ teamId: team.id, itemType: 'task', itemId: generateId() }, db);
+    await deleteTeam(team.id, db);
+
+    expect(await getTeam(team.id, db)).toBeUndefined();
+    expect(await db.aiTeamMembers.where('teamId').equals(team.id).count()).toBe(0);
+    expect(await db.aiTeamLinks.where('teamId').equals(team.id).count()).toBe(0);
+  });
+
+  // Phase 37 CR-01: the run ledger is a live reference enforced by the backup validator.
+  // Leaving the two ledger tables behind made the app's OWN next export unrestorable.
+  it('deletes the team run ledger so the next export still validates (CR-01)', async () => {
+    const { openBatch, createAssignment } = await import(
+      '../../../../src/db/repositories/aiTeamRunRepo'
+    );
+    const { ensureTeamThread, saveTeamMessage } = await import(
+      '../../../../src/db/repositories/teamTranscriptRepo'
+    );
+    const { exportBackupPayload } = await import('../../../../src/services/backup/exportBackup');
+    const { validateBackupPayload } = await import('../../../../src/services/backup/validateBackup');
+
+    const team = await makeTeam('Ledger');
+    const thread = await ensureTeamThread(team.id, db);
+    const batch = await openBatch(
+      {
+        teamId: team.id,
+        threadId: thread.id,
+        batchIndex: 1,
+        userRequest: 'x',
+        leadId,
+        planSnapshot: { original: [] },
+        planDecision: 'auto',
+      },
+      db
+    );
+    const assignment = await createAssignment(
+      {
+        batchId: batch.id,
+        agentId: employeeIds[0]!,
+        agentName: 'E1',
+        model: 'm',
+        task: 'Việc',
+      },
+      db
+    );
+    await saveTeamMessage(
+      {
+        threadId: thread.id,
+        role: 'assistant',
+        content: 'Báo cáo',
+        agentId: employeeIds[0]!,
+        agentName: 'E1',
+        messageKind: 'report',
+        batchId: batch.id,
+        assignmentId: assignment.id,
+        attemptNo: 1,
+        runStatus: 'done',
+        stopReason: 'none',
+        incomplete: false,
+      },
+      db
+    );
+
+    await deleteTeam(team.id, db);
+
+    expect(await db.aiTeamBatches.count()).toBe(0);
+    expect(await db.aiTeamAssignments.count()).toBe(0);
+
+    const envelope = await exportBackupPayload(db);
+    expect(validateBackupPayload(envelope)).toMatchObject({ valid: true });
+  });
+
+  it('removes a member row', async () => {
+    const team = await makeTeam('Remove');
+    const member = (await listTeamMembers(team.id, db)).find((m) => m.role === 'employee')!;
+
+    await removeTeamMember(member.id, db);
+    expect(await db.aiTeamMembers.get(member.id)).toBeUndefined();
+  });
+
+  it('refuses a dangling lead, employee or leadId patch without writing (WR-05, D-15)', async () => {
+    const ghost = generateId();
+    const teamsBefore = await db.aiTeams.count();
+    const membersBefore = await db.aiTeamMembers.count();
+
+    await expect(
+      createTeam({ name: 'Ghost lead', leadId: ghost, budgetTokens: 0 }, db)
+    ).rejects.toThrow(/Không tìm thấy lead/);
+    await expect(
+      createTeam(
+        { name: 'Ghost member', leadId, budgetTokens: 0, employeeIds: [employeeIds[0]!, ghost] },
+        db
+      )
+    ).rejects.toThrow(/Không tìm thấy nhân viên/);
+
+    expect(await db.aiTeams.count()).toBe(teamsBefore);
+    expect(await db.aiTeamMembers.count()).toBe(membersBefore);
+
+    const team = await makeTeam('Patch');
+    await expect(updateTeam(team.id, { leadId: ghost }, db)).rejects.toThrow(
+      /Không tìm thấy lead/
+    );
+    expect((await getTeam(team.id, db))?.leadId).toBe(leadId);
+    expect(await leadRows(team.id)).toEqual([leadId]);
+  });
+
+  it('adds, lists and removes links with a duplicate guard', async () => {
+    const team = await makeTeam('Links');
+    const taskId = generateId();
+
+    const link = await addTeamLink({ teamId: team.id, itemType: 'task', itemId: taskId }, db);
+    expect((await listTeamLinks(team.id, db)).map((l) => l.id)).toEqual([link.id]);
+
+    await expect(
+      addTeamLink({ teamId: team.id, itemType: 'task', itemId: taskId }, db)
+    ).rejects.toThrow();
+
+    await removeTeamLink(link.id, db);
+    expect(await listTeamLinks(team.id, db)).toHaveLength(0);
+  });
+
+  // Phase 38 tracer: the schema version, the store spec and the types must agree end to end.
+  // Real Dexie only — never mock the database here.
+  it('round-trips split usage through a close and reopen at V25 (D-23)', async () => {
+    const team = await makeTeam('Tracer');
+    const employee = (await listTeamMembers(team.id, db)).find((m) => m.role === 'employee')!;
+
+    await db.aiTeamMembers.update(employee.id, {
+      inputTokens: 120,
+      outputTokens: 30,
+      usageEstimated: true,
+    });
+
+    db.close();
+    db = new TaskPlannerDatabase(dbName);
+    await db.open();
+
+    const reopened = await db.aiTeamMembers.get(employee.id);
+    expect(reopened?.inputTokens).toBe(120);
+    expect(reopened?.outputTokens).toBe(30);
+    expect(reopened?.usageEstimated).toBe(true);
+    expect(LATEST_SCHEMA_VERSION).toBe(27);
+    expect(db.verno).toBe(LATEST_SCHEMA_VERSION);
+  });
+
+  describe('budgetWarnThresholdPct (Phase 38, D-04, D-05)', () => {
+    it('stores the boundaries 1 and 100 verbatim and rejects 0, 101 and 2.5', async () => {
+      const team = await makeTeam('Threshold');
+
+      expect((await updateTeam(team.id, { budgetWarnThresholdPct: 1 }, db)).budgetWarnThresholdPct).toBe(1);
+      expect(
+        (await updateTeam(team.id, { budgetWarnThresholdPct: 100 }, db)).budgetWarnThresholdPct
+      ).toBe(100);
+      expect((await getTeam(team.id, db))?.budgetWarnThresholdPct).toBe(100);
+
+      for (const value of [0, 101, 2.5]) {
+        await expect(updateTeam(team.id, { budgetWarnThresholdPct: value }, db)).rejects.toThrow();
+      }
+      expect((await getTeam(team.id, db))?.budgetWarnThresholdPct).toBe(100);
+    });
+
+    it('clears the override when budgetWarnThresholdPct is passed as undefined', async () => {
+      const team = await makeTeam('ThresholdClear');
+      await updateTeam(team.id, { budgetWarnThresholdPct: 55 }, db);
+
+      const cleared = await updateTeam(team.id, { budgetWarnThresholdPct: undefined }, db);
+
+      expect('budgetWarnThresholdPct' in cleared).toBe(false);
+      expect('budgetWarnThresholdPct' in ((await getTeam(team.id, db)) ?? {})).toBe(false);
+    });
+  });
+
+  describe('split usage columns (Phase 38, D-23)', () => {
+    it('seeds inputTokens and outputTokens at 0 on every member-creation path', async () => {
+      const team = await makeTeam('Seed');
+      const extra = await createEmployee(
+        { name: 'E9', role: 'Dev', capability: 'c', persona: 'p', model: 'm' },
+        db
+      );
+      await addTeamMember(
+        { teamId: team.id, agentId: extra.id, role: 'employee', budgetTokens: 0 },
+        db
+      );
+
+      const members = await listTeamMembers(team.id, db);
+      expect(members).toHaveLength(4);
+      expect(members.every((m) => m.inputTokens === 0 && m.outputTokens === 0)).toBe(true);
+    });
+  });
+
+  describe('lead re-assignment keeps usage (Phase 38, CR-02)', () => {
+    it('keeps a same-agent lead row and its usage across an updateTeam patch', async () => {
+      const team = await makeTeam('Carry');
+      const leadRow = (await listTeamMembers(team.id, db)).find((m) => m.role === 'lead')!;
+      await db.aiTeamMembers.update(leadRow.id, {
+        inputTokens: 120,
+        outputTokens: 30,
+        usageEstimated: true,
+      });
+
+      // Same agent: the row is untouched, so usage survives.
+      await updateTeam(team.id, { leadId }, db);
+      const kept = await db.aiTeamMembers.get(leadRow.id);
+      expect(kept?.inputTokens).toBe(120);
+      expect(kept?.outputTokens).toBe(30);
+      expect(kept?.usageEstimated).toBe(true);
+
+      // `assignLeader` to the current lead is a no-op, so the same row keeps its usage.
+      await assignLeader(team.id, leadId, db);
+      expect((await db.aiTeamMembers.get(leadRow.id))?.inputTokens).toBe(120);
+
+      // A different agent gets a fresh row seeded at 0 — usage belongs to the agent, not the seat.
+      const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
+      await assignLeader(team.id, otherLeadId, db);
+      const fresh = (await listTeamMembers(team.id, db)).find((m) => m.role === 'lead')!;
+      expect(fresh.agentId).toBe(otherLeadId);
+      expect(fresh.inputTokens).toBe(0);
+      expect(fresh.outputTokens).toBe(0);
+    });
+
+    it('carries the incoming agent row and keeps the outgoing lead usage (CR-05)', async () => {
+      const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
+      const team = await makeTeam('CarryIncoming');
+      const leadRow = (await listTeamMembers(team.id, db)).find((m) => m.role === 'lead')!;
+      await db.aiTeamMembers.update(leadRow.id, {
+        usedTokens: 500,
+        inputTokens: 400,
+        outputTokens: 100,
+      });
+
+      // Lead A -> B: A's row is demoted (it carries usage), B gets a fresh row.
+      await assignLeader(team.id, otherLeadId, db);
+      const bRow = (await listTeamMembers(team.id, db)).find((m) => m.role === 'lead')!;
+      expect(bRow.agentId).toBe(otherLeadId);
+      await db.aiTeamMembers.update(bRow.id, { budgetTokens: 700, usedTokens: 50 });
+
+      // B -> A: A's demoted row is promoted back, carrying its own budget and usage.
+      await assignLeader(team.id, leadId, db);
+
+      const after = await listTeamMembers(team.id, db);
+      const promoted = after.find((m) => m.role === 'lead')!;
+      expect(promoted.agentId).toBe(leadId);
+      expect(promoted.usedTokens).toBe(500);
+      expect(promoted.inputTokens).toBe(400);
+      expect(promoted.outputTokens).toBe(100);
+      expect(after.filter((m) => m.role === 'lead')).toHaveLength(1);
+
+      // B's recorded usage is not silently deleted — it stays on the roster.
+      const demoted = after.find((m) => m.agentId === otherLeadId)!;
+      expect(demoted.role).toBe('employee');
+      expect(demoted.budgetTokens).toBe(700);
+      expect(demoted.usedTokens).toBe(50);
+    });
+
+    it('drops an outgoing lead row that carries no usage (CR-05)', async () => {
+      const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
+      const team = await makeTeam('CarryClean');
+
+      await assignLeader(team.id, otherLeadId, db);
+
+      const after = await listTeamMembers(team.id, db);
+      expect(after).toHaveLength(3);
+      expect(after.filter((m) => m.role === 'lead')).toHaveLength(1);
+      expect(after.some((m) => m.agentId === leadId)).toBe(false);
+    });
+  });
+
+  describe('budgetSplit edge cases (AIO-BUDGET-05, D-14, D-15)', () => {
+    it('puts the whole total on a leader-alone roster, remainder 0', () => {
+      const [row] = splitEvenly(1000, [{ role: 'lead' as const }]);
+      expect(row!.budgetTokens).toBe(1000);
+      expect(1000 - Math.floor(1000 / 1) * 1).toBe(0);
+    });
+
+    it('returns an empty array for a zero-member roster without dividing', () => {
+      expect(splitEvenly(1000, [])).toEqual([]);
+    });
+
+    it('gives every row 0 when the total is 0', () => {
+      const rows = splitEvenly(0, [
+        { role: 'lead' as const },
+        { role: 'employee' as const },
+        { role: 'employee' as const },
+      ]);
+      expect(rows.map((r) => r.budgetTokens)).toEqual([0, 0, 0]);
+      expect(rows.reduce((sum, r) => sum + r.budgetTokens, 0)).toBe(0);
+    });
+
+    it('lands the remainder on the lead row even when it sits mid-array', () => {
+      const rows = splitEvenly(1001, [
+        { role: 'employee' as const, id: 'a' },
+        { role: 'lead' as const, id: 'b' },
+        { role: 'employee' as const, id: 'c' },
+      ]);
+      expect(rows.map((r) => r.budgetTokens)).toEqual([333, 335, 333]);
+      expect(rows.reduce((sum, r) => sum + r.budgetTokens, 0)).toBe(1001);
+    });
+
+    it('leaves the remainder undistributed when the roster has no lead', () => {
+      const rows = splitEvenly(1000, [
+        { role: 'employee' as const },
+        { role: 'employee' as const },
+        { role: 'employee' as const },
+      ]);
+      expect(rows.map((r) => r.budgetTokens)).toEqual([333, 333, 333]);
+      expect(rows.reduce((sum, r) => sum + r.budgetTokens, 0)).toBe(999);
+    });
+
+    it('never splits implicitly on add — a later member keeps 0 until the split is re-run (D-15)', async () => {
+      const team = await makeTeam('LateMember');
+      await applyEvenSplit(team.id, 1000, db);
+      const extra = await createEmployee(
+        { name: 'Late', role: 'Dev', capability: 'c', persona: 'p', model: 'm' },
+        db
+      );
+      const added = await addTeamMember(
+        { teamId: team.id, agentId: extra.id, role: 'employee', budgetTokens: 0 },
+        db
+      );
+      expect(added.budgetTokens).toBe(0);
+
+      const resplit = await applyEvenSplit(team.id, 1000, db);
+      expect(resplit).toHaveLength(4);
+      expect(resplit.reduce((sum, m) => sum + m.budgetTokens, 0)).toBe(1000);
+      expect((await db.aiTeamMembers.get(added.id))?.budgetTokens).toBe(250);
+    });
+
+    it('normalizes the total to a non-negative integer once, before dividing', () => {
+      const two = splitEvenly(1.5, [{ role: 'lead' as const }, { role: 'employee' as const }]);
+      expect(two.map((r) => r.budgetTokens)).toEqual([1, 1]);
+      expect(two.reduce((sum, r) => sum + r.budgetTokens, 0)).toBe(2);
+
+      const three = [
+        { role: 'lead' as const },
+        { role: 'employee' as const },
+        { role: 'employee' as const },
+      ];
+      expect(splitEvenly(-5, three).map((r) => r.budgetTokens)).toEqual([0, 0, 0]);
+      expect(splitEvenly(Number.NaN, three).map((r) => r.budgetTokens)).toEqual([0, 0, 0]);
+      expect(
+        splitEvenly(1000, three).every((r) => Number.isInteger(r.budgetTokens))
+      ).toBe(true);
+    });
+  });
+
+  describe('concurrencyLimit (Phase 37, D-02, D-03)', () => {    it('stores the boundaries 1 and 12 verbatim', async () => {
+      const team = await makeTeam('Concurrency');
+
+      expect((await updateTeam(team.id, { concurrencyLimit: 1 }, db)).concurrencyLimit).toBe(1);
+      expect((await updateTeam(team.id, { concurrencyLimit: 12 }, db)).concurrencyLimit).toBe(12);
+      expect((await getTeam(team.id, db))?.concurrencyLimit).toBe(12);
+    });
+
+    it.each([0, 13, 2.5])('rejects %s and leaves the stored value untouched', async (value) => {
+      const team = await makeTeam('ConcurrencyReject');
+      await updateTeam(team.id, { concurrencyLimit: 7 }, db);
+
+      await expect(updateTeam(team.id, { concurrencyLimit: value }, db)).rejects.toThrow();
+
+      expect((await getTeam(team.id, db))?.concurrencyLimit).toBe(7);
+    });
+
+    it('preserves the stored value when the key is omitted', async () => {
+      const team = await makeTeam('ConcurrencyOmit');
+      await updateTeam(team.id, { concurrencyLimit: 5 }, db);
+
+      await updateTeam(team.id, { name: 'ConcurrencyOmit renamed' }, db);
+
+      expect((await getTeam(team.id, db))?.concurrencyLimit).toBe(5);
+    });
+
+    it('removes the key when concurrencyLimit is passed as undefined', async () => {
+      const team = await makeTeam('ConcurrencyClear');
+      await updateTeam(team.id, { concurrencyLimit: 4 }, db);
+
+      const cleared = await updateTeam(team.id, { concurrencyLimit: undefined }, db);
+
+      expect('concurrencyLimit' in cleared).toBe(false);
+      expect('concurrencyLimit' in ((await getTeam(team.id, db)) ?? {})).toBe(false);
+    });
+
+    it('accepts concurrencyLimit on create', async () => {
+      const team = await createTeam({ name: 'ConcurrencyCreate', concurrencyLimit: 9 }, db);
+
+      expect(team.concurrencyLimit).toBe(9);
+    });
+
+    it('clampTeamConcurrency is total across every input', () => {
+      expect(clampTeamConcurrency(2.5)).toBe(3);
+      expect(clampTeamConcurrency(0)).toBe(1);
+      expect(clampTeamConcurrency(13)).toBe(12);
+      expect(clampTeamConcurrency(Number.NaN)).toBe(DEFAULT_TEAM_CONCURRENCY);
+      expect(clampTeamConcurrency(Number.POSITIVE_INFINITY)).toBe(DEFAULT_TEAM_CONCURRENCY);
+      expect(clampTeamConcurrency(1)).toBe(1);
+      expect(clampTeamConcurrency(12)).toBe(12);
+    });
+  });
+
+  describe('aiTeamRepo — team docs folder tree (AIO-DOCS-01, AIO-DOCS-06, D-09..D-11)', () => {
+    /** Raw rows, never `getNotesByFolder` — the test must prove the rows exist. */
+    async function childrenOf(parentId: string) {
+      return db.notes.where('parentId').equals(parentId).toArray();
+    }
+
+    async function childFolders(parentId: string) {
+      return (await childrenOf(parentId)).filter((note) => note.type === 'folder');
+    }
+
+    async function rootFolder() {
+      const setting = await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY);
+      const rootId = typeof setting?.value === 'string' ? setting.value : undefined;
+      return rootId === undefined ? undefined : db.notes.get(rootId);
+    }
+
+    /** D-12: strip the field the way a pre-41 row never had it — Dexie cannot store `undefined`. */
+    function stripDocsFolderId<T extends { docsFolderId?: string | undefined }>(row: T): T {
+      const copy = { ...row };
+      delete copy.docsFolderId;
+      return copy;
+    }
+
+    /** Simulate a pre-41 team: no tree, no `docsFolderId` on the team or its member rows. */
+    async function makePre41(teamId: string) {
+      const team = (await getTeam(teamId, db))!;
+      // A pre-41 build had no tree at all, so the rows are removed outright — the new
+      // `deleteTeamDocsTree` soft-deletes, which would leave a recoverable tree behind.
+      if (team.docsFolderId !== undefined) {
+        const rows = await db.notes.toArray();
+        const doomed = new Set<string>([team.docsFolderId]);
+        let frontier = [team.docsFolderId];
+        while (frontier.length > 0) {
+          const next = rows.filter(
+            (note) => note.parentId !== undefined && frontier.includes(note.parentId)
+          );
+          frontier = [];
+          for (const child of next) {
+            if (doomed.has(child.id)) continue;
+            doomed.add(child.id);
+            frontier.push(child.id);
+          }
+        }
+        await db.notes.bulkDelete([...doomed]);
+      }
+      await db.aiTeams.put(stripDocsFolderId(team));
+      for (const row of await db.aiTeamMembers.where('teamId').equals(teamId).toArray()) {
+        await db.aiTeamMembers.put(stripDocsFolderId(row));
+      }
+    }
+
+    it('creates 1 + 1 + N folders with the team folder under the shared root', async () => {
+      const team = await createTeam(
+        { name: 'Tree', leadId, budgetTokens: 0, employeeIds: employeeIds.slice(0, 2) },
+        db
+      );
+
+      // 1 root + 1 team folder + 3 member folders (the lead is a member row like any other).
+      expect(await db.notes.count()).toBe(5);
+      const folders = (await db.notes.toArray()).filter((note) => note.type === 'folder');
+      expect(folders).toHaveLength(5);
+
+      const root = await rootFolder();
+      expect(root?.title).toBe(AI_TEAMS_DOCS_ROOT_TITLE);
+      expect(team.docsFolderId).toBeDefined();
+
+      const teamFolder = (await db.notes.get(team.docsFolderId!))!;
+      expect(teamFolder.type).toBe('folder');
+      expect(teamFolder.title).toBe('Tree');
+      expect(teamFolder.parentId).toBe(root!.id);
+
+      const memberFolders = await childFolders(teamFolder.id);
+      expect(memberFolders).toHaveLength(3);
+      expect(memberFolders.map((note) => note.title).sort()).toEqual(['An', 'E1', 'E2']);
+    });
+
+    it('writes docsFolderId on the team and on every member row', async () => {
+      const team = await createTeam(
+        { name: 'Ids', leadId, budgetTokens: 0, employeeIds: employeeIds.slice(0, 2) },
+        db
+      );
+
+      expect((await getTeam(team.id, db))?.docsFolderId).toBe(team.docsFolderId);
+      const rows = await db.aiTeamMembers.where('teamId').equals(team.id).toArray();
+      expect(rows).toHaveLength(3);
+      for (const row of rows) {
+        const folder = row.docsFolderId === undefined ? undefined : await db.notes.get(row.docsFolderId);
+        expect(folder?.type).toBe('folder');
+        expect(folder?.parentId).toBe(team.docsFolderId);
+      }
+    });
+
+    it('rolls the team, the members, the folders and the root setting back on a throw', async () => {
+      const spy = vi.spyOn(db.notes, 'add').mockRejectedValueOnce(new Error('boom'));
+
+      await expect(
+        createTeam({ name: 'Rollback', leadId, budgetTokens: 0, employeeIds: [employeeIds[0]!] }, db)
+      ).rejects.toThrow(/boom/i);
+      spy.mockRestore();
+
+      expect(await db.aiTeams.count()).toBe(0);
+      expect(await db.aiTeamMembers.count()).toBe(0);
+      expect(await db.notes.count()).toBe(0);
+      expect(await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY)).toBeUndefined();
+    });
+
+    it('reuses one shared root across two teams', async () => {
+      const first = await createTeam({ name: 'One', leadId, budgetTokens: 0 }, db);
+      const second = await createTeam({ name: 'Two', leadId, budgetTokens: 0 }, db);
+
+      const roots = (await db.notes.toArray()).filter(
+        (note) => note.title === AI_TEAMS_DOCS_ROOT_TITLE
+      );
+      expect(roots).toHaveLength(1);
+      expect((await db.notes.get(first.docsFolderId!))?.parentId).toBe(roots[0]!.id);
+      expect((await db.notes.get(second.docsFolderId!))?.parentId).toBe(roots[0]!.id);
+    });
+
+    it('deleteTeam removes the whole tree and keeps the shared root and its setting', async () => {
+      const team = await createTeam(
+        { name: 'Doomed', leadId, budgetTokens: 0, employeeIds: [employeeIds[0]!] },
+        db
+      );
+      const teamFolderId = team.docsFolderId!;
+      const [memberFolder] = await childFolders(teamFolderId);
+      const inMember = await createNote(
+        { title: 'Draft', body: 'x', type: 'document', parentId: memberFolder!.id },
+        db
+      );
+      const inTeam = await createNote(
+        { title: 'Team doc', body: 'x', type: 'document', parentId: teamFolderId },
+        db
+      );
+      const root = await rootFolder();
+
+      await deleteTeam(team.id, db);
+
+      // D-10: the whole tree goes, in the same transaction as the team row.
+      expect(await db.notes.get(teamFolderId)).toBeUndefined();
+      expect(await db.notes.get(memberFolder!.id)).toBeUndefined();
+      expect(await db.notes.get(inMember.id)).toBeUndefined();
+      expect(await db.notes.get(inTeam.id)).toBeUndefined();
+      expect(await db.notes.get(root!.id)).toBeDefined();
+      expect(await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY)).toBeDefined();
+    });
+
+    // CR-05 (round 7): a silent skip on an irreversible delete deleted the team row and left the
+    // tree behind with no handle. A refusal must roll the whole transaction back instead.
+    it('deleteTeam refuses and rolls back when the tree cannot be proven (CR-05)', async () => {
+      const team = await createTeam(
+        { name: 'Unprovable', leadId, budgetTokens: 0, employeeIds: [employeeIds[0]!] },
+        db
+      );
+      const teamFolderId = team.docsFolderId!;
+      const [memberFolder] = await childFolders(teamFolderId);
+      const doc = await createNote(
+        { title: 'Giữ', body: 'x', type: 'document', parentId: memberFolder!.id },
+        db
+      );
+      // The team folder's slug is gone, so a hard delete cannot prove it owns the tree.
+      await db.notes.update(teamFolderId, { slug: undefined });
+
+      await expect(deleteTeam(team.id, db)).rejects.toThrow(/không xác định/i);
+
+      // Nothing was deleted — the team, its rows and its documents all survive.
+      expect(await getTeam(team.id, db)).toBeDefined();
+      expect(await db.aiTeamMembers.where('teamId').equals(team.id).count()).toBeGreaterThan(0);
+      expect(await db.notes.get(teamFolderId)).toBeDefined();
+      expect(await db.notes.get(memberFolder!.id)).toBeDefined();
+      expect(await db.notes.get(doc.id)).toBeDefined();
+    });
+
+    // WR-01 (round 7): duplicate `agentId` rows resolved to the same slug match; the second row
+    // minted a fresh folder EVERY turn. The row's own unclaimed in-tree handle keeps it stable.
+    it('does not mint a new folder every turn for duplicate agent rows (WR-01)', async () => {
+      const team = await createTeam(
+        { name: 'Dupes', leadId, budgetTokens: 0, employeeIds: [employeeIds[0]!] },
+        db
+      );
+      // A duplicate row for the same agent, as a corrupted payload could carry.
+      const existing = (await listTeamMembers(team.id, db)).find(
+        (member) => member.agentId === employeeIds[0]
+      )!;
+      await db.aiTeamMembers.add({
+        id: generateId(),
+        teamId: team.id,
+        agentId: employeeIds[0]!,
+        role: 'employee',
+        budgetTokens: 0,
+        usedTokens: 0,
+      });
+
+      await ensureTeamDocsReady(team.id, db);
+      const afterFirst = await db.notes.count();
+      await ensureTeamDocsReady(team.id, db);
+      const afterSecond = await db.notes.count();
+      await ensureTeamDocsReady(team.id, db);
+
+      expect(afterSecond).toBe(afterFirst);
+      expect(await db.notes.count()).toBe(afterSecond);
+      expect(existing.docsFolderId).toBeDefined();
+    });
+
+    it('addTeamMember creates the new folder immediately', async () => {
+      const team = await createTeam(
+        { name: 'Grow', leadId, budgetTokens: 0, employeeIds: [employeeIds[0]!] },
+        db
+      );
+
+      const added = await addTeamMember(
+        { teamId: team.id, agentId: employeeIds[1]!, role: 'employee', budgetTokens: 0 },
+        db
+      );
+
+      const folders = await childFolders(team.docsFolderId!);
+      expect(folders.map((note) => note.title).sort()).toEqual(['An', 'E1', 'E2']);
+      const folder = await db.notes.get(added.docsFolderId!);
+      expect(folder?.title).toBe('E2');
+      expect(folder?.parentId).toBe(team.docsFolderId);
+    });
+
+    it('addTeamMember on a pre-41 team backfills and mints exactly one folder', async () => {
+      const team = await createTeam(
+        { name: 'Legacy', leadId, budgetTokens: 0, employeeIds: [employeeIds[0]!] },
+        db
+      );
+      await makePre41(team.id);
+      expect(await db.notes.count()).toBe(1); // only the shared root survives
+
+      const added = await addTeamMember(
+        { teamId: team.id, agentId: employeeIds[2]!, role: 'employee', budgetTokens: 0 },
+        db
+      );
+
+      const recreated = (await getTeam(team.id, db))!.docsFolderId!;
+      expect(recreated).toBeDefined();
+      const folders = await childFolders(recreated);
+      // Roster after the add: lead + E1 + E3.
+      expect(folders).toHaveLength(3);
+      expect(folders.filter((note) => note.title === 'E3')).toHaveLength(1);
+      expect(folders.some((note) => note.title?.includes('(2)'))).toBe(false);
+      expect(await db.notes.count()).toBe(1 + 1 + 3);
+      expect((await db.notes.get(added.docsFolderId!))?.parentId).toBe(recreated);
+      for (const row of await db.aiTeamMembers.where('teamId').equals(team.id).toArray()) {
+        expect(row.docsFolderId).toBeDefined();
+      }
+    });
+
+    it('removeTeamMember keeps the folder and the documents inside it', async () => {
+      const team = await createTeam(
+        { name: 'Shrink', leadId, budgetTokens: 0, employeeIds: employeeIds.slice(0, 2) },
+        db
+      );
+      const row = (await listTeamMembers(team.id, db)).find(
+        (member) => member.agentId === employeeIds[1]
+      )!;
+      const doc = await createNote(
+        { title: 'Kept', body: 'x', type: 'document', parentId: row.docsFolderId! },
+        db
+      );
+
+      await removeTeamMember(row.id, db);
+
+      expect(await db.aiTeamMembers.get(row.id)).toBeUndefined();
+      expect(await db.notes.get(row.docsFolderId!)).toBeDefined();
+      expect(await db.notes.get(doc.id)).toBeDefined();
+    });
+
+    // CR-03 (round 6): `addTeamMember` reused a folder found by slug without checking it is a
+    // direct child of the team folder, so a stale duplicate elsewhere was adopted.
+    it('addTeamMember never adopts a stale duplicate slug outside the team tree (CR-03)', async () => {
+      const team = await createTeam(
+        { name: 'Stale', leadId, budgetTokens: 0, employeeIds: [employeeIds[0]!] },
+        db
+      );
+      // A stale zone for E2 outside the team folder, minted by an interrupted rebuild.
+      const stale = await createNote(
+        {
+          title: 'Cũ',
+          body: '',
+          type: 'folder',
+          slug: `ai-member:${team.id}:${employeeIds[1]!}`,
+        },
+        db,
+        { allowReservedSlug: true }
+      );
+
+      const added = await addTeamMember(
+        { teamId: team.id, agentId: employeeIds[1]!, role: 'employee', budgetTokens: 0 },
+        db
+      );
+
+      expect(added.docsFolderId).not.toBe(stale.id);
+      expect((await db.notes.get(added.docsFolderId!))?.parentId).toBe(team.docsFolderId);
+      expect((await db.notes.get(stale.id))?.parentId).toBeUndefined();
+    });
+
+    // CR-03: every mint site stamps the slug, so a later repair can find this lead's folder.
+    it('assignLeader stamps the new lead folder with its identity slug (CR-03)', async () => {
+      const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
+      const team = await makeTeam('LeadSlug');
+
+      await assignLeader(team.id, otherLeadId, db);
+
+      const leadRow = (await listTeamMembers(team.id, db)).find((m) => m.role === 'lead')!;
+      const folder = await db.notes.get(leadRow.docsFolderId!);
+      expect(folder?.slug).toBe(memberFolderSlug(team.id, otherLeadId));
+    });
+
+    // CR-04 (round 6): a promoted lead whose row named another agent's child folder was handed
+    // that folder on parent shape alone, so two agents shared one zone.
+    it('assignLeader never promotes a lead onto another agent zone (CR-04)', async () => {
+      const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
+      const team = await makeTeam('LeadSteal');
+      const teamFolderId = (await getTeam(team.id, db))!.docsFolderId!;
+      const employeeRow = (await listTeamMembers(team.id, db)).find(
+        (m) => m.agentId === employeeIds[0]
+      )!;
+      // The incoming lead's own row exists and names the employee's zone.
+      await db.aiTeamMembers.add({
+        id: generateId(),
+        teamId: team.id,
+        agentId: otherLeadId,
+        role: 'employee',
+        budgetTokens: 0,
+        usedTokens: 0,
+        docsFolderId: employeeRow.docsFolderId,
+      });
+
+      await assignLeader(team.id, otherLeadId, db);
+
+      const leadRow = (await listTeamMembers(team.id, db)).find((m) => m.role === 'lead')!;
+      expect(leadRow.docsFolderId).not.toBe(employeeRow.docsFolderId);
+      expect((await db.notes.get(leadRow.docsFolderId!))?.parentId).toBe(teamFolderId);
+      expect((await db.notes.get(leadRow.docsFolderId!))?.slug).toBe(
+        memberFolderSlug(team.id, otherLeadId)
+      );
+      // The employee's zone is untouched.
+      expect((await db.notes.get(employeeRow.docsFolderId!))?.slug).toBe(
+        memberFolderSlug(team.id, employeeIds[0]!)
+      );
+    });
+
+    // CR-03: a lead minted with no slug used to be unfindable by the repair path, which then
+    // stranded the lead's earlier documents under a ` (2)` sibling.
+    it('a repair after the lead folder is cleared re-adopts the same folder (CR-03)', async () => {
+      const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
+      const team = await makeTeam('LeadAdopt');
+      await assignLeader(team.id, otherLeadId, db);
+      const leadRow = (await listTeamMembers(team.id, db)).find((m) => m.role === 'lead')!;
+      const originalFolderId = leadRow.docsFolderId!;
+
+      // CR-08's path: the folder handle was cleared by a note delete.
+      await db.aiTeamMembers.update(leadRow.id, { docsFolderId: undefined });
+
+      const ready = await ensureTeamDocsReady(team.id, db);
+
+      expect(ready.memberFolderIds.get(otherLeadId)).toBe(originalFolderId);
+    });
+
+    it('assignLeader gives the new lead a folder and re-assignment mints no extra one', async () => {
+      const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
+      const team = await makeTeam('LeaderFolder');
+      const leadRow = (await listTeamMembers(team.id, db)).find((m) => m.role === 'lead')!;
+      // Recorded usage keeps the outgoing row (demoted, with its folder) instead of deleting it.
+      await db.aiTeamMembers.update(leadRow.id, { usedTokens: 500 });
+      const folderCountBefore = await db.notes.count();
+
+      await assignLeader(team.id, otherLeadId, db);
+
+      const after = await listTeamMembers(team.id, db);
+      const newLead = after.find((m) => m.role === 'lead')!;
+      expect(newLead.agentId).toBe(otherLeadId);
+      const teamFolderId = (await getTeam(team.id, db))!.docsFolderId!;
+      for (const member of after) {
+        const folder = member.docsFolderId === undefined
+          ? undefined
+          : await db.notes.get(member.docsFolderId);
+        expect(folder?.type).toBe('folder');
+        expect(folder?.parentId).toBe(teamFolderId);
+      }
+      expect(await db.notes.count()).toBe(folderCountBefore + 1);
+
+      const demotedBefore = after.find((m) => m.agentId === leadId)!;
+      await assignLeader(team.id, leadId, db);
+
+      const back = await listTeamMembers(team.id, db);
+      expect(back.find((m) => m.role === 'lead')!.agentId).toBe(leadId);
+      expect(back.find((m) => m.agentId === leadId)!.docsFolderId).toBe(demotedBefore.docsFolderId);
+      expect(await db.notes.count()).toBe(folderCountBefore + 1);
+    });
+
+    it('assignLeader on a pre-41 team backfills first without a duplicate folder', async () => {
+      const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
+      const team = await makeTeam('LegacyLead');
+      await makePre41(team.id);
+
+      await assignLeader(team.id, otherLeadId, db);
+
+      const recreated = (await getTeam(team.id, db))!.docsFolderId!;
+      expect(recreated).toBeDefined();
+      const folders = await childFolders(recreated);
+      expect(folders.some((note) => note.title?.includes('(2)'))).toBe(false);
+      const leadRow = (await listTeamMembers(team.id, db)).find((m) => m.role === 'lead')!;
+      expect(leadRow.agentId).toBe(otherLeadId);
+      expect((await db.notes.get(leadRow.docsFolderId!))?.parentId).toBe(recreated);
+    });
+
+    it('a leadId patch through updateTeam gives the new lead a live folder', async () => {
+      const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
+      const team = await makeTeam('UpdateLead');
+
+      const updated = await updateTeam(team.id, { leadId: otherLeadId }, db);
+
+      expect(updated.leadId).toBe(otherLeadId);
+      const teamFolderId = (await getTeam(team.id, db))!.docsFolderId!;
+      const leadRow = (await listTeamMembers(team.id, db)).find((m) => m.role === 'lead')!;
+      expect(leadRow.agentId).toBe(otherLeadId);
+      const folder = await db.notes.get(leadRow.docsFolderId!);
+      expect(folder?.type).toBe('folder');
+      expect(folder?.parentId).toBe(teamFolderId);
+
+      // 1 root + 1 team folder + 4 member folders: the outgoing lead's row is dropped (no
+      // usage) but its folder is retained by D-11, and the new lead gets exactly one folder.
+      expect(await db.notes.count()).toBe(1 + 1 + 4);
+      expect((await childFolders(teamFolderId)).some((note) => note.title?.includes('(2)'))).toBe(
+        false
+      );
+    });
+
+    // WR-04: a duplicate employeeId used to write two member rows and leave an orphan `X`
+    // folder behind while both rows pointed at `X (2)`.
+    it('createTeam dedupes employeeIds and drops the lead from the employee list (WR-04)', async () => {
+      const team = await createTeam(
+        {
+          name: 'Dupes',
+          leadId,
+          budgetTokens: 0,
+          employeeIds: [employeeIds[0]!, employeeIds[0]!, leadId],
+        },
+        db
+      );
+
+      const rows = await listTeamMembers(team.id, db);
+      expect(rows).toHaveLength(2); // one lead row, one employee row
+      expect(rows.filter((row) => row.agentId === leadId)).toHaveLength(1);
+      expect(rows.filter((row) => row.agentId === employeeIds[0])).toHaveLength(1);
+
+      const teamFolderId = team.docsFolderId!;
+      const folders = await childFolders(teamFolderId);
+      expect(folders).toHaveLength(2);
+      expect(folders.some((note) => note.title?.includes('(2)'))).toBe(false);
+      // 1 root + 1 team folder + 2 member folders — no orphan.
+      expect(await db.notes.count()).toBe(4);
+    });
+
+    // WR-07: the docs tree is keyed by id, so a rename never breaks it — but the owner would
+    // keep seeing the old name in Docs with no surface to reconcile it.
+    it('updateTeam renames the team folder in the same transaction (WR-07)', async () => {
+      const team = await makeTeam('OldName');
+      const teamFolderId = (await getTeam(team.id, db))!.docsFolderId!;
+
+      await updateTeam(team.id, { name: 'NewName' }, db);
+
+      expect((await db.notes.get(teamFolderId))?.title).toBe('NewName');
+      expect((await getTeam(team.id, db))?.docsFolderId).toBe(teamFolderId);
+    });
+
+    // WR-07 guard: a rename must not touch a folder that is not live.
+    it('updateTeam with a rename leaves a dead docsFolderId alone (WR-07)', async () => {
+      const team = await makeTeam('Stale');
+      const teamFolderId = (await getTeam(team.id, db))!.docsFolderId!;
+      await db.notes.delete(teamFolderId);
+
+      await updateTeam(team.id, { name: 'Renamed' }, db);
+
+      expect(await db.notes.get(teamFolderId)).toBeUndefined();
+    });
+
+    // CR-02: `docsFolderId` is an untrusted handle — a rename must not write a title onto a user
+    // document, and must not rename the shared root.
+    it('updateTeam rename does not touch a docsFolderId that names a document (CR-02)', async () => {
+      const team = await makeTeam('Stale');
+      const doc = await createNote({ title: 'Tài liệu người dùng', body: 'x', type: 'document' }, db);
+      await db.aiTeams.update(team.id, { docsFolderId: doc.id });
+
+      await updateTeam(team.id, { name: 'Renamed' }, db);
+
+      expect((await db.notes.get(doc.id))?.title).toBe('Tài liệu người dùng');
+    });
+
+    it('updateTeam rename does not touch the shared root (CR-02)', async () => {
+      const team = await makeTeam('Stale');
+      const rootId = (await db.settings.get(AI_TEAMS_DOCS_ROOT_SETTING_KEY))!.value as string;
+      await db.aiTeams.update(team.id, { docsFolderId: rootId });
+
+      await updateTeam(team.id, { name: 'Hijacked' }, db);
+
+      expect((await db.notes.get(rootId))?.title).toBe(AI_TEAMS_DOCS_ROOT_TITLE);
+    });
+
+    // WR-02: `removeTeamMember` keeps the folder, so re-adding the same agent must adopt it.
+    it('re-adding a removed member reuses its folder instead of minting a duplicate (WR-02)', async () => {
+      const team = await createTeam(
+        { name: 'ReAdd', leadId, budgetTokens: 0, employeeIds: [employeeIds[0]!] },
+        db
+      );
+      const row = (await listTeamMembers(team.id, db)).find(
+        (member) => member.agentId === employeeIds[0]
+      )!;
+      const originalFolderId = row.docsFolderId!;
+      const doc = await createNote(
+        { title: 'Đã viết trước đó', body: 'x', type: 'document', parentId: originalFolderId },
+        db
+      );
+
+      await removeTeamMember(row.id, db);
+      const readded = await addTeamMember(
+        { teamId: team.id, agentId: employeeIds[0]!, role: 'employee', budgetTokens: 0 },
+        db
+      );
+
+      expect(readded.docsFolderId).toBe(originalFolderId);
+      const teamFolderId = (await getTeam(team.id, db))!.docsFolderId!;
+      const folders = await childFolders(teamFolderId);
+      expect(folders.some((note) => note.title?.includes('(2)'))).toBe(false);
+      // The earlier document is still reachable from the member's folder.
+      expect((await db.notes.get(doc.id))?.parentId).toBe(originalFolderId);
+    });
+  });
+});

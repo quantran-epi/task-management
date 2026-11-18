@@ -8,6 +8,7 @@ export interface HeadingItem {
   id: string;
   level: number;
   text: string;
+  lineIndex?: number | undefined;
 }
 
 export interface DocOutlineToCProps {
@@ -32,7 +33,7 @@ export const DocOutlineToC: React.FC<DocOutlineToCProps> = ({
         const level = match[1].length;
         const text = match[2].trim();
         const id = `heading-${i}-${text.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-')}`;
-        items.push({ id, level, text });
+        items.push({ id, level, text, lineIndex: i });
       }
     }
 

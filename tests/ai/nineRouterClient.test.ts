@@ -7,7 +7,9 @@ import {
   completeJson,
   probeStructuredOutputCapability,
   clearCapabilityProbeCache,
+  mapUsage,
 } from '../../src/services/ai/nineRouterClient';
+import type { StreamChatChunk } from '../../src/services/ai/types';
 
 const invokeMock = vi.hoisted(() => vi.fn());
 
@@ -30,6 +32,34 @@ describe('nineRouterClient', () => {
     const errorMsg = 'Failed to fetch from https://api.9router.com with sk-abc123456789xyz';
     const redacted = redactApiKey(errorMsg, 'sk-abc123456789xyz');
     expect(redacted).toBe('Failed to fetch from https://api.9router.com with ***');
+  });
+
+  // WR-02: OpenAI's prompt_tokens already includes the cached portion, Anthropic's
+  // input_tokens does not. `splitUsage` adds prompt + cache, so the OpenAI shape must be
+  // normalized here or the cached tokens are charged twice.
+  it('subtracts cached_tokens from prompt_tokens for the OpenAI shape (WR-02)', () => {
+    const usage = mapUsage({
+      prompt_tokens: 1000,
+      completion_tokens: 200,
+      total_tokens: 1200,
+      prompt_tokens_details: { cached_tokens: 400 },
+    });
+    expect(usage.promptTokens).toBe(600);
+    expect(usage.cacheReadTokens).toBe(400);
+    expect((usage.promptTokens ?? 0) + (usage.cacheReadTokens ?? 0)).toBe(1000);
+  });
+
+  it('leaves promptTokens as-is for the Anthropic shape (WR-02)', () => {
+    const usage = mapUsage({
+      prompt_tokens: 600,
+      completion_tokens: 200,
+      cache_read_input_tokens: 400,
+      cache_creation_input_tokens: 50,
+    });
+    // Anthropic's input count already excludes cache reads, so no subtraction happens.
+    expect(usage.promptTokens).toBe(600);
+    expect(usage.cacheReadTokens).toBe(400);
+    expect(usage.cacheCreationTokens).toBe(50);
   });
 
   it('testNineRouterConnection returns models list on 200 OK', async () => {
@@ -304,6 +334,28 @@ describe('nineRouterClient', () => {
     ]);
   });
 
+  it('JSON fallback giữ chính xác body chia nhiều chunk và byte UTF-8', async () => {
+    const bytes = new TextEncoder().encode(JSON.stringify({
+      choices: [{ message: { content: 'Tiếng Việt nguyên vẹn' }, finish_reason: 'stop' }],
+    }, null, 2));
+    const stream = new ReadableStream({
+      start(controller) {
+        for (let index = 0; index < bytes.length; index += 3) controller.enqueue(bytes.slice(index, index + 3));
+        controller.close();
+      },
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(stream)));
+    const chunks: StreamChatChunk[] = [];
+    for await (const chunk of streamChatEvents({
+      endpoint: 'http://localhost:20128', apiKey: 'test-key',
+      payload: { model: 'model', messages: [] },
+    })) chunks.push(chunk);
+    expect(chunks).toEqual([
+      { type: 'text', delta: 'Tiếng Việt nguyên vẹn' },
+      { type: 'finish', finish_reason: 'stop' },
+    ]);
+  });
+
   it('streamChatEvents supports non-SSE JSON response from Tauri AI proxy', async () => {
     (window as any).__TAURI_INTERNALS__ = {};
     const jsonBody = JSON.stringify({
@@ -337,6 +389,83 @@ describe('nineRouterClient', () => {
     expect(chunks).toEqual([
       { type: 'text', delta: 'Direct JSON response' },
     ]);
+  });
+
+  it.each(['stop', 'length', 'tool_calls'])('emits SSE finish %s after content', async (reason) => {
+    const body = [
+      `data: ${JSON.stringify({ choices: [{ delta: { content: 'Retained text' }, finish_reason: reason }] })}\n\n`,
+      'data: [DONE]\n\n',
+    ].join('');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(body)));
+
+    const chunks: StreamChatChunk[] = [];
+    for await (const chunk of streamChatEvents({
+      endpoint: 'http://localhost:20128',
+      apiKey: 'test-key',
+      payload: { model: 'gpt-4o', messages: [{ role: 'user', content: 'test' }] },
+    })) chunks.push(chunk);
+
+    expect(chunks).toEqual([
+      { type: 'text', delta: 'Retained text' },
+      { type: 'finish', finish_reason: reason },
+    ]);
+  });
+
+  it.each(['stop', 'length'])('emits non-stream JSON finish %s after content in desktop', async (reason) => {
+    (window as any).__TAURI_INTERNALS__ = {};
+    invokeMock.mockResolvedValue({
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ choices: [{ message: { content: 'Retained text' }, finish_reason: reason }] }),
+    });
+
+    const chunks: StreamChatChunk[] = [];
+    for await (const chunk of streamChatEvents({
+      endpoint: 'http://localhost:20128',
+      apiKey: 'test-key',
+      payload: { model: 'gpt-4o', messages: [{ role: 'user', content: 'test' }] },
+    })) chunks.push(chunk);
+
+    expect(chunks).toEqual([
+      { type: 'text', delta: 'Retained text' },
+      { type: 'finish', finish_reason: reason },
+    ]);
+  });
+
+  it('emits finish events for every completed choice without inventing reasons', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+      `data: ${JSON.stringify({ choices: [
+        { delta: { content: 'Text' }, finish_reason: null },
+        { delta: {}, finish_reason: 'stop' },
+        { delta: {}, finish_reason: 'length' },
+      ] })}\n\ndata: [DONE]\n\n`,
+    )));
+    const chunks: StreamChatChunk[] = [];
+    for await (const chunk of streamChatEvents({
+      endpoint: 'http://localhost:20128', apiKey: 'test-key',
+      payload: { model: 'gpt-4o', messages: [] },
+    })) chunks.push(chunk);
+    expect(chunks).toEqual([
+      { type: 'text', delta: 'Text' },
+      { type: 'finish', finish_reason: 'stop' },
+      { type: 'finish', finish_reason: 'length' },
+    ]);
+  });
+
+  it.each(['sse', 'json'])('rejects content_filter for %s without emitting a completion', async (format) => {
+    const choice = { delta: {}, message: { content: 'Blocked' }, finish_reason: 'content_filter' };
+    const body = format === 'sse'
+      ? `data: ${JSON.stringify({ choices: [choice] })}\n\ndata: [DONE]\n\n`
+      : JSON.stringify({ choices: [choice] });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(body)));
+    const chunks: StreamChatChunk[] = [];
+    await expect(async () => {
+      for await (const chunk of streamChatEvents({
+        endpoint: 'http://localhost:20128', apiKey: 'test-key',
+        payload: { model: 'gpt-4o', messages: [] },
+      })) chunks.push(chunk);
+    }).rejects.toThrow('content_filter');
+    expect(chunks).toEqual([]);
   });
 
   it('streamChatEvents redacts sensitive API key on error in desktop', async () => {

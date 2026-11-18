@@ -9,7 +9,7 @@ import {
 } from '../../src/utils/timerAlerts';
 
 describe('timerAlerts 3-tier allocation & feasibility engine', () => {
-  const baseTask: Task = {
+  const baseTask: Task = { crId: '11111111-1111-4111-8111-111111111111',
     id: 'task-100',
     name: 'Implement OAuth Login',
     status: 'In Progress',

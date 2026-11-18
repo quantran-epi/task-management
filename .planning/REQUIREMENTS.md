@@ -1,265 +1,150 @@
-# Milestone v1.1 Requirements
+# Milestone v1.4 Requirements
 
-**Milestone:** v1.1 Banking IT Enhancements & Jira Integration
-**Goal:** Enhance application for banking IT development environment (SHB) with operational ownership fields, task work types, Jira Cloud connectivity, date-range task search, custom reminders, and advanced workload analytics.
+**Milestone:** v1.4 Unified AI Office
+**Goal:** Hợp nhất SDLC Studio và AI Office thành một workspace AI duy nhất dạng chat-first, free-style; xóa hoàn toàn SDLC Studio; đội ngũ AI leader + agent với kỹ năng chuyên biệt, token budget cứng, concurrency cấu hình được, và skill enrichment có duyệt version.
+**Defined:** 2026-11-09
+**Source of truth:** `.planning/MILESTONE-CONTEXT.md` — C-01..C-15 are LOCKED; R-01..R-21 are OPEN.
+**Research:** `.planning/research/SUMMARY.md`
+
+> **Rule (C-15):** No requirement is satisfied by reading code. Every acceptance criterion must be observable in a real UI walkthrough.
+
+---
 
 ## Requirements
 
-### Banking IT Domain Fields (SHB)
+### SDLC Studio Removal (AIO-REMOVE)
 
-- [x] **SHB-01**: User can add and edit multiple Ops Owner names (`opsOwners: string[]`) on Project, Milestone, and Task.
-- [x] **SHB-02**: User can add and edit multiple Business Analyst names (`businessAnalysts: string[]`) on Project, Milestone, and Task.
-- [x] **SHB-03**: Tasks and milestones visually display inherited Ops Owner and BA tags from parent project/milestone when not overridden.
-- [x] **SHB-04**: User can assign a Work Type (`workType: 'code' | 'document' | 'meeting' | 'support_testing' | 'investigate'`) to each Task with visual badge and filter support.
-- [x] **SHB-05**: Database upgrades to schema v2 with multi-entry indexes for `*opsOwners`, `*businessAnalysts`, and index for `workType`, preserving v1 data and backup compatibility.
+- [x] **AIO-REMOVE-01**: Shared primitives are extracted *before* any SDLC file is deleted — `buildConventionsSegment` → `services/ai/conventionsSegment.ts`, `DiffSyntaxHighlighter` → `components/common/`, the `sdlcArtifactTools` patch core → `services/ai/patchProposal.ts`, and `ArtifactDiffApprovalCard` → `PatchDiffApprovalCard`. (C-02, R-13; coordinator registry relocation removed — `TeamWorkspace.tsx` has zero SDLC code.)
+- [x] **AIO-REMOVE-02**: Every SDLC behavior entry point is gone — `ChangeRequestSdlcView`, `components/sdlc/**`, `components/ai/wizard/**`, all six launch points (TitleBar, CRExplorer, ChangeRequestsView, SystemDetailView, ChangeRequestDetailView, ChangeRequestTable), and the `sdlc` member of `EditorViewType`. `grep -rn "sdlc\|Sdlc" src` matches the enumerated residual list exactly (Dexie migration history, Dexie upgrade hooks, neutral identifiers). No stubs, no `as any`. (C-02; residual-list clause restated under C-16.)
+- [x] **AIO-REMOVE-03**: No SDLC schema module survives — all four schema modules, `wizard/changePack.ts`, and `reconciliation.ts` are deleted along with the feature (C-16: no data preservation, no `types/legacySdlc.ts` shim). Ordinary chat, knowledge publish, and backup round-trip still pass after deletion. (C-02, C-16)
+- [x] **AIO-REMOVE-04**: A persisted `viewType:'sdlc'` layout tab is dropped on launch and `activeTabId` re-points to a valid tab — never silently rendered as Tasks. `LAYOUT_STORAGE_KEY` is bumped and `partialize` filters unknown view types. (C-02)
+- [x] **AIO-REMOVE-05**: `restoreBackup` no longer *creates* SDLC chat tabs when `chatTabs` is absent, and `validateBackup` no longer enforces SDLC invariants. Backup schemas are import-tolerant and export-strict. (C-02, R-02)
 
-### Jira Cloud Integration
+### Navigation & Explorer (AIO-NAV)
 
-- [x] **JIRA-01**: User can configure Jira Cloud domain (`xxx.atlassian.net`), email, API token, and optional CORS Proxy URL in Settings.
-- [x] **JIRA-02**: User can test Jira Cloud connection with immediate diagnostic feedback (authenticating, CORS detection, success/failure).
-- [x] **JIRA-03**: User can create a new Jira issue directly from a local task with summary and minimal ADF description, auto-linking the Jira key.
-- [x] **JIRA-04**: User can manually link an existing Jira issue key to a local task and open the Jira web URL in one click.
-- [x] **JIRA-05**: User can inspect and execute Jira status transitions directly from the task detail modal.
+- [ ] **AIO-NAV-01**: Exactly one sidebar trigger named "AI Office" opens the workspace. The separate `ai_staff` trigger is removed from `DEFAULT_BOTTOM_LEFT_ITEMS`. (C-14, R-21)
+- [ ] **AIO-NAV-02**: The explorer has two sections — leaders + agents on top, group conversations below — with the conversation list virtualized because group count is unbounded. (C-14, C-08)
+- [ ] **AIO-NAV-03**: Clicking a leader, agent, or conversation opens its detail as a center-editor tab. Switching tool windows and relaunching the app does not lose the open tab or its state. (C-14)
+- [ ] **AIO-NAV-04**: Empty states exist for both sections with a create call-to-action; the explorer shows live run status for a running group without mounting its workspace. (C-14)
+- [ ] **AIO-NAV-05**: Alt+7 actually opens AI Office — it is registered in `actionRegistry` and `useGlobalKeymap`, not merely documented. (R-21)
 
-### Date-Range Search & Multi-Criteria Filtering
+### Group Chat Model (AIO-GROUP)
 
-- [x] **SRCH-01**: User can search and filter tasks by planned execution date window (via daily allocation ledger).
-- [x] **SRCH-02**: User can search and filter tasks by deadline date range.
-- [x] **SRCH-03**: User can filter tasks simultaneously by status, priority, workType, project, milestone, Ops Owner, and BA.
-- [x] **SRCH-04**: User can copy filtered task results as formatted Markdown standup summary to clipboard.
+- [ ] **AIO-GROUP-01**: Chat-first creation — a user can create an empty group chat, then add exactly one leader and any number of agents. No form requires name + leader + budget up front. (C-03, C-04)
+- [x] **AIO-GROUP-02**: `AiTeam` *is* the group chat; no new container entity wraps it. The transcript stays a `ChatThread` with `scopeKey = 'team:<teamId>'`. (C-04)
+- [x] **AIO-GROUP-03**: The group roster is editable after creation — add and remove agents at any time. `MAX_ACTIVE_TEAMS` and `MAX_EMPLOYEES_PER_TEAM` are removed from `aiTeamRepo`, `teamTools`, and `TeamEditorDrawer`. (C-08, C-09)
+- [x] **AIO-GROUP-04**: `MAX_BATCH_SIZE` no longer doubles as a concurrency cap; assignments-per-batch and agents-running-at-once are two separate controls. (C-09, C-10)
+- [x] **AIO-GROUP-05**: Deleting a leader, agent, or skill with live references either refuses with a clear message or cascades in one transaction. The user's own next backup export must validate. (C-14)
 
-### Notifications & Custom Reminders
+### Leader Orchestration (AIO-LEAD)
 
-- [x] **NOTIF-01**: User can set custom reminder date (`reminderDate: YYYY-MM-DD`) and optional note on Project, Milestone, and Task.
-- [x] **NOTIF-02**: User sees proactive in-app alert badge and notification drawer in application header showing active alerts.
-- [x] **NOTIF-03**: System alerts user to overdue tasks and tasks approaching deadline (today/tomorrow).
-- [x] **NOTIF-04**: System alerts user to days where planned work exceeds available capacity (>100% overload).
-- [x] **NOTIF-05**: System alerts user to stale tasks in 'In Progress' or 'In Review' status with no activity for more than 5 days.
+- [ ] **AIO-LEAD-01**: The leader analyzes a free-style request, selects agents by their skill, splits the work, and synthesizes the result. No CR, PL01, or PL02 is required to run. (C-05, C-06)
+- [ ] **AIO-LEAD-02**: The delegation plan is visible to the user with per-agent attribution on every message. The transcript distinguishes user, leader, and each agent. (C-05, R-09)
+- [x] **AIO-LEAD-03**: The user can @mention an agent directly; agents otherwise receive work only from the leader. (C-05)
+- [ ] **AIO-LEAD-04**: CR and PL documents are optional attachments. With no attachment the group still runs at full quality; with one, the leader and agents read it through the existing tools. (C-07)
+- [x] **AIO-LEAD-05**: Per-agent stop and a global abort both work, and stopped work is marked incomplete rather than silently dropped. (R-18)
 
-### Task Timer & Work Session Logs (Phase 12.1 INSERTED)
+### Runtime Reliability (AIO-RUNTIME)
 
-- [x] **TIMER-01**: Dexie SCHEMA_V5 adds `workSessions` and `activeTimers` stores without data loss.
-- [x] **TIMER-02**: User can create, view, edit, and delete work session logs per task with duration, date, and optional note.
-- [x] **TIMER-03**: User can start, pause, resume, and finish task timers with real wall-clock delta calculation and reload survival.
-- [x] **TIMER-04**: System cascades task, milestone, and project deletion to clean up associated work sessions and active timers.
-- [x] **TIMER-05**: Backup export and restore schemas bump to v3 and serialize `workSessions` with cryptographic validation.
-- [x] **TIMER-06**: User can run multiple concurrent timers simultaneously with reactive UI ticker loop.
-- [x] **TIMER-07**: System alerts user with 3-tier allocation warnings (task spent >= estimate toast, daily overload drawer alert, daily feasibility risk).
-- [x] **TIMER-08**: User can view and control active timers via AppHeader capsule widget and multi-timer dropdown badge.
-- [x] **TIMER-09**: User can inspect and manage task work history in TaskDrawer dedicated Work Sessions tab and record manual sessions via modal.
+- [x] **AIO-RUNTIME-01**: A throwing agent `start()` settles that agent as an error row and the batch resolves. A run can never hang in `batch-running`. (Pitfall 7)
+- [x] **AIO-RUNTIME-02**: ~~A second submit while a turn is running is rejected visibly at the composer — one user message, one turn, phase returns to `ready`. No `TURN_IN_PROGRESS` thrown into the void.~~ **Superseded by 37.1 D-01/D-02:** a second submit is never rejected — the composer always accepts and `send()` routes it to the leader as a steer turn. The invariant that survives is "no `TURN_IN_PROGRESS` is ever thrown into the void, and no user text is ever lost." (Pitfall 8)
+- [x] **AIO-RUNTIME-03**: Every registered `teamTurnId` is finished in `finally`; `getActiveTurns()` is empty after a run and the status indicator clears. (Pitfall 9)
+- [x] **AIO-RUNTIME-04**: Deleting a group mid-run tears down its coordinator and registry — no active turns, no further writes. (Pitfall 25)
+- [x] **AIO-RUNTIME-05**: Concurrency is a real scheduler — with limit 2 and a batch of 5, at most 2 agents run at once and all 5 settle. The limit is a persisted setting, not a constant. (C-10, R-05)
 
-### Multi-Reminder, Notification Settings & UI Controls (Phase 12.2 INSERTED)
+### Live Steering (AIO-STEER) — Phase 37.1
 
-- [x] **NOTIF-06**: User can configure multiple custom reminders with date (`YYYY-MM-DD`), optional time (`HH:mm`), and note on Projects, Milestones, and Tasks.
-- [x] **NOTIF-07**: Browser notifications support persistent display (`requireInteraction: true`) so notifications stay on screen until user interaction.
-- [x] **NOTIF-08**: User can configure notification settings in Settings (master toggle, persistent alert toggle, deadline warning threshold days, stale task threshold days, capacity overload threshold percentage, category toggles).
-- [x] **NOTIF-09**: User can pick which columns to display or hide on task tables and click column headers to sort table data, with column preferences saved across sessions.
-- [x] **NOTIF-10**: AppShell sidebar collapse/expand state is remembered and restored across sessions/reloads.
+- [x] **AIO-STEER-01**: A message sent while a batch is running reaches the leader and produces a visible re-plan, not a queued second turn. The composer is always usable — no outbox, no "busy" refusal. (D-01, D-02, D-24)
+- [x] **AIO-STEER-02**: The leader can cancel a `queued` assignment and rewrite another's task via `amend_assignments`; the scheduler honours both without a second source of truth. (D-06, D-07, D-08, D-27)
+- [x] **AIO-STEER-03**: A steering message addressed to a running agent is drained at its next `beforeToolRound` (including round 1) and appears in its transcript attribution. (D-09, D-10, D-15, D-17)
+- [x] **AIO-STEER-04**: A message addressed to an agent that already settled is refused visibly; the ledger stays consistent. ~~The leader is the gate for every `@agent` steer and holds a problematic one before it is delivered.~~ **Superseded 2026-11-12 by the unified participant model** (`.planning/ARCHITECTURE-TEAM-CHAT.md`): every message is one primitive `from → to[]`, so there is no approval gate and no "held" state. The recipient's read cursor is the only source of truth for whether a message was seen. (D-11, D-16, D-18, D-28)
+- [x] **AIO-STEER-05**: Abort/teardown while steering is in flight leaves no active turns and no further writes. (D-12, D-14, D-24)
 
-### Enhanced Analytics Dashboard
+### Token Budget (AIO-BUDGET)
 
-- [x] **ANLT-01**: User can view milestone burndown chart (lightweight SVG vector) tracking remaining vs completed work over time.
-- [x] **ANLT-02**: User can view task status distribution and completion velocity across projects.
-- [x] **ANLT-03**: User can view workload allocation broken down by Ops Owner, Business Analyst, and Work Type (hours and active task counts).
+- [x] **AIO-BUDGET-01**: ~~Budget is enforced before each model call, not only at tool-round boundaries. A turn whose prompt already exceeds the remaining budget is refused, not run.~~ **Superseded by 38 D-01:** budget never blocks — a turn whose prompt already exceeds the remaining budget still runs; crossing 100% of a member share or of the group total produces an in-app warning plus one OS notification (D-02/D-06), and the user presses Stop manually if they want to stop. The invariant that survives is "no model call is ever refused or parked for budget reasons." (C-11, D-01, D-02)
+- [x] **AIO-BUDGET-02**: Input and output tokens are both charged on every request. A response with no usage still increments the ledger under a stated policy — it is never free. (C-11, R-15)
+- [x] **AIO-BUDGET-03**: Retries are charged per attempt; a retried turn is not free. (R-15)
+- [x] **AIO-BUDGET-04**: Token increments are atomic — 20 concurrent increments sum correctly with no lost update. (R-15)
+- [x] **AIO-BUDGET-05**: Starting a group splits the total budget evenly across the leader and every agent, with the remainder handled deterministically. (C-12, R-15)
+- [x] **AIO-BUDGET-06**: A threshold warning fires when a member approaches its share; the threshold value is configurable, not hard-coded. (C-12, R-03, R-04)
+- [x] **AIO-BUDGET-07**: Topping up one agent raises that agent's share *and* the group total in a single transaction. (C-12)
+- [x] **AIO-BUDGET-08**: The budget display shows granted, used, and remaining for the group and per member, with input and output shown separately. (R-19)
+- [x] **AIO-BUDGET-09**: ~~Reaching the threshold pauses between tool rounds and resumes when the user tops up — the pause is visible, not a hang.~~ **Superseded by 38 D-01/D-02:** no pause is produced between tool rounds and there is no resume-on-top-up flow. Threshold crossing warns visibly (two levels: member share and group total) and the run continues; the user stops manually. The invariant that survives is "a threshold crossing is always visible, never a silent hang." (C-11, R-06, D-01, D-02, D-06)
 
-### Sticky Notes with Attachments & Pop-Out (Phase 13.1 INSERTED)
+### Skill Management & Enrichment (AIO-SKILL)
 
-- [x] **NOTE-01**: User can create, edit, pin, and delete standalone or entity-attached (Task, Project, Milestone) sticky notes with safe Common Markdown formatting.
-- [x] **NOTE-02**: User can attach up to 5 screenshot images (PNG/JPEG/GIF/WebP, max 5MB each) per note stored as Blobs and serialized in backups.
-- [x] **NOTE-03**: User can search and filter notes in a dedicated full view and pop out a pinned, floating, resizable notes window with Always on Top on Tauri and browser popup fallback.
+- [x] **AIO-SKILL-01**: ~~Leader, agent, and skill CRUD all work with validation, empty states, and error handling — no crash on network or AI failure.~~ **Overridden by 39 D-27/D-30:** Phase 39 delivers skill CRUD only. Leader/agent CRUD moves to Phase 40 (AIO-LEAD-01..04). The surviving invariant is "skill CRUD works with validation, empty states, and error handling — no crash on network or AI failure." (C-14)
+- [x] **AIO-SKILL-02**: After a run, an agent can propose a lesson. The proposal is stored as a pending version; it changes nothing until the user approves it. (C-13)
+- [x] **AIO-SKILL-03**: The user reviews a proposed version as a diff and approves or rejects it. Approval creates exactly one new approved version; the previous version remains retrievable. (C-13)
+- [x] **AIO-SKILL-04**: No AI tool can write an approved skill version. Only the user's approval action can. (C-13)
+- [x] **AIO-SKILL-05**: A mid-batch approval does not change the skill of an agent already running — the assignment pins its version. (C-13)
+- [x] **AIO-SKILL-06**: Skill bodies, including approved ones, are wrapped as untrusted data in the prompt. (C-13)
 
-### Actual Worklog Planner (Phase 13.1 INSERTED)
+### Data & Backup (AIO-DATA)
 
-- [x] **WORKLOG-01**: User can view weekly planned vs actual work comparison matrix with midnight segment splitting, color-coded variance, quick inline minute entry, and full work session detail editing.
+- [x] **AIO-DATA-01**: `aiSkillVersions` is added to Dexie (V18) and covered by export, restore, validate, and the Tauri SQLite flush. Adding a table updates all five coordinated lists. (R-02)
+- [x] **AIO-DATA-02**: `targetAgentId` survives export → restore. Agent assignment history is no longer stripped. (Pitfall 22)
+- [x] **AIO-DATA-03**: Export → validate → restore round-trips both a pre-v1.4 fixture and a v1.4 fixture with matching counts. (R-02, R-14)
+- [x] **AIO-DATA-04**: A backup produced by the previous build still imports; a backup produced by this build is read by the previous build without corruption. (R-02)
+- [x] **AIO-DATA-05**: Persisted SDLC rows are handled non-destructively — filtered from the UI, not silently deleted — unless a decision in Phase 36 says otherwise. (R-16)
 
-### Native Credential Storage & Auto-Sync Hardening (Phase 13.1 INSERTED)
+### Verification (AIO-VERIFY)
 
-- [x] **SYNC-01**: Native desktop OS Keychain credential persistence via Rust keyring crate with Web password-manager compatibility, safe legacy Jira token migration, zero-secret SQLite/IndexedDB boundaries, and resilient GitHub auto-sync with exponential backoff and SHA conflict pausing.
+- [ ] **AIO-VERIFY-01**: Automated tests cover the coordinator, budget gate, team tools, and team repository — the modules that currently have zero coverage. (C-15)
+- [ ] **AIO-VERIFY-02**: Each of the five live defects found in research is reproduced by a failing test before it is fixed. (C-15)
+- [ ] **AIO-VERIFY-03**: The milestone closes on a real UI walkthrough: create a group, staff it, assign free-style work, watch delegation, hit the budget warning, top up, approve a skill version, restore a backup. No item is confirmed by reading code. (C-15)
 
-### AI Chat Drawer & 9router Integration (Phase 13.2 INSERTED)
+### Team Docs Zones (AIO-DOCS) — Phase 41
 
-- [x] **AI-01**: User can configure 9router API endpoint, API key, and model name in Settings with connection test verification.
-- [x] **AI-02**: Right-side collapsible and pinnable chat drawer (docked side-by-side or overlay) accessible globally and from task/project/milestone views.
-- [x] **AI-03**: Chat sessions can be standalone or scoped to a specific Task, Project, or Milestone, retaining conversation history per scope in local IndexedDB.
-- [x] **AI-04**: Prompt context engine serializes scoped item fields (title, status, priority, estimates, tags, notes, dates) into system/user instructions for grounded responses.
-- [x] **AI-05**: Item link and document grounding extracts text from item links/notes (local attachments, URLs, note content) to answer reference-based questions directly.
+- [x] **AIO-DOCS-01**: Creating a team creates one team folder and one subfolder per member in `db.notes`, in the same transaction as the team row. A mid-transaction failure leaves neither the team nor any folder behind.
+- [x] **AIO-DOCS-02**: Every member can call the team tool `write_doc` (actions list/create/update), and the write is visible in Docs immediately in the member's own folder — no approval card, no separate draft table.
+- [x] **AIO-DOCS-03**: A member write outside its own subfolder is refused by code: `parentId` on create and the existing note's `parentId` on update are both checked against the caller's folder id. Prompt wording is not the enforcement.
+- [x] **AIO-DOCS-04**: A member cannot create a folder, delete a note, or call any other mutation: the DB-tool mutations `create_note`/`update_note`/`delete_note` stay outside `EMPLOYEE_READ_ONLY_ALLOWLIST` and are refused by the runtime's read-only gate, while `write_doc` is the only write path and writes nothing on refusal.
+- [x] **AIO-DOCS-05**: The leader keeps the full mutation toolset and its writes still park on the approval card; the user's accept is what places the final document at the team root.
+- [x] **AIO-DOCS-06**: Deleting a team removes its folder tree. A team created before this phase gets its tree lazily on first run, and repeated runs do not duplicate it.
 
-### Knowledge Base Integration (Phase 14 INSERTED)
+### Read-Only Git Inspection (AIO-READ) — Phase 42
 
-- [ ] **REQ-14.1**: Database schema upgrades to Dexie SCHEMA_V9 supporting document type, folder hierarchy (parentId), tags, and soft delete (deletedAt) without data loss on existing sticky notes.
-- [ ] **REQ-14.2**: Offline lexical BM25 search engine with field weighting (Title x3, Tags x2, Body x1) and Vietnamese diacritic normalization.
-- [x] **REQ-14.3**: Markdown renderer parses inline Wiki-links (`[[doc:id|Title]]`, `[[task:id|Title]]`, `[[project:id|Title]]`) into interactive chips and binary attachments (`attachment:uuid`) safely without XSS.
-- [x] **REQ-14.4**: Smart Ingestion flow extracts markdown headings/hashtags and regex-detects Jira keys and existing task/project titles with a 1-click "Áp dụng tất cả" banner.
-- [x] **REQ-14.5**: AI tools `search_knowledge_base` and `get_document_details` provide BM25-ranked snippets within character budget, supported by `@doc:` autocomplete and clickable citation chips opening a Quick Preview Drawer.
-- [x] **REQ-14.6**: NotesView provides a unified 3-column document workspace (Folder Tree + Document List + Split Editor/Reader with ToC and Backlinks), TaskDrawer Linked Knowledge integration, and Markdown/Zip export.
+- [x] **AIO-READ-04**: The reviewer reads `status`, `diff` (summary and per-file), `log`, and file contents of a remote repository over SSH, read-only — no writing command, no arbitrary shell, no output redirection.
+- [x] **AIO-READ-05**: Every new read path wraps its result as untrusted data at the same boundary the existing linked-item path uses, and a test asserts the wrap is present.
+- [x] **AIO-READ-06**: The reviewer can run read-only `oracle_query` and `oracle_describe`; both tools are advertised to team agents only while the Oracle AI Tool is enabled, and a disabled Oracle advertises neither.
 
-### Ghost Dev: Headless Claude Code Orchestration (Phase 15 INSERTED)
+### Repo Reading That Scales (AIO-READ) — Phase 43
 
-- [ ] **GHOST-01**: Zero-dependency Git unified diff parser converts raw diff strings into structured files, line counts, hunks, and individual additions/deletions.
-- [ ] **GHOST-02**: Prompt builder utilities format task context for Master Agent orchestration and package inline diff code comments (`file_path:line_number`) for iterative code refinement.
-- [ ] **GHOST-03**: Rust backend enforces shell command whitelist for autonomous diagnostic runs and blocks unwhitelisted commands until explicit user approval via modal gate.
-- [ ] **GHOST-04**: Agent Control view delivers a 3-column layout (Session List, Terminal Stream Log, Live Git Diff Reviewer) accessible via Sidebar badge and integrated with task triggers.
+- [x] **AIO-READ-07**: `git_read` exposes a `grep` action that searches a ref's tracked content by pattern and returns `path:line:text` hits with a bounded hit count, so an agent locates a symbol without reading any file in full.
+- [x] **AIO-READ-08**: `git_read`'s `read_file` returns line-numbered, paged content with `totalLines`, `hasMore`, and the next `offset` to call; a file larger than one page never enters the turn's context whole.
+- [x] **AIO-READ-09**: A team tool runs Claude Code headless on the remote host over SSH with an explicit read-only tool allowlist and a bounded turn count, and returns a structured report capped at a fixed size; a remote without the `claude` binary produces a truthful refusal code, never a mid-turn failure.
+- [x] **AIO-READ-10**: A team turn passes its provider context window into the runtime so in-loop compaction runs; a test asserts the window reaches `runAiOrchestratorLoop`.
 
-### Knowledge Server Foundation, DLP Checks & AST Ingestion (Phase 16 INSERTED)
+---
 
-- [x] **INGEST-01**: User can manually publish stable named sets of selected PlannerMate Markdown document UUIDs to an optional independently deployed knowledge server without changing, deleting, or replacing canonical local Markdown; folder-based creation captures a one-time explicit ordered membership snapshot.
-- [x] **INGEST-02**: Before any user-authored document-set name, document title, Markdown body, tag, or other payload text leaves PlannerMate, client-side checks detect PAN, CVV, PIN/PIN block, HSM keys, credentials, and customer PII, show category/document/location with masked context, and require fresh explicit confirmation for every affected publish attempt without any persisted trust bypass or sensitive audit content.
-- [x] **INGEST-03**: Published immutable Markdown snapshots are parsed into versioned section-first AST evidence chunks that preserve headings, tables, fenced code/SQL, ASCII diagrams, duplicate occurrences, exact raw source ranges, and atomic blocks without truncation; an atomic block over 50,000 characters rejects the candidate with exact location and split guidance.
-- [x] **INGEST-04**: Pre-send preview and daemon projection use the same versioned AST/newline-normalization policy and SHA-256 document/chunk hashes to classify added, changed, removed, and unchanged documents and chunks, reuse unchanged content representations, keep occurrence identity separate, and activate a candidate snapshot only after every document succeeds while preserving the prior active snapshot on failure.
-- [x] **INGEST-05**: User can inspect each document set and member using exactly `Never published`, `In sync`, `Local changes`, `Publishing`, `Warning`, or `Failed`, including subordinate connectivity uncertainty and the 10 newest content-free attempt records, while local Docs CRUD, autosave, folder navigation, and BM25 search continue when the optional knowledge server is disabled, unreachable, or absent.
+## Open Decisions (must be resolved in phase discuss, not assumed)
 
-### Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph (Phase 17)
-
-- [x] **GRAPH-01**: User can build a controlled graph projection for process 60000006 covering scheduled processes, container steps, software components, database objects, cycle types, statuses, and source documents.
-- [x] **GRAPH-02**: Graph keeps identically numbered domain objects distinct through namespaced composite identities (such as `PRC_PROCESS:60000006` vs `PRC_CONTAINER:60000006`).
-- [x] **GRAPH-03**: Structured Markdown tables and explicit identifiers are extracted deterministically before LLM extraction is used for prose-only relationships.
-- [x] **GRAPH-04**: Every graph relation retains source document, section, source range, extraction method, and evidence classification (`OBSERVED`, `INFERRED`, or `BUSINESS_APPROVED`).
-- [x] **GRAPH-05**: User can distinguish `OBSERVED`, `INFERRED`, and `BUSINESS_APPROVED` knowledge in graph-backed results.
-- [x] **GRAPH-06**: User can rebuild graph and indexes from published Markdown without treating Neo4j as canonical storage.
-
-### Multi-Modal Hybrid Retrieval Engine (Phase 18)
-
-- [x] **RETR-01**: User can find exact technical identifiers—including process IDs, package names, table names, cycle codes, and status codes—through full-text retrieval over the active published snapshot.
-- [x] **RETR-02**: User can find relevant English technical documentation using semantically equivalent Vietnamese or English questions through snapshot-scoped vector retrieval.
-- [x] **RETR-03**: User can query process flow and runtime call chains through ontology-approved bounded graph traversal.
-- [x] **RETR-04**: User can run dependency and impact queries across one to three graph hops with bounded result counts and explicit truncation status.
-- [x] **RETR-05**: User receives full-text, semantic, and graph evidence as one ranked, deduplicated, citation-bearing set with truthful modality and degraded-status metadata.
-
-### Grounded Assistant, Provenance Citations & Offline Fallback (Phase 19)
-
-- [x] **ANSWER-01**: Material claims cite exact source documents, sections, and line ranges with snapshot provenance.
-- [x] **ANSWER-02**: Flow, dependency, and impact answers expose step-by-step graph paths with per-hop evidence class and citation.
-- [x] **ANSWER-03**: Facts retain evidence classification; derived claims show visible INFERRED badge; mixed-classification uses weakest supporting.
-- [x] **ANSWER-04**: Conflicting indexed sources trigger warning with dimension (Version/Environment/Behavior/Unknown); no primary branch; scope variation labeled neutrally when metadata proves.
-- [x] **ANSWER-05**: Missing evidence produces explicit abstention (NEEDS_CLARIFICATION, NO_EVIDENCE, UNSUPPORTED); never guesses or falls back to ungrounded model knowledge.
-- [x] **ANSWER-06**: Local BM25 fallback runs automatically on allowed availability failures scoped to resolved set members; strong-evidence synthesis vs weak-evidence ranked list; local citations use [L#] and Local badge.
-- [x] **ANSWER-07**: Citation and graph-path interactions open QuickPreviewDrawer at exact document range with snapshot-first excerpt and mismatch warning when current content differs; historical citations durable with bounded excerpt.
-
-### Benchmark Evaluation Suite & Integrity Hardening (Phase 20)
-
-- [ ] **QUAL-01**: Maintainer can execute a version-controlled 40-case benchmark harness covering exact lookup, semantic retrieval, process flow, call chain, three-hop impact, conflict, abstention, security, and offline recovery cases.
-- [ ] **QUAL-02**: Benchmark asserts semantic expectations (expected sources/ranges, required graph paths with hop source/rel/target, required facts) and zero-tolerance trust invariants (no unsupported claims, single-snapshot path closure, balanced conflicts, zero credential leakage, zero offline egress).
-- [ ] **QUAL-03**: Automated release gate enforces aggregate pass rate `>= 90%`, per-category pass rate `>= 80%`, three-hop answer success `>= 90%`, graph path fidelity `100%`, and zero invariant violations, reporting all failures without masking retries.
-- [ ] **QUAL-04**: Automated checks prove knowledge graph rebuild produces semantic equivalence (stable URNs, factKeys, classifications, paths, retrieval results) and offline transport failures (connection refused, timeout) safely fall back to local BM25 with zero network egress while auth/config/parse errors remain visible.
-- [ ] **QUAL-05**: Verification proves daemon secrets never leak across API endpoints or generated benchmark reports, and Phase 16 sensitive-data scanning / fresh confirmation remains enforced before document publication.
-
-### Federated MCP Knowledge & Hybrid Tool Grounding (Phase 22)
-
-- [x] **MCP-ROUTE-01**: `intentRouter` dynamically inspects enabled MCP server capabilities and routes queries with `require_mcp` boolean and `target_mcp_servers` array without context explosion.
-- [x] **MCP-FEDERATED-01**: `groundedTurn` executes parallel retrieval across Knowledge Docs RAG and dynamic MCP tool execution loop with fail-soft isolation.
-- [x] **MCP-SYNTH-01**: Evidence pack integrates MCP findings with `M1`, `M2`... citations and synthesis validates closure across doc and tool findings.
-- [ ] **MCP-TELE-01**: Telegram bot assistant dynamically discovers enabled MCP tools and supports remote MCP queries for authorized users.
-
-### Knowledge Graph Build Reliability & Entity Fidelity (Phase 23)
-
-- [x] **BUILD-OOM-01**: Knowledge server rebuilds large document sets (>200 chunks) in bounded batches with event-loop yield, keeping memory under 1.5Gi without OOM/process death.
-- [x] **BUILD-CACHE-01**: Knowledge server caches chunk LLM extraction results persistently on disk keyed by `chunkContentHash` + model + promptVersion for instant incremental rebuilds.
-- [x] **ENTITY-FIDELITY-01**: Knowledge graph generates clean ASCII URNs via Unicode NFD diacritic stripping and preserves original Vietnamese entity names (`canonicalName`) on fact queries, DTOs, and UI without string-splitting URN segments.
-
-## Future Requirements (Deferred)
-
-- **FUTR-01**: Full bidirectional Jira issue webhook sync (deferred - requires server/push).
-- **FUTR-02**: Jira sprint and epic hierarchical import (deferred - v1.2 candidate).
-- **FUTR-03**: Native browser Push Notification API with service worker background sync.
+| ID | Decision | Blocks |
+|----|----------|--------|
+| R-01 | Leader gets its own DB table or a `role='lead'` member row | Phase 36 |
+| R-02 | Backup envelope version bump | Phase 36, 39 |
+| R-03 | Threshold value | Phase 38 |
+| R-04 | One threshold or several | Phase 38 |
+| R-05 | Concurrency default and scope (per-group vs global) | Phase 37 |
+| R-06 | Pause/resume/batch semantics at threshold | Phase 38 |
+| R-09 | Transcript model — one channel vs per-agent threads | Phase 39, 40 |
+| R-11 | One skill per agent or many | Phase 39 |
+| R-12 | Skill version restore | Phase 39 |
+| R-14 | Migration from team-scoped transcript to many chats | Phase 36 |
+| R-15 | Cache tokens, retries, missing usage, split remainder, mid-run membership | Phase 38 |
+| R-16 | Keep SDLC-specific PL/CAB/change-pack state or drop it | Phase 36 |
+| R-17 | Which tools an agent may use in free-style mode | Phase 37 |
+| R-19 | Budget display unit, precision, realtime vs per-turn | Phase 38 |
+| R-21 | Exact trigger name and stripe position | Phase 40 |
 
 ## Out of Scope
 
-- Direct OAuth 2.0 PKCE flow for Jira Cloud (requires registered client ID/secret; API tokens provide zero-config per-user access).
-- Public third-party CORS proxy services (blocked to protect confidential banking tokens and data).
-- Complex chart libraries (`@ant-design/plots`, `recharts`, `chart.js`) — keep zero new dependencies; lightweight native React SVG suffices.
-
-## Traceability
-
-| Requirement | Phase | Status |
-|---|---|---|
-| SHB-01 | Phase 9 | Complete |
-| SHB-02 | Phase 9 | Complete |
-| SHB-03 | Phase 9 | Complete |
-| SHB-04 | Phase 9 | Complete |
-| SHB-05 | Phase 9 | Complete |
-| SRCH-01 | Phase 10 | Complete |
-| SRCH-02 | Phase 10 | Complete |
-| SRCH-03 | Phase 10 | Complete |
-| SRCH-04 | Phase 10 | Complete |
-| JIRA-01 | Phase 11 | Complete |
-| JIRA-02 | Phase 11 | Complete |
-| JIRA-03 | Phase 11 | Complete |
-| JIRA-04 | Phase 11 | Complete |
-| JIRA-05 | Phase 11 | Complete |
-| NOTIF-01 | Phase 12 | Complete |
-| NOTIF-02 | Phase 12 | Complete |
-| NOTIF-03 | Phase 12 | Complete |
-| NOTIF-04 | Phase 12 | Complete |
-| NOTIF-05 | Phase 12 | Complete |
-| TIMER-01 | Phase 12.1 | Complete |
-| TIMER-02 | Phase 12.1 | Complete |
-| TIMER-03 | Phase 12.1 | Complete |
-| TIMER-04 | Phase 12.1 | Complete |
-| TIMER-05 | Phase 12.1 | Complete |
-| TIMER-06 | Phase 12.1 | Complete |
-| TIMER-07 | Phase 12.1 | Complete |
-| TIMER-08 | Phase 12.1 | Complete |
-| TIMER-09 | Phase 12.1 | Complete |
-| NOTIF-06 | Phase 12.2 | Complete |
-| NOTIF-07 | Phase 12.2 | Complete |
-| NOTIF-08 | Phase 12.2 | Complete |
-| NOTIF-09 | Phase 12.2 | Complete |
-| NOTIF-10 | Phase 12.2 | Complete |
-| ANLT-01 | Phase 13 | Complete |
-| ANLT-02 | Phase 13 | Complete |
-| ANLT-03 | Phase 13 | Complete |
-| NOTE-01 | Phase 13.1 | Complete |
-| NOTE-02 | Phase 13.1 | Complete |
-| NOTE-03 | Phase 13.1 | Complete |
-| WORKLOG-01 | Phase 13.1 | Complete |
-| SYNC-01 | Phase 13.1 | Complete |
-| AI-01 | Phase 13.2 | Complete |
-| AI-02 | Phase 13.2 | Complete |
-| AI-03 | Phase 13.2 | Complete |
-| AI-04 | Phase 13.2 | Complete |
-| AI-05 | Phase 13.2 | Complete |
-| REQ-14.1 | Phase 14 | Pending |
-| REQ-14.2 | Phase 14 | Pending |
-| REQ-14.3 | Phase 14 | Complete |
-| REQ-14.4 | Phase 14 | Complete |
-| REQ-14.5 | Phase 14 | Complete |
-| REQ-14.6 | Phase 14 | Complete |
-| GHOST-01 | Phase 15 | Pending |
-| GHOST-02 | Phase 15 | Pending |
-| GHOST-03 | Phase 15 | Pending |
-| GHOST-04 | Phase 15 | Pending |
-| INGEST-01 | Phase 16 | Complete |
-| INGEST-02 | Phase 16 | Complete |
-| INGEST-03 | Phase 16 | Complete |
-| INGEST-04 | Phase 16 | Complete |
-| INGEST-05 | Phase 16 | Complete |
-| GRAPH-01 | Phase 17 | Complete |
-| GRAPH-02 | Phase 17 | Complete |
-| GRAPH-03 | Phase 17 | Complete |
-| GRAPH-04 | Phase 17 | Complete |
-| GRAPH-05 | Phase 17 | Complete |
-| GRAPH-06 | Phase 17 | Complete |
-| RETR-01 | Phase 18 | Complete |
-| RETR-02 | Phase 18 | Complete |
-| RETR-03 | Phase 18 | Complete |
-| RETR-04 | Phase 18 | Complete |
-| RETR-05 | Phase 18 | Complete |
-| ANSWER-01 | Phase 19 | Complete |
-| ANSWER-02 | Phase 19 | Complete |
-| ANSWER-03 | Phase 19 | Complete |
-| ANSWER-04 | Phase 19 | Complete |
-| ANSWER-05 | Phase 19 | Complete |
-| ANSWER-06 | Phase 19 | Complete |
-| ANSWER-07 | Phase 19 | Complete |
-| QUAL-01 | Phase 20 | Pending |
-| QUAL-02 | Phase 20 | Pending |
-| QUAL-03 | Phase 20 | Pending |
-| QUAL-04 | Phase 20 | Pending |
-| QUAL-05 | Phase 20 | Pending |
-| MCP-ROUTE-01 | Phase 22 | Complete |
-| MCP-FEDERATED-01 | Phase 22 | Complete |
-| MCP-SYNTH-01 | Phase 22 | Complete |
-| MCP-TELE-01 | Phase 22 | Pending |
-| BUILD-OOM-01 | Phase 23 | Complete |
-| BUILD-CACHE-01 | Phase 23 | Complete |
-| ENTITY-FIDELITY-01 | Phase 23 | Complete |
+- PWA / GitHub Pages behavior.
+- Multi-user collaboration or any role system.
+- Restoring SDLC step gating in any form.
+- Peer-to-peer agent chat (R-10) — leader-mediated only for now.
+- Semantic/embedding search over transcripts.
+- Global cross-chat memory.
+- Always-on background agents.

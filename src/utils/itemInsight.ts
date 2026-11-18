@@ -1,4 +1,4 @@
-import type { Task, Project, Milestone, WorkSession, PlannedAllocation, CapacityRule, Note } from '../types/models';
+import type { Task, ChangeRequest, System, WorkSession, PlannedAllocation, Note } from '../types/models';
 import { getTodayDateString, isValidCalendarDate } from './date';
 import dayjs from 'dayjs';
 
@@ -35,7 +35,7 @@ export interface TaskInsightAnalysis {
   recommendations: InsightRecommendation[];
 }
 
-export interface ProjectInsightMetrics {
+export interface ChangeRequestInsightMetrics {
   totalTasks: number;
   doneTasks: number;
   inProgressTasks: number;
@@ -46,31 +46,27 @@ export interface ProjectInsightMetrics {
   actualSpentMinutes: number;
   plannedMinutes: number;
   unestimatedTaskCount: number;
-  milestonesCount: number;
-  approachingMilestonesCount: number;
+  targetSystemsCount: number;
 }
 
-export interface ProjectInsightAnalysis {
-  metrics: ProjectInsightMetrics;
+export interface ChangeRequestInsightAnalysis {
+  metrics: ChangeRequestInsightMetrics;
   recommendations: InsightRecommendation[];
 }
 
-export interface MilestoneInsightMetrics {
+export interface SystemInsightMetrics {
   totalTasks: number;
   doneTasks: number;
-  openTasks: number;
   inProgressTasks: number;
+  openTasks: number;
   overdueTasks: number;
   completionRate: number;
   remainingEstimateMinutes: number;
-  daysRemaining: number | null;
-  dailyCapacityMinutes: number;
-  capacityNeededDailyMinutes: number;
-  highOrUrgentOpenTasks: number;
+  changeRequestCount: number;
 }
 
-export interface MilestoneInsightAnalysis {
-  metrics: MilestoneInsightMetrics;
+export interface SystemInsightAnalysis {
+  metrics: SystemInsightMetrics;
   recommendations: InsightRecommendation[];
 }
 
@@ -251,38 +247,38 @@ export function analyzeTaskInsight(
 }
 
 /**
- * Project Insight analysis:
- * - Task completion & distribution
+ * Change Request Insight analysis:
+ * - Task completion & distribution across the CR's tasks
  * - Time budget (estimate vs actual vs planned)
- * - Milestone tracking
+ * - Target subsystem coverage
  * - Pre-implementation bottlenecks
  */
-export function analyzeProjectInsight(
-  project: Project,
-  projectTasks: Task[],
-  projectMilestones: Milestone[],
+export function analyzeChangeRequestInsight(
+  changeRequest: ChangeRequest,
+  crTasks: Task[],
+  targetSystems: System[],
   allWorkSessions: WorkSession[],
   allPlannedAllocations: PlannedAllocation[]
-): ProjectInsightAnalysis {
-  const totalTasks = projectTasks.length;
-  const doneTasks = projectTasks.filter((t) => t.status === 'Done').length;
-  const inProgressTasks = projectTasks.filter((t) => t.status === 'In Progress').length;
-  const openTasks = projectTasks.filter((t) => t.status === 'Open' || t.status === 'Pending').length;
+): ChangeRequestInsightAnalysis {
+  const totalTasks = crTasks.length;
+  const doneTasks = crTasks.filter((t) => t.status === 'Done').length;
+  const inProgressTasks = crTasks.filter((t) => t.status === 'In Progress').length;
+  const openTasks = crTasks.filter((t) => t.status === 'Open' || t.status === 'Pending').length;
 
   const today = getTodayDateString();
-  const overdueTasks = projectTasks.filter((t) => {
+  const overdueTasks = crTasks.filter((t) => {
     if (t.status === 'Done' || t.status === 'Cancelled' || !t.deadline) return false;
     return t.deadline < today;
   }).length;
 
   const completionRate = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
-  const unestimatedTaskCount = projectTasks.filter(
+  const unestimatedTaskCount = crTasks.filter(
     (t) => t.status !== 'Done' && t.status !== 'Cancelled' && (!t.estimateMinutes || t.estimateMinutes === 0)
   ).length;
 
-  const totalEstimatedMinutes = projectTasks.reduce((sum, t) => sum + (t.estimateMinutes || 0), 0);
+  const totalEstimatedMinutes = crTasks.reduce((sum, t) => sum + (t.estimateMinutes || 0), 0);
 
-  const taskIds = new Set(projectTasks.map((t) => t.id));
+  const taskIds = new Set(crTasks.map((t) => t.id));
   const actualSpentMinutes = allWorkSessions
     .filter((s) => taskIds.has(s.taskId))
     .reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
@@ -290,33 +286,28 @@ export function analyzeProjectInsight(
     .filter((a) => taskIds.has(a.taskId))
     .reduce((sum, a) => sum + (a.allocatedMinutes || 0), 0);
 
-  const milestonesCount = projectMilestones.length;
-  const approachingMilestonesCount = projectMilestones.filter((m) => {
-    if (m.status === 'Done' || m.status === 'Cancelled' || !m.deadline) return false;
-    const diff = dayjs(m.deadline).diff(dayjs(today), 'day');
-    return diff >= 0 && diff <= 7;
-  }).length;
+  const targetSystemsCount = targetSystems.length;
 
   const recommendations: InsightRecommendation[] = [];
 
-  if (project.deadline && isValidCalendarDate(project.deadline)) {
-    const diffDays = dayjs(project.deadline).diff(dayjs(today), 'day');
-    if (diffDays < 0 && project.status !== 'Done' && project.status !== 'Cancelled') {
+  if (changeRequest.deadline && isValidCalendarDate(changeRequest.deadline)) {
+    const diffDays = dayjs(changeRequest.deadline).diff(dayjs(today), 'day');
+    if (diffDays < 0 && changeRequest.status !== 'Done' && changeRequest.status !== 'Cancelled') {
       recommendations.push({
-        id: 'proj-overdue',
+        id: 'cr-overdue',
         severity: 'danger',
-        title: 'Dự án đã quá hạn chót',
-        description: `Hạn chót dự án là ${project.deadline} (${Math.abs(diffDays)} ngày trước). Cần đánh giá lại tiến độ tổng thể.`,
+        title: 'Change Request đã quá hạn chót',
+        description: `Hạn chót CR là ${changeRequest.deadline} (${Math.abs(diffDays)} ngày trước). Cần đánh giá lại tiến độ tổng thể.`,
       });
     }
   }
 
   if (totalTasks === 0) {
     recommendations.push({
-      id: 'proj-no-tasks',
+      id: 'cr-no-tasks',
       severity: 'warning',
-      title: 'Dự án chưa có tác vụ nào',
-      description: 'Hãy phân rã mục tiêu dự án thành các tác vụ cụ thể để bắt đầu lập kế hoạch.',
+      title: 'CR chưa có tác vụ nào',
+      description: 'Hãy phân rã mục tiêu CR thành các tác vụ cụ thể để bắt đầu lập kế hoạch.',
       actionText: 'Tạo tác vụ mới',
       actionKey: 'create-task',
     });
@@ -324,10 +315,10 @@ export function analyzeProjectInsight(
 
   if (unestimatedTaskCount > 0) {
     recommendations.push({
-      id: 'proj-unestimated-tasks',
+      id: 'cr-unestimated-tasks',
       severity: 'warning',
       title: `${unestimatedTaskCount} tác vụ chưa được ước lượng thời gian`,
-      description: 'Nhiều tác vụ thiếu ước lượng khiến tổng khối lượng công việc và tiến độ dự án không thể dự báo chính xác.',
+      description: 'Nhiều tác vụ thiếu ước lượng khiến tổng khối lượng công việc và tiến độ CR không thể dự báo chính xác.',
       actionText: 'Xem danh sách tác vụ',
       actionKey: 'view-tasks',
     });
@@ -335,40 +326,31 @@ export function analyzeProjectInsight(
 
   if (overdueTasks > 0) {
     recommendations.push({
-      id: 'proj-overdue-tasks',
+      id: 'cr-overdue-tasks',
       severity: 'danger',
       title: `Có ${overdueTasks} tác vụ bị quá hạn`,
-      description: 'Dự án đang có tác vụ trễ deadline. Cần rà soát và điều chỉnh thứ tự ưu tiên hoặc ngày hoàn thành.',
+      description: 'CR đang có tác vụ trễ deadline. Cần rà soát và điều chỉnh thứ tự ưu tiên hoặc ngày hoàn thành.',
       actionText: 'Xem tác vụ',
       actionKey: 'view-tasks',
     });
   }
 
-  if (milestonesCount === 0 && totalTasks > 5) {
+  if (targetSystemsCount === 0) {
     recommendations.push({
-      id: 'proj-no-milestones',
+      id: 'cr-no-targets',
       severity: 'info',
-      title: 'Chưa thiết lập cột mốc (Milestone)',
-      description: 'Dự án có trên 5 tác vụ nhưng chưa có cột mốc kiểm soát. Tạo milestone giúp chia nhỏ chặng đường và theo dõi burndown dễ dàng hơn.',
-      actionText: 'Tạo cột mốc',
-      actionKey: 'create-milestone',
-    });
-  }
-
-  if (approachingMilestonesCount > 0) {
-    recommendations.push({
-      id: 'proj-approaching-milestones',
-      severity: 'warning',
-      title: `Có ${approachingMilestonesCount} cột mốc sắp đến hạn trong vòng 7 ngày`,
-      description: 'Kiểm tra khối lượng công việc còn lại của các mốc này để đảm bảo bàn giao đúng cam kết.',
+      title: 'CR chưa gắn subsystem nào',
+      description: 'Chưa có subsystem mục tiêu nên không thể triển khai hay tạo nhánh tính năng theo hệ thống.',
+      actionText: 'Gắn subsystem',
+      actionKey: 'edit-cr',
     });
   }
 
   if (recommendations.length === 0) {
     recommendations.push({
-      id: 'proj-healthy',
+      id: 'cr-healthy',
       severity: 'success',
-      title: 'Tiến độ dự án đang ổn định',
+      title: 'Tiến độ CR đang ổn định',
       description: 'Các tác vụ đều được ước lượng và bám sát kế hoạch. Tiếp tục duy trì nhịp độ làm việc.',
     });
   }
@@ -385,120 +367,82 @@ export function analyzeProjectInsight(
       actualSpentMinutes,
       plannedMinutes,
       unestimatedTaskCount,
-      milestonesCount,
-      approachingMilestonesCount,
+      targetSystemsCount,
     },
     recommendations,
   };
 }
 
 /**
- * Milestone Insight analysis:
- * - Scope & progress distribution
- * - Schedule feasibility vs capacity
- * - Priority focus
+ * Subsystem Insight analysis:
+ * - Task scope & progress for the subsystem
+ * - Remaining effort
+ * - Change Request coverage
  */
-export function analyzeMilestoneInsight(
-  milestone: Milestone,
-  milestoneTasks: Task[],
-  capacityRules: CapacityRule[] = []
-): MilestoneInsightAnalysis {
-  const totalTasks = milestoneTasks.length;
-  const doneTasks = milestoneTasks.filter((t) => t.status === 'Done').length;
-  const inProgressTasks = milestoneTasks.filter((t) => t.status === 'In Progress').length;
-  const openTasks = milestoneTasks.filter((t) => t.status === 'Open' || t.status === 'Pending').length;
+export function analyzeSystemInsight(
+  system: System,
+  systemTasks: Task[],
+  changeRequests: ChangeRequest[]
+): SystemInsightAnalysis {
+  const totalTasks = systemTasks.length;
+  const doneTasks = systemTasks.filter((t) => t.status === 'Done').length;
+  const inProgressTasks = systemTasks.filter((t) => t.status === 'In Progress').length;
+  const openTasks = systemTasks.filter((t) => t.status === 'Open' || t.status === 'Pending').length;
 
   const today = getTodayDateString();
-  const overdueTasks = milestoneTasks.filter((t) => {
+  const overdueTasks = systemTasks.filter((t) => {
     if (t.status === 'Done' || t.status === 'Cancelled' || !t.deadline) return false;
     return t.deadline < today;
   }).length;
 
   const completionRate = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
-  const remainingTasks = milestoneTasks.filter((t) => t.status !== 'Done' && t.status !== 'Cancelled');
+  const remainingTasks = systemTasks.filter((t) => t.status !== 'Done' && t.status !== 'Cancelled');
   const remainingEstimateMinutes = remainingTasks.reduce((sum, t) => sum + (t.estimateMinutes || 0), 0);
 
-  const highOrUrgentOpenTasks = remainingTasks.filter(
-    (t) => t.priority === 'High' || t.priority === 'Urgent'
+  const changeRequestCount = changeRequests.filter((cr) =>
+    cr.targets.some((target) => target.systemId === system.id)
   ).length;
-
-  let daysRemaining: number | null = null;
-  if (milestone.deadline && isValidCalendarDate(milestone.deadline)) {
-    const dTarget = dayjs(milestone.deadline);
-    const dToday = dayjs(today);
-    daysRemaining = dTarget.diff(dToday, 'day');
-  }
-
-  // Calculate average daily capacity from capacityRules (default to 480m / 8h if empty)
-  const activeRules = capacityRules.filter((r) => r.workMinutes > 0);
-  const dailyCapacityMinutes = activeRules.length > 0
-    ? Math.round(activeRules.reduce((sum, r) => sum + r.workMinutes, 0) / activeRules.length)
-    : 480;
-
-  const capacityNeededDailyMinutes = daysRemaining !== null && daysRemaining > 0
-    ? Math.round(remainingEstimateMinutes / daysRemaining)
-    : remainingEstimateMinutes;
 
   const recommendations: InsightRecommendation[] = [];
 
   if (totalTasks === 0) {
     recommendations.push({
-      id: 'ms-no-tasks',
+      id: 'sys-no-tasks',
       severity: 'warning',
-      title: 'Cột mốc chưa gắn tác vụ',
-      description: 'Chưa có tác vụ nào thuộc cột mốc này. Gắn các tác vụ tương ứng để theo dõi tiến độ.',
+      title: 'Subsystem chưa gắn tác vụ',
+      description: 'Chưa có tác vụ nào thuộc subsystem này. Gắn tác vụ tương ứng để theo dõi tiến độ.',
       actionText: 'Thêm tác vụ',
       actionKey: 'create-task',
     });
   }
 
-  if (daysRemaining !== null && daysRemaining < 0 && milestone.status !== 'Done') {
+  if (overdueTasks > 0) {
     recommendations.push({
-      id: 'ms-overdue',
+      id: 'sys-overdue-tasks',
       severity: 'danger',
-      title: 'Cột mốc đã trễ hạn',
-      description: `Hạn của cột mốc là ${milestone.deadline} (${Math.abs(daysRemaining)} ngày trước) nhưng vẫn còn ${remainingTasks.length} tác vụ chưa xong.`,
-      actionText: 'Cập nhật mốc',
-      actionKey: 'edit-milestone',
-    });
-  } else if (daysRemaining !== null && daysRemaining >= 0 && daysRemaining <= 3 && remainingTasks.length > 0) {
-    recommendations.push({
-      id: 'ms-deadline-close',
-      severity: 'warning',
-      title: 'Hạn mốc rất cận kề (≤ 3 ngày)',
-      description: `Còn ${daysRemaining} ngày và ${remainingTasks.length} tác vụ (${(remainingEstimateMinutes / 60).toFixed(1)}h công việc) chưa hoàn thành.`,
-      actionText: 'Xem tiến độ',
-      actionKey: 'view-burndown',
+      title: `Có ${overdueTasks} tác vụ bị quá hạn`,
+      description: 'Subsystem đang có tác vụ trễ deadline. Cần rà soát và điều chỉnh thứ tự ưu tiên.',
+      actionText: 'Xem tác vụ',
+      actionKey: 'view-tasks',
     });
   }
 
-  if (daysRemaining !== null && daysRemaining > 0 && capacityNeededDailyMinutes > dailyCapacityMinutes) {
+  if (changeRequestCount === 0) {
     recommendations.push({
-      id: 'ms-capacity-overload',
-      severity: 'danger',
-      title: 'Nguy cơ quá tải thời gian hàng ngày',
-      description: `Cần ${(capacityNeededDailyMinutes / 60).toFixed(1)}h mỗi ngày để kịp mốc, trong khi dung lượng làm việc trung bình là ${(dailyCapacityMinutes / 60).toFixed(1)}h. Cân nhắc giảm phạm vi hoặc kéo giãn thời hạn.`,
-      actionText: 'Xem Burndown',
-      actionKey: 'view-burndown',
-    });
-  }
-
-  if (highOrUrgentOpenTasks > 0) {
-    recommendations.push({
-      id: 'ms-high-priority',
+      id: 'sys-no-crs',
       severity: 'info',
-      title: `Có ${highOrUrgentOpenTasks} tác vụ ưu tiên Cao / Khẩn cấp cần giải quyết`,
-      description: 'Ưu tiên xếp lịch các tác vụ này trước để giảm thiểu rủi ro cho cột mốc.',
+      title: 'Subsystem chưa thuộc Change Request nào',
+      description: 'Subsystem chưa là mục tiêu của CR nào nên chưa có luồng bàn giao chính thức.',
     });
   }
 
   if (recommendations.length === 0) {
     recommendations.push({
-      id: 'ms-on-track',
+      id: 'sys-on-track',
       severity: 'success',
-      title: 'Cột mốc đang bám sát tiến độ',
-      description: 'Thời gian và khối lượng công việc nằm trong dung lượng khả thi. Tiếp tục triển khai.',
+      title: 'Subsystem đang bám sát tiến độ',
+      description: 'Khối lượng công việc nằm trong dung lượng khả thi. Tiếp tục triển khai.',
     });
   }
 
@@ -511,10 +455,7 @@ export function analyzeMilestoneInsight(
       overdueTasks,
       completionRate,
       remainingEstimateMinutes,
-      daysRemaining,
-      dailyCapacityMinutes,
-      capacityNeededDailyMinutes,
-      highOrUrgentOpenTasks,
+      changeRequestCount,
     },
     recommendations,
   };

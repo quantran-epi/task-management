@@ -19,6 +19,7 @@ import { getEnabledMcpCapabilitySummaries } from './mcpClient';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { ChatMessageGrounding } from './groundedAnswerSchemas';
 import { getKnowledgeLinksForEntity } from '../../db/repositories/knowledgeLinkRepo';
+import { readNoteMarkdown } from '../../utils/noteBody';
 
 export interface GroundedTurnRuntimeHooks {
   runGroundedTurn?: (
@@ -107,7 +108,7 @@ export function createDefaultGroundedTurnDeps(options: {
       loadNoteBody: async (docId) => {
         const note = await database.notes.get(docId);
         if (!note) return null;
-        return { title: note.title, body: note.body, updatedAt: note.updatedAt };
+        return { title: note.title, body: readNoteMarkdown(note.body), updatedAt: note.updatedAt };
       },
     },
     packEvidence: (inp) => packEvidence(inp),

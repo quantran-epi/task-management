@@ -30,7 +30,7 @@ describe('AI Linking Tools with Mutation Confirmation (LINK-03, D-23)', () => {
   });
 
   it('describes tool mutation accurately in Vietnamese', async () => {
-    const task = await createTask({ name: 'Implement Core Module' }, testDb);
+    const task = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Implement Core Module' }, testDb);
     const setId = '00000000-0000-4000-8000-000000000001';
 
     const descLink = describeToolMutation('link_taskmate_to_knowledge', {
@@ -66,7 +66,7 @@ describe('AI Linking Tools with Mutation Confirmation (LINK-03, D-23)', () => {
   });
 
   it('executes link_taskmate_to_knowledge and creates KnowledgeLink record in Dexie', async () => {
-    const task = await createTask({ name: 'Task For Linking' }, testDb);
+    const task = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Task For Linking' }, testDb);
     const setId = '00000000-0000-4000-8000-000000000001';
 
     const resultStr = await executeAiTool(
@@ -106,7 +106,7 @@ describe('AI Linking Tools with Mutation Confirmation (LINK-03, D-23)', () => {
   });
 
   it('fails if neither urn nor docId is provided', async () => {
-    const task = await createTask({ name: 'Task With Invalid Link' }, testDb);
+    const task = await createTask({ crId: '11111111-1111-4111-8111-111111111111', name: 'Task With Invalid Link' }, testDb);
     const setId = '00000000-0000-4000-8000-000000000001';
 
     const resultStr = await executeAiTool(

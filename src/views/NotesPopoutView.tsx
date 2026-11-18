@@ -28,6 +28,7 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import type { Note, NoteEntityType } from '../types/models';
 import { deleteNote, updateNote } from '../db/repositories/noteRepo';
 import { renderSafeMarkdown } from '../utils/markdown';
+import { readNoteMarkdown } from '../utils/noteBody';
 import { NoteEditor } from '../components/notes/NoteEditor';
 import { NoteDetailModal } from '../components/notes/NoteDetailModal';
 import { QuickNoteEntry } from '../components/notes/QuickNoteEntry';
@@ -226,15 +227,15 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
   const entityNames = useLiveQuery(
     async () => {
       const map = new Map<string, string>();
-      const [tasks, projects, milestones] = await Promise.all([
+      const [tasks, changeRequests, systems] = await Promise.all([
         db.tasks.toArray(),
-        db.projects.toArray(),
-        db.milestones.toArray(),
+        db.changeRequests.toArray(),
+        db.systems.toArray(),
       ]);
 
       tasks.forEach((t) => map.set(`task:${t.id}`, t.name));
-      projects.forEach((p) => map.set(`project:${p.id}`, p.name));
-      milestones.forEach((m) => map.set(`milestone:${m.id}`, m.name));
+      changeRequests.forEach((c) => map.set(`cr:${c.id}`, c.name));
+      systems.forEach((s) => map.set(`system:${s.id}`, s.name));
       return map;
     },
     [db]
@@ -511,7 +512,7 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
                     whiteSpace: 'pre-wrap',
                     lineHeight: '1.5',
                   }}
-                  dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(note.body) }}
+                  dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(readNoteMarkdown(note.body)) }}
                 />
               </Card>
             );

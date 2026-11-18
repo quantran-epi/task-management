@@ -1,0 +1,211 @@
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { AgentStatusRow, type AgentAttributionAgent } from '../../../../src/components/ai/office/AgentAttributionRow';
+
+/**
+ * Phase 37 plan 06 — a queued agent is visible and stoppable (D-10).
+ * 37-08 extends this file for the stopped/error retry affordance.
+ */
+const agent: AgentAttributionAgent = {
+  agentId: 'agent-1',
+  name: 'An Nguyễn',
+  role: 'Phân tích',
+  isLead: false,
+  color: '#5b4fe8',
+};
+
+describe('AgentStatusRow — queued (D-10)', () => {
+  it('renders the queue tag and the stop button for a queued agent', () => {
+    const onStop = vi.fn();
+    render(<AgentStatusRow agent={agent} status="queued" onStop={onStop} />);
+
+    expect(screen.getByText('Đang xếp hàng')).toBeInTheDocument();
+    const stop = screen.getByTestId('agent-stop-agent-1');
+    expect(stop).toBeInTheDocument();
+
+    fireEvent.click(stop);
+    expect(onStop).toHaveBeenCalledTimes(1);
+  });
+  it('renders nothing for a done agent', () => {
+    const { container } = render(<AgentStatusRow agent={agent} status="done" onStop={vi.fn()} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe('AgentStatusRow — waiting lead (delegation rewrite)', () => {
+  it('renders the waiting tag and keeps the stop affordance', () => {
+    const onStop = vi.fn();
+    render(<AgentStatusRow agent={agent} status="waiting" onStop={onStop} />);
+
+    expect(screen.getByText('Đang chờ báo cáo')).toBeInTheDocument();
+    expect(screen.queryByText('Đang làm việc')).toBeNull();
+    fireEvent.click(screen.getByTestId('agent-stop-agent-1'));
+    expect(onStop).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders no retry button for a waiting attempt', () => {
+    const { container } = render(
+      <AgentStatusRow agent={agent} status="waiting" assignmentId="assignment-A" onRetry={vi.fn()} />
+    );
+
+    expect(container.querySelector('[data-testid^="agent-retry-"]')).toBeNull();
+  });
+});
+
+describe('AgentStatusRow — retry affordance (37-08 D-13)', () => {
+  // WR-02: `retryAssignment` refuses every non-terminal status, so the button must not exist.
+  it.each(['queued', 'running', 'paused'] as const)(
+    'renders no retry button for a %s attempt',
+    (status) => {
+      const { container } = render(
+        <AgentStatusRow agent={agent} status={status} assignmentId="assignment-A" onRetry={vi.fn()} />
+      );
+
+      expect(container.querySelector('[data-testid^="agent-retry-"]')).toBeNull();
+    }
+  );
+
+  it('renders the label and the retry button for a stopped assignment', () => {
+    const onRetry = vi.fn();
+    render(
+      <AgentStatusRow
+        agent={agent}
+        status="stopped"
+        assignmentId="assignment-A"
+        onRetry={onRetry}
+      />
+    );
+
+    expect(screen.getByText('Chưa hoàn tất')).toBeInTheDocument();
+    // The old label was REPLACED, not stacked beside the new one.
+    expect(screen.queryByText('Đã dừng giữa chừng')).toBeNull();
+    const retry = screen.getByTestId('agent-retry-assignment-A');
+    expect(retry).toBeInTheDocument();
+
+    fireEvent.click(retry);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the label and the retry button for an errored assignment', () => {
+    render(<AgentStatusRow agent={agent} status="error" assignmentId="assignment-A" onRetry={vi.fn()} />);
+
+    expect(screen.getByText('Chưa hoàn tất')).toBeInTheDocument();
+    expect(screen.queryByText('Lỗi')).toBeNull();
+    expect(screen.getByTestId('agent-retry-assignment-A')).toBeInTheDocument();
+  });
+
+  it('shows the label alone when the surface cannot retry', () => {
+    const { container } = render(<AgentStatusRow agent={agent} status="stopped" />);
+
+    expect(screen.getByText('Chưa hoàn tất')).toBeInTheDocument();
+    expect(container.querySelector('[data-testid^="agent-retry-"]')).toBeNull();
+  });
+
+  it('keys the retry test id by assignment so two attempts never collide', () => {
+    render(
+      <>
+        <AgentStatusRow agent={agent} status="stopped" assignmentId="assignment-A" onRetry={vi.fn()} />
+        <AgentStatusRow agent={agent} status="stopped" assignmentId="assignment-B" onRetry={vi.fn()} />
+      </>
+    );
+
+    expect(screen.getByTestId('agent-retry-assignment-A')).toBeInTheDocument();
+    expect(screen.getByTestId('agent-retry-assignment-B')).toBeInTheDocument();
+  });
+
+  it('renders no badge for ledger-only statuses', () => {
+    for (const status of ['skipped', 'blocked', 'needs-input'] as const) {
+      const { container, unmount } = render(<AgentStatusRow agent={agent} status={status} />);
+      expect(container.querySelector('.ant-tag')).toBeNull();
+      unmount();
+    }
+  });
+});
+
+describe('AgentStatusRow — idPrefix (37.1)', () => {
+  it('namespaces the stop id under the given prefix', () => {
+    render(<AgentStatusRow agent={agent} status="running" onStop={vi.fn()} idPrefix="indicator" />);
+
+    expect(screen.getByTestId('indicator-stop-agent-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('agent-stop-agent-1')).toBeNull();
+  });
+
+  it('namespaces the retry id under the given prefix', () => {
+    render(
+      <AgentStatusRow
+        agent={agent}
+        status="stopped"
+        assignmentId="assignment-A"
+        onRetry={vi.fn()}
+        idPrefix="indicator"
+      />
+    );
+
+    expect(screen.getByTestId('indicator-retry-assignment-A')).toBeInTheDocument();
+    expect(screen.queryByTestId('agent-retry-assignment-A')).toBeNull();
+  });
+
+  it('defaults to the agent prefix', () => {
+    render(<AgentStatusRow agent={agent} status="running" onStop={vi.fn()} />);
+
+    expect(screen.getByTestId('agent-stop-agent-1')).toBeInTheDocument();
+  });
+});
+
+describe('AgentStatusRow — hover-gated actions (37.1 D-23)', () => {
+  const actions = () => screen.getByTestId('agent-actions-agent-1');
+
+  it.each(['queued', 'running', 'paused'] as const)(
+    'hides the actions for a %s agent until hover',
+    (status) => {
+      render(<AgentStatusRow agent={agent} status={status} onStop={vi.fn()} />);
+
+      expect(actions().getAttribute('data-visible')).toBe('false');
+      fireEvent.mouseEnter(screen.getByTestId('agent-status-agent-1'));
+      expect(actions().getAttribute('data-visible')).toBe('true');
+      fireEvent.mouseLeave(screen.getByTestId('agent-status-agent-1'));
+      expect(actions().getAttribute('data-visible')).toBe('false');
+    }
+  );
+
+  it.each(['stopped', 'error'] as const)(
+    'shows the actions permanently for a %s agent',
+    (status) => {
+      render(
+        <AgentStatusRow agent={agent} status={status} assignmentId="assignment-A" onRetry={vi.fn()} />
+      );
+
+      expect(actions().getAttribute('data-visible')).toBe('true');
+      expect(screen.getByTestId('agent-retry-assignment-A')).toBeInTheDocument();
+    }
+  );
+
+  it('reveals the actions on keyboard focus', () => {
+    render(<AgentStatusRow agent={agent} status="running" onStop={vi.fn()} />);
+
+    expect(actions().getAttribute('data-visible')).toBe('false');
+    fireEvent.focus(screen.getByTestId('agent-stop-agent-1'));
+    expect(actions().getAttribute('data-visible')).toBe('true');
+  });
+
+  it('keeps the buttons in the DOM while hidden so arrow-key focus still finds them', () => {
+    render(<AgentStatusRow agent={agent} status="running" onStop={vi.fn()} />);
+
+    expect(actions().getAttribute('data-visible')).toBe('false');
+    expect(screen.getByTestId('agent-stop-agent-1')).toBeInTheDocument();
+  });
+
+  // WR-06: opacity alone left the hidden buttons focusable and clickable.
+  it('blocks pointer and tab interaction while the actions are hidden', () => {
+    render(<AgentStatusRow agent={agent} status="running" onStop={vi.fn()} />);
+
+    expect(actions().getAttribute('aria-hidden')).toBe('true');
+    expect(actions().style.pointerEvents).toBe('none');
+    expect(screen.getByTestId('agent-stop-agent-1').getAttribute('tabindex')).toBe('-1');
+
+    fireEvent.mouseEnter(screen.getByTestId('agent-status-agent-1'));
+    expect(actions().getAttribute('aria-hidden')).toBe('false');
+    expect(actions().style.pointerEvents).toBe('auto');
+    expect(screen.getByTestId('agent-stop-agent-1').getAttribute('tabindex')).toBe('0');
+  });
+});

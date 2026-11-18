@@ -172,28 +172,32 @@ describe('TimerPopoutView', () => {
     });
   });
 
-  it('renders Project › Milestone hierarchy subtitle under task name (D-04)', async () => {
-    await testDb.projects.add({
-      id: 'proj-popout-1',
-      name: 'Project Delta',
-      status: 'In Progress',
+  it('renders CR › Subsystem hierarchy subtitle under task name (D-04)', async () => {
+    await testDb.systems.add({
+      id: 'sys-popout-1',
+      name: 'Payments API',
+      code: 'PAY-API',
+      parentId: null,
+      type: 'SERVICE',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
 
-    await testDb.milestones.add({
-      id: 'ms-popout-1',
-      projectId: 'proj-popout-1',
-      name: 'Milestone Beta',
+    await testDb.changeRequests.add({
+      id: 'cr-popout-1',
+      code: 'CR-POPOUT-01',
+      name: 'CR Delta',
       status: 'In Progress',
+      type: 'ENHANCEMENT',
+      targets: [{ systemId: 'sys-popout-1' }],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
 
     await testDb.tasks.add({
       id: 'task-popout-sub',
-      projectId: 'proj-popout-1',
-      milestoneId: 'ms-popout-1',
+      crId: 'cr-popout-1',
+      systemId: 'sys-popout-1',
       name: 'Viết tài liệu tích hợp',
       status: 'In Progress',
       progress: 0,
@@ -222,7 +226,7 @@ describe('TimerPopoutView', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Viết tài liệu tích hợp')).toBeInTheDocument();
-      expect(screen.getByTestId('popout-hierarchy-subtitle')).toHaveTextContent('Project Delta › Milestone Beta');
+      expect(screen.getByTestId('popout-hierarchy-subtitle')).toHaveTextContent('CR-POPOUT-01 › Payments API');
     });
   });
 });

@@ -6,6 +6,7 @@ import { useTimer } from '../hooks/useTimer';
 import { getTodayDateString } from '../utils/date';
 import { evaluateLiveTaskDailyAllocationAlert } from '../utils/timerAlerts';
 import { sendDesktopNotification } from '../utils/desktopNotification';
+import { NotificationDeepLink } from '../utils/notificationDeepLink';
 import {
   NOTIFICATION_SETTINGS_KEY,
   DEFAULT_NOTIFICATION_SETTINGS,
@@ -169,6 +170,7 @@ export function useTimerAlertMonitor(options: UseTimerAlertMonitorOptions = {}):
             title: 'Vượt thời gian phân bổ',
             body: alert.message,
             requireInteraction: requireInteractionEnabled,
+            deeplink: NotificationDeepLink.task(timer.taskId),
           }).catch((err) => {
             console.warn('Live timer desktop notification failed:', err);
           });

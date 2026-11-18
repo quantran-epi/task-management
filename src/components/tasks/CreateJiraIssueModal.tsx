@@ -65,12 +65,12 @@ export const CreateJiraIssueModal: React.FC<CreateJiraIssueModalProps> = ({
         const defaultProj = (projRec?.value as string) || '';
         const defaultType = (issueTypeRec?.value as string) || 'Task';
 
-        // D-06: Resolve task parent Project to pre-fill default Epic Key
+        // D-06: Resolve task parent CR to pre-fill default Epic Key
         let parentEpicKey = '';
-        if (task.projectId) {
-          const parentProject = await db.projects.get(task.projectId);
-          if (parentProject?.jiraEpicKey) {
-            parentEpicKey = parentProject.jiraEpicKey;
+        if (task.crId) {
+          const parentCr = await db.changeRequests.get(task.crId);
+          if (parentCr?.jiraEpicKey) {
+            parentEpicKey = parentCr.jiraEpicKey;
           }
         }
 

@@ -121,10 +121,13 @@ describe('Timer Segments and Schema V7 Migration (Task 1)', () => {
     expect(ws?.segments?.[0]?.startTime).toBe('2026-10-01T07:00:00.000Z');
     expect(ws?.segments?.[0]?.endTime).toBe('2026-10-01T08:00:00.000Z');
 
-    // Verify project can accept jiraEpicKey
-    await v7Db.projects.update(sampleProjectId, { jiraEpicKey: 'PROJ-10' });
-    const project = await v7Db.projects.get(sampleProjectId);
-    expect(project?.jiraEpicKey).toBe('PROJ-10');
+    // Verify the migrated CR row can accept jiraEpicKey (the V16 upgrade maps projects -> CRs).
+    const crs = await v7Db.changeRequests.toArray();
+    expect(crs.length).toBeGreaterThanOrEqual(1);
+    const migratedCr = crs[0]!;
+    await v7Db.changeRequests.update(migratedCr.id, { jiraEpicKey: 'PROJ-10' });
+    const cr = await v7Db.changeRequests.get(migratedCr.id);
+    expect(cr?.jiraEpicKey).toBe('PROJ-10');
 
     v7Db.close();
   });

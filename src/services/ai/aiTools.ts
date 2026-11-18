@@ -1,19 +1,26 @@
 import type { TaskPlannerDatabase } from '../../db';
 import { APP_NAME } from '../../constants/app';
-import type { Task, Project, Milestone, Note, ActiveTimer, ReminderItem } from '../../types/models';
+import type { Task, ChangeRequest, System, Note, ActiveTimer, ReminderItem } from '../../types/models';
 import { NOTIFICATION_SETTINGS_KEY, DEFAULT_NOTIFICATION_SETTINGS } from '../../types/notifications';
 import { getTodayDateString } from '../../utils/date';
+import { wrapField } from './untrustedData';
 import { getEffectiveDailyCapacity } from '../../utils/capacity';
 import { inspectDateCapacity } from '../../utils/feasibility';
 import { filterSessionsByPeriod, aggregateWorkTypeBreakdown } from '../../utils/analytics';
 import { createTask, updateTask, reparentTask } from '../../db/repositories/taskRepo';
+import { deleteTaskWithAllocations } from '../../db/repositories/cascadeRepo';
 import {
-  deleteTaskWithAllocations,
-  deleteProjectWithCascade,
-  deleteMilestoneWithCascade,
-} from '../../db/repositories/cascadeRepo';
-import { createProject, updateProject } from '../../db/repositories/projectRepo';
-import { createMilestone, updateMilestone } from '../../db/repositories/milestoneRepo';
+  createChangeRequest,
+  updateChangeRequest,
+  getAllChangeRequests,
+  deleteChangeRequest,
+} from '../../db/repositories/changeRequestRepo';
+import {
+  getAllSystems,
+  createSystem,
+  updateSystem,
+  deleteSystem,
+} from '../../db/repositories/systemRepo';
 import { upsertAllocation, deleteAllocation } from '../../db/repositories/allocationRepo';
 import {
   createWorkSession,
@@ -37,6 +44,7 @@ import {
   deleteNoteAttachment,
   getNoteWithAttachments,
 } from '../../db/repositories/noteRepo';
+import { stripAnsiSequences, extractMermaidBlocks } from '../diagramSaveBridge';
 import {
   linkEntitiesToDoc,
   unlinkEntityFromDoc,
@@ -56,8 +64,7 @@ import { detectReferencedEntities } from '../../utils/smartIngestion';
 import { formatStandupSummary } from '../../utils/standup';
 import {
   analyzeTaskInsight,
-  analyzeProjectInsight,
-  analyzeMilestoneInsight,
+  analyzeChangeRequestInsight,
 } from '../../utils/itemInsight';
 import {
   getDistinctOpsOwners,
@@ -71,9 +78,16 @@ import { exportContentAsFile, inferFormatFromFilename, type ExportFormat } from 
 import { exportPresentationAsFile, type SlideData } from '../../utils/pptxExport';
 import { executeDynamicFileScript } from '../../utils/dynamicFileSandbox';
 import { generateImage } from './imageGenerationClient';
+import { preparePatch, readPatchTarget } from './patchProposal';
 import { executeKnowledgeRetrievalTool } from './knowledgeRetrievalTool';
 import { getImageConfig, getImageApiKey } from './nineRouterTokenService';
 import { redactApiKey } from './nineRouterClient';
+import { executeOracleQuery, executeOracleDescribe } from './oracleSqlclService';
+import {
+  executeSshListDir,
+  executeSshReadFile,
+  executeSshGrepFiles,
+} from './sshFsToolService';
 import dayjs from 'dayjs';
 
 export interface AiToolDefinition {
@@ -95,17 +109,17 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'query_tasks',
       description:
-        `Query or search tasks in ${APP_NAME}. Returns tasks enriched with creation/update dates, notes, project/milestone names, logged hours, recurring schedule, and checklists. Supports comprehensive filtering by dates (createdAt, createdAfter/Before, deadline, updatedAfter/Before), status, priority, workType, recurring state, project, milestone, or search keywords, with customizable sorting.`,
+        `Query or search tasks in ${APP_NAME}. Returns tasks enriched with creation/update dates, notes, CR/subsystem names, logged hours, recurring schedule, and checklists. Supports comprehensive filtering by dates (createdAt, createdAfter/Before, deadline, updatedAfter/Before), status, priority, workType, recurring state, CR, subsystem, or search keywords, with customizable sorting.`,
       parameters: {
         type: 'object',
         properties: {
-          projectId: {
+          crId: {
             type: 'string',
-            description: 'Optional project UUID to filter tasks belonging to this project.',
+            description: 'Optional Change Request UUID to filter tasks belonging to this CR.',
           },
-          milestoneId: {
+          systemId: {
             type: 'string',
-            description: 'Optional milestone UUID to filter tasks belonging to this milestone.',
+            description: 'Optional subsystem UUID to filter tasks belonging to this subsystem.',
           },
           status: {
             type: 'string',
@@ -186,9 +200,9 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
   {
     type: 'function',
     function: {
-      name: 'query_projects',
+      name: 'query_change_requests',
       description:
-        `List or search all projects in ${APP_NAME}. Returns project metadata, statuses, milestone counts, total task counts, dates, notes, and total logged minutes.`,
+        `List or search Change Requests in ${APP_NAME}. Returns CR metadata, type, status, and targets (subsystems only).`,
       parameters: {
         type: 'object',
         properties: {
@@ -196,43 +210,22 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
             type: 'string',
             description: 'Optional status: Open, Pending, In Progress, Done, Cancelled.',
           },
+          type: {
+            type: 'string',
+            enum: ['NEW_FEATURE', 'ENHANCEMENT', 'BUGFIX'],
+            description: 'Optional CR type filter.',
+          },
+          systemId: {
+            type: 'string',
+            description: 'Optional subsystem UUID to filter CRs targeting that subsystem.',
+          },
           search: {
             type: 'string',
-            description: 'Optional search keyword to match project name, description, or notes.',
-          },
-          createdAfter: {
-            type: 'string',
-            description: 'Optional filter for projects created on or after this date (YYYY-MM-DD).',
-          },
-          createdBefore: {
-            type: 'string',
-            description: 'Optional filter for projects created on or before this date (YYYY-MM-DD).',
-          },
-          deadlineBefore: {
-            type: 'string',
-            description: 'Optional filter for projects with deadline on or before this date (YYYY-MM-DD).',
-          },
-          deadlineAfter: {
-            type: 'string',
-            description: 'Optional filter for projects with deadline on or after this date (YYYY-MM-DD).',
-          },
-          jiraEpicKey: {
-            type: 'string',
-            description: 'Optional filter by Jira Epic key.',
-          },
-          sortBy: {
-            type: 'string',
-            enum: ['createdAt', 'updatedAt', 'deadline', 'name'],
-            description: 'Sort field (default: createdAt).',
-          },
-          sortOrder: {
-            type: 'string',
-            enum: ['asc', 'desc'],
-            description: 'Sort direction (default: desc for createdAt/updatedAt; asc for deadline/name).',
+            description: 'Optional search keyword to match CR code, name, or description.',
           },
           limit: {
             type: 'number',
-            description: 'Max number of projects to return (default 20, max 50).',
+            description: 'Max number of change requests to return (default 20, max 50).',
           },
         },
       },
@@ -241,53 +234,25 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
   {
     type: 'function',
     function: {
-      name: 'query_milestones',
+      name: 'query_systems',
       description:
-        `List or search milestones in ${APP_NAME}. Returns milestone metadata, parent project name, task counts, dates, notes, and deadlines.`,
+        `List or search systems and subsystems in ${APP_NAME}. Returns system metadata including code, type, and parentId.`,
       parameters: {
         type: 'object',
         properties: {
-          projectId: {
+          type: {
             type: 'string',
-            description: 'Optional project UUID to filter milestones for a specific project.',
-          },
-          status: {
-            type: 'string',
-            description: 'Optional status: Open, Pending, In Progress, Done, Cancelled.',
+            pattern: '^[A-Z][A-Z0-9_]*$',
+            description:
+              'Optional system type filter. Valid values come from the user-configurable system type list in Settings.',
           },
           search: {
             type: 'string',
-            description: 'Optional search keyword to match milestone name, description, or notes.',
-          },
-          createdAfter: {
-            type: 'string',
-            description: 'Optional filter for milestones created on or after this date (YYYY-MM-DD).',
-          },
-          createdBefore: {
-            type: 'string',
-            description: 'Optional filter for milestones created on or before this date (YYYY-MM-DD).',
-          },
-          deadlineBefore: {
-            type: 'string',
-            description: 'Optional filter for milestones with deadline on or before this date (YYYY-MM-DD).',
-          },
-          deadlineAfter: {
-            type: 'string',
-            description: 'Optional filter for milestones with deadline on or after this date (YYYY-MM-DD).',
-          },
-          sortBy: {
-            type: 'string',
-            enum: ['createdAt', 'updatedAt', 'deadline', 'name'],
-            description: 'Sort field (default: createdAt).',
-          },
-          sortOrder: {
-            type: 'string',
-            enum: ['asc', 'desc'],
-            description: 'Sort direction (default: desc for createdAt/updatedAt; asc for deadline/name).',
+            description: 'Optional search keyword to match system code or name.',
           },
           limit: {
             type: 'number',
-            description: 'Max number of milestones to return (default 20, max 50).',
+            description: 'Max number of systems to return (default 20, max 50).',
           },
         },
       },
@@ -298,13 +263,13 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'get_item_details',
       description:
-        'Retrieve full detailed information about a specific task, project, or milestone by its UUID, including linked parent names, logged work sessions summary, scheduled allocations, and sticky notes.',
+        'Retrieve full detailed information about a specific task, change request, or system by its UUID, including linked parent names, logged work sessions summary, scheduled allocations, and sticky notes.',
       parameters: {
         type: 'object',
         properties: {
           type: {
             type: 'string',
-            enum: ['task', 'project', 'milestone'],
+            enum: ['task', 'cr', 'system'],
             description: 'The entity type to fetch.',
           },
           id: {
@@ -321,7 +286,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'query_worklogs',
       description:
-        'Query actual worklog sessions and time spent. Can filter by taskId, projectId, date range (startDate to endDate YYYY-MM-DD), search keywords in notes/taskName, or duration. Returns session details and total minutes logged.',
+        'Query actual worklog sessions and time spent. Can filter by taskId, crId, date range (startDate to endDate YYYY-MM-DD), search keywords in notes/taskName, or duration. Returns session details and total minutes logged.',
       parameters: {
         type: 'object',
         properties: {
@@ -329,9 +294,9 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
             type: 'string',
             description: 'Optional task UUID to filter worklogs for a specific task.',
           },
-          projectId: {
+          crId: {
             type: 'string',
-            description: 'Optional project UUID to filter worklogs for tasks under this project.',
+            description: 'Optional Change Request UUID to filter worklogs for tasks under this CR.',
           },
           startDate: {
             type: 'string',
@@ -452,9 +417,9 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
             enum: ['7d', '14d', '30d', 'all'],
             description: 'Time window for analytics (default 14d).',
           },
-          projectId: {
+          crId: {
             type: 'string',
-            description: 'Optional project UUID to filter analytics for a specific project.',
+            description: 'Optional Change Request UUID to filter analytics for a specific CR.',
           },
         },
       },
@@ -465,7 +430,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'query_notes',
       description:
-        'Search or list notes and scratchpads. Can search text in title or body, filter by isPinned, filter by entityType (task, project, milestone, or standalone), filter by created/updated dates, or sort results.',
+        'Search or list notes and scratchpads. Can search text in title or body, filter by isPinned, filter by entityType (task, cr, system, or standalone), filter by created/updated dates, or sort results.',
       parameters: {
         type: 'object',
         properties: {
@@ -475,7 +440,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           },
           entityType: {
             type: 'string',
-            enum: ['task', 'project', 'milestone', 'standalone'],
+            enum: ['task', 'cr', 'system', 'standalone'],
             description: 'Filter by entity type (use "standalone" for notes not linked to any entity).',
           },
           entityId: {
@@ -537,6 +502,45 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
   {
     type: 'function',
     function: {
+      name: 'query_diagrams',
+      description:
+        'List Mermaid diagrams (Notes of type diagram). Filters by tag, title substring, or linked entity. The mermaid source (body) is OMITTED unless includeBody is true — listing a diagram does not let you read it.',
+      parameters: {
+        type: 'object',
+        properties: {
+          tags: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional array of tags; matches diagrams having at least one of them.',
+          },
+          title: {
+            type: 'string',
+            description: 'Optional case-insensitive substring of the diagram title.',
+          },
+          entityType: {
+            type: 'string',
+            enum: ['task', 'cr', 'system'],
+            description: 'Optional linked entity type filter.',
+          },
+          entityId: {
+            type: 'string',
+            description: 'Optional linked entity UUID filter.',
+          },
+          includeBody: {
+            type: 'boolean',
+            description: 'Include the mermaid source in each row (default false).',
+          },
+          limit: {
+            type: 'number',
+            description: 'Max number of diagrams to return (default 20, max 50).',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'query_trash_notes',
       description: 'List notes and documents currently in trash (soft-deleted), including deletion dates and titles.',
       parameters: {
@@ -571,13 +575,13 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'get_item_insight',
-      description: 'Run deep health analysis, risk calculation, estimate variance, and bottleneck diagnosis on a specific task, project, or milestone.',
+      description: 'Run deep health analysis, risk calculation, estimate variance, and bottleneck diagnosis on a specific task or change request.',
       parameters: {
         type: 'object',
         properties: {
           type: {
             type: 'string',
-            enum: ['task', 'project', 'milestone'],
+            enum: ['task', 'cr', 'system'],
             description: 'Entity type to analyze.',
           },
           id: {
@@ -593,7 +597,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'get_document_backlinks',
-      description: 'Find all tasks, projects, and notes that link to or reference a specific document in the knowledge base.',
+      description: 'Find all tasks, change requests, and notes that link to or reference a specific document in the knowledge base.',
       parameters: {
         type: 'object',
         properties: {
@@ -610,7 +614,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'generate_standup_report',
-      description: 'Generate standardized Vietnamese Markdown standup report grouping completed, in-progress, and pending tasks with project names, deadlines, and inherited Ops/BA tags.',
+      description: 'Generate standardized Vietnamese Markdown standup report grouping completed, in-progress, and pending tasks with CR names, deadlines, and inherited Ops/BA tags.',
       parameters: {
         type: 'object',
         properties: {
@@ -618,9 +622,9 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
             type: 'string',
             description: 'Date for the standup in YYYY-MM-DD format (defaults to today).',
           },
-          projectId: {
+          crId: {
             type: 'string',
-            description: 'Optional project UUID to restrict standup report to a single project.',
+            description: 'Optional Change Request UUID to restrict standup report to a single CR.',
           },
         },
       },
@@ -656,9 +660,9 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
             type: 'string',
             description: 'Optional task status filter: Open, Pending, In Progress, Resolved, In Review, Done, Cancelled.',
           },
-          projectId: {
+          crId: {
             type: 'string',
-            description: 'Optional project UUID to filter recurring tasks for a specific project.',
+            description: 'Optional Change Request UUID to filter recurring tasks for a specific CR.',
           },
           recurrenceFrequency: {
             type: 'string',
@@ -695,14 +699,14 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'create_task',
       description:
-        `Create a new task in ${APP_NAME}. Can optionally specify project, milestone, priority, estimate, deadline, work type, notes, dates, owners, and checklist.`,
+        `Create a new task in ${APP_NAME}. Can optionally specify CR, subsystem, priority, estimate, deadline, work type, notes, dates, owners, and checklist.`,
       parameters: {
         type: 'object',
         properties: {
           name: { type: 'string', description: 'Task title or name (required).' },
           description: { type: 'string', description: 'Optional detailed description.' },
-          projectId: { type: 'string', description: 'Optional project UUID.' },
-          milestoneId: { type: 'string', description: 'Optional milestone UUID.' },
+          crId: { type: 'string', description: 'Change Request UUID (required).' },
+          systemId: { type: 'string', description: 'Optional subsystem UUID; must be one of the CR targets.' },
           status: {
             type: 'string',
             enum: ['Open', 'Pending', 'In Progress', 'Resolved', 'In Review', 'Done', 'Cancelled'],
@@ -755,7 +759,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           },
           recurrenceEndDate: { type: 'string', description: 'End date for recurrence (YYYY-MM-DD).' },
         },
-        required: ['name'],
+        required: ['name', 'crId'],
       },
     },
   },
@@ -764,7 +768,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'update_task',
       description:
-        'Update fields of an existing task (status, priority, estimate, progress, dates, notes, owners, description, project, milestone, reminders, recurrence, tags).',
+        'Update fields of an existing task (status, priority, estimate, progress, dates, notes, owners, description, CR, subsystem, reminders, recurrence, tags).',
       parameters: {
         type: 'object',
         properties: {
@@ -790,8 +794,8 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           opsOwners: { type: 'array', items: { type: 'string' }, description: 'Operations Owners.' },
           businessAnalysts: { type: 'array', items: { type: 'string' }, description: 'Business Analysts.' },
           tags: { type: 'array', items: { type: 'string' }, description: 'Tags list.' },
-          projectId: { type: 'string', description: 'Parent project UUID (or null to unassign).' },
-          milestoneId: { type: 'string', description: 'Parent milestone UUID (or null to unassign).' },
+          crId: { type: 'string', description: 'Parent Change Request UUID (required).' },
+          systemId: { type: 'string', description: 'Subsystem UUID (or null to unassign); must be one of the CR targets.' },
           workType: {
             type: 'string',
             enum: ['code', 'document', 'meeting', 'support_testing', 'investigate', 'configuration', 'review_code'],
@@ -862,13 +866,13 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'reparent_task',
-      description: 'Move a task to a different project or milestone.',
+      description: 'Move a task to a different Change Request or subsystem.',
       parameters: {
         type: 'object',
         properties: {
           taskId: { type: 'string', description: 'UUID of the task to reparent.' },
-          projectId: { type: 'string', description: 'Target project UUID (or null to unassign).' },
-          milestoneId: { type: 'string', description: 'Target milestone UUID (or null to unassign).' },
+          crId: { type: 'string', description: 'Target Change Request UUID (required).' },
+          systemId: { type: 'string', description: 'Target subsystem UUID (or null to unassign); must be one of the CR targets.' },
         },
         required: ['taskId'],
       },
@@ -891,164 +895,72 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
   {
     type: 'function',
     function: {
-      name: 'create_project',
-      description: `Create a new project in ${APP_NAME}.`,
+      name: 'create_change_request',
+      description: `Create a new Change Request in ${APP_NAME}. Targets accept subsystems only; a logical parent system is rejected.`,
       parameters: {
         type: 'object',
         properties: {
-          name: { type: 'string', description: 'Project name (required).' },
-          description: { type: 'string', description: 'Project description.' },
+          code: { type: 'string', description: 'Human CR code (required), e.g. CR-2026-001.' },
+          name: { type: 'string', description: 'Change Request name (required).' },
+          type: {
+            type: 'string',
+            enum: ['NEW_FEATURE', 'ENHANCEMENT', 'BUGFIX'],
+            description: 'CR type (defaults to ENHANCEMENT).',
+          },
           status: {
             type: 'string',
             enum: ['Open', 'Pending', 'In Progress', 'Done', 'Cancelled'],
             description: 'Status (defaults to Open).',
           },
-          deadline: { type: 'string', description: 'Target date / deadline in YYYY-MM-DD format.' },
-          notes: { type: 'string', description: 'Project notes.' },
-          jiraEpicKey: { type: 'string', description: 'Optional Jira Epic key (e.g. PROJ-EPIC-1).' },
-          opsOwners: { type: 'array', items: { type: 'string' }, description: 'Optional Operations Owners.' },
-          businessAnalysts: { type: 'array', items: { type: 'string' }, description: 'Optional Business Analysts.' },
-          reminders: {
+          description: { type: 'string', description: 'CR description.' },
+          targets: {
             type: 'array',
             items: {
               type: 'object',
               properties: {
-                date: { type: 'string', description: 'Reminder date (YYYY-MM-DD).' },
-                time: { type: 'string', description: 'Optional reminder time (HH:mm).' },
-                note: { type: 'string', description: 'Optional reminder note.' },
+                systemId: { type: 'string', description: 'Subsystem UUID (required).' },
+                featureBranch: { type: 'string', description: 'Optional per-target feature branch.' },
               },
-              required: ['date'],
+              required: ['systemId'],
             },
-            description: 'Optional reminders list for project.',
+            description: 'Subsystem targets. A logical parent is rejected.',
           },
         },
-        required: ['name'],
+        required: ['code', 'name', 'type'],
       },
     },
   },
   {
     type: 'function',
     function: {
-      name: 'update_project',
-      description: 'Update project details, status, deadline, notes, owners, reminders, or description.',
+      name: 'update_change_request',
+      description: 'Update Change Request details, status, type, targets, owners, or description.',
       parameters: {
         type: 'object',
         properties: {
-          id: { type: 'string', description: 'UUID of the project to update.' },
-          name: { type: 'string', description: 'Updated project name.' },
+          id: { type: 'string', description: 'UUID of the change request to update.' },
+          code: { type: 'string', description: 'Updated CR code.' },
+          name: { type: 'string', description: 'Updated CR name.' },
           description: { type: 'string', description: 'Updated description.' },
           status: {
             type: 'string',
             enum: ['Open', 'Pending', 'In Progress', 'Done', 'Cancelled'],
           },
-          deadline: { type: 'string', description: 'Deadline in YYYY-MM-DD format.' },
-          notes: { type: 'string', description: 'Updated notes.' },
-          jiraEpicKey: { type: 'string', description: 'Updated Jira Epic key.' },
-          opsOwners: { type: 'array', items: { type: 'string' }, description: 'Operations Owners.' },
-          businessAnalysts: { type: 'array', items: { type: 'string' }, description: 'Business Analysts.' },
-          reminders: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                id: { type: 'string', description: 'Optional existing reminder UUID.' },
-                date: { type: 'string', description: 'Reminder date (YYYY-MM-DD).' },
-                time: { type: 'string', description: 'Optional reminder time (HH:mm).' },
-                note: { type: 'string', description: 'Optional reminder note.' },
-              },
-              required: ['date'],
-            },
-            description: 'Updated reminders array.',
-          },
-        },
-        required: ['id'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'delete_project',
-      description: 'Delete a project and cascade delete all child milestones, tasks, and allocations.',
-      parameters: {
-        type: 'object',
-        properties: {
-          id: { type: 'string', description: 'UUID of the project to delete.' },
-        },
-        required: ['id'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'create_milestone',
-      description: 'Create a new milestone under an existing project.',
-      parameters: {
-        type: 'object',
-        properties: {
-          projectId: { type: 'string', description: 'Parent project UUID (required).' },
-          name: { type: 'string', description: 'Milestone name (required).' },
-          description: { type: 'string', description: 'Milestone description.' },
-          status: {
+          type: {
             type: 'string',
-            enum: ['Open', 'Pending', 'In Progress', 'Done', 'Cancelled'],
-            description: 'Status (defaults to Open).',
+            enum: ['NEW_FEATURE', 'ENHANCEMENT', 'BUGFIX'],
           },
-          deadline: { type: 'string', description: 'Target date in YYYY-MM-DD format.' },
-          notes: { type: 'string', description: 'Optional milestone notes.' },
-          opsOwners: { type: 'array', items: { type: 'string' }, description: 'Optional Operations Owners.' },
-          businessAnalysts: { type: 'array', items: { type: 'string' }, description: 'Optional Business Analysts.' },
-          reminders: {
+          targets: {
             type: 'array',
             items: {
               type: 'object',
               properties: {
-                date: { type: 'string', description: 'Reminder date (YYYY-MM-DD).' },
-                time: { type: 'string', description: 'Optional reminder time (HH:mm).' },
-                note: { type: 'string', description: 'Optional reminder note.' },
+                systemId: { type: 'string', description: 'Subsystem UUID (required).' },
+                featureBranch: { type: 'string', description: 'Optional per-target feature branch.' },
               },
-              required: ['date'],
+              required: ['systemId'],
             },
-            description: 'Optional reminders list for milestone.',
-          },
-        },
-        required: ['projectId', 'name'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'update_milestone',
-      description: 'Update milestone name, description, status, deadline, notes, reminders, or owners.',
-      parameters: {
-        type: 'object',
-        properties: {
-          id: { type: 'string', description: 'UUID of the milestone to update.' },
-          name: { type: 'string', description: 'New milestone name.' },
-          description: { type: 'string', description: 'New description.' },
-          status: {
-            type: 'string',
-            enum: ['Open', 'Pending', 'In Progress', 'Done', 'Cancelled'],
-          },
-          deadline: { type: 'string', description: 'Deadline in YYYY-MM-DD format.' },
-          notes: { type: 'string', description: 'Updated notes.' },
-          opsOwners: { type: 'array', items: { type: 'string' }, description: 'Operations Owners.' },
-          businessAnalysts: { type: 'array', items: { type: 'string' }, description: 'Business Analysts.' },
-          reminders: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                id: { type: 'string', description: 'Optional existing reminder UUID.' },
-                date: { type: 'string', description: 'Reminder date (YYYY-MM-DD).' },
-                time: { type: 'string', description: 'Optional reminder time (HH:mm).' },
-                note: { type: 'string', description: 'Optional reminder note.' },
-              },
-              required: ['date'],
-            },
-            description: 'Updated reminders array.',
+            description: 'Replacement subsystem targets. A logical parent is rejected.',
           },
         },
         required: ['id'],
@@ -1058,12 +970,96 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
   {
     type: 'function',
     function: {
-      name: 'delete_milestone',
-      description: 'Delete a milestone and cascade delete its child tasks and allocations.',
+      name: 'delete_change_request',
+      description: 'Delete a Change Request and cascade delete all child tasks and allocations.',
       parameters: {
         type: 'object',
         properties: {
-          id: { type: 'string', description: 'UUID of the milestone to delete.' },
+          id: { type: 'string', description: 'UUID of the change request to delete.' },
+        },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_system',
+      description: `Create a new system or subsystem in ${APP_NAME}. A LOGICAL_GROUP accepts no SSH/repo fields and must not have a parent; a subsystem's parent must be a LOGICAL_GROUP. The code must be unique.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'System name (required).' },
+          code: { type: 'string', description: 'Unique human system code (required), e.g. CORE_BANKING.' },
+          parentId: {
+            type: 'string',
+            description: 'Logical parent system UUID; omit or null for a standalone subsystem.',
+          },
+          type: {
+            type: 'string',
+            pattern: '^[A-Z][A-Z0-9_]*$',
+            description:
+              'System type (defaults to SERVICE). Valid values come from the user-configurable system type list in Settings; LOGICAL_GROUP marks a parent system.',
+          },
+          description: { type: 'string', description: 'System description.' },
+          sshConfigId: { type: 'string', description: 'SSH config UUID (subsystems only).' },
+          remoteRepoPath: {
+            type: 'string',
+            description: 'Absolute path to the remote git repository (subsystems only).',
+          },
+          defaultBaseBranch: {
+            type: 'string',
+            description: 'Default base branch, e.g. main (subsystems only).',
+          },
+        },
+        required: ['name', 'code'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_system',
+      description:
+        'Update system details. Pass null to clear parentId, sshConfigId, remoteRepoPath or defaultBaseBranch. Promoting a subsystem to LOGICAL_GROUP drops its parent and repo binding; a code must stay unique.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'UUID of the system to update.' },
+          name: { type: 'string', description: 'Updated system name.' },
+          code: { type: 'string', description: 'Updated unique system code.' },
+          parentId: {
+            type: 'string',
+            description: 'Logical parent system UUID; null clears the parent.',
+          },
+          type: {
+            type: 'string',
+            pattern: '^[A-Z][A-Z0-9_]*$',
+            description:
+              'Updated system type. Valid values come from the user-configurable system type list in Settings.',
+          },
+          description: { type: 'string', description: 'Updated description.' },
+          sshConfigId: { type: 'string', description: 'SSH config UUID; null clears it.' },
+          remoteRepoPath: {
+            type: 'string',
+            description: 'Absolute remote git repository path; null clears it.',
+          },
+          defaultBaseBranch: { type: 'string', description: 'Default base branch; null clears it.' },
+        },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_system',
+      description:
+        'Permanently delete a system. Refuses while child subsystems exist. Removes the system from every Change Request target and clears systemId on tasks that referenced it.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'UUID of the system to delete.' },
         },
         required: ['id'],
       },
@@ -1255,7 +1251,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'create_note',
-      description: 'Create a new note, document, or folder in knowledge base, optionally linked to a task, project, or milestone.',
+      description: 'Create a new note, document, or folder in knowledge base, optionally linked to a task, change request, or system.',
       parameters: {
         type: 'object',
         properties: {
@@ -1270,7 +1266,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           tags: { type: 'array', items: { type: 'string' }, description: 'Optional tags array.' },
           entityType: {
             type: 'string',
-            enum: ['task', 'project', 'milestone'],
+            enum: ['task', 'cr', 'system'],
             description: 'Optional entity type to link note to.',
           },
           entityId: { type: 'string', description: 'UUID of entity to link note to.' },
@@ -1301,10 +1297,55 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           slug: { type: 'string', description: 'Updated URL/human readable slug.' },
           entityType: {
             type: 'string',
-            enum: ['task', 'project', 'milestone'],
+            enum: ['task', 'cr', 'system'],
             description: 'Optional entity type to link or re-bind note to.',
           },
           entityId: { type: 'string', description: 'UUID of entity to link or re-bind note to.' },
+          isPinned: { type: 'boolean', description: 'Updated pinned state.' },
+        },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_diagram',
+      description:
+        'Save a Mermaid diagram as a Note of type diagram. body is the mermaid source (e.g. "flowchart TD ..."), code fences optional. The tag "diagram" is always added.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Diagram title.' },
+          body: { type: 'string', description: 'Mermaid source (required). Code fences optional.' },
+          tags: { type: 'array', items: { type: 'string' }, description: 'Optional tags array.' },
+          parentId: { type: 'string', description: 'Optional parent diagram folder UUID.' },
+          entityType: {
+            type: 'string',
+            enum: ['task', 'cr', 'system'],
+            description: 'Optional entity type to link the diagram to.',
+          },
+          entityId: { type: 'string', description: 'UUID of entity to link the diagram to.' },
+          isPinned: { type: 'boolean', description: 'Whether the diagram should be pinned.' },
+        },
+        required: ['body'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_diagram',
+      description:
+        'Replace the mermaid source or metadata of an existing diagram. Refuses notes that are not diagrams (use update_note for those).',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'UUID of the diagram note to update.' },
+          title: { type: 'string', description: 'Updated title.' },
+          body: { type: 'string', description: 'Updated mermaid source.' },
+          tags: { type: 'array', items: { type: 'string' }, description: 'Updated tags array.' },
+          parentId: { type: 'string', description: 'Updated parent folder UUID.' },
           isPinned: { type: 'boolean', description: 'Updated pinned state.' },
         },
         required: ['id'],
@@ -1367,7 +1408,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
                 tags: { type: 'array', items: { type: 'string' }, description: 'Optional tags array.' },
                 entityType: {
                   type: 'string',
-                  enum: ['task', 'project', 'milestone'],
+                  enum: ['task', 'cr', 'system'],
                   description: 'Optional entity type to bind to.',
                 },
                 entityId: { type: 'string', description: 'Optional entity UUID to bind to.' },
@@ -1433,7 +1474,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'auto_link_document',
-      description: 'Scan document content for task titles, project names, and Jira keys, and automatically link referenced entities.',
+      description: 'Scan document content for task titles, CR codes, and Jira keys, and automatically link referenced entities.',
       parameters: {
         type: 'object',
         properties: {
@@ -1529,8 +1570,8 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
               properties: {
                 name: { type: 'string', description: 'Task name (required).' },
                 description: { type: 'string', description: 'Optional task description.' },
-                projectId: { type: 'string', description: 'Optional project UUID.' },
-                milestoneId: { type: 'string', description: 'Optional milestone UUID.' },
+                crId: { type: 'string', description: 'Change Request UUID.' },
+                systemId: { type: 'string', description: 'Optional subsystem UUID.' },
                 status: {
                   type: 'string',
                   enum: ['Open', 'Pending', 'In Progress', 'Resolved', 'In Review', 'Done', 'Cancelled'],
@@ -1561,7 +1602,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'batch_update_tasks',
-      description: 'Update common fields (status, priority, progress, project, or milestone) across multiple tasks in one call.',
+      description: 'Update common fields (status, priority, progress, CR, or subsystem) across multiple tasks in one call.',
       parameters: {
         type: 'object',
         properties: {
@@ -1582,8 +1623,8 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
                 enum: ['Low', 'Medium', 'High', 'Urgent'],
               },
               progress: { type: 'number', description: 'Progress percentage (0-100).' },
-              projectId: { type: 'string', description: 'Project UUID to assign.' },
-              milestoneId: { type: 'string', description: 'Milestone UUID to assign.' },
+              crId: { type: 'string', description: 'Change Request UUID to assign.' },
+              systemId: { type: 'string', description: 'Subsystem UUID to assign.' },
             },
             description: 'Fields to update on all specified tasks.',
           },
@@ -1614,7 +1655,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'manage_reminders',
       description:
-        `Manage reminders on tasks, projects, or milestones: add a new reminder with date/time/note, remove an existing reminder, or list current reminders. ${APP_NAME} has full native reminder support with browser desktop notifications.`,
+        `Manage reminders on tasks or change requests: add a new reminder with date/time/note, remove an existing reminder, or list current reminders. ${APP_NAME} has full native reminder support with browser desktop notifications.`,
       parameters: {
         type: 'object',
         properties: {
@@ -1625,10 +1666,10 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           },
           entityType: {
             type: 'string',
-            enum: ['task', 'project', 'milestone'],
+            enum: ['task', 'cr', 'system'],
             description: 'Type of entity owning the reminder.',
           },
-          entityId: { type: 'string', description: 'UUID of the task, project, or milestone.' },
+          entityId: { type: 'string', description: 'UUID of the task or change request.' },
           date: { type: 'string', description: 'Reminder date (YYYY-MM-DD), required for add action.' },
           time: { type: 'string', description: 'Optional reminder time (HH:mm).' },
           note: { type: 'string', description: 'Optional reminder description or note.' },
@@ -1642,17 +1683,17 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'link_document',
-      description: 'Create a bidirectional link between a knowledge base document and a task, project, or milestone.',
+      description: 'Create a bidirectional link between a knowledge base document and a task, change request, or system.',
       parameters: {
         type: 'object',
         properties: {
           documentId: { type: 'string', description: 'UUID of the document/note to link.' },
           entityType: {
             type: 'string',
-            enum: ['task', 'project', 'milestone'],
+            enum: ['task', 'cr', 'system'],
             description: 'Target entity type.',
           },
-          entityId: { type: 'string', description: 'UUID of the target task, project, or milestone.' },
+          entityId: { type: 'string', description: 'UUID of the target task, change request, or system.' },
         },
         required: ['documentId', 'entityType', 'entityId'],
       },
@@ -1662,14 +1703,14 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'unlink_document',
-      description: 'Remove bidirectional link between a knowledge base document and a task, project, or milestone.',
+      description: 'Remove bidirectional link between a knowledge base document and a task, change request, or system.',
       parameters: {
         type: 'object',
         properties: {
           documentId: { type: 'string', description: 'UUID of the document/note.' },
           entityType: {
             type: 'string',
-            enum: ['task', 'project', 'milestone'],
+            enum: ['task', 'cr', 'system'],
             description: 'Entity type.',
           },
           entityId: { type: 'string', description: 'UUID of the entity to unlink.' },
@@ -1715,7 +1756,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'read_file',
       description:
-        'Read a slice of a local file referenced in the conversation or attached to a task/project. Returns line-numbered content (`cat -n` format), lines read, and whether the file was truncated. Use offset and limit to page through large files.',
+        'Read a slice of a local file referenced in the conversation or attached to a task/CR. Returns line-numbered content (`cat -n` format), lines read, and whether the file was truncated. Use offset and limit to page through large files.',
       parameters: {
         type: 'object',
         properties: {
@@ -1928,13 +1969,13 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'link_taskmate_to_knowledge',
       description:
-        'Link a TaskMate entity (task, project, or milestone) to a knowledge entity (canonical graph URN or document UUID).',
+        'Link a TaskMate entity (task, change request, or system) to a knowledge entity (canonical graph URN or document UUID).',
       parameters: {
         type: 'object',
         properties: {
           taskMateEntityType: {
             type: 'string',
-            enum: ['task', 'project', 'milestone'],
+            enum: ['task', 'cr', 'system'],
             description: 'Type of the TaskMate entity to link.',
           },
           taskMateEntityId: {
@@ -1977,7 +2018,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           },
           taskMateEntityType: {
             type: 'string',
-            enum: ['task', 'project', 'milestone'],
+            enum: ['task', 'cr', 'system'],
             description: 'Optional entity type when removing by entity coordinates.',
           },
           taskMateEntityId: {
@@ -1996,37 +2037,324 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'get_artifact',
+      description:
+        'Read the current Markdown of a note or skill: target, id, full current draft, base hash, and the stable section index. Read-only; call it before proposing any edit.',
+      parameters: {
+        type: 'object',
+        properties: {
+          target: {
+            type: 'string',
+            enum: ['note', 'skill'],
+            description: 'Document kind to read.',
+          },
+          id: {
+            type: 'string',
+            description: 'noteId or skillId of the document.',
+          },
+        },
+        required: ['target', 'id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'patch_artifact_section',
+      description:
+        'Propose an append or replace edit to one section of a note or skill. Returns a unified diff and the resulting Markdown; it never writes the editor — the user must approve the change. Requires the sectionId, exact expectedHeading, and baseHash returned by get_artifact.',
+      parameters: {
+        type: 'object',
+        properties: {
+          target: {
+            type: 'string',
+            enum: ['note', 'skill'],
+            description: 'Document kind to patch.',
+          },
+          id: {
+            type: 'string',
+            description: 'noteId or skillId of the document.',
+          },
+          sectionId: {
+            type: 'string',
+            description: 'Dotted section id from get_artifact sectionIndex (e.g. "2.1").',
+          },
+          expectedHeading: {
+            type: 'string',
+            description: 'Exact heading text of that section, used to refuse drift.',
+          },
+          baseHash: {
+            type: 'string',
+            description: 'baseHash returned by the get_artifact call this edit is based on.',
+          },
+          operation: {
+            type: 'string',
+            enum: ['append', 'replace'],
+            description: 'append adds lines at the end of the section body; replace swaps the body.',
+          },
+          newContent: {
+            type: 'string',
+            description: 'Markdown text to append or use as the replacement body (max 120 lines).',
+          },
+        },
+        required: ['target', 'id', 'sectionId', 'expectedHeading', 'baseHash', 'operation', 'newContent'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'oracle_query',
+      description:
+        'Execute a read-only SQL query on the configured remote Oracle database via SQLcl over SSH. Strict read-only enforcement (SET TRANSACTION READ ONLY). Results formatted in JSON.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'The SELECT or WITH SQL query to execute on Oracle DB.',
+          },
+          explain: {
+            type: 'boolean',
+            description: 'Optional. If true, generates and returns the EXPLAIN PLAN rather than executing the query.',
+          },
+          limit: {
+            type: 'number',
+            description: 'Optional max rows to return (default 100, max 1000).',
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'oracle_describe',
+      description:
+        'Inspect Oracle database metadata: list tables/views, inspect columns, types, nullability, constraints, comments, or retrieve full table DDL.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['list_tables', 'describe_table', 'get_ddl'],
+            description: 'Action: list_tables (summary of tables), describe_table (columns, types, constraints), get_ddl (full DDL).',
+          },
+          tableOrView: {
+            type: 'string',
+            description: 'Table or view name (required for describe_table and get_ddl).',
+          },
+          schema: {
+            type: 'string',
+            description: 'Optional schema or owner name.',
+          },
+          search: {
+            type: 'string',
+            description: 'Optional search keyword to filter table names for list_tables.',
+          },
+        },
+        required: ['action'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'ssh_list_dir',
+      description:
+        'List files and directories on the remote host via configured SSH connection. Returns name, type (file/directory/symlink), size in bytes, and last modified timestamp. Directories sorted first.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: 'Remote directory path to list (e.g. "/var/log", "/etc/nginx", or ".").',
+          },
+          showHidden: {
+            type: 'boolean',
+            description: 'Optional. If true, includes hidden files starting with dot "." (default false).',
+          },
+          limit: {
+            type: 'number',
+            description: 'Optional max entries to return (default 100, max 200).',
+          },
+        },
+        required: ['path'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'ssh_read_file',
+      description:
+        'Read a slice of lines from a remote text/code/log file over SSH. Refuses binary files. Returns numbered lines, total lines count, and pagination indicator to preserve AI context window.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: 'Remote absolute path of the file to read.',
+          },
+          offset: {
+            type: 'number',
+            description: 'Optional 1-based line offset to start reading (default 1).',
+          },
+          limit: {
+            type: 'number',
+            description: 'Optional number of lines to read (default 100, max 500).',
+          },
+        },
+        required: ['path'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'ssh_grep_files',
+      description:
+        'Search for a string or regex pattern in remote files or directories using read-only grep over SSH. Ignores binary files. Returns matching file paths, line numbers, and contents.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: 'Remote file or directory path to search.',
+          },
+          pattern: {
+            type: 'string',
+            description: 'Search string or regular expression.',
+          },
+          recursive: {
+            type: 'boolean',
+            description: 'Optional. If true, searches recursively in subdirectories (default false).',
+          },
+          caseSensitive: {
+            type: 'boolean',
+            description: 'Optional. True for case-sensitive search, false for case-insensitive (default true).',
+          },
+          limit: {
+            type: 'number',
+            description: 'Optional max matching lines to return (default 50, max 100).',
+          },
+        },
+        required: ['path', 'pattern'],
+      },
+    },
+  },
 ];
+
+export interface ExecuteAiToolOptions {
+  /**
+   * WR-19: the CR a CR-scoped turn is bound to. Entity ids outside it are rejected so a
+   * scoped turn cannot read or mutate another CR's data.
+   */
+  crScopeId?: string;
+}
+
+/**
+ * WR-02: the read tools that stay advertised to the lead return user-authored free text, so
+ * they apply the same untrusted-data boundary `get_linked_context` applies. `wrapField` lives
+ * in `untrustedData` so every tool path shares one implementation.
+ */
+
+/** Tools whose first argument identifies a task; the task's `crId` must match the turn scope. */
+const TASK_SCOPED_TOOLS = new Set([
+  'update_task',
+  'delete_task',
+  'reparent_task',
+  'update_task_checklist',
+  'spawn_recurring_task_instance',
+]);
+
+async function assertCrScope(
+  toolName: string,
+  args: Record<string, any>,
+  db: TaskPlannerDatabase,
+  crScopeId: string
+): Promise<void> {
+  if (typeof args.crId === 'string' && args.crId !== crScopeId) {
+    throw new Error('Công cụ chỉ được thao tác trên Change Request đang mở.');
+  }
+  if (!TASK_SCOPED_TOOLS.has(toolName)) return;
+  const taskId = args.id ?? args.taskId;
+  if (typeof taskId !== 'string') return;
+  const task = await db.tasks.get(taskId);
+  if (task && task.crId !== crScopeId) {
+    throw new Error('Tác vụ không thuộc Change Request đang mở.');
+  }
+}
 
 export async function executeAiTool(
   toolName: string,
   args: Record<string, any>,
   db: TaskPlannerDatabase,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: ExecuteAiToolOptions
 ): Promise<string> {
   const normalized = normalizeToolName(toolName);
+  if (options?.crScopeId) {
+    try {
+      await assertCrScope(normalized, args, db, options.crScopeId);
+    } catch (err) {
+      return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
   try {
     switch (normalized) {
+      case 'ssh_list_dir': {
+        return await executeSshListDir(args as any, db);
+      }
+
+      case 'ssh_read_file': {
+        return await executeSshReadFile(args as any, db);
+      }
+
+      case 'ssh_grep_files': {
+        return await executeSshGrepFiles(args as any, db);
+      }
+
+      case 'oracle_query': {
+        return await executeOracleQuery(args as any, db);
+      }
+
+      case 'oracle_describe': {
+        return await executeOracleDescribe(args as any, db);
+      }
+
+      case 'get_artifact': {
+        return JSON.stringify(await readPatchTarget(db, args));
+      }
+
+      case 'patch_artifact_section': {
+        return JSON.stringify(await preparePatch(db, args));
+      }
+
       case 'query_tasks': {
         if (!db.tasks) return JSON.stringify({ error: 'Tasks table unavailable' });
         let tasks = await db.tasks.toArray();
-        const projects = db.projects ? await db.projects.toArray() : [];
-        const milestones = db.milestones ? await db.milestones.toArray() : [];
+        const changeRequests = db.changeRequests ? await db.changeRequests.toArray() : [];
+        const systems = db.systems ? await db.systems.toArray() : [];
         const workSessions = db.workSessions ? await db.workSessions.toArray() : [];
 
-        const projectMap = new Map<string, Project>(projects.map((p) => [p.id, p]));
-        const milestoneMap = new Map<string, Milestone>(milestones.map((m) => [m.id, m]));
+        const crMap = new Map<string, ChangeRequest>(changeRequests.map((c) => [c.id, c]));
+        const systemMap = new Map<string, System>(systems.map((s) => [s.id, s]));
         const loggedMap = new Map<string, number>();
         for (const ws of workSessions) {
           loggedMap.set(ws.taskId, (loggedMap.get(ws.taskId) || 0) + (ws.durationMinutes || 0));
         }
 
         // Entity / Status / Priority / WorkType / Recurrence filters
-        if (args.projectId) {
-          tasks = tasks.filter((t) => t.projectId === args.projectId);
+        if (args.crId) {
+          tasks = tasks.filter((t) => t.crId === args.crId);
         }
-        if (args.milestoneId) {
-          tasks = tasks.filter((t) => t.milestoneId === args.milestoneId);
+        if (args.systemId) {
+          tasks = tasks.filter((t) => t.systemId === args.systemId);
         }
         if (args.status) {
           tasks = tasks.filter(
@@ -2124,13 +2452,16 @@ export async function executeAiTool(
         const totalCount = tasks.length;
         const limit = Math.min(Math.max(1, Number(args.limit) || 25), 50);
         const subset = tasks.slice(0, limit).map((t) => {
-          const p = t.projectId ? projectMap.get(t.projectId) : undefined;
-          const m = t.milestoneId ? milestoneMap.get(t.milestoneId) : undefined;
+          const c = crMap.get(t.crId);
+          const s = t.systemId ? systemMap.get(t.systemId) : undefined;
           return {
             id: t.id,
             name: t.name,
-            description: t.description ?? null,
-            notes: t.notes ?? null,
+            // WR-02: user-authored free text is the same provenance `get_linked_context`
+            // wraps. This tool stays in `LEAD_TOOL_ALLOWLIST`, so its result carries the
+            // boundary too — otherwise the two read paths disagree again.
+            description: wrapField(`MÔ TẢ TÁC VỤ ${t.id}`, t.description),
+            notes: wrapField(`GHI CHÚ TÁC VỤ ${t.id}`, t.notes),
             status: t.status,
             priority: t.priority,
             progress: t.progress,
@@ -2141,16 +2472,17 @@ export async function executeAiTool(
             totalLoggedMinutes: loggedMap.get(t.id) || 0,
             jiraKey: t.jiraKey ?? null,
             workType: t.workType ?? null,
-            projectId: t.projectId ?? null,
-            projectName: p?.name ?? null,
-            milestoneId: t.milestoneId ?? null,
-            milestoneName: m?.name ?? null,
+            crId: t.crId ?? null,
+            crCode: c?.code ?? null,
+            crName: wrapField(`TÊN CR ${t.id}`, c?.name),
+            systemId: t.systemId ?? null,
+            systemName: wrapField(`TÊN HỆ THỐNG ${t.id}`, s?.name),
             checklistCount: t.checklist?.length ?? 0,
             checklistDoneCount: t.checklist?.filter((c) => c.done).length ?? 0,
             isRecurring: Boolean(t.isRecurring),
             recurrenceFrequency: t.recurrenceFrequency ?? null,
             reminderDate: t.reminderDate ?? null,
-            reminderNote: t.reminderNote ?? null,
+            reminderNote: wrapField(`GHI CHÚ NHẮC ${t.id}`, t.reminderNote),
             remindersCount: t.reminders?.length ?? 0,
             opsOwners: t.opsOwners ?? [],
             businessAnalysts: t.businessAnalysts ?? [],
@@ -2166,11 +2498,9 @@ export async function executeAiTool(
         });
       }
 
-      case 'query_projects': {
-        if (!db.projects) return JSON.stringify({ error: 'Projects table unavailable' });
-        let projects = await db.projects.toArray();
+      case 'query_change_requests': {
+        const allChangeRequests = await getAllChangeRequests(db);
         const allTasks = db.tasks ? await db.tasks.toArray() : [];
-        const allMilestones = db.milestones ? await db.milestones.toArray() : [];
         const workSessions = db.workSessions ? await db.workSessions.toArray() : [];
 
         const loggedMap = new Map<string, number>();
@@ -2178,208 +2508,105 @@ export async function executeAiTool(
           loggedMap.set(ws.taskId, (loggedMap.get(ws.taskId) || 0) + (ws.durationMinutes || 0));
         }
 
+        let changeRequests = allChangeRequests;
         if (args.status) {
-          projects = projects.filter(
-            (p) => p.status.toLowerCase() === String(args.status).toLowerCase()
+          changeRequests = changeRequests.filter(
+            (c) => c.status.toLowerCase() === String(args.status).toLowerCase()
           );
         }
-        if (args.createdAfter) {
-          const boundary = String(args.createdAfter).slice(0, 10);
-          projects = projects.filter((p) => (p.createdAt || '').slice(0, 10) >= boundary);
+        if (args.type) {
+          changeRequests = changeRequests.filter(
+            (c) => c.type.toLowerCase() === String(args.type).toLowerCase()
+          );
         }
-        if (args.createdBefore) {
-          const boundary = String(args.createdBefore).slice(0, 10);
-          projects = projects.filter((p) => (p.createdAt || '').slice(0, 10) <= boundary);
-        }
-        if (args.deadlineBefore) {
-          projects = projects.filter((p) => p.deadline && p.deadline <= args.deadlineBefore);
-        }
-        if (args.deadlineAfter) {
-          projects = projects.filter((p) => p.deadline && p.deadline >= args.deadlineAfter);
-        }
-        if (args.jiraEpicKey) {
-          const q = String(args.jiraEpicKey).toLowerCase();
-          projects = projects.filter((p) => p.jiraEpicKey && p.jiraEpicKey.toLowerCase().includes(q));
+        if (args.systemId) {
+          changeRequests = changeRequests.filter((c) =>
+            c.targets.some((t) => t.systemId === args.systemId)
+          );
         }
         if (args.search) {
           const q = String(args.search).toLowerCase();
-          projects = projects.filter(
-            (p) =>
-              p.name.toLowerCase().includes(q) ||
-              (p.description && p.description.toLowerCase().includes(q)) ||
-              (p.notes && p.notes.toLowerCase().includes(q)) ||
-              (p.jiraEpicKey && p.jiraEpicKey.toLowerCase().includes(q))
+          changeRequests = changeRequests.filter(
+            (c) =>
+              c.code.toLowerCase().includes(q) ||
+              c.name.toLowerCase().includes(q) ||
+              (c.description && c.description.toLowerCase().includes(q))
           );
         }
 
-        // Sorting
-        const sortBy = args.sortBy || 'createdAt';
-        const sortOrder = args.sortOrder || (sortBy === 'deadline' || sortBy === 'name' ? 'asc' : 'desc');
-        const isAsc = sortOrder.toLowerCase() === 'asc';
-
-        projects.sort((a, b) => {
-          let cmp = 0;
-          if (sortBy === 'createdAt') {
-            cmp = (a.createdAt || '').localeCompare(b.createdAt || '');
-          } else if (sortBy === 'updatedAt') {
-            cmp = (a.updatedAt || '').localeCompare(b.updatedAt || '');
-          } else if (sortBy === 'deadline') {
-            if (!a.deadline && !b.deadline) cmp = 0;
-            else if (!a.deadline) return 1;
-            else if (!b.deadline) return -1;
-            else cmp = a.deadline.localeCompare(b.deadline);
-          } else if (sortBy === 'name') {
-            cmp = a.name.localeCompare(b.name);
-          }
-          return isAsc ? cmp : -cmp;
-        });
+        changeRequests.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
 
         const limit = Math.min(Math.max(1, Number(args.limit) || 20), 50);
-        const subset = projects.slice(0, limit).map((p) => {
-          const pTasks = allTasks.filter((t) => t.projectId === p.id);
-          const pMilestones = allMilestones.filter((m) => m.projectId === p.id);
+        const subset = changeRequests.slice(0, limit).map((c) => {
+          const crTasks = allTasks.filter((t) => t.crId === c.id);
           let totalEstimate = 0;
           let totalLogged = 0;
-          for (const t of pTasks) {
+          for (const t of crTasks) {
             totalEstimate += t.estimateMinutes || 0;
             totalLogged += loggedMap.get(t.id) || 0;
           }
           return {
-            id: p.id,
-            name: p.name,
-            status: p.status,
-            deadline: p.deadline ?? null,
-            jiraEpicKey: p.jiraEpicKey ?? null,
-            description: p.description ?? null,
-            notes: p.notes ?? null,
-            opsOwners: p.opsOwners ?? [],
-            businessAnalysts: p.businessAnalysts ?? [],
-            reminderDate: p.reminderDate ?? null,
-            reminderNote: p.reminderNote ?? null,
-            createdAt: p.createdAt,
-            updatedAt: p.updatedAt,
-            taskCount: pTasks.length,
-            openTaskCount: pTasks.filter(
+            id: c.id,
+            code: c.code,
+            name: c.name,
+            type: c.type,
+            status: c.status,
+            deadline: c.deadline ?? null,
+            // WR-02: the CR description is user-authored free text — same boundary as above.
+            description: wrapField(`MÔ TẢ CR ${c.id}`, c.description),
+            targets: c.targets.map((t) => ({
+              systemId: t.systemId,
+              featureBranch: t.featureBranch ?? null,
+            })),
+            createdAt: c.createdAt,
+            updatedAt: c.updatedAt,
+            taskCount: crTasks.length,
+            openTaskCount: crTasks.filter(
               (t) => t.status !== 'Done' && t.status !== 'Cancelled'
             ).length,
-            milestoneCount: pMilestones.length,
             totalEstimateMinutes: totalEstimate,
             totalLoggedMinutes: totalLogged,
           };
         });
 
         return JSON.stringify({
-          totalCount: projects.length,
+          totalCount: changeRequests.length,
           returnedCount: subset.length,
-          projects: subset,
+          changeRequests: subset,
         });
       }
 
-      case 'query_milestones': {
-        if (!db.milestones) return JSON.stringify({ error: 'Milestones table unavailable' });
-        let milestones = await db.milestones.toArray();
-        const allTasks = db.tasks ? await db.tasks.toArray() : [];
-        const allProjects = db.projects ? await db.projects.toArray() : [];
-        const workSessions = db.workSessions ? await db.workSessions.toArray() : [];
-
-        const projectMap = new Map<string, Project>(allProjects.map((p) => [p.id, p]));
-        const loggedMap = new Map<string, number>();
-        for (const ws of workSessions) {
-          loggedMap.set(ws.taskId, (loggedMap.get(ws.taskId) || 0) + (ws.durationMinutes || 0));
-        }
-
-        if (args.projectId) {
-          milestones = milestones.filter((m) => m.projectId === args.projectId);
-        }
-        if (args.status) {
-          milestones = milestones.filter(
-            (m) => m.status.toLowerCase() === String(args.status).toLowerCase()
+      case 'query_systems': {
+        const allSystems = await getAllSystems(db);
+        let systems = allSystems;
+        if (args.type) {
+          systems = systems.filter(
+            (s) => s.type.toLowerCase() === String(args.type).toLowerCase()
           );
-        }
-        if (args.createdAfter) {
-          const boundary = String(args.createdAfter).slice(0, 10);
-          milestones = milestones.filter((m) => (m.createdAt || '').slice(0, 10) >= boundary);
-        }
-        if (args.createdBefore) {
-          const boundary = String(args.createdBefore).slice(0, 10);
-          milestones = milestones.filter((m) => (m.createdAt || '').slice(0, 10) <= boundary);
-        }
-        if (args.deadlineBefore) {
-          milestones = milestones.filter((m) => m.deadline && m.deadline <= args.deadlineBefore);
-        }
-        if (args.deadlineAfter) {
-          milestones = milestones.filter((m) => m.deadline && m.deadline >= args.deadlineAfter);
         }
         if (args.search) {
           const q = String(args.search).toLowerCase();
-          milestones = milestones.filter(
-            (m) =>
-              m.name.toLowerCase().includes(q) ||
-              (m.description && m.description.toLowerCase().includes(q)) ||
-              (m.notes && m.notes.toLowerCase().includes(q))
+          systems = systems.filter(
+            (s) => s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)
           );
         }
 
-        // Sorting
-        const sortBy = args.sortBy || 'createdAt';
-        const sortOrder = args.sortOrder || (sortBy === 'deadline' || sortBy === 'name' ? 'asc' : 'desc');
-        const isAsc = sortOrder.toLowerCase() === 'asc';
-
-        milestones.sort((a, b) => {
-          let cmp = 0;
-          if (sortBy === 'createdAt') {
-            cmp = (a.createdAt || '').localeCompare(b.createdAt || '');
-          } else if (sortBy === 'updatedAt') {
-            cmp = (a.updatedAt || '').localeCompare(b.updatedAt || '');
-          } else if (sortBy === 'deadline') {
-            if (!a.deadline && !b.deadline) cmp = 0;
-            else if (!a.deadline) return 1;
-            else if (!b.deadline) return -1;
-            else cmp = a.deadline.localeCompare(b.deadline);
-          } else if (sortBy === 'name') {
-            cmp = a.name.localeCompare(b.name);
-          }
-          return isAsc ? cmp : -cmp;
-        });
+        systems.sort((a, b) => a.code.localeCompare(b.code));
 
         const limit = Math.min(Math.max(1, Number(args.limit) || 20), 50);
-        const subset = milestones.slice(0, limit).map((m) => {
-          const mTasks = allTasks.filter((t) => t.milestoneId === m.id);
-          const p = projectMap.get(m.projectId);
-          let totalEstimate = 0;
-          let totalLogged = 0;
-          for (const t of mTasks) {
-            totalEstimate += t.estimateMinutes || 0;
-            totalLogged += loggedMap.get(t.id) || 0;
-          }
-          return {
-            id: m.id,
-            name: m.name,
-            projectId: m.projectId,
-            projectName: p?.name ?? null,
-            status: m.status,
-            deadline: m.deadline ?? null,
-            description: m.description ?? null,
-            notes: m.notes ?? null,
-            opsOwners: m.opsOwners ?? [],
-            businessAnalysts: m.businessAnalysts ?? [],
-            reminderDate: m.reminderDate ?? null,
-            reminderNote: m.reminderNote ?? null,
-            createdAt: m.createdAt,
-            updatedAt: m.updatedAt,
-            taskCount: mTasks.length,
-            openTaskCount: mTasks.filter(
-              (t) => t.status !== 'Done' && t.status !== 'Cancelled'
-            ).length,
-            totalEstimateMinutes: totalEstimate,
-            totalLoggedMinutes: totalLogged,
-          };
-        });
+        const subset = systems.slice(0, limit).map((s) => ({
+          id: s.id,
+          code: s.code,
+          name: s.name,
+          type: s.type,
+          parentId: s.parentId,
+          remoteRepoPath: s.remoteRepoPath ?? null,
+        }));
 
         return JSON.stringify({
-          totalCount: milestones.length,
+          totalCount: systems.length,
           returnedCount: subset.length,
-          milestones: subset,
+          systems: subset,
         });
       }
 
@@ -2389,15 +2616,15 @@ export async function executeAiTool(
           return JSON.stringify({ error: 'Missing required parameters: type, id' });
         }
 
-        let item: Task | Project | Milestone | undefined;
+        let item: Task | ChangeRequest | System | undefined;
         let stickyNotes: Note[] = [];
 
         if (type === 'task') {
           item = db.tasks ? await db.tasks.get(id) : undefined;
-        } else if (type === 'project') {
-          item = db.projects ? await db.projects.get(id) : undefined;
-        } else if (type === 'milestone') {
-          item = db.milestones ? await db.milestones.get(id) : undefined;
+        } else if (type === 'cr') {
+          item = db.changeRequests ? await db.changeRequests.get(id) : undefined;
+        } else if (type === 'system') {
+          item = db.systems ? await db.systems.get(id) : undefined;
         }
 
         if (!item) {
@@ -2434,8 +2661,8 @@ export async function executeAiTool(
 
         if (type === 'task') {
           const task = item as Task;
-          const project = task.projectId && db.projects ? await db.projects.get(task.projectId) : undefined;
-          const milestone = task.milestoneId && db.milestones ? await db.milestones.get(task.milestoneId) : undefined;
+          const cr = task.crId && db.changeRequests ? await db.changeRequests.get(task.crId) : undefined;
+          const system = task.systemId && db.systems ? await db.systems.get(task.systemId) : undefined;
           const taskSessions = db.workSessions
             ? (await db.workSessions.toArray()).filter((ws) => ws.taskId === id)
             : [];
@@ -2455,8 +2682,9 @@ export async function executeAiTool(
           return JSON.stringify({
             type,
             item,
-            projectName: project?.name ?? null,
-            milestoneName: milestone?.name ?? null,
+            crCode: cr?.code ?? null,
+            crName: cr?.name ?? null,
+            systemName: system?.name ?? null,
             workSessionsSummary: {
               totalLoggedMinutes,
               totalLoggedHours: (totalLoggedMinutes / 60).toFixed(1),
@@ -2471,28 +2699,24 @@ export async function executeAiTool(
           });
         }
 
-        if (type === 'project') {
-          const allTasks = db.tasks ? (await db.tasks.toArray()).filter((t) => t.projectId === id) : [];
-          const allMilestones = db.milestones
-            ? (await db.milestones.toArray()).filter((m) => m.projectId === id)
-            : [];
+        if (type === 'cr') {
+          const cr = item as ChangeRequest;
+          const allTasks = db.tasks ? (await db.tasks.toArray()).filter((t) => t.crId === id) : [];
           const workSessions = db.workSessions ? await db.workSessions.toArray() : [];
           const taskIds = new Set(allTasks.map((t) => t.id));
-          const projectSessions = workSessions.filter((ws) => taskIds.has(ws.taskId));
+          const crSessions = workSessions.filter((ws) => taskIds.has(ws.taskId));
 
           let totalLoggedMinutes = 0;
           let totalEstimateMinutes = 0;
           for (const t of allTasks) totalEstimateMinutes += t.estimateMinutes || 0;
-          for (const ws of projectSessions) totalLoggedMinutes += ws.durationMinutes || 0;
+          for (const ws of crSessions) totalLoggedMinutes += ws.durationMinutes || 0;
 
           return JSON.stringify({
             type,
             item,
-            milestones: allMilestones.map((m) => ({
-              id: m.id,
-              name: m.name,
-              status: m.status,
-              deadline: m.deadline ?? null,
+            targets: cr.targets.map((t) => ({
+              systemId: t.systemId,
+              featureBranch: t.featureBranch ?? null,
             })),
             tasksSummary: {
               total: allTasks.length,
@@ -2506,23 +2730,23 @@ export async function executeAiTool(
           });
         }
 
-        if (type === 'milestone') {
-          const milestone = item as Milestone;
-          const project = milestone.projectId && db.projects ? await db.projects.get(milestone.projectId) : undefined;
-          const allTasks = db.tasks ? (await db.tasks.toArray()).filter((t) => t.milestoneId === id) : [];
+        if (type === 'system') {
+          const system = item as System;
+          const parent = system.parentId && db.systems ? await db.systems.get(system.parentId) : undefined;
+          const allTasks = db.tasks ? (await db.tasks.toArray()).filter((t) => t.systemId === id) : [];
           const workSessions = db.workSessions ? await db.workSessions.toArray() : [];
           const taskIds = new Set(allTasks.map((t) => t.id));
-          const milestoneSessions = workSessions.filter((ws) => taskIds.has(ws.taskId));
+          const systemSessions = workSessions.filter((ws) => taskIds.has(ws.taskId));
 
           let totalLoggedMinutes = 0;
           let totalEstimateMinutes = 0;
           for (const t of allTasks) totalEstimateMinutes += t.estimateMinutes || 0;
-          for (const ws of milestoneSessions) totalLoggedMinutes += ws.durationMinutes || 0;
+          for (const ws of systemSessions) totalLoggedMinutes += ws.durationMinutes || 0;
 
           return JSON.stringify({
             type,
             item,
-            projectName: project?.name ?? null,
+            parentName: parent?.name ?? null,
             tasksSummary: {
               total: allTasks.length,
               open: allTasks.filter((t) => t.status === 'Open' || t.status === 'Pending').length,
@@ -2548,11 +2772,11 @@ export async function executeAiTool(
         const allTasks = db.tasks ? await db.tasks.toArray() : [];
         const taskMap = new Map<string, Task>(allTasks.map((t) => [t.id, t]));
 
-        if (args.projectId) {
-          const projectTaskIds = new Set(
-            allTasks.filter((t) => t.projectId === args.projectId).map((t) => t.id)
+        if (args.crId) {
+          const crTaskIds = new Set(
+            allTasks.filter((t) => t.crId === args.crId).map((t) => t.id)
           );
-          sessions = sessions.filter((s) => projectTaskIds.has(s.taskId));
+          sessions = sessions.filter((s) => crTaskIds.has(s.taskId));
         }
         if (args.taskId) {
           sessions = sessions.filter((s) => s.taskId === args.taskId);
@@ -2856,11 +3080,11 @@ export async function executeAiTool(
         let sessions = await db.workSessions.toArray();
         const allTasks = db.tasks ? await db.tasks.toArray() : [];
 
-        if (args.projectId) {
-          const projectTaskIds = new Set(
-            allTasks.filter((t) => t.projectId === args.projectId).map((t) => t.id)
+        if (args.crId) {
+          const crTaskIds = new Set(
+            allTasks.filter((t) => t.crId === args.crId).map((t) => t.id)
           );
-          sessions = sessions.filter((s) => projectTaskIds.has(s.taskId));
+          sessions = sessions.filter((s) => crTaskIds.has(s.taskId));
         }
 
         const filteredSessions = filterSessionsByPeriod(sessions, period as any);
@@ -2905,12 +3129,12 @@ export async function executeAiTool(
         if (!db.notes) return JSON.stringify({ error: 'Notes table unavailable' });
         let notes = (await db.notes.toArray()).filter((n) => !n.deletedAt);
         const allTasks = db.tasks ? await db.tasks.toArray() : [];
-        const allProjects = db.projects ? await db.projects.toArray() : [];
-        const allMilestones = db.milestones ? await db.milestones.toArray() : [];
+        const allChangeRequests = db.changeRequests ? await db.changeRequests.toArray() : [];
+        const allSystems = db.systems ? await db.systems.toArray() : [];
 
         const taskMap = new Map(allTasks.map((t) => [t.id, t.name]));
-        const projectMap = new Map(allProjects.map((p) => [p.id, p.name]));
-        const milestoneMap = new Map(allMilestones.map((m) => [m.id, m.name]));
+        const crMap = new Map(allChangeRequests.map((c) => [c.id, c.name]));
+        const systemMap = new Map(allSystems.map((s) => [s.id, s.name]));
 
         if (args.type) {
           notes = notes.filter((n) => (n.type || 'quick_note') === args.type);
@@ -2997,21 +3221,28 @@ export async function executeAiTool(
         const subset = notes.slice(0, limit).map((n) => {
           let entityName: string | null = null;
           if (n.entityType === 'task' && n.entityId) entityName = taskMap.get(n.entityId) ?? null;
-          else if (n.entityType === 'project' && n.entityId) entityName = projectMap.get(n.entityId) ?? null;
-          else if (n.entityType === 'milestone' && n.entityId) entityName = milestoneMap.get(n.entityId) ?? null;
+          else if (n.entityType === 'cr' && n.entityId) entityName = crMap.get(n.entityId) ?? null;
+          else if (n.entityType === 'system' && n.entityId) entityName = systemMap.get(n.entityId) ?? null;
 
           return {
             id: n.id,
-            title: n.title ?? 'Untitled Note',
+            // WR-05: `write_doc` makes titles model-authored, and the lead is the one agent
+            // holding mutation tools — so a title is data here, exactly like the body below.
+            title: wrapField(`TIÊU ĐỀ GHI CHÚ ${n.id}`, n.title ?? 'Untitled Note'),
             type: n.type || 'quick_note',
             parentId: n.parentId ?? null,
             tags: n.tags || [],
-            bodySnippet: n.body.length > 200 ? `${n.body.slice(0, 200)}...` : n.body,
+            // WR-02: the note body is user-authored free text — same boundary as above.
+            bodySnippet: wrapField(
+              `NỘI DUNG GHI CHÚ ${n.id}`,
+              n.body.length > 200 ? `${n.body.slice(0, 200)}...` : n.body
+            ),
             isPinned: n.isPinned,
             attachmentsCount: attachmentCountMap.get(n.id) || 0,
             entityType: n.entityType ?? 'standalone',
             entityId: n.entityId ?? null,
-            entityName,
+            // WR-04: an entity name is user-authored free text — same boundary as the title.
+            entityName: wrapField(`TÊN MỤC LIÊN KẾT ${n.id}`, entityName),
             createdAt: n.createdAt,
             updatedAt: n.updatedAt,
           };
@@ -3021,6 +3252,57 @@ export async function executeAiTool(
           totalCount,
           returnedCount: subset.length,
           notes: subset,
+        });
+      }
+
+      case 'query_diagrams': {
+        if (!db.notes) return JSON.stringify({ error: 'Notes table unavailable' });
+        let diagrams = (await db.notes.toArray()).filter(
+          (n) => !n.deletedAt && n.type === 'diagram'
+        );
+
+        if (Array.isArray(args.tags) && args.tags.length > 0) {
+          const filterTags = new Set(args.tags.map((t: string) => String(t).toLowerCase().trim()));
+          diagrams = diagrams.filter((n) =>
+            n.tags?.some((t) => filterTags.has(t.toLowerCase().trim()))
+          );
+        }
+        if (args.title) {
+          const q = String(args.title).toLowerCase();
+          diagrams = diagrams.filter((n) => (n.title || '').toLowerCase().includes(q));
+        }
+        if (args.entityType) {
+          diagrams = diagrams.filter((n) => n.entityType === args.entityType);
+        }
+        if (args.entityId) {
+          diagrams = diagrams.filter((n) => n.entityId === args.entityId);
+        }
+
+        diagrams.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+
+        const totalCount = diagrams.length;
+        const limit = Math.min(Math.max(1, Number(args.limit) || 20), 50);
+        const subset = diagrams.slice(0, limit).map((n) => {
+          const row: Record<string, any> = {
+            id: n.id,
+            // T-e63-01: title and body are user-authored free text — same boundary as query_notes.
+            title: wrapField(
+              'TIÊU ĐỀ BIỂU ĐỒ ' + n.id,
+              n.title ?? 'Biểu đồ chưa đặt tên'
+            ),
+            tags: n.tags || [],
+            updatedAt: n.updatedAt,
+          };
+          if (args.includeBody === true) {
+            row.body = wrapField('MÃ MERMAID BIỂU ĐỒ ' + n.id, n.body);
+          }
+          return row;
+        });
+
+        return JSON.stringify({
+          totalCount,
+          returnedCount: subset.length,
+          diagrams: subset,
         });
       }
 
@@ -3091,31 +3373,44 @@ export async function executeAiTool(
             name: task.name,
             analysis,
           });
-        } else if (type === 'project') {
-          const project = db.projects ? await db.projects.get(id) : null;
-          if (!project) return JSON.stringify({ error: `Project not found: ${id}` });
-          const projectTasks = db.tasks ? await db.tasks.where('projectId').equals(id).toArray() : [];
-          const projectMilestones = db.milestones ? await db.milestones.where('projectId').equals(id).toArray() : [];
+        } else if (type === 'cr') {
+          const cr = db.changeRequests ? await db.changeRequests.get(id) : null;
+          if (!cr) return JSON.stringify({ error: `ChangeRequest not found: ${id}` });
+          const crTasks = db.tasks ? await db.tasks.where('crId').equals(id).toArray() : [];
+          const targetSystems = db.systems
+            ? (await db.systems.toArray()).filter((sys) => cr.targets.some((t) => t.systemId === sys.id))
+            : [];
           const allWorkSessions = db.workSessions ? await db.workSessions.toArray() : [];
           const allAllocations = db.plannedAllocations ? await db.plannedAllocations.toArray() : [];
-          const analysis = analyzeProjectInsight(project, projectTasks, projectMilestones, allWorkSessions, allAllocations);
+          const analysis = analyzeChangeRequestInsight(cr, crTasks, targetSystems, allWorkSessions, allAllocations);
           return JSON.stringify({
-            type: 'project',
-            id: project.id,
-            name: project.name,
+            type: 'cr',
+            id: cr.id,
+            name: cr.name,
             analysis,
           });
-        } else if (type === 'milestone') {
-          const milestone = db.milestones ? await db.milestones.get(id) : null;
-          if (!milestone) return JSON.stringify({ error: `Milestone not found: ${id}` });
-          const milestoneTasks = db.tasks ? await db.tasks.where('milestoneId').equals(id).toArray() : [];
-          const capacityRules = db.capacityRules ? await db.capacityRules.toArray() : [];
-          const analysis = analyzeMilestoneInsight(milestone, milestoneTasks, capacityRules);
+        } else if (type === 'system') {
+          const system = db.systems ? await db.systems.get(id) : null;
+          if (!system) return JSON.stringify({ error: `System not found: ${id}` });
+          const systemTasks = db.tasks ? await db.tasks.where('systemId').equals(id).toArray() : [];
+          const crIds = Array.from(new Set(systemTasks.map((t) => t.crId)));
+          const allChangeRequests = db.changeRequests ? await db.changeRequests.toArray() : [];
+          const crs = allChangeRequests.filter((c) => crIds.includes(c.id));
           return JSON.stringify({
-            type: 'milestone',
-            id: milestone.id,
-            name: milestone.name,
-            analysis,
+            type: 'system',
+            id: system.id,
+            name: system.name,
+            analysis: {
+              subsystemCode: system.code,
+              subsystemType: system.type,
+              parentId: system.parentId,
+              taskCount: systemTasks.length,
+              openTaskCount: systemTasks.filter(
+                (t) => t.status !== 'Done' && t.status !== 'Cancelled'
+              ).length,
+              totalEstimateMinutes: systemTasks.reduce((sum, t) => sum + (t.estimateMinutes || 0), 0),
+              changeRequests: crs.map((c) => ({ id: c.id, code: c.code, name: c.name, status: c.status })),
+            },
           });
         }
         return JSON.stringify({ error: `Invalid item type: ${type}` });
@@ -3129,26 +3424,26 @@ export async function executeAiTool(
         return JSON.stringify({
           documentId: args.documentId,
           documentTitle: doc.title || 'Untitled Document',
-          totalBacklinks: backlinks.tasks.length + backlinks.projects.length + backlinks.referencingNotes.length,
+          totalBacklinks: backlinks.tasks.length + backlinks.changeRequests.length + backlinks.referencingNotes.length,
           tasks: backlinks.tasks.map((t) => ({ id: t.id, name: t.name, status: t.status, priority: t.priority })),
-          projects: backlinks.projects.map((p) => ({ id: p.id, name: p.name, status: p.status })),
+          changeRequests: backlinks.changeRequests.map((c) => ({ id: c.id, code: c.code, name: c.name, status: c.status })),
           referencingNotes: backlinks.referencingNotes.map((n) => ({ id: n.id, title: n.title, type: n.type })),
         });
       }
 
       case 'generate_standup_report': {
         const allTasks = db.tasks ? await db.tasks.toArray() : [];
-        const allProjects = db.projects ? await db.projects.toArray() : [];
-        const allMilestones = db.milestones ? await db.milestones.toArray() : [];
-        const projectMap = new Map(allProjects.map((p) => [p.id, p]));
-        const milestoneMap = new Map(allMilestones.map((m) => [m.id, m]));
+        const allChangeRequests = db.changeRequests ? await db.changeRequests.toArray() : [];
+        const allSystems = db.systems ? await db.systems.toArray() : [];
+        const crMap = new Map(allChangeRequests.map((c) => [c.id, c]));
+        const systemMap = new Map(allSystems.map((s) => [s.id, s]));
         let tasks = allTasks;
-        if (args.projectId) {
-          tasks = tasks.filter((t) => t.projectId === args.projectId);
+        if (args.crId) {
+          tasks = tasks.filter((t) => t.crId === args.crId);
         }
         const report = formatStandupSummary(tasks, {
-          projectMap,
-          milestoneMap,
+          crMap,
+          systemMap,
           todayStr: args.date || getTodayDateString(),
         });
         return JSON.stringify({
@@ -3164,8 +3459,7 @@ export async function executeAiTool(
         const horizonEnd = dayjs(todayStr).add(horizonDays, 'day').format('YYYY-MM-DD');
 
         const allTasks = db.tasks ? await db.tasks.toArray() : [];
-        const allProjects = db.projects ? await db.projects.toArray() : [];
-        const allMilestones = db.milestones ? await db.milestones.toArray() : [];
+        const allChangeRequests = db.changeRequests ? await db.changeRequests.toArray() : [];
         const allAllocations = db.plannedAllocations ? await db.plannedAllocations.toArray() : [];
 
         const activeTasks = allTasks.filter((t) => t.status !== 'Done' && t.status !== 'Cancelled');
@@ -3204,20 +3498,11 @@ export async function executeAiTool(
           }
         }
 
-        // Upcoming project deadlines
-        for (const p of allProjects) {
-          if (p.status !== 'Done' && p.status !== 'Cancelled' && p.deadline) {
-            if (p.deadline <= horizonEnd) {
-              upcomingDeadlines.push({ type: 'project', id: p.id, name: p.name, deadline: p.deadline });
-            }
-          }
-        }
-
-        // Upcoming milestone deadlines
-        for (const m of allMilestones) {
-          if (m.status !== 'Done' && m.status !== 'Cancelled' && m.deadline) {
-            if (m.deadline <= horizonEnd) {
-              upcomingDeadlines.push({ type: 'milestone', id: m.id, name: m.name, deadline: m.deadline });
+        // Upcoming CR deadlines
+        for (const c of allChangeRequests) {
+          if (c.status !== 'Done' && c.status !== 'Cancelled' && c.deadline) {
+            if (c.deadline <= horizonEnd) {
+              upcomingDeadlines.push({ type: 'cr', id: c.id, name: c.name, deadline: c.deadline });
             }
           }
         }
@@ -3248,8 +3533,8 @@ export async function executeAiTool(
             (t) => t.status.toLowerCase() === String(args.status).toLowerCase()
           );
         }
-        if (args.projectId) {
-          recurring = recurring.filter((t) => t.projectId === args.projectId);
+        if (args.crId) {
+          recurring = recurring.filter((t) => t.crId === args.crId);
         }
         if (args.recurrenceFrequency) {
           recurring = recurring.filter(
@@ -3275,9 +3560,9 @@ export async function executeAiTool(
           returnedCount: subset.length,
           recurringTasks: subset.map((t) => ({
             id: t.id,
-            name: t.name,
-            description: t.description ?? null,
-            notes: t.notes ?? null,
+            name: wrapField(`TÊN VIỆC ĐỊNH KỲ ${t.id}`, t.name),
+            description: wrapField(`MÔ TẢ VIỆC ĐỊNH KỲ ${t.id}`, t.description ?? null),
+            notes: wrapField(`GHI CHÚ VIỆC ĐỊNH KỲ ${t.id}`, t.notes ?? null),
             status: t.status,
             priority: t.priority,
             estimateMinutes: t.estimateMinutes,
@@ -3397,8 +3682,8 @@ export async function executeAiTool(
           {
             name: args.name,
             description: args.description,
-            projectId: args.projectId,
-            milestoneId: args.milestoneId,
+            crId: args.crId,
+            systemId: args.systemId,
             status: args.status || 'Open',
             priority: args.priority || 'Medium',
             estimateMinutes: typeof args.estimateMinutes === 'number' ? args.estimateMinutes : 0,
@@ -3443,8 +3728,10 @@ export async function executeAiTool(
         if (args.opsOwners !== undefined) patch.opsOwners = args.opsOwners;
         if (args.tags !== undefined) patch.opsOwners = args.tags;
         if (args.businessAnalysts !== undefined) patch.businessAnalysts = args.businessAnalysts;
-        if (args.projectId !== undefined) patch.projectId = args.projectId;
-        if (args.milestoneId !== undefined) patch.milestoneId = args.milestoneId;
+        if (args.crId !== undefined) patch.crId = args.crId;
+        // `null` means "unassign", but `TaskUpdateSchema.systemId` rejects null; `undefined`
+        // with the key present is what `updateTask` reads as a clear.
+        if (args.systemId !== undefined) patch.systemId = args.systemId === null ? undefined : args.systemId;
         if (args.workType !== undefined) patch.workType = args.workType;
         if (args.jiraKey !== undefined) patch.jiraKey = args.jiraKey;
         if (args.reminders !== undefined) {
@@ -3509,10 +3796,11 @@ export async function executeAiTool(
 
       case 'reparent_task': {
         if (!args.taskId) return JSON.stringify({ error: 'taskId is required' });
-        await reparentTask(args.taskId, args.projectId ?? null, args.milestoneId ?? null, db);
+        if (!args.crId) return JSON.stringify({ error: 'crId is required' });
+        await reparentTask(args.taskId, args.crId, args.systemId ?? undefined, db);
         return JSON.stringify({
           success: true,
-          message: `Đã di chuyển tác vụ (${args.taskId}) sang dự án/mốc mới.`,
+          message: `Đã di chuyển tác vụ (${args.taskId}) sang CR/hệ thống con mới.`,
         });
       }
 
@@ -3525,142 +3813,118 @@ export async function executeAiTool(
         });
       }
 
-      case 'create_project': {
-        const reminderItems = Array.isArray(args.reminders)
-          ? args.reminders.map((r: any) => ({
-              id: crypto.randomUUID(),
-              date: String(r.date),
-              time: r.time ? String(r.time) : undefined,
-              note: r.note ? String(r.note) : undefined,
+      case 'create_change_request': {
+        const targets = Array.isArray(args.targets)
+          ? args.targets.map((t: any) => ({
+              systemId: String(t.systemId),
+              featureBranch: t.featureBranch ? String(t.featureBranch) : undefined,
             }))
-          : undefined;
+          : [];
 
-        const project = await createProject(
+        const cr = await createChangeRequest(
           {
+            code: args.code,
             name: args.name,
-            description: args.description,
+            type: args.type,
             status: args.status || 'Open',
-            deadline: args.deadline,
-            notes: args.notes,
-            jiraEpicKey: args.jiraEpicKey,
-            opsOwners: args.opsOwners,
-            businessAnalysts: args.businessAnalysts,
-            reminders: reminderItems,
+            description: args.description,
+            targets,
           },
           db
         );
         return JSON.stringify({
           success: true,
-          message: `Đã tạo dự án "${project.name}" thành công.`,
-          project: { id: project.id, name: project.name, status: project.status },
+          message: `Đã tạo Change Request "${cr.code}" thành công.`,
+          changeRequest: { id: cr.id, code: cr.code, name: cr.name, status: cr.status },
         });
       }
 
-      case 'update_project': {
-        if (!args.id) return JSON.stringify({ error: 'Project ID is required' });
+      case 'update_change_request': {
+        if (!args.id) return JSON.stringify({ error: 'Change Request ID is required' });
         const patch: any = {};
+        if (args.code !== undefined) patch.code = args.code;
         if (args.name !== undefined) patch.name = args.name;
         if (args.description !== undefined) patch.description = args.description;
         if (args.status !== undefined) patch.status = args.status;
-        if (args.deadline !== undefined) patch.deadline = args.deadline;
-        if (args.notes !== undefined) patch.notes = args.notes;
-        if (args.jiraEpicKey !== undefined) patch.jiraEpicKey = args.jiraEpicKey;
-        if (args.opsOwners !== undefined) patch.opsOwners = args.opsOwners;
-        if (args.businessAnalysts !== undefined) patch.businessAnalysts = args.businessAnalysts;
-        if (args.reminders !== undefined) {
-          patch.reminders = Array.isArray(args.reminders)
-            ? args.reminders.map((r: any) => ({
-                id: r.id || crypto.randomUUID(),
-                date: String(r.date),
-                time: r.time ? String(r.time) : undefined,
-                note: r.note ? String(r.note) : undefined,
+        if (args.type !== undefined) patch.type = args.type;
+        if (args.targets !== undefined) {
+          patch.targets = Array.isArray(args.targets)
+            ? args.targets.map((t: any) => ({
+                systemId: String(t.systemId),
+                featureBranch: t.featureBranch ? String(t.featureBranch) : undefined,
               }))
             : [];
         }
 
-        await updateProject(args.id, patch, db);
+        await updateChangeRequest(args.id, patch, db);
         return JSON.stringify({
           success: true,
-          message: `Đã cập nhật dự án (${args.id}) thành công.`,
+          message: `Đã cập nhật Change Request (${args.id}) thành công.`,
           updatedFields: Object.keys(patch),
         });
       }
 
-      case 'delete_project': {
-        if (!args.id) return JSON.stringify({ error: 'Project ID is required' });
-        await deleteProjectWithCascade(args.id, 'cascade', db);
+      case 'delete_change_request': {
+        if (!args.id) return JSON.stringify({ error: 'Change Request ID is required' });
+        await deleteChangeRequest(args.id, db);
         return JSON.stringify({
           success: true,
-          message: `Đã xóa dự án (${args.id}) và tất cả mốc, tác vụ con liên quan.`,
+          message: `Đã xóa Change Request (${args.id}) và tất cả tác vụ con liên quan.`,
         });
       }
 
-      case 'create_milestone': {
-        const reminderItems = Array.isArray(args.reminders)
-          ? args.reminders.map((r: any) => ({
-              id: crypto.randomUUID(),
-              date: String(r.date),
-              time: r.time ? String(r.time) : undefined,
-              note: r.note ? String(r.note) : undefined,
-            }))
-          : undefined;
+      case 'create_system': {
+        if (!args.code || !args.name) {
+          return JSON.stringify({ error: 'System name and code are required' });
+        }
+        const input: any = { name: args.name, code: args.code };
+        if (args.parentId !== undefined) input.parentId = args.parentId;
+        if (args.type !== undefined) input.type = args.type;
+        if (args.description !== undefined) input.description = args.description;
+        if (args.sshConfigId !== undefined) input.sshConfigId = args.sshConfigId;
+        if (args.remoteRepoPath !== undefined) input.remoteRepoPath = args.remoteRepoPath;
+        if (args.defaultBaseBranch !== undefined) input.defaultBaseBranch = args.defaultBaseBranch;
 
-        const milestone = await createMilestone(
-          {
-            projectId: args.projectId,
-            name: args.name,
-            description: args.description,
-            status: args.status || 'Open',
-            deadline: args.deadline,
-            notes: args.notes,
-            opsOwners: args.opsOwners,
-            businessAnalysts: args.businessAnalysts,
-            reminders: reminderItems,
+        const system = await createSystem(input, db);
+        return JSON.stringify({
+          success: true,
+          message: `Đã tạo hệ thống "${system.code}" thành công.`,
+          system: {
+            id: system.id,
+            code: system.code,
+            name: system.name,
+            type: system.type,
+            parentId: system.parentId,
           },
-          db
-        );
-        return JSON.stringify({
-          success: true,
-          message: `Đã tạo mốc "${milestone.name}" thành công.`,
-          milestone: { id: milestone.id, name: milestone.name, status: milestone.status },
         });
       }
 
-      case 'update_milestone': {
-        if (!args.id) return JSON.stringify({ error: 'Milestone ID is required' });
+      case 'update_system': {
+        if (!args.id) return JSON.stringify({ error: 'System ID is required' });
         const patch: any = {};
         if (args.name !== undefined) patch.name = args.name;
+        if (args.code !== undefined) patch.code = args.code;
+        if (args.type !== undefined) patch.type = args.type;
         if (args.description !== undefined) patch.description = args.description;
-        if (args.status !== undefined) patch.status = args.status;
-        if (args.deadline !== undefined) patch.deadline = args.deadline;
-        if (args.notes !== undefined) patch.notes = args.notes;
-        if (args.opsOwners !== undefined) patch.opsOwners = args.opsOwners;
-        if (args.businessAnalysts !== undefined) patch.businessAnalysts = args.businessAnalysts;
-        if (args.reminders !== undefined) {
-          patch.reminders = Array.isArray(args.reminders)
-            ? args.reminders.map((r: any) => ({
-                id: r.id || crypto.randomUUID(),
-                date: String(r.date),
-                time: r.time ? String(r.time) : undefined,
-                note: r.note ? String(r.note) : undefined,
-              }))
-            : [];
-        }
+        if (args.parentId !== undefined) patch.parentId = args.parentId;
+        if (args.sshConfigId !== undefined) patch.sshConfigId = args.sshConfigId;
+        if (args.remoteRepoPath !== undefined) patch.remoteRepoPath = args.remoteRepoPath;
+        if (args.defaultBaseBranch !== undefined) patch.defaultBaseBranch = args.defaultBaseBranch;
 
-        await updateMilestone(args.id, patch, db);
+        const updated = await updateSystem(args.id, patch, db);
         return JSON.stringify({
           success: true,
-          message: `Đã cập nhật mốc (${args.id}) thành công.`,
+          message: `Đã cập nhật hệ thống (${updated.code}) thành công.`,
           updatedFields: Object.keys(patch),
         });
       }
 
-      case 'delete_milestone': {
-        if (!args.id) return JSON.stringify({ error: 'Milestone ID is required' });
-        await deleteMilestoneWithCascade(args.id, 'cascade', db);
+      case 'delete_system': {
+        if (!args.id) return JSON.stringify({ error: 'System ID is required' });
+        await deleteSystem(args.id, db);
         return JSON.stringify({
           success: true,
-          message: `Đã xóa mốc (${args.id}) và tất cả tác vụ con liên quan.`,
+          message: `Đã xóa hệ thống (${args.id}) và gỡ khỏi các CR/tác vụ liên quan.`,
         });
       }
 
@@ -3932,6 +4196,66 @@ export async function executeAiTool(
         });
       }
 
+      case 'create_diagram': {
+        if (typeof args.body !== 'string' || !args.body.trim()) {
+          return JSON.stringify({ error: 'body (mermaid source) is required' });
+        }
+        const extracted = extractMermaidBlocks(args.body);
+        const mermaid = (extracted[0] ?? stripAnsiSequences(args.body)).trim();
+        if (!mermaid) return JSON.stringify({ error: 'body (mermaid source) is required' });
+
+        const tags = Array.from(
+          new Set(['diagram', ...(Array.isArray(args.tags) ? args.tags.map(String) : [])])
+        );
+
+        const note = await createNote(
+          {
+            title: typeof args.title === 'string' ? args.title.trim() : '',
+            body: mermaid,
+            type: 'diagram',
+            parentId: args.parentId,
+            tags,
+            entityType: args.entityType,
+            entityId: args.entityId,
+            isPinned: Boolean(args.isPinned),
+          },
+          db
+        );
+        return JSON.stringify({
+          success: true,
+          message: 'Đã tạo biểu đồ Mermaid thành công.',
+          noteId: note.id,
+          title: note.title,
+        });
+      }
+
+      case 'update_diagram': {
+        if (!args.id) return JSON.stringify({ error: 'Diagram ID is required' });
+        const existing = db.notes ? await db.notes.get(args.id) : null;
+        if (!existing) return JSON.stringify({ error: `Note not found: ${args.id}` });
+        // T-e63-02: updateNote would happily overwrite a document body with mermaid source.
+        if (existing.type !== 'diagram' || existing.deletedAt) {
+          return JSON.stringify({ error: 'Note is not a diagram' });
+        }
+
+        const patch: any = {};
+        if (args.title !== undefined) patch.title = args.title;
+        if (args.body !== undefined) {
+          const extracted = extractMermaidBlocks(String(args.body));
+          patch.body = (extracted[0] ?? stripAnsiSequences(String(args.body))).trim();
+        }
+        if (args.tags !== undefined) patch.tags = args.tags;
+        if (args.parentId !== undefined) patch.parentId = args.parentId || undefined;
+        if (args.isPinned !== undefined) patch.isPinned = Boolean(args.isPinned);
+
+        await updateNote(args.id, patch, db);
+        return JSON.stringify({
+          success: true,
+          message: 'Đã cập nhật biểu đồ Mermaid (' + args.id + ').',
+        });
+      }
+
+
       case 'delete_note': {
         if (!args.id) return JSON.stringify({ error: 'Note ID is required' });
         if (args.permanent) {
@@ -4068,16 +4392,16 @@ export async function executeAiTool(
         if (!args.documentId) return JSON.stringify({ error: 'documentId is required' });
         const doc = db.notes ? await db.notes.get(args.documentId) : null;
         if (!doc) return JSON.stringify({ error: `Document not found: ${args.documentId}` });
-        const [allTasks, allProjects, allMilestones] = await Promise.all([
+        const [allTasks, allChangeRequests, allSystems] = await Promise.all([
           db.tasks ? db.tasks.toArray() : [],
-          db.projects ? db.projects.toArray() : [],
-          db.milestones ? db.milestones.toArray() : [],
+          db.changeRequests ? db.changeRequests.toArray() : [],
+          db.systems ? db.systems.toArray() : [],
         ]);
-        const detected = detectReferencedEntities(doc.body, allTasks, allProjects, allMilestones);
+        const detected = detectReferencedEntities(doc.body, allTasks, allChangeRequests, allSystems);
         if (detected.length === 0) {
           return JSON.stringify({
             success: true,
-            message: 'Không phát hiện tác vụ hoặc dự án nào trong tài liệu để liên kết.',
+            message: 'Không phát hiện tác vụ hoặc CR nào trong tài liệu để liên kết.',
             linkedCount: 0,
             detected: [],
           });
@@ -4209,8 +4533,8 @@ export async function executeAiTool(
 
       case 'manage_reminders': {
         if (!args.action) return JSON.stringify({ error: 'action parameter (add, remove, or list) is required' });
-        if (!args.entityType || !['task', 'project', 'milestone'].includes(args.entityType)) {
-          return JSON.stringify({ error: 'entityType must be "task", "project", or "milestone"' });
+        if (!args.entityType || !['task', 'cr'].includes(args.entityType)) {
+          return JSON.stringify({ error: 'entityType must be "task" or "cr"' });
         }
         if (!args.entityId) return JSON.stringify({ error: 'entityId is required' });
 
@@ -4222,16 +4546,11 @@ export async function executeAiTool(
           if (!task) return JSON.stringify({ error: `Không tìm thấy tác vụ: ${args.entityId}` });
           entityName = task.name;
           currentReminders = task.reminders || [];
-        } else if (args.entityType === 'project') {
-          const project = await db.projects.get(args.entityId);
-          if (!project) return JSON.stringify({ error: `Không tìm thấy dự án: ${args.entityId}` });
-          entityName = project.name;
-          currentReminders = project.reminders || [];
-        } else if (args.entityType === 'milestone') {
-          const milestone = await db.milestones.get(args.entityId);
-          if (!milestone) return JSON.stringify({ error: `Không tìm thấy mốc: ${args.entityId}` });
-          entityName = milestone.name;
-          currentReminders = milestone.reminders || [];
+        } else if (args.entityType === 'cr') {
+          const cr = await db.changeRequests.get(args.entityId);
+          if (!cr) return JSON.stringify({ error: `Không tìm thấy CR: ${args.entityId}` });
+          entityName = cr.name;
+          currentReminders = cr.reminders || [];
         }
 
         if (args.action === 'list') {
@@ -4255,8 +4574,7 @@ export async function executeAiTool(
           const updated = [...currentReminders, newReminder];
 
           if (args.entityType === 'task') await updateTask(args.entityId, { reminders: updated }, db);
-          else if (args.entityType === 'project') await updateProject(args.entityId, { reminders: updated }, db);
-          else if (args.entityType === 'milestone') await updateMilestone(args.entityId, { reminders: updated }, db);
+          else if (args.entityType === 'cr') await updateChangeRequest(args.entityId, { reminders: updated }, db);
 
           return JSON.stringify({
             success: true,
@@ -4273,8 +4591,7 @@ export async function executeAiTool(
           }
 
           if (args.entityType === 'task') await updateTask(args.entityId, { reminders: updated }, db);
-          else if (args.entityType === 'project') await updateProject(args.entityId, { reminders: updated }, db);
-          else if (args.entityType === 'milestone') await updateMilestone(args.entityId, { reminders: updated }, db);
+          else if (args.entityType === 'cr') await updateChangeRequest(args.entityId, { reminders: updated }, db);
 
           return JSON.stringify({
             success: true,
@@ -4289,8 +4606,8 @@ export async function executeAiTool(
       case 'link_document': {
         if (!args.documentId) return JSON.stringify({ error: 'documentId is required' });
         if (!args.entityId) return JSON.stringify({ error: 'entityId is required' });
-        if (!args.entityType || !['task', 'project', 'milestone'].includes(args.entityType)) {
-          return JSON.stringify({ error: 'entityType must be "task", "project", or "milestone"' });
+        if (!args.entityType || !['task', 'cr', 'system'].includes(args.entityType)) {
+          return JSON.stringify({ error: 'entityType must be "task", "cr", or "system"' });
         }
 
         const doc = await db.notes.get(args.documentId);
@@ -4301,14 +4618,14 @@ export async function executeAiTool(
           const t = await db.tasks.get(args.entityId);
           if (!t) return JSON.stringify({ error: `Không tìm thấy tác vụ: ${args.entityId}` });
           entityTitle = t.name;
-        } else if (args.entityType === 'project') {
-          const p = await db.projects.get(args.entityId);
-          if (!p) return JSON.stringify({ error: `Không tìm thấy dự án: ${args.entityId}` });
-          entityTitle = p.name;
-        } else if (args.entityType === 'milestone') {
-          const m = await db.milestones.get(args.entityId);
-          if (!m) return JSON.stringify({ error: `Không tìm thấy mốc: ${args.entityId}` });
-          entityTitle = m.name;
+        } else if (args.entityType === 'cr') {
+          const c = await db.changeRequests.get(args.entityId);
+          if (!c) return JSON.stringify({ error: `Không tìm thấy CR: ${args.entityId}` });
+          entityTitle = c.name;
+        } else if (args.entityType === 'system') {
+          const sys = await db.systems.get(args.entityId);
+          if (!sys) return JSON.stringify({ error: `Không tìm thấy hệ thống: ${args.entityId}` });
+          entityTitle = sys.name;
         }
 
         await linkEntitiesToDoc(
@@ -4327,8 +4644,8 @@ export async function executeAiTool(
       case 'unlink_document': {
         if (!args.documentId) return JSON.stringify({ error: 'documentId is required' });
         if (!args.entityId) return JSON.stringify({ error: 'entityId is required' });
-        if (!args.entityType || !['task', 'project', 'milestone'].includes(args.entityType)) {
-          return JSON.stringify({ error: 'entityType must be "task", "project", or "milestone"' });
+        if (!args.entityType || !['task', 'cr', 'system'].includes(args.entityType)) {
+          return JSON.stringify({ error: 'entityType must be "task", "cr", or "system"' });
         }
 
         await unlinkEntityFromDoc(args.documentId, args.entityType, args.entityId, db);
@@ -4407,8 +4724,9 @@ export async function executeAiTool(
 
       case 'query_notifications': {
         const tasks = db.tasks ? await db.tasks.toArray() : [];
-        const projects = db.projects ? await db.projects.toArray() : [];
-        const milestones = db.milestones ? await db.milestones.toArray() : [];
+        // `evaluateNotifications` reads `changeRequests` unconditionally to label each alert
+        // with its CR code; omitting it throws on the `crMap` build.
+        const changeRequests = db.changeRequests ? await db.changeRequests.toArray() : [];
         const rules = db.capacityRules ? await db.capacityRules.toArray() : [];
         const overrides = db.capacityOverrides ? await db.capacityOverrides.toArray() : [];
         const allocations = db.plannedAllocations ? await db.plannedAllocations.toArray() : [];
@@ -4419,8 +4737,7 @@ export async function executeAiTool(
 
         const alerts = evaluateNotifications({
           tasks,
-          projects,
-          milestones,
+          changeRequests,
           rules,
           overrides,
           allocations,
@@ -4495,10 +4812,15 @@ export async function executeAiTool(
         const scoredResults = rankBM25(args.query, bm25Docs, { limit });
         const results = scoredResults.map((sr) => ({
           id: sr.doc.id,
-          title: sr.doc.title,
-          tags: sr.doc.tags,
+          title: wrapField(`TIÊU ĐỀ TÀI LIỆU ${sr.doc.id}`, sr.doc.title),
+          tags: Array.isArray(sr.doc.tags)
+            ? sr.doc.tags.map((tag) => wrapField(`THẺ TÀI LIỆU ${sr.doc.id}`, tag))
+            : sr.doc.tags,
           score: Math.round(sr.score * 100) / 100,
-          snippet: extractRelevantSnippet(sr.doc.body, args.query, 1500),
+          snippet: wrapField(
+            `TRÍCH ĐOẠN TÀI LIỆU ${sr.doc.id}`,
+            extractRelevantSnippet(sr.doc.body, args.query, 1500)
+          ),
           updatedAt: sr.doc.updatedAt,
         }));
 
@@ -4537,11 +4859,13 @@ export async function executeAiTool(
 
         return JSON.stringify({
           id: doc.id,
-          title: doc.title || 'Untitled Document',
+          title: wrapField(`TIÊU ĐỀ TÀI LIỆU ${doc.id}`, doc.title || 'Untitled Document'),
           type: doc.type || 'document',
-          tags: doc.tags || [],
+          tags: Array.isArray(doc.tags)
+            ? doc.tags.map((tag) => wrapField(`THẺ TÀI LIỆU ${doc.id}`, tag))
+            : (doc.tags || []),
           slug: doc.slug,
-          body: doc.body || '',
+          body: wrapField(`NỘI DUNG TÀI LIỆU ${doc.id}`, doc.body || ''),
           attachments,
           createdAt: doc.createdAt,
           updatedAt: doc.updatedAt,
@@ -4752,12 +5076,12 @@ const MUTATION_TOOLS = new Set([
   'update_task_checklist',
   'reparent_task',
   'delete_task',
-  'create_project',
-  'update_project',
-  'delete_project',
-  'create_milestone',
-  'update_milestone',
-  'delete_milestone',
+  'create_change_request',
+  'update_change_request',
+  'delete_change_request',
+  'create_system',
+  'update_system',
+  'delete_system',
   'plan_allocation',
   'delete_allocation',
   'log_work_session',
@@ -4772,6 +5096,8 @@ const MUTATION_TOOLS = new Set([
   'remove_capacity_override',
   'create_note',
   'update_note',
+  'create_diagram',
+  'update_diagram',
   'delete_note',
   'restore_note',
   'batch_create_notes',
@@ -4789,7 +5115,19 @@ const MUTATION_TOOLS = new Set([
   'link_taskmate_to_knowledge',
   'unlink_taskmate_knowledge',
   'dismiss_notification',
+  'patch_artifact_section',
+  // Runs model-supplied JavaScript in the page realm — never without explicit approval.
+  'generate_file',
 ]);
+
+/**
+ * The Oracle read pair, filtered from `AI_DATABASE_TOOLS` so the definitions are not
+ * duplicated. Neither is a mutation: `executeOracleQuery`/`executeOracleDescribe` enforce
+ * read-only and return a structured error when the tool is disabled.
+ */
+export const ORACLE_READ_TOOLS: AiToolDefinition[] = AI_DATABASE_TOOLS.filter((tool) =>
+  ['oracle_query', 'oracle_describe'].includes(normalizeToolName(tool.function.name))
+);
 
 /**
  * Normalizes tool names by stripping provider or proxy cloaking wrappers
@@ -4835,7 +5173,7 @@ export function pruneToolsForContext(
     // Keep MCP tools and knowledge/doc inspection tools, exclude heavy personal task manipulation
     return allTools.filter((t) => {
       const name = normalizeToolName(t.function.name);
-      // Exclude personal task/project/timer mutations and operations
+      // Exclude personal task/CR/timer mutations and operations
       if (
         isMutationTool(name) ||
         name === 'start_timer' ||
@@ -4928,21 +5266,21 @@ export function describeToolMutation(toolName: string, args: Record<string, any>
     case 'update_task_checklist':
       return `Cập nhật checklist tác vụ (${args.taskId}): ${changes || `hành động ${args.action}`}`;
     case 'reparent_task':
-      return `Chuyển tác vụ (${args.taskId}) sang dự án/mốc mới: ${changes}`;
+      return `Chuyển tác vụ (${args.taskId}) sang CR/hệ thống con mới: ${changes}`;
     case 'delete_task':
       return `Xóa vĩnh viễn tác vụ (${args.id}) cùng các kế hoạch liên quan`;
-    case 'create_project':
-      return `Tạo dự án mới: "${args.name || 'Chưa đặt tên'}"${args.deadline ? ` [Hạn: ${args.deadline}]` : ''}`;
-    case 'update_project':
-      return `Cập nhật dự án (${args.id}): ${changes || 'không có thay đổi'}`;
-    case 'delete_project':
-      return `Xóa dự án (${args.id}) và tất cả mốc, tác vụ con liên quan`;
-    case 'create_milestone':
-      return `Tạo mốc mới: "${args.name || 'Chưa đặt tên'}"${args.deadline ? ` [Hạn: ${args.deadline}]` : ''}`;
-    case 'update_milestone':
-      return `Cập nhật mốc (${args.id}): ${changes || 'không có thay đổi'}`;
-    case 'delete_milestone':
-      return `Xóa mốc (${args.id}) và tất cả tác vụ con liên quan`;
+    case 'create_change_request':
+      return `Tạo Change Request mới: "${args.code || args.name || 'Chưa đặt tên'}"${args.type ? ` [Loại: ${args.type}]` : ''}`;
+    case 'update_change_request':
+      return `Cập nhật Change Request (${args.id}): ${changes || 'không có thay đổi'}`;
+    case 'delete_change_request':
+      return `Xóa Change Request (${args.id}) và tất cả tác vụ con liên quan`;
+    case 'create_system':
+      return `Tạo hệ thống mới: "${args.name || 'Chưa đặt tên'}"${args.code ? ` [Mã: ${args.code}]` : ''}${args.type ? ` [Loại: ${args.type}]` : ''}`;
+    case 'update_system':
+      return `Cập nhật hệ thống (${args.id}): ${changes || 'không có thay đổi'}`;
+    case 'delete_system':
+      return `Xóa vĩnh viễn hệ thống (${args.id}) và gỡ khỏi các CR/tác vụ liên quan`;
     case 'plan_allocation':
       return `Lên lịch làm việc: ${args.allocatedMinutes} phút vào ngày ${args.date} cho tác vụ (${args.taskId})`;
     case 'delete_allocation':
@@ -4971,6 +5309,10 @@ export function describeToolMutation(toolName: string, args: Record<string, any>
       return `Tạo ${args.type === 'folder' ? 'thư mục' : 'ghi chú/tài liệu'}: "${args.title || 'Mục mới'}"`;
     case 'update_note':
       return `Cập nhật ghi chú/tài liệu (${args.id}): ${changes || ''}`;
+    case 'create_diagram':
+      return `Tạo biểu đồ Mermaid: "${args.title || 'Biểu đồ mới'}"`;
+    case 'update_diagram':
+      return `Cập nhật biểu đồ Mermaid (${args.id})`;
     case 'delete_note':
       return `Xóa ${args.permanent ? 'vĩnh viễn' : 'vào thùng rác'} ghi chú (${args.id})`;
     case 'restore_note':
@@ -5026,7 +5368,7 @@ export function describeToolMutation(toolName: string, args: Record<string, any>
 
 /**
  * Enriches mutation description with resolved human-readable entity names from db
- * (tasks, projects, milestones, notes) and formatted field value diffs.
+ * (tasks, change requests, systems, notes) and formatted field value diffs.
  */
 export async function describeToolMutationWithContext(
   toolName: string,
@@ -5059,13 +5401,13 @@ export async function describeToolMutationWithContext(
         const task = db.tasks ? await db.tasks.get(taskId) : null;
         if (!task) return fallback;
         let dest = '';
-        if (args.projectId && db.projects) {
-          const proj = await db.projects.get(args.projectId);
-          if (proj) dest += ` dự án "${proj.name}"`;
+        if (args.crId && db.changeRequests) {
+          const cr = await db.changeRequests.get(args.crId);
+          if (cr) dest += ` CR "${cr.code}"`;
         }
-        if (args.milestoneId && db.milestones) {
-          const ms = await db.milestones.get(args.milestoneId);
-          if (ms) dest += ` mốc "${ms.name}"`;
+        if (args.systemId && db.systems) {
+          const sys = await db.systems.get(args.systemId);
+          if (sys) dest += ` hệ thống "${sys.name}"`;
         }
         return `Chuyển tác vụ "${task.name}" sang${dest || ' vị trí mới'}`;
       }
@@ -5078,30 +5420,30 @@ export async function describeToolMutationWithContext(
         return `Cập nhật checklist cho tác vụ "${task.name}": ${changes || `hành động ${args.action}`}`;
       }
 
-      case 'update_project': {
-        const project = db.projects ? await db.projects.get(args.id) : null;
-        if (!project) return fallback;
+      case 'update_system': {
+        const system = db.systems ? await db.systems.get(args.id) : null;
+        if (!system) return fallback;
         const changes = formatFieldChanges(args);
-        return `Cập nhật dự án "${project.name}": ${changes || 'không có thay đổi'}`;
+        return `Cập nhật hệ thống "${system.name}": ${changes || 'không có thay đổi'}`;
       }
 
-      case 'delete_project': {
-        const project = db.projects ? await db.projects.get(args.id) : null;
-        if (!project) return fallback;
-        return `Xóa dự án "${project.name}" và tất cả mốc, tác vụ con liên quan`;
+      case 'delete_system': {
+        const system = db.systems ? await db.systems.get(args.id) : null;
+        if (!system) return fallback;
+        return `Xóa vĩnh viễn hệ thống "${system.name}" và gỡ khỏi các CR/tác vụ liên quan`;
       }
 
-      case 'update_milestone': {
-        const milestone = db.milestones ? await db.milestones.get(args.id) : null;
-        if (!milestone) return fallback;
+      case 'update_change_request': {
+        const cr = db.changeRequests ? await db.changeRequests.get(args.id) : null;
+        if (!cr) return fallback;
         const changes = formatFieldChanges(args);
-        return `Cập nhật mốc "${milestone.name}": ${changes || 'không có thay đổi'}`;
+        return `Cập nhật Change Request "${cr.code}": ${changes || 'không có thay đổi'}`;
       }
 
-      case 'delete_milestone': {
-        const milestone = db.milestones ? await db.milestones.get(args.id) : null;
-        if (!milestone) return fallback;
-        return `Xóa mốc "${milestone.name}" và tất cả tác vụ con liên quan`;
+      case 'delete_change_request': {
+        const cr = db.changeRequests ? await db.changeRequests.get(args.id) : null;
+        if (!cr) return fallback;
+        return `Xóa Change Request "${cr.code}" và tất cả tác vụ con liên quan`;
       }
 
       case 'plan_allocation': {
@@ -5191,12 +5533,12 @@ export async function describeToolMutationWithContext(
         if (args.entityType === 'task' && db.tasks) {
           const t = await db.tasks.get(args.entityId);
           if (t) entityName = `tác vụ "${t.name}"`;
-        } else if (args.entityType === 'project' && db.projects) {
-          const p = await db.projects.get(args.entityId);
-          if (p) entityName = `dự án "${p.name}"`;
-        } else if (args.entityType === 'milestone' && db.milestones) {
-          const m = await db.milestones.get(args.entityId);
-          if (m) entityName = `mốc "${m.name}"`;
+        } else if (args.entityType === 'cr' && db.changeRequests) {
+          const c = await db.changeRequests.get(args.entityId);
+          if (c) entityName = `CR "${c.code}"`;
+        } else if (args.entityType === 'system' && db.systems) {
+          const sys = await db.systems.get(args.entityId);
+          if (sys) entityName = `hệ thống "${sys.name}"`;
         }
         if (!entityName) return fallback;
 
@@ -5215,12 +5557,12 @@ export async function describeToolMutationWithContext(
         if (args.entityType === 'task' && db.tasks) {
           const t = await db.tasks.get(args.entityId);
           if (t) entityName = `tác vụ "${t.name}"`;
-        } else if (args.entityType === 'project' && db.projects) {
-          const p = await db.projects.get(args.entityId);
-          if (p) entityName = `dự án "${p.name}"`;
-        } else if (args.entityType === 'milestone' && db.milestones) {
-          const m = await db.milestones.get(args.entityId);
-          if (m) entityName = `mốc "${m.name}"`;
+        } else if (args.entityType === 'cr' && db.changeRequests) {
+          const c = await db.changeRequests.get(args.entityId);
+          if (c) entityName = `CR "${c.code}"`;
+        } else if (args.entityType === 'system' && db.systems) {
+          const sys = await db.systems.get(args.entityId);
+          if (sys) entityName = `hệ thống "${sys.name}"`;
         }
         if (doc && entityName) {
           return `Liên kết tài liệu "${doc.title || 'Chưa đặt tên'}" với ${entityName}`;
@@ -5234,12 +5576,12 @@ export async function describeToolMutationWithContext(
         if (args.entityType === 'task' && db.tasks) {
           const t = await db.tasks.get(args.entityId);
           if (t) entityName = `tác vụ "${t.name}"`;
-        } else if (args.entityType === 'project' && db.projects) {
-          const p = await db.projects.get(args.entityId);
-          if (p) entityName = `dự án "${p.name}"`;
-        } else if (args.entityType === 'milestone' && db.milestones) {
-          const m = await db.milestones.get(args.entityId);
-          if (m) entityName = `mốc "${m.name}"`;
+        } else if (args.entityType === 'cr' && db.changeRequests) {
+          const c = await db.changeRequests.get(args.entityId);
+          if (c) entityName = `CR "${c.code}"`;
+        } else if (args.entityType === 'system' && db.systems) {
+          const sys = await db.systems.get(args.entityId);
+          if (sys) entityName = `hệ thống "${sys.name}"`;
         }
         if (doc && entityName) {
           return `Hủy liên kết tài liệu "${doc.title || 'Chưa đặt tên'}" khỏi ${entityName}`;
@@ -5252,12 +5594,12 @@ export async function describeToolMutationWithContext(
         if (args.taskMateEntityType === 'task' && db.tasks) {
           const t = await db.tasks.get(args.taskMateEntityId);
           if (t) entityName = `tác vụ "${t.name}"`;
-        } else if (args.taskMateEntityType === 'project' && db.projects) {
-          const p = await db.projects.get(args.taskMateEntityId);
-          if (p) entityName = `dự án "${p.name}"`;
-        } else if (args.taskMateEntityType === 'milestone' && db.milestones) {
-          const m = await db.milestones.get(args.taskMateEntityId);
-          if (m) entityName = `mốc "${m.name}"`;
+        } else if (args.taskMateEntityType === 'cr' && db.changeRequests) {
+          const c = await db.changeRequests.get(args.taskMateEntityId);
+          if (c) entityName = `CR "${c.code}"`;
+        } else if (args.taskMateEntityType === 'system' && db.systems) {
+          const sys = await db.systems.get(args.taskMateEntityId);
+          if (sys) entityName = `hệ thống "${sys.name}"`;
         }
         return `Liên kết tri thức "${args.displayLabel || args.urn || args.docId}" với ${entityName || `${args.taskMateEntityType} (${args.taskMateEntityId})`}`;
       }
@@ -5267,12 +5609,12 @@ export async function describeToolMutationWithContext(
         if (args.taskMateEntityType === 'task' && db.tasks) {
           const t = await db.tasks.get(args.taskMateEntityId);
           if (t) entityName = `tác vụ "${t.name}"`;
-        } else if (args.taskMateEntityType === 'project' && db.projects) {
-          const p = await db.projects.get(args.taskMateEntityId);
-          if (p) entityName = `dự án "${p.name}"`;
-        } else if (args.taskMateEntityType === 'milestone' && db.milestones) {
-          const m = await db.milestones.get(args.taskMateEntityId);
-          if (m) entityName = `mốc "${m.name}"`;
+        } else if (args.taskMateEntityType === 'cr' && db.changeRequests) {
+          const c = await db.changeRequests.get(args.taskMateEntityId);
+          if (c) entityName = `CR "${c.code}"`;
+        } else if (args.taskMateEntityType === 'system' && db.systems) {
+          const sys = await db.systems.get(args.taskMateEntityId);
+          if (sys) entityName = `hệ thống "${sys.name}"`;
         }
         return `Hủy liên kết tri thức khỏi ${entityName || `${args.taskMateEntityType || 'thực thể'} (${args.taskMateEntityId || args.linkId})`}`;
       }

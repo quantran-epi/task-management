@@ -1,5 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { APP_NAME } from '../constants/app';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Button,
   Space,
@@ -9,160 +8,39 @@ import {
   message,
   Modal,
   Select,
-  Input,
 } from 'antd';
 import {
   PlusOutlined,
   ExportOutlined,
-  RobotOutlined,
-  CopyOutlined,
-  DatabaseOutlined,
   FileTextOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
-import type { Note, DocumentSet, PublishPrimaryState } from '../types/models';
+import type { Note } from '../types/models';
 import {
   updateNote,
   createNote,
   softDeleteNote,
   permanentDeleteNote,
   restoreNote,
-  batchCreateNotes,
   bulkPermanentDeleteNotes,
 } from '../db/repositories/noteRepo';
 import { getBacklinksForDoc } from '../db/repositories/documentLinkRepo';
 import { PageHeader } from '../components/common/PageHeader';
 import { openNotesPopout } from '../utils/notesPopout';
-import { DocumentSetDrawer } from '../components/knowledge/DocumentSetDrawer';
-import { PublishPreviewModal } from '../components/knowledge/PublishPreviewModal';
-import { formatOversizedAtomicBlockError } from '../components/knowledge/PublishProgressPanel';
-import type { DocumentSetFormValue } from '../components/knowledge/DocumentSetForm';
-import {
-  computeSha256,
-  createDocumentSet,
-  getDocumentPublishStatuses,
-  normalizeMarkdownForHash,
-  updateDocumentSet,
-  type DocumentPublishStatus,
-} from '../db/repositories/documentSetRepo';
-import { useOptionalKnowledgeConfig } from '../services/knowledge/knowledgeConfig';
-import { createKnowledgeClient, KnowledgeClientError } from '../services/knowledge/knowledgeClient';
-import { PublishSession } from '../services/knowledge/publishOrchestrator';
-import type { CachedActiveSnapshotManifest, ChangePreview } from '../services/knowledge/changePreview';
+import { getDocumentPublishStatuses, type DocumentPublishStatus } from '../db/repositories/documentSetRepo';
+import { DocsLibraryActions } from '../components/notes/DocsLibraryActions';
+export { AI_KNOWLEDGE_DOC_PROMPT } from '../components/notes/DocsLibraryActions';
 
 import { DocFolderTree } from '../components/notes/DocFolderTree';
 import { DocEditorPane } from '../components/notes/DocEditorPane';
-import { ZipImportPreviewModal } from '../components/notes/ZipImportPreviewModal';
-import { exportFolderAsZip } from '../utils/exportFolderZip';
+import { MermaidAssistantView } from './MermaidAssistantView';
+import { downloadFolderAsZip } from '../utils/exportFolderZip';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
+import { useLayoutStore } from '../workbench/store/layoutStore';
 import { ResizeSplitter } from '../components/common/ResizeSplitter';
 
 const { Text } = Typography;
-
-export const AI_KNOWLEDGE_DOC_PROMPT = `Bạn là chuyên gia soạn thảo tài liệu tri thức (knowledge document) cho ${APP_NAME}.
-Hãy tạo tài liệu Markdown tối ưu đồng thời cho hệ thống tìm kiếm BM25, đồ thị tri thức Knowledge Graph (Neo4j) và ngữ cảnh của AI Assistant theo đúng các nguyên tắc sau:
-
-1. TRUNG THÀNH TUYỆT ĐỐI VỚI NGUỒN (SOURCE FIDELITY):
-- Chỉ trình bày lại thông tin có trong tài liệu nguồn. Được phép tái cấu trúc và định dạng lại, nhưng TUYỆT ĐỐI KHÔNG được thêm kiến thức mới.
-- TUYỆT ĐỐI KHÔNG tự tạo hoặc suy diễn: sự kiện, ngày tháng/năm, mã ticket (SD-…, JIRA-…), nguồn/tài liệu tham chiếu, tên procedure/bảng/cột/package/schema, mã lỗi, mã chu kỳ, quan hệ giữa các thành phần (CALLS / INVOKES / WRITES_TO / USES_TYPE / PRECEDES), ví dụ, ngoại lệ, con số, ngưỡng, SLA, và kết luận không có câu nguồn tương ứng.
-- Thông tin thiếu hoặc mơ hồ: ghi marker [THIẾU THÔNG TIN: <mô tả ngắn>] hoặc [CHƯA XÁC MINH: <mô tả ngắn>] ngay tại vị trí đó; tuyệt đối không thay bằng giá trị phỏng đoán.
-- KHÔNG bịa nội dung để lấp chỗ trống: section trong khung mẫu mà nguồn không có dữ liệu phải được lược bỏ hoặc giữ lại kèm marker thiếu thông tin; khung mẫu chỉ là gợi ý định dạng, không phải danh sách bắt buộc phải điền đủ.
-- Mọi khẳng định phải truy vết được về một câu trong nguồn; nếu không truy vết được, hạ xuống marker [CHƯA XÁC MINH: ...].
-
-2. TIÊU ĐỀ BẮT BUỘC:
-- Dòng đầu tiên của tài liệu BẮT BUỘC là tiêu đề H1 duy nhất:
-  # Tiêu đề tài liệu
-- Tiêu đề phải rõ nghĩa, chứa danh từ/thuật ngữ nghiệp vụ chính xác, tối đa 120 ký tự.
-
-3. PHẠM VI, ĐỘ DÀI & GIỚI HẠN KHỐI NGUYÊN TỬ (ATOMIC BLOCKS):
-- Nguyên tắc: 1 tài liệu = 1 chủ đề/quy trình/thành phần độc lập.
-- Giữ toàn bộ tài liệu dưới 50.000 ký tự (khuyến nghị 1.000 - 8.000 ký tự). Nếu chủ đề quá rộng, hãy tách thành các tài liệu con.
-- KHỐI NGUYÊN TỬ (Bảng hoặc Code block): TUYỆT ĐỐI KHÔNG để một bảng hoặc khối mã đơn lẻ dài quá 50.000 ký tự (sẽ gây lỗi chặn publish hệ thống). Bảng lớn cần chia nhỏ theo từng nhóm bước/chủ đề.
-
-4. HASHTAGS PHÂN LOẠI:
-- Ngay sau tiêu đề H1, thêm một dòng chứa inline hashtags dạng:
-  #tag-one #tag-two #he-thong
-- Dùng hashtag ngắn gọn để hỗ trợ phân loại và lọc tài liệu.
-
-5. CẤU TRÚC TIÊU ĐỀ H2/H3:
-- Sử dụng các tiêu đề mục rõ ràng, có ngữ nghĩa (ví dụ: ## Tóm tắt, ## Phạm vi, ## Thuật ngữ, ## Quy tắc, ## Luồng xử lý, ## Bảng tiến trình & bước thực thi, ## Bảng trạng thái/Mã lỗi, ## Ví dụ, ## Ngoại lệ, ## Nguồn).
-- TUYỆT ĐỐI KHÔNG dùng tiêu đề mơ hồ như: ## Ghi chú, ## Notes, ## Khác, ## Misc.
-
-6. NỘI DUNG TỰ CHỨA ĐỦ (SELF-CONTAINED):
-- Mỗi đoạn/section phải tự chứa đủ ngữ cảnh để khi AI chỉ trích xuất một đoạn khoảng 1.500 ký tự vẫn hiểu được đầy đủ.
-- Lặp lại tên chủ thể hoặc thuật ngữ chính xác trong từng section thay vì dùng đại từ mơ hồ ("nó", "hệ thống này", "chức năng trên").
-- Đưa từ khóa tìm kiếm mà người dùng thực tế sẽ tra cứu vào trực tiếp trong tiêu đề và nội dung.
-
-7. ĐỊNH DANH KỸ THUẬT & TRÍCH XUẤT KNOWLEDGE GRAPH:
-- Để hệ thống build Graph quan hệ (Neo4j) tự động trích xuất chính xác các thực thể và quan hệ (CALLS, INVOKES, WRITES_TO, USES_TYPE, PRECEDES):
-  + Tên thủ tục/hàm/thành phần (SoftwareComponent): Giữ nguyên tên có trong nguồn, bọc trong cặp dấu backtick code (ví dụ: \`<schema.package.procedure từ nguồn>\`). Tránh viết tên cộc lốc không rõ schema khiến parser cách ly (quarantine).
-  + Tên bảng dữ liệu (DatabaseObject): Giữ nguyên tên có trong nguồn, bọc trong cặp dấu backtick code (ví dụ: \`<schema.table từ nguồn>\`).
-  + Mã chu kỳ/loại (CycleType): Chỉ dùng mã có trong nguồn (ví dụ: \`<mã chu kỳ từ nguồn>\`).
-  + Bảng các bước thực thi: Khi mô tả luồng hoặc bước xử lý kỹ thuật, sử dụng bảng có các cột chuẩn sau:
-    * THU_TU / ORDER: Thứ tự thực thi tuần tự (1, 2, 3...) để xác định luồng và xây dựng quan hệ PRECEDES.
-    * TEN_BUOC / PROCEDURE: Tên hành động hoặc tên bước rõ nghĩa đóng vai trò định danh chính (canonical step identity).
-    * TARGET: Thủ tục hoặc đối tượng/tiến trình được gọi (quan hệ CALLS / INVOKES). Bọc mã trong cặp dấu backtick code.
-    * WRITES / GHI / TARGET_TABLE: Tên bảng cơ sở dữ liệu bị ghi hoặc cập nhật (quan hệ WRITES_TO). Bọc mã trong cặp dấu backtick code.
-    * GHI_CHU: Ghi chú hoặc mô tả bổ sung cho bước.
-    * QUY TẮC ĐỊNH DANH BƯỚC (STEP_ID): Chỉ đưa cột STEP_ID / MA_BUOC vào bảng khi tài liệu gốc ĐÃ CÓ SẴN mã định danh bước từ hệ thống cũ. TUYỆT ĐỐI KHÔNG tự bịa hoặc tự sinh mã giả như STEP_01, STEP_02 nếu nguồn không có.
-
-8. ĐỊNH DẠNG NGÀY & NGUỒN (SOURCES):
-- Dùng ngày tuyệt đối dạng ISO YYYY-MM-DD khi nguồn có ngày. Tuyệt đối không dùng ngày tương đối ("hôm qua", "tuần tới", "sắp tới").
-- Chỉ chép ngày, mã ticket/ServiceDesk, procedure/API và tài liệu tham chiếu từ nguồn. Nếu nguồn không có dữ liệu này, dùng marker [THIẾU THÔNG TIN: ...] và KHÔNG điền giá trị giữ chỗ.
-- Mục ## Nguồn (Sources) không bắt buộc phải có đầy đủ; được phép lược bỏ hoặc chỉ chứa marker thiếu thông tin.
-
-9. KHÔNG PHỤ THUỘC YAML FRONTMATTER:
-- Mọi thông tin cốt lõi (tiêu đề, thẻ, ngày, mô tả) phải hiển thị rõ ràng trong nội dung Markdown chuẩn. Không phụ thuộc vào YAML frontmatter để nạp dữ liệu.
-
-10. BẢO MẬT & DỮ LIỆU NHẠY CẢM:
-- TUYỆT ĐỐI KHÔNG đưa mật khẩu, API key, access token, PAT, secret hoặc thông tin xác thực riêng tư vào tài liệu.
-
----
-MẪU KHUNG CHUẨN ĐỂ ÁP DỤNG (CHỈ LÀ KHUNG ĐỊNH DẠNG — mọi giá trị mẫu chỉ mang tính minh họa, TUYỆT ĐỐI KHÔNG sao chép vào kết quả):
-
-# Tiêu đề nghiệp vụ hoặc thành phần
-
-#domain-tag #system-tag
-
-## Tóm tắt
-Mô tả ngắn gọn mục đích và câu hỏi nghiệp vụ mà tài liệu này giải quyết.
-
-## Phạm vi
-Phạm vi áp dụng của quy tắc hoặc thành phần này (hệ thống, phân hệ, dịch vụ phụ trách).
-
-## Thuật ngữ
-- **Thuật ngữ A**: Định nghĩa ngắn gọn, chính xác.
-- **Thuật ngữ B**: Định nghĩa ngắn gọn, chính xác.
-
-## Quy tắc
-1. Quy tắc thứ nhất (ghi rõ điều kiện và kết quả).
-2. Quy tắc thứ hai.
-
-## Luồng xử lý
-1. Bước 1: Hành động cụ thể.
-2. Bước 2: Hành động tiếp theo.
-
-## Các bước thực thi & Quan hệ thành phần
-| THU_TU | TEN_BUOC | TARGET | WRITES | GHI_CHU |
-|---|---|---|---|---|
-| 1 | <tên bước từ nguồn> | \`<procedure từ nguồn, bọc backtick>\` | \`<bảng từ nguồn, bọc backtick>\` | <ghi chú từ nguồn> |
-| 2 | <tên bước từ nguồn> | \`<procedure từ nguồn, bọc backtick>\` | \`<bảng từ nguồn, bọc backtick>\` | <ghi chú từ nguồn> |
-
-## Trạng thái và mã lỗi
-| Mã | Ý nghĩa | Hành động xử lý |
-|---|---|---|
-| <mã từ nguồn> | <ý nghĩa từ nguồn> | <hành động xử lý từ nguồn> |
-
-## Ví dụ
-(chỉ thêm nếu nguồn có ví dụ; nếu không, lược bỏ section này hoặc dùng [THIẾU THÔNG TIN: ...])
-
-## Ngoại lệ
-(chỉ thêm nếu nguồn có ngoại lệ; nếu không, lược bỏ section này hoặc dùng [THIẾU THÔNG TIN: ...])
-
-## Nguồn
-- Tài liệu/Ticket tham chiếu: [THIẾU THÔNG TIN: chưa có nguồn trong tài liệu gốc]
-- Ngày xác minh: [THIẾU THÔNG TIN: chưa có ngày trong tài liệu gốc]`;
 
 export const RECOMMENDED_DOC_TEMPLATE = `# Tiêu đề nghiệp vụ hoặc thành phần
 
@@ -211,6 +89,7 @@ Các trường hợp đặc biệt không áp dụng luồng tiêu chuẩn.
 export interface NotesViewProps {
   db?: TaskPlannerDatabase | undefined;
   initialDocId?: string | undefined;
+  hideFolderTree?: boolean | undefined;
 }
 
 const FOLDER_PREF_KEY = 'planner:docs_active_folder';
@@ -219,10 +98,11 @@ const DEFAULT_TREE_WIDTH = 320;
 const MIN_TREE_WIDTH = 220;
 const MAX_TREE_WIDTH = 600;
 
-export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb, initialDocId }) => {
-  const knowledgeConfig = useOptionalKnowledgeConfig();
-  const isConfigured = Boolean(knowledgeConfig.enabled && knowledgeConfig.baseUrl);
-
+export const NotesView: React.FC<NotesViewProps> = ({
+  db = defaultDb,
+  initialDocId,
+  hideFolderTree = false,
+}) => {
   const [treeWidth, setTreeWidth] = useState<number>(() => {
     try {
       const stored = localStorage.getItem(TREE_WIDTH_PREF_KEY);
@@ -262,16 +142,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb, initialDoc
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(initialDocId ?? null);
   const [activeDrawerTaskId, setActiveDrawerTaskId] = useState<string | null>(null);
-
-  const [aiPromptModalOpen, setAiPromptModalOpen] = useState<boolean>(false);
-  const [documentSetDrawerOpen, setDocumentSetDrawerOpen] = useState(false);
-  const [creatingDocumentSet, setCreatingDocumentSet] = useState(false);
-  const [publishModalOpen, setPublishModalOpen] = useState(false);
-  const [publishSession, setPublishSession] = useState<PublishSession | null>(null);
-  const [publishPreview, setPublishPreview] = useState<ChangePreview | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [reconcilingAttemptId, setReconcilingAttemptId] = useState<string>();
-  const [reconciliationErrorsBySet, setReconciliationErrorsBySet] = useState<Record<string, string>>({});
+  const openTab = useLayoutStore((s) => s.openTab);
 
   const handleFilterChange = (filter: string) => {
     setActiveFilter(filter);
@@ -346,7 +217,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb, initialDoc
     () => (allNotes ?? []).map((note) => ({ ...note, body: '' })),
     [allNotes]
   );
-  const loadSearchNotes = React.useCallback(() => db.notes.toArray(), [db]);
+  const loadSearchNotes = React.useCallback(async () => db.notes.toArray(), [db]);
 
   // Selected document instance for editor pane
   const activeDocument = useMemo(() => {
@@ -357,194 +228,10 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb, initialDoc
 
   const publishStatuses = useLiveQuery(async () => {
     const documentIds = (allNotes ?? [])
-      .filter((note) => note.type !== 'folder' && !note.deletedAt)
+      .filter((note) => note.type !== 'folder' && note.type !== 'diagram' && !note.deletedAt)
       .map((note) => note.id);
     return getDocumentPublishStatuses(documentIds, db);
   }, [db, allNotes]) as Record<string, DocumentPublishStatus> | undefined;
-
-  const documentSets = useLiveQuery(() => db.documentSets.toArray(), [db]);
-  const publishAttempts = useLiveQuery(() => db.publishAttempts.toArray(), [db]);
-  const publishedDocuments = useLiveQuery(() => db.publishedDocuments.toArray(), [db]);
-  const noteHashes = useLiveQuery(async () => {
-    const entries = await Promise.all(
-      (allNotes ?? [])
-        .filter((note) => note.type !== 'folder' && !note.deletedAt)
-        .map(async (note) => [note.id, await computeSha256(normalizeMarkdownForHash(note.body))] as const)
-    );
-    return Object.fromEntries(entries) as Record<string, string>;
-  }, [allNotes], {} as Record<string, string>);
-
-  const setStatus = useMemo(() => {
-    const statesBySet: Record<string, PublishPrimaryState> = {};
-    const activeAttemptIdsBySet: Record<string, string> = {};
-    for (const set of documentSets ?? []) {
-      const attempts = (publishAttempts ?? [])
-        .filter((attempt) => attempt.setId === set.id)
-        .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
-      const publishing = attempts.find((attempt) => attempt.status === 'Publishing');
-      if (publishing) {
-        statesBySet[set.id] = 'Publishing';
-        activeAttemptIdsBySet[set.id] = publishing.id;
-        continue;
-      }
-      const newestTerminal = attempts[0];
-      if (newestTerminal?.status === 'Failed' || newestTerminal?.status === 'Warning') {
-        statesBySet[set.id] = newestTerminal.status;
-        continue;
-      }
-      const metadata = (publishedDocuments ?? []).filter((item) => item.setId === set.id);
-      if (metadata.length === 0) {
-        statesBySet[set.id] = 'Never published';
-        continue;
-      }
-      const metadataById = new Map(metadata.map((item) => [item.documentId, item]));
-      const membershipMatches =
-        metadata.length === set.documentIds.length &&
-        set.documentIds.every((documentId) => metadataById.has(documentId));
-      const hashesMatch =
-        membershipMatches &&
-        set.documentIds.every(
-          (documentId) =>
-            noteHashes?.[documentId] === metadataById.get(documentId)?.publishedContentHash
-        );
-      statesBySet[set.id] = hashesMatch ? 'In sync' : 'Local changes';
-    }
-    return { statesBySet, activeAttemptIdsBySet };
-  }, [documentSets, publishAttempts, publishedDocuments, noteHashes]);
-
-  const cachedAt = useMemo(() => {
-    const attempts = (publishAttempts ?? []).filter((a) => a.completedAt);
-    if (!attempts.length) return undefined;
-    attempts.sort(
-      (a, b) => new Date(b.completedAt ?? 0).getTime() - new Date(a.completedAt ?? 0).getTime()
-    );
-    return attempts[0]?.completedAt;
-  }, [publishAttempts]);
-
-  const handleSaveDocumentSet = async (
-    setId: string | undefined,
-    value: DocumentSetFormValue
-  ) => {
-    try {
-      if (setId) {
-        await updateDocumentSet(setId, value, db);
-        message.success('Đã cập nhật bộ tài liệu');
-      } else {
-        await createDocumentSet(value, db);
-        message.success('Đã tạo bộ tài liệu mới');
-      }
-      setCreatingDocumentSet(false);
-    } catch (err) {
-      console.error('Failed to save document set:', err);
-      message.error(err instanceof Error ? err.message : 'Không thể lưu bộ tài liệu');
-    }
-  };
-
-  const handleReconcileAttempt = async (setId: string, attemptId: string) => {
-    if (!isConfigured || reconcilingAttemptId) return;
-    setReconcilingAttemptId(attemptId);
-    setReconciliationErrorsBySet((current) => {
-      const next = { ...current };
-      delete next[setId];
-      return next;
-    });
-    try {
-      const cachedAttempt = await db.publishAttempts.get(attemptId);
-      if (!cachedAttempt?.submittedDocuments?.length) {
-        setReconciliationErrorsBySet((current) => ({
-          ...current,
-          [setId]: 'Không thể tiếp tục kiểm tra: thiếu ảnh chụp đã gửi được lưu cục bộ.',
-        }));
-        return;
-      }
-      const client = createKnowledgeClient({
-        baseUrl: knowledgeConfig.baseUrl,
-        token: knowledgeConfig.token,
-        db,
-      });
-      const session = new PublishSession({ client, db });
-      const result = await session.pollAcceptedAttempt(attemptId);
-      if (result.uncertain) {
-        setReconciliationErrorsBySet((current) => ({
-          ...current,
-          [setId]: 'Mất kết nối — chưa xác định kết quả.',
-        }));
-      }
-    } catch {
-      setReconciliationErrorsBySet((current) => ({
-        ...current,
-        [setId]: 'Không thể kiểm tra trạng thái. Kiểm tra kết nối rồi thử lại.',
-      }));
-    } finally {
-      setReconcilingAttemptId(undefined);
-    }
-  };
-
-  const handlePreviewDocumentSet = async (set: DocumentSet) => {
-    if (!isConfigured || previewLoading) {
-      if (!isConfigured) message.warning('Hãy cấu hình Knowledge Server trước khi xuất bản.');
-      return;
-    }
-    setPreviewLoading(true);
-    try {
-      const client = createKnowledgeClient({
-        baseUrl: knowledgeConfig.baseUrl,
-        token: knowledgeConfig.token,
-        db,
-      });
-      let activeManifest: CachedActiveSnapshotManifest | null = null;
-      try {
-        activeManifest = await client.getSnapshotManifest(set.id);
-      } catch (err: unknown) {
-        if (
-          err instanceof KnowledgeClientError &&
-          err.status === 404 &&
-          err.serverCode === 'SNAPSHOT_NOT_FOUND'
-        ) {
-          activeManifest = null;
-        } else {
-          if (err instanceof KnowledgeClientError) {
-            if (err.code === 'NETWORK_ERROR') {
-              message.error('Không thể kết nối Knowledge Server. Kiểm tra máy chủ và mạng rồi thử lại.');
-            } else if (err.status === 401) {
-              message.error('Token phiên không hợp lệ hoặc đã hết hạn.');
-            } else if (err.status === 403) {
-              message.error('Token phiên không có quyền truy cập Knowledge Server.');
-            } else if (err.code === 'INVALID_RESPONSE') {
-              message.error('Knowledge Server phản hồi không hợp lệ.');
-            } else {
-              message.error('Máy chủ Knowledge Server gặp lỗi khi kiểm tra ảnh chụp.');
-            }
-          } else {
-            message.error('Không thể kiểm tra ảnh chụp trên Knowledge Server.');
-          }
-          return;
-        }
-      }
-      const session = new PublishSession({ client, db });
-      const setNotes = (allNotes ?? []).filter(
-        (note) => set.documentIds.includes(note.id) && !note.deletedAt
-      );
-      const preview = await session.buildPreview({
-        documentSet: set,
-        notes: setNotes,
-        activeManifest,
-      });
-      setPublishSession(session);
-      setPublishPreview(preview);
-      setPublishModalOpen(true);
-    } catch (error: unknown) {
-      message.error(formatOversizedAtomicBlockError(error) ?? 'Không thể tạo bản xem trước xuất bản.');
-    } finally {
-      setPreviewLoading(false);
-    }
-  };
-
-  const closePublishPreview = () => {
-    setPublishModalOpen(false);
-    setPublishSession(null);
-    setPublishPreview(null);
-  };
 
   // Current selected folder note if viewing a specific folder
   const currentFolder = useMemo(() => {
@@ -752,7 +439,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb, initialDoc
     const targetNotes = (allNotes || []).filter((n) => {
       if (n.deletedAt) return false;
       if (specialKey === 'root_docs') {
-        return !n.parentId && n.type === 'document';
+        return !n.parentId && n.type !== 'folder' && n.type !== 'quick_note';
       }
       if (specialKey === 'quick_notes') {
         return n.type === 'quick_note';
@@ -871,50 +558,6 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb, initialDoc
     }
   };
 
-  // Zip Import state & triggers
-  const [zipImportModalOpen, setZipImportModalOpen] = useState(false);
-  const [selectedZipFile, setSelectedZipFile] = useState<File | null>(null);
-  const zipFileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleOpenZipImport = () => {
-    if (zipFileInputRef.current) {
-      zipFileInputRef.current.value = '';
-      zipFileInputRef.current.click();
-    }
-  };
-
-  const handleZipFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedZipFile(file);
-      setZipImportModalOpen(true);
-    }
-  };
-
-  const handleBatchImportDocs = async (
-    docsToImport: Array<{ title: string; body: string; parentId?: string | undefined; tags?: string[] | undefined }>,
-    destinationFolderId?: string
-  ) => {
-    await batchCreateNotes(
-      docsToImport.map((d) => ({
-        title: d.title,
-        body: d.body,
-        type: 'document',
-        tags: d.tags ?? [],
-        ...(d.parentId ? { parentId: d.parentId } : {}),
-      })),
-      db
-    );
-    if (destinationFolderId) {
-      handleFilterChange(destinationFolderId);
-    }
-  };
-
-  // Available folders for move action
-  const availableFolders = useMemo(() => {
-    return (allNotes || []).filter((n) => n.type === 'folder' && !n.deletedAt);
-  }, [allNotes]);
-
   // Update document action
   const handleUpdateDocument = async (id: string, updates: Partial<Note>) => {
     try {
@@ -929,12 +572,12 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb, initialDoc
     if (note.deletedAt) {
       try {
         const backlinks = await getBacklinksForDoc(note.id, db);
-        const backlinkCount = backlinks.tasks.length + backlinks.projects.length + backlinks.referencingNotes.length;
+        const backlinkCount = backlinks.tasks.length + backlinks.changeRequests.length + backlinks.referencingNotes.length;
 
         if (backlinkCount > 0) {
           Modal.confirm({
             title: 'Cảnh báo xóa vĩnh viễn',
-            content: `Tài liệu "${note.title || 'Không tiêu đề'}" đang được ${backlinkCount} mục liên kết (Tasks/Projects). Vẫn tiếp tục xóa vĩnh viễn?`,
+            content: `Tài liệu "${note.title || 'Không tiêu đề'}" đang được ${backlinkCount} mục liên kết (Tasks/CRs). Vẫn tiếp tục xóa vĩnh viễn?`,
             okText: 'Xóa vĩnh viễn',
             okType: 'danger',
             cancelText: 'Hủy',
@@ -975,15 +618,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb, initialDoc
   };
 
   const handleDownloadFolder = async (folder: Note) => {
-    try {
-      message.loading({ content: `Đang nén thư mục "${folder.title || 'Thư mục'}"...`, key: 'download-folder' });
-      const fullNotes = allNotes || (await db.notes.toArray());
-      await exportFolderAsZip(folder, fullNotes);
-      message.success({ content: `Tải xuống thành công thư mục "${folder.title || 'Thư mục'}"`, key: 'download-folder' });
-    } catch (err: any) {
-      console.error('Download folder error:', err);
-      message.error({ content: `Không thể tải thư mục: ${err?.message || 'Lỗi không xác định'}`, key: 'download-folder' });
-    }
+    await downloadFolderAsZip(folder, allNotes || (await db.notes.toArray()));
   };
 
   const handleOpenPopout = () => {
@@ -992,101 +627,104 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb, initialDoc
     });
   };
 
-  const handleCopyAiPrompt = async () => {
-    try {
-      if (!navigator.clipboard?.writeText) {
-        throw new Error('Clipboard API unavailable');
-      }
-      await navigator.clipboard.writeText(AI_KNOWLEDGE_DOC_PROMPT);
-      message.success('Đã sao chép prompt hướng dẫn AI vào clipboard');
-    } catch {
-      message.error('Không thể sao chép prompt vào clipboard');
-    }
-  };
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 84px)', overflow: 'hidden' }}>
-      {/* 1. Page Header */}
-      <PageHeader
-        title="Ghi chú & Tài liệu"
-        subtitle="Hệ thống quản lý tri thức, tài liệu Markdown và ghi chú nhanh cá nhân"
-        extra={
-          <Space>
-            <Button icon={<DatabaseOutlined />} onClick={() => setDocumentSetDrawerOpen(true)}>
-              Bộ tài liệu
-            </Button>
-            <Tooltip title="Xem prompt chuẩn để dán vào AI ngoài tạo tài liệu Markdown phù hợp tìm kiếm">
-              <Button icon={<RobotOutlined />} onClick={() => setAiPromptModalOpen(true)}>
-                Prompt AI cho tài liệu
-              </Button>
-            </Tooltip>
-            <Tooltip title="Mở danh sách ghi chú trong cửa sổ nổi riêng biệt (Always on Top)">
-              <Button icon={<ExportOutlined />} onClick={handleOpenPopout}>
-                Cửa sổ nổi
-              </Button>
-            </Tooltip>
-          </Space>
-        }
-      />
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: hideFolderTree ? '100%' : 'calc(100vh - 84px)',
+        overflow: 'hidden',
+      }}
+    >
+      {/* 1. Page Header (Hidden when embedded in workbench editor where tree is moved to left explorer) */}
+      {!hideFolderTree && (
+        <PageHeader
+          title="Ghi chú & Tài liệu"
+          subtitle="Hệ thống quản lý tri thức, tài liệu Markdown và ghi chú nhanh cá nhân"
+          extra={
+            <Space>
+              <DocsLibraryActions
+                db={db}
+                notes={allNotes ?? []}
+                currentFolderId={currentFolder?.id}
+                onSelectFolder={handleFilterChange}
+              />
+              <Tooltip title="Mở danh sách ghi chú trong cửa sổ nổi riêng biệt (Always on Top)">
+                <Button icon={<ExportOutlined />} onClick={handleOpenPopout}>
+                  Cửa sổ nổi
+                </Button>
+              </Tooltip>
+            </Space>
+          }
+        />
+      )}
 
-      {/* 2. Fixed 2-Column Main Workspace */}
+      {/* 2. Main Workspace */}
       <div
         className="docs-2column-layout"
         style={{
           flex: 1,
           minHeight: 0,
+          height: hideFolderTree ? '100%' : undefined,
           display: 'flex',
-          border: '1px solid #f0f0f0',
-          borderRadius: 8,
+          border: hideFolderTree ? 'none' : '1px solid #f0f0f0',
+          borderRadius: hideFolderTree ? 0 : 8,
           overflow: 'hidden',
           backgroundColor: '#ffffff',
+          width: '100%',
         }}
       >
-        {/* Column 1: Searchable Tree Panel (resizable) */}
-        <DocFolderTree
-          notes={treeNotes}
-          loadSearchNotes={loadSearchNotes}
-          selectedDocId={activeDocument?.id ?? null}
-          activeFilter={activeFilter}
-          onSelectFilter={handleFilterChange}
-          onSelectDoc={(doc) => setSelectedDocId(doc.id)}
-          onCreateDoc={handleCreateDocument}
-          onCreateFolder={async (name, parentId) => {
-            await handleCreateFolder(name, parentId);
-          }}
-          onRenameFolder={handleRenameFolder}
-          onMoveFolder={handleOpenMoveFolderModal}
-          onDeleteFolder={handleDeleteFolder}
-          onDeleteFolderRecursive={handleDeleteFolderRecursive}
-          onEmptyTrash={handleEmptyTrash}
-          onClearSpecialFolder={handleClearSpecialFolder}
-          onUnpinAll={handleUnpinAll}
-          onOpenZipImport={handleOpenZipImport}
-          onDownloadFolder={handleDownloadFolder}
-          activeTag={activeTag}
-          onSelectTag={setActiveTag}
-          publishStatuses={publishStatuses}
-          onTogglePin={(doc) => handleUpdateDocument(doc.id, { isPinned: !doc.isPinned })}
-          onDeleteDoc={handleDeleteDocument}
-          onRestoreDoc={handleRestoreDocument}
-          onMoveDocToFolder={handleOpenMoveDocModal}
-          width={treeWidth}
-        />
+        {/* Column 1: Searchable Tree Panel (resizable, hidden when docked in workbench) */}
+        {!hideFolderTree && (
+          <>
+            <DocFolderTree
+              notes={treeNotes}
+              loadSearchNotes={loadSearchNotes}
+              selectedDocId={activeDocument?.id ?? null}
+              activeFilter={activeFilter}
+              onSelectFilter={handleFilterChange}
+              onSelectDoc={(doc) => setSelectedDocId(doc.id)}
+              onCreateDoc={handleCreateDocument}
+              onCreateFolder={async (name, parentId) => {
+                await handleCreateFolder(name, parentId);
+              }}
+              onRenameFolder={handleRenameFolder}
+              onMoveFolder={handleOpenMoveFolderModal}
+              onDeleteFolder={handleDeleteFolder}
+              onDeleteFolderRecursive={handleDeleteFolderRecursive}
+              onEmptyTrash={handleEmptyTrash}
+              onClearSpecialFolder={handleClearSpecialFolder}
+              onUnpinAll={handleUnpinAll}
+              onDownloadFolder={handleDownloadFolder}
+              activeTag={activeTag}
+              onSelectTag={setActiveTag}
+              publishStatuses={publishStatuses}
+              onTogglePin={(doc) => handleUpdateDocument(doc.id, { isPinned: !doc.isPinned })}
+              onDeleteDoc={handleDeleteDocument}
+              onRestoreDoc={handleRestoreDocument}
+              onMoveDocToFolder={handleOpenMoveDocModal}
+              width={treeWidth}
+            />
 
-        {/* Resizable Divider between Tree and Editor Pane */}
-        <ResizeSplitter
-          side="left"
-          currentWidth={treeWidth}
-          minWidth={MIN_TREE_WIDTH}
-          maxWidth={MAX_TREE_WIDTH}
-          defaultWidth={DEFAULT_TREE_WIDTH}
-          onResize={handleTreeResize}
-          onReset={handleTreeReset}
-        />
+            {/* Resizable Divider between Tree and Editor Pane */}
+            <ResizeSplitter
+              side="left"
+              currentWidth={treeWidth}
+              minWidth={MIN_TREE_WIDTH}
+              maxWidth={MAX_TREE_WIDTH}
+              defaultWidth={DEFAULT_TREE_WIDTH}
+              onResize={handleTreeResize}
+              onReset={handleTreeReset}
+            />
+          </>
+        )}
 
         {/* Column 2: Document Editor Pane or Empty State */}
         <div style={{ flex: 1, minWidth: 0, height: '100%', display: 'flex', flexDirection: 'column' }}>
           {activeDocument ? (
+            activeDocument.type === 'diagram' ? (
+              <MermaidAssistantView key={activeDocument.id} noteId={activeDocument.id} db={db} />
+            ) : (
             <DocEditorPane
               key={activeDocument.id}
               doc={activeDocument}
@@ -1095,12 +733,19 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb, initialDoc
               onRestoreDoc={handleRestoreDocument}
               onSelectDoc={(id) => setSelectedDocId(id)}
               onOpenTask={(taskId) => setActiveDrawerTaskId(taskId)}
-              onOpenProject={(projectId) => {
-                window.location.hash = `#/projects?project=${encodeURIComponent(projectId)}`;
+              onOpenCr={(crId) => {
+                openTab({
+                  id: `cr-${crId}`,
+                  title: 'Change Request',
+                  viewType: 'cr_detail',
+                  closable: true,
+                  params: { changeRequestId: crId },
+                });
               }}
               db={db}
               publishStatus={publishStatuses?.[activeDocument.id]}
             />
+            )
           ) : (
             <div
               style={{
@@ -1139,46 +784,6 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb, initialDoc
           )}
         </div>
       </div>
-
-      {/* Document Set Drawer */}
-      <DocumentSetDrawer
-        open={documentSetDrawerOpen}
-        database={db}
-        sets={documentSets ?? []}
-        notes={allNotes ?? []}
-        attempts={publishAttempts ?? []}
-        statesBySet={setStatus.statesBySet}
-        activeAttemptIdsBySet={setStatus.activeAttemptIdsBySet}
-        {...(reconcilingAttemptId ? { reconcilingAttemptId } : {})}
-        reconciliationErrorsBySet={reconciliationErrorsBySet}
-        configured={isConfigured}
-        loading={previewLoading}
-        creating={creatingDocumentSet}
-        {...(cachedAt ? { cachedAt } : {})}
-        {...(currentFolder?.id ? { currentFolderId: currentFolder.id } : {})}
-        onClose={() => {
-          setDocumentSetDrawerOpen(false);
-          setCreatingDocumentSet(false);
-        }}
-        onCreate={() => setCreatingDocumentSet(true)}
-        onCancelCreate={() => setCreatingDocumentSet(false)}
-        onSave={handleSaveDocumentSet}
-        onPreview={handlePreviewDocumentSet}
-        onReconcileAttempt={handleReconcileAttempt}
-        onOpenSettings={() => { window.location.hash = '#/settings'; }}
-      />
-
-      {publishSession && publishPreview && (
-        <PublishPreviewModal
-          open={publishModalOpen}
-          preview={publishPreview}
-          session={publishSession}
-          documentTitles={Object.fromEntries(
-            (allNotes ?? []).map((note) => [note.id, note.title || 'Không tiêu đề'])
-          )}
-          onClose={closePublishPreview}
-        />
-      )}
 
       {/* Move Document to Folder Modal */}
       <Modal
@@ -1236,67 +841,6 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb, initialDoc
             ]}
           />
         </div>
-      </Modal>
-
-      {/* Hidden file input for zip upload */}
-      <input
-        type="file"
-        ref={zipFileInputRef}
-        accept=".zip"
-        style={{ display: 'none' }}
-        onChange={handleZipFileSelected}
-      />
-
-      {/* Zip Import Preview Modal */}
-      <ZipImportPreviewModal
-        open={zipImportModalOpen}
-        onClose={() => {
-          setZipImportModalOpen(false);
-          setSelectedZipFile(null);
-        }}
-        zipFile={selectedZipFile}
-        folders={availableFolders}
-        currentFolderId={typeof activeFilter === 'string' && availableFolders.some((f) => f.id === activeFilter) ? activeFilter : null}
-        onImportDocs={handleBatchImportDocs}
-        onCreateFolder={handleCreateFolder}
-      />
-
-      {/* AI Document Generation Prompt Modal */}
-      <Modal
-        title={`Hướng dẫn AI tạo tài liệu tối ưu cho ${APP_NAME}`}
-        open={aiPromptModalOpen}
-        onCancel={() => setAiPromptModalOpen(false)}
-        width={760}
-        footer={[
-          <Button key="close" onClick={() => setAiPromptModalOpen(false)}>
-            Đóng
-          </Button>,
-          <Button
-            key="copy"
-            type="primary"
-            icon={<CopyOutlined />}
-            onClick={handleCopyAiPrompt}
-            aria-label="Sao chép prompt"
-          >
-            Sao chép prompt
-          </Button>,
-        ]}
-      >
-        <Space direction="vertical" size="small" style={{ width: '100%' }}>
-          <Text type="secondary">
-            Dán prompt này vào bất kỳ AI Assistant bên ngoài (Claude, ChatGPT, Open-WebUI, ...) khi bạn muốn tạo tài liệu Markdown để nạp vào {APP_NAME}.
-          </Text>
-          <Input.TextArea
-            readOnly
-            value={AI_KNOWLEDGE_DOC_PROMPT}
-            rows={18}
-            style={{
-              fontFamily: 'monospace',
-              fontSize: 12,
-              backgroundColor: '#fafafa',
-            }}
-          />
-        </Space>
       </Modal>
 
       {/* Task Drawer when clicking linked task from editor */}

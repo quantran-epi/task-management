@@ -25,7 +25,7 @@ describe('Timer Status Automation & Segment Timestamps (Task 2)', () => {
   );
 
   const createTaskWithStatus = async (id: string, status: TaskStatus) => {
-    const task: Task = {
+    const task: Task = { crId: '11111111-1111-4111-8111-111111111111',
       id,
       name: `Task ${id}`,
       status,

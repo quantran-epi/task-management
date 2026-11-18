@@ -4,8 +4,6 @@ use serde_json::Value;
 use std::path::Path;
 
 const ALLOWED_TABLES: &[&str] = &[
-    "projects",
-    "milestones",
     "tasks",
     "capacityRules",
     "capacityOverrides",
@@ -18,6 +16,21 @@ const ALLOWED_TABLES: &[&str] = &[
     "noteAttachments",
     "chatThreads",
     "chatMessages",
+    "aiEmployees",
+    "aiLeads",
+    "aiSkills",
+    "aiTeams",
+    "aiTeamMembers",
+    "aiTeamLinks",
+    "aiSkillVersions",
+    "aiTeamBatches",
+    "aiTeamAssignments",
+    "teamParticipants",
+    "teamMessages",
+    "teamReadCursors",
+    "chatTabs",
+    "systems",
+    "changeRequests",
 ];
 
 #[derive(Debug, Deserialize)]
@@ -192,9 +205,9 @@ mod tests {
                     deleted: false,
                 },
                 SqliteChange {
-                    table_name: "projects".into(),
-                    row_id: "project-1".into(),
-                    payload_json: Some("{\"id\":\"project-1\"}".into()),
+                    table_name: "notes".into(),
+                    row_id: "note-1".into(),
+                    payload_json: Some("{\"id\":\"note-1\"}".into()),
                     deleted: false,
                 },
             ],
@@ -203,8 +216,8 @@ mod tests {
         sqlite_apply_changes(
             path.clone(),
             vec![SqliteChange {
-                table_name: "projects".into(),
-                row_id: "project-1".into(),
+                table_name: "notes".into(),
+                row_id: "note-1".into(),
                 payload_json: None,
                 deleted: true,
             }],

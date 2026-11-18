@@ -15,6 +15,17 @@ describe('PlannerView & App Route Integration (PLAN-03, PLAN-04, UX-02, UX-03, U
     testDb = new TaskPlannerDatabase('TestPlannerView_' + Math.random().toString(36).slice(2));
     await testDb.open();
     await initializeDatabaseDefaults(testDb);
+    // CR-13: `createTask` now always resolves the owning CR.
+    await testDb.changeRequests.add({
+      id: '11111111-1111-4111-8111-111111111111',
+      name: 'Planner CR',
+      code: 'CR-PLANNER',
+      status: 'Open',
+      type: 'ENHANCEMENT',
+      targets: [],
+      createdAt: '2026-09-01T00:00:00.000Z',
+      updatedAt: '2026-09-01T00:00:00.000Z',
+    });
   });
 
   afterEach(async () => {
@@ -93,7 +104,7 @@ describe('PlannerView & App Route Integration (PLAN-03, PLAN-04, UX-02, UX-03, U
 
   it('allocates task to day column via + Allocate button and updates load and balance reactively', async () => {
     await createTask(
-      { name: 'Wireframe Dashboard', estimateMinutes: 240, status: 'In Progress', priority: 'High' },
+      { crId: '11111111-1111-4111-8111-111111111111', name: 'Wireframe Dashboard', estimateMinutes: 240, status: 'In Progress', priority: 'High' },
       testDb
     );
 

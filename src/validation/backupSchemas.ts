@@ -1,21 +1,17 @@
 import { z } from 'zod';
 import { isValidCalendarDate } from '../utils/date';
 import { isValidUuid } from '../utils/uuid';
+import { AiSkillVersionStatusSchema } from './aiOfficeSchemas';
 import {
   ChatMessageGroundingSchema,
   type ChatMessageGrounding,
 } from '../services/ai/groundedAnswerSchemas';
 import {
-  SdlcArtifactMetadataSchema,
-  SdlcDocumentSetMetadataSchema,
-  WizardSnapshotSchema,
-} from '../services/ai/wizardSchemas';
-import { SdlcWorkflowStateSchema } from '../services/wizard/workflowSchemas';
-import {
-  PROJECT_STATUSES,
-  MILESTONE_STATUSES,
   TASK_STATUSES,
   TASK_PRIORITIES,
+  SystemTypeSchema,
+  CR_TYPES,
+  CR_STATUSES,
   tagListSchema,
   workTypeSchema,
   jiraKeySchema,
@@ -54,41 +50,6 @@ const linkSchema = z
     { message: 'Link must be a URL, folder path, or file URI.' }
   );
 
-export const BackupProjectRecordSchema = z.object({
-  id: uuidSchema,
-  name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
-  description: z.string().optional(),
-  deadline: calendarDateSchema.optional(),
-  notes: z.string().optional(),
-  status: z.enum(PROJECT_STATUSES),
-  jiraEpicKey: jiraKeySchema.optional(),
-  opsOwners: tagListSchema.optional(),
-  businessAnalysts: tagListSchema.optional(),
-  documentLinks: z.array(linkSchema).optional(),
-  reminderDate: reminderDateSchema.optional(),
-  reminderNote: reminderNoteSchema,
-  reminders: remindersArraySchema,
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
-
-export const BackupMilestoneRecordSchema = z.object({
-  id: uuidSchema,
-  projectId: uuidSchema,
-  name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
-  description: z.string().optional(),
-  deadline: calendarDateSchema.optional(),
-  notes: z.string().optional(),
-  status: z.enum(MILESTONE_STATUSES),
-  opsOwners: tagListSchema.optional(),
-  businessAnalysts: tagListSchema.optional(),
-  reminderDate: reminderDateSchema.optional(),
-  reminderNote: reminderNoteSchema,
-  reminders: remindersArraySchema,
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
-
 export const BackupTaskChecklistItemSchema = z.object({
   id: z.string(),
   text: z.string(),
@@ -97,8 +58,8 @@ export const BackupTaskChecklistItemSchema = z.object({
 
 export const BackupTaskRecordSchema = z.object({
   id: uuidSchema,
-  projectId: uuidSchema.optional(),
-  milestoneId: uuidSchema.optional(),
+  crId: uuidSchema,
+  systemId: uuidSchema.optional(),
   name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
   description: z.string().optional(),
   deadline: calendarDateSchema.optional(),
@@ -176,16 +137,15 @@ export const BackupWorkSessionRecordSchema = z
 
 export const BackupNoteRecordSchema = z.object({
   id: uuidSchema,
-  type: z.enum(['quick_note', 'document', 'folder']).optional(),
+  type: z.enum(['quick_note', 'document', 'folder', 'diagram']).optional(),
   parentId: z.string().optional(),
   tags: z.array(z.string()).optional(),
   slug: z.string().optional(),
-  entityType: z.enum(['task', 'project', 'milestone']).optional(),
+  entityType: z.enum(['task', 'cr', 'system']).optional(),
   entityId: uuidSchema.optional(),
   title: z.string().trim().max(120, 'Title must be 120 characters or less').optional(),
   body: z.string().max(50000, 'Body must be 50000 characters or less'),
   isPinned: z.boolean(),
-  sdlcArtifact: SdlcArtifactMetadataSchema.optional(),
   deletedAt: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -212,7 +172,7 @@ export const BackupChatThreadRecordSchema = z
   .object({
     id: uuidSchema,
     scopeKey: z.string().min(1),
-    scopeType: z.enum(['global', 'task', 'project', 'milestone', 'document']),
+    scopeType: z.enum(['global', 'task', 'cr', 'system', 'document', 'team']),
     entityId: uuidSchema.optional(),
     title: z.string().optional(),
     createdAt: z.string(),
@@ -272,7 +232,7 @@ export const BackupChatTabRecordSchema = z
     id: uuidSchema,
     threadId: uuidSchema,
     scopeKey: z.string().min(1),
-    type: z.enum(['chat', 'sdlc']),
+    type: z.enum(['chat']),
     title: z.string().trim().min(1).max(200),
     order: z.number().int().nonnegative(),
     active: z.boolean().optional(),
@@ -284,7 +244,6 @@ export const BackupChatTabRecordSchema = z
       status: z.enum(['interrupted', 'error']).optional(),
     }).optional(),
     config: backupTabConfigSchema.optional(),
-    workflowState: SdlcWorkflowStateSchema.optional(),
     createdAt: z.string(),
     updatedAt: z.string(),
   })
@@ -338,11 +297,15 @@ export const BackupChatMessageRecordSchema = z
     createdAt: z.string(),
     isContextBoundary: z.boolean().optional(),
     durationMs: z.number().optional(),
+    // WR-10: cache tokens are charged as input (D-09), so a plain `z.object` here would
+    // silently STRIP them on restore. Declared optional so a pre-38 row still validates.
     tokenUsage: z
       .object({
         promptTokens: z.number().optional(),
         completionTokens: z.number().optional(),
         totalTokens: z.number().optional(),
+        cacheReadTokens: z.number().optional(),
+        cacheCreationTokens: z.number().optional(),
       })
       .optional(),
     generatedFiles: z
@@ -358,7 +321,40 @@ export const BackupChatMessageRecordSchema = z
       )
       .optional(),
     grounding: z.unknown().optional() as z.ZodType<ChatMessageGrounding | undefined>,
-    wizard: WizardSnapshotSchema.optional(),
+    // Phase 34 D-31: AI Office attribution. Declared explicitly — this is a plain z.object,
+    // so an undeclared key is silently stripped and restored messages render unattributed.
+    agentId: uuidSchema.optional(),
+    agentName: z.string().max(60).optional(),
+    agentKind: z.enum(['lead', 'employee']).optional(),
+    // `steer` is retained ONLY so a pre-37.1 backup still restores; nothing writes it now.
+  messageKind: z.enum(['instruction', 'report', 'synthesis', 'plan', 'steer']).optional(),
+    // Phase 36 D-14/D-18: HISTORICAL assignee attribution. Never live-validated — a backup
+    // taken after deleting the employee must still import.
+    targetAgentId: uuidSchema.optional(),
+    // Phase 37 D-22/D-24: ledger links. Declared explicitly for the same reason as the block
+    // above — this is a plain z.object, so an undeclared key is silently stripped and a
+    // restored report loses its assignment link. Historical: never live-validated.
+    batchId: uuidSchema.optional(),
+    assignmentId: uuidSchema.optional(),
+    attemptNo: z.number().int().positive().optional(),
+    runStatus: z
+      .enum(['queued', 'running', 'done', 'stopped', 'error', 'skipped', 'blocked', 'needs-input'])
+      .optional(),
+    stopReason: z
+      .enum([
+        'user-per-agent',
+        'user-abort',
+        'team-deleted',
+        'provider',
+        'tool-limit',
+        'budget-pause',
+        'leader-amend',
+        'none',
+      ])
+      .optional(),
+    incomplete: z.boolean().optional(),
+    supersededByMessageId: uuidSchema.optional(),
+    supersededAt: z.string().optional(),
   })
   .superRefine((msg, ctx) => {
     if (msg.grounding === undefined || msg.grounding === null) return;
@@ -374,46 +370,9 @@ export const BackupChatMessageRecordSchema = z
       return;
     }
 
-    if (typeof msg.grounding === 'object' && msg.grounding !== null) {
-      const rawG = msg.grounding as Record<string, unknown>;
-      if (Array.isArray(rawG.citations)) {
-        if (rawG.citations.length > 20) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['grounding', 'citations'],
-            message: 'GROUNDING_SIZE_EXCEEDED: citations count exceeds 20',
-            params: { code: 'GROUNDING_SIZE_EXCEEDED' },
-          });
-        }
-        rawG.citations.forEach((c: unknown, idx: number) => {
-          if (c && typeof c === 'object' && typeof (c as any).citedExcerpt === 'string' && (c as any).citedExcerpt.length > 2500) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              path: ['grounding', 'citations', idx, 'citedExcerpt'],
-              message: 'GROUNDING_SIZE_EXCEEDED: citation excerpt exceeds 2500 characters',
-              params: { code: 'GROUNDING_SIZE_EXCEEDED' },
-            });
-          }
-        });
-      }
-      if (Array.isArray(rawG.paths) && rawG.paths.length > 20) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['grounding', 'paths'],
-          message: 'GROUNDING_SIZE_EXCEEDED: paths count exceeds 20',
-          params: { code: 'GROUNDING_SIZE_EXCEEDED' },
-        });
-      }
-      if (Array.isArray(rawG.conflicts) && rawG.conflicts.length > 10) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['grounding', 'conflicts'],
-          message: 'GROUNDING_SIZE_EXCEEDED: conflicts count exceeds 10',
-          params: { code: 'GROUNDING_SIZE_EXCEEDED' },
-        });
-      }
-    }
-
+    // Size bounds live in `ChatMessageGroundingSchema` alone (500 citations, 16000-char
+    // excerpt, 50 paths, 20 conflicts). Duplicating them here at tighter values made the
+    // app's own export unrestorable: a grounding the app can persist failed import.
     const parsedGrounding = ChatMessageGroundingSchema.safeParse(msg.grounding);
     if (!parsedGrounding.success) {
       parsedGrounding.error.issues.forEach((issue) => {
@@ -472,7 +431,6 @@ export const BackupDocumentSetRecordSchema = z.object({
     .optional(),
   isBase: z.boolean().optional(),
   presentationRevision: z.number().int().nonnegative().optional(),
-  sdlc: SdlcDocumentSetMetadataSchema.optional(),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
 });
@@ -552,7 +510,7 @@ export const BackupKnowledgeLinkRecordSchema = z
   .object({
     id: uuidSchema,
     linkKey: z.string().min(1),
-    taskMateEntityType: z.enum(['task', 'project', 'milestone']),
+    taskMateEntityType: z.enum(['task', 'cr', 'system']),
     taskMateEntityId: uuidSchema,
     setId: uuidSchema,
     urn: z.string().min(1).optional(),
@@ -592,5 +550,364 @@ export const BackupTelegramWhitelistUserSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
 });
+
+// Phase 31.1: Backup schemas for System and ChangeRequest (ENT-SYS-01, ENT-CR-01)
+export const BackupSystemRecordSchema = z.object({
+  id: uuidSchema,
+  name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
+  code: z.string().trim().min(1, 'Code is required').max(64, 'Code must be 64 characters or less'),
+  parentId: z.string().nullable(),
+  type: SystemTypeSchema,
+  description: z.string().optional(),
+  sshConfigId: uuidSchema.optional(),
+  remoteRepoPath: z.string().optional(),
+  defaultBaseBranch: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const BackupChangeRequestRecordSchema = z.object({
+  id: uuidSchema,
+  name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
+  code: z.string().trim().min(1, 'Code is required').max(64, 'Code must be 64 characters or less'),
+  description: z.string().optional(),
+  deadline: calendarDateSchema.optional(),
+  status: z.enum(CR_STATUSES),
+  type: z.enum(CR_TYPES),
+  targets: z.array(
+    z.object({
+      systemId: uuidSchema,
+      featureBranch: z.string().optional(),
+    })
+  ),
+  jiraEpicKey: jiraKeySchema.optional(),
+  opsOwners: tagListSchema.optional(),
+  businessAnalysts: tagListSchema.optional(),
+  documentLinks: z.array(linkSchema).optional(),
+  reminderDate: reminderDateSchema.optional(),
+  reminderNote: reminderNoteSchema,
+  reminders: remindersArraySchema,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+// Phase 34: AI Office backup schemas (AIO-BACKUP-01). `strictObject` mirrors
+// `BackupChatTabRecordSchema`: an undeclared key such as `systemPrompt` is rejected
+// rather than silently stripped (T-34-28). Free text is limited to `persona` and `body`,
+// neither of which collides with FORBIDDEN_BACKUP_KEYS.
+const aiNameSchema = z.string().trim().min(1, 'Name is required').max(60, 'Name must be 60 characters or less');
+const aiRoleSchema = z.string().trim().min(1, 'Role is required').max(60, 'Role must be 60 characters or less');
+const aiCapabilitySchema = z
+  .string()
+  .trim()
+  .min(1, 'Capability is required')
+  .max(300, 'Capability must be 300 characters or less');
+const aiSkillDescriptionSchema = z
+  .string()
+  .trim()
+  .min(1, 'Description is required')
+  .max(300, 'Description must be 300 characters or less');
+const aiPersonaSchema = z.string().trim().min(1, 'Persona is required');
+const aiModelSchema = z.string().trim().min(1, 'Model is required');
+const aiTokensSchema = z.number().int().nonnegative('Token count must be zero or greater');
+
+export const BackupAiEmployeeRecordSchema = z.strictObject({
+  id: uuidSchema,
+  name: aiNameSchema,
+  role: aiRoleSchema,
+  capability: aiCapabilitySchema,
+  persona: aiPersonaSchema,
+  model: aiModelSchema,
+  skillId: uuidSchema.optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const BackupAiLeadRecordSchema = z.strictObject({
+  id: uuidSchema,
+  name: aiNameSchema,
+  role: aiRoleSchema,
+  capability: aiCapabilitySchema,
+  persona: aiPersonaSchema,
+  model: aiModelSchema,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const BackupAiSkillRecordSchema = z.strictObject({
+  id: uuidSchema,
+  name: aiNameSchema,
+  description: aiSkillDescriptionSchema,
+  body: z.string().trim().min(1, 'Body is required'),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const BackupAiTeamRecordSchema = z.strictObject({
+  id: uuidSchema,
+  name: aiNameSchema,
+  /** D-05: an empty group has no leader. D-09: the lock timestamp round-trips verbatim. */
+  leadId: uuidSchema.optional(),
+  leaderLockedAt: z.string().optional(),
+  /**
+   * Retired: teams have no active/paused state any more. Accepted so a pre-change export
+   * still validates, and dropped on restore.
+   */
+  status: z.enum(['active', 'idle']).optional(),
+  budgetTokens: aiTokensSchema,
+  autoSplitEnabled: z.boolean().optional(),
+  autoApproveMutations: z.boolean().optional(),
+  /** Phase 39: read-only MCP tools for this team. Optional so a pre-39 export still restores. */
+  mcpEnabled: z.boolean().optional(),
+  /** Phase 37 D-03/D-02: per-team run concurrency. Absent means the default; range 1-12. */
+  concurrencyLimit: z.number().int().min(1).max(12).optional(),
+  /**
+   * Phase 38 D-04/D-05: per-team override of the single warn threshold percentage.
+   * Absent means the global default; the 1-100 band mirrors `warnThresholdPctSchema`.
+   */
+  budgetWarnThresholdPct: z.number().int().min(1).max(100).optional(),
+  /** Phase 41 D-14: the team docs folder id. Optional so a pre-41 export still restores. */
+  docsFolderId: uuidSchema.optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const BackupAiTeamMemberRecordSchema = z.strictObject({
+  id: uuidSchema,
+  teamId: uuidSchema,
+  agentId: uuidSchema,
+  role: z.enum(['lead', 'employee']),
+  budgetTokens: aiTokensSchema,
+  usedTokens: aiTokensSchema,
+  /** Phase 38 D-23: split usage. Optional so a pre-38 export still restores. */
+  inputTokens: aiTokensSchema.optional(),
+  outputTokens: aiTokensSchema.optional(),
+  /** D-10/D-24: true when the counters came from the local tokenizer, not the provider. */
+  usageEstimated: z.boolean().optional(),
+  /** Phase 41 D-14: the member's own folder id. Optional so a pre-41 export still restores. */
+  docsFolderId: uuidSchema.optional(),
+});
+
+export const BackupAiTeamLinkRecordSchema = z.strictObject({
+  id: uuidSchema,
+  teamId: uuidSchema,
+  itemType: z.enum(['cr', 'task', 'system', 'note', 'document']),
+  itemId: uuidSchema,
+  createdAt: z.string(),
+});
+
+/** Phase 36 (D-16, D-22): a stored revision round-trips verbatim — `status` is never normalized. */
+export const BackupAiSkillVersionRecordSchema = z
+  .strictObject({
+    id: uuidSchema,
+    skillId: uuidSchema,
+    /**
+     * Phase 39 D-14: a pending row omits the number entirely (it is assigned at approval).
+     * Optional so a pre-39 export still restores; `positive()` stays, so `0` is still refused.
+     */
+    version: z.number().int().positive().optional(),
+    /** Phase 39 D-15: `0` is a legal baseline, so `nonnegative()`. Optional for the same reason. */
+    baseVersion: z.number().int().nonnegative().optional(),
+    status: AiSkillVersionStatusSchema,
+    name: aiNameSchema,
+    description: aiSkillDescriptionSchema,
+    body: z.string().trim().min(1, 'Body is required'),
+    evidence: z.string().max(2000, 'Evidence must be at most 2000 characters').optional(),
+    createdAt: z.string(),
+    decidedAt: z.string().optional(),
+  })
+  /**
+   * WR-05: the number and the status are one invariant, so they are checked together. An
+   * approved row without a number would restart numbering at 1 and mint a second v1; a
+   * non-approved row with a number is the pre-39 shape that made `max(approved) + 1` collide.
+   */
+  .superRefine((row, ctx) => {
+    if (row.status === 'approved' && row.version === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['version'],
+        message: 'An approved skill version must carry a version number',
+      });
+    }
+    if (row.status !== 'approved' && row.version !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['version'],
+        message: 'Only an approved skill version may carry a version number',
+      });
+    }
+  });
+
+/**
+ * Phase 37 (D-22, D-24, D-26): the run ledger.
+ *
+ * `strictObject` throughout: an undeclared key is rejected rather than silently stripped.
+ * `diagnosticDetail` (D-17) is deliberately absent — the export projection removes it before
+ * the row ever reaches the envelope, and a hand-crafted payload carrying it is refused here.
+ */
+const aiTeamPlanEntrySchema = z.strictObject({
+  agentId: uuidSchema,
+  /** Snapshot at plan time (D-25) — the roster may change before a retry. */
+  agentName: aiNameSchema,
+  task: z.string(),
+});
+
+export const BackupAiTeamBatchRecordSchema = z.strictObject({
+  id: uuidSchema,
+  teamId: uuidSchema,
+  threadId: uuidSchema,
+  batchIndex: z.number().int().nonnegative(),
+  userRequest: z.string(),
+  leadId: uuidSchema,
+  planSnapshot: z.strictObject({
+    original: z.array(aiTeamPlanEntrySchema),
+    edited: z.array(aiTeamPlanEntrySchema).optional(),
+  }),
+  planDecision: z.enum(['approved', 'rejected', 'auto']),
+  startedAt: z.string(),
+  endedAt: z.string().optional(),
+  phaseAtEnd: z
+    .enum([
+      'idle',
+      'ready',
+      'lead-thinking',
+      'awaiting-plan',
+      'batch-running',
+      'awaiting-budget',
+      'awaiting-mutation-approval',
+      'lead-synthesizing',
+    ])
+    .optional(),
+  abortedBy: z.enum(['user', 'team-deleted', 'app-exit', 'none']),
+});
+
+export const BackupAiTeamAssignmentRecordSchema = z.strictObject({
+  id: uuidSchema,
+  batchId: uuidSchema,
+  agentId: uuidSchema,
+  /** Snapshot (D-25) — never live-validated against the current roster. */
+  agentName: aiNameSchema,
+  skillId: uuidSchema.optional(),
+  skillVersion: z.number().int().positive().optional(),
+  model: aiModelSchema,
+  task: z.string(),
+  // D-24: `blocked` and `needs-input` are legal stored states even before their flows ship.
+  runStatus: z.enum([
+    'queued',
+    'running',
+    'done',
+    'stopped',
+    'error',
+    'skipped',
+    'blocked',
+    'needs-input',
+  ]),
+  stopReason: z.enum([
+    'user-per-agent',
+    'user-abort',
+    'team-deleted',
+    'provider',
+    'tool-limit',
+    'budget-pause',
+    'leader-amend',
+    'none',
+  ]),
+  attemptNo: z.number().int().positive(),
+  retryOfAssignmentId: uuidSchema.optional(),
+  incomplete: z.boolean(),
+  queuedAt: z.string(),
+  startedAt: z.string().optional(),
+  endedAt: z.string().optional(),
+  instructionMessageId: uuidSchema.optional(),
+  reportMessageId: uuidSchema.optional(),
+  // Retained ONLY so a pre-37.1 backup restores; the field is no longer written or read.
+  steerMessageIds: z.array(uuidSchema).optional(),
+  tokenUsage: z
+    .object({
+      promptTokens: z.number().optional(),
+      completionTokens: z.number().optional(),
+      totalTokens: z.number().optional(),
+      // WR-10: same strip hazard as the chat-message sub-schema above.
+      cacheReadTokens: z.number().optional(),
+      cacheCreationTokens: z.number().optional(),
+    })
+    .optional(),
+  /**
+   * Phase 38 D-23: the post-38 split-usage columns on the attempt row. `tokenUsage` above is
+   * retained only so a pre-38 backup restores; these three are what phase 38 writes.
+   */
+  inputTokens: aiTokensSchema.optional(),
+  outputTokens: aiTokensSchema.optional(),
+  usageEstimated: z.boolean().optional(),
+  toolCallCount: z.number().int().nonnegative().optional(),
+  /** D-24 handoff: upstream assignments that must finish first. */
+  dependsOn: z.array(uuidSchema).optional(),
+});
+
+/**
+ * 37.1 R1/WR-07: the team message log. `seq` is per team and monotonic; `to` is the routing
+ * list and must never be empty (invariant L1). `replyToId` is optional so a backup taken
+ * before R14 still restores.
+ */
+export const BackupTeamMessageRecordSchema = z.strictObject({
+  id: uuidSchema,
+  teamId: uuidSchema,
+  seq: z.number().int().positive(),
+  from: z.string().min(1),
+  to: z.array(z.string().min(1)).min(1),
+  content: z.string(),
+  kind: z.enum(['chat', 'instruction', 'report', 'synthesis']),
+  assignmentId: uuidSchema.optional(),
+  deliversMessageId: uuidSchema.optional(),
+  replyToId: uuidSchema.optional(),
+  createdAt: z.string(),
+});
+
+export const BackupTeamReadCursorRecordSchema = z.strictObject({
+  id: z.string().min(1),
+  teamId: uuidSchema,
+  participantId: z.string().min(1),
+  lastSeq: z.number().int().nonnegative(),
+  updatedAt: z.string(),
+});
+
+/**
+ * D-49: the current backup envelope contract.
+ *
+ * CR-01: phase 38 added only OPTIONAL columns (`AiTeam.budgetWarnThresholdPct`, the
+ * `AiTeamMember`/`AiTeamAssignment` split-usage trio), so a v13 payload validates against
+ * these schemas unchanged. Bumping the literal would send every pre-38 backup down
+ * `validateBackup`'s `schemaVersion < CURRENT` branch and make it unrestorable for nothing.
+ * A bump is only warranted when a field becomes required or its meaning changes — and then
+ * it needs a `13 → N` normalization step, not an outright reject.
+ */
+export const BACKUP_SCHEMA_VERSION = 13 as const;
+
+export const BackupEnvelopeSchema = z.object({
+  app: z.literal('personal-task-planner'),
+  schemaVersion: z.literal(BACKUP_SCHEMA_VERSION),
+  exportedAt: z.string(),
+  tables: z.record(z.string(), z.array(z.unknown())),
+  counts: z.record(z.string(), z.number()),
+});
+
+export const LEGACY_BACKUP_MESSAGE =
+  'Backup phiên bản cũ không còn được hỗ trợ (chứa projects/milestones). Dữ liệu local không bị thay đổi.';
+
+/**
+ * D-49 envelope-stage gate: a payload carrying a `projects` or `milestones` table is a
+ * pre-31.2 backup. Reject it before any per-table validation so no row can be mapped
+ * into the new model and no local write can happen.
+ */
+export function assertNoLegacyTables(raw: unknown): void {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return;
+  const tables = (raw as Record<string, unknown>).tables;
+  if (!tables || typeof tables !== 'object' || Array.isArray(tables)) return;
+  const candidate = tables as Record<string, unknown>;
+  if ('projects' in candidate || 'milestones' in candidate) {
+    throw new Error(LEGACY_BACKUP_MESSAGE);
+  }
+}
+
 
 

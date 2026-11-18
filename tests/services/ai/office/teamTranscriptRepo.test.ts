@@ -1,0 +1,622 @@
+// @vitest-environment node
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { TaskPlannerDatabase } from '../../../../src/db/index';
+import {
+  ensureTeamThread,
+  insertReportMessage,
+  saveTeamMessage,
+  listRecentTurns,
+  listRecentBatches,
+  listAssignmentHistory,
+  listInterruptedAssignments,
+  getTeamTurn,
+  buildTeamBm25Docs,
+  notifyAIChatSync,
+  supersedeTeamMessage,
+} from '../../../../src/db/repositories/teamTranscriptRepo';
+import {
+  closeBatch,
+  createAssignment,
+  openBatch,
+} from '../../../../src/db/repositories/aiTeamRunRepo';
+import * as syncChannel from '../../../../src/services/ai/aiSyncChannel';
+import { vi } from 'vitest';
+import { ASSIGNMENT_HISTORY_CAP } from '../../../../src/types/aiOffice';
+import {
+  createEmployee,
+  createLead,
+  deleteEmployee,
+  updateEmployee,
+} from '../../../../src/db/repositories/aiOfficeRepo';
+import { generateId } from '../../../../src/utils/uuid';
+import { assignLeader } from '../../../../src/db/repositories/aiTeamRepo';
+import { exportBackupPayload } from '../../../../src/services/backup/exportBackup';
+import { restoreBackupPayload } from '../../../../src/services/backup/restoreBackup';
+
+describe('teamTranscriptRepo (AIO-MEM-01, D-10, D-11, D-17, D-29, D-31)', () => {
+  let db: TaskPlannerDatabase;
+  let dbName: string;
+  let teamId: string;
+  let threadId: string;
+
+  beforeEach(async () => {
+    dbName = 'TestTeamTranscriptRepo_' + Math.random().toString(36).slice(2);
+    db = new TaskPlannerDatabase(dbName);
+    await db.open();
+
+    teamId = generateId();
+    const now = new Date().toISOString();
+    await db.aiTeams.add({
+      id: teamId,
+      name: 'Nhóm Nghiên Cứu',
+      leadId: generateId(),
+      budgetTokens: 0,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    threadId = (await ensureTeamThread(teamId, db)).id;
+  });
+
+  afterEach(async () => {
+    await db.delete();
+  });
+
+  it('resolves the same team-scoped thread on every call', async () => {
+    const first = await ensureTeamThread(teamId, db);
+    const second = await ensureTeamThread(teamId, db);
+
+    expect(second.id).toBe(first.id);
+    expect(first.scopeType).toBe('team');
+    expect(first.scopeKey).toBe(`team:${teamId}`);
+    expect(first.title).toBe('Nhóm Nghiên Cứu');
+    expect(await db.chatThreads.count()).toBe(1);
+  });
+
+  it('throws when the team does not exist', async () => {
+    await expect(ensureTeamThread(generateId(), db)).rejects.toThrow();
+  });
+
+  it('persists all four attribution fields and bumps the thread updatedAt', async () => {
+    const before = await db.chatThreads.get(threadId);
+    const agentId = generateId();
+
+    await new Promise((r) => setTimeout(r, 3));
+    const message = await saveTeamMessage(
+      {
+        threadId,
+        role: 'assistant',
+        content: 'Báo cáo xong.',
+        agentId,
+        agentName: 'Lan',
+        agentKind: 'employee',
+        messageKind: 'report',
+      },
+      db
+    );
+
+    const stored = await db.chatMessages.get(message.id);
+    expect(stored?.agentId).toBe(agentId);
+    expect(stored?.agentName).toBe('Lan');
+    expect(stored?.agentKind).toBe('employee');
+    expect(stored?.messageKind).toBe('report');
+
+    const after = await db.chatThreads.get(threadId);
+    expect(after!.updatedAt > before!.updatedAt).toBe(true);
+  });
+
+  it('returns the last N turns in chronological order', async () => {
+    for (let i = 0; i < 12; i += 1) {
+      // Distinct milliseconds: same-ms rows tie-break on id, which is not insertion order.
+      if (i > 0) await new Promise((r) => setTimeout(r, 2));
+      await saveTeamMessage({ threadId, role: 'user', content: `Lượt ${i}` }, db);
+    }
+
+    const recent = await listRecentTurns(threadId, 10, db);
+    expect(recent).toHaveLength(10);
+    expect(recent.map((m) => m.content)).toEqual(
+      Array.from({ length: 10 }, (_, i) => `Lượt ${i + 2}`)
+    );
+  });
+
+  // The context window is the CURRENT conversation. A superseded row (a re-synthesis, a
+  // retried report) is still in the transcript for `search_team_history`, but feeding it to
+  // the model makes the leader read its own replaced answer as if it were still true.
+  it('drops superseded rows from the recent window', async () => {
+    const old = await saveTeamMessage({ threadId, role: 'assistant', content: 'Bản cũ' }, db);
+    await new Promise((r) => setTimeout(r, 2));
+    const fresh = await saveTeamMessage({ threadId, role: 'assistant', content: 'Bản mới' }, db);
+    await supersedeTeamMessage(old.id, fresh.id, db);
+
+    const recent = await listRecentTurns(threadId, 10, db);
+    expect(recent.map((m) => m.content)).toEqual(['Bản mới']);
+  });
+
+  it('listRecentBatches returns closed batches newest-first with their assignments', async () => {
+    const batchOne = await openBatch(
+      {
+        teamId,
+        threadId,
+        batchIndex: 1,
+        userRequest: 'Yêu cầu lô 1',
+        leadId: generateId(),
+        planSnapshot: { original: [] },
+        planDecision: 'approved',
+      },
+      db
+    );
+    await createAssignment(
+      { batchId: batchOne.id, agentId: 'a1', agentName: 'Evra', model: 'm', task: 'Viết REQ' },
+      db
+    );
+    await closeBatch(batchOne.id, { abortedBy: 'none' }, db);
+
+    const batchTwo = await openBatch(
+      {
+        teamId,
+        threadId,
+        batchIndex: 2,
+        userRequest: 'Yêu cầu lô 2',
+        leadId: generateId(),
+        planSnapshot: { original: [] },
+        planDecision: 'rejected',
+      },
+      db
+    );
+    await createAssignment(
+      { batchId: batchTwo.id, agentId: 'a2', agentName: 'Vidic', model: 'm', task: 'Ra PL03' },
+      db
+    );
+    await closeBatch(batchTwo.id, { abortedBy: 'none' }, db);
+
+    const history = await listRecentBatches(threadId, 5, db);
+    expect(history.map((b) => b.batchIndex)).toEqual([2, 1]);
+    expect(history[0]!.userRequest).toBe('Yêu cầu lô 2');
+    expect(history[0]!.planDecision).toBe('rejected');
+    expect(history[0]!.assignments).toEqual([
+      { agentName: 'Vidic', task: 'Ra PL03', runStatus: 'queued' },
+    ]);
+    expect(history[1]!.assignments[0]!.agentName).toBe('Evra');
+  });
+
+  // An open batch is already in [HIỆN TRẠNG LÔ ĐANG CHẠY]. Listing it twice would make the
+  // leader believe two batches were running.
+  it('listRecentBatches excludes the batch that has not ended', async () => {
+    const closed = await openBatch(
+      {
+        teamId,
+        threadId,
+        batchIndex: 1,
+        userRequest: 'Xong rồi',
+        leadId: generateId(),
+        planSnapshot: { original: [] },
+        planDecision: 'approved',
+      },
+      db
+    );
+    await closeBatch(closed.id, { abortedBy: 'none' }, db);
+    await openBatch(
+      {
+        teamId,
+        threadId,
+        batchIndex: 2,
+        userRequest: 'Đang chạy',
+        leadId: generateId(),
+        planSnapshot: { original: [] },
+        planDecision: 'approved',
+      },
+      db
+    );
+
+    const history = await listRecentBatches(threadId, 5, db);
+    expect(history).toHaveLength(1);
+    expect(history[0]!.userRequest).toBe('Xong rồi');
+  });
+
+  it('listRecentBatches honours the limit', async () => {
+    for (let i = 1; i <= 3; i += 1) {
+      const batch = await openBatch(
+        {
+          teamId,
+          threadId,
+          batchIndex: i,
+          userRequest: `Lô ${i}`,
+          leadId: generateId(),
+          planSnapshot: { original: [] },
+          planDecision: 'auto',
+        },
+        db
+      );
+      await closeBatch(batch.id, { abortedBy: 'none' }, db);
+    }
+
+    expect((await listRecentBatches(threadId, 2, db)).map((b) => b.batchIndex)).toEqual([3, 2]);
+  });
+
+  it('listRecentBatches returns nothing for a thread with no batches', async () => {
+    expect(await listRecentBatches(threadId, 5, db)).toEqual([]);
+  });
+
+  it('caps the assignment history per agent and returns it newest-first', async () => {
+    const agentId = generateId();
+    const otherAgentId = generateId();
+
+    for (let i = 0; i < ASSIGNMENT_HISTORY_CAP + 5; i += 1) {
+      if (i > 0) await new Promise((r) => setTimeout(r, 2));
+      await saveTeamMessage(
+        {
+          threadId,
+          role: 'assistant',
+          content: `Việc ${i}`,
+          agentId,
+          agentName: 'Lan',
+          agentKind: 'employee',
+          messageKind: i % 2 === 0 ? 'instruction' : 'report',
+        },
+        db
+      );
+    }
+    await saveTeamMessage(
+      { threadId, role: 'assistant', content: 'Của người khác', agentId: otherAgentId, messageKind: 'report' },
+      db
+    );
+    await saveTeamMessage(
+      { threadId, role: 'assistant', content: 'Tổng hợp', agentId, messageKind: 'synthesis' },
+      db
+    );
+
+    const history = await listAssignmentHistory(threadId, agentId, undefined, db);
+    expect(history).toHaveLength(ASSIGNMENT_HISTORY_CAP);
+    expect(history.every((m) => m.agentId === agentId)).toBe(true);
+    expect(history.every((m) => m.messageKind === 'instruction' || m.messageKind === 'report')).toBe(
+      true
+    );
+    expect(history[0]?.content).toBe(`Việc ${ASSIGNMENT_HISTORY_CAP + 4}`);
+  });
+
+  it('finds an instruction attributed to the lead when it targets this employee (CR-06)', async () => {
+    const employeeId = generateId();
+    const leadId = generateId();
+
+    // Production shape: the instruction is displayed as the lead's, targeting the employee.
+    await saveTeamMessage(
+      {
+        threadId,
+        role: 'assistant',
+        content: 'Việc được giao',
+        agentId: leadId,
+        agentName: 'Minh',
+        agentKind: 'lead',
+        messageKind: 'instruction',
+        targetAgentId: employeeId,
+      },
+      db
+    );
+    await new Promise((r) => setTimeout(r, 2));
+    await saveTeamMessage(
+      {
+        threadId,
+        role: 'assistant',
+        content: 'Báo cáo',
+        agentId: employeeId,
+        agentName: 'Lan',
+        agentKind: 'employee',
+        messageKind: 'report',
+      },
+      db
+    );
+
+    const history = await listAssignmentHistory(threadId, employeeId, undefined, db);
+    expect(history.map((row) => row.content)).toEqual(['Báo cáo', 'Việc được giao']);
+  });
+
+  it('never returns a turn from another thread', async () => {
+    const message = await saveTeamMessage(
+      { threadId, role: 'assistant', content: 'Trong nhóm', agentId: generateId(), messageKind: 'report' },
+      db
+    );
+
+    expect((await getTeamTurn(threadId, message.id, db))?.id).toBe(message.id);
+    expect(await getTeamTurn(generateId(), message.id, db)).toBeUndefined();
+    expect(await getTeamTurn(threadId, generateId(), db)).toBeUndefined();
+  });
+
+  it('keeps the stored agentName when the profile is renamed (D-17)', async () => {
+    const agentId = generateId();
+    const stored = await saveTeamMessage(
+      {
+        threadId,
+        role: 'assistant',
+        content: 'Báo cáo cũ.',
+        agentId,
+        agentName: 'Lan',
+        agentKind: 'employee',
+        messageKind: 'report',
+      },
+      db
+    );
+
+    // A rename is a profile write; the transcript row is never rewritten.
+    const employee = await createEmployee(
+      { name: 'Lan', role: 'Chuyên viên', capability: 'x', persona: 'y', model: 'm' },
+      db
+    );
+    await updateEmployee(employee.id, { name: 'Lan Mới' }, db);
+
+    expect((await db.chatMessages.get(stored.id))?.agentName).toBe('Lan');
+
+    const fresh = await saveTeamMessage(
+      {
+        threadId,
+        role: 'assistant',
+        content: 'Báo cáo mới.',
+        agentId: employee.id,
+        agentName: 'Lan Mới',
+        agentKind: 'employee',
+        messageKind: 'report',
+      },
+      db
+    );
+    expect((await db.chatMessages.get(fresh.id))?.agentName).toBe('Lan Mới');
+  });
+
+  it('reads back a message whose employee was deleted, attribution intact (D-17)', async () => {
+    const employee = await createEmployee(
+      { name: 'Đã Xóa', role: 'Chuyên viên', capability: 'x', persona: 'y', model: 'm' },
+      db
+    );
+    const stored = await saveTeamMessage(
+      {
+        threadId,
+        role: 'assistant',
+        content: 'Báo cáo của người đã xóa.',
+        agentId: employee.id,
+        agentName: 'Đã Xóa',
+        agentKind: 'employee',
+        messageKind: 'report',
+      },
+      db
+    );
+
+    expect(await deleteEmployee(employee.id, db)).toEqual({ deleted: true });
+
+    const readBack = await db.chatMessages.get(stored.id);
+    expect(readBack?.agentName).toBe('Đã Xóa');
+    expect(readBack?.agentId).toBe(employee.id);
+
+    const history = await listAssignmentHistory(threadId, employee.id, undefined, db);
+    expect(history.map((row) => row.content)).toContain('Báo cáo của người đã xóa.');
+  });
+
+  it('projects rows into BM25 documents with agent name and message kind', async () => {    const agentMessage = await saveTeamMessage(
+      {
+        threadId,
+        role: 'assistant',
+        content: 'Tài liệu về thanh toán',
+        agentId: generateId(),
+        agentName: 'Lan',
+        agentKind: 'employee',
+        messageKind: 'report',
+      },
+      db
+    );
+    const userMessage = await saveTeamMessage(
+      { threadId, role: 'user', content: 'Tìm giúp tôi' },
+      db
+    );
+
+    const docs = await buildTeamBm25Docs(threadId, db);
+    const agentDoc = docs.find((d) => d.id === agentMessage.id);
+    const userDoc = docs.find((d) => d.id === userMessage.id);
+
+    expect(agentDoc).toMatchObject({
+      title: 'Lan',
+      tags: ['report'],
+      body: 'Tài liệu về thanh toán',
+      updatedAt: agentMessage.createdAt,
+    });
+    expect(userDoc).toMatchObject({ title: 'Người dùng', tags: ['user'], body: 'Tìm giúp tôi' });
+  });
+
+  describe('listInterruptedAssignments (D-19)', () => {
+    async function seedEmployee(name = 'Lan') {
+      return createEmployee(
+        { name, role: 'Chuyên viên', capability: 'x', persona: 'y', model: 'm' },
+        db
+      );
+    }
+
+    async function saveInstruction(agentId: string, task: string) {
+      const leadId = generateId();
+      return saveTeamMessage(
+        {
+          threadId,
+          role: 'assistant',
+          content: task,
+          agentId: leadId,
+          agentName: 'Minh',
+          agentKind: 'lead',
+          messageKind: 'instruction',
+          targetAgentId: agentId,
+        },
+        db
+      );
+    }
+
+    async function saveReport(agentId: string, content = 'Báo cáo') {
+      return saveTeamMessage(
+        {
+          threadId,
+          role: 'assistant',
+          content,
+          agentId,
+          agentName: 'Lan',
+          agentKind: 'employee',
+          messageKind: 'report',
+        },
+        db
+      );
+    }
+
+    it('reports nothing when an instruction has a later report from its agent', async () => {
+      const employee = await seedEmployee();
+      await saveInstruction(employee.id, 'Việc A');
+      await new Promise((r) => setTimeout(r, 2));
+      await saveReport(employee.id);
+
+      expect(await listInterruptedAssignments(threadId, db)).toEqual([]);
+    });
+
+    it('reports an unanswered instruction with the agent name and task text', async () => {
+      const employee = await seedEmployee('Lan');
+      const instruction = await saveInstruction(employee.id, 'Việc chưa xong');
+
+      expect(await listInterruptedAssignments(threadId, db)).toEqual([
+        {
+          agentId: employee.id,
+          agentName: 'Lan',
+          task: 'Việc chưa xong',
+          createdAt: instruction.createdAt,
+        },
+      ]);
+    });
+
+    it('does not let a report older than the instruction satisfy it', async () => {
+      const employee = await seedEmployee();
+      await saveReport(employee.id, 'Báo cáo cũ');
+      await new Promise((r) => setTimeout(r, 2));
+      await saveInstruction(employee.id, 'Việc mới');
+
+      const interrupted = await listInterruptedAssignments(threadId, db);
+      expect(interrupted).toHaveLength(1);
+      expect(interrupted[0]!.task).toBe('Việc mới');
+    });
+
+    it('still reports the unfinished turn after a real export → restore round-trip', async () => {
+      // The backup validator requires the team's leadId to resolve to a lead member row.
+      const lead = await createLead(
+        { name: 'Minh', role: 'Lead', capability: 'x', persona: 'y', model: 'm' },
+        db
+      );
+      await assignLeader(teamId, lead.id, db);
+
+      const employee = await seedEmployee('Lan');
+      await saveInstruction(employee.id, 'Việc bị gián đoạn');
+
+      const envelope = await exportBackupPayload(db);
+      const restoredName = 'TestTeamTranscriptRestored_' + Math.random().toString(36).slice(2);
+      const restored = new TaskPlannerDatabase(restoredName);
+      await restored.open();
+      try {
+        await restoreBackupPayload(envelope, restored);
+
+        expect(await listInterruptedAssignments(threadId, restored)).toEqual([
+          {
+            agentId: employee.id,
+            agentName: 'Lan',
+            task: 'Việc bị gián đoạn',
+            createdAt: expect.any(String),
+          },
+        ]);
+      } finally {
+        await restored.delete();
+      }
+    });
+
+    it('writes nothing while reading', async () => {
+      const employee = await seedEmployee();
+      await saveInstruction(employee.id, 'Việc A');
+
+      const messagesBefore = await db.chatMessages.count();
+      const tabsBefore = await db.chatTabs.toArray();
+
+      await listInterruptedAssignments(threadId, db);
+
+      expect(await db.chatMessages.count()).toBe(messagesBefore);
+      expect(await db.chatTabs.toArray()).toEqual(tabsBefore);
+    });
+  });
+
+  describe('insertReportMessage + link fields (D-22)', () => {
+    it('writes every required ChatMessage field from its input alone and never notifies', async () => {
+      const notifySpy = vi.spyOn(syncChannel, 'notifyAIChatSync');
+      const createdAt = '2026-11-11T10:00:00.000Z';
+      const row = await insertReportMessage(
+        {
+          id: generateId(),
+          threadId,
+          content: 'Báo cáo',
+          createdAt,
+          agentId: 'agent-1',
+          agentName: 'An',
+          batchId: 'batch-1',
+          assignmentId: 'assignment-1',
+          attemptNo: 2,
+          runStatus: 'stopped',
+          stopReason: 'user-abort',
+          incomplete: true,
+        },
+        db
+      );
+
+      const stored = await db.chatMessages.get(row.id);
+      expect(stored).toMatchObject({
+        threadId,
+        role: 'assistant',
+        content: 'Báo cáo',
+        createdAt,
+        agentId: 'agent-1',
+        agentName: 'An',
+        agentKind: 'employee',
+        messageKind: 'report',
+        batchId: 'batch-1',
+        assignmentId: 'assignment-1',
+        attemptNo: 2,
+        runStatus: 'stopped',
+        stopReason: 'user-abort',
+        incomplete: true,
+      });
+      // The post-commit notify belongs to `finalizeAttempt`, never to the insert helper.
+      expect(notifySpy).not.toHaveBeenCalled();
+      // `notifyAIChatSync` is the same function object, exported for one import site.
+      expect(notifyAIChatSync).toBe(syncChannel.notifyAIChatSync);
+      notifySpy.mockRestore();
+    });
+
+    it('saveTeamMessage carries the link fields and leaves them absent when not given', async () => {
+      const linked = await saveTeamMessage(
+        {
+          threadId,
+          role: 'assistant',
+          content: 'Việc A',
+          agentId: 'lead-1',
+          agentName: 'Minh',
+          agentKind: 'lead',
+          messageKind: 'instruction',
+          targetAgentId: 'agent-1',
+          batchId: 'batch-1',
+          assignmentId: 'assignment-1',
+          attemptNo: 1,
+          runStatus: 'queued',
+          stopReason: 'none',
+        },
+        db
+      );
+      expect(linked).toMatchObject({
+        batchId: 'batch-1',
+        assignmentId: 'assignment-1',
+        attemptNo: 1,
+        runStatus: 'queued',
+        stopReason: 'none',
+      });
+
+      const plain = await saveTeamMessage(
+        { threadId, role: 'user', content: 'xin chào' },
+        db
+      );
+      expect(plain).not.toHaveProperty('batchId');
+      expect(plain).not.toHaveProperty('runStatus');
+      expect(plain).not.toHaveProperty('incomplete');
+    });
+  });
+});

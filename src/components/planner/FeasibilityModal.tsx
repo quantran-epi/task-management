@@ -62,12 +62,12 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
   const restorerRef = useRef<(() => void) | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const project = useLiveQuery(
+  const changeRequest = useLiveQuery(
     async () => {
-      if (!task?.projectId) return undefined;
-      return db.projects.get(task.projectId);
+      if (!task?.crId) return undefined;
+      return db.changeRequests.get(task.crId);
     },
-    [task?.projectId, db]
+    [task?.crId, db]
   );
 
   // Compute initial date range
@@ -323,7 +323,7 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
       }
     >
       <div style={{ marginTop: 16 }}>
-        {/* Task & Project Context Banner */}
+        {/* Task & CR Context Banner */}
         {task && (
           <div
             data-testid="feasibility-task-context"
@@ -344,9 +344,9 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
               <Text strong style={{ fontSize: 14 }}>
                 {task.name}
               </Text>
-              {project?.name && (
+              {changeRequest && (
                 <Tag color="blue" style={{ margin: 0 }}>
-                  {project.name}
+                  {changeRequest.code || changeRequest.name}
                 </Tag>
               )}
             </Space>

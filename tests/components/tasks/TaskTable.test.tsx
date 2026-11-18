@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../../src/db';
-import type { Task, Project, Milestone } from '../../../src/types/models';
+import type { ChangeRequest, System, Task } from '../../../src/types/models';
 import { TaskTable, STORAGE_COLUMNS_KEY } from '../../../src/components/tasks/TaskTable';
 
 // Mock TimerContext
@@ -18,22 +18,26 @@ vi.mock('../../../src/hooks/useTimer', () => ({
 describe('TaskTable', () => {
   let testDb: TaskPlannerDatabase;
 
-  const mockProjects: Project[] = [
+  const mockChangeRequests: ChangeRequest[] = [
     {
-      id: 'proj-1',
-      name: 'Project 1',
+      id: 'cr-1',
+      code: 'CR-2026-001',
+      name: 'CR 1',
       status: 'In Progress',
+      type: 'ENHANCEMENT',
+      targets: [{ systemId: 'sys-1' }],
       createdAt: '2026-09-01T00:00:00Z',
       updatedAt: '2026-09-01T00:00:00Z',
     },
   ];
 
-  const mockMilestones: Milestone[] = [
+  const mockSystems: System[] = [
     {
-      id: 'mile-1',
-      projectId: 'proj-1',
-      name: 'Milestone 1',
-      status: 'Open',
+      id: 'sys-1',
+      name: 'Payments API',
+      code: 'PAY-API',
+      parentId: null,
+      type: 'SERVICE',
       createdAt: '2026-09-01T00:00:00Z',
       updatedAt: '2026-09-01T00:00:00Z',
     },
@@ -48,8 +52,8 @@ describe('TaskTable', () => {
       progress: 0,
       estimateMinutes: 60,
       deadline: '2026-10-01',
-      projectId: 'proj-1',
-      milestoneId: 'mile-1',
+      crId: 'cr-1',
+      systemId: 'sys-1',
       createdAt: '2026-09-01T00:00:00Z',
       updatedAt: '2026-09-01T00:00:00Z',
       notes: 'Private note body',
@@ -62,8 +66,8 @@ describe('TaskTable', () => {
       progress: 0,
       estimateMinutes: 45,
       deadline: '2026-09-29',
-      projectId: 'proj-1',
-      milestoneId: 'mile-1',
+      crId: 'cr-1',
+      systemId: 'sys-1',
       createdAt: '2026-09-01T00:00:00Z',
       updatedAt: '2026-09-01T00:00:00Z',
     },
@@ -75,8 +79,8 @@ describe('TaskTable', () => {
       progress: 50,
       estimateMinutes: 120,
       deadline: '2026-09-30',
-      projectId: 'proj-1',
-      milestoneId: 'mile-1',
+      crId: 'cr-1',
+      systemId: 'sys-1',
       createdAt: '2026-09-01T00:00:00Z',
       updatedAt: '2026-09-01T00:00:00Z',
     },
@@ -88,8 +92,8 @@ describe('TaskTable', () => {
       progress: 100,
       estimateMinutes: 30,
       deadline: '2026-09-25',
-      projectId: 'proj-1',
-      milestoneId: 'mile-1',
+      crId: 'cr-1',
+      systemId: 'sys-1',
       createdAt: '2026-09-01T00:00:00Z',
       updatedAt: '2026-09-01T00:00:00Z',
     },
@@ -106,8 +110,8 @@ describe('TaskTable', () => {
     render(
       <TaskTable
         tasks={mockTasks}
-        projects={mockProjects}
-        milestones={mockMilestones}
+        changeRequests={mockChangeRequests}
+        systems={mockSystems}
         selectedRowKeys={[]}
         onSelectRows={vi.fn()}
         onOpenDrawer={vi.fn()}
@@ -126,7 +130,7 @@ describe('TaskTable', () => {
     expect(screen.queryByText('Private note body')).not.toBeInTheDocument();
 
     // Verify column headers rendered
-    expect(screen.getByText('Tác vụ & Phân cấp')).toBeInTheDocument();
+    expect(screen.getByText('Tác vụ')).toBeInTheDocument();
     expect(screen.getByText('Trạng thái')).toBeInTheDocument();
     expect(screen.getByText('Độ ưu tiên')).toBeInTheDocument();
     expect(screen.getByText('1-4 / 4 tác vụ')).toBeInTheDocument();
@@ -146,8 +150,8 @@ describe('TaskTable', () => {
     render(
       <TaskTable
         tasks={mockTasks}
-        projects={mockProjects}
-        milestones={mockMilestones}
+        changeRequests={mockChangeRequests}
+        systems={mockSystems}
         selectedRowKeys={[]}
         onSelectRows={vi.fn()}
         onOpenDrawer={vi.fn()}
@@ -164,8 +168,8 @@ describe('TaskTable', () => {
     render(
       <TaskTable
         tasks={mockTasks}
-        projects={mockProjects}
-        milestones={mockMilestones}
+        changeRequests={mockChangeRequests}
+        systems={mockSystems}
         selectedRowKeys={[]}
         onSelectRows={vi.fn()}
         onOpenDrawer={vi.fn()}
@@ -181,7 +185,7 @@ describe('TaskTable', () => {
     expect(screen.getByText('Mặc định')).toBeInTheDocument();
 
     // Name column checkbox must be disabled inside the popover
-    const nameCheckbox = screen.getByRole('checkbox', { name: /Tác vụ & Phân cấp/ });
+    const nameCheckbox = screen.getByRole('checkbox', { name: /Tác vụ/ });
     expect(nameCheckbox).toBeDisabled();
     expect(nameCheckbox).toBeChecked();
   }, 15000);
@@ -190,8 +194,8 @@ describe('TaskTable', () => {
     render(
       <TaskTable
         tasks={mockTasks}
-        projects={mockProjects}
-        milestones={mockMilestones}
+        changeRequests={mockChangeRequests}
+        systems={mockSystems}
         selectedRowKeys={[]}
         onSelectRows={vi.fn()}
         onOpenDrawer={vi.fn()}
@@ -231,8 +235,8 @@ describe('TaskTable', () => {
     render(
       <TaskTable
         tasks={mockTasks}
-        projects={mockProjects}
-        milestones={mockMilestones}
+        changeRequests={mockChangeRequests}
+        systems={mockSystems}
         selectedRowKeys={[]}
         onSelectRows={vi.fn()}
         onOpenDrawer={vi.fn()}
@@ -240,18 +244,18 @@ describe('TaskTable', () => {
       />
     );
 
-    expect(screen.getByRole('columnheader', { name: /Tác vụ & Phân cấp/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /Tác vụ/i })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: /Trạng thái/i })).toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: /Ops Owner/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('columnheader', { name: /Business Analyst/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: /^BA$/i })).not.toBeInTheDocument();
   });
 
   it('supports 3-state sorting on name header', async () => {
     render(
       <TaskTable
         tasks={mockTasks}
-        projects={mockProjects}
-        milestones={mockMilestones}
+        changeRequests={mockChangeRequests}
+        systems={mockSystems}
         selectedRowKeys={[]}
         onSelectRows={vi.fn()}
         onOpenDrawer={vi.fn()}
@@ -259,7 +263,7 @@ describe('TaskTable', () => {
       />
     );
 
-    const nameHeader = screen.getByRole('columnheader', { name: /Tác vụ & Phân cấp/i });
+    const nameHeader = screen.getByRole('columnheader', { name: /Tác vụ/i });
     expect(nameHeader).toHaveClass('ant-table-column-has-sorters');
 
     // Click 1: Ascending
@@ -291,8 +295,8 @@ describe('TaskTable', () => {
     render(
       <TaskTable
         tasks={mockTasks}
-        projects={mockProjects}
-        milestones={mockMilestones}
+        changeRequests={mockChangeRequests}
+        systems={mockSystems}
         selectedRowKeys={[]}
         onSelectRows={vi.fn()}
         onOpenDrawer={vi.fn()}
@@ -330,8 +334,8 @@ describe('TaskTable', () => {
         priority: 'Medium',
         progress: 0,
         estimateMinutes: 45,
-        projectId: 'proj-1',
-        milestoneId: 'mile-1',
+        crId: 'cr-1',
+        systemId: 'sys-1',
         createdAt: '2026-09-01T00:00:00Z',
         updatedAt: '2026-09-01T00:00:00Z',
       },
@@ -340,8 +344,8 @@ describe('TaskTable', () => {
     render(
       <TaskTable
         tasks={tasksWithUndated}
-        projects={mockProjects}
-        milestones={mockMilestones}
+        changeRequests={mockChangeRequests}
+        systems={mockSystems}
         selectedRowKeys={[]}
         onSelectRows={vi.fn()}
         onOpenDrawer={vi.fn()}
@@ -349,7 +353,7 @@ describe('TaskTable', () => {
       />
     );
 
-    const deadlineHeader = screen.getByRole('columnheader', { name: /Hạn chót/i });
+    const deadlineHeader = screen.getByRole('columnheader', { name: /^Hạn$/i });
     expect(deadlineHeader).toHaveClass('ant-table-column-has-sorters');
 
     // Click 1: Ascending (earliest date first, undefined at bottom)
@@ -375,8 +379,8 @@ describe('TaskTable', () => {
     render(
       <TaskTable
         tasks={mockTasks}
-        projects={mockProjects}
-        milestones={mockMilestones}
+        changeRequests={mockChangeRequests}
+        systems={mockSystems}
         selectedRowKeys={[]}
         onSelectRows={vi.fn()}
         onOpenDrawer={vi.fn()}
@@ -395,8 +399,8 @@ describe('TaskTable', () => {
     render(
       <TaskTable
         tasks={mockTasks}
-        projects={mockProjects}
-        milestones={mockMilestones}
+        changeRequests={mockChangeRequests}
+        systems={mockSystems}
         selectedRowKeys={[]}
         onSelectRows={vi.fn()}
         onOpenDrawer={vi.fn()}

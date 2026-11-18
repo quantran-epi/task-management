@@ -2,10 +2,14 @@ mod agent_diff_ops;
 mod agent_manager;
 mod agent_skill_ops;
 mod ai_proxy;
+mod desktop_notification;
 mod jira_proxy;
 mod keyring_store;
 mod sqlite_persistence;
+mod ssh_pty_service;
+mod ssh_service;
 mod telegram_gateway;
+use tauri::Manager;
 
 #[tauri::command]
 fn open_devtools(window: tauri::WebviewWindow) {
@@ -17,8 +21,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .manage(telegram_gateway::TelegramGatewayState::new())
+        .manage(ssh_pty_service::SshPtyRegistry::default())
+        .manage(ssh_service::SshStreamRegistry::default())
         .invoke_handler(tauri::generate_handler![
             open_devtools,
+            desktop_notification::send_clickable_notification,
             sqlite_persistence::select_sqlite_path,
             sqlite_persistence::sqlite_file_status,
             sqlite_persistence::sqlite_init,
@@ -61,13 +68,34 @@ pub fn run() {
             telegram_gateway::get_telegram_status,
             telegram_gateway::send_telegram_reply,
             telegram_gateway::send_telegram_action,
+            ssh_service::ssh_test_connection,
+            ssh_service::ssh_list_dir,
+            ssh_service::ssh_read_file,
+            ssh_service::ssh_read_file_slice,
+            ssh_service::ssh_write_file,
+            ssh_service::ssh_create_dir,
+            ssh_service::ssh_delete_entry,
+            ssh_service::ssh_rename,
+            ssh_service::ssh_exec_command,
+            ssh_service::ssh_exec_stream,
+            ssh_service::ssh_kill_process,
+            ssh_pty_service::ssh_pty_start,
+            ssh_pty_service::ssh_pty_write,
+            ssh_pty_service::ssh_pty_resize,
+            ssh_pty_service::ssh_pty_close,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|_app_handle, event| {
+        .run(|app_handle, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event {
                 // D-18: Kill active process groups immediately, preserve .plannermate/worktrees on disk
                 agent_manager::cleanup_on_exit();
+                if let Some(pty_registry) = app_handle.try_state::<ssh_pty_service::SshPtyRegistry>() {
+                    ssh_pty_service::cleanup_on_exit(&pty_registry);
+                }
+                if let Some(stream_registry) = app_handle.try_state::<ssh_service::SshStreamRegistry>() {
+                    ssh_service::cleanup_on_exit(&stream_registry);
+                }
             }
         });
 }

@@ -18,7 +18,7 @@ import { SearchOutlined, FilterOutlined, ClearOutlined } from '@ant-design/icons
 import dayjs, { type Dayjs } from 'dayjs';
 import type { TaskFilterState } from '../../utils/filter';
 import { DEFAULT_TASK_FILTER_STATE, countActiveAdvancedFilters } from '../../utils/filter';
-import type { Project, Milestone, TaskStatus, TaskPriority, WorkType } from '../../types/models';
+import type { ChangeRequest, System, TaskStatus, TaskPriority, WorkType } from '../../types/models';
 import { WORK_TYPES } from '../../types/models';
 import { WORK_TYPE_CONFIG } from './WorkTypeBadge';
 
@@ -26,8 +26,8 @@ export interface TaskFilterBarProps {
   filters: TaskFilterState;
   onFilterChange: (patch: Partial<TaskFilterState>) => void;
   onResetFilters?: () => void;
-  projects?: Project[];
-  milestones?: Milestone[];
+  changeRequests?: ChangeRequest[];
+  systems?: System[];
   availableOpsOwners?: string[];
   availableBAs?: string[];
   searchInputRef?: React.Ref<InputRef>;
@@ -54,8 +54,8 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
   filters,
   onFilterChange,
   onResetFilters,
-  projects = [],
-  milestones = [],
+  changeRequests = [],
+  systems = [],
   availableOpsOwners = [],
   availableBAs = [],
   searchInputRef,
@@ -67,17 +67,20 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
   const hasActiveFilters =
     Boolean(filters.search) ||
     filters.hierarchyScope !== 'all' ||
-    Boolean(filters.projectId) ||
+    Boolean(filters.crId) ||
     filters.horizon !== 'all' ||
     filters.statuses.length !== DEFAULT_TASK_FILTER_STATE.statuses.length ||
     filters.priorities.length > 0 ||
     filters.includeClosed ||
     activeAdvancedCount > 0;
 
-  // Filter milestone choices based on selected project
-  const eligibleMilestones = filters.projectId
-    ? milestones.filter((m) => m.projectId === filters.projectId)
-    : milestones;
+  // Subsystem choices are limited to the selected CR's targets (D-46)
+  const selectedCr = filters.crId ? changeRequests.find((cr) => cr.id === filters.crId) : undefined;
+  const eligibleSystems = selectedCr
+    ? selectedCr.targets
+        .map((target) => systems.find((s) => s.id === target.systemId))
+        .filter((s): s is System => Boolean(s))
+    : [];
 
   return (
     <div
@@ -91,7 +94,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
         border: `1px solid ${token.colorBorderSecondary}`,
       }}
     >
-      {/* Top row: Search, Scope, Project, Advanced Toggle, Reset */}
+      {/* Top row: Search, Scope, CR, Subsystem, Advanced Toggle, Reset */}
       <div
         style={{
           display: 'flex',
@@ -118,7 +121,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
           <Segmented
             options={[
               { label: 'Tất cả', value: 'all' },
-              { label: 'Dự án', value: 'projects' },
+              { label: 'CR', value: 'cr' },
               { label: 'Độc lập', value: 'standalone' },
             ]}
             value={filters.hierarchyScope}
@@ -129,26 +132,39 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
           <Select
             allowClear
             showSearch
-            filterOption={(input, option) =>
-              (option?.label as string ?? '').toLowerCase().includes(input.toLowerCase())
-            }
-            placeholder="Lọc theo Dự án"
-            style={{ minWidth: 160 }}
-            value={filters.projectId || undefined}
+            optionFilterProp="label"
+            placeholder="Lọc theo CR"
+            style={{ minWidth: 180 }}
+            value={filters.crId || undefined}
             onChange={(val) => {
               onFilterChange({
-                projectId: val || null,
-                // Clear milestone if it doesn't belong to the newly selected project
-                milestoneId:
-                  val && filters.milestoneId
-                    ? milestones.find((m) => m.id === filters.milestoneId && m.projectId === val)
-                      ? filters.milestoneId
+                crId: val || null,
+                // Clear subsystem if it is not a target of the newly selected CR
+                systemId:
+                  val && filters.systemId
+                    ? changeRequests
+                        .find((cr) => cr.id === val)
+                        ?.targets.some((t) => t.systemId === filters.systemId)
+                      ? filters.systemId
                       : null
-                    : filters.milestoneId,
+                    : filters.systemId,
               });
             }}
-            options={projects.map((p) => ({ label: p.name, value: p.id }))}
-            aria-label="Lọc theo dự án"
+            options={changeRequests.map((cr) => ({ label: `${cr.code} · ${cr.name}`, value: cr.id }))}
+            aria-label="Lọc theo CR"
+          />
+
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder="Lọc theo Subsystem"
+            style={{ minWidth: 180 }}
+            value={filters.systemId || undefined}
+            onChange={(val) => onFilterChange({ systemId: val || null })}
+            options={eligibleSystems.map((s) => ({ label: s.name, value: s.id }))}
+            disabled={!filters.crId}
+            aria-label="Lọc theo Subsystem"
           />
 
           <Badge count={activeAdvancedCount} size="small" offset={[-2, 2]}>
@@ -346,24 +362,6 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
                   }}
                   allowClear
                   aria-label="Khoảng hạn chót hoàn thành"
-                />
-              </div>
-            </Col>
-
-            {/* Field 3: Milestone */}
-            <Col xs={24} sm={12} lg={6}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
-                  Mốc (Milestone):
-                </span>
-                <Select
-                  style={{ width: '100%' }}
-                  allowClear
-                  placeholder="Lọc theo mốc (Milestone)"
-                  value={filters.milestoneId || undefined}
-                  onChange={(val) => onFilterChange({ milestoneId: val || null })}
-                  options={eligibleMilestones.map((m) => ({ label: m.name, value: m.id }))}
-                  aria-label="Lọc theo mốc"
                 />
               </div>
             </Col>

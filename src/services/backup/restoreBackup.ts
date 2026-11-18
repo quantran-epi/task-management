@@ -24,8 +24,6 @@ function base64ToBlob(base64Data: string, mimeType: string): Blob {
 }
 
 const RESTORE_TABLES = (db: TaskPlannerDatabase) => [
-  db.projects,
-  db.milestones,
   db.tasks,
   db.capacityRules,
   db.capacityOverrides,
@@ -44,40 +42,76 @@ const RESTORE_TABLES = (db: TaskPlannerDatabase) => [
   db.knowledgeLinks,
   db.telegramSettings,
   db.telegramWhitelist,
+  db.systems,
+  db.changeRequests,
+  db.aiEmployees,
+  db.aiLeads,
+  db.aiSkills,
+  db.aiTeams,
+  db.aiTeamMembers,
+  db.aiTeamLinks,
+  db.aiSkillVersions,
+  db.aiTeamBatches,
+  db.aiTeamAssignments,
+  db.teamMessages,
+  db.teamReadCursors,
+  // WR-15: cleared with the log (never exported), so it must be in the transaction scope.
+  db.teamParticipants,
   db.settings,
   db.backupMetadata,
 ];
 
-const SDLC_TITLE = '⚙️ SDLC Workflow';
+/** Phase 34/37: the nine AI Office tables, cleared and re-added as one group. */
+const AI_OFFICE_TABLE_KEYS = [
+  'aiEmployees',
+  'aiLeads',
+  'aiSkills',
+  'aiTeams',
+  'aiTeamMembers',
+  'aiTeamLinks',
+  'aiSkillVersions',
+  'aiTeamBatches',
+  'aiTeamAssignments',
+] as const;
+
 const DEFAULT_CHAT_TITLE = '💬 Cuộc trò chuyện';
 
 function scopeFromThread(thread: ChatThread): string {
-  return thread.scopeType === 'project' && thread.scopeKey.endsWith(':sdlc')
-    ? thread.scopeKey.slice(0, -':sdlc'.length)
-    : thread.scopeKey;
+  // WR-16: a `:chat:`-suffixed thread scope must not become a tab scope — the validator
+  // rejects a tab whose scopeKey carries the per-thread suffix.
+  const chatIndex = thread.scopeKey.indexOf(':chat:');
+  return chatIndex >= 0 ? thread.scopeKey.slice(0, chatIndex) : thread.scopeKey;
 }
+
+// C-16: a legacy SDLC thread scope suffix. Such rows are deleted, never restored — the tab is
+// not generated either — but the CR scope still needs its ordinary chat thread.
+const LEGACY_SDLC_SCOPE_SUFFIX = ':sdlc';
 
 function legacyTabRows(
   threads: ChatThread[],
-  projectIds: Set<string>,
   now: string,
 ): { threads: ChatThread[]; tabs: ChatTab[] } {
-  const importedThreads = [...threads];
+  const importedThreads: ChatThread[] = [];
   const tabs: ChatTab[] = [];
   const scopes = new Set<string>();
   const threadByScope = new Map<string, ChatThread[]>();
 
-  for (const thread of importedThreads) {
+  for (const thread of threads) {
+    if (thread.scopeKey.endsWith(LEGACY_SDLC_SCOPE_SUFFIX)) {
+      scopes.add(thread.scopeKey.slice(0, -LEGACY_SDLC_SCOPE_SUFFIX.length));
+      continue;
+    }
     const scopeKey = scopeFromThread(thread);
+    importedThreads.push(thread);
     scopes.add(scopeKey);
     const scoped = threadByScope.get(scopeKey) ?? [];
     scoped.push(thread);
     threadByScope.set(scopeKey, scoped);
     tabs.push({
-      id: thread.scopeKey === `${scopeKey}:sdlc` && thread.scopeType === 'project' ? generateId() : thread.id,
+      id: thread.id,
       threadId: thread.id,
       scopeKey,
-      type: thread.scopeKey === `${scopeKey}:sdlc` && thread.scopeType === 'project' ? 'sdlc' : 'chat',
+      type: 'chat',
       title: thread.title?.trim() || DEFAULT_CHAT_TITLE,
       order: 0,
       active: false,
@@ -86,39 +120,10 @@ function legacyTabRows(
     });
   }
 
-  for (const projectId of projectIds) scopes.add(`project:${projectId}`);
   const orderedScopes = [...scopes].sort();
   for (const scopeKey of orderedScopes) {
     const scopedThreads = threadByScope.get(scopeKey) ?? [];
-    const hasSdlc = scopedThreads.some((thread) => thread.scopeKey === `${scopeKey}:sdlc` && thread.scopeType === 'project');
-    const projectId = scopeKey.startsWith('project:') ? scopeKey.slice('project:'.length) : undefined;
-    if (projectId && !hasSdlc) {
-      const threadId = generateId();
-      const sdlcThread: ChatThread = {
-        id: threadId,
-        scopeKey: `${scopeKey}:sdlc`,
-        scopeType: 'project',
-        entityId: projectId,
-        title: SDLC_TITLE,
-        createdAt: now,
-        updatedAt: now,
-      };
-      importedThreads.push(sdlcThread);
-      scopedThreads.push(sdlcThread);
-      threadByScope.set(scopeKey, scopedThreads);
-      tabs.push({
-        id: generateId(),
-        threadId,
-        scopeKey,
-        type: 'sdlc',
-        title: SDLC_TITLE,
-        order: 0,
-        active: false,
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
-    if (!scopedThreads.some((thread) => thread.scopeKey !== `${scopeKey}:sdlc` || thread.scopeType !== 'project')) {
+    if (scopedThreads.length === 0) {
       const threadId = generateId();
       const thread: ChatThread = {
         id: threadId,
@@ -160,9 +165,20 @@ function restoreRows(
 ): { tables: BackupTableData; tabs: ChatTab[] } {
   const tables = backup.tables;
   if (tables.chatTabs !== undefined) return { tables, tabs: tables.chatTabs };
-  const backfilled = legacyTabRows(tables.chatThreads ?? [], new Set(tables.projects.map((project) => project.id)), now);
+  const backfilled = legacyTabRows(tables.chatThreads ?? [], now);
+  // C-16: legacyTabRows deletes `:sdlc` threads, so their messages must go too — otherwise the
+  // restored DB carries orphans that its own exporter/validator then rejects (L5).
+  const survivingThreadIds = new Set(backfilled.threads.map((thread) => thread.id));
+  const chatMessages = tables.chatMessages?.filter((message) =>
+    survivingThreadIds.has(message.threadId)
+  );
   return {
-    tables: { ...tables, chatThreads: backfilled.threads, chatTabs: backfilled.tabs },
+    tables: {
+      ...tables,
+      chatThreads: backfilled.threads,
+      chatTabs: backfilled.tabs,
+      ...(chatMessages !== undefined ? { chatMessages } : {}),
+    },
     tabs: backfilled.tabs,
   };
 }
@@ -172,10 +188,20 @@ function countsFor(tables: BackupTableData): BackupTableCounts {
 }
 
 async function captureSnapshot(targetDb: TaskPlannerDatabase, timestamp: string): Promise<SnapshotData> {
-  const [projects, milestones, tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, notes, rawAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettingsRaw, telegramWhitelist, settings] = await Promise.all([
-    targetDb.projects.toArray(), targetDb.milestones.toArray(), targetDb.tasks.toArray(), targetDb.capacityRules.toArray(), targetDb.capacityOverrides.toArray(), targetDb.plannedAllocations.toArray(), targetDb.workSessions.toArray(), targetDb.notes.toArray(), targetDb.noteAttachments.toArray(), targetDb.chatThreads.toArray(), targetDb.chatMessages.toArray(), targetDb.chatTabs.toArray(), targetDb.documentSets.toArray(), targetDb.publishedDocuments.toArray(), targetDb.publishAttempts.toArray(), targetDb.dlpAudits.toArray(), targetDb.knowledgeLinks.toArray(), targetDb.telegramSettings.toArray(), targetDb.telegramWhitelist.toArray(), targetDb.settings.toArray()
+  // activeTimers is part of the snapshot: replaceTables clears the table for both import and
+  // rollback, so omitting it here would destroy the in-progress timer with no way back.
+  // CR-02: same rule for the team log — replaceTables clears `teamMessages`/`teamReadCursors`
+  // with the AI Office group, so a snapshot without them would delete the transcript on a
+  // rollback with no copy to restore.
+  const [tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, activeTimers, notes, rawAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettingsRaw, telegramWhitelist, systems, changeRequests, aiEmployees, aiLeads, aiSkills, aiTeams, aiTeamMembers, aiTeamLinks, aiSkillVersions, aiTeamBatches, rawAiTeamAssignments, teamMessages, teamReadCursors, settings] = await Promise.all([
+    targetDb.tasks.toArray(), targetDb.capacityRules.toArray(), targetDb.capacityOverrides.toArray(), targetDb.plannedAllocations.toArray(), targetDb.workSessions.toArray(), targetDb.activeTimers.toArray(), targetDb.notes.toArray(), targetDb.noteAttachments.toArray(), targetDb.chatThreads.toArray(), targetDb.chatMessages.toArray(), targetDb.chatTabs.toArray(), targetDb.documentSets.toArray(), targetDb.publishedDocuments.toArray(), targetDb.publishAttempts.toArray(), targetDb.dlpAudits.toArray(), targetDb.knowledgeLinks.toArray(), targetDb.telegramSettings.toArray(), targetDb.telegramWhitelist.toArray(), targetDb.systems.toArray(), targetDb.changeRequests.toArray(), targetDb.aiEmployees.toArray(), targetDb.aiLeads.toArray(), targetDb.aiSkills.toArray(), targetDb.aiTeams.toArray(), targetDb.aiTeamMembers.toArray(), targetDb.aiTeamLinks.toArray(), targetDb.aiSkillVersions.toArray(), targetDb.aiTeamBatches.toArray(), targetDb.aiTeamAssignments.toArray(), targetDb.teamMessages.toArray(), targetDb.teamReadCursors.toArray(), targetDb.settings.toArray()
   ]);
+  // T-37-14: the snapshot is downloadable as an envelope, so the same projection applies here.
+  const aiTeamAssignments = rawAiTeamAssignments.map(({ diagnosticDetail: _detail, ...row }) => row);
   const telegramSettings = telegramSettingsRaw.map((setting) => ({ ...setting, botToken: '' }));
+  // Never persist secrets (tokens, passphrases, SSH inventory) in a snapshot the UI offers
+  // for download; the export path filters the same way.
+  const safeSettings = settings.filter((setting) => isSafeBackupSetting(setting.key));
   const noteAttachments = await Promise.all(rawAttachments.map(async (attachment) => ({
     id: attachment.id,
     noteId: attachment.noteId,
@@ -186,7 +212,7 @@ async function captureSnapshot(targetDb: TaskPlannerDatabase, timestamp: string)
     ...(attachment.caption ? { caption: attachment.caption } : {}),
     createdAt: attachment.createdAt,
   })));
-  const tables: BackupTableData = { projects, milestones, tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, notes, noteAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettings, telegramWhitelist, settings };
+  const tables: BackupTableData = { tasks, capacityRules, capacityOverrides, plannedAllocations, workSessions, activeTimers, notes, noteAttachments, chatThreads, chatMessages, chatTabs, documentSets, publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks, telegramSettings, telegramWhitelist, systems, changeRequests, aiEmployees, aiLeads, aiSkills, aiTeams, aiTeamMembers, aiTeamLinks, aiSkillVersions, aiTeamBatches, aiTeamAssignments, teamMessages, teamReadCursors, settings: safeSettings };
   return { timestamp, tables, counts: countsFor(tables) };
 }
 
@@ -198,7 +224,9 @@ function prepareAttachments(attachments: BackupTableData['noteAttachments']): No
     mimeType: attachment.mimeType,
     sizeBytes: attachment.sizeBytes,
     data: attachment.data ? base64ToBlob(attachment.data, attachment.mimeType) : new Blob([], { type: attachment.mimeType }),
-    ...(attachment.filePath ? { filePath: attachment.filePath } : {}),
+    // Export strips `filePath` (it can be an absolute local path), so restore re-derives the
+    // deterministic attachment path here — this is what makes the export comment true.
+    filePath: attachment.filePath ?? `attachments/${attachment.id}_${attachment.fileName}`,
     ...(attachment.caption ? { caption: attachment.caption } : {}),
     createdAt: attachment.createdAt,
   }));
@@ -208,19 +236,58 @@ async function replaceTables(
   targetDb: TaskPlannerDatabase,
   tables: BackupTableData,
   attachments: NoteAttachment[],
-  snapshot?: SnapshotData,
+  snapshot?: SnapshotData | (() => Promise<SnapshotData>),
   recordCount = Object.values(countsFor(tables)).reduce((sum, count) => sum + count, 0),
 ): Promise<void> {
+  // WR-10/D-20: the AI Office group is all-present or all-absent. A payload carrying only some
+  // of the nine keys would wipe the group and restore nothing, so it is refused whole — and
+  // refused *outside* the transaction, so no clear() or bulkAdd can run. `captureSnapshot`
+  // always emits all nine keys, so a rollback replay can never be refused here.
+  const aiPresent = AI_OFFICE_TABLE_KEYS.filter((key) => tables[key] !== undefined);
+  if (aiPresent.length > 0 && aiPresent.length !== AI_OFFICE_TABLE_KEYS.length) {
+    throw new Error('Backup thiếu bảng AI Office — từ chối nhập để tránh mất dữ liệu.');
+  }
+
   await targetDb.transaction('rw', RESTORE_TABLES(targetDb), async () => {
+    // Captured inside the transaction so a write landing between snapshot and replace cannot
+    // be lost without a rollback path.
+    const snapshotData = typeof snapshot === 'function' ? await snapshot() : snapshot;
+    // Legacy/older payloads omit the knowledge tables; absent means "payload predates them", not "delete the catalog".
+    const clearKnowledge = tables.documentSets !== undefined
+      ? [
+          targetDb.documentSets.clear(), targetDb.publishedDocuments.clear(), targetDb.publishAttempts.clear(),
+          targetDb.dlpAudits.clear(), targetDb.knowledgeLinks.clear(),
+        ]
+      : [];
+    // Phase 34: same rule for AI Office — a payload that predates the tables must not wipe them.
+    const clearAiOffice = AI_OFFICE_TABLE_KEYS.some((key) => tables[key] !== undefined)
+      ? [
+          targetDb.aiEmployees.clear(), targetDb.aiLeads.clear(), targetDb.aiSkills.clear(),
+          targetDb.aiTeams.clear(), targetDb.aiTeamMembers.clear(), targetDb.aiTeamLinks.clear(),
+          targetDb.aiSkillVersions.clear(),
+          targetDb.aiTeamBatches.clear(), targetDb.aiTeamAssignments.clear(),
+        ]
+      : [];
+    // CR-03: the log is cleared only when the payload actually carries it. `exportBackup`
+    // omits an empty log, so clearing unconditionally would let a valid export from a
+    // machine with no transcript wipe the local one while restoring nothing.
+    // WR-15: `teamParticipants` is never exported, so it is cleared alongside the log —
+    // otherwise rows for agents that no longer exist survive the restore as orphans.
+    const clearTeamLog = tables.teamMessages !== undefined || tables.teamReadCursors !== undefined
+      ? [targetDb.teamMessages.clear(), targetDb.teamReadCursors.clear(), targetDb.teamParticipants.clear()]
+      : [];
+    // Settings are replaced key-by-key, never cleared wholesale: secrets (tokens, passphrases)
+    // are not part of any payload and must survive an import and its rollback.
+    const incomingSettingKeys = new Set<string>([
+      ...(tables.settings ?? []).map((setting) => setting.key),
+    ]);
     await Promise.all([
-      targetDb.projects.clear(), targetDb.milestones.clear(), targetDb.tasks.clear(), targetDb.capacityRules.clear(), targetDb.capacityOverrides.clear(), targetDb.plannedAllocations.clear(), targetDb.workSessions.clear(), targetDb.activeTimers.clear(), targetDb.notes.clear(), targetDb.noteAttachments.clear(), targetDb.chatThreads.clear(), targetDb.chatMessages.clear(), targetDb.chatTabs.clear(), targetDb.telegramSettings.clear(), targetDb.telegramWhitelist.clear(), targetDb.documentSets.clear(), targetDb.publishedDocuments.clear(), targetDb.publishAttempts.clear(), targetDb.dlpAudits.clear(), targetDb.knowledgeLinks.clear(), targetDb.settings.clear(), targetDb.backupMetadata.clear(),
+      targetDb.tasks.clear(), targetDb.capacityRules.clear(), targetDb.capacityOverrides.clear(), targetDb.plannedAllocations.clear(), targetDb.workSessions.clear(), targetDb.activeTimers.clear(), targetDb.notes.clear(), targetDb.noteAttachments.clear(), targetDb.chatThreads.clear(), targetDb.chatMessages.clear(), targetDb.chatTabs.clear(), targetDb.telegramSettings.clear(), targetDb.telegramWhitelist.clear(), targetDb.systems.clear(), targetDb.changeRequests.clear(), ...clearKnowledge, ...clearAiOffice, ...clearTeamLog, targetDb.settings.bulkDelete([...incomingSettingKeys]), targetDb.backupMetadata.clear(),
     ]);
 
     const add = async <T>(table: { bulkAdd: (rows: T[]) => Promise<unknown> }, rows: T[] | undefined) => {
       if (rows?.length) await table.bulkAdd(rows);
     };
-    await add(targetDb.projects, tables.projects);
-    await add(targetDb.milestones, tables.milestones);
     await add(targetDb.tasks, tables.tasks);
     await add(targetDb.capacityRules, tables.capacityRules);
     await add(targetDb.capacityOverrides, tables.capacityOverrides);
@@ -238,22 +305,56 @@ async function replaceTables(
     await add(targetDb.knowledgeLinks, tables.knowledgeLinks);
     await add(targetDb.telegramSettings, tables.telegramSettings);
     await add(targetDb.telegramWhitelist, tables.telegramWhitelist);
+    await add(targetDb.systems, tables.systems);
+    await add(targetDb.changeRequests, tables.changeRequests);
+    await add(targetDb.aiEmployees, tables.aiEmployees);
+    await add(targetDb.aiLeads, tables.aiLeads);
+    await add(targetDb.aiSkills, tables.aiSkills);
+    // The retired `status` column is accepted from older exports and dropped here, so a
+    // restored row matches the current `AiTeam` shape exactly.
+    await add(
+      targetDb.aiTeams,
+      (tables.aiTeams ?? []).map((row) => {
+        const { status: _retired, ...rest } = row as typeof row & { status?: unknown };
+        return rest;
+      })
+    );
+    // Phase 38: the new columns (`budgetWarnThresholdPct`, split usage) ride along inside these
+    // whole rows; the record schemas already validated them upstream in `validateBackupPayload`.
+    await add(targetDb.aiTeamMembers, tables.aiTeamMembers);
+    await add(targetDb.aiTeamLinks, tables.aiTeamLinks);
+    // D-22: `status` is written verbatim — a restored `pending` row is stored data, not an approval.
+    await add(targetDb.aiSkillVersions, tables.aiSkillVersions);
+    await add(targetDb.aiTeamBatches, tables.aiTeamBatches);
+    await add(targetDb.aiTeamAssignments, tables.aiTeamAssignments);
+    // 37.1 WR-07: restore the log and its cursors with the transcript they belong to.
+    await add(targetDb.teamMessages, tables.teamMessages);
+    await add(targetDb.teamReadCursors, tables.teamReadCursors);
     await add(targetDb.activeTimers, tables.activeTimers);
     for (const setting of tables.settings ?? []) if (isSafeBackupSetting(setting.key)) await targetDb.settings.put(setting);
-    if (snapshot) await targetDb.settings.put({ key: 'last_pre_import_snapshot', value: snapshot });
+    if (snapshotData) await targetDb.settings.put({ key: 'last_pre_import_snapshot', value: snapshotData });
     await targetDb.backupMetadata.add({ id: generateId(), timestamp: new Date().toISOString(), appVersion: '0.1.0', recordCount });
   });
 }
 
 export async function restoreBackupPayload(backup: BackupEnvelope, targetDb: TaskPlannerDatabase = defaultDb): Promise<{ totalRestored: number; snapshotTime: string }> {
   const validation = validateBackupPayload(backup);
-  if (!validation.valid || !validation.envelope) throw new Error('Backup payload must pass validation before restore');
+  if (!validation.valid || !validation.envelope) {
+    // Surface the validator's own message (notably the D-49 legacy-backup copy) instead of a generic one.
+    const first = validation.errors[0]?.message;
+    throw new Error(first ? `Backup payload must pass validation before restore: ${first}` : 'Backup payload must pass validation before restore');
+  }
   const validatedBackup = validation.envelope;
   const snapshotTime = new Date().toISOString();
   const normalized = restoreRows(validatedBackup, snapshotTime);
-  const snapshot = await captureSnapshot(targetDb, snapshotTime);
   const totalRestored = Object.values(validatedBackup.counts).reduce((sum, count) => sum + count, 0);
-  await replaceTables(targetDb, normalized.tables, prepareAttachments(normalized.tables.noteAttachments), snapshot, totalRestored);
+  await replaceTables(
+    targetDb,
+    normalized.tables,
+    prepareAttachments(normalized.tables.noteAttachments),
+    () => captureSnapshot(targetDb, snapshotTime),
+    totalRestored,
+  );
   return { totalRestored, snapshotTime };
 }
 
@@ -268,6 +369,11 @@ export async function rollbackToSnapshot(targetDb: TaskPlannerDatabase = default
 
 export function downloadSnapshotFile(snapshot: SnapshotData): void {
   const fileName = `task-planner-snapshot-${snapshot.timestamp.replace(/[:.]/g, '-')}.json`;
-  const envelope: BackupEnvelope = { app: APP_MARKER, schemaVersion: CURRENT_SCHEMA_VERSION, exportedAt: snapshot.timestamp, tables: snapshot.tables, counts: snapshot.counts };
+  // Second line of defence: a snapshot captured by an older build may still carry secrets.
+  const settings = snapshot.tables.settings;
+  const tables: BackupTableData = settings
+    ? { ...snapshot.tables, settings: settings.filter((setting) => isSafeBackupSetting(setting.key)) }
+    : snapshot.tables;
+  const envelope: BackupEnvelope = { app: APP_MARKER, schemaVersion: CURRENT_SCHEMA_VERSION, exportedAt: snapshot.timestamp, tables, counts: countsFor(tables) };
   triggerDownload(JSON.stringify(envelope, null, 2), fileName);
 }

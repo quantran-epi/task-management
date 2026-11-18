@@ -1,6 +1,4 @@
 import type {
-  Project,
-  Milestone,
   Task,
   CapacityRule,
   CapacityOverride,
@@ -19,26 +17,21 @@ import type {
   KnowledgeLink,
   TelegramSettingsRecord,
   TelegramWhitelistUser,
+  System,
+  ChangeRequest,
 } from './models';
-
-export interface MissingBackupSource {
-  id: string;
-  title: string;
-  version?: number | undefined;
-  hash?: string | undefined;
-}
-
-export interface MissingSourceCheckpoint {
-  tabId: string;
-  threadId: string;
-  step: string;
-  missingSourceIds: string[];
-}
-
-export interface BackupRecoveryInfo {
-  missingSources: MissingBackupSource[];
-  blockedTabs: MissingSourceCheckpoint[];
-}
+import type {
+  AiEmployee,
+  AiLead,
+  AiSkill,
+  AiTeam,
+  AiTeamMember,
+  AiTeamLink,
+  AiSkillVersion,
+  AiTeamBatch,
+  AiTeamAssignment,
+} from './aiOffice';
+import type { TeamMessage, TeamReadCursor } from './teamChat';
 
 export interface BackupAttachmentRecord {
   id: string;
@@ -53,8 +46,6 @@ export interface BackupAttachmentRecord {
 }
 
 export interface BackupTableData {
-  projects: Project[];
-  milestones: Milestone[];
   tasks: Task[];
   capacityRules: CapacityRule[];
   capacityOverrides: CapacityOverride[];
@@ -74,11 +65,23 @@ export interface BackupTableData {
   knowledgeLinks?: KnowledgeLink[];
   telegramSettings?: TelegramSettingsRecord[];
   telegramWhitelist?: TelegramWhitelistUser[];
+  systems?: System[];
+  changeRequests?: ChangeRequest[];
+  aiEmployees?: AiEmployee[];
+  aiLeads?: AiLead[];
+  aiSkills?: AiSkill[];
+  aiTeams?: AiTeam[];
+  aiTeamMembers?: AiTeamMember[];
+  aiTeamLinks?: AiTeamLink[];
+  aiSkillVersions?: AiSkillVersion[];
+  aiTeamBatches?: AiTeamBatch[];
+  aiTeamAssignments?: AiTeamAssignment[];
+  /** 37.1 R1/WR-07: the team message log and its read cursors travel with the backup. */
+  teamMessages?: TeamMessage[];
+  teamReadCursors?: TeamReadCursor[];
 }
 
 export interface BackupTableCounts {
-  projects: number;
-  milestones: number;
   tasks: number;
   capacityRules: number;
   capacityOverrides: number;
@@ -98,8 +101,20 @@ export interface BackupTableCounts {
   knowledgeLinks?: number;
   telegramSettings?: number;
   telegramWhitelist?: number;
+  systems?: number;
+  changeRequests?: number;
+  aiEmployees?: number;
+  aiLeads?: number;
+  aiSkills?: number;
+  aiTeams?: number;
+  aiTeamMembers?: number;
+  aiTeamLinks?: number;
+  aiSkillVersions?: number;
+  aiTeamBatches?: number;
+  aiTeamAssignments?: number;
+  teamMessages?: number;
+  teamReadCursors?: number;
 }
-
 
 export interface BackupEnvelope {
   app: 'personal-task-planner';
@@ -120,7 +135,6 @@ export interface BackupValidationResult {
   valid: boolean;
   envelope?: BackupEnvelope;
   errors: ValidationErrorDetail[];
-  recovery?: BackupRecoveryInfo;
 }
 
 export interface SnapshotData {

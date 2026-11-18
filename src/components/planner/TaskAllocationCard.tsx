@@ -27,7 +27,7 @@ import {
   deleteAllocation,
 } from '../../db/repositories/allocationRepo';
 import { formatMinutes } from '../../utils/time';
-import type { PlannedAllocation, Task, TaskPriority, Project } from '../../types/models';
+import type { PlannedAllocation, Task, TaskPriority, ChangeRequest } from '../../types/models';
 import { getJiraBrowseUrl } from '../../services/jira/jiraApi';
 
 const { Text } = Typography;
@@ -35,8 +35,7 @@ const { Text } = Typography;
 export interface TaskAllocationCardProps {
   allocation: PlannedAllocation;
   task: Task;
-  project?: Project | undefined;
-  projectName?: string | undefined;
+  changeRequest?: ChangeRequest | undefined;
   isActive: boolean;
   onEditTask?: ((taskId: string) => void) | undefined;
   db?: TaskPlannerDatabase | undefined;
@@ -60,8 +59,7 @@ const PRIORITY_LABELS: Record<TaskPriority, string> = {
 export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
   allocation,
   task,
-  project,
-  projectName,
+  changeRequest,
   isActive,
   onEditTask,
   db = defaultDb,
@@ -216,11 +214,11 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
         {task.name}
       </Text>
 
-      {/* Subtitle: Project name if associated */}
-      {(projectName || project?.name) && (
+      {/* Subtitle: CR code if associated */}
+      {changeRequest && (
         <Text
           type="secondary"
-          ellipsis={{ tooltip: projectName || project?.name }}
+          ellipsis={{ tooltip: `${changeRequest.code} · ${changeRequest.name}` }}
           style={{
             fontSize: 11,
             display: 'block',
@@ -229,7 +227,7 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
             lineHeight: 1.3,
           }}
         >
-          {projectName || project?.name}
+          {changeRequest.code}
         </Text>
       )}
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import type { Task, Project, Milestone } from '../types/models';
+import type { ChangeRequest, System, Task } from '../types/models';
 import {
   filterTasks,
   sortTasks,
@@ -32,8 +32,8 @@ function loadInitialGlobalSort(): TaskSortKey {
 
 export interface UseTaskFiltersOptions {
   tasks?: Task[];
-  projects?: Project[];
-  milestones?: Milestone[];
+  changeRequests?: ChangeRequest[];
+  systems?: System[];
   db?: TaskPlannerDatabase;
 }
 
@@ -56,7 +56,7 @@ export function useTaskFilters(
   input: UseTaskFiltersOptions | Task[] = []
 ): UseTaskFiltersReturn {
   const options: UseTaskFiltersOptions = Array.isArray(input) ? { tasks: input } : input;
-  const { tasks = [], projects = [], milestones = [], db = defaultDb } = options;
+  const { tasks = [], changeRequests = [], systems = [], db = defaultDb } = options;
 
   const [filters, setFiltersState] = useState<TaskFilterState>(DEFAULT_TASK_FILTER_STATE);
   const [debouncedSearch, setDebouncedSearch] = useState<string>(filters.search);
@@ -106,8 +106,8 @@ export function useTaskFilters(
 
   const todayStr = useMemo(() => getTodayDateString(), []);
 
-  const projectMap = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
-  const milestoneMap = useMemo(() => new Map(milestones.map((m) => [m.id, m])), [milestones]);
+  const crMap = useMemo(() => new Map(changeRequests.map((cr) => [cr.id, cr])), [changeRequests]);
+  const systemMap = useMemo(() => new Map(systems.map((s) => [s.id, s])), [systems]);
 
   const executionRangeStart = filters.executionDateRange?.[0];
   const executionRangeEnd = filters.executionDateRange?.[1];
@@ -146,8 +146,8 @@ export function useTaskFilters(
     };
     const matched = filterTasks(tasks, effectiveFilterState, {
       todayStr,
-      projectMap,
-      milestoneMap,
+      crMap,
+      systemMap,
       executionTaskIds: executionTaskIds ?? null,
       worklogTaskIds: worklogTaskIds ?? null,
     });
@@ -160,8 +160,8 @@ export function useTaskFilters(
     sortOrder,
     globalSort,
     todayStr,
-    projectMap,
-    milestoneMap,
+    crMap,
+    systemMap,
     executionTaskIds,
     worklogTaskIds,
   ]);

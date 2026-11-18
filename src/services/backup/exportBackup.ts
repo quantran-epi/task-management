@@ -1,10 +1,13 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { BackupEnvelope } from '../../types/backup';
+import type { AiTeamAssignment } from '../../types/aiOffice';
 import type { ChatTab } from '../../types/models';
 import { generateId } from '../../utils/uuid';
+import { BACKUP_SCHEMA_VERSION } from '../../validation/backupSchemas';
 
 export const APP_MARKER = 'personal-task-planner' as const;
-export const CURRENT_SCHEMA_VERSION = 10 as const;
+/** IN-01: one literal only — the envelope schema owns it. */
+export const CURRENT_SCHEMA_VERSION = BACKUP_SCHEMA_VERSION;
 
 export const UNSAFE_OR_EPHEMERAL_SETTING_KEYS = new Set<string>([
   'jira_api_token',
@@ -30,8 +33,15 @@ export const UNSAFE_OR_EPHEMERAL_SETTING_KEYS = new Set<string>([
   'github_auto_sync_dirty_since',
   'github_auto_sync_missed_due_at',
   'last_pre_import_snapshot',
+  // Machine-local host inventory: hostnames, usernames and key paths.
+  'ssh_configurations',
 ]);
 
+/**
+ * Phase 38: `ai_budget_warn_threshold_pct` passes by construction — the suffix rules below only
+ * reject secret-like keys (`_token`, `_key`, `_passphrase`, `_secret`, `_pat`), and the threshold
+ * is a plain percentage. No denylist/allowlist edit was needed for the new setting.
+ */
 export function isSafeBackupSetting(key: string): boolean {
   if (UNSAFE_OR_EPHEMERAL_SETTING_KEYS.has(key)) return false;
   const lower = key.toLowerCase();
@@ -153,10 +163,19 @@ function projectSafeChatTab(tab: ChatTab): ChatTab {
     ...(tab.status !== undefined ? { status: tab.status } : {}),
     ...(tab.checkpoint !== undefined ? { checkpoint: tab.checkpoint } : {}),
     ...(config && Object.keys(config).length > 0 ? { config } : {}),
-    ...(tab.workflowState !== undefined ? { workflowState: projectSafeTabValue(tab.workflowState) as Record<string, unknown> } : {}),
     createdAt: tab.createdAt,
     updatedAt: tab.updatedAt,
   };
+}
+
+/**
+ * T-37-14 / D-17: `diagnosticDetail` is the only place raw technical detail is allowed to
+ * live. It must not exist on the exported row at all — stripping it at the envelope level
+ * would still leave it inside a nested projection.
+ */
+function projectSafeAssignment(assignment: AiTeamAssignment): AiTeamAssignment {
+  const { diagnosticDetail: _diagnosticDetail, ...safe } = assignment;
+  return safe;
 }
 
 export async function exportBackupPayload(
@@ -164,8 +183,6 @@ export async function exportBackupPayload(
   _options?: ExportBackupOptions
 ): Promise<BackupEnvelope> {
   const [
-    projects,
-    milestones,
     tasks,
     capacityRules,
     capacityOverrides,
@@ -185,9 +202,20 @@ export async function exportBackupPayload(
     knowledgeLinks,
     telegramSettingsRaw,
     telegramWhitelist,
+    systems,
+    changeRequests,
+    aiEmployees,
+    aiLeads,
+    aiSkills,
+    aiTeams,
+    aiTeamMembers,
+    aiTeamLinks,
+    aiSkillVersions,
+    aiTeamBatches,
+    rawAiTeamAssignments,
+    teamMessages,
+    teamReadCursors,
   ] = await Promise.all([
-    targetDb.projects.toArray(),
-    targetDb.milestones.toArray(),
     targetDb.tasks.toArray(),
     targetDb.capacityRules.toArray(),
     targetDb.capacityOverrides.toArray(),
@@ -207,7 +235,25 @@ export async function exportBackupPayload(
     targetDb.knowledgeLinks.toArray(),
     targetDb.telegramSettings.toArray(),
     targetDb.telegramWhitelist.toArray(),
+    targetDb.systems.toArray(),
+    targetDb.changeRequests.toArray(),
+    targetDb.aiEmployees.toArray(),
+    targetDb.aiLeads.toArray(),
+    targetDb.aiSkills.toArray(),
+    // Phase 38: the whole row is read, so the new columns (`budgetWarnThresholdPct` on a team,
+    // split `inputTokens`/`outputTokens`/`usageEstimated` on a member) ride along with no export
+    // change. `projectSafeAssignment` strips `diagnosticDetail` and nothing else — keep it that way.
+    targetDb.aiTeams.toArray(),
+    targetDb.aiTeamMembers.toArray(),
+    targetDb.aiTeamLinks.toArray(),
+    targetDb.aiSkillVersions.toArray(),
+    targetDb.aiTeamBatches.toArray(),
+    targetDb.aiTeamAssignments.toArray(),
+    targetDb.teamMessages.toArray(),
+    targetDb.teamReadCursors.toArray(),
   ]);
+
+  const aiTeamAssignments = rawAiTeamAssignments.map(projectSafeAssignment);
 
   // Strip sensitive botToken from telegramSettings before export
   const telegramSettings = telegramSettingsRaw.map((s) => ({
@@ -215,14 +261,14 @@ export async function exportBackupPayload(
     botToken: '',
   }));
 
-  // Strictly exclude binary and base64 image data to prevent storage growth
+  // Strictly exclude binary and base64 image data to prevent storage growth. `filePath` is
+  // omitted too: it is an absolute local path (or a synthesized one), and restore re-derives it.
   const noteAttachments = rawAttachments.map((att) => ({
     id: att.id,
     noteId: att.noteId,
     fileName: att.fileName,
     mimeType: att.mimeType,
     sizeBytes: att.sizeBytes,
-    filePath: att.filePath || `attachments/${att.id}_${att.fileName}`,
     ...(att.caption ? { caption: att.caption } : {}),
     createdAt: att.createdAt,
   }));
@@ -233,8 +279,6 @@ export async function exportBackupPayload(
   const exportedAt = new Date().toISOString();
 
   const tables = {
-    projects,
-    milestones,
     tasks,
     capacityRules,
     capacityOverrides,
@@ -254,11 +298,22 @@ export async function exportBackupPayload(
     knowledgeLinks,
     telegramSettings,
     telegramWhitelist,
+    systems,
+    changeRequests,
+    aiEmployees,
+    aiLeads,
+    aiSkills,
+    aiTeams,
+    aiTeamMembers,
+    aiTeamLinks,
+    aiSkillVersions,
+    aiTeamBatches,
+    aiTeamAssignments,
+    ...(teamMessages.length > 0 ? { teamMessages } : {}),
+    ...(teamReadCursors.length > 0 ? { teamReadCursors } : {}),
   };
 
   const counts = {
-    projects: projects.length,
-    milestones: milestones.length,
     tasks: tasks.length,
     capacityRules: capacityRules.length,
     capacityOverrides: capacityOverrides.length,
@@ -278,6 +333,19 @@ export async function exportBackupPayload(
     knowledgeLinks: knowledgeLinks.length,
     telegramSettings: telegramSettings.length,
     telegramWhitelist: telegramWhitelist.length,
+    systems: systems.length,
+    changeRequests: changeRequests.length,
+    aiEmployees: aiEmployees.length,
+    aiLeads: aiLeads.length,
+    aiSkills: aiSkills.length,
+    aiTeams: aiTeams.length,
+    aiTeamMembers: aiTeamMembers.length,
+    aiTeamLinks: aiTeamLinks.length,
+    aiSkillVersions: aiSkillVersions.length,
+    aiTeamBatches: aiTeamBatches.length,
+    aiTeamAssignments: aiTeamAssignments.length,
+    teamMessages: teamMessages.length,
+    teamReadCursors: teamReadCursors.length,
   };
 
   const envelope: BackupEnvelope = {

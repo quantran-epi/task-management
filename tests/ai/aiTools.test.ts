@@ -9,6 +9,7 @@ import {
   normalizeToolName,
 } from '../../src/services/ai/aiTools';
 import { getTodayDateString } from '../../src/utils/date';
+import { getFriendlyToolLabel } from '../../src/services/ai/aiOrchestratorLoop';
 
 describe('aiTools', () => {
   const mockTasks = [
@@ -20,8 +21,8 @@ describe('aiTools', () => {
       priority: 'High',
       progress: 50,
       estimateMinutes: 60,
-      projectId: 'proj-1',
-      milestoneId: 'ms-1',
+      crId: 'cr-1',
+      systemId: 'sys-1',
       workType: 'code',
       deadline: '2026-10-01', // overdue relative to 2026-10-03
       checklist: [{ id: 'c1', text: 'Step 1', done: true }],
@@ -40,8 +41,8 @@ describe('aiTools', () => {
       priority: 'Urgent',
       progress: 0,
       estimateMinutes: 120,
-      projectId: 'proj-1',
-      milestoneId: 'ms-2',
+      crId: 'cr-1',
+      systemId: 'sys-2',
       workType: 'configuration',
       deadline: '2026-10-05',
       notes: 'Deployment checklist',
@@ -55,52 +56,58 @@ describe('aiTools', () => {
       priority: 'Low',
       progress: 100,
       estimateMinutes: 30,
-      projectId: 'proj-2',
+      crId: 'cr-2',
       workType: 'document',
       createdAt: '2026-09-25T10:00:00.000Z',
       updatedAt: '2026-09-26T10:00:00.000Z',
     },
   ];
 
-  const mockProjects = [
+  const mockChangeRequests = [
     {
-      id: 'proj-1',
+      id: 'cr-1',
+      code: 'CR-2026-001',
       name: 'Banking Platform',
+      type: 'NEW_FEATURE',
       status: 'In Progress',
       deadline: '2026-12-31',
       description: 'Main banking core',
-      notes: 'Banking notes',
-      jiraEpicKey: 'BANK-EPIC-1',
-      opsOwners: ['OpsTeam'],
-      businessAnalysts: ['BA1'],
+      targets: [
+        { systemId: 'sys-1', featureBranch: 'feature/CR-2026-001' },
+        { systemId: 'sys-2', featureBranch: 'feature/CR-2026-001' },
+      ],
       createdAt: '2026-09-01T00:00:00.000Z',
       updatedAt: '2026-09-02T00:00:00.000Z',
     },
     {
-      id: 'proj-2',
+      id: 'cr-2',
+      code: 'CR-2026-002',
       name: 'Mobile App',
+      type: 'ENHANCEMENT',
       status: 'Open',
       description: 'iOS and Android client',
+      targets: [],
       createdAt: '2026-09-10T00:00:00.000Z',
       updatedAt: '2026-09-10T00:00:00.000Z',
     },
   ];
 
-  const mockMilestones = [
+  const mockSystems = [
     {
-      id: 'ms-1',
-      projectId: 'proj-1',
+      id: 'sys-1',
+      code: 'BACKEND_API',
       name: 'Backend API',
-      status: 'In Progress',
-      deadline: '2026-10-10',
+      type: 'SERVICE',
+      parentId: null,
       createdAt: '2026-09-05T00:00:00.000Z',
       updatedAt: '2026-09-05T00:00:00.000Z',
     },
     {
-      id: 'ms-2',
-      projectId: 'proj-1',
+      id: 'sys-2',
+      code: 'CLOUD_DEPLOY',
       name: 'Cloud Deploy',
-      status: 'Open',
+      type: 'WORKER',
+      parentId: null,
       createdAt: '2026-09-15T00:00:00.000Z',
       updatedAt: '2026-09-15T00:00:00.000Z',
     },
@@ -218,18 +225,31 @@ describe('aiTools', () => {
     },
   ];
 
+  // CR-13: `updateTask`/`createTask` now always resolve the owning CR, so ad-hoc task
+  // fixtures need one that accepts any task's crId.
+  const mockCrForTask = {
+    id: 'cr-1',
+    code: 'CR-1',
+    name: 'Fixture CR',
+    status: 'Open',
+    type: 'ENHANCEMENT',
+    targets: [],
+    createdAt: '2026-10-01T00:00:00.000Z',
+    updatedAt: '2026-10-01T00:00:00.000Z',
+  };
+
   const mockDb: any = {
     tasks: {
       toArray: async () => mockTasks,
       get: async (id: string) => mockTasks.find((t) => t.id === id),
     },
-    projects: {
-      toArray: async () => mockProjects,
-      get: async (id: string) => mockProjects.find((p) => p.id === id),
+    changeRequests: {
+      toArray: async () => mockChangeRequests,
+      get: async (id: string) => mockChangeRequests.find((c) => c.id === id),
     },
-    milestones: {
-      toArray: async () => mockMilestones,
-      get: async (id: string) => mockMilestones.find((m) => m.id === id),
+    systems: {
+      toArray: async () => mockSystems,
+      get: async (id: string) => mockSystems.find((s) => s.id === id),
     },
     workSessions: {
       toArray: async () => mockWorkSessions,
@@ -298,7 +318,7 @@ describe('aiTools', () => {
   };
 
   it('declares comprehensive query and mutation AI_DATABASE_TOOLS', () => {
-    expect(AI_DATABASE_TOOLS.length).toBe(69);
+    expect(AI_DATABASE_TOOLS.length).toBe(79);
     const names = AI_DATABASE_TOOLS.map((t) => t.function.name);
     // Includes standard read tools
     expect(names).toContain('read_file');
@@ -311,8 +331,8 @@ describe('aiTools', () => {
     expect(names).toContain('link_document');
     expect(names).toContain('unlink_document');
     expect(names).toContain('query_tasks');
-    expect(names).toContain('query_projects');
-    expect(names).toContain('query_milestones');
+    expect(names).toContain('query_change_requests');
+    expect(names).toContain('query_systems');
     expect(names).toContain('get_item_details');
     expect(names).toContain('query_worklogs');
     expect(names).toContain('get_active_timer');
@@ -330,6 +350,10 @@ describe('aiTools', () => {
     expect(names).toContain('query_recurring_tasks');
     expect(names).toContain('get_system_status');
     expect(names).toContain('query_notifications');
+    expect(names).toContain('get_artifact');
+    expect(names).toContain('patch_artifact_section');
+    expect(names).not.toContain('propose_subsystems');
+    expect(names).not.toContain('propose_research');
 
     // Includes full mutation action tools
     expect(names).toContain('create_task');
@@ -340,12 +364,12 @@ describe('aiTools', () => {
     expect(names).toContain('batch_create_tasks');
     expect(names).toContain('batch_update_tasks');
     expect(names).toContain('spawn_recurring_task_instance');
-    expect(names).toContain('create_project');
-    expect(names).toContain('update_project');
-    expect(names).toContain('delete_project');
-    expect(names).toContain('create_milestone');
-    expect(names).toContain('update_milestone');
-    expect(names).toContain('delete_milestone');
+    expect(names).toContain('create_change_request');
+    expect(names).toContain('update_change_request');
+    expect(names).toContain('delete_change_request');
+    expect(names).toContain('create_system');
+    expect(names).toContain('update_system');
+    expect(names).toContain('delete_system');
     expect(names).toContain('plan_allocation');
     expect(names).toContain('batch_plan_allocations');
     expect(names).toContain('clear_allocations');
@@ -378,14 +402,17 @@ describe('aiTools', () => {
     it('normalizes tool names with proxy / cloaking suffixes and prefixes', () => {
       expect(normalizeToolName('create_task_ide')).toBe('create_task');
       expect(normalizeToolName('query_tasks_ide')).toBe('query_tasks');
-      expect(normalizeToolName('proxy_delete_project')).toBe('delete_project');
+      expect(normalizeToolName('proxy_delete_change_request')).toBe('delete_change_request');
       expect(normalizeToolName('create_task_cc')).toBe('create_task');
     });
 
     it('correctly identifies mutation tools versus read-only query tools even when cloaked', () => {
       expect(isMutationTool('create_task')).toBe(true);
       expect(isMutationTool('create_task_ide')).toBe(true);
-      expect(isMutationTool('delete_project_ide')).toBe(true);
+      expect(isMutationTool('delete_change_request_ide')).toBe(true);
+      expect(isMutationTool('create_system')).toBe(true);
+      expect(isMutationTool('update_system')).toBe(true);
+      expect(isMutationTool('delete_system_ide')).toBe(true);
       expect(isMutationTool('start_timer_ide')).toBe(true);
       expect(isMutationTool('plan_allocation')).toBe(true);
       expect(isMutationTool('manage_reminders')).toBe(true);
@@ -417,6 +444,9 @@ describe('aiTools', () => {
       expect(isMutationTool('get_daily_schedule')).toBe(false);
       expect(isMutationTool('get_system_status')).toBe(false);
       expect(isMutationTool('query_notifications')).toBe(false);
+      // 39-04 D-05: writing one inert pending row is not a mutation in the gate sense.
+      expect(isMutationTool('propose_skill_version')).toBe(false);
+      expect(isMutationTool('propose_skill_version_ide')).toBe(false);
     });
 
     it('generates readable Vietnamese description of mutations with cloaked names', () => {
@@ -437,16 +467,65 @@ describe('aiTools', () => {
       expect(allocDesc).toContain('90 phút');
       expect(allocDesc).toContain('2026-10-04');
     });
+
+    it('names the system in the create/update/delete approval sentences', async () => {
+      const createDesc = describeToolMutation('create_system', {
+        name: 'Core',
+        code: 'CORE',
+        type: 'LOGICAL_GROUP',
+      });
+      expect(createDesc).toContain('Core');
+      expect(createDesc).toContain('CORE');
+      expect(createDesc).toContain('LOGICAL_GROUP');
+
+      const updateDesc = describeToolMutation('update_system', {
+        id: 'sys-1',
+        name: 'New name',
+      });
+      expect(updateDesc).toContain('sys-1');
+      expect(updateDesc).toContain('Tên');
+
+      const updateCtx = await describeToolMutationWithContext(
+        'update_system',
+        { id: 'sys-1', name: 'New name' },
+        mockDb as any
+      );
+      expect(updateCtx).toContain('Backend API');
+
+      const unknownCtx = await describeToolMutationWithContext(
+        'update_system',
+        { id: 'missing-id', name: 'New name' },
+        mockDb as any
+      );
+      expect(unknownCtx).toContain('missing-id');
+
+      const deleteCtx = await describeToolMutationWithContext(
+        'delete_system',
+        { id: 'sys-1' },
+        mockDb as any
+      );
+      expect(deleteCtx).toContain('Backend API');
+
+      const labels = [
+        getFriendlyToolLabel('create_system'),
+        getFriendlyToolLabel('update_system'),
+        getFriendlyToolLabel('delete_system'),
+      ];
+      expect(new Set(labels).size).toBe(3);
+      labels.forEach((label) => expect(label).toMatch(/hệ thống/));
+    });
   });
 
   describe('query_tasks (enriched)', () => {
     it('returns enriched tasks with resolved names, logged minutes, and recurring status', async () => {
-      const resJson = await executeAiTool('query_tasks', { projectId: 'proj-1' }, mockDb);
+      const resJson = await executeAiTool('query_tasks', { crId: 'cr-1' }, mockDb);
       const res = JSON.parse(resJson);
       expect(res.totalCount).toBe(2);
       const t1 = res.tasks.find((t: any) => t.id === 'task-1');
-      expect(t1.projectName).toBe('Banking Platform');
-      expect(t1.milestoneName).toBe('Backend API');
+      // WR-02: the resolved names are user-authored free text, so they carry the same
+      // untrusted-data boundary `get_linked_context` applies.
+      expect(t1.crName).toContain('Banking Platform');
+      expect(t1.systemName).toContain('Backend API');
       expect(t1.totalLoggedMinutes).toBe(135); // 90 + 45
       expect(t1.isRecurring).toBe(true);
       expect(t1.recurrenceFrequency).toBe('weekly');
@@ -454,24 +533,66 @@ describe('aiTools', () => {
     });
   });
 
-  describe('query_projects (enriched)', () => {
-    it('returns project with aggregated task counts, estimate minutes, and logged minutes', async () => {
-      const resJson = await executeAiTool('query_projects', {}, mockDb);
+  describe('query_change_requests (enriched)', () => {
+    it('returns CR with aggregated task counts, estimate minutes, and logged minutes', async () => {
+      const resJson = await executeAiTool('query_change_requests', {}, mockDb);
       const res = JSON.parse(resJson);
-      const p1 = res.projects.find((p: any) => p.id === 'proj-1');
-      expect(p1.taskCount).toBe(2);
-      expect(p1.totalEstimateMinutes).toBe(180); // 60 + 120
-      expect(p1.totalLoggedMinutes).toBe(135); // 135 on task-1
+      const c1 = res.changeRequests.find((c: any) => c.id === 'cr-1');
+      expect(c1.taskCount).toBe(2);
+      expect(c1.totalEstimateMinutes).toBe(180); // 60 + 120
+      expect(c1.totalLoggedMinutes).toBe(135); // 135 on task-1
     });
   });
 
-  describe('query_milestones (enriched)', () => {
-    it('returns milestone with resolved project name and logged minutes', async () => {
-      const resJson = await executeAiTool('query_milestones', { projectId: 'proj-1' }, mockDb);
+  // WR-02: the three read tools that stay advertised to the lead return user-authored free
+  // text. Removing `get_item_details` from the allowlist only hid the disagreement — the same
+  // raw text still reached the lead through these. Each now applies the same boundary.
+  describe('WR-02: advertised read tools wrap their free text', () => {
+    it('wraps task description, notes, names and reminder note in query_tasks', async () => {
+      const res = JSON.parse(await executeAiTool('query_tasks', { crId: 'cr-1' }, mockDb));
+      const t1 = res.tasks.find((t: any) => t.id === 'task-1');
+      for (const [label, value] of [
+        ['description', t1.description],
+        ['notes', t1.notes],
+        ['crName', t1.crName],
+        ['systemName', t1.systemName],
+      ] as const) {
+        expect(value, label).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
+        expect(value, label).toContain('KẾT THÚC DỮ LIỆU KHÔNG ĐÁNG TIN');
+      }
+      expect(t1.description).toContain('Core unit test coverage');
+      expect(t1.notes).toContain('Some task notes');
+    });
+
+    it('wraps the CR description in query_change_requests', async () => {
+      const res = JSON.parse(await executeAiTool('query_change_requests', {}, mockDb));
+      const c1 = res.changeRequests.find((c: any) => c.id === 'cr-1');
+      expect(c1.description).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
+      expect(c1.description).toContain('Main banking core');
+    });
+
+    it('wraps the note body snippet in query_notes', async () => {
+      const res = JSON.parse(await executeAiTool('query_notes', { search: 'Swagger' }, mockDb));
+      expect(res.notes[0].bodySnippet).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
+      expect(res.notes[0].bodySnippet).toContain('Swagger endpoints for auth service');
+    });
+
+    // WR-05: `write_doc` makes titles model-authored, and the lead is the one agent holding
+    // mutation tools — so a title is data here, exactly like the body.
+    it('wraps the note title in query_notes (WR-05)', async () => {
+      const res = JSON.parse(await executeAiTool('query_notes', { search: 'Swagger' }, mockDb));
+      expect(res.notes[0].title).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
+      expect(res.notes[0].title).toContain('API Spec Draft');
+    });
+  });
+
+  describe('query_systems (enriched)', () => {
+    it('returns subsystem with code, type, and parentId', async () => {
+      const resJson = await executeAiTool('query_systems', { type: 'SERVICE' }, mockDb);
       const res = JSON.parse(resJson);
-      const m1 = res.milestones.find((m: any) => m.id === 'ms-1');
-      expect(m1.projectName).toBe('Banking Platform');
-      expect(m1.totalLoggedMinutes).toBe(135);
+      const s1 = res.systems.find((s: any) => s.id === 'sys-1');
+      expect(s1.code).toBe('BACKEND_API');
+      expect(s1.parentId).toBeNull();
     });
   });
 
@@ -479,8 +600,8 @@ describe('aiTools', () => {
     it('returns task with workSessionsSummary and plannedAllocations', async () => {
       const resJson = await executeAiTool('get_item_details', { type: 'task', id: 'task-1' }, mockDb);
       const res = JSON.parse(resJson);
-      expect(res.projectName).toBe('Banking Platform');
-      expect(res.milestoneName).toBe('Backend API');
+      expect(res.crName).toBe('Banking Platform');
+      expect(res.systemName).toBe('Backend API');
       expect(res.workSessionsSummary.totalLoggedMinutes).toBe(135);
       expect(res.workSessionsSummary.sessionCount).toBe(2);
       expect(res.plannedAllocations.length).toBe(1);
@@ -601,15 +722,17 @@ describe('aiTools', () => {
       const resJson = await executeAiTool('query_notes', { search: 'Swagger' }, mockDb);
       const res = JSON.parse(resJson);
       expect(res.totalCount).toBe(1);
-      expect(res.notes[0].title).toBe('API Spec Draft');
-      expect(res.notes[0].entityName).toBe('Write unit tests');
+      // WR-05: the title is wrapped as untrusted data; assert the content, not the wrapper.
+      expect(res.notes[0].title).toContain('API Spec Draft');
+      // WR-04: the entity name is wrapped too.
+      expect(res.notes[0].entityName).toContain('Write unit tests');
     });
 
     it('filters standalone notes', async () => {
       const resJson = await executeAiTool('query_notes', { entityType: 'standalone' }, mockDb);
       const res = JSON.parse(resJson);
       expect(res.totalCount).toBe(1);
-      expect(res.notes[0].title).toBe('Scratchpad Idea');
+      expect(res.notes[0].title).toContain('Scratchpad Idea');
     });
   });
 
@@ -672,6 +795,8 @@ describe('aiTools', () => {
           get: vi.fn().mockResolvedValue(mockTask),
           put: vi.fn().mockResolvedValue('t-chk'),
         },
+        // CR-13: `updateTask` always resolves the owning CR.
+        changeRequests: { get: vi.fn().mockResolvedValue(mockCrForTask) },
       };
 
       const res = await executeAiTool(
@@ -695,8 +820,11 @@ describe('aiTools', () => {
       expect(exactRes.tasks[0].id).toBe('task-1');
       expect(exactRes.tasks[0].createdAt).toBe('2026-10-01T08:00:00.000Z');
       expect(exactRes.tasks[0].updatedAt).toBe('2026-10-02T08:00:00.000Z');
-      expect(exactRes.tasks[0].notes).toBe('Some task notes');
-      expect(exactRes.tasks[0].description).toBe('Core unit test coverage');
+      expect(exactRes.tasks[0].notes).toContain('Some task notes');
+      expect(exactRes.tasks[0].description).toContain('Core unit test coverage');
+      // WR-02: wrapped, not raw — the boundary is visible on the value itself.
+      expect(exactRes.tasks[0].notes).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
+      expect(exactRes.tasks[0].description).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
 
       // createdAfter
       const afterRes = JSON.parse(
@@ -760,34 +888,33 @@ describe('aiTools', () => {
       expect(prioRes.tasks[2].id).toBe('task-3');
     });
 
-    it('supports query_projects filtering and returning all metadata fields', async () => {
+    it('supports query_change_requests filtering and returning all metadata fields', async () => {
       const res = JSON.parse(
-        await executeAiTool('query_projects', { createdAfter: '2026-09-05' }, mockDb)
+        await executeAiTool('query_change_requests', { type: 'ENHANCEMENT' }, mockDb)
       );
       expect(res.totalCount).toBe(1);
-      expect(res.projects[0].id).toBe('proj-2');
+      expect(res.changeRequests[0].id).toBe('cr-2');
 
       const allRes = JSON.parse(
-        await executeAiTool('query_projects', { jiraEpicKey: 'BANK' }, mockDb)
+        await executeAiTool('query_change_requests', { systemId: 'sys-1' }, mockDb)
       );
       expect(allRes.totalCount).toBe(1);
-      const p1 = allRes.projects[0];
-      expect(p1.id).toBe('proj-1');
-      expect(p1.createdAt).toBe('2026-09-01T00:00:00.000Z');
-      expect(p1.updatedAt).toBe('2026-09-02T00:00:00.000Z');
-      expect(p1.notes).toBe('Banking notes');
-      expect(p1.opsOwners).toContain('OpsTeam');
-      expect(p1.businessAnalysts).toContain('BA1');
+      const c1 = allRes.changeRequests[0];
+      expect(c1.id).toBe('cr-1');
+      expect(c1.code).toBe('CR-2026-001');
+      expect(c1.createdAt).toBe('2026-09-01T00:00:00.000Z');
+      expect(c1.updatedAt).toBe('2026-09-02T00:00:00.000Z');
+      expect(c1.targets[0].systemId).toBe('sys-1');
     });
 
-    it('supports query_milestones filtering by deadline and returning dates & notes', async () => {
+    it('supports query_systems filtering by type and returning code/parentId', async () => {
       const res = JSON.parse(
-        await executeAiTool('query_milestones', { deadlineBefore: '2026-10-12' }, mockDb)
+        await executeAiTool('query_systems', { type: 'WORKER' }, mockDb)
       );
       expect(res.totalCount).toBe(1);
-      const m1 = res.milestones[0];
-      expect(m1.id).toBe('ms-1');
-      expect(m1.createdAt).toBe('2026-09-05T00:00:00.000Z');
+      const s1 = res.systems[0];
+      expect(s1.id).toBe('sys-2');
+      expect(s1.code).toBe('CLOUD_DEPLOY');
     });
 
     it('supports query_worklogs search and minDuration with createdAt in output', async () => {
@@ -815,8 +942,8 @@ describe('aiTools', () => {
       const sortRes = JSON.parse(
         await executeAiTool('query_notes', { sortBy: 'title', sortOrder: 'asc' }, mockDb)
       );
-      // Pinned note still prioritized, but check title sort
-      expect(sortRes.notes[0].title).toBe('API Spec Draft');
+      // Pinned note still prioritized, but check title sort (WR-05: title is wrapped).
+      expect(sortRes.notes[0].title).toContain('API Spec Draft');
     });
 
     it('supports query_recurring_tasks filtering by status/frequency and returning all fields', async () => {
@@ -838,6 +965,8 @@ describe('aiTools', () => {
           get: vi.fn().mockResolvedValue({ id: 'existing-t', name: 'Task', status: 'Open', priority: 'Medium', progress: 0, estimateMinutes: 0 }),
           put: vi.fn().mockResolvedValue('existing-t'),
         },
+        // CR-13: `createTask`/`updateTask` always resolve the owning CR.
+        changeRequests: { get: vi.fn().mockResolvedValue(mockCrForTask) },
       };
 
       // create_task with full fields
@@ -846,6 +975,7 @@ describe('aiTools', () => {
           'create_task',
           {
             name: 'New Feature',
+            crId: '00000000-0000-4000-8000-000000000010',
             notes: 'Implementation notes',
             actualStartDate: '2026-10-04',
             actualEndDate: '2026-10-05',
@@ -903,6 +1033,8 @@ describe('aiTools', () => {
           get: vi.fn().mockResolvedValue(mockTaskWithReminders),
           put: vi.fn().mockResolvedValue(mockTaskWithReminders.id),
         },
+        // CR-13: `updateTask` always resolves the owning CR.
+        changeRequests: { get: vi.fn().mockResolvedValue(mockCrForTask) },
       };
 
       // 1. List reminders
@@ -955,7 +1087,10 @@ describe('aiTools', () => {
           get: vi.fn().mockResolvedValue(mockTask),
           update: vi.fn().mockResolvedValue(1),
         },
-        projects: {
+        changeRequests: {
+          get: vi.fn().mockResolvedValue(null),
+        },
+        systems: {
           get: vi.fn().mockResolvedValue(null),
         },
         transaction: vi.fn().mockImplementation(async (_mode, _tables, callback) => {
@@ -990,8 +1125,8 @@ describe('aiTools', () => {
     it('queries active notifications and dismisses an alert', async () => {
       const notifDb: any = {
         tasks: { toArray: async () => mockTasks },
-        projects: { toArray: async () => mockProjects },
-        milestones: { toArray: async () => mockMilestones },
+        changeRequests: { toArray: async () => mockChangeRequests },
+        systems: { toArray: async () => mockSystems },
         capacityRules: { toArray: async () => mockCapacityRules },
         capacityOverrides: { toArray: async () => mockCapacityOverrides },
         plannedAllocations: { toArray: async () => mockPlannedAllocations },
@@ -1110,9 +1245,10 @@ describe('aiTools', () => {
       const res = JSON.parse(resJson);
       expect(res.totalHits).toBeGreaterThanOrEqual(1);
       expect(res.results[0].id).toBe('doc-1');
-      expect(res.results[0].title).toBe('Core Banking Architecture & Ledger');
-      expect(res.results[0].snippet).toBeDefined();
-      expect(res.results[0].snippet.length).toBeLessThanOrEqual(1500);
+      // Retrieved text is untrusted data — wrapped, and the content survives inside the block.
+      expect(res.results[0].title).toContain('Core Banking Architecture & Ledger');
+      expect(res.results[0].title).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN');
+      expect(res.results[0].snippet).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN');
 
       // Verify soft-deleted doc is never returned
       const deletedCheckJson = await executeAiTool(
@@ -1143,7 +1279,9 @@ describe('aiTools', () => {
       );
       const res = JSON.parse(resJson);
       expect(res.id).toBe('doc-1');
-      expect(res.title).toBe('Core Banking Architecture & Ledger');
+      expect(res.title).toContain('Core Banking Architecture & Ledger');
+      expect(res.title).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN');
+      expect(res.body).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN');
       expect(res.body).toContain('double-entry accounting');
       expect(res.attachments).toEqual([
         {
@@ -1209,29 +1347,29 @@ describe('aiTools', () => {
 
       const reparentDesc = await describeToolMutationWithContext(
         'reparent_task',
-        { taskId: 'task-1', projectId: 'proj-1', milestoneId: 'ms-1' },
+        { taskId: 'task-1', crId: 'cr-1', systemId: 'sys-1' },
         mockDb as any
       );
       expect(reparentDesc).toContain('"Write unit tests"');
-      expect(reparentDesc).toContain('Banking Platform');
+      expect(reparentDesc).toContain('CR-2026-001');
       expect(reparentDesc).toContain('Backend API');
     });
 
-    it('resolves project and milestone names', async () => {
-      const projDesc = await describeToolMutationWithContext(
-        'update_project',
-        { id: 'proj-1', status: 'Done' },
+    it('resolves CR and system names', async () => {
+      const crDesc = await describeToolMutationWithContext(
+        'update_change_request',
+        { id: 'cr-1', status: 'Done' },
         mockDb as any
       );
-      expect(projDesc).toContain('"Banking Platform"');
-      expect(projDesc).toContain('Trạng thái: "Done"');
+      expect(crDesc).toContain('CR-2026-001');
+      expect(crDesc).toContain('Trạng thái: "Done"');
 
-      const msDesc = await describeToolMutationWithContext(
-        'delete_milestone',
-        { id: 'ms-1' },
+      const sysDesc = await describeToolMutationWithContext(
+        'delete_change_request',
+        { id: 'cr-1' },
         mockDb as any
       );
-      expect(msDesc).toContain('"Backend API"');
+      expect(sysDesc).toContain('CR-2026-001');
     });
 
     it('resolves note title for update_note and delete_note', async () => {
@@ -1292,9 +1430,44 @@ describe('aiTools', () => {
 
     const testMutationDb: any = {
       ...mockDb,
+      // CR-04/CR-08/WR-02: `noteReferenceStores` derives the transaction scope from
+      // `NOTE_REFERENCE_STORE_NAMES` via `db.table(name)`.
+      table: (name: string) => (mockDb as any)[name] ?? { name },
       transaction: vi.fn().mockImplementation(async (_mode, _tables, callback) => {
         return await callback();
       }),
+      // CR-04/CR-08: permanent note delete detaches document-set entries, published metadata,
+      // knowledge links, document-scoped threads and team folder handles.
+      documentSets: {
+        toArray: async () => [],
+        update: vi.fn().mockResolvedValue(1),
+      },
+      publishedDocuments: {
+        toArray: async () => [],
+        delete: vi.fn().mockResolvedValue(undefined),
+      },
+      knowledgeLinks: {
+        toArray: async () => [],
+        bulkDelete: vi.fn().mockResolvedValue(undefined),
+      },
+      aiTeams: {
+        toArray: async () => [],
+        update: vi.fn().mockResolvedValue(1),
+      },
+      aiTeamMembers: {
+        toArray: async () => [],
+        update: vi.fn().mockResolvedValue(1),
+      },
+      chatThreads: {
+        where: () => ({ equals: () => ({ toArray: async () => [] }) }),
+        bulkDelete: vi.fn().mockResolvedValue(undefined),
+      },
+      chatMessages: {
+        where: () => ({ anyOf: () => ({ delete: async () => 0 }) }),
+      },
+      chatTabs: {
+        where: () => ({ anyOf: () => ({ delete: async () => 0 }) }),
+      },
       settings: {
         ...mockDb.settings,
         put: vi.fn().mockResolvedValue(undefined),
@@ -1330,25 +1503,27 @@ describe('aiTools', () => {
           toArray: async () => mockTasks.filter(fn),
         }),
       },
-      projects: {
-        ...mockDb.projects,
-        add: vi.fn().mockResolvedValue('proj-new'),
-        put: vi.fn().mockResolvedValue('proj-updated'),
+      changeRequests: {
+        ...mockDb.changeRequests,
+        // CR-13: `createTask` resolves the CR, so an ad-hoc crId must still resolve.
+        get: async (id: string) => mockChangeRequests.find((c) => c.id === id) ?? { ...mockCrForTask, id },
+        add: vi.fn().mockResolvedValue('cr-new'),
+        put: vi.fn().mockResolvedValue('cr-updated'),
         update: vi.fn().mockResolvedValue(1),
+        where: (field: string) => ({
+          equals: (val: string) => ({
+            toArray: async () => mockChangeRequests.filter((c: any) => c[field] === val),
+          }),
+        }),
         orderBy: (_field: string) => ({
           uniqueKeys: async () => [],
         }),
       },
-      milestones: {
-        ...mockDb.milestones,
-        add: vi.fn().mockResolvedValue('ms-new'),
-        put: vi.fn().mockResolvedValue('ms-updated'),
+      systems: {
+        ...mockDb.systems,
+        add: vi.fn().mockResolvedValue('sys-new'),
+        put: vi.fn().mockResolvedValue('sys-updated'),
         update: vi.fn().mockResolvedValue(1),
-        where: (field: string) => ({
-          equals: (val: string) => ({
-            toArray: async () => mockMilestones.filter((m: any) => m[field] === val),
-          }),
-        }),
         orderBy: (_field: string) => ({
           uniqueKeys: async () => [],
         }),
@@ -1390,6 +1565,21 @@ describe('aiTools', () => {
                 createdAt: '2026-10-01T00:00:00.000Z',
               },
             ].filter((a) => (a as any)[field] === val),
+          }),
+          // CR-04: `detachNoteReferences` looks attachments up by a set of note ids.
+          anyOf: (vals: string[]) => ({
+            toArray: async () =>
+              [
+                {
+                  id: 'att-1',
+                  noteId: validNoteId,
+                  fileName: 'mock.png',
+                  mimeType: 'image/png',
+                  sizeBytes: 1024,
+                  caption: 'Mock screenshot',
+                  createdAt: '2026-10-01T00:00:00.000Z',
+                },
+              ].filter((a) => vals.includes(a.noteId)),
           }),
         }),
         add: vi.fn().mockResolvedValue('att-new'),
@@ -1515,7 +1705,7 @@ describe('aiTools', () => {
       expect(standupRes.markdownReport).toContain('BÁO CÁO STANDUP');
     });
 
-    it('executes get_item_insight for task, project, and milestone', async () => {
+    it('executes get_item_insight for task, change request, and system', async () => {
       const taskInsight = JSON.parse(
         await executeAiTool('get_item_insight', { type: 'task', id: 'task-1' }, testMutationDb)
       );
@@ -1523,17 +1713,17 @@ describe('aiTools', () => {
       expect(taskInsight.analysis).toBeDefined();
       expect(taskInsight.analysis.metrics).toBeDefined();
 
-      const projInsight = JSON.parse(
-        await executeAiTool('get_item_insight', { type: 'project', id: 'proj-1' }, testMutationDb)
+      const crInsight = JSON.parse(
+        await executeAiTool('get_item_insight', { type: 'cr', id: 'cr-1' }, testMutationDb)
       );
-      expect(projInsight.type).toBe('project');
-      expect(projInsight.analysis.metrics.totalTasks).toBeDefined();
+      expect(crInsight.type).toBe('cr');
+      expect(crInsight.analysis).toBeDefined();
 
-      const msInsight = JSON.parse(
-        await executeAiTool('get_item_insight', { type: 'milestone', id: 'ms-1' }, testMutationDb)
+      const sysInsight = JSON.parse(
+        await executeAiTool('get_item_insight', { type: 'system', id: 'sys-1' }, testMutationDb)
       );
-      expect(msInsight.type).toBe('milestone');
-      expect(msInsight.analysis.metrics.totalTasks).toBeDefined();
+      expect(sysInsight.type).toBe('system');
+      expect(sysInsight.analysis.taskCount).toBeDefined();
     });
 
     it('executes batch_plan_allocations and clear_allocations', async () => {
@@ -1579,8 +1769,8 @@ describe('aiTools', () => {
           'batch_create_tasks',
           {
             tasks: [
-              { name: 'Task A', estimateMinutes: 60 },
-              { name: 'Task B', priority: 'High' },
+              { name: 'Task A', crId: '00000000-0000-4000-8000-000000000010', estimateMinutes: 60 },
+              { name: 'Task B', crId: '00000000-0000-4000-8000-000000000010', priority: 'High' },
             ],
           },
           testMutationDb

@@ -32,7 +32,7 @@ describe('useNotifications hook (NOTIF-02, D-01, D-05)', () => {
 
   it('aggregates alerts and returns structured NotificationState', async () => {
     // Add overdue task
-    await testDb.tasks.add({
+    await testDb.tasks.add({ crId: '11111111-1111-4111-8111-111111111111',
       id: 't-overdue',
       name: 'Overdue Task',
       status: 'Open',
@@ -59,7 +59,7 @@ describe('useNotifications hook (NOTIF-02, D-01, D-05)', () => {
 
   it('reacts when alert is dismissed', async () => {
     // Add stale task
-    await testDb.tasks.add({
+    await testDb.tasks.add({ crId: '11111111-1111-4111-8111-111111111111',
       id: 't-stale',
       name: 'Stale Task',
       status: 'In Progress',
@@ -95,7 +95,7 @@ describe('useNotifications hook (NOTIF-02, D-01, D-05)', () => {
     const targetDate = dayjs(baseTime).format('YYYY-MM-DD');
 
     // Add task with reminder scheduled at 10:01
-    await testDb.tasks.add({
+    await testDb.tasks.add({ crId: '11111111-1111-4111-8111-111111111111',
       id: 't-reminder-time',
       name: 'Họp giao ban 10h01',
       status: 'Open',

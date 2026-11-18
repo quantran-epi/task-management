@@ -9,7 +9,6 @@ import { EmptyState } from './components/common/EmptyState';
 import { useHashRoute } from './hooks/useHashRoute';
 import { useThemeMode } from './hooks/useThemeMode';
 import { TasksView } from './views/TasksView';
-import { ProjectsView } from './views/ProjectsView';
 import { PlannerView } from './views/PlannerView';
 import { AnalyticsView } from './views/AnalyticsView';
 import { SettingsView } from './views/SettingsView';
@@ -21,19 +20,40 @@ import { AIPopoutView } from './views/AIPopoutView';
 import { ItemInsightView } from './views/ItemInsightView';
 import { AgentControlView } from './views/AgentControlView';
 import { TelegramMonitorView } from './views/TelegramMonitorView';
+import { MermaidAssistantView } from './views/MermaidAssistantView';
 import { TimerProvider } from './context/TimerContext';
 import { KnowledgeConfigProvider } from './services/knowledge/knowledgeConfig';
+import { startNotificationDeepLinkListener } from './utils/notificationDeepLink';
 
 const { defaultAlgorithm, darkAlgorithm } = theme;
 
 const themeTokens = {
-  colorPrimary: '#4f46e5',
-  colorPrimaryHover: '#4338ca',
-  colorPrimaryActive: '#3730a3',
+  colorPrimary: '#5b4fe8',
+  colorPrimaryHover: '#4f40dc',
+  colorPrimaryActive: '#4333c8',
+  colorInfo: '#22d3ee',
   borderRadius: 8,
   controlHeight: 36,
   fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
 };
+
+const getAppTheme = (isDark: boolean) => ({
+  algorithm: isDark ? darkAlgorithm : defaultAlgorithm,
+  token: {
+    ...themeTokens,
+    ...(isDark
+      ? {
+          colorBgBase: '#0a0d14',
+          colorBgLayout: '#0d1018',
+        }
+      : {
+          colorBgLayout: '#f8fafc',
+          boxShadowSecondary: '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05)',
+          boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+          wireframe: false,
+        }),
+  },
+});
 
 export const App: React.FC = () => {
   const { route, params, navigate } = useHashRoute('dashboard');
@@ -46,6 +66,8 @@ export const App: React.FC = () => {
     checkAndRequestStoragePersistence().catch((err) => {
       console.warn('Storage persistence auto-request failed on boot:', err);
     });
+    // Clicking an OS notification focuses the window and navigates to its target page.
+    return startNotificationDeepLinkListener();
   }, []);
 
   const renderContent = () => {
@@ -54,8 +76,6 @@ export const App: React.FC = () => {
         return <DashboardView onNavigate={navigate} />;
       case 'tasks':
         return <TasksView onNavigate={navigate} />;
-      case 'projects':
-        return <ProjectsView />;
       case 'planner':
         return <PlannerView targetDate={params.date} />;
       case 'analytics':
@@ -63,9 +83,9 @@ export const App: React.FC = () => {
       case 'notes':
         return <NotesView initialDocId={params.doc} />;
       case 'settings': {
-        const validTabs = ['capacity', 'data', 'jira', 'notifications', 'ai'] as const;
+        const validTabs = ['capacity', 'data', 'jira', 'notifications', 'ai', 'ssh'] as const;
         const selectedTab = validTabs.includes(params.tab as any)
-          ? (params.tab as 'capacity' | 'data' | 'jira' | 'notifications' | 'ai')
+          ? (params.tab as 'capacity' | 'data' | 'jira' | 'notifications' | 'ai' | 'ssh')
           : undefined;
         return <SettingsView onNavigate={navigate} defaultActiveTab={selectedTab} />;
       }
@@ -73,10 +93,12 @@ export const App: React.FC = () => {
         return <AgentControlView />;
       case 'telegram':
         return <TelegramMonitorView />;
+      case 'mermaid':
+        return <MermaidAssistantView initialCode={params.code} />;
       case 'insight': {
-        const validTypes = ['task', 'project', 'milestone'] as const;
+        const validTypes = ['task', 'cr', 'system'] as const;
         const itemType = validTypes.includes(params.type as any)
-          ? (params.type as 'task' | 'project' | 'milestone')
+          ? (params.type as 'task' | 'cr' | 'system')
           : 'task';
         return (
           <ItemInsightView
@@ -95,18 +117,7 @@ export const App: React.FC = () => {
     return (
       <ConfigProvider
         locale={viVN}
-        theme={{
-          algorithm: isDark ? darkAlgorithm : defaultAlgorithm,
-          token: {
-            ...themeTokens,
-            ...(isDark ? {} : {
-              colorBgLayout: '#f8fafc',
-              boxShadowSecondary: '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05)',
-              boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-              wireframe: false,
-            }),
-          },
-        }}
+        theme={getAppTheme(isDark)}
       >
         <TimerProvider>
           <TimerPopoutView />
@@ -119,18 +130,7 @@ export const App: React.FC = () => {
     return (
       <ConfigProvider
         locale={viVN}
-        theme={{
-          algorithm: isDark ? darkAlgorithm : defaultAlgorithm,
-          token: {
-            ...themeTokens,
-            ...(isDark ? {} : {
-              colorBgLayout: '#f8fafc',
-              boxShadowSecondary: '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05)',
-              boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-              wireframe: false,
-            }),
-          },
-        }}
+        theme={getAppTheme(isDark)}
       >
         <NotesPopoutView />
       </ConfigProvider>
@@ -141,18 +141,7 @@ export const App: React.FC = () => {
     return (
       <ConfigProvider
         locale={viVN}
-        theme={{
-          algorithm: isDark ? darkAlgorithm : defaultAlgorithm,
-          token: {
-            ...themeTokens,
-            ...(isDark ? {} : {
-              colorBgLayout: '#f8fafc',
-              boxShadowSecondary: '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05)',
-              boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-              wireframe: false,
-            }),
-          },
-        }}
+        theme={getAppTheme(isDark)}
       >
         <AIPopoutView />
       </ConfigProvider>
@@ -162,18 +151,7 @@ export const App: React.FC = () => {
   return (
     <ConfigProvider
       locale={viVN}
-      theme={{
-        algorithm: isDark ? darkAlgorithm : defaultAlgorithm,
-        token: {
-          ...themeTokens,
-          ...(isDark ? {} : {
-            colorBgLayout: '#f8fafc',
-            boxShadowSecondary: '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05)',
-            boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-            wireframe: false,
-          }),
-        },
-      }}
+      theme={getAppTheme(isDark)}
     >
       <KnowledgeConfigProvider>
         <AppShell currentRoute={route} onNavigate={navigate} isDark={isDark}>

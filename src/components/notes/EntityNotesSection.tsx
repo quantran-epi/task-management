@@ -25,6 +25,7 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Note, NoteEntityType } from '../../types/models';
 import { deleteNote, updateNote } from '../../db/repositories/noteRepo';
 import { renderSafeMarkdown } from '../../utils/markdown';
+import { readNoteMarkdown } from '../../utils/noteBody';
 import { NoteEditor } from './NoteEditor';
 import { NoteDetailModal } from './NoteDetailModal';
 import { QuickNoteEntry } from './QuickNoteEntry';
@@ -250,7 +251,7 @@ export const EntityNotesSection: React.FC<EntityNotesSectionProps> = ({
                     overflowY: 'auto',
                     whiteSpace: 'pre-wrap',
                   }}
-                  dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(note.body) }}
+                  dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(readNoteMarkdown(note.body)) }}
                 />
 
                 <div style={{ marginTop: 6, display: 'flex', justifyContent: 'flex-end' }}>

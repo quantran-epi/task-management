@@ -2,10 +2,19 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../src/db/index';
 import { createTask } from '../../src/db/repositories/taskRepo';
-import { createProject } from '../../src/db/repositories/projectRepo';
+import { createChangeRequest } from '../../src/db/repositories/changeRequestRepo';
 import { upsertAllocation } from '../../src/db/repositories/allocationRepo';
 import { AllocationModal } from '../../src/components/planner/AllocationModal';
 import { TaskAllocationCard } from '../../src/components/planner/TaskAllocationCard';
+
+/** `Task.crId` is required (D-27); every fixture needs a CR to hang off. */
+async function seedCr(targetDb: TaskPlannerDatabase): Promise<string> {
+  const cr = await createChangeRequest(
+    { code: `CR-${crypto.randomUUID().slice(0, 8)}`, name: 'Fixture CR', status: 'Open', type: 'ENHANCEMENT', targets: [] },
+    targetDb
+  );
+  return cr.id;
+}
 
 describe('Task Allocation UI Components (PLAN-01, PLAN-02, PLAN-06, D-09, D-10, D-11, D-16)', () => {
   let testDb: TaskPlannerDatabase;
@@ -21,7 +30,7 @@ describe('Task Allocation UI Components (PLAN-01, PLAN-02, PLAN-06, D-09, D-10, 
 
   describe('AllocationModal', () => {
     it('renders task selector, date picker, duration inputs, and preset buttons', async () => {
-      await createTask({ name: 'Alpha Task', estimateMinutes: 120, status: 'Open' }, testDb);
+      await createTask({ name: 'Alpha Task', estimateMinutes: 120, status: 'Open', crId: await seedCr(testDb) }, testDb);
 
       const onCancel = vi.fn();
       render(<AllocationModal open={true} onCancel={onCancel} db={testDb} />);
@@ -39,7 +48,7 @@ describe('Task Allocation UI Components (PLAN-01, PLAN-02, PLAN-06, D-09, D-10, 
 
     it('shows soft warning alert when allocated time exceeds task estimate (D-10, PLAN-06)', async () => {
       const task = await createTask(
-        { name: 'Short Task', estimateMinutes: 60, status: 'Open' },
+        { name: 'Short Task', estimateMinutes: 60, status: 'Open', crId: await seedCr(testDb) },
         testDb
       );
 
@@ -68,7 +77,7 @@ describe('Task Allocation UI Components (PLAN-01, PLAN-02, PLAN-06, D-09, D-10, 
 
     it('submits allocation successfully via upsertAllocation and triggers onSuccess', async () => {
       const task = await createTask(
-        { name: 'Feature Sprint', estimateMinutes: 240, status: 'In Progress' },
+        { name: 'Feature Sprint', estimateMinutes: 240, status: 'In Progress', crId: await seedCr(testDb) },
         testDb
       );
 
@@ -105,22 +114,21 @@ describe('Task Allocation UI Components (PLAN-01, PLAN-02, PLAN-06, D-09, D-10, 
       });
     });
 
-    it('renders project combobox filter and displays project context', async () => {
-      const proj = await createProject({ name: 'Project Omega', status: 'Open' }, testDb);
-      await createTask(
-        { name: 'Omega Task', estimateMinutes: 60, status: 'Open', projectId: proj.id },
+    it('renders CR combobox filter and displays CR context', async () => {
+      const cr = await createChangeRequest(
+        { code: 'CR-OMEGA', name: 'CR Omega', status: 'Open', type: 'ENHANCEMENT', targets: [] },
         testDb
       );
       await createTask(
-        { name: 'Independent Task', estimateMinutes: 90, status: 'Open' },
+        { name: 'Omega Task', estimateMinutes: 60, status: 'Open', crId: cr.id },
         testDb
       );
 
       render(<AllocationModal open={true} onCancel={vi.fn()} db={testDb} />);
 
       expect(await screen.findByText('Phân bổ thời gian tác vụ')).toBeInTheDocument();
-      expect(screen.getByText('Lọc theo dự án:')).toBeInTheDocument();
-      expect(screen.getByRole('combobox', { name: 'Lọc theo dự án' })).toBeInTheDocument();
+      expect(screen.getByText('Lọc theo CR:')).toBeInTheDocument();
+      expect(screen.getByRole('combobox', { name: 'Lọc theo CR' })).toBeInTheDocument();
       expect(screen.getByRole('combobox', { name: 'Chọn tác vụ' })).toBeInTheDocument();
     });
   });
@@ -128,7 +136,7 @@ describe('Task Allocation UI Components (PLAN-01, PLAN-02, PLAN-06, D-09, D-10, 
   describe('TaskAllocationCard', () => {
     it('renders active task card with duration tag and priority', async () => {
       const task = await createTask(
-        { name: 'Fix auth bug', priority: 'High', status: 'Open' },
+        { name: 'Fix auth bug', priority: 'High', status: 'Open', crId: await seedCr(testDb) },
         testDb
       );
       const alloc = await upsertAllocation(task.id, '2026-10-20', 90, testDb);
@@ -149,7 +157,7 @@ describe('Task Allocation UI Components (PLAN-01, PLAN-02, PLAN-06, D-09, D-10, 
 
     it('renders inactive Done task with muted styling and exclusion badge (D-16)', async () => {
       const task = await createTask(
-        { name: 'Finished feature', priority: 'Medium', status: 'Done' },
+        { name: 'Finished feature', priority: 'Medium', status: 'Done', crId: await seedCr(testDb) },
         testDb
       );
       const alloc = await upsertAllocation(task.id, '2026-10-20', 60, testDb);
@@ -171,7 +179,7 @@ describe('Task Allocation UI Components (PLAN-01, PLAN-02, PLAN-06, D-09, D-10, 
     });
 
     it('removes allocation on delete confirmation', async () => {
-      const task = await createTask({ name: 'Disposable', status: 'Open' }, testDb);
+      const task = await createTask({ name: 'Disposable', status: 'Open', crId: await seedCr(testDb) }, testDb);
       const alloc = await upsertAllocation(task.id, '2026-10-20', 45, testDb);
 
       render(

@@ -67,13 +67,16 @@ export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db = defaultDb }) =>
           unlistenScope = unsub;
         });
 
-        // Restore window geometry
+        // Unmaximize and restore window geometry
+        win.unmaximize().catch(() => {});
         try {
           const raw = localStorage.getItem(AI_GEOMETRY_STORAGE_KEY);
           if (raw) {
             const saved = JSON.parse(raw);
             if (saved.width && saved.height) {
-              win.setSize(new PhysicalSize(saved.width, saved.height)).catch(() => {});
+              const clampedW = Math.max(360, Math.min(saved.width, 560));
+              const clampedH = Math.max(480, Math.min(saved.height, 800));
+              win.setSize(new PhysicalSize(clampedW, clampedH)).catch(() => {});
             }
             if (typeof saved.x === 'number' && typeof saved.y === 'number') {
               currentMonitor().then((monitor) => {
@@ -92,6 +95,8 @@ export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db = defaultDb }) =>
               win.setAlwaysOnTop(saved.alwaysOnTop).catch(() => {});
               setPinned(saved.alwaysOnTop);
             }
+          } else {
+            win.setSize(new PhysicalSize(440, 680)).catch(() => {});
           }
         } catch {}
 
@@ -161,11 +166,18 @@ export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db = defaultDb }) =>
         width: '100vw',
         height: '100vh',
         backgroundColor: token.colorBgContainer,
+        color: token.colorText,
+        fontFamily: token.fontFamily || "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
       }}
     >
+      <style>{`
+        * {
+          font-family: ${token.fontFamily || "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"} !important;
+        }
+      `}</style>
       <AIChatDrawer
         open={true}
         onClose={handleClose}

@@ -8,51 +8,52 @@ import {
   updateWorkSession,
   deleteWorkSession,
   getTaskSpentMinutes,
-  getMilestoneSpentMinutes,
-  getProjectSpentMinutes,
+  getCrSpentMinutes,
   getTaskIdsWithWorkSessionsInRange,
 } from '../../src/db/repositories/workSessionRepo';
-import type { Task, Project, Milestone } from '../../src/types/models';
+import type { Task, ChangeRequest } from '../../src/types/models';
 
 describe('workSessionRepo (D-06, D-09, D-10, D-11, TIMER-01, TIMER-05)', () => {
   let db: TaskPlannerDatabase;
   const dbName = 'TestWorkSessionRepoDB_' + Math.random().toString(36).slice(2);
 
-  const sampleProjectId = '11111111-1111-4111-8111-111111111111';
-  const sampleMilestoneId = '22222222-2222-4222-8222-222222222222';
+  const sampleCrId = '11111111-1111-4111-8111-111111111111';
+  const otherCrId = '11111111-1111-4111-8111-111111111112';
   const sampleTaskId1 = '33333333-3333-4333-8333-333333333331';
   const sampleTaskId2 = '33333333-3333-4333-8333-333333333332';
-  const directProjectTaskId = '33333333-3333-4333-8333-333333333333';
+  const otherCrTaskId = '33333333-3333-4333-8333-333333333333';
 
   beforeEach(async () => {
     db = new TaskPlannerDatabase(dbName);
     await db.open();
 
     const now = new Date().toISOString();
-    const project: Project = {
-      id: sampleProjectId,
-      name: 'Repo Test Project',
+    const cr: ChangeRequest = {
+      id: sampleCrId,
+      name: 'Repo Test CR',
+      code: 'CR-1',
       status: 'In Progress',
+      type: 'ENHANCEMENT',
+      targets: [],
       createdAt: now,
       updatedAt: now,
     };
-    await db.projects.add(project);
-
-    const milestone: Milestone = {
-      id: sampleMilestoneId,
-      projectId: sampleProjectId,
-      name: 'Repo Test Milestone',
+    const otherCr: ChangeRequest = {
+      id: otherCrId,
+      name: 'Other CR',
+      code: 'CR-2',
       status: 'Open',
+      type: 'BUGFIX',
+      targets: [],
       createdAt: now,
       updatedAt: now,
     };
-    await db.milestones.add(milestone);
+    await db.changeRequests.bulkAdd([cr, otherCr]);
 
     const task1: Task = {
       id: sampleTaskId1,
-      projectId: sampleProjectId,
-      milestoneId: sampleMilestoneId,
-      name: 'Task 1 in Milestone',
+      crId: sampleCrId,
+      name: 'Task 1 in CR',
       status: 'In Progress',
       progress: 20,
       priority: 'High',
@@ -62,9 +63,8 @@ describe('workSessionRepo (D-06, D-09, D-10, D-11, TIMER-01, TIMER-05)', () => {
     };
     const task2: Task = {
       id: sampleTaskId2,
-      projectId: sampleProjectId,
-      milestoneId: sampleMilestoneId,
-      name: 'Task 2 in Milestone',
+      crId: sampleCrId,
+      name: 'Task 2 in CR',
       status: 'Open',
       progress: 0,
       priority: 'Medium',
@@ -72,10 +72,10 @@ describe('workSessionRepo (D-06, D-09, D-10, D-11, TIMER-01, TIMER-05)', () => {
       createdAt: now,
       updatedAt: now,
     };
-    const directTask: Task = {
-      id: directProjectTaskId,
-      projectId: sampleProjectId,
-      name: 'Direct Project Task',
+    const otherTask: Task = {
+      id: otherCrTaskId,
+      crId: otherCrId,
+      name: 'Other CR Task',
       status: 'Open',
       progress: 0,
       priority: 'Low',
@@ -83,7 +83,7 @@ describe('workSessionRepo (D-06, D-09, D-10, D-11, TIMER-01, TIMER-05)', () => {
       createdAt: now,
       updatedAt: now,
     };
-    await db.tasks.bulkAdd([task1, task2, directTask]);
+    await db.tasks.bulkAdd([task1, task2, otherTask]);
   });
 
   afterEach(async () => {
@@ -168,7 +168,7 @@ describe('workSessionRepo (D-06, D-09, D-10, D-11, TIMER-01, TIMER-05)', () => {
     expect(sessions).toHaveLength(0);
   });
 
-  it('calculates rollups accurately across Task, Milestone, and Project levels (D-11)', async () => {
+  it('calculates rollups accurately across Task and CR levels (D-11)', async () => {
     // Task 1: 30m + 45m = 75m
     await createWorkSession(
       {
@@ -200,10 +200,10 @@ describe('workSessionRepo (D-06, D-09, D-10, D-11, TIMER-01, TIMER-05)', () => {
       db
     );
 
-    // Direct Project Task: 50m
+    // Task on the other CR: 50m
     await createWorkSession(
       {
-        taskId: directProjectTaskId,
+        taskId: otherCrTaskId,
         startTime: '2026-09-29T11:00:00.000Z',
         endTime: '2026-09-29T11:50:00.000Z',
         durationMinutes: 50,
@@ -212,16 +212,11 @@ describe('workSessionRepo (D-06, D-09, D-10, D-11, TIMER-01, TIMER-05)', () => {
     );
 
     // Rollup 1: Task 1 spent = 75m
-    const task1Spent = await getTaskSpentMinutes(sampleTaskId1, db);
-    expect(task1Spent).toBe(75);
+    expect(await getTaskSpentMinutes(sampleTaskId1, db)).toBe(75);
 
-    // Rollup 2: Milestone spent = Task 1 (75m) + Task 2 (25m) = 100m
-    const milestoneSpent = await getMilestoneSpentMinutes(sampleMilestoneId, db);
-    expect(milestoneSpent).toBe(100);
-
-    // Rollup 3: Project spent = Milestone (100m) + Direct Task (50m) = 150m
-    const projectSpent = await getProjectSpentMinutes(sampleProjectId, db);
-    expect(projectSpent).toBe(150);
+    // Rollup 2: CR spent = Task 1 (75m) + Task 2 (25m) = 100m; the other CR's task is excluded
+    expect(await getCrSpentMinutes(sampleCrId, db)).toBe(100);
+    expect(await getCrSpentMinutes(otherCrId, db)).toBe(50);
   });
 
   it('getTaskIdsWithWorkSessionsInRange returns unique task IDs for sessions in date range', async () => {
@@ -233,6 +228,7 @@ describe('workSessionRepo (D-06, D-09, D-10, D-11, TIMER-01, TIMER-05)', () => {
       },
       db
     );
+
     await createWorkSession(
       {
         taskId: sampleTaskId2,

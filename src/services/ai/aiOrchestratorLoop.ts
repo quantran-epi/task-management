@@ -1,7 +1,7 @@
 import type { TaskPlannerDatabase } from '../../db';
 import type { ChatCompletionMessage, ToolCall } from './types';
 import type { ChatTokenUsage, ChatGeneratedFile } from '../../types/models';
-import { streamChatEvents, streamChatCompletion, stripThinkingBlocks } from './nineRouterClient';
+import { streamChatEvents, stripThinkingBlocks } from './nineRouterClient';
 import { pruneToolOutputsInMessages } from './historyPruning';
 import { compactMessagesInLoop } from './inLoopCompaction';
 import {
@@ -10,22 +10,39 @@ import {
   isMutationTool,
   normalizeToolName,
 } from './aiTools';
-import { executeDynamicMcpTool } from './mcpClient';
+import { executeDynamicMcpTool, type ExecuteMcpToolOptions } from './mcpClient';
+
+export interface DispatchAiToolCallOptions extends ExecuteMcpToolOptions {
+  /** WR-19: CR the turn is bound to; entity ids outside it are rejected. */
+  crScopeId?: string;
+}
+
+/** One definition of "this is a local DB tool", shared by dispatch and the WR-02 gate. */
+function isLocalDbTool(name: string): boolean {
+  const normalized = normalizeToolName(name);
+  return AI_DATABASE_TOOLS.some((t) => normalizeToolName(t.function.name) === normalized);
+}
 
 /** Default tool dispatch: local DB tools first, dynamic MCP tools otherwise. */
 export async function dispatchAiToolCall(
   name: string,
   args: Record<string, any>,
   db: TaskPlannerDatabase,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: DispatchAiToolCallOptions
 ): Promise<string> {
   const normalized = normalizeToolName(name);
-  const isLocalDbTool = AI_DATABASE_TOOLS.some(
-    (t) => normalizeToolName(t.function.name) === normalized
-  );
-  return isLocalDbTool
-    ? executeAiTool(name, args, db, signal)
-    : executeDynamicMcpTool(normalized, args, db);
+  return isLocalDbTool(normalized)
+    ? executeAiTool(
+        name,
+        args,
+        db,
+        signal,
+        {
+          ...(options?.crScopeId ? { crScopeId: options.crScopeId } : {}),
+        }
+      )
+    : executeDynamicMcpTool(normalized, args, db, options);
 }
 
 export interface AiOrchestratorLoopOptions {
@@ -35,6 +52,12 @@ export interface AiOrchestratorLoopOptions {
   messages: ChatCompletionMessage[];
   tools?: any[];
   temperature?: number;
+  maxTokens?: number;
+  /**
+   * Opt-in ceiling on tool rounds. Omit it and the loop runs until the model stops
+   * calling tools or the turn is aborted — a read-heavy turn (a repo walk, a multi-file
+   * review) is not cut off mid-evidence. Only a caller that wants a bound passes one.
+   */
   maxLoops?: number;
   db: TaskPlannerDatabase;
   signal?: AbortSignal;
@@ -42,11 +65,8 @@ export interface AiOrchestratorLoopOptions {
   onTextChunk?: (delta: string) => void;
   onReasoningChunk?: (delta: string) => void;
   onStatusChange?: (status: string | null) => void;
-  onUsage?: (usage: {
-    promptTokens?: number | undefined;
-    completionTokens?: number | undefined;
-    totalTokens?: number | undefined;
-  }) => void;
+  /** Phase 38 D-09: the full provider usage, split and cache fields included. */
+  onUsage?: (usage: ChatTokenUsage) => void;
   onToolCall?: (call: { id: string; name: string; args: Record<string, any> }) => void;
   onToolResult?: (callId: string, result: string, durationMs: number) => void;
   onMutationCheck?: (
@@ -58,7 +78,8 @@ export interface AiOrchestratorLoopOptions {
     name: string,
     args: Record<string, any>,
     db: TaskPlannerDatabase,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    options?: DispatchAiToolCallOptions
   ) => Promise<string>;
   /** Recent tool outputs kept intact when pruning; older ones truncate. */
   keepRecentToolOutputs?: number;
@@ -71,6 +92,15 @@ export interface AiOrchestratorLoopOptions {
   contextWindowTokens?: number | undefined;
   /** Fraction of the window that triggers compaction. Default 0.8. */
   compactAtRatio?: number;
+  /**
+   * D-09/D-21: awaited at EVERY round boundary including round 1, after in-loop
+   * compaction and before the next model call. Receives the loop's own signal so a
+   * parked gate can reject on abort. Any returned messages are appended to the
+   * conversation before the next model call.
+   */
+  beforeToolRound?:
+    | ((round: number, signal?: AbortSignal) => Promise<ChatCompletionMessage[] | void>)
+    | undefined;
 }
 
 export interface AiOrchestratorLoopResult {
@@ -79,14 +109,17 @@ export interface AiOrchestratorLoopResult {
   messages: ChatCompletionMessage[];
   tokenUsage: ChatTokenUsage;
   generatedFiles: ChatGeneratedFile[];
+  truncated: boolean;
+  loopLimitReached: boolean;
+  finishReason?: string;
 }
 
-function getFriendlyToolLabel(toolName: string): string {
+export function getFriendlyToolLabel(toolName: string): string {
   const normalized = normalizeToolName(toolName);
   switch (normalized) {
     case 'query_tasks': return 'Tra cứu tác vụ';
-    case 'query_projects': return 'Tra cứu dự án';
-    case 'query_milestones': return 'Tra cứu cột mốc';
+    case 'query_change_requests': return 'Tra cứu Change Request';
+    case 'query_systems': return 'Tra cứu hệ thống';
     case 'get_item_details': return 'Chi tiết mục';
     case 'query_worklogs': return 'Nhật ký công việc';
     case 'get_active_timer': return 'Trạng thái bấm giờ';
@@ -107,6 +140,9 @@ function getFriendlyToolLabel(toolName: string): string {
     case 'delete_task': return 'Xóa tác vụ';
     case 'plan_allocation': return 'Lên lịch phân bổ';
     case 'log_work_session': return 'Ghi nhận thời gian';
+    case 'create_system': return 'Tạo hệ thống';
+    case 'update_system': return 'Cập nhật hệ thống';
+    case 'delete_system': return 'Xóa hệ thống';
     default: return normalized || toolName;
   }
 }
@@ -130,7 +166,8 @@ export async function runAiOrchestratorLoop(
     messages,
     tools,
     temperature = 0.1,
-    maxLoops = 30,
+    maxTokens,
+    maxLoops: requestedMaxLoops,
     db,
     signal,
     synthesisPrompt = DEFAULT_SYNTHESIS_PROMPT,
@@ -147,7 +184,19 @@ export async function runAiOrchestratorLoop(
     maxOldToolChars = 500,
     contextWindowTokens,
     compactAtRatio = 0.8,
+    beforeToolRound,
   } = options;
+
+  // No ceiling unless the caller asked for one. `Infinity` keeps `loopCount < maxLoops` true
+  // for every round, so the loop ends only when the model stops calling tools, the provider
+  // reports `finish_reason: 'length'`, or the turn is aborted — never on a round count.
+  const maxLoops =
+    typeof requestedMaxLoops === 'number' &&
+    Number.isFinite(requestedMaxLoops) &&
+    requestedMaxLoops > 0
+      ? Math.max(1, Math.floor(requestedMaxLoops))
+      : Number.POSITIVE_INFINITY;
+  let loopLimitReached = false;
 
   const prune = (msgs: ChatCompletionMessage[]) =>
     pruneToolOutputsInMessages(msgs, keepRecentToolOutputs, maxOldToolChars);
@@ -160,6 +209,10 @@ export async function runAiOrchestratorLoop(
     totalTokens: 0,
   };
 
+  const outputLimit = typeof maxTokens === 'number' && Number.isFinite(maxTokens) && maxTokens > 0
+    ? { max_tokens: maxTokens }
+    : {};
+  let finishReason: string | undefined;
   let fullResponse = '';
   let loopCount = 0;
   let lastHadToolCalls = false;
@@ -174,6 +227,23 @@ export async function runAiOrchestratorLoop(
   // away; measure them once to know how much of the window is unavoidable.
   const toolsChars = tools && tools.length > 0 ? JSON.stringify(tools).length : 0;
   const fixedOverheadTokens = Math.ceil(toolsChars / 4);
+  /**
+   * WR-02: the advertised payload IS the allowlist. Without this, a provider that emits a
+   * tool name nobody advertised still reached `dispatchAiToolCall`, which routes on
+   * `AI_DATABASE_TOOLS` membership alone — so the lead could run `get_item_details` (excluded
+   * from `LEAD_TOOL_ALLOWLIST` precisely because it returns raw user text) just by naming it.
+   * An empty/absent payload means "no tool set declared", which keeps the no-tools paths
+   * (synthesis pass, callers that pass their own `executeToolFn` without `tools`) unchanged.
+   */
+  const advertisedToolNames =
+    tools && tools.length > 0
+      ? new Set(
+          tools
+            .map((tool: any) => normalizeToolName(String(tool?.function?.name ?? '')))
+            .filter((name: string) => name.length > 0)
+        )
+      : null;
+
   const tokenBudget = contextWindowTokens
     ? Math.floor(contextWindowTokens * compactAtRatio)
     : 0;
@@ -209,16 +279,30 @@ export async function runAiOrchestratorLoop(
       }
     }
 
+    // D-09/D-21: round boundary — every tool result from the previous round is already
+    // appended, so parking here resumes exactly where it stopped. The signal is
+    // passed in so a gate parked inside the hook rejects on Stop (Pitfall 8);
+    // throwIfAborted covers a hook that resolves normally after an abort.
+    // Runs AFTER compaction on purpose: a steer appended before it could be
+    // summarized away in the same round (Pitfall 7).
+    if (beforeToolRound) {
+      const injected = await beforeToolRound(loopCount, signal);
+      signal?.throwIfAborted();
+      if (injected && injected.length > 0) currentMessages.push(...injected);
+    }
+
     const messagesToSend = prune(currentMessages);
     const payload: {
       model: string;
       messages: ChatCompletionMessage[];
       temperature: number;
+      max_tokens?: number;
       tools?: any[];
     } = {
       model,
       messages: messagesToSend,
       temperature,
+      ...outputLimit,
     };
     if (tools && tools.length > 0) {
       payload.tools = tools;
@@ -245,6 +329,8 @@ export async function runAiOrchestratorLoop(
         } else if (chunk.type === 'tool_calls') {
           hasToolCalls = true;
           toolCallsToRun = chunk.calls;
+        } else if (chunk.type === 'finish') {
+          finishReason = chunk.finish_reason;
         } else if (chunk.type === 'usage' && chunk.usage) {
           // Latest round's prompt size — what the context window actually sees.
           currentPromptTokens = chunk.usage.promptTokens || 0;
@@ -252,6 +338,11 @@ export async function runAiOrchestratorLoop(
             promptTokens: (accumulatedTokenUsage.promptTokens || 0) + (chunk.usage.promptTokens || 0),
             completionTokens: (accumulatedTokenUsage.completionTokens || 0) + (chunk.usage.completionTokens || 0),
             totalTokens: (accumulatedTokenUsage.totalTokens || 0) + (chunk.usage.totalTokens || 0),
+            // WR-09: cache tokens are charged as input (D-09), so they must accumulate too —
+            // dropping them here made the persisted message usage cache-less.
+            cacheReadTokens: (accumulatedTokenUsage.cacheReadTokens || 0) + (chunk.usage.cacheReadTokens || 0),
+            cacheCreationTokens:
+              (accumulatedTokenUsage.cacheCreationTokens || 0) + (chunk.usage.cacheCreationTokens || 0),
           };
           onUsage?.(chunk.usage);
         }
@@ -261,27 +352,49 @@ export async function runAiOrchestratorLoop(
       // If model rejected tools payload on first loop, fallback to completion without tools
       if (loopCount === 1 && !fullResponse && tools && tools.length > 0) {
         console.warn('[runAiOrchestratorLoop] Tools stream error, retrying without tools:', streamErr);
-        const fallbackStream = streamChatCompletion({
+        const fallbackStream = streamChatEvents({
           endpoint,
           apiKey,
           payload: {
             model,
             messages: messagesToSend,
             temperature,
+            ...outputLimit,
           },
           ...(signal ? { signal } : {}),
         });
-        for await (const delta of fallbackStream) {
-          fullResponse += delta;
-          onTextChunk?.(delta);
+        for await (const chunk of fallbackStream) {
+          if (chunk.type === 'text') {
+            fullResponse += chunk.delta;
+            onTextChunk?.(chunk.delta);
+          } else if (chunk.type === 'finish') {
+            finishReason = chunk.finish_reason;
+          } else if (chunk.type === 'usage') {
+            accumulatedTokenUsage = {
+              promptTokens: (accumulatedTokenUsage.promptTokens || 0) + (chunk.usage.promptTokens || 0),
+              completionTokens: (accumulatedTokenUsage.completionTokens || 0) + (chunk.usage.completionTokens || 0),
+              totalTokens: (accumulatedTokenUsage.totalTokens || 0) + (chunk.usage.totalTokens || 0),
+              // WR-09: cache tokens are charged as input (D-09) — accumulate them here too.
+              cacheReadTokens: (accumulatedTokenUsage.cacheReadTokens || 0) + (chunk.usage.cacheReadTokens || 0),
+              cacheCreationTokens:
+                (accumulatedTokenUsage.cacheCreationTokens || 0) + (chunk.usage.cacheCreationTokens || 0),
+            };
+            onUsage?.(chunk.usage);
+          }
         }
         break;
       }
       throw streamErr;
     }
 
+    if (finishReason === 'length') break;
+
     lastHadToolCalls = hasToolCalls && toolCallsToRun.length > 0;
     if (!hasToolCalls || toolCallsToRun.length === 0) {
+      break;
+    }
+    if (lastHadToolCalls && loopCount >= maxLoops) {
+      loopLimitReached = true;
       break;
     }
 
@@ -331,6 +444,35 @@ export async function runAiOrchestratorLoop(
             continue;
           }
         }
+      }
+
+      // WR-02: a DB tool the turn never advertised is refused here, before any dispatch.
+      // `dispatchAiToolCall` routes on `AI_DATABASE_TOOLS` membership alone, so without this
+      // gate a provider that emits an unadvertised name (the lead's `get_item_details`,
+      // excluded precisely because it returns raw user text) still executed and returned it.
+      // The refusal is a tool result, so the provider protocol stays valid (every
+      // `tool_call` gets a `tool` message) and the model can correct itself.
+      //
+      // Scoped to DB tools on purpose: dynamic MCP tools carry their own gate inside
+      // `mcpClient` (disabled server, read-only mode) and its message is more specific than
+      // "not advertised". Runs after the mutation gate so a mutation refusal keeps its own
+      // message too.
+      if (
+        advertisedToolNames &&
+        isLocalDbTool(tc.function.name) &&
+        !advertisedToolNames.has(normalizeToolName(tc.function.name))
+      ) {
+        const refusal = JSON.stringify({
+          error: `Công cụ '${tc.function.name}' không nằm trong danh sách được phép của lượt này.`,
+        });
+        onToolResult?.(tc.id, refusal, 0);
+        currentMessages.push({
+          role: 'tool',
+          tool_call_id: tc.id,
+          name: tc.function.name,
+          content: refusal,
+        });
+        continue;
       }
 
       onStatusChange?.('Đang thực thi...');
@@ -402,7 +544,7 @@ export async function runAiOrchestratorLoop(
   }
 
   // Final synthesis pass if tools were called, or response is empty after tools ran
-  if (lastHadToolCalls || (!fullResponse.trim() && loopCount > 1)) {
+  if (!loopLimitReached && finishReason !== 'length' && (lastHadToolCalls || (!fullResponse.trim() && loopCount > 1))) {
     onStatusChange?.('Đang tổng hợp câu trả lời hoàn chỉnh...');
     fullResponse = '';
 
@@ -421,6 +563,7 @@ export async function runAiOrchestratorLoop(
         model,
         messages: synthesisMessages,
         temperature,
+        ...outputLimit,
       },
       ...(signal ? { signal } : {}),
     });
@@ -429,11 +572,17 @@ export async function runAiOrchestratorLoop(
       if (chunk.type === 'text') {
         fullResponse += chunk.delta;
         onTextChunk?.(chunk.delta);
+      } else if (chunk.type === 'finish') {
+        finishReason = chunk.finish_reason;
       } else if (chunk.type === 'usage' && chunk.usage) {
         accumulatedTokenUsage = {
           promptTokens: (accumulatedTokenUsage.promptTokens || 0) + (chunk.usage.promptTokens || 0),
           completionTokens: (accumulatedTokenUsage.completionTokens || 0) + (chunk.usage.completionTokens || 0),
           totalTokens: (accumulatedTokenUsage.totalTokens || 0) + (chunk.usage.totalTokens || 0),
+          // WR-09: cache tokens are charged as input (D-09) — accumulate them here too.
+          cacheReadTokens: (accumulatedTokenUsage.cacheReadTokens || 0) + (chunk.usage.cacheReadTokens || 0),
+          cacheCreationTokens:
+            (accumulatedTokenUsage.cacheCreationTokens || 0) + (chunk.usage.cacheCreationTokens || 0),
         };
         onUsage?.(chunk.usage);
       }
@@ -448,5 +597,8 @@ export async function runAiOrchestratorLoop(
     messages: currentMessages,
     tokenUsage: accumulatedTokenUsage,
     generatedFiles,
+    truncated: finishReason === 'length',
+    loopLimitReached,
+    ...(finishReason !== undefined ? { finishReason } : {}),
   };
 }

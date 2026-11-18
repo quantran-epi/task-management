@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type {
   Task,
-  Project,
-  Milestone,
+  ChangeRequest,
   CapacityRule,
   CapacityOverride,
   PlannedAllocation,
@@ -15,6 +14,7 @@ describe('evaluateNotifications', () => {
 
   const baseTask: Task = {
     id: 'task-1',
+    crId: 'cr-1',
     name: 'Sample Task',
     status: 'Open',
     progress: 0,
@@ -61,8 +61,7 @@ describe('evaluateNotifications', () => {
 
     const result = evaluateNotifications({
       tasks,
-      projects: [],
-      milestones: [],
+      changeRequests: [],
       rules: defaultRules,
       overrides: [],
       allocations: [],
@@ -108,8 +107,7 @@ describe('evaluateNotifications', () => {
 
     const result = evaluateNotifications({
       tasks,
-      projects: [],
-      milestones: [],
+      changeRequests: [],
       rules: defaultRules,
       overrides,
       allocations,
@@ -157,8 +155,7 @@ describe('evaluateNotifications', () => {
 
     const result = evaluateNotifications({
       tasks,
-      projects: [],
-      milestones: [],
+      changeRequests: [],
       rules: defaultRules,
       overrides: [],
       allocations: [],
@@ -229,8 +226,7 @@ describe('evaluateNotifications', () => {
 
     const result = evaluateNotifications({
       tasks,
-      projects: [],
-      milestones: [],
+      changeRequests: [],
       rules: defaultRules,
       overrides: [],
       allocations: [],
@@ -251,46 +247,26 @@ describe('evaluateNotifications', () => {
     expect(staleItems[1]?.tagLabel).toBe('Chưa cập nhật 6 ngày');
   });
 
-  it('Test 5: Flags active custom reminders on Project, Milestone, and Task where reminderDate <= todayDate and status not Done/Cancelled with priorityOrder: 5, tagColor: gold, canDismiss: true; skips if dismissed for todayDate', () => {
-    const projects: Project[] = [
-      {
-        id: 'p-1',
-        name: 'Project Reminder',
-        status: 'In Progress',
+  it('Test 5: Flags active custom reminders on CR and Task where reminderDate <= todayDate and status not Done/Cancelled with priorityOrder: 5, tagColor: gold, canDismiss: true; skips if dismissed for todayDate', () => {
+    const cr = (id: string, name: string, extra: Partial<ChangeRequest>): ChangeRequest => ({
+      id,
+      code: id.toUpperCase(),
+      name,
+      status: 'In Progress',
+      type: 'NEW_FEATURE',
+      targets: [],
+      createdAt: '2026-09-01T00:00:00.000Z',
+      updatedAt: '2026-09-01T00:00:00.000Z',
+      ...extra,
+    });
+
+    const changeRequests: ChangeRequest[] = [
+      cr('p-1', 'CR Reminder', {
         reminderDate: '2026-09-28',
         reminderNote: 'Review budget',
-        createdAt: '2026-09-01T00:00:00.000Z',
-        updatedAt: '2026-09-01T00:00:00.000Z',
-      },
-      {
-        id: 'p-dismissed',
-        name: 'Project Dismissed',
-        status: 'In Progress',
-        reminderDate: '2026-09-25',
-        createdAt: '2026-09-01T00:00:00.000Z',
-        updatedAt: '2026-09-01T00:00:00.000Z',
-      },
-      {
-        id: 'p-done',
-        name: 'Project Done',
-        status: 'Done',
-        reminderDate: '2026-09-28',
-        createdAt: '2026-09-01T00:00:00.000Z',
-        updatedAt: '2026-09-01T00:00:00.000Z',
-      },
-    ];
-
-    const milestones: Milestone[] = [
-      {
-        id: 'm-1',
-        projectId: 'p-1',
-        name: 'Milestone Reminder',
-        status: 'Open',
-        reminderDate: '2026-09-27',
-        reminderNote: 'Verify deliverable',
-        createdAt: '2026-09-01T00:00:00.000Z',
-        updatedAt: '2026-09-01T00:00:00.000Z',
-      },
+      }),
+      cr('p-dismissed', 'CR Dismissed', { reminderDate: '2026-09-25' }),
+      cr('p-done', 'CR Done', { status: 'Done', reminderDate: '2026-09-28' }),
     ];
 
     const tasks: Task[] = [
@@ -312,13 +288,12 @@ describe('evaluateNotifications', () => {
     ];
 
     const dismissedMap: Record<string, string> = {
-      'reminder:project:p-dismissed': todayDate,
+      'reminder:cr:p-dismissed': todayDate,
     };
 
     const result = evaluateNotifications({
       tasks,
-      projects,
-      milestones,
+      changeRequests,
       rules: defaultRules,
       overrides: [],
       allocations: [],
@@ -327,18 +302,15 @@ describe('evaluateNotifications', () => {
     });
 
     const reminders = result.filter((item) => item.category === 'reminder');
-    expect(reminders).toHaveLength(3); // p-1, m-1, t-rem-1
+    expect(reminders).toHaveLength(2); // p-1, t-rem-1
 
-    const projReminder = reminders.find((r) => r.id === 'reminder:project:p-1');
-    expect(projReminder).toBeDefined();
-    expect(projReminder?.priorityOrder).toBe(5);
-    expect(projReminder?.tagColor).toBe('gold');
-    expect(projReminder?.canDismiss).toBe(true);
-    expect(projReminder?.subtitle).toBe('Review budget');
-
-    const mileReminder = reminders.find((r) => r.id === 'reminder:milestone:m-1');
-    expect(mileReminder).toBeDefined();
-    expect(mileReminder?.entityType).toBe('milestone');
+    const crReminder = reminders.find((r) => r.id === 'reminder:cr:p-1');
+    expect(crReminder).toBeDefined();
+    expect(crReminder?.priorityOrder).toBe(5);
+    expect(crReminder?.tagColor).toBe('gold');
+    expect(crReminder?.canDismiss).toBe(true);
+    expect(crReminder?.subtitle).toBe('Review budget');
+    expect(crReminder?.entityType).toBe('cr');
 
     const taskReminder = reminders.find((r) => r.id === 'reminder:task:t-rem-1');
     expect(taskReminder).toBeDefined();
@@ -346,11 +318,14 @@ describe('evaluateNotifications', () => {
   });
 
   it('Test 6: Verifies unified output sorts strictly by priorityOrder ascending (1: overdue, 2: overload, 3: due-soon, 4: stale, 5: reminder) per D-05', () => {
-    const projects: Project[] = [
+    const changeRequests: ChangeRequest[] = [
       {
         id: 'p-1',
-        name: 'Project 1',
+        code: 'P-1',
+        name: 'CR 1',
         status: 'Open',
+        type: 'NEW_FEATURE',
+        targets: [],
         reminderDate: '2026-09-28',
         createdAt: '2026-09-01T00:00:00.000Z',
         updatedAt: '2026-09-01T00:00:00.000Z',
@@ -387,8 +362,7 @@ describe('evaluateNotifications', () => {
 
     const result = evaluateNotifications({
       tasks,
-      projects,
-      milestones: [],
+      changeRequests,
       rules: defaultRules,
       overrides: [],
       allocations,
@@ -479,8 +453,7 @@ describe('evaluateNotifications', () => {
 
       const result = evaluateNotifications({
         tasks: [taskWithReminders],
-        projects: [],
-        milestones: [],
+        changeRequests: [],
         rules: defaultRules,
         overrides: [],
         allocations: [],
@@ -521,10 +494,13 @@ describe('evaluateNotifications', () => {
         status: 'Done',
         reminders: [{ id: 'rem-1', date: '2026-09-28', time: '09:00' }],
       };
-      const cancelledProject: Project = {
-        id: 'proj-cancelled',
-        name: 'Cancelled Project',
+      const cancelledCr: ChangeRequest = {
+        id: 'cr-cancelled',
+        code: 'CR-CANCELLED',
+        name: 'Cancelled CR',
         status: 'Cancelled',
+        type: 'BUGFIX',
+        targets: [],
         reminders: [{ id: 'rem-2', date: '2026-09-28' }],
         createdAt: '2026-09-01T00:00:00.000Z',
         updatedAt: '2026-09-01T00:00:00.000Z',
@@ -532,8 +508,7 @@ describe('evaluateNotifications', () => {
 
       const result = evaluateNotifications({
         tasks: [doneTask],
-        projects: [cancelledProject],
-        milestones: [],
+        changeRequests: [cancelledCr],
         rules: defaultRules,
         overrides: [],
         allocations: [],
@@ -583,8 +558,7 @@ describe('evaluateNotifications', () => {
       // Mute all categories
       const resultMuted = evaluateNotifications({
         tasks,
-        projects: [],
-        milestones: [],
+        changeRequests: [],
         rules: defaultRules,
         overrides: [],
         allocations,
@@ -622,8 +596,7 @@ describe('evaluateNotifications', () => {
       // Default dueSoonDays = 1 -> neither 2 days nor 4 days is included
       const resultDefault = evaluateNotifications({
         tasks,
-        projects: [],
-        milestones: [],
+        changeRequests: [],
         rules: defaultRules,
         overrides: [],
         allocations: [],
@@ -635,8 +608,7 @@ describe('evaluateNotifications', () => {
       // Custom dueSoonDays = 3 -> in2Days included, in4Days excluded
       const resultCustom = evaluateNotifications({
         tasks,
-        projects: [],
-        milestones: [],
+        changeRequests: [],
         rules: defaultRules,
         overrides: [],
         allocations: [],
@@ -685,8 +657,7 @@ describe('evaluateNotifications', () => {
 
       const result = evaluateNotifications({
         tasks,
-        projects: [],
-        milestones: [],
+        changeRequests: [],
         rules: defaultRules,
         overrides: [],
         allocations: [],
@@ -725,8 +696,7 @@ describe('evaluateNotifications', () => {
       // At default 100%: 504m > 480m -> overloaded
       const result100 = evaluateNotifications({
         tasks,
-        projects: [],
-        milestones: [],
+        changeRequests: [],
         rules: defaultRules,
         overrides: [],
         allocations,
@@ -738,8 +708,7 @@ describe('evaluateNotifications', () => {
       // At 110%: 504m <= 480 * 1.1 (528m) -> not overloaded
       const result110 = evaluateNotifications({
         tasks,
-        projects: [],
-        milestones: [],
+        changeRequests: [],
         rules: defaultRules,
         overrides: [],
         allocations,

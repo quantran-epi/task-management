@@ -11,7 +11,7 @@ import {
   unlinkEntityFromDoc,
   getBacklinksForDoc,
 } from '../../src/db/repositories/documentLinkRepo';
-import type { Task, Project, Milestone } from '../../src/types/models';
+import type { ChangeRequest, System, Task } from '../../src/types/models';
 
 describe('smartIngestion utils', () => {
   describe('extractMarkdownMetadata', () => {
@@ -61,6 +61,7 @@ describe('smartIngestion utils', () => {
     const mockTasks: Task[] = [
       {
         id: 'task-1',
+        crId: 'cr-seed',
         name: 'Viết unit test cho auth',
         jiraKey: 'PROJ-101',
         status: 'Open',
@@ -72,6 +73,7 @@ describe('smartIngestion utils', () => {
       },
       {
         id: 'task-2',
+        crId: 'cr-seed',
         name: 'Tối ưu hoá database query',
         status: 'Open',
         progress: 0,
@@ -82,22 +84,26 @@ describe('smartIngestion utils', () => {
       },
     ];
 
-    const mockProjects: Project[] = [
+    const mockChangeRequests: ChangeRequest[] = [
       {
-        id: 'proj-1',
+        id: 'cr-1',
+        code: 'CR-2026-001',
         name: 'Core Banking Replatform',
         status: 'Open',
+        type: 'NEW_FEATURE',
+        targets: [{ systemId: 'sys-1' }],
         createdAt: '2026-10-01T00:00:00Z',
         updatedAt: '2026-10-01T00:00:00Z',
       },
     ];
 
-    const mockMilestones: Milestone[] = [
+    const mockSystems: System[] = [
       {
-        id: 'ms-1',
-        projectId: 'proj-1',
+        id: 'sys-1',
+        code: 'CORE_SVC',
         name: 'Giai đoạn 1 MVP',
-        status: 'Open',
+        parentId: null,
+        type: 'SERVICE',
         createdAt: '2026-10-01T00:00:00Z',
         updatedAt: '2026-10-01T00:00:00Z',
       },
@@ -105,27 +111,37 @@ describe('smartIngestion utils', () => {
 
     it('detects Jira issue keys matching regex', () => {
       const markdown = 'Tài liệu liên quan đến ticket PROJ-101 và SHB-9999.';
-      const detected = detectReferencedEntities(markdown, mockTasks, mockProjects, mockMilestones);
+      const detected = detectReferencedEntities(markdown, mockTasks, mockChangeRequests, mockSystems);
       const matchedJira = detected.find((d) => d.id === 'task-1');
       expect(matchedJira).toBeDefined();
       expect(matchedJira?.type).toBe('task');
       expect(matchedJira?.matchReason).toContain('Jira PROJ-101');
     });
 
-    it('matches task and project titles present in markdown body', () => {
+    it('matches task and CR titles present in markdown body', () => {
       const markdown = 'Cần làm cho Core Banking Replatform, đặc biệt là Tối ưu hoá database query.';
-      const detected = detectReferencedEntities(markdown, mockTasks, mockProjects, mockMilestones);
-      expect(detected.some((d) => d.id === 'proj-1' && d.type === 'project')).toBe(true);
+      const detected = detectReferencedEntities(markdown, mockTasks, mockChangeRequests, mockSystems);
+      expect(detected.some((d) => d.id === 'cr-1' && d.type === 'cr')).toBe(true);
       expect(detected.some((d) => d.id === 'task-2' && d.type === 'task')).toBe(true);
     });
 
-    it('does not falsely match short project names (e.g. MPA) inside arbitrary words like company or impact', () => {
-      const projectsWithMPA: Project[] = [
-        ...mockProjects,
+    it('matches a CR by its code and a subsystem by its code', () => {
+      const markdown = 'Theo CR-2026-001 thì CORE_SVC cần đổi.';
+      const detected = detectReferencedEntities(markdown, [], mockChangeRequests, mockSystems);
+      expect(detected.some((d) => d.id === 'cr-1' && d.type === 'cr')).toBe(true);
+      expect(detected.some((d) => d.id === 'sys-1' && d.type === 'system')).toBe(true);
+    });
+
+    it('does not falsely match short CR names (e.g. MPA) inside arbitrary words like company or impact', () => {
+      const crsWithMPA: ChangeRequest[] = [
+        ...mockChangeRequests,
         {
-          id: 'proj-mpa',
+          id: 'cr-mpa',
+          code: 'CR-MPA',
           name: 'MPA',
           status: 'Open',
+          type: 'ENHANCEMENT',
+          targets: [],
           createdAt: '2026-10-01T00:00:00Z',
           updatedAt: '2026-10-01T00:00:00Z',
         },
@@ -133,13 +149,13 @@ describe('smartIngestion utils', () => {
 
       // Contains "company", "campaign", "impact", "compact" — all contain "mpa" as substring
       const unrelatedText = 'Our company launched an advertising campaign that had tremendous impact on compact devices.';
-      const detectedFalse = detectReferencedEntities(unrelatedText, mockTasks, projectsWithMPA, mockMilestones);
-      expect(detectedFalse.some((d) => d.id === 'proj-mpa')).toBe(false);
+      const detectedFalse = detectReferencedEntities(unrelatedText, mockTasks, crsWithMPA, mockSystems);
+      expect(detectedFalse.some((d) => d.id === 'cr-mpa')).toBe(false);
 
       // Distinct word MPA should match
       const relatedText = 'Họp kỹ thuật dự án MPA với team frontend.';
-      const detectedTrue = detectReferencedEntities(relatedText, mockTasks, projectsWithMPA, mockMilestones);
-      expect(detectedTrue.some((d) => d.id === 'proj-mpa')).toBe(true);
+      const detectedTrue = detectReferencedEntities(relatedText, mockTasks, crsWithMPA, mockSystems);
+      expect(detectedTrue.some((d) => d.id === 'cr-mpa')).toBe(true);
     });
   });
 });
@@ -168,6 +184,7 @@ describe('documentLinkRepo bidirectional links and backlinks', () => {
 
     await db.tasks.add({
       id: 'task-1',
+      crId: 'cr-1',
       name: 'Task 1',
       notes: 'Ghi chú task 1',
       status: 'Open',
@@ -178,11 +195,13 @@ describe('documentLinkRepo bidirectional links and backlinks', () => {
       updatedAt: '2026-10-01T00:00:00Z',
     });
 
-    await db.projects.add({
-      id: 'proj-1',
-      name: 'Project 1',
+    await db.changeRequests.add({
+      id: 'cr-1',
+      code: 'CR-1',
+      name: 'CR 1',
       status: 'Open',
-      notes: '',
+      type: 'NEW_FEATURE',
+      targets: [],
       createdAt: '2026-10-01T00:00:00Z',
       updatedAt: '2026-10-01T00:00:00Z',
     });
@@ -196,11 +215,11 @@ describe('documentLinkRepo bidirectional links and backlinks', () => {
         matchedText: 'Task 1',
       },
       {
-        id: 'proj-1',
-        type: 'project' as const,
-        title: 'Project 1',
+        id: 'cr-1',
+        type: 'cr' as const,
+        title: 'CR 1',
         matchReason: 'matched title',
-        matchedText: 'Project 1',
+        matchedText: 'CR 1',
       },
     ];
 
@@ -211,17 +230,17 @@ describe('documentLinkRepo bidirectional links and backlinks', () => {
     expect(updatedTask?.notes).toContain(`[[doc:${docId}|${docTitle}]]`);
     expect(updatedTask?.documentLinks).toContain(docId);
 
-    // Check project has doc wiki-link
-    const updatedProj = await db.projects.get('proj-1');
-    expect(updatedProj?.notes).toContain(`[[doc:${docId}|${docTitle}]]`);
+    // Check CR has a documentLinks entry
+    const updatedCr = await db.changeRequests.get('cr-1');
+    expect(updatedCr?.documentLinks).toContain(docId);
 
-    // Check document body has references to task and project
+    // Check document body has references to task and CR
     const updatedDoc = await db.notes.get(docId);
     expect(updatedDoc?.body).toContain(`[[task:task-1|Task 1]]`);
-    expect(updatedDoc?.body).toContain(`[[project:proj-1|Project 1]]`);
+    expect(updatedDoc?.body).toContain(`[[cr:cr-1|CR 1]]`);
   });
 
-  it('getBacklinksForDoc returns all tasks, projects, and notes referencing target doc ID', async () => {
+  it('getBacklinksForDoc returns all tasks, CRs, and notes referencing target doc ID', async () => {
     const docId = 'target-doc';
 
     await db.notes.add({
@@ -236,6 +255,7 @@ describe('documentLinkRepo bidirectional links and backlinks', () => {
 
     await db.tasks.add({
       id: 't-ref',
+      crId: 'cr-ref',
       name: 'Referencing Task',
       notes: `Refer to [[doc:${docId}|Target Doc]]`,
       status: 'Open',
@@ -246,11 +266,14 @@ describe('documentLinkRepo bidirectional links and backlinks', () => {
       updatedAt: '2026-10-01T00:00:00Z',
     });
 
-    await db.projects.add({
+    await db.changeRequests.add({
       id: 'p-ref',
-      name: 'Referencing Project',
+      code: 'CR-REF',
+      name: 'Referencing CR',
       status: 'Open',
-      notes: `See [[doc:${docId}]]`,
+      type: 'ENHANCEMENT',
+      targets: [],
+      documentLinks: [docId],
       createdAt: '2026-10-01T00:00:00Z',
       updatedAt: '2026-10-01T00:00:00Z',
     });
@@ -267,7 +290,7 @@ describe('documentLinkRepo bidirectional links and backlinks', () => {
 
     const backlinks = await getBacklinksForDoc(docId, db);
     expect(backlinks.tasks.map((t) => t.id)).toEqual(['t-ref']);
-    expect(backlinks.projects.map((p) => p.id)).toEqual(['p-ref']);
+    expect(backlinks.changeRequests.map((cr) => cr.id)).toEqual(['p-ref']);
     expect(backlinks.referencingNotes.map((n) => n.id)).toEqual(['note-ref']);
   });
 
@@ -287,6 +310,7 @@ describe('documentLinkRepo bidirectional links and backlinks', () => {
 
     await db.tasks.add({
       id: 'task-u',
+      crId: 'cr-u',
       name: 'Task U',
       notes: `Note with [[doc:${docId}|${docTitle}]]`,
       documentLinks: [docId],

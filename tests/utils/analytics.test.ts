@@ -10,7 +10,7 @@ import type { Task, WorkSession } from '../../src/types/models';
 
 describe('analytics utilities', () => {
   const mockTasks: Task[] = [
-    {
+    { crId: '11111111-1111-4111-8111-111111111111',
       id: 'task-1',
       name: 'Viết tài liệu API',
       status: 'In Progress',
@@ -21,7 +21,7 @@ describe('analytics utilities', () => {
       createdAt: '2026-10-01T00:00:00.000Z',
       updatedAt: '2026-10-01T00:00:00.000Z',
     },
-    {
+    { crId: '11111111-1111-4111-8111-111111111111',
       id: 'task-2',
       name: 'Lập trình tính năng đăng nhập',
       status: 'Done',
@@ -32,7 +32,7 @@ describe('analytics utilities', () => {
       createdAt: '2026-10-01T00:00:00.000Z',
       updatedAt: '2026-10-01T00:00:00.000Z',
     },
-    {
+    { crId: '11111111-1111-4111-8111-111111111111',
       id: 'task-3',
       name: 'Task không có estimate và session',
       status: 'Open',
@@ -149,7 +149,7 @@ describe('analytics utilities', () => {
   });
 
   it('excludes items with 0 hours in estimate vs actual', () => {
-    const taskOnlyEstimate: Task = {
+    const taskOnlyEstimate: Task = { crId: '11111111-1111-4111-8111-111111111111',
       id: 'task-no-work',
       name: 'Task chưa làm',
       status: 'Open',
@@ -216,7 +216,7 @@ describe('analytics utilities', () => {
 
     it('identifies overestimate bias when actual is significantly less than estimate', () => {
       const overTasks: Task[] = [
-        {
+        { crId: '11111111-1111-4111-8111-111111111111',
           id: 'task-over',
           name: 'Task dự tính già',
           status: 'Done',
@@ -252,7 +252,7 @@ describe('analytics utilities', () => {
 
     it('handles tasks without actual sessions or without estimate', () => {
       const mixedTasks: Task[] = [
-        {
+        { crId: '11111111-1111-4111-8111-111111111111',
           id: 't-no-actual',
           name: 'Task chưa làm',
           status: 'Open',
@@ -263,7 +263,7 @@ describe('analytics utilities', () => {
           createdAt: '2026-10-01T00:00:00.000Z',
           updatedAt: '2026-10-01T00:00:00.000Z',
         },
-        {
+        { crId: '11111111-1111-4111-8111-111111111111',
           id: 't-no-est',
           name: 'Task không estimate',
           status: 'Done',

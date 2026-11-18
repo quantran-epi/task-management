@@ -24,7 +24,7 @@ describe('LocalSqlitePersistenceCard', () => {
   });
 
   it('shows missing-path recovery state without clearing local data', async () => {
-    await db.tasks.add({
+    await db.tasks.add({ crId: '11111111-1111-4111-8111-111111111111',
       id: 'task-1',
       name: 'Keep me',
       status: 'Open',

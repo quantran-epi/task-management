@@ -16,19 +16,22 @@ import { openTimerPopout } from '../../utils/timerPopout';
 export interface ActiveTimerWidgetProps {
   tasksMap?: Map<string, string>;
   database?: TaskPlannerDatabase;
+  compact?: boolean;
 }
 
 export function formatHierarchySubtitle(
-  project?: { name: string } | null,
-  milestone?: { name: string } | null
+  changeRequest?: { name: string; code?: string } | null,
+  system?: { name: string } | null
 ): string | null {
-  const parts = [project?.name, milestone?.name].filter(Boolean);
+  const crLabel = changeRequest ? changeRequest.code || changeRequest.name : undefined;
+  const parts = [crLabel, system?.name].filter(Boolean);
   return parts.length > 0 ? parts.join(' › ') : null;
 }
 
 export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
   tasksMap,
   database = db,
+  compact = false,
 }) => {
   const { token } = theme.useToken();
   const {
@@ -50,26 +53,26 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
     [activeTimers, database]
   );
 
-  // Load project & milestone hierarchy for active timer tasks (D-04)
+  // Load CR & subsystem hierarchy for active timer tasks (D-04, D-50)
   const hierarchyMap = useLiveQuery(
     async () => {
       if (!dbTasks || dbTasks.length === 0) return new Map<string, string>();
-      const projectIds = Array.from(new Set(dbTasks.map((t) => t.projectId).filter(Boolean))) as string[];
-      const milestoneIds = Array.from(new Set(dbTasks.map((t) => t.milestoneId).filter(Boolean))) as string[];
+      const crIds = Array.from(new Set(dbTasks.map((t) => t.crId).filter(Boolean))) as string[];
+      const systemIds = Array.from(new Set(dbTasks.map((t) => t.systemId).filter(Boolean))) as string[];
 
-      const [projects, milestones] = await Promise.all([
-        projectIds.length > 0 ? database.projects.bulkGet(projectIds) : [],
-        milestoneIds.length > 0 ? database.milestones.bulkGet(milestoneIds) : [],
+      const [changeRequests, systems] = await Promise.all([
+        crIds.length > 0 ? database.changeRequests.bulkGet(crIds) : [],
+        systemIds.length > 0 ? database.systems.bulkGet(systemIds) : [],
       ]);
 
-      const pMap = new Map(projects.filter(Boolean).map((p) => [p!.id, p!]));
-      const mMap = new Map(milestones.filter(Boolean).map((m) => [m!.id, m!]));
+      const crMap = new Map(changeRequests.filter(Boolean).map((cr) => [cr!.id, cr!]));
+      const systemMap = new Map(systems.filter(Boolean).map((s) => [s!.id, s!]));
 
       const result = new Map<string, string>();
       for (const t of dbTasks) {
-        const p = t.projectId ? pMap.get(t.projectId) : undefined;
-        const m = t.milestoneId ? mMap.get(t.milestoneId) : undefined;
-        const subtitle = formatHierarchySubtitle(p, m);
+        const cr = t.crId ? crMap.get(t.crId) : undefined;
+        const system = t.systemId ? systemMap.get(t.systemId) : undefined;
+        const subtitle = formatHierarchySubtitle(cr, system);
         if (subtitle) {
           result.set(t.id, subtitle);
         }
@@ -110,38 +113,40 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
         style={{
           display: 'inline-flex',
           alignItems: 'center',
-          gap: 8,
-          padding: '2px 10px',
+          gap: compact ? 6 : 8,
+          padding: compact ? '1px 8px' : '2px 10px',
           background: token.colorFillAlter,
-          borderRadius: 16,
+          borderRadius: compact ? 12 : 16,
           border: `1px solid ${token.colorBorderSecondary}`,
-          height: subtitle ? 36 : 32,
+          height: compact ? 20 : subtitle ? 36 : 32,
+          boxSizing: 'border-box',
         }}
       >
         <span
           data-testid="timer-status-indicator"
           style={{
-            width: 8,
-            height: 8,
+            width: compact ? 6 : 8,
+            height: compact ? 6 : 8,
             borderRadius: '50%',
             backgroundColor: isRunning ? token.colorSuccess : token.colorWarning,
             display: 'inline-block',
+            flexShrink: 0,
           }}
         />
-        <div style={{ display: 'inline-flex', flexDirection: 'column', maxWidth: 120 }}>
-          <Tooltip title={taskTitle}>
+        <div style={{ display: 'inline-flex', flexDirection: 'column', maxWidth: compact ? 130 : 120 }}>
+          <Tooltip title={subtitle ? `${taskTitle} (${subtitle})` : taskTitle}>
             <Typography.Text
               ellipsis
               style={{
-                fontSize: 13,
+                fontSize: compact ? 11.5 : 13,
                 fontWeight: 500,
-                lineHeight: 1.2,
+                lineHeight: compact ? '14px' : 1.2,
               }}
             >
               {taskTitle}
             </Typography.Text>
           </Tooltip>
-          {subtitle && (
+          {!compact && subtitle && (
             <Typography.Text
               ellipsis
               type="secondary"
@@ -159,49 +164,50 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
           data-testid="elapsed-ticker"
           style={{
             fontVariantNumeric: 'tabular-nums',
-            fontSize: 13,
+            fontSize: compact ? 11.5 : 13,
             fontWeight: 600,
             color: isRunning ? token.colorSuccess : token.colorWarning,
+            lineHeight: compact ? '14px' : 1.2,
           }}
         >
           {formatElapsedTicker(elapsedSec)}
         </Typography.Text>
-        <Space orientation="horizontal" size={2}>
+        <Space orientation="horizontal" size={compact ? 1 : 2}>
           {isRunning ? (
             <Button
               type="text"
               size="small"
-              icon={<PauseCircleOutlined style={{ fontSize: 16, color: token.colorWarning }} />}
+              icon={<PauseCircleOutlined style={{ fontSize: compact ? 12 : 16, color: token.colorWarning }} />}
               onClick={() => pauseTimer(timer.taskId)}
               aria-label="Tạm dừng"
-              style={{ minWidth: 24, minHeight: 24, padding: 0 }}
+              style={{ minWidth: compact ? 18 : 24, minHeight: compact ? 18 : 24, width: compact ? 18 : 24, height: compact ? 18 : 24, padding: 0 }}
             />
           ) : (
             <Button
               type="text"
               size="small"
-              icon={<PlayCircleOutlined style={{ fontSize: 16, color: token.colorSuccess }} />}
+              icon={<PlayCircleOutlined style={{ fontSize: compact ? 12 : 16, color: token.colorSuccess }} />}
               onClick={() => startTimer(timer.taskId)}
               aria-label="Tiếp tục"
-              style={{ minWidth: 24, minHeight: 24, padding: 0 }}
+              style={{ minWidth: compact ? 18 : 24, minHeight: compact ? 18 : 24, width: compact ? 18 : 24, height: compact ? 18 : 24, padding: 0 }}
             />
           )}
           <Button
             type="text"
             size="small"
-            icon={<CheckCircleOutlined style={{ fontSize: 16, color: token.colorPrimary }} />}
+            icon={<CheckCircleOutlined style={{ fontSize: compact ? 12 : 16, color: token.colorPrimary }} />}
             onClick={() => finishTimer(timer.taskId)}
             aria-label="Kết thúc phiên"
-            style={{ minWidth: 24, minHeight: 24, padding: 0 }}
+            style={{ minWidth: compact ? 18 : 24, minHeight: compact ? 18 : 24, width: compact ? 18 : 24, height: compact ? 18 : 24, padding: 0 }}
           />
           <Tooltip title="Mở cửa sổ nổi (Pop out)">
             <Button
               type="text"
               size="small"
-              icon={<ExportOutlined style={{ fontSize: 13, color: token.colorTextSecondary }} />}
+              icon={<ExportOutlined style={{ fontSize: compact ? 11 : 13, color: token.colorTextSecondary }} />}
               onClick={() => openTimerPopout()}
               aria-label="Mở cửa sổ nổi"
-              style={{ minWidth: 24, minHeight: 24, padding: 0 }}
+              style={{ minWidth: compact ? 18 : 24, minHeight: compact ? 18 : 24, width: compact ? 18 : 24, height: compact ? 18 : 24, padding: 0 }}
             />
           </Tooltip>
         </Space>
@@ -352,12 +358,27 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
 
   return (
     <Dropdown menu={{ items: menuItems }} trigger={['click']} placement="bottomRight">
-      <Badge count={activeTimers.length} overflowCount={99} color={token.colorSuccess} offset={[-2, 4]}>
+      <Badge
+        count={activeTimers.length}
+        overflowCount={99}
+        color={token.colorSuccess}
+        offset={compact ? [-1, 2] : [-2, 4]}
+        size={compact ? 'small' : 'default'}
+      >
         <Button
           type="text"
-          icon={<ClockCircleOutlined style={{ fontSize: 18, color: token.colorSuccess }} />}
+          icon={<ClockCircleOutlined style={{ fontSize: compact ? 13 : 18, color: token.colorSuccess }} />}
           aria-label={`${activeTimers.length} timer đang chạy`}
-          style={{ minHeight: 36, minWidth: 36 }}
+          style={{
+            minHeight: compact ? 20 : 36,
+            minWidth: compact ? 20 : 36,
+            height: compact ? 20 : 36,
+            width: compact ? 20 : 36,
+            padding: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
         />
       </Badge>
     </Dropdown>

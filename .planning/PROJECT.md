@@ -12,16 +12,16 @@ Make planned work realistically fit available time by exposing overload early an
 
 Shipped **v1.0 MVP** on 2026-09-27 with all 8 foundational phases complete. Shipped v1.1 Banking IT Enhancements. Phase 16 knowledge server foundation and Phase 17 pilot ontology & Neo4j graph projection complete (all 5 plans in Phase 17 executed, GRAPH-01..GRAPH-06 satisfied). Codebase features closed ontology contracts, deterministic AST extraction, bounded LLM prose fallback, factKey deduplication, parameterized Neo4j adapter, Fastify inspection endpoints, and DocumentSetDrawer graph controls with PlannerMate offline isolation.
 
-## Current Milestone: v1.2 Hybrid GraphRAG Knowledge Assistant MVP
+## Current Milestone: v1.4 Unified AI Office
 
-**Goal:** Query normalized local Markdown for scheduled process `60000006`, returning evidence-grounded answers, citations, and multi-hop dependency paths.
+**Goal:** Hợp nhất SDLC Studio và AI Office thành một workspace AI duy nhất (Unified AI Office) dạng chat-first, free-style; loại bỏ hoàn toàn SDLC Studio; quản lý đội ngũ AI leader và agent với kỹ năng chuyên biệt, điều phối công việc linh hoạt kèm cơ chế token budget cứng và luyện tập kỹ năng (skill enrichment).
 
 **Target features:**
-- Publish and incrementally index PlannerMate Markdown through an optional knowledge server.
-- Combine keyword, vector, and Neo4j graph retrieval over the scheduled-process pilot corpus.
-- Extract evidence-backed process steps, call chains, database objects, cycles, statuses, and diagnostic relationships.
-- Answer through the existing AI assistant with citations, graph paths, conflicts, and missing-evidence handling.
-- Verify quality with a benchmark corpus covering retrieval, flow, and impact queries of at least three hops.
+- **Trụ 1 — Xóa bỏ SDLC Studio & Tái cấu trúc Navigation**: Audit shared-service trước, tách phần AI Office thực sự dùng, rồi xóa mọi entry point/view/state machine/wizard route của SDLC Studio; thanh điều hướng chỉ còn một trigger "AI Office"; explorer 2 tầng (tầng trên: Leader & Agent; tầng dưới: Danh sách nhóm chat/hội thoại); click mở chi tiết tại center editor.
+- **Trụ 2 — Mô hình Nhóm chat Chat-First & Phân công Free-style**: Tạo nhóm chat không giới hạn; mỗi nhóm gồm 1 Leader và N Agent tùy ý; Leader tự động phân tích yêu cầu từ người dùng và phân công cho Agent phù hợp theo skill; user vẫn có thể @mention agent trực tiếp; CR và tài liệu SDLC chỉ là context tùy chọn — thiếu context không chặn và không giảm chất lượng.
+- **Trụ 3 — Token Budget cứng & Kiểm soát chi phí**: Cấp token budget chia đều cho Leader và các Agent khi bắt đầu nhóm; đo lường chính xác cả input + output token trên từng request; pause giữa các tool round khi chạm ngưỡng; cảnh báo ngưỡng; cho phép cấp thêm token cho từng agent và tự động tăng tổng ngân sách nhóm (chi tiết top-up cho Leader còn mở — R-12).
+- **Trụ 4 — Quản lý Kỹ năng & Làm giàu Skill (Skill Enrichment)**: CRUD Leader, Agent, Skill phải hoạt động đúng theo tiêu chí verify quan sát được (không tuyên bố "không lỗi" khi chưa walkthrough thực tế); cơ chế học hỏi và bổ sung kinh nghiệm sau các lượt chạy (Agent đề xuất bài học, User duyệt version Markdown mới).
+- **Trụ 5 — Concurrency Control & Thực thi ổn định**: Giới hạn số lượng Agent chạy song song để bảo vệ tài nguyên; xử lý lỗi vặt và cải thiện toàn diện UX AI Office.
 
 ## Requirements
 
@@ -50,8 +50,11 @@ Shipped **v1.0 MVP** on 2026-09-27 with all 8 foundational phases complete. Ship
 
 ### Active
 
-- [ ] Verify retrieval and multi-hop answer quality against a 30-50 question benchmark corpus.
-- [ ] Harden index rebuild performance and enforce server-side secret isolation.
+- [ ] v1.4: Xóa bỏ hoàn toàn SDLC Studio và tái cấu trúc điều hướng thành trigger duy nhất "AI Office" với Explorer 2 tầng (Leader/Agent + Nhóm chat).
+- [ ] v1.4: Triển khai mô hình nhóm chat chat-first, free-style với 1 Leader và N Agent, không giới hạn số nhóm/agent, CR và docs là context tùy chọn.
+- [ ] v1.4: Enforce token budget cứng tính toán cả input + output token, cảnh báo ngưỡng, và hỗ trợ top-up per-agent tăng tổng ngân sách nhóm.
+- [ ] v1.4: Quản lý kỹ năng chuyên biệt và cơ chế làm giàu skill (skill enrichment) có user phê duyệt version Markdown.
+- [ ] v1.4: Runtime concurrency control và xử lý triệt để toàn bộ lỗi lớn, lỗi vặt UX trong AI Office.
 
 ### Out of Scope
 
@@ -88,6 +91,14 @@ GitHub synchronization is backup synchronization, not collaborative live sync. B
 - **Evidence integrity**: Every extracted relationship must retain document, section, and source-range provenance plus evidence classification.
 - **Pilot scope**: MVP targets only `docs/sample-markdown-flow/60000006-SHB-Credit-calculations/`; broader card-system ingestion is deferred.
 - **Sensitive data**: Every publish attempt must scan for PAN, CVV, PIN/PIN block, HSM keys, credentials, and customer PII before content leaves PlannerMate. Findings require masked details and fresh explicit confirmation; no trust bypass persists.
+- **Artifact writes**: Chat-driven artifact edits are proposals. The editor changes only after explicit user approval of a diff; no tool may commit a version or claim approval.
+- **Skill writes**: No AI tool may write an approved skill version. Only the user's explicit approval action creates one.
+- **Repository autonomy**: Every filesystem/process operation on a real repository runs through the external fs-gw gateway — TaskMate never spawns repo processes itself. Missing fs-gw degrades to the manual change-pack fallback, never to a silent failure.
+- **Retrieve coupling**: Retrieval requests carry a query, not a locally-derived set ID list. A device with no published documents locally must still retrieve from the server.
+- **Hard budget**: Token budget is enforced before each model call, measured on input + output, and charged per attempt including retries. A response without usage data is never free.
+- **Optional context**: CR, PL01, PL02, and documents are optional attachments for a group chat. Their absence must not block a run or degrade output quality.
+- **Verification honesty**: No phase is complete on code reading alone. Every claim of correctness requires an observed walkthrough.
+- **No data preservation (C-16)**: The app has never run in production — every row in Dexie, SQLite, and backup is test data. Deleting a feature deletes its data, schema, types, backup fields, and migration path. Keep only code whose *functionality* the new feature reuses. Never keep a schema, type, or migration solely to import an old backup or preserve old rows.
 
 ## Key Decisions
 
@@ -108,6 +119,12 @@ GitHub synchronization is backup synchronization, not collaborative live sync. B
 | Start with scheduled process `60000006` as pilot corpus | Small enough to validate, rich enough for scheduler, call-chain, data, and diagnostic multi-hop queries | ✓ Validated — Phase 17 |
 | Synthesize grounded answers with closure validation | Prevents hallucination, enforces exact source ranges and graph paths | ✓ Validated — Phase 19 |
 | Automatic local BM25 fallback on daemon unavailability | Guarantees zero downtime and zero egress for local Markdown searches | ✓ Validated — Phase 19 |
+| Enterprise System Catalog with hierarchical physical subsystems | Models real enterprise systems owning SSH/repo paths and multi-repo SDLC context | ✓ Validated — Phase 31.1 |
+| Transform Project to Change Request impacting 1..N systems | Aligns personal workload with enterprise change management and multi-system delivery | ✓ Validated — Phase 31.1 |
+| Artifact edits from chat return a diff the user approves before the editor changes (v1.3) | Keeps "never claim a document was approved or saved" true; AI never overwrites work in progress | Planned — v1.3 |
+| Knowledge retrieve is query-only; the server owns set selection (v1.3) | A fresh install has no local document set to send, so client-side `setId` coupling breaks retrieval | Planned — v1.3 |
+| Repository autonomy goes through Claude Code headless via fs-gw (v1.3) | TaskMate must not re-implement an agent harness; Claude Code already owns file/tool orchestration inside the repo | Planned — v1.3 |
+| Manual change-pack script remains as explicit fallback (v1.3) | Repo autonomy must degrade safely when fs-gw is not running | Planned — v1.3 |
 
 
 ## Evolution
@@ -128,4 +145,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-10 after completing Phase 17 pilot ontology and Neo4j graph*
+*Last updated: 2026-11-09 for Milestone v1.4 Unified AI Office kickoff*

@@ -1,0 +1,355 @@
+/* ==========================================================================
+   OpenIDEA Islands Light Theme Tokens - IntelliJ ExpUI
+   ========================================================================== */
+
+:root,
+:root[data-theme="light"] {
+  /* Surfaces */
+  --bg-frame: #e9eaee;
+  --bg-app: #ffffff;
+  --bg-island: #ffffff;
+  --bg-elev: #f7f8fa;
+  --bg-popup: #ffffff;
+  --bg-floating-toolbar: #ffffff;
+  --bg-hover: #ededed;
+  --bg-selected: #d0dffe;
+  --bg-selected-strong: #bdd3ff;
+  --bg-current-line: #f5f8fe;
+  --bg-backdrop: #e9eaee;
+  --bg-input: #ffffff;
+
+  /* Borders & Dividers */
+  --border: #e9eaee;
+  --border-strong: #d1d3d9;
+  --border-popup: #d1d3d9;
+  --border-window: #d1d3d9;
+  --control-off: #c3c5cb;
+
+  /* Typography */
+  --fg: #191b1f;
+  --fg-strong: #000000;
+  --fg-secondary: #5f6269;
+  --fg-muted: #6c707e;
+  --fg-subtle: #73767c;
+  --fg-faint: #9fa2a8;
+  --fg-icon: #6c707e;
+
+  /* Accent & Status */
+  --accent: #5b4fe8;
+  --accent-soft: #eef0fe;
+  --link: #5b4fe8;
+  --link-hover: #4333c8;
+  --danger: #c54e58;
+  --warning: #a56906;
+  --success: #338555;
+  --info: #22d3ee;
+
+  /* Project Theme Gradients */
+  --project-color: #22d3ee;
+  --project-color-end: #a855f7;
+  --project-gradient-strength: 18%;
+
+  /* Metrics & Radii */
+  --island-gap: 6px;
+  --island-radius: 8px;
+  --radius-small: 4px;
+  --radius-control: 4px;
+  --radius-popup: 8px;
+  --radius-tab: 6px;
+
+  --stripe-width: 36px;
+  --titlebar-height: 40px;
+  --statusbar-height: 26px;
+  --tabbar-height: 36px;
+
+  --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-size-ui: 13.5px;
+  --font-size-base: 14px;
+  --font-size-small: 12px;
+  --font-size-xs: 11px;
+
+  /* Resizer handle tokens */
+  --handle-line-color: var(--border-strong);
+  --handle-line-color-hover: var(--accent);
+}
+
+/* Resizable divider styles */
+.workbench-resize-handle {
+  position: relative;
+  transition: background 0.15s ease;
+  user-select: none;
+  touch-action: none;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.workbench-resize-handle[data-direction="horizontal"] {
+  width: var(--island-gap, 6px);
+  margin: 0;
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+}
+
+.workbench-resize-handle[data-direction="horizontal"]::before {
+  content: "";
+  width: 2px;
+  height: 28px;
+  border-radius: 1px;
+  background: transparent;
+  transition: all 0.15s ease;
+}
+
+.workbench-resize-handle[data-direction="horizontal"]:hover::before,
+.workbench-resize-handle[data-direction="horizontal"][data-resize-handle-state="drag"]::before {
+  background: var(--handle-line-color-hover);
+  box-shadow: 0 0 4px rgba(91, 79, 232, 0.4);
+}
+
+.workbench-resize-handle[data-direction="vertical"] {
+  height: var(--island-gap, 6px);
+  margin: 0;
+  cursor: row-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+}
+
+.workbench-resize-handle[data-direction="vertical"]::before {
+  content: "";
+  height: 2px;
+  width: 28px;
+  border-radius: 1px;
+  background: transparent;
+  transition: all 0.15s ease;
+}
+
+.workbench-resize-handle[data-direction="vertical"]:hover::before,
+.workbench-resize-handle[data-direction="vertical"][data-resize-handle-state="drag"]::before {
+  background: var(--handle-line-color-hover);
+  box-shadow: 0 0 4px rgba(91, 79, 232, 0.4);
+}
+
+/* Viewport locking - prevent window-level scrollbars */
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden !important;
+  box-sizing: border-box;
+}
+
+.workbench-root {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  overflow: hidden !important;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+/* Islands Frame Container */
+.workbench-islands-frame {
+  background:
+    radial-gradient(
+      600px 300px at 0 0,
+      color-mix(in srgb, var(--project-color) var(--project-gradient-strength, 18%), transparent),
+      transparent
+    ),
+    var(--bg-frame);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-ui);
+}
+
+/* Individual Island Surface */
+.workbench-island-card {
+  background: var(--bg-island);
+  border-radius: var(--island-radius);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Center Editor Area Island - elevated focus contrast */
+.workbench-island-card-center {
+  background: var(--bg-island);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(56, 113, 225, 0.08);
+}
+
+/* Side Tool Windows - crisp border and elevation matching island cards */
+.workbench-island-card-toolwindow {
+  background: var(--bg-island);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+/* Ant Design Tree Explorer Fixes - Single row alignment without break lines */
+.workbench-toolwindow-left .ant-tree .ant-tree-treenode {
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  white-space: nowrap !important;
+  padding: 1px 0 !important;
+  min-width: 0 !important;
+}
+
+/* JetBrains Instant Expand - Disable slide down animation */
+.workbench-toolwindow-left .ant-motion-collapse,
+.workbench-toolwindow-left .ant-motion-collapse-active,
+.workbench-toolwindow-left .ant-tree-motion,
+.workbench-toolwindow-left .ant-tree .ant-tree-node-content-wrapper,
+.workbench-toolwindow-left .ant-tree .ant-tree-switcher-icon svg {
+  transition: none !important;
+  animation: none !important;
+}
+
+.workbench-toolwindow-left .ant-tree .ant-tree-switcher {
+  position: relative !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 28px !important;
+  line-height: 28px !important;
+  flex-shrink: 0 !important;
+  width: 20px !important;
+  margin: 0 !important;
+  align-self: center !important;
+}
+
+/* Balanced 18x18px hover pill centered around chevron, not exceeding item text height */
+.workbench-toolwindow-left .ant-tree .ant-tree-switcher:before {
+  content: "" !important;
+  position: absolute !important;
+  width: 18px !important;
+  height: 18px !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  border-radius: 4px !important;
+  transition: background-color 0.15s ease !important;
+}
+
+.workbench-toolwindow-left .ant-tree .ant-tree-switcher:not(.ant-tree-switcher-noop):hover:before {
+  background-color: var(--bg-hover, rgba(0, 0, 0, 0.06)) !important;
+}
+
+.workbench-toolwindow-left .ant-tree .ant-tree-switcher .ant-tree-switcher-icon {
+  position: relative !important;
+  z-index: 1 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  vertical-align: middle !important;
+  line-height: 1 !important;
+  margin: 0 !important;
+  font-size: 10px !important;
+}
+
+/* Custom Tree Expand Pill (JetBrains style balanced 18x18 hover pill for DocFolderTree & DiagramExplorer) */
+.workbench-tree-expand-btn {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--fg-muted, #8c8c8c);
+  cursor: pointer;
+  flex-shrink: 0;
+  border-radius: 4px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  background: transparent;
+  border: none;
+  padding: 0;
+  user-select: none;
+}
+
+.workbench-tree-expand-btn:hover {
+  background-color: var(--bg-hover, rgba(0, 0, 0, 0.06));
+  color: var(--fg-default, #262626);
+}
+
+.workbench-toolwindow-left .ant-tree .ant-tree-node-content-wrapper {
+  display: flex !important;
+  align-items: center !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  height: 28px !important;
+  line-height: 28px !important;
+  padding: 0 4px !important;
+  border-radius: 4px !important;
+}
+
+.workbench-toolwindow-left .ant-tree .ant-tree-iconEle {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin-right: 6px !important;
+  line-height: 1 !important;
+  flex-shrink: 0 !important;
+  width: 16px !important;
+}
+
+.workbench-toolwindow-left .ant-tree .ant-tree-title {
+  display: flex !important;
+  align-items: center !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  line-height: 1.2 !important;
+}
+
+/* ExpUI Tab in Editor Area */
+.workbench-expui-tab {
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--fg-secondary);
+  border-radius: var(--radius-tab) var(--radius-tab) 0 0;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+  position: relative;
+  background: transparent;
+}
+
+.workbench-expui-tab:hover {
+  background: var(--bg-hover);
+  color: var(--fg-strong);
+}
+
+.workbench-expui-tab.active {
+  background: var(--bg-island);
+  color: var(--fg-strong);
+  font-weight: 500;
+  box-shadow: 0 -1px 0 var(--border-strong) inset;
+}
+
+.workbench-expui-tab.active::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
+}

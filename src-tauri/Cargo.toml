@@ -22,6 +22,8 @@ rfd = "0.17.2"
 reqwest = { version = "0.12", features = ["json"] }
 open = "5.3"
 keyring = "4.2"
+notify-rust = "4"
 tokio = { version = "1", features = ["full"] }
 tokio-util = "0.7"
 libc = "0.2"
+ssh2 = { version = "0.9.6", features = ["vendored-openssl"] }

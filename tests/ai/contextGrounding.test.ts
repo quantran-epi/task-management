@@ -1,18 +1,18 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   serializeTaskContext,
-  serializeProjectContext,
-  serializeMilestoneContext,
+  serializeChangeRequestContext,
+  serializeSystemContext,
   buildItemContextPrompt,
   MAX_CONTEXT_CHAR_LIMIT,
 } from '../../src/services/ai/contextGrounding';
-import type { Task, Project, Milestone, Note, NoteAttachment } from '../../src/types/models';
+import type { Task, ChangeRequest, System, Note, NoteAttachment } from '../../src/types/models';
 
 describe('contextGrounding', () => {
   const mockTask: Task = {
     id: 'task-123',
-    projectId: 'proj-1',
-    milestoneId: 'ms-1',
+    crId: 'cr-1',
+    systemId: 'sys-1',
     name: 'Implement OAuth Token Refresh',
     description: 'Support automatic token refreshing on 401',
     status: 'In Progress',
@@ -38,31 +38,31 @@ describe('contextGrounding', () => {
     updatedAt: '2026-10-02T00:00:00Z',
   };
 
-  const mockProject: Project = {
-    id: 'proj-1',
+  const mockChangeRequest: ChangeRequest = {
+    id: 'cr-1',
+    code: 'CR-2026-001',
     name: 'Core Banking Auth Revamp',
-    description: 'Project to overhaul authentication flows across retail banking',
+    type: 'NEW_FEATURE',
     status: 'In Progress',
+    description: 'Change request to overhaul authentication flows across retail banking',
     deadline: '2026-12-31',
     jiraEpicKey: 'EPIC-90',
+    targets: [{ systemId: 'sys-1', featureBranch: 'feature/CR-2026-001' }],
     opsOwners: ['Duc Quan'],
     businessAnalysts: ['Alice BA'],
     documentLinks: ['https://confluence.bank.local/arch-spec'],
-    notes: 'Project level strategic roadmap notes.',
     createdAt: '2026-09-01T00:00:00Z',
     updatedAt: '2026-09-15T00:00:00Z',
   };
 
-  const mockMilestone: Milestone = {
-    id: 'ms-1',
-    projectId: 'proj-1',
-    name: 'Milestone 1: Backend Security',
+  const mockSystem: System = {
+    id: 'sys-1',
+    code: 'BACKEND_SEC',
+    name: 'Backend Security',
+    type: 'SERVICE',
+    parentId: null,
     description: 'Tokens, session limits, and rate limiting',
-    status: 'In Progress',
-    deadline: '2026-11-01',
-    opsOwners: ['Duc Quan'],
-    businessAnalysts: ['Alice BA'],
-    notes: 'Milestone security requirements.',
+    remoteRepoPath: '/srv/repos/backend-security',
     createdAt: '2026-09-10T00:00:00Z',
     updatedAt: '2026-09-20T00:00:00Z',
   };
@@ -87,26 +87,29 @@ describe('contextGrounding', () => {
     });
   });
 
-  describe('serializeProjectContext', () => {
-    it('produces structured XML <item_context type="project"> with project metadata', () => {
-      const xml = serializeProjectContext(mockProject);
-      expect(xml).toContain('<item_context type="project" id="proj-1">');
+  describe('serializeChangeRequestContext', () => {
+    it('produces structured XML <item_context type="cr"> with CR metadata', () => {
+      const xml = serializeChangeRequestContext(mockChangeRequest);
+      expect(xml).toContain('<item_context type="cr" id="cr-1">');
       expect(xml).toContain('</item_context>');
+      expect(xml).toContain('CR-2026-001');
       expect(xml).toContain('Core Banking Auth Revamp');
+      expect(xml).toContain('- **Type:** NEW_FEATURE');
       expect(xml).toContain('- **Status:** In Progress');
       expect(xml).toContain('- **Jira Epic:** EPIC-90');
       expect(xml).toContain('- **Deadline:** 2026-12-31');
     });
   });
 
-  describe('serializeMilestoneContext', () => {
-    it('produces structured XML <item_context type="milestone"> with milestone metadata', () => {
-      const xml = serializeMilestoneContext(mockMilestone);
-      expect(xml).toContain('<item_context type="milestone" id="ms-1">');
+  describe('serializeSystemContext', () => {
+    it('produces structured XML <item_context type="system"> with system metadata', () => {
+      const xml = serializeSystemContext(mockSystem);
+      expect(xml).toContain('<item_context type="system" id="sys-1">');
       expect(xml).toContain('</item_context>');
-      expect(xml).toContain('Milestone 1: Backend Security');
-      expect(xml).toContain('- **Status:** In Progress');
-      expect(xml).toContain('- **Deadline:** 2026-11-01');
+      expect(xml).toContain('BACKEND_SEC');
+      expect(xml).toContain('Backend Security');
+      expect(xml).toContain('- **Type:** SERVICE');
+      expect(xml).toContain('- **Remote Repo Path:** /srv/repos/backend-security');
     });
   });
 
@@ -330,16 +333,12 @@ describe('contextGrounding', () => {
       expect(prompt.endsWith('</item_context>')).toBe(true);
     });
 
-    it('serializes child milestones and child tasks when grounding a project', async () => {
+    it('serializes target subsystems and child tasks when grounding a CR', async () => {
       const mockDb: any = {
         notes: { where: () => ({ equals: () => ({ filter: () => ({ toArray: async () => [] }) }) }) },
         noteAttachments: { where: () => ({ equals: () => ({ toArray: async () => [] }) }) },
-        milestones: {
-          where: () => ({
-            equals: () => ({
-              toArray: async () => [mockMilestone],
-            }),
-          }),
+        systems: {
+          toArray: async () => [mockSystem],
         },
         tasks: {
           where: () => ({
@@ -351,13 +350,13 @@ describe('contextGrounding', () => {
       };
 
       const prompt = await buildItemContextPrompt({
-        entityType: 'project',
-        item: mockProject,
+        entityType: 'cr',
+        item: mockChangeRequest,
         db: mockDb,
       });
 
-      expect(prompt).toContain('### Milestones (1)');
-      expect(prompt).toContain('Milestone 1: Backend Security');
+      expect(prompt).toContain('### Target Subsystems (1)');
+      expect(prompt).toContain('Backend Security');
       expect(prompt).toContain('### Tasks (1 total, 1 open)');
       expect(prompt).toContain('Implement OAuth Token Refresh');
       expect(prompt).toContain('[Jira: CORE-104]');
@@ -365,16 +364,16 @@ describe('contextGrounding', () => {
   });
 
   describe('buildGlobalContextPrompt', () => {
-    it('summarizes active projects and tasks across workspace', async () => {
+    it('summarizes active change requests and tasks across workspace', async () => {
       const { buildGlobalContextPrompt } = await import('../../src/services/ai/contextGrounding');
       const mockDb: any = {
-        projects: { toArray: async () => [mockProject] },
+        changeRequests: { toArray: async () => [mockChangeRequest] },
         tasks: { toArray: async () => [mockTask] },
       };
 
       const prompt = await buildGlobalContextPrompt(mockDb);
       expect(prompt).toContain('<global_context>');
-      expect(prompt).toContain('Projects:** 1 total (1 active)');
+      expect(prompt).toContain('Change Requests:** 1 total (1 active)');
       expect(prompt).toContain('Tasks:** 1 total (1 open)');
       expect(prompt).toContain('Core Banking Auth Revamp');
       expect(prompt).toContain('</global_context>');

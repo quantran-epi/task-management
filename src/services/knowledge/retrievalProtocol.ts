@@ -55,6 +55,7 @@ export const RETRIEVAL_OUTCOMES = [
   'UNSUPPORTED',
   'DEGRADED',
   'SEED_ONLY',
+  'NO_PUBLISHED_SETS',
 ] as const;
 
 export const RetrievalOutcomeSchema = z.enum(RETRIEVAL_OUTCOMES);
@@ -714,18 +715,43 @@ export const RetrievalContextHintsSchema = z.strictObject({
 
 export type RetrievalContextHints = z.infer<typeof RetrievalContextHintsSchema>;
 
+/**
+ * D-07: the wire request is deliberately thin. Servers own published-set
+ * discovery and budgets; clients send only a query and optional bounds.
+ */
 export const FederatedRetrievalRequestSchema = z.strictObject({
   query: z.string().trim().min(1).max(4000),
-  setTierAssignments: z.array(FederatedSetTierAssignmentSchema).min(1).max(50),
-  comparisonMode: z.enum(['single', 'baseline_vs_scope']).nullable(),
-  budgets: FederatedRetrievalBudgetsSchema,
   limit: z.number().int().min(10).max(50).default(20),
+  setIds: z.array(z.string().uuid()).min(1).max(50).optional(),
   includeInferred: z.boolean().default(false),
   recentTurns: z.array(ConversationTurnSchema).max(3).default([]),
   contextHints: RetrievalContextHintsSchema.optional(),
 });
 
 export type FederatedRetrievalRequest = z.infer<typeof FederatedRetrievalRequestSchema>;
+
+/** D-09: per-set coverage states surfaced in the federated diagnostics ledger. */
+export const FEDERATED_SET_COVERAGE_STATES = [
+  'CONTRIBUTED',
+  'SEARCHED_NO_EVIDENCE',
+  'FAILED',
+  'TIMED_OUT',
+  'NOT_SEARCHED_BUDGET',
+  'UNAVAILABLE',
+] as const;
+
+export const FederatedSetCoverageStateSchema = z.enum(FEDERATED_SET_COVERAGE_STATES);
+export type FederatedSetCoverageState = z.infer<typeof FederatedSetCoverageStateSchema>;
+
+export const FederatedSetCoverageSchema = z.strictObject({
+  setId: z.string().uuid(),
+  state: FederatedSetCoverageStateSchema,
+  publishedSnapshotId: z.union([z.string().uuid(), z.string().regex(/^gsnap_[0-9a-f]{8,}$/)]).nullable(),
+  retrievalSnapshotId: z.union([z.string().uuid(), z.string().regex(/^gsnap_[0-9a-f]{8,}$/)]).nullable(),
+  staleIndex: z.boolean(),
+});
+
+export type FederatedSetCoverage = z.infer<typeof FederatedSetCoverageSchema>;
 
 export const FederatedRetrievalItemSchema = z.strictObject({
   setId: z.string().uuid(),
@@ -764,6 +790,7 @@ export const FederatedRetrievalResponseSchema = z
     diagnostics: z.strictObject({
       degraded: z.boolean(),
       coverageWarnings: z.array(FederatedCoverageWarningSchema).max(100),
+      coverage: z.array(FederatedSetCoverageSchema).max(50).default([]),
       // Aggregated content-free stage rows and dropped seeds (D-13, D-19).
       stageDiagnostics: z.array(StageDiagnosticSchema).max(20).optional(),
       failedSeeds: z.array(FailedSeedSchema).max(5).optional(),

@@ -157,48 +157,17 @@ export async function getTaskSpentMinutes(
 }
 
 /**
- * Computes total spent minutes for a milestone by summing spent time across all its tasks.
+ * Computes total spent minutes for a change request by summing spent time across all its tasks.
  */
-export async function getMilestoneSpentMinutes(
-  milestoneId: string,
+export async function getCrSpentMinutes(
+  crId: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<number> {
-  const tasks = await db.tasks.where('milestoneId').equals(milestoneId).toArray();
+  const tasks = await db.tasks.where('crId').equals(crId).toArray();
   if (tasks.length === 0) return 0;
 
   const taskIds = tasks.map((t) => t.id);
   const sessions = await db.workSessions.where('taskId').anyOf(taskIds).toArray();
-  return sessions.reduce((sum, s) => sum + s.durationMinutes, 0);
-}
-
-/**
- * Computes total spent minutes for a project across:
- * 1. Tasks belonging directly to the project
- * 2. Tasks belonging to milestones of the project
- */
-export async function getProjectSpentMinutes(
-  projectId: string,
-  db: TaskPlannerDatabase = defaultDb
-): Promise<number> {
-  const [projectTasks, milestones] = await Promise.all([
-    db.tasks.where('projectId').equals(projectId).toArray(),
-    db.milestones.where('projectId').equals(projectId).toArray(),
-  ]);
-
-  const milestoneIds = milestones.map((m) => m.id);
-  const milestoneTasks = milestoneIds.length > 0
-    ? await db.tasks.where('milestoneId').anyOf(milestoneIds).toArray()
-    : [];
-
-  const taskMap = new Map<string, boolean>();
-  for (const t of [...projectTasks, ...milestoneTasks]) {
-    taskMap.set(t.id, true);
-  }
-
-  const allTaskIds = Array.from(taskMap.keys());
-  if (allTaskIds.length === 0) return 0;
-
-  const sessions = await db.workSessions.where('taskId').anyOf(allTaskIds).toArray();
   return sessions.reduce((sum, s) => sum + s.durationMinutes, 0);
 }
 
@@ -221,6 +190,7 @@ export async function getWorkSessionsForDate(
     const task = taskMap.get(session.taskId);
     const fallbackTask: Task = {
       id: session.taskId,
+      crId: '',
       name: 'Deleted / Unknown Task',
       status: 'Cancelled',
       progress: 0,

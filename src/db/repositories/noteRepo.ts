@@ -1,4 +1,5 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../index';
+import type { Table } from 'dexie';
 import type { Note, NoteAttachment, NoteEntityType } from '../../types/models';
 import {
   NoteInputSchema,
@@ -9,16 +10,48 @@ import {
 } from '../../validation/schemas';
 import { generateId } from '../../utils/uuid';
 
+/**
+ * The `ai-` namespace is the ownership proof for a team's docs tree, so only the app may write it.
+ * Lives here (not in `teamDocsRepo`) because `teamDocsRepo` imports this module — the reverse
+ * import would be a cycle.
+ */
+export const RESERVED_SLUG_PREFIX = 'ai-';
+
+/** True only for a slug in the reserved namespace. */
+export function isReservedSlug(slug: string | null | undefined): boolean {
+  return slug?.trim().startsWith(RESERVED_SLUG_PREFIX) ?? false;
+}
+
 export interface NoteWithAttachments {
   note: Note;
   attachments: NoteAttachment[];
 }
 
+/**
+ * The `ai-` namespace is the ownership proof for a team's docs tree, so only the app may write it.
+ * Enforced at every path that accepts a slug from outside — `createNote`/`batchCreateNotes`
+ * (unless the caller opts in), `updateNote`, and `validateBackup` on import.
+ *
+ * Ceiling: a direct `db.notes.put` (SQLite hydration) bypasses this. That path is a local file
+ * the owner controls, and the app's own writes never produce a reserved slug there. A slugless
+ * folder it produces is NOT repaired by `ensureTeamDocsReady` — `resolveMemberFolder` rejects it
+ * and a fresh zone is minted, so the folder keeps its documents but is no longer the member's
+ * write target. The team delete is a soft delete for the same reason: a wrong guess about which
+ * folder is whose costs a Trash restore, never the documents.
+ */
+export function assertSlugNamespaceFree(slug: string | null | undefined): void {
+  if (isReservedSlug(slug)) {
+    throw new Error('Slug bắt đầu bằng "ai-" được dành riêng cho thư mục của nhóm AI.');
+  }
+}
+
 export async function createNote(
   input: NoteInput,
-  db: TaskPlannerDatabase = defaultDb
+  db: TaskPlannerDatabase = defaultDb,
+  opts?: { allowReservedSlug?: boolean }
 ): Promise<Note> {
   const validated = NoteInputSchema.parse(input);
+  if (!opts?.allowReservedSlug) assertSlugNamespaceFree(validated.slug);
   const now = new Date().toISOString();
 
   const note: Note = {
@@ -48,6 +81,7 @@ export async function batchCreateNotes(
   const now = new Date().toISOString();
   const notes: Note[] = inputs.map((input) => {
     const validated = NoteInputSchema.parse(input);
+    assertSlugNamespaceFree(validated.slug);
     return {
       id: generateId(),
       type: validated.type,
@@ -76,6 +110,21 @@ export async function updateNote(
   const validated = NoteUpdateSchema.parse(updates);
   const existing = await db.notes.get(id);
   if (!existing) return null;
+
+  // CR-04: a reserved slug is the ownership proof for a team's docs tree, so the generic note
+  // path must not be able to break it. Clearing the slug stranded the tree; overwriting it or
+  // flipping `type` did the same one field over, and the lead's `update_note` tool reaches both.
+  // The tree's own writers (`ensureDocsRoot`, `createTeamDocsTree`) use `db.notes.update`
+  // directly, so this guard never blocks them.
+  if (isReservedSlug(existing.slug)) {
+    if (validated.slug !== undefined || validated.type !== undefined) {
+      throw new Error(
+        'Không thể đổi slug hoặc loại của thư mục tài liệu nhóm AI.'
+      );
+    }
+  } else {
+    assertSlugNamespaceFree(validated.slug);
+  }
 
   const now = new Date().toISOString();
   const updated: Note = {
@@ -129,15 +178,112 @@ export async function updateNote(
   return updated;
 }
 
+/**
+ * CR-04/CR-08: every row that references a note must be deleted or detached before the note
+ * goes, or `validateBackup` rejects the app's own next export. One helper, because the two
+ * permanent delete paths (`deleteNote`, `bulkPermanentDeleteNotes`) and the team tree delete
+ * (`deleteTeamDocsTree`) share exactly this list — a fourth copy would drift.
+ *
+ * CR-08: the team handles (`aiTeams.docsFolderId`, `aiTeamMembers.docsFolderId`) are cleared
+ * here too. They are validated references, and the lazy repair only runs on a team's next turn —
+ * a team that never runs again would leave the app's own export invalid, and push does not
+ * validate, so the only remote backup would become unimportable.
+ *
+ * Runs inside the caller's transaction; it opens none of its own.
+ */
+export async function detachNoteReferences(
+  ids: readonly string[],
+  db: TaskPlannerDatabase = defaultDb
+): Promise<void> {
+  if (ids.length === 0) return;
+  const doomed = new Set(ids);
+
+  const attachments = await db.noteAttachments.where('noteId').anyOf(ids).toArray();
+  if (attachments.length > 0) {
+    await db.noteAttachments.bulkDelete(attachments.map((attachment) => attachment.id));
+  }
+
+  // A document set is a snapshot: drop the dead ids, never the whole set.
+  const sets = await db.documentSets.toArray();
+  for (const set of sets) {
+    if (!set.documentIds.some((documentId) => doomed.has(documentId))) continue;
+    await db.documentSets.update(set.id, {
+      documentIds: set.documentIds.filter((documentId) => !doomed.has(documentId)),
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  // WR-04: a `publishedDocuments` row is keyed by `[setId, documentId]`; leaving it behind makes
+  // the set read `Local changes` forever, because the status rule counts metadata vs ids.
+  const published = await db.publishedDocuments.toArray();
+  const doomedPublished = published.filter((row) => doomed.has(row.documentId));
+  for (const row of doomedPublished) {
+    await db.publishedDocuments.delete([row.setId, row.documentId]);
+  }
+
+  // WR-04: a knowledge link naming a gone document is a dangling reference too.
+  const links = await db.knowledgeLinks.toArray();
+  const doomedLinks = links.filter((link) => link.docId !== undefined && doomed.has(link.docId));
+  if (doomedLinks.length > 0) {
+    await db.knowledgeLinks.bulkDelete(doomedLinks.map((link) => link.id));
+  }
+
+  // A document-scoped thread has no meaning without its document — same rule as a team thread.
+  const threads = await db.chatThreads.where('scopeType').equals('document').toArray();
+  const doomedThreads = threads.filter(
+    (thread) => thread.entityId !== undefined && doomed.has(thread.entityId)
+  );
+  if (doomedThreads.length > 0) {
+    const threadIds = doomedThreads.map((thread) => thread.id);
+    await db.chatMessages.where('threadId').anyOf(threadIds).delete();
+    await db.chatTabs.where('threadId').anyOf(threadIds).delete();
+    await db.chatThreads.bulkDelete(threadIds);
+  }
+
+  // CR-08: clear the team handles that named a dying folder. The next turn's backfill re-mints.
+  const teams = await db.aiTeams.toArray();
+  for (const team of teams) {
+    if (team.docsFolderId !== undefined && doomed.has(team.docsFolderId)) {
+      await db.aiTeams.update(team.id, { docsFolderId: undefined });
+    }
+  }
+  const members = await db.aiTeamMembers.toArray();
+  for (const member of members) {
+    if (member.docsFolderId !== undefined && doomed.has(member.docsFolderId)) {
+      await db.aiTeamMembers.update(member.id, { docsFolderId: undefined });
+    }
+  }
+}
+
+/**
+ * WR-02: the stores `detachNoteReferences` reads or writes, in one list. Callers derive their
+ * transaction scope from it, so a store added to the helper can never be forgotten by a caller
+ * and surface as a `SubTransactionError` at runtime.
+ */
+export const NOTE_REFERENCE_STORE_NAMES = [
+  'notes',
+  'noteAttachments',
+  'documentSets',
+  'publishedDocuments',
+  'knowledgeLinks',
+  'chatThreads',
+  'chatMessages',
+  'chatTabs',
+  'aiTeams',
+  'aiTeamMembers',
+] as const;
+
+/** The same list as Dexie table handles, for `db.transaction('rw', ...)`. */
+export function noteReferenceStores(db: TaskPlannerDatabase): Table[] {
+  return NOTE_REFERENCE_STORE_NAMES.map((name) => db.table(name));
+}
+
 export async function deleteNote(
   id: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<void> {
-  await db.transaction('rw', [db.notes, db.noteAttachments], async () => {
-    const attachments = await db.noteAttachments.where('noteId').equals(id).toArray();
-    if (attachments.length > 0) {
-      await db.noteAttachments.bulkDelete(attachments.map((a) => a.id));
-    }
+  await db.transaction('rw', noteReferenceStores(db), async () => {
+    await detachNoteReferences([id], db);
     await db.notes.delete(id);
   });
 }
@@ -311,11 +457,8 @@ export async function bulkPermanentDeleteNotes(
   db: TaskPlannerDatabase = defaultDb
 ): Promise<void> {
   if (ids.length === 0) return;
-  await db.transaction('rw', [db.notes, db.noteAttachments], async () => {
-    const attachments = await db.noteAttachments.where('noteId').anyOf(ids).toArray();
-    if (attachments.length > 0) {
-      await db.noteAttachments.bulkDelete(attachments.map((a) => a.id));
-    }
+  await db.transaction('rw', noteReferenceStores(db), async () => {
+    await detachNoteReferences(ids, db);
     await db.notes.bulkDelete(ids);
   });
 }

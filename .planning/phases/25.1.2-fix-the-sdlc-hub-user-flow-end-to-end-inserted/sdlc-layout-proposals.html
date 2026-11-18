@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SDLC Tab Layout Proposals</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --tag-bg: #1e3a8a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 24px; }
+    h1 { font-size: 20px; margin-bottom: 8px; }
+    p.desc { font-size: 14px; color: var(--muted); margin-bottom: 24px; }
+
+    .nav-tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    .tab-btn { background: transparent; border: none; color: var(--muted); font-size: 14px; font-weight: 600; padding: 8px 16px; cursor: pointer; border-radius: 6px; }
+    .tab-btn.active { background: var(--primary); color: #fff; }
+
+    .proposal-container { display: none; }
+    .proposal-container.active { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+
+    .phone-frame {
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      background: #020617;
+      height: 720px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
+    }
+    .frame-header {
+      background: var(--card);
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .frame-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Explanation panel */
+    .info-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      height: fit-content;
+    }
+    .info-card h3 { font-size: 16px; color: var(--primary); margin-bottom: 12px; }
+    .info-card ul { margin-left: 20px; font-size: 14px; color: var(--muted); line-height: 1.6; }
+    .info-card li { margin-bottom: 8px; }
+
+    /* Elements inside phone frame */
+    .step-banner {
+      background: rgba(59, 130, 246, 0.1);
+      border-left: 4px solid var(--primary);
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .step-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--primary);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .step-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+    .step-desc { font-size: 12px; color: var(--muted); }
+
+    .stepper-row {
+      display: flex;
+      background: #090d16;
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      padding: 6px 8px;
+      gap: 6px;
+    }
+    .step-chip {
+      flex-shrink: 0;
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+    }
+    .step-chip.done { border-color: var(--success); color: var(--success); }
+    .step-chip.active { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+    .step-chip.stale { border-color: var(--warning); color: var(--warning); }
+
+    .chat-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: #020617;
+    }
+    .msg { max-width: 85%; padding: 8px 12px; border-radius: 8px; font-size: 13px; line-height: 1.4; }
+    .msg.ai { background: var(--card); border: 1px solid var(--border); align-self: flex-start; }
+    .msg.user { background: var(--primary); align-self: flex-end; }
+
+    .chat-input {
+      border-top: 1px solid var(--border);
+      padding: 10px 12px;
+      background: var(--card);
+      display: flex;
+      gap: 8px;
+    }
+    .chat-input input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 6px;
+      color: #fff;
+      font-size: 13px;
+    }
+
+    /* Subtabs inside tab */
+    .inner-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background: #090d16;
+    }
+    .inner-tab {
+      flex: 1;
+      text-align: center;
+      padding: 8px;
+      font-size: 13px;
+      color: var(--muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+    }
+    .inner-tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+      font-weight: 600;
+    }
+
+    /* Stepper list proposal 3 */
+    .step-accordion {
+      padding: 12px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .step-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--card);
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+    .step-card-header {
+      padding: 10px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .step-card-body {
+      padding: 12px;
+      border-top: 1px solid var(--border);
+      background: rgba(0,0,0,0.2);
+      font-size: 13px;
+    }
+
+    .btn-action {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Đề xuất Bố cục Tab SDLC trong AI Chat Drawer</h1>
+  <p class="desc">Bấm chọn từng Phương án bên dưới để xem trực tiếp giao diện mô phỏng trên màn hình.</p>
+
+  <div class="nav-tabs">
+    <button class="tab-btn active" onclick="switchProposal(1)">Phương án 1: Stepper ngang trên đỉnh + Chat (Wizard gọn)</button>
+    <button class="tab-btn" onclick="switchProposal(2)">Phương án 2: Chia 2 Tab con [Tiến trình] và [AI Thảo luận]</button>
+    <button class="tab-btn" onclick="switchProposal(3)">Phương án 3: Accordion mở rộng Drawer (Nút Maximize)</button>
+  </div>
+
+  <!-- PROPOSAL 1 -->
+  <div id="p1" class="proposal-container active">
+    <div class="phone-frame">
+      <div class="frame-header">
+        <span>⚙️ SDLC: CR-2026-001</span>
+        <span style="color: var(--muted)">Drawer 480px</span>
+      </div>
+      <!-- Stepper horizontal bar -->
+      <div class="stepper-row">
+        <div class="step-chip done">✓ 1. PL01/02</div>
+        <div class="step-chip active">● 2. Solution</div>
+        <div class="step-chip">3. Coding</div>
+        <div class="step-chip">4. Pack</div>
+        <div class="step-chip">5. Docs</div>
+        <div class="step-chip">6. CAB</div>
+      </div>
+      <!-- Current Step Banner with direct actions -->
+      <div class="step-banner">
+        <div class="step-badge">BƯỚC ĐANG LÀM: BƯỚC 2/6</div>
+        <div class="step-title">Duyệt & Lưu giải pháp SOLUTION.md</div>
+        <div class="step-desc">AI đã phân tích xong. Xem nội dung hoặc chat bên dưới để yêu cầu sửa trước khi Lưu.</div>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <button class="btn-action">Lưu SOLUTION.md</button>
+          <button class="btn-action" style="background:transparent; border:1px solid var(--border);">Xem bản thảo</button>
+        </div>
+      </div>
+      <!-- Chat history below -->
+      <div class="chat-scroll">
+        <div class="msg user">Nghiệp vụ rút gốc một phần, tối thiểu 1.000.000đ.</div>
+        <div class="msg ai">
+          <strong>Bản thảo SOLUTION.md đã sẵn sàng:</strong><br><br>
+          1. API <code>POST /savings/withdraw</code><br>
+          2. Bảng <code>SYN_SAVING_WITHDRAWAL</code><br>
+          3. Kiểm tra số dư gốc còn lại >= 500k.
+        </div>
+      </div>
+      <div class="chat-input">
+        <input type="text" placeholder="Góp ý sửa SOLUTION.md với AI...">
+        <button class="btn-action" style="margin-top:0;">Gửi</button>
+      </div>
+    </div>
+
+    <div class="info-card">
+      <h3>Ưu điểm của Phương án 1 (Khuyên dùng)</h3>
+      <ul>
+        <li><strong>Không bao giờ phải mở Modal lớn:</strong> Toàn bộ tiến trình 6 bước nằm ở thanh stepper trên đỉnh, bước hiện tại hiển thị nút bấm hành động ngay bên dưới.</li>
+        <li><strong>Vừa xem bước vừa chat liền mạch:</strong> Không gian chat AI vẫn chiếm 70% chiều cao, người dùng nói chuyện với AI để sửa solution và bấm nút "Lưu" ngay mà không cần chuyển màn hình.</li>
+        <li><strong>Bấm vào bước cũ để xem lại:</strong> Muốn xem lại PL01/PL02 hay Change Pack chỉ cần click vào chip tương ứng trên stepper.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- PROPOSAL 2 -->
+  <div id="p2" class="proposal-container">
+    <div class="phone-frame">
+      <div class="frame-header">
+        <span>⚙️ SDLC: CR-2026-001</span>
+        <span style="color: var(--muted)">Drawer 480px</span>
+      </div>
+      <!-- Inner Sub-tabs -->
+      <div class="inner-tabs">
+        <div class="inner-tab active">📋 Quy trình SDLC (Tài liệu)</div>
+        <div class="inner-tab">💬 AI Thảo luận (Chat)</div>
+      </div>
+      <div class="frame-body">
+        <div class="step-accordion">
+          <div class="step-card">
+            <div class="step-card-header" style="color: var(--success)">
+              <span>✓ Bước 1: Hồ sơ Đầu vào (PL01 & PL02)</span>
+              <span>Đã duyệt v1</span>
+            </div>
+          </div>
+          <div class="step-card" style="border-color: var(--primary)">
+            <div class="step-card-header" style="color: var(--primary)">
+              <span>● Bước 2: Giải pháp SOLUTION.md</span>
+              <span>Đang xử lý</span>
+            </div>
+            <div class="step-card-body">
+              <p style="color:var(--muted); margin-bottom:8px;">Bản thảo đã được AI tạo trong tab Chat. Đọc kỹ và bấm lưu để chuyển bước.</p>
+              <button class="btn-action">Lưu SOLUTION.md</button>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-card-header" style="color: var(--muted)">
+              <span>○ Bước 3: Triển khai Code ngoài</span>
+              <span>Chưa bắt đầu</span>
+            </div>
+          </div>
+          <div class="step-card">
+            <div class="step-card-header" style="color: var(--muted)">
+              <span>○ Bước 4: Change Pack & Soi Drift</span>
+              <span>Chưa bắt đầu</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="info-card">
+      <h3>Ưu điểm của Phương án 2 (Tách bạch)</h3>
+      <ul>
+        <li><strong>Tách riêng Tài liệu và Khung Chat:</strong> Người dùng bấm tab "Quy trình SDLC" để thấy toàn bộ danh sách 6 bước dọc to rõ, đọc tài liệu thoải mái.</li>
+        <li><strong>Khi cần chat:</strong> Bấm tab "AI Thảo luận" để chat toàn màn hình mà không bị bảng biểu che khuất.</li>
+        <li><strong>Nhược điểm:</strong> Phải bấm qua lại giữa 2 tab con khi vừa muốn đọc tài liệu vừa muốn chat chỉ đạo AI.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- PROPOSAL 3 -->
+  <div id="p3" class="proposal-container">
+    <div class="phone-frame" style="width: 100%; max-width: 680px;">
+      <div class="frame-header">
+        <span>⚙️ SDLC: CR-2026-001 (Chế độ Studio Mở rộng)</span>
+        <button class="btn-action" style="margin-top:0; background:transparent; border:1px solid var(--border);">Thu nhỏ ➔</button>
+      </div>
+      <div class="frame-body" style="flex-direction:row;">
+        <!-- Left: Stepper column -->
+        <div style="width: 240px; border-right:1px solid var(--border); padding:10px; background:#090d16; overflow-y:auto;">
+          <div style="font-size:11px; color:var(--muted); margin-bottom:8px; font-weight:600;">6 BƯỚC QUY TRÌNH</div>
+          <div style="padding:6px; background:var(--card); border-radius:4px; margin-bottom:6px; font-size:12px; color:var(--success);">✓ 1. Hồ sơ Đầu vào</div>
+          <div style="padding:6px; background:var(--primary); border-radius:4px; margin-bottom:6px; font-size:12px; font-weight:600;">● 2. Giải pháp SOLUTION</div>
+          <div style="padding:6px; border-radius:4px; margin-bottom:6px; font-size:12px; color:var(--muted);">○ 3. Coding ngoài</div>
+          <div style="padding:6px; border-radius:4px; margin-bottom:6px; font-size:12px; color:var(--muted);">○ 4. Change Pack & Drift</div>
+        </div>
+        <!-- Right: Content & Chat -->
+        <div style="flex:1; display:flex; flex-direction:column;">
+          <div style="padding:12px; border-bottom:1px solid var(--border); background:var(--card);">
+            <div style="font-weight:600; font-size:14px; margin-bottom:4px;">SOLUTION.md (v1)</div>
+            <div style="font-size:12px; color:var(--muted);">Chi tiết giải pháp kỹ thuật được đồng bộ trực tiếp.</div>
+            <button class="btn-action">Lưu giải pháp</button>
+          </div>
+          <div class="chat-scroll">
+            <div class="msg ai">AI đang lắng nghe yêu cầu bổ sung cho bước SOLUTION...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="info-card">
+      <h3>Ưu điểm của Phương án 3 (Mở rộng bề ngang)</h3>
+      <ul>
+        <li><strong>Không dùng popup/modal che khuất:</strong> Có nút "Phóng to / Thu nhỏ" trên header Drawer. Khi phóng to, Drawer mở rộng ra chiếm 60–70% màn hình thành 2 cột: Cột trái là danh sách bước, Cột phải là Nội dung + Chat.</li>
+        <li><strong>Cảm giác làm việc chuyên nghiệp (IDE style):</strong> Rất hợp cho desktop/Tauri, không bị tù túng trên màn hình hẹp.</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    function switchProposal(idx) {
+      document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+        btn.classList.toggle('active', i === idx - 1);
+      });
+      document.querySelectorAll('.proposal-container').forEach((cont, i) => {
+        cont.classList.toggle('active', i === idx - 1);
+      });
+    }
+  </script>
+</body>
+</html>

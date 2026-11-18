@@ -1,0 +1,158 @@
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { EditorArea } from '../EditorArea';
+import { useLayoutStore } from '../store/layoutStore';
+
+// Mock views so EditorArea test stays focused and fast
+vi.mock('../../views/TasksView', () => ({
+  TasksView: () => <div data-testid="mock-tasks-view">Mock Tasks View</div>,
+}));
+
+vi.mock('../../views/NotesView', () => ({
+  NotesView: () => <div data-testid="mock-notes-view">Mock Notes View</div>,
+}));
+
+vi.mock('../../views/PlannerView', () => ({
+  PlannerView: () => <div data-testid="mock-planner-view">Mock Planner View</div>,
+}));
+
+vi.mock('../../views/AnalyticsView', () => ({
+  AnalyticsView: () => <div data-testid="mock-analytics-view">Mock Analytics View</div>,
+}));
+
+vi.mock('../../views/SettingsView', () => ({
+  SettingsView: () => <div data-testid="mock-settings-view">Mock Settings View</div>,
+}));
+
+vi.mock('../../views/ChangeRequestDetailView', () => ({
+  ChangeRequestDetailView: ({ changeRequestId }: { changeRequestId: string }) => (
+    <div data-testid="mock-cr-detail-view">CR Detail: {changeRequestId}</div>
+  ),
+}));
+
+describe('EditorArea', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    act(() => {
+      useLayoutStore.getState().resetLayout();
+    });
+  });
+
+  it('renders tab list with default tabs and active Tasks view', () => {
+    render(<EditorArea />);
+
+    expect(screen.getByRole('tablist')).toBeDefined();
+    expect(screen.getByText('Tasks')).toBeDefined();
+    expect(screen.getByText('Docs')).toBeDefined();
+    expect(screen.getByText('Capacity Planner')).toBeDefined();
+
+    // Tasks view is rendered initially
+    expect(screen.getByTestId('mock-tasks-view')).toBeDefined();
+  });
+
+  it('switches active tab when clicked', () => {
+    render(<EditorArea />);
+
+    const docsTab = screen.getByText('Docs');
+    fireEvent.click(docsTab);
+
+    // Notes/Docs view rendered
+    expect(screen.getByTestId('mock-notes-view')).toBeDefined();
+    expect(useLayoutStore.getState().activeTabId).toBe('notes');
+  });
+
+  it('closes a closable tab and switches active tab to neighbor', () => {
+    render(<EditorArea />);
+
+    // Activate planner first
+    fireEvent.click(screen.getByText('Capacity Planner'));
+    expect(useLayoutStore.getState().activeTabId).toBe('planner');
+
+    // Close planner tab
+    const closePlannerBtn = screen.getByLabelText('Close Capacity Planner');
+    fireEvent.click(closePlannerBtn);
+
+    // Planner tab removed
+    expect(screen.queryByText('Capacity Planner')).toBeNull();
+    // Switched to neighbor tab
+    expect(useLayoutStore.getState().activeTabId).toBe('notes');
+  });
+
+  it('renders close button on Tasks tab and can close it', () => {
+    render(<EditorArea />);
+
+    const closeTasksBtn = screen.getByLabelText('Close Tasks');
+    expect(closeTasksBtn).toBeDefined();
+
+    fireEvent.click(closeTasksBtn);
+    expect(screen.queryByText('Tasks')).toBeNull();
+  });
+
+  it('enforces maximum 20 open tabs cap (T-25.4-03)', () => {
+    render(<EditorArea />);
+
+    // Add 25 tabs
+    act(() => {
+      for (let i = 1; i <= 25; i++) {
+        useLayoutStore.getState().openTab({
+          id: `tab-${i}`,
+          title: `Tab ${i}`,
+          viewType: 'tasks',
+          closable: true,
+        });
+      }
+    });
+
+    const openTabs = useLayoutStore.getState().openTabs;
+    expect(openTabs.length).toBeLessThanOrEqual(20);
+  });
+
+  it('renders open tabs dropdown trigger button', () => {
+    render(<EditorArea />);
+    const dropdownBtn = screen.getByRole('button', { name: 'Show open tabs list' });
+    expect(dropdownBtn).toBeDefined();
+  });
+
+  it('renders ChangeRequestDetailView for a cr_detail tab with its changeRequestId', () => {
+    render(<EditorArea />);
+
+    act(() => {
+      useLayoutStore.getState().openTab({
+        id: 'cr-cr-1',
+        title: 'CR-2026-001',
+        viewType: 'cr_detail',
+        closable: true,
+        params: { changeRequestId: 'cr-1' },
+      });
+    });
+
+    expect(screen.getByTestId('mock-cr-detail-view')).toHaveTextContent('CR Detail: cr-1');
+  });
+
+  it('pins and unpins tab via pin icon button', () => {
+    render(<EditorArea />);
+
+    const pinTasksBtn = screen.getByRole('button', { name: 'Pin Tasks' });
+    expect(pinTasksBtn).toBeDefined();
+
+    fireEvent.click(pinTasksBtn);
+    expect(useLayoutStore.getState().openTabs.find((t) => t.id === 'tasks')?.pinned).toBe(true);
+
+    const unpinTasksBtn = screen.getByRole('button', { name: 'Unpin Tasks' });
+    expect(unpinTasksBtn).toBeDefined();
+
+    fireEvent.click(unpinTasksBtn);
+    expect(useLayoutStore.getState().openTabs.find((t) => t.id === 'tasks')?.pinned).toBe(false);
+  });
+
+  it('renders reload active tab button and increments reload counter on click', () => {
+    render(<EditorArea />);
+
+    const reloadBtn = screen.getByRole('button', { name: 'Reload active tab' });
+    expect(reloadBtn).toBeDefined();
+
+    expect(useLayoutStore.getState().tabReloadKeys['tasks']).toBeUndefined();
+    fireEvent.click(reloadBtn);
+    expect(useLayoutStore.getState().tabReloadKeys['tasks']).toBe(1);
+  });
+});

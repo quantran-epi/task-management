@@ -17,7 +17,7 @@ import { useDayInsight } from '../hooks/useDayInsight';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
 import { PageHeader } from '../components/common/PageHeader';
 import { getTodayDateString } from '../utils/date';
-import type { Task, Project } from '../types/models';
+import type { Task, ChangeRequest } from '../types/models';
 
 dayjs.extend(isoWeek);
 
@@ -47,7 +47,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
   const [feasibilityModalOpen, setFeasibilityModalOpen] = useState<boolean>(false);
   const [taskSelectModalOpen, setTaskSelectModalOpen] = useState<boolean>(false);
   const [selectedTaskIdForFeasibility, setSelectedTaskIdForFeasibility] = useState<string | undefined>(undefined);
-  const [selectedProjectIdForFilter, setSelectedProjectIdForFilter] = useState<string | undefined>(undefined);
+  const [selectedCrIdForFilter, setSelectedCrIdForFilter] = useState<string | undefined>(undefined);
   const [insightDate, setInsightDate] = useState<string | undefined>(undefined);
 
   const screens = Grid.useBreakpoint();
@@ -67,24 +67,24 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
     []
   );
 
-  const projects = useLiveQuery(
+  const changeRequests = useLiveQuery(
     async () => {
-      const all = await db.projects.toArray();
-      return all.sort((a, b) => a.name.localeCompare(b.name));
+      const all = await db.changeRequests.toArray();
+      return all.sort((a, b) => (a.code || a.name).localeCompare(b.code || b.name));
     },
     [db],
     []
   );
 
-  const projectMap = useMemo(() => {
-    return new Map<string, Project>((projects ?? []).map((p) => [p.id, p]));
-  }, [projects]);
+  const crMap = useMemo(() => {
+    return new Map<string, ChangeRequest>((changeRequests ?? []).map((cr) => [cr.id, cr]));
+  }, [changeRequests]);
 
   const filteredSelectableTasks = useMemo(() => {
     if (!activeTasks) return [];
-    if (!selectedProjectIdForFilter) return activeTasks;
-    return activeTasks.filter((t) => t.projectId === selectedProjectIdForFilter);
-  }, [activeTasks, selectedProjectIdForFilter]);
+    if (!selectedCrIdForFilter) return activeTasks;
+    return activeTasks.filter((t) => t.crId === selectedCrIdForFilter);
+  }, [activeTasks, selectedCrIdForFilter]);
 
   // Synchronize calendar date when targetDate changes via deep-link (D-13, D-16, T-05-07)
   useEffect(() => {
@@ -94,7 +94,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
   }, [targetDate]);
 
   const handleOpenFeasibility = async (task?: Task) => {
-    setSelectedProjectIdForFilter(undefined);
+    setSelectedCrIdForFilter(undefined);
     if (task) {
       setFeasibilityTask(task);
       setFeasibilityModalOpen(true);
@@ -321,23 +321,23 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
             Chọn tác vụ để đánh giá công suất và xem trước phân bổ khối lượng công việc:
           </Text>
 
-          {/* Project combobox filter */}
+          {/* CR combobox filter */}
           <div>
             <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-              Dự án:
+              CR:
             </Text>
             <Select
               allowClear
               showSearch
-              placeholder="Lọc theo dự án (Tất cả)"
+              placeholder="Lọc theo CR (Tất cả)"
               style={{ width: '100%' }}
-              value={selectedProjectIdForFilter}
-              onChange={(newProjId) => {
-                setSelectedProjectIdForFilter(newProjId);
-                // If currently selected task does not match new project filter, reset selection
-                const matchingTasks = !newProjId
+              value={selectedCrIdForFilter}
+              onChange={(newCrId) => {
+                setSelectedCrIdForFilter(newCrId);
+                // If currently selected task does not match new CR filter, reset selection
+                const matchingTasks = !newCrId
                   ? (activeTasks ?? [])
-                  : (activeTasks ?? []).filter((t) => t.projectId === newProjId);
+                  : (activeTasks ?? []).filter((t) => t.crId === newCrId);
                 if (!matchingTasks.some((t) => t.id === selectedTaskIdForFeasibility)) {
                   setSelectedTaskIdForFeasibility(matchingTasks[0]?.id);
                 }
@@ -345,14 +345,14 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
               filterOption={(input, option) =>
                 (option?.label as string ?? '').toLowerCase().includes(input.toLowerCase())
               }
-              options={(projects ?? []).map((p) => ({
-                value: p.id,
-                label: p.name,
+              options={(changeRequests ?? []).map((cr) => ({
+                value: cr.id,
+                label: cr.code || cr.name,
               }))}
             />
           </div>
 
-          {/* Task selector with project subtitle */}
+          {/* Task selector with CR subtitle */}
           <div>
             <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
               Tác vụ:
@@ -368,26 +368,26 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
                 const task = (activeTasks ?? []).find((t) => t.id === option?.value);
                 if (!task) return false;
                 const taskMatch = task.name.toLowerCase().includes(search);
-                const proj = task.projectId ? projectMap.get(task.projectId) : undefined;
-                const projMatch = proj ? proj.name.toLowerCase().includes(search) : false;
-                return taskMatch || projMatch;
+                const cr = task.crId ? crMap.get(task.crId) : undefined;
+                const crMatch = cr ? (cr.code || cr.name).toLowerCase().includes(search) : false;
+                return taskMatch || crMatch;
               }}
               options={filteredSelectableTasks.map((t) => {
-                const proj = t.projectId ? projectMap.get(t.projectId) : undefined;
+                const cr = t.crId ? crMap.get(t.crId) : undefined;
                 return {
                   value: t.id,
                   label: `${t.name} (${t.estimateMinutes > 0 ? `${t.estimateMinutes}m` : 'chưa ước tính'})`,
-                  projectName: proj?.name,
+                  crName: cr ? cr.code || cr.name : undefined,
                 };
               })}
               optionRender={(option) => {
-                const projName = (option.data as { projectName?: string } | undefined)?.projectName;
+                const crName = (option.data as { crName?: string } | undefined)?.crName;
                 return (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '2px 0' }}>
                     <Text style={{ lineHeight: 1.3 }}>{option.label}</Text>
-                    {projName && (
+                    {crName && (
                       <Text type="secondary" style={{ fontSize: 11, lineHeight: 1.2 }}>
-                        {projName}
+                        {crName}
                       </Text>
                     )}
                   </div>

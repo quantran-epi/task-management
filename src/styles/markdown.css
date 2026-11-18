@@ -265,7 +265,9 @@
 }
 
 .chat-markdown-body .code-copy-btn,
-.markdown-rendered-view .code-copy-btn {
+.markdown-rendered-view .code-copy-btn,
+.code-block-wrapper .code-copy-btn,
+.code-block-wrapper .code-diagram-btn {
   background: transparent;
   border: 1px solid rgba(128, 128, 128, 0.3);
   border-radius: 4px;
@@ -273,15 +275,29 @@
   font-size: 11px;
   cursor: pointer;
   color: inherit;
-  opacity: 0.8;
+  opacity: 0.85;
   transition: all 0.15s ease;
+  margin-left: 6px;
+}
+
+.code-block-wrapper .code-diagram-btn {
+  color: #1677ff;
+  border-color: rgba(22, 119, 255, 0.4);
+  font-weight: 500;
 }
 
 .chat-markdown-body .code-copy-btn:hover,
-.markdown-rendered-view .code-copy-btn:hover {
+.markdown-rendered-view .code-copy-btn:hover,
+.code-block-wrapper .code-copy-btn:hover {
   opacity: 1;
   border-color: #1677ff;
   color: #1677ff;
+}
+
+.code-block-wrapper .code-diagram-btn:hover {
+  opacity: 1;
+  background-color: rgba(22, 119, 255, 0.1);
+  border-color: #1677ff;
 }
 
 /* Wiki Link Chips in Markdown View */

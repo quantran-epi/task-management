@@ -3,7 +3,7 @@ import type { Task } from '../types/models';
 export function generateGhostDevMasterPrompt(task: Task, repoPath: string): string {
   const parts: string[] = [
     `You are the Master/Lead Agent for task: "${task.name}".`,
-    `Project root directory: ${repoPath}`,
+    `Repository root directory: ${repoPath}`,
     'Work directly in current working directory using relative paths. Execute and edit files immediately without spending turns on planning or decomposition. When parallel workers are strictly required, you can call native tool `Task(description, prompt, subagent_type)` or `dispatch_subtask(role, task_prompt, model)`.',
   ];
 

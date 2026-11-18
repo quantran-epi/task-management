@@ -1,0 +1,345 @@
+/**
+ * AI Office domain contract (Phase 34).
+ *
+ * Self-contained union-first-then-records module, mirroring `src/types/agent.ts`.
+ * Every persisted date is an ISO string; every id is a client-generated UUID.
+ *
+ * The backup-schema denylist in `src/validation/backupSchemas.ts` rejects credential
+ * and instruction-text field names recursively (it matches object KEYS), so the free-text
+ * carriers here are `persona` (agents/leads), `body` (skills) and `evidence`
+ * (skill versions, capped at 2000 characters). `evidence` is exempt from the denylist
+ * because it is a value, not a key — the key-matched scan cannot see it; the length cap
+ * is what bounds it.
+ */
+
+import type { ChatTokenUsage } from './models';
+
+export type AiTeamMemberRole = 'lead' | 'employee';
+
+export type AiTeamLinkItemType = 'cr' | 'task' | 'system' | 'note' | 'document';
+
+/**
+ * D-35: a NEW run-state union, independent of the chat turn status surface.
+ *
+ * IN-08: there is deliberately no `'error'` phase. A failed turn settles back to `ready`
+ * (D-16 forbids parking in a running phase), and an `'error'` member nothing writes would be
+ * silently NON-busy — letting a new turn start beside a failed one. Every member here has a
+ * writer in `teamRunCoordinator`.
+ */
+export type TeamRunPhase =
+  | 'idle'
+  | 'ready'
+  | 'lead-thinking'
+  | 'awaiting-plan'
+  | 'batch-running'
+  | 'awaiting-budget'
+  | 'awaiting-mutation-approval'
+  | 'lead-synthesizing';
+
+/**
+ * `waiting` is RUNTIME-ONLY: a leader whose turn is parked inside `send_message`, waiting
+ * for the agent it delegated to. It is never persisted, never terminal, and it is what keeps
+ * the UI from claiming the leader is "đang phân tích" while it is simply waiting.
+ */
+export type AgentRunStatus =
+  | 'queued'
+  | 'running'
+  | 'paused'
+  | 'waiting'
+  | 'stopped'
+  | 'error'
+  | 'done';
+
+export type AiMessageKind = 'instruction' | 'report' | 'synthesis' | 'plan';
+
+export interface AiEmployee {
+  id: string;
+  name: string; // ≤ 60
+  role: string; // ≤ 60
+  capability: string; // ≤ 300 — the text the lead sees in the roster (D-04)
+  persona: string; // Markdown
+  model: string;
+  /** Scalar, not an array: D-25 "at most one skill" is enforced structurally. */
+  skillId?: string | undefined;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AiLead {
+  id: string;
+  name: string; // ≤ 60
+  role: string; // ≤ 60
+  capability: string; // ≤ 300
+  persona: string; // Markdown
+  model: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AiSkill {
+  id: string;
+  name: string; // ≤ 60
+  description: string; // ≤ 300
+  body: string; // Markdown
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AiTeam {
+  id: string;
+  name: string; // ≤ 60
+  /** D-05: a group may exist without a leader — an empty group is a legal stored row. */
+  leadId?: string | undefined;
+  /** D-09: durable leader lock, set at the first run; survives relaunch and backup. */
+  leaderLockedAt?: string | undefined;
+  budgetTokens: number;
+  /** D-06: "Tự động chia việc" bypass. */
+  autoSplitEnabled?: boolean | undefined;
+  /** D-13: skip the mutation approval gate. */
+  autoApproveMutations?: boolean | undefined;
+  /** Phase 39: advertise read-only MCP tools to this team's agents. Absent means off. */
+  mcpEnabled?: boolean | undefined;
+  /** Phase 37 D-03: per-team run concurrency; absent means `DEFAULT_TEAM_CONCURRENCY`. */
+  concurrencyLimit?: number | undefined;
+  /** Phase 38 D-04/D-05: per-team override; absent means the global default. */
+  budgetWarnThresholdPct?: number | undefined;
+  /** Phase 41 D-13: this team's folder id in `db.notes`; absent on pre-41 rows. */
+  docsFolderId?: string | undefined;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** D-32: per-agent budget home — not a JSON array on the team row. */
+export interface AiTeamMember {
+  id: string;
+  teamId: string;
+  agentId: string;
+  role: AiTeamMemberRole;
+  budgetTokens: number;
+  /** Legacy scalar every reader already sums; kept alongside the split columns below. */
+  usedTokens: number;
+  /** Phase 38 D-23: optional so a pre-V25 row still type-checks; readers coalesce to 0. */
+  inputTokens?: number | undefined;
+  outputTokens?: number | undefined;
+  /** Phase 38 D-09: `undefined` on an old row means "not estimated", never "estimated". */
+  usageEstimated?: boolean | undefined;
+  /** Phase 41 D-13a: this member's own folder id in `db.notes`; absent on pre-41 rows. */
+  docsFolderId?: string | undefined;
+}
+
+export interface AiTeamLink {
+  id: string;
+  teamId: string;
+  itemType: AiTeamLinkItemType;
+  itemId: string;
+  createdAt: string;
+}
+
+/** Phase 36 (D-16, D-22): a stored skill revision. `pending` is data, never an approval. */
+export type AiSkillVersionStatus = 'pending' | 'approved' | 'rejected';
+
+export interface AiSkillVersion {
+  id: string;
+  skillId: string;
+  /**
+   * D-14: assigned only at approval (`max(approved) + 1`). A pending row omits the key
+   * entirely rather than carrying `0` — the backup schema is `positive()`, so `0` cannot
+   * round-trip.
+   */
+  version?: number | undefined;
+  /** D-15: highest approved version at proposal time; `0` is the implicit baseline. */
+  baseVersion?: number | undefined;
+  status: AiSkillVersionStatus;
+  name: string; // ≤ 60
+  description: string; // ≤ 300
+  body: string; // Markdown
+  evidence?: string | undefined;
+  createdAt: string;
+  decidedAt?: string | undefined;
+}
+
+/** Phase 37 (D-22): why a batch stopped. `none` = still running or ended normally. */
+export type AiTeamBatchAbortedBy = 'user' | 'team-deleted' | 'app-exit' | 'none';
+
+/** D-24: `auto` = the plan card was skipped; the other two are an explicit choice. */
+export type AiTeamBatchPlanDecision = 'approved' | 'rejected' | 'auto';
+
+/**
+ * Phase 37 (D-22, D-24): the ledger's run status.
+ *
+ * Deliberately NOT `AgentRunStatus` — that union is the UI surface (`paused`/`done`) and
+ * cannot carry `skipped`, `blocked` or `needs-input`.
+ */
+export type AiTeamAssignmentRunStatus =
+  | 'queued'
+  | 'running'
+  | 'done'
+  | 'stopped'
+  | 'error'
+  | 'skipped'
+  | 'blocked'
+  | 'needs-input';
+
+export type AiTeamAssignmentStopReason =
+  | 'user-per-agent'
+  | 'user-abort'
+  | 'team-deleted'
+  | 'provider'
+  | 'tool-limit'
+  | 'budget-pause'
+  | 'leader-amend'
+  | 'none';
+
+export interface AiTeamPlanEntry {
+  agentId: string;
+  /** Snapshot at plan time (D-25) — the roster may change before a retry. */
+  agentName: string;
+  task: string;
+}
+
+/** D-24: the approved original is never overwritten by an edited plan. */
+export interface AiTeamPlanSnapshot {
+  original: AiTeamPlanEntry[];
+  edited?: AiTeamPlanEntry[] | undefined;
+}
+
+export interface AiTeamBatch {
+  id: string;
+  teamId: string;
+  threadId: string;
+  /** D-24: 1-based, monotonic within one turn's thread. */
+  batchIndex: number;
+  userRequest: string;
+  leadId: string;
+  planSnapshot: AiTeamPlanSnapshot;
+  planDecision: AiTeamBatchPlanDecision;
+  startedAt: string;
+  endedAt?: string | undefined;
+  phaseAtEnd?: TeamRunPhase | undefined;
+  abortedBy: AiTeamBatchAbortedBy;
+}
+
+/**
+ * Phase 37 (D-22, D-23, D-25): one row per attempt. Retry appends, never mutates.
+ *
+ * The profile fields are snapshots so history and retry never depend on the live roster.
+ * `diagnosticDetail` (D-17) stays out of the transcript and out of backup-facing keys.
+ */
+export interface AiTeamAssignment {
+  id: string;
+  batchId: string;
+  agentId: string;
+  agentName: string;
+  skillId?: string | undefined;
+  skillVersion?: number | undefined;
+  model: string;
+  task: string;
+  runStatus: AiTeamAssignmentRunStatus;
+  stopReason: AiTeamAssignmentStopReason;
+  /** D-23: 1-based per attempt chain; allocated inside the insert transaction. */
+  attemptNo: number;
+  /** Points at the first attempt of this chain for attempt 2+; absent on attempt 1. */
+  retryOfAssignmentId?: string | undefined;
+  incomplete: boolean;
+  queuedAt: string;
+  startedAt?: string | undefined;
+  endedAt?: string | undefined;
+  instructionMessageId?: string | undefined;
+  reportMessageId?: string | undefined;
+  tokenUsage?: ChatTokenUsage | undefined;
+  /** Phase 38 D-11/D-23: attempt-level split usage, written by the run ledger. */
+  inputTokens?: number | undefined;
+  outputTokens?: number | undefined;
+  usageEstimated?: boolean | undefined;
+  toolCallCount?: number | undefined;
+  /** D-17: technical detail for debugging; never rendered and never exported. */
+  diagnosticDetail?: string | undefined;
+  /** D-24 handoff: upstream assignments that must finish first. */
+  dependsOn?: string[] | undefined;
+}
+
+/**
+ * 37.1 D-22: one live step for the activity popover. Runtime-only — never persisted, so no
+ * backup schema or Dexie version changes.
+ */
+export interface AgentLiveStep {
+  id: string;
+  label: string;
+  at: string;
+  /** Serialized tool arguments from `ChatTurnToolEvent.args`; absent for status steps. */
+  detail?: string | undefined;
+  /**
+   * Phase 44 D-04: additive tool-telemetry fields. Runtime-only, like the rest of the step.
+   * Each optional field uses explicit `| undefined` per `exactOptionalPropertyTypes` and is
+   * conditionally spread at the write site, so an absent value is omitted rather than set.
+   */
+  toolName?: string | undefined;
+  phase?: 'call' | 'result' | undefined;
+  startedAt?: string | undefined;
+  endedAt?: string | undefined;
+  durationMs?: number | undefined;
+  status?: 'running' | 'done' | 'error' | undefined;
+  resultPreview?: string | undefined;
+}
+
+export interface AgentRunState {
+  agentId: string;
+  status: AgentRunStatus;
+  streamingText: string;
+  startedAt?: string | undefined;
+  incomplete?: boolean | undefined;
+  /** 37.1 D-22: capped live step list for the indicator popover. Never rendered as text. */
+  steps?: AgentLiveStep[] | undefined;
+}
+
+export interface AgentIdentity {
+  name: string;
+  role: string;
+  isLead: boolean;
+  /** UI-SPEC §Avatar deterministic palette entry. */
+  color: string;
+}
+
+export const RECENT_WINDOW_TURNS = 10; // D-10
+export const ASSIGNMENT_HISTORY_CAP = 50; // D-29
+/**
+ * How many finished batches the leader's prompt carries as structured history. The transcript
+ * window is 10 rows — about 1.5 two-agent batches — so without this the leader forgets what it
+ * already delegated after the second batch. Five batches is a few dozen lines of prompt.
+ */
+export const BATCH_HISTORY_LIMIT = 5;
+
+/**
+ * Phase 37 (D-02): per-team run concurrency.
+ *
+ * Only the *range* matches `ghostDevConfig.ts:54`; the ghost-dev default is 6, so 3 here
+ * is a Phase 37 choice, not parity.
+ */
+export const DEFAULT_TEAM_CONCURRENCY = 3;
+export const MIN_TEAM_CONCURRENCY = 1;
+export const MAX_TEAM_CONCURRENCY = 12;
+
+/** Total: every input yields an integer in [1, 12]; non-finite input falls back to the default. */
+export function clampTeamConcurrency(n: number): number {
+  const finite = Number.isFinite(n) ? n : DEFAULT_TEAM_CONCURRENCY;
+  return Math.max(MIN_TEAM_CONCURRENCY, Math.min(MAX_TEAM_CONCURRENCY, Math.round(finite)));
+}
+
+/**
+ * Phase 38 (D-04, D-05): the budget warning threshold, as a percentage of the member budget.
+ *
+ * The zod boundary rejects anything outside 1..100; this clamp is the runtime belt for values
+ * that bypass the form (backup import, direct repo calls).
+ */
+export const DEFAULT_BUDGET_WARN_THRESHOLD_PCT = 80;
+export const MIN_BUDGET_WARN_THRESHOLD_PCT = 1;
+export const MAX_BUDGET_WARN_THRESHOLD_PCT = 100;
+
+/** Total: every input yields an integer in [1, 100]; non-finite input falls back to the default. */
+export function clampBudgetWarnThresholdPct(n: number): number {
+  const finite = Number.isFinite(n) ? n : DEFAULT_BUDGET_WARN_THRESHOLD_PCT;
+  return Math.max(
+    MIN_BUDGET_WARN_THRESHOLD_PCT,
+    Math.min(MAX_BUDGET_WARN_THRESHOLD_PCT, Math.round(finite))
+  );
+}

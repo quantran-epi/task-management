@@ -9,6 +9,7 @@ import {
   CheckCircleOutlined,
   RobotOutlined,
   QuestionCircleOutlined,
+  CodeOutlined,
 } from '@ant-design/icons';
 import { APP_NAME } from '../../constants/app';
 import { Navigation } from './Navigation';
@@ -26,24 +27,25 @@ import { AIChatProvider, useAIChat } from '../../context/AIChatContext';
 import { useServiceWorkerUpdate } from '../../hooks/useServiceWorkerUpdate';
 import { useNotifications } from '../../hooks/useNotifications';
 import { useDesktopNotification } from '../../hooks/useDesktopNotification';
+import { useTeamChatNotifications } from '../../hooks/useTeamChatNotifications';
 import { useTimerAlertMonitor } from '../../hooks/useTimerAlertMonitor';
 import { useLocalSqlitePersistence } from '../../hooks/useLocalSqlitePersistence';
+import { useTeamRunTeardown } from '../../hooks/useTeamRunTeardown';
 import { useGitHubAutoSync } from '../../hooks/useGitHubAutoSync';
 import { useTelegramHeadlessWorker } from '../../services/telegram/telegramHeadlessWorker';
 import { GitHubSyncStatusDot } from './GitHubSyncStatusDot';
 import { ActiveTimerWidget } from '../timer/ActiveTimerWidget';
+import { ActiveAiTurnIndicator } from '../ai/ActiveAiTurnIndicator';
 import { NotificationBell } from '../notifications/NotificationBell';
 import { NotificationDrawer } from '../notifications/NotificationDrawer';
 import { TaskDrawer } from '../tasks/TaskDrawer';
-import { ProjectDetailModal } from '../projects/ProjectDetailModal';
-import { ProjectModal } from '../projects/ProjectModal';
-import { MilestoneModal } from '../projects/MilestoneModal';
 import { NoteDetailModal } from '../notes/NoteDetailModal';
 import { NoteEditor } from '../notes/NoteEditor';
 import { CommandPaletteModal } from '../palette/CommandPaletteModal';
 import { DailyReviewModal } from '../dailyReview/DailyReviewModal';
 import { AIChatDrawer, DEFAULT_AI_CHAT_WIDTH, type ActiveScope } from '../ai/AIChatDrawer';
 import { InlineAISelectionBar } from '../ai/InlineAISelectionBar';
+import { GlobalDiagramViewer } from '../common/GlobalDiagramViewer';
 import { useGitHubAuth } from '../../context/GitHubAuthContext';
 import { executeGitHubBackupPush } from '../../services/github/githubSyncService';
 import { useGlobalShortcuts } from '../../hooks/useGlobalShortcuts';
@@ -53,12 +55,10 @@ import type { ShortcutItem } from '../../types/shortcuts';
 import { db } from '../../db';
 import { dismissAlertToday } from '../../db/repositories/notificationRepo';
 import { createTask, getTask } from '../../db/repositories/taskRepo';
-import { getProject, updateProject } from '../../db/repositories/projectRepo';
-import { getMilestone, updateMilestone } from '../../db/repositories/milestoneRepo';
 import { getTodayDateString, isValidCalendarDate } from '../../utils/date';
 import type { AppRoute, NavigateFunction } from '../../types/navigation';
 import type { AlertNotificationItem } from '../../types/notifications';
-import type { Project, Milestone, Note } from '../../types/models';
+import type { Note } from '../../types/models';
 
 const { Header, Sider, Content } = Layout;
 const { useBreakpoint } = Grid;
@@ -115,11 +115,18 @@ const AppShellInner: React.FC<AppShellProps> = ({
   // Desktop Notification Startup Hook (D-18, D-19)
   useDesktopNotification({ notifications });
 
+  // 37.1 R13: a team message the user has not read raises an OS notification in real time,
+  // whether or not the team workspace is open.
+  useTeamChatNotifications();
+
   // Global Running Timer Threshold & Allocation Alert Monitor
   useTimerAlertMonitor();
 
   // Desktop SQLite mirror persistence
   useLocalSqlitePersistence();
+
+  // IN-04/D-18: app exit disposes every live AI team run (the `app-exit` writer).
+  useTeamRunTeardown();
 
   // Scheduled dirty-only GitHub auto sync
   useGitHubAutoSync();
@@ -132,9 +139,6 @@ const AppShellInner: React.FC<AppShellProps> = ({
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [dailyReviewOpen, setDailyReviewOpen] = useState(false);
   const [inspectingTaskId, setInspectingTaskId] = useState<string | undefined>(undefined);
-  const [inspectingProject, setInspectingProject] = useState<Project | null>(null);
-  const [editingProject, setEditingProject] = useState<Project | null>(null);
-  const [inspectingMilestone, setInspectingMilestone] = useState<Milestone | null>(null);
   const [inspectingNote, setInspectingNote] = useState<Note | null>(null);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [creatingNote, setCreatingNote] = useState(false);
@@ -198,7 +202,8 @@ const AppShellInner: React.FC<AppShellProps> = ({
     };
   }, [inspectingTaskId]);
 
-  // Register open inspection item with AIChatContext so Cmd+J grounds automatically
+  // Register open inspection item with AIChatContext so Cmd+J grounds automatically.
+  // CR/System inspection lives in the workbench insight tab, which registers itself.
   useEffect(() => {
     if (inspectingTaskId) {
       return registerActiveItem({
@@ -206,21 +211,9 @@ const AppShellInner: React.FC<AppShellProps> = ({
         id: inspectingTaskId,
         title: activeTaskTitle || 'Tác vụ đang xem',
       });
-    } else if (inspectingProject) {
-      return registerActiveItem({
-        type: 'project',
-        id: inspectingProject.id,
-        title: inspectingProject.name,
-      });
-    } else if (inspectingMilestone) {
-      return registerActiveItem({
-        type: 'milestone',
-        id: inspectingMilestone.id,
-        title: inspectingMilestone.name,
-      });
     }
     return undefined;
-  }, [inspectingTaskId, activeTaskTitle, inspectingProject, inspectingMilestone, registerActiveItem]);
+  }, [inspectingTaskId, activeTaskTitle, registerActiveItem]);
 
   const activeScope: ActiveScope = contextActiveScope;
 
@@ -266,8 +259,19 @@ const AppShellInner: React.FC<AppShellProps> = ({
 
   const handleQuickCreateTask = React.useCallback(async () => {
     try {
+      // Task.crId is required (D-27); quick-create attaches to the most recently updated CR.
+      const crs = await db.changeRequests.toArray();
+      const cr = crs.reduce<(typeof crs)[number] | undefined>(
+        (latest, candidate) => (!latest || candidate.updatedAt > latest.updatedAt ? candidate : latest),
+        undefined
+      );
+      if (!cr) {
+        message.warning('Vui lòng tạo Change Request trước khi thêm tác vụ');
+        return;
+      }
       const task = await createTask(
         {
+          crId: cr.id,
           name: 'Tác vụ mới',
           status: 'Open',
           priority: 'Medium',
@@ -383,12 +387,13 @@ const AppShellInner: React.FC<AppShellProps> = ({
 
     if (item.entityType === 'task' && item.entityId) {
       setInspectingTaskId(item.entityId);
-    } else if (item.entityType === 'project' && item.entityId) {
-      const p = await getProject(item.entityId);
-      if (p) setInspectingProject(p);
-    } else if (item.entityType === 'milestone' && item.entityId) {
-      const m = await getMilestone(item.entityId);
-      if (m) setInspectingMilestone(m);
+    } else if (item.entityType === 'cr' && item.entityId) {
+      // Resolve before routing so a stale persisted row cannot open a dead view (T-31.2-56).
+      const cr = await db.changeRequests.get(item.entityId);
+      if (cr) onNavigate('insight', { type: 'cr', id: cr.id });
+    } else if (item.entityType === 'system' && item.entityId) {
+      const system = await db.systems.get(item.entityId);
+      if (system) onNavigate('insight', { type: 'system', id: system.id });
     } else if (item.entityType === 'capacity' && item.date) {
       // T-12-09: Sanitize date parameter before routing
       if (isValidCalendarDate(item.date)) {
@@ -606,10 +611,11 @@ const AppShellInner: React.FC<AppShellProps> = ({
             )}
           </Space>
 
-          {/* Right: GitHub sync dot, ActiveTimerWidget, Mobile search, Daily Review, AI Assistant, NotificationBell, InstallButton, UpdateBadge */}
+          {/* Right: GitHub sync dot, ActiveTimerWidget, ActiveAiTurnIndicator, Mobile search, Daily Review, AI Assistant, NotificationBell, InstallButton, UpdateBadge */}
           <Space size="small" align="center">
             <GitHubSyncStatusDot />
             <ActiveTimerWidget />
+            <ActiveAiTurnIndicator />
 
             {isMobile && (
               <Tooltip title="Tìm kiếm & Lệnh nhanh">
@@ -622,6 +628,31 @@ const AppShellInner: React.FC<AppShellProps> = ({
                 />
               </Tooltip>
             )}
+
+            <Tooltip title="Chuyển sang giao diện IntelliJ ExpUI Workbench (Thử nghiệm desktop)">
+              <Button
+                type="primary"
+                ghost
+                icon={<CodeOutlined style={{ fontSize: 15 }} />}
+                onClick={() => {
+                  try {
+                    localStorage.setItem('taskmate_ui_shell', 'intellij');
+                  } catch {}
+                  window.location.reload();
+                }}
+                aria-label="Chuyển sang IntelliJ Workbench"
+                style={{
+                  height: 32,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  borderColor: '#3871e1',
+                  color: '#3871e1',
+                  borderRadius: 6,
+                }}
+              >
+                {!isMobile && <span>IntelliJ UI</span>}
+              </Button>
+            </Tooltip>
 
             <Tooltip title="Tổng quan & Đánh giá ngày (Briefing & Debriefing)">
               <Button
@@ -704,74 +735,6 @@ const AppShellInner: React.FC<AppShellProps> = ({
         onClose={() => setInspectingTaskId(undefined)}
       />
 
-      {inspectingProject && (
-        <ProjectDetailModal
-          open={Boolean(inspectingProject)}
-          project={inspectingProject}
-          onClose={() => setInspectingProject(null)}
-          onEdit={(proj) => {
-            setInspectingProject(null);
-            setEditingProject(proj);
-          }}
-          onNavigateToProjects={() => {
-            setInspectingProject(null);
-            onNavigate('projects');
-          }}
-          onOpenTask={(taskId) => {
-            setInspectingProject(null);
-            setInspectingTaskId(taskId);
-          }}
-          onAddTask={async (projId) => {
-            setInspectingProject(null);
-            try {
-              const task = await createTask(
-                {
-                  name: 'Tác vụ mới',
-                  projectId: projId,
-                  status: 'Open',
-                  priority: 'Medium',
-                  estimateMinutes: 0,
-                },
-                db
-              );
-              message.success('Đã tạo tác vụ cho dự án');
-              setInspectingTaskId(task.id);
-            } catch {
-              message.error('Không thể tạo tác vụ');
-            }
-          }}
-          db={db}
-        />
-      )}
-
-      {editingProject && (
-        <ProjectModal
-          open={Boolean(editingProject)}
-          project={editingProject}
-          onClose={() => setEditingProject(null)}
-          onSave={async (values) => {
-            await updateProject(editingProject.id, values, db);
-            setEditingProject(null);
-            message.success('Đã cập nhật dự án');
-          }}
-          db={db}
-        />
-      )}
-
-      {inspectingMilestone && (
-        <MilestoneModal
-          open={Boolean(inspectingMilestone)}
-          projectId={inspectingMilestone.projectId}
-          milestone={inspectingMilestone}
-          onClose={() => setInspectingMilestone(null)}
-          onSave={async (values) => {
-            await updateMilestone(inspectingMilestone.id, values, db);
-            setInspectingMilestone(null);
-            message.success('Đã cập nhật mốc');
-          }}
-        />
-      )}
-
       {inspectingNote && (
         <NoteDetailModal
           open={Boolean(inspectingNote)}
@@ -817,13 +780,22 @@ const AppShellInner: React.FC<AppShellProps> = ({
         onClose={() => setCommandPaletteOpen(false)}
         onNavigate={onNavigate}
         onOpenTask={(taskId) => setInspectingTaskId(taskId)}
-        onOpenProject={(p) => setInspectingProject(p)}
-        onOpenMilestone={(m) => setInspectingMilestone(m)}
         onOpenNote={(note) => setInspectingNote(note)}
         onCreateTask={async (name) => {
           try {
+            // Task.crId is required (D-27); quick-create attaches to the most recently updated CR.
+            const crs = await db.changeRequests.toArray();
+            const cr = crs.reduce<(typeof crs)[number] | undefined>(
+              (latest, candidate) => (!latest || candidate.updatedAt > latest.updatedAt ? candidate : latest),
+              undefined
+            );
+            if (!cr) {
+              message.warning('Vui lòng tạo Change Request trước khi thêm tác vụ');
+              return;
+            }
             const task = await createTask(
               {
+                crId: cr.id,
                 name: name || 'Tác vụ mới',
                 status: 'Open',
                 priority: 'Medium',
@@ -862,6 +834,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
       />
 
       <InlineAISelectionBar db={db} />
+      <GlobalDiagramViewer />
 
       <UpgradeModal />
       <AriaLiveRegion />

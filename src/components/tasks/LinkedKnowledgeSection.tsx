@@ -132,7 +132,9 @@ export const LinkedKnowledgeSection: React.FC<LinkedKnowledgeSectionProps> = ({
               }}
               onClick={() => onOpenDocPreview(doc.id)}
             >
-              <span>{doc.title || 'Không tiêu đề'}</span>
+              <span style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {doc.title || 'Không tiêu đề'}
+              </span>
             </Tag>
           </Tooltip>
         ))}
@@ -154,6 +156,7 @@ export const LinkedKnowledgeSection: React.FC<LinkedKnowledgeSectionProps> = ({
                 alignItems: 'center',
                 gap: 4,
                 cursor: link.docId ? 'pointer' : 'default',
+                maxWidth: '100%',
               }}
               onClick={() => {
                 if (link.docId) onOpenDocPreview(link.docId);
@@ -172,7 +175,9 @@ export const LinkedKnowledgeSection: React.FC<LinkedKnowledgeSectionProps> = ({
                   </div>
                 }
               >
-                <span>{link.displayLabel}</span>
+                <span style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {link.displayLabel}
+                </span>
               </Tooltip>
 
               <Popconfirm

@@ -7,7 +7,7 @@ import type {
   PlannedAllocation,
   Task,
   CapacityOverride,
-  Project,
+  ChangeRequest,
 } from '../types/models';
 import {
   getEffectiveDailyCapacity,
@@ -29,8 +29,8 @@ export interface DayPlannerData {
   allocations: Array<
     PlannedAllocation & {
       task: Task;
-      project?: Project | undefined;
-      projectName?: string | undefined;
+      cr?: ChangeRequest | undefined;
+      crName?: string | undefined;
       isActive: boolean;
     }
   >;
@@ -103,9 +103,9 @@ export function useWeeklyPlanner(
       const tasks = taskIds.length > 0 ? await targetDb.tasks.where('id').anyOf(taskIds).toArray() : [];
       const taskMap = new Map<string, Task>(tasks.map((t) => [t.id, t]));
 
-      // 5. Fetch projects for tasks
-      const projects = await targetDb.projects.toArray();
-      const projectMap = new Map<string, Project>(projects.map((p) => [p.id, p]));
+      // 5. Fetch change requests for tasks
+      const changeRequests = await targetDb.changeRequests.toArray();
+      const crMap = new Map<string, ChangeRequest>(changeRequests.map((cr) => [cr.id, cr]));
 
       const todayStr = getTodayDateString();
 
@@ -123,6 +123,7 @@ export function useWeeklyPlanner(
           const task = taskMap.get(alloc.taskId);
           const fallbackTask: Task = {
             id: alloc.taskId,
+            crId: '',
             name: 'Deleted / Unknown Task',
             status: 'Cancelled',
             progress: 0,
@@ -132,12 +133,12 @@ export function useWeeklyPlanner(
             updatedAt: '',
           };
           const resolvedTask = task ?? fallbackTask;
-          const project = resolvedTask.projectId ? projectMap.get(resolvedTask.projectId) : undefined;
+          const cr = crMap.get(resolvedTask.crId);
           return {
             ...alloc,
             task: resolvedTask,
-            project,
-            projectName: project?.name,
+            cr,
+            crName: cr?.name,
             isActive: isTaskActive(resolvedTask.status),
           };
         });

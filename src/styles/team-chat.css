@@ -1,0 +1,45 @@
+/* Team chat transcript (AI Office). Only what inline style cannot express:
+   hover/focus reveal, transitions, and reduced-motion. Colors come from antd tokens
+   passed in as custom properties on the message wrapper. */
+
+.tc-message .tc-actions {
+  opacity: 0;
+  transition: opacity 0.14s ease;
+}
+
+.tc-message:hover .tc-actions,
+.tc-message:focus-within .tc-actions {
+  opacity: 1;
+}
+
+/* A meter's fill animates on width and on the threshold color change. */
+.tc-meter > i {
+  transition: width 0.3s ease, background-color 0.2s ease;
+}
+
+/* One-shot entrance for a live streaming bubble only; persisted rows never animate. */
+@keyframes tc-enter {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.tc-enter {
+  animation: tc-enter 0.18s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tc-message .tc-actions,
+  .tc-meter > i {
+    transition: none;
+  }
+
+  .tc-enter {
+    animation: none;
+  }
+}

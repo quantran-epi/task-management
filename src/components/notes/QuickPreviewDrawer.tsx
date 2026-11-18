@@ -8,7 +8,7 @@ import {
   ProjectOutlined,
 } from '@ant-design/icons';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import type { Note, Task, Project } from '../../types/models';
+import type { Note, Task, ChangeRequest } from '../../types/models';
 import { renderSafeMarkdown, renderInlineFormatting } from '../../utils/markdown';
 import { getBacklinksForDoc, type BacklinksResult } from '../../db/repositories/documentLinkRepo';
 import { computeSha256, normalizeMarkdownForHash } from '../../db/repositories/documentSetRepo';
@@ -73,6 +73,8 @@ export interface QuickPreviewDrawerProps {
   relevanceReason?: string | undefined;
   citationAuthority?: 'server' | 'local' | undefined;
   snapshotAvailable?: boolean | undefined;
+  /** Set IDs from the persisted citation, shown when the local note is absent (D-10). */
+  setIds?: readonly string[] | undefined;
 }
 
 /**
@@ -141,19 +143,20 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
   relevanceReason,
   citationAuthority,
   snapshotAvailable = true,
+  setIds,
 }) => {
   const [doc, setDoc] = useState<Note | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [backlinks, setBacklinks] = useState<BacklinksResult>({
     tasks: [],
-    projects: [],
+    changeRequests: [],
     referencingNotes: [],
   });
   const [hashMismatch, setHashMismatch] = useState<boolean>(false);
   const [isHighlighted, setIsHighlighted] = useState<boolean>(false);
   const [isReducedMotion, setIsReducedMotion] = useState<boolean>(false);
   const [linkedParentTask, setLinkedParentTask] = useState<Task | null>(null);
-  const [linkedParentProject, setLinkedParentProject] = useState<Project | null>(null);
+  const [linkedParentCr, setLinkedParentCr] = useState<ChangeRequest | null>(null);
   const [activeDrawerTaskId, setActiveDrawerTaskId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'lines' | 'markdown'>('lines');
 
@@ -169,9 +172,9 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
     let active = true;
     if (!open || !docId) {
       setDoc(null);
-      setBacklinks({ tasks: [], projects: [], referencingNotes: [] });
+      setBacklinks({ tasks: [], changeRequests: [], referencingNotes: [] });
       setLinkedParentTask(null);
-      setLinkedParentProject(null);
+      setLinkedParentCr(null);
       setHashMismatch(false);
       setIsHighlighted(false);
       return () => {
@@ -189,7 +192,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
         setDoc(noteData || null);
         setBacklinks(backlinksData);
 
-        // Fetch direct parent entity if note belongs to task or project
+        // Fetch direct parent entity if note belongs to task or CR
         if (noteData?.entityType === 'task' && noteData.entityId) {
           const t = await db.tasks.get(noteData.entityId);
           if (active) setLinkedParentTask(t || null);
@@ -197,11 +200,11 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
           if (active) setLinkedParentTask(null);
         }
 
-        if (noteData?.entityType === 'project' && noteData.entityId) {
-          const p = await db.projects.get(noteData.entityId);
-          if (active) setLinkedParentProject(p || null);
+        if (noteData?.entityType === 'cr' && noteData.entityId) {
+          const cr = await db.changeRequests.get(noteData.entityId);
+          if (active) setLinkedParentCr(cr || null);
         } else {
-          if (active) setLinkedParentProject(null);
+          if (active) setLinkedParentCr(null);
         }
 
         // Check hash mismatch only for server authority when citedContentHash is present (D-10, D-21)
@@ -344,8 +347,52 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
 
   const hasBacklinks =
     backlinks.tasks.length > 0 ||
-    backlinks.projects.length > 0 ||
+    backlinks.changeRequests.length > 0 ||
     backlinks.referencingNotes.length > 0;
+
+  // D-10: a citation must be inspectable even when the local document is absent.
+  // Render a self-contained excerpt panel ahead of the `!doc` empty state. This
+  // panel is text-only (no dangerouslySetInnerHTML) and never auto-imports.
+  const hasCitationData = Boolean(citedExcerpt || citedSnapshotId || (setIds && setIds.length > 0));
+  const localAbsentExcerptPanel = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div
+        data-testid="local-document-absent-notice"
+        style={{
+          padding: '8px 12px',
+          borderRadius: 6,
+          background: '#fafafa',
+          color: '#595959',
+          fontSize: 12,
+          fontWeight: 600,
+        }}
+      >
+        Tài liệu gốc chưa có trên thiết bị này — nội dung dưới đây trích từ bản chụp đã trả về.
+      </div>
+      <div
+        data-testid="cited-excerpt-panel"
+        style={{ borderRadius: 8, border: '1px solid #d9d9d9', backgroundColor: '#fafafa', overflow: 'hidden' }}
+      >
+        <div style={{ padding: '6px 12px', background: '#f0f0f0', borderBottom: '1px solid #d9d9d9', fontSize: 12, fontWeight: 600 }}>
+          Trích dẫn từ bản chụp
+          {citedSnapshotId && (
+            <Text type="secondary" style={{ marginLeft: 8, fontSize: 11, fontFamily: 'monospace' }}>
+              {citedSnapshotId.slice(0, 7)}…
+            </Text>
+          )}
+        </div>
+        <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
+          {_sectionAnchor && <div><Text strong>Mục:</Text> {_sectionAnchor}</div>}
+          {citedExcerpt && <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{citedExcerpt}</div>}
+          {(setIds?.length ?? 0) > 0 && (
+            <div data-testid="cited-set-ids">
+              <Text strong>Bộ tài liệu:</Text> {setIds!.join(', ')}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <Modal
@@ -394,7 +441,16 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
           <Spin tip="Đang tải tài liệu..." />
         </div>
       ) : !doc ? (
-        <Empty description="Không tìm thấy tài liệu hoặc đã bị xóa" />
+        hasCitationData ? (
+          <>
+            {localAbsentExcerptPanel}
+            <div style={{ marginTop: 12 }}>
+              <Empty description="Không tìm thấy tài liệu hoặc đã bị xóa" />
+            </div>
+          </>
+        ) : (
+          <Empty description="Không tìm thấy tài liệu hoặc đã bị xóa" />
+        )
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* 1. Snapshot-mismatch banner when currentHash !== citedContentHash (D-10) */}
@@ -495,9 +551,9 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                   {linkedParentTask.jiraKey ? ` (${linkedParentTask.jiraKey})` : ''}
                 </Tag>
               )}
-              {linkedParentProject && (
+              {linkedParentCr && (
                 <Tag color="purple" icon={<ProjectOutlined />}>
-                  Dự án: {linkedParentProject.name}
+                  CR: {linkedParentCr.code || linkedParentCr.name}
                 </Tag>
               )}
               {doc.tags?.map((tag) => (
@@ -699,7 +755,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                 <LinkOutlined />
                 <span>
                   Liên kết đến tài liệu này (
-                  {backlinks.tasks.length + backlinks.projects.length + backlinks.referencingNotes.length}
+                  {backlinks.tasks.length + backlinks.changeRequests.length + backlinks.referencingNotes.length}
                   )
                 </span>
               </div>
@@ -732,9 +788,9 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                   </div>
                 ))}
 
-                {backlinks.projects.map((proj: Project) => (
+                {backlinks.changeRequests.map((cr: ChangeRequest) => (
                   <div
-                    key={`proj-backlink-${proj.id}`}
+                    key={`cr-backlink-${cr.id}`}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -746,7 +802,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                     }}
                   >
                     <ProjectOutlined style={{ color: '#722ed1' }} />
-                    <span style={{ fontWeight: 500 }}>{proj.name}</span>
+                    <span style={{ fontWeight: 500 }}>{cr.code || cr.name}</span>
                   </div>
                 ))}
 

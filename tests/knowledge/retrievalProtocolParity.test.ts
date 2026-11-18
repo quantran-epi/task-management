@@ -65,4 +65,43 @@ describe('retrieval protocol server/client parity', () => {
       Object.keys(server.FederatedRetrievalResponseSchema.shape.diagnostics.shape).sort()
     );
   });
+
+  it('appends NO_PUBLISHED_SETS to the mirrored outcomes in server order', () => {
+    expect(client.RETRIEVAL_OUTCOMES).toEqual(server.RETRIEVAL_OUTCOMES);
+    expect(client.RETRIEVAL_OUTCOMES.at(-1)).toBe('NO_PUBLISHED_SETS');
+  });
+
+  it('mirrors the thin federated request key set with no budgets or setTierAssignments', () => {
+    expect(Object.keys(client.FederatedRetrievalRequestSchema.shape).sort()).toEqual(
+      Object.keys(server.FederatedRetrievalRequestSchema.shape).sort()
+    );
+  });
+
+  it('accepts a query-only federated request with the default limit', () => {
+    const parsed = client.FederatedRetrievalRequestSchema.parse({ query: 'x' });
+    expect(parsed.limit).toBe(20);
+  });
+
+  it('rejects the retired setTierAssignments wire field', () => {
+    expect(client.FederatedRetrievalRequestSchema.safeParse({ query: 'x', setTierAssignments: [] }).success).toBe(false);
+  });
+
+  it('mirrors the federated set coverage schema and rejects unknown coverage states', () => {
+    expect(Object.keys(client.FederatedSetCoverageSchema.shape).sort()).toEqual(
+      Object.keys(server.FederatedSetCoverageSchema.shape).sort()
+    );
+    expect(
+      client.FederatedSetCoverageSchema.safeParse({
+        setId: '00000000-0000-4000-8000-000000000001',
+        state: 'NOT_A_REAL_STATE',
+        publishedSnapshotId: null,
+        retrievalSnapshotId: null,
+        staleIndex: false,
+      }).success
+    ).toBe(false);
+  });
+
+  it('keeps the coverage ledger in the mirrored federated diagnostics', () => {
+    expect(Object.keys(client.FederatedRetrievalResponseSchema.shape.diagnostics.shape)).toContain('coverage');
+  });
 });

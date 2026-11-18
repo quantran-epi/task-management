@@ -1,0 +1,1041 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { TaskPlannerDatabase } from '../../src/db';
+import { createEmployee, createLead, createSkill, updateLead } from '../../src/db/repositories/aiOfficeRepo';
+import { createTeam, getTeam, listTeamMembers, listTeams, updateTeam } from '../../src/db/repositories/aiTeamRepo';
+import { applyTeamBudgetSettings } from '../../src/db/repositories/aiTeamRepo';
+import { message } from 'antd';
+
+// WR-12: let each test make one write reject; every other case uses the real repo.
+vi.mock('../../src/db/repositories/aiTeamRepo', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../src/db/repositories/aiTeamRepo')>();
+  return {
+    ...actual,
+    updateTeam: vi.fn(actual.updateTeam),
+    // Phase 38 D-19: the settings save is one absolute two-table write, so this is the
+    // call that must reject for the WR-12 assertion.
+    applyTeamBudgetSettings: vi.fn(actual.applyTeamBudgetSettings),
+  };
+});
+import { TeamWorkspaceView } from '../../src/views/TeamWorkspaceView';
+import { AiOfficeExplorer } from '../../src/workbench/toolwindows/AiOfficeExplorer';
+import {
+  ensureTeamThread,
+  saveTeamMessage,
+} from '../../src/db/repositories/teamTranscriptRepo';
+import { useLayoutStore } from '../../src/workbench/store/layoutStore';
+import type { AiEmployee, AiLead, AiTeam } from '../../src/types/aiOffice';
+
+/**
+ * Phase 34 plan 10 — the team page (AIO-UI-01, AIO-TEAM-01, AIO-TEAM-04, AIO-BG-01,
+ * AIO-BUDGET-01, AIO-LINK-01, AIO-EMP-02).
+ *
+ * Rendered directly rather than through `EditorArea` so the suite does not depend on
+ * the routing switch; the routing itself is asserted from the source in Task 3.
+ */
+describe('TeamWorkspaceView — team page (AIO-TEAM-01, D-15/D-16/D-19/D-26)', () => {
+  let db: TaskPlannerDatabase;
+  let lead: AiLead;
+  let employees: AiEmployee[];
+  let activeTeam: AiTeam;
+  let idleTeam: AiTeam;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.spyOn(message, 'error').mockImplementation(() => undefined as never);
+    db = new TaskPlannerDatabase('test-teams-view-' + Math.random().toString(36).slice(2));
+    await db.open();
+    useLayoutStore.getState().resetLayout();
+
+    lead = await createLead(
+      {
+        name: 'Bình Trần',
+        role: 'Lead điều phối',
+        capability: 'Chia việc và tổng hợp kết quả.',
+        persona: 'Bạn là lead điều phối.',
+        model: 'claude-opus-4',
+      },
+      db
+    );
+    employees = [
+      await createEmployee(
+        {
+          name: 'An Nguyễn',
+          role: 'Chuyên viên phân tích',
+          capability: 'Phân tích nghiệp vụ.',
+          persona: 'Bạn là An.',
+          model: 'claude-sonnet-4',
+        },
+        db
+      ),
+      await createEmployee(
+        {
+          name: 'Chi Lê',
+          role: 'Kỹ sư kiểm thử',
+          capability: 'Viết kiểm thử.',
+          persona: 'Bạn là Chi.',
+          model: 'claude-sonnet-4',
+        },
+        db
+      ),
+      await createEmployee(
+        {
+          name: 'Dung Phạm',
+          role: 'Chuyên viên tài liệu',
+          capability: 'Viết tài liệu.',
+          persona: 'Bạn là Dung.',
+          model: 'claude-sonnet-4',
+        },
+        db
+      ),
+    ];
+    await createSkill(
+      { name: 'Viết đặc tả', description: 'Quy trình viết đặc tả.', body: '# Quy trình' },
+      db
+    );
+
+    activeTeam = await createTeam(
+      {
+        name: 'Nhóm Thanh Toán',
+        leadId: lead.id,
+        budgetTokens: 4000,
+        employeeIds: [employees[0]!.id, employees[1]!.id],
+      },
+      db
+    );
+    idleTeam = await createTeam(
+      {
+        name: 'Nhóm Báo Cáo',
+        leadId: lead.id,
+        budgetTokens: 2000,
+        employeeIds: [employees[2]!.id],
+      },
+      db
+    );
+  });
+
+  afterEach(async () => {
+    await db.delete();
+    vi.restoreAllMocks();
+  });
+
+  /** The workbench surface: a closable tab that receives only the team id. */
+  function renderView(teamId: string = activeTeam.id) {
+    return render(<TeamWorkspaceView db={db} teamId={teamId} />);
+  }
+
+  /** The AI Office explorer is the only team list now; the workspace opens in a tab. */
+  function renderList() {
+    return render(<AiOfficeExplorer db={db} />);
+  }
+
+  it('lists one explorer row per seeded team', async () => {
+    renderList();
+
+    expect(await screen.findByTestId(`ai-office-team-${activeTeam.id}`)).toBeInTheDocument();
+    expect(screen.getByTestId(`ai-office-team-${idleTeam.id}`)).toBeInTheDocument();
+  });
+
+  it('counts the groups in the explorer header', async () => {
+    renderList();
+
+    expect(await screen.findByText('Nhóm AI (2)')).toBeInTheDocument();
+  });
+
+  it('shows the lead name and member count on an explorer row', async () => {
+    renderList();
+
+    const row = await screen.findByTestId(`ai-office-team-${activeTeam.id}`);
+    expect(row).toHaveTextContent('Nhóm Thanh Toán');
+    expect(row).toHaveTextContent('Lead: Bình Trần');
+    expect(row).toHaveTextContent('3 thành viên');
+  });
+
+  it('lists every group with no cap copy (D-06)', async () => {
+    await createTeam({ name: 'Nhóm Ba', leadId: lead.id, budgetTokens: 1000 }, db);
+    await createTeam({ name: 'Nhóm Bốn', leadId: lead.id, budgetTokens: 1000 }, db);
+
+    renderList();
+
+    expect(await screen.findByTestId(`ai-office-team-${idleTeam.id}`)).toBeInTheDocument();
+    expect(screen.queryByText(/Đã có 3 nhóm đang hoạt động/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/tối đa ba nhân viên/)).not.toBeInTheDocument();
+  });
+
+  it('creates a group from a name alone — no lead, no members, zero budget', async () => {
+    renderList();
+
+    fireEvent.click(await screen.findByTestId('ai-office-add-team-btn'));
+    expect(await screen.findByTestId('team-editor-drawer')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Tên nhóm'), { target: { value: 'Nhóm Rỗng' } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('team-editor-save')).toBeEnabled();
+    });
+    fireEvent.click(screen.getByTestId('team-editor-save'));
+
+    await waitFor(async () => {
+      const teams = await listTeams(db);
+      expect(teams.some((team) => team.name === 'Nhóm Rỗng')).toBe(true);
+    });
+
+    const created = (await listTeams(db)).find((team) => team.name === 'Nhóm Rỗng')!;
+    expect(created.leadId).toBeUndefined();
+    expect(created.budgetTokens).toBe(0);
+    expect(await listTeamMembers(created.id, db)).toHaveLength(0);
+  });
+
+  it('stores four selected employees without a cap complaint', async () => {
+    const fourth = await createEmployee(
+      {
+        name: 'Em Võ',
+        role: 'Chuyên viên hỗ trợ',
+        capability: 'Hỗ trợ chung.',
+        persona: 'Bạn là Em.',
+        model: 'claude-sonnet-4',
+      },
+      db
+    );
+
+    renderList();
+
+    fireEvent.click(await screen.findByTestId('ai-office-add-team-btn'));
+    expect(await screen.findByTestId('team-editor-drawer')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Tên nhóm'), { target: { value: 'Nhóm Mới' } });
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Lead' }));
+    fireEvent.click(await screen.findByTitle('Bình Trần · Lead điều phối'));
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Nhân viên' }));
+    fireEvent.click(await screen.findByTitle('An Nguyễn · Chuyên viên phân tích'));
+    fireEvent.click(await screen.findByTitle('Chi Lê · Kỹ sư kiểm thử'));
+    fireEvent.click(await screen.findByTitle('Dung Phạm · Chuyên viên tài liệu'));
+    fireEvent.click(await screen.findByTitle('Em Võ · Chuyên viên hỗ trợ'));
+
+    fireEvent.change(screen.getByLabelText('Tổng ngân sách nhóm'), { target: { value: '3000' } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('team-editor-save')).toBeEnabled();
+    });
+    fireEvent.click(screen.getByTestId('team-editor-save'));
+
+    await waitFor(async () => {
+      const teams = await listTeams(db);
+      expect(teams.some((team) => team.name === 'Nhóm Mới')).toBe(true);
+    });
+
+    const created = (await listTeams(db)).find((team) => team.name === 'Nhóm Mới')!;
+    const members = await listTeamMembers(created.id, db);
+    expect(members).toHaveLength(5);
+    expect(members.filter((row) => row.role === 'employee').map((row) => row.agentId)).toContain(
+      fourth.id
+    );
+    expect(members.reduce((sum, row) => sum + row.budgetTokens, 0)).toBe(3000);
+    const leadRow = members.find((row) => row.role === 'lead')!;
+    expect(leadRow.budgetTokens).toBe(600);
+  });
+
+  it('renders the linked-items empty state and rows', async () => {
+    const { LinkedItemsList } = await import('../../src/components/ai/office/LinkedItemsList');
+
+    const { unmount } = render(<LinkedItemsList items={[]} />);
+    expect(screen.getByText('Chưa liên kết mục nào.')).toBeInTheDocument();
+    unmount();
+
+    render(
+      <LinkedItemsList
+        items={[{ id: 'link-1', itemType: 'task', name: 'Việc A' }]}
+        onRemove={vi.fn()}
+      />
+    );
+    expect(screen.getByTestId('linked-item-link-1')).toHaveTextContent('Việc A');
+  });
+
+  it('adds an item from the picker and keeps the modal open', async () => {
+    const { LinkedItemPicker } = await import('../../src/components/ai/office/LinkedItemPicker');
+    await db.changeRequests.add({
+      id: 'cr-1',
+      code: 'CR-101',
+      name: 'Nghiệp vụ thanh toán',
+      status: 'In Progress',
+      type: 'ENHANCEMENT',
+      targets: [],
+      createdAt: '2026-10-01',
+      updatedAt: '2026-10-01',
+    } as any);
+
+    const onAdd = vi.fn();
+    render(<LinkedItemPicker open db={db} onCancel={vi.fn()} onAdd={onAdd} />);
+
+    fireEvent.click(await screen.findByTestId('linked-picker-add-cr-1'));
+    expect(onAdd).toHaveBeenCalledWith({
+      id: 'cr-1',
+      itemType: 'cr',
+      name: 'CR-101 · Nghiệp vụ thanh toán',
+    });
+    expect(screen.getByTestId('linked-item-picker')).toBeInTheDocument();
+  });
+
+  it('renders the workspace with the sidebar and the transcript region', async () => {
+    renderView();
+
+    expect(await screen.findByTestId('team-sidebar')).toBeInTheDocument();
+    expect(await screen.findByTestId('team-transcript-region')).toBeInTheDocument();
+    expect(screen.getByTestId('team-workspace')).toBeInTheDocument();
+  });
+
+  it('creates exactly one team thread on open and reuses it after the tab is reopened', async () => {
+    const { unmount } = renderView();
+    await screen.findByTestId('team-transcript-region');
+
+    const first = await waitFor(async () => {
+      const rows = await db.chatThreads.where('scopeType').equals('team').toArray();
+      expect(rows).toHaveLength(1);
+      return rows;
+    });
+    expect(first[0]!.entityId).toBe(activeTeam.id);
+
+    // Closing and reopening the workbench tab is the real remount path.
+    unmount();
+    renderView();
+    await screen.findByTestId('team-transcript-region');
+
+    const second = await db.chatThreads.where('scopeType').equals('team').toArray();
+    expect(second).toHaveLength(1);
+    expect(second[0]!.id).toBe(first[0]!.id);
+  });
+
+  it('makes the transcript region a single focus stop', async () => {
+    renderView();
+    const region = await screen.findByTestId('team-transcript-region');
+    expect(region).toHaveAttribute('tabindex', '0');
+    expect(region).toHaveAttribute('role', 'region');
+  });
+
+  it('renders the sidebar budget, links and mode sections', async () => {
+    renderView();
+    await screen.findByTestId('team-sidebar');
+
+    expect(screen.getByTestId('team-budget-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('team-linked-items')).toBeInTheDocument();
+    expect(screen.getByTestId('team-mode-toggles')).toBeInTheDocument();
+  });
+
+  /** D-23: the sidebar shows granted/used/remaining with input and output separate. */
+  async function seedSplitUsage(estimated: boolean) {
+    const rows = await listTeamMembers(activeTeam.id, db);
+    const employeeRow = rows.find((row) => row.role === 'employee')!;
+    await db.aiTeamMembers.update(employeeRow.id, {
+      budgetTokens: 1000,
+      usedTokens: 750,
+      inputTokens: 600,
+      outputTokens: 150,
+      ...(estimated ? { usageEstimated: true } : {}),
+    });
+    return employeeRow;
+  }
+
+  it('shows one turn split as granted/used/remaining per member and group (AIO-BUDGET-08, D-23)', async () => {
+    const employeeRow = await seedSplitUsage(false);
+
+    renderView();
+    const sidebar = await screen.findByTestId('team-sidebar');
+
+    const memberLine = await screen.findByTestId(`member-usage-${employeeRow.agentId}`);
+    // UAT 38: the row shows used/granted + %; the split lives in the tooltip.
+    expect(memberLine).toHaveTextContent('750 / 1,000 · 75%');
+    expect(memberLine).toHaveAttribute('title', expect.stringContaining('600 vào / 150 ra'));
+    expect(memberLine).toHaveAttribute('title', expect.stringContaining('còn 250'));
+
+    const panel = screen.getByTestId('team-budget-panel');
+    // The panel reports the GROUP total (4,000 granted), the member row its own share.
+    expect(panel).toHaveTextContent('750 / 4,000 · 19%');
+    expect(screen.getByTestId('team-usage-line')).toHaveAttribute(
+      'title',
+      expect.stringContaining('600 vào / 150 ra · còn 3,250')
+    );
+
+    expect(sidebar.textContent ?? '').not.toContain('NaN');
+    expect(sidebar.textContent ?? '').not.toContain('Infinity');
+    expect(sidebar.textContent ?? '').not.toContain('undefined');
+  });
+
+  it('marks an estimated usage with a tilde and an accessible name (D-24)', async () => {
+    const employeeRow = await seedSplitUsage(true);
+
+    renderView();
+    await screen.findByTestId('team-sidebar');
+
+    const memberLine = await screen.findByTestId(`member-usage-${employeeRow.agentId}`);
+    expect(memberLine).toHaveTextContent('~750');
+    expect(memberLine.querySelector('[aria-label="ước lượng"]')).not.toBeNull();
+    expect(memberLine.querySelector('[title="ước lượng"]')).not.toBeNull();
+  });
+
+  it('shows the inherited global threshold in the drawer without storing it (R3-W1)', async () => {
+    await db.settings.put({ key: 'ai_budget_warn_threshold_pct', value: 65 });
+
+    renderView();
+    fireEvent.click(await screen.findByTestId('team-header-settings'));
+
+    const input = (await screen.findByTestId('team-threshold-input')) as HTMLInputElement;
+    await waitFor(() => expect(input.value).toBe('65'));
+    expect(screen.getByText(/Đang kế thừa mặc định toàn cục \(65%\)/)).toBeInTheDocument();
+    // Reading the global must never materialize it on the team row.
+    expect((await getTeam(activeTeam.id, db))?.budgetWarnThresholdPct).toBeUndefined();
+  });
+
+  it('keeps the member and group badges independent (D-03/D-06)', async () => {
+    const rows = await listTeamMembers(activeTeam.id, db);
+    const employeeRow = rows.find((row) => row.role === 'employee')!;
+    // Member over its own 1000 share; group total 4000 stays well under.
+    await db.aiTeamMembers.update(employeeRow.id, {
+      budgetTokens: 1000,
+      usedTokens: 900,
+      inputTokens: 700,
+      outputTokens: 200,
+    });
+
+    renderView();
+    await screen.findByTestId('team-sidebar');
+
+    expect(await screen.findByTestId('budget-badge-member')).toBeInTheDocument();
+    expect(screen.queryByTestId('budget-badge-team')).not.toBeInTheDocument();
+  });
+
+  it('converges the live sidebar numbers to the ledger after the turn ends (D-22, AIO-BUDGET-08)', async () => {
+    await db.settings.put({ key: 'ninerouter_api_key', value: 'sk-test' });
+    await db.settings.put({ key: 'ninerouter_endpoint', value: 'https://example.invalid/v1' });
+
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const createRuntimeDeps = () => ({
+      runLoop: (async (loopOptions: any) => {
+        loopOptions.onUsage?.({ promptTokens: 600, completionTokens: 150, totalTokens: 750 });
+        // Hold the turn open so the live capture happens before the terminal flush.
+        await gate;
+        return {
+          fullResponse: 'Xong.',
+          cleanResponse: 'Xong.',
+          messages: [],
+          tokenUsage: {},
+          generatedFiles: [],
+          truncated: false,
+          loopLimitReached: false,
+        };
+      }) as any,
+    });
+
+    render(<TeamWorkspaceView db={db} teamId={activeTeam.id} createRuntimeDeps={createRuntimeDeps} />);
+    const composer = await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(composer, { target: { value: 'Lượt có đo token' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    const leadRow = (await listTeamMembers(activeTeam.id, db)).find((row) => row.role === 'lead')!;
+    const liveLine = await screen.findByTestId(`member-usage-${leadRow.agentId}`);
+    await waitFor(() => expect(liveLine).toHaveTextContent('750'));
+    const liveText = screen.getByTestId('team-sidebar').textContent ?? '';
+    expect(liveText).not.toContain('NaN');
+    expect(liveText).not.toContain('undefined');
+    expect(liveText).not.toContain('Infinity');
+
+    release!();
+    await waitFor(() => expect(screen.getAllByText('Xong.').length).toBeGreaterThan(0));
+
+    // D-22: once the turn is over the rendered numbers equal the ledger rows.
+    const settled = await waitFor(async () => {
+      const rows = await listTeamMembers(activeTeam.id, db);
+      const row = rows.find((entry) => entry.role === 'lead')!;
+      expect(row.usedTokens).toBe(750);
+      expect(row.inputTokens).toBe(600);
+      expect(row.outputTokens).toBe(150);
+      return row;
+    });
+
+    const settledLine = screen.getByTestId(`member-usage-${leadRow.agentId}`);
+    expect(settledLine).toHaveTextContent(settled.usedTokens.toLocaleString());
+    expect(settledLine).toHaveTextContent(settled.budgetTokens.toLocaleString());
+    // The split and remaining figure live in the tooltip now.
+    expect(settledLine).toHaveAttribute(
+      'title',
+      expect.stringContaining(settled.inputTokens!.toLocaleString())
+    );
+    expect(settledLine).toHaveAttribute(
+      'title',
+      expect.stringContaining(settled.outputTokens!.toLocaleString())
+    );
+    expect(settledLine).toHaveAttribute(
+      'title',
+      expect.stringContaining(
+        Math.max(0, settled.budgetTokens - settled.usedTokens).toLocaleString()
+      )
+    );
+
+    const settledText = screen.getByTestId('team-sidebar').textContent ?? '';
+    expect(settledText).not.toContain('NaN');
+    expect(settledText).not.toContain('undefined');
+    expect(settledText).not.toContain('Infinity');
+    // The coordinator's own reconcile is covered by teamRunCoordinator.test.ts; this test
+    // proves the rendering layer does not diverge from the rows it is handed.
+  });
+
+  it('keeps the settings split table rows summing to the team total', async () => {
+    const { TeamSettingsDrawer, evenSplitRows } = await import(
+      '../../src/components/ai/office/TeamSettingsDrawer'
+    );
+    const members = await listTeamMembers(activeTeam.id, db);
+    const rows = evenSplitRows(
+      5000,
+      members.map((member) => ({
+        memberId: member.id,
+        agentId: member.agentId,
+        name: member.agentId,
+        role: member.role,
+        usedTokens: member.usedTokens,
+      }))
+    );
+    expect(rows.reduce((sum, row) => sum + row.budgetTokens, 0)).toBe(5000);
+    expect(rows.find((row) => row.role === 'lead')!.budgetTokens).toBe(1668);
+
+    render(
+      <TeamSettingsDrawer
+        open
+        team={activeTeam}
+        members={members}
+        lead={lead}
+        employees={employees}
+        leads={[lead]}
+        links={[]}
+        onCancel={vi.fn()}
+        onAssignLeader={vi.fn()}
+        onAddMember={vi.fn()}
+        onRemoveMember={vi.fn()}
+        onSave={vi.fn()}
+      />
+    );
+    expect(await screen.findByTestId('team-settings-drawer')).toBeInTheDocument();
+    expect(screen.getByText('Lưu cài đặt')).toBeInTheDocument();
+    // Phase 37 D-03/D-04: the per-team concurrency limit is editable here.
+    expect(screen.getByLabelText('Số nhân viên chạy đồng thời')).toBeInTheDocument();
+  });
+
+  it('uses the lead model for a bare message and the employee model for a mention', async () => {
+    await db.settings.put({ key: 'ninerouter_api_key', value: 'sk-test' });
+    await db.settings.put({ key: 'ninerouter_endpoint', value: 'https://example.invalid/v1' });
+
+    const seenModels: string[] = [];
+    const createRuntimeDeps = () => ({
+      runLoop: (async (loopOptions: any) => {
+        seenModels.push(loopOptions.model);
+        return {
+          fullResponse: 'Xong.',
+          cleanResponse: 'Xong.',
+          messages: [],
+          tokenUsage: {},
+          generatedFiles: [],
+          truncated: false,
+          loopLimitReached: false,
+        };
+      }) as any,
+    });
+
+    render(<TeamWorkspaceView db={db} teamId={activeTeam.id} createRuntimeDeps={createRuntimeDeps} />);
+    const composer = await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
+
+    fireEvent.change(composer, { target: { value: 'Yêu cầu chung' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+    await waitFor(() => expect(seenModels).toContain('claude-opus-4'));
+    // WR-02: `send()` now drops a submit while a turn is live, so the test must wait for
+    // the lead turn to settle (its reply lands in the transcript) before sending again.
+    await waitFor(() => expect(screen.getAllByText('Xong.').length).toBeGreaterThan(0));
+
+    fireEvent.change(composer, {
+      target: { value: `@[An Nguyễn](agent:${employees[0]!.id}) làm giúp` },
+    });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+    await waitFor(() => expect(seenModels).toContain('claude-sonnet-4'));
+  });
+
+  it('uses a lead persona/model edited between two sends on the second turn (D-03)', async () => {
+    await db.settings.put({ key: 'ninerouter_api_key', value: 'sk-test' });
+    await db.settings.put({ key: 'ninerouter_endpoint', value: 'https://example.invalid/v1' });
+
+    const seen: Array<{ model: string; system: string }> = [];
+    const createRuntimeDeps = () => ({
+      runLoop: (async (loopOptions: any) => {
+        seen.push({
+          model: loopOptions.model,
+          system: (loopOptions.messages ?? [])
+            .filter((message: any) => message.role === 'system')
+            .map((message: any) => String(message.content))
+            .join('\n'),
+        });
+        return {
+          fullResponse: 'Xong.',
+          cleanResponse: 'Xong.',
+          messages: [],
+          tokenUsage: {},
+          generatedFiles: [],
+          truncated: false,
+          loopLimitReached: false,
+        };
+      }) as any,
+    });
+
+    render(<TeamWorkspaceView db={db} teamId={activeTeam.id} createRuntimeDeps={createRuntimeDeps} />);
+    const composer = await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
+
+    fireEvent.change(composer, { target: { value: 'Lượt một' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+    await waitFor(() => expect(seen).toHaveLength(1));
+    await screen.findByLabelText('Gửi tin nhắn');
+
+    // Production edit path: the persisted lead row changes, no remount.
+    await updateLead(
+      lead.id,
+      { persona: 'Bạn là lead phiên bản hai.', model: 'claude-opus-5' },
+      db
+    );
+
+    fireEvent.change(composer, { target: { value: 'Lượt hai' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+    await waitFor(() => expect(seen).toHaveLength(2));
+
+    expect(seen[0]!.model).toBe('claude-opus-4');
+    expect(seen[0]!.system).toContain('Bạn là lead điều phối.');
+    expect(seen[1]!.model).toBe('claude-opus-5');
+    expect(seen[1]!.system).toContain('Bạn là lead phiên bản hai.');
+  });
+
+  it('lists roster members with role and removes an employee without touching the lead row', async () => {
+    renderView();
+    fireEvent.click(await screen.findByTestId('team-header-settings'));
+
+    const members = await listTeamMembers(activeTeam.id, db);
+    const employeeRow = members.find((row) => row.role === 'employee')!;
+    const leadRow = members.find((row) => row.role === 'lead')!;
+
+    expect(await screen.findByTestId(`team-member-row-${employeeRow.id}`)).toBeInTheDocument();
+    expect(screen.queryByTestId(`team-member-remove-${leadRow.id}`)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId(`team-member-remove-${employeeRow.id}`));
+    fireEvent.click(await screen.findByText('Gỡ'));
+
+    await waitFor(async () => {
+      const after = await listTeamMembers(activeTeam.id, db);
+      expect(after.some((row) => row.id === employeeRow.id)).toBe(false);
+      expect(after.some((row) => row.role === 'lead')).toBe(true);
+    });
+  });
+
+  it('adds an agent from the settings drawer, excluding agents already on the roster', async () => {
+    renderView();
+    fireEvent.click(await screen.findByTestId('team-header-settings'));
+    await screen.findByTestId('team-roster-block');
+
+    // Dung Phạm belongs to the other team, so she is the only addable agent.
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Thêm nhân viên' }));
+    expect(screen.queryByTitle('An Nguyễn · Chuyên viên phân tích')).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByTitle('Dung Phạm · Chuyên viên tài liệu'));
+
+    await waitFor(async () => {
+      const after = await listTeamMembers(activeTeam.id, db);
+      expect(after.some((row) => row.agentId === employees[2]!.id)).toBe(true);
+      expect(after.find((row) => row.agentId === employees[2]!.id)?.budgetTokens).toBe(0);
+    });
+  });
+
+  it('offers every persisted lead and locks the leader control once leaderLockedAt is set', async () => {
+    const secondLead = await createLead(
+      {
+        name: 'Cường Vũ',
+        role: 'Lead dự phòng',
+        capability: 'Điều phối dự phòng.',
+        persona: 'Bạn là lead dự phòng.',
+        model: 'claude-opus-4',
+      },
+      db
+    );
+
+    renderView();
+    fireEvent.click(await screen.findByTestId('team-header-settings'));
+
+    const leaderSelect = await screen.findByRole('combobox', { name: 'Leader' });
+    expect(leaderSelect).toBeEnabled();
+    fireEvent.mouseDown(leaderSelect);
+    fireEvent.click(await screen.findByTitle('Cường Vũ · Lead dự phòng'));
+
+    await waitFor(async () => {
+      const row = await getTeam(activeTeam.id, db);
+      expect(row?.leadId).toBe(secondLead.id);
+    });
+
+    await db.aiTeams.update(activeTeam.id, { leaderLockedAt: new Date().toISOString() });
+    await waitFor(async () => {
+      expect(screen.getByRole('combobox', { name: 'Leader' })).toBeDisabled();
+    });
+    expect(
+      screen.getByText(/Leader đã khóa từ lượt chạy đầu tiên và cố định suốt đời nhóm/)
+    ).toBeInTheDocument();
+  });
+
+  it('renders an empty group workspace without crashing', async () => {
+    const empty = await createTeam({ name: 'Nhóm Rỗng' }, db);
+
+    renderView(empty.id);
+
+    expect(await screen.findByTestId('team-workspace')).toBeInTheDocument();
+    expect(screen.getByTestId('team-header-no-lead')).toHaveTextContent('Chưa chọn lead');
+  });
+
+  it('warns about an unfinished turn in the restored transcript (D-19)', async () => {
+    const thread = await ensureTeamThread(activeTeam.id, db);
+    await saveTeamMessage(
+      {
+        threadId: thread.id,
+        role: 'assistant',
+        content: 'Viết đặc tả thanh toán',
+        agentId: lead.id,
+        agentName: lead.name,
+        agentKind: 'lead',
+        messageKind: 'instruction',
+        targetAgentId: employees[0]!.id,
+      },
+      db
+    );
+
+    renderView();
+
+    expect(await screen.findByText('Lượt trước bị gián đoạn')).toBeInTheDocument();
+    expect(screen.getByText(/An Nguyễn: Viết đặc tả thanh toán/)).toBeInTheDocument();
+  });
+
+  it('shows no interrupted warning when every instruction has a report', async () => {
+    const thread = await ensureTeamThread(activeTeam.id, db);
+    await saveTeamMessage(
+      {
+        threadId: thread.id,
+        role: 'assistant',
+        content: 'Viết đặc tả thanh toán',
+        agentId: lead.id,
+        agentName: lead.name,
+        agentKind: 'lead',
+        messageKind: 'instruction',
+        targetAgentId: employees[0]!.id,
+      },
+      db
+    );
+    await new Promise((r) => setTimeout(r, 2));
+    await saveTeamMessage(
+      {
+        threadId: thread.id,
+        role: 'assistant',
+        content: 'Đã xong.',
+        agentId: employees[0]!.id,
+        agentName: employees[0]!.name,
+        agentKind: 'employee',
+        messageKind: 'report',
+      },
+      db
+    );
+
+    renderView();
+    await screen.findByTestId('team-transcript-region');
+
+    expect(screen.queryByText('Lượt trước bị gián đoạn')).not.toBeInTheDocument();
+  });
+
+  it('suppresses the interrupted banner while the assigned agent is still running (WR-07)', async () => {
+    await db.settings.put({ key: 'ninerouter_api_key', value: 'sk-test' });
+    await db.settings.put({ key: 'ninerouter_endpoint', value: 'https://example.invalid/v1' });
+    await updateTeam(activeTeam.id, { autoSplitEnabled: true }, db);
+
+    let employeeStarted = false;
+    let releaseEmployee: (() => void) | undefined;
+    const employeeGate = new Promise<void>((resolve) => {
+      releaseEmployee = resolve;
+    });
+    let leadCalls = 0;
+
+    const createRuntimeDeps = (agentId: string) => ({
+      runLoop: (async (loopOptions: any) => {
+        if (agentId === lead.id) {
+          leadCalls += 1;
+          // Only the first lead turn delegates; the synthesis pass just answers.
+          if (leadCalls === 1) {
+            await loopOptions.executeToolFn('delegate_batch', {
+              assignments: [{ agentId: employees[0]!.id, task: 'Viết đặc tả thanh toán' }],
+            });
+          }
+        } else {
+          employeeStarted = true;
+          await employeeGate;
+        }
+        return {
+          fullResponse: 'Xong.',
+          cleanResponse: 'Xong.',
+          messages: [],
+          tokenUsage: {},
+          generatedFiles: [],
+          truncated: false,
+          loopLimitReached: false,
+        };
+      }) as any,
+    });
+
+    render(<TeamWorkspaceView db={db} teamId={activeTeam.id} createRuntimeDeps={createRuntimeDeps} />);
+    const composer = await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(composer, { target: { value: 'Chia việc giúp tôi' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    // The instruction row is persisted before the employee turn starts, so the inference
+    // would report an interruption; only the live-agent filter keeps the banner away.
+    await waitFor(async () => {
+      const rows = await db.chatMessages
+        .where('threadId')
+        .equals((await ensureTeamThread(activeTeam.id, db)).id)
+        .toArray();
+      expect(rows.some((row) => row.messageKind === 'instruction')).toBe(true);
+    });
+    await waitFor(() => expect(employeeStarted).toBe(true));
+    expect(screen.queryByText('Lượt trước bị gián đoạn')).not.toBeInTheDocument();
+
+    releaseEmployee!();
+    await waitFor(() => expect(screen.getAllByText('Xong.').length).toBeGreaterThan(0));
+    expect(screen.queryByText('Lượt trước bị gián đoạn')).not.toBeInTheDocument();
+  });
+
+  it('shows one error alert when saving group settings fails (WR-12)', async () => {
+    renderView();
+    fireEvent.click(await screen.findByTestId('team-header-settings'));
+    await screen.findByTestId('team-settings-drawer');
+
+    vi.mocked(applyTeamBudgetSettings).mockRejectedValueOnce(new Error('Không tìm thấy nhóm: 1234'));
+
+    fireEvent.click(screen.getByTestId('team-settings-save'));
+
+    const alert = await screen.findByTestId('team-action-error');
+    expect(alert).toHaveTextContent('Không lưu được thay đổi. Vui lòng thử lại.');
+    // The raw repo message (which embeds an id) must never reach the UI.
+    expect(screen.queryByText(/Không tìm thấy nhóm: 1234/)).not.toBeInTheDocument();
+  });
+
+  it('opens the settings drawer from the workspace header (IN-08b)', async () => {
+    renderView();
+
+    fireEvent.click(await screen.findByTestId('team-header-settings'));
+
+    expect(await screen.findByTestId('team-settings-drawer')).toBeInTheDocument();
+  });
+
+  it('locks the leader on the first send only', async () => {
+    await db.settings.put({ key: 'ninerouter_api_key', value: 'sk-test' });
+    await db.settings.put({ key: 'ninerouter_endpoint', value: 'https://example.invalid/v1' });
+
+    const createRuntimeDeps = () => ({
+      runLoop: (async () => ({
+        fullResponse: 'Xong.',
+        cleanResponse: 'Xong.',
+        messages: [],
+        tokenUsage: {},
+        generatedFiles: [],
+        truncated: false,
+        loopLimitReached: false,
+      })) as any,
+    });
+
+    render(<TeamWorkspaceView db={db} teamId={activeTeam.id} createRuntimeDeps={createRuntimeDeps} />);
+    const composer = await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
+
+    fireEvent.change(composer, { target: { value: 'Lượt một' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+    await screen.findByLabelText('Gửi tin nhắn');
+
+    const first = await waitFor(async () => {
+      const row = await getTeam(activeTeam.id, db);
+      expect(row?.leaderLockedAt).toBeTruthy();
+      return row!.leaderLockedAt;
+    });
+
+    fireEvent.change(composer, { target: { value: 'Lượt hai' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+    await screen.findByLabelText('Gửi tin nhắn');
+
+    const second = await getTeam(activeTeam.id, db);
+    expect(second?.leaderLockedAt).toBe(first);
+  });
+
+  it('runs the assigned lead after mount and locks it (assign-then-first-send)', async () => {
+    await db.settings.put({ key: 'ninerouter_api_key', value: 'sk-test' });
+    await db.settings.put({ key: 'ninerouter_endpoint', value: 'https://example.invalid/v1' });
+
+    const assignedLead = await createLead(
+      {
+        name: 'Cường Vũ',
+        role: 'Lead dự phòng',
+        capability: 'Điều phối dự phòng.',
+        persona: 'Bạn là lead dự phòng.',
+        model: 'claude-opus-5',
+      },
+      db
+    );
+    const empty = await createTeam({ name: 'Nhóm Rỗng' }, db);
+
+    const seen: Array<{ agentId: string; model: string; system: string }> = [];
+    const createRuntimeDeps = (agentId: string) => ({
+      runLoop: (async (loopOptions: any) => {
+        seen.push({
+          agentId,
+          model: loopOptions.model,
+          system: (loopOptions.messages ?? [])
+            .filter((message: any) => message.role === 'system')
+            .map((message: any) => String(message.content))
+            .join('\n'),
+        });
+        return {
+          fullResponse: 'Xong.',
+          cleanResponse: 'Xong.',
+          messages: [],
+          tokenUsage: {},
+          generatedFiles: [],
+          truncated: false,
+          loopLimitReached: false,
+        };
+      }) as any,
+    });
+
+    render(<TeamWorkspaceView db={db} teamId={empty.id} createRuntimeDeps={createRuntimeDeps} />);
+    fireEvent.click(await screen.findByTestId('team-header-settings'));
+
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: 'Leader' }));
+    fireEvent.click(await screen.findByTitle('Cường Vũ · Lead dự phòng'));
+    await waitFor(async () => {
+      expect((await getTeam(empty.id, db))?.leadId).toBe(assignedLead.id);
+    });
+    fireEvent.click(screen.getByText('Hủy'));
+
+    const composer = await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(composer, { target: { value: 'Bắt đầu' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    await waitFor(() => expect(seen).toHaveLength(1));
+    expect(seen[0]!.agentId).toBe(assignedLead.id);
+    expect(seen[0]!.model).toBe('claude-opus-5');
+    expect(seen[0]!.system).toContain('Bạn là lead dự phòng.');
+    await waitFor(async () => {
+      expect((await getTeam(empty.id, db))?.leaderLockedAt).toBeTruthy();
+    });
+  });
+
+  it('renders the team composer placeholder', async () => {
+    renderView();
+    expect(
+      await screen.findByPlaceholderText('Nhắn cho lead hoặc @ một nhân viên...')
+    ).toBeInTheDocument();
+  });
+
+  it('routes a bare message to the lead and a mention to that employee', async () => {
+    await db.settings.put({ key: 'ninerouter_api_key', value: 'sk-test' });
+    await db.settings.put({ key: 'ninerouter_endpoint', value: 'https://example.invalid/v1' });
+
+    const routedTo: string[] = [];
+    const createRuntimeDeps = (agentId: string) => ({
+      runLoop: (async () => {
+        routedTo.push(agentId);
+        return {
+          fullResponse: 'Xong.',
+          cleanResponse: 'Xong.',
+          messages: [],
+          tokenUsage: {},
+          generatedFiles: [],
+          truncated: false,
+          loopLimitReached: false,
+        };
+      }) as any,
+    });
+
+    render(<TeamWorkspaceView db={db} teamId={activeTeam.id} createRuntimeDeps={createRuntimeDeps} />);
+    const composer = await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
+
+    fireEvent.change(composer, { target: { value: 'Yêu cầu chung' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+    await waitFor(() => expect(routedTo).toContain(lead.id));
+    // WR-02: wait for the lead turn to settle before the next submit.
+    await waitFor(() => expect(screen.getAllByText('Xong.').length).toBeGreaterThan(0));
+
+    fireEvent.change(composer, {
+      target: { value: `@[An Nguyễn](agent:${employees[0]!.id}) làm giúp` },
+    });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+    await waitFor(() => expect(routedTo).toContain(employees[0]!.id));
+  });
+
+  it('offers the team lead as the first @ option in the composer', async () => {
+    renderView();
+    const composer = (await screen.findByLabelText(
+      'Nội dung tin nhắn trò chuyện AI'
+    )) as HTMLTextAreaElement;
+    composer.focus();
+    fireEvent.change(composer, { target: { value: '@', selectionStart: 1, selectionEnd: 1 } });
+    fireEvent.keyUp(composer, { key: '@', keyCode: 50 });
+
+    await waitFor(() => {
+      expect(document.querySelector('.ant-mentions-dropdown')).toBeInTheDocument();
+    });
+    const items = Array.from(
+      document.querySelectorAll<HTMLElement>('.ant-mentions-dropdown li[role="menuitem"]')
+    );
+    expect(items[0]!.textContent).toContain('Bình Trần');
+  });
+
+  it('routes the agents view and the team workspace tab in renderViewContent', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const source = readFileSync(
+      resolve(process.cwd(), 'src', 'workbench', 'EditorArea.tsx'),
+      'utf8'
+    );
+    expect(source).toContain('<AiOfficeView {...dbProp} />');
+    expect(source).toContain('<TeamWorkspaceView');
+  });
+
+  it('renders the lead approval card and routes the decision to the coordinator', async () => {
+    await db.settings.put({ key: 'ninerouter_api_key', value: 'sk-test' });
+    await db.settings.put({ key: 'ninerouter_endpoint', value: 'https://example.invalid/v1' });
+
+    let approvalSeen = false;
+    const createRuntimeDeps = () => ({
+      runLoop: (async (loopOptions: any) => {
+        const check = await loopOptions.onMutationCheck?.('update_task', { id: 't1' });
+        approvalSeen = true;
+        return {
+          fullResponse: check?.proceed ? 'Đã cập nhật.' : 'Đã hủy.',
+          cleanResponse: '',
+          messages: [],
+          tokenUsage: {},
+          generatedFiles: [],
+          truncated: false,
+          loopLimitReached: false,
+        };
+      }) as any,
+    });
+
+    render(<TeamWorkspaceView db={db} teamId={activeTeam.id} createRuntimeDeps={createRuntimeDeps} />);
+    const composer = await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(composer, { target: { value: 'Cập nhật việc A' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    expect(await screen.findByTestId('ai-mutation-approval')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Chấp thuận'));
+
+    await waitFor(() => expect(approvalSeen).toBe(true));
+    await waitFor(() => {
+      expect(screen.queryByTestId('ai-mutation-approval')).not.toBeInTheDocument();
+    });
+  });
+});

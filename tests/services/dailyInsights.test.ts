@@ -21,7 +21,7 @@ function makeAlloc(
     date: '2026-10-18',
     allocatedMinutes,
     isActive: true,
-    task: {
+    task: { crId: '11111111-1111-4111-8111-111111111111',
       id: `task-${name}`,
       name,
       status,

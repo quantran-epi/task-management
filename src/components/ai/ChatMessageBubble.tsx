@@ -1,11 +1,13 @@
 import React, { useState, useMemo } from 'react';
+import dayjs from 'dayjs';
 import { Typography, Button, Tooltip, theme, message, Spin, Tag, Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
 import {
   CopyOutlined,
   CheckOutlined,
   CheckSquareOutlined,
-  ProjectOutlined,
+  BranchesOutlined,
+  ApartmentOutlined,
   FileTextOutlined,
   FileAddOutlined,
   CodeOutlined,
@@ -19,6 +21,15 @@ import {
   FolderOpenOutlined,
 } from '@ant-design/icons';
 import type { ChatMessage, ChatGeneratedFile } from '../../types/models';
+import type { AgentRunStatus } from '../../types/aiOffice';
+import type { MessageSeenEntry } from '../../types/teamChat';
+import {
+  AgentAttributionRow,
+  AgentStatusRow,
+  agentColorFor,
+  agentTextColorFor,
+  type AgentAttributionAgent,
+} from './office/AgentAttributionRow';
 import { APP_NAME, APP_SLUG } from '../../constants/app';
 import { renderSafeMarkdown } from '../../utils/markdown';
 import {
@@ -40,26 +51,6 @@ import { EvidenceOnlyCard } from './grounded/EvidenceOnlyCard';
 import { SeedEntityCard } from './grounded/SeedEntityCard';
 import type { PersistedEntityRef } from '../../services/ai/groundedAnswerSchemas';
 import { MermaidViewer } from './MermaidViewer';
-import { DocumentPreviewCard, type DocumentPreviewPayload } from './wizard/DocumentPreviewCard';
-import { SolutionReviewCard, type SolutionReviewPayload } from './wizard/SolutionReviewCard';
-import { GapFillQuestionCard } from './wizard/GapFillQuestionCard';
-import { WizardProgressStrip } from './wizard/WizardProgressStrip';
-import type { ChangePackManifest } from '../../services/wizard/changePack';
-
-export interface WizardMessageCallbacks {
-  onSuggestion?: ((messageId: string, questionId: string, suggestion: string) => void) | undefined;
-  onSkip?: ((messageId: string, questionId: string, outcome: 'omitted' | 'unknown') => void) | undefined;
-  onRequestEdit?: ((messageId: string, draftRevision: number) => void) | undefined;
-  onSaveSolution?: ((messageId: string, draftRevision: number) => void | Promise<void>) | undefined;
-  onApproveExport?: ((messageId: string, draftRevision: number) => void | Promise<void>) | undefined;
-  onOpenNote?: ((noteId: string) => void) | undefined;
-  onConfirmPack?: ((messageId: string, manifest: Readonly<ChangePackManifest>) => void) | undefined;
-  onReplacePack?: ((messageId: string) => void) | undefined;
-  pendingKeys?: ReadonlySet<string> | undefined;
-  exportedFiles?: ReadonlyMap<string, DocumentPreviewPayload['exportedFile']> | undefined;
-  exportErrors?: ReadonlyMap<string, string> | undefined;
-  onRetryExport?: ((messageId: string) => void | Promise<void>) | undefined;
-}
 
 const { Text } = Typography;
 
@@ -99,7 +90,42 @@ export interface ChatMessageBubbleProps {
   onSaveStickyNote?: ((content: string) => Promise<void> | void) | undefined;
   onRunClaudeCode?: (() => Promise<void> | void) | undefined;
   groundedCallbacks?: GroundedAnswerCardCallbacks | undefined;
-  wizardCallbacks?: WizardMessageCallbacks | undefined;
+  /** Phase 34 D-07: attribution identity for an agent-authored message. */
+  agent?: AgentAttributionAgent | undefined;
+  agentStatus?: AgentRunStatus | undefined;
+  onStopAgent?: (() => void) | undefined;
+  /** 37-08 D-13: retry of one assignment attempt; absent means this surface cannot retry. */
+  onRetryAgent?: ((assignmentId: string) => void) | undefined;
+  /**
+   * 37.1 D-03/D-15: the steer row's delivery state. `'pending'` = the leader has not read
+   * it yet, `'held'` = read but not handed to an agent, undefined = delivered (no badge).
+   */
+  /**
+   * 37.1 rework: the read receipt for this row, from the participant cursors. Empty/absent
+   * means nobody has read it yet; the UI then shows a single "đã gửi" mark.
+   */
+  seenBy?: MessageSeenEntry[] | undefined;
+  /**
+   * 37.1 R14: the message this one answers. Rendered as a quote above the bubble; clicking it
+   * scrolls to the original. Absent means this message starts a thread.
+   */
+  replyTo?: { id: string; authorName: string; content: string } | undefined;
+  /**
+   * 37.1: who this message is addressed to. `to[]` is the obligation to respond, and without
+   * it a reader cannot tell which agent the leader just asked — the bubble only names the
+   * sender.
+   */
+  addressedTo?: Array<{ id: string; name: string }> | undefined;
+  /**
+   * Consecutive messages from the same author render as one block: the attribution header
+   * appears once, and the rows sit closer together. Set by `ChatMessageList`.
+   */
+  grouped?: boolean | undefined;
+  /**
+   * The NEXT row continues this author's block. Spacing belongs to the row above, so this —
+   * not `grouped` — decides the bottom margin.
+   */
+  continuesNext?: boolean | undefined;
 }
 
 /**
@@ -126,11 +152,13 @@ export function parseChecklistFromText(text: string): string[] {
 }
 
 /**
- * Parses markdown mentions (@[Task](task:id) and #[Project](project:id))
- * and renders them as sleek visual pill tags inside user messages.
+ * Parses markdown mentions (@[Task](task:id), #[CR](cr:id), #[System](system:id),
+ * @[Doc](doc:id) and @[Name](agent:id)) and renders them as sleek visual pill tags
+ * inside user messages. The `agent:` alternative is appended last so the earlier
+ * capture-group indices stay stable (T-34-41).
  */
 export function renderUserMessageWithMentions(content: string): React.ReactNode {
-  const mentionRegex = /(@\[([^\]]+)\]\(task:([a-zA-Z0-9_-]+)\))|(#\[([^\]]+)\]\(project:([a-zA-Z0-9_-]+)\))|(@\[([^\]]+)\]\(doc:([a-zA-Z0-9_-]+)\))/g;
+  const mentionRegex = /(@\[([^\]]+)\]\(task:([a-zA-Z0-9_-]+)\))|(#\[([^\]]+)\]\((?:cr|system):([a-zA-Z0-9_-]+)\))|(@\[([^\]]+)\]\(doc:([a-zA-Z0-9_-]+)\))|(@\[([^\]]+)\]\(agent:([a-zA-Z0-9-]+)\))/g;
   if (!mentionRegex.test(content)) {
     return content;
   }
@@ -168,13 +196,20 @@ export function renderUserMessageWithMentions(content: string): React.ReactNode 
         </Tag>
       );
     } else if (match[4]) {
-      // Project mention
-      const projName = match[5];
-      const projId = match[6];
+      // CR / System mention
+      const crName = match[5];
+      const crId = match[6];
+      const isSystem = content.slice(match.index, match.index + match[0].length).includes('(system:');
       parts.push(
         <Tag
-          key={`proj-pill-${projId}-${match.index}`}
-          icon={<ProjectOutlined style={{ color: '#ffffff', marginRight: 4 }} />}
+          key={`${isSystem ? 'system' : 'cr'}-pill-${crId}-${match.index}`}
+          icon={
+            isSystem ? (
+              <ApartmentOutlined style={{ color: '#ffffff', marginRight: 4 }} />
+            ) : (
+              <BranchesOutlined style={{ color: '#ffffff', marginRight: 4 }} />
+            )
+          }
           style={{
             margin: '0 3px',
             verticalAlign: 'middle',
@@ -187,7 +222,7 @@ export function renderUserMessageWithMentions(content: string): React.ReactNode 
             padding: '1px 6px',
           }}
         >
-          #{projName}
+          #{crName}
         </Tag>
       );
     } else if (match[7]) {
@@ -211,6 +246,29 @@ export function renderUserMessageWithMentions(content: string): React.ReactNode 
           }}
         >
           {docTitle}
+        </Tag>
+      );
+    } else if (match[10]) {
+      // Agent mention (D-08): pill uses the agent's deterministic avatar color.
+      const agentName = match[11];
+      const agentId = match[12];
+      const agentBg = agentId ? agentColorFor(agentId) : '#5b4fe8';
+      parts.push(
+        <Tag
+          key={`agent-pill-${agentId}-${match.index}`}
+          style={{
+            margin: '0 3px',
+            verticalAlign: 'middle',
+            borderRadius: 4,
+            fontWeight: 500,
+            backgroundColor: agentBg,
+            color: agentTextColorFor(agentBg),
+            border: `1px solid ${agentBg}`,
+            fontSize: 12,
+            padding: '1px 6px',
+          }}
+        >
+          {agentName}
         </Tag>
       );
     }
@@ -312,7 +370,15 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   onSaveStickyNote,
   onRunClaudeCode,
   groundedCallbacks,
-  wizardCallbacks,
+  agent,
+  agentStatus,
+  onStopAgent,
+  onRetryAgent,
+  seenBy,
+  replyTo,
+  addressedTo,
+  grouped = false,
+  continuesNext = false,
 }) => {
   const { token } = theme.useToken();
   const [copied, setCopied] = useState(false);
@@ -321,9 +387,8 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   const [diagnosticsForcedOpen, setDiagnosticsForcedOpen] = useState(false);
 
   const isUser = msg.role === 'user';
-  const formattedTime = msg.createdAt
-    ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : '';
+  // 24h on purpose: this UI is Vietnamese, so `06:06 PM` reads as a foreign format.
+  const formattedTime = msg.createdAt ? dayjs(msg.createdAt).format('HH:mm') : '';
 
   const handleMarkdownClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
@@ -352,97 +417,24 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
     }
   };
 
-  if (!isUser && !isStreaming && msg.wizard && wizardCallbacks) {
-    const snapshot = msg.wizard;
-    const payload = snapshot.renderPayload;
-    const wizardCard = (() => {
-      if (msg.content.startsWith('Đã bỏ qua:')) {
-        return (
-          <div style={GapFillQuestionCard.stackStyle}>
-            <GapFillQuestionCard
-              question={{
-                id: msg.id,
-                topic: payload.title,
-                description: msg.content,
-                templateSection: payload.title,
-                suggestions: [],
-                evidenceSources: [],
-                answer: msg.content.match(/^Đã bỏ qua:\s*(.+?)\s*·/)?.[1] ?? '(chưa cung cấp)',
-                outcome: 'omitted',
-              }}
-              onSuggestion={() => undefined}
-              onSkip={() => undefined}
-            />
-          </div>
-        );
-      }
-      if (snapshot.status === 'gap_fill') {
-        return (
-          <div style={GapFillQuestionCard.stackStyle}>
-            <WizardProgressStrip snapshot={snapshot} />
-            <GapFillQuestionCard
-              question={{
-                id: msg.id,
-                topic: payload.title,
-                description: msg.content,
-                templateSection: payload.title,
-                suggestions: [],
-                evidenceSources: [],
-                answer: msg.content.match(/^Đã bỏ qua:\s*(.+?)\s*·/)?.[1] ?? null,
-                outcome: msg.content.includes('Đã bỏ qua:') ? 'omitted' : 'open',
-              }}
-              onSuggestion={(questionId, suggestion) => wizardCallbacks.onSuggestion?.(msg.id, questionId, suggestion)}
-              onSkip={(questionId, outcome) => wizardCallbacks.onSkip?.(msg.id, (msg.content.match(/Cần làm rõ:\s*([^\n]+)/)?.[1] ?? questionId).trim(), outcome)}
-            />
-          </div>
-        );
-      }
-      if (snapshot.skill === 'SOLUTION' && snapshot.status === 'review' && snapshot.draftRevision !== null) {
-        const solution: SolutionReviewPayload = {
-          messageId: msg.id,
-          version: snapshot.draftRevision,
-          title: payload.title,
-          featureMode: 'featureMode' in payload ? payload.featureMode : 'new',
-          currentSystem: 'currentSystem' in payload ? payload.currentSystem : undefined,
-          affectedSurfaces: 'affectedSurfaces' in payload ? payload.affectedSurfaces : undefined,
-          markdown: 'markdown' in payload && payload.markdown ? payload.markdown : msg.content,
-        };
-        return <SolutionReviewCard solution={solution} onSave={() => wizardCallbacks.onSaveSolution?.(msg.id, snapshot.draftRevision)} onRequestEdit={() => wizardCallbacks.onRequestEdit?.(msg.id, snapshot.draftRevision)} onOpenNote={(noteId) => wizardCallbacks.onOpenNote?.(noteId)} />;
-      }
-      if (snapshot.status === 'review' && snapshot.draftRevision !== null) {
-        const preview: DocumentPreviewPayload = {
-          messageId: msg.id,
-          draftRevision: snapshot.draftRevision,
-          skill: snapshot.skill === 'SOLUTION' ? 'PL03' : snapshot.skill,
-          title: payload.title,
-          metadata: { cr: payload.title, requestingUnit: '', author: '', date: snapshot.createdAt.slice(0, 10) },
-          markdown: 'markdown' in payload && payload.markdown ? payload.markdown : msg.content,
-          exportedFile: wizardCallbacks.exportedFiles?.get(msg.id),
-          exportError: wizardCallbacks.exportErrors?.get(msg.id),
-        };
-        return <DocumentPreviewCard preview={preview} pending={wizardCallbacks.pendingKeys?.has(msg.id)} onApproveExport={() => wizardCallbacks.onApproveExport?.(msg.id, snapshot.draftRevision)} onRequestEdit={() => wizardCallbacks.onRequestEdit?.(msg.id, snapshot.draftRevision)} onRetryDownload={() => wizardCallbacks.onRetryExport?.(msg.id)} />;
-      }
-      return null;
-    })();
-    if (wizardCard) {
-      return <div data-role="assistant" data-testid="wizard-bubble" style={{ width: '100%', marginBottom: 12 }}>{wizardCard}</div>;
-    }
-  }
-
   // Branch assistant display on message.grounding payload
   if (!isUser && msg.grounding) {
     const g = msg.grounding;
+    const answer = g.answer;
+    const hasStructuredAnswer = Boolean(answer && (answer.conclusion || (answer.claims && answer.claims.length > 0)));
 
-    // Render friendly markdown answer with inline citation tags instead of bulky technical card
-    if (g.answer && (g.answer.conclusion || (g.answer.claims && g.answer.claims.length > 0))) {
+    // If grounding has no structured answer but msg.content has text, fallback to normal markdown display
+    if (!hasStructuredAnswer && msg.content && msg.content.trim().length > 0) {
+      // Fall through to regular message rendering below
+    } else if (hasStructuredAnswer && answer) {
       const isAbstention =
-        ('confidence' in g.answer && g.answer.confidence === 'unknown') ||
-        (typeof g.answer.conclusion === 'string' &&
+        ('confidence' in answer && answer.confidence === 'unknown') ||
+        (typeof answer.conclusion === 'string' &&
           /(không tìm thấy|không có thông tin|không có dữ liệu|chưa có thông tin|no relevant information|no evidence found|insufficient evidence)/i.test(
-            g.answer.conclusion
+            answer.conclusion
           ));
 
-      let formattedConclusion = g.answer.conclusion || '';
+      let formattedConclusion = answer.conclusion || '';
       if (isAbstention) {
         formattedConclusion = formattedConclusion.replace(/\[\s*[SL]?\d+\s*\]/gi, '').trim();
       } else {
@@ -455,14 +447,14 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       // Collect only citations actually referenced by the AI (claims, conclusion, citationReasons)
       const citedIds = new Set<string>();
       if (!isAbstention) {
-        (g.answer.claims || []).forEach((c) => {
+        (answer.claims || []).forEach((c) => {
           (c.citationIds || []).forEach((id) => citedIds.add(id.toUpperCase()));
         });
         const inlineMatches = Array.from((formattedConclusion + ' ' + (msg.content || '')).matchAll(/\[([SL]?\d+)\]/gi));
         inlineMatches.forEach((m) => {
           if (m[1]) citedIds.add(m[1].toUpperCase());
         });
-        const answerReasons = (g.answer as any).citationReasons;
+        const answerReasons = (answer as any).citationReasons;
         if (answerReasons && typeof answerReasons === 'object') {
           Object.keys(answerReasons).forEach((k) => citedIds.add(k.toUpperCase()));
         }
@@ -505,7 +497,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       // Format claims with inline citation tags
       const formattedClaims = isAbstention
         ? []
-        : (g.answer.claims || []).map((c) => {
+        : (answer.claims || []).map((c) => {
             let citedBadges = (c.citationIds || [])
               .map((cid) => {
                 const info = citationMap.get(cid.toUpperCase()) || citationMap.get(cid);
@@ -729,6 +721,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
     const sourcesSlot = g.citations && g.citations.length > 0 ? (
       <SourcesPanel
         citations={g.citations}
+        coverage={g.coverage}
         onOpenCitation={(c) => groundedCallbacks?.onCitationActivate?.(c)}
       />
     ) : undefined;
@@ -805,6 +798,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         </div>
         <SourcesPanel
           citations={g.citations}
+          coverage={g.coverage}
           onOpenCitation={(c) => groundedCallbacks?.onCitationActivate?.(c)}
         />
       </div>
@@ -1157,31 +1151,160 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
     [hasMarkdownTable, token.colorPrimary, msg.content]
   );
 
+  const messageTextRegion = (
+    <>
+      <MarkdownContentRenderer content={msg.content} onMarkdownClick={handleMarkdownClick} />
+      {isStreaming && (
+        <span
+          style={{
+            display: 'inline-block',
+            color: token.colorPrimary,
+            fontWeight: 'bold',
+            marginLeft: 2,
+            animation: 'blink 1s infinite',
+          }}
+        >
+          ▋
+        </span>
+      )}
+      {isStreaming && (
+        <div style={{ marginTop: 8 }}>
+          <Tag
+            icon={<SyncOutlined spin />}
+            color="processing"
+            style={{ borderRadius: 10, padding: '2px 8px', fontSize: 11 }}
+          >
+            {streamingStatus || 'Đang tạo câu trả lời...'}
+          </Tag>
+        </div>
+      )}
+    </>
+  );
+
+  // A lead or a synthesis row is the team's voice, not one worker's report — it gets the
+  // accent surface so a reader can tell "the leader is speaking" without reading the name.
+  const isLeadVoice =
+    !isUser && (agent?.isLead === true || msg.messageKind === 'synthesis');
+  // The draft put a small uppercase chip beside the author so a plan and a synthesis are
+  // distinguishable at a glance. A plain report has no chip — labelling every row adds noise.
+  const kindLabel =
+    msg.messageKind === 'synthesis'
+      ? 'Tổng hợp'
+      : msg.messageKind === 'plan'
+        ? 'Kế hoạch'
+        : undefined;
+
   return (
     <div
       data-role={msg.role}
+      data-message-id={msg.id}
+      className="tc-message"
       style={{
         display: 'flex',
         flexDirection: 'column',
         alignItems: isUser ? 'flex-end' : 'flex-start',
-        marginBottom: 12,
+        marginBottom: continuesNext ? 4 : 20,
         width: '100%',
+        // The hover-reveal rule lives in team-chat.css; the color it needs comes from here.
+        ['--tc-accent' as string]: token.colorPrimary,
       }}
     >
+      {/* Attribution names the AUTHOR. On a user row `agent` is only ever the target, and
+          the `→ name` line below already says who is being addressed. */}
+      {agent && !isUser && !grouped && <AgentAttributionRow agent={agent} kindLabel={kindLabel} />}
+      {addressedTo !== undefined && addressedTo.length > 0 && (
+        <div
+          data-testid={`addressed-to-${msg.id}`}
+          style={{
+            fontSize: 11,
+            color: token.colorTextSecondary,
+            marginBottom: 2,
+            alignSelf: isUser ? 'flex-end' : 'flex-start',
+          }}
+        >
+          → {addressedTo.map((entry) => entry.name).join(', ')}
+        </div>
+      )}
       <div
         style={{
-          maxWidth: isUser ? '85%' : '95%',
-          backgroundColor: isUser ? token.colorPrimary : token.colorFillAlter,
+          maxWidth: isUser ? '72%' : '82%',
+          // The percentage must include padding and border, or two bubbles with the same
+          // `max-width` render at different widths and the right edge looks ragged.
+          boxSizing: 'border-box',
+          backgroundColor: isUser
+            ? token.colorPrimary
+            : isLeadVoice
+              ? token.colorPrimaryBg
+              : token.colorBgContainer,
           color: isUser ? '#ffffff' : token.colorText,
           borderRadius: isUser ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
-          border: isUser ? 'none' : `1px solid ${token.colorBorderSecondary}`,
-          padding: isUser ? '8px 12px' : '12px 16px',
+          // Every side is declared explicitly. Writing `border` and then `borderLeft: undefined`
+          // made React remove the left side only, so a worker bubble rendered with three
+          // borders and a 2px-radius corner floating on an open edge.
+          ...(isUser
+            ? { border: 'none' }
+            : {
+                borderTop: `1px solid ${isLeadVoice ? token.colorPrimaryBorder : token.colorBorderSecondary}`,
+                borderRight: `1px solid ${isLeadVoice ? token.colorPrimaryBorder : token.colorBorderSecondary}`,
+                borderBottom: `1px solid ${isLeadVoice ? token.colorPrimaryBorder : token.colorBorderSecondary}`,
+                borderLeft: `1px solid ${isLeadVoice ? token.colorPrimaryBorder : token.colorBorderSecondary}`,
+              }),
+          padding: isUser ? '8px 12px' : '10px 14px',
           wordBreak: 'break-word',
           fontSize: 14,
           lineHeight: 1.57,
-          boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+          // The lead accent is an inset shadow, not a thicker border: a 3px left border
+          // shifts the text off-centre and clips the 12px corner radius.
+          boxShadow: isUser
+            ? 'none'
+            : isLeadVoice
+              ? `inset 3px 0 0 ${token.colorPrimary}`
+              : '0 1px 2px rgba(0,0,0,0.04)',
         }}
       >
+        {replyTo && (
+          <div
+            data-testid={`reply-quote-${msg.id}`}
+            role="button"
+            tabIndex={0}
+            onClick={() => {
+              document
+                .querySelector(`[data-message-id="${replyTo.id}"]`)
+                ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              document
+                .querySelector(`[data-message-id="${replyTo.id}"]`)
+                ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }}
+            style={{
+              marginBottom: 6,
+              padding: '4px 8px',
+              borderLeft: `2px solid ${isUser ? 'rgba(255,255,255,0.6)' : token.colorBorder}`,
+              borderRadius: 4,
+              background: isUser ? 'rgba(255,255,255,0.14)' : token.colorFillQuaternary,
+              fontSize: 12,
+              lineHeight: 1.4,
+              cursor: 'pointer',
+              opacity: 0.9,
+            }}
+          >
+            <div style={{ fontWeight: 600 }}>{replyTo.authorName}</div>
+            <div
+              style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+              }}
+            >
+              {replyTo.content}
+            </div>
+          </div>
+        )}
         {isUser ? (
           <div style={{ whiteSpace: 'pre-wrap' }}>{renderUserMessageWithMentions(msg.content)}</div>
         ) : isStreaming && !msg.content ? (
@@ -1198,39 +1321,44 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               </Text>
             </div>
           </div>
+        ) : agent && isStreaming ? (
+          <div aria-live="polite" aria-atomic="false">{messageTextRegion}</div>
         ) : (
-          <div>
-            <MarkdownContentRenderer
-              content={msg.content}
-              onMarkdownClick={handleMarkdownClick}
-            />
-            {isStreaming && (
-              <span
-                style={{
-                  display: 'inline-block',
-                  color: token.colorPrimary,
-                  fontWeight: 'bold',
-                  marginLeft: 2,
-                  animation: 'blink 1s infinite',
-                }}
-              >
-                ▋
-              </span>
-            )}
-            {isStreaming && (
-              <div style={{ marginTop: 8 }}>
-                <Tag
-                  icon={<SyncOutlined spin />}
-                  color="processing"
-                  style={{ borderRadius: 10, padding: '2px 8px', fontSize: 11 }}
-                >
-                  {streamingStatus || 'Đang tạo câu trả lời...'}
-                </Tag>
-              </div>
-            )}
-          </div>
+          <div>{messageTextRegion}</div>
         )}
       </div>
+
+      {/*
+        37-08 D-13: the gate prefers the PERSISTED status (`message.runStatus`), so the row
+        survives a remount with no live snapshot; the live `agentStatus` is only a fallback for
+        rows written before the ledger links existed. A superseded report renders no row at all
+        — supersession is suppressed HERE, not by hiding the button.
+
+        WR-01: only a report (or a pre-ledger row with no `messageKind`) carries attempt
+        status. An `instruction` row links to the attempt for pairing, but its status lives on
+        the report — rendering a row here gave the lead a queue badge, a stop button that
+        aborts the whole batch, and a retry button that refuses.
+      */}
+      {agent &&
+        msg.supersededByMessageId === undefined &&
+        (msg.messageKind === 'report' || msg.messageKind === undefined) &&
+        (msg.runStatus ?? agentStatus) && (
+          <AgentStatusRow
+            agent={agent}
+            status={msg.runStatus ?? agentStatus!}
+            {...(msg.assignmentId ? { assignmentId: msg.assignmentId } : {})}
+            onStop={onStopAgent}
+            onRetry={
+              onRetryAgent && msg.assignmentId
+                ? () => onRetryAgent(msg.assignmentId!)
+                : undefined
+            }
+          />
+        )}
+
+      {/* The receipt moved into the meta row below. It renders only on YOUR messages:
+          "who has read this" is information for the sender. On an agent's own row it
+          reported that the agent had read its own message. */}
 
       {/* AI-Generated Files Cards */}
       {!isUser && !isStreaming && msg.generatedFiles && msg.generatedFiles.length > 0 && (
@@ -1339,8 +1467,9 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         </div>
       )}
 
-      {/* Action Chips for Assistant messages per D-18 */}
-      {!isUser && !isStreaming && (
+      {/* Host-opted actions (checklist / sticky note / Claude Code). The team chat passes
+          none of these, so it renders no row here at all. */}
+      {!isUser && !isStreaming && (canAddToChecklist || canSaveStickyNote || canRunClaudeCode) && (
         <div
           style={{
             display: 'flex',
@@ -1384,74 +1513,32 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               Chạy với Claude Code
             </Button>
           )}
-
-          <Dropdown
-            menu={{ items: directDownloadMenuItems }}
-            trigger={['click']}
-            placement="bottomLeft"
-            getPopupContainer={(node) => node.parentElement || document.body}
-            overlayStyle={{ zIndex: 1500 }}
-          >
-            <Button
-              size="small"
-              icon={<DownloadOutlined />}
-              style={{ fontSize: 12, height: 24, padding: '0 8px' }}
-              title="Tải toàn bộ văn bản hội thoại chat"
-            >
-              Xuất đoạn chat
-            </Button>
-          </Dropdown>
-
-          <Dropdown
-            menu={{ items: saveAsMenuItems }}
-            trigger={['click']}
-            placement="bottomLeft"
-            getPopupContainer={(node) => node.parentElement || document.body}
-            overlayStyle={{ zIndex: 1500 }}
-          >
-            <Button
-              size="small"
-              icon={<FolderOpenOutlined />}
-              style={{ fontSize: 12, height: 24, padding: '0 8px' }}
-              title="Lưu toàn bộ văn bản hội thoại chat (Save As)"
-            >
-              Lưu đoạn chat...
-            </Button>
-          </Dropdown>
         </div>
       )}
 
+      {/* ONE meta row: time, cost, receipt, actions. The row used to be three stacked
+          rows (status tag, receipt, time+copy) on every message. */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: 8,
           marginTop: 4,
+          minHeight: 20,
           paddingLeft: isUser ? 0 : 4,
           paddingRight: isUser ? 4 : 0,
+          fontSize: 11,
+          color: token.colorTextTertiary,
         }}
       >
-        {formattedTime && (
-          <Text type="secondary" style={{ fontSize: 11 }}>
-            {formattedTime}
-          </Text>
-        )}
+        {formattedTime && <span>{formattedTime}</span>}
         {!isUser && !isStreaming && msg.durationMs !== undefined && (
           <Tooltip
             title={`Thời gian chạy phản hồi: ${(msg.durationMs / 1000).toFixed(2)}s`}
             zIndex={1500}
             getPopupContainer={(node) => node.parentElement || document.body}
           >
-            <span
-              style={{
-                fontSize: 11,
-                color: token.colorTextQuaternary,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 2,
-                cursor: 'default',
-              }}
-            >
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, cursor: 'default' }}>
               ⏱ {(msg.durationMs / 1000).toFixed(1)}s
             </span>
           </Tooltip>
@@ -1462,21 +1549,35 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
             zIndex={1500}
             getPopupContainer={(node) => node.parentElement || document.body}
           >
-            <span
-              style={{
-                fontSize: 11,
-                color: token.colorTextQuaternary,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 2,
-                cursor: 'default',
-              }}
-            >
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, cursor: 'default' }}>
               🪙 {(msg.tokenUsage.totalTokens ?? ((msg.tokenUsage.promptTokens || 0) + (msg.tokenUsage.completionTokens || 0))).toLocaleString()} tokens
             </span>
           </Tooltip>
         )}
-        {!isUser && (
+        {/* 37.1: "who has read this" is information for the SENDER, so it renders only on
+            your own messages. On an agent row it reported that the agent had read its own
+            message — a check mark that could never be false. */}
+        {!isStreaming && isUser && seenBy && seenBy.length > 0 && (
+          <Tooltip
+            title={seenBy
+              .map(
+                (entry) =>
+                  `${entry.participantName} đã đọc lúc ${dayjs(entry.at).format('HH:mm DD/MM/YYYY')}`
+              )
+              .join(' · ')}
+            zIndex={1500}
+            getPopupContainer={(node) => node.parentElement || document.body}
+          >
+            <Typography.Text
+              data-testid={`seen-${msg.id}`}
+              style={{ fontSize: 11, color: token.colorPrimary, cursor: 'default' }}
+            >
+              ✓✓
+            </Typography.Text>
+          </Tooltip>
+        )}
+
+        <div className="tc-actions" style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Tooltip
             title={copied ? 'Đã sao chép' : 'Sao chép nội dung'}
             zIndex={1500}
@@ -1491,7 +1592,41 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               style={{ minHeight: 20, minWidth: 20, padding: 0 }}
             />
           </Tooltip>
-        )}
+          {!isUser && !isStreaming && (
+            <Dropdown
+              trigger={['click']}
+              placement="bottomRight"
+              getPopupContainer={(node) => node.parentElement || document.body}
+              overlayStyle={{ zIndex: 1500 }}
+              menu={{
+                items: [
+                  {
+                    key: 'export',
+                    icon: <DownloadOutlined />,
+                    label: 'Xuất đoạn chat',
+                    children: directDownloadMenuItems,
+                  },
+                  {
+                    key: 'save',
+                    icon: <FolderOpenOutlined />,
+                    label: 'Lưu đoạn chat...',
+                    children: saveAsMenuItems,
+                  },
+                ],
+              }}
+            >
+              <Button
+                type="text"
+                size="small"
+                aria-label="Thao tác khác"
+                title="Xuất hoặc lưu đoạn chat"
+                style={{ minHeight: 20, minWidth: 20, padding: 0, fontSize: 13 }}
+              >
+                ⋯
+              </Button>
+            </Dropdown>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -2,8 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Button, Dropdown, Input, Modal, Segmented, Tooltip, Typography, Empty, type MenuProps } from 'antd';
 import {
   FolderOutlined,
-  FolderFilled,
-  FolderOpenFilled,
+  FolderOpenOutlined,
   PlusOutlined,
   PushpinOutlined,
   PushpinFilled,
@@ -21,8 +20,10 @@ import {
   SearchOutlined,
   UndoOutlined,
   CheckSquareOutlined,
-  ProjectOutlined,
+  ThunderboltOutlined,
+  BranchesOutlined,
   DownloadOutlined,
+  ApartmentOutlined,
 } from '@ant-design/icons';
 import type { Note } from '../../types/models';
 import type { DocumentPublishStatus } from '../../db/repositories/documentSetRepo';
@@ -54,6 +55,7 @@ export interface DocFolderTreeProps {
   onSelectFilter: (filterKeyOrFolderId: string) => void;
   onSelectDoc?: ((doc: Note) => void) | undefined;
   onCreateDoc: (targetFolderId?: string) => Promise<void> | void;
+  onCreateDiagram?: ((targetFolderId?: string) => Promise<void> | void) | undefined;
   onCreateFolder?: (folderName: string, parentId?: string) => Promise<void> | void;
   onRenameFolder?: (folderId: string, newName: string) => Promise<void> | void;
   onMoveFolder?: (folder: Note) => void;
@@ -72,7 +74,7 @@ export interface DocFolderTreeProps {
   onRestoreDoc?: ((doc: Note) => void) | undefined;
   onMoveDocToFolder?: ((doc: Note) => void) | undefined;
   /** Custom panel width when resizable */
-  width?: number | undefined;
+  width?: number | string | undefined;
 }
 
 const PAGE_SIZE = 20;
@@ -85,6 +87,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
   onSelectFilter,
   onSelectDoc,
   onCreateDoc,
+  onCreateDiagram,
   onCreateFolder,
   onRenameFolder,
   onMoveFolder,
@@ -144,7 +147,10 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
   // Counts for special folders
   const pinnedDocs = useMemo(() => activeNotes.filter((n) => n.isPinned && n.type !== 'folder'), [activeNotes]);
   const quickNotes = useMemo(() => activeNotes.filter((n) => n.type === 'quick_note'), [activeNotes]);
-  const rootDirectDocs = useMemo(() => activeNotes.filter((n) => !n.parentId && n.type === 'document'), [activeNotes]);
+  const rootDirectDocs = useMemo(
+    () => activeNotes.filter((n) => !n.parentId && n.type !== 'folder' && n.type !== 'quick_note'),
+    [activeNotes]
+  );
   const deletedDocs = useMemo(() => trashNotes.filter((n) => n.type !== 'folder'), [trashNotes]);
 
   // Active folder / scope info
@@ -204,7 +210,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
         return !doc.deletedAt && Boolean(doc.parentId && activeScopeInfo.descendantFolderIds.has(doc.parentId));
       }
       if (activeFilter === 'root_docs') {
-        return !doc.parentId && doc.type === 'document' && !doc.deletedAt;
+        return !doc.parentId && doc.type !== 'folder' && doc.type !== 'quick_note' && !doc.deletedAt;
       }
       if (activeFilter === 'quick_notes') {
         return doc.type === 'quick_note' && !doc.deletedAt;
@@ -293,7 +299,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
         if (doc.deletedAt) {
           setExpandedFolderIds((prev) => new Set(prev).add('trash'));
         }
-        if (!doc.parentId && doc.type === 'document') {
+        if (!doc.parentId && doc.type !== 'folder' && doc.type !== 'quick_note') {
           setExpandedFolderIds((prev) => new Set(prev).add('root_docs'));
         }
         if (doc.parentId) {
@@ -385,6 +391,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
   const renderDocItem = (doc: Note, depth: number = 0) => {
     const isSelected = selectedDocId === doc.id;
     const isQuickNote = doc.type === 'quick_note';
+    const isDiagram = doc.type === 'diagram';
 
     const docMenu: MenuProps['items'] = [
       ...(onTogglePin
@@ -464,8 +471,8 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
           className="doc-tree-item"
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
-            <span style={{ fontSize: 13, flexShrink: 0, color: isSelected ? '#4f46e5' : '#6b7280' }}>
-              {isQuickNote ? <FormOutlined /> : <FileTextOutlined />}
+            <span style={{ fontSize: 13, flexShrink: 0, color: isSelected ? '#4f46e5' : isDiagram ? '#10b981' : '#6b7280' }}>
+              {isDiagram ? <ApartmentOutlined /> : isQuickNote ? <FormOutlined /> : <FileTextOutlined />}
             </span>
             <span
               style={{
@@ -475,9 +482,9 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
                 textDecoration: doc.deletedAt ? 'line-through' : 'none',
                 opacity: doc.deletedAt ? 0.6 : 1,
               }}
-              title={doc.title || (isQuickNote ? 'Ghi chú nhanh' : 'Không tiêu đề')}
+              title={doc.title || (isDiagram ? 'Biểu đồ' : isQuickNote ? 'Ghi chú nhanh' : 'Không tiêu đề')}
             >
-              {doc.title || (isQuickNote ? 'Ghi chú nhanh' : 'Không tiêu đề')}
+              {doc.title || (isDiagram ? 'Biểu đồ' : isQuickNote ? 'Ghi chú nhanh' : 'Không tiêu đề')}
             </span>
             {doc.isPinned && !isQuickNote && (
               <PushpinFilled style={{ fontSize: 10, color: '#f59e0b', flexShrink: 0 }} />
@@ -487,9 +494,14 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
                 <CheckSquareOutlined style={{ fontSize: 11, color: '#1677ff', flexShrink: 0 }} />
               </Tooltip>
             )}
-            {doc.entityType === 'project' && (
-              <Tooltip title="Thuộc về một dự án">
-                <ProjectOutlined style={{ fontSize: 11, color: '#722ed1', flexShrink: 0 }} />
+            {doc.entityType === 'cr' && (
+              <Tooltip title="Thuộc về một Change Request">
+                <ThunderboltOutlined style={{ fontSize: 11, color: '#722ed1', flexShrink: 0 }} />
+              </Tooltip>
+            )}
+            {doc.entityType === 'system' && (
+              <Tooltip title="Thuộc về một hệ thống">
+                <BranchesOutlined style={{ fontSize: 11, color: '#13c2c2', flexShrink: 0 }} />
               </Tooltip>
             )}
           </div>
@@ -630,20 +642,10 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, flex: 1 }}>
           <span
+            className="workbench-tree-expand-btn"
             role="button"
             tabIndex={0}
             onClick={(e) => toggleFolderExpand(id, e)}
-            style={{
-              width: 16,
-              height: 16,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 10,
-              color: '#9ca3af',
-              cursor: 'pointer',
-              flexShrink: 0,
-            }}
           >
             {count > 0 ? (isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />) : <span style={{ width: 10 }} />}
           </span>
@@ -848,32 +850,22 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
         >
           {hasContent ? (
             <span
+              className="workbench-tree-expand-btn"
               role="button"
               tabIndex={0}
               onClick={(e) => toggleFolderExpand(node.id, e)}
-              style={{
-                width: 16,
-                height: 16,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 10,
-                color: '#9ca3af',
-                cursor: 'pointer',
-                flexShrink: 0,
-              }}
             >
               {isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />}
             </span>
           ) : (
-            <span style={{ width: 16, flexShrink: 0 }} />
+            <span style={{ width: 18, flexShrink: 0 }} />
           )}
 
           <span style={{ fontSize: 14, flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-            {isActive ? (
-              <FolderOpenFilled style={{ color: '#d97706' }} />
+            {isExpanded || isActive ? (
+              <FolderOpenOutlined style={{ color: '#eab308' }} />
             ) : (
-              <FolderFilled style={{ color: '#f59e0b' }} />
+              <FolderOutlined style={{ color: '#eab308' }} />
             )}
           </span>
           <span
@@ -982,17 +974,18 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
     <div
       className="doc-folder-tree"
       style={{
-        width: width ?? 320,
-        minWidth: width !== undefined ? width : 280,
-        maxWidth: width !== undefined ? width : 380,
-        flexShrink: 0,
+        width: width ?? '100%',
+        minWidth: typeof width === 'number' ? width : 0,
+        maxWidth: typeof width === 'number' ? width : 'none',
+        flexShrink: typeof width === 'number' ? 0 : 1,
+        flex: typeof width === 'string' || width === undefined ? 1 : undefined,
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
         gap: 10,
         padding: '12px 8px',
         backgroundColor: '#fafafa',
-        borderRight: '1px solid #f0f0f0',
+        borderRight: typeof width === 'number' ? '1px solid #f0f0f0' : 'none',
         overflowY: 'auto',
       }}
     >
@@ -1062,6 +1055,23 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
         >
           {activeFilter === 'quick_notes' ? 'Tạo ghi chú nhanh' : 'Tạo tài liệu'}
         </Button>
+        {onCreateDiagram && (
+          <Tooltip title="Tạo biểu đồ Mermaid mới">
+            <Button
+              style={{ flexShrink: 0 }}
+              icon={<ApartmentOutlined />}
+              aria-label="Tạo biểu đồ mới"
+              onClick={() => {
+                const targetFolder =
+                  typeof activeFilter === 'string' &&
+                  !['pinned', 'quick_notes', 'trash', 'root_docs'].includes(activeFilter)
+                    ? activeFilter
+                    : undefined;
+                onCreateDiagram(targetFolder);
+              }}
+            />
+          </Tooltip>
+        )}
         <Tooltip title="Tạo thư mục mới ở cấp gốc">
           <Button
             style={{ flexShrink: 0 }}
@@ -1132,14 +1142,14 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
             renderSpecialFolder(
               'root_docs',
               'Tài liệu chung (Chưa phân loại)',
-              <FileTextOutlined style={{ color: '#6366f1' }} />,
+              <FolderOutlined style={{ color: '#eab308' }} />,
               rootDirectDocs,
-              '#6366f1',
+              '#eab308',
               <Tooltip title="Tạo tài liệu mới ở cấp gốc">
                 <Button
                   type="text"
                   size="small"
-                  icon={<PlusOutlined style={{ fontSize: 11, color: '#6366f1' }} />}
+                  icon={<PlusOutlined style={{ fontSize: 11, color: '#eab308' }} />}
                   onClick={(e) => {
                     e.stopPropagation();
                     onCreateDoc(undefined);

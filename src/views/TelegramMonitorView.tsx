@@ -1028,7 +1028,7 @@ export const TelegramMonitorView: React.FC = () => {
                         options={[
                           { value: 'full', label: 'Toàn bộ (Tasks + Projects + Knowledge Docs)' },
                           { value: 'knowledge_only', label: 'Chỉ Knowledge Docs' },
-                          { value: 'tasks_only', label: 'Chỉ Tasks & Projects' },
+                          { value: 'tasks_only', label: 'Chỉ Tasks & CRs' },
                           { value: 'pure_llm', label: 'Chỉ LLM (Không chia sẻ dữ liệu TaskMate)' },
                         ]}
                       />
@@ -1119,7 +1119,7 @@ export const TelegramMonitorView: React.FC = () => {
               options={[
                 { value: 'full', label: 'Toàn bộ (Tasks + Projects + Knowledge Docs)' },
                 { value: 'knowledge_only', label: 'Chỉ Knowledge Docs' },
-                { value: 'tasks_only', label: 'Chỉ Tasks & Projects' },
+                { value: 'tasks_only', label: 'Chỉ Tasks & CRs' },
                 { value: 'pure_llm', label: 'Chỉ LLM (Không chia sẻ dữ liệu TaskMate)' },
               ]}
             />

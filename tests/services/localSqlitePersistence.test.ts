@@ -4,6 +4,7 @@ import {
   configureSqlitePath,
   enqueueLocalSqliteChange,
   flushLocalSqliteNow,
+  hydrateDexieFromSqlite,
   SQLITE_SETTING_KEYS,
   SQLITE_DOMAIN_TABLES,
 } from '../../src/services/localSqlitePersistence';
@@ -62,7 +63,7 @@ describe('localSqlitePersistence', () => {
 
     enqueueLocalSqliteChange(db, 'tasks', 'task-1', { id: 'task-1', name: 'old' }, false);
     enqueueLocalSqliteChange(db, 'tasks', 'task-1', { id: 'task-1', name: 'new' }, false);
-    enqueueLocalSqliteChange(db, 'projects', 'project-1', null, true);
+    enqueueLocalSqliteChange(db, 'changeRequests', 'cr-1', null, true);
 
     const result = await flushLocalSqliteNow(db);
 
@@ -71,7 +72,7 @@ describe('localSqlitePersistence', () => {
       path: 'tasks.sqlite',
       changes: expect.arrayContaining([
         { tableName: 'tasks', rowId: 'task-1', payloadJson: '{"id":"task-1","name":"new"}', deleted: false },
-        { tableName: 'projects', rowId: 'project-1', payloadJson: null, deleted: true },
+        { tableName: 'changeRequests', rowId: 'cr-1', payloadJson: null, deleted: true },
       ]),
     });
     await expect(db.settings.get(SQLITE_SETTING_KEYS.queue)).resolves.toMatchObject({ value: [] });
@@ -168,5 +169,61 @@ describe('localSqlitePersistence', () => {
         },
       ]),
     });
+  });
+
+  it('enqueues an aiSkillVersions row with its payload', async () => {
+    expect(SQLITE_DOMAIN_TABLES).toContain('aiSkillVersions');
+    await db.settings.bulkPut([
+      { key: SQLITE_SETTING_KEYS.path, value: 'tasks.sqlite' },
+      { key: SQLITE_SETTING_KEYS.enabled, value: true },
+    ]);
+    invokeMock.mockResolvedValueOnce(undefined);
+
+    const version = {
+      id: 'version-1',
+      skillId: 'skill-1',
+      version: 1,
+      status: 'pending',
+      name: 'Code review',
+      description: 'Reviews diffs',
+      body: '# Body',
+      createdAt: new Date().toISOString(),
+    };
+    enqueueLocalSqliteChange(db, 'aiSkillVersions', version.id, version, false);
+    await flushLocalSqliteNow(db);
+
+    expect(invokeMock).toHaveBeenCalledWith('sqlite_apply_changes', {
+      path: 'tasks.sqlite',
+      changes: expect.arrayContaining([
+        expect.objectContaining({
+          tableName: 'aiSkillVersions',
+          rowId: 'version-1',
+          payloadJson: JSON.stringify(version),
+          deleted: false,
+        }),
+      ]),
+    });
+  });
+
+  it('never copies AI or knowledge credentials into the local SQLite queue', async () => {
+    for (const key of ['ninerouter_api_key', 'knowledge_server_token', 'image_api_key', 'github_token']) {
+      enqueueLocalSqliteChange(db, 'settings', key, { key, value: 'secret-value' }, false);
+    }
+
+    const queue = (await db.settings.get(SQLITE_SETTING_KEYS.queue))?.value;
+    expect(queue ?? []).toEqual([]);
+  });
+
+  it('skips a malformed SQLite row instead of aborting hydration', async () => {
+    await db.settings.bulkPut([{ key: SQLITE_SETTING_KEYS.path, value: 'tasks.sqlite' }]);
+    invokeMock.mockResolvedValueOnce([
+      { tableName: 'tasks', rowId: 'good-1', payloadJson: JSON.stringify({ id: 'good-1' }), updatedAt: 'now' },
+      { tableName: 'tasks', rowId: 'bad-1', payloadJson: '{not json', updatedAt: 'now' },
+    ]);
+
+    const hydrated = await hydrateDexieFromSqlite(db);
+
+    expect(hydrated).toBe(1);
+    await expect(db.tasks.get('good-1')).resolves.toBeDefined();
   });
 });

@@ -69,8 +69,8 @@ export const LocalSqlitePersistenceCard: React.FC<LocalSqlitePersistenceCardProp
 
   const confirmRestore = async () => {
     const count = await Promise.all([
-      db.projects.count(),
-      db.milestones.count(),
+      db.changeRequests.count(),
+      db.systems.count(),
       db.tasks.count(),
       db.capacityRules.count(),
       db.capacityOverrides.count(),

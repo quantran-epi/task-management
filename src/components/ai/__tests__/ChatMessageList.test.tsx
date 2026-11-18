@@ -1,7 +1,74 @@
 // @vitest-environment jsdom
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, afterEach } from 'vitest';
+import type { ChatMessage } from '../../../types/models';
 import { ChatMessageList } from '../ChatMessageList';
+
+describe('ChatMessageList initial read position', () => {
+  afterEach(() => vi.restoreAllMocks());
+  const messages: ChatMessage[] = [{
+    id: 'read', threadId: 'thread', role: 'user', content: 'Tin đã đọc', createdAt: '2026-11-13T00:00:00Z',
+  }];
+  it('waits for saved cursor then opens at bottom when everything was read', () => {
+    const scroll = vi.fn();
+    const original = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = scroll;
+    try {
+      const { rerender } = render(<ChatMessageList messages={[]} readPositionReady={false} lastReadMessageId={null} onMessageRead={vi.fn()} />);
+      expect(scroll).not.toHaveBeenCalled();
+      rerender(<ChatMessageList messages={messages} readPositionReady lastReadMessageId="read" onMessageRead={vi.fn()} />);
+      expect(scroll).toHaveBeenCalledWith({ behavior: 'auto' });
+    } finally {
+      HTMLElement.prototype.scrollIntoView = original;
+    }
+  });
+});
+
+describe('ChatMessageList scroll-to-bottom on send (team chat read-tracking host)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  /**
+   * Oracle: specified. The transcript must be pinned to bottom AFTER the user's sent row is
+   * rendered. Team chat passes `onMessageRead`, so `followingRef` starts false and the passive
+   * new-message scroll is disabled — the explicit send scroll is the only one available.
+   * Boundary neighbours: scrollTrigger 0 (no send) and a second messages update (one row vs two).
+   */
+  it('scrolls after the persisted message row renders, not only when the trigger bumps', () => {
+    const scroll = vi.fn();
+    const original = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = scroll;
+    try {
+      const first: ChatMessage[] = [{
+        id: 'm1', threadId: 't', role: 'user', content: 'first', createdAt: '2026-11-17T00:00:00Z',
+      }];
+      const afterSend: ChatMessage[] = [
+        ...first,
+        { id: 'm2', threadId: 't', role: 'user', content: 'sent', createdAt: '2026-11-17T00:00:01Z' },
+      ];
+      const renderList = (messages: ChatMessage[], scrollTrigger: number) => (
+        <ChatMessageList
+          messages={messages}
+          readPositionReady
+          lastReadMessageId={null}
+          onMessageRead={vi.fn()}
+          scrollTrigger={scrollTrigger}
+        />
+      );
+      const { rerender } = render(renderList(first, 0));
+      scroll.mockClear();
+
+      // Send fires: the trigger bumps before the row is persisted/visible.
+      rerender(renderList(first, 1));
+      // The row arrives from the live query; this is when bottom-scrolling must happen.
+      scroll.mockClear();
+      rerender(renderList(afterSend, 1));
+
+      expect(scroll).toHaveBeenCalledWith({ behavior: 'auto' });
+    } finally {
+      HTMLElement.prototype.scrollIntoView = original;
+    }
+  });
+});
 
 describe('ChatMessageList pendingConfirmation rendering', () => {
   it('renders markdown summary properly in confirmation card and opens popout modal', () => {

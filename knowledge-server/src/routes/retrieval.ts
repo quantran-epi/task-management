@@ -5,12 +5,14 @@ import {
   RetrievalResponseSchema,
   FederatedRetrievalRequestSchema,
   FederatedRetrievalResponseSchema,
+  type FederatedSetCoverage,
 } from '../types/retrievalProtocol.js';
 import type { RetrievalService } from '../services/retrievalService.js';
 import {
   runFederatedRetrieval,
   type FederatedRetrievalDependencies,
 } from '../services/federatedRetrievalService.js';
+import { resolveQueryOnlyScope, type PublishedSetEntry } from '../services/publishedSetDiscovery.js';
 import { createRetrievalLogger } from '../retrieval/retrievalLogger.js';
 
 const uuid = z.string().uuid();
@@ -65,13 +67,59 @@ function classifyRetrievalError(error: unknown): {
   return { errorCode: 'INTERNAL_ERROR' };
 }
 
+export interface QueryOnlyRouteDependencies {
+  listPublishedSets(): PublishedSetEntry[];
+}
+
+function noPublishedSetsResponse() {
+  return FederatedRetrievalResponseSchema.parse({
+    outcome: 'NO_PUBLISHED_SETS',
+    items: [],
+    paths: [],
+    conflictGroups: [],
+    modalityStatus: {
+      fulltext: { status: 'unavailable', latencyMs: 0, itemCount: 0, reason: 'NO_PUBLISHED_SETS' },
+      vector: { status: 'unavailable', latencyMs: 0, itemCount: 0, reason: 'NO_PUBLISHED_SETS' },
+      graph: { status: 'unavailable', latencyMs: 0, itemCount: 0, reason: 'NO_PUBLISHED_SETS' },
+    },
+    diagnostics: { degraded: false, coverageWarnings: [], coverage: [] },
+  });
+}
+
+function degradedCoverageResponse(coverage: FederatedSetCoverage[]) {
+  const unavailableStatus = {
+    status: 'unavailable' as const,
+    reason: 'NO_SEARCHABLE_SETS',
+    itemCount: 0,
+    latencyMs: 0,
+  };
+  return FederatedRetrievalResponseSchema.parse({
+    outcome: 'DEGRADED',
+    items: [],
+    paths: [],
+    conflictGroups: [],
+    modalityStatus: {
+      fulltext: unavailableStatus,
+      vector: unavailableStatus,
+      graph: unavailableStatus,
+    },
+    diagnostics: { degraded: true, coverageWarnings: [], coverage },
+  });
+}
+
 export function registerRetrievalRoutes(
   app: FastifyInstance,
-  retrievalService: Pick<RetrievalService, 'retrieve'>,
-  federatedDeps?: FederatedRetrievalDependencies
+  retrievalService: Pick<RetrievalService, 'retrieve'> | undefined,
+  federatedDeps?: FederatedRetrievalDependencies,
+  queryOnlyDeps?: QueryOnlyRouteDependencies
 ) {
   // POST /api/v1/sets/:setId/retrieve
   app.post('/api/v1/sets/:setId/retrieve', async (request, reply) => {
+    if (!retrievalService) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: 'Route not available.' },
+      });
+    }
     const params = SetParamsSchema.safeParse(request.params);
     const body = RetrievalRequestSchema.safeParse(request.body);
     if (!params.success || !body.success) {
@@ -89,7 +137,7 @@ export function registerRetrievalRoutes(
       const response = await retrievalService.retrieve(
         params.data.setId,
         body.data,
-        requestSignal ? { signal: requestSignal } : undefined
+        ...(requestSignal ? [{ signal: requestSignal }] : [])
       );
       const validated = RetrievalResponseSchema.parse(response);
       phaseLogger.log({
@@ -132,7 +180,7 @@ export function registerRetrievalRoutes(
     }
   });
 
-  // POST /api/v1/retrieve
+  // POST /api/v1/retrieve — query-only request, server-authoritative discovery.
   app.post('/api/v1/retrieve', async (request, reply) => {
     const body = FederatedRetrievalRequestSchema.safeParse(request.body);
     if (!body.success) {
@@ -140,19 +188,58 @@ export function registerRetrievalRoutes(
     }
 
     const deps: FederatedRetrievalDependencies = federatedDeps ?? {
-      retrievePerSet: (setId, req, signal) =>
-        retrievalService.retrieve(setId, req, signal ? { signal } : undefined),
+      retrievePerSet: (setId, req, signal) => {
+        if (!retrievalService) throw new Error('RETRIEVAL_SERVICE_UNAVAILABLE');
+        return retrievalService.retrieve(setId, req, signal ? { signal } : undefined);
+      },
     };
 
     const requestSignal = (request.raw as any)?.signal as AbortSignal | undefined;
 
     try {
-      const response = await runFederatedRetrieval(
-        body.data,
-        deps,
-        requestSignal ? { signal: requestSignal } : undefined
-      );
+      const listPublishedSets =
+        queryOnlyDeps?.listPublishedSets ?? (() => [] as PublishedSetEntry[]);
+      const scope = await resolveQueryOnlyScope(body.data, { listPublishedSets });
+
+      let response;
+      if (scope.resolved === null && scope.outcome === 'NO_PUBLISHED_SETS') {
+        response = noPublishedSetsResponse();
+      } else if (scope.resolved === null && scope.outcome === 'DEGRADED') {
+        // All requested ids were unknown: keep the full UNAVAILABLE ledger and
+        // never collapse it into NO_EVIDENCE or NO_PUBLISHED_SETS (T-28-16).
+        response = degradedCoverageResponse(scope.coverage);
+      } else if (scope.resolved === null) {
+        throw new Error('UNRESOLVED_SCOPE');
+      } else {
+        response = await runFederatedRetrieval(
+          scope.resolved,
+          deps,
+          requestSignal ? { signal: requestSignal } : undefined
+        );
+        // Preserve the resolver's server-authoritative UNAVAILABLE rows (e.g.
+        // an unknown id in a mixed explicit restriction) and its budget-overflow
+        // NOT_SEARCHED_BUDGET rows. The fan-out ledger now owns every assigned
+        // set exactly once, so add only resolver rows for sets the fan-out did
+        // not see — never duplicate an assigned set.
+        if (scope.coverage.length > 0) {
+          const seen = new Set(response.diagnostics.coverage.map((row) => row.setId));
+          const extra = scope.coverage.filter((row) => !seen.has(row.setId)).slice(0, 50 - response.diagnostics.coverage.length);
+          if (extra.length > 0) {
+            response = {
+              ...response,
+              diagnostics: {
+                ...response.diagnostics,
+                coverage: [...response.diagnostics.coverage, ...extra],
+              },
+            };
+          }
+        }
+      }
       const validated = FederatedRetrievalResponseSchema.parse(response);
+      request.log.info(
+        { code: 'RETRIEVE_OK', setCount: scope.resolved?.setTierAssignments.length ?? 0, outcome: validated.outcome },
+        'Federated retrieval completed'
+      );
       return reply.code(200).send(validated);
     } catch {
       request.log.error({ code: 'INTERNAL_ERROR' }, 'Federated retrieval failed');

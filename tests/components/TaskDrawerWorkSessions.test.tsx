@@ -11,6 +11,7 @@ describe('TaskDrawerWorkSessions', () => {
 
   const mockTask: Task = {
     id: 'task-test-1',
+    crId: 'cr-test-1',
     name: 'Tác vụ kiểm thử phiên làm việc',
     status: 'In Progress',
     progress: 25,
@@ -43,10 +44,11 @@ describe('TaskDrawerWorkSessions', () => {
         put: vi.fn().mockResolvedValue('task-test-1'),
         toArray: vi.fn().mockResolvedValue([mockTask]),
       },
-      projects: {
+      changeRequests: {
         toArray: vi.fn().mockResolvedValue([]),
+        get: vi.fn().mockResolvedValue(undefined),
       },
-      milestones: {
+      systems: {
         toArray: vi.fn().mockResolvedValue([]),
       },
       workSessions: {

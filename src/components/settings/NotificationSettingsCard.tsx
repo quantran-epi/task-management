@@ -27,6 +27,7 @@ import {
   isNotificationPermissionGranted,
   requestNotificationPermission,
 } from '../../utils/desktopNotification';
+import { NotificationDeepLink } from '../../utils/notificationDeepLink';
 import {
   NOTIFICATION_SETTINGS_KEY,
   DEFAULT_NOTIFICATION_SETTINGS,
@@ -108,6 +109,7 @@ export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> =
           title: `${APP_NAME} - Thông báo màn hình`,
           body: 'Thông báo màn hình đã được kích hoạt thành công.',
           requireInteraction: settings.requireInteractionEnabled,
+          deeplink: NotificationDeepLink.settings,
         });
         return;
       }
@@ -132,6 +134,7 @@ export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> =
             title: `${APP_NAME} - Thông báo màn hình`,
             body: 'Thông báo màn hình đã được kích hoạt thành công.',
             requireInteraction: settings.requireInteractionEnabled,
+            deeplink: NotificationDeepLink.settings,
           });
         } else {
           setPermissionBlocked(true);
@@ -231,6 +234,7 @@ export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> =
                 title: `${APP_NAME} - Thông báo thử nghiệm`,
                 body: 'Thông báo màn hình đang hoạt động với cài đặt của bạn.',
                 requireInteraction: settings.requireInteractionEnabled,
+                deeplink: NotificationDeepLink.settings,
               });
               if (sent) {
                 message.success('Đã gửi thông báo thử nghiệm.');

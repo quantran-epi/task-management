@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { Table, Tag, Tooltip, Typography, Modal, Button, theme } from 'antd';
+import { Table, Tag, Tooltip, Typography, Modal, Button, Space, theme } from 'antd';
 import { EyeOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { PersistedCitation } from '../../../services/ai/groundedAnswerSchemas';
+import type { FederatedSetCoverage } from '../../../services/knowledge/retrievalProtocol';
 
 export interface SourcesPanelProps {
   citations: readonly PersistedCitation[];
+  coverage?: readonly FederatedSetCoverage[] | undefined;
   onOpenCitation: (c: PersistedCitation) => void;
 }
 
@@ -16,19 +18,21 @@ function parseCitationNumber(citationId: string): number {
 
 export const SourcesPanel: React.FC<SourcesPanelProps> = ({
   citations,
+  coverage,
   onOpenCitation,
 }) => {
   const { token } = theme.useToken();
   const [selectedMcp, setSelectedMcp] = useState<PersistedCitation | null>(null);
 
   // Deduplicate citations: document citations deduplicate by document range,
-  // whereas MCP tool citations deduplicate by citationId.
+  // whereas MCP tool citations deduplicate by citationId. SnapshotId is part
+  // of the key so two snapshots of the same range stay separate rows (D-11).
   const dedupedMap = new Map<string, PersistedCitation>();
   for (const c of citations) {
     const isMcp = c.citationId.startsWith('M') || c.evidenceKind === 'mcp_tool';
     const key = isMcp
       ? `mcp:${c.citationId}`
-      : `${c.documentId}:${c.lineStart}:${c.lineEnd}:${c.publishedContentHash ?? 'local'}`;
+      : `${c.documentId}:${c.lineStart}:${c.lineEnd}:${c.publishedContentHash ?? 'local'}:${c.snapshotId ?? 'none'}`;
     if (!dedupedMap.has(key)) {
       dedupedMap.set(key, c);
     }
@@ -240,8 +244,28 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
     },
   ];
 
+  const coverageByState = new Map<string, number>();
+  for (const row of coverage ?? []) {
+    coverageByState.set(row.state, (coverageByState.get(row.state) ?? 0) + 1);
+  }
+
   return (
     <div className="sources-panel" style={{ marginTop: 8 }}>
+      {coverage && coverage.length > 0 && (
+        <div
+          data-testid="sources-coverage"
+          style={{ marginBottom: 12, padding: '6px 10px', borderRadius: 6, background: token.colorFillQuaternary }}
+        >
+          <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 4, color: token.colorTextSecondary }}>
+            Phạm vi tìm kiếm bộ tài liệu
+          </div>
+          <Space size={[4, 6]} wrap>
+            {[...coverageByState.entries()].map(([state, count]) => (
+              <Tag key={state} style={{ margin: 0, fontSize: 10 }}>{state} ({count})</Tag>
+            ))}
+          </Space>
+        </div>
+      )}
       {docCitations.length > 0 && (
         <div style={{ marginBottom: mcpCitations.length > 0 ? 16 : 0 }}>
           {mcpCitations.length > 0 && (
@@ -252,9 +276,31 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
           <Table<PersistedCitation>
             dataSource={docCitations}
             columns={docColumns}
-            rowKey={(r) => `${r.citationId}-${r.documentId}-${r.lineStart}`}
+            rowKey={(r) => `${r.citationId}-${r.documentId}-${r.lineStart}-${r.snapshotId ?? 'none'}`}
             size="small"
             pagination={false}
+            expandable={{
+              expandedRowRender: (record) => (
+                <div data-testid="source-detail" style={{ fontSize: 11, color: token.colorTextSecondary }}>
+                  <div>Snapshot: {record.snapshotId ?? 'none'}</div>
+                  {(record.setMemberships ?? []).map((m) => (
+                    <div key={m.setId} data-testid="source-set-id">{m.setName} — {m.setId}</div>
+                  ))}
+                </div>
+              ),
+              expandRowByClick: false,
+              expandIcon: ({ expanded, onExpand, record }) => (
+                <span
+                  data-testid="source-expand-toggle"
+                  aria-label="Chi tiết nguồn"
+                  title="Chi tiết nguồn"
+                  onClick={(e) => { e.stopPropagation(); onExpand(record, e); }}
+                  style={{ cursor: 'pointer', padding: '0 6px', userSelect: 'none' }}
+                >
+                  {expanded ? '−' : '+'}
+                </span>
+              ),
+            }}
             onRow={(record) => ({
               onClick: () => onOpenCitation(record),
               onKeyDown: (e) => {

@@ -1,365 +1,302 @@
 ---
-gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: milestone
+gsd_state_version: "1.0"
+milestone: v1.4
+milestone_name: Unified AI Office (Phase Details)
+current_phase: 44
+current_phase_name: Agent Activity Panel, Configurable Explore Timeout and Prompt Log
 status: executing
-stopped_at: Phase 25.1 context updated with AI core reuse contract
-last_updated: "2026-10-30T12:48:24.836Z"
-last_activity: 2026-10-30 -- Phase 25.1 execution started
+stopped_at: Phase 44 UI-SPEC approved
+last_updated: "2026-11-17T14:10:43.775Z"
+last_activity: 2026-11-17
+last_activity_desc: Phase 44 execution resumed (wave continue)
+state_head: 76d5b87de273a40e7e0706f6abf1aa78a389958e
 progress:
-  total_phases: 10
-  completed_phases: 6
-  total_plans: 78
-  completed_plans: 61
-  percent: 60
+  total_phases: 8
+  completed_phases: 5
+  total_plans: 55
+  completed_plans: 55
+  percent: 63
 ---
 
-# Project State
+# Project State: TaskMate — Milestone v1.4
 
-## Project Reference
+See: .planning/PROJECT.md (updated 2026-11-09)
 
-See: .planning/PROJECT.md (updated 2026-10-07)
-
-**Core value:** Make planned work realistically fit available time while giving the personal user evidence-grounded access to their local banking IT knowledge.
-**Current focus:** Phase 25.1 — sdlc-flow-hardening-multi-tab-ai-chat-isolation
+**Core value:** Hợp nhất SDLC Studio và AI Office thành Unified AI Office dạng chat-first, free-style với token budget cứng và làm giàu skill.
+**Current focus:** Phase 44 — Agent Activity Panel, Configurable Explore Timeout and Prompt Log
 
 ## Current Position
 
-Phase: 25.1 (sdlc-flow-hardening-multi-tab-ai-chat-isolation) — EXECUTING
-Plan: 1 of 9
-Status: Executing Phase 25.1
-Last activity: 2026-10-30 -- Phase 25.1 execution started
-Stopped at: Phase 25.1 context updated with AI core reuse contract
+Phase: 44 (Agent Activity Panel, Configurable Explore Timeout and Prompt Log) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 44
+Last activity: 2026-11-17 - Completed quick task 261117-ss8: Thêm instrumentation/báo cáo lỗi đầy đủ cho mọi run agent/leader
 
-Progress: [██████████] 100%
+## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
-### Quick Tasks Completed
+- Phase 28 re-scoped from 4 to 5 plans in this isolated worktree (`gsd/phase-28-isolated`) after plan-checker findings and the user's supreme goal: zero-local-docs query-only `retrieve_knowledge` must work end to end on the live AI surfaces (AI Chat and Telegram), not be reduced to server-only work.
+- Replan removed all deleted Phase 35-06 SDLC/wizard file references, wired the all-unknown explicit-`setIds` DEGRADED outcome (C2), fixed 28-04 wave/dependency (W1), reduced 28-02 to 10 files (W2), completed `28-VALIDATION.md` sign-off (W3), and added absolute non-regression for `groundedTurn` / `knowledgeRetrievalTool` / `aiOrchestratorLoop` / Telegram with focused regression tests.
+- SDLC-RET-01..05 remain historical tooling IDs (REQUIREMENTS.md no longer lists them) mapped to live query-only retrieval outcomes; no SDLC code is resurrected.
+- Work here is isolated; phase 44 planning advances independently on `feature/intellij-workbench` and is not touched by this replan.
+- Phase 28 execution completed 2026-11-17 on `gsd/phase-28-isolated`: 5/5 plans, verifier passed 6/6 must-haves with zero gaps, security SECURED 21/21, code review clean after WR-01/02/03 fixes. Live Docker/Neo4j walkthrough was not run; user accepted mock-based automated contract evidence as recorded in `28-VALIDATION.md`.
 
-| # | Description | Date | Commit | Status | Directory |
-| --- | ------------- | ------ | -------- | -------- | ----------- |
-| 261030-jdu | Fix knowledge-server chunk cache invalidation on ontology version changes and rebuilds | 2026-10-30 | fdc6132 | complete | [261030-jdu-fix-knowledge-server-chunk-cache-invalid](./quick/261030-jdu-fix-knowledge-server-chunk-cache-invalid/) |
-| 261030-gj5 | Fix GitHub backup 502 Bad Gateway using gzip compression and Git Data API fallback | 2026-10-30 | e442800 | complete | [261030-gj5-fix-github-backup-502-bad-gateway-using-](./quick/261030-gj5-fix-github-backup-502-bad-gateway-using-/) |
-| 261030-dvh | Fast desktop build on staging, full test on master, release guard | 2026-10-30 | — | complete | [261030-dvh-staging-fast-desktop-build](./quick/261030-dvh-staging-fast-desktop-build/) |
-| 261028-gpk | Strengthen AI document normalization prompt against hallucination | 2026-10-28 | — | complete | [261028-gpk-strengthen-ai-document-normalization-pro](./quick/261028-gpk-strengthen-ai-document-normalization-pro/) |
-| 261028-e2z | Fix AI Chat Drawer Analysis Mode reliability and read-only behavior | 2026-10-28 | c764335 | complete | [261028-e2z-fix-ai-chat-drawer-analysis-mode-reliabi](./quick/261028-e2z-fix-ai-chat-drawer-analysis-mode-reliabi/) |
-| 261027-kcs | Optimize Telegram AI retrieval parity with AI Chat | 2026-10-27 | 942d4d6 | complete | [261027-kcs-optimize-telegram-ai-retrieval-parity-wi](./quick/261027-kcs-optimize-telegram-ai-retrieval-parity-wi/) |
-| 261027-htc | Fix federated retrieval budget accounting so multi-set evidence is not silently discarded | 2026-10-27 | 3fc728a | complete | [261027-htc-fix-federated-retrieval-budget-accountin](./quick/261027-htc-fix-federated-retrieval-budget-accountin/) |
-| 261027-fzh | Make MCP retrieval loop run until evidence is exhausted (novelty termination + cursor pagination) | 2026-10-27 | 7d4223b | complete | [261027-fzh-make-mcp-retrieval-loop-run-until-eviden](./quick/261027-fzh-make-mcp-retrieval-loop-run-until-eviden/) |
-| 261027-0kl | Normalize `docs/c06.zip` into `dist/c06-normalized.zip` per TaskMate doc contract | 2026-10-27 | be35ade | complete | [261027-0kl-chu-n-h-a-b-t-i-li-u-docs-c06-zip-theo-c](./quick/261027-0kl-chu-n-h-a-b-t-i-li-u-docs-c06-zip-theo-c/) |
-| fast-38c3095 | Raise AI JSON request timeout to 90s | 2026-10-24 | 38c3095 | complete | — |
-| 261024-kq4 | Fix intent router retry dropping MCP routing fields; require MCP keys in schema | 2026-10-24 | e213b63 | complete | [261024-kq4-fix-telegram-intent-router-retry-droppin](./quick/261024-kq4-fix-telegram-intent-router-retry-droppin/) |
-| 261022-djl | Share AI Chat Drawer and Telegram operational orchestration loop | 2026-10-22 | e861cb7 | complete | [261022-djl-refactor-ai-chat-drawer-and-telegram-cha](./quick/261022-djl-refactor-ai-chat-drawer-and-telegram-cha/) |
-| 261021-mcp | Fix MCP retrieval formatting and schema wrapper handling | 2026-10-21 | — | complete | [261021-mcp-fix-mcp-retrieval-formatting-and-schema-wrapper](./quick/261021-mcp-fix-mcp-retrieval-formatting-and-schema-wrapper/) |
-| 261020-tif | optimize-ai-chat-pipeline | 2026-10-20 | — | complete | [261020-tif-optimize-ai-chat-pipeline](./quick/261020-tif-optimize-ai-chat-pipeline/) |
-| 261020-nal | Refactor Telegram worker to use AIChatDrawer read-tool execution loop | 2026-10-20 | ac2b675 | complete | [261020-nal-refactor-telegram-worker-to-use-aichatdr](./quick/261020-nal-refactor-telegram-worker-to-use-aichatdr/) |
-| 261020-mia | fix build typecheck errors in src and tests | 2026-10-20 | d8501cf | complete | [261020-mia-fix-build-typecheck-errors-in-src-and-te](./quick/261020-mia-fix-build-typecheck-errors-in-src-and-te/) |
-| 261020-ckf | Fix chunk extraction failure halting and add pending/failed chunk batch run actions | 2026-10-20 | — | complete | [261020-ckf-fix-chunk-extraction-and-add-pending-retry-actions](./quick/261020-ckf-fix-chunk-extraction-and-add-pending-retry-actions/) |
-| 261020-mut | Support full mutation tools for admin on Telegram with preview and confirmation loop | 2026-10-20 | 288ec3b | complete | [261020-mut-telegram-admin-mutation-tools](./quick/261020-mut-telegram-admin-mutation-tools/) |
-| 261020-du1 | Connect Telegram chat to federated retrieval pipeline with intent pre-gating | 2026-10-20 | 6a2e3a0 | complete | [261020-du1-connect-telegram-chat-to-federated-retrieval](./quick/261020-du1-connect-telegram-chat-to-federated-retrieval/) |
-| 261020-d6r | Align Telegram chat with AI chat drawer intent routing, scope security gates, and anti-hallucination guardrails | 2026-10-20 | 5262a7f | complete | [261020-d6r-align-telegram-chat-with-ai-chat-drawer](./quick/261020-d6r-align-telegram-chat-with-ai-chat-drawer/) |
-| 261020-c95 | Admin unblock Telegram user and backup Telegram data excluding session logs | 2026-10-20 | 1b28187 | complete | [261020-c95-admin-unblock-and-telegram-backup](./quick/261020-c95-admin-unblock-and-telegram-backup/) |
-| 261019-adm | Telegram admin commands with multi-step conversation | 2026-10-19 | b455adb | complete | [261019-adm-telegram-admin-commands](./quick/261019-adm-telegram-admin-commands/) |
-| 261019-v0s | Sửa thông báo và hàng chờ user mới Telegram chưa phân quyền | 2026-10-19 | 1b262fd | complete | [261019-v0s-s-a-th-ng-b-o-v-h-ng-ch-user-m-i-telegra](./quick/261019-v0s-s-a-th-ng-b-o-v-h-ng-ch-user-m-i-telegra/) |
-| 261019-sqs | Limit inline AI popup to doc/note text and add over-quota spam protection with log drop | 2026-10-19 | — | complete | [261019-inline-ai-scope-quota-spam](./quick/261019-inline-ai-scope-quota-spam/) |
-| 261019-sb0 | Upgrade Telegram AI Gateway with grounded retrieval, multi-turn history with per-user max turns, /reset and /help commands, and Telegram HTML formatting | 2026-10-19 | — | complete | [261019-sb0-upgrade-telegram-ai-gateway-with-grounde](./quick/261019-sb0-upgrade-telegram-ai-gateway-with-grounde/) |
-| 261019-qib | Implement Telegram AI Gateway with on/off controls per docs/TELEGRAM_AI_GATEWAY_PLAN.md | 2026-10-19 | — | complete | [261019-qib-implement-telegram-ai-gateway-with-on-of](./quick/261019-qib-implement-telegram-ai-gateway-with-on-of/) |
-| 261019-fsm | add fullscreen popup modal for long message input in AI chat drawer | 2026-10-19 | — | complete | [261019-fsm-fullscreen-ai-chat-input](./quick/261019-fsm-fullscreen-ai-chat-input/) |
-| 261018-d7u | fix duplicate AI chat response in UI and history | 2026-10-18 | — | complete | [261018-d7u-fix-ai-chat-duplicate-response](./quick/261018-d7u-fix-ai-chat-duplicate-response/) |
-| 261018-jrd | add AI briefing and debriefing insights to header summary modal | 2026-10-18 | 4b5c951 | complete | [261018-jrd-add-ai-briefing-and-debriefing-insights-](./quick/261018-jrd-add-ai-briefing-and-debriefing-insights-/) |
-| 261018-iea | add toggle for search scope (all vs active folder) in doc folder tree | 2026-10-18 | 09ad259 | complete | [261018-iea-add-toggle-for-search-scope-in-doc-folde](./quick/261018-iea-add-toggle-for-search-scope-in-doc-folde/) |
-| 261018-rsd | add resizable sidebars to document page (folder tree, editor, table of contents) | 2026-10-18 | — | complete | [261018-resizable-sidebars-docs](./quick/261018-resizable-sidebars-docs/) |
-| 261017-owv | fix grounded citation rendering and synthesis prompt for vector and fulltext when graph has no paths | 2026-10-17 | ba0f060 | complete | [261017-owv-fix-vector-fulltext-citations-no-graph](./quick/261017-owv-fix-vector-fulltext-citations-no-graph/) |
-| 261016-ukb | Fix Grounded AI answer readability and QuickPreviewDrawer z-index under AIChatDrawer | 2026-10-16 | — | complete | [261016-ukb-fix-grounded-ai-answer-readability-and-q](./quick/261016-ukb-fix-grounded-ai-answer-readability-and-q/) |
-| 261016-dck | setup local knowledge server and neo4j via docker compose for testing and taskmate integration | 2026-10-16 | — | complete | [261016-dck-setup-local-knowledge-server-neo4j-docker](./quick/261016-dck-setup-local-knowledge-server-neo4j-docker/) |
-| 261013-gfv | fix AI chat routing duplication, loading feedback, evidence synthesis, and planner host config | 2026-10-13 | — | complete | [261013-gfv-fix-ai-chat-duplicate-routed-questions-t](./quick/261013-gfv-fix-ai-chat-duplicate-routed-questions-t/) |
-| 261010-pnd | fix missing isPinned property in restoreBackup.test.ts | 2026-10-10 | 551df68 | complete | [261010-pnd-fix-restore-backup-test-note-is-pinned](./quick/261010-pnd-fix-restore-backup-test-note-is-pinned/) |
-| 261009-v10t | fix Schema V10 table list and verno test assertions | 2026-10-09 | 5ad90bb | complete | [261009-v10t-fix-schema-v10-test-assertions](./quick/261009-v10t-fix-schema-v10-test-assertions/) |
-| 261009-n9z | integrate latest master, prepare artifact-only Phase 16 desktop build branch | 2026-10-09 | — | complete | [261009-n9z-create-phase-16-desktop-build-branch-mer](./quick/261009-n9z-create-phase-16-desktop-build-branch-mer/) |
-| 261009-hkj | write Oracle SQLcl MCP HTTP gateway requirements handoff | 2026-10-09 | — | complete | [261009-hkj-create-concise-requirements-handoff-for-](./quick/261009-hkj-create-concise-requirements-handoff-for-/) |
-| 261009-frs | write desktop stdio MCP implementation handoff with dynamic tool policy | 2026-10-09 | — | complete | [261009-frs-create-an-implementation-instruction-mar](./quick/261009-frs-create-an-implementation-instruction-mar/) |
-| 261009-mtb | dynamic browser sandbox for ai generated files using exceljs docx pptxgenjs | 2026-10-09 | — | complete | [261009-mtb-dynamic-browser-sandbox-for-ai-generated](./quick/261009-mtb-dynamic-browser-sandbox-for-ai-generated/) |
-| 261009-le3 | fix ai generated file content mixup and upgrade file generation engine | 2026-10-09 | d5efb54 | complete | [261009-le3-fix-ai-generated-file-content-mixup-and-](./quick/261009-le3-fix-ai-generated-file-content-mixup-and-/) |
-| 261009-j6f | fix ai export browser download and tooltip zindex | 2026-10-09 | — | complete | [261009-j6f-fix-ai-export-browser-download-and-toolt](./quick/261009-j6f-fix-ai-export-browser-download-and-toolt/) |
-| 261009-exp | fix ai export dropdown, add duration and token metrics, and support save as with location picker | 2026-10-09 | — | complete | [261009-exp-fix-ai-export-dropdown-metrics-save-as](./quick/261009-exp-fix-ai-export-dropdown-metrics-save-as/) |
-| 261009-ait | add comprehensive missing AI mutation and query tools | 2026-10-09 | — | complete | [261009-ait-add-comprehensive-missing-ai-tools](./quick/261009-ait-add-comprehensive-missing-ai-tools/) |
-| 261008-pop | fix diff popover zindex, terminal chat history and skill autocomplete, optimize diff refresh | 2026-10-08 | — | complete | [261008-fix-popover-history-autocomplete-diff-perf](./quick/261008-fix-popover-history-autocomplete-diff-perf/) |
-| 261008-jgo | show timer and token count in ghost dev | 2026-10-08 | 9f75db4 | complete | [261008-jgo-show-timer-and-token-count-in-ghost-dev-](./quick/261008-jgo-show-timer-and-token-count-in-ghost-dev-/) |
-| 261008-j1m | fix DocFolderTree CTA button crowding and panel width | 2026-10-08 | — | complete | [261008-j1m-fix-docfoldertree-cta-button-crowding-an](./quick/261008-j1m-fix-docfoldertree-cta-button-crowding-an/) |
-| 261008-b3b | fix claude executable picker, windows cmd execution, and mcp settings card | 2026-10-08 | 68caa53 | complete | [261008-b3b-fix-claude-executable-picker-and-cmd-exe](./quick/261008-b3b-fix-claude-executable-picker-and-cmd-exe/) |
-| 261007-kc4 | dynamic mcp config with in-chat toggle and authorship fingerprint | 2026-10-07 | 18d65c7 | complete | [261007-kc4-dynamic-mcp-config-with-in-chat-toggle-a](./quick/261007-kc4-dynamic-mcp-config-with-in-chat-toggle-a/) |
-| 261007-epc | fix ghostDevConfig claudePath exactOptionalPropertyTypes build error | 2026-10-07 | — | complete | [261007-epc-fix-ghost-dev-claude-path-exact-optional-property](./quick/261007-epc-fix-ghost-dev-claude-path-exact-optional-property/) |
-| 261007-gce | allow choosing claude code executable in ghost dev config | 2026-10-07 | 35bbc32 | complete | [261007-gce-allow-choose-claude-executable-ghost-dev](./quick/261007-gce-allow-choose-claude-executable-ghost-dev/) |
-| 261007-iwb | fix noteAttachments test failure after binary exclusion | 2026-10-07 | 7bbd991 | complete | [261007-iwb-fix-noteattachments-test-failure-after-b](./quick/261007-iwb-fix-noteattachments-test-failure-after-b/) |
-| 261007-hip | backup all user data and safe settings without binary data and fix dirty tracking | 2026-10-07 | 5c4b7c5 | complete | [261007-hip-backup-all-user-data-and-safe-settings-w](./quick/261007-hip-backup-all-user-data-and-safe-settings-w/) |
-| 261007-f4h | implement six UI and data fixes for agent control, docs, ghost dev, projects, and header | 2026-10-07 | 1ef6364 | complete | [261007-f4h-implement-six-ui-data-fixes-agent-contro](./quick/261007-f4h-implement-six-ui-data-fixes-agent-contro/) |
-| 261007-dtm | Fix scrollIntoView unhandled error in tests | 2026-10-07 | — | complete | [261007-dtm-fix-scrollintoview-unhandled-error-in-te](./quick/261007-dtm-fix-scrollintoview-unhandled-error-in-te/) |
-| 261006-fxm | Fix Ghost Dev modal input, prompt lang toggle, terminal result json parsing, and file lock defense | 2026-10-06 | — | complete | [261006-fxm-fix-ghost-dev-modal-terminal-lock](./quick/261006-fxm-fix-ghost-dev-modal-terminal-lock/) |
-| 261006-nog | Fix Ghost Dev subagent tracking, terminal log filtering, UI contrast, worktree write permissions, and AI loading indicators | 2026-10-06 | — | complete | [261006-nog-fix-ghost-dev-subagent-tracking-log-filt](./quick/261006-nog-fix-ghost-dev-subagent-tracking-log-filt/) |
-| 261006-nvw | Write test content to file hello.txt in repository root | 2026-10-06 | 70923fb | complete | [261006-nvw-write-test-content-to-file-hello-txt](./quick/261006-nvw-write-test-content-to-file-hello-txt/) |
-| 261006-9py | Fix #/agents route reload issue and add custom command + session audit history for Ghost Dev | 2026-10-06 | 776cfb0 | complete | [261006-9py-fix-agents-route-reload-issue-and-add-cu](./quick/261006-9py-fix-agents-route-reload-issue-and-add-cu/) |
-| 261005-kq5 | Fix AI chat silent stops with watchdog timeout, 30-turn tool loop, final synthesis pass, and safe tool error handling | 2026-10-05 | 6a051a8 | complete | [261005-kq5-fix-ai-chat-silent-stop-and-error-report](./quick/261005-kq5-fix-ai-chat-silent-stop-and-error-report/) |
-| 261005-k7m | Fix inline code tokenization and intra-word underscore italic corruption in markdown renderer | 2026-10-05 | 8744dab | complete | [261005-k7m-fix-markdown-inline-code-and-underscores](./quick/261005-k7m-fix-markdown-inline-code-and-underscores/) |
-| 261005-ep9 | Add Notes-page feature that displays reusable AI instruction prompt for external document generation | 2026-10-05 | 90a1235 | complete | [261005-ep9-add-a-notes-page-feature-that-displays-a](./quick/261005-ep9-add-a-notes-page-feature-that-displays-a/) |
-| 261004-ait | Add missing AI mutation tools (reminders, doc linking, notifications, recurring) and fix failing tests | 2026-10-04 | — | complete | [261004-ait-add-missing-ai-mutation-tools-and-fix-tests](./quick/261004-ait-add-missing-ai-mutation-tools-and-fix-tests/) |
-| 261004-ovf | Fix doc detail width overflow and vitest failures | 2026-10-04 | — | complete | [261004-ovf-fix-doc-overflow-and-tests](./quick/261004-ovf-fix-doc-overflow-and-tests/) |
-| 261004-t2a | Fix doc UI shift, togglable TOC, folder contents view, and zip nested folder bug | 2026-10-04 | b258b86 | complete | [261004-t2a-fix-doc-ui-shift-togglable-toc-folder-co](./quick/261004-t2a-fix-doc-ui-shift-togglable-toc-folder-co/) |
-| 261004-fhz | Folder hierarchy, zip markdown upload with preview modal, and doc bug fixes | 2026-10-04 | — | complete | [261004-fhz-folder-hierarchy-zip-upload-doc-fixes](./quick/261004-fhz-folder-hierarchy-zip-upload-doc-fixes/) |
-| 261004-qox | AI assistant feature to create/export files with various formats (MD, TXT, DOCX, XLSX, CSV) | 2026-10-04 | 9093528 | complete | [261004-qox-ai-file-generation-export](./quick/261004-qox-ai-file-generation-export/) |
-| 261004-fui | Redesign folder UI, enable 1-click document creation in folders, folder rename, safe delete, and move-to-folder | 2026-10-04 | — | complete | [261004-fui-folder-ui-and-doc-creation](./quick/261004-fui-folder-ui-and-doc-creation/) |
-| 261004-fdc | Fix docs entity detection word boundaries, title auto-detection, markdown viewer extensions (tables, nested lists, images, autolinks, copy), and folder creation | 2026-10-04 | 6d699d1 | complete | [261004-fdc-fix-docs-chat-issues](./quick/261004-fdc-fix-docs-chat-issues/) |
-| 261004-o1d | Fix docs editor paste autosave stale closure and add [[ wiki-link autocomplete | 2026-10-04 | 7a4a367 | complete | [261004-o1d-fix-docs-editor-paste-autosave-and-wiki-](./quick/261004-o1d-fix-docs-editor-paste-autosave-and-wiki-/) |
-| 1 | `260928-kn3` · Planner task item subtitle and auto-distribute project filter | 2026-09-28 | — | — | — |
-| 2 | `260928-kn4` · UI enhancements & project links | 2026-09-28 | — | — | — |
-| 260930-j2e | in task drawer detail, there are many fields now, divide them in sections for more focus and easy to use | 2026-09-30 | 2008412 | — | [260930-j2e-in-task-drawer-detail-there-are-many-fie](./quick/260930-j2e-in-task-drawer-detail-there-are-many-fie/) |
-| 260930-km1 | task list page need global sort, criteria may be by creation date, updated date, etc. | 2026-09-30 | 2111c95 | — | [260930-km1-task-list-page-need-global-sort-criteria](./quick/260930-km1-task-list-page-need-global-sort-criteria/) |
-| 260930-dii | Day Insight — per-task planned vs actual for a single date (read-only) | 2026-09-30 | 801eeb5 | complete | [260930-dii-day-insight-per-task-plan-vs-actual](./quick/260930-dii-day-insight-per-task-plan-vs-actual/) |
-| 260930-ugc | Setup Tauri desktop app for macOS and Windows | 2026-09-30 | faf3662 | complete | [260930-ugc-setup-tauri-desktop-app-for-macos-and-wi](./quick/260930-ugc-setup-tauri-desktop-app-for-macos-and-wi/) |
-| 260930-uwl | Add Tauri notification plugin for native desktop notifications | 2026-09-30 | e2d8996 | complete | [260930-uwl-add-tauri-notification-plugin-for-native](./quick/260930-uwl-add-tauri-notification-plugin-for-native/) |
-| 260930-vdl | pop out and pin timer as separate small window with multi-timer support and live sync | 2026-09-30 | 74e9bd2 | complete | [260930-vdl-pop-out-and-pin-timer-as-separate-small-](./quick/260930-vdl-pop-out-and-pin-timer-as-separate-small-/) |
-| 260930-wva | fix vitest virtual:pwa-register alias for windows runners | 2026-09-30 | 9bbc0f5 | complete | [260930-wva-fix-vitest-virtual-pwa-alias-windows](./quick/260930-wva-fix-vitest-virtual-pwa-alias-windows/) |
-| 261001-hex | Add Tauri local SQLite file persistence with user-selected path, row-level transactional autosave, close flush, missing-path recovery, and GitHub auto-sync by interval or fixed daily local time with dirty-only sync and missed-run catch-up | 2026-10-01 | 7d84dd6 | complete | [261001-hex-add-tauri-local-sqlite-file-persistence-](./quick/261001-hex-add-tauri-local-sqlite-file-persistence-/) |
-| 261002-cie | Jira status mapping, local-only status edits, note details, screenshot attachments, and quick notes | 2026-10-02 | df12789 | complete | [261002-cie-need-ui-for-local-status-to-jira-status-](./quick/261002-cie-need-ui-for-local-status-to-jira-status-/) |
-| 261002-f2d | task, project, and milestone need one more status call pending. task list and project list need pagination | 2026-10-02 | afdb2a7 | complete | [261002-f2d-task-project-and-milestone-need-one-more](./quick/261002-f2d-task-project-and-milestone-need-one-more/) |
-| 261003-grt | make AI launch that associate t items: task, project, etc more easier, use a button, current open detail and cmd + J is not work | 2026-10-03 | 3cfd08e | complete | [261003-grt-make-ai-launch-that-associate-t-items-ta](./quick/261003-grt-make-ai-launch-that-associate-t-items-ta/) |
-| 261003-tcl | AI tool calling harness with Dexie query tools and recognizable loading status | 2026-10-03 | f53b01f | complete | [261003-tcl-ai-tool-calling-harness](./quick/261003-tcl-ai-tool-calling-harness/) |
-| 261003-laj | add debug feature to see AI messages, system prompts, payloads, tool executions, and Tauri devtools | 2026-10-03 | 5993583 | complete | [261003-laj-add-debug-feature-to-see-ai-messages-bac](./quick/261003-laj-add-debug-feature-to-see-ai-messages-bac/) |
-| 20261003-mut | AI drawer header cleanup, mutations with confirmation, and inline input button | 2026-10-03 | — | complete | [20261003-ai-mutations-and-ui-cleanup](./quick/20261003-ai-mutations-and-ui-cleanup/) |
-| 261002-remove-analytics | Remove analytics page, components, calculations, tests, and navigation items | 2026-10-02 | — | complete | [261002-remove-analytics](./quick/261002-remove-analytics/) |
-| 261002-jm1 | Fix close-window action, stale popout cache, Jira mapping labels, note indicator, and pagination | 2026-10-02 | — | complete | [261002-jm1-fix-close-window-action-stale-popout-cac](./quick/261002-jm1-fix-close-window-action-stale-popout-cac/) |
-| 261002-su2 | Install @ant-design/plots and build charts 1 (Estimate vs Actual), 2 (Work Type Breakdown), and 6 (Productivity Heatmap) | 2026-10-02 | 777a838 | complete | [261002-su2-install-ant-design-plots-build-chart-1-e](./quick/261002-su2-install-ant-design-plots-build-chart-1-e/) |
-| 261002-t9m | Filter analytics charts to only show items with data (> 0 hours / minutes) | 2026-10-02 | — | complete | [261002-t9m-filter-charts-to-only-show-items-with-da](./quick/261002-t9m-filter-charts-to-only-show-items-with-da/) |
-| 261002-eac | Estimate vs actual accuracy analytics per task type | 2026-10-02 | 6e5dcdc | complete | [261002-eac-estimate-accuracy-per-task-type](./quick/261002-eac-estimate-accuracy-per-task-type/) |
-| 261002-rec | Recurring tasks and GitHub sync diagnostics | 2026-10-02 | — | complete | [261002-rec-recurring-tasks](./quick/261002-rec-recurring-tasks/) |
-| 261002-vqg | Open local folder link in system file explorer and browse local folders | 2026-10-02 | 39bac40 | complete | [261002-vqg-open-local-folder-link-in-file-explorer-](./quick/261002-vqg-open-local-folder-link-in-file-explorer-/) |
-| 261002-wik | Command Palette (Cmd+K), Task Checklist / Subtasks, and Daily Review Modal | 2026-10-02 | 779c019 | complete | [261002-wik-implement-command-palette-task-checklist](./quick/261002-wik-implement-command-palette-task-checklist/) |
-| 261002-x11 | Add Command Palette cheatsheet guide and prefix filters | 2026-10-02 | be616ad | complete | [261002-x11-add-command-palette-cheatsheet-guide-and](./quick/261002-x11-add-command-palette-cheatsheet-guide-and/) |
-| 261002-x47 | Fix 31 TypeScript build errors across 7 files | 2026-10-02 | a146d26 | complete | [261002-x47-fix-31-typescript-build-errors-across-7-](./quick/261002-x47-fix-31-typescript-build-errors-across-7-/) |
-| 261003-pdm | Normalize command palette item navigation with detail modals, tools, and navigators | 2026-10-03 | 99569a7 | complete | [261003-pdm-command-palette-item-detail-modals](./quick/261003-pdm-command-palette-item-detail-modals/) |
-| 261003-bz6 | Command palette insight pages for task, project, and milestone with pre-implementation analysis, and note edit modal fix | 2026-10-03 | 59b2905 | complete | [261003-bz6-for-command-palette-now-i-want-each-item](./quick/261003-bz6-for-command-palette-now-i-want-each-item/) |
-| 261003-tbl | Fix AI input Cmd+Enter clearing and add table items context menu with Ask AI for task, project, milestone | 2026-10-03 | cff43e2 | complete | [261003-tbl-fix-ai-input-and-add-table-context-menu](./quick/261003-tbl-fix-ai-input-and-add-table-context-menu/) |
-| 261003-pop | Fix AI input Cmd+Enter clearing, resizable and pinable AI popout window, and Claude shortcut for local paths | 2026-10-03 | — | complete | [261003-pop-fix-ai-input-popout-and-claude-shortcut](./quick/261003-pop-fix-ai-input-popout-and-claude-shortcut/) |
-| 261003-set | Fix SettingsView test timeout in CI with testTimeout configuration and clean Dexie teardown | 2026-10-03 | — | complete | [261003-set-fix-settingsview-test-timeout-in-ci](./quick/261003-set-fix-settingsview-test-timeout-in-ci/) |
-| 261003-wib | enhance UI aesthetics and modern app icon | 2026-10-03 | 2e51acb | complete | [261003-wib-enhance-ui-aesthetics-and-modern-app-ico](./quick/261003-wib-enhance-ui-aesthetics-and-modern-app-ico/) |
-| 261004-blg | fix drawer interactions, ai header actions dropdown, chat input height, task planner instructions modal, and rename app to PlannerMate | 2026-10-04 | ade0453 | complete | [261004-blg-fix-drawer-interactions-ai-header-action](./quick/261004-blg-fix-drawer-interactions-ai-header-action/) |
-| 261004-nps | normalize page structure UI across all views with unified PageHeader, update top header, enable notes search by parent name, and add item filter to NotesView | 2026-10-04 | — | complete | [261004-nps-normalize-page-structure-and-notes-filter](./quick/261004-nps-normalize-page-structure-and-notes-filter/) |
-| 261004-nls | fix note detail modal layout shift on open/close and display entity name in note detail modal | 2026-10-04 | — | complete | [261004-nls-fix-note-detail-modal-layout-shift-and-entity-name](./quick/261004-nls-fix-note-detail-modal-layout-shift-and-entity-name/) |
-| 261004-ash | app shortcuts with HUD autocomplete, cross-platform modifiers, multi-key combos, and view actions | 2026-10-04 | — | complete | [261004-ash-app-shortcuts-with-hud-autocomplete](./quick/261004-ash-app-shortcuts-with-hud-autocomplete/) |
-| 261004-chp | wire charLimit config to context grounding and add lightweight history and tool output pruning | 2026-10-04 | 7897cc3 | complete | [261004-chp-context-history-pruning-and-char-limit](./quick/261004-chp-context-history-pruning-and-char-limit/) |
-| 261004-cct | make context char limit freely configurable with estimated token preview and presets | 2026-10-04 | — | complete | [261004-cct-context-char-limit-and-token-preview](./quick/261004-cct-context-char-limit-and-token-preview/) |
-| 261004-gn9 | comprehensive AI tools full field support and filtering | 2026-10-04 | — | complete | [261004-gn9-comprehensive-ai-tools-full-field-suppor](./quick/261004-gn9-comprehensive-ai-tools-full-field-suppor/) |
-| 261004-hbt | update project view header title assertion in shell.test.tsx | 2026-10-04 | 06306bc | complete | [261004-hbt-fix-shell-test-tsx-project-view-header-t](./quick/261004-hbt-fix-shell-test-tsx-project-view-header-t/) |
-| 261004-ovf | fix doc detail width overflow and failing vitest tests | 2026-10-04 | — | complete | [261004-ovf-fix-doc-overflow-and-tests](./quick/261004-ovf-fix-doc-overflow-and-tests/) |
-| 261004-twn | PPTX generation, image generation support, and AI drawer header UI enhancement | 2026-10-04 | 4f087ac | complete | [261004-twn-add-pptx-generation-image-generation-sup](./quick/261004-twn-add-pptx-generation-image-generation-sup/) |
-| 261004-uc0 | dynamic fetch image models from endpoint and remove assistant text from AI drawer header | 2026-10-04 | — | complete | [261004-uc0-dynamic-fetch-image-models-from-endpoint](./quick/261004-uc0-dynamic-fetch-image-models-from-endpoint/) |
-| 261005-cn2 | Implement a Tauri-local proxy for AI 9Router configuration and connection checks, following the existing Jira proxy pattern. Route Tauri requests through the backend to avoid WebView CORS. Preserve browser behavior where appropriate. Run only targeted tests. | 2026-10-05 | a007093 | complete | [261005-cn2-implement-a-tauri-local-proxy-for-ai-9ro](./quick/261005-cn2-implement-a-tauri-local-proxy-for-ai-9ro/) |
-| 261005-dce | Add read-only Graphiti MCP integration for Tauri desktop app | 2026-10-05 | 606bf48 | complete | [261005-dce-add-read-only-graphiti-mcp-integration-f](./quick/261005-dce-add-read-only-graphiti-mcp-integration-f/) |
-| 261005-fxw | Fix desktop window close failure by adding core:window:allow-destroy permission and handling flush error | 2026-10-05 | a35d174 | — | [261005-fxw-fix-desktop-window-close-failure-by-addi](./quick/261005-fxw-fix-desktop-window-close-failure-by-addi/) |
-| 261005-hfx | make Graphiti MCP endpoint configurable and inject SmartVista dictionary instructions into AI assistant | 2026-10-05 | 127990a | complete | [261005-hfx-make-graphiti-mcp-endpoint-configurable-](./quick/261005-hfx-make-graphiti-mcp-endpoint-configurable-/) |
-| 261005-jfa | remove @file autocomplete in chat input bar, keep attach file button | 2026-10-05 | e864620 | complete | [261005-jfa-remove-file-autocomplete-in-chat-input-b](./quick/261005-jfa-remove-file-autocomplete-in-chat-input-b/) |
-| 261005-taw | Disable service worker in Tauri build and auto-unregister existing service worker in Tauri runtime | 2026-10-05 | 0dc5c1f | complete | [261005-taw-disable-sw-in-tauri-and-unregister-old-sw](./quick/261005-taw-disable-sw-in-tauri-and-unregister-old-sw/) |
-| 261005-mbq | Fix local attachment link Claude Code option to launch from Windows cmd.exe at selected path | 2026-10-05 | 6964979 | complete | [261005-mbq-fix-local-attachment-link-claude-code-op](./quick/261005-mbq-fix-local-attachment-link-claude-code-op/) |
-| 261005-mre | enable disable mcp modal from ai drawer dropdown menu | 2026-10-05 | 63d725b | — | [261005-mre-enable-disable-mcp-modal-from-ai-drawer-](./quick/261005-mre-enable-disable-mcp-modal-from-ai-drawer-/) |
-| 261005-njn | notify OS when AI finishes response while PlannerMate blurred | 2026-10-05 | fe08249 | — | [261005-njn-notify-os-when-ai-finishes-response-whil](./quick/261005-njn-notify-os-when-ai-finishes-response-whil/) |
-| 261006-c3u | Fix past deadline causing FeasibilityIntegration test failure | 2026-10-06 | — | complete | [261006-c3u-fix-past-deadline-causing-feasibilityint](./quick/261006-c3u-fix-past-deadline-causing-feasibilityint/) |
-| 261006-czh | autofill doc template on create and ai normalize note action | 2026-10-06 | a87511a | — | [261006-czh-autofill-doc-template-on-create-and-ai-n](./quick/261006-czh-autofill-doc-template-on-create-and-ai-n/) |
-| 261006-dns | break words search in docs page | 2026-10-06 | 5350a60 | complete | [261006-dns-break-words-search-in-docs-page](./quick/261006-dns-break-words-search-in-docs-page/) |
-| 261006-ktc | Fix AI normalize thinking text, enrich mutation context, and ground doc context | 2026-10-06 | 5ff5a36 | complete | [261006-ktc-fix-ai-normalize-thinking-text-enrich-ai](./quick/261006-ktc-fix-ai-normalize-thinking-text-enrich-ai/) |
-| 261006-ghd | Ghost dev: human-friendly logs, subagent detection, AI response in feedback history, multi-session history | 2026-10-06 | — | complete | [261006-ghd-ghost-dev-human-logs-subagents-feedback-sessions](./quick/261006-ghd-ghost-dev-human-logs-subagents-feedback-sessions/) |
-| 261006-mjh | Fix ghost dev file permission and worktree path alignment | 2026-10-06 | 156164b | complete | [261006-mjh-fix-ghost-dev-file-permission](./quick/261006-mjh-fix-ghost-dev-file-permission/) |
-| 261007-kc4 | dynamic mcp config with in-chat toggle and sidebar authorship fingerprint | 2026-10-07 | 18d65c7 | complete | [261007-kc4-dynamic-mcp-config-with-in-chat-toggle-a](./quick/261007-kc4-dynamic-mcp-config-with-in-chat-toggle-a/) |
-| 261008-jgo | show timer and token count in ghost dev running agent | 2026-10-08 | 9f75db4 | — | [261008-jgo-show-timer-and-token-count-in-ghost-dev-](./quick/261008-jgo-show-timer-and-token-count-in-ghost-dev-/) |
-| 261008-qmp | Fix diff panel race condition and loading overlay, stop process UX, and multi-task terminal log state | 2026-10-08 | — | complete | [261008-qmp-multi-process-fixes](./quick/261008-qmp-multi-process-fixes/) |
-| 261008-m80 | Fix AgentControlView test failures in AgentDiffReviewer | 2026-10-08 | — | complete | [261008-m80-fix-agentcontrolview-test-failures-in-ag](./quick/261008-m80-fix-agentcontrolview-test-failures-in-ag/) |
-| 261008-tfe | Fix AgentDiffReviewer tree expansion in AgentControlView tests | 2026-10-08 | — | complete | [261008-tfe-fix-agentdiffreviewer-tree-expansion](./quick/261008-tfe-fix-agentdiffreviewer-tree-expansion/) |
-| 261008-fex | Optimize file explorer perf, exclusions, mention in chat, PC reveal, and skills autocomplete | 2026-10-08 | — | complete | [261008-fex-agent-file-explorer-perf-and-skills](./quick/261008-fex-agent-file-explorer-perf-and-skills/) |
-| 261008-k9p | Fix false thinking state and timer run when clearing logs in ghost dev session | 2026-10-08 | 2931d37 | complete | [261008-k9p-fix-clear-logs-false-thinking-timer](./quick/261008-k9p-fix-clear-logs-false-thinking-timer/) |
-| 261009-ana | Fix build error in AnalyticsView.test.tsx | 2026-10-09 | — | complete | [261009-ana-fix-analytics-view-test-build-error](./quick/261009-ana-fix-analytics-view-test-build-error/) |
-| 261010-btr | Fix backup restore transaction lifetime and schema V10 alignment | 2026-10-10 | — | complete | [261010-btr-fix-backup-restore-transaction-schema-v10](./quick/261010-btr-fix-backup-restore-transaction-schema-v10/) |
-| 261016-scn | Fix AI scope chips, citation modal width/table layout, and docs navigation | 2026-10-16 | — | complete | [261016-scn-fix-ai-scope-chips-citation-modal-docs-navigation](./quick/261016-scn-fix-ai-scope-chips-citation-modal-docs-navigation/) |
-| 261016-g5i | Fix 5 AI Grounded Chat & Knowledge issues: graph paths, full history, thinking separation, stop button, retrieval stability | 2026-10-16 | — | complete | [261016-fix-5-grounded-chat-issues](./quick/261016-fix-5-grounded-chat-issues/) |
-| 261017-dti | Fix Document Tree Item Indentation for Special Folders and Subfolders | 2026-10-17 | — | complete | [261017-dti-fix-document-tree-item-indentation](./quick/261017-dti-fix-document-tree-item-indentation/) |
-| 261017-j6q | reminder drawer complete button and context menu quick add reminder | 2026-10-17 | — | complete | [261017-j6q-reminder-drawer-complete-and-context-men](./quick/261017-j6q-reminder-drawer-complete-and-context-men/) |
-| 261018-mc9 | fix ai chat citation document title overflow issue | 2026-10-18 | — | complete | [261018-mc9-fix-ai-chat-citation-document-title-over](./quick/261018-mc9-fix-ai-chat-citation-document-title-over/) |
-| 261018-tmo | Fix retrieval timeout misleading no evidence message on client | 2026-10-18 | — | complete | [261018-tmo-fix-retrieval-timeout-client-ui](./quick/261018-tmo-fix-retrieval-timeout-client-ui/) |
-| 261019-u17 | Fix inline AI popup positioning and add mention to chat drawer draft | 2026-10-19 | c77d7c4 | complete | [261019-u17-fix-inline-ai-popup-positioning-and-add-](./quick/261019-u17-fix-inline-ai-popup-positioning-and-add-/) |
+## Phase 42 Review Outcome
 
-## Performance Metrics
+All findings from rounds 1–3 and the continuation re-check are fixed and independently
+re-verified against real git behaviour:
 
-**Velocity:**
+- CR-01 parent/leaf symlink escape — `realpath -e` on both repo root and target with a
+  literal directory-boundary check before `cat`.
 
-- Total plans completed: 77 (v1.2)
-- Average duration: 8 min
-- Total execution time: 0.13 hours
+- WR-01 missing literal glob returned empty success — `git cat-file -p --end-of-options`.
+- WR-02 probe conflated infrastructure failure with "untracked" — only exit 1 falls back.
+- CR-04 repository `core.fsmonitor` hook ran on read commands — disabled explicitly.
+- WR-03 handler trimmed legitimate filename whitespace — `filePath` kept verbatim.
+- WR-04 `diff_file` expanded a filename as a pathspec glob — `--literal-pathspecs`.
 
-| Phase | Plan | Duration | Tasks | Files |
-|-------|------|----------|-------|-------|
-| 16 | 01 | 8m | 2 | 5 |
-| 18 | 02 | 18m | 2 | 7 |
-
-*Updated after each plan completion*
-| Phase 16 P06 | 15min | 1 tasks | 2 files |
-| Phase 16 P07 | 12min | 2 tasks | 6 files |
-| Phase 16 P08 | 9min | 1 tasks | 4 files |
-| Phase 16 P09 | 12min | 2 tasks | 6 files |
-| Phase 16 P10 | 19min | 1 tasks | 3 files |
-| Phase 16 P11 | 21min | 2 tasks | 7 files |
-| Phase 16 P12 | 25min | 2 tasks | 6 files |
-| Phase 16 P13 | 28min | 2 tasks | 2 files |
-| Phase 16 P14 | 8min | 3 tasks | 4 files |
-| Phase 16 P16 | 12min | 2 tasks | 5 files |
-| Phase 16 P18 | 4min | 2 tasks | 4 files |
-| Phase 16 P24 | 7min | 2 tasks | 13 files |
-| Phase 17 P01 | 4min | 2 tasks | 5 files |
-| Phase 17 P02 | 8min | 2 tasks | 4 files |
-| Phase 17 P03 | 6min | 2 tasks | 5 files |
-| Phase 17 P04 | 10min | 2 tasks | 7 files |
-| Phase 17 P05 | 9min | 2 tasks | 7 files |
-| Phase 17 P06 | 9 min | 3 tasks | 7 files |
-| Phase 19 P01 | 18m | 2 tasks | 5 files |
-| Phase 19 P08 | 10m | 2 tasks | 2 files |
-| Phase 19 P09 | 6m | 2 tasks | 2 files |
-| Phase 19 P11 | 10m | 2 tasks | 8 files |
-| Phase 19 P12 | 6m | 2 tasks | 11 files |
-| Phase 19 P13 | 15m | 2 tasks | 9 files |
-| Phase 19 P14 | 14m | 2 tasks | 8 files |
-| Phase 19 P15 | 25m | 2 tasks | 7 files |
-| Phase 19.1 P01 | 15m | 2 tasks | 3 files |
-| Phase 19.1 P02 | 12m | 2 tasks | 4 files |
-| Phase 19.1 P03 | 8m | 1 tasks | 3 files |
-| Phase 19.1 P04 | 10m | 2 tasks | 5 files |
-| Phase 19.2 P07 | 25m | 3 tasks | 17 files |
-| Phase 23 P01 | 15m | 2 tasks | 4 files |
-| Phase 23 P02 | 12m | 2 tasks | 3 files |
-| Phase 25 P01 | 12m | 2 tasks | 4 files |
-| Phase 25 P04 | 9min | 2 tasks | 8 files |
-
-## Accumulated Context
-
-### Decisions
-
-Recent decisions logged in PROJECT.md:
-
-- [Phase 19.2 Plan 07]: Dexie upgrades to SCHEMA_V11 adding knowledgeLinks table with unique compound linkKey (`${taskMateEntityType}:${taskMateEntityId}:${setId}:${urn || docId}`) preserving full data integrity from V10.
-- [Phase 19.2 Plan 07]: Deleting Task, Project, or Milestone cascades to purge all corresponding KnowledgeLinks atomically inside Dexie transactions.
-- [Phase 19.2 Plan 07]: AI linking tools link_taskmate_to_knowledge and unlink_taskmate_knowledge require user modal confirmation via MUTATION_TOOLS gate.
-- [Phase 19.2 Plan 07]: LinkedKnowledgeSection displays documents (purple, FileTextOutlined) and graph URNs (geekblue, DeploymentUnitOutlined) with inline preview and popconfirm deletion.
-- [Phase 19.2 Plan 07]: GroundedTurnInput forwards scoped entity linked URNs and docIds as contextHints to federated retrieval and local BM25 fallback, tolerating stale links gracefully.
-
-- [Phase 19.1 Plan 04]: Package production knowledge stack in exactly two K8s manifests (k8s/neo4j.yaml StatefulSet and k8s/knowledge-server.yaml Deployment) with zero hardcoded credentials, relying strictly on secretKeyRef and documented operator pre-flight (D-01..D-05).
-- [Phase 19.1 Plan 04]: Keep Neo4j Bolt/HTTP ports strictly internal behind ClusterIP service; expose knowledge-server via NodePort 30080 for TaskMate access (D-01..D-04).
-- [Phase 19.1 Plan 03]: Enforce strict error taxonomy via isTransportFailure and isFallbackAllowed in knowledgeClient.ts and groundedTurn.ts, preventing silent BM25 fallback for auth, config, invalid response, and abort errors (D-21, D-22).
-- [Phase 19.1 Plan 02]: Implement NineRouterQueryPlanner using native fetch against /v1/chat/completions with response_format json_object and zero Cypher string leakage (D-11, D-12).
-- [Phase 19.1 Plan 02]: Validate model completions with LogicalQueryPlanSchema and server-resolved candidates; enforce bounded 1-shot repair before returning PLANNER_SCHEMA_FAILURE (D-15, D-16, D-17).
-- [Phase 19.1 Plan 02]: Fail closed on missing PLANNER_ENDPOINT, PLANNER_MODEL, PLANNER_API_KEY, or allowed hosts on startup without exposing secret values (D-13, D-14).
-- [Phase 19 Plan 15]: Replay 20 hand-crafted reference cases across direct lookup, paths, conflicts, abstention, fallback, safety, and persistence without network or provider calls.
-- [Phase 19 Plan 15]: Enforce D-06 language lock and UTF-8 byte-identical quote preservation on mixed-language cases using Buffer.equals.
-- [Phase 19 Plan 15]: Extend offlineIsolation.test.ts to verify zero retrieve egress during local fallback.
-- [Phase 19 Plan 15]: Enforce firstSeenInDoc is never used as citation authority (D-34) via pickRepresentativeSource sorted by evidenceClass then stable documentId.
-
-- [Phase 19 Plan 14]: AIChatDrawer owns exactly one AbortController per turn; drawer close, scope change, and new submits abort the prior signal (AI-SPEC §4b).
-- [Phase 19 Plan 14]: Model API key gate moved to pre-synthesis; unconfigured models yield MODEL_UNAVAILABLE with interactive evidence exploration rather than failing retrieval (AI-SPEC Pitfall 5, D-43).
-- [Phase 19 Plan 14]: ChatMessageBubble branches on message.grounding to render GroundedAnswerCard or EvidenceOnlyCard with slotted cards (D-05, D-43).
-- [Phase 19 Plan 14]: Tra cứu lại (fresh lookup) creates a new assistant message while keeping historical grounding immutable (D-49).
-- [Phase 19 Plan 14]: Tạo câu trả lời từ bằng chứng synthesizes against stored evidence pack updating message grounding in place (D-44).
-
-- [Phase 19 Plan 13]: QuickPreviewDrawer renders snapshot-first line-numbered raw pre excerpt above current markdown when citedExcerpt is present (D-47, D-48).
-- [Phase 19 Plan 13]: QuickPreviewDrawer performs SHA-256 comparison between normalized current markdown and citedContentHash only for server authority, showing destructive alert banner on mismatch (D-10, D-21).
-- [Phase 19 Plan 13]: QuickPreviewDrawer focuses anchor, scrolls center, and applies static highlight for prefers-reduced-motion or 1600ms animated highlight (ANSWER-07).
-- [Phase 19 Plan 13]: DocumentSet carries scope (domain, environment, version), aliases, relations[], isBase, presentationRevision, preset without requiring shape migration for pre-19 data (D-17, D-18, D-32, D-35).
-- [Phase 19 Plan 13]: updatePresentationOrder updates ordering column and increments presentationRevision by 1 without touching graphSnapshotId, publishedContentHash, or publish state (D-32, D-33).
-
-- [Phase 19 Plan 12]: GraphPathCard groups by snapshotId with zero cross-snapshot hop concatenation (D-14).
-- [Phase 19 Plan 12]: GraphPathCard partitions paths into neutral variation container for EXTENDS/SUPPLEMENTS (D-25/D-27) vs destructive alert container for unproven conflicts (D-29).
-- [Phase 19 Plan 12]: DiagnosticsPanel strictly enforces content-free invariant (AI-SPEC §7) exposing only enums, timings, and counts without user query or raw excerpt leakage.
-
-- [Phase 19 Plan 09]: Fallback allowlist triggers local BM25 only on NETWORK_ERROR, TIMEOUT, and 5xx; inhibits fallback on AUTH (401/403), CONFIG (400/404), and INVALID_RESPONSE (D-41).
-- [Phase 19 Plan 09]: Enforce zero model calls on NO_EVIDENCE, UNSUPPORTED, and NEEDS_CLARIFICATION (D-04, D-07).
-- [Phase 19 Plan 09]: Persist citations, paths, and conflicts in MODEL_UNAVAILABLE outcome so UI can show evidence and trigger synthesizeFromStoredEvidence (D-43, D-44).
-- [Phase 19 Plan 09]: createFreshLookupTurn preserves prior grounding byte-immutable and passes query to a new message turn (D-49).
-- [Phase 18 Plan 02]: Installed exact @xenova/transformers@2.17.2 with --ignore-scripts per human approval checkpoint.
-- [Phase 18 Plan 02]: LocalOnnxEmbeddingProvider lazy-loads pipeline and maps model load failures to stable PROVIDER_ERROR for degraded fusion.
-- [Phase 18 Plan 02]: RemoteOpenAiEmbeddingProvider requires HTTPS, exact host allowlist, positive dimensions, and never leaks canary tokens or queries.
-- [Phase 18 Plan 02]: Target spike on Windows host (Node v20.19.5) cleanly probes runtime and captures sharp native binary unavailability due to --ignore-scripts.
-- [Phase 17 Plan 05]: Durably persist published Markdown snapshots and human approvals to disk using atomic .tmp rename pattern.
-- [Phase 17 Plan 05]: Orchestrate rebuild pipeline with stale-source guard ensuring sourceSnapshotId matches before activation.
-- [Phase 17 Plan 05]: Preserve approved facts as sourceMissing=true and BUSINESS_APPROVED when source evidence disappears (D-20).
-- [Phase 17 Plan 05]: Execute atomic pointer swap in single Neo4j transaction ensuring failure leaves prior active graph untouched.
-- [Phase 17 Plan 04]: Protect all graph Fastify endpoints with bearer auth, timing-safe equality, and origin checks.
-- [Phase 17 Plan 04]: Enforce strict Zod parsing on graph DTOs ensuring zero leakage of Cypher strings or credentials.
-- [Phase 17 Plan 04]: Add Đồ thị tri thức section into DocumentSetDrawer before Lịch sử xuất bản with rebuild confirmation modal.
-- [Phase 17 Plan 04]: Render expandable occurrences in GraphEvidenceDrawer with OBSERVED, INFERRED, and BUSINESS_APPROVED badges.
-- [Phase 17 Plan 03]: Verified and installed exact neo4j-driver@6.2.0 dependency after human gate.
-- [Phase 17 Plan 03]: Map relations to static parameterized query constants preventing Cypher injection.
-- [Phase 17 Plan 03]: Preserve both branches of contradictory assertions in functional relation slots as explicit Conflict records.
-- [Phase 17 Plan 03]: Calculate normalizedProjectionHash over sorted canonical entity and relation tuples excluding build timestamps.
-- [Phase 17 Plan 02]: Lock all deterministic extractions to OBSERVED classification and DETERMINISTIC_TABLE/SQL/CODE methods.
-- [Phase 17 Plan 02]: Track consumed character ranges for every parsed table and code block to exclude them from prose segmentation.
-- [Phase 17 Plan 02]: Enforce zero retries on LLM prose fallback; quarantine malformed responses or HTTP errors without looping.
-- [Phase 17 Plan 02]: Reject prose candidates referencing un-resolved subject/object endpoints and route to quarantine.
-- [Phase 17 Plan 01]: Lock ONTOLOGY_VERSION to 2026.10.1; keep 7 core node kinds and 10 controlled relation types.
-- [Phase 17 Plan 01]: Exclude deployment environment (SIT/UAT/PROD) from logical URNs; store on evidence records only (D-05).
-- [Phase 17 Plan 01]: Quarantine unqualified Oracle identifiers missing proven schema context to prevent accidental MAIN1 assumptions (D-08, D-16).
-- [Phase 17 Plan 01]: Filter relation qualifiers through strict allow-lists before hashing into semantic factKey (D-14, D-15).
-
-- [Phase 16 Plan 24]: Validate atomic Markdown blocks recursively at every AST depth while leaving total document length unconstrained.
-- [Phase 16 Plan 24]: Carry only sanitized block type, location, and limit metadata through daemon polling; never include raw Markdown content.
-- [Phase 16 Plan 16]: Close GAP-01 / CR-01: Export readKnowledgeServerOptions and startKnowledgeServer in knowledge-server/src/main.ts, failing closed before listening on invalid/insecure environment.
-- [Phase 16 Plan 16]: Close CR-02: Register one authenticated /api/v1/health route in Fastify under onRequest hook, eliminating unversioned /health contract divergence with KnowledgeServerConfigCard.
-- [Phase 16 Plan 18]: Accept 'document' as valid ChatScopeType in BackupChatThreadRecordSchema, requiring entityId via Zod refinement.
-- [Phase 16 Plan 18]: Validate in Stage 3 that document-scoped chat threads reference existing Note UUIDs in imported payload before committing to restore.
-- [Phase 16 Plan 01]: D-01: DocumentSet persists an explicit ordered snapshot of stable UUIDs; no live folder query.
-- [Phase 16 Plan 01]: D-02: Existing Note body, hierarchy, and tags preserved byte-for-byte during V10 upgrade.
-- [Phase 16 Plan 01]: D-08: Remote metadata is cached non-canonically without Markdown content or tokens.
-- [Phase 16 Plan 01]: D-27: PublishPrimaryState is constrained to exactly the six specified states.
-- [Phase 16 Plan 01]: D-29: PublishAttemptCache records metrics and bounded error summary, omitting payload/excerpts.
-- [Milestone v1.2]: Keep Markdown as canonical knowledge source; Neo4j and retrieval indexes remain rebuildable projections.
-- [Milestone v1.2]: Use collision-safe composite graph identities (e.g. `PRC_PROCESS:60000006` vs `PRC_CONTAINER:60000006`).
-- [Milestone v1.2]: Start with scheduled process `60000006` as bounded pilot corpus.
-- [Milestone v1.2]: Preserve local BM25 fallback in PlannerMate when optional knowledge server is offline.
-- [Milestone v1.2]: Retain evidence classifications `OBSERVED`, `INFERRED`, and `BUSINESS_APPROVED` across all graph relations.
-- [Phase 19 Plan 08]: Enforce serial bounded repair at most 2 attempts carrying only validation issues and previous raw output without expanding evidence.
-- [Phase 19 Plan 08]: Enforce D-06 language lock in system prompt: response language mirrors query language; technical identifiers and source quotes must be reproduced byte-identical.
-- [Phase 19 Plan 08]: Throw GroundedSynthesisError('INVALID_GROUNDED_OUTPUT') after exhausted repairs for safe error rendering (D-45).
-- [Phase 19 Plan 11]: ScopeVariationCard renders neutral variation card for proven scope variation (EXTENDS/SUPPLEMENTS with known dimension) per D-25/D-27; destructive ConflictBanner renders only when unresolved or dimension is Unknown (D-29).
-- [Phase 19 Plan 11]: ClaimBlock enforces D-26 invalid-state gate: claims asserting override terms without backing SUPERSEDES or policy/release/migration evidence kinds suppress prose and render safe synthesis error alert.
-- [Phase 19]: Path citation IDs resolve only to returned chunk item IDs. — Makes citation closure deterministic at strict protocol boundary.
-- [Phase 19]: Conflict scope stays metadata-only through fixed dimension allowlist. — Prevents free-text or model-invented scope proof.
-- [Phase ?]: Confirmed bank source DOCX templates as internal authority without AI recreation
-- [Phase ?]: Pinned archive profile B ceilings (5MB/25MB/2MB/256 entries) and zero-migration SDLC persistence metadata
-- [Phase 25]: Keep Wave 0 tests fixture-only until production wizard symbols exist; named TODO/fixme gates replace fake imports and false-green assertions. — Preserves honest red gates without creating production stubs.
-- [Phase 25]: Run Playwright against actual Vite /task-management/ through webServer and forbid page.setContent in document wizard E2E. — Prevents DOM-only tests from spoofing app integration.
-
-### Pending Todos
-
-None yet.
-
-### Blockers/Concerns
-
-- Phase 19.1 UAT remains partial: 2 issues, 4 blocked, 3 skipped. All nine gates are imported into Phase 19.2 and block production-ready status.
-- Real Neo4j, 9router, browser E2E, canary rollback, and restart proof remain mandatory execution gates.
-
-### Roadmap Evolution
-
-- Phase 25.1 inserted after Phase 25: SDLC Flow Hardening & Multi-Tab AI Chat Isolation (URGENT)
-- Phase 19.1 inserted after Phase 19: Production Neo4j Integration & Live Retrieval Validation (URGENT)
-- Phase 19.2 inserted after Phase 19.1: Production-Ready AI Assistant & Graph Integrity; Phase 19.1 partial UAT preserved and imported as blocking acceptance.
-- Phase 21 added: Knowledge Graph Entity Extraction & Semantic Retrieval Improvement (resolves dummy STEP_xxx, extracts TEN_BUOC & WRITES, improves Neo4j seed resolution, enables hybrid prose extraction per .planning/proposals/knowledge-graph-extraction-fix-plan.md)
-- Phase 22 added: Federated MCP Knowledge & Hybrid Tool Grounding (generic, server-agnostic routing and parallel retrieval across ALL enabled MCP servers for both AI Chat Drawer and Telegram)
-- Phase 23 added: Knowledge Graph Build Reliability & Entity Fidelity (Zero OOM vector batching, durable chunk extraction disk cache, Vietnamese NFD-to-ASCII URN slugification, canonicalName UI preservation)
-- Phase 24 added: Graph Retrieval Optimization (ontology-driven per-seed traversal, seed preservation, plan validation, deterministic fusion, safe diagnostics, measured Neo4j tuning, and live AI Chat verification from `docs/GRAPH_RETRIEVAL_OPTIMIZATION_ROADMAP.md`)
-
-## Deferred Items
-
-Items acknowledged and carried forward:
-
-| Category | Item | Status | Deferred At |
-|----------|------|--------|-------------|
-| Knowledge scope | Full card-system corpus beyond pilot 60000006 | Deferred to v2 | Milestone v1.2 init |
-| UI | Interactive graph canvas / manual graph editor | Deferred to v2 | Milestone v1.2 init |
-| Verification | Full-project TypeScript check blocked by pre-existing AgentControlView diff contract errors | Deferred outside Plan 16-14 | Plan 16-14 |
+Verification: 392 focused tests pass (9 files), `tsc --noEmit` clean. Full suite not run
+(project rule: over an hour). Phase verification has not been run yet.
 
 ## Session Continuity
 
-Last session: 2026-10-30T10:12:46.399Z
-Stopped at: Session resumed, proceeding with Plan 19.2-09 task 2 retrieval correctness fixes
-Resume file: .planning/phases/25.1-sdlc-flow-hardening-multi-tab-ai-chat-isolation/25.1-CONTEXT.md
+Last session: 2026-11-17T04:49:29.227Z
+Stopped at: Phase 44 UI-SPEC approved
+Resume file: .planning/phases/44-agent-activity-panel-configurable-explore-timeout-and-prompt/44-UI-SPEC.md
+
+Progress: [██████░░░░] 63%
+
+## Milestone v1.4 Map
+
+- [x] Phase 35: Shared-primitive extraction + SDLC behavior removal
+- [x] Phase 36: Data model, multi-chat identity, backup/migration
+- [ ] Phase 37: Runtime reliability + concurrency
+- [ ] Phase 37.1: Live steering — leader amends assignments, steers running agents (INSERTED)
+- [x] Phase 38: Hard token budget + accurate measurement
+- [x] Phase 39: Skill versioning + enrichment approval
+- [ ] Phase 40: Explorer UX, CRUD correctness, observed walkthrough
+- [ ] Phase 41: AI Office team docs zones — per-team folder tree, agent-scoped doc write (INSERTED)
+- [ ] Phase 42: Read-only git inspection for the reviewer agent (INSERTED)
+- [x] Phase 43: Repo reading that scales — grep, paged read, remote headless exploration (INSERTED)
+
+## Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 261111-c35 | Fix WR-05 + WR-10 data-safety warnings from phase 36 review | 2026-11-11 | 505e780d | [261111-c35-fix-wr-05-wr-10-data-safety-warnings-fro](./quick/261111-c35-fix-wr-05-wr-10-data-safety-warnings-fro/) |
+| 261111-d2p | Close remaining phase-36 review findings: WR-07/08/09/11/12 and IN-01..IN-04/06/07/08, record WR-13 in ROADMAP phase 38 | 2026-11-11 | 89186433 | [261111-d2p-close-phase-36-review-findings-part-two](./quick/261111-d2p-close-phase-36-review-findings-part-two/) |
+| 261113-ita | Fix team notification focus, unread viewport and missing-leader warning | 2026-11-13 | e8ce7e4f | [261113-ita-fix-confirmed-team-chat-focus-unread-and](./quick/261113-ita-fix-confirmed-team-chat-focus-unread-and/) |
+| 261113-ko9 | Restore last-read chat position, viewport read receipts, collapse plans and expose leader budget wait | 2026-11-13 | fa96058b | [261113-ko9-open-team-chat-at-latest-messages-and-co](./quick/261113-ko9-open-team-chat-at-latest-messages-and-co/) |
+| 261114-pxi | Add knowledge research tools (retrieve_knowledge, get_document_details) to the AI Office allowlist | 2026-11-14 | ced06e08 | [261114-pxi-add-retrieve-knowledge-and-get-document-](./quick/261114-pxi-add-retrieve-knowledge-and-get-document-/) |
+| 261114-qjh | Redesign the team chat transcript: hover actions, one meta row, user-only receipts, day dividers, grouped messages, compact sidebar | 2026-11-14 | d7b5c68c | [261114-qjh-redesign-team-chat-transcript-ui](./quick/261114-qjh-redesign-team-chat-transcript-ui/) |
+| 261114-r2m | Fix team-chat bubble borders (all four sides, border-box, inset lead accent) and grouped-row alignment | 2026-11-14 | 80c961dc | — |
+| 261114-r2n | Space team-chat rows by author (4px same block, 20px across authors) and label plan/synthesis rows | 2026-11-14 | eb788b72 | — |
+| 261115-q4n | Fix 3 UAT-41 defects: lead prompt write_doc fact, send() ordering + MCP timeout, ensureDocsReady error visibility | 2026-11-15 | e8557959 | [261115-q4n-fix-3-uat-41-defects-lead-prompt-write-d](./quick/261115-q4n-fix-3-uat-41-defects-lead-prompt-write-d/) |
+| 261116-e62 | AI mutation tools for Systems: create_system, update_system, delete_system | 2026-11-16 | 469deb2b | .planning/quick/261116-e62-ai-mutation-tools-for-systems-add-create-system-update-syste |
+| 261116-e63 | AI tools for Mermaid diagrams: query_diagrams, create_diagram, update_diagram | 2026-11-16 | 4fff0a59 | .planning/quick/261116-e63-ai-tools-for-mermaid-diagrams-add-query-diagrams-read-create |
+| 261116-e64 | Configurable system type list backed by settings | 2026-11-16 | bfad78fb | .planning/quick/261116-e64-configurable-system-type-list-systemtype-is-a-hardcoded-unio |
+| 261116-fyi | Restore Docs parity in IntelliJ workbench: document sets drawer (publish + graph build), ZIP import, folder ZIP export | 2026-11-16 | c0858407 | [261116-fyi-bring-docs-explorer-features-missing-fro](./quick/261116-fyi-bring-docs-explorer-features-missing-fro/) |
+| 261117-ss8 | Thêm instrumentation/báo cáo lỗi đầy đủ cho mọi run agent/leader: mỗi tool call (explore_repo, write_doc, v.v.) phải ghi log có timestamp, source abort (user stop / batch deadline / dispose / turn end), tool name, duration, error code/detail, outcome; áp dụng cho mọi thể loại run agent/leader. Ghi nhận UAT abort 31fc8015. | 2026-11-17 | 76d5b87d | [261117-ss8-th-m-instrumentation-b-o-c-o-l-i-y-cho-m](./quick/261117-ss8-th-m-instrumentation-b-o-c-o-l-i-y-cho-m/) |
+| 261117-tpk | Tổ chức lại màn hình Settings TaskMate thành các nhóm chức năng rõ ràng (UI arrangement only, zero config/behavior change) | 2026-11-17 | 3378d2f6 | [261117-tpk-t-ch-c-l-i-m-n-h-nh-settings-taskmate-th](./quick/261117-tpk-t-ch-c-l-i-m-n-h-nh-settings-taskmate-th/) |
+
+## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 37.1 inserted after Phase 37 (URGENT): Live steering — leader amends assignments and steers running agents mid-run. Scope deferred from 37-CONTEXT.md D-19: outbox+inbox agent, drain at `beforeToolRound`, `amend_assignments` tool, leader re-plan mid-batch, steer UI.
+- Phase 41 added (2026-11-15): AI Office team docs zones — per-team docs folder tree, agent-scoped document write. Owner decision: every member writes docs; visible immediately; leader writes the approved final at team root.
+- Phase 42 added (2026-11-15): Read-only git inspection for the reviewer agent. Owner decision: reviewer reads git read-only over SSH. Scope narrowed 2026-11-15 — the recursive linked-item read half was cut (sticky notes already arrive full-body via `get_item_details`; `read_file` already covers linked files; note attachments are image-only so the text branch was dead code). See `42-CONTEXT.md` §Deferred Ideas.
+- Phase 44 added (2026-11-17): Agent Activity Panel, Configurable Explore Timeout and Prompt Log. Owner decision: all three pieces ship in one phase, reviewed to zero critical/warning; push once to `feature/intellij-workbench` after verification. UI reference: `.planning/agent-activity-panel-draft.html`.
+
+- Phase 34 marked complete with zero tests covering the AI Office runtime and five live defects (hung batch run, unguarded double-submit, phantom active turn, `targetAgentId` stripped on restore, bare deletes breaking export). "Phase 34 complete" is not evidence of quality.
+- Research verdict: keep and harden the existing coordinator/budget gate; zero new npm dependencies.
+- Phase 35 completed under fresh-data-only scope: SDLC schema modules removed, no legacy compatibility requirement. Targeted tests/typecheck/build passed; exact copy, legacy-layout walkthrough, and existing unrelated selector test recorded as non-blocking debt.
+- Seven surviving modules import SDLC code on the hot path — extraction must precede deletion.
+
+## Decisions
+
+- [Phase 37.1]: D-24: `delegate_batch` returns an ack `{dispatched,batchId,status,agents[]}`; settled results reach the lead only through the synthesis turn opened by `onBatchSettled`
+- [Phase 37.1]: Agent cancellation is owned by a per-batch `AbortController`; the leader tool-call signal is never wired to an agent
+- [Phase 37.1]: The `kind:'unfinished'` tail travels in the synthesis prompt (`KẾT QUẢ CỦA LÔ`), not in the tool result
+- [Phase 37.1]: `usageTotals` is keyed per TURN (`usageBaselineKey`), so the dispatch turn's tokens survive the synthesis turn
+- [Phase ?]: D-01: Global conventions stored in Dexie settings under global_conventions key
+- [Phase ?]: D-02: GlobalConventionsCard embedded inside SDLC / AI tab of SettingsView
+- [Phase ?]: D-03: Setting key complies with isSafeBackupSetting whitelist, included in encrypted backups
+- [Phase ?]: D-04: Empty state returns empty string without generating default/fabricated text
+- [Phase 31]: D-09: Conventions segment placed between toolPolicy and fewShot layers inside untrusted delimiters
+- [Phase 31]: D-10: Global conventions precede repository conventions in prompt segment
+- [Phase 31]: D-11: Mandatory CONVENTIONS_CONFLICT_POLICY requires AI to cite both sources and stop for user resolution
+- [Phase 31]: D-12: Entire convention document retained without character caps or truncation
+- [Phase 31]: D-13: ConventionsSummaryCard renders on Step 1 and Step 2 with manual refresh and detail modal
+- [Phase 31]: D-14: ResponseEnvelope<T> and correlationId mandate verified in SOLUTION prompt without user prompt mention
+- [Phase 31]: D-15: Conflict witness test confirms both sources and CONVENTIONS_CONFLICT_POLICY are surfaced cleanly
+- [Phase 31.1]: D-16: systems table added in Dexie SCHEMA_V15; projects table migrated to changeRequests with backward-compatibility for tasks
+- [Phase 31.1]: D-17: 3 explicit CR types with designated colors: New Feature (#1677ff), Enhancement (#52c41a), Bugfix (#faad14)
+- [Phase 31.1]: D-18: Subsystems own SSH profiles and repository paths; CRs multi-target subsystems
+- [Phase 31.1]: D-19: Systems Explorer accessed via Left Stripe (Alt+6) and Search Everywhere; TitleBar kept uncluttered
+- [Phase 31.1]: D-20: ChangeRequestTable exhibits 3 CR type badges (#1677ff, #52c41a, #faad14) and cyan subsystem chips
+- [Phase 31.1]: D-21: ProjectExplorer displays CR nodes with type icons and target system pills, preserving task/milestone tree
+- [Phase 31.1]: D-22: loadMultiRepoConventions aggregates CONVENTIONS.md across all target subsystems of CR, layered with system code headers
+- [Phase 31.1]: D-23: SDLC Studio Step 3 dynamically provides Subsystem Switcher to inspect diffs and branches across multi-system CRs
+- [Phase 31.2]: D-24: systems table holds both LOGICAL_GROUP and deployable types; parent has no ssh/repo/branch, subsystem binds exactly one remote repo
+- [Phase 31.2]: D-25: changeRequests stores targets: CrTarget[] ({ systemId, featureBranch? }) instead of targetSystemIds; only deployable subsystems allowed; featureBranch defaults to feature/{cr.code} and is stored explicitly, baseBranch stays on the subsystem
+- [Phase 31.2]: D-26: Task.crId required, Task.systemId optional and must belong to cr.targets
+- [Phase 31.2]: D-27: projects and milestones tables removed from Dexie; test data reset allowed, no shadow aliases
+- [Phase 31.2]: D-28: SDLC workflow state keyed by crId; per-subsystem content lives inside steps, not as separate workflows
+- [Phase 31.2]: D-29: CR Explorer is default left tool window (Alt+1), tree CR -> Subsystem -> Task, no Milestone tier
+- [Phase 31.2]: D-30: Systems Explorer parent nodes have no create-CR action; subsystem nodes do, pre-selecting themselves
+- [Phase 31.2]: D-31: Clicking a CR opens a ChangeRequestDetailView tab, never a popup or inline swap
+- [Phase 31.2]: D-32: CR Detail is a single screen: header, 6-step progress strip, flat task table with Subsystem column, collapsed Jira/docs block
+- [Phase 31.2]: D-33: SystemDetailView has 4 tabs; Git & Branches tab exists only for subsystems
+- [Phase 31.2]: D-35: 1-click Git sets activeRemoteTarget and opens the LEFT `remote_explorer` tool window (amended — no bottom Remote Git panel exists); 1-click Terminal opens the bottom Terminal; both disabled with Catalog link when unconfigured
+- [Phase 31.2]: D-36: SDLC Studio is 3 zones (sidebar with CR picker + steps + Subsystems & Repos, workspace with context bar, step chat)
+- [Phase 31.2]: D-37: Subsystems & Repos is read-only observation; editing stays in System Catalog
+- [Phase 31.2]: D-38: selectedSystemId lives at SDLC view level and drives both Step 3 and Step 4; bar hidden for single-subsystem CRs
+- [Phase 31.2]: D-39: Step 2 solution is split into one section per subsystem with repo-scoped conventions
+- [Phase 31.2]: D-40: Step 4 packs per subsystem card plus Pack All with per-subsystem failure reporting; drift matrix is one table with a Subsystem column
+- [Phase 31.2]: D-41: AI subsystem proposals are structured artifacts constrained to existing Catalog ids
+- [Phase 31.2]: D-42: Proposals never auto-attach; user ticks and confirms before cr.targets changes
+- [Phase 31.2]: D-43: Proposals can supplement an already-populated CR, listing only the missing subsystems
+- [Phase 31.2]: D-44: Delete components/projects, ProjectsView, ProjectExplorer, RepoConfigView; rename ProjectSdlcView; rewrite CRExplorer; add CR Detail, SubsystemsReposPanel, SubsystemContextBar, SubsystemProposalCard
+- [Phase 31.2]: D-45: All project/milestone tests removed or rewritten; new invariant and proposal-gate tests added
+- [Phase 31.2]: D-46: Global Tasks tab stays; axes become CR + Subsystem (filter, table columns, TaskDrawer form, QuickAddBar)
+- [Phase 31.2]: D-47: ItemInsightView itemType drops project/milestone, adds cr/system
+- [Phase 31.2]: D-48: ChatScopeType drops project/milestone, adds cr/system; old project/milestone threads deleted on upgrade (test data, acceptable loss)
+- [Phase 31.2]: D-49: Backup schema version bumped; legacy backups containing projects/milestones rejected with explicit message, never auto-mapped
+- [Phase 31.2]: D-50: Every label surface (notifications, standup, dayInsight, weekly planner, dashboard, timer, feasibility, palette, selectionContext, filter, recurrence, docx export) resolves names from CR/Subsystem instead of Project
+- [Phase 31.2]: D-51: Left stripe id renamed projects -> cr_explorer with layout persist key bump
+- [Phase 31.2]: D-52: Mandatory execution order — schema/types/Zod/repo first, then legacy deletion, then daily surfaces, then CR/System views, then SDLC, then AI proposal, then tests
+- [Phase 31.2]: D-53: Step 3 reads featureBranch from cr.targets and baseBranch from system; no branch-name guessing from crCode
+- [Phase 42]: D-08 injection proof compares the WHOLE command string with `toBe`, never a containment check — `escapeShellArg` preserves the payload text inside the quotes, so `not.toContain(EVIL)` is vacuous by construction
+- [Phase 42]: `clearAllMocks` in `beforeEach` is what makes `mock.calls.at(-1)` case-scoped; it clears call history but NOT the `mockResolvedValueOnce` queue, so each case queues exactly the responses it consumes
+- [Phase 42]: AIO-READ-06 stays verify-only per D-13 — the gate at `teamRunCoordinator.ts:1174-1179` was already correct, so no code was written; coverage is advertisement-level only, execution enforcement lives in `oracleSqlclService.test.ts`
+- [Quick 261109-eme]: Refactor AI Office & Staff to Left Stripe tool windows (ai_office on top, ai_staff above remote_explorer); open dedicated staff_detail and team_workspace editor tabs; hide Ghost Dev entry points
+- [Phase 38]: D-23 parity is membership per table per list, never length equality — at HEAD the lists differ (35 Dexie / 27 TS+local / 27 Rust) for reasons outside phase 38, so a length gate would be false and un-greenable
+- [Phase 38]: No Rust or SQLite structural change for the new columns — they ride inside opaque `payload_json` rows; `aiTeams`/`aiTeamMembers` were already in `ALLOWED_TABLES`
+- [Phase 37-runtime-reliability-concurrency]: Ledger lands at Dexie V22 (V20/V21 taken by post-36 repairs); transitionAssignment is the only runStatus writer and returns null on a lost race; attemptNo allocated inside the insert transaction so retries append 2,3 never 2,2; concurrencyLimit default 3, range 1-12, clamped at the trust boundary.
+- [Phase 37]: Scheduler acquire(signal) requires the signal; cancel(handle) is release-equivalent only — a queued assignment is cancelled by aborting its own AbortController (no handle exists before admission)
+- [Phase 37]: Coordinator phase writes all route through setPhase(), which drops the write and its notify() once disposed, so runBatch/topUp tails cannot resurrect a dead run
+- [Phase 37]: teamRunManager deletes the map entry before awaiting a stale dispose, so a concurrent get during the dispose window constructs fresh rather than observing a half-torn-down coordinator
+- [Phase 37]: diagnosticDetail stripped by row projection (projectSafeAssignment) in export AND captureSnapshot, not at envelope level
+- [Phase 37]: assignment backup record omits diagnosticDetail entirely so a hand-crafted payload carrying it is rejected by strictObject
+- [Phase 37]: parity test pins LATEST_SCHEMA_VERSION = 22 so a future schema bump cannot silently desync its store source
+- [Phase 37]: finalizeAttempt is exported on the coordinator interface so 37-04 and the concurrency test share one terminal writer
+- [Phase 37]: a userStopped marker is required: settleAgent state cannot prove who ended the turn, and without it the ledger recorded done for a stopped attempt
+- [Phase 37]: 37-04: dispatchAssignment owns the whole acquire->start->settle->release span; release happens only in its finally
+- [Phase 37]: 37-04: userStopped is a Map<agentId, stopReason> so the stop path and the settle path record the same reason
+- [Phase 37]: 37-04: the report-link stamp and finalizeAttempt share one rw transaction, so a settled attempt can never own two bubbles
+- [Phase 37]: 37-06: a throw inside sendTurn is a fourth blocked cause (TURN_FAILED) — draft restored, text never dropped
+- [Phase 37]: 37-06: the API-error-card retry shares the composer's BUSY_PHASES entry rule, so one decision governs every dispatch path
+- [Phase 37]: retryAssignment claims the assignment id before any await and checks it before the busy-phase guard, so a double click is ignored rather than refused as a busy team
+- [Phase 37]: the delegate_batch result keeps its array shape and gains a final kind:'unfinished' entry, because a wrapper object would break every caller and the tool contract
+- [Phase 37]: persisted message.runStatus beats the live agentStatus: terminal agents are filtered out of snapshot.agents, so a stopped attempt has no live status and a remount has none at all
+- [Phase ?]: beforeToolRound returns messages instead of being fire-and-forget; the loop appends them verbatim
+- [Phase ?]: The round-boundary hook runs after in-loop compaction and fires on round 1 too
+- [Phase 37.1]: 'steer' is widened in all six messageKind declarations at once — a partial widen either fails tsc or silently strips the row on restore
+- [Phase 37.1]: steerMessageIds is declared on the strictObject assignment backup schema (an undeclared key fails loudly) and is safe against the forbidden-key gate
+- [Phase 37.1]: the steer contract adds no table, no Dexie version and no BACKUP_SCHEMA_VERSION bump — every addition is optional
+- [Phase ?]: The amend validator owns argument shape only; ledger membership stays in the coordinator, the only holder of openBatchId
+- [Phase ?]: A non-queued row refuses the whole amend list, so the leader's report always matches the ledger
+- [Phase ?]: Amend-cancel sets userStopped before aborting so leader-amend wins the from:queued guard; a rewrite appends an attempt and re-dispatches it
+- [Phase 37.1]: Team chat UI: a queued-only pending set still renders the indicator trigger so Stop stays reachable
+- [Phase 37.1]: AgentLiveStep is runtime-only; the delivered-steer set is derived from a batchId-scoped read because steerMessageIds is unindexed
+- [Phase 38]: Migration tests assert against LATEST_SCHEMA_VERSION instead of a literal so a schema bump cannot re-break them
+- [Phase 38]: V25 is purely additive with no .upgrade() hook; split usage columns are optional on the type and seeded 0 on every write path
+- [Phase ?]: AIO-BUDGET-01/09 keep their unchecked box; the override note records the decision and the checkmark lands when the implementation plans close
+- [Phase ?]: ROADMAP.md criteria 1 and 6 were already warning-only at HEAD, so plan 38-02 was a verify-and-noop for that file
+- [Phase 38]: incrementMemberUsage is the atomic delta sink; usedTokens stays the legacy scalar until plan 09
+- [Phase 38]: splitEvenly in budgetSplit.ts is the single home of the even-split rule; evenSplitRows is a thin adapter
+- [Phase 38]: backup envelope v14 and the nine-file fixture sweep ship in one changeset; validateBackup.ts stays unchanged because the record schemas already own the numeric guards
+- [Phase 38]: Out-of-band threshold reads fall back to 80 rather than clamping: a corrupt row is treated as unset, not silently rewritten to a boundary the user never chose
+- [Phase 38]: ai_budget_warn_threshold_pct passes isSafeBackupSetting by construction; a test pins it so a future suffix rule cannot silently drop it
+- [Phase 38]: The legacy BudgetGate stays byte-identical until plan 08; budgetGate.ts's docstring states this tree is not gate-free yet
+- [Phase 38]: Override and effective threshold are two snapshot fields; the override key is omitted when inheriting (exactOptionalPropertyTypes), never set to undefined
+- [Phase 38]: nextThresholdOverride(undefined) is the only clear mechanism — no separate clear method exists
+- [Phase 38]: tests/helpers/teamRunSnapshot.ts owns the snapshot stub; five drifted literals collapsed into it
+- [Phase 38]: applyTopUp (additive) and applyTeamBudgetSettings (absolute) are separate repo verbs, each one rw transaction over [aiTeams, aiTeamMembers]; mixing them is the double-increment bug
+- [Phase 38]: The roster is read inside the top-up transaction, never from the coordinator cache — WR-13's membersLoaded early return is off the path
+- [Phase 38]: The coordinator mirrors a persisted budget result (applyBudgetSettings) and never re-derives a delta; null and undefined both mean inherit at that boundary
+- [Phase 38]: applyTeamBudgetSettings clamps rather than zod-validates the threshold on purpose: zod refuses 0 at the trust boundary, the settings path clamps 0 to 1 as a runtime belt
+- [Phase 38]: The pre-call token estimate lives on the accounting record only, never in the live charge maps, so a guess cannot park a turn the reported number would not have parked
+- [Phase 38]: An estimated charge updates live counters but skips gate evaluation — D-07 says an estimate is never a decision, and plan 08 deletes the gate
+- [Phase 38]: flushAccounting marks the key flushed BEFORE awaiting the increment; that guard, not a zeroed record, is the duplicate-charge defence
+- [Phase 38]: The employee turn's finally flushes and reconciles too, covering mention-started turns that own no attempt row
+- [Phase 38]: tokenEstimate loads js-tiktoken through widened string specifiers with @vite-ignore so an absent package reaches the runtime catch; plan 10 switches them to literal lazy subpaths
+- [Phase 38]: js-tiktoken is pinned at exactly 1.0.21 and imported only through the lite + ranks/o200k_base subpaths (never the 5 MB root), so the tokenizer lands in its own lazy chunk
+- [Phase 38]: The Vietnamese token-count test asserts a positive integer, stability and inequality with chars÷4 — never a direction, because o200k_base can land either side of the heuristic
+- [Phase 38]: Two failure seams, not one: a rejecting loader proves the absent-package path, a throwing encode proves the present-but-failing path; both degrade to chars÷4
+- [Phase ?]: Budget warning identity is (teamId, level): the member level dispatches once per team, never once per teammate
+- [Phase ?]: budgetWarnings.member is the aggregate flag; the per-member badge stays plan 09's surface
+- [Phase ?]: pausedAgentId/pausedAgentName stay on the snapshot as always-null legacy fields because the parked phase value is still legal in old backups
+- [Phase ?]: Split budget rendering sums every member row so the header agrees with the ledger the coordinator reconciles against
+- [Phase ?]: A provisional pre-call measurement renders with the ~ estimate marker because it is not a provider number
+- [Phase ?]: AgentPausedBanner deleted: awaiting-budget has no producer and its copy claimed a parked turn plus a literal 80%
+- [Phase 41]: D-13/D-15: docsFolderId is unindexed row payload; V27 spreads SCHEMA_V26 byte-identically and needs no upgrade hook
+- [Phase 41]: D-14: docsFolderId is uuidSchema.optional() in both AI team backup strictObjects; not added to FORBIDDEN_BACKUP_KEYS
+- [Phase 41]: 41-02: teamDocsRepo owns the AI Teams root, per-team tree, member folders, hard tree delete and the idempotent backfill; the liveness guard runs inside the rw transaction over aiTeams/aiTeamMembers/aiEmployees/notes/settings
+- [Phase 41]: 41-03: write_doc is a team tool (never in MUTATION_TOOLS), so the employee read-only gate cannot block it; parentId comes from ctx.folderId only, type is the literal 'document', and a lead-role call refuses LEAD_USES_DB_TOOLS before action is read
+- [Phase 41]: 41-03: EMPLOYEE_ONLY_TEAM_TOOLS is the lead-payload subtraction set (wired in 41-06); it is not symmetric with LEAD_ONLY_TEAM_TOOLS — a tool in both would be offered to nobody
+- [Phase ?]: 41-04: five team lifecycle writes own the docs tree in their existing transactions; removeTeamMember keeps the folder and its documents (D-11); writeLeadRow resolves the team folder itself and re-reads the row before put so a nested backfill is never erased
+- [Phase 41]: 41-05: folder ids enter both prompts bare (UUIDs from the coordinator context) while member names pass through wrapField('TÊN NHÂN VIÊN') — T-41-21
+- [Phase 41]: 41-05: the employee policy states two exceptions (propose_skill_version, write_doc) and no refusal code appears in either prompt — the handler stays the guard (D-04)
+- [Phase 41]: 41-05: LEAD_NO_WRITE_DOC_LINE is exported so the test pins the exact sentence; the lead prompt names write_doc once, inside that negation, with no positive instruction (T-41-35)
+- [Phase 41]: D-05: docs tree ensured at turn start in the coordinator, never lazily inside write_doc
+- [Phase 41]: T-41-26: the leader gets no folderId even though its member row owns a live folder
+- [Phase 42]: D-06/D-09: `git_read` is one team tool with a fixed seven-value action enum (branches|status|log|diff_summary|diff_file|read_file|tree); absent from MUTATION_TOOLS and both role sets, so no approval card and no coordinator edit
+- [Phase 42]: D-07: the repo comes from the team's linked systems; `systemId` is only an index into that set — unlinked -> SYSTEM_NOT_LINKED, repo-less or empty -> NO_LINKED_REPO, ambiguous -> INVALID_ARGUMENT listing candidates
+- [Phase 42]: D-08: the handler never builds a command string; every value reaches a gitRemoteService/gitRemoteTreeService function that escapes per argument
+- [Phase 42]: D-11: every git_read wrap label is `GIT <action> <repoPath> — <field>`; a git or SSH throw becomes an INVALID_ARGUMENT refusal
+- [Phase 42]: `getRecentCommits` added because `getCommitLog` builds a base..target range and cannot express last-N of one branch; both share one `parseCommitLog`
+- [Phase 42]: D-12: reviewer detected by employee.role or skill.description containing 'review' (case-insensitive); no new AiEmployee field; the line names the tool and read order only, never a refusal code or repo path
+- [Phase ?]: grep record parse: split stdout on newline first, then NUL per record — -z separates fields, newline ends the record
+- [Phase ?]: readRemoteFilePage reuses confineRepoPath/isNotInRef and realpath containment; getRemoteFileContent stays whole-file for the editor
+- [Phase ?]: git_read grep reuses the log branch-resolution shape: only an absent/empty branch falls back to the system default; a supplied-but-rejected one refuses
+- [Phase ?]: git_read read_file pages via readRemoteFilePage and returns nextOffset only when hasMore; zero grep hits is a successful empty result, never a refusal
+- [Phase 43]: Team turns read the context window once at coordinator construction from getNineRouterConfig — no new state, prop, or settings row
+- [Phase 43]: explore_repo runs Claude Code headless on the remote: the preflight (command -v claude) is cached per SSH profile and refuses REMOTE_CLAUDE_UNAVAILABLE before any stream opens; the wall clock is enforced on the JS side because timeout(1) is absent on stock macOS
+- [Phase 43]: parseExploreResult tries the whole stdout payload before the last line — the CLI may pretty-print the JSON object, and a last-line-only parse would turn a good run into unparseable-output
+- [Phase 43]: explore_repo runs `claude -p --restricted` — verified against the real CLI that `--allowedTools` alone let a repo `.claude/settings.json` grant Bash, let `Read /etc/passwd` succeed, and let a repo `.mcp.json` execute a shell server on connect; `--restricted` closes all three and Read/Grep/Glob still work
+- [Phase 43]: the explore prompt goes after `--` and the model id refuses a leading `-` — `escapeShellArg` protects the shell, not the CLI's argv parser
+- [Phase 43]: explore_repo takes the turn's abort signal (through TeamToolContext) so a cancelled turn kills the remote process instead of leaving it reading for the 5-minute wall clock
+
+## Performance Metrics
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 37-runtime-reliability-concurrency P01 | 6 min | 3 tasks | 10 files |
+| Phase 37 P02 | 15 min | 3 tasks | 6 files |
+| Phase 37 P05 | 10 min | 3 tasks | 18 files |
+| Phase 37 P03 | 68 min | 3 tasks | 5 files |
+| Phase 37 P04 | 48 min | 3 tasks | 10 files |
+| Phase 37 P06 | 32 min | 3 tasks | 6 files |
+| Phase 37 P07 | 42 min | 2 tasks | 5 files |
+| Phase 37 P08 | 22 min | 2 tasks | 8 files |
+| Phase 37.1 P01 | 55 min | 3 tasks | 2 files |
+| Phase 37.1 P02 | ~12m | 3 tasks | 4 files |
+| Phase 37.1 P03 | ~6m | 3 tasks | 7 files |
+| Phase 37.1 P05 | 12 | 2 tasks | 4 files |
+| Phase 37.1 P06 | 35m | 3 tasks | 12 files |
+| Phase 38 P01 | 4min | 3 tasks | 9 files |
+| Phase 38 P02 | 2min | 2 tasks | 1 files |
+| Phase 38 P03 | 3min | 3 tasks | 4 files |
+| Phase 38 P10 | 5min | 2 tasks | 4 files |
+| Phase 38 P06 | 4min | 3 tasks | 10 files |
+| Phase 38 P11 | 2min | 2 tasks | 4 files |
+| Phase 38 P05 | 12min | 3 tasks | 10 files |
+| Phase 38 P12 | 4min | 2 tasks | 3 files |
+| Phase 38 P04 | 7min | 3 tasks | 7 files |
+| Phase 38 P07 | 22min | 3 tasks | 9 files |
+| Phase 38 P08 | 14min | 3 tasks | 8 files |
+| Phase 38 P09 | 26min | 3 tasks | 12 files |
+| Phase 41 P01 | 5m | 3 tasks | 9 files |
+| Phase 41 P02 | 20 min | 3 tasks | 2 files |
+| Phase 41 P03 | 10 min | 2 tasks | 2 files |
+| Phase 41 P04 | 12 | 4 tasks | 2 files |
+| Phase 41 P05 | 8 min | 3 tasks | 2 files |
+| Phase 41 P06 | ~20 min | 3 tasks | 2 files |
+| Phase 42 P01 | 4 min | 3 tasks | 3 files |
+| Phase 42 P02 | 5m | 2 tasks | 2 files |
+| Phase 42 P03 | 3 min | 3 tasks | 1 files |
+| Phase 43 P01 | 25m | 3 tasks | 4 files |
+| Phase 43 P02 | 35 min | 3 tasks | 4 files |
+| Phase 43 P03 | ~15 min | 2 tasks | 3 files |
+| Phase 43 P04 | 25 min | 3 tasks | 7 files |

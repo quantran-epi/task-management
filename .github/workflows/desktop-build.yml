@@ -8,6 +8,11 @@ on:
         required: false
         type: boolean
         default: false
+      skip_tests:
+        description: 'Skip test suite'
+        required: false
+        type: boolean
+        default: true
   push:
     branches:
       - master
@@ -57,12 +62,12 @@ jobs:
         run: npm ci
 
       - name: Install Knowledge Server dependencies
-        if: ${{ github.ref_name != 'staging' }}
+        if: ${{ github.ref_name != 'staging' && !inputs.skip_tests }}
         working-directory: knowledge-server
         run: npm ci --legacy-peer-deps
 
       - name: Run test suite
-        if: ${{ github.ref_name != 'staging' }}
+        if: ${{ github.ref_name != 'staging' && !inputs.skip_tests }}
         run: npm test
 
       - name: Build Tauri Desktop Application

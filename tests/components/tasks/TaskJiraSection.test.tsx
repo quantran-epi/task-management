@@ -8,7 +8,7 @@ import * as jiraApi from '../../../src/services/jira/jiraApi';
 describe('TaskJiraSection', () => {
   let testDb: TaskPlannerDatabase;
 
-  const baseTask: Task = {
+  const baseTask: Task = { crId: '11111111-1111-4111-8111-111111111111',
     id: '22222222-2222-4222-8222-222222222222',
     name: 'Integrate Jira Task Lifecycle',
     status: 'In Progress',

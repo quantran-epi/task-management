@@ -71,11 +71,11 @@ describe('renderSafeMarkdown rich markdown rendering', () => {
       );
     });
 
-    it('converts [[project:uuid-789|Core Banking]] into an interactive chip with project icon', () => {
-      const input = 'Belongs to [[project:uuid-789|Core Banking]]';
+    it('converts [[cr:uuid-789|Core Banking]] into an interactive chip with CR icon', () => {
+      const input = 'Belongs to [[cr:uuid-789|Core Banking]]';
       const html = renderSafeMarkdown(input);
       expect(html).toContain(
-        '<span class="wiki-link-chip" data-entity-type="project" data-entity-id="uuid-789" role="button" tabindex="0">📁 Core Banking</span>'
+        '<span class="wiki-link-chip" data-entity-type="cr" data-entity-id="uuid-789" role="button" tabindex="0">📋 Core Banking</span>'
       );
     });
 

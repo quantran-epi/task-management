@@ -1,33 +1,35 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../src/db';
 import {
+  buildScopeKey,
   createOrGetThread,
   saveMessage,
   getMessagesByThreadId,
   clearThreadContext,
   deleteThreadByScope,
 } from '../../src/db/repositories/chatRepo';
-import {
-  deleteProjectWithCascade,
-  deleteTaskWithAllocations,
-} from '../../src/db/repositories/cascadeRepo';
-import type { Task, Project, Milestone } from '../../src/types/models';
 
-describe('chatRepo and SCHEMA_V8 integration', () => {
+describe('chatRepo scope keys (CR/System axis)', () => {
   let db: TaskPlannerDatabase;
 
   beforeEach(async () => {
     db = new TaskPlannerDatabase(`test-chat-db-${Date.now()}-${Math.random()}`);
   });
 
-  it('initializes chatThreads and chatMessages stores in SCHEMA_V8', async () => {
+  it('builds cr: and system: scope keys', () => {
+    expect(buildScopeKey('cr', 'abc')).toBe('cr:abc');
+    expect(buildScopeKey('system', 'xyz')).toBe('system:xyz');
+    expect(buildScopeKey('task', 't1')).toBe('task:t1');
+    expect(buildScopeKey('global')).toBe('global');
+  });
+
+  it('initializes chatThreads and chatMessages stores', async () => {
     expect(db.chatThreads).toBeDefined();
     expect(db.chatMessages).toBeDefined();
 
-    const threadCount = await db.chatThreads.count();
-    const msgCount = await db.chatMessages.count();
-    expect(threadCount).toBe(0);
-    expect(msgCount).toBe(0);
+    expect(await db.chatThreads.count()).toBe(0);
+    expect(await db.chatMessages.count()).toBe(0);
   });
 
   it('createOrGetThread creates a single thread per scopeKey and reuses existing', async () => {
@@ -46,6 +48,27 @@ describe('chatRepo and SCHEMA_V8 integration', () => {
     expect(taskThread.scopeKey).toBe('task:task-123');
     expect(taskThread.entityId).toBe('task-123');
     expect(taskThread.title).toBe('Task Chat');
+
+    const crThread = await createOrGetThread(
+      { scopeType: 'cr', entityId: 'cr-1', title: 'CR Chat' },
+      db
+    );
+    expect(crThread.scopeKey).toBe('cr:cr-1');
+    expect(crThread.scopeType).toBe('cr');
+  });
+
+  // 37.1 UAT gap 4: React StrictMode double-invokes the first mount, so two callers race
+  // the read-then-add. `scopeKey` is a unique index, so the loser used to throw
+  // `ConstraintError` and the workspace stayed stuck on "Đang chuẩn bị nhóm...".
+  it('createOrGetThread resolves concurrent callers to one thread without throwing', async () => {
+    const results = await Promise.all([
+      createOrGetThread({ scopeType: 'team', entityId: 'team-race' }, db),
+      createOrGetThread({ scopeType: 'team', entityId: 'team-race' }, db),
+      createOrGetThread({ scopeType: 'team', entityId: 'team-race' }, db),
+    ]);
+
+    expect(new Set(results.map((row) => row.id)).size).toBe(1);
+    expect(await db.chatThreads.count()).toBe(1);
   });
 
   it('saveMessage appends user and assistant messages and updates thread updatedAt', async () => {
@@ -107,83 +130,44 @@ describe('chatRepo and SCHEMA_V8 integration', () => {
     expect(messages).toHaveLength(0);
   });
 
-  it('cascade delete cleans up chatThreads and chatMessages on entity deletion', async () => {
-    const now = new Date().toISOString();
-    const project: Project = {
-      id: 'proj-1',
-      name: 'Project 1',
-      status: 'Open',
-      createdAt: now,
-      updatedAt: now,
-    };
-    const milestone: Milestone = {
-      id: 'ms-1',
-      projectId: 'proj-1',
-      name: 'Milestone 1',
-      status: 'Open',
-      createdAt: now,
-      updatedAt: now,
-    };
-    const task1: Task = {
-      id: 'task-1',
-      projectId: 'proj-1',
-      milestoneId: 'ms-1',
-      name: 'Task 1',
-      status: 'Open',
-      priority: 'Medium',
-      progress: 0,
-      estimateMinutes: 60,
-      workType: 'code',
-      createdAt: now,
-      updatedAt: now,
-    };
-    const task2: Task = {
-      id: 'task-2',
-      projectId: 'proj-1',
-      milestoneId: 'ms-1',
-      name: 'Task 2',
-      status: 'Open',
-      priority: 'Low',
-      progress: 0,
-      estimateMinutes: 30,
-      workType: 'code',
-      createdAt: now,
-      updatedAt: now,
-    };
+  it('deleteThreadByScope purges a CR-scoped thread', async () => {
+    const thread = await createOrGetThread({ scopeType: 'cr', entityId: 'cr-9' }, db);
+    await saveMessage({ threadId: thread.id, role: 'user', content: 'CR msg' }, db);
 
-    await db.projects.add(project);
-    await db.milestones.add(milestone);
-    await db.tasks.bulkAdd([task1, task2]);
+    await deleteThreadByScope('cr:cr-9', db);
 
-    // Create threads and messages for each entity
-    const tThread1 = await createOrGetThread({ scopeType: 'task', entityId: 'task-1' }, db);
-    await saveMessage({ threadId: tThread1.id, role: 'user', content: 'Task 1 msg' }, db);
+    expect(await db.chatThreads.where('scopeKey').equals('cr:cr-9').first()).toBeUndefined();
+    expect(await db.chatMessages.where('threadId').equals(thread.id).count()).toBe(0);
+  });
 
-    const tThread2 = await createOrGetThread({ scopeType: 'task', entityId: 'task-2' }, db);
-    await saveMessage({ threadId: tThread2.id, role: 'user', content: 'Task 2 msg' }, db);
+  it('persists AI Office attribution into the stored row and omits the keys when absent', async () => {
+    const thread = await createOrGetThread({ scopeType: 'cr', entityId: 'cr-attrib' }, db);
+    await saveMessage(
+      {
+        threadId: thread.id,
+        role: 'assistant',
+        content: 'Báo cáo của nhân viên',
+        agentId: 'agent-1',
+        agentName: 'Lan',
+        agentKind: 'employee',
+        messageKind: 'report',
+      },
+      db
+    );
+    await saveMessage({ threadId: thread.id, role: 'assistant', content: 'Không gán' }, db);
 
-    const msThread = await createOrGetThread({ scopeType: 'milestone', entityId: 'ms-1' }, db);
-    await saveMessage({ threadId: msThread.id, role: 'user', content: 'Milestone msg' }, db);
-
-    const projThread = await createOrGetThread({ scopeType: 'project', entityId: 'proj-1' }, db);
-    await saveMessage({ threadId: projThread.id, role: 'user', content: 'Project msg' }, db);
-
-    // 1. Delete task-1 with allocations
-    await deleteTaskWithAllocations('task-1', db);
-    expect(await db.chatThreads.where('scopeKey').equals('task:task-1').first()).toBeUndefined();
-    expect(await db.chatMessages.where('threadId').equals(tThread1.id).count()).toBe(0);
-
-    // task-2 thread should remain
-    expect(await db.chatThreads.where('scopeKey').equals('task:task-2').first()).toBeDefined();
-
-    // 2. Delete project with cascade
-    await deleteProjectWithCascade('proj-1', 'cascade', db);
-    expect(await db.chatThreads.where('scopeKey').equals('project:proj-1').first()).toBeUndefined();
-    expect(await db.chatThreads.where('scopeKey').equals('milestone:ms-1').first()).toBeUndefined();
-    expect(await db.chatThreads.where('scopeKey').equals('task:task-2').first()).toBeUndefined();
-
-    expect(await db.chatMessages.where('threadId').equals(projThread.id).count()).toBe(0);
-    expect(await db.chatMessages.where('threadId').equals(msThread.id).count()).toBe(0);
-    expect(await db.chatMessages.where('threadId').equals(tThread2.id).count()).toBe(0);
+    const rows = await getMessagesByThreadId(thread.id, db);
+    // Both rows can share a millisecond; select by content, not by index.
+    const attributed = rows.find((row) => row.content === 'Báo cáo của nhân viên')!;
+    const plain = rows.find((row) => row.content === 'Không gán')!;
+    expect(attributed).toMatchObject({
+      agentId: 'agent-1',
+      agentName: 'Lan',
+      agentKind: 'employee',
+      messageKind: 'report',
+    });
+    for (const key of ['agentId', 'agentName', 'agentKind', 'messageKind']) {
+      expect(Object.hasOwn(plain, key)).toBe(false);
+    }
   });
 });

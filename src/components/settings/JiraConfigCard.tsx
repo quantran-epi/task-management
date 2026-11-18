@@ -452,7 +452,7 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
         <Row gutter={16}>
           <Col xs={24} sm={12}>
             <Form.Item
-              label="Mã dự án mặc định (Default Project Key)"
+              label="Mã dự án Jira mặc định (Default Jira Key)"
               extra="Điền sẵn khi tạo Issue mới từ task (ví dụ: SHB)"
             >
               <Input

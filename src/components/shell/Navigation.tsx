@@ -3,13 +3,14 @@ import { Menu, Badge, type MenuProps } from 'antd';
 import {
   DashboardOutlined,
   CheckSquareOutlined,
-  ProjectOutlined,
   CalendarOutlined,
   BarChartOutlined,
   FileTextOutlined,
   SettingOutlined,
   RobotOutlined,
   SendOutlined,
+  CodeOutlined,
+  ApartmentOutlined,
 } from '@ant-design/icons';
 import type { AppRoute } from '../../types/navigation';
 import { useGhostDevSessions } from '../../hooks/useGhostDevSessions';
@@ -44,11 +45,6 @@ export const Navigation: React.FC<NavigationProps> = ({ currentRoute, onNavigate
       label: 'Tác vụ',
     },
     {
-      key: 'projects',
-      icon: <ProjectOutlined style={{ fontSize: 16 }} />,
-      label: 'Dự án',
-    },
-    {
       key: 'planner',
       icon: <CalendarOutlined style={{ fontSize: 16 }} />,
       label: 'Lập kế hoạch',
@@ -80,6 +76,11 @@ export const Navigation: React.FC<NavigationProps> = ({ currentRoute, onNavigate
       label: 'Ghi chú',
     },
     {
+      key: 'mermaid',
+      icon: <ApartmentOutlined style={{ fontSize: 16 }} />,
+      label: 'Diagram Studio',
+    },
+    {
       key: 'telegram',
       icon: <SendOutlined style={{ fontSize: 16 }} />,
       label: (
@@ -100,13 +101,27 @@ export const Navigation: React.FC<NavigationProps> = ({ currentRoute, onNavigate
       icon: <SettingOutlined style={{ fontSize: 16 }} />,
       label: 'Cài đặt',
     },
+    {
+      key: '__switch_intellij__',
+      icon: <CodeOutlined style={{ fontSize: 16, color: '#3871e1' }} />,
+      label: <span style={{ color: '#3871e1', fontWeight: 600 }}>Giao diện IntelliJ</span>,
+      onClick: () => {
+        try {
+          localStorage.setItem('taskmate_ui_shell', 'intellij');
+        } catch {}
+        window.location.reload();
+      },
+    },
   ];
 
   return (
     <Menu
       mode="inline"
       selectedKeys={[currentRoute]}
-      onClick={({ key }) => onNavigate(key as AppRoute)}
+      onClick={({ key }) => {
+        if (key === '__switch_intellij__') return;
+        onNavigate(key as AppRoute);
+      }}
       items={items}
       style={{
         borderRight: 0,

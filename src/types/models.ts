@@ -1,12 +1,9 @@
 import type { ChatMessageGrounding } from '../services/ai/groundedAnswerSchemas';
 import type {
-  SdlcArtifactMetadata,
-  SdlcDocumentSetMetadata,
-  WizardSnapshot,
-} from '../services/ai/wizardSchemas';
+  AiTeamAssignmentRunStatus,
+  AiTeamAssignmentStopReason,
+} from './aiOffice';
 
-export type ProjectStatus = 'Open' | 'Pending' | 'In Progress' | 'Done' | 'Cancelled';
-export type MilestoneStatus = 'Open' | 'Pending' | 'In Progress' | 'Done' | 'Cancelled';
 export type TaskStatus = 'Open' | 'Pending' | 'In Progress' | 'Resolved' | 'In Review' | 'Done' | 'Cancelled';
 export type TaskPriority = 'Low' | 'Medium' | 'High' | 'Urgent';
 
@@ -38,35 +35,54 @@ export interface ReminderItem {
   note?: string | undefined;
 }
 
-export interface Project {
+// Phase 31.1: Enterprise Systems Catalog & Change Request Models (ENT-SYS-01, ENT-CR-01)
+// Phase 261116-e64: the value set is user-extensible at runtime — the single source of
+// truth for labels/colors is the `system_type_options` settings row, read through
+// `src/services/system/systemTypeSettings.ts`. `LOGICAL_GROUP` remains the parent marker.
+export type SystemType = string;
+
+/**
+ * D-24 invariant: `sshConfigId` / `remoteRepoPath` / `defaultBaseBranch` are only
+ * meaningful when `type !== 'LOGICAL_GROUP'`. A parent system is a grouping node
+ * with no repository binding of its own.
+ */
+export interface System {
   id: string; // RFC 4122 v4 UUID
   name: string;
+  code: string; // Unique system identifier code (e.g. CORE_BANKING, CREDIT_SVC)
+  parentId: string | null; // null for a subsystem with no parent; parent rows are always roots
+  type: SystemType;
+  description?: string;
+  sshConfigId?: string; // Foreign key referencing SshConfigRecord
+  remoteRepoPath?: string; // Remote filesystem git repository path
+  defaultBaseBranch?: string; // Default target branch (e.g. main, develop)
+  createdAt: string; // ISO string
+  updatedAt: string; // ISO string
+}
+
+export type CrType = 'NEW_FEATURE' | 'ENHANCEMENT' | 'BUGFIX';
+export type CrStatus = 'Open' | 'Pending' | 'In Progress' | 'Done' | 'Cancelled';
+
+/** A single system targeted by a change request (D-25). */
+export interface CrTarget {
+  systemId: string; // Reference to System.id
+  featureBranch?: string; // Per-target feature branch; defaults to feature/{cr.code}
+}
+
+export interface ChangeRequest {
+  id: string; // RFC 4122 v4 UUID (matches previous Project.id for migrated records)
+  name: string;
+  code: string; // Required human code (e.g. CR-2026-001)
   description?: string;
   deadline?: string; // YYYY-MM-DD
-  notes?: string;
-  status: ProjectStatus;
-  jiraEpicKey?: string; // Phase 13.1 D-05: Jira Epic key mapping
+  status: CrStatus;
+  type: CrType;
+  targets: CrTarget[]; // Multi-system targeting
+  jiraEpicKey?: string;
   opsOwners?: string[];
   businessAnalysts?: string[];
   documentLinks?: string[];
-  reminderDate?: string; // YYYY-MM-DD
-  reminderNote?: string;
-  reminders?: ReminderItem[];
-  createdAt: string; // ISO string metadata
-  updatedAt: string; // ISO string metadata
-}
-
-export interface Milestone {
-  id: string; // RFC 4122 v4 UUID
-  projectId: string; // Reference to Project.id
-  name: string;
-  description?: string;
-  deadline?: string; // YYYY-MM-DD
-  notes?: string;
-  status: MilestoneStatus;
-  opsOwners?: string[];
-  businessAnalysts?: string[];
-  reminderDate?: string; // YYYY-MM-DD
+  reminderDate?: string;
   reminderNote?: string;
   reminders?: ReminderItem[];
   createdAt: string;
@@ -81,8 +97,8 @@ export interface TaskChecklistItem {
 
 export interface Task {
   id: string; // RFC 4122 v4 UUID
-  projectId?: string; // Optional reference to Project.id
-  milestoneId?: string; // Optional reference to Milestone.id
+  crId: string; // Required reference to ChangeRequest.id
+  systemId?: string; // Optional reference to System.id; must be one of the CR's targets
   name: string;
   description?: string;
   deadline?: string; // YYYY-MM-DD
@@ -173,8 +189,8 @@ export interface ActiveTimer {
   segments?: TimerSegment[] | undefined; // Phase 13.1 D-01: discrete running segments
 }
 
-export type NoteEntityType = 'task' | 'project' | 'milestone';
-export type NoteType = 'quick_note' | 'document' | 'folder';
+export type NoteEntityType = 'task' | 'cr' | 'system';
+export type NoteType = 'quick_note' | 'document' | 'folder' | 'diagram';
 
 export interface Note {
   id: string; // RFC 4122 v4 UUID
@@ -183,11 +199,10 @@ export interface Note {
   tags?: string[] | undefined; // Taxonomy tags
   slug?: string | undefined; // URL / human readable slug
   entityType?: NoteEntityType | undefined; // Optional reference type
-  entityId?: string | undefined; // Optional reference to Task/Project/Milestone id
+  entityId?: string | undefined; // Optional reference to Task/CR/System id
   title?: string | undefined;
   body: string; // Markdown text content
   isPinned: boolean;
-  sdlcArtifact?: SdlcArtifactMetadata | undefined;
   deletedAt?: string | undefined; // D-17: Soft delete timestamp
   createdAt: string; // ISO string metadata
   updatedAt: string; // ISO string metadata
@@ -205,25 +220,26 @@ export interface NoteAttachment {
   filePath?: string | undefined; // Local disk file path
 }
 
-export type ChatScopeType = 'global' | 'task' | 'project' | 'milestone' | 'document';
+export type ChatScopeType = 'global' | 'task' | 'cr' | 'system' | 'document' | 'team';
 
 export interface ChatThread {
   id: string; // RFC 4122 v4 UUID
-  scopeKey: string; // Unique index: 'global' | 'task:<taskId>' | 'project:<projectId>' | 'milestone:<milestoneId>'
+  scopeKey: string; // Unique index: 'global' | 'task:<taskId>' | 'cr:<crId>' | 'system:<systemId>' | 'document:<docId>'
   scopeType: ChatScopeType;
-  entityId?: string | undefined; // Target task/project/milestone id (undefined if global)
+  entityId?: string | undefined; // Optional reference to Task/CR/System id| undefined; // Target task/CR/system id (undefined if global)
   title?: string | undefined;
   createdAt: string; // ISO string metadata
   updatedAt: string; // ISO string metadata
 }
 
-export type ChatTabType = 'chat' | 'sdlc';
+export type ChatTabType = 'chat';
 export type ChatTabStatus = 'idle' | 'processing' | 'interrupted' | 'error' | 'stale' | 'complete';
 
 /** Per-tab settings only. Endpoint, API keys, tokens, and passphrases stay global/session-only. */
 export interface ChatTabConfig {
   model?: string | undefined;
   analysisMode?: boolean | undefined;
+  autoApproveMutations?: boolean | undefined;
   mcpEnabled?: boolean | undefined;
   knowledgeEnabled?: boolean | undefined;
   promptContextOptions?: Record<string, boolean | string | number> | undefined;
@@ -248,7 +264,6 @@ export interface ChatTab {
   status?: ChatTabStatus | undefined;
   checkpoint?: ChatTabCheckpoint | undefined;
   config?: ChatTabConfig | undefined;
-  workflowState?: Record<string, unknown> | undefined;
   createdAt: string;
   updatedAt: string;
 }
@@ -259,6 +274,9 @@ export interface ChatTokenUsage {
   promptTokens?: number | undefined;
   completionTokens?: number | undefined;
   totalTokens?: number | undefined;
+  /** Phase 38 D-09: charged as normal input tokens when the provider reports them; absent means 0. */
+  cacheReadTokens?: number | undefined;
+  cacheCreationTokens?: number | undefined;
 }
 
 export interface ChatGeneratedFile {
@@ -281,7 +299,31 @@ export interface ChatMessage {
   tokenUsage?: ChatTokenUsage | undefined; // Model token usage metrics
   generatedFiles?: ChatGeneratedFile[] | undefined; // AI-generated downloadable files
   grounding?: ChatMessageGrounding | undefined; // Structured grounding (Plan 19-10 D-46)
-  wizard?: WizardSnapshot | undefined;
+  // Phase 34 D-31: AI Office attribution. All optional so existing rows stay valid.
+  agentId?: string | undefined;
+  agentName?: string | undefined;
+  agentKind?: 'lead' | 'employee' | undefined;
+  messageKind?: 'instruction' | 'report' | 'synthesis' | 'plan' | undefined;
+  /**
+   * CR-06: an instruction is displayed as the lead's message but belongs to the
+   * employee it was assigned to. This carries the assignee so history lookups can
+   * find it without misattributing the row.
+   */
+  targetAgentId?: string | undefined;
+  // Phase 37 D-22: ledger links. The truth of an attempt's status lives on the
+  // `aiTeamAssignments` row; these fields let the transcript render and pair rows
+  // without a join. Written by the coordinator's terminal writer, not by chat.
+  batchId?: string | undefined;
+  assignmentId?: string | undefined;
+  attemptNo?: number | undefined;
+  runStatus?: AiTeamAssignmentRunStatus | undefined;
+  stopReason?: AiTeamAssignmentStopReason | undefined;
+  incomplete?: boolean | undefined;
+  /** 37.1 R14: the message this one answers, so the UI can quote it. */
+  replyToId?: string | undefined;
+  /** 37-07: the synthesis row that replaced this one (write path is `supersedeTeamMessage`). */
+  supersededByMessageId?: string | undefined;
+  supersededAt?: string | undefined;
 }
 
 // Phase 16: Knowledge Server Foundation, DLP Checks & AST Ingestion models (D-01, D-08, D-18, D-27, D-29)
@@ -331,7 +373,6 @@ export interface DocumentSet {
   isBase?: boolean | undefined;
   presentationRevision?: number | undefined;
   preset?: DocumentSetPreset | undefined;
-  sdlc?: SdlcDocumentSetMetadata | undefined;
 }
 
 export interface PublishedDocumentMetadata {
@@ -379,13 +420,13 @@ export interface DlpAuditRecord {
   userAction: 'confirmed' | 'cancelled' | 'auto_passed';
 }
 
-export type TaskMateEntityType = 'task' | 'project' | 'milestone';
+export type TaskMateEntityType = 'task' | 'cr' | 'system';
 
 export interface KnowledgeLink {
   id: string; // RFC 4122 v4 UUID
   linkKey: string; // Unique composite key `${taskMateEntityType}:${taskMateEntityId}:${setId}:${urn || docId}`
   taskMateEntityType: TaskMateEntityType;
-  taskMateEntityId: string; // UUID of task, project, or milestone
+  taskMateEntityId: string; // UUID of task, CR, or system
   setId: string; // UUID of DocumentSet
   urn?: string | undefined; // Optional canonical knowledge graph URN
   docId?: string | undefined; // Optional stable Note/Document UUID

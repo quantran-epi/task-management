@@ -100,7 +100,7 @@ describe('DailyReviewModal', () => {
     const allocId = 'b0000000-0000-4000-8000-000000000001';
 
     // Seed task
-    const task: Task = {
+    const task: Task = { crId: '11111111-1111-4111-8111-111111111111',
       id: taskId,
       name: 'Viết báo cáo tuần',
       status: 'In Progress',

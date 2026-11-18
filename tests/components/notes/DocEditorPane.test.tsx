@@ -4,7 +4,7 @@ import { TaskPlannerDatabase } from '../../../src/db';
 import { DocEditorPane } from '../../../src/components/notes/DocEditorPane';
 import { APP_NAME } from '../../../src/constants/app';
 import * as aiChatContextModule from '../../../src/context/AIChatContext';
-import type { Note, Task, Project } from '../../../src/types/models';
+import type { Note, Task, ChangeRequest } from '../../../src/types/models';
 
 describe('DocEditorPane', () => {
   let db: TaskPlannerDatabase;
@@ -74,12 +74,12 @@ describe('DocEditorPane', () => {
     expect(lastCall![1].body).toBe(newBodyContent);
   });
 
-  it('triggers autocomplete popup when typing [[ and displays matching tasks, projects, docs', async () => {
+  it('triggers autocomplete popup when typing [[ and displays matching tasks, CRs, docs', async () => {
     // Populate DB with sample items
     const sampleTask: Task = {
       id: 'task-9999-9999',
+      crId: 'cr-1111-1111',
       name: 'Triển khai tính năng Wiki',
-      projectId: 'proj-1',
       status: 'In Progress',
       priority: 'High',
       progress: 50,
@@ -87,10 +87,13 @@ describe('DocEditorPane', () => {
       createdAt: '2026-10-04T00:00:00.000Z',
       updatedAt: '2026-10-04T00:00:00.000Z',
     };
-    const sampleProject: Project = {
-      id: 'proj-8888-8888',
+    const sampleCr: ChangeRequest = {
+      id: 'cr-8888-8888',
+      code: 'CR-ALPHA-01',
       name: `Dự án ${APP_NAME} Alpha`,
       status: 'In Progress',
+      type: 'ENHANCEMENT',
+      targets: [],
       createdAt: '2026-10-04T00:00:00.000Z',
       updatedAt: '2026-10-04T00:00:00.000Z',
     };
@@ -104,7 +107,7 @@ describe('DocEditorPane', () => {
     };
 
     await db.tasks.add(sampleTask);
-    await db.projects.add(sampleProject);
+    await db.changeRequests.add(sampleCr);
     await db.notes.add(otherDoc);
 
     render(<DocEditorPane doc={mockDoc} onUpdateDoc={vi.fn()} db={db} />);
@@ -117,7 +120,8 @@ describe('DocEditorPane', () => {
     // Autocomplete popup should appear
     expect(await screen.findByRole('listbox')).toBeInTheDocument();
     expect(screen.getByText('Triển khai tính năng Wiki')).toBeInTheDocument();
-    expect(screen.getByText(`Dự án ${APP_NAME} Alpha`)).toBeInTheDocument();
+    // CR candidates are labelled by their code.
+    expect(screen.getByText('CR-ALPHA-01')).toBeInTheDocument();
     expect(screen.getByText('Tài liệu kiến trúc hệ thống')).toBeInTheDocument();
   });
 
@@ -125,6 +129,7 @@ describe('DocEditorPane', () => {
     const onUpdateDoc = vi.fn();
     const sampleTask: Task = {
       id: 'task-7777-7777',
+      crId: 'cr-7777-7777',
       name: 'Viết tài liệu API',
       status: 'Open',
       priority: 'Medium',
@@ -173,6 +178,7 @@ describe('DocEditorPane', () => {
   it('supports keyboard navigation (ArrowDown, Enter, Escape) in autocomplete popup', async () => {
     const taskA: Task = {
       id: 'task-a',
+      crId: 'cr-a',
       name: 'Task Alpha',
       status: 'Open',
       priority: 'Low',
@@ -183,6 +189,7 @@ describe('DocEditorPane', () => {
     };
     const taskB: Task = {
       id: 'task-b',
+      crId: 'cr-b',
       name: 'Task Beta',
       status: 'Open',
       priority: 'Low',

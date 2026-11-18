@@ -11,26 +11,30 @@ describe('ScopePickerModal', () => {
     db = new TaskPlannerDatabase('test-scope-picker-' + Math.random());
     await db.open();
 
-    await db.projects.add({
-      id: 'proj-1',
-      name: 'Dự án Website',
-      status: 'In Progress',
+    await db.systems.add({
+      id: 'sys-1',
+      code: 'WEB_UI',
+      name: 'Hệ thống Website',
+      type: 'UI',
+      parentId: null,
       createdAt: '2026-10-01',
       updatedAt: '2026-10-01',
     });
 
-    await db.milestones.add({
-      id: 'ms-1',
-      projectId: 'proj-1',
-      name: 'Mốc Launch MVP',
+    await db.changeRequests.add({
+      id: 'cr-1',
+      code: 'CR-2026-001',
+      name: 'CR Website',
+      type: 'NEW_FEATURE',
       status: 'In Progress',
+      targets: [{ systemId: 'sys-1', featureBranch: 'feature/CR-2026-001' }],
       createdAt: '2026-10-01',
       updatedAt: '2026-10-01',
     });
 
     await db.tasks.add({
       id: 'task-1',
-      projectId: 'proj-1',
+      crId: 'cr-1',
       name: 'Thiết kế Navbar',
       status: 'Open',
       priority: 'High',
@@ -41,7 +45,7 @@ describe('ScopePickerModal', () => {
     });
   });
 
-  it('renders modal and lists global option, projects, milestones, tasks', async () => {
+  it('renders modal and lists global option, CRs, subsystems, tasks', async () => {
     const onSelect = vi.fn();
     const onClose = vi.fn();
 
@@ -57,8 +61,8 @@ describe('ScopePickerModal', () => {
 
     expect(screen.getByText('Chọn phạm vi ngữ cảnh AI')).toBeInTheDocument();
     expect(screen.getByText('Toàn cục (Không gắn)')).toBeInTheDocument();
-    expect(await screen.findByText('Dự án Website')).toBeInTheDocument();
-    expect(await screen.findByText('Mốc Launch MVP')).toBeInTheDocument();
+    expect(await screen.findByText('CR Website')).toBeInTheDocument();
+    expect(await screen.findByText('Hệ thống Website')).toBeInTheDocument();
     expect(await screen.findByText('Thiết kế Navbar')).toBeInTheDocument();
   });
 
@@ -125,6 +129,6 @@ describe('ScopePickerModal', () => {
     fireEvent.change(searchInput, { target: { value: 'Navbar' } });
 
     expect(await screen.findByText('Thiết kế Navbar')).toBeInTheDocument();
-    expect(screen.queryByText('Mốc Launch MVP')).not.toBeInTheDocument();
+    expect(screen.queryByText('CR Website')).not.toBeInTheDocument();
   });
 });

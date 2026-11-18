@@ -9,6 +9,7 @@ import {
   ExclamationCircleOutlined,
   BellOutlined,
   RobotOutlined,
+  CloudServerOutlined,
 } from '@ant-design/icons';
 import { WeeklyCapacityForm } from '../components/settings/WeeklyCapacityForm';
 import { OverridesTable } from '../components/settings/OverridesTable';
@@ -20,13 +21,19 @@ import { GitHubConfigCard } from '../components/settings/GitHubConfigCard';
 import { GitHubSyncCard } from '../components/settings/GitHubSyncCard';
 import { JiraConfigCard } from '../components/settings/JiraConfigCard';
 import { NineRouterConfigCard } from '../components/settings/NineRouterConfigCard';
+import { BudgetWarnThresholdCard } from '../components/settings/BudgetWarnThresholdCard';
 import { KnowledgeServerConfigCard } from '../components/settings/KnowledgeServerConfigCard';
 import { GhostDevConfigCard } from '../components/settings/GhostDevConfigCard';
+import { GlobalConventionsCard } from '../components/settings/GlobalConventionsCard';
 import { McpConfigCard } from '../components/settings/McpConfigCard';
 import { PwaStatusCard } from '../components/settings/PwaStatusCard';
 import { StoragePersistenceCard } from '../components/settings/StoragePersistenceCard';
 import { LocalSqlitePersistenceCard } from '../components/settings/LocalSqlitePersistenceCard';
 import { NotificationSettingsCard } from '../components/settings/NotificationSettingsCard';
+import { SshConfigCard } from '../components/settings/SshConfigCard';
+import { SystemTypeOptionsCard } from '../components/settings/SystemTypeOptionsCard';
+import { OracleAiToolConfigCard } from '../components/settings/OracleAiToolConfigCard';
+import { SshFsAiToolConfigCard } from '../components/settings/SshFsAiToolConfigCard';
 import { PostRestoreBanner } from '../components/settings/PostRestoreBanner';
 import { ResetDbModal } from '../components/common/ResetDbModal';
 import { PageHeader } from '../components/common/PageHeader';
@@ -42,7 +49,7 @@ const { Paragraph } = Typography;
 export interface SettingsViewProps {
   db?: TaskPlannerDatabase;
   onNavigate?: (route: AppRoute) => void;
-  defaultActiveTab?: 'capacity' | 'data' | 'jira' | 'notifications' | 'ai' | undefined;
+  defaultActiveTab?: 'capacity' | 'data' | 'jira' | 'notifications' | 'ai' | 'ssh' | undefined;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -50,7 +57,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onNavigate,
   defaultActiveTab = 'capacity',
 }) => {
-  const [activeTab, setActiveTab] = useState<'capacity' | 'data' | 'jira' | 'notifications' | 'ai'>(defaultActiveTab);
+  const [activeTab, setActiveTab] = useState<'capacity' | 'data' | 'jira' | 'notifications' | 'ai' | 'ssh'>(defaultActiveTab);
   const [resetModalOpen, setResetModalOpen] = useState(false);
 
   React.useEffect(() => {
@@ -159,11 +166,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             />
           )}
 
+          <Typography.Text strong>Sao lưu & khôi phục</Typography.Text>
           <BackupExportCard db={db} />
           <BackupImportCard db={db} onRestoreSuccess={handleRestoreSuccess} />
           <SnapshotRollbackCard db={db} />
+          <Typography.Text strong>Đồng bộ GitHub</Typography.Text>
           <GitHubConfigCard db={db} />
           <GitHubSyncCard db={db} onPullSuccess={handleRemotePullSuccess} />
+          <Typography.Text strong>Lưu trữ & môi trường</Typography.Text>
           <LocalSqlitePersistenceCard db={db} />
           <PwaStatusCard />
           <StoragePersistenceCard />
@@ -225,10 +235,34 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       ),
       children: (
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Typography.Text strong>Quy ước & công cụ AI</Typography.Text>
+          <GlobalConventionsCard db={db} />
           <McpConfigCard db={db} />
+          <OracleAiToolConfigCard db={db} />
+          <SshFsAiToolConfigCard db={db} />
+          <Typography.Text strong>Trợ lý & Ghost Dev</Typography.Text>
           <GhostDevConfigCard />
           <NineRouterConfigCard db={db} />
+          <Typography.Text strong>Ngân sách & Knowledge</Typography.Text>
+          <BudgetWarnThresholdCard db={db} />
           <KnowledgeServerConfigCard />
+        </Space>
+      ),
+    },
+    {
+      key: 'ssh',
+      label: (
+        <span>
+          <CloudServerOutlined style={{ marginRight: 8 }} />
+          Remote SSH
+        </span>
+      ),
+      children: (
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Typography.Text strong>Kết nối SSH</Typography.Text>
+          <SshConfigCard db={db} />
+          <Typography.Text strong>Phân loại hệ thống</Typography.Text>
+          <SystemTypeOptionsCard db={db} />
         </Space>
       ),
     },
@@ -254,7 +288,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       <Tabs
         activeKey={activeTab}
-        onChange={(k) => setActiveTab(k as 'capacity' | 'data' | 'jira' | 'notifications' | 'ai')}
+        onChange={(k) => setActiveTab(k as 'capacity' | 'data' | 'jira' | 'notifications' | 'ai' | 'ssh')}
         items={items}
       />
 

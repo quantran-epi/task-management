@@ -76,10 +76,10 @@ export const NotificationItemRow: React.FC<NotificationItemRowProps> = ({
     if (item.entityType === 'capacity') {
       return <CalendarOutlined style={{ color: '#fa8c16', fontSize: 16 }} />;
     }
-    if (item.entityType === 'project') {
+    if (item.entityType === 'cr') {
       return <FolderOutlined style={{ color: '#1677ff', fontSize: 16 }} />;
     }
-    if (item.entityType === 'milestone') {
+    if (item.entityType === 'system') {
       return <FlagOutlined style={{ color: '#722ed1', fontSize: 16 }} />;
     }
     return null;

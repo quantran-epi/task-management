@@ -4,7 +4,7 @@ export interface SkillItem {
   name: string;
   description: string;
   argumentHint?: string | null;
-  source: 'builtin' | 'project' | 'user';
+  source: 'builtin' | 'workspace' | 'user';
 }
 
 export const BUILTIN_SKILLS: SkillItem[] = [

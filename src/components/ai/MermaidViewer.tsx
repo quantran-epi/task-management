@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useId, useCallback } from 'react';
-import { Button, Tooltip, Modal, Spin, message, theme, Space } from 'antd';
+import { Button, Tooltip, Modal, Spin, message, theme, Space, Alert } from 'antd';
 import {
   DownloadOutlined,
   FullscreenOutlined,
@@ -12,11 +12,19 @@ import {
   UndoOutlined,
   ColumnWidthOutlined,
   DragOutlined,
+  RobotOutlined,
+  ExportOutlined,
+  PictureOutlined,
 } from '@ant-design/icons';
+import { fixMermaidWithAi } from '../../services/ai/mermaidFixerService';
+import { downloadMermaidSvg, downloadMermaidPng } from '../../utils/mermaidExport';
 
 export interface MermaidViewerProps {
   code: string;
   className?: string;
+  onCodeChange?: (newCode: string) => void;
+  showAiFix?: boolean;
+  showOpenInStudio?: boolean;
 }
 
 const MIN_SCALE = 0.2;
@@ -54,7 +62,13 @@ function isDarkColor(cssColor: string): boolean {
   return (0.299 * r + 0.587 * g + 0.114 * b) < 128;
 }
 
-export const MermaidViewer: React.FC<MermaidViewerProps> = ({ code, className }) => {
+export const MermaidViewer: React.FC<MermaidViewerProps> = ({
+  code,
+  className,
+  onCodeChange,
+  showAiFix = true,
+  showOpenInStudio = true,
+}) => {
   const { token } = theme.useToken();
   const palette: Palette = isDarkColor(String(token.colorBgContainer)) ? 'dark' : 'light';
   const rawId = useId();
@@ -64,12 +78,18 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({ code, className })
   const modalViewportRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
 
+  const [currentCode, setCurrentCode] = useState<string>(code);
   const [svgHtml, setSvgHtml] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [fixingWithAi, setFixingWithAi] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
   const [showModal, setShowModal] = useState<boolean>(false);
   const [viewSource, setViewSource] = useState<boolean>(false);
+
+  useEffect(() => {
+    setCurrentCode(code);
+  }, [code]);
 
   // Zoom & pan state for the fullscreen modal
   const [scale, setScale] = useState<number>(1);
@@ -165,7 +185,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({ code, className })
     setLoading(true);
     setError(null);
 
-    const cleanCode = code.trim();
+    const cleanCode = currentCode.trim();
     if (!cleanCode) {
       setLoading(false);
       return;
@@ -216,7 +236,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({ code, className })
     return () => {
       cancelled = true;
     };
-  }, [code, diagramId, palette]);
+  }, [currentCode, diagramId, palette]);
 
   // Measure natural diagram size for the modal canvas (fit / scroll sizing).
   useEffect(() => {
@@ -234,7 +254,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({ code, className })
 
   const handleCopyCode = async () => {
     try {
-      await navigator.clipboard.writeText(code);
+      await navigator.clipboard.writeText(currentCode);
       setCopied(true);
       message.success('Đã sao chép cú pháp Mermaid');
       setTimeout(() => setCopied(false), 2000);
@@ -244,17 +264,41 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({ code, className })
   };
 
   const handleDownloadSvg = () => {
-    if (!svgHtml) return;
-    const blob = new Blob([svgHtml], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `diagram-${Date.now()}.svg`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    message.success('Đã tải xuống sơ đồ SVG');
+    const svgEl = containerRef.current?.querySelector('svg');
+    downloadMermaidSvg(svgEl, { isDark: palette === 'dark', filename: 'diagram' });
+  };
+
+  const handleDownloadPng = () => {
+    const svgEl = containerRef.current?.querySelector('svg');
+    downloadMermaidPng(svgEl, { isDark: palette === 'dark', filename: 'diagram' });
+  };
+
+  const handleFixWithAi = async () => {
+    setFixingWithAi(true);
+    const hideLoading = message.loading('AI đang kiểm tra và sửa cú pháp Mermaid...', 0);
+    try {
+      const res = await fixMermaidWithAi({
+        code: currentCode,
+        errorMessage: error || undefined,
+      });
+      setCurrentCode(res.fixedCode);
+      onCodeChange?.(res.fixedCode);
+      message.success('AI đã sửa cú pháp thành công!');
+    } catch (err: any) {
+      message.error(err?.message || 'Không thể sửa cú pháp bằng AI');
+    } finally {
+      hideLoading();
+      setFixingWithAi(false);
+    }
+  };
+
+  const handleOpenInStudio = () => {
+    try {
+      sessionStorage.setItem('tm_mermaid_studio_code', currentCode);
+    } catch {}
+    window.dispatchEvent(new CustomEvent('taskmate:open-mermaid-studio', { detail: { code: currentCode } }));
+    window.location.hash = '#mermaid';
+    message.success('Đã mở sơ đồ trong Diagram Studio');
   };
 
   const canvasStyle: React.CSSProperties = {
@@ -316,6 +360,18 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({ code, className })
               style={{ fontSize: 12 }}
             />
           </Tooltip>
+          {showOpenInStudio && (
+            <Tooltip title="Mở trong Mermaid Studio">
+              <Button
+                type="text"
+                size="small"
+                aria-label="open-in-studio"
+                icon={<ExportOutlined />}
+                onClick={handleOpenInStudio}
+                style={{ fontSize: 12 }}
+              />
+            </Tooltip>
+          )}
           {svgHtml && !error && (
             <>
               <Tooltip title="Tải về file SVG">
@@ -325,6 +381,16 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({ code, className })
                   aria-label="download-svg"
                   icon={<DownloadOutlined />}
                   onClick={handleDownloadSvg}
+                  style={{ fontSize: 12 }}
+                />
+              </Tooltip>
+              <Tooltip title="Tải về file PNG">
+                <Button
+                  type="text"
+                  size="small"
+                  aria-label="download-png"
+                  icon={<PictureOutlined />}
+                  onClick={handleDownloadPng}
                   style={{ fontSize: 12 }}
                 />
               </Tooltip>
@@ -362,11 +428,64 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({ code, className })
             <span style={{ fontSize: 13, color: token.colorTextSecondary }}>Đang render sơ đồ...</span>
           </div>
         ) : error ? (
-          <div style={{ padding: 10, color: token.colorError, fontSize: 12 }}>
-            <div style={{ fontWeight: 600, marginBottom: 6 }}>⚠️ Không thể vẽ sơ đồ Mermaid:</div>
-            <pre style={{ margin: 0, padding: 10, background: token.colorFillSecondary, borderRadius: 6, overflowX: 'auto' }}>
-              {error}
-            </pre>
+          <div style={{ padding: 12 }}>
+            <Alert
+              type="error"
+              showIcon
+              message={<span style={{ fontWeight: 600 }}>Lỗi cú pháp Mermaid</span>}
+              description={
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+                  <pre
+                    style={{
+                      margin: 0,
+                      padding: 8,
+                      background: token.colorFillSecondary,
+                      borderRadius: 6,
+                      fontSize: 11,
+                      maxHeight: 120,
+                      overflowY: 'auto',
+                    }}
+                  >
+                    {error}
+                  </pre>
+                  <Space wrap size="small">
+                    {showAiFix && (
+                      <Button
+                        type="primary"
+                        size="small"
+                        icon={<RobotOutlined />}
+                        loading={fixingWithAi}
+                        onClick={handleFixWithAi}
+                      >
+                        Sửa bằng AI
+                      </Button>
+                    )}
+                    {showOpenInStudio && (
+                      <Button size="small" icon={<ExportOutlined />} onClick={handleOpenInStudio}>
+                        Mở trong Studio
+                      </Button>
+                    )}
+                    <Button size="small" icon={<CodeOutlined />} onClick={() => setViewSource((v) => !v)}>
+                      {viewSource ? 'Ẩn mã' : 'Xem mã lỗi'}
+                    </Button>
+                  </Space>
+                  {viewSource && (
+                    <pre
+                      style={{
+                        margin: 0,
+                        padding: 8,
+                        background: token.colorFillSecondary,
+                        borderRadius: 6,
+                        fontSize: 11,
+                        overflowX: 'auto',
+                      }}
+                    >
+                      <code>{currentCode}</code>
+                    </pre>
+                  )}
+                </div>
+              }
+            />
           </div>
         ) : viewSource ? (
           <pre
@@ -380,7 +499,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({ code, className })
               overflowX: 'auto',
             }}
           >
-            <code>{code}</code>
+            <code>{currentCode}</code>
           </pre>
         ) : (
           <div

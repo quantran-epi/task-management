@@ -6,8 +6,10 @@ import type {
 } from '../../types/backup';
 import { APP_MARKER, CURRENT_SCHEMA_VERSION } from './exportBackup';
 import {
-  BackupProjectRecordSchema,
-  BackupMilestoneRecordSchema,
+  AI_TEAMS_DOCS_ROOT_SETTING_KEY,
+  AI_TEAMS_DOCS_ROOT_SLUG,
+} from '../../db/repositories/teamDocsRepo';
+import {
   BackupTaskRecordSchema,
   BackupCapacityRuleRecordSchema,
   BackupCapacityOverrideRecordSchema,
@@ -27,17 +29,69 @@ import {
   BackupKnowledgeLinkRecordSchema,
   BackupTelegramSettingsRecordSchema,
   BackupTelegramWhitelistUserSchema,
+  BackupSystemRecordSchema,
+  BackupChangeRequestRecordSchema,
+  BackupAiEmployeeRecordSchema,
+  BackupAiLeadRecordSchema,
+  BackupAiSkillRecordSchema,
+  BackupAiTeamRecordSchema,
+  BackupAiTeamMemberRecordSchema,
+  BackupAiTeamLinkRecordSchema,
+  BackupAiSkillVersionRecordSchema,
+  BackupAiTeamBatchRecordSchema,
+  BackupAiTeamAssignmentRecordSchema,
+  BackupTeamMessageRecordSchema,
+  BackupTeamReadCursorRecordSchema,
+  assertNoLegacyTables,
+  LEGACY_BACKUP_MESSAGE,
 } from '../../validation/backupSchemas';
 
 
 /**
  * Two-stage validation engine for backup payloads:
  * Stage 1: Envelope validation (app marker, schemaVersion, structure)
- * Stage 2: Schema validation of records across domain tables (projects, milestones, tasks, capacityRules, capacityOverrides, plannedAllocations, and optionally workSessions)
- * Stage 3: Referential integrity checks (foreign keys: project, milestone, task)
+ * Stage 2: Schema validation of records across domain tables (tasks, capacityRules, capacityOverrides, plannedAllocations, and optionally workSessions)
+ * Stage 3: Referential integrity checks (foreign keys: task, note, document set)
  */
 
+/**
+ * D-14: before Phase 39 every skill-version row carried a number, `pending`/`rejected`
+ * included. Those exports are still at `schemaVersion` 13, so they pass the envelope check and
+ * must keep restoring. Dropping the number from non-approved rows here mirrors the v26 Dexie
+ * upgrade; the invariant then holds for both an existing database and a restored backup.
+ *
+ * IN-04: `aiSkillVersionRepo.stripNonApprovedVersionNumbers` holds the same rule for stored
+ * rows. Keep the two in step: change both or neither.
+ */
+function stripNonApprovedVersionNumbers(records: unknown): unknown {
+  if (!Array.isArray(records)) return records;
+  return records.map((rec) => {
+    if (!rec || typeof rec !== 'object') return rec;
+    const row = rec as Record<string, unknown>;
+    if (row.status === 'approved' || row.version === undefined) return rec;
+    const { version: _dropped, ...rest } = row;
+    return rest;
+  });
+}
+
 export function validateBackupPayload(raw: unknown): BackupValidationResult {
+  // D-49: reject a pre-31.2 payload at the envelope stage, before any table validation
+  // and therefore before any write. Local data is untouched.
+  try {
+    assertNoLegacyTables(raw);
+  } catch (err) {
+    return {
+      valid: false,
+      errors: [
+        {
+          table: 'envelope',
+          field: 'tables',
+          message: err instanceof Error ? err.message : LEGACY_BACKUP_MESSAGE,
+        },
+      ],
+    };
+  }
+
   const errors: ValidationErrorDetail[] = [];
 
   // Stage 1: Basic object and envelope check
@@ -64,15 +118,18 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     });
   }
 
-  if (
-    typeof candidate.schemaVersion !== 'number' ||
-    candidate.schemaVersion > CURRENT_SCHEMA_VERSION ||
-    candidate.schemaVersion < 1
-  ) {
+  if (typeof candidate.schemaVersion !== 'number' || candidate.schemaVersion > CURRENT_SCHEMA_VERSION) {
     errors.push({
       table: 'envelope',
       field: 'schemaVersion',
-      message: `Phiên bản sơ đồ (${String(candidate.schemaVersion)}) không tương thích (chỉ hỗ trợ phiên bản 1 đến ${CURRENT_SCHEMA_VERSION})`,
+      message: `Phiên bản sơ đồ (${String(candidate.schemaVersion)}) không tương thích (chỉ hỗ trợ phiên bản ${CURRENT_SCHEMA_VERSION})`,
+    });
+  } else if (candidate.schemaVersion < CURRENT_SCHEMA_VERSION) {
+    // D-49: older envelopes are not normalized — they are rejected outright.
+    errors.push({
+      table: 'envelope',
+      field: 'schemaVersion',
+      message: LEGACY_BACKUP_MESSAGE,
     });
   }
 
@@ -136,8 +193,6 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     return validRecords;
   }
 
-  const projects = validateTable('projects', BackupProjectRecordSchema, rawTables.projects ?? []);
-  const milestones = validateTable('milestones', BackupMilestoneRecordSchema, rawTables.milestones ?? []);
   const tasks = validateTable('tasks', BackupTaskRecordSchema, rawTables.tasks ?? []);
   const capacityRules = validateTable('capacityRules', BackupCapacityRuleRecordSchema, rawTables.capacityRules ?? []);
   const capacityOverrides = validateTable('capacityOverrides', BackupCapacityOverrideRecordSchema, rawTables.capacityOverrides ?? []);
@@ -155,7 +210,23 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     ? validateTable('chatThreads', BackupChatThreadRecordSchema, rawTables.chatThreads)
     : undefined;
   const chatMessages = rawTables.chatMessages !== undefined
-    ? validateTable('chatMessages', BackupChatMessageRecordSchema, rawTables.chatMessages)
+    ? validateTable('chatMessages', BackupChatMessageRecordSchema, rawTables.chatMessages)?.map(
+        (row) => {
+          // 37.1 §1.1: `messageKind: 'steer'` no longer exists. WR-06: the label is DROPPED,
+          // not remapped — a steer was a user message, never an instruction. Mapping it to
+          // `instruction` made `listInterruptedAssignments` report every restored steer as
+          // unfinished work that owed a report.
+          if (row.messageKind !== 'steer') return row;
+          const { messageKind: _steer, ...rest } = row;
+          return rest;
+        }
+      ) as NonNullable<BackupEnvelope['tables']['chatMessages']> | undefined
+    : undefined;
+  const teamMessages = rawTables.teamMessages !== undefined
+    ? validateTable('teamMessages', BackupTeamMessageRecordSchema, rawTables.teamMessages)
+    : undefined;
+  const teamReadCursors = rawTables.teamReadCursors !== undefined
+    ? validateTable('teamReadCursors', BackupTeamReadCursorRecordSchema, rawTables.teamReadCursors)
     : undefined;
   const chatTabs = rawTables.chatTabs !== undefined
     ? validateTable('chatTabs', BackupChatTabRecordSchema, rawTables.chatTabs)
@@ -187,6 +258,46 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
   const telegramWhitelist = rawTables.telegramWhitelist !== undefined
     ? validateTable('telegramWhitelist', BackupTelegramWhitelistUserSchema, rawTables.telegramWhitelist)
     : undefined;
+  const systems = rawTables.systems !== undefined
+    ? validateTable('systems', BackupSystemRecordSchema, rawTables.systems)
+    : undefined;
+  const changeRequests = rawTables.changeRequests !== undefined
+    ? validateTable('changeRequests', BackupChangeRequestRecordSchema, rawTables.changeRequests)
+    : undefined;
+  const aiEmployees = rawTables.aiEmployees !== undefined
+    ? validateTable('aiEmployees', BackupAiEmployeeRecordSchema, rawTables.aiEmployees)
+    : undefined;
+  const aiLeads = rawTables.aiLeads !== undefined
+    ? validateTable('aiLeads', BackupAiLeadRecordSchema, rawTables.aiLeads)
+    : undefined;
+  const aiSkills = rawTables.aiSkills !== undefined
+    ? validateTable('aiSkills', BackupAiSkillRecordSchema, rawTables.aiSkills)
+    : undefined;
+  const aiTeams = rawTables.aiTeams !== undefined
+    ? validateTable('aiTeams', BackupAiTeamRecordSchema, rawTables.aiTeams)
+    : undefined;
+  const aiTeamMembers = rawTables.aiTeamMembers !== undefined
+    ? validateTable('aiTeamMembers', BackupAiTeamMemberRecordSchema, rawTables.aiTeamMembers)
+    : undefined;
+  const aiTeamLinks = rawTables.aiTeamLinks !== undefined
+    ? validateTable('aiTeamLinks', BackupAiTeamLinkRecordSchema, rawTables.aiTeamLinks)
+    : undefined;
+  // D-14: pre-39 exports numbered every row. The envelope version did not change, so those
+  // backups must still restore — repair the shape here, exactly as the Dexie v26 upgrade does
+  // for an existing database. Without this the WR-05 invariant rejects the user's own backup.
+  const aiSkillVersions = rawTables.aiSkillVersions !== undefined
+    ? validateTable(
+        'aiSkillVersions',
+        BackupAiSkillVersionRecordSchema,
+        stripNonApprovedVersionNumbers(rawTables.aiSkillVersions)
+      )
+    : undefined;
+  const aiTeamBatches = rawTables.aiTeamBatches !== undefined
+    ? validateTable('aiTeamBatches', BackupAiTeamBatchRecordSchema, rawTables.aiTeamBatches)
+    : undefined;
+  const aiTeamAssignments = rawTables.aiTeamAssignments !== undefined
+    ? validateTable('aiTeamAssignments', BackupAiTeamAssignmentRecordSchema, rawTables.aiTeamAssignments)
+    : undefined;
 
   // If schema validation errors occurred, stop before referential checks
   if (errors.length > 0) {
@@ -194,44 +305,9 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
   }
 
   // Stage 3: Referential integrity checks
-  const projectIds = new Set(projects.map((p) => p.id));
-  const milestoneIds = new Set(milestones.map((m) => m.id));
   const taskIds = new Set(tasks.map((t) => t.id));
   const threadIds = new Set((chatThreads || []).map((thread) => thread.id));
   const threadById = new Map((chatThreads || []).map((thread) => [thread.id, thread]));
-  const recovery = { missingSources: [] as Array<{ id: string; title: string; version?: number; hash?: string }>, blockedTabs: [] as Array<{ tabId: string; threadId: string; step: string; missingSourceIds: string[] }> };
-
-  // Check milestones refer to existing project
-  milestones.forEach((m) => {
-    if (!projectIds.has(m.projectId)) {
-      errors.push({
-        table: 'milestones',
-        recordId: m.id,
-        field: 'projectId',
-        message: `Milestone references projectId "${m.projectId}" not found in projects`,
-      });
-    }
-  });
-
-  // Check tasks refer to existing project or milestone (if provided)
-  tasks.forEach((t) => {
-    if (t.projectId && !projectIds.has(t.projectId)) {
-      errors.push({
-        table: 'tasks',
-        recordId: t.id,
-        field: 'projectId',
-        message: `Task references projectId "${t.projectId}" not found in projects`,
-      });
-    }
-    if (t.milestoneId && !milestoneIds.has(t.milestoneId)) {
-      errors.push({
-        table: 'tasks',
-        recordId: t.id,
-        field: 'milestoneId',
-        message: `Task references milestoneId "${t.milestoneId}" not found in milestones`,
-      });
-    }
-  });
 
   // Check plannedAllocations refer to existing task
   plannedAllocations.forEach((pa) => {
@@ -261,6 +337,8 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
 
   // Check notes refer to existing entity if specified
   const noteIds = new Set((notes || []).map((n) => n.id));
+  const crIds = changeRequests ? new Set(changeRequests.map((cr) => cr.id)) : undefined;
+  const systemIds = systems ? new Set(systems.map((s) => s.id)) : undefined;
   if (notes) {
     notes.forEach((n) => {
       if (n.entityType && n.entityId) {
@@ -271,19 +349,19 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
             field: 'entityId',
             message: `Note references taskId "${n.entityId}" not found in tasks`,
           });
-        } else if (n.entityType === 'milestone' && !milestoneIds.has(n.entityId)) {
+        } else if (n.entityType === 'cr' && crIds && !crIds.has(n.entityId)) {
           errors.push({
             table: 'notes',
             recordId: n.id,
             field: 'entityId',
-            message: `Note references milestoneId "${n.entityId}" not found in milestones`,
+            message: `Note references crId "${n.entityId}" not found in changeRequests`,
           });
-        } else if (n.entityType === 'project' && !projectIds.has(n.entityId)) {
+        } else if (n.entityType === 'system' && systemIds && !systemIds.has(n.entityId)) {
           errors.push({
             table: 'notes',
             recordId: n.id,
             field: 'entityId',
-            message: `Note references projectId "${n.entityId}" not found in projects`,
+            message: `Note references systemId "${n.entityId}" not found in systems`,
           });
         }
       }
@@ -373,7 +451,6 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
 
   if (chatTabs && chatThreads) {
     const activeByScope = new Map<string, string>();
-    const sdlcByScope = new Set<string>();
     const tabIdsSeen = new Set<string>();
     chatTabs.forEach((tab) => {
       if (tabIdsSeen.has(tab.id)) errors.push({ table: 'chatTabs', recordId: tab.id, field: 'id', message: 'Duplicate ChatTab id' });
@@ -382,156 +459,17 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       if (!thread) {
         errors.push({ table: 'chatTabs', recordId: tab.id, field: 'threadId', message: `ChatTab references threadId "${tab.threadId}" not found in chatThreads` });
       } else {
-        const expectedScope = thread.scopeType === 'project' && thread.scopeKey.endsWith(':sdlc')
-          ? thread.scopeKey.slice(0, -5)
-          : thread.scopeKey.includes(':chat:')
-            ? thread.scopeKey.slice(0, thread.scopeKey.indexOf(':chat:'))
-            : thread.scopeKey;
+        const expectedScope = thread.scopeKey.includes(':chat:')
+          ? thread.scopeKey.slice(0, thread.scopeKey.indexOf(':chat:'))
+          : thread.scopeKey;
         if (tab.scopeKey !== expectedScope && tab.scopeKey !== thread.scopeKey) {
           errors.push({ table: 'chatTabs', recordId: tab.id, field: 'scopeKey', message: 'ChatTab scope does not match chat thread' });
-        }
-        if (thread.scopeType === 'project' && thread.entityId && tab.scopeKey === `project:${thread.entityId}` && tab.type === 'sdlc') {
-          if (sdlcByScope.has(tab.scopeKey)) errors.push({ table: 'chatTabs', recordId: tab.id, field: 'type', message: 'Duplicate SDLC tab for project scope' });
-          sdlcByScope.add(tab.scopeKey);
         }
       }
       if (tab.active) {
         if (activeByScope.has(tab.scopeKey)) errors.push({ table: 'chatTabs', recordId: tab.id, field: 'active', message: 'Multiple active tabs for scope' });
         activeByScope.set(tab.scopeKey, tab.id);
       }
-      const workflow = tab.workflowState;
-      if (workflow) {
-        const missingIds: string[] = [];
-        for (const artifact of Object.values(workflow.artifacts)) {
-          if (!artifact || !('noteId' in artifact) || !artifact.noteId) continue;
-          if (!noteIds.has(artifact.noteId)) {
-            missingIds.push(artifact.noteId);
-            if (!recovery.missingSources.some((source) => source.id === artifact.noteId)) {
-              recovery.missingSources.push({
-                id: artifact.noteId,
-                title: artifact.title,
-                version: artifact.version,
-                hash: artifact.hash,
-              });
-            }
-          }
-        }
-        if (missingIds.length > 0) {
-          recovery.blockedTabs.push({
-            tabId: tab.id,
-            threadId: tab.threadId,
-            step: workflow.currentStep,
-            missingSourceIds: [...new Set(missingIds)],
-          });
-          tab.workflowState = {
-            ...workflow,
-            checkpoint: {
-              requestId: workflow.checkpoint?.requestId ?? tab.checkpoint?.requestId ?? tab.id,
-              step: workflow.currentStep,
-              status: 'interrupted',
-              startedAt: workflow.checkpoint?.startedAt ?? tab.updatedAt,
-            },
-          };
-        }
-      }
-    });
-  }
-
-  // Check chatMessages refer to existing thread and wizard identity
-  if (chatMessages && chatThreads) {
-    chatMessages.forEach((cm) => {
-      if (!threadIds.has(cm.threadId)) {
-        errors.push({
-          table: 'chatMessages',
-          recordId: cm.id,
-          field: 'threadId',
-          message: `ChatMessage references threadId "${cm.threadId}" not found in chatThreads`,
-        });
-      }
-      if (cm.wizard) {
-        const thread = threadById.get(cm.threadId);
-        if (!thread || thread.scopeType !== 'project' || thread.entityId !== cm.wizard.projectId || thread.id !== cm.wizard.threadId) {
-          errors.push({
-            table: 'chatMessages',
-            recordId: cm.id,
-            field: 'wizard',
-            message: 'Wizard snapshot project/thread identity does not match chat thread',
-          });
-        }
-        if (!projectIds.has(cm.wizard.projectId)) {
-          errors.push({
-            table: 'chatMessages',
-            recordId: cm.id,
-            field: 'wizard.projectId',
-            message: `Wizard references projectId "${cm.wizard.projectId}" not found in projects`,
-          });
-        }
-        if (cm.wizard.artifactId && !noteIds.has(cm.wizard.artifactId)) {
-          errors.push({
-            table: 'chatMessages',
-            recordId: cm.id,
-            field: 'wizard.artifactId',
-            message: `Wizard references artifactId "${cm.wizard.artifactId}" not found in notes`,
-          });
-        }
-      }
-    });
-  }
-
-  if (notes) {
-    notes.forEach((note) => {
-      if (note.sdlcArtifact && !projectIds.has(note.sdlcArtifact.projectId)) {
-        errors.push({
-          table: 'notes',
-          recordId: note.id,
-          field: 'sdlcArtifact.projectId',
-          message: `Artifact references projectId "${note.sdlcArtifact.projectId}" not found in projects`,
-        });
-      }
-      if (note.sdlcArtifact && !threadIds.has(note.sdlcArtifact.threadId)) {
-        errors.push({
-          table: 'notes',
-          recordId: note.id,
-          field: 'sdlcArtifact.threadId',
-          message: `Artifact references threadId "${note.sdlcArtifact.threadId}" not found in chatThreads`,
-        });
-      }
-      if (note.sdlcArtifact) {
-        note.sdlcArtifact.sourceArtifactIds.forEach((sourceId) => {
-          if (!noteIds.has(sourceId)) {
-            errors.push({
-              table: 'notes',
-              recordId: note.id,
-              field: 'sdlcArtifact.sourceArtifactIds',
-              message: `Artifact references sourceArtifactId "${sourceId}" not found in notes`,
-            });
-          }
-        });
-      }
-    });
-  }
-
-  if (documentSets) {
-    const sdlcProjects = new Set<string>();
-    documentSets.forEach((set) => {
-      if (!set.sdlc) return;
-      if (!projectIds.has(set.sdlc.projectId)) {
-        errors.push({
-          table: 'documentSets',
-          recordId: set.id,
-          field: 'sdlc.projectId',
-          message: `SDLC set references projectId "${set.sdlc.projectId}" not found in projects`,
-        });
-      }
-      if (sdlcProjects.has(set.sdlc.projectId)) {
-        errors.push({
-          table: 'documentSets',
-          recordId: set.id,
-          field: 'sdlc',
-          message: `Duplicate SDLC mapping for projectId "${set.sdlc.projectId}"`,
-        });
-      }
-      sdlcProjects.add(set.sdlc.projectId);
     });
   }
 
@@ -549,25 +487,232 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     });
   }
 
-  if (errors.length > 0) {
-    return { valid: false, errors };
+  // Stage 4: CR/system invariants (D-24/D-25/D-26). `replaceTables` bulk-adds, so the
+  // repository guards never run on import — the payload itself must be checked.
+  const systemById = new Map((systems ?? []).map((s) => [s.id, s]));
+  const crById = new Map((changeRequests ?? []).map((cr) => [cr.id, cr]));
+  if (systems) {
+    for (const system of systems) {
+      if (system.type === 'LOGICAL_GROUP') {
+        if (system.parentId) {
+          errors.push({ table: 'systems', recordId: system.id, field: 'parentId', message: 'Parent system cannot have a parent' });
+        }
+        if (system.sshConfigId !== undefined || system.remoteRepoPath !== undefined || system.defaultBaseBranch !== undefined) {
+          errors.push({ table: 'systems', recordId: system.id, field: 'type', message: 'Parent system cannot carry SSH/repo fields' });
+        }
+      } else if (system.parentId) {
+        const parent = systemById.get(system.parentId);
+        if (!parent || parent.type !== 'LOGICAL_GROUP') {
+          errors.push({ table: 'systems', recordId: system.id, field: 'parentId', message: 'Subsystem parent must be a logical group' });
+        }
+      }
+    }
+  }
+  for (const cr of changeRequests ?? []) {
+    for (const target of cr.targets) {
+      const system = systemById.get(target.systemId);
+      if (!system) {
+        errors.push({ table: 'changeRequests', recordId: cr.id, field: 'targets', message: `Unknown systemId "${target.systemId}"` });
+      } else if (system.type === 'LOGICAL_GROUP') {
+        errors.push({ table: 'changeRequests', recordId: cr.id, field: 'targets', message: 'Parent system cannot be a CR target' });
+      }
+    }
+  }
+  for (const task of tasks) {
+    const cr = crById.get(task.crId);
+    if (!cr) {
+      errors.push({ table: 'tasks', recordId: task.id, field: 'crId', message: `Task references crId "${task.crId}" not found in changeRequests` });
+    } else if (task.systemId && !cr.targets.some((target) => target.systemId === task.systemId)) {
+      errors.push({ table: 'tasks', recordId: task.id, field: 'systemId', message: 'systemId is not a target of the task CR' });
+    }
   }
 
-  // Normalization for schemaVersion 1 (backfill Banking IT domain fields per D-16)
-  if (candidate.schemaVersion === 1) {
-    projects.forEach((p) => {
-      if (!p.opsOwners) p.opsOwners = [];
-      if (!p.businessAnalysts) p.businessAnalysts = [];
+  // Stage 5: AI Office referential integrity (T-34-31, T-36-07). `replaceTables` bulk-adds, so
+  // the repository guards never run on import — the payload itself must be checked.
+  //
+  // HISTORICAL vs LIVE (D-14/D-18): `chatMessages.targetAgentId`, `agentId` and `agentName` are
+  // attribution recorded at write time. They are deliberately NOT live-validated — a backup
+  // taken after deleting an employee must still import. Do not "fix" this gap.
+  const aiTeamIds = new Set((aiTeams ?? []).map((team) => team.id));
+  const aiLeadIds = new Set((aiLeads ?? []).map((lead) => lead.id));
+  const aiEmployeeIds = new Set((aiEmployees ?? []).map((employee) => employee.id));
+  const aiSkillIds = new Set((aiSkills ?? []).map((skill) => skill.id));
+  const membersByTeam = new Map<string, typeof aiTeamMembers>();
+  for (const member of aiTeamMembers ?? []) {
+    const bucket = membersByTeam.get(member.teamId) ?? [];
+    bucket.push(member);
+    membersByTeam.set(member.teamId, bucket);
+  }
+  const teamById = new Map((aiTeams ?? []).map((team) => [team.id, team]));
+
+  // D-10/Round 9: the validator checks SHAPE and REFERENTIAL INTEGRITY, not ownership. An earlier
+  // round required every reserved slug to be named by a team/member row; that rule contradicted
+  // four ordinary app behaviours (`removeTeamMember` keeps the folder by D-11, lead demotion drops
+  // the row, a folder move leaves the slug behind), so the app's own export failed its own
+  // validator and — because GitHub push does not validate — the only remote backup became
+  // unrestorable. The rule is gone.
+  //
+  // What protects the owner's documents is the delete confirmation, which names the folder about
+  // to go. That is the one check a corrupted payload cannot forge.
+  const notesById = new Map((notes ?? []).map((note) => [note.id, note]));
+  const rootSlugNotes = (notes ?? []).filter(
+    (note) => note.slug?.trim() === AI_TEAMS_DOCS_ROOT_SLUG
+  );
+  // WR-01: the root slug is a singleton — two of them make `ensureDocsRoot` arbitrary.
+  if (rootSlugNotes.length > 1) {
+    errors.push({
+      table: 'notes',
+      recordId: rootSlugNotes[1]!.id,
+      field: 'slug',
+      message: 'Only one folder may carry the "ai-root" slug',
     });
-    milestones.forEach((m) => {
-      if (!m.opsOwners) m.opsOwners = [];
-      if (!m.businessAnalysts) m.businessAnalysts = [];
-    });
-    tasks.forEach((t) => {
-      if (!t.opsOwners) t.opsOwners = [];
-      if (!t.businessAnalysts) t.businessAnalysts = [];
-      if (!t.workType) t.workType = 'code';
-    });
+  }
+  // WR-01: the root setting must name the folder carrying the root slug, or `ensureDocsRoot`
+  // adopts whatever it names — including a user folder.
+  const rootSetting = (settings ?? []).find(
+    (setting) => setting.key === AI_TEAMS_DOCS_ROOT_SETTING_KEY
+  );
+  if (rootSetting !== undefined) {
+    const named = notesById.get(String(rootSetting.value));
+    if (named === undefined || named.slug?.trim() !== AI_TEAMS_DOCS_ROOT_SLUG) {
+      errors.push({
+        table: 'settings',
+        recordId: AI_TEAMS_DOCS_ROOT_SETTING_KEY,
+        field: 'value',
+        message: 'ai_teams_docs_root must name the folder carrying the "ai-root" slug',
+      });
+    }
+  }
+  // A handle must name a folder. That is a SHAPE rule and it holds for every payload: a
+  // `docsFolderId` pointing at a document or a missing row is corrupt in every reading.
+  for (const team of aiTeams ?? []) {
+    if (team.docsFolderId === undefined) continue;
+    const row = notesById.get(team.docsFolderId);
+    if (row === undefined) continue; // already reported as a dangling reference above
+    if (row.type !== undefined && row.type !== 'folder') {
+      errors.push({ table: 'aiTeams', recordId: team.id, field: 'docsFolderId', message: 'AiTeam docsFolderId must name a folder' });
+    }
+  }
+  for (const member of aiTeamMembers ?? []) {
+    if (member.docsFolderId === undefined) continue;
+    const row = notesById.get(member.docsFolderId);
+    if (row === undefined) continue;
+    if (row.type !== undefined && row.type !== 'folder') {
+      errors.push({ table: 'aiTeamMembers', recordId: member.id, field: 'docsFolderId', message: 'AiTeamMember docsFolderId must name a folder' });
+    }
+  }
+  // WR-01 (round 7): duplicate `agentId` rows in one team are the state that made the backfill
+  // mint a fresh folder every turn. Same rule as `aiSkillVersions` above.
+  for (const [teamId, members] of membersByTeam) {
+    const seenAgents = new Set<string>();
+    for (const member of members ?? []) {
+      if (seenAgents.has(member.agentId)) {
+        errors.push({ table: 'aiTeamMembers', recordId: member.id, field: 'agentId', message: `Duplicate AiTeamMember for agentId "${member.agentId}" in team "${teamId}"` });
+      }
+      seenAgents.add(member.agentId);
+    }
+  }
+
+  for (const team of aiTeams ?? []) {
+    // D-05: an empty group has no leader; only a present leadId is a live reference.
+    if (team.leadId !== undefined && !aiLeadIds.has(team.leadId)) {
+      errors.push({ table: 'aiTeams', recordId: team.id, field: 'leadId', message: `AiTeam references leadId "${team.leadId}" not found in aiLeads` });
+    }
+    // Pitfall 5: both sources of truth must agree — both absent or both present.
+    const leadRows = (membersByTeam.get(team.id) ?? []).filter((row) => row.role === 'lead');
+    if (team.leadId === undefined) {
+      if (leadRows.length > 0) {
+        errors.push({ table: 'aiTeams', recordId: team.id, field: 'leadId', message: 'AiTeam has a lead member row but no leadId' });
+      }
+    } else if (!leadRows.some((row) => row.agentId === team.leadId)) {
+      errors.push({ table: 'aiTeams', recordId: team.id, field: 'leadId', message: `AiTeam leadId "${team.leadId}" has no matching lead member row` });
+    }
+    if (team.leaderLockedAt !== undefined && team.leadId === undefined) {
+      errors.push({ table: 'aiTeams', recordId: team.id, field: 'leaderLockedAt', message: 'AiTeam is leader-locked but has no leadId' });
+    }
+    // WR-06: `docsFolderId` is a live handle that drives a hard delete and a title write, so it
+    // gets the same referential check every other live reference gets.
+    if (team.docsFolderId !== undefined && !noteIds.has(team.docsFolderId)) {
+      errors.push({ table: 'aiTeams', recordId: team.id, field: 'docsFolderId', message: `AiTeam references docsFolderId "${team.docsFolderId}" not found in notes` });
+    }
+  }
+  for (const member of aiTeamMembers ?? []) {
+    if (!aiTeamIds.has(member.teamId)) {
+      errors.push({ table: 'aiTeamMembers', recordId: member.id, field: 'teamId', message: `AiTeamMember references teamId "${member.teamId}" not found in aiTeams` });
+      continue;
+    }
+    if (member.role === 'lead') {
+      const team = teamById.get(member.teamId);
+      if (team?.leadId !== member.agentId) {
+        errors.push({ table: 'aiTeamMembers', recordId: member.id, field: 'agentId', message: `Lead member "${member.agentId}" does not match the team leadId` });
+      }
+    } else if (!aiEmployeeIds.has(member.agentId) && !aiLeadIds.has(member.agentId)) {
+      errors.push({ table: 'aiTeamMembers', recordId: member.id, field: 'agentId', message: `AiTeamMember references agentId "${member.agentId}" not found in aiEmployees or aiLeads` });
+    }
+    // WR-06: same referential rule as the team's own `docsFolderId`.
+    if (member.docsFolderId !== undefined && !noteIds.has(member.docsFolderId)) {
+      errors.push({ table: 'aiTeamMembers', recordId: member.id, field: 'docsFolderId', message: `AiTeamMember references docsFolderId "${member.docsFolderId}" not found in notes` });
+    }
+  }
+  for (const link of aiTeamLinks ?? []) {
+    if (!aiTeamIds.has(link.teamId)) {
+      errors.push({ table: 'aiTeamLinks', recordId: link.id, field: 'teamId', message: `AiTeamLink references teamId "${link.teamId}" not found in aiTeams` });
+    }
+  }
+  for (const employee of aiEmployees ?? []) {
+    if (employee.skillId && !aiSkillIds.has(employee.skillId)) {
+      errors.push({ table: 'aiEmployees', recordId: employee.id, field: 'skillId', message: `AiEmployee references skillId "${employee.skillId}" not found in aiSkills` });
+    }
+  }
+  const seenVersions = new Set<string>();
+  for (const version of aiSkillVersions ?? []) {
+    if (!aiSkillIds.has(version.skillId)) {
+      errors.push({ table: 'aiSkillVersions', recordId: version.id, field: 'skillId', message: `AiSkillVersion references skillId "${version.skillId}" not found in aiSkills` });
+    }
+    // Phase 39 D-14: unnumbered pendings are legal and must not key `S:undefined` — two
+    // proposals for one skill would otherwise refuse the whole payload.
+    if (version.version === undefined) continue;
+    const key = `${version.skillId}:${version.version}`;
+    if (seenVersions.has(key)) {
+      errors.push({ table: 'aiSkillVersions', recordId: version.id, field: 'version', message: `Duplicate AiSkillVersion for skillId "${version.skillId}" version ${version.version}` });
+    }
+    seenVersions.add(key);
+  }
+  // Phase 37 (T-37-15, D-25): the ledger's own references must resolve, or a restore writes
+  // rows that point at nothing. `agentName`/`skillId`/`skillVersion`/`model` are snapshots and
+  // are deliberately NOT live-validated — same rule as `targetAgentId` above.
+  const batchById = new Map((aiTeamBatches ?? []).map((batch) => [batch.id, batch]));
+  const assignmentIds = new Set((aiTeamAssignments ?? []).map((row) => row.id));
+  for (const batch of aiTeamBatches ?? []) {
+    if (!aiTeamIds.has(batch.teamId)) {
+      errors.push({ table: 'aiTeamBatches', recordId: batch.id, field: 'teamId', message: `AiTeamBatch references teamId "${batch.teamId}" not found in aiTeams` });
+    }
+    if (!threadIds.has(batch.threadId)) {
+      errors.push({ table: 'aiTeamBatches', recordId: batch.id, field: 'threadId', message: `AiTeamBatch references threadId "${batch.threadId}" not found in chatThreads` });
+    }
+  }
+  for (const assignment of aiTeamAssignments ?? []) {
+    if (!batchById.has(assignment.batchId)) {
+      errors.push({ table: 'aiTeamAssignments', recordId: assignment.id, field: 'batchId', message: `AiTeamAssignment references batchId "${assignment.batchId}" not found in aiTeamBatches` });
+    }
+    if (assignment.retryOfAssignmentId !== undefined && !assignmentIds.has(assignment.retryOfAssignmentId)) {
+      errors.push({ table: 'aiTeamAssignments', recordId: assignment.id, field: 'retryOfAssignmentId', message: `AiTeamAssignment references retryOfAssignmentId "${assignment.retryOfAssignmentId}" not found in aiTeamAssignments` });
+    }
+  }
+  // D-25/D-04: one team = one chat. A nested scope key would merge two groups' transcripts.
+  for (const thread of chatThreads ?? []) {
+    if (thread.scopeType !== 'team') continue;
+    const entityId = thread.entityId;
+    if (entityId === undefined || !aiTeamIds.has(entityId)) {
+      errors.push({ table: 'chatThreads', recordId: thread.id, field: 'entityId', message: `Team ChatThread references entityId "${String(entityId)}" not found in aiTeams` });
+    }
+    if (thread.scopeKey !== `team:${String(entityId)}`) {
+      errors.push({ table: 'chatThreads', recordId: thread.id, field: 'scopeKey', message: 'Team ChatThread scopeKey must be exactly "team:<entityId>"' });
+    }
+  }
+
+  if (errors.length > 0) {
+    return { valid: false, errors };
   }
 
   const validEnvelope: BackupEnvelope = {
@@ -575,8 +720,6 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     schemaVersion: candidate.schemaVersion as number,
     exportedAt: candidate.exportedAt as string,
     tables: {
-      projects: projects as BackupEnvelope['tables']['projects'],
-      milestones: milestones as BackupEnvelope['tables']['milestones'],
       tasks: tasks as BackupEnvelope['tables']['tasks'],
       capacityRules: capacityRules as BackupEnvelope['tables']['capacityRules'],
       capacityOverrides: capacityOverrides as BackupEnvelope['tables']['capacityOverrides'],
@@ -596,10 +739,21 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       ...(knowledgeLinks !== undefined ? { knowledgeLinks } : {}),
       ...(telegramSettings !== undefined ? { telegramSettings } : {}),
       ...(telegramWhitelist !== undefined ? { telegramWhitelist } : {}),
+      ...(systems !== undefined ? { systems: systems as NonNullable<BackupEnvelope['tables']['systems']> } : {}),
+      ...(changeRequests !== undefined ? { changeRequests: changeRequests as NonNullable<BackupEnvelope['tables']['changeRequests']> } : {}),
+      ...(aiEmployees !== undefined ? { aiEmployees: aiEmployees as NonNullable<BackupEnvelope['tables']['aiEmployees']> } : {}),
+      ...(aiLeads !== undefined ? { aiLeads: aiLeads as NonNullable<BackupEnvelope['tables']['aiLeads']> } : {}),
+      ...(aiSkills !== undefined ? { aiSkills: aiSkills as NonNullable<BackupEnvelope['tables']['aiSkills']> } : {}),
+      ...(aiTeams !== undefined ? { aiTeams: aiTeams as NonNullable<BackupEnvelope['tables']['aiTeams']> } : {}),
+      ...(aiTeamMembers !== undefined ? { aiTeamMembers: aiTeamMembers as NonNullable<BackupEnvelope['tables']['aiTeamMembers']> } : {}),
+      ...(aiTeamLinks !== undefined ? { aiTeamLinks: aiTeamLinks as NonNullable<BackupEnvelope['tables']['aiTeamLinks']> } : {}),
+      ...(aiSkillVersions !== undefined ? { aiSkillVersions: aiSkillVersions as NonNullable<BackupEnvelope['tables']['aiSkillVersions']> } : {}),
+      ...(aiTeamBatches !== undefined ? { aiTeamBatches: aiTeamBatches as NonNullable<BackupEnvelope['tables']['aiTeamBatches']> } : {}),
+      ...(aiTeamAssignments !== undefined ? { aiTeamAssignments: aiTeamAssignments as NonNullable<BackupEnvelope['tables']['aiTeamAssignments']> } : {}),
+      ...(teamMessages !== undefined ? { teamMessages: teamMessages as NonNullable<BackupEnvelope['tables']['teamMessages']> } : {}),
+      ...(teamReadCursors !== undefined ? { teamReadCursors: teamReadCursors as NonNullable<BackupEnvelope['tables']['teamReadCursors']> } : {}),
     },
     counts: {
-      projects: projects.length,
-      milestones: milestones.length,
       tasks: tasks.length,
       capacityRules: capacityRules.length,
       capacityOverrides: capacityOverrides.length,
@@ -619,6 +773,19 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       ...(knowledgeLinks !== undefined ? { knowledgeLinks: knowledgeLinks.length } : {}),
       ...(telegramSettings !== undefined ? { telegramSettings: telegramSettings.length } : {}),
       ...(telegramWhitelist !== undefined ? { telegramWhitelist: telegramWhitelist.length } : {}),
+      ...(systems !== undefined ? { systems: systems.length } : {}),
+      ...(changeRequests !== undefined ? { changeRequests: changeRequests.length } : {}),
+      ...(aiEmployees !== undefined ? { aiEmployees: aiEmployees.length } : {}),
+      ...(aiLeads !== undefined ? { aiLeads: aiLeads.length } : {}),
+      ...(aiSkills !== undefined ? { aiSkills: aiSkills.length } : {}),
+      ...(aiTeams !== undefined ? { aiTeams: aiTeams.length } : {}),
+      ...(aiTeamMembers !== undefined ? { aiTeamMembers: aiTeamMembers.length } : {}),
+      ...(aiTeamLinks !== undefined ? { aiTeamLinks: aiTeamLinks.length } : {}),
+      ...(aiSkillVersions !== undefined ? { aiSkillVersions: aiSkillVersions.length } : {}),
+      ...(aiTeamBatches !== undefined ? { aiTeamBatches: aiTeamBatches.length } : {}),
+      ...(aiTeamAssignments !== undefined ? { aiTeamAssignments: aiTeamAssignments.length } : {}),
+      ...(teamMessages !== undefined ? { teamMessages: teamMessages.length } : {}),
+      ...(teamReadCursors !== undefined ? { teamReadCursors: teamReadCursors.length } : {}),
     },
   };
 
@@ -627,6 +794,5 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     valid: true,
     envelope: validEnvelope,
     errors: [],
-    ...(recovery.missingSources.length > 0 ? { recovery } : {}),
   };
 }

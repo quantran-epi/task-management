@@ -22,7 +22,7 @@ function toLocalDate(iso: string): string {
 /**
  * Reactive Day Insight loader: planned + actual + capacity for one calendar date.
  * Live-updates whenever plannedAllocations, workSessions, capacityRules,
- * capacityOverrides, tasks, or projects change.
+ * capacityOverrides, tasks, or change requests change.
  */
 export function useDayInsight(
   date: string,
@@ -50,12 +50,12 @@ export function useDayInsight(
 
   const data = useLiveQuery(
     async () => {
-      const [allocations, sessions, rules, overrides, projects] = await Promise.all([
+      const [allocations, sessions, rules, overrides, changeRequests] = await Promise.all([
         getAllocationsForDate(date, targetDb),
         targetDb.workSessions.where('date').equals(date).toArray(),
         targetDb.capacityRules.toArray(),
         targetDb.capacityOverrides.where('date').equals(date).toArray(),
-        targetDb.projects.toArray(),
+        targetDb.changeRequests.toArray(),
       ]);
 
       // Resolve tasks referenced only by sessions or active timers (allocations already carry task).
@@ -74,7 +74,7 @@ export function useDayInsight(
           : [];
 
       const taskMap = new Map<string, Task>(extraTasks.map((t) => [t.id, t]));
-      const projectNameById = new Map(projects.map((p) => [p.id, p.name]));
+      const crNameById = new Map(changeRequests.map((cr) => [cr.id, cr.name]));
 
       const capacityMinutes = getEffectiveDailyCapacity(date, rules, overrides);
 
@@ -84,7 +84,7 @@ export function useDayInsight(
         allocations,
         sessions,
         taskMap,
-        projectNameById,
+        crNameById,
         runningMinutesByTask,
       });
     },

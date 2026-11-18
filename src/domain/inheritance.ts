@@ -1,4 +1,4 @@
-export type TagSource = 'direct' | 'milestone' | 'project' | 'none';
+export type TagSource = 'direct' | 'cr' | 'none';
 
 export interface TagInheritanceResult {
   tags: string[];
@@ -6,14 +6,18 @@ export interface TagInheritanceResult {
   originName?: string;
 }
 
+/**
+ * Only the CR tier remains: a task has exactly one CR ancestor and no milestone
+ * tier. `systemId` is deliberately not inherited — it must be one of the CR's
+ * targets and the caller decides which one.
+ */
 export interface EntityTagAncestors {
-  project?: { name: string; opsOwners?: string[] | undefined; businessAnalysts?: string[] | undefined } | undefined;
-  milestone?: { name: string; projectId?: string | undefined; opsOwners?: string[] | undefined; businessAnalysts?: string[] | undefined } | undefined;
+  cr?: { name: string; opsOwners?: string[] | undefined; businessAnalysts?: string[] | undefined } | undefined;
 }
 
 export function resolveInheritedTags(
   field: 'opsOwners' | 'businessAnalysts',
-  item: { opsOwners?: string[]; businessAnalysts?: string[]; milestoneId?: string; projectId?: string },
+  item: { opsOwners?: string[]; businessAnalysts?: string[]; crId?: string },
   ancestors: EntityTagAncestors
 ): TagInheritanceResult {
   const direct = item[field];
@@ -21,17 +25,10 @@ export function resolveInheritedTags(
     return { tags: direct, source: 'direct' };
   }
 
-  if (ancestors.milestone) {
-    const msTags = ancestors.milestone[field];
-    if (msTags && msTags.length > 0) {
-      return { tags: msTags, source: 'milestone', originName: ancestors.milestone.name };
-    }
-  }
-
-  if (ancestors.project) {
-    const projTags = ancestors.project[field];
-    if (projTags && projTags.length > 0) {
-      return { tags: projTags, source: 'project', originName: ancestors.project.name };
+  if (ancestors.cr) {
+    const crTags = ancestors.cr[field];
+    if (crTags && crTags.length > 0) {
+      return { tags: crTags, source: 'cr', originName: ancestors.cr.name };
     }
   }
 

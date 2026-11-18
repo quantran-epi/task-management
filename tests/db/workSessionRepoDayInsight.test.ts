@@ -19,7 +19,7 @@ describe('workSessionRepo — Day Insight queries', () => {
     db = new TaskPlannerDatabase(dbName);
     await db.open();
     const now = new Date().toISOString();
-    const taskA: Task = {
+    const taskA: Task = { crId: '11111111-1111-4111-8111-111111111111',
       id: taskAId,
       name: 'Task A',
       status: 'In Progress',
@@ -29,7 +29,7 @@ describe('workSessionRepo — Day Insight queries', () => {
       createdAt: now,
       updatedAt: now,
     };
-    const taskB: Task = {
+    const taskB: Task = { crId: '11111111-1111-4111-8111-111111111111',
       id: taskBId,
       name: 'Task B',
       status: 'Open',

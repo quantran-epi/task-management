@@ -3,6 +3,7 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import {
   getTelegramSettings,
   saveTelegramSettings,
+  getWhitelist,
   checkAndConsumeQuota,
   checkAndConsumeCommandQuota,
   logTelegramSession,
@@ -26,6 +27,7 @@ import {
 } from '../ai/aiTools';
 import { runAiOrchestratorLoop } from '../ai/aiOrchestratorLoop';
 import { sendDesktopNotification } from '../../utils/desktopNotification';
+import { NotificationDeepLink } from '../../utils/notificationDeepLink';
 import type {
   TelegramInboundEvent,
   TelegramConflictEvent,
@@ -46,6 +48,10 @@ import { getTodayDateString } from '../../utils/date';
 import dayjs from 'dayjs';
 import { createDefaultGroundedTurnDeps } from '../ai/groundedTurnDeps';
 import { runGroundedTurn, type GroundedTurnResult } from '../ai/groundedTurn';
+import {
+  KNOWLEDGE_SERVER_EMPTY_NOTICE,
+  detectKnowledgeToolOutcome,
+} from '../ai/knowledgeOutcome';
 import { fetchSetCatalog } from '../../db/repositories/documentSetRepo';
 import type { ChatMessageGrounding } from '../ai/groundedAnswerSchemas';
 import {
@@ -257,7 +263,7 @@ export async function resolveScopedContext(
     return { contextText: '', matchedSourceTitles: [] };
   }
 
-  // 1. Tasks & Projects Scope
+  // 1. Tasks & CRs Scope
   const shouldIncludeTasks =
     (scope === 'full' || scope === 'tasks_only') &&
     (!intent || intent === 'query_taskmate' || intent === 'operate_taskmate' || intent === 'mixed');
@@ -518,7 +524,9 @@ export async function runTelegramGroundedTurn(
     modelConfigured: Boolean(apiKey && aiConfig.endpoint && aiConfig.defaultModel),
   };
 
-  const catalog = await fetchSetCatalog(db);
+  // Best-effort scope input only; a fresh device with no local sets still queries
+  // the server through runGroundedTurn without an early return.
+  const catalog = await fetchSetCatalog(db).catch(() => []);
   const deps = createDefaultGroundedTurnDeps({
     knowledgeBaseUrl: knowledgeConfig.baseUrl,
     knowledgeToken: knowledgeConfig.token,
@@ -551,6 +559,21 @@ export async function runTelegramGroundedTurn(
  * should continue normal grounded/ungrounded handling.
  */
 export function formatGroundedNonAnswer(result: GroundedTurnResult): string | null {
+  if (result.kind === 'server_empty') {
+    // D-13: the application owns the exact copy; never let the model paraphrase it.
+    const notice = result.notice || KNOWLEDGE_SERVER_EMPTY_NOTICE;
+    // D-14 (cross-surface parity with AI Chat): when the local catalog has
+    // documents, keep the canonical notice first and attach the local evidence
+    // as a separately labelled fallback. Never imply the server returned it.
+    if (result.localFallback) {
+      const localText = formatGroundedAnswerForTelegram(result.localFallback).trim();
+      if (localText) {
+        return `${notice}\n\n*(Chỉ dữ liệu nội bộ)*\n\n${localText}`;
+      }
+    }
+    return notice;
+  }
+
   if (result.kind === 'clarify_intent') {
     return (
       result.clarifyQuestion?.trim() ||
@@ -588,12 +611,87 @@ export function clearTelegramProcessedUpdateIdsForTesting(): void {
   processedUpdateIds.clear();
 }
 
+export async function notifyAdminsOnInboundMessage(
+  event: TelegramInboundEvent,
+  botToken: string,
+  db: TaskPlannerDatabase,
+  sendDirectFn: (token: string, chatId: string, text: string) => Promise<void>
+): Promise<void> {
+  if (!botToken || !botToken.trim()) return;
+
+  try {
+    const whitelist = await getWhitelist(db);
+    const caller = whitelist.find((u) => u.chatId === event.chat_id);
+
+    // If caller is an active admin, don't send self-notification
+    if (caller?.isAdmin && caller.status === 'active') {
+      return;
+    }
+
+    const activeAdmins = whitelist.filter(
+      (u) => u.isAdmin && u.status === 'active' && u.chatId !== event.chat_id
+    );
+
+    if (activeAdmins.length === 0) {
+      return;
+    }
+
+    const isFirstTime = !caller;
+    let statusBadge = '🆕 Người dùng mới - Chờ duyệt (Pending)';
+    if (caller) {
+      if (caller.status === 'active') {
+        statusBadge = '✅ Đang hoạt động (Active)';
+      } else if (caller.status === 'blocked') {
+        statusBadge = '⛔ Đã bị khóa (Blocked)';
+      } else {
+        statusBadge = '⏳ Đang chờ duyệt (Pending)';
+      }
+    }
+
+    const timeStr = event.date
+      ? dayjs(event.date * 1000).format('YYYY-MM-DD HH:mm:ss')
+      : dayjs().format('YYYY-MM-DD HH:mm:ss');
+
+    const header = isFirstTime
+      ? '🆕 **[TaskMate Bot] Người dùng mới gửi tin nhắn lần đầu**'
+      : '🔔 **[TaskMate Bot] Tin nhắn mới từ người dùng**';
+
+    const textContent =
+      event.text && event.text.trim() ? event.text.trim() : '*(Tin nhắn không có văn bản)*';
+
+    const lines = [
+      header,
+      '',
+      `👤 **Người gửi:** ${event.from_name || 'Không rõ'}`,
+      `🆔 **Chat ID:** \`${event.chat_id}\``,
+      `⏰ **Thời điểm:** ${timeStr}`,
+      `📊 **Trạng thái:** ${statusBadge}`,
+      '',
+      `💬 **Nội dung:**`,
+      `> ${textContent}`,
+    ];
+
+    const notificationText = lines.join('\n');
+
+    for (const admin of activeAdmins) {
+      try {
+        await sendDirectFn(botToken, admin.chatId, notificationText);
+      } catch (err) {
+        console.warn(`[telegramWorker] Failed to notify admin ${admin.chatId}:`, err);
+      }
+    }
+  } catch (err) {
+    console.warn('[telegramWorker] Error notifying admins on inbound message:', err);
+  }
+}
+
 export async function processTelegramInboundMessage(
   event: TelegramInboundEvent,
   botToken: string,
   db: TaskPlannerDatabase = defaultDb,
   sendReplyFn?: (token: string, chatId: string, text: string, replyTo?: number) => Promise<void>,
-  sendActionFn?: (token: string, chatId: string, action: string) => Promise<void>
+  sendActionFn?: (token: string, chatId: string, action: string) => Promise<void>,
+  sendDirectFn?: (token: string, chatId: string, text: string) => Promise<void>
 ): Promise<void> {
   const { update_id, chat_id, from_name, text, message_id } = event;
 
@@ -637,6 +735,10 @@ export async function processTelegramInboundMessage(
 
   const sendReply = sendReplyFn || defaultSendReply;
   const sendAction = sendActionFn || defaultSendAction;
+  const sendDirect = sendDirectFn || sendTelegramDirectMessage;
+
+  // Notify all active admins about incoming message from non-admin users
+  await notifyAdminsOnInboundMessage(event, botToken, db, sendDirect);
 
   const trimmedText = (text || '').trim();
   const lowerText = trimmedText.toLowerCase();
@@ -811,6 +913,7 @@ export async function processTelegramInboundMessage(
           title: 'Telegram Bot: Người dùng mới yêu cầu cấp quyền',
           body: `${from_name} (Chat ID: ${chat_id}): "${text}"`,
           tag: `telegram-pending-${chat_id}`,
+          deeplink: NotificationDeepLink.telegram,
         });
       } catch (notifErr) {
         console.warn('Failed to send desktop notification for new pending user:', notifErr);
@@ -908,7 +1011,7 @@ export async function processTelegramInboundMessage(
       const scopeDescriptions: Record<TelegramDataScope, string> = {
         full: 'Toàn bộ (Tasks + Projects + Docs)',
         knowledge_only: 'Chỉ Docs & Notes',
-        tasks_only: 'Chỉ Tasks & Projects',
+        tasks_only: 'Chỉ Tasks & CRs',
         pure_llm: 'Chỉ LLM (Không dữ liệu TaskMate)',
       };
 
@@ -1096,7 +1199,7 @@ export async function processTelegramInboundMessage(
   if (dataScope === 'tasks_only' && (routedIntent?.intent === 'query_knowledge' || routedIntent?.require_mcp === true)) {
     const scopeRefusal = routedIntent?.require_mcp === true
       ? `⚠️ Bạn chỉ có quyền truy cập dữ liệu công việc (tasks_only), không thể tra cứu công cụ hệ thống bên ngoài.`
-      : `⚠️ **Phạm vi truy cập bị giới hạn**\n\nTài khoản của bạn được cấu hình phạm vi **Chỉ Tasks & Projects** (\`tasks_only\`), không có quyền truy cập hệ thống tài liệu và tri thức (Knowledge Docs).\n\n💡 *Vui lòng chỉ đặt câu hỏi liên quan đến công việc hoặc liên hệ quản trị viên để mở rộng phạm vi.*`;
+      : `⚠️ **Phạm vi truy cập bị giới hạn**\n\nTài khoản của bạn được cấu hình phạm vi **Chỉ Tasks & CRs** (\`tasks_only\`), không có quyền truy cập hệ thống tài liệu và tri thức (Knowledge Docs).\n\n💡 *Vui lòng chỉ đặt câu hỏi liên quan đến công việc hoặc liên hệ quản trị viên để mở rộng phạm vi.*`;
     const htmlRefusal = markdownToTelegramHtml(scopeRefusal);
     await sendReply(botToken, chat_id, htmlRefusal, message_id);
     await logTelegramSession(
@@ -1117,7 +1220,7 @@ export async function processTelegramInboundMessage(
     dataScope === 'knowledge_only' &&
     (routedIntent?.intent === 'query_taskmate' || routedIntent?.intent === 'operate_taskmate')
   ) {
-    const scopeRefusal = `⚠️ **Phạm vi truy cập bị giới hạn**\n\nTài khoản của bạn được cấu hình phạm vi **Chỉ Docs & Notes** (\`knowledge_only\`), không có quyền truy cập hay thao tác dữ liệu công việc (Tasks & Projects).\n\n💡 *Vui lòng chỉ đặt câu hỏi liên quan đến tài liệu/kiến thức hoặc liên hệ quản trị viên để mở rộng phạm vi.*`;
+    const scopeRefusal = `⚠️ **Phạm vi truy cập bị giới hạn**\n\nTài khoản của bạn được cấu hình phạm vi **Chỉ Docs & Notes** (\`knowledge_only\`), không có quyền truy cập hay thao tác dữ liệu công việc (Tasks & CRs).\n\n💡 *Vui lòng chỉ đặt câu hỏi liên quan đến tài liệu/kiến thức hoặc liên hệ quản trị viên để mở rộng phạm vi.*`;
     const htmlRefusal = markdownToTelegramHtml(scopeRefusal);
     await sendReply(botToken, chat_id, htmlRefusal, message_id);
     await logTelegramSession(
@@ -1413,6 +1516,9 @@ export async function processTelegramInboundMessage(
 
   let rawAiResponse = '';
   let tokenCount = 0;
+  // D-13: the app prepends the canonical server-empty notice once per turn when
+  // a tool result carries NO_PUBLISHED_SETS, so the model never owns the copy.
+  let serverEmptyNotice = '';
 
   try {
     const loopResult = await runAiOrchestratorLoop({
@@ -1426,6 +1532,14 @@ export async function processTelegramInboundMessage(
       // headless worker, so the loop terminates only by model completion or cap.
       maxLoops: 30,
       db,
+      onToolResult: (_callId, result, _durationMs) => {
+        if (serverEmptyNotice) return;
+        // The orchestrator's seam is keyed by callId, not tool name; only the
+        // retrieve_knowledge result carries this exact structured outcome.
+        if (detectKnowledgeToolOutcome('retrieve_knowledge', result) === 'NO_PUBLISHED_SETS') {
+          serverEmptyNotice = KNOWLEDGE_SERVER_EMPTY_NOTICE;
+        }
+      },
       synthesisPrompt:
         'Dựa trên tất cả các kết quả công cụ và thông tin đã thu thập ở trên, hãy tổng hợp câu trả lời đầy đủ, chi tiết, chính xác và rõ ràng cho yêu cầu ban đầu.\n' +
         'Yêu cầu định dạng:\n' +
@@ -1461,6 +1575,12 @@ export async function processTelegramInboundMessage(
 
   // Post-processing: clean citation tags
   let processedResponse = cleanCitationTags(rawAiResponse);
+
+  // D-13: app-owned notice leads the reply, exactly once. The model's own text
+  // follows but cannot replace or paraphrase this canonical copy.
+  if (serverEmptyNotice) {
+    processedResponse = `${serverEmptyNotice}\n\n${processedResponse}`;
+  }
 
   // Step 9: Convert to Telegram HTML and Split/Send replies
   const formattedHtml = markdownToTelegramHtml(processedResponse);

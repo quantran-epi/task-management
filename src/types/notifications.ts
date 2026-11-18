@@ -38,7 +38,7 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
 
 export type AlertCategory = 'overdue' | 'overload' | 'due-soon' | 'stale' | 'reminder';
 export type NotificationTabKey = 'all' | 'deadline' | 'overload' | 'stale' | 'reminders';
-export type NotificationEntityType = 'task' | 'project' | 'milestone' | 'capacity';
+export type NotificationEntityType = 'task' | 'cr' | 'system' | 'capacity';
 
 export interface AlertNotificationItem {
   id: string; // e.g. "overdue:task:123", "overload:date:2026-09-29", "stale:task:456", "reminder:task:789"

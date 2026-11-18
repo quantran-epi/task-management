@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { Task, Project } from '../src/types/models';
+import type { Task, ChangeRequest } from '../src/types/models';
 
 describe('Jira Epic Mapping & Inheritance', () => {
   const JIRA_KEY_REGEX = /^[A-Z][A-Z0-9]+-[0-9]+$/;
@@ -14,11 +14,14 @@ describe('Jira Epic Mapping & Inheritance', () => {
     expect(JIRA_KEY_REGEX.test('')).toBe(false);
   });
 
-  it('inherits parent project jiraEpicKey as default epic for child task', () => {
-    const parentProject: Project = {
-      id: 'proj-1',
+  it('inherits parent CR jiraEpicKey as default epic for child task', () => {
+    const parentCr: ChangeRequest = {
+      id: 'cr-1',
+      code: 'CR-MB-01',
       name: 'Mobile Banking Redesign',
       status: 'In Progress',
+      type: 'ENHANCEMENT',
+      targets: [],
       jiraEpicKey: 'MB-100',
       createdAt: '2026-10-01T00:00:00.000Z',
       updatedAt: '2026-10-01T00:00:00.000Z',
@@ -26,8 +29,8 @@ describe('Jira Epic Mapping & Inheritance', () => {
 
     const childTask: Task = {
       id: 'task-1',
+      crId: 'cr-1',
       name: 'Implement OAuth Flow',
-      projectId: 'proj-1',
       status: 'Open',
       progress: 0,
       priority: 'High',
@@ -36,48 +39,53 @@ describe('Jira Epic Mapping & Inheritance', () => {
       updatedAt: '2026-10-01T00:00:00.000Z',
     };
 
-    // Helper simulating parent project resolution and default epic key
-    const resolveDefaultEpicKey = (task: Task, projects: Project[]): string | undefined => {
-      if (!task.projectId) return undefined;
-      const proj = projects.find((p) => p.id === task.projectId);
-      return proj?.jiraEpicKey;
+    // Helper simulating parent CR resolution and default epic key
+    const resolveDefaultEpicKey = (task: Task, crs: ChangeRequest[]): string | undefined => {
+      const cr = crs.find((c) => c.id === task.crId);
+      return cr?.jiraEpicKey;
     };
 
-    expect(resolveDefaultEpicKey(childTask, [parentProject])).toBe('MB-100');
+    expect(resolveDefaultEpicKey(childTask, [parentCr])).toBe('MB-100');
   });
 
-  it('allows overriding epicKey for child task without modifying parent project', () => {
-    const parentProject: Project = {
-      id: 'proj-1',
+  it('allows overriding epicKey for child task without modifying parent CR', () => {
+    const parentCr: ChangeRequest = {
+      id: 'cr-1',
+      code: 'CR-CB-01',
       name: 'Core Banking API',
       status: 'Open',
+      type: 'ENHANCEMENT',
+      targets: [],
       jiraEpicKey: 'CB-50',
       createdAt: '2026-10-01T00:00:00.000Z',
       updatedAt: '2026-10-01T00:00:00.000Z',
     };
 
     // Simulated modal state: pre-fill CB-50, user overrides to CB-99
-    let initialEpicKey = parentProject.jiraEpicKey;
-    let submittedEpicKey = 'CB-99';
+    const initialEpicKey = parentCr.jiraEpicKey;
+    const submittedEpicKey = 'CB-99';
 
     expect(initialEpicKey).toBe('CB-50');
     expect(submittedEpicKey).toBe('CB-99');
-    expect(parentProject.jiraEpicKey).toBe('CB-50'); // Parent remains untouched
+    expect(parentCr.jiraEpicKey).toBe('CB-50'); // Parent remains untouched
   });
 
-  it('returns undefined default epic when parent project has no jiraEpicKey or task has no projectId', () => {
-    const projectWithoutEpic: Project = {
-      id: 'proj-2',
+  it('returns undefined default epic when the parent CR has no jiraEpicKey', () => {
+    const crWithoutEpic: ChangeRequest = {
+      id: 'cr-2',
+      code: 'CR-TOOLS-01',
       name: 'Internal Dev Tools',
       status: 'Open',
+      type: 'ENHANCEMENT',
+      targets: [],
       createdAt: '2026-10-01T00:00:00.000Z',
       updatedAt: '2026-10-01T00:00:00.000Z',
     };
 
-    const taskWithProject: Task = {
+    const taskWithCr: Task = {
       id: 'task-2',
+      crId: 'cr-2',
       name: 'Setup linter',
-      projectId: 'proj-2',
       status: 'Open',
       progress: 0,
       priority: 'Low',
@@ -86,8 +94,10 @@ describe('Jira Epic Mapping & Inheritance', () => {
       updatedAt: '2026-10-01T00:00:00.000Z',
     };
 
-    const standaloneTask: Task = {
+    // A task whose CR is not in the provided set resolves to no default epic.
+    const orphanTask: Task = {
       id: 'task-3',
+      crId: 'cr-missing',
       name: 'Read documentation',
       status: 'Open',
       progress: 0,
@@ -97,13 +107,12 @@ describe('Jira Epic Mapping & Inheritance', () => {
       updatedAt: '2026-10-01T00:00:00.000Z',
     };
 
-    const resolveDefaultEpicKey = (task: Task, projects: Project[]): string | undefined => {
-      if (!task.projectId) return undefined;
-      const proj = projects.find((p) => p.id === task.projectId);
-      return proj?.jiraEpicKey;
+    const resolveDefaultEpicKey = (task: Task, crs: ChangeRequest[]): string | undefined => {
+      const cr = crs.find((c) => c.id === task.crId);
+      return cr?.jiraEpicKey;
     };
 
-    expect(resolveDefaultEpicKey(taskWithProject, [projectWithoutEpic])).toBeUndefined();
-    expect(resolveDefaultEpicKey(standaloneTask, [projectWithoutEpic])).toBeUndefined();
+    expect(resolveDefaultEpicKey(taskWithCr, [crWithoutEpic])).toBeUndefined();
+    expect(resolveDefaultEpicKey(orphanTask, [crWithoutEpic])).toBeUndefined();
   });
 });

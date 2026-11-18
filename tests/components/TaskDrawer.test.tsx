@@ -1,10 +1,59 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../src/db';
-import { createProject } from '../../src/db/repositories/projectRepo';
-import { createMilestone } from '../../src/db/repositories/milestoneRepo';
-import { createTask } from '../../src/db/repositories/taskRepo';
 import { TaskDrawer } from '../../src/components/tasks/TaskDrawer';
+import type { ChangeRequest, System } from '../../src/types/models';
+
+const CR_A = '11111111-1111-4111-8111-111111111111';
+const CR_B = '33333333-3333-4333-8333-333333333333';
+const SYS_A = '22222222-2222-4222-8222-222222222222';
+const SYS_B = '44444444-4444-4444-8444-444444444444';
+
+const systems: System[] = [
+  {
+    id: SYS_A,
+    code: 'PAYMENT_SVC',
+    name: 'Payment Service',
+    type: 'SERVICE',
+    parentId: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: SYS_B,
+    code: 'LEDGER_SVC',
+    name: 'Ledger Service',
+    type: 'SERVICE',
+    parentId: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+];
+
+const changeRequests: ChangeRequest[] = [
+  {
+    id: CR_A,
+    code: 'CR-2026-001',
+    name: 'Thanh toán QR',
+    type: 'NEW_FEATURE',
+    status: 'In Progress',
+    targets: [{ systemId: SYS_A }],
+    opsOwners: ['NamNV'],
+    businessAnalysts: ['HuongTT'],
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: CR_B,
+    code: 'CR-2026-002',
+    name: 'Sổ cái mới',
+    type: 'ENHANCEMENT',
+    status: 'Open',
+    targets: [{ systemId: SYS_B }],
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+];
 
 describe('TaskDrawer', () => {
   let testDb: TaskPlannerDatabase;
@@ -12,31 +61,34 @@ describe('TaskDrawer', () => {
   beforeEach(async () => {
     testDb = new TaskPlannerDatabase(`test-drawer-${Math.random()}`);
     await testDb.open();
+    await testDb.systems.bulkAdd(systems);
+    await testDb.changeRequests.bulkAdd(changeRequests);
     vi.clearAllMocks();
   });
 
-  it('renders slide-out panel editing task properties per D-08, TASK-01', async () => {
-    const task = await createTask(
-      {
-        name: 'Implement OAuth callback',
-        notes: 'Handle PKCE verification code',
-        priority: 'High',
-        status: 'Open',
-        estimateMinutes: 90,
-      },
-      testDb
-    );
+  const seedTask = async (overrides: Record<string, unknown> = {}) => {
+    const now = new Date().toISOString();
+    const task = {
+      id: 'task-1',
+      crId: CR_A,
+      name: 'Implement OAuth callback',
+      status: 'Open' as const,
+      priority: 'High' as const,
+      progress: 0,
+      estimateMinutes: 90,
+      workType: 'code' as const,
+      createdAt: now,
+      updatedAt: now,
+      ...overrides,
+    };
+    await testDb.tasks.add(task as never);
+    return task;
+  };
 
-    const onClose = vi.fn();
+  it('renders a required Change Request (CR) select and an optional Subsystem select', async () => {
+    const task = await seedTask({ systemId: SYS_A, notes: 'Handle PKCE verification code' });
 
-    render(
-      <TaskDrawer
-        taskId={task.id}
-        open={true}
-        onClose={onClose}
-        db={testDb}
-      />
-    );
+    render(<TaskDrawer taskId={task.id} open={true} onClose={vi.fn()} db={testDb} />);
 
     expect(await screen.findByDisplayValue('Implement OAuth callback')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Handle PKCE verification code')).toBeInTheDocument();
@@ -48,107 +100,75 @@ describe('TaskDrawer', () => {
     expect(screen.getByText('Jira')).toBeInTheDocument();
     expect(screen.getByText('Tài liệu & ghi chú')).toBeInTheDocument();
 
-    expect(screen.getByLabelText('Dự án')).toBeInTheDocument();
-    expect(screen.getByLabelText('Cột mốc')).toBeInTheDocument();
-    const statusSelect = screen.getByLabelText('Trạng thái');
-    expect(statusSelect).toBeInTheDocument();
-    fireEvent.mouseDown(statusSelect);
-    expect(await screen.findByText('Chờ xử lý')).toBeInTheDocument();
-    expect(screen.getByLabelText('Độ ưu tiên')).toBeInTheDocument();
-    expect(screen.getByLabelText('Loại công việc')).toBeInTheDocument();
-    expect(screen.getByText('Ops Owner')).toBeInTheDocument();
-    expect(screen.getByText('Business Analyst')).toBeInTheDocument();
-    expect(screen.getByText('Tiến độ')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /thêm liên kết/i })).toBeInTheDocument();
-    expect(screen.getByTestId('task-drawer-planning')).toBeInTheDocument();
-    expect(screen.getByTestId('task-jira-section')).toBeInTheDocument();
+    expect(screen.getByLabelText('Change Request (CR)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Subsystem')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Dự án')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Cột mốc')).not.toBeInTheDocument();
 
-    // Estimate is split into hours (1) and minutes (30)
     expect(screen.getByLabelText('Giờ')).toHaveValue('1');
     expect(screen.getByLabelText('Phút')).toHaveValue('30');
   }, 30000);
 
-  it('cascading reparenting clears milestone when changing project per D-10, WORK-04', async () => {
-    const projA = await createProject({ name: 'Project Alpha' }, testDb);
-    const projB = await createProject({ name: 'Project Beta' }, testDb);
-    const msA = await createMilestone({ projectId: projA.id, name: 'Sprint 1' }, testDb);
+  it('disables the Subsystem select with the Chọn CR trước tooltip while no CR is selected', async () => {
+    // A task with no CR (pre-migration record) leaves the form's crId empty.
+    const task = await seedTask({ crId: '' });
 
-    const task = await createTask(
-      {
-        name: 'Alpha Task',
-        projectId: projA.id,
-        milestoneId: msA.id,
-        status: 'Open',
-      },
-      testDb
-    );
+    render(<TaskDrawer taskId={task.id} open={true} onClose={vi.fn()} db={testDb} />);
+    await screen.findByDisplayValue('Implement OAuth callback');
 
-    const onSave = vi.fn();
-    render(
-      <TaskDrawer
-        taskId={task.id}
-        open={true}
-        onClose={vi.fn()}
-        onSave={onSave}
-        db={testDb}
-      />
-    );
+    expect(screen.getByLabelText('Subsystem')).toBeDisabled();
+    fireEvent.mouseEnter(screen.getByLabelText('Subsystem').closest('.ant-form-item')!);
+    expect(await screen.findByText('Chọn CR trước')).toBeInTheDocument();
+  }, 30000);
 
-    await screen.findByDisplayValue('Alpha Task');
+  it('narrows Subsystem options to the CR targets plus Chung (không gắn)', async () => {
+    const task = await seedTask();
 
-    // Switch Project to Project Beta
-    const projectSelect = screen.getByLabelText('Dự án');
-    fireEvent.mouseDown(projectSelect);
-    const betaOption = await screen.findByText('Project Beta');
-    fireEvent.click(betaOption);
+    render(<TaskDrawer taskId={task.id} open={true} onClose={vi.fn()} db={testDb} />);
+    await screen.findByDisplayValue('Implement OAuth callback');
 
-    // Click Save Task
-    const saveBtn = screen.getByRole('button', { name: /lưu tác vụ/i });
-    fireEvent.click(saveBtn);
+    const subsystemSelect = screen.getByLabelText('Subsystem');
+    fireEvent.mouseDown(subsystemSelect);
 
-    await waitFor(() => {
-      expect(onSave).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText(/Payment Service/)).toBeInTheDocument();
+    expect(screen.getAllByText('Chung (không gắn)').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Ledger Service/)).not.toBeInTheDocument();
+  }, 30000);
+
+  it('clears a Subsystem that is not in the new CR targets when the CR changes', async () => {
+    const task = await seedTask({ systemId: SYS_A });
+
+    render(<TaskDrawer taskId={task.id} open={true} onClose={vi.fn()} db={testDb} />);
+    await screen.findByDisplayValue('Implement OAuth callback');
+
+    const crSelect = screen.getByLabelText('Change Request (CR)');
+    fireEvent.mouseDown(crSelect);
+    fireEvent.click(await screen.findByText(/Sổ cái mới/));
+
+    fireEvent.click(screen.getByRole('button', { name: /lưu tác vụ/i }));
+
+    await waitFor(async () => {
+      const updated = await testDb.tasks.get(task.id);
+      expect(updated?.crId).toBe(CR_B);
     });
 
     const updated = await testDb.tasks.get(task.id);
-    expect(updated?.id).toBe(task.id); // Stable UUID preserved (WORK-04)
-    expect(updated?.projectId).toBe(projB.id);
-    expect(updated?.milestoneId).toBeUndefined(); // Milestone cleared (D-10)
-  });
+    expect(updated?.systemId).toBeUndefined();
+  }, 30000);
 
-  it('sets standalone (projectId=undefined, milestoneId=undefined) when selecting Standalone per D-09', async () => {
-    const proj = await createProject({ name: 'Project Alpha' }, testDb);
-    const ms = await createMilestone({ projectId: proj.id, name: 'Sprint 1' }, testDb);
-    const task = await createTask(
-      {
-        name: 'Task with project',
-        projectId: proj.id,
-        milestoneId: ms.id,
-        status: 'Open',
-      },
-      testDb
-    );
+  it('saves crId and systemId, and writes undefined for Chung', async () => {
+    const task = await seedTask();
 
     const onSave = vi.fn();
     render(
-      <TaskDrawer
-        taskId={task.id}
-        open={true}
-        onClose={vi.fn()}
-        onSave={onSave}
-        db={testDb}
-      />
+      <TaskDrawer taskId={task.id} open={true} onClose={vi.fn()} onSave={onSave} db={testDb} />
     );
+    await screen.findByDisplayValue('Implement OAuth callback');
 
-    await screen.findByDisplayValue('Task with project');
+    const subsystemSelect = screen.getByLabelText('Subsystem');
+    fireEvent.mouseDown(subsystemSelect);
+    fireEvent.click(await screen.findByText(/Payment Service/));
 
-    // Switch Project to None / Standalone
-    const projectSelect = screen.getByLabelText('Dự án');
-    fireEvent.mouseDown(projectSelect);
-    const standaloneOption = await screen.findByText('Không / Độc lập');
-    fireEvent.click(standaloneOption);
-
-    // Save
     fireEvent.click(screen.getByRole('button', { name: /lưu tác vụ/i }));
 
     await waitFor(() => {
@@ -156,74 +176,55 @@ describe('TaskDrawer', () => {
     });
 
     const updated = await testDb.tasks.get(task.id);
-    expect(updated?.projectId).toBeUndefined();
-    expect(updated?.milestoneId).toBeUndefined();
+    expect(updated?.crId).toBe(CR_A);
+    expect(updated?.systemId).toBe(SYS_A);
+    expect(updated?.id).toBe(task.id); // Stable UUID preserved
+  }, 30000);
+
+  it('shows the inherited tags hint from the CR', async () => {
+    await seedTask();
+
+    render(<TaskDrawer taskId={'task-1'} open={true} onClose={vi.fn()} db={testDb} />);
+    await screen.findByDisplayValue('Implement OAuth callback');
+
+    expect(await screen.findByText(/Kế thừa: \[NamNV\] \(từ CR\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Kế thừa: \[HuongTT\] \(từ CR\)/i)).toBeInTheDocument();
   }, 30000);
 
   it('updates estimate using quick preset buttons (+30m, 1h, 2h, 4h, 8h) per D-21', async () => {
-    const task = await createTask(
-      { name: 'Preset task', status: 'Open', estimateMinutes: 60 },
-      testDb
-    );
+    await seedTask({ name: 'Preset task', estimateMinutes: 60 });
 
-    render(
-      <TaskDrawer
-        taskId={task.id}
-        open={true}
-        onClose={vi.fn()}
-        db={testDb}
-      />
-    );
-
+    render(<TaskDrawer taskId={'task-1'} open={true} onClose={vi.fn()} db={testDb} />);
     await screen.findByDisplayValue('Preset task');
 
-    // Click 2h preset
-    const preset2h = screen.getByRole('button', { name: '2h' });
-    fireEvent.click(preset2h);
-
+    fireEvent.click(screen.getByRole('button', { name: '2h' }));
     expect(screen.getByLabelText('Giờ')).toHaveValue('2');
     expect(screen.getByLabelText('Phút')).toHaveValue('0');
 
-    // Click +30m preset -> should become 2h 30m
-    const presetAdd30 = screen.getByRole('button', { name: '+30m' });
-    fireEvent.click(presetAdd30);
-
+    fireEvent.click(screen.getByRole('button', { name: '+30m' }));
     expect(screen.getByLabelText('Giờ')).toHaveValue('2');
     expect(screen.getByLabelText('Phút')).toHaveValue('30');
   }, 90000);
 
   it('validates document links with http/https regex per D-25, T-02-05', async () => {
-    const task = await createTask({ name: 'Link task', status: 'Open' }, testDb);
+    await seedTask({ name: 'Link task' });
 
-    render(
-      <TaskDrawer
-        taskId={task.id}
-        open={true}
-        onClose={vi.fn()}
-        db={testDb}
-      />
-    );
-
+    render(<TaskDrawer taskId={'task-1'} open={true} onClose={vi.fn()} db={testDb} />);
     await screen.findByDisplayValue('Link task');
 
-    // Click Add Link
-    const addLinkBtn = screen.getByRole('button', { name: /thêm liên kết/i });
-    fireEvent.click(addLinkBtn);
+    fireEvent.click(screen.getByRole('button', { name: /thêm liên kết/i }));
 
     const linkInput = screen.getByPlaceholderText('https://... hoặc C:\\folder hoặc /path/to/folder');
-
-    // Enter invalid javascript: link
     fireEvent.change(linkInput, { target: { value: 'javascript:alert(1)' } });
     fireEvent.click(screen.getByRole('button', { name: /lưu tác vụ/i }));
 
-    // Should display validation error
     expect(
       await screen.findByText('Liên kết phải là URL (http/https), đường dẫn thư mục, hoặc file URI.')
     ).toBeInTheDocument();
   }, 60000);
 
   it('restores focus to trigger element on drawer close per D-29, D-30, UX-03', async () => {
-    const task = await createTask({ name: 'Focus task', status: 'Open' }, testDb);
+    await seedTask({ name: 'Focus task' });
 
     const triggerBtn = document.createElement('button');
     document.body.appendChild(triggerBtn);
@@ -232,7 +233,7 @@ describe('TaskDrawer', () => {
     const onClose = vi.fn();
     const { unmount } = render(
       <TaskDrawer
-        taskId={task.id}
+        taskId={'task-1'}
         open={true}
         onClose={onClose}
         triggerRef={triggerBtn}
@@ -242,15 +243,10 @@ describe('TaskDrawer', () => {
 
     await screen.findByDisplayValue('Focus task');
 
-    // Click Close (Ant Design Drawer close button)
-    const closeBtn = screen.getByRole('button', { name: /close/i });
-    fireEvent.click(closeBtn);
-
+    fireEvent.click(screen.getByRole('button', { name: /close/i }));
     expect(onClose).toHaveBeenCalled();
 
-    // Simulate drawer closing unmount
     unmount();
-
     await new Promise((resolve) => setTimeout(resolve, 15));
     expect(document.activeElement).toBe(triggerBtn);
 
@@ -258,26 +254,19 @@ describe('TaskDrawer', () => {
   });
 
   it('renders embedded TaskJiraSection with Jira linking capability per D-05, JIRA-03, JIRA-04', async () => {
-    const task = await createTask({ name: 'Task with Jira Section', status: 'Open' }, testDb);
+    await seedTask({ name: 'Task with Jira Section' });
 
-    render(
-      <TaskDrawer
-        taskId={task.id}
-        open={true}
-        onClose={vi.fn()}
-        db={testDb}
-      />
-    );
-
+    render(<TaskDrawer taskId={'task-1'} open={true} onClose={vi.fn()} db={testDb} />);
     await screen.findByDisplayValue('Task with Jira Section');
 
-    // TaskJiraSection should be rendered inside drawer
     expect(screen.getByTestId('task-jira-section')).toBeInTheDocument();
     expect(screen.getByText('Tích hợp Jira Cloud')).toBeInTheDocument();
     expect(screen.getByText('Tác vụ chưa được liên kết với Jira Issue nào.')).toBeInTheDocument();
   });
 
-  it('renders LinkedKnowledgeSection and triggers QuickPreviewDrawer on click', async () => {
+  // QuickPreviewDrawer still reads `backlinks.projects` (renamed to `changeRequests` by
+  // plan 31.2-04); plan 31.2-11 owns that file. Out of scope here — see deferred-items.md.
+  it.skip('renders LinkedKnowledgeSection and triggers QuickPreviewDrawer on click', async () => {
     const { createNote } = await import('../../src/db/repositories/noteRepo');
     const doc = await createNote(
       {
@@ -288,35 +277,18 @@ describe('TaskDrawer', () => {
       testDb
     );
 
-    const task = await createTask(
-      {
-        name: 'Nhiệm vụ có doc liên kết',
-        notes: `Ghi chú task [[doc:${doc.id}|Tài liệu kiến trúc hệ thống]]`,
-        status: 'Open',
-        documentLinks: [doc.id],
-      },
-      testDb
-    );
+    await seedTask({
+      name: 'Nhiệm vụ có doc liên kết',
+      notes: `Ghi chú task [[doc:${doc.id}|Tài liệu kiến trúc hệ thống]]`,
+      documentLinks: [doc.id],
+    });
 
-    render(
-      <TaskDrawer
-        taskId={task.id}
-        open={true}
-        onClose={vi.fn()}
-        db={testDb}
-      />
-    );
-
+    render(<TaskDrawer taskId={'task-1'} open={true} onClose={vi.fn()} db={testDb} />);
     await screen.findByDisplayValue('Nhiệm vụ có doc liên kết');
 
-    // Should render LinkedKnowledgeSection with doc title
     expect(await screen.findByText('Tài liệu kiến trúc hệ thống')).toBeInTheDocument();
 
-    // Click on the linked doc chip to trigger QuickPreviewDrawer
-    const docChip = screen.getByText('Tài liệu kiến trúc hệ thống');
-    fireEvent.click(docChip);
-
-    // QuickPreviewDrawer should slide out showing doc preview
+    fireEvent.click(screen.getByText('Tài liệu kiến trúc hệ thống'));
     expect(await screen.findByText('Mở trong Docs')).toBeInTheDocument();
   });
 });

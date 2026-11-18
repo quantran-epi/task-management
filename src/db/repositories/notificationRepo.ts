@@ -1,7 +1,6 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../index';
 import { updateTask } from './taskRepo';
-import { updateProject } from './projectRepo';
-import { updateMilestone } from './milestoneRepo';
+import { updateChangeRequest } from './changeRequestRepo';
 
 export const DISMISSED_ALERTS_KEY = 'dismissedAlerts';
 
@@ -105,7 +104,15 @@ export async function completeReminderAlert(
     if (!task) return;
     if (reminderId && task.reminders) {
       const updatedReminders = task.reminders.filter((r) => r.id !== reminderId);
-      await updateTask(entityId, { reminders: updatedReminders }, db);
+      await updateTask(
+        entityId,
+        {
+          reminders: updatedReminders,
+          reminderDate: updatedReminders.length > 0 ? updatedReminders[0]?.date : undefined,
+          reminderNote: updatedReminders.length > 0 ? updatedReminders[0]?.note : undefined,
+        },
+        db
+      );
     } else {
       // Legacy single reminder removal
       await updateTask(
@@ -118,31 +125,22 @@ export async function completeReminderAlert(
         db
       );
     }
-  } else if (entityType === 'project') {
-    const project = await db.projects.get(entityId);
-    if (!project) return;
-    if (reminderId && project.reminders) {
-      const updatedReminders = project.reminders.filter((r) => r.id !== reminderId);
-      await updateProject(entityId, { reminders: updatedReminders }, db);
-    } else {
-      await updateProject(
+  } else if (entityType === 'cr') {
+    const cr = await db.changeRequests.get(entityId);
+    if (!cr) return;
+    if (reminderId && cr.reminders) {
+      const updatedReminders = cr.reminders.filter((r) => r.id !== reminderId);
+      await updateChangeRequest(
         entityId,
         {
-          reminderDate: undefined,
-          reminderNote: undefined,
-          reminders: [],
+          reminders: updatedReminders,
+          reminderDate: updatedReminders.length > 0 ? updatedReminders[0]?.date : undefined,
+          reminderNote: updatedReminders.length > 0 ? updatedReminders[0]?.note : undefined,
         },
         db
       );
-    }
-  } else if (entityType === 'milestone') {
-    const milestone = await db.milestones.get(entityId);
-    if (!milestone) return;
-    if (reminderId && milestone.reminders) {
-      const updatedReminders = milestone.reminders.filter((r) => r.id !== reminderId);
-      await updateMilestone(entityId, { reminders: updatedReminders }, db);
     } else {
-      await updateMilestone(
+      await updateChangeRequest(
         entityId,
         {
           reminderDate: undefined,

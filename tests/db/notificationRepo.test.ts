@@ -33,8 +33,8 @@ describe('Notification Repository (D-14, D-15, D-16)', () => {
     it('returns true for stale tasks and custom reminders', () => {
       expect(isAlertDismissible('stale:task:123')).toBe(true);
       expect(isAlertDismissible('reminder:task:456')).toBe(true);
-      expect(isAlertDismissible('reminder:project:789')).toBe(true);
-      expect(isAlertDismissible('reminder:milestone:999')).toBe(true);
+      expect(isAlertDismissible('reminder:cr:789')).toBe(true);
+      expect(isAlertDismissible('reminder:system:999')).toBe(true);
     });
   });
 
@@ -109,7 +109,7 @@ describe('Notification Repository (D-14, D-15, D-16)', () => {
       const taskId = 'task-rem-1';
       const remId1 = '00000000-0000-4000-8000-000000000001';
       const remId2 = '00000000-0000-4000-8000-000000000002';
-      await testDb.tasks.add({
+      await testDb.tasks.add({ crId: '11111111-1111-4111-8111-111111111111',
         id: taskId,
         name: 'Task with reminders',
         status: 'Open',
@@ -134,7 +134,7 @@ describe('Notification Repository (D-14, D-15, D-16)', () => {
 
     it('clears legacy reminder from task', async () => {
       const taskId = 'task-rem-legacy';
-      await testDb.tasks.add({
+      await testDb.tasks.add({ crId: '11111111-1111-4111-8111-111111111111',
         id: taskId,
         name: 'Task with legacy reminder',
         status: 'Open',
@@ -155,22 +155,53 @@ describe('Notification Repository (D-14, D-15, D-16)', () => {
       expect(updated?.reminderNote).toBeUndefined();
     });
 
-    it('removes reminder from project', async () => {
-      const projId = 'proj-rem-1';
+    it('removes reminder from a Change Request', async () => {
+      const crId = '11111111-1111-4111-8111-111111111113';
       const remId = '00000000-0000-4000-8000-000000000003';
-      await testDb.projects.add({
-        id: projId,
-        name: 'Project with reminder',
+      await testDb.changeRequests.add({
+        id: crId,
+        name: 'CR with reminder',
+        code: 'CR-REM-1',
         status: 'Open',
+        type: 'ENHANCEMENT',
+        targets: [],
         reminders: [{ id: remId, date: '2026-09-28' }],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
 
-      await completeReminderAlert(`reminder:project:${projId}:${remId}`, testDb);
+      await completeReminderAlert(`reminder:cr:${crId}:${remId}`, testDb);
 
-      const updated = await testDb.projects.get(projId);
+      const updated = await testDb.changeRequests.get(crId);
       expect(updated?.reminders).toHaveLength(0);
+    });
+
+    it('clears reminderDate when last reminder in reminders array is completed (prevents 2-click bug)', async () => {
+      const taskId = 'task-2click-bug';
+      const remId = '00000000-0000-4000-8000-000000000099';
+      await testDb.tasks.add({ crId: '11111111-1111-4111-8111-111111111111',
+        id: taskId,
+        name: 'Task with synced reminderDate and reminders',
+        status: 'Open',
+        priority: 'High',
+        progress: 0,
+        estimateMinutes: 30,
+        workType: 'code',
+        reminderDate: '2026-09-28',
+        reminderNote: 'Synced note',
+        reminders: [{ id: remId, date: '2026-09-28', note: 'Synced note' }],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      // User clicks complete
+      await completeReminderAlert(`reminder:task:${taskId}:${remId}`, testDb);
+
+      const updated = await testDb.tasks.get(taskId);
+      expect(updated?.reminders).toEqual([]);
+      // Crucial: reminderDate and reminderNote MUST be cleared so legacy alert is not triggered
+      expect(updated?.reminderDate).toBeUndefined();
+      expect(updated?.reminderNote).toBeUndefined();
     });
   });
 });

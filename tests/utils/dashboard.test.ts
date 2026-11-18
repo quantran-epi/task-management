@@ -7,7 +7,7 @@ import {
 } from '../../src/utils/dashboard';
 
 describe('dashboard utils', () => {
-  const baseTask: Task = {
+  const baseTask: Task = { crId: '11111111-1111-4111-8111-111111111111',
     id: 't-1',
     name: 'Base Task',
     status: 'Open',

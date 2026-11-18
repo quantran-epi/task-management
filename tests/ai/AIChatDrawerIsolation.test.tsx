@@ -1,0 +1,496 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { AIChatDrawer } from '../../src/components/ai/AIChatDrawer';
+import { TaskPlannerDatabase } from '../../src/db';
+import {
+  createChatTab,
+  listTabsByScope,
+  setActiveTab,
+} from '../../src/db/repositories/chatTabRepo';
+import * as nineRouterTokenService from '../../src/services/ai/nineRouterTokenService';
+import * as nineRouterClient from '../../src/services/ai/nineRouterClient';
+import {
+  clearGroundedTurnTestHooks,
+  setGroundedTurnTestHooks,
+} from '../../src/services/ai/groundedTurnDeps';
+
+vi.mock('../../src/utils/pptxExport', () => ({
+  exportPresentationAsFile: vi.fn(),
+}));
+
+const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
+const SCOPE = { type: 'cr' as const, id: PROJECT_ID, title: 'Isolation Project' };
+const SCOPE_KEY = `cr:${PROJECT_ID}`;
+const CHAT_ONE = '💬 Cuộc trò chuyện #1';
+const CHAT_TWO = '💬 Cuộc trò chuyện #2';
+
+const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+describe('AIChatDrawer multi-tab isolation', () => {
+  let db: TaskPlannerDatabase;
+  let streamSignals: AbortSignal[];
+  let streamPayloads: any[];
+
+  const seedTabs = async (config?: Record<string, unknown>) => {
+    const first = await createChatTab(
+      {
+        scopeType: 'cr',
+        scopeKey: SCOPE_KEY,
+        entityId: PROJECT_ID,
+        title: CHAT_ONE,
+        ...(config ? { config: config as never } : {}),
+      },
+      db
+    );
+    const second = await createChatTab(
+      {
+        scopeType: 'cr',
+        scopeKey: SCOPE_KEY,
+        entityId: PROJECT_ID,
+        title: CHAT_TWO,
+        ...(config ? { config: config as never } : {}),
+      },
+      db
+    );
+    await setActiveTab(SCOPE_KEY, first.id, db);
+    return { first, second };
+  };
+
+  const openTab = async (title: string) => {
+    const tab = await screen.findByRole('tab', { name: new RegExp(escape(title)) });
+    fireEvent.click(tab);
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: new RegExp(escape(title)) })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      )
+    );
+  };
+
+  const submit = (text: string) => {
+    fireEvent.change(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI'), {
+      target: { value: text },
+    });
+    // Another tab may be mid-stream: chat input stays typeable, so answer a prompt there or send.
+    const send = screen.queryByLabelText('Gửi tin nhắn');
+    if (send) fireEvent.click(send);
+    else fireEvent.keyDown(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI'), { key: 'Enter', metaKey: true });
+  };
+
+  beforeEach(async () => {
+    streamSignals = [];
+    streamPayloads = [];
+    clearGroundedTurnTestHooks();
+    // Ordinary chat falls through the grounded router into the tool loop.
+    setGroundedTurnTestHooks({
+      runGroundedTurn: async (input) => ({ kind: 'operational', routedQuery: input.query }),
+    });
+    db = new TaskPlannerDatabase(`isolation-${Date.now()}-${Math.random()}`);
+    await db.open();
+    await db.changeRequests.add({
+      id: PROJECT_ID,
+        code: 'CR-AI-01',
+      name: 'Isolation Project',
+      status: 'Open',
+        type: 'ENHANCEMENT',
+        targets: [],
+      createdAt: '2026-10-30T00:00:00.000Z',
+      updatedAt: '2026-10-30T00:00:00.000Z',
+    });
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
+      endpoint: 'http://localhost:20128',
+      defaultModel: 'gpt-4o',
+      charLimit: 12000,
+    });
+    vi.spyOn(nineRouterTokenService, 'fetchAvailableModels').mockResolvedValue([
+      'model-alpha',
+      'model-beta',
+    ]);
+    vi.spyOn(nineRouterClient, 'streamChatCompletion').mockImplementation(
+      (async function* () {
+        /* no tokens */
+      }) as never
+    );
+  });
+
+  afterEach(async () => {
+    cleanup();
+    clearGroundedTurnTestHooks();
+    vi.restoreAllMocks();
+    // Turn tails and tab writes land asynchronously; closing first surfaces them as a
+    // post-teardown Dexie DatabaseClosedError instead of a clean run.
+    await new Promise<void>((resolve) => setTimeout(resolve, 25));
+    db.close();
+  });
+
+  const hangStream = () => {
+    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation(((options: any) => {
+      streamPayloads.push(options.payload);
+      streamSignals.push(options.signal);
+      return (async function* () {
+        await new Promise<void>(() => {});
+        yield { type: 'text' as const, delta: 'never' };
+      })();
+    }) as never);
+  };
+
+  it('seeds per-tab runtimes so tab badges show real per-tab status', async () => {
+    await seedTabs({ analysisMode: true });
+    hangStream();
+    render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+
+    await openTab(CHAT_ONE);
+    submit('Tab A request');
+
+    await waitFor(() => expect(streamSignals).toHaveLength(1));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('tab', { name: new RegExp(`${escape(CHAT_ONE)} — Đang xử lý`) })
+      ).toBeInTheDocument()
+    );
+    expect(
+      screen.queryByRole('tab', { name: new RegExp(`${escape(CHAT_TWO)} — `) })
+    ).toBeNull();
+  });
+
+  it('streams concurrently in two tabs without aborting the first request', async () => {
+    await seedTabs({ analysisMode: true });
+    hangStream();
+    render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+
+    await openTab(CHAT_ONE);
+    submit('Tab A request');
+    await waitFor(() => expect(streamSignals).toHaveLength(1));
+
+    await openTab(CHAT_TWO);
+    submit('Tab B request');
+    await waitFor(() => expect(streamSignals).toHaveLength(2));
+
+    expect(streamSignals[0]?.aborted).toBe(false);
+    expect(streamSignals[1]?.aborted).toBe(false);
+  });
+
+  it('stop aborts only the active tab request', async () => {
+    await seedTabs({ analysisMode: true });
+    hangStream();
+    render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+
+    await openTab(CHAT_ONE);
+    submit('Tab A request');
+    await waitFor(() => expect(streamSignals).toHaveLength(1));
+
+    await openTab(CHAT_TWO);
+    submit('Tab B request');
+    await waitFor(() => expect(streamSignals).toHaveLength(2));
+
+    fireEvent.click(screen.getByLabelText('Dừng sinh phản hồi'));
+
+    await waitFor(() => expect(streamSignals[1]?.aborted).toBe(true));
+    expect(streamSignals[0]?.aborted).toBe(false);
+  });
+
+  it('unmounting the drawer aborts every tab request', async () => {
+    await seedTabs({ analysisMode: true });
+    hangStream();
+    const { unmount } = render(
+      <AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />
+    );
+
+    await openTab(CHAT_ONE);
+    submit('Tab A request');
+    await waitFor(() => expect(streamSignals).toHaveLength(1));
+
+    await openTab(CHAT_TWO);
+    submit('Tab B request');
+    await waitFor(() => expect(streamSignals).toHaveLength(2));
+
+    unmount();
+    expect(streamSignals[0]?.aborted).toBe(true);
+    expect(streamSignals[1]?.aborted).toBe(true);
+  });
+
+  it('keeps a composer draft per tab across tab switches', async () => {
+    await seedTabs({ analysisMode: true });
+    render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+
+    await openTab(CHAT_ONE);
+    fireEvent.change(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI'), {
+      target: { value: 'Draft only in tab A' },
+    });
+
+    await openTab(CHAT_TWO);
+    expect(
+      (screen.getByLabelText('Nội dung tin nhắn trò chuyện AI') as HTMLTextAreaElement).value
+    ).toBe('');
+
+    await openTab(CHAT_ONE);
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText('Nội dung tin nhắn trò chuyện AI') as HTMLTextAreaElement).value
+      ).toBe('Draft only in tab A')
+    );
+  });
+
+  it('persists the model per tab in ChatTab.config and resolves it after reopen', async () => {
+    const { first, second } = await seedTabs({ analysisMode: true });
+    const firstRender = render(
+      <AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />
+    );
+    await openTab(CHAT_ONE);
+
+    // Refresh resolves the active tab's model from the live catalog and persists it durably.
+    fireEvent.click(screen.getByLabelText('Làm mới danh sách mô hình'));
+    await waitFor(async () => {
+      const row = await db.chatTabs.get(first.id);
+      expect(row?.config?.model).toBe('model-alpha');
+    });
+    const other = await db.chatTabs.get(second.id);
+    expect(other?.config?.model).not.toBe('model-alpha');
+
+    firstRender.unmount();
+
+    hangStream();
+    render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+    await openTab(CHAT_ONE);
+    submit('Model after reopen');
+    await waitFor(() => expect(streamPayloads).toHaveLength(1));
+    expect(streamPayloads[0]?.model).toBe('model-alpha');
+  });
+
+  it('sends a non-empty model on the first turn of a fresh tab', async () => {
+    await seedTabs({ analysisMode: true });
+    hangStream();
+    render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+
+    await openTab(CHAT_ONE);
+    submit('First turn');
+    await waitFor(() => expect(streamPayloads).toHaveLength(1));
+    expect(streamPayloads[0]?.model).toBeTruthy();
+    expect(streamPayloads[0]?.model).not.toBe('');
+  });
+
+  it('renders the error card only for the tab that failed', async () => {
+    await seedTabs({ analysisMode: true });
+    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation((() =>
+      (async function* () {
+        throw new Error('boom');
+      })()) as never);
+    vi.spyOn(nineRouterClient, 'streamChatCompletion').mockImplementation(
+      (async function* () {
+        throw new Error('boom');
+      }) as never
+    );
+
+    render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+    await openTab(CHAT_ONE);
+    submit('Failing turn');
+
+    await waitFor(() =>
+      expect(screen.getAllByTestId('inline-api-error-card')).toHaveLength(1)
+    );
+
+    await openTab(CHAT_TWO);
+    expect(screen.queryByTestId('inline-api-error-card')).toBeNull();
+
+    await openTab(CHAT_ONE);
+    await waitFor(() =>
+      expect(screen.getAllByTestId('inline-api-error-card')).toHaveLength(1)
+    );
+  });
+
+  it('keeps mutation confirmation owned by its own tab', async () => {
+    await seedTabs();
+    let call = 0;
+    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation((() => {
+      call += 1;
+      if (call === 1) {
+        return (async function* () {
+          yield {
+            type: 'tool_calls' as const,
+            calls: [
+              {
+                id: 'call_iso_task',
+                type: 'function',
+                function: {
+                  name: 'create_task',
+                  arguments: JSON.stringify({ name: 'Tác vụ cách ly tab' }),
+                },
+              },
+            ],
+          };
+        })();
+      }
+      return (async function* () {
+        yield { type: 'text' as const, delta: 'Đã tạo tác vụ cách ly.' };
+      })();
+    }) as never);
+
+    render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+    await openTab(CHAT_ONE);
+    submit('Tạo task');
+
+    await waitFor(() =>
+      expect(screen.getByTestId('ai-mutation-approval')).toBeInTheDocument()
+    );
+
+    await openTab(CHAT_TWO);
+    expect(screen.queryByTestId('ai-mutation-approval')).toBeNull();
+
+    await openTab(CHAT_ONE);
+    await waitFor(() =>
+      expect(screen.getByTestId('ai-mutation-approval')).toBeInTheDocument()
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Chấp thuận' }));
+    await waitFor(() =>
+      expect(screen.getByText(/Đã tạo tác vụ cách ly/i)).toBeInTheDocument()
+    );
+  });
+
+  it('never commits assistant output for a request superseded mid-stream', async () => {
+    await seedTabs({ analysisMode: true });
+    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation(((options: any) => {
+      streamSignals.push(options.signal);
+      return (async function* () {
+        await new Promise<void>((resolve) => setTimeout(resolve, 40));
+        yield { type: 'text' as const, delta: 'late output' };
+      })();
+    }) as never);
+
+    render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+    await openTab(CHAT_ONE);
+    submit('Stop me');
+
+    await waitFor(() => expect(screen.getByLabelText('Dừng sinh phản hồi')).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText('Dừng sinh phản hồi'));
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 150));
+
+    const tab = (await listTabsByScope(SCOPE_KEY, db)).find((row) => row.title === CHAT_ONE);
+    const messages = await db.chatMessages.where('threadId').equals(tab!.threadId).toArray();
+    expect(messages.filter((msg) => msg.role === 'assistant')).toHaveLength(0);
+    expect(messages.filter((msg) => msg.role === 'user')).toHaveLength(1);
+  });
+
+  it('cancels a turn stopped inside the send prelude and never starts the loop', async () => {
+    await seedTabs();
+    const streamSpy = vi.spyOn(nineRouterClient, 'streamChatEvents');
+    streamSpy.mockImplementation(((() => {
+      return (async function* () {
+        yield { type: 'text' as const, delta: 'must never appear' };
+      })();
+    }) as never));
+
+    render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+    await openTab(CHAT_ONE);
+    submit('Stop while staging');
+
+    // The prelude paints the staged state (and therefore the Stop control) before the runtime
+    // starts; stopping here must cancel the staged turn, not start it and discard the output.
+    await waitFor(() => expect(screen.getByLabelText('Dừng sinh phản hồi')).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText('Dừng sinh phản hồi'));
+
+    // Let the cancelled prelude settle before teardown; an unawaited write after db.close()
+    // surfaces as an unhandled DatabaseClosedError rather than a test failure.
+    await waitFor(() => expect(screen.queryByLabelText('Dừng sinh phản hồi')).toBeNull());
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    expect(streamSpy).not.toHaveBeenCalled();
+    const tab = (await listTabsByScope(SCOPE_KEY, db)).find((row) => row.title === CHAT_ONE);
+    const messages = await db.chatMessages.where('threadId').equals(tab!.threadId).toArray();
+    expect(messages.filter((msg) => msg.role === 'assistant')).toHaveLength(0);
+  });
+
+  it('never transmits a cancelled prelude when a newer send supersedes it', async () => {
+    await seedTabs();
+
+    // Hold the first send inside its prelude until the test says otherwise.
+    let releaseFirstKey: () => void = () => {};
+    const firstKeyHeld = new Promise<void>((resolve) => {
+      releaseFirstKey = resolve;
+    });
+    let keyCalls = 0;
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockImplementation(async () => {
+      keyCalls += 1;
+      if (keyCalls === 1) await firstKeyHeld;
+      return 'test-api-key';
+    });
+
+    const payloads: any[] = [];
+    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation(((options: any) => {
+      payloads.push(options.payload);
+      return (async function* () {
+        yield { type: 'text' as const, delta: 'Xong' };
+      })();
+    }) as never);
+
+    render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+    await openTab(CHAT_ONE);
+    submit('Lượt bị hủy');
+
+    await waitFor(() => expect(screen.getByLabelText('Dừng sinh phản hồi')).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText('Dừng sinh phản hồi'));
+    await waitFor(() => expect(screen.getByLabelText('Gửi tin nhắn')).toBeInTheDocument());
+
+    // A second send must not revive the cancelled prelude: its token is already gone.
+    submit('Lượt thay thế');
+    releaseFirstKey();
+
+    await waitFor(() => expect(payloads).toHaveLength(1));
+    // The cancelled send never reaches the transport; the replacement is the turn that runs.
+    const sent = payloads[0].messages as Array<{ role: string; content: string }>;
+    const userTurns = sent.filter((msg) => msg.role === 'user');
+    expect(userTurns[userTurns.length - 1]!.content).toBe('Lượt thay thế');
+  });
+
+  it('keeps the replacement turn visible when the cancelled prelude returns late', async () => {
+    await seedTabs();
+
+    let releaseFirstKey: () => void = () => {};
+    const firstKeyHeld = new Promise<void>((resolve) => {
+      releaseFirstKey = resolve;
+    });
+    let keyCalls = 0;
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockImplementation(async () => {
+      keyCalls += 1;
+      if (keyCalls === 1) await firstKeyHeld;
+      return 'test-api-key';
+    });
+
+    let releaseStream: () => void = () => {};
+    const streamHeld = new Promise<void>((resolve) => {
+      releaseStream = resolve;
+    });
+    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation(((options: any) => {
+      streamPayloads.push(options.payload);
+      return (async function* () {
+        await streamHeld;
+        yield { type: 'text' as const, delta: 'Đang trả lời thay thế' };
+      })();
+    }) as never);
+
+    render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+    await openTab(CHAT_ONE);
+    submit('Lượt bị hủy');
+    await waitFor(() => expect(screen.getByLabelText('Dừng sinh phản hồi')).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText('Dừng sinh phản hồi'));
+    await waitFor(() => expect(screen.getByLabelText('Gửi tin nhắn')).toBeInTheDocument());
+
+    submit('Lượt thay thế');
+    // The replacement reaches the transport while the cancelled prelude is still parked.
+    await waitFor(() => expect(streamPayloads).toHaveLength(1));
+
+    // Now let the stale prelude unwind. It must not touch the live turn's indicators.
+    releaseFirstKey();
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+    expect(screen.getByLabelText('Dừng sinh phản hồi')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Lượt|Đang xử lý/ })).toBeInTheDocument();
+    expect(screen.queryByTestId('inline-api-error-card')).toBeNull();
+
+    releaseStream();
+    await waitFor(() =>
+      expect(screen.getByText('Đang trả lời thay thế')).toBeInTheDocument()
+    );
+  });
+});

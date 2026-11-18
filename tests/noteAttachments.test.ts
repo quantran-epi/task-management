@@ -7,7 +7,7 @@ import {
   deleteNoteAttachment,
   getNoteWithAttachments,
 } from '../src/db/repositories/noteRepo';
-import { exportBackupPayload } from '../src/services/backup/exportBackup';
+import { exportBackupPayload, CURRENT_SCHEMA_VERSION } from '../src/services/backup/exportBackup';
 import { restoreBackupPayload } from '../src/services/backup/restoreBackup';
 import { validateBackupPayload } from '../src/services/backup/validateBackup';
 
@@ -16,8 +16,8 @@ describe('Note Attachments & Backup Serialization', () => {
     await db.notes.clear();
     await db.noteAttachments.clear();
     await db.tasks.clear();
-    await db.milestones.clear();
-    await db.projects.clear();
+    await db.changeRequests.clear();
+    await db.systems.clear();
     await db.capacityRules.clear();
     await db.capacityOverrides.clear();
     await db.plannedAllocations.clear();
@@ -111,7 +111,7 @@ describe('Note Attachments & Backup Serialization', () => {
   });
 
   describe('Backup export and restore round-trip (D-19)', () => {
-    it('exports attachments without binary data in backup payload version 4 and restores metadata faithfully', async () => {
+    it('exports attachments without binary data in the v11 backup payload and restores metadata faithfully', async () => {
       const note = await createNote({
         title: 'Note for backup',
         body: 'Markdown content',
@@ -132,13 +132,14 @@ describe('Note Attachments & Backup Serialization', () => {
 
       // Export
       const backup = await exportBackupPayload();
-      expect(backup.schemaVersion).toBe(10);
+      expect(backup.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
       expect(backup.tables.notes).toHaveLength(1);
       expect((backup.tables as any).noteAttachments).toHaveLength(1);
 
       const exportedAttachment = (backup.tables as any).noteAttachments[0];
       expect(exportedAttachment.data).toBeUndefined();
-      expect(exportedAttachment.filePath).toBe(`attachments/${att.id}_${att.fileName}`);
+      // Export strips filePath (it can be an absolute local path); restore re-derives it.
+      expect(exportedAttachment.filePath).toBeUndefined();
 
       // Validate
       const validation = validateBackupPayload(backup);
@@ -179,9 +180,10 @@ describe('Note Attachments & Backup Serialization', () => {
       const backup = await exportBackupPayload();
 
       // Simulate legacy backup payload containing base64 data
+      // (restore now validates ids at the trust boundary, so the fixture uses a UUID)
       (backup.tables as any).noteAttachments = [
         {
-          id: 'legacy-att-1',
+          id: '0b5bd7d1-3f1e-4f5f-8c3a-9d2e6b7a4c10',
           noteId: note.id,
           fileName: 'legacy.png',
           mimeType: 'image/png',
@@ -210,7 +212,7 @@ describe('Note Attachments & Backup Serialization', () => {
       const note = await createNote({
         title: 'Note with local path',
         body: 'Testing path backup',
-        entityType: 'project',
+        entityType: 'cr',
       });
 
       await addNoteAttachment({
@@ -226,7 +228,8 @@ describe('Note Attachments & Backup Serialization', () => {
       expect((backup.tables as any).noteAttachments).toHaveLength(1);
 
       const exportedAtt = (backup.tables as any).noteAttachments[0];
-      expect(exportedAtt.filePath).toBe('/Users/me/Documents/screenshot-local.png');
+      // Absolute local paths never leave the machine; restore re-derives a relative path.
+      expect(exportedAtt.filePath).toBeUndefined();
       expect(exportedAtt.data).toBeUndefined();
 
       // Validation passes without data
@@ -240,7 +243,7 @@ describe('Note Attachments & Backup Serialization', () => {
       await restoreBackupPayload(backup);
       const restored = await db.noteAttachments.toArray();
       expect(restored).toHaveLength(1);
-      expect(restored[0]?.filePath).toBe('/Users/me/Documents/screenshot-local.png');
+      expect(restored[0]?.filePath).toMatch(/^attachments\/[0-9a-f-]+_screenshot-local\.png$/);
       expect(restored[0]?.fileName).toBe('screenshot-local.png');
     });
   });
