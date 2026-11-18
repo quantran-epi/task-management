@@ -978,7 +978,7 @@ pub async fn start_ghost_dev_session(
                                                 }
 
                                                 let w_status = wchild.wait().await;
-                                                let _ = RUNNING_PROCESS_COUNT.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |c| {
+                                                let _ = RUNNING_PROCESS_COUNT.try_update(Ordering::SeqCst, Ordering::SeqCst, |c| {
                                                     Some(c.saturating_sub(1))
                                                 });
 
@@ -1101,7 +1101,7 @@ pub async fn start_ghost_dev_session(
 
         // Wait for child process exit
         let status = child.wait().await;
-        let _ = RUNNING_PROCESS_COUNT.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |c| {
+        let _ = RUNNING_PROCESS_COUNT.try_update(Ordering::SeqCst, Ordering::SeqCst, |c| {
             Some(c.saturating_sub(1))
         });
 

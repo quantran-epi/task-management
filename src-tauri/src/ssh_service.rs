@@ -444,7 +444,7 @@ pub fn ssh_exec_command(
     // Tool task path: no socket read timeout — only explicit cancel/app exit may stop it.
     let out = crate::tool_cancel::run_cancellable_remote_command(
         &registry,
-        app,
+        app.clone(),
         &config,
         secret.as_deref(),
         call_id,
