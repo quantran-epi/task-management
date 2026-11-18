@@ -9,8 +9,6 @@ export interface OracleToolConfig {
   envVars?: string;
   /** Max rows returned by query (default: 100, max: 1000) */
   maxRows?: number;
-  /** Command timeout in seconds (default: 30) */
-  timeoutSeconds?: number;
   /** Last tested timestamp ISO string */
   lastTestedAt?: string;
   /** Last test status message */

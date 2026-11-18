@@ -210,13 +210,6 @@ export const OracleSqlclSettingsModal: React.FC<OracleSqlclSettingsModalProps> =
             <InputNumber min={10} max={1000} style={{ width: '100%' }} />
           </Form.Item>
 
-          <Form.Item
-            name="timeoutSeconds"
-            label="Timeout (giây)"
-            style={{ width: 120 }}
-          >
-            <InputNumber min={5} max={120} style={{ width: '100%' }} />
-          </Form.Item>
         </Space>
 
         <Form.Item

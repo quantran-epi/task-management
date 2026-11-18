@@ -14,7 +14,6 @@ export const DEFAULT_ORACLE_CONFIG: OracleToolConfig = {
   sqlclPath: 'sql',
   envVars: '',
   maxRows: 100,
-  timeoutSeconds: 30,
 };
 
 /**

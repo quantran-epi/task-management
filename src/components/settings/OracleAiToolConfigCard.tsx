@@ -183,14 +183,6 @@ export const OracleAiToolConfigCard: React.FC<OracleAiToolConfigCardProps> = ({
             <InputNumber min={10} max={1000} style={{ width: '100%' }} />
           </Form.Item>
 
-          <Form.Item
-            name="timeoutSeconds"
-            label="Timeout (giây)"
-            style={{ width: 140 }}
-            tooltip="Thời gian tối đa chờ câu lệnh thực thi (5 - 120 giây)."
-          >
-            <InputNumber min={5} max={120} style={{ width: '100%' }} />
-          </Form.Item>
         </Space>
 
         <Form.Item
