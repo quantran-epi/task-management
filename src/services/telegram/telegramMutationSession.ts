@@ -2,12 +2,17 @@ import type { TaskPlannerDatabase } from '../../db';
 import { db as defaultDb } from '../../db';
 import {
   AI_DATABASE_TOOLS,
+  SSH_READ_TOOLS,
+  ORACLE_READ_TOOLS,
   executeAiTool,
   isMutationTool,
   describeToolMutationWithContext,
   normalizeToolName,
   formatFieldChanges,
 } from '../ai/aiTools';
+import { getGatedAddenda } from '../ai/chatTurnTools';
+import { getOracleToolConfig } from '../ai/oracleSqlclService';
+import { getSshFsToolConfig } from '../ai/sshFsToolService';
 import { discoverAllMcpTools } from '../ai/mcpClient';
 import { streamChatEvents } from '../ai/nineRouterClient';
 import type { ChatCompletionMessage, ToolCall } from '../ai/types';
@@ -260,7 +265,26 @@ export async function executeAdminMutationTurn(
     console.warn('[telegramMutationSession] Failed to discover MCP tools for admin:', err);
   }
 
-  const allAvailableTools = [...AI_DATABASE_TOOLS, ...mcpTools];
+  // Quick cz2: Telegram has no team flag, so SSH/Oracle availability = connection config
+  // existence. A tool whose connection is unconfigured never reaches the model payload.
+  const [oracleCfg, sshFsCfg] = await Promise.all([
+    getOracleToolConfig(db).catch(() => null),
+    getSshFsToolConfig(db).catch(() => null),
+  ]);
+  const gatedAddenda = getGatedAddenda({
+    sshConfigReady: Boolean(sshFsCfg?.sshConfigId),
+    oracleConfigReady: Boolean(oracleCfg?.sshConfigId && oracleCfg?.connectionString),
+  });
+  const gatedNames = new Set(gatedAddenda.map((t) => normalizeToolName(t.function.name)));
+  const disabledNames = new Set(
+    [...SSH_READ_TOOLS, ...ORACLE_READ_TOOLS]
+      .map((t) => normalizeToolName(t.function.name))
+      .filter((name) => !gatedNames.has(name))
+  );
+  const allAvailableTools = [
+    ...AI_DATABASE_TOOLS.filter((t) => !disabledNames.has(normalizeToolName(t.function.name))),
+    ...mcpTools,
+  ];
   const mcpToolNameSet = new Set(mcpTools.map((t) => t.function.name));
 
   let loopCount = 0;

@@ -22,9 +22,15 @@ import {
 } from './telegramMutationSession';
 import {
   AI_DATABASE_TOOLS,
+  SSH_READ_TOOLS,
+  ORACLE_READ_TOOLS,
   executeAiTool,
   isMutationTool,
+  normalizeToolName,
 } from '../ai/aiTools';
+import { getGatedAddenda } from '../ai/chatTurnTools';
+import { getOracleToolConfig } from '../ai/oracleSqlclService';
+import { getSshFsToolConfig } from '../ai/sshFsToolService';
 import { runAiOrchestratorLoop } from '../ai/aiOrchestratorLoop';
 import { sendDesktopNotification } from '../../utils/desktopNotification';
 import { NotificationDeepLink } from '../../utils/notificationDeepLink';
@@ -1465,7 +1471,24 @@ export async function processTelegramInboundMessage(
 
   // Step 7: Filter available read/query tools based on dataScope
   // CRITICAL SECURITY: strictly exclude mutation tools and adhere to dataScope
-  let availableTools = AI_DATABASE_TOOLS.filter((t) => !isMutationTool(t.function.name));
+  // Quick cz2: disable SSH/Oracle at the payload when their shared connection is not configured.
+  const [telegramOracleCfg, telegramSshCfg] = await Promise.all([
+    getOracleToolConfig(db).catch(() => null),
+    getSshFsToolConfig(db).catch(() => null),
+  ]);
+  const telegramGatedAddenda = getGatedAddenda({
+    sshConfigReady: Boolean(telegramSshCfg?.sshConfigId),
+    oracleConfigReady: Boolean(telegramOracleCfg?.sshConfigId && telegramOracleCfg?.connectionString),
+  });
+  const telegramEnabledNames = new Set(telegramGatedAddenda.map((t) => normalizeToolName(t.function.name)));
+  const telegramDisabledNames = new Set(
+    [...SSH_READ_TOOLS, ...ORACLE_READ_TOOLS]
+      .map((t) => normalizeToolName(t.function.name))
+      .filter((name) => !telegramEnabledNames.has(name))
+  );
+  let availableTools = AI_DATABASE_TOOLS.filter(
+    (t) => !isMutationTool(t.function.name) && !telegramDisabledNames.has(normalizeToolName(t.function.name))
+  );
   if (dataScope === 'pure_llm') {
     availableTools = [];
   } else if (dataScope === 'tasks_only') {

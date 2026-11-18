@@ -240,7 +240,15 @@ const waitForReady = (coordinator: TeamRunCoordinator, timeoutMs = 20000): Promi
 interface HarnessOptions {
   scripts: Record<string, LoopScript>;
   teamPatch?: Partial<
-    Pick<AiTeam, 'autoSplitEnabled' | 'autoApproveMutations' | 'budgetTokens' | 'concurrencyLimit'>
+    Pick<
+      AiTeam,
+      | 'autoSplitEnabled'
+      | 'autoApproveMutations'
+      | 'budgetTokens'
+      | 'concurrencyLimit'
+      | 'sshFsToolsEnabled'
+      | 'oracleToolsEnabled'
+    >
   >;
   /** D-03 seam: when true, the coordinator reads its roster from `harness.roster` per turn. */
   useSeam?: boolean;
@@ -336,6 +344,12 @@ async function createHarness(options: HarnessOptions): Promise<Harness> {
         : {}),
       ...(options.teamPatch?.concurrencyLimit !== undefined
         ? { concurrencyLimit: options.teamPatch.concurrencyLimit }
+        : {}),
+      ...(options.teamPatch?.sshFsToolsEnabled !== undefined
+        ? { sshFsToolsEnabled: options.teamPatch.sshFsToolsEnabled }
+        : {}),
+      ...(options.teamPatch?.oracleToolsEnabled !== undefined
+        ? { oracleToolsEnabled: options.teamPatch.oracleToolsEnabled }
         : {}),
       employeeIds: employees.map((row) => row.id),
     },
@@ -1683,6 +1697,8 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       const leadNames: string[][] = [];
       const employeeNames: string[][] = [];
       harness = await createHarness({
+        // Quick cz2: the team flag is on, but the shared connection config is not yet set.
+        teamPatch: { oracleToolsEnabled: true },
         scripts: {
           [LEAD_MODEL]: async (options) => {
             leadNames.push((options.tools ?? []).map((t) => normalizeToolName(t.function.name)));

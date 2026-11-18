@@ -35,6 +35,7 @@ import {
 } from '../../services/ai/aiTools';
 import { runAiOrchestratorLoop } from '../../services/ai/aiOrchestratorLoop';
 import { getToolsForTurn } from '../../services/ai/chatTurnTools';
+import { SSH_READ_TOOLS, ORACLE_READ_TOOLS, normalizeToolName } from '../../services/ai/aiTools';
 import {
   getMcpServers,
   discoverAllMcpTools,
@@ -1816,7 +1817,24 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           logAiChatError('MCP instruction resolution error', err);
         }
       }
-      const toolsForTurn = getToolsForTurn(turnAnalysisMode, dynamicMcpTools);
+      // Quick cz2: chat has no team flag, so SSH/Oracle availability = shared connection config
+      // existence. Tools whose connection is not configured are removed from the payload entirely.
+      const [oracleCfg, sshFsCfg] = await Promise.all([
+        getOracleToolConfig(db).catch(() => null),
+        getSshFsToolConfig(db).catch(() => null),
+      ]);
+      const sshReady = Boolean(sshFsCfg?.sshConfigId);
+      const oracleReady = Boolean(oracleCfg?.sshConfigId && oracleCfg?.connectionString);
+      const disabledToolNames = new Set<string>([
+        ...(sshReady ? [] : SSH_READ_TOOLS.map((t) => normalizeToolName(t.function.name))),
+        ...(oracleReady ? [] : ORACLE_READ_TOOLS.map((t) => normalizeToolName(t.function.name))),
+      ]);
+      const toolsForTurn = getToolsForTurn(
+        turnAnalysisMode,
+        dynamicMcpTools,
+        undefined,
+        disabledToolNames
+      );
 
       let conventionsSegment = '';
       try {

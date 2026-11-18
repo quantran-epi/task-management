@@ -2,10 +2,65 @@ import { describe, it, expect } from 'vitest';
 import {
   EMPLOYEE_READ_ONLY_ALLOWLIST,
   LEAD_TOOL_ALLOWLIST,
+  getGatedAddenda,
   getToolsForTurn,
   payloadHasMutationTool,
 } from '../../src/services/ai/chatTurnTools';
-import { AI_DATABASE_TOOLS, ORACLE_READ_TOOLS, isMutationTool, normalizeToolName } from '../../src/services/ai/aiTools';
+import {
+  AI_DATABASE_TOOLS,
+  SSH_READ_TOOLS,
+  ORACLE_READ_TOOLS,
+  isMutationTool,
+  normalizeToolName,
+} from '../../src/services/ai/aiTools';
+
+describe('quick cz2 enablement gating (getGatedAddenda)', () => {
+  const sshNames = SSH_READ_TOOLS.map((t) => normalizeToolName(t.function.name));
+  const oracleNames = ORACLE_READ_TOOLS.map((t) => normalizeToolName(t.function.name));
+  const namesOf = (tools: { function: { name: string } }[]) => tools.map((t) => normalizeToolName(t.function.name));
+
+  it('advertises nothing when the team flags are off even if config is ready', () => {
+    const addenda = getGatedAddenda({
+      team: { sshFsToolsEnabled: false, oracleToolsEnabled: false },
+      sshConfigReady: true,
+      oracleConfigReady: true,
+    });
+    expect(addenda).toHaveLength(0);
+  });
+
+  it('gives both SSH and Oracle tools when the team flags are on and config is ready', () => {
+    const addenda = getGatedAddenda({
+      team: { sshFsToolsEnabled: true, oracleToolsEnabled: true },
+      sshConfigReady: true,
+      oracleConfigReady: true,
+    });
+    expect(namesOf(addenda).sort()).toEqual([...sshNames, ...oracleNames].sort());
+  });
+
+  it('withholds a tool when config is missing even if the team flag is on', () => {
+    const addenda = getGatedAddenda({
+      team: { sshFsToolsEnabled: true, oracleToolsEnabled: true },
+      sshConfigReady: false,
+      oracleConfigReady: false,
+    });
+    expect(addenda).toHaveLength(0);
+  });
+
+  it('chat/Telegram (no team) advertise from config readiness alone', () => {
+    const addenda = getGatedAddenda({ sshConfigReady: true, oracleConfigReady: false });
+    expect(namesOf(addenda).sort()).toEqual([...sshNames].sort());
+  });
+
+  it('disabledToolNames removes SSH/Oracle tools from getToolsForTurn payloads', () => {
+    const disabled = new Set([...sshNames, ...oracleNames]);
+    const payload = getToolsForTurn(false, [], undefined, disabled);
+    const payloadNames = namesOf(payload);
+    for (const name of [...sshNames, ...oracleNames]) {
+      expect(payloadNames).not.toContain(name);
+    }
+    expect(payloadNames).toContain('query_tasks');
+  });
+});
 
 describe('chatTurnTools allowlists (D-12, D-27)', () => {
   it('employee payload contains no mutation tool', () => {

@@ -85,6 +85,24 @@ describe('getAllAvailableToolDefinitions (tool catalog aggregate)', () => {
     );
   });
 
+  it('points SSH/Oracle tool usage at the gated dispatch sites (quick cz2)', async () => {
+    const entries = await catalog(db);
+    const find = (name: string) =>
+      entries.find((entry) => normalizeToolName(entry.tool.function.name) === name);
+    for (const name of ['ssh_read_file_page', 'ssh_list_dir', 'ssh_grep_files', 'oracle_query', 'oracle_describe']) {
+      const entry = find(name);
+      expect(entry).toBeDefined();
+      expect(entry?.usage.labels.join(' ')).toContain('gated');
+      const refs = entry?.usage.references.join(' ') ?? '';
+      expect(refs).toContain('teamRunCoordinator.ts');
+      expect(refs).toContain('AIChatDrawer.tsx');
+      expect(refs).toContain('telegramHeadlessWorker.ts');
+      expect(refs).toContain('telegramMutationSession.ts');
+      expect(refs).not.toContain(':1311');
+      expect(refs).not.toContain(':1802');
+    }
+  });
+
   it('annotates team tools, mutation tools, and argument-independent mutation detection', async () => {
     const entries = await catalog(db);
     const find = (name: string) =>

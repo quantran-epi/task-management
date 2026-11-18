@@ -1,9 +1,12 @@
 import {
   AI_DATABASE_TOOLS,
+  SSH_READ_TOOLS,
+  ORACLE_READ_TOOLS,
   type AiToolDefinition,
   isMutationTool,
   normalizeToolName,
 } from './aiTools';
+import type { AiTeam } from '../../types/aiOffice';
 import { isReadOnlyMcpTool } from './mcpClient';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { TEAM_TOOL_DEFINITIONS } from './office/teamTools';
@@ -63,6 +66,33 @@ export function payloadHasMutationTool(tools: readonly AiToolDefinition[]): bool
   return tools.some((tool) => isMutationTool(tool.function.name));
 }
 
+export interface GatedAddendaOptions {
+  /** Team chat context: enablement is a per-team row flag. Absent for chat/Telegram. */
+  team?: Pick<AiTeam, 'sshFsToolsEnabled' | 'oracleToolsEnabled'> | undefined;
+  /** Connection readiness = configured connection exists (no global enable flag). */
+  sshConfigReady: boolean;
+  oracleConfigReady: boolean;
+}
+
+/**
+ * Quick cz2 (decisions 5/7): SSH FS / Oracle tools are advertised only when enabled.
+ *
+ * - Team chat: enabled iff the team row flag is true AND the shared connection is ready.
+ * - Ordinary chat / Telegram (no team): enabled iff the shared connection is ready.
+ *
+ * Pure by design — no DB reads here; callers resolve config readiness per turn. Both lead and
+ * employee payloads consume the result, so a disabled tool never reaches the model at all.
+ */
+export function getGatedAddenda(options: GatedAddendaOptions): AiToolDefinition[] {
+  const { team, sshConfigReady, oracleConfigReady } = options;
+  const sshEnabled = team ? team.sshFsToolsEnabled === true && sshConfigReady : sshConfigReady;
+  const oracleEnabled = team ? team.oracleToolsEnabled === true && oracleConfigReady : oracleConfigReady;
+  return [
+    ...(sshEnabled ? SSH_READ_TOOLS : []),
+    ...(oracleEnabled ? ORACLE_READ_TOOLS : []),
+  ];
+}
+
 /**
  * Tool set for a single chat turn. In ordinary chat Analysis Mode no longer strips
  * mutation DB tools: the runtime parks every mutation for explicit user approval, so
@@ -74,19 +104,23 @@ export function payloadHasMutationTool(tools: readonly AiToolDefinition[]): bool
 export function getToolsForTurn(
   effectiveAnalysisMode: boolean,
   dynamicMcpTools: AiToolDefinition[] = [],
-  allowedToolNames?: readonly string[]
+  allowedToolNames?: readonly string[],
+  disabledToolNames: ReadonlySet<string> = new Set()
 ): AiToolDefinition[] {
   const allowed = allowedToolNames === undefined
     ? undefined
     : new Set(allowedToolNames.map(normalizeToolName));
+  const isDisabled = (name: string) => disabledToolNames.has(normalizeToolName(name));
   return [
     ...AI_DATABASE_TOOLS.filter((tool) =>
+      !isDisabled(tool.function.name) &&
       (!allowed || allowed.has(normalizeToolName(tool.function.name))) &&
       (allowed !== undefined || !['get_artifact', 'patch_artifact_section'].includes(normalizeToolName(tool.function.name))) &&
       // ponytail: mutation tools stay in the ordinary-chat payload (approval card guards them);
       // an explicit allowlist keeps its read-only-by-default contract.
       (!effectiveAnalysisMode || allowed === undefined || !isMutationTool(normalizeToolName(tool.function.name)))),
     ...dynamicMcpTools.filter((tool) =>
+      !isDisabled(tool.function.name) &&
       (!allowed || allowed.has(normalizeToolName(tool.function.name))) &&
       (!(effectiveAnalysisMode || allowed) || isReadOnlyMcpTool(normalizeToolName(tool.function.name)))),
   ];
@@ -166,6 +200,20 @@ const CURATED_GRAPHITI_USAGE: ToolCatalogUsage = {
   references: ['graphitiMcpClient.ts:240', 'mcpClient.ts:356'],
 };
 
+/**
+ * Quick cz2: where the enablement-gated SSH FS / Oracle tools are actually dispatched.
+ * Both team roles receive the same addenda; chat and Telegram pass a disabled-name set.
+ */
+const SSH_ORACLE_USAGE: ToolCatalogUsage = {
+  labels: ['Chat thường (gated)', 'Agent nhóm lead/employee (gated)', 'Telegram (gated)'],
+  references: [
+    'teamRunCoordinator.ts (leadTools + employeeTools getGatedAddenda)',
+    'AIChatDrawer.tsx (gated getToolsForTurn)',
+    'telegramHeadlessWorker.ts (gated getGatedAddenda)',
+    'telegramMutationSession.ts (gated getGatedAddenda)',
+  ],
+};
+
 /** Specific overrides layered on top of the builtin defaults. */
 const BUILTIN_USAGE_OVERRIDES: Record<string, ToolCatalogUsage> = {
   query_tasks: {
@@ -177,15 +225,11 @@ const BUILTIN_USAGE_OVERRIDES: Record<string, ToolCatalogUsage> = {
       'telegramHeadlessWorker.ts:1468',
     ],
   },
-  ssh_read_file_page: {
-    labels: ['Chat thường', 'Agent nhóm', 'Telegram headless'],
-    references: [
-      'AIChatDrawer.tsx:1802',
-      'teamRunCoordinator.ts:1311',
-      'teamRunCoordinator.ts:1333',
-      'telegramHeadlessWorker.ts:1468',
-    ],
-  },
+  ssh_read_file_page: SSH_ORACLE_USAGE,
+  ssh_list_dir: SSH_ORACLE_USAGE,
+  ssh_grep_files: SSH_ORACLE_USAGE,
+  oracle_query: SSH_ORACLE_USAGE,
+  oracle_describe: SSH_ORACLE_USAGE,
 };
 
 function mergeUsage(...parts: (ToolCatalogUsage | undefined)[]): ToolCatalogUsage {
@@ -213,15 +257,16 @@ export async function getAllAvailableToolDefinitions(
   const builtinEntries: ToolCatalogEntry[] = AI_DATABASE_TOOLS.map((tool) => {
     const name = normalizeToolName(tool.function.name);
     const mutation = isMutationTool(name);
+    const override = BUILTIN_USAGE_OVERRIDES[name];
+    // Entries with a specific override own their usage map: merging the generic curated
+    // defaults would reintroduce the stale dispatch refs the override exists to replace.
     return {
       tool,
       source: 'builtin',
       isMutationTool: mutation,
-      usage: mergeUsage(
-        BUILTIN_USAGE_OVERRIDES[name],
-        CURATED_BUILTIN_USAGE,
-        mutation ? MUTATION_EXTRA_USAGE : undefined
-      ),
+      usage: override
+        ? mergeUsage(override, mutation ? MUTATION_EXTRA_USAGE : undefined)
+        : mergeUsage(CURATED_BUILTIN_USAGE, mutation ? MUTATION_EXTRA_USAGE : undefined),
     };
   });
 

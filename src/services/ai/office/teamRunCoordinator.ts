@@ -35,7 +35,6 @@ import { dispatchAiToolCall } from '../aiOrchestratorLoop';
 import type { ChatCompletionMessage } from '../types';
 import {
   AI_DATABASE_TOOLS,
-  ORACLE_READ_TOOLS,
   isMutationTool,
   normalizeToolName,
   type AiToolDefinition,
@@ -43,10 +42,12 @@ import {
 import {
   EMPLOYEE_READ_ONLY_ALLOWLIST,
   LEAD_TOOL_ALLOWLIST,
+  getGatedAddenda,
   getToolsForTurn,
 } from '../chatTurnTools';
 import { discoverAllMcpTools, isReadOnlyMcpTool } from '../mcpClient';
 import { getOracleToolConfig } from '../oracleSqlclService';
+import { getSshFsToolConfig } from '../sshFsToolService';
 import { aiTurnManager } from '../aiTurnManager';
 import { createTeamRunRegistry, type TeamRunRegistry } from './teamRunRegistry';
 import { createTeamRunScheduler, type SchedulerHandle } from './scheduler';
@@ -1304,6 +1305,29 @@ export function createTeamRunCoordinator(
       : undefined;
   }
 
+  /**
+   * Quick cz2: SSH FS / Oracle tool readiness is resolved per payload (never cached across
+   * turns). Both lead and employee get the FULL tool set when their team flag is on — this is
+   * decision 5, not a lead-only privilege. Pass the live team row so `getGatedAddenda` can gate
+   * on the per-team flags; connection readiness comes from the single global config.
+   */
+  async function gatedAddenda(): Promise<AiToolDefinition[]> {
+    // Fast path: with no per-team flag on, the addenda are empty regardless of config —
+    // skip the config reads so tool assembly stays synchronous for the common case.
+    if (liveTeam.sshFsToolsEnabled !== true && liveTeam.oracleToolsEnabled !== true) {
+      return [];
+    }
+    const [sshCfg, oracleCfg] = await Promise.all([
+      getSshFsToolConfig(db).catch(() => null),
+      getOracleToolConfig(db).catch(() => ({ sshConfigId: '', connectionString: '' })),
+    ]);
+    return getGatedAddenda({
+      team: liveTeam,
+      sshConfigReady: Boolean(sshCfg?.sshConfigId),
+      oracleConfigReady: Boolean(oracleCfg.sshConfigId && oracleCfg.connectionString),
+    });
+  }
+
   async function leadTools(): Promise<AiToolDefinition[]> {
     // CR-04 / D-13: the lead is the only agent allowed to mutate, so its payload must
     // actually advertise the mutation tools — the runtime parks each one on the
@@ -1324,7 +1348,7 @@ export function createTeamRunCoordinator(
         (tool) => !EMPLOYEE_ONLY_TEAM_TOOLS.has(normalizeToolName(tool.function.name))
       ),
       ...mcpReadOnlyTools(),
-      ...(await oracleReadTools()),
+      ...(await gatedAddenda()),
     ];
   }
 
@@ -1333,20 +1357,8 @@ export function createTeamRunCoordinator(
       ...getToolsForTurn(true, [], EMPLOYEE_READ_ONLY_ALLOWLIST),
       ...EMPLOYEE_TEAM_TOOLS,
       ...mcpReadOnlyTools(),
-      ...(await oracleReadTools()),
+      ...(await gatedAddenda()),
     ];
-  }
-
-  /**
-   * Oracle read is advertised only while the AI Tool is enabled — a disabled Oracle in the
-   * payload is the "model calls unrelated tools" problem. Read per payload, not cached, so a
-   * mid-session toggle reaches the next turn. `getOracleToolConfig` already returns the
-   * disabled default on error, so no try/catch here.
-   */
-  async function oracleReadTools(): Promise<AiToolDefinition[]> {
-    const cfg = await getOracleToolConfig(db);
-    // Quick cz2: enable/disable is per-team (Task 5 gating); here only connection readiness.
-    return cfg.sshConfigId && cfg.connectionString ? ORACLE_READ_TOOLS : [];
   }
 
   /**
