@@ -2,17 +2,13 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   EXPLORE_DEFAULT_MAX_TURNS,
-  EXPLORE_DEFAULT_TIMEOUT_MS,
-  EXPLORE_MAX_TIMEOUT_SECONDS,
   EXPLORE_MAX_TURNS_CAP,
-  EXPLORE_MIN_TIMEOUT_SECONDS,
   EXPLORE_REPORT_MAX_CHARS,
   buildExploreCommand,
   REMOTE_CLAUDE_AUTH_SETTINGS,
   SSH_TRANSPORT_RETRY_ATTEMPTS,
   SSH_TRANSPORT_RETRY_BACKOFF_MS,
   isTransientSshTransportError,
-  clampExploreTimeoutSeconds,
   parseExploreResult,
   probeRemoteClaude,
   resetRemoteClaudeProbeCache,
@@ -131,33 +127,13 @@ describe('buildExploreCommand (43-04 D-03)', () => {
   });
 });
 
-describe('clampExploreTimeoutSeconds (44-01 D-01)', () => {
-  it('exports the advertised bounds and unchanged default', () => {
-    expect(EXPLORE_MIN_TIMEOUT_SECONDS).toBe(60);
-    expect(EXPLORE_MAX_TIMEOUT_SECONDS).toBe(900);
-    expect(EXPLORE_DEFAULT_TIMEOUT_MS).toBe(300_000);
-  });
-
-  it('passes in-range values through and clamps out-of-range values to the nearest boundary', () => {
-    expect(clampExploreTimeoutSeconds(60)).toBe(60);
-    expect(clampExploreTimeoutSeconds(900)).toBe(900);
-    expect(clampExploreTimeoutSeconds(59)).toBe(60);
-    expect(clampExploreTimeoutSeconds(901)).toBe(900);
-    // 0 is out of range on the low side, not "absent" — it clamps to the floor.
-    expect(clampExploreTimeoutSeconds(0)).toBe(60);
-  });
-
-  it('falls back to 300 for absent, non-finite and unparseable input', () => {
-    expect(clampExploreTimeoutSeconds(undefined)).toBe(300);
-    expect(clampExploreTimeoutSeconds(Number.NaN)).toBe(300);
-    expect(clampExploreTimeoutSeconds(Number.POSITIVE_INFINITY)).toBe(300);
-    expect(clampExploreTimeoutSeconds('không phải số')).toBe(300);
-  });
-
-  it('floors fractional values before clamping', () => {
-    expect(clampExploreTimeoutSeconds(120.9)).toBe(120);
-    // Floored first, then clamped: 59.9 -> 59 -> 60.
-    expect(clampExploreTimeoutSeconds(59.9)).toBe(60);
+describe('no explore timeout (tool-lifecycle contract)', () => {
+  it('exports no timeout bounds and no timeout clamp', async () => {
+    const mod = await import('../../src/services/remoteExploreService');
+    expect('clampExploreTimeoutSeconds' in mod).toBe(false);
+    expect('EXPLORE_DEFAULT_TIMEOUT_MS' in mod).toBe(false);
+    expect('EXPLORE_MIN_TIMEOUT_SECONDS' in mod).toBe(false);
+    expect('EXPLORE_MAX_TIMEOUT_SECONDS' in mod).toBe(false);
   });
 });
 
@@ -262,9 +238,7 @@ describe('runRemoteExplore (43-04 D-03)', () => {
     expect(cancel).not.toHaveBeenCalled();
   });
 
-  it('bounds a stream that never exits, cancels it, and reports timeout', async () => {
-    vi.useFakeTimers();
-
+  it('never ends a stream that runs past any elapsed time: only explicit abort cancels', async () => {
     const cancel = vi.fn(async () => {});
     const stream = vi.fn(
       async (
@@ -277,149 +251,41 @@ describe('runRemoteExplore (43-04 D-03)', () => {
         return cancel;
       }
     );
+    const controller = new AbortController();
 
-    const pending = runRemoteExplore(CONFIG, undefined, request(), { stream });
-    // Let the stream handle resolve before the wall clock fires.
-    await vi.advanceTimersByTimeAsync(0);
-    await vi.advanceTimersByTimeAsync(300_000);
+    const pending = runRemoteExplore(CONFIG, undefined, request(), { stream, signal: controller.signal });
+    let settled = false;
+    void pending.then(() => { settled = true; });
+    // No time source exists in the implementation; no timer can settle this promise.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    expect(cancel).not.toHaveBeenCalled();
 
+    controller.abort();
     const outcome = await pending;
-    expect(outcome.outcome).toBe('error');
-    expect(outcome.detail).toBe('timeout');
-    expect(outcome.report).toBe('một phần báo cáo');
+    expect(outcome.detail).toBe('aborted');
     expect(cancel).toHaveBeenCalledTimes(1);
-    expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('caps a timeout report at the same budget as a parsed one', async () => {
-    vi.useFakeTimers();
-
+  it('uses the model call id as the ssh stream session id so cancel targets the right task', async () => {
     const stream = vi.fn(
       async (
         _config: SshConfig,
         _command: string,
         _sessionId: string,
-        onData: (e: SshStreamEvent) => void
+        _onData: (e: SshStreamEvent) => void,
+        onExit: (e: SshStreamExitEvent) => void
       ) => {
-        // Never exits and never prints JSON: the raw stream is all the caller will get.
-        onData({ sessionId: 's', stream: 'stdout', line: 'y'.repeat(EXPLORE_REPORT_MAX_CHARS * 3) });
+        onExit({ sessionId: 's', exitStatus: 0, error: null });
         return async () => {};
       }
     );
-
-    const pending = runRemoteExplore(CONFIG, undefined, request(), { stream });
-    await vi.advanceTimersByTimeAsync(0);
-    await vi.advanceTimersByTimeAsync(300_000);
-
-    const outcome = await pending;
-    expect(outcome.detail).toBe('timeout');
-    expect(outcome.report).toHaveLength(EXPLORE_REPORT_MAX_CHARS);
-    expect(outcome.truncated).toBe(true);
+    await runRemoteExplore(CONFIG, undefined, request(), { stream, callId: 'call-model-42' });
+    expect(stream.mock.calls.at(-1)?.[2]).toBe('call-model-42');
   });
 
-  it('uses the deps timeoutMs deadline to cancel and report timeout at that instant', async () => {
-    vi.useFakeTimers();
-
-    const cancel = vi.fn(async () => {});
-    const stream = vi.fn(
-      async (
-        _config: SshConfig,
-        _command: string,
-        _sessionId: string,
-        onData: (e: SshStreamEvent) => void
-      ) => {
-        onData({ sessionId: 's', stream: 'stdout', line: 'một phần' });
-        return cancel;
-      }
-    );
-
-    const pending = runRemoteExplore(CONFIG, undefined, request(), {
-      stream,
-      timeoutMs: 60_000,
-    });
-    await vi.advanceTimersByTimeAsync(0);
-    // Just under the derived deadline: still pending.
-    await vi.advanceTimersByTimeAsync(59_999);
-    let settled = false;
-    void pending.then(() => {
-      settled = true;
-    });
-    await vi.advanceTimersByTimeAsync(0);
-    expect(settled).toBe(false);
-    // Exactly at the deadline the watchdog fires.
-    await vi.advanceTimersByTimeAsync(1);
-
-    const outcome = await pending;
-    expect(outcome.outcome).toBe('error');
-    expect(outcome.detail).toBe('timeout');
-    expect(cancel).toHaveBeenCalledTimes(1);
-    expect(vi.getTimerCount()).toBe(0);
-  });
-
-  it('a custom timeoutMs still cancels the remote and keeps the bounded timeout report', async () => {
-    vi.useFakeTimers();
-
-    const cancel = vi.fn(async () => {});
-    const stream = vi.fn(
-      async (
-        _config: SshConfig,
-        _command: string,
-        _sessionId: string,
-        onData: (e: SshStreamEvent) => void
-      ) => {
-        // Never exits: the watchdog must end the run.
-        onData({ sessionId: 's', stream: 'stdout', line: 'chưa xong' });
-        return cancel;
-      }
-    );
-
-    const pending = runRemoteExplore(CONFIG, undefined, request(), {
-      stream,
-      timeoutMs: 60_000,
-    });
-    await vi.advanceTimersByTimeAsync(60_000);
-
-    const outcome = await pending;
-    // Cancel is load-bearing: the derived deadline must not drop it (D-02).
-    expect(cancel).toHaveBeenCalledTimes(1);
-    expect(outcome.outcome).toBe('error');
-    expect(outcome.detail).toBe('timeout');
-    expect(outcome.report).toBe('chưa xong');
-    expect(vi.getTimerCount()).toBe(0);
-  });
-
-  it('a custom timeoutMs leaves no pending timer when the stream exits early', async () => {
-    vi.useFakeTimers();
-
-    const cancel = vi.fn(async () => {});
-    const stream = vi.fn(
-      async (
-        _config: SshConfig,
-        _command: string,
-        _sessionId: string,
-        onData: (e: SshStreamEvent) => void,
-        onExit: (e: SshStreamExitEvent) => void
-      ) => {
-        onData({ sessionId: 's', stream: 'stdout', line: '{"is_error":false,"result":"xong"}' });
-        onExit({ sessionId: 's', exitStatus: 0, error: null });
-        return cancel;
-      }
-    );
-
-    const outcome = await runRemoteExplore(CONFIG, undefined, request(), {
-      stream,
-      timeoutMs: 60_000,
-    });
-
-    expect(outcome.outcome).toBe('success');
-    // A stream that finishes before the deadline must clear the watchdog (D-02).
-    expect(vi.getTimerCount()).toBe(0);
-    expect(cancel).not.toHaveBeenCalled();
-  });
-
-  it('cancels a process whose stream handle resolves after the timeout', async () => {
-    vi.useFakeTimers();
-
+  it('cancels a process whose stream handle resolves after an explicit abort', async () => {
     const cancel = vi.fn(async () => {});
     let releaseHandle: ((handle: () => Promise<void>) => void) | undefined;
     const stream = vi.fn(
@@ -428,17 +294,15 @@ describe('runRemoteExplore (43-04 D-03)', () => {
           releaseHandle = resolve;
         })
     );
+    const controller = new AbortController();
 
-    const pending = runRemoteExplore(CONFIG, undefined, request(), { stream });
-    // SSH connect still in flight when the wall clock fires.
-    await vi.advanceTimersByTimeAsync(300_000);
-    expect((await pending).detail).toBe('timeout');
+    const pending = runRemoteExplore(CONFIG, undefined, request(), { stream, signal: controller.signal });
+    controller.abort();
+    expect((await pending).detail).toBe('aborted');
 
     releaseHandle!(cancel);
-    await vi.advanceTimersByTimeAsync(0);
-
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
     expect(cancel).toHaveBeenCalledTimes(1);
-    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('caches a positive probe but re-probes a negative one', async () => {

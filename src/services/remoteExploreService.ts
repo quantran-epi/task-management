@@ -8,18 +8,15 @@ import type { SshConfig } from '../types/ssh';
  * model with its own context window does the reading on the remote host and returns only
  * conclusions, capped.
  *
- * Everything in this module is pure or takes an injected function, so the command shape, the
- * parser and the timeout are provable without SSH.
+ * Everything in this module is pure or takes an injected function, so the command shape and
+ * the parser are provable without SSH.
  *
- * Ceiling: the remote CLI's own `--max-turns` is the only server-side bound; `timeout(1)` is not
- * portable to stock macOS, so the wall clock is enforced here and cancelled through the stream
- * handle. A wedged remote process the SSH layer cannot kill still strands the turn.
+ * No wall clock, watchdog or idle timeout exists here. The remote CLI's `--max-turns` bounds
+ * its own work; otherwise the run ends only on explicit Cancel (id-only `ssh_kill_process`
+ * with the model's call id) or app exit.
  */
 
 export const EXPLORE_REPORT_MAX_CHARS = 12_000;
-export const EXPLORE_DEFAULT_TIMEOUT_MS = 300_000;
-export const EXPLORE_MIN_TIMEOUT_SECONDS = 60;
-export const EXPLORE_MAX_TIMEOUT_SECONDS = 900;
 export const EXPLORE_DEFAULT_MAX_TURNS = 20;
 export const EXPLORE_MAX_TURNS_CAP = 40;
 
@@ -71,16 +68,6 @@ export function clampExploreMaxTurns(value: unknown): number {
   const n = Math.floor(Number(value));
   if (!Number.isFinite(n)) return EXPLORE_DEFAULT_MAX_TURNS;
   return Math.min(Math.max(1, n), EXPLORE_MAX_TURNS_CAP);
-}
-
-/**
- * Phase 44 D-01: clamps a caller-supplied deadline into the advertised 60..900s range. Invalid,
- * fractional and out-of-range input never refuses the call — it clamps or falls back to 300s.
- */
-export function clampExploreTimeoutSeconds(value: unknown): number {
-  const n = Math.floor(Number(value));
-  if (!Number.isFinite(n)) return EXPLORE_DEFAULT_TIMEOUT_MS / 1000;
-  return Math.min(Math.max(EXPLORE_MIN_TIMEOUT_SECONDS, n), EXPLORE_MAX_TIMEOUT_SECONDS);
 }
 
 /**
@@ -331,22 +318,21 @@ export async function probeRemoteClaude(
 export interface RunRemoteExploreDeps {
   stream?: typeof execRemoteCommandStream;
   /**
-   * The turn's abort signal. A cancelled turn must not leave a remote process reading for the
-   * full wall clock, so abort cancels the stream exactly like the timeout does.
+   * The turn's abort signal. Only an explicit Stop uses it; there is no time-based ending.
    */
   signal?: AbortSignal | undefined;
   /**
-   * Phase 44 D-02: the per-call watchdog deadline in milliseconds, derived by the caller from a
-   * clamped `timeoutSeconds`. Optional so existing callers keep the 300s default contract.
+   * The model's real tool-call id. Used as the SSH stream session id so explicit Cancel kills
+   * exactly this task through `ssh_kill_process` — the stream registry's id-only cancel handle.
    */
-  timeoutMs?: number | undefined;
+  callId?: string | undefined;
   /** Injectable for tests; production uses the real timer. */
   sleep?: (ms: number) => Promise<void>;
 }
 
 /**
- * Runs the explore command and bounds it on this side. The remote may lack `timeout(1)`, so the
- * wall clock lives here and cancels through the handle the stream returns.
+ * Runs the explore command until the remote exits, the user cancels by call id, or the app exits.
+ * NO timeout/watchdog exists here under any name.
  */
 export async function runRemoteExplore(
   config: SshConfig,
@@ -355,17 +341,16 @@ export async function runRemoteExplore(
   deps: RunRemoteExploreDeps = {}
 ): Promise<ExploreOutcome> {
   const stream = deps.stream ?? execRemoteCommandStream;
-  const timeoutMs = deps.timeoutMs ?? EXPLORE_DEFAULT_TIMEOUT_MS;
   const command = buildExploreCommand(request);
-  const sessionId = crypto.randomUUID();
+  // Real model call id when present: registry cancellation addresses exactly this stream.
+  const sessionId = deps.callId ?? crypto.randomUUID();
 
   let stdout = '';
   let stderr = '';
   let overflowed = false;
   let settled = false;
-  /** Set when the settle was a cancel (timeout or abort) with no stream handle yet. */
+  /** Set when an explicit cancel arrived before the stream handle existed. */
   let cancelOnArrival = false;
-  let timer: ReturnType<typeof setTimeout> | undefined;
   let cancel: (() => Promise<void>) | undefined;
   const signal = deps.signal;
 
@@ -373,7 +358,6 @@ export async function runRemoteExplore(
     const finish = (outcome: ExploreOutcome) => {
       if (settled) return;
       settled = true;
-      if (timer !== undefined) clearTimeout(timer);
       signal?.removeEventListener('abort', onAbort);
       resolve(overflowed ? { ...outcome, truncated: true } : outcome);
     };
@@ -420,22 +404,6 @@ export async function runRemoteExplore(
       finish(parseExploreResult(stdout));
     };
 
-    timer = setTimeout(() => {
-      // The remote is wedged: kill it, keep whatever arrived, and never hang the turn.
-      cancelOnArrival = true;
-      void cancel?.().catch(() => undefined);
-      // Same cap as the parsed path: a wedged remote that streamed 48k must not hand the
-      // calling model 4× the report budget just because it never printed valid JSON.
-      finish(
-        capReport({
-          report: stdout.trim(),
-          truncated: false,
-          outcome: 'error',
-          detail: 'timeout',
-        })
-      );
-    }, timeoutMs);
-
     void (async () => {
       try {
         const handle = await withSshTransportRetry(
@@ -443,8 +411,8 @@ export async function runRemoteExplore(
           deps
         );
         cancel = handle;
-        // The wall clock (or an abort) can fire while the SSH connect is still in flight; the
-        // process it would have killed is now live and nothing else would ever cancel it.
+        // An explicit abort can fire while the SSH connect is still in flight; the process it
+        // would have killed is now live and nothing else would ever cancel it.
         if (cancelOnArrival) await handle().catch(() => undefined);
       } catch (err: any) {
         finish(
