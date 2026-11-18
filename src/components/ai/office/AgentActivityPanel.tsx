@@ -421,7 +421,7 @@ const PromptLogTab: React.FC<{ logs: TeamDebugLog[]; onClearLogs: () => void }> 
  * D-09/D-10/D-11/D-12: the collapsible right rail. Presentational only — the workspace owns
  * the run snapshot, the roster, the prompt capture and the shared open state.
  */
-export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = ({
+export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = React.memo(({
   agents,
   roster,
   debugLogs,
@@ -445,6 +445,10 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = ({
   rows.sort((a, b) => b.sortMs - a.sortMs);
 
   const pillIds = Array.from(new Set([...roster.map((member) => member.id), ...rows.map((row) => row.agentId)]));
+  // Count pills once instead of filtering the whole row list inside every pill's render —
+  // with up to MAX_LIVE_STEPS rows that O(n²) scan ran on every snapshot update.
+  const countByAgent = new Map<string, number>();
+  for (const row of rows) countByAgent.set(row.agentId, (countByAgent.get(row.agentId) ?? 0) + 1);
   const visibleRows = filter === 'all' ? rows : rows.filter((row) => row.agentId === filter);
   const runningExplore = visibleRows.find(
     (row) => row.toolName === 'explore_repo' && row.status === 'running'
@@ -501,7 +505,7 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = ({
         >
           {['all', ...pillIds].map((id) => {
             const active = filter === id;
-            const count = id === 'all' ? rows.length : rows.filter((row) => row.agentId === id).length;
+            const count = id === 'all' ? rows.length : countByAgent.get(id) ?? 0;
             return (
               <Button
                 key={id}
@@ -598,6 +602,6 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = ({
       </div>
     </aside>
   );
-};
+});
 
 export default AgentActivityPanel;

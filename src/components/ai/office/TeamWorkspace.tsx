@@ -563,6 +563,19 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     [roster, team.leadId]
   );
 
+  // Stable identity for the memoized activity rail: an inline `.map()` here made every composer
+  // keystroke (which re-renders this host) defeat AgentActivityPanel's React.memo (ai-chat-input-lag).
+  const activityRoster = useMemo(
+    () => roster.map((member) => ({
+      id: member.id,
+      name: member.name,
+      ...(member.id === team.leadId ? { isLead: true } : {}),
+    })),
+    [roster, team.leadId]
+  );
+  const clearDebugLogs = useCallback(() => setDebugLogs([]), []);
+  const closeActivity = useCallback(() => setActivityOpen(false), []);
+
   /** Memoized so a composer keystroke does not change the transcript list's props. */
   const messageListExtensions = useMemo(
     () => ({
@@ -765,38 +778,45 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     }
   };
 
-  const transcriptExtensions = (
-    <>
-      <TeamActivityIndicator
-        phase={snapshot.phase}
-        agents={snapshot.agents}
-        agentDirectory={agentDirectory}
-        leadId={team.leadId}
-        {...(coordinator ? { onStopAgent: (agentId: string) => coordinator.stopAgent(agentId) } : {})}
-      />
-      {(snapshot.pendingPlan ?? snapshot.lastPlan) && (
-        <AssignmentPlanCard
-          plan={(snapshot.pendingPlan ?? snapshot.lastPlan)!}
-          decision={
-            snapshot.pendingPlan ? planDecision : snapshot.lastPlanDecision ?? undefined
-          }
-          onApprove={() => {
-            setPlanDecision('approved');
-            coordinator?.resolvePlan(true);
-          }}
-          onReject={() => {
-            setPlanDecision('rejected');
-            coordinator?.resolvePlan(false);
-          }}
+  // Stable identity: an inline element here changed on every composer keystroke and forced the
+  // whole widget subtree (indicator, plan card, proposals) to re-render (ai-chat-input-lag).
+  const transcriptExtensions = useMemo(
+    () => (
+      <>
+        <TeamActivityIndicator
+          phase={snapshot.phase}
+          agents={snapshot.agents}
+          agentDirectory={agentDirectory}
+          leadId={team.leadId}
+          {...(coordinator ? { onStopAgent: (agentId: string) => coordinator.stopAgent(agentId) } : {})}
         />
-      )}
-      <PendingSkillProposals
-        members={liveMembers}
-        employees={employees}
-        skills={skills}
-        db={db}
-      />
-    </>
+        {(snapshot.pendingPlan ?? snapshot.lastPlan) && (
+          <AssignmentPlanCard
+            plan={(snapshot.pendingPlan ?? snapshot.lastPlan)!}
+            decision={
+              snapshot.pendingPlan ? planDecision : snapshot.lastPlanDecision ?? undefined
+            }
+            onApprove={() => {
+              setPlanDecision('approved');
+              coordinator?.resolvePlan(true);
+            }}
+            onReject={() => {
+              setPlanDecision('rejected');
+              coordinator?.resolvePlan(false);
+            }}
+          />
+        )}
+        <PendingSkillProposals
+          members={liveMembers}
+          employees={employees}
+          skills={skills}
+          db={db}
+        />
+      </>
+    ),
+    [snapshot.phase, snapshot.agents, snapshot.pendingPlan, snapshot.lastPlan,
+      snapshot.lastPlanDecision, planDecision, coordinator, agentDirectory, team.leadId,
+      liveMembers, employees, skills, db]
   );
 
   return (
@@ -1070,10 +1090,10 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
           <Splitter.Panel defaultSize="28%" min={280} max="50%">
             <AgentActivityPanel
               agents={snapshot.agents}
-              roster={roster.map((member) => ({ id: member.id, name: member.name, ...(member.id === team.leadId ? { isLead: true } : {}) }))}
+              roster={activityRoster}
               debugLogs={debugLogs}
-              onClearLogs={() => setDebugLogs([])}
-              onClose={() => setActivityOpen(false)}
+              onClearLogs={clearDebugLogs}
+              onClose={closeActivity}
               open={activityOpen}
             />
           </Splitter.Panel>

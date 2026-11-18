@@ -116,6 +116,51 @@ describe('AgentActivityPanel — tabs and a11y (44-03 Task 2)', () => {
   });
 });
 
+describe('AgentActivityPanel — render cost (ai-chat-input-lag)', () => {
+  /**
+   * Oracle: specified. A composer keystroke re-renders TeamWorkspace; the activity rail must
+   * NOT rebuild its timeline when its own props are unchanged. `Date.parse` is called once per
+   * row in `toTimelineRow`, so a stable-props re-render that calls it again proves wasted work.
+   * Boundary neighbours: same props (must skip) vs a genuinely changed step (must rebuild).
+   */
+  it('does not rebuild the timeline when re-rendered with identical props', () => {
+    const agents: AgentRunState[] = [{
+      agentId: 'agent-1', status: 'running', streamingText: '',
+      steps: [
+        stepRow({ id: 'stable-1', toolName: 'oracle_query' }),
+        stepRow({ id: 'stable-2', toolName: 'oracle_describe' }),
+      ],
+    }];
+    const logs: TeamDebugLog[] = [];
+    const clear = () => {};
+    const parseSpy = vi.spyOn(Date, 'parse');
+
+    try {
+      const { rerender } = render(
+        <AgentActivityPanel agents={agents} roster={ROSTER} debugLogs={logs} onClearLogs={clear} />
+      );
+      const afterMount = parseSpy.mock.calls.length;
+
+      rerender(
+        <AgentActivityPanel agents={agents} roster={ROSTER} debugLogs={logs} onClearLogs={clear} />
+      );
+      expect(parseSpy.mock.calls.length).toBe(afterMount);
+
+      // A real change must still rebuild.
+      const changed: AgentRunState[] = [{
+        ...agents[0]!,
+        steps: [...agents[0]!.steps!, stepRow({ id: 'stable-3', toolName: 'oracle_query' })],
+      }];
+      rerender(
+        <AgentActivityPanel agents={changed} roster={ROSTER} debugLogs={logs} onClearLogs={clear} />
+      );
+      expect(parseSpy.mock.calls.length).toBeGreaterThan(afterMount);
+    } finally {
+      parseSpy.mockRestore();
+    }
+  });
+});
+
 describe('AgentActivityPanel — explore progress (44-03 Task 2)', () => {
   it('shows an elapsed/deadline progress card for a running explore_repo, derived from serialized args', () => {
     const agents: AgentRunState[] = [{
