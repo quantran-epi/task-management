@@ -297,16 +297,16 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
           const firstBranch = remoteBranches[0]?.name;
           const defaultBranch = targetMain ?? targetMaster ?? firstBranch ?? '';
 
-          setSelectedBranch((current) => {
-            const preferred = current || activeRemoteBranch;
-            const stillValid = preferred && remoteBranches.some((b) => b.name === preferred);
-            const nextBranch = stillValid ? preferred : defaultBranch;
-            if (nextBranch) {
-              setActiveRemoteBranch(nextBranch);
-              void loadRootTree(nextBranch, targetPath);
-            }
-            return nextBranch;
-          });
+          // Keep state updaters pure: React StrictMode may invoke them twice. Compute the
+          // next branch from the latest store/state values and perform remote side effects once.
+          const preferred = selectedBranch || activeRemoteBranch;
+          const stillValid = preferred && remoteBranches.some((b) => b.name === preferred);
+          const nextBranch = stillValid ? preferred : defaultBranch;
+          setSelectedBranch(nextBranch);
+          if (nextBranch) {
+            setActiveRemoteBranch(nextBranch);
+            void loadRootTree(nextBranch, targetPath);
+          }
         } else {
           setSelectedBranch('');
           setTreeData([]);
@@ -319,7 +319,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         setLoadingBranches(false);
       }
     },
-    [selectedConfig, repoPath, loadRootTree, activeRemoteBranch, setActiveRemoteBranch]
+    [selectedConfig, repoPath, loadRootTree, selectedBranch, activeRemoteBranch, setActiveRemoteBranch]
   );
 
   // Trigger branch load when repoPath input changes / blurred

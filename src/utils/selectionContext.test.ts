@@ -157,6 +157,21 @@ describe('selectionContext utility', () => {
       document.body.removeChild(container);
     });
 
+    it('orders backward multi-line selections into start/end line (WR-02)', () => {
+      const { container, lineEls } = buildViewerDom();
+      const fakeSelection = {
+        isCollapsed: false,
+        rangeCount: 1,
+        anchorNode: lineEls[2]!.firstChild!,
+        focusNode: lineEls[0]!.firstChild!,
+        toString: () => 'line one\nconst answer = 42;\nline three',
+      } as unknown as Selection;
+
+      const anchor = extractRemoteSelectionAnchor(fakeSelection, container);
+      expect(anchor?.startLine).toBe(1);
+      expect(anchor?.endLine).toBe(3);
+    });
+
     it('formats a remote mention with path:line and never resolves a fake doc', async () => {
       const anchor: RemoteSelectionAnchor = {
         targetUuid: TARGET_UUID,

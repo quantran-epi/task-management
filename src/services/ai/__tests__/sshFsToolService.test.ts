@@ -3,6 +3,7 @@ import {
   isLikelyBinaryPath,
   shellQuote,
   resolveRemotePath,
+  resolveRemoteToolPath,
   executeSshListDir,
   executeSshReadFile,
   executeSshGrepFiles,
@@ -81,6 +82,16 @@ describe('sshFsToolService', () => {
       expect(resolveRemotePath('/etc/hosts', '/var/log')).toBe('/etc/hosts');
       expect(resolveRemotePath('~/my-app', '/var/log')).toBe('~/my-app');
     });
+
+    it('resolveRemoteToolPath confines explicit remote targets to the target repo (WR-01)', () => {
+      const target = { sshConfigId: 'ssh-1', repoPath: '/srv/my-repo', branch: 'feature/x' };
+      expect(resolveRemoteToolPath('.', '/var/log', target)).toBe('/srv/my-repo');
+      expect(resolveRemoteToolPath('src/app.ts', '/var/log', target)).toBe('/srv/my-repo/src/app.ts');
+      expect(resolveRemoteToolPath('/srv/my-repo/src/app.ts', undefined, target)).toBe('/srv/my-repo/src/app.ts');
+      expect(() => resolveRemoteToolPath('/etc/passwd', undefined, target)).toThrow(/ngoài repo/);
+      expect(() => resolveRemoteToolPath('~/.ssh/id_rsa', undefined, target)).toThrow(/"~"/);
+      expect(resolveRemoteToolPath('/etc/hosts', '/var/log', undefined)).toBe('/etc/hosts');
+    });
   });
 
   describe('executeSshListDir', () => {
@@ -146,6 +157,20 @@ describe('sshFsToolService', () => {
       expect(res.count).toBe(2);
       expect(res.data.content).toBe('5: First line\n6: Second line');
       expect(res.truncated).toBe(true);
+    });
+
+    it('refuses paths outside the explicit remote target repo before any SSH read', async () => {
+      const readSpy = vi.spyOn(sshService, 'readRemoteFileSlice').mockResolvedValue({
+        lines: ['secret'], totalLines: 1, offset: 1, limit: 1, hasMore: false,
+      });
+      const res = JSON.parse(await executeSshReadFile(
+        { path: '/etc/passwd' },
+        mockDb,
+        { sshConfigId: 'ssh-1', repoPath: '/srv/my-repo', branch: 'feature/x' },
+      ));
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('ngoài repo');
+      expect(readSpy).not.toHaveBeenCalled();
     });
   });
 

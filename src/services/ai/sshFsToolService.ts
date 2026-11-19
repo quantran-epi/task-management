@@ -88,11 +88,6 @@ async function resolveSshConfig(
   const fsConfig: SshFsToolConfig = persisted
     ? { ...persisted, sshConfigId: configId }
     : { sshConfigId: configId };
-  if (!remoteTarget && !persisted) {
-    throw new Error(
-      'Chưa cấu hình công cụ SSH File System. Vui lòng chọn cấu hình SSH trong Settings hoặc thanh công cụ AI Chat.',
-    );
-  }
 
   const sshConfig = await getSshConfigById(configId, db);
   if (!sshConfig) {
@@ -121,6 +116,34 @@ export function resolveRemotePath(inputPath: string, basePath?: string): string 
 }
 
 /**
+ * Phase 47 review WR-01: an explicit remote target must confine SSH FS reads to its repo path.
+ * The global config remains host-wide for legacy callers; only remote chat turns are confined.
+ */
+export function resolveRemoteToolPath(
+  inputPath: string,
+  defaultBasePath: string | undefined,
+  remoteTarget: RemoteToolTarget | undefined,
+): string {
+  const repoPath = remoteTarget?.repoPath?.trim();
+  if (!repoPath) {
+    return resolveRemotePath(inputPath, defaultBasePath);
+  }
+
+  const trimmed = (inputPath || '').trim();
+  if (trimmed.startsWith('~')) {
+    throw new Error('Đường dẫn "~" không được phép khi công cụ SSH đang gắn với một repo cụ thể.');
+  }
+
+  const resolved = resolveRemotePath(trimmed, repoPath);
+  const normalizedRepo = repoPath.replace(/\/+$/, '') || '/';
+  if (normalizedRepo === '/' && resolved.startsWith('/')) return resolved;
+  if (resolved === normalizedRepo || resolved.startsWith(`${normalizedRepo}/`)) {
+    return resolved;
+  }
+  throw new Error(`Đường dẫn "${trimmed}" nằm ngoài repo của remote target.`);
+}
+
+/**
  * Execute ssh_list_dir tool call
  */
 export async function executeSshListDir(
@@ -131,7 +154,7 @@ export async function executeSshListDir(
   const start = performance.now();
   try {
     const { fsConfig, sshConfig } = await resolveSshConfig(db, remoteTarget);
-    const targetPath = resolveRemotePath(args.path, fsConfig.defaultBasePath);
+    const targetPath = resolveRemoteToolPath(args.path, fsConfig.defaultBasePath, remoteTarget);
 
     const rawFiles = await listRemoteDir(sshConfig, targetPath);
 
@@ -208,7 +231,7 @@ export async function executeSshReadFile(
     }
 
     const { fsConfig, sshConfig } = await resolveSshConfig(db, remoteTarget);
-    const targetPath = resolveRemotePath(args.path, fsConfig.defaultBasePath);
+    const targetPath = resolveRemoteToolPath(args.path, fsConfig.defaultBasePath, remoteTarget);
 
     if (isLikelyBinaryPath(targetPath)) {
       throw new Error(
@@ -275,7 +298,7 @@ export async function executeSshGrepFiles(
     }
 
     const { fsConfig, sshConfig } = await resolveSshConfig(db, remoteTarget);
-    const targetPath = resolveRemotePath(args.path, fsConfig.defaultBasePath);
+    const targetPath = resolveRemoteToolPath(args.path, fsConfig.defaultBasePath, remoteTarget);
 
     const limit = Math.min(
       Math.max(1, Number(args.limit) || fsConfig.maxGrepMatches || 50),

@@ -54,9 +54,14 @@ export function extractRemoteSelectionAnchor(
     ?? '';
   if (!targetUuid) return null;
 
-  const startLine = lineNumberForNode(selection.anchorNode, container);
+  const anchorLine = lineNumberForNode(selection.anchorNode, container);
   const focusLine = lineNumberForNode(selection.focusNode, container);
-  if (startLine === null || focusLine === null) return null;
+  if (anchorLine === null || focusLine === null) return null;
+
+  // Selection direction is not meaningful for a code anchor. A backward drag places the
+  // browser's anchor on the later line, so order both endpoints before emitting the range.
+  const startLine = Math.min(anchorLine, focusLine);
+  const endLine = Math.max(anchorLine, focusLine);
 
   const selectedText = selection.toString();
   const relativeFilePath =
@@ -71,7 +76,7 @@ export function extractRemoteSelectionAnchor(
     branch: container.getAttribute('data-remote-branch') ?? '',
     relativeFilePath,
     startLine,
-    endLine: Math.max(startLine, focusLine),
+    endLine,
     selectedText,
   };
 }

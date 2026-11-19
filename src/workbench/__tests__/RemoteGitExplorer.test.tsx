@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { RemoteGitExplorer } from '../toolwindows/RemoteGitExplorer';
@@ -104,6 +105,27 @@ describe('RemoteGitExplorer Component', () => {
       expect(screen.getByText('src')).toBeDefined();
       expect(screen.getByText('package.json')).toBeDefined();
     });
+  });
+
+  it('does not double-load the remote tree under StrictMode (WR-03)', async () => {
+    act(() => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'feat/test');
+    });
+
+    render(
+      <StrictMode>
+        <AntdThemeAdapter>
+          <RemoteGitExplorer />
+        </AntdThemeAdapter>
+      </StrictMode>
+    );
+
+    await waitFor(() => {
+      expect(gitRemoteTreeService.getRemoteTree).toHaveBeenCalledWith(
+        mockSshConfigs[0], '/home/dev/my-repo', 'feat/test', '', 'secret-123'
+      );
+    });
+    expect(gitRemoteTreeService.getRemoteTree).toHaveBeenCalledTimes(1);
   });
 
   it('opens remote file tab in layoutStore when a file node is clicked', async () => {
