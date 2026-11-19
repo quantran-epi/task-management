@@ -32,6 +32,7 @@ import {
   readRemoteFilePage,
 } from '../../../services/gitRemoteTreeService';
 import type { System } from '../../../types/models';
+import type { RemoteToolTarget } from '../../../types/sshFsTool';
 import type { SshConfig } from '../../../types/ssh';
 import type { RemoteGitCommit } from '../../../types/gitRemote';
 import {
@@ -99,6 +100,13 @@ export interface TeamToolContext {
    * When absent, the resolver falls back to team systems and SSH-config default paths.
    */
   repoHints?: string[] | undefined;
+  /**
+   * Phase 47 D-13 (ASVS V4): explicit remote target from the active chat scope. When present,
+   * `git_read` resolves this exact {sshConfigId, repoPath, branch} and WINS over model-supplied
+   * selectors and linked-system resolution — no fallback to another host/repo. Ordinary team
+   * callers leave it unset.
+   */
+  remoteTarget?: RemoteToolTarget | undefined;
 }
 
 export type TeamToolRefusalCode =
@@ -1187,6 +1195,28 @@ async function resolveGitRepo(
   ctx: TeamToolContext
 ): Promise<GitRepoResolution> {
   const noRepo = (message: string) => refuse('NO_LINKED_REPO', `${message} ${NO_REPO_HINT}`);
+
+  // Phase 47 D-13 (T-47-06): the chat-scope target is the FIRST, authoritative source. It wins
+  // over every model selector and over team links/SSH defaults — a remote turn must never read a
+  // different host/repo/branch. Resolution is direct (no catalog matching, no ambiguity) and
+  // still delegates to the escaped, confined git readers in gitRead. No team identity needed.
+  if (ctx.remoteTarget) {
+    const target = ctx.remoteTarget;
+    const config = await getSshConfigById(target.sshConfigId, ctx.db);
+    if (!config) return noRepo(`SSH config được cung cấp không tồn tại: ${target.sshConfigId}.`);
+    const system: System = {
+      id: '', name: target.repoPath, code: '', parentId: null, type: 'SERVICE',
+      sshConfigId: config.id, remoteRepoPath: target.repoPath,
+      defaultBaseBranch: target.branch,
+      createdAt: '', updatedAt: '',
+    };
+    return {
+      system,
+      config,
+      repoPath: target.repoPath,
+      secret: (await getSshSecret(config.id)) ?? undefined,
+    };
+  }
 
   const allSystems = await ctx.db.systems.toArray();
   const allConfigs = await getSshConfigs(ctx.db);

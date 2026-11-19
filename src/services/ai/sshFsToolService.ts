@@ -5,6 +5,7 @@ import {
   type SshReadFileArgs,
   type SshGrepFilesArgs,
   type SshFsToolResult,
+  type RemoteToolTarget,
   SSH_FS_TOOL_CONFIG_KEY,
 } from '../../types/sshFsTool';
 import {
@@ -59,26 +60,44 @@ export async function saveSshFsToolConfig(
   });
 }
 
-/** Helper to validate config and retrieve corresponding SshConfig */
+/**
+ * Helper to validate config and retrieve the corresponding SshConfig.
+ *
+ * Phase 47 D-13 (ASVS V4): when a remote chat scope supplies an explicit target, its
+ * `sshConfigId` WINS over the global config and there is no fallback to another host or the
+ * global id. The global config still supplies `defaultBasePath`/caps when present, but a remote
+ * turn works with no global config at all (Pitfall 6) — only the target's identity is required.
+ * Escaping, path confinement and all caps applied by callers stay unchanged.
+ */
 async function resolveSshConfig(
   db: TaskPlannerDatabase,
+  remoteTarget?: RemoteToolTarget,
 ): Promise<{ fsConfig: SshFsToolConfig; sshConfig: SshConfig }> {
-  const fsConfig = await getSshFsToolConfig(db);
-  if (!fsConfig) {
+  const persisted = await getSshFsToolConfig(db);
+  const configId = remoteTarget?.sshConfigId || persisted?.sshConfigId || '';
+  if (!configId) {
+    throw new Error(
+      remoteTarget
+        ? 'Remote target không có SSH Host hợp lệ.'
+        : 'Chưa cấu hình SSH Host cho công cụ SSH File System. Vui lòng chọn một kết nối SSH trong Settings.',
+    );
+  }
+
+  // The scope target is identity-only (no base path/caps). When a target is active we do NOT
+  // inherit the global config's sshConfigId, but its base path/caps stay as tuning defaults.
+  const fsConfig: SshFsToolConfig = persisted
+    ? { ...persisted, sshConfigId: configId }
+    : { sshConfigId: configId };
+  if (!remoteTarget && !persisted) {
     throw new Error(
       'Chưa cấu hình công cụ SSH File System. Vui lòng chọn cấu hình SSH trong Settings hoặc thanh công cụ AI Chat.',
     );
   }
-  if (!fsConfig.sshConfigId) {
-    throw new Error(
-      'Chưa cấu hình SSH Host cho công cụ SSH File System. Vui lòng chọn một kết nối SSH trong Settings.',
-    );
-  }
 
-  const sshConfig = await getSshConfigById(fsConfig.sshConfigId, db);
+  const sshConfig = await getSshConfigById(configId, db);
   if (!sshConfig) {
     throw new Error(
-      `Không tìm thấy cấu hình SSH với ID: "${fsConfig.sshConfigId}". Có thể kết nối này đã bị xoá.`,
+      `Không tìm thấy cấu hình SSH với ID: "${configId}". Có thể kết nối này đã bị xoá.`,
     );
   }
 
@@ -107,10 +126,11 @@ export function resolveRemotePath(inputPath: string, basePath?: string): string 
 export async function executeSshListDir(
   args: SshListDirArgs,
   db: TaskPlannerDatabase = defaultDb,
+  remoteTarget?: RemoteToolTarget,
 ): Promise<string> {
   const start = performance.now();
   try {
-    const { fsConfig, sshConfig } = await resolveSshConfig(db);
+    const { fsConfig, sshConfig } = await resolveSshConfig(db, remoteTarget);
     const targetPath = resolveRemotePath(args.path, fsConfig.defaultBasePath);
 
     const rawFiles = await listRemoteDir(sshConfig, targetPath);
@@ -179,6 +199,7 @@ export async function executeSshListDir(
 export async function executeSshReadFile(
   args: SshReadFileArgs,
   db: TaskPlannerDatabase = defaultDb,
+  remoteTarget?: RemoteToolTarget,
 ): Promise<string> {
   const start = performance.now();
   try {
@@ -186,7 +207,7 @@ export async function executeSshReadFile(
       throw new Error('Tham số "path" không được để trống.');
     }
 
-    const { fsConfig, sshConfig } = await resolveSshConfig(db);
+    const { fsConfig, sshConfig } = await resolveSshConfig(db, remoteTarget);
     const targetPath = resolveRemotePath(args.path, fsConfig.defaultBasePath);
 
     if (isLikelyBinaryPath(targetPath)) {
@@ -242,6 +263,7 @@ export async function executeSshGrepFiles(
   args: SshGrepFilesArgs,
   db: TaskPlannerDatabase = defaultDb,
   callId?: string,
+  remoteTarget?: RemoteToolTarget,
 ): Promise<string> {
   const start = performance.now();
   try {
@@ -252,7 +274,7 @@ export async function executeSshGrepFiles(
       throw new Error('Tham số "pattern" không được để trống.');
     }
 
-    const { fsConfig, sshConfig } = await resolveSshConfig(db);
+    const { fsConfig, sshConfig } = await resolveSshConfig(db, remoteTarget);
     const targetPath = resolveRemotePath(args.path, fsConfig.defaultBasePath);
 
     const limit = Math.min(

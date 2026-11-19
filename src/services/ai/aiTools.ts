@@ -1,4 +1,5 @@
 import type { TaskPlannerDatabase } from '../../db';
+import type { RemoteToolTarget } from '../../types/sshFsTool';
 import { APP_NAME } from '../../constants/app';
 import type { Task, ChangeRequest, System, Note, ActiveTimer, ReminderItem } from '../../types/models';
 import { NOTIFICATION_SETTINGS_KEY, DEFAULT_NOTIFICATION_SETTINGS } from '../../types/notifications';
@@ -2275,6 +2276,12 @@ export interface ExecuteAiToolOptions {
    * Lightweight local tools ignore it.
    */
   callId?: string;
+  /**
+   * Phase 47 D-13: explicit remote target from the active chat scope. When present, SSH FS
+   * tools use its sshConfigId instead of the global config; model selectors cannot override it.
+   * Ordinary global/team/Telegram callers leave it unset.
+   */
+  remoteTarget?: RemoteToolTarget;
 }
 
 /**
@@ -2328,15 +2335,15 @@ export async function executeAiTool(
   try {
     switch (normalized) {
       case 'ssh_list_dir': {
-        return await executeSshListDir(args as any, db);
+        return await executeSshListDir(args as any, db, options?.remoteTarget);
       }
 
       case 'ssh_read_file_page': {
-        return await executeSshReadFile(args as any, db);
+        return await executeSshReadFile(args as any, db, options?.remoteTarget);
       }
 
       case 'ssh_grep_files': {
-        return await executeSshGrepFiles(args as any, db, options?.callId);
+        return await executeSshGrepFiles(args as any, db, options?.callId, options?.remoteTarget);
       }
 
       case 'oracle_query': {

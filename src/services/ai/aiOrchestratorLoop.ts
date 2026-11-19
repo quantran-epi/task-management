@@ -11,12 +11,30 @@ import {
   normalizeToolName,
 } from './aiTools';
 import { executeDynamicMcpTool, type ExecuteMcpToolOptions } from './mcpClient';
+import { executeTeamTool } from './office/teamTools';
+import type { RemoteToolTarget } from '../../types/sshFsTool';
 
 export interface DispatchAiToolCallOptions extends ExecuteMcpToolOptions {
   /** WR-19: CR the turn is bound to; entity ids outside it are rejected. */
   crScopeId?: string;
   /** Model tool-call id, forwarded to heavy tools for id-only cancellation. */
   callId?: string;
+  /**
+   * Phase 47 D-13: explicit remote target from the active chat scope. Forwarded into local SSH
+   * tool options and the team-tool context so git_read/SSH reads use exactly this host/repo/branch.
+   */
+  remoteTarget?: RemoteToolTarget;
+}
+
+/**
+ * Phase 47 D-13: `git_read` is a team tool, not an `AI_DATABASE_TOOLS` member, so the ordinary
+ * drawer's dispatch must route it explicitly. On a remote turn the scope target is injected as a
+ * first-class source and overwrites model-supplied host/path/branch selectors (ASVS V4); no team
+ * or agent identity is required for this path. Every read stays read-only/confined/escaped/bounded
+ * inside the team adapter (D-14).
+ */
+function isGitReadTool(name: string): boolean {
+  return normalizeToolName(name) === 'git_read';
 }
 
 /** One definition of "this is a local DB tool", shared by dispatch and the WR-02 gate. */
@@ -34,6 +52,31 @@ export async function dispatchAiToolCall(
   options?: DispatchAiToolCallOptions
 ): Promise<string> {
   const normalized = normalizeToolName(name);
+
+  // Phase 47 D-13: on a remote turn, git_read goes through the team adapter with the explicit
+  // scope target. The target overwrites model selectors so a remote turn can never read another
+  // host/repo/branch. No team identity exists on the ordinary drawer turn, so the context carries
+  // empty identity fields; the adapter's explicit-target resolution short-circuits before needing
+  // any team link.
+  if (isGitReadTool(normalized) && options?.remoteTarget) {
+    const target = options.remoteTarget;
+    const scopedArgs: Record<string, any> = {
+      ...args,
+      sshConfigId: target.sshConfigId,
+      repoPath: target.repoPath,
+      branch: target.branch,
+    };
+    return executeTeamTool(normalized, scopedArgs, {
+      db,
+      teamId: '',
+      threadId: '',
+      agentId: '',
+      remoteTarget: target,
+      ...(options.callId ? { loopCallId: options.callId } : {}),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
   return isLocalDbTool(normalized)
     ? executeAiTool(
         name,
@@ -43,6 +86,7 @@ export async function dispatchAiToolCall(
         {
           ...(options?.crScopeId ? { crScopeId: options.crScopeId } : {}),
           ...(options?.callId ? { callId: options.callId } : {}),
+          ...(options?.remoteTarget ? { remoteTarget: options.remoteTarget } : {}),
         }
       )
     : executeDynamicMcpTool(normalized, args, db, options);
@@ -85,6 +129,12 @@ export interface AiOrchestratorLoopOptions {
     options?: DispatchAiToolCallOptions,
     callId?: string
   ) => Promise<string>;
+  /**
+   * Phase 47 D-13: explicit remote target used by the loop's own dispatch fallback (when no
+   * host-supplied `executeToolFn` exists) so a remote git_read still reaches the team adapter
+   * with the scope target. The real drawer path carries it through `executeToolFn` instead.
+   */
+  remoteTarget?: RemoteToolTarget;
   /** Recent tool outputs kept intact when pruning; older ones truncate. */
   keepRecentToolOutputs?: number;
   /** Character cap applied to older tool outputs. */
@@ -184,6 +234,7 @@ export async function runAiOrchestratorLoop(
     onMutationCheck,
     onFileGenerated,
     executeToolFn,
+    remoteTarget,
     keepRecentToolOutputs = 2,
     maxOldToolChars = 500,
     contextWindowTokens,
@@ -485,7 +536,10 @@ export async function runAiOrchestratorLoop(
       try {
         toolResult = executeToolFn
           ? await executeToolFn(tc.function.name, args, db, signal, undefined, tc.id)
-          : await dispatchAiToolCall(tc.function.name, args, db, signal, { callId: tc.id });
+          : await dispatchAiToolCall(tc.function.name, args, db, signal, {
+              callId: tc.id,
+              ...(remoteTarget ? { remoteTarget } : {}),
+            });
       } catch (toolErr: any) {
         if (toolErr?.name === 'AbortError' || signal?.aborted) throw toolErr;
         toolResult = JSON.stringify({

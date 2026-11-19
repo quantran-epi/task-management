@@ -1,3 +1,15 @@
+/**
+ * Phase 47 D-13: an explicit remote target taken from the active chat scope. It is threaded
+ * through the real drawer dispatcher chain (as `remoteTarget`) and preferred by every remote read
+ * tool over the global config or any model-supplied host/path selector (ASVS V4). Identity only —
+ * no secrets.
+ */
+export interface RemoteToolTarget {
+  sshConfigId: string;
+  repoPath: string;
+  branch: string;
+}
+
 export interface SshFsToolConfig {
   /** Fixed SSH configuration ID to execute file operations on */
   sshConfigId: string;

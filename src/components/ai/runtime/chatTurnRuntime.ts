@@ -1,5 +1,6 @@
 import type { TaskPlannerDatabase } from '../../../db';
 import type { ChatGeneratedFile, ChatMessage, ChatTokenUsage } from '../../../types/models';
+import type { RemoteToolTarget } from '../../../types/sshFsTool';
 import {
   runAiOrchestratorLoop,
   dispatchAiToolCall,
@@ -76,6 +77,11 @@ export interface ChatTurnRequest {
   contextWindowTokens?: number;
   /** WR-19: CR this turn is bound to; tool calls outside it are rejected. */
   crScopeId?: string;
+  /**
+   * Phase 47 D-13: explicit remote target from the active chat scope. Forwarded into the real
+   * drawer turn's dispatch options so SSH git reads use exactly this host/repo/branch.
+   */
+  remoteTarget?: RemoteToolTarget;
   /** Phase 34 D-31: AI Office attribution forwarded into the persisted assistant row. */
   agentId?: string | undefined;
   agentName?: string | undefined;
@@ -345,6 +351,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
           : {}),
         db: deps.db,
         signal: turnController.signal,
+        ...(request.remoteTarget ? { remoteTarget: request.remoteTarget } : {}),
         // 37.1 §4.2: `beforeToolRound` is the ONE way a message reaches a running turn.
         // The coordinator's drain reads the durable log and returns what to append.
         ...(request.beforeToolRound
@@ -365,6 +372,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
             allowMutation: request.autoApprove,
             ...(request.crScopeId ? { crScopeId: request.crScopeId } : {}),
             ...(callId ? { callId } : {}),
+            ...(request.remoteTarget ? { remoteTarget: request.remoteTarget } : {}),
           });
         },
         onTextChunk: (delta) => {

@@ -377,4 +377,55 @@ describe('remote read pipelines against a real git repository', () => {
       readRemoteFilePage(mockConfig, repo, 'HEAD', 'link.txt', 1, 10)
     ).rejects.toBeInstanceOf(PathOutsideRepoError);
   });
+
+  // Phase 47 D-14 / T-47-07: adding the explicit-target seam must not weaken path confinement or
+  // shell escaping. These regressions pin the existing helpers with a leading-`-` branch and a
+  // `../` path. Grep hit text wrapping as data is asserted in teamTools git_read tests.
+  it('keeps a leading-dash branch as a revision, never an option', async () => {
+    // gitRemoteService uses `--end-of-options` before escaping the ref. A leading `-` branch
+    // therefore becomes a rev argument, not a grep flag; a nonexistent ref yields no hits, not a
+    // usage/option error. The observed command is the observable seam.
+    vi.spyOn(sshService, 'execRemoteCommand').mockResolvedValueOnce({
+      stdout: '',
+      stderr: '###EXIT 1\n',
+      exitStatus: 0,
+    } as any);
+    const execSpy = vi.mocked(sshService.execRemoteCommand);
+
+    const result = await grepRemoteRef(mockConfig, repo, '-DANGEROUS', { pattern: 'NEEDLE' });
+
+    expect(result.hits).toEqual([]);
+    const command = execSpy.mock.calls.at(-1)![1];
+    expect(command).toContain('--end-of-options');
+    // The ref must be quoted and follow --end-of-options; it must never appear as a bare flag.
+    expect(command).toContain("'-DANGEROUS'");
+    expect(command.indexOf('--end-of-options')).toBeLessThan(command.indexOf("'-DANGEROUS'"));
+  });
+
+  it('passes a leading-dash search pattern as data via -e, not as an option', async () => {
+    vi.spyOn(sshService, 'execRemoteCommand').mockResolvedValueOnce({
+      stdout: '',
+      stderr: '###EXIT 1\n',
+      exitStatus: 0,
+    } as any);
+    const execSpy = vi.mocked(sshService.execRemoteCommand);
+
+    await grepRemoteRef(mockConfig, repo, 'HEAD', { pattern: '-rf /' });
+
+    const command = execSpy.mock.calls.at(-1)![1];
+    expect(command).toContain("-e '-rf /'");
+    // `-e` places the pattern as the regex value, so it cannot be parsed as a flag.
+    expect(command.indexOf('-e ')).toBeLessThan(command.indexOf("'-rf /'"));
+  });
+
+  it('refuses a ../ path that escapes the repo before any remote command runs', async () => {
+    const execSpy = vi.mocked(sshService.execRemoteCommand);
+    const before = execSpy.mock.calls.length;
+
+    await expect(
+      readRemoteFilePage(mockConfig, repo, 'HEAD', '../../etc/passwd', 1, 10)
+    ).rejects.toBeInstanceOf(PathOutsideRepoError);
+
+    expect(execSpy.mock.calls.length).toBe(before);
+  });
 });

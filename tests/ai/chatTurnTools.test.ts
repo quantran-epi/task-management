@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   EMPLOYEE_READ_ONLY_ALLOWLIST,
   LEAD_TOOL_ALLOWLIST,
@@ -13,6 +13,24 @@ import {
   isMutationTool,
   normalizeToolName,
 } from '../../src/services/ai/aiTools';
+import { dispatchAiToolCall } from '../../src/services/ai/aiOrchestratorLoop';
+import { executeTeamTool, type TeamToolContext } from '../../src/services/ai/office/teamTools';
+import * as sshService from '../../src/services/sshService';
+import type { RemoteToolTarget } from '../../src/types/sshFsTool';
+
+// Wrap the real team-tools module so `executeTeamTool` stays observable (its call args are the
+// D-13 contract) while every other export remains real. This mirrors the remoteExploreService
+// seam in teamToolsGitRead.test.ts.
+vi.mock('../../src/services/ai/office/teamTools', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/services/ai/office/teamTools')>();
+  return { ...actual, executeTeamTool: vi.fn(actual.executeTeamTool) };
+});
+
+const REMOTE_TARGET: RemoteToolTarget = {
+  sshConfigId: 'ssh-scope-target',
+  repoPath: '/srv/scope-repo',
+  branch: 'feature/scope',
+};
 
 describe('quick cz2 enablement gating (getGatedAddenda)', () => {
   const sshNames = SSH_READ_TOOLS.map((t) => normalizeToolName(t.function.name));
@@ -129,13 +147,114 @@ describe('chatTurnTools allowlists (D-12, D-27)', () => {
     expect(names).not.toContain('delegate_batch');
   });
 
-  // The Oracle pair is a read path: the team payloads may carry it, so it must never be
-  // classified as a mutation or the employee gate would drop it.
-  it('ORACLE_READ_TOOLS is exactly the two read tools and neither is a mutation', () => {
+  // The Oracle read set is a read path: the team payloads may carry it, so it must never be
+  // classified as a mutation or the employee gate would drop it. Phase 45 added
+  // oracle_list_connections as a third read tool; keep the assertion aligned with the source.
+  it('ORACLE_READ_TOOLS is exactly the read tools and neither is a mutation', () => {
     const names = ORACLE_READ_TOOLS.map((t) => normalizeToolName(t.function.name));
-    expect(names.sort()).toEqual(['oracle_describe', 'oracle_query']);
+    expect(names.sort()).toEqual(['oracle_describe', 'oracle_list_connections', 'oracle_query']);
     for (const name of names) {
       expect(isMutationTool(name)).toBe(false);
     }
+  });
+});
+
+/**
+ * Phase 47 D-13 / T-47-06: an explicit remote target from the chat scope must win at the
+ * DISPATCH layer. The drawer never calls `executeAiTool` directly — it goes through
+ * `dispatchAiToolCall` — so that is the seam these tests pin.
+ */
+describe('dispatchAiToolCall explicit remote target (Phase 47 D-13)', () => {
+  const GLOBAL_ID = 'ssh-global-config';
+  const SCOPE_ID = REMOTE_TARGET.sshConfigId;
+  let mockDb: any;
+  let getSshConfigByIdSpy: any;
+  let listRemoteDirSpy: any;
+  let executeTeamToolSpy: any;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    const settingsMap = new Map<string, any>();
+    settingsMap.set('ssh_fs_ai_tool_config', {
+      key: 'ssh_fs_ai_tool_config',
+      value: {
+        sshConfigId: GLOBAL_ID,
+        defaultBasePath: '/srv/global',
+        maxLinesPerRead: 100,
+        maxListEntries: 100,
+        maxGrepMatches: 50,
+      },
+    });
+    mockDb = {
+      settings: { get: vi.fn(async (key: string) => settingsMap.get(key) ?? null) },
+    };
+    const configFor = (id: string) => ({
+      id,
+      name: id,
+      host: '10.0.0.1',
+      port: 22,
+      username: 'dev',
+      authType: 'password' as const,
+      createdAt: '',
+      updatedAt: '',
+    });
+    getSshConfigByIdSpy = vi
+      .spyOn(sshService, 'getSshConfigById')
+      .mockImplementation(async (id: string) => configFor(id));
+    listRemoteDirSpy = vi
+      .spyOn(sshService, 'listRemoteDir')
+      .mockResolvedValue([] as any);
+    vi.spyOn(sshService, 'execRemoteCommand')
+      .mockResolvedValue({ stdout: '', stderr: '', exitStatus: 1 } as any);
+    executeTeamToolSpy = vi.mocked(executeTeamTool);
+    executeTeamToolSpy.mockReset();
+    executeTeamToolSpy.mockResolvedValue('{}');
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('forwards the scope target sshConfigId to the SSH tool instead of the global config', async () => {
+    await dispatchAiToolCall('ssh_list_dir', { path: '.' }, mockDb, undefined, {
+      remoteTarget: REMOTE_TARGET,
+      callId: 'call-ssh-scope',
+    });
+
+    expect(getSshConfigByIdSpy).toHaveBeenCalledWith(SCOPE_ID, mockDb);
+    expect(getSshConfigByIdSpy).not.toHaveBeenCalledWith(GLOBAL_ID, mockDb);
+    expect(listRemoteDirSpy).toHaveBeenCalledTimes(1);
+    expect(listRemoteDirSpy.mock.calls[0]![0].id).toBe(SCOPE_ID);
+  });
+
+  it('keeps the global config for an ordinary dispatch with no remote target', async () => {
+    await dispatchAiToolCall('ssh_list_dir', { path: '.' }, mockDb, undefined, {
+      callId: 'call-global',
+    });
+
+    expect(getSshConfigByIdSpy).toHaveBeenCalledWith(GLOBAL_ID, mockDb);
+    expect(getSshConfigByIdSpy).not.toHaveBeenCalledWith(SCOPE_ID, mockDb);
+  });
+
+  it('dispatches git_read on a remote turn through the team adapter with the explicit target', async () => {
+    await dispatchAiToolCall(
+      'git_read',
+      { action: 'grep', pattern: 'launch', sshConfigId: 'model-chosen-host', branch: 'model-branch' },
+      mockDb,
+      undefined,
+      { remoteTarget: REMOTE_TARGET, callId: 'call-git-scope' }
+    );
+
+    expect(executeTeamToolSpy).toHaveBeenCalledTimes(1);
+    const [name, args, ctx] = executeTeamToolSpy.mock.calls[0]!;
+    expect(name).toBe('git_read');
+    // Model-supplied host/branch selectors must not survive — the scope target wins (ASVS V4).
+    expect(args.sshConfigId).toBe(SCOPE_ID);
+    expect(args.repoPath).toBe(REMOTE_TARGET.repoPath);
+    expect(args.branch).toBe(REMOTE_TARGET.branch);
+    expect((ctx as TeamToolContext).remoteTarget).toEqual(REMOTE_TARGET);
+    expect((ctx as TeamToolContext).loopCallId).toBe('call-git-scope');
+    // A remote-turn dispatch has no team identity; it must not require one.
+    expect((ctx as TeamToolContext).db).toBe(mockDb);
   });
 });
