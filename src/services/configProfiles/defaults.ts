@@ -4,7 +4,6 @@ import {
   DEFAULT_GHOST_DEV_CONFIG,
   type GhostDevConfig,
 } from '../agents/ghostDevConfig';
-import { DEFAULT_MCP_SERVERS } from '../ai/mcpClient';
 import { DEFAULT_GRAPHITI_MCP_ENDPOINT } from '../ai/graphitiMcpClient';
 import {
   DEFAULT_NINEROUTER_ENDPOINT,
@@ -32,7 +31,7 @@ export function buildDefaultProfileConfig(): ProfileConfig {
     system_type_options: DEFAULT_SYSTEM_TYPE_OPTIONS,
     global_conventions: '',
     ai_budget_warn_threshold_pct: DEFAULT_BUDGET_WARN_THRESHOLD_PCT,
-    mcp_servers: DEFAULT_MCP_SERVERS,
+    mcp_servers: '',
     graphiti_mcp_enabled: true,
     graphiti_mcp_endpoint: DEFAULT_GRAPHITI_MCP_ENDPOINT,
     ninerouter_endpoint: DEFAULT_NINEROUTER_ENDPOINT,

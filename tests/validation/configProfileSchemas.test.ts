@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { validateConfigProfilePayload } from '../../src/validation/configProfileSchemas';
+import {
+  CONFIG_PROFILE_APP_MARKER,
+  CONFIG_PROFILE_SCHEMA_VERSION,
+  ConfigProfileEnvelopeSchema,
+  validateConfigProfilePayload,
+} from '../../src/validation/configProfileSchemas';
 import { buildDefaultProfileConfig } from '../../src/services/configProfiles/defaults';
 import {
   PROFILE_KEY_CATALOG,
@@ -141,6 +146,22 @@ describe('default profile config purity', () => {
     expect(config.capacityRules).toHaveLength(7);
     expect(config.capacityRules.filter((r) => r.workMinutes === 480)).toHaveLength(5);
     expect(config.secretFields.jira_api_token).toBe('');
+    expect(config.settings.mcp_servers).toBe('');
+    expect(JSON.stringify(config)).not.toContain('mcpServers');
+    // IN-02: the default draft must satisfy the import schema directly, without normaliseDraft.
+    const envelope = {
+      app: CONFIG_PROFILE_APP_MARKER,
+      profileSchemaVersion: CONFIG_PROFILE_SCHEMA_VERSION,
+      exportedAt: '2026-11-19T00:00:00.000Z',
+      profile: {
+        id: 'default-draft',
+        name: 'Default',
+        createdAt: '2026-11-19T00:00:00.000Z',
+        updatedAt: '2026-11-19T00:00:00.000Z',
+        config,
+      },
+    };
+    expect(ConfigProfileEnvelopeSchema.safeParse(envelope).success).toBe(true);
     dbSpy.mockRestore();
     storageSpy.mockRestore();
   });
