@@ -450,40 +450,28 @@ Planner action: add `pinnedContextSegment?: string` to both `*TurnRequestInput` 
 **Deprecated/outdated:**
 - Two CONTEXT.md canonical paths are stale: use `src/components/knowledge/DocumentSetDrawer.tsx` (not `src/components/notes/...`) and `src/components/knowledge/PublishPreviewModal.tsx` (not `src/components/notes/...`). Verified by `find` this session.
 
-## Assumptions Log
+## Assumptions Log — RESOLVED at planning (2026-11-19)
 
-All fact claims in this document were verified by opening the source file this session; the `[ASSUMED]` items below are proposals/policies not yet confirmed by the user, plus items the planner must decide.
+All fact claims in this document were verified by opening the source file this session. The `[ASSUMED]` proposals below were resolved by the planner in the Phase 45 PLAN.md set; each now records the chosen answer.
 
-| # | Claim | Section | Risk if wrong |
-|---|-------|---------|---------------|
-| A1 | New app-tab will use a dedicated `doc_set` `EditorViewType` rather than reusing `notes` with params | Architecture / Code Examples | Planner discretion (CONTEXT.md); reusing `notes` is viable but conflates set view with note view. |
-| A2 | Oracle profile list is stored as one `settings` row (not a new Dexie table) | Architecture / Runtime State | Changes migration + backup surface; a new table needs schema V28 + backup envelope work. |
-| A3 | Pinned context is framed with a standalone `buildPinnedContextSegment` helper | Architecture / Code Examples | Planner discretion on exact wording/seam; must remain wrapped as untrusted data. |
-| A4 | New Oracle settings key(s) will be added to the backup denylist | Common Pitfall 1 / Runtime State | If the user wants profiles inside encrypted backups instead, use keyring and document the tradeoff (planner checkpoint). |
-| A5 | Minimal `GET /sets` response is `Array<{setId, snapshotId}>` plus optional graph state | Pattern 1 | D-04 fields are "if available"; document count/state may require extra server plumbing the planner can descope. |
-| A6 | Both team prompt builders are the only prompt-construction paths (covering retry/continuation) | Pitfall 6 / Pattern 4 | If another path assembles prompts directly, pin injection must be added there too. |
+| # | Claim | Section | Resolution (planner) |
+|---|-------|---------|----------------------|
+| A1 | Dedicated `doc_set` `EditorViewType` vs reusing `notes` | Architecture / Code Examples | **RESOLVED — dedicated `doc_set` view type** (plan 02). Set view stays distinct from single-note view (D-07 intent). |
+| A2 | Oracle profiles as one `settings` row vs new Dexie table | Architecture / Runtime State | **RESOLVED — one settings row.** Avoids schema V28 + backup envelope work. |
+| A3 | Standalone `buildPinnedContextSegment` helper | Architecture / Code Examples | **RESOLVED — standalone helper** in `conventionsSegment.ts`, wrapping text as untrusted data (plan 04). |
+| A4 | Oracle settings key(s) added to backup denylist | Common Pitfall 1 / Runtime State | **RESOLVED — denylist.** Per CLAUDE.md "secrets remain client-side"; profile secrets are NOT backed up, no keyring work in this phase. Both the new profile-list key AND legacy `oracle_ai_tool_config` are denied (plan 03 T-45-06), plus the legacy row is deleted after migration. |
+| A5 | Minimal `GET /sets` response | Pattern 1 | **RESOLVED — ship `{setId, snapshotId}`** verbatim from `listActiveSnapshots()`, optional metadata passthrough only; no extra graph/count plumbing (plan 01). |
+| A6 | Both team prompt builders are the only prompt-construction paths | Pitfall 6 / Pattern 4 | **RESOLVED — inject at both builders** (`buildEmployeeTurnRequest` / `buildLeadTurnRequest`) so all leader/member paths inherit it; plan 04 test asserts both include the segment. |
 
-## Open Questions
+## Open Questions — RESOLVED at planning (2026-11-19)
 
-1. **Does the user want Oracle profiles inside encrypted backups?**
-   - What we know: today the single config is exported in plaintext (denylist gap); secrets-in-backup violates the "secrets remain client-side" constraint.
-   - What's unclear: denylist the new key entirely (profiles not backed up) vs. store secrets in Tauri keyring and back up only non-secret metadata.
-   - Recommendation: default to denylist + keyring; add `checkpoint:human-verify` if the user's backup expectations are ambiguous.
+1. **Oracle profiles inside encrypted backups?** → **RESOLVED: No.** Both Oracle settings keys are added to `UNSAFE_OR_EPHEMERAL_SETTING_KEYS` (plan 03, T-45-06) so no plaintext connection string enters a backup; the legacy key row is also deleted after a successful migration. No Tauri keyring work this phase; no `checkpoint:human-verify` needed because CLAUDE.md already locks "secrets remain client-side".
 
-2. **Should the old `oracle_ai_tool_config` key remain after migration?**
-   - What we know: D-13 says "remain readable for rollback only if cheap. Planner decides."
-   - What's unclear: whether leaving it risks drift (two sources of truth) or is worth rollback safety.
-   - Recommendation: migrate, keep old key as read-only legacy seed for one release, then remove; add a migration test.
+2. **Should old `oracle_ai_tool_config` remain after migration?** → **RESOLVED: No — delete it after a successful migration.** D-13 leaves the rollback choice to the planner; keeping the raw string readable would leak it into plaintext backups (`isSafeBackupSetting('oracle_ai_tool_config')` is true today). Plan 03 migrates the value into active profile #1, then removes the legacy settings row in the same transaction, and denylists the legacy key as defense-in-depth. The working connection is preserved (in the profile), satisfying D-13.
 
-3. **Does `GET /sets` need per-set document counts / state / timestamps?**
-   - What we know: `listActiveSnapshots()` returns only `{setId, snapshotId}`; graph state lives in `graphBuildService`; document count is in the snapshot payload.
-   - What's unclear: D-04 says these are "if available" — scope is planner discretion.
-   - Recommendation: ship minimal `{setId, snapshotId}` first; add state/count only where a ready accessor exists.
+3. **Does `GET /sets` need document counts / state / timestamps?** → **RESOLVED: No.** Ship minimal `{setId, snapshotId}` from `listActiveSnapshots()`; accept optional passthrough metadata only where a ready accessor exists (D-04 "if available"). No new server plumbing (plan 01).
 
-4. **Where exactly does the pinned-context badge render?**
-   - What we know: team header lives in `TeamWorkspace.tsx` (`data-testid="team-workspace-header"`, status chip at `:959`); `ChatHeader.tsx` already uses `Tooltip`.
-   - What's unclear: header chip vs. per-message badge. D-18 says "in team chat".
-   - Recommendation: team header chip with `Tooltip` showing current content (single source, always visible); confirm with discuss if needed.
+4. **Where does the pinned-context badge render?** → **RESOLVED: team chat header chip with Tooltip** in `TeamWorkspace.tsx`, showing current content; absent when no pin (plan 04, D-18). Single source, always visible.
 
 ## Environment Availability
 
@@ -514,21 +502,22 @@ All fact claims in this document were verified by opening the source file this s
 
 ### Phase Requirements → Test Map
 No requirement IDs assigned; mapped to locked decisions. All commands are focused (<30s each).
+PATHS CONVERGED 2026-11-19 with the final PLAN.md set (colocated `src/**/__tests__/` suites used where they exist; `tests/...` used where the file exists there). This table is the canonical map; `45-VALIDATION.md` is regenerated from it.
 
 | D-ID / Behavior | Test Type | Automated Command | File Exists? |
 |-----------------|-----------|-------------------|--------------|
-| D-01/D-02 delete gate: unpublished = 1 local button; published = local-only disabled until exact name typed; full-delete calls purge then local delete | component | `npx vitest run src/components/knowledge/__tests__/DocumentSetDrawerDelete.test.tsx` | ❌ Wave 0 |
-| D-04 `listPublishedSets()` parses `{setId,snapshotId}` and propagates `KnowledgeClientError` | unit | `npx vitest run src/services/knowledge/__tests__/knowledgeClient.list.test.ts` | ❌ Wave 0 |
+| D-01/D-02 delete gate via shared `DocumentSetDeleteDialog` | component | `npx vitest run src/components/knowledge/__tests__/DocumentSetDeleteDialog.test.tsx` | ❌ Wave 0 |
+| D-04 `listPublishedSets()` parses `{setId,snapshotId}` and propagates `KnowledgeClientError` | unit | `npx vitest run tests/knowledge/knowledgeClient.test.ts` | ✅ (existing; extend) |
 | D-04 `GET /api/v1/sets` returns `listActiveSnapshots()` with shared auth | server unit | `npm --prefix knowledge-server test -- --run tests/setListRoutes.test.ts` | ❌ Wave 0 |
 | D-03/D-05 retrieval scope unchanged (no local filtering) | server unit | `npm --prefix knowledge-server test -- --run tests/publishedSetDiscovery.test.ts` | ✅ (existing) |
-| D-06/D-07/D-08 Docs page opens `doc_set` app tab; tab persists; bounded rendering | component/store | `npx vitest run src/workbench/__tests__/layoutStore.test.ts src/workbench/__tests__/DocsExplorerZip.test.tsx` | ✅ (existing; extend) |
-| D-09/D-13 migration: old-shaped config → active profile #1 with identical fields | unit (fake-indexeddb) | `npx vitest run src/services/ai/__tests__/oracleSqlclService.test.ts` | ✅ (existing; extend) |
-| D-10/D-11 resolution order id → name/env → active; unknown selector error lists names only | unit | `npx vitest run src/services/ai/__tests__/oracleConnectionResolution.test.ts` | ❌ Wave 0 |
+| D-06/D-07/D-08 Docs page + doc_set tab + delete-dialog mount | component/store | `npx vitest run src/workbench/__tests__/DocsWorkspace.test.tsx src/workbench/__tests__/layoutStore.test.ts` | ❌ W0 DocsWorkspace / ✅ layoutStore extend |
+| D-09/D-13 migration: old config → active profile #1, then legacy key removed + denylisted | unit (fake-indexeddb) | `npx vitest run src/services/ai/__tests__/oracleSqlclService.test.ts` | ✅ (existing; extend) |
+| D-10/D-11/D-04 resolution order id → name/env → active; name-only errors; both keys denylisted | unit | `npx vitest run src/services/ai/__tests__/oracleMultiConnection.test.ts tests/services/backup/exportBackup.test.ts` | ❌ W0 multi / ✅ extend backup |
 | D-11/D-15 read-only guard unchanged across profiles | unit | `npx vitest run src/services/ai/__tests__/oracleSqlclService.test.ts` | ✅ (existing) |
-| D-12 `oracle_list_connections` safe metadata + gated advertisement | unit | `npx vitest run src/services/ai/__tests__/chatTurnTools.test.ts` | ❌ Wave 0 |
-| D-16/D-17 both prompt builders include pinned segment when supplied | unit | `npx vitest run src/services/ai/office/__tests__/teamPrompts.test.ts` | ❌ Wave 0 |
-| D-16 backup round-trip accepts `pinnedContext` on AiTeam records | unit | `npx vitest run src/services/backup/__tests__/backupRoundTrip.test.ts` (locate exact file) | ⚠ verify path |
-| D-01/A4 secret key denylisted from backups | unit | `npx vitest run src/services/backup/__tests__/exportBackup.test.ts` (locate exact file) | ⚠ verify path |
+| D-12 `oracle_list_connections` safe metadata + gated advertisement | unit | `npx vitest run src/services/ai/__tests__/chatTurnTools.test.ts` | ✅ (existing; extend) |
+| D-16/D-17 both prompt builders include pinned segment when supplied | unit | `npx vitest run tests/services/ai/office/teamPrompts.test.ts` | ✅ (existing; extend) |
+| D-16 backup round-trip accepts `pinnedContext` on AiTeam records | unit | `npx vitest run tests/validation/backupSchemas.test.ts` | ✅ (existing; extend) |
+| D-03 backup denylist: both Oracle keys excluded from settings export | unit | `npx vitest run tests/services/backup/exportBackup.test.ts` | ✅ (existing; extend) |
 
 ### Sampling Rate
 - **Per task commit:** focused file command from the map + `npx tsc --noEmit`.
@@ -536,14 +525,12 @@ No requirement IDs assigned; mapped to locked decisions. All commands are focuse
 - **Phase gate:** all mapped focused tests green + typecheck; no full-suite run; then `/gsd-verify-work` with a real UI walkthrough (per C-15: no acceptance by reading code).
 
 ### Wave 0 Gaps
-- [ ] `src/components/knowledge/__tests__/DocumentSetDrawerDelete.test.tsx` — D-01/D-02 type-to-confirm + purge ordering
-- [ ] `src/services/knowledge/__tests__/knowledgeClient.list.test.ts` — D-04 list parsing/error
 - [ ] `knowledge-server/tests/setListRoutes.test.ts` — D-04 GET /sets
-- [ ] `src/services/ai/__tests__/oracleConnectionResolution.test.ts` — D-10/D-11 selector + safe error
-- [ ] `src/services/ai/__tests__/chatTurnTools.test.ts` — D-12 advertisement
-- [ ] `src/services/ai/office/__tests__/teamPrompts.test.ts` — D-16/D-17 segment injection in both builders
-- [ ] Extend `src/services/ai/__tests__/oracleSqlclService.test.ts`, `src/workbench/__tests__/layoutStore.test.ts`, `publishedSetDiscovery.test.ts` for new behaviors
-- [ ] Confirm exact backup test filenames before planning (two paths above flagged ⚠)
+- [ ] `src/components/knowledge/__tests__/DocumentSetDeleteDialog.test.tsx` — D-01/D-02 shared type-to-confirm + purge ordering + reuse-ready
+- [ ] `src/workbench/__tests__/DocsWorkspace.test.tsx` — dedicated Docs screen + doc_set tab + delete-dialog mount (extend `src/workbench/__tests__/layoutStore.test.ts`)
+- [ ] `src/services/ai/__tests__/oracleMultiConnection.test.ts` — D-10/D-11 selector + safe errors + backup denylist
+- [ ] `tests/components/ai/office/TeamWorkspacePinnedContext.test.tsx` — D-18 badge/tooltip
+- [ ] Extend existing: `src/services/ai/__tests__/oracleSqlclService.test.ts`, `src/services/ai/__tests__/chatTurnTools.test.ts`, `tests/knowledge/knowledgeClient.test.ts`, `tests/knowledge/KnowledgeServerConfigCard.test.tsx`, `tests/services/backup/exportBackup.test.ts`, `tests/services/ai/office/teamPrompts.test.ts`, `tests/services/ai/office/teamRunCoordinator.test.ts`, `tests/validation/backupSchemas.test.ts`, `src/workbench/__tests__/layoutStore.test.ts`
 - Framework install: none — Vitest/jsdom/fake-indexeddb already present.
 
 ## Security Domain

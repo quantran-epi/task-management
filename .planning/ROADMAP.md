@@ -374,15 +374,15 @@ Plans:
 **Plans:** 5 plans in 3 waves
 
 Plans:
-**Wave 1** *(no dependencies — three independent capability slices)*
+**Wave 1** *(no dependencies — two independent capability slices)*
 
-- [ ] 45-01-PLAN.md — Tracer: `GET /api/v1/sets` + `listPublishedSets()` + Settings "Quản lý set" + full-delete default / type-to-confirm (D-01..D-05)
-- [ ] 45-02-PLAN.md — Tracer: dedicated Docs workspace + persistent in-app `doc_set` tabs + bounded rendering (D-06..D-08)
-- [ ] 45-03-PLAN.md — Tracer: named Oracle profiles, migration + selector resolution, list tool, backup denylist, settings UI (D-09..D-15)
+- [ ] 45-01-PLAN.md — Tracer: `GET /api/v1/sets` + `listPublishedSets()` + Settings "Quản lý set" + shared `DocumentSetDeleteDialog` (full-delete default / typed confirmation) (D-01..D-05)
+- [ ] 45-03-PLAN.md — Tracer: named Oracle profiles, migration (legacy key removed) + selector resolution, list tool, both keys denylisted, settings UI (D-09..D-15)
 
-**Wave 2** *(blocked on 45-03 — shared teamRunCoordinator.ts)*
+**Wave 2** *(blocked on Wave 1)*
 
-- [ ] 45-04-PLAN.md — Per-team pinned context: schema/backup, untrusted segment in both builders + coordinator, settings editor, chat badge (D-16..D-19)
+- [ ] 45-02-PLAN.md — Tracer: dedicated Docs workspace + persistent in-app `doc_set` tabs + bounded rendering; detail reuses the shared delete dialog from 45-01 (D-06..D-08; delete reachability D-01/D-02). Depends on 45-01.
+- [ ] 45-04-PLAN.md — Per-team pinned context: schema/backup, untrusted segment in both builders + coordinator, settings editor, chat badge (D-16..D-19). Depends on 45-03 (shared teamRunCoordinator.ts).
 
 **Wave 3** *(blocked on Waves 1-2)*
 
