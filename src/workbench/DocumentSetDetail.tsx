@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Alert, Button, Empty, Table, Typography } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
-import type { TaskPlannerDatabase } from '../db';
+import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import { useOptionalKnowledgeConfig } from '../services/knowledge/knowledgeConfig';
 import { createKnowledgeClient } from '../services/knowledge/knowledgeClient';
 import { DocumentSetDeleteDialog } from '../components/knowledge/DocumentSetDeleteDialog';
@@ -30,7 +30,7 @@ interface DocumentRow {
  * All reads are local (IndexedDB); the optional knowledge client is used only by the
  * shared delete dialog, never to browse or render documents.
  */
-export function DocumentSetDetail({ setId, db }: DocumentSetDetailProps) {
+export function DocumentSetDetail({ setId, db = defaultDb }: DocumentSetDetailProps) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const knowledgeConfig = useOptionalKnowledgeConfig();
   const client = useMemo(() => {
