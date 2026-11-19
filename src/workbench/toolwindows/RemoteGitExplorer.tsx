@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Select, Input, Tree, Button, Tooltip, Tag, Spin, Alert, Empty } from 'antd';
+import { Select, Input, Tree, Button, Tooltip, Tag, Spin, Alert, Empty, Segmented } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import FolderOutlined from '@ant-design/icons/FolderOutlined';
 import FolderOpenOutlined from '@ant-design/icons/FolderOpenOutlined';
@@ -10,10 +10,10 @@ import CloudServerOutlined from '@ant-design/icons/CloudServerOutlined';
 import FolderViewOutlined from '@ant-design/icons/FolderViewOutlined';
 import { RemoteDirectoryBrowserModal } from '../../components/common/RemoteDirectoryBrowserModal';
 import { getSshConfigs, getSshSecret } from '../../services/sshService';
-import { getRemoteBranches, checkDirtyStatus } from '../../services/gitRemoteService';
+import { getRemoteBranches, checkDirtyStatus, grepRemoteRef } from '../../services/gitRemoteService';
 import { getRemoteTree, mergeUncommittedFilesIntoTree } from '../../services/gitRemoteTreeService';
 import type { SshConfig } from '../../types/ssh';
-import type { RemoteGitBranch, RemoteGitTreeNode } from '../../types/gitRemote';
+import type { RemoteGitBranch, RemoteGitTreeNode, RemoteGrepHit } from '../../types/gitRemote';
 import { useLayoutStore } from '../store/layoutStore';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 
@@ -136,6 +136,13 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
   const [treeData, setTreeData] = useState<CustomTreeNodeData[]>([]);
   const [loadingTree, setLoadingTree] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  // Phase 47 search state — scoped to the active target above; never a new target picker (D-02).
+  const [searchMode, setSearchMode] = useState<'content' | 'name'>('content');
+  const [searchInput, setSearchInput] = useState<string>('');
+  const [grepHits, setGrepHits] = useState<RemoteGrepHit[]>([]);
+  const [grepTruncated, setGrepTruncated] = useState<boolean>(false);
+  const [searching, setSearching] = useState<boolean>(false);
+  const searchSeq = useRef<number>(0);
 
   // Load SSH configs on mount
   useEffect(() => {
@@ -385,26 +392,97 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
     }
   };
 
-  const handleSelectNode = (_selectedKeys: any, info: any) => {
-    const node = info.node as CustomTreeNodeData;
-    if (!node.isLeaf || !selectedConfig) return;
-
-    const rawTitle = node.rawNode?.title || (node.title as string) || node.key.toString();
+  /**
+   * Single tab-open path for tree clicks and both search modes. `initialLine` is a one-shot
+   * hint: it is included only for a search hit, never for a plain tree reopen (Pitfall 3).
+   */
+  const openRemoteFile = (
+    filePath: string,
+    title: string,
+    extra?: {
+      size?: number | undefined;
+      gitStatus?: string | undefined;
+      initialLine?: number | undefined;
+    }
+  ) => {
+    if (!selectedConfig) return;
     openTab({
-      id: `remote:${node.key}`,
-      title: rawTitle,
+      id: `remote:${filePath}`,
+      title,
       viewType: 'remote_file',
       closable: true,
       params: {
         config: selectedConfig,
         repoPath: repoPath.trim(),
         branch: selectedBranch,
-        filePath: node.key as string,
-        size: node.size,
-        gitStatus: node.gitStatus,
+        filePath,
+        ...(extra?.size !== undefined ? { size: extra.size } : {}),
+        ...(extra?.gitStatus !== undefined ? { gitStatus: extra.gitStatus } : {}),
+        ...(extra?.initialLine !== undefined ? { initialLine: extra.initialLine } : {}),
       },
     });
   };
+
+  const handleSelectNode = (_selectedKeys: any, info: any) => {
+    const node = info.node as CustomTreeNodeData;
+    if (!node.isLeaf || !selectedConfig) return;
+
+    const rawTitle = node.rawNode?.title || (node.title as string) || node.key.toString();
+    openRemoteFile(node.key as string, rawTitle, {
+      size: node.size,
+      gitStatus: node.gitStatus,
+    });
+  };
+
+  // Content search: reuse the confined, escaped, bounded git grep service (D-14). The pattern
+  // goes to grepRemoteRef as DATA — escaping (`-e`, `--end-of-options`, escapeShellArg) stays
+  // in the service and is never reimplemented here. 200 hits are capped again in the service.
+  const CONTENT_HIT_LIMIT = 200;
+  const runContentSearch = useCallback(
+    async (pattern: string) => {
+      const trimmed = pattern.trim();
+      if (!selectedConfig || !repoPath.trim() || !selectedBranch || !trimmed) {
+        setGrepHits([]);
+        setGrepTruncated(false);
+        return;
+      }
+      const seq = ++searchSeq.current;
+      setSearching(true);
+      setError(null);
+      try {
+        const secret = await getSshSecret(selectedConfig.id);
+        const result = await grepRemoteRef(
+          selectedConfig,
+          repoPath.trim(),
+          selectedBranch,
+          { pattern: trimmed, literal: true, limit: CONTENT_HIT_LIMIT },
+          secret ?? undefined
+        );
+        if (seq !== searchSeq.current) return; // discard stale async result
+        setGrepHits(result.hits.slice(0, CONTENT_HIT_LIMIT));
+        setGrepTruncated(result.truncated);
+      } catch (err: any) {
+        if (seq !== searchSeq.current) return;
+        setGrepHits([]);
+        setGrepTruncated(false);
+        setError(err?.message || 'Content search failed');
+      } finally {
+        if (seq === searchSeq.current) setSearching(false);
+      }
+    },
+    [selectedConfig, repoPath, selectedBranch]
+  );
+
+  // Renderer-side debounce so typing does not fire a remote grep per keystroke. It only starts
+  // once the user has engaged the search field, so opening the explorer never greps on mount.
+  const hasSearchedRef = useRef<boolean>(false);
+  useEffect(() => {
+    if (searchMode !== 'content' || !hasSearchedRef.current) return;
+    const timer = setTimeout(() => {
+      void runContentSearch(searchInput);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchMode, searchInput, runContentSearch]);
 
   return (
     <div
@@ -497,6 +575,37 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
             />
           </Tooltip>
         </div>
+
+        {/* Search (scoped to the active target — D-02/D-03) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Segmented
+            size="small"
+            value={searchMode}
+            onChange={(val) => setSearchMode(val as 'content' | 'name')}
+            options={[
+              { label: 'Content', value: 'content' },
+              { label: 'Name', value: 'name' },
+            ]}
+            data-testid="search-mode-segmented"
+          />
+          <Input.Search
+            size="small"
+            style={{ flex: 1 }}
+            placeholder={searchMode === 'content' ? 'Search file contents…' : 'Search file/folder names…'}
+            value={searchInput}
+            onChange={(e) => {
+              setSearchInput(e.target.value);
+              hasSearchedRef.current = true;
+            }}
+            onSearch={(val) => {
+              hasSearchedRef.current = true;
+              if (searchMode === 'content') void runContentSearch(val);
+            }}
+            loading={searching}
+            allowClear
+            data-testid="remote-search-input"
+          />
+        </div>
       </div>
 
       {/* Error alert if any */}
@@ -521,6 +630,54 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
           position: 'relative',
         }}
       >
+        {searchMode === 'content' && hasSearchedRef.current && searchInput.trim() ? (
+          <div data-testid="content-search-results" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {grepHits.length === 0 && !searching ? (
+              <div style={{ padding: 12, fontSize: 12, color: 'var(--fg-muted, #6c707e)' }}>
+                No content matches in this target.
+              </div>
+            ) : (
+              grepHits.map((hit, idx) => (
+                <div
+                  key={`${hit.path}:${hit.line}:${idx}`}
+                  role="button"
+                  tabIndex={0}
+                  data-testid="content-search-hit"
+                  onClick={() =>
+                    openRemoteFile(hit.path, hit.path.split('/').pop() || hit.path, {
+                      initialLine: hit.line,
+                    })
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      openRemoteFile(hit.path, hit.path.split('/').pop() || hit.path, {
+                        initialLine: hit.line,
+                      });
+                    }
+                  }}
+                  style={{
+                    cursor: 'pointer',
+                    padding: '4px 6px',
+                    borderRadius: 4,
+                    fontSize: 12,
+                    fontFamily: "'JetBrains Mono', Consolas, Monaco, monospace",
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-all',
+                  }}
+                >
+                  <span style={{ color: 'var(--accent, #3871e1)' }}>{hit.path}</span>
+                  <span style={{ color: 'var(--fg-muted, #8c8f9c)' }}>:{hit.line}:</span>
+                  <span>{hit.text}</span>
+                </div>
+              ))
+            )}
+            {grepTruncated && (
+              <div style={{ padding: '4px 6px', fontSize: 11, color: '#d97706' }}>
+                Results limited to {CONTENT_HIT_LIMIT} hits.
+              </div>
+            )}
+          </div>
+        ) : (
         <Spin spinning={loadingTree}>
           {treeData.length > 0 ? (
             <Tree
@@ -551,6 +708,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
             </div>
           ) : null}
         </Spin>
+        )}
       </div>
 
       {/* Remote Directory Browser Modal */}

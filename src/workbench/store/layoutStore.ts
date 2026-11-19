@@ -106,6 +106,14 @@ export const DEFAULT_LAYOUT_STATE: LayoutStateValues = {
 export const LAYOUT_STORAGE_KEY = 'taskmate_workbench_layout_v3';
 export const MAX_OPEN_TABS = 20;
 
+/**
+ * Tab params that are one-shot deeplink hints, not durable tab state. A plain reopen of an
+ * existing tab omits them and MUST clear the previous value; only a fresh navigation may
+ * set them again. Kept as one list so every line/highlight/message param behaves identically
+ * (Phase 47 `initialLine` mirrors the pre-existing `targetMessageId` precedent).
+ */
+export const ONE_SHOT_TAB_PARAM_KEYS = ['targetMessageId', 'initialLine'] as const;
+
 /** View types retired from `EditorViewType` but still possibly persisted. */
 // 'agents' was the retired ghost-dev list page/tab (its staff list survives in the
 // ai_office/ai_staff tool windows; shell-permission approvals now mount at the shell root).
@@ -174,12 +182,15 @@ export const useLayoutStore = create<LayoutState>()(
               activeTabId: tab.id,
               openTabs: state.openTabs.map((t) => {
                 if (t.id !== tab.id) return t;
-                // targetMessageId is a one-shot notification deeplink. A plain reopen of the
-                // team tab (explorer, active-turn indicator) omits it and MUST clear the
-                // previous highlight; only a new deeplink may set it again.
+                // One-shot deeplink params (message highlight, remote initial line) are not
+                // durable tab state. A plain reopen omits them and MUST clear the previous
+                // value; only a fresh navigation may set them again.
                 const mergedParams = { ...t.params, ...tab.params };
-                if ('targetMessageId' in mergedParams && !('targetMessageId' in (tab.params ?? {}))) {
-                  delete mergedParams.targetMessageId;
+                const incoming = tab.params ?? {};
+                for (const key of ONE_SHOT_TAB_PARAM_KEYS) {
+                  if (key in mergedParams && !(key in incoming)) {
+                    delete mergedParams[key];
+                  }
                 }
                 return { ...t, title: tab.title || t.title, params: mergedParams };
               }),

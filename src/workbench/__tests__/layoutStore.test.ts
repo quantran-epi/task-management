@@ -183,6 +183,42 @@ describe('useLayoutStore', () => {
     expect(tabs.find((t) => t.id === 'planner')?.pinned).toBe(false);
   });
 
+  it('clears one-shot deeplink params on plain reopen but re-sets them on a fresh navigation', () => {
+    const tabId = 'remote:src/index.ts';
+    useLayoutStore.getState().openTab({
+      id: tabId,
+      title: 'index.ts',
+      viewType: 'remote_file',
+      closable: true,
+      params: { filePath: 'src/index.ts', initialLine: 7, targetMessageId: 'msg-1' },
+    });
+    expect(useLayoutStore.getState().openTabs.find((t) => t.id === tabId)?.params?.initialLine).toBe(7);
+
+    // Plain reopen (tree click): no one-shot params -> they are cleared.
+    useLayoutStore.getState().openTab({
+      id: tabId,
+      title: 'index.ts',
+      viewType: 'remote_file',
+      closable: true,
+      params: { filePath: 'src/index.ts' },
+    });
+    let params = useLayoutStore.getState().openTabs.find((t) => t.id === tabId)?.params;
+    expect(params?.initialLine).toBeUndefined();
+    expect(params?.targetMessageId).toBeUndefined();
+    expect(params?.filePath).toBe('src/index.ts');
+
+    // Fresh search hit: initialLine is set again.
+    useLayoutStore.getState().openTab({
+      id: tabId,
+      title: 'index.ts',
+      viewType: 'remote_file',
+      closable: true,
+      params: { filePath: 'src/index.ts', initialLine: 12 },
+    });
+    params = useLayoutStore.getState().openTabs.find((t) => t.id === tabId)?.params;
+    expect(params?.initialLine).toBe(12);
+  });
+
   it('sets active remote target and branch correctly', () => {
     useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/var/www/repo', 'feature/login');
     let state = useLayoutStore.getState();

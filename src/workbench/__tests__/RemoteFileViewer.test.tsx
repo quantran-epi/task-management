@@ -36,6 +36,8 @@ describe('RemoteFileViewer Component', () => {
     vi.clearAllMocks();
     vi.spyOn(sshService, 'getSshSecret').mockResolvedValue('secret-123');
     vi.spyOn(gitRemoteTreeService, 'getRemoteFileContent').mockResolvedValue(sampleCode);
+    // jsdom does not implement scrollIntoView; stub it so the highlight effect is observable.
+    Element.prototype.scrollIntoView = vi.fn();
   });
 
   it('renders file header with file path, branch, and Read-Only badge', async () => {
@@ -155,5 +157,67 @@ describe('RemoteFileViewer Component', () => {
       );
       expect(openSpy).toHaveBeenCalledWith('note-doc-1');
     });
+  });
+
+  it('highlights and scrolls to initialLine, ignores out-of-range, and leaves no stale highlight without it', async () => {
+    const { unmount } = render(
+      <AntdThemeAdapter>
+        <RemoteFileViewer
+          config={mockConfig}
+          repoPath="/home/dev/my-repo"
+          branch="main"
+          filePath="src/math.ts"
+          initialLine={2}
+        />
+      </AntdThemeAdapter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('initial-line-highlight')).toBeDefined();
+    });
+    expect(screen.getByTestId('initial-line-highlight').getAttribute('data-line-number')).toBe('2');
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    // Readonly markers stay byte-stable with the line feature enabled.
+    expect(screen.getByTestId('readonly-badge')).toBeDefined();
+    expect(screen.getByTestId('code-container')).toBeDefined();
+    expect(screen.getByTestId('line-numbers-gutter')).toBeDefined();
+    unmount();
+
+    // Out-of-range line is ignored gracefully (no crash, no highlight).
+    vi.mocked(Element.prototype.scrollIntoView).mockClear();
+    const oor = render(
+      <AntdThemeAdapter>
+        <RemoteFileViewer
+          config={mockConfig}
+          repoPath="/home/dev/my-repo"
+          branch="main"
+          filePath="src/math.ts"
+          initialLine={999}
+        />
+      </AntdThemeAdapter>
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('code-container')).toBeDefined();
+    });
+    expect(screen.queryByTestId('initial-line-highlight')).toBeNull();
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+    oor.unmount();
+
+    // Plain reopen with no initialLine: no stale highlight.
+    const plain = render(
+      <AntdThemeAdapter>
+        <RemoteFileViewer
+          config={mockConfig}
+          repoPath="/home/dev/my-repo"
+          branch="main"
+          filePath="src/math.ts"
+        />
+      </AntdThemeAdapter>
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('code-container')).toBeDefined();
+    });
+    expect(screen.queryByTestId('initial-line-highlight')).toBeNull();
+    plain.unmount();
   });
 });

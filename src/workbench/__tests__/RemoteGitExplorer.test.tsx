@@ -42,6 +42,14 @@ describe('RemoteGitExplorer Component', () => {
       uncommittedFiles: [],
     });
 
+    vi.spyOn(gitRemoteService, 'grepRemoteRef').mockResolvedValue({
+      hits: [
+        { path: 'src/index.ts', line: 7, text: 'const secret = "-Dtest";' },
+        { path: 'package.json', line: 2, text: '"name": "demo"' },
+      ],
+      truncated: false,
+    });
+
     vi.spyOn(gitRemoteTreeService, 'getRemoteTree').mockImplementation(async (_cfg, _repo, _ref, dirPath) => {
       if (!dirPath) {
         return [
@@ -230,5 +238,53 @@ describe('RemoteGitExplorer Component', () => {
     const untrackedTab = tabs.find((t) => t.id === 'remote:untracked-script.sh');
     expect(untrackedTab).toBeDefined();
     expect(untrackedTab?.params?.gitStatus).toBe('?');
+  });
+
+  it('content search calls grepRemoteRef with the active target and bounded limit, renders path:line:text, and opens at that line', async () => {
+    act(() => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
+    });
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteGitExplorer />
+      </AntdThemeAdapter>
+    );
+
+    const searchWrapper = screen.getByTestId('remote-search-input');
+    // antd Input.Search puts the testid on its wrapper div; the real editable node is the input.
+    const searchInput = searchWrapper.tagName === 'INPUT' ? searchWrapper : searchWrapper.querySelector('input')!;
+    // A leading-dash / special-char pattern must be passed as DATA, never quoted here.
+    // The renderer debounces 300ms; waitFor covers that plus the async service call.
+    fireEvent.change(searchInput, { target: { value: '-Dtest; rm -rf /' } });
+
+    await waitFor(() => {
+      expect(gitRemoteService.grepRemoteRef).toHaveBeenCalledWith(
+        mockSshConfigs[0],
+        '/home/dev/my-repo',
+        'main',
+        expect.objectContaining({
+          pattern: '-Dtest; rm -rf /',
+          literal: true,
+          limit: 200,
+        }),
+        'secret-123'
+      );
+    });
+
+    // path:line:text rendering (repo-relative path used verbatim) on the hit row.
+    const hits = await screen.findAllByTestId('content-search-hit');
+    const hit = hits.find((h) => h.textContent?.includes('src/index.ts'))!;
+    expect(hit.textContent).toContain('src/index.ts');
+    expect(hit.textContent).toContain(':7:');
+    expect(hit.textContent).toContain('const secret = "-Dtest";');
+
+    fireEvent.click(hit);
+
+    const remoteTab = useLayoutStore.getState().openTabs.find((t) => t.id === 'remote:src/index.ts');
+    expect(remoteTab).toBeDefined();
+    expect(remoteTab?.viewType).toBe('remote_file');
+    expect(remoteTab?.params?.filePath).toBe('src/index.ts');
+    expect(remoteTab?.params?.initialLine).toBe(7);
   });
 });

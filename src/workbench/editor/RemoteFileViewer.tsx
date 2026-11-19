@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Tag, Button, Alert, Spin, Tooltip, message, theme } from 'antd';
 import {
   FileTextOutlined,
@@ -22,6 +22,8 @@ export interface RemoteFileViewerProps {
   branch?: string;
   filePath?: string;
   size?: number;
+  /** One-shot 1-based line to highlight and scroll to (search hit / citation). */
+  initialLine?: number;
   db?: any;
 }
 
@@ -43,6 +45,7 @@ export function RemoteFileViewer({
   branch = 'main',
   filePath = '',
   size,
+  initialLine,
   db,
 }: RemoteFileViewerProps) {
   const { token } = theme.useToken();
@@ -137,6 +140,24 @@ export function RemoteFileViewer({
   };
 
   const lines = content !== null ? content.split('\n') : [];
+
+  // One-shot initial line: only a positive in-range line is highlighted/scrolled; any stale,
+  // out-of-range, or fractional value is ignored so an oversized/short file never crashes.
+  const highlightLine =
+    typeof initialLine === 'number' &&
+    Number.isInteger(initialLine) &&
+    initialLine >= 1 &&
+    initialLine <= lines.length
+      ? initialLine
+      : null;
+  const highlightLineRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (highlightLine === null) return;
+    const el = highlightLineRef.current;
+    if (!el || typeof el.scrollIntoView !== 'function') return;
+    el.scrollIntoView({ block: 'center' });
+  }, [highlightLine, content]);
 
   return (
     <div
@@ -373,11 +394,29 @@ export function RemoteFileViewer({
                 color: 'var(--fg-primary, #1f2328)',
               }}
             >
-              {lines.map((line, idx) => (
-                <div key={idx} style={{ height: 20 }}>
-                  <DiffLineCodeRenderer content={line} isDark={isDark} />
-                </div>
-              ))}
+              {lines.map((line, idx) => {
+                const lineNo = idx + 1;
+                const isHighlighted = highlightLine === lineNo;
+                return (
+                  <div
+                    key={idx}
+                    ref={isHighlighted ? highlightLineRef : undefined}
+                    data-testid={isHighlighted ? 'initial-line-highlight' : undefined}
+                    data-line-number={lineNo}
+                    style={{
+                      height: 20,
+                      ...(isHighlighted
+                        ? {
+                            background: 'rgba(56, 113, 225, 0.18)',
+                            boxShadow: 'inset 2px 0 0 var(--accent, #3871e1)',
+                          }
+                        : {}),
+                    }}
+                  >
+                    <DiffLineCodeRenderer content={line} isDark={isDark} />
+                  </div>
+                );
+              })}
             </div>
           </div>
         ) : null}
