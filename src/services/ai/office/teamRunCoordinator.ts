@@ -1428,7 +1428,8 @@ export function createTeamRunCoordinator(
    * reused, not cleared).
    */
   async function refreshMcpTools(): Promise<void> {
-    if (liveTeam.mcpEnabled !== true) {
+    // Absent means ON — only an explicit `false` opts a team out of MCP.
+    if (liveTeam.mcpEnabled === false) {
       mcpTools = [];
       return;
     }

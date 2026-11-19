@@ -2,12 +2,9 @@ import { useRef, useState } from 'react';
 import { Button, Input, Modal, Space, Typography, message } from 'antd';
 import { APP_NAME } from '../../constants/app';
 import { CopyOutlined, DatabaseOutlined, RobotOutlined, UploadOutlined } from '@ant-design/icons';
-import { useLiveQuery } from 'dexie-react-hooks';
 import type { TaskPlannerDatabase } from '../../db';
-import type { DocumentSet, Note } from '../../types/models';
+import type { Note } from '../../types/models';
 import { batchCreateNotes, createNote } from '../../db/repositories/noteRepo';
-import { createDocumentSet } from '../../db/repositories/documentSetRepo';
-import { DocumentSetForm, type DocumentSetFormValue } from '../knowledge/DocumentSetForm';
 import { ZipImportPreviewModal, type ZipImportPreviewModalProps } from './ZipImportPreviewModal';
 
 const { Text } = Typography;
@@ -123,8 +120,6 @@ interface DocsLibraryActionsProps {
   onSelectFolder: (folderId: string) => void;
   /** Opens the single document-set library tab. */
   onOpenLibrary?: () => void;
-  /** Opens the library tab with one set selected (used after creating a set). */
-  onOpenSet?: (setId: string, title: string) => void;
 }
 
 export function DocsLibraryActions({
@@ -133,26 +128,10 @@ export function DocsLibraryActions({
   currentFolderId,
   onSelectFolder,
   onOpenLibrary,
-  onOpenSet,
 }: DocsLibraryActionsProps) {
   const [aiPromptModalOpen, setAiPromptModalOpen] = useState(false);
-  const [createModalOpen, setCreateModalOpen] = useState(false);
   const [selectedZipFile, setSelectedZipFile] = useState<File | null>(null);
   const zipFileInputRef = useRef<HTMLInputElement>(null);
-
-  const documentSets = useLiveQuery(() => db.documentSets.toArray(), [db]);
-
-  const handleSaveDocumentSet = async (value: DocumentSetFormValue): Promise<DocumentSet | null> => {
-    try {
-      const created = await createDocumentSet(value, db);
-      message.success('Đã tạo bộ tài liệu mới');
-      return created;
-    } catch (err) {
-      console.error('Failed to save document set:', err);
-      message.error(err instanceof Error ? err.message : 'Không thể lưu bộ tài liệu');
-      return null;
-    }
-  };
 
   const handleBatchImportDocs: ZipImportPreviewModalProps['onImportDocs'] = async (
     docsToImport,
@@ -196,13 +175,6 @@ export function DocsLibraryActions({
         </Button>
         <Button
           size="small"
-          aria-label="Tạo bộ tài liệu"
-          onClick={() => setCreateModalOpen(true)}
-        >
-          Tạo bộ tài liệu
-        </Button>
-        <Button
-          size="small"
           icon={<UploadOutlined />}
           onClick={() => {
             if (zipFileInputRef.current) {
@@ -217,26 +189,6 @@ export function DocsLibraryActions({
           Prompt AI
         </Button>
       </Space>
-      <Modal
-        title="Tạo bộ tài liệu mới"
-        open={createModalOpen}
-        onCancel={() => setCreateModalOpen(false)}
-        footer={null}
-        width={720}
-      >
-        <DocumentSetForm
-          notes={notes.filter((note) => note.type !== 'folder' && note.type !== 'diagram' && !note.deletedAt)}
-          availableSets={documentSets ?? []}
-          {...(currentFolderId ? { currentFolderId } : {})}
-          onSave={async (value) => {
-            const created = await handleSaveDocumentSet(value);
-            setCreateModalOpen(false);
-            if (!created) return;
-            if (onOpenSet) onOpenSet(created.id, created.name);
-            else onOpenLibrary?.();
-          }}
-        />
-      </Modal>
       <input
         type="file"
         ref={zipFileInputRef}

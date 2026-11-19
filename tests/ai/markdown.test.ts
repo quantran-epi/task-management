@@ -143,6 +143,16 @@ describe('renderSafeMarkdown rich markdown rendering', () => {
       expect(evilHtml).toContain('XSS');
     });
 
+    it('drops dangerous URLs hidden by control characters in links and images', () => {
+      const link = renderSafeMarkdown('[click](java\tscript:location=1//)');
+      expect(link).not.toContain('<a ');
+      expect(link).toContain('click');
+
+      const image = renderSafeMarkdown('![XSS](da\tta:image/svg+xml;base64,abc)');
+      expect(image).not.toContain('<img class="markdown-image"');
+      expect(image).toContain('XSS');
+    });
+
     it('converts autolinks and bare URLs to safe hyperlinks', () => {
       const input = 'Xem tài liệu tại <https://docs.github.com> hoặc https://example.com/api.';
       const html = renderSafeMarkdown(input);

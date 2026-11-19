@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
-import { Button, Input, Space, Tooltip, Typography, Spin, theme } from 'antd';
+import { Button, Input, Space, Tooltip, Spin, theme } from 'antd';
 import {
   RobotOutlined,
   CommentOutlined,
@@ -30,6 +30,7 @@ import {
   extractRemoteSelectionAnchor,
   remoteAnchorToPayload,
 } from './RemoteSelectionAnchor';
+import { renderSafeMarkdown } from '../../utils/markdown';
 
 export interface InlineAISelectionBarProps {
   db?: TaskPlannerDatabase;
@@ -747,7 +748,11 @@ ${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC TH�
                 </div>
               )}
               {isLoadingInline && !inlineResponse && !inlineStatus && <Spin size="small" style={{ marginRight: 6 }} />}
-              <Typography.Text style={{ whiteSpace: 'pre-wrap' }}>{inlineResponse}</Typography.Text>
+              <div
+                className="chat-markdown-body"
+                style={{ fontSize: 12 }}
+                dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(inlineResponse) }}
+              />
             </div>
           )}
 

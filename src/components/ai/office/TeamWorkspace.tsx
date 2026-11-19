@@ -195,7 +195,8 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   useEffect(() => {
     void getMcpServers(db).catch(() => {});
   }, [db]);
-  const mcpEnabled = team.mcpEnabled === true;
+  // Absent means ON (Team chat defaults to all MCP servers); only `false` opts out.
+  const mcpEnabled = team.mcpEnabled !== false;
   const [debugLogs, setDebugLogs] = useState<TeamDebugLog[]>([]);
   // D-10: runtime-only rail visibility, default open on the only supported runtime (Tauri desktop).
   const [activityOpen, setActivityOpen] = useState<boolean>(true);
@@ -437,7 +438,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     coordinator?.setTeamSettings({
       autoSplitEnabled: team.autoSplitEnabled === true,
       autoApproveMutations: team.autoApproveMutations === true,
-      mcpEnabled: team.mcpEnabled === true,
+      mcpEnabled: team.mcpEnabled !== false,
       ...(team.concurrencyLimit !== undefined
         ? { concurrencyLimit: team.concurrencyLimit }
         : {}),

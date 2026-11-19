@@ -14,10 +14,12 @@ const { Text } = Typography;
 export interface DocSetLibraryProps {
   db?: TaskPlannerDatabase | undefined;
   selectedSetId?: unknown;
+  /** Rendered outside the tab host (e.g. a modal in the classic shell) — never touch layout tabs. */
+  embedded?: boolean | undefined;
 }
 
 /** One tab for all document sets: left list, right detail. No browsing modal. */
-export function DocSetLibrary({ db = defaultDb, selectedSetId }: DocSetLibraryProps) {
+export function DocSetLibrary({ db = defaultDb, selectedSetId, embedded = false }: DocSetLibraryProps) {
   const openTab = useLayoutStore((s) => s.openTab);
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState('');
@@ -33,6 +35,7 @@ export function DocSetLibrary({ db = defaultDb, selectedSetId }: DocSetLibraryPr
   const selectedId = requestedId ?? localSelectedId ?? sets[0]?.id;
 
   useEffect(() => {
+    if (embedded) return;
     if (selectedId && selectedId !== requestedId) {
       openTab({
         id: 'doc_set_library',
@@ -58,6 +61,7 @@ export function DocSetLibrary({ db = defaultDb, selectedSetId }: DocSetLibraryPr
   const selectSet = (setId: string, name: string) => {
     setLocalSelectedId(setId);
     setCreating(false);
+    if (embedded) return;
     openTab({
       id: 'doc_set_library',
       title: `Bộ tài liệu: ${name}`,

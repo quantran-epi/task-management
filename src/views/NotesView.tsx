@@ -38,6 +38,7 @@ import { MermaidAssistantView } from './MermaidAssistantView';
 import { downloadFolderAsZip } from '../utils/exportFolderZip';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
 import { useLayoutStore } from '../workbench/store/layoutStore';
+import { DocSetLibrary } from '../workbench/DocSetLibrary';
 import { ResizeSplitter } from '../components/common/ResizeSplitter';
 
 const { Text } = Typography;
@@ -142,6 +143,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(initialDocId ?? null);
   const [activeDrawerTaskId, setActiveDrawerTaskId] = useState<string | null>(null);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const openTab = useLayoutStore((s) => s.openTab);
 
   const handleFilterChange = (filter: string) => {
@@ -648,6 +650,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                 notes={allNotes ?? []}
                 currentFolderId={currentFolder?.id}
                 onSelectFolder={handleFilterChange}
+                onOpenLibrary={() => setLibraryOpen(true)}
               />
               <Tooltip title="Mở danh sách ghi chú trong cửa sổ nổi riêng biệt (Always on Top)">
                 <Button icon={<ExportOutlined />} onClick={handleOpenPopout}>
@@ -784,6 +787,19 @@ export const NotesView: React.FC<NotesViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* Document-set library (classic shell has no tab host, so the same UI opens here) */}
+      <Modal
+        title="Bộ tài liệu"
+        open={libraryOpen}
+        onCancel={() => setLibraryOpen(false)}
+        footer={null}
+        width={1100}
+        destroyOnHidden
+        styles={{ body: { height: '70vh', padding: 0 } }}
+      >
+        <DocSetLibrary db={db} embedded />
+      </Modal>
 
       {/* Move Document to Folder Modal */}
       <Modal

@@ -520,4 +520,30 @@ export const JetBrainsStaffIcon: React.FC<JetBrainsIconProps> = ({ size = 16, st
   </svg>
 );
 
+// 15. Config Profiles (Copy / duplicate settings card — Emerald to Teal with export arrow)
+export const JetBrainsProfilesIcon: React.FC<JetBrainsIconProps> = ({ size = 16, style, className }) => (
+  <svg
+    viewBox="0 0 24 24"
+    width={size}
+    height={size}
+    className={className}
+    style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style }}
+  >
+    <defs>
+      <linearGradient id="jbProfilesGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#34d399" />
+        <stop offset="100%" stopColor="#0d9488" />
+      </linearGradient>
+    </defs>
+    {/* Back profile card */}
+    <rect x="4.5" y="2.5" width="13" height="14" rx="2.5" fill="#a7f3d0" opacity="0.75" />
+    {/* Front profile card */}
+    <rect x="6.5" y="5.5" width="13" height="14" rx="2.5" fill="url(#jbProfilesGrad)" />
+    <circle cx="11.5" cy="10.5" r="2" fill="#ffffff" />
+    <path d="M 8.5 16 C 8.5 13.8 9.8 12.8 11.5 12.8 C 13.2 12.8 14.5 13.8 14.5 16 Z" fill="#ffffff" opacity="0.9" />
+    {/* Export arrow */}
+    <path d="M 16 7.5 L 21 7.5 M 19 5.5 L 21 7.5 L 19 9.5" stroke="#ffffff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+  </svg>
+);
+
 

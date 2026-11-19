@@ -207,12 +207,12 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
     expect(renamed.leadId).toBe(leadId);
   });
 
-  it('persists and clears the team MCP toggle (Phase 39)', async () => {
+  it('enables MCP by default and persists explicit opt-out', async () => {
     const team = await makeTeam('Mcp');
-    expect((await getTeam(team.id, db))?.mcpEnabled).toBeUndefined();
-
-    expect((await updateTeam(team.id, { mcpEnabled: true }, db)).mcpEnabled).toBe(true);
     expect((await getTeam(team.id, db))?.mcpEnabled).toBe(true);
+
+    expect((await updateTeam(team.id, { mcpEnabled: false }, db)).mcpEnabled).toBe(false);
+    expect((await getTeam(team.id, db))?.mcpEnabled).toBe(false);
 
     // `undefined` clears the column, same add/remove idiom as the other optional toggles.
     expect((await updateTeam(team.id, { mcpEnabled: undefined }, db)).mcpEnabled).toBeUndefined();

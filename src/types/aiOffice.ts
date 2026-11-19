@@ -97,7 +97,7 @@ export interface AiTeam {
   autoSplitEnabled?: boolean | undefined;
   /** D-13: skip the mutation approval gate. */
   autoApproveMutations?: boolean | undefined;
-  /** Phase 39: advertise read-only MCP tools to this team's agents. Absent means off. */
+  /** Team chat enables all MCP servers by default; `false` is an explicit opt-out. */
   mcpEnabled?: boolean | undefined;
   /** Quick cz2: advertise SSH FS tools to this team's agents. Absent means off. */
   sshFsToolsEnabled?: boolean | undefined;

@@ -13,6 +13,21 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#39;');
 }
 
+/** Schemes allowed in links/images. Anything else (javascript:, data:, vbscript:, …) is dropped. */
+const SAFE_URL_SCHEMES = new Set(['http', 'https', 'mailto']);
+
+/**
+ * Strip ASCII control characters (browsers ignore them, so `java\tscript:` resolves to
+ * `javascript:`) and reject any explicit scheme outside the allowlist. Relative URLs and
+ * fragments carry no scheme and stay allowed.
+ */
+function sanitizeUrl(rawUrl: string): string | null {
+  const url = rawUrl.replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(url)?.[1]?.toLowerCase();
+  if (scheme && !SAFE_URL_SCHEMES.has(scheme)) return null;
+  return url;
+}
+
 export function renderInlineFormatting(rawText: string): string {
   // First escape raw HTML
   let text = escapeHtml(rawText);
@@ -46,11 +61,11 @@ export function renderInlineFormatting(rawText: string): string {
 
   // 4.5b Standard web image (![alt](url)) - disallow dangerous protocols
   text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_match, alt, url) => {
-    const trimmedUrl = url.trim();
-    if (/^(javascript|vbscript|data):/i.test(trimmedUrl)) {
+    const safeUrl = sanitizeUrl(url);
+    if (!safeUrl) {
       return alt;
     }
-    return `<img class="markdown-image" src="${trimmedUrl}" alt="${alt}" loading="lazy" />`;
+    return `<img class="markdown-image" src="${safeUrl}" alt="${alt}" loading="lazy" />`;
   });
 
   // 4.6 Wiki-link chips ([[doc:id|Title]], [[task:id|Title]], [[cr:id|Title]], [[system:id|Title]])
@@ -66,11 +81,11 @@ export function renderInlineFormatting(rawText: string): string {
 
   // 5. Links [text](url) - strictly disallow dangerous schemes
   text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, linkText, url) => {
-    const trimmedUrl = url.trim();
-    if (/^(javascript|vbscript|data):/i.test(trimmedUrl)) {
+    const safeUrl = sanitizeUrl(url);
+    if (!safeUrl) {
       return linkText; // Strip dangerous protocol link
     }
-    return `<a href="${trimmedUrl}" target="_blank" rel="noopener noreferrer">${linkText}</a>`;
+    return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${linkText}</a>`;
   });
 
   // 6. Explicit Autolinks: <https://...>

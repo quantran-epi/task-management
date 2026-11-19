@@ -303,12 +303,9 @@ describe('ConfigProfilesView — defaults-seeded authoring (D-01..D-07)', () => 
     fireEvent.click(screen.getByRole('button', { name: /Mới \(từ mặc định\)/i }));
     expect(screen.getByLabelText('Tên profile')).toHaveValue('');
 
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Chọn profile' }));
-    fireEvent.click(
-      (await screen.findAllByText('Cấu hình cho bạn bè')).find(
-        (element) => element.closest('.ant-select-item-option') !== null
-      )!
-    );
+    const savedProfile = (await db.settings.get(CONFIGURATION_PROFILES_SETTING_KEY))
+      ?.value as Array<{ id: string }>;
+    fireEvent.click(screen.getByTestId(`profile-list-item-${savedProfile[0]!.id}`));
     expect(screen.getByLabelText('Tên profile')).toHaveValue('Cấu hình cho bạn bè');
 
     // Delete asks for confirmation and writes the empty list back to the store.

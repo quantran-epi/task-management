@@ -412,7 +412,6 @@ export function DocsExplorer({ db = defaultDb }: DocsExplorerProps) {
           currentFolderId={allNotes.find((note) => note.id === activeFilter && note.type === 'folder' && !note.deletedAt)?.id}
           onSelectFolder={setActiveFilter}
           onOpenLibrary={() => handleOpenDocumentSetLibrary()}
-          onOpenSet={(setId) => handleOpenDocumentSetLibrary(setId)}
         />
       </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>

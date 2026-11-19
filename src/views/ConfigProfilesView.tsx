@@ -4,10 +4,13 @@ import {
   Button,
   Card,
   Collapse,
+  Col,
   Input,
   Modal,
+  Row,
   Select,
   Space,
+  theme,
   Switch,
   Tooltip,
   Typography,
@@ -275,6 +278,7 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
   db = defaultDb,
   onNavigate,
 }) => {
+  const { token } = theme.useToken();
   const [profiles, setProfiles] = useState<ConfigurationProfile[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -504,7 +508,7 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
   };
 
   return (
-    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '16px 24px' }}>
+    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px' }}>
       <PageHeader
         title="Cấu hình cho người khác (Settings for Others)"
         subtitle="Soạn profile mới từ cấu hình mặc định, đặt tên và xuất ra tệp JSON. Không đọc cấu hình hiện tại của bạn."
@@ -521,46 +525,104 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
         }
       />
 
-      <Card title="Profile đã lưu" style={{ marginBottom: 16 }}>
-        <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          <Select
-            aria-label="Chọn profile"
-            placeholder="Chọn profile đã lưu"
-            style={{ width: '100%', maxWidth: 420 }}
-            loading={loading}
-            value={selectedId}
-            onChange={(id) => handleSelect(id)}
-            allowClear
-            options={profiles.map((profile) => ({ value: profile.id, label: profile.name }))}
-          />
-          <Space wrap>
-            <Input
-              aria-label="Tên profile"
-              placeholder="Tên profile"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              style={{ width: 260 }}
+      <Row gutter={16} align="top">
+      <Col xs={24} md={7} lg={6}>
+      <div
+        style={{
+          borderRight: `1px solid ${token.colorBorderSecondary}`,
+          paddingRight: 12,
+          minHeight: 360,
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: 8,
+          }}
+        >
+          <Text strong style={{ fontSize: token.fontSizeSM, textTransform: 'uppercase' }}>
+            Profile đã lưu
+          </Text>
+          <Tooltip title="Tạo profile mới từ cấu hình mặc định">
+            <Button
+              type="text"
+              size="small"
+              icon={<PlusOutlined />}
+              aria-label="Mới (từ mặc định)"
+              onClick={handleNew}
             />
-            <Button icon={<PlusOutlined />} onClick={handleNew}>
-              Mới (từ mặc định)
-            </Button>
-            <Button type="primary" icon={<SaveOutlined />} onClick={handleSave}>
-              Lưu profile
-            </Button>
-            <Button danger icon={<DeleteOutlined />} disabled={!selectedProfile} onClick={handleDelete}>
-              Xóa profile
-            </Button>
-            <ConfigProfileExportButton profile={selectedProfile} />
-          </Space>
-          {!selectedProfile && (
-            <Text type="secondary">Chọn profile để xuất, hoặc soạn profile mới rồi lưu lại.</Text>
-          )}
-          {draftError && (
-            <Alert type="error" showIcon message="Profile chưa hợp lệ" description={draftError} />
-          )}
-        </Space>
-      </Card>
+          </Tooltip>
+        </div>
+        {profiles.length === 0 && !loading ? (
+          <Text type="secondary" style={{ display: 'block', padding: '12px 8px', fontSize: token.fontSizeSM }}>
+            Chưa có profile nào. Bấm + để tạo.
+          </Text>
+        ) : (
+          <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+            {profiles.map((profile) => {
+              const active = selectedId === profile.id;
+              return (
+                <div
+                  key={profile.id}
+                  data-testid={`profile-list-item-${profile.id}`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => handleSelect(profile.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      handleSelect(profile.id);
+                    }
+                  }}
+                  style={{
+                    cursor: 'pointer',
+                    padding: '8px 10px',
+                    marginBottom: 2,
+                    borderRadius: token.borderRadius,
+                    borderLeft: `2px solid ${active ? token.colorPrimary : 'transparent'}`,
+                    background: active ? token.colorFillSecondary : 'transparent',
+                    fontSize: token.fontSize,
+                  }}
+                >
+                  <Text style={{ fontWeight: active ? 600 : 400 }}>{profile.name}</Text>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      </Col>
 
+      <Col xs={24} md={17} lg={18}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          flexWrap: 'nowrap',
+          marginBottom: 12,
+        }}
+      >
+        <Input
+          aria-label="Tên profile"
+          placeholder="Tên profile"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          style={{ flex: 1, minWidth: 140 }}
+        />
+        <Button type="primary" icon={<SaveOutlined />} onClick={handleSave}>
+          Lưu profile
+        </Button>
+        <ConfigProfileExportButton profile={selectedProfile} />
+        <Button danger icon={<DeleteOutlined />} disabled={!selectedProfile} onClick={handleDelete}>
+          Xóa profile
+        </Button>
+      </div>
+      {draftError && (
+        <Alert type="error" showIcon message="Profile chưa hợp lệ" description={draftError} style={{ marginBottom: 12 }} />
+      )}
       <Collapse
         ghost
         defaultActiveKey={[]}
@@ -879,6 +941,8 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
           },
         ]}
       />
+      </Col>
+      </Row>
     </div>
   );
 };

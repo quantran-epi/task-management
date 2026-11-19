@@ -115,6 +115,8 @@ export async function createTeam(
     budgetTokens: validated.budgetTokens,
     createdAt: now,
     updatedAt: now,
+    // Team chat starts with every MCP server on; opt-out is explicit (mcpEnabled: false).
+    mcpEnabled: validated.mcpEnabled ?? true,
   };
   if (validated.leadId !== undefined) team.leadId = validated.leadId;
   if (validated.autoSplitEnabled !== undefined) team.autoSplitEnabled = validated.autoSplitEnabled;

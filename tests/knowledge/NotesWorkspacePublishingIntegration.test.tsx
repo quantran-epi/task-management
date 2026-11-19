@@ -105,7 +105,7 @@ client_secret: "canary-secret"`;
     expect(await database.dlpAudits.count()).toBe(0);
   });
 
-  it('creates a set from the create modal with stable UUIDs and zero network requests', async () => {
+  it('persists a document set with stable UUIDs and zero network requests (repository path)', async () => {
     const database = await configuredDb('notes-create-set');
     const folder = await createNote({ title: 'Tín dụng', body: '', type: 'folder' }, database);
     const doc1 = await createNote({
@@ -122,28 +122,12 @@ client_secret: "canary-secret"`;
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
 
-    const { DocsLibraryActions } = await import('../../src/components/notes/DocsLibraryActions');
-    await act(async () => {
-      render(
-        <KnowledgeConfigProvider db={database}>
-          <DocsLibraryActions
-            db={database}
-            notes={(await database.notes.toArray()).sort(
-              (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-            )}
-            currentFolderId={folder.id}
-            onSelectFolder={() => {}}
-          />
-        </KnowledgeConfigProvider>
-      );
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Tạo bộ tài liệu' }));
-    expect(await screen.findByText('Tạo bộ tài liệu mới')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Tên bộ tài liệu'), { target: { value: 'Bộ tài liệu tín dụng' } });
-    fireEvent.click(screen.getByRole('radio', { name: 'Từ thư mục hiện tại' }));
-    expect(await screen.findByText('Tài liệu thêm hoặc di chuyển sau này không tự thay đổi bộ này.')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
+    // The toolbar no longer exposes a duplicate create button; this asserts the repository
+    // path directly. The library-tab create flow is covered by DocsWorkspace tests.
+    await createDocumentSet({
+      name: 'Bộ tài liệu tín dụng',
+      documentIds: [doc2.id, doc1.id],
+    }, database);
 
     await waitFor(async () => expect(await database.documentSets.toArray()).toHaveLength(1));
     expect(fetchSpy).not.toHaveBeenCalled();

@@ -109,6 +109,24 @@ describe('Docs workspace + doc_set library tab (D-06, D-07, D-08)', () => {
     openSpy.mockRestore();
   });
 
+  it('creates a set from the library tab form and selects it', async () => {
+    await createNote({ title: 'Tài liệu nguồn', body: '# 1', type: 'document' }, db);
+    renderWorkspace();
+    await openLibrary();
+
+    fireEvent.click(screen.getByRole('button', { name: /Tạo bộ tài liệu/ }));
+    fireEvent.change(await screen.findByLabelText('Tên bộ tài liệu'), {
+      target: { value: 'Bộ tạo từ tab' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
+
+    await waitFor(async () => {
+      const sets = await db.documentSets.toArray();
+      expect(sets.map((set) => set.name)).toEqual(['Bộ tạo từ tab']);
+    });
+    expect(await screen.findByRole('button', { name: 'Mở bộ tài liệu Bộ tạo từ tab' })).toBeInTheDocument();
+  });
+
   it('survives a layout persist -> rehydrate cycle without a storage key bump', async () => {
     const set = await seedSet('Bộ A', 1);
     renderWorkspace();

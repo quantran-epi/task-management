@@ -6,7 +6,6 @@ import {
   DesktopOutlined,
   CodeOutlined,
   SwapOutlined,
-  EditOutlined,
 } from '@ant-design/icons';
 import { TaskMateLogo } from '../components/TaskMateLogo';
 import {
@@ -15,6 +14,7 @@ import {
   JetBrainsPlannerIcon,
   JetBrainsTelegramIcon,
   JetBrainsAnalyticsIcon,
+  JetBrainsProfilesIcon,
 } from '../components/icons/JetBrainsIcons';
 import { isTauriApp } from '../utils/timerPopout';
 import { useTelegramPendingUsers } from '../hooks/useTelegramPendingUsers';
@@ -303,7 +303,7 @@ export function TitleBar({
               <Button
                 type="text"
                 size="small"
-                icon={<EditOutlined />}
+                icon={<JetBrainsProfilesIcon size={14} />}
                 onClick={() => onOpenView?.('config-profiles')}
                 aria-label="Open Config Profiles"
                 style={{

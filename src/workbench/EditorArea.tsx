@@ -39,6 +39,7 @@ import {
   JetBrainsDiagramIcon,
   JetBrainsSystemsIcon,
   JetBrainsRemoteGitIcon,
+  JetBrainsProfilesIcon,
 } from '../components/icons/JetBrainsIcons';
 import { SettingOutlined } from '@ant-design/icons';
 import { TasksView } from '../views/TasksView';
@@ -90,6 +91,8 @@ export function getEditorTabIcon(viewType: EditorViewType, size = 13): React.Rea
       return <JetBrainsDiagramIcon size={size} />;
     case 'remote_file':
       return <JetBrainsRemoteGitIcon size={size} />;
+    case 'config-profiles':
+      return <JetBrainsProfilesIcon size={size} />;
     case 'insight':
       return <FundProjectionScreenOutlined style={{ fontSize: size - 1, color: '#10b981' }} />;
     case 'staff_detail':

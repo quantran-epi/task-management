@@ -79,6 +79,17 @@ describe('TeamWorkspace settings drawer persists autoSplitEnabled', () => {
     vi.clearAllMocks();
   });
 
+  it('treats a team with no mcpEnabled key as ON and syncs that to the live coordinator', async () => {
+    const legacy = { ...team };
+    delete (legacy as { mcpEnabled?: boolean }).mcpEnabled;
+
+    render(<TeamWorkspace team={legacy} lead={undefined} members={[]} employees={[]} skills={[]} db={db} />);
+
+    await waitFor(() => {
+      expect(setTeamSettings).toHaveBeenCalledWith(expect.objectContaining({ mcpEnabled: true }));
+    });
+  });
+
   it('persists an enabled autoSplit switch to the team row on save', async () => {
     render(<TeamWorkspace team={{ ...team, autoSplitEnabled: false }} lead={undefined} members={[]} employees={[]} skills={[]} db={db} />);
 
