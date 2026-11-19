@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v1.4
 milestone_name: Unified AI Office (Phase Details)
-current_phase: 44
-current_phase_name: Agent Activity Panel, Configurable Explore Timeout and Prompt Log
+current_phase: 45
+current_phase_name: Knowledge Sets, Docs Workspace, Oracle Connections & Team Pinned Context
 status: executing
-stopped_at: Phase 44 UI-SPEC approved
-last_updated: "2026-11-17T14:10:43.775Z"
+stopped_at: Phase 45 UI-SPEC approved
+last_updated: "2026-11-19T05:10:15.535Z"
 last_activity: 2026-11-17
 last_activity_desc: Phase 44 execution resumed (wave continue)
-state_head: 76d5b87de273a40e7e0706f6abf1aa78a389958e
+state_head: 3861da3f37143fbeccab374745cd2741decf16ac
 progress:
-  total_phases: 8
+  total_phases: 9
   completed_phases: 5
-  total_plans: 55
+  total_plans: 60
   completed_plans: 55
-  percent: 63
+  percent: 56
 ---
 
 # Project State: TaskMate — Milestone v1.4
@@ -27,9 +27,9 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 
 ## Current Position
 
-Phase: 44 (Agent Activity Panel, Configurable Explore Timeout and Prompt Log) — EXECUTING
+Phase: 45 (Knowledge Sets, Docs Workspace, Oracle Connections & Team Pinned Context) — READY TO EXECUTE
 Plan: 1 of 4
-Status: Executing Phase 44
+Status: Ready to execute
 Last activity: 2026-11-17 - Completed quick task 261117-ss8: Thêm instrumentation/báo cáo lỗi đầy đủ cho mọi run agent/leader
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
@@ -59,11 +59,11 @@ Verification: 392 focused tests pass (9 files), `tsc --noEmit` clean. Full suite
 
 ## Session Continuity
 
-Last session: 2026-11-17T04:49:29.227Z
-Stopped at: Phase 44 UI-SPEC approved
-Resume file: .planning/phases/44-agent-activity-panel-configurable-explore-timeout-and-prompt/44-UI-SPEC.md
+Last session: 2026-11-19T04:54:50.290Z
+Stopped at: Phase 45 UI-SPEC approved
+Resume file: .planning/phases/45-knowledge-sets-docs-workspace-oracle-connections-team-pinned/45-UI-SPEC.md
 
-Progress: [██████░░░░] 63%
+Progress: [██████░░░░] 56%
 
 ## Milestone v1.4 Map
 
