@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 Phase: 46 (Configuration Profiles) — EXECUTING
 Plan: 4 of 4
 Status: Ready to execute
-Last activity: 2026-11-19 — Completed quick task 261119-tai: rút gọn Profile Setting, bỏ ô secret read-only, sửa field JSON `[object Object]`, gom nhóm Collapse
+Last activity: 2026-11-19 — Completed quick task 261119-u7u: đưa quản lý bộ tài liệu vào tab chuyên dụng, bỏ khối Không gian Docs
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -108,6 +108,7 @@ Progress: [█████░░░░░] 50%
 | 261118-epj | Fix macOS Tauri build: borrow NotificationResponse in notify-rust wait_for_response click handler | 2026-11-18 | b65dd32d | [261118-epj-fix-macos-tauri-build-failure-notify-rus](./quick/261118-epj-fix-macos-tauri-build-failure-notify-rus/) |
 | 261119-s1j | Chuyển toàn bộ tính năng của DocumentSetDrawer sang tab bộ tài liệu và xóa drawer | 2026-11-19 | fa9d58af | [261119-s1j-chuy-n-to-n-b-t-nh-n-ng-c-a-documentsetd](./quick/261119-s1j-chuy-n-to-n-b-t-nh-n-ng-c-a-documentsetd/) |
 | 261119-tai | Rút gọn Profile Setting: bỏ ô secret read-only, sửa field JSON `[object Object]`, gom nhóm Collapse | 2026-11-19 | 552d174d | [261119-tai-r-t-g-n-profile-setting-ch-gi-field-setu](./quick/261119-tai-r-t-g-n-profile-setting-ch-gi-field-setu/) |
+| 261119-u7u | Đưa quản lý bộ tài liệu vào tab chuyên dụng, bỏ khối Không gian Docs trong Docs Explorer | 2026-11-19 | 77eb077c | [261119-u7u-rework-docs-explorer-remove-compact-kh-n](./quick/261119-u7u-rework-docs-explorer-remove-compact-kh-n/) |
 
 ## Accumulated Context
 
