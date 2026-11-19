@@ -268,6 +268,7 @@ export function WorkbenchLayout({
         telegram: 'Telegram Bot',
         mermaid: 'Diagram Studio',
         systems: 'System Catalog',
+        'config-profiles': 'Cấu hình cho người khác',
       };
       openTab({
         id: viewKey,

@@ -5,6 +5,7 @@ export type AppRoute =
   | 'analytics'
   | 'notes'
   | 'settings'
+  | 'config-profiles'
   | 'timer-popout'
   | 'notes-popout'
   | 'ai-popout'

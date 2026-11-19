@@ -46,6 +46,7 @@ import { NotesView } from '../views/NotesView';
 import { PlannerView } from '../views/PlannerView';
 import { AnalyticsView } from '../views/AnalyticsView';
 import { SettingsView } from '../views/SettingsView';
+import { ConfigProfilesView } from '../views/ConfigProfilesView';
 import { DashboardView } from '../views/DashboardView';
 import { TelegramMonitorView } from '../views/TelegramMonitorView';
 import { ItemInsightView } from '../views/ItemInsightView';
@@ -577,6 +578,8 @@ export function EditorArea({ db }: EditorAreaProps) {
         return <AnalyticsView {...dbProp} />;
       case 'settings':
         return <SettingsView {...dbProp} />;
+      case 'config-profiles':
+        return <ConfigProfilesView {...dbProp} />;
       case 'cr_detail':
         return (
           <ChangeRequestDetailView
