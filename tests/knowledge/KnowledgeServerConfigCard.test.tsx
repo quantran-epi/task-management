@@ -342,7 +342,12 @@ describe('KnowledgeServerConfigCard', () => {
     expect(knowledgeSave).toBeDefined();
     fireEvent.click(knowledgeSave!);
 
-    expect(await screen.findAllByText('Đã lưu cấu hình Knowledge Server.')).not.toHaveLength(0);
+    await waitFor(
+      () => {
+        expect(screen.getAllByText('Đã lưu cấu hình Knowledge Server.').length).toBeGreaterThan(0);
+      },
+      { timeout: 5000 }
+    );
     await waitFor(async () => {
       const [urlSetting, enabledSetting] = await Promise.all([
         db.settings.get('knowledge_server_base_url'),
