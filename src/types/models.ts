@@ -220,11 +220,11 @@ export interface NoteAttachment {
   filePath?: string | undefined; // Local disk file path
 }
 
-export type ChatScopeType = 'global' | 'task' | 'cr' | 'system' | 'document' | 'team';
+export type ChatScopeType = 'global' | 'task' | 'cr' | 'system' | 'document' | 'team' | 'remote';
 
 export interface ChatThread {
   id: string; // RFC 4122 v4 UUID
-  scopeKey: string; // Unique index: 'global' | 'task:<taskId>' | 'cr:<crId>' | 'system:<systemId>' | 'document:<docId>'
+  scopeKey: string; // Unique index: 'global' | 'task:<taskId>' | 'cr:<crId>' | 'system:<systemId>' | 'document:<docId>' | 'team:<teamId>' | 'remote:<targetUuid>'
   scopeType: ChatScopeType;
   entityId?: string | undefined; // Optional reference to Task/CR/System id| undefined; // Target task/CR/system id (undefined if global)
   title?: string | undefined;

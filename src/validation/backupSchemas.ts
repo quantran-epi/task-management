@@ -172,7 +172,7 @@ export const BackupChatThreadRecordSchema = z
   .object({
     id: uuidSchema,
     scopeKey: z.string().min(1),
-    scopeType: z.enum(['global', 'task', 'cr', 'system', 'document', 'team']),
+    scopeType: z.enum(['global', 'task', 'cr', 'system', 'document', 'team', 'remote']),
     entityId: uuidSchema.optional(),
     title: z.string().optional(),
     createdAt: z.string(),

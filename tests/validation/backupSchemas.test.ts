@@ -109,6 +109,24 @@ describe('backupSchemas — version-11 CR-centric envelope (ENT-NORM-01)', () =>
     expect(mod.BackupChatThreadRecordSchema.safeParse(chatThreadRecord('project')).success).toBe(false);
     expect(mod.BackupChatThreadRecordSchema.safeParse(chatThreadRecord('milestone')).success).toBe(false);
   });
+
+  it('accepts a remote chat scope with a v4 UUID entityId but rejects a raw path (D-06)', () => {
+    const targetUuid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    expect(
+      mod.BackupChatThreadRecordSchema.safeParse({
+        ...chatThreadRecord('remote'),
+        scopeKey: `remote:${targetUuid}`,
+        entityId: targetUuid,
+      }).success
+    ).toBe(true);
+    expect(
+      mod.BackupChatThreadRecordSchema.safeParse({
+        ...chatThreadRecord('remote'),
+        scopeKey: 'remote:ssh-config/repo/branch',
+        entityId: 'ssh-config/repo/branch',
+      }).success
+    ).toBe(false);
+  });
 });
 
 describe('assertNoLegacyTables — envelope-stage legacy rejection (D-49)', () => {

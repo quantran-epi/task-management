@@ -24,6 +24,11 @@ describe('chatRepo scope keys (CR/System axis)', () => {
     expect(buildScopeKey('global')).toBe('global');
   });
 
+  it('builds a target-based remote:<uuid> scope key (Phase 47 D-06)', () => {
+    const targetUuid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    expect(buildScopeKey('remote', targetUuid)).toBe(`remote:${targetUuid}`);
+  });
+
   it('initializes chatThreads and chatMessages stores', async () => {
     expect(db.chatThreads).toBeDefined();
     expect(db.chatMessages).toBeDefined();

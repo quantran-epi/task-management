@@ -579,7 +579,7 @@ export class TaskPlannerDatabase extends Dexie {
     this.version(20)
       .stores(SCHEMA_V20)
       .upgrade(async (tx) => {
-        const valid = new Set(['global', 'task', 'cr', 'system', 'document', 'team']);
+        const valid = new Set(['global', 'task', 'cr', 'system', 'document', 'team', 'remote']);
         await tx
           .table('chatThreads')
           .toCollection()

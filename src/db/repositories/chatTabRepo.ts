@@ -30,7 +30,7 @@ export function threadScopeParts(scopeKey: string, fallback?: ChatScopeInput): P
   const [scopeType, entityId] = scopeKey.split(':', 2);
   if (scopeKey === 'global') return { scopeType: 'global' };
   if (fallback) return { scopeType: fallback.scopeType, ...(fallback.entityId ? { entityId: fallback.entityId } : {}) };
-  if (scopeType === 'task' || scopeType === 'cr' || scopeType === 'system' || scopeType === 'document' || scopeType === 'team') {
+  if (scopeType === 'task' || scopeType === 'cr' || scopeType === 'system' || scopeType === 'document' || scopeType === 'team' || scopeType === 'remote') {
     return { scopeType, ...(entityId ? { entityId } : {}) };
   }
   return { scopeType: 'global' };
