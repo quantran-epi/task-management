@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ScopePickerModal } from '../../src/components/ai/ScopePickerModal';
 import { TaskPlannerDatabase } from '../../src/db';
+import { useLayoutStore } from '../../src/workbench/store/layoutStore';
+import { isValidUuid } from '../../src/utils/uuid';
 import 'fake-indexeddb/auto';
 
 describe('ScopePickerModal', () => {
@@ -130,5 +132,55 @@ describe('ScopePickerModal', () => {
 
     expect(await screen.findByText('Thiết kế Navbar')).toBeInTheDocument();
     expect(screen.queryByText('CR Website')).not.toBeInTheDocument();
+  });
+
+  describe('remote target scope (Phase 47 D-06)', () => {
+    beforeEach(() => {
+      useLayoutStore.getState().resetLayout();
+    });
+
+    it('lists the active remote target and selects it with a UUID scope id (not a path)', async () => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-prod', '/srv/repo', 'feature/x');
+      const onSelect = vi.fn();
+
+      render(
+        <ScopePickerModal
+          open={true}
+          onClose={vi.fn()}
+          currentScope={{ type: 'global' }}
+          onSelectScope={onSelect}
+          db={db}
+        />
+      );
+
+      // Wait for the async useLiveQuery results so the list settles before we click.
+      await screen.findByText('CR Website');
+      const remoteText = await screen.findByText('ssh-prod · /srv/repo · feature/x');
+      fireEvent.click(remoteText);
+
+      expect(onSelect).toHaveBeenCalledTimes(1);
+      const scope = onSelect.mock.calls[0]![0];
+      expect(scope.type).toBe('remote');
+      expect(isValidUuid(scope.id)).toBe(true);
+      expect(scope.id).not.toContain('/');
+      expect(scope.title).toContain('ssh-prod');
+    });
+
+    it('omits the remote entry when no target is active', async () => {
+      useLayoutStore.getState().setActiveRemoteTarget(null, '');
+
+      render(
+        <ScopePickerModal
+          open={true}
+          onClose={vi.fn()}
+          currentScope={{ type: 'global' }}
+          onSelectScope={vi.fn()}
+          db={db}
+        />
+      );
+
+      await screen.findByText('CR Website');
+      expect(screen.queryByText(/ssh-prod/)).not.toBeInTheDocument();
+    });
   });
 });

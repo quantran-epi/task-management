@@ -7,11 +7,14 @@ import {
   ApartmentOutlined,
   GlobalOutlined,
   CheckOutlined,
+  CloudServerOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Task, ChangeRequest, System } from '../../types/models';
 import type { ActiveScope } from '../../context/AIChatContext';
+import { useLayoutStore } from '../../workbench/store/layoutStore';
+import { deriveRemoteTargetUuid } from '../../utils/remoteTarget';
 
 const { Text } = Typography;
 
@@ -23,11 +26,11 @@ export interface ScopePickerModalProps {
   db?: TaskPlannerDatabase;
 }
 
-type ScopeTab = 'all' | 'task' | 'cr' | 'system';
+type ScopeTab = 'all' | 'task' | 'cr' | 'system' | 'remote';
 
 interface ScopeListItem {
   id: string;
-  type: 'global' | 'task' | 'cr' | 'system';
+  type: 'global' | 'task' | 'cr' | 'system' | 'remote';
   title: string;
   subtitle?: string | undefined;
   status?: string | undefined;
@@ -61,6 +64,13 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
   const tasks = useLiveQuery<Task[]>(() => db.tasks.toArray(), [db]) ?? [];
   const changeRequests = useLiveQuery<ChangeRequest[]>(() => db.changeRequests.toArray(), [db]) ?? [];
   const systems = useLiveQuery<System[]>(() => db.systems.toArray(), [db]) ?? [];
+
+  // Phase 47 D-06: the active remote target as a first-class scope. The id is a stable
+  // target-derived v4 UUID (never a raw path) so it survives backup validation; no entry
+  // is emitted when no target is active (empty state, not a fabricated id).
+  const activeRemoteConfigId = useLayoutStore((s) => s.activeRemoteConfigId);
+  const activeRemoteRepoPath = useLayoutStore((s) => s.activeRemoteRepoPath);
+  const activeRemoteBranch = useLayoutStore((s) => s.activeRemoteBranch);
 
   const crMap = useMemo(() => {
     const map = new Map<string, ChangeRequest>();
@@ -124,6 +134,24 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
       }
     }
 
+    // Remote target (Phase 47 D-06) — one entry for the current SSH config/repo/branch.
+    if ((activeTab === 'all' || activeTab === 'remote') && activeRemoteConfigId) {
+      const targetUuid = deriveRemoteTargetUuid(
+        activeRemoteConfigId,
+        activeRemoteRepoPath,
+        activeRemoteBranch
+      );
+      const title = `${activeRemoteConfigId} · ${activeRemoteRepoPath || '/'} · ${activeRemoteBranch || '-'}`;
+      if (!q || title.toLowerCase().includes(q)) {
+        items.push({
+          id: targetUuid,
+          type: 'remote',
+          title,
+          subtitle: `Remote • ${activeRemoteConfigId}${activeRemoteBranch ? ` • ${activeRemoteBranch}` : ''}`,
+        });
+      }
+    }
+
     // Tasks
     if (activeTab === 'all' || activeTab === 'task') {
       for (const t of tasks) {
@@ -146,7 +174,7 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
     }
 
     return items;
-  }, [query, activeTab, selectedCrId, tasks, changeRequests, systems, crMap]);
+  }, [query, activeTab, selectedCrId, tasks, changeRequests, systems, crMap, activeRemoteConfigId, activeRemoteRepoPath, activeRemoteBranch]);
 
   const handleSelect = (item: ScopeListItem) => {
     if (item.type === 'global') {
@@ -178,6 +206,8 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
         return <BranchesOutlined style={{ color: '#fa8c16', fontSize: 16 }} />;
       case 'system':
         return <ApartmentOutlined style={{ color: '#722ed1', fontSize: 16 }} />;
+      case 'remote':
+        return <CloudServerOutlined style={{ color: '#13c2c2', fontSize: 16 }} />;
     }
   };
 
@@ -217,6 +247,7 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
               { label: 'Tác vụ', value: 'task' },
               { label: 'CR', value: 'cr' },
               { label: 'Subsystem', value: 'system' },
+              ...(activeRemoteConfigId ? [{ label: 'Remote', value: 'remote' as const }] : []),
             ]}
           />
 
