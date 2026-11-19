@@ -13,7 +13,8 @@ const { Dragger } = Upload;
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 export interface ConfigProfileImportCardProps {
-  db: TaskPlannerDatabase;
+  /** Optional to avoid issuing any db read while merely rendering the picker. */
+  db?: TaskPlannerDatabase;
   onApplySuccess?: (envelope: ValidProfileEnvelope, result: ApplyProfileResult) => void;
 }
 
@@ -29,8 +30,11 @@ export const ConfigProfileImportCard: React.FC<ConfigProfileImportCardProps> = (
   onApplySuccess,
 }) => {
   const [modalOpen, setModalOpen] = useState(false);
+
   const [parsedPayload, setParsedPayload] = useState<unknown | null>(null);
   const [fileName, setFileName] = useState('');
+
+  if (!db) return null;
 
   const uploadProps: UploadProps = {
     name: 'configProfileFile',
