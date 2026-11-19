@@ -81,7 +81,12 @@ import { preparePatch, readPatchTarget } from './patchProposal';
 import { executeKnowledgeRetrievalTool } from './knowledgeRetrievalTool';
 import { getImageConfig, getImageApiKey } from './nineRouterTokenService';
 import { redactApiKey } from './nineRouterClient';
-import { executeOracleQuery, executeOracleDescribe } from './oracleSqlclService';
+import {
+  executeOracleQuery,
+  executeOracleDescribe,
+  getOracleConnectionProfiles,
+  listOracleConnectionSummaries,
+} from './oracleSqlclService';
 import {
   executeSshListDir,
   executeSshReadFile,
@@ -2161,6 +2166,19 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
   {
     type: 'function',
     function: {
+      name: 'oracle_list_connections',
+      description:
+        'List available named Oracle connection profiles with safe metadata only (id, name, environment, isActive). Use the returned name, environment or id as the selector for oracle_query / oracle_describe. Never returns connection strings or passwords.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'ssh_list_dir',
       description:
         'List files and directories on the remote host via configured SSH connection. Returns name, type (file/directory/symlink), size in bytes, and last modified timestamp. Directories sorted first.',
@@ -2327,6 +2345,11 @@ export async function executeAiTool(
 
       case 'oracle_describe': {
         return await executeOracleDescribe(args as any, db, options?.callId);
+      }
+
+      case 'oracle_list_connections': {
+        const profiles = await getOracleConnectionProfiles(db);
+        return JSON.stringify(listOracleConnectionSummaries(profiles));
       }
 
       case 'get_artifact': {
@@ -5076,12 +5099,16 @@ const MUTATION_TOOLS = new Set([
 ]);
 
 /**
- * The Oracle read pair, filtered from `AI_DATABASE_TOOLS` so the definitions are not
- * duplicated. Neither is a mutation: `executeOracleQuery`/`executeOracleDescribe` enforce
- * read-only and return a structured error when the tool is disabled.
+ * The Oracle read trio, filtered from `AI_DATABASE_TOOLS` so the definitions are not
+ * duplicated. Neither query nor describe is a mutation (read-only guard enforced in
+ * `executeOracleQuery`/`executeOracleDescribe`); `oracle_list_connections` returns only
+ * safe metadata (id/name/environment/isActive). All join the same gated addendum so a
+ * disabled Oracle advertises none of them.
  */
 export const ORACLE_READ_TOOLS: AiToolDefinition[] = AI_DATABASE_TOOLS.filter((tool) =>
-  ['oracle_query', 'oracle_describe'].includes(normalizeToolName(tool.function.name))
+  ['oracle_query', 'oracle_describe', 'oracle_list_connections'].includes(
+    normalizeToolName(tool.function.name)
+  )
 );
 
 /**

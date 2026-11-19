@@ -296,5 +296,34 @@ describe('exportBackup service', () => {
       expect((envelope.tables as any).telegramSessionLogs).toBeUndefined();
       expect(JSON.stringify(envelope)).not.toContain('Private user question');
     });
+
+    // T-45-06: both Oracle settings keys carry password-bearing connection strings and
+    // must never enter a plaintext backup, regardless of migration state.
+    it('excludes both Oracle connection settings keys from a settings export', async () => {
+      await testDb.settings.add({ key: 'themeMode', value: 'dark' });
+      await testDb.settings.add({
+        key: 'oracle_ai_tool_config_list',
+        value: {
+          profiles: [{
+            id: 'uuid-1', name: 'SIT', environment: 'SIT', isActive: true,
+            sshConfigId: 'ssh-1', connectionString: 'sit_user/sit_secret@sithost:1521/SIT',
+          }],
+        },
+      });
+      await testDb.settings.add({
+        key: 'oracle_ai_tool_config',
+        value: { sshConfigId: 'ssh-1', connectionString: 'legacy_user/legacy_secret@legacyhost:1521/LEGACY' },
+      });
+
+      const envelope = await exportBackupPayload(testDb);
+
+      expect(envelope.tables.settings).toEqual([{ key: 'themeMode', value: 'dark' }]);
+      const serialized = JSON.stringify(envelope);
+      expect(serialized).not.toContain('oracle_ai_tool_config');
+      expect(serialized).not.toContain('sit_secret');
+      expect(serialized).not.toContain('legacy_secret');
+      expect(serialized).not.toContain('@sithost');
+      expect(serialized).not.toContain('@legacyhost');
+    });
   });
 });

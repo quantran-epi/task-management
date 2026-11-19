@@ -35,6 +35,11 @@ export const UNSAFE_OR_EPHEMERAL_SETTING_KEYS = new Set<string>([
   'last_pre_import_snapshot',
   // Machine-local host inventory: hostnames, usernames and key paths.
   'ssh_configurations',
+  // T-45-06: both Oracle settings keys embed password-bearing connection strings.
+  // The legacy key is deleted after a successful migration, but a partial/failed migration
+  // or an older build could still leave it readable — deny it as defense in depth.
+  'oracle_ai_tool_config_list',
+  'oracle_ai_tool_config',
 ]);
 
 /**

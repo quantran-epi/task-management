@@ -46,7 +46,7 @@ import {
   getToolsForTurn,
 } from '../chatTurnTools';
 import { discoverAllMcpTools, isReadOnlyMcpTool } from '../mcpClient';
-import { getOracleToolConfig } from '../oracleSqlclService';
+import { getOracleConnectionProfiles } from '../oracleSqlclService';
 import { getSshFsToolConfig } from '../sshFsToolService';
 import { aiTurnManager } from '../aiTurnManager';
 import { createTeamRunRegistry, type TeamRunRegistry } from './teamRunRegistry';
@@ -1362,14 +1362,15 @@ export function createTeamRunCoordinator(
     if (liveTeam.sshFsToolsEnabled !== true && liveTeam.oracleToolsEnabled !== true) {
       return [];
     }
-    const [sshCfg, oracleCfg] = await Promise.all([
+    const [sshCfg, oracleProfiles] = await Promise.all([
       getSshFsToolConfig(db).catch(() => null),
-      getOracleToolConfig(db).catch(() => ({ sshConfigId: '', connectionString: '' })),
+      getOracleConnectionProfiles(db).catch(() => []),
     ]);
     return getGatedAddenda({
       team: liveTeam,
       sshConfigReady: Boolean(sshCfg?.sshConfigId),
-      oracleConfigReady: Boolean(oracleCfg.sshConfigId && oracleCfg.connectionString),
+      // Any ready profile enables the Oracle tools; selection happens per call.
+      oracleConfigReady: oracleProfiles.some((p) => Boolean(p.sshConfigId && p.connectionString)),
     });
   }
 

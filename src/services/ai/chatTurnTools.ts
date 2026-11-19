@@ -230,6 +230,7 @@ const BUILTIN_USAGE_OVERRIDES: Record<string, ToolCatalogUsage> = {
   ssh_grep_files: SSH_ORACLE_USAGE,
   oracle_query: SSH_ORACLE_USAGE,
   oracle_describe: SSH_ORACLE_USAGE,
+  oracle_list_connections: SSH_ORACLE_USAGE,
 };
 
 function mergeUsage(...parts: (ToolCatalogUsage | undefined)[]): ToolCatalogUsage {

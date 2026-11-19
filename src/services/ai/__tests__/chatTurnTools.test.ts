@@ -89,7 +89,7 @@ describe('getAllAvailableToolDefinitions (tool catalog aggregate)', () => {
     const entries = await catalog(db);
     const find = (name: string) =>
       entries.find((entry) => normalizeToolName(entry.tool.function.name) === name);
-    for (const name of ['ssh_read_file_page', 'ssh_list_dir', 'ssh_grep_files', 'oracle_query', 'oracle_describe']) {
+    for (const name of ['ssh_read_file_page', 'ssh_list_dir', 'ssh_grep_files', 'oracle_query', 'oracle_describe', 'oracle_list_connections']) {
       const entry = find(name);
       expect(entry).toBeDefined();
       expect(entry?.usage.labels.join(' ')).toContain('gated');
@@ -164,5 +164,42 @@ describe('getAllAvailableToolDefinitions (tool catalog aggregate)', () => {
       (tool) => !artifactTools.includes(normalizeToolName(tool.function.name))
     ).map((tool) => normalizeToolName(tool.function.name));
     expect(tools.map((tool) => normalizeToolName(tool.function.name))).toEqual(expected);
+  });
+
+  // D-12 / T-45-09: oracle_list_connections must join the same gated addendum as
+  // query/describe, so a disabled Oracle advertises none of the three.
+  it('advertises oracle_list_connections only under the Oracle enablement gate', () => {
+    const names = (opts: Parameters<typeof chatTurnTools.getGatedAddenda>[0]) =>
+      chatTurnTools.getGatedAddenda(opts).map((t) => normalizeToolName(t.function.name));
+
+    const readyWithFlag = names({
+      team: { oracleToolsEnabled: true } as any,
+      sshConfigReady: false,
+      oracleConfigReady: true,
+    });
+    expect(readyWithFlag).toContain('oracle_list_connections');
+    expect(readyWithFlag).toContain('oracle_query');
+    expect(readyWithFlag).toContain('oracle_describe');
+
+    const flagOff = names({
+      team: { oracleToolsEnabled: false } as any,
+      sshConfigReady: false,
+      oracleConfigReady: true,
+    });
+    expect(flagOff).not.toContain('oracle_list_connections');
+    expect(flagOff).not.toContain('oracle_query');
+
+    const configNotReady = names({
+      team: { oracleToolsEnabled: true } as any,
+      sshConfigReady: false,
+      oracleConfigReady: false,
+    });
+    expect(configNotReady).not.toContain('oracle_list_connections');
+
+    // No team (ordinary chat / Telegram): readiness alone gates the addendum.
+    const chatReady = names({ sshConfigReady: false, oracleConfigReady: true });
+    expect(chatReady).toContain('oracle_list_connections');
+    const chatNotReady = names({ sshConfigReady: false, oracleConfigReady: false });
+    expect(chatNotReady).not.toContain('oracle_list_connections');
   });
 });
