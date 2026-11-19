@@ -126,6 +126,44 @@ export function getToolsForTurn(
   ];
 }
 
+/**
+ * Phase 47 D-13: build the advertised tool list for a turn, including the remote-scope-specific
+ * gates. Pure so the drawer's real gating can be unit-tested deterministically:
+ *  - an active remote target makes SSH tools ready even with no global SSH FS config (Pitfall 6);
+ *  - a remote turn advertises exactly one team tool, `git_read` — never explore_repo/write_doc.
+ */
+export interface RemoteTurnToolOptions {
+  effectiveAnalysisMode: boolean;
+  dynamicMcpTools?: AiToolDefinition[];
+  /** Whether a global SSH FS config exists (the ordinary-scope gate). */
+  globalSshConfigReady: boolean;
+  /** Whether the active remote scope carries an explicit target for this turn. */
+  hasRemoteTarget: boolean;
+  oracleConfigReady: boolean;
+  allowedToolNames?: readonly string[];
+}
+
+export function getToolsForTurnWithRemote(options: RemoteTurnToolOptions): AiToolDefinition[] {
+  const sshReady = options.hasRemoteTarget || options.globalSshConfigReady;
+  const disabled = new Set<string>([
+    ...(sshReady ? [] : SSH_READ_TOOLS.map((t) => normalizeToolName(t.function.name))),
+    ...(options.oracleConfigReady ? [] : ORACLE_READ_TOOLS.map((t) => normalizeToolName(t.function.name))),
+  ]);
+  const tools = getToolsForTurn(
+    options.effectiveAnalysisMode,
+    options.dynamicMcpTools ?? [],
+    options.allowedToolNames,
+    disabled
+  );
+  if (options.hasRemoteTarget) {
+    const gitReadDef = TEAM_TOOL_DEFINITIONS.find(
+      (t) => normalizeToolName(t.function.name) === 'git_read'
+    );
+    if (gitReadDef) tools.push(gitReadDef);
+  }
+  return tools;
+}
+
 // ---------------------------------------------------------------------------
 // Read-only tool catalog (Settings > AI tab). Additive: nothing above this line
 // is modified. The catalog never feeds a dispatch path — it is inventory only.

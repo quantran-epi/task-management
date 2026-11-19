@@ -4,6 +4,7 @@ import {
   LEAD_TOOL_ALLOWLIST,
   getGatedAddenda,
   getToolsForTurn,
+  getToolsForTurnWithRemote,
   payloadHasMutationTool,
 } from '../../src/services/ai/chatTurnTools';
 import {
@@ -234,6 +235,33 @@ describe('dispatchAiToolCall explicit remote target (Phase 47 D-13)', () => {
 
     expect(getSshConfigByIdSpy).toHaveBeenCalledWith(GLOBAL_ID, mockDb);
     expect(getSshConfigByIdSpy).not.toHaveBeenCalledWith(SCOPE_ID, mockDb);
+  });
+
+  it('remote turn advertises git_read and keeps SSH tools with no global config', () => {
+    const names = getToolsForTurnWithRemote({
+      effectiveAnalysisMode: false,
+      globalSshConfigReady: false,
+      hasRemoteTarget: true,
+      oracleConfigReady: false,
+    }).map((t) => normalizeToolName(t.function.name));
+    expect(names).toContain('git_read');
+    expect(names).toContain('ssh_list_dir');
+    expect(names).toContain('ssh_read_file_page');
+    expect(names).toContain('ssh_grep_files');
+    // Exactly one team tool is added — never explore_repo or any write tool.
+    expect(names.filter((n) => ['git_read', 'explore_repo', 'write_doc'].includes(n))).toEqual(['git_read']);
+  });
+
+  it('non-remote turn with no global config keeps SSH tools disabled and advertises no git_read', () => {
+    const names = getToolsForTurnWithRemote({
+      effectiveAnalysisMode: false,
+      globalSshConfigReady: false,
+      hasRemoteTarget: false,
+      oracleConfigReady: false,
+    }).map((t) => normalizeToolName(t.function.name));
+    expect(names).not.toContain('git_read');
+    expect(names).not.toContain('ssh_list_dir');
+    expect(names).not.toContain('ssh_grep_files');
   });
 
   it('dispatches git_read on a remote turn through the team adapter with the explicit target', async () => {

@@ -1041,6 +1041,21 @@ describe('chatTurnRuntime team seams (D-07, D-12, D-13, D-19, D-21)', () => {
 
     expect(Object.hasOwn(loopOptions!, 'beforeToolRound')).toBe(false);
   });
+
+  // Phase 47 D-13: the explicit remote scope target must reach the loop options so the
+  // loop-internal dispatch fallback can use it when no host executeToolFn is supplied.
+  it('forwards request.remoteTarget into loop options', async () => {
+    const target = { sshConfigId: 'ssh-prod', repoPath: '/srv/repo', branch: 'feature/x' };
+    let loopOptions: AiOrchestratorLoopOptions | undefined;
+    const runtime = runtimeWith(async (options) => {
+      loopOptions = options;
+      return { fullResponse: 'ok', tokenUsage: {} };
+    });
+
+    await runtime.start(makeRequest({ threadId, remoteTarget: target }));
+
+    expect((loopOptions as any).remoteTarget).toEqual(target);
+  });
 });
 
 async function waitForStatus(predicate: () => boolean, timeoutMs = 2000): Promise<void> {

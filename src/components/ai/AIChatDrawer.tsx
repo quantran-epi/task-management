@@ -26,16 +26,20 @@ import {
   buildItemContextPrompt,
   buildGlobalContextPrompt,
   serializeDocumentContext,
+  serializeRemoteContext,
+  type RemoteContextAnchor,
   extractMentionedEntityIds,
 } from '../../services/ai/contextGrounding';
+import { deriveRemoteTargetUuid } from '../../utils/remoteTarget';
+import { useLayoutStore } from '../../workbench/store/layoutStore';
+import type { RemoteToolTarget } from '../../types/sshFsTool';
 import { compactThreadContext, sanitizeHistoryTurns } from '../../services/ai/contextCompaction';
 import {
   type AiToolDefinition,
   describeToolMutationWithContext,
 } from '../../services/ai/aiTools';
 import { runAiOrchestratorLoop } from '../../services/ai/aiOrchestratorLoop';
-import { getToolsForTurn } from '../../services/ai/chatTurnTools';
-import { SSH_READ_TOOLS, ORACLE_READ_TOOLS, normalizeToolName } from '../../services/ai/aiTools';
+import { getToolsForTurnWithRemote } from '../../services/ai/chatTurnTools';
 import {
   getMcpServers,
   discoverAllMcpTools,
@@ -226,7 +230,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   isDockedPanel = false,
 }) => {
   const { token } = theme.useToken();
-  const { pendingPrompt, clearPendingPrompt, pendingDraft, clearPendingDraft, setCustomScope } = useAIChat();
+  const {
+    pendingPrompt, clearPendingPrompt, pendingDraft, clearPendingDraft, setCustomScope, registerActiveItem,
+  } = useAIChat();
 
   // Width management with drag-resize clamping
   const [internalWidth, setInternalWidth] = useState<number>(() => {
@@ -442,6 +448,36 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   scopeKeyRef.current = scopeKey;
 
   const isCrScope = currentScope.type === 'cr' && Boolean(currentScope.id);
+
+  // Phase 47 D-13: the active remote target is read from the SAME layout state the scope picker
+  // and explorer use. It becomes the explicit `remoteTarget` on the real drawer turn. Kept as a
+  // derived value (no new persisted state): a remote scope's id is the target-derived UUID.
+  const activeRemoteConfigId = useLayoutStore((s) => s.activeRemoteConfigId);
+  const activeRemoteRepoPath = useLayoutStore((s) => s.activeRemoteRepoPath);
+  const activeRemoteBranch = useLayoutStore((s) => s.activeRemoteBranch);
+  const isRemoteScope = currentScope.type === 'remote' && Boolean(activeRemoteConfigId);
+  const currentRemoteTarget: RemoteToolTarget | undefined =
+    isRemoteScope && activeRemoteConfigId
+      ? {
+          sshConfigId: activeRemoteConfigId,
+          repoPath: activeRemoteRepoPath,
+          branch: activeRemoteBranch,
+        }
+      : undefined;
+
+  // Phase 47 D-08: when a remote target becomes active, register it so the drawer auto-activates
+  // its scope via AIChatContext's `customScope ?? registeredTop ?? global` precedence. A manual
+  // customScope still wins; we never call setCustomScope automatically and never persist it here.
+  useEffect(() => {
+    if (!activeRemoteConfigId) return undefined;
+    const targetUuid = deriveRemoteTargetUuid(
+      activeRemoteConfigId,
+      activeRemoteRepoPath,
+      activeRemoteBranch
+    );
+    const title = `${activeRemoteConfigId} · ${activeRemoteRepoPath || '/'} · ${activeRemoteBranch || '-'}`;
+    return registerActiveItem({ type: 'remote', id: targetUuid, title });
+  }, [activeRemoteConfigId, activeRemoteRepoPath, activeRemoteBranch, registerActiveItem]);
 
   // Per-tab runtime/request ownership. Runtime state stays ephemeral; durable history stays in Dexie.
   const tabRuntimes = useTabRuntimes();
@@ -1768,6 +1804,17 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           } else if (effectiveScope.type === 'document') {
             const note = db.notes ? await db.notes.get(effectiveScope.id) : null;
             if (note) systemInstruction = serializeDocumentContext(note);
+          } else if (effectiveScope.type === 'remote' && currentRemoteTarget) {
+            // Phase 47 D-07: remote is its own bounded shape — target identity + any attached
+            // path:line anchors — never cast into Task/System. Read-only leaves are data.
+            const remoteAnchors: RemoteContextAnchor[] = (tabRuntimes.get(turnTabId)?.references ?? [])
+              .filter((path) => typeof path === 'string' && path.trim().length > 0)
+              .map((path) => ({ relativeFilePath: path, startLine: 0, endLine: 0 }));
+            systemInstruction = serializeRemoteContext({
+              ...currentRemoteTarget,
+              ...(remoteAnchors.length > 0 ? { anchors: remoteAnchors } : {}),
+              charLimit: config.charLimit,
+            });
           }
         } catch (err) {
           logAiChatError('Context grounding resolution error', err);
@@ -1866,18 +1913,17 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         getOracleToolConfig(db).catch(() => null),
         getSshFsToolConfig(db).catch(() => null),
       ]);
-      const sshReady = Boolean(sshFsCfg?.sshConfigId);
-      const oracleReady = Boolean(oracleCfg?.sshConfigId && oracleCfg?.connectionString);
-      const disabledToolNames = new Set<string>([
-        ...(sshReady ? [] : SSH_READ_TOOLS.map((t) => normalizeToolName(t.function.name))),
-        ...(oracleReady ? [] : ORACLE_READ_TOOLS.map((t) => normalizeToolName(t.function.name))),
-      ]);
-      const toolsForTurn = getToolsForTurn(
-        turnAnalysisMode,
+      // Phase 47 D-13 / Pitfall 6: an active remote target makes SSH tools ready for THIS turn
+      // even when the global SSH FS config is absent, and a remote turn advertises exactly one
+      // team tool — git_read — so cross-file git reads work from this ordinary chat path. The
+      // gating is a pure helper so it is unit-testable (chatTurnTools.getToolsForTurnWithRemote).
+      const toolsForTurn = getToolsForTurnWithRemote({
+        effectiveAnalysisMode: turnAnalysisMode,
         dynamicMcpTools,
-        undefined,
-        disabledToolNames
-      );
+        globalSshConfigReady: Boolean(sshFsCfg?.sshConfigId),
+        hasRemoteTarget: Boolean(isRemoteScope && currentRemoteTarget),
+        oracleConfigReady: Boolean(oracleCfg?.sshConfigId && oracleCfg?.connectionString),
+      });
 
       let conventionsSegment = '';
       try {
@@ -1978,6 +2024,9 @@ Rules:
         ...(config.contextWindowTokens ? { contextWindowTokens: config.contextWindowTokens } : {}),
         // WR-19: a CR-scoped turn may only touch that CR's entities.
         ...(isCrScope && currentScope.id ? { crScopeId: currentScope.id } : {}),
+        // Phase 47 D-13: the explicit scope target reaches the dispatcher chain ONLY through
+        // this real turn request. This is how a remote git_read reads the looked-at host/repo/branch.
+        ...(currentRemoteTarget ? { remoteTarget: currentRemoteTarget } : {}),
       });
 
       const debugTurnId = debugTurnRef.current.get(turnTabId);
