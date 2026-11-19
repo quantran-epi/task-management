@@ -1,11 +1,28 @@
-import React, { useEffect, useState } from 'react';
-import { ApiOutlined, SaveOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Form, Input, Space, Switch, Typography } from 'antd';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ApiOutlined, DeleteOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
+import {
+  Alert,
+  Button,
+  Card,
+  Divider,
+  Form,
+  Input,
+  Popconfirm,
+  Space,
+  Switch,
+  Table,
+  Typography,
+} from 'antd';
 import { announceToScreenReader } from '../common/AriaLiveRegion';
 import {
   useKnowledgeConfig,
   validateKnowledgeBaseUrl,
 } from '../../services/knowledge/knowledgeConfig';
+import {
+  createKnowledgeClient,
+  type KnowledgeClient,
+  type PublishedSetSummary,
+} from '../../services/knowledge/knowledgeClient';
 
 const { Paragraph } = Typography;
 
@@ -39,6 +56,53 @@ export const KnowledgeServerConfigCard: React.FC<KnowledgeServerConfigCardProps>
   const [diagnostic, setDiagnostic] = useState<Diagnostic | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [publishedSets, setPublishedSets] = useState<PublishedSetSummary[]>([]);
+  const [setListLoading, setSetListLoading] = useState(false);
+  const [setListError, setSetListError] = useState<string | null>(null);
+  const [purgingSetId, setPurgingSetId] = useState<string | null>(null);
+
+  const client = useMemo<KnowledgeClient | undefined>(
+    () =>
+      enabled && config.baseUrl && config.token
+        ? createKnowledgeClient({ baseUrl: config.baseUrl, token: config.token, fetcher })
+        : undefined,
+    [enabled, config.baseUrl, config.token, fetcher]
+  );
+
+  const loadPublishedSets = useCallback(async () => {
+    if (!client) {
+      setPublishedSets([]);
+      setSetListError(null);
+      return;
+    }
+    setSetListLoading(true);
+    try {
+      setPublishedSets(await client.listPublishedSets());
+      setSetListError(null);
+    } catch {
+      setPublishedSets([]);
+      setSetListError('Không thể tải danh sách set từ Knowledge Server.');
+    } finally {
+      setSetListLoading(false);
+    }
+  }, [client]);
+
+  useEffect(() => {
+    void loadPublishedSets();
+  }, [loadPublishedSets]);
+
+  const handlePurge = async (setId: string) => {
+    if (!client) return;
+    setPurgingSetId(setId);
+    try {
+      await client.purgeDocumentSet(setId);
+      await loadPublishedSets();
+    } catch {
+      setSetListError('Không thể dọn set này trên Knowledge Server.');
+    } finally {
+      setPurgingSetId(null);
+    }
+  };
 
   useEffect(() => {
     if (!config.ready) return;
@@ -200,6 +264,66 @@ export const KnowledgeServerConfigCard: React.FC<KnowledgeServerConfigCardProps>
           </Button>
         </Space>
       </Form>
+
+      <Divider>Quản lý set</Divider>
+      <Paragraph type="secondary">
+        Liệt kê các set đã xuất bản trên Knowledge Server theo dữ liệu của máy chủ. Việc dọn set là hành động thủ công; danh sách này không ảnh hưởng đến phạm vi truy xuất.
+      </Paragraph>
+      {!client ? (
+        <Alert
+          type="warning"
+          showIcon
+          message="Không thể kết nối Knowledge Server. Kiểm tra cấu hình để xem và dọn các set đã xuất bản."
+        />
+      ) : (
+        <Space direction="vertical" style={{ width: '100%' }}>
+          {setListError && (
+            <Alert type="error" showIcon message={setListError} />
+          )}
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => void loadPublishedSets()}
+            loading={setListLoading}
+          >
+            Tải lại danh sách
+          </Button>
+          <Table<PublishedSetSummary>
+            rowKey="setId"
+            size="small"
+            dataSource={publishedSets}
+            loading={setListLoading}
+            pagination={{ pageSize: 5, showSizeChanger: false }}
+            columns={[
+              { title: 'Set ID', dataIndex: 'setId', ellipsis: true },
+              { title: 'Snapshot ID', dataIndex: 'snapshotId', ellipsis: true },
+              {
+                title: 'Hành động',
+                key: 'actions',
+                width: 130,
+                render: (_value, row) => (
+                  <Popconfirm
+                    title="Dọn set này khỏi Knowledge Server?"
+                    description="Snapshot và graph tương ứng sẽ bị xóa vĩnh viễn trên máy chủ."
+                    okText="Dọn set này"
+                    cancelText="Hủy"
+                    onConfirm={() => void handlePurge(row.setId)}
+                  >
+                    <Button
+                      danger
+                      size="small"
+                      icon={<DeleteOutlined />}
+                      loading={purgingSetId === row.setId}
+                      aria-label="Dọn set này"
+                    >
+                      Dọn set này
+                    </Button>
+                  </Popconfirm>
+                ),
+              },
+            ]}
+          />
+        </Space>
+      )}
     </Card>
   );
 };

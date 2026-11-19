@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import Dexie from 'dexie';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,6 +10,22 @@ import { AriaLiveRegion } from '../../src/components/common/AriaLiveRegion';
 import { KnowledgeConfigProvider } from '../../src/services/knowledge/knowledgeConfig';
 import { SettingsView } from '../../src/views/SettingsView';
 import { generateId } from '../../src/utils/uuid';
+
+const listPublishedSets = vi.hoisted(() => vi.fn());
+const purgeDocumentSet = vi.hoisted(() => vi.fn());
+const realCreateKnowledgeClient = vi.hoisted(() => vi.fn());
+
+vi.mock('../../src/services/knowledge/knowledgeClient', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../src/services/knowledge/knowledgeClient')>();
+  realCreateKnowledgeClient.mockImplementation(original.createKnowledgeClient);
+  return {
+    ...original,
+    createKnowledgeClient: vi.fn((options: Parameters<typeof original.createKnowledgeClient>[0]) => {
+      const client = realCreateKnowledgeClient(options);
+      return Object.assign(client, { listPublishedSets, purgeDocumentSet });
+    }),
+  };
+});
 
 vi.mock('../../src/components/settings/McpConfigCard', () => ({
   McpConfigCard: () => null,
@@ -40,6 +56,8 @@ describe('KnowledgeServerConfigCard', () => {
     await db.open();
     localStorage.clear();
     sessionStorage.clear();
+    listPublishedSets.mockReset();
+    purgeDocumentSet.mockReset();
   });
 
   afterEach(async () => {
@@ -181,6 +199,71 @@ describe('KnowledgeServerConfigCard', () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it('lists published server sets and refreshes after a confirmed purge (D-03, D-04)', async () => {
+    const setA = generateId();
+    const setB = generateId();
+    const snapshotA = generateId();
+    listPublishedSets.mockResolvedValueOnce([
+      { setId: setA, snapshotId: snapshotA },
+      { setId: setB, snapshotId: generateId() },
+    ]);
+    listPublishedSets.mockResolvedValueOnce([{ setId: setB, snapshotId: generateId() }]);
+    purgeDocumentSet.mockResolvedValue(undefined);
+
+    renderCard(db);
+    await screen.findByRole('switch', { name: 'Bật Knowledge Server' });
+    fireEvent.click(screen.getByRole('switch', { name: 'Bật Knowledge Server' }));
+    fireEvent.change(screen.getByLabelText('URL Knowledge Server'), {
+      target: { value: 'https://knowledge.example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('Token phiên'), {
+      target: { value: 'secret-session-token' },
+    });
+    fireEvent.click(screen.getAllByRole('button', { name: /Lưu cấu hình/ })[0]!);
+
+    expect(await screen.findByText('Quản lý set')).toBeInTheDocument();
+    expect(await screen.findByText(setA)).toBeInTheDocument();
+    expect(screen.getByText(snapshotA)).toBeInTheDocument();
+    expect(screen.getByText(setB)).toBeInTheDocument();
+    expect(listPublishedSets).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Dọn set này' })[0]!);
+    const popconfirm = await waitFor(() => {
+      const node = document.querySelector('.ant-popconfirm');
+      expect(node).toBeInTheDocument();
+      return node as HTMLElement;
+    });
+    fireEvent.click(within(popconfirm).getByRole('button', { name: 'Dọn set này' }));
+    await waitFor(() => expect(purgeDocumentSet).toHaveBeenCalledWith(setA));
+    await waitFor(() => expect(listPublishedSets).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText(setA)).not.toBeInTheDocument());
+  });
+
+  it('shows a diagnostic when the daemon is unreachable without breaking local config (D-03)', async () => {
+    listPublishedSets.mockRejectedValue(new Error('daemon unavailable'));
+    renderCard(db);
+    await screen.findByRole('switch', { name: 'Bật Knowledge Server' });
+    fireEvent.click(screen.getByRole('switch', { name: 'Bật Knowledge Server' }));
+    fireEvent.change(screen.getByLabelText('URL Knowledge Server'), {
+      target: { value: 'https://knowledge.example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('Token phiên'), {
+      target: { value: 'secret-session-token' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Lưu cấu hình/ }));
+
+    expect(await screen.findByText(/Không thể tải danh sách set/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Lưu cấu hình/ })).toBeEnabled();
+  });
+
+  it('makes no published-set request when the daemon is disabled', async () => {
+    renderCard(db);
+    await screen.findByRole('switch', { name: 'Bật Knowledge Server' });
+    expect(await screen.findByText('Quản lý set')).toBeInTheDocument();
+    expect(listPublishedSets).not.toHaveBeenCalled();
+    expect(screen.getByText(/Không thể kết nối/)).toBeInTheDocument();
+  });
+
   it('maintains persisted token across views while excluding it from backups', async () => {
     const tokenCanary = 'bearer-token-canary-secret-12345';
 
@@ -222,9 +305,14 @@ describe('KnowledgeServerConfigCard', () => {
     fireEvent.change(screen.getByLabelText('Token phiên'), {
       target: { value: tokenCanary },
     });
-    fireEvent.click(screen.getByRole('button', { name: /Lưu cấu hình/ }));
+    const saveButtons = screen.getAllByRole('button', { name: /Lưu cấu hình/ });
+    const knowledgeSave = saveButtons.find((button) =>
+      button.closest('.ant-card')?.textContent?.includes('Dịch vụ độc lập và tùy chọn')
+    );
+    expect(knowledgeSave).toBeDefined();
+    fireEvent.click(knowledgeSave!);
 
-    expect(await screen.findByText('Đã lưu cấu hình Knowledge Server.')).toBeInTheDocument();
+    expect(await screen.findAllByText('Đã lưu cấu hình Knowledge Server.')).not.toHaveLength(0);
     await waitFor(async () => {
       const [urlSetting, enabledSetting] = await Promise.all([
         db.settings.get('knowledge_server_base_url'),
