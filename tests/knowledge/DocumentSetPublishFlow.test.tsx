@@ -2,11 +2,12 @@
 import 'fake-indexeddb/auto';
 import '@testing-library/jest-dom/vitest';
 import { TaskPlannerDatabase } from '../../src/db';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { DocumentSetForm, snapshotFolderMembers } from '../../src/components/knowledge/DocumentSetForm';
 import { AttemptHistoryList } from '../../src/components/knowledge/AttemptHistoryList';
-import { DocumentSetDrawer, publishStateLabel } from '../../src/components/knowledge/DocumentSetDrawer';
+import { DocumentSetDetail, publishStateLabel } from '../../src/workbench/DocumentSetDetail';
+import { computeSha256, normalizeMarkdownForHash } from '../../src/db/repositories/documentSetRepo';
 import { PublishPreviewModal } from '../../src/components/knowledge/PublishPreviewModal';
 import { PublishProgressPanel } from '../../src/components/knowledge/PublishProgressPanel';
 import type { ChangePreview } from '../../src/services/knowledge/changePreview';
@@ -37,6 +38,44 @@ const documentSet: DocumentSet = {
   createdAt: NOW,
   updatedAt: NOW,
 };
+
+/** Seed a fresh DB for a tab render; mirrors DocumentSetDetailPublished.test.tsx. */
+/** hashes: documentId -> 'match' (current body hash) or any other literal (stale). */
+async function seedTabDb(options: {
+  set?: DocumentSet;
+  notes?: Note[];
+  attempts?: PublishAttemptCache[];
+  hashes?: Record<string, string>;
+} = {}) {
+  const database = new TaskPlannerDatabase(`pub-flow-${crypto.randomUUID()}`);
+  await database.open();
+  await database.documentSets.add(options.set ?? documentSet);
+  const seededNotes = options.notes ?? notes;
+  for (const note of seededNotes) await database.notes.add(note);
+  for (const attempt of options.attempts ?? []) await database.publishAttempts.add(attempt);
+  const bodyHashById = new Map(
+    await Promise.all(seededNotes.map(async (n) => [n.id, await computeSha256(normalizeMarkdownForHash(n.body))] as const))
+  );
+  for (const [documentId, marker] of Object.entries(options.hashes ?? {})) {
+    await database.publishedDocuments.add({
+      setId: (options.set ?? documentSet).id,
+      documentId,
+      lastKnownRemoteAt: NOW,
+      publishedContentHash: marker === 'match' ? (bodyHashById.get(documentId) ?? marker) : marker,
+      lastPrimaryState: 'In sync',
+    });
+  }
+  return database;
+}
+
+async function renderTab(database: TaskPlannerDatabase, props: Partial<Parameters<typeof DocumentSetDetail>[0]> = {}) {
+  await act(async () => {
+    render(<DocumentSetDetail setId="set-a" db={database} {...props} />);
+  });
+  await screen.findByTestId('doc-set-detail');
+  // Live queries are async; flush microtasks so state derived from Dexie is settled.
+  await act(async () => { await Promise.resolve(); });
+}
 
 describe('document-set management', () => {
   it('creates trimmed names from empty, folder snapshot, or manual ordered members', () => {
@@ -89,7 +128,7 @@ describe('document-set management', () => {
     expect(onPublish).not.toHaveBeenCalled();
   });
 
-  it('renders exact six states, cached offline copy, active summary, and newest 10 safe attempts', () => {
+  it('renders exact six states, cached offline copy, active summary, and newest 10 safe attempts', async () => {
     const states: PublishPrimaryState[] = ['Never published', 'In sync', 'Local changes', 'Publishing', 'Warning', 'Failed'];
     expect(states.map(publishStateLabel)).toEqual([
       'Chưa xuất bản',
@@ -103,6 +142,7 @@ describe('document-set management', () => {
       id: `attempt-${index}`,
       setId: 'set-a',
       startedAt: new Date(Date.parse(NOW) + index * 1000).toISOString(),
+      completedAt: NOW,
       durationMs: 1000,
       status: index === 10 ? 'Failed' : 'In sync',
       addedCount: 1,
@@ -118,110 +158,75 @@ describe('document-set management', () => {
     expect(screen.getAllByText(/SAFE_CODE/)).toHaveLength(10);
     expect(screen.queryByText('attempt-0')).not.toBeInTheDocument();
     expect(document.body.textContent).not.toContain('# Alpha');
+    cleanup();
 
-    render(
-      <DocumentSetDrawer
-        open
-        sets={[documentSet]}
-        notes={notes}
-        attempts={attempts}
-        selectedSetId="set-a"
-        state="Publishing"
-        activeSummary="2 tài liệu trong ảnh chụp đang hoạt động"
-        cachedAt={NOW}
-        offline
-        configured
-        onClose={vi.fn()}
-        onSave={vi.fn()}
-        onPreview={vi.fn()}
-      />
-    );
+    const publishing: PublishAttemptCache = {
+      id: 'attempt-publishing', setId: 'set-a', startedAt: new Date(Date.parse(NOW) + 20000).toISOString(),
+      status: 'Publishing', addedCount: 0, changedCount: 0, removedCount: 0, unchangedCount: 0, warningCount: 0,
+    };
+    const database = await seedTabDb({
+      attempts: [...attempts, publishing],
+      hashes: { 'doc-a': 'match', 'doc-b': 'match' },
+    });
+    const offlineClient = {
+      getGraphStatus: vi.fn().mockRejectedValue(Object.assign(new Error('offline'), { code: 'NETWORK_ERROR' })),
+    };
+    await renderTab(database, { setId: 'set-a', configured: true, knowledgeClient: offlineClient as never });
     expect(screen.getByText('Đang xuất bản')).toBeInTheDocument();
     expect(screen.getByText('2 tài liệu trong ảnh chụp đang hoạt động')).toBeInTheDocument();
-    expect(screen.getByText(`Dữ liệu trạng thái gần nhất: ${NOW}`)).toBeInTheDocument();
+    expect(await screen.findByText(`Dữ liệu trạng thái gần nhất: ${NOW}`)).toBeInTheDocument();
+    database.close();
   });
 
-  it('renders each list row and selected detail from its own set state', () => {
-    const secondSet = { ...documentSet, id: 'set-b', name: 'Bộ thứ hai' };
-    const { rerender } = render(
-      <DocumentSetDrawer
-        open
-        sets={[documentSet, secondSet]}
-        notes={notes}
-        attempts={[]}
-        statesBySet={{ 'set-a': 'In sync', 'set-b': 'Local changes' }}
-        configured
-        onClose={vi.fn()}
-        onSave={vi.fn()}
-        onPreview={vi.fn()}
-      />
-    );
+  it('derives each tab detail from its own set state', async () => {
+    // Exact matching hashes -> In sync for set-a's tab.
+    const syncedDb = await seedTabDb({
+      attempts: [],
+      hashes: { 'doc-a': 'match', 'doc-b': 'match' },
+    });
+    await renderTab(syncedDb, { setId: 'set-a', configured: true });
     expect(screen.getByText('Đã đồng bộ')).toBeInTheDocument();
-    expect(screen.getByText('Có thay đổi cục bộ')).toBeInTheDocument();
+    cleanup();
+    syncedDb.close();
 
-    rerender(
-      <DocumentSetDrawer
-        open
-        sets={[documentSet, secondSet]}
-        notes={notes}
-        attempts={[]}
-        selectedSetId="set-b"
-        statesBySet={{ 'set-a': 'In sync', 'set-b': 'Local changes' }}
-        configured
-        onClose={vi.fn()}
-        onSave={vi.fn()}
-        onPreview={vi.fn()}
-      />
-    );
+    // A stale hash for the same set -> Local changes for that set's tab, not another's.
+    const staleDb = await seedTabDb({
+      attempts: [],
+      hashes: { 'doc-a': 'match', 'doc-b': 'stale-hash' },
+    });
+    await renderTab(staleDb, { setId: 'set-a', configured: true });
     expect(screen.getByText('Có thay đổi cục bộ')).toBeInTheDocument();
+    staleDb.close();
   });
 
-  it('offers retained-attempt reconciliation for Publishing state', () => {
-    const onReconcileAttempt = vi.fn();
-    render(
-      <DocumentSetDrawer
-        open
-        sets={[documentSet]}
-        notes={notes}
-        attempts={[]}
-        selectedSetId="set-a"
-        statesBySet={{ 'set-a': 'Publishing' }}
-        activeAttemptIdsBySet={{ 'set-a': 'attempt-a' }}
-        configured
-        onClose={vi.fn()}
-        onSave={vi.fn()}
-        onPreview={vi.fn()}
-        onReconcileAttempt={onReconcileAttempt}
-      />
-    );
+  it('offers retained-attempt reconciliation for Publishing state', async () => {
+    const attemptId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const database = await seedTabDb({
+      attempts: [{
+        id: attemptId, setId: 'set-a', startedAt: NOW, status: 'Publishing',
+        addedCount: 1, changedCount: 0, removedCount: 0, unchangedCount: 0, warningCount: 0,
+        submittedDocuments: [{ documentId: 'doc-a', submittedContentHash: 'a'.repeat(64) }],
+      }],
+    });
+    const pollAttempt = vi.fn().mockResolvedValue({ attemptId, setId: 'set-a', status: 'In sync', uncertain: false });
+    const client = { getGraphStatus: vi.fn().mockResolvedValue({ state: 'Never built' }), pollAttempt };
+    await renderTab(database, { setId: 'set-a', configured: true, knowledgeClient: client as never });
+
     fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra trạng thái' }));
-    expect(onReconcileAttempt).toHaveBeenCalledWith('set-a', 'attempt-a');
+    await waitFor(() => expect(pollAttempt).toHaveBeenCalledWith(attemptId, expect.anything()));
+    database.close();
   });
 
   it('keeps local metadata when remote purge fails', async () => {
-    const database = new TaskPlannerDatabase(`delete-failure-${crypto.randomUUID()}`);
-    await database.open();
-    await database.documentSets.add(documentSet);
+    const database = await seedTabDb({
+      hashes: { 'doc-a': 'match', 'doc-b': 'match' },
+    });
     const client = {
       getGraphStatus: vi.fn().mockResolvedValue({ state: 'Never built' }),
       purgeDocumentSet: vi.fn().mockRejectedValue(new Error('daemon unavailable')),
     };
 
-    render(
-      <DocumentSetDrawer
-        open
-        database={database}
-        sets={[documentSet]}
-        notes={notes}
-        attempts={[]}
-        statesBySet={{ 'set-a': 'In sync' }}
-        configured
-        knowledgeClient={client as never}
-        onClose={vi.fn()}
-        onSave={vi.fn()}
-        onPreview={vi.fn()}
-      />
-    );
+    await renderTab(database, { setId: 'set-a', configured: true, knowledgeClient: client as never });
 
     fireEvent.click(screen.getByRole('button', { name: 'Xóa bộ tài liệu Bộ nghiệp vụ' }));
     expect(await screen.findByText(/Xác nhận xóa bộ tài liệu/)).toBeInTheDocument();
@@ -232,58 +237,34 @@ describe('document-set management', () => {
     database.close();
   });
 
-  it('disables preview for empty, invalid config, or active same-set attempt while edits stay enabled', () => {
-    const { rerender } = render(
-      <DocumentSetDrawer
-        open
-        sets={[{ ...documentSet, documentIds: [] }]}
-        notes={notes}
-        attempts={[]}
-        selectedSetId="set-a"
-        state="Never published"
-        configured
-        onClose={vi.fn()}
-        onSave={vi.fn()}
-        onPreview={vi.fn()}
-      />
-    );
+  it('disables preview for empty, invalid config, or active same-set attempt while edits stay enabled', async () => {
+    // Empty set -> preview disabled, edit enabled.
+    const emptyDb = await seedTabDb({ set: { ...documentSet, documentIds: [] } });
+    await renderTab(emptyDb, { setId: 'set-a', configured: true });
     expect(screen.getByRole('button', { name: 'Xem trước xuất bản' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).toBeEnabled();
+    cleanup();
+    emptyDb.close();
 
-    rerender(
-      <DocumentSetDrawer
-        open
-        sets={[documentSet]}
-        notes={notes}
-        attempts={[]}
-        selectedSetId="set-a"
-        state="Never published"
-        configured={false}
-        onClose={vi.fn()}
-        onSave={vi.fn()}
-        onPreview={vi.fn()}
-      />
-    );
+    // Unconfigured -> warning + disabled preview.
+    const db2 = await seedTabDb();
+    await renderTab(db2, { setId: 'set-a', configured: false });
     expect(screen.getByText('Chưa cấu hình Knowledge Server.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Xem trước xuất bản' })).toBeDisabled();
+    cleanup();
+    db2.close();
 
-    rerender(
-      <DocumentSetDrawer
-        open
-        sets={[documentSet]}
-        notes={notes}
-        attempts={[]}
-        selectedSetId="set-a"
-        state="Publishing"
-        configured
-        activeSetId="set-a"
-        onClose={vi.fn()}
-        onSave={vi.fn()}
-        onPreview={vi.fn()}
-      />
-    );
+    // Publishing attempt on this set -> disabled preview, edits still enabled.
+    const db3 = await seedTabDb({
+      attempts: [{
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', setId: 'set-a', startedAt: NOW,
+        status: 'Publishing', addedCount: 0, changedCount: 0, removedCount: 0, unchangedCount: 0, warningCount: 0,
+      }],
+    });
+    await renderTab(db3, { setId: 'set-a', configured: true });
     expect(screen.getByRole('button', { name: 'Xem trước xuất bản' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).toBeEnabled();
+    db3.close();
   }, 30000);
 });
 

@@ -12,7 +12,7 @@ import { PublishSession } from '../../src/services/knowledge/publishOrchestrator
 import { createKnowledgeClient } from '../../src/services/knowledge/knowledgeClient';
 import { exportBackupPayload } from '../../src/services/backup/exportBackup';
 import { rankBM25 } from '../../src/utils/bm25';
-import { DocumentSetDrawer } from '../../src/components/knowledge/DocumentSetDrawer';
+import { publishStateLabel } from '../../src/workbench/DocumentSetDetail';
 import { AttemptHistoryList } from '../../src/components/knowledge/AttemptHistoryList';
 import type { Note, PublishPrimaryState } from '../../src/types/models';
 
@@ -296,25 +296,12 @@ ${SENSITIVE_CANARIES.PII}
     expect(timestamps).not.toContain('2026-10-08T01:01:00.000Z');
     expect(timestamps).toContain('2026-10-08T01:11:00.000Z');
 
-    // Drawer renders the 6 primary states
+    // The doc_set tab owns the six primary states; their labels stay stable after drawer removal.
     const states: PublishPrimaryState[] = ['Never published', 'In sync', 'Local changes', 'Publishing', 'Warning', 'Failed'];
-    for (const state of states) {
-      const { unmount } = render(
-        <DocumentSetDrawer
-          open
-          sets={[set]}
-          notes={[doc]}
-          attempts={cachedAttempts}
-          selectedSetId={set.id}
-          state={state}
-          configured={true}
-          onClose={vi.fn()}
-          onSave={vi.fn()}
-          onPreview={vi.fn()}
-        />
-      );
-      unmount();
-    }
+    expect(states.map(publishStateLabel)).toEqual([
+      'Chưa xuất bản', 'Đã đồng bộ', 'Có thay đổi cục bộ', 'Đang xuất bản', 'Cảnh báo', 'Thất bại',
+    ]);
+    expect(cachedAttempts.length).toBe(10);
 
     // Modal with conflict shows warning and action to inspect
     const client = createKnowledgeClient({

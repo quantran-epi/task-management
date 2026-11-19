@@ -16,6 +16,15 @@ vi.mock('../../views/SettingsView', () => ({ SettingsView: () => <div data-testi
 vi.mock('../../views/ChangeRequestDetailView', () => ({
   ChangeRequestDetailView: () => <div data-testid="mock-cr-view" />,
 }));
+// Knowledge config is read from the global db via context; the workspace fixture uses a
+// fresh db, so make the hook report a configured daemon to exercise publish/graph gates.
+vi.mock('../../services/knowledge/knowledgeConfig', () => ({
+  useOptionalKnowledgeConfig: () => ({
+    ready: true, enabled: true, baseUrl: 'http://127.0.0.1:3001', token: 'test-token',
+    loopbackHttpWarning: false, setToken: () => {}, savePersistedConfig: async () => {},
+  }),
+  validateKnowledgeBaseUrl: (value: string) => ({ baseUrl: value, loopbackHttpWarning: false }),
+}));
 vi.mock('../../components/knowledge/DocumentSetDeleteDialog', () => ({
   DocumentSetDeleteDialog: ({ open }: { open: boolean }) => (
     <div data-testid="shared-delete-dialog" data-open={String(open)} />
@@ -145,6 +154,44 @@ describe('Docs workspace + doc_set tabs (D-06, D-07, D-08)', () => {
     expect(screen.getByTestId('shared-delete-dialog')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: `Xóa bộ tài liệu ${set.name}` }));
     expect(screen.getByTestId('shared-delete-dialog')).toHaveAttribute('data-open', 'true');
+  });
+
+  it('opens a doc_set tab with publish preview, graph section, and attempt history', async () => {
+    const set = await seedSet('Bộ đầy đủ', 2);
+    renderWorkspace();
+    fireEvent.click(await screen.findByRole('button', { name: `Mở bộ tài liệu ${set.name}` }, { timeout: 5000 }));
+
+    const detail = await screen.findByTestId('doc-set-detail');
+    expect(screen.getByRole('button', { name: 'Xem trước xuất bản' })).toBeInTheDocument();
+    expect(within(detail).getByRole('heading', { name: /Đồ thị tri thức/ })).toBeInTheDocument();
+    expect(within(detail).getByRole('heading', { name: 'Lịch sử xuất bản' })).toBeInTheDocument();
+    for (const label of ['Xây dựng lại đồ thị', 'Xem bằng chứng', 'Kiểm tra trạng thái', 'Tiến trình từng phần']) {
+      expect(within(detail).getByRole('button', { name: new RegExp(label) })).toBeInTheDocument();
+    }
+  });
+
+  it('gates graph rebuild on a published snapshot and confirms via modal', async () => {
+    const set = await seedSet('Bộ rebuild', 1);
+    await act(async () => {
+      useLayoutStore.getState().openTab({
+        id: `doc_set-${set.id}`, title: set.name, viewType: 'doc_set', closable: true, params: { setId: set.id },
+      });
+    });
+    const { unmount } = render(<EditorArea db={db} />);
+    const detail = await screen.findByTestId('doc-set-detail');
+
+    const rebuild = within(detail).getByRole('button', { name: /Xây dựng lại đồ thị/ });
+    expect(rebuild).toBeDisabled(); // never published
+
+    await db.publishedDocuments.add({
+      setId: set.id, documentId: set.documentIds[0]!, lastKnownRemoteAt: new Date().toISOString(),
+      publishedContentHash: 'a'.repeat(64), lastPrimaryState: 'In sync',
+    });
+    await waitFor(() => expect(rebuild).toBeEnabled(), { timeout: 5000 });
+
+    fireEvent.click(rebuild);
+    expect(screen.getByText('Xác nhận xây dựng lại đồ thị tri thức')).toBeInTheDocument();
+    unmount();
   });
 
   it('has no long-scroll drawer trigger left in the Docs workspace', async () => {
