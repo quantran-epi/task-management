@@ -13,11 +13,12 @@
 
 1. **Màn hình soạn (authoring) KHÔNG đọc cũng KHÔNG export settings hiện tại của user.** Profile được soạn MỚI từ defaults. (Không tái dùng các config card gắn với `db` theo cách đọc giá trị thật.)
 2. **Profile phải phủ MỌI setting type trong app**, không chỉ 6 tab của SettingsView. Bao gồm global AI settings + template defaults cho AI-team sạch. **Loại trừ** bookkeeping nội bộ như `ai_teams_docs_root`, và loại trừ team records / members / usage / doc folders thực tế.
-3. **Secrets/credentials** (API keys, tokens, passphrases, SSH/Oracle/Telegram secrets) được HIỂN THỊ là field trong profile soạn nhưng **export blank**. Sau import, recipient nhận checklist "need to re-enter" rõ ràng. **Không bao giờ** đưa giá trị secret vào JSON export.
+3. **Secrets/credentials** (API keys, tokens, passphrases, SSH/Oracle secrets) được HIỂN THỊ là field trong profile soạn nhưng **export blank**. Sau import, recipient nhận checklist "need to re-enter" rõ ràng. **Không bao giờ** đưa giá trị secret vào JSON export. Telegram secrets bị loại hoàn toàn theo Quyết định 8 (xem dưới).
 4. **Machine-specific values** (SSH host/keyPath, sqlclPath, claudePath, docs root, localhost endpoints, GitHub owner/repo, v.v.) được **giữ lại** trong JSON profile nhưng màn hình import phải flag chúng với warning/checklist rõ ràng.
-5. **AI team global configurable settings gồm:** `ai_budget_warn_threshold_pct` (BudgetWarnThresholdCard), `global_conventions`, `mcp_servers`/Graphiti, 9Router endpoint/model/limits, và global tool connection configs (SSH/Oracle/Telegram/Ghost Dev) — khác với cột per-team trên `aiTeams`. **Team defaults template:** `budgetTokens`, `concurrencyLimit`, `autoSplitEnabled`, `autoApproveMutations`, `mcpEnabled`, `sshFsToolsEnabled`, `oracleToolsEnabled`, `budgetWarnThresholdPct` với `null` = inherit global. KHÔNG có team names, ids, members, usage, folder handles.
+5. **AI team global configurable settings gồm:** `ai_budget_warn_threshold_pct` (BudgetWarnThresholdCard), `global_conventions`, `mcp_servers`/Graphiti, 9Router endpoint/model/limits, và global tool connection configs (SSH/Oracle/Ghost Dev; Telegram bị loại theo Quyết định 8) — khác với cột per-team trên `aiTeams`. **Team defaults template:** `budgetTokens`, `concurrencyLimit`, `autoSplitEnabled`, `autoApproveMutations`, `mcpEnabled`, `sshFsToolsEnabled`, `oracleToolsEnabled`, `budgetWarnThresholdPct` với `null` = inherit global. KHÔNG có team names, ids, members, usage, folder handles.
 6. **UX ưu tiên cực kỳ dễ dùng:** nút rõ ràng, export một-click profile đang chọn, import preview có tóm tắt cảnh báo, preserve existing settings safety (không clear wholesale destructive).
 7. **Cô lập trong worktree** `phase-46-configuration-profiles`, branch `feature/phase-46-configuration-profiles`. Phase 45 chạy ở worktree chính — KHÔNG đụng file/planning state của Phase 45.
+8. **[QUYẾT ĐỊNH MỚI — user, 2026-11-19] Telegram bị LOẠI hoàn toàn khỏi profile scope.** Cấu hình Telegram chỉ tồn tại trên máy owner; không đưa vào schema/export, không render field trong form soạn, không ghi `db.telegramSettings` lúc import, và không xuất hiện trong checklist. Đây là scope decision có thẩm quyền, thay thế suggestion trước đó về việc đưa `telegramSettings` vào profile. Test boundary: fixture có `telegramSettings` phải bị schema từ chối; import phải giữ nguyên row `db.telegramSettings` của recipient; authoring test khẳng định không có field Telegram. Phần còn lại của blocker (capacityRules, capacityOverrides, Ghost Dev localStorage) VẪN in-scope.
 
 ### Claude's Discretion
 - Không được ghi rõ trong prompt. Các lựa chọn triển khai (lưu profile ở đâu, route name, schema shape) để planner quyết định dựa trên research này.
@@ -143,8 +144,8 @@ Bảng phân loại mọi key tìm được (nguồn: grep `db.settings.*` + con
 |------|----------|-------|
 | `capacityRules` (7 ngày, `dayOfWeek`/`workMinutes`) | cấu hình công suất tuần | Giữ; copy rows sang profile; import upsert theo `dayOfWeek` | `[VERIFIED: src/db/repositories/capacityRepo.ts:26-55]`, `[VERIFIED: src/types/models.ts:131-134]` |
 | `capacityOverrides` | ngoại lệ theo ngày | Giữ; upsert theo `date` | `[VERIFIED: src/db/repositories/capacityRepo.ts:60-113]` |
-| `plannedAllocations` | phân bổ kế hoạch | Cân nhắc: là dữ liệu vận hành, không phải "setting" — planner quyết định; mặc định KHÔNG export để tránh mang dữ liệu lịch sử | `[VERIFIED: src/services/backup/exportBackup.ts:227]` |
-| `telegramSettings` (`id:'default'`, `botToken`, `isEnabled`, `autoStartOnLaunch`, `defaultScope`, `maxHistoryTurns`) | cấu hình bot | Giữ config; `botToken` blank | `[VERIFIED: src/services/telegram/telegramSettingsService.ts:10-17]` |
+| `plannedAllocations` | phân bổ kế hoạch | **RESOLVED (A2): LOẠI TRỪ** — dữ liệu vận hành, không phải setting; không export để tránh mang dữ liệu lịch sử | `[VERIFIED: src/services/backup/exportBackup.ts:227]` |
+| `telegramSettings` (`id:'default'`, `botToken`, `isEnabled`, `autoStartOnLaunch`, `defaultScope`, `maxHistoryTurns`) | cấu hình bot | **RESOLVED (user decision mới): LOẠI TRỪ HOÀN TOÀN** — chỉ tồn tại trên máy owner; không vào schema/export/form/import/checklist. Quyết định này thay thế đề xuất cũ "giữ config, botToken blank". | `[VERIFIED: src/services/telegram/telegramSettingsService.ts:10-17]` |
 | `telegramWhitelist` | danh sách user | LOẠI TRỪ (dữ liệu thực tế, không phải setting) | `[VERIFIED: src/services/backup/exportBackup.ts:242]` |
 | `aiTeams` / `aiTeamMembers` | team records + usage + docsFolderId | LOẠI TRỪ record; CHỈ lấy template defaults (xem 1d) | `[VERIFIED: src/types/aiOffice.ts:88-132]` |
 
@@ -174,14 +175,14 @@ Template đề xuất (chỉ các field cấu hình, KHÔNG id/name/members/usag
 `{ budgetTokens, concurrencyLimit?, autoSplitEnabled?, autoApproveMutations?, mcpEnabled?, sshFsToolsEnabled?, oracleToolsEnabled?, budgetWarnThresholdPct?: null }`.
 `budgetWarnThresholdPct: null` = inherit global (khớp semantics `undefined` ở `src/services/ai/budgetWarnSettings.ts:12-25`).
 
-Secrets bổ sung nằm ngoài `db.settings`: Telegram `botToken` trong bảng; SSH secret trong keyring với prefix `ssh_secret_<id>` `[VERIFIED: src/services/sshService.ts:18,67,92]`; Oracle connectionString có password `[VERIFIED: src/types/oracleSqlcl.ts:4]`.
+Secrets bổ sung nằm ngoài `db.settings`: Telegram `botToken` trong bảng (bị LOẠI hoàn toàn khỏi profile theo Quyết định 8 — chỉ máy owner); SSH secret trong keyring với prefix `ssh_secret_<id>` `[VERIFIED: src/services/sshService.ts:18,67,92]`; Oracle connectionString có password `[VERIFIED: src/types/oracleSqlcl.ts:4]`.
 
 Defaults sẵn có để seed form (dùng lại, không tự chế):
 - `DEFAULT_NOTIFICATION_SETTINGS` `[VERIFIED: src/types/notifications.ts:23-36]`
 - `DEFAULT_SYSTEM_TYPE_OPTIONS` `[VERIFIED: src/services/system/systemTypeSettings.ts:23-29]`
 - `DEFAULT_GHOST_DEV_CONFIG` `[VERIFIED: src/services/agents/ghostDevConfig.ts:10-15]`
 - `DEFAULT_MCP_SERVERS` `[VERIFIED: src/services/ai/mcpClient.ts:40+]`
-- `DEFAULT_TELEGRAM_SETTINGS` `[VERIFIED: src/services/telegram/telegramSettingsService.ts:10-17]`
+- ~~`DEFAULT_TELEGRAM_SETTINGS`~~ — KHÔNG dùng: Telegram bị loại khỏi profile (Quyết định 8). `[VERIFIED: src/services/telegram/telegramSettingsService.ts:10-17]`
 - `DEFAULT_NINEROUTER_ENDPOINT/MODEL/CHAR_LIMIT/CONTEXT_WINDOW_TOKENS`, `DEFAULT_IMAGE_*` `[VERIFIED: src/services/ai/nineRouterTokenService.ts:12-19]`
 - `DEFAULT_BUDGET_WARN_THRESHOLD_PCT` (trong `src/types/aiOffice.ts`) `[VERIFIED: src/services/ai/budgetWarnSettings.ts:3-7]`
 
@@ -334,7 +335,7 @@ const rows = await db.settings.get('configuration_profiles'); // một row chứ
 3. **Đăng ký màn hình ở 6 điểm:** `src/types/navigation.ts:1-14`, `src/hooks/useHashRoute.ts:11-25`, `src/App.tsx:112-118`, `src/workbench/EditorArea.tsx:578-579`, `src/workbench/WorkbenchLayout.tsx:210-253`, `src/workbench/store/layoutStore.ts:11`. Gợi ý route: `'config-profiles'`. Phải cập nhật `validTabs`/`VALID_ROUTES` nếu dùng tab param.
 4. **Form soạn từ defaults:** render theo nhóm khớp 6 tab + AI global + AI-team template; mỗi secret field có placeholder "sẽ để trống khi export"; machine-specific field có icon cảnh báo. Nút "Xuất profile này" một-click (Quyết định 6).
 5. **Import card đặt trong tab `data` của SettingsView** (`src/views/SettingsView.tsx:160-199`) — KHÔNG thêm tab; cạnh `BackupImportCard`. Gọi preview modal riêng (profile-aware).
-6. **Checklist sau import** gồm 2 nhóm: (a) secrets cần nhập lại (keyring/Telegram/Oracle), (b) machine-specific cần rà soát (hosts, paths, endpoints, GitHub owner/repo). Dùng `PostRestoreBanner` + `announceToScreenReader`.
+6. **Checklist sau import** gồm 2 nhóm: (a) secrets cần nhập lại (keyring/Oracle — KHÔNG có Telegram theo Quyết định 8), (b) machine-specific cần rà soát (hosts, paths, endpoints, GitHub owner/repo, ghostDevConfig.claudePath). Dùng `PostRestoreBanner` + `announceToScreenReader`.
 7. **Không phụ thuộc PWA/GitHub Pages** (CLAUDE.md) — mọi thứ chạy local/Tauri.
 
 ## Risks & Guardrails
@@ -382,7 +383,7 @@ const rows = await db.settings.get('configuration_profiles'); // một row chứ
 | Soạn profile từ defaults, KHÔNG đọc db | component | `npx vitest run tests/views/ConfigProfilesView.test.tsx -x` | `tests/views/ConfigProfilesView.test.tsx` |
 | Export đúng 1 profile, secrets blank | unit | `npx vitest run tests/services/configProfiles/exportProfile.test.ts -x` | `tests/services/configProfiles/exportProfile.test.ts` |
 | Schema chấp nhận mọi setting type + team template | unit | `npx vitest run tests/validation/configProfileSchemas.test.ts -x` | `tests/validation/configProfileSchemas.test.ts` |
-| Quét JSON không chứa secret | unit | `npx vitest run tests/services/configProfiles/secretLeak.test.ts -x` | `tests/services/configProfiles/secretLeak.test.ts` |
+| Quét JSON không chứa secret + Telegram vắng mặt | unit | `npx vitest run tests/services/configProfiles/exportProfile.test.ts -x` | `tests/services/configProfiles/exportProfile.test.ts` (secret-leak case; Telegram-absent asserted in `configProfileSchemas.test.ts` / `profileRoundTrip.test.ts`) |
 | Import preview cảnh báo machine-specific | component | `npx vitest run tests/components/settings/ImportProfilePreviewModal.test.tsx -x` | `tests/components/settings/ImportProfilePreviewModal.test.tsx` |
 | Import merge key-by-key, không clear wholesale | unit | `npx vitest run tests/services/configProfiles/importProfile.test.ts -x` | `tests/services/configProfiles/importProfile.test.ts` |
 | Import không ghi đè secret thật | unit | `npx vitest run tests/services/configProfiles/importProfile.test.ts -x` | (cùng file, case riêng) |
@@ -430,18 +431,20 @@ Threat patterns cho stack:
 
 | # | Claim | Section | Risk if wrong |
 |---|-------|---------|---------------|
-| A1 | Lưu named profiles trong 1 row `configuration_profiles` trên `db.settings` là lựa chọn tốt nhất (tránh schema bump) | Implications #2 | Nếu user muốn table riêng → cần Dexie version bump; planner nên chốt |
-| A2 | `plannedAllocations` là dữ liệu vận hành, không phải "setting" → mặc định không export | Inventory 1c | Nếu user coi là setting → thiếu coverage; cần confirm |
-| A3 | Cách tách Oracle `connectionString` (user/pass/host trong một chuỗi) — giữ host, blank pass | R-3 | Import sai có thể lộ password hoặc mất host; cần confirm chi tiết |
+| A1 — **RESOLVED** | Lưu named profiles trong 1 row `configuration_profiles` trên `db.settings` (tránh schema bump) | Implications #2 | Chốt: một-row-array, không version bump |
+| A2 — **RESOLVED** | `plannedAllocations` là dữ liệu vận hành → không export; capacityRules/Overrides CÓ export | Inventory 1c | Chốt: rules/overrides upsert theo natural key, plannedAllocations loại |
+| A3 — **RESOLVED** | Oracle `connectionString`: blank toàn bộ chuỗi, host/service riêng giữ + flag | R-3 | Chốt: không tách password từ chuỗi; host vẫn review được |
 | A4 | Tên route `'config-profiles'` và việc đăng ký cả workbench | Implications #3 | Tên khác/đăng ký thiếu → screen không mở được ở runtime chính |
 | A5 | Dùng lại `ImportPreviewModal` (mở rộng) thay vì viết modal mới | UX/Implications #5 | Nếu schema khác quá xa → khó tái dùng; planner quyết định |
 
-## Open Questions
+## Open Questions — tất cả đã RESOLVED
 
-1. **Lưu profile ở đâu?** — Biết: pattern một-row-array tồn tại. Chưa rõ: user có muốn table Dexie riêc (version bump) không. Recommendation: một-row-array; confirmation checkpoint.
-2. **Oracle connectionString tách thế nào?** — Biết: chứa `user/password@host:port/service`. Chưa rõ: giữ một phần hay blank toàn bộ rồi thêm field host riêng. Recommendation: blank toàn bộ connectionString, thêm các field host/service riêng để flag review.
-3. **`plannedAllocations` / capacityOverrides có vào profile không?** — Biết: capacityRules/Overrides là setting; plannedAllocations là dữ liệu. Recommendation: export rules+overrides, bỏ plannedAllocations.
-4. **Có cần nameless "quick export" không chọn profile không?** — Quyết định 6 nói "one-click export of the selected profile" → đã rõ: phải chọn profile trước. Không còn mở.
+1. **[RESOLVED — A1] Lưu profile ở đâu?** — Quyết định: một-row-array trên `db.settings` key `configuration_profiles` (theo pattern `ssh_configurations`), KHÔNG tạo table Dexie riêng → tránh version bump. Rationale: profile do user soạn, không phải dữ liệu app; pattern đã được test.
+2. **[RESOLVED — A3] Oracle connectionString tách thế nào?** — Quyết định: để trống TOÀN BỘ chuỗi `connectionString` (chứa `user/password@host:port/service`) trong export; các field host/service/keyPath ở dạng riêng được giữ và flag machine-specific. Rationale: không thể tách password an toàn từ chuỗi; blank nguyên chuỗi tránh lộ mật khẩu, host vẫn được review.
+3. **[RESOLVED — A2] `plannedAllocations` / capacityOverrides có vào profile không?** — Quyết định: **capacityRules (upsert theo `dayOfWeek`) + capacityOverrides (upsert theo `date`) CÓ trong profile**; `plannedAllocations` bị LOẠI (dữ liệu vận hành). Rationale: rules/overrides là cấu hình công suất đúng nghĩa "setting"; plannedAllocations là lịch sử phân bổ.
+4. **[RESOLVED] Có cần nameless "quick export" không chọn profile không?** — Không. Quyết định 6 nói "one-click export of the selected profile" → phải chọn profile trước.
+5. **[RESOLVED — user decision mới] Telegram có vào profile không?** — KHÔNG. Loại hoàn toàn: không schema/export/form/import/checklist; cấu hình Telegram chỉ trên máy owner. Thay thế đề xuất cũ "giữ config, botToken blank".
+6. **[RESOLVED] Ghost Dev config có vào profile không?** — CÓ: `ghostDevConfig` (localStorage `planner:ghost_dev_config`) được export và import lại bằng `localStorage.setItem` có guard; `claudePath` flag machine-specific. Rationale: đây là cấu hình tool global (quyết định 5), và là một trong bốn backend mà blocker yêu cầu phủ.
 
 ## Sources
 
