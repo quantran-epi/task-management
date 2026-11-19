@@ -147,7 +147,7 @@ describe('ConfigProfilesView — defaults-seeded authoring (D-01..D-07)', () => 
 
     const result = await applyConfigProfile(validation.data, db);
     expect(result.applied).toBe(true);
-    expect((await db.settings.get('ai_team_defaults'))).toBeDefined();
+    expect(await db.settings.get('ai_team_defaults')).toBeUndefined();
   });
 
   it('creates, saves, selects and deletes named profiles through the one-row store', async () => {

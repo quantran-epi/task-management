@@ -2,10 +2,7 @@ import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TaskPlannerDatabase } from '../../../src/db';
 import { GHOST_DEV_CONFIG_KEY } from '../../../src/services/agents/ghostDevConfig';
-import {
-  AI_TEAM_DEFAULTS_SETTING_KEY,
-  applyConfigProfile,
-} from '../../../src/services/configProfiles/importProfile';
+import { applyConfigProfile } from '../../../src/services/configProfiles/importProfile';
 
 const TELEGRAM = {
   id: 'default' as const,
@@ -106,7 +103,7 @@ describe('importProfile hardening', () => {
     expect(allSettings).not.toContain('attacker-supplied-secret');
   });
 
-  it('persists teamDefaults as a portable template row (WR-03)', async () => {
+  it('treats teamDefaults as documentation-only: no ai_team_defaults row is written (WR-01 round 2)', async () => {
     const db = freshDb();
     const payload = envelope() as unknown as Record<string, unknown>;
     const config = (payload.profile as Record<string, unknown>).config as Record<string, unknown>;
@@ -123,8 +120,12 @@ describe('importProfile hardening', () => {
 
     const result = await applyConfigProfile(payload, db);
     expect(result.applied).toBe(true);
-    expect((await db.settings.get(AI_TEAM_DEFAULTS_SETTING_KEY))?.value).toEqual(config.teamDefaults);
-    expect(result.appliedSettingKeys).toContain(AI_TEAM_DEFAULTS_SETTING_KEY);
+    expect(await db.settings.get('ai_team_defaults')).toBeUndefined();
+    expect(result.appliedSettingKeys).not.toContain('ai_team_defaults');
+    // The template remains readable in the imported envelope, but never becomes a setting.
+    expect((result as unknown as { appliedSettingKeys: string[] }).appliedSettingKeys).not.toContain(
+      'teamDefaults'
+    );
   });
 
   it('upserts capacity rows by natural key with no duplicates on double import', async () => {

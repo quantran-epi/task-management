@@ -79,9 +79,9 @@ export const PostProfileImportChecklist: React.FC<PostProfileImportChecklistProp
             ))}
           </ul>
           <Paragraph type="secondary" style={{ marginBottom: 6 }}>
-            Mẫu defaults cho đội AI (nếu có trong profile) được lưu thành cài đặt
-            <Text code> ai_team_defaults </Text> nhưng các team hiện hữu không tự động đổi — hãy chỉnh
-            thủ công khi tạo team mới.
+            Phần mẫu defaults cho đội AI trong tệp profile chỉ để tham khảo: KHÔNG được áp dụng tự
+            động, không ghi vào cài đặt và không đổi team hiện hữu. Bạn có thể đọc giá trị trong tệp
+            rồi tự quyết định khi cấu hình team.
           </Paragraph>
           <Text strong>Giá trị machine-specific cần rà soát:</Text>
           <ul data-checklist-group="machine-specific">

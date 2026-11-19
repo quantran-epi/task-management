@@ -11,11 +11,6 @@ import {
 import type { ConfigurationProfile } from './types';
 
 export const CONFIGURATION_PROFILES_SETTING_KEY = 'configuration_profiles';
-/**
- * Portable template row for future AI teams. No runtime team-creation surface consumes this
- * key today, so the post-import checklist explicitly lists the template as a manual step.
- */
-export const AI_TEAM_DEFAULTS_SETTING_KEY = 'ai_team_defaults';
 
 export async function getProfiles(db: TaskPlannerDatabase = defaultDb): Promise<ConfigurationProfile[]> {
   const record = await db.settings.get(CONFIGURATION_PROFILES_SETTING_KEY);
@@ -91,13 +86,9 @@ export async function applyConfigProfile(
     }
   }
 
-  // WR-03: persist the clean AI-team template instead of silently dropping it. Team records
-  // already in db.aiTeams are never touched; the value is a template for future teams.
-  const teamDefaults = config.teamDefaults;
-  if (teamDefaults !== undefined) {
-    incoming.push({ key: AI_TEAM_DEFAULTS_SETTING_KEY, value: teamDefaults });
-  }
-
+  // WR-01 (round 2): teamDefaults is documentation-only. It stays in the envelope for the
+  // recipient to read, but no runtime team-creation path consumes a settings row, so importing
+  // must not create a write-only `ai_team_defaults` record.
   await db.transaction('rw', db.settings, db.capacityRules, db.capacityOverrides, async () => {
     // Guardrail verbatim intent: settings are replaced key-by-key, never cleared wholesale.
     if (incoming.length > 0) {
