@@ -55,9 +55,18 @@ export function DocumentSetDetail({ setId, db }: DocumentSetDetailProps) {
     return found.filter((note): note is Note => Boolean(note) && note?.type !== 'folder');
   }, [db, set?.id, documentIdsKey], [] as Note[]);
 
+  // WR-02: publishedDocuments alone is not authoritative. DocsLibraryActions.setStatus
+  // treats a set as published when EITHER published documents OR a publish attempt exists
+  // (attempt can be Publishing, reconcile can fail mid-terminal, or a backup may predate the
+  // metadata rows). Fail safe: if we cannot rule out a remote snapshot, keep the gated
+  // published delete path so the shared dialog never offers un-gated local-only delete.
   const published = useLiveQuery(async () => {
     if (!db || !set) return false;
-    return (await db.publishedDocuments.where('setId').equals(set.id).count()) > 0;
+    const [docCount, attemptCount] = await Promise.all([
+      db.publishedDocuments.where('setId').equals(set.id).count(),
+      db.publishAttempts.where('setId').equals(set.id).count(),
+    ]);
+    return docCount > 0 || attemptCount > 0;
   }, [db, set?.id], false);
 
   const handleCloseDelete = useCallback(() => setDeleteOpen(false), []);
