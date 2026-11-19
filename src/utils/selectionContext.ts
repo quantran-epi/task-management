@@ -5,7 +5,17 @@ import {
   serializeDocumentContext,
 } from '../services/ai/contextGrounding';
 
-export type AIContextEntityType = 'doc' | 'note' | 'task' | 'cr' | 'system' | 'unknown';
+export type AIContextEntityType = 'doc' | 'note' | 'task' | 'cr' | 'system' | 'remote' | 'unknown';
+
+/** Phase 47 D-11: remote anchor fields carried alongside a remote selection payload. */
+export interface RemoteAnchorContext {
+  relativeFilePath: string;
+  startLine: number;
+  endLine: number;
+  sshConfigId?: string | undefined;
+  repoPath?: string | undefined;
+  branch?: string | undefined;
+}
 
 export interface ResolvedHierarchyContext {
   targetType: AIContextEntityType;
@@ -16,6 +26,7 @@ export interface ResolvedHierarchyContext {
   system?: { id: string; name: string; code: string } | undefined;
   hierarchyPath: string; // e.g. 'CR "CR-2026-001" > Tác vụ "Auth" > Tài liệu "Spec"'
   fullContextText?: string | undefined; // Full markdown / XML serialization of the source entities
+  remote?: RemoteAnchorContext | undefined; // D-11: structured remote anchor, only for targetType 'remote'
 }
 
 export interface SelectionContextPayload extends ResolvedHierarchyContext {
@@ -77,6 +88,8 @@ export function getDomContextFromNode(node: Node | null): { entityType: AIContex
           ? 'cr'
           : contextType === 'system'
           ? 'system'
+          : contextType === 'remote'
+          ? 'remote'
           : 'unknown';
 
       return {
@@ -99,12 +112,29 @@ export function getDomContextFromNode(node: Node | null): { entityType: AIContex
 export async function resolveEntityHierarchy(
   entityType: AIContextEntityType,
   entityId?: string | undefined,
-  db: TaskPlannerDatabase = defaultDb
+  db: TaskPlannerDatabase = defaultDb,
+  remote?: RemoteAnchorContext | undefined
 ): Promise<ResolvedHierarchyContext> {
   if (!entityId || entityType === 'unknown') {
     return {
       targetType: 'unknown',
       hierarchyPath: 'Toàn cục',
+    };
+  }
+
+  // Phase 47 D-11: a remote anchor resolves entirely from its own structured payload.
+  // It MUST NOT fall through to db.notes.get(entityId) — that would resolve a target UUID
+  // as a non-existent note ("Tài liệu không tên") and lose path/line (Pitfall 4).
+  if (entityType === 'remote') {
+    const location = remote?.relativeFilePath
+      ? `${remote.relativeFilePath}:${remote.startLine}-${remote.endLine}`
+      : undefined;
+    return {
+      targetType: 'remote',
+      targetId: entityId,
+      targetTitle: location ?? 'Remote',
+      hierarchyPath: location ? `Remote ${remote?.sshConfigId ?? entityId} > ${location}` : `Remote ${entityId}`,
+      ...(remote ? { remote } : {}),
     };
   }
 
@@ -281,7 +311,14 @@ export async function resolveEntityHierarchy(
  */
 export function formatSelectionMentionPrompt(payload: SelectionContextPayload, userQuery?: string): string {
   const quote = payload.selectedText.trim();
-  const contextHeader = `[Trích đoạn từ ${payload.hierarchyPath}]`;
+  // D-11: a remote mention must carry `relativeFilePath:startLine-endLine` in the header,
+  // never a bare text fragment and never a fabricated doc hierarchy.
+  const remoteLocation = payload.targetType === 'remote' && payload.remote
+    ? `${payload.remote.relativeFilePath}:${payload.remote.startLine}-${payload.remote.endLine}`
+    : undefined;
+  const contextHeader = remoteLocation
+    ? `[Trích đoạn từ ${payload.hierarchyPath} @ ${remoteLocation}]`
+    : `[Trích đoạn từ ${payload.hierarchyPath}]`;
 
   const quotedBlock = quote
     .split('\n')
