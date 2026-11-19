@@ -366,6 +366,28 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 44-04-PLAN.md — run combined tests/typecheck, code+UI reviews, observed Tauri walkthrough, and one phase push
 
+### Phase 45: Knowledge Sets, Docs Workspace, Oracle Connections & Team Pinned Context
+
+**Goal:** Một người dùng có thể dọn và ngăn chặn orphan document set trên Knowledge Server, duyệt Docs trong một workspace một màn hình với tab ứng dụng bền bỉ, chọn kết nối Oracle theo tên môi trường (SIT/UAT) với mặc định active, và pin ngữ cảnh riêng cho từng team xuất hiện ở mọi lượt leader/agent kèm badge trên chat — tất cả vẫn chạy local và không rò rỉ bí mật.
+**Requirements**: D-01–D-19 (locked decisions in 45-CONTEXT.md; no formal REQ IDs assigned)
+**Depends on:** Phase 44
+**Plans:** 5 plans in 3 waves
+
+Plans:
+**Wave 1** *(no dependencies — three independent capability slices)*
+
+- [ ] 45-01-PLAN.md — Tracer: `GET /api/v1/sets` + `listPublishedSets()` + Settings "Quản lý set" + full-delete default / type-to-confirm (D-01..D-05)
+- [ ] 45-02-PLAN.md — Tracer: dedicated Docs workspace + persistent in-app `doc_set` tabs + bounded rendering (D-06..D-08)
+- [ ] 45-03-PLAN.md — Tracer: named Oracle profiles, migration + selector resolution, list tool, backup denylist, settings UI (D-09..D-15)
+
+**Wave 2** *(blocked on 45-03 — shared teamRunCoordinator.ts)*
+
+- [ ] 45-04-PLAN.md — Per-team pinned context: schema/backup, untrusted segment in both builders + coordinator, settings editor, chat badge (D-16..D-19)
+
+**Wave 3** *(blocked on Waves 1-2)*
+
+- [ ] 45-05-PLAN.md — Combined focused test + typecheck gate, code+UI reviews, observed Tauri walkthrough, validation sign-off
+
 ## Milestone: v1.2 Knowledge System Implementation
 
 ### Phase 18: Multi-Modal Hybrid Retrieval Engine
