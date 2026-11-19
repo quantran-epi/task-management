@@ -9,7 +9,10 @@ import type { z } from 'zod';
 import type { ConfigProfileEnvelopeSchema } from '../../validation/configProfileSchemas';
 
 export type ValidProfileEnvelope = z.infer<typeof ConfigProfileEnvelopeSchema>;
-import { getMachineSpecificFields, getSecretFields } from '../../services/configProfiles/catalog';
+import {
+  getDeclaredProfileSecretFields,
+  getMachineSpecificFields,
+} from '../../services/configProfiles/catalog';
 import {
   applyConfigProfile,
   type ApplyProfileResult,
@@ -83,11 +86,16 @@ export const ImportProfilePreviewModal: React.FC<ImportProfilePreviewModalProps>
     [parsed]
   );
 
-  // The catalog is the single source of truth for the re-entry warning: every declared
-  // secret travels blank in a profile, so all of them need review on the recipient machine.
+  // IN-01: list only secrets the profile actually declares, intersected with the catalog;
+  // unrelated catalog secrets may still need checking when those services are in use.
   const secretRows = useMemo<FieldRow[]>(
-    () => getSecretFields().map((field) => ({ key: field, field })),
-    []
+    () =>
+      validationResult.valid
+        ? getDeclaredProfileSecretFields(
+            validationResult.envelope.profile.config.secretFields
+          ).map((field) => ({ key: field, field }))
+        : [],
+    [validationResult]
   );
 
   const machineRows = useMemo<FieldRow[]>(
@@ -217,6 +225,10 @@ export const ImportProfilePreviewModal: React.FC<ImportProfilePreviewModalProps>
                       hiện tại của bạn được giữ nguyên.
                     </Paragraph>
                     <Text strong>Secrets cần nhập lại sau khi áp dụng:</Text>
+                    <Paragraph type="secondary" style={{ marginBottom: 6 }}>
+                      Chỉ liệt kê secret được profile khai báo. Các secret khác trong danh mục vẫn
+                      cần kiểm tra nếu bạn dùng dịch vụ tương ứng.
+                    </Paragraph>
                     <ul data-preview-group="secrets">
                       {secretRows.map((row) => (
                         <li key={row.key} data-field={row.field}>

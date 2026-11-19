@@ -51,6 +51,15 @@ export const ConfigProfileImportCard: React.FC<ConfigProfileImportCardProps> = (
       }
 
       const reader = new FileReader();
+      reader.onerror = () => {
+        setFileName('');
+        setParsedPayload(null);
+        setModalOpen(false);
+        notification.error({
+          message: 'Không đọc được tệp',
+          description: 'Không thể đọc nội dung tệp cấu hình. Vui lòng thử lại.',
+        });
+      };
       reader.onload = (e) => {
         try {
           const parsed = JSON.parse(e.target?.result as string);

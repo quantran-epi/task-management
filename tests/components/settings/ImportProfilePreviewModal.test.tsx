@@ -69,8 +69,14 @@ describe('ImportProfilePreviewModal', () => {
     expect(secretsGroup).not.toBeNull();
     expect(machineGroup).not.toBeNull();
 
-    for (const field of getSecretFields()) {
+    for (const field of Object.keys(validPayload.profile.config.secretFields)) {
       expect(secretsGroup?.querySelector(`[data-field="${field}"]`)).not.toBeNull();
+    }
+    const undeclared = getSecretFields().find(
+      (field) => !(field in validPayload.profile.config.secretFields)
+    );
+    if (undeclared) {
+      expect(secretsGroup?.querySelector(`[data-field="${undeclared}"]`)).toBeNull();
     }
     for (const field of getMachineSpecificFields()) {
       expect(machineGroup?.querySelector(`[data-field="${field}"]`)).not.toBeNull();

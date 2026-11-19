@@ -92,6 +92,15 @@ export function getSecretFields(): string[] {
     .map(([key]) => key);
 }
 
+/**
+ * Secret fields actually declared by a profile, intersected with the known catalog so an
+ * unknown key from an untrusted file cannot masquerade as a catalog secret in the UI.
+ */
+export function getDeclaredProfileSecretFields(declared: Record<string, unknown>): string[] {
+  const catalog = new Set(getSecretFields());
+  return Object.keys(declared).filter((key) => catalog.has(key));
+}
+
 /** Machine-specific field names whose values are preserved but must be reviewed on import. */
 export function getMachineSpecificFields(): string[] {
   const keys = Object.entries(PROFILE_KEY_CATALOG)

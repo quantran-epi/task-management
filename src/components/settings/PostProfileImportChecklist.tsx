@@ -3,7 +3,10 @@ import { Alert, Typography } from 'antd';
 import { WarningOutlined } from '@ant-design/icons';
 import type { z } from 'zod';
 import type { ConfigProfileEnvelopeSchema } from '../../validation/configProfileSchemas';
-import { getMachineSpecificFields, getSecretFields } from '../../services/configProfiles/catalog';
+import {
+  getDeclaredProfileSecretFields,
+  getMachineSpecificFields,
+} from '../../services/configProfiles/catalog';
 import { announceToScreenReader } from '../common/AriaLiveRegion';
 
 const { Paragraph, Text } = Typography;
@@ -35,10 +38,15 @@ export const PostProfileImportChecklist: React.FC<PostProfileImportChecklistProp
 
   if (!visible) return null;
 
-  // Every catalog secret arrives blank by design; the applied result's skipped-secret
-  // list is merged in so the checklist also covers secrets found in the file.
+  // IN-01: only secrets declared by the profile (plus blank keys actually skipped during
+  // apply) are listed; all entries are intersected with the catalog to ignore unknown keys.
   const secrets = Array.from(
-    new Set([...getSecretFields(), ...blankSecretFields, ...Object.keys(envelope.profile.config.secretFields)])
+    new Set([
+      ...getDeclaredProfileSecretFields(envelope.profile.config.secretFields),
+      ...getDeclaredProfileSecretFields(
+        Object.fromEntries(blankSecretFields.map((field) => [field, '']))
+      ),
+    ])
   ).filter((field) => !/telegram/i.test(field));
 
   const machineFields = getMachineSpecificFields().filter((field) => !/telegram/i.test(field));
@@ -59,6 +67,10 @@ export const PostProfileImportChecklist: React.FC<PostProfileImportChecklistProp
             được giữ nguyên.
           </Paragraph>
           <Text strong>Secrets cần nhập lại:</Text>
+          <Paragraph type="secondary" style={{ marginBottom: 6 }}>
+            Chỉ liệt kê secret được profile khai báo. Các secret khác trong danh mục vẫn cần kiểm
+            tra nếu bạn dùng dịch vụ tương ứng.
+          </Paragraph>
           <ul data-checklist-group="secrets">
             {secrets.map((field) => (
               <li key={field} data-field={field}>
@@ -66,6 +78,11 @@ export const PostProfileImportChecklist: React.FC<PostProfileImportChecklistProp
               </li>
             ))}
           </ul>
+          <Paragraph type="secondary" style={{ marginBottom: 6 }}>
+            Mẫu defaults cho đội AI (nếu có trong profile) được lưu thành cài đặt
+            <Text code> ai_team_defaults </Text> nhưng các team hiện hữu không tự động đổi — hãy chỉnh
+            thủ công khi tạo team mới.
+          </Paragraph>
           <Text strong>Giá trị machine-specific cần rà soát:</Text>
           <ul data-checklist-group="machine-specific">
             {machineFields.map((field) => (

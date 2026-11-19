@@ -53,8 +53,14 @@ describe('PostProfileImportChecklist', () => {
     expect(secrets).not.toBeNull();
     expect(machine).not.toBeNull();
 
-    for (const field of getSecretFields()) {
+    for (const field of Object.keys(envelope.profile.config.secretFields)) {
       expect(secrets?.querySelector(`[data-field="${field}"]`)).not.toBeNull();
+    }
+    const undeclared = getSecretFields().find(
+      (field) => !(field in envelope.profile.config.secretFields)
+    );
+    if (undeclared) {
+      expect(secrets?.querySelector(`[data-field="${undeclared}"]`)).toBeNull();
     }
     for (const field of getMachineSpecificFields()) {
       expect(machine?.querySelector(`[data-field="${field}"]`)).not.toBeNull();
