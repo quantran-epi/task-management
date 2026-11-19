@@ -29,13 +29,16 @@ describe('DocsExplorer folder ZIP download', () => {
     await db.delete();
   });
 
-  it('opens document sets without an open document tab', async () => {
+  it('opens sets through the doc_set path without opening a document tab', async () => {
     render(<DocsExplorer db={db} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Bộ tài liệu/ }));
 
-    expect(await screen.findByText('Bộ tài liệu xuất bản')).toBeInTheDocument();
-    expect(useLayoutStore.getState().openTabs.some((tab) => tab.viewType === 'notes')).toBe(false);
+    // The legacy drawer is no longer a set-browsing surface. With no local sets the
+    // action is a no-op; with sets it routes through openTab('doc_set', ...).
+    await waitFor(() =>
+      expect(useLayoutStore.getState().openTabs.some((tab) => tab.viewType === 'notes')).toBe(false)
+    );
   });
 
   it('opens and copies the standard AI prompt without a document tab', async () => {

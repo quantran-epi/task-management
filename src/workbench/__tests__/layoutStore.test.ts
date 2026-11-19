@@ -96,6 +96,26 @@ describe('useLayoutStore', () => {
     expect(useLayoutStore.getState().activeTabId).toBe('notes');
   });
 
+  it('keeps a doc_set tab with its setId across persist and rehydrate', async () => {
+    const setId = '11111111-1111-4111-8111-111111111111';
+    useLayoutStore.getState().openTab({
+      id: `doc_set-${setId}`,
+      title: 'Bộ nghiệp vụ',
+      viewType: 'doc_set',
+      closable: true,
+      params: { setId },
+    });
+    const persisted = localStorage.getItem(LAYOUT_STORAGE_KEY);
+    expect(persisted).toContain('doc_set');
+
+    await useLayoutStore.persist.rehydrate();
+
+    const tab = useLayoutStore.getState().openTabs.find((item) => item.viewType === 'doc_set');
+    expect(tab?.id).toBe(`doc_set-${setId}`);
+    expect(tab?.params?.setId).toBe(setId);
+    expect(useLayoutStore.getState().activeTabId).toBe(`doc_set-${setId}`);
+  });
+
   it('toggles tool windows correctly', () => {
     // Toggling already active left 'cr_explorer' -> turns null
     useLayoutStore.getState().toggleToolWindow('left', 'cr_explorer');

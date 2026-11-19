@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { Modal, message } from 'antd';
+import { Button, Card, Empty, Modal, Table, Typography, message } from 'antd';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Note } from '../../types/models';
@@ -25,6 +25,9 @@ export interface DocsExplorerProps {
   db?: TaskPlannerDatabase | undefined;
 }
 
+/** One bounded screen of sets; never a long scroll of every note (D-06/D-08). */
+export const DOCS_WORKSPACE_PAGE_SIZE = 8;
+
 const DEFAULT_NEW_DIAGRAM_TEMPLATE = `flowchart TD
   Start([Bắt đầu]) --> Step1[Bước 1: Tiếp nhận yêu cầu]
   Step1 --> Decision{Hợp lệ không?}
@@ -43,6 +46,26 @@ export function DocsExplorer({ db = defaultDb }: DocsExplorerProps) {
   const [publishStatuses, setPublishStatuses] = useState<Record<string, DocumentPublishStatus>>({});
 
   const allNotes = useLiveQuery(async () => db.notes.toArray(), [db], []);
+
+  // D-06/D-08: the workspace renders a bounded, set-level screen. Document sets come
+  // from IndexedDB only — no daemon call is involved in browsing or opening a set.
+  const documentSets = useLiveQuery(async () => {
+    const sets = await db.documentSets.toArray();
+    return sets.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  }, [db], []);
+
+  const handleOpenDocumentSet = useCallback(
+    (setId: string, title: string) => {
+      openTab({
+        id: `doc_set-${setId}`,
+        title,
+        viewType: 'doc_set',
+        closable: true,
+        params: { setId },
+      });
+    },
+    [openTab]
+  );
 
   const selectedDocId = useMemo(() => {
     if (activeTab?.viewType === 'notes' && activeTab.params?.doc) {
@@ -390,14 +413,74 @@ export function DocsExplorer({ db = defaultDb }: DocsExplorerProps) {
     [allNotes]
   );
 
+  const setRows = (documentSets ?? []).map((set) => ({
+    key: set.id,
+    id: set.id,
+    name: set.name,
+    documentCount: set.documentIds.length,
+    updatedAt: set.updatedAt,
+  }));
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <div data-testid="docs-set-workspace" style={{ padding: 8, flexShrink: 0 }}>
+        <Card size="small" title={<Typography.Text strong>Không gian Docs</Typography.Text>} styles={{ body: { padding: 8 } }}>
+          <Table
+            rowKey="key"
+            size="small"
+            dataSource={setRows}
+            pagination={{ pageSize: DOCS_WORKSPACE_PAGE_SIZE, showSizeChanger: false }}
+            locale={{
+              emptyText: (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description={
+                    <span>
+                      Chưa có bộ tài liệu nào
+                      <br />
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        Tạo bộ tài liệu trong phần Ghi chú để bắt đầu duyệt Docs.
+                      </Typography.Text>
+                    </span>
+                  }
+                />
+              ),
+            }}
+            columns={[
+              {
+                title: 'Bộ tài liệu',
+                dataIndex: 'name',
+                key: 'name',
+                ellipsis: true,
+                render: (name: string, row: { id: string; name: string }) => (
+                  <Button
+                    type="link"
+                    size="small"
+                    aria-label={`Mở bộ tài liệu ${row.name}`}
+                    onClick={() => handleOpenDocumentSet(row.id, row.name)}
+                  >
+                    {name}
+                  </Button>
+                ),
+              },
+              {
+                title: 'Số tài liệu',
+                dataIndex: 'documentCount',
+                key: 'documentCount',
+                width: 100,
+              },
+            ]}
+          />
+        </Card>
+      </div>
       <div style={{ padding: 8, flexShrink: 0 }}>
         <DocsLibraryActions
           db={db}
           notes={allNotes ?? []}
           currentFolderId={allNotes.find((note) => note.id === activeFilter && note.type === 'folder' && !note.deletedAt)?.id}
           onSelectFolder={setActiveFilter}
+          onOpenSet={handleOpenDocumentSet}
+          workspaceSets={documentSets ?? []}
         />
       </div>
       <DocFolderTree

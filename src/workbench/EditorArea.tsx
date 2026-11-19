@@ -56,6 +56,7 @@ import { MermaidAssistantView } from '../views/MermaidAssistantView';
 import { StaffDetailView } from '../views/StaffDetailView';
 import { TeamWorkspaceView } from '../views/TeamWorkspaceView';
 import { RemoteFileViewer } from './editor/RemoteFileViewer';
+import { DocumentSetDetail } from './DocumentSetDetail';
 import type { TaskPlannerDatabase } from '../db';
 
 export interface EditorAreaProps {
@@ -67,6 +68,7 @@ export function getEditorTabIcon(viewType: EditorViewType, size = 13): React.Rea
     case 'tasks':
       return <JetBrainsTasksIcon size={size} />;
     case 'notes':
+    case 'doc_set':
       return <JetBrainsDocsIcon size={size} />;
     case 'planner':
       return <JetBrainsPlannerIcon size={size} />;
@@ -571,6 +573,8 @@ export function EditorArea({ db }: EditorAreaProps) {
         return <TasksView {...dbProp} initialCrId={tab.params?.changeRequestId} quickAddRequest={tab.params?.quickAddRequest} />;
       case 'notes':
         return <NotesView {...dbProp} initialDocId={tab.params?.doc} hideFolderTree={true} />;
+      case 'doc_set':
+        return <DocumentSetDetail setId={String(tab.params?.setId ?? '')} {...dbProp} />;
       case 'planner':
         return <PlannerView {...dbProp} targetDate={tab.params?.date} />;
       case 'analytics':

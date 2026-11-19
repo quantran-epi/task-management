@@ -133,9 +133,19 @@ interface DocsLibraryActionsProps {
   notes: Note[];
   currentFolderId?: string | undefined;
   onSelectFolder: (folderId: string) => void;
+  /** Set-level browsing is owned by the Docs workspace; every open path goes through this callback. */
+  onOpenSet?: (setId: string, title: string) => void;
+  workspaceSets?: DocumentSet[];
 }
 
-export function DocsLibraryActions({ db, notes, currentFolderId, onSelectFolder }: DocsLibraryActionsProps) {
+export function DocsLibraryActions({
+  db,
+  notes,
+  currentFolderId,
+  onSelectFolder,
+  onOpenSet,
+  workspaceSets = [],
+}: DocsLibraryActionsProps) {
   const [aiPromptModalOpen, setAiPromptModalOpen] = useState(false);
   const knowledgeConfig = useOptionalKnowledgeConfig();
   const isConfigured = Boolean(knowledgeConfig.enabled && knowledgeConfig.baseUrl);
@@ -350,7 +360,20 @@ export function DocsLibraryActions({ db, notes, currentFolderId, onSelectFolder 
   return (
     <>
       <Space wrap size={4}>
-        <Button size="small" icon={<DatabaseOutlined />} onClick={() => setDocumentSetDrawerOpen(true)}>
+        <Button
+          size="small"
+          icon={<DatabaseOutlined />}
+          aria-label="Bộ tài liệu"
+          onClick={() => {
+            const firstSet = workspaceSets[0];
+            if (firstSet && onOpenSet) {
+              onOpenSet(firstSet.id, firstSet.name);
+              return;
+            }
+            setCreatingDocumentSet(true);
+            setDocumentSetDrawerOpen(true);
+          }}
+        >
           Bộ tài liệu
         </Button>
         <Button

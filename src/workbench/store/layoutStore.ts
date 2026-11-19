@@ -18,7 +18,10 @@ export type EditorViewType =
   | 'system_detail'
   | 'remote_file'
   | 'staff_detail'
-  | 'team_workspace';
+  | 'team_workspace'
+  // D-07: a document set opens as its own app tab; unknown/persisted doc_set tabs
+  // survive merge/partialize without a LAYOUT_STORAGE_KEY bump.
+  | 'doc_set';
 
 export interface EditorTab {
   id: string;
