@@ -51,7 +51,7 @@ import {
 } from '../../services/knowledge/knowledgeClient';
 import { useOptionalKnowledgeConfig } from '../../services/knowledge/knowledgeConfig';
 import { generateId } from '../../utils/uuid';
-import { deleteDocumentSet } from '../../db/repositories/documentSetRepo';
+import { DocumentSetDeleteDialog } from './DocumentSetDeleteDialog';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -149,7 +149,6 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
   const [connectivityUncertain, setConnectivityUncertain] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deletingSet, setDeletingSet] = useState<DocumentSet | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [chunkModalOpen, setChunkModalOpen] = useState(false);
   const [chunkData, setChunkData] = useState<ChunksListResponse | null>(null);
   const [chunkLoading, setChunkLoading] = useState(false);
@@ -372,42 +371,6 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
   const openDeleteModal = (targetSet: DocumentSet) => {
     setDeletingSet(targetSet);
     setDeleteModalOpen(true);
-  };
-
-  const executeDeleteLocalOnly = async (targetSet: DocumentSet) => {
-    setIsDeleting(true);
-    try {
-      await deleteDocumentSet(targetSet.id, database);
-      message.success(`Đã xóa bộ tài liệu "${targetSet.name}" khỏi cơ sở dữ liệu cục bộ.`);
-      if (internalSelectedId === targetSet.id) {
-        setInternalSelectedId(undefined);
-      }
-      setDeleteModalOpen(false);
-      setDeletingSet(null);
-    } catch (err: any) {
-      message.error(err?.message || 'Không thể xóa bộ tài liệu cục bộ.');
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const executeDeleteFull = async (targetSet: DocumentSet) => {
-    setIsDeleting(true);
-    try {
-      if (!client) throw new Error('Knowledge Server chưa được cấu hình hoặc không khả dụng.');
-      await client.purgeDocumentSet(targetSet.id);
-      await deleteDocumentSet(targetSet.id, database);
-      message.success(`Đã xóa hoàn toàn bộ tài liệu "${targetSet.name}" (cục bộ & remote).`);
-      if (internalSelectedId === targetSet.id) {
-        setInternalSelectedId(undefined);
-      }
-      setDeleteModalOpen(false);
-      setDeletingSet(null);
-    } catch (err: any) {
-      message.error(`Xóa thất bại trên máy chủ: ${err?.message || 'Lỗi không xác định'}. Metadata cục bộ được giữ nguyên.`);
-    } finally {
-      setIsDeleting(false);
-    }
   };
 
   // Rebuild button enable conditions per D-18 / UI spec:
@@ -773,75 +736,22 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
         />
       )}
 
-      {/* Delete document set confirmation modal */}
+      {/* Shared hardened delete dialog — also reused by the Docs doc_set detail (plan 02). */}
       {deletingSet && (
-        <Modal
+        <DocumentSetDeleteDialog
           open={deleteModalOpen}
-          title={`Xác nhận xóa bộ tài liệu: "${deletingSet.name}"`}
-          onCancel={() => {
-            if (!isDeleting) {
-              setDeleteModalOpen(false);
-              setDeletingSet(null);
-            }
+          set={deletingSet}
+          database={database}
+          {...(client ? { client } : {})}
+          published={stateForSet(deletingSet.id) !== 'Never published'}
+          onClose={() => {
+            setDeleteModalOpen(false);
+            setDeletingSet(null);
           }}
-          footer={null}
-        >
-          {stateForSet(deletingSet.id) === 'Never published' ? (
-            <Space direction="vertical" style={{ width: '100%' }}>
-              <Paragraph>
-                Bộ tài liệu này chưa từng xuất bản lên máy chủ Knowledge Server. Bạn có chắc chắn muốn xóa bản ghi này khỏi cơ sở dữ liệu cục bộ không?
-              </Paragraph>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-                <Button disabled={isDeleting} onClick={() => setDeleteModalOpen(false)}>
-                  Hủy
-                </Button>
-                <Button
-                  type="primary"
-                  danger
-                  loading={isDeleting}
-                  onClick={() => executeDeleteLocalOnly(deletingSet)}
-                >
-                  Xóa cục bộ
-                </Button>
-              </div>
-            </Space>
-          ) : (
-            <Space direction="vertical" style={{ width: '100%' }}>
-              <Paragraph>
-                Bộ tài liệu này đã được xuất bản hoặc có liên kết đồ thị tri thức trên Knowledge Server. Vui lòng chọn chế độ xóa phù hợp:
-              </Paragraph>
-              <Alert
-                type="warning"
-                showIcon
-                message="Lưu ý quan trọng"
-                description='Nếu chọn "Chỉ xóa cục bộ", dữ liệu snapshot/graph trên Knowledge Server sẽ không được dọn dẹp và có thể trở thành dữ liệu mồ côi.'
-              />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
-                <Button
-                  type="primary"
-                  danger
-                  loading={isDeleting}
-                  onClick={() => executeDeleteFull(deletingSet)}
-                >
-                  Xóa toàn bộ (Cục bộ & Remote)
-                </Button>
-                <Button
-                  danger
-                  disabled={isDeleting}
-                  onClick={() => executeDeleteLocalOnly(deletingSet)}
-                >
-                  Chỉ xóa cục bộ (Giữ remote)
-                </Button>
-                <Button
-                  disabled={isDeleting}
-                  onClick={() => setDeleteModalOpen(false)}
-                >
-                  Hủy
-                </Button>
-              </div>
-            </Space>
-          )}
-        </Modal>
+          onDeleted={(setId) => {
+            if (internalSelectedId === setId) setInternalSelectedId(undefined);
+          }}
+        />
       )}
 
       {/* Granular Chunk Progress & Selective Retry Modal */}
