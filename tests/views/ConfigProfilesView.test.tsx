@@ -150,6 +150,58 @@ describe('ConfigProfilesView — defaults-seeded authoring (D-01..D-07)', () => 
     expect(await db.settings.get('ai_team_defaults')).toBeUndefined();
   });
 
+  it('rejects a user-typed invalid override date without writing or overwriting today (WR-02 round 2)', async () => {
+    render(<ConfigProfilesView db={db} />);
+
+    const today = new Date().toISOString().slice(0, 10);
+    await db.capacityOverrides.add({ id: 'recipient-today', date: today, workMinutes: 480 });
+
+    fireEvent.click(screen.getByRole('button', { name: /Thêm ngoại lệ/ }));
+    // New exceptions are seeded with today, but the user may mistype the date.
+    expect(screen.getByLabelText('Ngày ngoại lệ 1')).toHaveValue(today);
+    fireEvent.change(screen.getByLabelText('Ngày ngoại lệ 1'), {
+      target: { value: '2026-13-99' },
+    });
+    fireEvent.change(screen.getByLabelText('Tên profile'), {
+      target: { value: 'Profile với ngày sai' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Lưu profile/i }));
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('Profile chưa hợp lệ');
+    });
+    expect(screen.getByText(/capacityOverrides\.0\.date/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Ngày ngoại lệ 1')).toHaveValue('2026-13-99');
+    expect(await db.settings.get(CONFIGURATION_PROFILES_SETTING_KEY)).toBeUndefined();
+
+    // The bad profile never reaches import; the recipient's existing override is untouched.
+    const rows = await db.capacityOverrides.toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: 'recipient-today', date: today, workMinutes: 480 });
+
+    const invalidEnvelope = {
+      app: 'taskmate-config-profile',
+      profileSchemaVersion: 1,
+      exportedAt: '2026-11-19T00:00:00.000Z',
+      profile: {
+        id: 'bad-date',
+        name: 'Profile với ngày sai',
+        createdAt: '2026-11-19T00:00:00.000Z',
+        updatedAt: '2026-11-19T00:00:00.000Z',
+        config: {
+          settings: {},
+          capacityRules: [],
+          capacityOverrides: [{ date: '2026-13-99', workMinutes: 0 }],
+          secretFields: {},
+        },
+      },
+    };
+    expect(ConfigProfileEnvelopeSchema.safeParse(invalidEnvelope).success).toBe(false);
+    const result = await applyConfigProfile(invalidEnvelope, db);
+    expect(result.applied).toBe(false);
+    expect(await db.capacityOverrides.toArray()).toEqual(rows);
+  });
+
   it('creates, saves, selects and deletes named profiles through the one-row store', async () => {
     render(<ConfigProfilesView db={db} />);
 

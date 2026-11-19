@@ -17,8 +17,23 @@ export const CapacityRuleProfileSchema = z.strictObject({
   workMinutes: z.number().int().min(0).max(1440),
 });
 
+/** Reject strings like `2026-13-99` that match the shape but are not real calendar days. */
+function isRealCalendarDate(value: string): boolean {
+  const [year, month, day] = value.split('-').map(Number);
+  if (year === undefined || month === undefined || day === undefined) return false;
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  );
+}
+
 export const CapacityOverrideProfileSchema = z.strictObject({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD'),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD')
+    .refine(isRealCalendarDate, 'Expected a real calendar date (YYYY-MM-DD)'),
   workMinutes: z.number().int().min(0).max(1440),
   note: z.string().optional(),
 });

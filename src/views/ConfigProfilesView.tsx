@@ -134,11 +134,10 @@ const clampInt = (text: string, min: number, max: number, blankValue: number): n
   return Math.max(min, Math.min(max, Math.round(parsed)));
 };
 
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-
 /**
- * WR-04: every editable numeric/date value is normalised to the schema bounds before
- * it reaches a saved profile, so a self-authored profile always imports cleanly.
+ * WR-04: editable numeric values are normalised to the schema bounds before they reach
+ * a saved profile. Dates are deliberately left as typed: invalid input must surface as a
+ * validation error, never be silently rewritten to today (WR-02 round 2).
  */
 function normaliseDraft(config: ProfileConfig): ProfileConfig {
   const settings = { ...config.settings };
@@ -199,9 +198,6 @@ function normaliseDraft(config: ProfileConfig): ProfileConfig {
     })),
     capacityOverrides: config.capacityOverrides.map((override) => ({
       ...override,
-      date: DATE_PATTERN.test(override.date)
-        ? override.date
-        : new Date().toISOString().slice(0, 10),
       workMinutes: clampInt(fieldValue(override.workMinutes), 0, 1440, 0),
     })),
     ...(ghostDevConfig !== undefined ? { ghostDevConfig } : {}),
@@ -571,7 +567,7 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
                 ...current,
                 capacityOverrides: [
                   ...current.capacityOverrides,
-                  { date: '', workMinutes: 0, note: '' },
+                  { date: new Date().toISOString().slice(0, 10), workMinutes: 0, note: '' },
                 ],
               }))
             }
