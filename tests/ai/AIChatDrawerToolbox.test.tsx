@@ -5,6 +5,14 @@ import { InlineAISelectionBar } from '../../src/components/ai/InlineAISelectionB
 import { AIChatProvider, useAIChat } from '../../src/context/AIChatContext';
 import { TaskPlannerDatabase } from '../../src/db';
 import { createChatTab, setActiveTab } from '../../src/db/repositories/chatTabRepo';
+import { saveMessage } from '../../src/db/repositories/chatRepo';
+import { useLayoutStore } from '../../src/workbench/store/layoutStore';
+import {
+  RemoteCitationChips,
+  parseRemoteCitationRefs,
+} from '../../src/components/ai/RemoteCitationChips';
+import * as sshService from '../../src/services/sshService';
+import type { SshConfig } from '../../src/types/ssh';
 import 'fake-indexeddb/auto';
 
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -259,5 +267,111 @@ describe('Remote selection inline toolbar (Phase 47 D-09/D-10/D-11)', () => {
     });
     // No fake doc resolution was ever attempted for the remote anchor.
     expect(resolveSpy).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Phase 47 D-12: remote `path:line` citations are render-only chips that open the readonly remote
+ * file tab at that line using the ACTIVE target, while document citations keep their preview.
+ */
+describe('Remote path:line citation navigation (Phase 47 D-12)', () => {
+  const REMOTE_CONFIG: SshConfig = {
+    id: 'ssh-cite-1',
+    name: 'Cite Server',
+    host: '10.0.0.5',
+    port: 22,
+    username: 'dev',
+    authType: 'key_file',
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+  };
+  const REPO_PATH = '/srv/repos/payments';
+  const BRANCH = 'main';
+  const REMOTE_TARGET_UUID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    useLayoutStore.getState().resetLayout();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    useLayoutStore.getState().resetLayout();
+  });
+
+  it('parseRemoteCitationRefs extracts repo-relative path:line refs and rejects traversal/absolute paths', () => {
+    const refs = parseRemoteCitationRefs(
+      'Xem src/service/Fee.ts:42 và docs/guide.md:7.\nKhông /etc/passwd:1 hay ../secret.ts:3.'
+    );
+    expect(refs).toEqual([
+      { relativePath: 'src/service/Fee.ts', line: 42 },
+      { relativePath: 'docs/guide.md', line: 7 },
+    ]);
+  });
+
+  it('chip click invokes onActivate with the exact path:line ref', () => {
+    const onActivate = vi.fn();
+    render(
+      <RemoteCitationChips
+        citations={[{ relativePath: 'src/Fee.ts', line: 88 }]}
+        onActivate={onActivate}
+      />
+    );
+    const chip = screen.getByTestId('remote-citation-chip');
+    expect(chip.textContent).toContain('src/Fee.ts:88');
+    fireEvent.click(chip);
+    expect(onActivate).toHaveBeenCalledWith({ relativePath: 'src/Fee.ts', line: 88 });
+  });
+
+  it('clicking a remote citation chip opens the remote file tab with the active target and initialLine', async () => {
+    const db = new TaskPlannerDatabase(`TestRemoteCite_${Date.now()}_${Math.random()}`);
+    useLayoutStore.getState().setActiveRemoteTarget(REMOTE_CONFIG.id, REPO_PATH, BRANCH);
+    vi.spyOn(sshService, 'getSshConfigById').mockResolvedValue(REMOTE_CONFIG);
+
+    const openTabSpy = vi.spyOn(useLayoutStore.getState(), 'openTab').mockImplementation(() => {});
+
+    const SCOPE_KEY = `remote:${REMOTE_TARGET_UUID}`;
+    const tab = await createChatTab(
+      { scopeType: 'remote', scopeKey: SCOPE_KEY, entityId: REMOTE_TARGET_UUID, title: 'Remote chat' },
+      db
+    );
+    await setActiveTab(SCOPE_KEY, tab.id, db);
+    await saveMessage({
+      threadId: tab.threadId,
+      role: 'assistant',
+      content: 'Hàm phí nằm ở src/service/Fee.ts:42.',
+    }, db);
+
+    try {
+      render(
+        <AIChatDrawer
+          open
+          onClose={() => {}}
+          db={db}
+          activeScope={{ type: 'remote', id: REMOTE_TARGET_UUID, title: 'Remote chat' }}
+        />
+      );
+
+      const chip = await screen.findByTestId('remote-citation-chip');
+      expect(chip.textContent).toContain('src/service/Fee.ts:42');
+      fireEvent.click(chip);
+
+      await waitFor(() => {
+        expect(openTabSpy).toHaveBeenCalledTimes(1);
+      });
+      const opened = openTabSpy.mock.calls[0]![0];
+      const openedParams = opened.params ?? {};
+      expect(opened.id).toBe('remote:src/service/Fee.ts');
+      expect(opened.viewType).toBe('remote_file');
+      expect(openedParams.filePath).toBe('src/service/Fee.ts');
+      expect(openedParams.initialLine).toBe(42);
+      expect(openedParams.repoPath).toBe(REPO_PATH);
+      expect(openedParams.branch).toBe(BRANCH);
+      expect(openedParams.config.id).toBe(REMOTE_CONFIG.id);
+    } finally {
+      await db.delete();
+    }
   });
 });

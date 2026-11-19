@@ -33,6 +33,12 @@ import {
 import { deriveRemoteTargetUuid } from '../../utils/remoteTarget';
 import { useLayoutStore } from '../../workbench/store/layoutStore';
 import type { RemoteToolTarget } from '../../types/sshFsTool';
+import {
+  RemoteCitationChips,
+  parseRemoteCitationRefs,
+  type RemoteCitationRef,
+} from './RemoteCitationChips';
+import { getSshConfigById } from '../../services/sshService';
 import { compactThreadContext, sanitizeHistoryTurns } from '../../services/ai/contextCompaction';
 import {
   type AiToolDefinition,
@@ -2159,6 +2165,36 @@ Rules:
     }
   };
 
+  // Phase 47 D-12 (Pitfall 7, T-47-10): a remote `path:line` citation opens the readonly remote
+  // file tab at that line via the one-shot initialLine param. The chip carries ONLY a repo-relative
+  // path + line; the SSH config/repo/branch come from the ACTIVE remote target, never from the
+  // model-produced citation text, so a click cannot navigate to another host. Document citations
+  // keep their existing setActivePreviewCitation path untouched.
+  const handleRemoteCitationActivate = useCallback(
+    async (citation: RemoteCitationRef) => {
+      const configId = useLayoutStore.getState().activeRemoteConfigId;
+      if (!configId) return;
+      const repoPath = useLayoutStore.getState().activeRemoteRepoPath;
+      const branch = useLayoutStore.getState().activeRemoteBranch;
+      const config = await getSshConfigById(configId, db);
+      if (!config) return;
+      useLayoutStore.getState().openTab({
+        id: `remote:${citation.relativePath}`,
+        title: citation.relativePath.split('/').pop() || citation.relativePath,
+        viewType: 'remote_file',
+        closable: true,
+        params: {
+          config,
+          repoPath,
+          branch,
+          filePath: citation.relativePath,
+          initialLine: citation.line,
+        },
+      });
+    },
+    [db]
+  );
+
   const groundedCallbacks: GroundedAnswerCardCallbacks = {
     onFindRelated: (entity, sourceMessageId) => {
       void handleFindRelated(entity, sourceMessageId);
@@ -2594,6 +2630,18 @@ Rules:
             }
           }}
           // Drawer business, rendered by the shared surface but owned here.
+          transcriptExtensions={
+            isRemoteScope ? (
+              <div style={{ padding: '0 16px 8px' }}>
+                <RemoteCitationChips
+                  citations={parseRemoteCitationRefs(
+                    [...messages].reverse().find((m) => m.role === 'assistant')?.content ?? ''
+                  )}
+                  onActivate={(citation) => void handleRemoteCitationActivate(citation)}
+                />
+              </div>
+            ) : undefined
+          }
           messageListExtensions={{
             scrollTrigger,
             ...(groundedCallbacks ? { groundedCallbacks } : {}),
