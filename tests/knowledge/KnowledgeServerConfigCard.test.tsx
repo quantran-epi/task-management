@@ -239,6 +239,28 @@ describe('KnowledgeServerConfigCard', () => {
     await waitFor(() => expect(screen.queryByText(setA)).not.toBeInTheDocument());
   });
 
+  it('renders the Vietnamese empty state for an empty published-set list (UI-SPEC)', async () => {
+    listPublishedSets.mockResolvedValue([]);
+    renderCard(db);
+    await screen.findByRole('switch', { name: 'Bật Knowledge Server' });
+    fireEvent.click(screen.getByRole('switch', { name: 'Bật Knowledge Server' }));
+    fireEvent.change(screen.getByLabelText('URL Knowledge Server'), {
+      target: { value: 'https://knowledge.example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('Token phiên'), {
+      target: { value: 'secret-session-token' },
+    });
+    fireEvent.click(screen.getAllByRole('button', { name: /Lưu cấu hình/ })[0]!);
+
+    expect(await screen.findByText('Chưa có set nào được xuất bản')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Chọn "Làm mới" để tải lại từ Knowledge Server/)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Làm mới danh sách set' })
+    ).toBeInTheDocument();
+  });
+
   it('shows a diagnostic when the daemon is unreachable without breaking local config (D-03)', async () => {
     listPublishedSets.mockRejectedValue(new Error('daemon unavailable'));
     renderCard(db);

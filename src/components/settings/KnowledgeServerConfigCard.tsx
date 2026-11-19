@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   Divider,
+  Empty,
   Form,
   Input,
   Popconfirm,
@@ -284,8 +285,9 @@ export const KnowledgeServerConfigCard: React.FC<KnowledgeServerConfigCardProps>
             icon={<ReloadOutlined />}
             onClick={() => void loadPublishedSets()}
             loading={setListLoading}
+            aria-label="Làm mới danh sách set"
           >
-            Tải lại danh sách
+            Làm mới
           </Button>
           <Table<PublishedSetSummary>
             rowKey="setId"
@@ -293,6 +295,19 @@ export const KnowledgeServerConfigCard: React.FC<KnowledgeServerConfigCardProps>
             dataSource={publishedSets}
             loading={setListLoading}
             pagination={{ pageSize: 5, showSizeChanger: false }}
+            locale={{
+              emptyText: (
+                <Empty
+                  description={
+                    <span>
+                      <strong>Chưa có set nào được xuất bản</strong>
+                      <br />
+                      Chọn &quot;Làm mới&quot; để tải lại từ Knowledge Server, hoặc xuất bản một bộ tài liệu để bắt đầu.
+                    </span>
+                  }
+                />
+              ),
+            }}
             columns={[
               { title: 'Set ID', dataIndex: 'setId', ellipsis: true },
               { title: 'Snapshot ID', dataIndex: 'snapshotId', ellipsis: true },
