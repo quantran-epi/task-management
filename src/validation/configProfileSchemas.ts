@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { isSafeBackupSetting } from '../services/backup/exportBackup';
+import { getSecretFields } from '../services/configProfiles/catalog';
 
 /**
  * Independent, versioned schema for portable configuration profiles.
@@ -43,14 +45,30 @@ export const AiTeamDefaultsTemplateSchema = z.strictObject({
  * strictObject at config level: an unknown section such as `telegramSettings` is rejected.
  * Telegram is excluded by explicit user decision (owner-machine-only).
  */
-export const ProfileConfigSchema = z.strictObject({
-  settings: z.record(z.string(), z.unknown()),
-  capacityRules: z.array(CapacityRuleProfileSchema).default([]),
-  capacityOverrides: z.array(CapacityOverrideProfileSchema).default([]),
-  ghostDevConfig: GhostDevProfileSchema.nullable().optional(),
-  teamDefaults: AiTeamDefaultsTemplateSchema.optional(),
-  secretFields: z.record(z.string(), z.literal('')),
-});
+export const ProfileConfigSchema = z
+  .strictObject({
+    settings: z.record(z.string(), z.unknown()),
+    capacityRules: z.array(CapacityRuleProfileSchema).default([]),
+    capacityOverrides: z.array(CapacityOverrideProfileSchema).default([]),
+    ghostDevConfig: GhostDevProfileSchema.nullable().optional(),
+    teamDefaults: AiTeamDefaultsTemplateSchema.optional(),
+    secretFields: z.record(z.string(), z.literal('')),
+  })
+  .refine(
+    (config) =>
+      Object.entries(config.settings).every(
+        ([key, value]) => value === '' || !isSecretLikeSettingKey(key)
+      ),
+    {
+      path: ['settings'],
+      message: 'Secret-like keys must not carry values in config.settings; use secretFields with blank values instead',
+    }
+  );
+
+/** A key is secret-like if the backup denylist/suffix rule or the profile catalog says so. */
+function isSecretLikeSettingKey(key: string): boolean {
+  return !isSafeBackupSetting(key) || getSecretFields().includes(key);
+}
 
 export const ConfigurationProfileSchema = z.strictObject({
   id: z.string().min(1),

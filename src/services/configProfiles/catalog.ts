@@ -47,6 +47,7 @@ export const PROFILE_KEY_CATALOG: Record<string, ProfileKeyClassification> = {
   notification_settings: 'portable',
   system_type_options: 'portable',
   knowledge_server_enabled: 'portable',
+  ai_team_defaults: 'portable',
   // Machine-specific values: preserved in JSON but flagged for review.
   github_owner: 'machine-specific',
   github_repo: 'machine-specific',

@@ -64,6 +64,16 @@ describe('config profile schemas', () => {
     expect(validateConfigProfilePayload(payload).valid).toBe(true);
   });
 
+  it('rejects a non-blank secret-like key in config.settings (WR-01)', () => {
+    const payload = fixture();
+    payload.profile.config.settings.github_pat = 'attacker';
+    const result = validateConfigProfilePayload(payload);
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.some((error) => /secret/i.test(error.message))).toBe(true);
+    }
+  });
+
   it('accepts teamDefaults.budgetWarnThresholdPct: null', () => {
     expect(validateConfigProfilePayload(fixture()).valid).toBe(true);
   });

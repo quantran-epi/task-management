@@ -2,7 +2,10 @@ import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TaskPlannerDatabase } from '../../../src/db';
 import { GHOST_DEV_CONFIG_KEY } from '../../../src/services/agents/ghostDevConfig';
-import { applyConfigProfile } from '../../../src/services/configProfiles/importProfile';
+import {
+  AI_TEAM_DEFAULTS_SETTING_KEY,
+  applyConfigProfile,
+} from '../../../src/services/configProfiles/importProfile';
 
 const TELEGRAM = {
   id: 'default' as const,
@@ -57,12 +60,18 @@ describe('importProfile hardening', () => {
     return db;
   }
 
-  it('merges key-by-key, skips blank secrets and takes a snapshot', async () => {
+  it('merges key-by-key, skips blank secrets and never replaces the shared snapshot', async () => {
     const db = freshDb();
+    const backupSnapshot = {
+      timestamp: '2026-11-18T00:00:00.000Z',
+      tables: { settings: [{ key: 'github_owner', value: 'backup-time-owner' }] },
+      counts: { settings: 1 },
+    };
     await db.settings.bulkPut([
       { key: 'github_owner', value: 'old-owner' },
       { key: 'ninerouter_api_key', value: 'recipient-real-secret' },
       { key: 'notification_settings', value: { dueSoonDays: 5 } },
+      { key: 'last_pre_import_snapshot', value: backupSnapshot },
     ]);
     const result = await applyConfigProfile(envelope(), db);
     expect(result.applied).toBe(true);
@@ -70,9 +79,52 @@ describe('importProfile hardening', () => {
     expect((await db.settings.get('github_owner'))?.value).toBe('new-owner');
     expect((await db.settings.get('ninerouter_api_key'))?.value).toBe('recipient-real-secret');
     expect((await db.settings.get('notification_settings'))?.value).toEqual({ dueSoonDays: 5 });
-    expect((await db.settings.get('last_pre_import_snapshot'))?.value).toMatchObject({
-      settings: expect.arrayContaining([{ key: 'github_owner', value: 'old-owner' }]),
-    });
+    // CR-01/WR-02: the backup snapshot stays byte-for-byte valid and unchanged.
+    expect((await db.settings.get('last_pre_import_snapshot'))?.value).toEqual(backupSnapshot);
+    expect((await db.settings.get('last_profile_import_snapshot'))).toBeUndefined();
+    // No secret value is copied into any NEW row written by profile import.
+    for (const key of result.appliedSettingKeys) {
+      expect(JSON.stringify(await db.settings.get(key))).not.toContain('recipient-real-secret');
+    }
+  });
+
+  it('rejects every secret-like setting key regardless of value (CR-01/WR-01/WR-02)', async () => {
+    const db = freshDb();
+    await db.settings.put({ key: 'github_pat', value: 'recipient-real-pat' });
+    const payload = envelope() as unknown as Record<string, unknown>;
+    const config = (payload.profile as Record<string, unknown>).config as Record<string, unknown>;
+    const settings = config.settings as Record<string, unknown>;
+    settings.github_pat = 'attacker-supplied-secret';
+    // Non-blank secret-like keys are rejected at the schema trust boundary (WR-01) with
+    // zero writes, while `applyConfigProfile` also skips secret-like keys regardless of value.
+    const result = await applyConfigProfile(payload, db);
+    expect(result.applied).toBe(false);
+    expect(result.errors.some((error) => /secret/i.test(error.message))).toBe(true);
+    expect((await db.settings.get('github_pat'))?.value).toBe('recipient-real-pat');
+    expect((await db.settings.get('ninerouter_api_key'))?.value).toBeUndefined();
+    const allSettings = JSON.stringify(await db.settings.toArray());
+    expect(allSettings).not.toContain('attacker-supplied-secret');
+  });
+
+  it('persists teamDefaults as a portable template row (WR-03)', async () => {
+    const db = freshDb();
+    const payload = envelope() as unknown as Record<string, unknown>;
+    const config = (payload.profile as Record<string, unknown>).config as Record<string, unknown>;
+    config.teamDefaults = {
+      budgetTokens: 250000,
+      concurrencyLimit: 5,
+      autoSplitEnabled: true,
+      autoApproveMutations: false,
+      mcpEnabled: true,
+      sshFsToolsEnabled: false,
+      oracleToolsEnabled: true,
+      budgetWarnThresholdPct: 70,
+    };
+
+    const result = await applyConfigProfile(payload, db);
+    expect(result.applied).toBe(true);
+    expect((await db.settings.get(AI_TEAM_DEFAULTS_SETTING_KEY))?.value).toEqual(config.teamDefaults);
+    expect(result.appliedSettingKeys).toContain(AI_TEAM_DEFAULTS_SETTING_KEY);
   });
 
   it('upserts capacity rows by natural key with no duplicates on double import', async () => {
