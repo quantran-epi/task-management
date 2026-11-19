@@ -22,7 +22,7 @@ export function RightToolWindow({
 }: RightToolWindowProps) {
   const rightActiveId = useLayoutStore((s) => s.rightActiveId);
   const toggleToolWindow = useLayoutStore((s) => s.toggleToolWindow);
-  const { closeChat } = useAIChat();
+  const { closeChat, activeScope } = useAIChat();
 
   const handleCollapse = () => {
     if (rightActiveId) {
@@ -129,6 +129,7 @@ export function RightToolWindow({
               onClose={handleCollapse}
               isPinned={true}
               isDockedPanel={true}
+              activeScope={activeScope}
               {...(db ? { db } : {})}
             />
           </div>

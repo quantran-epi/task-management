@@ -729,11 +729,25 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     const runtime = registry.initialize(activeTabId, activeThreadId);
     const carry = draftCarryRef.current;
     if (carry.tabId !== activeTabId) {
-      draftCarryRef.current = { tabId: activeTabId, text: runtime.draft };
+      // Adopting the durable tab after the async tab/thread list resolves. On a fresh
+      // "Open in chat" the pending draft is written while activeTabId is still the
+      // provisional 'default', so it lives in unseededDraft (or the provisional runtime's
+      // draft). Seed it into the real runtime now instead of dropping it (first-click loss).
+      // ONLY draw from provisional state: carry.text from a different real tab must not bleed
+      // into this one.
+      const provisionalDraft = unseededDraft || (carry.tabId === 'default' ? carry.text : '');
+      const handoffDraft = provisionalDraft || runtime.draft;
+      if (handoffDraft !== runtime.draft) {
+        registry.patch(activeTabId, { draft: handoffDraft });
+      }
+      draftCarryRef.current = { tabId: activeTabId, text: handoffDraft };
+      // Handed off to the runtime; clear the provisional copy so a later tab switch
+      // cannot re-seed an unrelated tab with this draft.
+      if (unseededDraft) setUnseededDraft('');
     } else if (carry.text && !runtime.draft) {
       registry.patch(activeTabId, { draft: carry.text });
     }
-  }, [activeTabId, activeThreadId]);
+  }, [activeTabId, activeThreadId, unseededDraft]);
 
   // Model & Token settings. Model is per-tab and durable in ChatTab.config.model (D-07).
   const [persistedDefaultModel, setPersistedDefaultModel] = useState<string>('');
