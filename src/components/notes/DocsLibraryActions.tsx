@@ -1,25 +1,13 @@
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button, Input, Modal, Space, Typography, message } from 'antd';
 import { APP_NAME } from '../../constants/app';
 import { CopyOutlined, DatabaseOutlined, RobotOutlined, UploadOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { TaskPlannerDatabase } from '../../db';
-import type { Note, DocumentSet, PublishPrimaryState } from '../../types/models';
+import type { DocumentSet, Note } from '../../types/models';
 import { batchCreateNotes, createNote } from '../../db/repositories/noteRepo';
-import {
-  computeSha256,
-  createDocumentSet,
-  normalizeMarkdownForHash,
-  updateDocumentSet,
-} from '../../db/repositories/documentSetRepo';
-import { DocumentSetDrawer } from '../knowledge/DocumentSetDrawer';
-import type { DocumentSetFormValue } from '../knowledge/DocumentSetForm';
-import { PublishPreviewModal } from '../knowledge/PublishPreviewModal';
-import { formatOversizedAtomicBlockError } from '../knowledge/PublishProgressPanel';
-import { useOptionalKnowledgeConfig } from '../../services/knowledge/knowledgeConfig';
-import { createKnowledgeClient, KnowledgeClientError } from '../../services/knowledge/knowledgeClient';
-import { PublishSession } from '../../services/knowledge/publishOrchestrator';
-import type { CachedActiveSnapshotManifest, ChangePreview } from '../../services/knowledge/changePreview';
+import { createDocumentSet } from '../../db/repositories/documentSetRepo';
+import { DocumentSetForm, type DocumentSetFormValue } from '../knowledge/DocumentSetForm';
 import { ZipImportPreviewModal, type ZipImportPreviewModalProps } from './ZipImportPreviewModal';
 
 const { Text } = Typography;
@@ -142,186 +130,24 @@ export function DocsLibraryActions({
   notes,
   currentFolderId,
   onSelectFolder,
+  onOpenSet,
 }: DocsLibraryActionsProps) {
   const [aiPromptModalOpen, setAiPromptModalOpen] = useState(false);
-  const knowledgeConfig = useOptionalKnowledgeConfig();
-  const isConfigured = Boolean(knowledgeConfig.enabled && knowledgeConfig.baseUrl);
-  const [documentSetDrawerOpen, setDocumentSetDrawerOpen] = useState(false);
-  const [creatingDocumentSet, setCreatingDocumentSet] = useState(false);
-  const [publishModalOpen, setPublishModalOpen] = useState(false);
-  const [publishSession, setPublishSession] = useState<PublishSession | null>(null);
-  const [publishPreview, setPublishPreview] = useState<ChangePreview | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [reconcilingAttemptId, setReconcilingAttemptId] = useState<string>();
-  const [reconciliationErrorsBySet, setReconciliationErrorsBySet] = useState<Record<string, string>>({});
+  const [createModalOpen, setCreateModalOpen] = useState(false);
   const [selectedZipFile, setSelectedZipFile] = useState<File | null>(null);
   const zipFileInputRef = useRef<HTMLInputElement>(null);
 
   const documentSets = useLiveQuery(() => db.documentSets.toArray(), [db]);
-  const publishAttempts = useLiveQuery(() => db.publishAttempts.toArray(), [db]);
-  const publishedDocuments = useLiveQuery(() => db.publishedDocuments.toArray(), [db]);
-  const noteHashes = useLiveQuery(async () => {
-    const entries = await Promise.all(
-      notes
-        .filter((note) => note.type !== 'folder' && note.type !== 'diagram' && !note.deletedAt)
-        .map(async (note) => [note.id, await computeSha256(normalizeMarkdownForHash(note.body))] as const)
-    );
-    return Object.fromEntries(entries) as Record<string, string>;
-  }, [notes], {} as Record<string, string>);
 
-  const setStatus = useMemo(() => {
-    const statesBySet: Record<string, PublishPrimaryState> = {};
-    const activeAttemptIdsBySet: Record<string, string> = {};
-    for (const set of documentSets ?? []) {
-      const attempts = (publishAttempts ?? [])
-        .filter((attempt) => attempt.setId === set.id)
-        .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
-      const publishing = attempts.find((attempt) => attempt.status === 'Publishing');
-      if (publishing) {
-        statesBySet[set.id] = 'Publishing';
-        activeAttemptIdsBySet[set.id] = publishing.id;
-        continue;
-      }
-      const newestTerminal = attempts[0];
-      if (newestTerminal?.status === 'Failed' || newestTerminal?.status === 'Warning') {
-        statesBySet[set.id] = newestTerminal.status;
-        continue;
-      }
-      const metadata = (publishedDocuments ?? []).filter((item) => item.setId === set.id);
-      if (metadata.length === 0) {
-        statesBySet[set.id] = 'Never published';
-        continue;
-      }
-      const metadataById = new Map(metadata.map((item) => [item.documentId, item]));
-      const membershipMatches =
-        metadata.length === set.documentIds.length &&
-        set.documentIds.every((documentId) => metadataById.has(documentId));
-      const hashesMatch =
-        membershipMatches &&
-        set.documentIds.every(
-          (documentId) => noteHashes[documentId] === metadataById.get(documentId)?.publishedContentHash
-        );
-      statesBySet[set.id] = hashesMatch ? 'In sync' : 'Local changes';
-    }
-    return { statesBySet, activeAttemptIdsBySet };
-  }, [documentSets, publishAttempts, publishedDocuments, noteHashes]);
-
-  const cachedAt = useMemo(() => {
-    const attempts = (publishAttempts ?? []).filter((a) => a.completedAt);
-    if (!attempts.length) return undefined;
-    attempts.sort(
-      (a, b) => new Date(b.completedAt ?? 0).getTime() - new Date(a.completedAt ?? 0).getTime()
-    );
-    return attempts[0]?.completedAt;
-  }, [publishAttempts]);
-
-  const handleSaveDocumentSet = async (setId: string | undefined, value: DocumentSetFormValue) => {
+  const handleSaveDocumentSet = async (value: DocumentSetFormValue): Promise<DocumentSet | null> => {
     try {
-      if (setId) {
-        await updateDocumentSet(setId, value, db);
-        message.success('Đã cập nhật bộ tài liệu');
-      } else {
-        await createDocumentSet(value, db);
-        message.success('Đã tạo bộ tài liệu mới');
-      }
-      setCreatingDocumentSet(false);
+      const created = await createDocumentSet(value, db);
+      message.success('Đã tạo bộ tài liệu mới');
+      return created;
     } catch (err) {
       console.error('Failed to save document set:', err);
       message.error(err instanceof Error ? err.message : 'Không thể lưu bộ tài liệu');
-    }
-  };
-
-  const handleReconcileAttempt = async (setId: string, attemptId: string) => {
-    if (!isConfigured || reconcilingAttemptId) return;
-    setReconcilingAttemptId(attemptId);
-    setReconciliationErrorsBySet((current) => {
-      const next = { ...current };
-      delete next[setId];
-      return next;
-    });
-    try {
-      const cachedAttempt = await db.publishAttempts.get(attemptId);
-      if (!cachedAttempt?.submittedDocuments?.length) {
-        setReconciliationErrorsBySet((current) => ({
-          ...current,
-          [setId]: 'Không thể tiếp tục kiểm tra: thiếu ảnh chụp đã gửi được lưu cục bộ.',
-        }));
-        return;
-      }
-      const client = createKnowledgeClient({
-        baseUrl: knowledgeConfig.baseUrl,
-        token: knowledgeConfig.token,
-        db,
-      });
-      const session = new PublishSession({ client, db });
-      const result = await session.pollAcceptedAttempt(attemptId);
-      if (result.uncertain) {
-        setReconciliationErrorsBySet((current) => ({
-          ...current,
-          [setId]: 'Mất kết nối — chưa xác định kết quả.',
-        }));
-      }
-    } catch {
-      setReconciliationErrorsBySet((current) => ({
-        ...current,
-        [setId]: 'Không thể kiểm tra trạng thái. Kiểm tra kết nối rồi thử lại.',
-      }));
-    } finally {
-      setReconcilingAttemptId(undefined);
-    }
-  };
-
-  const handlePreviewDocumentSet = async (set: DocumentSet) => {
-    if (!isConfigured || previewLoading) {
-      if (!isConfigured) message.warning('Hãy cấu hình Knowledge Server trước khi xuất bản.');
-      return;
-    }
-    setPreviewLoading(true);
-    try {
-      const client = createKnowledgeClient({
-        baseUrl: knowledgeConfig.baseUrl,
-        token: knowledgeConfig.token,
-        db,
-      });
-      let activeManifest: CachedActiveSnapshotManifest | null = null;
-      try {
-        activeManifest = await client.getSnapshotManifest(set.id);
-      } catch (err: unknown) {
-        if (
-          err instanceof KnowledgeClientError &&
-          err.status === 404 &&
-          err.serverCode === 'SNAPSHOT_NOT_FOUND'
-        ) {
-          activeManifest = null;
-        } else {
-          if (err instanceof KnowledgeClientError) {
-            if (err.code === 'NETWORK_ERROR') {
-              message.error('Không thể kết nối Knowledge Server. Kiểm tra máy chủ và mạng rồi thử lại.');
-            } else if (err.status === 401) {
-              message.error('Token phiên không hợp lệ hoặc đã hết hạn.');
-            } else if (err.status === 403) {
-              message.error('Token phiên không có quyền truy cập Knowledge Server.');
-            } else if (err.code === 'INVALID_RESPONSE') {
-              message.error('Knowledge Server phản hồi không hợp lệ.');
-            } else {
-              message.error('Máy chủ Knowledge Server gặp lỗi khi kiểm tra ảnh chụp.');
-            }
-          } else {
-            message.error('Không thể kiểm tra ảnh chụp trên Knowledge Server.');
-          }
-          return;
-        }
-      }
-      const session = new PublishSession({ client, db });
-      const setNotes = notes.filter((note) => set.documentIds.includes(note.id) && !note.deletedAt);
-      const preview = await session.buildPreview({ documentSet: set, notes: setNotes, activeManifest });
-      setPublishSession(session);
-      setPublishPreview(preview);
-      setPublishModalOpen(true);
-    } catch (error: unknown) {
-      message.error(formatOversizedAtomicBlockError(error) ?? 'Không thể tạo bản xem trước xuất bản.');
-    } finally {
-      setPreviewLoading(false);
+      return null;
     }
   };
 
@@ -361,10 +187,7 @@ export function DocsLibraryActions({
           size="small"
           icon={<DatabaseOutlined />}
           aria-label="Tạo bộ tài liệu"
-          onClick={() => {
-            setCreatingDocumentSet(true);
-            setDocumentSetDrawerOpen(true);
-          }}
+          onClick={() => setCreateModalOpen(true)}
         >
           Tạo bộ tài liệu
         </Button>
@@ -384,45 +207,24 @@ export function DocsLibraryActions({
           Prompt AI
         </Button>
       </Space>
-      <DocumentSetDrawer
-        open={documentSetDrawerOpen}
-        database={db}
-        sets={documentSets ?? []}
-        notes={notes.filter((note) => note.type !== 'folder' && note.type !== 'diagram')}
-        attempts={publishAttempts ?? []}
-        statesBySet={setStatus.statesBySet}
-        activeAttemptIdsBySet={setStatus.activeAttemptIdsBySet}
-        {...(reconcilingAttemptId ? { reconcilingAttemptId } : {})}
-        reconciliationErrorsBySet={reconciliationErrorsBySet}
-        configured={isConfigured}
-        loading={previewLoading}
-        creating={creatingDocumentSet}
-        {...(cachedAt ? { cachedAt } : {})}
-        {...(currentFolderId ? { currentFolderId } : {})}
-        onClose={() => {
-          setDocumentSetDrawerOpen(false);
-          setCreatingDocumentSet(false);
-        }}
-        onCreate={() => setCreatingDocumentSet(true)}
-        onCancelCreate={() => setCreatingDocumentSet(false)}
-        onSave={handleSaveDocumentSet}
-        onPreview={handlePreviewDocumentSet}
-        onReconcileAttempt={handleReconcileAttempt}
-        onOpenSettings={() => { window.location.hash = '#/settings'; }}
-      />
-      {publishSession && publishPreview && (
-        <PublishPreviewModal
-          open={publishModalOpen}
-          preview={publishPreview}
-          session={publishSession}
-          documentTitles={Object.fromEntries(notes.map((note) => [note.id, note.title || 'Không tiêu đề']))}
-          onClose={() => {
-            setPublishModalOpen(false);
-            setPublishSession(null);
-            setPublishPreview(null);
+      <Modal
+        title="Tạo bộ tài liệu mới"
+        open={createModalOpen}
+        onCancel={() => setCreateModalOpen(false)}
+        footer={null}
+        width={720}
+      >
+        <DocumentSetForm
+          notes={notes.filter((note) => note.type !== 'folder' && note.type !== 'diagram' && !note.deletedAt)}
+          availableSets={documentSets ?? []}
+          {...(currentFolderId ? { currentFolderId } : {})}
+          onSave={async (value) => {
+            const created = await handleSaveDocumentSet(value);
+            setCreateModalOpen(false);
+            if (created) onOpenSet?.(created.id, created.name);
           }}
         />
-      )}
+      </Modal>
       <input
         type="file"
         ref={zipFileInputRef}

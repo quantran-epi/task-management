@@ -125,7 +125,7 @@ interface DocumentRow {
 /**
  * Single home for every per-set action in the `doc_set` editor tab. All reads are local
  * (IndexedDB); the optional knowledge client powers publish/graph actions and the shared
- * delete dialog, never document browsing. Replaces the retired DocumentSetDrawer.
+ * delete dialog, never document browsing. This tab is the single home for per-set actions.
  */
 export function DocumentSetDetail({
   setId,
