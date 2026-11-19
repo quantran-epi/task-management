@@ -5,7 +5,11 @@ import { TaskPlannerDatabase } from '../../src/db';
 import { CONFIGURATION_PROFILES_SETTING_KEY } from '../../src/services/configProfiles/importProfile';
 import { getSecretFields } from '../../src/services/configProfiles/catalog';
 import { DEFAULT_NINEROUTER_ENDPOINT } from '../../src/services/ai/nineRouterTokenService';
-import { ConfigProfileEnvelopeSchema } from '../../src/validation/configProfileSchemas';
+import {
+  CONFIG_PROFILE_APP_MARKER,
+  CONFIG_PROFILE_SCHEMA_VERSION,
+  ConfigProfileEnvelopeSchema,
+} from '../../src/validation/configProfileSchemas';
 import { applyConfigProfile } from '../../src/services/configProfiles/importProfile';
 
 vi.mock('../../src/components/common/AriaLiveRegion', () => ({
@@ -125,8 +129,8 @@ describe('ConfigProfilesView — defaults-seeded authoring (D-01..D-07)', () => 
     expect(savedConfig).toBeDefined();
 
     const validation = ConfigProfileEnvelopeSchema.safeParse({
-      app: 'taskmate-config-profile',
-      profileSchemaVersion: 1,
+      app: CONFIG_PROFILE_APP_MARKER,
+      profileSchemaVersion: CONFIG_PROFILE_SCHEMA_VERSION,
       exportedAt: '2026-11-19T00:00:00.000Z',
       profile: {
         id: 'validation-check',
@@ -180,8 +184,8 @@ describe('ConfigProfilesView — defaults-seeded authoring (D-01..D-07)', () => 
     expect(rows[0]).toMatchObject({ id: 'recipient-today', date: today, workMinutes: 480 });
 
     const invalidEnvelope = {
-      app: 'taskmate-config-profile',
-      profileSchemaVersion: 1,
+      app: CONFIG_PROFILE_APP_MARKER,
+      profileSchemaVersion: CONFIG_PROFILE_SCHEMA_VERSION,
       exportedAt: '2026-11-19T00:00:00.000Z',
       profile: {
         id: 'bad-date',

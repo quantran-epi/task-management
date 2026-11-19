@@ -25,7 +25,11 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import type { AppRoute } from '../types/navigation';
 import { generateId } from '../utils/uuid';
 import { buildDefaultProfileConfig } from '../services/configProfiles/defaults';
-import { ConfigProfileEnvelopeSchema } from '../validation/configProfileSchemas';
+import {
+  CONFIG_PROFILE_APP_MARKER,
+  CONFIG_PROFILE_SCHEMA_VERSION,
+  ConfigProfileEnvelopeSchema,
+} from '../validation/configProfileSchemas';
 import { getMachineSpecificFields, getSecretFields } from '../services/configProfiles/catalog';
 import { getProfiles, saveProfiles } from '../services/configProfiles/importProfile';
 import type { ConfigurationProfile, ProfileConfig } from '../services/configProfiles/types';
@@ -207,8 +211,8 @@ function normaliseDraft(config: ProfileConfig): ProfileConfig {
 
 function envelopeForDraft(name: string, config: ProfileConfig, id: string, now: string) {
   return {
-    app: 'taskmate-config-profile' as const,
-    profileSchemaVersion: 1 as const,
+    app: CONFIG_PROFILE_APP_MARKER,
+    profileSchemaVersion: CONFIG_PROFILE_SCHEMA_VERSION,
     exportedAt: now,
     profile: { id, name, createdAt: now, updatedAt: now, config },
   };
