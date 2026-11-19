@@ -484,6 +484,40 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
     return () => clearTimeout(timer);
   }, [searchMode, searchInput, runContentSearch]);
 
+  // Name mode filters the ALREADY-LOADED, repo-relative tree (no new walker / whole-file read,
+  // D-03). Flatten it and match a relative path segment case-insensitively; cap rendered rows
+  // so a large tree cannot flood the DOM (T-47-05).
+  const NAME_RESULT_LIMIT = 200;
+  const nameResults = (() => {
+    if (searchMode !== 'name' || !searchInput.trim()) return [];
+    const needle = searchInput.trim().toLowerCase();
+    const found: Array<{ path: string; node: CustomTreeNodeData }> = [];
+    const visit = (nodes: CustomTreeNodeData[]) => {
+      for (const node of nodes) {
+        const path = String(node.key);
+        const segments = path.split('/');
+        if (segments.some((seg) => seg.toLowerCase().includes(needle))) {
+          found.push({ path, node });
+          if (found.length >= NAME_RESULT_LIMIT) return;
+        }
+        if (node.children) visit(node.children as CustomTreeNodeData[]);
+        if (found.length >= NAME_RESULT_LIMIT) return;
+      }
+    };
+    visit(treeData);
+    return found;
+  })();
+
+  // Switching modes must not leak the other mode's visible state. Clear the input so the
+  // inactive mode's results (grep hits or name matches) are no longer rendered.
+  const handleSearchModeChange = (val: 'content' | 'name') => {
+    setSearchMode(val);
+    setSearchInput('');
+    setGrepHits([]);
+    setGrepTruncated(false);
+    hasSearchedRef.current = false;
+  };
+
   return (
     <div
       data-testid="remote-git-explorer"
@@ -581,7 +615,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
           <Segmented
             size="small"
             value={searchMode}
-            onChange={(val) => setSearchMode(val as 'content' | 'name')}
+            onChange={(val) => handleSearchModeChange(val as 'content' | 'name')}
             options={[
               { label: 'Content', value: 'content' },
               { label: 'Name', value: 'name' },
@@ -630,7 +664,55 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
           position: 'relative',
         }}
       >
-        {searchMode === 'content' && hasSearchedRef.current && searchInput.trim() ? (
+        {searchMode === 'name' && searchInput.trim() ? (
+          <div data-testid="name-search-results" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {nameResults.length === 0 ? (
+              <div style={{ padding: 12, fontSize: 12, color: 'var(--fg-muted, #6c707e)' }}>
+                No name matches in this tree.
+              </div>
+            ) : (
+              nameResults.map(({ path, node }) => {
+                const title = node.rawNode?.title || String(node.title) || path;
+                return (
+                  <div
+                    key={path}
+                    role="button"
+                    tabIndex={0}
+                    data-testid="name-search-hit"
+                    data-file-path={path}
+                    onClick={() => openRemoteFile(path, String(title), {
+                      size: node.size,
+                      gitStatus: node.gitStatus,
+                    })}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        openRemoteFile(path, String(title), {
+                          size: node.size,
+                          gitStatus: node.gitStatus,
+                        });
+                      }
+                    }}
+                    style={{
+                      cursor: 'pointer',
+                      padding: '4px 6px',
+                      borderRadius: 4,
+                      fontSize: 12,
+                      fontFamily: "'JetBrains Mono', Consolas, Monaco, monospace",
+                    }}
+                  >
+                    {node.isLeaf ? <FileTextOutlined /> : <FolderOutlined />}{' '}
+                    <span>{path}</span>
+                  </div>
+                );
+              })
+            )}
+            {nameResults.length >= NAME_RESULT_LIMIT && (
+              <div style={{ padding: '4px 6px', fontSize: 11, color: '#d97706' }}>
+                Results limited to {NAME_RESULT_LIMIT} entries.
+              </div>
+            )}
+          </div>
+        ) : searchMode === 'content' && hasSearchedRef.current && searchInput.trim() ? (
           <div data-testid="content-search-results" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {grepHits.length === 0 && !searching ? (
               <div style={{ padding: 12, fontSize: 12, color: 'var(--fg-muted, #6c707e)' }}>
