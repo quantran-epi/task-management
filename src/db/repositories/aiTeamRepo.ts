@@ -287,6 +287,16 @@ export async function updateTeam(
         delete updated.oracleToolsEnabled;
       }
     }
+    // Phase 45 D-16: same add/remove idiom; an empty-string pin is normalized to absent so
+    // no pin means no field on the row (and therefore no segment and no chat badge).
+    if ('pinnedContext' in patch) {
+      const pin = validated.pinnedContext?.trim();
+      if (pin) {
+        updated.pinnedContext = pin;
+      } else {
+        delete updated.pinnedContext;
+      }
+    }
     // Phase 37 D-03: same add/remove idiom, so clearing stays expressible. The range is
     // already enforced by zod; the clamp is the runtime belt for values that bypass the form.
     if ('concurrencyLimit' in patch) {

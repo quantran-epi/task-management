@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Avatar, Button, Drawer, InputNumber, Popconfirm, Select, Switch, Table, Tag, theme } from 'antd';
+import { Alert, Avatar, Button, Drawer, Input, InputNumber, Popconfirm, Select, Switch, Table, Tag, theme } from 'antd';
 import type { AiEmployee, AiLead, AiTeam, AiTeamMember } from '../../../types/aiOffice';
 import {
   DEFAULT_BUDGET_WARN_THRESHOLD_PCT,
@@ -35,6 +35,8 @@ export interface TeamSettingsDrawerProps {
     oracleToolsEnabled: boolean;
     /** D-04: absent = leave the stored override alone, `null` = inherit, number = store. */
     budgetWarnThresholdPct?: number | null | undefined;
+    /** Phase 45 D-16: team-scoped pinned context note; empty string clears the pin. */
+    pinnedContext: string;
   }) => void;
   /** D-04: the global default, shown as the inherited value. Never written from here. */
   globalThresholdPct?: number | undefined;
@@ -102,6 +104,8 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
     team.budgetWarnThresholdPct
   );
   const [thresholdTouched, setThresholdTouched] = useState(false);
+  // Phase 45 D-16: local draft for the team-scoped pinned context note.
+  const [pinnedContext, setPinnedContext] = useState<string>(team.pinnedContext ?? '');
   const [rosterError, setRosterError] = useState<string | null>(null);
 
   const memberAgentIds = useMemo(
@@ -183,6 +187,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
     setConcurrency(team.concurrencyLimit ?? DEFAULT_TEAM_CONCURRENCY);
     setThresholdPct(team.budgetWarnThresholdPct);
     setThresholdTouched(false);
+    setPinnedContext(team.pinnedContext ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seeded once per open
   }, [open, team.id]);
 
@@ -237,6 +242,8 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
       // D-04: untouched leaves the stored value alone; a clear sends `null`; a typed value
       // sends the number. `undefined` is the only "do nothing" spelling.
       budgetWarnThresholdPct: thresholdTouched ? thresholdPct : undefined,
+      // Phase 45 D-16: persist the whole trimmed note; empty string clears the pin.
+      pinnedContext: pinnedContext.trim(),
     });
   };
 
@@ -252,7 +259,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <Button onClick={onCancel}>Hủy</Button>
           <Button type="primary" onClick={handleSave} data-testid="team-settings-save">
-            Lưu cài đặt
+            Lưu cài đặt nhóm
           </Button>
         </div>
       }
@@ -469,6 +476,23 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
             {thresholdPct === null || thresholdPct === undefined
               ? `Đang kế thừa mặc định toàn cục (${globalThresholdPct ?? DEFAULT_BUDGET_WARN_THRESHOLD_PCT}%).`
               : `Đang dùng ngưỡng riêng của nhóm (${thresholdPct}%).`}
+          </div>
+        </div>
+
+        <div data-testid="team-pinned-context-block">
+          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Pinned Team Context</div>
+          <Input.TextArea
+            value={pinnedContext}
+            onChange={(event) => setPinnedContext(event.target.value)}
+            placeholder="Ghi chú định hướng cho nhóm này, ví dụ: dùng môi trường DB SIT cho oracle_query."
+            autoSize={{ minRows: 3, maxRows: 8 }}
+            aria-label="Pinned Team Context"
+            data-testid="team-pinned-context-input"
+          />
+          <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>
+            Nội dung này chỉ áp dụng cho nhóm và được đưa vào mọi lượt của leader lẫn nhân viên. Việc
+            nêu tên môi trường DB ở đây chỉ định hướng agent chọn kết nối Oracle — không thay đổi
+            kết nối đang dùng chung của toàn ứng dụng.
           </div>
         </div>
 

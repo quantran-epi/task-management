@@ -775,6 +775,8 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     oracleToolsEnabled: boolean;
     /** D-04: absent = leave the stored override alone, `null` = inherit, number = store. */
     budgetWarnThresholdPct?: number | null | undefined;
+    /** Phase 45 D-16: team-scoped pinned context note. */
+    pinnedContext: string;
   }) => {
     // D-19: ONE absolute two-table write. Composing `updateTeam(total)` with a per-member
     // additive loop is what turned 3000 → 4000 into 5000.
@@ -800,6 +802,8 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         autoSplitEnabled: input.autoSplitEnabled,
         autoApproveMutations: input.autoApproveMutations,
         concurrencyLimit: input.concurrencyLimit,
+        // Phase 45 D-16: persist the pin on the same team row; empty string clears it.
+        pinnedContext: input.pinnedContext,
       },
       db
     );

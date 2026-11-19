@@ -249,6 +249,21 @@ describe('aiTeamRepo (AIO-BUDGET-01, D-05, D-06, D-09, D-17, D-19, D-26, D-32)',
     expect(Object.prototype.hasOwnProperty.call(reread, 'oracleToolsEnabled')).toBe(false);
   });
 
+  it('persists, trims and clears the per-team pinned context (Phase 45 D-16)', async () => {
+    const team = await makeTeam('Pinned');
+    expect((await getTeam(team.id, db))?.pinnedContext).toBeUndefined();
+
+    const updated = await updateTeam(team.id, { pinnedContext: '  Dùng DB SIT  ' }, db);
+    expect(updated.pinnedContext).toBe('Dùng DB SIT');
+    expect((await getTeam(team.id, db))?.pinnedContext).toBe('Dùng DB SIT');
+
+    // An empty pin clears the field entirely — no segment, no chat badge.
+    const cleared = await updateTeam(team.id, { pinnedContext: '' }, db);
+    expect(cleared.pinnedContext).toBeUndefined();
+    const reread = await getTeam(team.id, db);
+    expect(Object.prototype.hasOwnProperty.call(reread, 'pinnedContext')).toBe(false);
+  });
+
   it('updateTeam on an unlocked team still accepts a leadId patch and keeps sources in step', async () => {    const otherLeadId = (await createLead(leadInput('Bình'), db)).id;
     const team = await makeTeam('Unlocked');
 
