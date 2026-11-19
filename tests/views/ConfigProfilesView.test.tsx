@@ -35,6 +35,10 @@ describe('ConfigProfilesView — defaults-seeded authoring (D-01..D-07)', () => 
     }
   });
 
+  const openPanel = (label: string) => {
+    fireEvent.click(screen.getByText(label).closest('.ant-collapse-header')!);
+  };
+
   it('seeds the form from DEFAULT_* constants and NEVER reads db.settings during authoring', async () => {
     const settingsSpy = vi.spyOn(db.settings, 'get');
 
@@ -150,6 +154,19 @@ describe('ConfigProfilesView — defaults-seeded authoring (D-01..D-07)', () => 
     expect(within(screen.getByTestId('profile-ai-team-section')).getByText('Kế thừa global')).toBeInTheDocument();
   });
 
+  it('keeps all grouped fields and DOM hooks reachable after collapsing', () => {
+    render(<ConfigProfilesView db={db} />);
+
+    expect(screen.getByLabelText('9Router endpoint')).toBeInTheDocument();
+    expect(screen.getByLabelText('Team budget warn threshold')).toBeInTheDocument();
+    expect(screen.getByTestId('profile-capacity-section')).toBeInTheDocument();
+    expect(screen.getByTestId('profile-ghost-dev-section')).toBeInTheDocument();
+    expect(screen.getByTestId('profile-ai-team-section')).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-machine-specific-row="github_owner"] [data-machine-specific]')
+    ).not.toBeNull();
+  });
+
   it('renders NO Telegram field/section and no team record controls', () => {
     render(<ConfigProfilesView db={db} />);
 
@@ -173,6 +190,7 @@ describe('ConfigProfilesView — defaults-seeded authoring (D-01..D-07)', () => 
   it('clamps blank/invalid draft values before saving so the profile passes schema and import (WR-04)', async () => {
     render(<ConfigProfilesView db={db} />);
 
+    openPanel('Công suất làm việc (capacity)');
     fireEvent.click(screen.getByRole('button', { name: /Thêm ngoại lệ/ }));
     fireEvent.change(screen.getByLabelText('Ghost Dev concurrency cap'), { target: { value: '0' } });
     fireEvent.change(screen.getByLabelText('Phút làm việc Thứ Hai'), { target: { value: '2000' } });
@@ -221,6 +239,7 @@ describe('ConfigProfilesView — defaults-seeded authoring (D-01..D-07)', () => 
     const today = new Date().toISOString().slice(0, 10);
     await db.capacityOverrides.add({ id: 'recipient-today', date: today, workMinutes: 480 });
 
+    openPanel('Công suất làm việc (capacity)');
     fireEvent.click(screen.getByRole('button', { name: /Thêm ngoại lệ/ }));
     // New exceptions are seeded with today, but the user may mistype the date.
     expect(screen.getByLabelText('Ngày ngoại lệ 1')).toHaveValue(today);

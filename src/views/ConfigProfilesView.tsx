@@ -1,8 +1,9 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Button,
   Card,
+  Collapse,
   Input,
   Modal,
   Select,
@@ -160,6 +161,16 @@ function newDraftFromDefaults(): ProfileConfig {
 
 function fieldValue(value: unknown): string {
   return value === null || value === undefined ? '' : String(value);
+}
+
+/** Slug for stable Collapse keys; Vietnamese diacritics fold to plain ASCII. */
+function slugify(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
 }
 
 const clampInt = (text: string, min: number, max: number, blankValue: number): number => {
@@ -550,22 +561,33 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
         </Space>
       </Card>
 
-      <Space direction="vertical" style={{ width: '100%' }} size="middle">
-        <Typography.Text strong>Thông báo & hệ thống</Typography.Text>
-        <Card size="small">
-          {renderSetting('notification_settings')}
-          {renderSetting('system_type_options')}
-        </Card>
-
-        {SETTING_GROUPS.map((group) => (
-          <Fragment key={group.title}>
-            <Typography.Text strong>{group.title}</Typography.Text>
-            <Card size="small">{group.keys.map(renderSetting)}</Card>
-          </Fragment>
-        ))}
-
-        <Typography.Text strong>Công suất làm việc (capacity)</Typography.Text>
-        <Card size="small" data-testid="profile-capacity-section">
+      <Collapse
+        ghost
+        defaultActiveKey={[]}
+        items={[
+          {
+            key: 'thong-bao-he-thong',
+            label: 'Thông báo & hệ thống',
+            forceRender: true,
+            children: (
+              <Card size="small">
+                {renderSetting('notification_settings')}
+                {renderSetting('system_type_options')}
+              </Card>
+            ),
+          },
+          ...SETTING_GROUPS.map((group) => ({
+            key: slugify(group.title),
+            label: group.title,
+            forceRender: true,
+            children: <Card size="small">{group.keys.map(renderSetting)}</Card>,
+          })),
+          {
+            key: 'capacity',
+            label: 'Công suất làm việc (capacity)',
+            forceRender: true,
+            children: (
+              <Card size="small" data-testid="profile-capacity-section">
           {draft.capacityRules.map((rule) => (
             <Space key={rule.dayOfWeek} style={{ marginBottom: 8 }} wrap>
               <Text style={{ width: 100 }}>{DAY_LABELS[rule.dayOfWeek] ?? `Ngày ${rule.dayOfWeek}`}</Text>
@@ -658,10 +680,15 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
           >
             Thêm ngoại lệ
           </Button>
-        </Card>
-
-        <Typography.Text strong>Ghost Dev config</Typography.Text>
-        <Card size="small" data-testid="profile-ghost-dev-section">
+              </Card>
+            ),
+          },
+          {
+            key: 'ghost-dev',
+            label: 'Ghost Dev config',
+            forceRender: true,
+            children: (
+              <Card size="small" data-testid="profile-ghost-dev-section">
           <div style={{ marginBottom: 12 }}>
             <Text strong>Model chính (master)</Text>
             <div>
@@ -750,10 +777,15 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
               />
             </div>
           </div>
-        </Card>
-
-        <Typography.Text strong>Mẫu defaults cho đội AI (AI-team template)</Typography.Text>
-        <Card size="small" data-testid="profile-ai-team-section">
+              </Card>
+            ),
+          },
+          {
+            key: 'ai-team',
+            label: 'Mẫu defaults cho đội AI (AI-team template)',
+            forceRender: true,
+            children: (
+              <Card size="small" data-testid="profile-ai-team-section">
           <div style={{ marginBottom: 12 }}>
             <Text strong>Token budget mỗi team</Text>
             <div>
@@ -842,8 +874,11 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
               />
             </div>
           ))}
-        </Card>
-      </Space>
+              </Card>
+            ),
+          },
+        ]}
+      />
     </div>
   );
 };
