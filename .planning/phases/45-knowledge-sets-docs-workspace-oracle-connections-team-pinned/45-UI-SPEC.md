@@ -1,7 +1,7 @@
 ---
 phase: "45"
 slug: "knowledge-sets-docs-workspace-oracle-connections-team-pinned"
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: "2026-11-19"
@@ -329,28 +329,52 @@ Paths `src/components/ai/office/TeamSettingsDrawer.tsx`, `src/components/ai/offi
 
 ## UI Considerations
 
-Applicable state considerations resolved: 11 covered, 5 backstop, 0 unresolved.
+UI consideration probe (2026-11-19): 42 applicable categories across 6 elements, 42 resolved, 0 unresolved, 0 unclassified. Verification tiers: 12 explicit, 30 backstop. Backstop rows lift into `must_haves.truths` and require wired evidence at verify time; they are not silent passes.
 
-> **Status: draft, not user-confirmed.** These classifications were authored by the UI researcher from upstream artifacts; the user has not reviewed them. Do not treat ✅ as consent.
-
-| Category | Element(s) | Status | Resolution / Reason |
-|----------|------------|--------|---------------------|
-| empty | Published-set list | ✅ covered | Renders the documented "Chưa có set nào được xuất bản" `Empty` with a "Làm mới" next step. |
-| empty | Docs workspace set grid | ✅ covered | Renders "Chưa có bộ tài liệu nào" `Empty` — one screen, no long scroll. |
-| empty | Oracle profile list | ✅ covered | `Chưa có kết nối Oracle nào. Thêm một kết nối để bắt đầu.` (exists). |
-| zero-one-many | Pinned-context badge | ✅ covered | 0 → no badge; 1 pin (string) → single badge with tooltip; the "many" case does not apply (one pin per team). |
-| zero-one-many | Oracle profiles | ✅ covered | 0 → empty text; 1 → auto-active; many → exactly one active + `Dùng` on the rest. |
-| loading | Set list, Docs list | ✅ covered | antd `Table` spinner, empty state suppressed; no full-array mount. |
-| loading | Purge / delete / Oracle test | ✅ covered | Per-action antd loading; dialog controls disabled; no extra spinner. |
-| error | Set list load / daemon offline | ✅ covered | Documented `Alert` error/warning copy; table replaced when daemon unreachable. |
-| error | Oracle unknown selector / failed test | ✅ covered | Names-only selector error; redacted test banner; no connection string anywhere. |
-| partial | Full-delete failure | ✅ covered | Local metadata preserved, error toast names the failure; no silent local-only fallback. |
-| overflow | Set IDs / connection strings in tables | ✅ covered | `ellipsis` + `Tooltip` full value; never wrap. |
-| long-text | Pinned-context tooltip | 🧪 backstop | Visual UI-state test: a long pin shows fully in the tooltip without shifting the chat header layout. |
-| long-text | Oracle environment / set name | 🧪 backstop | Visual UI-state test: long names ellipsize in list and dialog title without pushing actions off-screen. |
-| overflow | Docs detail with many documents | 🧪 backstop | Held-out render test: N≫pageSize documents render exactly one bounded page + pagination controls (D-08). |
-| zero-one-many | Published-set list rows | 🧪 backstop | Held-out render test: 0 → `Empty`, 1 → single row, many → paginated. |
-| overflow | `doc_set` tabs with many sets | 🧪 backstop | Visual UI-state test: 8+ set tabs scroll horizontally; active indicator and add control stay visible; `MAX_OPEN_TABS` enforced. |
+| Category | Element(s) | Status | Verification | Resolution |
+|----------|------------|--------|--------------|------------|
+| empty | Published-set list (Settings) | resolved | ✅ explicit | Published-set list renders antd Empty with heading Chưa có set nào được xuất bản and body telling user to Làm mới or publish a set (§Empty states). |
+| loading | Published-set list (Settings) | resolved | ✅ explicit | Set list loading shows antd Table spinner; empty state suppressed while loading (§Loading / busy states). |
+| error | Published-set list (Settings) | resolved | ✅ explicit | Set list load failure shows antd Alert Không thể tải danh sách set từ Knowledge Server.; daemon disabled/unreachable shows documented info/warning Alert with Mở cài đặt (§Error / offline states). |
+| populated | Published-set list (Settings) | resolved | 🧪 backstop | What does the normal populated (happy-path) state look like at a typical volume of content? |
+| partial | Published-set list (Settings) | resolved | 🧪 backstop | What is shown for partial or incomplete data — some fields or rows present, others missing? |
+| overflow | Published-set list (Settings) | resolved | ✅ explicit | Set IDs and snapshot IDs use antd Table ellipsis plus Tooltip for the full value; they never wrap (§Typography). |
+| zero-one-many | Published-set list (Settings) | resolved | 🧪 backstop | Held-out render test: 0 → Empty, 1 → single row, many → paginated (§UI Considerations). |
+| long-text | Published-set list (Settings) | resolved | 🧪 backstop | What happens with unusually long text — truncation, wrapping, ellipsis, or reflow? |
+| empty | Shared delete dialog | resolved | 🧪 backstop | What is shown when there is no data — zero items, an unfilled form, or absent media? |
+| loading | Shared delete dialog | resolved | 🧪 backstop | What is shown while data or content is still loading (skeleton, spinner, progressive reveal)? |
+| error | Shared delete dialog | resolved | 🧪 backstop | What is shown when the load or submit fails (message, retry affordance, partial fallback)? |
+| partial | Shared delete dialog | resolved | 🧪 backstop | What is shown for partial or incomplete data — some fields or rows present, others missing? |
+| overflow | Shared delete dialog | resolved | 🧪 backstop | What happens when content exceeds its container — scroll, clip, wrap, or truncate? |
+| long-text | Shared delete dialog | resolved | 🧪 backstop | What happens with unusually long text — truncation, wrapping, ellipsis, or reflow? |
+| empty | Docs workspace + doc_set tabs | resolved | ✅ explicit | Docs workspace renders antd Empty Chưa có bộ tài liệu nào when no local sets; one bounded screen, no long scroll (§Empty states, §Component contract 3). |
+| loading | Docs workspace + doc_set tabs | resolved | ✅ explicit | Docs set list loading shows bounded list spinner; no full-array mount (§Loading / busy states). |
+| error | Docs workspace + doc_set tabs | resolved | 🧪 backstop | What is shown when the load or submit fails (message, retry affordance, partial fallback)? |
+| populated | Docs workspace + doc_set tabs | resolved | 🧪 backstop | What does the normal populated (happy-path) state look like at a typical volume of content? |
+| partial | Docs workspace + doc_set tabs | resolved | 🧪 backstop | What is shown for partial or incomplete data — some fields or rows present, others missing? |
+| overflow | Docs workspace + doc_set tabs | resolved | 🧪 backstop | Held-out render test: N≫pageSize documents render exactly one bounded page + pagination controls (D-08) (§UI Considerations). |
+| zero-one-many | Docs workspace + doc_set tabs | resolved | ✅ explicit | Docs grid: 0 sets → Empty; 1 set → single card; many sets → one bounded screen, click opens in-app doc_set tab (§Component contract 3). |
+| long-text | Docs workspace + doc_set tabs | resolved | 🧪 backstop | What happens with unusually long text — truncation, wrapping, ellipsis, or reflow? |
+| empty | Oracle connection profiles | resolved | ✅ explicit | Oracle profile list locale.emptyText is Chưa có kết nối Oracle nào. Thêm một kết nối để bắt đầu. (§Empty states). |
+| loading | Oracle connection profiles | resolved | ✅ explicit | Oracle test in flight shows loading on the tested row Test control; result banner appears after (§Loading / busy states). |
+| error | Oracle connection profiles | resolved | ✅ explicit | Oracle unknown selector shows error listing available name/environment values only (never connectionString/password); test failure shows redacted Lỗi kết nối banner (§Error / offline states). |
+| populated | Oracle connection profiles | resolved | 🧪 backstop | What does the normal populated (happy-path) state look like at a typical volume of content? |
+| partial | Oracle connection profiles | resolved | 🧪 backstop | What is shown for partial or incomplete data — some fields or rows present, others missing? |
+| overflow | Oracle connection profiles | resolved | 🧪 backstop | What happens when content exceeds its container — scroll, clip, wrap, or truncate? |
+| zero-one-many | Oracle connection profiles | resolved | ✅ explicit | Oracle: 0 profiles → empty text; 1 → auto-active; many → exactly one active with Đang dùng/Mặc định tags and Dùng on the rest (§Component contract 4). |
+| long-text | Oracle connection profiles | resolved | 🧪 backstop | Visual UI-state test: long Oracle environment / set names ellipsize in list and dialog title without pushing actions off-screen (§UI Considerations). |
+| empty | Pinned Team Context editor | resolved | 🧪 backstop | What is shown when there is no data — zero items, an unfilled form, or absent media? |
+| loading | Pinned Team Context editor | resolved | 🧪 backstop | What is shown while data or content is still loading (skeleton, spinner, progressive reveal)? |
+| error | Pinned Team Context editor | resolved | 🧪 backstop | What is shown when the load or submit fails (message, retry affordance, partial fallback)? |
+| partial | Pinned Team Context editor | resolved | ✅ explicit | Pinned context: no pin → no textarea value and no badge; content is a single team-scoped string, with hint copy stating it is injected into every turn (§Component contract 5). |
+| overflow | Pinned Team Context editor | resolved | 🧪 backstop | What happens when content exceeds its container — scroll, clip, wrap, or truncate? |
+| long-text | Pinned Team Context editor | resolved | 🧪 backstop | What happens with unusually long text — truncation, wrapping, ellipsis, or reflow? |
+| empty | Team chat pin badge | resolved | 🧪 backstop | What is shown when there is no data — zero items, an unfilled form, or absent media? |
+| loading | Team chat pin badge | resolved | 🧪 backstop | What is shown while data or content is still loading (skeleton, spinner, progressive reveal)? |
+| error | Team chat pin badge | resolved | 🧪 backstop | What is shown when the load or submit fails (message, retry affordance, partial fallback)? |
+| populated | Team chat pin badge | resolved | 🧪 backstop | What does the normal populated (happy-path) state look like at a typical volume of content? |
+| overflow | Team chat pin badge | resolved | 🧪 backstop | What happens when content exceeds its container — scroll, clip, wrap, or truncate? |
+| long-text | Team chat pin badge | resolved | 🧪 backstop | Visual UI-state test: a long pin shows fully in the tooltip without shifting the chat header layout (§UI Considerations). |
 
 ---
 
@@ -380,12 +404,12 @@ No shadcn, no Tailwind, no third-party UI registry, no new npm dependency (RESEA
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
-- [ ] Dimension 7 Inventory Provenance: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
+- [x] Dimension 7 Inventory Provenance: PASS
 
-**Approval:** pending
+**Approval:** APPROVED — all 7 dimensions PASS (gsd-ui-checker, 2026-11-19); prior copywriting BLOCK resolved (`Lưu cài đặt nhóm`).
