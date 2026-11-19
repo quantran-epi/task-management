@@ -241,7 +241,6 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
   const [draftError, setDraftError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const secretFields = useMemo(() => getSecretFields(), []);
   const machineSpecificFields = useMemo(() => getMachineSpecificFields(), []);
 
   useEffect(() => {
@@ -760,30 +759,6 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
                   }))
                 }
               />
-            </div>
-          ))}
-        </Card>
-
-        <Typography.Text strong>Secrets (sẽ để trống khi xuất)</Typography.Text>
-        <Card size="small" data-testid="profile-secrets-section">
-          <Alert
-            type="info"
-            showIcon
-            message="Mọi trường secret đều để trống và sẽ được ghi là '' trong tệp export. Người nhận cần nhập lại sau khi import."
-            style={{ marginBottom: 12 }}
-          />
-          {secretFields.map((key) => (
-            <div key={key} style={{ marginBottom: 12 }}>
-              <Text strong>{displayLabel(key)}</Text>
-              <div>
-                <Input
-                  aria-label={displayLabel(key)}
-                  data-secret-field={key}
-                  placeholder="Sẽ để trống khi export"
-                  value=""
-                  readOnly
-                />
-              </div>
             </div>
           ))}
         </Card>

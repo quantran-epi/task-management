@@ -3,7 +3,6 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { ConfigProfilesView } from '../../src/views/ConfigProfilesView';
 import { TaskPlannerDatabase } from '../../src/db';
 import { CONFIGURATION_PROFILES_SETTING_KEY } from '../../src/services/configProfiles/importProfile';
-import { getSecretFields } from '../../src/services/configProfiles/catalog';
 import { DEFAULT_NINEROUTER_ENDPOINT } from '../../src/services/ai/nineRouterTokenService';
 import {
   CONFIG_PROFILE_APP_MARKER,
@@ -51,17 +50,11 @@ describe('ConfigProfilesView — defaults-seeded authoring (D-01..D-07)', () => 
     });
   });
 
-  it('renders secret fields blank with an export-blank placeholder', () => {
+  it('does not render blank secret inputs in authoring view (secrets handled by Import UI + checklist)', () => {
     render(<ConfigProfilesView db={db} />);
 
-    const secretsCard = screen.getByTestId('profile-secrets-section');
-    const secretFields = getSecretFields();
-    for (const key of secretFields) {
-      const field = secretsCard.querySelector(`[data-secret-field="${key}"]`);
-      expect(field, `secret field ${key} must be rendered`).not.toBeNull();
-      expect(field).toHaveValue('');
-      expect(field).toHaveAttribute('placeholder', 'Sẽ để trống khi export');
-    }
+    expect(screen.queryByTestId('profile-secrets-section')).toBeNull();
+    expect(document.querySelectorAll('[data-secret-field]').length).toBe(0);
   });
 
   it('flags machine-specific fields including ghostDevConfig.claudePath with a warning marker', () => {
