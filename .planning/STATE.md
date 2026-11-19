@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v1.4
 milestone_name: Unified AI Office (Phase Details)
-current_phase: 44
-current_phase_name: Agent Activity Panel, Configurable Explore Timeout and Prompt Log
+current_phase: 45
+current_phase_name: Knowledge Sets, Docs Workspace, Oracle Connections & Team Pinned Context
 status: executing
 stopped_at: Phase 44 UI-SPEC approved
-last_updated: "2026-11-17T14:10:43.775Z"
-last_activity: 2026-11-17
-last_activity_desc: Phase 44 execution resumed (wave continue)
-state_head: 76d5b87de273a40e7e0706f6abf1aa78a389958e
+last_updated: "2026-11-19T03:40:47.823Z"
+last_activity: 2026-11-19
+last_activity_desc: Phase 45 execution started
+state_head: c583a114832ed3060873ea038dec8b5bb5529819
 progress:
-  total_phases: 8
+  total_phases: 9
   completed_phases: 5
-  total_plans: 55
+  total_plans: 60
   completed_plans: 55
-  percent: 63
+  percent: 56
 ---
 
 # Project State: TaskMate — Milestone v1.4
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-09)
 
 **Core value:** Hợp nhất SDLC Studio và AI Office thành Unified AI Office dạng chat-first, free-style với token budget cứng và làm giàu skill.
-**Current focus:** Phase 44 — Agent Activity Panel, Configurable Explore Timeout and Prompt Log
+**Current focus:** Phase 45 — Knowledge Sets, Docs Workspace, Oracle Connections & Team Pinned Context
 
 ## Current Position
 
-Phase: 44 (Agent Activity Panel, Configurable Explore Timeout and Prompt Log) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 44
-Last activity: 2026-11-17 - Completed quick task 261117-ss8: Thêm instrumentation/báo cáo lỗi đầy đủ cho mọi run agent/leader
+Phase: 45 (Knowledge Sets, Docs Workspace, Oracle Connections & Team Pinned Context) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 45
+Last activity: 2026-11-19 — Phase 45 execution started
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -63,7 +63,7 @@ Last session: 2026-11-17T04:49:29.227Z
 Stopped at: Phase 44 UI-SPEC approved
 Resume file: .planning/phases/44-agent-activity-panel-configurable-explore-timeout-and-prompt/44-UI-SPEC.md
 
-Progress: [██████░░░░] 63%
+Progress: [██████░░░░] 56%
 
 ## Milestone v1.4 Map
 
@@ -109,6 +109,8 @@ Progress: [██████░░░░] 63%
 - Phase 41 added (2026-11-15): AI Office team docs zones — per-team docs folder tree, agent-scoped document write. Owner decision: every member writes docs; visible immediately; leader writes the approved final at team root.
 - Phase 42 added (2026-11-15): Read-only git inspection for the reviewer agent. Owner decision: reviewer reads git read-only over SSH. Scope narrowed 2026-11-15 — the recursive linked-item read half was cut (sticky notes already arrive full-body via `get_item_details`; `read_file` already covers linked files; note attachments are image-only so the text branch was dead code). See `42-CONTEXT.md` §Deferred Ideas.
 - Phase 44 added (2026-11-17): Agent Activity Panel, Configurable Explore Timeout and Prompt Log. Owner decision: all three pieces ship in one phase, reviewed to zero critical/warning; push once to `feature/intellij-workbench` after verification. UI reference: `.planning/agent-activity-panel-draft.html`.
+- Phase 45 added (2026-11-19): Knowledge Sets, Docs Workspace, Oracle Connections & Team Pinned Context. Owner decisions: one UI+infra phase; server set management in Settings > Knowledge Daemon; dedicated Docs page with app tabs; Oracle named multi-connection by environment with active default; team pinned context injected every turn with badge + tooltip. Debug root cause for orphan sets recorded in `.planning/debug/knowledge-server-orphan-sets.md`.
+- Phase 46 added (2026-11-19): Configuration Profiles. Owner decisions: named profiles authored independently of the current app settings; all setting types covered; export one profile to JSON; normal Settings screen imports that profile; secrets are blank in export with post-import re-entry prompts; machine-specific paths/hosts are preserved but flagged for review; clean AI-team defaults template carries no ids/members/usage/folders. Work isolated in a dedicated worktree/branch so Phase 45 is unaffected.
 
 - Phase 34 marked complete with zero tests covering the AI Office runtime and five live defects (hung batch run, unguarded double-submit, phantom active turn, `targetAgentId` stripped on restore, bare deletes breaking export). "Phase 34 complete" is not evidence of quality.
 - Research verdict: keep and harden the existing coordinator/budget gate; zero new npm dependencies.

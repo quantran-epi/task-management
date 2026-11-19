@@ -388,6 +388,16 @@ Plans:
 
 - [ ] 45-05-PLAN.md — Combined focused test + typecheck gate, code+UI reviews, observed Tauri walkthrough, validation sign-off
 
+### Phase 46: Configuration Profiles
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 45
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 46 to break down)
+
 ## Milestone: v1.2 Knowledge System Implementation
 
 ### Phase 18: Multi-Modal Hybrid Retrieval Engine
