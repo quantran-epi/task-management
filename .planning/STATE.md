@@ -5,16 +5,16 @@ milestone_name: Unified AI Office (Phase Details)
 current_phase: 46
 current_phase_name: Configuration Profiles
 status: executing
-stopped_at: Completed 46-01-PLAN.md
-last_updated: "2026-11-19T05:51:14.375Z"
+stopped_at: Completed 46-02-PLAN.md
+last_updated: "2026-11-19T06:06:36.810Z"
 last_activity: 2026-11-19
 last_activity_desc: Phase 46 execution started
-state_head: 44f3c8f8f56b544c4daf6d14e133916b12544933
+state_head: b65cda1d325c777b9748e11f4dd0c713cfe81ed8
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 64
-  completed_plans: 56
+  completed_plans: 57
   percent: 50
 ---
 
@@ -28,9 +28,9 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 46 (Configuration Profiles) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
-Last activity: 2026-11-19 — Phase 46 plan 01 completed, plan 02 ready
+Last activity: 2026-11-19 — Phase 46 plan 02 completed, plan 03 ready
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -59,8 +59,8 @@ Verification: 392 focused tests pass (9 files), `tsc --noEmit` clean. Full suite
 
 ## Session Continuity
 
-Last session: 2026-11-19T05:51:13.425Z
-Stopped at: Completed 46-01-PLAN.md
+Last session: 2026-11-19T06:06:35.705Z
+Stopped at: Completed 46-02-PLAN.md
 Resume file: None
 
 Progress: [█████░░░░░] 50%
@@ -265,6 +265,7 @@ Progress: [█████░░░░░] 50%
 - [Phase 46]: Profile envelope uses strictObject and explicit blank-secret literals; backup forbidden-key regex is deliberately not reused
 - [Phase 46]: Telegram excluded from profiles (owner-machine-only): no schema section, no import read/write; strictObject rejects telegramSettings
 - [Phase 46]: Import merges settings key-by-key in one rw transaction with a snapshot; blank secrets never overwrite recipient values; capacity rows upsert by natural key with fresh ids
+- [Phase 46]: [Phase 46]: Authoring screen is seeded only from buildDefaultProfileConfig; the single db.settings.get in the view reads the profile list key, never the author's config — D-01 proof: no current-settings read may enter the portable profile
 
 ## Performance Metrics
 
@@ -309,3 +310,4 @@ Progress: [█████░░░░░] 50%
 | Phase 43 P03 | ~15 min | 2 tasks | 3 files |
 | Phase 43 P04 | 25 min | 3 tasks | 7 files |
 | Phase 46 P01 | 6min | 3 tasks | 11 files |
+| Phase 46 P02 | 11min | 2 tasks | 10 files |
