@@ -29,13 +29,12 @@ describe('DocsExplorer folder ZIP download', () => {
     await db.delete();
   });
 
-  it('exposes one bounded set workspace and no legacy drawer browse trigger', async () => {
+  it('opens the dedicated set library tab from the compact toolbar', async () => {
     render(<DocsExplorer db={db} />);
 
-    // The legacy "Bộ tài liệu" drawer trigger is retired; set browsing lives only
-    // in the bounded workspace, and no notes tab is opened from this surface.
     expect(screen.getByTestId('docs-set-workspace')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Bộ tài liệu' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Bộ tài liệu' }));
+    expect(useLayoutStore.getState().openTabs.some((tab) => tab.viewType === 'doc_set_library')).toBe(true);
     await waitFor(() =>
       expect(useLayoutStore.getState().openTabs.some((tab) => tab.viewType === 'notes')).toBe(false)
     );

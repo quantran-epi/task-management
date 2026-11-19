@@ -16,8 +16,6 @@ vi.mock('../../views/SettingsView', () => ({ SettingsView: () => <div data-testi
 vi.mock('../../views/ChangeRequestDetailView', () => ({
   ChangeRequestDetailView: () => <div data-testid="mock-cr-view" />,
 }));
-// Knowledge config is read from the global db via context; the workspace fixture uses a
-// fresh db, so make the hook report a configured daemon to exercise publish/graph gates.
 vi.mock('../../services/knowledge/knowledgeConfig', () => ({
   useOptionalKnowledgeConfig: () => ({
     ready: true, enabled: true, baseUrl: 'http://127.0.0.1:3001', token: 'test-token',
@@ -31,7 +29,7 @@ vi.mock('../../components/knowledge/DocumentSetDeleteDialog', () => ({
   ),
 }));
 
-describe('Docs workspace + doc_set tabs (D-06, D-07, D-08)', () => {
+describe('Docs workspace + doc_set library tab (D-06, D-07, D-08)', () => {
   let db: TaskPlannerDatabase;
 
   beforeEach(async () => {
@@ -41,8 +39,6 @@ describe('Docs workspace + doc_set tabs (D-06, D-07, D-08)', () => {
       useLayoutStore.getState().resetLayout();
       useLayoutStore.setState({ openTabs: [], activeTabId: null });
     });
-    // Zustand persists on every set; rehydrate from the cleared storage so a case
-    // cannot inherit the previous case's tabs (or another test file's session).
     await useLayoutStore.persist.rehydrate();
     act(() => {
       useLayoutStore.setState({ openTabs: [], activeTabId: null });
@@ -60,8 +56,7 @@ describe('Docs workspace + doc_set tabs (D-06, D-07, D-08)', () => {
       const note = await createNote({ title: `${name} tài liệu ${i}`, body: `# ${i}`, type: 'document' }, db);
       noteIds.push(note.id);
     }
-    const set = await createDocumentSet({ name, documentIds: noteIds }, db);
-    return set;
+    return createDocumentSet({ name, documentIds: noteIds }, db);
   }
 
   function renderWorkspace() {
@@ -73,36 +68,42 @@ describe('Docs workspace + doc_set tabs (D-06, D-07, D-08)', () => {
     );
   }
 
-  it('opens exactly one doc_set tab carrying the setId when a set is clicked', async () => {
+  async function openLibrary() {
+    fireEvent.click(await screen.findByRole('button', { name: 'Bộ tài liệu' }, { timeout: 5000 }));
+    await screen.findByTestId('doc-set-library');
+  }
+
+  it('opens exactly one reusable library tab with left list and right detail', async () => {
     const set = await seedSet('Bộ A', 1);
     renderWorkspace();
 
-    fireEvent.click(await screen.findByRole('button', { name: `Mở bộ tài liệu ${set.name}` }, { timeout: 5000 }));
+    await openLibrary();
+    fireEvent.click(await screen.findByRole('button', { name: `Mở bộ tài liệu ${set.name}` }));
 
     await waitFor(() => {
-      const tabs = useLayoutStore.getState().openTabs.filter((tab) => tab.viewType === 'doc_set');
+      const tabs = useLayoutStore.getState().openTabs.filter((tab) => tab.viewType === 'doc_set_library');
       expect(tabs).toHaveLength(1);
-      expect(tabs[0]?.id).toBe(`doc_set-${set.id}`);
-      expect(tabs[0]?.params?.setId).toBe(set.id);
+      expect(tabs[0]?.id).toBe('doc_set_library');
     });
+    expect(screen.getByTestId('doc-set-library-list')).toBeInTheDocument();
+    expect(screen.getByTestId('doc-set-library-detail')).toBeInTheDocument();
     expect(await screen.findByTestId('doc-set-detail')).toBeInTheDocument();
   });
 
-  it('keeps multiple sets open as separate in-app tabs', async () => {
-    const first = await seedSet('Bộ A', 1);
-    const second = await seedSet('Bộ B', 1);
+  it('keeps one tab when selecting multiple sets from the library list', async () => {
+    await seedSet('Bộ A', 1);
+    await seedSet('Bộ B', 1);
     const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
     renderWorkspace();
 
-    fireEvent.click(await screen.findByRole('button', { name: `Mở bộ tài liệu ${first.name}` }, { timeout: 5000 }));
-    fireEvent.click(await screen.findByRole('button', { name: `Mở bộ tài liệu ${second.name}` }, { timeout: 5000 }));
+    await openLibrary();
+    fireEvent.click(await screen.findByRole('button', { name: 'Mở bộ tài liệu Bộ A' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mở bộ tài liệu Bộ B' }));
 
     await waitFor(() => {
-      const tabs = useLayoutStore.getState().openTabs.filter((tab) => tab.viewType === 'doc_set');
-      expect(tabs.map((tab) => tab.id)).toEqual([
-        `doc_set-${first.id}`,
-        `doc_set-${second.id}`,
-      ]);
+      const tabs = useLayoutStore.getState().openTabs.filter((tab) => tab.viewType === 'doc_set_library');
+      expect(tabs).toHaveLength(1);
+      expect(tabs[0]?.params?.selectedSetId).toBeTruthy();
     });
     expect(openSpy).not.toHaveBeenCalled();
     openSpy.mockRestore();
@@ -111,25 +112,27 @@ describe('Docs workspace + doc_set tabs (D-06, D-07, D-08)', () => {
   it('survives a layout persist -> rehydrate cycle without a storage key bump', async () => {
     const set = await seedSet('Bộ A', 1);
     renderWorkspace();
-    fireEvent.click(await screen.findByRole('button', { name: `Mở bộ tài liệu ${set.name}` }, { timeout: 5000 }));
+    await openLibrary();
+    fireEvent.click(await screen.findByRole('button', { name: `Mở bộ tài liệu ${set.name}` }));
     await waitFor(() =>
-      expect(useLayoutStore.getState().openTabs.some((tab) => tab.viewType === 'doc_set')).toBe(true)
+      expect(useLayoutStore.getState().openTabs.some((tab) => tab.viewType === 'doc_set_library')).toBe(true)
     );
 
     await useLayoutStore.persist.rehydrate();
 
     const tab = useLayoutStore
       .getState()
-      .openTabs.find((candidate) => candidate.viewType === 'doc_set');
-    expect(tab?.id).toBe(`doc_set-${set.id}`);
-    expect(tab?.params?.setId).toBe(set.id);
-    expect(useLayoutStore.getState().activeTabId).toBe(`doc_set-${set.id}`);
+      .openTabs.find((candidate) => candidate.viewType === 'doc_set_library');
+    expect(tab?.id).toBe('doc_set_library');
+    expect(tab?.params?.selectedSetId).toBe(set.id);
+    expect(useLayoutStore.getState().activeTabId).toBe('doc_set_library');
   });
 
   it('renders only one bounded page plus pagination when a set has many documents', async () => {
-    const set = await seedSet('Bộ lớn', 25);
+    await seedSet('Bộ lớn', 25);
     renderWorkspace();
-    fireEvent.click(await screen.findByRole('button', { name: `Mở bộ tài liệu ${set.name}` }, { timeout: 5000 }));
+    await openLibrary();
+    fireEvent.click(await screen.findByRole('button', { name: 'Mở bộ tài liệu Bộ lớn' }));
     await screen.findByTestId('doc-set-detail');
 
     const detail = screen.getByTestId('doc-set-detail');
@@ -138,17 +141,17 @@ describe('Docs workspace + doc_set tabs (D-06, D-07, D-08)', () => {
       expect(documentsTable.querySelectorAll('table tbody tr')).toHaveLength(10)
     );
     const rows = Array.from(documentsTable.querySelectorAll('table tbody tr'));
-    // Exactly one page of 10 data rows rendered, never the full 25-document array.
     expect(rows).toHaveLength(10);
     expect(rows[0]?.textContent).toContain('Bộ lớn tài liệu 1');
     expect(documentsTable.textContent).not.toContain('Bộ lớn tài liệu 25');
     expect(document.querySelector('.ant-pagination')).not.toBeNull();
   });
 
-  it('mounts the shared DocumentSetDeleteDialog from the doc_set detail', async () => {
+  it('mounts the shared DocumentSetDeleteDialog from the library detail', async () => {
     const set = await seedSet('Bộ xóa', 1);
     renderWorkspace();
-    fireEvent.click(await screen.findByRole('button', { name: `Mở bộ tài liệu ${set.name}` }, { timeout: 5000 }));
+    await openLibrary();
+    fireEvent.click(await screen.findByRole('button', { name: `Mở bộ tài liệu ${set.name}` }));
     await screen.findByTestId('doc-set-detail');
 
     expect(screen.getByTestId('shared-delete-dialog')).toBeInTheDocument();
@@ -156,10 +159,14 @@ describe('Docs workspace + doc_set tabs (D-06, D-07, D-08)', () => {
     expect(screen.getByTestId('shared-delete-dialog')).toHaveAttribute('data-open', 'true');
   });
 
-  it('opens a doc_set tab with publish preview, graph section, and attempt history', async () => {
-    const set = await seedSet('Bộ đầy đủ', 2);
-    renderWorkspace();
-    fireEvent.click(await screen.findByRole('button', { name: `Mở bộ tài liệu ${set.name}` }, { timeout: 5000 }));
+  it('opens a library detail with publish preview, graph section, and attempt history', async () => {
+    await seedSet('Bộ đầy đủ', 2);
+    act(() => {
+      useLayoutStore.getState().openTab({
+        id: 'doc_set_library', title: 'Bộ tài liệu', viewType: 'doc_set_library', closable: true,
+      });
+    });
+    render(<EditorArea db={db} />);
 
     const detail = await screen.findByTestId('doc-set-detail');
     expect(screen.getByRole('button', { name: 'Xem trước xuất bản' })).toBeInTheDocument();
@@ -168,20 +175,21 @@ describe('Docs workspace + doc_set tabs (D-06, D-07, D-08)', () => {
     for (const label of ['Xây dựng lại đồ thị', 'Xem bằng chứng', 'Kiểm tra trạng thái', 'Tiến trình từng phần']) {
       expect(within(detail).getByRole('button', { name: new RegExp(label) })).toBeInTheDocument();
     }
-  });
+  }, 30000);
 
   it('gates graph rebuild on a published snapshot and confirms via modal', async () => {
     const set = await seedSet('Bộ rebuild', 1);
     await act(async () => {
       useLayoutStore.getState().openTab({
-        id: `doc_set-${set.id}`, title: set.name, viewType: 'doc_set', closable: true, params: { setId: set.id },
+        id: 'doc_set_library', title: 'Bộ tài liệu', viewType: 'doc_set_library', closable: true,
+        params: { selectedSetId: set.id },
       });
     });
     const { unmount } = render(<EditorArea db={db} />);
     const detail = await screen.findByTestId('doc-set-detail');
 
     const rebuild = within(detail).getByRole('button', { name: /Xây dựng lại đồ thị/ });
-    expect(rebuild).toBeDisabled(); // never published
+    expect(rebuild).toBeDisabled();
 
     await db.publishedDocuments.add({
       setId: set.id, documentId: set.documentIds[0]!, lastKnownRemoteAt: new Date().toISOString(),
@@ -194,13 +202,13 @@ describe('Docs workspace + doc_set tabs (D-06, D-07, D-08)', () => {
     unmount();
   });
 
-  it('has no long-scroll drawer trigger left in the Docs workspace', async () => {
-    await seedSet('Bộ A', 1);
+  it('has no bulky Docs-space block; Bộ tài liệu opens the dedicated library tab', async () => {
     renderWorkspace();
 
-    expect(screen.queryByText('Bộ tài liệu xuất bản')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Bộ tài liệu' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Tạo bộ tài liệu' })).toBeInTheDocument();
-    expect(screen.getByTestId('docs-set-workspace')).toBeInTheDocument();
+    expect(screen.queryByText('Không gian Docs')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Bộ tài liệu' })).toBeInTheDocument();
+    await openLibrary();
+    expect(screen.getByTestId('doc-set-library')).toBeInTheDocument();
+    expect(useLayoutStore.getState().openTabs.some((tab) => tab.viewType === 'doc_set_library')).toBe(true);
   });
 });

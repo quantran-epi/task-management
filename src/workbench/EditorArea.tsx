@@ -58,6 +58,7 @@ import { StaffDetailView } from '../views/StaffDetailView';
 import { TeamWorkspaceView } from '../views/TeamWorkspaceView';
 import { RemoteFileViewer } from './editor/RemoteFileViewer';
 import { DocumentSetDetail } from './DocumentSetDetail';
+import { DocSetLibrary } from './DocSetLibrary';
 import type { TaskPlannerDatabase } from '../db';
 
 export interface EditorAreaProps {
@@ -70,6 +71,7 @@ export function getEditorTabIcon(viewType: EditorViewType, size = 13): React.Rea
       return <JetBrainsTasksIcon size={size} />;
     case 'notes':
     case 'doc_set':
+    case 'doc_set_library':
       return <JetBrainsDocsIcon size={size} />;
     case 'planner':
       return <JetBrainsPlannerIcon size={size} />;
@@ -576,6 +578,8 @@ export function EditorArea({ db }: EditorAreaProps) {
         return <NotesView {...dbProp} initialDocId={tab.params?.doc} hideFolderTree={true} />;
       case 'doc_set':
         return <DocumentSetDetail setId={String(tab.params?.setId ?? '')} {...dbProp} />;
+      case 'doc_set_library':
+        return <DocSetLibrary selectedSetId={tab.params?.selectedSetId} {...dbProp} />;
       case 'planner':
         return <PlannerView {...dbProp} targetDate={tab.params?.date} />;
       case 'analytics':

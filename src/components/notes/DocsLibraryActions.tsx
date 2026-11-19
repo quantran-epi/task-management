@@ -121,7 +121,9 @@ interface DocsLibraryActionsProps {
   notes: Note[];
   currentFolderId?: string | undefined;
   onSelectFolder: (folderId: string) => void;
-  /** Set-level browsing is owned by the Docs workspace; every open path goes through this callback. */
+  /** Opens the single document-set library tab. */
+  onOpenLibrary?: () => void;
+  /** Opens the library tab with one set selected (used after creating a set). */
   onOpenSet?: (setId: string, title: string) => void;
 }
 
@@ -130,6 +132,7 @@ export function DocsLibraryActions({
   notes,
   currentFolderId,
   onSelectFolder,
+  onOpenLibrary,
   onOpenSet,
 }: DocsLibraryActionsProps) {
   const [aiPromptModalOpen, setAiPromptModalOpen] = useState(false);
@@ -186,6 +189,13 @@ export function DocsLibraryActions({
         <Button
           size="small"
           icon={<DatabaseOutlined />}
+          aria-label="Bộ tài liệu"
+          onClick={() => onOpenLibrary?.()}
+        >
+          Bộ tài liệu
+        </Button>
+        <Button
+          size="small"
           aria-label="Tạo bộ tài liệu"
           onClick={() => setCreateModalOpen(true)}
         >
@@ -221,7 +231,9 @@ export function DocsLibraryActions({
           onSave={async (value) => {
             const created = await handleSaveDocumentSet(value);
             setCreateModalOpen(false);
-            if (created) onOpenSet?.(created.id, created.name);
+            if (!created) return;
+            if (onOpenSet) onOpenSet(created.id, created.name);
+            else onOpenLibrary?.();
           }}
         />
       </Modal>

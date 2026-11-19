@@ -22,7 +22,9 @@ export type EditorViewType =
   | 'team_workspace'
   // D-07: a document set opens as its own app tab; unknown/persisted doc_set tabs
   // survive merge/partialize without a LAYOUT_STORAGE_KEY bump.
-  | 'doc_set';
+  | 'doc_set'
+  // Dedicated Docs library tab: left set list + right detail, one tab for all sets.
+  | 'doc_set_library';
 
 export interface EditorTab {
   id: string;
