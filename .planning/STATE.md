@@ -5,16 +5,16 @@ milestone_name: Unified AI Office (Phase Details)
 current_phase: 46
 current_phase_name: Configuration Profiles
 status: executing
-stopped_at: Completed 46-02-PLAN.md
-last_updated: "2026-11-19T06:06:36.810Z"
+stopped_at: Completed 46-03-PLAN.md
+last_updated: "2026-11-19T07:04:17.765Z"
 last_activity: 2026-11-19
-last_activity_desc: Phase 46 execution started
-state_head: b65cda1d325c777b9748e11f4dd0c713cfe81ed8
+last_activity_desc: Phase 46 plan 03 completed
+state_head: d0d705de2076d164b736dbfb88cc3b3b92103e84
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 64
-  completed_plans: 57
+  completed_plans: 58
   percent: 50
 ---
 
@@ -28,9 +28,9 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 46 (Configuration Profiles) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
-Last activity: 2026-11-19 — Phase 46 plan 02 completed, plan 03 ready
+Last activity: 2026-11-19 — Phase 46 plan 03 completed, plan 04 ready
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -59,8 +59,8 @@ Verification: 392 focused tests pass (9 files), `tsc --noEmit` clean. Full suite
 
 ## Session Continuity
 
-Last session: 2026-11-19T06:06:35.705Z
-Stopped at: Completed 46-02-PLAN.md
+Last session: 2026-11-19T07:04:16.365Z
+Stopped at: Completed 46-03-PLAN.md
 Resume file: None
 
 Progress: [█████░░░░░] 50%
@@ -266,6 +266,9 @@ Progress: [█████░░░░░] 50%
 - [Phase 46]: Telegram excluded from profiles (owner-machine-only): no schema section, no import read/write; strictObject rejects telegramSettings
 - [Phase 46]: Import merges settings key-by-key in one rw transaction with a snapshot; blank secrets never overwrite recipient values; capacity rows upsert by natural key with fresh ids
 - [Phase 46]: [Phase 46]: Authoring screen is seeded only from buildDefaultProfileConfig; the single db.settings.get in the view reads the profile list key, never the author's config — D-01 proof: no current-settings read may enter the portable profile
+- [Phase 46]: Profile import flags the full catalog of secrets and machine-specific fields, never filters to fields present in a file
+- [Phase 46]: SettingsView test uses one uniquely named Dexie instance per file (beforeAll/afterAll, cleared per test) to eliminate late useLiveQuery DatabaseClosedError
+- [Phase 46]: Import card defers all db use to preview/apply so rendering the Settings data tab cannot interfere with GitHub sync live queries
 
 ## Performance Metrics
 
@@ -311,3 +314,4 @@ Progress: [█████░░░░░] 50%
 | Phase 43 P04 | 25 min | 3 tasks | 7 files |
 | Phase 46 P01 | 6min | 3 tasks | 11 files |
 | Phase 46 P02 | 11min | 2 tasks | 10 files |
+| Phase 46 P03 | 53min | 2 tasks | 8 files |
