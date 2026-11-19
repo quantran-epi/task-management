@@ -57,6 +57,74 @@ describe('ConfigProfilesView — defaults-seeded authoring (D-01..D-07)', () => 
     expect(document.querySelectorAll('[data-secret-field]').length).toBe(0);
   });
 
+  it('renders notification_settings and system_type_options as readable JSON, never [object Object]', () => {
+    render(<ConfigProfilesView db={db} />);
+
+    expect((screen.getByLabelText('Cài đặt thông báo') as HTMLTextAreaElement).value).toContain(
+      '"browserNotificationsEnabled"'
+    );
+    expect((screen.getByLabelText('Tùy chọn loại hệ thống') as HTMLTextAreaElement).value).toContain(
+      '"LOGICAL_GROUP"'
+    );
+    expect(screen.queryByText('[object Object]')).toBeNull();
+  });
+
+  it('saves a valid edited notification_settings object, not a string', async () => {
+    render(<ConfigProfilesView db={db} />);
+
+    fireEvent.change(screen.getByLabelText('Cài đặt thông báo'), {
+      target: { value: JSON.stringify({ browserNotificationsEnabled: true, dueSoonDays: 5 }, null, 2) },
+    });
+    fireEvent.change(screen.getByLabelText('Tên profile'), { target: { value: 'Profile JSON object' } });
+    fireEvent.click(screen.getByRole('button', { name: /Lưu profile/i }));
+
+    let savedConfig: { settings: Record<string, unknown> } | undefined;
+    await waitFor(async () => {
+      const stored = await db.settings.get(CONFIGURATION_PROFILES_SETTING_KEY);
+      savedConfig = (stored?.value as Array<{ config: typeof savedConfig }> | undefined)?.[0]?.config;
+      expect(savedConfig).toBeDefined();
+    });
+    expect(typeof savedConfig!.settings.notification_settings).toBe('object');
+    expect(savedConfig!.settings.notification_settings).not.toBeInstanceOf(String);
+    expect((savedConfig!.settings.notification_settings as { dueSoonDays: number }).dueSoonDays).toBe(5);
+  });
+
+  it('saves a valid edited system_type_options array, not a string', async () => {
+    render(<ConfigProfilesView db={db} />);
+
+    fireEvent.change(screen.getByLabelText('Tùy chọn loại hệ thống'), {
+      target: { value: JSON.stringify([{ value: 'API', label: 'API', color: '#1890ff' }]) },
+    });
+    fireEvent.change(screen.getByLabelText('Tên profile'), { target: { value: 'Profile JSON array' } });
+    fireEvent.click(screen.getByRole('button', { name: /Lưu profile/i }));
+
+    let savedConfig: { settings: Record<string, unknown> } | undefined;
+    await waitFor(async () => {
+      const stored = await db.settings.get(CONFIGURATION_PROFILES_SETTING_KEY);
+      savedConfig = (stored?.value as Array<{ config: typeof savedConfig }> | undefined)?.[0]?.config;
+      expect(savedConfig).toBeDefined();
+    });
+    expect(Array.isArray(savedConfig!.settings.system_type_options)).toBe(true);
+    expect((savedConfig!.settings.system_type_options as Array<{ value: string }>)[0]?.value).toBe('API');
+  });
+
+  it('blocks save and stores no string for invalid JSON or wrong structured shape', async () => {
+    render(<ConfigProfilesView db={db} />);
+
+    fireEvent.change(screen.getByLabelText('Cài đặt thông báo'), { target: { value: '{' } });
+    fireEvent.change(screen.getByLabelText('Tùy chọn loại hệ thống'), {
+      target: { value: JSON.stringify({ not: 'an array' }) },
+    });
+    fireEvent.change(screen.getByLabelText('Tên profile'), { target: { value: 'Profile JSON sai' } });
+    fireEvent.click(screen.getByRole('button', { name: /Lưu profile/i }));
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('Profile chưa hợp lệ');
+    });
+    expect(screen.getAllByRole('alert').length).toBeGreaterThan(0);
+    expect(await db.settings.get(CONFIGURATION_PROFILES_SETTING_KEY)).toBeUndefined();
+  });
+
   it('flags machine-specific fields including ghostDevConfig.claudePath with a warning marker', () => {
     render(<ConfigProfilesView db={db} />);
 
