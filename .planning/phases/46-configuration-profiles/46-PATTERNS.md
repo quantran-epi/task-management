@@ -107,7 +107,7 @@ if (confirmText !== 'RESTORE' || !validationResult.valid || !validationResult.en
 ```
 
 ### Defaults (seed source, no db) — `src/types/notifications.ts:23-37`, `src/services/ai/budgetWarnSettings.ts:3-7`
-`DEFAULT_NOTIFICATION_SETTINGS`, `DEFAULT_BUDGET_WARN_THRESHOLD_PCT=80`, `DEFAULT_NINEROUTER_*` (nineRouterTokenService.ts:12-19), `DEFAULT_GHOST_DEV_CONFIG`, `DEFAULT_MCP_SERVERS`, `DEFAULT_SYSTEM_TYPE_OPTIONS`, `DEFAULT_TELEGRAM_SETTINGS`.
+`DEFAULT_NOTIFICATION_SETTINGS`, `DEFAULT_BUDGET_WARN_THRESHOLD_PCT=80`, `DEFAULT_NINEROUTER_*` (nineRouterTokenService.ts:12-19), `DEFAULT_GHOST_DEV_CONFIG`, `DEFAULT_MCP_SERVERS`, `DEFAULT_SYSTEM_TYPE_OPTIONS`. Telegram defaults are deliberately excluded — Telegram is owner-machine-only and never enters a profile.
 
 ## Shared Patterns
 

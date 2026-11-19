@@ -397,16 +397,13 @@ Plans:
 
 Plans:
 **Wave 1**
-
 - [ ] 46-01-PLAN.md — Tracer: schema/defaults/catalog + export/import lõi, round-trip secret-blank end-to-end, denylist profile khỏi backup (D-01..D-07)
 
-**Wave 2** *(blocked on Wave 1; two independent slices)*
-
-- [ ] 46-02-PLAN.md — Màn hình soạn từ defaults + named profile CRUD + export một-click + đăng ký route workbench/hash (D-01, D-02, D-03, D-04, D-05, D-06, D-07)
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 46-02-PLAN.md — Màn hình soạn từ defaults + named profile CRUD + export một-click + đăng ký route workbench/hash (D-01..D-07)
 - [ ] 46-03-PLAN.md — Import card + preview confirm-gated + post-import checklist trong Settings data tab, không thêm tab thứ 7 (D-03, D-04, D-05, D-06)
 
-**Wave 3** *(blocked on Waves 1-2)*
-
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 46-04-PLAN.md — Cổng focused test + typecheck, ký duyệt Nyquist, walkthrough Tauri quan sát được (C-15)
 
 ## Milestone: v1.2 Knowledge System Implementation
