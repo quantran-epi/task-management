@@ -9,7 +9,17 @@ import {
   executeOracleDescribe,
   testOracleConnection,
   saveOracleToolConfig,
+  getOracleConnectionProfiles,
+  saveOracleConnectionProfiles,
+  resolveOracleConnection,
+  listOracleConnectionSummaries,
+  getOracleToolConfig,
 } from '../oracleSqlclService';
+import {
+  ORACLE_TOOL_CONFIG_KEY,
+  ORACLE_TOOL_CONFIG_LIST_KEY,
+  type OracleConnectionProfile,
+} from '../../../types/oracleSqlcl';
 import * as sshService from '../../sshService';
 
 describe('oracleSqlclService - Guardrails & Safety', () => {
@@ -114,11 +124,47 @@ describe('oracleSqlclService - Execution & SSH mocking', () => {
     settings: {
       get: vi.fn(),
       put: vi.fn(),
+      delete: vi.fn(),
     },
+    transaction: vi.fn(async (_mode: string, _tables: unknown, fn: () => Promise<void>) => fn()),
+  };
+
+  /** Seed one active profile under the new list key, keyed by settings key. */
+  const seedActiveProfile = (connection: Partial<OracleConnectionProfile>) => {
+    fakeDb.settings.get.mockImplementation(async (key: string) =>
+      key === ORACLE_TOOL_CONFIG_LIST_KEY
+        ? {
+            key,
+            value: {
+              profiles: [
+                {
+                  id: 'default-profile',
+                  name: 'Default',
+                  environment: 'SIT',
+                  isActive: true,
+                  sshConfigId: 'ssh-1',
+                  connectionString: 'user/pass@host:1521/srv',
+                  ...connection,
+                },
+              ],
+            },
+          }
+        : undefined
+    );
   };
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    // The shared fakeDb persists across cases: clearAllMocks drops call history but NOT
+    // implementations installed by earlier cases (mockImplementation / Once queues).
+    // Reset the db mocks explicitly; sshService spies use Once values queued per case.
+    fakeDb.settings.get.mockReset();
+    fakeDb.settings.put.mockReset();
+    fakeDb.settings.delete.mockReset();
+    fakeDb.transaction.mockReset();
+    fakeDb.transaction.mockImplementation(
+      async (_mode: string, _tables: unknown, fn: () => Promise<void>) => fn()
+    );
+    vi.restoreAllMocks();
   });
 
   it('returns a helpful error when the connection is not configured', async () => {
@@ -133,13 +179,7 @@ describe('oracleSqlclService - Execution & SSH mocking', () => {
   });
 
   it('executes read-only query over mocked SSH', async () => {
-    fakeDb.settings.get.mockResolvedValueOnce({
-      value: {
-        sshConfigId: 'ssh-1',
-        connectionString: 'user/pass@host:1521/srv',
-        maxRows: 100,
-      },
-    });
+    seedActiveProfile({ maxRows: 100 });
 
     vi.spyOn(sshService, 'getSshConfigs').mockResolvedValueOnce([
       { id: 'ssh-1', name: 'Bastion' } as any,
@@ -161,12 +201,7 @@ describe('oracleSqlclService - Execution & SSH mocking', () => {
   });
 
   it('executes describe_table over mocked SSH', async () => {
-    fakeDb.settings.get.mockResolvedValueOnce({
-      value: {
-        sshConfigId: 'ssh-1',
-        connectionString: 'user/pass@host:1521/srv',
-      },
-    });
+    seedActiveProfile({});
 
     vi.spyOn(sshService, 'getSshConfigs').mockResolvedValueOnce([
       { id: 'ssh-1', name: 'Bastion' } as any,
@@ -233,12 +268,7 @@ describe('oracleSqlclService - Execution & SSH mocking', () => {
   // id alone. A dropped id makes cancellation impossible and was the root cause of the
   // "process survives tab switch / cannot stop one task" failure class.
   it('passes the model tool-call id down to the SSH transport', async () => {
-    fakeDb.settings.get.mockResolvedValueOnce({
-      value: {
-        sshConfigId: 'ssh-1',
-        connectionString: 'user/pass@host:1521/srv',
-      },
-    });
+    seedActiveProfile({});
     vi.spyOn(sshService, 'getSshConfigs').mockResolvedValueOnce([
       { id: 'ssh-1', name: 'Bastion' } as any,
     ]);
@@ -262,12 +292,161 @@ describe('oracleSqlclService - Execution & SSH mocking', () => {
   // Regression: no time-based rejection anywhere in the tool path. Advancing the clock by
   // an hour while the transport stays pending must NOT settle the call with a timeout —
   // only an explicit cancel (or app exit) may end a task.
+  it('migrates the legacy single config into active profile #1 then deletes the legacy row', async () => {
+    const legacyConfig = {
+      sshConfigId: 'ssh-legacy',
+      connectionString: 'legacy_user/legacy_pass@legacyhost:1521/LEGACY',
+      sqlclPath: '/opt/sqlcl/bin/sql',
+      envVars: 'export TNS_ADMIN=/opt/oracle/network/admin',
+      maxRows: 250,
+      lastTestedAt: '2026-01-02T03:04:05.000Z',
+      lastTestStatus: 'ok',
+    };
+    fakeDb.settings.get.mockImplementation(async (key: string) =>
+      key === ORACLE_TOOL_CONFIG_LIST_KEY
+        ? undefined
+        : key === ORACLE_TOOL_CONFIG_KEY
+          ? { key, value: legacyConfig }
+          : undefined
+    );
+    fakeDb.settings.delete.mockImplementation(async (_key: string) => { /* verified via assertion below */ });
+
+    const profiles = await getOracleConnectionProfiles(fakeDb);
+
+    expect(profiles).toHaveLength(1);
+    expect(profiles[0]).toMatchObject({
+      ...legacyConfig,
+      name: expect.any(String),
+      environment: expect.any(String),
+      isActive: true,
+    });
+    expect(profiles[0]?.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(fakeDb.settings.put).toHaveBeenCalledWith({
+      key: ORACLE_TOOL_CONFIG_LIST_KEY,
+      value: { profiles: [expect.objectContaining({ ...legacyConfig, isActive: true })] },
+    });
+    expect(fakeDb.settings.delete).toHaveBeenCalledWith(ORACLE_TOOL_CONFIG_KEY);
+  });
+
+  it('keeps the legacy config readable through the compatibility accessor after migration', async () => {
+    const profile: OracleConnectionProfile = {
+      id: '11111111-1111-4111-8111-111111111111',
+      name: 'Primary',
+      environment: 'SIT',
+      isActive: true,
+      sshConfigId: 'ssh-1',
+      connectionString: 'user/pass@sithost:1521/SIT',
+      maxRows: 100,
+    };
+    fakeDb.settings.get.mockImplementation(async (key: string) =>
+      key === ORACLE_TOOL_CONFIG_KEY ? undefined : { key, value: { profiles: [profile] } }
+    );
+
+    const cfg = await getOracleToolConfig(fakeDb);
+    expect(cfg).toMatchObject({
+      sshConfigId: 'ssh-1',
+      connectionString: 'user/pass@sithost:1521/SIT',
+    });
+  });
+
+  it('saves the profile list under the denylisted settings key', async () => {
+    const profile: OracleConnectionProfile = {
+      id: '22222222-2222-4222-8222-222222222222',
+      name: 'UAT',
+      environment: 'UAT',
+      isActive: true,
+      sshConfigId: 'ssh-1',
+      connectionString: 'user/pass@uathost:1521/UAT',
+    };
+    await saveOracleConnectionProfiles([profile], fakeDb);
+    expect(fakeDb.settings.put).toHaveBeenCalledWith({
+      key: ORACLE_TOOL_CONFIG_LIST_KEY,
+      value: { profiles: [profile] },
+    });
+  });
+
+  it('resolves selectors by exact id, case-insensitive name/env, then active fallback', () => {
+    const profiles: OracleConnectionProfile[] = [
+      {
+        id: 'aaa', name: 'Main SIT', environment: 'SIT', isActive: true,
+        sshConfigId: 'ssh-1', connectionString: 'u/p@sit:1521/SIT',
+      },
+      {
+        id: 'bbb', name: 'UAT Box', environment: 'UAT', isActive: false,
+        sshConfigId: 'ssh-2', connectionString: 'u/p@uat:1521/UAT',
+      },
+    ];
+    expect(resolveOracleConnection(profiles, { connectionId: 'bbb' }).id).toBe('bbb');
+    expect(resolveOracleConnection(profiles, { name: 'uat box' }).id).toBe('bbb');
+    expect(resolveOracleConnection(profiles, { environment: 'sit' }).id).toBe('aaa');
+    expect(resolveOracleConnection(profiles).id).toBe('aaa');
+    expect(listOracleConnectionSummaries(profiles)).toEqual([
+      { id: 'aaa', name: 'Main SIT', environment: 'SIT', isActive: true },
+      { id: 'bbb', name: 'UAT Box', environment: 'UAT', isActive: false },
+    ]);
+  });
+
+  it('unknown selector error lists only names/environments, never a connection string', () => {
+    const profiles: OracleConnectionProfile[] = [
+      {
+        id: 'aaa', name: 'Main SIT', environment: 'SIT', isActive: true,
+        sshConfigId: 'ssh-1', connectionString: 'secret_user/secret_pass@prodhost:1521/PROD',
+      },
+    ];
+    let message = '';
+    try {
+      resolveOracleConnection(profiles, { name: 'DOES_NOT_EXIST' });
+    } catch (err: any) {
+      message = err?.message || '';
+    }
+    expect(message).toContain('Main SIT');
+    expect(message).not.toContain('secret_pass');
+    expect(message).not.toContain('@prodhost');
+    expect(message).not.toContain('ssh-1');
+  });
+
+  it('routes a query to the selected profile under the unchanged read-only guard', async () => {
+    const profiles: OracleConnectionProfile[] = [
+      {
+        id: 'sit-id', name: 'SIT', environment: 'SIT', isActive: true,
+        sshConfigId: 'ssh-1', connectionString: 'sit_user/sit_pass@sithost:1521/SIT', maxRows: 100,
+      },
+      {
+        id: 'uat-id', name: 'UAT', environment: 'UAT', isActive: false,
+        sshConfigId: 'ssh-2', connectionString: 'uat_user/uat_pass@uathost:1521/UAT', maxRows: 100,
+      },
+    ];
+    fakeDb.settings.get.mockImplementation(async (key: string) =>
+      key === ORACLE_TOOL_CONFIG_LIST_KEY ? { key, value: { profiles } } : undefined
+    );
+    vi.spyOn(sshService, 'getSshConfigs').mockResolvedValue([
+      { id: 'ssh-1', name: 'SIT Bastion' } as any,
+      { id: 'ssh-2', name: 'UAT Bastion' } as any,
+    ]);
+    vi.spyOn(sshService, 'getSshSecret').mockResolvedValue('secret-pass');
+    const execSpy = vi.spyOn(sshService, 'execRemoteCommand').mockResolvedValue({
+      stdout: '[{"OK": 1}]', stderr: '', exitStatus: 0,
+    });
+
+    const res = JSON.parse(await executeOracleQuery(
+      { query: 'SELECT 1 FROM DUAL', name: 'UAT' }, fakeDb
+    ));
+    expect(res.success).toBe(true);
+    const remoteCommand = execSpy.mock.calls[0]?.[1] as string;
+    expect(remoteCommand).toContain('uat_user/uat_pass@uathost:1521/UAT');
+    expect(remoteCommand).not.toContain('sit_user');
+
+    const blocked = JSON.parse(await executeOracleQuery(
+      { query: 'DELETE FROM employees', name: 'UAT' }, fakeDb
+    ));
+    expect(blocked.success).toBe(false);
+    expect(blocked.error).toMatch(/Bị từ chối/);
+  });
+
   it('never rejects a pending query after an hour of fake time (no timeout)', async () => {
     vi.useFakeTimers();
     try {
-      fakeDb.settings.get.mockResolvedValueOnce({
-        value: { sshConfigId: 'ssh-1', connectionString: 'user/pass@host:1521/srv' },
-      });
+      seedActiveProfile({});
       vi.spyOn(sshService, 'getSshConfigs').mockResolvedValueOnce([
         { id: 'ssh-1', name: 'Bastion' } as any,
       ]);

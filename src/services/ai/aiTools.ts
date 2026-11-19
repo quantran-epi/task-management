@@ -2082,7 +2082,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'oracle_query',
       description:
-        'Execute a read-only SQL query on the configured remote Oracle database via SQLcl over SSH. Strict read-only enforcement (SET TRANSACTION READ ONLY). Results formatted in JSON.',
+        'Execute a read-only SQL query on a named remote Oracle connection via SQLcl over SSH. Strict read-only enforcement (SET TRANSACTION READ ONLY). Results formatted in JSON. Use oracle_list_connections to discover valid selectors; omit selector to use the active connection.',
       parameters: {
         type: 'object',
         properties: {
@@ -2098,6 +2098,18 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
             type: 'number',
             description: 'Optional max rows to return (default 100, max 1000).',
           },
+          connectionId: {
+            type: 'string',
+            description: 'Optional exact connection profile id (highest-priority selector).',
+          },
+          name: {
+            type: 'string',
+            description: 'Optional connection profile display name (case-insensitive).',
+          },
+          environment: {
+            type: 'string',
+            description: 'Optional connection environment label, e.g. SIT or UAT (case-insensitive).',
+          },
         },
         required: ['query'],
       },
@@ -2108,7 +2120,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'oracle_describe',
       description:
-        'Inspect Oracle database metadata: list tables/views, inspect columns, types, nullability, constraints, comments, or retrieve full table DDL.',
+        'Inspect Oracle database metadata on a named connection: list tables/views, inspect columns, types, nullability, constraints, comments, or retrieve full table DDL. Use oracle_list_connections to discover valid selectors; omit selector to use the active connection.',
       parameters: {
         type: 'object',
         properties: {
@@ -2128,6 +2140,18 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           search: {
             type: 'string',
             description: 'Optional search keyword to filter table names for list_tables.',
+          },
+          connectionId: {
+            type: 'string',
+            description: 'Optional exact connection profile id (highest-priority selector).',
+          },
+          name: {
+            type: 'string',
+            description: 'Optional connection profile display name (case-insensitive).',
+          },
+          environment: {
+            type: 'string',
+            description: 'Optional connection environment label, e.g. SIT or UAT (case-insensitive).',
           },
         },
         required: ['action'],

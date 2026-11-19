@@ -2,7 +2,12 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { getSshConfigs, getSshSecret, execRemoteCommand } from '../sshService';
 import {
   ORACLE_TOOL_CONFIG_KEY,
+  ORACLE_TOOL_CONFIG_LIST_KEY,
   type OracleToolConfig,
+  type OracleToolConfigList,
+  type OracleConnectionProfile,
+  type OracleConnectionSelector,
+  type OracleConnectionSummary,
   type OracleQueryArgs,
   type OracleDescribeArgs,
   type OracleToolExecutionResult,
@@ -17,15 +22,151 @@ export const DEFAULT_ORACLE_CONFIG: OracleToolConfig = {
 };
 
 /**
+ * Loads the named profile list, migrating the legacy single-config row on first read.
+ *
+ * Migration wraps the existing working connection unchanged into active profile #1,
+ * persists the list, then deletes `oracle_ai_tool_config` in the SAME transaction so no
+ * plaintext copy of the password-bearing connection string survives in settings.
+ * See T-45-06 / D-13.
+ */
+export async function getOracleConnectionProfiles(
+  db: TaskPlannerDatabase = defaultDb
+): Promise<OracleConnectionProfile[]> {
+  try {
+    const listRec = await db.settings.get(ORACLE_TOOL_CONFIG_LIST_KEY);
+    if (listRec?.value) {
+      const profiles = (listRec.value as OracleToolConfigList).profiles;
+      if (Array.isArray(profiles)) return profiles;
+    }
+
+    // No list yet: attempt one-shot migration from the legacy single-config row.
+    const legacyRec = await db.settings.get(ORACLE_TOOL_CONFIG_KEY);
+    if (!legacyRec?.value) return [];
+
+    const legacy = {
+      ...DEFAULT_ORACLE_CONFIG,
+      ...(legacyRec.value as Partial<OracleToolConfig>),
+    };
+    const migrated: OracleConnectionProfile = {
+      ...legacy,
+      id: crypto.randomUUID(),
+      name: 'Oracle (migrated)',
+      environment: 'UNKNOWN',
+      isActive: true,
+    };
+
+    await db.transaction('rw', db.settings, async () => {
+      await db.settings.put({
+        key: ORACLE_TOOL_CONFIG_LIST_KEY,
+        value: { profiles: [migrated] } satisfies OracleToolConfigList,
+      });
+      // Delete the legacy row only after the list is persisted successfully inside the
+      // same transaction — if either write fails, Dexie rolls both back and migration
+      // is retried on the next read. Never keep a rollback copy of the raw string.
+      await db.settings.delete(ORACLE_TOOL_CONFIG_KEY);
+    });
+
+    return [migrated];
+  } catch {
+    return [];
+  }
+}
+
+/** Persists the whole named profile list as one settings row. */
+export async function saveOracleConnectionProfiles(
+  profiles: OracleConnectionProfile[],
+  db: TaskPlannerDatabase = defaultDb
+): Promise<void> {
+  await db.settings.put({
+    key: ORACLE_TOOL_CONFIG_LIST_KEY,
+    value: { profiles } satisfies OracleToolConfigList,
+  });
+}
+
+/** Safe metadata only — never include connectionString, sqlclPath, envVars or test details. */
+export function listOracleConnectionSummaries(
+  profiles: OracleConnectionProfile[]
+): OracleConnectionSummary[] {
+  return profiles.map(({ id, name, environment, isActive }) => ({
+    id,
+    name,
+    environment,
+    isActive,
+  }));
+}
+
+/**
+ * Resolves a tool selector to exactly one profile: exact id, then case-insensitive
+ * name/environment, then the active profile. Throws a name-only error for an unknown
+ * selector so passwords and `@host` fragments can never reach the model or logs (T-45-07).
+ */
+export function resolveOracleConnection(
+  profiles: OracleConnectionProfile[],
+  selector: OracleConnectionSelector = {}
+): OracleConnectionProfile {
+  const byId = selector.connectionId
+    ? profiles.find((profile) => profile.id === selector.connectionId)
+    : undefined;
+  if (byId) return byId;
+
+  const needle = selector.name?.trim().toLowerCase();
+  const envNeedle = selector.environment?.trim().toLowerCase();
+  if (needle) {
+    const byName = profiles.find((profile) => profile.name.trim().toLowerCase() === needle);
+    if (byName) return byName;
+  }
+  if (envNeedle) {
+    const byEnv = profiles.find(
+      (profile) => profile.environment.trim().toLowerCase() === envNeedle
+    );
+    if (byEnv) return byEnv;
+  }
+
+  const hasSelector = Boolean(
+    selector.connectionId?.trim() || selector.name?.trim() || selector.environment?.trim()
+  );
+  if (!hasSelector) {
+    // D-10: no selector at all -> active default.
+    const active = profiles.find((profile) => profile.isActive);
+    if (active) return active;
+  }
+
+  // A selector was supplied but matched nothing (or no active profile exists): report
+  // safe names only. Never include a connection string, host or password (T-45-07).
+  const safeList = profiles.length
+    ? listOracleConnectionSummaries(profiles)
+        .map((p) => `${p.name} (${p.environment})${p.isActive ? ' [active]' : ''}`)
+        .join(', ')
+    : '(chưa có kết nối nào)';
+  throw new Error(
+    `Không tìm thấy kết nối Oracle phù hợp. Các kết nối hiện có: ${safeList}. ` +
+      `Chọn connectionId/name/environment trong danh sách trên.`
+  );
+}
+
+/**
  * Loads the active Oracle SQLcl AI Tool configuration from database settings.
+ *
+ * Legacy callers (chat toolbox indicator, Telegram gating) keep working after migration:
+ * the legacy row is deleted on migration, so when it is absent we resolve the active
+ * profile instead. This never recreates the plaintext legacy row.
  */
 export async function getOracleToolConfig(
   db: TaskPlannerDatabase = defaultDb
 ): Promise<OracleToolConfig> {
   try {
     const rec = await db.settings.get(ORACLE_TOOL_CONFIG_KEY);
-    if (!rec || !rec.value) return { ...DEFAULT_ORACLE_CONFIG };
-    return { ...DEFAULT_ORACLE_CONFIG, ...(rec.value as Partial<OracleToolConfig>) };
+    if (rec?.value) {
+      return { ...DEFAULT_ORACLE_CONFIG, ...(rec.value as Partial<OracleToolConfig>) };
+    }
+  } catch {
+    return { ...DEFAULT_ORACLE_CONFIG };
+  }
+  try {
+    const profiles = await getOracleConnectionProfiles(db);
+    if (!profiles.length) return { ...DEFAULT_ORACLE_CONFIG };
+    const active = resolveOracleConnection(profiles);
+    return { ...DEFAULT_ORACLE_CONFIG, ...active };
   } catch {
     return { ...DEFAULT_ORACLE_CONFIG };
   }
@@ -251,15 +392,31 @@ export async function executeOracleQuery(
   callId?: string
 ): Promise<string> {
   const startTime = Date.now();
-  const config = await getOracleToolConfig(db);
 
   // Quick cz2: enable/disable lives on the aiTeams row, not the shared connection config.
   // Execution here only checks that the connection is configured; payload gating is in chatTurnTools.
-  if (!config.sshConfigId || !config.connectionString) {
+  const profiles = await getOracleConnectionProfiles(db);
+  if (!profiles.length) {
     return JSON.stringify({
       success: false,
       error:
         'Oracle AI Tool chưa được cấu hình. Vui lòng chọn máy chủ SSH và chuỗi kết nối trong Cài đặt hoặc Hộp công cụ AI Chat.',
+    } satisfies Partial<OracleToolExecutionResult>);
+  }
+
+  let config: OracleToolConfig;
+  try {
+    config = resolveOracleConnection(profiles, args);
+  } catch (err: any) {
+    return JSON.stringify({
+      success: false,
+      error: err?.message || 'Không tìm thấy kết nối Oracle phù hợp.',
+    } satisfies Partial<OracleToolExecutionResult>);
+  }
+  if (!config.sshConfigId || !config.connectionString) {
+    return JSON.stringify({
+      success: false,
+      error: 'Kết nối Oracle đã chọn chưa được cấu hình đầy đủ (SSH hoặc connection string).',
     } satisfies Partial<OracleToolExecutionResult>);
   }
 
@@ -387,13 +544,29 @@ export async function executeOracleDescribe(
   callId?: string
 ): Promise<string> {
   const startTime = Date.now();
-  const config = await getOracleToolConfig(db);
 
   // Quick cz2: enable/disable lives on the aiTeams row, not the shared connection config.
-  if (!config.sshConfigId || !config.connectionString) {
+  const profiles = await getOracleConnectionProfiles(db);
+  if (!profiles.length) {
     return JSON.stringify({
       success: false,
       error: 'Oracle AI Tool chưa được cấu hình. Vui lòng chọn máy chủ SSH và chuỗi kết nối trong Cài đặt hoặc Hộp công cụ AI Chat.',
+    });
+  }
+
+  let config: OracleToolConfig;
+  try {
+    config = resolveOracleConnection(profiles, args);
+  } catch (err: any) {
+    return JSON.stringify({
+      success: false,
+      error: err?.message || 'Không tìm thấy kết nối Oracle phù hợp.',
+    });
+  }
+  if (!config.sshConfigId || !config.connectionString) {
+    return JSON.stringify({
+      success: false,
+      error: 'Kết nối Oracle đã chọn chưa được cấu hình đầy đủ (SSH hoặc connection string).',
     });
   }
 
