@@ -146,7 +146,7 @@ All Vietnamese. Copy marked **EXISTS** is already landed in the executing source
 | Primary CTA — Quản lý set (server purge) | `Dọn set này` (Popconfirm ok; danger) — **EXISTS** |
 | Primary CTA — Oracle profiles | `Thêm kết nối Oracle` — **EXISTS** |
 | Primary CTA — Docs workspace | Clicking a set card/row opens it in an in-app tab (no button label); the grid's affordance is "Mở bộ tài liệu" via `Tooltip`/`aria-label` — **NEW** |
-| Primary CTA — Team pinned context | `Lưu` in Team Settings (existing drawer save path); editor label `Pinned Team Context` — **NEW** |
+| Primary CTA — Team pinned context | `Lưu cài đặt nhóm` in Team Settings (the drawer save control, now carrying the pinned field; specific verb + noun — not a bare "Save"); editor label `Pinned Team Context` — **NEW** |
 | Refresh set list | `Làm mới` (icon-only variant: `ReloadOutlined` + `aria-label="Làm mới danh sách set"`) — **NEW** |
 
 ### Empty states
@@ -264,7 +264,7 @@ Paths `src/components/ai/office/TeamSettingsDrawer.tsx`, `src/components/ai/offi
 
 | Property | Contract |
 |----------|----------|
-| Editor | In `Cài đặt nhóm` (`TeamSettingsDrawer`), an `Input.TextArea` labeled `Pinned Team Context` bound to `team.pinnedContext`, saved through the existing team-update path. |
+| Editor | In `Cài đặt nhóm` (`TeamSettingsDrawer`), an `Input.TextArea` labeled `Pinned Team Context` bound to `team.pinnedContext`, saved through the existing team-update path via the drawer's primary CTA labeled `Lưu cài đặt nhóm` (specific verb + noun; never a bare "Lưu"/"Save"). |
 | Hint copy | States that the text is team-scoped guidance injected into **every** leader/member turn, and that naming a DB environment here only guides agents' Oracle connection choice — it does **not** change the global active connection (D-19). |
 | Badge | In the team chat header (near the existing status chip that uses `Tooltip`), render a compact `Tag`/icon badge (`PushpinOutlined`/`PushpinFilled`) **only when** `team.pinnedContext` is non-empty. |
 | Tooltip | Displays the current pinned content verbatim, so the user can read it without leaving chat. Long content is bounded by antd `Tooltip` behavior (no layout shift in the header). |
