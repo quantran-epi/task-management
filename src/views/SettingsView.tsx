@@ -7,6 +7,7 @@ import {
   CloudSyncOutlined,
   WarningOutlined,
   ExclamationCircleOutlined,
+  EditOutlined,
   BellOutlined,
   RobotOutlined,
   CloudServerOutlined,
@@ -185,6 +186,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           )}
 
           <Typography.Text strong>Sao lưu & khôi phục</Typography.Text>
+          {onNavigate && (
+            <Button
+              icon={<EditOutlined />}
+              onClick={() => onNavigate('config-profiles')}
+              aria-label="Soạn & xuất Profile"
+            >
+              Soạn & xuất Profile
+            </Button>
+          )}
           <BackupExportCard db={db} />
           <BackupImportCard db={db} onRestoreSuccess={handleRestoreSuccess} />
           <ConfigProfileImportCard
