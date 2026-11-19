@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Avatar, Button, Dropdown, Splitter, theme } from 'antd';
-import { SettingOutlined } from '@ant-design/icons';
+import { Alert, Avatar, Button, Dropdown, Splitter, Tag, Tooltip, theme } from 'antd';
+import { PushpinFilled, SettingOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { TaskPlannerDatabase } from '../../../db';
 import type {
@@ -957,6 +957,25 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                   Chưa chọn lead
                 </span>
               )}
+              {/* Phase 45 D-18: a compact, focusable display-only badge appears only when the
+                  team has a pin. Its tooltip shows the current pinned content verbatim — never
+                  a system instruction. Long content is bounded by antd Tooltip behavior. */}
+              {team.pinnedContext ? (
+                <Tooltip title={team.pinnedContext}>
+                  <Tag
+                    icon={<PushpinFilled />}
+                    color={token.colorPrimary}
+                    tabIndex={0}
+                    role="img"
+                    aria-label={`Ngữ cảnh nhóm đã ghim: ${team.pinnedContext}`}
+                    title={team.pinnedContext}
+                    data-testid="team-header-pinned-badge"
+                    style={{ margin: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                  >
+                    Đã ghim
+                  </Tag>
+                </Tooltip>
+              ) : null}
               {/* One status chip replaces the old always-on header buttons: the run state is
                   the only thing worth knowing at a glance. */}
               <span
