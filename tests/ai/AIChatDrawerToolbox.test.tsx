@@ -1,6 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { AIChatDrawer } from '../../src/components/ai/AIChatDrawer';
+import { InlineAISelectionBar } from '../../src/components/ai/InlineAISelectionBar';
+import { AIChatProvider, useAIChat } from '../../src/context/AIChatContext';
 import { TaskPlannerDatabase } from '../../src/db';
 import { createChatTab, setActiveTab } from '../../src/db/repositories/chatTabRepo';
 import 'fake-indexeddb/auto';
@@ -134,5 +136,128 @@ describe('ChatTabToolbox and Tab Isolation', () => {
     expect(currentB?.config?.autoApproveMutations).toBe(true);
     expect(currentB?.config?.analysisMode).toBe(true);
     expect(currentB?.config?.mcpEnabled).toBe(false);
+  });
+});
+
+/**
+ * Phase 47 D-09/D-10/D-11: a selection in a remote readonly viewer activates the inline
+ * toolbar, and Open in Chat carries the D-11 structured anchor (with path:line) into the
+ * remote-scope composer — never a fake doc resolution.
+ */
+describe('Remote selection inline toolbar (Phase 47 D-09/D-10/D-11)', () => {
+  let db: TaskPlannerDatabase;
+
+  const SSH_CONFIG_ID = 'ssh-remote-1';
+  const REPO_PATH = '/srv/repos/my-repo';
+  const BRANCH = 'feature/remote';
+  const FILE_PATH = 'src/service/PaymentService.ts';
+  const TARGET_UUID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const SELECTED_TEXT = 'function calculateFee(amount: number) {\n  return amount * 0.02;\n}';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    db = new TaskPlannerDatabase(`TestRemoteInline_${Date.now()}_${Math.random()}`);
+  });
+
+  afterEach(async () => {
+    cleanup();
+    vi.restoreAllMocks();
+    await db.delete();
+  });
+
+  /** Render a code-container DOM like RemoteFileViewer and a remote selection inside it. */
+  const selectRemoteCode = () => {
+    const container = document.createElement('div');
+    container.setAttribute('data-testid', 'code-container');
+    container.setAttribute('data-ai-context-type', 'remote');
+    container.setAttribute('data-ai-context-id', TARGET_UUID);
+    container.setAttribute('data-remote-target-uuid', TARGET_UUID);
+    container.setAttribute('data-remote-config', SSH_CONFIG_ID);
+    container.setAttribute('data-remote-ssh-config-id', SSH_CONFIG_ID);
+    container.setAttribute('data-remote-repo-path', REPO_PATH);
+    container.setAttribute('data-remote-branch', BRANCH);
+    container.setAttribute('data-remote-path', FILE_PATH);
+    document.body.appendChild(container);
+
+    const line = document.createElement('div');
+    line.setAttribute('data-remote-line', '42');
+    line.setAttribute('data-remote-path', FILE_PATH);
+    line.textContent = SELECTED_TEXT;
+    container.appendChild(line);
+
+    const mockSelection = {
+      isCollapsed: false,
+      rangeCount: 1,
+      toString: () => SELECTED_TEXT,
+      anchorNode: line,
+      focusNode: line,
+      getRangeAt: () => ({
+        getBoundingClientRect: () => ({
+          top: 250,
+          bottom: 310,
+          left: 200,
+          right: 500,
+          width: 300,
+          height: 60,
+        }),
+      }),
+    };
+    vi.spyOn(window, 'getSelection').mockReturnValue(mockSelection as any);
+    return container;
+  };
+
+  const TestShell = () => {
+    const { isOpen, closeChat, activeScope } = useAIChat();
+    return (
+      <div>
+        <InlineAISelectionBar db={db} />
+        <AIChatDrawer open={isOpen} onClose={closeChat} db={db} activeScope={activeScope} />
+      </div>
+    );
+  };
+
+  it('shows Explain, Ask and Open in Chat for a remote selection', async () => {
+    selectRemoteCode();
+    render(
+      <AIChatProvider>
+        <TestShell />
+      </AIChatProvider>
+    );
+
+    fireEvent.mouseUp(document);
+
+    const toolbar = await screen.findByTestId('remote-inline-toolbar');
+    expect(toolbar).toBeInTheDocument();
+    expect(screen.getByTestId('remote-explain')).toBeInTheDocument();
+    expect(screen.getByTestId('remote-ask')).toBeInTheDocument();
+    expect(screen.getByTestId('remote-open-in-chat')).toBeInTheDocument();
+    // Breadcrumb shows repo-relative path + line, not a fake doc entity.
+    expect(screen.getByText(new RegExp(FILE_PATH.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))).toBeInTheDocument();
+  });
+
+  it('Open in Chat calls openChatWithDraft with remote scope and a path:line mention, no fake doc resolution', async () => {
+    selectRemoteCode();
+    // Pin a spy on resolveEntityHierarchy: the remote branch must NEVER call it.
+    const selectionContext = await import('../../src/utils/selectionContext');
+    const resolveSpy = vi.spyOn(selectionContext, 'resolveEntityHierarchy');
+
+    render(
+      <AIChatProvider>
+        <TestShell />
+      </AIChatProvider>
+    );
+
+    fireEvent.mouseUp(document);
+    const openInChat = await screen.findByTestId('remote-open-in-chat');
+    fireEvent.click(openInChat);
+
+    const textarea = (await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI')) as HTMLTextAreaElement;
+    await waitFor(() => {
+      expect(textarea.value).toContain(`${FILE_PATH}:42-42`);
+      expect(textarea.value).toContain('> function calculateFee');
+    });
+    // No fake doc resolution was ever attempted for the remote anchor.
+    expect(resolveSpy).not.toHaveBeenCalled();
   });
 });

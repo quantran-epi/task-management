@@ -26,6 +26,10 @@ import {
   normalizeToolName,
 } from '../../services/ai/aiTools';
 import type { ChatCompletionMessage, ToolCall } from '../../services/ai/types';
+import {
+  extractRemoteSelectionAnchor,
+  remoteAnchorToPayload,
+} from './RemoteSelectionAnchor';
 
 export interface InlineAISelectionBarProps {
   db?: TaskPlannerDatabase;
@@ -193,7 +197,45 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
         };
 
         const domContext = getDomContextFromNode(anchorNode);
-        // Only activate inline AI toolbar for documents and notes
+
+        // Phase 47 D-09/D-11: a selection inside a readonly remote file viewer becomes a
+        // STRUCTURED anchor (target/path/startLine/endLine/text). It never fabricates a doc
+        // entity — the anchor resolves from its own DOM metadata (Pitfall 4).
+        if (domContext.entityType === 'remote') {
+          const anchorNodeElement =
+            anchorNode?.nodeType === Node.ELEMENT_NODE
+              ? (anchorNode as HTMLElement)
+              : anchorNode?.parentElement;
+          const container = anchorNodeElement?.closest(
+            '[data-testid="code-container"]'
+          ) as HTMLElement | null;
+          const remoteAnchor = container
+            ? extractRemoteSelectionAnchor(selection, container)
+            : null;
+          if (!remoteAnchor) {
+            if (!isAskingInline) {
+              setVisible(false);
+              setSelectionRect(null);
+            }
+            return;
+          }
+          const payload = remoteAnchorToPayload(remoteAnchor);
+          setCurrentPayload(payload);
+          setSelectionRect(rectInfo);
+          const initialPos = calculatePopupPosition(
+            rectInfo,
+            320,
+            38,
+            window.innerWidth,
+            window.scrollX,
+            window.scrollY
+          );
+          setPosition({ x: initialPos.x, y: initialPos.y });
+          setVisible(true);
+          return;
+        }
+
+        // Existing behavior preserved: only documents and notes activate the legacy toolbar.
         if (domContext.entityType !== 'doc' && domContext.entityType !== 'note') {
           if (!isAskingInline) {
             setVisible(false);
@@ -249,6 +291,22 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
   const handleMentionToDrawer = () => {
     if (!currentPayload) return;
     const prompt = formatSelectionMentionPrompt(currentPayload);
+
+    // Phase 47 D-10/D-11: a remote selection opens the remote-scope composer with the
+    // structured anchor mention (formatSelectionMentionPrompt already emits path:line for
+    // remote payloads). No fake doc resolution is involved.
+    if (currentPayload.targetType === 'remote') {
+      openChatWithDraft(
+        {
+          type: 'remote',
+          id: currentPayload.targetId,
+          title: currentPayload.targetTitle,
+        },
+        prompt
+      );
+      handleDismiss();
+      return;
+    }
 
     // Switch scope appropriately if attached to a task, CR or system
     let scopeType: 'task' | 'cr' | 'system' | 'global' = 'global';
@@ -394,7 +452,22 @@ ${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC TH�
 
           let toolResult = '';
           try {
-            toolResult = await executeAiTool(tc.function.name, args, db);
+            // D-13/D-14: on a remote selection the inline read-only loop is bound to the
+            // anchor's own target — the model cannot redirect a tool to another host/repo.
+            const remoteCtx = currentPayload.remote;
+            const toolOptions =
+              currentPayload.targetType === 'remote' &&
+              remoteCtx?.sshConfigId &&
+              remoteCtx.repoPath
+                ? {
+                    remoteTarget: {
+                      sshConfigId: remoteCtx.sshConfigId,
+                      repoPath: remoteCtx.repoPath,
+                      branch: remoteCtx.branch ?? '',
+                    },
+                  }
+                : undefined;
+            toolResult = await executeAiTool(tc.function.name, args, db, undefined, toolOptions);
           } catch (err: any) {
             toolResult = JSON.stringify({ error: err?.message || String(err) });
           }
@@ -477,7 +550,54 @@ ${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC TH�
         />
       </div>
 
-      {!isAskingInline ? (
+      {!isAskingInline && currentPayload.targetType === 'remote' ? (
+        /* Phase 47 D-09: remote readonly selection toolbar. Explicit English action names
+           keep the remote affordance unambiguous; handlers are the same bounded read-only
+           loop and structured-anchor composer path used everywhere else. */
+        <Space size={2} wrap data-testid="remote-inline-toolbar">
+          <Tooltip
+            zIndex={2500}
+            title="Open the structured remote anchor mention in the chat composer"
+          >
+            <Button
+              type="text"
+              size="small"
+              icon={<CommentOutlined style={{ color: token.colorPrimary }} />}
+              onClick={handleMentionToDrawer}
+              data-testid="remote-open-in-chat"
+            >
+              Open in Chat
+            </Button>
+          </Tooltip>
+          <Tooltip zIndex={2500} title="Explain the selected remote code briefly">
+            <Button
+              type="text"
+              size="small"
+              icon={<BulbOutlined style={{ color: '#faad14' }} />}
+              onClick={() =>
+                handleRunInlinePrompt(
+                  'Explain',
+                  'Giải thích ngắn gọn ý nghĩa của đoạn code remote đã chọn, kèm path:startLine-endLine khi trích dẫn.'
+                )
+              }
+              data-testid="remote-explain"
+            >
+              Explain
+            </Button>
+          </Tooltip>
+          <Tooltip zIndex={2500} title="Ask a custom question about the selected remote code">
+            <Button
+              type="text"
+              size="small"
+              icon={<RobotOutlined style={{ color: token.colorPrimary }} />}
+              onClick={() => setIsAskingInline(true)}
+              data-testid="remote-ask"
+            >
+              Ask
+            </Button>
+          </Tooltip>
+        </Space>
+      ) : !isAskingInline ? (
         /* Floating Toolbar Quick Actions */
         <Space size={2} wrap>
           <Tooltip

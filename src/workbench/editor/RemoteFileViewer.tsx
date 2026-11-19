@@ -15,6 +15,8 @@ import { getRemoteFileContent } from '../../services/gitRemoteTreeService';
 import { getSshSecret } from '../../services/sshService';
 import { extractMermaidBlocks, saveDiagramToStudio, openDiagramInStudio } from '../../services/diagramSaveBridge';
 import { DiffLineCodeRenderer } from '../../components/common/DiffSyntaxHighlighter';
+import { deriveRemoteTargetUuid } from '../../utils/remoteTarget';
+import { useAIChat } from '../../context/AIChatContext';
 
 export interface RemoteFileViewerProps {
   config?: SshConfig;
@@ -49,7 +51,22 @@ export function RemoteFileViewer({
   db,
 }: RemoteFileViewerProps) {
   const { token } = theme.useToken();
+  const { registerActiveItem } = useAIChat();
   const isDark = token.colorBgBase === '#141414' || token.colorTextBase?.includes('255');
+
+  // Phase 47 D-08 (Pitfall 5): opening/selecting this remote file auto-activates the target's
+  // remote scope WITHOUT overriding a manual scope choice. registerActiveItem pushes onto the
+  // AIChatContext stack, and activeScope = customScope ?? registeredTop ?? global, so a user's
+  // explicit setCustomScope still wins. We never call setCustomScope here. The id is the same
+  // derived target UUID the scope picker and drawer use, so all three agree on one identity.
+  const targetUuid = config?.id && repoPath.trim()
+    ? deriveRemoteTargetUuid(config.id, repoPath.trim(), branch)
+    : undefined;
+  useEffect(() => {
+    if (!targetUuid || !config?.id) return undefined;
+    const title = `${config.id} · ${repoPath.trim() || '/'} · ${branch || '-'}`;
+    return registerActiveItem({ type: 'remote', id: targetUuid, title });
+  }, [targetUuid, config?.id, repoPath, branch, registerActiveItem]);
 
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -353,6 +370,14 @@ export function RemoteFileViewer({
         ) : content !== null && !isTooLarge ? (
           <div
             data-testid="code-container"
+            data-ai-context-type="remote"
+            data-ai-context-id={targetUuid ?? undefined}
+            data-remote-target-uuid={targetUuid ?? undefined}
+            data-remote-config={config?.id ?? ''}
+            data-remote-ssh-config-id={config?.id ?? ''}
+            data-remote-repo-path={repoPath}
+            data-remote-branch={branch}
+            data-remote-path={filePath}
             style={{
               display: 'flex',
               minWidth: '100%',
@@ -403,6 +428,8 @@ export function RemoteFileViewer({
                     ref={isHighlighted ? highlightLineRef : undefined}
                     data-testid={isHighlighted ? 'initial-line-highlight' : undefined}
                     data-line-number={lineNo}
+                    data-remote-line={lineNo}
+                    data-remote-path={filePath}
                     style={{
                       height: 20,
                       ...(isHighlighted
