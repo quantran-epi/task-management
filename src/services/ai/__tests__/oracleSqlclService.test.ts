@@ -14,6 +14,8 @@ import {
   resolveOracleConnection,
   listOracleConnectionSummaries,
   getOracleToolConfig,
+  safeOracleIdentifier,
+  escapeOracleLikeFilter,
 } from '../oracleSqlclService';
 import {
   ORACLE_TOOL_CONFIG_KEY,
@@ -116,6 +118,23 @@ Disconnected from Oracle Database.
       'SP2-0310: unable to open file'
     );
     expect(extractOracleError('All good', '')).toBeNull();
+  });
+
+  // WR-03: identifier validation + LIKE escaping helpers.
+  it('safeOracleIdentifier accepts valid identifiers (trim + uppercase) and rejects injection', () => {
+    expect(safeOracleIdentifier('  employees ', 'Tên bảng')).toBe('EMPLOYEES');
+    expect(safeOracleIdentifier('my$table#2', 'Tên bảng')).toBe('MY$TABLE#2');
+    expect(() => safeOracleIdentifier("EMP' UNION SELECT password FROM secret_table --", 'Tên bảng')).toThrow(
+      /không hợp lệ/
+    );
+    expect(() => safeOracleIdentifier('1BAD', 'Tên bảng')).toThrow(/không hợp lệ/);
+    expect(() => safeOracleIdentifier('A B', 'Tên bảng')).toThrow(/không hợp lệ/);
+    expect(() => safeOracleIdentifier(undefined, 'Tên schema')).toThrow(/không hợp lệ/);
+  });
+
+  it('escapeOracleLikeFilter doubles single quotes so a filter cannot break the literal', () => {
+    expect(escapeOracleLikeFilter("O'REILLY")).toBe("O''REILLY");
+    expect(escapeOracleLikeFilter("' UNION SELECT 1 --")).toBe("'' UNION SELECT 1 --");
   });
 });
 
@@ -224,6 +243,101 @@ describe('oracleSqlclService - Execution & SSH mocking', () => {
     expect(res.columns).toEqual([
       { COLUMN_NAME: 'ID', FULL_DATA_TYPE: 'NUMBER(10,0)', NULLABLE: 'N' },
     ]);
+  });
+
+  // WR-03: a model-supplied identifier carrying an injected UNION must be rejected before
+  // any SSH script is sent, and must surface through the JSON { success:false, error } path.
+  it('rejects an injected tableOrView in describe_table without reaching SSH', async () => {
+    seedActiveProfile({});
+    const execSpy = vi.spyOn(sshService, 'execRemoteCommand').mockResolvedValue({
+      stdout: '[{"OK": 1}]',
+      stderr: '',
+      exitStatus: 0,
+    });
+
+    const payload = "EMP' UNION SELECT password FROM secret_table --";
+    const res = JSON.parse(
+      await executeOracleDescribe(
+        { action: 'describe_table', tableOrView: payload },
+        fakeDb
+      )
+    );
+
+    expect(res.success).toBe(false);
+    expect(res.error).toMatch(/không hợp lệ/);
+    expect(res.error).not.toContain('secret_table');
+    expect(execSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects an injected schema in list_tables and get_ddl without reaching SSH', async () => {
+    seedActiveProfile({});
+    const execSpy = vi.spyOn(sshService, 'execRemoteCommand').mockResolvedValue({
+      stdout: '[]',
+      stderr: '',
+      exitStatus: 0,
+    });
+    const payload = "HR' OR 1=1 --";
+
+    const listRes = JSON.parse(
+      await executeOracleDescribe({ action: 'list_tables', schema: payload }, fakeDb)
+    );
+    expect(listRes.success).toBe(false);
+    expect(listRes.error).toMatch(/không hợp lệ/);
+
+    const ddlRes = JSON.parse(
+      await executeOracleDescribe(
+        { action: 'get_ddl', tableOrView: 'EMPLOYEES', schema: payload },
+        fakeDb
+      )
+    );
+    expect(ddlRes.success).toBe(false);
+    expect(ddlRes.error).toMatch(/không hợp lệ/);
+    expect(execSpy).not.toHaveBeenCalled();
+  });
+
+  it('keeps a LIKE search filter as an escaped literal in the list_tables script', async () => {
+    seedActiveProfile({});
+    vi.spyOn(sshService, 'getSshConfigs').mockResolvedValue([
+      { id: 'ssh-1', name: 'Bastion' } as any,
+    ]);
+    vi.spyOn(sshService, 'getSshSecret').mockResolvedValue('secret-pass');
+    const execSpy = vi.spyOn(sshService, 'execRemoteCommand').mockResolvedValue({
+      stdout: '[]',
+      stderr: '',
+      exitStatus: 0,
+    });
+
+    const resStr = await executeOracleDescribe(
+      { action: 'list_tables', search: "O'REILLY" },
+      fakeDb
+    );
+    expect(JSON.parse(resStr).success).toBe(true);
+    const remoteCommand = execSpy.mock.calls[0]?.[1] as string;
+    // The quote is doubled inside the literal; no injected `...%' OR ...` structure exists.
+    expect(remoteCommand).toContain("LIKE '%O''REILLY%'");
+    expect(remoteCommand).toContain('SET TRANSACTION READ ONLY;');
+  });
+
+  it('get_ddl script includes SET TRANSACTION READ ONLY', async () => {
+    seedActiveProfile({});
+    vi.spyOn(sshService, 'getSshConfigs').mockResolvedValue([
+      { id: 'ssh-1', name: 'Bastion' } as any,
+    ]);
+    vi.spyOn(sshService, 'getSshSecret').mockResolvedValue('secret-pass');
+    const execSpy = vi.spyOn(sshService, 'execRemoteCommand').mockResolvedValue({
+      stdout: 'CREATE TABLE ...',
+      stderr: '',
+      exitStatus: 0,
+    });
+
+    const resStr = await executeOracleDescribe(
+      { action: 'get_ddl', tableOrView: 'employees', schema: 'hr' },
+      fakeDb
+    );
+    expect(JSON.parse(resStr).success).toBe(true);
+    const remoteCommand = execSpy.mock.calls[0]?.[1] as string;
+    expect(remoteCommand).toContain('SET TRANSACTION READ ONLY;');
+    expect(remoteCommand).toContain("GET_DDL('TABLE', 'EMPLOYEES', 'HR')");
   });
 
   it('tests Oracle connection successfully', async () => {

@@ -233,6 +233,29 @@ export function assertReadOnlyQuery(sql: string): void {
 }
 
 /**
+ * WR-03: validate a model-supplied identifier (schema / table / view name) before it is
+ * interpolated into a describe script. Oracle unquoted identifiers are letters, digits and
+ * _ $ #, start with a letter; we normalize to uppercase. Rejecting anything else stops an
+ * injected `EMP' UNION SELECT ... --` from breaking out of the SQL string literal.
+ */
+export function safeOracleIdentifier(value: string | undefined, label: string): string {
+  const normalized = (value ?? '').trim().toUpperCase();
+  if (!/^[A-Z][A-Z0-9_$#]*$/.test(normalized)) {
+    throw new Error(`${label} không hợp lệ.`);
+  }
+  return normalized;
+}
+
+/**
+ * WR-03: escape a model-supplied free-text filter for safe embedding inside a SQL
+ * string literal (LIKE '%...%'). Doubling single quotes is the SQL-standard escape; the
+ * value stays a pure literal and cannot terminate the surrounding quote.
+ */
+export function escapeOracleLikeFilter(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+/**
  * Wraps SQL query with row limit if query does not already limit rows.
  */
 export function applyQueryLimit(sql: string, maxRows: number): string {
@@ -574,8 +597,13 @@ export async function executeOracleDescribe(
     const action = args.action;
 
     if (action === 'list_tables') {
-      const search = (args.search || '').trim().toUpperCase();
-      const schema = (args.schema || '').trim().toUpperCase();
+      // WR-03: schema is an identifier (strict validation); search is free text embedded in a
+      // LIKE literal (quote-escaped). An invalid identifier is thrown and caught below, which
+      // returns the JSON { success:false, error } path before any SSH script is built or sent.
+      const schema = args.schema?.trim() ? safeOracleIdentifier(args.schema, 'Tên schema') : '';
+      const search = args.search?.trim()
+        ? escapeOracleLikeFilter(args.search.trim().toUpperCase())
+        : '';
 
       const schemaFilter = schema ? `AND OWNER = '${schema}'` : '';
       const searchFilter = search ? `AND (UPPER(TABLE_NAME) LIKE '%${search}%' OR UPPER(COMMENTS) LIKE '%${search}%')` : '';
@@ -614,11 +642,13 @@ EXIT;
     }
 
     if (action === 'describe_table') {
-      const tableName = (args.tableOrView || '').trim().toUpperCase();
-      if (!tableName) {
+      if (!args.tableOrView?.trim()) {
         return JSON.stringify({ success: false, error: 'Cần cung cấp tên bảng tableOrView.' });
       }
-      const schema = (args.schema || '').trim().toUpperCase();
+      // WR-03: validate both identifiers before interpolation; a throw is caught below and
+      // returned via the JSON { success:false, error } path, never reaching the SSH script.
+      const tableName = safeOracleIdentifier(args.tableOrView, 'Tên bảng');
+      const schema = args.schema?.trim() ? safeOracleIdentifier(args.schema, 'Tên schema') : '';
       const schemaFilter = schema ? `AND c.OWNER = '${schema}'` : '';
 
       // Queries columns, data types, nullability, comments, and primary keys
@@ -668,11 +698,13 @@ EXIT;
     }
 
     if (action === 'get_ddl') {
-      const tableName = (args.tableOrView || '').trim().toUpperCase();
-      if (!tableName) {
+      if (!args.tableOrView?.trim()) {
         return JSON.stringify({ success: false, error: 'Cần cung cấp tên bảng tableOrView.' });
       }
-      const schema = (args.schema || '').trim().toUpperCase();
+      // WR-03: validate both identifiers before interpolation; a throw is caught below and
+      // returned via the JSON { success:false, error } path, never reaching the SSH script.
+      const tableName = safeOracleIdentifier(args.tableOrView, 'Tên bảng');
+      const schema = args.schema?.trim() ? safeOracleIdentifier(args.schema, 'Tên schema') : '';
       const schemaExpr = schema ? `'${schema}'` : 'USER';
 
       const script = `
@@ -681,6 +713,7 @@ SET PAGESIZE 0;
 SET FEEDBACK OFF;
 SET LINESIZE 32767;
 SET HEADING OFF;
+SET TRANSACTION READ ONLY;
 SELECT DBMS_METADATA.GET_DDL('TABLE', '${tableName}', ${schemaExpr}) FROM DUAL;
 EXIT;
       `.trim();
