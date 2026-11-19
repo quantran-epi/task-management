@@ -14,6 +14,7 @@ import { TasksView } from './views/TasksView';
 import { PlannerView } from './views/PlannerView';
 import { AnalyticsView } from './views/AnalyticsView';
 import { SettingsView } from './views/SettingsView';
+import { ConfigProfilesView } from './views/ConfigProfilesView';
 import { DashboardView } from './views/DashboardView';
 import { NotesView } from './views/NotesView';
 import { NotesPopoutView } from './views/NotesPopoutView';
@@ -116,6 +117,8 @@ export const App: React.FC = () => {
           : undefined;
         return <SettingsView onNavigate={navigate} defaultActiveTab={selectedTab} />;
       }
+      case 'config-profiles':
+        return <ConfigProfilesView onNavigate={navigate} />;
       case 'team':
         return (
           <TeamWorkspaceView

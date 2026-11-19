@@ -9,6 +9,7 @@ export type EditorViewType =
   | 'planner'
   | 'analytics'
   | 'settings'
+  | 'config-profiles'
   | 'cr_detail'
   | 'dashboard'
   | 'telegram'

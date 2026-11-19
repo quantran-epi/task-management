@@ -6,6 +6,7 @@ import {
   DesktopOutlined,
   CodeOutlined,
   SwapOutlined,
+  EditOutlined,
 } from '@ant-design/icons';
 import { TaskMateLogo } from '../components/TaskMateLogo';
 import {
@@ -295,6 +296,27 @@ export function TitleBar({
                 }}
               >
                 Analytics
+              </Button>
+            </Tooltip>
+
+            <Tooltip title="Soạn & xuất cấu hình cho người khác">
+              <Button
+                type="text"
+                size="small"
+                icon={<EditOutlined />}
+                onClick={() => onOpenView?.('config-profiles')}
+                aria-label="Open Config Profiles"
+                style={{
+                  height: 24,
+                  padding: '0 7px',
+                  fontSize: 12,
+                  borderRadius: 3,
+                  color: activeView === 'config-profiles' ? 'var(--accent, #3871e1)' : 'var(--fg-secondary, #5f6269)',
+                  background: activeView === 'config-profiles' ? 'var(--bg-selected, #d0dffe)' : 'transparent',
+                  fontWeight: activeView === 'config-profiles' ? 600 : 400,
+                }}
+              >
+                Profiles
               </Button>
             </Tooltip>
           </div>

@@ -7,6 +7,7 @@ import {
   CloudSyncOutlined,
   WarningOutlined,
   ExclamationCircleOutlined,
+  EditOutlined,
   BellOutlined,
   RobotOutlined,
   CloudServerOutlined,
@@ -15,6 +16,8 @@ import { WeeklyCapacityForm } from '../components/settings/WeeklyCapacityForm';
 import { OverridesTable } from '../components/settings/OverridesTable';
 import { BackupExportCard } from '../components/settings/BackupExportCard';
 import { BackupImportCard } from '../components/settings/BackupImportCard';
+import { ConfigProfileImportCard } from '../components/settings/ConfigProfileImportCard';
+import { PostProfileImportChecklist } from '../components/settings/PostProfileImportChecklist';
 import { ImportPreviewModal } from '../components/settings/ImportPreviewModal';
 import { SnapshotRollbackCard } from '../components/settings/SnapshotRollbackCard';
 import { GitHubConfigCard } from '../components/settings/GitHubConfigCard';
@@ -44,6 +47,8 @@ import { rollbackToSnapshot, downloadSnapshotFile } from '../services/backup/res
 import { announceToScreenReader } from '../components/common/AriaLiveRegion';
 import type { SnapshotData, BackupEnvelope } from '../types/backup';
 import type { PullBackupResult } from '../services/github/types';
+import type { z } from 'zod';
+import type { ConfigProfileEnvelopeSchema } from '../validation/configProfileSchemas';
 
 const { Paragraph } = Typography;
 
@@ -67,6 +72,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   }, [defaultActiveTab]);
   const [showPostRestoreBanner, setShowPostRestoreBanner] = useState(false);
+  const [appliedProfile, setAppliedProfile] = useState<{
+    envelope: z.infer<typeof ConfigProfileEnvelopeSchema>;
+    blankSecretFields: string[];
+  } | null>(null);
   const [remotePayload, setRemotePayload] = useState<BackupEnvelope | null>(null);
   const [remoteSha, setRemoteSha] = useState<string | null>(null);
   const [remoteExportedAt, setRemoteExportedAt] = useState<string | null>(null);
@@ -167,9 +176,36 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             />
           )}
 
+          {appliedProfile && (
+            <PostProfileImportChecklist
+              envelope={appliedProfile.envelope}
+              blankSecretFields={appliedProfile.blankSecretFields}
+              visible
+              onClose={() => setAppliedProfile(null)}
+            />
+          )}
+
           <Typography.Text strong>Sao lưu & khôi phục</Typography.Text>
+          {onNavigate && (
+            <Button
+              icon={<EditOutlined />}
+              onClick={() => onNavigate('config-profiles')}
+              aria-label="Soạn & xuất Profile"
+            >
+              Soạn & xuất Profile
+            </Button>
+          )}
           <BackupExportCard db={db} />
           <BackupImportCard db={db} onRestoreSuccess={handleRestoreSuccess} />
+          <ConfigProfileImportCard
+            db={db}
+            onApplySuccess={(envelope, result) =>
+              setAppliedProfile({
+                envelope,
+                blankSecretFields: result.skippedBlankSecrets,
+              })
+            }
+          />
           <SnapshotRollbackCard db={db} />
           <Typography.Text strong>Đồng bộ GitHub</Typography.Text>
           <GitHubConfigCard db={db} />

@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v1.4
 milestone_name: Unified AI Office (Phase Details)
-current_phase: 45
-current_phase_name: Knowledge Sets, Docs Workspace, Oracle Connections & Team Pinned Context
+current_phase: 46
+current_phase_name: Configuration Profiles
 status: executing
-stopped_at: Phase 45 UI-SPEC approved
-last_updated: "2026-11-19T05:10:15.535Z"
-last_activity: 2026-11-17
-last_activity_desc: Phase 44 execution resumed (wave continue)
-state_head: 3861da3f37143fbeccab374745cd2741decf16ac
+stopped_at: Completed 46-03-PLAN.md
+last_updated: "2026-11-19T07:04:17.765Z"
+last_activity: 2026-11-19
+last_activity_desc: Phase 46 plan 03 completed
+state_head: d0d705de2076d164b736dbfb88cc3b3b92103e84
 progress:
-  total_phases: 9
+  total_phases: 10
   completed_phases: 5
-  total_plans: 60
-  completed_plans: 55
-  percent: 56
+  total_plans: 64
+  completed_plans: 58
+  percent: 50
 ---
 
 # Project State: TaskMate — Milestone v1.4
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-09)
 
 **Core value:** Hợp nhất SDLC Studio và AI Office thành Unified AI Office dạng chat-first, free-style với token budget cứng và làm giàu skill.
-**Current focus:** Phase 44 — Agent Activity Panel, Configurable Explore Timeout and Prompt Log
+**Current focus:** Phase 46 — Configuration Profiles
 
 ## Current Position
 
-Phase: 45 (Knowledge Sets, Docs Workspace, Oracle Connections & Team Pinned Context) — READY TO EXECUTE
-Plan: 1 of 4
+Phase: 46 (Configuration Profiles) — EXECUTING
+Plan: 4 of 4
 Status: Ready to execute
-Last activity: 2026-11-17 - Completed quick task 261117-ss8: Thêm instrumentation/báo cáo lỗi đầy đủ cho mọi run agent/leader
+Last activity: 2026-11-19 — Phase 46 plan 03 completed, plan 04 ready
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -59,11 +59,17 @@ Verification: 392 focused tests pass (9 files), `tsc --noEmit` clean. Full suite
 
 ## Session Continuity
 
-Last session: 2026-11-19T04:54:50.290Z
-Stopped at: Phase 45 UI-SPEC approved
-Resume file: .planning/phases/45-knowledge-sets-docs-workspace-oracle-connections-team-pinned/45-UI-SPEC.md
+Last session: 2026-11-19T07:04:16.365Z
+Stopped at: Completed 46-03-PLAN.md
+Resume file: None
 
-Progress: [██████░░░░] 56%
+Progress: [█████░░░░░] 50%
+
+## Preserved Context — feature/intellij-workbench (phase 45 line)
+
+- Last session on `feature/intellij-workbench`: 2026-11-19T04:54:50.290Z; stopped at Phase 45 UI-SPEC approved; resume file `.planning/phases/45-knowledge-sets-docs-workspace-oracle-connections-team-pinned/45-UI-SPEC.md`.
+- Phase 45 (Knowledge Sets, Docs Workspace, Oracle Connections & Team Pinned Context) was READY TO EXECUTE with 4 plans on that line; all Oracle multi-connection profile work (T-45-03/T-45-06) is present in this tree after merge.
+- Phase 44 quick tasks and 261117-ss8 instrumentation remain in the quick-tasks table below.
 
 ## Milestone v1.4 Map
 
@@ -109,6 +115,8 @@ Progress: [██████░░░░] 56%
 - Phase 41 added (2026-11-15): AI Office team docs zones — per-team docs folder tree, agent-scoped document write. Owner decision: every member writes docs; visible immediately; leader writes the approved final at team root.
 - Phase 42 added (2026-11-15): Read-only git inspection for the reviewer agent. Owner decision: reviewer reads git read-only over SSH. Scope narrowed 2026-11-15 — the recursive linked-item read half was cut (sticky notes already arrive full-body via `get_item_details`; `read_file` already covers linked files; note attachments are image-only so the text branch was dead code). See `42-CONTEXT.md` §Deferred Ideas.
 - Phase 44 added (2026-11-17): Agent Activity Panel, Configurable Explore Timeout and Prompt Log. Owner decision: all three pieces ship in one phase, reviewed to zero critical/warning; push once to `feature/intellij-workbench` after verification. UI reference: `.planning/agent-activity-panel-draft.html`.
+- Phase 45 added (2026-11-19): Knowledge Sets, Docs Workspace, Oracle Connections & Team Pinned Context. Owner decisions: one UI+infra phase; server set management in Settings > Knowledge Daemon; dedicated Docs page with app tabs; Oracle named multi-connection by environment with active default; team pinned context injected every turn with badge + tooltip. Debug root cause for orphan sets recorded in `.planning/debug/knowledge-server-orphan-sets.md`.
+- Phase 46 added (2026-11-19): Configuration Profiles. Owner decisions: named profiles authored independently of the current app settings; all setting types covered; export one profile to JSON; normal Settings screen imports that profile; secrets are blank in export with post-import re-entry prompts; machine-specific paths/hosts are preserved but flagged for review; clean AI-team defaults template carries no ids/members/usage/folders. Work isolated in a dedicated worktree/branch so Phase 45 is unaffected.
 
 - Phase 34 marked complete with zero tests covering the AI Office runtime and five live defects (hung batch run, unguarded double-submit, phantom active turn, `targetAgentId` stripped on restore, bare deletes breaking export). "Phase 34 complete" is not evidence of quality.
 - Research verdict: keep and harden the existing coordinator/budget gate; zero new npm dependencies.
@@ -260,6 +268,13 @@ Progress: [██████░░░░] 56%
 - [Phase 43]: explore_repo runs `claude -p --restricted` — verified against the real CLI that `--allowedTools` alone let a repo `.claude/settings.json` grant Bash, let `Read /etc/passwd` succeed, and let a repo `.mcp.json` execute a shell server on connect; `--restricted` closes all three and Read/Grep/Glob still work
 - [Phase 43]: the explore prompt goes after `--` and the model id refuses a leading `-` — `escapeShellArg` protects the shell, not the CLI's argv parser
 - [Phase 43]: explore_repo takes the turn's abort signal (through TeamToolContext) so a cancelled turn kills the remote process instead of leaving it reading for the 5-minute wall clock
+- [Phase 46]: Profile envelope uses strictObject and explicit blank-secret literals; backup forbidden-key regex is deliberately not reused
+- [Phase 46]: Telegram excluded from profiles (owner-machine-only): no schema section, no import read/write; strictObject rejects telegramSettings
+- [Phase 46]: Import merges settings key-by-key in one rw transaction with a snapshot; blank secrets never overwrite recipient values; capacity rows upsert by natural key with fresh ids
+- [Phase 46]: [Phase 46]: Authoring screen is seeded only from buildDefaultProfileConfig; the single db.settings.get in the view reads the profile list key, never the author's config — D-01 proof: no current-settings read may enter the portable profile
+- [Phase 46]: Profile import flags the full catalog of secrets and machine-specific fields, never filters to fields present in a file
+- [Phase 46]: SettingsView test uses one uniquely named Dexie instance per file (beforeAll/afterAll, cleared per test) to eliminate late useLiveQuery DatabaseClosedError
+- [Phase 46]: Import card defers all db use to preview/apply so rendering the Settings data tab cannot interfere with GitHub sync live queries
 
 ## Performance Metrics
 
@@ -303,3 +318,6 @@ Progress: [██████░░░░] 56%
 | Phase 43 P02 | 35 min | 3 tasks | 4 files |
 | Phase 43 P03 | ~15 min | 2 tasks | 3 files |
 | Phase 43 P04 | 25 min | 3 tasks | 7 files |
+| Phase 46 P01 | 6min | 3 tasks | 11 files |
+| Phase 46 P02 | 11min | 2 tasks | 10 files |
+| Phase 46 P03 | 53min | 2 tasks | 8 files |

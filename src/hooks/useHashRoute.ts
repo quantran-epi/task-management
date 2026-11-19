@@ -15,6 +15,7 @@ const VALID_ROUTES: readonly AppRoute[] = [
   'analytics',
   'notes',
   'settings',
+  'config-profiles',
   'timer-popout',
   'notes-popout',
   'ai-popout',

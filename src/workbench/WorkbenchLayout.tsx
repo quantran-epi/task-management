@@ -166,6 +166,7 @@ export function WorkbenchLayout({
         notes: 'Docs',
         telegram: 'Telegram Bot',
         settings: 'Settings',
+        'config-profiles': 'Cấu hình cho người khác',
         insight: 'Item Insight',
       };
       if (viewKey === 'team') {
@@ -268,6 +269,7 @@ export function WorkbenchLayout({
         telegram: 'Telegram Bot',
         mermaid: 'Diagram Studio',
         systems: 'System Catalog',
+        'config-profiles': 'Cấu hình cho người khác',
       };
       openTab({
         id: viewKey,
