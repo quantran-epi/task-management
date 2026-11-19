@@ -582,17 +582,11 @@ describe('strict fixed-route knowledge client', () => {
 
     it('posts validated federated retrieval without a set route', async () => {
       const setId = generateId();
+      // D-07 wire contract: the client sends only query + optional bounds; the server owns
+      // published-set discovery and budgets (retrievalProtocol.ts FederatedRetrievalRequestSchema).
       const body = {
         query: 'Compare SIT and PROD',
-        setTierAssignments: [{ setId, tier: 'REQUIRED', roleGroup: 'baseline' }],
-        comparisonMode: 'single',
-        budgets: {
-          concurrency: 1,
-          elapsedMs: 1000,
-          maxSets: 1,
-          maxItems: 20,
-          maxEvidenceChars: 8000,
-        },
+        setIds: [setId],
       };
       const fetcher = vi.fn(async (input: RequestInfo | URL) => {
         expect(String(input)).toBe('https://knowledge.example.com/api/v1/retrieve');

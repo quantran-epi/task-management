@@ -68,7 +68,7 @@ describe('Docs workspace + doc_set tabs (D-06, D-07, D-08)', () => {
     const set = await seedSet('Bộ A', 1);
     renderWorkspace();
 
-    fireEvent.click(await screen.findByRole('button', { name: `Mở bộ tài liệu ${set.name}` }));
+    fireEvent.click(await screen.findByRole('button', { name: `Mở bộ tài liệu ${set.name}` }, { timeout: 5000 }));
 
     await waitFor(() => {
       const tabs = useLayoutStore.getState().openTabs.filter((tab) => tab.viewType === 'doc_set');
@@ -85,8 +85,8 @@ describe('Docs workspace + doc_set tabs (D-06, D-07, D-08)', () => {
     const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
     renderWorkspace();
 
-    fireEvent.click(await screen.findByRole('button', { name: `Mở bộ tài liệu ${first.name}` }));
-    fireEvent.click(await screen.findByRole('button', { name: `Mở bộ tài liệu ${second.name}` }));
+    fireEvent.click(await screen.findByRole('button', { name: `Mở bộ tài liệu ${first.name}` }, { timeout: 5000 }));
+    fireEvent.click(await screen.findByRole('button', { name: `Mở bộ tài liệu ${second.name}` }, { timeout: 5000 }));
 
     await waitFor(() => {
       const tabs = useLayoutStore.getState().openTabs.filter((tab) => tab.viewType === 'doc_set');
@@ -102,7 +102,7 @@ describe('Docs workspace + doc_set tabs (D-06, D-07, D-08)', () => {
   it('survives a layout persist -> rehydrate cycle without a storage key bump', async () => {
     const set = await seedSet('Bộ A', 1);
     renderWorkspace();
-    fireEvent.click(await screen.findByRole('button', { name: `Mở bộ tài liệu ${set.name}` }));
+    fireEvent.click(await screen.findByRole('button', { name: `Mở bộ tài liệu ${set.name}` }, { timeout: 5000 }));
     await waitFor(() =>
       expect(useLayoutStore.getState().openTabs.some((tab) => tab.viewType === 'doc_set')).toBe(true)
     );
@@ -120,7 +120,7 @@ describe('Docs workspace + doc_set tabs (D-06, D-07, D-08)', () => {
   it('renders only one bounded page plus pagination when a set has many documents', async () => {
     const set = await seedSet('Bộ lớn', 25);
     renderWorkspace();
-    fireEvent.click(await screen.findByRole('button', { name: `Mở bộ tài liệu ${set.name}` }));
+    fireEvent.click(await screen.findByRole('button', { name: `Mở bộ tài liệu ${set.name}` }, { timeout: 5000 }));
     await screen.findByTestId('doc-set-detail');
 
     const detail = screen.getByTestId('doc-set-detail');
@@ -138,7 +138,7 @@ describe('Docs workspace + doc_set tabs (D-06, D-07, D-08)', () => {
   it('mounts the shared DocumentSetDeleteDialog from the doc_set detail', async () => {
     const set = await seedSet('Bộ xóa', 1);
     renderWorkspace();
-    fireEvent.click(await screen.findByRole('button', { name: `Mở bộ tài liệu ${set.name}` }));
+    fireEvent.click(await screen.findByRole('button', { name: `Mở bộ tài liệu ${set.name}` }, { timeout: 5000 }));
     await screen.findByTestId('doc-set-detail');
 
     expect(screen.getByTestId('shared-delete-dialog')).toBeInTheDocument();

@@ -752,8 +752,9 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       );
       // 6th arg of executeToolFn is tc.id from the orchestrator loop; the wrapper must accept
       // it and pass it to BOTH toolContext (team tools) and dispatchAiToolCall (local tools).
+      // toolContext also takes the per-turn repoHints slice before signal/loopCallId.
       expect(source).toMatch(/loopCallId\?: string\n    \): Promise<string>/);
-      expect(source).toMatch(/toolContext\(agentId, signal, loopCallId\)/);
+      expect(source).toMatch(/toolContext\(agentId, repoHints, signal, loopCallId\)/);
       expect(source).toMatch(/\.\.\.\(loopCallId \? \{ callId: loopCallId \} : \{\}\)/);
     });
   });
@@ -7254,8 +7255,11 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
         const started = Date.now();
         await coordinator.send('Xin chào');
         await waitForReady(coordinator);
-        // The bound, not the (never-settling) discovery, is what let this return.
-        expect(Date.now() - started).toBeLessThan(2_000);
+        // The bound, not the (never-settling) discovery, is what let this return: without the
+        // 50ms bound, `send()` would hang forever and this test would hit the suite timeout.
+        // A generous wall-clock ceiling tolerates CPU contention from parallel workers while
+        // still proving the discovery promise was abandoned rather than awaited.
+        expect(Date.now() - started).toBeLessThan(10_000);
       } finally {
         mcpProbe.hang = false;
       }

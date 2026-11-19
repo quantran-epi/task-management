@@ -267,34 +267,42 @@ describe('KnowledgeServerConfigCard', () => {
   it('maintains persisted token across views while excluding it from backups', async () => {
     const tokenCanary = 'bearer-token-canary-secret-12345';
 
-    function Shell({ testDb }: { testDb: TaskPlannerDatabase }) {
-      const [route, setRoute] = useState<'settings' | 'notes'>('settings');
+    function Shell({
+      testDb,
+      fetcher,
+    }: {
+      testDb: TaskPlannerDatabase;
+      fetcher: typeof fetch;
+    }) {
+      const [route, setRoute] = useState<'settings' | 'sets'>('settings');
       return (
         <KnowledgeConfigProvider db={testDb}>
           <button onClick={() => setRoute('settings')}>Go Settings</button>
-          <button onClick={() => setRoute('notes')}>Go Notes</button>
-          {route === 'settings' ? <SettingsView db={testDb} defaultActiveTab="ai" /> : <NotesView db={testDb} />}
+          <button onClick={() => setRoute('sets')}>Go Sets</button>
+          {route === 'settings' ? (
+            <SettingsView db={testDb} defaultActiveTab="ai" />
+          ) : (
+            <KnowledgeServerConfigCard fetcher={fetcher} />
+          )}
         </KnowledgeConfigProvider>
       );
     }
 
-    const { NotesView } = await import('../../src/views/NotesView');
-    const { createNote } = await import('../../src/db/repositories/noteRepo');
-    const { createDocumentSet } = await import('../../src/db/repositories/documentSetRepo');
     const { exportBackupPayload } = await import('../../src/services/backup/exportBackup');
 
-    const note = await createNote({ title: 'Ghi chú', body: '# Nội dung', type: 'document' }, db);
-    await createDocumentSet({ name: 'Bộ 1', documentIds: [note.id] }, db);
-
+    // Plan 02 replaced the long-scroll document-set drawer with the dedicated Docs workspace,
+    // so the old "Bộ tài liệu" -> "Mở chi tiết" -> publish-preview path no longer exists.
+    // The same persisted-token invariant is observed through the set-management section,
+    // which builds its client from the provider's token on mount.
     const fetchSpy = vi.fn().mockImplementation(async () => {
-      return new Response(JSON.stringify({ ok: true, attemptId: '11111111-1111-4111-8111-111111111111', status: 'Publishing' }), {
+      return new Response(JSON.stringify([]), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
     });
     vi.stubGlobal('fetch', fetchSpy);
 
-    const { unmount } = render(<Shell testDb={db} />);
+    const { unmount } = render(<Shell testDb={db} fetcher={fetchSpy} />);
 
     // 1. In Settings view, configure Knowledge Server
     await screen.findByRole('switch', { name: 'Bật Knowledge Server' });
@@ -322,19 +330,25 @@ describe('KnowledgeServerConfigCard', () => {
       expect(enabledSetting?.value).toBe(true);
     });
 
-    // 2. Switch to NotesView without unmounting KnowledgeConfigProvider
-    fireEvent.click(screen.getByRole('button', { name: 'Go Notes' }));
-    expect(await screen.findByText('Ghi chú & Tài liệu')).toBeInTheDocument();
+    // 2. Switch to the set-management surface on the same provider/db: it reads the persisted
+    // token and issues its authoritative list request through the supplied fetcher.
+    fireEvent.click(screen.getByRole('button', { name: 'Go Sets' }));
+    expect(await screen.findByText('Quản lý set')).toBeInTheDocument();
 
-    // 3. Open document set drawer and preview
-    fireEvent.click((await screen.findByText('Bộ tài liệu')).closest('button') as HTMLButtonElement);
-    fireEvent.click(await screen.findByRole('button', { name: 'Mở chi tiết' }));
-    const previewButton = await screen.findByRole('button', { name: 'Xem trước xuất bản' });
-    await waitFor(() => expect(previewButton).toBeEnabled());
-    fireEvent.click(previewButton);
-
-    // 4. Assert Authorization header contains token
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    // 3. Assert the card built its client with the persisted token, and that the real client
+    // sends that token as a Bearer header (listPublishedSets is mocked at the card boundary).
+    const { createKnowledgeClient } = await import('../../src/services/knowledge/knowledgeClient');
+    await waitFor(() =>
+      expect(vi.mocked(createKnowledgeClient)).toHaveBeenCalledWith(
+        expect.objectContaining({ token: tokenCanary })
+      )
+    );
+    const probeClient = realCreateKnowledgeClient({
+      baseUrl: 'https://knowledge.example.com',
+      token: tokenCanary,
+      fetcher: fetchSpy,
+    });
+    await probeClient.listPublishedSets();
     const authHeader = fetchSpy.mock.calls[0]?.[1]?.headers?.Authorization || fetchSpy.mock.calls[0]?.[1]?.headers?.authorization;
     expect(authHeader).toBe(`Bearer ${tokenCanary}`);
 
