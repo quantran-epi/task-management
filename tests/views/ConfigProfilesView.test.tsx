@@ -3,7 +3,6 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { ConfigProfilesView } from '../../src/views/ConfigProfilesView';
 import { TaskPlannerDatabase } from '../../src/db';
 import { CONFIGURATION_PROFILES_SETTING_KEY } from '../../src/services/configProfiles/importProfile';
-import { getSecretFields } from '../../src/services/configProfiles/catalog';
 import { DEFAULT_NINEROUTER_ENDPOINT } from '../../src/services/ai/nineRouterTokenService';
 import {
   CONFIG_PROFILE_APP_MARKER,
@@ -36,6 +35,10 @@ describe('ConfigProfilesView — defaults-seeded authoring (D-01..D-07)', () => 
     }
   });
 
+  const openPanel = (label: string) => {
+    fireEvent.click(screen.getByText(label).closest('.ant-collapse-header')!);
+  };
+
   it('seeds the form from DEFAULT_* constants and NEVER reads db.settings during authoring', async () => {
     const settingsSpy = vi.spyOn(db.settings, 'get');
 
@@ -51,17 +54,79 @@ describe('ConfigProfilesView — defaults-seeded authoring (D-01..D-07)', () => 
     });
   });
 
-  it('renders secret fields blank with an export-blank placeholder', () => {
+  it('does not render blank secret inputs in authoring view (secrets handled by Import UI + checklist)', () => {
     render(<ConfigProfilesView db={db} />);
 
-    const secretsCard = screen.getByTestId('profile-secrets-section');
-    const secretFields = getSecretFields();
-    for (const key of secretFields) {
-      const field = secretsCard.querySelector(`[data-secret-field="${key}"]`);
-      expect(field, `secret field ${key} must be rendered`).not.toBeNull();
-      expect(field).toHaveValue('');
-      expect(field).toHaveAttribute('placeholder', 'Sẽ để trống khi export');
-    }
+    expect(screen.queryByTestId('profile-secrets-section')).toBeNull();
+    expect(document.querySelectorAll('[data-secret-field]').length).toBe(0);
+  });
+
+  it('renders notification_settings and system_type_options as readable JSON, never [object Object]', () => {
+    render(<ConfigProfilesView db={db} />);
+
+    expect((screen.getByLabelText('Cài đặt thông báo') as HTMLTextAreaElement).value).toContain(
+      '"browserNotificationsEnabled"'
+    );
+    expect((screen.getByLabelText('Tùy chọn loại hệ thống') as HTMLTextAreaElement).value).toContain(
+      '"LOGICAL_GROUP"'
+    );
+    expect(screen.queryByText('[object Object]')).toBeNull();
+  });
+
+  it('saves a valid edited notification_settings object, not a string', async () => {
+    render(<ConfigProfilesView db={db} />);
+
+    fireEvent.change(screen.getByLabelText('Cài đặt thông báo'), {
+      target: { value: JSON.stringify({ browserNotificationsEnabled: true, dueSoonDays: 5 }, null, 2) },
+    });
+    fireEvent.change(screen.getByLabelText('Tên profile'), { target: { value: 'Profile JSON object' } });
+    fireEvent.click(screen.getByRole('button', { name: /Lưu profile/i }));
+
+    let savedConfig: { settings: Record<string, unknown> } | undefined;
+    await waitFor(async () => {
+      const stored = await db.settings.get(CONFIGURATION_PROFILES_SETTING_KEY);
+      savedConfig = (stored?.value as Array<{ config: typeof savedConfig }> | undefined)?.[0]?.config;
+      expect(savedConfig).toBeDefined();
+    });
+    expect(typeof savedConfig!.settings.notification_settings).toBe('object');
+    expect(savedConfig!.settings.notification_settings).not.toBeInstanceOf(String);
+    expect((savedConfig!.settings.notification_settings as { dueSoonDays: number }).dueSoonDays).toBe(5);
+  });
+
+  it('saves a valid edited system_type_options array, not a string', async () => {
+    render(<ConfigProfilesView db={db} />);
+
+    fireEvent.change(screen.getByLabelText('Tùy chọn loại hệ thống'), {
+      target: { value: JSON.stringify([{ value: 'API', label: 'API', color: '#1890ff' }]) },
+    });
+    fireEvent.change(screen.getByLabelText('Tên profile'), { target: { value: 'Profile JSON array' } });
+    fireEvent.click(screen.getByRole('button', { name: /Lưu profile/i }));
+
+    let savedConfig: { settings: Record<string, unknown> } | undefined;
+    await waitFor(async () => {
+      const stored = await db.settings.get(CONFIGURATION_PROFILES_SETTING_KEY);
+      savedConfig = (stored?.value as Array<{ config: typeof savedConfig }> | undefined)?.[0]?.config;
+      expect(savedConfig).toBeDefined();
+    });
+    expect(Array.isArray(savedConfig!.settings.system_type_options)).toBe(true);
+    expect((savedConfig!.settings.system_type_options as Array<{ value: string }>)[0]?.value).toBe('API');
+  });
+
+  it('blocks save and stores no string for invalid JSON or wrong structured shape', async () => {
+    render(<ConfigProfilesView db={db} />);
+
+    fireEvent.change(screen.getByLabelText('Cài đặt thông báo'), { target: { value: '{' } });
+    fireEvent.change(screen.getByLabelText('Tùy chọn loại hệ thống'), {
+      target: { value: JSON.stringify({ not: 'an array' }) },
+    });
+    fireEvent.change(screen.getByLabelText('Tên profile'), { target: { value: 'Profile JSON sai' } });
+    fireEvent.click(screen.getByRole('button', { name: /Lưu profile/i }));
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('Profile chưa hợp lệ');
+    });
+    expect(screen.getAllByRole('alert').length).toBeGreaterThan(0);
+    expect(await db.settings.get(CONFIGURATION_PROFILES_SETTING_KEY)).toBeUndefined();
   });
 
   it('flags machine-specific fields including ghostDevConfig.claudePath with a warning marker', () => {
@@ -89,6 +154,19 @@ describe('ConfigProfilesView — defaults-seeded authoring (D-01..D-07)', () => 
     expect(within(screen.getByTestId('profile-ai-team-section')).getByText('Kế thừa global')).toBeInTheDocument();
   });
 
+  it('keeps all grouped fields and DOM hooks reachable after collapsing', () => {
+    render(<ConfigProfilesView db={db} />);
+
+    expect(screen.getByLabelText('9Router endpoint')).toBeInTheDocument();
+    expect(screen.getByLabelText('Team budget warn threshold')).toBeInTheDocument();
+    expect(screen.getByTestId('profile-capacity-section')).toBeInTheDocument();
+    expect(screen.getByTestId('profile-ghost-dev-section')).toBeInTheDocument();
+    expect(screen.getByTestId('profile-ai-team-section')).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-machine-specific-row="github_owner"] [data-machine-specific]')
+    ).not.toBeNull();
+  });
+
   it('renders NO Telegram field/section and no team record controls', () => {
     render(<ConfigProfilesView db={db} />);
 
@@ -112,6 +190,7 @@ describe('ConfigProfilesView — defaults-seeded authoring (D-01..D-07)', () => 
   it('clamps blank/invalid draft values before saving so the profile passes schema and import (WR-04)', async () => {
     render(<ConfigProfilesView db={db} />);
 
+    openPanel('Công suất làm việc (capacity)');
     fireEvent.click(screen.getByRole('button', { name: /Thêm ngoại lệ/ }));
     fireEvent.change(screen.getByLabelText('Ghost Dev concurrency cap'), { target: { value: '0' } });
     fireEvent.change(screen.getByLabelText('Phút làm việc Thứ Hai'), { target: { value: '2000' } });
@@ -160,6 +239,7 @@ describe('ConfigProfilesView — defaults-seeded authoring (D-01..D-07)', () => 
     const today = new Date().toISOString().slice(0, 10);
     await db.capacityOverrides.add({ id: 'recipient-today', date: today, workMinutes: 480 });
 
+    openPanel('Công suất làm việc (capacity)');
     fireEvent.click(screen.getByRole('button', { name: /Thêm ngoại lệ/ }));
     // New exceptions are seeded with today, but the user may mistype the date.
     expect(screen.getByLabelText('Ngày ngoại lệ 1')).toHaveValue(today);

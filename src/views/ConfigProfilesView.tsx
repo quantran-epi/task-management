@@ -1,8 +1,9 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Button,
   Card,
+  Collapse,
   Input,
   Modal,
   Select,
@@ -94,7 +95,37 @@ const SETTING_FIELDS: Record<string, string> = {
   graphiti_mcp_endpoint: 'Graphiti MCP endpoint',
   knowledge_server_enabled: 'Bật knowledge server',
   knowledge_server_base_url: 'Knowledge server base URL',
+  notification_settings: 'Cài đặt thông báo',
+  system_type_options: 'Tùy chọn loại hệ thống',
 };
+
+const JSON_SETTINGS: Record<string, 'object' | 'array'> = {
+  notification_settings: 'object',
+  system_type_options: 'array',
+};
+const STRUCTURED_ERROR = 'JSON không hợp lệ hoặc sai kiểu (cần object/array).';
+const STRUCTURED_SAVE_ERROR =
+  'Cài đặt thông báo / Tùy chọn loại hệ thống: JSON chưa hợp lệ. Sửa trước khi lưu.';
+
+function parseStructuredValue(key: string, text: string): unknown {
+  const parsed: unknown = JSON.parse(text);
+  const kind = JSON_SETTINGS[key] ?? 'object';
+  const valid =
+    kind === 'array'
+      ? Array.isArray(parsed)
+      : parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed);
+  if (!valid) throw new Error(STRUCTURED_ERROR);
+  return parsed;
+}
+
+function structuredTextFor(config: ProfileConfig): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const key of Object.keys(JSON_SETTINGS)) {
+    const fallback = JSON_SETTINGS[key] === 'array' ? [] : {};
+    result[key] = JSON.stringify(config.settings[key] ?? fallback, null, 2);
+  }
+  return result;
+}
 
 const SETTING_GROUPS: Array<{ title: string; keys: string[] }> = [
   { title: 'GitHub', keys: ['github_owner', 'github_repo', 'github_branch', 'github_auto_sync_enabled', 'github_auto_sync_mode', 'github_auto_sync_interval_minutes', 'github_auto_sync_daily_time'] },
@@ -130,6 +161,16 @@ function newDraftFromDefaults(): ProfileConfig {
 
 function fieldValue(value: unknown): string {
   return value === null || value === undefined ? '' : String(value);
+}
+
+/** Slug for stable Collapse keys; Vietnamese diacritics fold to plain ASCII. */
+function slugify(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
 }
 
 const clampInt = (text: string, min: number, max: number, blankValue: number): number => {
@@ -238,10 +279,13 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [draft, setDraft] = useState<ProfileConfig>(newDraftFromDefaults);
+  const [structuredText, setStructuredText] = useState<Record<string, string>>(() =>
+    structuredTextFor(draft)
+  );
+  const [structuredErrors, setStructuredErrors] = useState<Record<string, string>>({});
   const [draftError, setDraftError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const secretFields = useMemo(() => getSecretFields(), []);
   const machineSpecificFields = useMemo(() => getMachineSpecificFields(), []);
 
   useEffect(() => {
@@ -271,7 +315,10 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
     setSelectedId(null);
     setName('');
     setDraftError(null);
-    setDraft(newDraftFromDefaults());
+    const fresh = newDraftFromDefaults();
+    setDraft(fresh);
+    setStructuredText(structuredTextFor(fresh));
+    setStructuredErrors({});
   };
 
   const handleNew = () => {
@@ -285,7 +332,10 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
     setSelectedId(profile.id);
     setName(profile.name);
     setDraftError(null);
-    setDraft(cloneConfig(profile.config));
+    const config = cloneConfig(profile.config);
+    setDraft(config);
+    setStructuredText(structuredTextFor(config));
+    setStructuredErrors({});
   };
 
   const handleSave = async () => {
@@ -294,9 +344,26 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
       notification.error({ message: 'Vui lòng nhập tên profile' });
       return;
     }
+    // Structured fields must never reach the envelope as strings (T-quick-01).
+    const structuredValues: Record<string, unknown> = {};
+    for (const key of Object.keys(JSON_SETTINGS)) {
+      try {
+        structuredValues[key] = parseStructuredValue(key, structuredText[key] ?? '');
+      } catch {
+        setDraftError(STRUCTURED_SAVE_ERROR);
+        return;
+      }
+    }
+    if (Object.values(structuredErrors).some(Boolean)) {
+      setDraftError(STRUCTURED_SAVE_ERROR);
+      return;
+    }
     const now = new Date().toISOString();
     const existing = profiles.find((profile) => profile.id === selectedId);
     const normalised = normaliseDraft(draft);
+    for (const key of Object.keys(JSON_SETTINGS)) {
+      normalised.settings[key] = structuredValues[key];
+    }
     const validation = ConfigProfileEnvelopeSchema.safeParse(
       envelopeForDraft(trimmed, normalised, existing?.id ?? 'draft', now)
     );
@@ -377,6 +444,30 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
     const label = displayLabel(key);
     const isMachine = machineSpecificFields.includes(key);
     const value = draft.settings[key];
+    if (key in JSON_SETTINGS) {
+      const error = structuredErrors[key];
+      return (
+        <div key={key}>
+          <Text strong>{label}</Text>
+          <Input.TextArea
+            aria-label={label}
+            rows={6}
+            value={structuredText[key] ?? ''}
+            onChange={(event) => {
+              const text = event.target.value;
+              setStructuredText((current) => ({ ...current, [key]: text }));
+              try {
+                setSetting(key, parseStructuredValue(key, text));
+                setStructuredErrors((current) => ({ ...current, [key]: '' }));
+              } catch {
+                setStructuredErrors((current) => ({ ...current, [key]: STRUCTURED_ERROR }));
+              }
+            }}
+          />
+          {error && <Text type="danger" role="alert">{error}</Text>}
+        </div>
+      );
+    }
     const control = BOOLEAN_SETTINGS.has(key) ? (
       <Switch
         aria-label={label}
@@ -470,22 +561,33 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
         </Space>
       </Card>
 
-      <Space direction="vertical" style={{ width: '100%' }} size="middle">
-        <Typography.Text strong>Thông báo & hệ thống</Typography.Text>
-        <Card size="small">
-          {renderSetting('notification_settings')}
-          {renderSetting('system_type_options')}
-        </Card>
-
-        {SETTING_GROUPS.map((group) => (
-          <Fragment key={group.title}>
-            <Typography.Text strong>{group.title}</Typography.Text>
-            <Card size="small">{group.keys.map(renderSetting)}</Card>
-          </Fragment>
-        ))}
-
-        <Typography.Text strong>Công suất làm việc (capacity)</Typography.Text>
-        <Card size="small" data-testid="profile-capacity-section">
+      <Collapse
+        ghost
+        defaultActiveKey={[]}
+        items={[
+          {
+            key: 'thong-bao-he-thong',
+            label: 'Thông báo & hệ thống',
+            forceRender: true,
+            children: (
+              <Card size="small">
+                {renderSetting('notification_settings')}
+                {renderSetting('system_type_options')}
+              </Card>
+            ),
+          },
+          ...SETTING_GROUPS.map((group) => ({
+            key: slugify(group.title),
+            label: group.title,
+            forceRender: true,
+            children: <Card size="small">{group.keys.map(renderSetting)}</Card>,
+          })),
+          {
+            key: 'capacity',
+            label: 'Công suất làm việc (capacity)',
+            forceRender: true,
+            children: (
+              <Card size="small" data-testid="profile-capacity-section">
           {draft.capacityRules.map((rule) => (
             <Space key={rule.dayOfWeek} style={{ marginBottom: 8 }} wrap>
               <Text style={{ width: 100 }}>{DAY_LABELS[rule.dayOfWeek] ?? `Ngày ${rule.dayOfWeek}`}</Text>
@@ -578,10 +680,15 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
           >
             Thêm ngoại lệ
           </Button>
-        </Card>
-
-        <Typography.Text strong>Ghost Dev config</Typography.Text>
-        <Card size="small" data-testid="profile-ghost-dev-section">
+              </Card>
+            ),
+          },
+          {
+            key: 'ghost-dev',
+            label: 'Ghost Dev config',
+            forceRender: true,
+            children: (
+              <Card size="small" data-testid="profile-ghost-dev-section">
           <div style={{ marginBottom: 12 }}>
             <Text strong>Model chính (master)</Text>
             <div>
@@ -670,10 +777,15 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
               />
             </div>
           </div>
-        </Card>
-
-        <Typography.Text strong>Mẫu defaults cho đội AI (AI-team template)</Typography.Text>
-        <Card size="small" data-testid="profile-ai-team-section">
+              </Card>
+            ),
+          },
+          {
+            key: 'ai-team',
+            label: 'Mẫu defaults cho đội AI (AI-team template)',
+            forceRender: true,
+            children: (
+              <Card size="small" data-testid="profile-ai-team-section">
           <div style={{ marginBottom: 12 }}>
             <Text strong>Token budget mỗi team</Text>
             <div>
@@ -762,32 +874,11 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
               />
             </div>
           ))}
-        </Card>
-
-        <Typography.Text strong>Secrets (sẽ để trống khi xuất)</Typography.Text>
-        <Card size="small" data-testid="profile-secrets-section">
-          <Alert
-            type="info"
-            showIcon
-            message="Mọi trường secret đều để trống và sẽ được ghi là '' trong tệp export. Người nhận cần nhập lại sau khi import."
-            style={{ marginBottom: 12 }}
-          />
-          {secretFields.map((key) => (
-            <div key={key} style={{ marginBottom: 12 }}>
-              <Text strong>{displayLabel(key)}</Text>
-              <div>
-                <Input
-                  aria-label={displayLabel(key)}
-                  data-secret-field={key}
-                  placeholder="Sẽ để trống khi export"
-                  value=""
-                  readOnly
-                />
-              </div>
-            </div>
-          ))}
-        </Card>
-      </Space>
+              </Card>
+            ),
+          },
+        ]}
+      />
     </div>
   );
 };
