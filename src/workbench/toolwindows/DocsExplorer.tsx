@@ -479,10 +479,9 @@ export function DocsExplorer({ db = defaultDb }: DocsExplorerProps) {
           notes={allNotes ?? []}
           currentFolderId={allNotes.find((note) => note.id === activeFilter && note.type === 'folder' && !note.deletedAt)?.id}
           onSelectFolder={setActiveFilter}
-          onOpenSet={handleOpenDocumentSet}
-          workspaceSets={documentSets ?? []}
         />
       </div>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
       <DocFolderTree
         notes={allNotes ?? []}
         loadSearchNotes={loadSearchNotes}
@@ -508,6 +507,7 @@ export function DocsExplorer({ db = defaultDb }: DocsExplorerProps) {
         onRestoreDoc={handleRestoreDoc}
         width="100%"
       />
+      </div>
     </div>
   );
 }

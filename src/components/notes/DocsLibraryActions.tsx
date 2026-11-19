@@ -135,7 +135,6 @@ interface DocsLibraryActionsProps {
   onSelectFolder: (folderId: string) => void;
   /** Set-level browsing is owned by the Docs workspace; every open path goes through this callback. */
   onOpenSet?: (setId: string, title: string) => void;
-  workspaceSets?: DocumentSet[];
 }
 
 export function DocsLibraryActions({
@@ -143,8 +142,6 @@ export function DocsLibraryActions({
   notes,
   currentFolderId,
   onSelectFolder,
-  onOpenSet,
-  workspaceSets = [],
 }: DocsLibraryActionsProps) {
   const [aiPromptModalOpen, setAiPromptModalOpen] = useState(false);
   const knowledgeConfig = useOptionalKnowledgeConfig();
@@ -363,18 +360,13 @@ export function DocsLibraryActions({
         <Button
           size="small"
           icon={<DatabaseOutlined />}
-          aria-label="Bộ tài liệu"
+          aria-label="Tạo bộ tài liệu"
           onClick={() => {
-            const firstSet = workspaceSets[0];
-            if (firstSet && onOpenSet) {
-              onOpenSet(firstSet.id, firstSet.name);
-              return;
-            }
             setCreatingDocumentSet(true);
             setDocumentSetDrawerOpen(true);
           }}
         >
-          Bộ tài liệu
+          Tạo bộ tài liệu
         </Button>
         <Button
           size="small"

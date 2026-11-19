@@ -151,7 +151,8 @@ describe('Docs workspace + doc_set tabs (D-06, D-07, D-08)', () => {
     renderWorkspace();
 
     expect(screen.queryByText('Bộ tài liệu xuất bản')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Quản lý Bộ tài liệu' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Bộ tài liệu' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tạo bộ tài liệu' })).toBeInTheDocument();
     expect(screen.getByTestId('docs-set-workspace')).toBeInTheDocument();
   });
 });
