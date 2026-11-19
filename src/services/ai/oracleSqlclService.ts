@@ -324,6 +324,61 @@ export function extractOracleError(stdout: string, stderr: string): string | nul
 }
 
 /**
+ * Redacts the password-bearing connection string from any text before it reaches a tool
+ * result or model-visible error. Covers the full `user/pass@host` string and the bare
+ * password component, which a shell/SSH error may echo back.
+ */
+function redactConnectionSecrets(message: string, config: OracleToolConfig): string {
+  let out = message;
+  const cs = config.connectionString?.trim();
+  if (!cs) return out;
+  out = out.split(cs).join('***');
+  const atIdx = cs.indexOf('@');
+  const beforeAt = atIdx >= 0 ? cs.slice(0, atIdx) : cs;
+  const slashIdx = beforeAt.indexOf('/');
+  const password = slashIdx >= 0 ? beforeAt.slice(slashIdx + 1) : '';
+  if (password) out = out.split(password).join('***');
+  return out;
+}
+
+/**
+ * Detects a remote command failure that `extractOracleError` cannot see (SSH auth failure,
+ * missing `sql`, connect timeout, shell error). These produce no ORA-/SP2- token; without
+ * this guard `extractJsonFromSqlclOutput('')` turns an empty stdout into `[]` and the tool
+ * falsely reports `{ success: true, data: [] }` instead of the real error.
+ *
+ * Returns a redacted error message on failure, or null when the command output is usable.
+ * A legitimately empty result set (exit 0, no stderr) is NOT treated as a failure.
+ */
+export function detectRemoteFailure(
+  res: { stdout: string; stderr: string; exitStatus: number; finishReason?: string },
+  config: OracleToolConfig
+): string | null {
+  const stdout = (res.stdout ?? '').trim();
+  const stderr = (res.stderr ?? '').trim();
+  const nonZeroExit = typeof res.exitStatus === 'number' && res.exitStatus !== 0;
+  const badFinish = res.finishReason === 'error' || res.finishReason === 'cancelled';
+  // Empty stdout WITH stderr content on an otherwise-ok exit is a silent shell/sqlcl failure
+  // (e.g. `sql: command not found` written to stderr). Empty stdout alone may be a valid 0-row
+  // result, so it is not by itself an error.
+  const emptyOutWithStderr = !stdout && Boolean(stderr);
+  if (!nonZeroExit && !badFinish && !emptyOutWithStderr) return null;
+
+  const firstLine = stderr.split('\n').find((line) => line.trim().length > 0)?.trim() ?? '';
+  let reason: string;
+  if (firstLine) {
+    reason = firstLine;
+  } else if (res.finishReason === 'cancelled') {
+    reason = 'Lệnh SQLcl đã bị hủy.';
+  } else if (nonZeroExit) {
+    reason = `Lệnh SQLcl thoát với mã ${res.exitStatus} và không trả về dữ liệu.`;
+  } else {
+    reason = 'Lệnh SQLcl không trả về dữ liệu.';
+  }
+  return redactConnectionSecrets(reason, config);
+}
+
+/**
  * Executes an arbitrary SQL script through remote SQLcl over SSH.
  */
 async function runSqlclScriptOverSsh(
@@ -472,12 +527,13 @@ EXIT;
       const res = await runSqlclScriptOverSsh(config, script, db, callId);
       const executionTimeMs = Date.now() - startTime;
       const oracleError = extractOracleError(res.stdout, res.stderr);
+      const remoteFailure = detectRemoteFailure(res, config);
 
-      if (oracleError) {
+      if (oracleError || remoteFailure) {
         return JSON.stringify({
           success: false,
           action: 'explain',
-          error: oracleError,
+          error: oracleError ?? remoteFailure ?? 'Lỗi thực thi SQLcl không xác định.',
           executionTimeMs,
         } satisfies OracleToolExecutionResult);
       }
@@ -508,12 +564,13 @@ EXIT;
     const res = await runSqlclScriptOverSsh(config, script, db, callId);
     const executionTimeMs = Date.now() - startTime;
     const oracleError = extractOracleError(res.stdout, res.stderr);
+    const remoteFailure = detectRemoteFailure(res, config);
 
-    if (oracleError) {
+    if (oracleError || remoteFailure) {
       return JSON.stringify({
         success: false,
         action: 'query',
-        error: oracleError,
+        error: oracleError ?? remoteFailure ?? 'Lỗi thực thi SQLcl không xác định.',
         executionTimeMs,
         executedSql: limitedSql,
       } satisfies OracleToolExecutionResult);
@@ -524,7 +581,10 @@ EXIT;
     const rowCount = isArray
       ? (parsedJson as unknown[]).length
       : parsedJson && typeof parsedJson === 'object' && 'results' in parsedJson
-        ? (parsedJson as any).results?.[0]?.rows?.length ?? 0
+        ? (parsedJson as any).results?.reduce(
+            (sum: number, group: any) => sum + (Array.isArray(group?.items) ? group.items.length : 0),
+            0
+          ) ?? 0
         : undefined;
 
     // Truncate output string if payload exceeds safety token budget (~60KB)
@@ -629,8 +689,9 @@ EXIT;
       const res = await runSqlclScriptOverSsh(config, script, db, callId);
       const executionTimeMs = Date.now() - startTime;
       const oracleError = extractOracleError(res.stdout, res.stderr);
-      if (oracleError) {
-        return JSON.stringify({ success: false, action, error: oracleError, executionTimeMs });
+      const remoteFailure = detectRemoteFailure(res, config);
+      if (oracleError || remoteFailure) {
+        return JSON.stringify({ success: false, action, error: oracleError ?? remoteFailure ?? 'Lỗi thực thi SQLcl không xác định.', executionTimeMs });
       }
 
       return JSON.stringify({
@@ -684,8 +745,9 @@ EXIT;
       const res = await runSqlclScriptOverSsh(config, script, db, callId);
       const executionTimeMs = Date.now() - startTime;
       const oracleError = extractOracleError(res.stdout, res.stderr);
-      if (oracleError) {
-        return JSON.stringify({ success: false, action, error: oracleError, executionTimeMs });
+      const remoteFailure = detectRemoteFailure(res, config);
+      if (oracleError || remoteFailure) {
+        return JSON.stringify({ success: false, action, error: oracleError ?? remoteFailure ?? 'Lỗi thực thi SQLcl không xác định.', executionTimeMs });
       }
 
       return JSON.stringify({
@@ -721,8 +783,9 @@ EXIT;
       const res = await runSqlclScriptOverSsh(config, script, db, callId);
       const executionTimeMs = Date.now() - startTime;
       const oracleError = extractOracleError(res.stdout, res.stderr);
-      if (oracleError) {
-        return JSON.stringify({ success: false, action, error: oracleError, executionTimeMs });
+      const remoteFailure = detectRemoteFailure(res, config);
+      if (oracleError || remoteFailure) {
+        return JSON.stringify({ success: false, action, error: oracleError ?? remoteFailure ?? 'Lỗi thực thi SQLcl không xác định.', executionTimeMs });
       }
 
       return JSON.stringify({

@@ -557,6 +557,40 @@ describe('oracleSqlclService - Execution & SSH mocking', () => {
     expect(blocked.error).toMatch(/Bị từ chối/);
   });
 
+  it('returns an error, never silent empty data, when the remote command fails with empty stdout', async () => {
+    // Regression: a non-selected SSH host / missing sqlcl / bad login produces a nonzero exit
+    // and empty stdout. No ORA-/SP2- token appears, so extractOracleError returns null and the
+    // old code reported { success: true, data: [] } — exactly the "empty result" symptom.
+    seedActiveProfile({ connectionString: 'uat_user/uat_pass@uathost:1521/UAT' });
+    vi.spyOn(sshService, 'getSshConfigs').mockResolvedValue([{ id: 'ssh-1', name: 'UAT' } as any]);
+    vi.spyOn(sshService, 'getSshSecret').mockResolvedValue('secret-pass');
+    vi.spyOn(sshService, 'execRemoteCommand').mockResolvedValue({
+      stdout: '',
+      stderr: 'Permission denied (publickey).',
+      exitStatus: 255,
+    });
+
+    const res = JSON.parse(await executeOracleQuery({ query: 'SELECT 1 FROM DUAL' }, fakeDb));
+    expect(res.success).toBe(false);
+    expect(res.error).toBeTruthy();
+    expect(res.error).not.toContain('uat_pass');
+  });
+
+  it('counts rows from SQLcl JSON results[].items (the shape SQLcl actually emits)', async () => {
+    seedActiveProfile({});
+    vi.spyOn(sshService, 'getSshConfigs').mockResolvedValue([{ id: 'ssh-1', name: 'Bastion' } as any]);
+    vi.spyOn(sshService, 'getSshSecret').mockResolvedValue('secret-pass');
+    vi.spyOn(sshService, 'execRemoteCommand').mockResolvedValue({
+      stdout: JSON.stringify({ results: [{ items: [{ X: 1 }] }] }),
+      stderr: '',
+      exitStatus: 0,
+    });
+
+    const res = JSON.parse(await executeOracleQuery({ query: 'SELECT 1 AS X FROM DUAL' }, fakeDb));
+    expect(res.success).toBe(true);
+    expect(res.rowCount).toBe(1);
+  });
+
   it('never rejects a pending query after an hour of fake time (no timeout)', async () => {
     vi.useFakeTimers();
     try {
