@@ -90,7 +90,10 @@ describe('configuration profile round trip (tracer)', () => {
     expect((await db.settings.get('github_owner'))?.value).toBe('example-owner');
     expect((await db.settings.get('ninerouter_api_key'))?.value).toBe('recipient-real-secret');
     expect((await db.settings.get('notification_settings'))?.value).toEqual({ dueSoonDays: 3 });
-    expect(await db.settings.get('last_pre_import_snapshot')).toBeDefined();
+    // CR-01/WR-02: profile import is a key-by-key merge and never replaces the shared
+    // backup snapshot used by rollback/download.
+    expect(await db.settings.get('last_pre_import_snapshot')).toBeUndefined();
+    expect(await db.settings.get('last_profile_import_snapshot')).toBeUndefined();
 
     const rules = await db.capacityRules.toArray();
     expect(rules).toHaveLength(1);
