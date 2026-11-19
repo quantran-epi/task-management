@@ -33,6 +33,8 @@ export const UNSAFE_OR_EPHEMERAL_SETTING_KEYS = new Set<string>([
   'github_auto_sync_dirty_since',
   'github_auto_sync_missed_due_at',
   'last_pre_import_snapshot',
+  // Phase 46: saved named profiles carry blank secrets and machine paths — never export them in a plaintext backup.
+  'configuration_profiles',
   // Machine-local host inventory: hostnames, usernames and key paths.
   'ssh_configurations',
   // T-45-06: both Oracle settings keys embed password-bearing connection strings.

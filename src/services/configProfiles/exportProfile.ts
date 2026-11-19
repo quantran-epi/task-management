@@ -3,11 +3,7 @@ import {
   CONFIG_PROFILE_APP_MARKER,
   CONFIG_PROFILE_SCHEMA_VERSION,
 } from '../../validation/configProfileSchemas';
-import {
-  UNSAFE_OR_EPHEMERAL_SETTING_KEYS,
-  isSafeBackupSetting,
-} from '../backup/exportBackup';
-import { KEYRING_KEYS } from '../keyringService';
+import { getSecretFields } from './catalog';
 import { saveFileWithPicker } from '../../utils/fileExport';
 import { sanitizeFilename } from '../../utils/fileExport';
 
@@ -23,15 +19,11 @@ export interface ConfigProfileExportPayload {
  * same denylist/keyring list used by backup export; no new hand-written list.
  */
 export function getDeclaredSecretKeys(): string[] {
-  return [
-    ...UNSAFE_OR_EPHEMERAL_SETTING_KEYS,
-    ...Object.values(KEYRING_KEYS),
-    'knowledge_server_token',
-  ];
+  return getSecretFields();
 }
 
 function isDeclaredSecretKey(key: string): boolean {
-  return getDeclaredSecretKeys().includes(key) || !isSafeBackupSetting(key);
+  return getSecretFields().includes(key);
 }
 
 /**
