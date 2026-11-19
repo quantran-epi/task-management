@@ -89,6 +89,15 @@ const SnapshotResponseSchema = z
     ),
   })
   .strict();
+const PublishedSetSchema = z
+  .object({
+    setId: uuid,
+    snapshotId: uuid,
+  })
+  .passthrough();
+export const PublishedSetListSchema = z.array(PublishedSetSchema);
+export type PublishedSetSummary = z.infer<typeof PublishedSetSchema>;
+
 const ErrorEnvelopeSchema = z
   .object({
     error: z
@@ -963,6 +972,14 @@ export function createKnowledgeClient(options: CreateKnowledgeClientOptions) {
         await sleep(delay, pollOptions.signal);
         delay = Math.min(maxDelay, delay * 2);
       }
+    },
+
+    async listPublishedSets(signal?: AbortSignal): Promise<PublishedSetSummary[]> {
+      return request(
+        '/sets',
+        PublishedSetListSchema,
+        signal ? { signal } : {}
+      );
     },
 
     async purgeDocumentSet(setId: string, signal?: AbortSignal): Promise<void> {

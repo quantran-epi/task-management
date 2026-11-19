@@ -1005,4 +1005,56 @@ describe('strict fixed-route knowledge client', () => {
       expect(rejectRes.proposal.proposalId).toBe(proposalId);
     });
   });
+
+  describe('published set list (D-04)', () => {
+    it('parses the authoritative list and tolerates optional metadata', async () => {
+      const rows = [
+        {
+          setId: generateId(),
+          snapshotId: generateId(),
+          documentCount: 3,
+          state: 'READY',
+          updatedAt: '2026-11-19T00:00:00.000Z',
+        },
+        { setId: generateId(), snapshotId: generateId() },
+      ];
+      const fetcher = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+        expect(String(input)).toBe('https://knowledge.example.com/api/v1/sets');
+        expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer token');
+        return jsonResponse(rows);
+      });
+      const client = createKnowledgeClient({
+        baseUrl: 'https://knowledge.example.com',
+        token: 'token',
+        fetcher,
+      });
+
+      await expect(client.listPublishedSets()).resolves.toEqual(rows);
+      expect(fetcher).toHaveBeenCalledOnce();
+    });
+
+    it('surfaces remote and invalid responses as KnowledgeClientError', async () => {
+      const remoteClient = createKnowledgeClient({
+        baseUrl: 'https://knowledge.example.com',
+        token: 'token',
+        fetcher: vi.fn(async () =>
+          jsonResponse({ error: { code: 'UNAUTHORIZED', message: 'Valid bearer authorization is required.' } }, 401)
+        ),
+      });
+      await expect(remoteClient.listPublishedSets()).rejects.toMatchObject({
+        code: 'REMOTE_ERROR',
+        status: 401,
+        serverCode: 'UNAUTHORIZED',
+      });
+
+      const invalidClient = createKnowledgeClient({
+        baseUrl: 'https://knowledge.example.com',
+        token: 'token',
+        fetcher: vi.fn(async () => jsonResponse([{ setId: 'not-a-uuid' }])),
+      });
+      await expect(invalidClient.listPublishedSets()).rejects.toMatchObject({
+        code: 'INVALID_RESPONSE',
+      });
+    });
+  });
 });

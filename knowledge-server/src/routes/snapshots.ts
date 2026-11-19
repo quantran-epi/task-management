@@ -70,6 +70,10 @@ export function registerSnapshotRoutes(
   attemptService: AttemptService,
   graphBuildService?: GraphBuildService
 ) {
+  // Server-authoritative published-set enumeration; no local-catalog filtering or GC.
+  // Registered through buildKnowledgeServer so Bearer auth and allowedOrigins apply.
+  app.get('/api/v1/sets', async () => attemptService.store.listActiveSnapshots());
+
   app.get('/api/v1/sets/:setId/snapshot', async (request, reply) => {
     const params = SetParamsSchema.safeParse(request.params);
     if (!params.success) return invalid(reply);
