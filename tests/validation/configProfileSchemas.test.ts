@@ -10,6 +10,7 @@ import {
   PROFILE_KEY_CATALOG,
   getSecretFields,
   getMachineSpecificFields,
+  getDeclaredProfileMachineFields,
 } from '../../src/services/configProfiles/catalog';
 import { db } from '../../src/db';
 
@@ -132,6 +133,23 @@ describe('config profile schemas', () => {
     expect(getSecretFields()).toContain('jira_api_token');
     expect(getMachineSpecificFields()).toContain('github_owner');
     expect(getMachineSpecificFields()).toContain('ghostDevConfig.claudePath');
+  });
+
+  it('lists only declared machine-specific fields (IN-04)', () => {
+    const declared = getDeclaredProfileMachineFields({
+      settings: { github_owner: 'acme', jira_domain: 'example.atlassian.net' },
+      ghostDevConfig: {
+        masterModel: 'sonnet',
+        workerModel: 'haiku',
+        concurrencyCap: 6,
+        claudePath: '/usr/local/bin/claude',
+      },
+    });
+    expect(declared).toEqual(['github_owner', 'ghostDevConfig.claudePath']);
+    expect(getDeclaredProfileMachineFields({ settings: { github_owner: 'acme' } })).toEqual([
+      'github_owner',
+    ]);
+    expect(getDeclaredProfileMachineFields({ settings: { unknown_field: 'x' } })).toEqual([]);
   });
 });
 

@@ -10,8 +10,8 @@ import type { ConfigProfileEnvelopeSchema } from '../../validation/configProfile
 
 export type ValidProfileEnvelope = z.infer<typeof ConfigProfileEnvelopeSchema>;
 import {
+  getDeclaredProfileMachineFields,
   getDeclaredProfileSecretFields,
-  getMachineSpecificFields,
 } from '../../services/configProfiles/catalog';
 import {
   applyConfigProfile,
@@ -99,8 +99,14 @@ export const ImportProfilePreviewModal: React.FC<ImportProfilePreviewModalProps>
   );
 
   const machineRows = useMemo<FieldRow[]>(
-    () => getMachineSpecificFields().map((field) => ({ key: field, field })),
-    []
+    () =>
+      validationResult.valid
+        ? getDeclaredProfileMachineFields(validationResult.envelope.profile.config).map((field) => ({
+            key: field,
+            field,
+          }))
+        : [],
+    [validationResult]
   );
 
   const fieldCount = validationResult.valid
@@ -237,6 +243,9 @@ export const ImportProfilePreviewModal: React.FC<ImportProfilePreviewModalProps>
                       ))}
                     </ul>
                     <Text strong>Giá trị machine-specific cần rà soát:</Text>
+                    <Paragraph type="secondary" style={{ marginBottom: 6 }}>
+                      Các field khác chỉ cần kiểm tra nếu bạn dùng dịch vụ tương ứng.
+                    </Paragraph>
                     <ul data-preview-group="machine-specific">
                       {machineRows.map((row) => (
                         <li key={row.key} data-field={row.field}>

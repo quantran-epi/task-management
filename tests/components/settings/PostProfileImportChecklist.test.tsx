@@ -62,10 +62,15 @@ describe('PostProfileImportChecklist', () => {
     if (undeclared) {
       expect(secrets?.querySelector(`[data-field="${undeclared}"]`)).toBeNull();
     }
+    expect(machine?.querySelector('[data-field="github_owner"]')).not.toBeNull();
     for (const field of getMachineSpecificFields()) {
-      expect(machine?.querySelector(`[data-field="${field}"]`)).not.toBeNull();
+      if (field === 'github_owner') continue;
+      expect(machine?.querySelector(`[data-field="${field}"]`)).toBeNull();
     }
-    expect(machine?.querySelector('[data-field="ghostDevConfig.claudePath"]')).not.toBeNull();
+    expect(machine?.querySelector('[data-field="ghostDevConfig.claudePath"]')).toBeNull();
+    expect(
+      screen.getByText(/Các field khác chỉ cần kiểm tra nếu bạn dùng dịch vụ tương ứng/)
+    ).toBeInTheDocument();
     expect(screen.queryByText(/telegram/i)).not.toBeInTheDocument();
     expect(announceSpy).toHaveBeenCalled();
   });

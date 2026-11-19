@@ -4,8 +4,8 @@ import { WarningOutlined } from '@ant-design/icons';
 import type { z } from 'zod';
 import type { ConfigProfileEnvelopeSchema } from '../../validation/configProfileSchemas';
 import {
+  getDeclaredProfileMachineFields,
   getDeclaredProfileSecretFields,
-  getMachineSpecificFields,
 } from '../../services/configProfiles/catalog';
 import { announceToScreenReader } from '../common/AriaLiveRegion';
 
@@ -49,7 +49,9 @@ export const PostProfileImportChecklist: React.FC<PostProfileImportChecklistProp
     ])
   ).filter((field) => !/telegram/i.test(field));
 
-  const machineFields = getMachineSpecificFields().filter((field) => !/telegram/i.test(field));
+  const machineFields = getDeclaredProfileMachineFields(
+    envelope.profile.config
+  ).filter((field) => !/telegram/i.test(field));
 
   return (
     <Alert
@@ -84,6 +86,9 @@ export const PostProfileImportChecklist: React.FC<PostProfileImportChecklistProp
             rồi tự quyết định khi cấu hình team.
           </Paragraph>
           <Text strong>Giá trị machine-specific cần rà soát:</Text>
+          <Paragraph type="secondary" style={{ marginBottom: 6 }}>
+            Các field khác chỉ cần kiểm tra nếu bạn dùng dịch vụ tương ứng.
+          </Paragraph>
           <ul data-checklist-group="machine-specific">
             {machineFields.map((field) => (
               <li key={field} data-field={field}>

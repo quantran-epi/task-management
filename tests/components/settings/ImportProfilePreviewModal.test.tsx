@@ -3,7 +3,10 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../../src/db';
 import { ImportProfilePreviewModal } from '../../../src/components/settings/ImportProfilePreviewModal';
 import { CONFIG_PROFILE_APP_MARKER, CONFIG_PROFILE_SCHEMA_VERSION } from '../../../src/validation/configProfileSchemas';
-import { getMachineSpecificFields, getSecretFields } from '../../../src/services/configProfiles/catalog';
+import {
+  getMachineSpecificFields,
+  getSecretFields,
+} from '../../../src/services/configProfiles/catalog';
 
 describe('ImportProfilePreviewModal', () => {
   let testDb: TaskPlannerDatabase;
@@ -78,10 +81,22 @@ describe('ImportProfilePreviewModal', () => {
     if (undeclared) {
       expect(secretsGroup?.querySelector(`[data-field="${undeclared}"]`)).toBeNull();
     }
-    for (const field of getMachineSpecificFields()) {
+    const declaredMachineFields = Object.keys(validPayload.profile.config.settings).filter((field) =>
+      getMachineSpecificFields().includes(field)
+    );
+    declaredMachineFields.push('ghostDevConfig.claudePath');
+    for (const field of declaredMachineFields) {
       expect(machineGroup?.querySelector(`[data-field="${field}"]`)).not.toBeNull();
     }
-    expect(machineGroup?.querySelector('[data-field="ghostDevConfig.claudePath"]')).not.toBeNull();
+    const undeclaredMachine = getMachineSpecificFields().find(
+      (field) => !declaredMachineFields.includes(field)
+    );
+    if (undeclaredMachine) {
+      expect(machineGroup?.querySelector(`[data-field="${undeclaredMachine}"]`)).toBeNull();
+    }
+    expect(
+      screen.getByText(/Các field khác chỉ cần kiểm tra nếu bạn dùng dịch vụ tương ứng/)
+    ).toBeInTheDocument();
     expect(screen.queryByText(/telegram/i)).not.toBeInTheDocument();
     expect(screen.getByText(/trộn theo từng khóa/i)).toBeInTheDocument();
     expect(screen.queryByText(/thay thế toàn bộ/i)).not.toBeInTheDocument();

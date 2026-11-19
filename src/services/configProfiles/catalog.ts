@@ -109,6 +109,24 @@ export function getMachineSpecificFields(): string[] {
   return keys;
 }
 
+/**
+ * Machine-specific fields actually declared by a profile, intersected with the known
+ * catalog so an unknown key from an untrusted file cannot appear in review lists.
+ */
+export function getDeclaredProfileMachineFields(
+  config: {
+    settings: Record<string, unknown>;
+    ghostDevConfig?: { [key: string]: unknown; claudePath?: string | undefined } | null | undefined;
+  }
+): string[] {
+  const catalog = new Set(getMachineSpecificFields());
+  const declared = Object.keys(config.settings);
+  if (config.ghostDevConfig?.claudePath !== undefined) {
+    declared.push('ghostDevConfig.claudePath');
+  }
+  return declared.filter((key) => catalog.has(key));
+}
+
 /** All keys belonging to one classification bucket, for inventory tests. */
 export function getKeysByClassification(classification: ProfileKeyClassification): string[] {
   return Object.entries(PROFILE_KEY_CATALOG)
