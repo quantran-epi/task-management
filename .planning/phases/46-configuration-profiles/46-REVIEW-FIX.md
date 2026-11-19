@@ -60,7 +60,7 @@ verified: 2026-11-19
 **Trạng thái: FIXED**
 
 **Thay đổi cụ thể:**
-- `src/services/configProfiles/importProfile.ts`: `isBlankSecretKey` giờ nhận diện mọi secret-like key qua `!isSafeBackupSetting(key) || getSecretFields().includes(key)`; vòng lặp import bỏ qua **mọi** secret-like key bất kể giá trị, track blank vào `skippedBlankSecrets` và non-blank vào `rejectedSecretKeys` (trả về trong `ApplyProfileResult` để UI cảnh báo). Không có secret nào từ profile được `db.settings.put`.
+- `src/services/configProfiles/importProfile.ts`: `isBlankSecretKey` giờ nhận diện mọi secret-like key qua `!isSafeBackupSetting(key) || getSecretFields().includes(key)`; vòng lặp import bỏ qua **mọi** secret-like key bất kể giá trị, track blank vào `skippedBlankSecrets` (được UI dùng để nhắc nhập lại). Key secret-like có giá trị khác `''` bị schema refinement chặn ở trust boundary trước khi tới vòng lặp; không có secret nào từ profile được `db.settings.put`. (Đính chính vòng 2: không có trường `rejectedSecretKeys` và không có cảnh báo UI tương ứng.)
 - `src/validation/configProfileSchemas.ts`: `.refine` trên `ProfileConfigSchema` từ chối secret-like key có giá trị khác `''` trong `config.settings` với message rõ ràng; field `secretFields` (luôn `''`) vẫn hợp lệ. Blank `*_token` vẫn được chấp nhận.
 - `tests/services/configProfiles/importProfile.test.ts`: payload có `github_pat: 'attacker-supplied-secret'` bị schema chặn với 0 write, secret thật của recipient còn nguyên.
 - `tests/validation/configProfileSchemas.test.ts`: test mới assert `github_pat: 'attacker'` bị reject kèm message chứa “secret”.

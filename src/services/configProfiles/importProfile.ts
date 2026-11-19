@@ -31,8 +31,6 @@ export interface ApplyProfileResult {
   errors: Array<{ field: string; message: string }>;
   appliedSettingKeys: string[];
   skippedBlankSecrets: string[];
-  /** Secret-like settings found with a non-blank value — rejected without being written. */
-  rejectedSecretKeys: string[];
 }
 
 /** Secret-like keys are rejected on sight, regardless of the value carried in the profile. */
@@ -58,7 +56,6 @@ export async function applyConfigProfile(
       errors: validation.errors,
       appliedSettingKeys: [],
       skippedBlankSecrets: [],
-      rejectedSecretKeys: [],
     };
   }
   const envelope = validation.envelope;
@@ -69,12 +66,11 @@ export async function applyConfigProfile(
 
   const incoming: Setting[] = [];
   const skippedBlankSecrets: string[] = [];
-  const rejectedSecretKeys: string[] = [];
   for (const [key, value] of Object.entries(config.settings)) {
     if (isBlankSecretKey(key)) {
+      // Non-blank secret-like keys are already rejected by the schema refine at the trust
+      // boundary; even if one reached here, no profile secret may ever be written.
       if (value === '') skippedBlankSecrets.push(key);
-      else rejectedSecretKeys.push(key);
-      // No profile secret may ever be written to db.settings, whatever its value.
       continue;
     }
     incoming.push({ key, value });
@@ -148,6 +144,5 @@ export async function applyConfigProfile(
     errors: [],
     appliedSettingKeys: incoming.map((setting) => setting.key),
     skippedBlankSecrets,
-    rejectedSecretKeys,
   };
 }
