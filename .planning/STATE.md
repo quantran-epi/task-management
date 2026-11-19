@@ -5,16 +5,16 @@ milestone_name: Unified AI Office (Phase Details)
 current_phase: 46
 current_phase_name: Configuration Profiles
 status: executing
-stopped_at: Phase 44 UI-SPEC approved
-last_updated: "2026-11-19T05:33:38.691Z"
+stopped_at: Completed 46-01-PLAN.md
+last_updated: "2026-11-19T05:51:14.375Z"
 last_activity: 2026-11-19
-last_activity_desc: Phase 45 execution started
-state_head: 43a77167cadc3c89e3db8e45a69486369b45c1f7
+last_activity_desc: Phase 46 execution started
+state_head: 44f3c8f8f56b544c4daf6d14e133916b12544933
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 64
-  completed_plans: 55
+  completed_plans: 56
   percent: 50
 ---
 
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-09)
 
 **Core value:** Hợp nhất SDLC Studio và AI Office thành Unified AI Office dạng chat-first, free-style với token budget cứng và làm giàu skill.
-**Current focus:** Phase 45 — Knowledge Sets, Docs Workspace, Oracle Connections & Team Pinned Context
+**Current focus:** Phase 46 — Configuration Profiles
 
 ## Current Position
 
-Phase: 46 (Configuration Profiles) — READY TO EXECUTE
-Plan: 1 of 5
+Phase: 46 (Configuration Profiles) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-11-19 — Phase 45 execution started
+Last activity: 2026-11-19 — Phase 46 plan 01 completed, plan 02 ready
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -59,9 +59,9 @@ Verification: 392 focused tests pass (9 files), `tsc --noEmit` clean. Full suite
 
 ## Session Continuity
 
-Last session: 2026-11-17T04:49:29.227Z
-Stopped at: Phase 44 UI-SPEC approved
-Resume file: .planning/phases/44-agent-activity-panel-configurable-explore-timeout-and-prompt/44-UI-SPEC.md
+Last session: 2026-11-19T05:51:13.425Z
+Stopped at: Completed 46-01-PLAN.md
+Resume file: None
 
 Progress: [█████░░░░░] 50%
 
@@ -262,6 +262,9 @@ Progress: [█████░░░░░] 50%
 - [Phase 43]: explore_repo runs `claude -p --restricted` — verified against the real CLI that `--allowedTools` alone let a repo `.claude/settings.json` grant Bash, let `Read /etc/passwd` succeed, and let a repo `.mcp.json` execute a shell server on connect; `--restricted` closes all three and Read/Grep/Glob still work
 - [Phase 43]: the explore prompt goes after `--` and the model id refuses a leading `-` — `escapeShellArg` protects the shell, not the CLI's argv parser
 - [Phase 43]: explore_repo takes the turn's abort signal (through TeamToolContext) so a cancelled turn kills the remote process instead of leaving it reading for the 5-minute wall clock
+- [Phase 46]: Profile envelope uses strictObject and explicit blank-secret literals; backup forbidden-key regex is deliberately not reused
+- [Phase 46]: Telegram excluded from profiles (owner-machine-only): no schema section, no import read/write; strictObject rejects telegramSettings
+- [Phase 46]: Import merges settings key-by-key in one rw transaction with a snapshot; blank secrets never overwrite recipient values; capacity rows upsert by natural key with fresh ids
 
 ## Performance Metrics
 
@@ -305,3 +308,4 @@ Progress: [█████░░░░░] 50%
 | Phase 43 P02 | 35 min | 3 tasks | 4 files |
 | Phase 43 P03 | ~15 min | 2 tasks | 3 files |
 | Phase 43 P04 | 25 min | 3 tasks | 7 files |
+| Phase 46 P01 | 6min | 3 tasks | 11 files |

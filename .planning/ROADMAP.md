@@ -393,11 +393,11 @@ Plans:
 **Goal:** Một người dùng có thể soạn profile cấu hình cho người khác từ một màn hình riêng "Settings for Others" được khởi tạo hoàn toàn từ defaults (không đọc cấu hình hiện tại của chính mình), phủ mọi loại setting gồm global AI và template defaults cho AI-team sạch, export đúng một profile ra JSON với mọi secret để trống, và import file đó qua Settings thường với preview cảnh báo giá trị machine-specific + checklist nhập lại secret — không xóa hay ghi đè dữ liệu của người nhận.
 **Requirements**: D-01–D-07 (locked decisions in 46-RESEARCH.md §User Constraints; no formal REQ IDs assigned)
 **Depends on:** Phase 45
-**Plans:** 4 plans in 3 waves
+**Plans:** 1/4 plans executed in 3 waves
 
 Plans:
 **Wave 1**
-- [ ] 46-01-PLAN.md — Tracer: schema/defaults/catalog + export/import lõi, round-trip secret-blank end-to-end, denylist profile khỏi backup (D-01..D-07)
+- [x] 46-01-PLAN.md — Tracer: schema/defaults/catalog + export/import lõi, round-trip secret-blank end-to-end, denylist profile khỏi backup (D-01..D-07)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 46-02-PLAN.md — Màn hình soạn từ defaults + named profile CRUD + export một-click + đăng ký route workbench/hash (D-01..D-07)
