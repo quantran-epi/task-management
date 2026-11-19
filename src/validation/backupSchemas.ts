@@ -671,6 +671,11 @@ export const BackupAiTeamRecordSchema = z.strictObject({
   budgetWarnThresholdPct: z.number().int().min(1).max(100).optional(),
   /** Phase 41 D-14: the team docs folder id. Optional so a pre-41 export still restores. */
   docsFolderId: uuidSchema.optional(),
+  /**
+   * Phase 45 D-16/T-45-11: the per-team pinned context note. Optional so a pre-45 export
+   * still validates; strictObject owns the key so an undeclared field still fails loudly.
+   */
+  pinnedContext: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -689,6 +694,8 @@ export const BackupAiTeamMemberRecordSchema = z.strictObject({
   usageEstimated: z.boolean().optional(),
   /** Phase 41 D-14: the member's own folder id. Optional so a pre-41 export still restores. */
   docsFolderId: uuidSchema.optional(),
+  /** Phase 45 D-16/T-45-11: accepted for symmetry with the team record; team-scoped in practice. */
+  pinnedContext: z.string().optional(),
 });
 
 export const BackupAiTeamLinkRecordSchema = z.strictObject({

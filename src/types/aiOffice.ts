@@ -109,6 +109,12 @@ export interface AiTeam {
   budgetWarnThresholdPct?: number | undefined;
   /** Phase 41 D-13: this team's folder id in `db.notes`; absent on pre-41 rows. */
   docsFolderId?: string | undefined;
+  /**
+   * Phase 45 D-16: per-team "Pinned Team Context" note. Injected as untrusted,
+   * safety-negated guidance into every leader/member turn; naming a DB environment here
+   * only guides Oracle connection selection and never changes the global active profile (D-19).
+   */
+  pinnedContext?: string | undefined;
   createdAt: string;
   updatedAt: string;
 }

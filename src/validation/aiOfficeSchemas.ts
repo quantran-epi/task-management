@@ -140,6 +140,8 @@ export const AiTeamInputSchema = z.object({
   concurrencyLimit: concurrencyLimitSchema,
   /** Phase 38 D-04/D-05: absent means the global default. */
   budgetWarnThresholdPct: warnThresholdPctSchema,
+  /** Phase 45 D-16: per-team pinned context note; untrusted guidance injected every turn. */
+  pinnedContext: z.string().optional(),
 });
 
 export const AiTeamUpdateSchema = z.object({
@@ -157,6 +159,8 @@ export const AiTeamUpdateSchema = z.object({
   concurrencyLimit: concurrencyLimitSchema,
   /** Phase 38 D-04/D-05: `undefined` clears the per-team override. */
   budgetWarnThresholdPct: warnThresholdPctSchema,
+  /** Phase 45 D-16: `undefined` clears the pin; the repo carries it through validated updates. */
+  pinnedContext: z.string().optional(),
 });
 
 export const AiTeamMemberInputSchema = z.object({

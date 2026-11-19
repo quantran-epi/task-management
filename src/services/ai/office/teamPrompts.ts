@@ -50,6 +50,12 @@ export interface BuildEmployeeTurnRequestInput {
    * teamPrompts stays pure: it never reads the DB itself.
    */
   conventionsSegment?: string | undefined;
+  /**
+   * Phase 45 D-16/D-17: per-team pinned context, already framed by the coordinator via
+   * `buildPinnedContextSegment()` as untrusted data with a safety-override negation. The
+   * builder never sees raw pin text — same purity rule as `conventionsSegment`.
+   */
+  pinnedContextSegment?: string | undefined;
   /** Newest-first from `listAssignmentHistory`. */
   assignmentHistory: readonly ChatMessage[];
   /** Bounded recent window from `listRecentTurns`. */
@@ -114,6 +120,7 @@ export function buildEmployeeTurnRequest(input: BuildEmployeeTurnRequestInput): 
     originalRequest,
     batchResults,
     conventionsSegment,
+    pinnedContextSegment,
     assignmentHistory,
     recentTurns,
     folderId,
@@ -143,6 +150,8 @@ export function buildEmployeeTurnRequest(input: BuildEmployeeTurnRequestInput): 
     // the single source of truth (db.settings 'global_conventions'), so it is framed exactly
     // like the single-chat prompt — untrusted-data delimiters + conflict policy included.
     ...(conventionsSegment ? [conventionsSegment] : []),
+    // Phase 45 D-16/D-17: the team pin follows conventions as framed untrusted data.
+    ...(pinnedContextSegment ? [pinnedContextSegment] : []),
   ];
 
   // D-16: the folder id is a fixed fact for the turn. A UUID from the context, not model- or
@@ -251,6 +260,8 @@ export interface BuildLeadTurnRequestInput {
   originalRequest: string;
   /** Org-wide conventions segment, pre-framed by the coordinator; see BuildEmployeeTurnRequestInput. */
   conventionsSegment?: string | undefined;
+  /** Phase 45 D-16/D-17: coordinator-framed untrusted pinned-context segment. */
+  pinnedContextSegment?: string | undefined;
   recentTurns: readonly ChatMessage[];
   /** D-12: the batch's current reports, resolved from the ledger on a re-synthesis pass. */
   batchResults?: readonly BatchResult[] | undefined;
@@ -321,6 +332,7 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
     recentTurns,
     batchResults,
     conventionsSegment,
+    pinnedContextSegment,
     ledger,
     docsFolderId,
     memberFolders,
@@ -352,6 +364,8 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
     ANTI_FABRICATION_BLOCK,
     // Same single-source-of-truth convention segment the employees receive (see above).
     ...(conventionsSegment ? [conventionsSegment] : []),
+    // Phase 45 D-16/D-17: the team pin follows conventions as framed untrusted data.
+    ...(pinnedContextSegment ? [pinnedContextSegment] : []),
     [
       '[DANH SÁCH NHÂN VIÊN]',
       ...roster.map((e) => `- ${e.name} — ${e.role}: ${e.capability} (agentId: ${e.id})`),

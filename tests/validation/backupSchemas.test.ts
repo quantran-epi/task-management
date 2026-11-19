@@ -314,6 +314,31 @@ describe('phase-38 split usage and threshold at the backup boundary (T-38-17, T-
     }
   });
 
+  it('round-trips a team carrying pinnedContext and keeps old backups valid (D-16, T-45-11)', () => {
+    const PIN = 'Dùng DB SIT cho oracle_query; đây là hướng dẫn nhóm.';
+    const parsed = backupSchemas.BackupAiTeamRecordSchema.parse({
+      ...teamRecord(),
+      pinnedContext: PIN,
+    });
+    expect(parsed.pinnedContext).toBe(PIN);
+    // Old backups without the optional key still validate.
+    expect(backupSchemas.BackupAiTeamRecordSchema.safeParse(teamRecord()).success).toBe(true);
+    // Member record accepts it symmetrically (team-scoped in practice).
+    expect(
+      backupSchemas.BackupAiTeamMemberRecordSchema.safeParse({
+        ...memberRecord(),
+        pinnedContext: PIN,
+      }).success
+    ).toBe(true);
+    // A wrong type is refused at the boundary.
+    expect(
+      backupSchemas.BackupAiTeamRecordSchema.safeParse({
+        ...teamRecord(),
+        pinnedContext: 42,
+      }).success
+    ).toBe(false);
+  });
+
   it('still refuses an undeclared key on a row carrying a new field', () => {
     expect(
       backupSchemas.BackupAiTeamMemberRecordSchema.safeParse({
