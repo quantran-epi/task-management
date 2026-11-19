@@ -19,8 +19,7 @@ export interface DocumentSetDeleteDialogProps {
 }
 
 /**
- * Shared published-set delete gate (D-01/D-02). Mounted by the legacy drawer and
- * reusable from the Docs `doc_set` detail so the hardened paths survive drawer retirement.
+ * Shared published-set delete gate (D-01/D-02). Mounted by the Docs `doc_set` detail.
  * Full delete remains the primary action; local-only requires the exact set name.
  */
 export const DocumentSetDeleteDialog: React.FC<DocumentSetDeleteDialogProps> = ({
