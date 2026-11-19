@@ -115,9 +115,29 @@ export function resolveRemotePath(inputPath: string, basePath?: string): string 
   return trimmed;
 }
 
+/** Lexically normalize a POSIX path. Browser renderer has no node:path module. */
+function normalizePosixPath(path: string): string {
+  const absolute = path.startsWith('/');
+  const parts: string[] = [];
+  for (const segment of path.split('/')) {
+    if (!segment || segment === '.') continue;
+    if (segment === '..') {
+      if (parts.length === 0) {
+        throw new Error('Đường dẫn nằm ngoài repo của remote target.');
+      }
+      parts.pop();
+      continue;
+    }
+    parts.push(segment);
+  }
+  return `${absolute ? '/' : ''}${parts.join('/')}` || '.';
+}
+
 /**
- * Phase 47 review WR-01: an explicit remote target must confine SSH FS reads to its repo path.
- * The global config remains host-wide for legacy callers; only remote chat turns are confined.
+ * Phase 47 review WR-01/CR-01: an explicit remote target must confine SSH FS reads to its repo path.
+ * Paths are lexically normalized BEFORE the containment check and the normalized path is what
+ * reaches SSH, so `..` cannot escape the repo on the remote host. The global config remains
+ * host-wide for legacy callers; only remote chat turns are confined.
  */
 export function resolveRemoteToolPath(
   inputPath: string,
@@ -134,8 +154,8 @@ export function resolveRemoteToolPath(
     throw new Error('Đường dẫn "~" không được phép khi công cụ SSH đang gắn với một repo cụ thể.');
   }
 
-  const resolved = resolveRemotePath(trimmed, repoPath);
-  const normalizedRepo = repoPath.replace(/\/+$/, '') || '/';
+  const normalizedRepo = normalizePosixPath(repoPath);
+  const resolved = normalizePosixPath(resolveRemotePath(trimmed, normalizedRepo));
   if (normalizedRepo === '/' && resolved.startsWith('/')) return resolved;
   if (resolved === normalizedRepo || resolved.startsWith(`${normalizedRepo}/`)) {
     return resolved;

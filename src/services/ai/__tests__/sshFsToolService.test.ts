@@ -88,8 +88,12 @@ describe('sshFsToolService', () => {
       expect(resolveRemoteToolPath('.', '/var/log', target)).toBe('/srv/my-repo');
       expect(resolveRemoteToolPath('src/app.ts', '/var/log', target)).toBe('/srv/my-repo/src/app.ts');
       expect(resolveRemoteToolPath('/srv/my-repo/src/app.ts', undefined, target)).toBe('/srv/my-repo/src/app.ts');
+      expect(resolveRemoteToolPath('/srv/my-repo/src/../src/app.ts', undefined, target)).toBe('/srv/my-repo/src/app.ts');
       expect(() => resolveRemoteToolPath('/etc/passwd', undefined, target)).toThrow(/ngoài repo/);
       expect(() => resolveRemoteToolPath('~/.ssh/id_rsa', undefined, target)).toThrow(/"~"/);
+      expect(() => resolveRemoteToolPath('../.ssh/id_rsa', undefined, target)).toThrow(/ngoài repo/);
+      expect(() => resolveRemoteToolPath('/srv/my-repo/../.ssh/id_rsa', undefined, target)).toThrow(/ngoài repo/);
+      expect(() => resolveRemoteToolPath('src/../../secret', undefined, target)).toThrow(/ngoài repo/);
       expect(resolveRemoteToolPath('/etc/hosts', '/var/log', undefined)).toBe('/etc/hosts');
     });
   });
@@ -165,6 +169,20 @@ describe('sshFsToolService', () => {
       });
       const res = JSON.parse(await executeSshReadFile(
         { path: '/etc/passwd' },
+        mockDb,
+        { sshConfigId: 'ssh-1', repoPath: '/srv/my-repo', branch: 'feature/x' },
+      ));
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('ngoài repo');
+      expect(readSpy).not.toHaveBeenCalled();
+    });
+
+    it('refuses traversal paths that escape the explicit remote target repo before SSH read', async () => {
+      const readSpy = vi.spyOn(sshService, 'readRemoteFileSlice').mockResolvedValue({
+        lines: ['secret'], totalLines: 1, offset: 1, limit: 1, hasMore: false,
+      });
+      const res = JSON.parse(await executeSshReadFile(
+        { path: '/srv/my-repo/../.ssh/id_rsa' },
         mockDb,
         { sshConfigId: 'ssh-1', repoPath: '/srv/my-repo', branch: 'feature/x' },
       ));
