@@ -390,13 +390,24 @@ Plans:
 
 ### Phase 46: Configuration Profiles
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Một người dùng có thể soạn profile cấu hình cho người khác từ một màn hình riêng "Settings for Others" được khởi tạo hoàn toàn từ defaults (không đọc cấu hình hiện tại của chính mình), phủ mọi loại setting gồm global AI và template defaults cho AI-team sạch, export đúng một profile ra JSON với mọi secret để trống, và import file đó qua Settings thường với preview cảnh báo giá trị machine-specific + checklist nhập lại secret — không xóa hay ghi đè dữ liệu của người nhận.
+**Requirements**: D-01–D-07 (locked decisions in 46-RESEARCH.md §User Constraints; no formal REQ IDs assigned)
 **Depends on:** Phase 45
-**Plans:** 0 plans
+**Plans:** 4 plans in 3 waves
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 46 to break down)
+**Wave 1**
+
+- [ ] 46-01-PLAN.md — Tracer: schema/defaults/catalog + export/import lõi, round-trip secret-blank end-to-end, denylist profile khỏi backup (D-01..D-07)
+
+**Wave 2** *(blocked on Wave 1; two independent slices)*
+
+- [ ] 46-02-PLAN.md — Màn hình soạn từ defaults + named profile CRUD + export một-click + đăng ký route workbench/hash (D-01, D-02, D-03, D-04, D-05, D-06, D-07)
+- [ ] 46-03-PLAN.md — Import card + preview confirm-gated + post-import checklist trong Settings data tab, không thêm tab thứ 7 (D-03, D-04, D-05, D-06)
+
+**Wave 3** *(blocked on Waves 1-2)*
+
+- [ ] 46-04-PLAN.md — Cổng focused test + typecheck, ký duyệt Nyquist, walkthrough Tauri quan sát được (C-15)
 
 ## Milestone: v1.2 Knowledge System Implementation
 
