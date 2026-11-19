@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskPlannerDatabase } from '../../db';
 import { createDocumentSet } from '../../db/repositories/documentSetRepo';
@@ -124,14 +124,15 @@ describe('Docs workspace + doc_set tabs (D-06, D-07, D-08)', () => {
     await screen.findByTestId('doc-set-detail');
 
     const detail = screen.getByTestId('doc-set-detail');
+    const documentsTable = within(detail).getByTestId('doc-set-documents');
     await waitFor(() =>
-      expect(detail.querySelectorAll('table tbody tr')).toHaveLength(10)
+      expect(documentsTable.querySelectorAll('table tbody tr')).toHaveLength(10)
     );
-    const rows = Array.from(detail.querySelectorAll('table tbody tr'));
+    const rows = Array.from(documentsTable.querySelectorAll('table tbody tr'));
     // Exactly one page of 10 data rows rendered, never the full 25-document array.
     expect(rows).toHaveLength(10);
-    expect(await screen.findByText('Bộ lớn tài liệu 1')).toBeInTheDocument();
-    expect(screen.queryByText('Bộ lớn tài liệu 25')).not.toBeInTheDocument();
+    expect(rows[0]?.textContent).toContain('Bộ lớn tài liệu 1');
+    expect(documentsTable.textContent).not.toContain('Bộ lớn tài liệu 25');
     expect(document.querySelector('.ant-pagination')).not.toBeNull();
   });
 
