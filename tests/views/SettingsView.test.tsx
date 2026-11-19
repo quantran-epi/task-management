@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import React from 'react';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../src/db';
 import { GitHubAuthProvider, useGitHubAuth } from '../../src/context/GitHubAuthContext';
 import { SettingsView } from '../../src/views/SettingsView';
@@ -31,22 +31,30 @@ function AuthSetter({ token, passphrase }: { token?: string; passphrase?: string
 }
 
 describe('SettingsView Integration & Offline Independence (SYNC-07, SYNC-05)', () => {
+  // Keep one Dexie instance per test file. Closing/deleting the DB while a just-unmounted
+  // useLiveQuery subscription is still winding down produces a late DatabaseClosedError
+  // unhandled rejection (observed in the AI tab cards). The instance uses a unique name so
+  // it remains isolated from other suites; a trivial clear keeps per-test state independent.
   let db: TaskPlannerDatabase;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     db = new TaskPlannerDatabase(`test-settings-view-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     await db.open();
-    vi.clearAllMocks();
   });
 
-  afterEach(async () => {
-    cleanup();
+  afterAll(async () => {
     try {
       await db.close();
       await db.delete();
     } catch {
       // ignore
     }
+  });
+
+  beforeEach(async () => {
+    await db.settings.clear();
+    await db.changeRequests.clear();
+    vi.clearAllMocks();
   });
 
   it('renders capacity tab by default and switches to data tab displaying all local and GitHub cards', async () => {
