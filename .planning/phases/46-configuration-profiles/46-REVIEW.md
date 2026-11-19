@@ -1,8 +1,8 @@
 ---
 phase: 46-configuration-profiles
-reviewed: 2026-11-19T00:00:00Z
+reviewed: 2026-11-19T09:18:24Z
 depth: standard
-files_reviewed: 28
+files_reviewed: 32
 files_reviewed_list:
   - src/App.tsx
   - src/components/settings/ConfigProfileExportButton.tsx
@@ -32,191 +32,120 @@ files_reviewed_list:
   - tests/validation/configProfileSchemas.test.ts
   - tests/views/ConfigProfilesView.test.tsx
   - tests/views/SettingsView.test.tsx
+  - tests/workbench/ConfigProfilesEntryPoint.test.tsx
+  - tests/components/settings/ConfigProfileImportCard.test.tsx
+  - src/workbench/TitleBar.tsx
+  - src/components/shell/Navigation.tsx
 findings:
-  critical: 2
-  warning: 5
-  info: 2
-  total: 9
+  critical: 0
+  warning: 2
+  info: 4
+  total: 6
   necessity: 0
 status: issues_found
 ---
 
 # Phase 46: Code Review Report
 
-**Reviewed:** 2026-11-19T00:00:00Z
+**Reviewed:** 2026-11-19T09:18:24Z
 **Depth:** standard
-**Files Reviewed:** 28
+**Files Reviewed:** 32
 **Status:** issues_found
 
 ## Summary
 
-Đã review 28 file nguồn của phase configuration profiles ở độ sâu standard, bao gồm trace chéo sang `restoreBackup.ts`, `SnapshotRollbackCard.tsx`, `Navigation.tsx`, `TitleBar.tsx`, `SearchEverywhereModal.tsx`, `ghostDevConfig.ts`, `keyringService.ts` và `types/backup.ts`.
+Re-review sau 9 finding của `46-REVIEW.md`, phạm vi 28 file gốc + 4 file mới (`ConfigProfilesEntryPoint.test.tsx`, `ConfigProfileImportCard.test.tsx`, `TitleBar.tsx`, `Navigation.tsx`). Mọi finding cũ đều đã được đối chiếu trực tiếp với source hiện tại, không chỉ dựa vào `46-REVIEW-FIX.md`.
 
-Telegram exclusion, six-tab Settings lock, secret-blank on export và purity của authoring screen nhìn chung được triển khai đúng và có test bao phủ. Tuy nhiên có 2 lỗi BLOCKER: (1) profile import ghi một snapshot **không tương thích** với cơ chế rollback dùng chung, làm hỏng hoàn toàn rollback/download snapshot và có thể xóa mất rollback point hợp lệ của backup import trước đó; (2) route `config-profiles` được đăng ký nhưng **không có bất kỳ điểm vào UI nào**, khiến toàn bộ màn hình authoring/export không thể truy cập trong runtime Tauri. Ngoài ra có các lỗi về secret trust boundary, snapshot chứa secret plaintext, teamDefaults bị bỏ qua khi import, authoring UI tạo dữ liệu vi phạm chính schema import của nó, và FileReader thiếu onerror.
+**Xác minh 9 finding cũ — tất cả đã FIXED (không tái phạm):**
 
-## Critical Issues
+- **CR-01** (`importProfile.ts:101-143`): không còn lệnh ghi `last_pre_import_snapshot`; comment tại `:107-109` ghi rõ. Test `importProfile.test.ts:63-89` seed `SnapshotData` hợp lệ và assert byte-for-byte unchanged; `profileRoundTrip.test.ts:95-96` assert cả hai khóa snapshot đều `undefined`. Không còn snapshot profile-specific nào được tạo → CR-01 **và** WR-02 (secret plaintext trong snapshot) cùng được triệt tiêu. ✓
+- **CR-02** (`TitleBar.tsx:302-321`, `SettingsView.tsx:189-197`, `WorkbenchLayout.tsx:260-282,272`, `EditorArea.tsx:581-582`): có button "Profiles" gọi `onOpenView('config-profiles')` trong shell IntelliJ mặc định, và button "Soạn & xuất Profile" trong data tab của classic shell. `handleOpenView` mở tab, `EditorArea` render `ConfigProfilesView`. Test entry-point xác nhận; 6-tab contract vẫn giữ (`SettingsView.tsx:145-307`). ✓
+- **WR-01** (`configProfileSchemas.ts:57-71`, `importProfile.ts:43-46,78-86`): refine schema reject secret-like key có value ≠ `''`; loop import skip mọi secret-like key. Secret thật của recipient không bị ghi đè (test `importProfile.test.ts:91-107`). ✓
+- **WR-03** (`importProfile.ts:18,94-99`, `catalog.ts:50`, checklist `:81-85`): `teamDefaults` được ghi vào `ai_team_defaults` trong cùng transaction; test round-trip 8 field pass. (Xem WR-01 mới bên dưới — giá trị được ghi nhưng không có consumer.) ✓
+- **WR-04** (`ConfigProfilesView.tsx:131-210,291-332`): `normaliseDraft` clamp mọi numeric field; `handleSave` validate envelope trước khi ghi db; test `ConfigProfilesView.test.tsx:108-151` pass. ✓
+- **WR-05** (`ConfigProfileImportCard.tsx:53-62`): có `reader.onerror` reset state + notification; test chuyên biệt pass. ✓
+- **IN-01** (`catalog.ts:99-102`, preview `:91-99`, checklist `:43-50`): dùng `getDeclaredProfileSecretFields` (giao với catalog) thay vì full catalog cho secrets. ✓
+- **IN-02** (`ConfigProfilesView.tsx:364-374`): warning icon có `tabIndex={0}`, `role="img"`, `aria-label` tiếng Việt. ✓
 
-### CR-01: Profile import ghi snapshot sai định dạng, phá hỏng rollback và gây mất rollback point
+Không tìm thấy secret leak mới, snapshot incompatibility, hay entry-point hỏng. Tuy nhiên, chính các fix đã đưa vào 2 vấn đề mới (WR) và 4 vấn đề chất lượng (IN) — chi tiết bên dưới.
 
-**File:** `src/services/configProfiles/importProfile.ts:67-72,96` (liên quan `src/services/backup/restoreBackup.ts:361-367`, `src/types/backup.ts:140-144`, `src/views/SettingsView.tsx:121-142`, `src/components/settings/SnapshotRollbackCard.tsx:21-27`)
-
-**Issue:** `applyConfigProfile` ghi vào khóa dùng chung `last_pre_import_snapshot` một object có dạng `{ timestamp, settings, capacityRules, capacityOverrides }`. Nhưng mọi consumer của khóa này đều kỳ vọng `SnapshotData = { timestamp, tables, counts }`:
-
-- `rollbackToSnapshot` (restoreBackup.ts:364-365): `const snapshot = snapshotSetting.value as SnapshotData; await replaceTables(targetDb, snapshot.tables, prepareAttachments(snapshot.tables.noteAttachments))`. Vì `snapshot.tables` là `undefined`, biểu thức `snapshot.tables.noteAttachments` ném `TypeError` ngay trước khi vào `replaceTables`.
-- `downloadSnapshotFile` (restoreBackup.ts:373): `snapshot.tables.settings` — cùng lỗi `TypeError`.
-- `SnapshotRollbackCard` (dùng `useLiveQuery`, luôn mount trong data tab) sẽ hiển thị nút "Hoàn tác" và "Tải snapshot" cho snapshot rỗng này; bấm vào chỉ báo lỗi.
-
-Hậu quả nghiêm trọng hơn: khóa `last_pre_import_snapshot` là **singleton** dùng chung với backup import/GitHub restore. Nếu người dùng nhập backup (tạo rollback point hợp lệ) rồi sau đó nhập profile, rollback point hợp lệ đó bị **ghi đè** bằng object không dùng được → mất hoàn toàn khả năng khôi phục dữ liệu trước đó. Đây là data-loss risk. Test hiện tại (`importProfile.test.ts:73-75`) chỉ kiểm tra snapshot có chứa setting cũ, không hề khớp với `SnapshotData`, nên không phát hiện lỗi.
-
-**Fix:** Không ghi snapshot profile vào khóa dùng chung. Thêm một khóa riêng, hoặc tốt nhất bỏ hẳn việc ghi snapshot vì `applyConfigProfile` là key-by-key merge (không clear bảng, không ghi đè secret) nên không cần rollback toàn cục. Nếu vẫn cần rollback, tạo đúng `SnapshotData` qua `captureSnapshot()` và lưu ở khóa riêng `last_profile_import_snapshot`:
-
-```ts
-// importProfile.ts — xóa dòng 96:
-// await db.settings.put({ key: 'last_pre_import_snapshot', value: snapshot });
-
-// Nếu cần rollback point riêng:
-await db.settings.put({ key: 'last_profile_import_snapshot', value: snapshot });
-```
-
-Cần cập nhật test để khẳng định `last_pre_import_snapshot` **không** bị ghi bởi profile import, và assert mọi snapshot consumer đều nhận được object có `.tables`/`.counts`.
-
-### CR-02: Route `config-profiles` không có điểm vào UI — màn hình authoring/export không thể truy cập
-
-**File:** `src/App.tsx:120-121`, `src/components/shell/Navigation.tsx:29-92`, `src/workbench/TitleBar.tsx:195-285`, `src/workbench/search/SearchEverywhereModal.tsx`
-
-**Issue:** Phase đăng ký route `config-profiles` ở mọi nơi cần thiết để render (`App.tsx`, `useHashRoute.ts:18`, `navigation.ts:8`, `EditorArea.tsx:581-582`, `layoutStore.ts:12`, `WorkbenchLayout.tsx:271` title map). Tuy nhiên không có **call site nào** điều hướng tới nó:
-
-- `Navigation.tsx` (sidebar của classic shell) không có menu item `config-profiles` (chỉ có dashboard/tasks/planner/analytics/notes/mermaid/telegram/settings).
-- `TitleBar.tsx` — nơi duy nhất gọi `onOpenView` trong IntelliJ shell — chỉ có 5 mục: `dashboard`, `tasks`, `planner`, `telegram`, `analytics`.
-- `SearchEverywhereModal.tsx` không sinh action `config-profiles`.
-- `SettingsView.tsx` có `ConfigProfileImportCard` (nhập) nhưng **không có link** tới màn hình authoring/export. `ConfigProfilesView` chỉ có nút một chiều "Quay lại Cài đặt".
-
-Với cấu hình Tauri-only và `main.tsx:47` mặc định `useIntelliJ`, người dùng không có cách nào mở `ConfigProfilesView` (700 dòng) — trừ khi tự sửa hash `#/config-profiles` trong classic shell, điều không khả thi trong webview IntelliJ mặc định. Toàn bộ năng lực "soạn & xuất profile" (D-01..D-06) vì thế không dùng được.
-
-**Fix:** Thêm một điểm vào rõ ràng. Ví dụ trong `SettingsView` data tab hoặc `PageHeader`:
-
-```tsx
-<Button icon={<EditOutlined />} onClick={() => onNavigate?.('config-profiles')}>
-  Soạn & xuất Profile
-</Button>
-```
-
-và/hoặc thêm `config-profiles` vào menu `TitleBar.onOpenView` (`handleOpenView` trong `WorkbenchLayout.tsx` đã có title map sẵn). Bổ sung test assert menu item tồn tại ở shell mặc định.
+## Narrative Findings (AI reviewer)
 
 ## Warnings
 
-### WR-01: Giá trị secret không rỗng trong `settings` của profile có thể ghi đè secret thật của người nhận
+### WR-01: `ai_team_defaults` là setting write-only — fix WR-03 không có consumer runtime
 
-**File:** `src/services/configProfiles/importProfile.ts:76-82`, `src/validation/configProfileSchemas.ts:47`
+**File:** `src/services/configProfiles/importProfile.ts:18,94-99`; `src/services/configProfiles/catalog.ts:50`; `src/components/settings/PostProfileImportChecklist.tsx:81-85`
 
-**Issue:** `ProfileConfigSchema.settings` là `z.record(z.string(), z.unknown())` — không ràng buộc secret key. Vòng lặp import chỉ bỏ qua secret key khi **giá trị bằng `''`**:
+**Issue:** Fix WR-03 ghi `config.teamDefaults` vào khóa `ai_team_defaults` nhưng **không có bất kỳ đoạn code nào trong `src/` đọc lại khóa này**. Grep toàn repo cho literal `ai_team_defaults` và `AI_TEAM_DEFAULTS_SETTING_KEY` chỉ trả về: định nghĩa constant (`importProfile.ts:18`), chính lệnh ghi (`:98`), phân loại catalog (`catalog.ts:50`) và chuỗi hướng dẫn trong checklist (`PostProfileImportChecklist.tsx:83`). Không có `db.settings.get('ai_team_defaults')` ở bất cứ đâu, kể cả luồng tạo team (`teamRunCoordinator.ts`, `TeamEditorDrawer.tsx`, `TeamSettingsDrawer.tsx`). Checklist nói "hãy chỉnh thủ công khi tạo team mới", nhưng giá trị nằm trong một setting row vô hình, không có UI nào hiển thị để người dùng "chỉnh thủ công". Kết quả: fix WR-03 chỉ chuyển từ *silent drop* sang *silent write* — kỳ vọng của người dùng rằng profile mang defaults cho team vẫn không được đáp ứng, và giờ còn có dữ liệu chết tích lũy trong db.
 
-```ts
-if (value === '' && isBlankSecretKey(key)) { skippedBlankSecrets.push(key); continue; }
-incoming.push({ key, value });
-```
+**Fix:** Chọn một trong hai hướng và làm triệt để:
+- Nếu `ai_team_defaults` là template thật: đọc khóa này trong luồng tạo team (`TeamEditorDrawer` / `TeamSettingsDrawer` / service tạo team) để seed các field `budgetTokens`, `concurrencyLimit`, `autoSplitEnabled`, …; thêm test assert team mới nhận giá trị sau import.
+- Nếu chỉ là tài liệu tham khảo: bỏ hẳn lệnh `incoming.push` ở `importProfile.ts:98` (quay về document-only), và trong checklist ghi rõ "section này KHÔNG được áp dụng, chỉ để tham khảo" thay vì hướng dẫn "chỉnh thủ công khi tạo team mới" — đồng thời bỏ khóa khỏi `PROFILE_KEY_CATALOG`.
 
-Do đó một file profile畸形/độc hại (trust boundary: file do người dùng chọn) có thể chứa `settings: { github_pat: "giá_trị_kẻ_tấn_công" }`. Vì `isBlankSecretKey('github_pat') === true` nhưng giá trị không rỗng, dòng này sẽ `incoming.push` và `db.settings.put` → **ghi đè token thật** của người nhận. Điều này trái trực tiếp với constraint "profile secrets must never be overwritten" và khác với `secretFields` (được schema ép `z.literal('')`). Export chuẩn không tạo ra trường hợp này, nhưng import là unbounded input nên phải tự phòng vệ.
+### WR-02: `normaliseDraft` âm thầm thay ngày ngoại lệ không hợp lệ bằng ngày hôm nay — nguy cơ ghi đè override
 
-**Fix:** Bỏ qua **mọi** secret-like key bất kể giá trị, đồng thời từ chối chúng ở schema:
+**File:** `src/views/ConfigProfilesView.tsx:200-206` (cụ thể `:202-204`)
 
-```ts
-for (const [key, value] of Object.entries(config.settings)) {
-  if (isBlankSecretKey(key)) {
-    if (value === '') skippedBlankSecrets.push(key);
-    continue; // không bao giờ ghi secret từ profile vào db
-  }
-  incoming.push({ key, value });
-}
-```
+**Issue:** Fix WR-04 thay `date: ''` bằng `new Date().toISOString().slice(0, 10)`, nhưng áp dụng cho **mọi** date không khớp `DATE_PATTERN`, không chỉ ngày rỗng từ nút "Thêm ngoại lệ" (`:567-580`). Người dùng gõ nhầm `2026-13-99` hoặc `2026-1-5` → profile lưu với ngày hôm nay, không có thông báo nào. Khi người nhận import, `applyConfigProfile` upsert theo natural key `date` (`importProfile.ts:124-142`) → `workMinutes` của **ngày hôm nay** bị ghi đè bằng giá trị của ngoại lệ gõ nhầm. Đây là silent data corruption, đúng hành vi mà phase muốn tránh. Test WR-04 (`ConfigProfilesView.test.tsx:108-151`) chỉ cover ngày rỗng nên không phát hiện nhánh này.
 
-Thêm rule refine trong `ProfileConfigSchema` để reject secret-like key xuất hiện trong `settings` (dùng `isSafeBackupSetting`), và test với payload secret có giá trị không rỗng.
-
-### WR-02: Snapshot của profile import lưu secret plaintext, vi phạm mô hình snapshot an toàn
-
-**File:** `src/services/configProfiles/importProfile.ts:62-72,96` (so sánh `src/services/backup/restoreBackup.ts:202-204,372-376`)
-
-**Issue:** `settingsBefore = await db.settings.toArray()` lấy **toàn bộ** settings, kể cả `jira_api_token`, `github_pat`, `backup_passphrase`, `ssh_configurations`, Oracle connection string. Object này được lưu nguyên vẹn vào `last_pre_import_snapshot`. Trong khi đó backup snapshot (`captureSnapshot`, restoreBackup.ts:204) chủ động lọc: `const safeSettings = settings.filter(isSafeBackupSetting)` với comment *"Never persist secrets ... in a snapshot the UI offers"*, và `downloadSnapshotFile` còn có lớp phòng vệ thứ hai. Profile import bypass cả hai lớp này. Dù khóa này nằm trong denylist xuất backup (exportBackup.ts:35), việc lưu secret plaintext vào một khóa vốn được thiết kế là "snapshot có thể tải về" là một lỗ hổng bảo mật, nhất là khi CR-01 đã làm cho luồng tải về bị lỗi — use-case dự kiến của snapshot hoàn toàn vỡ.
-
-**Fix:** Khi tạo snapshot, lọc secret giống `captureSnapshot`:
+**Fix:** Phân biệt hai trường hợp — chỉ tự động điền ngày hôm nay cho bản ghi mới do nút "Thêm ngoại lệ" tạo (gán ngày hợp lệ ngay tại `:574`); với date do người dùng gõ mà không khớp pattern, giữ nguyên và để `ConfigProfileEnvelopeSchema.safeParse` ở `handleSave` (`:300-308`) chặn lại, hiển thị inline `Alert` "Profile chưa hợp lệ" kèm path `capacityOverrides.N.date`:
 
 ```ts
-const settings = settingsBefore.filter((s) => isSafeBackupSetting(s.key));
+// normaliseDraft: bỏ fallback âm thầm
+capacityOverrides: config.capacityOverrides.map((override) => ({
+  ...override,
+  workMinutes: clampInt(fieldValue(override.workMinutes), 0, 1440, 0),
+})),
+// tại nút "Thêm ngoại lệ" (:574):
+{ date: new Date().toISOString().slice(0, 10), workMinutes: 0, note: '' },
 ```
 
-(`isSafeBackupSetting` đã được import sẵn ở dòng 5). Ưu tiên xử lý chung với CR-01 bằng cách tái dùng `captureSnapshot()` thay vì tự dựng snapshot.
-
-### WR-03: `teamDefaults` được export/import nhưng không bao giờ được áp dụng
-
-**File:** `src/services/configProfiles/importProfile.ts:46-148`, `src/views/ConfigProfilesView.tsx:561-651`, `src/validation/configProfileSchemas.ts:51`
-
-**Issue:** `ConfigProfilesView` cho người dùng chỉnh sửa toàn bộ AI-team template (`budgetTokens`, `concurrencyLimit`, `autoSplitEnabled`, `autoApproveMutations`, `mcpEnabled`, `sshFsToolsEnabled`, `oracleToolsEnabled`, `budgetWarnThresholdPct`); schema định nghĩa `AiTeamDefaultsTemplateSchema`; export giữ nguyên section. Nhưng `applyConfigProfile` chỉ đọc `config.settings`, `config.secretFields`, `config.capacityRules`, `config.capacityOverrides`, `config.ghostDevConfig` — **không đụng tới `config.teamDefaults`**. Hệ quả: phần cấu hình này được ghi vào file và sau đó bị bỏ qua lặng lẽ khi nhập;PostProfileImportChecklist cũng không nhắc người dùng phải cấu hình lại. Người dùng có cơ sở tin rằng profile của họ chứa và sẽ áp dụng các default này.
-
-**Fix:** Quyết định rõ vai trò của `teamDefaults`:
-- Nếu là template áp dụng được: map các field sang các setting key tương ứng trong `incoming` (hoặc ghi vào storage riêng) trong `applyConfigProfile`, và thêm test round-trip assert giá trị sau import.
-- Nếu chỉ là tài liệu tham khảo: ghi rõ trong UI/checklist rằng section này **không** được áp dụng tự động, và cân nhắc bỏ khỏi schema/export để tránh hiểu lầm.
-
-### WR-04: Authoring UI tạo ra giá trị vi phạm chính schema import — profile tự export có thể không tự import được
-
-**File:** `src/views/ConfigProfilesView.tsx:398-466,518-533,584-598` (đối chiếu `src/validation/configProfileSchemas.ts:14-29`)
-
-**Issue:** Nhiều control trong màn hình soạn profile cho phép tạo giá trị mà `ConfigProfileEnvelopeSchema` sẽ từ chối:
-
-- Ngoại lệ công suất mới được khởi tạo với `date: ''` (dòng 460). Schema `CapacityOverrideProfileSchema.date` bắt `/^\d{4}-\d{2}-\d{2}$/`. Người dùng bấm "Thêm ngoại lệ", không kịp điền ngày, lưu rồi export → file bị schema đánh dấu **không hợp lệ**, import bị chặn.
-- `concurrencyCap` gán `text === '' ? 0 : Number(text)` (dòng 527) nhưng schema `GhostDevProfileSchema.concurrencyCap` bắt `min(1).max(12)`; giá trị 0 hoặc >12 làm profile vô hiệu.
-- `workMinutes` của rule và override dùng `Number(text)` không clamp (dòng 386, 420), schema bắt `0..1440`.
-- `teamDefaults.concurrencyLimit` cũng dùng `Number(text)` không clamp (dòng 593), schema `min(1)`.
-
-Không có bước validate trước khi `handleSave`/export, nên lỗi chỉ bùng phát ở máy người nhận — rất khó chẩn đoán.
-
-**Fix:** Validate draft bằng `ConfigProfileEnvelopeSchema` (hoặc schema từng phần) trước khi lưu/export và hiển thị lỗi tại chỗ; đồng thời clamp giá trị ngay tại control:
-
-```ts
-// date: không khởi tạo rỗng
-{ date: new Date().toISOString().slice(0, 10), workMinutes: 0 }
-// concurrencyCap
-concurrencyCap: Math.max(1, Math.min(12, text === '' ? 6 : Number(text)))
-// workMinutes
-Math.max(0, Math.min(1440, text === '' ? 0 : Number(text)))
-```
-
-### WR-05: `FileReader` trong import card thiếu `onerror` — đọc tệp thất bại im lặng
-
-**File:** `src/components/settings/ConfigProfileImportCard.tsx:53-67`
-
-**Issue:** `reader.onload` được xử lý (kể cả `try/catch` cho `JSON.parse`), nhưng không có `reader.onerror`. Nếu việc đọc tệp thất bại (quyền truy cập, tệp bị khóa/lỗi I/O — có thể xảy ra khi chọn tệp từ đường dẫn lạ trong Tauri), `readAsText` reject mà không có callback nào chạy: không notification, không reset loading, người dùng bấm chọn tệp và **không thấy phản hồi nào**, không biết tại sao import không mở.
-
-**Fix:** Thêm handler và đóng modal state:
-
-```ts
-reader.onerror = () => {
-  notification.error({
-    message: 'Không đọc được tệp',
-    description: 'Không thể đọc nội dung tệp cấu hình. Vui lòng thử lại.',
-  });
-};
-```
+Thêm test: gõ date sai format → `handleSave` không ghi db và hiển thị `draftError`, ngày hôm nay của recipient không đổi sau import.
 
 ## Info
 
-### IN-01: Checklist liệt kê toàn bộ secret catalog thay vì những secret thực sự có trong profile
+### IN-01: `rejectedSecretKeys` là nhánh chết — không thể nonzero, và fix report khẳng nhận sai về UI warning
 
-**File:** `src/components/settings/ImportProfilePreviewModal.tsx:86-91,219-226`, `src/components/settings/PostProfileImportChecklist.tsx:40-44`
+**File:** `src/services/configProfiles/importProfile.ts:39-40,78-86,160`; `src/validation/configProfileSchemas.ts:57-71`
 
-**Issue:** Cả preview lẫn checklist đều lấy `getSecretFields()` — **mọi** secret trong catalog — rồi hiển thị hết, thay vì chỉ các secret mà profile thực sự khai báo (`envelope.profile.config.secretFields`). Kết quả: import một profile chỉ chứa `github_owner` vẫn hiện danh sách ~15 secret "cần nhập lại", phần lớn profile không hề có. Dù an toàn theo hướng bảo thủ, thông tin này gây nhiễu và làm người dùng chủ quan với cảnh báo (alert fatigue).
+**Issue:** `ApplyProfileResult.rejectedSecretKeys` được định nghĩa, push tại `:81` và return tại `:160`, nhưng **không có caller nào đọc** (grep toàn repo chỉ thấy trong chính file này; `ImportProfilePreviewModal.tsx:143` và `SettingsView.tsx:205` chỉ dùng `skippedBlankSecrets`). Quan trọng hơn: nhánh `else rejectedSecretKeys.push(key)` là **không bao giờ chạy**. Predicate `isBlankSecretKey` (`importProfile.ts:44-46`) và `isSecretLikeSettingKey` (`configProfileSchemas.ts:69-71`) là cùng một biểu thức; refine schema ở `:57-66` đã từ chối mọi payload có secret-like key mang value ≠ `''` trước khi `applyConfigProfile` tới vòng lặp (early return ở `:60-68`). Với payload hợp lệ, mọi secret-like key đều có value `''` → chỉ đi vào `skippedBlankSecrets`. `46-REVIEW-FIX.md:63` viết "trả về trong ApplyProfileResult để UI cảnh báo" — cảnh báo đó không tồn tại. Không có rủi ro bảo mật thực tế (schema chặn và modal hiện lỗi), nhưng API surface và ghi chú fix gây hiểu lầm.
 
-**Fix:** Giao Intersection giữa catalog và `Object.keys(envelope.profile.config.secretFields)` (giữ catalog để đảm bảo không sót secret bị thiếu khai báo nhưng vẫn thuộc diện cần rà soát), hoặc ghi chú rõ "kiểm tra nếu bạn dùng các dịch vụ này".
+**Fix:** Xóa field `rejectedSecretKeys`, nhánh `else` tại `:81` và các khởi tạo liên quan (`:66,77,160`); hoặc nếu muốn giữ làm defense-in-depth, gọi `announceToScreenReader` / `notification.warning` với nội dung tiếng Việt tại `ImportProfilePreviewModal.handleApply` khi mảng này nonzero, và sửa fix report cho đúng. Thêm test assert payload secret non-blank bị chặn ở schema (đã có) thay vì kỳ vọng `rejectedSecretKeys`.
 
-### IN-02: Tooltip cảnh báo machine-specific gắn trên icon không thể focus bằng bàn phím
+### IN-02: `defaults.ts` gán `mcp_servers` vào settings nhưng `normaliseDraft` luôn xóa — giá trị chết, có chứa dữ liệu nội bộ
 
-**File:** `src/views/ConfigProfilesView.tsx:259-263,539`
+**File:** `src/services/configProfiles/defaults.ts:35`; `src/views/ConfigProfilesView.tsx:146-148`; `src/services/configProfiles/catalog.ts:67`
 
-**Issue:** `machineWarning` bọc `<WarningOutlined />` bằng `<Tooltip>`. Ant Design Tooltip chỉ kích hoạt qua hover/focus trên phần tử con có thể tương tác; `WarningOutlined` render thành `<span>` không có `tabIndex`, nên người dùng bàn phím/không dùng chuột không bao giờ đọc được nội dung giải thích "giá trị path được giữ lại... cần rà soát". Các input thì có `aria-label` tốt, riêng thông tin cảnh báo này bị loại khỏi luồng accessibility.
+**Issue:** `buildDefaultProfileConfig()` gán `mcp_servers: DEFAULT_MCP_SERVERS` vào `settings`. `mcp_servers` được catalog phân loại `secret-blank` (`catalog.ts:67`), và `normaliseDraft` xóa **mọi** secret-like key khỏi settings trước khi lưu (`ConfigProfilesView.tsx:146-148`). Vì `handleSave` luôn gọi `normaliseDraft` (`:299`), giá trị này không bao giờ lọt vào profile đã lưu hay file export — nên **không có secret leak thực tế**, nhưng dòng `defaults.ts:35` là code chết và gây hiểu lầm. `DEFAULT_MCP_SERVERS` thực tế chứa URL nội bộ và instruction dài; nếu sau này có path export bỏ qua `normaliseDraft`, đây sẽ là kênh rò rỉ. Test purity (`configProfileSchemas.test.ts:133-147`) không kiểm tra điều này.
 
-**Fix:** Thêm `tabIndex={0}` và `aria-label` trên icon, hoặc dùng `<Tooltip><button type="button" aria-label="..."><WarningOutlined /></button></Tooltip>`.
+**Fix:** Trong `buildDefaultProfileConfig`, thay `mcp_servers: DEFAULT_MCP_SERVERS` bằng `''` (hoặc bỏ hẳn key, vì `secretFields` đã có `mcp_servers: ''`), và bỏ import `DEFAULT_MCP_SERVERS` ở `defaults.ts:7` nếu không còn dùng. Thêm assert default config pass `ConfigProfileEnvelopeSchema.safeParse` **trực tiếp** (không qua `normaliseDraft`) vào test purity.
+
+### IN-03: `envelopeForDraft` hardcode marker/version thay vì dùng constant
+
+**File:** `src/views/ConfigProfilesView.tsx:212-219`; `src/validation/configProfileSchemas.ts:12-13`
+
+**Issue:** `envelopeForDraft` ghi cứng `'taskmate-config-profile'` và `1`, trong khi `exportProfile.ts:3-5` và schema dùng `CONFIG_PROFILE_APP_MARKER` / `CONFIG_PROFILE_SCHEMA_VERSION`. Hiện tại cùng giá trị nên validation ở `handleSave` pass, nhưng khi bump schema version, draft vẫn tự validate ở v1 rồi export ở v2 → profile tự soạn có thể không tự import được — đúng lớp lỗi mà WR-04 đang muốn phòng tránh.
+
+**Fix:** Import và dùng constant:
+
+```ts
+import { ConfigProfileEnvelopeSchema, CONFIG_PROFILE_APP_MARKER, CONFIG_PROFILE_SCHEMA_VERSION } from '../validation/configProfileSchemas';
+// trong envelopeForDraft:
+app: CONFIG_PROFILE_APP_MARKER,
+profileSchemaVersion: CONFIG_PROFILE_SCHEMA_VERSION,
+```
+
+### IN-04: Checklist/preview vẫn liệt kê toàn bộ machine-specific catalog, không phải field profile khai báo
+
+**File:** `src/components/settings/ImportProfilePreviewModal.tsx:101-104`; `src/components/settings/PostProfileImportChecklist.tsx:52`
+
+**Issue:** Fix IN-01 chỉ thu hẹp danh sách **secret** qua `getDeclaredProfileSecretFields`; danh sách machine-specific vẫn dùng `getMachineSpecificFields()` trả về toàn bộ catalog (~7 field + `ghostDevConfig.claudePath`) bất kể profile có chứa field đó hay không. Import profile chỉ có `github_owner` vẫn hiện `ninerouter_endpoint`, `image_endpoint`, `knowledge_server_base_url`, … cần rà soát — cùng dạng alert fatigue mà IN-01 đã sửa cho secret. Không có note giải thích "chỉ kiểm tra nếu dùng dịch vụ tương ứng" như phần secret (`:228-231`, `:70-73`).
+
+**Fix:** Thêm helper `getDeclaredProfileMachineFields(config)` trong `catalog.ts` tương tự `getDeclaredProfileSecretFields`, intersect với: `Object.keys(config.settings)` + (`config.ghostDevConfig?.claudePath !== undefined` ? `['ghostDevConfig.claudePath']` : []). Dùng ở preview `:102` và checklist `:52`, kèm ghi chú "các field khác chỉ cần kiểm tra nếu bạn dùng dịch vụ tương ứng". Cập nhật test `ImportProfilePreviewModal.test.tsx:81-84` / `PostProfileImportChecklist.test.tsx:65-68` để assert field machine-specific không khai báo không xuất hiện.
 
 ---
 
-_Reviewed: 2026-11-19T00:00:00Z_
+_Reviewed: 2026-11-19T09:18:24Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
