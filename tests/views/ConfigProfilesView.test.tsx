@@ -5,6 +5,8 @@ import { TaskPlannerDatabase } from '../../src/db';
 import { CONFIGURATION_PROFILES_SETTING_KEY } from '../../src/services/configProfiles/importProfile';
 import { getSecretFields } from '../../src/services/configProfiles/catalog';
 import { DEFAULT_NINEROUTER_ENDPOINT } from '../../src/services/ai/nineRouterTokenService';
+import { ConfigProfileEnvelopeSchema } from '../../src/validation/configProfileSchemas';
+import { applyConfigProfile } from '../../src/services/configProfiles/importProfile';
 
 vi.mock('../../src/components/common/AriaLiveRegion', () => ({
   announceToScreenReader: vi.fn(),
@@ -92,6 +94,62 @@ describe('ConfigProfilesView — defaults-seeded authoring (D-01..D-07)', () => 
     expect(within(teamSection).queryByText(/tên đội|team name|member|thành viên|folder|thư mục/i)).not.toBeInTheDocument();
   });
 
+  it('exposes a keyboard-focusable machine-specific warning with an accessible name (IN-02)', () => {
+    render(<ConfigProfilesView db={db} />);
+
+    const warnings = document.querySelectorAll('[data-machine-specific][role="img"]');
+    expect(warnings.length).toBeGreaterThan(0);
+    for (const warning of Array.from(warnings)) {
+      expect(warning).toHaveAttribute('tabindex', '0');
+      expect(warning.getAttribute('aria-label')).toMatch(/cảnh báo/i);
+    }
+  });
+
+  it('clamps blank/invalid draft values before saving so the profile passes schema and import (WR-04)', async () => {
+    render(<ConfigProfilesView db={db} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Thêm ngoại lệ/ }));
+    fireEvent.change(screen.getByLabelText('Ghost Dev concurrency cap'), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText('Phút làm việc Thứ Hai'), { target: { value: '2000' } });
+    fireEvent.change(screen.getByLabelText('Team concurrency limit'), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText('Tên profile'), { target: { value: 'Profile tự soạn' } });
+    fireEvent.click(screen.getByRole('button', { name: /Lưu profile/i }));
+
+    let rows: Array<{ name: string; config: unknown }> = [];
+    await waitFor(async () => {
+      const stored = await db.settings.get(CONFIGURATION_PROFILES_SETTING_KEY);
+      expect(Array.isArray(stored?.value)).toBe(true);
+      rows = (stored?.value ?? []) as Array<{ name: string; config: unknown }>;
+    });
+    const savedConfig = rows[0]?.config;
+    expect(savedConfig).toBeDefined();
+
+    const validation = ConfigProfileEnvelopeSchema.safeParse({
+      app: 'taskmate-config-profile',
+      profileSchemaVersion: 1,
+      exportedAt: '2026-11-19T00:00:00.000Z',
+      profile: {
+        id: 'validation-check',
+        name: 'Profile tự soạn',
+        createdAt: '2026-11-19T00:00:00.000Z',
+        updatedAt: '2026-11-19T00:00:00.000Z',
+        config: savedConfig,
+      },
+    });
+    expect(validation.success).toBe(true);
+    if (!validation.success) return;
+
+    const config = validation.data.profile.config;
+    expect(config.capacityOverrides[0]?.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(config.ghostDevConfig?.concurrencyCap).toBe(1);
+    expect(config.capacityRules.find((rule) => rule.dayOfWeek === 1)?.workMinutes).toBe(1440);
+    expect(config.teamDefaults?.concurrencyLimit).toBe(1);
+
+    const result = await applyConfigProfile(validation.data, db);
+    expect(result.applied).toBe(true);
+    expect((await db.settings.get('ai_team_defaults'))).toBeDefined();
+  });
+
   it('creates, saves, selects and deletes named profiles through the one-row store', async () => {
     render(<ConfigProfilesView db={db} />);
 
@@ -110,7 +168,11 @@ describe('ConfigProfilesView — defaults-seeded authoring (D-01..D-07)', () => 
     expect(screen.getByLabelText('Tên profile')).toHaveValue('');
 
     fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Chọn profile' }));
-    fireEvent.click(await screen.findByText('Cấu hình cho bạn bè'));
+    fireEvent.click(
+      (await screen.findAllByText('Cấu hình cho bạn bè')).find(
+        (element) => element.closest('.ant-select-item-option') !== null
+      )!
+    );
     expect(screen.getByLabelText('Tên profile')).toHaveValue('Cấu hình cho bạn bè');
 
     // Delete asks for confirmation and writes the empty list back to the store.

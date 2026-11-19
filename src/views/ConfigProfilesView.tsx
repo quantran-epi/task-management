@@ -25,6 +25,7 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import type { AppRoute } from '../types/navigation';
 import { generateId } from '../utils/uuid';
 import { buildDefaultProfileConfig } from '../services/configProfiles/defaults';
+import { ConfigProfileEnvelopeSchema } from '../validation/configProfileSchemas';
 import { getMachineSpecificFields, getSecretFields } from '../services/configProfiles/catalog';
 import { getProfiles, saveProfiles } from '../services/configProfiles/importProfile';
 import type { ConfigurationProfile, ProfileConfig } from '../services/configProfiles/types';
@@ -127,6 +128,96 @@ function fieldValue(value: unknown): string {
   return value === null || value === undefined ? '' : String(value);
 }
 
+const clampInt = (text: string, min: number, max: number, blankValue: number): number => {
+  const parsed = Number(text);
+  if (!Number.isFinite(parsed)) return blankValue;
+  return Math.max(min, Math.min(max, Math.round(parsed)));
+};
+
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * WR-04: every editable numeric/date value is normalised to the schema bounds before
+ * it reaches a saved profile, so a self-authored profile always imports cleanly.
+ */
+function normaliseDraft(config: ProfileConfig): ProfileConfig {
+  const settings = { ...config.settings };
+  // Secret-like keys belong in secretFields (blank) and can never enter profile.settings.
+  for (const key of getSecretFields()) {
+    if (key in settings) delete settings[key];
+  }
+  // Blank numeric input is legal in the draft; normalise it to a schema-valid default.
+  for (const key of NUMBER_SETTINGS) {
+    if (key in settings && settings[key] === '') {
+      settings[key] = key === 'ai_budget_warn_threshold_pct' ? 80 : 0;
+    }
+  }
+  if (typeof settings.ai_budget_warn_threshold_pct === 'number') {
+    settings.ai_budget_warn_threshold_pct = clampInt(
+      fieldValue(settings.ai_budget_warn_threshold_pct),
+      1,
+      100,
+      80
+    );
+  }
+  const ghostDevConfig = config.ghostDevConfig
+    ? {
+        ...config.ghostDevConfig,
+        concurrencyCap: clampInt(
+          fieldValue(config.ghostDevConfig.concurrencyCap),
+          1,
+          12,
+          6
+        ),
+      }
+    : config.ghostDevConfig;
+  const teamDefaults = config.teamDefaults
+    ? {
+        ...config.teamDefaults,
+        budgetTokens: clampInt(fieldValue(config.teamDefaults.budgetTokens), 0, Number.MAX_SAFE_INTEGER, 0),
+        ...(config.teamDefaults.concurrencyLimit !== undefined
+          ? { concurrencyLimit: clampInt(fieldValue(config.teamDefaults.concurrencyLimit), 1, 12, 3) }
+          : {}),
+        ...(typeof config.teamDefaults.budgetWarnThresholdPct === 'number'
+          ? {
+              budgetWarnThresholdPct: clampInt(
+                fieldValue(config.teamDefaults.budgetWarnThresholdPct),
+                1,
+                100,
+                80
+              ),
+            }
+          : {}),
+      }
+    : config.teamDefaults;
+  return {
+    ...config,
+    settings,
+    capacityRules: config.capacityRules.map((rule) => ({
+      ...rule,
+      workMinutes: clampInt(fieldValue(rule.workMinutes), 0, 1440, 0),
+    })),
+    capacityOverrides: config.capacityOverrides.map((override) => ({
+      ...override,
+      date: DATE_PATTERN.test(override.date)
+        ? override.date
+        : new Date().toISOString().slice(0, 10),
+      workMinutes: clampInt(fieldValue(override.workMinutes), 0, 1440, 0),
+    })),
+    ...(ghostDevConfig !== undefined ? { ghostDevConfig } : {}),
+    ...(teamDefaults !== undefined ? { teamDefaults } : {}),
+  };
+}
+
+function envelopeForDraft(name: string, config: ProfileConfig, id: string, now: string) {
+  return {
+    app: 'taskmate-config-profile' as const,
+    profileSchemaVersion: 1 as const,
+    exportedAt: now,
+    profile: { id, name, createdAt: now, updatedAt: now, config },
+  };
+}
+
 function displayLabel(key: string): string {
   return SETTING_FIELDS[key] ?? SECRET_LABELS[key] ?? key;
 }
@@ -147,6 +238,7 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [draft, setDraft] = useState<ProfileConfig>(newDraftFromDefaults);
+  const [draftError, setDraftError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const secretFields = useMemo(() => getSecretFields(), []);
@@ -178,6 +270,7 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
   const resetDraft = () => {
     setSelectedId(null);
     setName('');
+    setDraftError(null);
     setDraft(newDraftFromDefaults());
   };
 
@@ -191,6 +284,7 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
     if (!profile) return;
     setSelectedId(profile.id);
     setName(profile.name);
+    setDraftError(null);
     setDraft(cloneConfig(profile.config));
   };
 
@@ -202,12 +296,23 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
     }
     const now = new Date().toISOString();
     const existing = profiles.find((profile) => profile.id === selectedId);
+    const normalised = normaliseDraft(draft);
+    const validation = ConfigProfileEnvelopeSchema.safeParse(
+      envelopeForDraft(trimmed, normalised, existing?.id ?? 'draft', now)
+    );
+    if (!validation.success) {
+      setDraftError(
+        validation.error.issues.map((issue) => `${issue.path.join('.') || 'profile'}: ${issue.message}`).join('; ')
+      );
+      return;
+    }
+    setDraftError(null);
     const saved: ConfigurationProfile = {
       id: existing?.id ?? generateId(),
       name: trimmed,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
-      config: cloneConfig(draft),
+      config: normalised,
     };
     const next = existing
       ? profiles.map((profile) => (profile.id === saved.id ? saved : profile))
@@ -258,7 +363,13 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
 
   const machineWarning = (key: string) => (
     <Tooltip title="Giá trị máy chủ/path được giữ lại trong file export; hãy rà soát sau khi import.">
-      <WarningOutlined data-machine-specific={key} style={{ color: '#faad14', marginLeft: 6 }} />
+      <WarningOutlined
+        data-machine-specific={key}
+        tabIndex={0}
+        role="img"
+        aria-label={`Cảnh báo giá trị theo máy: ${displayLabel(key)} được giữ lại trong file export; hãy rà soát sau khi import.`}
+        style={{ color: '#faad14', marginLeft: 6 }}
+      />
     </Tooltip>
   );
 
@@ -352,6 +463,9 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
           </Space>
           {!selectedProfile && (
             <Text type="secondary">Chọn profile để xuất, hoặc soạn profile mới rồi lưu lại.</Text>
+          )}
+          {draftError && (
+            <Alert type="error" showIcon message="Profile chưa hợp lệ" description={draftError} />
           )}
         </Space>
       </Card>
