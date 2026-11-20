@@ -33,6 +33,7 @@
 }
 .cz-btn:hover { background: var(--bg-hover); }
 .cz-btn.tiny { padding: 2px 7px; font-size: 11px; line-height: 15px; }
+.cz-btn.tiny.compact { padding: 1px 5px; font-size: 10px; }
 .cz-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
 .cz-icon-btn {
   width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center;

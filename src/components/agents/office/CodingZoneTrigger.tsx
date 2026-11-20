@@ -79,7 +79,7 @@ export const CodingZoneTrigger: React.FC<CodingZoneTriggerProps> = ({
     <>
       <button
         type="button"
-        className={compact ? 'cz-btn tiny' : 'cz-btn tiny'}
+        className={compact ? 'cz-btn tiny compact' : 'cz-btn tiny'}
         data-testid="coding-zone-trigger"
         onClick={() => setOpen(true)}
       >
