@@ -6,6 +6,7 @@ import {
   getRemoteBranches,
   checkDirtyStatus,
   getCommitLog,
+  getRecentCommits,
   getDiffSummary,
   getFileDiff,
   checkHeadDrift,
@@ -334,6 +335,37 @@ describe('gitRemoteService - Task 1 Tracer Slice', () => {
         undefined
       );
       expect(diff).toBe(mockDiff);
+    });
+  });
+
+  describe('getRecentCommits — WR-05 limit normalization', () => {
+    it('normalizes a numeric-string limit and clamps to 1..100 before shell interpolation', async () => {
+      vi.mocked(sshService.execRemoteCommand).mockResolvedValueOnce({
+        stdout: '',
+        stderr: '',
+        exitStatus: 0,
+      });
+
+      await getRecentCommits(dummyConfig, '/var/repo', 'main', 500 as unknown as number);
+      expect(sshService.execRemoteCommand).toHaveBeenCalledWith(
+        dummyConfig,
+        "git -C '/var/repo' -c core.fsmonitor=false --no-pager log -n '100' --format='%x1e%H%x00%h%x00%an%x00%ad%x00%s' --date=iso --end-of-options 'main'",
+        undefined,
+        undefined
+      );
+    });
+
+    it('cannot inject shell syntax through a non-numeric limit', async () => {
+      vi.mocked(sshService.execRemoteCommand).mockResolvedValueOnce({
+        stdout: '',
+        stderr: '',
+        exitStatus: 0,
+      });
+
+      await getRecentCommits(dummyConfig, '/var/repo', 'main', '1; touch /tmp/pwned #' as unknown as number);
+      const cmd = vi.mocked(sshService.execRemoteCommand).mock.calls[0]![1];
+      expect(cmd).not.toContain('touch /tmp/pwned');
+      expect(cmd).toContain("-n '20'"); // NaN -> default 20
     });
   });
 

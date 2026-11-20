@@ -170,13 +170,17 @@ export async function getRecentCommits(
   secret?: string,
   callId?: string
 ): Promise<RemoteGitCommit[]> {
+  // WR-05: normalize at the service boundary (same convention as grepRemoteRef) before the
+  // value is interpolated into the shell command. String(limit) raw would let a non-numeric
+  // value inject shell syntax; clamp 1..100 with a 20 default.
+  const safeLimit = Math.min(Math.max(1, Math.floor(Number(limit)) || 20), 100);
   const output = await runGitCommand(
     config,
     repoPath,
     [
       'log',
       '-n',
-      String(limit),
+      escapeShellArg(String(safeLimit)),
       "--format='%x1e%H%x00%h%x00%an%x00%ad%x00%s'",
       '--date=iso',
       // CR-01: every option precedes the terminator; the branch is a revision, never an option.
