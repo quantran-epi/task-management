@@ -283,6 +283,20 @@ describe('FindInRemoteFiles — entry, seed, modes, debounce and Enter (Task 1)'
     expect(folderRows.some((t) => t?.includes('alpha.ts'))).toBe(false);
   });
 
+  it('Files/Folders with an empty pattern show a prompt and fetch nothing (WR-04)', async () => {
+    render(<FindInRemoteFiles />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Files' }));
+    await act(async () => { await Promise.resolve(); });
+
+    expect(screen.getByTestId('find-empty-prompt')).toHaveTextContent('Type to search files/folders.');
+    expect(searchRemoteTree).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Folders' }));
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByTestId('find-empty-prompt')).toBeDefined();
+    expect(searchRemoteTree).not.toHaveBeenCalled();
+  });
+
   it('a query change in Files mode never calls grepRemoteRef', async () => {
     searchRemoteTree.mockResolvedValue([treeResult({ path: 'alpha.ts', name: 'alpha.ts' })]);
     render(<FindInRemoteFiles />);

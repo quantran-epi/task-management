@@ -38,6 +38,8 @@ export const FIND_STATUS_COPY = {
   emptyHeading: 'No matches',
   emptyBody: (pattern: string, repo: string, ref: string): string =>
     `No matches for \`${pattern}\` in \`${repo} / ${ref}\`. Try a different pattern, widen the file mask, or switch scope to Whole ref.`,
+  // WR-04: Files/Folders need a needle; with none typed, prompt instead of an unexplained list.
+  emptyPrompt: 'Type to search files/folders.',
   previewUnavailable:
     'Preview unavailable for this binary or large file (>256 KB). Open full file.',
   openFullFile: 'Open full file',

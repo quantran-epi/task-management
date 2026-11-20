@@ -146,12 +146,14 @@ export function FindInRemoteFiles(props: FindInRemoteFilesProps) {
   // Files/Folders modes: filter the cached ls-tree client-side by query + mask (D-05/D-09).
   // The query text never reaches git — no grep, no command construction in these modes.
   useEffect(() => {
-    if (!open || mode === 'content') {
+    const needle = remoteQuery.pattern.trim();
+    // WR-04: an empty needle fetches nothing (searchRemoteTree returns [] immediately); do not
+    // dispatch a pointless remote call — show the prompt in the results pane instead.
+    if (!open || mode === 'content' || !needle) {
       setTreeRows([]);
       return;
     }
     let cancelled = false;
-    const needle = remoteQuery.pattern.trim();
     // Directory scope uses the same confinement as plan 01; a throwing path refuses the whole
     // filter rather than silently widening the subtree.
     const confinedDir = remoteQuery.directory ? confineRepoPath(remoteQuery.directory) : '';
@@ -440,6 +442,11 @@ export function FindInRemoteFiles(props: FindInRemoteFilesProps) {
                 />
               </div>
             ))}
+            {mode !== 'content' && !remoteQuery.pattern ? (
+              <div className="find-empty" data-testid="find-empty-prompt">
+                {FIND_STATUS_COPY.emptyPrompt}
+              </div>
+            ) : null}
             {state.status === 'done' && rows.length === 0 ? (
               <div className="find-empty" data-testid="find-empty">
                 <strong>{FIND_STATUS_COPY.emptyHeading}</strong>
