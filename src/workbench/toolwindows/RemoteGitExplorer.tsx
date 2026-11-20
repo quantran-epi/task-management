@@ -475,12 +475,14 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         return mergeUncommittedFilesIntoTree(rawChildren, uncommittedFiles, path);
       };
 
-      let children = await fetchLevel(startPath);
+      let level = await fetchLevel(startPath);
       let fetches = 1;
-      while (fetches < CHAIN_FETCH_CAP) {
-        const only = children.length === 1 ? children[0]! : undefined;
+      // `level` is the children of the last node we descended through; `chain` records the
+      // folders we walked past so the result can be folded back into one nested subtree.
+      const chain: RemoteGitTreeNode[] = [];
+      while (fetches < CHAIN_FETCH_CAP && level.length === 1) {
+        const only = level[0]!;
         if (
-          !only ||
           only.isLeaf ||
           only.gitStatus?.trim() ||
           Boolean(only.children?.length) ||
@@ -490,10 +492,14 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
           break;
         }
         const deeper = await fetchLevel(only.key);
-        children = children.map((child) =>
-          child.key === only.key ? { ...child, children: deeper } : child
-        );
         fetches += 1;
+        chain.push(only);
+        level = deeper;
+        if (deeper.length === 0) break;
+      }
+      let children = level;
+      for (let i = chain.length - 1; i >= 0; i -= 1) {
+        children = [{ ...chain[i]!, children }];
       }
       setTreeData((prev) => injectRawChildren(prev, startPath, children));
     } catch (err: any) {

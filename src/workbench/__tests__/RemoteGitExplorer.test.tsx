@@ -691,6 +691,46 @@ describe('RemoteGitExplorer Component', () => {
     expect(calls.length).toBe(3);
   });
 
+  it('walks a chain deeper than one descent in a single expand (BUG-02)', async () => {
+    act(() => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
+      useLayoutStore.getState().setActiveRemoteBranch('main');
+    });
+    // Root chain: a/b -> a/b/c -> a/b/c/d -> a/b/c/d/e (single folder each), deepest is a file.
+    const nextLevel: Record<string, any[]> = {
+      'a/b': [{ key: 'a/b/c', title: 'c', isLeaf: false, sha: 't-c' }],
+      'a/b/c': [{ key: 'a/b/c/d', title: 'd', isLeaf: false, sha: 't-d' }],
+      'a/b/c/d': [{ key: 'a/b/c/d/e', title: 'e', isLeaf: false, sha: 't-e' }],
+      'a/b/c/d/e': [{ key: 'a/b/c/d/e/Deep.java', title: 'Deep.java', isLeaf: true, size: 5, sha: 'b-1' }],
+    };
+    vi.spyOn(gitRemoteTreeService, 'getRemoteTree').mockImplementation(async (_cfg, _repo, _ref, dirPath) => {
+      if (!dirPath) {
+        return [{ key: 'a', title: 'a', isLeaf: false, sha: 't-a',
+          children: [{ key: 'a/b', title: 'b', isLeaf: false, sha: 't-b' }] }];
+      }
+      return nextLevel[dirPath as string] ?? [];
+    });
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteGitExplorer />
+      </AntdThemeAdapter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('a.b')).toBeDefined();
+    });
+    fireEvent.click(screen.getByText('a.b').closest('.ant-tree-treenode')!.querySelector('.ant-tree-switcher')!);
+
+    await waitFor(() => {
+      expect(screen.getByText('Deep.java')).toBeDefined();
+    });
+    const calls = ((gitRemoteTreeService.getRemoteTree as any).mock.calls as any[][]);
+    for (const path of ['a/b', 'a/b/c', 'a/b/c/d', 'a/b/c/d/e']) {
+      expect(calls.filter((c) => c[3] === path).length).toBe(1);
+    }
+  });
+
   it('keeps a branch point expanded into separate nodes', async () => {
     act(() => {
       useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
