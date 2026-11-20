@@ -94,7 +94,8 @@ export interface FindSessionDeps {
  * Pure supersede-and-guard state machine (D-08). Every search bumps `seq`, marks current
  * results stale, cancels the prior request and issues a stable callId. A response whose seq
  * no longer matches is dropped, so a late run can never overwrite newer results. No React,
- * db or service imports — deps are injected and the UI wires cancel to `cancelToolCall`.
+ * db or service imports — deps are injected and the UI wires cancel to `cancelRemoteCall`, which
+ * delegates to the `cancelToolCall` transport.
  */
 export class FindSession {
   private seq = 0;
