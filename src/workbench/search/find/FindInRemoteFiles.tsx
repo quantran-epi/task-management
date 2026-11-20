@@ -56,6 +56,7 @@ export function FindInRemoteFiles(props: FindInRemoteFilesProps) {
   const closeFind = useFindStore((s) => s.closeFind);
   const togglePinned = useFindStore((s) => s.togglePinned);
   const openTab = useLayoutStore((s) => s.openTab);
+  const setPendingRevealTarget = useLayoutStore((s) => s.setPendingRevealTarget);
 
   const [pattern, setPattern] = useState('');
   const [mode, setMode] = useState<Mode>('content');
@@ -223,8 +224,19 @@ export function FindInRemoteFiles(props: FindInRemoteFilesProps) {
       const row = rows[index];
       if (!row || !configId) return;
       if (mode === 'folders') {
-        // Plan 03 owns explorer reveal; the typed prop is the explicit seam, never a silent stub.
-        props.onReveal?.(row.path);
+        // Folders-mode reveal: set the one-shot target consumed by RemoteGitExplorer. An
+        // explicit onReveal prop (if a host supplies one) takes precedence over the default.
+        // No new reveal transport, no new store field (D-11/D-12).
+        if (props.onReveal) {
+          props.onReveal(row.path);
+        } else {
+          setPendingRevealTarget({
+            configId,
+            repoPath,
+            branch,
+            filePath: row.path,
+          });
+        }
         return;
       }
       const suffix = secondary ? `-side-${Date.now()}` : '';
@@ -243,7 +255,7 @@ export function FindInRemoteFiles(props: FindInRemoteFilesProps) {
         },
       });
     },
-    [rows, configId, repoPath, branch, openTab, mode, props]
+    [rows, configId, repoPath, branch, openTab, mode, props, setPendingRevealTarget]
   );
 
   const handleKeyDown = useCallback(

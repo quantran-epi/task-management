@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Select, Input, Tree, Button, Tooltip, Tag, Spin, Alert, Empty, Segmented } from 'antd';
+import { Select, Input, Tree, Button, Tooltip, Tag, Spin, Alert, Empty } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import FolderOutlined from '@ant-design/icons/FolderOutlined';
 import FolderOpenOutlined from '@ant-design/icons/FolderOpenOutlined';
@@ -10,7 +10,7 @@ import CloudServerOutlined from '@ant-design/icons/CloudServerOutlined';
 import FolderViewOutlined from '@ant-design/icons/FolderViewOutlined';
 import { RemoteDirectoryBrowserModal } from '../../components/common/RemoteDirectoryBrowserModal';
 import { getSshConfigs, getSshSecret } from '../../services/sshService';
-import { getRemoteBranches, checkDirtyStatus, grepRemoteRef } from '../../services/gitRemoteService';
+import { getRemoteBranches, checkDirtyStatus } from '../../services/gitRemoteService';
 import {
   getRemoteTree,
   mergeUncommittedFilesIntoTree,
@@ -18,7 +18,7 @@ import {
   type RemoteTreeSearchResult,
 } from '../../services/gitRemoteTreeService';
 import type { SshConfig } from '../../types/ssh';
-import type { RemoteGitBranch, RemoteGitTreeNode, RemoteGrepHit } from '../../types/gitRemote';
+import type { RemoteGitBranch, RemoteGitTreeNode } from '../../types/gitRemote';
 import { compactRemoteTree, keyOfPathFor, type CompactedNode } from '../../utils/remoteTreeCompact';
 import { useLayoutStore } from '../store/layoutStore';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -241,14 +241,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
   const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
   const [loadingTree, setLoadingTree] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  // Phase 47 search state — scoped to the active target above; never a new target picker (D-02).
-  const [searchMode, setSearchMode] = useState<'content' | 'name'>('content');
-  const [searchInput, setSearchInput] = useState<string>('');
-  const [grepHits, setGrepHits] = useState<RemoteGrepHit[]>([]);
-  const [grepTruncated, setGrepTruncated] = useState<boolean>(false);
-  const [searching, setSearching] = useState<boolean>(false);
-  const searchSeq = useRef<number>(0);
-  // Global (whole-ref) search state — distinct from the subtree content/name search above.
+  // Global (whole-ref) search state — the unified Find dialog (plan 02) owns subtree search.
   const [globalQuery, setGlobalQuery] = useState<string>('');
   const [globalResults, setGlobalResults] = useState<RemoteTreeSearchResult[]>([]);
   const [globalSearching, setGlobalSearching] = useState<boolean>(false);
@@ -512,90 +505,6 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
     });
   };
 
-  // Content search: reuse the confined, escaped, bounded git grep service (D-14). The pattern
-  // goes to grepRemoteRef as DATA — escaping (`-e`, `--end-of-options`, escapeShellArg) stays
-  // in the service and is never reimplemented here. 200 hits are capped again in the service.
-  const CONTENT_HIT_LIMIT = 200;
-  const runContentSearch = useCallback(
-    async (pattern: string) => {
-      const trimmed = pattern.trim();
-      if (!selectedConfig || !repoPath.trim() || !selectedBranch || !trimmed) {
-        setGrepHits([]);
-        setGrepTruncated(false);
-        return;
-      }
-      const seq = ++searchSeq.current;
-      setSearching(true);
-      setError(null);
-      try {
-        const secret = await getSshSecret(selectedConfig.id);
-        const result = await grepRemoteRef(
-          selectedConfig,
-          repoPath.trim(),
-          selectedBranch,
-          { pattern: trimmed, literal: true, limit: CONTENT_HIT_LIMIT },
-          secret ?? undefined
-        );
-        if (seq !== searchSeq.current) return; // discard stale async result
-        setGrepHits(result.hits.slice(0, CONTENT_HIT_LIMIT));
-        setGrepTruncated(result.truncated);
-      } catch (err: any) {
-        if (seq !== searchSeq.current) return;
-        setGrepHits([]);
-        setGrepTruncated(false);
-        setError(err?.message || 'Content search failed');
-      } finally {
-        if (seq === searchSeq.current) setSearching(false);
-      }
-    },
-    [selectedConfig, repoPath, selectedBranch]
-  );
-
-  // Renderer-side debounce so typing does not fire a remote grep per keystroke. It only starts
-  // once the user has engaged the search field, so opening the explorer never greps on mount.
-  const hasSearchedRef = useRef<boolean>(false);
-  useEffect(() => {
-    if (searchMode !== 'content' || !hasSearchedRef.current) return;
-    const timer = setTimeout(() => {
-      void runContentSearch(searchInput);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchMode, searchInput, runContentSearch]);
-
-  // Name mode filters the ALREADY-LOADED, repo-relative tree (no new walker / whole-file read,
-  // D-03). Flatten it and match a relative path segment case-insensitively; cap rendered rows
-  // so a large tree cannot flood the DOM (T-47-05).
-  const NAME_RESULT_LIMIT = 200;
-  const nameResults = (() => {
-    if (searchMode !== 'name' || !searchInput.trim()) return [];
-    const needle = searchInput.trim().toLowerCase();
-    const found: Array<{ path: string; node: RemoteGitTreeNode }> = [];
-    const visit = (nodes: RemoteGitTreeNode[]) => {
-      for (const node of nodes) {
-        const path = node.key;
-        const segments = path.split('/');
-        if (segments.some((seg) => seg.toLowerCase().includes(needle))) {
-          found.push({ path, node });
-          if (found.length >= NAME_RESULT_LIMIT) return;
-        }
-        if (node.children) visit(node.children);
-        if (found.length >= NAME_RESULT_LIMIT) return;
-      }
-    };
-    visit(treeData);
-    return found;
-  })();
-
-  // Switching modes must not leak the other mode's visible state. Clear the input so the
-  // inactive mode's results (grep hits or name matches) are no longer rendered.
-  const handleSearchModeChange = (val: 'content' | 'name') => {
-    setSearchMode(val);
-    setSearchInput('');
-    setGrepHits([]);
-    setGrepTruncated(false);
-    hasSearchedRef.current = false;
-  };
-
   // Global whole-ref search: debounced, guarded on a full remote target, query stays DATA only.
   const globalSearchReady = Boolean(selectedConfig && repoPath.trim() && selectedBranch);
   useEffect(() => {
@@ -648,9 +557,6 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
     // Folders have no file tab: reveal the folder node in the tree. Clear the global query so
     // the results panel unmounts and the Tree is visible for the reveal (T-quick-05).
     setGlobalQuery('');
-    setSearchInput('');
-    setGrepHits([]);
-    hasSearchedRef.current = false;
     setExpandedKeys(result.path.split('/').slice(0, -1));
     useLayoutStore.getState().setPendingRevealTarget({
       configId: selectedConfig?.id ?? null,
@@ -739,10 +645,6 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
     let cancelled = false;
     const reveal = async () => {
       try {
-        setSearchInput('');
-        setGrepHits([]);
-        setGrepTruncated(false);
-        hasSearchedRef.current = false;
         const secret = await getSshSecret(selectedConfig.id);
         let currentTree = treeData;
         for (const ancestor of ancestorPaths) {
@@ -903,37 +805,6 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
             data-testid="global-search-input"
           />
         </div>
-
-        {/* Search (scoped to the active target — D-02/D-03) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Segmented
-            size="small"
-            value={searchMode}
-            onChange={(val) => handleSearchModeChange(val as 'content' | 'name')}
-            options={[
-              { label: 'Content', value: 'content' },
-              { label: 'Name', value: 'name' },
-            ]}
-            data-testid="search-mode-segmented"
-          />
-          <Input.Search
-            size="small"
-            style={{ flex: 1 }}
-            placeholder={searchMode === 'content' ? 'Search file contents…' : 'Search file/folder names…'}
-            value={searchInput}
-            onChange={(e) => {
-              setSearchInput(e.target.value);
-              hasSearchedRef.current = true;
-            }}
-            onSearch={(val) => {
-              hasSearchedRef.current = true;
-              if (searchMode === 'content') void runContentSearch(val);
-            }}
-            loading={searching}
-            allowClear
-            data-testid="remote-search-input"
-          />
-        </div>
       </div>
 
       {/* Error alert if any */}
@@ -1002,101 +873,6 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
                   </div>
                 );
               })
-            )}
-          </div>
-        ) : searchMode === 'name' && searchInput.trim() ? (
-          <div data-testid="name-search-results" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {nameResults.length === 0 ? (
-              <div style={{ padding: 12, fontSize: 12, color: 'var(--fg-muted, #6c707e)' }}>
-                No name matches in this tree.
-              </div>
-            ) : (
-              nameResults.map(({ path, node }) => {
-                const title = node.title || path;
-                return (
-                  <div
-                    key={path}
-                    role="button"
-                    tabIndex={0}
-                    data-testid="name-search-hit"
-                    data-file-path={path}
-                    onClick={() => openRemoteFile(path, String(title), {
-                      size: node.size,
-                      gitStatus: node.gitStatus,
-                    })}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        openRemoteFile(path, String(title), {
-                          size: node.size,
-                          gitStatus: node.gitStatus,
-                        });
-                      }
-                    }}
-                    style={{
-                      cursor: 'pointer',
-                      padding: '4px 6px',
-                      borderRadius: 4,
-                      fontSize: 12,
-                      fontFamily: "'JetBrains Mono', Consolas, Monaco, monospace",
-                    }}
-                  >
-                    {node.isLeaf ? <FileTextOutlined /> : <FolderOutlined />}{' '}
-                    <span>{path}</span>
-                  </div>
-                );
-              })
-            )}
-            {nameResults.length >= NAME_RESULT_LIMIT && (
-              <div style={{ padding: '4px 6px', fontSize: 11, color: '#d97706' }}>
-                Results limited to {NAME_RESULT_LIMIT} entries.
-              </div>
-            )}
-          </div>
-        ) : searchMode === 'content' && hasSearchedRef.current && searchInput.trim() ? (
-          <div data-testid="content-search-results" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {grepHits.length === 0 && !searching ? (
-              <div style={{ padding: 12, fontSize: 12, color: 'var(--fg-muted, #6c707e)' }}>
-                No content matches in this target.
-              </div>
-            ) : (
-              grepHits.map((hit, idx) => (
-                <div
-                  key={`${hit.path}:${hit.line}:${idx}`}
-                  role="button"
-                  tabIndex={0}
-                  data-testid="content-search-hit"
-                  onClick={() =>
-                    openRemoteFile(hit.path, hit.path.split('/').pop() || hit.path, {
-                      initialLine: hit.line,
-                    })
-                  }
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      openRemoteFile(hit.path, hit.path.split('/').pop() || hit.path, {
-                        initialLine: hit.line,
-                      });
-                    }
-                  }}
-                  style={{
-                    cursor: 'pointer',
-                    padding: '4px 6px',
-                    borderRadius: 4,
-                    fontSize: 12,
-                    fontFamily: "'JetBrains Mono', Consolas, Monaco, monospace",
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-all',
-                  }}
-                >
-                  <span style={{ color: 'var(--accent, #3871e1)' }}>{hit.path}</span>
-                  <span style={{ color: 'var(--fg-muted, #8c8f9c)' }}>:{hit.line}:</span>
-                  <span>{hit.text}</span>
-                </div>
-              ))
-            )}
-            {grepTruncated && (
-              <div style={{ padding: '4px 6px', fontSize: 11, color: '#d97706' }}>
-                Results limited to {CONTENT_HIT_LIMIT} hits.
-              </div>
             )}
           </div>
         ) : (

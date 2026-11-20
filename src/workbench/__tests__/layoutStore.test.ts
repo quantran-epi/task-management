@@ -219,6 +219,24 @@ describe('useLayoutStore', () => {
     expect(params?.initialLine).toBe(12);
   });
 
+  it('sets and consumes the one-shot pending reveal target', () => {
+    const target = {
+      configId: 'ssh-1',
+      repoPath: '/home/dev/repo',
+      branch: 'main',
+      filePath: 'src/main/java/com/acme/orders',
+    };
+    expect(useLayoutStore.getState().pendingRevealTarget).toBeNull();
+
+    useLayoutStore.getState().setPendingRevealTarget(target);
+    expect(useLayoutStore.getState().pendingRevealTarget).toEqual(target);
+
+    expect(useLayoutStore.getState().consumePendingRevealTarget()).toEqual(target);
+    expect(useLayoutStore.getState().pendingRevealTarget).toBeNull();
+    // A second consume is a no-op — the one-shot request is not replayed.
+    expect(useLayoutStore.getState().consumePendingRevealTarget()).toBeNull();
+  });
+
   it('sets active remote target and branch correctly', () => {
     useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/var/www/repo', 'feature/login');
     let state = useLayoutStore.getState();

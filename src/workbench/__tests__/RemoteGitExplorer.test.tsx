@@ -262,7 +262,7 @@ describe('RemoteGitExplorer Component', () => {
     expect(untrackedTab?.params?.gitStatus).toBe('?');
   });
 
-  it('content search calls grepRemoteRef with the active target and bounded limit, renders path:line:text, and opens at that line', async () => {
+  it('no longer renders the three superseded inline search inputs (D-11)', async () => {
     act(() => {
       useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
     });
@@ -272,44 +272,20 @@ describe('RemoteGitExplorer Component', () => {
         <RemoteGitExplorer />
       </AntdThemeAdapter>
     );
-
-    const searchWrapper = screen.getByTestId('remote-search-input');
-    // antd Input.Search puts the testid on its wrapper div; the real editable node is the input.
-    const searchInput = searchWrapper.tagName === 'INPUT' ? searchWrapper : searchWrapper.querySelector('input')!;
-    // A leading-dash / special-char pattern must be passed as DATA, never quoted here.
-    // The renderer debounces 300ms; waitFor covers that plus the async service call.
-    fireEvent.change(searchInput, { target: { value: '-Dtest; rm -rf /' } });
 
     await waitFor(() => {
-      expect(gitRemoteService.grepRemoteRef).toHaveBeenCalledWith(
-        mockSshConfigs[0],
-        '/home/dev/my-repo',
-        'main',
-        expect.objectContaining({
-          pattern: '-Dtest; rm -rf /',
-          literal: true,
-          limit: 200,
-        }),
-        'secret-123'
-      );
+      expect(screen.getByTestId('ssh-config-select')).toBeDefined();
     });
-
-    // path:line:text rendering (repo-relative path used verbatim) on the hit row.
-    const hits = await screen.findAllByTestId('content-search-hit');
-    const hit = hits.find((h) => h.textContent?.includes('src/index.ts'))!;
-    expect(hit.textContent).toContain('src/index.ts');
-    expect(hit.textContent).toContain(':7:');
-    expect(hit.textContent).toContain('const secret = "-Dtest";');
-
-    fireEvent.click(hit);
-
-    const remoteTab = useLayoutStore.getState().openTabs.find((t) => t.id === 'remote:src/index.ts');
-    expect(remoteTab).toBeDefined();
-    expect(remoteTab?.viewType).toBe('remote_file');
-    expect(remoteTab?.params?.initialLine).toBe(7);
+    // The old content/name placeholders and segmented control are gone.
+    expect(screen.queryByPlaceholderText('Search file contents…')).toBeNull();
+    expect(screen.queryByPlaceholderText('Search file/folder names…')).toBeNull();
+    expect(screen.queryByTestId('remote-search-input')).toBeNull();
+    expect(screen.queryByTestId('search-mode-segmented')).toBeNull();
+    // grepRemoteRef is never called from the explorer anymore — the Find dialog owns it.
+    expect(gitRemoteService.grepRemoteRef).not.toHaveBeenCalled();
   });
 
-  it('name mode filters the active tree by relative path and opens the remote tab without initialLine', async () => {
+  it('keeps target selectors, global search and readonly tree intact after input removal', async () => {
     act(() => {
       useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
     });
@@ -320,61 +296,22 @@ describe('RemoteGitExplorer Component', () => {
       </AntdThemeAdapter>
     );
 
-    // Load the tree first.
     await waitFor(() => {
       expect(screen.getByText('package.json')).toBeDefined();
     });
+    expect(screen.getByTestId('ssh-config-select')).toBeDefined();
+    expect(screen.getByTestId('repo-path-input')).toBeDefined();
+    expect(screen.getByTestId('branch-select')).toBeDefined();
+    expect(screen.getByTestId('global-search-input')).toBeDefined();
+    expect(screen.getByTestId('refresh-tree-btn')).toBeDefined();
+    expect(screen.getByTestId('browse-remote-repo-btn')).toBeDefined();
 
-    // Switch to Name mode via the segmented control.
-    const nameButton = screen.getByText('Name');
-    fireEvent.click(nameButton);
-
-    const wrapper = screen.getByTestId('remote-search-input');
-    const input = wrapper.tagName === 'INPUT' ? wrapper : wrapper.querySelector('input')!;
-    fireEvent.change(input, { target: { value: 'PACKAGE' } }); // case-insensitive, root-level leaf
-
-    await waitFor(() => {
-      expect(screen.getAllByTestId('name-search-hit').length).toBe(1);
-    });
-    const hits = screen.getAllByTestId('name-search-hit');
-    expect(hits[0]?.getAttribute('data-file-path')).toBe('package.json');
-
-    fireEvent.click(hits[0]!);
+    // Clicking a file still opens the readonly remote tab with no initialLine.
+    fireEvent.click(screen.getByText('package.json'));
     const tab = useLayoutStore.getState().openTabs.find((t) => t.id === 'remote:package.json');
-    expect(tab).toBeDefined();
     expect(tab?.viewType).toBe('remote_file');
     expect(tab?.params?.filePath).toBe('package.json');
     expect(tab?.params?.initialLine).toBeUndefined();
-
-    // No new filesystem walker / whole-file read: only getRemoteTree + grepRemoteRef are used.
-    expect(gitRemoteTreeService.getRemoteTree).toHaveBeenCalled();
-  });
-
-  it('switching modes clears the other mode\'s results', async () => {
-    act(() => {
-      useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
-    });
-
-    render(
-      <AntdThemeAdapter>
-        <RemoteGitExplorer />
-      </AntdThemeAdapter>
-    );
-
-    // Produce a content result first.
-    const wrapper = screen.getByTestId('remote-search-input');
-    const input = wrapper.tagName === 'INPUT' ? wrapper : wrapper.querySelector('input')!;
-    fireEvent.change(input, { target: { value: 'secret' } });
-    await waitFor(() => {
-      expect(screen.getAllByTestId('content-search-hit').length).toBeGreaterThan(0);
-    });
-
-    // Switch to Name mode: the content hits must disappear, input cleared.
-    fireEvent.click(screen.getByText('Name'));
-    await waitFor(() => {
-      expect(screen.queryByTestId('content-search-results')).toBeNull();
-    });
-    expect(screen.queryAllByTestId('name-search-hit').length).toBe(0);
   });
 
   it('reveals a pending file: expands ancestor folders, selects the node, and consumes the request', async () => {

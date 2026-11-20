@@ -308,6 +308,41 @@ describe('FindInRemoteFiles — entry, seed, modes, debounce and Enter (Task 1)'
     expect(tab.params.initialLine).toBeUndefined();
   });
 
+  it('Enter on a Folders row sets the one-shot pendingRevealTarget consumed by the explorer', async () => {
+    useLayoutStore.setState({
+      activeRemoteConfigId: CONFIG.id,
+      activeRemoteRepoPath: '/srv/repo',
+      activeRemoteBranch: 'main',
+      pendingRevealTarget: null,
+    });
+    searchRemoteTree.mockResolvedValue([treeResult({ path: 'src/main', name: 'main', type: 'folder' })]);
+    render(<FindInRemoteFiles />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Folders' }));
+    fireEvent.change(screen.getByLabelText('Pattern'), { target: { value: 'main' } });
+    await screen.findByTestId('find-result-row-0');
+
+    fireEvent.keyDown(screen.getByLabelText('Pattern'), { key: 'Enter' });
+
+    expect(useLayoutStore.getState().pendingRevealTarget).toEqual({
+      configId: CONFIG.id,
+      repoPath: '/srv/repo',
+      branch: 'main',
+      filePath: 'src/main',
+    });
+  });
+
+  it('an explicit onReveal prop overrides the default store wiring', async () => {
+    const onReveal = vi.fn();
+    searchRemoteTree.mockResolvedValue([treeResult({ path: 'src/main', name: 'main', type: 'folder' })]);
+    render(<FindInRemoteFiles onReveal={onReveal} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Folders' }));
+    fireEvent.change(screen.getByLabelText('Pattern'), { target: { value: 'main' } });
+    await screen.findByTestId('find-result-row-0');
+
+    fireEvent.keyDown(screen.getByLabelText('Pattern'), { key: 'Enter' });
+    expect(onReveal).toHaveBeenCalledWith('src/main');
+  });
+
   it('icon-only buttons expose aria-label + tooltip and are focusable', () => {
     render(<FindInRemoteFiles />);
     const close = screen.getByRole('button', { name: /close/i });
