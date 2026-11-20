@@ -8,10 +8,6 @@ import {
   DeleteOutlined,
   CopyOutlined,
   CloudServerOutlined,
-  CodeOutlined,
-  DatabaseOutlined,
-  DesktopOutlined,
-  ThunderboltOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { System, SystemType } from '../../types/models';
@@ -20,6 +16,7 @@ import { isLogicalParent } from '../../db/repositories/systemRepo';
 import {
   DEFAULT_SYSTEM_TYPE_OPTIONS,
   SYSTEM_TYPE_FALLBACK_COLOR,
+  getSystemTypeIcon,
   type SystemTypeOption,
 } from '../../services/system/systemTypeSettings';
 
@@ -39,15 +36,6 @@ export interface SystemTableProps {
   onEditSystem: (system: System) => void;
   onDeleteSystem: (system: System) => void;
 }
-
-/** Icons are not user-editable; unknown types render with no icon. */
-const TYPE_ICONS: Record<string, React.ReactNode> = {
-  LOGICAL_GROUP: <FolderOutlined style={{ marginRight: 4 }} />,
-  SERVICE: <CodeOutlined style={{ marginRight: 4 }} />,
-  SCHEMA: <DatabaseOutlined style={{ marginRight: 4 }} />,
-  UI: <DesktopOutlined style={{ marginRight: 4 }} />,
-  WORKER: <ThunderboltOutlined style={{ marginRight: 4 }} />,
-};
 
 export const SystemTable: React.FC<SystemTableProps> = ({
   systems,
@@ -144,12 +132,13 @@ export const SystemTable: React.FC<SystemTableProps> = ({
       width: 140,
       render: (type: SystemType) => {
         const option = typeOptions.find((opt) => opt.value === type);
+        const TypeIcon = getSystemTypeIcon(type);
         return (
           <Tag
             color={option?.color ?? SYSTEM_TYPE_FALLBACK_COLOR}
             style={{ display: 'inline-flex', alignItems: 'center' }}
           >
-            {TYPE_ICONS[type]}
+            <TypeIcon style={{ marginRight: 4 }} />
             <span>{option?.label ?? type}</span>
           </Tag>
         );
