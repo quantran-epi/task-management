@@ -10,6 +10,8 @@ import {
   getFileDiff,
   checkHeadDrift,
   parseNumstatZ,
+  grepRemoteRef,
+  GREP_MATCH_LIMIT_CEILING,
 } from '../gitRemoteService';
 import * as sshService from '../sshService';
 
@@ -332,6 +334,93 @@ describe('gitRemoteService - Task 1 Tracer Slice', () => {
         undefined
       );
       expect(diff).toBe(mockDiff);
+    });
+  });
+
+  describe('grepRemoteRef — D-09/D-10 tracer slice', () => {
+    const grepMock = () =>
+      vi.mocked(sshService.execRemoteCommand).mockResolvedValue({
+        stdout: '',
+        stderr: '###EXIT 1\n',
+        exitStatus: 0,
+      });
+
+    const records = (n: number): string =>
+      Array.from({ length: n }, (_, i) => `HEAD:src/f${i}.ts\0${i + 1}\0needle\n`).join('');
+
+    it('exports a 2000 ceiling and accepts a 2000 limit with escaping flags intact', async () => {
+      expect(GREP_MATCH_LIMIT_CEILING).toBe(2000);
+      grepMock();
+
+      const result = await grepRemoteRef(
+        dummyConfig,
+        '/var/repo',
+        'main',
+        { pattern: 'needle', limit: 2000, literal: true, caseSensitive: true, path: 'src' },
+        undefined,
+        'call-find-1'
+      );
+
+      expect(result).toEqual({ hits: [], truncated: false });
+      // Whole-command `toBe` proof (Phase 42 D-08) — containment checks are vacuous because
+      // escaping preserves the payload text inside the quotes.
+      expect(sshService.execRemoteCommand).toHaveBeenCalledWith(
+        dummyConfig,
+        "{ git -C '/var/repo' -c core.fsmonitor=false --no-pager grep -z -n -I --no-color -F --no-ignore-case -e 'needle' --end-of-options 'main' -- 'src'; printf '###EXIT %s\\n' \"$?\" >&2; } | head -c 262145",
+        undefined,
+        'call-find-1'
+      );
+    });
+
+    it('clamps a limit above 2000 to 2000 and flags truncation', async () => {
+      vi.mocked(sshService.execRemoteCommand).mockResolvedValueOnce({
+        stdout: records(2002),
+        stderr: '###EXIT 1\n',
+        exitStatus: 0,
+      });
+
+      const result = await grepRemoteRef(dummyConfig, '/var/repo', 'HEAD', {
+        pattern: 'needle',
+        limit: 5000,
+      });
+
+      expect(result.hits).toHaveLength(2000);
+      expect(result.truncated).toBe(true);
+    });
+
+    it('keeps a leading-dash pattern, ref and path as escaped DATA, never git options', async () => {
+      grepMock();
+
+      await grepRemoteRef(dummyConfig, '/var/repo', '--output=/tmp/pwn', {
+        pattern: "'; rm -rf /; '",
+        limit: 2000,
+        literal: true,
+        caseSensitive: true,
+        path: '--foo',
+      });
+
+      expect(sshService.execRemoteCommand).toHaveBeenCalledWith(
+        dummyConfig,
+        "{ git -C '/var/repo' -c core.fsmonitor=false --no-pager grep -z -n -I --no-color -F --no-ignore-case -e ''\\''; rm -rf /; '\\''' --end-of-options '--output=/tmp/pwn' -- '--foo'; printf '###EXIT %s\\n' \"$?\" >&2; } | head -c 262145",
+        undefined,
+        undefined
+      );
+    });
+
+    it('reports oversized grep output as truncated truthfully', async () => {
+      const hugeText = 'x'.repeat(262200);
+      vi.mocked(sshService.execRemoteCommand).mockResolvedValueOnce({
+        stdout: `HEAD:src/big.ts\0${1}\0${hugeText}\n`,
+        stderr: '###EXIT 1\n',
+        exitStatus: 0,
+      });
+
+      const result = await grepRemoteRef(dummyConfig, '/var/repo', 'HEAD', {
+        pattern: 'x',
+        limit: 2000,
+      });
+      expect(result.hits).toHaveLength(1);
+      expect(result.truncated).toBe(true);
     });
   });
 

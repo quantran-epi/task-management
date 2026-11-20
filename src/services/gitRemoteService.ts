@@ -369,7 +369,7 @@ export interface GrepRemoteRefOptions {
   /** Single repo-relative path or directory. Absent = whole tree. */
   path?: string | undefined;
   caseSensitive?: boolean | undefined;
-  /** Default 50, clamped 1..200. */
+  /** Default 50, clamped 1..GREP_MATCH_LIMIT_CEILING. */
   limit?: number | undefined;
   /** Literal string match (`-F`) instead of a basic regex. Default false. */
   literal?: boolean | undefined;
@@ -377,6 +377,9 @@ export interface GrepRemoteRefOptions {
 
 /** A `git grep` failure that means the PATTERN is malformed — the model's argument mistake. */
 export class InvalidGrepPatternError extends Error {}
+
+/** Numeric match ceiling for content search (D-10); distinct from the shell-side byte cap. */
+export const GREP_MATCH_LIMIT_CEILING = 2000;
 
 /** Shell-side byte cap; a broad pattern must not stream megabytes into the turn. */
 const GREP_BYTE_CAP = 262144;
@@ -395,7 +398,7 @@ export async function grepRemoteRef(
   secret?: string,
   callId?: string
 ): Promise<{ hits: RemoteGrepHit[]; truncated: boolean }> {
-  const limit = Math.min(Math.max(1, Math.floor(Number(options.limit)) || 50), 200);
+  const limit = Math.min(Math.max(1, Math.floor(Number(options.limit)) || 50), GREP_MATCH_LIMIT_CEILING);
   const flags = ['-z', '-n', '-I', '--no-color'];
   if (options.literal) flags.push('-F');
   flags.push(options.caseSensitive === false ? '-i' : '--no-ignore-case');
