@@ -6,10 +6,10 @@ current_phase: 46
 current_phase_name: Configuration Profiles
 status: executing
 stopped_at: Completed 46-03-PLAN.md
-last_updated: "2026-11-20T05:04:43.433Z"
+last_updated: "2026-11-20T05:41:34.885Z"
 last_activity: 2026-11-20
 last_activity_desc: Phase 46 plan 03 completed
-state_head: 0927799566c242ce797e95a3161dbfb4c0d9beda
+state_head: 2082d27c3942f2a41aa1b91d762b6668f6993d55
 progress:
   total_phases: 10
   completed_phases: 5
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 Phase: 46 (Configuration Profiles) — EXECUTING
 Plan: 4 of 4
 Status: Ready to execute
-Last activity: 2026-11-20 — Completed verified quick task 261120-gdq: fixed all 8 code-review findings from 261120-f8v (remote reveal/search, AI popout handoff, Markdown heuristic)
+Last activity: 2026-11-20 — Completed quick task 261120-ha7: raised default settle-poll deadline to 30 minutes so explore_repo 20-40 turn runs are not force-stopped at two minutes
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -111,6 +111,7 @@ Progress: [█████░░░░░] 50%
 | 261119-u7u | Đưa quản lý bộ tài liệu vào tab chuyên dụng, bỏ khối Không gian Docs trong Docs Explorer | 2026-11-19 | 77eb077c | [261119-u7u-rework-docs-explorer-remove-compact-kh-n](./quick/261119-u7u-rework-docs-explorer-remove-compact-kh-n/) |
 | 261120-f8v | Cập nhật CLAUDE.md: project này discuss bằng tiếng Việt. Bổ sung tính năng: khi mở tab file view, cho phép show file tương ứng trên Explorer SSH remote. | 2026-11-20 | be19854a | [261120-f8v-c-p-nh-t-claude-md-project-n-y-discuss-b](./quick/261120-f8v-c-p-nh-t-claude-md-project-n-y-discuss-b/) |
 | 261120-gdq | Fix all 8 code-review findings from quick 261120-f8v: cross-branch reveal no-op, folder search result reveal hidden by results panel, Tauri draft handoff uses global emit instead of emitTo ai-popout, duplicate remote tree fetches during reveal, result cap consumed by ancestor folders, over-permissive looksLikeCodeLine causing prose misrender, browser popout handle recovery, global search full tree fetch every keystroke. | 2026-11-20 | 09277995 | [261120-gdq-fix-all-8-code-review-findings-from-quic](./quick/261120-gdq-fix-all-8-code-review-findings-from-quic/) |
+| 261120-ha7 | Tăng timeout mặc định settlePollDeadlineMs trong teamRunCoordinator.ts từ 120s lên 30 phút để explore_repo 20-40 turn không bị ép dừng nhầm; giữ cơ chế chống kẹt | 2026-11-20 | 2082d27c | [261120-ha7-t-ng-timeout-m-c-nh-settlepolldeadlinems](./quick/261120-ha7-t-ng-timeout-m-c-nh-settlepolldeadlinems/) |
 
 ## Accumulated Context
 
