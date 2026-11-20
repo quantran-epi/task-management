@@ -83,7 +83,7 @@ Phase 48 adds a coding-capable SDLC team member and a fullscreen Coding Zone rev
 
 The single biggest integration gap: the existing Ghost Dev accept/revert commands operate on **local filesystem paths** (`std::fs`, local `git` with `current_dir`) and the SSH session stores a synthetic `worktree_path = ssh://<profile>/<remote_dir>` that those commands cannot resolve (`PathBuf::exists()` returns false). D-08 requires SSH-only edits confined to a real remote worktree. Planner must design SSH-backed diff/apply/revert (git over SSH via `execRemoteCommand` + SFTP reads + server-side realpath confinement) and a real remote `git worktree add -b <branch> <path>`, rather than reusing the local-file commands verbatim. `ssh_write_file` exists but is unconfined and must never be called with a model-supplied path without new confinement.
 
-**Primary recommendation:** Wrap the existing diff/viewer/chat/popout primitives into a new `CodingZone` modal + `coding-zone-popout` route, and build one new SSH-worktree service layer that confines every path and executes git/apply/revert on the remote host; never route agent edits through local filesystem commands.
+**Primary recommendation:** Wrap the existing diff/viewer/chat/popout primitives into a new `CodingZone` modal + `coding-zone-popout` route, and build one new SSH-worktree service layer that confines every path and executes git/apply/revert on the remote host; never route agent edits through local filesystem commands. Worktree provisioning is owned by the Agent Developer session-start path in that service (see Open Questions OQ2 RESOLVED).
 
 ## Architectural Responsibility Map
 
@@ -96,7 +96,7 @@ The single biggest integration gap: the existing Ghost Dev accept/revert command
 | Agent Developer tool allowlist & dispatch | API / Backend (team tools/coordinator) | Database / Storage (aiEmployees rows) | Role/permission lives in team tool layer, not UI |
 | Team chat mirror/composer | Browser / Client | Database / Storage (existing chat store) | No new schema; `saveTeamMessage` already persists |
 | Cross-window sync | Browser / Client | API / Backend (Tauri `emitTo` for targeted handoff) | Same-origin BroadcastChannel + targeted Tauri events |
-| Worktree lifecycle (create/remove) | API / Backend (SSH remote git) | — | Must be created and cleaned up on remote host; no local writes |
+| Worktree lifecycle (create/remove) | API / Backend (SSH remote git) | — | Must be created and cleaned up on remote host; no local writes; owned by Agent Developer session start |
 
 ## Standard Stack
 
@@ -131,6 +131,7 @@ The single biggest integration gap: the existing Ghost Dev accept/revert command
 | New chat schema for strip | Mirror via existing `teamMessages` store | **Rejected new schema** — D-16 forbids it; reuse `saveTeamMessage` + `types/teamChat.ts`. |
 | Full React Router for popout | Hash route + dedicated `AppRoute` member | Hash route matches existing `timer-popout`/`notes-popout`/`ai-popout` pattern; least new machinery. |
 | Custom BroadcastChannel bus | Existing `aiSyncChannel.ts` + targeted `emitTo` | Reuse per D-15; add a dedicated channel name/type union rather than a new transport. |
+| Provisioning in tool/first-edit path | Deterministic path derivation in `sshWorktreeService` at session start | **Rejected** — a lazily derived path with no producer let verbs fall back to a main-checkout `repoPath`, risking writes outside the worktree. Session-start ownership guarantees a real, verified `remoteWorktreePath` before any verb. |
 
 **Installation:** None — no new packages. All work reuses existing dependencies.
 
@@ -181,6 +182,10 @@ No packages are added by this phase. The table below audits the packages the pha
         |
         +-- live activity: ghost-dev:stream-chunk / session-updated / session-finished (Tauri listen) --> [truthful status chip]
 
+[Agent Developer session start] --> [ssh_worktree_provision: git worktree add/list over SSH + realpath verify] --> [WorktreeDescriptor.remoteWorktreePath]
+        |  descriptor stored on request-bound session before activation
+        +--> every edit/diff/review verb references remoteWorktreePath ONLY (no main-checkout/repoPath fallback)
+
 [Team chat persistence] <---- saveTeamMessage / teamMessages ---- both windows (no new schema)
 ```
 
@@ -198,14 +203,14 @@ src/
 │   ├── useCodingZoneSync.ts         # NEW: BroadcastChannel + emitTo state bus
 │   └── useSshWorktreeDiff.ts        # NEW (or wrap useGhostDevDiff): remote diff + hunk verbs
 ├── services/
-│   ├── sshWorktreeService.ts        # NEW: confined remote git/apply/revert over SSH
+│   ├── sshWorktreeService.ts        # NEW: session-start provisioning + confined remote git/apply/revert over SSH
 │   └── ai/office/teamTools.ts       # EDIT: add code_edit team tool (Agent Developer only)
 ├── utils/
 │   └── codingZonePopout.ts          # NEW: mirror of aiPopout.ts with dedicated label
 ├── types/navigation.ts              # EDIT: add 'coding-zone-popout' AppRoute
 └── hooks/useHashRoute.ts            # EDIT: whitelist new route
 src-tauri/src/
-└── agent_manager.rs / agent_diff_ops.rs  # EDIT: SSH-native worktree diff/apply/revert commands
+└── agent_manager.rs / agent_diff_ops.rs  # EDIT: SSH-native worktree provision/diff/apply/revert commands
 ```
 
 ### Pattern 1: Tauri secondary window with targeted handoff
@@ -243,16 +248,22 @@ await new Promise<void>((resolve, reject) => {
 ### Pattern 3: Confined remote path resolution
 
 **What:** Lexical `..` normalization + containment check before any SSH call; on the remote, canonicalize both root and target with `realpath --` and literal directory boundary (`workingCopyCatSnippet`). `[VERIFIED: codebase read]` `src/services/ai/sshFsToolService.ts:142-164`, `src/services/gitRemoteTreeService.ts:382-390`.
-**When to use:** Every worktree read/write/edit path (D-08). Server-side validation is mandatory; renderer checks are not enforcement.
+**When to use:** Every worktree read/write/edit path (D-08); root is always the descriptor's `remoteWorktreePath`, never the repo/main checkout. Server-side validation is mandatory; renderer checks are not enforcement.
 
 ### Pattern 4: Per-hunk patch application
 
 **What:** `buildHunkPatch`/`formatHunkPatch` reconstruct a single-hunk unified patch; `git apply --reverse` reverts it; `git apply --cached` + commit keeps it. `[VERIFIED: codebase read]` `gitDiffParser.ts:166-190`, `agent_manager.rs:1331-1399`, `agent_diff_ops.rs:65-113`; `[CITED: https://git-scm.com/docs/git-apply]`.
-**When to use:** Accept/Reject (D-12). git apply is atomic by default — on failure nothing applies; surface the error (D-14), do not silently refresh.
+**When to use:** Accept/Reject (D-12), with cwd/target strictly inside the provisioned worktree. git apply is atomic by default — on failure nothing applies; surface the error (D-14), do not silently refresh.
+
+### Pattern 5: Deterministic remote worktree provisioning at session start
+
+**What:** Derive `<remoteRepoPath>/.taskmate-worktrees/agent-developer-<safe-id>` and branch `taskmate/agent-developer-<safe-id>`; `git worktree list --porcelain` for idempotent reuse; `git worktree add -b <branch> <path> <baseRef|HEAD>` when absent; verify via remote `realpath` boundary. `[CITED: https://git-scm.com/docs/git-worktree]`.
+**When to use:** Agent Developer session start (D-08/OQ2). Runs entirely over SSH on the remote host; there is no local filesystem path and no main-checkout fallback. Descriptor's `remoteWorktreePath` is required before any verb.
 
 ### Anti-Patterns to Avoid
 
 - **Reusing local-worktree commands on `ssh://` path:** they call `PathBuf::exists()` and fail; worse, if a local dir existed they would write outside the agent worktree (violates D-08). Build SSH-backed verbs.
+- **No worktree path producer / `repoPath ?? remoteWorktreePath` fallback:** without session-start provisioning, verbs fall back to a main-checkout `repoPath` and can write to the main branch. Provision deterministically and reference `remoteWorktreePath` only.
 - **Calling `ssh_write_file` with unconfined paths:** `ssh_service.rs:359-376` is raw SFTP create with zero path validation. Confine first, or add a confined Rust command.
 - **New chat schema for the strip:** D-16 forbids; use `saveTeamMessage` and `types/teamChat.ts`.
 - **Fake “Đồng bộ” chip:** D-18 requires truthful state when SSH/session/popout is unavailable.
@@ -272,15 +283,21 @@ await new Promise<void>((resolve, reject) => {
 | Popout lifecycle | New window util | pattern in `aiPopout.ts`/`notesPopout.ts` | Dedupe, geometry, focus, browser fallback already solved |
 | Path confinement | Ad-hoc string checks | `resolveRemoteToolPath`, `confineRepoPath`, `workingCopyCatSnippet` | Battle-tested against `..`, symlinks, macOS realpath differences |
 
-**Key insight:** All UI mechanics exist. The only genuinely new engineering is SSH-native worktree diff/apply/revert with confinement and cross-window state transport — everything else is composition.
+**Key insight:** All UI mechanics exist. The genuinely new engineering is SSH-native worktree provisioning + diff/apply/revert with confinement and cross-window state transport — everything else is composition.
 
 ## Common Pitfalls
 
 ### Pitfall 1: Synthetic `ssh://` worktree path passed to local commands
 **What goes wrong:** `start_ssh_ghost_dev_session` sets `worktree_path = format!("ssh://{}/{}", ...)`, and `get_worktree_diff`/`accept_patch_diff`/`revert_hunk_diff` do `PathBuf::from(...).exists()` → false, so diff is empty and accept/reject fails.
 **Why it happens:** Ghost Dev local-session code was reused for SSH sessions without replacing the storage/command layer.
-**How to avoid:** Introduce an explicit worktree descriptor `{ sshConfigId, remoteWorktreePath, branch }`; SSH commands take config + path, never a synthetic local path.
+**How to avoid:** Introduce an explicit worktree descriptor `{ sshConfigId, remoteWorktreePath, branch }` produced at session start; SSH commands take config + real path, never a synthetic local path.
 **Warning signs:** Diff panel empty while agent streams file mutations; accept/revert errors mentioning path does not exist.
+
+### Pitfall 1b: Worktree path with no producer → main-checkout fallback
+**What goes wrong:** `WorktreeDescriptor.remoteWorktreePath` is defined but never populated; verbs use `desc.repoPath ?? remoteWorktreePath`, so a main-checkout path becomes the write target and edits land on the main branch.
+**Why it happens:** Confining helper exists but no code path creates the worktree or fills the descriptor.
+**How to avoid:** Session start deterministically provisions the remote worktree and returns a descriptor with required `remoteWorktreePath`; every verb uses that path only. No `repoPath` field or fallback anywhere in the verb service.
+**Warning signs:** Any `?? remoteWorktreePath` expression, or a descriptor whose `remoteWorktreePath` can be empty.
 
 ### Pitfall 2: Agent edits escape the worktree
 **What goes wrong:** `ssh_write_file`/`ssh_exec_command` with model-supplied path can write anywhere the SSH user can reach.
@@ -349,6 +366,17 @@ export function formatHunkPatch(filePath: string, hunk: DiffHunk): string {
 export function resolveRemoteToolPath(inputPath, defaultBasePath, remoteTarget) { /* .. normalization + repo containment */ }
 ```
 
+### Remote worktree provisioning
+```ts
+// NEW in src/services/sshWorktreeService.ts (plan 48-01)
+provisionWorktree({ sshConfigId, remoteRepoPath, sessionKey, baseRef, secret })
+  -> WorktreeDescriptor { sshConfigId, remoteRepoPath, remoteWorktreePath, branch, baseRef }
+// remote worktree = <remoteRepoPath>/.taskmate-worktrees/agent-developer-<safe-id>
+// branch = taskmate/agent-developer-<safe-id>
+// Rust ssh_worktree_provision: git worktree list --porcelain (idempotent) -> git worktree add -b <branch> <path> <baseRef|HEAD> -> realpath verify
+```
+Every edit/diff/review verb uses `desc.remoteWorktreePath` only; `desc.remoteRepoPath` is used solely by provisioning.
+
 ### Cross-window sync
 ```ts
 // Source: src/services/ai/aiSyncChannel.ts:27-55
@@ -366,6 +394,7 @@ subscribeAIChatSync((payload) => { /* ignore own window, apply if newer revision
 | Old Approach | Current Approach | When Changed | Impact |
 |--------------|------------------|--------------|--------|
 | Local Ghost Dev worktree diff/accept/revert | Needed: SSH-native worktree verbs | Phase 48 | D-08 forces remote execution; local commands cannot serve SSH path |
+| Worktree path without producer (`repoPath` fallback) | Deterministic provisioning at session start with required `remoteWorktreePath` | Phase 48 checker revision | Prevents writes to main checkout/main branch |
 | Draft popout = floating div | Real Tauri `WebviewWindow` for Coding Zone | Quick 261121-0ix correction + D-06 | Must implement actual secondary window, not DOM overlay |
 | Single shared AI chat scope | Team chat unified participant model + Coding Zone mirror | 37.1 + Phase 48 | Strip mirrors existing store; no new schema |
 
@@ -378,27 +407,27 @@ subscribeAIChatSync((payload) => { /* ignore own window, apply if newer revision
 |---|-------|---------|---------------|
 | A1 | Tauri secondary windows of this app share one origin, so BroadcastChannel reaches the popout | Architecture, Standard Stack | If origin differs, cross-window sync fails; fallback to `emitTo` for all state |
 | A2 | Remote host has git available and supports `git worktree add` in the configured repo | Architecture | Worktree creation fails; planner needs explicit precondition + truthful error (D-18) |
-| A3 | `Edit` capability for Agent Developer maps to a new team tool gated by role, not to the headless `claude` remote agent's own toolset | Stack, Architecture | Wrong layer chosen; D-07 still achievable but implementation location shifts |
+| A3 | `Edit` capability for Agent Developer maps to a new team tool gated by role, not to the headless `claude` remote agent's own toolset | Stack, Architecture (OQ1 RESOLVED) | Wrong layer chosen; D-07 still achievable but implementation location shifts |
 | A4 | `feature/intellij-workbench` exists on `origin` and this worktree can merge/push it | Validation/merge | D-22 blocked; planner must sequence rebase/merge after verification |
 
 External doc claims (Tauri `emitTo`, git apply semantics, MDN BroadcastChannel) are `[CITED: official docs]` with MEDIUM confidence and are not in this assumptions table.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Where does the Agent Developer's `Edit` actually execute?**
    - What we know: team staff tools live in `teamTools.ts` + `teamRunCoordinator.ts`; remote headless `claude` sessions run with `bypassPermissions` on SSH (`agent_manager.rs:391-394`).
-   - What's unclear: D-07 says "team tools plus code-edit capability" but D-08 says no local writes — whether Edit is a new team tool doing confined SFTP/git writes, or a restriction of the remote headless agent's tools into a worktree.
-   - Recommendation: implement one new `code_edit` team tool gated to the Agent Developer role, operating exclusively through the SSH worktree service; keep the remote headless session read-only by default. Confirm with user only if plan-checker flags ambiguity — user requested no intermediate questions.
+   - What was unclear: D-07 says "team tools plus code-edit capability" but D-08 says no local writes — whether Edit is a new team tool doing confined SFTP/git writes, or a restriction of the remote headless agent's tools into a worktree.
+   - **RESOLVED:** One new `code_edit` team tool gated to the Agent Developer role, operating exclusively through the SSH worktree service over remote git (`git apply` / `git apply --reverse`) with server-side realpath confinement. The remote headless `claude` session stays read-only by default (D-08/D-10). Location chosen: team tool layer (`teamTools.ts`), not the headless agent's own toolset. Planner implemented this in plan 48-01; no user question needed (user requested no intermediate questions).
 
 2. **Worktree creation ownership and cleanup**
    - What we know: `git worktree add` isolates files/HEAD/index; `git worktree remove` requires clean tree.
-   - What's unclear: who creates the remote worktree (on session start vs first edit) and what happens on session end with unreviewed changes.
-   - Recommendation: create on Agent Developer session start, persist descriptor in session state, never auto-remove with uncommitted changes; surface in UI.
+   - What was unclear: who creates the remote worktree (on session start vs first edit) and what happens on session end with unreviewed changes.
+   - **RESOLVED:** Remote worktree provisioning is owned by the Agent Developer session-start path in the SSH worktree service (`sshWorktreeService.provisionWorktree` → Rust `ssh_worktree_provision`). Path derivation is deterministic (`<remoteRepoPath>/.taskmate-worktrees/agent-developer-<safe-id>`, branch `taskmate/agent-developer-<safe-id>`), verified by `git worktree list --porcelain` (idempotent reuse) and a remote `realpath` boundary check. There is no local filesystem path or local git call — provisioning runs entirely over SSH on the remote host. The descriptor's required `remoteWorktreePath` must exist before any edit/diff/review verb; those verbs reference that path only, never the main checkout. On session end, never auto-remove a worktree with unreviewed/uncommitted changes; surface its state in the UI (D-18). The session-start call site awaits provisioning and withholds activation on failure (`WORKTREE_NOT_AVAILABLE`). Planner implemented this in plan 48-01 Task 1.
 
 3. **Hunk identity across refreshes**
    - What we know: `DiffHunk` has no stable id (only line numbers/header).
-   - What's unclear: how to keep decisions stable when agent edits shift line numbers.
-   - Recommendation: key decisions by `{filePath, hunk header, content hash}` + diff revision; on mismatch, mark stale and require user re-decision (D-14).
+   - What was unclear: how to keep decisions stable when agent edits shift line numbers.
+   - **RESOLVED:** Key decisions by `{filePath, hunk header, content hash}` plus a diff revision; on mismatch mark the hunk stale and require user re-decision rather than silently clearing or auto-applying (D-14). Planner carried this into plan 48-02 (diff panel decision keying) and plan 48-03 (versioned cross-window sync).
 
 ## Environment Availability
 
@@ -437,7 +466,7 @@ External doc claims (Tauri `emitTo`, git apply semantics, MDN BroadcastChannel) 
 | D-05 | Viewer parity | component | `npx vitest run src/workbench/editor/__tests__/RemoteFileViewer.test.tsx --bail=1` | ❌ Wave 0 (extend) |
 | D-06/D-15 | Popout + sync | component + E2E | scoped Vitest + Playwright cross-window spec | ❌ Wave 0 |
 | D-07 | Agent Developer roster + tool gating | unit | `npx vitest run src/services/ai/office/__tests__/teamTools.codeEdit.test.ts --bail=1` | ❌ Wave 0 |
-| D-08 | Worktree confinement | unit (pure path logic) | `npx vitest run src/services/__tests__/sshWorktreeService.test.ts --bail=1` | ❌ Wave 0 |
+| D-08 | Worktree provisioning + confinement | unit (pure path logic + mocked SSH) | `npx vitest run src/services/__tests__/sshWorktreeProvision.test.ts src/services/__tests__/sshWorktreeService.test.ts --bail=1` | ❌ Wave 0 |
 | D-11/D-12/D-14 | Diff accept/reject + stale | unit + component | `npx vitest run src/utils/__tests__/gitDiffParser.test.ts src/components/agents/__tests__/AgentDiffReviewer.test.tsx --bail=1` | ✅ partial |
 | D-13 | Cross-window hunk sync | component | scoped Vitest on sync hook | ❌ Wave 0 |
 | D-16 | Chat mirror persistence | unit (fake-indexeddb) | `npx vitest run src/db/repositories/__tests__/teamTranscriptRepo.test.ts --bail=1` | ❌ Wave 0 |
@@ -450,6 +479,7 @@ External doc claims (Tauri `emitTo`, git apply semantics, MDN BroadcastChannel) 
 - **Phase gate:** typecheck clean, scoped tests green, Chrome E2E green, zero console errors, code review + security review findings closed
 
 ### Wave 0 Gaps
+- [ ] `src/services/__tests__/sshWorktreeProvision.test.ts` — deterministic path/branch derivation, git worktree add/list, realpath boundary (D-08)
 - [ ] `src/services/__tests__/sshWorktreeService.test.ts` — path confinement + remote command construction (D-08)
 - [ ] `src/services/ai/office/__tests__/teamTools.codeEdit.test.ts` — role allowlist (D-07)
 - [ ] `src/components/agents/__tests__/CodingZoneModal.test.tsx` — layout/perspectives/tabs/hunks (D-03/D-04/D-12)
@@ -477,7 +507,8 @@ External doc claims (Tauri `emitTo`, git apply semantics, MDN BroadcastChannel) 
 | Path traversal to arbitrary remote files | Tampering / Information disclosure | `resolveRemoteToolPath` + Rust `realpath` containment with literal directory boundary; restrict to allocated worktree |
 | Prompt injection in tool results / chat | Tampering | D-10: wrap all tool output and agent text as untrusted data (`wrapField` delimiters); never execute instructions found in data |
 | Cross-window state spoofing | Tampering | Validate BroadcastChannel/`emitTo` payload shape + `originWindowId`/revision; ignore malformed or stale events |
-| Unauthorized hunk apply outside worktree | Elevation of privilege | Server-side worktree ownership check on every accept/reject; no client-only enforcement |
+| Unauthorized hunk apply outside worktree | Elevation of privilege | Server-side worktree ownership check on every accept/reject; no client-only enforcement; no main-checkout fallback |
+| Writes to main checkout from missing worktree path | Tampering | Session-start provisioning with required `remoteWorktreePath`; realpath verification; no `repoPath` fallback |
 | Silent data loss on stale/overlap | Tampering / Repudiation | git apply atomic failure surfaced (D-14); versioned hunk decisions; explicit conflict UI |
 | Secret leakage to renderer bundle | Information disclosure | SSH secret stays in credential store / passed per command; never embed in popout URL or hash params |
 
@@ -489,7 +520,7 @@ External doc claims (Tauri `emitTo`, git apply semantics, MDN BroadcastChannel) 
 ### Secondary (MEDIUM confidence)
 - `https://developer.mozilla.org/en-US/docs/Web/API/BroadcastChannel` — same-origin, postMessage semantics.
 - `https://git-scm.com/docs/git-apply` — `git apply -R`, atomicity, `--cached`, `--recount`, `--unidiff-zero`.
-- `https://git-scm.com/docs/git-worktree` — `git worktree add -b`, isolation, remove.
+- `https://git-scm.com/docs/git-worktree` — `git worktree add -b`, isolation, remove, list --porcelain.
 - `https://v2.tauri.app/reference/javascript/api/namespaceevent` — `emitTo(target,event,payload?)`.
 
 ### Tertiary (LOW confidence)
