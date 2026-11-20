@@ -104,7 +104,7 @@ describe('compactRemoteTree', () => {
     expect(out[0]!.label).toBe('src.main.java');
     // Children of the source root compact on their own, producing the dotted package label.
     expect(out[0]!.children).toHaveLength(1);
-    expect(out[0]!.children[0]!.label).toBe('com.acme.orders');
+    expect(out[0]!.children[0]!.label).toBe('acme.orders');
   });
 
   it('never merges a reveal target away', () => {
@@ -164,14 +164,19 @@ describe('keyOfPathFor', () => {
   it('maps every chain path back to the compact node stable key, recursively', () => {
     const compacted = compactRemoteTree([
       folder('com', [
-        folder('com/acme', [folder('com/acme/orders'), folder('com/acme/billing')]),
+        folder('com/acme', [
+          folder('com/acme/orders', [folder('com/acme/orders/dto')]),
+        ]),
       ]),
+      folder('lib', [folder('lib/util')]),
     ]);
     const map = keyOfPathFor(compacted);
     expect(map.get('com')).toBe('com');
     expect(map.get('com/acme')).toBe('com');
     expect(map.get('com/acme/orders')).toBe('com');
-    expect(map.get('com/acme/billing')).toBe('com');
+    expect(map.get('com/acme/orders/dto')).toBe('com');
+    expect(map.get('lib')).toBe('lib');
+    expect(map.get('lib/util')).toBe('lib');
     expect(map.has('missing')).toBe(false);
   });
 });
