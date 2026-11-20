@@ -169,6 +169,83 @@ function isNotInRef(err: unknown, cleanPath: string, ref: string): boolean {
   );
 }
 
+export interface RemoteTreeSearchResult {
+  path: string;
+  name: string;
+  type: 'file' | 'folder';
+  size?: number;
+  /** Offsets of the matched substring inside `name` (0 length = ancestor match, no highlight). */
+  matchStart: number;
+  matchLength: number;
+}
+
+export const SEARCH_RESULT_LIMIT = 100;
+
+/**
+ * Whole-ref file/folder search for the remote explorer. One confined read-only ls-tree command;
+ * the query never reaches git (it is filtered client-side), so a leading `-` or path-escaping
+ * text cannot alter options or escape the repo (T-quick-04).
+ */
+export async function searchRemoteTree(
+  config: SshConfig,
+  repoPath: string,
+  ref: string,
+  query: string,
+  secret?: string,
+  callId?: string
+): Promise<RemoteTreeSearchResult[]> {
+  const needle = query.trim().toLowerCase();
+  if (!needle || !repoPath.trim() || !ref) return [];
+
+  // Literals plus the escaped ref only; the search text is data, filtered below.
+  const gitArgs = ['ls-tree', '-r', '-l', '-z', '--end-of-options', escapeShellArg(ref)];
+  let stdout: string;
+  try {
+    stdout = await runGitCommand(config, repoPath, gitArgs, secret, callId);
+  } catch {
+    return []; // git/SSH failure degrades to an empty result, never a UI crash
+  }
+
+  const results: RemoteTreeSearchResult[] = [];
+  const seen = new Set<string>();
+
+  const nameMatch = (name: string): { matchStart: number; matchLength: number } => {
+    const index = name.toLowerCase().indexOf(needle);
+    return index >= 0
+      ? { matchStart: index, matchLength: needle.length }
+      : { matchStart: 0, matchLength: 0 };
+  };
+
+  const add = (path: string, name: string, type: 'file' | 'folder', size?: number) => {
+    const clean = confineRepoPath(path, 'Đường dẫn kết quả');
+    if (seen.has(clean) || results.length >= SEARCH_RESULT_LIMIT) return;
+    seen.add(clean);
+    const match = nameMatch(name);
+    results.push({ path: clean, name, type, ...(size !== undefined ? { size } : {}), ...match });
+  };
+
+  for (const line of stdout.split('\0')) {
+    if (!line.trim()) continue;
+    const node = parseLsTreeLine(line);
+    if (!node || !node.isLeaf) continue; // ls-tree -r lists blobs; folders derive from paths
+    const segments = node.key.split('/').filter(Boolean);
+    if (!segments.some((segment) => segment.toLowerCase().includes(needle))) continue;
+
+    const fileName = segments[segments.length - 1] ?? node.title;
+    add(node.key, fileName, 'file', node.size);
+
+    // Represent matching folders (and ancestors of a file hit) so folder navigation works.
+    let ancestor = '';
+    for (let i = 0; i < segments.length - 1; i++) {
+      ancestor = ancestor ? `${ancestor}/${segments[i]}` : segments[i]!;
+      add(ancestor, segments[i]!, 'folder');
+    }
+    if (results.length >= SEARCH_RESULT_LIMIT) break;
+  }
+
+  return results;
+}
+
 /**
  * Fetches tree nodes for a given ref and directory inside the remote git repository.
  * Invariant: Read-only command. NEVER calls git checkout or modifies working copy.

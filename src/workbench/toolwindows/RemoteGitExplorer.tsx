@@ -11,7 +11,12 @@ import FolderViewOutlined from '@ant-design/icons/FolderViewOutlined';
 import { RemoteDirectoryBrowserModal } from '../../components/common/RemoteDirectoryBrowserModal';
 import { getSshConfigs, getSshSecret } from '../../services/sshService';
 import { getRemoteBranches, checkDirtyStatus, grepRemoteRef } from '../../services/gitRemoteService';
-import { getRemoteTree, mergeUncommittedFilesIntoTree } from '../../services/gitRemoteTreeService';
+import {
+  getRemoteTree,
+  mergeUncommittedFilesIntoTree,
+  searchRemoteTree,
+  type RemoteTreeSearchResult,
+} from '../../services/gitRemoteTreeService';
 import type { SshConfig } from '../../types/ssh';
 import type { RemoteGitBranch, RemoteGitTreeNode, RemoteGrepHit } from '../../types/gitRemote';
 import { useLayoutStore } from '../store/layoutStore';
@@ -173,6 +178,12 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
   const [grepTruncated, setGrepTruncated] = useState<boolean>(false);
   const [searching, setSearching] = useState<boolean>(false);
   const searchSeq = useRef<number>(0);
+  // Global (whole-ref) search state — distinct from the subtree content/name search above.
+  const [globalQuery, setGlobalQuery] = useState<string>('');
+  const [globalResults, setGlobalResults] = useState<RemoteTreeSearchResult[]>([]);
+  const [globalSearching, setGlobalSearching] = useState<boolean>(false);
+  const [globalActiveIndex, setGlobalActiveIndex] = useState<number>(0);
+  const globalSeq = useRef<number>(0);
 
   // Load SSH configs on mount
   useEffect(() => {
@@ -531,6 +542,93 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
     hasSearchedRef.current = false;
   };
 
+  // Global whole-ref search: debounced, guarded on a full remote target, query stays DATA only.
+  const globalSearchReady = Boolean(selectedConfig && repoPath.trim() && selectedBranch);
+  useEffect(() => {
+    if (!globalQuery.trim() || !globalSearchReady || !selectedConfig) {
+      setGlobalResults([]);
+      setGlobalSearching(false);
+      return;
+    }
+    const seq = ++globalSeq.current;
+    const timer = setTimeout(() => {
+      setGlobalSearching(true);
+      setError(null);
+      void (async () => {
+        try {
+          const secret = await getSshSecret(selectedConfig.id);
+          const results = await searchRemoteTree(
+            selectedConfig,
+            repoPath.trim(),
+            selectedBranch,
+            globalQuery,
+            secret ?? undefined
+          );
+          if (seq === globalSeq.current) {
+            setGlobalResults(results);
+            setGlobalActiveIndex(0);
+          }
+        } catch (err: any) {
+          if (seq === globalSeq.current) {
+            setGlobalResults([]);
+            setError(err?.message || 'Global search failed');
+          }
+        } finally {
+          if (seq === globalSeq.current) setGlobalSearching(false);
+        }
+      })();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [globalQuery, globalSearchReady, selectedConfig, repoPath, selectedBranch]);
+
+  useEffect(() => {
+    setGlobalResults([]);
+    setGlobalQuery('');
+  }, [selectedConfigId, repoPath, selectedBranch]);
+
+  const activateGlobalResult = (result: RemoteTreeSearchResult) => {
+    if (result.type === 'file') {
+      openRemoteFile(result.path, result.name, { size: result.size });
+      return;
+    }
+    // Folders have no file tab: reveal the folder node in the tree.
+    setSearchInput('');
+    setGrepHits([]);
+    hasSearchedRef.current = false;
+    setExpandedKeys(result.path.split('/').slice(0, -1));
+    useLayoutStore.getState().setPendingRevealTarget({
+      configId: selectedConfig?.id ?? null,
+      repoPath: repoPath.trim(),
+      branch: selectedBranch,
+      filePath: result.path,
+    });
+  };
+
+  const handleGlobalKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setGlobalActiveIndex((i) => Math.min(i + 1, globalResults.length - 1));
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setGlobalActiveIndex((i) => Math.max(i - 1, 0));
+    } else if (event.key === 'Enter' && globalResults[globalActiveIndex]) {
+      event.preventDefault();
+      activateGlobalResult(globalResults[globalActiveIndex]!);
+    }
+  };
+
+  const renderHighlightedName = (result: RemoteTreeSearchResult) => {
+    const { name, matchStart, matchLength } = result;
+    if (!matchLength) return name;
+    return (
+      <>
+        {name.slice(0, matchStart)}
+        <mark>{name.slice(matchStart, matchStart + matchLength)}</mark>
+        {name.slice(matchStart + matchLength)}
+      </>
+    );
+  };
+
   // Reveal an already-open remote file in the tree. The target comes from a remote tab; its path
   // is passed only to the confined getRemoteTree service, never to a shell command (T-quick-01).
   useEffect(() => {
@@ -716,6 +814,25 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
           </Tooltip>
         </div>
 
+        {/* Global whole-ref search (IntelliJ-style) — distinct from the subtree search below */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 11, color: 'var(--fg-muted, #6c707e)', whiteSpace: 'nowrap' }}>
+            Tìm toàn kho
+          </span>
+          <Input
+            size="small"
+            style={{ flex: 1, fontSize: 12 }}
+            prefix={<span style={{ color: 'var(--fg-muted, #6c707e)' }}>⌕</span>}
+            placeholder="Tìm tệp/thư mục trong toàn kho"
+            value={globalQuery}
+            onChange={(e) => setGlobalQuery(e.target.value)}
+            onKeyDown={handleGlobalKeyDown}
+            disabled={!globalSearchReady}
+            allowClear
+            data-testid="global-search-input"
+          />
+        </div>
+
         {/* Search (scoped to the active target — D-02/D-03) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <Segmented
@@ -770,7 +887,53 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
           position: 'relative',
         }}
       >
-        {searchMode === 'name' && searchInput.trim() ? (
+        {globalQuery.trim() ? (
+          <div data-testid="global-search-results" role="listbox" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {globalResults.length === 0 && !globalSearching ? (
+              <div style={{ padding: 12, fontSize: 12, color: 'var(--fg-muted, #6c707e)' }}>
+                Không có kết quả trong kho từ xa.
+              </div>
+            ) : (
+              globalResults.map((result, idx) => {
+                const breadcrumb = result.path.split('/').slice(0, -1).join(' / ');
+                return (
+                  <div
+                    key={`${result.type}:${result.path}`}
+                    role="option"
+                    aria-selected={idx === globalActiveIndex}
+                    tabIndex={0}
+                    data-testid={result.type === 'file' ? 'global-search-hit-file' : 'global-search-hit-folder'}
+                    data-file-path={result.path}
+                    data-result-type={result.type}
+                    onMouseEnter={() => setGlobalActiveIndex(idx)}
+                    onClick={() => activateGlobalResult(result)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') activateGlobalResult(result);
+                    }}
+                    style={{
+                      cursor: 'pointer',
+                      padding: '4px 6px',
+                      borderRadius: 4,
+                      fontSize: 12,
+                      background: idx === globalActiveIndex ? 'rgba(56, 113, 225, 0.1)' : 'transparent',
+                    }}
+                  >
+                    {result.type === 'file' ? <FileTextOutlined /> : <FolderOutlined />}{' '}
+                    <Tag bordered={false} style={{ fontSize: 10, margin: '0 4px 0 0' }}>
+                      {result.type === 'file' ? 'Tệp' : 'Thư mục'}
+                    </Tag>
+                    {breadcrumb && (
+                      <span style={{ color: 'var(--fg-muted, #6c707e)' }}>{breadcrumb} / </span>
+                    )}
+                    <span style={{ fontFamily: "'JetBrains Mono', Consolas, Monaco, monospace" }}>
+                      {renderHighlightedName(result)}
+                    </span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        ) : searchMode === 'name' && searchInput.trim() ? (
           <div data-testid="name-search-results" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {nameResults.length === 0 ? (
               <div style={{ padding: 12, fontSize: 12, color: 'var(--fg-muted, #6c707e)' }}>

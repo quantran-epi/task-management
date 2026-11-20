@@ -459,7 +459,7 @@ describe('RemoteGitExplorer Component', () => {
 
     await waitFor(() => {
       expect(gitRemoteTreeService.searchRemoteTree).toHaveBeenCalledWith(
-        mockSshConfigs[0], '/home/dev/my-repo', 'main', 'inde', 'secret-123', undefined
+        mockSshConfigs[0], '/home/dev/my-repo', 'main', 'inde', 'secret-123'
       );
     });
 

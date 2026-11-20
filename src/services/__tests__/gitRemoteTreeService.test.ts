@@ -86,10 +86,10 @@ describe('gitRemoteTreeService uncommitted files & working copy fallback', () =>
 
 describe('searchRemoteTree', () => {
   const lsTreeOutput = [
-    '100644 blob abc123\t120\tREADME.md',
-    '100644 blob def456\t2048\tsrc/index.ts',
-    '100644 blob fed789\t512\tsrc/nested/INDEX.ts',
-    '040000 tree aaa111\t-\tsrc/nested',
+    '100644 blob abc123 120\tREADME.md',
+    '100644 blob def456 2048\tsrc/index.ts',
+    '100644 blob fed789 512\tsrc/nested/INDEX.ts',
+    '040000 tree aaa111 -\tsrc/nested',
   ].join('\0');
 
   beforeEach(() => {
@@ -109,7 +109,7 @@ describe('searchRemoteTree', () => {
 
     expect(cmdSpy).toHaveBeenCalledTimes(1);
     const args = cmdSpy.mock.calls[0]![2] as string[];
-    expect(args).toEqual(['ls-tree', '-r', '-l', '-z', '--end-of-options', 'main']);
+    expect(args).toEqual(['ls-tree', '-r', '-l', '-z', '--end-of-options', "'main'"]);
     expect(results).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ path: 'src/index.ts', name: 'index.ts', type: 'file' }),
@@ -135,7 +135,7 @@ describe('searchRemoteTree', () => {
 
     const args = cmdSpy.mock.calls[0]![2] as string[];
     expect(args.join(' ')).not.toContain('rm -rf');
-    expect(args).toEqual(['ls-tree', '-r', '-l', '-z', '--end-of-options', 'main']);
+    expect(args).toEqual(['ls-tree', '-r', '-l', '-z', '--end-of-options', "'main'"]);
   });
 
   it('returns an empty result with an error flag on git failure', async () => {
