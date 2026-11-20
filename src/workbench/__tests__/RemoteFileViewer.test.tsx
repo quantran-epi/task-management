@@ -6,6 +6,7 @@ import * as gitRemoteTreeService from '../../services/gitRemoteTreeService';
 import * as sshService from '../../services/sshService';
 import * as diagramSaveBridge from '../../services/diagramSaveBridge';
 import type { SshConfig } from '../../types/ssh';
+import { useLayoutStore } from '../store/layoutStore';
 
 const mockConfig: SshConfig = {
   id: 'ssh-1',
@@ -38,6 +39,7 @@ describe('RemoteFileViewer Component', () => {
     vi.spyOn(gitRemoteTreeService, 'getRemoteFileContent').mockResolvedValue(sampleCode);
     // jsdom does not implement scrollIntoView; stub it so the highlight effect is observable.
     Element.prototype.scrollIntoView = vi.fn();
+    useLayoutStore.getState().resetLayout();
   });
 
   it('renders file header with file path, branch, and Read-Only badge', async () => {
@@ -219,5 +221,47 @@ describe('RemoteFileViewer Component', () => {
     });
     expect(screen.queryByTestId('initial-line-highlight')).toBeNull();
     plain.unmount();
+  });
+
+  it('reveal button sets pending reveal target and activates left remote explorer', async () => {
+    render(
+      <AntdThemeAdapter>
+        <RemoteFileViewer
+          config={mockConfig}
+          repoPath="  /home/dev/my-repo  "
+          branch="feature/test"
+          filePath="  src/index.ts  "
+        />
+      </AntdThemeAdapter>
+    );
+
+    const btn = await screen.findByTestId('reveal-in-explorer-btn');
+    fireEvent.click(btn);
+
+    const state = useLayoutStore.getState();
+    expect(state.pendingRevealTarget).toEqual({
+      configId: 'ssh-1',
+      repoPath: '/home/dev/my-repo',
+      branch: 'feature/test',
+      filePath: 'src/index.ts',
+    });
+    expect(state.leftActiveId).toBe('remote_explorer');
+  });
+
+  it('reveal button is disabled without SSH config or paths', async () => {
+    const { unmount } = render(
+      <AntdThemeAdapter>
+        <RemoteFileViewer repoPath="/home/dev/my-repo" filePath="src/index.ts" />
+      </AntdThemeAdapter>
+    );
+    expect(screen.getByTestId('reveal-in-explorer-btn').hasAttribute('disabled')).toBe(true);
+    unmount();
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteFileViewer config={mockConfig} repoPath="  " filePath="src/index.ts" />
+      </AntdThemeAdapter>
+    );
+    expect(screen.getByTestId('reveal-in-explorer-btn').hasAttribute('disabled')).toBe(true);
   });
 });

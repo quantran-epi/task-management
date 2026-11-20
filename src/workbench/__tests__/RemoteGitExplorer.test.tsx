@@ -376,4 +376,66 @@ describe('RemoteGitExplorer Component', () => {
     });
     expect(screen.queryAllByTestId('name-search-hit').length).toBe(0);
   });
+
+  it('reveals a pending file: expands ancestor folders, selects the node, and consumes the request', async () => {
+    act(() => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
+      (useLayoutStore.getState() as any).setPendingRevealTarget?.({
+        configId: 'ssh-1',
+        repoPath: '/home/dev/my-repo',
+        branch: 'main',
+        filePath: 'src/index.ts',
+      });
+    });
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteGitExplorer />
+      </AntdThemeAdapter>
+    );
+
+    // Ancestor folder is materialized through the confined tree service.
+    await waitFor(() => {
+      expect(gitRemoteTreeService.getRemoteTree).toHaveBeenCalledWith(
+        mockSshConfigs[0], '/home/dev/my-repo', 'main', 'src', 'secret-123'
+      );
+    });
+
+    // Child renders (ancestor expanded) and is the selected tree node.
+    await waitFor(() => {
+      const node = screen.getByText('index.ts').closest('.ant-tree-treenode');
+      expect(node?.className).toContain('ant-tree-node-selected');
+    });
+
+    expect((useLayoutStore.getState() as any).pendingRevealTarget).toBeNull();
+  });
+
+  it('consumes a stale reveal target without selecting a wrong-node lookup or crashing', async () => {
+    act(() => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
+      (useLayoutStore.getState() as any).setPendingRevealTarget?.({
+        configId: 'other-config',
+        repoPath: '/other/repo',
+        branch: 'main',
+        filePath: 'src/index.ts',
+      });
+    });
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteGitExplorer />
+      </AntdThemeAdapter>
+    );
+
+    await waitFor(() => {
+      expect((useLayoutStore.getState() as any).pendingRevealTarget).toBeNull();
+    });
+    expect(gitRemoteTreeService.getRemoteTree).not.toHaveBeenCalledWith(
+      expect.anything(), '/other/repo', expect.anything(), expect.anything(), expect.anything()
+    );
+    // Explorer still loads its own tree after the stale request is discarded.
+    await waitFor(() => {
+      expect(screen.getByText('package.json')).toBeDefined();
+    });
+  });
 });
