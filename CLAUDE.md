@@ -267,6 +267,10 @@ A private, offline-first web application for one person to manage projects, mile
 
 ## Conventions
 
+### Language
+- Mọi thảo luận và trao đổi về dự án này đều bằng tiếng Việt. Khi cần gọi người dùng, xưng "sếp"; không dùng mày/tao.
+- Mã nguồn, tên định danh, đường dẫn tệp, lệnh, thuật ngữ kỹ thuật và trích đoạn code giữ nguyên hình thức gốc, không dịch.
+
 ### Anti-Loop & Tool Usage Rules
 - **No Read Loop Bug**: Tuyệt đối cấm lặp tool `Read` (read loop bug) — không đọc đi đọc lại cùng một file, cùng một khoảng dòng hoặc các khoảng dòng trùng lặp nhỏ (20-40 lines). Hành vi đọc lặp không sinh ra tiến độ bị coi là critical bug.
 - **Anti-Read-Loop Mandate**: Đọc 1 lần với phạm vi rộng (100-300+ dòng hoặc toàn bộ file). Không bao giờ re-read lại đoạn vừa đọc. Cần context thì đọc rộng 1 lần duy nhất và thực hiện action/edit ngay.
