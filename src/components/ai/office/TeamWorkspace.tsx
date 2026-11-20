@@ -46,6 +46,7 @@ import {
 } from '../../../services/ai/office/teamRunCoordinator';
 import { getOrCreateRun } from '../../../services/ai/office/teamRunManager';
 import { cancelToolCall } from '../../../services/sshService';
+import { CODE_EDIT_AGENT_NAME } from '../../../services/ai/office/teamTools';
 
 /** Bounded prompt-debug log shown in the activity rail (never grows without limit). */
 const MAX_DEBUG_LOGS = 100;
@@ -609,7 +610,10 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     ...(lead ? [{ id: lead.id, name: lead.name }] : []),
     ...employees.map((employee) => ({ id: employee.id, name: employee.name })),
   ]);
-  const developerId = employees.find((employee) => employee.name === 'Agent Developer')?.id ?? '';
+  // WR-05/IN-01: prefer the stable marker; fall back to the shared constant for legacy rosters.
+  const developerId = employees.find((employee) => employee.agentKind === 'developer')?.id
+    ?? employees.find((employee) => employee.name === CODE_EDIT_AGENT_NAME)?.id
+    ?? '';
   const codingZoneSystem = useLiveQuery(async () => {
     const systemLink = links.find((link) => link.itemType === 'system');
     return systemLink ? db.systems.get(systemLink.itemId) : undefined;
