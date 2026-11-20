@@ -377,7 +377,7 @@ export interface GrepRemoteRefOptions {
   caseSensitive?: boolean | undefined;
   /** Default 50, clamped 1..GREP_MATCH_LIMIT_CEILING. */
   limit?: number | undefined;
-  /** Literal string match (`-F`) instead of a basic regex. Default false. */
+  /** Literal string match (`-F`) instead of an extended regex (`-E`). Default false. */
   literal?: boolean | undefined;
   /** Whole-word match (`-w`); applies in both literal and regex modes. Default false. */
   words?: boolean | undefined;
