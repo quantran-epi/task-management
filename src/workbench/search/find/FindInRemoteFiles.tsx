@@ -304,7 +304,9 @@ export function FindInRemoteFiles(props: FindInRemoteFilesProps) {
             <Button
               type="text"
               aria-label={FIND_CONTROL_LABELS.fileMask}
+              aria-controls="find-file-mask"
               icon={<FilterOutlined />}
+              onClick={() => document.querySelector<HTMLInputElement>('.find-mask input')?.focus()}
             />
           </Tooltip>
           <Tooltip title={pinned ? FIND_CONTROL_LABELS.unpin : FIND_CONTROL_LABELS.pin}>
@@ -338,6 +340,7 @@ export function FindInRemoteFiles(props: FindInRemoteFilesProps) {
           <Checkbox aria-label="Words" checked={words} onChange={(e) => setWords(e.target.checked)}>Word</Checkbox>
           <Checkbox aria-label="Regex" checked={regex} onChange={(e) => setRegex(e.target.checked)}>.*</Checkbox>
           <Input
+            id="find-file-mask"
             aria-label="File mask"
             className="find-mask"
             value={mask}
