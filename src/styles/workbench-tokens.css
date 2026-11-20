@@ -284,13 +284,14 @@
   box-shadow: 0 0 4px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
-/* Viewport locking - prevent window-level scrollbars */
+/* Base viewport sizing. IN-02: the viewport overflow LOCK lives on .workbench-root only —
+   a global `overflow: hidden !important` also froze the default shell (main.tsx boots App
+   unless the IntelliJ workbench is chosen), which had no override. Keep sizing global. */
 html, body, #root {
   width: 100%;
   height: 100%;
   margin: 0;
   padding: 0;
-  overflow: hidden !important;
   box-sizing: border-box;
 }
 

@@ -40,6 +40,13 @@ describe('46.1 visual tokens — single source of truth', () => {
     expect(tokenCss).toContain(':root[data-theme="dark"]');
   });
 
+  it('scopes the viewport overflow lock to the workbench, not the default shell (IN-02)', () => {
+    // A global `html, body, #root { overflow: hidden !important }` also froze the default App.
+    expect(tokenCss).not.toMatch(/html[^{}]*body[^{}]*#root[^{}]*\{[^}]*overflow:\s*hidden/s);
+    const workbenchRoot = /\.workbench-root\s*\{[^}]*overflow:\s*hidden\s*!important[^}]*\}/s;
+    expect(tokenCss).toMatch(workbenchRoot);
+  });
+
   it('declares every compact row/control token consumed by the Find dialog', () => {
     for (const name of [
       '--row', '--tree-indent', '--tree-icon-size', '--tree-guide-width',
