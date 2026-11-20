@@ -4914,6 +4914,46 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       const cursor = await getCursor(current.team.id, target.id, current.db);
       expect(cursor.lastSeq).toBe(Math.max(...log.map((row) => row.seq)));
     });
+
+    // team-chat-leader-stall: a message sent while the lead is turning used to be advanced
+    // past by the active turn's drain (→ "seen") and then dropped when that turn ended.
+    it('starts a follow-up lead turn for plain messages that arrive while the lead is turning', async () => {
+      const firstTurnStarted = deferred();
+      const firstTurnGate = deferred();
+      const leadPrompts: string[] = [];
+      const questions = ['Câu hỏi số 1', 'Câu hỏi số 2', 'Câu hỏi số 3'];
+
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            const text = lastTextOf(options);
+            leadPrompts.push(text);
+            await options.beforeToolRound!(1, options.signal);
+            if (text === 'Việc đầu tiên') {
+              firstTurnStarted.release();
+              await firstTurnGate.promise;
+            }
+            return loopResult('Xong.');
+          },
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Việc đầu tiên');
+      await firstTurnStarted.promise;
+
+      // Sent while the lead's runtime is live and `leadTurnKind === 'thinking'`.
+      // Each must be queued as its own answer, not silently acknowledged and dropped.
+      for (const question of questions) await current.coordinator.send(question);
+
+      firstTurnGate.release();
+      await sent;
+      // Follow-ups are chained on the lead runtime after the active turn.
+      await waitFor(() => questions.every((q) => leadPrompts.includes(q)), 5000);
+      await waitForReady(current.coordinator);
+
+      for (const question of questions) expect(leadPrompts).toContain(question);
+    });
   });
 
   // 37.1 R6/R9/R12/R14: everyone may speak to everyone, one message may name several
