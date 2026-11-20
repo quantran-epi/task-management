@@ -148,3 +148,92 @@ export function buildWorktreeFileTree(
 
   return convert(root);
 }
+
+export interface CompactFileNode {
+  key: string;
+  path: string;
+  name: string;
+  label: string;
+  chain: string[];
+  children: CompactFileNode[];
+  isLeaf: boolean;
+  isDir: boolean;
+  diffFile?: DiffFile;
+}
+
+/**
+ * Song song với remoteTreeCompact nhưng khác node shape/badge semantics
+ * (diffFile thay gitStatus). Cố tình không generic hóa để không đụng remote tree đã verify.
+ */
+export function compactFileTree(
+  nodes: FileTreeNode[],
+  options: { revealTargets?: readonly string[] } = {}
+): CompactFileNode[] {
+  const revealTargets = new Set(options.revealTargets ?? []);
+  const segmentName = (fullPath: string): string => fullPath.split('/').pop() ?? fullPath;
+
+  function compactNode(node: FileTreeNode): CompactFileNode {
+    if (!node.isDir) {
+      return {
+        key: node.key,
+        path: node.path,
+        name: node.title && typeof node.title === 'string' ? node.title : segmentName(node.path),
+        label: node.title && typeof node.title === 'string' ? node.title : segmentName(node.path),
+        chain: [node.key],
+        children: [],
+        isLeaf: true,
+        isDir: false,
+        ...(node.diffFile ? { diffFile: node.diffFile } : {}),
+      };
+    }
+
+    const chain: string[] = [node.key];
+    const names: string[] = [segmentName(node.key)];
+    let end = node;
+    // Reveal target được gộp vào chain rồi mới dừng để key map trỏ đúng node cần reveal.
+    // Node có diffFile là diff target — dừng ngay ở node hiện tại.
+    if (!end.diffFile) {
+      while (true) {
+        const children = end.children ?? [];
+        if (children.length !== 1) break;
+        const only = children[0]!;
+        if (only.isLeaf || only.diffFile) break;
+        end = only;
+        chain.push(end.key);
+        names.push(segmentName(end.key));
+        if (end.diffFile || revealTargets.has(end.key)) break;
+      }
+    }
+
+    return {
+      key: chain[0]!,
+      path: end.path,
+      name: names[names.length - 1]!,
+      label: names.length > 1 ? names.join('.') : names[0]!,
+      chain,
+      children: compactNodeChildren(end.children ?? []),
+      isLeaf: false,
+      isDir: true,
+      ...(end.diffFile ? { diffFile: end.diffFile } : {}),
+    };
+  }
+
+  function compactNodeChildren(children: FileTreeNode[]): CompactFileNode[] {
+    return children.map(compactNode);
+  }
+
+  return nodes.map(compactNode);
+}
+
+/** Map mọi path trong chain về key của node đã gộp, đệ quy. */
+export function fileKeyOfPathFor(nodes: CompactFileNode[]): Map<string, string> {
+  const map = new Map<string, string>();
+  function visit(list: CompactFileNode[]): void {
+    for (const node of list) {
+      for (const path of node.chain) map.set(path, node.key);
+      visit(node.children);
+    }
+  }
+  visit(nodes);
+  return map;
+}

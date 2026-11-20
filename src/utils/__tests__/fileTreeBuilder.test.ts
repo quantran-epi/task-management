@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { buildWorktreeFileTree } from '../fileTreeBuilder';
+import {
+  buildWorktreeFileTree,
+  compactFileTree,
+  fileKeyOfPathFor,
+  type FileTreeNode,
+} from '../fileTreeBuilder';
 import type { DiffFile } from '../../types/agent';
 
 describe('buildWorktreeFileTree', () => {
@@ -77,5 +82,118 @@ describe('buildWorktreeFileTree', () => {
 
     expect(tree.length).toBe(1);
     expect(tree[0]?.title).toBe('src');
+  });
+});
+
+function dir(path: string, children: FileTreeNode[] = []): FileTreeNode {
+  return {
+    key: path,
+    title: path.split('/').pop() ?? path,
+    path,
+    isDir: true,
+    isLeaf: false,
+    children,
+  };
+}
+
+function file(path: string, diffFile?: DiffFile): FileTreeNode {
+  return {
+    key: path,
+    title: path.split('/').pop() ?? path,
+    path,
+    isDir: false,
+    isLeaf: true,
+    ...(diffFile ? { diffFile } : {}),
+  };
+}
+
+const sampleDiff: DiffFile = {
+  oldPath: 'com/A.java',
+  newPath: 'com/A.java',
+  status: 'modified',
+  hunks: [],
+  additions: 1,
+  deletions: 0,
+};
+
+describe('compactFileTree', () => {
+  it('gộp chain folder single-child thành một node dotted, không mutate input', () => {
+    const input = [dir('com', [dir('com/acme', [dir('com/acme/orders', [])])])];
+    const before = JSON.stringify(input);
+
+    const result = compactFileTree(input);
+
+    expect(result).toHaveLength(1);
+    const node = result[0]!;
+    expect(node.key).toBe('com');
+    expect(node.path).toBe('com/acme/orders');
+    expect(node.label).toBe('com.acme.orders');
+    expect(node.chain).toEqual(['com', 'com/acme', 'com/acme/orders']);
+    expect(node.isLeaf).toBe(false);
+    expect(node.isDir).toBe(true);
+    expect(node.children).toEqual([]);
+    expect(JSON.stringify(input)).toBe(before);
+  });
+
+  it('dừng gộp ở branch point (>=2 children)', () => {
+    const input = [dir('com', [dir('com/acme', []), dir('com/other', [])])];
+    const result = compactFileTree(input);
+    expect(result[0]?.chain).toEqual(['com']);
+    expect(result[0]?.children).toHaveLength(2);
+  });
+
+  it('dừng gộp ở node có diffFile và giữ nguyên field', () => {
+    const withDiff = { ...dir('com', [dir('com/acme', [])]), diffFile: sampleDiff };
+    const result = compactFileTree([withDiff]);
+    expect(result[0]?.chain).toEqual(['com']);
+    expect(result[0]?.diffFile).toBe(sampleDiff);
+  });
+
+  it('dừng gộp ở node nằm trong revealTargets', () => {
+    const input = [dir('com', [dir('com/acme', [dir('com/acme/orders', [])])])];
+    const result = compactFileTree(input, { revealTargets: ['com/acme'] });
+    expect(result[0]?.chain).toEqual(['com', 'com/acme']);
+  });
+
+  it('dừng gộp khi single child là file leaf, node con vẫn ở lại', () => {
+    const leaf = file('com/acme/Foo.java');
+    const input = [dir('com', [dir('com/acme', [leaf])])];
+    const result = compactFileTree(input);
+    expect(result[0]?.chain).toEqual(['com', 'com/acme']);
+    expect(result[0]?.children).toHaveLength(1);
+    expect(result[0]?.children?.[0]?.isLeaf).toBe(true);
+    expect(result[0]?.children?.[0]?.path).toBe('com/acme/Foo.java');
+  });
+
+  it('pass-through leaf giữ key/path, chain một segment', () => {
+    const leaf = file('Foo.java', sampleDiff);
+    const result = compactFileTree([leaf]);
+    expect(result[0]).toMatchObject({
+      key: 'Foo.java',
+      path: 'Foo.java',
+      name: 'Foo.java',
+      label: 'Foo.java',
+      chain: ['Foo.java'],
+      isLeaf: true,
+      isDir: false,
+      diffFile: sampleDiff,
+    });
+  });
+});
+
+describe('fileKeyOfPathFor', () => {
+  it('map mọi path trong chain về key node đã gộp và đệ quy vào children', () => {
+    const leaf = file('com/acme/Foo.java');
+    const input = [dir('com', [dir('com/acme', [leaf])])];
+    const map = fileKeyOfPathFor(compactFileTree(input));
+
+    expect(map.get('com')).toBe('com');
+    expect(map.get('com/acme')).toBe('com');
+    expect(map.get('com/acme/Foo.java')).toBe('com/acme/Foo.java');
+  });
+
+  it('path lạ trả undefined', () => {
+    const map = fileKeyOfPathFor(compactFileTree([file('Foo.java')]));
+    expect(map.get('unknown/path')).toBeUndefined();
   });
 });
