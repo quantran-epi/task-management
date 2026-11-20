@@ -72,7 +72,7 @@ pub struct ToolTaskStatusEvent {
 /// One live tool call. Cloned out of the registry before any kill so no lock is held across
 /// an SSH connection (avoids deadlock).
 #[derive(Clone)]
-struct LiveTask {
+pub(crate) struct LiveTask {
     cancelled: Arc<AtomicBool>,
     /// Process-group id printed by `setsid` — `kill -TERM -<pgid>` hits the whole job.
     pgid: Option<u32>,
