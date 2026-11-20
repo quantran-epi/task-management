@@ -4,6 +4,7 @@ import { TaskPlannerDatabase } from '../../src/db';
 import { createSystem } from '../../src/db/repositories/systemRepo';
 import { SystemsExplorer } from '../../src/workbench/toolwindows/SystemsExplorer';
 import { useLayoutStore } from '../../src/workbench/store/layoutStore';
+import { setSystemTypeOptions } from '../../src/services/system/systemTypeSettings';
 
 /**
  * Wave 0 contract for plan 31.2-12 Task 2 (ENT-NORM-02, D-30/D-34, T-31.2-32).
@@ -90,6 +91,48 @@ describe('SystemsExplorer — divergent action sets (ENT-NORM-02)', () => {
     expect(gitItem?.getAttribute('title') ?? '').toContain(
       'Chưa cấu hình SSH/Repo — mở System Catalog'
     );
+  });
+
+  it('renders node icons by system type with configured color and unknown fallback', async () => {
+    await setSystemTypeOptions(
+      [
+        { value: 'LOGICAL_GROUP', label: 'Parent System', color: '#722ed1' },
+        { value: 'SERVICE', label: 'Service', color: '#13c2c2' },
+        { value: 'PAYMENT_GATEWAY', label: 'Payment Gateway', color: '#ff0000' },
+      ],
+      db
+    );
+    const parent = await createSystem(
+      { parentId: null, name: 'SmartCard Core', code: 'SC-CORE', type: 'LOGICAL_GROUP' },
+      db
+    );
+    await createSystem(
+      { name: 'Card Auth API', code: 'SC-AUTH-API', parentId: parent.id, type: 'SERVICE' },
+      db
+    );
+    await createSystem(
+      { name: 'Payment API', code: 'PAY-API', parentId: parent.id, type: 'PAYMENT_GATEWAY' },
+      db
+    );
+    await createSystem(
+      { name: 'Legacy API', code: 'LEG-API', parentId: parent.id, type: 'UNKNOWN_TYPE' },
+      db
+    );
+
+    render(<SystemsExplorer db={db} />);
+    await screen.findByText('Card Auth API');
+
+    const iconFor = (name: string) => {
+      const row = screen.getByText(name).closest('.ant-tree-treenode');
+      return row?.querySelector('.ant-tree-node-content-wrapper .anticon');
+    };
+    expect(iconFor('SmartCard Core')?.className).toMatch(/anticon-folder(-open)?/);
+    expect(iconFor('Card Auth API')).toHaveClass('anticon-code');
+    expect(iconFor('Card Auth API')).toHaveStyle({ color: '#13c2c2' });
+    expect(iconFor('Payment API')).toHaveClass('anticon-appstore');
+    expect(iconFor('Payment API')).toHaveStyle({ color: '#ff0000' });
+    expect(iconFor('Legacy API')).toHaveClass('anticon-appstore');
+    expect(iconFor('Legacy API')).toHaveStyle({ color: '#8c8c8c' });
   });
 
   it('opens ChangeRequestModal pre-filled when Tạo CR is clicked on a subsystem', async () => {

@@ -1,9 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Tree, Input, Empty, Typography, Button, Dropdown, Modal, message, type MenuProps } from 'antd';
 import {
-  FolderOutlined,
-  FolderOpenOutlined,
-  BranchesOutlined,
   SearchOutlined,
   InboxOutlined,
   PlusOutlined,
@@ -14,6 +11,10 @@ import {
   CloudServerOutlined,
   CodeOutlined,
 } from '@ant-design/icons';
+import {
+  getSystemTypeIcon,
+  useSystemTypeLookup,
+} from '../../services/system/systemTypeSettings';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import {
@@ -47,6 +48,7 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
   const { openGit, openTerminal, disabledReason } = useSystemActions();
 
   const systems = useLiveQuery(() => getAllSystems(db), [db]) ?? [];
+  const typeLookup = useSystemTypeLookup(db);
 
   const handleOpenDetail = (targetSystem: System) => {
     openTab({
@@ -166,7 +168,10 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
     ];
   };
 
-  const renderSubsystemNode = (c: System): DataNode => ({
+  const renderSubsystemNode = (c: System): DataNode => {
+    const SubsystemIcon = getSystemTypeIcon(c.type);
+    const { color: typeColor } = typeLookup(c.type);
+    return {
     key: `sys:${c.id}`,
     title: (
       <Dropdown menu={{ items: getNodeMenu(c) ?? [] }} trigger={['contextMenu']}>
@@ -187,9 +192,9 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
               fontSize: 10,
               padding: '0 4px',
               borderRadius: 3,
-              background: '#e6fffb',
-              color: '#08979c',
-              border: '1px solid #87e8de',
+              background: 'var(--bg-elev)',
+              color: typeColor,
+              border: '1px solid var(--border-strong)',
               flexShrink: 0,
             }}
           >
@@ -198,9 +203,10 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
         </span>
       </Dropdown>
     ),
-    icon: <BranchesOutlined style={{ color: '#13c2c2' }} />,
+    icon: <SubsystemIcon style={{ color: typeColor }} />,
     isLeaf: true,
-  });
+    };
+  };
 
   const treeData = useMemo<DataNode[]>(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -216,6 +222,7 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
       .map((p) => {
         const childNodes = subsystems.filter((c) => c.parentId === p.id).map(renderSubsystemNode);
         if (!matches(p) && childNodes.length === 0) return null;
+        const { color: parentColor } = typeLookup(p.type);
 
         return {
           key: `sys:${p.id}`,
@@ -238,9 +245,9 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
                     fontSize: 10,
                     padding: '0 4px',
                     borderRadius: 3,
-                    background: '#f9f0ff',
-                    color: '#722ed1',
-                    border: '1px solid #d3adf7',
+                    background: 'var(--bg-elev)',
+                    color: parentColor,
+                    border: '1px solid var(--border-strong)',
                     flexShrink: 0,
                   }}
                 >
@@ -249,12 +256,10 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
               </span>
             </Dropdown>
           ),
-          icon: ({ expanded }: { expanded?: boolean }) =>
-            expanded ? (
-              <FolderOpenOutlined style={{ color: '#722ed1' }} />
-            ) : (
-              <FolderOutlined style={{ color: '#722ed1' }} />
-            ),
+          icon: ({ expanded }: { expanded?: boolean }) => {
+            const Icon = getSystemTypeIcon(p.type, !!expanded);
+            return <Icon style={{ color: parentColor }} />;
+          },
           children: childNodes,
         };
       })
@@ -268,7 +273,7 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
     );
 
     return [...parentNodes, ...unparented.map(renderSubsystemNode)];
-  }, [systems, searchQuery]);
+  }, [systems, searchQuery, typeLookup]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
