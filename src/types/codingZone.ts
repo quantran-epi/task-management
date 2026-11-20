@@ -9,6 +9,14 @@ export interface WorktreeDescriptor {
   baseRef?: string | undefined;
 }
 
+/** Phase 48: model-supplied hunk data. Untrusted — only filePath/hunk text enter the patch. */
+export interface CodeEditArgs {
+  filePath: string;
+  hunkHeader?: string | undefined;
+  action: 'apply' | 'revert';
+  patch?: string | undefined;
+}
+
 export interface CodeEditResult {
   ok: true;
   filePath: string;

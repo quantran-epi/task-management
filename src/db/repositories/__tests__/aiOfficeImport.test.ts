@@ -108,7 +108,14 @@ describe('importAiStaff', () => {
       'utf8'
     );
     const result = await importAiStaff(JSON.parse(raw), db, 'claude-sonnet-5-5');
-    expect(result.created).toEqual({ skills: 4, employees: 4, leads: 1 });
+    expect(result.created).toEqual({ skills: 4, employees: 5, leads: 1 });
     expect(result.warnings).toEqual([]);
+
+    const developer = await db.aiEmployees
+      .toCollection()
+      .filter((row) => row.name === 'Agent Developer')
+      .first();
+    expect(developer?.model).toBe('claude-opus-5-5');
+    expect(developer?.skillId).toBeDefined();
   });
 });

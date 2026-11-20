@@ -73,6 +73,7 @@ import {
   type LinkedItemIndexEntry,
 } from './teamPrompts';
 import {
+  AGENT_DEVELOPER_ONLY_TEAM_TOOLS,
   CODE_EDIT_AGENT_NAME,
   EMPLOYEE_ONLY_TEAM_TOOLS,
   LEAD_ONLY_TEAM_TOOLS,
@@ -1453,17 +1454,27 @@ export function createTeamRunCoordinator(
       // Phase 41 D-06/T-41-33: the lead payload must not advertise the employee-only write
       // path. The handler's role guard is the code half; this is the payload half.
       ...TEAM_TOOL_DEFINITIONS.filter(
-        (tool) => !EMPLOYEE_ONLY_TEAM_TOOLS.has(normalizeToolName(tool.function.name))
+        (tool) =>
+          !EMPLOYEE_ONLY_TEAM_TOOLS.has(normalizeToolName(tool.function.name)) &&
+          !AGENT_DEVELOPER_ONLY_TEAM_TOOLS.has(normalizeToolName(tool.function.name))
       ),
       ...mcpReadOnlyTools(),
       ...(await gatedAddenda()),
     ];
   }
 
-  async function employeeTools(): Promise<AiToolDefinition[]> {
+  async function employeeTools(agentName?: string): Promise<AiToolDefinition[]> {
+    const isDeveloper = agentName === CODE_EDIT_AGENT_NAME;
     return [
       ...getToolsForTurn(true, [], EMPLOYEE_READ_ONLY_ALLOWLIST),
-      ...EMPLOYEE_TEAM_TOOLS,
+      ...EMPLOYEE_TEAM_TOOLS.filter((tool) =>
+        isDeveloper || !AGENT_DEVELOPER_ONLY_TEAM_TOOLS.has(normalizeToolName(tool.function.name))
+      ),
+      ...(isDeveloper
+        ? TEAM_TOOL_DEFINITIONS.filter((tool) =>
+            AGENT_DEVELOPER_ONLY_TEAM_TOOLS.has(normalizeToolName(tool.function.name))
+          )
+        : []),
       ...mcpReadOnlyTools(),
       ...(await gatedAddenda()),
     ];
@@ -2336,7 +2347,7 @@ export function createTeamRunCoordinator(
           ? { contextWindowTokens: options.contextWindowTokens }
           : {}),
         autoApprove: false,
-        tools: await employeeTools(),
+        tools: await employeeTools(employee.name),
         mutationPolicy: 'read-only',
         persistUserMessage: false,
         agentKind: 'employee',

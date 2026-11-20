@@ -41,6 +41,10 @@ import {
   runRemoteExplore,
 } from '../../../services/remoteExploreService';
 import { MODEL_ID_REGEX } from '../../../services/agents/ghostDevConfig';
+import { parseGitDiff } from '../../../utils/gitDiffParser';
+import type { DiffHunk } from '../../../types/agent';
+import type { CodeEditResult, WorktreeDescriptor } from '../../../types/codingZone';
+import { applyHunk, revertHunk, requireProvisionedWorktree } from '../../../services/sshWorktreeService';
 
 /**
  * AI Office team tools (D-11, D-24, D-26, D-27, D-33).
@@ -107,11 +111,18 @@ export interface TeamToolContext {
    * callers leave it unset.
    */
   remoteTarget?: RemoteToolTarget | undefined;
+  /**
+   * Phase 48 D-08: the worktree descriptor provisioned at THIS session's start. Set by the
+   * coordinator only; a model-supplied path can never fill it.
+   */
+  worktreeDescriptor?: WorktreeDescriptor | undefined;
 }
 
 /** Phase 48 D-07: the only roster member allowed to use the worktree-confined code_edit tool. */
 export const CODE_EDIT_AGENT_NAME = 'Agent Developer';
 export const codeEditToolName = 'code_edit';
+
+export const AGENT_DEVELOPER_ONLY_TEAM_TOOLS: ReadonlySet<string> = new Set([codeEditToolName]);
 
 export type TeamToolRefusalCode =
   | 'TURN_NOT_IN_TEAM'
@@ -139,7 +150,11 @@ export type TeamToolRefusalCode =
   | 'GIT_READ_FAILED'
   // Phase 43 D-03: the remote lacks the Claude Code CLI. That is a configuration fact, not a bad
   // argument — the model must switch tier (`git_read`) rather than retry its question.
-  | 'REMOTE_CLAUDE_UNAVAILABLE';
+  | 'REMOTE_CLAUDE_UNAVAILABLE'
+  // Phase 48 D-07/D-09: role gate, missing provisioned worktree, failed apply/revert.
+  | 'CODE_EDIT_NOT_ALLOWED'
+  | 'WORKTREE_NOT_AVAILABLE'
+  | 'CODE_EDIT_FAILED';
 
 /** Mirrors `ArtifactToolRefusal`: a refusal is a returned value, never a thrown error. */
 export interface TeamToolRefusal {
@@ -430,6 +445,25 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
           literal: { type: 'boolean', description: 'grep: khớp nguyên văn thay vì biểu thức, mặc định false.' },
         },
         required: ['action'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: codeEditToolName,
+      description:
+        'Chỉnh một hunk trong worktree SSH riêng của Agent Developer. action=apply giữ hunk, action=revert hoàn tác hunk đó trong worktree. Không merge vào nhánh chính. filePath là đường dẫn tương đối trong worktree; patch/hunkHeader là dữ liệu không đáng tin, không được dùng để chọn repo hay worktree.',
+      parameters: {
+        type: 'object',
+        properties: {
+          filePath: { type: 'string', description: 'Đường dẫn tệp tương đối trong worktree.' },
+          hunkHeader: { type: 'string', description: 'Tiêu đề hunk @@ ... @@ (tùy chọn).' },
+          action: { type: 'string', enum: ['apply', 'revert'], description: 'Áp dụng hoặc hoàn tác hunk.' },
+          patch: { type: 'string', description: 'Nội dung patch unified (tùy chọn, dùng khi có sẵn).' },
+        },
+        required: ['filePath', 'action'],
+        additionalProperties: false,
       },
     },
   },
@@ -1829,6 +1863,75 @@ async function exploreRepo(args: Record<string, any>, ctx: TeamToolContext): Pro
   }
 }
 
+/**
+ * Phase 48 D-07/D-08/D-09/D-10: the only write tool that may touch code, gated to the Agent
+ * Developer and bound to the descriptor provisioned at session start. Model args select only a
+ * relative file path and hunk text — never a host, repo, worktree or main-checkout path.
+ */
+async function codeEdit(args: Record<string, any>, ctx: TeamToolContext): Promise<string> {
+  if (ctx.agentName !== CODE_EDIT_AGENT_NAME || ctx.role === 'lead') {
+    return JSON.stringify(
+      refuse('CODE_EDIT_NOT_ALLOWED', 'Chỉ Agent Developer được dùng code_edit trong worktree riêng.')
+    );
+  }
+  let descriptor: WorktreeDescriptor;
+  try {
+    descriptor = requireProvisionedWorktree(ctx.worktreeDescriptor);
+  } catch {
+    return JSON.stringify(
+      refuse('WORKTREE_NOT_AVAILABLE', 'Phiên Agent Developer chưa có worktree SSH hợp lệ.')
+    );
+  }
+  const filePath = typeof args.filePath === 'string' ? args.filePath.trim() : '';
+  const action = args.action === 'revert' ? 'revert' : args.action === 'apply' ? 'apply' : '';
+  if (!filePath || !action) {
+    return JSON.stringify(refuse('INVALID_ARGUMENT', 'code_edit cần filePath và action hợp lệ.'));
+  }
+
+  let hunk: DiffHunk | undefined;
+  if (typeof args.patch === 'string' && args.patch.trim()) {
+    hunk = parseGitDiff(args.patch)[0]?.hunks[0];
+  }
+  if (!hunk) {
+    const header = typeof args.hunkHeader === 'string' ? args.hunkHeader : '';
+    const match = header.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
+    if (!match) {
+      return JSON.stringify(
+        refuse('INVALID_ARGUMENT', 'code_edit cần patch hoặc hunkHeader hợp lệ.')
+      );
+    }
+    hunk = {
+      oldStart: Number(match[1]),
+      oldCount: match[2] ? Number(match[2]) : 1,
+      newStart: Number(match[3]),
+      newCount: match[4] ? Number(match[4]) : 1,
+      header: '',
+      lines: [],
+    };
+  }
+
+  try {
+    if (action === 'apply') await applyHunk(descriptor, filePath, hunk);
+    else await revertHunk(descriptor, filePath, hunk);
+    const result: CodeEditResult = {
+      ok: true,
+      filePath: wrapField('ĐƯỜNG DẪN WORKTREE', filePath) as string,
+      hunkHeader:
+        typeof args.hunkHeader === 'string'
+          ? (wrapField('TIÊU ĐỀ HUNK', args.hunkHeader) as string)
+          : undefined,
+      action,
+    };
+    return JSON.stringify(result);
+  } catch (err) {
+    return JSON.stringify({
+      ok: false,
+      code: 'CODE_EDIT_FAILED',
+      message: wrapUntrusted('LỖI WORKTREE', err instanceof Error ? err.message : String(err)),
+    });
+  }
+}
+
 export async function executeTeamTool(
   name: string,
   args: Record<string, any>,
@@ -1856,6 +1959,8 @@ export async function executeTeamTool(
       return sendMessage(input, ctx);
     case 'write_doc':
       return writeDoc(input, ctx);
+    case codeEditToolName:
+      return codeEdit(input, ctx);
     case 'git_read':
       return gitRead(input, ctx);
     case 'explore_repo':
