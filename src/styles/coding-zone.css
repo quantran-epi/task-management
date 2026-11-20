@@ -147,6 +147,11 @@
 .cz-activity { padding: 10px; overflow: auto; }
 .cz-act-head { font-size: 11px; font-weight: 650; margin: 16px 0 10px; color: var(--fg-strong); }
 .cz-activity-empty { font-size: 11px; color: var(--fg-muted); }
+.cz-activity-list { display: flex; flex-direction: column; gap: 6px; }
+.cz-activity-item { display: grid; grid-template-columns: 38px 56px minmax(0, 1fr); gap: 6px; padding: 5px 7px; border-left: 2px solid var(--accent); background: var(--surface-sunken); }
+.cz-activity-time { font-size: 10px; color: var(--fg-faint); font-family: var(--font-mono); }
+.cz-activity-label { font-size: 10px; color: var(--accent); text-transform: uppercase; }
+.cz-activity-text { font-size: 11px; color: var(--fg); overflow-wrap: anywhere; }
 .cz-active-file-card { padding: 10px; border-bottom: 1px solid var(--border); background: var(--surface-strong); }
 .cz-active-file-label { font-size: 9px; color: var(--fg-faint); text-transform: uppercase; letter-spacing: .05em; }
 .cz-active-file-value { font-family: var(--font-mono); font-size: 11px; color: var(--fg-strong); margin-top: 4px; word-break: break-all; }

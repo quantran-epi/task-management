@@ -1,10 +1,22 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { DiffFile } from '../../../types/agent';
 import type { WorktreeDescriptor } from '../../../types/codingZone';
 import type { CodingZoneMessage } from '../CodingZoneChatStrip';
 
 const viewerProps = vi.fn();
+const openPopoutMock = vi.fn();
+const syncEmitterMock = vi.fn(async (_label: string, _event: string, _payload: unknown) => {});
+const activityHandlers: Record<string, (event: { payload: unknown }) => void> = {};
+
+vi.mock('../../../utils/codingZonePopout', () => ({
+  openCodingZonePopout: (state: unknown) => openPopoutMock(state),
+  isCodingZonePopoutOpen: async () => false,
+  isTauriApp: () => false,
+  CODING_ZONE_LABEL: 'coding-zone-popout',
+  CODING_ZONE_HANDOFF_EVENT: 'coding-zone-handoff',
+  CODING_ZONE_SYNC_EVENT: 'coding-zone-sync',
+}));
 
 vi.mock('../../../workbench/editor/RemoteFileViewer', () => ({
   RemoteFileViewer: (props: Record<string, unknown>) => {
@@ -14,6 +26,8 @@ vi.mock('../../../workbench/editor/RemoteFileViewer', () => ({
 }));
 
 import { CodingZoneModal } from '../CodingZoneModal';
+import { deriveConnectionState, CONNECTION_COPY, setActivityListenerForTest } from '../CodingZoneLiveState';
+import { setCodingZoneEmitterForTest } from '../../../hooks/useCodingZoneSync';
 
 const descriptor: WorktreeDescriptor = {
   sshConfigId: 'ssh-1',
@@ -58,7 +72,20 @@ function renderModal(overrides: Record<string, unknown> = {}) {
 describe('CodingZoneModal shell', () => {
   beforeEach(() => {
     viewerProps.mockClear();
+    openPopoutMock.mockClear();
+    syncEmitterMock.mockClear();
+    Object.keys(activityHandlers).forEach((key) => delete activityHandlers[key]);
+    setCodingZoneEmitterForTest(syncEmitterMock);
+    setActivityListenerForTest(async (event, handler) => {
+      activityHandlers[event] = handler;
+      return () => { delete activityHandlers[event]; };
+    });
     document.documentElement.dataset.theme = 'light';
+  });
+
+  afterEach(() => {
+    setCodingZoneEmitterForTest(undefined);
+    setActivityListenerForTest(undefined);
   });
 
   it('renders both perspectives and switches layout without losing shared state', () => {
@@ -150,5 +177,74 @@ describe('CodingZoneModal shell', () => {
     const { onClose } = renderModal();
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('popout button opens the util with the current shared state', () => {
+    const onPopout = vi.fn();
+    renderModal({ onPopout });
+    fireEvent.click(screen.getByTestId('cz-popout-button'));
+    expect(onPopout).toHaveBeenCalledWith(expect.objectContaining({
+      tabs: [], activeTabId: '__overview__',
+      descriptor, connection: 'connected',
+    }));
+  });
+
+  it('a hunk decision publishes a newer-revision sync event', async () => {
+    renderModal({
+      renderDiffPanel: ({ hunkStates, setHunkState }: {
+        hunkStates: Record<string, string>;
+        setHunkState: (key: string, state: 'accepted') => void;
+      }) => (
+        <button type="button" data-testid="cz-test-accept" onClick={() => setHunkState('h1', 'accepted')}>
+          {hunkStates.h1 ?? 'pending'}
+        </button>
+      ),
+    });
+    fireEvent.click(screen.getByTitle('src/AgentWorkbench.tsx'));
+    fireEvent.click(screen.getByTestId('cz-test-accept'));
+    await waitFor(() => {
+      const events = syncEmitterMock.mock.calls.map((call) => call[2] as { revision: number; kind: string; payload: unknown });
+      expect(events.some((event) => event.kind === 'hunk' && event.payload
+        && typeof event.payload === 'object' && 'key' in event.payload && (event.payload as { key: string }).key === 'h1')).toBe(true);
+      expect(events.at(-1)?.revision).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  it('activity events render live and no sample timeline appears', async () => {
+    renderModal();
+    fireEvent.click(screen.getByTestId('cz-perspective-chat'));
+    expect(screen.queryByTestId('cz-activity-item')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(activityHandlers['ghost-dev:stream-chunk']).toBeDefined();
+      expect(activityHandlers['ghost-dev:session-finished']).toBeDefined();
+    });
+    act(() => {
+      activityHandlers['ghost-dev:stream-chunk']?.({ payload: { type: 'tool_use', content: 'Đọc src/AgentWorkbench.tsx' } });
+      activityHandlers['ghost-dev:session-finished']?.({ payload: null });
+    });
+    await waitFor(() => {
+      const items = screen.getAllByTestId('cz-activity-item').map((item) => item.textContent);
+      expect(items.some((text) => text?.includes('Đọc src/AgentWorkbench.tsx'))).toBe(true);
+      expect(items.some((text) => text?.includes('Phiên Agent Developer đã kết thúc'))).toBe(true);
+    });
+  });
+
+  it('derives truthful connection states with exact copy', () => {
+    expect(deriveConnectionState({ sshProbeOk: true, worktreeValid: true, sessionActive: true, popoutOpen: true })).toBe('connected');
+    expect(deriveConnectionState({ sshProbeOk: false, worktreeValid: true, sessionActive: true, popoutOpen: true })).toBe('disconnected');
+    expect(deriveConnectionState({ sshProbeOk: true, worktreeValid: false, sessionActive: true, popoutOpen: true })).toBe('invalid-worktree');
+    expect(deriveConnectionState({ sshProbeOk: true, worktreeValid: true, sessionActive: false, popoutOpen: true })).toBe('session-ended');
+    expect(deriveConnectionState({ sshProbeOk: true, worktreeValid: true, sessionActive: true })).toBe('connecting');
+    expect(CONNECTION_COPY.disconnected.chip).toBe('Mất kết nối');
+    expect(CONNECTION_COPY['invalid-worktree'].detail).toBe('Đường dẫn worktree không hợp lệ. Kiểm tra cấu hình repository từ xa.');
+    expect(CONNECTION_COPY['session-ended'].detail).toBe('Phiên Agent Developer đã kết thúc. Mở phiên mới để tiếp tục.');
+  });
+
+  it('no unconditional sync chip when SSH probe fails', () => {
+    renderModal({ connection: 'disconnected' });
+    const chip = screen.getByTestId('coding-zone-connection');
+    expect(chip).toHaveTextContent('Mất kết nối');
+    expect(chip).not.toHaveTextContent('Đồng bộ');
+    expect(screen.getByTestId('cz-connection-detail')).toHaveTextContent('Không kết nối được SSH target. Kiểm tra cấu hình SSH và thử lại.');
   });
 });
