@@ -99,9 +99,10 @@ describe('ChatMessageList notification target highlight', () => {
       );
       const bubble = screen.getByTestId('chat-target-bubble');
       expect(bubble).toBeTruthy();
-      // The ring is an outline on the bubble, so its own background is unchanged.
+      // The ring is an INSET shadow on the bubble: it never crosses the 4px grouped gap.
       expect(bubble.style.background).toBe('');
-      expect(bubble.style.outline).toContain('solid');
+      expect(bubble.style.boxShadow).toContain('inset');
+      expect(bubble.style.outline).toBe('');
       // The row wrapper carries no fill — that was what absorbed the bottom margin.
       const row = bubble.closest('[data-chat-message-id]') as HTMLElement;
       expect(row.getAttribute('data-chat-message-id')).toBe('m2');
