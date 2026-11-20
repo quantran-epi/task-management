@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Unified AI Office
 status: executing
-stopped_at: Phase 48 UI-SPEC approved
-last_updated: "2026-11-20T19:13:27.928Z"
-last_activity: 2026-11-20 -- Phase 48 execution started
+stopped_at: Phase 48 plan 03 complete
+last_updated: "2026-11-20T19:44:32Z"
+last_activity: 2026-11-20 -- Phase 48 plan 03 complete
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 68
-  completed_plans: 62
+  completed_plans: 63
   percent: 50
 current_phase: 46.1
 current_phase_name: Unified Remote Search and Visual Tokens
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 48 (agent-developer-workbench-ssh-worktree-coding-zone-popout-hu) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-11-20 -- Phase 48 execution started
 
@@ -57,9 +57,9 @@ Verification: 392 focused tests pass (9 files), `tsc --noEmit` clean. Full suite
 
 ## Session Continuity
 
-Last session: 2026-11-20T19:12:49.060Z
-Stopped at: Phase 48 UI-SPEC approved
-Resume file: .planning/phases/48-agent-developer-workbench-ssh-worktree-coding-zone-popout-hu/48-UI-SPEC.md
+Last session: 2026-11-20T19:44:32Z
+Stopped at: Completed 48-03-PLAN.md
+Resume file: None
 
 Progress: [█████████░] 91%
 
@@ -291,6 +291,9 @@ Progress: [█████████░] 91%
 - [Phase ?]: Coding Zone perspectives swap layout only and share one modal state object
 - [Phase ?]: Hunk decision key combines filePath, header, body hash and diff revision; failures never clear decisions
 - [Phase ?]: Bulk accept disabled without pending hunks; bulk revert disabled without accepted hunks
+- [Phase 48]: Coding Zone popout is a dedicated Tauri WebviewWindow; state handoff travels by emitTo/postMessage, never in hash
+- [Phase 48]: Cross-window events carry originWindowId + monotonic revision; self/stale/malformed ignored at receipt
+- [Phase 48]: "Đồng bộ" chip requires live session + SSH probe + valid worktree + popout presence; exact Vietnamese failure copy is pinned by tests
 
 ## Performance Metrics
 
@@ -341,3 +344,4 @@ Progress: [█████████░] 91%
 | Phase 46.1 P05 | 3min | 2 tasks | 1 files |
 | Phase 48 P01 | 21min | 3 tasks | 12 files |
 | Phase 48 P02 | 14min | 2 tasks | 10 files |
+| Phase 48 P03 | 29min | 2 tasks | 13 files |
