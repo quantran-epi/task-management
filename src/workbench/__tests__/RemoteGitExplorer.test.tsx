@@ -417,6 +417,41 @@ describe('RemoteGitExplorer Component', () => {
     });
   });
 
+  it('in-panel Find button dispatches the existing open-find event only when a target is ready', async () => {
+    const dispatched = vi.fn();
+    const handler = (event: Event) => {
+      expect(event.type).toBe('taskmate:open-find-in-remote-files');
+      dispatched();
+      event.preventDefault(); // acknowledge so no "unavailable" message appears
+    };
+    window.addEventListener('taskmate:open-find-in-remote-files', handler);
+    try {
+      render(
+        <AntdThemeAdapter>
+          <RemoteGitExplorer />
+        </AntdThemeAdapter>
+      );
+      // No target configured yet -> disabled.
+      await waitFor(() => {
+        expect(screen.getByTestId('open-find-btn')).toBeDefined();
+      });
+      expect(screen.getByTestId('open-find-btn').hasAttribute('disabled')).toBe(true);
+
+      // Configure config + repo + branch; the explorer auto-loads branches and selects main.
+      const repoInput = screen.getByTestId('repo-path-input');
+      fireEvent.change(repoInput, { target: { value: '/home/dev/my-repo' } });
+      fireEvent.blur(repoInput);
+      await waitFor(() => {
+        expect(screen.getByTestId('open-find-btn').hasAttribute('disabled')).toBe(false);
+      });
+
+      fireEvent.click(screen.getByTestId('open-find-btn'));
+      expect(dispatched).toHaveBeenCalledOnce();
+    } finally {
+      window.removeEventListener('taskmate:open-find-in-remote-files', handler);
+    }
+  });
+
   it('global search is inert with no remote connected', async () => {
     const searchSpy = vi.spyOn(gitRemoteTreeService, 'searchRemoteTree').mockResolvedValue([]);
 

@@ -56,6 +56,25 @@ describe('actionRegistry', () => {
     unregister();
   });
 
+  it('keeps find.inPath palette-reachable with no advertised shortcut and dispatches the Find event', () => {
+    const find = getAction('find.inPath');
+    expect(find).toBeDefined();
+    expect(find?.shortcut).toBeUndefined();
+    const dispatched = vi.fn();
+    const handler = (event: Event) => {
+      expect(event.type).toBe('taskmate:open-find-in-remote-files');
+      dispatched();
+      event.preventDefault();
+    };
+    window.addEventListener('taskmate:open-find-in-remote-files', handler);
+    try {
+      find!.perform();
+      expect(dispatched).toHaveBeenCalledOnce();
+    } finally {
+      window.removeEventListener('taskmate:open-find-in-remote-files', handler);
+    }
+  });
+
   it('opens Tasks and issues a new focus request on every New Task action', () => {
     useLayoutStore.getState().closeAllTabs();
     executeAction('task.create');

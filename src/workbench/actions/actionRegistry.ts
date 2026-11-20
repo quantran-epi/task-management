@@ -176,7 +176,6 @@ export function initStandardActions(): void {
       id: 'find.inPath',
       title: 'Find in Remote Files',
       category: 'Navigate',
-      shortcut: 'Ctrl+Shift+F',
       perform: () => {
         dispatchHandledAction('taskmate:open-find-in-remote-files', 'Find in Remote Files chưa sẵn sàng.');
       },

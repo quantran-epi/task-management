@@ -18,31 +18,31 @@ function keydown(init: KeyboardEventInit, target: EventTarget): KeyboardEvent {
   return event;
 }
 
-describe('useGlobalKeymap — find.inPath shortcut (D-04 / T-46.1-05)', () => {
+describe('useGlobalKeymap — no global Find shortcut (261120-vcb)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('Ctrl+Shift+F (key F) dispatches find.inPath and prevents default while typing in an input', () => {
+  it('Ctrl+Shift+F (key F) is inert and never dispatches find.inPath', () => {
     render(<Harness />);
     const input = screen.getByTestId('typing-target');
     input.focus();
 
     const event = keydown({ key: 'F', ctrlKey: true, shiftKey: true }, input);
 
-    expect(event.defaultPrevented).toBe(true);
-    expect(executeAction).toHaveBeenCalledWith('find.inPath');
+    expect(event.defaultPrevented).toBe(false);
+    expect(executeAction).not.toHaveBeenCalled();
   });
 
-  it('Cmd+Shift+F (key f, metaKey) dispatches find.inPath and prevents default', () => {
+  it('Cmd+Shift+F (key f, metaKey) is inert and never dispatches find.inPath', () => {
     render(<Harness />);
     const input = screen.getByTestId('typing-target');
     input.focus();
 
     const event = keydown({ key: 'f', metaKey: true, shiftKey: true }, input);
 
-    expect(event.defaultPrevented).toBe(true);
-    expect(executeAction).toHaveBeenCalledWith('find.inPath');
+    expect(event.defaultPrevented).toBe(false);
+    expect(executeAction).not.toHaveBeenCalled();
   });
 
   it('plain Ctrl+F does NOT dispatch find.inPath', () => {

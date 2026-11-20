@@ -5,6 +5,7 @@ import FolderOutlined from '@ant-design/icons/FolderOutlined';
 import FolderOpenOutlined from '@ant-design/icons/FolderOpenOutlined';
 import FileTextOutlined from '@ant-design/icons/FileTextOutlined';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
+import SearchOutlined from '@ant-design/icons/SearchOutlined';
 import BranchesOutlined from '@ant-design/icons/BranchesOutlined';
 import CloudServerOutlined from '@ant-design/icons/CloudServerOutlined';
 import FolderViewOutlined from '@ant-design/icons/FolderViewOutlined';
@@ -21,6 +22,7 @@ import type { SshConfig } from '../../types/ssh';
 import type { RemoteGitBranch, RemoteGitTreeNode } from '../../types/gitRemote';
 import { compactRemoteTree, keyOfPathFor, type CompactedNode } from '../../utils/remoteTreeCompact';
 import { useLayoutStore } from '../store/layoutStore';
+import { executeAction } from '../actions/actionRegistry';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 
 export interface RemoteGitExplorerProps {
@@ -820,6 +822,16 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
               onClick={() => loadRootTree()}
               disabled={!selectedConfig || !repoPath.trim()}
               data-testid="refresh-tree-btn"
+            />
+          </Tooltip>
+          <Tooltip title="Find in Remote Files">
+            <Button
+              size="small"
+              icon={<SearchOutlined />}
+              aria-label="Find in Remote Files"
+              onClick={() => executeAction('find.inPath')}
+              disabled={!selectedConfig || !repoPath.trim() || !selectedBranch}
+              data-testid="open-find-btn"
             />
           </Tooltip>
         </div>
