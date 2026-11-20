@@ -417,18 +417,20 @@ Plans:
 3. Remote search correctness: scoped `git grep` / `git ls-tree`, 150 ms debounce, sequence-based stale guards, real SSH cancellation, bounded results, binary/large-file handling and truthful error states.
 4. Compact remote folder tree: single-child chain merging, 24 px rows, 16 px icons, 12 px indent, compact labels and reveal mapping that preserves stable keys.
 5. Shared visual system: bundle Inter and IBM Plex Mono with Vietnamese subsets for offline Tauri use; centralize the approved light/dark palette, font roles, row/control sizes, hover/selection and match styling as tokens; remove hardcoded colors in the touched surfaces.
+
 **Success Criteria**:
   1. Remote search modes share one input/state machine; stale and cancelled runs cannot overwrite current results.
   2. Arrow navigation updates the preview and Enter opens the remote file at the exact match line.
   3. Deep single-child folder chains render as compact dotted labels and reveal from search results still works.
   4. Changing a color/font/control token in the shared token file propagates to the new search UI and migrated workbench surfaces without editing component literals.
   5. Vietnamese text in UI labels renders correctly offline; unit/component tests cover search state, preview linkage, tree compaction and token usage.
+
 **Depends on:** Phase 46
-**Plans:** 5 plans in 5 waves
+**Plans:** 1/5 plans executed in 5 waves
 
 Plans:
 **Wave 1** *(no dependencies — correctness backbone)*
-- [ ] 46.1-01-PLAN.md — Tracer: 2000-match scoped `git grep`, pure FindSession with seq/stale/cancel, query/mask builder, real callId cancellation (R3, D-08/D-09/D-10)
+- [x] 46.1-01-PLAN.md — Tracer: 2000-match scoped `git grep`, pure FindSession with seq/stale/cancel, query/mask builder, real callId cancellation (R3, D-08/D-09/D-10)
 
 **Wave 2** *(blocked on Wave 1)*
 - [ ] 46.1-02-PLAN.md — Shortcut → action → seeded two-pane Find dialog, three modes, virtualized highlighted rows, following preview, keyboard nav, Enter at line (R1, R2, D-04..D-08)
