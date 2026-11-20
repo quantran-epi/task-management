@@ -4,7 +4,7 @@ milestone: v1.4
 milestone_name: Unified AI Office
 status: executing
 stopped_at: Phase 48 UI-SPEC approved
-last_updated: "2026-11-20T19:13:13.170Z"
+last_updated: "2026-11-20T19:13:27.928Z"
 last_activity: 2026-11-20 -- Phase 48 execution started
 progress:
   total_phases: 10
@@ -288,6 +288,9 @@ Progress: [█████████░] 91%
 - [Phase 46.1]: Combined gate uses --bail=1 not -x: Vitest 5.0.2 rejects -x; fail-fast preserved, 12 files/126 tests green, no full suite.
 - [Phase 48]: Agent Developer worktree provisioning owns real remoteWorktreePath at session start; no repoPath fallback — Prevents main-checkout writes (D-08/D-09)
 - [Phase 48]: code_edit role-gated to Agent Developer with request-bound descriptor; model paths never select worktree — ASVS privilege/tampering mitigation (D-07/D-10)
+- [Phase ?]: Coding Zone perspectives swap layout only and share one modal state object
+- [Phase ?]: Hunk decision key combines filePath, header, body hash and diff revision; failures never clear decisions
+- [Phase ?]: Bulk accept disabled without pending hunks; bulk revert disabled without accepted hunks
 
 ## Performance Metrics
 
