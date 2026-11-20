@@ -109,6 +109,10 @@ export interface TeamToolContext {
   remoteTarget?: RemoteToolTarget | undefined;
 }
 
+/** Phase 48 D-07: the only roster member allowed to use the worktree-confined code_edit tool. */
+export const CODE_EDIT_AGENT_NAME = 'Agent Developer';
+export const codeEditToolName = 'code_edit';
+
 export type TeamToolRefusalCode =
   | 'TURN_NOT_IN_TEAM'
   | 'SKILL_NOT_ASSIGNED'

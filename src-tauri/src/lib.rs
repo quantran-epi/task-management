@@ -62,6 +62,7 @@ pub fn run() {
             agent_diff_ops::list_worktree_files,
             agent_diff_ops::read_worktree_file_content,
             agent_diff_ops::revert_hunk_diff,
+            agent_diff_ops::ssh_worktree_provision,
             agent_skill_ops::list_available_skills,
             telegram_gateway::start_telegram_polling,
             telegram_gateway::stop_telegram_polling,

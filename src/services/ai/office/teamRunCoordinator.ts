@@ -62,7 +62,9 @@ import { dispatchBudgetWarning, resetBudgetWarnings } from './budgetWarning';
 import { estimateTokens } from './tokenEstimate';
 import { getGlobalBudgetWarnThresholdPct } from '../budgetWarnSettings';
 import { getGlobalConventions } from '../../conventionService';
-import { cancelToolCall } from '../../sshService';
+import { cancelToolCall, getSshConfigById, getSshSecret } from '../../sshService';
+import { provisionWorktree, requireProvisionedWorktree } from '../../sshWorktreeService';
+import type { WorktreeDescriptor } from '../../../types/codingZone';
 import { buildConventionsSegment, buildPinnedContextSegment } from '../conventionsSegment';
 import {
   buildEmployeeTurnRequest,
@@ -71,6 +73,7 @@ import {
   type LinkedItemIndexEntry,
 } from './teamPrompts';
 import {
+  CODE_EDIT_AGENT_NAME,
   EMPLOYEE_ONLY_TEAM_TOOLS,
   LEAD_ONLY_TEAM_TOOLS,
   TEAM_TOOL_DEFINITIONS,
@@ -265,6 +268,15 @@ export interface TeamRunCoordinatorOptions {
    * the owner's 5 s choice, and a test that waited it out would take 5 s per case.
    */
   mcpDiscoveryTimeoutMs?: number | undefined;
+  /**
+   * Phase 48 D-08: request-bound Agent Developer worktree target. Identity only; session start
+   * provisions the real worktree from it and no verb runs without the descriptor.
+   */
+  agentDeveloperWorktree?: {
+    sshConfigId: string;
+    remoteRepoPath: string;
+    baseRef?: string | undefined;
+  } | undefined;
   /**
    * Production seam (D-03): resolve a fresh roster from persisted rows at every turn start.
    * When supplied, no construction-time `lead`/`employees`/`skills` value reaches a turn.
@@ -1314,6 +1326,39 @@ export function createTeamRunCoordinator(
     return finalized;
   }
 
+  /** Request-bound provisioned worktree; set only after provisioning succeeds. */
+  const provisionedWorktrees = new Map<string, WorktreeDescriptor>();
+
+  /**
+   * Phase 48 D-08/D-09: session start owns provisioning. No activation until the descriptor
+   * with a real `remoteWorktreePath` exists; failure throws a truthful refusal.
+   */
+  async function provisionAgentSession(
+    agentId: string,
+    agentName: string | undefined
+  ): Promise<void> {
+    if (agentName !== CODE_EDIT_AGENT_NAME) return;
+    if (provisionedWorktrees.has(agentId)) return;
+    const target = options.agentDeveloperWorktree;
+    if (!target?.sshConfigId || !target.remoteRepoPath) {
+      throw new Error('WORKTREE_NOT_AVAILABLE: chưa cấu hình SSH worktree cho Agent Developer.');
+    }
+    const config = await getSshConfigById(target.sshConfigId, db);
+    if (!config) {
+      throw new Error('WORKTREE_NOT_AVAILABLE: SSH config của Agent Developer không tồn tại.');
+    }
+    const secret = (await getSshSecret(config.id)) ?? undefined;
+    const descriptor = await provisionWorktree({
+      sshConfigId: config.id,
+      config,
+      remoteRepoPath: target.remoteRepoPath,
+      sessionKey: agentId,
+      baseRef: target.baseRef,
+      secret,
+    });
+    provisionedWorktrees.set(agentId, requireProvisionedWorktree(descriptor));
+  }
+
   function toolContext(
     agentId: string,
     repoHints: readonly string[],
@@ -1348,6 +1393,16 @@ export function createTeamRunCoordinator(
       ...(signal ? { signal } : {}),
       ...(loopCallId ? { loopCallId } : {}),
       ...(repoHints.length > 0 ? { repoHints: [...repoHints] } : {}),
+      ...(agentName === CODE_EDIT_AGENT_NAME && options.agentDeveloperWorktree
+        ? { remoteTarget: {
+            sshConfigId: options.agentDeveloperWorktree.sshConfigId,
+            repoPath: options.agentDeveloperWorktree.remoteRepoPath,
+            branch: options.agentDeveloperWorktree.baseRef ?? '',
+          } }
+        : {}),
+      ...(provisionedWorktrees.get(agentId)
+        ? { worktreeDescriptor: provisionedWorktrees.get(agentId) }
+        : {}),
     };
   }
 
@@ -2263,6 +2318,10 @@ export function createTeamRunCoordinator(
         ...(folderId ? { folderId } : {}),
         mode,
       });
+
+      // D-08/D-09: provision BEFORE the turn is advertised or any verb can run. No descriptor
+      // means no active session — the catch path settles this agent with a truthful refusal.
+      await provisionAgentSession(employee.id, employee.name);
 
       const request: ChatTurnRequest = {
         ...prompt,

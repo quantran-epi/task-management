@@ -1,5 +1,8 @@
+use serde::Serialize;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use crate::agent_manager::hidden_std_command;
+use crate::ssh_service::{connect_and_auth, SshConfig};
 
 #[tauri::command]
 pub async fn list_worktree_files(worktree_path: String) -> Result<Vec<String>, String> {
@@ -110,4 +113,155 @@ pub async fn revert_hunk_diff(worktree_path: String, patch_content: String) -> R
     }
 
     Ok(())
+}
+
+// -------------------------------------------------------------------------------------------------
+// Phase 48 — SSH-native Agent Developer worktree provisioning.
+// No local fs / local git touches the worktree path: every command runs on the remote via SSH.
+// -------------------------------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeDescriptor {
+    pub ssh_config_id: String,
+    pub remote_repo_path: String,
+    pub remote_worktree_path: String,
+    pub branch: String,
+    pub base_ref: Option<String>,
+}
+
+/// Must stay byte-for-byte identical to the TS `deriveRemoteWorktreePath` sanitizer.
+fn worktree_safe_id(session_key: &str) -> String {
+    session_key
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '-' })
+        .take(40)
+        .collect()
+}
+
+fn derive_remote_worktree_path(remote_repo_path: &str, session_key: &str) -> String {
+    let root = remote_repo_path.trim().trim_end_matches('/');
+    format!("{}/.taskmate-worktrees/agent-developer-{}", root, worktree_safe_id(session_key))
+}
+
+fn derive_worktree_branch(session_key: &str) -> String {
+    format!("taskmate/agent-developer-{}", worktree_safe_id(session_key))
+}
+
+/// Single-quote an argument for the remote shell. Mirrors `shellQuote` in sshFsToolService.
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+struct RemoteOutput {
+    stdout: String,
+    stderr: String,
+    exit_status: i32,
+}
+
+/// Blocking SSH command. `build_remote_command` carries the payload as base64 so quoted
+/// arguments and `$()` survive intact. Never called with a local path.
+fn exec_remote(
+    config: &SshConfig,
+    secret: Option<&str>,
+    command: &str,
+) -> Result<RemoteOutput, String> {
+    let session = connect_and_auth(config, secret)?;
+    let mut channel = session
+        .channel_session()
+        .map_err(|e| format!("Không thể mở SSH channel: {}", e))?;
+    let remote_command = crate::tool_cancel::build_remote_command(command);
+    channel
+        .exec(&remote_command)
+        .map_err(|e| format!("Thực thi lệnh thất bại: {}", e))?;
+    let mut stdout = String::new();
+    let mut stderr = String::new();
+    channel
+        .read_to_string(&mut stdout)
+        .map_err(|e| format!("Đọc stdout thất bại: {}", e))?;
+    channel
+        .stderr()
+        .read_to_string(&mut stderr)
+        .map_err(|e| format!("Đọc stderr thất bại: {}", e))?;
+    let exit_status = channel.exit_status().unwrap_or(1) as i32;
+    Ok(RemoteOutput { stdout, stderr, exit_status })
+}
+
+#[tauri::command]
+pub async fn ssh_worktree_provision(
+    config: SshConfig,
+    secret: Option<String>,
+    remote_repo_path: String,
+    session_key: String,
+    base_ref: Option<String>,
+) -> Result<WorktreeDescriptor, String> {
+    let repo = remote_repo_path.trim().trim_end_matches('/').to_string();
+    if repo.is_empty() {
+        return Err("Đường dẫn repo remote trống.".to_string());
+    }
+    let worktree_path = derive_remote_worktree_path(&repo, &session_key);
+    let branch = derive_worktree_branch(&session_key);
+    let explicit_base = base_ref.filter(|s| !s.trim().is_empty());
+    let base = explicit_base.clone().unwrap_or_else(|| "HEAD".to_string());
+
+    let list = exec_remote(
+        &config,
+        secret.as_deref(),
+        &format!("git -C {} worktree list --porcelain", shell_quote(&repo)),
+    )?;
+    if list.exit_status != 0 {
+        return Err(format!("git worktree list thất bại: {}", list.stderr.trim()));
+    }
+    let registered = list
+        .stdout
+        .lines()
+        .any(|line| line.trim() == format!("worktree {}", worktree_path));
+
+    if !registered {
+        let add = exec_remote(
+            &config,
+            secret.as_deref(),
+            &format!(
+                "git -C {} worktree add -b {} {} {}",
+                shell_quote(&repo),
+                shell_quote(&branch),
+                shell_quote(&worktree_path),
+                shell_quote(&base)
+            ),
+        )?;
+        if add.exit_status != 0 {
+            return Err(format!("git worktree add thất bại: {}", add.stderr.trim()));
+        }
+    }
+
+    // realpath both, literal directory boundary, and exact deterministic path. Exit 77 is a
+    // policy refusal. Appending '/' preserves trailing newlines through command substitution.
+    let verify = format!(
+        "root=$(realpath -- {} && printf /) || exit 1; root=${{root%?}}; root=${{root%?}}; \
+         wt=$(realpath -- {} && printf /) || exit 1; wt=${{wt%?}}; wt=${{wt%?}}; \
+         expected=${{root%/}}/.taskmate-worktrees/agent-developer-{}; \
+         [ \"$wt\" = \"$expected\" ] || exit 77; \
+         case \"$wt\" in \"${{root%/}}/\"*) printf %s \"$wt\" ;; *) exit 78 ;; esac",
+        shell_quote(&repo),
+        shell_quote(&worktree_path),
+        worktree_safe_id(&session_key)
+    );
+    let checked = exec_remote(&config, secret.as_deref(), &verify)?;
+    if checked.exit_status == 77 {
+        return Err("Worktree path nằm ngoài repo hoặc sai quy ước deterministic.".to_string());
+    }
+    if checked.exit_status != 0 || checked.stdout.trim() != worktree_path {
+        return Err(format!(
+            "Không xác thực được worktree remote: {}",
+            checked.stderr.trim()
+        ));
+    }
+
+    Ok(WorktreeDescriptor {
+        ssh_config_id: config.id,
+        remote_repo_path: repo,
+        remote_worktree_path: worktree_path,
+        branch,
+        base_ref: explicit_base,
+    })
 }
