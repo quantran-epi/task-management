@@ -111,7 +111,8 @@ describe('confined worktree verbs', () => {
     await revertHunk(DESC, 'README.md', HUNK);
     const apply = execRemoteCommandMock.mock.calls[0]![1] as string;
     const revert = execRemoteCommandMock.mock.calls[1]![1] as string;
-    expect(apply).toContain('git apply -');
+    expect(apply).toContain('git apply --recount --cached -');
+    expect(apply).toContain('git commit -m');
     expect(apply).not.toContain('--reverse');
     expect(revert).toContain('git apply --reverse');
     for (const command of [apply, revert]) {

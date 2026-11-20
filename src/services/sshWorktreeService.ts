@@ -219,9 +219,15 @@ async function applyPatch(
   // apply path: base64 over a pipe, with only base64 alphabet inside shell quotes.
   const encoded = base64EncodeUtf8(patch);
   const config = await remoteContext(desc);
-  const args = reverse ? 'git apply --reverse -' : 'git apply -';
+  // WR-01: the diff is the working-tree change already present. "Accept" must STAGE that
+  // change and commit it (mirroring agent_manager.rs accept_patch_diff); a forward
+  // `git apply` against the working tree is a no-op failure. Revert stays a working-tree
+  // reverse apply. `--cached` touches only the index, not the working-tree bytes.
+  const args = reverse
+    ? 'git apply --reverse -'
+    : `git apply --recount --cached - && (git commit -m ${shellQuote('chore(coding-zone): accept hunk')} || git diff --cached --quiet)`;
   // `cd` runs in the shell first, then the pipe feeds git apply's stdin. Only base64
-  // alphabet appears inside shell quotes. Mirrors Rust apply_patch_remote exactly.
+  // alphabet appears inside shell quotes.
   const command = worktreeCommand(desc.remoteWorktreePath, `printf %s ${shellQuote(encoded)} | base64 -d | ${args}`);
   const res = await execRemoteCommand(config, command, secret);
   if (res.exitStatus !== 0) {
