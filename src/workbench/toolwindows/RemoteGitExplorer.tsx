@@ -222,6 +222,15 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
     if (activeRemoteRepoPath) setRepoPath(activeRemoteRepoPath);
   }, [activeRemoteConfigId, activeRemoteRepoPath]);
 
+  // Store → local branch sync, mirroring the target sync above. A cross-branch reveal sets the
+  // store branch; without this the local guard in the reveal effect never clears (T-quick-05).
+  const lastAppliedBranchRef = useRef<string>('');
+  useEffect(() => {
+    if (lastAppliedBranchRef.current === activeRemoteBranch) return;
+    lastAppliedBranchRef.current = activeRemoteBranch;
+    if (activeRemoteBranch) setSelectedBranch(activeRemoteBranch);
+  }, [activeRemoteBranch]);
+
   const selectedConfig = sshConfigs.find((c) => c.id === selectedConfigId);
 
   const [uncommittedFiles, setUncommittedFiles] = useState<
@@ -591,7 +600,9 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
       openRemoteFile(result.path, result.name, { size: result.size });
       return;
     }
-    // Folders have no file tab: reveal the folder node in the tree.
+    // Folders have no file tab: reveal the folder node in the tree. Clear the global query so
+    // the results panel unmounts and the Tree is visible for the reveal (T-quick-05).
+    setGlobalQuery('');
     setSearchInput('');
     setGrepHits([]);
     hasSearchedRef.current = false;
@@ -631,6 +642,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
 
   // Reveal an already-open remote file in the tree. The target comes from a remote tab; its path
   // is passed only to the confined getRemoteTree service, never to a shell command (T-quick-01).
+  const revealInFlightRef = useRef<string | null>(null);
   useEffect(() => {
     const target = pendingRevealTarget;
     if (!target || sshConfigs.length === 0) return; // wait until configs resolve before judging staleness
@@ -649,8 +661,10 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
       (target.branch && target.branch !== selectedBranch)
     ) {
       // Different target: align the explorer first; the pending request survives for the
-      // follow-up render once the matching root tree is loaded.
+      // follow-up render once the matching root tree is loaded. Sync local branch too, so the
+      // alignment guard above clears instead of awaiting a store echo that never reaches us.
       setSelectedConfigId(alignedConfig);
+      if (target.branch) setSelectedBranch(target.branch);
       setActiveRemoteTarget(
         alignedConfig,
         target.repoPath.trim(),
@@ -660,6 +674,12 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
     }
     if (!selectedConfig || !normalizedPath || !repoPath.trim() || !selectedBranch) return;
     if (treeData.length === 0) return; // wait for the root tree of this target to load
+
+    // The effect depends on treeData, which the reveal itself updates. Guard by target identity so
+    // the state update cannot re-enter the reveal and re-fetch the same ancestors (T-quick-08).
+    const flightKey = `${alignedConfig}|${repoPath.trim()}|${selectedBranch}|${normalizedPath}`;
+    if (revealInFlightRef.current === flightKey) return;
+    revealInFlightRef.current = flightKey;
 
     const segments = normalizedPath.split('/').filter(Boolean);
     const ancestors: string[] = [];
@@ -681,6 +701,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         const secret = await getSshSecret(selectedConfig.id);
         let currentTree = treeData;
         for (const ancestor of ancestorPaths) {
+          if (cancelled) return;
           if (findTreeNode(currentTree, ancestor)?.children) continue;
           const rawChildren = await getRemoteTree(
             selectedConfig,
@@ -689,12 +710,13 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
             ancestor,
             secret ?? undefined
           );
+          if (cancelled) return;
           const merged = mergeUncommittedFilesIntoTree(rawChildren, uncommittedFiles, ancestor);
           const nodes = merged.map(mapTreeNodeToDataNode);
           currentTree = injectTreeChildren(currentTree, ancestor, nodes);
-          setTreeData(currentTree);
         }
         if (cancelled) return;
+        setTreeData(currentTree); // one update, after all ancestors are materialized
         setExpandedKeys(ancestors);
         setSelectedKeys([normalizedPath]);
       } catch (err: any) {
@@ -702,11 +724,13 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         setError(err?.message || `Failed to reveal ${normalizedPath}`);
       } finally {
         if (!cancelled) consumePendingRevealTarget();
+        if (revealInFlightRef.current === flightKey) revealInFlightRef.current = null;
       }
     };
     void reveal();
     return () => {
       cancelled = true;
+      if (revealInFlightRef.current === flightKey) revealInFlightRef.current = null;
     };
   }, [
     pendingRevealTarget,

@@ -494,4 +494,119 @@ describe('RemoteGitExplorer Component', () => {
     fireEvent.change(input, { target: { value: 'anything' } });
     expect(searchSpy).not.toHaveBeenCalled();
   });
+
+  it('consumes a cross-branch pending reveal by syncing local selectedBranch from the store', async () => {
+    act(() => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
+    });
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteGitExplorer />
+      </AntdThemeAdapter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('package.json')).toBeDefined();
+    });
+
+    act(() => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'feat/test');
+      (useLayoutStore.getState() as any).setPendingRevealTarget?.({
+        configId: 'ssh-1',
+        repoPath: '/home/dev/my-repo',
+        branch: 'feat/test',
+        filePath: 'src/index.ts',
+      });
+    });
+
+    await waitFor(() => {
+      expect(gitRemoteTreeService.getRemoteTree).toHaveBeenCalledWith(
+        mockSshConfigs[0], '/home/dev/my-repo', 'feat/test', 'src', 'secret-123'
+      );
+    });
+    await waitFor(() => {
+      expect((useLayoutStore.getState() as any).pendingRevealTarget).toBeNull();
+    });
+  });
+
+  it('activating a global-search folder result hides the results panel and reveals the tree', async () => {
+    act(() => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
+    });
+    vi.spyOn(gitRemoteTreeService, 'searchRemoteTree').mockResolvedValue([
+      { path: 'src/nested', name: 'nested', type: 'folder', matchStart: 0, matchLength: 6 },
+    ]);
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteGitExplorer />
+      </AntdThemeAdapter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('package.json')).toBeDefined();
+    });
+
+    fireEvent.change(screen.getByTestId('global-search-input'), { target: { value: 'nested' } });
+    const folderHit = await screen.findByTestId('global-search-hit-folder');
+    fireEvent.click(folderHit);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('global-search-results')).toBeNull();
+    });
+    expect(screen.getByText('package.json')).toBeDefined(); // tree is visible again
+    // The folder reveal runs against the aligned tree and consumes the pending target.
+    await waitFor(() => {
+      expect(gitRemoteTreeService.getRemoteTree).toHaveBeenCalledWith(
+        mockSshConfigs[0], '/home/dev/my-repo', 'main', 'src', 'secret-123'
+      );
+    });
+    await waitFor(() => {
+      expect((useLayoutStore.getState() as any).pendingRevealTarget).toBeNull();
+    });
+  });
+
+  it('fetches each ancestor exactly once for a multi-level reveal', async () => {
+    vi.spyOn(gitRemoteTreeService, 'getRemoteTree').mockImplementation(async (_cfg, _repo, _ref, dirPath) => {
+      if (!dirPath) {
+        return [{ key: 'src', title: 'src', isLeaf: false, sha: 'tree-1' }];
+      }
+      if (dirPath === 'src') {
+        return [{ key: 'src/nested', title: 'nested', isLeaf: false, sha: 'tree-2' }];
+      }
+      if (dirPath === 'src/nested') {
+        return [{ key: 'src/nested/deep.ts', title: 'deep.ts', isLeaf: true, size: 10, sha: 'blob-1' }];
+      }
+      return [];
+    });
+    act(() => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
+      (useLayoutStore.getState() as any).setPendingRevealTarget?.({
+        configId: 'ssh-1',
+        repoPath: '/home/dev/my-repo',
+        branch: 'main',
+        filePath: 'src/nested/deep.ts',
+      });
+    });
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteGitExplorer />
+      </AntdThemeAdapter>
+    );
+
+    await waitFor(() => {
+      const node = screen.getByText('deep.ts').closest('.ant-tree-treenode');
+      expect(node?.className).toContain('ant-tree-treenode-selected');
+    });
+    // Let any re-entrant effect settle before asserting call counts.
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const calls = (gitRemoteTreeService.getRemoteTree as any).mock.calls as any[][];
+    expect(calls.filter((c) => c[3] === 'src').length).toBe(1);
+    expect(calls.filter((c) => c[3] === 'src/nested').length).toBe(1);
+  });
 });
