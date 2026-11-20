@@ -255,8 +255,9 @@ export interface TeamRunCoordinatorOptions {
   /** Test seam: production omits it and the coordinator uses the default chat-turn deps. */
   createRuntimeDeps?: ((agentId: string) => Partial<ChatTurnRuntimeDeps>) | undefined;
   /**
-   * Test seam (WR-05): the bounded settle-poll deadline. Production omits it — the 120 s
-   * default is what stops a row that can never settle from hanging the team turn forever.
+   * Test seam (WR-05): the bounded settle-poll deadline. Production omits it — the
+   * 30-minute `DEFAULT_SETTLE_POLL_DEADLINE_MS` default is what stops a row that can never
+   * settle from hanging the team turn forever.
    */
   settlePollDeadlineMs?: number | undefined;
   /**
@@ -393,6 +394,12 @@ let stepSeq = 0;
  * choice — the popover scrolls, so a real run's steps all fit within it.
  */
 export const MAX_LIVE_STEPS = 200;
+
+/**
+ * WR-05: bounded settle-poll deadline. Production default; a row that can never settle is
+ * finalized when this expires. 30 min so a 20-40 turn `explore_repo` run is not cut short.
+ */
+export const DEFAULT_SETTLE_POLL_DEADLINE_MS = 1_800_000;
 
 /**
  * Global (not per-agent) step cap: N agents × 200 would still grow without bound. After a
@@ -3605,7 +3612,7 @@ export function createTeamRunCoordinator(
       // Ledger poll (Pitfall 5): a cancelled queued row may never have had a deferred.
       // WR-09: bounded — a row that can never settle must not hang the team turn forever
       // (`finishTurn` would never fire and every later submit would wait on the log).
-      const deadline = Date.now() + (options.settlePollDeadlineMs ?? 120_000);
+      const deadline = Date.now() + (options.settlePollDeadlineMs ?? DEFAULT_SETTLE_POLL_DEADLINE_MS);
       let deadlineExpired = false;
       while (!disposed && !batchController?.signal.aborted) {
         const rows = await listBatchAssignments(batchId, db);
