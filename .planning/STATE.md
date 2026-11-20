@@ -4,7 +4,7 @@ milestone: v1.4
 milestone_name: Unified AI Office
 status: executing
 stopped_at: Phase 48 UI-SPEC approved
-last_updated: "2026-11-20T18:31:57.914Z"
+last_updated: "2026-11-20T18:55:08.232Z"
 last_activity: 2026-11-20 -- Phase 48 execution started
 progress:
   total_phases: 10
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 48 (agent-developer-workbench-ssh-worktree-coding-zone-popout-hu) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 48
+Plan: 2 of 4
+Status: Ready to execute
 Last activity: 2026-11-20 -- Phase 48 execution started
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
@@ -57,7 +57,7 @@ Verification: 392 focused tests pass (9 files), `tsc --noEmit` clean. Full suite
 
 ## Session Continuity
 
-Last session: 2026-11-20T18:04:48.812Z
+Last session: 2026-11-20T18:55:08.225Z
 Stopped at: Phase 48 UI-SPEC approved
 Resume file: .planning/phases/48-agent-developer-workbench-ssh-worktree-coding-zone-popout-hu/48-UI-SPEC.md
 
@@ -286,6 +286,8 @@ Progress: [█████████░] 91%
 - [Phase 46]: Import card defers all db use to preview/apply so rendering the Settings data tab cannot interfere with GitHub sync live queries
 - [Phase ?]: Draft blue #2f62d8 canonical; Fontsource default per-weight CSS bundles Vietnamese offline; workbench-tokens.css single source
 - [Phase 46.1]: Combined gate uses --bail=1 not -x: Vitest 5.0.2 rejects -x; fail-fast preserved, 12 files/126 tests green, no full suite.
+- [Phase 48]: Agent Developer worktree provisioning owns real remoteWorktreePath at session start; no repoPath fallback — Prevents main-checkout writes (D-08/D-09)
+- [Phase 48]: code_edit role-gated to Agent Developer with request-bound descriptor; model paths never select worktree — ASVS privilege/tampering mitigation (D-07/D-10)
 
 ## Performance Metrics
 
@@ -334,3 +336,4 @@ Progress: [█████████░] 91%
 | Phase 46 P03 | 53min | 2 tasks | 8 files |
 | Phase 46.1 P04 | 15min | 3 tasks | 11 files |
 | Phase 46.1 P05 | 3min | 2 tasks | 1 files |
+| Phase 48 P01 | 21min | 3 tasks | 12 files |
