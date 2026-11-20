@@ -40,6 +40,14 @@ export interface PendingTerminalTarget {
   repoPath: string;
 }
 
+/** Transient one-shot request to reveal an SSH-remote file/folder inside the left explorer. */
+export interface PendingRevealTarget {
+  configId: string | null;
+  repoPath: string;
+  branch: string;
+  filePath: string;
+}
+
 export interface LayoutStateValues {
   leftActiveId: string | null;
   rightActiveId: string | null;
@@ -55,6 +63,8 @@ export interface LayoutStateValues {
   isBottomMaximized: boolean;
   /** Transient 1-click Terminal request. Deliberately not persisted (T-31.2-19). */
   pendingTerminalTarget: PendingTerminalTarget | null;
+  /** Transient 1-shot reveal request. Deliberately not persisted. */
+  pendingRevealTarget: PendingRevealTarget | null;
   /** Transient per-tab reload counter. Deliberately not persisted. */
   tabReloadKeys: Record<string, number>;
 }
@@ -78,6 +88,8 @@ export interface LayoutActions {
   setActiveRemoteBranch: (branch: string) => void;
   setPendingTerminalTarget: (target: PendingTerminalTarget | null) => void;
   consumePendingTerminalTarget: () => PendingTerminalTarget | null;
+  setPendingRevealTarget: (target: PendingRevealTarget | null) => void;
+  consumePendingRevealTarget: () => PendingRevealTarget | null;
   resetLayout: () => void;
 }
 
@@ -103,6 +115,7 @@ export const DEFAULT_LAYOUT_STATE: LayoutStateValues = {
   activeRemoteBranch: '',
   isBottomMaximized: false,
   pendingTerminalTarget: null,
+  pendingRevealTarget: null,
   tabReloadKeys: {},
 };
 
@@ -350,6 +363,16 @@ export const useLayoutStore = create<LayoutState>()(
       consumePendingTerminalTarget: (): PendingTerminalTarget | null => {
         const target = get().pendingTerminalTarget;
         if (target) set(() => ({ pendingTerminalTarget: null }));
+        return target;
+      },
+
+      setPendingRevealTarget: (target: PendingRevealTarget | null) => {
+        set(() => ({ pendingRevealTarget: target }));
+      },
+
+      consumePendingRevealTarget: (): PendingRevealTarget | null => {
+        const target = get().pendingRevealTarget;
+        if (target) set(() => ({ pendingRevealTarget: null }));
         return target;
       },
 

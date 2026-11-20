@@ -404,7 +404,7 @@ describe('RemoteGitExplorer Component', () => {
     // Child renders (ancestor expanded) and is the selected tree node.
     await waitFor(() => {
       const node = screen.getByText('index.ts').closest('.ant-tree-treenode');
-      expect(node?.className).toContain('ant-tree-node-selected');
+      expect(node?.className).toContain('ant-tree-treenode-selected');
     });
 
     expect((useLayoutStore.getState() as any).pendingRevealTarget).toBeNull();

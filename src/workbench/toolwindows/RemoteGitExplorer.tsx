@@ -118,6 +118,32 @@ function formatBytes(bytes?: number): string {
   return `${formatted} ${sizes[i]}`;
 }
 
+/** Replace children of the node matching `targetKey`, leaving all sibling branches intact. */
+function injectTreeChildren(
+  nodes: CustomTreeNodeData[],
+  targetKey: string,
+  children: CustomTreeNodeData[]
+): CustomTreeNodeData[] {
+  return nodes.map((item) => {
+    if (item.key === targetKey) return { ...item, children };
+    if (item.children) {
+      return { ...item, children: injectTreeChildren(item.children as CustomTreeNodeData[], targetKey, children) };
+    }
+    return item;
+  });
+}
+
+function findTreeNode(nodes: CustomTreeNodeData[], key: string): CustomTreeNodeData | undefined {
+  for (const node of nodes) {
+    if (node.key === key) return node;
+    if (node.children) {
+      const found = findTreeNode(node.children as CustomTreeNodeData[], key);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
 export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
   const openTab = useLayoutStore((s) => s.openTab);
   const activeRemoteConfigId = useLayoutStore((s) => s.activeRemoteConfigId);
@@ -125,6 +151,8 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
   const activeRemoteBranch = useLayoutStore((s) => s.activeRemoteBranch);
   const setActiveRemoteTarget = useLayoutStore((s) => s.setActiveRemoteTarget);
   const setActiveRemoteBranch = useLayoutStore((s) => s.setActiveRemoteBranch);
+  const pendingRevealTarget = useLayoutStore((s) => s.pendingRevealTarget);
+  const consumePendingRevealTarget = useLayoutStore((s) => s.consumePendingRevealTarget);
 
   const [sshConfigs, setSshConfigs] = useState<SshConfig[]>([]);
   const [selectedConfigId, setSelectedConfigId] = useState<string | null>(activeRemoteConfigId);
@@ -134,6 +162,8 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
   const [selectedBranch, setSelectedBranch] = useState<string>(activeRemoteBranch || '');
   const [loadingBranches, setLoadingBranches] = useState<boolean>(false);
   const [treeData, setTreeData] = useState<CustomTreeNodeData[]>([]);
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
   const [loadingTree, setLoadingTree] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   // Phase 47 search state — scoped to the active target above; never a new target picker (D-02).
@@ -368,25 +398,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         node.key as string
       );
       const childrenNodes: CustomTreeNodeData[] = mergedChildren.map(mapTreeNodeToDataNode);
-      const updateTreeNodes = (list: CustomTreeNodeData[]): CustomTreeNodeData[] => {
-        return list.map((item) => {
-          if (item.key === node.key) {
-            return {
-              ...item,
-              children: childrenNodes,
-            };
-          }
-          if (item.children) {
-            return {
-              ...item,
-              children: updateTreeNodes(item.children as CustomTreeNodeData[]),
-            };
-          }
-          return item;
-        });
-      };
-
-      setTreeData((prev) => updateTreeNodes(prev));
+      setTreeData((prev) => injectTreeChildren(prev, node.key as string, childrenNodes));
     } catch (err: any) {
       setError(err?.message || `Failed to expand folder ${node.key}`);
     }
@@ -423,7 +435,8 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
     });
   };
 
-  const handleSelectNode = (_selectedKeys: any, info: any) => {
+  const handleSelectNode = (keys: any, info: any) => {
+    setSelectedKeys((keys as string[]) ?? []);
     const node = info.node as CustomTreeNodeData;
     if (!node.isLeaf || !selectedConfig) return;
 
@@ -517,6 +530,99 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
     setGrepTruncated(false);
     hasSearchedRef.current = false;
   };
+
+  // Reveal an already-open remote file in the tree. The target comes from a remote tab; its path
+  // is passed only to the confined getRemoteTree service, never to a shell command (T-quick-01).
+  useEffect(() => {
+    const target = pendingRevealTarget;
+    if (!target || sshConfigs.length === 0) return; // wait until configs resolve before judging staleness
+    const normalizedPath = target.filePath.trim();
+    const knownConfig =
+      target.configId === null || sshConfigs.some((c) => c.id === target.configId);
+    if (!knownConfig) {
+      // Unknown target: discard it instead of selecting an arbitrary node.
+      consumePendingRevealTarget();
+      return;
+    }
+    const alignedConfig = target.configId ?? selectedConfigId;
+    if (
+      alignedConfig !== selectedConfigId ||
+      target.repoPath.trim() !== repoPath.trim() ||
+      (target.branch && target.branch !== selectedBranch)
+    ) {
+      // Different target: align the explorer first; the pending request survives for the
+      // follow-up render once the matching root tree is loaded.
+      setSelectedConfigId(alignedConfig);
+      setActiveRemoteTarget(
+        alignedConfig,
+        target.repoPath.trim(),
+        target.branch || selectedBranch
+      );
+      return;
+    }
+    if (!selectedConfig || !normalizedPath || !repoPath.trim() || !selectedBranch) return;
+    if (treeData.length === 0) return; // wait for the root tree of this target to load
+
+    const segments = normalizedPath.split('/').filter(Boolean);
+    const ancestors: string[] = [];
+    const ancestorPaths: string[] = [];
+    for (let i = 0; i < segments.length - 1; i++) {
+      const parent = ancestorPaths[i - 1];
+      const path = parent ? `${parent}/${segments[i]}` : segments[i]!;
+      ancestorPaths.push(path);
+      ancestors.push(path);
+    }
+
+    let cancelled = false;
+    const reveal = async () => {
+      try {
+        setSearchInput('');
+        setGrepHits([]);
+        setGrepTruncated(false);
+        hasSearchedRef.current = false;
+        const secret = await getSshSecret(selectedConfig.id);
+        let currentTree = treeData;
+        for (const ancestor of ancestorPaths) {
+          if (findTreeNode(currentTree, ancestor)?.children) continue;
+          const rawChildren = await getRemoteTree(
+            selectedConfig,
+            repoPath.trim(),
+            selectedBranch,
+            ancestor,
+            secret ?? undefined
+          );
+          const merged = mergeUncommittedFilesIntoTree(rawChildren, uncommittedFiles, ancestor);
+          const nodes = merged.map(mapTreeNodeToDataNode);
+          currentTree = injectTreeChildren(currentTree, ancestor, nodes);
+          setTreeData(currentTree);
+        }
+        if (cancelled) return;
+        setExpandedKeys(ancestors);
+        setSelectedKeys([normalizedPath]);
+      } catch (err: any) {
+        if (cancelled) return;
+        setError(err?.message || `Failed to reveal ${normalizedPath}`);
+      } finally {
+        if (!cancelled) consumePendingRevealTarget();
+      }
+    };
+    void reveal();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    pendingRevealTarget,
+    selectedConfig,
+    selectedConfigId,
+    repoPath,
+    selectedBranch,
+    treeData,
+    uncommittedFiles,
+    sshConfigs,
+    setActiveRemoteTarget,
+    consumePendingRevealTarget,
+    mapTreeNodeToDataNode,
+  ]);
 
   return (
     <div
@@ -766,7 +872,10 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
               motion={false as any}
               loadData={onLoadData}
               treeData={treeData}
+              selectedKeys={selectedKeys}
+              expandedKeys={expandedKeys}
               onSelect={handleSelectNode}
+              onExpand={(keys) => setExpandedKeys(keys as string[])}
               showIcon
               blockNode
               style={{

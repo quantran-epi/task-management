@@ -9,6 +9,7 @@ import {
   ReloadOutlined,
   LockOutlined,
   ApartmentOutlined,
+  FolderViewOutlined,
 } from '@ant-design/icons';
 import type { SshConfig } from '../../types/ssh';
 import { getRemoteFileContent } from '../../services/gitRemoteTreeService';
@@ -17,6 +18,7 @@ import { extractMermaidBlocks, saveDiagramToStudio, openDiagramInStudio } from '
 import { DiffLineCodeRenderer } from '../../components/common/DiffSyntaxHighlighter';
 import { deriveRemoteTargetUuid } from '../../utils/remoteTarget';
 import { useAIChat } from '../../context/AIChatContext';
+import { useLayoutStore } from '../store/layoutStore';
 
 export interface RemoteFileViewerProps {
   config?: SshConfig;
@@ -129,6 +131,19 @@ export function RemoteFileViewer({
     } catch {
       message.error('Failed to copy path');
     }
+  };
+
+  const canReveal = Boolean(config && repoPath.trim() && filePath.trim());
+  const handleRevealInExplorer = () => {
+    if (!canReveal) return;
+    const layout = useLayoutStore.getState();
+    layout.setPendingRevealTarget({
+      configId: config?.id ?? null,
+      repoPath: repoPath.trim(),
+      branch,
+      filePath: filePath.trim(),
+    });
+    layout.setToolWindowActive('left', 'remote_explorer');
   };
 
   // Save extracted Mermaid diagram to Diagram Studio
@@ -294,6 +309,18 @@ export function RemoteFileViewer({
               disabled={content === null}
             >
               Copy Content
+            </Button>
+          </Tooltip>
+
+          <Tooltip title="Hiện trong Explorer">
+            <Button
+              size="small"
+              icon={<FolderViewOutlined />}
+              onClick={handleRevealInExplorer}
+              disabled={!canReveal}
+              data-testid="reveal-in-explorer-btn"
+            >
+              Reveal
             </Button>
           </Tooltip>
 
