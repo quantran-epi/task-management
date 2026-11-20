@@ -403,30 +403,39 @@ export function FindInRemoteFiles(props: FindInRemoteFilesProps) {
         </div>
 
         <div className="find-scopes">
-          <Tabs
-            size="small"
-            activeKey={mode}
-            onChange={(key) => setMode(key as Mode)}
-            items={[
-              { key: 'content', label: 'Content' },
-              { key: 'files', label: 'Files' },
-              { key: 'folders', label: 'Folders' },
-            ]}
-          />
-          <Tabs
-            size="small"
-            activeKey={scope}
-            onChange={(key) => setScope(key as Scope)}
-            items={[
-              { key: 'whole-ref', label: 'Whole ref' },
-              { key: 'directory', label: 'Directory' },
-            ]}
-          />
-          <span className="find-scopeval">
-            <span data-testid="find-seed-config">{configId}</span>
-            <span data-testid="find-seed-repo">{repoPath}</span>
-            <span data-testid="find-seed-branch">{branch}</span>
-            {repoPath} / {branch}
+          <div className="find-axis" role="group" aria-label="Find mode">
+            <span className="find-axis-label">Mode</span>
+            <Tabs
+              size="small"
+              activeKey={mode}
+              onChange={(key) => setMode(key as Mode)}
+              items={[
+                { key: 'content', label: 'Content' },
+                { key: 'files', label: 'Files' },
+                { key: 'folders', label: 'Folders' },
+              ]}
+            />
+          </div>
+          <div className="find-axis" role="group" aria-label="Search scope">
+            <span className="find-axis-label">Scope</span>
+            <Tabs
+              size="small"
+              activeKey={scope}
+              onChange={(key) => setScope(key as Scope)}
+              items={[
+                { key: 'whole-ref', label: 'Toàn bộ nhánh' },
+                { key: 'directory', label: 'Trong thư mục' },
+              ]}
+            />
+          </div>
+          <span
+            className="find-scopeval"
+            data-testid="find-seed"
+            data-config-id={configId ?? ''}
+            data-repo-path={repoPath}
+            data-branch={branch}
+          >
+            {repoPath && branch ? `${repoPath} / ${branch}` : 'No active remote target'}
           </span>
         </div>
 

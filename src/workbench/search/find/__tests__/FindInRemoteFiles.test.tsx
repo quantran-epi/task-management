@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { FindInRemoteFiles } from '../FindInRemoteFiles';
 import { useLayoutStore } from '../../../store/layoutStore';
@@ -70,9 +71,11 @@ describe('FindInRemoteFiles — entry, seed, modes, debounce and Enter (Task 1)'
     for (const tab of ['Content', 'Files', 'Folders']) {
       expect(screen.getByRole('tab', { name: tab })).toBeDefined();
     }
-    for (const tab of ['Whole ref', 'Directory']) {
+    for (const tab of ['Toàn bộ nhánh', 'Trong thư mục']) {
       expect(screen.getByRole('tab', { name: tab })).toBeDefined();
     }
+    expect(screen.getByRole('group', { name: 'Find mode' })).toBeDefined();
+    expect(screen.getByRole('group', { name: 'Search scope' })).toBeDefined();
     expect(screen.getByRole('textbox', { name: 'File mask' })).toBeDefined();
     for (const toggle of ['Match Case', 'Words', 'Regex']) {
       expect(screen.getByRole('checkbox', { name: toggle })).toBeDefined();
@@ -81,12 +84,20 @@ describe('FindInRemoteFiles — entry, seed, modes, debounce and Enter (Task 1)'
     expect(screen.queryByRole('tab', { name: 'Scope' })).toBeNull();
   });
 
-  it('seeds from layoutStore active remote config / repo / branch', () => {
+  it('seeds from layoutStore active remote config / repo / branch as provenance data attributes', () => {
     render(<FindInRemoteFiles />);
 
-    expect(screen.getByTestId('find-seed-config')).toHaveTextContent(CONFIG.id);
-    expect(screen.getByTestId('find-seed-repo')).toHaveTextContent('/srv/repo');
-    expect(screen.getByTestId('find-seed-branch')).toHaveTextContent('main');
+    const seed = screen.getByTestId('find-seed');
+    const layout = useLayoutStore.getState();
+    expect(seed.dataset.configId).toBe(layout.activeRemoteConfigId);
+    expect(seed.dataset.repoPath).toBe(layout.activeRemoteRepoPath);
+    expect(seed.dataset.branch).toBe(layout.activeRemoteBranch);
+    // One short visible label; no raw UUID or concatenated diagnostic text in the DOM text.
+    expect(seed.textContent).toBe('/srv/repo / main');
+    expect(seed.textContent).not.toContain(CONFIG.id);
+    expect(screen.queryByTestId('find-seed-config')).toBeNull();
+    expect(screen.queryByTestId('find-seed-repo')).toBeNull();
+    expect(screen.queryByTestId('find-seed-branch')).toBeNull();
   });
 
   it('debounces 150 ms, calls session.search with an untransformed RemoteQuery; deps.start calls grepRemoteRef with limit 2000', async () => {
@@ -504,6 +515,25 @@ describe('FindInRemoteFiles — entry, seed, modes, debounce and Enter (Task 1)'
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('find.css pins non-wrapping fields and bounded, horizontally-scrolling result/preview rules (BUG-05/06)', () => {
+    const css = readFileSync('src/workbench/search/find/find.css', 'utf8');
+
+    // Fields: Pattern keeps usable width when Directory scope is shown.
+    expect(css).toMatch(/\.find-fields\s*\{[^}]*flex-wrap:\s*nowrap/);
+    expect(css).toMatch(/\.find-fields\s*\{[^}]*min-width:\s*0/);
+    expect(css).toMatch(/\.find-pattern\s*\{[^}]*flex:\s*1 1 auto[^}]*min-width:\s*160px/);
+    expect(css).toMatch(/\.find-directory\s*\{[^}]*flex:\s*0 1 220px[^}]*min-width:\s*140px/);
+    // Result rows ellipsize; never push the modal wider.
+    expect(css).toMatch(/\.find-results\s*\{[^}]*overflow-x:\s*hidden/);
+    expect(css).toMatch(/\.find-rrow\s*>\s*\*\s*\{\s*min-width:\s*0/);
+    expect(css).toMatch(/\.find-rcode\s*\{[^}]*min-width:\s*0[^}]*overflow:\s*hidden[^}]*text-overflow:\s*ellipsis/);
+    // Preview: min-height + horizontal scroll keep source on one line, gutter separated.
+    expect(css).toMatch(/\.find-cline\s*\{[^}]*min-height:\s*var\(--find-code-line-height[^}]*height:\s*auto/);
+    expect(css).toMatch(/\.find-source\s*\{[^}]*white-space:\s*pre[^}]*overflow-x:\s*auto/);
+    expect(css).toMatch(/\.find-lno\s*\{[^}]*box-sizing:\s*border-box[^}]*padding-right:\s*10px/);
+    expect(css).not.toContain('!important');
   });
 
   it('Files rows show the tree entry size as count when available', async () => {
