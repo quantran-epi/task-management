@@ -4,7 +4,7 @@ milestone: v1.4
 milestone_name: Unified AI Office
 status: executing
 stopped_at: Phase 46.1 UI-SPEC approved
-last_updated: "2026-11-20T12:36:09.284Z"
+last_updated: "2026-11-20T12:55:08.026Z"
 last_activity: 2026-11-20 -- Phase 46.1 execution started
 progress:
   total_phases: 10
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 46.1 (unified-remote-file-search-and-workbench-visual-tokens-find) — EXECUTING
-Plan: 1 of 5
-Status: Executing Phase 46.1
+Plan: 2 of 5
+Status: Ready to execute
 Last activity: 2026-11-20 -- Phase 46.1 execution started
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
@@ -57,7 +57,7 @@ Verification: 392 focused tests pass (9 files), `tsc --noEmit` clean. Full suite
 
 ## Session Continuity
 
-Last session: 2026-11-20T07:40:14.811Z
+Last session: 2026-11-20T12:54:39.301Z
 Stopped at: Phase 46.1 UI-SPEC approved
 Resume file: .planning/phases/46.1-unified-remote-file-search-and-workbench-visual-tokens-find/46.1-UI-SPEC.md
 
@@ -281,6 +281,7 @@ Progress: [█████░░░░░] 50%
 - [Phase 46]: Profile import flags the full catalog of secrets and machine-specific fields, never filters to fields present in a file
 - [Phase 46]: SettingsView test uses one uniquely named Dexie instance per file (beforeAll/afterAll, cleared per test) to eliminate late useLiveQuery DatabaseClosedError
 - [Phase 46]: Import card defers all db use to preview/apply so rendering the Settings data tab cannot interfere with GitHub sync live queries
+- [Phase ?]: Draft blue #2f62d8 canonical; Fontsource default per-weight CSS bundles Vietnamese offline; workbench-tokens.css single source
 
 ## Performance Metrics
 
@@ -327,3 +328,4 @@ Progress: [█████░░░░░] 50%
 | Phase 46 P01 | 6min | 3 tasks | 11 files |
 | Phase 46 P02 | 11min | 2 tasks | 10 files |
 | Phase 46 P03 | 53min | 2 tasks | 8 files |
+| Phase 46.1 P04 | 15min | 3 tasks | 11 files |

@@ -357,13 +357,16 @@ Plans:
 
 Plans:
 **Wave 1**
+
 - [ ] 44-01-PLAN.md — make explore_repo timeoutSeconds clamp 60..900/default 300 flow to the existing watchdog
 - [ ] 44-02-PLAN.md — add additive step fields and id-based call+result upsert with capped previews and payload status
 
 **Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 44-03-PLAN.md — build the right-side Agent Activity Panel and migrate Debug Prompt into the Prompt log tab
 
 **Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 44-04-PLAN.md — run combined tests/typecheck, code+UI reviews, observed Tauri walkthrough, and one phase push
 
 ### Phase 45: Knowledge Sets, Docs Workspace, Oracle Connections & Team Pinned Context
@@ -397,13 +400,16 @@ Plans:
 
 Plans:
 **Wave 1**
+
 - [x] 46-01-PLAN.md — Tracer: schema/defaults/catalog + export/import lõi, round-trip secret-blank end-to-end, denylist profile khỏi backup (D-01..D-07)
 
 **Wave 2** *(blocked on Wave 1 completion)*
+
 - [x] 46-02-PLAN.md — Màn hình soạn từ defaults + named profile CRUD + export một-click + đăng ký route workbench/hash (D-01..D-07)
 - [x] 46-03-PLAN.md — Import card + preview confirm-gated + post-import checklist trong Settings data tab, không thêm tab thứ 7 (D-03, D-04, D-05, D-06)
 
 **Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 46-04-PLAN.md — Cổng focused test + typecheck, ký duyệt Nyquist, walkthrough Tauri quan sát được (C-15)
 
 ## Milestone: v1.2 Knowledge System Implementation
@@ -412,6 +418,7 @@ Plans:
 
 **Goal:** Replace scattered SSH Remote Explorer search with one Find in Remote Files dialog modeled on OpenIdea/IntelliJ, make the remote folder tree compact for deep dependency paths, and promote the approved draft's typography, palette and compact control styling into shared workbench tokens used across TaskMate.
 **Requirements**:
+
 1. One `Ctrl/Cmd+Shift+F` Find in Remote Files surface with Content / Files / Folders modes, scope controls, file mask and search options, replacing the three separate Remote Git Explorer search inputs.
 2. Two-pane result experience: virtualized result rows showing highlighted code plus `path:line`, and a bottom preview that follows arrow selection, scrolls the active line into view and highlights all matches in the file.
 3. Remote search correctness: scoped `git grep` / `git ls-tree`, 150 ms debounce, sequence-based stale guards, real SSH cancellation, bounded results, binary/large-file handling and truthful error states.
@@ -419,6 +426,7 @@ Plans:
 5. Shared visual system: bundle Inter and IBM Plex Mono with Vietnamese subsets for offline Tauri use; centralize the approved light/dark palette, font roles, row/control sizes, hover/selection and match styling as tokens; remove hardcoded colors in the touched surfaces.
 
 **Success Criteria**:
+
   1. Remote search modes share one input/state machine; stale and cancelled runs cannot overwrite current results.
   2. Arrow navigation updates the preview and Enter opens the remote file at the exact match line.
   3. Deep single-child folder chains render as compact dotted labels and reveal from search results still works.
@@ -426,22 +434,27 @@ Plans:
   5. Vietnamese text in UI labels renders correctly offline; unit/component tests cover search state, preview linkage, tree compaction and token usage.
 
 **Depends on:** Phase 46
-**Plans:** 3/5 plans executed in 5 waves
+**Plans:** 4/5 plans executed
 
 Plans:
 **Wave 1** *(no dependencies — correctness backbone)*
+
 - [x] 46.1-01-PLAN.md — Tracer: 2000-match scoped `git grep`, pure FindSession with seq/stale/cancel, query/mask builder, real callId cancellation (R3, D-08/D-09/D-10)
 
 **Wave 2** *(blocked on Wave 1)*
+
 - [x] 46.1-02-PLAN.md — Shortcut → action → seeded two-pane Find dialog, three modes, virtualized highlighted rows, following preview, keyboard nav, Enter at line (R1, R2, D-04..D-08)
 
 **Wave 3** *(blocked on Wave 2; shares the dialog module)*
+
 - [x] 46.1-03-PLAN.md — Compact single-child tree with stable reveal mapping + tokenized 24 px rows, then remove the three old inline search inputs (R4, D-11..D-13)
 
 **Wave 4** *(blocked on Waves 1-3; font install gated by blocking-human checkpoint)*
-- [ ] 46.1-04-PLAN.md — Bundle offline Inter/IBM Plex Mono with Vietnamese subsets, centralize resolved draft palette + light/dark tokens, migrate touched surfaces (R5, D-01..D-03)
+
+- [x] 46.1-04-PLAN.md — Bundle offline Inter/IBM Plex Mono with Vietnamese subsets, centralize resolved draft palette + light/dark tokens, migrate touched surfaces (R5, D-01..D-03)
 
 **Wave 5** *(blocked on Waves 2-4)*
+
 - [ ] 46.1-05-PLAN.md — Combined focused gate + Nyquist sign-off + end-of-phase observable Tauri UAT (R1-R5, C-15)
 
 ### Phase 18: Multi-Modal Hybrid Retrieval Engine
