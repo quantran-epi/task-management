@@ -475,4 +475,48 @@ describe('FindInRemoteFiles — entry, seed, modes, debounce and Enter (Task 1)'
 
     expect(document.activeElement).toBe(maskInput);
   });
+
+  it('windows result rows: 40 hits mount at most 25 DOM rows inside the listbox', async () => {
+    vi.useFakeTimers();
+    try {
+      grepRemoteRef.mockResolvedValue({
+        hits: Array.from({ length: 40 }, (_, i) => ({
+          path: `src/file-${String(i).padStart(2, '0')}.ts`,
+          line: i + 1,
+          text: `needle ${i}`,
+        })),
+        truncated: false,
+      });
+      render(<FindInRemoteFiles />);
+      fireEvent.change(screen.getByLabelText('Pattern'), { target: { value: 'needle' } });
+      await act(async () => {
+        vi.advanceTimersByTime(FIND_DEBOUNCE_MS);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      const container = screen.getByRole('listbox', { name: 'Search results' });
+      expect(container).toBeDefined();
+      const domRows = container.querySelectorAll('[data-testid^="find-result-row-"]');
+      expect(domRows.length).toBeGreaterThan(0);
+      expect(domRows.length).toBeLessThanOrEqual(25);
+      expect(screen.queryByTestId('find-result-row-39')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('Files rows show the tree entry size as count when available', async () => {
+    searchRemoteTree.mockResolvedValue([
+      { ...treeResult({ path: 'alpha.ts', name: 'alpha.ts', type: 'file' }), size: 1024 },
+      treeResult({ path: 'beta.ts', name: 'beta.ts', type: 'file' }),
+    ]);
+    render(<FindInRemoteFiles />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Files' }));
+    fireEvent.change(screen.getByLabelText('Pattern'), { target: { value: 'a' } });
+
+    expect(await screen.findByTestId('find-result-row-0')).toBeDefined();
+    expect(screen.getByTestId('find-result-row-0').querySelector('.find-rcount')?.textContent).toBe('1024');
+    expect(screen.getByTestId('find-result-row-1').querySelector('.find-rcount')).toBeNull();
+  });
 });

@@ -12,6 +12,8 @@ export interface MatchRow {
   line: number;
   text: string;
   ranges: Array<[number, number]>;
+  /** Files/Folders roster count from the tree entry; content hits leave it undefined. */
+  count?: number;
 }
 
 export interface PreviewMark {

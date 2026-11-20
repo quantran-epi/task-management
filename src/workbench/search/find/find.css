@@ -59,6 +59,7 @@
   min-height: 0;
   border-top: 1px solid var(--border);
 }
+.find-results-pane { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .find-results { overflow-y: auto; }
 .find-rrow {
   display: flex;

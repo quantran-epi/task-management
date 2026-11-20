@@ -17,6 +17,7 @@ import { hitsToMatchRows, matchRanges, type MatchRow } from './parsing';
 import { CodePreview, FolderPreview, ResultRow } from './parts';
 import { FIND_DEBOUNCE_MS, FIND_STATUS_COPY, FindSession, type FindState, type RemoteQuery } from './session';
 import { FIND_CONTROL_LABELS, FIND_DIALOG_TITLE, useFindStore } from './store';
+import { VirtualizedList } from '../../virtual/VirtualizedList';
 import './find.css';
 
 /** Preview byte cap (D-10); a larger or binary file shows truthful copy + open-full-file. */
@@ -181,6 +182,7 @@ export function FindInRemoteFiles(props: FindInRemoteFilesProps) {
           path: entry.path,
           line: 0,
           text: entry.path,
+          ...(entry.size !== undefined ? { count: entry.size } : {}),
           ranges: matchRanges(entry.path, needle, {
             literal: true,
             matchCase: remoteQuery.matchCase,
@@ -429,25 +431,34 @@ export function FindInRemoteFiles(props: FindInRemoteFilesProps) {
         </div>
 
         <div className="find-split">
-          <div className="find-results" role="listbox" aria-label="Search results">
-            {rows.map((row, index) => (
-              <div
-                key={`${row.path}:${row.line}:${index}`}
-                data-testid={`find-result-row-${index}`}
-                onMouseDown={() => setActiveIndex(index)}
-              >
-                <ResultRow
-                  text={row.text}
-                  ranges={row.ranges}
-                  path={row.path}
-                  line={row.line}
-                  active={index === activeIndex}
-                  variant={mode === 'folders' ? 'folders' : mode === 'files' ? 'files' : 'content'}
-                  onSelect={() => setActiveIndex(index)}
-                  onOpen={() => openRow(index, false)}
-                />
-              </div>
-            ))}
+          <div className="find-results-pane">
+            <VirtualizedList
+              items={rows}
+              className="find-results"
+              aria-label="Search results"
+              estimateSize={() => 24}
+              height="100%"
+              style={{ flex: '1 1 0', minHeight: 0 }}
+              scrollToIndex={activeIndex}
+              renderItem={(row, index) => (
+                <div
+                  data-testid={`find-result-row-${index}`}
+                  onMouseDown={() => setActiveIndex(index)}
+                >
+                  <ResultRow
+                    text={row.text}
+                    ranges={row.ranges}
+                    path={row.path}
+                    line={row.line}
+                    active={index === activeIndex}
+                    count={row.count}
+                    variant={mode === 'folders' ? 'folders' : mode === 'files' ? 'files' : 'content'}
+                    onSelect={() => setActiveIndex(index)}
+                    onOpen={() => openRow(index, false)}
+                  />
+                </div>
+              )}
+            />
             {mode !== 'content' && !remoteQuery.pattern ? (
               <div className="find-empty" data-testid="find-empty-prompt">
                 {FIND_STATUS_COPY.emptyPrompt}

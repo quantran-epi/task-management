@@ -23,7 +23,7 @@ export interface ResultRowProps {
   line: number;
   active: boolean;
   variant?: 'content' | 'files' | 'folders';
-  count?: number;
+  count?: number | undefined;
   onSelect?: () => void;
   onOpen?: () => void;
 }
