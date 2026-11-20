@@ -112,6 +112,35 @@ export function renderInlineFormatting(rawText: string): string {
   return text;
 }
 
+/** Curated language labels accepted from a bare token line. Never taken from arbitrary text. */
+const BARE_CODE_LANGUAGES = new Set([
+  'java', 'javascript', 'js', 'typescript', 'ts', 'tsx', 'python', 'py', 'sql', 'json',
+  'yaml', 'yml', 'bash', 'sh', 'go', 'rust', 'rs', 'c', 'cpp', 'csharp', 'html', 'css',
+  'xml', 'kotlin', 'swift', 'php', 'ruby', 'scala', 'markdown', 'md', 'dockerfile',
+]);
+
+const CODE_KEYWORDS = /\b(class|def|func|function|return|const|let|var|public|private|static|void|new|import|package|SELECT|FROM|WHERE|INSERT|UPDATE|DELETE|CREATE|TABLE)\b/i;
+
+function looksLikeCodeLine(line: string): boolean {
+  if (!line.trim()) return false;
+  if (/^(```|#{1,6}\s|>\s?|(?:---|\*\*\*|___)\s*$)/.test(line)) return false;
+  if (/^\s*(?:[-*]\s+|\d+\.\s+|\|)/.test(line)) return false;
+  if (isTableDelimiter(line)) return false;
+  return /[;{}()=<>:]/.test(line) || CODE_KEYWORDS.test(line);
+}
+
+/** Single source of truth for fenced AND normalized bare-token code block markup. */
+function renderCodeBlockHtml(lang: string, codeLines: string[], attr: string): string {
+  const escapedCode = codeLines.map((l) => escapeHtml(l)).join('\n');
+  const langAttr = lang ? ` class="language-${lang}"` : '';
+  const langLabel = lang || 'code';
+  const diagramActionBtn =
+    lang.toLowerCase() === 'mermaid'
+      ? '<button class="code-diagram-btn" type="button">📊 Xem Diagram</button>'
+      : '';
+  return `<div class="code-block-wrapper"${attr}><div class="code-block-header"><span class="code-block-lang">${langLabel}</span><div>${diagramActionBtn}<button class="code-copy-btn" type="button">Copy</button></div></div><pre class="code-block"><code${langAttr}>${escapedCode}</code></pre></div>`;
+}
+
 function isTableDelimiter(line: string): boolean {
   const trimmed = line.trim();
   if (!trimmed) return false;
@@ -270,16 +299,8 @@ export function renderSafeMarkdown(source: string, options?: MarkdownRenderOptio
     if (codeFenceMatch) {
       if (inCodeBlock) {
         // Closing code block
-        const codeBlockEndLine = i + 1;
-        const escapedCode = codeBlockLines.map((l) => escapeHtml(l)).join('\n');
-        const langAttr = codeBlockLang ? ` class="language-${codeBlockLang}"` : '';
-        const langLabel = codeBlockLang || 'code';
-        const isMermaidBlock = codeBlockLang.toLowerCase() === 'mermaid';
-        const diagramActionBtn = isMermaidBlock
-          ? '<button class="code-diagram-btn" type="button">📊 Xem Diagram</button>'
-          : '';
         output.push(
-          `<div class="code-block-wrapper"${lineAttr(codeBlockStartLine, codeBlockEndLine)}><div class="code-block-header"><span class="code-block-lang">${langLabel}</span><div>${diagramActionBtn}<button class="code-copy-btn" type="button">Copy</button></div></div><pre class="code-block"><code${langAttr}>${escapedCode}</code></pre></div>`
+          renderCodeBlockHtml(codeBlockLang, codeBlockLines, lineAttr(codeBlockStartLine, i + 1))
         );
         inCodeBlock = false;
         codeBlockLang = '';
@@ -297,6 +318,27 @@ export function renderSafeMarkdown(source: string, options?: MarkdownRenderOptio
 
     if (inCodeBlock) {
       codeBlockLines.push(line);
+      continue;
+    }
+
+    // 1.5 Malformed model output: a bare curated language token followed by code-looking lines.
+    // Only restructures plain text; the label comes from the allowlist and code still escapes.
+    const bareLang = line.trim();
+    if (
+      BARE_CODE_LANGUAGES.has(bareLang) &&
+      i + 1 < lines.length &&
+      looksLikeCodeLine(lines[i + 1] ?? '')
+    ) {
+      flushAll();
+      const codeLines: string[] = [];
+      let j = i + 1;
+      for (; j < lines.length; j++) {
+        const candidate = lines[j] ?? '';
+        if (!looksLikeCodeLine(candidate)) break;
+        codeLines.push(candidate);
+      }
+      output.push(renderCodeBlockHtml(bareLang, codeLines, lineAttr(i + 1, j)));
+      i = j - 1; // loop's i++ resumes at the first non-code line
       continue;
     }
 
@@ -443,16 +485,7 @@ export function renderSafeMarkdown(source: string, options?: MarkdownRenderOptio
 
   // Handle unclosed code block if stream cut off
   if (inCodeBlock && codeBlockLines.length > 0) {
-    const escapedCode = codeBlockLines.map((l) => escapeHtml(l)).join('\n');
-    const langAttr = codeBlockLang ? ` class="language-${codeBlockLang}"` : '';
-    const langLabel = codeBlockLang || 'code';
-    const isMermaidBlock = codeBlockLang.toLowerCase() === 'mermaid';
-    const diagramActionBtn = isMermaidBlock
-      ? '<button class="code-diagram-btn" type="button">📊 Xem Diagram</button>'
-      : '';
-    output.push(
-      `<div class="code-block-wrapper"${lineAttr(codeBlockStartLine, lines.length)}><div class="code-block-header"><span class="code-block-lang">${langLabel}</span><div>${diagramActionBtn}<button class="code-copy-btn" type="button">Copy</button></div></div><pre class="code-block"><code${langAttr}>${escapedCode}</code></pre></div>`
-    );
+    output.push(renderCodeBlockHtml(codeBlockLang, codeBlockLines, lineAttr(codeBlockStartLine, lines.length)));
   }
 
   flushAll();
