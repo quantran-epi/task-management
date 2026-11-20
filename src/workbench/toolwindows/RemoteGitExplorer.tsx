@@ -48,11 +48,11 @@ function renderGitStatusBadge(status?: string) {
         style={{
           fontSize: 10,
           fontWeight: 600,
-          lineHeight: '14px',
-          padding: '0 4px',
+          lineHeight: 'var(--status-badge-height)',
+          padding: '0 var(--status-badge-pad)',
           margin: 0,
-          color: '#16a34a',
-          background: 'rgba(22, 163, 74, 0.1)',
+          color: 'var(--status-untracked)',
+          background: 'var(--status-untracked-bg)',
         }}
       >
         ?
@@ -67,11 +67,11 @@ function renderGitStatusBadge(status?: string) {
         style={{
           fontSize: 10,
           fontWeight: 600,
-          lineHeight: '14px',
-          padding: '0 4px',
+          lineHeight: 'var(--status-badge-height)',
+          padding: '0 var(--status-badge-pad)',
           margin: 0,
-          color: '#0891b2',
-          background: 'rgba(8, 145, 178, 0.1)',
+          color: 'var(--status-added)',
+          background: 'var(--status-added-bg)',
         }}
       >
         {s}
@@ -86,11 +86,11 @@ function renderGitStatusBadge(status?: string) {
         style={{
           fontSize: 10,
           fontWeight: 600,
-          lineHeight: '14px',
-          padding: '0 4px',
+          lineHeight: 'var(--status-badge-height)',
+          padding: '0 var(--status-badge-pad)',
           margin: 0,
-          color: '#dc2626',
-          background: 'rgba(220, 38, 38, 0.1)',
+          color: 'var(--status-deleted)',
+          background: 'var(--status-deleted-bg)',
         }}
       >
         D
@@ -104,11 +104,11 @@ function renderGitStatusBadge(status?: string) {
       style={{
         fontSize: 10,
         fontWeight: 600,
-        lineHeight: '14px',
-        padding: '0 4px',
+        lineHeight: 'var(--status-badge-height)',
+        padding: '0 var(--status-badge-pad)',
         margin: 0,
-        color: '#2563eb',
-        background: 'rgba(37, 99, 235, 0.1)',
+        color: 'var(--status-modified)',
+        background: 'var(--status-modified-bg)',
       }}
     >
       {s || 'M'}
@@ -184,11 +184,11 @@ function compactedNodeToDataNode(node: CompactedNode): CustomTreeNodeData {
             variant="filled"
             style={{
               fontSize: 10,
-              lineHeight: '14px',
-              padding: '0 4px',
+              lineHeight: 'var(--status-badge-height)',
+              padding: '0 var(--status-badge-pad)',
               margin: 0,
-              color: 'var(--fg-muted, #6c707e)',
-              background: 'rgba(0,0,0,0.04)',
+              color: 'var(--fg-muted)',
+              background: 'var(--surface-sunken)',
             }}
           >
             {formatBytes(node.size)}
@@ -203,12 +203,12 @@ function compactedNodeToDataNode(node: CompactedNode): CustomTreeNodeData {
     icon: ({ expanded }: { expanded?: boolean }) =>
       node.isLeaf ? (
         <FileTextOutlined
-          style={{ color: isCode ? 'var(--accent, #3871e1)' : 'var(--fg-muted, #6c707e)' }}
+          style={{ color: isCode ? 'var(--accent)' : 'var(--fg-muted)' }}
         />
       ) : expanded ? (
-        <FolderOpenOutlined style={{ color: '#f59e0b' }} />
+        <FolderOpenOutlined style={{ color: 'var(--folder-icon)' }} />
       ) : (
-        <FolderOutlined style={{ color: '#f59e0b' }} />
+        <FolderOutlined style={{ color: 'var(--folder-icon)' }} />
       ),
     isLeaf: node.isLeaf,
     ...(node.size !== undefined ? { size: node.size } : {}),
@@ -704,7 +704,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         height: '100%',
         width: '100%',
         overflow: 'hidden',
-        background: 'var(--bg-island, #ffffff)',
+        background: 'var(--bg-island)',
       }}
     >
       {/* Controls Container */}
@@ -714,13 +714,13 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
           flexDirection: 'column',
           gap: 8,
           padding: '8px 10px',
-          borderBottom: '1px solid var(--border, #e9eaee)',
-          background: 'var(--bg-elev, #f7f8fa)',
+          borderBottom: '1px solid var(--border)',
+          background: 'var(--bg-elev)',
         }}
       >
         {/* SSH Host Selector */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <CloudServerOutlined style={{ color: '#f59e0b', fontSize: 13 }} />
+          <CloudServerOutlined style={{ color: 'var(--folder-icon)', fontSize: 13 }} />
           <Select
             size="small"
             style={{ flex: 1 }}
@@ -737,7 +737,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
 
         {/* Remote Repository Path */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <FolderViewOutlined style={{ color: 'var(--fg-muted, #6c707e)', fontSize: 13 }} />
+          <FolderViewOutlined style={{ color: 'var(--fg-muted)', fontSize: 13 }} />
           <Input
             size="small"
             style={{ flex: 1, fontSize: 12 }}
@@ -761,7 +761,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
 
         {/* Branch Selector & Refresh */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <BranchesOutlined style={{ color: 'var(--accent, #3871e1)', fontSize: 13 }} />
+          <BranchesOutlined style={{ color: 'var(--accent)', fontSize: 13 }} />
           <Select
             size="small"
             style={{ flex: 1 }}
@@ -789,13 +789,13 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
 
         {/* Global whole-ref search (IntelliJ-style) — distinct from the subtree search below */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 11, color: 'var(--fg-muted, #6c707e)', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 11, color: 'var(--fg-muted)', whiteSpace: 'nowrap' }}>
             Tìm toàn kho
           </span>
           <Input
             size="small"
             style={{ flex: 1, fontSize: 12 }}
-            prefix={<span style={{ color: 'var(--fg-muted, #6c707e)' }}>⌕</span>}
+            prefix={<span style={{ color: 'var(--fg-muted)' }}>⌕</span>}
             placeholder="Tìm tệp/thư mục trong toàn kho"
             value={globalQuery}
             onChange={(e) => setGlobalQuery(e.target.value)}
@@ -832,7 +832,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         {globalQuery.trim() ? (
           <div data-testid="global-search-results" role="listbox" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {globalResults.length === 0 && !globalSearching ? (
-              <div style={{ padding: 12, fontSize: 12, color: 'var(--fg-muted, #6c707e)' }}>
+              <div style={{ padding: 12, fontSize: 12, color: 'var(--fg-muted)' }}>
                 Không có kết quả trong kho từ xa.
               </div>
             ) : (
@@ -857,7 +857,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
                       padding: '4px 6px',
                       borderRadius: 4,
                       fontSize: 12,
-                      background: idx === globalActiveIndex ? 'rgba(56, 113, 225, 0.1)' : 'transparent',
+                      background: idx === globalActiveIndex ? 'var(--accent-soft)' : 'transparent',
                     }}
                   >
                     {result.type === 'file' ? <FileTextOutlined /> : <FolderOutlined />}{' '}
@@ -865,9 +865,9 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
                       {result.type === 'file' ? 'Tệp' : 'Thư mục'}
                     </Tag>
                     {breadcrumb && (
-                      <span style={{ color: 'var(--fg-muted, #6c707e)' }}>{breadcrumb} / </span>
+                      <span style={{ color: 'var(--fg-muted)' }}>{breadcrumb} / </span>
                     )}
-                    <span style={{ fontFamily: "'JetBrains Mono', Consolas, Monaco, monospace" }}>
+                    <span style={{ fontFamily: 'var(--font-mono)' }}>
                       {renderHighlightedName(result)}
                     </span>
                   </div>

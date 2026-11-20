@@ -294,7 +294,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
   const getCategoryIcon = (category: SearchResultItem['category']) => {
     switch (category) {
       case 'action':
-        return <ThunderboltOutlined style={{ color: 'var(--accent, #3871e1)', fontSize: 13 }} />;
+        return <ThunderboltOutlined style={{ color: 'var(--accent)', fontSize: 13 }} />;
       case 'task':
         return <JetBrainsTasksIcon size={14} />;
       case 'cr':
@@ -302,7 +302,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
       case 'doc':
         return <JetBrainsDocsIcon size={14} />;
       case 'system':
-        return <ApartmentOutlined style={{ color: '#722ed1', fontSize: 14 }} />;
+        return <ApartmentOutlined style={{ color: 'var(--accent)', fontSize: 14 }} />;
     }
   };
 
@@ -316,7 +316,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
         position: 'fixed',
         inset: 0,
         zIndex: 1000,
-        background: 'rgba(0, 0, 0, 0.28)',
+        background: 'var(--bg-backdrop)',
         display: 'flex',
         alignItems: 'flex-start',
         justifyContent: 'center',
@@ -329,16 +329,16 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
           width: 620,
           maxWidth: '92vw',
           maxHeight: '70vh',
-          background: 'var(--bg-popup, #ffffff)',
-          border: '1px solid var(--border-strong, #d1d3d9)',
+          background: 'var(--bg-popup)',
+          border: '1px solid var(--border-strong)',
           borderRadius: 'var(--radius-popup, 8px)',
-          boxShadow: '0 12px 32px rgba(0, 0, 0, 0.18)',
+          boxShadow: 'var(--shadow)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
           fontFamily: 'var(--font-ui)',
           fontSize: 'var(--font-size-ui, 13px)',
-          color: 'var(--fg, #191b1f)',
+          color: 'var(--fg)',
         }}
       >
         {/* Top Header: Categories Tabs */}
@@ -349,10 +349,10 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            height: 38,
+            height: 'var(--search-head-height)',
             padding: '0 10px',
-            background: 'var(--bg-frame, #e9eaee)',
-            borderBottom: '1px solid var(--border-strong, #d1d3d9)',
+            background: 'var(--bg-frame)',
+            borderBottom: '1px solid var(--border-strong)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -366,16 +366,16 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
                   aria-selected={isActive}
                   onClick={() => setActiveTab(tab.key)}
                   style={{
-                    height: 24,
+                    height: 'var(--search-tab-height)',
                     padding: '0 10px',
-                    border: isActive ? '1px solid var(--border-strong, #d1d3d9)' : '1px solid transparent',
+                    border: isActive ? '1px solid var(--border-strong)' : '1px solid transparent',
                     borderRadius: 'var(--radius-small, 4px)',
-                    background: isActive ? 'var(--bg-popup, #ffffff)' : 'transparent',
-                    color: isActive ? 'var(--fg-strong, #000000)' : 'var(--fg-secondary, #5f6269)',
+                    background: isActive ? 'var(--bg-popup)' : 'transparent',
+                    color: isActive ? 'var(--fg-strong)' : 'var(--fg-secondary)',
                     fontWeight: isActive ? 600 : 400,
                     fontSize: 12,
                     cursor: 'pointer',
-                    boxShadow: isActive ? '0 1px 2px rgba(0, 0, 0, 0.05)' : 'none',
+                    boxShadow: isActive ? 'var(--shadow)' : 'none',
                     transition: 'all 0.15s ease',
                   }}
                 >
@@ -395,7 +395,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
               cursor: 'pointer',
               padding: '4px',
               borderRadius: 3,
-              color: 'var(--fg-muted, #6c707e)',
+              color: 'var(--fg-muted)',
               display: 'flex',
               alignItems: 'center',
             }}
@@ -410,12 +410,12 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
             display: 'flex',
             alignItems: 'center',
             padding: '10px 14px',
-            borderBottom: '1px solid var(--border, #e9eaee)',
-            background: 'var(--bg-popup, #ffffff)',
+            borderBottom: '1px solid var(--border)',
+            background: 'var(--bg-popup)',
             gap: 10,
           }}
         >
-          <SearchOutlined style={{ fontSize: 15, color: 'var(--fg-icon, #6c707e)' }} />
+          <SearchOutlined style={{ fontSize: 15, color: 'var(--fg-icon)' }} />
           <input
             ref={inputRef}
             type="text"
@@ -430,7 +430,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
               outline: 'none',
               fontSize: 13.5,
               fontFamily: 'inherit',
-              color: 'var(--fg-strong, #000000)',
+              color: 'var(--fg-strong)',
               background: 'transparent',
             }}
           />
@@ -444,7 +444,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
                 background: 'transparent',
                 cursor: 'pointer',
                 padding: '2px 6px',
-                color: 'var(--fg-muted, #6c707e)',
+                color: 'var(--fg-muted)',
               }}
             >
               <CloseOutlined style={{ fontSize: 12 }} />
@@ -459,7 +459,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
             style={{
               padding: '24px 16px',
               textAlign: 'center',
-              color: 'var(--fg-muted, #6c707e)',
+              color: 'var(--fg-muted)',
               fontSize: 12,
               height: 120,
             }}
@@ -470,7 +470,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
           <VirtualizedList
             items={filteredItems}
             height={360}
-            estimateSize={() => 34}
+            estimateSize={() => 34 /* VirtualizedList needs a numeric estimate; mirrors --search-row-height. */}
             scrollToIndex={selectedIndex}
             role="listbox"
             aria-label="Search results"
@@ -489,13 +489,13 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '6px 12px',
-                    height: 34,
+                    height: 'var(--search-row-height)',
                     boxSizing: 'border-box',
                     cursor: 'pointer',
                     borderRadius: 'var(--radius-small, 4px)',
                     margin: '1px 6px',
-                    background: isSelected ? 'var(--bg-selected, #d0dffe)' : 'transparent',
-                    color: 'var(--fg-strong, #000000)',
+                    background: isSelected ? 'var(--bg-selected)' : 'transparent',
+                    color: 'var(--fg-strong)',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
@@ -514,7 +514,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
                       <span
                         style={{
                           fontSize: 11,
-                          color: 'var(--fg-muted, #6c707e)',
+                          color: 'var(--fg-muted)',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
@@ -532,9 +532,9 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
                         fontFamily: 'inherit',
                         padding: '1px 5px',
                         borderRadius: 2,
-                        background: isSelected ? 'rgba(255, 255, 255, 0.6)' : 'var(--bg-island, #f7f8f9)',
-                        border: '1px solid var(--border, #e9eaee)',
-                        color: 'var(--fg-secondary, #5f6269)',
+                        background: isSelected ? 'var(--accent-soft)' : 'var(--bg-island)',
+                        border: '1px solid var(--border)',
+                        color: 'var(--fg-secondary)',
                       }}
                     >
                       {item.shortcut}
@@ -550,10 +550,10 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
         <div
           style={{
             padding: '4px 12px',
-            borderTop: '1px solid var(--border, #e9eaee)',
-            background: 'var(--bg-elev, #f7f8f9)',
+            borderTop: '1px solid var(--border)',
+            background: 'var(--bg-elev)',
             fontSize: 10.5,
-            color: 'var(--fg-muted, #6c707e)',
+            color: 'var(--fg-muted)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
