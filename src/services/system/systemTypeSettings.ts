@@ -1,4 +1,13 @@
-import { useCallback } from 'react';
+import { useCallback, type ComponentType } from 'react';
+import {
+  AppstoreOutlined,
+  CodeOutlined,
+  DatabaseOutlined,
+  DesktopOutlined,
+  FolderOpenOutlined,
+  FolderOutlined,
+  ThunderboltOutlined,
+} from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 
@@ -12,6 +21,20 @@ export const SYSTEM_TYPE_VALUE_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 export const SYSTEM_TYPE_VALUE_MAX_LENGTH = 40;
 export const LOGICAL_GROUP_TYPE = 'LOGICAL_GROUP';
 export const SYSTEM_TYPE_FALLBACK_COLOR = '#8c8c8c';
+
+/** Icon components only — each surface owns its own styling. */
+export const SYSTEM_TYPE_ICON_COMPONENTS: Readonly<Record<string, ComponentType<any>>> = {
+  LOGICAL_GROUP: FolderOutlined,
+  SERVICE: CodeOutlined,
+  SCHEMA: DatabaseOutlined,
+  UI: DesktopOutlined,
+  WORKER: ThunderboltOutlined,
+};
+
+export function getSystemTypeIcon(type: string, expanded = false): ComponentType<any> {
+  if (type === LOGICAL_GROUP_TYPE && expanded) return FolderOpenOutlined;
+  return SYSTEM_TYPE_ICON_COMPONENTS[type] ?? AppstoreOutlined;
+}
 
 export interface SystemTypeOption {
   value: string;

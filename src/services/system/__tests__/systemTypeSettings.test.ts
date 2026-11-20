@@ -1,10 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import 'fake-indexeddb/auto';
+import {
+  AppstoreOutlined,
+  CodeOutlined,
+  DatabaseOutlined,
+  DesktopOutlined,
+  FolderOpenOutlined,
+  FolderOutlined,
+  ThunderboltOutlined,
+} from '@ant-design/icons';
 import { TaskPlannerDatabase } from '../../../db';
 import {
   DEFAULT_SYSTEM_TYPE_OPTIONS,
   SYSTEM_TYPE_OPTIONS_SETTING_KEY,
   ensureSystemTypeOption,
+  getSystemTypeIcon,
   getSystemTypeOptions,
   isValidSystemTypeValue,
   normalizeSystemTypeOptions,
@@ -12,6 +22,19 @@ import {
   toSystemTypeValue,
 } from '../systemTypeSettings';import { SystemInputSchema } from '../../../validation/schemas';
 import { BackupSystemRecordSchema } from '../../../validation/backupSchemas';
+
+describe('getSystemTypeIcon', () => {
+  it('maps built-in types to their Ant Design icons with a fallback for custom/unknown types', () => {
+    expect(getSystemTypeIcon('LOGICAL_GROUP')).toBe(FolderOutlined);
+    expect(getSystemTypeIcon('LOGICAL_GROUP', true)).toBe(FolderOpenOutlined);
+    expect(getSystemTypeIcon('SERVICE')).toBe(CodeOutlined);
+    expect(getSystemTypeIcon('SCHEMA')).toBe(DatabaseOutlined);
+    expect(getSystemTypeIcon('UI')).toBe(DesktopOutlined);
+    expect(getSystemTypeIcon('WORKER')).toBe(ThunderboltOutlined);
+    expect(getSystemTypeIcon('PAYMENT_GATEWAY')).toBe(AppstoreOutlined);
+    expect(getSystemTypeIcon('UNKNOWN_TYPE')).toBe(AppstoreOutlined);
+  });
+});
 
 describe('systemTypeSettings', () => {
   let db: TaskPlannerDatabase;

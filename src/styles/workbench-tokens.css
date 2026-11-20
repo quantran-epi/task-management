@@ -523,6 +523,47 @@ html, body, #root {
   white-space: nowrap !important;
 }
 
+/* AgentDiffReviewer — compact 24px tree rows, scoped so global tree rules stay unchanged. */
+.agent-diff-tree .ant-tree-treenode {
+  min-height: var(--row);
+  height: var(--row);
+}
+
+.agent-diff-tree .ant-tree-switcher,
+.agent-diff-tree .ant-tree-node-content-wrapper {
+  height: var(--row);
+  line-height: var(--row);
+}
+
+.agent-diff-tree .ant-tree-indent-unit {
+  width: var(--tree-indent);
+}
+
+.agent-diff-tree .ant-tree-iconEle,
+.agent-diff-tree .ant-tree-node-content-wrapper .anticon {
+  width: var(--tree-icon-size);
+  font-size: var(--tree-icon-size);
+}
+
+.agent-diff-tree .ant-tree-node-content-wrapper,
+.agent-diff-tree .agent-diff-tree-label {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-diff-tree .ant-tree-treenode-selected .ant-tree-node-content-wrapper,
+.agent-diff-tree .ant-tree-node-content-wrapper.ant-tree-node-selected {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.agent-diff-tree .ant-tree-treenode:hover .ant-tree-node-content-wrapper {
+  background: var(--bg-hover);
+}
+
 /* ExpUI Tab in Editor Area */
 .workbench-expui-tab {
   height: 30px;

@@ -41,9 +41,13 @@ import { DiffHunkView } from './DiffHunkView';
 import { DiffInlineCommentModal } from './DiffInlineCommentModal';
 import {
   buildWorktreeFileTree,
+  compactFileTree,
+  fileKeyOfPathFor,
   DEFAULT_EXCLUDED_PATTERNS,
+  type CompactFileNode,
   type FileTreeNode,
 } from '../../utils/fileTreeBuilder';
+import '../../styles/workbench-tokens.css';
 
 const { Text } = Typography;
 
@@ -355,16 +359,21 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
     return Array.from(keys);
   }, [diffFiles, selectedFilePath, debouncedSearch, treeData]);
 
+  // Compact chain folder sau khi search lọc raw tree; stable key dùng cho select/expand/reveal.
+  const compactedTree = useMemo(() => compactFileTree(treeData), [treeData]);
+  const treeKeyOfPath = useMemo(() => fileKeyOfPathFor(compactedTree), [compactedTree]);
+
   // Keep folder nodes containing diffs expanded by default
   const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
   useEffect(() => {
     if (diffFolderKeys.length > 0) {
-      setExpandedKeys((prev) => Array.from(new Set([...prev, ...diffFolderKeys])));
+      const mappedKeys = diffFolderKeys.map((key) => treeKeyOfPath.get(key) ?? key);
+      setExpandedKeys((prev) => Array.from(new Set([...prev, ...mappedKeys])));
     }
-  }, [diffFolderKeys]);
+  }, [diffFolderKeys, treeKeyOfPath]);
 
   // Context menu builder for any file/folder item
-  const getContextMenuItems = (node: FileTreeNode): NonNullable<MenuProps['items']> => {
+  const getContextMenuItems = (node: CompactFileNode): NonNullable<MenuProps['items']> => {
     const items: NonNullable<MenuProps['items']> = [
       {
         key: 'copy-path',
@@ -662,24 +671,28 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
             {/* Tree Component */}
             <div ref={treeContainerRef} style={{ flex: 1, minHeight: 200, overflow: 'hidden', padding: '4px 2px' }}>
               <Tree
+                className="agent-diff-tree"
                 showIcon={false}
                 blockNode
                 virtual={!isTestEnv}
                 height={treeHeight}
                 expandedKeys={expandedKeys}
                 onExpand={(keys) => setExpandedKeys(keys as string[])}
-                selectedKeys={selectedFilePath ? [selectedFilePath] : []}
+                selectedKeys={
+                  selectedFilePath ? [treeKeyOfPath.get(selectedFilePath) ?? selectedFilePath] : []
+                }
                 onSelect={(_, info) => {
-                  const node = info.node as unknown as FileTreeNode;
+                  const node = info.node as unknown as CompactFileNode;
                   if (node && node.isLeaf) {
                     onSelectFilePath(node.path);
                   }
                 }}
-                treeData={treeData as unknown as DataNode[]}
+                treeData={compactedTree as unknown as DataNode[]}
                 titleRender={(nodeData) => {
-                  const node = nodeData as unknown as FileTreeNode;
-                  const isSelected = node.path === selectedFilePath;
+                  const node = nodeData as unknown as CompactFileNode;
+                  const isSelected = node.key === (selectedFilePath ? (treeKeyOfPath.get(selectedFilePath) ?? selectedFilePath) : undefined);
                   const df = node.diffFile;
+                  const tooltip = node.label !== node.path ? `${node.label}\n${node.path}` : node.label;
 
                   return (
                     <Dropdown
@@ -716,9 +729,9 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                             />
                           )}
                           <Text
-                            ellipsis={{ tooltip: node.path }}
+                            ellipsis={{ tooltip }}
+                            className="agent-diff-tree-label"
                             style={{
-                              fontSize: 12,
                               fontWeight: df ? 600 : 400,
                               color: df
                                 ? df.status === 'deleted'
@@ -729,7 +742,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                                 : token.colorTextSecondary,
                             }}
                           >
-                            {String(node.title)}
+                            {node.label}
                           </Text>
                         </Space>
 
