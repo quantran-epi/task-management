@@ -227,31 +227,35 @@ export const CodingZoneModal: React.FC<CodingZoneModalProps> = ({
   }, [changedPaths, tabs, hunkStates, treeScope, treeQuery, allMessages, activity, environment, publish]);
 
   const closeTab = useCallback((id: string) => {
-    setTabs((previous) => {
-      const index = previous.findIndex((tab) => tab.id === id);
-      if (index < 0) return previous;
-      const next = previous.filter((tab) => tab.id !== id);
-      setActiveTabId((current) => {
-        if (current !== id) return current;
-        const neighbor = next[index] ?? next[index - 1];
-        return neighbor?.id ?? OVERVIEW_TAB_ID;
-      });
-      return next;
-    });
-  }, []);
+    const index = tabs.findIndex((tab) => tab.id === id);
+    if (index < 0) return;
+    const next = tabs.filter((tab) => tab.id !== id);
+    const nextActive = activeTabId === id
+      ? (next[index] ?? next[index - 1])?.id ?? OVERVIEW_TAB_ID
+      : activeTabId;
+    const nextActiveFile = next.find((tab) => tab.id === nextActive)?.filePath ?? null;
+    setTabs(next);
+    setActiveTabId(nextActive);
+    setActiveFile(nextActiveFile);
+    // WR-03: tab + active-file state is shared with the popout; publish, never rely on an
+    // unrelated event to republish later. Computed outside the state updater (no publish in
+    // a React updater).
+    publish('tabs', next);
+    publish('activeFile', nextActiveFile);
+  }, [tabs, activeTabId, publish]);
 
   const reorderTab = useCallback((fromId: string, toId: string) => {
     if (fromId === toId || fromId === OVERVIEW_TAB_ID || toId === OVERVIEW_TAB_ID) return;
-    setTabs((previous) => {
-      const from = previous.findIndex((tab) => tab.id === fromId);
-      const to = previous.findIndex((tab) => tab.id === toId);
-      if (from < 0 || to < 0) return previous;
-      const next = [...previous];
-      const [moved] = next.splice(from, 1);
-      if (moved) next.splice(to, 0, moved);
-      return next;
-    });
-  }, []);
+    const from = tabs.findIndex((tab) => tab.id === fromId);
+    const to = tabs.findIndex((tab) => tab.id === toId);
+    if (from < 0 || to < 0) return;
+    const next = [...tabs];
+    const [moved] = next.splice(from, 1);
+    if (!moved) return;
+    next.splice(to, 0, moved);
+    setTabs(next);
+    publish('tabs', next);
+  }, [tabs, publish]);
 
   const setHunkState = useCallback((key: string, state: CodingZoneHunkState) => {
     setHunkStates((previous) => ({ ...previous, [key]: state }));

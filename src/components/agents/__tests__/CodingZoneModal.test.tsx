@@ -189,6 +189,21 @@ describe('CodingZoneModal shell', () => {
     }));
   });
 
+  it('closing and reordering a tab publishes tabs + activeFile sync events (WR-03)', async () => {
+    renderModal();
+    fireEvent.click(screen.getByRole('button', { name: 'Tất cả' }));
+    fireEvent.click(screen.getByTitle('README.md'));
+    fireEvent.click(screen.getByTitle('src/AgentWorkbench.tsx'));
+    syncEmitterMock.mockClear();
+
+    fireEvent.click(screen.getByTestId('cz-tab-close-diff'));
+    await waitFor(() => {
+      const events = syncEmitterMock.mock.calls.map((call) => call[2] as { kind: string; payload: unknown });
+      expect(events.some((event) => event.kind === 'tabs')).toBe(true);
+      expect(events.some((event) => event.kind === 'activeFile')).toBe(true);
+    });
+  });
+
   it('a hunk decision publishes a newer-revision sync event', async () => {
     renderModal({
       renderDiffPanel: ({ hunkStates, setHunkState }: {
