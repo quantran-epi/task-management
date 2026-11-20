@@ -121,12 +121,17 @@ const BARE_CODE_LANGUAGES = new Set([
 
 const CODE_KEYWORDS = /\b(class|def|func|function|return|const|let|var|public|private|static|void|new|import|package|SELECT|FROM|WHERE|INSERT|UPDATE|DELETE|CREATE|TABLE)\b/i;
 
+/** Strong structural markers of a code line. A lone colon or spaced "(…)" is deliberately absent. */
+const CODE_STRUCTURE = /;|[{}]|=>|->|=|[A-Za-z_$][\w$]*\(/;
+
 function looksLikeCodeLine(line: string): boolean {
   if (!line.trim()) return false;
   if (/^(```|#{1,6}\s|>\s?|(?:---|\*\*\*|___)\s*$)/.test(line)) return false;
   if (/^\s*(?:[-*]\s+|\d+\.\s+|\|)/.test(line)) return false;
   if (isTableDelimiter(line)) return false;
-  return /[;{}()=<>:]/.test(line) || CODE_KEYWORDS.test(line);
+  // A keyword alone, or a keyword inside prose with a colon, is not code. Keywords only count
+  // as a secondary signal alongside a trailing colon (e.g. "class Foo:", "def foo(x):").
+  return CODE_STRUCTURE.test(line) || (CODE_KEYWORDS.test(line) && /:\s*$/.test(line));
 }
 
 /** Single source of truth for fenced AND normalized bare-token code block markup. */

@@ -26,6 +26,46 @@ export interface AIDraftPayload {
 
 /** Browser-mode handle for the popout opened via window.open (null/closed => no popout). */
 let browserPopoutHandle: Window | null = null;
+const BROWSER_POPOUT_NAME = 'task-planner-ai-popout';
+/** Survives a page reload so a session-restored named popup can be re-adopted. */
+export const BROWSER_POPOUT_SESSION_KEY = 'taskmate.ai-popout.session-active';
+
+function markBrowserPopoutSession(active: boolean): void {
+  try {
+    if (active) sessionStorage.setItem(BROWSER_POPOUT_SESSION_KEY, '1');
+    else sessionStorage.removeItem(BROWSER_POPOUT_SESSION_KEY);
+  } catch {
+    // Storage unavailable (private mode) — recovery simply will not be attempted.
+  }
+}
+
+/**
+ * Return the live tracked browser handle, or re-adopt the named popup after a session restore.
+ * Only a popup whose hash identifies the AI popout is accepted; a stray window is closed.
+ */
+function recoverBrowserPopout(): Window | null {
+  if (browserPopoutHandle && !browserPopoutHandle.closed) return browserPopoutHandle;
+  let marked = false;
+  try {
+    marked = sessionStorage.getItem(BROWSER_POPOUT_SESSION_KEY) === '1';
+  } catch {
+    return null;
+  }
+  if (!marked) return null;
+  try {
+    const handle = window.open('', BROWSER_POPOUT_NAME);
+    if (handle && !handle.closed && handle.location?.hash?.startsWith('#ai-popout')) {
+      browserPopoutHandle = handle;
+      return handle;
+    }
+    try { handle?.close(); } catch { /* stray window may reject close */ }
+  } catch {
+    // A cross-origin or blocked re-open cannot be adopted.
+  }
+  browserPopoutHandle = null;
+  markBrowserPopoutSession(false);
+  return null;
+}
 
 export function buildAiPopoutUrl(base = '', scope?: AIScopeParams): string {
   const params = new URLSearchParams();
@@ -49,8 +89,9 @@ export async function openAiPopout(scope?: AIScopeParams): Promise<void> {
         await existing.show();
         await existing.setFocus();
         if (scope) {
-          const { emit } = await import('@tauri-apps/api/event');
-          await emit(AI_SCOPE_EVENT, scope);
+          const { emitTo } = await import('@tauri-apps/api/event');
+          // Scope the handoff to the named webview: no global broadcast (T-quick-07).
+          await emitTo(AI_POPOUT_LABEL, AI_SCOPE_EVENT, scope);
         }
         return;
       }
@@ -82,9 +123,10 @@ export async function openAiPopout(scope?: AIScopeParams): Promise<void> {
   const base = `${window.location.origin}${window.location.pathname}`;
   browserPopoutHandle = window.open(
     buildAiPopoutUrl(base, scope),
-    'task-planner-ai-popout',
+    BROWSER_POPOUT_NAME,
     'width=480,height=720,resizable=yes,status=no'
   );
+  markBrowserPopoutSession(Boolean(browserPopoutHandle && !browserPopoutHandle.closed));
 }
 
 /** True when a floating AI popout is currently open (Tauri webview or browser popup). */
@@ -98,7 +140,7 @@ export async function isAiPopoutOpen(): Promise<boolean> {
       return false;
     }
   }
-  return Boolean(browserPopoutHandle && !browserPopoutHandle.closed);
+  return Boolean(recoverBrowserPopout());
 }
 
 /**
@@ -110,11 +152,12 @@ export async function sendTextToAiPopout(text: string, scope?: AIScopeParams): P
   if (isTauriApp()) {
     try {
       if (!(await isAiPopoutOpen())) return false;
-      const [{ emit }, { getAllWebviewWindows }] = await Promise.all([
+      const [{ emitTo }, { getAllWebviewWindows }] = await Promise.all([
         import('@tauri-apps/api/event'),
         import('@tauri-apps/api/webviewWindow'),
       ]);
-      await emit(AI_DRAFT_EVENT, payload);
+      // Deliver the draft only to the AI popout webview, never a global broadcast (T-quick-07).
+      await emitTo(AI_POPOUT_LABEL, AI_DRAFT_EVENT, payload);
       const existing = (await getAllWebviewWindows()).find((w) => w.label === AI_POPOUT_LABEL);
       await existing?.setFocus();
       return true;
@@ -122,9 +165,10 @@ export async function sendTextToAiPopout(text: string, scope?: AIScopeParams): P
       return false;
     }
   }
-  if (!browserPopoutHandle || browserPopoutHandle.closed) return false;
+  const handle = recoverBrowserPopout();
+  if (!handle) return false;
   try {
-    browserPopoutHandle.postMessage({ type: AI_DRAFT_EVENT, ...payload }, window.location.origin);
+    handle.postMessage({ type: AI_DRAFT_EVENT, ...payload }, window.location.origin);
     return true;
   } catch {
     return false;

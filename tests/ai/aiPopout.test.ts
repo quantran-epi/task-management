@@ -5,7 +5,7 @@ const { tauriWindows, tauriEmit } = vi.hoisted(() => ({
     getAllWebviewWindows: vi.fn(),
     WebviewWindow: vi.fn(),
   },
-  tauriEmit: { emit: vi.fn() },
+  tauriEmit: { emit: vi.fn(), emitTo: vi.fn() },
 }));
 
 vi.mock('@tauri-apps/api/webviewWindow', () => tauriWindows);
@@ -18,6 +18,9 @@ import {
   setAiWindowAlwaysOnTop,
   closeCurrentAiPopoutWindow,
   AI_DRAFT_EVENT,
+  AI_SCOPE_EVENT,
+  AI_POPOUT_LABEL,
+  BROWSER_POPOUT_SESSION_KEY,
   isAiPopoutOpen,
   sendTextToAiPopout,
 } from '../../src/utils/aiPopout';
@@ -29,6 +32,7 @@ describe('aiPopout utility', () => {
 
   afterEach(() => {
     delete (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+    sessionStorage.removeItem(BROWSER_POPOUT_SESSION_KEY);
   });
 
   describe('isTauriApp', () => {
@@ -109,6 +113,30 @@ describe('aiPopout utility', () => {
       expect(await isAiPopoutOpen()).toBe(false);
       await expect(sendTextToAiPopout('text')).resolves.toBe(false);
     });
+
+    it('recovers a session-restored named popout and posts drafts to it', async () => {
+      // Simulate a fresh module state where the tracked handle was lost but the session marker remains.
+      vi.spyOn(window, 'open').mockReturnValueOnce(null);
+      await openAiPopout();
+      sessionStorage.setItem(BROWSER_POPOUT_SESSION_KEY, '1');
+
+      const postMessage = vi.fn();
+      const recovered = {
+        closed: false,
+        location: { hash: '#ai-popout?scopeType=task' },
+        postMessage,
+      } as unknown as WindowProxy;
+      const openSpy = vi.spyOn(window, 'open').mockReturnValue(recovered);
+
+      expect(await isAiPopoutOpen()).toBe(true);
+      expect(openSpy).toHaveBeenLastCalledWith('', 'task-planner-ai-popout');
+      postMessage.mockClear();
+      expect(await sendTextToAiPopout('khôi phục')).toBe(true);
+      expect(postMessage).toHaveBeenCalledWith(
+        { type: AI_DRAFT_EVENT, text: 'khôi phục' },
+        window.location.origin
+      );
+    });
   });
 
   describe('draft handoff in Tauri', () => {
@@ -118,6 +146,7 @@ describe('aiPopout utility', () => {
         { label: 'ai-popout', show: vi.fn(), setFocus: vi.fn() },
       ]);
       tauriEmit.emit.mockResolvedValue(undefined);
+      tauriEmit.emitTo.mockResolvedValue(undefined);
     });
 
     it('reports open when the ai-popout webview exists', async () => {
@@ -126,18 +155,33 @@ describe('aiPopout utility', () => {
       expect(await isAiPopoutOpen()).toBe(false);
     });
 
-    it('emits the draft event to the existing popout', async () => {
+    it('emits the draft event scoped to the ai-popout window', async () => {
       const focus = vi.fn();
       tauriWindows.getAllWebviewWindows.mockResolvedValue([
         { label: 'ai-popout', show: vi.fn(), setFocus: focus },
       ]);
       const result = await sendTextToAiPopout('nội dung', { type: 'remote', id: 'r-1' });
       expect(result).toBe(true);
-      expect(tauriEmit.emit).toHaveBeenCalledWith(AI_DRAFT_EVENT, {
+      expect(tauriEmit.emitTo).toHaveBeenCalledWith(AI_POPOUT_LABEL, AI_DRAFT_EVENT, {
         text: 'nội dung',
         scope: { type: 'remote', id: 'r-1' },
       });
+      expect(tauriEmit.emit).not.toHaveBeenCalled();
       expect(focus).toHaveBeenCalled();
+    });
+
+    it('scopes the scope event to the ai-popout window when showing an existing popout', async () => {
+      const show = vi.fn();
+      const focus = vi.fn();
+      tauriWindows.getAllWebviewWindows.mockResolvedValue([
+        { label: 'ai-popout', show, setFocus: focus },
+      ]);
+      const scope = { type: 'task', id: 't-9' };
+      await openAiPopout(scope);
+      expect(show).toHaveBeenCalled();
+      expect(focus).toHaveBeenCalled();
+      expect(tauriEmit.emitTo).toHaveBeenCalledWith(AI_POPOUT_LABEL, AI_SCOPE_EVENT, scope);
+      expect(tauriEmit.emit).not.toHaveBeenCalled();
     });
   });
 

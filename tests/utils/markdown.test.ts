@@ -181,5 +181,26 @@ describe('renderSafeMarkdown', () => {
       expect(output).toContain('&lt;T&gt;');
       expect(output).not.toContain('<T>');
     });
+
+    it('keeps prose with a colon and code-like keywords as a paragraph', () => {
+      const input = 'Note: this class is new and worth an import.';
+      const output = renderSafeMarkdown('java\n' + input);
+      expect(output).not.toContain('code-block-wrapper');
+      expect(output).toContain(input);
+    });
+
+    it('keeps prose with spaced parentheses as a paragraph', () => {
+      const input = 'This function (see docs) returns a value.';
+      const output = renderSafeMarkdown('python\n' + input);
+      expect(output).not.toContain('code-block-wrapper');
+      expect(output).toContain(input);
+    });
+
+    it('renders a genuine def with a trailing colon as code', () => {
+      const output = renderSafeMarkdown('python\ndef foo(x):');
+      expect(output).toContain('code-block-wrapper');
+      expect(output).toContain('language-python');
+      expect(output).toContain('def foo(x):');
+    });
   });
 });
