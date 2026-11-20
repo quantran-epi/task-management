@@ -10,7 +10,7 @@ import {
 } from '@ant-design/icons';
 import { grepRemoteRef } from '../../../services/gitRemoteService';
 import { confineRepoPath, getRemoteFileContent, searchRemoteTree } from '../../../services/gitRemoteTreeService';
-import { cancelToolCall, getSshConfigById, getSshSecret } from '../../../services/sshService';
+import { cancelRemoteCall, getSshConfigById, getSshSecret } from '../../../services/sshService';
 import { useLayoutStore } from '../../store/layoutStore';
 import { buildGrepOptions, matchesMask } from './query';
 import { hitsToMatchRows, matchRanges, type MatchRow } from './parsing';
@@ -99,7 +99,7 @@ export function FindInRemoteFiles(props: FindInRemoteFilesProps) {
           );
         },
         cancel: async (callId) => {
-          await cancelToolCall(callId);
+          await cancelRemoteCall(callId);
         },
         nextRequestId: () => `find-${crypto.randomUUID()}`,
       },

@@ -23,7 +23,8 @@ vi.mock('../../../../services/gitRemoteTreeService', () => ({
 vi.mock('../../../../services/sshService', () => ({
   getSshConfigById: (...args: unknown[]) => getSshConfigById(...args),
   getSshSecret: (...args: unknown[]) => getSshSecret(...args),
-  cancelToolCall: (...args: unknown[]) => cancelToolCall(...args),
+  // IN-03: the Find path calls the typed cancelRemoteCall alias; it delegates to cancelToolCall.
+  cancelRemoteCall: (...args: unknown[]) => cancelToolCall(...args),
 }));
 
 const CONFIG = {

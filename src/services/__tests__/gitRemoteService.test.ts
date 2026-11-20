@@ -11,6 +11,7 @@ import {
   getFileDiff,
   checkHeadDrift,
   parseNumstatZ,
+  parseNameStatusZ,
   grepRemoteRef,
   GREP_MATCH_LIMIT_CEILING,
 } from '../gitRemoteService';
@@ -335,6 +336,18 @@ describe('gitRemoteService - Task 1 Tracer Slice', () => {
         undefined
       );
       expect(diff).toBe(mockDiff);
+    });
+  });
+
+  describe('parseNameStatusZ — IN-03 copy mapping', () => {
+    it('maps a copy (C) record to added, not modified', () => {
+      // `<C100>\0<old>\0<new>\0` — target path is the third token.
+      const output = 'C100\0src/old.ts\0src/copy.ts\0A\0src/new.ts\0M\0src/mod.ts\0';
+      expect(parseNameStatusZ(output)).toEqual([
+        { path: 'src/copy.ts', status: 'added' },
+        { path: 'src/new.ts', status: 'added' },
+        { path: 'src/mod.ts', status: 'modified' },
+      ]);
     });
   });
 

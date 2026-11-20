@@ -292,8 +292,10 @@ export function parseNameStatusZ(output: string): Array<{ path: string; status: 
     i += isRename ? 2 : 1;
     if (!path) continue;
 
+    // IN-03: a copy (C) is a new path in the result tree, like an add — never mislabel it
+    // `modified`. The parser is exported and reusable even though getDiffSummary uses only -M.
     const status: DiffFileStatus =
-      letter === 'A'
+      letter === 'A' || letter === 'C'
         ? 'added'
         : letter === 'D'
           ? 'deleted'
