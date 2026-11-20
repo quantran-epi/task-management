@@ -9,6 +9,54 @@ export interface WorktreeDescriptor {
   baseRef?: string | undefined;
 }
 
+import type { DiffFile } from './agent';
+import type { SshConfig } from './ssh';
+
+/** Phase 48: one shared slice mirrored between modal and popout. */
+export interface CodingZoneSharedTab {
+  id: string;
+  filePath: string;
+  kind: 'code' | 'diff';
+}
+
+export type CodingZoneHunkState = 'pending' | 'accepted' | 'rejected';
+
+export interface CodingZoneSharedMessage {
+  id: string;
+  author: string;
+  time: string;
+  text: string;
+  kind?: 'chat' | 'agent' | 'synthesis' | undefined;
+}
+
+export interface CodingZoneSharedActivity {
+  id: string;
+  time: string;
+  label: string;
+  text: string;
+  kind: 'tool' | 'result' | 'status';
+}
+
+export interface CodingZoneSharedState {
+  tabs: CodingZoneSharedTab[];
+  activeTabId: string;
+  activeFile: string | null;
+  initialLine?: number | undefined;
+  hunkStates: Record<string, CodingZoneHunkState>;
+  treeScope: 'diff' | 'all';
+  treeQuery: string;
+  messages: CodingZoneSharedMessage[];
+  activity: CodingZoneSharedActivity[];
+  descriptor?: WorktreeDescriptor | undefined;
+  sshConfig?: SshConfig | undefined;
+  allFiles: string[];
+  /** Real diff metadata, not pasted into URL/hash — IPC payload only. */
+  diffFiles: DiffFile[];
+  diffRevision: number;
+  connection: ConnectionState;
+  onlineCount: number;
+}
+
 /** Phase 48: model-supplied hunk data. Untrusted — only filePath/hunk text enter the patch. */
 export interface CodeEditArgs {
   filePath: string;

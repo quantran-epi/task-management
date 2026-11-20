@@ -20,6 +20,7 @@ import { NotesView } from './views/NotesView';
 import { NotesPopoutView } from './views/NotesPopoutView';
 import { TimerPopoutView } from './views/TimerPopoutView';
 import { AIPopoutView } from './views/AIPopoutView';
+import { CodingZonePopoutView } from './views/CodingZonePopoutView';
 import { ItemInsightView } from './views/ItemInsightView';
 import { TeamWorkspaceView } from './views/TeamWorkspaceView';
 import { TelegramMonitorView } from './views/TelegramMonitorView';
@@ -182,6 +183,17 @@ export const App: React.FC = () => {
         <AIChatProvider>
           <AIPopoutView />
         </AIChatProvider>
+      </ConfigProvider>
+    );
+  }
+
+  if (route === 'coding-zone-popout') {
+    return (
+      <ConfigProvider
+        locale={viVN}
+        theme={getAppTheme(isDark)}
+      >
+        <CodingZonePopoutView />
       </ConfigProvider>
     );
   }

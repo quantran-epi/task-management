@@ -9,6 +9,7 @@ export type AppRoute =
   | 'timer-popout'
   | 'notes-popout'
   | 'ai-popout'
+  | 'coding-zone-popout'
   | 'insight'
   | 'team'
   | 'telegram'
