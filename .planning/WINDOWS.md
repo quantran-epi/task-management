@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 14
+open_count: 16
 waived_count: 0
 fixed_count: 0
-total_count: 14
-last_updated: 2026-11-18T03:20:23.156Z
+total_count: 16
+last_updated: 2026-11-20T09:12:06.751Z
 ---
 
 # Broken Windows Ledger
@@ -29,6 +29,8 @@ last_updated: 2026-11-18T03:20:23.156Z
 | 12 | quick-261118-c0y | unrun-verify | tests/views/SettingsView.test.tsx |  | Pre-existing intermittent DatabaseClosedError unhandled rejection from McpConfigCard on DB close; reproduces at pristine HEAD independent of this plan. Out of scope. | open |  | 2026-11-18T02:03:33.414Z |  |
 | 13 | quick-261118-cz2 | unrun-verify | src-tauri/Cargo.toml |  | cargo check blocked by sandbox proxy (bit-vec v0.8.0 download); Rust compile unverified in this environment | open |  | 2026-11-18T03:20:22.976Z |  |
 | 14 | quick-261118-cz2 | deviation | tests/services/ai/office/teamRunCoordinator.test.ts |  | 4 timing-sensitive scheduler/R6 tests fail on baseline HEAD (pre-existing, out of scope) | open |  | 2026-11-18T03:20:23.156Z |  |
+| 15 | 46.1 | deviation | src/workbench/search/find/FindInRemoteFiles.tsx |  | Plan 02: file-mask icon button had no onClick; wired to focus mask input (Rule 1 fix) | open |  | 2026-11-20T09:12:06.486Z |  |
+| 16 | 46.1 | deviation |  |  | Plan 02 verify commands use vitest -x which Vitest 5 rejects; used --bail=1 | open |  | 2026-11-20T09:12:06.751Z |  |
 
 ````json
 [
@@ -211,6 +213,32 @@ last_updated: 2026-11-18T03:20:23.156Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-11-18T03:20:23.156Z",
+    "resolved_at": null,
+    "milestone": "v1.4"
+  },
+  {
+    "id": 15,
+    "kind": "deviation",
+    "phase": "46.1",
+    "file": "src/workbench/search/find/FindInRemoteFiles.tsx",
+    "line": null,
+    "description": "Plan 02: file-mask icon button had no onClick; wired to focus mask input (Rule 1 fix)",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-11-20T09:12:06.486Z",
+    "resolved_at": null,
+    "milestone": "v1.4"
+  },
+  {
+    "id": 16,
+    "kind": "deviation",
+    "phase": "46.1",
+    "file": "",
+    "line": null,
+    "description": "Plan 02 verify commands use vitest -x which Vitest 5 rejects; used --bail=1",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-11-20T09:12:06.751Z",
     "resolved_at": null,
     "milestone": "v1.4"
   }
