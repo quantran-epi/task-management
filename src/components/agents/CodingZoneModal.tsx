@@ -10,6 +10,7 @@ import type {
   ConnectionState,
   WorktreeDescriptor,
 } from '../../types/codingZone';
+import { isConnectionState, isDiffFileGuard, isWorktreeDescriptor } from '../../types/codingZone';
 import { RemoteFileViewer } from '../../workbench/editor/RemoteFileViewer';
 import { useCodingZoneSync } from '../../hooks/useCodingZoneSync';
 import { CONNECTION_COPY, useCodingZoneActivity } from './CodingZoneLiveState';
@@ -140,6 +141,12 @@ export const CodingZoneModal: React.FC<CodingZoneModalProps> = ({
       case 'full': {
         const state = event.payload as Partial<CodingZoneSharedState> | undefined;
         if (!state || typeof state !== 'object') return;
+        // WR-06: a malformed descriptor/diff/connection must reject the WHOLE event before
+        // any field reaches state (and ultimately a write verb or the remote viewer).
+        if (state.descriptor !== undefined && !isWorktreeDescriptor(state.descriptor)) return;
+        if (state.diffFiles !== undefined
+          && (!Array.isArray(state.diffFiles) || !state.diffFiles.every(isDiffFileGuard))) return;
+        if (state.connection !== undefined && !isConnectionState(state.connection)) return;
         if (isTabList(state.tabs)) setTabs(state.tabs);
         if (typeof state.activeTabId === 'string') setActiveTabId(state.activeTabId);
         if (typeof state.activeFile === 'string' || state.activeFile === null) setActiveFile(state.activeFile);

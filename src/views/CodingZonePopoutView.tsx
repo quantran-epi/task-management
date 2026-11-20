@@ -13,6 +13,7 @@ import type {
   CodingZoneSyncPayload,
   ConnectionState,
 } from '../types/codingZone';
+import { isCodingZoneFullState } from '../types/codingZone';
 import { useCodingZoneSync } from '../hooks/useCodingZoneSync';
 import { closeCodingZonePopout } from '../utils/codingZonePopout';
 
@@ -23,21 +24,6 @@ const EMPTY_FILES: readonly string[] = [];
 const EMPTY_DIFF_FILES: readonly DiffFile[] = [];
 const EMPTY_MESSAGES: readonly CodingZoneSharedMessage[] = [];
 
-/** Validate untrusted cross-window payloads at the boundary (T-48-10). */
-function isSharedState(value: unknown): value is CodingZoneSharedState {
-  if (!value || typeof value !== 'object') return false;
-  const state = value as Partial<CodingZoneSharedState>;
-  return Array.isArray(state.tabs)
-    && typeof state.activeTabId === 'string'
-    && (state.activeFile === null || typeof state.activeFile === 'string')
-    && !!state.hunkStates && typeof state.hunkStates === 'object'
-    && (state.treeScope === 'diff' || state.treeScope === 'all')
-    && typeof state.treeQuery === 'string'
-    && Array.isArray(state.messages)
-    && Array.isArray(state.activity)
-    && Array.isArray(state.allFiles);
-}
-
 export interface CodingZonePopoutViewProps {
   /** Popout window always quotes the connection carried in the handoff snapshot. */
   connection?: ConnectionState | undefined;
@@ -47,7 +33,7 @@ export const CodingZonePopoutView: React.FC<CodingZonePopoutViewProps> = ({ conn
   const [shared, setShared] = useState<CodingZoneSharedState | undefined>(undefined);
 
   const onState = useCallback((event: CodingZoneSyncPayload) => {
-    if (event.kind !== 'full' || !isSharedState(event.payload)) return;
+    if (event.kind !== 'full' || !isCodingZoneFullState(event.payload)) return;
     setShared(event.payload);
   }, []);
   // The modal owns tabs/decisions; this view needs the same full snapshot to feed its diff panel.

@@ -189,6 +189,39 @@ describe('CodingZoneModal shell', () => {
     }));
   });
 
+  it('rejects a full sync event with a malformed descriptor (WR-06)', async () => {
+    const onPopout = vi.fn();
+    renderModal({ onPopout });
+    const base = {
+      tabs: [], activeTabId: '__overview__', activeFile: null, hunkStates: {},
+      treeScope: 'diff', treeQuery: '', messages: [], activity: [], allFiles: [], diffFiles: [],
+      diffRevision: 1, connection: 'connected', onlineCount: 1,
+    };
+    const send = (descriptorValue: unknown, revision: number) => window.dispatchEvent(new MessageEvent('message', {
+      origin: window.location.origin,
+      data: {
+        type: 'coding-zone-sync',
+        payload: {
+          originWindowId: 'popout', revision, kind: 'full',
+          payload: { ...base, descriptor: descriptorValue },
+        },
+      },
+    }));
+    // Missing remoteWorktreePath: malformed, must not replace the current descriptor.
+    send({ sshConfigId: 'ssh-1', remoteRepoPath: '/srv/repo', branch: 'x' }, 20);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fireEvent.click(screen.getByTestId('cz-popout-button'));
+    expect(onPopout).toHaveBeenLastCalledWith(expect.objectContaining({ descriptor }));
+
+    // A well-formed descriptor is accepted and applied.
+    const replacement = { ...descriptor, remoteWorktreePath: `${descriptor.remoteWorktreePath}-2` };
+    send(replacement, 21);
+    await waitFor(() => {
+      fireEvent.click(screen.getByTestId('cz-popout-button'));
+      expect(onPopout).toHaveBeenLastCalledWith(expect.objectContaining({ descriptor: replacement }));
+    });
+  });
+
   it('does not run a turn twice when a chat send event is re-delivered (WR-04)', async () => {
     const { onSend } = renderModal();
     const message = { id: 'dup-1', author: 'Bạn', time: '09:00', text: 'gửi một lần', kind: 'chat' };
