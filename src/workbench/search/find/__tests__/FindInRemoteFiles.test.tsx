@@ -529,9 +529,12 @@ describe('FindInRemoteFiles — entry, seed, modes, debounce and Enter (Task 1)'
     expect(css).toMatch(/\.find-results\s*\{[^}]*overflow-x:\s*hidden/);
     expect(css).toMatch(/\.find-rrow\s*>\s*\*\s*\{\s*min-width:\s*0/);
     expect(css).toMatch(/\.find-rcode\s*\{[^}]*min-width:\s*0[^}]*overflow:\s*hidden[^}]*text-overflow:\s*ellipsis/);
-    // Preview: min-height + horizontal scroll keep source on one line, gutter separated.
+    // Preview: one pane scrolls both axes; code block sizes to its longest line.
+    expect(css).toMatch(/\.find-preview-body\s*\{[^}]*overflow:\s*auto/);
+    expect(css).toMatch(/\.find-code\s*\{[^}]*width:\s*max-content/);
     expect(css).toMatch(/\.find-cline\s*\{[^}]*min-height:\s*var\(--find-code-line-height[^}]*height:\s*auto/);
-    expect(css).toMatch(/\.find-source\s*\{[^}]*white-space:\s*pre[^}]*overflow-x:\s*auto/);
+    expect(css).toMatch(/\.find-source\s*\{[^}]*white-space:\s*pre/);
+    expect(css).not.toMatch(/\.find-source\s*\{[^}]*overflow-x/);
     expect(css).toMatch(/\.find-lno\s*\{[^}]*box-sizing:\s*border-box[^}]*padding-right:\s*10px/);
     expect(css).not.toContain('!important');
   });

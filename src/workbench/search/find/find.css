@@ -51,20 +51,37 @@
 .find-scopes {
   display: flex;
   align-items: center;
-  gap: var(--find-gap-sm, 8px);
-  padding: 0 var(--find-gap-md, 16px);
+  gap: var(--find-gap-md, 16px);
+  padding: var(--find-gap-xs, 4px) var(--find-gap-md, 16px) var(--find-gap-sm, 8px);
 }
 .find-axis {
   display: flex;
   align-items: center;
-  gap: var(--find-gap-sm, 8px);
+  gap: var(--find-gap-xs, 4px);
   min-width: 0;
+  padding: 2px 4px 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-island);
 }
-.find-axis + .find-axis {
-  border-left: 1px solid var(--border);
-  padding-left: var(--find-gap-md, 16px);
+.find-axis-label {
+  padding-right: 6px;
+  border-right: 1px solid var(--border);
+  color: var(--fg-subtle);
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
-.find-axis-label { color: var(--fg-subtle); font-size: var(--font-size-xs); white-space: nowrap; }
+/* Axis tabs render as chips: no underline divider, no AntD tab padding. */
+.find-axis .ant-tabs { min-width: 0; }
+.find-axis .ant-tabs-nav { margin: 0; }
+.find-axis .ant-tabs-nav::before { border-bottom: 0; }
+.find-axis .ant-tabs-ink-bar { display: none; }
+.find-axis .ant-tabs-nav-list { gap: 2px; }
+.find-axis .ant-tabs-nav-list > .ant-tabs-tab { margin: 0; padding: 2px 8px; border-radius: 5px; }
+.find-axis .ant-tabs-tab .ant-tabs-tab-btn { font-size: var(--font-size-xs); }
+.find-axis .ant-tabs-tab-active { background: var(--accent-soft); }
+.find-axis .ant-tabs-tab-active .ant-tabs-tab-btn { color: var(--accent); }
 .find-scopeval {
   margin-left: auto;
   min-width: 0;
@@ -77,11 +94,12 @@
 
 .find-split {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: var(--find-results-height, 210px) var(--find-handle-height, 7px) var(--find-preview-height, 246px);
   min-height: 0;
   border-top: 1px solid var(--border);
 }
-.find-results-pane { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.find-results-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 .find-results { overflow-y: auto; overflow-x: hidden; }
 .find-rrow {
   display: flex;
@@ -108,9 +126,11 @@
   font-size: var(--font-size-xs);
 }
 .find-rrow mark { background: var(--match, var(--accent-soft)); color: var(--match-ink, var(--fg)); }
+/* Preview marks keep their syntax token color; only the hit background is added. */
+.find-code mark { background: var(--match, var(--accent-soft)); border-radius: 2px; }
 .find-empty { padding: var(--find-gap-md, 16px); color: var(--fg-subtle); }
 .find-handle { cursor: row-resize; border-top: 1px solid var(--border-strong); }
-.find-preview { display: flex; flex-direction: column; min-height: 0; }
+.find-preview { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 .find-pane-head {
   display: flex;
   align-items: center;
@@ -120,7 +140,9 @@
   border-bottom: 1px solid var(--border);
   font-weight: 600;
 }
-.find-preview-body { flex: 1; overflow-y: auto; font-family: var(--font-mono, monospace); }
+.find-preview-body { flex: 1; min-width: 0; overflow: auto; font-family: var(--font-mono, monospace); }
+/* Code block grows to its longest line; the pane scrolls, not each line. */
+.find-code { min-width: 100%; width: max-content; }
 .find-cline { display: flex; min-height: var(--find-code-line-height, 19px); height: auto; }
 .find-cline.cur { background: var(--bg-current-line); }
 .find-lno {
@@ -133,9 +155,7 @@
 }
 .find-source {
   flex: 1 1 auto;
-  min-width: 0;
   white-space: pre;
-  overflow-x: auto;
 }
 
 .find-footer {

@@ -40,6 +40,30 @@ describe('parts.tsx — range-based highlighted rendering (T-46.1-07)', () => {
     scrollIntoView.mockRestore();
   });
 
+  it('CodePreview tokenizes syntax like the file viewer while keeping match marks', () => {
+    const content = 'const needle = "x";';
+    const { container } = render(
+      <CodePreview
+        content={content}
+        pattern="needle"
+        options={{ literal: true, matchCase: true, words: false }}
+        activeLine={0}
+      />
+    );
+    const spans = Array.from(container.querySelectorAll('.find-source span'));
+    const keyword = spans.find((s) => s.textContent === 'const');
+    const str = spans.find((s) => s.textContent === '"x"');
+    expect(keyword).toBeDefined();
+    expect(str).toBeDefined();
+    expect((keyword as HTMLElement).style.color).not.toBe('');
+    expect((str as HTMLElement).style.color).not.toBe('');
+    expect((keyword as HTMLElement).style.color).not.toBe((str as HTMLElement).style.color);
+    expect(container.querySelector('.find-source')!.textContent).toBe(content);
+    const mark = container.querySelector('mark');
+    expect(mark!.textContent).toBe('needle');
+    expect((mark as HTMLElement).style.color).not.toBe('');
+  });
+
   it('FolderPreview shows a concise folder listing without dangerouslySetInnerHTML', () => {
     const { container } = render(<FolderPreview entries={['src/main', 'src/test']} />);
     expect(container.textContent).toContain('src/main');

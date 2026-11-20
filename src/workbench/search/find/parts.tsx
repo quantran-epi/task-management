@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import type { MatchOptions } from './parsing';
 import { previewMatchRanges } from './parsing';
+import { tokenizeCodeLine, getGithubThemeColors } from '../../../components/common/DiffSyntaxHighlighter';
+import { useThemeMode } from '../../../hooks/useThemeMode';
 
 /** Slice text with <mark> on match ranges; skip overlapping/out-of-order ranges. */
 export function HighlightedText({ text, ranges }: { text: string; ranges: Array<[number, number]> }) {
@@ -63,6 +65,32 @@ export function ResultRow({
   );
 }
 
+/** Tokenize one preview line and keep match ranges as <mark>, so syntax color and hits coexist. */
+function SyntaxLine({ text, ranges, isDark }: { text: string; ranges: Array<[number, number]>; isDark: boolean }) {
+  const tokens = tokenizeCodeLine(text);
+  const colors = getGithubThemeColors(isDark);
+  const out: React.ReactNode[] = [];
+  let pos = 0;
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]!;
+    const start = pos;
+    const end = pos + token.text.length;
+    pos = end;
+    const style = { color: colors[token.type] || colors.plain, fontStyle: token.type === 'comment' ? 'italic' : undefined } as const;
+    let cursor = start;
+    for (const [ms, me] of ranges) {
+      const s = Math.max(ms, start);
+      const e = Math.min(me, end);
+      if (s >= e) continue;
+      if (s > cursor) out.push(<span key={`${cursor}-${s}`} style={style}>{text.slice(cursor, s)}</span>);
+      out.push(<mark key={`${s}-${e}`} style={style}>{text.slice(s, e)}</mark>);
+      cursor = e;
+    }
+    if (cursor < end) out.push(<span key={`${cursor}-${end}`} style={style}>{text.slice(cursor, end)}</span>);
+  }
+  return <>{out}</>;
+}
+
 export interface CodePreviewProps {
   content: string;
   pattern: string;
@@ -71,6 +99,7 @@ export interface CodePreviewProps {
 }
 
 export function CodePreview({ content, pattern, options, activeLine }: CodePreviewProps) {
+  const isDark = useThemeMode();
   const lines = content.split('\n');
   const marks = previewMatchRanges(content, pattern, options);
   const markByLine = new Map<number, Array<[number, number]>>();
@@ -94,7 +123,7 @@ export function CodePreview({ content, pattern, options, activeLine }: CodePrevi
             className={`find-cline${cur ? ' cur' : ''}`}
           >
             <span className="find-lno">{n}</span>
-            <span className="find-source"><HighlightedText text={line} ranges={markByLine.get(n) ?? []} /></span>
+            <span className="find-source"><SyntaxLine text={line} ranges={markByLine.get(n) ?? []} isDark={isDark} /></span>
           </div>
         );
       })}
