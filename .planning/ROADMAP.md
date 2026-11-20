@@ -434,7 +434,7 @@ Plans:
   5. Vietnamese text in UI labels renders correctly offline; unit/component tests cover search state, preview linkage, tree compaction and token usage.
 
 **Depends on:** Phase 46
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans complete
 
 Plans:
 **Wave 1** *(no dependencies — correctness backbone)*
@@ -455,7 +455,7 @@ Plans:
 
 **Wave 5** *(blocked on Waves 2-4)*
 
-- [ ] 46.1-05-PLAN.md — Combined focused gate + Nyquist sign-off + end-of-phase observable Tauri UAT (R1-R5, C-15)
+- [x] 46.1-05-PLAN.md — Combined focused gate + Nyquist sign-off + end-of-phase observable Tauri UAT (R1-R5, C-15)
 
 ### Phase 18: Multi-Modal Hybrid Retrieval Engine
 
