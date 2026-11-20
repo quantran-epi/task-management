@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<!--
+  DRAFT / BẢN NHÁP REVIEW UI — DỮ LIỆU MẪU / SAMPLE DATA
+  Mục đích: cho sếp duyệt bố cục + luồng tương tác của Agent Developer Workbench
+  trước khi đưa vào source app. Đây KHÔNG phải code app thật.
+
+  Hành vi CHỈ được mô phỏng trong trang (không có server, không IPC, không Tauri):
+  1. Cây worktree SSH: dữ liệu tĩnh, search/expand-collapse bằng JS local.
+  2. Nội dung file: sample, tô màu tay bằng span, không có syntax-highlight library.
+  3. Copy Path / Copy Content / Reveal / Reload: chỉ hiện toast.
+  4. Diff Accept/Reject/Accept All/Revert All: chỉ đổi state trong trang.
+  5. Popout: div nổi trong cùng trang, đồng bộ transcript + file active bằng state chung.
+  6. Team chat: không gửi đi đâu, tin chỉ nằm trong bộ nhớ trang.
+  7. Light/Dark: chỉ đổi attribute data-theme trên <html>.
+  8. Perspective "Team chat + agent activity": cùng state, chỉ đổi bố cục modal.
+
+  Không có tài nguyên mạng: mọi CSS/JS inline, font hệ thống, font mono hệ thống.
+-->
+<html lang="vi" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Developer Workbench — Draft review (DỮ LIỆU MẪU)</title>
+<style>
+:root, :root[data-theme="light"] {
+  --bg: #eef1f6;
+  --surface: #f8fafc;
+  --surface-strong: #ffffff;
+  --surface-sunken: #e8ecf3;
+  --fg: #1f2937;
+  --fg-strong: #000000;
+  --fg-secondary: #5f6269;
+  --fg-muted: #6c707e;
+  --fg-subtle: #64748b;
+  --fg-faint: #94a3b8;
+  --accent: #2f62d8;
+  --accent-soft: #e4ecff;
+  --accent-fg: #ffffff;
+  --border: #e9eaee;
+  --border-strong: #d1d3d9;
+  --bg-hover: #ededed;
+  --bg-selected: #d0dffe;
+  --bg-current-line: #f5f8fe;
+  --danger: #d1484f;
+  --warning: #a56906;
+  --success: #338555;
+  --status-untracked: #16a34a;
+  --status-added: #0891b2;
+  --status-deleted: #dc2626;
+  --status-modified: #2563eb;
+  --diff-add-bg: #e6ffed;
+  --diff-del-bg: #ffeef0;
+  --diff-add-fg: #1a6b34;
+  --diff-del-fg: #a3272e;
+  --folder-icon: #c98614;
+  --shadow: 0 24px 70px rgba(23, 35, 58, 0.24), 0 3px 12px rgba(23, 35, 58, 0.12);
+  --row: 24px;
+  --tab-h: 30px;
+}
+:root[data-theme="dark"] {
+  --bg: #11151d;
+  --surface: #171d27;
+  --surface-strong: #1c2330;
+  --surface-sunken: #111720;
+  --fg: #e6ebf5;
+  --fg-strong: #f4f7fb;
+  --fg-secondary: #9aa8bd;
+  --fg-muted: #9aa8bd;
+  --fg-subtle: #9aa8bd;
+  --fg-faint: #71819a;
+  --accent: #6a9bff;
+  --accent-soft: #1e3156;
+  --accent-fg: #071224;
+  --border: #2c3646;
+  --border-strong: #3d4a5f;
+  --bg-hover: #232c3b;
+  --bg-selected: #1e3156;
+  --bg-current-line: #1e3156;
+  --danger: #ff8289;
+  --warning: #e0a63a;
+  --success: #5cc98a;
+  --status-untracked: #4ade80;
+  --status-added: #22d3ee;
+  --status-deleted: #ff8289;
+  --status-modified: #6a9bff;
+  --diff-add-bg: #23452b;
+  --diff-del-bg: #4d1f24;
+  --diff-add-fg: #8ee0a6;
+  --diff-del-fg: #ffb0b5;
+  --folder-icon: #e0a63a;
+  --shadow: 0 24px 70px rgba(0, 0, 0, 0.55), 0 3px 12px rgba(0, 0, 0, 0.35);
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px; color: var(--fg); background: var(--bg);
+}
+.mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+.btn {
+  background: var(--surface-strong); border: 1px solid var(--border-strong);
+  border-radius: 5px; padding: 5px 10px; font-size: 12px; line-height: 16px;
+  color: var(--fg);
+}
+.btn:hover { background: var(--bg-hover); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.danger { color: var(--danger); }
+.btn.tiny { padding: 2px 7px; font-size: 11px; line-height: 15px; }
+.btn:disabled { opacity: .45; cursor: default; }
+.icon-btn {
+  width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: 1px solid transparent; border-radius: 5px; color: var(--fg-muted);
+  font-size: 14px;
+}
+.icon-btn:hover { background: var(--bg-hover); color: var(--fg-strong); }
+.segmented {
+  display: inline-flex; border: 1px solid var(--border-strong); border-radius: 5px;
+  overflow: hidden; background: var(--surface-sunken);
+}
+.segmented button {
+  border: 0; background: transparent; padding: 4px 10px; font-size: 11px; color: var(--fg-secondary);
+}
+.segmented button.on { background: var(--surface-strong); color: var(--accent); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+
+/* --- modal shell --- */
+.backdrop { position: fixed; inset: 0; background: var(--bg); padding: 16px; z-index: 10; }
+.modal {
+  width: 100%; height: 100%; background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: 11px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden;
+}
+.modal-header {
+  height: 48px; flex: 0 0 48px; display: flex; align-items: center; gap: 10px;
+  padding: 0 12px; background: var(--surface-strong); border-bottom: 1px solid var(--border-strong);
+}
+.modal-title { font-size: 13px; font-weight: 650; color: var(--fg-strong); white-space: nowrap; }
+.sample-badge {
+  font-size: 9px; font-weight: 700; letter-spacing: .04em; padding: 3px 7px; border-radius: 3px;
+  background: var(--accent-soft); color: var(--accent); white-space: nowrap;
+}
+.spacer { flex: 1; }
+.header-divider { width: 1px; height: 20px; background: var(--border-strong); }
+.perspective-label { font-size: 10px; color: var(--fg-faint); margin-right: 2px; }
+.modal-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 260px 1fr 300px; }
+.pane { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--surface); }
+.pane + .pane { border-left: 1px solid var(--border-strong); }
+.modal-footer {
+  height: 26px; flex: 0 0 26px; display: flex; align-items: center; gap: 14px; padding: 0 12px;
+  background: var(--surface-strong); border-top: 1px solid var(--border-strong);
+  font-size: 10px; color: var(--fg-muted);
+}
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); display: inline-block; }
+.reopen { position: fixed; left: 20px; bottom: 20px; z-index: 9; }
+.hidden { display: none !important; }
+
+/* --- left explorer --- */
+.target-card { padding: 9px 10px; border-bottom: 1px solid var(--border); background: var(--surface-strong); }
+.target-line { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--fg-strong); }
+.target-line .mono { font-size: 10px; }
+.branch-line { margin-top: 5px; display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--fg-muted); }
+.tag {
+  display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 9px; font-weight: 650;
+  background: var(--surface-sunken); color: var(--fg-secondary); border: 1px solid var(--border);
+}
+.tag.branch { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.tag.readonly { color: var(--warning); }
+.tag.state-accept { background: rgba(51,133,85,.14); color: var(--success); border-color: transparent; }
+.tag.state-reject { background: rgba(209,72,79,.14); color: var(--danger); border-color: transparent; }
+.explorer-controls { padding: 8px; border-bottom: 1px solid var(--border); background: var(--surface-strong); }
+.search-wrap { position: relative; }
+.search-wrap input {
+  width: 100%; height: 26px; padding: 0 8px 0 24px; border-radius: 4px;
+  border: 1px solid var(--border-strong); background: var(--bg); outline: none; font-size: 11px;
+}
+.search-wrap input:focus { border-color: var(--accent); }
+.search-wrap span { position: absolute; left: 8px; top: 4px; color: var(--fg-faint); font-size: 12px; }
+.scope-row { display: flex; align-items: center; gap: 6px; margin-top: 7px; }
+.scope-row .segmented button { padding: 2px 8px; }
+.scope-hint { font-size: 9px; color: var(--fg-faint); margin-left: auto; }
+.tree { flex: 1; overflow: auto; padding: 4px 0 10px; }
+.tree-row {
+  height: var(--row); display: flex; align-items: center; gap: 4px; padding-right: 8px;
+  white-space: nowrap; cursor: pointer; user-select: none; font-size: 11px;
+}
+.tree-row:hover { background: var(--bg-hover); }
+.tree-row.selected { background: var(--accent-soft); color: var(--accent); }
+.tree-caret { width: 14px; flex: 0 0 14px; text-align: center; color: var(--fg-faint); font-size: 9px; }
+.tree-name { overflow: hidden; text-overflow: ellipsis; }
+.tree-icon { flex: 0 0 14px; text-align: center; font-size: 11px; }
+.tree-icon.folder { color: var(--folder-icon); }
+.tree-icon.file { color: var(--fg-faint); }
+.status-badge {
+  font-size: 9px; font-weight: 700; width: 13px; height: 13px; line-height: 13px; text-align: center;
+  border-radius: 2px; flex: 0 0 13px;
+}
+.st-M { color: var(--status-modified); background: rgba(37,99,235,.12); }
+.st-A { color: var(--status-added); background: rgba(8,145,178,.12); }
+.st-D { color: var(--status-deleted); background: rgba(220,38,38,.12); }
+.tree-delta { margin-left: auto; font-size: 9px; font-family: "SFMono-Regular", Consolas, monospace; }
+.delta-add { color: var(--success); }
+.delta-del { color: var(--danger); }
+
+/* --- center tabs --- */
+.tabbar {
+  height: var(--tab-h); flex: 0 0 var(--tab-h); display: flex; align-items: stretch;
+  background: var(--surface-sunken); border-bottom: 1px solid var(--border-strong); overflow-x: auto;
+}
+.tab {
+  position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px 0 11px;
+  min-width: 96px; max-width: 210px; height: var(--tab-h); cursor: pointer; user-select: none;
+  color: var(--fg-secondary); background: transparent; border-right: 1px solid var(--border);
+  font-size: 11px; white-space: nowrap;
+}
+.tab:hover { background: var(--bg-hover); color: var(--fg-strong); }
+.tab.active { background: var(--surface); color: var(--fg-strong); font-weight: 600; }
+.tab.active::after {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--accent); border-radius: 2px 2px 0 0;
+}
+.tab.drop-target { box-shadow: inset 2px 0 0 var(--accent); }
+.tab-title { overflow: hidden; text-overflow: ellipsis; }
+.tab-close { border: 0; background: transparent; color: var(--fg-faint); font-size: 14px; padding: 0 2px; border-radius: 3px; }
+.tab-close:hover { background: var(--danger); color: #fff; }
+.tab-pin { font-size: 9px; color: var(--accent); }
+.tab-icon { font-size: 11px; color: var(--fg-muted); }
+.tab-icon.diff { color: var(--success); }
+.content { flex: 1; min-height: 0; overflow: auto; background: var(--surface-strong); }
+.toolbar {
+  height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 10px;
+  border-bottom: 1px solid var(--border); background: var(--surface); font-size: 11px;
+}
+.pathline { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.pathline .path { font-family: "SFMono-Regular", Consolas, monospace; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toolbar-actions { display: flex; gap: 3px; margin-left: auto; }
+.counters { display: flex; align-items: center; gap: 6px; }
+.cnt { font-family: "SFMono-Regular", Consolas, monospace; font-size: 11px; font-weight: 700; }
+.cnt.add { color: var(--success); }
+.cnt.del { color: var(--danger); }
+.cnt-label { font-size: 10px; color: var(--fg-faint); }
+.code-body { padding: 6px 0 20px; }
+.code-row {
+  display: grid; grid-template-columns: 52px 1fr; min-height: 19px; line-height: 19px;
+  font-family: "SFMono-Regular", Consolas, monospace; font-size: 11.5px;
+}
+.code-row:hover { background: var(--bg-current-line); }
+.code-row.target { background: var(--accent-soft); }
+.ln { text-align: right; padding-right: 12px; color: var(--fg-faint); user-select: none; font-size: 10px; }
+.code-text { padding-right: 16px; white-space: pre; overflow: visible; }
+.kw { color: #8250df; font-weight: 600; }
+:root[data-theme="dark"] .kw { color: #c792ea; }
+.str { color: #0a7d55; }
+:root[data-theme="dark"] .str { color: #7bd88f; }
+.cm { color: var(--fg-faint); font-style: italic; }
+.fn { color: #1d5fbf; }
+:root[data-theme="dark"] .fn { color: #82aaff; }
+.num { color: #a56906; }
+.overview { padding: 18px 20px; }
+.overview h2 { font-size: 16px; margin: 0 0 4px; color: var(--fg-strong); }
+.overview p { margin: 0 0 16px; color: var(--fg-secondary); font-size: 12px; }
+.ov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.ov-card { border: 1px solid var(--border-strong); border-radius: 7px; padding: 12px; background: var(--surface); }
+.ov-card:hover { border-color: var(--accent); }
+.ov-card .name { font-family: "SFMono-Regular", Consolas, monospace; font-size: 11px; color: var(--fg-strong); word-break: break-all; }
+.ov-card .meta { margin-top: 8px; font-size: 10px; color: var(--fg-muted); display: flex; gap: 8px; }
+.ov-note { margin-top: 16px; padding: 10px 12px; border-left: 3px solid var(--accent); background: var(--accent-soft); font-size: 11px; color: var(--fg-secondary); }
+
+/* --- diff --- */
+.diff-wrap { padding-bottom: 20px; }
+.hunk { border: 1px solid var(--border-strong); border-radius: 6px; margin: 12px 10px; overflow: hidden; background: var(--surface-strong); }
+.hunk-head {
+  display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 9px;
+  background: var(--surface-sunken); border-bottom: 1px solid var(--border-strong); font-size: 11px;
+}
+.hunk-head .hdr { font-family: "SFMono-Regular", Consolas, monospace; color: var(--fg-secondary); font-size: 10.5px; }
+.hunk-head .head-actions { margin-left: auto; display: flex; gap: 5px; align-items: center; }
+.hunk[data-state="accept"] { border-color: var(--success); }
+.hunk[data-state="reject"] { border-color: var(--danger); }
+.diff-line { display: grid; grid-template-columns: 42px 42px 18px 1fr; min-height: 19px; line-height: 19px; font-family: "SFMono-Regular", Consolas, monospace; font-size: 11.5px; }
+.diff-line .no { text-align: right; padding-right: 8px; color: var(--fg-faint); background: var(--surface); user-select: none; font-size: 10px; }
+.diff-line .marker { text-align: center; color: var(--fg-muted); user-select: none; }
+.diff-line .txt { padding-right: 10px; white-space: pre; }
+.diff-line.add { background: var(--diff-add-bg); color: var(--diff-add-fg); }
+.diff-line.add .no, .diff-line.add .marker { background: var(--diff-add-bg); color: var(--diff-add-fg); opacity: .75; }
+.diff-line.del { background: var(--diff-del-bg); color: var(--diff-del-fg); }
+.diff-line.del .no, .diff-line.del .marker { background: var(--diff-del-bg); color: var(--diff-del-fg); opacity: .75; }
+.dimmed-old .diff-line.del { opacity: .32; text-decoration: line-through; }
+.dimmed-new .diff-line.add { opacity: .32; text-decoration: line-through; }
+.hunk[data-state="reject"] .hunk-body { opacity: .72; }
+.split-head { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface); border-bottom: 1px solid var(--border); font-size: 10px; color: var(--fg-muted); }
+.split-head div { padding: 2px 8px; }
+.split-head div + div { border-left: 1px solid var(--border-strong); }
+.split-line { display: grid; grid-template-columns: 1fr 1fr; min-height: 19px; line-height: 19px; font-family: "SFMono-Regular", Consolas, monospace; font-size: 11px; }
+.split-side { display: grid; grid-template-columns: 38px 16px 1fr; min-width: 0; overflow: hidden; }
+.split-side + .split-side { border-left: 1px solid var(--border-strong); }
+.split-side .no { text-align: right; padding-right: 6px; color: var(--fg-faint); font-size: 10px; }
+.split-side .marker { text-align: center; color: var(--fg-muted); }
+.split-side .txt { white-space: pre; padding-right: 8px; }
+.split-side.is-add { background: var(--diff-add-bg); color: var(--diff-add-fg); }
+.split-side.is-del { background: var(--diff-del-bg); color: var(--diff-del-fg); }
+.split-side.blank { background: var(--surface-sunken); }
+.dimmed-old .split-side.is-del, .dimmed-new .split-side.is-add { opacity: .32; text-decoration: line-through; }
+.hunk-foot { padding: 4px 9px; font-size: 10px; color: var(--fg-faint); background: var(--surface); border-top: 1px solid var(--border); }
+
+/* --- chat strip --- */
+.chat-head {
+  height: 38px; flex: 0 0 38px; display: flex; align-items: center; gap: 7px; padding: 0 10px;
+  background: var(--surface-strong); border-bottom: 1px solid var(--border-strong); font-size: 11px; font-weight: 600;
+}
+.sync-chip { font-size: 9px; font-weight: 500; color: var(--success); display: inline-flex; align-items: center; gap: 4px; }
+.chat-transcript { flex: 1; min-height: 0; overflow-y: auto; padding: 10px; }
+.msg { display: grid; grid-template-columns: 24px 1fr; gap: 7px; margin-bottom: 10px; }
+.msg-avatar {
+  width: 24px; height: 24px; border-radius: 5px; background: var(--accent-soft); color: var(--accent);
+  display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700;
+}
+.msg.agent .msg-avatar { background: rgba(8,145,178,.14); color: var(--status-added); }
+.msg-meta { display: flex; align-items: baseline; gap: 5px; font-size: 10px; }
+.msg-name { font-weight: 650; color: var(--fg-strong); }
+.msg-time { color: var(--fg-faint); font-size: 9px; }
+.msg-kind { font-size: 8px; font-weight: 700; padding: 0 4px; border-radius: 2px; background: var(--accent-soft); color: var(--accent); }
+.msg-kind.synthesis { background: rgba(51,133,85,.15); color: var(--success); }
+.msg-text { font-size: 11px; line-height: 1.45; color: var(--fg-secondary); margin-top: 2px; overflow-wrap: anywhere; }
+.chat-compose { border-top: 1px solid var(--border-strong); padding: 8px; background: var(--surface-strong); }
+.chat-compose textarea {
+  width: 100%; height: 50px; resize: none; border-radius: 5px; padding: 6px 7px;
+  border: 1px solid var(--border-strong); background: var(--bg); outline: none; font: inherit; font-size: 11px;
+}
+.chat-compose textarea:focus { border-color: var(--accent); }
+.compose-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.compose-hint { font-size: 9px; color: var(--fg-faint); }
+
+/* --- chat perspective --- */
+.agent-activity { padding: 10px; overflow: auto; }
+.act-head { font-size: 11px; font-weight: 650; margin: 0 0 10px; color: var(--fg-strong); }
+.act-item { padding: 8px 9px; border-left: 2px solid var(--border-strong); margin-bottom: 10px; background: var(--surface); border-radius: 0 5px 5px 0; }
+.act-item.live { border-left-color: var(--accent); background: var(--accent-soft); }
+.act-item .act-title { font-size: 11px; color: var(--fg-strong); font-weight: 600; }
+.act-item .act-meta { font-size: 10px; color: var(--fg-muted); margin-top: 3px; }
+.perspective-chat .chat-transcript { font-size: 12px; }
+.active-file-card { padding: 10px; border-bottom: 1px solid var(--border); background: var(--surface-strong); }
+.active-file-card .lbl { font-size: 9px; color: var(--fg-faint); text-transform: uppercase; letter-spacing: .05em; }
+.active-file-card .val { font-family: "SFMono-Regular", Consolas, monospace; font-size: 11px; color: var(--fg-strong); margin-top: 4px; word-break: break-all; }
+
+/* --- popout / notes / toast --- */
+.popout {
+  position: fixed; right: 26px; top: 70px; width: 420px; height: 520px; z-index: 40;
+  display: flex; flex-direction: column; background: var(--surface-strong);
+  border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: var(--shadow); overflow: hidden;
+}
+.popout-head {
+  height: 36px; flex: 0 0 36px; display: flex; align-items: center; gap: 8px; padding: 0 10px;
+  background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 650;
+}
+.popout-file { padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 10px; color: var(--fg-muted); }
+.popout-file b { color: var(--fg-strong); font-family: "SFMono-Regular", Consolas, monospace; font-size: 10.5px; word-break: break-all; }
+.popout-note { font-size: 9px; color: var(--warning); padding: 4px 10px; background: var(--surface-sunken); border-bottom: 1px solid var(--border); }
+.notes-overlay { position: fixed; inset: 0; z-index: 50; background: rgba(15, 23, 42, .35); display: flex; justify-content: flex-end; }
+.notes-panel { width: min(430px, 100%); height: 100%; background: var(--surface-strong); box-shadow: var(--shadow); display: flex; flex-direction: column; }
+.notes-head { height: 48px; flex: 0 0 48px; display: flex; align-items: center; padding: 0 14px; border-bottom: 1px solid var(--border-strong); font-weight: 650; }
+.notes-body { overflow: auto; padding: 14px; }
+.notes-body ol { margin: 0; padding-left: 20px; }
+.notes-body li { margin-bottom: 11px; font-size: 12px; line-height: 1.5; color: var(--fg-secondary); }
+.notes-body li b { color: var(--fg-strong); }
+.notes-foot { padding: 10px 14px; border-top: 1px solid var(--border); font-size: 10px; color: var(--fg-faint); }
+.toast {
+  position: fixed; left: 50%; bottom: 42px; transform: translateX(-50%); z-index: 90;
+  background: var(--fg-strong); color: var(--surface-strong); padding: 8px 14px; border-radius: 6px;
+  font-size: 11px; box-shadow: var(--shadow); pointer-events: none;
+}
+:root[data-theme="dark"] .toast { background: #e6ebf5; color: #11151d; }
+@media (max-width: 900px) {
+  .modal-body { grid-template-columns: 200px 1fr; }
+  .modal-body > .pane.chat { display: none; }
+  .perspective-label { display: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="backdrop" id="backdrop">
+  <div class="modal" id="modal" role="dialog" aria-label="Agent Developer Workbench draft">
+    <div class="modal-header">
+      <span class="modal-title">Agent Developer Workbench</span>
+      <span class="sample-badge" data-sample="true">DỮ LIỆU MẪU / SAMPLE DATA</span>
+      <div class="header-divider"></div>
+      <span class="perspective-label">Góc nhìn</span>
+      <div class="segmented" id="perspective-switch">
+        <button type="button" data-perspective="code" class="on">Coding zone</button>
+        <button type="button" data-perspective="chat">Team chat + agent activity</button>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn tiny" type="button" id="theme-btn" title="Đổi palette sáng/tối">Light / Dark</button>
+      <button class="btn tiny" type="button" id="popout-btn">Popout chat</button>
+      <button class="btn tiny" type="button" id="notes-btn">Ghi chú</button>
+      <button class="icon-btn" type="button" id="close-btn" title="Ẩn modal" aria-label="Ẩn modal">×</button>
+    </div>
+
+    <!-- PERSPECTIVE 1: Coding zone -->
+    <div class="modal-body" id="body-code">
+      <!-- LEFT: SSH worktree explorer -->
+      <div class="pane explorer" data-sample="true">
+        <div class="target-card">
+          <div class="target-line">
+            <span>SSH</span>
+            <span class="mono">devbox-worktree-261121 · /srv/taskmate</span>
+          </div>
+          <div class="branch-line">
+            <span class="tag branch">feature/agent-developer-workbench</span>
+            <span>read-only</span>
+          </div>
+        </div>
+        <div class="explorer-controls">
+          <div class="search-wrap">
+            <span>⌕</span>
+            <input id="tree-search" type="text" placeholder="Tìm file trong worktree..." aria-label="Tìm file">
+          </div>
+          <div class="scope-row">
+            <div class="segmented" id="scope-switch">
+              <button type="button" data-scope="diff" class="on">Diff</button>
+              <button type="button" data-scope="all">Tất cả</button>
+            </div>
+            <span class="scope-hint" id="scope-hint">chỉ file có thay đổi</span>
+          </div>
+        </div>
+        <div class="tree" id="tree" data-sample="true"></div>
+      </div>
+
+      <!-- CENTER: file tabs -->
+      <div class="pane center">
+        <div class="tabbar" id="tabbar" role="tablist" aria-label="File đang mở"></div>
+        <div class="content" id="content"></div>
+      </div>
+
+      <!-- RIGHT: team chat strip -->
+      <div class="pane chat" data-sample="true">
+        <div class="chat-head">
+          <span>Team chat · 3 online</span>
+          <span class="sync-chip"><i class="dot"></i> Đồng bộ</span>
+          <div class="spacer"></div>
+          <button class="icon-btn" type="button" id="chat-popout-btn" title="Mở popout" aria-label="Mở popout">⤢</button>
+        </div>
+        <div class="chat-transcript" id="chat-transcript"></div>
+        <div class="chat-compose">
+          <textarea id="chat-input" placeholder="Gõ tin mẫu... (không gửi đi đâu)" aria-label="Soạn tin nhắn"></textarea>
+          <div class="compose-row">
+            <span class="compose-hint">Mô phỏng — tin chỉ nằm trong trang</span>
+            <div class="spacer"></div>
+            <button class="btn tiny primary" type="button" id="chat-send">Gửi</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PERSPECTIVE 2: Team chat + agent activity -->
+    <div class="modal-body perspective-chat hidden" id="body-chat">
+      <div class="pane">
+        <div class="chat-head"><span>Agent activity</span><span class="sync-chip"><i class="dot"></i> Đồng bộ</span></div>
+        <div class="active-file-card">
+          <div class="lbl">File đang active (chia sẻ với Coding zone)</div>
+          <div class="val" id="perspective-file">—</div>
+        </div>
+        <div class="agent-activity" data-sample="true">
+          <p class="act-head">Dòng thời gian mẫu</p>
+          <div class="act-item live"><div class="act-title">Agent Developer · đang rà soát</div><div class="act-meta">3 hunk trong AgentWorkbench.tsx · 2 phút trước</div></div>
+          <div class="act-item"><div class="act-title">Reviewer · diff_summary</div><div class="act-meta">Đọc 6 file trên nhánh feature/... · 8 phút trước</div></div>
+          <div class="act-item"><div class="act-title">Leader · plan</div><div class="act-meta">Chốt phạm vi draft UI workbench · 14 phút trước</div></div>
+          <div class="act-item"><div class="act-title">Agent Developer · synthesis</div><div class="act-meta">Gợi ý counter +/− cập nhật ngay · 18 phút trước</div></div>
+        </div>
+      </div>
+      <div class="pane chat" data-sample="true">
+        <div class="chat-head">
+          <span>Team chat · 3 online</span>
+          <span class="sync-chip"><i class="dot"></i> Đồng bộ</span>
+          <div class="spacer"></div>
+          <button class="btn tiny" type="button" id="chat-popout-btn-2">Popout</button>
+        </div>
+        <div class="chat-transcript" id="chat-transcript-wide"></div>
+        <div class="chat-compose">
+          <textarea id="chat-input-wide" placeholder="Gõ tin mẫu... (dùng chung state với dải chat)" aria-label="Soạn tin nhắn ở góc nhìn team"></textarea>
+          <div class="compose-row">
+            <span class="compose-hint">Cùng transcript với Coding zone</span>
+            <div class="spacer"></div>
+            <button class="btn tiny primary" type="button" id="chat-send-wide">Gửi</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer" data-sample="true">
+      <span><i class="dot"></i> SSH target giả lập</span>
+      <span>Nhánh: feature/agent-developer-workbench</span>
+      <span>Draft UI · không sửa source app</span>
+      <div class="spacer"></div>
+      <span>DỮ LIỆU MẪU / SAMPLE DATA</span>
+    </div>
+  </div>
+</div>
+
+<button class="btn primary reopen hidden" id="reopen-btn" type="button">Hiện lại Agent Developer Workbench</button>
+
+<!-- Popout giả lập: div nổi, KHÔNG phải window.open / IPC / Tauri -->
+<div class="popout hidden" id="popout" role="dialog" aria-label="Team chat popout mô phỏng">
+  <div class="popout-head">
+    <span>Team chat — Popout (mô phỏng)</span>
+    <div class="spacer"></div>
+    <button class="icon-btn" type="button" id="popout-close" aria-label="Đóng popout" style="color:inherit">×</button>
+  </div>
+  <div class="popout-note">Đồng bộ mô phỏng trong cùng trang — chia sẻ state, không có cửa sổ thật.</div>
+  <div class="popout-file">File đang active: <b id="popout-file">—</b></div>
+  <div class="chat-transcript" id="popout-transcript"></div>
+  <div class="chat-compose">
+    <textarea id="popout-input" placeholder="Gõ tin từ popout..." aria-label="Soạn tin trong popout"></textarea>
+    <div class="compose-row">
+      <span class="compose-hint">Cùng transcript với modal</span>
+      <div class="spacer"></div>
+      <button class="btn tiny primary" type="button" id="popout-send">Gửi</button>
+    </div>
+  </div>
+</div>
+
+<!-- Ghi chú -->
+<div class="notes-overlay hidden" id="notes-overlay">
+  <div class="notes-panel" role="dialog" aria-label="Ghi chú về hành vi mô phỏng">
+    <div class="notes-head">Ghi chú · hành vi được mô phỏng
+      <div class="spacer"></div>
+      <button class="icon-btn" type="button" id="notes-close" aria-label="Đóng ghi chú">×</button>
+    </div>
+    <div class="notes-body">
+      <ol>
+        <li><b>Cây worktree SSH là dữ liệu tĩnh.</b> Search, collapse/expand, scope Diff/Tất cả chạy bằng JS local; không kết nối SSH hay đọc filesystem.</li>
+        <li><b>Nội dung file là sample.</b> Gutter số dòng và tô màu keyword/string/comment làm bằng span, không dùng syntax-highlight library.</li>
+        <li><b>Copy Path / Copy Content / Reveal / Reload chỉ hiện toast</b> "Mô phỏng — không có tác dụng thật"; không ghi clipboard thật.</li>
+        <li><b>Diff Accept/Reject/Accept All/Revert All chỉ đổi state trong trang.</b> Bộ đếm +/− phản ánh số dòng của các hunk <em>chưa quyết định</em>; không sửa file hay repository.</li>
+        <li><b>Popout không phải cửa sổ thật.</b> Đây là div nổi dùng chung biến <code>messages</code> và <code>activeTabId</code> với modal; không dùng window.open, IPC hay Tauri.</li>
+        <li><b>Team chat không gửi đi đâu.</b> Tin thêm vào chỉ nằm trong bộ nhớ trang, mất khi reload.</li>
+        <li><b>Light/Dark chỉ đổi attribute <code>data-theme</code></b> trên <code>&lt;html&gt;</code> để swap palette CSS; không lưu cài đặt.</li>
+        <li><b>Góc nhìn "Team chat + agent activity" chỉ đổi bố cục</b> của cùng modal, vẫn dùng chung state tab/chat.</li>
+        <li><b>Tab pinned "Tổng quan" không có nút ×.</b> Đóng tab active chuyển sang tab kề; kéo thả để sắp xếp lại (pinned luôn đứng đầu).</li>
+      </ol>
+    </div>
+    <div class="notes-foot">Tất cả nội dung ở trên là DỮ LIỆU MẪU / SAMPLE DATA. Không chứa token, passphrase hay path máy thật.</div>
+  </div>
+</div>
+
+<div class="toast hidden" id="toast" role="status"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------------- sample data ---------------- */
+  const FILES = {
+    'README.md': {
+      status: '', adds: 0, dels: 0, diff: false,
+      lines: [
+        '<cm># TaskMate — DỮ LIỆU MẪU / SAMPLE</cm>',
+        '',
+        'Ứng dụng quản lý công việc offline-first, chạy local.',
+        '',
+        '<cm>## Phát triển</cm>',
+        '<str>npm install</str>',
+        '<str>npm run dev</str>',
+        '',
+        '<cm>## Lưu ý</cm>',
+        'Bản draft này chỉ để review UI workbench.'
+      ]
+    },
+    'src/utils/compactFileTree.ts': {
+      status: 'A', adds: 30, dels: 0, diff: false,
+      lines: [
+        '<cm>// DỮ LIỆU MẪU / SAMPLE DATA</cm>',
+        '<kw>export type</kw> TreeNode = { path: <kw>string</kw>; children?: TreeNode[] };',
+        '',
+        '<kw>export function</kw> <fn>compactFileTree</fn>(paths: <kw>string</kw>[]): TreeNode[] {',
+        '  <kw>const</kw> root: TreeNode[] = [];',
+        '  <kw>const</kw> index = <kw>new</kw> Map&lt;<kw>string</kw>, TreeNode&gt;();',
+        '  <kw>for</kw> (<kw>const</kw> path <kw>of</kw> paths) {',
+        '    <kw>const</kw> parts = path.split(<str>"/"</str>);',
+        '    <kw>let</kw> cursor = root;',
+        '    <kw>for</kw> (<kw>const</kw> part <kw>of</kw> parts) {',
+        '      <kw>const</kw> key = cursor === root ? part : <str>`${path}/${part}`</str>;',
+        '      <kw>let</kw> node = index.get(key);',
+        '      <kw>if</kw> (!node) { node = { path: key }; index.set(key, node); cursor.push(node); }',
+        '      cursor = node.children ?? (node.children = []);',
+        '    }',
+        '  }',
+        '  <kw>return</kw> root;',
+        '}'
+      ]
+    },
+    'src/workbench/AgentWorkbench.tsx': {
+      status: 'M', adds: 42, dels: 8, diff: true,
+      lines: [
+        '<kw>export function</kw> <fn>AgentWorkbench</fn>() {',
+        '  <kw>return</kw> &lt;<div className=<str>"workbench"</str>&gt;...&lt;/div&gt;;',
+        '}'
+      ]
+    }
+  };
+
+  const TREE = [
+    { id: 'src', name: 'src', folder: true, children: [
+      { id: 'src-workbench', name: 'workbench', folder: true, children: [
+        { id: 'f-agentwb', name: 'AgentWorkbench.tsx', path: 'src/workbench/AgentWorkbench.tsx' },
+        { id: 'f-layout', name: 'layoutStore.ts', path: 'src/workbench/store/layoutStore.ts' }
+      ]},
+      { id: 'src-components', name: 'components', folder: true, children: [
+        { id: 'src-agents', name: 'agents', folder: true, children: [
+          { id: 'f-diffhunk', name: 'DiffHunkView.tsx', path: 'src/components/agents/DiffHunkView.tsx' },
+          { id: 'f-reviewer', name: 'AgentDiffReviewer.tsx', path: 'src/components/agents/AgentDiffReviewer.tsx' }
+        ]}
+      ]},
+      { id: 'src-utils', name: 'utils', folder: true, children: [
+        { id: 'f-compact', name: 'compactFileTree.ts', path: 'src/utils/compactFileTree.ts' }
+      ]}
+    ]},
+    { id: 'tests', name: 'tests', folder: true, children: [
+      { id: 'f-test-compact', name: 'compactFileTree.test.ts', path: 'tests/compactFileTree.test.ts' }
+    ]},
+    { id: 'planning', name: '.planning/quick', folder: true, children: [
+      { id: 'f-readme', name: 'README.md', path: 'README.md' }
+    ]}
+  ];
+
+  const EXTRA = {
+    'src/workbench/store/layoutStore.ts': { status: 'M', adds: 6, dels: 2, diff: false },
+    'src/components/agents/DiffHunkView.tsx': { status: 'A', adds: 38, dels: 0, diff: false },
+    'src/components/agents/AgentDiffReviewer.tsx': { status: 'M', adds: 12, dels: 3, diff: false },
+    'tests/compactFileTree.test.ts': { status: 'A', adds: 22, dels: 0, diff: false },
+    'README.md': FILES['README.md'],
+    'src/utils/compactFileTree.ts': FILES['src/utils/compactFileTree.ts'],
+    'src/workbench/AgentWorkbench.tsx': FILES['src/workbench/AgentWorkbench.tsx']
+  };
+  Object.keys(EXTRA).forEach(function (p) { if (!FILES[p]) FILES[p] = EXTRA[p]; });
+
+  const HUNKS = [
+    {
+      id: 'h1', header: '@@ -12,7 +12,11 @@ export function buildCompactTree(', adds: 14, dels: 2,
+      lines: [
+        { m: ' ', o: 12, n: 12, t: 'export function buildCompactTree(paths: string[]): Tree[' },
+        { m: '-', o: 13, n: null, t: '  const result: Tree[] = [];' },
+        { m: '+', o: null, n: 13, t: '  const seen = new Set<string>();' },
+        { m: '+', o: null, n: 14, t: '  const result: Tree[] = [];' },
+        { m: ' ', o: 14, n: 15, t: '  for (const path of paths) {' },
+        { m: '-', o: 15, n: null, t: '    if (!path) continue;' },
+        { m: '+', o: null, n: 16, t: '    if (!path || seen.has(path)) continue;' },
+        { m: '+', o: null, n: 17, t: '    seen.add(path);' },
+        { m: ' ', o: 16, n: 18, t: '    result.push(toNode(path));' },
+        { m: ' ', o: 17, n: 19, t: '  }' }
+      ]
+    },
+    {
+      id: 'h2', header: '@@ -38,9 +42,13 @@ function toNode(path: string): Tree {', adds: 18, dels: 4,
+      lines: [
+        { m: ' ', o: 38, n: 42, t: 'function toNode(path: string): Tree {' },
+        { m: '-', o: 39, n: null, t: '  const parts = path.split("/");' },
+        { m: '+', o: null, n: 43, t: '  const parts = path.split("/").filter(Boolean);' },
+        { m: '+', o: null, n: 44, t: '  if (parts.length === 0) throw new Error("empty path");' },
+        { m: ' ', o: 40, n: 45, t: '  const node: Tree = { path, children: [] };' },
+        { m: '-', o: 41, n: null, t: '  return { ...node, name: parts[parts.length - 1] };' },
+        { m: '+', o: null, n: 46, t: '  const name = parts.at(-1) ?? path;' },
+        { m: '+', o: null, n: 47, t: '  return { ...node, name, depth: parts.length };' },
+        { m: ' ', o: 42, n: 48, t: '}' }
+      ]
+    },
+    {
+      id: 'h3', header: '@@ -71,5 +79,7 @@ export const compact = memo(buildCompactTree);', adds: 10, dels: 2,
+      lines: [
+        { m: '-', o: 71, n: null, t: 'export const compact = buildCompactTree;' },
+        { m: '+', o: null, n: 79, t: 'export const compact = memo(buildCompactTree);' },
+        { m: '+', o: null, n: 80, t: 'export const countNodes = (t: Tree[]): number =>' },
+        { m: '+', o: null, n: 81, t: '  t.reduce((n, x) => n + 1 + countNodes(x.children ?? []), 0);' },
+        { m: ' ', o: 72, n: 82, t: '' },
+        { m: '-', o: 73, n: null, t: '// TODO: tach helper' },
+        { m: '+', o: null, n: 83, t: '// DỮ LIỆU MẪU / SAMPLE DATA' }
+      ]
+    }
+  ];
+
+  const SEED_MESSAGES = [
+    { who: 'TL', name: 'Trưởng nhóm', time: '09:12', kind: 'plan', text: 'Đã mở nhánh feature/agent-developer-workbench, mời rà bản draft UI trước.' },
+    { who: 'RV', name: 'Reviewer', time: '09:14', kind: '', text: 'Mình nhìn phần diff review trước — bộ đếm +/− phải đổi ngay khi bấm Accept.' },
+    { who: 'AD', name: 'Agent Developer', time: '09:15', kind: '', agent: true, text: 'Đang rà 3 hunk trong AgentWorkbench.tsx. Chưa sửa source app.' },
+    { who: 'TV', name: 'Thành viên', time: '09:18', kind: 'synthesis', text: 'Popout cần giữ nguyên dải chat khi sang góc nhìn team activity.' },
+    { who: 'AD', name: 'Agent Developer', time: '09:20', kind: '', agent: true, text: 'Đã chia sẻ chung state tin nhắn và file active giữa modal với popout.' }
+  ];
+
+  /* ---------------- state ---------------- */
+  let tabs = [
+    { id: 'overview', title: 'Tổng quan', type: 'overview', pinned: true, closable: false },
+    { id: 'readme', title: 'README.md', type: 'code', path: 'README.md', closable: true },
+    { id: 'compact', title: 'compactFileTree.ts', type: 'code', path: 'src/utils/compactFileTree.ts', closable: true },
+    { id: 'agentwb', title: 'AgentWorkbench.tsx', type: 'diff', path: 'src/workbench/AgentWorkbench.tsx', closable: true }
+  ];
+  let activeTabId = 'agentwb';
+  let tabSeq = 0;
+  const hunkStates = { h1: null, h2: null, h3: null };
+  let diffMode = 'unified';
+  let treeScope = 'diff';
+  let treeQuery = '';
+  const collapsed = new Set(['src-components']);
+  let messages = SEED_MESSAGES.slice();
+  let perspective = 'code';
+  let toastTimer = null;
+
+  const $ = function (id) { return document.getElementById(id); };
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function toast(text) {
+    const el = $('toast');
+    el.textContent = text;
+    el.classList.remove('hidden');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.add('hidden'); }, 1900);
+  }
+  function activeTab() {
+    return tabs.find(function (t) { return t.id === activeTabId; }) || tabs[0];
+  }
+
+  /* ---------------- tree ---------------- */
+  function meta(path) { return FILES[path] || { status: '', adds: 0, dels: 0, diff: false }; }
+  function subtreeHasDiff(node) {
+    if (node.folder) return node.children.some(subtreeHasDiff);
+    return !!meta(node.path).diff;
+  }
+  function matches(node) {
+    if (treeScope === 'diff' && !subtreeHasDiff(node)) return false;
+    if (!treeQuery) return true;
+    const q = treeQuery.toLowerCase();
+    if (node.folder) return node.name.toLowerCase().includes(q) || node.children.some(matches);
+    return node.name.toLowerCase().includes(q) || node.path.toLowerCase().includes(q);
+  }
+  function renderTreeNode(node, depth) {
+    if (!matches(node)) return '';
+    const isFolder = !!node.folder;
+    const open = treeQuery ? true : !collapsed.has(node.id);
+    const indent = 'padding-left:' + (6 + depth * 12) + 'px';
+    const selected = !isFolder && activeTab() && activeTab().path === node.path;
+    let row = '<div class="tree-row' + (selected ? ' selected' : '') + '" style="' + indent + '" data-sample="true"';
+    if (isFolder) {
+      row += ' data-folder="' + esc(node.id) + '"><span class="tree-caret">' + (open ? '▾' : '▸') + '</span>' +
+        '<span class="tree-icon folder">▣</span><span class="tree-name">' + esc(node.name) + '</span></div>';
+    } else {
+      const m = meta(node.path);
+      row += ' data-path="' + esc(node.path) + '"><span class="tree-caret"></span>' +
+        '<span class="tree-icon file">◇</span><span class="tree-name">' + esc(node.name) + '</span>';
+      if (m.status) row += '<span class="status-badge st-' + m.status + '">' + m.status + '</span>';
+      if (m.adds || m.dels) {
+        row += '<span class="tree-delta"><span class="delta-add">+' + m.adds + '</span> <span class="delta-del">−' + m.dels + '</span></span>';
+      }
+      row += '</div>';
+    }
+    const kids = isFolder && open
+      ? node.children.map(function (c) { return renderTreeNode(c, depth + 1); }).join('')
+      : '';
+    return row + kids;
+  }
+  function renderTree() { $('tree').innerHTML = TREE.map(function (n) { return renderTreeNode(n, 0); }).join(''); }
+
+  /* ---------------- tabs ---------------- */
+  function renderTabs() {
+    $('tabbar').innerHTML = tabs.map(function (t) {
+      const icon = t.type === 'diff' ? 'Δ' : (t.type === 'overview' ? '◈' : '◇');
+      return '<div class="tab' + (t.id === activeTabId ? ' active' : '') + '" role="tab" draggable="true" data-tab="' + esc(t.id) + '"' +
+        ' aria-selected="' + (t.id === activeTabId) + '">' +
+        '<span class="tab-icon ' + (t.type === 'diff' ? 'diff' : '') + '">' + icon + '</span>' +
+        '<span class="tab-title">' + esc(t.title) + '</span>' +
+        (t.pinned ? '<span class="tab-pin" title="Ghim — không đóng được">●</span>'
+                  : '<button class="tab-close" type="button" data-close="' + esc(t.id) + '" title="Đóng tab" aria-label="Đóng tab">×</button>') +
+        '</div>';
+    }).join('');
+  }
+  function activateTab(id) {
+    if (!tabs.some(function (t) { return t.id === id; })) return;
+    activeTabId = id;
+    renderTabs(); renderContent(); renderTree(); renderPopoutFile();
+  }
+  function openTab(path) {
+    const found = tabs.find(function (t) { return t.path === path; });
+    if (found) { activateTab(found.id); return; }
+    const m = meta(path);
+    const id = 'tab-' + (++tabSeq);
+    tabs.push({
+      id: id, title: path.split('/').pop(), type: m.diff ? 'diff' : 'code',
+      path: path, closable: true
+    });
+    activateTab(id);
+    toast('Đã mở tab mẫu: ' + path.split('/').pop());
+  }
+  function closeTab(id) {
+    const idx = tabs.findIndex(function (t) { return t.id === id; });
+    if (idx < 0) return;
+    if (tabs[idx].pinned || tabs[idx].closable === false) { toast('Tab được ghim — không đóng được.'); return; }
+    tabs.splice(idx, 1);
+    if (activeTabId === id) {
+      const next = tabs[idx] || tabs[idx - 1] || tabs[0];
+      activeTabId = next ? next.id : '';
+    }
+    renderTabs(); renderContent(); renderTree(); renderPopoutFile();
+  }
+  let dragTabId = null;
+  $('tabbar').addEventListener('dragstart', function (e) {
+    const tab = e.target.closest('.tab');
+    if (!tab) return;
+    dragTabId = tab.dataset.tab;
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  $('tabbar').addEventListener('dragover', function (e) {
+    const tab = e.target.closest('.tab');
+    if (!tab || !dragTabId) return;
+    e.preventDefault();
+    tab.classList.add('drop-target');
+  });
+  $('tabbar').addEventListener('dragleave', function (e) {
+    const tab = e.target.closest('.tab');
+    if (tab) tab.classList.remove('drop-target');
+  });
+  $('tabbar').addEventListener('drop', function (e) {
+    const tab = e.target.closest('.tab');
+    if (!tab || !dragTabId || tab.dataset.tab === dragTabId) return;
+    e.preventDefault();
+    const from = tabs.findIndex(function (t) { return t.id === dragTabId; });
+    const to = tabs.findIndex(function (t) { return t.id === tab.dataset.tab; });
+    if (from < 0 || to < 0) return;
+    const moved = tabs.splice(from, 1)[0];
+    tabs.splice(to, 0, moved);
+    tabs.sort(function (a, b) { return (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0); });
+    dragTabId = null;
+    renderTabs();
+    toast('Đã sắp xếp lại tab (pinned luôn đứng đầu).');
+  });
+
+  /* ---------------- code / overview content ---------------- */
+  function renderCode(tab) {
+    const m = meta(tab.path);
+    const body = (FILES[tab.path] && FILES[tab.path].lines) || [
+      '<cm>// DỮ LIỆU MẪU / SAMPLE DATA</cm>',
+      '<cm>// Nội dung file mẫu cho review UI — không đọc từ đĩa.</cm>',
+      '<kw>export const</kw> sample = <str>"' + esc(tab.path) + '"</str>;'
+    ];
+    return '<div class="toolbar">' +
+        '<div class="pathline"><span class="tag">remote</span><span class="path">/srv/taskmate/' + esc(tab.path) + '</span>' +
+        '<span class="tag branch">feature/agent-developer-workbench</span><span class="tag readonly">Read-Only</span></div>' +
+        '<div class="toolbar-actions">' +
+          '<button class="btn tiny" data-toast="Copy Path">Copy Path</button>' +
+          '<button class="btn tiny" data-toast="Copy Content">Copy Content</button>' +
+          '<button class="btn tiny" data-toast="Reveal">Reveal</button>' +
+          '<button class="btn tiny" data-toast="Reload">Reload</button>' +
+        '</div></div>' +
+      '<div class="code-body">' + body.map(function (line, i) {
+        return '<div class="code-row' + (i === 5 ? ' target' : '') + '"><span class="ln">' + (i + 1) + '</span><span class="code-text">' + line + '</span></div>';
+      }).join('') + '</div>' +
+      '<div class="hunk-foot">DỮ LIỆU MẪU / SAMPLE DATA · ' + esc(m.status || 'no change') +
+      (m.adds ? ' · +' + m.adds + ' −' + m.dels : '') + ' · read-only</div>';
+  }
+  function renderOverview() {
+    return '<div class="overview" data-sample="true">' +
+      '<h2>Agent Developer Workbench — bản nháp review</h2>' +
+      '<p>DỮ LIỆU MẪU / SAMPLE DATA · 6 file thay đổi trên nhánh giả. Chọn một file để mở tab code hoặc diff.</p>' +
+      '<div class="ov-grid">' +
+        Object.keys(FILES).filter(function (p) { return FILES[p].status; }).map(function (p) {
+          const m = FILES[p];
+          return '<div class="ov-card"><div class="name">' + esc(p) + '</div>' +
+            '<div class="meta"><span class="status-badge st-' + m.status + '">' + m.status + '</span>' +
+            '<span class="delta-add">+' + m.adds + '</span><span class="delta-del">−' + m.dels + '</span>' +
+            (m.diff ? '<span class="tag">diff</span>' : '') + '</div>' +
+            '<div class="meta"><button class="btn tiny" data-open="' + esc(p) + '">Mở tab</button></div></div>';
+        }).join('') +
+      '</div><div class="ov-note">Đây là prototype tương tác. Mọi nhãn, path và nội dung đều là dữ liệu mẫu; không đọc filesystem, không gọi SSH, không sửa source app.</div></div>';
+  }
+
+  /* ---------------- diff ---------------- */
+  function counts() {
+    let a = 0, d = 0;
+    HUNKS.forEach(function (h) {
+      if (!hunkStates[h.id]) { a += h.adds; d += h.dels; }
+    });
+    return { a: a, d: d };
+  }
+  function hunkLineUnified(l, h) {
+    const cls = l.m === '+' ? 'add' : (l.m === '-' ? 'del' : '');
+    return '<div class="diff-line ' + cls + '">' +
+      '<span class="no">' + (l.o == null ? '' : l.o) + '</span>' +
+      '<span class="no">' + (l.n == null ? '' : l.n) + '</span>' +
+      '<span class="marker">' + esc(l.m) + '</span>' +
+      '<span class="txt">' + esc(l.t) + '</span></div>';
+  }
+  function hunkLineSplit(l) {
+    let left, right;
+    if (l.m === '+') {
+      left = { cls: 'blank', no: '', marker: '', t: '' };
+      right = { cls: 'is-add', no: l.n, marker: '+', t: l.t };
+    } else if (l.m === '-') {
+      left = { cls: 'is-del', no: l.o, marker: '-', t: l.t };
+      right = { cls: 'blank', no: '', marker: '', t: '' };
+    } else {
+      left = { cls: '', no: l.o, marker: ' ', t: l.t };
+      right = { cls: '', no: l.n, marker: ' ', t: l.t };
+    }
+    function side(s) {
+      return '<div class="split-side ' + s.cls + '"><span class="no">' + (s.no == null ? '' : s.no) + '</span>' +
+        '<span class="marker">' + esc(s.marker) + '</span><span class="txt">' + esc(s.t) + '</span></div>';
+    }
+    return '<div class="split-line">' + side(left) + side(right) + '</div>';
+  }
+  function renderHunks() {
+    return HUNKS.map(function (h) {
+      const state = hunkStates[h.id];
+      const dim = state === 'accept' ? 'dimmed-old' : (state === 'reject' ? 'dimmed-new' : '');
+      const tag = state === 'accept' ? '<span class="tag state-accept">Đã chấp nhận</span>'
+        : (state === 'reject' ? '<span class="tag state-reject">Đã từ chối</span>'
+        : '<span class="tag">Chờ duyệt</span>');
+      return '<div class="hunk" data-state="' + (state || 'pending') + '">' +
+        '<div class="hunk-head"><span class="hdr">' + esc(h.header) + '</span>' + tag +
+        '<span class="cnt add">+' + h.adds + '</span><span class="cnt del">−' + h.dels + '</span>' +
+        '<span class="head-actions">' +
+          '<button class="btn tiny' + (state === 'accept' ? ' primary' : '') + '" data-hunk="' + h.id + '" data-decision="accept">Accept</button>' +
+          '<button class="btn tiny' + (state === 'reject' ? ' danger' : '') + '" data-hunk="' + h.id + '" data-decision="reject">Reject</button>' +
+        '</span></div>' +
+        (diffMode === 'unified' ? '<div class="split-head"><div>UNIFIED · old / new</div></div>' : '<div class="split-head"><div>− OLD</div><div>+ NEW</div></div>') +
+        '<div class="hunk-body ' + dim + '">' +
+          h.lines.map(function (l) { return diffMode === 'unified' ? hunkLineUnified(l, h) : hunkLineSplit(l); }).join('') +
+        '</div>' +
+        '<div class="hunk-foot">Hunk ' + h.id + ' · DỮ LIỆU MẪU / SAMPLE DATA · click lại cùng một nút để hoàn tác quyết định</div>' +
+      '</div>';
+    }).join('');
+  }
+  function renderDiff(tab) {
+    const c = counts();
+    const allAccepted = HUNKS.every(function (h) { return hunkStates[h.id] === 'accept'; });
+    const allRejected = HUNKS.every(function (h) { return hunkStates[h.id] === 'reject'; });
+    return '<div class="toolbar">' +
+      '<div class="pathline"><span class="path">' + esc(tab.path) + '</span>' +
+      '<span class="tag branch">feature/agent-developer-workbench</span><span class="tag readonly">Read-Only</span></div>' +
+      '<div class="toolbar-actions"><button class="btn tiny" data-toast="Reveal">Reveal</button></div></div>' +
+      '<div class="toolbar">' +
+        '<div class="segmented" id="diff-mode">' +
+          '<button type="button" data-mode="unified" class="' + (diffMode === 'unified' ? 'on' : '') + '">Unified</button>' +
+          '<button type="button" data-mode="split" class="' + (diffMode === 'split' ? 'on' : '') + '">Side-by-side</button>' +
+        '</div>' +
+        '<div class="counters"><span class="cnt add" id="cnt-add">+' + c.a + '</span>' +
+          '<span class="cnt del" id="cnt-del">−' + c.d + '</span>' +
+          '<span class="cnt-label">dòng chưa quyết định</span></div>' +
+        '<div class="spacer"></div>' +
+        '<button class="btn tiny" id="accept-all" ' + (allAccepted ? 'disabled' : '') + '>Accept All</button>' +
+        '<button class="btn tiny" id="revert-all" ' + (allRejected ? 'disabled' : '') + '>Revert All</button>' +
+      '</div>' +
+      '<div class="diff-wrap" data-sample="true">' + renderHunks() + '</div>' +
+      '<div class="hunk-foot">Project: DỮ LIỆU MẪU / SAMPLE · ' + esc(tab.path) + ' · 3 hunk · ' + HUNKS.length + ' hunk</div>';
+  }
+  function renderContent() {
+    const tab = activeTab();
+    if (!tab) { $('content').innerHTML = '<div class="overview">Không còn tab nào mở. Chọn file trong cây worktree.</div>'; return; }
+    if (tab.type === 'overview') $('content').innerHTML = renderOverview();
+    else if (tab.type === 'diff') $('content').innerHTML = renderDiff(tab);
+    else $('content').innerHTML = renderCode(tab);
+  }
+  function applyHunkDecision(hunkId, decision) {
+    if (!(hunkId in hunkStates)) return;
+    hunkStates[hunkId] = hunkStates[hunkId] === decision ? null : decision;
+    renderContent();
+    const c = counts();
+    toast('Hunk ' + hunkId + ': ' + (decision === 'accept' ? 'chấp nhận' : 'từ chối') + ' · còn +' + c.a + ' −' + c.d);
+  }
+  function setAllDecisions(decision) {
+    HUNKS.forEach(function (h) { hunkStates[h.id] = decision; });
+    renderContent();
+    const c = counts();
+    toast((decision === 'accept' ? 'Accept All' : 'Revert All') + ' · còn +' + c.a + ' −' + c.d);
+  }
+
+  /* ---------------- chat ---------------- */
+  function messageHTML(m) {
+    return '<div class="msg' + (m.agent ? ' agent' : '') + '">' +
+      '<div class="msg-avatar">' + esc(m.who) + '</div><div>' +
+      '<div class="msg-meta"><span class="msg-name">' + esc(m.name) + '</span>' +
+      '<span class="msg-time">' + esc(m.time) + '</span>' +
+      (m.kind ? '<span class="msg-kind ' + (m.kind === 'synthesis' ? 'synthesis' : '') + '">' + esc(m.kind) + '</span>' : '') +
+      '</div><div class="msg-text">' + esc(m.text) + '</div></div></div>';
+  }
+  function renderChat() {
+    const html = messages.map(messageHTML).join('');
+    $('chat-transcript').innerHTML = html;
+    $('chat-transcript-wide').innerHTML = html;
+    $('popout-transcript').innerHTML = html;
+    ['chat-transcript', 'chat-transcript-wide', 'popout-transcript'].forEach(function (id) {
+      const el = $(id); el.scrollTop = el.scrollHeight;
+    });
+  }
+  function appendMessage(text) {
+    const clean = String(text || '').trim();
+    if (!clean) return false;
+    const now = new Date();
+    messages.push({
+      who: 'SE', name: 'Sếp (bạn)',
+      time: String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0'),
+      kind: '', text: clean
+    });
+    renderChat();
+    return true;
+  }
+  function sendFrom(inputId) {
+    const input = $(inputId);
+    if (appendMessage(input.value)) { input.value = ''; }
+  }
+  function renderPopoutFile() {
+    const t = activeTab();
+    const name = t ? (t.path || t.title) : '—';
+    $('popout-file').textContent = name;
+    $('perspective-file').textContent = name;
+  }
+
+  /* ---------------- chrome / controls ---------------- */
+  function setPerspective(next) {
+    perspective = next;
+    $('body-code').classList.toggle('hidden', next !== 'code');
+    $('body-chat').classList.toggle('hidden', next !== 'chat');
+    Array.prototype.forEach.call($('perspective-switch').children, function (b) {
+      b.classList.toggle('on', b.dataset.perspective === next);
+    });
+  }
+  function togglePopout(force) {
+    const el = $('popout');
+    const open = typeof force === 'boolean' ? force : el.classList.contains('hidden');
+    el.classList.toggle('hidden', !open);
+    if (open) renderChat();
+  }
+  function toggleNotes(force) {
+    const el = $('notes-overlay');
+    const open = typeof force === 'boolean' ? force : el.classList.contains('hidden');
+    el.classList.toggle('hidden', !open);
+  }
+
+  $('theme-btn').addEventListener('click', function () {
+    const root = document.documentElement;
+    const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    toast('Palette: ' + (next === 'dark' ? 'Dark' : 'Light'));
+  });
+  $('notes-btn').addEventListener('click', function () { toggleNotes(true); });
+  $('notes-close').addEventListener('click', function () { toggleNotes(false); });
+  $('notes-overlay').addEventListener('click', function (e) { if (e.target === $('notes-overlay')) toggleNotes(false); });
+  $('popout-btn').addEventListener('click', function () { togglePopout(); });
+  $('chat-popout-btn').addEventListener('click', function () { togglePopout(true); });
+  $('chat-popout-btn-2').addEventListener('click', function () { togglePopout(true); });
+  $('popout-close').addEventListener('click', function () { togglePopout(false); });
+  $('close-btn').addEventListener('click', function () {
+    $('backdrop').classList.add('hidden');
+    $('reopen-btn').classList.remove('hidden');
+    togglePopout(false); toggleNotes(false);
+  });
+  $('reopen-btn').addEventListener('click', function () {
+    $('backdrop').classList.remove('hidden');
+    $('reopen-btn').classList.add('hidden');
+  });
+  $('perspective-switch').addEventListener('click', function (e) {
+    const b = e.target.closest('button[data-perspective]');
+    if (b) setPerspective(b.dataset.perspective);
+  });
+
+  $('tree-search').addEventListener('input', function (e) { treeQuery = e.target.value.trim(); renderTree(); });
+  $('scope-switch').addEventListener('click', function (e) {
+    const b = e.target.closest('button[data-scope]');
+    if (!b) return;
+    treeScope = b.dataset.scope;
+    Array.prototype.forEach.call($('scope-switch').children, function (x) { x.classList.toggle('on', x === b); });
+    $('scope-hint').textContent = treeScope === 'diff' ? 'chỉ file có thay đổi' : 'mọi file trong cây';
+    renderTree();
+  });
+  $('tree').addEventListener('click', function (e) {
+    const folder = e.target.closest('[data-folder]');
+    if (folder) {
+      const id = folder.dataset.folder;
+      if (collapsed.has(id)) collapsed.delete(id); else collapsed.add(id);
+      renderTree(); return;
+    }
+    const file = e.target.closest('[data-path]');
+    if (file) openTab(file.dataset.path);
+  });
+
+  $('tabbar').addEventListener('click', function (e) {
+    const close = e.target.closest('[data-close]');
+    if (close) { e.stopPropagation(); closeTab(close.dataset.close); return; }
+    const tab = e.target.closest('[data-tab]');
+    if (tab) activateTab(tab.dataset.tab);
+  });
+
+  $('content').addEventListener('click', function (e) {
+    const toastBtn = e.target.closest('[data-toast]');
+    if (toastBtn) { toast('Mô phỏng — không có tác dụng thật: ' + toastBtn.dataset.toast); return; }
+    const open = e.target.closest('[data-open]');
+    if (open) { openTab(open.dataset.open); return; }
+    const mode = e.target.closest('#diff-mode button[data-mode]');
+    if (mode) { diffMode = mode.dataset.mode; renderContent(); return; }
+    const hunk = e.target.closest('[data-hunk][data-decision]');
+    if (hunk) { applyHunkDecision(hunk.dataset.hunk, hunk.dataset.decision); return; }
+    if (e.target.closest('#accept-all')) { setAllDecisions('accept'); return; }
+    if (e.target.closest('#revert-all')) { setAllDecisions('reject'); }
+  });
+
+  $('chat-send').addEventListener('click', function () { sendFrom('chat-input'); });
+  $('chat-send-wide').addEventListener('click', function () { sendFrom('chat-input-wide'); });
+  $('popout-send').addEventListener('click', function () { sendFrom('popout-input'); });
+  function enterToSend(inputId, btnId) {
+    $(inputId).addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $(btnId).click(); }
+    });
+  }
+  enterToSend('chat-input', 'chat-send');
+  enterToSend('chat-input-wide', 'chat-send-wide');
+  enterToSend('popout-input', 'popout-send');
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      if (!$('notes-overlay').classList.contains('hidden')) toggleNotes(false);
+      else if (!$('popout').classList.contains('hidden')) togglePopout(false);
+    }
+  });
+
+  /* ---------------- boot ---------------- */
+  renderTree(); renderTabs(); renderContent(); renderChat(); renderPopoutFile();
+})();
+</script>
+</body>
+</html>
