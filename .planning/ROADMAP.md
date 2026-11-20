@@ -426,14 +426,14 @@ Plans:
   5. Vietnamese text in UI labels renders correctly offline; unit/component tests cover search state, preview linkage, tree compaction and token usage.
 
 **Depends on:** Phase 46
-**Plans:** 1/5 plans executed in 5 waves
+**Plans:** 2/5 plans executed in 5 waves
 
 Plans:
 **Wave 1** *(no dependencies — correctness backbone)*
 - [x] 46.1-01-PLAN.md — Tracer: 2000-match scoped `git grep`, pure FindSession with seq/stale/cancel, query/mask builder, real callId cancellation (R3, D-08/D-09/D-10)
 
 **Wave 2** *(blocked on Wave 1)*
-- [ ] 46.1-02-PLAN.md — Shortcut → action → seeded two-pane Find dialog, three modes, virtualized highlighted rows, following preview, keyboard nav, Enter at line (R1, R2, D-04..D-08)
+- [x] 46.1-02-PLAN.md — Shortcut → action → seeded two-pane Find dialog, three modes, virtualized highlighted rows, following preview, keyboard nav, Enter at line (R1, R2, D-04..D-08)
 
 **Wave 3** *(blocked on Wave 2; shares the dialog module)*
 - [ ] 46.1-03-PLAN.md — Compact single-child tree with stable reveal mapping + tokenized 24 px rows, then remove the three old inline search inputs (R4, D-11..D-13)
