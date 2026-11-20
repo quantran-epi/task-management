@@ -115,4 +115,13 @@ describe('.agent-diff-tree CSS contract', () => {
     }
     expect(block).not.toContain('!important');
   });
+
+  it('icon không override font-size inline — CSS token là nguồn kích thước', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/components/agents/AgentDiffReviewer.tsx'), 'utf8');
+    const treeSource = source.slice(source.indexOf('className="agent-diff-tree"'), source.indexOf('{/* Content Viewer'));
+    for (const icon of ['FolderOutlined', 'FileTextOutlined']) {
+      const match = treeSource.match(new RegExp(`<${icon}[\\s\\S]*?/>`));
+      expect(match?.[0] ?? '').not.toMatch(/fontSize\s*:/);
+    }
+  });
 });

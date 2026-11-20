@@ -719,13 +719,10 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                       >
                         <Space size={5} style={{ overflow: 'hidden', flex: 1 }}>
                           {node.isDir ? (
-                            <FolderOutlined style={{ color: '#1677ff', fontSize: 12 }} />
+                            <FolderOutlined style={{ color: '#1677ff' }} />
                           ) : (
                             <FileTextOutlined
-                              style={{
-                                color: df ? '#4f46e5' : token.colorTextSecondary,
-                                fontSize: 12,
-                              }}
+                              style={{ color: df ? '#4f46e5' : token.colorTextSecondary }}
                             />
                           )}
                           <Text
