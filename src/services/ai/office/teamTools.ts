@@ -1884,7 +1884,8 @@ async function codeEdit(args: Record<string, any>, ctx: TeamToolContext): Promis
   }
   const filePath = typeof args.filePath === 'string' ? args.filePath.trim() : '';
   const action = args.action === 'revert' ? 'revert' : args.action === 'apply' ? 'apply' : '';
-  if (!filePath || !action) {
+  // CR-01: reject control characters before they reach the confined patch path.
+  if (!filePath || !action || /[\r\n\0]/.test(filePath)) {
     return JSON.stringify(refuse('INVALID_ARGUMENT', 'code_edit cần filePath và action hợp lệ.'));
   }
 

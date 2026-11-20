@@ -95,7 +95,8 @@ export class WorktreeVerbError extends Error {
 export function confineWorktreePath(inputPath: string, desc: WorktreeDescriptor): string {
   const root = desc.remoteWorktreePath.trim().replace(/\/+$/, '');
   const trimmed = (inputPath ?? '').trim();
-  if (!trimmed || trimmed.startsWith('/') || trimmed.startsWith('~') || trimmed.includes('\0')) {
+  if (!trimmed || trimmed.startsWith('/') || trimmed.startsWith('~') || trimmed.includes('\0')
+    || trimmed.includes('\n') || trimmed.includes('\r')) {
     throw new WorktreeVerbError('WORKTREE_PATH_ESCAPE', 'Đường dẫn tệp không hợp lệ trong worktree.');
   }
   const parts: string[] = [];
@@ -131,6 +132,14 @@ async function remoteContext(desc: WorktreeDescriptor) {
 
 function worktreeCommand(root: string, gitArgs: string): string {
   return `cd ${shellQuote(root)} && ${gitArgs}`;
+}
+
+/** UTF-8 safe base64 that works in both the Tauri webview and Node test runners. */
+function base64EncodeUtf8(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
 }
 
 async function runWorktreeCommand(
@@ -205,9 +214,15 @@ async function applyPatch(
   const clean = confineWorktreePath(filePath, desc);
   const relative = clean.slice(desc.remoteWorktreePath.length + 1);
   const patch = formatHunkPatch(relative, hunk);
+  // CR-01: never place untrusted patch bytes in a shell heredoc — a newline in the path or
+  // hunk text would close PATCH_EOF and execute the rest as shell commands. Mirror the Rust
+  // apply path: base64 over a pipe, with only base64 alphabet inside shell quotes.
+  const encoded = base64EncodeUtf8(patch);
   const config = await remoteContext(desc);
   const args = reverse ? 'git apply --reverse -' : 'git apply -';
-  const command = `${worktreeCommand(desc.remoteWorktreePath, args)} <<'PATCH_EOF'\n${patch}\nPATCH_EOF`;
+  // `cd` runs in the shell first, then the pipe feeds git apply's stdin. Only base64
+  // alphabet appears inside shell quotes. Mirrors Rust apply_patch_remote exactly.
+  const command = worktreeCommand(desc.remoteWorktreePath, `printf %s ${shellQuote(encoded)} | base64 -d | ${args}`);
   const res = await execRemoteCommand(config, command, secret);
   if (res.exitStatus !== 0) {
     throw new WorktreeVerbError(

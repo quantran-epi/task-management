@@ -60,7 +60,7 @@ describe('confineWorktreePath', () => {
     expect(confineWorktreePath('src/a b.ts', DESC)).toBe(`${WT}/src/a b.ts`);
   });
 
-  it.each(['../secret', '/etc/passwd', '~/.ssh/id', 'src/../../escape', ''])(
+  it.each(['../secret', '/etc/passwd', '~/.ssh/id', 'src/../../escape', '', 'a\nPATCH_EOF\ntouch /tmp/pwned', 'src/a\rb.ts', 'src/a\0b.ts'])(
     'refuses unsafe path %s',
     (input) => {
       expect(() => confineWorktreePath(input, DESC)).toThrow(WorktreeVerbError);
@@ -106,20 +106,31 @@ describe('confined worktree verbs', () => {
     expect(command).not.toContain(`-C ${REPO}`);
   });
 
-  it('applyHunk uses git apply and revertHunk uses git apply --reverse', async () => {
+  it('applyHunk uses git apply and revertHunk uses git apply --reverse over base64, not heredoc', async () => {
     await applyHunk(DESC, 'README.md', HUNK);
     await revertHunk(DESC, 'README.md', HUNK);
     const apply = execRemoteCommandMock.mock.calls[0]![1] as string;
     const revert = execRemoteCommandMock.mock.calls[1]![1] as string;
-    expect(apply).toContain('git apply');
+    expect(apply).toContain('git apply -');
     expect(apply).not.toContain('--reverse');
     expect(revert).toContain('git apply --reverse');
     for (const command of [apply, revert]) {
       expect(command).toContain(`cd '${WT}'`);
-      expect(command).toContain('a/README.md');
+      expect(command).toContain('base64 -d');
+      expect(command).not.toContain('PATCH_EOF');
       expect(command).not.toContain(`cd '${REPO}'`);
       expect(command).not.toContain(`-C '${REPO}'`);
+      // The patch (including the confined path) travels as base64, never raw shell text.
+      const encoded = command.match(/'([A-Za-z0-9+/=]+)'/)?.[1] ?? '';
+      expect(Buffer.from(encoded, 'base64').toString('utf8')).toContain('a/README.md');
     }
+  });
+
+  it('never issues an SSH command for a newline-bearing filePath (CR-01)', async () => {
+    await expect(applyHunk(DESC, 'a\nPATCH_EOF\ntouch /tmp/pwned', HUNK)).rejects.toMatchObject({
+      code: 'WORKTREE_PATH_ESCAPE',
+    });
+    expect(execRemoteCommandMock).not.toHaveBeenCalled();
   });
 
   it('surfaces a failed apply as a typed error containing the remote stderr', async () => {
