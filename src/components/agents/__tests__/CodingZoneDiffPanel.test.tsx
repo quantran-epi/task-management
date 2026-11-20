@@ -32,7 +32,7 @@ const hunkDiff: DiffFile = {
   oldPath: 'src/AgentWorkbench.tsx', newPath: 'src/AgentWorkbench.tsx', status: 'modified',
   hunks: [hunk], additions: 2, deletions: 1,
 };
-const key = `src/AgentWorkbench.tsx::${hunk.header}::${hunkContentHash(hunk)}::1`;
+const key = `src/AgentWorkbench.tsx::${hunk.header}::${hunkContentHash(hunk)}`;
 
 function renderDiff(overrides: Partial<React.ComponentProps<typeof CodingZoneDiffPanel>> = {}) {
   const setHunkState = vi.fn();
@@ -101,6 +101,25 @@ describe('CodingZoneDiffPanel', () => {
         setHunkState={view.setHunkState}
       />
     );
+    expect(screen.getByTestId('cz-diff-stale')).toHaveTextContent(COPY.stale);
+  });
+
+  it('keeps a decision for an unchanged hunk across a revision bump (WR-02)', () => {
+    const hunkStates = { [key]: 'accepted' as const };
+    const view = renderDiff({ hunkStates });
+    expect(screen.getByTestId('cz-hunk-tag')).toHaveTextContent(COPY.accepted);
+    view.rerender(
+      <CodingZoneDiffPanel
+        descriptor={descriptor}
+        filePath="src/AgentWorkbench.tsx"
+        files={[hunkDiff]}
+        revision={5}
+        hunkStates={hunkStates}
+        setHunkState={view.setHunkState}
+      />
+    );
+    // Decision survives the revision bump; only the stale banner reflects the new revision.
+    expect(screen.getByTestId('cz-hunk-tag')).toHaveTextContent(COPY.accepted);
     expect(screen.getByTestId('cz-diff-stale')).toHaveTextContent(COPY.stale);
   });
 

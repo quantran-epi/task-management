@@ -98,7 +98,10 @@ export const CodingZoneDiffPanel: React.FC<CodingZoneDiffPanelProps> = ({
 
   const file = useMemo(() => files.find((candidate) => candidate.newPath === filePath), [files, filePath]);
   const hunks = file?.hunks ?? [];
-  const keyFor = (hunk: DiffHunk) => `${filePath}::${hunk.header}::${hunkContentHash(hunk)}::${revision}`;
+  // WR-02: decisions are keyed by CONTENT, not revision. A new diff revision must keep
+  // decisions for unchanged hunks (and only mark genuinely changed hunks stale via the
+  // content hash), never silently reset every accepted/rejected hunk to pending.
+  const keyFor = (hunk: DiffHunk) => `${filePath}::${hunk.header}::${hunkContentHash(hunk)}`;
   const pending = hunks.filter((hunk) => (hunkStates[keyFor(hunk)] ?? 'pending') === 'pending');
   const pendingAdds = pending.reduce((sum, hunk) => sum + hunkCounts(hunk).adds, 0);
   const pendingDels = pending.reduce((sum, hunk) => sum + hunkCounts(hunk).dels, 0);
