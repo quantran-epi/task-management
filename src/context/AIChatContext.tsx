@@ -19,6 +19,7 @@ export interface AIChatContextValue {
   pendingPrompt: string | null;
   clearPendingPrompt: () => void;
   pendingDraft: string | null;
+  setPendingDraft: (text: string | null) => void;
   clearPendingDraft: () => void;
 }
 
@@ -58,7 +59,7 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
     }
   });
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
-  const [pendingDraft, setPendingDraft] = useState<string | null>(null);
+  const [pendingDraft, setPendingDraftState] = useState<string | null>(null);
 
   const saveOpenState = (open: boolean) => {
     setIsOpen(open);
@@ -93,6 +94,10 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
     }
     saveOpenState(true);
   }, [persistScope]);
+
+  const setPendingDraft = useCallback((text: string | null) => {
+    setPendingDraftState(text);
+  }, []);
 
   const clearPendingPrompt = useCallback(() => {
     setPendingPrompt(null);
@@ -155,6 +160,7 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
     pendingPrompt,
     clearPendingPrompt,
     pendingDraft,
+    setPendingDraft,
     clearPendingDraft,
   };
 
@@ -173,6 +179,7 @@ const defaultContextValue: AIChatContextValue = {
   pendingPrompt: null,
   clearPendingPrompt: () => {},
   pendingDraft: null,
+  setPendingDraft: () => {},
   clearPendingDraft: () => {},
 };
 

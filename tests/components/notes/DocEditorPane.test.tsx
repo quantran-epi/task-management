@@ -294,6 +294,7 @@ describe('DocEditorPane', () => {
       pendingPrompt: null,
       clearPendingPrompt: vi.fn(),
       pendingDraft: null,
+      setPendingDraft: vi.fn(),
       clearPendingDraft: vi.fn(),
     });
 

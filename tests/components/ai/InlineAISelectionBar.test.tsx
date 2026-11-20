@@ -219,12 +219,9 @@ describe('InlineAISelectionBar component mention workflow', () => {
     });
     vi.spyOn(aiPopoutUtils, 'isAiPopoutOpen').mockResolvedValue(true);
     const sendSpy = vi.spyOn(aiPopoutUtils, 'sendTextToAiPopout').mockResolvedValue(true);
-    const openChatWithDraftSpy = vi.fn();
 
     const TestShell = () => {
       const { isOpen, closeChat, activeScope } = useAIChat();
-      const ctx = useAIChat();
-      ctx.openChatWithDraft = openChatWithDraftSpy;
       return (
         <div>
           <InlineAISelectionBar db={db} />
@@ -261,8 +258,8 @@ describe('InlineAISelectionBar component mention workflow', () => {
     });
     const [text, scope] = sendSpy.mock.calls[0]!;
     expect(text).toContain('Nội dung gửi vào cửa sổ AI nổi');
-    expect(scope).toEqual(expect.objectContaining({ type: 'doc' }));
-    expect(openChatWithDraftSpy).not.toHaveBeenCalled();
+    expect(scope).toEqual(expect.objectContaining({ type: 'global' }));
+    // No in-app panel opened: the drawer textarea never appears.
     expect(screen.queryByLabelText('Nội dung tin nhắn trò chuyện AI')).toBeNull();
   });
 

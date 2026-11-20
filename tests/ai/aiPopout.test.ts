@@ -105,6 +105,8 @@ describe('aiPopout utility', () => {
 
     it('does nothing when no popout handle exists', async () => {
       vi.spyOn(window, 'open').mockReturnValue(null);
+      await openAiPopout(); // clears any handle tracked by an earlier test
+      expect(await isAiPopoutOpen()).toBe(false);
       await expect(sendTextToAiPopout('text')).resolves.toBe(false);
     });
   });

@@ -31,6 +31,7 @@ import {
   remoteAnchorToPayload,
 } from './RemoteSelectionAnchor';
 import { renderSafeMarkdown } from '../../utils/markdown';
+import { isAiPopoutOpen, sendTextToAiPopout } from '../../utils/aiPopout';
 
 export interface InlineAISelectionBarProps {
   db?: TaskPlannerDatabase;
@@ -288,67 +289,55 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
     };
   }, [db, isAskingInline]);
 
-  // Action: Mention to Chat Drawer
-  const handleMentionToDrawer = () => {
+  // Action: Mention to Chat Drawer (or the floating popout when one is open)
+  const handleMentionToDrawer = async () => {
     if (!currentPayload) return;
     const prompt = formatSelectionMentionPrompt(currentPayload);
 
-    // Phase 47 D-10/D-11: a remote selection opens the remote-scope composer with the
-    // structured anchor mention (formatSelectionMentionPrompt already emits path:line for
-    // remote payloads). No fake doc resolution is involved.
+    // Phase 47 D-10/D-11: a remote selection targets the remote-scope composer; the structured
+    // anchor mention already carries its repo-relative path:line. No fake doc resolution.
+    let scope: {
+      type: 'remote' | 'task' | 'cr' | 'system' | 'global';
+      id: string | undefined;
+      title: string | undefined;
+    };
     if (currentPayload.targetType === 'remote') {
-      openChatWithDraft(
-        {
-          type: 'remote',
-          id: currentPayload.targetId,
-          title: currentPayload.targetTitle,
-        },
-        prompt
-      );
-      handleDismiss();
-      return;
-    }
-
-    // Switch scope appropriately if attached to a task, CR or system
-    let scopeType: 'task' | 'cr' | 'system' | 'global' = 'global';
-    let scopeId: string | undefined = undefined;
-    let scopeTitle: string | undefined = undefined;
-
-    if (currentPayload.targetType === 'task') {
-      scopeType = 'task';
-      scopeId = currentPayload.targetId;
-      scopeTitle = currentPayload.targetTitle;
+      scope = {
+        type: 'remote',
+        id: currentPayload.targetId,
+        title: currentPayload.targetTitle,
+      };
+    } else if (currentPayload.targetType === 'task') {
+      scope = { type: 'task', id: currentPayload.targetId, title: currentPayload.targetTitle };
     } else if (currentPayload.targetType === 'cr') {
-      scopeType = 'cr';
-      scopeId = currentPayload.targetId;
-      scopeTitle = currentPayload.targetTitle;
+      scope = { type: 'cr', id: currentPayload.targetId, title: currentPayload.targetTitle };
     } else if (currentPayload.targetType === 'system') {
-      scopeType = 'system';
-      scopeId = currentPayload.targetId;
-      scopeTitle = currentPayload.targetTitle;
+      scope = { type: 'system', id: currentPayload.targetId, title: currentPayload.targetTitle };
     } else if (currentPayload.parentTask) {
-      scopeType = 'task';
-      scopeId = currentPayload.parentTask.id;
-      scopeTitle = currentPayload.parentTask.name;
+      scope = { type: 'task', id: currentPayload.parentTask.id, title: currentPayload.parentTask.name };
     } else if (currentPayload.parentCr) {
-      scopeType = 'cr';
-      scopeId = currentPayload.parentCr.id;
-      scopeTitle = currentPayload.parentCr.name;
+      scope = { type: 'cr', id: currentPayload.parentCr.id, title: currentPayload.parentCr.name };
     } else if (currentPayload.system) {
-      scopeType = 'system';
-      scopeId = currentPayload.system.id;
-      scopeTitle = currentPayload.system.name;
+      scope = { type: 'system', id: currentPayload.system.id, title: currentPayload.system.name };
+    } else {
+      scope = { type: 'global', id: undefined, title: undefined };
     }
 
-    openChatWithDraft(
-      {
-        type: scopeType,
-        id: scopeId,
-        title: scopeTitle,
-      },
-      prompt
-    );
+    // When the floating AI window is open, seed its composer instead of opening an in-app panel.
+    // Any handoff failure falls back to the existing openChatWithDraft flow.
+    try {
+      if (await isAiPopoutOpen()) {
+        const delivered = await sendTextToAiPopout(prompt, scope);
+        if (delivered) {
+          handleDismiss();
+          return;
+        }
+      }
+    } catch {
+      // Fall through to the in-app draft below.
+    }
 
+    openChatWithDraft(scope, prompt);
     handleDismiss();
   };
 

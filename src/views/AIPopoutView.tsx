@@ -8,9 +8,12 @@ import {
   setAiWindowAlwaysOnTop,
   closeCurrentAiPopoutWindow,
   AI_SCOPE_EVENT,
+  AI_DRAFT_EVENT,
   type AIScopeParams,
+  type AIDraftPayload,
 } from '../utils/aiPopout';
 import type { ChatScopeType } from '../types/models';
+import { useAIChat } from '../context/AIChatContext';
 
 const AI_GEOMETRY_STORAGE_KEY = 'planner:ai_popout_geometry';
 
@@ -20,6 +23,7 @@ export interface AIPopoutViewProps {
 
 export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db = defaultDb }) => {
   const { token } = theme.useToken();
+  const { setPendingDraft } = useAIChat();
   const [pinned, setPinned] = useState<boolean>(true);
   const [isTauri] = useState<boolean>(() => isTauriApp());
   const [activeScope, setActiveScope] = useState<ActiveScope>(() => {
@@ -41,8 +45,22 @@ export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db = defaultDb }) =>
   // Tauri window listeners and geometry persistence
   useEffect(() => {
     let unlistenScope: (() => void) | undefined;
+    let unlistenDraft: (() => void) | undefined;
     let unlistenMoved: (() => void) | undefined;
     let unlistenResized: (() => void) | undefined;
+
+    // Seed the composer from an incoming draft (and its scope), never auto-send.
+    const applyDraft = (payload: AIDraftPayload) => {
+      if (typeof payload.text !== 'string' || !payload.text) return;
+      setPendingDraft(payload.text);
+      if (payload.scope?.type) {
+        setActiveScope({
+          type: payload.scope.type as ChatScopeType,
+          id: payload.scope.id,
+          title: payload.scope.title,
+        });
+      }
+    };
 
     if (isTauri) {
       isAiWindowAlwaysOnTop().then((state) => setPinned(state));
@@ -65,6 +83,12 @@ export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db = defaultDb }) =>
           }
         }).then((unsub) => {
           unlistenScope = unsub;
+        });
+
+        listen<AIDraftPayload>(AI_DRAFT_EVENT, (event) => {
+          if (event.payload) applyDraft(event.payload);
+        }).then((unsub) => {
+          unlistenDraft = unsub;
         });
 
         // Unmaximize and restore window geometry
@@ -131,14 +155,25 @@ export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db = defaultDb }) =>
           unlistenResized = unsub;
         });
       });
+    } else {
+      // Browser popup: same-origin postMessage from the main window.
+      const onMessage = (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
+        const data = event.data as { type?: string } & Partial<AIDraftPayload>;
+        if (data?.type !== AI_DRAFT_EVENT) return;
+        applyDraft(data.scope ? { text: data.text ?? '', scope: data.scope } : { text: data.text ?? '' });
+      };
+      window.addEventListener('message', onMessage);
+      return () => window.removeEventListener('message', onMessage);
     }
 
     return () => {
       if (unlistenScope) unlistenScope();
+      if (unlistenDraft) unlistenDraft();
       if (unlistenMoved) unlistenMoved();
       if (unlistenResized) unlistenResized();
     };
-  }, [isTauri]);
+  }, [isTauri, setPendingDraft]);
 
   const handleTogglePin = async () => {
     const next = !pinned;

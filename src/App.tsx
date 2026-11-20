@@ -25,6 +25,7 @@ import { TeamWorkspaceView } from './views/TeamWorkspaceView';
 import { TelegramMonitorView } from './views/TelegramMonitorView';
 import { MermaidAssistantView } from './views/MermaidAssistantView';
 import { TimerProvider } from './context/TimerContext';
+import { AIChatProvider } from './context/AIChatContext';
 import { KnowledgeConfigProvider } from './services/knowledge/knowledgeConfig';
 import { startNotificationDeepLinkListener } from './utils/notificationDeepLink';
 import { attachGlobalToolTaskListener } from './components/ai/runtime/toolTaskStore';
@@ -178,7 +179,9 @@ export const App: React.FC = () => {
         locale={viVN}
         theme={getAppTheme(isDark)}
       >
-        <AIPopoutView />
+        <AIChatProvider>
+          <AIPopoutView />
+        </AIChatProvider>
       </ConfigProvider>
     );
   }

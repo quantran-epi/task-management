@@ -17,6 +17,15 @@ export interface AIScopeParams {
 }
 
 export const AI_SCOPE_EVENT = 'ai-set-scope';
+export const AI_DRAFT_EVENT = 'ai-set-draft';
+
+export interface AIDraftPayload {
+  text: string;
+  scope?: AIScopeParams;
+}
+
+/** Browser-mode handle for the popout opened via window.open (null/closed => no popout). */
+let browserPopoutHandle: Window | null = null;
 
 export function buildAiPopoutUrl(base = '', scope?: AIScopeParams): string {
   const params = new URLSearchParams();
@@ -71,11 +80,55 @@ export async function openAiPopout(scope?: AIScopeParams): Promise<void> {
 
   // Web browser fallback
   const base = `${window.location.origin}${window.location.pathname}`;
-  window.open(
+  browserPopoutHandle = window.open(
     buildAiPopoutUrl(base, scope),
     'task-planner-ai-popout',
     'width=480,height=720,resizable=yes,status=no'
   );
+}
+
+/** True when a floating AI popout is currently open (Tauri webview or browser popup). */
+export async function isAiPopoutOpen(): Promise<boolean> {
+  if (isTauriApp()) {
+    try {
+      const { getAllWebviewWindows } = await import('@tauri-apps/api/webviewWindow');
+      const windows = await getAllWebviewWindows();
+      return windows.some((w) => w.label === AI_POPOUT_LABEL);
+    } catch {
+      return false;
+    }
+  }
+  return Boolean(browserPopoutHandle && !browserPopoutHandle.closed);
+}
+
+/**
+ * Seed a draft into the open popout without opening a new window. Returns false when no popout
+ * exists or the handoff fails; the caller then falls back to the in-app draft flow.
+ */
+export async function sendTextToAiPopout(text: string, scope?: AIScopeParams): Promise<boolean> {
+  const payload: AIDraftPayload = { text, ...(scope ? { scope } : {}) };
+  if (isTauriApp()) {
+    try {
+      if (!(await isAiPopoutOpen())) return false;
+      const [{ emit }, { getAllWebviewWindows }] = await Promise.all([
+        import('@tauri-apps/api/event'),
+        import('@tauri-apps/api/webviewWindow'),
+      ]);
+      await emit(AI_DRAFT_EVENT, payload);
+      const existing = (await getAllWebviewWindows()).find((w) => w.label === AI_POPOUT_LABEL);
+      await existing?.setFocus();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  if (!browserPopoutHandle || browserPopoutHandle.closed) return false;
+  try {
+    browserPopoutHandle.postMessage({ type: AI_DRAFT_EVENT, ...payload }, window.location.origin);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function isAiWindowAlwaysOnTop(): Promise<boolean> {
