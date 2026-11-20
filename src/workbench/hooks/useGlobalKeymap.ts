@@ -26,6 +26,13 @@ export function useGlobalKeymap(): void {
         return;
       }
 
+      // Ctrl/Cmd+Shift+F (Find in Remote Files) — beside Ctrl+K, BEFORE the input guard (D-04).
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'F' || e.key === 'f')) {
+        e.preventDefault();
+        executeAction('find.inPath');
+        return;
+      }
+
       // If user is actively typing in an input field, do not hijack Alt+key or Insert unless intended
       if (isInput) {
         return;

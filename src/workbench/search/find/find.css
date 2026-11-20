@@ -1,0 +1,105 @@
+/* Find in Remote Files — all values reference shared workbench tokens (D-02).
+   Token names mirror 46.1-UI-SPEC; values land in workbench-tokens.css (plan 04). */
+
+.find-dialog-frame .ant-modal {
+  width: var(--find-dialog-width, min(820px, calc(100% - 32px)));
+  max-width: 100%;
+  top: var(--find-dialog-top, 22px);
+  padding-bottom: 0;
+}
+
+.find-dialog-frame .ant-modal-content {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--find-dialog-radius, 11px);
+  box-shadow: var(--shadow, var(--find-shadow, none));
+  overflow: hidden;
+  background: var(--bg-island);
+  resize: both;
+}
+
+.find-root {
+  font-family: var(--font-ui);
+  color: var(--fg);
+  font-size: var(--font-size-ui);
+}
+
+.find-drag {
+  display: flex;
+  align-items: center;
+  gap: var(--find-gap-xs, 4px);
+  height: var(--find-drag-height, 38px);
+  padding: 0 var(--find-gap-md, 16px);
+  border-bottom: 1px solid var(--border);
+}
+
+.find-grip { color: var(--fg-faint); cursor: move; }
+.find-title { font-weight: 600; font-size: var(--font-size-ui); }
+.find-status { flex: 1; color: var(--fg-subtle); font-size: var(--font-size-xs); }
+
+.find-fields {
+  display: flex;
+  align-items: center;
+  gap: var(--find-gap-sm, 8px);
+  padding: var(--find-gap-sm, 8px) var(--find-gap-md, 16px);
+}
+.find-pattern { flex: 1; font-family: var(--font-mono, monospace); }
+.find-mask { width: var(--find-mask-width, 140px); font-family: var(--font-mono, monospace); }
+
+.find-scopes {
+  display: flex;
+  align-items: center;
+  gap: var(--find-gap-sm, 8px);
+  padding: 0 var(--find-gap-md, 16px);
+}
+.find-scopeval { margin-left: auto; color: var(--fg-faint); font-size: var(--font-size-xs); }
+
+.find-split {
+  display: grid;
+  grid-template-rows: var(--find-results-height, 210px) var(--find-handle-height, 7px) var(--find-preview-height, 246px);
+  min-height: 0;
+  border-top: 1px solid var(--border);
+}
+.find-results { overflow-y: auto; }
+.find-rrow {
+  display: flex;
+  align-items: center;
+  gap: var(--find-gap-md, 16px);
+  height: var(--row, var(--find-row-height, 24px));
+  padding: 0 var(--find-gap-md, 16px);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--font-size-small);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.find-rrow.on { background: var(--accent-soft); }
+.find-rcode { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.find-rrow.on .find-rfile { color: var(--accent); }
+.find-rfile { color: var(--fg-faint); font-size: var(--font-size-xs); }
+.find-rrow mark { background: var(--match, var(--accent-soft)); color: var(--match-ink, var(--fg)); }
+.find-empty { padding: var(--find-gap-md, 16px); color: var(--fg-subtle); }
+.find-handle { cursor: row-resize; border-top: 1px solid var(--border-strong); }
+.find-preview { display: flex; flex-direction: column; min-height: 0; }
+.find-pane-head {
+  display: flex;
+  align-items: center;
+  gap: var(--find-gap-xs, 4px);
+  height: var(--find-pane-head-height, 30px);
+  padding: 0 var(--find-gap-md, 16px);
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+}
+.find-preview-body { flex: 1; overflow-y: auto; font-family: var(--font-mono, monospace); }
+.find-cline { display: flex; height: var(--find-code-line-height, 19px); }
+.find-cline.cur { background: var(--bg-current-line); }
+.find-lno { width: var(--find-gutter-width, 52px); text-align: right; color: var(--fg-faint); user-select: none; }
+
+.find-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--find-gap-md, 16px);
+  height: var(--find-footer-height, 38px);
+  padding: 0 var(--find-gap-md, 16px);
+  border-top: 1px solid var(--border);
+  color: var(--fg-subtle);
+  font-size: var(--font-size-xs);
+}

@@ -13,6 +13,8 @@ import { useLayoutStore } from './store/layoutStore';
 import { useGlobalKeymap } from './hooks/useGlobalKeymap';
 import { useDoubleShift } from './hooks/useDoubleShift';
 import { SearchEverywhereModal } from './search/SearchEverywhereModal';
+import { FindInRemoteFiles } from './search/find/FindInRemoteFiles';
+import { useFindStore } from './search/find/store';
 import { useNotifications } from '../hooks/useNotifications';
 import { useTeamChatNotifications } from '../hooks/useTeamChatNotifications';
 import { NOTIFICATION_DEEPLINK_EVENT } from '../utils/notificationDeepLink';
@@ -96,6 +98,7 @@ export function WorkbenchLayout({
   db,
 }: WorkbenchLayoutProps) {
   const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const openFind = useFindStore((s) => s.openFind);
   const notifications = useNotifications(db);
   useTeamChatNotifications(db);
 
@@ -132,6 +135,23 @@ export function WorkbenchLayout({
       window.removeEventListener('taskmate:open-search-everywhere', handleOpenSearch);
     };
   }, []);
+
+  // Find in Remote Files — seeded from the active remote target, no second picker (D-04).
+  useEffect(() => {
+    const handleOpenFind = (event: Event) => {
+      event.preventDefault();
+      const state = useLayoutStore.getState();
+      openFind({
+        configId: state.activeRemoteConfigId,
+        repoPath: state.activeRemoteRepoPath,
+        branch: state.activeRemoteBranch,
+      });
+    };
+    window.addEventListener('taskmate:open-find-in-remote-files', handleOpenFind);
+    return () => {
+      window.removeEventListener('taskmate:open-find-in-remote-files', handleOpenFind);
+    };
+  }, [openFind]);
 
   const handleOpenSearchUnified = useCallback(() => {
     setSearchModalOpen(true);
@@ -445,6 +465,7 @@ export function WorkbenchLayout({
           onClose={() => setSearchModalOpen(false)}
           {...(db ? { db } : {})}
         />
+        <FindInRemoteFiles />
 
         {/* Global Inline AI Selection Bar for document text selection */}
         <InlineAISelectionBar {...(db ? { db } : {})} />
