@@ -9,6 +9,7 @@ function TokenConsumer() {
   return (
     <div data-testid="token-consumer">
       <span data-testid="color-primary">{token.colorPrimary}</span>
+      <span data-testid="color-bg">{token.colorBgBase}</span>
       <span data-testid="border-radius">{token.borderRadius}</span>
       <span data-testid="font-size">{token.fontSize}</span>
       <span data-testid="control-height">{token.controlHeight}</span>
@@ -31,5 +32,35 @@ describe('AntdThemeAdapter', () => {
     expect(Number(screen.getByTestId('font-size').textContent)).toBeGreaterThan(0);
     expect(Number(screen.getByTestId('control-height').textContent)).toBeGreaterThan(0);
     expect(screen.getByText('Test Button')).toBeInTheDocument();
+  });
+
+  it('aligns data-theme and Antd surface tokens with the OS dark preference (IN-01)', () => {
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('prefers-color-scheme: dark'),
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    })) as typeof window.matchMedia;
+    try {
+      const { container, unmount } = render(
+        <AntdThemeAdapter>
+          <TokenConsumer />
+        </AntdThemeAdapter>
+      );
+      expect(container.querySelector('[data-theme="dark"]')).not.toBeNull();
+      // IN-01: dark palette mirrors workbench-tokens.css dark block, not the light values.
+      expect(screen.getByTestId('color-bg').textContent).toBe('#11151d');
+      // Dark algorithm derives the resolved primary from the dark seed (#6a9bff), so it differs
+      // from the light seed. The source-level visualTokens gate guards the literal #2f62d8.
+      expect(screen.getByTestId('color-primary').textContent).not.toBe('#2f62d8');
+      unmount();
+    } finally {
+      window.matchMedia = original;
+    }
   });
 });
