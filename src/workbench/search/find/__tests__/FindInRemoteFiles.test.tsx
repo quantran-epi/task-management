@@ -343,6 +343,79 @@ describe('FindInRemoteFiles — entry, seed, modes, debounce and Enter (Task 1)'
     expect(onReveal).toHaveBeenCalledWith('src/main');
   });
 
+  it('cancels the in-flight SSH call when the dialog closes (WR-03)', async () => {
+    vi.useFakeTimers();
+    try {
+      let finish!: (v: { hits: unknown[]; truncated: boolean }) => void;
+      grepRemoteRef.mockImplementation(() => new Promise((res) => { finish = res; }));
+      render(<FindInRemoteFiles />);
+      fireEvent.change(screen.getByLabelText('Pattern'), { target: { value: 'needle' } });
+      await act(async () => {
+        vi.advanceTimersByTime(FIND_DEBOUNCE_MS);
+        await Promise.resolve();
+      });
+      const callId = grepRemoteRef.mock.calls[0]![5] as string;
+
+      act(() => { useFindStore.getState().closeFind(); });
+
+      expect(cancelToolCall).toHaveBeenCalledWith(callId);
+      // Late response must not commit into a closed dialog.
+      await act(async () => { finish({ hits: [{ path: 'late.ts', line: 1, text: 'x' }], truncated: false }); });
+      expect(cancelToolCall).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('shows Stop while searching; Stop cancels and keeps partial results (WR-03)', async () => {
+    vi.useFakeTimers();
+    try {
+      let finish!: (v: { hits: unknown[]; truncated: boolean }) => void;
+      grepRemoteRef.mockImplementation(() => new Promise((res) => { finish = res; }));
+      render(<FindInRemoteFiles />);
+      fireEvent.change(screen.getByLabelText('Pattern'), { target: { value: 'needle' } });
+      await act(async () => {
+        vi.advanceTimersByTime(FIND_DEBOUNCE_MS);
+        await Promise.resolve();
+      });
+      const stop = screen.getByRole('button', { name: 'Stop' });
+      const callId = grepRemoteRef.mock.calls[0]![5] as string;
+
+      fireEvent.click(stop);
+      expect(cancelToolCall).toHaveBeenCalledWith(callId);
+      expect(screen.getByText(/Stopped — showing partial results/)).toBeDefined();
+
+      // The late SSH response is stale after Stop and cannot overwrite the partial state.
+      await act(async () => { finish({ hits: [{ path: 'late.ts', line: 1, text: 'x' }], truncated: false }); });
+      expect(document.querySelectorAll('[data-testid^="find-result-row-"]').length).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('cancels the previous session when the seed changes (WR-03)', async () => {
+    vi.useFakeTimers();
+    try {
+      grepRemoteRef.mockImplementation(() => new Promise(() => {})); // stays in flight
+      const { rerender } = render(<FindInRemoteFiles />);
+      fireEvent.change(screen.getByLabelText('Pattern'), { target: { value: 'needle' } });
+      await act(async () => {
+        vi.advanceTimersByTime(FIND_DEBOUNCE_MS);
+        await Promise.resolve();
+      });
+      const firstCallId = grepRemoteRef.mock.calls[0]![5] as string;
+
+      act(() => {
+        useFindStore.getState().openFind({ configId: CONFIG.id, repoPath: '/srv/other', branch: 'dev' });
+      });
+      rerender(<FindInRemoteFiles />);
+
+      expect(cancelToolCall).toHaveBeenCalledWith(firstCallId);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('icon-only buttons expose aria-label + tooltip and are focusable', () => {
     render(<FindInRemoteFiles />);
     const close = screen.getByRole('button', { name: /close/i });

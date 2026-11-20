@@ -6,6 +6,7 @@ import {
   FileOutlined,
   FilterOutlined,
   PushpinOutlined,
+  StopOutlined,
 } from '@ant-design/icons';
 import { grepRemoteRef } from '../../../services/gitRemoteService';
 import { confineRepoPath, getRemoteFileContent, searchRemoteTree } from '../../../services/gitRemoteTreeService';
@@ -105,6 +106,17 @@ export function FindInRemoteFiles(props: FindInRemoteFilesProps) {
       (next) => setState(next)
     );
   }, [seedKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // WR-03: tear down in-flight SSH work when the dialog closes or the target (seed) changes.
+  // A `useMemo` keyed on seedKey builds a NEW session on reseed, so also cancel the PREVIOUS one;
+  // otherwise its late response commits old config/repo/branch results into the reopened dialog.
+  const prevSessionRef = useRef<FindSession | null>(null);
+  useEffect(() => {
+    const previous = prevSessionRef.current;
+    prevSessionRef.current = session;
+    if (previous && previous !== session) previous.cancel();
+    if (!open) session.cancel();
+  }, [open, session]);
 
   const remoteQuery = useMemo<RemoteQuery>(
     () => ({
@@ -312,6 +324,16 @@ export function FindInRemoteFiles(props: FindInRemoteFilesProps) {
             {state.status === 'partial' ? FIND_STATUS_COPY.partial : ''}
             {state.error}
           </span>
+          {state.status === 'searching' ? (
+            <Tooltip title={FIND_CONTROL_LABELS.stop}>
+              <Button
+                type="text"
+                aria-label={FIND_CONTROL_LABELS.stop}
+                icon={<StopOutlined />}
+                onClick={() => session.cancel()}
+              />
+            </Tooltip>
+          ) : null}
           <Tooltip title={FIND_CONTROL_LABELS.fileMask}>
             <Button
               type="text"

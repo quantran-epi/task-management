@@ -32,6 +32,7 @@ export const FIND_CONTROL_LABELS = {
   pin: 'Pin',
   unpin: 'Unpin',
   close: 'Close',
+  stop: 'Stop',
 } as const;
 
 /** Single-source dialog title from the action registry / UI-SPEC. */
