@@ -386,20 +386,8 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
           <div
             key={msg.id}
             data-chat-message-id={msg.id}
-            data-testid={isTarget ? 'chat-target-message' : undefined}
             ref={isTarget ? targetMessageRef : undefined}
-            style={{
-              flexShrink: 0,
-              ...(isTarget
-                ? {
-                    background: token.colorPrimaryBg,
-                    outline: `2px solid ${token.colorPrimaryBorder}`,
-                    borderRadius: 6,
-                    margin: '0 -8px',
-                    padding: '0 8px',
-                  }
-                : {}),
-            }}
+            style={{ flexShrink: 0 }}
           >
             {dayChanged && (
               <div
@@ -460,6 +448,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
                 : {})}
               grouped={grouped}
               continuesNext={continuesNext}
+              highlighted={isTarget}
             />
           </div>
         );

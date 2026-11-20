@@ -126,6 +126,8 @@ export interface ChatMessageBubbleProps {
    * not `grouped` — decides the bottom margin.
    */
   continuesNext?: boolean | undefined;
+  /** OS-notification deeplink target: a thin ring marks this bubble without filling the row. */
+  highlighted?: boolean | undefined;
 }
 
 /**
@@ -379,6 +381,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   addressedTo,
   grouped = false,
   continuesNext = false,
+  highlighted = false,
 }) => {
   const { token } = theme.useToken();
   const [copied, setCopied] = useState(false);
@@ -1226,8 +1229,16 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         </div>
       )}
       <div
+        data-testid={highlighted ? 'chat-target-bubble' : undefined}
         style={{
           maxWidth: isUser ? '72%' : '82%',
+          // A notification deeplink ring hugs the bubble itself. It must NOT sit on the row
+          // wrapper: that wrapper is a flex item, so its background filled the bubble's bottom
+          // margin and fused the highlighted reply with the next message. An outline is outside
+          // the border box and never absorbs that gap.
+          ...(highlighted
+            ? { outline: `2px solid ${token.colorPrimary}`, outlineOffset: 2 }
+            : {}),
           // The percentage must include padding and border, or two bubbles with the same
           // `max-width` render at different widths and the right edge looks ragged.
           boxSizing: 'border-box',
