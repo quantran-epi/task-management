@@ -101,6 +101,10 @@ None - plan executed as written. TDD RED/GREEN commits were consolidated into on
 - Minor TDD expectation corrections (sanitizer output, absolute path rejection message, wrapped tool result JSON) resolved in tests before GREEN.
 - Two pre-existing Rust visibility warnings in `src-tauri/src/tool_cancel.rs` remain unchanged and are out of scope for this plan.
 
+## Self-Check: PASSED
+- SUMMARY file present on disk.
+- Task commits `e2f9e5ff`, `88d57704`, `8bde6f70` and metadata commit `baf83c32` verified in git log.
+
 ## User Setup Required
 
 None - no external service configuration required.
