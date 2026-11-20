@@ -6,6 +6,7 @@ import { TaskPlannerDatabase } from '../../../../src/db/index';
 import {
   abortAllAssignmentControllers,
   createTeamRunCoordinator,
+  DEFAULT_SETTLE_POLL_DEADLINE_MS,
   EMPLOYEE_AMEND_REFUSAL,
   resolveTeamToolName,
   STOPPED_REPORT_COPY,
@@ -5610,6 +5611,17 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
   // the batch while rows were still live. A later `send()` then opened a SECOND batch and
   // overwrote `assignmentIdsByAgent`, leaving a phantom `running` entry behind.
   describe('settle poll deadline (WR-05)', () => {
+    it('defaults the settle poll deadline to 30 minutes', () => {
+      expect(DEFAULT_SETTLE_POLL_DEADLINE_MS).toBe(1_800_000);
+      const source = readFileSync(
+        new URL('../../../../src/services/ai/office/teamRunCoordinator.ts', import.meta.url),
+        'utf8'
+      );
+      // Wiring check: the constant is the default AND the old inline literal is gone.
+      expect(source).toContain('?? DEFAULT_SETTLE_POLL_DEADLINE_MS');
+      expect(source).not.toContain('?? 120_000');
+    });
+
     it('finalizes a stuck row instead of closing the batch around it', async () => {
       const synthesisPrompts: string[] = [];
       harness = await createHarness({
