@@ -116,6 +116,11 @@ export interface TeamToolContext {
    * coordinator only; a model-supplied path can never fill it.
    */
   worktreeDescriptor?: WorktreeDescriptor | undefined;
+  /**
+   * WR-05: capability granted by the coordinator to the ONE persisted Agent Developer row,
+   * keyed by agent id — never by the mutable display name.
+   */
+  codeEditAllowed?: boolean | undefined;
 }
 
 /** Phase 48 D-07: the only roster member allowed to use the worktree-confined code_edit tool. */
@@ -1869,7 +1874,7 @@ async function exploreRepo(args: Record<string, any>, ctx: TeamToolContext): Pro
  * relative file path and hunk text — never a host, repo, worktree or main-checkout path.
  */
 async function codeEdit(args: Record<string, any>, ctx: TeamToolContext): Promise<string> {
-  if (ctx.agentName !== CODE_EDIT_AGENT_NAME || ctx.role === 'lead') {
+  if (!ctx.codeEditAllowed || ctx.role === 'lead') {
     return JSON.stringify(
       refuse('CODE_EDIT_NOT_ALLOWED', 'Chỉ Agent Developer được dùng code_edit trong worktree riêng.')
     );

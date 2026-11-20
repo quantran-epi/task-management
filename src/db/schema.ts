@@ -195,4 +195,10 @@ export const SCHEMA_V27 = {
 
 // Bump with every new `this.version(n)` in db/index.ts. Migration tests assert
 // against this instead of a literal, so a schema bump never silently breaks them.
-export const LATEST_SCHEMA_VERSION = 27;
+// Phase 48 WR-05: `agentKind` on aiEmployees is unindexed row payload — no index rebuild.
+// The V28 upgrade hook marks the single legacy Agent Developer row by its exact name.
+export const SCHEMA_V28 = {
+  ...SCHEMA_V27,
+} as const;
+
+export const LATEST_SCHEMA_VERSION = 28;

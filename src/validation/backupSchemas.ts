@@ -619,6 +619,7 @@ export const BackupAiEmployeeRecordSchema = z.strictObject({
   persona: aiPersonaSchema,
   model: aiModelSchema,
   skillId: uuidSchema.optional(),
+  agentKind: z.literal('developer').optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

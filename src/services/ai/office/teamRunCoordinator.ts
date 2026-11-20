@@ -1331,14 +1331,22 @@ export function createTeamRunCoordinator(
   const provisionedWorktrees = new Map<string, WorktreeDescriptor>();
 
   /**
+   * WR-05: resolve the ONE developer by stable marker. The mutable display name is used only
+   * as a legacy fallback for rosters that predate `agentKind`, and only when no row carries
+   * the marker — so renaming another member to "Agent Developer" cannot grant code_edit.
+   */
+  function developerAgentId(): string | undefined {
+    const marked = roster.employees.filter((row) => row.agentKind === 'developer');
+    if (marked.length > 0) return marked[0]!.id;
+    return roster.employees.find((row) => row.name === CODE_EDIT_AGENT_NAME)?.id;
+  }
+
+  /**
    * Phase 48 D-08/D-09: session start owns provisioning. No activation until the descriptor
    * with a real `remoteWorktreePath` exists; failure throws a truthful refusal.
    */
-  async function provisionAgentSession(
-    agentId: string,
-    agentName: string | undefined
-  ): Promise<void> {
-    if (agentName !== CODE_EDIT_AGENT_NAME) return;
+  async function provisionAgentSession(agentId: string): Promise<void> {
+    if (agentId !== developerAgentId()) return;
     if (provisionedWorktrees.has(agentId)) return;
     const target = options.agentDeveloperWorktree;
     if (!target?.sshConfigId || !target.remoteRepoPath) {
@@ -1380,6 +1388,9 @@ export function createTeamRunCoordinator(
     const role: 'lead' | 'employee' = isLead ? 'lead' : 'employee';
     const agentName = isLead ? roster.lead?.name : employee?.name;
     const folderId = isLead ? undefined : memberFolderIds.get(agentId);
+    // WR-05: the capability follows the stable developer id and the request-bound target,
+    // never the display name. `remoteTarget`/`codeEditAllowed` are both gated by this.
+    const codeEditGranted = !isLead && agentId === developerAgentId() && !!options.agentDeveloperWorktree;
     return {
       db,
       teamId,
@@ -1394,13 +1405,14 @@ export function createTeamRunCoordinator(
       ...(signal ? { signal } : {}),
       ...(loopCallId ? { loopCallId } : {}),
       ...(repoHints.length > 0 ? { repoHints: [...repoHints] } : {}),
-      ...(agentName === CODE_EDIT_AGENT_NAME && options.agentDeveloperWorktree
+      ...(codeEditGranted
         ? { remoteTarget: {
-            sshConfigId: options.agentDeveloperWorktree.sshConfigId,
-            repoPath: options.agentDeveloperWorktree.remoteRepoPath,
-            branch: options.agentDeveloperWorktree.baseRef ?? '',
+            sshConfigId: options.agentDeveloperWorktree!.sshConfigId,
+            repoPath: options.agentDeveloperWorktree!.remoteRepoPath,
+            branch: options.agentDeveloperWorktree!.baseRef ?? '',
           } }
         : {}),
+      ...(codeEditGranted ? { codeEditAllowed: true } : {}),
       ...(provisionedWorktrees.get(agentId)
         ? { worktreeDescriptor: provisionedWorktrees.get(agentId) }
         : {}),
@@ -1463,8 +1475,9 @@ export function createTeamRunCoordinator(
     ];
   }
 
-  async function employeeTools(agentName?: string): Promise<AiToolDefinition[]> {
-    const isDeveloper = agentName === CODE_EDIT_AGENT_NAME;
+  async function employeeTools(agentId?: string): Promise<AiToolDefinition[]> {
+    // WR-05: advertise the write tool to the stable developer id, not the mutable name.
+    const isDeveloper = agentId !== undefined && agentId === developerAgentId();
     return [
       ...getToolsForTurn(true, [], EMPLOYEE_READ_ONLY_ALLOWLIST),
       ...EMPLOYEE_TEAM_TOOLS.filter((tool) =>
@@ -2332,7 +2345,8 @@ export function createTeamRunCoordinator(
 
       // D-08/D-09: provision BEFORE the turn is advertised or any verb can run. No descriptor
       // means no active session — the catch path settles this agent with a truthful refusal.
-      await provisionAgentSession(employee.id, employee.name);
+      // WR-05: capability follows the STABLE developer marker, not the display name.
+      await provisionAgentSession(employee.id);
 
       const request: ChatTurnRequest = {
         ...prompt,
@@ -2347,7 +2361,7 @@ export function createTeamRunCoordinator(
           ? { contextWindowTokens: options.contextWindowTokens }
           : {}),
         autoApprove: false,
-        tools: await employeeTools(employee.name),
+        tools: await employeeTools(employee.id),
         mutationPolicy: 'read-only',
         persistUserMessage: false,
         agentKind: 'employee',

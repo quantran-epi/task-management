@@ -79,6 +79,7 @@ export async function createEmployee(
     updatedAt: now,
   };
   if (validated.skillId !== undefined) employee.skillId = validated.skillId;
+  if (employee.name.trim() === 'Agent Developer') employee.agentKind = 'developer';
 
   await db.aiEmployees.add(employee);
   return employee;
@@ -502,6 +503,9 @@ export async function importAiStaff(
             `«${employee.name}» tham chiếu kỹ năng «${employee.skillName}» không có trong file lẫn hệ thống — nhân viên được tạo không gắn kỹ năng.`
           );
       }
+      // WR-05: the capability marker is stamped by the import owner at creation time from
+      // the exact role name, so the runtime gate never trusts a mutable display name.
+      if (employee.name.trim() === 'Agent Developer') row.agentKind = 'developer';
       await db.aiEmployees.add(row);
       employeeNames.add(key);
       result.created.employees += 1;

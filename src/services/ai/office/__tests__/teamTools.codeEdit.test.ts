@@ -35,6 +35,7 @@ function ctx(overrides: Partial<TeamToolContext> = {}): TeamToolContext {
     agentId: 'a1',
     agentName: CODE_EDIT_AGENT_NAME,
     role: 'employee',
+    codeEditAllowed: true,
     worktreeDescriptor: WT,
     ...overrides,
   };
@@ -84,11 +85,21 @@ describe('code_edit dispatch', () => {
     });
   });
 
+  it('refuses a display-name spoof without the stable capability grant (WR-05)', async () => {
+    const spoof = await executeTeamTool(
+      'code_edit',
+      ARGS,
+      ctx({ agentName: CODE_EDIT_AGENT_NAME, codeEditAllowed: undefined, worktreeDescriptor: WT })
+    );
+    expect(JSON.parse(spoof)).toMatchObject({ code: 'CODE_EDIT_NOT_ALLOWED' });
+    expect(applyHunkMock).not.toHaveBeenCalled();
+  });
+
   it('refuses non-developer employees and the lead before any SSH verb', async () => {
     const other = await executeTeamTool(
       'code_edit',
       ARGS,
-      ctx({ agentName: 'Patrice Evra', worktreeDescriptor: WT })
+      ctx({ agentName: 'Patrice Evra', codeEditAllowed: undefined, worktreeDescriptor: WT })
     );
     const lead = await executeTeamTool(
       'code_edit',

@@ -117,5 +117,9 @@ describe('importAiStaff', () => {
       .first();
     expect(developer?.model).toBe('claude-opus-5-5');
     expect(developer?.skillId).toBeDefined();
+    // WR-05: capability is a stable row marker, not the mutable display name.
+    expect(developer?.agentKind).toBe('developer');
+    expect(result.created.employees).toBe(5);
+    expect((await db.aiEmployees.toArray()).filter((row) => row.agentKind === 'developer')).toHaveLength(1);
   });
 });

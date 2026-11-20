@@ -27,6 +27,7 @@ import {
   SCHEMA_V25,
   SCHEMA_V26,
   SCHEMA_V27,
+  SCHEMA_V28,
 } from './schema';
 import type {
   Task,
@@ -669,6 +670,21 @@ export class TaskPlannerDatabase extends Dexie {
     // Phase 41 (D-12, D-13): `docsFolderId` on teams and members is unindexed row payload,
     // so no index spec changes and no `.upgrade()` hook — old rows are test data (C-16).
     this.version(27).stores(SCHEMA_V27);
+
+    // Phase 48 WR-05: backfill the stable capability marker on the existing Agent Developer
+    // row. Name is used ONLY for this one-time migration; every runtime gate keys on `id`.
+    this.version(28)
+      .stores(SCHEMA_V28)
+      .upgrade((tx) =>
+        tx
+          .table('aiEmployees')
+          .toCollection()
+          .modify((row: Record<string, unknown>) => {
+            if (typeof row.name === 'string' && row.name.trim() === 'Agent Developer' && !row.agentKind) {
+              row.agentKind = 'developer';
+            }
+          })
+      );
 
     // Multi-tab concurrency handlers (DATA-04, D-09, D-10)
     this.on('blocked', () => {

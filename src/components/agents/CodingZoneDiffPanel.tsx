@@ -229,9 +229,14 @@ export const CodingZoneDiffPanel: React.FC<CodingZoneDiffPanelProps> = ({
 /** Trigger visibility is name-based: only the Agent Developer role may open the workbench. */
 export function hasActiveAgentDeveloperSession(
   agents: readonly { agentId: string; status: string }[],
-  roster: readonly { id: string; name: string }[]
+  roster: readonly { id: string; name: string; agentKind?: 'developer' | undefined }[]
 ): boolean {
-  const developerIds = new Set(roster.filter((member) => member.name === CODE_EDIT_AGENT_NAME).map((member) => member.id));
+  // WR-05: prefer the stable marker; fall back to the shared constant for legacy rosters.
+  const marked = roster.filter((member) => member.agentKind === 'developer');
+  const developerIds = new Set(
+    (marked.length > 0 ? marked : roster.filter((member) => member.name === CODE_EDIT_AGENT_NAME))
+      .map((member) => member.id)
+  );
   return agents.some((agent) =>
     developerIds.has(agent.agentId) &&
     ['queued', 'running', 'paused', 'waiting'].includes(agent.status)

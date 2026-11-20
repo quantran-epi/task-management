@@ -61,6 +61,11 @@ export interface AiEmployee {
   model: string;
   /** Scalar, not an array: D-25 "at most one skill" is enforced structurally. */
   skillId?: string | undefined;
+  /**
+   * Phase 48 WR-05: stable capability marker. The code_edit role gate keys on this, never on
+   * the mutable display name. Only the one imported Agent Developer row carries it.
+   */
+  agentKind?: 'developer' | undefined;
   createdAt: string;
   updatedAt: string;
 }
