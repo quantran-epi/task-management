@@ -146,4 +146,40 @@ describe('renderSafeMarkdown', () => {
       expect(output).not.toContain('class="code-diagram-btn"');
     });
   });
+
+  describe('bare language token followed by code (malformed model output)', () => {
+    it('renders a bare language line plus code as a labelled code block', () => {
+      const input =
+        'java\nCtpAckData execute(CtpRequestEnvelope request, CtpSourceSystem sourceSystem);';
+      const output = renderSafeMarkdown(input);
+      expect(output).toContain('code-block-wrapper');
+      expect(output).toContain('language-java');
+      expect(output).toContain('class="code-block-lang">java<');
+      expect(output).toContain(
+        '<code class="language-java">CtpAckData execute(CtpRequestEnvelope request, CtpSourceSystem sourceSystem);</code>'
+      );
+    });
+
+    it('leaves a normal fenced java block unchanged', () => {
+      const input = '```java\nclass Foo {}\n```';
+      const output = renderSafeMarkdown(input);
+      expect(output).toContain('code-block-wrapper');
+      expect(output).toContain('<code class="language-java">class Foo {}</code>');
+    });
+
+    it('keeps a prose word followed by an ordinary sentence as paragraph text', () => {
+      const input = 'java\nThis is a normal sentence about programming languages.';
+      const output = renderSafeMarkdown(input);
+      expect(output).not.toContain('code-block-wrapper');
+      expect(output).toContain('This is a normal sentence about programming languages.');
+    });
+
+    it('escapes HTML/meta characters in the bare-language code line', () => {
+      const input = 'java\nList<T> values = new ArrayList<>();';
+      const output = renderSafeMarkdown(input);
+      expect(output).toContain('code-block-wrapper');
+      expect(output).toContain('&lt;T&gt;');
+      expect(output).not.toContain('<T>');
+    });
+  });
 });
