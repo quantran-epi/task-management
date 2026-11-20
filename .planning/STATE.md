@@ -130,6 +130,7 @@ Progress: [█████████░] 91%
 - Seven surviving modules import SDLC code on the hot path — extraction must precede deletion.
 - Phase 46.1 inserted after Phase 46: Unified remote file search, compact remote tree, and shared workbench visual tokens from the approved draft (URGENT)
 - Phase 46.1 edited: edited title, goal, requirements, success criteria
+- Phase 48 added (2026-11-21): Agent Developer Workbench — SSH worktree coding zone, popout, hunk review. UI source of truth: `.planning/quick/261121-0ix-t-o-b-n-draft-html-t-ng-t-c-cho-agent-de/agent-developer-workbench-draft.html`. agent developer edits only inside its allocated SSH remote worktree; user reviews/merges outside.
 
 ## Decisions
 

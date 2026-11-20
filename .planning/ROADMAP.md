@@ -1142,6 +1142,17 @@ Plans:
 - [x] 43-03-PLAN.md — team turns pass `contextWindowTokens` so in-loop compaction runs
 - [x] 43-04-PLAN.md — `explore_repo` team tool: Claude Code headless on the remote, bounded structured report
 
+### Phase 48: Agent Developer Workbench: SSH worktree coding zone, popout, hunk review
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 46.1
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 48 to break down)
+
 ---
 
 ## Milestone: v1.3 SDLC Closed-Loop Engine & Repository Autonomy
