@@ -400,7 +400,10 @@ export async function grepRemoteRef(
 ): Promise<{ hits: RemoteGrepHit[]; truncated: boolean }> {
   const limit = Math.min(Math.max(1, Math.floor(Number(options.limit)) || 50), GREP_MATCH_LIMIT_CEILING);
   const flags = ['-z', '-n', '-I', '--no-color'];
+  // WR-01: regex mode must be ERE so `foo|bar`, `+`, `?`, `{n}` work and agree with the
+  // JavaScript regex the client highlighter (parsing.ts) uses for the same pattern.
   if (options.literal) flags.push('-F');
+  else flags.push('-E');
   flags.push(options.caseSensitive === false ? '-i' : '--no-ignore-case');
 
   const parts = [

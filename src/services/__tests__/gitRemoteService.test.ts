@@ -372,6 +372,24 @@ describe('gitRemoteService - Task 1 Tracer Slice', () => {
       );
     });
 
+    it('uses extended regex (-E) in regex mode so ERE constructs match', async () => {
+      grepMock();
+
+      await grepRemoteRef(dummyConfig, '/var/repo', 'main', {
+        pattern: 'foo|bar',
+        limit: 2000,
+        // literal omitted => regex mode
+      });
+
+      // -E (not bare BRE) aligns remote matching with the client JS regex highlighter.
+      expect(sshService.execRemoteCommand).toHaveBeenCalledWith(
+        dummyConfig,
+        "{ git -C '/var/repo' -c core.fsmonitor=false --no-pager grep -z -n -I --no-color -E --no-ignore-case -e 'foo|bar' --end-of-options 'main'; printf '###EXIT %s\\n' \"$?\" >&2; } | head -c 262145",
+        undefined,
+        undefined
+      );
+    });
+
     it('clamps a limit above 2000 to 2000 and flags truncation', async () => {
       vi.mocked(sshService.execRemoteCommand).mockResolvedValueOnce({
         stdout: records(2002),
