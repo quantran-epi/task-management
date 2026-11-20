@@ -8,11 +8,11 @@ import {
   PushpinOutlined,
 } from '@ant-design/icons';
 import { grepRemoteRef } from '../../../services/gitRemoteService';
-import { getRemoteFileContent } from '../../../services/gitRemoteTreeService';
+import { confineRepoPath, getRemoteFileContent, searchRemoteTree } from '../../../services/gitRemoteTreeService';
 import { cancelToolCall, getSshConfigById, getSshSecret } from '../../../services/sshService';
 import { useLayoutStore } from '../../store/layoutStore';
-import { buildGrepOptions } from './query';
-import { hitsToMatchRows, type MatchRow } from './parsing';
+import { buildGrepOptions, matchesMask } from './query';
+import { hitsToMatchRows, matchRanges, type MatchRow } from './parsing';
 import { CodePreview, FolderPreview, ResultRow } from './parts';
 import { FIND_DEBOUNCE_MS, FIND_STATUS_COPY, FindSession, type FindState, type RemoteQuery } from './session';
 import { FIND_CONTROL_LABELS, FIND_DIALOG_TITLE, useFindStore } from './store';
@@ -49,7 +49,7 @@ const EMPTY_STATE: FindState = {
   truncated: false,
 };
 
-export function FindInRemoteFiles(_props: FindInRemoteFilesProps) {
+export function FindInRemoteFiles(props: FindInRemoteFilesProps) {
   const open = useFindStore((s) => s.open);
   const pinned = useFindStore((s) => s.pinned);
   const seed = useFindStore((s) => s.seed);
@@ -69,6 +69,7 @@ export function FindInRemoteFiles(_props: FindInRemoteFilesProps) {
   const [state, setState] = useState<FindState>(EMPTY_STATE);
   const [previewContent, setPreviewContent] = useState<string | null>(null);
   const [previewUnavailable, setPreviewUnavailable] = useState(false);
+  const [treeRows, setTreeRows] = useState<MatchRow[]>([]);
 
   const configId = seed?.configId ?? null;
   const repoPath = seed?.repoPath ?? '';
@@ -129,8 +130,51 @@ export function FindInRemoteFiles(_props: FindInRemoteFilesProps) {
     return () => clearTimeout(timer);
   }, [open, mode, remoteQuery, session]);
 
+  // Files/Folders modes: filter the cached ls-tree client-side by query + mask (D-05/D-09).
+  // The query text never reaches git — no grep, no command construction in these modes.
+  useEffect(() => {
+    if (!open || mode === 'content') {
+      setTreeRows([]);
+      return;
+    }
+    let cancelled = false;
+    const needle = remoteQuery.pattern.trim();
+    // Directory scope uses the same confinement as plan 01; a throwing path refuses the whole
+    // filter rather than silently widening the subtree.
+    const confinedDir = remoteQuery.directory ? confineRepoPath(remoteQuery.directory) : '';
+    void (async () => {
+      try {
+        const config = configId ? await getSshConfigById(configId) : null;
+        if (!config) return;
+        configRef.current = config;
+        const entries = await searchRemoteTree(config, repoPath, branch, needle);
+        if (cancelled) return;
+        const wanted = mode === 'folders' ? 'folder' : 'file';
+        const filtered = entries.filter((entry) =>
+          entry.type === wanted &&
+          entry.name.toLowerCase().includes(needle.toLowerCase()) &&
+          matchesMask(entry.path, remoteQuery.mask) &&
+          (!confinedDir || entry.path.startsWith(confinedDir + '/'))
+        );
+        setTreeRows(filtered.map((entry) => ({
+          path: entry.path,
+          line: 0,
+          text: entry.path,
+          ranges: matchRanges(entry.path, needle, {
+            literal: true,
+            matchCase: remoteQuery.matchCase,
+            words: remoteQuery.words,
+          }),
+        })));
+      } catch {
+        if (!cancelled) setTreeRows([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, mode, remoteQuery.pattern, remoteQuery.mask, remoteQuery.directory, repoPath, branch, configId]);
+
   // Single mapping point: committed hits → display rows with ranges from hit.text (D-06).
-  const rows: MatchRow[] = useMemo(
+  const contentRows: MatchRow[] = useMemo(
     () => hitsToMatchRows(state.hits, remoteQuery.pattern, {
       literal: !remoteQuery.regex,
       matchCase: remoteQuery.matchCase,
@@ -138,6 +182,7 @@ export function FindInRemoteFiles(_props: FindInRemoteFilesProps) {
     }),
     [state.hits, remoteQuery.pattern, remoteQuery.regex, remoteQuery.matchCase, remoteQuery.words]
   );
+  const rows: MatchRow[] = mode === 'content' ? contentRows : treeRows;
   const activeRow = rows[activeIndex];
   useEffect(() => {
     setActiveIndex((i) => Math.min(i, Math.max(0, rows.length - 1)));
@@ -175,24 +220,30 @@ export function FindInRemoteFiles(_props: FindInRemoteFilesProps) {
 
   const openRow = useCallback(
     (index: number, secondary: boolean) => {
-      const hit = rows[index];
-      if (!hit || !configId) return;
+      const row = rows[index];
+      if (!row || !configId) return;
+      if (mode === 'folders') {
+        // Plan 03 owns explorer reveal; the typed prop is the explicit seam, never a silent stub.
+        props.onReveal?.(row.path);
+        return;
+      }
       const suffix = secondary ? `-side-${Date.now()}` : '';
       openTab({
-        id: `remote:${hit.path}${suffix}`,
-        title: hit.path.split('/').pop() || hit.path,
+        id: `remote:${row.path}${suffix}`,
+        title: row.path.split('/').pop() || row.path,
         viewType: 'remote_file',
         closable: true,
         params: {
           config: configRef.current ?? { id: configId, name: '', host: '', port: 22, username: '', authType: 'agent', createdAt: '', updatedAt: '' },
           repoPath,
           branch,
-          filePath: hit.path,
-          initialLine: hit.line,
+          filePath: row.path,
+          // One-shot line only for content hits; a Files row opens with no line highlight.
+          ...(mode === 'content' && row.line >= 1 ? { initialLine: row.line } : {}),
         },
       });
     },
-    [rows, configId, repoPath, branch, openTab]
+    [rows, configId, repoPath, branch, openTab, mode, props]
   );
 
   const handleKeyDown = useCallback(
@@ -346,6 +397,7 @@ export function FindInRemoteFiles(_props: FindInRemoteFilesProps) {
                   path={row.path}
                   line={row.line}
                   active={index === activeIndex}
+                  variant={mode === 'folders' ? 'folders' : mode === 'files' ? 'files' : 'content'}
                   onSelect={() => setActiveIndex(index)}
                   onOpen={() => openRow(index, false)}
                 />
@@ -366,7 +418,7 @@ export function FindInRemoteFiles(_props: FindInRemoteFilesProps) {
               <span>{activeRow?.path ?? ''}</span>
             </div>
             <div className="find-preview-body">
-              {mode !== 'content' ? <FolderPreview entries={[]} /> : null}
+              {mode !== 'content' ? <FolderPreview entries={rows.map((r) => r.path)} /> : null}
               {mode === 'content' && previewUnavailable ? (
                 <div className="find-preview-notice">
                   <span>{FIND_STATUS_COPY.previewUnavailable}</span>

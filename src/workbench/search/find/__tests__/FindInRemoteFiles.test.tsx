@@ -246,6 +246,68 @@ describe('FindInRemoteFiles — entry, seed, modes, debounce and Enter (Task 1)'
     }
   });
 
+  function treeResult(overrides: Partial<{ path: string; name: string; type: 'file' | 'folder' }>) {
+    return {
+      path: overrides.path ?? 'alpha.ts',
+      name: overrides.name ?? 'alpha.ts',
+      type: overrides.type ?? 'file',
+      matchStart: 0,
+      matchLength: 0,
+    };
+  }
+
+  it('Files mode lists only files filtered by query + mask; Folders mode only directories', async () => {
+    searchRemoteTree.mockResolvedValue([
+      treeResult({ path: 'alpha.ts', name: 'alpha.ts', type: 'file' }),
+      treeResult({ path: 'beta.ts', name: 'beta.ts', type: 'file' }),
+      treeResult({ path: 'gamma.js', name: 'gamma.js', type: 'file' }),
+      treeResult({ path: 'src', name: 'src', type: 'folder' }),
+      treeResult({ path: 'docs', name: 'docs', type: 'folder' }),
+    ]);
+    render(<FindInRemoteFiles />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'File mask' }), { target: { value: '*.ts' } });
+    fireEvent.click(screen.getByRole('tab', { name: 'Files' }));
+    fireEvent.change(screen.getByLabelText('Pattern'), { target: { value: 'alpha' } });
+
+    expect(await screen.findByTestId('find-result-row-0')).toBeDefined();
+    const countRows = () => document.querySelectorAll('[data-testid^="find-result-row-"]');
+    expect(countRows().length).toBe(1);
+    expect(screen.getByTestId('find-result-row-0').textContent).toContain('alpha.ts');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Folders' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'File mask' }), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Pattern'), { target: { value: 'sr' } });
+    await act(async () => { await Promise.resolve(); });
+    const folderRows = Array.from(countRows()).map((r) => r.textContent);
+    expect(folderRows.some((t) => t?.includes('src'))).toBe(true);
+    expect(folderRows.some((t) => t?.includes('alpha.ts'))).toBe(false);
+  });
+
+  it('a query change in Files mode never calls grepRemoteRef', async () => {
+    searchRemoteTree.mockResolvedValue([treeResult({ path: 'alpha.ts', name: 'alpha.ts' })]);
+    render(<FindInRemoteFiles />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Files' }));
+    fireEvent.change(screen.getByLabelText('Pattern'), { target: { value: 'a' } });
+    fireEvent.change(screen.getByLabelText('Pattern'), { target: { value: 'al' } });
+    expect(grepRemoteRef).not.toHaveBeenCalled();
+  });
+
+  it('Enter on a Files row opens the file with no initialLine', async () => {
+    const openTab = vi.fn();
+    useLayoutStore.setState({ openTab });
+    searchRemoteTree.mockResolvedValue([treeResult({ path: 'alpha.ts', name: 'alpha.ts' })]);
+    render(<FindInRemoteFiles />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Files' }));
+    fireEvent.change(screen.getByLabelText('Pattern'), { target: { value: 'alpha' } });
+    await screen.findByTestId('find-result-row-0');
+
+    fireEvent.keyDown(screen.getByLabelText('Pattern'), { key: 'Enter' });
+    expect(openTab).toHaveBeenCalledTimes(1);
+    const tab = openTab.mock.calls[0]![0] as any;
+    expect(tab.params.filePath).toBe('alpha.ts');
+    expect(tab.params.initialLine).toBeUndefined();
+  });
+
   it('icon-only buttons expose aria-label + tooltip and are focusable', () => {
     render(<FindInRemoteFiles />);
     const close = screen.getByRole('button', { name: /close/i });
