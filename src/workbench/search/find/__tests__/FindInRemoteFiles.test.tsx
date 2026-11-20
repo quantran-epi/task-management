@@ -439,4 +439,14 @@ describe('FindInRemoteFiles — entry, seed, modes, debounce and Enter (Task 1)'
     close.focus();
     expect(document.activeElement).toBe(close);
   });
+
+  it('File mask toolbar button focuses the File mask textbox (WR-07)', () => {
+    render(<FindInRemoteFiles />);
+    const maskInput = screen.getByRole('textbox', { name: 'File mask' });
+    const button = screen.getByRole('button', { name: 'File mask' });
+
+    fireEvent.click(button);
+
+    expect(document.activeElement).toBe(maskInput);
+  });
 });

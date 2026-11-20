@@ -342,7 +342,7 @@ export function FindInRemoteFiles(props: FindInRemoteFilesProps) {
               aria-label={FIND_CONTROL_LABELS.fileMask}
               aria-controls="find-file-mask"
               icon={<FilterOutlined />}
-              onClick={() => document.querySelector<HTMLInputElement>('.find-mask input')?.focus()}
+              onClick={() => document.getElementById('find-file-mask')?.focus()}
             />
           </Tooltip>
           <Tooltip title={pinned ? FIND_CONTROL_LABELS.unpin : FIND_CONTROL_LABELS.pin}>
