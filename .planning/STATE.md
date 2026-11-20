@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 Phase: 46.1 (unified-remote-file-search-and-workbench-visual-tokens-find) — COMPLETE
 Plan: 5 of 5
 Status: Phase complete — verification passed 12/12 (UAT handoff pending)
-Last activity: 2026-11-20
+Last activity: 2026-11-21 - Completed quick task 261120-x4x: SystemsExplorer type-aware icons (ghost-dev compact tree work dropped per user)
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -109,6 +109,7 @@ Progress: [█████████░] 91%
 | 261119-u7u | Đưa quản lý bộ tài liệu vào tab chuyên dụng, bỏ khối Không gian Docs trong Docs Explorer | 2026-11-19 | 77eb077c | [261119-u7u-rework-docs-explorer-remove-compact-kh-n](./quick/261119-u7u-rework-docs-explorer-remove-compact-kh-n/) |
 | 261120-f8v | Cập nhật CLAUDE.md: project này discuss bằng tiếng Việt. Bổ sung tính năng: khi mở tab file view, cho phép show file tương ứng trên Explorer SSH remote. | 2026-11-20 | be19854a | [261120-f8v-c-p-nh-t-claude-md-project-n-y-discuss-b](./quick/261120-f8v-c-p-nh-t-claude-md-project-n-y-discuss-b/) |
 | 261120-vcb | Fix 46.1 Find dialog and Remote Git Explorer: tree target reset + chain walk, drop global Ctrl+Shift+F with in-panel button, seed label, Vietnamese scope tabs, single-pane preview scroll, syntax colors | 2026-11-20 | 7940b164 | [261120-vcb-fix-46-1-find-dialog-and-remote-explorer](./quick/261120-vcb-fix-46-1-find-dialog-and-remote-explorer/) |
+| 261120-x4x | Icon hệ thống theo type trong SystemsExplorer qua nguồn chung (đã bỏ phần compact tree AgentDiffReviewer vì ghost dev retired) | 2026-11-21 | 86bffc8a | [261120-x4x-compact-tree-styling-for-agentdiffreview](./quick/261120-x4x-compact-tree-styling-for-agentdiffreview/) |
 | 261120-gdq | Fix all 8 code-review findings from quick 261120-f8v: cross-branch reveal no-op, folder search result reveal hidden by results panel, Tauri draft handoff uses global emit instead of emitTo ai-popout, duplicate remote tree fetches during reveal, result cap consumed by ancestor folders, over-permissive looksLikeCodeLine causing prose misrender, browser popout handle recovery, global search full tree fetch every keystroke. | 2026-11-20 | 09277995 | [261120-gdq-fix-all-8-code-review-findings-from-quic](./quick/261120-gdq-fix-all-8-code-review-findings-from-quic/) |
 | 261120-ha7 | Tăng timeout mặc định settlePollDeadlineMs trong teamRunCoordinator.ts từ 120s lên 30 phút để explore_repo 20-40 turn không bị ép dừng nhầm; giữ cơ chế chống kẹt | 2026-11-20 | 2082d27c | [261120-ha7-t-ng-timeout-m-c-nh-settlepolldeadlinems](./quick/261120-ha7-t-ng-timeout-m-c-nh-settlepolldeadlinems/) |
 
