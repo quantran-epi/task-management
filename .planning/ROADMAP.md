@@ -408,6 +408,27 @@ Plans:
 
 ## Milestone: v1.2 Knowledge System Implementation
 
+### Phase 46.1: Unified Remote Search and Visual Tokens (INSERTED)
+
+**Goal:** Replace scattered SSH Remote Explorer search with one Find in Remote Files dialog modeled on OpenIdea/IntelliJ, make the remote folder tree compact for deep dependency paths, and promote the approved draft's typography, palette and compact control styling into shared workbench tokens used across TaskMate.
+**Requirements**:
+1. One `Ctrl/Cmd+Shift+F` Find in Remote Files surface with Content / Files / Folders modes, scope controls, file mask and search options, replacing the three separate Remote Git Explorer search inputs.
+2. Two-pane result experience: virtualized result rows showing highlighted code plus `path:line`, and a bottom preview that follows arrow selection, scrolls the active line into view and highlights all matches in the file.
+3. Remote search correctness: scoped `git grep` / `git ls-tree`, 150 ms debounce, sequence-based stale guards, real SSH cancellation, bounded results, binary/large-file handling and truthful error states.
+4. Compact remote folder tree: single-child chain merging, 24 px rows, 16 px icons, 12 px indent, compact labels and reveal mapping that preserves stable keys.
+5. Shared visual system: bundle Inter and IBM Plex Mono with Vietnamese subsets for offline Tauri use; centralize the approved light/dark palette, font roles, row/control sizes, hover/selection and match styling as tokens; remove hardcoded colors in the touched surfaces.
+**Success Criteria**:
+  1. Remote search modes share one input/state machine; stale and cancelled runs cannot overwrite current results.
+  2. Arrow navigation updates the preview and Enter opens the remote file at the exact match line.
+  3. Deep single-child folder chains render as compact dotted labels and reveal from search results still works.
+  4. Changing a color/font/control token in the shared token file propagates to the new search UI and migrated workbench surfaces without editing component literals.
+  5. Vietnamese text in UI labels renders correctly offline; unit/component tests cover search state, preview linkage, tree compaction and token usage.
+**Depends on:** Phase 46
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 46.1 to break down)
+
 ### Phase 18: Multi-Modal Hybrid Retrieval Engine
 
 - Fulltext BM25 search
