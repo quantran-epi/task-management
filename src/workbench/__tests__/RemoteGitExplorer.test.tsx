@@ -535,6 +535,127 @@ describe('RemoteGitExplorer Component', () => {
     expect(screen.queryByText('orders')).toBeNull();
   });
 
+  it('re-fetches a same-path folder after a branch switch and drops stale expansion/selection (BUG-01)', async () => {
+    act(() => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
+      useLayoutStore.getState().setActiveRemoteBranch('main');
+    });
+    // Root has one folder `src` and a file; expanding `src` fetches its children.
+    vi.spyOn(gitRemoteTreeService, 'getRemoteTree').mockImplementation(async (_cfg, _repo, _ref, dirPath) => {
+      if (!dirPath) {
+        return [
+          { key: 'src', title: 'src', isLeaf: false, sha: 'tree-src' },
+          { key: 'root.ts', title: 'root.ts', isLeaf: true, size: 10, sha: 'blob-root' },
+        ];
+      }
+      return [
+        { key: `${dirPath}/child.ts`, title: 'child.ts', isLeaf: true, size: 10, sha: 'blob-child' },
+      ];
+    });
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteGitExplorer />
+      </AntdThemeAdapter>
+    );
+
+    // Root loads for main.
+    await waitFor(() => {
+      expect(screen.getByText('src')).toBeDefined();
+    });
+    // Expand `src` on main -> loadData fetches dirPath='src'.
+    const srcRow = screen.getByText('src').closest('.ant-tree-treenode')!;
+    fireEvent.click(srcRow.querySelector('.ant-tree-switcher')!);
+    await waitFor(() => {
+      expect(gitRemoteTreeService.getRemoteTree).toHaveBeenCalledWith(
+        mockSshConfigs[0], '/home/dev/my-repo', 'main', 'src', 'secret-123'
+      );
+    });
+    await waitFor(() => {
+      expect(screen.getByText('child.ts')).toBeDefined();
+    });
+    // Select the expanded folder's child so a stale selection would be visible.
+    fireEvent.click(screen.getByText('child.ts'));
+    expect(
+      screen.getByText('child.ts').closest('.ant-tree-treenode')?.className
+    ).toContain('ant-tree-treenode-selected');
+
+    const callsBeforeSwitch = (gitRemoteTreeService.getRemoteTree as any).mock.calls.length;
+
+    // Switch repo path from the store (as a 1-click Git action would).
+    act(() => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo-2', 'main');
+    });
+
+    // Root reloads for the new target.
+    await waitFor(() => {
+      expect(gitRemoteTreeService.getRemoteTree).toHaveBeenCalledWith(
+        mockSshConfigs[0], '/home/dev/my-repo-2', 'main', '', 'secret-123'
+      );
+    });
+    // Stale selection/expansion are cleared: no selected row survives the switch.
+    await waitFor(() => {
+      expect(document.querySelector('.ant-tree-treenode-selected')).toBeNull();
+    });
+
+    // Tree remounted: `src` starts collapsed, so expanding it calls loadData again for the new target.
+    const srcRowAfter = screen.getByText('src').closest('.ant-tree-treenode')!;
+    expect(srcRowAfter.className).not.toContain('ant-tree-treenode-expanded');
+    fireEvent.click(srcRowAfter.querySelector('.ant-tree-switcher')!);
+    await waitFor(() => {
+      const newTargetCalls = ((gitRemoteTreeService.getRemoteTree as any).mock.calls as any[][]).filter(
+        (c) => c[1] === '/home/dev/my-repo-2' && c[3] === 'src'
+      );
+      expect(newTargetCalls.length).toBeGreaterThan(0);
+    });
+    expect((gitRemoteTreeService.getRemoteTree as any).mock.calls.length).toBeGreaterThan(callsBeforeSwitch);
+  });
+
+  it('walks a single-child chain down to the deepest children with bounded calls (BUG-02)', async () => {
+    act(() => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
+      useLayoutStore.getState().setActiveRemoteBranch('main');
+    });
+    // Root = single chain vn -> vn/shb -> vn/shb/core; expanding the compact node walks:
+    // fetch vn (one folder shb) -> fetch vn/shb (one folder core) -> fetch vn/shb/core (deep file).
+    vi.spyOn(gitRemoteTreeService, 'getRemoteTree').mockImplementation(async (_cfg, _repo, _ref, dirPath) => {
+      if (!dirPath) {
+        return [{ key: 'vn', title: 'vn', isLeaf: false, sha: 't-vn',
+          children: [{ key: 'vn/shb', title: 'shb', isLeaf: false, sha: 't-shb' }] }];
+      }
+      if (dirPath === 'vn/shb') {
+        return [{ key: 'vn/shb/core', title: 'core', isLeaf: false, sha: 't-core' }];
+      }
+      if (dirPath === 'vn/shb/core') {
+        return [{ key: 'vn/shb/core/Main.ts', title: 'Main.ts', isLeaf: true, size: 10, sha: 'b-1' }];
+      }
+      return [];
+    });
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteGitExplorer />
+      </AntdThemeAdapter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('vn.shb')).toBeDefined();
+    });
+    // Expand the compact node; rawPath = last path 'vn/shb'.
+    const chainRow = screen.getByText('vn.shb').closest('.ant-tree-treenode')!;
+    fireEvent.click(chainRow.querySelector('.ant-tree-switcher')!);
+
+    // Deepest real file appears after the bounded walk.
+    await waitFor(() => {
+      expect(screen.getByText('Main.ts')).toBeDefined();
+    });
+    const calls = ((gitRemoteTreeService.getRemoteTree as any).mock.calls as any[][]);
+    expect(calls.filter((c) => c[3] === 'vn/shb').length).toBe(1);
+    expect(calls.filter((c) => c[3] === 'vn/shb/core').length).toBe(1);
+    // No runaway walking past a leaf: root + exactly two walk fetches.
+    expect(calls.length).toBe(3);
+  });
+
   it('keeps a branch point expanded into separate nodes', async () => {
     act(() => {
       useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');

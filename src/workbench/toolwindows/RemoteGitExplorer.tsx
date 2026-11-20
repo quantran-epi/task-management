@@ -126,6 +126,12 @@ function formatBytes(bytes?: number): string {
   return `${formatted} ${sizes[i]}`;
 }
 
+/** Hard ceiling on chained folder fetches for one expand — keeps read-only walks bounded (T-vcb-01). */
+const CHAIN_FETCH_CAP = 24;
+
+/** Mirrors the source-root stop in compactRemoteTree so the walk stops at the same boundary. */
+const SOURCE_ROOT_RE = /(?:^|\/)(?:src|test)\/(?:main|test)\/(?:java|kotlin|resources|scala|groovy)$/;
+
 /** Replace children of the raw node matching `targetPath`, leaving all sibling branches intact. */
 function injectRawChildren(
   nodes: RemoteGitTreeNode[],
@@ -248,6 +254,10 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
   const [globalActiveIndex, setGlobalActiveIndex] = useState<number>(0);
   const globalSeq = useRef<number>(0);
 
+  // Identity of the remote target the tree is showing. Remounting the Tree on change drops
+  // AntD's internal loadedKeys; clearing the controlled keys drops stale expansion/selection.
+  const treeTargetKey = `${selectedConfigId ?? ''}|${repoPath}|${selectedBranch}`;
+
   // Load SSH configs on mount
   useEffect(() => {
     let mounted = true;
@@ -283,6 +293,9 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
     lastAppliedTargetRef.current = key;
     if (activeRemoteConfigId) setSelectedConfigId(activeRemoteConfigId);
     if (activeRemoteRepoPath) setRepoPath(activeRemoteRepoPath);
+    // New target: stale expansion/selection from the previous repo must not survive (BUG-01).
+    setExpandedKeys([]);
+    setSelectedKeys([]);
   }, [activeRemoteConfigId, activeRemoteRepoPath]);
 
   // Store → local branch sync, mirroring the target sync above. A cross-branch reveal sets the
@@ -292,6 +305,9 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
     if (lastAppliedBranchRef.current === activeRemoteBranch) return;
     lastAppliedBranchRef.current = activeRemoteBranch;
     if (activeRemoteBranch) setSelectedBranch(activeRemoteBranch);
+    // Branch switch invalidates loaded children and any selection in the old ref (BUG-01).
+    setExpandedKeys([]);
+    setSelectedKeys([]);
   }, [activeRemoteBranch]);
 
   const selectedConfig = sshConfigs.find((c) => c.id === selectedConfigId);
@@ -438,27 +454,48 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConfig, repoPath]);
 
-  // Lazy child loader for directory nodes
+  // Lazy child loader for directory nodes. `node.rawPath` is the compacted chain's LAST path:
+  // fetch there, then walk down a single-folder chain so the deepest real children appear
+  // without exposing intermediate rows. Every read goes through the confined tree service.
   const onLoadData = async (node: any) => {
     if (!selectedConfig || !repoPath.trim() || !selectedBranch) return;
+    const startPath = node.rawPath as string;
     try {
       const secret = await getSshSecret(selectedConfig.id);
-      const rawChildren = await getRemoteTree(
-        selectedConfig,
-        repoPath.trim(),
-        selectedBranch,
-        node.rawPath as string,
-        secret ?? undefined
-      );
+      const fetchLevel = async (path: string): Promise<RemoteGitTreeNode[]> => {
+        const rawChildren = await getRemoteTree(
+          selectedConfig,
+          repoPath.trim(),
+          selectedBranch,
+          path,
+          secret ?? undefined
+        );
+        return mergeUncommittedFilesIntoTree(rawChildren, uncommittedFiles, path);
+      };
 
-      const mergedChildren = mergeUncommittedFilesIntoTree(
-        rawChildren,
-        uncommittedFiles,
-        node.rawPath as string
-      );
-      setTreeData((prev) => injectRawChildren(prev, node.rawPath as string, mergedChildren));
+      let children = await fetchLevel(startPath);
+      let fetches = 1;
+      while (fetches < CHAIN_FETCH_CAP) {
+        const only = children.length === 1 ? children[0]! : undefined;
+        if (
+          !only ||
+          only.isLeaf ||
+          only.gitStatus?.trim() ||
+          Boolean(only.children?.length) ||
+          revealPaths.includes(only.key) ||
+          SOURCE_ROOT_RE.test(only.key)
+        ) {
+          break;
+        }
+        const deeper = await fetchLevel(only.key);
+        children = children.map((child) =>
+          child.key === only.key ? { ...child, children: deeper } : child
+        );
+        fetches += 1;
+      }
+      setTreeData((prev) => injectRawChildren(prev, startPath, children));
     } catch (err: any) {
-      setError(err?.message || `Failed to expand folder ${node.rawPath}`);
+      setError(err?.message || `Failed to expand folder ${startPath}`);
     }
   };
 
@@ -879,6 +916,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         <Spin spinning={loadingTree}>
           {compactDisplayNodes.length > 0 ? (
             <Tree
+              key={treeTargetKey}
               className="remote-git-tree"
               motion={false as any}
               loadData={onLoadData}
