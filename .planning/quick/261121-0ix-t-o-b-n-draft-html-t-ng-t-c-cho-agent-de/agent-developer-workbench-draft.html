@@ -9,7 +9,7 @@
   2. Nội dung file: sample, tô màu tay bằng span, không có syntax-highlight library.
   3. Copy Path / Copy Content / Reveal / Reload: chỉ hiện toast.
   4. Diff Accept/Reject/Accept All/Revert All: chỉ đổi state trong trang.
-  5. Popout: div nổi trong cùng trang, đồng bộ transcript + file active bằng state chung.
+  5. Popout: div nổi trong cùng trang, mở lại Coding Zone (tree + tabs/diff) kèm chat strip nhỏ, đồng bộ bằng state chung.
   6. Team chat: không gửi đi đâu, tin chỉ nằm trong bộ nhớ trang.
   7. Light/Dark: chỉ đổi attribute data-theme trên <html>.
   8. Perspective "Team chat + agent activity": cùng state, chỉ đổi bố cục modal.
@@ -343,19 +343,24 @@ button { cursor: pointer; }
 .active-file-card .lbl { font-size: 9px; color: var(--fg-faint); text-transform: uppercase; letter-spacing: .05em; }
 .active-file-card .val { font-family: "SFMono-Regular", Consolas, monospace; font-size: 11px; color: var(--fg-strong); margin-top: 4px; word-break: break-all; }
 
-/* --- popout / notes / toast --- */
+/* --- popout coding zone / notes / toast --- */
 .popout {
-  position: fixed; right: 26px; top: 70px; width: 420px; height: 520px; z-index: 40;
-  display: flex; flex-direction: column; background: var(--surface-strong);
+  position: fixed; right: 26px; top: 70px; width: min(960px, calc(100vw - 52px)); height: min(680px, calc(100vh - 100px));
+  z-index: 40; display: flex; flex-direction: column; background: var(--surface-strong);
   border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: var(--shadow); overflow: hidden;
 }
 .popout-head {
   height: 36px; flex: 0 0 36px; display: flex; align-items: center; gap: 8px; padding: 0 10px;
   background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 650;
 }
-.popout-file { padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 10px; color: var(--fg-muted); }
-.popout-file b { color: var(--fg-strong); font-family: "SFMono-Regular", Consolas, monospace; font-size: 10.5px; word-break: break-all; }
+.popout-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 210px minmax(0, 1fr) 230px; }
+.popout-body > .pane { min-width: 0; }
+.popout-chat .chat-transcript { max-height: none; }
 .popout-note { font-size: 9px; color: var(--warning); padding: 4px 10px; background: var(--surface-sunken); border-bottom: 1px solid var(--border); }
+@media (max-width: 760px) {
+  .popout-body { grid-template-columns: 1fr; grid-template-rows: 1fr 2fr; }
+  .popout-body > .pane.explorer, .popout-body > .pane.chat { display: none; }
+}
 .notes-overlay { position: fixed; inset: 0; z-index: 50; background: rgba(15, 23, 42, .35); display: flex; justify-content: flex-end; }
 .notes-panel { width: min(430px, 100%); height: 100%; background: var(--surface-strong); box-shadow: var(--shadow); display: flex; flex-direction: column; }
 .notes-head { height: 48px; flex: 0 0 48px; display: flex; align-items: center; padding: 0 14px; border-bottom: 1px solid var(--border-strong); font-weight: 650; }
@@ -392,7 +397,7 @@ button { cursor: pointer; }
       </div>
       <div class="spacer"></div>
       <button class="btn tiny" type="button" id="theme-btn" title="Đổi palette sáng/tối">Light / Dark</button>
-      <button class="btn tiny" type="button" id="popout-btn">Popout chat</button>
+      <button class="btn tiny" type="button" id="popout-btn">Popout Coding Zone</button>
       <button class="btn tiny" type="button" id="notes-btn">Ghi chú</button>
       <button class="icon-btn" type="button" id="close-btn" title="Ẩn modal" aria-label="Ẩn modal">×</button>
     </div>
@@ -439,7 +444,7 @@ button { cursor: pointer; }
           <span>Team chat · 3 online</span>
           <span class="sync-chip"><i class="dot"></i> Đồng bộ</span>
           <div class="spacer"></div>
-          <button class="icon-btn" type="button" id="chat-popout-btn" title="Mở popout" aria-label="Mở popout">⤢</button>
+          <button class="icon-btn" type="button" id="chat-popout-btn" title="Mở Coding Zone ra cửa sổ riêng" aria-label="Mở Coding Zone ra cửa sổ riêng">⤢</button>
         </div>
         <div class="chat-transcript" id="chat-transcript"></div>
         <div class="chat-compose">
@@ -474,7 +479,7 @@ button { cursor: pointer; }
           <span>Team chat · 3 online</span>
           <span class="sync-chip"><i class="dot"></i> Đồng bộ</span>
           <div class="spacer"></div>
-          <button class="btn tiny" type="button" id="chat-popout-btn-2">Popout</button>
+          <button class="btn tiny" type="button" id="chat-popout-btn-2">Popout Coding Zone</button>
         </div>
         <div class="chat-transcript" id="chat-transcript-wide"></div>
         <div class="chat-compose">
@@ -500,22 +505,43 @@ button { cursor: pointer; }
 
 <button class="btn primary reopen hidden" id="reopen-btn" type="button">Hiện lại Agent Developer Workbench</button>
 
-<!-- Popout giả lập: div nổi, KHÔNG phải window.open / IPC / Tauri -->
-<div class="popout hidden" id="popout" role="dialog" aria-label="Team chat popout mô phỏng">
+<!-- Popout giả lập: div nổi chứa Coding Zone, KHÔNG phải window.open / IPC / Tauri -->
+<div class="popout hidden" id="popout" role="dialog" aria-label="Coding Zone popout mô phỏng">
   <div class="popout-head">
-    <span>Team chat — Popout (mô phỏng)</span>
+    <span>Coding Zone — Popout (mô phỏng)</span>
     <div class="spacer"></div>
     <button class="icon-btn" type="button" id="popout-close" aria-label="Đóng popout" style="color:inherit">×</button>
   </div>
-  <div class="popout-note">Đồng bộ mô phỏng trong cùng trang — chia sẻ state, không có cửa sổ thật.</div>
-  <div class="popout-file">File đang active: <b id="popout-file">—</b></div>
-  <div class="chat-transcript" id="popout-transcript"></div>
-  <div class="chat-compose">
-    <textarea id="popout-input" placeholder="Gõ tin từ popout..." aria-label="Soạn tin trong popout"></textarea>
-    <div class="compose-row">
-      <span class="compose-hint">Cùng transcript với modal</span>
-      <div class="spacer"></div>
-      <button class="btn tiny primary" type="button" id="popout-send">Gửi</button>
+  <div class="popout-note">Đồng bộ mô phỏng trong cùng trang — chia sẻ state tree/tab/diff/chat, không có cửa sổ thật.</div>
+  <div class="popout-body">
+    <div class="pane explorer" data-sample="true">
+      <div class="target-card">
+        <div class="target-line"><span>SSH</span><span class="mono">worktree · /srv/taskmate</span></div>
+        <div class="branch-line"><span class="tag branch">feature/agent-developer-workbench</span><span>read-only</span></div>
+      </div>
+      <div class="explorer-controls">
+        <div class="search-wrap"><span>⌕</span>
+          <input id="popout-tree-search" type="text" placeholder="Tìm file trong worktree..." aria-label="Tìm file trong popout">
+        </div>
+      </div>
+      <div class="tree" id="popout-tree" data-sample="true"></div>
+    </div>
+    <div class="pane center">
+      <div class="tabbar" id="popout-tabbar" role="tablist" aria-label="File đang mở trong popout"></div>
+      <div class="content" id="popout-content"></div>
+    </div>
+    <div class="pane chat popout-chat" data-sample="true">
+      <div class="chat-head"><span>Team chat · strip</span><span class="sync-chip"><i class="dot"></i> Đồng bộ</span></div>
+      <div class="popout-file">File active: <b id="popout-file">—</b></div>
+      <div class="chat-transcript" id="popout-transcript"></div>
+      <div class="chat-compose">
+        <textarea id="popout-input" placeholder="Gõ tin từ Coding Zone..." aria-label="Soạn tin trong popout"></textarea>
+        <div class="compose-row">
+          <span class="compose-hint">Cùng transcript với modal</span>
+          <div class="spacer"></div>
+          <button class="btn tiny primary" type="button" id="popout-send">Gửi</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -533,7 +559,7 @@ button { cursor: pointer; }
         <li><b>Nội dung file là sample.</b> Gutter số dòng và tô màu keyword/string/comment làm bằng span, không dùng syntax-highlight library.</li>
         <li><b>Copy Path / Copy Content / Reveal / Reload chỉ hiện toast</b> "Mô phỏng — không có tác dụng thật"; không ghi clipboard thật.</li>
         <li><b>Diff Accept/Reject/Accept All/Revert All chỉ đổi state trong trang.</b> Bộ đếm +/− phản ánh số dòng của các hunk <em>chưa quyết định</em>; không sửa file hay repository.</li>
-        <li><b>Popout không phải cửa sổ thật.</b> Đây là div nổi dùng chung biến <code>messages</code> và <code>activeTabId</code> với modal; không dùng window.open, IPC hay Tauri.</li>
+        <li><b>Popout Coding Zone không phải cửa sổ thật.</b> Đây là div nổi chứa tree, tab/diff và chat strip nhỏ, dùng chung biến <code>messages</code>, <code>activeTabId</code>, <code>hunkStates</code>, <code>treeScope</code> với modal; không dùng window.open, IPC hay Tauri.</li>
         <li><b>Team chat không gửi đi đâu.</b> Tin thêm vào chỉ nằm trong bộ nhớ trang, mất khi reload.</li>
         <li><b>Light/Dark chỉ đổi attribute <code>data-theme</code></b> trên <code>&lt;html&gt;</code> để swap palette CSS; không lưu cài đặt.</li>
         <li><b>Góc nhìn "Team chat + agent activity" chỉ đổi bố cục</b> của cùng modal, vẫn dùng chung state tab/chat.</li>
@@ -760,11 +786,15 @@ button { cursor: pointer; }
       : '';
     return row + kids;
   }
-  function renderTree() { $('tree').innerHTML = TREE.map(function (n) { return renderTreeNode(n, 0); }).join(''); }
+  function renderTree() {
+    const html = TREE.map(function (n) { return renderTreeNode(n, 0); }).join('');
+    $('tree').innerHTML = html;
+    $('popout-tree').innerHTML = html;
+  }
 
   /* ---------------- tabs ---------------- */
-  function renderTabs() {
-    $('tabbar').innerHTML = tabs.map(function (t) {
+  function tabsHTML() {
+    return tabs.map(function (t) {
       const icon = t.type === 'diff' ? 'Δ' : (t.type === 'overview' ? '◈' : '◇');
       return '<div class="tab' + (t.id === activeTabId ? ' active' : '') + '" role="tab" draggable="true" data-tab="' + esc(t.id) + '"' +
         ' aria-selected="' + (t.id === activeTabId) + '">' +
@@ -774,6 +804,10 @@ button { cursor: pointer; }
                   : '<button class="tab-close" type="button" data-close="' + esc(t.id) + '" title="Đóng tab" aria-label="Đóng tab">×</button>') +
         '</div>';
     }).join('');
+  }
+  function renderTabs() {
+    $('tabbar').innerHTML = tabsHTML();
+    $('popout-tabbar').innerHTML = tabsHTML();
   }
   function activateTab(id) {
     if (!tabs.some(function (t) { return t.id === id; })) return;
@@ -953,12 +987,17 @@ button { cursor: pointer; }
       '<div class="diff-wrap" data-sample="true">' + renderHunks() + '</div>' +
       '<div class="hunk-foot">Project: DỮ LIỆU MẪU / SAMPLE · ' + esc(tab.path) + ' · 3 hunk · ' + HUNKS.length + ' hunk</div>';
   }
-  function renderContent() {
+  function contentHTML() {
     const tab = activeTab();
-    if (!tab) { $('content').innerHTML = '<div class="overview">Không còn tab nào mở. Chọn file trong cây worktree.</div>'; return; }
-    if (tab.type === 'overview') $('content').innerHTML = renderOverview();
-    else if (tab.type === 'diff') $('content').innerHTML = renderDiff(tab);
-    else $('content').innerHTML = renderCode(tab);
+    if (!tab) return '<div class="overview">Không còn tab nào mở. Chọn file trong cây worktree.</div>';
+    if (tab.type === 'overview') return renderOverview();
+    if (tab.type === 'diff') return renderDiff(tab);
+    return renderCode(tab);
+  }
+  function renderContent() {
+    const html = contentHTML();
+    $('content').innerHTML = html;
+    $('popout-content').innerHTML = html;
   }
   function applyHunkDecision(hunkId, decision) {
     if (!(hunkId in hunkStates)) return;
@@ -1063,7 +1102,7 @@ button { cursor: pointer; }
     if (b) setPerspective(b.dataset.perspective);
   });
 
-  $('tree-search').addEventListener('input', function (e) { treeQuery = e.target.value.trim(); renderTree(); });
+  $('tree-search').addEventListener('input', function (e) { treeQuery = e.target.value.trim(); $('popout-tree-search').value = treeQuery; renderTree(); });
   $('scope-switch').addEventListener('click', function (e) {
     const b = e.target.closest('button[data-scope]');
     if (!b) return;
@@ -1072,36 +1111,49 @@ button { cursor: pointer; }
     $('scope-hint').textContent = treeScope === 'diff' ? 'chỉ file có thay đổi' : 'mọi file trong cây';
     renderTree();
   });
-  $('tree').addEventListener('click', function (e) {
-    const folder = e.target.closest('[data-folder]');
-    if (folder) {
-      const id = folder.dataset.folder;
-      if (collapsed.has(id)) collapsed.delete(id); else collapsed.add(id);
-      renderTree(); return;
-    }
-    const file = e.target.closest('[data-path]');
-    if (file) openTab(file.dataset.path);
-  });
+  function bindTree(id) {
+    $(id).addEventListener('click', function (e) {
+      const folder = e.target.closest('[data-folder]');
+      if (folder) {
+        const folderId = folder.dataset.folder;
+        if (collapsed.has(folderId)) collapsed.delete(folderId); else collapsed.add(folderId);
+        renderTree(); return;
+      }
+      const file = e.target.closest('[data-path]');
+      if (file) openTab(file.dataset.path);
+    });
+  }
+  bindTree('tree');
+  bindTree('popout-tree');
 
-  $('tabbar').addEventListener('click', function (e) {
-    const close = e.target.closest('[data-close]');
-    if (close) { e.stopPropagation(); closeTab(close.dataset.close); return; }
-    const tab = e.target.closest('[data-tab]');
-    if (tab) activateTab(tab.dataset.tab);
-  });
+  function bindTabbar(id) {
+    $(id).addEventListener('click', function (e) {
+      const close = e.target.closest('[data-close]');
+      if (close) { e.stopPropagation(); closeTab(close.dataset.close); return; }
+      const tab = e.target.closest('[data-tab]');
+      if (tab) activateTab(tab.dataset.tab);
+    });
+  }
+  bindTabbar('tabbar');
+  bindTabbar('popout-tabbar');
+  $('popout-tree-search').addEventListener('input', function (e) { treeQuery = e.target.value.trim(); $('tree-search').value = treeQuery; renderTree(); });
 
-  $('content').addEventListener('click', function (e) {
-    const toastBtn = e.target.closest('[data-toast]');
-    if (toastBtn) { toast('Mô phỏng — không có tác dụng thật: ' + toastBtn.dataset.toast); return; }
-    const open = e.target.closest('[data-open]');
-    if (open) { openTab(open.dataset.open); return; }
-    const mode = e.target.closest('#diff-mode button[data-mode]');
-    if (mode) { diffMode = mode.dataset.mode; renderContent(); return; }
-    const hunk = e.target.closest('[data-hunk][data-decision]');
-    if (hunk) { applyHunkDecision(hunk.dataset.hunk, hunk.dataset.decision); return; }
-    if (e.target.closest('#accept-all')) { setAllDecisions('accept'); return; }
-    if (e.target.closest('#revert-all')) { setAllDecisions('reject'); }
-  });
+  function bindContent(id) {
+    $(id).addEventListener('click', function (e) {
+      const toastBtn = e.target.closest('[data-toast]');
+      if (toastBtn) { toast('Mô phỏng — không có tác dụng thật: ' + toastBtn.dataset.toast); return; }
+      const open = e.target.closest('[data-open]');
+      if (open) { openTab(open.dataset.open); return; }
+      const mode = e.target.closest('[data-mode]');
+      if (mode) { diffMode = mode.dataset.mode; renderContent(); return; }
+      const hunk = e.target.closest('[data-hunk][data-decision]');
+      if (hunk) { applyHunkDecision(hunk.dataset.hunk, hunk.dataset.decision); return; }
+      if (e.target.closest('#accept-all')) { setAllDecisions('accept'); return; }
+      if (e.target.closest('#revert-all')) { setAllDecisions('reject'); }
+    });
+  }
+  bindContent('content');
+  bindContent('popout-content');
 
   $('chat-send').addEventListener('click', function () { sendFrom('chat-input'); });
   $('chat-send-wide').addEventListener('click', function () { sendFrom('chat-input-wide'); });
