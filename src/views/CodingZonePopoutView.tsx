@@ -6,14 +6,22 @@
 import React, { useCallback, useState } from 'react';
 import { CodingZoneModal } from '../components/agents/CodingZoneModal';
 import { CodingZoneDiffPanel } from '../components/agents/CodingZoneDiffPanel';
+import type { DiffFile } from '../types/agent';
 import type {
+  CodingZoneSharedMessage,
   CodingZoneSharedState,
   CodingZoneSyncPayload,
   ConnectionState,
 } from '../types/codingZone';
+import { useCodingZoneSync } from '../hooks/useCodingZoneSync';
 import { closeCodingZonePopout } from '../utils/codingZonePopout';
 
 const WINDOW_ID = `coding-zone-popout-${typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : Math.random()}`;
+
+// Stable empties: inline literals would retrigger CodingZoneModal's environment effect on every render.
+const EMPTY_FILES: readonly string[] = [];
+const EMPTY_DIFF_FILES: readonly DiffFile[] = [];
+const EMPTY_MESSAGES: readonly CodingZoneSharedMessage[] = [];
 
 /** Validate untrusted cross-window payloads at the boundary (T-48-10). */
 function isSharedState(value: unknown): value is CodingZoneSharedState {
@@ -42,7 +50,8 @@ export const CodingZonePopoutView: React.FC<CodingZonePopoutViewProps> = ({ conn
     if (event.kind !== 'full' || !isSharedState(event.payload)) return;
     setShared(event.payload);
   }, []);
-  void onState; // Handoff/sync subscriptions live inside CodingZoneModal (same windowId bus).
+  // The modal owns tabs/decisions; this view needs the same full snapshot to feed its diff panel.
+  useCodingZoneSync(WINDOW_ID, onState);
 
   return (
     <div className="cz-popout-window" data-testid="coding-zone-popout-view" data-shared-state={shared ? 'ready' : 'pending'}>
@@ -57,12 +66,12 @@ export const CodingZonePopoutView: React.FC<CodingZonePopoutViewProps> = ({ conn
         }
       `}</style>
       <CodingZoneModal
+        messages={shared?.messages ?? EMPTY_MESSAGES}
+        allFiles={shared?.allFiles ?? EMPTY_FILES}
+        diffFiles={shared?.diffFiles ?? EMPTY_DIFF_FILES}
         {...(shared ? {
           descriptor: shared.descriptor,
           sshConfig: shared.sshConfig,
-          messages: shared.messages,
-          allFiles: shared.allFiles,
-          diffFiles: shared.diffFiles,
           diffRevision: shared.diffRevision,
           onlineCount: shared.onlineCount,
         } : {})}
