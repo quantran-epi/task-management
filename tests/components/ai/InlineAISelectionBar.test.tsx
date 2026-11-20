@@ -11,6 +11,7 @@ import { AIChatProvider, useAIChat } from '../../../src/context/AIChatContext';
 import { TaskPlannerDatabase } from '../../../src/db';
 import * as selectionContextUtils from '../../../src/utils/selectionContext';
 import * as nineRouterTokenService from '../../../src/services/ai/nineRouterTokenService';
+import * as aiPopoutUtils from '../../../src/utils/aiPopout';
 
 describe('InlineAISelectionBar positioning math', () => {
   it('places popup strictly above selection when clearance exists (rect.top >= popupHeight + GAP + 10)', () => {
@@ -206,5 +207,113 @@ describe('InlineAISelectionBar component mention workflow', () => {
 
     // Should not render "Mention vào Chat" button
     expect(screen.queryByRole('button', { name: /Mention vào Chat/i })).not.toBeInTheDocument();
+  });
+
+  it('routes Open in Chat to the floating popout when one is open, without opening an in-app panel', async () => {
+    vi.spyOn(selectionContextUtils, 'resolveEntityHierarchy').mockResolvedValue({
+      targetType: 'doc',
+      targetId: 'doc-popout',
+      targetTitle: 'Doc Popout',
+      hierarchyPath: 'Dự án "Demo" > Tài liệu "Doc Popout"',
+      fullContextText: 'Context content',
+    });
+    vi.spyOn(aiPopoutUtils, 'isAiPopoutOpen').mockResolvedValue(true);
+    const sendSpy = vi.spyOn(aiPopoutUtils, 'sendTextToAiPopout').mockResolvedValue(true);
+    const openChatWithDraftSpy = vi.fn();
+
+    const TestShell = () => {
+      const { isOpen, closeChat, activeScope } = useAIChat();
+      const ctx = useAIChat();
+      ctx.openChatWithDraft = openChatWithDraftSpy;
+      return (
+        <div>
+          <InlineAISelectionBar db={db} />
+          <AIChatDrawer open={isOpen} onClose={closeChat} db={db} activeScope={activeScope} />
+        </div>
+      );
+    };
+
+    render(
+      <AIChatProvider>
+        <TestShell />
+      </AIChatProvider>
+    );
+
+    const docNode = document.createElement('div');
+    docNode.setAttribute('data-ai-context-type', 'doc');
+    docNode.setAttribute('data-ai-context-id', 'doc-popout');
+    const mockSelection = {
+      isCollapsed: false,
+      toString: () => 'Nội dung gửi vào cửa sổ AI nổi',
+      anchorNode: docNode,
+      getRangeAt: () => ({
+        getBoundingClientRect: () => ({ top: 250, bottom: 270, left: 200, right: 400, width: 200, height: 20 }),
+      }),
+    };
+    vi.spyOn(window, 'getSelection').mockReturnValue(mockSelection as any);
+    fireEvent.mouseUp(document);
+
+    const mentionBtn = await screen.findByRole('button', { name: /Mention vào Chat/i });
+    fireEvent.click(mentionBtn);
+
+    await waitFor(() => {
+      expect(sendSpy).toHaveBeenCalledTimes(1);
+    });
+    const [text, scope] = sendSpy.mock.calls[0]!;
+    expect(text).toContain('Nội dung gửi vào cửa sổ AI nổi');
+    expect(scope).toEqual(expect.objectContaining({ type: 'doc' }));
+    expect(openChatWithDraftSpy).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('Nội dung tin nhắn trò chuyện AI')).toBeNull();
+  });
+
+  it('falls back to in-app draft when no popout is open', async () => {
+    vi.spyOn(selectionContextUtils, 'resolveEntityHierarchy').mockResolvedValue({
+      targetType: 'doc',
+      targetId: 'doc-fallback',
+      targetTitle: 'Doc Fallback',
+      hierarchyPath: 'Dự án "Demo" > Tài liệu "Doc Fallback"',
+      fullContextText: 'Context content',
+    });
+    vi.spyOn(aiPopoutUtils, 'isAiPopoutOpen').mockResolvedValue(false);
+    const sendSpy = vi.spyOn(aiPopoutUtils, 'sendTextToAiPopout').mockResolvedValue(true);
+
+    const TestShell = () => {
+      const { isOpen, closeChat, activeScope } = useAIChat();
+      return (
+        <div>
+          <InlineAISelectionBar db={db} />
+          <AIChatDrawer open={isOpen} onClose={closeChat} db={db} activeScope={activeScope} />
+        </div>
+      );
+    };
+
+    render(
+      <AIChatProvider>
+        <TestShell />
+      </AIChatProvider>
+    );
+
+    const docNode = document.createElement('div');
+    docNode.setAttribute('data-ai-context-type', 'doc');
+    docNode.setAttribute('data-ai-context-id', 'doc-fallback');
+    const mockSelection = {
+      isCollapsed: false,
+      toString: () => 'Nội dung fallback khi không có popout',
+      anchorNode: docNode,
+      getRangeAt: () => ({
+        getBoundingClientRect: () => ({ top: 250, bottom: 270, left: 200, right: 400, width: 200, height: 20 }),
+      }),
+    };
+    vi.spyOn(window, 'getSelection').mockReturnValue(mockSelection as any);
+    fireEvent.mouseUp(document);
+
+    const mentionBtn = await screen.findByRole('button', { name: /Mention vào Chat/i });
+    fireEvent.click(mentionBtn);
+
+    const textarea = (await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI')) as HTMLTextAreaElement;
+    await waitFor(() => {
+      expect(textarea.value).toContain('Nội dung fallback khi không có popout');
+    });
+    expect(sendSpy).not.toHaveBeenCalled();
   });
 });
