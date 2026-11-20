@@ -9,6 +9,7 @@ import {
   getRemoteFileContent,
   getRemoteWorkingFileContent,
   PathOutsideRepoError,
+  searchRemoteTree,
 } from '../gitRemoteTreeService';
 import * as gitRemoteService from '../gitRemoteService';
 import * as sshService from '../sshService';
@@ -80,6 +81,69 @@ describe('gitRemoteTreeService uncommitted files & working copy fallback', () =>
       undefined,
       undefined
     );
+  });
+});
+
+describe('searchRemoteTree', () => {
+  const lsTreeOutput = [
+    '100644 blob abc123\t120\tREADME.md',
+    '100644 blob def456\t2048\tsrc/index.ts',
+    '100644 blob fed789\t512\tsrc/nested/INDEX.ts',
+    '040000 tree aaa111\t-\tsrc/nested',
+  ].join('\0');
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('issues one confined ls-tree -r command and returns bounded file/folder matches', async () => {
+    const cmdSpy = vi.spyOn(gitRemoteService, 'runGitCommand').mockResolvedValue(lsTreeOutput);
+
+    const results = await searchRemoteTree(
+      mockConfig,
+      '/home/dev/repo',
+      'main',
+      'INDEX',
+      'secret-123'
+    );
+
+    expect(cmdSpy).toHaveBeenCalledTimes(1);
+    const args = cmdSpy.mock.calls[0]![2] as string[];
+    expect(args).toEqual(['ls-tree', '-r', '-l', '-z', '--end-of-options', 'main']);
+    expect(results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: 'src/index.ts', name: 'index.ts', type: 'file' }),
+        expect.objectContaining({ path: 'src/nested/INDEX.ts', name: 'INDEX.ts', type: 'file' }),
+      ])
+    );
+    // Folder ancestors are represented as folder hits; data never reaches git.
+    expect(results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: 'src/nested', name: 'nested', type: 'folder' }),
+      ])
+    );
+    for (const result of results) {
+      expect(result.matchStart).toBeGreaterThanOrEqual(0);
+      expect(result.matchStart + result.matchLength).toBeLessThanOrEqual(result.name.length);
+    }
+  });
+
+  it('never interpolates a leading-dash or escaping query into the command', async () => {
+    const cmdSpy = vi.spyOn(gitRemoteService, 'runGitCommand').mockResolvedValue(lsTreeOutput);
+
+    await searchRemoteTree(mockConfig, '/home/dev/repo', 'main', '-rf /; rm -rf /', 'secret-123');
+
+    const args = cmdSpy.mock.calls[0]![2] as string[];
+    expect(args.join(' ')).not.toContain('rm -rf');
+    expect(args).toEqual(['ls-tree', '-r', '-l', '-z', '--end-of-options', 'main']);
+  });
+
+  it('returns an empty result with an error flag on git failure', async () => {
+    vi.spyOn(gitRemoteService, 'runGitCommand').mockRejectedValue(new Error('ssh down'));
+
+    const results = await searchRemoteTree(mockConfig, '/home/dev/repo', 'main', 'index');
+
+    expect(results).toEqual([]);
   });
 });
 

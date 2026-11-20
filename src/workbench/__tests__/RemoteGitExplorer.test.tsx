@@ -438,4 +438,60 @@ describe('RemoteGitExplorer Component', () => {
       expect(screen.getByText('package.json')).toBeDefined();
     });
   });
+
+  it('global search finds remote files/folders, highlights matches, opens files and reveals folders', async () => {
+    act(() => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
+    });
+    vi.spyOn(gitRemoteTreeService, 'searchRemoteTree').mockResolvedValue([
+      { path: 'src/index.ts', name: 'index.ts', type: 'file', matchStart: 0, matchLength: 4 },
+      { path: 'src/nested', name: 'nested', type: 'folder', matchStart: 0, matchLength: 4 },
+    ]);
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteGitExplorer />
+      </AntdThemeAdapter>
+    );
+
+    const input = screen.getByTestId('global-search-input');
+    fireEvent.change(input, { target: { value: 'inde' } });
+
+    await waitFor(() => {
+      expect(gitRemoteTreeService.searchRemoteTree).toHaveBeenCalledWith(
+        mockSshConfigs[0], '/home/dev/my-repo', 'main', 'inde', 'secret-123', undefined
+      );
+    });
+
+    const fileHit = await screen.findByTestId('global-search-hit-file');
+    expect(fileHit.textContent).toContain('src');
+    expect(fileHit.querySelector('mark')?.textContent).toBe('inde');
+    expect(screen.getByTestId('global-search-hit-folder')).toBeDefined();
+
+    fireEvent.click(fileHit);
+    const tab = useLayoutStore.getState().openTabs.find((t) => t.id === 'remote:src/index.ts');
+    expect(tab).toBeDefined();
+
+    fireEvent.keyDown(screen.getByTestId('global-search-hit-folder'), { key: 'Enter' });
+    await waitFor(() => {
+      expect((useLayoutStore.getState() as any).pendingRevealTarget).toEqual(
+        expect.objectContaining({ filePath: 'src/nested' })
+      );
+    });
+  });
+
+  it('global search is inert with no remote connected', async () => {
+    const searchSpy = vi.spyOn(gitRemoteTreeService, 'searchRemoteTree').mockResolvedValue([]);
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteGitExplorer />
+      </AntdThemeAdapter>
+    );
+
+    const input = screen.getByTestId('global-search-input');
+    expect(input.hasAttribute('disabled')).toBe(true);
+    fireEvent.change(input, { target: { value: 'anything' } });
+    expect(searchSpy).not.toHaveBeenCalled();
+  });
 });
