@@ -189,6 +189,25 @@ describe('CodingZoneModal shell', () => {
     }));
   });
 
+  it('does not run a turn twice when a chat send event is re-delivered (WR-04)', async () => {
+    const { onSend } = renderModal();
+    const message = { id: 'dup-1', author: 'Bạn', time: '09:00', text: 'gửi một lần', kind: 'chat' };
+    for (const revision of [10, 11]) {
+      window.dispatchEvent(new MessageEvent('message', {
+        origin: window.location.origin,
+        data: {
+          type: 'coding-zone-sync',
+          payload: {
+            originWindowId: 'popout', revision, kind: 'chat',
+            payload: { message, intent: 'send' },
+          },
+        },
+      }));
+    }
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+    expect(onSend).toHaveBeenCalledWith('gửi một lần');
+  });
+
   it('closing and reordering a tab publishes tabs + activeFile sync events (WR-03)', async () => {
     renderModal();
     fireEvent.click(screen.getByRole('button', { name: 'Tất cả' }));

@@ -104,6 +104,9 @@ export const CodingZoneModal: React.FC<CodingZoneModalProps> = ({
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const onSendRef = useRef(onSendMessage);
   onSendRef.current = onSendMessage;
+  // WR-04: the dual transport (BroadcastChannel + Tauri emitTo) can re-deliver a chat event.
+  // Key sends by message id so `runTurn` fires at most once per message in this window.
+  const sentMessageIds = useRef<Set<string>>(new Set());
 
   const [environment, setEnvironment] = useState({
     descriptor, sshConfig, allFiles: [...allFiles], diffFiles: [...diffFiles], diffRevision, connection, onlineCount,
@@ -178,7 +181,10 @@ export const CodingZoneModal: React.FC<CodingZoneModalProps> = ({
         if (!item || !isSharedMessage(item.message)) return;
         const message = item.message;
         setRemoteMessages((current) => current.some((m) => m.id === message.id) ? current : [...current, message]);
-        if (item.intent === 'send') onSendRef.current?.(message.text);
+        if (item.intent === 'send' && !sentMessageIds.current.has(message.id)) {
+          sentMessageIds.current.add(message.id);
+          onSendRef.current?.(message.text);
+        }
         return;
       }
       case 'activity':
@@ -268,6 +274,9 @@ export const CodingZoneModal: React.FC<CodingZoneModalProps> = ({
       author: 'Bạn', time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }), text, kind: 'chat',
     };
     setRemoteMessages((current) => [...current, message]);
+    // Mark before the local send so a re-delivered 'send' event for this id cannot run
+    // `runTurn` a second time in this window (WR-04).
+    sentMessageIds.current.add(message.id);
     publish('chat', { message, intent: 'send' });
     onSendRef.current?.(text);
   }, [publish, windowId]);
