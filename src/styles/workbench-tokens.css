@@ -313,6 +313,64 @@ html, body, #root {
   line-height: 1.2 !important;
 }
 
+/* Remote Git Explorer — compact 24px tree rows (D-13). Scoped to .remote-git-tree so the
+   global 28px workbench tree rules above are unchanged for every other tree. */
+.remote-git-tree {
+  --remote-row-height: 24px;
+  --remote-tree-indent: 12px;
+  --remote-icon-size: 16px;
+}
+
+.remote-git-tree .ant-tree-treenode {
+  padding: 0 !important;
+  min-height: var(--remote-row-height) !important;
+  height: var(--remote-row-height) !important;
+}
+
+.remote-git-tree .ant-tree-switcher,
+.remote-git-tree .ant-tree-node-content-wrapper {
+  height: var(--remote-row-height) !important;
+  line-height: var(--remote-row-height) !important;
+}
+
+.remote-git-tree .ant-tree-node-content-wrapper {
+  padding: 0 4px !important;
+}
+
+.remote-git-tree .ant-tree-treenode-selected .ant-tree-node-content-wrapper,
+.remote-git-tree .ant-tree-node-content-wrapper.ant-tree-node-selected {
+  background: var(--accent-soft, #e4ecff) !important;
+  color: var(--accent, #2f62d8) !important;
+}
+
+.remote-git-tree .ant-tree-treenode:hover .ant-tree-node-content-wrapper {
+  background: var(--bg-hover, rgba(0, 0, 0, 0.06)) !important;
+}
+
+/* 12px indent per level, 1px guides between levels. AntD sets --tree-indent-size inline. */
+.remote-git-tree .ant-tree-indent-unit {
+  width: var(--remote-tree-indent) !important;
+}
+
+.remote-git-tree .ant-tree-indent-unit::before {
+  border-left: 1px solid var(--border, #e9eaee) !important;
+  height: var(--remote-row-height) !important;
+}
+
+.remote-git-tree .ant-tree-iconEle,
+.remote-git-tree .remote-tree-title .anticon {
+  width: var(--remote-icon-size) !important;
+  font-size: var(--remote-icon-size) !important;
+}
+
+.remote-git-tree .remote-tree-title,
+.remote-git-tree .remote-tree-label {
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
 /* ExpUI Tab in Editor Area */
 .workbench-expui-tab {
   height: 30px;

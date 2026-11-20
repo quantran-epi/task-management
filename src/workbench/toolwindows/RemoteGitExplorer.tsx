@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Select, Input, Tree, Button, Tooltip, Tag, Spin, Alert, Empty, Segmented } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import FolderOutlined from '@ant-design/icons/FolderOutlined';
@@ -19,6 +19,7 @@ import {
 } from '../../services/gitRemoteTreeService';
 import type { SshConfig } from '../../types/ssh';
 import type { RemoteGitBranch, RemoteGitTreeNode, RemoteGrepHit } from '../../types/gitRemote';
+import { compactRemoteTree, keyOfPathFor, type CompactedNode } from '../../utils/remoteTreeCompact';
 import { useLayoutStore } from '../store/layoutStore';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 
@@ -32,6 +33,8 @@ interface CustomTreeNodeData extends DataNode {
   sha?: string;
   gitStatus?: string;
   rawNode?: RemoteGitTreeNode;
+  /** Full repo-relative path to fetch children for (compacted last-path, or raw key). */
+  rawPath?: string;
 }
 
 function renderGitStatusBadge(status?: string) {
@@ -123,30 +126,97 @@ function formatBytes(bytes?: number): string {
   return `${formatted} ${sizes[i]}`;
 }
 
-/** Replace children of the node matching `targetKey`, leaving all sibling branches intact. */
-function injectTreeChildren(
-  nodes: CustomTreeNodeData[],
-  targetKey: string,
-  children: CustomTreeNodeData[]
-): CustomTreeNodeData[] {
+/** Replace children of the raw node matching `targetPath`, leaving all sibling branches intact. */
+function injectRawChildren(
+  nodes: RemoteGitTreeNode[],
+  targetPath: string,
+  children: RemoteGitTreeNode[]
+): RemoteGitTreeNode[] {
   return nodes.map((item) => {
-    if (item.key === targetKey) return { ...item, children };
+    if (item.key === targetPath) return { ...item, children };
     if (item.children) {
-      return { ...item, children: injectTreeChildren(item.children as CustomTreeNodeData[], targetKey, children) };
+      return { ...item, children: injectRawChildren(item.children, targetPath, children) };
     }
     return item;
   });
 }
 
-function findTreeNode(nodes: CustomTreeNodeData[], key: string): CustomTreeNodeData | undefined {
+function findRawTreeNode(nodes: RemoteGitTreeNode[], key: string): RemoteGitTreeNode | undefined {
   for (const node of nodes) {
     if (node.key === key) return node;
     if (node.children) {
-      const found = findTreeNode(node.children as CustomTreeNodeData[], key);
+      const found = findRawTreeNode(node.children, key);
       if (found) return found;
     }
   }
   return undefined;
+}
+
+/**
+ * Build AntD nodes from a compacted view. `key` is the stable first-path key; `rawPath` is the
+ * last path in the chain and is the operation target for lazy child fetches and file opens.
+ * Status badges stay on the row and the full path is available via Tooltip on the title.
+ */
+function compactedNodeToDataNode(node: CompactedNode): CustomTreeNodeData {
+  const isCode = /\.(ts|tsx|js|jsx|json|rs|go|py|css|html|md)$/i.test(node.label);
+  const fullTitle: React.ReactNode = (
+    <Tooltip title={node.chain.length > 1 ? node.chain.join(' / ') : undefined}>
+      <span
+        className="remote-tree-title"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          minWidth: 0,
+          maxWidth: '100%',
+          overflow: 'hidden',
+          whiteSpace: 'nowrap',
+          textOverflow: 'ellipsis',
+          userSelect: 'none',
+        }}
+      >
+        <span className="remote-tree-label" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {node.label}
+        </span>
+        {renderGitStatusBadge(node.gitStatus)}
+        {node.isLeaf && node.size !== undefined && (
+          <Tag
+            variant="filled"
+            style={{
+              fontSize: 10,
+              lineHeight: '14px',
+              padding: '0 4px',
+              margin: 0,
+              color: 'var(--fg-muted, #6c707e)',
+              background: 'rgba(0,0,0,0.04)',
+            }}
+          >
+            {formatBytes(node.size)}
+          </Tag>
+        )}
+      </span>
+    </Tooltip>
+  );
+  return {
+    key: node.key,
+    title: fullTitle,
+    icon: ({ expanded }: { expanded?: boolean }) =>
+      node.isLeaf ? (
+        <FileTextOutlined
+          style={{ color: isCode ? 'var(--accent, #3871e1)' : 'var(--fg-muted, #6c707e)' }}
+        />
+      ) : expanded ? (
+        <FolderOpenOutlined style={{ color: '#f59e0b' }} />
+      ) : (
+        <FolderOutlined style={{ color: '#f59e0b' }} />
+      ),
+    isLeaf: node.isLeaf,
+    ...(node.size !== undefined ? { size: node.size } : {}),
+    sha: node.path,
+    ...(node.gitStatus !== undefined ? { gitStatus: node.gitStatus } : {}),
+    rawPath: node.path,
+    ...(node.children.length > 0 ? { children: node.children.map(compactedNodeToDataNode) } : {}),
+  };
 }
 
 export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
@@ -166,7 +236,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
   const [branches, setBranches] = useState<RemoteGitBranch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState<string>(activeRemoteBranch || '');
   const [loadingBranches, setLoadingBranches] = useState<boolean>(false);
-  const [treeData, setTreeData] = useState<CustomTreeNodeData[]>([]);
+  const [treeData, setTreeData] = useState<RemoteGitTreeNode[]>([]);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
   const [loadingTree, setLoadingTree] = useState<boolean>(false);
@@ -233,59 +303,36 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
 
   const selectedConfig = sshConfigs.find((c) => c.id === selectedConfigId);
 
+  // Reveal targets (and their ancestors) must not be merged away — a search result path stays
+  // a distinct, selectable node so the reveal effect can highlight it (D-12, Pitfall 6).
+  const revealPaths = useMemo(() => {
+    const target = pendingRevealTarget?.filePath?.trim();
+    if (!target) return [] as string[];
+    const segments = target.split('/').filter(Boolean);
+    const paths: string[] = [];
+    let acc = '';
+    for (const seg of segments) {
+      acc = acc ? `${acc}/${seg}` : seg;
+      paths.push(acc);
+    }
+    return paths;
+  }, [pendingRevealTarget]);
+
+  // Raw tree is the source of truth; the compacted view is derived for rendering only.
+  const compactedNodes = useMemo(
+    () => compactRemoteTree(treeData, { revealTargets: revealPaths }),
+    [treeData, revealPaths]
+  );
+  const compactDisplayNodes = useMemo(
+    () => compactedNodes.map(compactedNodeToDataNode),
+    [compactedNodes]
+  );
+  /** Resolve any raw chain path (including a reveal target) to the stable compact node key. */
+  const keyOfPath = useMemo(() => keyOfPathFor(compactedNodes), [compactedNodes]);
+
   const [uncommittedFiles, setUncommittedFiles] = useState<
     Array<{ path: string; indexStatus: string; workingTreeStatus: string }>
   >([]);
-
-  const mapTreeNodeToDataNode = useCallback((node: RemoteGitTreeNode): CustomTreeNodeData => {
-    const isCode = /\.(ts|tsx|js|jsx|json|rs|go|py|css|html|md)$/i.test(node.title);
-    return {
-      key: node.key,
-      title: (
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            fontSize: 12.5,
-            userSelect: 'none',
-          }}
-        >
-          <span>{node.title}</span>
-          {renderGitStatusBadge(node.gitStatus)}
-          {node.isLeaf && node.size !== undefined && (
-            <Tag
-              bordered={false}
-              style={{
-                fontSize: 10,
-                lineHeight: '14px',
-                padding: '0 4px',
-                color: 'var(--fg-muted, #6c707e)',
-                background: 'rgba(0,0,0,0.04)',
-              }}
-            >
-              {formatBytes(node.size)}
-            </Tag>
-          )}
-        </span>
-      ),
-      icon: ({ expanded }: { expanded?: boolean }) =>
-        node.isLeaf ? (
-          <FileTextOutlined
-            style={{ color: isCode ? 'var(--accent, #3871e1)' : 'var(--fg-muted, #6c707e)' }}
-          />
-        ) : expanded ? (
-          <FolderOpenOutlined style={{ color: '#f59e0b' }} />
-        ) : (
-          <FolderOutlined style={{ color: '#f59e0b' }} />
-        ),
-      isLeaf: node.isLeaf,
-      ...(node.size !== undefined ? { size: node.size } : {}),
-      sha: node.sha,
-      ...(node.gitStatus !== undefined ? { gitStatus: node.gitStatus } : {}),
-      rawNode: node,
-    };
-  }, []);
 
   // Load root tree
   const loadRootTree = useCallback(
@@ -315,8 +362,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         );
 
         const mergedNodes = mergeUncommittedFilesIntoTree(rawNodes, dirtyFiles);
-        const mapped: CustomTreeNodeData[] = mergedNodes.map(mapTreeNodeToDataNode);
-        setTreeData(mapped);
+        setTreeData(mergedNodes);
       } catch (err: any) {
         setError(err?.message || 'Failed to load repository tree');
         setTreeData([]);
@@ -324,7 +370,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         setLoadingTree(false);
       }
     },
-    [selectedConfig, repoPath, selectedBranch, mapTreeNodeToDataNode]
+    [selectedConfig, repoPath, selectedBranch]
   );
 
   // Load branches whenever config or repoPath changes
@@ -408,19 +454,18 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         selectedConfig,
         repoPath.trim(),
         selectedBranch,
-        node.key as string,
+        node.rawPath as string,
         secret ?? undefined
       );
 
       const mergedChildren = mergeUncommittedFilesIntoTree(
         rawChildren,
         uncommittedFiles,
-        node.key as string
+        node.rawPath as string
       );
-      const childrenNodes: CustomTreeNodeData[] = mergedChildren.map(mapTreeNodeToDataNode);
-      setTreeData((prev) => injectTreeChildren(prev, node.key as string, childrenNodes));
+      setTreeData((prev) => injectRawChildren(prev, node.rawPath as string, mergedChildren));
     } catch (err: any) {
-      setError(err?.message || `Failed to expand folder ${node.key}`);
+      setError(err?.message || `Failed to expand folder ${node.rawPath}`);
     }
   };
 
@@ -460,8 +505,8 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
     const node = info.node as CustomTreeNodeData;
     if (!node.isLeaf || !selectedConfig) return;
 
-    const rawTitle = node.rawNode?.title || (node.title as string) || node.key.toString();
-    openRemoteFile(node.key as string, rawTitle, {
+    const rawTitle = node.rawPath?.split('/').at(-1) || String(node.key);
+    openRemoteFile(node.rawPath as string, rawTitle, {
       size: node.size,
       gitStatus: node.gitStatus,
     });
@@ -524,16 +569,16 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
   const nameResults = (() => {
     if (searchMode !== 'name' || !searchInput.trim()) return [];
     const needle = searchInput.trim().toLowerCase();
-    const found: Array<{ path: string; node: CustomTreeNodeData }> = [];
-    const visit = (nodes: CustomTreeNodeData[]) => {
+    const found: Array<{ path: string; node: RemoteGitTreeNode }> = [];
+    const visit = (nodes: RemoteGitTreeNode[]) => {
       for (const node of nodes) {
-        const path = String(node.key);
+        const path = node.key;
         const segments = path.split('/');
         if (segments.some((seg) => seg.toLowerCase().includes(needle))) {
           found.push({ path, node });
           if (found.length >= NAME_RESULT_LIMIT) return;
         }
-        if (node.children) visit(node.children as CustomTreeNodeData[]);
+        if (node.children) visit(node.children);
         if (found.length >= NAME_RESULT_LIMIT) return;
       }
     };
@@ -702,7 +747,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         let currentTree = treeData;
         for (const ancestor of ancestorPaths) {
           if (cancelled) return;
-          if (findTreeNode(currentTree, ancestor)?.children) continue;
+          if (findRawTreeNode(currentTree, ancestor)?.children) continue;
           const rawChildren = await getRemoteTree(
             selectedConfig,
             repoPath.trim(),
@@ -712,13 +757,15 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
           );
           if (cancelled) return;
           const merged = mergeUncommittedFilesIntoTree(rawChildren, uncommittedFiles, ancestor);
-          const nodes = merged.map(mapTreeNodeToDataNode);
-          currentTree = injectTreeChildren(currentTree, ancestor, nodes);
+          currentTree = injectRawChildren(currentTree, ancestor, merged);
         }
         if (cancelled) return;
         setTreeData(currentTree); // one update, after all ancestors are materialized
         setExpandedKeys(ancestors);
-        setSelectedKeys([normalizedPath]);
+        // A chain may have compacted the raw path into a stable first-path key (Pitfall 6).
+        // Resolve through the map before selecting; never select a raw path that no longer exists.
+        const displayKey = keyOfPath.get(normalizedPath) ?? normalizedPath;
+        setSelectedKeys([displayKey]);
       } catch (err: any) {
         if (cancelled) return;
         setError(err?.message || `Failed to reveal ${normalizedPath}`);
@@ -743,7 +790,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
     sshConfigs,
     setActiveRemoteTarget,
     consumePendingRevealTarget,
-    mapTreeNodeToDataNode,
+    keyOfPath,
   ]);
 
   return (
@@ -965,7 +1012,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
               </div>
             ) : (
               nameResults.map(({ path, node }) => {
-                const title = node.rawNode?.title || String(node.title) || path;
+                const title = node.title || path;
                 return (
                   <div
                     key={path}
@@ -1054,11 +1101,12 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
           </div>
         ) : (
         <Spin spinning={loadingTree}>
-          {treeData.length > 0 ? (
+          {compactDisplayNodes.length > 0 ? (
             <Tree
+              className="remote-git-tree"
               motion={false as any}
               loadData={onLoadData}
-              treeData={treeData}
+              treeData={compactDisplayNodes}
               selectedKeys={selectedKeys}
               expandedKeys={expandedKeys}
               onSelect={handleSelectNode}

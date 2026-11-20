@@ -567,6 +567,134 @@ describe('RemoteGitExplorer Component', () => {
     });
   });
 
+  it('renders a deep single-child folder chain as one dotted compact node (D-12)', async () => {
+    act(() => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
+    });
+    vi.spyOn(gitRemoteTreeService, 'getRemoteTree').mockImplementation(async (_cfg, _repo, _ref, dirPath) => {
+      if (!dirPath) {
+        return [{
+          key: 'com', title: 'com', isLeaf: false, sha: 't-com',
+          children: [{
+            key: 'com/acme', title: 'acme', isLeaf: false, sha: 't-acme',
+            children: [{ key: 'com/acme/orders', title: 'orders', isLeaf: false, sha: 't-orders' }],
+          }],
+        }];
+      }
+      return [];
+    });
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteGitExplorer />
+      </AntdThemeAdapter>
+    );
+
+    // Root renders the merged dotted label; intermediate segments are not separate rows.
+    await waitFor(() => {
+      expect(screen.getByText('com.acme.orders')).toBeDefined();
+    });
+    expect(screen.queryByText('acme')).toBeNull();
+    expect(screen.queryByText('orders')).toBeNull();
+  });
+
+  it('keeps a branch point expanded into separate nodes', async () => {
+    act(() => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
+    });
+    vi.spyOn(gitRemoteTreeService, 'getRemoteTree').mockImplementation(async (_cfg, _repo, _ref) => [
+      { key: 'com/acme/one', title: 'one', isLeaf: false, sha: 't-1' },
+      { key: 'com/acme/two', title: 'two', isLeaf: false, sha: 't-2' },
+    ]);
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteGitExplorer />
+      </AntdThemeAdapter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('one')).toBeDefined();
+      expect(screen.getByText('two')).toBeDefined();
+    });
+  });
+
+  it('does not merge a status-badged node and keeps its badge visible', async () => {
+    act(() => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
+    });
+    vi.spyOn(gitRemoteService, 'checkDirtyStatus').mockResolvedValue({
+      isClean: false,
+      uncommittedFiles: [
+        { path: 'src/changed.ts', indexStatus: ' ', workingTreeStatus: 'M' },
+      ],
+    });
+    vi.spyOn(gitRemoteTreeService, 'getRemoteTree').mockImplementation(async (_cfg, _repo, _ref, dirPath) => {
+      if (!dirPath) {
+        // A badged single-child chain at root: the badge must stop compaction at `com/acme`.
+        return [{
+          key: 'com', title: 'com', isLeaf: false, sha: 't-com', gitStatus: 'M',
+          children: [{ key: 'com/acme', title: 'acme', isLeaf: false, sha: 't-acme' }],
+        }];
+      }
+      return [];
+    });
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteGitExplorer />
+      </AntdThemeAdapter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('com')).toBeDefined();
+      expect(screen.getAllByTestId('status-badge-modified').length).toBeGreaterThan(0);
+    });
+    // Badge stops the chain: the root label is not merged into a dotted `com.acme`.
+    expect(screen.queryByText('com.acme')).toBeNull();
+  });
+
+  it('reveal of a path inside a compact chain selects the stable first-path key', async () => {
+    act(() => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
+    });
+    // Two children under com: one single-child chain (com/acme/orders) and a sibling so the
+    // reveal target com/acme/orders/dto stays a separate node (revealTargets guard).
+    vi.spyOn(gitRemoteTreeService, 'getRemoteTree').mockImplementation(async (_cfg, _repo, _ref, dirPath) => {
+      if (!dirPath) {
+        return [
+          { key: 'src', title: 'src', isLeaf: false, sha: 't-src' },
+          { key: 'lib', title: 'lib', isLeaf: false, sha: 't-lib' },
+        ];
+      }
+      if (dirPath === 'src') {
+        return [{ key: 'src/nested/deep.ts', title: 'deep.ts', isLeaf: true, sha: 'b-1', size: 10 }];
+      }
+      return [];
+    });
+    act(() => {
+      (useLayoutStore.getState() as any).setPendingRevealTarget?.({
+        configId: 'ssh-1',
+        repoPath: '/home/dev/my-repo',
+        branch: 'main',
+        filePath: 'src/nested/deep.ts',
+      });
+    });
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteGitExplorer />
+      </AntdThemeAdapter>
+    );
+
+    // The reveal target is in revealTargets, so it stays distinct and selects its stable key.
+    await waitFor(() => {
+      const node = screen.getByText('deep.ts').closest('.ant-tree-treenode');
+      expect(node?.className).toContain('ant-tree-treenode-selected');
+    });
+    expect((useLayoutStore.getState() as any).pendingRevealTarget).toBeNull();
+  });
+
   it('fetches each ancestor exactly once for a multi-level reveal', async () => {
     vi.spyOn(gitRemoteTreeService, 'getRemoteTree').mockImplementation(async (_cfg, _repo, _ref, dirPath) => {
       if (!dirPath) {
