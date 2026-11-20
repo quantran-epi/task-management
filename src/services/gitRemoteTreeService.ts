@@ -181,6 +181,14 @@ export interface RemoteTreeSearchResult {
 
 export const SEARCH_RESULT_LIMIT = 100;
 
+/** Whole-ref ls-tree stdout keyed by non-secret target identifiers. Query text is never a key. */
+const searchTreeCache = new Map<string, string>();
+
+/** Reset the whole-ref listing cache (tests / explicit invalidation). */
+export function clearSearchTreeCache(): void {
+  searchTreeCache.clear();
+}
+
 /**
  * Whole-ref file/folder search for the remote explorer. One confined read-only ls-tree command;
  * the query never reaches git (it is filtered client-side), so a leading `-` or path-escaping
@@ -199,14 +207,19 @@ export async function searchRemoteTree(
 
   // Literals plus the escaped ref only; the search text is data, filtered below.
   const gitArgs = ['ls-tree', '-r', '-l', '-z', '--end-of-options', escapeShellArg(ref)];
-  let stdout: string;
-  try {
-    stdout = await runGitCommand(config, repoPath, gitArgs, secret, callId);
-  } catch {
-    return []; // git/SSH failure degrades to an empty result, never a UI crash
+  const cacheKey = `${config.id}|${repoPath}|${ref}`;
+  let stdout = searchTreeCache.get(cacheKey);
+  if (stdout === undefined) {
+    try {
+      stdout = await runGitCommand(config, repoPath, gitArgs, secret, callId);
+      searchTreeCache.set(cacheKey, stdout); // cache success only; a failure is never remembered
+    } catch {
+      return []; // git/SSH failure degrades to an empty result, never a UI crash
+    }
   }
 
-  const results: RemoteTreeSearchResult[] = [];
+  const files: RemoteTreeSearchResult[] = [];
+  const folders: RemoteTreeSearchResult[] = [];
   const seen = new Set<string>();
 
   const nameMatch = (name: string): { matchStart: number; matchLength: number } => {
@@ -216,12 +229,19 @@ export async function searchRemoteTree(
       : { matchStart: 0, matchLength: 0 };
   };
 
-  const add = (path: string, name: string, type: 'file' | 'folder', size?: number) => {
+  // Folders are navigation aids derived from matching-file ancestors; they must not consume the
+  // file result cap (T-quick-06). Both collections stay confined and deduplicated by `seen`.
+  const addFile = (path: string, name: string, size?: number) => {
     const clean = confineRepoPath(path, 'Đường dẫn kết quả');
-    if (seen.has(clean) || results.length >= SEARCH_RESULT_LIMIT) return;
+    if (seen.has(clean) || files.length >= SEARCH_RESULT_LIMIT) return;
     seen.add(clean);
-    const match = nameMatch(name);
-    results.push({ path: clean, name, type, ...(size !== undefined ? { size } : {}), ...match });
+    files.push({ path: clean, name, type: 'file', ...(size !== undefined ? { size } : {}), ...nameMatch(name) });
+  };
+  const addFolder = (path: string, name: string) => {
+    const clean = confineRepoPath(path, 'Đường dẫn kết quả');
+    if (seen.has(clean)) return;
+    seen.add(clean);
+    folders.push({ path: clean, name, type: 'folder', ...nameMatch(name) });
   };
 
   for (const line of stdout.split('\0')) {
@@ -231,19 +251,18 @@ export async function searchRemoteTree(
     const segments = node.key.split('/').filter(Boolean);
     if (!segments.some((segment) => segment.toLowerCase().includes(needle))) continue;
 
-    const fileName = segments[segments.length - 1] ?? node.title;
-    add(node.key, fileName, 'file', node.size);
-
-    // Represent matching folders (and ancestors of a file hit) so folder navigation works.
+    // Derive ancestors first so the final capped file still contributes its folder path.
     let ancestor = '';
     for (let i = 0; i < segments.length - 1; i++) {
       ancestor = ancestor ? `${ancestor}/${segments[i]}` : segments[i]!;
-      add(ancestor, segments[i]!, 'folder');
+      addFolder(ancestor, segments[i]!);
     }
-    if (results.length >= SEARCH_RESULT_LIMIT) break;
+    const fileName = segments[segments.length - 1] ?? node.title;
+    addFile(node.key, fileName, node.size);
+    if (files.length >= SEARCH_RESULT_LIMIT) break;
   }
 
-  return results;
+  return [...files, ...folders];
 }
 
 /**

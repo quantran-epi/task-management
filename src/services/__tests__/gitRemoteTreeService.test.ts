@@ -10,6 +10,8 @@ import {
   getRemoteWorkingFileContent,
   PathOutsideRepoError,
   searchRemoteTree,
+  clearSearchTreeCache,
+  SEARCH_RESULT_LIMIT,
 } from '../gitRemoteTreeService';
 import * as gitRemoteService from '../gitRemoteService';
 import * as sshService from '../sshService';
@@ -94,6 +96,7 @@ describe('searchRemoteTree', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    clearSearchTreeCache();
   });
 
   it('issues one confined ls-tree -r command and returns bounded file/folder matches', async () => {
@@ -144,6 +147,40 @@ describe('searchRemoteTree', () => {
     const results = await searchRemoteTree(mockConfig, '/home/dev/repo', 'main', 'index');
 
     expect(results).toEqual([]);
+  });
+
+  it('caps real file matches independently of ancestor folders', async () => {
+    const lines: string[] = [];
+    for (let i = 0; i < SEARCH_RESULT_LIMIT + 20; i++) {
+      lines.push(`100644 blob sha${i} 10\tdir${i}/match${i}.ts`);
+    }
+    vi.spyOn(gitRemoteService, 'runGitCommand').mockResolvedValue(lines.join('\0'));
+
+    const results = await searchRemoteTree(mockConfig, '/home/dev/repo', 'main', 'match');
+
+    const files = results.filter((r) => r.type === 'file');
+    const folders = results.filter((r) => r.type === 'folder');
+    expect(files).toHaveLength(SEARCH_RESULT_LIMIT);
+    expect(folders.length).toBeGreaterThan(0);
+    // Ancestor folders are derived, confined, and never starve file results.
+    expect(folders.every((f) => !f.path.includes('..'))).toBe(true);
+    expect(results.every((r) => !r.path.includes('..'))).toBe(true);
+    expect(gitRemoteService.runGitCommand).toHaveBeenCalledTimes(1);
+  });
+
+  it('reuses one whole-ref listing across queries but refetches on a new ref', async () => {
+    const cmdSpy = vi.spyOn(gitRemoteService, 'runGitCommand').mockResolvedValue(lsTreeOutput);
+
+    const indexResults = await searchRemoteTree(mockConfig, '/home/dev/repo', 'main', 'index');
+    const readmeResults = await searchRemoteTree(mockConfig, '/home/dev/repo', 'main', 'readme');
+
+    expect(cmdSpy).toHaveBeenCalledTimes(1);
+    expect(indexResults.some((r) => r.name === 'index.ts')).toBe(true);
+    expect(readmeResults.some((r) => r.name === 'README.md')).toBe(true);
+    expect(readmeResults.some((r) => r.name === 'index.ts')).toBe(false);
+
+    await searchRemoteTree(mockConfig, '/home/dev/repo', 'develop', 'index');
+    expect(cmdSpy).toHaveBeenCalledTimes(2);
   });
 });
 
