@@ -10,13 +10,14 @@ const getSshConfigById = vi.fn();
 const getSshSecret = vi.fn();
 const cancelToolCall = vi.fn();
 const searchRemoteTree = vi.fn();
+let previewImpl: (...args: unknown[]) => Promise<string> = async () => 'line one\nneedle here\nline three';
 
 vi.mock('../../../../services/gitRemoteService', () => ({
   grepRemoteRef: (...args: unknown[]) => grepRemoteRef(...args),
 }));
 vi.mock('../../../../services/gitRemoteTreeService', () => ({
   searchRemoteTree: (...args: unknown[]) => searchRemoteTree(...args),
-  getRemoteFileContent: vi.fn(async () => 'line one\nneedle here\nline three'),
+  getRemoteFileContent: (...args: unknown[]) => previewImpl(...args),
   confineRepoPath: (p: string) => p,
 }));
 vi.mock('../../../../services/sshService', () => ({
@@ -58,6 +59,7 @@ describe('FindInRemoteFiles — entry, seed, modes, debounce and Enter (Task 1)'
     cancelToolCall.mockResolvedValue(true);
     grepRemoteRef.mockResolvedValue({ hits: [], truncated: false });
     searchRemoteTree.mockResolvedValue([]);
+    previewImpl = async () => 'line one\nneedle here\nline three';
   });
 
   it('renders pattern input, three modes, two scopes, mask and three toggles; no OpenIdea tabs', () => {
@@ -187,6 +189,61 @@ describe('FindInRemoteFiles — entry, seed, modes, debounce and Enter (Task 1)'
     fireEvent.keyDown(root, { key: 'Escape' });
     expect(useFindStore.getState().open).toBe(true);
     expect(useFindStore.getState().pinned).toBe(true);
+  });
+
+  it('arrow/PageDown nav moves active row and preview header follows; rows show highlighted code + relPath:line', async () => {
+    vi.useFakeTimers();
+    try {
+      grepRemoteRef.mockResolvedValue({
+        hits: [
+          { path: 'src/a.ts', line: 3, text: 'needle one' },
+          { path: 'src/b.ts', line: 7, text: 'needle two' },
+        ],
+        truncated: false,
+      });
+      render(<FindInRemoteFiles />);
+      fireEvent.change(screen.getByLabelText('Pattern'), { target: { value: 'needle' } });
+      await act(async () => {
+        vi.advanceTimersByTime(FIND_DEBOUNCE_MS);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      const root = screen.getByLabelText('Pattern').closest('.find-root')!;
+      const row0 = screen.getByTestId('find-result-row-0');
+      expect(row0.textContent).toContain('src/a.ts:3');
+      expect(row0.querySelector('mark')?.textContent).toBe('needle');
+
+      fireEvent.keyDown(root, { key: 'ArrowDown' });
+      expect(screen.getByTestId('find-result-row-1').querySelector('.find-rrow')?.classList.contains('on')).toBe(true);
+      expect(document.querySelector('.find-pane-head')?.textContent).toContain('src/b.ts');
+      fireEvent.keyDown(root, { key: 'PageUp' });
+      expect(screen.getByTestId('find-result-row-0').querySelector('.find-rrow')?.classList.contains('on')).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a binary preview shows the truthful notice and an Open full file action', async () => {
+    vi.useFakeTimers();
+    try {
+      previewImpl = async () => 'binary\0content';
+      grepRemoteRef.mockResolvedValue({
+        hits: [{ path: 'assets/blob.bin', line: 1, text: 'needle' }],
+        truncated: false,
+      });
+      render(<FindInRemoteFiles />);
+      fireEvent.change(screen.getByLabelText('Pattern'), { target: { value: 'needle' } });
+      await act(async () => {
+        vi.advanceTimersByTime(FIND_DEBOUNCE_MS);
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(screen.getByText(/Preview unavailable for this binary or large file/)).toBeDefined();
+      expect(screen.getByRole('button', { name: 'Open full file' })).toBeDefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('icon-only buttons expose aria-label + tooltip and are focusable', () => {

@@ -34,6 +34,13 @@ export const FIND_STATUS_COPY = {
     'Showing the first 2,000 matches — results truncated. Narrow the pattern or file mask.',
   error: (reason: string): string =>
     `Search failed — ${reason}. Check the SSH connection and the selected ref, then retry.`,
+  // UI-SPEC "Copywriting Contract" — single source for empty / preview states (D-08).
+  emptyHeading: 'No matches',
+  emptyBody: (pattern: string, repo: string, ref: string): string =>
+    `No matches for \`${pattern}\` in \`${repo} / ${ref}\`. Try a different pattern, widen the file mask, or switch scope to Whole ref.`,
+  previewUnavailable:
+    'Preview unavailable for this binary or large file (>256 KB). Open full file.',
+  openFullFile: 'Open full file',
 } as const;
 
 export type FindStatus = 'idle' | 'searching' | 'done' | 'error' | 'partial';

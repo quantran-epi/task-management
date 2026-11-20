@@ -8,12 +8,30 @@ import {
   PushpinOutlined,
 } from '@ant-design/icons';
 import { grepRemoteRef } from '../../../services/gitRemoteService';
+import { getRemoteFileContent } from '../../../services/gitRemoteTreeService';
 import { cancelToolCall, getSshConfigById, getSshSecret } from '../../../services/sshService';
 import { useLayoutStore } from '../../store/layoutStore';
 import { buildGrepOptions } from './query';
+import { hitsToMatchRows, type MatchRow } from './parsing';
+import { CodePreview, FolderPreview, ResultRow } from './parts';
 import { FIND_DEBOUNCE_MS, FIND_STATUS_COPY, FindSession, type FindState, type RemoteQuery } from './session';
 import { FIND_CONTROL_LABELS, FIND_DIALOG_TITLE, useFindStore } from './store';
 import './find.css';
+
+/** Preview byte cap (D-10); a larger or binary file shows truthful copy + open-full-file. */
+const PREVIEW_BYTE_CAP = 256 * 1024;
+function looksBinary(text: string): boolean {
+  // NUL byte or a high ratio of non-printable control characters.
+  if (text.includes('\0')) return true;
+  const sample = text.slice(0, 2048);
+  if (!sample) return false;
+  let controls = 0;
+  for (let i = 0; i < sample.length; i += 1) {
+    const c = sample.charCodeAt(i);
+    if (c < 9 || (c > 13 && c < 32)) controls += 1;
+  }
+  return controls / sample.length > 0.1;
+}
 
 /** Plan 03 fills this; declared now so Files/Folders rows do not silently lack a reveal path. */
 export interface FindInRemoteFilesProps {
@@ -49,6 +67,8 @@ export function FindInRemoteFiles(_props: FindInRemoteFilesProps) {
   const [regex, setRegex] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [state, setState] = useState<FindState>(EMPTY_STATE);
+  const [previewContent, setPreviewContent] = useState<string | null>(null);
+  const [previewUnavailable, setPreviewUnavailable] = useState(false);
 
   const configId = seed?.configId ?? null;
   const repoPath = seed?.repoPath ?? '';
@@ -109,10 +129,49 @@ export function FindInRemoteFiles(_props: FindInRemoteFilesProps) {
     return () => clearTimeout(timer);
   }, [open, mode, remoteQuery, session]);
 
-  const rows = state.hits;
+  // Single mapping point: committed hits → display rows with ranges from hit.text (D-06).
+  const rows: MatchRow[] = useMemo(
+    () => hitsToMatchRows(state.hits, remoteQuery.pattern, {
+      literal: !remoteQuery.regex,
+      matchCase: remoteQuery.matchCase,
+      words: remoteQuery.words,
+    }),
+    [state.hits, remoteQuery.pattern, remoteQuery.regex, remoteQuery.matchCase, remoteQuery.words]
+  );
+  const activeRow = rows[activeIndex];
   useEffect(() => {
     setActiveIndex((i) => Math.min(i, Math.max(0, rows.length - 1)));
   }, [rows.length]);
+
+  // Preview follows the active row immediately (D-07). Fetch bound at 256 KB (D-10).
+  useEffect(() => {
+    if (mode !== 'content') return;
+    if (!activeRow || !configRef.current) {
+      setPreviewContent(null);
+      setPreviewUnavailable(false);
+      return;
+    }
+    let cancelled = false;
+    setPreviewContent(null);
+    setPreviewUnavailable(false);
+    void (async () => {
+      try {
+        const content = await getRemoteFileContent(
+          configRef.current!, repoPath, branch, activeRow.path,
+          (await getSshSecret(configRef.current!.id)) ?? undefined
+        );
+        if (cancelled) return;
+        if (new TextEncoder().encode(content).length > PREVIEW_BYTE_CAP || looksBinary(content)) {
+          setPreviewUnavailable(true);
+          return;
+        }
+        setPreviewContent(content);
+      } catch {
+        if (!cancelled) setPreviewUnavailable(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeRow?.path, mode, repoPath, branch]);
 
   const openRow = useCallback(
     (index: number, secondary: boolean) => {
@@ -275,30 +334,69 @@ export function FindInRemoteFiles(_props: FindInRemoteFilesProps) {
 
         <div className="find-split">
           <div className="find-results" role="listbox" aria-label="Search results">
-            {rows.map((hit, index) => (
+            {rows.map((row, index) => (
               <div
-                key={`${hit.path}:${hit.line}:${index}`}
+                key={`${row.path}:${row.line}:${index}`}
                 data-testid={`find-result-row-${index}`}
-                className={`find-rrow${index === activeIndex ? ' on' : ''}`}
-                role="option"
-                aria-selected={index === activeIndex}
                 onMouseDown={() => setActiveIndex(index)}
-                onDoubleClick={() => openRow(index, false)}
               >
-                <span className="find-rcode">{hit.text}</span>
-                <span className="find-rfile">{hit.path}:{hit.line}</span>
+                <ResultRow
+                  text={row.text}
+                  ranges={row.ranges}
+                  path={row.path}
+                  line={row.line}
+                  active={index === activeIndex}
+                  onSelect={() => setActiveIndex(index)}
+                  onOpen={() => openRow(index, false)}
+                />
               </div>
             ))}
-            {state.status === 'idle' && rows.length === 0 ? <div className="find-empty">No matches</div> : null}
+            {state.status === 'done' && rows.length === 0 ? (
+              <div className="find-empty" data-testid="find-empty">
+                <strong>{FIND_STATUS_COPY.emptyHeading}</strong>
+                <div>{FIND_STATUS_COPY.emptyBody(remoteQuery.pattern, repoPath, branch)}</div>
+              </div>
+            ) : null}
             {state.truncated ? <Tag variant="filled">{FIND_STATUS_COPY.truncated}</Tag> : null}
           </div>
           <div className="find-handle" aria-hidden="true" />
           <div className="find-preview">
             <div className="find-pane-head">
               <FileOutlined aria-hidden="true" />
-              <span>{rows[activeIndex]?.path ?? ''}</span>
+              <span>{activeRow?.path ?? ''}</span>
             </div>
-            <div className="find-preview-body" />
+            <div className="find-preview-body">
+              {mode !== 'content' ? <FolderPreview entries={[]} /> : null}
+              {mode === 'content' && previewUnavailable ? (
+                <div className="find-preview-notice">
+                  <span>{FIND_STATUS_COPY.previewUnavailable}</span>
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      if (!activeRow || !configId) return;
+                      openTab({
+                        id: `remote:${activeRow.path}`,
+                        title: activeRow.path.split('/').pop() || activeRow.path,
+                        viewType: 'remote_file',
+                        closable: true,
+                        params: {
+                          config: configRef.current ?? { id: configId, name: '', host: '', port: 22, username: '', authType: 'agent', createdAt: '', updatedAt: '' },
+                          repoPath, branch, filePath: activeRow.path,
+                        },
+                      });
+                    }}
+                  >{FIND_STATUS_COPY.openFullFile}</Button>
+                </div>
+              ) : null}
+              {mode === 'content' && previewContent !== null ? (
+                <CodePreview
+                  content={previewContent}
+                  pattern={remoteQuery.pattern}
+                  options={{ literal: !remoteQuery.regex, matchCase: remoteQuery.matchCase, words: remoteQuery.words }}
+                  activeLine={activeRow?.line ?? 1}
+                />
+              ) : null}
+            </div>
           </div>
         </div>
 
