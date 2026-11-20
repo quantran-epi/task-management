@@ -19,6 +19,7 @@ describe('buildGrepOptions — D-05/D-09', () => {
       pattern: 'needle',
       caseSensitive: false,
       literal: true,
+      words: false,
       limit: 2000,
     });
     expect(FIND_MATCH_LIMIT).toBe(2000);
@@ -30,10 +31,21 @@ describe('buildGrepOptions — D-05/D-09', () => {
     expect(opts.literal).toBe(false);
   });
 
-  it('wraps with word boundaries only in regex+words mode', () => {
-    expect(buildGrepOptions({ ...base, regex: true, words: true }).pattern).toBe('\\bneedle\\b');
-    expect(buildGrepOptions({ ...base, regex: false, words: true }).pattern).toBe('needle');
+  it('passes words through as a flag in every mode, never as a hand-written \\b', () => {
+    expect(buildGrepOptions({ ...base, words: true })).toMatchObject({ words: true, pattern: 'needle' });
+    expect(buildGrepOptions({ ...base, regex: true, words: true })).toMatchObject({
+      words: true,
+      pattern: 'needle',
+    });
     expect(buildGrepOptions({ ...base, regex: true, words: false }).pattern).toBe('needle');
+    expect(buildGrepOptions({ ...base, regex: false, words: false }).pattern).toBe('needle');
+    // No option value ever carries a literal word boundary — git's -w owns word semantics.
+    for (const opts of [
+      buildGrepOptions({ ...base, words: true }),
+      buildGrepOptions({ ...base, regex: true, words: true }),
+    ]) {
+      expect(opts.pattern).not.toContain('\\b');
+    }
   });
 
   it('adds a confined path only for Directory scope', () => {

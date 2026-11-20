@@ -390,6 +390,36 @@ describe('gitRemoteService - Task 1 Tracer Slice', () => {
       );
     });
 
+    it('adds -w for whole-word matching in both literal and regex modes', async () => {
+      grepMock();
+
+      await grepRemoteRef(dummyConfig, '/var/repo', 'main', {
+        pattern: 'cat',
+        limit: 2000,
+        literal: true,
+        words: true,
+      });
+      expect(sshService.execRemoteCommand).toHaveBeenCalledWith(
+        dummyConfig,
+        "{ git -C '/var/repo' -c core.fsmonitor=false --no-pager grep -z -n -I --no-color -F -w --no-ignore-case -e 'cat' --end-of-options 'main'; printf '###EXIT %s\\n' \"$?\" >&2; } | head -c 262145",
+        undefined,
+        undefined
+      );
+
+      grepMock();
+      await grepRemoteRef(dummyConfig, '/var/repo', 'main', {
+        pattern: 'cat',
+        limit: 2000,
+        words: true,
+      });
+      expect(sshService.execRemoteCommand).toHaveBeenCalledWith(
+        dummyConfig,
+        "{ git -C '/var/repo' -c core.fsmonitor=false --no-pager grep -z -n -I --no-color -E -w --no-ignore-case -e 'cat' --end-of-options 'main'; printf '###EXIT %s\\n' \"$?\" >&2; } | head -c 262145",
+        undefined,
+        undefined
+      );
+    });
+
     it('clamps a limit above 2000 to 2000 and flags truncation', async () => {
       vi.mocked(sshService.execRemoteCommand).mockResolvedValueOnce({
         stdout: records(2002),

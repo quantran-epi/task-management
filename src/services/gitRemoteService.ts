@@ -373,6 +373,8 @@ export interface GrepRemoteRefOptions {
   limit?: number | undefined;
   /** Literal string match (`-F`) instead of a basic regex. Default false. */
   literal?: boolean | undefined;
+  /** Whole-word match (`-w`); applies in both literal and regex modes. Default false. */
+  words?: boolean | undefined;
 }
 
 /** A `git grep` failure that means the PATTERN is malformed — the model's argument mistake. */
@@ -404,6 +406,9 @@ export async function grepRemoteRef(
   // JavaScript regex the client highlighter (parsing.ts) uses for the same pattern.
   if (options.literal) flags.push('-F');
   else flags.push('-E');
+  // WR-02: whole-word matching in BOTH modes; git's -w is the single source of word semantics,
+  // so the caller must not hand-write \b (would double-bound and misbehave under -F).
+  if (options.words) flags.push('-w');
   flags.push(options.caseSensitive === false ? '-i' : '--no-ignore-case');
 
   const parts = [

@@ -7,19 +7,19 @@ export type { RemoteQuery } from './session';
 import type { RemoteQuery } from './session';
 
 const BACKSLASH = String.fromCharCode(92);
-const WORD_BOUNDARY = BACKSLASH + 'b';
 
 /**
  * RemoteQuery to service options. Pure: no command string is built here, and every user string
  * stays DATA. grepRemoteRef is the only place values reach a shell (D-09, one-way).
  */
 export function buildGrepOptions(query: RemoteQuery): GrepRemoteRefOptions {
-  // Word boundaries are regex-only: literal mode (-F) treats a boundary as text.
-  const pattern = query.words && query.regex ? WORD_BOUNDARY + query.pattern + WORD_BOUNDARY : query.pattern;
+  // WR-02: whole-word matching is git's `-w` job, not a hand-written \b (which literal -F would
+  // treat as text, and which would double-bound in regex mode). Pass `words` through unchanged.
   return {
-    pattern,
+    pattern: query.pattern,
     caseSensitive: query.matchCase,
     literal: !query.regex,
+    words: query.words,
     limit: FIND_MATCH_LIMIT,
     // Directory scope requires a path; confineRepoPath refuses an escaping/empty directory
     // before any command is issued (T-46.1-02).
