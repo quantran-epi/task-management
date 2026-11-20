@@ -55,9 +55,16 @@ const IDLE_STATE: FindState = {
   truncated: false,
 };
 
-/** Recognises the Tauri `cancel_tool_call` rejection and abort-style errors. */
+/**
+ * Recognises the Tauri `cancel_tool_call` rejection, abort-style errors and the codebase's
+ * `err.name === 'AbortError'` convention (AIChatDrawer / documentExport). The transport itself
+ * is `cancelToolCall(callId)` — no second cancel path exists (Pitfall 8).
+ */
 export function isCancelledError(e: unknown): boolean {
   if (!e) return false;
+  if (typeof e === 'object' && 'name' in e && (e as { name?: unknown }).name === 'AbortError') {
+    return true;
+  }
   const msg = e instanceof Error ? e.message : String(e);
   return /cancell?ed|abort(ed)?|cancel_tool_call/i.test(msg);
 }

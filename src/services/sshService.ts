@@ -279,6 +279,14 @@ export async function cancelToolCall(callId: string): Promise<boolean> {
 }
 
 /**
+ * Typed alias for the FindSession cancel seam. Not a second transport — it delegates to
+ * cancelToolCall, the single Tauri `cancel_tool_call` command (Pitfall 8).
+ */
+export function cancelRemoteCall(callId: string): Promise<boolean> {
+  return cancelToolCall(callId);
+}
+
+/**
  * Run a remote command without a PTY and stream stdout/stderr lines as they arrive.
  * Returns an idempotent cancel handle that SIGTERMs the remote process and unlistens.
  */

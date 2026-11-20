@@ -139,7 +139,54 @@ describe('FindSession — tracer correctness backbone (D-08/D-10)', () => {
   it('recognises cancel-shaped and abort-shaped errors only', () => {
     expect(isCancelledError(new Error('cancelled'))).toBe(true);
     expect(isCancelledError(new Error('AbortError: aborted'))).toBe(true);
+    const abortError = Object.assign(new Error('signal aborted'), { name: 'AbortError' });
+    expect(isCancelledError(abortError)).toBe(true);
+    expect(isCancelledError(new Error('cancel_tool_call: process not found'))).toBe(true);
     expect(isCancelledError(new Error('network failure'))).toBe(false);
     expect(isCancelledError(null)).toBe(false);
+  });
+
+  it('uses an explicit stable callId and passes the same id to cancel', async () => {
+    const pending = deferred<GrepResult>();
+    const deps = makeDeps(() => pending.promise);
+    const session = new FindSession(deps);
+
+    const p = session.search(query);
+    expect(deps.nextRequestId).toHaveBeenCalled();
+    const callId = deps.start.mock.calls[0]![0]; // stable id handed to start
+    expect(callId).toBe('call-1');
+
+    session.cancel();
+    expect(deps.cancel).toHaveBeenCalledWith(callId); // same id — real SSH cancellation
+    pending.resolve({ hits: [hit('late.ts', 1)], truncated: false });
+    await p;
+  });
+
+  it('double cancel is idempotent: only the first invocation cancels', async () => {
+    const pending = deferred<GrepResult>();
+    const deps = makeDeps(() => pending.promise);
+    const session = new FindSession(deps);
+
+    const p = session.search(query);
+    session.cancel();
+    session.cancel();
+    expect(deps.cancel).toHaveBeenCalledTimes(1);
+    expect(session.getState().status).toBe('partial');
+    pending.reject(new Error('cancelled'));
+    await p;
+  });
+
+  it('a cancel after the search resolved is a no-op: final state is preserved', async () => {
+    const result: GrepResult = { hits: [hit('done.ts', 5)], truncated: false };
+    const deps = makeDeps(async () => result);
+    const session = new FindSession(deps);
+
+    await session.search(query);
+    const finalState = session.getState();
+    expect(finalState.status).toBe('done');
+
+    session.cancel();
+    expect(deps.cancel).not.toHaveBeenCalled();
+    expect(session.getState()).toBe(finalState); // no clobber, same state object
   });
 });
