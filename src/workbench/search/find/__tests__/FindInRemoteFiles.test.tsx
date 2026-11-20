@@ -408,6 +408,32 @@ describe('FindInRemoteFiles — entry, seed, modes, debounce and Enter (Task 1)'
     }
   });
 
+  it('clearing the content Pattern clears stale results (WR-08)', async () => {
+    vi.useFakeTimers();
+    try {
+      grepRemoteRef.mockResolvedValue({
+        hits: [{ path: 'src/a.ts', line: 3, text: 'needle here' }],
+        truncated: false,
+      });
+      render(<FindInRemoteFiles />);
+      fireEvent.change(screen.getByLabelText('Pattern'), { target: { value: 'needle' } });
+      await act(async () => {
+        vi.advanceTimersByTime(FIND_DEBOUNCE_MS);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      const countRows = () => document.querySelectorAll('[data-testid^="find-result-row-"]').length;
+      expect(countRows()).toBe(1);
+
+      fireEvent.change(screen.getByLabelText('Pattern'), { target: { value: '' } });
+      await act(async () => { await Promise.resolve(); });
+
+      expect(countRows()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('cancels the previous session when the seed changes (WR-03)', async () => {
     vi.useFakeTimers();
     try {

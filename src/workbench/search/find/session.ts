@@ -173,6 +173,19 @@ export class FindSession {
     this.emit({ ...this.state, status: 'partial', stale: false, error: null });
   }
 
+  /**
+   * WR-08: clear all results and cancel any in-flight call (e.g. the content Pattern was
+   * emptied). Bumping seq makes a late response stale; emitting IDLE_STATE clears stale hits,
+   * status and error together so nothing from the previous query can resurface.
+   */
+  reset(): void {
+    this.seq += 1;
+    const running = this.callId;
+    this.callId = null;
+    if (running) void this.deps.cancel(running).catch(() => undefined);
+    this.emit(IDLE_STATE);
+  }
+
   private emit(next: FindState): void {
     this.state = next;
     this.onChange?.(next);

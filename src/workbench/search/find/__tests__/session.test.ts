@@ -189,4 +189,34 @@ describe('FindSession — tracer correctness backbone (D-08/D-10)', () => {
     expect(deps.cancel).not.toHaveBeenCalled();
     expect(session.getState()).toBe(finalState); // no clobber, same state object
   });
+
+  it('reset() clears hits/status, cancels in-flight work and drops the late response (WR-08)', async () => {
+    const pending = deferred<GrepResult>();
+    const deps = makeDeps((callId) =>
+      callId === 'call-1'
+        ? Promise.resolve({ hits: [hit('done.ts', 5)], truncated: false })
+        : pending.promise
+    );
+    const session = new FindSession(deps);
+
+    await session.search(query); // seed committed hits
+    expect(session.getState().hits).toEqual([hit('done.ts', 5)]);
+
+    const p = session.search({ ...query, pattern: 'in-flight' });
+    const runningCallId = deps.start.mock.calls[1]![0] as string;
+    session.reset();
+
+    expect(deps.cancel).toHaveBeenCalledWith(runningCallId);
+    expect(session.getState()).toEqual({
+      status: 'idle',
+      stale: false,
+      hits: [],
+      truncated: false,
+      error: null,
+    });
+    // Late response from the cancelled run cannot repopulate the cleared state.
+    pending.resolve({ hits: [hit('late.ts', 1)], truncated: false });
+    await p;
+    expect(session.getState().hits).toEqual([]);
+  });
 });

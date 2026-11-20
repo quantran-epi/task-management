@@ -134,8 +134,14 @@ export function FindInRemoteFiles(props: FindInRemoteFilesProps) {
 
   // 150 ms debounce (D-08). A query change marks current results stale immediately; the
   // seq-guarded session drops any late response. Files/Folders modes never call grep (Task 3).
+  // WR-08: an empty content pattern cancels in-flight work and resets session state so results
+  // from the previous pattern cannot linger on screen — mirrors the Files/Folders empty guard.
   useEffect(() => {
-    if (!open || mode !== 'content' || !remoteQuery.pattern) return;
+    if (!open || mode !== 'content') return;
+    if (!remoteQuery.pattern) {
+      session.reset();
+      return;
+    }
     session.invalidate();
     const timer = setTimeout(() => {
       void session.search(remoteQuery);
