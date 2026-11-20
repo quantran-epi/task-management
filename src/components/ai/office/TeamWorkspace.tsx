@@ -325,6 +325,16 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         return;
       }
 
+      // CR-02: the Agent Developer worktree target comes from the persisted linked System,
+      // the same row the Coding Zone trigger reads. Resolved here from `db`, NOT from a
+      // live-query array whose identity would become an effect dependency and tear down a
+      // running coordinator (WR-06). Absent config means provisioning refuses truthfully.
+      const systemLink = (await listTeamLinks(team.id, db)).find((link) => link.itemType === 'system');
+      const devSystem = systemLink ? await db.systems.get(systemLink.itemId) : undefined;
+      const agentDeveloperWorktree = devSystem?.sshConfigId && devSystem.remoteRepoPath
+        ? { sshConfigId: devSystem.sshConfigId, remoteRepoPath: devSystem.remoteRepoPath }
+        : undefined;
+
       // D-18: the manager owns the entry, so a stale-thread coordinator is disposed before
       // the replacement is handed back — one live coordinator per team at every instant.
       const created = await getOrCreateRun(db, team.id, thread.id, () =>
@@ -347,6 +357,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         model: config.defaultModel,
         endpoint: config.endpoint,
         apiKey,
+        ...(agentDeveloperWorktree ? { agentDeveloperWorktree } : {}),
         // D-04: the window makes `tokenBudget > 0`, so in-loop compaction can run on a
         // read-heavy turn. `getNineRouterConfig` always returns a positive default.
         contextWindowTokens: config.contextWindowTokens,
