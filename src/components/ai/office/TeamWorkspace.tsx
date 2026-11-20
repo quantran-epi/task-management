@@ -56,6 +56,10 @@ import { USER_PARTICIPANT_ID, type MessageSeenEntry } from '../../../types/teamC
 import type { ChatTurnRuntimeDeps } from '../runtime/chatTurnRuntime';
 import { AiChatWidget } from '../AiChatWidget';
 import { agentColorFor } from './AgentAttributionRow';
+import { CodingZoneTrigger } from '../../agents/office/CodingZoneTrigger';
+import { hasActiveAgentDeveloperSession } from '../../agents/CodingZoneDiffPanel';
+import { deriveRemoteWorktreePath, deriveWorktreeBranch } from '../../../services/sshWorktreeService';
+import { getSshConfigById } from '../../../services/sshService';
 import {
   ACTIVITY_RAIL_ID,
   AgentActivityPanel,
@@ -589,6 +593,51 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     return map;
   }, [snapshot.agents]);
 
+  // Phase 48 D-02/D-18: the trigger is live-state-only. No sample descriptor or fake sync chip.
+  const codingZoneActive = hasActiveAgentDeveloperSession(snapshot.agents, [
+    ...(lead ? [{ id: lead.id, name: lead.name }] : []),
+    ...employees.map((employee) => ({ id: employee.id, name: employee.name })),
+  ]);
+  const developerId = employees.find((employee) => employee.name === 'Agent Developer')?.id ?? '';
+  const codingZoneSystem = useLiveQuery(async () => {
+    const systemLink = links.find((link) => link.itemType === 'system');
+    return systemLink ? db.systems.get(systemLink.itemId) : undefined;
+  }, [db, links]);
+  const codingZoneSshConfigId = codingZoneSystem?.sshConfigId;
+  const codingZoneRepoPath = codingZoneSystem?.remoteRepoPath;
+  const codingZoneDescriptor = useMemo(() => {
+    if (!codingZoneActive || !codingZoneSshConfigId || !codingZoneRepoPath || !developerId) return undefined;
+    return {
+      sshConfigId: codingZoneSshConfigId,
+      remoteRepoPath: codingZoneRepoPath,
+      remoteWorktreePath: deriveRemoteWorktreePath(codingZoneRepoPath, developerId),
+      branch: deriveWorktreeBranch(developerId),
+    };
+  }, [codingZoneActive, codingZoneSshConfigId, codingZoneRepoPath, developerId]);
+  const codingZoneConfig = useLiveQuery(
+    () => (codingZoneSshConfigId ? getSshConfigById(codingZoneSshConfigId, db) : Promise.resolve(null)),
+    [db, codingZoneSshConfigId]
+  ) ?? undefined;
+  const codingZoneMessages = useMemo(() => teamLog.map((row) => ({
+    id: row.id,
+    author: row.from === USER_PARTICIPANT_ID ? 'Bạn' : (roster.find((member) => member.id === row.from)?.name ?? row.from),
+    time: new Date(row.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+    text: row.content,
+    kind: row.kind === 'instruction' || row.kind === 'report' ? 'agent' as const
+      : row.kind === 'synthesis' ? 'synthesis' as const : 'chat' as const,
+  })), [teamLog, roster]);
+  const codingZoneTrigger = codingZoneActive ? (
+    <CodingZoneTrigger
+      active
+      descriptor={codingZoneDescriptor}
+      sshConfig={codingZoneConfig ?? undefined}
+      messages={codingZoneMessages}
+      connection={codingZoneConfig ? 'connected' : 'disconnected'}
+      onlineCount={Math.max(1, snapshot.agents.length)}
+      onSendMessage={(text) => { void runTurn(text); }}
+    />
+  ) : null;
+
   const agentMentionOptions = useMemo(
     () =>
       roster.map((agent) => ({
@@ -1003,6 +1052,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                 />
                 {busy ? 'Đang chạy' : 'Rảnh'}
               </span>
+              {codingZoneTrigger}
               <Button
                 size="small"
                 aria-label="Mở activity"
@@ -1183,6 +1233,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
               onCancelToolCall={handleCancelToolCall}
               onClose={closeActivity}
               open={activityOpen}
+              codingZoneSlot={codingZoneTrigger}
             />
           </Splitter.Panel>
         ) : null}

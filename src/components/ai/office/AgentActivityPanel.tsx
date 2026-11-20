@@ -53,6 +53,8 @@ export interface AgentActivityPanelProps {
   onClose?: (() => void) | undefined;
   /** Mirrors the workspace rail state so both controls keep aria-expanded in sync. */
   open?: boolean | undefined;
+  /** Phase 48 D-02: Coding Zone action owned by the workspace, mounted without restyling the rail. */
+  codingZoneSlot?: React.ReactNode | undefined;
 }
 
 type ToolStatus = 'running' | 'done' | 'error';
@@ -495,6 +497,7 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = React.memo(
   onCancelToolCall,
   onClose,
   open = true,
+  codingZoneSlot,
 }) => {
   const { token } = theme.useToken();
   const [tab, setTab] = useState<TabKey>('timeline');
@@ -575,6 +578,7 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = React.memo(
             />
           ) : null}
         </div>
+        {codingZoneSlot ? <div style={{ marginTop: 8 }}>{codingZoneSlot}</div> : null}
         <div
           role="group"
           aria-label="Lọc theo agent"
