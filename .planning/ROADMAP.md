@@ -1144,14 +1144,27 @@ Plans:
 
 ### Phase 48: Agent Developer Workbench: SSH worktree coding zone, popout, hunk review
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Một người dùng có thể giao việc code cho đúng một Agent Developer trong team, theo dõi và duyệt từng hunk trong một Coding Zone toàn màn hình khớp bản draft đã duyệt, mở Coding Zone ra cửa sổ Tauri thứ hai đồng bộ với team chat, trong khi mọi sửa file chỉ nằm trong worktree SSH riêng của agent — người dùng tự merge ngoài TaskMate và app không bao giờ tự merge vào nhánh chính.
+**Requirements**: D-01–D-22 (locked decisions in 48-CONTEXT.md; no formal REQ IDs assigned)
 **Depends on:** Phase 46.1
-**Plans:** 0 plans
+**Plans:** 4 plans in 4 waves
 
 Plans:
+**Wave 1**
 
-- [ ] TBD (run /gsd-plan-phase 48 to break down)
+- [ ] 48-01-PLAN.md — Agent Developer roster + role-gated code_edit tool + SSH worktree service with server-side realpath confinement (D-07/D-08/D-09/D-10)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 48-02-PLAN.md — Coding Zone modal: 3-pane tree/file-viewer/diff/chat, two perspectives, hunk review, 'Mở Coding Zone' trigger (D-01..D-05, D-11/D-12/D-14/D-16)
+
+**Wave 3** *(blocked on Wave 1 + Wave 2 — shares CodingZoneModal.tsx)*
+
+- [ ] 48-03-PLAN.md — Real Tauri Coding Zone popout + versioned cross-window sync + live activity + truthful connection state (D-06/D-13/D-15/D-17/D-18)
+
+**Wave 4** *(blocked on Wave 2 + Wave 3)*
+
+- [ ] 48-04-PLAN.md — Focused gate + Chrome Playwright UAT + review closeout + guarded merge/push to feature/intellij-workbench (D-19..D-22)
 
 ---
 
