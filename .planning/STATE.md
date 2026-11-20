@@ -6,10 +6,10 @@ current_phase: 46
 current_phase_name: Configuration Profiles
 status: executing
 stopped_at: Completed 46-03-PLAN.md
-last_updated: "2026-11-19T07:04:17.765Z"
+last_updated: "2026-11-20T04:37:06.814Z"
 last_activity: 2026-11-19
 last_activity_desc: Phase 46 plan 03 completed
-state_head: d0d705de2076d164b736dbfb88cc3b3b92103e84
+state_head: be19854a721b038538ac675c5a4b9e052df15da2
 progress:
   total_phases: 10
   completed_phases: 5
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 Phase: 46 (Configuration Profiles) — EXECUTING
 Plan: 4 of 4
 Status: Ready to execute
-Last activity: 2026-11-19 — Completed quick task 261119-u7u: đưa quản lý bộ tài liệu vào tab chuyên dụng, bỏ khối Không gian Docs
+Last activity: 2026-11-20 — Completed quick task 261120-f8v: Vietnamese discussion convention, SSH remote file reveal + global search, AI chat Markdown + floating-window draft handoff
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -109,6 +109,7 @@ Progress: [█████░░░░░] 50%
 | 261119-s1j | Chuyển toàn bộ tính năng của DocumentSetDrawer sang tab bộ tài liệu và xóa drawer | 2026-11-19 | fa9d58af | [261119-s1j-chuy-n-to-n-b-t-nh-n-ng-c-a-documentsetd](./quick/261119-s1j-chuy-n-to-n-b-t-nh-n-ng-c-a-documentsetd/) |
 | 261119-tai | Rút gọn Profile Setting: bỏ ô secret read-only, sửa field JSON `[object Object]`, gom nhóm Collapse | 2026-11-19 | 552d174d | [261119-tai-r-t-g-n-profile-setting-ch-gi-field-setu](./quick/261119-tai-r-t-g-n-profile-setting-ch-gi-field-setu/) |
 | 261119-u7u | Đưa quản lý bộ tài liệu vào tab chuyên dụng, bỏ khối Không gian Docs trong Docs Explorer | 2026-11-19 | 77eb077c | [261119-u7u-rework-docs-explorer-remove-compact-kh-n](./quick/261119-u7u-rework-docs-explorer-remove-compact-kh-n/) |
+| 261120-f8v | Cập nhật CLAUDE.md: project này discuss bằng tiếng Việt. Bổ sung tính năng: khi mở tab file view, cho phép show file tương ứng trên Explorer SSH remote. | 2026-11-20 | be19854a | [261120-f8v-c-p-nh-t-claude-md-project-n-y-discuss-b](./quick/261120-f8v-c-p-nh-t-claude-md-project-n-y-discuss-b/) |
 
 ## Accumulated Context
 
