@@ -34,7 +34,7 @@ export interface CodingZoneSharedState {
 }
 
 const CHANNEL_NAME = 'taskmate_coding_zone_sync';
-const KINDS: readonly CodingZoneSyncKind[] = ['tabs', 'activeFile', 'hunk', 'chat', 'activity', 'full'];
+const KINDS: readonly CodingZoneSyncKind[] = ['tabs', 'activeFile', 'hunk', 'chat', 'activity', 'full', 'request-state'];
 const MAX_REVISION = Number.MAX_SAFE_INTEGER;
 
 const channels = new Map<string, BroadcastChannel | null>();
@@ -85,6 +85,8 @@ export function getCodingZoneListenerCountForTest(): number {
 export interface UseCodingZoneSyncResult {
   /** Increment the revision and broadcast a state slice to the other window. */
   publish: (kind: CodingZoneSyncKind, payload: unknown) => void;
+  /** Ask the owner window to republish its latest full snapshot. */
+  requestState: () => void;
   /** True when the paired Coding Zone window is currently open. */
   pairedWindowOpen: () => Promise<boolean>;
 }
@@ -92,19 +94,50 @@ export interface UseCodingZoneSyncResult {
 /**
  * @param windowId unique id for THIS webview; must differ between main and popout.
  * @param onState called only for valid events from another window with a newer revision.
+ * @param getSnapshot owner window's latest full state; answering a late popout's request prevents handoff races.
  */
 export function useCodingZoneSync(
   windowId: string,
-  onState: (event: CodingZoneSyncPayload) => void
+  onState: (event: CodingZoneSyncPayload) => void,
+  getSnapshot?: () => unknown
 ): UseCodingZoneSyncResult {
   const revisionRef = useRef(0);
   const seenRef = useRef<number>(-1);
   const handlerRef = useRef(onState);
+  const snapshotRef = useRef(getSnapshot);
   handlerRef.current = onState;
+  snapshotRef.current = getSnapshot;
 
   const receive = useCallback((candidate: unknown) => {
     if (!isValidCodingZoneSyncPayload(candidate)) return;
     if (candidate.originWindowId === windowId) return;
+    if (candidate.kind === 'request-state') {
+      const snapshot = snapshotRef.current?.();
+      if (snapshot !== undefined) {
+        const response: CodingZoneSyncPayload = {
+          originWindowId: windowId,
+          revision: ++revisionRef.current,
+          kind: 'full',
+          payload: snapshot,
+        };
+        getSharedChannel(windowId)?.postMessage(response);
+        if (emitOverride) {
+          void emitOverride(CODING_ZONE_LABEL, CODING_ZONE_SYNC_EVENT, response).catch(() => {});
+        } else if (isTauriApp()) {
+          void (async () => {
+            try {
+              const { emitTo } = await import('@tauri-apps/api/event');
+              await emitTo(CODING_ZONE_LABEL, CODING_ZONE_SYNC_EVENT, response);
+            } catch {
+              // BroadcastChannel already answered when origins match.
+            }
+          })();
+        } else if (typeof window !== 'undefined') {
+          window.postMessage({ type: CODING_ZONE_SYNC_EVENT, payload: response }, window.location.origin);
+        }
+      }
+      return;
+    }
     if (candidate.revision <= seenRef.current) return;
     seenRef.current = candidate.revision;
     handlerRef.current(candidate);
@@ -186,7 +219,31 @@ export function useCodingZoneSync(
     }
   }, [windowId]);
 
+  const requestState = useCallback(() => {
+    const event: CodingZoneSyncPayload = {
+      originWindowId: windowId,
+      revision: 0,
+      kind: 'request-state',
+      payload: null,
+    };
+    getSharedChannel(windowId)?.postMessage(event);
+    if (emitOverride) {
+      void emitOverride(CODING_ZONE_LABEL, CODING_ZONE_SYNC_EVENT, event).catch(() => {});
+    } else if (isTauriApp()) {
+      void (async () => {
+        try {
+          const { emitTo } = await import('@tauri-apps/api/event');
+          await emitTo(CODING_ZONE_LABEL, CODING_ZONE_SYNC_EVENT, event);
+        } catch {
+          // BroadcastChannel already delivered the request when origins match.
+        }
+      })();
+    } else if (typeof window !== 'undefined') {
+      window.postMessage({ type: CODING_ZONE_SYNC_EVENT, payload: event }, window.location.origin);
+    }
+  }, [windowId]);
+
   const pairedWindowOpen = useCallback(() => isCodingZonePopoutOpen(), []);
 
-  return { publish, pairedWindowOpen };
+  return { publish, requestState, pairedWindowOpen };
 }

@@ -189,7 +189,7 @@ export const CodingZoneModal: React.FC<CodingZoneModalProps> = ({
     }
   }, []);
 
-  const { publish } = useCodingZoneSync(windowId, onState);
+  const { publish } = useCodingZoneSync(windowId, onState, snapshot);
 
   useEffect(() => {
     const latest = liveActivity.at(-1);

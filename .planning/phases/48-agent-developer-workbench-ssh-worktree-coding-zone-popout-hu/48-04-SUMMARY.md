@@ -32,6 +32,9 @@ key-files:
   modified:
     - playwright.config.ts
     - src/views/CodingZonePopoutView.tsx
+    - src/hooks/useCodingZoneSync.ts
+    - src/components/agents/CodingZoneModal.tsx
+    - src/types/codingZone.ts
     - src-tauri/src/tool_cancel.rs
     - .planning/phases/48-agent-developer-workbench-ssh-worktree-coding-zone-popout-hu/48-VALIDATION.md
 
@@ -135,7 +138,15 @@ completed: 2026-11-21
 
 ---
 
-**Total deviations:** 5 auto-fixed (2 bugs, 2 blocking, 1 warning/environment).
+**6. [Rule 1 - Bug] Popout handoff race on slow listener mount**
+- **Found during:** orchestrator re-run of Chrome UAT after plan completion.
+- **Issue:** initial handoff could arrive before the secondary window subscribed; the popout then started with no tabs/diff snapshot and the popout test failed intermittently.
+- **Fix:** added a `request-state` sync kind. The popout requests the owner's latest snapshot after its listener mounts; the owner republishes `full` state from `CodingZoneModal.snapshot()`.
+- **Files modified:** `src/types/codingZone.ts`, `src/hooks/useCodingZoneSync.ts`, `src/components/agents/CodingZoneModal.tsx`, `src/views/CodingZonePopoutView.tsx`, `src/hooks/__tests__/useCodingZoneSync.test.ts`.
+- **Verification:** new focused request/response test passes; Chrome UAT passed three consecutive runs with zero errors.
+- **Committed in:** this orchestrator closeout commit.
+
+**Total deviations:** 6 auto-fixed (3 bugs, 2 blocking, 1 warning/environment).
 **Impact on plan:** All fixes necessary to make verification truthful and green. No packages installed; no merge or push performed.
 
 ## Issues Encountered

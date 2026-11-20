@@ -3,7 +3,7 @@
  * Shared state arrives via targeted handoff / versioned sync; no paths or secrets in the hash.
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { CodingZoneModal } from '../components/agents/CodingZoneModal';
 import { CodingZoneDiffPanel } from '../components/agents/CodingZoneDiffPanel';
 import type { DiffFile } from '../types/agent';
@@ -51,7 +51,9 @@ export const CodingZonePopoutView: React.FC<CodingZonePopoutViewProps> = ({ conn
     setShared(event.payload);
   }, []);
   // The modal owns tabs/decisions; this view needs the same full snapshot to feed its diff panel.
-  useCodingZoneSync(WINDOW_ID, onState);
+  const { requestState } = useCodingZoneSync(WINDOW_ID, onState);
+  // Initial handoff can arrive before this listener mounts; ask the owner to republish.
+  useEffect(() => { requestState(); }, [requestState]);
 
   return (
     <div className="cz-popout-window" data-testid="coding-zone-popout-view" data-shared-state={shared ? 'ready' : 'pending'}>

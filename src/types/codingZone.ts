@@ -82,7 +82,7 @@ export interface CodeEditRefusal {
 export interface CodingZoneSyncPayload {
   originWindowId: string;
   revision: number;
-  kind: 'tabs' | 'activeFile' | 'hunk' | 'chat' | 'activity' | 'full';
+  kind: 'tabs' | 'activeFile' | 'hunk' | 'chat' | 'activity' | 'full' | 'request-state';
   payload: unknown;
 }
 

@@ -106,6 +106,22 @@ describe('useCodingZoneSync', () => {
     expect(emitMock).toHaveBeenCalledWith('coding-zone-popout', CODING_ZONE_SYNC_EVENT, expect.objectContaining({ revision: 2 }));
   });
 
+  it('republishes latest state when a late popout requests it', async () => {
+    const getSnapshot = vi.fn(() => ({ seeded: true }));
+    const { result } = renderHook(() => useCodingZoneSync('main', vi.fn(), getSnapshot));
+    const owner = channels.at(-1);
+    expect(owner).toBeDefined();
+    act(() => {
+      owner?.trigger({ originWindowId: 'popout', revision: 0, kind: 'request-state', payload: null });
+    });
+    expect(getSnapshot).toHaveBeenCalledTimes(1);
+    const published = owner?.postMessageMock.mock.calls.at(-1)?.[0] as { originWindowId: string; revision: number; kind: string };
+    expect(published).toMatchObject({ originWindowId: 'main', revision: 1, kind: 'full' });
+    act(() => { result.current.requestState(); });
+    const request = owner?.postMessageMock.mock.calls.at(-1)?.[0] as { kind: string };
+    expect(request.kind).toBe('request-state');
+  });
+
   it('seeds initial state from the handoff event', async () => {
     const onState = vi.fn();
     renderHook(() => useCodingZoneSync('popout', onState));
