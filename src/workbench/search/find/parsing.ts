@@ -38,7 +38,7 @@ export function matchRanges(text: string, pattern: string, options: MatchableOpt
   let source = regexMode ? pattern : escapeRegExp(pattern);
   if (options.words) {
     const boundary = String.fromCharCode(92) + 'b';
-    source = boundary + source + boundary;
+    source = `${boundary}(?:${source})${boundary}`;
   }
   let re: RegExp;
   try {

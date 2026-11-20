@@ -61,6 +61,22 @@ describe('parsing — MatchRow mapping from committed RemoteGrepHit[] (Task 2)',
     expect(decode('Tìm trong tệp tìm', viet)).toBe('Tìm|tìm');
   });
 
+  it('applies word boundaries to every regex alternation, matching git -E -w', () => {
+    const text = 'foo bar foobar xbar baz';
+    const rows = hitsToMatchRows([{ path: 'x', line: 1, text }], 'foo|bar', {
+      literal: false,
+      matchCase: true,
+      words: true,
+    });
+    expect(decode(text, rows[0]!.ranges)).toBe('foo|bar');
+  });
+
+  it('keeps literal+words whole-word behavior with the grouped boundary', () => {
+    const text = 'cat concatenate cat';
+    const ranges = matchRanges(text, 'cat', { literal: true, matchCase: true, words: true });
+    expect(decode(text, ranges)).toBe('cat|cat');
+  });
+
   it('previewMatchRanges marks all occurrences in a loaded file with line numbers', () => {
     const marks = previewMatchRanges('one needle\ntwo needle\n', 'needle', {
       literal: true,
