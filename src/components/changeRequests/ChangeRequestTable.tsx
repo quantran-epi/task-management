@@ -1,30 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import {
-  Table,
-  Tag,
-  Button,
-  Space,
-  Tooltip,
-  Popover,
-  Dropdown,
-  Progress,
-  theme,
-  type TableColumnsType,
-  type MenuProps,
-} from 'antd';
-import {
-  EditOutlined,
-  DeleteOutlined,
-  BranchesOutlined,
-  LinkOutlined,
-  FolderOpenOutlined,
-  RobotOutlined,
-  MoreOutlined,
-  BellOutlined,
-  ThunderboltOutlined,
-  ToolOutlined,
-  BugOutlined,
-} from '@ant-design/icons';
+import { Table, Tag, Button, Space, Tooltip, Popover, Dropdown, Progress, useAntdToken } from '../ui';
+import type { TableColumnsType, MenuProps } from 'antd';
+import { EditOutlined, DeleteOutlined, BranchesOutlined, LinkOutlined, FolderOpenOutlined, RobotOutlined, MoreOutlined, BellOutlined, ThunderboltOutlined, ToolOutlined, BugOutlined } from '../ui/icon';
 import type { ChangeRequest, CrType, CrStatus, System, Task } from '../../types/models';
 import { EmptyState } from '../common/EmptyState';
 import { getTodayDateString } from '../../utils/date';
@@ -98,7 +75,7 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
   loading = false,
   db = defaultDb,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const today = getTodayDateString();
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20 });
   const { openChat } = useAIChat();

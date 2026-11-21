@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Modal, Tag, Typography } from 'antd';
-import { ExportOutlined } from '@ant-design/icons';
+import { Button, Modal, Tag, Typography } from '../ui';
+import { ExportOutlined } from '../ui/icon';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Note, NoteAttachment } from '../../types/models';
 import { renderSafeMarkdown } from '../../utils/markdown';

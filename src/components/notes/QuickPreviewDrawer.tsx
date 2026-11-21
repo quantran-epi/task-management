@@ -1,12 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Modal, Button, Typography, Space, Tag, Empty, Divider, Spin, Tooltip, Segmented } from 'antd';
-import {
-  FileTextOutlined,
-  ExportOutlined,
-  LinkOutlined,
-  CheckSquareOutlined,
-  ProjectOutlined,
-} from '@ant-design/icons';
+import { Modal, Button, Typography, Space, Tag, Empty, Divider, Spin, Tooltip, Segmented } from '../ui';
+import { FileTextOutlined, ExportOutlined, LinkOutlined, CheckSquareOutlined, ProjectOutlined } from '../ui/icon';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Note, Task, ChangeRequest } from '../../types/models';
 import { renderSafeMarkdown, renderInlineFormatting } from '../../utils/markdown';

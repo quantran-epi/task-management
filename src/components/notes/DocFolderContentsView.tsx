@@ -1,15 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Breadcrumb, Button, Card, Col, Empty, Pagination, Row, Space, Tag, Typography } from 'antd';
-import {
-  FolderFilled,
-  FolderOpenFilled,
-  PlusOutlined,
-  UploadOutlined,
-  FileTextOutlined,
-  FormOutlined,
-  FolderAddOutlined,
-  CalendarOutlined,
-} from '@ant-design/icons';
+import { Breadcrumb, Button, Card, Col, Empty, Pagination, Row, Space, Tag, Typography, EmptyImageSimple } from '../ui';
+import { FolderFilled, FolderOpenFilled, PlusOutlined, UploadOutlined, FileTextOutlined, FormOutlined, FolderAddOutlined, CalendarOutlined } from '../ui/icon';
 import type { Note } from '../../types/models';
 import type { QuickFilterKey } from './DocFolderTree';
 
@@ -232,7 +223,7 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
           {documents.length === 0 ? (
             <div style={{ padding: '40px 0', textAlign: 'center' }}>
               <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                image={EmptyImageSimple}
                 description={
                   subfolders.length > 0
                     ? 'Chưa có tài liệu trực tiếp trong thư mục này. Bạn có thể mở các thư mục con phía trên hoặc tạo tài liệu mới.'

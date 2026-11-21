@@ -1,23 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Upload,
-  Button,
-  Image,
-  Input,
-  Popconfirm,
-  Space,
-  Typography,
-  message,
-  Card,
-  Tooltip,
-} from 'antd';
-import {
-  PlusOutlined,
-  DeleteOutlined,
-  EditOutlined,
-  CheckOutlined,
-  CameraOutlined,
-} from '@ant-design/icons';
+import { Upload, Button, Image, Input, Popconfirm, Space, Typography, Card, Tooltip, SpaceCompact, UPLOAD_LIST_IGNORE, ImagePreviewGroup, useMessage } from '../ui';
+import { PlusOutlined, DeleteOutlined, EditOutlined, CheckOutlined, CameraOutlined } from '../ui/icon';
 import type { UploadFile } from 'antd';
 import type { NoteAttachment } from '../../types/models';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -50,6 +33,7 @@ export const NoteAttachmentsPanel: React.FC<NoteAttachmentsPanelProps> = ({
   db = defaultDb,
   readOnly = false,
 }) => {
+  const message = useMessage();
   const [objectUrls, setObjectUrls] = useState<Map<string, string>>(new Map());
   const [editingCaptionId, setEditingCaptionId] = useState<string | null>(null);
   const [captionInput, setCaptionInput] = useState<string>('');
@@ -83,17 +67,17 @@ export const NoteAttachmentsPanel: React.FC<NoteAttachmentsPanelProps> = ({
   const beforeUpload = (file: File) => {
     if (totalCount >= MAX_ATTACHMENTS) {
       message.error(`Mỗi ghi chú chỉ được đính kèm tối đa ${MAX_ATTACHMENTS} ảnh`);
-      return Upload.LIST_IGNORE;
+      return UPLOAD_LIST_IGNORE;
     }
 
     if (!ALLOWED_MIME_TYPES.includes(file.type as (typeof ALLOWED_MIME_TYPES)[number])) {
       message.error('Chỉ hỗ trợ định dạng ảnh: PNG, JPEG, GIF, WebP');
-      return Upload.LIST_IGNORE;
+      return UPLOAD_LIST_IGNORE;
     }
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
       message.error('Dung lượng ảnh không được vượt quá 5MB');
-      return Upload.LIST_IGNORE;
+      return UPLOAD_LIST_IGNORE;
     }
 
     return true;
@@ -211,7 +195,7 @@ export const NoteAttachmentsPanel: React.FC<NoteAttachmentsPanelProps> = ({
         )}
       </div>
 
-      <Image.PreviewGroup>
+      <ImagePreviewGroup>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
           {/* Persisted attachments */}
           {attachments.map((att) => {
@@ -238,7 +222,7 @@ export const NoteAttachmentsPanel: React.FC<NoteAttachmentsPanelProps> = ({
                 </div>
                 <div style={{ marginTop: 6 }}>
                   {isEditing ? (
-                    <Space.Compact style={{ width: '100%' }}>
+                    <SpaceCompact style={{ width: '100%' }}>
                       <Input
                         size="small"
                         value={captionInput}
@@ -251,7 +235,7 @@ export const NoteAttachmentsPanel: React.FC<NoteAttachmentsPanelProps> = ({
                         icon={<CheckOutlined />}
                         onClick={() => void handleSaveCaption(att)}
                       />
-                    </Space.Compact>
+                    </SpaceCompact>
                   ) : (
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <Typography.Text
@@ -322,7 +306,7 @@ export const NoteAttachmentsPanel: React.FC<NoteAttachmentsPanelProps> = ({
                 </div>
                 <div style={{ marginTop: 6 }}>
                   {isEditing ? (
-                    <Space.Compact style={{ width: '100%' }}>
+                    <SpaceCompact style={{ width: '100%' }}>
                       <Input
                         size="small"
                         value={captionInput}
@@ -335,7 +319,7 @@ export const NoteAttachmentsPanel: React.FC<NoteAttachmentsPanelProps> = ({
                         icon={<CheckOutlined />}
                         onClick={() => handleSaveStagedCaption(idx)}
                       />
-                    </Space.Compact>
+                    </SpaceCompact>
                   ) : (
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <Typography.Text
@@ -374,7 +358,7 @@ export const NoteAttachmentsPanel: React.FC<NoteAttachmentsPanelProps> = ({
             );
           })}
         </div>
-      </Image.PreviewGroup>
+      </ImagePreviewGroup>
     </div>
   );
 };

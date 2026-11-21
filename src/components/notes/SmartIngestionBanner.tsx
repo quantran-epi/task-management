@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Alert, Button, Checkbox, Space, Typography } from 'antd';
-import { BulbOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
+import { Alert, Button, Checkbox, Space, Typography } from '../ui';
+import { BulbOutlined, CheckOutlined, CloseOutlined } from '../ui/icon';
 import type { DetectedEntity } from '../../utils/smartIngestion';
 
 const { Text } = Typography;

@@ -1,19 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { Input, Select, Typography, Empty, Tag, Dropdown, Button, Tooltip, type MenuProps } from 'antd';
+import { Input, Select, Typography, Empty, Tag, Dropdown, Button, Tooltip, EmptyImageSimple } from '../ui';
+import type { MenuProps } from 'antd';
 import { useDocWorkerSearch } from '../../hooks/useDocWorkerSearch';
-import {
-  SearchOutlined,
-  PushpinFilled,
-  PushpinOutlined,
-  FolderOutlined,
-  FolderFilled,
-  PlusOutlined,
-  DeleteOutlined,
-  MoreOutlined,
-  FileTextOutlined,
-  FormOutlined,
-  UndoOutlined,
-} from '@ant-design/icons';
+import { SearchOutlined, PushpinFilled, PushpinOutlined, FolderOutlined, FolderFilled, PlusOutlined, DeleteOutlined, MoreOutlined, FileTextOutlined, FormOutlined, UndoOutlined } from '../ui/icon';
 import type { Note } from '../../types/models';
 import type { DocumentPublishStatus } from '../../db/repositories/documentSetRepo';
 import { matchesDocSearch } from '../../utils/docSearch';
@@ -341,7 +330,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
         {filteredAndSortedDocs.length === 0 ? (
           <div style={{ marginTop: 48, textAlign: 'center', padding: '0 16px' }}>
             <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              image={EmptyImageSimple}
               description={
                 currentFolder
                   ? `Thư mục "${currentFolder.title}" chưa có tài liệu`

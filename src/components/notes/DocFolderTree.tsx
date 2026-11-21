@@ -1,30 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Button, Dropdown, Input, Modal, Segmented, Tooltip, Typography, Empty, type MenuProps } from 'antd';
-import {
-  FolderOutlined,
-  FolderOpenOutlined,
-  PlusOutlined,
-  PushpinOutlined,
-  PushpinFilled,
-  FileTextOutlined,
-  FormOutlined,
-  DeleteOutlined,
-  TagOutlined,
-  MoreOutlined,
-  EditOutlined,
-  FileAddOutlined,
-  FolderAddOutlined,
-  UploadOutlined,
-  CaretRightOutlined,
-  CaretDownOutlined,
-  SearchOutlined,
-  UndoOutlined,
-  CheckSquareOutlined,
-  ThunderboltOutlined,
-  BranchesOutlined,
-  DownloadOutlined,
-  ApartmentOutlined,
-} from '@ant-design/icons';
+import { Button, Dropdown, Input, Modal, Segmented, Tooltip, Typography, Empty, EmptyImageSimple } from '../ui';
+import type { MenuProps } from 'antd';
+import { FolderOutlined, FolderOpenOutlined, PlusOutlined, PushpinOutlined, PushpinFilled, FileTextOutlined, FormOutlined, DeleteOutlined, TagOutlined, MoreOutlined, EditOutlined, FileAddOutlined, FolderAddOutlined, UploadOutlined, CaretRightOutlined, CaretDownOutlined, SearchOutlined, UndoOutlined, CheckSquareOutlined, ThunderboltOutlined, BranchesOutlined, DownloadOutlined, ApartmentOutlined } from '../ui/icon';
 import type { Note } from '../../types/models';
 import type { DocumentPublishStatus } from '../../db/repositories/documentSetRepo';
 import { DocPublishBadge } from '../knowledge/DocPublishBadge';
@@ -1105,7 +1082,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
             searchResults.map((doc) => renderDocItem(doc, 0))
           ) : (
             <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              image={EmptyImageSimple}
               description="Không tìm thấy tài liệu phù hợp"
               style={{ marginTop: 24 }}
             />

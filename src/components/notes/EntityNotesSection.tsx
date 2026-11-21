@@ -1,25 +1,6 @@
 import React, { useState } from 'react';
-import {
-  Card,
-  Button,
-  Space,
-  Typography,
-  Tag,
-  Badge,
-  Popconfirm,
-  Empty,
-  message,
-  Tooltip,
-} from 'antd';
-import {
-  PlusOutlined,
-  PushpinFilled,
-  PushpinOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  PaperClipOutlined,
-  ExportOutlined,
-} from '@ant-design/icons';
+import { Card, Button, Space, Typography, Tag, Badge, Popconfirm, Empty, Tooltip, EmptyImageSimple, useMessage } from '../ui';
+import { PlusOutlined, PushpinFilled, PushpinOutlined, EditOutlined, DeleteOutlined, PaperClipOutlined, ExportOutlined } from '../ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Note, NoteEntityType } from '../../types/models';
@@ -42,6 +23,7 @@ export const EntityNotesSection: React.FC<EntityNotesSectionProps> = ({
   entityId,
   db = defaultDb,
 }) => {
+  const message = useMessage();
   const [editorOpen, setEditorOpen] = useState<boolean>(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
@@ -145,7 +127,7 @@ export const EntityNotesSection: React.FC<EntityNotesSectionProps> = ({
 
       {(!notes || notes.length === 0) ? (
         <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          image={EmptyImageSimple}
           description="Chưa có ghi chú nào cho mục này"
           style={{ margin: '16px 0' }}
         />

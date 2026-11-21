@@ -1,14 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Modal,
-  Form,
-  Input,
-  Switch,
-  Select,
-  Segmented,
-  Button,
-  message,
-} from 'antd';
+import { Modal, Form, Input, Switch, Select, Segmented, Button, FormItem, useForm, useWatch, TextArea, useMessage } from '../ui';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Note, NoteAttachment, NoteEntityType } from '../../types/models';
 import { createNote, updateNote, addNoteAttachment } from '../../db/repositories/noteRepo';
@@ -35,7 +26,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   onSaved,
   db = defaultDb,
 }) => {
-  const [form] = Form.useForm();
+  const message = useMessage();
+  const [form] = useForm();
   const [tabMode, setTabMode] = useState<'write' | 'preview'>('write');
   const [saving, setSaving] = useState<boolean>(false);
   const [attachments, setAttachments] = useState<NoteAttachment[]>([]);
@@ -84,7 +76,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     setTabMode('write');
   }, [open, note, defaultEntityType, defaultEntityId, db, form]);
 
-  const currentEntityType = Form.useWatch('entityType', form);
+  const currentEntityType = useWatch('entityType', form);
 
   const getEntityOptions = () => {
     switch (currentEntityType) {
@@ -195,16 +187,16 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     >
       <Form form={form} layout="vertical" initialValues={{ isPinned: false }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, alignItems: 'flex-start' }}>
-          <Form.Item name="title" label="Tiêu đề (tùy chọn)">
+          <FormItem name="title" label="Tiêu đề (tùy chọn)">
             <Input placeholder="Tiêu đề ghi chú..." maxLength={120} />
-          </Form.Item>
-          <Form.Item name="isPinned" label="Ghim lên đầu" valuePropName="checked">
+          </FormItem>
+          <FormItem name="isPinned" label="Ghim lên đầu" valuePropName="checked">
             <Switch />
-          </Form.Item>
+          </FormItem>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 12 }}>
-          <Form.Item name="entityType" label="Liên kết thực thể">
+          <FormItem name="entityType" label="Liên kết thực thể">
             <Select
               allowClear
               placeholder="Độc lập (Không liên kết)"
@@ -215,9 +207,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               ]}
               onChange={() => form.setFieldValue('entityId', undefined)}
             />
-          </Form.Item>
+          </FormItem>
 
-          <Form.Item
+          <FormItem
             name="entityId"
             label="Chọn thực thể cụ thể"
             rules={[
@@ -236,7 +228,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               disabled={!currentEntityType}
               options={getEntityOptions()}
             />
-          </Form.Item>
+          </FormItem>
         </div>
 
         <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -253,12 +245,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         </div>
 
         {tabMode === 'write' ? (
-          <Form.Item
+          <FormItem
             name="body"
             rules={[{ required: true, message: 'Nội dung ghi chú không được để trống' }]}
             style={{ marginBottom: 16 }}
           >
-            <Input.TextArea
+            <TextArea
               rows={8}
               placeholder="Nhập nội dung markdown... Hỗ trợ tiêu đề (#), in đậm (**), danh sách việc cần làm (- [ ] hoặc - [x]), mã (`code`), liên kết ([text](url))..."
               value={markdownBody}
@@ -278,7 +270,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 }
               }}
             />
-          </Form.Item>
+          </FormItem>
         ) : (
           <div
             style={{

@@ -1,6 +1,6 @@
 import React from 'react';
-import { Typography, Tag } from 'antd';
-import { LinkOutlined, CheckSquareOutlined, ProjectOutlined, FileTextOutlined } from '@ant-design/icons';
+import { Typography, Tag } from '../ui';
+import { LinkOutlined, CheckSquareOutlined, ProjectOutlined, FileTextOutlined } from '../ui/icon';
 import type { Task, ChangeRequest, Note } from '../../types/models';
 
 const { Text } = Typography;

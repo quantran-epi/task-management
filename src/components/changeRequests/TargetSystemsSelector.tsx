@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
-import { TreeSelect, Tag } from 'antd';
-import { FolderOutlined, BranchesOutlined } from '@ant-design/icons';
+import { TreeSelect, Tag, TreeSelectSHOW_CHILD } from '../ui';
+import { FolderOutlined, BranchesOutlined } from '../ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { System } from '../../types/models';
@@ -121,7 +121,7 @@ export const TargetSystemsSelector: React.FC<TargetSystemsSelectorProps> = ({
         value={value}
         onChange={onChange ?? (() => {})}
         treeCheckable
-        showCheckedStrategy={TreeSelect.SHOW_CHILD}
+        showCheckedStrategy={TreeSelectSHOW_CHILD}
         placeholder={placeholder}
         style={{ width: '100%', ...style }}
         disabled={disabled}

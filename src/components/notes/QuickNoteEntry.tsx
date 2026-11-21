@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Button, Input, Space, Typography, Tooltip, message } from 'antd';
-import { CameraOutlined, SendOutlined } from '@ant-design/icons';
+import { Button, Space, Typography, Tooltip, TextArea, useMessage } from '../ui';
+import { CameraOutlined, SendOutlined } from '../ui/icon';
 import dayjs from 'dayjs';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { addNoteAttachment, createNote } from '../../db/repositories/noteRepo';
@@ -22,6 +22,7 @@ export const QuickNoteEntry: React.FC<QuickNoteEntryProps> = ({
   db = defaultDb,
   onCreated,
 }) => {
+  const message = useMessage();
   const [body, setBody] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -136,7 +137,7 @@ export const QuickNoteEntry: React.FC<QuickNoteEntryProps> = ({
         backgroundColor: '#fafafa',
       }}
     >
-      <Input.TextArea
+      <TextArea
         autoSize={{ minRows: 2, maxRows: 6 }}
         placeholder={placeholder}
         value={body}

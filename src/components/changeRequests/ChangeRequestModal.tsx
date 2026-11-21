@@ -1,27 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  Modal,
-  Form,
-  Input,
-  DatePicker,
-  Select,
-  Button,
-  Space,
-  Radio,
-  Tag,
-  message,
-} from 'antd';
-import {
-  DeleteOutlined,
-  LinkOutlined,
-  PlusOutlined,
-  ApiOutlined,
-  FolderOpenOutlined,
-  ExportOutlined,
-  ThunderboltOutlined,
-  ToolOutlined,
-  BugOutlined,
-} from '@ant-design/icons';
+import { Modal, Form, Input, DatePicker, Select, Button, Space, Tag, FormItem, FormList, useForm, RadioGroup, RadioButton, TextArea, useMessage } from '../ui';
+import { DeleteOutlined, LinkOutlined, PlusOutlined, ApiOutlined, FolderOpenOutlined, ExportOutlined, ThunderboltOutlined, ToolOutlined, BugOutlined } from '../ui/icon';
 import dayjs, { type Dayjs } from 'dayjs';
 import type { ChangeRequest, CrTarget, CrType, CrStatus } from '../../types/models';
 import { openDocumentLink, browseLocalFolder } from '../../utils/documentLinks';
@@ -85,9 +64,10 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
   initialTargets,
   systems,
 }) => {
+  const message = useMessage();
   useRegisterActiveForm('change-request-modal', open);
 
-  const [form] = Form.useForm<ChangeRequestFormValues>();
+  const [form] = useForm<ChangeRequestFormValues>();
   const restorerRef = useRef<(() => void) | null>(null);
   const [creatingEpic, setCreatingEpic] = useState(false);
 
@@ -253,7 +233,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
         style={{ marginTop: 16 }}
       >
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
-          <Form.Item
+          <FormItem
             name="name"
             label="Tên Change Request"
             rules={[
@@ -262,9 +242,9 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
             ]}
           >
             <Input placeholder="vd: Tích hợp xác thực SmartCard và hoàn tiền tự động" autoFocus />
-          </Form.Item>
+          </FormItem>
 
-          <Form.Item
+          <FormItem
             name="code"
             label="Mã CR"
             rules={[
@@ -273,17 +253,17 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
             ]}
           >
             <Input placeholder="vd: CR-2026-001" style={{ textTransform: 'uppercase' }} />
-          </Form.Item>
+          </FormItem>
         </div>
 
         {/* 3 Explicit CR Types */}
-        <Form.Item
+        <FormItem
           name="type"
           label="Loại Change Request (CR Type)"
           rules={[{ required: true, message: 'Vui lòng chọn loại Change Request.' }]}
         >
-          <Radio.Group style={{ width: '100%', display: 'flex', gap: 12 }}>
-            <Radio.Button value="NEW_FEATURE" style={{ flex: 1, textAlign: 'center', height: 'auto', padding: '6px 8px' }}>
+          <RadioGroup style={{ width: '100%', display: 'flex', gap: 12 }}>
+            <RadioButton value="NEW_FEATURE" style={{ flex: 1, textAlign: 'center', height: 'auto', padding: '6px 8px' }}>
               <div style={{ fontWeight: 600 }}>
                 <ThunderboltOutlined style={{ color: '#1677ff', marginRight: 6 }} />
                 Tạo mới tính năng
@@ -291,9 +271,9 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
               <Tag color="#1677ff" style={{ marginTop: 4, marginRight: 0, fontSize: 11 }}>
                 New Feature
               </Tag>
-            </Radio.Button>
+            </RadioButton>
 
-            <Radio.Button value="ENHANCEMENT" style={{ flex: 1, textAlign: 'center', height: 'auto', padding: '6px 8px' }}>
+            <RadioButton value="ENHANCEMENT" style={{ flex: 1, textAlign: 'center', height: 'auto', padding: '6px 8px' }}>
               <div style={{ fontWeight: 600 }}>
                 <ToolOutlined style={{ color: '#52c41a', marginRight: 6 }} />
                 Nâng cấp / Cập nhật
@@ -301,9 +281,9 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
               <Tag color="#52c41a" style={{ marginTop: 4, marginRight: 0, fontSize: 11 }}>
                 Enhancement
               </Tag>
-            </Radio.Button>
+            </RadioButton>
 
-            <Radio.Button value="BUGFIX" style={{ flex: 1, textAlign: 'center', height: 'auto', padding: '6px 8px' }}>
+            <RadioButton value="BUGFIX" style={{ flex: 1, textAlign: 'center', height: 'auto', padding: '6px 8px' }}>
               <div style={{ fontWeight: 600 }}>
                 <BugOutlined style={{ color: '#faad14', marginRight: 6 }} />
                 Sửa lỗi
@@ -311,12 +291,12 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
               <Tag color="#faad14" style={{ marginTop: 4, marginRight: 0, fontSize: 11 }}>
                 Bugfix
               </Tag>
-            </Radio.Button>
-          </Radio.Group>
-        </Form.Item>
+            </RadioButton>
+          </RadioGroup>
+        </FormItem>
 
         {/* Multi-System Target Selector */}
-        <Form.Item
+        <FormItem
           name="targets"
           label="Các subsystem chịu ảnh hưởng (Target Subsystems)"
           rules={[
@@ -330,43 +310,43 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
           extra="Chọn các dịch vụ, database schema hoặc worker job trong Enterprise Catalog sẽ thay đổi mã nguồn trong đợt CR này."
         >
           <TargetSystemsSelector db={db} preselectedIds={initialTargetIds} systems={systems} />
-        </Form.Item>
+        </FormItem>
 
-        <Form.Item name="description" label="Mô tả phạm vi thay đổi">
-          <Input.TextArea rows={2} placeholder="Tóm tắt yêu cầu kinh doanh, phạm vi ảnh hưởng, và mục tiêu..." />
-        </Form.Item>
+        <FormItem name="description" label="Mô tả phạm vi thay đổi">
+          <TextArea rows={2} placeholder="Tóm tắt yêu cầu kinh doanh, phạm vi ảnh hưởng, và mục tiêu..." />
+        </FormItem>
 
         <div style={{ display: 'flex', gap: 16 }}>
-          <Form.Item name="status" label="Trạng thái" style={{ flex: 1 }}>
+          <FormItem name="status" label="Trạng thái" style={{ flex: 1 }}>
             <Select options={CR_STATUSES.map((s) => ({ label: STATUS_LABELS[s] || s, value: s }))} />
-          </Form.Item>
+          </FormItem>
 
-          <Form.Item name="deadline" label="Hạn chót mục tiêu" style={{ flex: 1 }}>
+          <FormItem name="deadline" label="Hạn chót mục tiêu" style={{ flex: 1 }}>
             <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
-          </Form.Item>
+          </FormItem>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          <Form.Item name="opsOwners" label="Ops Owner">
+          <FormItem name="opsOwners" label="Ops Owner">
             <TagSelect field="opsOwners" />
-          </Form.Item>
+          </FormItem>
 
-          <Form.Item name="businessAnalysts" label="Business Analyst">
+          <FormItem name="businessAnalysts" label="Business Analyst">
             <TagSelect field="businessAnalysts" />
-          </Form.Item>
+          </FormItem>
         </div>
 
         {/* Reminders */}
         <RemindersFormList />
 
         {/* Document Links */}
-        <Form.Item label="Tài liệu liên kết">
-          <Form.List name="documentLinks">
+        <FormItem label="Tài liệu liên kết">
+          <FormList name="documentLinks">
             {(fields, { add, remove }) => (
               <Space direction="vertical" style={{ width: '100%' }}>
                 {fields.map((field) => (
                   <div key={field.key} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    <Form.Item
+                    <FormItem
                       {...field}
                       noStyle
                       rules={[
@@ -385,7 +365,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
                         prefix={<LinkOutlined style={{ color: '#8c8c8c' }} />}
                         style={{ flex: 1, minWidth: 0 }}
                       />
-                    </Form.Item>
+                    </FormItem>
                     <Button
                       type="text"
                       icon={<FolderOpenOutlined />}
@@ -443,12 +423,12 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
                 </div>
               </Space>
             )}
-          </Form.List>
-        </Form.Item>
+          </FormList>
+        </FormItem>
 
         {/* Jira Epic Mapping */}
         <div style={{ marginBottom: 16 }}>
-          <Form.Item
+          <FormItem
             name="jiraEpicKey"
             label="Mã Jira Epic (Jira Epic Key)"
             rules={[
@@ -475,7 +455,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
                 </Button>
               }
             />
-          </Form.Item>
+          </FormItem>
         </div>
       </Form>
     </Modal>

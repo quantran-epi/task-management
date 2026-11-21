@@ -1,36 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import {
-  Alert,
-  Button,
-  Input,
-  Radio,
-  Space,
-  Tag,
-  Tooltip,
-  Typography,
-  message,
-  Popconfirm,
-  Dropdown,
-} from 'antd';
+import { Alert, Button, Input, Space, Tag, Tooltip, Typography, Popconfirm, Dropdown, RadioGroup, RadioButton, TextArea, useMessage } from '../ui';
 import type { TextAreaRef } from 'antd/es/input/TextArea';
-import {
-  EditOutlined,
-  EyeOutlined,
-  SplitCellsOutlined,
-  FullscreenOutlined,
-  FullscreenExitOutlined,
-  RobotOutlined,
-  DeleteOutlined,
-  CloudSyncOutlined,
-  FileTextOutlined,
-  CheckSquareOutlined,
-  FolderOutlined,
-  UndoOutlined,
-  DownloadOutlined,
-  FilePptOutlined,
-  FileWordOutlined,
-  FileMarkdownOutlined,
-} from '@ant-design/icons';
+import { EditOutlined, EyeOutlined, SplitCellsOutlined, FullscreenOutlined, FullscreenExitOutlined, RobotOutlined, DeleteOutlined, CloudSyncOutlined, FileTextOutlined, CheckSquareOutlined, FolderOutlined, UndoOutlined, DownloadOutlined, FilePptOutlined, FileWordOutlined, FileMarkdownOutlined } from '../ui/icon';
 import type { Note, Task, ChangeRequest } from '../../types/models';
 import type { DocumentPublishStatus } from '../../db/repositories/documentSetRepo';
 import { renderSafeMarkdown } from '../../utils/markdown';
@@ -83,6 +54,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
   publishStatus,
   compactPublishBadge,
 }) => {
+  const message = useMessage();
   const [viewMode, setViewMode] = useState<EditorViewMode>('split');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [title, setTitle] = useState('');
@@ -658,7 +630,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
         }}
       >
         {/* Left: View Mode Toggle */}
-        <Radio.Group
+        <RadioGroup
           size="small"
           value={viewMode}
           onChange={(e) => setViewMode(e.target.value)}
@@ -666,16 +638,16 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
           buttonStyle="solid"
           style={{ flexShrink: 0 }}
         >
-          <Radio.Button value="edit">
+          <RadioButton value="edit">
             <EditOutlined /> Sửa
-          </Radio.Button>
-          <Radio.Button value="split">
+          </RadioButton>
+          <RadioButton value="split">
             <SplitCellsOutlined /> Song song
-          </Radio.Button>
-          <Radio.Button value="preview">
+          </RadioButton>
+          <RadioButton value="preview">
             <EyeOutlined /> Xem
-          </Radio.Button>
-        </Radio.Group>
+          </RadioButton>
+        </RadioGroup>
 
         {/* Right Actions */}
         <Space size={8} wrap={false} style={{ flexShrink: 0 }}>
@@ -946,7 +918,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
               overflow: 'hidden',
             }}
           >
-            <Input.TextArea
+            <TextArea
               ref={textareaRef}
               value={body}
               readOnly={Boolean(doc.deletedAt)}

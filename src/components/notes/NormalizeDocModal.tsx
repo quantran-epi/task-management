@@ -1,23 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  Modal,
-  Button,
-  Segmented,
-  Alert,
-  Spin,
-  Space,
-  Typography,
-  Input,
-} from 'antd';
-import {
-  RobotOutlined,
-  CheckOutlined,
-  CloseOutlined,
-  ReloadOutlined,
-  SplitCellsOutlined,
-  EyeOutlined,
-  EditOutlined,
-} from '@ant-design/icons';
+import { Modal, Button, Segmented, Alert, Spin, Space, Typography, TextArea } from '../ui';
+import { RobotOutlined, CheckOutlined, CloseOutlined, ReloadOutlined, SplitCellsOutlined, EyeOutlined, EditOutlined } from '../ui/icon';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import {
   getNineRouterConfig,
@@ -28,7 +11,6 @@ import { AI_KNOWLEDGE_DOC_PROMPT } from '../../views/NotesView';
 import { renderSafeMarkdown } from '../../utils/markdown';
 
 const { Text } = Typography;
-const { TextArea } = Input;
 
 export interface NormalizeDocModalProps {
   open: boolean;

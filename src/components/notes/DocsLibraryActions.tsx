@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
-import { Button, Input, Modal, Space, Typography, message } from 'antd';
+import { Button, Modal, Space, Typography, TextArea, useMessage } from '../ui';
 import { APP_NAME } from '../../constants/app';
-import { CopyOutlined, DatabaseOutlined, RobotOutlined, UploadOutlined } from '@ant-design/icons';
+import { CopyOutlined, DatabaseOutlined, RobotOutlined, UploadOutlined } from '../ui/icon';
 import type { TaskPlannerDatabase } from '../../db';
 import type { Note } from '../../types/models';
 import { batchCreateNotes, createNote } from '../../db/repositories/noteRepo';
@@ -129,6 +129,7 @@ export function DocsLibraryActions({
   onSelectFolder,
   onOpenLibrary,
 }: DocsLibraryActionsProps) {
+  const message = useMessage();
   const [aiPromptModalOpen, setAiPromptModalOpen] = useState(false);
   const [selectedZipFile, setSelectedZipFile] = useState<File | null>(null);
   const zipFileInputRef = useRef<HTMLInputElement>(null);
@@ -230,7 +231,7 @@ export function DocsLibraryActions({
           <Text type="secondary">
             Dán prompt này vào bất kỳ AI Assistant bên ngoài (Claude, ChatGPT, Open-WebUI, ...) khi bạn muốn tạo tài liệu Markdown để nạp vào {APP_NAME}.
           </Text>
-          <Input.TextArea
+          <TextArea
             readOnly
             value={AI_KNOWLEDGE_DOC_PROMPT}
             rows={18}

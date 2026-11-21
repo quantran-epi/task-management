@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
-import { Typography } from 'antd';
-import { OrderedListOutlined } from '@ant-design/icons';
+import { Typography } from '../ui';
+import { OrderedListOutlined } from '../ui/icon';
 
 const { Text } = Typography;
 

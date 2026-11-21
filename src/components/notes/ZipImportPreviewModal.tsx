@@ -1,25 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import {
-  Modal,
-  Table,
-  Button,
-  Input,
-  Checkbox,
-  Radio,
-  Select,
-  Typography,
-  Tag,
-  Drawer,
-  Alert,
-  Spin,
-  message,
-} from 'antd';
-import {
-  FileTextOutlined,
-  EyeOutlined,
-  FolderAddOutlined,
-  CheckCircleOutlined,
-} from '@ant-design/icons';
+import { Modal, Table, Button, Input, Checkbox, Radio, Select, Typography, Tag, Drawer, Alert, Spin, RadioGroup, InputSearch, useMessage } from '../ui';
+import { FileTextOutlined, EyeOutlined, FolderAddOutlined, CheckCircleOutlined } from '../ui/icon';
 import JSZip from 'jszip';
 import type { Note } from '../../types/models';
 import { renderSafeMarkdown } from '../../utils/markdown';
@@ -121,6 +102,7 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
   onImportDocs,
   onCreateFolder,
 }) => {
+  const message = useMessage();
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
   const [extractedDocs, setExtractedDocs] = useState<ExtractedZipDoc[]>([]);
@@ -430,14 +412,14 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
               <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>
                 Vị trí lưu trữ tài liệu:
               </Text>
-              <Radio.Group
+              <RadioGroup
                 value={targetMode}
                 onChange={(e) => setTargetMode(e.target.value)}
                 style={{ marginBottom: 10 }}
               >
                 <Radio value="new">Tạo thư mục mới gom tất cả tài liệu</Radio>
                 <Radio value="existing">Lưu vào thư mục hiện có</Radio>
-              </Radio.Group>
+              </RadioGroup>
 
               {targetMode === 'new' ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, maxWidth: 420 }}>
@@ -480,7 +462,7 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
                   Chọn tất cả ({selectedCount}/{extractedDocs.length})
                 </Checkbox>
               </div>
-              <Input.Search
+              <InputSearch
                 placeholder="Tìm theo tên file hoặc tiêu đề..."
                 value={searchFilter}
                 onChange={(e) => setSearchFilter(e.target.value)}
