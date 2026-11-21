@@ -39,6 +39,7 @@ export const PROFILE_KEY_CATALOG: Record<string, ProfileKeyClassification> = {
   ninerouter_char_limit: 'portable',
   ninerouter_context_window_tokens: 'portable',
   ninerouter_cached_models: 'portable',
+  utility_tool_ai_models: 'portable',
   image_model: 'portable',
   image_cached_models: 'portable',
   graphiti_mcp_enabled: 'portable',

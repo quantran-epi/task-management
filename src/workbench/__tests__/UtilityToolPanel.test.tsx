@@ -9,8 +9,8 @@ describe('UtilityToolPanel', () => {
       render(<UtilityToolPanel viewType={viewType} />);
       const separators = screen.getAllByRole('separator');
       expect(separators).toHaveLength(1);
-      expect(separators[0].getAttribute('aria-orientation')).toBe('vertical');
-      expect(separators[0].style.background).toContain('var(--border-strong');
+      expect(separators[0]?.getAttribute('aria-orientation')).toBe('vertical');
+      expect(separators[0]?.style.background).toContain('var(--border-strong');
     }
   );
 
