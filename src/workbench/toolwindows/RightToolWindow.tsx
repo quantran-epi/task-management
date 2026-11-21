@@ -1,10 +1,6 @@
 import React from 'react';
-import { Tooltip } from 'antd';
-import {
-  MinusOutlined,
-  BellOutlined,
-  ToolOutlined,
-} from '@ant-design/icons';
+import { Tooltip } from '../../components/ui';
+import { MinusOutlined, BellOutlined, ToolOutlined } from '../../components/ui/icon';
 import { JetBrainsAIIcon } from '../../components/icons/JetBrainsIcons';
 import { useLayoutStore } from '../store/layoutStore';
 import { useAIChat } from '../../context/AIChatContext';

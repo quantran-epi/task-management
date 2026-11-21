@@ -1,15 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Tooltip, Button, Popconfirm, Select, Input } from 'antd';
-import {
-  CodeOutlined,
-  CloseOutlined,
-  ClearOutlined,
-  ReloadOutlined,
-  FullscreenOutlined,
-  FullscreenExitOutlined,
-  PlusOutlined,
-  CloudServerOutlined,
-} from '@ant-design/icons';
+import { Tooltip, Button, Popconfirm, Select, Input } from '../../components/ui';
+import { CodeOutlined, CloseOutlined, ClearOutlined, ReloadOutlined, FullscreenOutlined, FullscreenExitOutlined, PlusOutlined, CloudServerOutlined } from '../../components/ui/icon';
 import { useLayoutStore } from '../store/layoutStore';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { getSshConfigs } from '../../services/sshService';

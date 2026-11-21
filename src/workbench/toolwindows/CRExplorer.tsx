@@ -1,19 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { Tree, Input, Button, Empty, Tag, Typography, Dropdown, Modal, message, type MenuProps } from 'antd';
-import {
-  SearchOutlined,
-  InboxOutlined,
-  PlusOutlined,
-  ThunderboltOutlined,
-  ToolOutlined,
-  BugOutlined,
-  FolderOutlined,
-  FolderOpenOutlined,
-  FileTextOutlined,
-  ExportOutlined,
-  EditOutlined,
-  DeleteOutlined,
-} from '@ant-design/icons';
+import { Tree, Input, Button, Empty, Tag, Typography, Dropdown, useMessage, useTaskMateModal } from '../../components/ui';
+import type { MenuProps } from 'antd';
+import { SearchOutlined, InboxOutlined, PlusOutlined, ThunderboltOutlined, ToolOutlined, BugOutlined, FolderOutlined, FolderOpenOutlined, FileTextOutlined, ExportOutlined, EditOutlined, DeleteOutlined } from '../../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import {
@@ -73,6 +61,8 @@ function TaskLeafTitle({ task }: { task: Task }) {
 }
 
 export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorerProps) {
+  const { modal, contextHolder } = useTaskMateModal();
+  const message = useMessage();
   const [searchQuery, setSearchQuery] = useState('');
   const [crModalOpen, setCrModalOpen] = useState(false);
   const [editingCR, setEditingCR] = useState<ChangeRequest | null>(null);
@@ -133,7 +123,7 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
       danger: true,
       label: 'Xóa',
       onClick: () => {
-        Modal.confirm({
+        modal.confirm({
           title: `Xóa Change Request '${cr.code || cr.name}'?`,
           content: 'Toàn bộ tác vụ con liên quan sẽ bị xóa vĩnh viễn.',
           okText: 'Xóa vĩnh viễn',
@@ -233,6 +223,7 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {contextHolder}
       {/* Header strip */}
       <div
         style={{

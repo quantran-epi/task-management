@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Select, Input, Tree, Button, Tooltip, Tag, Spin, Alert, Empty } from 'antd';
+import { Select, Input, Tree, Button, Tooltip, Tag, Spin, Alert, Empty, EmptyImageSimple, IconButton } from '../../components/ui';
 import type { DataNode } from 'antd/es/tree';
 import FolderOutlined from '@ant-design/icons/FolderOutlined';
 import FolderOpenOutlined from '@ant-design/icons/FolderOpenOutlined';
@@ -22,7 +22,8 @@ import type { SshConfig } from '../../types/ssh';
 import type { RemoteGitBranch, RemoteGitTreeNode } from '../../types/gitRemote';
 import { compactRemoteTree, keyOfPathFor, type CompactedNode } from '../../utils/remoteTreeCompact';
 import { useLayoutStore } from '../store/layoutStore';
-import { executeAction } from '../actions/actionRegistry';
+import { executeAction, type ActionNotify } from '../actions/actionRegistry';
+import { useMessage } from '../../components/ui';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 
 export interface RemoteGitExplorerProps {
@@ -228,6 +229,8 @@ function compactedNodeToDataNode(node: CompactedNode): CustomTreeNodeData {
 }
 
 export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
+  const message = useMessage();
+  const notify: ActionNotify = (kind, text) => message[kind](text);
   const openTab = useLayoutStore((s) => s.openTab);
   const activeRemoteConfigId = useLayoutStore((s) => s.activeRemoteConfigId);
   const activeRemoteRepoPath = useLayoutStore((s) => s.activeRemoteRepoPath);
@@ -831,11 +834,11 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
             />
           </Tooltip>
           <Tooltip title="Find in Remote Files">
-            <Button
+            <IconButton
               size="small"
               icon={<SearchOutlined />}
               aria-label="Find in Remote Files"
-              onClick={() => executeAction('find.inPath')}
+              onClick={() => executeAction('find.inPath', notify)}
               disabled={!selectedConfig || !repoPath.trim() || !selectedBranch}
               data-testid="open-find-btn"
             />
@@ -954,7 +957,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
           ) : !loadingTree ? (
             <div style={{ padding: 20 }}>
               <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                image={EmptyImageSimple}
                 description={
                   !selectedConfig
                     ? 'No SSH host selected'

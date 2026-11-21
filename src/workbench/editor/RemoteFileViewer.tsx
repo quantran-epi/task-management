@@ -1,16 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Tag, Button, Alert, Spin, Tooltip, message, theme } from 'antd';
-import {
-  FileTextOutlined,
-  BranchesOutlined,
-  CopyOutlined,
-  CheckOutlined,
-  WarningOutlined,
-  ReloadOutlined,
-  LockOutlined,
-  ApartmentOutlined,
-  FolderViewOutlined,
-} from '@ant-design/icons';
+import { Tag, Button, Alert, Spin, Tooltip, useAntdToken, useMessage } from '../../components/ui';
+import { FileTextOutlined, BranchesOutlined, CopyOutlined, CheckOutlined, WarningOutlined, ReloadOutlined, LockOutlined, ApartmentOutlined, FolderViewOutlined } from '../../components/ui/icon';
 import type { SshConfig } from '../../types/ssh';
 import { getRemoteFileContent } from '../../services/gitRemoteTreeService';
 import { getSshSecret } from '../../services/sshService';
@@ -52,7 +42,8 @@ export function RemoteFileViewer({
   initialLine,
   db,
 }: RemoteFileViewerProps) {
-  const { token } = theme.useToken();
+  const message = useMessage();
+  const { token } = useAntdToken();
   const { registerActiveItem } = useAIChat();
   const isDark = token.colorBgBase === '#141414' || token.colorTextBase?.includes('255');
 

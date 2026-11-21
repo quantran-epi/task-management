@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Input, Tooltip } from 'antd';
+import { Tooltip, InputSearch } from '../../components/ui';
 import { useLayoutStore } from '../store/layoutStore';
 import { UTILITY_TOOLS } from './utilityTools';
 
@@ -22,7 +22,7 @@ export function ToolExplorerPanel() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       <div style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box', padding: 10, flexShrink: 0 }}>
-        <Input.Search
+        <InputSearch
           allowClear
           placeholder="Tìm công cụ..."
           value={query}

@@ -1,17 +1,7 @@
 import { useEffect, useRef } from 'react';
-import {
-  CloseOutlined,
-  InboxOutlined,
-  PushpinOutlined,
-  PushpinFilled,
-  DownOutlined,
-  ReloadOutlined,
-  FundProjectionScreenOutlined,
-  FileTextOutlined,
-  UserOutlined,
-  TeamOutlined,
-} from '@ant-design/icons';
-import { Dropdown, Tooltip, type MenuProps } from 'antd';
+import { CloseOutlined, InboxOutlined, PushpinOutlined, PushpinFilled, DownOutlined, ReloadOutlined, FundProjectionScreenOutlined, FileTextOutlined, UserOutlined, TeamOutlined } from '../components/ui/icon';
+import { Dropdown, Tooltip } from '../components/ui';
+import type { MenuProps } from 'antd';
 import {
   DndContext,
   closestCenter,
@@ -41,7 +31,7 @@ import {
   JetBrainsRemoteGitIcon,
   JetBrainsProfilesIcon,
 } from '../components/icons/JetBrainsIcons';
-import { SettingOutlined } from '@ant-design/icons';
+import { SettingOutlined } from '../components/ui/icon';
 import { TasksView } from '../views/TasksView';
 import { NotesView } from '../views/NotesView';
 import { PlannerView } from '../views/PlannerView';

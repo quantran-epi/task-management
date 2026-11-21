@@ -1,39 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import {
-  Input,
-  Button,
-  Dropdown,
-  Modal,
-  Tooltip,
-  Typography,
-  Empty,
-  Select,
-  message,
-  type MenuProps,
-} from 'antd';
-import {
-  FolderOutlined,
-  FolderOpenOutlined,
-  PlusOutlined,
-  FileTextOutlined,
-  DeleteOutlined,
-  MoreOutlined,
-  EditOutlined,
-  FolderAddOutlined,
-  CaretRightOutlined,
-  CaretDownOutlined,
-  SearchOutlined,
-  UndoOutlined,
-  CheckSquareOutlined,
-  ProjectOutlined,
-  FlagOutlined,
-  CopyOutlined,
-  SwapOutlined,
-  LinkOutlined,
-  CodeOutlined,
-  PushpinFilled,
-  PushpinOutlined,
-} from '@ant-design/icons';
+import { Input, Button, Dropdown, Tooltip, Typography, Empty, Select, useMessage, useTaskMateModal, EmptyImageSimple, Modal } from '../../components/ui';
+import type { MenuProps } from 'antd';
+import { FolderOutlined, FolderOpenOutlined, PlusOutlined, FileTextOutlined, DeleteOutlined, MoreOutlined, EditOutlined, FolderAddOutlined, CaretRightOutlined, CaretDownOutlined, SearchOutlined, UndoOutlined, CheckSquareOutlined, ProjectOutlined, FlagOutlined, CopyOutlined, SwapOutlined, LinkOutlined, CodeOutlined, PushpinFilled, PushpinOutlined } from '../../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Note, NoteEntityType } from '../../types/models';
@@ -71,6 +39,8 @@ const DEFAULT_NEW_DIAGRAM_TEMPLATE = `flowchart TD
   Process --> Finish([Hoàn thành])`;
 
 export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
+  const { modal, contextHolder } = useTaskMateModal();
+  const message = useMessage();
   const openTab = useLayoutStore((s) => s.openTab);
   const activeTabId = useLayoutStore((s) => s.activeTabId);
   const openTabs = useLayoutStore((s) => s.openTabs);
@@ -297,7 +267,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
 
   const handleDeleteItem = (item: Note) => {
     const isFolder = item.type === 'folder';
-    Modal.confirm({
+    modal.confirm({
       title: `Xoá ${isFolder ? 'thư mục' : 'biểu đồ'} "${item.title || 'không tên'}"?`,
       content: isFolder
         ? 'Các biểu đồ bên trong thư mục này sẽ được chuyển vào thùng rác.'
@@ -326,7 +296,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
   };
 
   const handlePermanentDeleteItem = (item: Note) => {
-    Modal.confirm({
+    modal.confirm({
       title: `Xoá vĩnh viễn "${item.title || 'không tên'}"?`,
       content: 'Hành động này không thể hoàn tác.',
       okText: 'Xoá vĩnh viễn',
@@ -345,7 +315,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
 
   const handleEmptyTrash = () => {
     if (trashNotes.length === 0) return;
-    Modal.confirm({
+    modal.confirm({
       title: `Dọn sạch toàn bộ thùng rác (${trashNotes.length} mục)?`,
       content: 'Toàn bộ biểu đồ và thư mục trong thùng rác sẽ bị xoá vĩnh viễn.',
       okText: 'Dọn sạch',
@@ -950,6 +920,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
         padding: '8px 6px',
       }}
     >
+      {contextHolder}
       {/* 1. Search Bar + Create Button */}
       <div style={{ marginBottom: 8, padding: '0 4px', display: 'flex', alignItems: 'center', gap: 6 }}>
         <Input
@@ -990,7 +961,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
               searchResults.map((d) => renderDiagramItem(d, 0))
             ) : (
               <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                image={EmptyImageSimple}
                 description="Không tìm thấy biểu đồ phù hợp"
                 style={{ marginTop: 24 }}
               />

@@ -1,6 +1,9 @@
 import { useLayoutStore } from '../store/layoutStore';
 import { useSyncExternalStore } from 'react';
-import { message } from 'antd';
+
+/** View-owned notification channel — this module is not React and owns no AntD singleton (D-06). */
+export type ActionNotify = (kind: 'warning' | 'error' | 'info', text: string) => void;
+const noopNotify: ActionNotify = () => {};
 
 export interface ActionDefinition {
   id: string;
@@ -8,7 +11,7 @@ export interface ActionDefinition {
   category: string;
   shortcut?: string;
   icon?: string;
-  perform: () => void;
+  perform: (notify: ActionNotify) => void;
 }
 
 const actionsRegistry = new Map<string, ActionDefinition>();
@@ -43,23 +46,23 @@ export function getAllActions(): ActionDefinition[] {
   return actionSnapshot;
 }
 
-export function executeAction(id: string): void {
+export function executeAction(id: string, notify: ActionNotify = noopNotify): void {
   const action = actionsRegistry.get(id);
   if (!action) {
-    message.warning('Action không còn khả dụng.');
+    notify('warning', 'Action không còn khả dụng.');
     return;
   }
   try {
-    action.perform();
+    action.perform(notify);
   } catch (error) {
-    message.error(error instanceof Error ? error.message : 'Không thể thực hiện action.');
+    notify('error', error instanceof Error ? error.message : 'Không thể thực hiện action.');
   }
 }
 
-function dispatchHandledAction(eventName: string, unavailableMessage: string): void {
+function dispatchHandledAction(eventName: string, unavailableMessage: string, notify: ActionNotify): void {
   // Mounted views acknowledge handled commands with preventDefault; no listener means unavailable.
   const unhandled = window.dispatchEvent(new CustomEvent(eventName, { cancelable: true }));
-  if (unhandled) message.info(unavailableMessage);
+  if (unhandled) notify('info', unavailableMessage);
 }
 
 export function clearCustomActions(): void {
@@ -177,16 +180,16 @@ export function initStandardActions(): void {
       title: 'Search Everywhere',
       category: 'Navigate',
       shortcut: 'Double Shift',
-      perform: () => {
-        dispatchHandledAction('taskmate:open-search-everywhere', 'Search Everywhere chưa sẵn sàng.');
+      perform: (notify) => {
+        dispatchHandledAction('taskmate:open-search-everywhere', 'Search Everywhere chưa sẵn sàng.', notify);
       },
     },
     {
       id: 'find.inPath',
       title: 'Find in Remote Files',
       category: 'Navigate',
-      perform: () => {
-        dispatchHandledAction('taskmate:open-find-in-remote-files', 'Find in Remote Files chưa sẵn sàng.');
+      perform: (notify) => {
+        dispatchHandledAction('taskmate:open-find-in-remote-files', 'Find in Remote Files chưa sẵn sàng.', notify);
       },
     },
     {
@@ -211,8 +214,8 @@ export function initStandardActions(): void {
       title: 'Toggle Timer',
       category: 'Timer',
       shortcut: 'Alt+T',
-      perform: () => {
-        dispatchHandledAction('taskmate:toggle-timer', 'Mở Tasks và chọn một tác vụ để bật/tắt bộ đếm giờ.');
+      perform: (notify) => {
+        dispatchHandledAction('taskmate:toggle-timer', 'Mở Tasks và chọn một tác vụ để bật/tắt bộ đếm giờ.', notify);
       },
     },
     {
@@ -231,10 +234,10 @@ export function initStandardActions(): void {
       title: 'Reload Active Tab',
       category: 'Tab',
       shortcut: 'Alt+R',
-      perform: () => {
+      perform: (notify) => {
         const state = useLayoutStore.getState();
         if (!state.openTabs.some((tab) => tab.id === state.activeTabId)) {
-          message.info('Không có tab hiện tại để tải lại.');
+          notify('info', 'Không có tab hiện tại để tải lại.');
           return;
         }
         state.reloadTab();
@@ -244,10 +247,10 @@ export function initStandardActions(): void {
       id: 'tab.reload-all',
       title: 'Reload All Tabs',
       category: 'Tab',
-      perform: () => {
+      perform: (notify) => {
         const state = useLayoutStore.getState();
         if (!state.openTabs.length) {
-          message.info('Không có tab nào để tải lại.');
+          notify('info', 'Không có tab nào để tải lại.');
           return;
         }
         state.reloadAllTabs();

@@ -1,16 +1,7 @@
 import { useState, useMemo } from 'react';
-import { Tree, Input, Empty, Typography, Button, Dropdown, Modal, message, type MenuProps } from 'antd';
-import {
-  SearchOutlined,
-  InboxOutlined,
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  ExportOutlined,
-  RocketOutlined,
-  CloudServerOutlined,
-  CodeOutlined,
-} from '@ant-design/icons';
+import { Tree, Input, Empty, Typography, Button, Dropdown, useMessage, useTaskMateModal } from '../../components/ui';
+import type { MenuProps } from 'antd';
+import { SearchOutlined, InboxOutlined, PlusOutlined, EditOutlined, DeleteOutlined, ExportOutlined, RocketOutlined, CloudServerOutlined, CodeOutlined } from '../../components/ui/icon';
 import {
   getSystemTypeIcon,
   useSystemTypeLookup,
@@ -38,6 +29,8 @@ export interface SystemsExplorerProps {
 }
 
 export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
+  const { modal, contextHolder } = useTaskMateModal();
+  const message = useMessage();
   const [searchQuery, setSearchQuery] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSystem, setEditingSystem] = useState<System | null>(null);
@@ -73,7 +66,7 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
   };
 
   const handleDelete = (system: System) => {
-    Modal.confirm({
+    modal.confirm({
       title: `Xóa hệ thống "${system.name}"?`,
       content: `Xóa hệ thống '${system.name}'? Toàn bộ liên kết SSH và cấu hình repo của hệ thống này sẽ bị hủy. Các subsystem con cần được gán lại hệ thống cha.`,
       okText: 'Xóa',
@@ -277,6 +270,7 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {contextHolder}
       {/* Header filter & quick action */}
       <div
         style={{

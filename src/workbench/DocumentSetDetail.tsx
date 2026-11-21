@@ -1,34 +1,5 @@
-import {
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  CloudOutlined,
-  DatabaseOutlined,
-  DeleteOutlined,
-  EditOutlined,
-  EyeOutlined,
-  LoadingOutlined,
-  PlayCircleOutlined,
-  ReloadOutlined,
-  WarningOutlined,
-} from '@ant-design/icons';
-import {
-  Alert,
-  Button,
-  Card,
-  Descriptions,
-  Empty,
-  Modal,
-  Progress,
-  Skeleton,
-  Space,
-  Statistic,
-  Table,
-  Tag,
-  Tooltip,
-  Typography,
-  message,
-  theme,
-} from 'antd';
+import { CheckCircleOutlined, CloseCircleOutlined, CloudOutlined, DatabaseOutlined, DeleteOutlined, EditOutlined, EyeOutlined, LoadingOutlined, PlayCircleOutlined, ReloadOutlined, WarningOutlined } from '../components/ui/icon';
+import { Alert, Button, Card, Descriptions, Empty, Modal, Progress, Skeleton, Space, Statistic, Table, Tag, Tooltip, Typography, useAntdToken, useMessage, DescriptionsItem } from '../components/ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -134,7 +105,8 @@ export function DocumentSetDetail({
   configured: configuredOverride,
   graphStatusOverride,
 }: DocumentSetDetailProps) {
-  const { token } = theme.useToken();
+  const message = useMessage();
+  const { token } = useAntdToken();
   const knowledgeConfig = useOptionalKnowledgeConfig();
   const configured = configuredOverride ?? Boolean(knowledgeConfig.enabled && knowledgeConfig.baseUrl);
   const client = useMemo<KnowledgeClient | undefined>(() => {
@@ -468,7 +440,7 @@ export function DocumentSetDetail({
     setRebuilding(true);
     setConnectivityUncertain(false);
     try {
-      message.loading({ content: 'Đang bắt đầu xử lý các phần đã chọn...', key: 'retry-chunks' });
+      message.loading({ content: 'Đang bắt đầu xử lý các phần đã chọn...', key: 'retry-chunks', duration: 0 });
       const accepted = await client.retryGraphChunks(setId, optionsOrChunkIds);
       message.success({ content: 'Đã nhận yêu cầu xử lý trích xuất.', key: 'retry-chunks' });
       await handleFetchChunks();
@@ -744,7 +716,7 @@ export function DocumentSetDetail({
                 )}
 
                 <Descriptions size="small" column={1}>
-                  <Descriptions.Item label="Snapshot đồ thị">
+                  <DescriptionsItem label="Snapshot đồ thị">
                     {graphStatus?.activeGraphSnapshotId ? (
                       <Text code copyable={{ text: graphStatus.activeGraphSnapshotId }}>
                         {graphStatus.activeGraphSnapshotId.slice(0, 8)}...
@@ -752,14 +724,14 @@ export function DocumentSetDetail({
                     ) : (
                       <Text type="secondary">Chưa có</Text>
                     )}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Phiên bản Ontology">
+                  </DescriptionsItem>
+                  <DescriptionsItem label="Phiên bản Ontology">
                     <Text code>{graphStatus?.ontologyVersion ?? '2026.10.1'}</Text>
-                  </Descriptions.Item>
+                  </DescriptionsItem>
                   {graphStatus?.activatedAt && (
-                    <Descriptions.Item label="Kích hoạt lúc">
+                    <DescriptionsItem label="Kích hoạt lúc">
                       <Text>{new Date(graphStatus.activatedAt).toLocaleString()}</Text>
-                    </Descriptions.Item>
+                    </DescriptionsItem>
                   )}
                 </Descriptions>
 

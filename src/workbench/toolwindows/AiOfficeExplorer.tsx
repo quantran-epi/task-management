@@ -1,11 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, Input, Button, Typography, Tooltip, Popconfirm } from 'antd';
-import {
-  SearchOutlined,
-  PlusOutlined,
-  TeamOutlined,
-  DeleteOutlined,
-} from '@ant-design/icons';
+import { Alert, Input, Typography, Tooltip, Popconfirm, IconButton } from '../../components/ui';
+import { SearchOutlined, PlusOutlined, TeamOutlined, DeleteOutlined } from '../../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { listEmployees, listLeads } from '../../db/repositories/aiOfficeRepo';
@@ -198,7 +193,7 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
           style={{ flex: 1, fontSize: 12 }}
         />
         <Tooltip title="Tạo nhóm mới">
-          <Button
+          <IconButton
             size="small"
             type="text"
             icon={<PlusOutlined />}
@@ -341,7 +336,7 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
                     okButtonProps={{ danger: true }}
                     onConfirm={() => handleDeleteTeam(team)}
                   >
-                    <Button
+                    <IconButton
                       size="small"
                       type="text"
                       danger

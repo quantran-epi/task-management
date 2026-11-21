@@ -1,5 +1,5 @@
-import { Tooltip } from 'antd';
-import { MinusOutlined } from '@ant-design/icons';
+import { Tooltip } from '../../components/ui';
+import { MinusOutlined } from '../../components/ui/icon';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { useLayoutStore } from '../store/layoutStore';
 import {

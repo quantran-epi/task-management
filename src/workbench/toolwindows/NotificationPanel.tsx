@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Tabs, List, Empty, message } from 'antd';
-import { CheckCircleOutlined } from '@ant-design/icons';
+import { Tabs, List, Empty, useMessage } from '../../components/ui';
+import { CheckCircleOutlined } from '../../components/ui/icon';
 import type { AlertNotificationItem, NotificationTabKey } from '../../types/notifications';
 import { NotificationItemRow } from '../../components/notifications/NotificationItemRow';
 import { useNotifications } from '../../hooks/useNotifications';
@@ -14,6 +14,7 @@ export interface NotificationPanelProps {
 }
 
 export const NotificationPanel: React.FC<NotificationPanelProps> = ({ db = defaultDb }) => {
+  const message = useMessage();
   const notifications = useNotifications(db);
   const [activeTab, setActiveTab] = useState<NotificationTabKey>('all');
   const openTab = useLayoutStore((s: LayoutActions) => s.openTab);

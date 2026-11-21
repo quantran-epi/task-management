@@ -1,18 +1,15 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import {
-  SearchOutlined,
-  ThunderboltOutlined,
-  CloseOutlined,
-} from '@ant-design/icons';
+import { SearchOutlined, ThunderboltOutlined, CloseOutlined } from '../../components/ui/icon';
 import {
   JetBrainsTasksIcon,
   JetBrainsProjectIcon,
   JetBrainsDocsIcon,
 } from '../../components/icons/JetBrainsIcons';
-import { ApartmentOutlined } from '@ant-design/icons';
+import { ApartmentOutlined } from '../../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import { useActionRegistry, executeAction } from '../actions/actionRegistry';
+import { useActionRegistry, executeAction, type ActionNotify } from '../actions/actionRegistry';
+import { useMessage } from '../../components/ui';
 import { useLayoutStore } from '../store/layoutStore';
 import { VirtualizedList } from '../virtual/VirtualizedList';
 
@@ -41,6 +38,8 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
 
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const message = useMessage();
+  const notify: ActionNotify = (kind, text) => message[kind](text);
   const openTab = useLayoutStore((s) => s.openTab);
   const allActions = useActionRegistry();
 
@@ -104,7 +103,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
             shortcut: act.shortcut,
             onSelect: () => {
               onClose();
-              executeAction(act.id);
+              executeAction(act.id, notify);
             },
           });
         }

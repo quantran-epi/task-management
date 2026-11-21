@@ -123,6 +123,7 @@ export {
 } from './image';
 export {
   Input,
+  InputSearch,
   controlStyle,
   controlWidthStyle,
   type InputProps,
@@ -282,6 +283,7 @@ export {
 } from './tag';
 export {
   Textarea,
+  TextArea,
   DEFAULT_TEXTAREA_MIN_ROWS,
   type TextareaProps,
 } from './textarea';

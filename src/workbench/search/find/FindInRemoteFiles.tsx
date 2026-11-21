@@ -1,13 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SshConfig } from '../../../types/ssh';
-import { Button, Checkbox, Input, Modal, Tabs, Tooltip, Tag } from 'antd';
-import {
-  CloseOutlined,
-  FileOutlined,
-  FilterOutlined,
-  PushpinOutlined,
-  StopOutlined,
-} from '@ant-design/icons';
+import { Button, Checkbox, Input, Modal, Tabs, Tooltip, Tag, IconButton } from '../../../components/ui';
+import { CloseOutlined, FileOutlined, FilterOutlined, PushpinOutlined, StopOutlined } from '../../../components/ui/icon';
 import { grepRemoteRef } from '../../../services/gitRemoteService';
 import { confineRepoPath, getRemoteFileContent, searchRemoteTree } from '../../../services/gitRemoteTreeService';
 import { cancelRemoteCall, getSshConfigById, getSshSecret } from '../../../services/sshService';
@@ -336,7 +330,7 @@ export function FindInRemoteFiles(props: FindInRemoteFilesProps) {
           </span>
           {state.status === 'searching' ? (
             <Tooltip title={FIND_CONTROL_LABELS.stop}>
-              <Button
+              <IconButton
                 type="text"
                 aria-label={FIND_CONTROL_LABELS.stop}
                 icon={<StopOutlined />}
@@ -345,7 +339,7 @@ export function FindInRemoteFiles(props: FindInRemoteFilesProps) {
             </Tooltip>
           ) : null}
           <Tooltip title={FIND_CONTROL_LABELS.fileMask}>
-            <Button
+            <IconButton
               type="text"
               aria-label={FIND_CONTROL_LABELS.fileMask}
               aria-controls="find-file-mask"
@@ -354,7 +348,7 @@ export function FindInRemoteFiles(props: FindInRemoteFilesProps) {
             />
           </Tooltip>
           <Tooltip title={pinned ? FIND_CONTROL_LABELS.unpin : FIND_CONTROL_LABELS.pin}>
-            <Button
+            <IconButton
               type="text"
               aria-label={pinned ? FIND_CONTROL_LABELS.unpin : FIND_CONTROL_LABELS.pin}
               aria-pressed={pinned}
@@ -363,7 +357,7 @@ export function FindInRemoteFiles(props: FindInRemoteFilesProps) {
             />
           </Tooltip>
           <Tooltip title={FIND_CONTROL_LABELS.close}>
-            <Button
+            <IconButton
               type="text"
               aria-label={FIND_CONTROL_LABELS.close}
               icon={<CloseOutlined />}

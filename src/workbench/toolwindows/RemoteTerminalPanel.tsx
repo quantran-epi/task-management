@@ -1,13 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { Button, Tooltip, message, Tag } from 'antd';
-import {
-  ApartmentOutlined,
-  ReloadOutlined,
-  ClearOutlined,
-  CopyOutlined,
-} from '@ant-design/icons';
+import { Button, Tooltip, Tag, useMessage } from '../../components/ui';
+import { ApartmentOutlined, ReloadOutlined, ClearOutlined, CopyOutlined } from '../../components/ui/icon';
 import '@xterm/xterm/css/xterm.css';
 import type { SshConfig } from '../../types/ssh';
 import {
@@ -38,6 +33,7 @@ export function RemoteTerminalPanel({
   isActive = true,
   onSessionReady,
 }: RemoteTerminalPanelProps) {
+  const message = useMessage();
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);

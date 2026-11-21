@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Empty, Input, List, Space, Tag, Typography, message } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { Button, Empty, List, Space, Tag, Typography, useMessage, InputSearch, EmptyImageSimple, ListItem, ListItemMeta } from '../components/ui';
+import { PlusOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import { createDocumentSet } from '../db/repositories/documentSetRepo';
@@ -20,6 +20,7 @@ export interface DocSetLibraryProps {
 
 /** One tab for all document sets: left list, right detail. No browsing modal. */
 export function DocSetLibrary({ db = defaultDb, selectedSetId, embedded = false }: DocSetLibraryProps) {
+  const message = useMessage();
   const openTab = useLayoutStore((s) => s.openTab);
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState('');
@@ -102,7 +103,7 @@ export function DocSetLibrary({ db = defaultDb, selectedSetId, embedded = false 
           <Button icon={<PlusOutlined />} onClick={() => setCreating(true)} block>
             Tạo bộ tài liệu
           </Button>
-          <Input.Search
+          <InputSearch
             placeholder="Tìm bộ tài liệu"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -113,11 +114,11 @@ export function DocSetLibrary({ db = defaultDb, selectedSetId, embedded = false 
           <List
             size="small"
             dataSource={filteredSets}
-            locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có bộ tài liệu" /> }}
+            locale={{ emptyText: <Empty image={EmptyImageSimple} description="Chưa có bộ tài liệu" /> }}
             renderItem={(set) => {
               const active = set.id === selectedId && !creating;
               return (
-                <List.Item
+                <ListItem
                   key={set.id}
                   role="button"
                   aria-label={`Mở bộ tài liệu ${set.name}`}
@@ -128,7 +129,7 @@ export function DocSetLibrary({ db = defaultDb, selectedSetId, embedded = false 
                     background: active ? 'var(--ant-color-primary-bg, #e6f4ff)' : undefined,
                   }}
                 >
-                  <List.Item.Meta
+                  <ListItemMeta
                     title={<Text strong={active}>{set.name}</Text>}
                     description={
                       <Space size={4} wrap>
@@ -139,7 +140,7 @@ export function DocSetLibrary({ db = defaultDb, selectedSetId, embedded = false 
                       </Space>
                     }
                   />
-                </List.Item>
+                </ListItem>
               );
             }}
           />

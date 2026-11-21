@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { Modal, message } from 'antd';
+import { useMessage, useTaskMateModal } from '../../components/ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Note } from '../../types/models';
@@ -33,6 +33,8 @@ const DEFAULT_NEW_DIAGRAM_TEMPLATE = `flowchart TD
   Process --> Finish([Hoàn thành])`;
 
 export function DocsExplorer({ db = defaultDb }: DocsExplorerProps) {
+  const { modal, contextHolder } = useTaskMateModal();
+  const message = useMessage();
   const openTab = useLayoutStore((s) => s.openTab);
   const activeTabId = useLayoutStore((s) => s.activeTabId);
   const openTabs = useLayoutStore((s) => s.openTabs);
@@ -219,7 +221,7 @@ export function DocsExplorer({ db = defaultDb }: DocsExplorerProps) {
         (n) => n.type !== 'folder' && folderIdsToDelete.includes(n.parentId || '') && !n.deletedAt
       );
 
-      Modal.confirm({
+      modal.confirm({
         title: `Xóa thư mục "${folder.title || 'Không tên'}"?`,
         content:
           affectedDocs.length > 0
@@ -263,7 +265,7 @@ export function DocsExplorer({ db = defaultDb }: DocsExplorerProps) {
       );
       const totalItems = folderIdsToDelete.length + affectedDocs.length;
 
-      Modal.confirm({
+      modal.confirm({
         title: `Xóa vĩnh viễn toàn bộ thư mục "${folder.title || 'Không tên'}"?`,
         content: `Hành động này sẽ xóa vĩnh viễn thư mục và ${affectedDocs.length} tài liệu bên trong.`,
         okText: `Xóa vĩnh viễn (${totalItems} mục)`,
@@ -290,7 +292,7 @@ export function DocsExplorer({ db = defaultDb }: DocsExplorerProps) {
     const trashItems = (allNotes || []).filter((n) => Boolean(n.deletedAt));
     if (trashItems.length === 0) return;
 
-    Modal.confirm({
+    modal.confirm({
       title: 'Dọn sạch thùng rác?',
       content: `Sẽ xóa vĩnh viễn ${trashItems.length} mục trong thùng rác. Hành động này không thể hoàn tác!`,
       okText: `Xóa vĩnh viễn (${trashItems.length})`,
@@ -323,7 +325,7 @@ export function DocsExplorer({ db = defaultDb }: DocsExplorerProps) {
 
       if (targetNotes.length === 0) return;
 
-      Modal.confirm({
+      modal.confirm({
         title: `Xóa tất cả trong "${title}"?`,
         content: `Chuyển toàn bộ ${targetNotes.length} tài liệu vào thùng rác?`,
         okText: 'Chuyển vào thùng rác',
@@ -405,6 +407,7 @@ export function DocsExplorer({ db = defaultDb }: DocsExplorerProps) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {contextHolder}
       <div data-testid="docs-set-workspace" style={{ padding: 8, flexShrink: 0 }}>
         <DocsLibraryActions
           db={db}

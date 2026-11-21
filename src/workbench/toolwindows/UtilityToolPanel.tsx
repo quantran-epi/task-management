@@ -1,17 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Checkbox, Input, Modal, Radio, Segmented, Select, message } from 'antd';
-import {
-  CodeOutlined,
-  CopyOutlined,
-  DeleteOutlined,
-  DiffOutlined,
-  FileTextOutlined,
-  FormatPainterOutlined,
-  MinusOutlined,
-  SaveOutlined,
-  SwapOutlined,
-  RobotOutlined,
-} from '@ant-design/icons';
+import { Checkbox, Input, Modal, Radio, Segmented, Select, useMessage, RadioGroup } from '../../components/ui';
+import { CodeOutlined, CopyOutlined, DeleteOutlined, DiffOutlined, FileTextOutlined, FormatPainterOutlined, MinusOutlined, SaveOutlined, SwapOutlined, RobotOutlined } from '../../components/ui/icon';
 import type { EditorViewType } from '../store/layoutStore';
 import { renderSafeMarkdown } from '../../utils/markdown';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -102,12 +91,12 @@ const footerStyle: React.CSSProperties = {
   fontSize: 'var(--font-size-xs, 11px)',
 };
 
-async function copyToClipboard(text: string) {
+async function copyToClipboard(text: string, notify: (kind: 'success' | 'error', text: string) => void) {
   try {
     await navigator.clipboard.writeText(text);
-    message.success('Đã copy');
+    notify('success', 'Đã copy');
   } catch {
-    message.error('Không copy được');
+    notify('error', 'Không copy được');
   }
 }
 
@@ -332,6 +321,7 @@ type SaveAsModalProps = {
 };
 
 function SaveAsModal({ open, defaultName, formats, db, onClose }: SaveAsModalProps) {
+  const message = useMessage();
   const [kind, setKind] = useState<SaveKind>('download');
   const [extension, setExtension] = useState(formats[0]?.extension ?? '');
   const [name, setDefaultName] = useState(defaultName);
@@ -397,10 +387,10 @@ function SaveAsModal({ open, defaultName, formats, db, onClose }: SaveAsModalPro
       onCancel={onClose}
       destroyOnClose
     >
-      <Radio.Group value={kind} onChange={(e) => setKind(e.target.value)} style={{ marginBottom: 16 }}>
+      <RadioGroup value={kind} onChange={(e) => setKind(e.target.value)} style={{ marginBottom: 16 }}>
         <Radio value="download">Tải về máy</Radio>
         <Radio value="docs">Lưu vào Docs</Radio>
-      </Radio.Group>
+      </RadioGroup>
       <div style={{ display: 'flex', gap: 8 }}>
         <Input aria-label="Tên file/doc" value={name} onChange={(e) => setDefaultName(e.target.value)} placeholder="Tên file/doc" />
         <Select aria-label="Định dạng" value={extension} onChange={setExtension} style={{ width: 110 }} options={formats.map((f) => ({ value: f.extension, label: `.${f.extension}` }))} />
@@ -475,6 +465,8 @@ function FoldingCodeView({ text, kind, rightRef, onRightScroll, label, error }: 
 }
 
 function JsonFormatter({ db }: { db: TaskPlannerDatabase }) {
+  const message = useMessage();
+  const notify = (kind: 'success' | 'error', text: string) => message[kind](text);
   const [saveOpen, setSaveOpen] = useState(false);
   const [content, patchContent, clearContent] = useUtilityContent('json_formatter');
   const { input, output, error, formatted, indent } = content;
@@ -504,8 +496,8 @@ function JsonFormatter({ db }: { db: TaskPlannerDatabase }) {
       <div style={toolbarStyle}>
         <button type="button" className="utility-tool-btn primary" style={toolPrimaryBtnStyle} title="Format JSON" onClick={() => run(false)}><FormatPainterOutlined /> Format</button>
         <button type="button" className="utility-tool-btn" style={toolBtnStyle} title="Minify JSON" onClick={() => run(true)}><MinusOutlined /> Minify</button>
-        <button type="button" className="utility-tool-btn" style={toolBtnStyle} title="Copy input" onClick={() => copyToClipboard(input)}><CopyOutlined /></button>
-        <button type="button" className="utility-tool-btn" style={toolBtnStyle} title="Copy output" onClick={() => copyToClipboard(output)}><CopyOutlined /></button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} title="Copy input" onClick={() => copyToClipboard(input, notify)}><CopyOutlined /></button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} title="Copy output" onClick={() => copyToClipboard(output, notify)}><CopyOutlined /></button>
         <button type="button" className="utility-tool-btn" style={toolBtnStyle} aria-label="Clear" title="Clear" onClick={clearContent}><DeleteOutlined /></button>
         <select
           aria-label="Indent"
@@ -557,6 +549,8 @@ function JsonFormatter({ db }: { db: TaskPlannerDatabase }) {
 }
 
 function XmlFormatter({ db }: { db: TaskPlannerDatabase }) {
+  const message = useMessage();
+  const notify = (kind: 'success' | 'error', text: string) => message[kind](text);
   const [saveOpen, setSaveOpen] = useState(false);
   const [content, patchContent, clearContent] = useUtilityContent('xml_formatter');
   const { input, output, error, formatted, indent } = content;
@@ -585,8 +579,8 @@ function XmlFormatter({ db }: { db: TaskPlannerDatabase }) {
       <div style={toolbarStyle}>
         <button type="button" className="utility-tool-btn primary" style={toolPrimaryBtnStyle} title="Format XML" onClick={() => run(false)}><FormatPainterOutlined /> Format</button>
         <button type="button" className="utility-tool-btn" style={toolBtnStyle} title="Minify XML" onClick={() => run(true)}><MinusOutlined /> Minify</button>
-        <button type="button" className="utility-tool-btn" style={toolBtnStyle} title="Copy input" onClick={() => copyToClipboard(input)}><CopyOutlined /></button>
-        <button type="button" className="utility-tool-btn" style={toolBtnStyle} title="Copy output" onClick={() => copyToClipboard(output)}><CopyOutlined /></button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} title="Copy input" onClick={() => copyToClipboard(input, notify)}><CopyOutlined /></button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} title="Copy output" onClick={() => copyToClipboard(output, notify)}><CopyOutlined /></button>
         <button type="button" className="utility-tool-btn" style={toolBtnStyle} aria-label="Clear" title="Clear" onClick={clearContent}><DeleteOutlined /></button>
         <select
           aria-label="Indent"
@@ -748,6 +742,8 @@ function TextCompare({ db }: { db: TaskPlannerDatabase }) {
 }
 
 function MarkdownViewer({ db }: { db: TaskPlannerDatabase }) {
+  const message = useMessage();
+  const notify = (kind: 'success' | 'error', text: string) => message[kind](text);
   const [saveOpen, setSaveOpen] = useState(false);
   const [content, patchContent, clearContent] = useUtilityContent('markdown_viewer');
   const { source } = content;
@@ -759,7 +755,7 @@ function MarkdownViewer({ db }: { db: TaskPlannerDatabase }) {
   return (
     <div style={panelStyle}>
       <div style={toolbarStyle}>
-        <button type="button" className="utility-tool-btn" style={toolBtnStyle} title="Copy source" onClick={() => copyToClipboard(source)}><CopyOutlined /> Copy</button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} title="Copy source" onClick={() => copyToClipboard(source, notify)}><CopyOutlined /> Copy</button>
         <button type="button" className="utility-tool-btn" style={toolBtnStyle} title="Clear" onClick={clearContent}><DeleteOutlined /> Clear</button>
         <button type="button" className="utility-tool-btn" style={toolBtnStyle} aria-label="Save as" title="Save as" onClick={() => setSaveOpen(true)}><SaveOutlined /> Save as</button>
         <button type="button" className="utility-tool-btn" style={toolBtnStyle} aria-label="AI · Markdown Viewer" title="AI · Markdown Viewer" onClick={() => setAiOpen(true)}><RobotOutlined /> AI</button>

@@ -1,10 +1,5 @@
-import { Tooltip, Typography } from 'antd';
-import {
-  DatabaseOutlined,
-  CloudSyncOutlined,
-  ApiOutlined,
-  CheckCircleFilled,
-} from '@ant-design/icons';
+import { Tooltip, Typography } from '../components/ui';
+import { DatabaseOutlined, CloudSyncOutlined, ApiOutlined, CheckCircleFilled } from '../components/ui/icon';
 import { useTimer } from '../hooks/useTimer';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';

@@ -1,5 +1,5 @@
 import React from 'react';
-import { CodeOutlined, DiffOutlined, FileTextOutlined } from '@ant-design/icons';
+import { CodeOutlined, DiffOutlined, FileTextOutlined } from '../../components/ui/icon';
 import type { EditorViewType } from '../store/layoutStore';
 
 export interface UtilityTool {

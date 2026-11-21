@@ -1,15 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, Input, Button, Tag, Typography, Tooltip, Dropdown, Modal, type MenuProps } from 'antd';
-import {
-  SearchOutlined,
-  PlusOutlined,
-  UserOutlined,
-  CrownOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  BookOutlined,
-  UploadOutlined,
-} from '@ant-design/icons';
+import { Alert, Input, Tag, Typography, Tooltip, Dropdown, useTaskMateModal, IconButton } from '../../components/ui';
+import type { MenuProps } from 'antd';
+import { SearchOutlined, PlusOutlined, UserOutlined, CrownOutlined, EditOutlined, DeleteOutlined, BookOutlined, UploadOutlined } from '../../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import {
@@ -37,6 +29,7 @@ export interface AiStaffExplorerProps {
 }
 
 export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb }) => {
+  const { modal, contextHolder } = useTaskMateModal();
   const [search, setSearch] = useState('');
   /**
    * D-31/D-33: the ONE open/closed source for all three drawers. A second `drawer` flag
@@ -121,7 +114,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
    * there and the alert names what blocks it, so the user knows which roster to edit first.
    */
   const confirmDelete = (name: string, run: () => Promise<AiOfficeDeleteResult>) => {
-    Modal.confirm({
+    modal.confirm({
       title: `Xóa «${name}»?`,
       content: 'Nếu hồ sơ còn được dùng, thao tác sẽ bị chặn và bạn cần gỡ khỏi nhóm trước.',
       okText: 'Xóa',
@@ -167,6 +160,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
         background: 'var(--bg-island, #ffffff)',
       }}
     >
+      {contextHolder}
       {/* Search and Action Bar */}
       <div
         style={{
@@ -187,7 +181,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
           style={{ flex: 1, fontSize: 12 }}
         />
         <Tooltip title="Nhập JSON">
-          <Button
+          <IconButton
             size="small"
             type="text"
             icon={<UploadOutlined />}
@@ -197,7 +191,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
           />
         </Tooltip>
         <Tooltip title="Thêm Lead AI">
-          <Button
+          <IconButton
             size="small"
             type="text"
             icon={<CrownOutlined style={{ color: '#d97706' }} />}
@@ -206,7 +200,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
           />
         </Tooltip>
         <Tooltip title="Thêm Nhân viên AI">
-          <Button
+          <IconButton
             size="small"
             type="text"
             icon={<PlusOutlined />}
@@ -215,7 +209,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
           />
         </Tooltip>
         <Tooltip title="Thêm Kỹ năng">
-          <Button
+          <IconButton
             size="small"
             type="text"
             icon={<BookOutlined style={{ color: 'var(--accent, #5b4fe8)' }} />}

@@ -1,24 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  Alert,
-  Button,
-  Input,
-  Modal,
-  Segmented,
-  Select,
-  Space,
-  Spin,
-  Typography,
-} from 'antd';
-import {
-  CheckOutlined,
-  CloseOutlined,
-  EditOutlined,
-  EyeOutlined,
-  ReloadOutlined,
-  RobotOutlined,
-  SplitCellsOutlined,
-} from '@ant-design/icons';
+import { Alert, Button, Modal, Segmented, Select, Space, Spin, Typography, TextArea, SpaceCompact } from '../../components/ui';
+import { CheckOutlined, CloseOutlined, EditOutlined, EyeOutlined, ReloadOutlined, RobotOutlined, SplitCellsOutlined } from '../../components/ui/icon';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import {
   getNineRouterApiKey,
@@ -31,7 +13,6 @@ import {
 import { renderSafeMarkdown } from '../../utils/markdown';
 
 const { Text } = Typography;
-const { TextArea } = Input;
 
 const MODEL_MAP_KEY = 'utility_tool_ai_models';
 const CACHED_MODELS_KEY = 'ninerouter_cached_models';
@@ -331,7 +312,7 @@ export const UtilityToolAIAssistant: React.FC<UtilityToolAIAssistantProps> = ({
           </Text>
         )}
 
-        <Space.Compact style={{ width: '100%' }}>
+        <SpaceCompact style={{ width: '100%' }}>
           <TextArea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
@@ -342,7 +323,7 @@ export const UtilityToolAIAssistant: React.FC<UtilityToolAIAssistantProps> = ({
           <Button type="primary" onClick={generate} disabled={isStreaming || !prompt.trim()}>
             Tạo
           </Button>
-        </Space.Compact>
+        </SpaceCompact>
 
         {mode === 'ask' ? (
           <div

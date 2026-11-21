@@ -1,5 +1,5 @@
 import React from 'react';
-import { Badge, Tooltip } from 'antd';
+import { Badge, Tooltip } from '../../components/ui';
 import { useLayoutStore, type ToolWindowSlot } from '../store/layoutStore';
 
 export interface ToolWindowItem {

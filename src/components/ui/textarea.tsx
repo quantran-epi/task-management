@@ -30,3 +30,6 @@ export const Textarea = forwardRef<TextAreaRef, TextareaProps>(function Textarea
   });
   return <AntInput.TextArea {...merged} ref={ref} />;
 });
+
+/** Alias for the Textarea wrapper under the AntD compound name. */
+export const TextArea = Textarea;

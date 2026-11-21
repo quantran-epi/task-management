@@ -8,12 +8,15 @@ import {
   initStandardActions,
 } from '../actions/actionRegistry';
 import { useLayoutStore } from '../store/layoutStore';
-import { message } from 'antd';
+import type { ActionNotify } from '../actions/actionRegistry';
 import { renderHook, fireEvent } from '@testing-library/react';
 import { useGlobalKeymap } from '../hooks/useGlobalKeymap';
 
+const notify = vi.fn() as unknown as ActionNotify & ReturnType<typeof vi.fn>;
+
 describe('actionRegistry', () => {
   beforeEach(() => {
+    notify.mockClear();
     clearCustomActions();
     initStandardActions();
     useLayoutStore.getState().resetLayout();
@@ -42,10 +45,8 @@ describe('actionRegistry', () => {
   });
 
   it('reports unknown actions instead of silently ignoring them', () => {
-    const warning = vi.spyOn(message, 'warning').mockImplementation(() => undefined as any);
-    executeAction('non.existent.action');
-    expect(warning).toHaveBeenCalledWith('Action không còn khả dụng.');
-    warning.mockRestore();
+    executeAction('non.existent.action', notify);
+    expect(notify).toHaveBeenCalledWith('warning', 'Action không còn khả dụng.');
   });
 
   it('keeps registry snapshots stable until registration changes', () => {
@@ -68,7 +69,7 @@ describe('actionRegistry', () => {
     };
     window.addEventListener('taskmate:open-find-in-remote-files', handler);
     try {
-      find!.perform();
+      find!.perform(notify);
       expect(dispatched).toHaveBeenCalledOnce();
     } finally {
       window.removeEventListener('taskmate:open-find-in-remote-files', handler);
@@ -93,28 +94,24 @@ describe('actionRegistry', () => {
   });
 
   it('reports unavailable timer context but accepts acknowledged commands', () => {
-    const info = vi.spyOn(message, 'info').mockImplementation(() => undefined as any);
-    executeAction('timer.toggle');
-    expect(info).toHaveBeenCalledOnce();
-    info.mockClear();
+    executeAction('timer.toggle', notify);
+    expect(notify).toHaveBeenCalledOnce();
+    notify.mockClear();
     const handler = (event: Event) => event.preventDefault();
     window.addEventListener('taskmate:toggle-timer', handler);
     try {
-      executeAction('timer.toggle');
-      expect(info).not.toHaveBeenCalled();
+      executeAction('timer.toggle', notify);
+      expect(notify).not.toHaveBeenCalled();
     } finally {
       window.removeEventListener('taskmate:toggle-timer', handler);
-      info.mockRestore();
     }
   });
 
   it('reports reload actions when no tabs are open', () => {
-    const info = vi.spyOn(message, 'info').mockImplementation(() => undefined as any);
     useLayoutStore.getState().closeAllTabs();
-    executeAction('tab.reload-active');
-    executeAction('tab.reload-all');
-    expect(info).toHaveBeenCalledTimes(2);
-    info.mockRestore();
+    executeAction('tab.reload-active', notify);
+    executeAction('tab.reload-all', notify);
+    expect(notify).toHaveBeenCalledTimes(2);
   });
 
   it('contains all standard actions', () => {

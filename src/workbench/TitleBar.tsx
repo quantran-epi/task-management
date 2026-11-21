@@ -1,13 +1,6 @@
 import { useState, type CSSProperties } from 'react';
-import { Button, Tooltip, Modal, Typography, Tag, Badge, message } from 'antd';
-import {
-  SearchOutlined,
-  SettingOutlined,
-  DesktopOutlined,
-  CodeOutlined,
-  SunOutlined,
-  MoonOutlined,
-} from '@ant-design/icons';
+import { Button, Tooltip, Modal, Typography, Tag, Badge, useMessage, IconButton } from '../components/ui';
+import { SearchOutlined, SettingOutlined, DesktopOutlined, CodeOutlined, SunOutlined, MoonOutlined } from '../components/ui/icon';
 import { TaskMateLogo } from '../components/TaskMateLogo';
 import {
   JetBrainsDashboardIcon,
@@ -37,6 +30,7 @@ export function TitleBar({
   activeView,
   title = 'TaskMate',
 }: TitleBarProps) {
+  const message = useMessage();
   const [tauriModalOpen, setTauriModalOpen] = useState(false);
   const isTauri = isTauriApp();
   const { mode, toggle } = useThemeMode();
@@ -315,7 +309,7 @@ export function TitleBar({
 
           {/* Theme toggle — light/dark swap is instant across the app and popouts (D-05/D-07). */}
           <Tooltip title={mode === 'dark' ? 'Giao diện: Sáng' : 'Giao diện: Tối'}>
-            <Button
+            <IconButton
               type="text"
               size="small"
               icon={mode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
@@ -336,7 +330,7 @@ export function TitleBar({
 
           {/* Tauri Desktop Runtime Check Trigger Button */}
           <Tooltip title={isTauri ? 'Tauri Desktop Runtime (Click to inspect)' : 'Web Browser Runtime'}>
-            <Button
+            <IconButton
               type="text"
               size="small"
               icon={
@@ -365,7 +359,7 @@ export function TitleBar({
           {/* Settings Action */}
           {onOpenSettings && (
             <Tooltip title="Settings">
-              <Button
+              <IconButton
                 type="text"
                 size="small"
                 icon={<SettingOutlined style={{ fontSize: 14, color: 'var(--fg-secondary, #5f6269)' }} />}
