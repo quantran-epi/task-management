@@ -3,6 +3,10 @@ import { Button } from '../../../src/components/ui';
 import { SearchOutlined } from '../../../src/components/ui/icon';
 import type { ButtonProps } from 'antd';
 
-export function GoodImport(props: ButtonProps) {
-  return <Button icon={<SearchOutlined />} {...props}>good</Button>;
+// Type-only import (D-19): referenced here without forwarding AntD props to the
+// TaskMate wrapper, whose policy narrows `variant` (exactOptionalPropertyTypes).
+export type GoodImportProps = Pick<ButtonProps, 'danger' | 'loading' | 'disabled'>;
+
+export function GoodImport() {
+  return <Button icon={<SearchOutlined />}>good</Button>;
 }

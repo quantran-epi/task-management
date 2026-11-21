@@ -18,7 +18,7 @@ export default [
   {
     files: ['src/**/*.{ts,tsx}', 'tests/fixtures/guard/**/*.tsx'],
     languageOptions: {
-      // TS7 (Go-native) has no compiler JS API -> typescript-eslint cannot run.
+      // TS7 (Go-native) has no compiler JS API -> the TS ESLint parser cannot run.
       // Babel strips TS/TSX syntax without type info (D-17, research Pitfall 1).
       parser: babelParser,
       parserOptions: {

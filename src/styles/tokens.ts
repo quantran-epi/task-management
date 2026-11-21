@@ -1,4 +1,4 @@
-import { theme, type ThemeConfig } from '../components/ui/antdTheme';
+import { getAntdAlgorithms, type ThemeConfig } from '../components/ui/antdTheme';
 
 /**
  * Single source of truth for the workbench palette and metrics (TOKEN-01..04, D-08/D-12).
@@ -271,7 +271,7 @@ export const darkTokens = {
 export function getAntdTheme(mode: ThemeMode): ThemeConfig {
   const tokens = mode === 'dark' ? darkTokens : lightTokens;
   return {
-    algorithm: [mode === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm, theme.compactAlgorithm],
+    algorithm: getAntdAlgorithms(mode).algorithm,
     token: {
       colorPrimary: tokens.antd.colorPrimary,
       colorBgBase: tokens.antd.colorBgBase,
