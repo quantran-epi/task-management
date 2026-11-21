@@ -16,6 +16,8 @@ export interface WrapperPolicy {
   borderRadius: number;
   fontSize: number;
   paddingInline: number;
+  /** Whole-pixel icon size from the spacing scale — never a fractional font-size. */
+  iconSize: string;
 }
 
 /**
@@ -24,7 +26,13 @@ export interface WrapperPolicy {
  */
 export function getSharedControlTokens(): WrapperPolicy {
   const { controlHeight, borderRadius, fontSize, buttonPaddingInline } = sharedTokens;
-  return { controlHeight, borderRadius, fontSize, paddingInline: buttonPaddingInline };
+  return {
+    controlHeight,
+    borderRadius,
+    fontSize,
+    paddingInline: buttonPaddingInline,
+    iconSize: sharedTokens.spacing.md,
+  };
 }
 
 /** Status color comes only from the shared D-12 map — never a view literal. */

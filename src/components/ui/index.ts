@@ -5,3 +5,4 @@ export {
   type ButtonVariant,
   type IconButtonProps,
 } from './button';
+export * from './icon';
