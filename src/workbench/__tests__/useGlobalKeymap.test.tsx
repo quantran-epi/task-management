@@ -3,9 +3,16 @@ import { render, screen } from '@testing-library/react';
 import { useGlobalKeymap } from '../hooks/useGlobalKeymap';
 import { executeAction } from '../actions/actionRegistry';
 
+const messageMock = vi.hoisted(() => ({ current: { success: vi.fn(), error: vi.fn() } as Record<string, (...a: unknown[]) => void> }));
+
 vi.mock('../actions/actionRegistry', () => ({
   executeAction: vi.fn(),
 }));
+
+vi.mock('../../components/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../components/ui')>();
+  return { ...actual, useMessage: () => messageMock.current };
+});
 
 function Harness() {
   useGlobalKeymap();
@@ -21,6 +28,9 @@ function keydown(init: KeyboardEventInit, target: EventTarget): KeyboardEvent {
 describe('useGlobalKeymap — no global Find shortcut (261120-vcb)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    messageMock.current = { success: vi.fn(), error: vi.fn() };
+    messageMock.current.success = vi.fn();
+    messageMock.current.error = vi.fn();
   });
 
   it('Ctrl+Shift+F (key F) is inert and never dispatches find.inPath', () => {
@@ -61,6 +71,24 @@ describe('useGlobalKeymap — no global Find shortcut (261120-vcb)', () => {
 
     keydown({ key: 'k', ctrlKey: true }, input);
 
-    expect(executeAction).toHaveBeenCalledWith('search.everywhere');
+    expect(executeAction).toHaveBeenCalledWith('search.everywhere', expect.any(Function));
+  });
+
+  it('uses the latest message instance after the holder returns a new one (WR-02)', () => {
+    const { rerender } = render(<Harness />);
+    const input = screen.getByTestId('typing-target');
+
+    // Simulate ThemeAppHolder re-mounting with a fresh AntD message instance.
+    const freshInfo = vi.fn();
+    messageMock.current = { success: vi.fn(), info: freshInfo, error: vi.fn() };
+    rerender(<Harness />);
+
+    keydown({ key: 'k', ctrlKey: true }, input);
+    const notify = vi.mocked(executeAction).mock.calls[0]?.[1];
+    expect(notify).toBeTypeOf('function');
+    notify?.('info', 'hello');
+
+    // With the old stale closure this called the ORIGINAL message.info.
+    expect(freshInfo).toHaveBeenCalledWith('hello');
   });
 });

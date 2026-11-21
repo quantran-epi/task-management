@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useMessage } from '../../components/ui';
 import { executeAction, type ActionNotify } from '../actions/actionRegistry';
 
@@ -12,7 +12,10 @@ import { executeAction, type ActionNotify } from '../actions/actionRegistry';
  */
 export function useGlobalKeymap(): void {
   const message = useMessage();
-  const notify: ActionNotify = (kind, text) => message[kind](text);
+  // Keep the listener's notify current even if the AntD holder re-mounts and
+  // useMessage() returns a fresh instance (WR-02: stale-closure guard).
+  const notifyRef = useRef<ActionNotify>((kind, text) => message[kind](text));
+  notifyRef.current = (kind, text) => message[kind](text);
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const isInput =
@@ -25,7 +28,7 @@ export function useGlobalKeymap(): void {
       // Ctrl+K or Cmd+K (Search Everywhere)
       if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
-        executeAction('search.everywhere', notify);
+        executeAction('search.everywhere', notifyRef.current);
         return;
       }
 
@@ -38,72 +41,72 @@ export function useGlobalKeymap(): void {
       if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
         if (e.key === '1') {
           e.preventDefault();
-          executeAction('view.toggle-cr-explorer', notify);
+          executeAction('view.toggle-cr-explorer', notifyRef.current);
           return;
         }
         if (e.key === '2') {
           e.preventDefault();
-          executeAction('view.toggle-docs', notify);
+          executeAction('view.toggle-docs', notifyRef.current);
           return;
         }
         if (e.key === '3') {
           e.preventDefault();
-          executeAction('view.toggle-ai-chat', notify);
+          executeAction('view.toggle-ai-chat', notifyRef.current);
           return;
         }
         if (e.key === '4') {
           e.preventDefault();
-          executeAction('view.toggle-notifications', notify);
+          executeAction('view.toggle-notifications', notifyRef.current);
           return;
         }
         if (e.key === '5') {
           e.preventDefault();
-          executeAction('view.toggle-remote-explorer', notify);
+          executeAction('view.toggle-remote-explorer', notifyRef.current);
           return;
         }
         if (e.key === '7') {
           e.preventDefault();
-          executeAction('view.toggle-ai-office', notify);
+          executeAction('view.toggle-ai-office', notifyRef.current);
           return;
         }
         if (e.key === '8') {
           e.preventDefault();
-          executeAction('view.toggle-ai-staff', notify);
+          executeAction('view.toggle-ai-staff', notifyRef.current);
           return;
         }
         if (e.key === '9') {
           e.preventDefault();
-          executeAction('view.toggle-tool-explorer', notify);
+          executeAction('view.toggle-tool-explorer', notifyRef.current);
           return;
         }
         if (e.key === 'm' || e.key === 'M') {
           e.preventDefault();
-          executeAction('view.open-mermaid-studio', notify);
+          executeAction('view.open-mermaid-studio', notifyRef.current);
           return;
         }
         if (e.key === '6') {
           e.preventDefault();
-          executeAction('view.toggle-systems', notify);
+          executeAction('view.toggle-systems', notifyRef.current);
           return;
         }
         if (e.key === 'F12') {
           e.preventDefault();
-          executeAction('view.toggle-terminal', notify);
+          executeAction('view.toggle-terminal', notifyRef.current);
           return;
         }
         if (e.key === 't' || e.key === 'T') {
           e.preventDefault();
-          executeAction('timer.toggle', notify);
+          executeAction('timer.toggle', notifyRef.current);
           return;
         }
         if (e.key === 'r' || e.key === 'R') {
           e.preventDefault();
-          executeAction('tab.reload-active', notify);
+          executeAction('tab.reload-active', notifyRef.current);
           return;
         }
         if (e.key === 'Insert') {
           e.preventDefault();
-          executeAction('task.create', notify);
+          executeAction('task.create', notifyRef.current);
           return;
         }
       }
