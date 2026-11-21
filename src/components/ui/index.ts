@@ -16,3 +16,8 @@ export {
 export { Textarea, DEFAULT_TEXTAREA_MIN_ROWS, type TextareaProps } from './textarea';
 export { Select, type SelectProps } from './select';
 export { InputNumber, type InputNumberProps } from './input-number';
+export { Modal, useTaskMateModal, getOverlayWidth, type OverlayWidth, type ModalProps } from './modal';
+export { Drawer, type DrawerProps } from './drawer';
+export { Popconfirm, type PopconfirmProps } from './popconfirm';
+export { ThemeAppHolder, useMessage } from './message';
+export { useNotification, useNotificationConfig } from './notification';
