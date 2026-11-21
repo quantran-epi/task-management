@@ -1,8 +1,8 @@
 ---
 phase: 50-full-app-adoption
-reviewed: 2026-11-21T15:11:33Z
+reviewed: 2026-11-21T15:56:39Z
 depth: standard
-files_reviewed: 115
+files_reviewed: 124
 files_reviewed_list:
   - e2e/adoption.spec.ts
   - scripts/adoption-codemod.mjs
@@ -130,115 +130,39 @@ files_reviewed_list:
   - tests/utils/mermaidExport.test.ts
 findings:
   critical: 0
-  warning: 4
-  info: 2
-  total: 6
-status: issues_found
+  warning: 0
+  info: 0
+  total: 0
+status: clean
 ---
 
-# Phase 50: Code Review Report
+# Phase 50: Re-review Report (sau code-review fixes)
 
-**Reviewed:** 2026-11-21T15:11:33Z
+**Reviewed:** 2026-11-21T15:56:39Z
 **Depth:** standard
-**Files Reviewed:** 115
-**Status:** issues_found
+**Files Reviewed:** 124
+**Status:** clean
 
 ## Summary
 
-Phase 50 là đợt migration cơ học quy mô lớn: đổi import `antd`/`@ant-design/icons` sang UI barrel, thay static `message`/`notification`/`Modal.confirm` bằng hook (`useMessage`/`useNotification`/`useTaskMateModal`), và thay token inline bằng CSS var. Đa số thay đổi là cơ học và nhất quán. Đã xác nhận bằng công cụ: `tsc --noEmit` sạch (exit 0), `eslint src` không có error (6 warning directive dư), 90 test scoped đều pass, mọi caller của `useTaskMateModal` đều render `contextHolder`, mọi root render đều nằm trong `ThemeAppHolder`, static API guard sạch.
+Re-review ở standard depth sau 6 commit fix. Xác nhận cả 6 hạng mục từ report trước đều đã được giải quyết đúng bản chất, và migration gap-to-CSS-var (152 file, commit `97eecb57`) không gây regression spacing/hành vi. Không phát hiện finding mới.
 
-Tuy nhiên tồn tại 6 vấn đề: 4 warning (1 regression hành vi thật từ migration, 1 stale closure tiềm ẩn, 1 lỗi codemod, 1 guard vô hiệu) và 2 info. Không có lỗi bảo mật hay mất dữ liệu.
+Xác thực bằng công cụ:
+- `npx tsc --noEmit` → exit 0, sạch.
+- `npx eslint <6 file IN-01>` → exit 0, không còn unused-disable warning.
+- 6 file test scoped (57 test) → đều pass: `controls.test.tsx`, `useGlobalKeymap.test.tsx`, `adoption-codemod.test.mjs`, `inlineStyleSweep.test.ts`, `documentLinks.test.ts`, `AntdThemeAdapter.test.tsx`.
 
-## Warnings
+## Xác minh 6 fix trước
 
-### WR-01: Wrapper `Form` ghi đè `layout` của caller — form GitHub Sync chuyển từ inline sang vertical
-
-**File:** `src/components/ui/form.tsx:23-31`; trigger tại `src/components/settings/GitHubSyncCard.tsx:517`
-
-**Issue:** `Form` wrapper tính `layout` từ `labelPolicy` (mặc định `'top'` → `'vertical'`) rồi đặt `layout={layout}` SAU `...rest`. Vì `FormProps extends AntFormProps`, caller vẫn truyền được `layout` nhưng giá trị bị bỏ qua. Trước migration, `GitHubSyncCard` import `Form` trực tiếp từ `'antd'` và dùng `<Form layout="inline">` cho form cấu hình lịch tự động đồng bộ (chế độ / giờ chạy / mỗi phút). Sau migration sang UI barrel (commit `905adebd`), `layout="inline"` bị wrapper ép thành `vertical` — form bị xếp chồng thay vì nằm ngang. Đây là regression hành vi có thật do phase này gây ra. ESLint/tsc không bắt vì kiểu vẫn hợp lệ.
-
-**Fix:** Tôn trọng `layout` của caller khi có:
-
-```tsx
-export function Form({ labelPolicy = 'top', style, ...rest }: FormProps) {
-  const policyLayout = labelPolicy === 'inline' ? 'inline' : labelPolicy === 'left' ? 'horizontal' : 'vertical';
-  return (
-    <AntForm
-      {...rest}
-      layout={rest.layout ?? policyLayout}
-      requiredMark={rest.requiredMark ?? true}
-      style={{ ...formStyle(), ...style }}
-    />
-  );
-}
-```
-
-### WR-02: `useGlobalKeymap` bắt closure `notify` trong effect có deps rỗng
-
-**File:** `src/workbench/hooks/useGlobalKeymap.ts:14-16,116`
-
-**Issue:** `notify` được tạo mới mỗi render (`(kind, text) => message[kind](text)`), nhưng `useEffect(..., [])` chỉ chạy một lần và capture bản đầu. Hiện tại `message` từ `AntApp.useApp()` tương đối ổn định nên chạy được, nhưng đây là stale-closure tiềm ẩn: nếu holder `ThemeAppHolder` mount lại hoặc AntD trả instance mới, mọi thông báo phím tắt (`Ctrl+K`, `Alt+1..9`, `Alt+T`...) sẽ gọi instance cũ, im lặng hoặc lỗi. Đặc biệt dự án chuyển đổi theme trong lúc chạy — holder nằm dưới `AntdThemeAdapter`, dễ bị re-mount. `eslint.config.mjs` chỉ bật `react-hooks/rules-of-hooks`, KHÔNG bật `exhaustive-deps`, nên không có gì cảnh báo.
-
-**Fix:** Dùng ref cho notify, hoặc đưa `message` vào deps:
-
-```tsx
-const notifyRef = useRef<ActionNotify>((kind, text) => message[kind](text));
-notifyRef.current = (kind, text) => message[kind](text);
-useEffect(() => {
-  function handleKeyDown(e: KeyboardEvent) {
-    // ... executeAction('...', notifyRef.current)
-  }
-  window.addEventListener('keydown', handleKeyDown);
-  return () => window.removeEventListener('keydown', handleKeyDown);
-}, []);
-```
-
-### WR-03: Codemod bỏ sót static `Modal` — có thể sinh mã crash khi chạy lại
-
-**File:** `scripts/adoption-codemod.mjs:11,91`
-
-**Issue:** `STATIC_APIS = new Set(['message', 'notification'])` không chứa `Modal`. Với file import `Modal` từ `'antd'` và gọi `Modal.confirm(...)`, codemod không cảnh báo mà rewrite lặng lẽ import `Modal` từ UI barrel — component `Modal` declarative (`src/components/ui/modal.tsx:38`) không có static `.confirm`; static `Modal.confirm` chỉ có qua `useTaskMateModal()`. Kết quả: `Modal.confirm is not a function` lúc runtime. Đã reproduce bằng probe: input `import { Modal, message } from 'antd'` + `Modal.confirm()` → output `import { Modal } from '../ui'` + `Modal.confirm()` không có warning cho `Modal`. Các file hiện tại đã convert hết sang `modal.confirm` nên không ảnh hưởng ngay, nhưng tool vẫn là nguồn sinh mã trong repo và sẽ tái phạm nếu chạy lại trên file cũ.
-
-**Fix:** Thêm `'Modal'` vào `STATIC_APIS` và đảm bảo warning nhắc convert sang `useTaskMateModal`:
-
-```js
-const STATIC_APIS = new Set(['message', 'notification', 'Modal']);
-```
-
-### WR-04: Guard `inlineStyleSweep` dùng regex sai — không chặn được literal `gap` số
-
-**File:** `src/components/ui/__tests__/inlineStyleSweep.test.ts:11`
-
-**Issue:** Pattern `/\bgap:\s*[diagram]\b/i` viết nhầm thành character class. `[diagram]` chỉ khớp MỘT ký tự trong tập `{d,i,a,g,r,m}` kèm `\b` phía sau, nên chỉ bắt được `gap: d` (không tồn tại trong code) và BỎ SOT mọi giá trị thật như `gap: 6`, `gap: 8`, `gap: 12`. Kiểm chứng: `gap: 8` → false, `gap: diagram` → false, `gap: d` → true. Guard này tạo cảm giác an toàn giả cho mục tiêu D-09 ("token phải đi qua CSS var, không literal"), trong khi bỏ sót đúng thứ nó cần chặn — giống hệt các pattern `fontSize`/`borderRadius`/hex đi kèm. Ảnh hưởng tới độ tin cậy của test guard (nằm trong scope review).
-
-**Fix:** Sửa thành pattern bắt số literal, ví dụ:
-
-```ts
-/\bgap:\s*\d+\b/,
-```
-
-hoặc nếu ý định là cấm các token cụ thể, dùng grouping đúng: `/\bgap:\s*(?:diagram|6|8|12)\b/i`.
-
-## Info
-
-### IN-01: Directive `eslint-disable react-hooks/exhaustive-deps` dư sau migration
-
-**File:** `src/components/changeRequests/ChangeRequestModal.tsx:114`, `src/components/notes/NormalizeDocModal.tsx:142`, `src/workbench/toolwindows/RemoteGitExplorer.tsx:459`, `src/workbench/search/find/FindInRemoteFiles.tsx:103`
-
-**Issue:** `eslint src` báo 6 warning "Unused eslint-disable directive". Các directive này từng chặn `exhaustive-deps` trước migration; sau khi migration thay đổi dependency array, chúng trở nên vô dụng và gây nhiễu. Không gây lỗi runtime nhưng là tín hiệu deps array đã thay đổi mà chưa rà soát lại.
-
-**Fix:** Xóa các directive dư (hoặc bật lại `exhaustive-deps` nếu muốn guard thực sự — hiện tại config chỉ có `rules-of-hooks`).
-
-### IN-02: Helper trong `documentLinks` có noop default — mất feedback/confirm im lặng nếu caller quên truyền
-
-**File:** `src/utils/documentLinks.tsx:9-10,57,84,198`
-
-**Issue:** `openLocalPathInExplorer`, `launchClaudeAtLocalPath`, `promptLocalPathAction` nhận `notify`/`confirm` với default `noopNotify`/`noopConfirm`. `noopConfirm` trả `{ destroy(){} }` và không gọi resolve — nếu caller tương lai quên truyền `confirm`, `promptLocalPathAction` hiện dialog vô hình và `openDocumentLink` có thể treo không phản hồi. Hiện tại mọi caller nội bộ đã truyền đủ callback (đã kiểm tra), nên chỉ là rủi ro tiềm ẩn.
-
-**Fix:** Bỏ default, bắt buộc caller truyền `notify`/`confirm` (type-level) để lỗi lộ ra lúc compile thay vì im lặng lúc runtime.
+- **WR-01** (`src/components/ui/form.tsx:24-30`): `layout={rest.layout ?? policyLayout}` — caller `layout` nay được tôn trọng. Có test trong `controls.test.tsx`.
+- **WR-02** (`src/workbench/hooks/useGlobalKeymap.ts:15-16`): `notifyRef` cập nhật mỗi render; mọi `executeAction` dùng `notifyRef.current`. Test xác nhận instance `message` mới sau re-render được dùng. `useGlobalKeymap` nằm trong `WorkbenchLayout` dưới `ThemeAppHolder`, nên re-render đúng khi holder đổi.
+- **WR-03** (`scripts/adoption-codemod.mjs:11`): `STATIC_APIS` chứa `'Modal'`; emit warning qua `staticValues`. Test probe xác nhận `Modal.confirm` bị cảnh báo.
+- **WR-04** (`src/components/ui/__tests__/inlineStyleSweep.test.ts:11`): pattern `/\bgap:\s*\d+\b/` đúng, có test chống typo `gap: d`/`gap: diagram`. Migration 1:1: đối chiếu toàn bộ diff `97eecb57` cho thấy mọi literal `gap: N` → `'var(--gap-N)'` với count khớp chính xác cho cả 13 giá trị (1,2,3,4,5,6,7,8,10,12,14,16,24); không có conversion sai lệch hay leftover literal trong file đã migrate. CSS vars được định nghĩa trong `src/styles/tokens.ts:80-92` (1px..24px), spread vào cả `lightTokens.css` lẫn `darkTokens.css`, và `applyCssVariables()` ghi vào cả wrapper lẫn `document.documentElement` — nên resolve đúng ở cả light/dark và cả portal/popout.
+- **IN-01** (6 file): mọi directive `eslint-disable` dư đã xóa; eslint sạch. Đặc biệt `FindInRemoteFiles.tsx` effect vẫn đúng sau khi bỏ directive.
+- **IN-02** (`src/utils/documentLinks.tsx`): bỏ `noopNotify`/`noopConfirm`, signature bắt buộc `notify`/`confirm`; mọi caller active trong `src/` đã truyền đủ (đã scan toàn bộ), test cập nhật, `tsc` sạch. File scratch `r04-convert2.cjs` đã bị xóa (commit `c06465bd`).
 
 ---
 
-_Reviewed: 2026-11-21T15:11:33Z_
+_Reviewed: 2026-11-21T15:56:39Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
