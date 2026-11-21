@@ -1,8 +1,22 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { Button, theme } from 'antd';
 import { AntdThemeAdapter } from '../AntdThemeAdapter';
+import { getAntdTheme } from '../../styles/tokens';
+import { THEME_MODE_EVENT } from '../themeBroadcast';
 import '../../styles/workbench-tokens.css';
+
+const tauri = vi.hoisted(() => {
+  let handler: ((event: { payload: unknown }) => void) | null = null;
+  const emitTo = vi.fn(async () => {});
+  const listen = vi.fn(async (_event: string, next: (event: { payload: unknown }) => void) => {
+    handler = next;
+    return () => { if (handler === next) handler = null; };
+  });
+  return { emitTo, listen, handler: () => handler };
+});
+
+vi.mock('@tauri-apps/api/event', () => ({ emitTo: tauri.emitTo, listen: tauri.listen }));
 
 function TokenConsumer() {
   const { token } = theme.useToken();
@@ -61,6 +75,44 @@ describe('AntdThemeAdapter', () => {
       unmount();
     } finally {
       window.matchMedia = original;
+    }
+  });
+
+  it('injects the matching accent CSS variable on the theme wrapper', () => {
+    const { container, unmount } = render(
+      <AntdThemeAdapter><div /></AntdThemeAdapter>
+    );
+    const wrapper = container.querySelector('.taskmate-workbench-theme') as HTMLElement;
+    expect(wrapper.style.getPropertyValue('--accent')).toBe(getAntdTheme('light').token?.colorPrimary);
+    unmount();
+  });
+
+  it('re-renders a popout AntdThemeAdapter on a received valid mode without reload', async () => {
+    Object.defineProperty(window, '__TAURI_INTERNALS__', {
+      value: { invoke: async () => undefined, transformCallback: () => 0 },
+      configurable: true,
+    });
+    window.localStorage.clear();
+    tauri.emitTo.mockClear();
+    tauri.listen.mockClear();
+    try {
+      const { container, unmount } = render(
+        <AntdThemeAdapter><div /></AntdThemeAdapter>
+      );
+      const wrapper = container.querySelector('.taskmate-workbench-theme') as HTMLElement;
+      expect(wrapper.getAttribute('data-theme')).toBe('light');
+      expect(wrapper.style.getPropertyValue('--accent')).toBe('#2f62d8');
+
+      await waitFor(() => expect(tauri.listen).toHaveBeenCalledWith(THEME_MODE_EVENT, expect.any(Function)));
+      act(() => { tauri.handler()!({ payload: { mode: 'dark' } }); });
+
+      expect(wrapper.getAttribute('data-theme')).toBe('dark');
+      expect(wrapper.style.getPropertyValue('--accent')).toBe('#6a9bff');
+      expect(tauri.emitTo).not.toHaveBeenCalled();
+      expect(window.localStorage.getItem('taskmate_theme')).toBeNull();
+      unmount();
+    } finally {
+      Reflect.deleteProperty(window, '__TAURI_INTERNALS__');
     }
   });
 });
