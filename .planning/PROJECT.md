@@ -12,11 +12,18 @@ Make planned work realistically fit available time by exposing overload early an
 
 Shipped **v1.0 MVP** on 2026-09-27 with all 8 foundational phases complete. Shipped v1.1 Banking IT Enhancements. Phase 16 knowledge server foundation and Phase 17 pilot ontology & Neo4j graph projection complete (all 5 plans in Phase 17 executed, GRAPH-01..GRAPH-06 satisfied). Codebase features closed ontology contracts, deterministic AST extraction, bounded LLM prose fallback, factKey deduplication, parameterized Neo4j adapter, Fastify inspection endpoints, and DocumentSetDrawer graph controls with PlannerMate offline isolation.
 
-## Current Milestone: v1.4 Unified AI Office
+## Current Milestone: v1.5 Design System & UI Consistency
 
-**Goal:** Hợp nhất SDLC Studio và AI Office thành một workspace AI duy nhất (Unified AI Office) dạng chat-first, free-style; loại bỏ hoàn toàn SDLC Studio; quản lý đội ngũ AI leader và agent với kỹ năng chuyên biệt, điều phối công việc linh hoạt kèm cơ chế token budget cứng và luyện tập kỹ năng (skill enrichment).
-
+**Goal:** Refactor toàn bộ UI TaskMate thành một design system duy nhất theo phong cách IntelliJ: tất cả control AntD đều được wrap tại một nơi, token dùng chung cho light và dark, xóa shell AntD cũ, và guard bằng ESLint + CI để không tái diễn import trực tiếp.
 **Target features:**
+- **Shell đơn nhất**: chỉ khởi động shell IntelliJ; xóa hẳn shell AntD, flag chuyển đổi và PWA prompts; không migration.
+- **Token tập trung**: một nguồn token (màu/radius/height/font/spacing) cho cả ConfigProvider lẫn CSS; light + dark đầy đủ, đổi theme tức thì, giữ lựa chọn hiện tại của user.
+- **Wrapper toàn diện**: mọi control AntD (kể cả Table/Form/DatePicker/Modal/Drawer/Card/Menu/Tooltip/...) đều có wrapper TaskMate tại `src/components/ui/`; mọi control có thể đổi/thay thế tại một điểm, không import trực tiếp.
+- **Guardrails**: ESLint `no-restricted-imports` chặn import AntD ngoài thư mục wrapper; CI chạy lint + build.
+- **Adoption & verify**: migrate mọi màn hình/tool window/settings/CR/notes/AI Office, xóa style trùng token, UAT Chrome ở cả light và dark, tsc + lint + focused test + build xanh.
+
+
+**Previous milestone (v1.4) features:**
 - **Trụ 1 — Xóa bỏ SDLC Studio & Tái cấu trúc Navigation**: Audit shared-service trước, tách phần AI Office thực sự dùng, rồi xóa mọi entry point/view/state machine/wizard route của SDLC Studio; thanh điều hướng chỉ còn một trigger "AI Office"; explorer 2 tầng (tầng trên: Leader & Agent; tầng dưới: Danh sách nhóm chat/hội thoại); click mở chi tiết tại center editor.
 - **Trụ 2 — Mô hình Nhóm chat Chat-First & Phân công Free-style**: Tạo nhóm chat không giới hạn; mỗi nhóm gồm 1 Leader và N Agent tùy ý; Leader tự động phân tích yêu cầu từ người dùng và phân công cho Agent phù hợp theo skill; user vẫn có thể @mention agent trực tiếp; CR và tài liệu SDLC chỉ là context tùy chọn — thiếu context không chặn và không giảm chất lượng.
 - **Trụ 3 — Token Budget cứng & Kiểm soát chi phí**: Cấp token budget chia đều cho Leader và các Agent khi bắt đầu nhóm; đo lường chính xác cả input + output token trên từng request; pause giữa các tool round khi chạm ngưỡng; cảnh báo ngưỡng; cho phép cấp thêm token cho từng agent và tự động tăng tổng ngân sách nhóm (chi tiết top-up cho Leader còn mở — R-12).
@@ -145,4 +152,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-09 for Milestone v1.4 Unified AI Office kickoff*
+*Last updated: 2026-11-21 for Milestone v1.5 Design System & UI Consistency kickoff*

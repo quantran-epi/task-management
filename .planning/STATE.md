@@ -1,34 +1,31 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.4
-milestone_name: Unified AI Office
-status: completed
-stopped_at: Phase 48 complete — all plans executed, review clean, gates green, merge/push delivered
-last_updated: "2026-11-21T00:00:00.000Z"
-last_activity: 2026-11-21 -- Phase 48 completed and merged into feature/intellij-workbench
+milestone: v1.5
+milestone_name: Design System & UI Consistency
+status: planning
+last_updated: "2026-11-21T06:32:38.886Z"
+last_activity: 2026-11-21
 progress:
-  total_phases: 10
-  completed_phases: 6
-  total_plans: 68
-  completed_plans: 66
-  percent: 60
-current_phase: 48
-current_phase_name: Agent Developer Workbench — SSH Worktree Coding Zone and Popout
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
-# Project State: TaskMate — Milestone v1.4
+# Project State: TaskMate — Milestone v1.5
 
-See: .planning/PROJECT.md (updated 2026-11-09)
+See: .planning/PROJECT.md (updated 2026-11-21)
 
-**Core value:** Hợp nhất SDLC Studio và AI Office thành Unified AI Office dạng chat-first, free-style với token budget cứng và làm giàu skill.
-**Current focus:** Phase 48 — agent-developer-workbench-ssh-worktree-coding-zone-popout-hu
+**Core value:** Một bộ design system TaskMate duy nhất, IntelliJ-only, light+dark, mọi control AntD đều wrap và có thể thay đổi tại một điểm.
+**Current focus:** Phase 49 — Design System Foundation
 
 ## Current Position
 
-Phase: 48 (agent-developer-workbench-ssh-worktree-coding-zone-popout-hu) — COMPLETE
-Plan: 4 of 4
-Status: Phase complete — review clean (0 Critical/Warning/Info), focused Vitest + tsc + cargo + Chrome UAT green; merged to feature/intellij-workbench
-Last activity: 2026-11-21 - Completed quick task 261121-eck: Markdown Viewer trong Tool Explorer + fix search overflow + icon polish
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-11-21 — Milestone v1.5 started
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
