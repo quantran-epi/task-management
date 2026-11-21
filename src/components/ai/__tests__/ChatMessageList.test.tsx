@@ -75,10 +75,11 @@ describe('ChatMessageList notification target highlight', () => {
 
   /**
    * Oracle: specified. A notification deeplink with a targetMessageId must scroll that row into
-   * view and mark it with a test id so it can be visually highlighted. Boundary neighbours: no
-   * target (nothing highlighted) and a target not present in the current window.
+   * view and ring ONLY its bubble — never the row wrapper, whose background would fill the
+   * inter-message margin and fuse the reply with the next message (purple-reply-wrap).
+   * Boundary neighbours: no target (nothing highlighted) and the following message.
    */
-  it('scrolls to and marks the target message', () => {
+  it('scrolls to and rings only the target bubble, not the row wrapper', () => {
     const scroll = vi.fn();
     const original = HTMLElement.prototype.scrollIntoView;
     HTMLElement.prototype.scrollIntoView = scroll;
@@ -86,6 +87,7 @@ describe('ChatMessageList notification target highlight', () => {
       const messages: ChatMessage[] = [
         { id: 'm1', threadId: 't', role: 'user', content: 'first', createdAt: '2026-11-18T00:00:00Z' },
         { id: 'm2', threadId: 't', role: 'assistant', content: 'target', createdAt: '2026-11-18T00:00:01Z' },
+        { id: 'm3', threadId: 't', role: 'assistant', content: 'next', createdAt: '2026-11-18T00:00:02Z' },
       ];
       render(
         <ChatMessageList
@@ -95,8 +97,16 @@ describe('ChatMessageList notification target highlight', () => {
           targetMessageId="m2"
         />
       );
-      expect(screen.getByTestId('chat-target-message')).toBeTruthy();
-      expect(screen.getByTestId('chat-target-message').getAttribute('data-chat-message-id')).toBe('m2');
+      const bubble = screen.getByTestId('chat-target-bubble');
+      expect(bubble).toBeTruthy();
+      // The ring is an INSET shadow on the bubble: it never crosses the 4px grouped gap.
+      expect(bubble.style.background).toBe('');
+      expect(bubble.style.boxShadow).toContain('inset');
+      expect(bubble.style.outline).toBe('');
+      // The row wrapper carries no fill — that was what absorbed the bottom margin.
+      const row = bubble.closest('[data-chat-message-id]') as HTMLElement;
+      expect(row.getAttribute('data-chat-message-id')).toBe('m2');
+      expect(row.style.background).toBe('');
       expect(scroll).toHaveBeenCalledWith({ block: 'center', behavior: 'auto' });
     } finally {
       HTMLElement.prototype.scrollIntoView = original;
@@ -157,7 +167,7 @@ describe('ChatMessageList notification target highlight', () => {
       );
       // The target stays highlighted, but the viewport is no longer owned by the deeplink.
       expect(scroll).not.toHaveBeenCalledWith({ block: 'center', behavior: 'auto' });
-      expect(screen.getByTestId('chat-target-message')).toBeTruthy();
+      expect(screen.getByTestId('chat-target-bubble')).toBeTruthy();
     } finally {
       HTMLElement.prototype.scrollIntoView = original;
     }
@@ -168,7 +178,7 @@ describe('ChatMessageList notification target highlight', () => {
       { id: 'm1', threadId: 't', role: 'user', content: 'first', createdAt: '2026-11-18T00:00:00Z' },
     ];
     render(<ChatMessageList messages={messages} readPositionReady lastReadMessageId={null} />);
-    expect(screen.queryByTestId('chat-target-message')).toBeNull();
+    expect(screen.queryByTestId('chat-target-bubble')).toBeNull();
   });
 });
 

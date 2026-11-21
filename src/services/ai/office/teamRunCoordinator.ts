@@ -122,7 +122,7 @@ import {
   getCursor,
   readMessagesAfter,
 } from './teamEventLog';
-import { USER_PARTICIPANT_ID } from '../../../types/teamChat';
+import { USER_PARTICIPANT_ID, type TeamMessage } from '../../../types/teamChat';
 
 /**
  * Headless team-run coordinator (D-01/D-02/D-03, D-06, D-08, D-12/D-13, D-14, D-20/D-21,
@@ -640,6 +640,57 @@ export function createTeamRunCoordinator(
    */
   let synthesisPending = false;
   /**
+   * team-chat-leader-stall: plain messages sent while the lead (or its batch synthesis) is
+   * busy are queued here for ONE follow-up turn. They are NOT injected into the busy turn's
+   * `drainInbox` — that advanced their cursor ("seen") but tied the answer to whatever the
+   * busy turn happened to be doing, so a dispatch/synthesis turn could end without replying.
+   * Each row is the durable log message; a follow-up turn uses its text as the prompt and
+   * skips re-injection via `triggerMessageId`. Serialized on `leadTurnChain`, never a
+   * background poll. Cleared on dispose so a torn-down run cannot resurrect a turn.
+   *
+   * The claim is added SYNCHRONOUSLY beside the log append: an await between them lets a busy
+   * turn's `drainInbox` see an unclaimed row, advance the cursor and inject it too.
+   * `claimedLeadReplyIds` outlives dequeue so that drain never answers a queued row twice.
+   */
+  interface PendingLeadReply {
+    message: TeamMessage;
+    epoch: number;
+  }
+  const pendingLeadReplies: PendingLeadReply[] = [];
+  /** id → claim epoch. Claims are permanent for the coordinator: a queued row is only ever
+   * answered by its own follow-up, never injected into a different turn. */
+  const claimedLeadReplyIds = new Map<string, number>();
+  /** Claims whose follow-up either started or was cancelled by a Stop. Only these may let
+   * `drainInbox` advance its cursor past them. */
+  const releasedLeadReplyIds = new Set<string>();
+  /** Guards against two same-tick follow-up drains racing on the chain. */
+  let leadReplyDrainScheduled = false;
+  /**
+   * Stop epoch: incremented by every Stop/abort/dispose. A queued follow-up captures the
+   * epoch at claim time; a later Stop invalidates it even if the task was already shifted
+   * off the queue and is waiting on `leadTurnChain`.
+   */
+  let leadReplyStopEpoch = 0;
+  const invalidateQueuedLeadReplies = (): void => {
+    pendingLeadReplies.length = 0;
+    // Release only this epoch's claims. A newer turn's markers must survive an older Stop.
+    for (const [id, epoch] of claimedLeadReplyIds) {
+      if (epoch === leadReplyStopEpoch) releasedLeadReplyIds.add(id);
+    }
+    leadReplyStopEpoch += 1;
+  };
+  /** Claim immediately after the log append; the message is now owned by a lead turn. */
+  const claimLeadReply = (message: TeamMessage): void => {
+    claimedLeadReplyIds.set(message.id, leadReplyStopEpoch);
+    pendingLeadReplies.push({ message, epoch: leadReplyStopEpoch });
+  };
+  /** A claimed row that starts its OWN turn directly (lead was idle after preps). */
+  const takeLeadReply = (id: string): void => {
+    const index = pendingLeadReplies.findIndex((entry) => entry.message.id === id);
+    if (index >= 0) pendingLeadReplies.splice(index, 1);
+    releasedLeadReplyIds.add(id);
+  };
+  /**
    * D-18: set once at the top of `dispose()` and never cleared. Every post-await phase
    * write checks it, because `dispose()` cannot await the in-flight `send()`/`runBatch` —
    * releasing the parks is what lets them finish, so a late tail would resurrect a phase.
@@ -925,6 +976,11 @@ export function createTeamRunCoordinator(
     }
     return false;
   };
+  /** Plain messages queue while the LEAD runtime or its synthesis/batch owns the turn.
+   * A parked plan approval is busy for commands, but the lead is idle and can still answer a
+   * plain question without colliding with the batch it has not opened yet. */
+  const isLeadReplyBusy = (): boolean =>
+    leadTurnKind !== null || synthesisPending || openBatchId !== null;
 
   const registry: TeamRunRegistry = createTeamRunRegistry((agentId) =>
     buildRuntimeDeps(agentId)
@@ -951,7 +1007,9 @@ export function createTeamRunCoordinator(
     text: string,
     batchResults?: readonly BatchResult[],
     announcedPhase: 'lead-thinking' | 'lead-synthesizing' = 'lead-thinking',
-    triggerMessageId?: string
+    triggerMessageId?: string,
+    /** Queued follow-up only: rechecked AFTER the chain wait, so a later Stop still cancels. */
+    requiredStopEpoch?: number
   ): Promise<void> {
     if (disposed) return;
     registerTeamTurn();
@@ -960,6 +1018,7 @@ export function createTeamRunCoordinator(
       // this check the turn runs against a deleted team and writes orphan rows.
       await withLeadRuntime(async () => {
         if (disposed) return;
+        if (requiredStopEpoch !== undefined && requiredStopEpoch !== leadReplyStopEpoch) return;
         await startLeadTurn(text, batchResults, announcedPhase, triggerMessageId);
       });
     } finally {
@@ -968,6 +1027,37 @@ export function createTeamRunCoordinator(
       // a flag would need a reset on every path and could outlive its condition.
       if (openBatchId === null) aiTurnManager.finishTurn(teamTurnId);
     }
+  }
+
+  /**
+   * team-chat-leader-stall: run ONE chained lead turn per queued plain message, using its text
+   * as the prompt. `triggerMessageId` skips re-injecting that row as a "steer" on round 1.
+   *
+   * Called from `send()` when the lead is busy. `runLeadTurn` enqueues on `leadTurnChain`
+   * behind the busy turn (and behind any synthesis already chained), so each follow-up starts
+   * only after the active turn releases the runtime — never a concurrent turn. A single drain
+   * at a time preserves arrival order.
+   */
+  function scheduleLeadReplyDrain(): void {
+    if (disposed || leadReplyDrainScheduled || pendingLeadReplies.length === 0) return;
+    leadReplyDrainScheduled = true;
+    void (async () => {
+      try {
+        while (!disposed && pendingLeadReplies.length > 0) {
+          const { message, epoch } = pendingLeadReplies.shift()!;
+          // A Stop between shift() and this check must reject this task without touching a
+          // legitimately newer turn's markers. Drop the claim when rejected so the row can be
+          // answered by a later message/retry, not silently marked "seen" forever.
+          if (epoch !== leadReplyStopEpoch) {
+            claimedLeadReplyIds.delete(message.id);
+            continue;
+          }
+          await runLeadTurn(message.content, undefined, 'lead-thinking', message.id, epoch);
+        }
+      } finally {
+        leadReplyDrainScheduled = false;
+      }
+    })();
   }
 
   function updateAgent(agentId: string, patch: Partial<AgentRunState>): void {
@@ -2735,13 +2825,31 @@ export function createTeamRunCoordinator(
     if (disposed) return [];
     // Advance BEFORE returning: the loop appends these to the very next model call, so the
     // read has happened. A teardown must not consume a message nobody read.
-    await advanceCursor(teamId, participantId, batch[batch.length - 1]!.seq, db);
+    // A claimed row stays unread until its own follow-up turn consumes it. Advancing the
+    // cursor past it here would mark it "seen" while nobody answered. The previous released
+    // rows are still consumed, so a later drain can progress past them.
+    const lastConsumed = [...batch].reverse().find((message) => {
+      if (participantId !== roster.lead?.id) return true;
+      const claimEpoch = claimedLeadReplyIds.get(message.id);
+      return claimEpoch === undefined || releasedLeadReplyIds.has(message.id);
+    });
+    if (lastConsumed !== undefined) {
+      await advanceCursor(teamId, participantId, lastConsumed.seq, db);
+    }
     notify();
     return batch
-      .filter(
-        (message) =>
-          message.to.includes(participantId) && skipIds?.has(message.id) !== true
-      )
+      .filter((message) => {
+        if (!message.to.includes(participantId)) return false;
+        if (skipIds?.has(message.id) === true) return false;
+        // A claimed row is owned by its own follow-up turn, never injected into whichever
+        // turn happens to drain while it is pending — that would answer it twice. Released
+        // rows (follow-up started, or cancelled by a Stop) are part of this turn's read
+        // receipt only; the trigger text is in that turn's prompt, so never re-inject it.
+        if (participantId === roster.lead?.id && claimedLeadReplyIds.has(message.id)) {
+          return false;
+        }
+        return true;
+      })
       .map((message) => ({
         role: 'user' as const,
         // The sender is named: an anonymous user-role message is indistinguishable from the
@@ -3059,7 +3167,7 @@ export function createTeamRunCoordinator(
     if (recipients.length === 0) {
       return 'refused';
     }
-    await appendForExistingMessage(
+    const logRow = await appendForExistingMessage(
       {
         id: row.id,
         teamId,
@@ -3071,6 +3179,10 @@ export function createTeamRunCoordinator(
       },
       db
     );
+    // Claim synchronously: any await here would let the busy turn's `drainInbox` inject the
+    // row into its own prompt and double-answer it.
+    const plainToLead = targets.length === 0 && recipients.includes(roster.lead!.id);
+    if (plainToLead) claimLeadReply(logRow);
     notify();
     if (disposed) return 'steered';
 
@@ -3133,12 +3245,14 @@ export function createTeamRunCoordinator(
       }
     }
 
-    // Plain chat with the leader. If its consumer is already turning, the message waits in
-    // the log and the current turn's next round drains it — never a second concurrent turn.
-    // WR-03: `synthesisPending` counts as busy too — the batch row is already closed at that
-    // point, so `leadTurnKind` is still null and a message here would start a second answer
-    // alongside the synthesis.
-    if (leadTurnKind !== null || synthesisPending) return 'steered';
+    // Plain chat with the leader. The row was claimed beside its log append; a busy turn now
+    // gets a chained follow-up, an idle turn takes the claim directly. `isBusy` also covers an
+    // open batch window, before synthesis takes the chain.
+    if (isLeadReplyBusy()) {
+      scheduleLeadReplyDrain();
+      return 'steered';
+    }
+    takeLeadReply(logRow.id);
     await runLeadTurn(text, undefined, 'lead-thinking', row.id);
     return 'started';
   }
@@ -3204,7 +3318,7 @@ export function createTeamRunCoordinator(
       },
       db
     );
-    await appendForExistingMessage(
+    const logRow = await appendForExistingMessage(
       {
         id: saved.id,
         teamId,
@@ -3217,6 +3331,11 @@ export function createTeamRunCoordinator(
       },
       db
     );
+    // Same stall assumption as the composer path: an idle leader must be woken by a real
+    // follow-up turn, not left to a busy turn's drain that ends without answering. Claim
+    // synchronously beside the append.
+    const toLead = to.includes(roster.lead?.id ?? '') && fromId !== roster.lead?.id;
+    if (toLead) claimLeadReply(logRow);
     if (fromId === roster.lead?.id) to.forEach((id) => messagedRecipients.add(id));
     notify();
 
@@ -3255,12 +3374,14 @@ export function createTeamRunCoordinator(
         continue;
       }
       if (roster.lead && recipientId === roster.lead.id) {
-        // A lead that is mid-turn (including the one calling this tool) reads the message at
-        // its next round; starting a second lead turn here would be a re-entrant turn.
-        if (leadTurnKind !== null || synthesisPending) {
+        // Stalled-message fix: a busy lead gets a chained follow-up turn with this row as its
+        // trigger; an idle lead takes the claim and starts directly. Never a re-entrant turn.
+        if (isLeadReplyBusy()) {
+          scheduleLeadReplyDrain();
           outcomes.push({ to: recipientId, outcome: 'queued' });
           continue;
         }
+        takeLeadReply(saved.id);
         await runLeadTurn(content, undefined, 'lead-thinking', saved.id);
         outcomes.push({ to: recipientId, outcome: 'started' });
         continue;
@@ -4164,6 +4285,9 @@ export function createTeamRunCoordinator(
       planResolver(false);
       planResolver = null;
     }
+    // team-chat-leader-stall: stopping the lead ends its run, including a follow-up already
+    // shifted off the queue and waiting on leadTurnChain. Bump the epoch, don't just clear.
+    if (roster.lead !== undefined && agentId === roster.lead.id) invalidateQueuedLeadReplies();
     userStopped.set(agentId, 'user-per-agent');
     stampAbortSource([agentId], 'user-per-agent');
     // D-10/D-11: creation-time link, because a QUEUED assignment has no runtime entry and
@@ -4208,6 +4332,9 @@ export function createTeamRunCoordinator(
     // tool call stays pending forever and send() never resolves.
     planResolver?.(false);
     planResolver = null;
+    // team-chat-leader-stall: a Stop ends the run — queued (or already shifted) follow-up
+    // replies must not spawn fresh turns. Rows stay in the log (never data loss).
+    invalidateQueuedLeadReplies();
     // D-11: a global abort ends EVERY agent as a user abort, so the turn's own settle path
     // (which may win the race for a running agent) must map to stopped/user-abort too.
     for (const agentId of agents.keys()) userStopped.set(agentId, 'user-abort');
@@ -4255,6 +4382,8 @@ export function createTeamRunCoordinator(
    */
   async function dispose(cause: 'team-deleted' | 'app-exit' = 'team-deleted'): Promise<void> {
     disposed = true;
+    // team-chat-leader-stall: a teardown never runs queued follow-ups. Rows stay in the log.
+    invalidateQueuedLeadReplies();
     // `ready` is the terminal state; set it before the ledger await so no observer sees a
     // live phase after the flag is up and before the close resolves.
     // IN-07: the stop path and this teardown race to settle the same attempts. Marking every

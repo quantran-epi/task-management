@@ -2595,9 +2595,9 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
 
       const sent = current.coordinator.send('Làm báo cáo');
       await waitFor(() => current.coordinator.getState().phase === 'batch-running');
-      // 37.1 §1.1: the message is appended and the idle leader reads it — a new turn, not
-      // a refusal and not a second concurrent turn on a live runtime.
-      await expect(current.coordinator.send('chen ngang')).resolves.toBe('started');
+      // An open batch owns the turn before synthesis takes the chain. The submit is queued
+      // for a chained follow-up (not a concurrent turn) and never dropped.
+      await expect(current.coordinator.send('chen ngang')).resolves.toBe('steered');
 
       gate.release();
       await sent;
@@ -4689,7 +4689,9 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       const sent = current.coordinator.send('Làm báo cáo');
       await waitFor(() => current.coordinator.getState().phase === 'batch-running');
 
-      await expect(current.coordinator.send('đổi hướng sang kiểm thử')).resolves.toBe('started');
+      // Mid-batch the message is queued for its own chained lead turn; the busy turn must
+      // not consume or drop it (finding #3: openBatchId !== null is busy).
+      await expect(current.coordinator.send('đổi hướng sang kiểm thử')).resolves.toBe('steered');
 
       // The message is in the log, addressed to the leader, as an ordinary user row.
       const log = await teamLog(current);
@@ -4913,6 +4915,117 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
         .toArray();
       const cursor = await getCursor(current.team.id, target.id, current.db);
       expect(cursor.lastSeq).toBe(Math.max(...log.map((row) => row.seq)));
+    });
+
+    // team-chat-leader-stall: a message sent while the lead is turning used to be advanced
+    // past by the active turn's drain (→ "seen") and then dropped when that turn ended.
+    it('starts a follow-up lead turn for plain messages that arrive while the lead is turning', async () => {
+      const firstTurnStarted = deferred();
+      const firstTurnGate = deferred();
+      const leadPrompts: string[] = [];
+      const questions = ['Câu hỏi số 1', 'Câu hỏi số 2', 'Câu hỏi số 3'];
+
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            const text = lastTextOf(options);
+            leadPrompts.push(text);
+            await options.beforeToolRound!(1, options.signal);
+            if (text === 'Việc đầu tiên') {
+              firstTurnStarted.release();
+              await firstTurnGate.promise;
+            }
+            return loopResult('Xong.');
+          },
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Việc đầu tiên');
+      await firstTurnStarted.promise;
+
+      // Sent while the lead's runtime is live and `leadTurnKind === 'thinking'`.
+      // Each must be queued as its own answer, not silently acknowledged and dropped.
+      for (const question of questions) await current.coordinator.send(question);
+
+      firstTurnGate.release();
+      await sent;
+      // Follow-ups are chained on the lead runtime after the active turn.
+      await waitFor(() => questions.every((q) => leadPrompts.includes(q)), 5000);
+      await waitForReady(current.coordinator);
+
+      for (const question of questions) expect(leadPrompts).toContain(question);
+    });
+
+    it('claims a plain message before any await so a busy drain cannot answer it twice', async () => {
+      const firstTurnStarted = deferred();
+      const firstTurnGate = deferred();
+      const drains: string[][] = [];
+      const leadPrompts: string[] = [];
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            const text = lastTextOf(options);
+            leadPrompts.push(text);
+            const injected = (await options.beforeToolRound!(1, options.signal)) ?? [];
+            drains.push(injected.map((row) => String(row.content)));
+            if (text === 'Việc đầu tiên') {
+              firstTurnStarted.release();
+              await firstTurnGate.promise;
+            }
+            return loopResult('Xong.');
+          },
+        },
+      });
+      const current = harness;
+      const sent = current.coordinator.send('Việc đầu tiên');
+      await firstTurnStarted.promise;
+
+      await expect(current.coordinator.send('Câu hỏi riêng')).resolves.toBe('steered');
+      // The busy turn's drain runs a second round before it ends; the claimed row must NOT
+      // be injected there (its own chained turn is the sole answer).
+      const busyDrain = (await current.coordinator.drainInbox(current.lead.id));
+      expect(busyDrain.some((row) => String(row.content).includes('Câu hỏi riêng'))).toBe(false);
+
+      firstTurnGate.release();
+      await sent;
+      await waitFor(() => leadPrompts.includes('Câu hỏi riêng'), 5000);
+      await waitForReady(current.coordinator);
+
+      const allInjected = drains.flat().join('\n');
+      expect(allInjected).not.toContain('Câu hỏi riêng');
+      expect(leadPrompts.filter((row) => row === 'Câu hỏi riêng')).toHaveLength(1);
+    });
+
+    it('a later Stop cancels a follow-up already shifted off the lead reply queue', async () => {
+      const firstTurnStarted = deferred();
+      const firstTurnGate = deferred();
+      const leadPrompts: string[] = [];
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            const text = lastTextOf(options);
+            leadPrompts.push(text);
+            await options.beforeToolRound!(1, options.signal);
+            if (text === 'Việc đầu tiên') {
+              firstTurnStarted.release();
+              await firstTurnGate.promise;
+            }
+            return loopResult('Xong.');
+          },
+        },
+      });
+      const current = harness;
+      const sent = current.coordinator.send('Việc đầu tiên');
+      await firstTurnStarted.promise;
+
+      await expect(current.coordinator.send('Câu hỏi bị hủy')).resolves.toBe('steered');
+      current.coordinator.stopAgent(current.lead.id);
+
+      firstTurnGate.release();
+      await sent;
+      await sleep(80);
+      expect(leadPrompts).not.toContain('Câu hỏi bị hủy');
     });
   });
 

@@ -126,6 +126,8 @@ export interface ChatMessageBubbleProps {
    * not `grouped` — decides the bottom margin.
    */
   continuesNext?: boolean | undefined;
+  /** OS-notification deeplink target: a thin ring marks this bubble without filling the row. */
+  highlighted?: boolean | undefined;
 }
 
 /**
@@ -379,6 +381,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   addressedTo,
   grouped = false,
   continuesNext = false,
+  highlighted = false,
 }) => {
   const { token } = theme.useToken();
   const [copied, setCopied] = useState(false);
@@ -1226,8 +1229,16 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         </div>
       )}
       <div
+        data-testid={highlighted ? 'chat-target-bubble' : undefined}
         style={{
           maxWidth: isUser ? '72%' : '82%',
+          // A notification deeplink ring hugs the bubble itself. It must NOT sit on the row
+          // wrapper: that wrapper is a flex item, so its background filled the bubble's bottom
+          // margin and fused the highlighted reply with the next message. An INSET ring stays
+          // inside the bubble: an outline (even at offset 0) would cross the 4px grouped gap.
+          ...(highlighted
+            ? { boxShadow: `inset 0 0 0 2px ${token.colorPrimary}` }
+            : {}),
           // The percentage must include padding and border, or two bubbles with the same
           // `max-width` render at different widths and the right edge looks ragged.
           boxSizing: 'border-box',
@@ -1255,11 +1266,13 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           lineHeight: 1.57,
           // The lead accent is an inset shadow, not a thicker border: a 3px left border
           // shifts the text off-centre and clips the 12px corner radius.
-          boxShadow: isUser
-            ? 'none'
-            : isLeadVoice
-              ? `inset 3px 0 0 ${token.colorPrimary}`
-              : '0 1px 2px rgba(0,0,0,0.04)',
+          boxShadow: highlighted
+            ? `inset 0 0 0 2px ${token.colorPrimary}`
+            : isUser
+              ? 'none'
+              : isLeadVoice
+                ? `inset 3px 0 0 ${token.colorPrimary}`
+                : '0 1px 2px rgba(0,0,0,0.04)',
         }}
       >
         {replyTo && (
