@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { message } from 'antd';
+import { useMessage } from '../components/ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type TaskPlannerDatabase } from '../db';
 import { useTimer } from '../hooks/useTimer';
@@ -25,6 +25,7 @@ export interface UseTimerAlertMonitorOptions {
  */
 export function useTimerAlertMonitor(options: UseTimerAlertMonitorOptions = {}): void {
   const targetDb = options.database || db;
+  const message = useMessage();
   const { activeTimers, getElapsedSeconds, tick } = useTimer();
   const alertedTasksRef = useRef<Set<string>>(new Set());
 
@@ -177,5 +178,5 @@ export function useTimerAlertMonitor(options: UseTimerAlertMonitorOptions = {}):
         }
       }
     }
-  }, [activeTimers, liveMonitoringData, getElapsedSeconds, tick]);
+  }, [activeTimers, liveMonitoringData, getElapsedSeconds, tick, message]);
 }

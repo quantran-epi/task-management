@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { message } from 'antd';
+import { useMessage } from '../components/ui';
 import { announceToScreenReader } from '../components/common/AriaLiveRegion';
 
 /**
@@ -7,6 +7,7 @@ import { announceToScreenReader } from '../components/common/AriaLiveRegion';
  * Triggers accessible screen reader announcements and toast alerts upon transition (D-09, UX-04).
  */
 export function useNetworkStatus(): boolean {
+  const message = useMessage();
   const [isOnline, setIsOnline] = useState<boolean>(() => {
     if (typeof navigator !== 'undefined' && 'onLine' in navigator) {
       return navigator.onLine;
@@ -34,7 +35,7 @@ export function useNetworkStatus(): boolean {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, []);
+  }, [message]);
 
   return isOnline;
 }
