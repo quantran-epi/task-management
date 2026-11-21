@@ -65,16 +65,19 @@ describe('native popup placement contract', () => {
   it('closes on outside pointer and Escape and restores anchor focus', () => {
     const view = render(<Popover trigger={['click']} content="Nội dung">{anchor()}</Popover>);
     const trigger = view.getByText('Mở');
+    const anchorNode = trigger.parentElement as HTMLElement;
+    anchorNode.tabIndex = 0;
+    anchorNode.focus();
     fireEvent.click(trigger);
     const outside = document.createElement('button');
     document.body.appendChild(outside);
     fireEvent.pointerDown(outside);
     expect(installedPopup()).toBeNull();
-    expect(document.activeElement).toBe(trigger);
+    expect(document.activeElement).toBe(anchorNode);
     fireEvent.click(trigger);
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(installedPopup()).toBeNull();
-    expect(document.activeElement).toBe(trigger);
+    expect(document.activeElement).toBe(anchorNode);
     outside.remove();
     view.unmount();
   });

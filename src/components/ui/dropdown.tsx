@@ -1,14 +1,11 @@
 import type { DropdownProps as AntDropdownProps, MenuProps as AntMenuProps } from 'antd';
 import {
-  cloneElement,
-  isValidElement,
   useCallback,
   useRef,
   useState,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
-  type ReactElement,
   type ReactNode,
 } from 'react';
 import { Popup } from './native/popup';
@@ -40,10 +37,6 @@ export function DropdownButton({ children, icon, type, disabled, onClick, ...res
   );
 }
 
-function triggerOf(children: ReactNode): ReactElement<Record<string, unknown>> | null {
-  if (Array.isArray(children)) return triggerOf(children[0]);
-  return isValidElement<Record<string, unknown>>(children) ? children : null;
-}
 
 /** Native S-SEL/S-MNU dropdown: click/hover/focus/contextMenu trigger + BODY portal menu. */
 export function Dropdown({ styles, ...rest }: DropdownProps) {
@@ -81,44 +74,36 @@ export function Dropdown({ styles, ...rest }: DropdownProps) {
     ...callerRoot,
   } as CSSProperties;
 
-  const anchor = triggerOf(rest.children);
-  const trigger = anchor ? cloneElement(anchor, {
-    ref: (node: HTMLElement | null) => {
-      anchorRef.current = node;
-      const original = (anchor as unknown as { ref?: (node: HTMLElement | null) => void }).ref;
-      if (typeof original === 'function') original(node);
-      else if (original && typeof original === 'object') (original as { current: HTMLElement | null }).current = node;
-    },
-    'data-state': current ? 'expanded' : 'collapsed',
-    'data-oi-control': 'dropdown-trigger',
-    onClick: (event: ReactMouseEvent<HTMLElement>) => {
-      (anchor.props.onClick as ((event: ReactMouseEvent<HTMLElement>) => void) | undefined)?.(event);
-      if (!disabled && triggers.includes('click')) setVisibility(!current);
-    },
-    onContextMenu: (event: ReactMouseEvent<HTMLElement>) => {
-      (anchor.props.onContextMenu as ((event: ReactMouseEvent<HTMLElement>) => void) | undefined)?.(event);
-      if (!disabled && triggers.includes('contextMenu')) {
-        event.preventDefault();
-        setVisibility(true);
-      }
-    },
-    onMouseEnter: (event: ReactMouseEvent<HTMLElement>) => {
-      (anchor.props.onMouseEnter as ((event: ReactMouseEvent<HTMLElement>) => void) | undefined)?.(event);
-      startHover();
-    },
-    onMouseLeave: (event: ReactMouseEvent<HTMLElement>) => {
-      (anchor.props.onMouseLeave as ((event: ReactMouseEvent<HTMLElement>) => void) | undefined)?.(event);
-      stopHover();
-    },
-    onFocus: (event: React.FocusEvent<HTMLElement>) => {
-      (anchor.props.onFocus as ((event: React.FocusEvent<HTMLElement>) => void) | undefined)?.(event);
-      if (!disabled && triggers.includes('focus')) setVisibility(true);
-    },
-    onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => {
-      (anchor.props.onKeyDown as ((event: ReactKeyboardEvent<HTMLElement>) => void) | undefined)?.(event);
-      if (event.key === 'ArrowDown' && !disabled) { event.preventDefault(); setVisibility(true); }
-    },
-  }) : rest.children;
+  // Anchor is a real DOM wrapper: callers pass function-component buttons that
+  // cannot accept a ref, and event delegation keeps their own handlers intact.
+  const trigger = (
+    <span
+      ref={anchorRef}
+      data-state={current ? 'expanded' : 'collapsed'}
+      data-oi-control="dropdown-trigger"
+      style={{ display: 'inline-flex' }}
+      onClick={(event: ReactMouseEvent<HTMLElement>) => {
+        if (!disabled && triggers.includes('click')) setVisibility(!current);
+        void event;
+      }}
+      onContextMenu={(event: ReactMouseEvent<HTMLElement>) => {
+        if (!disabled && triggers.includes('contextMenu')) {
+          event.preventDefault();
+          setVisibility(true);
+        }
+      }}
+      onMouseEnter={startHover}
+      onMouseLeave={stopHover}
+      onFocus={() => {
+        if (!disabled && triggers.includes('focus')) setVisibility(true);
+      }}
+      onKeyDown={(event: ReactKeyboardEvent<HTMLElement>) => {
+        if (event.key === 'ArrowDown' && !disabled) { event.preventDefault(); setVisibility(true); }
+      }}
+    >
+      {rest.children}
+    </span>
+  );
 
   const menuProps = rest.menu ?? {};
   const menuOnClick = menuProps.onClick as ((info: MenuClickInfo) => void) | undefined;

@@ -1,14 +1,9 @@
 import type { TooltipProps as AntTooltipProps } from 'antd';
 import {
-  cloneElement,
-  isValidElement,
   useEffect,
   useRef,
   useState,
   type CSSProperties,
-  type FocusEvent as ReactFocusEvent,
-  type MouseEvent as ReactMouseEvent,
-  type ReactElement,
   type ReactNode,
 } from 'react';
 import { classNames } from './native/classNames';
@@ -26,10 +21,6 @@ export interface TooltipWrapperProps extends AntTooltipProps {
 
 const WIDTH_SCALE = { md: 18, lg: 28 } as const;
 
-function triggerOf(children: ReactNode): ReactElement<Record<string, unknown>> | null {
-  if (Array.isArray(children)) return triggerOf(children[0]);
-  return isValidElement<Record<string, unknown>>(children) ? children : null;
-}
 
 function titleText(title: ReactNode | ((...args: never[]) => ReactNode)): ReactNode {
   if (title === null || title === undefined || title === '' || typeof title === 'function') return null;
@@ -69,31 +60,20 @@ export function Tooltip({ widthScale = 'md', overlayStyle, ...rest }: TooltipWra
     ...overlayStyle,
   } as CSSProperties;
 
-  const anchor = triggerOf(rest.children);
-  const trigger = anchor ? cloneElement(anchor, {
-    ref: (node: HTMLElement | null) => {
-      anchorRef.current = node;
-      const original = (anchor as unknown as { ref?: (node: HTMLElement | null) => void }).ref;
-      if (typeof original === 'function') original(node);
-      else if (original && typeof original === 'object') (original as { current: HTMLElement | null }).current = node;
-    },
-    onMouseEnter: (event: ReactMouseEvent<HTMLElement>) => {
-      (anchor.props.onMouseEnter as ((event: ReactMouseEvent<HTMLElement>) => void) | undefined)?.(event);
-      show();
-    },
-    onMouseLeave: (event: ReactMouseEvent<HTMLElement>) => {
-      (anchor.props.onMouseLeave as ((event: ReactMouseEvent<HTMLElement>) => void) | undefined)?.(event);
-      hide();
-    },
-    onFocus: (event: ReactFocusEvent<HTMLElement>) => {
-      (anchor.props.onFocus as ((event: ReactFocusEvent<HTMLElement>) => void) | undefined)?.(event);
-      show();
-    },
-    onBlur: (event: ReactFocusEvent<HTMLElement>) => {
-      (anchor.props.onBlur as ((event: ReactFocusEvent<HTMLElement>) => void) | undefined)?.(event);
-      hide();
-    },
-  }) : rest.children;
+  // Delegating wrapper: caller children are often function components and cannot take a ref.
+  const trigger = (
+    <span
+      ref={anchorRef}
+      data-oi-control="tooltip-trigger"
+      style={{ display: 'inline-flex' }}
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onFocus={show}
+      onBlur={hide}
+    >
+      {rest.children}
+    </span>
+  );
 
   return (
     <>

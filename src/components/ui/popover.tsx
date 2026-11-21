@@ -1,15 +1,9 @@
 import type { PopoverProps as AntPopoverProps } from 'antd';
 import {
-  cloneElement,
-  isValidElement,
   useCallback,
   useRef,
   useState,
   type CSSProperties,
-  type FocusEvent as ReactFocusEvent,
-  type MouseEvent as ReactMouseEvent,
-  type ReactElement,
-  type ReactNode,
 } from 'react';
 import { classNames } from './native/classNames';
 import { Popup } from './native/popup';
@@ -24,10 +18,6 @@ export interface PopoverWrapperProps extends AntPopoverProps {
 
 export const WIDTH_SCALE = { md: 18, lg: 28 } as const;
 
-function triggerOf(children: ReactNode): ReactElement<Record<string, unknown>> | null {
-  if (Array.isArray(children)) return triggerOf(children[0]);
-  return isValidElement<Record<string, unknown>>(children) ? children : null;
-}
 
 /** Native N-19: BODY-portal popover surface with hover/click/focus triggers. */
 export function Popover({ widthScale = 'md', overlayStyle, ...rest }: PopoverWrapperProps) {
@@ -55,35 +45,31 @@ export function Popover({ widthScale = 'md', overlayStyle, ...rest }: PopoverWra
     ...overlayStyle,
   } as CSSProperties;
 
-  const anchor = triggerOf(rest.children);
-  const trigger = anchor ? cloneElement(anchor, {
-    ref: (node: HTMLElement | null) => {
-      anchorRef.current = node;
-      const original = (anchor as unknown as { ref?: (node: HTMLElement | null) => void }).ref;
-      if (typeof original === 'function') original(node);
-      else if (original && typeof original === 'object') (original as { current: HTMLElement | null }).current = node;
-    },
-    'data-state': current ? 'expanded' : 'collapsed',
-    'data-oi-control': 'popover-trigger',
-    onClick: (event: ReactMouseEvent<HTMLElement>) => {
-      (anchor.props.onClick as ((event: ReactMouseEvent<HTMLElement>) => void) | undefined)?.(event);
-      if (!disabled && triggers.includes('click')) setVisibility(!current);
-    },
-    onMouseEnter: (event: ReactMouseEvent<HTMLElement>) => {
-      (anchor.props.onMouseEnter as ((event: ReactMouseEvent<HTMLElement>) => void) | undefined)?.(event);
-      if (disabled || !triggers.includes('hover')) return;
-      hoverTimer.current = setTimeout(() => setVisibility(true), rest.mouseEnterDelay ?? 0.1);
-    },
-    onMouseLeave: (event: ReactMouseEvent<HTMLElement>) => {
-      (anchor.props.onMouseLeave as ((event: ReactMouseEvent<HTMLElement>) => void) | undefined)?.(event);
-      if (hoverTimer.current) { clearTimeout(hoverTimer.current); hoverTimer.current = null; }
-      if (triggers.includes('hover')) setVisibility(false);
-    },
-    onFocus: (event: ReactFocusEvent<HTMLElement>) => {
-      (anchor.props.onFocus as ((event: ReactFocusEvent<HTMLElement>) => void) | undefined)?.(event);
-      if (!disabled && triggers.includes('focus')) setVisibility(true);
-    },
-  }) : rest.children;
+  // Delegating wrapper: caller children are often function components and cannot take a ref.
+  const trigger = (
+    <span
+      ref={anchorRef}
+      data-state={current ? 'expanded' : 'collapsed'}
+      data-oi-control="popover-trigger"
+      style={{ display: 'inline-flex' }}
+      onClick={() => {
+        if (!disabled && triggers.includes('click')) setVisibility(!current);
+      }}
+      onMouseEnter={() => {
+        if (disabled || !triggers.includes('hover')) return;
+        hoverTimer.current = setTimeout(() => setVisibility(true), rest.mouseEnterDelay ?? 0.1);
+      }}
+      onMouseLeave={() => {
+        if (hoverTimer.current) { clearTimeout(hoverTimer.current); hoverTimer.current = null; }
+        if (triggers.includes('hover')) setVisibility(false);
+      }}
+      onFocus={() => {
+        if (!disabled && triggers.includes('focus')) setVisibility(true);
+      }}
+    >
+      {rest.children}
+    </span>
+  );
 
   const title = typeof rest.title === 'function' ? null : rest.title;
   const content = typeof rest.content === 'function' ? null : rest.content;
