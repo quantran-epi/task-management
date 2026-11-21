@@ -1,10 +1,6 @@
 import React from 'react';
-import { Button, DatePicker, Space, Typography } from 'antd';
-import {
-  LeftOutlined,
-  RightOutlined,
-  SettingOutlined,
-} from '@ant-design/icons';
+import { Button, DatePicker, Space, Typography, SpaceCompact } from '../ui';
+import { LeftOutlined, RightOutlined, SettingOutlined } from '../ui/icon';
 import dayjs, { type Dayjs } from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 
@@ -69,7 +65,7 @@ export const WeekNavigator: React.FC<WeekNavigatorProps> = ({
     >
       <Space wrap size="middle">
         {/* Navigation Button Group (D-02) */}
-        <Space.Compact>
+        <SpaceCompact>
           <Button
             icon={<LeftOutlined />}
             onClick={handlePrevWeek}
@@ -85,7 +81,7 @@ export const WeekNavigator: React.FC<WeekNavigatorProps> = ({
             aria-label="Tuần sau"
             title="Tuần sau (Alt+Right)"
           />
-        </Space.Compact>
+        </SpaceCompact>
 
         {/* Week DatePicker */}
         <DatePicker

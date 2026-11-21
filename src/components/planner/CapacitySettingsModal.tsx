@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Modal, Space, Button } from 'antd';
+import { Modal, Space, Button } from '../ui';
 import { WeeklyCapacityForm } from '../settings/WeeklyCapacityForm';
 import { OverridesTable } from '../settings/OverridesTable';
 import { createFocusRestorer } from '../../utils/focus';

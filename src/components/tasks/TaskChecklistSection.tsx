@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Button, Checkbox, Input, List, Typography, Tooltip } from 'antd';
-import { PlusOutlined, DeleteOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { Button, Checkbox, Input, List, Typography, Tooltip, ListItem } from '../ui';
+import { PlusOutlined, DeleteOutlined, CheckCircleOutlined } from '../ui/icon';
 import type { TaskChecklistItem } from '../../types/models';
 
 const { Text } = Typography;
@@ -109,7 +109,7 @@ export const TaskChecklistSection: React.FC<TaskChecklistSectionProps> = ({
           bordered
           dataSource={value}
           renderItem={(item) => (
-            <List.Item
+            <ListItem
               key={item.id}
               style={{
                 display: 'flex',
@@ -144,7 +144,7 @@ export const TaskChecklistSection: React.FC<TaskChecklistSectionProps> = ({
                 onClick={() => handleDeleteItem(item.id)}
                 aria-label={`Xóa mục ${item.text}`}
               />
-            </List.Item>
+            </ListItem>
           )}
         />
       )}

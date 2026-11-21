@@ -1,5 +1,5 @@
 import React from 'react';
-import { Table, Tag, Typography, Space, Empty, Alert, Progress } from 'antd';
+import { Table, Tag, Typography, Space, Empty, Alert, Progress } from '../ui';
 import dayjs from 'dayjs';
 import { formatMinutes } from '../../utils/time';
 import type { DayInsightData, DayInsightRow } from '../../utils/dayInsight';

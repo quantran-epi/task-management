@@ -1,21 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import {
-  Modal,
-  Form,
-  DatePicker,
-  TimePicker,
-  InputNumber,
-  Input,
-  Button,
-  List,
-  Typography,
-  Popconfirm,
-  Tag,
-  Space,
-  Divider,
-  message,
-} from 'antd';
-import { DeleteOutlined, PlusOutlined, EditOutlined } from '@ant-design/icons';
+import { Modal, Form, DatePicker, InputNumber, Button, List, Typography, Popconfirm, Tag, Space, Divider, useMessage, Textarea, TimeRangePicker, FormItem, useForm, ListItem, ListItemMeta } from '../ui';
+import { DeleteOutlined, PlusOutlined, EditOutlined } from '../ui/icon';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useRegisterActiveForm } from '../../context/FormGuardContext';
 import {
@@ -56,11 +41,12 @@ export const WorkSessionDetailModal: React.FC<WorkSessionDetailModalProps> = ({
   onSuccess,
   db = defaultDb,
 }) => {
+  const message = useMessage();
   useRegisterActiveForm('work-session-detail-modal', open);
   const [sessions, setSessions] = useState<WorkSession[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [editingSession, setEditingSession] = useState<WorkSession | null>(null);
-  const [form] = Form.useForm<FormValues>();
+  const [form] = useForm<FormValues>();
 
   const loadSessions = async () => {
     setLoading(true);
@@ -235,7 +221,7 @@ export const WorkSessionDetailModal: React.FC<WorkSessionDetailModalProps> = ({
               const endFmt = s.endTime ? dayjs(s.endTime).format('HH:mm') : '—';
               const isSelected = editingSession?.id === s.id;
               return (
-                <List.Item
+                <ListItem
                   style={{
                     padding: '8px 12px',
                     borderRadius: 6,
@@ -270,7 +256,7 @@ export const WorkSessionDetailModal: React.FC<WorkSessionDetailModalProps> = ({
                     </Popconfirm>,
                   ]}
                 >
-                  <List.Item.Meta
+                  <ListItemMeta
                     title={
                       <Space>
                         <Text style={{ fontVariantNumeric: 'tabular-nums' }}>
@@ -302,7 +288,7 @@ export const WorkSessionDetailModal: React.FC<WorkSessionDetailModalProps> = ({
                       </div>
                     }
                   />
-                </List.Item>
+                </ListItem>
               );
             }}
           />
@@ -318,29 +304,29 @@ export const WorkSessionDetailModal: React.FC<WorkSessionDetailModalProps> = ({
 
           <Form form={form} layout="vertical" onFinish={handleFinish}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Form.Item
+              <FormItem
                 name="date"
                 label="Ngày làm việc"
                 rules={[{ required: true, message: 'Vui lòng chọn ngày làm việc' }]}
               >
                 <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" allowClear={false} />
-              </Form.Item>
+              </FormItem>
 
-              <Form.Item
+              <FormItem
                 name="timeRange"
                 label="Khoảng thời gian (Bắt đầu - Kết thúc)"
                 rules={[{ required: true, message: 'Vui lòng chọn khoảng thời gian' }]}
               >
-                <TimePicker.RangePicker
+                <TimeRangePicker
                   style={{ width: '100%' }}
                   format="HH:mm"
                   onChange={handleTimeRangeChange}
                   allowClear={false}
                 />
-              </Form.Item>
+              </FormItem>
             </div>
 
-            <Form.Item
+            <FormItem
               name="durationMinutes"
               label="Thời lượng (phút)"
               rules={[
@@ -349,22 +335,22 @@ export const WorkSessionDetailModal: React.FC<WorkSessionDetailModalProps> = ({
               ]}
             >
               <InputNumber min={1} max={1440} style={{ width: '100%' }} />
-            </Form.Item>
+            </FormItem>
 
-            <Form.Item
+            <FormItem
               name="note"
               label="Ghi chú (tùy chọn)"
               rules={[{ max: 500, message: 'Ghi chú tối đa 500 ký tự' }]}
             >
-              <Input.TextArea
+              <Textarea
                 rows={2}
                 maxLength={500}
                 showCount
                 placeholder="Nội dung công việc thực hiện trong phiên này..."
               />
-            </Form.Item>
+            </FormItem>
 
-            <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
+            <FormItem style={{ marginBottom: 0, textAlign: 'right' }}>
               <Space>
                 {editingSession && (
                   <Button onClick={() => setEditingSession(null)}>Hủy sửa</Button>
@@ -373,7 +359,7 @@ export const WorkSessionDetailModal: React.FC<WorkSessionDetailModalProps> = ({
                   Lưu thời gian
                 </Button>
               </Space>
-            </Form.Item>
+            </FormItem>
           </Form>
         </div>
       </div>

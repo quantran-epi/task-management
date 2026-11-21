@@ -1,38 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  Table,
-  Tag,
-  Space,
-  Button,
-  Popover,
-  Tooltip,
-  Modal,
-  Input,
-  Select,
-  message,
-  Dropdown,
-  Progress,
-  Checkbox,
-  theme,
-  type TableColumnsType,
-  type MenuProps,
-} from 'antd';
-import {
-  EditOutlined,
-  MoreOutlined,
-  DeleteOutlined,
-  LinkOutlined,
-  CopyOutlined,
-  PlayCircleOutlined,
-  PauseCircleOutlined,
-  CheckCircleOutlined,
-  SettingOutlined,
-  FileTextOutlined,
-  SyncOutlined,
-  FolderOpenOutlined,
-  RobotOutlined,
-  BellOutlined,
-} from '@ant-design/icons';
+import { Table, Tag, Space, Button, Popover, Tooltip, Modal, Select, Dropdown, Progress, Checkbox, useAntdToken, useMessage, useTaskMateModal, Textarea } from '../ui';
+import type { TableColumnsType, MenuProps } from 'antd';
+import { EditOutlined, MoreOutlined, DeleteOutlined, LinkOutlined, CopyOutlined, PlayCircleOutlined, PauseCircleOutlined, CheckCircleOutlined, SettingOutlined, FileTextOutlined, SyncOutlined, FolderOpenOutlined, RobotOutlined, BellOutlined } from '../ui/icon';
 import { useAIChat } from '../../context/AIChatContext';
 import type { Task, ChangeRequest, System, TaskPriority, WorkType } from '../../types/models';
 import { InlineStatusTag } from './InlineStatusTag';
@@ -161,7 +130,9 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   globalSort,
   onGlobalSortChange,
 }) => {
-  const { token } = theme.useToken();
+  const { modal, contextHolder } = useTaskMateModal();
+  const message = useMessage();
+  const { token } = useAntdToken();
   const today = getTodayDateString();
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
   const [standupFallbackModalOpen, setStandupFallbackModalOpen] = useState<boolean>(false);
@@ -382,7 +353,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       danger: true,
       label: 'Xóa',
       onClick: () => {
-        Modal.confirm({
+        modal.confirm({
           title: 'Xóa tác vụ',
           content: `Bạn có chắc muốn xóa "${record.name}"?`,
           okText: 'Xóa',
@@ -580,7 +551,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
               fontSize: 12,
               fontWeight: 600,
               color: CR_TYPE_COLORS[cr.type],
-              backgroundColor: `${CR_TYPE_COLORS[cr.type]}15`,
+              backgroundColor: `color-mix(in srgb, ${CR_TYPE_COLORS[cr.type]} 9%, transparent)`,
               cursor: onSelectCr ? 'pointer' : 'default',
             }}
           >
@@ -947,8 +918,10 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   );
 
   return (
-    <div
-      ref={tableRef}
+    <>
+      {contextHolder}
+      <div
+        ref={tableRef}
       data-testid="task-table-container"
       tabIndex={0}
       onKeyDown={handleKeyDown}
@@ -1110,7 +1083,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
         <p style={{ fontSize: 13, color: token.colorTextSecondary, marginBottom: 8 }}>
           Trình duyệt không hỗ trợ sao chép tự động hoặc chưa được cấp quyền. Vui lòng nhấn <strong>Ctrl+C</strong> (hoặc <strong>Cmd+C</strong>) để sao chép nội dung bên dưới:
         </p>
-        <Input.TextArea
+        <Textarea
           ref={fallbackTextareaRef as unknown as React.Ref<any>}
           value={standupFallbackText}
           readOnly
@@ -1125,6 +1098,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
         visible={Boolean(ghostDevTask)}
         onCancel={() => setGhostDevTask(null)}
       />
-    </div>
+      </div>
+    </>
   );
 };

@@ -1,22 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import {
-  Modal,
-  DatePicker,
-  Radio,
-  Segmented,
-  InputNumber,
-  Button,
-  Space,
-  Alert,
-  Typography,
-  Tag,
-  message,
-} from 'antd';
-import {
-  ThunderboltOutlined,
-  CheckCircleOutlined,
-  ExclamationCircleOutlined,
-} from '@ant-design/icons';
+import { Modal, Segmented, InputNumber, Button, Space, Alert, Typography, Tag, useMessage, RadioGroup, RadioButton, DateRangePicker } from '../ui';
+import { ThunderboltOutlined, CheckCircleOutlined, ExclamationCircleOutlined } from '../ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import dayjs, { type Dayjs } from 'dayjs';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -33,7 +17,6 @@ import { CandidateAllocationsTable } from './CandidateAllocationsTable';
 import { DateInspectionBreakdown } from './DateInspectionBreakdown';
 
 const { Text } = Typography;
-const { RangePicker } = DatePicker;
 
 export interface FeasibilityModalProps {
   open: boolean;
@@ -57,6 +40,7 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
   onSuccess,
   db = defaultDb,
 }) => {
+  const message = useMessage();
   useRegisterActiveForm('feasibility-modal', open);
 
   const restorerRef = useRef<(() => void) | null>(null);
@@ -373,7 +357,7 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
                   Khoảng thời gian đánh giá
                 </Text>
                 <Space>
-                  <Radio.Group
+                  <RadioGroup
                     value={rangeMode}
                     onChange={(e) => {
                       const mode = e.target.value;
@@ -388,12 +372,12 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
                       setCandidateOverrides({});
                     }}
                   >
-                    <Radio.Button value="deadline" disabled={!taskDeadline}>
+                    <RadioButton value="deadline" disabled={!taskDeadline}>
                       Theo hạn chót
-                    </Radio.Button>
-                    <Radio.Button value="custom">Tùy chọn khoảng ngày</Radio.Button>
-                  </Radio.Group>
-                  <RangePicker
+                    </RadioButton>
+                    <RadioButton value="custom">Tùy chọn khoảng ngày</RadioButton>
+                  </RadioGroup>
+                  <DateRangePicker
                     value={dateRange}
                     onChange={(val) => {
                       if (val && val[0] && val[1]) {

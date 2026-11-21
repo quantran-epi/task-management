@@ -1,6 +1,6 @@
 import React from 'react';
-import { Button, Typography, Space, Tooltip } from 'antd';
-import { PlusOutlined, BarChartOutlined } from '@ant-design/icons';
+import { Button, Typography, Tooltip, SpaceCompact } from '../ui';
+import { PlusOutlined, BarChartOutlined } from '../ui/icon';
 import type { DayPlannerData } from '../../hooks/useWeeklyPlanner';
 import { DayColumnHeader } from './DayColumnHeader';
 import { TaskAllocationCard } from './TaskAllocationCard';
@@ -90,7 +90,7 @@ export const DayColumn: React.FC<DayColumnProps> = ({
       </div>
 
       {/* Footer: Phân bổ + Chi tiết ngày (D-03) */}
-      <Space.Compact style={{ width: '100%' }}>
+      <SpaceCompact style={{ width: '100%' }}>
         <Button
           type="dashed"
           icon={<PlusOutlined />}
@@ -110,7 +110,7 @@ export const DayColumn: React.FC<DayColumnProps> = ({
             />
           </Tooltip>
         )}
-      </Space.Compact>
+      </SpaceCompact>
     </div>
   );
 };

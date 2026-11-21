@@ -1,5 +1,5 @@
 import React from 'react';
-import { Tag } from 'antd';
+import { Tag } from '../ui';
 
 export interface HierarchyBreadcrumbProps {
   crCode?: string | undefined;

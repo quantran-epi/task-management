@@ -1,24 +1,6 @@
 import React, { useState } from 'react';
-import {
-  Card,
-  Tag,
-  Typography,
-  Space,
-  Button,
-  Popover,
-  Popconfirm,
-  InputNumber,
-  DatePicker,
-  message,
-} from 'antd';
-import {
-  ClockCircleOutlined,
-  DeleteOutlined,
-  EditOutlined,
-  CheckCircleOutlined,
-  StopOutlined,
-  LinkOutlined,
-} from '@ant-design/icons';
+import { Card, Tag, Typography, Space, Button, Popover, Popconfirm, InputNumber, DatePicker, useMessage } from '../ui';
+import { ClockCircleOutlined, DeleteOutlined, EditOutlined, CheckCircleOutlined, StopOutlined, LinkOutlined } from '../ui/icon';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -65,6 +47,7 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
   db = defaultDb,
   jiraDomain,
 }) => {
+  const message = useMessage();
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [hours, setHours] = useState(Math.floor(allocation.allocatedMinutes / 60));
   const [minutes, setMinutes] = useState(allocation.allocatedMinutes % 60);

@@ -1,18 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import {
-  Table,
-  Button,
-  Select,
-  Popover,
-  InputNumber,
-  Tag,
-  Typography,
-  Space,
-  Empty,
-  Card,
-  message,
-} from 'antd';
-import { PlusOutlined, EditOutlined } from '@ant-design/icons';
+import { Table, Button, Select, Popover, InputNumber, Tag, Typography, Space, Empty, Card, useMessage } from '../ui';
+import { PlusOutlined, EditOutlined } from '../ui/icon';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -46,6 +34,7 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
   weekDates,
   db = defaultDb,
 }) => {
+  const message = useMessage();
   const [adHocTaskIds, setAdHocTaskIds] = useState<string[]>([]);
   const [selectedTaskIdToAdd, setSelectedTaskIdToAdd] = useState<string | undefined>(undefined);
 

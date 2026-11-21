@@ -1,5 +1,5 @@
 import { Input as AntInput, type InputProps as AntInputProps } from 'antd';
-import type { CSSProperties } from 'react';
+import { forwardRef, type CSSProperties } from 'react';
 import { getSharedControlTokens, withoutUndefined } from './tokens.contract';
 
 /** Full-width is the default; `auto` keeps the AntD intrinsic width. */
@@ -26,11 +26,14 @@ export function controlWidthStyle(width: InputWidth): CSSProperties {
 }
 
 /** Single swap point for every AntD Input. Error maps to AntD `status`. */
-export function Input({ width = 'full', status, style, ...rest }: InputProps) {
+export const Input = forwardRef<import('antd').InputRef, InputProps>(function Input(
+  { width = 'full', status, style, ...rest },
+  ref,
+) {
   const merged = withoutUndefined({
     ...rest,
     status: status ?? (rest['aria-invalid'] ? 'error' : undefined),
     style: { ...controlStyle(), ...controlWidthStyle(width), ...style },
   });
-  return <AntInput {...merged} />;
-}
+  return <AntInput {...merged} ref={ref} />;
+});

@@ -1,27 +1,6 @@
 import React, { useState } from 'react';
-import {
-  Card,
-  Table,
-  Button,
-  DatePicker,
-  InputNumber,
-  Space,
-  Typography,
-  Progress,
-  Alert,
-  Popconfirm,
-  Popover,
-  Empty,
-  message,
-  Tooltip,
-} from 'antd';
-import {
-  ClockCircleOutlined,
-  DeleteOutlined,
-  EditOutlined,
-  PlusOutlined,
-  ThunderboltOutlined,
-} from '@ant-design/icons';
+import { Card, Table, Button, DatePicker, InputNumber, Space, Typography, Progress, Alert, Popconfirm, Popover, Empty, Tooltip, useMessage, EmptyImageSimple } from '../ui';
+import { ClockCircleOutlined, DeleteOutlined, EditOutlined, PlusOutlined, ThunderboltOutlined } from '../ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import dayjs, { type Dayjs } from 'dayjs';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -47,6 +26,7 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
   liveEstimateMinutes,
   db = defaultDb,
 }) => {
+  const message = useMessage();
   const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs());
   const [hours, setHours] = useState(1);
   const [minutes, setMinutes] = useState(0);
@@ -349,7 +329,7 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
           locale={{
             emptyText: (
               <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                image={EmptyImageSimple}
                 description="Chưa có phân bổ nào trên các ngày lịch"
               />
             ),

@@ -1,10 +1,6 @@
 import React, { useMemo } from 'react';
-import { Tag, Typography, Tooltip, Spin, Popconfirm } from 'antd';
-import {
-  FileTextOutlined,
-  DeploymentUnitOutlined,
-  CloseOutlined,
-} from '@ant-design/icons';
+import { Tag, Typography, Tooltip, Spin, Popconfirm } from '../ui';
+import { FileTextOutlined, DeploymentUnitOutlined, CloseOutlined } from '../ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Note, KnowledgeLink, TaskMateEntityType } from '../../types/models';

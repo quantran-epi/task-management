@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Modal, Form, DatePicker, TimePicker, InputNumber, Input, message } from 'antd';
+import { Modal, Form, DatePicker, InputNumber, useMessage, Textarea, TimeRangePicker, FormItem, useForm } from '../ui';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useRegisterActiveForm } from '../../context/FormGuardContext';
 import { createWorkSession, updateWorkSession } from '../../db/repositories/workSessionRepo';
@@ -30,8 +30,9 @@ export const ManualWorkSessionModal: React.FC<ManualWorkSessionModalProps> = ({
   onSuccess,
   db = defaultDb,
 }) => {
+  const message = useMessage();
   useRegisterActiveForm('manual-work-session-modal', open);
-  const [form] = Form.useForm<FormValues>();
+  const [form] = useForm<FormValues>();
 
   useEffect(() => {
     if (!open) return;
@@ -137,28 +138,28 @@ export const ManualWorkSessionModal: React.FC<ManualWorkSessionModalProps> = ({
       destroyOnClose
     >
       <Form form={form} layout="vertical" onFinish={handleFinish}>
-        <Form.Item
+        <FormItem
           name="date"
           label="Ngày làm việc"
           rules={[{ required: true, message: 'Vui lòng chọn ngày làm việc' }]}
         >
           <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" allowClear={false} />
-        </Form.Item>
+        </FormItem>
 
-        <Form.Item
+        <FormItem
           name="timeRange"
           label="Khoảng thời gian (Bắt đầu - Kết thúc)"
           rules={[{ required: true, message: 'Vui lòng chọn khoảng thời gian' }]}
         >
-          <TimePicker.RangePicker
+          <TimeRangePicker
             style={{ width: '100%' }}
             format="HH:mm"
             onChange={handleTimeRangeChange}
             allowClear={false}
           />
-        </Form.Item>
+        </FormItem>
 
-        <Form.Item
+        <FormItem
           name="durationMinutes"
           label="Thời lượng (phút)"
           rules={[
@@ -167,20 +168,20 @@ export const ManualWorkSessionModal: React.FC<ManualWorkSessionModalProps> = ({
           ]}
         >
           <InputNumber min={1} max={1440} style={{ width: '100%' }} />
-        </Form.Item>
+        </FormItem>
 
-        <Form.Item
+        <FormItem
           name="note"
           label="Ghi chú (tùy chọn)"
           rules={[{ max: 500, message: 'Ghi chú tối đa 500 ký tự' }]}
         >
-          <Input.TextArea
+          <Textarea
             rows={3}
             maxLength={500}
             showCount
             placeholder="Nội dung công việc thực hiện trong phiên này..."
           />
-        </Form.Item>
+        </FormItem>
       </Form>
     </Modal>
   );

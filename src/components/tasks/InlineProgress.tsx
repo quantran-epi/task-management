@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Popover, Progress, Slider, InputNumber, Space, message } from 'antd';
+import { Popover, Progress, Slider, InputNumber, Space, useMessage } from '../ui';
 import { updateTaskProgress } from '../../db/repositories/taskRepo';
 import type { TaskPlannerDatabase } from '../../db';
 
@@ -16,6 +16,7 @@ export const InlineProgress: React.FC<InlineProgressProps> = ({
   onProgressChange,
   db,
 }) => {
+  const message = useMessage();
   const [open, setOpen] = useState(false);
   const [val, setVal] = useState<number>(progress);
 

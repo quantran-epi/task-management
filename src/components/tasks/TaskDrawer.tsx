@@ -1,22 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  Drawer,
-  Form,
-  Input,
-  Select,
-  InputNumber,
-  Button,
-  Space,
-  DatePicker,
-  Slider,
-  message,
-  Tabs,
-  Typography,
-  Badge,
-  Switch,
-  Tooltip,
-} from 'antd';
-import { PlusOutlined, DeleteOutlined, LinkOutlined, SyncOutlined, FolderOpenOutlined, ExportOutlined, RobotOutlined } from '@ant-design/icons';
+import { Drawer, Form, Input, Select, InputNumber, Button, Space, DatePicker, Slider, Tabs, Typography, Badge, Switch, Tooltip, useMessage, Textarea, FormItem, FormList, useForm, useWatch } from '../ui';
+import { PlusOutlined, DeleteOutlined, LinkOutlined, SyncOutlined, FolderOpenOutlined, ExportOutlined, RobotOutlined } from '../ui/icon';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { openDocumentLink, browseLocalFolder } from '../../utils/documentLinks';
@@ -128,9 +112,10 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
   triggerRef,
   db,
 }) => {
+  const message = useMessage();
   useRegisterActiveForm('task-drawer', open);
 
-  const [form] = Form.useForm<TaskDrawerFormValues>();
+  const [form] = useForm<TaskDrawerFormValues>();
   const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
   const [systems, setSystems] = useState<System[]>([]);
   const [currentTask, setCurrentTask] = useState<Task | null>(null);
@@ -138,9 +123,9 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
   const [loading, setLoading] = useState(false);
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
   const [ghostDevModalOpen, setGhostDevModalOpen] = useState(false);
-  const selectedCrId = Form.useWatch('crId', form);
-  const watchHours = Form.useWatch('hours', form);
-  const watchMinutes = Form.useWatch('minutes', form);
+  const selectedCrId = useWatch('crId', form);
+  const watchHours = useWatch('hours', form);
+  const watchMinutes = useWatch('minutes', form);
   const liveEstimateMinutes =
     watchHours !== undefined && watchMinutes !== undefined ? watchHours * 60 + watchMinutes : undefined;
   const restorerRef = useRef<(() => void) | null>(null);
@@ -475,7 +460,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
       {renderSection(
         'Thông tin chính',
         <>
-          <Form.Item
+          <FormItem
             name="name"
             label="Tên tác vụ"
             rules={[
@@ -484,10 +469,10 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
             ]}
           >
             <Input placeholder="Tên tác vụ..." maxLength={120} />
-          </Form.Item>
+          </FormItem>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Form.Item
+            <FormItem
               name="crId"
               label="Change Request (CR)"
               rules={[{ required: true, message: 'Vui lòng chọn Change Request.' }]}
@@ -503,11 +488,11 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                   label: `${cr.code} · ${cr.name}`,
                 }))}
               />
-            </Form.Item>
+            </FormItem>
 
             <Tooltip title={selectedCrId ? '' : 'Chọn CR trước'} placement="top">
               <span style={{ display: 'block' }}>
-                <Form.Item name="systemId" label="Subsystem">
+                <FormItem name="systemId" label="Subsystem">
                   <Select
                     aria-label="Subsystem"
                     disabled={!selectedCrId}
@@ -517,7 +502,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                       ...filteredSystems.map((s) => ({ value: s.id, label: s.name })),
                     ]}
                   />
-                </Form.Item>
+                </FormItem>
               </span>
             </Tooltip>
           </div>
@@ -528,33 +513,33 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
         'Trạng thái & phân loại',
         <>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            <Form.Item name="status" label="Trạng thái" rules={[{ required: true }]}>
+            <FormItem name="status" label="Trạng thái" rules={[{ required: true }]}>
               <Select
                 aria-label="Trạng thái"
                 options={ALL_STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] || s }))}
               />
-            </Form.Item>
+            </FormItem>
 
-            <Form.Item name="priority" label="Độ ưu tiên" rules={[{ required: true }]}>
+            <FormItem name="priority" label="Độ ưu tiên" rules={[{ required: true }]}>
               <Select
                 aria-label="Độ ưu tiên"
                 options={ALL_PRIORITIES.map((p) => ({ value: p, label: PRIORITY_LABELS[p] || p }))}
               />
-            </Form.Item>
+            </FormItem>
 
-            <Form.Item name="workType" label="Loại công việc" rules={[{ required: true }]}>
+            <FormItem name="workType" label="Loại công việc" rules={[{ required: true }]}>
               <Select aria-label="Loại công việc" options={workTypeOptions} />
-            </Form.Item>
+            </FormItem>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Form.Item name="opsOwners" label="Ops Owner">
+            <FormItem name="opsOwners" label="Ops Owner">
               <TagSelect field="opsOwners" inheritedText={opsInheritedText} />
-            </Form.Item>
+            </FormItem>
 
-            <Form.Item name="businessAnalysts" label="Business Analyst">
+            <FormItem name="businessAnalysts" label="Business Analyst">
               <TagSelect field="businessAnalysts" inheritedText={baInheritedText} />
-            </Form.Item>
+            </FormItem>
           </div>
         </>
       )}
@@ -562,25 +547,25 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
       {renderSection(
         'Thời gian & tiến độ',
         <>
-          <Form.Item label="Thời gian ước tính">
+          <FormItem label="Thời gian ước tính">
             <Space direction="vertical" style={{ width: '100%' }}>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                <Form.Item
+                <FormItem
                   name="hours"
                   label="Giờ"
                   style={{ marginBottom: 0 }}
                   rules={[{ type: 'number', min: 0, max: 100 }]}
                 >
                   <InputNumber min={0 as number} max={100 as number} style={{ width: 100 }} aria-label="Giờ" />
-                </Form.Item>
-                <Form.Item
+                </FormItem>
+                <FormItem
                   name="minutes"
                   label="Phút"
                   style={{ marginBottom: 0 }}
                   rules={[{ type: 'number', min: 0, max: 59 }]}
                 >
                   <InputNumber min={0 as number} max={59 as number} style={{ width: 100 }} aria-label="Phút" />
-                </Form.Item>
+                </FormItem>
               </div>
               <Space wrap size="small">
                 <Button size="small" onClick={() => addPresetMinutes(30)}>
@@ -600,21 +585,21 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                 </Button>
               </Space>
             </Space>
-          </Form.Item>
+          </FormItem>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Form.Item name="deadline" label="Hạn chót">
+            <FormItem name="deadline" label="Hạn chót">
               <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="Hạn chót" />
-            </Form.Item>
+            </FormItem>
 
-            <Form.Item name="actualStartDate" label="Bắt đầu thực tế">
+            <FormItem name="actualStartDate" label="Bắt đầu thực tế">
               <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="Bắt đầu thực tế" />
-            </Form.Item>
+            </FormItem>
           </div>
 
-          <Form.Item name="actualEndDate" label="Kết thúc thực tế">
+          <FormItem name="actualEndDate" label="Kết thúc thực tế">
             <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="Kết thúc thực tế" />
-          </Form.Item>
+          </FormItem>
 
           <div
             style={{
@@ -636,12 +621,12 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                 <SyncOutlined style={{ color: '#1677ff' }} />
                 <span style={{ fontWeight: 500 }}>Lặp lại định kỳ</span>
               </Space>
-              <Form.Item name="isRecurring" valuePropName="checked" noStyle>
+              <FormItem name="isRecurring" valuePropName="checked" noStyle>
                 <Switch aria-label="Bật lặp lại định kỳ" />
-              </Form.Item>
+              </FormItem>
             </div>
 
-            <Form.Item
+            <FormItem
               noStyle
               shouldUpdate={(prev, cur) =>
                 prev.isRecurring !== cur.isRecurring ||
@@ -663,7 +648,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                     }}
                   >
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                      <Form.Item
+                      <FormItem
                         name="recurrenceFrequency"
                         label="Tần suất"
                         initialValue="daily"
@@ -676,9 +661,9 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                             { value: 'monthly', label: 'Hàng tháng' },
                           ]}
                         />
-                      </Form.Item>
+                      </FormItem>
 
-                      <Form.Item
+                      <FormItem
                         name="recurrenceInterval"
                         label="Chu kỳ"
                         initialValue={1}
@@ -696,11 +681,11 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                                 : 'tháng'
                           }
                         />
-                      </Form.Item>
+                      </FormItem>
                     </div>
 
                     {freq === 'weekly' && (
-                      <Form.Item
+                      <FormItem
                         name="recurrenceDaysOfWeek"
                         label="Các ngày trong tuần"
                         style={{ marginBottom: 0 }}
@@ -718,10 +703,10 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                             { value: 7, label: 'Chủ nhật' },
                           ]}
                         />
-                      </Form.Item>
+                      </FormItem>
                     )}
 
-                    <Form.Item
+                    <FormItem
                       name="recurrenceEndDate"
                       label="Ngày kết thúc (tùy chọn)"
                       style={{ marginBottom: 0 }}
@@ -731,21 +716,21 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                         format="YYYY-MM-DD"
                         placeholder="Không giới hạn"
                       />
-                    </Form.Item>
+                    </FormItem>
                   </div>
                 );
               }}
-            </Form.Item>
+            </FormItem>
           </div>
 
           <RemindersFormList />
 
-          <Form.Item label="Tiến độ" style={{ marginBottom: 12 }}>
+          <FormItem label="Tiến độ" style={{ marginBottom: 12 }}>
             <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-              <Form.Item name="progress" noStyle>
+              <FormItem name="progress" noStyle>
                 <Slider min={0} max={100} style={{ flex: 1 }} />
-              </Form.Item>
-              <Form.Item name="progress" noStyle>
+              </FormItem>
+              <FormItem name="progress" noStyle>
                 <InputNumber
                   min={0 as number}
                   max={100 as number}
@@ -753,19 +738,19 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                   parser={(v) => (Number((v || '').replace('%', '')) || 0) as number}
                   style={{ width: 80 }}
                 />
-              </Form.Item>
+              </FormItem>
             </div>
-          </Form.Item>
+          </FormItem>
 
-          <Form.Item label="Danh sách việc cần làm (Checklist)">
-            <Form.Item name="checklist" noStyle>
+          <FormItem label="Danh sách việc cần làm (Checklist)">
+            <FormItem name="checklist" noStyle>
               <TaskChecklistSection
                 onSyncProgress={(pct) => {
                   form.setFieldValue('progress', pct);
                 }}
               />
-            </Form.Item>
-          </Form.Item>
+            </FormItem>
+          </FormItem>
         </>
       )}
 
@@ -794,13 +779,13 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
             db={db}
           />
 
-          <Form.Item label="Tài liệu liên kết">
-            <Form.List name="documentLinks">
+          <FormItem label="Tài liệu liên kết">
+            <FormList name="documentLinks">
               {(fields, { add, remove }) => (
                 <Space direction="vertical" style={{ width: '100%' }}>
                   {fields.map((field) => (
                     <div key={field.key} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      <Form.Item
+                      <FormItem
                         {...field}
                         noStyle
                         rules={[
@@ -819,7 +804,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                           prefix={<LinkOutlined style={{ color: '#8c8c8c' }} />}
                           style={{ flex: 1, minWidth: 0 }}
                         />
-                      </Form.Item>
+                      </FormItem>
                       <Button
                         type="text"
                         icon={<FolderOpenOutlined />}
@@ -877,16 +862,16 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                   </div>
                 </Space>
               )}
-            </Form.List>
-          </Form.Item>
+            </FormList>
+          </FormItem>
 
-          <Form.Item name="notes" label="Ghi chú">
-            <Input.TextArea
+          <FormItem name="notes" label="Ghi chú">
+            <Textarea
               autoSize={{ minRows: 4, maxRows: 10 }}
               placeholder="Ghi chú chi tiết tác vụ (văn bản thuần / markdown)..."
               style={{ whiteSpace: 'pre-wrap' }}
             />
-          </Form.Item>
+          </FormItem>
         </>
       )}
     </Form>

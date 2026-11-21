@@ -1,5 +1,5 @@
 import React from 'react';
-import { Collapse, Table, Tag, Typography, Space } from 'antd';
+import { Collapse, Table, Tag, Typography, Space } from '../ui';
 import dayjs from 'dayjs';
 import { formatMinutes } from '../../utils/time';
 import type { DateInspectionItem, DateInspectionStatus } from '../../types/feasibility';

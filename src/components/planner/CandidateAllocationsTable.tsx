@@ -1,5 +1,5 @@
 import React from 'react';
-import { Table, Checkbox, InputNumber, Typography, Empty } from 'antd';
+import { Table, Checkbox, InputNumber, Typography, Empty, EmptyImageSimple } from '../ui';
 import dayjs from 'dayjs';
 import { formatMinutes } from '../../utils/time';
 import type { CandidateAllocation } from '../../types/feasibility';
@@ -90,7 +90,7 @@ export const CandidateAllocationsTable: React.FC<CandidateAllocationsTableProps>
   if (candidates.length === 0) {
     return (
       <Empty
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
+        image={EmptyImageSimple}
         description={
           <div>
             <Text strong style={{ display: 'block', fontSize: 16, marginBottom: 4 }}>

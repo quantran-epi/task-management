@@ -1,14 +1,6 @@
 import React from 'react';
-import { Tag } from 'antd';
-import {
-  CodeOutlined,
-  FileTextOutlined,
-  TeamOutlined,
-  CheckCircleOutlined,
-  BugOutlined,
-  SettingOutlined,
-  EyeOutlined,
-} from '@ant-design/icons';
+import { Tag } from '../ui';
+import { CodeOutlined, FileTextOutlined, TeamOutlined, CheckCircleOutlined, BugOutlined, SettingOutlined, EyeOutlined } from '../ui/icon';
 import type { WorkType } from '../../types/models';
 
 export interface WorkTypeConfig {

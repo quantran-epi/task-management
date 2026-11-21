@@ -1,24 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  Space,
-  Button,
-  Input,
-  Tag,
-  Select,
-  Popconfirm,
-  Alert,
-  Typography,
-  Spin,
-  message,
-} from 'antd';
-import {
-  LinkOutlined,
-  PlusOutlined,
-  ReloadOutlined,
-  DisconnectOutlined,
-  BranchesOutlined,
-  WarningOutlined,
-} from '@ant-design/icons';
+import { Space, Button, Input, Tag, Select, Popconfirm, Alert, Typography, Spin, useMessage, SpaceCompact } from '../ui';
+import { LinkOutlined, PlusOutlined, ReloadOutlined, DisconnectOutlined, BranchesOutlined, WarningOutlined } from '../ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { getJiraApiToken } from '../../services/jiraTokenService';
@@ -56,6 +38,7 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
   onUpdateTask,
   db = defaultDb,
 }) => {
+  const message = useMessage();
   const [modalOpen, setModalOpen] = useState(false);
   const [manualKey, setManualKey] = useState('');
   const [keyError, setKeyError] = useState<string | null>(null);
@@ -354,7 +337,7 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
             <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
               Hoặc gắn mã Jira Issue có sẵn:
             </Text>
-            <Space.Compact style={{ width: '100%', maxWidth: 300 }}>
+            <SpaceCompact style={{ width: '100%', maxWidth: 300 }}>
               <Input
                 placeholder="SHB-1234"
                 value={manualKey}
@@ -369,7 +352,7 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
               <Button type="default" onClick={() => void handleLinkKey()} loading={linking}>
                 Gắn Jira Key
               </Button>
-            </Space.Compact>
+            </SpaceCompact>
             {keyError && (
               <div style={{ marginTop: 4 }}>
                 <Text type="danger" style={{ fontSize: 12 }}>

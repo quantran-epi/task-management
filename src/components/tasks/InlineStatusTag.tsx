@@ -1,5 +1,6 @@
 import React from 'react';
-import { Dropdown, Tag, message, type MenuProps } from 'antd';
+import { Dropdown, Tag, useMessage } from '../ui';
+import type { MenuProps } from 'antd';
 import type { TaskStatus } from '../../types/models';
 import { updateTaskStatus } from '../../db/repositories/taskRepo';
 import type { TaskPlannerDatabase } from '../../db';
@@ -85,6 +86,7 @@ export const InlineStatusTag: React.FC<InlineStatusTagProps> = ({
   onStatusChange,
   db,
 }) => {
+  const message = useMessage();
   const current = STATUS_CONFIG[status] ?? {
     label: status,
     bg: '#f1f5f9',

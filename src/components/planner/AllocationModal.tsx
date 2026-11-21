@@ -1,18 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import {
-  Modal,
-  Form,
-  Select,
-  DatePicker,
-  InputNumber,
-  Button,
-  Space,
-  Alert,
-  Typography,
-  Tag,
-  message,
-} from 'antd';
-import { ClockCircleOutlined, WarningOutlined } from '@ant-design/icons';
+import { Modal, Form, Select, DatePicker, InputNumber, Button, Space, Alert, Typography, Tag, useMessage, FormItem, useForm, useWatch } from '../ui';
+import { ClockCircleOutlined, WarningOutlined } from '../ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import dayjs, { type Dayjs } from 'dayjs';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -51,9 +39,10 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
   onSuccess,
   db = defaultDb,
 }) => {
+  const message = useMessage();
   useRegisterActiveForm('allocation-modal', open);
 
-  const [form] = Form.useForm();
+  const [form] = useForm();
   const [submitting, setSubmitting] = useState(false);
   const [existingTotalMinutes, setExistingTotalMinutes] = useState(0);
   const [existingDateMinutes, setExistingDateMinutes] = useState(0);
@@ -61,10 +50,10 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
   const restorerRef = useRef<(() => void) | null>(null);
 
   // Watch form fields for live estimate comparison
-  const selectedTaskId = Form.useWatch('taskId', form);
-  const selectedDate = Form.useWatch('date', form) as Dayjs | undefined;
-  const hours = Form.useWatch('hours', form) ?? 0;
-  const minutes = Form.useWatch('minutes', form) ?? 0;
+  const selectedTaskId = useWatch('taskId', form);
+  const selectedDate = useWatch('date', form) as Dayjs | undefined;
+  const hours = useWatch('hours', form) ?? 0;
+  const minutes = useWatch('minutes', form) ?? 0;
 
   // Query active tasks for dropdown (PLAN-01)
   const activeTasks = useLiveQuery(
@@ -263,7 +252,7 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
         </div>
 
         {/* Task Selection */}
-        <Form.Item
+        <FormItem
           name="taskId"
           label="Chọn tác vụ"
           rules={[{ required: true, message: 'Vui lòng chọn tác vụ cần phân bổ' }]}
@@ -315,21 +304,21 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
               );
             }}
           />
-        </Form.Item>
+        </FormItem>
 
         {/* Date Picker */}
-        <Form.Item
+        <FormItem
           name="date"
           label="Ngày thực hiện"
           rules={[{ required: true, message: 'Vui lòng chọn ngày thực hiện' }]}
         >
           <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" aria-label="Ngày thực hiện" />
-        </Form.Item>
+        </FormItem>
 
         {/* Duration Input & Presets */}
-        <Form.Item label="Thời gian dự kiến" required style={{ marginBottom: 8 }}>
+        <FormItem label="Thời gian dự kiến" required style={{ marginBottom: 8 }}>
           <Space align="start" size="middle">
-            <Form.Item
+            <FormItem
               name="hours"
               rules={[{ required: true, message: 'Vui lòng nhập giờ' }]}
               style={{ marginBottom: 0 }}
@@ -341,9 +330,9 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
                 style={{ width: 100 }}
                 aria-label="Giờ dự kiến"
               />
-            </Form.Item>
+            </FormItem>
 
-            <Form.Item
+            <FormItem
               name="minutes"
               rules={[{ required: true, message: 'Vui lòng nhập phút' }]}
               style={{ marginBottom: 0 }}
@@ -356,9 +345,9 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
                 style={{ width: 100 }}
                 aria-label="Phút dự kiến"
               />
-            </Form.Item>
+            </FormItem>
           </Space>
-        </Form.Item>
+        </FormItem>
 
         {/* Quick Presets */}
         <div style={{ marginBottom: 16 }}>

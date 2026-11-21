@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Form, Input, Select, Button, Alert, message } from 'antd';
+import { Modal, Form, Input, Select, Button, Alert, useMessage, Textarea, FormItem, useForm } from '../ui';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { getJiraApiToken } from '../../services/jiraTokenService';
 import type { Task } from '../../types/models';
@@ -32,8 +32,9 @@ export const CreateJiraIssueModal: React.FC<CreateJiraIssueModalProps> = ({
   onSuccess,
   db = defaultDb,
 }) => {
+  const message = useMessage();
   useRegisterActiveForm('create-jira-issue', open);
-  const [form] = Form.useForm<FormValues>();
+  const [form] = useForm<FormValues>();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [config, setConfig] = useState<JiraConfig | null>(null);
@@ -192,16 +193,16 @@ export const CreateJiraIssueModal: React.FC<CreateJiraIssueModalProps> = ({
       )}
 
       <Form form={form} layout="vertical">
-        <Form.Item
+        <FormItem
           name="projectKey"
           label="Mã dự án (Project Key)"
           rules={[{ required: true, message: 'Vui lòng nhập Project Key (ví dụ: SHB)' }]}
           extra="Ví dụ: SHB, CORE, PROJ"
         >
           <Input placeholder="SHB" style={{ textTransform: 'uppercase' }} />
-        </Form.Item>
+        </FormItem>
 
-        <Form.Item
+        <FormItem
           name="issueType"
           label="Loại Issue (Issue Type)"
           rules={[{ required: true, message: 'Vui lòng chọn loại Issue' }]}
@@ -214,9 +215,9 @@ export const CreateJiraIssueModal: React.FC<CreateJiraIssueModalProps> = ({
               { value: 'Sub-task', label: 'Sub-task' },
             ]}
           />
-        </Form.Item>
+        </FormItem>
 
-        <Form.Item
+        <FormItem
           name="epicKey"
           label="Mã Jira Epic (Parent Epic Key)"
           rules={[
@@ -228,22 +229,22 @@ export const CreateJiraIssueModal: React.FC<CreateJiraIssueModalProps> = ({
           extra="Tự động điền từ Dự án cha (nếu có). Bạn có thể chỉnh sửa hoặc bỏ trống."
         >
           <Input placeholder="vd: SHB-100" style={{ textTransform: 'uppercase' }} allowClear />
-        </Form.Item>
+        </FormItem>
 
-        <Form.Item
+        <FormItem
           name="summary"
           label="Tiêu đề Issue (Summary)"
           rules={[{ required: true, message: 'Vui lòng nhập tiêu đề Issue' }]}
         >
           <Input placeholder="Tiêu đề tác vụ..." maxLength={255} />
-        </Form.Item>
+        </FormItem>
 
-        <Form.Item name="description" label="Mô tả Issue (Description)">
-          <Input.TextArea
+        <FormItem name="description" label="Mô tả Issue (Description)">
+          <Textarea
             rows={5}
             placeholder="Mô tả chi tiết tác vụ (sẽ được chuyển đổi thành định dạng Atlassian Document Format)..."
           />
-        </Form.Item>
+        </FormItem>
       </Form>
     </Modal>
   );

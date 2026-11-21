@@ -1,13 +1,6 @@
 import React from 'react';
-import { Tag, Progress, Space, Typography, Tooltip } from 'antd';
-import {
-  CheckCircleOutlined,
-  ClockCircleOutlined,
-  ExclamationCircleOutlined,
-  MinusCircleOutlined,
-  WarningOutlined,
-  CalendarOutlined,
-} from '@ant-design/icons';
+import { Tag, Progress, Space, Typography, Tooltip } from '../ui';
+import { CheckCircleOutlined, ClockCircleOutlined, ExclamationCircleOutlined, MinusCircleOutlined, WarningOutlined, CalendarOutlined } from '../ui/icon';
 import dayjs from 'dayjs';
 import type { DayPlannerData } from '../../hooks/useWeeklyPlanner';
 import type { DailyLoadState } from '../../utils/capacity';

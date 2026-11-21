@@ -1,20 +1,7 @@
 import React, { useState } from 'react';
-import {
-  Input,
-  Select,
-  Segmented,
-  Checkbox,
-  Radio,
-  Space,
-  Button,
-  Badge,
-  DatePicker,
-  Row,
-  Col,
-  theme,
-  type InputRef,
-} from 'antd';
-import { SearchOutlined, FilterOutlined, ClearOutlined } from '@ant-design/icons';
+import { Input, Select, Segmented, Checkbox, Space, Button, Badge, Row, Col, useAntdToken, DateRangePicker, RadioGroup, RadioButton } from '../ui';
+import type { InputRef } from 'antd';
+import { SearchOutlined, FilterOutlined, ClearOutlined } from '../ui/icon';
 import dayjs, { type Dayjs } from 'dayjs';
 import type { TaskFilterState } from '../../utils/filter';
 import { DEFAULT_TASK_FILTER_STATE, countActiveAdvancedFilters } from '../../utils/filter';
@@ -60,7 +47,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
   availableBAs = [],
   searchInputRef,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [advancedOpen, setAdvancedOpen] = useState<boolean>(false);
 
   const activeAdvancedCount = countActiveAdvancedFilters(filters);
@@ -191,7 +178,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
         </div>
 
         {/* Date Horizons */}
-        <Radio.Group
+        <RadioGroup
           value={filters.horizon}
           onChange={(e) => onFilterChange({ horizon: e.target.value })}
           optionType="button"
@@ -199,11 +186,11 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
           size="middle"
           aria-label="Khoảng thời gian"
         >
-          <Radio.Button value="all">Tất cả</Radio.Button>
-          <Radio.Button value="overdue">Quá hạn</Radio.Button>
-          <Radio.Button value="today">Hôm nay</Radio.Button>
-          <Radio.Button value="this_week">Tuần này</Radio.Button>
-        </Radio.Group>
+          <RadioButton value="all">Tất cả</RadioButton>
+          <RadioButton value="overdue">Quá hạn</RadioButton>
+          <RadioButton value="today">Hôm nay</RadioButton>
+          <RadioButton value="this_week">Tuần này</RadioButton>
+        </RadioGroup>
       </div>
 
       {/* Row 2: Status multiselect, include closed toggle, Priority filter */}
@@ -273,7 +260,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
                 <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
                   Thời gian kế hoạch:
                 </span>
-                <DatePicker.RangePicker
+                <DateRangePicker
                   style={{ width: '100%' }}
                   placeholder={['Từ ngày', 'Đến ngày']}
                   format="YYYY-MM-DD"
@@ -306,7 +293,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
                 <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
                   Ngày có worklog:
                 </span>
-                <DatePicker.RangePicker
+                <DateRangePicker
                   style={{ width: '100%' }}
                   placeholder={['Từ ngày', 'Đến ngày']}
                   format="YYYY-MM-DD"
@@ -339,7 +326,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
                 <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
                   Hạn chót:
                 </span>
-                <DatePicker.RangePicker
+                <DateRangePicker
                   style={{ width: '100%' }}
                   placeholder={['Hạn từ', 'Hạn đến']}
                   format="YYYY-MM-DD"

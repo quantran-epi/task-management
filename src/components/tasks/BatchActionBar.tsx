@@ -1,21 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import {
-  Button,
-  Dropdown,
-  Popconfirm,
-  Modal,
-  Select,
-  Space,
-  theme,
-  message,
-  type MenuProps,
-} from 'antd';
-import {
-  DeleteOutlined,
-  CheckCircleOutlined,
-  FolderOutlined,
-  CloseOutlined,
-} from '@ant-design/icons';
+import { Button, Dropdown, Popconfirm, Modal, Select, Space, useAntdToken, useMessage } from '../ui';
+import type { MenuProps } from 'antd';
+import { DeleteOutlined, CheckCircleOutlined, FolderOutlined, CloseOutlined } from '../ui/icon';
 import type { TaskStatus, ChangeRequest, System } from '../../types/models';
 import type { TaskPlannerDatabase } from '../../db';
 import { updateTaskStatus, reparentTask } from '../../db/repositories/taskRepo';
@@ -64,7 +50,8 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
   systems = [],
   db,
 }) => {
-  const { token } = theme.useToken();
+  const message = useMessage();
+  const { token } = useAntdToken();
   const [moveModalOpen, setMoveModalOpen] = useState(false);
   const [targetCrId, setTargetCrId] = useState<string | undefined>(undefined);
   const [targetSystemId, setTargetSystemId] = useState<string | undefined>(undefined);

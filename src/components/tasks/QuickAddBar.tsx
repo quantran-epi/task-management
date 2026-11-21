@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Input, Button, Select, Space, message, type InputRef } from 'antd';
+import { Input, Button, Select, useMessage, SpaceCompact } from '../ui';
+import type { InputRef } from 'antd';
 import { parseQuickAddInput } from '../../utils/time';
 import { createTask } from '../../db/repositories/taskRepo';
 import type { ChangeRequest, System, Task, WorkType } from '../../types/models';
@@ -25,6 +26,7 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
   db,
   inputRef,
 }) => {
+  const message = useMessage();
   const [text, setText] = useState('');
   const [workType, setWorkType] = useState<WorkType>('code');
   const [crId, setCrId] = useState<string | undefined>(activeCrId ?? undefined);
@@ -104,7 +106,7 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
   });
 
   return (
-    <Space.Compact style={{ width: '100%' }}>
+    <SpaceCompact style={{ width: '100%' }}>
       <Select
         showSearch
         optionFilterProp="label"
@@ -159,6 +161,6 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
       >
         Thêm
       </Button>
-    </Space.Compact>
+    </SpaceCompact>
   );
 };

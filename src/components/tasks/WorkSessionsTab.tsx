@@ -1,25 +1,7 @@
 import React, { useState } from 'react';
-import {
-  Table,
-  Button,
-  Space,
-  Typography,
-  Progress,
-  Popconfirm,
-  Tooltip,
-  Empty,
-  Card,
-  theme,
-  type TableColumnsType,
-} from 'antd';
-import {
-  PlayCircleOutlined,
-  PauseCircleOutlined,
-  CheckCircleOutlined,
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
-} from '@ant-design/icons';
+import { Table, Button, Space, Typography, Progress, Popconfirm, Tooltip, Empty, Card, useAntdToken, EmptyImageSimple } from '../ui';
+import type { TableColumnsType } from 'antd';
+import { PlayCircleOutlined, PauseCircleOutlined, CheckCircleOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '../ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import dayjs from 'dayjs';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -38,7 +20,7 @@ export const WorkSessionsTab: React.FC<WorkSessionsTabProps> = ({
   task,
   db = defaultDb,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSession, setEditingSession] = useState<WorkSession | null>(null);
 
@@ -347,7 +329,7 @@ export const WorkSessionsTab: React.FC<WorkSessionsTabProps> = ({
         locale={{
           emptyText: (
             <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              image={EmptyImageSimple}
               description={
                 <div>
                   <Typography.Text strong style={{ display: 'block', marginBottom: 4 }}>
