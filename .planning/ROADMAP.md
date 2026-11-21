@@ -160,7 +160,7 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 51. Control Inventory & Surface Audit | 0/TBD | Not started | — |
+| 51. Control Inventory & Surface Audit | 1/3 | In Progress|  |
 | 52. OpenIDEA Mapping & Design Contract | 0/TBD | Not started | — |
 | 53. Native Core & Form Controls | 0/TBD | Not started | — |
 | 54. Native Overlay & Complex Controls | 0/TBD | Not started | — |
@@ -233,7 +233,7 @@
 5. `restoreBackup` no longer creates SDLC tabs; `validateBackup` no longer enforces SDLC invariants.
 
 **Status:** Complete — 2026-11-10; accepted fresh-data-only scope, verification debt recorded in 35-VERIFICATION.md.
-**Plans:** 9/9 plans complete
+**Plans:** 1/3 plans executed
 
 Plans:
 **Wave 1**

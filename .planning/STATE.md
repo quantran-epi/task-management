@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Native UI Controls
-status: planning
-stopped_at: Phase 50 UI-SPEC approved
-last_updated: "2026-11-21T17:16:09.032Z"
-last_activity: 2026-11-21 — v1.6 roadmap created (Phases 51–58, 18 requirements mapped)
+status: executing
+stopped_at: Completed 51-01-PLAN.md
+last_updated: "2026-11-21T17:22:13.821Z"
+last_activity: 2026-11-21 -- Phase 51 execution started
 progress:
   total_phases: 8
   completed_phases: 0
-  total_plans: 0
+  total_plans: 3
   completed_plans: 0
   percent: 0
 ---
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md (updated 2026-11-21)
 
 ## Current Position
 
-Phase: 51 — Control Inventory & Surface Audit
-Plan: —
-Status: Roadmap created — ready for phase planning
-Last activity: 2026-11-21 — v1.6 roadmap created (Phases 51–58, 18 requirements mapped)
+Phase: 51 (control-inventory-surface-audit) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-11-21 -- Phase 51 execution started
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -55,9 +55,9 @@ Verification: 392 focused tests pass (9 files), `tsc --noEmit` clean. Full suite
 
 ## Session Continuity
 
-Last session: 2026-11-21T11:35:29.369Z
-Stopped at: Phase 50 UI-SPEC approved
-Resume file: .planning/phases/50-full-app-adoption/50-UI-SPEC.md
+Last session: 2026-11-21T17:21:53.772Z
+Stopped at: Completed 51-01-PLAN.md
+Resume file: None
 
 Progress: [█████████░] 91%
 
@@ -299,6 +299,7 @@ Progress: [█████████░] 91%
 - [Phase 48]: "Đồng bộ" chip requires live session + SSH probe + valid worktree + popout presence; exact Vietnamese failure copy is pinned by tests
 - [Phase 48]: Phase 48 D-21 UAT drives real Coding Zone components in system Chrome through a non-production Vite harness with confined synthetic Tauri IPC; no live SSH credentials or new packages.
 - [Phase 48]: 48-VALIDATION.md signed off for D-19/D-20/D-21 only; D-22 delivery merge/push remains a blocking user checkpoint and Phase 48 is not marked complete.
+- [Phase 51]: Tồn kho Phase 51 định nghĩa bốn số riêng biệt: 56 file wrapper, 257 tên export guard, 52/141/3 named import live và 10 file test bằng chứng. Mọi lệch với PATTERNS được ghi kèm lệnh tái tạo; static call site được đếm bằng cú pháp và bind context, không phải import AntD tĩnh. — ROADMAP tiêu chí #5 cần một định nghĩa "wrapper" duy nhất; 56 file và 257 export là hai phép đếm khác nhau. PATTERNS đã lỗi thời so với source nên lệnh scan live là truth, tránh Phase 52 lập kế hoạch trên số sai.
 
 ## Performance Metrics
 
@@ -351,3 +352,4 @@ Progress: [█████████░] 91%
 | Phase 48 P02 | 14min | 2 tasks | 10 files |
 | Phase 48 P03 | 29min | 2 tasks | 13 files |
 | Phase 48 P04 | 20min | 2 tasks | 7 files |
+| Phase 51 P01 | 3 min | 2 tasks | 1 files |
