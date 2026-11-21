@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { Button, theme } from 'antd';
 import { AntdThemeAdapter } from '../AntdThemeAdapter';
-import { getAntdTheme } from '../../styles/tokens';
+import { getAntdTheme, lightTokens } from '../../styles/tokens';
 import { THEME_MODE_EVENT } from '../themeBroadcast';
 import '../../styles/workbench-tokens.css';
 
@@ -84,6 +84,21 @@ describe('AntdThemeAdapter', () => {
     );
     const wrapper = container.querySelector('.taskmate-workbench-theme') as HTMLElement;
     expect(wrapper.style.getPropertyValue('--accent')).toBe(getAntdTheme('light').token?.colorPrimary);
+    unmount();
+  });
+
+  it('writes the palette to the document root so portaled content inherits it (CR-02)', () => {
+    const { unmount } = render(<AntdThemeAdapter><div /></AntdThemeAdapter>);
+    const root = document.documentElement;
+    expect(root.style.getPropertyValue('--bg-island')).toBe(lightTokens.css['--bg-island']);
+    expect(root.style.getPropertyValue('--border-strong')).toBe(lightTokens.css['--border-strong']);
+    expect(root.style.getPropertyValue('--font-ui')).toBe(lightTokens.css['--font-ui']);
+    expect(root.style.colorScheme).toBe('light');
+    // Simulated portal appended straight to <body>: the variable is available from :root.
+    const portal = document.createElement('div');
+    document.body.appendChild(portal);
+    expect(getComputedStyle(portal).getPropertyValue('--bg-island').trim()).toBe(lightTokens.css['--bg-island']);
+    portal.remove();
     unmount();
   });
 

@@ -310,13 +310,18 @@ export function getAntdTheme(mode: ThemeMode): ThemeConfig {
   };
 }
 
-/** Writes only enum-derived values from the typed token objects — never a raw stored string. */
+/**
+ * Writes only enum-derived values from the typed token objects — never a raw stored string.
+ * Palette lands on the document root as well as the wrapper so AntD portals
+ * (Modal/Drawer/Dropdown/Find) appended to <body> inherit the same variables (CR-02).
+ */
 export function applyCssVariables(mode: ThemeMode, target: HTMLElement): void {
   const tokens = mode === 'dark' ? darkTokens : lightTokens;
+  const roots = [target, document.documentElement];
   for (const [name, value] of Object.entries(tokens.css)) {
-    target.style.setProperty(name, value);
+    for (const root of roots) root.style.setProperty(name, value);
   }
-  target.style.colorScheme = mode;
+  for (const root of roots) root.style.colorScheme = mode;
 }
 
 // CSS-only aliases kept in workbench-tokens.css because they are structural var() references,
