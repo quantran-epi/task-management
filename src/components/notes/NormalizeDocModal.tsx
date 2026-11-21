@@ -139,7 +139,6 @@ ${originalContent}
       setProposedContent('');
       setError(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, originalContent]);
 
   const handleAccept = () => {

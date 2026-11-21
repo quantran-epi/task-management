@@ -456,7 +456,6 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
     if (selectedConfig && repoPath.trim()) {
       void loadBranches(repoPath.trim());
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConfig, repoPath]);
 
   // Lazy child loader for directory nodes. `node.rawPath` is the compacted chain's LAST path:

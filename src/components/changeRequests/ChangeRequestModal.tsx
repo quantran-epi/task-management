@@ -111,7 +111,6 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
         });
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, changeRequest, form, initialTargetsKey]);
 
   const handleClose = () => {

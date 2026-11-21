@@ -49,7 +49,6 @@ export function sanitizeBrowserFileText(raw: string): string {
       // Normalize CRLF / CR to LF for stable, predictable blocks.
       .replace(/\r\n?/g, '\n')
       // Strip C0/C1 control characters except tab and newline (no NUL/ESC/injected terminals).
-      // eslint-disable-next-line no-control-regex
       .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '')
       // Neutralize sequences that could impersonate a closing prompt delimiter.
       .replace(/<\/(?:referenced_files|item_context|mentioned_entities|system|file_content)>/gi, '[closed-tag]')

@@ -8,7 +8,6 @@ import { useLayoutStore } from '../workbench/store/layoutStore';
  * Mitigates T-29.1-09 before saving diagram to database.
  */
 export function stripAnsiSequences(input: string): string {
-  // eslint-disable-next-line no-control-regex
   return input.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '');
 }
 

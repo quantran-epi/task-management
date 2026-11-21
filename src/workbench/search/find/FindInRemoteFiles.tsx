@@ -100,7 +100,7 @@ export function FindInRemoteFiles(props: FindInRemoteFilesProps) {
       },
       (next) => setState(next)
     );
-  }, [seedKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [seedKey]);
 
   // WR-03: tear down in-flight SSH work when the dialog closes or the target (seed) changes.
   // A `useMemo` keyed on seedKey builds a NEW session on reseed, so also cancel the PREVIOUS one;
