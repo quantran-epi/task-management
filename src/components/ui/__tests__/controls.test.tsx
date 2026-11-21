@@ -245,7 +245,7 @@ describe('D-12 status-map parity across three surfaces', () => {
         {statuses.map((status) => (
           <div key={status} data-status={status}>
             <StatusTag status={status}>{status}</StatusTag>
-            <Badge status={status} count={status} />
+            <Badge status={status} count={status} dot />
             <StatusDot status={status} label={status} />
           </div>
         ))}
@@ -264,11 +264,10 @@ describe('D-12 status-map parity across three surfaces', () => {
       expect(styleOf(tag).getPropertyValue('--ui-status-color').trim()).toBe(expected);
 
       const chipSurface = row!.querySelector('[data-oi-control="chip"][data-state="' + status + '"]') as HTMLElement;
-      const badgeDot = row!.querySelector('[data-oi-control="badge-dot"]') as HTMLElement | null;
+      const badgeDot = row!.querySelector('[data-oi-control="badge-dot"]') as HTMLElement;
       expect(styleOf(chipSurface).getPropertyValue('--ui-status-color').trim()).toBe(expected);
-      if (badgeDot) {
-        expect(styleOf(badgeDot).backgroundColor.replace(/\s/g, '')).toBe(expectedRgb);
-      }
+      expect(badgeDot).not.toBeNull();
+      expect(styleOf(badgeDot).backgroundColor.replace(/\s/g, '')).toBe(expectedRgb);
 
       const dot = row!.querySelector('[role="img"]') as HTMLElement;
       expect(styleOf(dot).backgroundColor.replace(/\s/g, '')).toBe(expectedRgb);

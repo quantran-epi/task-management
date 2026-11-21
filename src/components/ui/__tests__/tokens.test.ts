@@ -67,6 +67,15 @@ describe('tokens — single source parity', () => {
       expect(css['--dur']).toBe('140ms');
       expect(css['--ease']).toBe('cubic-bezier(0.2,0,0,1)');
     }
+    // 52-UI-SPEC §5 / OpenIDEA source palette — control tokens match vendored CSS
+    // so :root[data-theme] and inline injection cannot disagree (INFO-02).
+    expect(lightTokens.css['--bg-elev']).toBe('#f7f8f9');
+    expect(darkTokens.css['--bg-elev']).toBe('#212326');
+    expect(lightTokens.css['--fg-faint']).toBe('#9fa2a8');
+    expect(darkTokens.css['--fg-faint']).toBe('#5f6269');
+    expect(darkTokens.css['--bg-input']).toBe('#191a1c');
+    expect(darkTokens.css['--fg-strong']).toBe('#dfe1e5');
+    expect(darkTokens.css['--border-strong']).toBe('#40434a');
     expect(lightTokens.css['--danger-control']).toBe('#c54e58');
     expect(darkTokens.css['--danger-control']).toBe('#f57e84');
     expect(lightTokens.css['--danger']).toBe(statusColorMap.light.danger);

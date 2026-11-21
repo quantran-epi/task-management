@@ -17,7 +17,12 @@
 
 /* OpenIDEA CSS modules read --danger for invalid controls; keep D-12 status
    colors intact for Tag/Badge by scoping the control-level override. */
-.taskmate-workbench-theme [data-oi-control] {
+.taskmate-workbench-theme :is(
+  [data-oi-control="input"], [data-oi-control="input-number"],
+  [data-oi-control="select"], [data-oi-control="checkbox"],
+  [data-oi-control="radio"], [data-oi-control="radio-button"],
+  [data-oi-control="switch"], [data-oi-control="textarea"]
+) {
   --danger: var(--danger-control);
 }
 
