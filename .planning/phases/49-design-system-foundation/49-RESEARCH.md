@@ -241,7 +241,7 @@ eslint.config.js (or .mjs)        # NEW: flat config, no-restricted-imports, ui/
 ### Pattern 2: Flat-config scoped import ban
 
 **What:** ESLint flat config config-object with `files: ["src/**/*.{ts,tsx}"]`, `ignores: ["src/components/ui/**"]`, `rules: { "no-restricted-imports": ["error", { paths: [{ name: "antd", message: "..." }, { name: "@ant-design/icons" }] }] }`. Later config objects override earlier ones; scoped `ignores` only removes paths from that object, not globally. [CITED: eslint.org/docs/latest/use/configure/configuration-files + rules/no-restricted-imports]
-**When to use:** GUARD-01. Optionally set `allowTypeImports: true` if type-only imports outside ui/ must stay (default false). Decide: D-01 same-name exports mean app should import types from `ui/` too → keep false for strictness, or allow types to reduce churn.
+**When to use:** GUARD-01. Per locked D-19, set `allowTypeImports: true` (type-only imports outside `ui/` are allowed; only runtime imports are blocked). Resolved — see §Open Questions (RESOLVED) Q3.
 
 ### Pattern 3: Theme mode state + cross-window broadcast
 
@@ -253,7 +253,7 @@ eslint.config.js (or .mjs)        # NEW: flat config, no-restricted-imports, ui/
 - **Pass-through wrapper ceremony:** a wrapper that is `export { Button } from 'antd'` violates CTRL-06/Phase-49 watch-out. Every wrapper must apply shared token default or policy (D-02/D-10/D-12) and be the single swap point.
 - **Two theme trees:** keeping legacy `App` ConfigProvider + `AntdThemeAdapter` both mounted → drift. D-13: delete `App` first.
 - **Hand-maintained duplicate palette:** do not copy hex values into both `tokens.ts` and CSS; drive one from the other.
-- **Importing AntD types directly all over app:** strict GUARD-01 (allowTypeImports:false) forces type imports through `ui/` barrel too.
+- **Runtime AntD imports outside `ui/`:** GUARD-01 blocks runtime imports; per D-19 `import type` is expressly allowed (`allowTypeImports: true`), so type imports may stay in place through Phase 50.
 - **Static `Modal.confirm` with theme expectations:** use `Modal.useModal()` context holder (CITED).
 - **Running full Vitest suite:** project rule — scope paths.
 
@@ -407,22 +407,24 @@ npx vitest run src/workbench/__tests__/AntdThemeAdapter.test.tsx -t="dark"
 | A2 | seam "too-new" SUS flags on eslint/globals/babel are false positives (mature packages, recent version publish) | Package Legitimacy | If actually malicious (contradicted by official repo + download counts), install would be unsafe — checkpoint verify covers this |
 | A3 | tsgo/TS7 has no TS7-compatible typescript-eslint release as of 2026-11-21 | Pitfall 1 | If a TS7 parser exists, Option A adds unnecessary babel deps — verify once at plan time |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **ESLint parser path (BLOCKING for GUARD-01 plan)**
-   - What we know: TS 7.0.2 native has no `createSourceFile`/`createProgram`; typescript-eslint 8.x peer caps TS at <6.1.0. Babel parser works without TS compiler but adds 3 deps.
-   - Unclear: whether planner/user accepts babel parser as the lint parser, or prefers pinning legacy TS for tooling, or downgrading TS (violates CLAUDE.md).
-   - Recommendation: Option A (Babel parser) — smallest change, keeps build stack, no type-aware lint needed. Confirm before writing guard plan.
+All three questions were resolved by locked CONTEXT.md decisions (D-17/D-18/D-19) during `/gsd-discuss-phase` and are now binding — no open decision remains for planning or implementation.
 
-2. **Icon wrapper granularity**
-   - What we know: D-09 says icons wrapped via single `src/components/ui/icon.tsx`; D-03 says every control is one file ("no exceptions").
-   - Unclear: do 144 icons count as 144 files or one `icon.tsx` exporting 144 wrapped icons?
-   - Recommendation: one `icon.tsx` with a generic wrapped-icon factory + same-name exports for all 144; D-09 explicitly names one file for icons, treat icons as one policy family. Confirm with user if strict reading required.
+1. **ESLint parser path — RESOLVED by D-17**
+   - Was: TS 7.0.2 native has no `createSourceFile`/`createProgram`; typescript-eslint 8.x peers cap TS at <6.1.0. Babel parser works without TS compiler but adds 3 deps.
+   - Resolution (D-17, locked): use `@babel/eslint-parser` + `@babel/core` + `@babel/preset-typescript`; keep TypeScript 7.0.2 for build; DO NOT install typescript-eslint. This was the recommended Option A and is now a locked decision, not an open question.
+   - Implemented in: plan 08 (`eslint.config.mjs` Babel parser config; package pins; `guardConfig.test.ts` asserts no `typescript-eslint`).
 
-3. **Type-only imports outside ui/**
-   - What we know: `allowTypeImports` default false; 62 imports include ~10 types.
-   - Unclear: strict ban (all types via ui barrel) vs allow type imports to reduce Phase-50 churn.
-   - Recommendation: `allowTypeImports: false` for D-06 GUARD-01 "không có ngoại lệ"; barrel re-exports AntD prop types.
+2. **Icon wrapper granularity — RESOLVED by D-18**
+   - Was: D-09 says icons wrapped via single `src/components/ui/icon.tsx`; D-03 says every control is one file ("no exceptions").
+   - Resolution (D-18, locked): one `src/components/ui/icon.tsx` re-exporting all 144 icons via one generic wrapped-icon factory. D-18 is an explicit, deliberate exception to D-03 (icons are a policy family, not controls). No further user confirmation needed.
+   - Implemented in: plan 03 (`icon.tsx`, 144 same-name exports, count gate).
+
+3. **Type-only imports outside ui/ — RESOLVED by D-19 (supersedes earlier recommendation)**
+   - Was: research recommended `allowTypeImports: false` for strict GUARD-01; that recommendation is RETRACTED.
+   - Resolution (D-19, locked): `no-restricted-imports` uses `allowTypeImports: true` — `import type` from `antd` is permitted outside `ui/`; only runtime imports are blocked. The earlier "no exceptions" reading of GUARD-01 applied to runtime imports; D-19 explicitly carves out type-only imports to reduce Phase-50 churn and is authoritative over the research recommendation.
+   - Implemented in: plan 08 (`allowTypeImports: true` in rule config; `guardConfig.test.ts` asserts the flag; `good-import.tsx` fixture proves `import type` passes), threat T-49-22 disposition accept.
 
 ## Environment Availability
 
