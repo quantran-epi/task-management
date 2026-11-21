@@ -116,6 +116,7 @@ Progress: [█████████░] 91%
 | 261121-eck | Markdown Viewer trong Tool Explorer + fix search overflow + icon polish | 2026-11-21 | 635cba8e | [261121-eck-trong-tool-explorer-th-m-markdown-viewer](./quick/261121-eck-trong-tool-explorer-th-m-markdown-viewer/) |
 | 261121-ev5 | AI assistant inline cho 4 utility editor (JSON, XML, Text Compare, Markdown) với 2 chế độ sửa/hỏi và model riêng từng tool | 2026-11-21 | a268db51 | [261121-ev5-ai-assistant-cho-utility-tool-editors](./quick/261121-ev5-ai-assistant-cho-utility-tool-editors/) |
 | 261121-foz | Line number mọi pane + fold JSON/XML + giữ nội dung khi đổi tab + Save as (download/Docs) cho utility editor | 2026-11-21 | 66c69839 | [261121-foz-line-number-v-collapse-expand-cho-utilit](./quick/261121-foz-line-number-v-collapse-expand-cho-utilit/) |
+| 261121-hza | Sửa seen receipt cho lead reply xếp hàng, bỏ nhãn untrusted cho lệnh hiện tại, prompt ủy thác code_edit cho Agent Developer | 2026-11-21 | e1b0c0ba | [261121-hza-fix-ai-team-seen-receipts-untrusted-inst](./quick/261121-hza-fix-ai-team-seen-receipts-untrusted-inst/) |
 
 ## Accumulated Context
 

@@ -4598,6 +4598,21 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
     const lastTextOf = (options: AiOrchestratorLoopOptions): string =>
       String(options.messages.at(-1)?.content ?? '');
 
+    /** The follow-up's cursor write lands in the turn's `finally`, after its phase clears. */
+    const waitForLeadCursor = async (
+      current: Harness,
+      minSeq: number,
+      timeoutMs = 5000
+    ): Promise<void> => {
+      const startedAt = Date.now();
+      for (;;) {
+        const cursor = await getCursor(current.team.id, current.lead.id, current.db);
+        if (cursor.lastSeq >= minSeq) return;
+        if (Date.now() - startedAt > timeoutMs) throw new Error('waitForLeadCursor timeout');
+        await sleep(5);
+      }
+    };
+
     const teamLog = async (current: Harness) =>
       current.db.teamMessages.where('teamId').equals(current.team.id).sortBy('seq');
 
@@ -4955,6 +4970,57 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       await waitForReady(current.coordinator);
 
       for (const question of questions) expect(leadPrompts).toContain(question);
+
+      // The queued rows must be marked "đã xem" by their OWN follow-up turns, even though
+      // the busy turn's drain deliberately skipped them while claimed.
+      const rows = await current.db.teamMessages
+        .where('teamId')
+        .equals(current.team.id)
+        .filter((row) => questions.includes(row.content))
+        .toArray();
+      expect(rows).toHaveLength(questions.length);
+      await waitForLeadCursor(current, Math.max(...rows.map((row) => row.seq)));
+    });
+
+    it('marks a queued follow-up as seen even when its turn has no tool round', async () => {
+      const firstTurnStarted = deferred();
+      const firstTurnGate = deferred();
+      const beforeToolRoundCalls: string[] = [];
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            const text = lastTextOf(options);
+            if (text === 'Việc đầu tiên') {
+              await options.beforeToolRound!(1, options.signal);
+              firstTurnStarted.release();
+              await firstTurnGate.promise;
+            } else {
+              // Deliberately no tool round: the turn ends straight with loopResult.
+              beforeToolRoundCalls.push(text);
+            }
+            return loopResult('Xong.');
+          },
+        },
+      });
+      const current = harness;
+
+      const sent = current.coordinator.send('Việc đầu tiên');
+      await firstTurnStarted.promise;
+      await expect(current.coordinator.send('Câu hỏi không tool round')).resolves.toBe('steered');
+
+      firstTurnGate.release();
+      await sent;
+      await waitFor(() => beforeToolRoundCalls.includes('Câu hỏi không tool round'), 5000);
+      await waitForReady(current.coordinator);
+
+      expect(beforeToolRoundCalls).toContain('Câu hỏi không tool round');
+      const row = await current.db.teamMessages
+        .where('teamId')
+        .equals(current.team.id)
+        .filter((entry) => entry.content === 'Câu hỏi không tool round')
+        .first();
+      expect(row).toBeDefined();
+      await waitForLeadCursor(current, row!.seq);
     });
 
     it('claims a plain message before any await so a busy drain cannot answer it twice', async () => {
