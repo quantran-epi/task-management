@@ -6,6 +6,9 @@ import { Tooltip } from '../tooltip';
 import { Popover, WIDTH_SCALE } from '../popover';
 import { Popconfirm } from '../popconfirm';
 import { AutoComplete, AutoCompleteOption } from '../auto-complete';
+import { TreeSelect, TreeSelectNode, TreeSelectSHOW_ALL, TreeSelectSHOW_CHILD, TreeSelectSHOW_PARENT } from '../tree-select';
+import { DatePicker, DateRangePicker } from '../date-picker';
+import dayjs from 'dayjs';
 
 let errorSpy: ReturnType<typeof vi.spyOn>;
 
@@ -258,6 +261,89 @@ describe('S-SEL native AutoComplete', () => {
     expect(input.style.maxWidth).toBe('222px');
     fireEvent.focus(input);
     expect(installedPopup()).toBeNull();
+    view.unmount();
+  });
+});
+
+describe('S-SEL/S-TR native TreeSelect', () => {
+  it('keeps wrapper-defined SHOW_* statics and emits checked keys with SHOW_CHILD', () => {
+    const onChange = vi.fn();
+    const view = render(
+      <TreeSelect
+        treeCheckable
+        showCheckedStrategy={TreeSelectSHOW_CHILD}
+        treeDefaultExpandAll
+        treeData={[
+          { key: 'root', title: 'Root', value: 'root', children: [
+            { key: 'child', title: 'Child', value: 'child' },
+          ] },
+        ]}
+        value={['root', 'child']}
+        onChange={onChange}
+      />,
+    );
+    expect(TreeSelectSHOW_ALL).toBe('SHOW_ALL');
+    expect(TreeSelectSHOW_CHILD).toBe('SHOW_CHILD');
+    expect(TreeSelectSHOW_PARENT).toBe('SHOW_PARENT');
+    expect(typeof TreeSelectNode).toBe('function');
+    const trigger = view.container.querySelector('[data-oi-control="tree-select"]') as HTMLInputElement;
+    fireEvent.click(trigger);
+    const checkbox = document.querySelector('input[data-oi-control="checkbox"]') as HTMLInputElement;
+    expect(checkbox).not.toBeNull();
+    fireEvent.click(checkbox);
+    expect(onChange).toHaveBeenCalled();
+    const value = onChange.mock.calls.at(-1)![0];
+    expect(Array.isArray(value)).toBe(true);
+    expect(value).not.toContain('root');
+    view.unmount();
+  });
+});
+
+describe('N-08 native DatePicker', () => {
+  it('uses select-popup hook, blocks disabled dates and emits a Dayjs tuple for ranges', () => {
+    const onChange = vi.fn();
+    const view = render(
+      <DateRangePicker
+        value={[dayjs('2026-01-05'), dayjs('2026-01-07')]}
+        onChange={onChange}
+        disabledDate={(date) => date.date() === 6}
+      />,
+    );
+    const inputs = view.container.querySelectorAll('[data-oi-control="date-picker"]');
+    expect(inputs).toHaveLength(2);
+    fireEvent.click(inputs[0]!);
+    const popup = document.querySelector('[data-oi-control="select-popup"]') as HTMLElement;
+    expect(popup).not.toBeNull();
+    expect(popup.parentElement).toBe(document.body);
+    expect(popup.style.position).toBe('fixed');
+    const disabled = Array.from(popup.querySelectorAll('[aria-disabled="true"]')) as HTMLElement[];
+    expect(disabled.length).toBeGreaterThan(0);
+    const cells = Array.from(popup.querySelectorAll('[data-oi-control="list-row"]')) as HTMLElement[];
+    const selectable = cells.find((cell) => cell.textContent === '5')!;
+    fireEvent.click(selectable);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const [dates, strings] = onChange.mock.calls[0]!;
+    expect(Array.isArray(dates)).toBe(true);
+    expect(dates[0]).toBeInstanceOf(Object);
+    expect(strings).toHaveLength(2);
+    expect(typeof strings[0]).toBe('string');
+    view.unmount();
+  });
+
+  it('keeps the single-value Dayjs signature and full-width default', () => {
+    const onChange = vi.fn();
+    const view = render(<DatePicker value={dayjs('2026-01-05')} onChange={onChange} />);
+    const input = view.container.querySelector('[data-oi-control="date-picker"]') as HTMLInputElement;
+    expect(input.value).toBe('2026-01-05');
+    expect(input.style.width).toBe('100%');
+    fireEvent.click(input);
+    const popup = document.querySelector('[data-oi-control="select-popup"]') as HTMLElement;
+    expect(popup).not.toBeNull();
+    const cell = Array.from(popup.querySelectorAll('[data-oi-control="list-row"]'))
+      .find((node) => node.textContent === '5') as HTMLElement;
+    fireEvent.click(cell);
+    expect(onChange).toHaveBeenCalledWith(expect.anything(), expect.any(String));
+    expect(onChange.mock.calls[0]![1]).toBe('2026-01-05');
     view.unmount();
   });
 });
