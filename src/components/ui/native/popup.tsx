@@ -11,6 +11,8 @@ export interface PopupProps {
   className?: string;
   children: ReactNode;
   label?: string;
+  /** Measurement hook for the owning control; defaults to the generic popup hook. */
+  control?: string;
 }
 
 interface Position {
@@ -43,7 +45,7 @@ function place(anchor: DOMRect, element: HTMLElement): Position {
   return { left, top, width };
 }
 
-export function Popup({ open, anchorRef, onClose, className, children, label }: PopupProps) {
+export function Popup({ open, anchorRef, onClose, className, children, label, control = 'popup' }: PopupProps) {
   const popupRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<Position | null>(null);
 
@@ -94,7 +96,7 @@ export function Popup({ open, anchorRef, onClose, className, children, label }: 
       ref={popupRef}
       role="dialog"
       aria-label={label}
-      data-oi-control="popup"
+      data-oi-control={control}
       data-positioned=""
       className={classNames(popupStyles.popup, popupStyles.surface, className)}
       style={{

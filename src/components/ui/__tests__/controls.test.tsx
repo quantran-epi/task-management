@@ -75,7 +75,8 @@ describe('input-family policy', () => {
         <InputNumber min={1} max={9} precision={2} value={2.5} onChange={() => {}} aria-label="Amount" />
       </>,
     );
-    expect(container.querySelector('.ant-select-clear')).not.toBeNull();
+    expect(container.querySelector('[data-oi-control="select"]')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Xóa lựa chọn' })).toBeInTheDocument();
     expect(screen.getByLabelText('Amount')).toHaveValue('2.50');
   });
 });
