@@ -196,6 +196,7 @@ export function TimeRangePicker({
     display(range[1] as Dayjs | null, format),
   ]);
   const [active, setActive] = useState<0 | 1>(0);
+  const [rangeOpen, setRangeOpen] = useState(false);
   const invalid = status === 'error' || ariaInvalid === true;
   const anchorRef = active === 0 ? startRef : endRef;
   const parsed = drafts[active] ? dayjs(drafts[active], format) : dayjs('00:00:00', 'HH:mm:ss');
@@ -211,6 +212,7 @@ export function TimeRangePicker({
     setDrafts((prev) => active === 0 ? [next.format(format), prev[1]] : [prev[0], next.format(format)]);
     commitIndex(active, next);
     setActive(active === 0 ? 1 : 0);
+    setRangeOpen(false);
     anchorRef.current?.focus();
   }
 
@@ -225,7 +227,7 @@ export function TimeRangePicker({
           ref={index === 0 ? startRef : endRef}
           value={drafts[index]}
           aria-label={`${ariaLabel ?? placeholder ?? 'Khoảng thời gian'} ${index === 0 ? 'bắt đầu' : 'kết thúc'}`}
-          onFocus={() => setActive(index)}
+          onFocus={() => { setActive(index); setRangeOpen(true); }}
           onChange={(event) => {
             const text = event.target.value;
             setDrafts((prev) => index === 0 ? [text, prev[1]] : [prev[0], text]);
@@ -240,7 +242,7 @@ export function TimeRangePicker({
       {allowClear && (range[0] || range[1]) && !rangeDisabled ? (
         <button type="button" aria-label="Xóa khoảng thời gian" onClick={() => { setDrafts(['', '']); (onChange as ((value: [Dayjs | null, Dayjs | null] | null) => void) | undefined)?.(null); }}>×</button>
       ) : null}
-      <Popup open={true} anchorRef={anchorRef as React.RefObject<HTMLElement | null>} onClose={() => anchorRef.current?.blur()} className={selectStyles.popup ?? ''} control="time-picker-range-popup" label={ariaLabel ?? 'Chọn khoảng thời gian'}>
+      <Popup open={rangeOpen} anchorRef={anchorRef as React.RefObject<HTMLElement | null>} onClose={() => { setRangeOpen(false); anchorRef.current?.focus(); }} className={selectStyles.popup ?? ''} control="time-picker-range-popup" label={ariaLabel ?? 'Chọn khoảng thời gian'}>
         <div className={selectStyles.popupInner} style={{ display: 'flex', gap: 4 }}>
           <TimeColumn id="tr-h" values={grid.hours} value={parsed.hour()} lead={0} label="Giờ" onLead={() => {}} onPick={(h) => pick(h, parsed.minute(), parsed.second())} />
           <TimeColumn id="tr-m" values={grid.minutes} value={parsed.minute()} lead={0} label="Phút" onLead={() => {}} onPick={(m) => pick(parsed.hour(), m, parsed.second())} />
