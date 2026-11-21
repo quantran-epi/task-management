@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { Form, FormItem } from '../form';
 import { Checkbox, CheckboxGroup } from '../checkbox';
+import { Popup } from '../native/popup';
 import { Select } from '../select';
 import { Radio, RadioButton, RadioGroup } from '../radio';
 import { Switch } from '../switch';
@@ -85,6 +86,46 @@ describe('Switch content and uncontrolled state (WR-02)', () => {
     fireEvent.click(control);
     expect(onChange.mock.calls[0]![0]).toBe(false);
     expect(control).toHaveAttribute('aria-checked', 'false');
+  });
+});
+
+describe('Popup focus handling (WR-05)', () => {
+  it('keeps search input focused across rerenders and after clear', () => {
+    const onChange = vi.fn();
+    const { container } = render(
+      <Select
+        aria-label="Chọn"
+        showSearch
+        value="a"
+        options={[{ value: 'a', label: 'A' }]}
+        onChange={onChange}
+      />,
+    );
+    const input = container.querySelector('input') as HTMLInputElement;
+    input.focus();
+    fireEvent.change(input, { target: { value: 'abc' } });
+    expect(document.activeElement).toBe(input);
+    fireEvent.click(screen.getAllByLabelText('Xóa lựa chọn')[0]!);
+    expect(document.activeElement).toBe(input);
+  });
+
+  it('closes only the topmost popup on Escape', () => {
+    const onCloseOuter = vi.fn();
+    const onCloseInner = vi.fn();
+    const anchor = document.createElement('button');
+    document.body.appendChild(anchor);
+    const anchorRef = { current: anchor };
+    const { unmount } = render(
+      <>
+        <Popup open anchorRef={anchorRef} onClose={onCloseOuter} label="outer" />
+        <Popup open anchorRef={anchorRef} onClose={onCloseInner} label="inner" />
+      </>,
+    );
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onCloseInner).toHaveBeenCalledTimes(1);
+    expect(onCloseOuter).not.toHaveBeenCalled();
+    unmount();
+    anchor.remove();
   });
 });
 

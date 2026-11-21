@@ -47,7 +47,11 @@ function place(anchor: DOMRect, element: HTMLElement): Position {
 
 export function Popup({ open, anchorRef, onClose, className, children, label, control = 'popup' }: PopupProps) {
   const popupRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
   const [position, setPosition] = useState<Position | null>(null);
+  // Inline onClose arrows are unstable; effect identity must not follow them
+  // or every parent rerender re-registers listeners and steals field focus (WR-05).
+  onCloseRef.current = onClose;
 
   const updatePosition = useCallback(() => {
     const anchor = anchorRef.current?.getBoundingClientRect();
@@ -69,25 +73,28 @@ export function Popup({ open, anchorRef, onClose, className, children, label, co
   useEffect(() => {
     if (!open || typeof document === 'undefined') return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onClose();
-      }
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      // Only the innermost open popup handles Escape (nested popup guard).
+      const popups = document.querySelectorAll('[role="dialog"][data-positioned]');
+      if (popups.length > 0 && popups[popups.length - 1] !== popupRef.current) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onCloseRef.current();
+      anchorRef.current?.focus();
     };
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target;
       if (!(target instanceof Node)) return;
       if (popupRef.current?.contains(target) || anchorRef.current?.contains(target)) return;
-      onClose();
+      onCloseRef.current();
     };
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('pointerdown', onPointerDown, true);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
       document.removeEventListener('pointerdown', onPointerDown, true);
-      anchorRef.current?.focus();
     };
-  }, [open, onClose, anchorRef]);
+  }, [open, anchorRef]);
 
   if (!open || typeof document === 'undefined') return null;
 
