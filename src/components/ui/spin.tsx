@@ -1,13 +1,15 @@
 import { Spin as AntSpin, type SpinProps as AntSpinProps } from 'antd';
 import type { CSSProperties } from 'react';
+import { useThemeMode } from '../../hooks/useThemeMode';
 import { getSharedControlTokens, getStatusTokens } from './tokens.contract';
 
 export type SpinProps = AntSpinProps;
 
 /** Single swap point for AntD Spin; accent comes from the shared D-12 map. */
 export function Spin({ style, ...rest }: SpinProps) {
+  const { mode } = useThemeMode();
   const { controlHeight, fontSize } = getSharedControlTokens();
-  const accent = getStatusTokens('accent');
+  const accent = getStatusTokens('accent', mode);
   return (
     <AntSpin
       {...rest}

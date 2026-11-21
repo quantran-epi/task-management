@@ -19,6 +19,8 @@ import { Popconfirm } from '../popconfirm';
 import { ThemeAppHolder, useMessage } from '../message';
 import { useNotification } from '../notification';
 import { getSharedControlTokens, type StatusKind } from '../tokens.contract';
+import { CheckCircleFilled } from '../icon';
+import { Spin } from '../spin';
 
 vi.mock('@tauri-apps/api/event', () => ({
   emitTo: vi.fn(async () => {}),
@@ -146,6 +148,34 @@ describe('overlay policy', () => {
     expect(screen.getByText('thông báo')).toBeInTheDocument();
     fireEvent.click(screen.getByText('confirm'));
     expect(screen.getAllByText('chắc chứ').length).toBeGreaterThan(1);
+  });
+});
+
+describe('status-aware wrappers follow the active mode (WR-01)', () => {
+  it.each(modes)('uses the %s accent for Icon tone and Spin accent', (mode) => {
+    const { container, unmount } = shell(mode, (
+      <div>
+        <CheckCircleFilled tone="accent" aria-label="ok" />
+        <Spin aria-label="loading" />
+      </div>
+    ));
+    const expected = statusColorMap[mode as ThemeMode].accent;
+    const icon = container.querySelector('[aria-label="ok"]') as HTMLElement;
+    expect(icon.style.color.replace(/\s/g, '')).toBe(hexToRgb(expected));
+    const spin = container.querySelector('.ant-spin') as HTMLElement;
+    expect(spin.style.getPropertyValue('--ui-spin-accent').trim()).toBe(expected);
+    unmount();
+  });
+
+  it.each(modes)('uses the %s danger hex for the Popconfirm danger tone', (mode) => {
+    shell(mode, (
+      <Popconfirm open tone="danger" title="Xóa?">
+        <button type="button">Xóa</button>
+      </Popconfirm>
+    ));
+    const expected = statusColorMap[mode as ThemeMode].danger;
+    const ok = screen.getByText('Xác nhận').closest('button') as HTMLElement;
+    expect(ok.style.getPropertyValue('--ui-status-color').trim()).toBe(expected);
   });
 });
 

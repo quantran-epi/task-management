@@ -143,6 +143,7 @@ import {
   ZoomOutOutlined as ZoomOutOutlinedComponent,
 } from '@ant-design/icons';
 
+import { useThemeMode } from '../../hooks/useThemeMode';
 import { getSharedControlTokens, getStatusTokens, type StatusKind } from './tokens.contract';
 
 type AntIconComponent = (props: Record<string, unknown>) => ReactNode;
@@ -167,11 +168,12 @@ export type WrappedIcon = (props: WrappedIconProps) => ReactNode;
  */
 export function wrapIcon(Component: AntIconComponent): WrappedIcon {
   return function PolicyIcon({ size, tone, style, ...rest }: WrappedIconProps) {
+    const { mode } = useThemeMode();
     const metrics = getSharedControlTokens();
     const resolvedStyle = {
       '--ui-control-height': `${metrics.controlHeight}px`,
       fontSize: typeof size === 'number' ? `${size}px` : size ?? metrics.iconSize,
-      ...(tone ? { color: getStatusTokens(tone) } : {}),
+      ...(tone ? { color: getStatusTokens(tone, mode) } : {}),
       ...style,
     } as CSSProperties;
     return <Component {...rest} style={resolvedStyle} />;

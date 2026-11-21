@@ -1,5 +1,6 @@
 import { Popconfirm as AntPopconfirm, type PopconfirmProps as AntPopconfirmProps } from 'antd';
 import type { CSSProperties } from 'react';
+import { useThemeMode } from '../../hooks/useThemeMode';
 import { getStatusTokens, type StatusKind } from './tokens.contract';
 
 export interface PopconfirmProps extends AntPopconfirmProps {
@@ -17,7 +18,8 @@ export function Popconfirm({
   title,
   ...rest
 }: PopconfirmProps) {
-  const dangerColor = getStatusTokens(tone);
+  const { mode } = useThemeMode();
+  const dangerColor = getStatusTokens(tone, mode);
   return (
     <AntPopconfirm
       {...rest}
