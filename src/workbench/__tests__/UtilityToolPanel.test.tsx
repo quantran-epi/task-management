@@ -143,6 +143,67 @@ describe('UtilityToolPanel', () => {
     expect(preview.querySelector('img')).not.toBeNull();
   });
 
+  it.each(['json_formatter', 'xml_formatter', 'text_compare', 'markdown_viewer'] as const)(
+    'shows a line-number gutter in every pane of %s',
+    (viewType) => {
+      render(<UtilityToolPanel viewType={viewType} />);
+      expect(screen.getAllByTestId('line-gutter')).toHaveLength(viewType === 'text_compare' ? 2 : 2);
+    }
+  );
+
+  it('folds and expands a JSON object, keeping the opening row and its number together', () => {
+    render(<UtilityToolPanel viewType="json_formatter" />);
+    fireEvent.change(screen.getByLabelText('JSON input'), {
+      target: { value: '{"a":{"inner":"hidden-value"},"tail":1}' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /format-painter Format/i }));
+    const output = screen.getByLabelText('JSON output');
+    expect(output.textContent).toContain('hidden-value');
+    expect(output.textContent).toBe(
+      '{\n  "a": {\n    "inner": "hidden-value"\n  },\n  "tail": 1\n}'
+    );
+
+    const fold = screen.getByRole('button', { name: 'Thu gọn dòng 2' });
+    fireEvent.click(fold);
+    expect(output.textContent).not.toContain('hidden-value');
+    expect(output.textContent).toContain('…');
+    expect(screen.queryByRole('button', { name: 'Thu gọn dòng 2' })).toBeNull();
+    const expand = screen.getByRole('button', { name: 'Mở rộng dòng 2' });
+    fireEvent.click(expand);
+    expect(output.textContent).toBe(
+      '{\n  "a": {\n    "inner": "hidden-value"\n  },\n  "tail": 1\n}'
+    );
+    expect(output.querySelector('span[style*="color"]')).not.toBeNull();
+    expect(screen.getAllByTestId('line-gutter')[1]?.textContent).toContain('6');
+  });
+
+  it('folds and expands an XML element', () => {
+    render(<UtilityToolPanel viewType="xml_formatter" />);
+    fireEvent.change(screen.getByLabelText('XML input'), {
+      target: { value: '<root><item><value>secret</value></item></root>' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /format-painter Format/i }));
+    const output = screen.getByLabelText('XML output');
+    expect(output.textContent).toContain('secret');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Thu gọn dòng 2' }));
+    expect(output.textContent).not.toContain('secret');
+    expect(screen.getByRole('button', { name: 'Mở rộng dòng 2' })).toBeDefined();
+    expect(output.querySelector('span[style*="color"]')).not.toBeNull();
+  });
+
+  it('resets folding when the formatted output changes', () => {
+    render(<UtilityToolPanel viewType="json_formatter" />);
+    const input = screen.getByLabelText('JSON input');
+    fireEvent.change(input, { target: { value: '{"a":{"x":1},"tail":1}' } });
+    fireEvent.click(screen.getByRole('button', { name: /format-painter Format/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Thu gọn dòng 2' }));
+    expect(screen.getByLabelText('JSON output').textContent).not.toContain('"x"');
+    fireEvent.change(input, { target: { value: '{"a":{"y":2},"tail":1}' } });
+    fireEvent.click(screen.getByRole('button', { name: /format-painter Format/i }));
+    expect(screen.getByLabelText('JSON output').textContent).toContain('"y"');
+  });
+
   it('syncs scroll between editor and preview proportionally without bounce', () => {
     // The hook releases its bounce guard in requestAnimationFrame — run it inline so each
     // fired scroll is a fresh sync (jsdom does not emit scroll events when scrollTop changes).

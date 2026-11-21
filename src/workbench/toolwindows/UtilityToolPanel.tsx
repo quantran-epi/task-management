@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Checkbox, Segmented, Select, Tooltip, message } from 'antd';
 import {
   CodeOutlined,
@@ -15,6 +15,7 @@ import type { EditorViewType } from '../store/layoutStore';
 import { renderSafeMarkdown } from '../../utils/markdown';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { UtilityToolAIAssistant } from './UtilityToolAIAssistant';
+import { LineNumberedPane, computeFoldRanges } from './LineNumberedPane';
 
 type Indent = '2' | '4' | 'tab';
 
@@ -58,6 +59,8 @@ const editorStyle: React.CSSProperties = {
   color: 'var(--fg, #1f2937)',
   background: 'var(--bg-island, #fff)',
   tabSize: 2,
+  whiteSpace: 'pre',
+  overflow: 'auto',
 };
 const outputStyle: React.CSSProperties = {
   ...editorStyle,
@@ -304,6 +307,68 @@ function escapeHtml(s: string) {
   return s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]!));
 }
 
+const ELLIPSIS_MARKUP = ' <span style="color:var(--fg-muted)">…</span>';
+
+type FoldingCodeViewProps = {
+  text: string;
+  kind: 'json' | 'xml';
+  rightRef: React.RefObject<HTMLPreElement | null>;
+  onRightScroll: () => void;
+  label: 'JSON output' | 'XML output';
+  error?: string | null;
+};
+
+/** Highlighted code view with gutter folding; source line numbers stay stable. */
+function FoldingCodeView({ text, kind, rightRef, onRightScroll, label, error }: FoldingCodeViewProps) {
+  const lines = useMemo(() => (error ? [''] : text.split('\n')), [text, error]);
+  const ranges = useMemo(() => (error ? [] : computeFoldRanges(text, kind)), [text, kind, error]);
+  const [folded, setFolded] = useState<ReadonlySet<number>>(() => new Set());
+  useEffect(() => { setFolded(new Set()); }, [text]);
+
+  const visibleLines: number[] = [];
+  const collapsedLines = new Set<number>();
+  const foldableLines = new Set(ranges.map((r) => r.openLine));
+  const openByLine = new Map(ranges.map((r) => [r.openLine, r]));
+  let skipUntil = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (i <= skipUntil) continue;
+    visibleLines.push(i);
+    const range = openByLine.get(i);
+    if (range && folded.has(i)) {
+      collapsedLines.add(i);
+      skipUntil = range.closeLine;
+    }
+  }
+
+  const html = error
+    ? escapeHtml(`❌ ${error}`)
+    : visibleLines.map((i) =>
+        highlight(lines[i] ?? '', kind) +
+        (collapsedLines.has(i) ? ELLIPSIS_MARKUP : '') +
+        (i < lines.length - 1 ? '\n' : '')
+      ).join('');
+
+  return (
+    <LineNumberedPane
+      scrollRef={rightRef}
+      totalLines={lines.length}
+      visibleLines={visibleLines}
+      foldableLines={foldableLines}
+      collapsedLines={collapsedLines}
+      onToggleFold={(lineIndex) =>
+        setFolded((prev) => {
+          const next = new Set(prev);
+          if (next.has(lineIndex)) next.delete(lineIndex);
+          else next.add(lineIndex);
+          return next;
+        })
+      }
+    >
+      <pre ref={rightRef} onScroll={onRightScroll} aria-label={label} style={{ ...outputStyle, whiteSpace: 'pre' }} dangerouslySetInnerHTML={{ __html: html }} />
+    </LineNumberedPane>
+  );
+}
+
 function JsonFormatter({ db }: { db: TaskPlannerDatabase }) {
   const [input, setInput] = useState('');
   const [output, setOutput] = useState('');
@@ -370,12 +435,14 @@ function JsonFormatter({ db }: { db: TaskPlannerDatabase }) {
       <div style={splitPaneStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-island, #fff)' }}>
           <div style={colHeadStyle}>INPUT <span style={{ marginLeft: 'auto', fontWeight: 400, color: 'var(--fg-muted)' }}>{input.length} ký tự</span></div>
-          <textarea ref={leftRef} onScroll={onLeftScroll} aria-label="JSON input" spellCheck={false} style={editorStyle} value={input} onChange={(e) => onInput(e.target.value)} placeholder={'Dán JSON vào đây, ví dụ: {"name":"TaskMate","ok":true}'} />
+          <LineNumberedPane scrollRef={leftRef} totalLines={input.split('\n').length}>
+            <textarea ref={leftRef} wrap="off" onScroll={onLeftScroll} aria-label="JSON input" spellCheck={false} style={editorStyle} value={input} onChange={(e) => onInput(e.target.value)} placeholder={'Dán JSON vào đây, ví dụ: {"name":"TaskMate","ok":true}'} />
+          </LineNumberedPane>
         </div>
         <PaneDivider />
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-island, #fff)' }}>
           <div style={colHeadStyle}>OUTPUT <span style={{ marginLeft: 'auto', fontWeight: 400, color: 'var(--fg-muted)' }}>đã format</span></div>
-          <pre ref={rightRef} onScroll={onRightScroll} aria-label="JSON output" style={outputStyle} dangerouslySetInnerHTML={{ __html: error ? escapeHtml(`❌ ${error}`) : highlight(output, 'json') }} />
+          <FoldingCodeView text={output} kind="json" rightRef={rightRef} onRightScroll={onRightScroll} label="JSON output" error={error} />
         </div>
       </div>
       <div style={footerStyle}><span>JSON · UTF-8</span><span>{output ? output.split('\n').length : 0} dòng</span></div>
@@ -456,12 +523,14 @@ function XmlFormatter({ db }: { db: TaskPlannerDatabase }) {
       <div style={splitPaneStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-island, #fff)' }}>
           <div style={colHeadStyle}>INPUT <span style={{ marginLeft: 'auto', fontWeight: 400, color: 'var(--fg-muted)' }}>{input.length} ký tự</span></div>
-          <textarea ref={leftRef} onScroll={onLeftScroll} aria-label="XML input" spellCheck={false} style={editorStyle} value={input} onChange={(e) => onInput(e.target.value)} placeholder={'Dán XML vào đây, ví dụ: <note><to>Quan</to></note>'} />
+          <LineNumberedPane scrollRef={leftRef} totalLines={input.split('\n').length}>
+            <textarea ref={leftRef} wrap="off" onScroll={onLeftScroll} aria-label="XML input" spellCheck={false} style={editorStyle} value={input} onChange={(e) => onInput(e.target.value)} placeholder={'Dán XML vào đây, ví dụ: <note><to>Quan</to></note>'} />
+          </LineNumberedPane>
         </div>
         <PaneDivider />
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-island, #fff)' }}>
           <div style={colHeadStyle}>OUTPUT <span style={{ marginLeft: 'auto', fontWeight: 400, color: 'var(--fg-muted)' }}>đã format</span></div>
-          <pre ref={rightRef} onScroll={onRightScroll} aria-label="XML output" style={outputStyle} dangerouslySetInnerHTML={{ __html: error ? escapeHtml(`❌ ${error}`) : highlight(output, 'xml') }} />
+          <FoldingCodeView text={output} kind="xml" rightRef={rightRef} onRightScroll={onRightScroll} label="XML output" error={error} />
         </div>
       </div>
       <div style={footerStyle}><span>XML · UTF-8</span><span>{output ? output.split('\n').length : 0} dòng</span></div>
@@ -538,12 +607,16 @@ function TextCompare({ db }: { db: TaskPlannerDatabase }) {
       <div style={splitPaneStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-island, #fff)' }}>
           <div style={colHeadStyle}>A — GỐC <span style={{ marginLeft: 'auto', fontWeight: 400, color: 'var(--fg-muted)' }}>{countA} {unit}</span></div>
-          <textarea ref={leftRef} onScroll={onLeftScroll} aria-label="Text A" spellCheck={false} style={editorStyle} value={a} onChange={(e) => setA(e.target.value)} placeholder="Text gốc..." />
+          <LineNumberedPane scrollRef={leftRef} totalLines={a.split('\n').length}>
+            <textarea ref={leftRef} wrap="off" onScroll={onLeftScroll} aria-label="Text A" spellCheck={false} style={editorStyle} value={a} onChange={(e) => setA(e.target.value)} placeholder="Text gốc..." />
+          </LineNumberedPane>
         </div>
         <PaneDivider />
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-island, #fff)' }}>
           <div style={colHeadStyle}>B — MỚI <span style={{ marginLeft: 'auto', fontWeight: 400, color: 'var(--fg-muted)' }}>{countB} {unit}</span></div>
-          <textarea ref={rightRef} onScroll={onRightScroll} aria-label="Text B" spellCheck={false} style={editorStyle} value={b} onChange={(e) => setB(e.target.value)} placeholder="Text cần so sánh..." />
+          <LineNumberedPane scrollRef={rightRef} totalLines={b.split('\n').length}>
+            <textarea ref={rightRef} wrap="off" onScroll={onRightScroll} aria-label="Text B" spellCheck={false} style={editorStyle} value={b} onChange={(e) => setB(e.target.value)} placeholder="Text cần so sánh..." />
+          </LineNumberedPane>
         </div>
       </div>
       <div style={{ height: '34%', display: 'flex', flexDirection: 'column', borderTop: '1px solid var(--border-strong, #d1d3d9)' }}>
@@ -551,7 +624,8 @@ function TextCompare({ db }: { db: TaskPlannerDatabase }) {
         <div style={{ flex: 1, overflow: 'auto', font: '12.5px/1.55 var(--font-mono, monospace)' }}>
           {result.rows.length ? (
             result.rows.map((row, idx) => (
-              <div key={idx} style={{ ...rowStyle(row.type), display: 'grid', gridTemplateColumns: '44px 1fr 20px 1fr 44px' }}>
+              <div key={idx} style={{ ...rowStyle(row.type), display: 'grid', gridTemplateColumns: '28px 44px 1fr 20px 1fr 44px' }}>
+                <span style={{ padding: '1px 6px', textAlign: 'right', color: 'var(--fg-muted)', background: 'var(--bg-elev, #f7f8fa)' }}>{idx + 1}</span>
                 <span style={{ padding: '1px 8px', textAlign: 'right', color: 'var(--fg-muted)', background: 'var(--bg-elev, #f7f8fa)' }}>{row.an ?? ''}</span>
                 <span style={{ padding: '1px 8px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }} dangerouslySetInnerHTML={{ __html: escapeHtml(row.a) }} />
                 <span style={{ textAlign: 'center', color: row.type === 'del' ? 'var(--danger)' : row.type === 'add' ? 'var(--success)' : 'var(--fg-muted)' }}>
@@ -605,12 +679,16 @@ function MarkdownViewer({ db }: { db: TaskPlannerDatabase }) {
       <div style={splitPaneStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-island, #fff)' }}>
           <div style={colHeadStyle}>SOẠN</div>
-          <textarea ref={leftRef} onScroll={onLeftScroll} aria-label="Markdown editor" spellCheck={false} style={editorStyle} value={source} onChange={(e) => setSource(e.target.value)} placeholder="Dán Markdown vào đây..." />
+          <LineNumberedPane scrollRef={leftRef} totalLines={source.split('\n').length}>
+            <textarea ref={leftRef} wrap="off" onScroll={onLeftScroll} aria-label="Markdown editor" spellCheck={false} style={editorStyle} value={source} onChange={(e) => setSource(e.target.value)} placeholder="Dán Markdown vào đây..." />
+          </LineNumberedPane>
         </div>
         <PaneDivider />
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-island, #fff)' }}>
           <div style={colHeadStyle}>XEM TRƯỚC</div>
-          <div ref={rightRef} onScroll={onRightScroll} aria-label="Markdown preview" className="markdown-rendered-view" style={{ ...outputStyle, whiteSpace: 'normal' }} dangerouslySetInnerHTML={{ __html: rendered }} />
+          <LineNumberedPane scrollRef={rightRef} totalLines={source.split('\n').length}>
+            <div ref={rightRef} onScroll={onRightScroll} aria-label="Markdown preview" className="markdown-rendered-view" style={{ ...outputStyle, whiteSpace: 'normal' }} dangerouslySetInnerHTML={{ __html: rendered }} />
+          </LineNumberedPane>
         </div>
       </div>
       <div style={footerStyle}><span>Markdown · UTF-8</span><span>{rendered ? 'Đã render' : 'Chưa có nội dung'}</span></div>
