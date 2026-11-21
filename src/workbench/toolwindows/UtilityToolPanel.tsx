@@ -17,8 +17,8 @@ import { renderSafeMarkdown } from '../../utils/markdown';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { createNote } from '../../db/repositories/noteRepo';
 import { UtilityToolAIAssistant } from './UtilityToolAIAssistant';
-import { LineNumberedPane, computeFoldRanges } from './LineNumberedPane';
-import { useUtilityContent, type Indent } from './utilityToolContentStore';
+import { LineNumberedPane, computeFoldRanges, countLines } from './LineNumberedPane';
+import { getUtilityContent, useUtilityContent, type Indent } from './utilityToolContentStore';
 
 const splitPaneStyle: React.CSSProperties = {
   display: 'grid',
@@ -327,13 +327,16 @@ function SaveAsModal({ open, defaultName, formats, db, onClose }: SaveAsModalPro
   const [name, setDefaultName] = useState(defaultName);
   const [saving, setSaving] = useState(false);
 
+  // Callers rebuild `formats` inline every render. Depending on it here re-ran
+  // this effect (and its three setState calls) on every editor keystroke.
+  const formatsRef = useRef(formats);
+  formatsRef.current = formats;
   useEffect(() => {
-    if (open) {
-      setKind('download');
-      setExtension(formats[0]?.extension ?? '');
-      setDefaultName(defaultName);
-    }
-  }, [open, defaultName, formats]);
+    if (!open) return;
+    setKind('download');
+    setExtension(formatsRef.current[0]?.extension ?? '');
+    setDefaultName(defaultName);
+  }, [open, defaultName]);
 
   const save = async () => {
     const trimmed = name.trim();
@@ -412,28 +415,40 @@ function FoldingCodeView({ text, kind, rightRef, onRightScroll, label, error }: 
   const [folded, setFolded] = useState<ReadonlySet<number>>(() => new Set());
   useEffect(() => { setFolded(new Set()); }, [text]);
 
-  const visibleLines: number[] = [];
-  const collapsedLines = new Set<number>();
-  const foldableLines = new Set(ranges.map((r) => r.openLine));
-  const openByLine = new Map(ranges.map((r) => [r.openLine, r]));
-  let skipUntil = -1;
-  for (let i = 0; i < lines.length; i++) {
-    if (i <= skipUntil) continue;
-    visibleLines.push(i);
-    const range = openByLine.get(i);
-    if (range && folded.has(i)) {
-      collapsedLines.add(i);
-      skipUntil = range.closeLine;
-    }
-  }
+  const toggleFold = useCallback((lineIndex: number) => {
+    setFolded((prev) => {
+      const next = new Set(prev);
+      if (next.has(lineIndex)) next.delete(lineIndex);
+      else next.add(lineIndex);
+      return next;
+    });
+  }, []);
 
-  const html = error
+  const { visibleLines, collapsedLines, foldableLines } = useMemo(() => {
+    const visibleLines: number[] = [];
+    const collapsedLines = new Set<number>();
+    const foldableLines = new Set(ranges.map((r) => r.openLine));
+    const openByLine = new Map(ranges.map((r) => [r.openLine, r]));
+    let skipUntil = -1;
+    for (let i = 0; i < lines.length; i++) {
+      if (i <= skipUntil) continue;
+      visibleLines.push(i);
+      const range = openByLine.get(i);
+      if (range && folded.has(i)) {
+        collapsedLines.add(i);
+        skipUntil = range.closeLine;
+      }
+    }
+    return { visibleLines, collapsedLines, foldableLines };
+  }, [lines, ranges, folded]);
+
+  const html = useMemo(() => error
     ? escapeHtml(`❌ ${error}`)
     : visibleLines.map((i) =>
         highlight(lines[i] ?? '', kind) +
         (collapsedLines.has(i) ? ELLIPSIS_MARKUP : '') +
         (i < lines.length - 1 ? '\n' : '')
-      ).join('');
+      ).join(''), [error, visibleLines, lines, kind, collapsedLines]);
 
   return (
     <LineNumberedPane
@@ -442,14 +457,7 @@ function FoldingCodeView({ text, kind, rightRef, onRightScroll, label, error }: 
       visibleLines={visibleLines}
       foldableLines={foldableLines}
       collapsedLines={collapsedLines}
-      onToggleFold={(lineIndex) =>
-        setFolded((prev) => {
-          const next = new Set(prev);
-          if (next.has(lineIndex)) next.delete(lineIndex);
-          else next.add(lineIndex);
-          return next;
-        })
-      }
+      onToggleFold={toggleFold}
     >
       <pre ref={rightRef} onScroll={onRightScroll} aria-label={label} style={{ ...outputStyle, whiteSpace: 'pre' }} dangerouslySetInnerHTML={{ __html: html }} />
     </LineNumberedPane>
@@ -464,17 +472,18 @@ function JsonFormatter({ db }: { db: TaskPlannerDatabase }) {
   const { leftRef, rightRef, onLeftScroll, onRightScroll } = useSyncedScroll<HTMLTextAreaElement, HTMLPreElement>();
 
   const run = useCallback((minify: boolean) => {
-    if (!input.trim()) {
+    const { input: current, indent: currentIndent } = getUtilityContent('json_formatter');
+    if (!current.trim()) {
       patchContent({ output: '', error: null });
       return;
     }
     try {
-      const value = JSON.parse(input);
-      patchContent({ output: JSON.stringify(value, null, minify ? undefined : indentUnit(indent)), formatted: true, error: null });
+      const value = JSON.parse(current);
+      patchContent({ output: JSON.stringify(value, null, minify ? undefined : indentUnit(currentIndent)), formatted: true, error: null });
     } catch (e) {
       patchContent({ error: e instanceof Error ? e.message : String(e) });
     }
-  }, [input, indent, patchContent]);
+  }, [patchContent]);
 
   const onInput = (value: string) => {
     patchContent({ input: value, error: null, formatted: false, ...(!value.trim() ? { output: '' } : {}) });
@@ -517,7 +526,7 @@ function JsonFormatter({ db }: { db: TaskPlannerDatabase }) {
       <div style={splitPaneStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-island, #fff)' }}>
           <div style={colHeadStyle}>INPUT <span style={{ marginLeft: 'auto', fontWeight: 400, color: 'var(--fg-muted)' }}>{input.length} ký tự</span></div>
-          <LineNumberedPane scrollRef={leftRef} totalLines={input.split('\n').length}>
+          <LineNumberedPane scrollRef={leftRef} totalLines={countLines(input)}>
             <textarea ref={leftRef} wrap="off" onScroll={onLeftScroll} aria-label="JSON input" spellCheck={false} style={editorStyle} value={input} onChange={(e) => onInput(e.target.value)} placeholder={'Dán JSON vào đây, ví dụ: {"name":"TaskMate","ok":true}'} />
           </LineNumberedPane>
         </div>
@@ -527,7 +536,7 @@ function JsonFormatter({ db }: { db: TaskPlannerDatabase }) {
           <FoldingCodeView text={output} kind="json" rightRef={rightRef} onRightScroll={onRightScroll} label="JSON output" error={error} />
         </div>
       </div>
-      <div style={footerStyle}><span>JSON · UTF-8</span><span>{output ? output.split('\n').length : 0} dòng</span></div>
+      <div style={footerStyle}><span>JSON · UTF-8</span><span>{output ? countLines(output) : 0} dòng</span></div>
       <SaveAsModal
         open={saveOpen}
         defaultName="formatted"
@@ -555,16 +564,17 @@ function XmlFormatter({ db }: { db: TaskPlannerDatabase }) {
   const { leftRef, rightRef, onLeftScroll, onRightScroll } = useSyncedScroll<HTMLTextAreaElement, HTMLPreElement>();
 
   const run = useCallback((minify: boolean) => {
-    if (!input.trim()) {
+    const { input: current, indent: currentIndent } = getUtilityContent('xml_formatter');
+    if (!current.trim()) {
       patchContent({ output: '', error: null });
       return;
     }
     try {
-      patchContent({ output: formatXmlString(input, minify ? '' : indent), formatted: true, error: null });
+      patchContent({ output: formatXmlString(current, minify ? '' : currentIndent), formatted: true, error: null });
     } catch (e) {
       patchContent({ error: e instanceof Error ? e.message : String(e) });
     }
-  }, [input, indent, patchContent]);
+  }, [patchContent]);
 
   const onInput = (value: string) => {
     patchContent({ input: value, error: null, formatted: false, ...(!value.trim() ? { output: '' } : {}) });
@@ -607,7 +617,7 @@ function XmlFormatter({ db }: { db: TaskPlannerDatabase }) {
       <div style={splitPaneStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-island, #fff)' }}>
           <div style={colHeadStyle}>INPUT <span style={{ marginLeft: 'auto', fontWeight: 400, color: 'var(--fg-muted)' }}>{input.length} ký tự</span></div>
-          <LineNumberedPane scrollRef={leftRef} totalLines={input.split('\n').length}>
+          <LineNumberedPane scrollRef={leftRef} totalLines={countLines(input)}>
             <textarea ref={leftRef} wrap="off" onScroll={onLeftScroll} aria-label="XML input" spellCheck={false} style={editorStyle} value={input} onChange={(e) => onInput(e.target.value)} placeholder={'Dán XML vào đây, ví dụ: <note><to>Quan</to></note>'} />
           </LineNumberedPane>
         </div>
@@ -617,7 +627,7 @@ function XmlFormatter({ db }: { db: TaskPlannerDatabase }) {
           <FoldingCodeView text={output} kind="xml" rightRef={rightRef} onRightScroll={onRightScroll} label="XML output" error={error} />
         </div>
       </div>
-      <div style={footerStyle}><span>XML · UTF-8</span><span>{output ? output.split('\n').length : 0} dòng</span></div>
+      <div style={footerStyle}><span>XML · UTF-8</span><span>{output ? countLines(output) : 0} dòng</span></div>
       <SaveAsModal
         open={saveOpen}
         defaultName="formatted"
@@ -662,8 +672,8 @@ function TextCompare({ db }: { db: TaskPlannerDatabase }) {
   }, [a, b, mode, ignoreCase, ignoreSpace]);
 
   const unit = mode === 'lines' ? 'dòng' : 'từ';
-  const countA = mode === 'lines' ? a.split('\n').length : a.split(/\s+/).filter(Boolean).length;
-  const countB = mode === 'lines' ? b.split('\n').length : b.split(/\s+/).filter(Boolean).length;
+  const countA = mode === 'lines' ? countLines(a) : a.split(/\s+/).filter(Boolean).length;
+  const countB = mode === 'lines' ? countLines(b) : b.split(/\s+/).filter(Boolean).length;
   const rowStyle = (type: DiffRow['type']): React.CSSProperties => {
     const color =
       type === 'add' ? 'var(--success-bg, #e6f6ec)' : type === 'del' ? 'var(--danger-bg, #fdeaea)' : 'transparent';
@@ -701,14 +711,14 @@ function TextCompare({ db }: { db: TaskPlannerDatabase }) {
       <div style={splitPaneStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-island, #fff)' }}>
           <div style={colHeadStyle}>A — GỐC <span style={{ marginLeft: 'auto', fontWeight: 400, color: 'var(--fg-muted)' }}>{countA} {unit}</span></div>
-          <LineNumberedPane scrollRef={leftRef} totalLines={a.split('\n').length}>
+          <LineNumberedPane scrollRef={leftRef} totalLines={countLines(a)}>
             <textarea ref={leftRef} wrap="off" onScroll={onLeftScroll} aria-label="Text A" spellCheck={false} style={editorStyle} value={a} onChange={(e) => setA(e.target.value)} placeholder="Text gốc..." />
           </LineNumberedPane>
         </div>
         <PaneDivider />
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-island, #fff)' }}>
           <div style={colHeadStyle}>B — MỚI <span style={{ marginLeft: 'auto', fontWeight: 400, color: 'var(--fg-muted)' }}>{countB} {unit}</span></div>
-          <LineNumberedPane scrollRef={rightRef} totalLines={b.split('\n').length}>
+          <LineNumberedPane scrollRef={rightRef} totalLines={countLines(b)}>
             <textarea ref={rightRef} wrap="off" onScroll={onRightScroll} aria-label="Text B" spellCheck={false} style={editorStyle} value={b} onChange={(e) => setB(e.target.value)} placeholder="Text cần so sánh..." />
           </LineNumberedPane>
         </div>
@@ -786,14 +796,14 @@ function MarkdownViewer({ db }: { db: TaskPlannerDatabase }) {
       <div style={splitPaneStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-island, #fff)' }}>
           <div style={colHeadStyle}>SOẠN</div>
-          <LineNumberedPane scrollRef={leftRef} totalLines={source.split('\n').length}>
+          <LineNumberedPane scrollRef={leftRef} totalLines={countLines(source)}>
             <textarea ref={leftRef} wrap="off" onScroll={onLeftScroll} aria-label="Markdown editor" spellCheck={false} style={editorStyle} value={source} onChange={(e) => setSource(e.target.value)} placeholder="Dán Markdown vào đây..." />
           </LineNumberedPane>
         </div>
         <PaneDivider />
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-island, #fff)' }}>
           <div style={colHeadStyle}>XEM TRƯỚC</div>
-          <LineNumberedPane scrollRef={rightRef} totalLines={source.split('\n').length}>
+          <LineNumberedPane scrollRef={rightRef} totalLines={countLines(source)}>
             <div ref={rightRef} onScroll={onRightScroll} aria-label="Markdown preview" className="markdown-rendered-view" style={{ ...outputStyle, whiteSpace: 'normal' }} dangerouslySetInnerHTML={{ __html: rendered }} />
           </LineNumberedPane>
         </div>

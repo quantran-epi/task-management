@@ -1,10 +1,11 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 
 /** 0-based line interval of a foldable block, computed on the formatted output. */
 export type FoldRange = { openLine: number; closeLine: number };
 
-function countNewlines(s: string): number {
-  let n = 0;
+/** Line count without allocating the array that `split('\n')` builds on every keystroke. */
+export function countLines(s: string): number {
+  let n = 1;
   for (let i = 0; i < s.length; i++) if (s[i] === '\n') n++;
   return n;
 }
@@ -49,7 +50,7 @@ function computeXmlFoldRanges(text: string): FoldRange[] {
   XML_TOKEN.lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = XML_TOKEN.exec(text)) !== null) {
-    line += countNewlines(text.slice(lastIndex, match.index));
+    line += countLines(text.slice(lastIndex, match.index)) - 1;
     const raw = match[0];
     lastIndex = match.index + raw.length;
     if (raw.startsWith('<!--') || raw.startsWith('<![CDATA[') || raw.startsWith('<?') || raw.startsWith('<!DOCTYPE')) continue;
@@ -109,7 +110,34 @@ export function LineNumberedPane({
     return () => node.removeEventListener('scroll', sync);
   }, [scrollRef]);
 
-  const lines = visibleLines ?? Array.from({ length: Math.max(0, totalLines) }, (_, i) => i);
+  const lines = useMemo(
+    () => visibleLines ?? Array.from({ length: Math.max(0, totalLines) }, (_, i) => i),
+    [visibleLines, totalLines]
+  );
+  const gutterRows = useMemo(
+    () => lines.map((lineIndex) => {
+      const foldable = foldableLines?.has(lineIndex) ?? false;
+      const collapsed = collapsedLines?.has(lineIndex) ?? false;
+      const number = lineIndex + 1;
+      return (
+        <div key={lineIndex} style={{ height: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px 0 6px' }}>
+          <span style={{ color: 'var(--fg-muted, #6c707e)' }}>{number}</span>
+          {foldable && (
+            <button
+              type="button"
+              aria-label={`${collapsed ? 'Mở rộng' : 'Thu gọn'} dòng ${number}`}
+              aria-expanded={!collapsed}
+              onClick={() => onToggleFold?.(lineIndex)}
+              style={{ border: 'none', background: 'transparent', color: 'var(--fg-muted, #6c707e)', padding: '0 2px', font: 'inherit', cursor: 'pointer', lineHeight: '20px' }}
+            >
+              {collapsed ? '▸' : '▾'}
+            </button>
+          )}
+        </div>
+      );
+    }),
+    [lines, foldableLines, collapsedLines, onToggleFold]
+  );
   return (
     <div style={{ display: 'flex', flexDirection: 'row', flex: 1, minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
       <div
@@ -125,27 +153,7 @@ export function LineNumberedPane({
           color: 'var(--fg-muted, #6c707e)',
         }}
       >
-        {lines.map((lineIndex) => {
-          const foldable = foldableLines?.has(lineIndex) ?? false;
-          const collapsed = collapsedLines?.has(lineIndex) ?? false;
-          const number = lineIndex + 1;
-          return (
-            <div key={lineIndex} style={{ height: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px 0 6px' }}>
-              <span style={{ color: 'var(--fg-muted, #6c707e)' }}>{number}</span>
-              {foldable && (
-                <button
-                  type="button"
-                  aria-label={`${collapsed ? 'Mở rộng' : 'Thu gọn'} dòng ${number}`}
-                  aria-expanded={!collapsed}
-                  onClick={() => onToggleFold?.(lineIndex)}
-                  style={{ border: 'none', background: 'transparent', color: 'var(--fg-muted, #6c707e)', padding: '0 2px', font: 'inherit', cursor: 'pointer', lineHeight: '20px' }}
-                >
-                  {collapsed ? '▸' : '▾'}
-                </button>
-              )}
-            </div>
-          );
-        })}
+        {gutterRows}
       </div>
       {children}
     </div>

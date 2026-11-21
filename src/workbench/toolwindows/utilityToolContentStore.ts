@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { create } from 'zustand';
 
 export type Indent = '2' | '4' | 'tab';
@@ -37,9 +38,17 @@ export const useUtilityToolContent = create<Store>((set) => ({
   resetAll: () => set({ values: initialContent() }),
 }));
 
+/** Fresh value outside React render — actions must not read a stale input closure. */
+export function getUtilityContent<K extends ToolId>(key: K) {
+  return useUtilityToolContent.getState().values[key];
+}
+
 export function useUtilityContent<K extends ToolId>(key: K) {
   const value = useUtilityToolContent((s) => s.values[key]);
-  const patch = useUtilityToolContent((s) => s.patch);
-  const clear = useUtilityToolContent((s) => s.clear);
-  return [value, (p: Partial<UtilityToolContentMap[K]>) => patch(key, p), () => clear(key)] as const;
+  const patch = useCallback(
+    (p: Partial<UtilityToolContentMap[K]>) => useUtilityToolContent.getState().patch(key, p),
+    [key]
+  );
+  const clear = useCallback(() => useUtilityToolContent.getState().clear(key), [key]);
+  return [value, patch, clear] as const;
 }
