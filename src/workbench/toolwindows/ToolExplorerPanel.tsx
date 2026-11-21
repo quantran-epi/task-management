@@ -21,13 +21,15 @@ export function ToolExplorerPanel() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      <Input.Search
-        allowClear
-        placeholder="Tìm công cụ..."
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        style={{ margin: 10 }}
-      />
+      <div style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box', padding: 10, flexShrink: 0 }}>
+        <Input.Search
+          allowClear
+          placeholder="Tìm công cụ..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
+        />
+      </div>
       <div style={{ padding: '4px 12px', color: 'var(--fg-muted, #6c707e)', fontSize: 'var(--font-size-xs, 11px)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
         Format &amp; Transform
       </div>
