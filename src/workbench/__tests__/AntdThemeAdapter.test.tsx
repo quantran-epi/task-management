@@ -42,9 +42,10 @@ describe('AntdThemeAdapter', () => {
 
     expect(screen.getByTestId('color-primary').textContent).toBe('#2f62d8');
     expect(screen.getByTestId('border-radius').textContent).toBe('4');
-    // compactAlgorithm scales seed token values down (fontSize - 2, controlHeight - 6 etc.)
-    expect(Number(screen.getByTestId('font-size').textContent)).toBeGreaterThan(0);
-    expect(Number(screen.getByTestId('control-height').textContent)).toBeGreaterThan(0);
+    // compactAlgorithm resolves the 13px/30px seeds down to 10px/26px (measured
+    // from getDesignToken with defaultAlgorithm + compactAlgorithm).
+    expect(screen.getByTestId('font-size').textContent).toBe('10');
+    expect(screen.getByTestId('control-height').textContent).toBe('26');
     expect(screen.getByText('Test Button')).toBeInTheDocument();
   });
 

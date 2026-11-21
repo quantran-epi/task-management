@@ -87,7 +87,17 @@ describe('isPassThroughWrapper', () => {
 });
 
 describe('coverage gate ownership', () => {
-  it('does not assert full-tree coverage — plan 08 owns that gate', () => {
-    expect(Object.keys(scanConsumedAntd('/nonexistent-src-root'))).toEqual(['components', 'icons', 'utilities']);
+  it('scans a real fixture root so the live-tree gate has a verified owner', () => {
+    const root = fixture({
+      'view.tsx': "import { Button, Modal } from 'antd';\nimport { SearchOutlined } from '@ant-design/icons';",
+    });
+    const scanned = scanConsumedAntd(root);
+    expect(scanned.components).toEqual(['Button', 'Modal']);
+    expect(scanned.icons).toEqual(['SearchOutlined']);
+    expect(findMissingWrappers(scanned, new Set(['Button', 'SearchOutlined']))).toEqual(['Modal']);
+    writeFileSync(join(root, 'modal.tsx'), 'export function Modal() { return null; }');
+    writeFileSync(join(root, 'button.tsx'), 'export function Button() { return null; }');
+    writeFileSync(join(root, 'icon.tsx'), 'export const SearchOutlined = wrapIcon(SearchComponent);');
+    expect(findMissingWrappers(scanned, scanWrappers(root))).toEqual([]);
   });
 });
