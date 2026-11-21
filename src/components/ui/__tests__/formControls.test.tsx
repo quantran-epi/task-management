@@ -117,8 +117,8 @@ describe('Popup focus handling (WR-05)', () => {
     const anchorRef = { current: anchor };
     const { unmount } = render(
       <>
-        <Popup open anchorRef={anchorRef} onClose={onCloseOuter} label="outer" />
-        <Popup open anchorRef={anchorRef} onClose={onCloseInner} label="inner" />
+        <Popup open anchorRef={anchorRef} onClose={onCloseOuter} label="outer"><span>outer</span></Popup>
+        <Popup open anchorRef={anchorRef} onClose={onCloseInner} label="inner"><span>inner</span></Popup>
       </>,
     );
     fireEvent.keyDown(document, { key: 'Escape' });
