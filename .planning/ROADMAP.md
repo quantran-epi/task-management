@@ -99,7 +99,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 50-01-PLAN.md — Nền adoption: mount ThemeAppHolder mỗi branch, wrapper ConfigProvider + theme bridge, codemod, guard static API + inline sweep, e2e skeleton (ADOPT-01..04)
+- [x] 50-01-PLAN.md — Nền adoption: mount ThemeAppHolder mỗi branch, wrapper ConfigProvider + theme bridge, codemod, guard static API + inline sweep, e2e skeleton (ADOPT-01..04)
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -131,7 +131,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 49. Design System Foundation | 9/9 | Complete    | 2026-11-21 |
-| 50. Full App Adoption | 0/9 | Not started | - |
+| 50. Full App Adoption | 1/9 | In Progress|  |
 
 ## Previous Milestone: v1.3
 
@@ -180,7 +180,7 @@ Plans:
 5. `restoreBackup` no longer creates SDLC tabs; `validateBackup` no longer enforces SDLC invariants.
 
 **Status:** Complete — 2026-11-10; accepted fresh-data-only scope, verification debt recorded in 35-VERIFICATION.md.
-**Plans:** 9/9 plans complete
+**Plans:** 1/9 plans executed
 
 Plans:
 **Wave 1**
