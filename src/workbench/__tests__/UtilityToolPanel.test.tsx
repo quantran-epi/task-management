@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor, within, cleanup } from '@testing-li
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { UtilityToolPanel } from '../toolwindows/UtilityToolPanel';
 import { computeFoldRanges } from '../toolwindows/LineNumberedPane';
+import { useUtilityToolContent } from '../toolwindows/utilityToolContentStore';
 
 const mocks = vi.hoisted(() => ({
   queue: [] as string[],
@@ -36,6 +37,7 @@ beforeEach(() => {
   mocks.queue = [];
   mocks.getConfig.mockResolvedValue(mocks.config);
   mocks.getKey.mockResolvedValue('test-key');
+  useUtilityToolContent.getState().resetAll();
 });
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
@@ -304,6 +306,36 @@ describe('UtilityToolPanel AI assistant wiring', () => {
     await waitFor(() => expect(within(dialog).getByText('giải thích')).toBeDefined());
     expect(within(dialog).queryByRole('button', { name: /Áp dụng/ })).toBeNull();
     expect(editor.value).toBe('# giữ nguyên');
+  });
+});
+
+describe('UtilityToolPanel content persistence', () => {
+  const cases = [
+    { viewType: 'json_formatter' as const, editor: 'JSON input', value: '{"kept":1}' },
+    { viewType: 'xml_formatter' as const, editor: 'XML input', value: '<kept/>' },
+    { viewType: 'text_compare' as const, editor: 'Text B', value: 'kept-B' },
+    { viewType: 'markdown_viewer' as const, editor: 'Markdown editor', value: '# kept' },
+  ];
+
+  it.each(cases)('keeps $editor content of $viewType across unmount/remount', ({ viewType, editor, value }) => {
+    const first = render(<UtilityToolPanel viewType={viewType} />);
+    fireEvent.change(screen.getByLabelText(editor), { target: { value } });
+    first.unmount();
+    render(<UtilityToolPanel viewType={viewType} />);
+    expect((screen.getByLabelText(editor) as HTMLTextAreaElement).value).toBe(value);
+  });
+
+  it('resets JSON content and formatted output after Clear', () => {
+    const first = render(<UtilityToolPanel viewType="json_formatter" />);
+    const input = screen.getByLabelText('JSON input');
+    fireEvent.change(input, { target: { value: '{"kept":1}' } });
+    fireEvent.click(screen.getByRole('button', { name: /format-painter Format/i }));
+    expect(screen.getByLabelText('JSON output').textContent).toContain('kept');
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    first.unmount();
+    render(<UtilityToolPanel viewType="json_formatter" />);
+    expect((screen.getByLabelText('JSON input') as HTMLTextAreaElement).value).toBe('');
+    expect(screen.getByLabelText('JSON output').textContent).toBe('');
   });
 });
 

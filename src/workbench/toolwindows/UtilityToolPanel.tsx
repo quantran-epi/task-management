@@ -16,8 +16,7 @@ import { renderSafeMarkdown } from '../../utils/markdown';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { UtilityToolAIAssistant } from './UtilityToolAIAssistant';
 import { LineNumberedPane, computeFoldRanges } from './LineNumberedPane';
-
-type Indent = '2' | '4' | 'tab';
+import { useUtilityContent, type Indent } from './utilityToolContentStore';
 
 const splitPaneStyle: React.CSSProperties = {
   display: 'grid',
@@ -370,35 +369,26 @@ function FoldingCodeView({ text, kind, rightRef, onRightScroll, label, error }: 
 }
 
 function JsonFormatter({ db }: { db: TaskPlannerDatabase }) {
-  const [input, setInput] = useState('');
-  const [output, setOutput] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [formatted, setFormatted] = useState(false);
-  const [indent, setIndent] = useState<Indent>('2');
+  const [content, patchContent, clearContent] = useUtilityContent('json_formatter');
+  const { input, output, error, formatted, indent } = content;
   const [aiOpen, setAiOpen] = useState(false);
   const { leftRef, rightRef, onLeftScroll, onRightScroll } = useSyncedScroll<HTMLTextAreaElement, HTMLPreElement>();
 
   const run = useCallback((minify: boolean) => {
     if (!input.trim()) {
-      setOutput('');
-      setError(null);
+      patchContent({ output: '', error: null });
       return;
     }
     try {
       const value = JSON.parse(input);
-      setOutput(JSON.stringify(value, null, minify ? undefined : indentUnit(indent)));
-      setFormatted(true);
-      setError(null);
+      patchContent({ output: JSON.stringify(value, null, minify ? undefined : indentUnit(indent)), formatted: true, error: null });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      patchContent({ error: e instanceof Error ? e.message : String(e) });
     }
-  }, [input, indent]);
+  }, [input, indent, patchContent]);
 
   const onInput = (value: string) => {
-    setInput(value);
-    setError(null);
-    setFormatted(false);
-    if (!value.trim()) setOutput('');
+    patchContent({ input: value, error: null, formatted: false, ...(!value.trim() ? { output: '' } : {}) });
   };
 
   return (
@@ -417,11 +407,11 @@ function JsonFormatter({ db }: { db: TaskPlannerDatabase }) {
           <Button icon={<CopyOutlined />} onClick={() => copyToClipboard(output)} />
         </Tooltip>
         <Tooltip title="Clear">
-          <Button icon={<DeleteOutlined />} onClick={() => { setInput(''); setOutput(''); setError(null); setFormatted(false); }} />
+          <Button aria-label="Clear" icon={<DeleteOutlined />} onClick={clearContent} />
         </Tooltip>
         <Select<Indent>
           value={indent}
-          onChange={setIndent}
+          onChange={(v) => patchContent({ indent: v })}
           style={{ width: 100 }}
           options={[{ value: '2', label: '2 spaces' }, { value: '4', label: '4 spaces' }, { value: 'tab', label: 'Tab' }]}
         />
@@ -450,7 +440,7 @@ function JsonFormatter({ db }: { db: TaskPlannerDatabase }) {
         open={aiOpen}
         toolId="json_formatter"
         content={input}
-        onApply={(v) => { setInput(v); setOutput(''); setError(null); setFormatted(false); }}
+        onApply={(v) => patchContent({ input: v, output: '', error: null, formatted: false })}
         onClose={() => setAiOpen(false)}
         db={db}
       />
@@ -459,34 +449,25 @@ function JsonFormatter({ db }: { db: TaskPlannerDatabase }) {
 }
 
 function XmlFormatter({ db }: { db: TaskPlannerDatabase }) {
-  const [input, setInput] = useState('');
-  const [output, setOutput] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [formatted, setFormatted] = useState(false);
-  const [indent, setIndent] = useState<Indent>('2');
+  const [content, patchContent, clearContent] = useUtilityContent('xml_formatter');
+  const { input, output, error, formatted, indent } = content;
   const [aiOpen, setAiOpen] = useState(false);
   const { leftRef, rightRef, onLeftScroll, onRightScroll } = useSyncedScroll<HTMLTextAreaElement, HTMLPreElement>();
 
   const run = useCallback((minify: boolean) => {
     if (!input.trim()) {
-      setOutput('');
-      setError(null);
+      patchContent({ output: '', error: null });
       return;
     }
     try {
-      setOutput(formatXmlString(input, minify ? '' : indent));
-      setFormatted(true);
-      setError(null);
+      patchContent({ output: formatXmlString(input, minify ? '' : indent), formatted: true, error: null });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      patchContent({ error: e instanceof Error ? e.message : String(e) });
     }
-  }, [input, indent]);
+  }, [input, indent, patchContent]);
 
   const onInput = (value: string) => {
-    setInput(value);
-    setError(null);
-    setFormatted(false);
-    if (!value.trim()) setOutput('');
+    patchContent({ input: value, error: null, formatted: false, ...(!value.trim() ? { output: '' } : {}) });
   };
 
   return (
@@ -505,11 +486,11 @@ function XmlFormatter({ db }: { db: TaskPlannerDatabase }) {
           <Button icon={<CopyOutlined />} onClick={() => copyToClipboard(output)} />
         </Tooltip>
         <Tooltip title="Clear">
-          <Button icon={<DeleteOutlined />} onClick={() => { setInput(''); setOutput(''); setError(null); setFormatted(false); }} />
+          <Button aria-label="Clear" icon={<DeleteOutlined />} onClick={clearContent} />
         </Tooltip>
         <Select<Indent>
           value={indent}
-          onChange={setIndent}
+          onChange={(v) => patchContent({ indent: v })}
           style={{ width: 100 }}
           options={[{ value: '2', label: '2 spaces' }, { value: '4', label: '4 spaces' }, { value: 'tab', label: 'Tab' }]}
         />
@@ -538,7 +519,7 @@ function XmlFormatter({ db }: { db: TaskPlannerDatabase }) {
         open={aiOpen}
         toolId="xml_formatter"
         content={input}
-        onApply={(v) => { setInput(v); setOutput(''); setError(null); setFormatted(false); }}
+        onApply={(v) => patchContent({ input: v, output: '', error: null, formatted: false })}
         onClose={() => setAiOpen(false)}
         db={db}
       />
@@ -547,11 +528,10 @@ function XmlFormatter({ db }: { db: TaskPlannerDatabase }) {
 }
 
 function TextCompare({ db }: { db: TaskPlannerDatabase }) {
-  const [a, setA] = useState('');
-  const [b, setB] = useState('');
-  const [mode, setMode] = useState<'lines' | 'words'>('lines');
-  const [ignoreCase, setIgnoreCase] = useState(false);
-  const [ignoreSpace, setIgnoreSpace] = useState(false);
+  const [content, patchContent, clearContent] = useUtilityContent('text_compare');
+  const { a, b, mode, ignoreCase, ignoreSpace } = content;
+  const setA = (a: string) => patchContent({ a });
+  const setB = (b: string) => patchContent({ b });
   const [aiOpen, setAiOpen] = useState(false);
   const { leftRef, rightRef, onLeftScroll, onRightScroll } = useSyncedScroll<HTMLTextAreaElement, HTMLTextAreaElement>();
 
@@ -584,16 +564,16 @@ function TextCompare({ db }: { db: TaskPlannerDatabase }) {
       <div style={toolbarStyle}>
         <Segmented<'lines' | 'words'>
           value={mode}
-          onChange={setMode}
+          onChange={(v) => patchContent({ mode: v })}
           options={[{ label: 'Theo dòng', value: 'lines' }, { label: 'Theo từ', value: 'words' }]}
         />
-        <Checkbox checked={ignoreCase} onChange={(e) => setIgnoreCase(e.target.checked)}>Bỏ qua hoa/thường</Checkbox>
-        <Checkbox checked={ignoreSpace} onChange={(e) => setIgnoreSpace(e.target.checked)}>Bỏ qua khoảng trắng</Checkbox>
+        <Checkbox checked={ignoreCase} onChange={(e) => patchContent({ ignoreCase: e.target.checked })}>Bỏ qua hoa/thường</Checkbox>
+        <Checkbox checked={ignoreSpace} onChange={(e) => patchContent({ ignoreSpace: e.target.checked })}>Bỏ qua khoảng trắng</Checkbox>
         <Tooltip title="Đổi chiều">
           <Button icon={<SwapOutlined />} onClick={() => { setA(b); setB(a); }}>Đổi chiều</Button>
         </Tooltip>
         <Tooltip title="Xóa cả hai">
-          <Button icon={<DeleteOutlined />} onClick={() => { setA(''); setB(''); }} />
+          <Button aria-label="Clear" icon={<DeleteOutlined />} onClick={clearContent} />
         </Tooltip>
         <Tooltip title="AI · Text Compare">
           <Button aria-label="AI · Text Compare" icon={<RobotOutlined />} onClick={() => setAiOpen(true)}>AI</Button>
@@ -655,7 +635,9 @@ function TextCompare({ db }: { db: TaskPlannerDatabase }) {
 }
 
 function MarkdownViewer({ db }: { db: TaskPlannerDatabase }) {
-  const [source, setSource] = useState('');
+  const [content, patchContent, clearContent] = useUtilityContent('markdown_viewer');
+  const { source } = content;
+  const setSource = (source: string) => patchContent({ source });
   const [aiOpen, setAiOpen] = useState(false);
   const rendered = useMemo(() => renderSafeMarkdown(source), [source]);
   const { leftRef, rightRef, onLeftScroll, onRightScroll } = useSyncedScroll<HTMLTextAreaElement, HTMLDivElement>();
@@ -667,7 +649,7 @@ function MarkdownViewer({ db }: { db: TaskPlannerDatabase }) {
           <Button icon={<CopyOutlined />} onClick={() => copyToClipboard(source)}>Copy</Button>
         </Tooltip>
         <Tooltip title="Clear">
-          <Button icon={<DeleteOutlined />} onClick={() => setSource('')}>Clear</Button>
+          <Button icon={<DeleteOutlined />} onClick={clearContent}>Clear</Button>
         </Tooltip>
         <Tooltip title="AI · Markdown Viewer">
           <Button aria-label="AI · Markdown Viewer" icon={<RobotOutlined />} onClick={() => setAiOpen(true)}>AI</Button>
