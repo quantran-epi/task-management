@@ -1,3 +1,11 @@
+---
+status: testing
+phase: 50-full-app-adoption
+source: [50-VERIFICATION.md]
+started: 2026-11-21T16:00:25Z
+updated: 2026-11-21T16:00:25Z
+---
+
 # Phase 50 — UAT Evidence (2026-11-21)
 
 > ADOPT-03 / D-12 / D-13. Bằng chứng quan sát được trên Chrome thật ở cả light và dark.
@@ -60,6 +68,33 @@ Không có defect parity light/dark nào phát hiện được trong 6 luồng a
 Sếp mở app thật (`npm run dev` / `tauri dev`) trên Chrome, bấm nút "Chuyển đổi giao diện sáng/tối" trên TitleBar, đi lần lượt 6 luồng U1..U6 ở cả light và dark, đối chiếu matrix ở trên: quan sát focus ring 2px, Tab/Enter/Escape, aria-label icon button, parity màu/font/size.
 
 **Trạng thái:** chờ sếp xác nhận trên Chrome thật. Automated Playwright đã xanh 6/6; đây là bằng chứng cấu trúc/aria/parity token, không thay thế quan sát focus ring bằng mắt (xem `50-VALIDATION.md` §Manual-Only Verifications).
+
+## Human Verification Tests (từ 50-VERIFICATION.md)
+
+### 1. 6 luồng U1..U6 × light/dark trên Chrome thật
+expected: Mỗi luồng render đúng control, theme đổi tức thì không reload, không control nào lệch màu/font/size giữa 2 theme — đối chiếu matrix ở trên.
+result: [pending]
+
+### 2. Focus ring + keyboard nav bằng mắt
+expected: Focus indicator 2px rõ ràng, đúng token, giữ nguyên ở cả 2 theme; Tab/Enter/Escape hoạt động.
+result: [pending]
+
+### 3. Parity trực quan light/dark
+expected: Cùng một control ở 2 theme chỉ khác giá trị token (accent), font-size 13px và radius 4px giữ nguyên.
+result: [pending]
+
+## Summary
+
+total: 3
+passed: 0
+issues: 0
+pending: 3
+skipped: 0
+blocked: 0
+
+## Gaps
+
+(none yet)
 
 ---
 *Phase: 50-full-app-adoption · Generated: 2026-11-21*
