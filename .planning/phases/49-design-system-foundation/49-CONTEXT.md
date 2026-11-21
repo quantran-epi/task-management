@@ -37,6 +37,11 @@ Nền tảng design system TaskMate, chạy trên đúng một shell IntelliJ/wo
 - **D-15:** Không dùng GitHub Actions CI; bắt buộc `npm run lint` + `npm run build` + focused test local sau mỗi lần sửa code.
 - **D-16:** UAT Chrome chi tiết để Phase 50; Phase 49 verify bằng unit test + build.
 
+### Tooling choices (resolved after research)
+- **D-17:** Dùng Babel parser (`@babel/eslint-parser` + `@babel/core` + `@babel/preset-typescript`) cho ESLint; giữ TypeScript 7.0.2 cho build. Không dùng typescript-eslint.
+- **D-18:** Icon wrapper gom trong một file `src/components/ui/icon.tsx` export lại 144 icon; đổi icon library sửa đúng file này. Đây là ngoại lệ có chủ đích của D-03 (icon không phải control).
+- **D-19:** ESLint `no-restricted-imports` với `allowTypeImports: true` — `import type` từ `antd` được phép ngoài `ui/`; chỉ chặn runtime import.
+
 ### Claude's Discretion
 - Cấu trúc bên trong mỗi file wrapper và cách map props AntD → props wrapper, miễn tuân D-01..D-04.
 - Tên cụ thể của CSS custom properties và hằng số token, miễn có một nguồn duy nhất.
