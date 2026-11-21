@@ -1185,6 +1185,62 @@ export function repoPathTail(path: string): string {
 }
 
 /**
+ * One context source for both `resolveGitRepo` and the Agent Developer worktree resolver:
+ * direct system links plus every CR target, deduped by System.id. A missing row is skipped.
+ */
+export async function listLinkedSystems(
+  teamId: string,
+  db: TaskPlannerDatabase
+): Promise<System[]> {
+  const links = await listTeamLinks(teamId, db);
+  const byId = new Map<string, System>();
+  for (const link of links) {
+    if (link.itemType === 'system') {
+      const row = await db.systems.get(link.itemId);
+      if (row) byId.set(row.id, row);
+    } else if (link.itemType === 'cr') {
+      const cr = await db.changeRequests.get(link.itemId);
+      if (!cr) continue; // mirrors a missing system row
+      for (const target of cr.targets) {
+        const row = await db.systems.get(target.systemId);
+        if (row) byId.set(row.id, row);
+      }
+    }
+  }
+  return [...byId.values()];
+}
+
+export interface AgentDeveloperWorktreeResolution {
+  worktree?: { sshConfigId: string; remoteRepoPath: string };
+  ambiguousSystemNames: string[];
+}
+
+/**
+ * Resolve the Agent Developer worktree target once, from team links. Only a system carrying
+ * BOTH an SSH config and a repo path is usable. Ambiguity is never guessed: the caller gets
+ * names to ask the user about, with no path leaking into the model's prompt.
+ */
+export async function resolveAgentDeveloperWorktree(
+  teamId: string,
+  db: TaskPlannerDatabase
+): Promise<AgentDeveloperWorktreeResolution> {
+  const usable = (await listLinkedSystems(teamId, db)).filter(
+    (s) => s.sshConfigId && s.remoteRepoPath
+  );
+  if (usable.length === 1) {
+    const row = usable[0]!;
+    return {
+      worktree: { sshConfigId: row.sshConfigId!, remoteRepoPath: row.remoteRepoPath! },
+      ambiguousSystemNames: [],
+    };
+  }
+  if (usable.length > 1) {
+    return { ambiguousSystemNames: usable.map((s) => s.name) };
+  }
+  return { ambiguousSystemNames: [] };
+}
+
+/**
  * Turn free-text into candidate hints by matching ONLY names/codes/tails already present in the
  * catalog. No new nomenclature is invented and no team link is used as a filter: a repo merely
  * mentioned in the conversation is enough. Matching is whole-term (unicode-aware boundaries) so
@@ -1263,24 +1319,10 @@ async function resolveGitRepo(
 
   const allSystems = await ctx.db.systems.toArray();
   const allConfigs = await getSshConfigs(ctx.db);
-  const links = await listTeamLinks(ctx.teamId, ctx.db);
   // Team-scoped systems are the FIRST context source, but not a hard filter: the catalog and SSH
   // defaults stay eligible as hints so a repo known only by folder name still resolves.
-  const byId = new Map<string, System>();
-  for (const link of links) {
-    if (link.itemType === 'system') {
-      const row = await ctx.db.systems.get(link.itemId);
-      if (row) byId.set(row.id, row);
-    } else if (link.itemType === 'cr') {
-      const cr = await ctx.db.changeRequests.get(link.itemId);
-      if (!cr) continue; // mirrors a missing system row
-      for (const target of cr.targets) {
-        const row = await ctx.db.systems.get(target.systemId);
-        if (row) byId.set(row.id, row);
-      }
-    }
-  }
-  const linkedSystems = [...byId.values()];
+  const linkedSystems = await listLinkedSystems(ctx.teamId, ctx.db);
+  const byId = new Map(linkedSystems.map((s) => [s.id, s]));
 
   const candidates: RepoResolutionCandidate[] = [];
   const candidateKeys = new Set<string>();
