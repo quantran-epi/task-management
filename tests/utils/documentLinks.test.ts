@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Modal } from 'antd';
 
 const invokeMock = vi.hoisted(() => vi.fn());
+const notifyMock = vi.fn();
+const confirmMock = vi.fn((_config?: unknown) => ({ destroy: vi.fn() }));
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: invokeMock,
@@ -20,6 +21,9 @@ describe('documentLinks utility', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     invokeMock.mockReset();
+    notifyMock.mockReset();
+    confirmMock.mockReset();
+    confirmMock.mockImplementation(() => ({ destroy: vi.fn() }));
     delete (window as any).__TAURI_INTERNALS__;
   });
 
@@ -77,7 +81,7 @@ describe('documentLinks utility', () => {
   describe('openDocumentLink and local path operations', () => {
     it('opens web URL using window.open in browser mode', async () => {
       const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
-      await openDocumentLink('https://example.com');
+      await openDocumentLink('https://example.com', { confirm: confirmMock, notify: notifyMock });
       expect(openSpy).toHaveBeenCalledWith('https://example.com', '_blank', 'noopener,noreferrer');
     });
 
@@ -89,7 +93,7 @@ describe('documentLinks utility', () => {
         },
       });
 
-      await openLocalPathInExplorer('/Users/john/project');
+      await openLocalPathInExplorer('/Users/john/project', notifyMock);
       expect(writeTextMock).toHaveBeenCalledWith('/Users/john/project');
     });
 
@@ -101,7 +105,7 @@ describe('documentLinks utility', () => {
         },
       });
 
-      await launchClaudeAtLocalPath('/Users/john/project');
+      await launchClaudeAtLocalPath('/Users/john/project', notifyMock);
       expect(writeTextMock).toHaveBeenCalledWith("cd '/Users/john/project' && claude");
     });
 
@@ -113,7 +117,7 @@ describe('documentLinks utility', () => {
         },
       });
 
-      await openDocumentLink('/Users/john/project', { quickClaude: true });
+      await openDocumentLink('/Users/john/project', { quickClaude: true, confirm: confirmMock, notify: notifyMock });
       expect(writeTextMock).toHaveBeenCalledWith("cd '/Users/john/project' && claude");
     });
 
@@ -121,7 +125,7 @@ describe('documentLinks utility', () => {
       (window as any).__TAURI_INTERNALS__ = {};
       invokeMock.mockResolvedValue(undefined);
 
-      await launchClaudeAtLocalPath('C:\\Users\\john\\project');
+      await launchClaudeAtLocalPath('C:\\Users\\john\\project', notifyMock);
 
       expect(invokeMock).toHaveBeenCalledWith('launch_claude_at_local_path', {
         path: 'C:\\Users\\john\\project',
@@ -136,24 +140,21 @@ describe('documentLinks utility', () => {
       (window as any).__TAURI_INTERNALS__ = {};
       invokeMock.mockResolvedValue(undefined);
 
-      await openDocumentLink('C:\\Users\\john\\project', { quickClaude: true });
+      await openDocumentLink('C:\\Users\\john\\project', { quickClaude: true, confirm: confirmMock, notify: notifyMock });
 
       expect(invokeMock).toHaveBeenCalledWith('launch_claude_at_local_path', {
         path: 'C:\\Users\\john\\project',
       });
     });
 
-    it('openDocumentLink prompts modal confirm for local path by default', async () => {
-      const confirmSpy = vi.spyOn(Modal, 'confirm').mockImplementation((config: any) => {
+    it('openDocumentLink prompts via the injected confirm for a local path', async () => {
+      confirmMock.mockImplementation((config: any) => {
         config?.onCancel?.();
-        return {
-          destroy: vi.fn(),
-          update: vi.fn(),
-        } as any;
+        return { destroy: vi.fn() };
       });
 
-      await openDocumentLink('/Users/john/project');
-      expect(confirmSpy).toHaveBeenCalledWith(
+      await openDocumentLink('/Users/john/project', { confirm: confirmMock, notify: notifyMock });
+      expect(confirmMock).toHaveBeenCalledWith(
         expect.objectContaining({
           title: 'Thao tác với đường dẫn cục bộ',
           footer: expect.any(Function),
@@ -164,12 +165,12 @@ describe('documentLinks utility', () => {
 
   describe('browse dialogs in non-Tauri browser', () => {
     it('browseLocalFolder returns null when not in Tauri', async () => {
-      const res = await browseLocalFolder();
+      const res = await browseLocalFolder(notifyMock);
       expect(res).toBeNull();
     });
 
     it('browseLocalFile returns null when not in Tauri', async () => {
-      const res = await browseLocalFile();
+      const res = await browseLocalFile(notifyMock);
       expect(res).toBeNull();
     });
   });

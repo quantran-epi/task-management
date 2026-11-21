@@ -6,8 +6,6 @@ import { isTauriApp } from './timerPopout';
 
 /** Confirmation function injected by the view (D-06): no global AntD singleton. */
 export type ConfirmDialog = (config: ModalFuncProps) => { destroy: () => void };
-const noopNotify: Notify = () => {};
-const noopConfirm: ConfirmDialog = () => ({ destroy: () => {} });
 
 
 async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
@@ -54,7 +52,7 @@ export function normalizeLocalPath(urlOrPath: string): string {
 /**
  * Opens a local file or directory in Finder / File Explorer.
  */
-export async function openLocalPathInExplorer(cleanPath: string, notify: Notify = noopNotify): Promise<void> {
+export async function openLocalPathInExplorer(cleanPath: string, notify: Notify): Promise<void> {
   if (isTauriApp()) {
     try {
       await tauriInvoke('open_local_path', { path: cleanPath });
@@ -81,7 +79,7 @@ export async function openLocalPathInExplorer(cleanPath: string, notify: Notify 
 /**
  * Launches Command Prompt / Terminal with Claude Code at the given directory.
  */
-export async function launchClaudeAtLocalPath(cleanPath: string, notify: Notify = noopNotify): Promise<void> {
+export async function launchClaudeAtLocalPath(cleanPath: string, notify: Notify): Promise<void> {
   const terminalCmd = `cd '${cleanPath.replace(/'/g, "'\\''")}' && claude`;
   if (isTauriApp()) {
     try {
@@ -109,7 +107,7 @@ export async function launchClaudeAtLocalPath(cleanPath: string, notify: Notify 
 /**
  * Prompts user to pick between opening in File Explorer or running Claude Code in terminal.
  */
-export function promptLocalPathAction(cleanPath: string, confirm: ConfirmDialog = noopConfirm, notify: Notify = noopNotify): Promise<void> {
+export function promptLocalPathAction(cleanPath: string, confirm: ConfirmDialog, notify: Notify): Promise<void> {
   return new Promise<void>((resolve) => {
     let resolved = false;
     const safeResolve = () => {
@@ -196,17 +194,17 @@ export interface OpenDocumentLinkOptions {
  */
 export async function openDocumentLink(
   urlOrPath: string,
-  options?: OpenDocumentLinkOptions & { confirm?: ConfirmDialog; notify?: Notify }
+  options: OpenDocumentLinkOptions & { confirm: ConfirmDialog; notify: Notify }
 ): Promise<void> {
   const trimmed = urlOrPath.trim();
   if (!trimmed) return;
 
   if (isLocalPath(trimmed)) {
     const cleanPath = normalizeLocalPath(trimmed);
-    if (options?.quickClaude) {
-      await launchClaudeAtLocalPath(cleanPath, options?.notify);
+    if (options.quickClaude) {
+      await launchClaudeAtLocalPath(cleanPath, options.notify);
     } else {
-      await promptLocalPathAction(cleanPath, options?.confirm, options?.notify);
+      await promptLocalPathAction(cleanPath, options.confirm, options.notify);
     }
     return;
   }
@@ -233,7 +231,7 @@ export async function openDocumentLink(
  * Invokes native directory picker dialog in Tauri desktop app.
  * Returns selected path or null if cancelled or not in Tauri.
  */
-export async function browseLocalFolder(notify: Notify = noopNotify): Promise<string | null> {
+export async function browseLocalFolder(notify: Notify): Promise<string | null> {
   if (!isTauriApp()) {
     notify('warning', 'Duyệt thư mục chỉ khả dụng trên ứng dụng Desktop.');
     return null;
@@ -252,7 +250,7 @@ export async function browseLocalFolder(notify: Notify = noopNotify): Promise<st
  * Invokes native file picker dialog in Tauri desktop app.
  * Returns selected path or null if cancelled or not in Tauri.
  */
-export async function browseLocalFile(notify: Notify = noopNotify): Promise<string | null> {
+export async function browseLocalFile(notify: Notify): Promise<string | null> {
   if (!isTauriApp()) {
     notify('warning', 'Duyệt tập tin chỉ khả dụng trên ứng dụng Desktop.');
     return null;
