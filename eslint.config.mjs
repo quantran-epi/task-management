@@ -10,6 +10,8 @@
 //   - `npm run lint:adoption` -> `eslint src`; EXPECTED RED until Phase 50
 //                             migrates the ~248 app files still importing
 //                             AntD directly. Phase 50 promotes it to `lint`.
+// IN-01: do not read a green `npm run lint` as app-wide guard coverage. Before
+// the Phase 50 release, replace `lint` with `eslint src` and require it green.
 import babelParser from '@babel/eslint-parser';
 import reactHooks from 'eslint-plugin-react-hooks';
 
