@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Avatar, Button, Drawer, Input, InputNumber, Popconfirm, Select, Switch, Table, Tag, theme } from 'antd';
+import { Alert, Avatar, Button, Drawer, InputNumber, Popconfirm, Select, Switch, Table, Tag, useAntdToken, TextArea } from '../../ui';
 import type { AiEmployee, AiLead, AiTeam, AiTeamMember } from '../../../types/aiOffice';
 import {
   DEFAULT_BUDGET_WARN_THRESHOLD_PCT,
@@ -78,7 +78,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
   onSave,
   globalThresholdPct,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   // The displayed table is the LIVE roster overlaid with per-member edits, so a member added
   // or removed while the drawer is open shows up without closing it. The team total is the
   // sum of those rows plus whatever the team holds beyond them (a deliberate under-allocation),
@@ -481,7 +481,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
 
         <div data-testid="team-pinned-context-block">
           <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Pinned Team Context</div>
-          <Input.TextArea
+          <TextArea
             value={pinnedContext}
             onChange={(event) => setPinnedContext(event.target.value)}
             placeholder="Ghi chú định hướng cho nhóm này, ví dụ: dùng môi trường DB SIT cho oracle_query."

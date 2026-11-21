@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Collapse, Drawer, Input, Tag, theme } from 'antd';
+import { Alert, Button, Collapse, Drawer, Input, Tag, useAntdToken, TextArea } from '../../ui';
 import dayjs from 'dayjs';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
@@ -61,7 +61,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
   onSaved,
   db = defaultDb,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [body, setBody] = useState('');
@@ -458,7 +458,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
 
         <div>
           <div style={{ fontSize: 12, marginBottom: 4 }}>Mô tả (nhân viên chỉ thấy phần này)</div>
-          <Input.TextArea
+          <TextArea
             rows={2}
             maxLength={300}
             value={description}
@@ -469,7 +469,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
 
         <div>
           <div style={{ fontSize: 12, marginBottom: 4 }}>Nội dung</div>
-          <Input.TextArea
+          <TextArea
             rows={14}
             value={body}
             onChange={(e) => setBody(e.target.value)}

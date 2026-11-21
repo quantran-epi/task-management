@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useState } from 'react';
-import { Avatar, Button, Tag, theme } from 'antd';
-import { TeamOutlined } from '@ant-design/icons';
+import { Avatar, Button, Tag, useAntdToken } from '../../ui';
+import { TeamOutlined } from '../../ui/icon';
 import { agentColorFor, agentTextColorFor } from './AgentAttributionRow';
 
 export interface AssignmentPlanItem {
@@ -33,7 +33,7 @@ export const AssignmentPlanCard: React.FC<AssignmentPlanCardProps> = ({
   onApprove,
   onReject,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [collapsed, setCollapsed] = useState(decision !== undefined);
   const contentId = useId();
   useEffect(() => { setCollapsed(decision !== undefined); }, [plan, decision]);

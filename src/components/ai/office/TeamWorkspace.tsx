@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Avatar, Button, Dropdown, Splitter, Tag, Tooltip, theme } from 'antd';
-import { PushpinFilled, SettingOutlined } from '@ant-design/icons';
+import { Alert, Avatar, Button, Dropdown, Splitter, Tag, Tooltip, useAntdToken, SplitterPanel } from '../../ui';
+import { PushpinFilled, SettingOutlined } from '../../ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { TaskPlannerDatabase } from '../../../db';
 import type {
@@ -172,7 +172,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   targetMessageId,
   createRuntimeDeps,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [coordinator, setCoordinator] = useState<TeamRunCoordinator | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<TeamRunSnapshot>(EMPTY_SNAPSHOT);
@@ -961,7 +961,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
           background: token.colorBgContainer,
         }}
       >
-        <Splitter.Panel defaultSize={300} min={260} max={380}>
+        <SplitterPanel defaultSize={300} min={260} max={380}>
           <TeamSidebar
             team={team}
             lead={lead}
@@ -987,9 +987,9 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
               runAction(() => removeTeamLink(linkId, db));
             }}
           />
-        </Splitter.Panel>
+        </SplitterPanel>
 
-        <Splitter.Panel>
+        <SplitterPanel>
           <div style={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             <div
               data-testid="team-workspace-header"
@@ -1236,10 +1236,10 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
               )}
             </div>
           </div>
-        </Splitter.Panel>
+        </SplitterPanel>
 
         {activityOpen ? (
-          <Splitter.Panel defaultSize="28%" min={280} max="50%">
+          <SplitterPanel defaultSize="28%" min={280} max="50%">
             <AgentActivityPanel
               agents={stableAgents}
               roster={activityRoster}
@@ -1250,7 +1250,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
               open={activityOpen}
               codingZoneSlot={codingZoneTrigger}
             />
-          </Splitter.Panel>
+          </SplitterPanel>
         ) : null}
       </Splitter>
 

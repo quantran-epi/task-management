@@ -1,31 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  Modal,
-  Form,
-  Input,
-  InputNumber,
-  Select,
-  Button,
-  Space,
-  Typography,
-  Alert,
-  Tag,
-  List,
-  Popconfirm,
-  theme,
-  message,
-} from 'antd';
-import {
-  DatabaseOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  SyncOutlined,
-  SaveOutlined,
-  PlusOutlined,
-  DeleteOutlined,
-  StarOutlined,
-  EditOutlined,
-} from '@ant-design/icons';
+import { Modal, Form, Input, InputNumber, Select, Button, Space, Typography, Alert, Tag, List, Popconfirm, useAntdToken, useMessage, FormItem, InputPassword, ListItem, useForm } from '../ui';
+import { DatabaseOutlined, CheckCircleOutlined, CloseCircleOutlined, SyncOutlined, SaveOutlined, PlusOutlined, DeleteOutlined, StarOutlined, EditOutlined } from '../ui/icon';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { getSshConfigs } from '../../services/sshService';
 import type { SshConfig } from '../../types/ssh';
@@ -54,14 +29,15 @@ type ProfileFormValues = Pick<
  * Settings card. Owns one invariant: a non-empty list always has exactly one active
  * profile, and deleting the active profile reassigns active to a remaining one.
  *
- * Security: connection strings never appear in plaintext (Input.Password) and are
+ * Security: connection strings never appear in plaintext (InputPassword) and are
  * redacted from every displayed error message (T-45-06/T-45-07).
  */
 export const OracleProfileManager: React.FC<OracleProfileManagerProps> = ({
   db = defaultDb,
   onConfigChange,
 }) => {
-  const [form] = Form.useForm<ProfileFormValues>();
+  const appMessage = useMessage();
+  const [form] = useForm<ProfileFormValues>();
   const [sshConfigs, setSshConfigs] = useState<SshConfig[]>([]);
   const [profiles, setProfiles] = useState<OracleConnectionProfile[]>([]);
   const [loading, setLoading] = useState(false);
@@ -87,7 +63,7 @@ export const OracleProfileManager: React.FC<OracleProfileManagerProps> = ({
       setSshConfigs(sshs);
       setProfiles(loaded);
     } catch (err: any) {
-      message.error(`Không thể tải cấu hình Oracle: ${redact(err?.message || 'Lỗi không xác định')}`);
+      appMessage.error(`Không thể tải cấu hình Oracle: ${redact(err?.message || 'Lỗi không xác định')}`);
     } finally {
       setLoading(false);
     }
@@ -145,10 +121,10 @@ export const OracleProfileManager: React.FC<OracleProfileManagerProps> = ({
       }
       await persist(next);
       setEditing(null);
-      message.success('Đã lưu kết nối Oracle.');
+      appMessage.success('Đã lưu kết nối Oracle.');
     } catch (err: any) {
       if (err?.errorFields) return;
-      message.error(`Lưu thất bại: ${redact(err?.message || 'Lỗi không xác định')}`);
+      appMessage.error(`Lưu thất bại: ${redact(err?.message || 'Lỗi không xác định')}`);
     }
   };
 
@@ -156,7 +132,7 @@ export const OracleProfileManager: React.FC<OracleProfileManagerProps> = ({
     try {
       await persist(profiles.map((p) => ({ ...p, isActive: p.id === id })));
     } catch (err: any) {
-      message.error(`Không thể đặt mặc định: ${redact(err?.message || 'Lỗi không xác định')}`);
+      appMessage.error(`Không thể đặt mặc định: ${redact(err?.message || 'Lỗi không xác định')}`);
     }
   };
 
@@ -168,9 +144,9 @@ export const OracleProfileManager: React.FC<OracleProfileManagerProps> = ({
         next[0] = { ...next[0]!, isActive: true };
       }
       await persist(next);
-      message.success('Đã xóa kết nối Oracle.');
+      appMessage.success('Đã xóa kết nối Oracle.');
     } catch (err: any) {
-      message.error(`Không thể xóa: ${redact(err?.message || 'Lỗi không xác định')}`);
+      appMessage.error(`Không thể xóa: ${redact(err?.message || 'Lỗi không xác định')}`);
     }
   };
 
@@ -189,14 +165,14 @@ export const OracleProfileManager: React.FC<OracleProfileManagerProps> = ({
             : p
         );
         await persist(next);
-        message.success(safeMessage);
+        appMessage.success(safeMessage);
       } else {
-        message.error(safeMessage);
+        appMessage.error(safeMessage);
       }
     } catch (err: any) {
       const safeMessage = redact(err?.message || 'Kiểm tra thất bại');
       setTestResult({ ok: false, message: safeMessage });
-      message.error(safeMessage);
+      appMessage.error(safeMessage);
     } finally {
       setTestingId(null);
     }
@@ -204,25 +180,25 @@ export const OracleProfileManager: React.FC<OracleProfileManagerProps> = ({
 
   const profileForm = (
     <Form form={form} layout="vertical">
-      <Form.Item
+      <FormItem
         name="name"
         label="Tên kết nối"
         rules={[{ required: true, message: 'Vui lòng nhập tên kết nối' }]}
         tooltip="Tên để AI chọn kết nối này qua oracle_query / oracle_describe."
       >
         <Input placeholder="vd: Oracle SIT" />
-      </Form.Item>
+      </FormItem>
 
-      <Form.Item
+      <FormItem
         name="environment"
         label="Môi trường"
         rules={[{ required: true, message: 'Vui lòng nhập môi trường' }]}
         tooltip="Nhãn môi trường (SIT, UAT, ...). Chỉ là nhãn — không có cổng xác nhận đặc biệt."
       >
         <Input placeholder="vd: SIT, UAT" />
-      </Form.Item>
+      </FormItem>
 
-      <Form.Item
+      <FormItem
         name="sshConfigId"
         label="Máy chủ SSH Remote"
         rules={[{ required: true, message: 'Vui lòng chọn 1 máy chủ SSH' }]}
@@ -237,33 +213,33 @@ export const OracleProfileManager: React.FC<OracleProfileManagerProps> = ({
           }))}
           notFoundContent="Chưa có cấu hình SSH nào. Thêm trong Cài đặt > SSH."
         />
-      </Form.Item>
+      </FormItem>
 
-      <Form.Item
+      <FormItem
         name="connectionString"
         label="Chuỗi kết nối Oracle (Connect String)"
         rules={[{ required: true, message: 'Vui lòng nhập chuỗi kết nối Oracle' }]}
         extra="Chuỗi này chứa mật khẩu; nó được ẩn trong giao diện và loại khỏi bản sao lưu plaintext."
       >
-        <Input.Password
+        <InputPassword
           placeholder="user/password@host:1521/service hoặc user/pass@TNS_ALIAS"
           visibilityToggle
           autoComplete="off"
         />
-      </Form.Item>
+      </FormItem>
 
       <Space orientation="horizontal" size="middle" style={{ display: 'flex', width: '100%' }}>
-        <Form.Item name="sqlclPath" label="Lệnh gọi SQLcl" style={{ flex: 1 }}>
+        <FormItem name="sqlclPath" label="Lệnh gọi SQLcl" style={{ flex: 1 }}>
           <Input placeholder="sql" />
-        </Form.Item>
-        <Form.Item name="maxRows" label="Số dòng tối đa" style={{ width: 140 }}>
+        </FormItem>
+        <FormItem name="maxRows" label="Số dòng tối đa" style={{ width: 140 }}>
           <InputNumber min={10} max={1000} style={{ width: '100%' }} />
-        </Form.Item>
+        </FormItem>
       </Space>
 
-      <Form.Item name="envVars" label="Biến môi trường Remote (tùy chọn)">
+      <FormItem name="envVars" label="Biến môi trường Remote (tùy chọn)">
         <Input placeholder="export TNS_ADMIN=/opt/oracle/network/admin" />
-      </Form.Item>
+      </FormItem>
     </Form>
   );
 
@@ -280,7 +256,7 @@ export const OracleProfileManager: React.FC<OracleProfileManagerProps> = ({
         locale={{ emptyText: 'Chưa có kết nối Oracle nào. Thêm một kết nối để bắt đầu.' }}
         split
         renderItem={(profile) => (
-          <List.Item
+          <ListItem
             actions={[
               <Button
                 key="active"
@@ -326,7 +302,7 @@ export const OracleProfileManager: React.FC<OracleProfileManagerProps> = ({
               </Popconfirm>,
             ]}
           >
-            <List.Item.Meta
+            <ListItem.Meta
               title={
                 <Space size={4} wrap>
                   <Text strong>{profile.name}</Text>
@@ -347,7 +323,7 @@ export const OracleProfileManager: React.FC<OracleProfileManagerProps> = ({
                 </Space>
               }
             />
-          </List.Item>
+          </ListItem>
         )}
       />
 
@@ -406,7 +382,7 @@ export const OracleSqlclSettingsModal: React.FC<OracleSqlclSettingsModalProps> =
   db = defaultDb,
   onConfigChange,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
 
   return (
     <Modal

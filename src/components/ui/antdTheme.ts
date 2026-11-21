@@ -7,6 +7,9 @@ import { getSharedControlTokens } from './tokens.contract';
 
 export type { ThemeConfig };
 
+/** Token type returned by useAntdToken, for helper signatures in view files. */
+export type AntdToken = ReturnType<typeof AntTheme.useToken>['token'];
+
 /** Themed token hook for view files; they never import runtime `theme` from antd. */
 export function useAntdToken() {
   return AntTheme.useToken();

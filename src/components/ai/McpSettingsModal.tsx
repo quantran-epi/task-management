@@ -1,24 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import {
-  Modal,
-  List,
-  Switch,
-  Tag,
-  Typography,
-  Space,
-  Button,
-  message,
-  theme,
-  Alert,
-} from 'antd';
-import {
-  ApiOutlined,
-  DatabaseOutlined,
-  SettingOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  SyncOutlined,
-} from '@ant-design/icons';
+import { Modal, List, Switch, Tag, Typography, Space, Button, Alert, useAntdToken, useMessage, ListItem } from '../ui';
+import { ApiOutlined, DatabaseOutlined, SettingOutlined, CheckCircleOutlined, CloseCircleOutlined, SyncOutlined } from '../ui/icon';
 import { type TaskPlannerDatabase } from '../../db';
 import {
   getMcpServers,
@@ -45,7 +27,8 @@ export const McpSettingsModal: React.FC<McpSettingsModalProps> = ({
   onSettingsChange,
   onOpenSettings,
 }) => {
-  const { token } = theme.useToken();
+  const appMessage = useMessage();
+  const { token } = useAntdToken();
   const [servers, setServers] = useState<McpServerConfig[]>([]);
   const [loading, setLoading] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -76,14 +59,14 @@ export const McpSettingsModal: React.FC<McpSettingsModalProps> = ({
     try {
       const next = await toggleMcpServer(id, checked, db);
       setServers(next);
-      message.success(
+      appMessage.success(
         checked
           ? 'Đã bật máy chủ MCP.'
           : 'Đã tắt máy chủ MCP. Công cụ sẽ không nạp vào cuộc trò chuyện.'
       );
       onSettingsChange?.();
     } catch (err: any) {
-      message.error(`Không thể thay đổi trạng thái MCP: ${err?.message || 'Lỗi không xác định'}`);
+      appMessage.error(`Không thể thay đổi trạng thái MCP: ${err?.message || 'Lỗi không xác định'}`);
     } finally {
       setLoading(false);
     }
@@ -95,14 +78,14 @@ export const McpSettingsModal: React.FC<McpSettingsModalProps> = ({
       const res = await testMcpServerConnection(server);
       setTestResults((prev) => ({ ...prev, [server.id]: res }));
       if (res.ok) {
-        message.success(res.message);
+        appMessage.success(res.message);
       } else {
-        message.error(res.message);
+        appMessage.error(res.message);
       }
     } catch (err: any) {
       const fail = { ok: false, message: err?.message || 'Lỗi kết nối' };
       setTestResults((prev) => ({ ...prev, [server.id]: fail }));
-      message.error(fail.message);
+      appMessage.error(fail.message);
     } finally {
       setTestingId(null);
     }
@@ -167,7 +150,7 @@ export const McpSettingsModal: React.FC<McpSettingsModalProps> = ({
             const isTesting = testingId === server.id;
 
             return (
-              <List.Item
+              <ListItem
                 key={server.id}
                 style={{
                   padding: '12px 14px',
@@ -245,7 +228,7 @@ export const McpSettingsModal: React.FC<McpSettingsModalProps> = ({
                     />
                   </div>
                 )}
-              </List.Item>
+              </ListItem>
             );
           }}
         />

@@ -107,6 +107,7 @@ export {
 export {
   useAntdToken,
   darkAlgorithm,
+  type AntdToken,
 } from './antdTheme';
 export {
   Col,

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Button, Space } from 'antd';
+import { Alert, Button, Space } from '../ui';
 
 export interface InterruptedBannerProps {
   message?: string;

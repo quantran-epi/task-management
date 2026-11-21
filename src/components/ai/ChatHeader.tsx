@@ -1,17 +1,7 @@
 import React from 'react';
-import { Button, Tooltip, Dropdown, theme } from 'antd';
+import { Button, Tooltip, Dropdown, useAntdToken } from '../ui';
 import type { MenuProps } from 'antd';
-import {
-  PushpinOutlined,
-  PushpinFilled,
-  CloseOutlined,
-  BugOutlined,
-  ExportOutlined,
-  MoreOutlined,
-  BookOutlined,
-  DeleteOutlined,
-  DisconnectOutlined,
-} from '@ant-design/icons';
+import { PushpinOutlined, PushpinFilled, CloseOutlined, BugOutlined, ExportOutlined, MoreOutlined, BookOutlined, DeleteOutlined, DisconnectOutlined } from '../ui/icon';
 import { JetBrainsAIIcon } from '../icons/JetBrainsIcons';
 import type { ActiveScope } from '../../context/AIChatContext';
 
@@ -42,7 +32,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onOpenInstructions,
   onClose,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
 
   const menuItems: MenuProps['items'] = [
     ...(onOpenInstructions

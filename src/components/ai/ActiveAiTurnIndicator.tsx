@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Badge, Button, Dropdown, type MenuProps, Popconfirm, Tooltip, Typography, theme } from 'antd';
-import { SyncOutlined, StopOutlined, CloseCircleOutlined, TeamOutlined } from '@ant-design/icons';
+import { Badge, Button, Dropdown, Popconfirm, Tooltip, Typography, useAntdToken } from '../ui';
+import type { MenuProps } from 'antd';
+import { SyncOutlined, StopOutlined, CloseCircleOutlined, TeamOutlined } from '../ui/icon';
 import { aiTurnManager, useActiveAiTurns, type ActiveAiTurn } from '../../services/ai/aiTurnManager';
 import { formatElapsedTicker } from '../../utils/time';
 import { useAIChat } from '../../context/AIChatContext';
@@ -12,7 +13,7 @@ export interface ActiveAiTurnIndicatorProps {
 }
 
 export const ActiveAiTurnIndicator: React.FC<ActiveAiTurnIndicatorProps> = ({ compact = false }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const activeTurns = useActiveAiTurns();
   const { openChat } = useAIChat();
 

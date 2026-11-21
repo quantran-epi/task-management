@@ -1,6 +1,6 @@
 import React from 'react';
-import { Card, Button, Typography, Space, theme } from 'antd';
-import { ExclamationCircleFilled, ReloadOutlined, SettingOutlined } from '@ant-design/icons';
+import { Card, Button, Typography, Space, useAntdToken } from '../ui';
+import { ExclamationCircleFilled, ReloadOutlined, SettingOutlined } from '../ui/icon';
 
 const { Text, Paragraph } = Typography;
 
@@ -19,7 +19,7 @@ export const InlineApiErrorCard: React.FC<InlineApiErrorCardProps> = ({
   onRetry,
   onOpenSettings,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
 
   return (
     <Card

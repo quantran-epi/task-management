@@ -1,5 +1,5 @@
 import React from 'react';
-import { Tag, Typography, theme } from 'antd';
+import { Tag, Typography, useAntdToken } from '../../ui';
 import type {
   StageDiagnostic,
   StageName,
@@ -45,7 +45,7 @@ export interface StageDiagnosticsListProps {
  * accept no free-text field and no arbitrary key iteration.
  */
 export const StageDiagnosticsList: React.FC<StageDiagnosticsListProps> = ({ stages }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
 
   if (stages.length === 0) return null;
 

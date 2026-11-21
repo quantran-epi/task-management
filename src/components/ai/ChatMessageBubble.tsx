@@ -1,25 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import dayjs from 'dayjs';
-import { Typography, Button, Tooltip, theme, message, Spin, Tag, Dropdown } from 'antd';
+import { Typography, Button, Tooltip, Spin, Tag, Dropdown, useAntdToken, useMessage } from '../ui';
 import type { MenuProps } from 'antd';
-import {
-  CopyOutlined,
-  CheckOutlined,
-  CheckSquareOutlined,
-  BranchesOutlined,
-  ApartmentOutlined,
-  FileTextOutlined,
-  FileAddOutlined,
-  CodeOutlined,
-  LoadingOutlined,
-  SyncOutlined,
-  DownloadOutlined,
-  FileWordOutlined,
-  FileExcelOutlined,
-  FilePptOutlined,
-  FileMarkdownOutlined,
-  FolderOpenOutlined,
-} from '@ant-design/icons';
+import { CopyOutlined, CheckOutlined, CheckSquareOutlined, BranchesOutlined, ApartmentOutlined, FileTextOutlined, FileAddOutlined, CodeOutlined, LoadingOutlined, SyncOutlined, DownloadOutlined, FileWordOutlined, FileExcelOutlined, FilePptOutlined, FileMarkdownOutlined, FolderOpenOutlined } from '../ui/icon';
 import type { ChatMessage, ChatGeneratedFile } from '../../types/models';
 import type { AgentRunStatus } from '../../types/aiOffice';
 import type { MessageSeenEntry } from '../../types/teamChat';
@@ -383,7 +366,8 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   continuesNext = false,
   highlighted = false,
 }) => {
-  const { token } = theme.useToken();
+  const appMessage = useMessage();
+  const { token } = useAntdToken();
   const [copied, setCopied] = useState(false);
   const [checklistAdded, setChecklistAdded] = useState(false);
   const [noteSaved, setNoteSaved] = useState(false);
@@ -938,10 +922,10 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
     try {
       await navigator.clipboard.writeText(msg.content);
       setCopied(true);
-      message.success('Đã sao chép nội dung');
+      appMessage.success('Đã sao chép nội dung');
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      message.error('Không thể sao chép');
+      appMessage.error('Không thể sao chép');
     }
   };
 
@@ -996,12 +980,12 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         );
         if (directDownload) {
           downloadBlob(result.filename, result.blob);
-          message.success(`Đã tải xuống ${result.filename} (${result.slideCount} slides)`);
+          appMessage.success(`Đã tải xuống ${result.filename} (${result.slideCount} slides)`);
           return;
         }
         const saveRes = await saveFileWithPicker(result.filename, result.blob);
         if (saveRes.saved) {
-          message.success(`Đã lưu ${result.filename} (${result.slideCount} slides)`);
+          appMessage.success(`Đã lưu ${result.filename} (${result.slideCount} slides)`);
         }
         return;
       }
@@ -1009,15 +993,15 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       const result = await exportContentAsFile(msg.content, `${baseName}.${format}`, format, false);
       if (directDownload) {
         downloadBlob(result.filename, result.blob);
-        message.success(`Đã tải xuống ${result.filename}`);
+        appMessage.success(`Đã tải xuống ${result.filename}`);
         return;
       }
       const saveRes = await saveFileWithPicker(result.filename, result.blob);
       if (saveRes.saved) {
-        message.success(`Đã lưu ${result.filename}`);
+        appMessage.success(`Đã lưu ${result.filename}`);
       }
     } catch (err: unknown) {
-      message.error(`Không thể xuất tệp: ${(err as Error)?.message || 'Lỗi không xác định'}`);
+      appMessage.error(`Không thể xuất tệp: ${(err as Error)?.message || 'Lỗi không xác định'}`);
     }
   };
 
@@ -1044,7 +1028,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       }
 
       if (!resolvedContent) {
-        message.error('Không tìm thấy nội dung tệp đã tạo để lưu. Vui lòng yêu cầu AI tạo lại.');
+        appMessage.error('Không tìm thấy nội dung tệp đã tạo để lưu. Vui lòng yêu cầu AI tạo lại.');
         return;
       }
 
@@ -1075,16 +1059,16 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
 
       if (directDownload) {
         downloadBlob(file.filename, blob);
-        message.success(`Đã tải xuống tệp ${file.filename}`);
+        appMessage.success(`Đã tải xuống tệp ${file.filename}`);
         return;
       }
 
       const saveRes = await saveFileWithPicker(file.filename, blob);
       if (saveRes.saved) {
-        message.success(`Đã lưu tệp ${file.filename}`);
+        appMessage.success(`Đã lưu tệp ${file.filename}`);
       }
     } catch (err: unknown) {
-      message.error(`Không thể lưu tệp: ${(err as Error)?.message || 'Lỗi không xác định'}`);
+      appMessage.error(`Không thể lưu tệp: ${(err as Error)?.message || 'Lỗi không xác định'}`);
     }
   };
 

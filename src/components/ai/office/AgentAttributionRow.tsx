@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Avatar, Button, Tag, theme } from 'antd';
-import { CrownOutlined, HourglassOutlined, PauseCircleOutlined, StopOutlined, SyncOutlined } from '@ant-design/icons';
+import { Avatar, Button, Tag, useAntdToken } from '../../ui';
+import { CrownOutlined, HourglassOutlined, PauseCircleOutlined, StopOutlined, SyncOutlined } from '../../ui/icon';
 import type { AgentRunStatus, AiTeamAssignmentRunStatus } from '../../../types/aiOffice';
 
 /** UI-SPEC §Avatar & Identity Treatment — fixed six-entry palette. */
@@ -38,7 +38,7 @@ export interface AgentAttributionRowProps {
 }
 
 export const AgentAttributionRow: React.FC<AgentAttributionRowProps> = ({ agent, kindLabel }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
 
   return (
     <div

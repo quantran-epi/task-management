@@ -1,6 +1,6 @@
 import React from 'react';
-import { Avatar, Button, Switch, Tag, theme } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { Avatar, Button, Switch, Tag, useAntdToken } from '../../ui';
+import { PlusOutlined } from '../../ui/icon';
 import type { AiEmployee, AiLead, AiTeam, AiTeamMember, AgentRunStatus, TeamRunPhase } from '../../../types/aiOffice';
 import { isAtThreshold, resolveThresholdPct } from '../../../services/ai/office/budgetGate';
 import { agentColorFor, agentTextColorFor } from './AgentAttributionRow';
@@ -95,7 +95,7 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
   onAddLink,
   onRemoveLink,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const statusByAgent = new Map(snapshot.agents.map((row) => [row.agentId, row.status]));
   const liveByAgent = new Map((liveUsage ?? []).map((row) => [row.agentId, row]));
   const pct = resolveThresholdPct(team, budgetWarnThresholdPct);

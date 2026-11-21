@@ -1,6 +1,6 @@
 import React from 'react';
-import { Tag } from 'antd';
-import { SyncOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { Tag } from '../../ui';
+import { SyncOutlined, CheckCircleOutlined } from '../../ui/icon';
 
 export type StagedLoadingStage =
   | 'preparing'

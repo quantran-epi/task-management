@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button, Popover, Typography } from 'antd';
+import { Button, Popover, Typography } from '../../ui';
 import dayjs from 'dayjs';
 import type { AgentLiveStep, AgentRunState, TeamRunPhase } from '../../../types/aiOffice';
 import {

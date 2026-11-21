@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, theme } from 'antd';
+import { Button, useAntdToken } from '../../ui';
 import type { FailedSeed } from '../../../services/knowledge/retrievalProtocol';
 import { ReasonCodeChip } from './ReasonCodeChip';
 
@@ -17,7 +17,7 @@ export const PartialSeedNotice: React.FC<PartialSeedNoticeProps> = ({
   failedSeeds,
   onOpenDiagnostics,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const shown = failedSeeds.slice(0, 5);
 
   return (

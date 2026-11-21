@@ -1,14 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
-import { Button, Input, Space, Tooltip, Spin, theme } from 'antd';
-import {
-  RobotOutlined,
-  CommentOutlined,
-  FileSearchOutlined,
-  BulbOutlined,
-  CheckCircleOutlined,
-  CloseOutlined,
-  SendOutlined,
-} from '@ant-design/icons';
+import { Button, Input, Space, Tooltip, Spin, useAntdToken } from '../ui';
+import { RobotOutlined, CommentOutlined, FileSearchOutlined, BulbOutlined, CheckCircleOutlined, CloseOutlined, SendOutlined } from '../ui/icon';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { useAIChat } from '../../context/AIChatContext';
 import {
@@ -78,7 +70,7 @@ export function calculatePopupPosition(
 const READ_ONLY_AI_TOOLS = AI_DATABASE_TOOLS.filter((t) => !isMutationTool(t.function.name));
 
 export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db = defaultDb }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const { openChatWithDraft } = useAIChat();
 
   const [visible, setVisible] = useState(false);

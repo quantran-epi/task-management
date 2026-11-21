@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Table, Tag, Tooltip, Typography, Modal, Button, Space, theme } from 'antd';
-import { EyeOutlined } from '@ant-design/icons';
+import { Table, Tag, Tooltip, Typography, Modal, Button, Space, useAntdToken } from '../../ui';
+import { EyeOutlined } from '../../ui/icon';
 import type { ColumnsType } from 'antd/es/table';
 import type { PersistedCitation } from '../../../services/ai/groundedAnswerSchemas';
 import type { FederatedSetCoverage } from '../../../services/knowledge/retrievalProtocol';
@@ -21,7 +21,7 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
   coverage,
   onOpenCitation,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [selectedMcp, setSelectedMcp] = useState<PersistedCitation | null>(null);
 
   // Deduplicate citations: document citations deduplicate by document range,

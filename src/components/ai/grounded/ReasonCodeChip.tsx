@@ -1,5 +1,5 @@
 import React from 'react';
-import { Tag, Tooltip, theme } from 'antd';
+import { Tag, Tooltip, useAntdToken } from '../../ui';
 
 /**
  * Fixed enum → Vietnamese explanation map (24-UI-SPEC Copywriting Contract).
@@ -34,7 +34,7 @@ export interface ReasonCodeChipProps {
 }
 
 export const ReasonCodeChip: React.FC<ReasonCodeChipProps> = ({ code }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const explanation = REASON_CODE_EXPLANATIONS[code] ?? UNKNOWN_REASON_EXPLANATION;
   const isFallbackOrLimit =
     code === 'FALLBACK_ONE_HOP' || code === 'RESULT_LIMIT_REACHED';

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { theme, message, Modal } from 'antd';
+import { useAntdToken, useMessage, useTaskMateModal } from '../ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type {
@@ -235,7 +235,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   isPopoutWindow = false,
   isDockedPanel = false,
 }) => {
-  const { token } = theme.useToken();
+  const appMessage = useMessage();
+  const { modal, contextHolder } = useTaskMateModal();
+  const { token } = useAntdToken();
   const {
     pendingPrompt, clearPendingPrompt, pendingDraft, clearPendingDraft, setCustomScope, registerActiveItem,
   } = useAIChat();
@@ -389,9 +391,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     try {
       const next = await setAllMcpServersEnabled(enabled, db);
       setMcpServers(next);
-      message.success(enabled ? 'Đã bật toàn bộ máy chủ MCP' : 'Đã tắt toàn bộ máy chủ MCP');
+      appMessage.success(enabled ? 'Đã bật toàn bộ máy chủ MCP' : 'Đã tắt toàn bộ máy chủ MCP');
     } catch (err: any) {
-      message.error(`Không thể đổi trạng thái MCP: ${err?.message || err}`);
+      appMessage.error(`Không thể đổi trạng thái MCP: ${err?.message || err}`);
     }
   };
 
@@ -402,11 +404,11 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       // The tab-level flag is NOT flipped here: `ChatTabToolbox` already does it when the
       // user enables a server, and doing it twice cancelled itself out (a stale closure read
       // the old value and flipped the freshly-enabled tab straight back off).
-      message.success(
+      appMessage.success(
         enabled ? 'Đã bật máy chủ MCP' : 'Đã tắt máy chủ MCP'
       );
     } catch (err: any) {
-      message.error(`Không thể đổi trạng thái MCP: ${err?.message || err}`);
+      appMessage.error(`Không thể đổi trạng thái MCP: ${err?.message || err}`);
     }
   };
 
@@ -787,12 +789,12 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         const current = resolveActiveModel();
         const next = liveModels.includes(current) ? current : liveModels[0];
         if (next) await writeTabModel(activeTab, next);
-        message.success(`Đã cập nhật ${liveModels.length} mô hình từ 9router`);
+        appMessage.success(`Đã cập nhật ${liveModels.length} mô hình từ 9router`);
       } else {
-        message.warning('Không tìm thấy mô hình nào từ 9router');
+        appMessage.warning('Không tìm thấy mô hình nào từ 9router');
       }
     } catch (err: any) {
-      message.error(`Không thể tải danh sách mô hình: ${err?.message || err}`);
+      appMessage.error(`Không thể tải danh sách mô hình: ${err?.message || err}`);
     } finally {
       setIsRefreshingModels(false);
     }
@@ -943,7 +945,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       try {
         await updateChatTab(tabId, { title }, db);
       } catch {
-        message.error('Không thể đổi tên tab');
+        appMessage.error('Không thể đổi tên tab');
       }
     },
     [db]
@@ -964,7 +966,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       await setActiveTab(scopeKey, newTab.id, db);
     } catch (err) {
       logAiChatError('Failed to add tab', err);
-      message.error('Không thể tạo tab mới');
+      appMessage.error('Không thể tạo tab mới');
     }
   }, [currentScope.id, currentScope.type, db, durableTabs, scopeKey]);
 
@@ -986,12 +988,12 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           await deleteChatTab(tabId, db);
         } catch (err) {
           logAiChatError('Failed to delete tab', err);
-          message.error('Không thể đóng tab');
+          appMessage.error('Không thể đóng tab');
         }
       };
 
       if (isRunning) {
-        Modal.confirm({
+        modal.confirm({
           title: 'Xác nhận đóng tab',
           content: `Đóng tab “${targetTab.title}”? Tool đang chạy vẫn tiếp tục ở nền — mở lại tab hoặc dùng bảng Hoạt động để xem và hủy theo từng tác vụ.`,
           okText: 'Đóng tab',
@@ -1080,11 +1082,11 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       logAiChatError('Failed to update tab autoApproveMutations', err);
     }
     if (nextVal) {
-      message.warning(
+      appMessage.warning(
         'Đã bật tự động duyệt thay đổi dữ liệu cho tab này. AI sẽ tự động thực thi và báo cáo chi tiết.'
       );
     } else {
-      message.info(
+      appMessage.info(
         'Đã tắt tự động duyệt cho tab này. AI sẽ hỏi xác nhận trước khi thực hiện thay đổi dữ liệu.'
       );
     }
@@ -1112,7 +1114,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     } catch (err) {
       logAiChatError('Failed to update tab analysis mode', err);
     }
-    message.info(
+    appMessage.info(
       nextVal
         ? 'Đã bật chế độ phân tích cho tab này. AI sẽ tra cứu tri thức và CSDL bằng công cụ.'
         : 'Đã tắt chế độ phân tích cho tab này. Quay lại chế độ hội thoại thông thường.'
@@ -1140,7 +1142,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     } catch (err) {
       logAiChatError('Failed to update tab mcpEnabled', err);
     }
-    message.info(
+    appMessage.info(
       nextVal
         ? 'Đã bật công cụ MCP cho tab này.'
         : 'Đã tắt công cụ MCP cho tab này. AI chỉ sử dụng công cụ nội bộ.'
@@ -2292,12 +2294,12 @@ Rules:
       await clearThreadMessages(targetThreadId, db);
     }
     tabRuntimes.patch(activeTabId, { references: [] });
-    message.success('Đã xóa hội thoại của tab này');
+    appMessage.success('Đã xóa hội thoại của tab này');
   };
 
   /** D-05 single clear path: the composer and the toolbox delegate here (thread-scoped only). */
   const handleDeleteCurrentThread = () => {
-    Modal.confirm({
+    modal.confirm({
       title: 'Xóa tin nhắn cuộc trò chuyện này?',
       content: 'Toàn bộ nội dung trao đổi trong tab đang mở sẽ bị xóa khỏi lịch sử.',
       okText: 'Xóa tin nhắn',
@@ -2310,7 +2312,7 @@ Rules:
   };
 
   const handleClearAllHistory = () => {
-    Modal.confirm({
+    modal.confirm({
       title: 'Xóa toàn bộ lịch sử AI?',
       content:
         'Hành động này sẽ xóa vĩnh viễn tất cả các cuộc trò chuyện và tin nhắn AI trên mọi phạm vi (toàn cục, tác vụ, dự án). Không thể hoàn tác.',
@@ -2329,7 +2331,7 @@ Rules:
         } catch (err) {
           logAiChatError('Failed to rebuild chat tabs after history reset', err);
         }
-        message.success('Đã xóa sạch toàn bộ lịch sử trò chuyện AI');
+        appMessage.success('Đã xóa sạch toàn bộ lịch sử trò chuyện AI');
       },
     });
   };
@@ -2378,9 +2380,9 @@ Rules:
         })),
       ];
       await updateTask(task.id, { checklist: newChecklist }, db);
-      message.success(`Đã thêm ${items.length} mục vào Checklist`);
+      appMessage.success(`Đã thêm ${items.length} mục vào Checklist`);
     } catch (err: any) {
-      message.error(`Không thể thêm vào Checklist: ${err?.message || err}`);
+      appMessage.error(`Không thể thêm vào Checklist: ${err?.message || err}`);
     }
   };
 
@@ -2397,9 +2399,9 @@ Rules:
         },
         db
       );
-      message.success('Đã lưu phản hồi vào Sticky Notes');
+      appMessage.success('Đã lưu phản hồi vào Sticky Notes');
     } catch (err: any) {
-      message.error(`Không thể lưu ghi chú: ${err?.message || err}`);
+      appMessage.error(`Không thể lưu ghi chú: ${err?.message || err}`);
     }
   };
 
@@ -2410,7 +2412,7 @@ Rules:
       if (!task) return;
       await launchClaudeTerminal({ task });
     } catch (err: any) {
-      message.error(`Lỗi khởi chạy Claude Code: ${err?.message || err}`);
+      appMessage.error(`Lỗi khởi chạy Claude Code: ${err?.message || err}`);
     }
   };
 
@@ -2447,6 +2449,7 @@ Rules:
         flexDirection: 'column',
       }}
     >
+      {contextHolder}
       {/* Left border drag handle (desktop drawer only, not when docked in panel) */}
       {!isMobile && !isPopoutWindow && !isDockedPanel && (
         <div

@@ -1,12 +1,6 @@
 import React, { useEffect, useSyncExternalStore, useState } from 'react';
-import { Button, Empty, Popconfirm, Tag, Tooltip, Typography, theme } from 'antd';
-import {
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  CloseOutlined,
-  CopyOutlined,
-  SyncOutlined,
-} from '@ant-design/icons';
+import { Button, Empty, Popconfirm, Tag, Tooltip, Typography, useAntdToken, EmptyImageSimple } from '../../ui';
+import { CheckCircleOutlined, CloseCircleOutlined, CloseOutlined, CopyOutlined, SyncOutlined } from '../../ui/icon';
 import dayjs from 'dayjs';
 import type { AgentLiveStep, AgentRunState } from '../../../types/aiOffice';
 import {
@@ -204,7 +198,7 @@ function toStoreRow(snapshot: { callId: string; status: string; updatedAt: numbe
 }
 
 const TimelineEventRow: React.FC<{ row: TimelineRow; onCancel?: ((id: string) => void) | undefined }> = ({ row, onCancel }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [expanded, setExpanded] = useState(false);
   const { step, status, toolName, agentName } = row;
   const detailsId = detailsIdFor(step.id);
@@ -333,7 +327,7 @@ const TimelineEventRow: React.FC<{ row: TimelineRow; onCancel?: ((id: string) =>
 };
 
 const ProgressCard: React.FC<{ row: TimelineRow; onCancel?: ((id: string) => void) | undefined }> = ({ row, onCancel }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   // The card is a stopwatch, NOT a deadline: a running task has no time limit. The ticker
   // only advances the elapsed display; it never ends the task.
   const [tick, setTick] = useState(0);
@@ -388,7 +382,7 @@ const ProgressCard: React.FC<{ row: TimelineRow; onCancel?: ((id: string) => voi
 
 /** D-14: one preserved prompt-history entry. Every field renders as escaped text. */
 const PromptLogEntry: React.FC<{ log: TeamDebugLog; index: number }> = ({ log, index }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [copied, setCopied] = useState(false);
   const text = capPreview(log.text);
   const copy = () => {
@@ -499,7 +493,7 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = React.memo(
   open = true,
   codingZoneSlot,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [tab, setTab] = useState<TabKey>('timeline');
   const [filter, setFilter] = useState<string>('all');
   // Real consumer of the module-level store: snapshot survives tab/view unmounts, so the
@@ -655,7 +649,7 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = React.memo(
         </div>
         {visibleRows.length === 0 ? (
           <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            image={EmptyImageSimple}
             description={
               <span>
                 <strong>{EMPTY_TIMELINE_HEADING}</strong>

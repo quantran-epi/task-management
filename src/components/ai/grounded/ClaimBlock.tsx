@@ -1,6 +1,6 @@
 import React from 'react';
-import { Tag, Tooltip, theme } from 'antd';
-import { InfoCircleOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { Tag, Tooltip, useAntdToken } from '../../ui';
+import { InfoCircleOutlined, CheckCircleOutlined } from '../../ui/icon';
 import type {
   GroundedClaim,
   PersistedCitation,
@@ -23,7 +23,7 @@ export const ClaimBlock: React.FC<ClaimBlockProps> = ({
   citations,
   onCitationActivate,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
 
   // Resolve cited citations
   const citationMap = new Map<string, PersistedCitation>();

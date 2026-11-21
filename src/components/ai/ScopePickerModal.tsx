@@ -1,14 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Modal, Input, Segmented, List, Tag, Typography, Select, Space, Empty, theme } from 'antd';
-import {
-  SearchOutlined,
-  CheckSquareOutlined,
-  BranchesOutlined,
-  ApartmentOutlined,
-  GlobalOutlined,
-  CheckOutlined,
-  CloudServerOutlined,
-} from '@ant-design/icons';
+import { Modal, Input, Segmented, List, Tag, Typography, Select, Space, Empty, useAntdToken, EmptyImageSimple, ListItem } from '../ui';
+import { SearchOutlined, CheckSquareOutlined, BranchesOutlined, ApartmentOutlined, GlobalOutlined, CheckOutlined, CloudServerOutlined } from '../ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Task, ChangeRequest, System } from '../../types/models';
@@ -45,7 +37,7 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
   onSelectScope,
   db = defaultDb,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState<ScopeTab>('all');
   const [selectedCrId, setSelectedCrId] = useState<string | null>(null);
@@ -274,7 +266,7 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
         >
           {filteredItems.length === 0 ? (
             <div style={{ padding: 24 }}>
-              <Empty description="Không tìm thấy mục phù hợp" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              <Empty description="Không tìm thấy mục phù hợp" image={EmptyImageSimple} />
             </div>
           ) : (
             <List
@@ -282,7 +274,7 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
               renderItem={(item) => {
                 const selected = isCurrent(item);
                 return (
-                  <List.Item
+                  <ListItem
                     key={`${item.type}:${item.id ?? 'global'}`}
                     onClick={() => handleSelect(item)}
                     style={{
@@ -338,7 +330,7 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
                         Đang chọn
                       </Tag>
                     )}
-                  </List.Item>
+                  </ListItem>
                 );
               }}
             />

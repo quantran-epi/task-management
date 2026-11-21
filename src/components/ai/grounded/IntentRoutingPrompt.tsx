@@ -1,6 +1,6 @@
 import React from 'react';
-import { Card, Typography, Space, Button, theme } from 'antd';
-import { QuestionCircleOutlined, CloseOutlined } from '@ant-design/icons';
+import { Card, Typography, Space, Button, useAntdToken } from '../../ui';
+import { QuestionCircleOutlined, CloseOutlined } from '../../ui/icon';
 
 const { Text, Paragraph } = Typography;
 
@@ -20,7 +20,7 @@ export const IntentRoutingPrompt: React.FC<ClarificationPromptCardProps> = ({
   originalQuery,
   onCancel,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
 
   return (
     <Card

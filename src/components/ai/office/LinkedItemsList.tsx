@@ -1,12 +1,6 @@
 import React from 'react';
-import { Button, theme } from 'antd';
-import {
-  ApartmentOutlined,
-  BranchesOutlined,
-  CheckSquareOutlined,
-  CloseOutlined,
-  FileTextOutlined,
-} from '@ant-design/icons';
+import { Button, useAntdToken } from '../../ui';
+import { ApartmentOutlined, BranchesOutlined, CheckSquareOutlined, CloseOutlined, FileTextOutlined } from '../../ui/icon';
 import type { AiTeamLinkItemType } from '../../../types/aiOffice';
 
 export interface LinkedItemRow {
@@ -37,7 +31,7 @@ function iconFor(itemType: AiTeamLinkItemType): React.ReactNode {
 
 /** UI-SPEC §9 linked item rows. */
 export const LinkedItemsList: React.FC<LinkedItemsListProps> = ({ items, onRemove }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
 
   if (items.length === 0) {
     return (

@@ -1,24 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import {
-  Modal,
-  Form,
-  Input,
-  InputNumber,
-  Select,
-  Button,
-  Space,
-  Typography,
-  Alert,
-  theme,
-  message,
-} from 'antd';
-import {
-  FolderOpenOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  SyncOutlined,
-  SaveOutlined,
-} from '@ant-design/icons';
+import { Modal, Form, Input, InputNumber, Select, Button, Space, Typography, Alert, useAntdToken, useMessage, FormItem, useForm } from '../ui';
+import { FolderOpenOutlined, CheckCircleOutlined, CloseCircleOutlined, SyncOutlined, SaveOutlined } from '../ui/icon';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { getSshConfigs } from '../../services/sshService';
 import type { SshConfig } from '../../types/ssh';
@@ -45,8 +27,9 @@ export const SshFsSettingsModal: React.FC<SshFsSettingsModalProps> = ({
   db = defaultDb,
   onConfigChange,
 }) => {
-  const { token } = theme.useToken();
-  const [form] = Form.useForm<SshFsToolConfig>();
+  const appMessage = useMessage();
+  const { token } = useAntdToken();
+  const [form] = useForm<SshFsToolConfig>();
   const [sshConfigs, setSshConfigs] = useState<SshConfig[]>([]);
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -68,7 +51,7 @@ export const SshFsSettingsModal: React.FC<SshFsSettingsModalProps> = ({
         ...(fsCfg || {}),
       });
     } catch (err: any) {
-      message.error(`Không thể tải cấu hình SSH File System: ${err?.message || 'Lỗi không xác định'}`);
+      appMessage.error(`Không thể tải cấu hình SSH File System: ${err?.message || 'Lỗi không xác định'}`);
     } finally {
       setLoading(false);
     }
@@ -91,12 +74,12 @@ export const SshFsSettingsModal: React.FC<SshFsSettingsModalProps> = ({
         ...values,
       };
       await saveSshFsToolConfig(updated, db);
-      message.success('Đã lưu cấu hình SSH File System AI Tool thành công.');
+      appMessage.success('Đã lưu cấu hình SSH File System AI Tool thành công.');
       onConfigChange?.();
       onClose();
     } catch (err: any) {
       if (err?.errorFields) return;
-      message.error(`Lưu thất bại: ${err?.message || 'Lỗi không xác định'}`);
+      appMessage.error(`Lưu thất bại: ${err?.message || 'Lỗi không xác định'}`);
     }
   };
 
@@ -116,9 +99,9 @@ export const SshFsSettingsModal: React.FC<SshFsSettingsModalProps> = ({
       });
 
       if (res.success) {
-        message.success(res.message);
+        appMessage.success(res.message);
       } else {
-        message.error(res.message);
+        appMessage.error(res.message);
       }
     } catch (err: any) {
       if (err?.errorFields) return;
@@ -126,7 +109,7 @@ export const SshFsSettingsModal: React.FC<SshFsSettingsModalProps> = ({
         ok: false,
         message: err?.message || 'Kiểm tra thất bại',
       });
-      message.error(`Lỗi kiểm tra: ${err?.message || 'Lỗi không xác định'}`);
+      appMessage.error(`Lỗi kiểm tra: ${err?.message || 'Lỗi không xác định'}`);
     } finally {
       setTesting(false);
     }
@@ -174,7 +157,7 @@ export const SshFsSettingsModal: React.FC<SshFsSettingsModalProps> = ({
       </Paragraph>
 
       <Form form={form} layout="vertical" initialValues={DEFAULT_SSH_FS_CONFIG}>
-        <Form.Item
+        <FormItem
           name="sshConfigId"
           label="Máy chủ SSH Remote cố định"
           rules={[{ required: true, message: 'Vui lòng chọn 1 máy chủ SSH' }]}
@@ -189,40 +172,40 @@ export const SshFsSettingsModal: React.FC<SshFsSettingsModalProps> = ({
             }))}
             notFoundContent="Chưa có cấu hình SSH nào. Thêm trong Cài đặt > SSH."
           />
-        </Form.Item>
+        </FormItem>
 
-        <Form.Item
+        <FormItem
           name="defaultBasePath"
           label="Thư mục gốc mặc định (Base Path)"
           tooltip="Thư mục bắt đầu hoặc tiền tố đường dẫn tương đối (vd: /var/log hoặc /home/app hoặc /)"
         >
           <Input placeholder="/var/log" />
-        </Form.Item>
+        </FormItem>
 
         <Space orientation="horizontal" size="middle" style={{ display: 'flex', width: '100%' }}>
-          <Form.Item
+          <FormItem
             name="maxLinesPerRead"
             label="Số dòng tối đa / lần đọc"
             style={{ flex: 1 }}
           >
             <InputNumber min={10} max={500} style={{ width: '100%' }} />
-          </Form.Item>
+          </FormItem>
 
-          <Form.Item
+          <FormItem
             name="maxListEntries"
             label="Số mục tối đa / lần liệt kê"
             style={{ flex: 1 }}
           >
             <InputNumber min={10} max={200} style={{ width: '100%' }} />
-          </Form.Item>
+          </FormItem>
 
-          <Form.Item
+          <FormItem
             name="maxGrepMatches"
             label="Số kết quả / lần grep"
             style={{ flex: 1 }}
           >
             <InputNumber min={5} max={100} style={{ width: '100%' }} />
-          </Form.Item>
+          </FormItem>
         </Space>
 
         {testResult && (

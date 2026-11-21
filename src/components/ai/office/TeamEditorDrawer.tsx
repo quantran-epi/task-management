@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Avatar, Button, Drawer, Input, InputNumber, Select, theme } from 'antd';
+import { Alert, Avatar, Button, Drawer, Input, InputNumber, Select, useAntdToken } from '../../ui';
 import type { AiEmployee, AiLead } from '../../../types/aiOffice';
 import { createTeam } from '../../../db/repositories/aiTeamRepo';
 import type { TaskPlannerDatabase } from '../../../db';
@@ -27,7 +27,7 @@ export const TeamEditorDrawer: React.FC<TeamEditorDrawerProps> = ({
   onCancel,
   onSaved,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [name, setName] = useState('');
   const [leadId, setLeadId] = useState<string | undefined>(undefined);
   const [employeeIds, setEmployeeIds] = useState<string[]>([]);

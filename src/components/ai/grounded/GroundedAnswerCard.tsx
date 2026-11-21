@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Card, Collapse, Button, Tag, Tooltip, Divider, theme } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { Card, Collapse, Button, Tag, Tooltip, Divider, useAntdToken } from '../../ui';
+import { ReloadOutlined } from '../../ui/icon';
 import {
   toGroundedAnswerDisplay,
   type ChatMessageGrounding,
@@ -113,7 +113,7 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
   onOpenDiagnostics,
   isFreshLookingUp = false,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [seedDiagnosticsOpen, setSeedDiagnosticsOpen] = useState(false);
 
   const renderSecondaryCta = () => {

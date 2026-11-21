@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Drawer, Input, Select, Space } from 'antd';
+import { Alert, Button, Drawer, Input, Select, Space, TextArea } from '../../ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
 import {
@@ -224,7 +224,7 @@ const AgentEditorShell: React.FC<AgentEditorShellProps> = ({
 
           <div>
             <div style={{ fontSize: 12, marginBottom: 4 }}>Mô tả năng lực (lead nhìn thấy)</div>
-            <Input.TextArea
+            <TextArea
               rows={2}
               maxLength={300}
               value={form.capability}
@@ -235,7 +235,7 @@ const AgentEditorShell: React.FC<AgentEditorShellProps> = ({
 
           <div>
             <div style={{ fontSize: 12, marginBottom: 4 }}>Persona</div>
-            <Input.TextArea
+            <TextArea
               rows={8}
               value={form.persona}
               onChange={(e) => set('persona', e.target.value)}

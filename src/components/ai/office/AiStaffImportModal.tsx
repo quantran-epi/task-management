@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
-import { Alert, Button, Modal, Table, Upload, Typography } from 'antd';
-import { InboxOutlined } from '@ant-design/icons';
+import { Alert, Button, Modal, Table, UploadDragger, Typography, UPLOAD_LIST_IGNORE } from '../../ui';
+import { InboxOutlined } from '../../ui/icon';
 import type { UploadProps } from 'antd';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
 import { importAiStaff, type AiStaffImportResult } from '../../../db/repositories/aiOfficeRepo';
 import { AiStaffImportSchema, type AiStaffImportInput } from '../../../validation/aiOfficeSchemas';
 import { fetchAvailableModels } from '../../../services/ai/nineRouterTokenService';
 
-const { Dragger } = Upload;
 const { Text } = Typography;
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
@@ -96,7 +95,7 @@ export const AiStaffImportModal: React.FC<AiStaffImportModalProps> = ({
       if (file.size > MAX_FILE_SIZE) {
         setPayload(null);
         setErrors(['Tệp vượt quá 2MB.']);
-        return Upload.LIST_IGNORE;
+        return UPLOAD_LIST_IGNORE;
       }
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -172,13 +171,13 @@ export const AiStaffImportModal: React.FC<AiStaffImportModalProps> = ({
           thêm, không sửa hay xoá.
         </Text>
 
-        <Dragger {...uploadProps} style={{ padding: '8px 0' }}>
+        <UploadDragger {...uploadProps} style={{ padding: '8px 0' }}>
           <p className="ant-upload-drag-icon">
             <InboxOutlined style={{ fontSize: 32, color: '#1677ff' }} />
           </p>
           <p className="ant-upload-text">Chọn hoặc kéo thả tệp JSON</p>
           {fileName && <p className="ant-upload-hint">{fileName}</p>}
-        </Dragger>
+        </UploadDragger>
 
         {errors.length > 0 && (
           <Alert

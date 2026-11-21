@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Avatar, Button, Popconfirm, Tag, theme } from 'antd';
-import { CrownOutlined } from '@ant-design/icons';
+import { Avatar, Button, Popconfirm, Tag, useAntdToken, type AntdToken } from '../../ui';
+import { CrownOutlined } from '../../ui/icon';
 import type { AiEmployee, AiLead } from '../../../types/aiOffice';
 import { agentColorFor, agentTextColorFor } from './AgentAttributionRow';
 
@@ -8,7 +8,7 @@ function initialOf(name: string): string {
   return Array.from(name.trim())[0]?.toUpperCase() ?? '?';
 }
 
-function cardSurface(token: ReturnType<typeof theme.useToken>['token'], hovered: boolean): React.CSSProperties {
+function cardSurface(token: AntdToken, hovered: boolean): React.CSSProperties {
   return {
     background: token.colorBgContainer,
     border: `1px solid ${hovered ? token.colorBorder : token.colorBorderSecondary}`,
@@ -36,7 +36,7 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
   onEdit,
   onDelete,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [hovered, setHovered] = useState(false);
   const color = agentColorFor(employee.id);
 
@@ -102,7 +102,7 @@ export interface LeadCardProps {
 
 /** UI-SPEC §2 lead card — same surface, crown + Lead tag, no skill or team rows. */
 export const LeadCard: React.FC<LeadCardProps> = ({ lead, onEdit, onDelete }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [hovered, setHovered] = useState(false);
   const color = agentColorFor(lead.id);
 

@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import dayjs from 'dayjs';
-import { Divider, Button, Modal, Tooltip, theme } from 'antd';
-import { SyncOutlined, ExclamationCircleOutlined, ExpandAltOutlined } from '@ant-design/icons';
+import { Divider, Button, Modal, Tooltip, useAntdToken } from '../ui';
+import { SyncOutlined, ExclamationCircleOutlined, ExpandAltOutlined } from '../ui/icon';
 import type { ChatMessage } from '../../types/models';
 import { APP_NAME } from '../../constants/app';
 import { renderSafeMarkdown } from '../../utils/markdown';
@@ -111,7 +111,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
   addressedTo,
   targetMessageId,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isPopoutOpen, setIsPopoutOpen] = useState(false);

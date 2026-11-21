@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { theme } from 'antd';
+import { useAntdToken } from '../../ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
 import {
@@ -68,7 +68,7 @@ export const PendingSkillProposals: React.FC<PendingSkillProposalsProps> = ({
   skills,
   db = defaultDb,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const pending = useLiveQuery(() => listPendingSkillVersions(db), [db]) ?? [];
   const approvedRows =
     useLiveQuery(() => db.aiSkillVersions.where('status').equals('approved').toArray(), [db]) ?? [];

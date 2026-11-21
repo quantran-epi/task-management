@@ -1,5 +1,5 @@
 import React from 'react';
-import { Tag, Tooltip, theme } from 'antd';
+import { Tag, Tooltip, useAntdToken } from '../../ui';
 
 export interface ChipItem {
   id: string;
@@ -19,7 +19,7 @@ export const CandidateChipList: React.FC<CandidateChipListProps> = ({
   variant,
   onSelect,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
 
   // Max 3 chips rendered per D-04 / D-07
   const renderedItems = items.slice(0, 3);

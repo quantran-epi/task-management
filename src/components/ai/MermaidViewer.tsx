@@ -1,21 +1,6 @@
 import React, { useEffect, useRef, useState, useId, useCallback } from 'react';
-import { Button, Tooltip, Modal, Spin, message, theme, Space, Alert } from 'antd';
-import {
-  DownloadOutlined,
-  FullscreenOutlined,
-  CopyOutlined,
-  CheckOutlined,
-  CodeOutlined,
-  EyeOutlined,
-  ZoomInOutlined,
-  ZoomOutOutlined,
-  UndoOutlined,
-  ColumnWidthOutlined,
-  DragOutlined,
-  RobotOutlined,
-  ExportOutlined,
-  PictureOutlined,
-} from '@ant-design/icons';
+import { Button, Tooltip, Modal, Spin, Space, Alert, useAntdToken, useMessage } from '../ui';
+import { DownloadOutlined, FullscreenOutlined, CopyOutlined, CheckOutlined, CodeOutlined, EyeOutlined, ZoomInOutlined, ZoomOutOutlined, UndoOutlined, ColumnWidthOutlined, DragOutlined, RobotOutlined, ExportOutlined, PictureOutlined } from '../ui/icon';
 import { fixMermaidWithAi } from '../../services/ai/mermaidFixerService';
 import { downloadMermaidSvg, downloadMermaidPng } from '../../utils/mermaidExport';
 
@@ -69,7 +54,8 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
   showAiFix = true,
   showOpenInStudio = true,
 }) => {
-  const { token } = theme.useToken();
+  const appMessage = useMessage();
+  const { token } = useAntdToken();
   const palette: Palette = isDarkColor(String(token.colorBgContainer)) ? 'dark' : 'light';
   const rawId = useId();
   const diagramId = `mermaid-${rawId.replace(/[^a-zA-Z0-9_-]/g, '')}`;
@@ -256,10 +242,10 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
     try {
       await navigator.clipboard.writeText(currentCode);
       setCopied(true);
-      message.success('Đã sao chép cú pháp Mermaid');
+      appMessage.success('Đã sao chép cú pháp Mermaid');
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      message.error('Không thể sao chép');
+      appMessage.error('Không thể sao chép');
     }
   };
 
@@ -275,7 +261,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
 
   const handleFixWithAi = async () => {
     setFixingWithAi(true);
-    const hideLoading = message.loading('AI đang kiểm tra và sửa cú pháp Mermaid...', 0);
+    const hideLoading = appMessage.loading('AI đang kiểm tra và sửa cú pháp Mermaid...', 0);
     try {
       const res = await fixMermaidWithAi({
         code: currentCode,
@@ -283,9 +269,9 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
       });
       setCurrentCode(res.fixedCode);
       onCodeChange?.(res.fixedCode);
-      message.success('AI đã sửa cú pháp thành công!');
+      appMessage.success('AI đã sửa cú pháp thành công!');
     } catch (err: any) {
-      message.error(err?.message || 'Không thể sửa cú pháp bằng AI');
+      appMessage.error(err?.message || 'Không thể sửa cú pháp bằng AI');
     } finally {
       hideLoading();
       setFixingWithAi(false);
@@ -298,7 +284,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
     } catch {}
     window.dispatchEvent(new CustomEvent('taskmate:open-mermaid-studio', { detail: { code: currentCode } }));
     window.location.hash = '#mermaid';
-    message.success('Đã mở sơ đồ trong Diagram Studio');
+    appMessage.success('Đã mở sơ đồ trong Diagram Studio');
   };
 
   const canvasStyle: React.CSSProperties = {

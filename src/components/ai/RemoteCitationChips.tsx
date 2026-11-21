@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button } from 'antd';
+import { Button } from '../ui';
 
 /**
  * Phase 47 D-12: remote `path:line` citations are RENDER-ONLY chips. They are deliberately not

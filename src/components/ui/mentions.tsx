@@ -1,5 +1,5 @@
-import { Mentions as AntMentions, type MentionsProps as AntMentionsProps } from 'antd';
-import type { CSSProperties } from 'react';
+import { Mentions as AntMentions, type MentionsProps as AntMentionsProps, type MentionsRef } from 'antd';
+import { forwardRef, type CSSProperties } from 'react';
 import { getSharedControlTokens } from './tokens.contract';
 import { controlStyle, controlWidthStyle } from './input';
 
@@ -11,11 +11,15 @@ export interface MentionsWrapperProps extends AntMentionsProps {
 }
 
 /** Mentions with shared input metrics; Option is the real AntD static. */
-export function Mentions({ width = 'full', style, ...rest }: MentionsWrapperProps) {
+export const Mentions = forwardRef<MentionsRef, MentionsWrapperProps>(function Mentions(
+  { width = 'full', style, ...rest },
+  ref,
+) {
   const { iconSize } = getSharedControlTokens();
   return (
     <AntMentions
       {...rest}
+      ref={ref}
       style={{
         ...controlStyle(),
         ...controlWidthStyle(width),
@@ -24,6 +28,6 @@ export function Mentions({ width = 'full', style, ...rest }: MentionsWrapperProp
       } as CSSProperties}
     />
   );
-}
+});
 
 export const MentionsOption = AntMentions.Option;

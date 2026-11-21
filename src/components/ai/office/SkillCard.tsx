@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button, Popconfirm, Tag, theme } from 'antd';
+import { Button, Popconfirm, Tag, useAntdToken } from '../../ui';
 import type { AiSkill } from '../../../types/aiOffice';
 
 export interface SkillCardProps {
@@ -19,7 +19,7 @@ export const SkillCard: React.FC<SkillCardProps> = ({
   onEdit,
   onDelete,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [hovered, setHovered] = useState(false);
 
   return (

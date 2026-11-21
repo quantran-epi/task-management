@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Descriptions, InputNumber, Modal, theme } from 'antd';
+import { Button, Descriptions, InputNumber, Modal, useAntdToken, DescriptionsItem } from '../../ui';
 
 export type BudgetTopUpScope =
   | { kind: 'agent'; name: string }
@@ -29,7 +29,7 @@ export const BudgetTopUpModal: React.FC<BudgetTopUpModalProps> = ({
   onCancel,
   onConfirm,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [amount, setAmount] = useState<number | null>(null);
 
   useEffect(() => {
@@ -65,13 +65,13 @@ export const BudgetTopUpModal: React.FC<BudgetTopUpModalProps> = ({
         <div style={{ fontSize: 14, fontWeight: 600 }}>{scopeLine}</div>
 
         <Descriptions size="small" column={1}>
-          <Descriptions.Item label="Đã dùng">{used.toLocaleString()} token</Descriptions.Item>
-          <Descriptions.Item label="Ngân sách hiện tại">
+          <DescriptionsItem label="Đã dùng">{used.toLocaleString()} token</DescriptionsItem>
+          <DescriptionsItem label="Ngân sách hiện tại">
             {budget.toLocaleString()} token
-          </Descriptions.Item>
-          <Descriptions.Item label={`Ngưỡng cảnh báo (${thresholdPct}%)`}>
+          </DescriptionsItem>
+          <DescriptionsItem label={`Ngưỡng cảnh báo (${thresholdPct}%)`}>
             {Math.round((budget * thresholdPct) / 100).toLocaleString()} token
-          </Descriptions.Item>
+          </DescriptionsItem>
         </Descriptions>
 
         <div>

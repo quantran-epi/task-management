@@ -1,6 +1,6 @@
 import React from 'react';
-import { Tag, theme } from 'antd';
-import { EditOutlined } from '@ant-design/icons';
+import { Tag, useAntdToken } from '../../ui';
+import { EditOutlined } from '../../ui/icon';
 
 export interface RoutedScopeInfo {
   domain?: string | null | undefined;
@@ -41,7 +41,7 @@ export const ScopeChipsBar: React.FC<ScopeChipsBarProps> = ({
   routedScope,
   onEditScope,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
 
   if (!hasMeaningfulRoutedScope(routedScope)) {
     return null;

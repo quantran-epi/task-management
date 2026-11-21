@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Card, Tag, theme } from 'antd';
-import { NodeIndexOutlined, CheckCircleOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { Card, Tag, useAntdToken, type AntdToken } from '../../ui';
+import { NodeIndexOutlined, CheckCircleOutlined, InfoCircleOutlined } from '../../ui/icon';
 import type {
   PersistedCitation,
   PersistedConflictGroup,
@@ -17,7 +17,7 @@ export interface GraphPathCardProps {
 
 function renderHopClassificationBadge(
   cls: 'OBSERVED' | 'INFERRED' | 'BUSINESS_APPROVED',
-  token: ReturnType<typeof theme.useToken>['token']
+  token: AntdToken
 ) {
   if (cls === 'OBSERVED') {
     return (
@@ -116,7 +116,7 @@ const PathRow: React.FC<PathRowProps> = ({
   prefixLabel,
   showVerify = false,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const citationMap = new Map<string, PersistedCitation>();
   for (const c of citations) {
     citationMap.set(c.citationId, c);
@@ -247,7 +247,7 @@ export const GraphPathCard: React.FC<GraphPathCardProps> = ({
   conflictGroups,
   onCitationActivate,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [showAlternatives, setShowAlternatives] = useState<Record<string, boolean>>({});
 
   if (!paths || paths.length === 0) return null;

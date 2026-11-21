@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Tag, theme } from 'antd';
+import { Card, Tag, useAntdToken } from '../../ui';
 import type {
   PersistedCitation,
   PersistedConflictGroup,
@@ -24,7 +24,7 @@ export const ScopeVariationCard: React.FC<ScopeVariationCardProps> = ({
   citations,
   onCitationActivate,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
 
   const dimension = conflictGroup.scopeProof?.dimension ?? conflictGroup.dimension;
   let titleSuffix = 'môi trường';

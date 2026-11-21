@@ -1,5 +1,5 @@
 import React from 'react';
-import { Collapse, Descriptions, Tag, Typography, theme } from 'antd';
+import { Collapse, Descriptions, Tag, Typography, useAntdToken } from '../../ui';
 import type {
   CompleteModalityStatus,
   GraphRetainedCounts,
@@ -56,7 +56,7 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
   graphAfterFusion,
   forceOpen = false,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
 
   const items = [
     {

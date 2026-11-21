@@ -1,14 +1,7 @@
 import React from 'react';
-import { Modal, Typography, Tabs, Tag, Alert, theme, Space } from 'antd';
+import { Modal, Typography, Tabs, Tag, Alert, Space, useAntdToken } from '../ui';
 import { APP_NAME } from '../../constants/app';
-import {
-  RobotOutlined,
-  ThunderboltOutlined,
-  CheckCircleOutlined,
-  BranchesOutlined,
-  CalendarOutlined,
-  ClockCircleOutlined,
-} from '@ant-design/icons';
+import { RobotOutlined, ThunderboltOutlined, CheckCircleOutlined, BranchesOutlined, CalendarOutlined, ClockCircleOutlined } from '../ui/icon';
 
 const { Text, Paragraph } = Typography;
 
@@ -21,7 +14,7 @@ export const AITaskPlannerInstructionsModal: React.FC<AITaskPlannerInstructionsM
   open,
   onClose,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
 
   const tabItems = [
     {

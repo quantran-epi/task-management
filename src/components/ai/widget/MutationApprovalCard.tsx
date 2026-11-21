@@ -1,6 +1,6 @@
 import React from 'react';
-import { Button, theme } from 'antd';
-import { ExclamationCircleOutlined } from '@ant-design/icons';
+import { Button, useAntdToken } from '../../ui';
+import { ExclamationCircleOutlined } from '../../ui/icon';
 import { renderSafeMarkdown } from '../../../utils/markdown';
 
 export interface MutationApprovalCardProps {
@@ -19,7 +19,7 @@ export const MutationApprovalCard: React.FC<MutationApprovalCardProps> = ({
   onApprove,
   onReject,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const summaryHtml = renderSafeMarkdown(summary);
 
   return (

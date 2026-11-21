@@ -1,21 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Mentions, Avatar, Button, Tooltip, Tag, theme, Modal, Input } from 'antd';
+import { Mentions, Avatar, Button, Tooltip, Tag, Modal, useAntdToken, TextArea } from '../ui';
 import type { MentionsRef } from 'antd';
-import {
-  SendOutlined,
-  StopOutlined,
-  CheckSquareOutlined,
-  BranchesOutlined,
-  ApartmentOutlined,
-  ClearOutlined,
-  CalendarOutlined,
-  DashboardOutlined,
-  WarningOutlined,
-  QuestionCircleOutlined,
-  PaperClipOutlined,
-  FileTextOutlined,
-  FullscreenOutlined,
-} from '@ant-design/icons';
+import { SendOutlined, StopOutlined, CheckSquareOutlined, BranchesOutlined, ApartmentOutlined, ClearOutlined, CalendarOutlined, DashboardOutlined, WarningOutlined, QuestionCircleOutlined, PaperClipOutlined, FileTextOutlined, FullscreenOutlined } from '../ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Task, ChangeRequest, System, Note } from '../../types/models';
@@ -130,7 +116,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   leadingContent,
   agentOptions,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [internalValue, setInternalValue] = useState('');
   const effectiveValue = value ?? internalValue;
   const update = (next: string) => {
@@ -973,7 +959,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
         }
         destroyOnClose={false}
       >
-        <Input.TextArea
+        <TextArea
           autoFocus
           value={fullscreenDraft}
           onChange={(e) => setFullscreenDraft(e.target.value)}

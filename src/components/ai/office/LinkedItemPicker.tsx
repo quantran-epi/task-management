@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Input, Modal, Select, theme } from 'antd';
+import { Button, Input, Modal, Select, useAntdToken } from '../../ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { TaskPlannerDatabase } from '../../../db';
 import type { AiTeamLinkItemType } from '../../../types/aiOffice';
@@ -30,7 +30,7 @@ const TYPE_OPTIONS: Array<{ label: string; value: AiTeamLinkItemType }> = [
  * modal stays open after a pick so multi-add needs one open, not five.
  */
 export const LinkedItemPicker: React.FC<LinkedItemPickerProps> = ({ open, db, onCancel, onAdd }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [itemType, setItemType] = useState<AiTeamLinkItemType>('cr');
   const [query, setQuery] = useState('');
 

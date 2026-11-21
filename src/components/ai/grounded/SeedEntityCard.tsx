@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, Tag, theme } from 'antd';
+import { Button, Tag, useAntdToken } from '../../ui';
 import type { PersistedEntityRef } from '../../../services/ai/groundedAnswerSchemas';
 import type { GraphRetainedCounts } from '../../../services/knowledge/retrievalProtocol';
 
@@ -32,7 +32,7 @@ export const SeedEntityCard: React.FC<SeedEntityCardProps> = ({
   onFindRelated,
   isFindingRelated,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const kindLabel = KIND_LABELS[entity.kind] ?? entity.kind;
   const countsLine = `Thực thể: ${graphCounts.entity} · Cạnh: ${graphCounts.edge} · Đường dẫn: ${graphCounts.path}`;
 

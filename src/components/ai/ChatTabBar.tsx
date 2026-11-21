@@ -1,13 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import {
-  CloseOutlined,
-  ExperimentFilled,
-  LeftOutlined,
-  MessageOutlined,
-  PlusOutlined,
-  ReloadOutlined,
-  RightOutlined,
-} from '@ant-design/icons';
+import { CloseOutlined, ExperimentFilled, LeftOutlined, MessageOutlined, PlusOutlined, ReloadOutlined, RightOutlined } from '../ui/icon';
 import {
   DndContext,
   closestCenter,
@@ -22,7 +14,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Badge, Input, Tooltip, theme } from 'antd';
+import { Badge, Input, Tooltip, useAntdToken, type AntdToken } from '../ui';
 import type { TabRuntimeStatus } from './runtime/tabTypes';
 
 export type ChatTabType = 'chat';
@@ -74,7 +66,7 @@ interface SortableChatTabItemProps {
   onRenameTab?: ((id: string, title: string) => void) | undefined;
   tabRef: (el: HTMLDivElement | null) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
-  token: ReturnType<typeof theme.useToken>['token'];
+  token: AntdToken;
 }
 
 function SortableChatTabItem({
@@ -108,10 +100,10 @@ function SortableChatTabItem({
 
   const renderStatusIndicator = () => {
     if (resolvedStatus === 'processing') {
-      return <Badge status="processing" style={{ flexShrink: 0 }} />;
+      return <Badge status="accent" style={{ flexShrink: 0 }} />;
     }
     if (resolvedStatus === 'error') {
-      return <Badge status="error" style={{ flexShrink: 0 }} />;
+      return <Badge status="danger" style={{ flexShrink: 0 }} />;
     }
     if (resolvedStatus === 'interrupted') {
       return (
@@ -309,7 +301,7 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
   tabStatuses,
   tabAnalysisModes,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const tabElementsRef = useRef<(HTMLDivElement | null)[]>([]);
   const [editingTabId, setEditingTabId] = useState<string | null>(null);

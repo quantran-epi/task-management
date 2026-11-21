@@ -1,6 +1,6 @@
 import React from 'react';
-import { Alert, Button, Collapse, Tooltip, theme } from 'antd';
-import { CheckCircleOutlined, CloseCircleOutlined, DiffOutlined } from '@ant-design/icons';
+import { Alert, Button, Collapse, Tooltip, useAntdToken } from '../../ui';
+import { CheckCircleOutlined, CloseCircleOutlined, DiffOutlined } from '../../ui/icon';
 import type { ArtifactPatchProposal } from '../../../services/ai/patchProposal';
 
 export interface PatchDiffApprovalCardProps {
@@ -47,7 +47,7 @@ export const PatchDiffApprovalCard: React.FC<PatchDiffApprovalCardProps> = ({
   variant = 'patch', subtitle, evidence, staleReason = 'document-changed',
   onApprove, onReject,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const dark = isDarkBase(token.colorBgBase);
   const addBg = dark ? '#23452b' : '#e6ffed';
   const delBg = dark ? '#4d1f24' : '#ffeef0';

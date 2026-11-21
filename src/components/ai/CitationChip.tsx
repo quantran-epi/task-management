@@ -1,6 +1,6 @@
 import React from 'react';
-import { Tag, Tooltip, theme } from 'antd';
-import { FileTextOutlined } from '@ant-design/icons';
+import { Tag, Tooltip, useAntdToken } from '../ui';
+import { FileTextOutlined } from '../ui/icon';
 
 export interface CitationChipProps {
   docId?: string | undefined;
@@ -51,7 +51,7 @@ export const CitationChip: React.FC<CitationChipProps> = ({
   snapshotId,
   publishedContentHash,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const effectiveTitle = documentTitle ?? title ?? 'Tài liệu';
   const effectiveHeading = sectionAnchor ?? heading;
 

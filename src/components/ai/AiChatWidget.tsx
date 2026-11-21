@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Tag, Typography, theme } from 'antd';
-import { SyncOutlined, CheckCircleOutlined, StopOutlined } from '@ant-design/icons';
+import { Alert, Button, Tag, Typography, useAntdToken } from '../ui';
+import { SyncOutlined, CheckCircleOutlined, StopOutlined } from '../ui/icon';
 import type { ChatMessage } from '../../types/models';
 import type { AgentRunStatus } from '../../types/aiOffice';
 import { formatToolLimitMessage, TOOL_LIMIT_UNCAPPED_MESSAGE, type ChatTurnStatus, type ChatTurnToolEvent } from './runtime/chatTurnRuntime';
@@ -161,7 +161,7 @@ const isArtifactToolName = (name: string) => name === 'get_artifact' || name ===
 
 /** Collapsed-by-default tool badge. Raw arguments/output never auto-expand (D-04). */
 const ToolEventBadge: React.FC<{ event: ChatTurnToolEvent; extension?: React.ReactNode }> = ({ event, extension }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [expanded, setExpanded] = useState(false);
   const detailsId = `tool-event-${event.id.replace(/[^A-Za-z0-9_-]/g, '-')}`;
 
@@ -279,7 +279,7 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
   onRetryAgent,
   agentMentionOptions,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const isTurnActive = ACTIVE_STAGES.has(turn.status);
   // D-03: derive compact from the space the host actually gives us, so narrow hosts
   // (drawer at 320px, a squeezed step panel) collapse instead of overflowing. An explicit

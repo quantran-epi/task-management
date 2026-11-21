@@ -1,19 +1,7 @@
 import React from 'react';
-import { Select, Button, Tooltip, Popover, Badge, Switch, Typography, Dropdown, theme } from 'antd';
+import { Select, Button, Tooltip, Popover, Badge, Switch, Typography, Dropdown, useAntdToken } from '../ui';
 import type { MenuProps } from 'antd';
-import {
-  ReloadOutlined,
-  ExperimentFilled,
-  ExperimentOutlined,
-  ThunderboltFilled,
-  ThunderboltOutlined,
-  ClearOutlined,
-  ApiOutlined,
-  DatabaseOutlined,
-  FolderOpenOutlined,
-  SettingOutlined,
-  MoreOutlined,
-} from '@ant-design/icons';
+import { ReloadOutlined, ExperimentFilled, ExperimentOutlined, ThunderboltFilled, ThunderboltOutlined, ClearOutlined, ApiOutlined, DatabaseOutlined, FolderOpenOutlined, SettingOutlined, MoreOutlined } from '../ui/icon';
 import type { McpServerConfig } from '../../services/ai/mcpClient';
 
 export interface ChatTabToolboxProps {
@@ -84,7 +72,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
   sshFsToolEnabled = false,
   onClearContext,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const enabledMcpCount = mcpServers.filter((s) => s.enabled).length;
   // The master switch reflects the TAB flag, not "a tool will actually be advertised":
   // reporting the combined state made a switch the user had just turned on read "ĐANG TẮT"
