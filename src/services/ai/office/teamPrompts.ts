@@ -75,9 +75,15 @@ export interface BuildEmployeeTurnRequestInput {
    * produces the document. The mode only decides what happens when the turn is just talk.
    */
   mode?: EmployeeTurnMode | undefined;
+  /** Only the developer with an allocated worktree gets the third (code_edit) exception. */
+  codeEditAllowed?: boolean | undefined;
 }
 
 export type EmployeeTurnMode = 'assignment' | 'chat';
+
+/** Exported so the test pins the exact third exception instead of a paraphrase. */
+export const CODE_EDIT_EXCEPTION_LINE =
+  'Ngoại lệ 3: công cụ code_edit chỉ sửa code trong worktree SSH riêng được cấp phát cho bạn (Agent Developer), apply/revert từng hunk; không merge vào nhánh chính, không đụng repo/worktree khác, filePath là đường dẫn tương đối trong worktree.';
 
 /** Exported so the tests assert this exact text instead of a paraphrase. */
 export const ASSIGNMENT_MODE_BLOCK = [
@@ -125,6 +131,7 @@ export function buildEmployeeTurnRequest(input: BuildEmployeeTurnRequestInput): 
     recentTurns,
     folderId,
     mode,
+    codeEditAllowed,
   } = input;
 
   const parts = [
@@ -139,9 +146,12 @@ export function buildEmployeeTurnRequest(input: BuildEmployeeTurnRequestInput): 
         : []),
     [
       '[CHÍNH SÁCH CHỈ ĐỌC]',
-      'Bạn chỉ được đọc dữ liệu. Mọi thao tác ghi đều bị từ chối tự động, trừ hai ngoại lệ bên dưới.',
+      codeEditAllowed
+        ? 'Bạn chỉ được đọc dữ liệu. Mọi thao tác ghi đều bị từ chối tự động, trừ ba ngoại lệ bên dưới.'
+        : 'Bạn chỉ được đọc dữ liệu. Mọi thao tác ghi đều bị từ chối tự động, trừ hai ngoại lệ bên dưới.',
       'Ngoại lệ 1: công cụ propose_skill_version được phép tạo một đề xuất kỹ năng ở trạng thái chờ duyệt. Đề xuất đó không thay đổi kỹ năng — chỉ người dùng duyệt mới tạo ra phiên bản mới.',
       'Ngoại lệ 2: công cụ write_doc được phép ghi tài liệu vào chính thư mục tài liệu của bạn; tài liệu hiện ngay trong Docs, không có thẻ phê duyệt. Công cụ này không ghi được ra ngoài thư mục của bạn, không tạo được thư mục, và không xoá được gì.',
+      ...(codeEditAllowed ? [CODE_EDIT_EXCEPTION_LINE] : []),
       'Nếu cần thay đổi dữ liệu khác, hãy nêu rõ trong báo cáo để trưởng nhóm thực hiện.',
       'Bạn có thể nhắn trực tiếp cho trưởng nhóm, nhân viên khác hoặc người dùng bằng công cụ send_message khi cần hỏi lại hoặc trao đổi.',
     ].join('\n'),
@@ -294,6 +304,10 @@ export const LEAD_NO_WRITE_DOC_LINE =
 export const EMPLOYEE_WRITE_DOC_LINE =
   'Mỗi nhân viên tự ghi tài liệu của mình bằng công cụ nhóm write_doc (list/create/update) trong folder riêng của họ, không qua thẻ phê duyệt; khi giao việc tài liệu, ghi rõ trong nội dung việc là nhân viên dùng write_doc; create_note là đường ghi của LEADER nên không được giao cho nhân viên.';
 
+/** Exported so the test pins the exact delegation rule instead of a paraphrase. */
+export const LEAD_CODE_DELEGATION_LINE =
+  '14. Việc cần sửa code (code_edit trong worktree) thì giao cho Agent Developer qua delegate_batch, dùng agentId từ [DANH SÁCH NHÂN VIÊN]; nếu nhóm không có Agent Developer thì báo người dùng. Bạn không tự sửa code và không giao việc sửa code cho nhân viên khác.';
+
 /**
  * Phase 42 D-12 / Phase 43 D-05: the reviewer's read order over a remote repository.
  * `git_read` is advertised to every employee (D-09), so this line grants nothing — the handler
@@ -361,6 +375,7 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
       '11. Khi người dùng nhắc tới một nhân viên đã xong việc, nói thẳng là đã xong và đề nghị chạy lại hoặc giao việc mới — không tự chạy lại.',
       '12. Khi cần trao đổi trực tiếp thay vì giao việc (hỏi lại, nhắc nhở, cảnh báo), dùng công cụ send_message thay vì delegate_batch.',
       '13. Cần chi tiết cũ hơn phần ngữ cảnh này: search_team_history để tìm, read_team_turn để đọc toàn văn. Không đoán lại việc đã làm.',
+      LEAD_CODE_DELEGATION_LINE,
     ].join('\n'),
     ANTI_FABRICATION_BLOCK,
     // Same single-source-of-truth convention segment the employees receive (see above).

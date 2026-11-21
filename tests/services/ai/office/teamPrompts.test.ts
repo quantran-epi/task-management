@@ -4,7 +4,9 @@ import {
   ANTI_FABRICATION_BLOCK,
   ASSIGNMENT_MODE_BLOCK,
   CHAT_MODE_BLOCK,
+  CODE_EDIT_EXCEPTION_LINE,
   EMPLOYEE_WRITE_DOC_LINE,
+  LEAD_CODE_DELEGATION_LINE,
   LEAD_NO_WRITE_DOC_LINE,
   EXPLORE_REPO_TIER_LINE,
   REVIEWER_GIT_READ_LINE,
@@ -678,7 +680,24 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
 
     expect(system).toContain('propose_skill_version');
     expect(system).toContain('write_doc');
+    expect(system).toContain('hai ngoại lệ');
+    expect(system).not.toContain(CODE_EDIT_EXCEPTION_LINE);
     expect(system).not.toContain('một ngoại lệ duy nhất');
+  });
+
+  it('advertises the third code_edit exception only to the granted developer', () => {
+    const system = buildEmployee({ codeEditAllowed: true })
+      .systemMessages.map((m) => m.content)
+      .join('\n');
+
+    expect(system).toContain('ba ngoại lệ');
+    expect(system).toContain(CODE_EDIT_EXCEPTION_LINE);
+  });
+
+  it('tells the lead to delegate code edits to Agent Developer', () => {
+    const system = buildLead().systemMessages.map((m) => m.content).join('\n');
+
+    expect(system).toContain(LEAD_CODE_DELEGATION_LINE);
   });
 
   // D-04: the guard is the handler. A prompt naming a refusal code would imply the model

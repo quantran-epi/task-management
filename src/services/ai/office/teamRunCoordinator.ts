@@ -2434,6 +2434,11 @@ export function createTeamRunCoordinator(
         recentTurns,
         ...(folderId ? { folderId } : {}),
         mode,
+        // Same gate as `toolContext` (1486): the third prompt exception exists only for the
+        // developer whose request actually carries a worktree descriptor.
+        ...(employee.id === developerAgentId() && !!options.agentDeveloperWorktree
+          ? { codeEditAllowed: true }
+          : {}),
       });
 
       // D-08/D-09: provision BEFORE the turn is advertised or any verb can run. No descriptor
